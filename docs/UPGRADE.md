@@ -51,9 +51,15 @@ Fresh installs now generate the CA key and enable gRPC TLS; existing ones add
 them first (Compose: `secrets/module_ca_kek` must exist before `up`).
 
 **Upgrading to v4.2: the flux forwarding API and pages are removed.** The
-v2 routes that change forwards, rules, tunnels, nodes, Ansible machines and
-clean agents answer 404; use `/api/v4/forward/*`. Old forwarding data is not
-migrated (F5c archives it). Read
+v2 routes that change forwards and legacy rules, the administrator's forward
+node, Ansible machine and clean agent routes, tunnel update and diagnose,
+permission update and removal, and speed limit update answer 404; use
+`/api/v4/forward/*`. The lists, tunnel creation and deletion, permission
+assignment, speed limit create and delete, and the clean agents' register,
+heartbeat and report stay served, without pages, until the legacy cleanup
+(F5c). Old forwarding data is not migrated: F5c archives it (on the
+read-only Compose and Helm containers the first start cannot, so write the
+archive yourself) and then drops its tables. Read
 ["Flux Forwarding API Removed (v4.2)"](#flux-forwarding-api-removed-v42).
 
 **Upgrading to v4.2: the official signing root changes, and every package
@@ -80,13 +86,22 @@ of the kernel's HS256 tokens after identity's cutover is finalized is in the
 binary and applies at once. Read
 ["Upgrading From 4.2.0-rc.2 To 4.2.0-rc.3"](#upgrading-from-420-rc2-to-420-rc3).
 
-**Upgrading to 4.2.0 from 4.2.0-rc.4: the four Agent packages have new builds,
-and the systemd installer needs `--version`.** The release changes no table,
-no signing root and nothing in the Control binary but its version. The signed `machine-telemetry`,
-`nftables-forward`, `gost-mesh` and `nat-egress` packages of rc.4 embed an
-Agent that was built before its `x/net` fix, so move them to the 4.2.0 builds.
-`scripts/install.sh`, `install.sh` and `panel_install.sh` install the release
-tag you name and no longer resolve "latest" or `go_dev`. Read
+**Upgrading to 4.2.0 from 4.2.0-rc.4: six packages changed, the systemd
+installer needs `--version`, and Control starts after
+`forward legacy drop`.** The release changes no table and no signing root.
+The Control binary changes beyond its version: it starts on a database whose
+flux tables were dropped (the release candidates exited 1 there), and
+Stripe and PayPal checkout and the user Telegram unbind and notification
+settings answer "not implemented" instead of a fake success. The signed
+`machine-telemetry`, `nftables-forward`, `gost-mesh` and `nat-egress`
+packages of rc.4 embed an Agent that was built before its `x/net` fix, so
+move them to the 4.2.0 builds; `notification` and the commercial `payment`
+serve those Telegram and checkout routes natively and answer honestly only
+from their 4.2.0 builds. `scripts/install.sh`, `install.sh` and
+`panel_install.sh` install the release tag you name and no longer resolve
+"latest" or `go_dev`, and a fresh install on a host with no previous release
+completes (earlier installers stopped there without a message). Upgrade
+Control first, then the Agents. Read
 ["Upgrading From 4.2.0-rc.4 To 4.2.0"](#upgrading-from-420-rc4-to-420).
 
 ## Fixed Legacy Native Layout
@@ -3248,25 +3263,51 @@ either package are read by the other.
 
 ## Upgrading From 4.2.0-rc.4 To 4.2.0
 
-4.2.0 changes no table, no signing root and nothing in the Control binary but
-its version: nothing under any `migrations` directory differs from rc.4, no Go
-file differs apart from the version string, and the root is the same
-`jW26nr2tbthASoeq6RmIpx8Ah+uhPNIv9V1ewRVb1VE=`. The Agent and Control share a
-version number; upgrade the Agents first as for every 4.2 build. Coming from
-4.1.0, do everything in
+4.2.0 changes no table and no signing root: nothing under any `migrations`
+directory differs from rc.4, and the root is the same
+`jW26nr2tbthASoeq6RmIpx8Ah+uhPNIv9V1ewRVb1VE=`. It does change Go code. Of
+the 26 Go files that differ from rc.4, 11 are tests and 15 are not
+(`git diff --stat v4.2.0-rc.4 v4.2.0 -- '*.go'`):
+
+- **The Control binary**, in 11 files: the version string
+  (`internal/branding/branding.go`, `cmd/server/main.go`, and `docs/docs.go`,
+  which also carries the new descriptions of the two Telegram user routes);
+  the start and the old agents' endpoints after `forward legacy drop`
+  (`cmd/server/bootstrap.go`, `internal/forwardlegacy/tables.go`,
+  `internal/handler/agent.go`, and `forward_agent_bridge_service.go`,
+  `forward_clean_agent_service.go` and `init_forward_runtime_system_config.go`
+  in `internal/service`); and the Stripe and PayPal checkout and the user
+  Telegram routes (`internal/handler/payment.go`,
+  `internal/handler/telegram.go`).
+- **Two package binaries**, with the same checkout and Telegram change:
+  `notification` (`packages/notification/native/telegram.go`) and the
+  commercial `payment` (`packages/payment/native/payments.go`). No other
+  package binary depends on a Go package that changed.
+- **The staging tool** `scripts/staging/stagingctl` (two labels; it is not
+  shipped).
+
+The Agent and Control share a version number and a Control hands out only
+its own Agent release, so from rc.4 you upgrade Control first and the Agents
+after it ([Staged Agent Upgrades (v4.2)](#staged-agent-upgrades-v42)); rc.4
+Agents keep working meanwhile. Coming from 4.1.0, do everything in
 ["The Official Signing Root Changes (v4.2)"](#the-official-signing-root-changes-v42)
-with the 4.2.0 builds in place of rc.2; coming from rc.2 or earlier, the
-rc.3 notes ([Upgrading From 4.2.0-rc.2 To 4.2.0-rc.3](#upgrading-from-420-rc2-to-420-rc3))
+with the 4.2.0 builds in place of rc.2, and move the Agents in the order of
+["Order Of Operations"](#order-of-operations); coming from rc.2 or earlier,
+the rc.3 notes ([Upgrading From 4.2.0-rc.2 To 4.2.0-rc.3](#upgrading-from-420-rc2-to-420-rc3))
 apply too, with 4.2.0 in place of rc.3. The notes below are on top of them.
 
 ### 4.2.0 Checklist
 
 1. Back up the database and the configuration, as always.
-2. Upgrade the Agents first, with the `agent-install.sh` release asset of
-   4.2.0 (see [Staged Agent Upgrades (v4.2)](#staged-agent-upgrades-v42)).
-3. Deploy the 4.2.0 Control. Every installation keeps running the release it
-   has: under the same root nothing is moved for you
+2. Deploy the 4.2.0 Control. On a systemd host, name the tag:
+   `install.sh update --version v4.2.0` (see below). Every installation keeps
+   running the release it has: under the same root nothing is moved for you
    ([Identity-Platform Recovers By Itself](#identity-platform-recovers-by-itself)).
+3. Upgrade the Agents to 4.2.0 with a campaign (`anix-control agent upgrade
+   start`, the Agent's 4.2.0 release in `agent_install.artifact_dir`), or
+   re-run the install command of a node: both install Control's own Agent
+   release, so they need the 4.2.0 Control from step 2
+   ([Staged Agent Upgrades (v4.2)](#staged-agent-upgrades-v42)).
 4. **Move the four packages that embed an Agent** (`machine-telemetry`,
    `nftables-forward`, `gost-mesh` and `nat-egress`) to their 4.2.0 builds:
    verify and extract them from the release archive
@@ -3275,15 +3316,19 @@ apply too, with 4.2.0 in place of rc.3. The notes below are on top of them.
    [Upgrade Procedure](#upgrade-procedure) and `"desired_version"` `4.2.0`.
    The rc.4 builds embed the Agent as it was before the `x/net` fix (see
    below).
-5. No package source changed since rc.4, so the other packages work as they
-   are: an installation on its rc.4 release keeps working. Import the 4.2.0
+5. **Move `notification` to its 4.2.0 build the same way**, and on a
+   commercial installation `payment` too, once the release owner has attached
+   the commercial builds. `POST /api/v2/user/telegram/unbind`,
+   `POST /api/v2/user/telegram/notify` and `POST /api/v2/payment/fiat/create`
+   run natively by default, so the rc.4 packages keep answering the old fake
+   success; a route set to `legacy` gets the new answer from the 4.2.0
+   binary at once. No other package binary changed since rc.4: an
+   installation on its rc.4 release keeps working. Import the other 4.2.0
    builds from the verified archive when you want the installations on the
    release version. Coming from rc.2 or earlier, also move
-   `identity-platform` (step 4 of the [rc.3 Checklist](#rc3-checklist-42), with
-   `VERSION=4.2.0`): its security fixes live in the package.
-6. On a systemd host, name the tag in every `install` and `update` command
-   (`--version v4.2.0`; see below).
-7. Run the smoke checks of [Post-Upgrade Record](#post-upgrade-record).
+   `identity-platform` (step 4 of the [rc.3 Checklist](#rc3-checklist-42),
+   with `VERSION=4.2.0`): its security fixes live in the package.
+6. Run the smoke checks of [Post-Upgrade Record](#post-upgrade-record).
 
 ### What Changes For Operators In 4.2.0
 
@@ -3298,42 +3343,99 @@ apply too, with 4.2.0 in place of rc.3. The notes below are on top of them.
   now scans the four plugin commands with `govulncheck` and fails for a
   vulnerability their call graph reaches.
 - **The systemd installer installs the tag it is given.**
-  `scripts/install.sh install` and `update` require `--version <tag>` and fail
-  before they change anything without it; they no longer resolve GitHub's
-  `releases/latest`, so publishing a release cannot change what an unpinned
-  command installs. The one-command entry points `install.sh` and
-  `panel_install.sh` fetch the installer at that tag instead of from the
-  `go_dev` branch, and refuse a command that names none. `preflight` and
-  `enable-agents` take no version: the entry points read the tag from
-  `INSTALL_REF=<tag>` for them. A script or unit that calls `install.sh update`
-  without `--version` must be changed. Containers are unchanged.
+  `scripts/install.sh install` and `update` require `--version <tag>` (or
+  `ANIX_CONTROL_VERSION=<tag>`) and fail before they change anything without
+  it; they no longer resolve GitHub's `releases/latest`, so publishing a
+  release cannot change what an unpinned command installs. The one-command
+  entry points `install.sh` and `panel_install.sh` fetch the installer at
+  that tag instead of from the `go_dev` branch, and refuse a command that
+  names none. `preflight`, `enable-agents` and a `rollback` without
+  `--version` take no version: the entry points read the tag from
+  `INSTALL_REF=<tag>` for them. A script or unit that calls
+  `install.sh update` without `--version` must be changed. Containers are
+  unchanged.
+- **A fresh systemd install completes.** On a host with no previous release,
+  every earlier installer (since v4.0.0) stopped with exit 1 and no message
+  after `Staged verified identity bootstrap package`, before the binary, the
+  unit and the service. A successful `install` or `update` also exited 1; it
+  exits 0 now, so automation that checks the status sees success. Without
+  `--admin-email` the first administrator is `admin@anixops.local` (the old
+  default, `admin@localhost`, is refused by Control's login check). A
+  backslash or a double quote in the administrator's email or password is
+  written to `config.yaml` as given; a value it cannot carry (a control
+  character such as a tab or a carriage return, U+2028 or U+2029, bytes that
+  are not UTF-8) is refused with the reason before the file is written. Piped
+  (`curl ... | sudo bash -s --`), the entry points always fetch the installer
+  at the tag; a `./scripts/install.sh` in the current directory is no longer
+  run. A host where an earlier installer stopped keeps its `config.yaml`,
+  with `admin@localhost` in it: remove it first, as
+  [`guide/release-installation.md`](guide/release-installation.md) ("After an
+  install that stopped without a message") says.
 - **A fresh systemd install runs in production mode.** The installer writes
   `env: "production"` into the `config.yaml` of a fresh install. The example
   template says `development`, which made host installs run a full AutoMigrate
   on every start and skip the production JWT-secret check. `update` never
-  rewrites an existing config: an installation from an earlier release stays
-  as it is, and can set `env: "production"` by hand
+  changes `env` in an existing config: an installation from an earlier
+  release stays as it is, and can set `env: "production"` by hand
   ([`guide/release-installation.md`](guide/release-installation.md)).
-- **The Helm chart's default image is the release.** The chart's `appVersion`
-  was `4.0.0`, so a release installed without `image.tag` or `image.digest`
-  resolved to the 4.0.0 image. It is now the release version and the tag gate
-  checks it. Keep setting `image.digest`, as the deployment guide says.
+- **Control starts after `forward legacy drop`.** On a database whose flux
+  tables were dropped, `anix-control migrate`, the server and
+  `forward legacy status` of the release candidates exited 1 with
+  `no such table: v2_forward` (PostgreSQL: `relation "v2_forward" does not
+  exist`). 4.2.0 starts there, and the old agents' task poll and result
+  report and a clean agent's heartbeat answer without bridge tasks or jobs.
+  A database dropped by a release candidate needs no repair: start 4.2.0 on
+  it. The flux v2 routes that are still served and use a dropped table (the
+  forward and tunnel lists, tunnel creation and deletion, speed limits,
+  traffic uploads) answer the database error
+  ([the drop](#forwarding-archive-clean-the-nodes-drop-the-old-tables-v42);
+  [design](architecture/forward-sdk.md#10-upgrade-from-v41), "After the drop").
+- **Stripe and PayPal checkout and the user Telegram settings answer "not
+  implemented".** `POST /api/v2/payment/fiat/create` with `stripe` or
+  `paypal` no longer answers a simulated checkout link and no longer stores a
+  pending payment record; `POST /api/v2/user/telegram/unbind` and
+  `POST /api/v2/user/telegram/notify` no longer answer success while changing
+  nothing. Each answers the v2 envelope with HTTP 200 and `code` -1 and a
+  message that says what was not done, so a client that checks only the HTTP
+  status still sees success. Users unbind by sending `/unbind` to the bot;
+  administrators change a member's switches with
+  `PUT /api/v2/admin/telegram/users/:id/notify`. Pending Stripe or PayPal
+  records the old answer created stay as they are; nothing can pay them.
+- **Rolling back to 4.1.0 skips what has no 4.1.0 release.**
+  `config/scripts/rollback_installations.py` lists the installations that
+  cannot move (`order` and `payment` on a 4.0 build) up front, moves the
+  rest and exits `3` when it skipped some (`0` with `--allow-skipped`); a
+  `--version` that nothing can reach is exit `1`
+  ([Rolling Back After The Import](#rolling-back-after-the-import)). A
+  wrapper that treats every non-zero status as failure must allow `3` or pass
+  `--allow-skipped`.
 - **Nothing else changes for operators.** The other changes of this release
   are in the release pipeline (the tag waits for the E2E, smoke and policy
   jobs, runners are pinned to `ubuntu-24.04`, a crash of the change
-  classifier fails the job) and in the visual-regression tests
-  (`CHANGELOG.md`, "4.2.0").
+  classifier fails the job), in the visual-regression tests, and in the
+  documentation: the install examples name `v4.2.0`, and the Agent upgrade
+  order in this runbook is the one the code supports (`CHANGELOG.md`,
+  "4.2.0").
 
 ### For The Release Owner Of 4.2.0
 
-- **Agent pin.** `AGENT_REF` in `ci.yml` names the Agent's 4.2.0 release
-  commit, `95fa91b7`; the Agent's `v4.2.0` tag must be on that commit before
-  the Control tag ([`RELEASING.md`](RELEASING.md), "What The Tag Pipeline
-  Does"). The signed Agent packages are built from it.
-- **Commercial packages.** After the 4.2.0 tag exists, run the manual
+- **Agent tag first.** `AGENT_REF` in `ci.yml` names the commit the Agent's
+  4.2.0 release is tagged from, `95fa91b7`; the signed Agent packages are
+  built from that commit, not from a tag. Push the Agent's `v4.2.0` tag on
+  that commit and wait for its `Build and Release` run to publish the Agent
+  release before you push the Control tag: a 4.2.0 Control's
+  `/install/agent.env` names `v4.2.0`, so node installs and campaigns cannot
+  download the Agent until that release exists. Nothing in the tag pipeline
+  checks this;
+  `git ls-remote --tags https://github.com/AnixOps/anix-agent 'v4.2.0^{}'`
+  must print `95fa91b7d8207a768b6eefabacec07f15a8f1135`.
+- **Commercial packages.** After the tag pipeline has published the 4.2.0
+  release (its last job, `Create Release`, has finished: the attach step
+  uploads to that release and fails while it does not exist), run the manual
   `Commercial Packages` workflow with `tag=v4.2.0` and `attach=true`, as for
   rc.3 above. A commercial installation imports `order`, `payment` and
-  `affiliate` before the first start of a Control that runs them.
+  `affiliate` before the first start of a Control that runs them; the 4.2.0
+  `payment` build carries the checkout change above.
 - **npm audit waivers expire:** braces on 2026-11-02 and sprintf-js on
   2026-11-05 (`web/audit-allowlist.json`); the frontend audit fails after that
   unless they are renewed or fixed.
@@ -3341,9 +3443,12 @@ apply too, with 4.2.0 in place of rc.3. The notes below are on top of them.
 ### Rolling Back From 4.2.0
 
 Redeploy the previous image or binary as in [Rollback](#rollback); there is no
-schema step. The four packages moved in step 4 can stay on 4.2.0 or go back
-with the same `PUT /api/v3/plugin-installations` call: their rc.4 builds run on
-the same tables. Going back to 4.1.0 is
+schema step. The packages moved in steps 4 and 5 can stay on 4.2.0 or go back
+with the same `PUT /api/v3/plugin-installations` call: their previous builds
+run on the same tables (and `notification` and `payment` answer the old fake
+success again). A database on which `forward legacy drop` ran cannot go back
+to a release candidate, which does not start there: stay on 4.2.0, or restore
+the backup taken before the drop. Going back to 4.1.0 is
 [Rolling Back After The Import](#rolling-back-after-the-import) and
 `config/scripts/rollback_installations.py`. A systemd host restores its
 backups as in [Rollback](#rollback), or runs `install.sh rollback --version
@@ -3354,6 +3459,60 @@ backups as in [Rollback](#rollback), or runs `install.sh rollback --version
 Those of [rc.3](#known-limits) are unchanged. The reachable advisories in the
 Agent's hysteria and quic-go dependencies that rc.4 left open (see "Source
 builds need Go 1.26" in the rc.3 notes) are listed in the Agent's CHANGELOG.
+And:
+
+- **`cmd/sqlite2postgres` cannot move a 4.x database to PostgreSQL.** With
+  `-reset` it stops while it resets the sequences: the kernel tables whose
+  primary key is text (`v3_kernel_plugin`, which every Control fills on its
+  first start, and others) fail with `sql: Scan error on column index 0, name
+  "max": converting driver.Value type string ("wireguard") to a int64`, and
+  the import rolls back, so nothing is copied. The `-dry-run` returns before
+  that step and does not warn. Past it, the tool would also write the `bytea`
+  columns of `v3_kernel_plugin_artifact` and `v3_kernel_plugin_webui_asset`
+  as text (the files of a published plugin release fail as invalid UTF-8),
+  skip the `v4_forward_legacy_*` tables, and create the dropped flux tables
+  again on the target. 4.1.0's tool fails the same way. Until it is fixed there is no
+  tool path from a 4.x SQLite database to PostgreSQL
+  ([`reference/sqlite-to-postgres-migration.md`](reference/sqlite-to-postgres-migration.md)).
+- **On PostgreSQL the first 4.2 start after 4.1.0 alters a kernel table.**
+  The kernel tables are migrated in every `env`, production included (the
+  promise that a production start never alters existing tables does not hold
+  for them), and 4.2 adds `reported_error_code varchar(64) NOT NULL DEFAULT
+  ''` to `v4_kernel_node_config_status`. A Control role that does not own
+  that table (a separate migration role, a `pg_restore` as another user)
+  stops with `Failed to prepare database: ensure control kernel schema:
+  ERROR: must be owner of table v4_kernel_node_config_status (SQLSTATE
+  42501)`. Run the first start or `anix-control migrate` as the table's
+  owner, or have the owner run
+  `ALTER TABLE v4_kernel_node_config_status ADD COLUMN IF NOT EXISTS reported_error_code varchar(64) NOT NULL DEFAULT '';`
+  first. A database a 4.2 release candidate has started has the column
+  already, and 4.1.0 runs on it unchanged.
+- **The forwarding cleanup on Compose and Helm.** The read-only containers
+  cannot write the startup archive (write it as step 1 of
+  ["Forwarding: Archive, Clean The Nodes, Drop The Old Tables"](#forwarding-archive-clean-the-nodes-drop-the-old-tables-v42)
+  says), and steps 4 and 5 have no container form: `forward legacy drop`
+  reads `--backup-taken` and the recorded archive inside the container that
+  runs it, while every Control is stopped, so run it in a one-off container
+  of the Control image that mounts both. The Helm chart has no persistent
+  volume for the archive. Neither path was rehearsed.
+- **No built-in payment gateway builds a pay link** (commercial edition).
+  `POST /api/v2/user/payment/create` answers a `trade_no` with an empty
+  `pay_url` and `qrcode` for EPay, Stripe and PayPal and stores a pending
+  record, and `GET /api/v2/payment/methods` still lists Stripe and PayPal as
+  enabled when their `v2_payment` row is, although `fiat/create` refuses
+  both.
+- **A new database gets enabled sample subscription templates.** The first
+  start, in every `env` and in containers, creates the `default`, `vip` and
+  `test` subscription groups with sample templates whose servers are
+  placeholders (`your-server.example.com`, `*.example.com`,
+  `127.0.0.1:19999`, sample keys). The log says they are disabled, but they
+  are created enabled (the column's default replaces the `0` the code sets).
+  Disable or delete them before users subscribe.
+- **The first start logs the bootstrap administrator's password.** When it
+  creates the first administrator, Control prints its email and password in
+  clear text, also a password taken from `config.yaml` such as the one the
+  systemd installer generates, so the password stays in the journal or the
+  container log. Change it after the first sign-in.
 
 ## Switching Route Modes
 

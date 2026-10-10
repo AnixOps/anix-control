@@ -7,16 +7,27 @@
 ### Highlights since 4.1.0
 
 This is the first stable 4.2 release. It rolls up 4.2.0-rc.1 to rc.4 (CHANGELOG.md has a section
-for each with every change; the `v4.2.0-rc.3` tag was pushed but not published, and rc.4 carries
-its changes) plus the changes listed after this summary. Read docs/UPGRADE.md before upgrading:
-"The Official Signing Root Changes (v4.2)" when coming from 4.1.0, and "Upgrading From 4.2.0-rc.4
-To 4.2.0" when coming from a release candidate.
+with every change for rc.1, rc.2 and rc.4; rc.3 has none of its own: the `v4.2.0-rc.3` tag was
+pushed but not published, and the rc.4 section carries its changes) plus the changes listed after
+this summary. Read
+[docs/UPGRADE.md](https://github.com/AnixOps/anix-control/blob/v4.2.0/docs/UPGRADE.md) before
+upgrading:
+["The Official Signing Root Changes (v4.2)"](https://github.com/AnixOps/anix-control/blob/v4.2.0/docs/UPGRADE.md#the-official-signing-root-changes-v42)
+when coming from 4.1.0, and
+["Upgrading From 4.2.0-rc.4 To 4.2.0"](https://github.com/AnixOps/anix-control/blob/v4.2.0/docs/UPGRADE.md#upgrading-from-420-rc4-to-420)
+when coming from a release candidate.
 
-- **Forwarding is the v4 model.** The flux forwarding API and pages are removed (the v2 routes
-  that change forwards, rules, tunnels, nodes, Ansible machines and clean agents answer 404);
-  routes are chains of hops under `/api/v4/forward/*`. The old forwarding data is archived on the
-  first start and its tables are dropped only by the explicit, irreversible
-  `anix-control forward legacy drop`.
+- **Forwarding is the v4 model.** The flux forwarding API and pages are removed; routes are
+  chains of hops under `/api/v4/forward/*`. The v2 routes that change forwards and legacy rules,
+  the administrator's forward node, Ansible machine and clean agent routes, tunnel update and
+  diagnose, permission update and removal, and speed limit update answer 404. The lists, tunnel
+  creation and deletion, permission assignment, speed limit create and delete, and the clean
+  agents' register, heartbeat and report stay served, without pages, until the legacy cleanup
+  (["Flux Forwarding API Removed (v4.2)"](https://github.com/AnixOps/anix-control/blob/v4.2.0/docs/UPGRADE.md#flux-forwarding-api-removed-v42)
+  lists both). The first start archives the old forwarding data where the data directory is
+  writable; on the read-only Compose and Helm containers it cannot, so write the archive with
+  `anix-control forward legacy archive -o <dir>`. The old tables are dropped only by the
+  explicit, irreversible `anix-control forward legacy drop`.
 - **`agent_control.mtls` defaults to `required`:** legacy API-key Agents are refused on the
   AnixOps Agent channels. `anix-control agents transports --check-required` lists the nodes it
   would refuse.
@@ -32,19 +43,28 @@ To 4.2.0" when coming from a release candidate.
   a nightly security workflow. From this release the signed Agent packages are built from an
   Agent that carries the `x/net` fix (below). The Agent's main binary still reaches four
   advisories in its Hysteria2 and QUIC dependencies when scanned with the release build tags;
-  the Agent's CHANGELOG ("Known Gaps") names each one with the configuration that exposes it.
+  [the Agent's CHANGELOG](https://github.com/AnixOps/anix-agent/blob/v4.2.0/CHANGELOG.md#known-gaps)
+  ("Known Gaps", in `AnixOps/anix-agent`) names each one with the configuration that exposes it.
+- **A fresh systemd install completes.** On a host with no previous release `scripts/install.sh`
+  stopped with exit 1 and no message before it installed the binary or the service (since v4.0.0).
+- **Control starts after `forward legacy drop`.** The 4.2.0 release candidates exited 1 with
+  `no such table: v2_forward` once the flux tables were dropped; the only way out was the backup.
 - **Experimental, off by default:** the `anixops` forward driver and the relay process (A3).
+- **Known limits** are in
+  ["Known Limits In 4.2.0"](https://github.com/AnixOps/anix-control/blob/v4.2.0/docs/UPGRADE.md#known-limits-in-420): among them,
+  `cmd/sqlite2postgres` cannot move a 4.x SQLite database to PostgreSQL, and on PostgreSQL the
+  first 4.2 start after 4.1.0 alters a kernel table, so it must run as the table owner.
 
 ### Changed
 
 - **The systemd installer installs a named release tag.** `scripts/install.sh` requires
-  `--version <tag>` for `install` and `update` and no longer resolves GitHub's
-  `releases/latest`, so publishing a release cannot change what an unpinned command installs. The
-  one-command entry points `install.sh` and `panel_install.sh` fetch the installer at that tag
-  instead of from the `go_dev` branch and refuse a command that names no tag (`INSTALL_REF` still
-  overrides, for a developer who installs another ref). The installer is no longer described as
-  frozen. `scripts/tests/test_install_tag.sh` covers all three scripts.
-
+  `--version <tag>` (or `ANIX_CONTROL_VERSION=<tag>`) for `install` and `update` and no longer
+  resolves GitHub's `releases/latest`, so publishing a release cannot change what an unpinned
+  command installs. The one-command entry points `install.sh` and `panel_install.sh` fetch the
+  installer at that tag instead of from the `go_dev` branch and refuse a command that names no
+  tag (`INSTALL_REF` still overrides, for a developer who installs another ref, and names the tag
+  for `preflight`, `enable-agents` and a `rollback` without `--version`). The installer is no
+  longer described as frozen. `scripts/tests/test_install_tag.sh` covers all three scripts.
 - **More test and policy jobs gate the tag.** `release-binaries` now also waits for Release Workflow Policy Check, Deployment Script Checks, Package Storage PostgreSQL, Docker Build Smoke, Kubernetes Smoke and E2E Tests, and `plugin-package-publish` waits for Go Quality Gates, Go Security Scans and Backend Tests. Before, a failing E2E, Docker or Kubernetes smoke, package storage, deployment script or release policy job did not stop the tag from being published, and the signed packages did not wait for the Go gates. `config/scripts/check_release_workflow.sh` enforces each gate, and its self-test checks that removing any one of them fails the check.
 - **One Agent pin, and a vulnerability scan of the Agent plugins that ship in the signed
   packages.** Every anix-agent checkout in `ci.yml` (the official packages, the cross-repository
@@ -55,26 +75,82 @@ To 4.2.0" when coming from a release candidate.
   carry x/net v0.60.0 and reach none. The signed packages of 4.2.0-rc.4 were built from the old
   pin. `Plugin Package Release Contracts` now runs the same scan over `nftables-forward`,
   `gost-mesh`, `machine-telemetry` and `nat-egress` and fails for a vulnerability their call graph
-  reaches. `config/scripts/check_release_workflow.sh` enforces the single pin, that every checkout
-  uses it, and that the scan stays.
-- **The systemd installer installs a named release tag.** `scripts/install.sh` requires
-  `--version <tag>` for `install` and `update` and no longer resolves GitHub's
-  `releases/latest`, so publishing a release cannot change what an unpinned command installs. The
-  one-command entry points `install.sh` and `panel_install.sh` fetch the installer at that tag
-  instead of from the `go_dev` branch and refuse a command that names no tag (`INSTALL_REF` still
-  overrides, for a developer who installs another ref). The installer is no longer described as
-  frozen. `scripts/tests/test_install_tag.sh` covers all three scripts.
+  reaches. `config/scripts/check_release_workflow.sh` enforces the single pin and that every
+  checkout uses it; of the scan it checks only that the step still scans `nftables-forward`.
 
 ### Fixed
 
+- **A fresh systemd install completes.** On a host with no previous release
+  `scripts/install.sh install` stopped with exit 1 and no message before it installed the binary,
+  the unit or the service (`backup_current_release` returned the status of its failed test;
+  present since v4.0.0), and a successful `install` or `update` also exited 1. Also fixed: the
+  default administrator `admin@localhost` was refused by Control's login check (the default is now
+  `admin@anixops.local`, the server's own); an administrator email or password containing a
+  backslash was corrupted in `config.yaml` (`ab\qcd` did not load; a double quote is now accepted
+  too); `install.sh` and `panel_install.sh` run from a pipe used a `./scripts/install.sh` or
+  `./install.sh` in the current directory and skipped the tag pin; a bare `--version` exited 1
+  without a message. A bootstrap email or password that `config.yaml` or the login check cannot
+  carry (a control character such as a tab or a carriage return, U+2028 / U+2029, bytes that are
+  not UTF-8) is refused with a reason before the file is written; it used to make the install fail
+  late or run with a changed value. A host where an earlier installer stopped keeps its
+  `config.yaml`: remove it first (`docs/guide/release-installation.md`, "After an install that
+  stopped without a message"). `scripts/tests/test_install_fresh_main.sh` runs the real `main()`
+  on an empty installation.
 - **A fresh systemd install runs in production mode.** The installer (`scripts/install.sh`) writes
   `env: "production"` into the `config.yaml` of a fresh install. The template said
   `env: "development"`, so host installs ran a full AutoMigrate on every start and skipped the
-  production JWT-secret check. `update` never rewrites an existing config; an install from an
-  earlier release can set `env: "production"` by hand (`docs/guide/release-installation.md`).
+  production JWT-secret check. `update` never changes `env` in an existing config; an install from
+  an earlier release can set `env: "production"` by hand (`docs/guide/release-installation.md`).
+- **Control starts after `forward legacy drop`.** `anix-control migrate`, the server and
+  `forward legacy status` exited 1 with `no such table: v2_forward` (PostgreSQL: `relation
+  "v2_forward" does not exist`) once the flux tables were dropped: the start seeded the old
+  runtime's settings and rewrote the retired iptables backend in the dropped tables. The start now
+  skips what no longer exists, and a legacy agent's result report (which answered 500), task poll
+  and a clean agent's heartbeat no longer fail on the dropped bridge and job tables. Only the
+  database's own "table does not exist" counts as dropped: any other failed statement is still an
+  error, so a result report is retried instead of being acknowledged as a diagnostic task. The
+  drop itself is unchanged, and a database dropped by a 4.2.0 release candidate needs no repair.
+  The flux v2 routes that are still served and use a dropped table answer the database error.
+- **Rollback to 4.1.0 no longer stops at the first package without a 4.1.0 release.**
+  `config/scripts/rollback_installations.py` lists the installations that have no release of the
+  requested version (`order`, `payment` on a 4.0 build answered `release_not_found` and left
+  everything after them on 4.2) up front, skips them, moves the rest and ends with a
+  rolled back / skipped / failed summary. It exits `3` when something was skipped unless
+  `--allow-skipped` is given. A `--version` that no installation can reach (a typo, a `v` prefix)
+  moves nothing and is an error, exit `1`, with or without `--allow-skipped` and in the dry run;
+  a network, authorization or 5xx error still stops the run, and a dropped connection is
+  reported as an error instead of a traceback (docs/UPGRADE.md, "Rolling Back After The Import").
+- **Stripe and PayPal checkout and the user Telegram settings no longer answer a fake success.**
+  `POST /api/v2/payment/fiat/create` answered a simulated Stripe or PayPal checkout link and stored
+  a pending payment record that nothing could pay. Neither checkout is implemented, so both
+  providers are refused (`code` -1, "Stripe 支付尚未实现，未创建支付订单 (Stripe checkout is not
+  implemented; no payment was created)", the same for PayPal) and no record is created.
+  `POST /api/v2/user/telegram/unbind` and `POST /api/v2/user/telegram/notify` answered success
+  while changing nothing; they answer `code` -1 "not implemented" and leave the binding and its
+  notification switches as they were. To unbind, send `/unbind` to the bot; administrators can
+  change a member's switches with `PUT /api/v2/admin/telegram/users/:id/notify`. The refusal is
+  the v2 envelope (HTTP 200, `code` -1), and these routes run natively by default, so they change
+  with the 4.2.0 builds of `notification` and of the commercial `payment` package. The Stripe and
+  PayPal webhooks, the EPay callback and `/api/v2/user/payment/create` are unchanged.
 - **The Helm chart's default image is the release.** `appVersion`, the chart's default image tag,
   was still `4.0.0`. It is now the release version, set by `prepare_release.py` and checked by the
   release tag gate (`check_release_version.py`).
+- **Docs: stale install examples and Agent statements.** The install examples in README, the
+  release-installation guide, DEPLOYMENT and BRAND_MIGRATION name the release being installed
+  (`v4.2.0`) instead of `v4.0.0` (which paired the v4.0.0 installer with `--grpc-name`, a flag it
+  does not have) and `v4.0.1` (a tag that does not exist); the rollback example names `v4.1.0`.
+  README and `docs/intro/README.md` no longer claim a "sixteen-package cohort" and "immutable V4
+  evidence": a release ships the 15 community packages and no evidence bundle (v4.0.0 only). The
+  systemd installer is no longer called frozen. `docs/UPGRADE.md` and
+  `docs/architecture/forward-sdk.md` no longer say the 4.2 Agent is not out, and the upgrade order
+  is what works: from 4.1 a Control has no one-command installer (`/install.sh`,
+  `/install/agent.env`), so nodes with an anix-agent move first with its own installer and the
+  others after the upgrade under `agent_control.mtls: preferred`; from a 4.2 release candidate,
+  Control first and then the Agents, because a Control hands out only its own Agent release. The
+  4.2 start adds 23 tables, 2 views and 1 column, not 20 tables. The migration guide no longer
+  pins the unpublished `v3.0.0-alpha.2` and says `scripts/install-agent.sh migrate` cannot run,
+  and a unit test (`config/scripts/docs_release_claims_test.py`) keeps documented install pins to
+  released tags and the Agent order to what the code supports.
 
 ### Tooling
 
