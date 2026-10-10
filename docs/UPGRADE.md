@@ -121,7 +121,8 @@ Before touching production:
   to their real values** ([rc.4 → rc.5 Checklist](#rc4--rc5-checklist)).
 - **Upgrading to v4.2: every enabled node must run an enrolled Agent, since
   `agent_control.mtls` now defaults to `required`; `anix-control agents
-  transports --check-required` must exit 0**
+  transports --check-required` must exit 0 (or keep
+  `agent_control.mtls: preferred` until it does)**
   ([v4.2 Requires Enrolled Agents](#agent-transports-v42-requires-enrolled-agents)).
 - **Upgrading to v4.2: the flux forwarding API (`/api/v2/forward/*` and the
   administrator's forward, rule, node, Ansible machine and clean agent
@@ -2059,10 +2060,16 @@ selectable.
 
 ### Order Of Operations
 
-1. **On 4.1, upgrade every node's Agent and let it enroll** (the checklist
-   in "Preparing For v4.2" below; forward nodes: "The New Agent First, Then
-   Control"). Control needs `grpc.enabled`, `grpc.tls_cert_file` /
-   `grpc.tls_key_file` and `module_runtime.ca_kek` for that.
+1. **On 4.1, upgrade the Agent of every node that already runs one, and let
+   it enroll** (the checklist in "Preparing For v4.2" below; forward nodes:
+   "The New Agent First, Then Control"). Control needs `grpc.enabled`,
+   `grpc.tls_cert_file` / `grpc.tls_key_file` and `module_runtime.ca_kek` for
+   that. A 4.1 Control cannot serve the one-command installer (the script
+   reads `/install/agent.env`, which only a 4.2 Control answers), so a node
+   with no Agent to update moves after step 3, from its node page, with
+   `agent_control.mtls: preferred` kept until it has
+   ([Forward Nodes](#forward-nodes-the-new-agent-first-then-control),
+   [Keeping `preferred` For A While](#keeping-preferred-for-a-while)).
 2. **Run the gate** against the database Control uses:
 
    ```bash
@@ -2084,7 +2091,8 @@ selectable.
    that no enabled node shows `unseen` without a certificate in
    `anix-control agents transports`. Do not run the v4.2 binary against the
    4.1 database just for the check: admin commands migrate the schema
-   first.
+   first. The nodes you move after the upgrade (step 1) are listed too, which
+   is why `preferred` stays until they have moved.
 3. **Upgrade Control to v4.2.** Its startup log states the mode, and under
    `required`:
    - `WARNING: Agent transports: agent_control.mtls=required refuses N enabled
@@ -2344,7 +2352,9 @@ To move a `legacy` node:
    (`ANIX_CONTROL_MODULE_RUNTIME_CA_KEK`), `grpc.enabled: true` and
    `grpc.tls_cert_file`/`grpc.tls_key_file`. The startup log line
    `Agent transports: ... agent enrollment: available` confirms it.
-2. Upgrade anix-agent to a release with A2 enrollment. It enrolls with its
+2. Upgrade anix-agent to 4.2.0-rc.1 or later, the first release with
+   enrollment (on a root install `sudo anix-agent update <tag>`, see
+   `docs/INSTALL.md` in the anix-agent repository). It enrolls with its
    existing node key on its next start; a new node can use a one-time
    credential (`anix-control agent token create -node proxy-12`).
 3. Watch the node turn `mtls` in `anix-control agents transports` (within
@@ -2367,7 +2377,8 @@ constraint: v4.2 replaces the flux-compatible forwarding, retires the clean
 agent and NodeX, and (once you confirm it) drops the old forwarding tables. A
 clean agent node still on its old agent when Control moves to v4.2 is refused
 (`agent_mtls_required`), and Control can then no longer clean it. Upgrade in
-this order:
+this order (on 4.1 the installer of step 1 exists only on a 4.2 Control, see
+below):
 
 1. **Install the new anix-agent on every forward node first**, while Control
    is still on 4.1, clean agent and NodeX nodes included. On install it
@@ -2385,16 +2396,40 @@ this order:
    NodeX's HTTP API and Ansible hosts over SSH; neither depends on
    `agent_control.mtls`.
 
-That Agent release is not out yet. This section will name its version, and
-the v4.2 upgrade notes will repeat the order
+That Agent release is anix-agent 4.2.0-rc.1 or later: the first with
+enrollment, the credential-only configuration the install script writes, and
+`upgrade.v1`. The candidates `v4.2.0-rc.1` to `v4.2.0-rc.4` are published, and
+the Agent's 4.2.0 release comes with Control 4.2.0, since the two share a
+version number (H25). The same order is in "Order Of Operations" above
 ([design](architecture/forward-sdk.md#10-upgrade-from-v41)).
+
+**Step 1 needs the installer of a 4.2 Control.** The one-command installer
+below is served by Control 4.2 (`/install.sh`, with `/install/agent.env`). A
+4.1 Control has neither (its `/install.sh` is the clean agent's, under
+`/api/v2/forward-agent/`), so the script cannot read the Agent release from it
+and stops before it changes anything. On 4.1, step 1 therefore holds for the
+nodes you can update with the Agent's own installer. For the others, which
+have no anix-agent to update (clean agent, NodeX and Ansible nodes), keep them
+served while Control moves first:
+
+1. Set `agent_control.mtls: preferred` (`ANIX_CONTROL_AGENT_CONTROL_MTLS`)
+   before the upgrade, so the clean agents' register, heartbeat and report
+   stay served after it
+   ([Keeping `preferred` For A While](#keeping-preferred-for-a-while)).
+2. Upgrade Control to v4.2.
+3. Run each of those nodes' install command from its page (below). It removes
+   the legacy runtime on the node and enrolls the Agent.
+4. When `anix-control agents transports --check-required` exits 0, remove
+   the setting and restart. "Forwarding: Archive, Clean The Nodes, Drop The
+   Old Tables" follows as written; until step 3, `forward legacy check`
+   reports these nodes unreachable.
 
 #### Installing Or Switching A Node With One Command
 
-Control serves the installer for step 1: on the node's page, **复制安装命令**
-issues a single-use enrollment token for the node (super administrators; 1
-hour by default, at most 7 days) and prints the command to paste on the node
-as root:
+A 4.2 Control serves the installer for step 1: on the node's page,
+**复制安装命令** issues a single-use enrollment token for the node (super
+administrators; 1 hour by default, at most 7 days) and prints the command to
+paste on the node as root:
 
 ```sh
 curl -fsSL https://panel.example.com/install.sh | sudo bash -s -- \
@@ -2411,9 +2446,10 @@ upgrades it in place and keeps its identity. Before the first command:
   checklist above), and an https address nodes reach:
   `agent_install.public_url` unless the request's origin is already right.
 - The node needs systemd, root, `curl`, `sha256sum` and `unzip`.
-- It needs the anix-agent release that accepts the credential-only
-  configuration the script writes; today's Agent refuses it (no node API
-  key). That release is the one step 1 names.
+- It needs anix-agent 4.2.0-rc.1 or later, which accepts the credential-only
+  configuration the script writes; earlier Agents refuse it (`ApiKey is
+  required`, and the script stops at "did not enroll"). That release is the
+  one step 1 names.
 - The installer removes only objects it can name: the three tables and the
   clean agent. gost services the flux runtime created through gost's API on
   NodeX hosts live in a gost the operator installed; Control's upgrade
@@ -2712,7 +2748,11 @@ section 9, "Upgrades (O4)"; protocol: `sdk/api/agent/v1/PROTOCOL.md`,
   `plugins.official_public_key`, and `agent_install.public_url` is the
   https address nodes download from.
 - **Run it.** The Control version and the Agent version are the same
-  (H25): after upgrading Control, upgrade the Agents.
+  (H25), and a Control hands out only its own release: a campaign refuses a
+  `target_version` newer than Control, and `/install/agent.env` names `v` +
+  Control's version unless `agent_install.agent_version` is set. On a 4.2
+  Control, upgrade Control first and then the Agents; an Agent one release
+  behind keeps working meanwhile (the Agent contract only grows).
 
   ```bash
   anix-control agent upgrade start -reason "v4.2.0"   # or POST /api/v4/kernel/agents/upgrades
@@ -2766,11 +2806,14 @@ Control Treats The Root") too. What it means for an upgrade:
   [below](#commercial-packages-have-no-new-root-build): `affiliate`, `order`
   and `payment` are not in the release and have no build signed with the new
   root.
-- **Agents.** Upgrade the Agents first, as before, with the `agent-install.sh`
-  release asset of 4.2 (the `/install.sh` of a 4.2 Control is the same file),
-  after verifying it against the new root (the commands are in the script's
-  header). A 4.1 release has no one-command installer to use instead
-  (`/install.sh` answers 404), and an Agent built before 4.2 cannot verify
+- **Agents.** Verify the `agent-install.sh` release asset of 4.2 (the
+  `/install.sh` of a 4.2 Control is the same file) against the new root; the
+  commands are in the script's header. It runs only against a 4.2 Control: it
+  reads that Control's `/install/agent.env`, which a 4.1 Control does not have
+  (`/install.sh` answers 404 there). From 4.1 the Agents therefore move in
+  the order of ["Order Of Operations"](#order-of-operations): the nodes that
+  run an anix-agent first, with its own installer, and the others from their
+  node pages once Control is on 4.2. An Agent built before 4.2 cannot verify
   the new root; a node that
   enables the plugin supervisor sets `PluginOfficialPublicKey` itself and
   must change it to the new root before it takes packages signed with it.
@@ -3003,32 +3046,39 @@ recovery, the way out is the rollback below or restoring the database backup.
   `pg_restore` of the Compose backup into a fresh database, 30 seconds, then
   4.1.0 started on it, login and all 15 packages healthy after 38 seconds)
   and lose what changed since.
-- The 4.2 start adds 20 tables and 2 views to the database (the
+- The 4.2 start adds 23 tables, 2 views and 1 column to the database (the
   `v4_forward_legacy_*`, `v4_kernel_agent_upgrade_*`, `v4_kernel_forward_*`
-  and `v4_kernel_package_report_state` tables, `kapi_package_report_v1` and
-  `kapi_plugin_configuration_v1`) and drops no table; the row counts of the
-  existing tables were unchanged. 4.1.0 ignores the new ones, so a rollback
-  needs no schema step.
+  and `v4_kernel_package_report_state` tables, plus `v4_kernel_admin_api_token`,
+  `v4_kernel_alert` and `v4_kernel_user_activity`; the views
+  `kapi_package_report_v1` and `kapi_plugin_configuration_v1`; and the column
+  `reported_error_code` of `v4_kernel_node_config_status`, `NOT NULL DEFAULT
+  ''`) and drops no table; the row counts of the existing tables were
+  unchanged. 4.1.0 ignores the new ones, so a rollback needs no schema step.
 
 ## Upgrading From 4.2.0-rc.2 To 4.2.0-rc.3
 
 rc.3 changes no table and no signing root: nothing under any `migrations`
 directory differs from rc.2, and the root is the same
 `jW26nr2tbthASoeq6RmIpx8Ah+uhPNIv9V1ewRVb1VE=`. The Agent and Control share a
-version number; upgrade the Agents first as for every 4.2 build. Coming from
-4.1.0, do everything in
+version number and a Control hands out only its own Agent release, so from
+rc.2 you upgrade Control first and the Agents after it
+([Staged Agent Upgrades](#staged-agent-upgrades-v42)); rc.2 Agents keep
+working meanwhile. Coming from 4.1.0, do everything in
 ["The Official Signing Root Changes (v4.2)"](#the-official-signing-root-changes-v42)
 with the rc.3 builds in place of rc.2; the notes below are on top of it.
 
 ### rc.3 Checklist (4.2)
 
 1. Back up the database and the configuration, as always.
-2. Upgrade the Agents first, with the `agent-install.sh` release asset of
-   rc.3 (see [Staged Agent Upgrades (v4.2)](#staged-agent-upgrades-v42)).
-3. Deploy the rc.3 Control. `identity-platform` keeps running its rc.2 release:
+2. Deploy the rc.3 Control. `identity-platform` keeps running its rc.2 release:
    the bootstrap moves an installation only when its release can no longer be
    verified ([Identity-Platform Recovers By Itself](#identity-platform-recovers-by-itself)),
    and under the same root it can.
+3. Upgrade the Agents to rc.3 with a campaign (`anix-control agent upgrade
+   start`, the rc.3 release in `agent_install.artifact_dir`), or re-run the
+   install command of a node: both install Control's own Agent release, so
+   they need the rc.3 Control from step 2
+   ([Staged Agent Upgrades (v4.2)](#staged-agent-upgrades-v42)).
 4. **Move `identity-platform` to rc.3** with an administrator session token
    (the call of step 3 in [Upgrade Procedure](#upgrade-procedure), with
    `VERSION=4.2.0-rc.3`), then check `GET /api/v3/plugin-installations` for

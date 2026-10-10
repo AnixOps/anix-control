@@ -36,7 +36,7 @@ Download the installer from the exact release tag. This fetches one script, not
 the repository checkout:
 
 ```bash
-export VERSION=v4.0.0
+export VERSION=v4.2.0   # the release tag to install
 curl -fsSL \
   "https://raw.githubusercontent.com/AnixOps/anix-control/${VERSION}/scripts/install.sh" \
   -o /tmp/anix-control-install.sh
@@ -303,7 +303,7 @@ failed health or identity gateway check restores that snapshot.
 Upgrade to an explicit release:
 
 ```bash
-export TARGET=v4.0.0
+export TARGET=v4.2.0   # the release tag to upgrade to
 curl -fsSL \
   "https://raw.githubusercontent.com/AnixOps/anix-control/${TARGET}/scripts/install.sh" \
   -o /tmp/anix-control-install.sh
@@ -314,10 +314,12 @@ rm -f /tmp/anix-control-install.sh
 To roll back the application files, run the same version-pinned installer with
 the previous known-good tag. Configuration and database rollback are separate
 operator decisions; do not restore a database merely because an application
-binary was rolled back.
+binary was rolled back. Going back to a 4.1 release from 4.2 also needs the
+package installations moved back, because the official signing root changed
+([`../UPGRADE.md`](../UPGRADE.md#rolling-back-after-the-import)).
 
 ```bash
-export PREVIOUS=v2.5.0
+export PREVIOUS=v4.1.0   # the previous known-good tag
 curl -fsSL \
   "https://raw.githubusercontent.com/AnixOps/anix-control/${PREVIOUS}/scripts/install.sh" \
   -o /tmp/anix-control-install.sh
@@ -336,9 +338,11 @@ For older panel products or a coordinated panel/node cutover, follow
   production version selector.
 - Review the script before execution and keep release checksums with the change
   record.
-- For v4, retain the verified `v4-release-evidence.tar.gz` with the deployment
-  record. Do not install a partial sixteen-package set or bypass an unhealthy
-  package with a direct legacy route.
+- Keep the release's `SHA256SUMS.txt` and the packages archive's `.sig` with
+  the deployment record. Only `v4.0.0` has a verified
+  `v4-release-evidence.tar.gz`; later releases ship no evidence bundle. Do not
+  install a partial package set or bypass an unhealthy package with a direct
+  legacy route.
 - Do not use the legacy `install.sh` source/Docker path unless
   `ANIX_CONTROL_LEGACY_SOURCE_INSTALL=1` is intentionally set for a controlled
   recovery. It is not the stable release path.

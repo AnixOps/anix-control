@@ -43,7 +43,7 @@ The systemd installer [`scripts/install.sh`](../scripts/install.sh) (also reache
 
 - Container deployment (Compose, Helm): [`docs/DEPLOYMENT.md`](DEPLOYMENT.md)
 - Docker development stack: [`docs/reference/quickstart.md`](reference/quickstart.md)
-- Native systemd install (frozen): [`docs/guide/release-installation.md`](guide/release-installation.md)
+- Native systemd install (the alternative to containers): [`docs/guide/release-installation.md`](guide/release-installation.md)
 - Local dev: [`docs/reference/startup-config.md`](reference/startup-config.md)
 - Runtime config migration: [`docs/reference/forward-runtime-migration.md`](reference/forward-runtime-migration.md)
 - NodeX mode and runtime semantics: [`docs/reference/runtime.md`](reference/runtime.md)
