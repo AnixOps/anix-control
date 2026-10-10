@@ -91,38 +91,49 @@ func InitForwardRuntimeSystemConfig(db *gorm.DB) error {
 // migrateIptablesForwardBackend 把存量数据里的 iptables_ansible 归一化为 nftables_ansible。
 // iptables 已从用户面下线, normalize 兜底能防新增, 此处清理历史数据让 backend 值统一。
 // 幂等: 多次执行安全。
+//
+// The flux tables are gone once the v4.2 upgrade dropped them
+// (forwardlegacy.Drop): a table that does not exist has nothing to
+// normalize, so each statement runs only when its table is there.
 func migrateIptablesForwardBackend(db *gorm.DB) error {
 	const ipt = model.ForwardRuntimeBackendIptablesAnsible
 	const nft = model.ForwardRuntimeBackendNftablesAnsible
+	migrator := db.Migrator()
 
 	// Forward.runtime_backend
-	if err := db.Model(&model.Forward{}).
-		Where("runtime_backend = ?", ipt).
-		Update("runtime_backend", nft).Error; err != nil {
-		return err
+	if migrator.HasTable(&model.Forward{}) {
+		if err := db.Model(&model.Forward{}).
+			Where("runtime_backend = ?", ipt).
+			Update("runtime_backend", nft).Error; err != nil {
+			return err
+		}
 	}
 
 	// 未完成的 job (pending/running) 才迁移; 已完成的保留审计原值
-	if err := db.Model(&model.ForwardRuntimeJob{}).
-		Where("backend = ? AND status IN ?", ipt, []int{
-			model.ForwardRuntimeJobStatusPending,
-			model.ForwardRuntimeJobStatusRunning,
-		}).
-		Update("backend", nft).Error; err != nil {
-		return err
+	if migrator.HasTable(&model.ForwardRuntimeJob{}) {
+		if err := db.Model(&model.ForwardRuntimeJob{}).
+			Where("backend = ? AND status IN ?", ipt, []int{
+				model.ForwardRuntimeJobStatusPending,
+				model.ForwardRuntimeJobStatusRunning,
+			}).
+			Update("backend", nft).Error; err != nil {
+			return err
+		}
 	}
 
 	// ForwardTrafficCursor 有 (forward_id, backend) 唯一索引: 先删与 nft 行冲突的 ipt 行, 再迁移剩余
-	if err := db.Exec(`DELETE FROM v2_forward_traffic_cursor
-		WHERE backend = ? AND forward_id IN (
-			SELECT forward_id FROM v2_forward_traffic_cursor WHERE backend = ?
-		)`, ipt, nft).Error; err != nil {
-		return err
-	}
-	if err := db.Model(&model.ForwardTrafficCursor{}).
-		Where("backend = ?", ipt).
-		Update("backend", nft).Error; err != nil {
-		return err
+	if migrator.HasTable(&model.ForwardTrafficCursor{}) {
+		if err := db.Exec(`DELETE FROM v2_forward_traffic_cursor
+			WHERE backend = ? AND forward_id IN (
+				SELECT forward_id FROM v2_forward_traffic_cursor WHERE backend = ?
+			)`, ipt, nft).Error; err != nil {
+			return err
+		}
+		if err := db.Model(&model.ForwardTrafficCursor{}).
+			Where("backend = ?", ipt).
+			Update("backend", nft).Error; err != nil {
+			return err
+		}
 	}
 
 	// systemconfig 里的后端选择值
