@@ -28,6 +28,18 @@ import (
 // sees the failed statements the handlers would log.
 func fluxDroppedAgentDB(t *testing.T) (*gorm.DB, *strings.Builder) {
 	t.Helper()
+	db, statements := fluxAgentDB(t)
+	for _, table := range forwardlegacy.DropTables {
+		require.NoError(t, db.Migrator().DropTable(table), table)
+	}
+	statements.Reset()
+	return db, statements
+}
+
+// fluxAgentDB is a v4.1 database: the flux tables, the node inventory and
+// the diagnostic task table, all there.
+func fluxAgentDB(t *testing.T) (*gorm.DB, *strings.Builder) {
+	t.Helper()
 	statements := &strings.Builder{}
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{
 		Logger: logger.New(log.New(statements, "", 0), logger.Config{LogLevel: logger.Error, IgnoreRecordNotFoundError: true}),
@@ -43,9 +55,6 @@ func fluxDroppedAgentDB(t *testing.T) (*gorm.DB, *strings.Builder) {
 		&model.SpeedLimit{}, &model.ForwardRuntimeJob{}, &model.ForwardTrafficCursor{}, &model.ForwardAgentBridgeTask{},
 		&model.ForwardRule{}, &model.ForwardRoute{}, &model.ForwardLog{}, &model.ForwardStats{},
 	))
-	for _, table := range forwardlegacy.DropTables {
-		require.NoError(t, db.Migrator().DropTable(table), table)
-	}
 	statements.Reset()
 	return db, statements
 }

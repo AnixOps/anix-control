@@ -19,6 +19,7 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/agenttransport"
 	"github.com/AnixOps/anix-control/v4/internal/agentws"
 	"github.com/AnixOps/anix-control/v4/internal/database"
+	"github.com/AnixOps/anix-control/v4/internal/forwardlegacy"
 	"github.com/AnixOps/anix-control/v4/internal/kernelnodeops"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/AnixOps/anix-control/v4/internal/nodesecrets"
@@ -27,6 +28,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 // agentDiagnosticTaskType is the type of every task an administrator sends
@@ -803,6 +805,14 @@ func (h *AgentHandler) AgentGetTasks(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"tasks": tasks})
 }
 
+// quietDB is the handler's database with GORM's statement log off, for the
+// statements on a table that Drop may have removed (forwardlegacy): their
+// "no such table" is an answer, not a failure, and the caller logs the
+// failures that are.
+func (h *AgentHandler) quietDB() *gorm.DB {
+	return h.db.Session(&gorm.Session{Logger: logger.Default.LogMode(logger.Silent)})
+}
+
 // pullBridgeTasks 取出该节点尚未下发的 clean_agent bridge 任务并原子标记为 dispatched。
 func (h *AgentHandler) pullBridgeTasks(nodeID uint) []AgentTask {
 	tasks := []AgentTask{}
@@ -810,17 +820,19 @@ func (h *AgentHandler) pullBridgeTasks(nodeID uint) []AgentTask {
 		return tasks
 	}
 	// Every task poll of every legacy agent comes here, and the table is
-	// gone once the v4.2 upgrade dropped the flux tables (forwardlegacy.Drop).
-	if !h.db.Migrator().HasTable(&model.ForwardAgentBridgeTask{}) {
-		return tasks
-	}
-
+	// gone once the v4.2 upgrade dropped the flux tables (forwardlegacy.Drop):
+	// the node has no bridge task then, and the poll says nothing about it.
+	// Only the database saying the table does not exist means that, so the
+	// statement is the check, with its own failure logged once here, not
+	// by GORM on every poll.
 	var mappings []model.ForwardAgentBridgeTask
-	if err := h.db.
+	if err := h.quietDB().
 		Where("node_id = ? AND status = ?", nodeID, model.ForwardAgentBridgeTaskStatusPending).
 		Order("id ASC").
 		Find(&mappings).Error; err != nil {
-		log.Printf("[WARN] agent tasks: load bridge tasks for node %d failed: %v", nodeID, err)
+		if !forwardlegacy.MissingTable(err, model.ForwardAgentBridgeTask{}.TableName()) {
+			log.Printf("[WARN] agent tasks: load bridge tasks for node %d failed: %v", nodeID, err)
+		}
 		return tasks
 	}
 
@@ -1554,13 +1566,15 @@ func (h *AgentHandler) AgentGetForwardRules(c *gin.Context) {
 	}
 
 	// The rules table is gone once the v4.2 upgrade dropped the flux tables
-	// (forwardlegacy.Drop): the node has no rules then.
+	// (forwardlegacy.Drop): the node has no rules then, and that is not
+	// logged on every poll. Any other failure is logged and answers as it
+	// always did, no rules.
 	var rules []*model.ForwardRule
-	if h.db.Migrator().HasTable(&model.ForwardRule{}) {
-		h.db.Where("relay_node_id = ? OR exit_node_id = ?", nodeID, nodeID).
-			Preload("RelayNode").
-			Preload("ExitNode").
-			Find(&rules)
+	if err := h.quietDB().Where("relay_node_id = ? OR exit_node_id = ?", nodeID, nodeID).
+		Preload("RelayNode").
+		Preload("ExitNode").
+		Find(&rules).Error; err != nil && !forwardlegacy.MissingTable(err, model.ForwardRule{}.TableName()) {
+		log.Printf("[WARN] agent forward rules: load rules for node %d failed: %v", nodeID, err)
 	}
 
 	// 转换为 Agent 需要的格式

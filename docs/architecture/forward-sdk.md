@@ -2061,8 +2061,14 @@ Drop The Old Tables").
   (`forwardlegacy.UnlessDropped` around `InitForwardRuntimeSystemConfig`,
   `HasTable` in `migrateIptablesForwardBackend`), a legacy agent's task poll
   and result report find no bridge task, and a clean agent's heartbeat gets
-  no job. `migrate`, the server and `forward legacy status` start on a
-  dropped database on SQLite and PostgreSQL
+  no job. Those request paths run their statement and take the database's
+  own "no such table" (SQLSTATE 42P01 on PostgreSQL,
+  `forwardlegacy.MissingTable`) for the answer, with no metadata query in
+  front of it: a table that is there behaves as before, and any other
+  failure stays the error it was (the result report answers 500 and the
+  agent retries). `Migrator().HasTable` is not that answer: it is false
+  when its own query fails. `migrate`, the server and `forward legacy
+  status` start on a dropped database on SQLite and PostgreSQL
   (`TestBootstrapDatabaseAfterForwardLegacyDrop`). The flux v2 routes that
   read or write a flux table (the remaining `kernel-owned` lists, tunnels,
   speed limits, rules and traffic uploads) are not guarded: the legacy

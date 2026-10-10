@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/AnixOps/anix-control/v4/internal/forwardlegacy"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -51,15 +52,19 @@ func (s *ForwardAgentBridgeService) LookupBridgeTask(taskID string) (*model.Forw
 	if db == nil {
 		return nil, nil
 	}
-	// Every task result a legacy agent reports is looked up here, and the
-	// table is gone once the v4.2 upgrade dropped the flux tables
-	// (forwardlegacy.Drop): then no task is a bridge task.
-	if !db.Migrator().HasTable(&model.ForwardAgentBridgeTask{}) {
-		return nil, nil
-	}
 	var task model.ForwardAgentBridgeTask
 	err := db.Where("task_id = ?", taskID).First(&task).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	// Every task result a legacy agent reports is looked up here, and the
+	// table is gone once the v4.2 upgrade dropped the flux tables
+	// (forwardlegacy.Drop): then no task is a bridge task. Only the
+	// database saying the table does not exist means that. Any other
+	// failure stays an error: the result route answers 500 and the agent
+	// retries, where "not a bridge task" would send the report on as a
+	// diagnostic task and acknowledge a bridged job's result for good.
+	if forwardlegacy.MissingTable(err, task.TableName()) {
 		return nil, nil
 	}
 	if err != nil {
