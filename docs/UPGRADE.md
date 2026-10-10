@@ -2633,7 +2633,17 @@ Control v4.2). Step by step:
    reported. `v2_forward_node` (the node inventory) and
    `v2_forward_clean_agent` are kept.
 6. **Start Control.** It no longer creates the dropped tables or runs the
-   old forwarding workers. `forward legacy status` shows when the drop ran.
+   old forwarding workers, and it no longer seeds or checks the old
+   runtime's `forward_runtime` settings (a NodeX address that is gone does
+   not stop the start). `anix-control migrate`, the server and
+   `forward legacy status` all start on the dropped database;
+   `forward legacy status` shows when the drop ran. The old agents' HTTP
+   endpoints (`/api/v2/agent/tasks`, `/api/v2/agent/result`) and a clean
+   agent's heartbeat keep answering, without bridge tasks or jobs.
+   The 4.2.0 release candidates stopped here instead, with `no such table:
+   v2_forward` (PostgreSQL: `relation "v2_forward" does not exist`) on each
+   of these commands, although the drop had completed. A database dropped
+   by one of them needs no repair: start a release with this fix on it.
 
 **Rollback.** Before the drop, rolling back to 4.1 is the usual binary
 rollback: the old tables are untouched (the upgrade adds only

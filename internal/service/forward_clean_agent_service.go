@@ -9,9 +9,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/AnixOps/anix-control/v4/internal/forwardlegacy"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/AnixOps/anix-control/v4/internal/nodesecrets"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 const (
@@ -251,6 +253,29 @@ func (s *ForwardCleanAgentService) Heartbeat(input ForwardCleanAgentHeartbeatInp
 	}
 	now := time.Now()
 
+	// The runtime jobs are gone once the v4.2 upgrade dropped the flux
+	// tables (forwardlegacy.Drop): the agent is still known and seen, and
+	// has nothing to run. Only the database saying the table does not exist
+	// means that; any other failure is the error it was before. The jobs
+	// are read ahead of the transaction because PostgreSQL aborts the
+	// transaction a statement fails in, and the agent's own update must not
+	// go with it. The claims below stay atomic (status = pending), so two
+	// heartbeats never take one job twice.
+	query := s.db.Session(&gorm.Session{Logger: logger.Default.LogMode(logger.Silent)}).
+		Where("backend = ? AND status = ?", model.ForwardRuntimeBackendCleanAgent, model.ForwardRuntimeJobStatusPending)
+	if agent.NodeID == nil || *agent.NodeID == 0 {
+		query = query.Where("node_id IS NULL")
+	} else {
+		query = query.Where("node_id = ?", *agent.NodeID)
+	}
+	var jobs []model.ForwardRuntimeJob
+	if err := query.Order("id ASC").Limit(limit).Find(&jobs).Error; err != nil {
+		if !forwardlegacy.MissingTable(err, model.ForwardRuntimeJob{}.TableName()) {
+			return nil, err
+		}
+		jobs = nil
+	}
+
 	var actions []ForwardCleanAgentAction
 	err = s.db.Transaction(func(tx *gorm.DB) error {
 		updates := cleanAgentInfoUpdates("", input.Version, input.Hostname, input.OS, input.Arch, input.Kernel, input.PublicIP, input.PrivateIP, input.Capabilities)
@@ -258,18 +283,6 @@ func (s *ForwardCleanAgentService) Heartbeat(input ForwardCleanAgentHeartbeatInp
 		updates["last_seen"] = &now
 		updates["last_error"] = ""
 		if err := tx.Model(&model.ForwardCleanAgent{}).Where("id = ?", agent.ID).Updates(updates).Error; err != nil {
-			return err
-		}
-
-		query := tx.Where("backend = ? AND status = ?", model.ForwardRuntimeBackendCleanAgent, model.ForwardRuntimeJobStatusPending)
-		if agent.NodeID == nil || *agent.NodeID == 0 {
-			query = query.Where("node_id IS NULL")
-		} else {
-			query = query.Where("node_id = ?", *agent.NodeID)
-		}
-
-		var jobs []model.ForwardRuntimeJob
-		if err := query.Order("id ASC").Limit(limit).Find(&jobs).Error; err != nil {
 			return err
 		}
 

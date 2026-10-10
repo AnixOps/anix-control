@@ -359,7 +359,9 @@ host); only a super administrator may download it, and every attempt is in
 the audit log (module `forward`, action `legacy_archive_download`). The
 rest of the upgrade (check, abandon and the irreversible drop) is command
 line only: `anix-control forward legacy`, in
-[`../UPGRADE.md`](../UPGRADE.md).
+[`../UPGRADE.md`](../UPGRADE.md). After the drop, `anix-control migrate`, the
+server and `forward legacy status` start on the database without the flux
+tables (`status` reports when the drop ran).
 
 ## The 19 Rewritten v2 Routes
 
