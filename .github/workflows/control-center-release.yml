@@ -32,7 +32,7 @@ jobs:
   # ==================== Android ====================
   build-android:
     name: Android
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
@@ -113,7 +113,7 @@ jobs:
   # ==================== Web ====================
   build-web:
     name: Web
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
@@ -227,7 +227,7 @@ jobs:
   # ==================== Linux ====================
   build-linux:
     name: Linux
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
@@ -312,15 +312,15 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: ubuntu-latest
+          - os: ubuntu-24.04
             goos: linux
             goarch: amd64
             platform: linux-amd64
-          - os: ubuntu-latest
+          - os: ubuntu-24.04
             goos: linux
             goarch: arm64
             platform: linux-arm64
-          - os: ubuntu-latest
+          - os: ubuntu-24.04
             goos: windows
             goarch: amd64
             platform: windows-amd64
@@ -391,7 +391,7 @@ jobs:
   create-release:
     name: Create Release
     needs: [build-android, build-web, build-windows, build-macos, build-linux, build-ios, build-cli]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 

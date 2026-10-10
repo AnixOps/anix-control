@@ -12,6 +12,21 @@
   overrides, for a developer who installs another ref). The installer is no longer described as
   frozen. `scripts/tests/test_install_tag.sh` covers all three scripts.
 
+- **More test and policy jobs gate the tag.** `release-binaries` now also waits for Release Workflow Policy Check, Deployment Script Checks, Package Storage PostgreSQL, Docker Build Smoke, Kubernetes Smoke and E2E Tests, and `plugin-package-publish` waits for Go Quality Gates, Go Security Scans and Backend Tests. Before, a failing E2E, Docker or Kubernetes smoke, package storage, deployment script or release policy job did not stop the tag from being published, and the signed packages did not wait for the Go gates. `config/scripts/check_release_workflow.sh` enforces each gate, and its self-test checks that removing any one of them fails the check.
+
+### Tooling
+
+- **CI:** every Linux job runs on `ubuntu-24.04` instead of `ubuntu-latest`, which GitHub moves to
+  Ubuntu 26.04 from 2026-10-19 to 2026-11-19. `postgres-restore-rehearsal`, a release gate,
+  installs `postgresql-client-16`, a package Ubuntu 26.04 does not have, so tag builds would start
+  failing with nothing changed in the repository (docs/RELEASING.md, "Runner Image").
+- **CI:** the `Classify Changes` step fails when the classifier crashes. It ran without `pipefail`,
+  so a crash left the job green with empty outputs, every job gated on them was skipped, and a
+  skipped required check counts as passed.
+- **CI:** a push to `go_dev` or `release/**`, the nightly and a manual run no longer share a
+  concurrency group with the next run of the same branch. GitHub dropped the pending push run when
+  a newer one queued (8 `go_dev` pushes between 2026-10-05 and 2026-10-06 had no CI at all). Pull
+  request runs still cancel superseded runs, and a release tag keeps one group per tag.
 - **Tests:** the visual-regression captures no longer depend on where the page happens to be
   scrolled. A full-page screenshot paints the sticky admin sidebar and topbar and the fixed skip
   link at the scroll offset, and the offset can change during the capture itself (the viewport
