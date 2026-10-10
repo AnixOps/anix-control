@@ -3220,6 +3220,17 @@ apply too, with 4.2.0 in place of rc.3. The notes below are on top of them.
   `enable-agents` take no version: the entry points read the tag from
   `INSTALL_REF=<tag>` for them. A script or unit that calls `install.sh update`
   without `--version` must be changed. Containers are unchanged.
+- **A fresh systemd install runs in production mode.** The installer writes
+  `env: "production"` into the `config.yaml` of a fresh install. The example
+  template says `development`, which made host installs run a full AutoMigrate
+  on every start and skip the production JWT-secret check. `update` never
+  rewrites an existing config: an installation from an earlier release stays
+  as it is, and can set `env: "production"` by hand
+  ([`guide/release-installation.md`](guide/release-installation.md)).
+- **The Helm chart's default image is the release.** The chart's `appVersion`
+  was `4.0.0`, so a release installed without `image.tag` or `image.digest`
+  resolved to the 4.0.0 image. It is now the release version and the tag gate
+  checks it. Keep setting `image.digest`, as the deployment guide says.
 - **Nothing else changes for operators.** The other changes of this release
   are in the release pipeline (the tag waits for the E2E, smoke and policy
   jobs, runners are pinned to `ubuntu-24.04`, a crash of the change

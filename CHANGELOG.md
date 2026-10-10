@@ -28,12 +28,22 @@ To 4.2.0" when coming from a release candidate.
 - **The console APIs of the admin UI** (server-side sort, bulk actions, per-node traffic,
   credential rotation, administrator API tokens, a Telegram test message, certificate alerts).
 - **Security and dependencies:** the identity fixes of rc.3 (they live in the `identity-platform`
-  package), no reachable Go vulnerability in any module (Go 1.26.9, `x/net` v0.60.0), and a
-  nightly security workflow. From this release the signed Agent packages are built from an Agent
-  that carries the `x/net` fix (below).
+  package), no reachable Go vulnerability in any Control module (Go 1.26.9, `x/net` v0.60.0), and
+  a nightly security workflow. From this release the signed Agent packages are built from an
+  Agent that carries the `x/net` fix (below). The Agent's main binary still reaches four
+  advisories in its Hysteria2 and QUIC dependencies when scanned with the release build tags;
+  the Agent's CHANGELOG ("Known Gaps") names each one with the configuration that exposes it.
 - **Experimental, off by default:** the `anixops` forward driver and the relay process (A3).
 
 ### Changed
+
+- **The systemd installer installs a named release tag.** `scripts/install.sh` requires
+  `--version <tag>` for `install` and `update` and no longer resolves GitHub's
+  `releases/latest`, so publishing a release cannot change what an unpinned command installs. The
+  one-command entry points `install.sh` and `panel_install.sh` fetch the installer at that tag
+  instead of from the `go_dev` branch and refuse a command that names no tag (`INSTALL_REF` still
+  overrides, for a developer who installs another ref). The installer is no longer described as
+  frozen. `scripts/tests/test_install_tag.sh` covers all three scripts.
 
 - **More test and policy jobs gate the tag.** `release-binaries` now also waits for Release Workflow Policy Check, Deployment Script Checks, Package Storage PostgreSQL, Docker Build Smoke, Kubernetes Smoke and E2E Tests, and `plugin-package-publish` waits for Go Quality Gates, Go Security Scans and Backend Tests. Before, a failing E2E, Docker or Kubernetes smoke, package storage, deployment script or release policy job did not stop the tag from being published, and the signed packages did not wait for the Go gates. `config/scripts/check_release_workflow.sh` enforces each gate, and its self-test checks that removing any one of them fails the check.
 - **One Agent pin, and a vulnerability scan of the Agent plugins that ship in the signed
@@ -54,6 +64,17 @@ To 4.2.0" when coming from a release candidate.
   instead of from the `go_dev` branch and refuse a command that names no tag (`INSTALL_REF` still
   overrides, for a developer who installs another ref). The installer is no longer described as
   frozen. `scripts/tests/test_install_tag.sh` covers all three scripts.
+
+### Fixed
+
+- **A fresh systemd install runs in production mode.** The installer (`scripts/install.sh`) writes
+  `env: "production"` into the `config.yaml` of a fresh install. The template said
+  `env: "development"`, so host installs ran a full AutoMigrate on every start and skipped the
+  production JWT-secret check. `update` never rewrites an existing config; an install from an
+  earlier release can set `env: "production"` by hand (`docs/guide/release-installation.md`).
+- **The Helm chart's default image is the release.** `appVersion`, the chart's default image tag,
+  was still `4.0.0`. It is now the release version, set by `prepare_release.py` and checked by the
+  release tag gate (`check_release_version.py`).
 
 ### Tooling
 

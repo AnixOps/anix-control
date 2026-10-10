@@ -14,8 +14,9 @@ Use this tree like NodeX:
 ## Status And Planning
 
 - Feature status register: [`features.md`](features.md)
-- Current 4.0.x RC execution roadmap: [`ROADMAP-4.0.x-RC.md`](ROADMAP-4.0.x-RC.md)
-- Current RC verification snapshot: [`RC-EVIDENCE-4.0.x.md`](RC-EVIDENCE-4.0.x.md)
+- Releasing (cutting a release, what the tag pipeline does): [`RELEASING.md`](RELEASING.md)
+- 4.0.x RC execution roadmap (historical): [`ROADMAP-4.0.x-RC.md`](ROADMAP-4.0.x-RC.md)
+- 4.0.x RC verification snapshot (historical): [`RC-EVIDENCE-4.0.x.md`](RC-EVIDENCE-4.0.x.md)
 - Product version history and staged-plan status: [`architecture/release-line-status.md`](architecture/release-line-status.md)
 - Plugin kernel contract: [`architecture/plugin-kernel-contract.md`](architecture/plugin-kernel-contract.md)
 - Package extraction design and current development direction: [`architecture/package-extraction.md`](architecture/package-extraction.md)

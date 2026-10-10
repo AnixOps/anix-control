@@ -22,6 +22,8 @@ publishes everything. Nothing is built locally.
    - Swagger;
    - frontend package;
    - example configurations;
+   - the Helm chart's `appVersion` (its default image tag; the chart's own
+     `version` is a separate SemVer);
    - README.
 
    Then it checks the result with `config/scripts/check_release_version.py`.

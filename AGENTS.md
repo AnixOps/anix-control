@@ -213,6 +213,7 @@ A release tag `vX.Y.Z[-alpha|-beta|-rc.N]` must match every surface checked by
 - `web/package.json` and `web/package-lock.json` (`version` and `packages[""].version`)
 - `docs/swagger.json`, `docs/swagger.yaml`, `docs/docs.go` (regenerate with `make swagger`)
 - `config/config.yaml.example`, `config/config.prod.yaml`, `config/config.dev.yaml.example` (`app.version`)
+- `config/deploy/helm/anix-control/Chart.yaml` (`appVersion`, the chart's default image tag; the chart's own `version` is a separate SemVer, bumped on template or values changes)
 - `CHANGELOG.md` (first `## X.Y.Z - YYYY-MM-DD` heading)
 - `README.md` (the `- Current release:` line)
 
@@ -254,7 +255,10 @@ A release tag `vX.Y.Z[-alpha|-beta|-rc.N]` must match every surface checked by
   `--version vX.Y.Z` is required, and `install.sh` and `panel_install.sh`
   fetch the installer at that tag. It never reads `releases/latest` or a
   moving branch, so tagging a release cannot change what an unpinned command
-  installs. Containers stay the primary deployment. Control Center tags
+  installs. A fresh install writes `env: "production"` into `config.yaml`
+  (the template says `development`; `scripts/tests/test_install_fresh_config.sh`
+  and `internal/config/installer_config_test.go`), and `update` never rewrites
+  an existing config. Containers stay the primary deployment. Control Center tags
   (`control-center-v*`) are never marked latest. Operator docs:
   `docs/DEPLOYMENT.md`, `docs/UPGRADE.md`, `docs/guide/release-installation.md`.
 

@@ -33,6 +33,8 @@ TEXT_SURFACES: tuple[tuple[str, str], ...] = (
     ("config/config.yaml.example", r'^\s{2}version:\s*"([^"]+)"'),
     ("config/config.prod.yaml", r'^\s{2}version:\s*"([^"]+)"'),
     ("config/config.dev.yaml.example", r'^\s{2}version:\s*"([^"]+)"'),
+    # The chart's default image tag. Its own `version` is not a release surface.
+    ("config/deploy/helm/anix-control/Chart.yaml", r'^appVersion:\s*"([^"]+)"'),
     ("docs/docs.go", r'^\s*Version:\s*"([^"]+)"'),
     ("docs/swagger.yaml", r"^\s{2}version:\s*([^\s]+)"),
     ("README.md", r"^- Current release:\s+`v([^`]+)`"),
@@ -118,8 +120,14 @@ def self_test() -> None:
             path = root / relative
             if not path.exists():
                 raise AssertionError(f"fixture lacks {relative}")
+        chart = root / "config/deploy/helm/anix-control/Chart.yaml"
+        assert 'appVersion: "4.0.0"' in chart.read_text(encoding="utf-8")
         prepare_release(root, "4.1.0", "2026-10-01")
         checker.check_release_version(root, "v4.1.0")
+        # The chart's default image follows the release; its own version stays.
+        chart_text = chart.read_text(encoding="utf-8")
+        if 'appVersion: "4.1.0"' not in chart_text or "\nversion: 0.3.0\n" not in chart_text:
+            raise AssertionError(f"Chart.yaml not prepared as expected:\n{chart_text}")
         text = changelog.read_text(encoding="utf-8")
         if "## Unreleased\n\n## 4.1.0 - 2026-10-01\n\n### Added" not in text:
             raise AssertionError(f"CHANGELOG not dated as expected:\n{text}")
@@ -131,6 +139,22 @@ def self_test() -> None:
                     raise AssertionError(f"{bad}: unexpected error {error}") from error
             else:
                 raise AssertionError(f"{bad}: should have been refused")
+
+    # A tree whose chart has no appVersion cannot be prepared: the release
+    # would ship a chart that deploys another release's image.
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary)
+        checker.write_fixture(root, "4.0.0")
+        (root / "CHANGELOG.md").write_text("# Changelog\n\n## Unreleased\n\n- A change.\n\n## 4.0.0 - 2026-07-17\n", encoding="utf-8")
+        chart = root / "config/deploy/helm/anix-control/Chart.yaml"
+        chart.write_text("apiVersion: v2\nname: anix-control\nversion: 0.3.0\n", encoding="utf-8")
+        try:
+            prepare_release(root, "4.1.0", "2026-10-01")
+        except PrepareError as error:
+            if "Chart.yaml" not in str(error) or "version field not found" not in str(error):
+                raise AssertionError(f"unexpected error {error}") from error
+        else:
+            raise AssertionError("a chart without appVersion should have been refused")
     print("prepare_release self-test passed")
 
 

@@ -67,7 +67,8 @@ The installer will:
    `plugins.control_execution_enabled` is enabled so the identity package can
    serve login.
 6. Download the configuration template that matches the selected tag.
-7. Generate the JWT secret, node API token, and first administrator password.
+7. Set `env: "production"` and generate the JWT secret, node API token, and
+   first administrator password ([Environment](#environment-production)).
 8. Generate the CA key-encryption key (`module_runtime.ca_kek`) in
    `config/secrets/module_ca_kek` (mode 0600, printed only as a fingerprint)
    and, given a publicly trusted certificate, enable gRPC with TLS
@@ -93,6 +94,25 @@ sudo rm -f /opt/anixops/control/.bootstrap-admin-password
 
 To supply an initial password non-interactively, use `--admin-password`. Do
 not put secrets in shell history on shared hosts.
+
+### Environment: production
+
+The template is also the local-development file, so it says
+`env: "development"`. A host install is not a development install: the
+installer writes `env: "production"` into the new `config.yaml` (as the
+container defaults are), next to the generated `jwt.secret`.
+
+- In production Control refuses to start when `jwt.secret` is empty or a
+  template value, and it never alters existing tables on start: an empty
+  database gets the full schema, an existing one only the tables it lacks
+  (`docs/reference/startup-config.md`). In `development` it runs a full
+  `AutoMigrate` on every start and accepts the template secret.
+- Only a **fresh** install writes the file. `update`, `rollback` and
+  `enable-agents` never change `env`. A host installed by an earlier release
+  has `env: "development"`; check with
+  `grep '^env:' /opt/anixops/control/config/config.yaml`. To move it to
+  production, confirm `jwt.secret` is a random value of your own, set
+  `env: "production"` and restart (`sudo systemctl restart anix-control`).
 
 ## Installed Layout And Operations
 
