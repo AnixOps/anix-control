@@ -2,6 +2,11 @@
 
 Date: 2026-09-28
 
+> Historical record. The release-stage, rehearsal, evidence and approval gates
+> it cites were retired after `v4.0.0`; releases now follow
+> [`RELEASING.md`](RELEASING.md). The handoff checklist below is not an open
+> work list: open work is in [`../TODO.md`](../TODO.md).
+
 ## Goal
 
 Deliver an auditable `4.0.x` release candidate in one focused week. The
