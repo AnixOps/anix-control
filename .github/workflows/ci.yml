@@ -117,6 +117,10 @@ jobs:
       - name: Test identity bootstrap installer configuration
         run: bash scripts/tests/test_identity_bootstrap_install.sh
 
+      # The installer installs the tag it is given and is fetched at that tag.
+      - name: Test the installers install a named release tag
+        run: bash scripts/tests/test_install_tag.sh
+
       # Fresh Control installs generate the CA key and enable gRPC TLS for
       # Agents (systemd installer, Compose init-secrets.sh): shellcheck, then
       # the fake-root tests.
@@ -1695,7 +1699,7 @@ jobs:
           openssl pkeyutl -verify -pubin -keyform DER -inkey "${official_der}" -rawin \
             -in release-assets/agent-install.sh -sigfile "${signature_bin}"
           rm -f "${signature_bin}" "${official_der}"
-          # scripts/install.sh (frozen) and the docker job read the identity
+          # scripts/install.sh and the docker job read the identity
           # bootstrap package by name, so it also stays a separate asset.
           for suffix in anxp manifest.json manifest.sig; do
             install -m 0644 "release-packages/identity-platform-${GITHUB_REF_NAME#v}.${suffix}" release-assets/
