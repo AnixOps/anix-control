@@ -72,6 +72,14 @@ def check_release_version(repo_root: Path, tag: str) -> str:
             version,
             config_name,
         )
+    # The Helm chart's default image tag is its appVersion. The chart's own
+    # `version` is a separate SemVer and is not checked.
+    require_pattern(
+        repo_root / "config/deploy/helm/anix-control/Chart.yaml",
+        r'^appVersion:\s*"([^"]+)"',
+        version,
+        "Helm chart appVersion",
+    )
     require_pattern(
         repo_root / "docs/docs.go",
         r'^\s*Version:\s*"([^"]+)"',
@@ -110,6 +118,7 @@ def write_fixture(root: Path, version: str) -> None:
         "config/config.yaml.example": f'app:\n  version: "{version}"\n',
         "config/config.prod.yaml": f'app:\n  version: "{version}"\n',
         "config/config.dev.yaml.example": f'app:\n  version: "{version}"\n',
+        "config/deploy/helm/anix-control/Chart.yaml": f'apiVersion: v2\nname: anix-control\nversion: 0.3.0\nappVersion: "{version}"\n',
         "docs/docs.go": f'\tVersion: "{version}",\n',
         "docs/swagger.yaml": f'  version: {version}\n',
         "CHANGELOG.md": f"# Changelog\n\n## {version} - 2026-07-17\n",
@@ -140,6 +149,23 @@ def self_test() -> None:
         package = root / "web/package.json"
         package.write_text(json.dumps({"version": "4.0.0-alpha.8"}), encoding="utf-8")
         expect_failure("frontend package version mismatch")
+        package.write_text(json.dumps({"version": version}), encoding="utf-8")
+        assert check_release_version(root, f"v{version}") == version
+
+        # A stale chart appVersion makes the default image the previous
+        # release's, so the tag gate must refuse it; the chart's own version
+        # is not a surface and may differ.
+        chart = root / "config/deploy/helm/anix-control/Chart.yaml"
+        fresh_chart = chart.read_text(encoding="utf-8")
+        chart.write_text(fresh_chart.replace(f'appVersion: "{version}"', 'appVersion: "4.0.0"'), encoding="utf-8")
+        expect_failure("Helm chart appVersion version mismatch: expected 4.0.0-alpha.7, found 4.0.0")
+        chart.write_text(fresh_chart.replace(f'appVersion: "{version}"\n', ""), encoding="utf-8")
+        expect_failure("Helm chart appVersion version mismatch: expected 4.0.0-alpha.7, found <missing>")
+        chart.write_text(fresh_chart.replace(f'appVersion: "{version}"', f"appVersion: {version}"), encoding="utf-8")
+        expect_failure("found <missing>")
+        chart.write_text(fresh_chart.replace("version: 0.3.0", "version: 9.9.9"), encoding="utf-8")
+        assert check_release_version(root, f"v{version}") == version
+        chart.write_text(fresh_chart, encoding="utf-8")
 
         try:
             check_release_version(root, "v4")

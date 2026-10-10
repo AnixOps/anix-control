@@ -17,6 +17,12 @@ helm install control config/deploy/helm/anix-control -n anix \
 kubectl -n anix logs deploy/control-anix-control -c migrate   # generated admin password
 ```
 
+Without `image.digest` or `image.tag` the chart runs
+`ghcr.io/anixops/anix-control:<appVersion>`: `appVersion` in `Chart.yaml` is the
+Control release this chart ships with. `prepare_release.py` sets it with the
+other version surfaces and the release tag gate fails a stale one. The chart's
+own `version` is a separate SemVer, bumped when a template or value changes.
+
 What the chart does:
 
 - `migrate` init container: `anix-control migrate` (schema and seeds under a
