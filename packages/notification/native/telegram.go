@@ -690,23 +690,32 @@ func (s *Service) UserTelegramStatus(ctx context.Context, request pluginhostsdk.
 	})
 }
 
-// UserTelegramUnbind is POST /api/v2/user/telegram/unbind. The legacy
-// handler is a stub that deletes nothing; so is this one.
-func (s *Service) UserTelegramUnbind(_ context.Context, request pluginhostsdk.NativeRequest) (pluginhostsdk.NativeResponse, error) {
-	log.Printf("[STUB] Telegram unbind: deleting binding for user_id=%d not yet implemented", actor(request))
+// Messages of the two user routes below: neither is implemented, so a request
+// is answered with an error and nothing is changed. They are the kernel
+// handler's messages (internal/tests/notificationcompat).
+const (
+	telegramUnbindNotImplementedMessage = "Telegram 解绑尚未实现，绑定未被修改；请在 Telegram 机器人中发送 /unbind (Telegram unbind is not implemented here; your binding was not changed, send /unbind to the bot)"
+	telegramNotifyNotImplementedMessage = "Telegram 通知设置尚未实现，设置未被修改 (Telegram notification settings are not implemented here; your settings were not changed)"
+)
 
-	return s.panel(map[string]any{"message": "unbound successfully"})
+// UserTelegramUnbind is POST /api/v2/user/telegram/unbind. It is not
+// implemented: it deletes nothing and says so.
+func (s *Service) UserTelegramUnbind(_ context.Context, request pluginhostsdk.NativeRequest) (pluginhostsdk.NativeResponse, error) {
+	log.Printf("Telegram unbind refused for user_id=%d: not implemented, the binding is unchanged", actor(request))
+
+	return s.panelError(telegramUnbindNotImplementedMessage)
 }
 
-// UserTelegramNotify is POST /api/v2/user/telegram/notify. The legacy
-// handler validates the body and changes nothing; so does this one.
+// UserTelegramNotify is POST /api/v2/user/telegram/notify. The body is
+// validated as in the kernel; a valid one is then refused, as the feature is
+// not implemented: no setting is changed.
 func (s *Service) UserTelegramNotify(_ context.Context, request pluginhostsdk.NativeRequest) (pluginhostsdk.NativeResponse, error) {
 	var req NotifySettingsRequest
 	if err := binding.JSON.BindBody(request.Body, &req); err != nil {
 		return s.panelError(err.Error())
 	}
 
-	log.Printf("[STUB] Telegram notify settings update for user_id=%d not yet implemented", actor(request))
+	log.Printf("Telegram notify settings update refused for user_id=%d: not implemented, the settings are unchanged", actor(request))
 
-	return s.panel(map[string]any{"message": "settings updated"})
+	return s.panelError(telegramNotifyNotImplementedMessage)
 }

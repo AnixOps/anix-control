@@ -962,7 +962,10 @@ func (s *TelegramHandlerExtendedTestSuite) TestGetTelegramStatus_NoBinding() {
 	assert.NotContains(s.T(), resp, "error")
 }
 
-func (s *TelegramHandlerExtendedTestSuite) TestUserTelegramActionsEnvelope() {
+// The user's unbind and notify-settings routes are not implemented: each
+// answers an error envelope and leaves the binding and its settings alone. A
+// success answer here once made a user believe they were unbound.
+func (s *TelegramHandlerExtendedTestSuite) TestUserTelegramActionsAreNotImplemented() {
 	user := &model.User{
 		Email:          "tg-actions@example.com",
 		Token:          "tg-actions-token",
@@ -970,6 +973,9 @@ func (s *TelegramHandlerExtendedTestSuite) TestUserTelegramActionsEnvelope() {
 		TransferEnable: 1073741824,
 	}
 	s.db.Create(user)
+	// The notify switches default to on.
+	binding := &model.TelegramUser{UserID: user.ID, TelegramID: 424242, Username: "tg-actions"}
+	s.Require().NoError(s.db.Create(binding).Error)
 
 	handler := NewTelegramHandler()
 	s.router.POST("/user/telegram/unbind", func(c *gin.Context) {
@@ -986,25 +992,39 @@ func (s *TelegramHandlerExtendedTestSuite) TestUserTelegramActionsEnvelope() {
 	s.router.ServeHTTP(unbindResp, unbindReq)
 	assert.Equal(s.T(), http.StatusOK, unbindResp.Code)
 	unbindPayload := decodePanelTestResponse(s.T(), unbindResp)
-	assert.Equal(s.T(), float64(0), unbindPayload["code"])
-	unbindData, ok := unbindPayload["data"].(map[string]any)
-	assert.True(s.T(), ok)
-	assert.Equal(s.T(), "unbound successfully", unbindData["message"])
-	assert.NotContains(s.T(), unbindPayload, "message")
+	assert.Equal(s.T(), float64(-1), unbindPayload["code"])
+	assert.Nil(s.T(), unbindPayload["data"])
+	assert.Contains(s.T(), unbindPayload["msg"], "Telegram 解绑尚未实现")
+	assert.NotContains(s.T(), unbindResp.Body.String(), "unbound successfully")
 
-	notifyBody := map[string]any{"notify_expire": true}
-	notifyJSON, _ := json.Marshal(notifyBody)
+	notifyJSON, _ := json.Marshal(map[string]any{"notify_expire": false})
 	notifyReq, _ := http.NewRequest("POST", "/user/telegram/notify", bytes.NewReader(notifyJSON))
 	notifyReq.Header.Set("Content-Type", "application/json")
 	notifyResp := httptest.NewRecorder()
 	s.router.ServeHTTP(notifyResp, notifyReq)
 	assert.Equal(s.T(), http.StatusOK, notifyResp.Code)
 	notifyPayload := decodePanelTestResponse(s.T(), notifyResp)
-	assert.Equal(s.T(), float64(0), notifyPayload["code"])
-	notifyData, ok := notifyPayload["data"].(map[string]any)
-	assert.True(s.T(), ok)
-	assert.Equal(s.T(), "settings updated", notifyData["message"])
-	assert.NotContains(s.T(), notifyPayload, "message")
+	assert.Equal(s.T(), float64(-1), notifyPayload["code"])
+	assert.Nil(s.T(), notifyPayload["data"])
+	assert.Contains(s.T(), notifyPayload["msg"], "Telegram 通知设置尚未实现")
+	assert.NotContains(s.T(), notifyResp.Body.String(), "settings updated")
+
+	// Nothing was changed: the binding is still there with its settings.
+	var stored model.TelegramUser
+	s.Require().NoError(s.db.Where("user_id = ?", user.ID).First(&stored).Error)
+	assert.Equal(s.T(), binding.TelegramID, stored.TelegramID)
+	assert.True(s.T(), stored.NotifyExpire, "the switch the request turned off is unchanged")
+	assert.True(s.T(), stored.NotifyTraffic)
+	assert.True(s.T(), stored.NotifyTicket)
+
+	// A body that does not parse is still refused as a bad request.
+	badReq, _ := http.NewRequest("POST", "/user/telegram/notify", bytes.NewReader([]byte(`{"notify_expire":"no"}`)))
+	badReq.Header.Set("Content-Type", "application/json")
+	badResp := httptest.NewRecorder()
+	s.router.ServeHTTP(badResp, badReq)
+	badPayload := decodePanelTestResponse(s.T(), badResp)
+	assert.Equal(s.T(), float64(-1), badPayload["code"])
+	assert.NotContains(s.T(), badPayload["msg"], "尚未实现")
 }
 
 func TestTelegramHandlerExtended(t *testing.T) {
