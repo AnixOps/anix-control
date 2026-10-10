@@ -36,7 +36,7 @@ It should not become a dumping ground for:
 | `scripts/` | operator-facing scripts: release installer `install.sh`, `install-agent.sh`, `manage.sh`, SQLite/PostgreSQL migration and restore rehearsal, plugin release signing, WireGuard helpers, legacy panel upgrade, and `staging/`, the local route-cutover rehearsal stack ([staging-rehearsal.md](../guide/staging-rehearsal.md)) |
 | `docs/` | documentation tree (see below) plus generated Swagger output (`docs.go`, `swagger.json`, `swagger.yaml`) |
 | `.github/` | CI (`workflows/ci.yml`), SDK sync, Control Center workflows, `CODEOWNERS`, and the branch ruleset description in `BRANCH_PROTECTION.md` |
-| `install.sh` / `panel_install.sh` | forwarders to the frozen systemd release installer `scripts/install.sh` (container deployment is the primary path) |
+| `install.sh` / `panel_install.sh` | forwarders that fetch the systemd release installer `scripts/install.sh` at the tag named by `--version` (container deployment is the primary path) |
 | `Dockerfile`, `docker-compose.yml`, `docker-compose.prod.yml` | container image (`source` and CI-only `release` targets), development stack, and production Compose deployment with an external PostgreSQL |
 | `Dockerfile` / `docker-compose.yml` / `docker-compose.prod.yml` | container build and startup |
 | `Makefile` | local build, run, test, lint, swagger, and gRPC generation targets |
