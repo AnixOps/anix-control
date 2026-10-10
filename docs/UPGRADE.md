@@ -50,17 +50,21 @@ upgrade, and read
 Fresh installs now generate the CA key and enable gRPC TLS; existing ones add
 them first (Compose: `secrets/module_ca_kek` must exist before `up`).
 
-**Upgrading to v4.2: the flux forwarding API and pages are removed.** The
-v2 routes that change forwards and legacy rules, the administrator's forward
-node, Ansible machine and clean agent routes, tunnel update and diagnose,
-permission update and removal, and speed limit update answer 404; use
-`/api/v4/forward/*`. The lists, tunnel creation and deletion, permission
-assignment, speed limit create and delete, and the clean agents' register,
-heartbeat and report stay served, without pages, until the legacy cleanup
-(F5c). Old forwarding data is not migrated: F5c archives it (on the
-read-only Compose and Helm containers the first start cannot, so write the
-archive yourself) and then drops its tables. Read
-["Flux Forwarding API Removed (v4.2)"](#flux-forwarding-api-removed-v42).
+**Upgrading to v4.2: the flux forwarding API and pages are removed.** Among
+the v2 routes that answer 404 are those that create, update, delete, pause,
+resume or diagnose a forward, the administrator's legacy rule, forward node,
+Ansible machine and clean agent routes, tunnel update and diagnose,
+permission update and removal, and speed limit update; use
+`/api/v4/forward/*`. Still served, without pages, until the legacy cleanup
+(F5c) are reads (the forward, tunnel, permission and speed limit lists,
+statistics, runtime status and doctor), some writes (the forward order,
+tunnel creation and deletion, permission assignment, speed limit create and
+delete, the user traffic reset) and the node-facing endpoints (the clean
+agents' register, heartbeat and report, the internal traffic upload).
+["Flux Forwarding API Removed (v4.2)"](#flux-forwarding-api-removed-v42)
+lists both; read it. Old forwarding data is not migrated: F5c archives it
+(on the read-only Compose and Helm containers the first start cannot, so
+write the archive yourself) and then drops its tables.
 
 **Upgrading to v4.2: the official signing root changes, and every package
 except `identity-platform` stays down until you import its 4.2 build.** The
@@ -95,9 +99,11 @@ Stripe and PayPal checkout and the user Telegram unbind and notification
 settings answer "not implemented" instead of a fake success. The signed
 `machine-telemetry`, `nftables-forward`, `gost-mesh` and `nat-egress`
 packages of rc.4 embed an Agent that was built before its `x/net` fix, so
-move them to the 4.2.0 builds; `notification` and the commercial `payment`
-serve those Telegram and checkout routes natively and answer honestly only
-from their 4.2.0 builds. `scripts/install.sh`, `install.sh` and
+move them to the 4.2.0 builds. Those Telegram and checkout routes run
+natively by default, and in that mode `notification` and the commercial
+`payment` answer honestly only from their 4.2.0 builds; a route set to `legacy` is
+answered by the 4.2.0 Control binary, honestly, whatever the package build
+(`shadow` is for GET routes only). `scripts/install.sh`, `install.sh` and
 `panel_install.sh` install the release tag you name and no longer resolve
 "latest" or `go_dev`, and a fresh install on a host with no previous release
 completes (earlier installers stopped there without a message). Upgrade
@@ -3283,8 +3289,8 @@ the 26 Go files that differ from rc.4, 11 are tests and 15 are not
   `notification` (`packages/notification/native/telegram.go`) and the
   commercial `payment` (`packages/payment/native/payments.go`). No other
   package binary depends on a Go package that changed.
-- **The staging tool** `scripts/staging/stagingctl` (two labels; it is not
-  shipped).
+- **The staging tool** `scripts/staging/stagingctl` (four labels in two
+  files, and two response masks removed; it is not shipped).
 
 The Agent and Control share a version number and a Control hands out only
 its own Agent release, so from rc.4 you upgrade Control first and the Agents
@@ -3368,7 +3374,8 @@ apply too, with 4.2.0 in place of rc.3. The notes below are on top of them.
   (`curl ... | sudo bash -s --`), the entry points always fetch the installer
   at the tag; a `./scripts/install.sh` in the current directory is no longer
   run. A host where an earlier installer stopped keeps its `config.yaml`,
-  with `admin@localhost` in it: remove it first, as
+  with `admin@localhost` in it when that run had no `--admin-email`: remove
+  it first, as
   [`guide/release-installation.md`](guide/release-installation.md) ("After an
   install that stopped without a message") says.
 - **A fresh systemd install runs in production mode.** The installer writes
@@ -3426,9 +3433,12 @@ apply too, with 4.2.0 in place of rc.3. The notes below are on top of them.
   release before you push the Control tag: a 4.2.0 Control's
   `/install/agent.env` names `v4.2.0`, so node installs and campaigns cannot
   download the Agent until that release exists. Nothing in the tag pipeline
-  checks this;
-  `git ls-remote --tags https://github.com/AnixOps/anix-agent 'v4.2.0^{}'`
-  must print `95fa91b7d8207a768b6eefabacec07f15a8f1135`.
+  checks this. Run
+  `git ls-remote --tags https://github.com/AnixOps/anix-agent 'refs/tags/v4.2.0' 'refs/tags/v4.2.0^{}'`:
+  the peeled `refs/tags/v4.2.0^{}` line of an annotated tag, or for a
+  lightweight tag (the Agent's `v4.2.0-rc.1` is one), which has no peeled
+  line, the `refs/tags/v4.2.0` line itself, must show
+  `95fa91b7d8207a768b6eefabacec07f15a8f1135`.
 - **Commercial packages.** After the tag pipeline has published the 4.2.0
   release (its last job, `Create Release`, has finished: the attach step
   uploads to that release and fails while it does not exist), run the manual
@@ -3462,16 +3472,19 @@ builds need Go 1.26" in the rc.3 notes) are listed in the Agent's CHANGELOG.
 And:
 
 - **`cmd/sqlite2postgres` cannot move a 4.x database to PostgreSQL.** With
-  `-reset` it stops while it resets the sequences: the kernel tables whose
-  primary key is text (`v3_kernel_plugin`, which every Control fills on its
-  first start, and others) fail with `sql: Scan error on column index 0, name
-  "max": converting driver.Value type string ("wireguard") to a int64`, and
+  `-reset` it copies every table before it resets any sequence, and both
+  steps fail. The copy writes the `bytea` columns of
+  `v3_kernel_plugin_artifact` and `v3_kernel_plugin_webui_asset` as text, so
+  a database that holds the files of a plugin release stops there (they fail
+  as invalid UTF-8). Without such files, it stops while it resets the
+  sequences: the kernel tables whose primary key is text
+  (`v3_kernel_plugin`, which every Control fills on its first start, and
+  others) fail with `sql: Scan error on column index 0, name "max":
+  converting driver.Value type string ("wireguard") to a int64`. Either way
   the import rolls back, so nothing is copied. The `-dry-run` returns before
-  that step and does not warn. Past it, the tool would also write the `bytea`
-  columns of `v3_kernel_plugin_artifact` and `v3_kernel_plugin_webui_asset`
-  as text (the files of a published plugin release fail as invalid UTF-8),
-  skip the `v4_forward_legacy_*` tables, and create the dropped flux tables
-  again on the target. 4.1.0's tool fails the same way. Until it is fixed there is no
+  both steps and does not warn. The tool also skips the
+  `v4_forward_legacy_*` tables and creates the dropped flux tables again on
+  the target. 4.1.0's tool fails the same way. Until it is fixed there is no
   tool path from a 4.x SQLite database to PostgreSQL
   ([`reference/sqlite-to-postgres-migration.md`](reference/sqlite-to-postgres-migration.md)).
 - **On PostgreSQL the first 4.2 start after 4.1.0 alters a kernel table.**

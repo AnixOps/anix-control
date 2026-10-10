@@ -18,13 +18,16 @@ when coming from 4.1.0, and
 when coming from a release candidate.
 
 - **Forwarding is the v4 model.** The flux forwarding API and pages are removed; routes are
-  chains of hops under `/api/v4/forward/*`. The v2 routes that change forwards and legacy rules,
-  the administrator's forward node, Ansible machine and clean agent routes, tunnel update and
-  diagnose, permission update and removal, and speed limit update answer 404. The lists, tunnel
-  creation and deletion, permission assignment, speed limit create and delete, and the clean
-  agents' register, heartbeat and report stay served, without pages, until the legacy cleanup
-  (["Flux Forwarding API Removed (v4.2)"](https://github.com/AnixOps/anix-control/blob/v4.2.0/docs/UPGRADE.md#flux-forwarding-api-removed-v42)
-  lists both). The first start archives the old forwarding data where the data directory is
+  chains of hops under `/api/v4/forward/*`. Among the v2 routes that answer 404 are those that
+  create, update, delete, pause, resume or diagnose a forward, the administrator's legacy rule,
+  forward node, Ansible machine and clean agent routes, tunnel update and diagnose, permission
+  update and removal, and speed limit update. Still served, without pages, until the legacy
+  cleanup are reads (the forward, tunnel, permission and speed limit lists, statistics, runtime
+  status and doctor), some writes (the forward order, tunnel creation and deletion, permission
+  assignment, speed limit create and delete, the user traffic reset) and the node-facing endpoints
+  (the clean agents' register, heartbeat and report, the internal traffic upload).
+  ["Flux Forwarding API Removed (v4.2)"](https://github.com/AnixOps/anix-control/blob/v4.2.0/docs/UPGRADE.md#flux-forwarding-api-removed-v42)
+  lists both. The first start archives the old forwarding data where the data directory is
   writable; on the read-only Compose and Helm containers it cannot, so write the archive with
   `anix-control forward legacy archive -o <dir>`. The old tables are dropped only by the
   explicit, irreversible `anix-control forward legacy drop`.
@@ -45,10 +48,11 @@ when coming from a release candidate.
   advisories in its Hysteria2 and QUIC dependencies when scanned with the release build tags;
   [the Agent's CHANGELOG](https://github.com/AnixOps/anix-agent/blob/v4.2.0/CHANGELOG.md#known-gaps)
   ("Known Gaps", in `AnixOps/anix-agent`) names each one with the configuration that exposes it.
-- **A fresh systemd install completes.** On a host with no previous release `scripts/install.sh`
-  stopped with exit 1 and no message before it installed the binary or the service (since v4.0.0).
-- **Control starts after `forward legacy drop`.** The 4.2.0 release candidates exited 1 with
-  `no such table: v2_forward` once the flux tables were dropped; the only way out was the backup.
+- **The systemd installer finishes on a new host.** On a host with no previous release
+  `scripts/install.sh` stopped with exit 1 and no message before it installed the binary or the
+  service (since v4.0.0).
+- **Dropping the flux tables no longer stops Control.** After `forward legacy drop` the 4.2.0
+  release candidates exited 1 with `no such table: v2_forward`; the only way out was the backup.
 - **Experimental, off by default:** the `anixops` forward driver and the relay process (A3).
 - **Known limits** are in
   ["Known Limits In 4.2.0"](https://github.com/AnixOps/anix-control/blob/v4.2.0/docs/UPGRADE.md#known-limits-in-420): among them,
@@ -105,8 +109,9 @@ when coming from a release candidate.
   `forward legacy status` exited 1 with `no such table: v2_forward` (PostgreSQL: `relation
   "v2_forward" does not exist`) once the flux tables were dropped: the start seeded the old
   runtime's settings and rewrote the retired iptables backend in the dropped tables. The start now
-  skips what no longer exists, and a legacy agent's result report (which answered 500), task poll
-  and a clean agent's heartbeat no longer fail on the dropped bridge and job tables. Only the
+  skips what no longer exists; a legacy agent's result report (which answered 500) and a clean
+  agent's heartbeat no longer fail on the dropped bridge and job tables, and a legacy agent's task
+  poll, which already answered without bridge tasks, no longer logs a warning on every poll. Only the
   database's own "table does not exist" counts as dropped: any other failed statement is still an
   error, so a result report is retried instead of being acknowledged as a diagnostic task. The
   drop itself is unchanged, and a database dropped by a 4.2.0 release candidate needs no repair.
