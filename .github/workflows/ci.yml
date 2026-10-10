@@ -1539,7 +1539,7 @@ jobs:
   plugin-package-publish:
     name: Publish Signed Official Plugin Packages
     runs-on: ubuntu-24.04
-    needs: [tag-gate, plugin-package-release-test, cross-repository-agent-e2e]
+    needs: [tag-gate, plugin-package-release-test, cross-repository-agent-e2e, go-quality, go-security, backend-test]
     if: ${{ needs.tag-gate.outputs.is_release_tag == 'true' }}
     steps:
       - name: Checkout Control
@@ -2292,7 +2292,12 @@ jobs:
   release-binaries:
     name: Build Release Binary (${{ matrix.goos }}-${{ matrix.goarch }})
     runs-on: ubuntu-24.04
-    needs: [go-quality, go-lint, go-security, backend-test, postgres-stats-test, migration-dry-run-test, postgres-restore-rehearsal, plugin-package-release-test, plugin-package-publish, forward-runtime-test, grpc-test, cross-repository-agent-e2e, cmd-test, tag-gate]
+    # The tag waits for the test jobs. A job named here must run on tags: a
+    # skipped need skips this job. Smoke Tests is not listed: Backend Tests
+    # runs its packages, since internal/tests/smoke is under ./internal/...
+    # E2E Tests is listed because Backend Tests excludes internal/tests/e2e.
+    # config/scripts/check_release_workflow.sh lists the same names.
+    needs: [go-quality, go-lint, go-security, backend-test, postgres-stats-test, migration-dry-run-test, postgres-restore-rehearsal, plugin-package-release-test, plugin-package-publish, forward-runtime-test, grpc-test, cross-repository-agent-e2e, e2e-test, cmd-test, tag-gate, release-workflow-policy, deploy-script-test, package-storage-postgres, docker-smoke, kubernetes-smoke]
     if: ${{ needs.tag-gate.outputs.is_release_tag == 'true' }}
     strategy:
       fail-fast: false
