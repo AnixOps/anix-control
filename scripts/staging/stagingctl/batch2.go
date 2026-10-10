@@ -681,7 +681,7 @@ func b2NotificationSpecs() []RouteSpec {
 		RouteSpec{RouteID: "notification.user.telegram.unbind.post", Writes: func(w *World) []Req {
 			path := "/api/v2/user/telegram/unbind"
 			return []Req{
-				{Persona: User, Path: path, Label: "unbind (a stub: nothing is deleted)"},
+				{Persona: User, Path: path, Label: "unbind (not implemented: refused, nothing is deleted)"},
 				{Persona: User2, Path: path, Label: "not bound"},
 				{Persona: Anon, Path: path, Label: "anonymous"},
 			}
@@ -689,7 +689,7 @@ func b2NotificationSpecs() []RouteSpec {
 		RouteSpec{RouteID: "notification.user.telegram.notify.post", Writes: func(w *World) []Req {
 			path := "/api/v2/user/telegram/notify"
 			return []Req{
-				{Persona: User, Path: path, Body: map[string]any{"notify_expire": false, "notify_traffic": true}, Label: "settings (a stub: nothing changes)"},
+				{Persona: User, Path: path, Body: map[string]any{"notify_expire": false, "notify_traffic": true}, Label: "settings (not implemented: refused, nothing changes)"},
 				{Persona: User, Path: path, Body: map[string]any{}, Label: "empty body"},
 				{Persona: User, Path: path, Body: map[string]any{"notify_ticket": "no"}, Label: "wrong field type"},
 				{Persona: User, Path: path, Body: `{"notify_expire":`, Label: "invalid JSON"},

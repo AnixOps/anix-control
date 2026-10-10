@@ -3989,70 +3989,38 @@ func (s *PaymentHandlerTestSuite) TestX402CheckPayment_NotFoundUsesPanelEnvelope
 	s.assertPaymentPanelError(w, "支付记录不存在")
 }
 
-func (s *PaymentHandlerTestSuite) TestFiatCreatePayment_Stripe() {
-	handler := NewPaymentHandler()
-	s.router.POST("/fiat/create", handler.FiatCreatePayment)
-
-	body := map[string]any{
-		"order_id": 1,
-		"provider": "stripe",
-	}
-	jsonBody, _ := json.Marshal(body)
-
-	req, _ := http.NewRequest("POST", "/fiat/create", bytes.NewReader(jsonBody))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	s.router.ServeHTTP(w, req)
-
-	assert.Equal(s.T(), http.StatusOK, w.Code)
-	resp := decodePanelTestResponse(s.T(), w)
-	assert.Equal(s.T(), float64(0), resp["code"])
-	assert.NotEmpty(s.T(), resp["msg"])
-	assert.NotZero(s.T(), resp["ts"])
-	assert.NotContains(s.T(), resp, "message")
-	assert.NotContains(s.T(), resp, "error")
-	data := resp["data"].(map[string]any)
-	assert.NotEmpty(s.T(), data["payment_id"])
-	assert.Contains(s.T(), data["trade_no"], "FIAT")
-	assert.Equal(s.T(), "stripe", data["provider"])
-	assert.Contains(s.T(), data["checkout_url"], "https://checkout.stripe.com/pay/")
-	assert.Contains(s.T(), data["session_id"], "cs_test_")
-	assert.Equal(s.T(), float64(100), data["amount"])
-	assert.Equal(s.T(), "USD", data["currency"])
-	assert.Equal(s.T(), "Stripe 支付订单已创建 (模拟)", data["message"])
+// A Stripe or PayPal payment is refused with the not-implemented message: no
+// simulated checkout link is answered and no payment record is created.
+func (s *PaymentHandlerTestSuite) TestFiatCreatePayment_StripeIsNotImplemented() {
+	s.assertFiatRefused("stripe", "Stripe 支付尚未实现，未创建支付订单")
 }
 
-func (s *PaymentHandlerTestSuite) TestFiatCreatePayment_PayPal() {
+func (s *PaymentHandlerTestSuite) TestFiatCreatePayment_PayPalIsNotImplemented() {
+	s.assertFiatRefused("paypal", "PayPal 支付尚未实现，未创建支付订单")
+}
+
+func (s *PaymentHandlerTestSuite) assertFiatRefused(provider, message string) {
 	handler := NewPaymentHandler()
 	s.router.POST("/fiat/create", handler.FiatCreatePayment)
 
-	body := map[string]any{
-		"order_id": 1,
-		"provider": "paypal",
-	}
-	jsonBody, _ := json.Marshal(body)
+	var before int64
+	s.Require().NoError(database.Get().Model(&model.PaymentRecord{}).Count(&before).Error)
 
+	jsonBody, _ := json.Marshal(map[string]any{"order_id": 1, "provider": provider})
 	req, _ := http.NewRequest("POST", "/fiat/create", bytes.NewReader(jsonBody))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusOK, w.Code)
-	resp := decodePanelTestResponse(s.T(), w)
-	assert.Equal(s.T(), float64(0), resp["code"])
-	assert.NotEmpty(s.T(), resp["msg"])
-	assert.NotZero(s.T(), resp["ts"])
-	assert.NotContains(s.T(), resp, "message")
-	assert.NotContains(s.T(), resp, "error")
-	data := resp["data"].(map[string]any)
-	assert.NotEmpty(s.T(), data["payment_id"])
-	assert.Contains(s.T(), data["trade_no"], "FIAT")
-	assert.Equal(s.T(), "paypal", data["provider"])
-	assert.Contains(s.T(), data["approve_url"], "https://www.paypal.com/checkoutnow")
-	assert.Contains(s.T(), data["order_id"], "PAYPAL_ORDER_")
-	assert.Equal(s.T(), float64(100), data["amount"])
-	assert.Equal(s.T(), "USD", data["currency"])
-	assert.Equal(s.T(), "PayPal 支付订单已创建 (模拟)", data["message"])
+	// assertPaymentPanelError also requires code -1 and no data.
+	s.assertPaymentPanelError(w, message)
+	s.NotContains(w.Body.String(), "checkout_url")
+	s.NotContains(w.Body.String(), "approve_url")
+	s.NotContains(w.Body.String(), "模拟")
+
+	var after int64
+	s.Require().NoError(database.Get().Model(&model.PaymentRecord{}).Count(&after).Error)
+	s.Equal(before, after, "a refused payment must not leave a pending payment record")
 }
 
 func (s *PaymentHandlerTestSuite) TestFiatCreatePayment_InvalidProvider() {

@@ -678,9 +678,18 @@ func (h *TelegramHandler) GetTelegramStatus(c *gin.Context) {
 	})
 }
 
+// Messages of the two user routes below. They are not implemented: a request
+// is answered with an error and nothing is changed. The same messages are in
+// packages/notification/native; internal/tests/notificationcompat keeps them
+// equal.
+const (
+	telegramUnbindNotImplementedMessage = "Telegram 解绑尚未实现，绑定未被修改；请在 Telegram 机器人中发送 /unbind (Telegram unbind is not implemented here; your binding was not changed, send /unbind to the bot)"
+	telegramNotifyNotImplementedMessage = "Telegram 通知设置尚未实现，设置未被修改 (Telegram notification settings are not implemented here; your settings were not changed)"
+)
+
 // UnbindTelegram godoc
 // @Summary 解绑Telegram
-// @Description 用户解绑自己的Telegram账号
+// @Description 尚未实现：不会解除绑定，始终返回错误（code=-1）；请在 Telegram 机器人中发送 /unbind 解绑
 // @Tags 用户端
 // @Accept json
 // @Produce json
@@ -688,23 +697,17 @@ func (h *TelegramHandler) GetTelegramStatus(c *gin.Context) {
 // @Success 200 {object} map[string]any
 // @Router /user/telegram/unbind [post]
 func (h *TelegramHandler) UnbindTelegram(c *gin.Context) {
-	userID := c.GetUint("user_id")
+	// Not implemented. Doing it needs the binding found with
+	// TelegramUserService.GetByUserID and deleted (404 when there is none), as
+	// the bot's /unbind command (handleUnbind) does for the Telegram account.
+	log.Printf("Telegram unbind refused for user_id=%d: not implemented, the binding is unchanged", c.GetUint("user_id"))
 
-	// Telegram unbind stub:
-	//   1. Look up the user's Telegram binding via TelegramUserService.GetByUserID(userID)
-	//   2. Delete the binding record from user_telegram_bindings table
-	//   3. Optionally send an unbind confirmation message via the bot
-	//   4. Return 404 if no binding exists
-	log.Printf("[STUB] Telegram unbind: deleting binding for user_id=%d not yet implemented", userID)
-
-	_ = h.botService.GetTelegramUserService()
-
-	panelSuccess(c, gin.H{"message": "unbound successfully"})
+	panelError(c, telegramUnbindNotImplementedMessage)
 }
 
 // UpdateNotifySettings godoc
 // @Summary 更新Telegram通知设置
-// @Description 用户更新自己的Telegram通知设置
+// @Description 尚未实现：校验请求体后始终返回错误（code=-1），不会修改任何设置
 // @Tags 用户端
 // @Accept json
 // @Produce json
@@ -714,21 +717,18 @@ func (h *TelegramHandler) UnbindTelegram(c *gin.Context) {
 // @Failure 400 {object} map[string]any
 // @Router /user/telegram/notify [post]
 func (h *TelegramHandler) UpdateNotifySettings(c *gin.Context) {
-	userID := c.GetUint("user_id")
-
 	var req NotifySettingsRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		panelError(c, err.Error())
 		return
 	}
 
-	// Telegram notify settings update stub:
-	//   1. Look up the user's Telegram binding via TelegramUserService.GetByUserID(userID)
-	//   2. Update notify_enabled (and optionally notify_types) on the binding record
-	//   3. Return 404 if no binding exists
-	log.Printf("[STUB] Telegram notify settings update for user_id=%d not yet implemented", userID)
+	// Not implemented. Doing it needs the binding found with
+	// TelegramUserService.GetByUserID and its notify_expire, notify_traffic and
+	// notify_ticket set from req (404 when there is none).
+	log.Printf("Telegram notify settings update refused for user_id=%d: not implemented, the settings are unchanged", c.GetUint("user_id"))
 
-	panelSuccess(c, gin.H{"message": "settings updated"})
+	panelError(c, telegramNotifyNotImplementedMessage)
 }
 
 // ========== 请求结构体 ==========

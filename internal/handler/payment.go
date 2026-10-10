@@ -432,7 +432,22 @@ func (h *PaymentHandler) X402CheckPayment(c *gin.Context) {
 
 // ====== 法币支付 (Stripe/PayPal 等) ======
 
+// Stripe and PayPal have a verified webhook (StripeWebhook, PayPalWebhook) but
+// no checkout creation: no Stripe Checkout Session or PayPal Order is ever
+// requested, so there is no link a buyer could pay at. FiatCreatePayment
+// refuses both and creates no payment record. The same messages are in
+// packages/payment/native; internal/tests/paymentcompat keeps them equal.
+const (
+	fiatStripeNotImplementedMessage = "Stripe 支付尚未实现，未创建支付订单 (Stripe checkout is not implemented; no payment was created)"
+	fiatPayPalNotImplementedMessage = "PayPal 支付尚未实现，未创建支付订单 (PayPal checkout is not implemented; no payment was created)"
+)
+
 // FiatCreatePayment 创建法币支付
+//
+// The order is validated as before. A request for Stripe or PayPal is then
+// refused: neither provider's checkout is implemented, and an earlier version
+// answered a simulated checkout link and stored a pending payment record that
+// nothing could ever pay.
 func (h *PaymentHandler) FiatCreatePayment(c *gin.Context) {
 	var req struct {
 		OrderID  uint   `json:"order_id" binding:"required"`
@@ -467,95 +482,20 @@ func (h *PaymentHandler) FiatCreatePayment(c *gin.Context) {
 		return
 	}
 
-	// 生成商户订单号
-	fiatNonce := make([]byte, 4)
-	if _, err := rand.Read(fiatNonce); err != nil {
-		log.Printf("fiat trade number generation failed: %v", err)
-		panelError(c, "生成支付单号失败")
-		return
-	}
-	tradeNo := fmt.Sprintf("FIAT%s%s", time.Now().Format("20060102150405"), hex.EncodeToString(fiatNonce))
-
 	switch req.Provider {
 	case "stripe":
-		// Stripe Checkout Session creation stub:
-		//   1. Set stripe.Key = config.StripeSecretKey
-		//   2. Create a stripe.CheckoutSession with line items, success_url, cancel_url
-		//   3. Return session.URL for user redirect
-		//   4. Store the session_id in the payment record for later webhook correlation
-		// Current implementation uses mock data.
-		log.Printf("[STUB] Stripe Checkout Session creation not yet implemented, using mock response")
-
-		paymentRecord := &model.PaymentRecord{
-			TradeNo:      tradeNo,
-			GatewayType:  model.PaymentMethodFiat,
-			Provider:     model.PaymentProviderStripe,
-			UserID:       order.UserID,
-			Amount:       float64(order.TotalAmount) / 100,
-			ActualAmount: float64(order.TotalAmount) / 100,
-			Currency:     "USD",
-			Status:       model.PaymentStatusPending,
-			OrderID:      &req.OrderID,
-		}
-
-		if err := h.gatewayService.CreateRecord(paymentRecord); err != nil {
-			log.Printf("stripe payment record creation failed: %v", err)
-			panelError(c, "创建支付记录失败")
-			return
-		}
-
-		// 模拟 Stripe Checkout URL
-		checkoutURL := fmt.Sprintf("https://checkout.stripe.com/pay/cs_test_%s", tradeNo)
-		panelSuccess(c, gin.H{
-			"payment_id":   paymentRecord.ID,
-			"trade_no":     tradeNo,
-			"provider":     "stripe",
-			"checkout_url": checkoutURL,
-			"session_id":   fmt.Sprintf("cs_test_%s", tradeNo),
-			"amount":       paymentRecord.Amount,
-			"currency":     "USD",
-			"message":      "Stripe 支付订单已创建 (模拟)",
-		})
+		// Implementing it needs a Stripe Checkout Session (secret key from the
+		// gateway configuration, line items, success and cancel URLs) whose id
+		// is stored in the payment record for the webhook to correlate.
+		log.Printf("fiat payment refused: Stripe checkout is not implemented (order_id=%d)", req.OrderID)
+		panelError(c, fiatStripeNotImplementedMessage)
 
 	case "paypal":
-		// PayPal Order creation stub:
-		//   1. Initialize PayPal Client (ClientID, ClientSecret from config)
-		//   2. Create a PayPal Order with the payment amount and currency
-		//   3. Return approve_url for user authorization
-		//   4. Store the PayPal order_id in the payment record
-		// Current implementation uses mock data.
-		log.Printf("[STUB] PayPal Order creation not yet implemented, using mock response")
-
-		paymentRecord := &model.PaymentRecord{
-			TradeNo:      tradeNo,
-			GatewayType:  model.PaymentMethodFiat,
-			Provider:     model.PaymentProviderPayPal,
-			UserID:       order.UserID,
-			Amount:       float64(order.TotalAmount) / 100,
-			ActualAmount: float64(order.TotalAmount) / 100,
-			Currency:     "USD",
-			Status:       model.PaymentStatusPending,
-			OrderID:      &req.OrderID,
-		}
-
-		if err := h.gatewayService.CreateRecord(paymentRecord); err != nil {
-			log.Printf("paypal payment record creation failed: %v", err)
-			panelError(c, "创建支付记录失败")
-			return
-		}
-
-		// 模拟 PayPal Approve URL
-		approveURL := fmt.Sprintf("https://www.paypal.com/checkoutnow?token=PAYPAL_%s", tradeNo)
-		panelSuccess(c, gin.H{
-			"payment_id":  paymentRecord.ID,
-			"trade_no":    tradeNo,
-			"provider":    "paypal",
-			"approve_url": approveURL,
-			"order_id":    fmt.Sprintf("PAYPAL_ORDER_%s", tradeNo),
-			"amount":      paymentRecord.Amount,
-			"currency":    "USD",
-			"message":     "PayPal 支付订单已创建 (模拟)",
-		})
+		// Implementing it needs a PayPal Order (client id and secret from the
+		// gateway configuration) whose approve link is returned and whose id is
+		// stored in the payment record.
+		log.Printf("fiat payment refused: PayPal checkout is not implemented (order_id=%d)", req.OrderID)
+		panelError(c, fiatPayPalNotImplementedMessage)
 
 	default:
 		panelError(c, "不支持的支付方式")
