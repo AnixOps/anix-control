@@ -83,6 +83,23 @@ reject_text() {
   echo "ok: ${description} is absent"
 }
 
+# Every anix-agent checkout takes its ref from the one AGENT_REF in the top-level
+# env. A checkout left on a raw commit would build and test a different Agent
+# than the pin says, and the pin check above would not notice.
+require_agent_checkouts_use_pin() {
+  local checkouts
+  local pinned
+
+  checkouts="$(grep -cF -- "repository: AnixOps/anix-agent" "${WORKFLOW_PATH}" || true)"
+  pinned="$(grep -cF -- 'ref: ${{ env.AGENT_REF }}' "${WORKFLOW_PATH}" || true)"
+  if [[ "${checkouts}" -gt 0 && "${checkouts}" == "${pinned}" ]]; then
+    echo "ok: all ${checkouts} Agent checkouts use AGENT_REF"
+    return 0
+  fi
+
+  fail "${checkouts} Agent checkouts but ${pinned} use 'ref: \${{ env.AGENT_REF }}'"
+}
+
 release_binary_pairs() {
   awk '
     /^  release-binaries:/ { in_job = 1; next }
@@ -273,7 +290,9 @@ check_release_workflow() {
   require_named_step_text go-quality "Install pinned protoc" "sha256sum -c" "pinned protoc checksum verification" || failed=1
   require_text "GOST_VERSION: '3.2.6'" "pinned GOST runtime version" || failed=1
   require_text "GOST_LINUX_ARM64_BINARY_SHA256" "pinned arm64 GOST binary checksum" || failed=1
-  require_text "ref: acf54a02f07bd7a46cb9f993e13be5c5b5d8d036" "pinned Agent source commit" || failed=1
+  require_text "AGENT_REF: '91a045a8e67d22f2a9ce766b9f8286a69ee5ca80'" "pinned Agent source commit" || failed=1
+  require_agent_checkouts_use_pin || failed=1
+  require_job_text plugin-package-release-test "govulncheck ./cmd/nftables-forward" "pinned Agent plugin vulnerability scan" || failed=1
   require_text "-exclude-dir=config/scripts/testdata" "full gosec excludes the non-compiling AST fixture directory" || failed=1
   require_text "scripts/tests/test_identity_bootstrap_install.sh" "identity bootstrap installer regression test" || failed=1
 
@@ -420,6 +439,9 @@ run_self_test() {
     "s/--formal-release/--unsigned-release/" \
     "s/check_release_version.py --tag/check_release_version.py --self-test/" \
     "s/body_path: release\/RELEASE_NOTES.md/generate_release_notes: true/" \
+    "s/AGENT_REF: '/AGENT_REF_X: '/" \
+    '0,/ref: \${{ env.AGENT_REF }}/s//ref: 0000000000000000000000000000000000000000/' \
+    "s#govulncheck ./cmd/nftables-forward#echo ./cmd/nftables-forward#" \
     "s/anix-control-linux-amd64.tar.gz/anix-control-linux.tar.gz/g" \
     "s/go-security, backend-test/backend-test/" \
     "s/--verify-release-archive/--skip-release-archive/" \

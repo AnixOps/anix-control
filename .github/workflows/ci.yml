@@ -33,6 +33,10 @@ env:
   GOST_LINUX_AMD64_BINARY_SHA256: 'a2aea24efb4597b5f57b35b8e1bbcc59f439b80723854d4371f6828b46682ffb'
   GOST_LINUX_ARM64_ARCHIVE_SHA256: 'f674c8f4a033dc1dfd4f0d5e9602fbe5b0d0f81307bf3794f44b5b5d6d622eae'
   GOST_LINUX_ARM64_BINARY_SHA256: '343c3e003996ca0437b9cc47dd1500cd0475ba09f5a5f17e50851854e06a1ca7'
+  # The one anix-agent commit every checkout below builds and tests: the
+  # signed Agent plugins, the cross-repository E2E and the live WebUI gate.
+  # Move it to the Agent release commit with every Agent tag (docs/RELEASING.md).
+  AGENT_REF: '91a045a8e67d22f2a9ce766b9f8286a69ee5ca80'   # anix-agent v4.2.0-rc.4
 
 jobs:
   changes:
@@ -1442,7 +1446,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: AnixOps/anix-agent
-          ref: acf54a02f07bd7a46cb9f993e13be5c5b5d8d036
+          ref: ${{ env.AGENT_REF }}
           path: V2bX_AnixOps
 
       - name: Setup Go
@@ -1487,6 +1491,23 @@ jobs:
           install -m 0755 "${RUNNER_TEMP}/gost" package-build/gost
           echo "${GOST_LINUX_AMD64_BINARY_SHA256}  package-build/gost" | sha256sum --check --strict
           package-build/gost -V
+
+      # The Agent plugins ship inside the signed packages, so a vulnerable
+      # dependency in them reaches every installation. govulncheck scans the
+      # four commands those binaries are built from and fails the step only for
+      # a vulnerability their call graph reaches; a vulnerable package or
+      # module they merely import is printed as information. Like go-security,
+      # it reads the live advisory database.
+      - name: Scan the Agent plugin binaries that ship in the signed packages
+        shell: bash
+        working-directory: V2bX_AnixOps
+        env:
+          GOEXPERIMENT: jsonv2
+          GOWORK: 'off'
+        run: |
+          set -Eeuo pipefail
+          go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
+          "$(go env GOPATH)/bin"/govulncheck ./cmd/nftables-forward ./cmd/gost-mesh ./cmd/machine-telemetry ./cmd/nat-egress
 
       - name: Run Machine Telemetry package unit tests
         run: python3 -m unittest discover -s packages/machine-telemetry/tests -p 'test_*.py' -v
@@ -1553,7 +1574,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: AnixOps/anix-agent
-          ref: acf54a02f07bd7a46cb9f993e13be5c5b5d8d036
+          ref: ${{ env.AGENT_REF }}
           path: V2bX_AnixOps
 
       - name: Setup Go
@@ -1870,7 +1891,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: AnixOps/anix-agent
-          ref: acf54a02f07bd7a46cb9f993e13be5c5b5d8d036
+          ref: ${{ env.AGENT_REF }}
           path: V2bX_AnixOps
 
       - name: Setup Go
@@ -1938,7 +1959,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: AnixOps/anix-agent
-          ref: acf54a02f07bd7a46cb9f993e13be5c5b5d8d036
+          ref: ${{ env.AGENT_REF }}
           path: V2bX_AnixOps
 
       - name: Setup Go
@@ -2127,7 +2148,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: AnixOps/anix-agent
-          ref: acf54a02f07bd7a46cb9f993e13be5c5b5d8d036
+          ref: ${{ env.AGENT_REF }}
           path: V2bX_AnixOps
 
       # The live Control WebUI gate builds a temporary Control binary and a
