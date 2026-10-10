@@ -80,6 +80,15 @@ of the kernel's HS256 tokens after identity's cutover is finalized is in the
 binary and applies at once. Read
 ["Upgrading From 4.2.0-rc.2 To 4.2.0-rc.3"](#upgrading-from-420-rc2-to-420-rc3).
 
+**Upgrading to 4.2.0 from 4.2.0-rc.4: the four Agent packages have new builds,
+and the systemd installer needs `--version`.** The release changes no table,
+no signing root and nothing in the Control binary but its version. The signed `machine-telemetry`,
+`nftables-forward`, `gost-mesh` and `nat-egress` packages of rc.4 embed an
+Agent that was built before its `x/net` fix, so move them to the 4.2.0 builds.
+`scripts/install.sh`, `install.sh` and `panel_install.sh` install the release
+tag you name and no longer resolve "latest" or `go_dev`. Read
+["Upgrading From 4.2.0-rc.4 To 4.2.0"](#upgrading-from-420-rc4-to-420).
+
 ## Fixed Legacy Native Layout
 
 For the specific legacy layout discovered on the old native host
@@ -3149,6 +3158,103 @@ either package are read by the other.
   about 20 minutes can be forgotten earlier than its one-hour window.
 - A TOTP code can be used twice inside its roughly 90-second window, and
   regenerating backup codes asks only for the session; neither changed in rc.3.
+
+## Upgrading From 4.2.0-rc.4 To 4.2.0
+
+4.2.0 changes no table, no signing root and nothing in the Control binary but
+its version: nothing under any `migrations` directory differs from rc.4, no Go
+file differs apart from the version string, and the root is the same
+`jW26nr2tbthASoeq6RmIpx8Ah+uhPNIv9V1ewRVb1VE=`. The Agent and Control share a
+version number; upgrade the Agents first as for every 4.2 build. Coming from
+4.1.0, do everything in
+["The Official Signing Root Changes (v4.2)"](#the-official-signing-root-changes-v42)
+with the 4.2.0 builds in place of rc.2; coming from rc.2 or earlier, the
+rc.3 notes ([Upgrading From 4.2.0-rc.2 To 4.2.0-rc.3](#upgrading-from-420-rc2-to-420-rc3))
+apply too, with 4.2.0 in place of rc.3. The notes below are on top of them.
+
+### 4.2.0 Checklist
+
+1. Back up the database and the configuration, as always.
+2. Upgrade the Agents first, with the `agent-install.sh` release asset of
+   4.2.0 (see [Staged Agent Upgrades (v4.2)](#staged-agent-upgrades-v42)).
+3. Deploy the 4.2.0 Control. Every installation keeps running the release it
+   has: under the same root nothing is moved for you
+   ([Identity-Platform Recovers By Itself](#identity-platform-recovers-by-itself)).
+4. **Move the four packages that embed an Agent** (`machine-telemetry`,
+   `nftables-forward`, `gost-mesh` and `nat-egress`) to their 4.2.0 builds:
+   verify and extract them from the release archive
+   ([Getting A Package From The Release](#getting-a-package-from-the-release)),
+   then import and move each one with the calls of step 4 of the
+   [Upgrade Procedure](#upgrade-procedure) and `"desired_version"` `4.2.0`.
+   The rc.4 builds embed the Agent as it was before the `x/net` fix (see
+   below).
+5. No package source changed since rc.4, so the other packages work as they
+   are: an installation on its rc.4 release keeps working. Import the 4.2.0
+   builds from the verified archive when you want the installations on the
+   release version. Coming from rc.2 or earlier, also move
+   `identity-platform` (step 4 of the [rc.3 Checklist](#rc3-checklist-42), with
+   `VERSION=4.2.0`): its security fixes live in the package.
+6. On a systemd host, name the tag in every `install` and `update` command
+   (`--version v4.2.0`; see below).
+7. Run the smoke checks of [Post-Upgrade Record](#post-upgrade-record).
+
+### What Changes For Operators In 4.2.0
+
+- **The signed Agent packages carry the Agent's `x/net` fix.** Every
+  anix-agent checkout in `ci.yml` takes its ref from one `AGENT_REF`. The
+  signed packages of rc.4 were built from the older rc.3 pin, which carries
+  `golang.org/x/net` v0.58.0: four of its advisories (GO-2026-6603,
+  GO-2026-6611, GO-2026-6612 and GO-2026-6617) are reached from the four plugin
+  commands. The 4.2.0 packages are built from the commit `AGENT_REF` pins, the
+  Agent's v4.2.0-rc.4 commit (`91a045a8`) or a newer one; at rc.4 it carries
+  x/net v0.60.0 and reaches none of them. `Plugin Package Release Contracts`
+  now scans the four plugin commands with `govulncheck` and fails for a
+  vulnerability their call graph reaches.
+- **The systemd installer installs the tag it is given.**
+  `scripts/install.sh install` and `update` require `--version <tag>` and fail
+  before they change anything without it; they no longer resolve GitHub's
+  `releases/latest`, so publishing a release cannot change what an unpinned
+  command installs. The one-command entry points `install.sh` and
+  `panel_install.sh` fetch the installer at that tag instead of from the
+  `go_dev` branch, and refuse a command that names none. `preflight` and
+  `enable-agents` take no version: the entry points read the tag from
+  `INSTALL_REF=<tag>` for them. A script or unit that calls `install.sh update`
+  without `--version` must be changed. Containers are unchanged.
+- **Nothing else changes for operators.** The other changes of this release
+  are in the release pipeline (the tag waits for the E2E, smoke and policy
+  jobs, runners are pinned to `ubuntu-24.04`, a crash of the change
+  classifier fails the job) and in the visual-regression tests
+  (`CHANGELOG.md`, "4.2.0").
+
+### For The Release Owner Of 4.2.0
+
+- **Agent pin.** Before the tag, `AGENT_REF` in `ci.yml` names the Agent's
+  4.2.0 release commit ([`RELEASING.md`](RELEASING.md), "What The Tag Pipeline
+  Does"); the signed Agent packages are built from it.
+- **Commercial packages.** After the 4.2.0 tag exists, run the manual
+  `Commercial Packages` workflow with `tag=v4.2.0` and `attach=true`, as for
+  rc.3 above. A commercial installation imports `order`, `payment` and
+  `affiliate` before the first start of a Control that runs them.
+- **npm audit waivers expire:** braces on 2026-11-02 and sprintf-js on
+  2026-11-05 (`web/audit-allowlist.json`); the frontend audit fails after that
+  unless they are renewed or fixed.
+
+### Rolling Back From 4.2.0
+
+Redeploy the previous image or binary as in [Rollback](#rollback); there is no
+schema step. The four packages moved in step 4 can stay on 4.2.0 or go back
+with the same `PUT /api/v3/plugin-installations` call: their rc.4 builds run on
+the same tables. Going back to 4.1.0 is
+[Rolling Back After The Import](#rolling-back-after-the-import) and
+`config/scripts/rollback_installations.py`. A systemd host restores its
+backups as in [Rollback](#rollback), or runs `install.sh rollback --version
+<previous tag>`, which installs that tag.
+
+### Known Limits In 4.2.0
+
+Those of [rc.3](#known-limits) are unchanged. The reachable advisories in the
+Agent's hysteria and quic-go dependencies that rc.4 left open (see "Source
+builds need Go 1.26" in the rc.3 notes) are listed in the Agent's CHANGELOG.
 
 ## Switching Route Modes
 

@@ -87,7 +87,7 @@ auth:
 
 app:
   name: "AnixOps Control"
-  version: "4.2.0-rc.4"
+  version: "4.2.0"
   api_token: ""
   traffic_log_enable: true
   subscribe_path: "s"

@@ -2,6 +2,37 @@
 
 ## Unreleased
 
+## 4.2.0 - 2026-10-10
+
+### Highlights since 4.1.0
+
+This is the first stable 4.2 release. It rolls up 4.2.0-rc.1 to rc.4 (CHANGELOG.md has a section
+for each with every change; the `v4.2.0-rc.3` tag was pushed but not published, and rc.4 carries
+its changes) plus the changes listed after this summary. Read docs/UPGRADE.md before upgrading:
+"The Official Signing Root Changes (v4.2)" when coming from 4.1.0, and "Upgrading From 4.2.0-rc.4
+To 4.2.0" when coming from a release candidate.
+
+- **Forwarding is the v4 model.** The flux forwarding API and pages are removed (the v2 routes
+  that change forwards, rules, tunnels, nodes, Ansible machines and clean agents answer 404);
+  routes are chains of hops under `/api/v4/forward/*`. The old forwarding data is archived on the
+  first start and its tables are dropped only by the explicit, irreversible
+  `anix-control forward legacy drop`.
+- **`agent_control.mtls` defaults to `required`:** legacy API-key Agents are refused on the
+  AnixOps Agent channels. `anix-control agents transports --check-required` lists the nodes it
+  would refuse.
+- **A new official signing root.** Every package except `identity-platform` stays down until you
+  import its 4.2 build (`identity-platform` recovers by itself from rc.2 on), and the commercial
+  packages need the `Commercial Packages` workflow run with the release tag.
+- **Staged Agent upgrades:** Control pushes Agent releases to the nodes in canary batches
+  (`anix-control agent upgrade`).
+- **The console APIs of the admin UI** (server-side sort, bulk actions, per-node traffic,
+  credential rotation, administrator API tokens, a Telegram test message, certificate alerts).
+- **Security and dependencies:** the identity fixes of rc.3 (they live in the `identity-platform`
+  package), no reachable Go vulnerability in any module (Go 1.26.9, `x/net` v0.60.0), and a
+  nightly security workflow. From this release the signed Agent packages are built from an Agent
+  that carries the `x/net` fix (below).
+- **Experimental, off by default:** the `anixops` forward driver and the relay process (A3).
+
 ### Changed
 
 - **More test and policy jobs gate the tag.** `release-binaries` now also waits for Release Workflow Policy Check, Deployment Script Checks, Package Storage PostgreSQL, Docker Build Smoke, Kubernetes Smoke and E2E Tests, and `plugin-package-publish` waits for Go Quality Gates, Go Security Scans and Backend Tests. Before, a failing E2E, Docker or Kubernetes smoke, package storage, deployment script or release policy job did not stop the tag from being published, and the signed packages did not wait for the Go gates. `config/scripts/check_release_workflow.sh` enforces each gate, and its self-test checks that removing any one of them fails the check.
