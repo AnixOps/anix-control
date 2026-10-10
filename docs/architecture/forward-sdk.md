@@ -2055,7 +2055,19 @@ Drop The Old Tables").
   schema steps from creating the tables again, by table name, and the
   flux workers (runtime job executor, bridge, flow reset, gost and Ansible
   stats) no longer start. The latency prober and a forward node's legacy
-  desired configuration treat the missing tables as empty.
+  desired configuration treat the missing tables as empty. So does every
+  other path a Control without flux data still runs: the start seeds and
+  normalizes the old runtime's settings only while the tables exist
+  (`forwardlegacy.UnlessDropped` around `InitForwardRuntimeSystemConfig`,
+  `HasTable` in `migrateIptablesForwardBackend`), a legacy agent's task poll
+  and result report find no bridge task, and a clean agent's heartbeat gets
+  no job. `migrate`, the server and `forward legacy status` start on a
+  dropped database on SQLite and PostgreSQL
+  (`TestBootstrapDatabaseAfterForwardLegacyDrop`). The flux v2 routes that
+  read or write a flux table (the remaining `kernel-owned` lists, tunnels,
+  speed limits, rules and traffic uploads) are not guarded: the legacy
+  runtime is frozen, and they answer the database error once its tables
+  are gone.
 
 The flux v2 routes, the route catalog entries and the flux guardrails in
 AGENTS.md go in the same release (F5, H17). Done in F5d: the 53 routes

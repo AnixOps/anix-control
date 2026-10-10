@@ -168,7 +168,11 @@ func bootstrapDatabase(ctx context.Context, cfg *config.Config, env string) erro
 	service.InitDefaultPlan()
 	service.InitDefaultAuthKeyFromEnv()
 
-	if err := service.InitForwardRuntimeSystemConfig(db); err != nil {
+	// Seeding the flux runtime's settings also rewrites rows of the flux
+	// tables (forward-sdk.md section 10). Once the v4.2 upgrade dropped them
+	// it has nothing left to do, and the old runtime's settings no longer
+	// gate the start.
+	if err := forwardlegacy.UnlessDropped(service.InitForwardRuntimeSystemConfig)(db); err != nil {
 		return fmt.Errorf("initialize forward runtime config: %w", err)
 	}
 	for _, step := range []struct {

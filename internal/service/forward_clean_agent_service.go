@@ -261,6 +261,13 @@ func (s *ForwardCleanAgentService) Heartbeat(input ForwardCleanAgentHeartbeatInp
 			return err
 		}
 
+		// The runtime jobs are gone once the v4.2 upgrade dropped the flux
+		// tables (forwardlegacy.Drop): the agent is still known and seen,
+		// and has nothing to run.
+		if !tx.Migrator().HasTable(&model.ForwardRuntimeJob{}) {
+			return nil
+		}
+
 		query := tx.Where("backend = ? AND status = ?", model.ForwardRuntimeBackendCleanAgent, model.ForwardRuntimeJobStatusPending)
 		if agent.NodeID == nil || *agent.NodeID == 0 {
 			query = query.Where("node_id IS NULL")

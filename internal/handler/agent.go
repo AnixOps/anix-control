@@ -809,6 +809,11 @@ func (h *AgentHandler) pullBridgeTasks(nodeID uint) []AgentTask {
 	if h.db == nil || nodeID == 0 {
 		return tasks
 	}
+	// Every task poll of every legacy agent comes here, and the table is
+	// gone once the v4.2 upgrade dropped the flux tables (forwardlegacy.Drop).
+	if !h.db.Migrator().HasTable(&model.ForwardAgentBridgeTask{}) {
+		return tasks
+	}
 
 	var mappings []model.ForwardAgentBridgeTask
 	if err := h.db.
@@ -1548,11 +1553,15 @@ func (h *AgentHandler) AgentGetForwardRules(c *gin.Context) {
 		return
 	}
 
+	// The rules table is gone once the v4.2 upgrade dropped the flux tables
+	// (forwardlegacy.Drop): the node has no rules then.
 	var rules []*model.ForwardRule
-	h.db.Where("relay_node_id = ? OR exit_node_id = ?", nodeID, nodeID).
-		Preload("RelayNode").
-		Preload("ExitNode").
-		Find(&rules)
+	if h.db.Migrator().HasTable(&model.ForwardRule{}) {
+		h.db.Where("relay_node_id = ? OR exit_node_id = ?", nodeID, nodeID).
+			Preload("RelayNode").
+			Preload("ExitNode").
+			Find(&rules)
+	}
 
 	// 转换为 Agent 需要的格式
 	var agentRules []ForwardRuleForAgent

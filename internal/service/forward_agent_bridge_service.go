@@ -51,6 +51,12 @@ func (s *ForwardAgentBridgeService) LookupBridgeTask(taskID string) (*model.Forw
 	if db == nil {
 		return nil, nil
 	}
+	// Every task result a legacy agent reports is looked up here, and the
+	// table is gone once the v4.2 upgrade dropped the flux tables
+	// (forwardlegacy.Drop): then no task is a bridge task.
+	if !db.Migrator().HasTable(&model.ForwardAgentBridgeTask{}) {
+		return nil, nil
+	}
 	var task model.ForwardAgentBridgeTask
 	err := db.Where("task_id = ?", taskID).First(&task).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
