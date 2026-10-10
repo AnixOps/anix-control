@@ -4,6 +4,7 @@
 
 ### Changed
 
+- **More test and policy jobs gate the tag.** `release-binaries` now also waits for Release Workflow Policy Check, Deployment Script Checks, Package Storage PostgreSQL, Docker Build Smoke, Kubernetes Smoke and E2E Tests, and `plugin-package-publish` waits for Go Quality Gates, Go Security Scans and Backend Tests. Before, a failing E2E, Docker or Kubernetes smoke, package storage, deployment script or release policy job did not stop the tag from being published, and the signed packages did not wait for the Go gates. `config/scripts/check_release_workflow.sh` enforces each gate, and its self-test checks that removing any one of them fails the check.
 - **One Agent pin, and a vulnerability scan of the Agent plugins that ship in the signed
   packages.** Every anix-agent checkout in `ci.yml` (the official packages, the cross-repository
   E2E, the chaos E2E and the live WebUI gate) takes its ref from one `AGENT_REF`. It moves from

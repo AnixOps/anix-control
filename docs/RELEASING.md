@@ -85,6 +85,10 @@ only the highest version `latest`.
 `ci.yml` runs the full test suite, then:
 
 - **Tag gate.** The tag's version must equal the tree's declared version.
+- **Test gates.** Packages, binaries and the image wait for the test and
+  policy jobs. The `needs` lists of `plugin-package-publish` and
+  `release-binaries` in `ci.yml` name them, and
+  `config/scripts/check_release_workflow.sh` fails if one is dropped.
 - **Official packages.** Every package under `packages/` is built at the tag's
   version and signed with the protected key `ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY`.
   - The signing root must equal `plugins.official_public_key` in
