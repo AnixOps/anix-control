@@ -47,10 +47,11 @@ important parts, in request order:
   node assignments, topologies, deployments, access groups, resource grants,
   and quota policies. `/api/v4/plugins/:plugin_id/*` exposes the package route
   gateway directly to administrators.
-- **Packages** (`packages/*`): sixteen official signed packages plus
-  `packages/shared`. Package host processes use `sdk/pluginhostsdk` to serve
-  the host protocol (`sdk/api/pluginhost/v1`) and `sdk/packagebridgesdk` to call
-  the bridge protocol (`sdk/api/packagebridge/v1`).
+- **Packages** (`packages/*`): eighteen official signed packages (a release
+  ships the 15 of the community edition) plus `packages/shared`. Package host
+  processes use `sdk/pluginhostsdk` to serve the host protocol
+  (`sdk/api/pluginhost/v1`) and `sdk/packagebridgesdk` to call the bridge
+  protocol (`sdk/api/packagebridge/v1`).
 - **Nodes**: the node runtime is `anix-agent` (separate repository
   `AnixOps/anix-agent`). Control imports no anix-agent module; it owns the
   Agent contract in its SDK module (`sdk/api/agent/v1`) and talks to agents
