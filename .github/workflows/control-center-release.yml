@@ -3,8 +3,8 @@ name: Control Center Release
 # Ported from the archived AnixOps/Anixops-control-center repository
 # (.github/workflows/release.yml). Releases are tagged control-center-<version>
 # so they never collide with anix-control's own v*.*.* tags, and they are never
-# marked as the repository's latest release (scripts/install.sh reads
-# releases/latest for the Control package).
+# marked as the repository's latest release (the Releases page and the Control
+# image's latest tag follow it, and the latest release must be a Control one).
 
 on:
   workflow_dispatch:

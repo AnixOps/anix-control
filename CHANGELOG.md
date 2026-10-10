@@ -16,6 +16,13 @@
   `gost-mesh`, `machine-telemetry` and `nat-egress` and fails for a vulnerability their call graph
   reaches. `config/scripts/check_release_workflow.sh` enforces the single pin, that every checkout
   uses it, and that the scan stays.
+- **The systemd installer installs a named release tag.** `scripts/install.sh` requires
+  `--version <tag>` for `install` and `update` and no longer resolves GitHub's
+  `releases/latest`, so publishing a release cannot change what an unpinned command installs. The
+  one-command entry points `install.sh` and `panel_install.sh` fetch the installer at that tag
+  instead of from the `go_dev` branch and refuse a command that names no tag (`INSTALL_REF` still
+  overrides, for a developer who installs another ref). The installer is no longer described as
+  frozen. `scripts/tests/test_install_tag.sh` covers all three scripts.
 
 ### Tooling
 
