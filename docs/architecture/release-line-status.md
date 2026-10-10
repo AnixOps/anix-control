@@ -1,11 +1,14 @@
 # AnixOps Product Release Line And Delivery Status
 
-Date: 2026-09-29
+Date: 2026-10-09
 
 This document records the staged product-version plan and the current delivery
-boundary. The active `4.0.x` RC plan and its verification status are in
+boundary. The current release is the one named by the `- Current release:` line
+of [`README.md`](../../README.md); the CHANGELOG sections list what each release
+changed, and releases follow [`RELEASING.md`](../RELEASING.md). The `4.0.x` RC
+roadmap and its evidence snapshot,
 [`ROADMAP-4.0.x-RC.md`](../ROADMAP-4.0.x-RC.md) and
-[`RC-EVIDENCE-4.0.x.md`](../RC-EVIDENCE-4.0.x.md).
+[`RC-EVIDENCE-4.0.x.md`](../RC-EVIDENCE-4.0.x.md), are historical records.
 
 ## Version Decision
 
@@ -13,8 +16,8 @@ The `v4.0.0-alpha.1` through `v4.0.0-alpha.7` tags were early package-platform
 experiments before the staged product programme was frozen. They are immutable
 historical preview evidence, not approval for production data-plane traffic.
 The later `v4.0.0` tag was published on 2026-07-20 with a signed sixteen-package
-baseline. Its evidence binds that tag's commit, not the current `4.0.x` RC
-worktree or any new production traffic approval.
+baseline. Its evidence binds that tag's commit, not later releases or any
+production traffic approval.
 
 The earlier planned product line was:
 
@@ -27,16 +30,22 @@ The published tags did not follow every intermediate stage in that sequence;
 module path remains `github.com/AnixOps/anix-control/v4`; import-major version
 and product version are separate contracts.
 
+Releases since `v4.0.0` (dates from the CHANGELOG headings): `v4.1.0-rc.1` to
+`v4.1.0-rc.6` (2026-10-01 to 2026-10-03) and the stable `v4.1.0` (2026-10-04);
+`v4.2.0-rc.1` (2026-10-04), `v4.2.0-rc.2` (2026-10-05) and `v4.2.0-rc.4`
+(2026-10-09). The `v4.2.0-rc.3` tag was pushed, but its pipeline failed the Go
+security gate, so it was not published.
+
 Historical preview tags must never be moved. Release automation treats them
-as audit evidence only. The current worktree requires a new commit-bound CI
-run, staging records, and operator approval before an additional RC tag is
-published.
+as audit evidence only. A new tag needs its own commit-bound tag-pipeline run
+(`RELEASING.md`); the repository has no release-stage, rehearsal or approval
+gates (`AGENTS.md`, Release Policy).
 
 ## What Exists Now
 
-The current worktree retains the following foundation from the staged plan.
-"Implemented" means source and focused test coverage exist; it does not
-silently imply a production rollout of new worktree changes.
+The tree retains the following foundation from the staged plan.
+"Implemented" means source and focused test coverage exist; it does not imply a
+production rollout.
 
 | Area | Status | Evidence and boundary |
 |------|--------|-----------------------|
@@ -46,10 +55,10 @@ silently imply a production rollout of new worktree changes.
 | Scoped authorization | Implemented and administrable | `service_scope`, access groups, group users/plans, resource grants, quota policies, and server-side effective-access resolution exist. `/admin/access-groups` manages the model without returning member credentials. |
 | Agent Supervisor canary configuration | Implemented, default off | The node deployment wizard can emit Supervisor fields only after explicit opt-in, a trusted Control channel, and an official public key. It does not alter the legacy data plane. |
 | Real signed-WebUI browser gate | Implemented | An isolated Playwright test builds a real Control binary/frontend, registers an ephemeral signed package, checks catalog/asset/menu/route behavior, disables it through a durable operation, and verifies revocation. No browser route interception is used. |
-| Release package scope | Retired after v4.0.0 | Up to `v4.0.0` a release-stage contract fixed each release's package set (3.1 shipped only `machine-telemetry`). Releases now sign and publish every package under `packages/` at the tag version (`docs/RELEASING.md`). |
-| Compatible Control Center lifecycle slice | Preview/Partial | The Control Center (`control-center/`, imported from the archived `Anixops-control-center` repository) connects with a separate Control administrator session via `/api/v2/login`, then reads the official `/api/v3` catalog and installation state, edits revisioned configuration, submits idempotent Control/Agent install/update/enable/disable/rollback actions, and renders operation chains. Its Workers session remains independent. Local frontend tests/build and a full-process signed Agent install/update/enable rehearsal pass; live staging evidence is still required. |
-| Default deployment safety | Implemented | The normal and production templates keep Control execution, Agent dispatch, and topology execution disabled. The development template is explicitly separate. |
-| Legacy compatibility | Retained intentionally | `/api/v2`, subscription behavior, UniProxy synchronization, and the existing forwarding path remain active until their owning packages reach parity and migration evidence exists. |
+| Release package scope | Retired after v4.0.0 | Up to `v4.0.0` a release-stage contract fixed each release's package set (3.1 shipped only `machine-telemetry`). Releases now sign and publish the packages of the release edition at the tag version; the community set leaves out `order`, `payment` and `affiliate` (`docs/RELEASING.md`, `config/editions.json`). |
+| Compatible Control Center lifecycle slice | Preview/Partial | The Control Center (`control-center/`, imported from the archived `Anixops-control-center` repository) connects with a separate Control administrator session via `/api/v2/login`, then reads the official `/api/v3` catalog and installation state, edits revisioned configuration, submits idempotent Control/Agent install/update/enable/disable/rollback actions, and renders operation chains. Its Workers session remains independent. Local frontend tests/build and a full-process signed Agent install/update/enable rehearsal pass; live staging evidence is still to be collected. |
+| Default deployment safety | Implemented | Agent dispatch (`plugins.dispatch_enabled`) and topology execution (`plugins.topology_execution_enabled`) are off in the built-in defaults (`internal/config/defaults.yaml`, used by the container image) and in every shipped template except the development one, which turns dispatch on. Control execution (`plugins.control_execution_enabled`) is on in the built-in defaults and `scripts/install.sh` sets it with the identity bootstrap, because the `identity-platform` package serves login from a Control package host; `config/config.yaml.example` and `config/config.prod.yaml` still write `false` as the cold-start value that the installer rewrites. Other opt-in features stay off by default: `module_runtime.enabled`, `forward.anixops_experimental`, and `grpc.enabled` in the built-in defaults and the production template. |
+| Legacy compatibility | Retained intentionally | `/api/v2`, subscription behavior and UniProxy synchronization remain active until their owning packages reach parity and migration evidence exists. The flux forwarding API and pages were removed in v4.2 (F5d; its frozen runtime stays until the cleanup, F5c), and the legacy REST and WebSocket agent paths are refused unless `agent_control.mtls` is lowered from its v4.2 default `required` (`docs/UPGRADE.md`). |
 
 ## Current Verification
 
@@ -69,10 +78,11 @@ bash config/scripts/check_release_workflow.sh --self-test
 bash config/scripts/check_release_workflow.sh
 ```
 
-The current `4.0.x` release candidate must additionally pass the
-repository-wide CI gates, signed-package workflow, cross-repository Agent
-process gate, live staging, and release artifact verification before a new tag
-is created.
+A release additionally waits for the tag pipeline's test and policy gates: the
+repository-wide CI jobs, the signed-package workflow and the cross-repository
+Agent process gate (the `needs` of `plugin-package-publish` and
+`release-binaries` in `ci.yml`, enforced by `check_release_workflow.sh`;
+`RELEASING.md`).
 
 ## Production Baseline And Upgrade Rehearsal
 
@@ -132,24 +142,36 @@ Defects found by the rehearsal, all fixed on `go_dev` before this record:
 - the bridge replaced the request `Host` with `package-bridge`, so the
   forward-agent `install.sh` pointed at `http://package-bridge` (PR #19).
 
+PRs #11 to #19 and the container work (#21 to #29) first shipped in
+`v4.1.0-rc.1`, so every release from `v4.1.0` on has these fixes and the
+container image; the published `v4.0.0` has none of them.
+
 This is a local rehearsal on a copy of production data. It is not a staging
 canary and does not authorize the production upgrade.
 
 ## Explicitly Not Complete
 
-The following statements are intentionally false today:
+The following are not claimed, and are not complete, today:
 
-- The current `4.0.x` worktree changes are not released or operator approved.
-- The published `v4.0.0` evidence does not certify later uncommitted changes.
-- No plugin package is authorized to take over proxy or forwarding traffic in
-  3.1.
-- `nftables-forward`, `gost-mesh`, `nat-egress`, WireGuard, and
-  `protocol-runtime` are not part of the 3.1 package-release scope.
-- A successful unit or browser test is not a 72-hour canary. Stable release
-  still needs the canary record and explicit operator authorization.
-- The legacy business domains have not yet been moved out of the kernel.
+- The published `v4.0.0` evidence certifies that tag's commit only; it does not
+  certify later releases.
+- A successful unit or browser test is not a 72-hour canary. Staging and
+  canary evidence is how an operator learns that a rollout is safe, and it is
+  worth collecting before a production upgrade, but the repository has no gate
+  that requires it (`RELEASING.md`, History).
+- `nftables-forward`, `gost-mesh` and `nat-egress` are signed with every
+  release but remain Preview/Partial (`docs/features.md`); letting them carry
+  production traffic is the operator's decision.
+- The business domains have not moved out of the kernel: 177 of the 243
+  `/api/v2` routes have native package handlers (130 run natively by default),
+  but handlers, services, workers and table ownership stay in the kernel
+  (`package-extraction.md`, section 1).
 
 ## Historical Stage Targets
+
+These are the original stage exits. The release-stage contract that enforced
+them was retired after `v4.0.0` (`RELEASING.md`, History), and the staging,
+rehearsal and canary evidence they name is no longer a release gate.
 
 | Stage | Product objective | Exit boundary |
 |-------|-------------------|---------------|
@@ -163,13 +185,15 @@ The following statements are intentionally false today:
 ## Stop Rules
 
 Work on a prerelease stops only when its declared scope, tests, signed assets,
-release metadata, and rollback documentation agree. Production promotion
-requires the applicable canary and explicit operator authorization. A new
-candidate cannot borrow completion from a historical tag or later worktree.
+release metadata, and rollback documentation agree. Moving a release to
+production is the operator's own decision and no repository gate enforces a
+canary or an approval; the checklists in [`../UPGRADE.md`](../UPGRADE.md) are
+the operator's guide. A new candidate cannot borrow completion from a
+historical tag.
 
 For the kernel/package contract, see
-[`plugin-kernel-contract.md`](plugin-kernel-contract.md). The current release
-work is tracked in [`../ROADMAP-4.0.x-RC.md`](../ROADMAP-4.0.x-RC.md) and its
-evidence in [`../RC-EVIDENCE-4.0.x.md`](../RC-EVIDENCE-4.0.x.md). Earlier
-3.1-to-4.0 planning documents were retired; their history remains in Git and
-`CHANGELOG.md`.
+[`plugin-kernel-contract.md`](plugin-kernel-contract.md). Release work is
+tracked in the `## Unreleased` section of `CHANGELOG.md` and cut as
+[`../RELEASING.md`](../RELEASING.md) describes; the 4.0.x RC roadmap and its
+evidence snapshot are historical. Earlier 3.1-to-4.0 planning documents were
+retired; their history remains in Git and `CHANGELOG.md`.
