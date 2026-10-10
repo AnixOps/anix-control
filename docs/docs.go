@@ -10239,7 +10239,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "用户更新自己的Telegram通知设置",
+                "description": "尚未实现：校验请求体后始终返回错误（code=-1），不会修改任何设置",
                 "consumes": [
                     "application/json"
                 ],
@@ -10315,7 +10315,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "用户解绑自己的Telegram账号",
+                "description": "尚未实现：不会解除绑定，始终返回错误（code=-1）；请在 Telegram 机器人中发送 /unbind 解绑",
                 "consumes": [
                     "application/json"
                 ],

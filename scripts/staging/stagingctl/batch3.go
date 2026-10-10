@@ -816,10 +816,8 @@ func b3PaymentSpecs() []RouteSpec {
 			path := "/api/v2/payment/fiat/create"
 			payable := w.ID("order.user.payable", 3)
 			return []Req{
-				{Persona: User, Path: path, Mask: []string{"data.trade_no", "data.checkout_url", "data.session_id"},
-					Body: map[string]any{"order_id": payable, "provider": "stripe"}, Label: "a simulated Stripe checkout"},
-				{Persona: User, Path: path, Mask: []string{"data.trade_no", "data.approve_url", "data.order_id"},
-					Body: map[string]any{"order_id": payable, "provider": "paypal"}, Label: "a simulated PayPal order"},
+				{Persona: User, Path: path, Body: map[string]any{"order_id": payable, "provider": "stripe"}, Label: "Stripe checkout (not implemented: refused, no payment record)"},
+				{Persona: User, Path: path, Body: map[string]any{"order_id": payable, "provider": "paypal"}, Label: "PayPal order (not implemented: refused, no payment record)"},
 				{Persona: User, Path: path, Body: map[string]any{"order_id": payable, "provider": "alipay"}, Label: "an unsupported provider"},
 				{Persona: User, Path: path, Body: map[string]any{"order_id": w.ID("order.user2.status.0", 0), "provider": "stripe"}, Label: "another member's order"},
 				{Persona: User, Path: path, Body: map[string]any{"order_id": w.ID("order.user.status.1", 0), "provider": "stripe"}, Label: "a paid order"},

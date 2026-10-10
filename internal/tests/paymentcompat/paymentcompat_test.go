@@ -5,12 +5,14 @@
 //
 // The native side reads orders through the kernel view kapi_order_billing_v1
 // (packagestore.EnsureKernelAPIViews). No test calls a payment provider: the
-// fiat routes are stubs on both sides, and the callbacks (callbacks_test.go)
-// verify PayPal deliveries against a fake PayPal API.
+// fiat route refuses Stripe and PayPal on both sides (neither checkout is
+// implemented), and the callbacks (callbacks_test.go) verify PayPal
+// deliveries against a fake PayPal API.
 package paymentcompat
 
 import (
 	"context"
+	"encoding/json"
 	"regexp"
 	"testing"
 	"time"
@@ -415,16 +417,57 @@ func TestCreatePaymentRoutesParity(t *testing.T) {
 		{Name: "x402 is not enabled", Path: "/api/v2/payment/x402/create", Principal: buyer, Seed: noMethods,
 			Body: []byte(`{"order_id":1,"token":"USDC","network":"base-sepolia"}`)},
 	})
+	// Neither Stripe nor PayPal has a checkout: both are refused, on both
+	// sides, with no payment record (the state compared is the records).
 	fiat := route("POST", "/api/v2/payment/fiat/create", "payment.payment.fiat.create.post", payments((*handler.PaymentHandler).FiatCreatePayment))
 	write(t, fiat, recordState, []packagecompat.Case{
-		{Name: "a simulated Stripe checkout", Path: "/api/v2/payment/fiat/create", Principal: buyer,
-			Mask: []string{"data.trade_no", "data.checkout_url", "data.session_id"}, Body: []byte(`{"order_id":1,"provider":"stripe"}`)},
-		{Name: "a simulated PayPal order", Path: "/api/v2/payment/fiat/create", Principal: buyer,
-			Mask: []string{"data.trade_no", "data.approve_url", "data.order_id"}, Body: []byte(`{"order_id":5,"provider":"paypal"}`)},
+		{Name: "Stripe is not implemented", Path: "/api/v2/payment/fiat/create", Principal: buyer, Body: []byte(`{"order_id":1,"provider":"stripe"}`)},
+		{Name: "PayPal is not implemented", Path: "/api/v2/payment/fiat/create", Principal: buyer, Body: []byte(`{"order_id":5,"provider":"paypal"}`)},
 		{Name: "an unknown provider", Path: "/api/v2/payment/fiat/create", Principal: buyer, Body: []byte(`{"order_id":1,"provider":"alipay"}`)},
 		{Name: "another user's order", Path: "/api/v2/payment/fiat/create", Principal: buyer, Body: []byte(`{"order_id":3,"provider":"stripe"}`)},
 		{Name: "a paid order", Path: "/api/v2/payment/fiat/create", Principal: buyer, Body: []byte(`{"order_id":2,"provider":"stripe"}`)},
 		{Name: "no provider", Path: "/api/v2/payment/fiat/create", Principal: buyer, Body: []byte(`{"order_id":1}`)},
 		{Name: "no body", Path: "/api/v2/payment/fiat/create", Principal: buyer},
 	})
+}
+
+// TestFiatCreateRefusesStripeAndPayPal pins what the native route answers
+// for the two fiat providers, which the parity cases above only compare with
+// the kernel: an error envelope that says the checkout is not implemented, no
+// simulated link, and no pending payment record that nothing could pay.
+func TestFiatCreateRefusesStripeAndPayPal(t *testing.T) {
+	for _, tc := range []struct{ provider, message string }{
+		{"stripe", "Stripe 支付尚未实现，未创建支付订单"},
+		{"paypal", "PayPal 支付尚未实现，未创建支付订单"},
+	} {
+		t.Run(tc.provider, func(t *testing.T) {
+			db := packagecompat.OpenSQLite(t, &model.Plan{}, &model.User{}, &model.Order{}, &model.PaymentGateway{}, &model.PaymentRecord{}, &model.Payment{})
+			seed(t, db)
+			var before int64
+			require.NoError(t, db.Model(&model.PaymentRecord{}).Count(&before).Error)
+
+			service := &native.Service{Open: func(ctx context.Context) (*gorm.DB, error) { return db.WithContext(ctx), nil }}
+			response, err := service.Handlers()["payment.payment.fiat.create.post"](context.Background(), pluginhostsdk.NativeRequest{
+				RouteID: "payment.payment.fiat.create.post", Method: "POST", Principal: buyer,
+				Body: []byte(`{"order_id":1,"provider":"` + tc.provider + `"}`),
+			})
+			require.NoError(t, err)
+			require.Equal(t, 200, int(response.StatusCode))
+			var envelope struct {
+				Code int    `json:"code"`
+				Data any    `json:"data"`
+				Msg  string `json:"msg"`
+			}
+			require.NoError(t, json.Unmarshal(response.Body, &envelope), "%s", response.Body)
+			require.Equal(t, -1, envelope.Code, "%s", response.Body)
+			require.Nil(t, envelope.Data, "%s", response.Body)
+			require.Contains(t, envelope.Msg, tc.message)
+			require.NotContains(t, string(response.Body), "checkout_url")
+			require.NotContains(t, string(response.Body), "approve_url")
+
+			var after int64
+			require.NoError(t, db.Model(&model.PaymentRecord{}).Count(&after).Error)
+			require.Equal(t, before, after, "a refused payment must not leave a pending payment record")
+		})
+	}
 }

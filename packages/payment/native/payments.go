@@ -18,7 +18,6 @@ import (
 // Payment methods and providers, as the kernel's model constants.
 const (
 	methodCrypto   = "crypto"
-	methodFiat     = "fiat"
 	providerX402   = "x402"
 	providerStripe = "stripe"
 	providerPayPal = "paypal"
@@ -410,9 +409,20 @@ func parseUint(s string) (uint, error) {
 	return result, nil
 }
 
-// FiatCreatePayment is POST /api/v2/payment/fiat/create: a Stripe or PayPal
-// payment of the caller's pending order. Both are stubs that call no
-// provider and answer a simulated checkout link, as in the kernel.
+// Messages of a refused Stripe or PayPal payment. Both providers have a
+// verified webhook but no checkout creation: no Stripe Checkout Session or
+// PayPal Order is ever requested, so there is no link a buyer could pay at.
+// They are the kernel handler's messages (internal/tests/paymentcompat).
+const (
+	stripeNotImplementedMessage = "Stripe 支付尚未实现，未创建支付订单 (Stripe checkout is not implemented; no payment was created)"
+	paypalNotImplementedMessage = "PayPal 支付尚未实现，未创建支付订单 (PayPal checkout is not implemented; no payment was created)"
+)
+
+// FiatCreatePayment is POST /api/v2/payment/fiat/create. The caller's order
+// is validated as in the kernel, then a Stripe or PayPal payment is refused:
+// neither provider's checkout is implemented, and an earlier version answered
+// a simulated checkout link and stored a pending payment record that nothing
+// could ever pay. No payment record is created.
 func (s *Service) FiatCreatePayment(ctx context.Context, request pluginhostsdk.NativeRequest) (pluginhostsdk.NativeResponse, error) {
 	var req struct {
 		OrderID  uint   `json:"order_id" binding:"required"`
@@ -426,56 +436,17 @@ func (s *Service) FiatCreatePayment(ctx context.Context, request pluginhostsdk.N
 		log.Printf("fiat payment order lookup failed: %v", err)
 		return s.panelError("数据库错误")
 	}
-	order, message := s.payableOrder(db, req.OrderID, request.Principal.ActorID, "fiat")
-	if message != "" {
+	if _, message := s.payableOrder(db, req.OrderID, request.Principal.ActorID, "fiat"); message != "" {
 		return s.panelError(message)
 	}
-	nonce, err := randomHex(4)
-	if err != nil {
-		log.Printf("fiat trade number generation failed: %v", err)
-		return s.panelError("生成支付单号失败")
-	}
-	tradeNo := "FIAT" + s.now().Format("20060102150405") + nonce
-	var provider string
 	switch req.Provider {
-	case "stripe":
-		provider = providerStripe
-		log.Printf("[STUB] Stripe Checkout Session creation not yet implemented, using mock response")
-	case "paypal":
-		provider = providerPayPal
-		log.Printf("[STUB] PayPal Order creation not yet implemented, using mock response")
+	case providerStripe:
+		log.Printf("fiat payment refused: Stripe checkout is not implemented (order_id=%d)", req.OrderID)
+		return s.panelError(stripeNotImplementedMessage)
+	case providerPayPal:
+		log.Printf("fiat payment refused: PayPal checkout is not implemented (order_id=%d)", req.OrderID)
+		return s.panelError(paypalNotImplementedMessage)
 	default:
 		return s.panelError("不支持的支付方式")
 	}
-	record := &PaymentRecord{
-		TradeNo: tradeNo, GatewayType: methodFiat, Provider: provider, UserID: order.UserID,
-		Amount: float64(order.TotalAmount) / 100, ActualAmount: float64(order.TotalAmount) / 100, Currency: "USD",
-		Status: PaymentStatusPending, OrderID: &req.OrderID,
-	}
-	if err := db.Create(record).Error; err != nil {
-		log.Printf("%s payment record creation failed: %v", provider, err)
-		return s.panelError("创建支付记录失败")
-	}
-	if provider == providerStripe {
-		return s.panel(map[string]any{
-			"payment_id":   record.ID,
-			"trade_no":     tradeNo,
-			"provider":     "stripe",
-			"checkout_url": fmt.Sprintf("https://checkout.stripe.com/pay/cs_test_%s", tradeNo),
-			"session_id":   fmt.Sprintf("cs_test_%s", tradeNo),
-			"amount":       record.Amount,
-			"currency":     "USD",
-			"message":      "Stripe 支付订单已创建 (模拟)",
-		})
-	}
-	return s.panel(map[string]any{
-		"payment_id":  record.ID,
-		"trade_no":    tradeNo,
-		"provider":    "paypal",
-		"approve_url": fmt.Sprintf("https://www.paypal.com/checkoutnow?token=PAYPAL_%s", tradeNo),
-		"order_id":    fmt.Sprintf("PAYPAL_ORDER_%s", tradeNo),
-		"amount":      record.Amount,
-		"currency":    "USD",
-		"message":     "PayPal 支付订单已创建 (模拟)",
-	})
 }
