@@ -7,13 +7,37 @@
 - **One Agent pin, and a vulnerability scan of the Agent plugins that ship in the signed
   packages.** Every anix-agent checkout in `ci.yml` (the official packages, the cross-repository
   E2E, the chaos E2E and the live WebUI gate) takes its ref from one `AGENT_REF`. It moves from
-  the rc.3 commit `acf54a02` to the Agent's `v4.2.0-rc.4` commit `91a045a8`, which carries the
-  circl and utls bumps for GO-2026-4550 and GO-2026-4512: the packages built from the old pin
-  embedded the vulnerable dependencies. `Plugin Package Release Contracts` also runs
-  `govulncheck` over `nftables-forward`, `gost-mesh`, `machine-telemetry` and `nat-egress` and
-  fails for a vulnerability their call graph reaches.
-  `config/scripts/check_release_workflow.sh` enforces the single pin, that every checkout uses
-  it, and that the scan stays.
+  the rc.3 commit `acf54a02` to the Agent's `v4.2.0-rc.4` commit `91a045a8`. Scanned with
+  `govulncheck`, the four plugin commands at the old pin reach four `golang.org/x/net` v0.58.0
+  advisories (GO-2026-6603, GO-2026-6611, GO-2026-6612 and GO-2026-6617); at the new pin they
+  carry x/net v0.60.0 and reach none. The signed packages of 4.2.0-rc.4 were built from the old
+  pin. `Plugin Package Release Contracts` now runs the same scan over `nftables-forward`,
+  `gost-mesh`, `machine-telemetry` and `nat-egress` and fails for a vulnerability their call graph
+  reaches. `config/scripts/check_release_workflow.sh` enforces the single pin, that every checkout
+  uses it, and that the scan stays.
+
+### Tooling
+
+- **CI:** every Linux job runs on `ubuntu-24.04` instead of `ubuntu-latest`, which GitHub moves to
+  Ubuntu 26.04 from 2026-10-19 to 2026-11-19. `postgres-restore-rehearsal`, a release gate,
+  installs `postgresql-client-16`, a package Ubuntu 26.04 does not have, so tag builds would start
+  failing with nothing changed in the repository (docs/RELEASING.md, "Runner Image").
+- **CI:** the `Classify Changes` step fails when the classifier crashes. It ran without `pipefail`,
+  so a crash left the job green with empty outputs, every job gated on them was skipped, and a
+  skipped required check counts as passed.
+- **CI:** a push to `go_dev` or `release/**`, the nightly and a manual run no longer share a
+  concurrency group with the next run of the same branch. GitHub dropped the pending push run when
+  a newer one queued (8 `go_dev` pushes between 2026-10-05 and 2026-10-06 had no CI at all). Pull
+  request runs still cancel superseded runs, and a release tag keeps one group per tag.
+- **Tests:** the visual-regression captures no longer depend on where the page happens to be
+  scrolled. A full-page screenshot paints the sticky admin sidebar and topbar and the fixed skip
+  link at the scroll offset, and the offset can change during the capture itself (the viewport
+  resize and restore moved it from 345 to 321 px), so `admin-dashboard-alerts-resolved` failed now
+  and then on `go_dev` (CI runs 37544603715 and 37861273822; about 6 of 240 runs with 0-600 ms of API
+  latency). `web/e2e/visual/visual.spec.js` now scrolls to the top before each capture, and the 10
+  baselines that had a non-zero scroll baked in (`admin-dashboard-alerts-resolved` light, dark and
+  phone, and the seven `admin-telegram-test-*` screens) were regenerated in the CI-pinned
+  Playwright image. Retries stay at 0.
 
 ## 4.2.0-rc.4 - 2026-10-09
 
@@ -51,9 +75,7 @@
   with the rc.3 tag.
 - API token creation after the identity cutover needs a sign-in at most ten minutes old: **still
   so**, but a stale sign-in now has its own code, `step_up_sign_in_stale`.
-- `x/crypto`: v0.56.0 in the root and Control Center modules; the `sdk` module stays at v0.55.0
-  because the Agent builds with Go 1.25 (the advisories are in `x/crypto/ssh`, which it does not
-  call).
+- `x/crypto`: v0.57.0 in the root, Control Center and `sdk` modules.
 
 ### Security
 
@@ -63,8 +85,9 @@
   fixed in Go 1.26.9; `x/net/http2` fixed in v0.60.0). The root and Control Center modules, the CI
   and nightly toolchain and the Control and module images (`golang:1.26.9-alpine`, pinned by
   digest) move to them, and the `sdk` and `identity` modules move to `go 1.26.0` with the same
-  `x/net` v0.60.0. The Agent is still on Go 1.25 and `x/net` v0.58.0 in its own module until its
-  Go 1.26 move ships (see docs/UPGRADE.md).
+  `x/net` v0.60.0. The Agent builds with Go 1.26.9 and `x/net` v0.60.0 in its own module from this
+  release; four reachable advisories in its hysteria and quic-go dependencies are not fixed
+  here, and the Agent's CHANGELOG lists them.
 
 - **Security:** the server logs a startup `WARNING` for each weak shared secret (`jwt.secret`,
   `app.api_token`, `grpc.api_token`): set but shorter than 32 bytes, a template value, or only a few
@@ -117,17 +140,15 @@
   (built with Go 1.24) refuses a Go 1.26 target; its config is migrated to the v2 format.
 - **Security (Go dependencies):** `govulncheck` now reports no reachable
   vulnerability in any module. The root module moves to `golang.org/x/crypto`
-  v0.56.0 (GO-2026-6354, GO-2026-6355) and `golang.org/x/mod` v0.40.0
+  v0.57.0 (GO-2026-6354, GO-2026-6355) and `golang.org/x/mod` v0.40.0
   (GO-2026-6179, GO-2026-6180) and its `go` directive to 1.26.0, which the CI
   and release toolchain (1.26.8) already used. The Control Center module
   (`control-center/`) moves from Go 1.24 to 1.26 (its workflows and Dockerfile
   too) and from x/crypto v0.23.0, x/net v0.25.0, x/text v0.15.0, x/sys,
   golang-jwt v5.2.0 and gorilla/websocket v1.5.1 to current releases; that
   cleared 35 reachable advisories, most of them in the Go 1.24 standard
-  library. Left as is: the `sdk` module keeps `golang.org/x/crypto` v0.55.0
-  (GO-2026-6354 and GO-2026-6355 are in `x/crypto/ssh`, which it does not
-  call): v0.56.0 needs Go 1.26 and the Agent builds with Go 1.25, so raising
-  the SDK would stop the Agent from building. GO-2026-5932 (the unmaintained
+  library. The `sdk` module is on `golang.org/x/crypto` v0.57.0 too, with the same `go 1.26.0`
+  directive. GO-2026-5932 (the unmaintained
   `x/crypto/openpgp`) has no fixed version and nothing here imports it.
 - **Security:** revoking a module's enrollment now also revokes a certificate
   that was being renewed at that moment. On PostgreSQL a renewal that began
