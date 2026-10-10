@@ -49,7 +49,7 @@ To 4.2.0" when coming from a release candidate.
 - **One Agent pin, and a vulnerability scan of the Agent plugins that ship in the signed
   packages.** Every anix-agent checkout in `ci.yml` (the official packages, the cross-repository
   E2E, the chaos E2E and the live WebUI gate) takes its ref from one `AGENT_REF`. It moves from
-  the rc.3 commit `acf54a02` to the Agent's `v4.2.0-rc.4` commit `91a045a8`. Scanned with
+  the rc.3 commit `acf54a02` to the Agent's `v4.2.0` commit `95fa91b7`. Scanned with
   `govulncheck`, the four plugin commands at the old pin reach four `golang.org/x/net` v0.58.0
   advisories (GO-2026-6603, GO-2026-6611, GO-2026-6612 and GO-2026-6617); at the new pin they
   carry x/net v0.60.0 and reach none. The signed packages of 4.2.0-rc.4 were built from the old

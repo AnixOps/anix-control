@@ -3206,8 +3206,8 @@ apply too, with 4.2.0 in place of rc.3. The notes below are on top of them.
   `golang.org/x/net` v0.58.0: four of its advisories (GO-2026-6603,
   GO-2026-6611, GO-2026-6612 and GO-2026-6617) are reached from the four plugin
   commands. The 4.2.0 packages are built from the commit `AGENT_REF` pins, the
-  Agent's v4.2.0-rc.4 commit (`91a045a8`) or a newer one; at rc.4 it carries
-  x/net v0.60.0 and reaches none of them. `Plugin Package Release Contracts`
+  Agent's v4.2.0 commit (`95fa91b7`); it carries x/net v0.60.0 and reaches
+  none of them. `Plugin Package Release Contracts`
   now scans the four plugin commands with `govulncheck` and fails for a
   vulnerability their call graph reaches.
 - **The systemd installer installs the tag it is given.**
@@ -3239,9 +3239,10 @@ apply too, with 4.2.0 in place of rc.3. The notes below are on top of them.
 
 ### For The Release Owner Of 4.2.0
 
-- **Agent pin.** Before the tag, `AGENT_REF` in `ci.yml` names the Agent's
-  4.2.0 release commit ([`RELEASING.md`](RELEASING.md), "What The Tag Pipeline
-  Does"); the signed Agent packages are built from it.
+- **Agent pin.** `AGENT_REF` in `ci.yml` names the Agent's 4.2.0 release
+  commit, `95fa91b7`; the Agent's `v4.2.0` tag must be on that commit before
+  the Control tag ([`RELEASING.md`](RELEASING.md), "What The Tag Pipeline
+  Does"). The signed Agent packages are built from it.
 - **Commercial packages.** After the 4.2.0 tag exists, run the manual
   `Commercial Packages` workflow with `tag=v4.2.0` and `attach=true`, as for
   rc.3 above. A commercial installation imports `order`, `payment` and
