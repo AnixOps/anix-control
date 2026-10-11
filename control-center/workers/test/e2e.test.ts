@@ -9,9 +9,21 @@
  */
 
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest'
+import { hash } from 'bcryptjs'
 import app from '../src/index'
 import type { ApiErrorResponse, AuthLoginResponse, AuthMeResponse, AuthRefreshResponse, AuthRegisterResponse, DashboardOverviewResponseData, Env, HealthResponse, ReadinessResponse } from '../src/types'
 import { createMockKV, createMockR2, createMockD1 } from '../test/setup'
+
+// The public register route always creates viewers. Admin fixtures are inserted
+// directly with the statement the handler uses for users.
+async function registerAdmin(env: Env, email: string, password: string) {
+  const passwordHash = await hash(password, 12)
+  return env.DB.prepare(`
+    INSERT INTO users (email, password_hash, role, auth_provider, enabled)
+    VALUES (?, ?, ?, 'local', 1)
+    RETURNING id, email, role, created_at
+  `).bind(email, passwordHash, 'admin').first()
+}
 
 // Create test environment with shared mocks
 function createTestEnv(overrides: Partial<Env> = {}): Env {
@@ -56,15 +68,7 @@ describe('E2E: Dashboard Overview', () => {
   beforeAll(async () => {
     env = createTestEnv()
 
-    await app.request('/api/v1/auth/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email: 'dashboard@example.com',
-        password: 'Dashboard123!',
-        role: 'admin',
-      }),
-    }, env)
+    await registerAdmin(env, 'dashboard@example.com', 'Dashboard123!')
 
     const loginRes = await app.request('/api/v1/auth/login', {
       method: 'POST',
@@ -128,15 +132,7 @@ describe('E2E: WebSocket Flow', () => {
   beforeAll(async () => {
     env = createTestEnv()
 
-    await app.request('/api/v1/auth/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email: 'wsuser@example.com',
-        password: 'WsUser123!',
-        role: 'admin',
-      }),
-    }, env)
+    await registerAdmin(env, 'wsuser@example.com', 'WsUser123!')
 
     const loginRes = await app.request('/api/v1/auth/login', {
       method: 'POST',
@@ -182,7 +178,7 @@ describe('E2E: Authentication Flow', () => {
     env = createTestEnv()
   })
 
-  it('should register a new user', async () => {
+  it('should register a new user as a viewer, ignoring a requested role', async () => {
     const res = await app.request('/api/v1/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -197,6 +193,7 @@ describe('E2E: Authentication Flow', () => {
     const data = await res.json() as AuthRegisterResponse
     expect(data.success).toBe(true)
     expect(data.data?.email).toBe('test@example.com')
+    expect(data.data?.role).toBe('viewer')
   })
 
   it('should login with valid credentials', async () => {
@@ -259,15 +256,7 @@ describe('E2E: Node Management Flow', () => {
     env = createTestEnv()
 
     // Register and login
-    await app.request('/api/v1/auth/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email: 'nodeuser@example.com',
-        password: 'NodeUser123!',
-        role: 'admin',
-      }),
-    }, env)
+    await registerAdmin(env, 'nodeuser@example.com', 'NodeUser123!')
 
     const loginRes = await app.request('/api/v1/auth/login', {
       method: 'POST',
@@ -323,15 +312,7 @@ describe('E2E: Playbook Flow', () => {
     env = createTestEnv()
 
     // Register and login
-    await app.request('/api/v1/auth/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email: 'playbook@example.com',
-        password: 'Playbook123!',
-        role: 'admin',
-      }),
-    }, env)
+    await registerAdmin(env, 'playbook@example.com', 'Playbook123!')
 
     const loginRes = await app.request('/api/v1/auth/login', {
       method: 'POST',
@@ -392,15 +373,7 @@ describe('E2E: MFA Flow', () => {
     env = createTestEnv()
 
     // Register and login
-    await app.request('/api/v1/auth/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email: 'mfauser@example.com',
-        password: 'MfaUser123!',
-        role: 'admin',
-      }),
-    }, env)
+    await registerAdmin(env, 'mfauser@example.com', 'MfaUser123!')
 
     const loginRes = await app.request('/api/v1/auth/login', {
       method: 'POST',
@@ -460,15 +433,7 @@ describe('E2E: Realtime Endpoints Smoke', () => {
   beforeAll(async () => {
     env = createTestEnv()
 
-    await app.request('/api/v1/auth/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email: 'realtime@example.com',
-        password: 'Realtime123!',
-        role: 'admin',
-      }),
-    }, env)
+    await registerAdmin(env, 'realtime@example.com', 'Realtime123!')
 
     const loginRes = await app.request('/api/v1/auth/login', {
       method: 'POST',
