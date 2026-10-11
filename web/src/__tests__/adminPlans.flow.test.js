@@ -84,6 +84,44 @@ describe('Admin Plans flow', () => {
     }))
   })
 
+  it('keeps the fields the plan form does not show when an edit is saved', async () => {
+    const plan = {
+      id: 2,
+      name: 'Business',
+      transfer_enable: 200,
+      speed_limit: 30,
+      device_limit: 3,
+      month_price: 1200,
+      group_id: 7,
+      show: 1,
+      renew: 1,
+      sort: 4,
+      content: 'Notes',
+      quarter_price: 3000,
+    }
+    mockGetPlans.mockResolvedValue({ data: [plan] })
+
+    const wrapper = mount(Plans, { attachTo: document.body })
+    await flushPromises()
+
+    wrapper.vm.edit(plan)
+    await nextTick()
+
+    await inBody('[data-test="plan-name-input"]').setValue('Business Plus')
+    await inBody('[data-test="plan-save-button"]').trigger('click')
+    await flushPromises()
+
+    expect(mockUpdatePlan).toHaveBeenCalledWith(2, expect.objectContaining({
+      name: 'Business Plus',
+      group_id: 7,
+      show: 1,
+      renew: 1,
+      sort: 4,
+      content: 'Notes',
+      quarter_price: 3000,
+    }))
+  })
+
   it('loads plans and groups from legacy, panel, and nested payloads', async () => {
     mockGetPlans.mockResolvedValueOnce({
       data: [{ id: 1, name: 'Legacy Plan', speed_limit: 10, device_limit: 1 }]

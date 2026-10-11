@@ -18,6 +18,11 @@
 
 ### Fixed
 
+- Saving an edit in the admin plan form keeps the plan's group, visibility, renewal, sort, content
+  and the prices the form does not show. The form used to send only five fields to `PUT /admin/plans/:id`,
+  which replaces the whole plan, so a renamed plan lost its group, dropped off the storefront and
+  lost its other prices. The API contract is unchanged: `PUT` still replaces the whole plan.
+
 - Sending a test notification over Telegram or webhook now returns an error that the channel is not
   implemented. It used to log a stub line and report success although nothing was delivered.
 - Runtime diagnostics and the web admin point operators at the existing relay onboarding guide,

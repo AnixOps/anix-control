@@ -236,6 +236,9 @@ const showAssign = ref(false)
 const showGroupModal = ref(false)
 
 const editingPlanId = ref(null)
+// The stored plan being edited. PUT replaces the whole plan, so the save
+// starts from this record and changes only the fields the form shows.
+const editingPlan = ref(null)
 const currentPlan = ref(null)
 const planSaving = ref(false)
 const planError = ref('')
@@ -295,6 +298,7 @@ const ensurePlanSuccess = (res, fallbackKey) => {
 
 const resetPlanForm = () => {
   editingPlanId.value = null
+  editingPlan.value = null
   form.name = ''
   form.transfer_enable = 0
   form.speed_limit = 0
@@ -398,6 +402,7 @@ const openCreateModal = () => {
 
 const edit = (plan) => {
   editingPlanId.value = plan.id
+  editingPlan.value = { ...plan }
   form.name = plan.name || ''
   form.transfer_enable = plan.transfer_enable || 0
   form.speed_limit = Number(plan.speed_limit || 0)
@@ -444,13 +449,14 @@ const save = async () => {
     return
   }
 
-  const payload = {
+  const fields = {
     name: form.name.trim(),
     transfer_enable: form.transfer_enable,
     speed_limit: Number(form.speed_limit || 0),
     device_limit: Number(form.device_limit || 0),
     month_price: form.month_price
   }
+  const payload = editingPlanId.value ? { ...editingPlan.value, ...fields } : fields
 
   planSaving.value = true
   try {
