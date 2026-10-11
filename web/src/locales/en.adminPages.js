@@ -96,7 +96,7 @@ export default {
         panelRuntimeDoc: 'Panel doc: docs/reference/runtime.md',
         panelRelayOnboarding: 'Panel doc: docs/guide/forward-relay-onboarding.md',
         nodeXRepo: 'NodeX repo: https://github.com/zdwtest/NodeX',
-        panelNodeXOnboarding: 'Panel doc: docs/forward-runtime-relay-onboarding.md'
+        panelNodeXOnboarding: 'Panel doc: docs/guide/forward-relay-onboarding.md'
       },
       doctor: {
         title: 'Active Runtime Snapshot',

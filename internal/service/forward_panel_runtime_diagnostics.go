@@ -905,7 +905,7 @@ func buildNodeXOperatorCommands(baseURL string) PanelForwardRuntimeCommandHints 
 			"Current repo: docs/reference/runtime.md",
 			"Current repo: docs/guide/forward-relay-onboarding.md",
 			"NodeX repo: https://github.com/zdwtest/NodeX",
-			"NodeX doc: docs/forward-runtime-relay-onboarding.md",
+			"NodeX doc: docs/guide/forward-relay-onboarding.md",
 		},
 	}
 }

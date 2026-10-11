@@ -96,7 +96,7 @@ export default {
         panelRuntimeDoc: '\u9762\u677f\u6587\u6863: docs/reference/runtime.md',
         panelRelayOnboarding: '\u9762\u677f\u6587\u6863: docs/guide/forward-relay-onboarding.md',
         nodeXRepo: 'NodeX \u4ed3\u5e93: https://github.com/zdwtest/NodeX',
-        panelNodeXOnboarding: '\u9762\u677f\u6587\u6863: docs/forward-runtime-relay-onboarding.md'
+        panelNodeXOnboarding: '\u9762\u677f\u6587\u6863: docs/guide/forward-relay-onboarding.md'
       },
       doctor: {
         title: '\u5f53\u524d\u8fd0\u884c\u65f6\u5feb\u7167',

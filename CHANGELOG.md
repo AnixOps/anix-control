@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Fixed
+
+- Runtime diagnostics and the web admin point operators at the existing relay onboarding guide,
+  `docs/guide/forward-relay-onboarding.md`. A duplicate bullet in the 4.1.0-rc.6 section is removed.
+
 ## 4.2.0 - 2026-10-10
 
 ### Highlights since 4.1.0
@@ -2520,13 +2525,6 @@ this summary. Read docs/UPGRADE.md before upgrading.
   `grpc.enabled`); without them agents cannot enroll, which the startup log
   says. Set `optional` to keep the release candidates' silent behaviour.
 
-
-- `agent_control.mtls` defaults to `preferred` instead of `optional`
-  (decision H5): legacy API-key agents keep working and now get the
-  deprecation signals. `preferred` no longer needs gRPC TLS and the
-  built-in CA to start (only `required` does, together with
-  `grpc.enabled`); without them agents cannot enroll, which the startup log
-  says. Set `optional` to keep the release candidates' silent behaviour.
 - The admin console's first visit downloads less: the admin messages are
   split into `admin` (shell, navigation, ⌘K, dashboard) and `adminPages`
   (every other admin page and the forward suite), which the router loads
