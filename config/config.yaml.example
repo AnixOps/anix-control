@@ -308,7 +308,8 @@ package_routes:
 
 admin:
   email: "control@anixops.com"
-  # Leave empty to generate and print a one-time random bootstrap password.
+  # Required on the first start of an empty database: the server refuses to start
+  # without it. It is never generated or printed.
   password: ""
 
 tls:

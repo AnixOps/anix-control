@@ -86,7 +86,8 @@ grpc:
 
 admin:
   email: "admin@example.com"
-  # Leave empty to generate and print a one-time random bootstrap password.
+  # Required on the first start of an empty database: the server refuses to start
+  # without it. It is never generated or printed.
   password: ""
 
 forward_runtime:
@@ -152,7 +153,7 @@ Development (builds this checkout and runs a throwaway PostgreSQL):
 
 ```bash
 docker compose up -d --build
-docker compose logs migrate   # generated admin password on the first run
+ANIX_CONTROL_ADMIN_PASSWORD='choose-a-password' docker compose up -d --build
 ```
 
 Production uses `docker-compose.prod.yml` with a released image digest, an

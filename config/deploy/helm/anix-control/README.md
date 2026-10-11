@@ -14,7 +14,7 @@ helm install control config/deploy/helm/anix-control -n anix \
   --set image.digest=sha256:<digest from docker-image.txt> \
   --set config.ANIX_CONTROL_DATABASE_HOST=postgres.example.internal \
   --set config.ANIX_CONTROL_ADMIN_EMAIL=admin@example.com
-kubectl -n anix logs deploy/control-anix-control -c migrate   # generated admin password
+kubectl -n anix logs deploy/control-anix-control -c migrate   # on an empty database this shows why the first administrator was not created
 ```
 
 Without `image.digest` or `image.tag` the chart runs

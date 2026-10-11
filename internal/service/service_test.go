@@ -1,10 +1,12 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/base64"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -5856,21 +5858,31 @@ func (s *InitServiceTestSuite) SetupTest() {
 	s.ServiceTestSuite.SetupTest()
 }
 
-func (s *InitServiceTestSuite) TestGenerateRandomPassword() {
-	// Test generateRandomPassword function
-	password1, err := generateRandomPassword(16)
-	assert.NoError(s.T(), err)
-	assert.NotEmpty(s.T(), password1)
-	assert.Len(s.T(), password1, 16)
+func (s *InitServiceTestSuite) TestInitAdmin_RefusesToGeneratePassword() {
+	cfg := &config.Config{Admin: config.AdminConfig{Email: "first@example.com"}}
 
-	password2, err := generateRandomPassword(32)
-	assert.NoError(s.T(), err)
-	assert.Len(s.T(), password2, 32)
+	err := InitAdmin(cfg)
+	assert.ErrorIs(s.T(), err, ErrAdminPasswordRequired)
 
-	// Two passwords should be different (with very high probability)
-	password3, err := generateRandomPassword(16)
-	assert.NoError(s.T(), err)
-	assert.NotEqual(s.T(), password1, password3)
+	var count int64
+	database.Get().Model(&model.User{}).Where("is_admin = ?", 1).Count(&count)
+	assert.Zero(s.T(), count, "no administrator is created without a configured password")
+}
+
+func (s *InitServiceTestSuite) TestInitAdmin_NeverLogsThePassword() {
+	const password = "operator-chosen-passphrase-7"
+	var logs bytes.Buffer
+	previous := log.Writer()
+	log.SetOutput(&logs)
+	defer log.SetOutput(previous)
+
+	cfg := &config.Config{Admin: config.AdminConfig{Email: "first@example.com", Password: password}}
+	assert.NoError(s.T(), InitAdmin(cfg))
+
+	assert.NotContains(s.T(), logs.String(), password)
+	var admin model.User
+	assert.NoError(s.T(), database.Get().Where("is_admin = ?", 1).First(&admin).Error)
+	assert.NoError(s.T(), bcrypt.CompareHashAndPassword([]byte(admin.Password), []byte(password)))
 }
 
 func (s *InitServiceTestSuite) TestStrPtr() {
@@ -5963,12 +5975,12 @@ func (s *InitServiceTestSuite) TestInitAdmin_AdminAlreadyExists() {
 	assert.Equal(s.T(), "existing@example.com", admin.Email)
 }
 
-func (s *InitServiceTestSuite) TestInitAdmin_DefaultCredentials() {
-	// Test with empty admin config - should use default email and a generated password.
+func (s *InitServiceTestSuite) TestInitAdmin_DefaultEmailWithConfiguredPassword() {
+	// An empty email falls back to the default; the password must still be configured.
 	cfg := &config.Config{
 		Admin: config.AdminConfig{
 			Email:    "",
-			Password: "",
+			Password: "configured-password-1",
 		},
 		JWT: config.JWTConfig{
 			Secret: "test-jwt-secret",
@@ -5976,14 +5988,13 @@ func (s *InitServiceTestSuite) TestInitAdmin_DefaultCredentials() {
 		},
 	}
 
-	InitAdmin(cfg)
+	assert.NoError(s.T(), InitAdmin(cfg))
 
-	// Verify admin was created with default email
 	var admin model.User
 	err := database.Get().Where("is_admin = ?", 1).First(&admin).Error
 	assert.NoError(s.T(), err)
 	assert.Equal(s.T(), "admin@anixops.local", admin.Email)
-	assert.Error(s.T(), bcrypt.CompareHashAndPassword([]byte(admin.Password), []byte("password")))
+	assert.NoError(s.T(), bcrypt.CompareHashAndPassword([]byte(admin.Password), []byte("configured-password-1")))
 }
 
 func (s *InitServiceTestSuite) TestInitSubscriptionDefaults() {

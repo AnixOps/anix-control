@@ -5,7 +5,8 @@
 # docker-compose.prod.yml with a released image and an external database.
 #
 #   docker compose up -d --build
-#   docker compose logs migrate      # generated admin password on first run
+#   ANIX_CONTROL_ADMIN_PASSWORD='choose-a-password' docker compose up -d --build
+#                                    # the first start on an empty database needs it
 #   open http://127.0.0.1:3000
 name: anix-control-dev
 
@@ -22,6 +23,7 @@ x-control: &control
     ANIX_CONTROL_DATABASE_DATABASE: anix_control
     ANIX_CONTROL_JWT_SECRET: dev-only-jwt-secret-change-me
     ANIX_CONTROL_ADMIN_EMAIL: admin@anixops.local
+    ANIX_CONTROL_ADMIN_PASSWORD: ${ANIX_CONTROL_ADMIN_PASSWORD:-}
   read_only: true
   tmpfs:
     - /tmp:rw,exec,mode=1777
