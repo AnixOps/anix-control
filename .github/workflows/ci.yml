@@ -757,6 +757,7 @@ jobs:
           cp config/deploy/compose/control.env.example "${work}/control.env"
           sed -i -e 's/^ANIX_CONTROL_DATABASE_USERNAME=.*/ANIX_CONTROL_DATABASE_USERNAME=postgres/' \
                  -e 's/^ANIX_CONTROL_DATABASE_DATABASE=.*/ANIX_CONTROL_DATABASE_DATABASE=anix_control_compose/' "${work}/control.env"
+          printf '%s\n' 'ANIX_CONTROL_ADMIN_PASSWORD=ci-compose-admin-password-0123456789' >> "${work}/control.env"
           install -d -m 0755 "${work}/secrets"
           printf '%s' postgres | sudo install -m 0400 -o 10001 -g 10001 /dev/stdin "${work}/secrets/db_password"
           # The documented fresh-install step: jwt_secret and the CA key.
