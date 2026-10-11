@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased
+- `POST /api/v1/auth/register` always creates a `viewer`. It used to accept a `role` in the body, so anyone
+  could register as `admin`. The field is ignored now; e2e fixtures insert admins directly.
 - Trimmed the worker to the core control-center routes (platform probes, auth/MFA, users, nodes, node-groups, playbooks, tasks, schedules, notifications, dashboard, audit-logs, ssh, plugins, agents, logs, backups, batch, SSE, WebSocket) plus the tail worker.
 - Removed route groups and their handlers, services, types, tests, and docs: incidents, governance, webhooks, kubernetes, lb (load balancing), mesh (Istio), scaling (autoscaling), ai, vectors (Vectorize), web3, ipfs, and `/internal` developer mode.
 - Removed unused services (discovery, elk, resilience, tracing), the tenant middleware/handlers/service, and the unused `src/index-with-auth.ts` entrypoint.

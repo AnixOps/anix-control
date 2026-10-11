@@ -130,7 +130,6 @@ export const enhancedRegisterSchema = z.object({
   email: z.string().email('Invalid email address'),
   password: passwordSchema,
   confirmPassword: z.string(),
-  role: z.enum(['admin', 'operator', 'viewer']).optional(),
 }).refine(
   (data) => data.password === data.confirmPassword,
   {

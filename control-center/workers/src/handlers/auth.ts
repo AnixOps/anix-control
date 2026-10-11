@@ -13,10 +13,11 @@ const loginSchema = z.object({
   password: z.string().min(1),
 })
 
+// The public route never accepts a role: every self-registered account is a
+// viewer. Zod drops unknown keys, so a role in the body is ignored.
 const registerSchema = z.object({
   email: z.string().email(),
   password: passwordSchema,
-  role: z.enum(['admin', 'operator', 'viewer']).optional(),
 })
 
 /**
@@ -165,7 +166,7 @@ export async function loginHandler(c: Context<{ Bindings: Env }>) {
 export async function registerHandler(c: Context<{ Bindings: Env }>) {
   try {
     const body = await c.req.json()
-    const { email, password, role } = registerSchema.parse(body)
+    const { email, password } = registerSchema.parse(body)
 
     // 额外的密码复杂度验证
     const passwordValidation = validatePassword(password)
@@ -198,7 +199,7 @@ export async function registerHandler(c: Context<{ Bindings: Env }>) {
         VALUES (?, ?, ?, 'local', 1)
         RETURNING id, email, role, created_at
       `)
-      .bind(email, passwordHash, role || 'viewer')
+      .bind(email, passwordHash, 'viewer')
       .first<{ id: number; email: string; role: string; created_at: string }>()
 
     // 记录审计日志
