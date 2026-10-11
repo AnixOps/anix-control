@@ -120,7 +120,8 @@ sudo bash init-secrets.sh --grpc-name grpc.example.com
 
 # 4) 启动：migrate 一次性服务先准备库结构，control 随后启动
 docker compose -f docker-compose.prod.yml up -d
-docker compose -f docker-compose.prod.yml logs migrate   # 新库会打印生成的管理员密码
+# 新库需要 control.env 中已设置 ANIX_CONTROL_ADMIN_PASSWORD（或 _FILE），缺少时 migrate 报错退出
+docker compose -f docker-compose.prod.yml logs migrate
 docker compose -f docker-compose.prod.yml ps             # control 应为 healthy
 curl -fsS http://127.0.0.1:8080/readyz
 ```

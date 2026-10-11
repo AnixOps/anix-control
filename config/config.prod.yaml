@@ -203,4 +203,4 @@ agent_control:
 # 默认管理员配置
 admin:
   email: "admin@your-domain.com"
-  password: ""  # 留空将自动生成
+  password: ""  # 新库首次启动必须设置（或用 ANIX_CONTROL_ADMIN_PASSWORD_FILE）；留空则拒绝启动，不会生成或打印密码

@@ -163,7 +163,9 @@ func bootstrapDatabase(ctx context.Context, cfg *config.Config, env string) erro
 	}
 
 	// 初始化管理员账号、默认订阅分组、默认套餐、环境变量中的默认授权密钥
-	service.InitAdmin(cfg)
+	if err := service.InitAdmin(cfg); err != nil {
+		return fmt.Errorf("create the first administrator: %w", err)
+	}
 	service.InitSubscriptionDefaults()
 	service.InitDefaultPlan()
 	service.InitDefaultAuthKeyFromEnv()

@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+
+### Security
+
+- The first administrator is never generated or printed. On an empty database the server refuses to start
+  unless `admin.password` is set (`ANIX_CONTROL_ADMIN_PASSWORD`, or `ANIX_CONTROL_ADMIN_PASSWORD_FILE`).
+  Databases that already have an administrator are unaffected, and the installer already writes the password
+  it generates. **Fresh Docker Compose, production compose and Helm installs must set the password before the
+  first start.** For Helm, add `admin_password: ANIX_CONTROL_ADMIN_PASSWORD` to `secrets.files` and provide the
+  value in the Secret.
+
 ### Fixed
 
 - Runtime diagnostics and the web admin point operators at the existing relay onboarding guide,

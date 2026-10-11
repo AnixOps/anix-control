@@ -1,9 +1,9 @@
 package service
 
 import (
-	"crypto/rand"
+	"errors"
+	"fmt"
 	"log"
-	"math/big"
 	"time"
 
 	"github.com/AnixOps/anix-control/v4/internal/config"
@@ -11,61 +11,66 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 )
 
-// InitAdmin 初始化管理员账号
-func InitAdmin(cfg *config.Config) {
+// ErrAdminPasswordRequired means the first administrator must be created but no
+// password is configured. A password is never generated or printed: set
+// ANIX_CONTROL_ADMIN_PASSWORD or ANIX_CONTROL_ADMIN_PASSWORD_FILE before the first start.
+var ErrAdminPasswordRequired = errors.New("no administrator exists and no admin password is configured: set ANIX_CONTROL_ADMIN_PASSWORD or ANIX_CONTROL_ADMIN_PASSWORD_FILE before the first start")
+
+// InitAdmin creates the first administrator when the database has none. It creates
+// nothing and returns ErrAdminPasswordRequired when no password is configured.
+func InitAdmin(cfg *config.Config) error {
+	return initAdmin(database.GetDB(), cfg)
+}
+
+func initAdmin(db *gorm.DB, cfg *config.Config) error {
 	// 确保表存在
-	if !database.GetDB().Migrator().HasTable(&model.User{}) {
-		if err := database.GetDB().AutoMigrate(&model.User{}); err != nil {
-			log.Fatalf("Failed to migrate admin user table: %v", err)
+	if !db.Migrator().HasTable(&model.User{}) {
+		if err := db.AutoMigrate(&model.User{}); err != nil {
+			return fmt.Errorf("migrate admin user table: %w", err)
 		}
 	}
 
 	// Once identity is authoritative a v2_user row alone cannot log in:
 	// administrators are created through identity.
-	if database.GetDB().Migrator().HasTable(&model.IdentityAuthority{}) {
-		state, err := IdentityAuthorityState(database.GetDB())
+	if db.Migrator().HasTable(&model.IdentityAuthority{}) {
+		state, err := IdentityAuthorityState(db)
 		if err != nil {
-			log.Fatalf("Failed to read the identity authority: %v", err)
+			return fmt.Errorf("read the identity authority: %w", err)
 		}
 		if IdentityAuthoritative(state) {
 			log.Println("Identity is authoritative; skipping the default admin (create administrators through identity).")
-			return
+			return nil
 		}
 	}
 
 	var count int64
-	if err := database.GetDB().Model(&model.User{}).Where("is_admin = ?", 1).Count(&count).Error; err != nil {
-		log.Fatalf("Failed to check admin account: %v", err)
+	if err := db.Model(&model.User{}).Where("is_admin = ?", 1).Count(&count).Error; err != nil {
+		return fmt.Errorf("check admin account: %w", err)
 	}
 
 	if count > 0 {
 		log.Println("Admin account already exists, skipping creation.")
-		return
+		return nil
 	}
-
-	log.Println("No admin account found, creating default admin...")
 
 	email := cfg.Admin.Email
 	password := cfg.Admin.Password
 
+	if password == "" {
+		return ErrAdminPasswordRequired
+	}
 	if email == "" {
 		email = "admin@anixops.local"
 	}
 
-	if password == "" {
-		generatedPassword, err := generateRandomPassword(32)
-		if err != nil {
-			log.Fatalf("Failed to generate admin password: %v", err)
-		}
-		password = generatedPassword
-		log.Println("Admin password is empty; generated a random bootstrap password.")
-	}
+	log.Println("No admin account found, creating the first administrator...")
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
-		log.Fatalf("Failed to hash password: %v", err)
+		return fmt.Errorf("hash admin password: %w", err)
 	}
 
 	admin := model.User{
@@ -81,27 +86,10 @@ func InitAdmin(cfg *config.Config) {
 		UpdatedAt:      time.Now(),
 	}
 
-	if err := database.GetDB().Create(&admin).Error; err != nil {
-		log.Fatalf("Failed to create admin account: %v", err)
+	if err := db.Create(&admin).Error; err != nil {
+		return fmt.Errorf("create admin account: %w", err)
 	}
 
-	log.Println("====================================================")
-	log.Println("Admin account created successfully!")
-	log.Printf("Email:    %s\n", email)
-	log.Printf("Password: %s\n", password)
-	log.Println("====================================================")
-}
-
-func generateRandomPassword(length int) (string, error) {
-	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*"
-	b := make([]byte, length)
-	max := big.NewInt(int64(len(charset)))
-	for i := range b {
-		n, err := rand.Int(rand.Reader, max)
-		if err != nil {
-			return "", err
-		}
-		b[i] = charset[n.Int64()]
-	}
-	return string(b), nil
+	log.Printf("Admin account created: %s (the password is the one configured by the operator)\n", email)
+	return nil
 }

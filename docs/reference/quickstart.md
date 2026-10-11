@@ -26,8 +26,7 @@ Development stack (builds this checkout, runs a throwaway PostgreSQL, no config
 file needed):
 
 ```bash
-docker compose up -d --build
-docker compose logs migrate        # prints the generated admin password once
+ANIX_CONTROL_ADMIN_PASSWORD='choose-a-password' docker compose up -d --build
 docker compose ps                  # control becomes healthy
 ```
 

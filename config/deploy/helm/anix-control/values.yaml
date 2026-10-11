@@ -49,6 +49,8 @@ secrets:
   files:
     jwt_secret: ANIX_CONTROL_JWT_SECRET
     db_password: ANIX_CONTROL_DATABASE_PASSWORD
+    # On an empty database add: admin_password: ANIX_CONTROL_ADMIN_PASSWORD
+    # (the first administrator's password is required and never generated).
   # Values for a chart-created Secret (ignored with existingSecret). Keep them
   # out of version control: pass them with --set-file or an external values file.
   values:
