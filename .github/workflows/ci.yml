@@ -36,7 +36,7 @@ env:
   # The one anix-agent commit every checkout below builds and tests: the
   # signed Agent plugins, the cross-repository E2E and the live WebUI gate.
   # Move it to the Agent release commit with every Agent tag (docs/RELEASING.md).
-  AGENT_REF: '91a045a8e67d22f2a9ce766b9f8286a69ee5ca80'   # anix-agent v4.2.0-rc.4
+  AGENT_REF: '95fa91b7d8207a768b6eefabacec07f15a8f1135'   # anix-agent v4.2.0
 
 jobs:
   changes:

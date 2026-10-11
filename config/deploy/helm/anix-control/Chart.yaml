@@ -9,7 +9,7 @@ version: 0.3.0
 # edit it by hand: config/scripts/prepare_release.py sets it with every other
 # version surface, and config/scripts/check_release_version.py (the tag gate)
 # fails a release whose appVersion differs from the tag.
-appVersion: "4.2.0-rc.4"
+appVersion: "4.2.0"
 home: https://github.com/AnixOps/anix-control
 sources:
   - https://github.com/AnixOps/anix-control
