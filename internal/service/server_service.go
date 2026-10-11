@@ -641,32 +641,6 @@ func (s *ServerService) addRoutesAndBaseConfig(config map[string]any, routeIDs [
 	return nil
 }
 
-// GetServerRate 获取服务器流量倍率
-func (s *ServerService) GetServerRate(serverType model.ServerType, serverID uint) float64 {
-	server, err := s.GetServerByTypeAndID(serverType, serverID)
-	if err != nil {
-		return 1.0
-	}
-
-	switch sv := server.(type) {
-	case *model.ServerVMess:
-		return normalizeTrafficRate(sv.Rate)
-	case *model.ServerVLESS:
-		return normalizeTrafficRate(sv.Rate)
-	case *model.ServerTrojan:
-		return normalizeTrafficRate(sv.Rate)
-	case *model.ServerShadowsocks:
-		return normalizeTrafficRate(sv.Rate)
-	case *model.ServerHysteria:
-		return normalizeTrafficRate(sv.Rate)
-	case *model.ServerTUIC:
-		return normalizeTrafficRate(sv.Rate)
-	case *model.ServerAnyTLS:
-		return normalizeTrafficRate(sv.Rate)
-	}
-	return 1.0
-}
-
 func normalizeTrafficRate(rate float64) float64 {
 	if rate <= 0 {
 		return 1.0

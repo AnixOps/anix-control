@@ -362,7 +362,12 @@ func (h *UniProxyHandler) PushTraffic(c *gin.Context) {
 		return
 	}
 
-	rate := h.serverService.GetServerRate(serverType, uint(nodeID))
+	// The billing rate is the node's own Rate, as the gRPC and Agent Control
+	// reports apply it. The legacy server table of the same ID is not consulted.
+	rate := 1.0
+	if node, err := h.nodeService.GetNode(uint(nodeID)); err == nil {
+		rate = node.Rate
+	}
 	if err := h.serverService.RecordNodeTrafficReport(serverType, uint(nodeID), traffics, rate); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to record traffic report"})
 		return

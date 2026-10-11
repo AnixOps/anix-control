@@ -206,6 +206,34 @@ func (s *UniProxyE2ETestSuite) TestPushTraffic_Success() {
 	assert.Contains(s.T(), []int{http.StatusOK, http.StatusBadRequest}, w.Code)
 }
 
+// TestPushTraffic_BillsWithNodeRate: a report is billed with the node's own
+// rate. No legacy server row exists for this node ID, so the old lookup
+// would have billed at 1.0.
+func (s *UniProxyE2ETestSuite) TestPushTraffic_BillsWithNodeRate() {
+	s.Require().NoError(s.db.Model(s.testNode).Update("rate", 2.0).Error)
+
+	trafficData := map[string]any{
+		strconv.FormatUint(uint64(s.testUser.ID), 10): []int64{1024, 2048},
+	}
+	jsonBody, _ := json.Marshal(trafficData)
+
+	req, _ := http.NewRequest("POST", "/api/v2/server/UniProxy/push", bytes.NewReader(jsonBody))
+	q := req.URL.Query()
+	q.Add("node_id", strconv.Itoa(int(s.testNode.ID)))
+	req.URL.RawQuery = q.Encode()
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-API-Key", s.testNode.APIKey)
+
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+	s.Require().Equal(http.StatusOK, w.Code)
+
+	var logs []model.TrafficLog
+	s.Require().NoError(s.db.Where("user_id = ?", s.testUser.ID).Find(&logs).Error)
+	s.Require().Len(logs, 1)
+	assert.Equal(s.T(), 2.0, logs[0].Rate)
+}
+
 // TestPushAlive_Success 测试上报在线用户成功
 func (s *UniProxyE2ETestSuite) TestPushAlive_Success() {
 	aliveData := map[string]any{
