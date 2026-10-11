@@ -4151,7 +4151,7 @@ func (s *NotificationExtendedTestSuite) TestListLogs() {
 	assert.NotContains(s.T(), resp, "error")
 }
 
-func (s *NotificationExtendedTestSuite) TestSendTestNotification_TelegramSuccess() {
+func (s *NotificationExtendedTestSuite) TestSendTestNotification_TelegramNotImplemented() {
 	handler := NewNotificationHandler()
 	s.router.POST("/admin/notification/test", handler.SendTestNotification)
 
@@ -4166,15 +4166,13 @@ func (s *NotificationExtendedTestSuite) TestSendTestNotification_TelegramSuccess
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
+	// A Telegram test send is not implemented yet: report it, never a success
+	// that delivered nothing.
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 	resp := decodePanelTestResponse(s.T(), w)
-	assert.Equal(s.T(), float64(0), resp["code"])
-	data, ok := resp["data"].(map[string]any)
-	assert.True(s.T(), ok)
-	assert.Equal(s.T(), true, data["success"])
-	assert.Equal(s.T(), "test notification sent", data["message"])
-	assert.NotContains(s.T(), resp, "message")
-	assert.NotContains(s.T(), resp, "error")
+	assert.Equal(s.T(), float64(-1), resp["code"])
+	assert.Contains(s.T(), resp["msg"], "telegram")
+	assert.Contains(s.T(), resp["msg"], "not implemented")
 }
 
 func (s *NotificationExtendedTestSuite) TestGetEmailConfig() {

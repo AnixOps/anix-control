@@ -2,7 +2,6 @@ package handler
 
 import (
 	"encoding/json"
-	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -617,21 +616,11 @@ func (h *NotificationHandler) SendTestNotification(c *gin.Context) {
 			h.notificationService.SetEmailConfig(cfg)
 		}
 		err = h.notificationService.SendEmail(recipient, title, content)
-	case "telegram":
-		// Telegram test notification stub:
-		//   1. Look up the admin's Telegram chat ID from user_telegram_bindings table
-		//   2. Use TelegramBotService.SendNotification(chatID, title, content)
-		//   3. Return error if no admin Telegram binding found
-		log.Printf("[STUB] test notification: Telegram delivery not yet implemented")
-		err = nil
-	case "webhook":
-		// Webhook test notification stub:
-		//   1. Read webhook URL from system configuration
-		//   2. Build payload: {event: "test_notification", title, content, timestamp}
-		//   3. POST to the configured webhook URL
-		//   4. Return error on HTTP failure
-		log.Printf("[STUB] test notification: Webhook delivery not yet implemented")
-		err = nil
+	case "telegram", "webhook":
+		// These test sends are not implemented yet. Report that instead of a
+		// success that delivered nothing.
+		panelError(c, "test notification for "+req.Type+" is not implemented")
+		return
 	default:
 		panelError(c, "invalid notification type")
 		return
