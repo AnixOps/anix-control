@@ -4,6 +4,10 @@
 
 ### Security
 
+- Subscriptions no longer carry a WireGuard node's server private key. The JSON and base64 JSON formats
+  included it in the node settings, so any subscriber could impersonate the node. Clients keep the server
+  public key and their own peer key.
+
 - The first administrator is never generated or printed. On an empty database the server refuses to start
   unless `admin.password` is set (`ANIX_CONTROL_ADMIN_PASSWORD`, or `ANIX_CONTROL_ADMIN_PASSWORD_FILE`).
   Databases that already have an administrator are unaffected, and the installer already writes the password

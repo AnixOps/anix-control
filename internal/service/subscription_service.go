@@ -744,8 +744,26 @@ func (s *SubscriptionService) nodeProtocolToParsedNode(node *model.Node, protoco
 	if parsed.Type == string(model.ProtocolWireGuard) {
 		s.applyWireGuardPeer(parsed, protocol, ctx)
 	}
+	// After the WireGuard step, which derives the server public key from it.
+	stripServerPrivateKeys(parsed.Settings)
 
 	return parsed
+}
+
+// stripServerPrivateKeys removes a node's private key material from the settings
+// that subscriptions carry. A subscriber connects with the server's public key
+// and its own credentials. The private key would let anyone impersonate the node.
+func stripServerPrivateKeys(settings map[string]any) {
+	for key := range settings {
+		if isServerPrivateKeyName(key) {
+			delete(settings, key)
+		}
+	}
+}
+
+func isServerPrivateKeyName(key string) bool {
+	compact := strings.ToLower(strings.NewReplacer("_", "", "-", "", ".", "", " ", "").Replace(key))
+	return strings.Contains(compact, "privatekey")
 }
 
 // ss2022KeyLen 返回 SS2022 cipher 对应的密钥字节长度 (aes-128→16, aes-256→32)。
