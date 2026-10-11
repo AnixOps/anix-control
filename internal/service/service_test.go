@@ -2618,6 +2618,79 @@ func (s *SubscriptionServiceTestSuite) TestGetUserSubscription_LegacyGroupIDFall
 		"expired_at":      expireAt,
 	}).Error)
 
+	// Subscriptions only include nodes that reported within the last 5 minutes.
+	lastCheckAt := time.Now().Unix()
+	node := &model.Node{
+		Name:        "Legacy Node",
+		Host:        "legacy.example.com",
+		Port:        443,
+		Rate:        1.0,
+		Show:        1,
+		Status:      model.NodeStatusOnline,
+		LastCheckAt: &lastCheckAt,
+	}
+	assert.NoError(s.T(), database.Get().Create(node).Error)
+
+	transport := "ws"
+	tlsSettings := `{"server_name":"legacy.example.com","fingerprint":"chrome"}`
+	transportSettings := `{"path":"/ws","headers":{"Host":"legacy.example.com"}}`
+	protocol := &model.NodeProtocol{
+		NodeID:            node.ID,
+		Name:              "Legacy VLESS",
+		Type:              model.ProtocolVLESS,
+		Port:              443,
+		Enable:            1,
+		Show:              1,
+		Transport:         &transport,
+		TLSSettings:       &tlsSettings,
+		TransportSettings: &transportSettings,
+	}
+	assert.NoError(s.T(), database.Get().Create(protocol).Error)
+	assert.NoError(s.T(), database.Get().Exec(
+		"INSERT INTO v2_subscription_group_node_protocols (subscription_group_id, node_protocol_id) VALUES (?, ?)",
+		group.ID,
+		protocol.ID,
+	).Error)
+
+	resp, err := s.svc.GetUserSubscription(&model.SubscriptionRequest{
+		Token:  s.testUser.Token,
+		Format: model.FormatV2Ray,
+	})
+	assert.NoError(s.T(), err)
+	if assert.NotNil(s.T(), resp) {
+		decoded, decodeErr := base64.StdEncoding.DecodeString(resp.Content)
+		assert.NoError(s.T(), decodeErr)
+		assert.Contains(s.T(), string(decoded), "vless://")
+		assert.Contains(s.T(), string(decoded), "legacy.example.com")
+	}
+}
+
+func (s *SubscriptionServiceTestSuite) TestGetUserSubscription_ExcludesNodeWithoutHeartbeat() {
+	group := &model.SubscriptionGroup{
+		Name:     "Legacy Group",
+		Priority: 5,
+		Enable:   1,
+	}
+	assert.NoError(s.T(), s.svc.CreateGroup(group))
+
+	monthPrice := int64(1000)
+	plan := &model.Plan{
+		Name:           "Legacy Plan",
+		GroupID:        group.ID,
+		TransferEnable: 100,
+		MonthPrice:     &monthPrice,
+		Show:           1,
+	}
+	assert.NoError(s.T(), database.Get().Create(plan).Error)
+
+	expireAt := time.Now().Add(30 * 24 * time.Hour).Unix()
+	assert.NoError(s.T(), database.Get().Model(&model.User{}).Where("id = ?", s.testUser.ID).Updates(map[string]any{
+		"plan_id":         plan.ID,
+		"group_id":        group.ID,
+		"transfer_enable": plan.TransferEnable * 1073741824,
+		"expired_at":      expireAt,
+	}).Error)
+
 	node := &model.Node{
 		Name:   "Legacy Node",
 		Host:   "legacy.example.com",
@@ -2657,8 +2730,8 @@ func (s *SubscriptionServiceTestSuite) TestGetUserSubscription_LegacyGroupIDFall
 	if assert.NotNil(s.T(), resp) {
 		decoded, decodeErr := base64.StdEncoding.DecodeString(resp.Content)
 		assert.NoError(s.T(), decodeErr)
-		assert.Contains(s.T(), string(decoded), "vless://")
-		assert.Contains(s.T(), string(decoded), "legacy.example.com")
+		assert.NotContains(s.T(), string(decoded), "vless://")
+		assert.NotContains(s.T(), string(decoded), "legacy.example.com")
 	}
 }
 

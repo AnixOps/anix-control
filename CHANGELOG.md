@@ -6,6 +6,10 @@
 
 - Runtime diagnostics and the web admin point operators at the existing relay onboarding guide,
   `docs/guide/forward-relay-onboarding.md`. A duplicate bullet in the 4.1.0-rc.6 section is removed.
+- Subscriptions again include only nodes that reported within the last five minutes. The online
+  check had been commented out while debugging, so nodes that were offline were served to clients.
+  Nodes that have not reported recently are now left out of subscriptions. The debug `[Subscription]`
+  output on that path is removed.
 
 ## 4.2.0 - 2026-10-10
 

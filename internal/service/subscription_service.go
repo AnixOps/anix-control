@@ -579,18 +579,14 @@ func (s *SubscriptionService) getInternalNodes(user *model.User, ctx *model.Temp
 
 	var protocols []model.NodeProtocol
 	// 查询关联到这些分组的协议
-	// 调试日志：打印正在查询的分组 ID
-	fmt.Printf("[Subscription] Requesting internal nodes for groupIDs: %v\n", groupIDs)
 
 	if err := s.db.Preload("Node").Preload("SubscriptionGroups").
 		Joins("JOIN v2_subscription_group_node_protocols ON v2_subscription_group_node_protocols.node_protocol_id = v2_node_protocol.id").
 		Where("v2_subscription_group_node_protocols.subscription_group_id IN ? AND v2_node_protocol.enable = 1", groupIDs).
 		Find(&protocols).Error; err != nil {
-		fmt.Printf("[Subscription] DB Query Error: %v\n", err)
 		return nil, err
 	}
 
-	fmt.Printf("[Subscription] Found %d candidate protocols\n", len(protocols))
 	// The protocols' secrets (a Shadowsocks 2022 server key, a WireGuard
 	// server key) are read through the node credential split.
 	nodesecrets.ResolveProtocols(s.db, protocols)
@@ -601,14 +597,12 @@ func (s *SubscriptionService) getInternalNodes(user *model.User, ctx *model.Temp
 			continue
 		}
 		if p.Node == nil {
-			fmt.Printf("[Subscription] Protocol %d has no Node associated\n", p.ID)
 			continue
 		}
 
-		fmt.Printf("[Subscription] Checking node %s (Online: %v, LastCheck: %v)\n", p.Node.Name, p.Node.IsOnline(), p.Node.LastCheckAt)
-
-		// 调试期间放宽在线检查，先让东西出来
-		// if !p.Node.IsOnline() { continue }
+		if !p.Node.IsOnline() {
+			continue
+		}
 
 		// 遍历协议所属的所有分组
 		for _, g := range p.SubscriptionGroups {
