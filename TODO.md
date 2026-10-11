@@ -154,10 +154,6 @@ deliberately in a later PR.
   `forward_runtime.iptables_ansible` block, but the config loader
   (`internal/config/config.go`) only parses `forward_runtime.nftables_ansible`,
   so that block is ignored. Move the templates to `nftables_ansible`.
-- [ ] Runtime diagnostics (`internal/service/forward_panel_runtime_diagnostics.go`)
-  and the web locale strings point operators at a nonexistent
-  `docs/forward-runtime-relay-onboarding.md`; the guide is
-  `docs/guide/forward-relay-onboarding.md`.
 - [ ] Remove hard-coded `/home/dev/...` defaults from
   `config/deploy/deploy_panel.sh`, `config/deploy/ansible/nodes/`,
   `scripts/deploy_wireguard_gost_quic.sh`, and the agent deploy defaults in

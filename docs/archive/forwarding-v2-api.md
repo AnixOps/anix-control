@@ -12,7 +12,7 @@
 This document is the API contract for the current forwarding implementation. It
 records what exists now, which routes are Flux-compatible, and which routes are
 local extensions. The v4.2 API, `/api/v4/forward/*`, is in
-[`v4-api.md`](v4-api.md); the routes here stay until F5d removes them.
+[`v4-api.md`](../forwarding/v4-api.md); the routes here stay until F5d removes them.
 
 ## Response Shapes
 

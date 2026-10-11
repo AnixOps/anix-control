@@ -85,7 +85,7 @@ duplicate it here); the docs landing page is `docs/README.md`.
   - **Full lane.** Every job, including benchmarks.
     It runs on `go_dev` and `release/**` pushes, tags, the nightly
     schedule, manual runs, PRs labelled `ci:full`, and PRs that change the Go
-    dependencies, the classifier or `.github/actions/`.
+    dependencies or the classifier.
   - **Workflow changes.** A PR that changes `ci.yml` runs the full lane,
     unless the change stays inside the bodies of jobs gated on one class
     (`if: ${{ needs.changes.outputs.<class> == 'true' }}`) or of always-run
