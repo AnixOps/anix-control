@@ -2,7 +2,6 @@
 
 ## Unreleased
 
-
 ### Security
 
 - The first administrator is never generated or printed. On an empty database the server refuses to start
@@ -14,6 +13,8 @@
 
 ### Fixed
 
+- Sending a test notification over Telegram or webhook now returns an error that the channel is not
+  implemented. It used to log a stub line and report success although nothing was delivered.
 - Runtime diagnostics and the web admin point operators at the existing relay onboarding guide,
   `docs/guide/forward-relay-onboarding.md`. A duplicate bullet in the 4.1.0-rc.6 section is removed.
 - Subscriptions again include only nodes that reported within the last five minutes. The online

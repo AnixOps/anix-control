@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"net/smtp"
 	"strconv"
 	"strings"
@@ -383,10 +382,8 @@ func (s *Service) AdminTestNotification(ctx context.Context, request pluginhosts
 			cfg = nil
 		}
 		err = sendEmail(cfg, recipient, title, content)
-	case "telegram":
-		log.Printf("[STUB] test notification: Telegram delivery not yet implemented")
-	case "webhook":
-		log.Printf("[STUB] test notification: Webhook delivery not yet implemented")
+	case "telegram", "webhook":
+		return s.panelError("test notification for " + req.Type + " is not implemented")
 	default:
 		return s.panelError("invalid notification type")
 	}
