@@ -349,6 +349,12 @@ func (h *TelegramHandler) DeleteWebhook(c *gin.Context) {
 // @Failure 400 {object} map[string]any
 // @Router /telegram/webhook [post]
 func (h *TelegramHandler) TelegramWebhook(c *gin.Context) {
+	// Only Telegram knows the secret_token registered with setWebhook. Reject
+	// anything else before reading the body.
+	if !h.botService.ValidWebhookSecret(c.GetHeader("X-Telegram-Bot-Api-Secret-Token")) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "invalid webhook secret"})
+		return
+	}
 	var update service.TelegramUpdate
 	if err := c.ShouldBindJSON(&update); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})

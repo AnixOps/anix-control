@@ -3,8 +3,11 @@ package native
 import (
 	"bytes"
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -62,6 +65,14 @@ func sendMessage(db *gorm.DB, chatID int64, text string) error {
 
 // setWebhook is TelegramBotService.SetWebhook: it points the bot's webhook
 // at webhookURL and records it.
+// telegramWebhookSecret must match service.TelegramWebhookSecret: the legacy
+// receiver checks the secret_token this package registers.
+func telegramWebhookSecret(token string) string {
+	mac := hmac.New(sha256.New, []byte(token))
+	mac.Write([]byte("telegram-webhook-secret"))
+	return hex.EncodeToString(mac.Sum(nil))
+}
+
 func setWebhook(db *gorm.DB, webhookURL string) error {
 	bot, err := firstBot(db)
 	if err != nil {
@@ -70,7 +81,8 @@ func setWebhook(db *gorm.DB, webhookURL string) error {
 
 	url := fmt.Sprintf("%s/bot%s/setWebhook", telegramAPIBase, bot.Token)
 	payload := map[string]any{
-		"url": webhookURL,
+		"url":          webhookURL,
+		"secret_token": telegramWebhookSecret(bot.Token),
 	}
 
 	_, err = botAPIRequest(url, payload)

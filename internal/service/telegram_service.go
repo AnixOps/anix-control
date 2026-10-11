@@ -2,6 +2,10 @@ package service
 
 import (
 	"bytes"
+	"crypto/hmac"
+	"crypto/sha256"
+	"crypto/subtle"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -50,6 +54,26 @@ func (s *TelegramBotService) UpdateBot(bot *model.TelegramBot) error {
 	return s.db.Save(bot).Error
 }
 
+// TelegramWebhookSecret is the secret_token registered with setWebhook. Telegram
+// sends it back in X-Telegram-Bot-Api-Secret-Token with every update. It is derived
+// from the bot token, so the webhook keeps no extra state. Changing the token
+// changes the secret: set the webhook again afterwards.
+func TelegramWebhookSecret(token string) string {
+	mac := hmac.New(sha256.New, []byte(token))
+	mac.Write([]byte("telegram-webhook-secret"))
+	return hex.EncodeToString(mac.Sum(nil))
+}
+
+// ValidWebhookSecret reports whether an update carries the secret registered
+// for the current bot token. With no bot configured nothing is valid.
+func (s *TelegramBotService) ValidWebhookSecret(header string) bool {
+	bot, err := s.GetBot()
+	if err != nil || bot.Token == "" {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(header), []byte(TelegramWebhookSecret(bot.Token))) == 1
+}
+
 // SetWebhook 设置Webhook
 func (s *TelegramBotService) SetWebhook(webhookURL string) error {
 	bot, err := s.GetBot()
@@ -59,7 +83,8 @@ func (s *TelegramBotService) SetWebhook(webhookURL string) error {
 
 	url := fmt.Sprintf("https://api.telegram.org/bot%s/setWebhook", bot.Token)
 	payload := map[string]any{
-		"url": webhookURL,
+		"url":          webhookURL,
+		"secret_token": TelegramWebhookSecret(bot.Token),
 	}
 
 	_, err = s.apiRequest(url, payload)
