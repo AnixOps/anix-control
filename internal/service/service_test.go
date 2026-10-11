@@ -5933,7 +5933,7 @@ func (s *InitServiceTestSuite) TestInitAdmin_NoAdminExists() {
 	}
 
 	// Call InitAdmin - should create admin
-	InitAdmin(cfg)
+	assert.NoError(s.T(), InitAdmin(cfg))
 
 	// Verify admin was created
 	var admin model.User
@@ -5967,7 +5967,7 @@ func (s *InitServiceTestSuite) TestInitAdmin_AdminAlreadyExists() {
 		},
 	}
 
-	InitAdmin(cfg)
+	assert.NoError(s.T(), InitAdmin(cfg))
 
 	// Verify existing admin unchanged
 	var admin model.User

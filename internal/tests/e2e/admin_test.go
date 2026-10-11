@@ -143,7 +143,7 @@ func (s *AdminE2ETestSuite) SetupSuite() {
 	s.Require().NoError(err)
 
 	// 初始化管理员
-	service.InitAdmin(s.cfg)
+	s.Require().NoError(service.InitAdmin(s.cfg))
 	s.restoreIdentityHost = installIdentityPlatformE2EPackage(s.T(), s.cfg)
 
 	// 创建路由
