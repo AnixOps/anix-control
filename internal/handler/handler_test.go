@@ -6170,13 +6170,33 @@ func (s *TelegramHandlerTestSuite) TestSetWebhook_MissingURL() {
 	assert.NotContains(s.T(), resp, "error")
 }
 
+func (s *TelegramHandlerTestSuite) TestTelegramWebhook_RejectsMissingSecret() {
+	handler := NewTelegramHandler()
+	s.router.POST("/telegram/webhook", handler.TelegramWebhook)
+	require.NoError(s.T(), s.db.Create(&model.TelegramBot{Name: "Bot", Token: "123:abc", Enabled: true}).Error)
+
+	// A forged update: the sender claims to be user 42 and asks for /sub.
+	body := `{"update_id":1,"message":{"message_id":1,"from":{"id":42},"chat":{"id":42},"text":"/sub"}}`
+	req, _ := http.NewRequest("POST", "/telegram/webhook", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusForbidden, w.Code)
+	var chats int64
+	s.db.Model(&model.TelegramChat{}).Count(&chats)
+	assert.Zero(s.T(), chats, "a rejected update must not be stored")
+}
+
 func (s *TelegramHandlerTestSuite) TestTelegramWebhook_MissingBody() {
 	handler := NewTelegramHandler()
 	s.router.POST("/telegram/webhook", handler.TelegramWebhook)
+	require.NoError(s.T(), s.db.Create(&model.TelegramBot{Name: "Bot", Token: "123:abc", Enabled: true}).Error)
 
 	body := `{}`
 	req, _ := http.NewRequest("POST", "/telegram/webhook", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Telegram-Bot-Api-Secret-Token", service.TelegramWebhookSecret("123:abc"))
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 

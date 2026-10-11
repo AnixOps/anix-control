@@ -11,6 +11,11 @@
   it generates. **Fresh Docker Compose, production compose and Helm installs must set the password before the
   first start.** For Helm, add `admin_password: ANIX_CONTROL_ADMIN_PASSWORD` to `secrets.files` and provide the
   value in the Secret.
+- The Telegram webhook accepts only updates that carry the secret registered with `setWebhook`
+  (`X-Telegram-Bot-Api-Secret-Token`). Before, anyone who knew a Telegram user ID could forge
+  `/sub` and receive that user's subscription token. The secret is derived from the bot token.
+  **After upgrading, set the webhook once in the admin console** (Telegram → Set webhook):
+  until then Telegram's updates are rejected. Changing the bot token also needs a new webhook.
 
 ### Fixed
 
