@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/AnixOps/anix-control/v4/internal/cache"
 	"github.com/AnixOps/anix-control/v4/internal/config"
@@ -98,12 +99,14 @@ func (s *SubscribeE2ETestSuite) SetupSuite() {
 	}
 	s.db.Create(s.testUser)
 
-	// 创建测试节点
+	// 创建测试节点. Subscriptions only include nodes that reported within the last five minutes.
+	lastCheckAt := time.Now().Unix()
 	s.testNode = &model.Node{
 		Name:        "Subscribe Test Node",
 		Host:        "test.example.com",
 		Port:        443,
 		Status:      model.NodeStatusOnline,
+		LastCheckAt: &lastCheckAt,
 		Rate:        1.0,
 		TrafficRate: 1.0,
 		Show:        1,
