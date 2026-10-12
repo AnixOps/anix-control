@@ -3,7 +3,7 @@ import { DOMWrapper, flushPromises, mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import Deployments from '@/views/admin/Deployments.vue'
 import UiSelect from '@/ui/UiSelect.vue'
-import { answerConfirms } from './helpers/feedback'
+import { answerConfirms, toastMessages } from './helpers/feedback'
 
 const kernelApi = vi.hoisted(() => ({
   applyKernelDeployment: vi.fn(),
@@ -11,6 +11,7 @@ const kernelApi = vi.hoisted(() => ({
   createKernelTopology: vi.fn(),
   createKernelTopologyRevision: vi.fn(),
   deleteKernelNodeAssignment: vi.fn(),
+  deleteKernelTopology: vi.fn(),
   diagnoseKernelTopologyDeployment: vi.fn(),
   getKernelDeploymentStatus: vi.fn(),
   getKernelDeployments: vi.fn(),
@@ -88,6 +89,7 @@ function resolveEmptyState() {
   kernelApi.upsertKernelNodeAssignment.mockResolvedValue({ id: 1 })
   kernelApi.deleteKernelNodeAssignment.mockResolvedValue(undefined)
   kernelApi.cancelKernelOperation.mockResolvedValue({ id: 'op-1', state: 'cancel_requested' })
+  kernelApi.deleteKernelTopology.mockResolvedValue({ topology: { id: 1 }, deleted: true, deployment: null })
 }
 
 function resolveAssignmentState(assignments = []) {
@@ -784,6 +786,158 @@ describe('Deployments', () => {
     await flushPromises()
     expect(kernelApi.getKernelOperations).toHaveBeenCalledTimes(2)
     wrapper.unmount()
+  })
+
+  describe('deleting a topology', () => {
+    const mesh = { id: 4, name: 'Mesh', service_scope: 'forward', active_revision_id: null }
+    const liveMesh = { ...mesh, active_revision_id: 30 }
+    const deletingMesh = { ...liveMesh, delete_requested_at: '2026-10-12T08:00:00Z' }
+    const teardown = { id: 77, topology_id: 4, revision_id: 30, teardown: true, state: 'applying' }
+
+    it('asks first and removes a topology the kernel deletes at once', async () => {
+      kernelApi.getKernelTopologies.mockResolvedValueOnce([mesh]).mockResolvedValue([])
+      kernelApi.deleteKernelTopology.mockResolvedValue({ topology: { ...mesh, deleted_at: '2026-10-12T08:00:00Z' }, deleted: true, deployment: null })
+      const answers = [false, true]
+      const confirms = answerConfirms(() => answers.shift())
+      const wrapper = mountDeployments()
+      await flushPromises()
+
+      await wrapper.get('[data-testid="delete-topology-4"]').trigger('click')
+      await flushPromises()
+      expect(confirms.calls).toHaveLength(1)
+      expect(confirms.last()).toMatchObject({ tone: 'danger', title: 'Delete topology Mesh?', confirmLabel: 'Delete topology' })
+      expect(confirms.last().message).toContain('its name can be used again')
+      expect(kernelApi.deleteKernelTopology).not.toHaveBeenCalled()
+
+      await wrapper.get('[data-testid="delete-topology-4"]').trigger('click')
+      await flushPromises()
+      expect(kernelApi.deleteKernelTopology).toHaveBeenCalledWith(4)
+      expect(toastMessages('success')).toContain('Topology Mesh was deleted')
+      expect(wrapper.find('[data-testid="delete-topology-4"]').exists()).toBe(false)
+      wrapper.unmount()
+    })
+
+    it('shows a teardown as deleting, polls it and announces the deletion', async () => {
+      vi.useFakeTimers()
+      kernelApi.getKernelTopologies
+        .mockResolvedValueOnce([liveMesh])
+        .mockResolvedValueOnce([deletingMesh])
+        .mockResolvedValue([])
+      kernelApi.getKernelDeployments
+        .mockResolvedValueOnce([])
+        .mockResolvedValue([{ ...teardown, state: 'succeeded' }])
+      kernelApi.deleteKernelTopology.mockResolvedValue({ topology: deletingMesh, deleted: false, deployment: teardown })
+      const confirms = answerConfirms(true)
+      const wrapper = mountDeployments()
+      await flushPromises()
+
+      await wrapper.get('[data-testid="delete-topology-4"]').trigger('click')
+      await flushPromises()
+      expect(confirms.last().message).toContain('teardown deployment')
+      expect(kernelApi.deleteKernelTopology).toHaveBeenCalledWith(4)
+      expect(toastMessages('info')).toContain('Tearing down topology Mesh (deployment #77); it is deleted when the teardown succeeds')
+      expect(wrapper.get('[data-testid="topology-deleting-4"]').text()).toBe('Deleting')
+      const button = wrapper.get('[data-testid="delete-topology-4"]')
+      expect(button.text()).toBe('Deleting')
+      expect(button.attributes('disabled')).toBeDefined()
+      expect(kernelApi.getKernelTopologies).toHaveBeenCalledTimes(2)
+
+      await vi.advanceTimersByTimeAsync(2000)
+      await flushPromises()
+      expect(kernelApi.getKernelTopologies).toHaveBeenCalledTimes(3)
+      expect(toastMessages('success')).toContain('Topology Mesh was deleted')
+      expect(wrapper.find('[data-testid="delete-topology-4"]').exists()).toBe(false)
+
+      await vi.advanceTimersByTimeAsync(4000)
+      await flushPromises()
+      expect(kernelApi.getKernelTopologies).toHaveBeenCalledTimes(3)
+      wrapper.unmount()
+    })
+
+    it('keeps a topology whose teardown does not succeed and says so', async () => {
+      vi.useFakeTimers()
+      kernelApi.getKernelTopologies
+        .mockResolvedValueOnce([deletingMesh])
+        .mockResolvedValue([liveMesh])
+      kernelApi.getKernelDeployments
+        .mockResolvedValueOnce([teardown])
+        .mockResolvedValue([{ ...teardown, state: 'rolled_back' }])
+      const wrapper = mountDeployments()
+      await flushPromises()
+      expect(wrapper.get('[data-testid="topology-deleting-4"]').exists()).toBe(true)
+
+      await vi.advanceTimersByTimeAsync(2000)
+      await flushPromises()
+      expect(toastMessages('error')).toContain('Topology Mesh was kept: teardown deployment #77 ended as rolled_back')
+      expect(wrapper.find('[data-testid="topology-deleting-4"]').exists()).toBe(false)
+      expect(wrapper.get('[data-testid="delete-topology-4"]').attributes('disabled')).toBeUndefined()
+      wrapper.unmount()
+    })
+
+    it('shows why the kernel refused a delete', async () => {
+      kernelApi.getKernelTopologies.mockResolvedValue([liveMesh])
+      kernelApi.deleteKernelTopology.mockRejectedValue({
+        response: { status: 409, data: { error: { code: 'topology_execution_disabled', message: 'topology execution is disabled: enable plugins.topology_execution_enabled' } } },
+      })
+      answerConfirms(true)
+      const wrapper = mountDeployments()
+      await flushPromises()
+
+      await wrapper.get('[data-testid="delete-topology-4"]').trigger('click')
+      await flushPromises()
+      expect(toastMessages('error')).toContain('topology execution is disabled: enable plugins.topology_execution_enabled')
+      expect(wrapper.find('[data-testid="topology-deleting-4"]').exists()).toBe(false)
+      expect(wrapper.get('[data-testid="delete-topology-4"]').attributes('disabled')).toBeUndefined()
+      wrapper.unmount()
+    })
+
+    it('deletes from the topology workspace after its inline confirmation', async () => {
+      kernelApi.getKernelTopologies.mockResolvedValueOnce([mesh]).mockResolvedValue([])
+      kernelApi.getKernelTopologyRevisions.mockResolvedValue([{ id: 30, topology_id: 4, revision: 1, message: 'initial' }])
+      kernelApi.getKernelTopologyRevision.mockResolvedValue({ revision: { id: 30, message: 'initial' }, vertices: [], edges: [] })
+      const confirms = answerConfirms(true)
+      const wrapper = mountDeployments()
+      await flushPromises()
+
+      await wrapper.get('[data-testid="edit-topology-4"]').trigger('click')
+      await flushPromises()
+      await bodyGet('#topology-delete').trigger('click')
+      expect(bodyGet('[data-testid="delete-confirmation"]').text()).toContain('Delete Mesh?')
+      expect(kernelApi.deleteKernelTopology).not.toHaveBeenCalled()
+      await bodyGet('[data-testid="confirm-delete"]').trigger('click')
+      await flushPromises()
+
+      expect(confirms.calls).toHaveLength(0)
+      expect(kernelApi.deleteKernelTopology).toHaveBeenCalledWith(4)
+      expect(toastMessages('success')).toContain('Topology Mesh was deleted')
+      expect(inBody('#topology-editor-title').exists()).toBe(false)
+      wrapper.unmount()
+    })
+
+    it('follows a teardown started from the workspace in its deployment status', async () => {
+      kernelApi.getKernelTopologies.mockResolvedValueOnce([liveMesh]).mockResolvedValue([deletingMesh])
+      kernelApi.getKernelTopologyRevisions.mockResolvedValue([{ id: 30, topology_id: 4, revision: 1, message: 'initial' }])
+      kernelApi.getKernelTopologyRevision.mockResolvedValue({ revision: { id: 30, message: 'initial' }, vertices: [], edges: [] })
+      kernelApi.deleteKernelTopology.mockResolvedValue({ topology: deletingMesh, deleted: false, deployment: teardown })
+      kernelApi.getKernelDeploymentStatus.mockResolvedValue({ deployment: teardown, steps: [] })
+      const wrapper = mountDeployments()
+      await flushPromises()
+
+      await wrapper.get('[data-testid="edit-topology-4"]').trigger('click')
+      await flushPromises()
+      await bodyGet('#topology-delete').trigger('click')
+      expect(bodyGet('[data-testid="delete-confirmation"]').text()).toContain('Its active revision runs on nodes')
+      await bodyGet('[data-testid="confirm-delete"]').trigger('click')
+      await flushPromises()
+
+      expect(kernelApi.getKernelDeploymentStatus).toHaveBeenCalledWith(77)
+      const workspace = bodyGet('[data-testid="topology-workspace"]')
+      expect(workspace.get('[data-testid="topology-deleting"]').exists()).toBe(true)
+      expect(workspace.text()).toContain('Teardown')
+      expect(bodyGet('#topology-delete').attributes('disabled')).toBeDefined()
+      expect(bodyGet('#topology-plan').attributes('disabled')).toBeDefined()
+      wrapper.unmount()
+    })
   })
 
   it('keeps a server load failure visible instead of showing an empty topology state', async () => {

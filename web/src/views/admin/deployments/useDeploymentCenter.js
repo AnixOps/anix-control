@@ -5,6 +5,7 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { useConfirm } from '@/ui/composables/useConfirm'
+import { useToast } from '@/ui/composables/useToast'
 import { extractNodes } from '@/composables/useKernelDeployments'
 import { getNodes } from '@/api/admin'
 import {
@@ -13,6 +14,7 @@ import {
   createKernelTopology,
   createKernelTopologyRevision,
   deleteKernelNodeAssignment,
+  deleteKernelTopology,
   diagnoseKernelTopologyDeployment,
   getKernelDeploymentStatus,
   getKernelDeployments,
@@ -47,6 +49,7 @@ export function useDeploymentCenter() {
 
   const { t } = useAppI18n()
   const confirm = useConfirm()
+  const toast = useToast()
   const viewMode = ref('topologies')
   const loading = ref(false)
   const loaded = ref(false)
@@ -62,6 +65,7 @@ export function useDeploymentCenter() {
   const assignmentsLoading = ref(false)
   const assignmentBusy = ref({})
   const operationBusy = ref('')
+  const topologyBusy = ref({})
   const trackedOperationIDs = ref(new Set())
   const topologyEditor = reactive({
     open: false,
@@ -95,6 +99,10 @@ export function useDeploymentCenter() {
   let topologySessionID = 0
   let assignmentLoadRequestID = 0
   let operationRequestGeneration = 0
+  // Topologies being torn down (id → name): when one leaves the list its
+  // teardown deleted it; when it stays without delete_requested_at the
+  // teardown failed or was rolled back and the topology was kept.
+  const watchedTeardowns = new Map()
 
   const scopedOperationIDs = computed(() => {
     const ids = new Set(trackedOperationIDs.value)
@@ -115,6 +123,54 @@ export function useDeploymentCenter() {
 
   function pluginName(pluginID) {
     return assignmentResources.plugins.find(plugin => plugin?.id === pluginID)?.name || pluginID
+  }
+
+  function topologyLabel(topology) {
+    return topology?.name || `#${topology?.id}`
+  }
+
+  function isTopologyDeleting(topology) {
+    return Boolean(topology?.delete_requested_at)
+  }
+
+  function isTopologyBusy(topology) {
+    return Boolean(topologyBusy.value[topology?.id])
+  }
+
+  function setTopologyBusy(topology, busy) {
+    const next = { ...topologyBusy.value }
+    if (busy) next[topology.id] = true
+    else delete next[topology.id]
+    topologyBusy.value = next
+  }
+
+  // Every topology list goes through here so the end of a teardown is
+  // announced once, whichever refresh sees it first. Load deployments first:
+  // a failed teardown names its deployment's state.
+  function setTopologies(nextTopologies) {
+    topologies.value = nextTopologies
+    for (const [topologyID, name] of [...watchedTeardowns]) {
+      const topology = nextTopologies.find(item => Number(item?.id) === topologyID)
+      if (topology && isTopologyDeleting(topology)) continue
+      watchedTeardowns.delete(topologyID)
+      if (!topology) {
+        toast.success(t('control.messages.topologyDeleted', { name }))
+        if (topologyEditor.open && Number(topologyEditor.topology?.id) === topologyID && !topologyEditor.saving) {
+          beginTopologyEditorSession()
+          topologyEditor.open = false
+        }
+        continue
+      }
+      const deployment = latestDeploymentFor(topology)
+      toast.error(t('control.messages.topologyDeleteFailed', { name, id: deployment?.id || '-', state: deployment?.state || '-' }))
+    }
+    for (const topology of nextTopologies) {
+      if (isTopologyDeleting(topology)) watchedTeardowns.set(Number(topology.id), topologyLabel(topology))
+    }
+    if (topologyEditor.open && topologyEditor.topology?.id) {
+      const current = nextTopologies.find(item => Number(item?.id) === Number(topologyEditor.topology.id))
+      if (current) topologyEditor.topology = current
+    }
   }
 
   function latestDeploymentFor(topology) {
@@ -205,8 +261,8 @@ export function useDeploymentCenter() {
         getKernelScopes(),
         getNodes({ page: 1, page_size: 200 }),
       ])
-      topologies.value = rows(topologyRows)
       deployments.value = rows(deploymentRows)
+      setTopologies(rows(topologyRows))
       if (operationRequestGenerationAtStart === operationRequestGeneration) {
         operations.value = rows(operationRows)
         reconcileTrackedOperations()
@@ -237,7 +293,7 @@ export function useDeploymentCenter() {
 
   async function refreshTopologies() {
     const topologyRows = await getKernelTopologies()
-    topologies.value = rows(topologyRows)
+    setTopologies(rows(topologyRows))
   }
 
   async function refreshOperationState() {
@@ -682,6 +738,83 @@ export function useDeploymentCenter() {
     }
   }
 
+  // Deleting a topology: confirmed here for the table row; the workspace asks
+  // inline first and passes confirmed. A topology without an active revision
+  // is deleted at once; one running on nodes gets a teardown deployment, is
+  // shown as 删除中 and polled until the teardown ends.
+  async function deleteTopology(topology, { confirmed = false } = {}) {
+    if (!topology?.id || isTopologyBusy(topology) || isTopologyDeleting(topology)) return false
+    const topologyID = Number(topology.id)
+    const name = topologyLabel(topology)
+    if (!confirmed) {
+      const accepted = await confirm({
+        title: t('control.topology.deleteTitle', { name }),
+        message: topology.active_revision_id ? t('control.topology.deleteLiveMessage') : t('control.topology.deleteMessage'),
+        confirmLabel: t('control.topology.deleteAction'),
+        tone: 'danger',
+      })
+      if (!accepted) return false
+    }
+    const inEditor = () => topologyEditor.open && Number(topologyEditor.topology?.id) === topologyID
+    setTopologyBusy(topology, true)
+    if (inEditor()) Object.assign(topologyEditor, { saving: true, error: '' })
+    error.value = ''
+    notice.value = ''
+    try {
+      const result = await deleteKernelTopology(topologyID)
+      const deployment = result?.deployment
+      if (deployment?.id) updateDeployment(deployment)
+      if (result?.deleted) {
+        topologies.value = topologies.value.filter(item => Number(item?.id) !== topologyID)
+        if (inEditor()) {
+          topologyEditor.saving = false
+          closeTopologyEditor()
+        }
+        toast.success(t('control.messages.topologyDeleted', { name }))
+      } else {
+        const deleting = { ...topology, ...(result?.topology || {}) }
+        if (!deleting.delete_requested_at) deleting.delete_requested_at = new Date().toISOString()
+        topologies.value = topologies.value.map(item => (Number(item?.id) === topologyID ? deleting : item))
+        watchedTeardowns.set(topologyID, name)
+        if (inEditor()) {
+          topologyEditor.topology = deleting
+          if (deployment?.id) {
+            topologyEditor.deploymentID = Number(deployment.id)
+            try {
+              await refreshDeploymentStatus(deployment.id)
+            } catch (cause) {
+              if (inEditor()) topologyEditor.error = errorMessage(cause, 'control.errors.topologyStatus')
+            }
+          }
+        }
+        toast.info(t('control.messages.topologyTeardownStarted', { name, id: deployment?.id || '-' }))
+      }
+      try {
+        await refreshTopologies()
+      } catch (cause) {
+        error.value = errorMessage(cause, 'control.errors.load')
+      }
+      await refreshOperationState()
+      return true
+    } catch (cause) {
+      const message = errorMessage(cause, 'control.errors.topologyDelete')
+      if (inEditor()) topologyEditor.error = message
+      toast.error(message)
+      return false
+    } finally {
+      setTopologyBusy(topology, false)
+      if (inEditor()) topologyEditor.saving = false
+      updatePolling()
+    }
+  }
+
+  async function deleteEditorTopology({ topologyID }) {
+    const topology = Number(topologyEditor.topology?.id) === Number(topologyID)
+      ? topologyEditor.topology
+      : topologies.value.find(item => Number(item?.id) === Number(topologyID))
+    return deleteTopology(topology, { confirmed: true })
+  }
+
   async function cancelOperation(operationID) {
     operationBusy.value = operationID
     error.value = ''
@@ -703,8 +836,13 @@ export function useDeploymentCenter() {
     return Boolean(topologyEditor.open && topologyEditor.deploymentID && ACTIVE_DEPLOYMENT_STATES.has(state))
   }
 
+  function hasTeardownsRunning() {
+    return topologies.value.some(isTopologyDeleting)
+  }
+
   function hasActiveScopedWork() {
     if (selectedDeploymentIsActive()) return true
+    if (hasTeardownsRunning()) return true
     if (operations.value.some(operation => isScopedOperation(operation) && !TERMINAL_OPERATION_STATES.has(operation.state))) return true
     return [...trackedOperationIDs.value].some(operationID => {
       const operation = operations.value.find(item => String(item?.id) === String(operationID))
@@ -735,15 +873,25 @@ export function useDeploymentCenter() {
     const topologyID = topologyEditor.topology?.id
     const deploymentID = Number(topologyEditor.deploymentID)
     const shouldRefreshDeployment = selectedDeploymentIsActive()
+    const shouldRefreshTeardowns = hasTeardownsRunning()
     try {
       const operationRequest = getKernelOperations()
       const deploymentRequest = shouldRefreshDeployment
         ? getKernelDeploymentStatus(deploymentID)
         : null
-      const [operationRows, status] = await Promise.all([operationRequest, deploymentRequest])
+      const [operationRows, status, topologyRows, deploymentRows] = await Promise.all([
+        operationRequest,
+        deploymentRequest,
+        shouldRefreshTeardowns ? getKernelTopologies() : null,
+        shouldRefreshTeardowns ? getKernelDeployments() : null,
+      ])
       if (operationRequestGenerationAtStart === operationRequestGeneration) {
         operations.value = rows(operationRows)
         reconcileTrackedOperations()
+      }
+      if (shouldRefreshTeardowns) {
+        deployments.value = rows(deploymentRows)
+        setTopologies(rows(topologyRows))
       }
       if (status && isCurrentDeploymentStatusSession(sessionID, topologyID, deploymentID)) {
         topologyEditor.deploymentStatus = status
@@ -790,6 +938,7 @@ export function useDeploymentCenter() {
     scopedOperationIDs,
     pluginName,
     latestDeploymentFor,
+    isTopologyBusy,
     loadInitial,
     setViewMode,
     loadAssignments,
@@ -812,6 +961,8 @@ export function useDeploymentCenter() {
     openDeploymentStatus,
     applyDeployment,
     rollbackDeployment,
+    deleteTopology,
+    deleteEditorTopology,
     cancelOperation,
   }
 }

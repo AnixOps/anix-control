@@ -100,6 +100,9 @@ func EnsureKernelSchema(db *gorm.DB) error {
 	if err := db.AutoMigrate(model.KernelModels()...); err != nil {
 		return err
 	}
+	if err := migrateTopologyLiveNameIndex(db); err != nil {
+		return err
+	}
 	return db.Transaction(func(tx *gorm.DB) error {
 		for i := range defaultServiceScopes {
 			scope := defaultServiceScopes[i]
@@ -121,6 +124,28 @@ func EnsureKernelSchema(db *gorm.DB) error {
 		}
 		return nil
 	})
+}
+
+// migrateTopologyLiveNameIndex replaces the plain unique index on
+// v3_kernel_topology.name with the partial one on live rows. Schemas created
+// before topologies could be deleted carry the plain index under GORM's
+// default name, idx_v3_kernel_topology_name, on SQLite and PostgreSQL alike;
+// it would keep a deleted topology's name taken. AutoMigrate creates missing
+// indexes but never drops one, so the old index is dropped here. Both steps
+// are idempotent and run on every start.
+func migrateTopologyLiveNameIndex(db *gorm.DB) error {
+	migrator := db.Migrator()
+	if migrator.HasIndex(&model.Topology{}, model.LegacyTopologyNameIndex) {
+		if err := migrator.DropIndex(&model.Topology{}, model.LegacyTopologyNameIndex); err != nil {
+			return fmt.Errorf("drop topology name index %s: %w", model.LegacyTopologyNameIndex, err)
+		}
+	}
+	if !migrator.HasIndex(&model.Topology{}, model.TopologyLiveNameIndex) {
+		if err := migrator.CreateIndex(&model.Topology{}, model.TopologyLiveNameIndex); err != nil {
+			return fmt.Errorf("create topology name index %s: %w", model.TopologyLiveNameIndex, err)
+		}
+	}
+	return nil
 }
 
 // LockPluginInstallationTarget must be called inside the transaction that
@@ -3031,6 +3056,11 @@ func CreateTopologyRevision(db *gorm.DB, topologyID, actorID uint, input Topolog
 	if err := db.First(&topology, topologyID).Error; err != nil {
 		return nil, err
 	}
+	if deleting, err := topologyDeletePending(db, topology); err != nil {
+		return nil, err
+	} else if deleting {
+		return nil, ErrTopologyDeleting
+	}
 	issues := ValidateTopology(input)
 	issues = append(issues, ValidateTopologyAssignments(db, topology.ServiceScope, input)...)
 	if len(issues) > 0 {
@@ -3059,6 +3089,11 @@ func CreateTopologyRevision(db *gorm.DB, topologyID, actorID uint, input Topolog
 		var topology model.Topology
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&topology, topologyID).Error; err != nil {
 			return err
+		}
+		if deleting, err := topologyDeletePending(tx, topology); err != nil {
+			return err
+		} else if deleting {
+			return ErrTopologyDeleting
 		}
 		var latest int64
 		if err := tx.Model(&model.TopologyRevision{}).Where("topology_id = ?", topologyID).

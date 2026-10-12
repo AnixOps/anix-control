@@ -112,6 +112,7 @@
           :error-title="t('control.topology.graphFailed')"
         />
 
+        <p v-if="deleting" class="topology-deleting" data-testid="topology-deleting" role="status">{{ t('control.topology.deletingHint') }}</p>
         <p v-if="dirty" class="topology-dirty" role="status">{{ t('control.topology.unsavedChanges') }}</p>
         <section v-if="validation" class="topology-validation" :class="validation.valid ? 'is-valid' : 'is-invalid'" role="status">
           <strong>{{ validation.valid ? t('control.topology.valid') : t('control.topology.invalid') }}</strong>
@@ -137,6 +138,7 @@
           <div class="status-line">
             <strong>{{ t('control.topology.deployment') }}</strong>
             <code>#{{ deploymentID }}</code>
+            <span v-if="deploymentStatus.deployment?.teardown" class="state-badge state-pending">{{ t('control.topology.teardown') }}</span>
             <span :class="['state-badge', stateClass(deploymentState)]">{{ deploymentState || '-' }}</span>
           </div>
           <p v-if="deploymentStatus.deployment?.last_error" class="row-error">{{ deploymentStatus.deployment.last_error }}</p>
@@ -165,10 +167,11 @@
           {{ validating ? t('control.topology.validating') : t('control.topology.diagnose') }}
         </UiButton>
         <UiButton id="topology-preview" :disabled="validating || loading || dirty || !selectedRevisionID" @click="previewRevision">{{ t('control.topology.previewAction') }}</UiButton>
-        <UiButton id="topology-save-revision" variant="primary" :disabled="saving || loading" @click="saveRevision">{{ saving ? t('control.actions.saving') : t('control.topology.saveRevision') }}</UiButton>
-        <UiButton id="topology-plan" :disabled="saving || dirty || !selectedRevisionID || confirmationActive" @click="plan">{{ t('control.topology.plan') }}</UiButton>
+        <UiButton id="topology-save-revision" variant="primary" :disabled="saving || loading || deleting" @click="saveRevision">{{ saving ? t('control.actions.saving') : t('control.topology.saveRevision') }}</UiButton>
+        <UiButton id="topology-plan" :disabled="saving || dirty || deleting || !selectedRevisionID || confirmationActive" @click="plan">{{ t('control.topology.plan') }}</UiButton>
         <UiButton id="topology-apply" variant="primary" :disabled="saving || dirty || !canApply || applyConfirming || rollbackConfirming" @click="requestApply">{{ t('control.topology.apply') }}</UiButton>
         <UiButton id="topology-rollback" variant="danger-soft" :disabled="saving || dirty || !canRollback || applyConfirming || rollbackConfirming" @click="requestRollback">{{ t('control.topology.rollback') }}</UiButton>
+        <UiButton id="topology-delete" variant="danger-soft" :disabled="saving || loading || deleting || confirmationActive" @click="requestDelete">{{ deleting ? t('control.topology.deleting') : t('common.actions.delete') }}</UiButton>
         <section v-if="applyConfirming" class="action-confirmation apply-confirmation" data-testid="apply-confirmation" role="alertdialog" :aria-label="t('control.topology.apply')">
           <p>{{ t('control.topology.applyConfirm', { topology: confirmedTopologyLabel, deployment: confirmedDeploymentID }) }}</p>
           <div class="confirmation-actions">
@@ -183,6 +186,14 @@
             <UiButton size="sm" variant="danger" data-testid="confirm-rollback" :disabled="saving || dirty || !confirmationMatchesCurrentDeployment" @click="rollback">{{ t('control.topology.rollback') }}</UiButton>
           </div>
         </section>
+        <section v-if="deleteConfirming" class="action-confirmation delete-confirmation" data-testid="delete-confirmation" role="alertdialog" :aria-label="t('control.topology.deleteAction')">
+          <p>{{ t('control.topology.deleteConfirm', { topology: confirmedTopologyLabel }) }}</p>
+          <p class="confirmation-detail">{{ topology?.active_revision_id ? t('control.topology.deleteLiveMessage') : t('control.topology.deleteMessage') }}</p>
+          <div class="confirmation-actions">
+            <UiButton size="sm" :disabled="saving" @click="clearConfirmation">{{ t('common.actions.cancel') }}</UiButton>
+            <UiButton size="sm" variant="danger" data-testid="confirm-delete" :disabled="saving || deleting" @click="confirmDelete">{{ t('control.topology.deleteAction') }}</UiButton>
+          </div>
+        </section>
       </template>
     </template>
   </UiDialog>
@@ -190,7 +201,9 @@
 
 <script setup>
 // Topology create / revision editor (UiDialog: focus trap, Esc, focus
-// return). It cannot be dismissed while saving or validating. JSON / 图示
+// return). It cannot be dismissed while saving or validating. 应用, 回滚 and
+// 删除 ask inline before they emit; a topology being torn down (删除中) can
+// only be watched. JSON / 图示
 // switches the editor for a read-only G6 preview of the JSON being edited
 // (UI U8): G6 loads only when the preview opens, and the graph follows the
 // light / dark theme.
@@ -221,7 +234,7 @@ const props = defineProps({
   validating: { type: Boolean, default: false },
   error: { type: String, default: '' },
 })
-const emit = defineEmits(['close', 'create-topology', 'save-revision', 'diagnose', 'preview', 'plan', 'apply', 'rollback', 'select-revision'])
+const emit = defineEmits(['close', 'create-topology', 'save-revision', 'diagnose', 'preview', 'plan', 'apply', 'rollback', 'delete', 'select-revision'])
 const { t } = useAppI18n()
 const json = ref(emptyTopologyJSON())
 const baselineJSON = ref(emptyTopologyJSON())
@@ -238,6 +251,7 @@ const revisionOptions = computed(() => (props.revisions.length === 0
 const failurePolicyOptions = computed(() => [{ value: 'stop_and_rollback', label: t('control.topology.stopAndRollback') }])
 const applyConfirming = ref(false)
 const rollbackConfirming = ref(false)
+const deleteConfirming = ref(false)
 const confirmedDeploymentID = ref(0)
 const confirmedTopologyLabel = ref('')
 const localError = ref('')
@@ -256,7 +270,10 @@ const canRollback = computed(() => Boolean(props.deploymentID) && ![
   '', 'rollback_requested', 'rollback_configuring', 'rollback_enabling', 'rollback_disabling', 'rolled_back',
 ].includes(deploymentState.value))
 const topologyLabel = computed(() => props.topology?.name || `#${props.topology?.id || props.deploymentID}`)
-const confirmationActive = computed(() => applyConfirming.value || rollbackConfirming.value)
+// A topology with delete_requested_at is being torn down: it cannot be
+// changed, only watched (rolling the teardown back keeps it).
+const deleting = computed(() => Boolean(props.topology?.delete_requested_at))
+const confirmationActive = computed(() => applyConfirming.value || rollbackConfirming.value || deleteConfirming.value)
 const confirmationMatchesCurrentDeployment = computed(() => (
   confirmedDeploymentID.value > 0 && Number(props.deploymentID) === confirmedDeploymentID.value
 ))
@@ -450,6 +467,20 @@ function rollback() {
   emit('rollback', { deploymentID })
 }
 
+function requestDelete() {
+  if (props.saving || props.loading || deleting.value || confirmationActive.value || !props.topology?.id) return
+  clearConfirmation()
+  confirmedTopologyLabel.value = topologyLabel.value
+  deleteConfirming.value = true
+}
+
+function confirmDelete() {
+  const topologyID = Number(props.topology?.id || 0)
+  const confirmed = deleteConfirming.value && !props.saving && !deleting.value && topologyID > 0
+  clearConfirmation()
+  if (confirmed) emit('delete', { topologyID })
+}
+
 function beginConfirmation(action) {
   const deploymentID = Number(props.deploymentID)
   if (!deploymentID) return
@@ -463,6 +494,7 @@ function beginConfirmation(action) {
 function clearConfirmation() {
   applyConfirming.value = false
   rollbackConfirming.value = false
+  deleteConfirming.value = false
   confirmedDeploymentID.value = 0
   confirmedTopologyLabel.value = ''
 }
@@ -509,7 +541,9 @@ function stateClass(state) {
 .state-pending { color: var(--warning); background: var(--warning-soft); }
 .action-confirmation { width: 100%; border: 1px solid var(--separator); border-radius: var(--radius-sm); padding: var(--space-3); }
 .apply-confirmation { border-color: var(--accent); background: var(--accent-soft); }
-.rollback-confirmation { border-color: var(--danger); background: var(--danger-soft); }
+.rollback-confirmation, .delete-confirmation { border-color: var(--danger); background: var(--danger-soft); }
+.confirmation-detail { color: var(--label-2); font-size: var(--type-caption-size); }
+.topology-deleting { margin: 0; padding: var(--space-2) var(--space-3); border-left: 3px solid var(--warning); color: var(--warning); background: var(--warning-soft); font-size: var(--type-caption-size); }
 .action-confirmation p { margin: 0 0 var(--space-3); }
 .confirmation-actions { display: flex; justify-content: flex-end; gap: var(--space-2); }
 @media (max-width: 720px) {

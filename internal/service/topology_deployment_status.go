@@ -29,6 +29,7 @@ type TopologyDeploymentView struct {
 	RolloutGroup         string     `json:"rollout_group"`
 	State                string     `json:"state"`
 	FailurePolicy        string     `json:"failure_policy"`
+	Teardown             bool       `json:"teardown"`
 	HasError             bool       `json:"has_error"`
 	LastError            string     `json:"last_error,omitempty"`
 	HealthGateDeadlineAt *time.Time `json:"health_gate_deadline_at,omitempty"`
@@ -111,7 +112,7 @@ func PublicTopologyDeployment(deployment model.TopologyDeployment) TopologyDeplo
 	return TopologyDeploymentView{
 		ID: deployment.ID, TopologyID: deployment.TopologyID, RevisionID: deployment.RevisionID,
 		PreviousRevisionID: deployment.PreviousRevisionID, RolloutGroup: deployment.RolloutGroup,
-		State: deployment.State, FailurePolicy: deployment.FailurePolicy,
+		State: deployment.State, FailurePolicy: deployment.FailurePolicy, Teardown: deployment.Teardown,
 		HasError:             topologyDeploymentHasError(deployment),
 		LastError:            topologyDeploymentErrorSummary(deployment.State, deployment.LastError),
 		HealthGateDeadlineAt: deployment.HealthGateDeadlineAt,

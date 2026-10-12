@@ -1776,6 +1776,17 @@ func (h *KernelHandler) CreateTopology(c *gin.Context) {
 		kernelError(c, http.StatusBadRequest, "scope_not_found", "service scope does not exist")
 		return
 	}
+	// Names are unique among live topologies only; a deleted topology's
+	// name can be reused (ux_topology_live_name).
+	var nameCount int64
+	if err := h.db.Model(&model.Topology{}).Where("name = ?", row.Name).Count(&nameCount).Error; err != nil {
+		kernelDBError(c, err)
+		return
+	}
+	if nameCount > 0 {
+		kernelError(c, http.StatusConflict, "topology_name_conflict", "a topology with this name already exists")
+		return
+	}
 	if err := h.db.Create(&row).Error; err != nil {
 		kernelDBError(c, err)
 		return
@@ -1783,9 +1794,67 @@ func (h *KernelHandler) CreateTopology(c *gin.Context) {
 	kernelData(c, 201, row)
 }
 
+// DeleteTopology deletes a topology. Rows are never removed: the topology is
+// flagged deleted, its name becomes free again, and its revisions,
+// deployments and operations stay for audit. A topology without an active
+// revision is deleted at once (200). One whose active revision runs on nodes
+// is torn down first (202 with the teardown deployment); the executor deletes
+// it when the teardown succeeds and keeps it when the teardown fails.
+func (h *KernelHandler) DeleteTopology(c *gin.Context) {
+	id, ok := parseKernelID(c, "id")
+	if !ok {
+		return
+	}
+	result, err := service.DeleteTopology(h.db, service.TopologyDeleteInput{
+		TopologyID: id, ActorID: kernelActorID(c), ExecutionEnabled: topologyExecutionEnabled(), At: time.Now(),
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, gorm.ErrRecordNotFound):
+			kernelError(c, http.StatusNotFound, "not_found", "topology not found")
+		case errors.Is(err, service.ErrTopologyDeleting):
+			kernelError(c, http.StatusConflict, "topology_deleting", "the topology is already being deleted")
+		case errors.Is(err, service.ErrTopologyDeploymentBusy):
+			kernelError(c, http.StatusConflict, "topology_deployment_busy", "a deployment of this topology is in progress; wait for it to finish or roll it back before deleting the topology")
+		case errors.Is(err, service.ErrTopologyTeardownRequiresExecution):
+			kernelError(c, http.StatusConflict, "topology_execution_disabled", err.Error())
+		case errors.Is(err, service.ErrTopologyTeardownInvalid):
+			kernelError(c, http.StatusUnprocessableEntity, "topology_teardown_invalid", err.Error())
+		default:
+			kernelDBError(c, err)
+		}
+		return
+	}
+	response := gin.H{"topology": result.Topology, "deleted": result.Deleted, "deployment": nil}
+	if result.Deployment != nil {
+		response["deployment"] = service.PublicTopologyDeployment(*result.Deployment)
+	}
+	status := http.StatusOK
+	if !result.Deleted {
+		status = http.StatusAccepted
+	}
+	kernelData(c, status, response)
+}
+
+// liveTopology answers 404 and false when the topology is missing or deleted.
+func (h *KernelHandler) liveTopology(c *gin.Context, topologyID uint) bool {
+	if _, err := service.GetTopology(h.db, topologyID); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			kernelError(c, http.StatusNotFound, "not_found", "topology not found")
+			return false
+		}
+		kernelDBError(c, err)
+		return false
+	}
+	return true
+}
+
 func (h *KernelHandler) ListTopologyRevisions(c *gin.Context) {
 	id, ok := parseKernelID(c, "id")
 	if !ok {
+		return
+	}
+	if !h.liveTopology(c, id) {
 		return
 	}
 	var rows []model.TopologyRevision
@@ -1816,7 +1885,14 @@ func (h *KernelHandler) CreateTopologyRevision(c *gin.Context) {
 	}
 	row, err := service.CreateTopologyRevision(h.db, id, kernelActorID(c), input)
 	if err != nil {
-		kernelError(c, 422, "topology_invalid", err.Error())
+		switch {
+		case errors.Is(err, gorm.ErrRecordNotFound):
+			kernelError(c, http.StatusNotFound, "not_found", "topology not found")
+		case errors.Is(err, service.ErrTopologyDeleting):
+			kernelError(c, http.StatusConflict, "topology_deleting", "the topology is being deleted")
+		default:
+			kernelError(c, 422, "topology_invalid", err.Error())
+		}
 		return
 	}
 	kernelData(c, 201, row)
@@ -1829,6 +1905,9 @@ func (h *KernelHandler) GetTopologyRevision(c *gin.Context) {
 	}
 	revisionID, ok := parseKernelID(c, "revision_id")
 	if !ok {
+		return
+	}
+	if !h.liveTopology(c, topologyID) {
 		return
 	}
 	var revision model.TopologyRevision
@@ -1880,6 +1959,8 @@ func (h *KernelHandler) PlanDeployment(c *gin.Context) {
 		switch {
 		case errors.Is(err, service.ErrTopologyDeploymentBusy):
 			kernelError(c, http.StatusConflict, "topology_deployment_busy", err.Error())
+		case errors.Is(err, service.ErrTopologyDeleting):
+			kernelError(c, http.StatusConflict, "topology_deleting", "the topology is being deleted")
 		case errors.Is(err, gorm.ErrRecordNotFound):
 			kernelError(c, http.StatusNotFound, "not_found", "topology or revision not found")
 		default:
@@ -1995,6 +2076,10 @@ func (h *KernelHandler) ApplyDeployment(c *gin.Context) {
 		switch {
 		case errors.Is(err, service.ErrTopologyDeploymentNotPlanned), errors.Is(err, service.ErrTopologyDeploymentTerminal):
 			kernelError(c, http.StatusConflict, "topology_deployment_not_applicable", err.Error())
+		case errors.Is(err, service.ErrTopologyDeleted):
+			kernelError(c, http.StatusConflict, "topology_deleted", "the deployment's topology has been deleted")
+		case errors.Is(err, service.ErrTopologyDeleting):
+			kernelError(c, http.StatusConflict, "topology_deleting", "the deployment's topology is being deleted")
 		default:
 			kernelDBError(c, err)
 		}
@@ -2017,6 +2102,10 @@ func (h *KernelHandler) RollbackDeployment(c *gin.Context) {
 		switch {
 		case errors.Is(err, service.ErrTopologyDeploymentTerminal):
 			kernelError(c, http.StatusConflict, "topology_deployment_not_rollbackable", err.Error())
+		case errors.Is(err, service.ErrTopologyDeleted):
+			kernelError(c, http.StatusConflict, "topology_deleted", "the deployment's topology has been deleted")
+		case errors.Is(err, service.ErrTopologyDeleting):
+			kernelError(c, http.StatusConflict, "topology_deleting", "the deployment's topology is being deleted")
 		default:
 			kernelDBError(c, err)
 		}

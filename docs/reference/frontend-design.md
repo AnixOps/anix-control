@@ -1264,7 +1264,11 @@ fails and retries on its own, so one failing endpoint never blanks the page.
   `scripts/data-table-pages.mjs` so no bare table comes back.
 - 部署编排 keeps its state and API calls in
   `views/admin/deployments/useDeploymentCenter.js`; the panels next to it
-  only render.
+  only render. 删除 on a topology row asks through `useConfirm()`, the
+  workspace asks inline like 应用 and 回滚; the result is a toast. A topology
+  whose teardown deployment runs shows 删除中, and the page polls the
+  topology and deployment lists until it is deleted (success toast) or kept
+  (error toast naming the teardown's state).
 
 ### Kernel alerts in 需要处理
 

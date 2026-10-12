@@ -592,6 +592,32 @@ If a release requires schema/data changes:
 For SQLite-to-PostgreSQL migration, use
 [`reference/sqlite-to-postgres-migration.md`](reference/sqlite-to-postgres-migration.md).
 
+### Topologies Can Be Deleted
+
+Topologies are soft deleted (`DELETE /api/v3/topologies/:id`,
+[`architecture/plugin-kernel-contract.md`](architecture/plugin-kernel-contract.md#deleting-a-topology)).
+At startup `service.EnsureKernelSchema` adds `deleted` (NOT NULL, default 0),
+`deleted_at` and `delete_requested_at` to `v3_kernel_topology` and
+`teardown` to `v3_kernel_topology_deployment`, drops the unique index
+`idx_v3_kernel_topology_name` and creates the partial unique index
+`ux_topology_live_name` on `name WHERE deleted = 0`, on SQLite and PostgreSQL
+alike. Existing topologies stay live; the step is idempotent. Check it after
+the upgrade (read-only):
+
+```sql
+-- PostgreSQL
+SELECT indexname, indexdef FROM pg_indexes WHERE tablename = 'v3_kernel_topology';
+-- SQLite
+SELECT name, sql FROM sqlite_master WHERE type = 'index' AND tbl_name = 'v3_kernel_topology';
+```
+
+Rolling back to an older build shows deleted topologies again (it does not
+know the flag) and re-creates `idx_v3_kernel_topology_name`, which fails
+while a deleted topology shares its name with a live one. Before such a
+rollback, list them with
+`SELECT id, name FROM v3_kernel_topology WHERE deleted = 1 AND name IN (SELECT name FROM v3_kernel_topology WHERE deleted = 0);`
+and rename the deleted rows.
+
 ### Nodes Without An API Key
 
 Agents authenticate with their node's API key, or with a forward node's API
