@@ -40,7 +40,7 @@ is the v4.2 forwarding redesign. It replaces the flux-panel clone
 >   熔断（建议连续 3 次失败跳过 30 秒），入口用 DDNS/CNAME 做高可用，逐跳延迟探测。
 > - **传输**：期望状态随 `config.v1` 下发，报告走 `PackageReport`；一条长连接、低频心跳，
 >   Control 宕机时节点照常转发。
-> - **对接与升级**：nyanpass 式一条命令安装；v4.2 升级时旧 `v2_forward*` 数据归档为仅管理员可读的
+> - **对接与升级**：一条命令安装；v4.2 升级时旧 `v2_forward*` 数据归档为仅管理员可读的
 >   JSON，清理节点上的旧规则后删表（**不可逆**，H15）。
 > - 文末列出待你拍板的问题（H11–H14、H18–H23），每条附推荐答案。
 
@@ -82,7 +82,7 @@ flux-panel, the upstream, paused development in 2026-01. The market survey
 (`forward-market-survey-2026-10`, summarized in the owner's plan) found
 that what operators value is load balancing and failover, per-route latency
 probes, billing multipliers, forwarding that survives the panel going down,
-and easy node onboarding. nyanpass sets the bar on all four.
+and easy node onboarding. Established forwarding panels set the bar on all four.
 
 **Owner decisions (2026-10-02)** this design follows:
 
@@ -102,7 +102,7 @@ and easy node onboarding. nyanpass sets the bar on all four.
 - nftables is applied natively by the Agent. Ansible is only a fallback for
   hosts without an Agent. gost is managed by the Agent; NodeX goes.
 - The AnixOps relay protocol ships in v4.3. v4.2 delivers nftables and gost.
-- Benchmark nyanpass on onboarding, own protocol (v4.3), load balancing and
+- Match established forwarding panels on onboarding, own protocol (v4.3), load balancing and
   failover, and the commercial loop (commercial edition).
 
 **Licensing.** The design borrows ideas only. nft-forward has no licence and
@@ -129,7 +129,7 @@ Goals:
   direction.
 - **G5. Failover without Control.** Health checks, circuit breakers and
   failover run on the nodes and keep working while Control is down.
-- **G6. nyanpass-grade onboarding.** One command adds a node; Control
+- **G6. One-command onboarding.** One command adds a node; Control
   upgrades it; one command removes everything we installed.
 
 Non-goals:
@@ -1715,7 +1715,7 @@ on it ([`../forwarding/v4-api.md`](../forwarding/v4-api.md)).
 
 ## 9. Node onboarding
 
-The target is nyanpass's experience: copy one command, paste it on the
+The target experience: copy one command, paste it on the
 machine, and the node appears. This is part of F3 and reuses the agent
 enrollment (`internal/agentpki`).
 
@@ -1755,6 +1755,8 @@ below). As built:
   forward nodes have no group model and creating the node on first use needs
   a change to `agentpki.Enroll`. `--group` is accepted by the parser and
   refused with that reason.
+  5.0 replaces this with node groups and join tokens: see
+  [`../design/node-onboarding/README.md`](../design/node-onboarding/README.md).
 - **Preflight (O2).** After reading `/install/agent.env` (or the bundle)
   and before changing anything the script checks: systemd ≥ 240 (fail;
   < 247 warns about the gost sandbox), the kernel ≥ 5.10 and nft ≥ 0.9.7 on
@@ -1818,7 +1820,7 @@ below). As built:
   use creates the node. Proposed default lifetime 1 hour (today's default
   is 24 hours, maximum 7 days; H18).
 - **Mirrors.** The Control domain, a mainland mirror or GitHub releases,
-  like nyanpass's two routes.
+  so a machine can pick the route that reaches it.
 - **The script** detects the architecture (amd64, amd64-v3, arm64) and the
   init system (systemd, OpenRC), installs the Agent and its pinned gost,
   writes the sysctl drop-in, enrolls (the Agent creates its key and gets
@@ -1840,7 +1842,7 @@ below). As built:
   reconnect or fail to apply their state (H19). Forwarding continues during
   an Agent upgrade (kernel rules, separate gost unit). As built (O4), see
   "Upgrades (O4)" below.
-- **One Agent per node.** nyanpass starts extra instances for load
+- **One Agent per node.** Some panels start extra instances for load
   sharing; we do not need that: nftables is in the kernel and gost scales
   across cores.
 

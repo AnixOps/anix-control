@@ -2674,7 +2674,7 @@ this summary. Read docs/UPGRADE.md before upgrading.
     DDNS, per-hop latency probes and end-to-end diagnosis, all running on
     the nodes while Control is down.
   - **Also covered:** the Control and Agent transport (`config.v1` and
-    `PackageReport`), nyanpass-style one-command node onboarding, the v4.2
+    `PackageReport`), one-command node onboarding, the v4.2
     upgrade (archive the flux forwarding data, clean the nodes, drop the
     tables; irreversible, H15), metering, editions, testing, security, the
     PR plan, and the open questions H11 to H14 and H18 to H23 with
