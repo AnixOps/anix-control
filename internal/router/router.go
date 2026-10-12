@@ -805,6 +805,22 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		v4.POST("/kernel/agents/install-tokens", agentInstall.CreateInstallToken)
 		v4.POST("/kernel/agents/rotate-credentials", agents.RotateCredentials)
 		v4.GET("/kernel/agents/transports", handler.NewAgentTransportsHandler(agentPolicy).List)
+		// Node groups (5.0 node onboarding): a group's join token makes any
+		// machine that runs its install command a node of the group. The
+		// command (it shows the token) and the token reset are for super
+		// administrators.
+		nodeGroups := handler.NewNodeGroupsHandler(agentInstall)
+		v4.GET("/kernel/node-groups", nodeGroups.List)
+		v4.POST("/kernel/node-groups", nodeGroups.Create)
+		v4.GET("/kernel/node-groups/:id", nodeGroups.Get)
+		v4.PUT("/kernel/node-groups/:id", nodeGroups.Update)
+		v4.DELETE("/kernel/node-groups/:id", nodeGroups.Delete)
+		v4.GET("/kernel/node-groups/:id/command", nodeGroups.Command)
+		v4.POST("/kernel/node-groups/:id/reset-token", nodeGroups.ResetToken)
+		// :id is the node, proxy-<id> or forward-<id> (the segment shares
+		// its wildcard name with /kernel/nodes/:id/traffic).
+		v4.POST("/kernel/nodes/:id/approve", nodeGroups.ApproveNode)
+		v4.POST("/kernel/nodes/:id/reject", nodeGroups.RejectNode)
 		// Staged Agent upgrades (forward-sdk.md section 9, O4; H19).
 		upgrades := handler.NewAgentUpgradesHandler()
 		v4.POST("/kernel/agents/upgrades", upgrades.Start)

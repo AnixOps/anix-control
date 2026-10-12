@@ -168,7 +168,7 @@ func runOfflineBundleCommand(cfg *config.Config, arguments []string, stdout io.W
 		Install string `json:"install"`
 	}{
 		File: target, OfflineBundle: bundle,
-		Install: "sudo bash install.sh --offline " + filepath.Base(target) + " --control " + settings.ControlURL + " --node <proxy-<id>|forward-<id>> --token <anixagt_...>",
+		Install: "sudo bash install.sh --offline " + filepath.Base(target) + " -u " + settings.ControlURL + " -t <anixjoin_...|anixagt_...>",
 	})
 }
 

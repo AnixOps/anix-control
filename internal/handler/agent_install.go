@@ -78,8 +78,11 @@ type installScriptInfo struct {
 }
 
 // CreateInstallToken issues a single-use enrollment token bound to a node
-// and returns the install command for every mirror. Super administrators
-// only; agentpki writes the token's audit entry.
+// and returns the install command for every mirror (-u <control> -t
+// <anixagt_...>: the token names its node). It enrolls an existing node, for
+// moving a node to a new machine or after a credential rotation; new
+// machines join a node group instead. Super administrators only; agentpki
+// writes the token's audit entry.
 func (h *AgentInstallHandler) CreateInstallToken(c *gin.Context) {
 	db := h.db()
 	ok, err := service.IsSuperAdmin(db, kernelActorID(c))
@@ -143,7 +146,7 @@ func (h *AgentInstallHandler) CreateInstallToken(c *gin.Context) {
 	c.Header("Cache-Control", "no-store")
 	kernelData(c, http.StatusCreated, installTokenResponse{
 		Enrollment: row, Credential: credential, Node: node.String(), ExpiresAt: expires,
-		AgentVersion: settings.AgentVersion, Commands: settings.Commands(node.String(), credential),
+		AgentVersion: settings.AgentVersion, Commands: settings.Commands(credential),
 		Script: installScriptInfo{
 			URL: settings.ControlURL + "/install.sh", SignatureURL: settings.ControlURL + "/install.sh.sig", Signed: signatureErr == nil,
 		},

@@ -981,6 +981,8 @@ definitions:
       updated_at:
         type: string
     type: object
+  nodegroup.GroupInput:
+    type: object
   service.TelegramCallback:
     properties:
       data:
@@ -6813,6 +6815,229 @@ paths:
       security:
       - BearerAuth: []
       summary: Revoke an admin API token
+      tags:
+      - Kernel
+  /api/v4/kernel/node-groups:
+    get:
+      description: The live node groups by sort and id, each with its defaults, protocol
+        template, subscription groups, token reset and expiry times, and its live
+        and pending nodes counted. Never the join token.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List node groups
+      tags:
+      - Kernel
+    post:
+      consumes:
+      - application/json
+      description: 'A node group of kind proxy or forward with a new join token (sealed
+        under module_runtime.ca_kek, which must be set). Its defaults (rate, tags,
+        monthly_limit_bytes, reset_day, sort) are copied to every node the token creates;
+        a proxy group''s protocol_template lists the protocols each new node gets
+        (tls none, or reality for vless; port or port_range) and subscription_group_ids
+        the subscription groups they join. The answer does not carry the token: GET
+        .../command shows the install command. Audited.'
+      parameters:
+      - description: the group
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/nodegroup.GroupInput'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Create a node group
+      tags:
+      - Kernel
+  /api/v4/kernel/node-groups/{id}:
+    delete:
+      description: 'Soft-deletes a group: its token joins nothing from then on and
+        its name can be used again. Refused (409 node_group_in_use) while the group
+        has live nodes. Audited.'
+      parameters:
+      - description: node group id
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete a node group
+      tags:
+      - Kernel
+    get:
+      description: One live node group, as List shows it.
+      parameters:
+      - description: node group id
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get a node group
+      tags:
+      - Kernel
+    put:
+      consumes:
+      - application/json
+      description: Replaces every field of a group but its kind (which cannot change)
+        and its token. Nodes that joined keep what they got; the defaults and the
+        template apply to later joins. Audited.
+      parameters:
+      - description: node group id
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: the group
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/nodegroup.GroupInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Update a node group
+      tags:
+      - Kernel
+  /api/v4/kernel/node-groups/{id}/command:
+    get:
+      description: The install command for every mirror (curl -fsSL <control>/install.sh
+        | sudo bash -s -- -u <control> -t <anixjoin_...>), the join token, its expiry
+        and the uninstall command. The same command joins any number of machines until
+        the token expires or is reset. Super administrators only; every read is audited
+        as a token reveal (node_group_join_token_reveal).
+      parameters:
+      - description: node group id
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Show a node group's install command
+      tags:
+      - Kernel
+  /api/v4/kernel/node-groups/{id}/reset-token:
+    post:
+      description: 'Replaces the group''s join token: every earlier install command
+        stops working; nodes that joined keep their certificates. GET .../command
+        shows the new command. Super administrators only; audited (node_group_join_token_reset).'
+      parameters:
+      - description: node group id
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Reset a node group's join token
+      tags:
+      - Kernel
+  /api/v4/kernel/nodes/{id}/approve:
+    post:
+      description: 'Approves a node that joined a group requiring approval: Control
+        starts sending it its configuration (config.v1) and its users (users.v1).
+        409 node_not_pending for any other node. Audited (node_approve).'
+      parameters:
+      - description: proxy-<id> or forward-<id>
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Approve a pending node
+      tags:
+      - Kernel
+  /api/v4/kernel/nodes/{id}/reject:
+    post:
+      description: 'Rejects a node that joined a group requiring approval: the node
+        is disabled and marked rejected (it no longer counts toward its group), and
+        its Agent certificates are revoked, which ends its stream at the next heartbeat.
+        409 node_not_pending for any other node. Audited (node_reject).'
+      parameters:
+      - description: proxy-<id> or forward-<id>
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Reject a pending node
       tags:
       - Kernel
   /api/v4/kernel/nodes/{id}/traffic:

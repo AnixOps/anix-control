@@ -123,17 +123,26 @@ func TestShellQuote(t *testing.T) {
 }
 
 func TestRenderCommand(t *testing.T) {
-	command := RenderCommand(CommandInput{
+	join := RenderCommand(CommandInput{
 		ControlURL: "https://ctl.example.com", ScriptURL: "https://ctl.example.com/install.sh",
-		Node: "forward-41", Token: "anixagt_TOKEN", Mirror: MirrorControl,
+		Token: "anixjoin_TOKEN", Mirror: MirrorControl,
 	})
-	assert.Equal(t, "curl -fsSL https://ctl.example.com/install.sh | sudo bash -s -- --control https://ctl.example.com --node forward-41 --token anixagt_TOKEN", command)
+	assert.Equal(t, "curl -fsSL https://ctl.example.com/install.sh | sudo bash -s -- -u https://ctl.example.com -t anixjoin_TOKEN", join)
+
+	// An enrollment credential names its node: the command is the same
+	// shape.
+	enroll := RenderCommand(CommandInput{
+		ControlURL: "https://ctl.example.com", ScriptURL: "https://ctl.example.com/install.sh",
+		Token: "anixagt_TOKEN", Mirror: MirrorControl,
+	})
+	assert.Equal(t, "curl -fsSL https://ctl.example.com/install.sh | sudo bash -s -- -u https://ctl.example.com -t anixagt_TOKEN", enroll)
 
 	ipv6 := RenderCommand(CommandInput{
 		ControlURL: "https://[2001:db8::1]:8443", ScriptURL: "https://[2001:db8::1]:8443/install.sh",
-		Node: "proxy-7", Token: "anixagt_TOKEN", Mirror: MirrorCN,
+		Token: "anixjoin_TOKEN", Mirror: MirrorCN,
 	})
-	assert.Equal(t, "curl -fsSLg 'https://[2001:db8::1]:8443/install.sh' | sudo bash -s -- --control 'https://[2001:db8::1]:8443' --node proxy-7 --token anixagt_TOKEN --mirror cn", ipv6)
+	assert.Equal(t, "curl -fsSLg 'https://[2001:db8::1]:8443/install.sh' | sudo bash -s -- -u 'https://[2001:db8::1]:8443' -t anixjoin_TOKEN --mirror cn", ipv6)
+	assert.NotContains(t, ipv6, "--node")
 }
 
 func TestSettingsCommands(t *testing.T) {
@@ -141,18 +150,19 @@ func TestSettingsCommands(t *testing.T) {
 		ControlURL: "https://ctl.example.com:8443", GRPCTarget: "ctl.example.com:50051",
 		AgentVersion: "v4.2.0", ControlVersion: "v4.2.0",
 	}
-	commands := settings.Commands("forward-41", "anixagt_TOKEN")
+	commands := settings.Commands("anixjoin_TOKEN")
 	require.Len(t, commands, 3)
 	assert.Equal(t, MirrorControl, commands[0].Mirror)
 	assert.False(t, commands[0].Available, "no artifact_dir: the control mirror falls back")
-	assert.Contains(t, commands[0].Command, "curl -fsSL https://ctl.example.com:8443/install.sh | sudo bash -s -- --control https://ctl.example.com:8443")
+	assert.Equal(t, "curl -fsSL https://ctl.example.com:8443/install.sh | sudo bash -s -- -u https://ctl.example.com:8443 -t anixjoin_TOKEN", commands[0].Command)
 	assert.NotContains(t, commands[0].Command, "--mirror")
 	assert.False(t, commands[1].Available)
 	assert.True(t, strings.HasSuffix(commands[1].Command, "--mirror cn"))
 	assert.True(t, commands[2].Available)
 	assert.Contains(t, commands[2].Command, "https://github.com/AnixOps/anix-control/releases/download/v4.2.0/agent-install.sh")
 	assert.True(t, strings.HasSuffix(commands[2].Command, "--mirror github"))
-	assert.Contains(t, commands[2].Command, "--control https://ctl.example.com:8443")
+	assert.Contains(t, commands[2].Command, "-u https://ctl.example.com:8443 -t anixjoin_TOKEN")
+	assert.Equal(t, "sudo anix-agent uninstall", UninstallCommand)
 }
 
 func writeRelease(t *testing.T, dir, tag string, assets map[string]string) {

@@ -215,7 +215,7 @@ func TestAgentOfflineBundleCommand(t *testing.T) {
 	require.Equal(t, "anix-agent-linux-64.zip", written.Asset)
 	require.Equal(t, "panel.example.com:50051", written.GRPCTarget)
 	require.Contains(t, written.Files, "SHA256SUMS.sig")
-	require.Contains(t, written.Install, "--offline agent-offline-amd64.tar.gz --control https://panel.example.com")
+	require.Contains(t, written.Install, "--offline agent-offline-amd64.tar.gz -u https://panel.example.com -t <anixjoin_...|anixagt_...>")
 	info, err := os.Stat(out)
 	require.NoError(t, err)
 	require.Equal(t, os.FileMode(0o644), info.Mode().Perm())
