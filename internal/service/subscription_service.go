@@ -603,6 +603,12 @@ func (s *SubscriptionService) getInternalNodes(user *model.User, ctx *model.Temp
 		if !p.Node.IsOnline() {
 			continue
 		}
+		// A node that joined a group requiring approval serves nobody until
+		// an administrator approves it (Control sends it no users), and a
+		// rejected one never does: neither is offered to subscribers.
+		if p.Node.Approval == model.NodeApprovalPending || p.Node.Approval == model.NodeApprovalRejected {
+			continue
+		}
 
 		// 遍历协议所属的所有分组
 		for _, g := range p.SubscriptionGroups {
