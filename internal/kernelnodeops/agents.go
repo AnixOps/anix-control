@@ -268,6 +268,10 @@ func streamFailure(err error) Outcome {
 	switch {
 	case errors.Is(err, agentstreams.ErrNotConnected), errors.Is(err, agentstreams.ErrSessionClosed):
 		return Failed(kernelnodeopsv1.ErrorCode_ERROR_CODE_NODE_OFFLINE, message, true)
+	case errors.Is(err, agentstreams.ErrPendingApproval):
+		// Retryable: the configuration is stored and goes out once an
+		// administrator approves the node.
+		return Failed(kernelnodeopsv1.ErrorCode_ERROR_CODE_NODE_OFFLINE, message, true)
 	case errors.Is(err, agentstreams.ErrCapabilityMissing):
 		return Failed(kernelnodeopsv1.ErrorCode_ERROR_CODE_CAPABILITY_MISSING, message, false)
 	case errors.Is(err, context.DeadlineExceeded):

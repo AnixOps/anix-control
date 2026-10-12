@@ -122,12 +122,18 @@ type userDeltaSender struct {
 	db          *gorm.DB
 }
 
-// serveUserDeltas sends a session's user deltas until ctx ends: on connect,
-// the deltas since the Agent's cursor or a full resync; then a delta for
+// serveUserDeltas sends a session's user deltas until ctx ends: once the
+// node is not pending approval, the deltas since the Agent's cursor or a
+// full resync; then a delta for
 // each batch of change log rows as the log advances. A database error is
 // retried after userDeltaPoll; a send error ends the sender, as the stream
 // is gone.
 func (s *AgentControlGRPCServer) serveUserDeltas(ctx context.Context, connection *AgentControlConnection, node agentcontrol.AgentNode, cursor uint64) {
+	// A node pending approval gets no users until an administrator
+	// approves it (nodegroup, owner decision D4).
+	if err := waitForApproval(ctx, node); err != nil {
+		return
+	}
 	feed := agentUserFeed
 	feed.attach(connection, cursor)
 	defer feed.detach(connection)

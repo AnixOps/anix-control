@@ -72,6 +72,7 @@ const (
 	EventNodeOffline  = "node.offline"   // 节点离线
 	EventNodeOnline   = "node.online"    // 节点上线
 	EventNodeHighLoad = "node.high_load" // 节点高负载
+	EventNodeJoined   = "node.joined"    // 机器以节点组接入令牌接入 (新节点或重新接入)
 
 	// 系统通知
 	EventSystemBroadcast   = "system.broadcast"   // 系统广播

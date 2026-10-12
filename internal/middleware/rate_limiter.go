@@ -115,6 +115,26 @@ func (rl *RateLimiter) StartCleanup(interval time.Duration) {
 	}()
 }
 
+// Allow takes a token from key's bucket and reports whether the call may
+// proceed. The middleware keys buckets by client; a caller outside an HTTP
+// request (the gRPC AgentEnrollment.Join) keys them itself. It applies in
+// gin's test mode too.
+func (rl *RateLimiter) Allow(key string) bool {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+	bucket, ok := rl.buckets[key]
+	if !ok {
+		bucket = &tokenBucket{
+			tokens:     rl.burst,
+			maxTokens:  rl.burst,
+			refillRate: rl.rate,
+			lastRefill: time.Now(),
+		}
+		rl.buckets[key] = bucket
+	}
+	return bucket.allow()
+}
+
 // Middleware returns a gin.HandlerFunc that enforces rate limiting per client IP.
 func (rl *RateLimiter) Middleware() gin.HandlerFunc {
 	return rl.middleware(func(c *gin.Context) string { return c.ClientIP() })
@@ -145,23 +165,7 @@ func (rl *RateLimiter) middleware(keyFor func(*gin.Context) string) gin.HandlerF
 			return
 		}
 
-		key := keyFor(c)
-
-		rl.mu.Lock()
-		bucket, ok := rl.buckets[key]
-		if !ok {
-			bucket = &tokenBucket{
-				tokens:     rl.burst,
-				maxTokens:  rl.burst,
-				refillRate: rl.rate,
-				lastRefill: time.Now(),
-			}
-			rl.buckets[key] = bucket
-		}
-		allowed := bucket.allow()
-		rl.mu.Unlock()
-
-		if !allowed {
+		if !rl.Allow(keyFor(c)) {
 			retryAfter := int(math.Ceil(1.0 / rl.rate))
 			if retryAfter < 1 {
 				retryAfter = 1
