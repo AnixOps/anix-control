@@ -90,6 +90,9 @@
       <template #cell-certificate="{ row }">
         <NodeCertificateCell :entry="transportEntries.get(nodeRef(row.id))" :status="transportStatus" />
       </template>
+      <template #cell-serviceStatus="{ row }">
+        <NodeServiceStatusCell :entry="serviceEntries.get(Number(row.id))" :status="serviceStatus" />
+      </template>
       <template #cell-lastHeartbeat="{ row }">
         <time v-if="row.last_check_at" :title="format.dateTime(row.last_check_at)">{{ format.relativeTime(row.last_check_at) }}</time>
         <span v-else>{{ t('admin.nodes.table.never') }}</span>
@@ -125,7 +128,9 @@
 // search, status chips, sort and pages (all four in the URL), a row opens the
 // node page (/admin/nodes/:id). The Agent connection type and certificate of
 // the nodes in view come from one batched inventory call after the list has
-// loaded (it never holds the list up). The list keeps add, edit, sync and delete in
+// loaded (it never holds the list up), and so does their systemd services
+// summary (服务状态, the machine-telemetry package's; a dash without the
+// package, its host or its permission). The list keeps add, edit, sync and delete in
 // the row menu, and the Agent registration key and the parent-node Ansible
 // helper as page actions. Node (proxy service) is not ForwardNode.
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
@@ -150,6 +155,7 @@ import NodeConnectionBadge from './nodes/NodeConnectionBadge.vue'
 import NodeDeploySheet from './nodes/NodeDeploySheet.vue'
 import NodeFormSheet from './nodes/NodeFormSheet.vue'
 import NodeNotice from './nodes/NodeNotice.vue'
+import NodeServiceStatusCell from './nodes/NodeServiceStatusCell.vue'
 import { nodeRef } from './nodes/agentConnection'
 import {
   NODE_STATUS, isOverQuota, monthlyUsed, normalizeNode, readNodePage, readNodePayload,
@@ -157,6 +163,7 @@ import {
 } from './nodes/nodeData'
 import { useNodeActions } from './nodes/useNodeActions'
 import { useNodeDeploy } from './nodes/useNodeDeploy'
+import { useNodeServiceStatus } from './nodes/useNodeServiceStatus'
 import { useNodeTransports } from './nodes/useNodeTransports'
 
 const { t } = useAppI18n()
@@ -190,6 +197,7 @@ const sortState = ref(NODE_SORT.fromQuery(
   SORT_ORDERS.includes(firstQuery('order')) ? firstQuery('order') : ''
 ))
 const { entries: transportEntries, status: transportStatus, load: loadTransports, reset: resetTransports } = useNodeTransports()
+const { entries: serviceEntries, status: serviceStatus, load: loadServiceStatus, reset: resetServiceStatus } = useNodeServiceStatus()
 
 const formOpen = ref(false)
 const editingNode = ref(null)
@@ -230,6 +238,7 @@ const columns = computed(() => [
   { key: 'connection', label: t('admin.nodes.table.connection'), nowrap: true, breakpoint: 'lg' },
   { key: 'agentVersion', label: t('admin.nodes.table.agentVersion'), nowrap: true, value: node => node.server_version || '', breakpoint: 'lg', hidden: true, card: false },
   { key: 'certificate', label: t('admin.nodes.table.certificate'), nowrap: true, breakpoint: 'lg', card: false },
+  { key: 'serviceStatus', label: t('admin.nodes.table.serviceStatus'), nowrap: true, breakpoint: 'lg', card: false },
   { key: 'load', label: t('admin.nodes.table.load'), nowrap: true, numeric: true, value: loadText, firstDirection: 'desc', breakpoint: 'lg', hidden: true, card: false },
   { key: 'lastHeartbeat', label: t('admin.nodes.table.lastHeartbeat'), nowrap: true, firstDirection: 'desc' },
   { key: 'parent', label: t('admin.nodes.table.parent'), value: node => parentName(node.parent_id), hidden: true },
@@ -284,14 +293,17 @@ const loadNodes = async () => {
     nodes.value = (payload.list || []).map(normalizeNode)
     pagination.total = payload.total || 0
     rememberNodeNames(nodes.value)
-    // The Agent connection of the nodes in view: one call, after the list.
+    // The Agent connection and the services summary of the nodes in view:
+    // one call each, after the list.
     void loadTransports(nodes.value.map(node => node.id))
+    void loadServiceStatus(nodes.value.map(node => node.id))
     return true
   } catch (e) {
     console.error('Failed to load nodes:', e)
     loadError.value = e
     nodes.value = []
     resetTransports()
+    resetServiceStatus()
     return false
   } finally {
     loading.value = false

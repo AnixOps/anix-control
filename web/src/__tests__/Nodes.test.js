@@ -5,6 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { inBody } from './helpers/feedback'
+import { screen, within } from '@testing-library/vue'
+import userEvent from '@testing-library/user-event'
 import Nodes from '@/views/admin/Nodes.vue'
 
 const adminApi = vi.hoisted(() => ({
@@ -32,6 +34,11 @@ vi.mock('@/api/admin', () => adminApi)
 // The Agent connection of the nodes in view (GET /api/v4/kernel/agents/transports).
 const kernelApi = vi.hoisted(() => ({ getKernelAgentTransports: vi.fn() }))
 vi.mock('@/api/kernel', async importOriginal => ({ ...(await importOriginal()), ...kernelApi }))
+
+// The services summary of the nodes in view (the machine-telemetry package's
+// GET /api/v3/plugins/machine-telemetry/nodes/services).
+const telemetryApi = vi.hoisted(() => ({ getNodesServicesSummary: vi.fn() }))
+vi.mock('@/api/machineTelemetry', async importOriginal => ({ ...(await importOriginal()), ...telemetryApi }))
 
 const Stub = { template: '<div />' }
 
@@ -65,6 +72,7 @@ describe('Nodes.vue', () => {
     adminApi.getNodeCredentials.mockResolvedValue({ data: { api_key: '' } })
     adminApi.getAuthKeys.mockResolvedValue({ data: [] })
     kernelApi.getKernelAgentTransports.mockResolvedValue({ nodes: [] })
+    telemetryApi.getNodesServicesSummary.mockResolvedValue([])
   })
 
   it('stops follow-up requests and shows the error state when the nodes do not load', async () => {
@@ -303,6 +311,99 @@ describe('Nodes.vue', () => {
     it('asks for nothing when there are no nodes', async () => {
       await mountNodes()
       expect(kernelApi.getKernelAgentTransports).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('服务状态 of the nodes in view', () => {
+    const nodes = [5, 6, 7, 8, 9, 10, 11, 12, 13].map(id => ({ id, name: `node-${id}`, host: `n${id}.example`, status: 1 }))
+    const summary = (total, active, failed) => ({ total, active, failed, inactive: total - active - failed })
+    const entry = (nodeID, extra = {}) => ({
+      node_id: nodeID, enabled: true, reported: true, supported: true, unsupported_reason: '', stale: false,
+      observed_at: '2026-10-02T07:59:00Z', summary: summary(3, 3, 0), ...extra
+    })
+    const answer = [
+      entry(5),
+      entry(6, { summary: summary(3, 1, 1) }),
+      entry(7, { summary: summary(3, 2, 0) }),
+      entry(8, { summary: summary(0, 0, 0) }),
+      entry(9, { reported: false, supported: false, observed_at: null, summary: summary(0, 0, 0) }),
+      entry(10, { supported: false, unsupported_reason: 'cgroup v1', summary: summary(0, 0, 0) }),
+      entry(11, { stale: true }),
+      entry(12, { enabled: false, reported: false, supported: false, observed_at: null, summary: summary(0, 0, 0) })
+    ]
+    const cells = wrapper => wrapper.findAll('tbody tr').map(row => row.find('[data-service-status]'))
+
+    it('asks for the nodes of the page in one call after the list and shows a word for each state', async () => {
+      adminApi.getNodes.mockResolvedValue({ data: { list: nodes, total: nodes.length } })
+      telemetryApi.getNodesServicesSummary.mockResolvedValue(answer)
+      const { wrapper } = await mountNodes()
+
+      expect(telemetryApi.getNodesServicesSummary).toHaveBeenCalledTimes(1)
+      expect(telemetryApi.getNodesServicesSummary).toHaveBeenCalledWith([5, 6, 7, 8, 9, 10, 11, 12, 13])
+      const header = wrapper.findAll('thead th').map(th => th.text())
+      expect(header).toContain('Services')
+      const shown = cells(wrapper)
+      expect(shown.map(cell => cell.attributes('data-service-status'))).toEqual([
+        'healthy', 'failed', 'partial', 'empty', 'waiting', 'unsupported', 'stale', 'none', 'none'
+      ])
+      expect(shown.map(cell => cell.text())).toEqual([
+        '3/3 OK', '1 failed', '2/3 running', 'No services', 'Waiting', 'Unsupported', 'Stale',
+        '—Service collection is off on this node', '—Service collection is off on this node'
+      ])
+      expect(shown[1].attributes('title')).toContain('3 services: 1 running, 1 failed')
+      expect(shown[5].attributes('title')).toBe('Reason: cgroup v1')
+    })
+
+    it('never breaks the page: without the plugin host, the package or the permission the column shows a dash', async () => {
+      adminApi.getNodes.mockResolvedValue({ data: { list: nodes.slice(0, 2), total: 2 } })
+      for (const status of [502, 403, 404]) {
+        telemetryApi.getNodesServicesSummary.mockRejectedValueOnce(Object.assign(new Error(`request failed ${status}`), { response: { status } }))
+        const { wrapper } = await mountNodes()
+        expect(wrapper.find('tbody').text()).toContain('node-5')
+        const shown = cells(wrapper)
+        expect(shown.map(cell => cell.attributes('data-service-status'))).toEqual(['unavailable', 'unavailable'])
+        expect(shown[0].text()).toContain('—')
+        expect(shown[0].attributes('title')).toContain('Service status is unavailable')
+        expect(wrapper.find('[data-testid="node-service-status"]').exists()).toBe(false)
+        wrapper.unmount()
+      }
+    })
+
+    it('does not hold the list up, and drops the answer for a page the administrator has already left', async () => {
+      adminApi.getNodes.mockResolvedValue({ data: { list: nodes.slice(0, 1), total: 40 } })
+      let releaseFirst
+      telemetryApi.getNodesServicesSummary
+        .mockReturnValueOnce(new Promise((resolve) => { releaseFirst = resolve }))
+        .mockResolvedValueOnce([entry(5, { summary: summary(2, 1, 1) })])
+      const { wrapper } = await mountNodes()
+      expect(wrapper.find('tbody').text()).toContain('node-5')
+      expect(cells(wrapper)[0].attributes('data-service-status')).toBe('loading')
+      await wrapper.vm.loadNodes()
+      await flushPromises()
+      releaseFirst([entry(5)])
+      await flushPromises()
+      expect(cells(wrapper)[0].attributes('data-service-status')).toBe('failed')
+    })
+
+    it('is a column of the table settings: it can be hidden, and stays hidden', async () => {
+      adminApi.getNodes.mockResolvedValue({ data: { list: nodes.slice(0, 1), total: 1 } })
+      const user = userEvent.setup()
+      const { wrapper } = await mountNodes()
+      const headers = () => wrapper.findAll('thead th').map(th => th.text())
+      expect(headers()).toContain('Services')
+      await user.click(screen.getByRole('button', { name: 'Table settings' }))
+      const menu = await screen.findByRole('menu')
+      const toggle = within(menu).getByRole('menuitemcheckbox', { name: 'Services' })
+      expect(toggle.getAttribute('aria-checked')).toBe('true')
+      await user.click(toggle)
+      expect(headers()).not.toContain('Services')
+      expect(JSON.parse(localStorage.getItem('anix.table.admin.nodes')).hidden).toContain('serviceStatus')
+      localStorage.removeItem('anix.table.admin.nodes')
+    })
+
+    it('asks for nothing when there are no nodes', async () => {
+      await mountNodes()
+      expect(telemetryApi.getNodesServicesSummary).not.toHaveBeenCalled()
     })
   })
 })

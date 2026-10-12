@@ -20,6 +20,31 @@
   blocks the delete (409 `topology_deployment_busy`); planned deployments are cancelled and can no longer be
   applied. At startup the schema gains the flag columns and swaps the unique index on the topology name for
   one on live topologies (`ux_topology_live_name`); see docs/UPGRADE.md.
+- The node list has a 服务状态 (Services) column: each node's systemd services from machine-telemetry
+  ("3/3 正常", "1 个失败", 等待上报, 不支持, 数据过期), loaded for the page in one call to the package's new
+  `GET /api/v3/plugins/machine-telemetry/nodes/services?ids=` route. Without the plugin host, the package or
+  `machine-telemetry.api` it shows "—" and the list works as before; it can be hidden in the table settings.
+
+### Changed
+
+- A package's WebUI bundle is optional. `build_package.py` builds, signs and verifies a manifest without
+  `webui` (an empty `frontend_sha256`, which the kernel and the Agent already accepted), and refuses a
+  `webui/` directory the manifest does not declare. Such a package stores no WebUI asset and the extension
+  catalog leaves it out; `packages/shared/tests/webui_contract.mjs` checks only the packages with a bundle.
+- 部署编排 has its own subtitle and moved from the 扩展 group of the sidebar to 网络.
+- The WebUI bundles of forward, gost-mesh, nat-egress and nftables-forward use only the WebUI class contract
+  (plus one `<package>-extension` class on their root), not unstyled names such as `page-header` or
+  `stats-grid`; `pluginWebuiClasses.test.js` enforces it.
+- The live Control WebUI gate loads and revokes the nftables-forward WebUI and checks that identity-platform
+  and machine-telemetry install without one and stay out of the catalog.
+
+### Removed
+
+- The placeholder WebUI pages (a heading and the package version) of subscription, proxy-node, plan, ticket,
+  knowledge, protocol-runtime, affiliate, identity-platform, notification, order, payment, platform and
+  wireguard, and the machine-telemetry extension page, with their `/admin/extensions/*` sidebar entries.
+  The features are on the core pages; machine-telemetry keeps its control routes for the node pages. The
+  web app's test-only local module registry and its machine-telemetry module are gone too.
 
 ## 4.2.1 - 2026-10-12
 

@@ -63,7 +63,8 @@ export const ADMIN_MENU = Object.freeze([
     // Node (proxy service, /admin/nodes) and the forwarding area's nodes
     // (/admin/forward/inventory) are different resources: separate items.
     // 转发 needs the forward package's v4 API (F5b); the flux-clone pages
-    // (转发（旧版）, 转发节点（旧版）) were removed in v4.2 (F5d).
+    // (转发（旧版）, 转发节点（旧版）) were removed in v4.2 (F5d). 部署编排
+    // (topologies, node roles, deployments) belongs with the nodes.
     items: [
       { id: 'nodes', to: '/admin/nodes', icon: 'nodes', labelKey: 'shell.admin.items.nodes' },
       {
@@ -74,15 +75,15 @@ export const ADMIN_MENU = Object.freeze([
         capability: 'forward.v4',
         match: FORWARD_V4_PATHS.map(path => `${path}/`).concat(FORWARD_V4_PATHS)
       },
-      { id: 'agents', to: '/admin/agent', icon: 'agents', labelKey: 'shell.admin.items.agents' }
+      { id: 'agents', to: '/admin/agent', icon: 'agents', labelKey: 'shell.admin.items.agents' },
+      { id: 'deployments', to: '/admin/deployments', icon: 'deployments', labelKey: 'shell.admin.items.deployments' }
     ]
   },
   {
     id: 'extensions',
     labelKey: 'shell.admin.groups.extensions',
     items: [
-      { id: 'plugins', to: '/admin/plugins', icon: 'plugins', labelKey: 'shell.admin.items.plugins' },
-      { id: 'deployments', to: '/admin/deployments', icon: 'deployments', labelKey: 'shell.admin.items.deployments' }
+      { id: 'plugins', to: '/admin/plugins', icon: 'plugins', labelKey: 'shell.admin.items.plugins' }
     ]
   },
   {

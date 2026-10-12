@@ -41,15 +41,15 @@ export default function create(host) {
       })
       return () => {
         if (loading.value) {
-          return h('section', { class: 'control-page gost-mesh-extension' }, [
+          return h('section', { class: 'gost-mesh-extension' }, [
             h('h1', 'GOST Mesh'),
             h('p', { role: 'status' }, 'Loading tunnel mesh...'),
           ])
         }
         if (error.value) {
-          return h('section', { class: 'control-page gost-mesh-extension' }, [
+          return h('section', { class: 'gost-mesh-extension' }, [
             h('h1', 'GOST Mesh'),
-            h('p', { class: 'error', role: 'alert' }, error.value),
+            h('p', { role: 'alert' }, error.value),
           ])
         }
         const summary = [
@@ -68,18 +68,20 @@ export default function create(host) {
           h('td', tunnel.upstream || '-'),
           h('td', stateLabel(tunnel)),
         ]))
-        return h('section', { class: 'control-page gost-mesh-extension' }, [
+        return h('section', { class: 'gost-mesh-extension' }, [
           h('header', [
             h('h1', 'GOST Mesh'),
             h('p', 'Signed GOST v3.2.6 WSS/QUIC runtime status. Canary approval is still required before production traffic.'),
           ]),
-          h('dl', { class: 'metric-grid' }, summary.flatMap(([label, metric]) => [
+          h('dl', summary.flatMap(([label, metric]) => [
             h('dt', label),
             h('dd', metric),
           ])),
-          h('table', { class: 'data-table' }, [
-            h('thead', [h('tr', ['Tunnel', 'Entry', 'Exit', 'Protocol', 'Listen', 'Upstream', 'State'].map(label => h('th', label)))]),
-            h('tbody', rows.length ? rows : [h('tr', { key: 'empty' }, [h('td', { colspan: 7, class: 'empty-state' }, 'No GOST tunnels')])]),
+          h('div', { class: 'table-container' }, [
+            h('table', { class: 'data-table' }, [
+              h('thead', [h('tr', ['Tunnel', 'Entry', 'Exit', 'Protocol', 'Listen', 'Upstream', 'State'].map(label => h('th', label)))]),
+              h('tbody', rows.length ? rows : [h('tr', { key: 'empty' }, [h('td', { colspan: 7, class: 'empty-state' }, 'No GOST tunnels')])]),
+            ]),
           ]),
         ])
       }

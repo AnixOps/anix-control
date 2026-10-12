@@ -27,14 +27,12 @@ MANIFEST_NAME = "manifest.json"
 REPORT_NAME = "build-report.json"
 CHECKSUM_NAME = "SHA256SUMS.txt"
 PACKAGE_INDEX_NAME = "package.json"
-WEBUI_PATH = "webui/index.mjs"
 SCHEMA_PATH = "config.schema.json"
 DEFAULTS_PATH = "config.defaults.json"
 MANIFEST_TEMPLATE_PATH = "manifest.template.json"
 FORMAT_VERSION = "anixops.package/v1"
 BUILD_REPORT_VERSION = "anixops.package-build/v1"
 MAX_ARTIFACT_BYTES = 64 << 20
-MAX_WEBUI_BYTES = 2 << 20
 MANIFEST_FIELDS = (
     "id",
     "name",
@@ -54,15 +52,8 @@ MANIFEST_FIELDS = (
     "migration_version",
     "control_routes",
     "frontend_sha256",
-    "webui",
 )
-WEBUI_FIELDS = ("bundle", "permissions", "menus", "routes")
-WEBUI_BUNDLE_FIELDS = ("path", "sha256")
-WEBUI_MENU_FIELDS = ("id", "parent", "label", "icon", "route", "permission", "order")
-WEBUI_ROUTE_FIELDS = ("id", "path", "export", "permission")
 SAFE_GO_TOKEN = re.compile(r"^[a-z0-9][a-z0-9_]{0,31}$")
-STATIC_IMPORT = re.compile(r"(?m)^\s*import(?:\s|\{|'|\")")
-DYNAMIC_IMPORT = re.compile(r"\bimport\s*\(")
 
 
 class PackageError(RuntimeError):
@@ -146,16 +137,6 @@ def canonical_manifest_value(value: Any) -> dict[str, Any]:
     if not isinstance(entrypoints, dict) or any(not isinstance(key, str) or not isinstance(path, str) for key, path in entrypoints.items()):
         raise PackageError("manifest entrypoints must be a string map")
     manifest["entrypoints"] = {key: entrypoints[key] for key in sorted(entrypoints)}
-
-    webui = ordered_fields(manifest["webui"], WEBUI_FIELDS, "manifest webui")
-    webui["bundle"] = ordered_fields(webui["bundle"], WEBUI_BUNDLE_FIELDS, "manifest webui bundle")
-    menus = webui["menus"]
-    routes = webui["routes"]
-    if not isinstance(menus, list) or not isinstance(routes, list):
-        raise PackageError("manifest WebUI menus and routes must be arrays")
-    webui["menus"] = [ordered_fields(menu, WEBUI_MENU_FIELDS, "manifest WebUI menu") for menu in menus]
-    webui["routes"] = [ordered_fields(route, WEBUI_ROUTE_FIELDS, "manifest WebUI route") for route in routes]
-    manifest["webui"] = webui
     return manifest
 
 
@@ -191,21 +172,6 @@ def validate_agent_input(agent: AgentInput) -> bytes:
         return agent.path.read_bytes()
     except OSError as exc:
         raise PackageError(f"read Agent binary: {exc}") from exc
-
-
-def validate_webui_source(source: bytes) -> None:
-    if not source or len(source) > MAX_WEBUI_BYTES:
-        raise PackageError(f"WebUI bundle must be between 1 and {MAX_WEBUI_BYTES} bytes")
-    try:
-        text = source.decode("utf-8")
-    except UnicodeDecodeError as exc:
-        raise PackageError("WebUI bundle must be UTF-8") from exc
-    if STATIC_IMPORT.search(text) or DYNAMIC_IMPORT.search(text):
-        raise PackageError("WebUI bundle must not contain static or dynamic imports")
-    if "export default function create" not in text or "export const anixopsExtension" not in text:
-        raise PackageError("WebUI bundle must export the extension descriptor and host factory")
-    if "webuiApiVersion: 'anixops.webui/v1'" not in text:
-        raise PackageError("WebUI bundle must declare anixops.webui/v1")
 
 
 def validate_config_source(schema: Any, defaults: Any) -> None:
@@ -251,8 +217,11 @@ def validate_manifest_contract(manifest: dict[str, Any], architecture: str | Non
         raise PackageError("generated manifest architecture does not match Agent input")
     if not re.fullmatch(r"[0-9a-f]{64}", str(manifest.get("artifact_sha256", ""))):
         raise PackageError("generated manifest artifact digest is invalid")
-    if not re.fullmatch(r"[0-9a-f]{64}", str(manifest.get("frontend_sha256", ""))):
-        raise PackageError("generated manifest frontend digest is invalid")
+    # The package ships no administrator WebUI: the node page shows its
+    # services table, and the kernel and the Agent sign an empty frontend
+    # digest without a webui block.
+    if manifest.get("frontend_sha256") != "" or "webui" in manifest:
+        raise PackageError("generated manifest must not declare a WebUI")
 
 
 def source_bytes(relative_path: str) -> bytes:
@@ -263,8 +232,6 @@ def source_bytes(relative_path: str) -> bytes:
 
 
 def package_entries(agent: AgentInput, agent_binary: bytes) -> tuple[list[ArchiveEntry], dict[str, Any]]:
-    webui = source_bytes(WEBUI_PATH)
-    validate_webui_source(webui)
     schema_value = sorted_json_value(load_json(PACKAGE_ROOT / SCHEMA_PATH, "configuration schema"))
     defaults_value = sorted_json_value(load_json(PACKAGE_ROOT / DEFAULTS_PATH, "configuration defaults"))
     validate_config_source(schema_value, defaults_value)
@@ -275,7 +242,6 @@ def package_entries(agent: AgentInput, agent_binary: bytes) -> tuple[list[Archiv
         ArchiveEntry(agent.archive_path, agent_binary, 0o755),
         ArchiveEntry(DEFAULTS_PATH, defaults, 0o644),
         ArchiveEntry(SCHEMA_PATH, schema, 0o644),
-        ArchiveEntry(WEBUI_PATH, webui, 0o644),
     ]
     payload_entries.sort(key=lambda entry: entry.path)
     file_index = [
@@ -306,7 +272,7 @@ def deterministic_tar(entries: list[ArchiveEntry]) -> bytes:
     return shared.deterministic_tar([shared.ArchiveEntry(entry.path, entry.data, entry.mode) for entry in entries])
 
 
-def generated_manifest(agent: AgentInput, artifact: bytes, webui: bytes, schema: Any) -> dict[str, Any]:
+def generated_manifest(agent: AgentInput, artifact: bytes, schema: Any) -> dict[str, Any]:
     template = load_json(PACKAGE_ROOT / MANIFEST_TEMPLATE_PATH, "manifest template")
     if not isinstance(template, dict):
         raise PackageError("manifest template must be a JSON object")
@@ -317,22 +283,18 @@ def generated_manifest(agent: AgentInput, artifact: bytes, webui: bytes, schema:
     template = {field: template[field] for field in MANIFEST_FIELDS}
     template["version"] = PLUGIN_VERSION
     template["api_version"] = "v1"
-    webui_digest = sha256_bytes(webui)
     template["architectures"] = [agent.architecture]
     template["artifact_sha256"] = sha256_bytes(artifact)
     template["config_schema"] = sorted_json_value(schema)
     template["entrypoints"] = {agent.entrypoint_name: agent.archive_path}
-    template["frontend_sha256"] = webui_digest
-    try:
-        template["webui"]["bundle"]["sha256"] = webui_digest
-    except (KeyError, TypeError) as exc:
-        raise PackageError("manifest template WebUI bundle is invalid") from exc
+    if template["frontend_sha256"] != "":
+        raise PackageError("manifest template must keep frontend_sha256 empty")
     manifest = canonical_manifest_value(template)
     validate_manifest_contract(manifest, agent.architecture)
     return manifest
 
 
-def output_report(agent: AgentInput, agent_binary: bytes, artifact: bytes, manifest: bytes, webui: bytes, schema: bytes) -> dict[str, Any]:
+def output_report(agent: AgentInput, agent_binary: bytes, artifact: bytes, manifest: bytes, schema: bytes) -> dict[str, Any]:
     return {
         "agent": {
             "architecture": agent.architecture,
@@ -360,11 +322,6 @@ def output_report(agent: AgentInput, agent_binary: bytes, artifact: bytes, manif
             "size": len(schema),
         },
         "version": PLUGIN_VERSION,
-        "webui": {
-            "path": WEBUI_PATH,
-            "sha256": sha256_bytes(webui),
-            "size": len(webui),
-        },
     }
 
 
@@ -394,12 +351,11 @@ def build_package(agent: AgentInput, output_dir: Path) -> dict[str, bytes]:
     artifact = deterministic_tar(entries)
     if len(artifact) > MAX_ARTIFACT_BYTES:
         raise PackageError(f"package artifact exceeds {MAX_ARTIFACT_BYTES} bytes")
-    webui = source_bytes(WEBUI_PATH)
     schema_value = sorted_json_value(load_json(PACKAGE_ROOT / SCHEMA_PATH, "configuration schema"))
     schema = pretty_json(schema_value)
-    manifest_value = generated_manifest(agent, artifact, webui, schema_value)
+    manifest_value = generated_manifest(agent, artifact, schema_value)
     manifest = canonical_manifest_json(manifest_value)
-    report = pretty_json(output_report(agent, agent_binary, artifact, manifest, webui, schema))
+    report = pretty_json(output_report(agent, agent_binary, artifact, manifest, schema))
     generated = {
         ARTIFACT_NAME: artifact,
         MANIFEST_NAME: manifest,
@@ -521,7 +477,7 @@ def verify_output_dir(output_dir: Path) -> None:
         raise PackageError("generated manifest artifact digest mismatch")
 
     contents, modes = read_archive(artifact)
-    expected_paths = {PACKAGE_INDEX_NAME, WEBUI_PATH, SCHEMA_PATH, DEFAULTS_PATH}
+    expected_paths = {PACKAGE_INDEX_NAME, SCHEMA_PATH, DEFAULTS_PATH}
     entrypoints = manifest.get("entrypoints")
     if not isinstance(entrypoints, dict) or len(entrypoints) != 1:
         raise PackageError("generated manifest must contain one architecture entrypoint")
@@ -535,12 +491,6 @@ def verify_output_dir(output_dir: Path) -> None:
         raise PackageError("artifact contains an unexpected file set")
     if modes[entrypoint_path] != 0o755 or any(modes[path] != 0o644 for path in expected_paths - {entrypoint_path}):
         raise PackageError("artifact entry modes are invalid")
-    validate_webui_source(contents[WEBUI_PATH])
-    bundle = manifest.get("webui", {}).get("bundle", {})
-    if bundle.get("path") != WEBUI_PATH or bundle.get("sha256") != sha256_bytes(contents[WEBUI_PATH]):
-        raise PackageError("generated manifest WebUI digest mismatch")
-    if manifest.get("frontend_sha256") != bundle.get("sha256"):
-        raise PackageError("generated manifest frontend digest mismatch")
     try:
         archive_schema = json.loads(contents[SCHEMA_PATH])
         archive_defaults = json.loads(contents[DEFAULTS_PATH])
@@ -557,8 +507,6 @@ def verify_output_dir(output_dir: Path) -> None:
         raise PackageError("build report artifact digest mismatch")
     if report.get("manifest", {}).get("sha256") != sha256_bytes(manifest_bytes):
         raise PackageError("build report manifest digest mismatch")
-    if report.get("webui", {}).get("sha256") != sha256_bytes(contents[WEBUI_PATH]):
-        raise PackageError("build report WebUI digest mismatch")
     if report.get("agent", {}).get("sha256") != sha256_bytes(contents[entrypoint_path]):
         raise PackageError("build report Agent digest mismatch")
 

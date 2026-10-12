@@ -1,4 +1,5 @@
 import { NODES, envelope } from './nodeData.js'
+import { serviceStatusAnswer } from './serviceStatus.js'
 import { transportsAnswer } from './transports.js'
 
 export default {
@@ -24,6 +25,10 @@ export default {
     // The Agent connection and certificate of the nodes in view (one call per page).
     if (path === '/api/v4/kernel/agents/transports') {
       return transportsAnswer(query)
+    }
+    // Their systemd services summary (the machine-telemetry package, one call).
+    if (path === '/api/v3/plugins/machine-telemetry/nodes/services') {
+      return serviceStatusAnswer(query)
     }
     if (path === '/api/v2/admin/nodes/stats') return envelope({ total: 47, online: 38, offline: 6, pending: 3 })
     if (path === '/api/v2/admin/auth-keys' && method === 'POST') return envelope({ id: 4, key: 'ak_live_3f9d2c71b0e84a5f9c6d1e2a7b8c4d0f' })

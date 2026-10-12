@@ -16,6 +16,9 @@ const packageVersion = '4.0.0'
 const adminEmail = 'live-control-webui@anixops.test'
 const adminPassword = 'LiveControlWebUI!2026'
 const goBinary = process.env.ANIXOPS_GO_BIN || 'go'
+// The Agent-target packages the gate installs: machine-telemetry ships no
+// WebUI (its data shows in the node pages), nftables-forward ships one.
+const agentPackages = new Set(['machine-telemetry', 'nftables-forward'])
 
 function trimOutput(output, maximum = 12_000) {
   return output.length <= maximum ? output : output.slice(-maximum)
@@ -296,7 +299,7 @@ async function buildSignedOfficialPackage(tempRoot, signing, packageID) {
     '--platform', 'linux/amd64',
     '--platform', 'linux/arm64',
   ]
-  if (packageID === 'machine-telemetry') {
+  if (agentPackages.has(packageID)) {
     for (const goarch of ['amd64', 'arm64']) {
       const binary = await buildFormalAgentBinary(tempRoot, packageID, goarch)
       arguments_.push('--agent-binary', `${packageID}@linux/${goarch}=${binary}`)
@@ -305,6 +308,7 @@ async function buildSignedOfficialPackage(tempRoot, signing, packageID) {
   await runCommand(`build signed ${packageID} package`, 'python3', arguments_, { cwd: controlRoot })
 	const stem = `${packageID}-${packageVersion}`
 	return {
+		id: packageID,
 		output: packageOutput,
 		artifact: await readFile(path.join(packageOutput, `${stem}.anxp`)),
 		manifest: await readFile(path.join(packageOutput, `${stem}.manifest.json`)),
@@ -312,14 +316,21 @@ async function buildSignedOfficialPackage(tempRoot, signing, packageID) {
 	}
 }
 
-async function installSignedMachineTelemetry(signed) {
+// Registers, uploads and enables the Control installation of each signed
+// package, through the authenticated kernel API.
+async function installSignedPackages(packages) {
 	const login = await loginAsLiveControlAdmin()
   const token = login?.data?.token
 	if (typeof token !== 'string' || token.length === 0) {
 		throw new Error(`real Control login did not issue an admin token: ${JSON.stringify(login)}`)
 	}
 	await waitForInstallation(token, 'identity-platform', packageVersion)
+  for (const signed of packages) {
+    await installSignedPackage(token, signed)
+  }
+}
 
+async function installSignedPackage(token, signed) {
   const release = await apiJSON(`${liveControlAPIURL}/api/v3/plugin-releases`, apiOptions(token, 'POST', {
     manifest: signed.manifest.toString('utf8'),
     signature: signed.signature,
@@ -333,12 +344,12 @@ async function installSignedMachineTelemetry(signed) {
     artifact_base64: signed.artifact.toString('base64'),
   }))
   await apiJSON(`${liveControlAPIURL}/api/v3/plugin-installations`, apiOptions(token, 'PUT', {
-    plugin_id: 'machine-telemetry',
+    plugin_id: signed.id,
     target: 'control',
     desired_version: packageVersion,
     enabled: true,
   }))
-	await waitForInstallation(token, 'machine-telemetry', packageVersion)
+	await waitForInstallation(token, signed.id, packageVersion)
 }
 
 async function terminate(child) {
@@ -398,7 +409,10 @@ export default async function setupLiveControlMachineTelemetry() {
 
 	const signing = await createSigningMaterial(tempRoot)
 	const identityBootstrap = await buildSignedOfficialPackage(tempRoot, signing, 'identity-platform')
-	const signed = await buildSignedOfficialPackage(tempRoot, signing, 'machine-telemetry')
+	const signed = [
+		await buildSignedOfficialPackage(tempRoot, signing, 'machine-telemetry'),
+		await buildSignedOfficialPackage(tempRoot, signing, 'nftables-forward'),
+	]
 	await writeFile(configPath, controlConfig({
 		databasePath,
 		frontendPath,
@@ -416,7 +430,7 @@ export default async function setupLiveControlMachineTelemetry() {
     child.stderr.pipe(log)
     child.once('error', error => log.write(`failed to start Control: ${error.stack || error.message}\n`))
     await waitForHealth(child, 35_000, logPath)
-    await installSignedMachineTelemetry(signed)
+    await installSignedPackages(signed)
 
     return async () => {
       await terminate(child)

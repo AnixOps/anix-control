@@ -949,6 +949,64 @@ func TestListEnabledWebUIExtensionsRequiresVerifiedVersionBoundInstallation(t *t
 	require.ErrorIs(t, err, ErrExtensionCatalogIntegrity)
 }
 
+// A package may ship no WebUI (packages/shared/build_package.py): its signed
+// manifest has an empty frontend_sha256 and no webui key. It registers,
+// stores and verifies like any other release, stores no WebUI asset, and the
+// extension catalog leaves it out.
+func TestPluginReleaseWithoutWebUIInstallsAndStaysOutOfTheCatalog(t *testing.T) {
+	db := newKernelTestDB(t)
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	register := func(manifest PluginManifest, artifact []byte) {
+		t.Helper()
+		canonical, err := CanonicalPluginManifest(manifest)
+		require.NoError(t, err)
+		signature := base64.StdEncoding.EncodeToString(ed25519.Sign(privateKey, canonical))
+		release, err := RegisterPluginRelease(db, string(canonical), signature, publicKey)
+		require.NoError(t, err)
+		_, err = StorePluginArtifact(db, release.ID, artifact)
+		require.NoError(t, err)
+		require.NoError(t, requireVerifiedPluginArtifact(db, *release))
+		require.NoError(t, db.Create(&model.PluginInstallation{
+			PluginID: manifest.ID, Target: "control", DesiredVersion: manifest.Version,
+			ObservedVersion: manifest.Version, State: "healthy", Enabled: true, LifecycleGeneration: 1,
+		}).Error)
+	}
+
+	headless := PluginManifest{
+		ID: "headless", Name: "Headless", Version: "1.0.0", APIVersion: "v1", Publisher: "AnixOps",
+		Targets: []string{"control"}, Permissions: []string{"headless.view", PluginAPIPermission("headless")},
+		ControlRoutes: []string{"/api/v3/plugins/headless/status"},
+	}
+	headlessArtifact := kernelTestArtifact(headless.ID)
+	headless.ArtifactSHA256 = kernelTestArtifactSHA256(headlessArtifact)
+	canonical, err := CanonicalPluginManifest(headless)
+	require.NoError(t, err)
+	require.Contains(t, string(canonical), `"frontend_sha256":""`)
+	require.NotContains(t, string(canonical), `"webui"`)
+	register(headless, headlessArtifact)
+
+	withUI := kernelTestWebUIManifest("example-ui")
+	register(withUI, kernelTestWebUIPackage(t, &withUI, `export const anixopsExtension = {}; export default {};`))
+
+	var assets []model.PluginWebUIAsset
+	require.NoError(t, db.Find(&assets).Error)
+	require.Len(t, assets, 1)
+	require.Equal(t, "example-ui", assets[0].PluginID)
+
+	extensions, err := listEnabledWebUIExtensions(db, publicKey, 0, true, false)
+	require.NoError(t, err)
+	require.Len(t, extensions, 1)
+	require.Equal(t, "example-ui", extensions[0].PluginID)
+
+	_, err = ResolveActivePluginWebUIAsset(db, publicKey, 0, true, headless.ID, headless.Version, strings.Repeat("b", 64))
+	require.ErrorIs(t, err, gorm.ErrRecordNotFound)
+	// Its control routes still resolve: the gateway does not need a WebUI.
+	resolution, err := ResolvePluginControlRoute(db, publicKey, headless.ID, "/api/v3/plugins/headless/status", 0, true)
+	require.NoError(t, err)
+	require.Equal(t, "/api/v3/plugins/headless/status", resolution.MatchedRoute)
+}
+
 func TestListEnabledWebUIExtensionsNormalizesUnknownMenuParent(t *testing.T) {
 	db := newKernelTestDB(t)
 	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)

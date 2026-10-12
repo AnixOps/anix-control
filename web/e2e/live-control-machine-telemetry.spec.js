@@ -1,6 +1,9 @@
 import { test, expect } from '@playwright/test'
 
-const extensionPath = '/admin/extensions/machine-telemetry'
+// The real Control runs three signed packages: identity-platform (the
+// bootstrap) and machine-telemetry ship no WebUI, nftables-forward ships one.
+const extensionID = 'nftables-forward'
+const extensionPath = `/admin/extensions/${extensionID}`
 
 async function operationState(page, operationID) {
   return page.evaluate(async id => {
@@ -13,7 +16,16 @@ async function operationState(page, operationID) {
   }, operationID)
 }
 
-test('loads, serves, and revokes the official signed machine-telemetry WebUI through real Control', async ({ page }) => {
+async function installations(page) {
+  return page.evaluate(async () => {
+    const token = localStorage.getItem('token')
+    const response = await fetch('/api/v3/plugin-installations', { headers: { Authorization: `Bearer ${token}` } })
+    const payload = await response.json()
+    return Array.isArray(payload?.data) ? payload.data : []
+  })
+}
+
+test('lists only packages with a WebUI, then loads, serves, and revokes a signed WebUI through real Control', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('app.locale', 'en'))
 
   // Extension discovery validates and preloads the signed bundle before the
@@ -21,7 +33,7 @@ test('loads, serves, and revokes the official signed machine-telemetry WebUI thr
   // assertion instead of waiting for a second, cache-dependent request.
   const bundleResponse = page.waitForResponse(response => {
     const url = new URL(response.url())
-    return url.pathname.startsWith('/api/v3/extensions/machine-telemetry/4.0.0/webui/') &&
+    return url.pathname.startsWith(`/api/v3/extensions/${extensionID}/4.0.0/webui/`) &&
       response.request().method() === 'GET' && response.status() === 200
   })
   const catalogResponse = page.waitForResponse(response => {
@@ -35,27 +47,33 @@ test('loads, serves, and revokes the official signed machine-telemetry WebUI thr
   await page.locator('form[data-auth-form="password"] button[type="submit"]').click()
   await page.waitForURL(/\/admin\/dashboard$/)
 
+  // The packages without a WebUI are installed and healthy, but the
+  // catalog leaves them out: only nftables-forward has an extension.
+  const installed = await installations(page)
+  for (const pluginID of ['identity-platform', 'machine-telemetry', extensionID]) {
+    expect(installed).toEqual(expect.arrayContaining([
+      expect.objectContaining({ plugin_id: pluginID, target: 'control', observed_version: '4.0.0', state: 'healthy', enabled: true }),
+    ]))
+  }
   const extensions = await (await catalogResponse).json()
   expect(extensions).toEqual(expect.objectContaining({ data: expect.any(Array) }))
-  expect(extensions.data).toEqual(expect.arrayContaining([
-    expect.objectContaining({ plugin_id: 'identity-platform', version: '4.0.0', state: 'healthy' }),
-    expect.objectContaining({ plugin_id: 'machine-telemetry', version: '4.0.0', state: 'healthy' }),
-  ]))
-  const extension = extensions.data.find(item => item.plugin_id === 'machine-telemetry')
-  expect(extension).toBeDefined()
+  expect(extensions.data.map(item => item.plugin_id)).toEqual([extensionID])
+  const extension = extensions.data[0]
   expect(extension).toEqual(expect.objectContaining({
-    plugin_id: 'machine-telemetry',
+    plugin_id: extensionID,
     version: '4.0.0',
     state: 'healthy',
     installation_id: expect.any(Number),
     bundle: expect.objectContaining({
       path: 'webui/index.mjs',
       sha256: expect.stringMatching(/^[a-f0-9]{64}$/),
-      url: expect.stringMatching(/^\/api\/v3\/extensions\/machine-telemetry\/4\.0\.0\/webui\//),
+      url: expect.stringMatching(new RegExp(`^/api/v3/extensions/${extensionID}/4\\.0\\.0/webui/`)),
     }),
   }))
-  expect(extension.menus).toEqual([expect.objectContaining({ route: extensionPath, label: 'Machine Telemetry' })])
-  expect(extension.routes).toEqual([expect.objectContaining({ path: extensionPath, permission: 'machine-telemetry.view' })])
+  expect(extension.menus).toEqual([expect.objectContaining({ route: extensionPath, label: 'nftables Forward' })])
+  expect(extension.routes).toEqual([expect.objectContaining({ path: extensionPath, permission: `${extensionID}.view` })])
+  await expect(page.locator('a[href="/admin/extensions/machine-telemetry"]')).toHaveCount(0)
+  await expect(page.locator('a[href="/admin/extensions/identity-platform"]')).toHaveCount(0)
 
   const menu = page.locator(`a[href="${extensionPath}"]`)
   await expect(menu).toBeVisible()
@@ -65,10 +83,10 @@ test('loads, serves, and revokes the official signed machine-telemetry WebUI thr
   const bundle = await bundleResponse
   expect(new URL(bundle.url()).pathname).toBe(extension.bundle.url)
   expect(bundle.headers()['cache-control']).toBe('private, no-store')
-  await expect(page.locator('.machine-telemetry-extension h1')).toHaveText('Machine Telemetry')
-  expect(await bundle.text()).toContain('MachineTelemetryExtension')
+  await expect(page.locator('.nftables-forward-extension h1')).toHaveText('nftables Forward')
+  expect(await bundle.text()).toContain('NftablesForwardExtension')
 
-  const disable = await page.evaluate(async installationID => {
+  const disable = await page.evaluate(async () => {
     const token = localStorage.getItem('token')
     const response = await fetch('/api/v3/plugin-installations', {
       method: 'PUT',
@@ -77,7 +95,7 @@ test('loads, serves, and revokes the official signed machine-telemetry WebUI thr
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        plugin_id: 'machine-telemetry',
+        plugin_id: 'nftables-forward',
         target: 'control',
         desired_version: '4.0.0',
         enabled: false,
@@ -88,7 +106,7 @@ test('loads, serves, and revokes the official signed machine-telemetry WebUI thr
       operationID: response.headers.get('X-AnixOps-Operation-ID'),
       body: await response.json(),
     }
-  }, extension.installation_id)
+  })
   expect(disable.status).toBe(200)
   expect(disable.operationID).toMatch(/^[0-9a-f-]{36}$/i)
   expect(disable.body.data).toEqual(expect.objectContaining({ enabled: false, state: 'disabled' }))
@@ -112,9 +130,7 @@ test('loads, serves, and revokes the official signed machine-telemetry WebUI thr
     }
   }, extension.bundle.url)
   expect(revocation.catalogStatus).toBe(200)
-  expect(revocation.catalog.data).toEqual([
-    expect.objectContaining({ plugin_id: 'identity-platform', version: '4.0.0', state: 'healthy' }),
-  ])
+  expect(revocation.catalog.data).toEqual([])
   expect(revocation.assetStatus).toBe(404)
 
   // A new SPA runtime must not retain a menu or dynamically registered route

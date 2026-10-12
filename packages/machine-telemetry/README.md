@@ -1,9 +1,13 @@
 # Machine Telemetry Reference Package
 
 This directory is the reproducible package source for the first AnixOps
-Control + Agent + WebUI reference package. It contains package metadata,
-configuration, and a dependency-free WebUI module. The Agent executable is an
-explicit build input and is never replaced with a placeholder.
+Control + Agent reference package. It contains package metadata and
+configuration. The Agent executable is an explicit build input and is never
+replaced with a placeholder.
+
+The package ships no administrator WebUI bundle. Its data shows in the core
+pages: the node page's 服务 section and the 服务状态 column of the node list
+read its `control_routes` (see "Systemd Services Table").
 
 ## Source Layout
 
@@ -16,9 +20,7 @@ packages/machine-telemetry/
 |-- manifest.template.json
 |-- tests/release_gate.sh
 |-- tests/test_build.py
-|-- tests/test_verify_signature.py
-|-- tests/webui_smoke.mjs
-`-- webui/index.mjs
+`-- tests/test_verify_signature.py
 ```
 
 `build.py` creates one combined package archive. For a Linux AMD64 build the
@@ -29,7 +31,6 @@ agent/linux-amd64/plugin
 config.defaults.json
 config.schema.json
 package.json
-webui/index.mjs
 ```
 
 The generated signed-manifest input declares both `control` and `agent`
@@ -41,7 +42,9 @@ targets and maps `agent-linux-amd64` to
 From 4.1 the package declares `telemetry.systemd.read` and serves the
 read-only per-node services table at
 `GET /api/v3/plugins/machine-telemetry/nodes/:id/services` (administrators;
-the node page's 服务 section). Collection is off on every node until enabled
+the node page's 服务 section), and the services summary of several nodes at
+`GET /api/v3/plugins/machine-telemetry/nodes/services?ids=1,2,3` (the node
+list's 服务状态 column). Collection is off on every node until enabled
 in the Agent installation's configuration:
 
 ```json
@@ -98,13 +101,13 @@ The tar writer fixes entry order, ownership, permissions, timestamps, and
 format. Identical source and Agent binary bytes therefore produce an identical
 artifact and manifest. Reproducibility of the input Agent binary remains the
 responsibility of its Go release build. The builder enforces the current
-64 MiB Control/Agent artifact limit and 2 MiB WebUI bundle limit.
+64 MiB Control/Agent artifact limit.
 
 ## Verify
 
-Verification checks the outer checksums, manifest-to-artifact binding, WebUI
-digest, architecture entrypoint, tar metadata, package file index, and every
-inner file digest.
+Verification checks the outer checksums, manifest-to-artifact binding, the
+empty frontend digest (no WebUI), architecture entrypoint, tar metadata,
+package file index, and every inner file digest.
 
 ```bash
 python3 packages/machine-telemetry/build.py verify \
@@ -139,17 +142,13 @@ python3 -m unittest discover \
 
 python3 packages/machine-telemetry/build.py self-test
 
-node packages/machine-telemetry/tests/webui_smoke.mjs
-
 bash packages/machine-telemetry/tests/release_gate.sh
 ```
 
 The test suite builds twice and compares every output byte, verifies archive
 metadata and digests, rejects a tampered artifact, rejects a non-executable
-Agent input, and enforces that `webui/index.mjs` has no static or dynamic
-imports. The Node smoke test executes the factory with the versioned host API,
-checks the namespace-constrained request, and renders a telemetry response
-without Vue or other installed dependencies.
+Agent input, and checks that the package declares no WebUI while keeping the
+control routes the node pages read.
 
 ## Signing Boundary
 
@@ -163,7 +162,3 @@ unsigned package, creates only a temporary test key, checks PEM and raw
 Base64 public-key verification, and rejects missing or tampered signatures.
 The temporary signing key is deleted before the script exits and is never
 uploaded.
-
-The WebUI module does not embed its own SHA-256. Doing so would create an
-unsatisfiable self-hash. The signed manifest binds the bundle path and digest,
-and the Control and browser loaders verify those bytes before import.

@@ -81,13 +81,13 @@ export default function create(host) {
 
       return () => {
         if (loading.value) {
-          return h('section', { class: 'control-page nftables-forward-extension' }, [
+          return h('section', { class: 'nftables-forward-extension' }, [
             h('h1', 'nftables Forward'),
             h('p', { role: 'status' }, 'Loading forwarding rules...'),
           ])
         }
         if (error.value) {
-          return h('section', { class: 'control-page nftables-forward-extension' }, [
+          return h('section', { class: 'nftables-forward-extension' }, [
             h('h1', 'nftables Forward'),
             h('p', { role: 'alert' }, `Forwarding status unavailable: ${error.value}`),
           ])
@@ -100,18 +100,16 @@ export default function create(host) {
           ['Unhealthy', count(value.summary.degraded)],
           ['Rollback', count(value.summary.rollback_required)],
         ]
-        return h('section', { class: 'control-page nftables-forward-extension' }, [
-          h('div', { class: 'page-header' }, [
-            h('div', [
-              h('h1', 'nftables Forward'),
-              h('p', { class: 'description-cell' }, `Dedicated TCP/UDP package ${PLUGIN_VERSION}`),
-            ]),
+        return h('section', { class: 'nftables-forward-extension' }, [
+          h('header', [
+            h('h1', 'nftables Forward'),
+            h('p', `Dedicated TCP/UDP package ${PLUGIN_VERSION}`),
             h('button', { type: 'button', class: 'btn btn-secondary', onClick: refreshForwarding }, 'Refresh'),
           ]),
-          h('div', { class: 'stats-grid' }, summaryRows.map(([label, value]) => h('div', { class: 'stat-item', key: label }, [
-            h('span', { class: 'stat-label' }, label),
-            h('strong', { class: 'stat-value' }, String(value)),
-          ]))),
+          h('dl', summaryRows.flatMap(([label, value]) => [
+            h('dt', { key: `${label}-label` }, label),
+            h('dd', { key: `${label}-value` }, String(value)),
+          ])),
           h('div', { class: 'table-container' }, [
             h('table', { class: 'data-table' }, [
               h('thead', [h('tr', [
@@ -119,7 +117,7 @@ export default function create(host) {
               ])]),
               h('tbody', value.rules.length > 0
                 ? value.rules.map(rule => h('tr', { key: rule.id || `${rule.node_id}:${rule.listen}` }, [
-                  h('td', [h('strong', rule.name || `Rule ${rule.id}`), h('div', { class: 'description-cell' }, rule.topology || '')]),
+                  h('td', [h('strong', rule.name || `Rule ${rule.id}`), h('div', rule.topology || '')]),
                   h('td', rule.node_name || `Node ${rule.node_id ?? 'n/a'}`),
                   h('td', rule.protocol || 'tcp+udp'),
                   h('td', rule.listen || ''),

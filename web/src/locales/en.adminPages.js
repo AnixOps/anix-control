@@ -695,6 +695,7 @@ export default {
   },
   control: {
     subtitle: 'Manage official signed packages, Control WebUI extensions, and lifecycle operations.',
+    deploymentsSubtitle: 'Manage topologies, node roles, and deployments.',
     actions: {
       refresh: 'Refresh', refreshing: 'Refreshing...', importRelease: 'Import release', install: 'Install',
       configure: 'Configure', enable: 'Enable', disable: 'Disable', upgrade: 'Upgrade', update: 'Upgrade', rollback: 'Rollback', cancel: 'Cancel operation', installOfficialOnly: 'Official release required',

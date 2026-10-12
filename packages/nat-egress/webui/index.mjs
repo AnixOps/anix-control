@@ -39,15 +39,15 @@ export default function create(host) {
       })
       return () => {
         if (loading.value) {
-          return h('section', { class: 'control-page nat-egress-extension' }, [
+          return h('section', { class: 'nat-egress-extension' }, [
             h('h1', 'NAT Egress'),
             h('p', { role: 'status' }, 'Loading egress nodes...'),
           ])
         }
         if (error.value) {
-          return h('section', { class: 'control-page nat-egress-extension' }, [
+          return h('section', { class: 'nat-egress-extension' }, [
             h('h1', 'NAT Egress'),
-            h('p', { class: 'error', role: 'alert' }, error.value),
+            h('p', { role: 'alert' }, error.value),
           ])
         }
         const summary = [
@@ -65,18 +65,20 @@ export default function create(host) {
           h('td', exit.health || '-'),
           h('td', stateLabel(exit)),
         ]))
-        return h('section', { class: 'control-page nat-egress-extension' }, [
+        return h('section', { class: 'nat-egress-extension' }, [
           h('header', [
             h('h1', 'NAT Egress'),
             h('p', 'Signed Agent runtime status for nftables masquerade, policy routing, stable cleanup state, and marked egress health. Production signing remains gated by the pinned Agent revision and namespace evidence.'),
           ]),
-          h('dl', { class: 'metric-grid' }, summary.flatMap(([label, metric]) => [
+          h('dl', summary.flatMap(([label, metric]) => [
             h('dt', label),
             h('dd', metric),
           ])),
-          h('table', { class: 'data-table' }, [
-            h('thead', [h('tr', ['Exit', 'Node', 'Interface', 'Public IP', 'Policy Table', 'Health', 'State'].map(label => h('th', label)))]),
-            h('tbody', rows.length ? rows : [h('tr', { key: 'empty' }, [h('td', { colspan: 7, class: 'empty-state' }, 'No NAT egress exits')])]),
+          h('div', { class: 'table-container' }, [
+            h('table', { class: 'data-table' }, [
+              h('thead', [h('tr', ['Exit', 'Node', 'Interface', 'Public IP', 'Policy Table', 'Health', 'State'].map(label => h('th', label)))]),
+              h('tbody', rows.length ? rows : [h('tr', { key: 'empty' }, [h('td', { colspan: 7, class: 'empty-state' }, 'No NAT egress exits')])]),
+            ]),
           ]),
         ])
       }

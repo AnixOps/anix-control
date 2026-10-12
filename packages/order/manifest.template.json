@@ -16,13 +16,7 @@
   "entrypoints": {},
   "migration_version": 0,
   "control_routes": [],
-  "frontend_sha256": "GENERATED_AT_BUILD",
-  "webui": {
-    "bundle": {"path": "webui/index.mjs", "sha256": "GENERATED_AT_BUILD"},
-    "permissions": ["order.view"],
-    "menus": [{"id": "order.main", "parent": "services", "label": "Order", "icon": "receipt", "route": "/admin/extensions/order", "permission": "order.view", "order": 130}],
-    "routes": [{"id": "order.main", "path": "/admin/extensions/order", "export": "mount", "permission": "order.view"}]
-  },
+  "frontend_sha256": "",
   "control_entrypoint": {"path": "bin/control-host", "sha256": "GENERATED_AT_BUILD"},
   "agent_entrypoint": null,
   "migrations": {"index": "migrations/index.json", "sha256": "GENERATED_AT_BUILD"},

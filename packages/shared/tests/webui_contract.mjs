@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict'
-import { readdir, readFile } from 'node:fs/promises'
+import { access, readdir, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+
+// The WebUI bundle is optional: only a package whose manifest template
+// declares `webui` ships one (packages/shared/build_package.py). This checks
+// every such bundle against its manifest, and that no other package keeps a
+// webui/ directory the builder would refuse.
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const packagesRoot = path.resolve(here, '..', '..')
@@ -22,11 +27,21 @@ function moduleURL(source) {
   return `data:text/javascript;base64,${Buffer.from(source, 'utf8').toString('base64')}`
 }
 
+async function exists(target) {
+  try {
+    await access(target)
+    return true
+  } catch {
+    return false
+  }
+}
+
 const packageNames = (await readdir(packagesRoot, { withFileTypes: true }))
   .filter(entry => entry.isDirectory())
   .map(entry => entry.name)
   .sort()
 
+const checked = []
 for (const packageID of packageNames) {
   const packageRoot = path.join(packagesRoot, packageID)
   let manifest
@@ -36,10 +51,14 @@ for (const packageID of packageNames) {
     continue
   }
 
-  const webui = manifest.webui
-  if (!webui?.bundle?.path || !Array.isArray(webui.routes)) {
+  if (!('webui' in manifest)) {
+    assert.ok(!(await exists(path.join(packageRoot, 'webui'))), `${packageID} keeps a webui/ directory but its manifest declares no webui`)
+    assert.equal(manifest.frontend_sha256, '', `${packageID} declares no webui, so frontend_sha256 must stay empty`)
     continue
   }
+
+  const webui = manifest.webui
+  assert.ok(webui?.bundle?.path && Array.isArray(webui.routes), `${packageID} webui must declare a bundle and routes`)
   const source = await readFile(path.join(packageRoot, webui.bundle.path), 'utf8')
   assert.ok(source.includes(versionToken), `${packageID} WebUI must declare the release-version token`)
 
@@ -62,6 +81,8 @@ for (const packageID of packageNames) {
       `${packageID} WebUI factory ${route.export} must return a component`,
     )
   }
+  checked.push(packageID)
 }
 
-console.log('v4 WebUI package contract passed')
+assert.ok(checked.length > 0, 'no package declares a WebUI bundle')
+console.log(`v4 WebUI package contract passed for ${checked.length} packages with a WebUI: ${checked.join(', ')}`)

@@ -46,6 +46,17 @@ content-addressed by `plugins/<plugin>/<version>/<sha256>.artifact` metadata
 and immutable for a release. Re-uploading the same bytes is idempotent; changing
 the bytes for an existing release is rejected.
 
+The administrator WebUI is optional. A package without one leaves `webui`
+out of its manifest and keeps `frontend_sha256` empty (the signed canonical
+bytes are `"frontend_sha256":""` with no `webui` key, in Control and in the
+Agent). Its release registers, stores, verifies and installs like any other,
+stores no WebUI asset, and the extension catalog (`GET /api/v3/extensions`)
+leaves it out; its `control_routes` work as before. Of the official
+packages only `forward`, `gost-mesh`, `nat-egress` and `nftables-forward`
+ship a bundle: the others are served by the core admin pages
+(`packages/shared/build_package.py` builds both kinds and refuses a stray
+`webui/` directory).
+
 If the signed manifest declares `webui`, the uploaded artifact must be a
 package archive containing the declared `webui/*.js` or `webui/*.mjs` bundle
 path. The kernel extracts that one file from zip, tar, or tar.gz packages,
@@ -85,9 +96,11 @@ the design tokens). A change that has to break one is a WebUI contract
 change (`anixops.webui/v2`), not a Control refactor.
 `web/src/__tests__/pluginWebuiClasses.test.js` fails when one of them loses
 its rule in `style.css`, and checks that the bundled packages use them.
-Other class names a bundle uses (`page-header`, `stats-grid`, ...) are
-the plugin's own: Control gives them no style and promises nothing about
-them.
+Control gives any other class name no style and promises nothing about it.
+The official bundles therefore use only these classes, plus one class named
+after their package on their root element (`nftables-forward-extension`) as
+a hook; the same test fails on any other class, so a bundle cannot rely on
+an unstyled look-alike of a Control class (`page-header`, `stats-grid`).
 
 Backend package APIs are admitted only through the kernel gateway namespace
 `/api/v3/plugins/<plugin-id>/...`. A signed manifest may register exact routes
@@ -118,7 +131,10 @@ fixture at `contracts/plugin/v1/manifest-golden.json` is byte-identical in both
 repositories and includes the first `machine-telemetry` Control + Agent + WebUI
 package descriptor. The signed byte stream includes `webui` metadata, so Agent
 must decode the same WebUI structures as Control instead of treating that field
-as client-only metadata.
+as client-only metadata. (The shipped `machine-telemetry` package no longer
+declares a WebUI; the fixture keeps that v1 descriptor because it pins the
+WebUI structures both repositories decode. A manifest without `webui` encodes
+an empty `frontend_sha256` and no `webui` key on both sides.)
 
 Global manifest validation now rejects unsupported API versions, unsafe
 package IDs or versions, duplicate targets, malformed architecture tokens,
