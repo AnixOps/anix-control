@@ -20,6 +20,10 @@
   blocks the delete (409 `topology_deployment_busy`); planned deployments are cancelled and can no longer be
   applied. At startup the schema gains the flag columns and swaps the unique index on the topology name for
   one on live topologies (`ux_topology_live_name`); see docs/UPGRADE.md.
+- The node list has a 服务状态 (Services) column: each node's systemd services from machine-telemetry
+  ("3/3 正常", "1 个失败", 等待上报, 不支持, 数据过期), loaded for the page in one call to the package's new
+  `GET /api/v3/plugins/machine-telemetry/nodes/services?ids=` route. Without the plugin host, the package or
+  `machine-telemetry.api` it shows "—" and the list works as before; it can be hidden in the table settings.
 
 ### Changed
 

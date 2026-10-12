@@ -500,6 +500,21 @@ GET /api/v4/kernel/agents/transports?legacy_only=true      # 只看仍在旧通�
 `last_certificate` 的 `not_after`、`renew_after`、`revoked_at`、`revoke_reason`，有效证书超过 `renew_after`
 时提示 Agent 没有按时续期。这个请求失败只会让这两列显示「暂不可用」，不影响节点列表。
 
+### 节点的服务汇总（机器遥测插件）
+
+```http
+# 当前页节点的 systemd 服务汇总（管理员，需要 machine-telemetry.api）
+GET /api/v3/plugins/machine-telemetry/nodes/services?ids=12,13,14   # 1 到 200 个节点 ID，逗号分隔或重复
+# 单个节点的服务表
+GET /api/v3/plugins/machine-telemetry/nodes/12/services
+```
+
+汇总应答 `{"data": {"nodes": [...]}}`，按请求顺序每个节点一项：`node_id`、`enabled`、`reported`、
+`supported`、`unsupported_reason`、`stale`、`observed_at`、`summary`（`total`、`failed`、`active`、
+`inactive`）。由插件宿主应答：没有开启 `plugins.control_execution_enabled`、没有安装机器遥测插件或
+没有权限时返回错误，管理端「节点」列表的「服务状态」列只显示「—」。字段说明见
+[`../architecture/package-reports.md`](../architecture/package-reports.md)。
+
 ### 轮换节点的 Agent 凭据
 
 ```http

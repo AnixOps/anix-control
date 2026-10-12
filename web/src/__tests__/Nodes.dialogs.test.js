@@ -23,10 +23,15 @@ const api = vi.hoisted(() => ({
 
 vi.mock('@/api/admin', () => api)
 
-// The Agent connection of the nodes in view is not what these tests are about.
+// The Agent connection and the services summary of the nodes in view are not
+// what these tests are about.
 vi.mock('@/api/kernel', async importOriginal => ({
   ...(await importOriginal()),
   getKernelAgentTransports: vi.fn(async () => ({ nodes: [] }))
+}))
+vi.mock('@/api/machineTelemetry', async importOriginal => ({
+  ...(await importOriginal()),
+  getNodesServicesSummary: vi.fn(async () => [])
 }))
 
 const Harness = {

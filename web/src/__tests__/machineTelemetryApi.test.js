@@ -2,7 +2,7 @@
 // write of the per-node settings and the pattern check.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
-  getNodeServices, nodeHasServicesTable, saveNodeServicesSettings, validGlob, withNodeServices
+  MAX_SUMMARY_NODES, getNodeServices, getNodesServicesSummary, nodeHasServicesTable, saveNodeServicesSettings, validGlob, withNodeServices
 } from '@/api/machineTelemetry'
 
 const kernel = vi.hoisted(() => ({
@@ -31,6 +31,18 @@ describe('machine-telemetry services API', () => {
     request.mockResolvedValue({ data: { node_id: 5, units: [] } })
     expect(await getNodeServices(5)).toEqual({ node_id: 5, units: [] })
     expect(request).toHaveBeenCalledWith({ baseURL: '/api/v3', url: '/plugins/machine-telemetry/nodes/5/services', method: 'get' })
+  })
+
+  it('reads the summary of several nodes in one call, without duplicates and at most 200 ids', async () => {
+    request.mockResolvedValue({ data: { nodes: [{ node_id: 5, enabled: false }] } })
+    expect(await getNodesServicesSummary([5, '6', 5, 0, -1, 'x'])).toEqual([{ node_id: 5, enabled: false }])
+    expect(request).toHaveBeenCalledWith({
+      baseURL: '/api/v3', url: '/plugins/machine-telemetry/nodes/services', method: 'get', params: { ids: '5,6' }
+    })
+
+    request.mockResolvedValue({ data: null })
+    expect(await getNodesServicesSummary(Array.from({ length: 250 }, (_, index) => index + 1))).toEqual([])
+    expect(request.mock.calls.at(-1)[0].params.ids.split(',')).toHaveLength(MAX_SUMMARY_NODES)
   })
 
   it('finds the services table only in an enabled assignment of a release that declares it', async () => {

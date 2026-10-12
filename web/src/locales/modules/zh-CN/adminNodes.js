@@ -46,10 +46,27 @@ export default {
     lastHeartbeat: '最后心跳',
     connection: '连接方式',
     certificate: '证书',
+    serviceStatus: '服务状态',
     never: '从未',
     empty: '还没有节点',
     emptyDescription: `${AGENT_NAME} 用注册密钥启动后，节点会自动出现在这里；也可以手动添加。`,
     loadFailed: '无法加载节点'
+  },
+  // The 服务状态 column: the machine-telemetry services summary of a node.
+  serviceStatus: {
+    states: {
+      healthy: '{active}/{total} 正常',
+      partial: '{active}/{total} 运行中',
+      failed: '{failed} 个失败',
+      empty: '无服务',
+      waiting: '等待上报',
+      unsupported: '不支持',
+      stale: '数据过期'
+    },
+    counts: '共 {total} 个服务：{active} 个运行中，{failed} 个失败',
+    loading: '正在加载服务状态',
+    unavailable: '服务状态不可用：需要已启用的机器遥测插件和它的 API 权限',
+    notEnabled: '此节点未启用服务采集'
   },
   actions: {
     open: '打开节点',

@@ -140,7 +140,10 @@ assigned release declares `telemetry.systemd.read`.
 ### Route
 
 `GET /api/v3/plugins/machine-telemetry/nodes/:id/services`, declared as the
-control route `/api/v3/plugins/machine-telemetry/nodes/*`. The kernel
+control route `/api/v3/plugins/machine-telemetry/nodes/*`, and its summary
+for several nodes,
+`GET /api/v3/plugins/machine-telemetry/nodes/services?ids=12,13` (same
+control route, see "Node list" below). The kernel
 gateway requires an administrator with `machine-telemetry.api`; the package
 host answers the route itself (it is not a compatibility route, so route
 modes do not apply), accepts only `GET` and a decimal node id without
@@ -175,6 +178,42 @@ current globs and counts the units:
   reloading count only in `total`.
 - Errors use the kernel shape `{"error": {"code", "message"}}`: 404
   `not_found`, 405, 403 `forbidden`, 503 `storage_unavailable`.
+
+### Summary for the node list
+
+`GET /api/v3/plugins/machine-telemetry/nodes/services?ids=12,13,14` answers
+the summary of the listed nodes in one call: the settings are read once and
+the reports of the enabled nodes in one query. `ids` lists 1 to 200 proxy
+node ids, comma separated or repeated, without leading zeros (else 400
+`invalid_request`); the answer has one entry per id, in order, without
+duplicates. An entry is the node's table without `include`, `exclude`,
+`units`, `version` and `window_seconds`:
+
+```json
+{"data": {"nodes": [
+  {"node_id": 12, "enabled": true, "reported": true, "supported": true, "unsupported_reason": "",
+   "stale": false, "observed_at": "2026-10-03T11:55:00Z",
+   "summary": {"total": 3, "failed": 1, "active": 1, "inactive": 1}},
+  {"node_id": 13, "enabled": false, "reported": false, "supported": false, "unsupported_reason": "",
+   "stale": false, "observed_at": null, "summary": {"total": 0, "failed": 0, "active": 0, "inactive": 0}}
+]}}
+```
+
+GET only, for administrators, through the same gateway checks as the table.
+
+### Node list
+
+The node list (`/admin/nodes`) has a 服务状态 column, part of the table
+settings: after the list loads, one summary call for the nodes on the page
+(like the Agent connection column). It shows "3/3 正常" when every unit
+runs, "N 个失败" when a unit failed, "2/3 运行中" when no unit failed but not
+all run, and 无服务, 等待上报, 不支持 or 数据过期 for the other states; the
+tooltip has the counts and the report time. The cell is "—" for a node that
+does not collect its services, and for every node when the call fails: the
+summary is served by the package host, so it needs
+`plugins.control_execution_enabled`, an enabled machine-telemetry Control
+installation of a release with this route, and `machine-telemetry.api`.
+Without them the list works as before.
 
 ### Node page
 

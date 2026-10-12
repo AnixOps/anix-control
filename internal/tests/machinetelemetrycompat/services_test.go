@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -82,12 +83,17 @@ func (k *servicesKernel) report(t *testing.T, nodeID uint, payload string, obser
 
 func (k *servicesKernel) get(t *testing.T, path string, principal pluginhostsdk.Principal) (int, map[string]json.RawMessage) {
 	t.Helper()
+	return k.getQuery(t, path, nil, principal)
+}
+
+func (k *servicesKernel) getQuery(t *testing.T, path string, query map[string][]string, principal pluginhostsdk.Principal) (int, map[string]json.RawMessage) {
+	t.Helper()
 	svc := &native.Service{
 		Open: func(ctx context.Context) (*gorm.DB, error) { return k.db.WithContext(ctx), nil },
 		Now:  func() time.Time { return k.now },
 	}
 	response, err := svc.NodeServices(context.Background(), pluginhostsdk.NativeRequest{
-		RouteID: native.NodesRouteID, Method: "GET", Principal: principal, Metadata: pluginhostsdk.RequestMetadata{Path: path},
+		RouteID: native.NodesRouteID, Method: "GET", Principal: principal, Metadata: pluginhostsdk.RequestMetadata{Path: path, Query: query},
 	})
 	require.NoError(t, err)
 	var body map[string]json.RawMessage
@@ -199,6 +205,75 @@ func TestServicesRouteRefusesMalformedRequests(t *testing.T) {
 	svc := &native.Service{Open: func(ctx context.Context) (*gorm.DB, error) { return kernel.db.WithContext(ctx), nil }}
 	response, err := svc.NodeServices(context.Background(), pluginhostsdk.NativeRequest{
 		Method: "POST", Principal: admin, Metadata: pluginhostsdk.RequestMetadata{Path: "/api/v3/plugins/machine-telemetry/nodes/7/services"},
+	})
+	require.NoError(t, err)
+	require.EqualValues(t, 405, response.StatusCode)
+}
+
+const summaryPath = "/api/v3/plugins/machine-telemetry/nodes/services"
+
+// The node list's summary: one entry per requested node, in order, from the
+// settings and the reports of the enabled nodes, with the node's globs
+// applied as in its table.
+func TestServicesSummaryAnswersEachRequestedNode(t *testing.T) {
+	kernel := newServicesKernel(t)
+	kernel.configure(t, `{"systemd_services":{"nodes":{
+		"7":{"enabled":true,"exclude":["*-debug.service"]},
+		"8":{"enabled":false},
+		"9":{"enabled":true},
+		"10":{"enabled":true},
+		"11":{"enabled":true}}}}`)
+	kernel.report(t, 7, servicesPayload, kernel.now.Add(-5*time.Minute))
+	kernel.report(t, 8, servicesPayload, kernel.now)
+	kernel.report(t, 10, servicesPayload, kernel.now.Add(-26*time.Minute))
+	kernel.report(t, 11, `{"supported": false, "unsupported_reason": "cgroup v1", "units": []}`, kernel.now)
+
+	status, body := kernel.getQuery(t, summaryPath, map[string][]string{"ids": {"9,7,8", "10,11,12,7"}}, admin)
+	require.Equal(t, 200, status)
+	require.JSONEq(t, `{"nodes": [
+		{"node_id": 9, "enabled": true, "reported": false, "supported": false, "unsupported_reason": "", "stale": false, "observed_at": null,
+		 "summary": {"total": 0, "failed": 0, "active": 0, "inactive": 0}},
+		{"node_id": 7, "enabled": true, "reported": true, "supported": true, "unsupported_reason": "", "stale": false, "observed_at": "2026-10-03T11:55:00Z",
+		 "summary": {"total": 3, "failed": 1, "active": 1, "inactive": 1}},
+		{"node_id": 8, "enabled": false, "reported": false, "supported": false, "unsupported_reason": "", "stale": false, "observed_at": null,
+		 "summary": {"total": 0, "failed": 0, "active": 0, "inactive": 0}},
+		{"node_id": 10, "enabled": true, "reported": true, "supported": true, "unsupported_reason": "", "stale": true, "observed_at": "2026-10-03T11:34:00Z",
+		 "summary": {"total": 4, "failed": 1, "active": 1, "inactive": 1}},
+		{"node_id": 11, "enabled": true, "reported": true, "supported": false, "unsupported_reason": "cgroup v1", "stale": false, "observed_at": "2026-10-03T12:00:00Z",
+		 "summary": {"total": 0, "failed": 0, "active": 0, "inactive": 0}},
+		{"node_id": 12, "enabled": false, "reported": false, "supported": false, "unsupported_reason": "", "stale": false, "observed_at": null,
+		 "summary": {"total": 0, "failed": 0, "active": 0, "inactive": 0}}
+	]}`, string(body["data"]))
+}
+
+// The summary needs 1 to 200 well-formed node ids, GET and an administrator.
+func TestServicesSummaryRefusesMalformedRequests(t *testing.T) {
+	kernel := newServicesKernel(t)
+	tooMany := make([]string, native.MaxSummaryNodes+1)
+	for index := range tooMany {
+		tooMany[index] = strconv.Itoa(index + 1)
+	}
+	for name, query := range map[string]map[string][]string{
+		"missing":        nil,
+		"empty":          {"ids": {""}},
+		"zero":           {"ids": {"0"}},
+		"leading zero":   {"ids": {"07"}},
+		"negative":       {"ids": {"-1"}},
+		"word":           {"ids": {"7,abc"}},
+		"empty item":     {"ids": {"7,,8"}},
+		"out of range":   {"ids": {"4294967296"}},
+		"too many nodes": {"ids": {strings.Join(tooMany, ",")}},
+	} {
+		status, body := kernel.getQuery(t, summaryPath, query, admin)
+		require.Equal(t, 400, status, name)
+		require.Contains(t, string(body["error"]), "invalid_request", name)
+	}
+	status, _ := kernel.getQuery(t, summaryPath, map[string][]string{"ids": {"7"}}, pluginhostsdk.Principal{ActorID: 2})
+	require.Equal(t, 403, status)
+
+	svc := &native.Service{Open: func(ctx context.Context) (*gorm.DB, error) { return kernel.db.WithContext(ctx), nil }}
+	response, err := svc.NodeServices(context.Background(), pluginhostsdk.NativeRequest{
+		Method: "POST", Principal: admin, Metadata: pluginhostsdk.RequestMetadata{Path: summaryPath, Query: map[string][]string{"ids": {"7"}}},
 	})
 	require.NoError(t, err)
 	require.EqualValues(t, 405, response.StatusCode)

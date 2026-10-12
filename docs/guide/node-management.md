@@ -202,6 +202,13 @@ GET /api/v2/admin/nodes?sort=last_check_at&order=desc   # 服务端排序
 这两列不能排序。列表还显示每个节点 Agent 的连接方式（mTLS 流 / API 密钥流 / 旧版 / 第三方 / 离线）和证书状态，
 节点页「概览」里有「Agent 连接」分组（连接方式、最近出现、证书到期与续期时间、吊销时间和原因）。
 
+「服务状态」列显示机器遥测插件上报的 systemd 服务汇总：全部运行为「3/3 正常」，有失败为「N 个失败」，
+没有失败但不全在运行为「2/3 运行中」，另有「无服务」「等待上报」「不支持」「数据过期」；悬停可看计数和上报时间。
+列表加载后对当前页的节点发一次 `GET /api/v3/plugins/machine-telemetry/nodes/services?ids=…` 请求。
+未开启服务采集的节点显示「—」；插件宿主未开启（`plugins.control_execution_enabled`）、未安装机器遥测插件
+或管理员没有 `machine-telemetry.api` 权限时，整列显示「—」，列表照常使用。这一列可以在表格设置里隐藏。
+服务采集按节点在节点页「服务」分区开启，见 [`../architecture/package-reports.md`](../architecture/package-reports.md)。
+
 节点页的「流量」分区画这个节点上传和下载随时间的变化（`GET /api/v4/kernel/nodes/:id/traffic`）：
 24 小时、7 天、30 天按小时，90 天、1 年按日；上方是该范围的上传、下载、合计，图下可以切换成数据表。
 「流量与监控 → 实时节点」里点一行（或行菜单的「查看流量」）会在侧边栏里显示同一张图。小时数据来自流量日志，

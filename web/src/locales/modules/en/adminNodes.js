@@ -46,10 +46,27 @@ export default {
     lastHeartbeat: 'Last heartbeat',
     connection: 'Connection',
     certificate: 'Certificate',
+    serviceStatus: 'Services',
     never: 'Never',
     empty: 'No nodes yet',
     emptyDescription: `A node appears here when its ${AGENT_NAME} starts with a registration key, or when you add it by hand.`,
     loadFailed: 'Couldn’t load nodes'
+  },
+  // The Services column: the machine-telemetry services summary of a node.
+  serviceStatus: {
+    states: {
+      healthy: '{active}/{total} OK',
+      partial: '{active}/{total} running',
+      failed: '{failed} failed',
+      empty: 'No services',
+      waiting: 'Waiting',
+      unsupported: 'Unsupported',
+      stale: 'Stale'
+    },
+    counts: '{total} services: {active} running, {failed} failed',
+    loading: 'Loading service status',
+    unavailable: 'Service status is unavailable: it needs the enabled machine-telemetry package and its API permission',
+    notEnabled: 'Service collection is off on this node'
   },
   actions: {
     open: 'Open node',

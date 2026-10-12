@@ -6,8 +6,8 @@ configuration. The Agent executable is an explicit build input and is never
 replaced with a placeholder.
 
 The package ships no administrator WebUI bundle. Its data shows in the core
-pages: the node page's 服务 section reads its `control_routes` (see
-"Systemd Services Table").
+pages: the node page's 服务 section and the 服务状态 column of the node list
+read its `control_routes` (see "Systemd Services Table").
 
 ## Source Layout
 
@@ -42,7 +42,9 @@ targets and maps `agent-linux-amd64` to
 From 4.1 the package declares `telemetry.systemd.read` and serves the
 read-only per-node services table at
 `GET /api/v3/plugins/machine-telemetry/nodes/:id/services` (administrators;
-the node page's 服务 section). Collection is off on every node until enabled
+the node page's 服务 section), and the services summary of several nodes at
+`GET /api/v3/plugins/machine-telemetry/nodes/services?ids=1,2,3` (the node
+list's 服务状态 column). Collection is off on every node until enabled
 in the Agent installation's configuration:
 
 ```json

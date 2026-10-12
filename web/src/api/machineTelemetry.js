@@ -37,6 +37,25 @@ export async function getNodeServices(nodeID) {
   }))
 }
 
+// The most nodes one summary request may name (the package's
+// native.MaxSummaryNodes).
+export const MAX_SUMMARY_NODES = 200
+
+// The services summary of several nodes, for the node list: one call,
+// answered by the package host like the table. Each entry is the node's
+// table without its units: { node_id, enabled, reported, supported,
+// unsupported_reason, stale, observed_at, summary }.
+export async function getNodesServicesSummary(nodeIDs) {
+  const ids = [...new Set((nodeIDs || []).map(Number).filter(id => Number.isSafeInteger(id) && id > 0))].slice(0, MAX_SUMMARY_NODES)
+  const answer = unwrap(await request({
+    baseURL: '/api/v3',
+    url: `/plugins/${MACHINE_TELEMETRY_ID}/nodes/services`,
+    method: 'get',
+    params: { ids: ids.join(',') }
+  }))
+  return Array.isArray(answer?.nodes) ? answer.nodes : []
+}
+
 function manifestOf(release) {
   const manifest = release?.manifest
   if (manifest && typeof manifest === 'object') return manifest

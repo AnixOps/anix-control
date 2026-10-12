@@ -3763,3 +3763,11 @@ packages with a real page still ship one: `forward`, `gost-mesh`,
   packages (`.github/workflows/commercial-packages.yml`) and the
   `identity-platform` bootstrap package build, sign and install the same
   way.
+- **New 服务状态 column on 节点.** It summarizes each node's systemd
+  services from machine-telemetry (the 服务 section of the node page) in one
+  call per page, `GET /api/v3/plugins/machine-telemetry/nodes/services`. The
+  route is new in this release of the package: update machine-telemetry
+  too. It needs the package host (`plugins.control_execution_enabled`), an
+  enabled machine-telemetry Control installation and `machine-telemetry.api`;
+  without them the column shows "—" and the list works as before. Hide it
+  in the table settings if you do not use the services panel.
