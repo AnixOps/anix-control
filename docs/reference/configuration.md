@@ -373,11 +373,15 @@ agent_control:
 
 ## Agent Install (One-Command Onboarding)
 
-`agent_install` configures the install command the node page copies
-(`POST /api/v4/kernel/agents/install-tokens`, super administrators) and the
-public downloads it uses: `GET /install.sh`, `/install.sh.sig`,
-`/install/agent.env` and `/install/agent/<tag>/<asset>`
-([guide](../guide/agent-onboarding.md)).
+`agent_install` configures the install commands Control renders, a node
+group's (`GET /api/v4/kernel/node-groups/:id/command`) and an existing
+node's (`POST /api/v4/kernel/agents/install-tokens`), both for super
+administrators, and the public routes the script uses: `GET /install.sh`,
+`/install.sh.sig`, `/install/agent.env`, `/install/agent/<tag>/<asset>` and
+`/install/ip` (the caller's address as Control sees it, with
+`server.trusted_proxies` applied) ([guide](../guide/agent-onboarding.md)).
+Node group join tokens are sealed with `module_runtime.ca_kek`: without it
+no node group can be created.
 
 ```yaml
 agent_install:

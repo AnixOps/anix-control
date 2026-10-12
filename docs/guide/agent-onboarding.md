@@ -1,59 +1,204 @@
 # Installing The Agent With One Command
 
-A node joins Control with one command copied from its page: Control issues a
-single-use enrollment token bound to the node, and the install script it
-serves installs the AnixOps Agent, removes the legacy forward runtime of the
-machine and waits until the Agent has enrolled
-([design](../architecture/forward-sdk.md#9-node-onboarding)).
+A machine becomes a node of Control with one command. The command carries
+Control's address and a token, and the token says what the machine becomes:
+
+- a **node group's join token** (`anixjoin_...`) makes it a new node of the
+  group. The same command works on any number of machines; each becomes a
+  node with the group's defaults and protocols
+  ([node groups](#joining-a-node-group));
+- a node's **one-time enrollment token** (`anixagt_...`) makes it that
+  existing node: for moving a node to a new machine, or after a credential
+  rotation ([existing nodes](#enrolling-an-existing-node)).
+
+The install script Control serves installs the AnixOps Agent, removes the
+legacy forward runtime of the machine, runs `anix-agent join` to exchange
+the token for the node's certificate, writes the configuration for the node
+the join named and starts the Agent
+([design](../architecture/forward-sdk.md#9-node-onboarding), 5.0 node
+groups: `docs/design/node-onboarding`).
 
 ## Before You Start
 
-> **Needs anix-agent v4.2.0-rc.1 or later.** The script writes a
-> credential-only configuration (Control's address, the node and the
-> enrollment token; no node API key and no proxy cores). v4.2.0-rc.1 accepts
-> it: in a rehearsal against Control 4.2.0-rc.1 the Agent enrolled with the
-> token, opened its control stream with the client certificate and showed as
-> `mtls` in `anix-control agents transports`. Earlier Agents start and refuse
-> that configuration (`ApiKey is required`) and the script stops at "did not
-> enroll": keep installing those nodes the way `docs/UPGRADE.md` describes.
+> **Needs an anix-agent release with `anix-agent join` (5.0).** The script
+> runs `anix-agent join` to obtain the node's identity before the Agent
+> starts, and writes a configuration that carries no token and no node API
+> key. An Agent release without the `join` command stops the script at
+> "the join failed".
 
 On Control:
 
 - The built-in agent CA is on (`module_runtime.ca_kek` with `pki: builtin`)
   and the gRPC listener has TLS (`grpc.enabled`, `grpc.tls_cert_file`):
-  the Agent enrolls there (`docs/UPGRADE.md`,
+  the Agent joins there (`docs/UPGRADE.md`,
   "Agent Transports: Preparing For v4.2"). Fresh installs generate the key;
   the certificate must be publicly trusted for the gRPC target, because the
   Agent verifies it against the node's system CAs and accepts no private CA
   ([release installation](release-installation.md#agent-access),
-  `docs/DEPLOYMENT.md` 2.0.2).
+  `docs/DEPLOYMENT.md` 2.0.2). Node group join tokens are sealed with the
+  same `module_runtime.ca_kek`: without it no group can be created
+  (`409 ca_kek_missing`).
 - Nodes reach Control over **https**. Set `agent_install.public_url` to the
   address nodes use (for example `https://panel.example.com`) unless the
   request's origin is already right (behind a reverse proxy it only is when
   the proxy is in `server.trusted_proxies`). Set `agent_install.grpc_target`
   when nodes dial the gRPC listener at another host or port than
-  `public_url`'s host and `grpc.port`.
+  `public_url`'s host and `grpc.port`. Behind a reverse proxy, also list it
+  in `server.trusted_proxies`: the script asks `GET /install/ip` for the
+  machine's address, and only a trusted proxy's forwarded address counts.
 - Only a super administrator (an administrator who is not staff and not
-  banned) can issue install tokens.
+  banned) can show a group's command or reset its token, and issue
+  enrollment tokens.
 
 On the node: Linux on amd64 or arm64 with systemd 240 or later, root
-(sudo), `curl`, `sha256sum` and `unzip` (or `python3`); for an offline
-bundle also `tar` and OpenSSL 3. A forward node needs Linux 5.10 and
-nftables 0.9.7 or later. OpenRC is not supported yet. The script checks
-all of this before it changes anything ([preflight](#preflight-checks)).
+(sudo), `curl`, `sha256sum`, `runuser` or `setpriv` (util-linux) and
+`unzip` (or `python3`); for an offline bundle also `tar` and OpenSSL 3. A
+forward node needs Linux 5.10 and nftables 0.9.7 or later. OpenRC is not
+supported yet. The script checks all of this before it changes anything
+([preflight](#preflight-checks)).
 
-## Install
+## Joining A Node Group
 
-1. Open the node: **节点 › node › 部署 › 复制安装命令** for a proxy node, or
-   the forward node's page (**转发节点 › node › 概览 › 复制安装命令**).
-2. Choose the token lifetime (1 hour by default, at most 7 days) and
-   generate the command. The token is shown once and works once; closing the
-   sheet drops it.
-3. Pick the download source and copy its command:
+A node group owns a join token and the defaults of the nodes it creates.
+Its kind is `proxy` (the machines serve users: `v2_node` rows) or `forward`
+(entry and relay machines of forward routes: forward nodes). The console's
+dialog for groups comes in a later release; until then use the API
+([reference](api-reference.md#节点组与接入令牌)):
+
+1. Create the group (any administrator):
+
+   ```sh
+   curl -fsS -X POST https://panel.example.com/api/v4/kernel/node-groups \
+     -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' -d '{
+       "name": "HK", "kind": "proxy", "rate": 1, "tags": ["hk"],
+       "require_approval": false, "max_nodes": 0,
+       "subscription_group_ids": [1],
+       "protocol_template": [
+         {"name": "VLESS Reality", "type": "vless", "port": 443, "tls": "reality",
+          "reality": {"server_name": "www.example.com", "dest": "www.example.com:443"},
+          "settings": {"flow": "xtls-rprx-vision"}},
+         {"name": "SS 2022", "type": "shadowsocks", "port_range": [20000, 40000],
+          "settings": {"method": "2022-blake3-aes-128-gcm"}}
+       ]}'
+   ```
+
+2. Show its command (super administrators; every read is in the operation
+   log as `node_group_join_token_reveal`):
+
+   ```sh
+   curl -fsS https://panel.example.com/api/v4/kernel/node-groups/1/command \
+     -H "Authorization: Bearer $ADMIN_TOKEN"
+   ```
+
+   The answer lists the command for each download source (`control`,
+   `cn`, `github`, as in [enrolling an existing node](#enrolling-an-existing-node)),
+   the token, its expiry and the uninstall command.
+
+3. Run it on each machine as root:
+
+   ```sh
+   curl -fsSL https://panel.example.com/install.sh | sudo bash -s -- -u https://panel.example.com -t anixjoin_8Kq...
+   ```
+
+   | Flag | Meaning |
+   |---|---|
+   | `-u`, `--control` | Control's address (in the copied command) |
+   | `-t`, `--token` | the join token (in the copied command); `ANIX_AGENT_TOKEN` in the environment works too and keeps it out of the shell history |
+   | `--name hk-01` | the new node's name; default: the machine's host name. Control makes it unique in the group with `-2`, `-3` |
+   | `--host 203.0.113.5` | the address clients connect to; default: the machine's public address as Control sees it |
+   | `--mirror cn\|github`, `--offline <bundle>` | where the Agent comes from ([sources](#enrolling-an-existing-node), [offline](#installing-without-internet-access)) |
+   | `--reset` | discard this machine's identity and join as a new node |
+   | `--forward` | turn IP forwarding on for a proxy node too; a forward group's node always gets it |
+   | `--timeout 180` | how long the join may take, in seconds |
+
+   The script prints the node it joined, for example
+   `已接入：hk-01 (proxy-12)`, and reminds you that the command, token
+   included, is in the shell history.
+
+What Control does with a join, in one transaction:
+
+1. It finds the group by the token's SHA-256. An unknown token, a deleted
+   group, an expired token or a group at `max_nodes` gets one answer,
+   `join_rejected`, without detail; the operation log has the reason and
+   the machine's address (`agent_join_rejected`). Joins are rate limited
+   per address.
+2. A machine that lost its local state (a reinstall, `uninstall --purge`)
+   [rejoins](#rejoining) its earlier node when the rule holds.
+3. Otherwise it creates the node: the name and host above, the group's
+   rate, tags, monthly traffic limit and reset day and sort, and, in a
+   proxy group, the template's protocols with their own secrets and ports,
+   in the group's subscription groups.
+4. It issues the node's certificate (enrollment method `join_token`) and
+   writes `agent_join` to the operation log; after the commit every
+   administrator gets a notification (in-app, e-mail when configured,
+   Telegram when bound): `节点已接入：hk-01 (proxy-12)`, or `节点待审批：...`.
+
+**Protocol templates.** Each entry of `protocol_template` is one protocol
+every new node of the group gets. Control generates each node's secrets:
+the Reality key pair and short ID, the Shadowsocks 2022 server key, the
+WireGuard server key pair; a template that sets one is refused.
+
+| Field | Meaning |
+|---|---|
+| `name` | the protocol's name (default: its type) |
+| `type` | `vless`, `vmess`, `shadowsocks` or `wireguard` in this release |
+| `port` or `port_range` | a fixed port, or `[from, to]`: a random port per node, distinct from the node's other protocols. Control cannot see which ports are busy on the machine; a port in use shows in the node's runtime health, and you edit it |
+| `transport` | `tcp` (default), `ws`, `grpc`, `h2`, `httpupgrade` for VLESS and VMess; Reality runs on `tcp`, `grpc` and `h2` |
+| `tls` | `none` (default) or `reality` (VLESS). `acme` and `self_signed` need certificates on the node and come in a later release |
+| `reality` | `server_name`, `dest` (default `<server_name>:443`), `fingerprint` (default `chrome`) |
+| `settings`, `transport_settings` | JSON objects copied to the protocol (for example `flow`, a Shadowsocks `method`, a WebSocket `path`) |
+
+Changing a group's template applies to later joins; nodes that joined keep
+their protocols.
+
+**The token.** The command can be shown again at any time (owner decision
+D8): Control keeps the token's SHA-256 and a copy sealed with AES-256-GCM
+under a key derived from `module_runtime.ca_kek`. `POST
+/api/v4/kernel/node-groups/<id>/reset-token` replaces it: every earlier
+command stops working, nodes that joined keep their certificates.
+`token_expires_at` and `max_nodes` bound a group's token; deleting a group
+(refused while it has live nodes) ends it.
+
+**Approval.** A group with `require_approval` creates its nodes pending:
+they get their certificate and connect, but Control sends them neither
+their configuration nor their users, and offers their protocols to no
+subscriber, until an administrator approves them
+(`POST /api/v4/kernel/nodes/<node>/approve`). Rejecting one
+(`.../reject`) disables it and revokes its certificates. The script says
+so when it joined a pending node.
+
+### Rejoining
+
+A machine whose local state is gone presents the same machine fingerprint
+again (a SHA-256 of its `/etc/machine-id`). Cloned images often share
+`/etc/machine-id`, so the fingerprint alone never hands a machine another
+machine's node. Control rejoins the earlier node only when all of these
+hold:
+
+- a live, enabled node of the same group has the same fingerprint;
+- the public address it joined from is one of the machine's addresses now;
+- it has not been seen on the Agent Control stream (or by a heartbeat) for
+  5 minutes;
+- `--reset` was not given.
+
+Then the node's old certificates are revoked and a new one is issued for it
+(`rejoined proxy-12` in the script's summary). In every other case a new
+node is created; the earlier node stays until you delete it.
+
+## Enrolling An Existing Node
+
+To move a node to a new machine, or to enroll it again after its identity
+was revoked, issue a single-use enrollment token for the node (1 hour by
+default, at most 7 days; super administrators): **节点 › node › 部署 ›
+复制安装命令** for a proxy node, the forward node's page for a forward
+node, or `POST /api/v4/kernel/agents/install-tokens` with
+`{"node": "proxy-12"}`. The token is shown once and works once.
+
+1. Pick the download source and copy its command:
 
    ```sh
    curl -fsSL https://panel.example.com/install.sh | sudo bash -s -- \
-     --control https://panel.example.com --node forward-41 --token anixagt_...
+     -u https://panel.example.com -t anixagt_...
    ```
 
    | Source | Script from | Agent from | Checksum from |
@@ -62,13 +207,17 @@ all of this before it changes anything ([preflight](#preflight-checks)).
    | `cn` (`--mirror cn`) | Control | the mainland mirror (`agent_install.cn_mirror_url`), else Control, else GitHub | Control, else GitHub |
    | `github` (`--mirror github`) | GitHub release asset `agent-install.sh` | GitHub | GitHub |
 
-   A mirror never supplies the checksum it is checked against.
-4. Paste it on the node as root. The script prints what it did:
+   A mirror never supplies the checksum it is checked against. The token
+   names its node, so the command has no node flag.
+2. Paste it on the node as root (add `--reset` on a machine that runs the
+   Agent of another node). The script prints what it did:
 
    ```text
-   [anixops] AnixOps Agent v4.2.0 is running (install)
-     node:        forward-41
+   [anixops] 已接入：relay-41 (forward-41)
+   [anixops] AnixOps Agent v5.0.0 is running (install)
+     node:        forward-41 (relay-41)
      identity:    spiffe://anixops/prod/agent/forward-41 (serial ..., expires ...)
+     join:        enrolled as forward-41
      forwarding:  wrote /etc/sysctl.d/90-anixops-forward.conf (net.ipv4.ip_forward=1 net.ipv6.conf.all.forwarding=1); applied
      legacy:      removed
                     - nftables table inet v2b_forward
@@ -81,7 +230,8 @@ The Agent then shows as connected over mTLS on **Agent 连接方式**
 ## What The Script Does
 
 1. Checks its arguments, root, the architecture and systemd; a first install
-   without `--token` stops here.
+   without a token (`-t`) stops here. A machine that ran the script before
+   knows its node from `/etc/anixops/agent/config.json`.
 2. Reads `https://<control>/install/agent.env`: the Agent release (Control's
    own version, H25), the gRPC target, the mirrors and, when Control holds
    the release, its SHA-256. With `--offline` it reads the bundle instead.
@@ -96,15 +246,11 @@ The Agent then shows as connected over mTLS on **Agent 连接方式**
 6. Stops a running Agent (forwarding keeps running), installs
    `/usr/lib/anixops-agent/anix-agent` (and the pinned gost when the release
    ships it) with `/usr/local/bin/anix-agent` linking to it.
-7. Writes `/etc/anixops/agent/config.json` (root:anixops-agent, 0640) with
-   Control's address, the gRPC target, the node and the identity paths, and
-   the token to `/var/lib/anixops-agent/enroll.credential` (0600, owned by
-   the Agent, which removes it after use). The Agent's state is in
-   `/var/lib/anixops-agent` (0700), its key and certificate in
-   `/var/lib/anixops-agent/pki`, the gost driver's files in
-   `/var/lib/anixops-gost` (0750). A machine that runs, or ran, the Agent
-   of anix-agent's own root installer (a unit without
-   `User=anixops-agent`, or `/var/lib/anix-agent` or
+7. Creates the Agent's directories: its state in `/var/lib/anixops-agent`
+   (0700), its key and certificate in `/var/lib/anixops-agent/pki`, the
+   gost driver's files in `/var/lib/anixops-gost` (0750). A machine that
+   runs, or ran, the Agent of anix-agent's own root installer (a unit
+   without `User=anixops-agent`, or `/var/lib/anix-agent` or
    `/var/lib/anixops/plugins`) first gets
    `anix-agent migrate-paths --chown anixops-agent`: the Agent's identity,
    stream state and plugins are copied to `/var/lib/anixops-agent`, owned
@@ -115,22 +261,46 @@ The Agent then shows as connected over mTLS on **Agent 连接方式**
    `inet v2b_forward`, `ip v2b_forward` and `ip anixops_forward`, and the
    clean agent (`v2forward-agent.service`, `/etc/v2board-forward-agent`,
    `/usr/local/bin/v2forward-agent`). It touches no other table or service.
-9. On a forward node (`forward-<id>`, or a proxy node with `--forward`)
-   turns on IP forwarding, which nftables DNAT and gost relays need: writes
-   `/etc/sysctl.d/90-anixops-forward.conf` (`net.ipv4.ip_forward = 1`,
-   `net.ipv6.conf.all.forwarding = 1`, as `anix-agent forward
-   sysctl-dropin` prints it) and applies it with
-   `sysctl -e -p` (`-e`: a host without IPv6 still gets IPv4). When it
-   cannot apply now, the summary notes it and the file applies at the next
-   boot. A proxy node without `--forward` is left as it is. With
-   `--accept-ra` it adds `net.ipv6.conf.<if>.accept_ra = 2` for the
-   interfaces that have an IPv6 default route from router advertisements
-   (SLAAC), and later runs keep those lines.
-10. Writes `anix-agent.service` and `anixops-gost.service`, and a polkit rule
-    that lets `anixops-agent` start, stop and reload `anixops-gost.service`
-    only; enables and starts the Agent.
-11. Waits (up to `--timeout`, 180 s by default) until `anix-agent identity`
-    shows a valid certificate for the node.
+9. Writes `anix-agent.service` and `anixops-gost.service`, and a polkit rule
+   that lets `anixops-agent` start, stop and reload `anixops-gost.service`
+   only; enables them.
+10. Joins Control, unless the machine already holds a valid identity (a
+    re-run): asks `https://<control>/install/ip` over IPv4 and IPv6 for the
+    machine's public addresses (a family that does not answer is left out),
+    writes the token to `/var/lib/anixops-agent/join.token` (0600, the
+    Agent's) and runs, as `anixops-agent` and within `--timeout` (180 s):
+
+    ```sh
+    anix-agent join --control <url> --grpc <grpc_target> --token-file /var/lib/anixops-agent/join.token \
+      [--name N] [--host H] [--address A]... [--reset] --pki-dir /var/lib/anixops-agent/pki --json
+    ```
+
+    The token file is removed as soon as the join returns. The join writes
+    the key and certificate into the identity store and answers the node it
+    joined (`proxy-<id>` or `forward-<id>`), its name, its group and whether
+    it waits for approval; a failed join stops the script with Control's
+    reason before the Agent starts.
+11. Writes `/etc/anixops/agent/config.json` (root:anixops-agent, 0640) with
+    Control's address, the gRPC target, that node and the identity paths:
+    no token and no API key. A configuration for another node is kept as
+    `config.json.bak.<time>`.
+12. On a forward node the join made (its kind is known only now), runs the
+    forward [preflight checks](#preflight-checks); a failure stops the
+    script before the Agent starts, and the same command continues once it
+    is fixed (the identity is kept).
+13. On a forward node (`forward-<id>`, or a proxy node with `--forward`)
+    turns on IP forwarding, which nftables DNAT and gost relays need: writes
+    `/etc/sysctl.d/90-anixops-forward.conf` (`net.ipv4.ip_forward = 1`,
+    `net.ipv6.conf.all.forwarding = 1`, as `anix-agent forward
+    sysctl-dropin` prints it) and applies it with
+    `sysctl -e -p` (`-e`: a host without IPv6 still gets IPv4). When it
+    cannot apply now, the summary notes it and the file applies at the next
+    boot. A proxy node without `--forward` is left as it is. With
+    `--accept-ra` it adds `net.ipv6.conf.<if>.accept_ra = 2` for the
+    interfaces that have an IPv6 default route from router advertisements
+    (SLAAC), and later runs keep those lines.
+14. Starts the Agent and prints the summary, and, when the token came on the
+    command line, a reminder that the command is in the shell history.
 
 The Agent runs as `anixops-agent`, not root, with only `CAP_NET_ADMIN` and
 `CAP_NET_BIND_SERVICE`, `NoNewPrivileges`, `ProtectSystem=strict` (writable:
@@ -144,15 +314,16 @@ AF_UNIX`. gost runs as `anixops-gost` with `CAP_NET_BIND_SERVICE` only.
 
 The same command is safe to repeat. With a valid identity it upgrades the
 Agent in place, keeps the identity and the configuration, and leaves the
-token unused (it expires). A failed run can be re-run after fixing the cause. Re-runs
-run the preflight checks too: a check that now fails (for example a moved
-gRPC port) stops the upgrade until it is fixed or `--skip-preflight` is
-given.
+token unused (`already joined as proxy-12; the token was not used`). A
+failed run can be re-run after fixing the cause. Re-runs run the preflight
+checks too: a check that now fails (for example a moved gRPC port) stops
+the upgrade until it is fixed or `--skip-preflight` is given.
 
-To move the machine to another node, or to enroll again after its identity
-was revoked, issue a new command for the node and add `--reset`: the script
-discards the identity, rewrites the configuration (the old one is kept as
-`config.json.bak.<time>`) and enrolls with the new token.
+To move the machine to another node, or to join again after its identity
+was revoked, run a command with a token for the new node or group and add
+`--reset`: the script discards the identity, joins with the token (with a
+join token Control then always creates a new node) and rewrites the
+configuration (the old one is kept as `config.json.bak.<time>`).
 
 ## Rotating A Node's Credentials
 
@@ -187,7 +358,7 @@ command of the node, adding `--reset` (the old identity is discarded):
 
 ```sh
 curl -fsSL https://panel.example.com/install.sh | sudo bash -s -- \
-  --control https://panel.example.com --node proxy-12 --token anixagt_... --reset
+  -u https://panel.example.com -t anixagt_... --reset
 ```
 
 **The node's API key.** The Agent holds a certificate, not the key, but the
@@ -213,8 +384,8 @@ credential lives and, for a proxy node, whether to replace the API key too,
 then shows the new credential once, masked and with a copy button, together
 with when it expires. Closing the dialog clears it. The console does not know
 whether you are a super administrator: a refusal appears in the dialog. It
-shows no install command, because the `--reset` form above is not in an Agent
-release yet; give the credential to the machine as the steps above say.
+shows no install command; give the credential to the machine with the
+command above.
 
 Every rotation is in the operation log as `agent_credentials_rotate` (with
 your reason and what was revoked) and `agent_enrollment_token_issue`,
@@ -229,6 +400,13 @@ changes anything, the script checks the machine. Each check prints `ok`,
 `FAIL` with a `fix:` line. When a check fails the script stops after
 running all of them and says how many failed; nothing on the machine has
 changed. `--skip-preflight` installs anyway and notes it in the summary.
+
+The forward checks (kernel 5.10, nftables, polkit, firewalls, IPv6 SLAAC)
+need to know that the machine forwards. Before a fresh join they run up
+front only with `--forward` or on a machine whose configuration names a
+forward node; a machine that a join makes a forward node gets them right
+after the join, before its Agent starts (step 12 above). Pass `--forward`
+to have them checked before anything changes.
 
 | Check | Fails when | Warns when |
 |---|---|---|
@@ -253,7 +431,7 @@ polkit (Ubuntu 24.04, Debian 12) to forward with gost.
 
 A node that cannot download from Control's mirrors or GitHub installs from
 an offline bundle. The node still needs to reach Control's gRPC target to
-enroll; only the downloads move to the bundle.
+join; only the downloads move to the bundle.
 
 1. Put the Agent release in `agent_install.artifact_dir` on Control
    (`<dir>/<tag>/`): the zips and their `.sig` files, `SHA256SUMS` and
@@ -269,13 +447,17 @@ enroll; only the downloads move to the bundle.
    signatures with `plugins.official_public_key` and that `SHA256SUMS`
    lists the zip's digest, and prints the files and the install command.
 3. Copy the bundle and `install.sh` to the node (the bundle contains the
-   script too), generate the install command on the node page, and run it
-   with `--offline`:
+   script too), copy the command (a group's or a node's), and run it with
+   `--offline`:
 
    ```sh
    sudo bash install.sh --offline agent-offline-amd64.tar.gz \
-     --control https://panel.example.com --node forward-41 --token anixagt_...
+     -u https://panel.example.com -t anixjoin_...
    ```
+
+   The join still needs Control's gRPC target. When Control's https address
+   cannot be reached either, the script passes no public address, and a new
+   node's host is the address Control's gRPC listener saw: give `--host`.
 
 The bundle is a `tar.gz` of flat files:
 
@@ -344,7 +526,7 @@ printf '%s' 'MCowBQYDK2VwAyEAjW26nr2tbthASoeq6RmIpx8Ah+uhPNIv9V1ewRVb1VE=' | bas
 base64 -d install.sh.sig >install.sh.sig.bin
 openssl pkeyutl -verify -pubin -keyform DER -inkey official.der -rawin \
   -in install.sh -sigfile install.sh.sig.bin
-sudo bash install.sh --control https://panel.example.com --node forward-41 --token anixagt_...
+sudo bash install.sh -u https://panel.example.com -t anixjoin_...
 ```
 
 Control serves `/install.sh.sig` only when the signature verifies its script
@@ -432,8 +614,10 @@ last 7 hours and after the end.
 2. **The certificate ended.** An Agent whose certificate ended cannot
    connect or renew. Enroll it again: issue a new install command on the
    node's page (or `POST /api/v4/kernel/agents/install-tokens`) and run it on
-   the node with `--reset`, as in [Running It Again](#running-it-again). The
-   alert clears when the new certificate exists.
+   the node with `--reset`, as in [Running It Again](#running-it-again). A
+   node of a group can also rejoin with the group's command when the
+   [rejoin rule](#rejoining) holds. The alert clears when the new
+   certificate exists.
 3. **The node is gone for good.** Disable or delete the node: its
    certificates are revoked and the alert resolves. A revoked certificate
    never alerts.
@@ -450,9 +634,13 @@ split or an identity cutover left unfinished) with what clears each.
 | `node_disabled` on a rotation | enable the node first ([rotation](#rotating-a-nodes-credentials)) |
 | `cannot reach .../install/agent.env` | the node cannot reach Control over https (DNS, firewall, certificate) |
 | `cannot get the checksum of ...` | `--mirror cn` without GitHub access: put the release in `agent_install.artifact_dir` |
-| `did not enroll within 180s` | `journalctl -u anix-agent.service -n 50`: a used or expired token needs a new command; the gRPC target must be reachable with TLS |
-| `installed for another node` | the machine runs the Agent of another node: add `--reset` with a token for the new node |
-| `--group` refused | node-group tokens are not in this release |
+| `the join failed` with `join_rejected` | the group's token was reset, has expired, its group was deleted or is at `max_nodes`: copy the current command (`GET /api/v4/kernel/node-groups/<id>/command`); the operation log's `agent_join_rejected` entry has the reason |
+| `the join failed` with `agent_enrollment_rejected` | the enrollment token was used, expired or revoked, or its node is disabled: issue a new one |
+| `the join did not finish within 180s` | the gRPC target must be reachable with TLS from this machine; `--timeout` gives the join longer |
+| `ResourceExhausted` from the join | too many joins from this address in a short time: wait a minute and re-run |
+| `already joined as proxy-12; the token was not used` | the machine keeps its node: add `--reset` to join with the token instead |
+| `--node is gone`, `--group is gone` | an old command: copy the current one (`-u <control> -t <token>`) |
+| `ca_kek_missing` when creating a group | set `module_runtime.ca_kek`: join tokens are sealed with it |
 | `preflight found N problem(s)` | each `FAIL` line above has a `fix:`; re-run after fixing, or add `--skip-preflight` |
 | `cannot connect to the gRPC target` | open `grpc.port` from the node to Control, or set `agent_install.grpc_target` to an address nodes reach |
 | `the certificate of the gRPC target ... does not verify` | the gRPC listener needs a certificate for that host from a CA in the node's trust store |
@@ -462,10 +650,13 @@ split or an identity cutover left unfinished) with what clears each.
 
 ## Not In This Release
 
-- Node-group tokens (`--group`), where the first use creates the node: Control
-  has no node-group model for Agent nodes yet, and creating the node on first
-  enrollment needs a change to the agent PKI. Tokens are bound to an existing
-  node.
+- The console's pages for node groups (接入节点, the 节点组 tab, the list of
+  pending nodes): use the API above until they ship.
+- Protocol templates with `tls` `acme` or `self_signed`, and the types that
+  need a certificate on the node (Trojan, Hysteria2, TUIC, AnyTLS).
+- Deleting a rejected node: rejecting disables it and revokes its
+  certificates; the node row stays until node deletion becomes a soft
+  delete.
 - OpenRC.
 - gost forwarding on polkit older than 0.106 (Ubuntu 22.04 ships 0.105,
   which reads `.pkla` files instead of `/etc/polkit-1/rules.d`): preflight

@@ -38,6 +38,16 @@
 - The live Control WebUI gate loads and revokes the nftables-forward WebUI and checks that identity-platform
   and machine-telemetry install without one and stay out of the catalog.
 
+- The install command is `curl -fsSL <control>/install.sh | sudo bash -s -- -u <control> -t <token>` for both a node
+  group's join token and a node's one-time enrollment token (`-u`/`--control`, `-t`/`--token`; the token names its
+  node or group). After installing the Agent the script runs `anix-agent join` synchronously as `anixops-agent`
+  (with `--name`, `--host`, the addresses from `/install/ip` and `--reset`), writes `config.json` for the node the
+  join named (no token in it), and only then turns on IP forwarding (a forward node) and starts the Agent. A machine
+  that a join makes a forward node gets the forward preflight checks after the join, before its Agent starts. A
+  machine with a valid identity skips the join. The script ends with a reminder that the command is in the shell
+  history. The install-token API answer renders the same command shape. Needs an anix-agent release with
+  `anix-agent join`.
+
 ### Removed
 
 - The placeholder WebUI pages (a heading and the package version) of subscription, proxy-node, plan, ticket,
@@ -45,6 +55,39 @@
   wireguard, and the machine-telemetry extension page, with their `/admin/extensions/*` sidebar entries.
   The features are on the core pages; machine-telemetry keeps its control routes for the node pages. The
   web app's test-only local module registry and its machine-telemetry module are gone too.
+  "Joining a node group"). The change is additive, so Agents in the field are unaffected.
+- Node groups (5.0 node onboarding, `docs/design/node-onboarding`): a group (`v5_node_group`, kind `proxy` or
+  `forward`) owns an `anixjoin_` join token and the defaults of the nodes it creates (rate, tags, monthly traffic
+  limit and reset day, sort, a protocol template and subscription groups). The token is stored as its SHA-256 and
+  sealed with AES-256-GCM under a key derived from `module_runtime.ca_kek` (HKDF-SHA256), so a super administrator
+  can show the install command again; resetting it invalidates every earlier command. Names are unique among live
+  groups; deleting a group is a soft delete, refused while it has live nodes. Administrator API under
+  `/api/v4/kernel/node-groups` (list, create, get, update, delete; `GET .../command` and `POST .../reset-token` for
+  super administrators), every write and token read audited (`docs/guide/api-reference.md`).
+- Control serves `AgentEnrollment.Join`: in one transaction it finds the group by the token's hash, rejoins a
+  reinstalled machine's earlier node when the rejoin rule holds (same group and fingerprint, its last public address
+  among the machine's, not seen on the Agent Control stream for 5 minutes, no reset; the old certificates are
+  revoked), or creates a node (requested name or host name, made unique with `-2`, `-3`; the group's defaults; for a
+  proxy group the template's protocols with per-node Reality keys and short IDs, Shadowsocks 2022 and WireGuard keys
+  and fixed or random ports, in the group's subscription groups; for a forward group a forward node created as the
+  forward inventory creates one), records a `join_token` enrollment, issues the certificate and audits
+  `agent_join`. Unusable tokens (unknown, deleted group, expired, at `max_nodes`) get `PermissionDenied` with
+  `join_rejected` and no detail, audited with the reason (`agent_join_rejected`); joins are rate limited per peer.
+  Every join notifies the administrators after the commit (`node.joined`: in-app, e-mail, Telegram).
+- Approval per group (`require_approval`): a pending node gets its certificate and connects, but Control sends it no
+  configuration (`config.v1`) and no users (`users.v1`), and subscriptions leave its protocols out, until an
+  administrator approves it
+  (`POST /api/v4/kernel/nodes/:id/approve`), which pushes its configuration at once; rejecting
+  (`.../reject`) disables the node and revokes its certificates.
+- `GET /install/ip` answers the caller's address as Control sees it (`server.trusted_proxies` applied), rate
+  limited like the other `/install` routes; the install script hands the IPv4 and IPv6 answers to the join.
+- Proxy and forward nodes have `node_group_id`, `machine_fingerprint`, `approval` (`approved` for every existing
+  node) and `last_public_address`, added at start by the existing schema steps (`EnsureNodeRuntimeHealthSchema`,
+  `EnsureForwardNodeColumns`); `v5_node_group` is created with the kernel schema.
+
+- The install script's `--node` and `--group` flags (an old command stops with a pointer to the new one), its wait
+  for the Agent to enroll after starting it, and the `enroll.credential` file it wrote.
+- The unused `NodeGroup` model (`v2_node_group`); the staging seed keeps its plan group ids without the table.
 
 ## 4.2.1 - 2026-10-12
 
