@@ -22,6 +22,11 @@
 
 ### Fixed
 
+- UniProxy traffic reports are billed with the node's own `rate`, as the gRPC and Agent Control reports
+  already were. The rate used to come from a legacy server row with the same ID, so a node with a rate
+  other than 1 was billed at 1.0 when no such row existed, and at that row's rate when one did. Traffic
+  that was already recorded is not recalculated.
+
 - Saving an edit in the admin plan form keeps the plan's group, visibility, renewal, sort, content
   and the prices the form does not show. The form used to send only five fields to `PUT /admin/plans/:id`,
   which replaces the whole plan, so a renamed plan lost its group, dropped off the storefront and

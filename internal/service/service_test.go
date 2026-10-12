@@ -5576,43 +5576,6 @@ func (s *ServerServiceTestSuite) TestBuildNodeConfig_WithRoutes() {
 	assert.Equal(s.T(), "geoip:cn", routes[0]["match"])
 }
 
-func (s *ServerServiceTestSuite) TestGetServerRate() {
-	server := &model.ServerVMess{
-		BaseServer: model.BaseServer{
-			Name:       "Rate Test",
-			Host:       "rate.example.com",
-			ServerPort: 443,
-			Rate:       2.5,
-		},
-		Network: "tcp",
-	}
-	database.Get().Create(server)
-
-	rate := s.svc.GetServerRate(model.ServerTypeVMess, server.ID)
-	assert.Equal(s.T(), 2.5, rate)
-}
-
-func (s *ServerServiceTestSuite) TestGetServerRate_NotFound() {
-	rate := s.svc.GetServerRate(model.ServerTypeVMess, 99999)
-	assert.Equal(s.T(), 1.0, rate)
-}
-
-func (s *ServerServiceTestSuite) TestGetServerRate_InvalidRateFallsBackToOne() {
-	server := &model.ServerVMess{
-		BaseServer: model.BaseServer{
-			Name:       "Invalid Rate Test",
-			Host:       "invalid-rate.example.com",
-			ServerPort: 443,
-			Rate:       0,
-		},
-		Network: "tcp",
-	}
-	database.Get().Create(server)
-
-	rate := s.svc.GetServerRate(model.ServerTypeVMess, server.ID)
-	assert.Equal(s.T(), 1.0, rate)
-}
-
 func (s *ServerServiceTestSuite) TestParseTrafficData() {
 	data := map[string]any{
 		"1": []any{float64(1024), float64(2048)},
