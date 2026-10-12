@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Changed
+
+- CI installs golangci-lint from its pinned, checksum-verified release binary instead of compiling it
+  on every run.
+
 ### Security
 
 - Subscriptions no longer carry a WireGuard node's server private key. The JSON and base64 JSON formats
