@@ -707,6 +707,7 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		v3.GET("/topologies", kernel.ListTopologies)
 		v3.POST("/topologies", kernel.CreateTopology)
 		v3.POST("/topologies/validate", kernel.ValidateTopology)
+		v3.DELETE("/topologies/:id", kernel.DeleteTopology)
 		v3.GET("/topologies/:id/revisions", kernel.ListTopologyRevisions)
 		v3.POST("/topologies/:id/revisions", kernel.CreateTopologyRevision)
 		v3.GET("/topologies/:id/revisions/:revision_id", kernel.GetTopologyRevision)

@@ -194,6 +194,14 @@ export async function createKernelTopology(input) {
   return unwrap(await v3({ url: '/topologies', method: 'post', data: input }))
 }
 
+// Deleting a topology answers { topology, deleted, deployment }: deleted is
+// true when it was deleted at once (200); otherwise (202) deployment is the
+// teardown that removes its active revision from the nodes and deletes it
+// when it succeeds.
+export async function deleteKernelTopology(topologyID) {
+  return unwrap(await v3({ url: `/topologies/${topologyID}`, method: 'delete' }))
+}
+
 export async function getKernelTopologyRevisions(topologyID) {
   return unwrap(await v3({ url: `/topologies/${topologyID}/revisions`, method: 'get' }))
 }

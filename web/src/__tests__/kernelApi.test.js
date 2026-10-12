@@ -255,6 +255,13 @@ describe('kernel API', () => {
     expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v3', url: '/topologies', method: 'post', data: topology })
   })
 
+  it('deletes a topology through the v3 kernel and unwraps its result', async () => {
+    const result = { topology: { id: 3 }, deleted: false, deployment: { id: 9, teardown: true, state: 'applying' } }
+    mockRequest.mockResolvedValueOnce({ data: result })
+    await expect(kernelApi.deleteKernelTopology(3)).resolves.toEqual(result)
+    expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v3', url: '/topologies/3', method: 'delete' })
+  })
+
   it('reads and switches route modes through the v4 kernel', async () => {
     await kernelApi.getKernelRouteModes('legacy-api')
     expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v4', url: '/kernel/route-modes', method: 'get', params: { package_id: 'legacy-api' } })

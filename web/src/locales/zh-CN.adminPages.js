@@ -731,7 +731,12 @@ export default {
       preview: '只读部署预览', previewAction: '预览', previewSteps: '{count} 个计划步骤',
       emptyHint: '新建一个拓扑，写入顶点与连接，保存修订后即可规划部署。',
       viewLabel: '编辑方式', viewJSON: 'JSON', viewGraph: '图示', graphLabel: '拓扑图示', graphSummary: '{nodes} 个顶点，{edges} 条连接',
-      graphEmpty: '还没有顶点', graphEmptyHint: '在 JSON 的 vertices 中添加顶点后，这里会画出拓扑。', graphInvalidHint: '修正 JSON 后这里会画出拓扑。', graphFailed: '拓扑图示加载失败'
+      graphEmpty: '还没有顶点', graphEmptyHint: '在 JSON 的 vertices 中添加顶点后，这里会画出拓扑。', graphInvalidHint: '修正 JSON 后这里会画出拓扑。', graphFailed: '拓扑图示加载失败',
+      deleting: '删除中', deleteTitle: '删除拓扑 {name}？', deleteAction: '删除拓扑', deleteConfirm: '确认删除 {topology} 吗？',
+      deleteMessage: '拓扑会从本页消失，名称可以重新使用。它的修订、部署和操作记录会保留以供审计。',
+      deleteLiveMessage: '它的激活修订正在节点上运行。系统会先执行一次拆除部署，停用并移除每个插件顶点，拆除成功后才删除拓扑；拆除失败时拓扑保留。修订、部署和操作记录会保留以供审计。',
+      deletingHint: '拆除部署正在从节点上移除该拓扑，成功后拓扑会被删除；回滚拆除部署会保留拓扑。',
+      teardown: '拆除'
     },
     extensions: { errorsTitle: 'WebUI 扩展加载失败' },
     assignments: {
@@ -755,14 +760,17 @@ export default {
       releaseImported: '{plugin} {version} 已导入', cancelRequested: '已请求取消操作',
       assignmentSaved: '{plugin} 节点角色已保存', assignmentStateSaved: '{plugin} 节点角色状态已保存', assignmentDeleted: '{plugin} 节点角色已删除',
       topologyRevisionSaved: '拓扑修订 {revision} 已保存', topologyPlanned: '部署 #{id} 已规划',
-      topologyApplyRequested: '已请求应用拓扑部署', topologyRollbackRequested: '已请求回滚拓扑部署', topologyCreated: '拓扑 {name} 已创建'
+      topologyApplyRequested: '已请求应用拓扑部署', topologyRollbackRequested: '已请求回滚拓扑部署', topologyCreated: '拓扑 {name} 已创建',
+      topologyDeleted: '拓扑 {name} 已删除', topologyTeardownStarted: '正在拆除拓扑 {name}（部署 #{id}），拆除成功后删除',
+      topologyDeleteFailed: '拓扑 {name} 未删除：拆除部署 #{id} 的结束状态为 {state}'
     },
     errors: {
       load: '无法加载控制状态', action: '插件操作失败', install: '插件安装失败', configLoad: '无法加载插件配置',
       configSave: '无法保存插件配置', releaseImport: '发行版导入失败', cancel: '无法取消操作', poll: '无法刷新操作状态',
       nodesLoad: '无法加载节点', assignmentsLoad: '无法加载节点角色', assignmentSave: '无法保存节点角色', assignmentDelete: '无法删除节点角色',
       topologyLoad: '无法加载拓扑修订', topologyValidate: '无法校验拓扑', topologySave: '无法保存拓扑修订', topologyPlan: '无法规划拓扑部署',
-      topologyPreview: '无法预览拓扑部署', topologyStatus: '无法加载部署状态', topologyApply: '无法应用拓扑部署', topologyRollback: '无法回滚拓扑部署', topologyCreate: '无法创建拓扑'
+      topologyPreview: '无法预览拓扑部署', topologyStatus: '无法加载部署状态', topologyApply: '无法应用拓扑部署', topologyRollback: '无法回滚拓扑部署', topologyCreate: '无法创建拓扑',
+      topologyDelete: '无法删除拓扑'
     }
   },
   routeModes: {

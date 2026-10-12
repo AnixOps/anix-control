@@ -731,7 +731,12 @@ export default {
       preview: 'Read-only deployment preview', previewAction: 'Preview', previewSteps: '{count} planned steps',
       emptyHint: 'Create a topology, describe its vertices and links, and save a revision to plan a deployment.',
       viewLabel: 'Edit as', viewJSON: 'JSON', viewGraph: 'Graph', graphLabel: 'Topology graph', graphSummary: '{nodes} vertices, {edges} links',
-      graphEmpty: 'No vertices yet', graphEmptyHint: 'Add vertices to the JSON and the topology is drawn here.', graphInvalidHint: 'Fix the JSON and the topology is drawn here.', graphFailed: 'Couldn’t draw the topology'
+      graphEmpty: 'No vertices yet', graphEmptyHint: 'Add vertices to the JSON and the topology is drawn here.', graphInvalidHint: 'Fix the JSON and the topology is drawn here.', graphFailed: 'Couldn’t draw the topology',
+      deleting: 'Deleting', deleteTitle: 'Delete topology {name}?', deleteAction: 'Delete topology', deleteConfirm: 'Delete {topology}?',
+      deleteMessage: 'It disappears from this page and its name can be used again. Its revisions, deployments and operations are kept for audit.',
+      deleteLiveMessage: 'Its active revision runs on nodes. A teardown deployment first disables and removes every plugin vertex, and the topology is deleted when the teardown succeeds; if the teardown fails, the topology is kept. Revisions, deployments and operations are kept for audit.',
+      deletingHint: 'A teardown deployment is removing this topology from its nodes. The topology is deleted when it succeeds; rolling the teardown back keeps it.',
+      teardown: 'Teardown'
     },
     extensions: { errorsTitle: 'WebUI extension loading failed' },
     assignments: {
@@ -755,14 +760,17 @@ export default {
       releaseImported: '{plugin} {version} was imported', cancelRequested: 'Operation cancellation was requested',
       assignmentSaved: '{plugin} assignment was saved', assignmentStateSaved: '{plugin} assignment state was saved', assignmentDeleted: '{plugin} assignment was deleted',
       topologyRevisionSaved: 'Topology revision {revision} was saved', topologyPlanned: 'Deployment #{id} was planned',
-      topologyApplyRequested: 'Deployment apply was requested', topologyRollbackRequested: 'Deployment rollback was requested', topologyCreated: 'Topology {name} was created'
+      topologyApplyRequested: 'Deployment apply was requested', topologyRollbackRequested: 'Deployment rollback was requested', topologyCreated: 'Topology {name} was created',
+      topologyDeleted: 'Topology {name} was deleted', topologyTeardownStarted: 'Tearing down topology {name} (deployment #{id}); it is deleted when the teardown succeeds',
+      topologyDeleteFailed: 'Topology {name} was kept: teardown deployment #{id} ended as {state}'
     },
     errors: {
       load: 'Unable to load control state', action: 'Plugin operation failed', install: 'Plugin installation failed', configLoad: 'Unable to load plugin configuration',
       configSave: 'Unable to save plugin configuration', releaseImport: 'Release import failed', cancel: 'Unable to cancel operation', poll: 'Unable to refresh operation state',
       nodesLoad: 'Unable to load nodes', assignmentsLoad: 'Unable to load node assignments', assignmentSave: 'Unable to save node assignment', assignmentDelete: 'Unable to delete node assignment',
       topologyLoad: 'Unable to load topology revisions', topologyValidate: 'Unable to validate topology', topologySave: 'Unable to save topology revision', topologyPlan: 'Unable to plan topology deployment',
-      topologyPreview: 'Unable to preview topology deployment', topologyStatus: 'Unable to load deployment status', topologyApply: 'Unable to apply topology deployment', topologyRollback: 'Unable to roll back topology deployment', topologyCreate: 'Unable to create topology'
+      topologyPreview: 'Unable to preview topology deployment', topologyStatus: 'Unable to load deployment status', topologyApply: 'Unable to apply topology deployment', topologyRollback: 'Unable to roll back topology deployment', topologyCreate: 'Unable to create topology',
+      topologyDelete: 'Unable to delete topology'
     }
   },
   routeModes: {

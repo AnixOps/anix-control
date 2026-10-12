@@ -9,6 +9,17 @@
   the certificate of a new node of the group, or of its earlier node (`sdk/api/agent/v1/PROTOCOL.md`,
   "Joining a node group"). This is the contract only: Control answers `Join` with `Unimplemented` until
   node groups and join tokens land. The change is additive, so Agents in the field are unaffected.
+- Topologies can be deleted: `DELETE /api/v3/topologies/:id` (audited like the rest of `/api/v3`) and 删除 on
+  部署编排 → 拓扑 and in the topology workspace, after a confirmation. Rows are never removed: the topology gets
+  `deleted = 1` and `deleted_at`, disappears from the list and every `/api/v3/topologies/:id/...` route (404),
+  and its name can be reused; its revisions, deployments and operations stay in the activity timeline. A
+  topology without an active revision is deleted at once (200). One whose active revision runs on nodes is
+  first torn down by a teardown deployment that disables every plugin vertex (202, shown as 删除中); it is
+  deleted when the teardown succeeds and kept when the teardown fails or is rolled back. This needs
+  `plugins.topology_execution_enabled` (otherwise 409 `topology_execution_disabled`). A running deployment
+  blocks the delete (409 `topology_deployment_busy`); planned deployments are cancelled and can no longer be
+  applied. At startup the schema gains the flag columns and swaps the unique index on the topology name for
+  one on live topologies (`ux_topology_live_name`); see docs/UPGRADE.md.
 
 ## 4.2.1 - 2026-10-12
 

@@ -25,6 +25,9 @@ const (
 	topologyDeploymentStateSucceeded         = "succeeded"
 	topologyDeploymentStateFailed            = "failed"
 	topologyDeploymentStateRolledBack        = "rolled_back"
+	// topologyDeploymentStateCancelled closes a planned deployment that can
+	// no longer be applied because its topology was deleted.
+	topologyDeploymentStateCancelled = "cancelled"
 
 	topologyStepStatePlanned             = "planned"
 	topologyStepStateConfiguring         = "configuring"
@@ -195,6 +198,11 @@ func PlanTopologyDeployment(db *gorm.DB, input TopologyDeploymentPlanInput) (*mo
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&topology, input.TopologyID).Error; err != nil {
 			return err
 		}
+		if deleting, err := topologyDeletePending(tx, topology); err != nil {
+			return err
+		} else if deleting {
+			return ErrTopologyDeleting
+		}
 		var revision model.TopologyRevision
 		if err := tx.First(&revision, "id = ? AND topology_id = ?", input.RevisionID, input.TopologyID).Error; err != nil {
 			return errors.New("topology revision does not belong to topology")
@@ -259,6 +267,11 @@ func RequestTopologyDeploymentApply(db *gorm.DB, deploymentID uint, _ time.Time)
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&deployment, deploymentID).Error; err != nil {
 			return err
 		}
+		// A deleted topology's deployments are never applied, and while a
+		// topology is being deleted only its teardown runs.
+		if err := checkTopologyAcceptsDeployment(tx, deployment); err != nil {
+			return err
+		}
 		switch deployment.State {
 		case topologyDeploymentStatePlanned:
 			if err := tx.Model(&deployment).Updates(map[string]any{
@@ -299,6 +312,12 @@ func RequestTopologyDeploymentRollback(db *gorm.DB, deploymentID uint, at time.T
 	var deployment model.TopologyDeployment
 	err := db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&deployment, deploymentID).Error; err != nil {
+			return err
+		}
+		// Rolling back a deployment of a deleted topology would put its
+		// plugins back on the nodes; while a topology is being deleted, only
+		// its teardown can be rolled back (which cancels the deletion).
+		if err := checkTopologyAcceptsDeployment(tx, deployment); err != nil {
 			return err
 		}
 		switch deployment.State {
@@ -362,14 +381,31 @@ func GetTopologyDeploymentStatus(db *gorm.DB, deploymentID uint) (*TopologyDeplo
 	return status, nil
 }
 
-func compileTopologyDeploymentSteps(tx *gorm.DB, topology model.Topology, revision model.TopologyRevision, vertices []model.TopologyVertex, edges []model.TopologyEdge, rolloutGroup string) ([]model.TopologyDeploymentStep, error) {
-	// A canary may intentionally remove every vertex in its rollout group. In
-	// that case the new revision has no graph to validate or order; the active
-	// revision below supplies the durable removal steps. Full deployments still
-	// require a non-empty, valid topology, and any non-empty canary graph is
-	// validated normally.
+func compileTopologyDeploymentSteps(tx *gorm.DB, topology model.Topology, _ model.TopologyRevision, vertices []model.TopologyVertex, edges []model.TopologyEdge, rolloutGroup string) ([]model.TopologyDeploymentStep, error) {
+	return compileTopologySteps(tx, topology, vertices, edges, rolloutGroup, false)
+}
+
+// compileTopologyTeardownSteps plans the removal of every deployable vertex of
+// the topology's active revision: the removal steps a deployment compiles for
+// vertices dropped from the active revision, against an empty graph. Only
+// DeleteTopology uses it. An empty graph never reaches it from a user revision,
+// which ValidateTopology still requires to have a vertex.
+func compileTopologyTeardownSteps(tx *gorm.DB, topology model.Topology) ([]model.TopologyDeploymentStep, error) {
+	if topology.ActiveRevisionID == nil {
+		return nil, errors.New("topology has no active revision to tear down")
+	}
+	return compileTopologySteps(tx, topology, nil, nil, "", true)
+}
+
+func compileTopologySteps(tx *gorm.DB, topology model.Topology, vertices []model.TopologyVertex, edges []model.TopologyEdge, rolloutGroup string, teardown bool) ([]model.TopologyDeploymentStep, error) {
+	// A canary may intentionally remove every vertex in its rollout group, and
+	// a teardown removes every vertex of the active revision. In those cases
+	// the target has no graph to validate or order; the active revision below
+	// supplies the durable removal steps. Full deployments still require a
+	// non-empty, valid topology, and any non-empty canary graph is validated
+	// normally.
 	var order []string
-	if len(vertices) == 0 && len(edges) == 0 && rolloutGroup != "" {
+	if len(vertices) == 0 && len(edges) == 0 && (rolloutGroup != "" || teardown) {
 		order = []string{}
 	} else {
 		issues := ValidateTopology(TopologyRevisionInput{Vertices: vertices, Edges: edges})
@@ -602,8 +638,11 @@ func (e *TopologyDeploymentExecutor) reconcileDeployment(ctx context.Context, de
 		if deployment.State != topologyDeploymentStateApplying && deployment.State != topologyDeploymentStateRollbackRequested {
 			return nil
 		}
+		// Unscoped: a deleted topology must not wedge the pass for every
+		// other deployment. DeleteTopology refuses while a deployment runs, so
+		// only a teardown reaches a deleted topology, and only once it is done.
 		var topology model.Topology
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&topology, deployment.TopologyID).Error; err != nil {
+		if err := tx.Unscoped().Clauses(clause.Locking{Strength: "UPDATE"}).First(&topology, deployment.TopologyID).Error; err != nil {
 			return err
 		}
 		var revision model.TopologyRevision
@@ -938,6 +977,9 @@ func (e *TopologyDeploymentExecutor) reconcileRollback(tx *gorm.DB, topology *mo
 		}).Error; err != nil {
 			return changed, false, err
 		}
+		if err := clearTopologyDeleteRequest(tx, *deployment); err != nil {
+			return changed, false, err
+		}
 		return true, true, nil
 	}
 	healthByNode, healthErr := topologyRollbackHealthByNode(tx, steps, now)
@@ -1123,10 +1165,16 @@ func completeTopologyDeploymentApply(tx *gorm.DB, topology *model.Topology, depl
 	if err := writeTopologyTerminalObservedStates(tx, *deployment, revision, nodes, "succeeded", "", healthByNode, at); err != nil {
 		return err
 	}
-	// A rollout-group deployment is a canary attempt against this revision,
-	// not publication of the whole revision.  Keep the current active pointer
-	// and revision state until a subsequent full rollout succeeds.
-	if strings.TrimSpace(deployment.RolloutGroup) == "" {
+	// A teardown removed the active revision from every node: the topology
+	// is deleted now. A rollout-group deployment is a canary attempt against
+	// this revision, not publication of the whole revision.  Keep the current
+	// active pointer and revision state until a subsequent full rollout
+	// succeeds.
+	if deployment.Teardown {
+		if err := markTopologyDeleted(tx, topology, at); err != nil {
+			return err
+		}
+	} else if strings.TrimSpace(deployment.RolloutGroup) == "" {
 		if err := tx.Model(topology).Update("active_revision_id", revision.ID).Error; err != nil {
 			return err
 		}
@@ -1159,6 +1207,10 @@ func completeTopologyDeploymentRollback(tx *gorm.DB, topology *model.Topology, d
 			return err
 		}
 	}
+	// A rolled-back teardown restored the active revision: the topology stays.
+	if err := clearTopologyDeleteRequest(tx, *deployment); err != nil {
+		return err
+	}
 	if err := tx.Model(deployment).Updates(map[string]any{
 		"state": topologyDeploymentStateRolledBack, "completed_at": at, "rollback_completed_at": at, "health_gate_deadline_at": nil,
 	}).Error; err != nil {
@@ -1186,7 +1238,7 @@ func failTopologyRollback(tx *gorm.DB, deployment *model.TopologyDeployment, rev
 	}).Error; err != nil {
 		return err
 	}
-	return nil
+	return clearTopologyDeleteRequest(tx, *deployment)
 }
 
 func topologyTerminalObservedNodes(tx *gorm.DB, deployment *model.TopologyDeployment) ([]uint, error) {

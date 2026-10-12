@@ -1,6 +1,10 @@
 package model
 
-import "time"
+import (
+	"time"
+
+	"gorm.io/plugin/soft_delete"
+)
 
 // ServiceScope is an authorization namespace. A user may belong to multiple
 // groups in each scope without leaking quota or grants into another service.
@@ -223,14 +227,34 @@ type NodePluginLifecycle struct {
 
 func (NodePluginLifecycle) TableName() string { return "v3_kernel_node_plugin_lifecycle" }
 
+// TopologyLiveNameIndex is the unique index on the names of live topologies.
+// It is partial (WHERE deleted = 0), so a deleted topology's name can be
+// reused; service.EnsureKernelSchema replaces the plain unique index older
+// schemas carry (LegacyTopologyNameIndex) with it.
+const (
+	TopologyLiveNameIndex   = "ux_topology_live_name"
+	LegacyTopologyNameIndex = "idx_v3_kernel_topology_name"
+)
+
+// Topology rows are never removed. Deleting a topology sets Deleted to 1 and
+// DeletedAt; gorm.io/plugin/soft_delete then adds "deleted = 0" to every
+// query, update and delete of this model, so a deleted topology is invisible
+// unless a query is Unscoped. Its revisions, deployments, steps, observed
+// states and operations are kept for audit.
 type Topology struct {
-	ID               uint      `gorm:"primaryKey" json:"id"`
-	Name             string    `gorm:"size:160;not null;uniqueIndex" json:"name"`
-	ServiceScope     string    `gorm:"size:64;not null;index" json:"service_scope"`
-	Description      string    `gorm:"type:text" json:"description"`
-	ActiveRevisionID *uint     `gorm:"index" json:"active_revision_id"`
-	CreatedAt        time.Time `json:"created_at"`
-	UpdatedAt        time.Time `json:"updated_at"`
+	ID               uint   `gorm:"primaryKey" json:"id"`
+	Name             string `gorm:"size:160;not null;uniqueIndex:ux_topology_live_name,where:deleted = 0" json:"name"`
+	ServiceScope     string `gorm:"size:64;not null;index" json:"service_scope"`
+	Description      string `gorm:"type:text" json:"description"`
+	ActiveRevisionID *uint  `gorm:"index" json:"active_revision_id"`
+	// DeleteRequestedAt is set while a teardown deployment removes the active
+	// revision from the nodes; the topology is deleted when it succeeds, and
+	// the mark is cleared when it fails or rolls back.
+	DeleteRequestedAt *time.Time            `json:"delete_requested_at"`
+	Deleted           soft_delete.DeletedAt `gorm:"column:deleted;not null;default:0;softDelete:flag,DeletedAtField:DeletedAt" json:"-"`
+	DeletedAt         *time.Time            `json:"deleted_at"`
+	CreatedAt         time.Time             `json:"created_at"`
+	UpdatedAt         time.Time             `json:"updated_at"`
 }
 
 func (Topology) TableName() string { return "v3_kernel_topology" }
@@ -282,6 +306,11 @@ type TopologyDeployment struct {
 	State              string `gorm:"size:32;not null;index" json:"state"`
 	FailurePolicy      string `gorm:"size:32;not null" json:"failure_policy"`
 	LastError          string `gorm:"type:text" json:"last_error"`
+	// Teardown marks the deployment DELETE /api/v3/topologies/:id creates for
+	// a topology with an active revision: its steps disable every vertex of
+	// that revision (RevisionID and PreviousRevisionID both name it), and its
+	// success deletes the topology instead of activating a revision.
+	Teardown bool `gorm:"not null;default:false" json:"teardown"`
 	// HealthGateDeadlineAt is a durable grace window for a terminal Agent
 	// operation to be followed by its independent runtime observation.
 	HealthGateDeadlineAt *time.Time `json:"health_gate_deadline_at"`

@@ -30,12 +30,14 @@
         <DeploymentTopologiesPanel
           :topologies="topologies"
           :latest-deployment-for="latestDeploymentFor"
+          :is-busy="isTopologyBusy"
           :loading="loading && !loaded"
           :error="loaded ? null : error"
           :can-create="scopes.length > 0"
           @create="openNewTopology"
           @edit="openTopologyEditor"
           @view-deployment="openDeploymentStatus"
+          @delete="deleteTopology"
           @retry="loadInitial()"
         />
       </template>
@@ -93,6 +95,7 @@
       @plan="planTopology"
       @apply="applyDeployment"
       @rollback="rollbackDeployment"
+      @delete="deleteEditorTopology"
     />
 
     <AssignmentDrawer
@@ -152,6 +155,7 @@ const {
   scopedOperationIDs,
   pluginName,
   latestDeploymentFor,
+  isTopologyBusy,
   loadInitial,
   setViewMode,
   loadAssignments,
@@ -174,6 +178,8 @@ const {
   openDeploymentStatus,
   applyDeployment,
   rollbackDeployment,
+  deleteTopology,
+  deleteEditorTopology,
   cancelOperation,
 } = useDeploymentCenter()
 

@@ -46,7 +46,13 @@
       </template>
       <template #cell-deployment="{ row }">
         <UiBadge
-          v-if="latestDeploymentFor(row)"
+          v-if="row.delete_requested_at"
+          tone="warning"
+          :data-testid="`topology-deleting-${row.id}`"
+          :label="t('control.topology.deleting')"
+        />
+        <UiBadge
+          v-else-if="latestDeploymentFor(row)"
           :tone="deploymentStateTone(latestDeploymentFor(row).state)"
           :label="latestDeploymentFor(row).state || '-'"
         />
@@ -65,6 +71,16 @@
           >
             {{ t('control.topology.status') }}
           </UiButton>
+          <UiButton
+            size="sm"
+            variant="danger-soft"
+            :data-testid="`delete-topology-${row.id}`"
+            :loading="isBusy(row)"
+            :disabled="Boolean(row.delete_requested_at)"
+            @click="emit('delete', row)"
+          >
+            {{ row.delete_requested_at ? t('control.topology.deleting') : t('common.actions.delete') }}
+          </UiButton>
         </span>
       </template>
     </UiDataTable>
@@ -73,7 +89,9 @@
 
 <script setup>
 // 部署编排 · 拓扑 (UI U8): the topologies with their latest deployment.
-// Editing opens the topology workspace; 查看状态 opens it on the deployment.
+// Editing opens the topology workspace; 查看状态 opens it on the deployment;
+// 删除 asks first, and a topology running on nodes shows 删除中 while its
+// teardown deployment runs.
 import { computed } from 'vue'
 import { Plus, Waypoints } from '@lucide/vue'
 import { useAppI18n } from '@/composables/useAppI18n'
@@ -85,11 +103,12 @@ import { deploymentStateTone } from './useDeploymentCenter'
 defineProps({
   topologies: { type: Array, default: () => [] },
   latestDeploymentFor: { type: Function, required: true },
+  isBusy: { type: Function, default: () => false },
   loading: { type: Boolean, default: false },
   error: { type: [String, Object, null], default: null },
   canCreate: { type: Boolean, default: false }
 })
-const emit = defineEmits(['create', 'edit', 'view-deployment', 'retry'])
+const emit = defineEmits(['create', 'edit', 'view-deployment', 'delete', 'retry'])
 const { t } = useAppI18n()
 
 const columns = computed(() => [
