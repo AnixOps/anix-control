@@ -20,6 +20,7 @@ const _ = grpc.SupportPackageIsVersion9
 
 const (
 	AgentEnrollment_Enroll_FullMethodName               = "/anix.agent.v1.AgentEnrollment/Enroll"
+	AgentEnrollment_Join_FullMethodName                 = "/anix.agent.v1.AgentEnrollment/Join"
 	AgentEnrollment_Renew_FullMethodName                = "/anix.agent.v1.AgentEnrollment/Renew"
 	AgentEnrollment_GetTrustBundle_FullMethodName       = "/anix.agent.v1.AgentEnrollment/GetTrustBundle"
 	AgentEnrollment_IssueLinkCertificate_FullMethodName = "/anix.agent.v1.AgentEnrollment/IssueLinkCertificate"
@@ -41,7 +42,11 @@ const (
 //	spiffe://anixops/<cluster>/agent/forward-<id>   a forward node (v2_forward_node)
 //
 // Control ignores the subject and SANs of the CSR and issues the identity of
-// the node the bootstrap credential authenticated.
+// the node the bootstrap credential names. The node credential and a
+// one-time anixagt_ enrollment credential name an existing node (Enroll); a
+// node group's anixjoin_ join token names the group, and Control issues the
+// identity of the node it creates in that group or of the machine's earlier
+// node of the group (Join).
 type AgentEnrollmentClient interface {
 	// Enroll exchanges a bootstrap credential and a CSR for the node's first
 	// certificate. The credential is one of:
@@ -50,6 +55,11 @@ type AgentEnrollmentClient interface {
 	//     forward node's token;
 	//   - enrollment_credential, a one-time anixagt_ credential bound to a node.
 	Enroll(ctx context.Context, in *EnrollAgentRequest, opts ...grpc.CallOption) (*EnrollAgentResponse, error)
+	// Join exchanges a node group's join token and a CSR for the certificate of
+	// a new node of that group, or of this machine's earlier node (see the
+	// rejoin rule in docs/design/node-onboarding). Control ignores the CSR's
+	// subject and SANs.
+	Join(ctx context.Context, in *JoinRequest, opts ...grpc.CallOption) (*JoinResponse, error)
 	// Renew issues a new certificate to the holder of a valid one, presented as
 	// the TLS client certificate.
 	Renew(ctx context.Context, in *RenewAgentCertificateRequest, opts ...grpc.CallOption) (*RenewAgentCertificateResponse, error)
@@ -85,6 +95,16 @@ func (c *agentEnrollmentClient) Enroll(ctx context.Context, in *EnrollAgentReque
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(EnrollAgentResponse)
 	err := c.cc.Invoke(ctx, AgentEnrollment_Enroll_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentEnrollmentClient) Join(ctx context.Context, in *JoinRequest, opts ...grpc.CallOption) (*JoinResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(JoinResponse)
+	err := c.cc.Invoke(ctx, AgentEnrollment_Join_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -146,7 +166,11 @@ func (c *agentEnrollmentClient) GetLinkTrustBundle(ctx context.Context, in *GetL
 //	spiffe://anixops/<cluster>/agent/forward-<id>   a forward node (v2_forward_node)
 //
 // Control ignores the subject and SANs of the CSR and issues the identity of
-// the node the bootstrap credential authenticated.
+// the node the bootstrap credential names. The node credential and a
+// one-time anixagt_ enrollment credential name an existing node (Enroll); a
+// node group's anixjoin_ join token names the group, and Control issues the
+// identity of the node it creates in that group or of the machine's earlier
+// node of the group (Join).
 type AgentEnrollmentServer interface {
 	// Enroll exchanges a bootstrap credential and a CSR for the node's first
 	// certificate. The credential is one of:
@@ -155,6 +179,11 @@ type AgentEnrollmentServer interface {
 	//     forward node's token;
 	//   - enrollment_credential, a one-time anixagt_ credential bound to a node.
 	Enroll(context.Context, *EnrollAgentRequest) (*EnrollAgentResponse, error)
+	// Join exchanges a node group's join token and a CSR for the certificate of
+	// a new node of that group, or of this machine's earlier node (see the
+	// rejoin rule in docs/design/node-onboarding). Control ignores the CSR's
+	// subject and SANs.
+	Join(context.Context, *JoinRequest) (*JoinResponse, error)
 	// Renew issues a new certificate to the holder of a valid one, presented as
 	// the TLS client certificate.
 	Renew(context.Context, *RenewAgentCertificateRequest) (*RenewAgentCertificateResponse, error)
@@ -188,6 +217,9 @@ type UnimplementedAgentEnrollmentServer struct{}
 
 func (UnimplementedAgentEnrollmentServer) Enroll(context.Context, *EnrollAgentRequest) (*EnrollAgentResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Enroll not implemented")
+}
+func (UnimplementedAgentEnrollmentServer) Join(context.Context, *JoinRequest) (*JoinResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Join not implemented")
 }
 func (UnimplementedAgentEnrollmentServer) Renew(context.Context, *RenewAgentCertificateRequest) (*RenewAgentCertificateResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Renew not implemented")
@@ -236,6 +268,24 @@ func _AgentEnrollment_Enroll_Handler(srv interface{}, ctx context.Context, dec f
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(AgentEnrollmentServer).Enroll(ctx, req.(*EnrollAgentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentEnrollment_Join_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(JoinRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentEnrollmentServer).Join(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentEnrollment_Join_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentEnrollmentServer).Join(ctx, req.(*JoinRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -322,6 +372,10 @@ var AgentEnrollment_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Enroll",
 			Handler:    _AgentEnrollment_Enroll_Handler,
+		},
+		{
+			MethodName: "Join",
+			Handler:    _AgentEnrollment_Join_Handler,
 		},
 		{
 			MethodName: "Renew",

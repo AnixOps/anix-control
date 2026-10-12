@@ -86,6 +86,12 @@ const (
 // credential, so secret scanners can recognize them.
 const EnrollmentCredentialPrefix = "anixagt_"
 
+// JoinTokenPrefix starts every node group join token
+// (AgentEnrollment.Join), so secret scanners can recognize them and the
+// installer can tell a join token, which joins a group, from an enrollment
+// credential, which enrolls an existing node.
+const JoinTokenPrefix = "anixjoin_"
+
 // spiffeTrustDomain is the SPIFFE trust domain of every AnixOps identity.
 const spiffeTrustDomain = "anixops"
 

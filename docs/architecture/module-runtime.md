@@ -157,6 +157,11 @@ gRPC listener (`grpc.*`, port 50051), not on the module listener.
   3. *Registration keys* keep minting node API keys
      (`/api/v2/node/register`, `NodeService.Register`); the agent then
      enrolls with that key, as in 1.
+  4. *Node groups* (5.0, contract only so far): `AgentEnrollment.Join`
+     takes a group's join token (`anixjoin_...`), creates a node of the
+     group or rejoins the machine's earlier node, and issues its
+     certificate. Control answers it `Unimplemented` until the node group
+     server lands (`sdk/api/agent/v1/PROTOCOL.md`, "Joining a node group").
 
   A one-time credential is consumed atomically: of two concurrent
   enrollments exactly one succeeds, and a failed issuance leaves it unused.

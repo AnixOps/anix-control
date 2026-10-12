@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Added
+
+- The Agent contract has an `AgentEnrollment.Join` RPC (`JoinRequest`, `JoinResponse`), and the SDK names
+  the join token prefix `anixjoin_` (`agentcontrol.JoinTokenPrefix`): a machine exchanges a node group's join token and a CSR for
+  the certificate of a new node of the group, or of its earlier node (`sdk/api/agent/v1/PROTOCOL.md`,
+  "Joining a node group"). This is the contract only: Control answers `Join` with `Unimplemented` until
+  node groups and join tokens land. The change is additive, so Agents in the field are unaffected.
+
 ## 4.2.1 - 2026-10-12
 
 ### Changed

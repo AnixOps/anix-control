@@ -15,7 +15,11 @@ option go_package = "github.com/AnixOps/anix-control/sdk/api/agent/v1;agentv1pb"
 //   spiffe://anixops/<cluster>/agent/forward-<id>   a forward node (v2_forward_node)
 //
 // Control ignores the subject and SANs of the CSR and issues the identity of
-// the node the bootstrap credential authenticated.
+// the node the bootstrap credential names. The node credential and a
+// one-time anixagt_ enrollment credential name an existing node (Enroll); a
+// node group's anixjoin_ join token names the group, and Control issues the
+// identity of the node it creates in that group or of the machine's earlier
+// node of the group (Join).
 service AgentEnrollment {
   // Enroll exchanges a bootstrap credential and a CSR for the node's first
   // certificate. The credential is one of:
@@ -24,6 +28,11 @@ service AgentEnrollment {
   //     forward node's token;
   //   - enrollment_credential, a one-time anixagt_ credential bound to a node.
   rpc Enroll(EnrollAgentRequest) returns (EnrollAgentResponse);
+  // Join exchanges a node group's join token and a CSR for the certificate of
+  // a new node of that group, or of this machine's earlier node (see the
+  // rejoin rule in docs/design/node-onboarding). Control ignores the CSR's
+  // subject and SANs.
+  rpc Join(JoinRequest) returns (JoinResponse);
   // Renew issues a new certificate to the holder of a valid one, presented as
   // the TLS client certificate.
   rpc Renew(RenewAgentCertificateRequest) returns (RenewAgentCertificateResponse);
@@ -60,6 +69,67 @@ message EnrollAgentRequest {
 
 message EnrollAgentResponse {
   AgentCertificate certificate = 1;
+}
+
+message JoinRequest {
+  // csr_der is a PKCS#10 request in DER. Only its public key is used.
+  bytes csr_der = 1;
+  // join_token is the node group's join token, anixjoin_ followed by the
+  // base64url encoding of 32 random bytes. It is the only credential of the
+  // call; no client certificate is needed.
+  string join_token = 2;
+  // machine_fingerprint is the lowercase hex SHA-256 of "anixops-join-v1\n"
+  // followed by the machine ID from /etc/machine-id. It is never
+  // authentication: it only selects which node of the group the machine may
+  // rejoin, and only under the rejoin rule, because cloned images often
+  // share a machine ID.
+  string machine_fingerprint = 3;
+  // hostname is the machine's host name. A new node is named after it when
+  // requested_name is empty.
+  string hostname = 4;
+  // requested_name is the node name the operator asked for (install.sh
+  // --name). Control makes a new node's name unique within the group with a
+  // -2, -3 suffix.
+  string requested_name = 5;
+  // connect_host is the address clients connect to (install.sh --host). When
+  // it is empty, a new node's host is the first entry of public_addresses.
+  string connect_host = 6;
+  // public_addresses are the machine's addresses as Control sees them, from
+  // GET /install/ip over IPv4 and IPv6, IPv4 first. The installer passes
+  // them because the gRPC peer address is a proxy's when Control sits behind
+  // one. A rejoin needs one of them to equal the node's last known public
+  // address.
+  repeated string public_addresses = 7;
+  // arch and os are the Agent's GOARCH and GOOS, such as "amd64" and
+  // "linux".
+  string arch = 8;
+  string os = 9;
+  // agent_version and instance_id are recorded with the enrollment.
+  string agent_version = 10;
+  string instance_id = 11;
+  // reset (install.sh --reset) asks for a new node: Control never rejoins
+  // the machine's earlier node and always creates one.
+  bool reset = 12;
+}
+
+message JoinResponse {
+  // certificate is the node's agent certificate, issued as Enroll issues it.
+  AgentCertificate certificate = 1;
+  // node is the node's identity name, "proxy-<id>" or "forward-<id>" by the
+  // kind of the group: the node the Agent runs as.
+  string node = 2;
+  // node_name is the node's display name.
+  string node_name = 3;
+  // group is the name of the node's group.
+  string group = 4;
+  // created is true when Control created the node, and false when the
+  // machine rejoined its earlier node.
+  bool created = 5;
+  // approval is "approved", or "pending" when the node's group requires
+  // approval and an administrator has not approved the node yet. A pending
+  // node connects with its certificate, but Control withholds its config.v1
+  // and users.v1 snapshots until it is approved.
+  string approval = 6;
 }
 
 message RenewAgentCertificateRequest {
