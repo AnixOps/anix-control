@@ -137,6 +137,259 @@ func (x *EnrollAgentResponse) GetCertificate() *AgentCertificate {
 	return nil
 }
 
+type JoinRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// csr_der is a PKCS#10 request in DER. Only its public key is used.
+	CsrDer []byte `protobuf:"bytes,1,opt,name=csr_der,json=csrDer,proto3" json:"csr_der,omitempty"`
+	// join_token is the node group's join token, anixjoin_ followed by the
+	// base64url encoding of 32 random bytes. It is the only credential of the
+	// call; no client certificate is needed.
+	JoinToken string `protobuf:"bytes,2,opt,name=join_token,json=joinToken,proto3" json:"join_token,omitempty"`
+	// machine_fingerprint is the lowercase hex SHA-256 of "anixops-join-v1\n"
+	// followed by the machine ID from /etc/machine-id. It is never
+	// authentication: it only selects which node of the group the machine may
+	// rejoin, and only under the rejoin rule, because cloned images often
+	// share a machine ID.
+	MachineFingerprint string `protobuf:"bytes,3,opt,name=machine_fingerprint,json=machineFingerprint,proto3" json:"machine_fingerprint,omitempty"`
+	// hostname is the machine's host name. A new node is named after it when
+	// requested_name is empty.
+	Hostname string `protobuf:"bytes,4,opt,name=hostname,proto3" json:"hostname,omitempty"`
+	// requested_name is the node name the operator asked for (install.sh
+	// --name). Control makes a new node's name unique within the group with a
+	// -2, -3 suffix.
+	RequestedName string `protobuf:"bytes,5,opt,name=requested_name,json=requestedName,proto3" json:"requested_name,omitempty"`
+	// connect_host is the address clients connect to (install.sh --host). When
+	// it is empty, a new node's host is the first entry of public_addresses.
+	ConnectHost string `protobuf:"bytes,6,opt,name=connect_host,json=connectHost,proto3" json:"connect_host,omitempty"`
+	// public_addresses are the machine's addresses as Control sees them, from
+	// GET /install/ip over IPv4 and IPv6, IPv4 first. The installer passes
+	// them because the gRPC peer address is a proxy's when Control sits behind
+	// one. A rejoin needs one of them to equal the node's last known public
+	// address.
+	PublicAddresses []string `protobuf:"bytes,7,rep,name=public_addresses,json=publicAddresses,proto3" json:"public_addresses,omitempty"`
+	// arch and os are the Agent's GOARCH and GOOS, such as "amd64" and
+	// "linux".
+	Arch string `protobuf:"bytes,8,opt,name=arch,proto3" json:"arch,omitempty"`
+	Os   string `protobuf:"bytes,9,opt,name=os,proto3" json:"os,omitempty"`
+	// agent_version and instance_id are recorded with the enrollment.
+	AgentVersion string `protobuf:"bytes,10,opt,name=agent_version,json=agentVersion,proto3" json:"agent_version,omitempty"`
+	InstanceId   string `protobuf:"bytes,11,opt,name=instance_id,json=instanceId,proto3" json:"instance_id,omitempty"`
+	// reset (install.sh --reset) asks for a new node: Control never rejoins
+	// the machine's earlier node and always creates one.
+	Reset_        bool `protobuf:"varint,12,opt,name=reset,proto3" json:"reset,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *JoinRequest) Reset() {
+	*x = JoinRequest{}
+	mi := &file_api_grpc_agent_v1_agent_enrollment_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *JoinRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*JoinRequest) ProtoMessage() {}
+
+func (x *JoinRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_grpc_agent_v1_agent_enrollment_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use JoinRequest.ProtoReflect.Descriptor instead.
+func (*JoinRequest) Descriptor() ([]byte, []int) {
+	return file_api_grpc_agent_v1_agent_enrollment_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *JoinRequest) GetCsrDer() []byte {
+	if x != nil {
+		return x.CsrDer
+	}
+	return nil
+}
+
+func (x *JoinRequest) GetJoinToken() string {
+	if x != nil {
+		return x.JoinToken
+	}
+	return ""
+}
+
+func (x *JoinRequest) GetMachineFingerprint() string {
+	if x != nil {
+		return x.MachineFingerprint
+	}
+	return ""
+}
+
+func (x *JoinRequest) GetHostname() string {
+	if x != nil {
+		return x.Hostname
+	}
+	return ""
+}
+
+func (x *JoinRequest) GetRequestedName() string {
+	if x != nil {
+		return x.RequestedName
+	}
+	return ""
+}
+
+func (x *JoinRequest) GetConnectHost() string {
+	if x != nil {
+		return x.ConnectHost
+	}
+	return ""
+}
+
+func (x *JoinRequest) GetPublicAddresses() []string {
+	if x != nil {
+		return x.PublicAddresses
+	}
+	return nil
+}
+
+func (x *JoinRequest) GetArch() string {
+	if x != nil {
+		return x.Arch
+	}
+	return ""
+}
+
+func (x *JoinRequest) GetOs() string {
+	if x != nil {
+		return x.Os
+	}
+	return ""
+}
+
+func (x *JoinRequest) GetAgentVersion() string {
+	if x != nil {
+		return x.AgentVersion
+	}
+	return ""
+}
+
+func (x *JoinRequest) GetInstanceId() string {
+	if x != nil {
+		return x.InstanceId
+	}
+	return ""
+}
+
+func (x *JoinRequest) GetReset_() bool {
+	if x != nil {
+		return x.Reset_
+	}
+	return false
+}
+
+type JoinResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// certificate is the node's agent certificate, issued as Enroll issues it.
+	Certificate *AgentCertificate `protobuf:"bytes,1,opt,name=certificate,proto3" json:"certificate,omitempty"`
+	// node is the node's identity name, "proxy-<id>" or "forward-<id>" by the
+	// kind of the group: the node the Agent runs as.
+	Node string `protobuf:"bytes,2,opt,name=node,proto3" json:"node,omitempty"`
+	// node_name is the node's display name.
+	NodeName string `protobuf:"bytes,3,opt,name=node_name,json=nodeName,proto3" json:"node_name,omitempty"`
+	// group is the name of the node's group.
+	Group string `protobuf:"bytes,4,opt,name=group,proto3" json:"group,omitempty"`
+	// created is true when Control created the node, and false when the
+	// machine rejoined its earlier node.
+	Created bool `protobuf:"varint,5,opt,name=created,proto3" json:"created,omitempty"`
+	// approval is "approved", or "pending" when the node's group requires
+	// approval and an administrator has not approved the node yet. A pending
+	// node connects with its certificate, but Control withholds its config.v1
+	// and users.v1 snapshots until it is approved.
+	Approval      string `protobuf:"bytes,6,opt,name=approval,proto3" json:"approval,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *JoinResponse) Reset() {
+	*x = JoinResponse{}
+	mi := &file_api_grpc_agent_v1_agent_enrollment_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *JoinResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*JoinResponse) ProtoMessage() {}
+
+func (x *JoinResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_api_grpc_agent_v1_agent_enrollment_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use JoinResponse.ProtoReflect.Descriptor instead.
+func (*JoinResponse) Descriptor() ([]byte, []int) {
+	return file_api_grpc_agent_v1_agent_enrollment_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *JoinResponse) GetCertificate() *AgentCertificate {
+	if x != nil {
+		return x.Certificate
+	}
+	return nil
+}
+
+func (x *JoinResponse) GetNode() string {
+	if x != nil {
+		return x.Node
+	}
+	return ""
+}
+
+func (x *JoinResponse) GetNodeName() string {
+	if x != nil {
+		return x.NodeName
+	}
+	return ""
+}
+
+func (x *JoinResponse) GetGroup() string {
+	if x != nil {
+		return x.Group
+	}
+	return ""
+}
+
+func (x *JoinResponse) GetCreated() bool {
+	if x != nil {
+		return x.Created
+	}
+	return false
+}
+
+func (x *JoinResponse) GetApproval() string {
+	if x != nil {
+		return x.Approval
+	}
+	return ""
+}
+
 type RenewAgentCertificateRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// csr_der is a PKCS#10 request in DER for the new key pair.
@@ -147,7 +400,7 @@ type RenewAgentCertificateRequest struct {
 
 func (x *RenewAgentCertificateRequest) Reset() {
 	*x = RenewAgentCertificateRequest{}
-	mi := &file_api_grpc_agent_v1_agent_enrollment_proto_msgTypes[2]
+	mi := &file_api_grpc_agent_v1_agent_enrollment_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -159,7 +412,7 @@ func (x *RenewAgentCertificateRequest) String() string {
 func (*RenewAgentCertificateRequest) ProtoMessage() {}
 
 func (x *RenewAgentCertificateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_grpc_agent_v1_agent_enrollment_proto_msgTypes[2]
+	mi := &file_api_grpc_agent_v1_agent_enrollment_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -172,7 +425,7 @@ func (x *RenewAgentCertificateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RenewAgentCertificateRequest.ProtoReflect.Descriptor instead.
 func (*RenewAgentCertificateRequest) Descriptor() ([]byte, []int) {
-	return file_api_grpc_agent_v1_agent_enrollment_proto_rawDescGZIP(), []int{2}
+	return file_api_grpc_agent_v1_agent_enrollment_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *RenewAgentCertificateRequest) GetCsrDer() []byte {
@@ -191,7 +444,7 @@ type RenewAgentCertificateResponse struct {
 
 func (x *RenewAgentCertificateResponse) Reset() {
 	*x = RenewAgentCertificateResponse{}
-	mi := &file_api_grpc_agent_v1_agent_enrollment_proto_msgTypes[3]
+	mi := &file_api_grpc_agent_v1_agent_enrollment_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -203,7 +456,7 @@ func (x *RenewAgentCertificateResponse) String() string {
 func (*RenewAgentCertificateResponse) ProtoMessage() {}
 
 func (x *RenewAgentCertificateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_grpc_agent_v1_agent_enrollment_proto_msgTypes[3]
+	mi := &file_api_grpc_agent_v1_agent_enrollment_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -216,7 +469,7 @@ func (x *RenewAgentCertificateResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RenewAgentCertificateResponse.ProtoReflect.Descriptor instead.
 func (*RenewAgentCertificateResponse) Descriptor() ([]byte, []int) {
-	return file_api_grpc_agent_v1_agent_enrollment_proto_rawDescGZIP(), []int{3}
+	return file_api_grpc_agent_v1_agent_enrollment_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *RenewAgentCertificateResponse) GetCertificate() *AgentCertificate {
@@ -234,7 +487,7 @@ type GetAgentTrustBundleRequest struct {
 
 func (x *GetAgentTrustBundleRequest) Reset() {
 	*x = GetAgentTrustBundleRequest{}
-	mi := &file_api_grpc_agent_v1_agent_enrollment_proto_msgTypes[4]
+	mi := &file_api_grpc_agent_v1_agent_enrollment_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -246,7 +499,7 @@ func (x *GetAgentTrustBundleRequest) String() string {
 func (*GetAgentTrustBundleRequest) ProtoMessage() {}
 
 func (x *GetAgentTrustBundleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_grpc_agent_v1_agent_enrollment_proto_msgTypes[4]
+	mi := &file_api_grpc_agent_v1_agent_enrollment_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -259,7 +512,7 @@ func (x *GetAgentTrustBundleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetAgentTrustBundleRequest.ProtoReflect.Descriptor instead.
 func (*GetAgentTrustBundleRequest) Descriptor() ([]byte, []int) {
-	return file_api_grpc_agent_v1_agent_enrollment_proto_rawDescGZIP(), []int{4}
+	return file_api_grpc_agent_v1_agent_enrollment_proto_rawDescGZIP(), []int{6}
 }
 
 type GetAgentTrustBundleResponse struct {
@@ -274,7 +527,7 @@ type GetAgentTrustBundleResponse struct {
 
 func (x *GetAgentTrustBundleResponse) Reset() {
 	*x = GetAgentTrustBundleResponse{}
-	mi := &file_api_grpc_agent_v1_agent_enrollment_proto_msgTypes[5]
+	mi := &file_api_grpc_agent_v1_agent_enrollment_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -286,7 +539,7 @@ func (x *GetAgentTrustBundleResponse) String() string {
 func (*GetAgentTrustBundleResponse) ProtoMessage() {}
 
 func (x *GetAgentTrustBundleResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_grpc_agent_v1_agent_enrollment_proto_msgTypes[5]
+	mi := &file_api_grpc_agent_v1_agent_enrollment_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -299,7 +552,7 @@ func (x *GetAgentTrustBundleResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetAgentTrustBundleResponse.ProtoReflect.Descriptor instead.
 func (*GetAgentTrustBundleResponse) Descriptor() ([]byte, []int) {
-	return file_api_grpc_agent_v1_agent_enrollment_proto_rawDescGZIP(), []int{5}
+	return file_api_grpc_agent_v1_agent_enrollment_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *GetAgentTrustBundleResponse) GetTrustBundleDer() [][]byte {
@@ -329,7 +582,7 @@ type AgentCertificate struct {
 
 func (x *AgentCertificate) Reset() {
 	*x = AgentCertificate{}
-	mi := &file_api_grpc_agent_v1_agent_enrollment_proto_msgTypes[6]
+	mi := &file_api_grpc_agent_v1_agent_enrollment_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -341,7 +594,7 @@ func (x *AgentCertificate) String() string {
 func (*AgentCertificate) ProtoMessage() {}
 
 func (x *AgentCertificate) ProtoReflect() protoreflect.Message {
-	mi := &file_api_grpc_agent_v1_agent_enrollment_proto_msgTypes[6]
+	mi := &file_api_grpc_agent_v1_agent_enrollment_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -354,7 +607,7 @@ func (x *AgentCertificate) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AgentCertificate.ProtoReflect.Descriptor instead.
 func (*AgentCertificate) Descriptor() ([]byte, []int) {
-	return file_api_grpc_agent_v1_agent_enrollment_proto_rawDescGZIP(), []int{6}
+	return file_api_grpc_agent_v1_agent_enrollment_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *AgentCertificate) GetCertificateDer() []byte {
@@ -419,7 +672,7 @@ type IssueLinkCertificateRequest struct {
 
 func (x *IssueLinkCertificateRequest) Reset() {
 	*x = IssueLinkCertificateRequest{}
-	mi := &file_api_grpc_agent_v1_agent_enrollment_proto_msgTypes[7]
+	mi := &file_api_grpc_agent_v1_agent_enrollment_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -431,7 +684,7 @@ func (x *IssueLinkCertificateRequest) String() string {
 func (*IssueLinkCertificateRequest) ProtoMessage() {}
 
 func (x *IssueLinkCertificateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_grpc_agent_v1_agent_enrollment_proto_msgTypes[7]
+	mi := &file_api_grpc_agent_v1_agent_enrollment_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -444,7 +697,7 @@ func (x *IssueLinkCertificateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IssueLinkCertificateRequest.ProtoReflect.Descriptor instead.
 func (*IssueLinkCertificateRequest) Descriptor() ([]byte, []int) {
-	return file_api_grpc_agent_v1_agent_enrollment_proto_rawDescGZIP(), []int{7}
+	return file_api_grpc_agent_v1_agent_enrollment_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *IssueLinkCertificateRequest) GetCsrDer() []byte {
@@ -463,7 +716,7 @@ type IssueLinkCertificateResponse struct {
 
 func (x *IssueLinkCertificateResponse) Reset() {
 	*x = IssueLinkCertificateResponse{}
-	mi := &file_api_grpc_agent_v1_agent_enrollment_proto_msgTypes[8]
+	mi := &file_api_grpc_agent_v1_agent_enrollment_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -475,7 +728,7 @@ func (x *IssueLinkCertificateResponse) String() string {
 func (*IssueLinkCertificateResponse) ProtoMessage() {}
 
 func (x *IssueLinkCertificateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_grpc_agent_v1_agent_enrollment_proto_msgTypes[8]
+	mi := &file_api_grpc_agent_v1_agent_enrollment_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -488,7 +741,7 @@ func (x *IssueLinkCertificateResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IssueLinkCertificateResponse.ProtoReflect.Descriptor instead.
 func (*IssueLinkCertificateResponse) Descriptor() ([]byte, []int) {
-	return file_api_grpc_agent_v1_agent_enrollment_proto_rawDescGZIP(), []int{8}
+	return file_api_grpc_agent_v1_agent_enrollment_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *IssueLinkCertificateResponse) GetCertificate() *LinkCertificate {
@@ -506,7 +759,7 @@ type GetLinkTrustBundleRequest struct {
 
 func (x *GetLinkTrustBundleRequest) Reset() {
 	*x = GetLinkTrustBundleRequest{}
-	mi := &file_api_grpc_agent_v1_agent_enrollment_proto_msgTypes[9]
+	mi := &file_api_grpc_agent_v1_agent_enrollment_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -518,7 +771,7 @@ func (x *GetLinkTrustBundleRequest) String() string {
 func (*GetLinkTrustBundleRequest) ProtoMessage() {}
 
 func (x *GetLinkTrustBundleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_grpc_agent_v1_agent_enrollment_proto_msgTypes[9]
+	mi := &file_api_grpc_agent_v1_agent_enrollment_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -531,7 +784,7 @@ func (x *GetLinkTrustBundleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetLinkTrustBundleRequest.ProtoReflect.Descriptor instead.
 func (*GetLinkTrustBundleRequest) Descriptor() ([]byte, []int) {
-	return file_api_grpc_agent_v1_agent_enrollment_proto_rawDescGZIP(), []int{9}
+	return file_api_grpc_agent_v1_agent_enrollment_proto_rawDescGZIP(), []int{11}
 }
 
 type GetLinkTrustBundleResponse struct {
@@ -546,7 +799,7 @@ type GetLinkTrustBundleResponse struct {
 
 func (x *GetLinkTrustBundleResponse) Reset() {
 	*x = GetLinkTrustBundleResponse{}
-	mi := &file_api_grpc_agent_v1_agent_enrollment_proto_msgTypes[10]
+	mi := &file_api_grpc_agent_v1_agent_enrollment_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -558,7 +811,7 @@ func (x *GetLinkTrustBundleResponse) String() string {
 func (*GetLinkTrustBundleResponse) ProtoMessage() {}
 
 func (x *GetLinkTrustBundleResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_grpc_agent_v1_agent_enrollment_proto_msgTypes[10]
+	mi := &file_api_grpc_agent_v1_agent_enrollment_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -571,7 +824,7 @@ func (x *GetLinkTrustBundleResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetLinkTrustBundleResponse.ProtoReflect.Descriptor instead.
 func (*GetLinkTrustBundleResponse) Descriptor() ([]byte, []int) {
-	return file_api_grpc_agent_v1_agent_enrollment_proto_rawDescGZIP(), []int{10}
+	return file_api_grpc_agent_v1_agent_enrollment_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *GetLinkTrustBundleResponse) GetTrustBundleDer() [][]byte {
@@ -605,7 +858,7 @@ type LinkCertificate struct {
 
 func (x *LinkCertificate) Reset() {
 	*x = LinkCertificate{}
-	mi := &file_api_grpc_agent_v1_agent_enrollment_proto_msgTypes[11]
+	mi := &file_api_grpc_agent_v1_agent_enrollment_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -617,7 +870,7 @@ func (x *LinkCertificate) String() string {
 func (*LinkCertificate) ProtoMessage() {}
 
 func (x *LinkCertificate) ProtoReflect() protoreflect.Message {
-	mi := &file_api_grpc_agent_v1_agent_enrollment_proto_msgTypes[11]
+	mi := &file_api_grpc_agent_v1_agent_enrollment_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -630,7 +883,7 @@ func (x *LinkCertificate) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LinkCertificate.ProtoReflect.Descriptor instead.
 func (*LinkCertificate) Descriptor() ([]byte, []int) {
-	return file_api_grpc_agent_v1_agent_enrollment_proto_rawDescGZIP(), []int{11}
+	return file_api_grpc_agent_v1_agent_enrollment_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *LinkCertificate) GetCertificateDer() []byte {
@@ -701,7 +954,30 @@ const file_api_grpc_agent_v1_agent_enrollment_proto_rawDesc = "" +
 	"\vinstance_id\x18\x04 \x01(\tR\n" +
 	"instanceId\"X\n" +
 	"\x13EnrollAgentResponse\x12A\n" +
-	"\vcertificate\x18\x01 \x01(\v2\x1f.anix.agent.v1.AgentCertificateR\vcertificate\"7\n" +
+	"\vcertificate\x18\x01 \x01(\v2\x1f.anix.agent.v1.AgentCertificateR\vcertificate\"\x87\x03\n" +
+	"\vJoinRequest\x12\x17\n" +
+	"\acsr_der\x18\x01 \x01(\fR\x06csrDer\x12\x1d\n" +
+	"\n" +
+	"join_token\x18\x02 \x01(\tR\tjoinToken\x12/\n" +
+	"\x13machine_fingerprint\x18\x03 \x01(\tR\x12machineFingerprint\x12\x1a\n" +
+	"\bhostname\x18\x04 \x01(\tR\bhostname\x12%\n" +
+	"\x0erequested_name\x18\x05 \x01(\tR\rrequestedName\x12!\n" +
+	"\fconnect_host\x18\x06 \x01(\tR\vconnectHost\x12)\n" +
+	"\x10public_addresses\x18\a \x03(\tR\x0fpublicAddresses\x12\x12\n" +
+	"\x04arch\x18\b \x01(\tR\x04arch\x12\x0e\n" +
+	"\x02os\x18\t \x01(\tR\x02os\x12#\n" +
+	"\ragent_version\x18\n" +
+	" \x01(\tR\fagentVersion\x12\x1f\n" +
+	"\vinstance_id\x18\v \x01(\tR\n" +
+	"instanceId\x12\x14\n" +
+	"\x05reset\x18\f \x01(\bR\x05reset\"\xce\x01\n" +
+	"\fJoinResponse\x12A\n" +
+	"\vcertificate\x18\x01 \x01(\v2\x1f.anix.agent.v1.AgentCertificateR\vcertificate\x12\x12\n" +
+	"\x04node\x18\x02 \x01(\tR\x04node\x12\x1b\n" +
+	"\tnode_name\x18\x03 \x01(\tR\bnodeName\x12\x14\n" +
+	"\x05group\x18\x04 \x01(\tR\x05group\x12\x18\n" +
+	"\acreated\x18\x05 \x01(\bR\acreated\x12\x1a\n" +
+	"\bapproval\x18\x06 \x01(\tR\bapproval\"7\n" +
 	"\x1cRenewAgentCertificateRequest\x12\x17\n" +
 	"\acsr_der\x18\x01 \x01(\fR\x06csrDer\"b\n" +
 	"\x1dRenewAgentCertificateResponse\x12A\n" +
@@ -732,9 +1008,10 @@ const file_api_grpc_agent_v1_agent_enrollment_proto_rawDesc = "" +
 	"\bdns_name\x18\x05 \x01(\tR\adnsName\x12\x16\n" +
 	"\x06serial\x18\x06 \x01(\tR\x06serial\x12$\n" +
 	"\x0enot_after_unix\x18\a \x01(\x03R\fnotAfterUnix\x12(\n" +
-	"\x10renew_after_unix\x18\b \x01(\x03R\x0erenewAfterUnix2\x8b\x04\n" +
+	"\x10renew_after_unix\x18\b \x01(\x03R\x0erenewAfterUnix2\xcc\x04\n" +
 	"\x0fAgentEnrollment\x12O\n" +
-	"\x06Enroll\x12!.anix.agent.v1.EnrollAgentRequest\x1a\".anix.agent.v1.EnrollAgentResponse\x12b\n" +
+	"\x06Enroll\x12!.anix.agent.v1.EnrollAgentRequest\x1a\".anix.agent.v1.EnrollAgentResponse\x12?\n" +
+	"\x04Join\x12\x1a.anix.agent.v1.JoinRequest\x1a\x1b.anix.agent.v1.JoinResponse\x12b\n" +
 	"\x05Renew\x12+.anix.agent.v1.RenewAgentCertificateRequest\x1a,.anix.agent.v1.RenewAgentCertificateResponse\x12g\n" +
 	"\x0eGetTrustBundle\x12).anix.agent.v1.GetAgentTrustBundleRequest\x1a*.anix.agent.v1.GetAgentTrustBundleResponse\x12o\n" +
 	"\x14IssueLinkCertificate\x12*.anix.agent.v1.IssueLinkCertificateRequest\x1a+.anix.agent.v1.IssueLinkCertificateResponse\x12i\n" +
@@ -752,40 +1029,45 @@ func file_api_grpc_agent_v1_agent_enrollment_proto_rawDescGZIP() []byte {
 	return file_api_grpc_agent_v1_agent_enrollment_proto_rawDescData
 }
 
-var file_api_grpc_agent_v1_agent_enrollment_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
+var file_api_grpc_agent_v1_agent_enrollment_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
 var file_api_grpc_agent_v1_agent_enrollment_proto_goTypes = []any{
 	(*EnrollAgentRequest)(nil),            // 0: anix.agent.v1.EnrollAgentRequest
 	(*EnrollAgentResponse)(nil),           // 1: anix.agent.v1.EnrollAgentResponse
-	(*RenewAgentCertificateRequest)(nil),  // 2: anix.agent.v1.RenewAgentCertificateRequest
-	(*RenewAgentCertificateResponse)(nil), // 3: anix.agent.v1.RenewAgentCertificateResponse
-	(*GetAgentTrustBundleRequest)(nil),    // 4: anix.agent.v1.GetAgentTrustBundleRequest
-	(*GetAgentTrustBundleResponse)(nil),   // 5: anix.agent.v1.GetAgentTrustBundleResponse
-	(*AgentCertificate)(nil),              // 6: anix.agent.v1.AgentCertificate
-	(*IssueLinkCertificateRequest)(nil),   // 7: anix.agent.v1.IssueLinkCertificateRequest
-	(*IssueLinkCertificateResponse)(nil),  // 8: anix.agent.v1.IssueLinkCertificateResponse
-	(*GetLinkTrustBundleRequest)(nil),     // 9: anix.agent.v1.GetLinkTrustBundleRequest
-	(*GetLinkTrustBundleResponse)(nil),    // 10: anix.agent.v1.GetLinkTrustBundleResponse
-	(*LinkCertificate)(nil),               // 11: anix.agent.v1.LinkCertificate
+	(*JoinRequest)(nil),                   // 2: anix.agent.v1.JoinRequest
+	(*JoinResponse)(nil),                  // 3: anix.agent.v1.JoinResponse
+	(*RenewAgentCertificateRequest)(nil),  // 4: anix.agent.v1.RenewAgentCertificateRequest
+	(*RenewAgentCertificateResponse)(nil), // 5: anix.agent.v1.RenewAgentCertificateResponse
+	(*GetAgentTrustBundleRequest)(nil),    // 6: anix.agent.v1.GetAgentTrustBundleRequest
+	(*GetAgentTrustBundleResponse)(nil),   // 7: anix.agent.v1.GetAgentTrustBundleResponse
+	(*AgentCertificate)(nil),              // 8: anix.agent.v1.AgentCertificate
+	(*IssueLinkCertificateRequest)(nil),   // 9: anix.agent.v1.IssueLinkCertificateRequest
+	(*IssueLinkCertificateResponse)(nil),  // 10: anix.agent.v1.IssueLinkCertificateResponse
+	(*GetLinkTrustBundleRequest)(nil),     // 11: anix.agent.v1.GetLinkTrustBundleRequest
+	(*GetLinkTrustBundleResponse)(nil),    // 12: anix.agent.v1.GetLinkTrustBundleResponse
+	(*LinkCertificate)(nil),               // 13: anix.agent.v1.LinkCertificate
 }
 var file_api_grpc_agent_v1_agent_enrollment_proto_depIdxs = []int32{
-	6,  // 0: anix.agent.v1.EnrollAgentResponse.certificate:type_name -> anix.agent.v1.AgentCertificate
-	6,  // 1: anix.agent.v1.RenewAgentCertificateResponse.certificate:type_name -> anix.agent.v1.AgentCertificate
-	11, // 2: anix.agent.v1.IssueLinkCertificateResponse.certificate:type_name -> anix.agent.v1.LinkCertificate
-	0,  // 3: anix.agent.v1.AgentEnrollment.Enroll:input_type -> anix.agent.v1.EnrollAgentRequest
-	2,  // 4: anix.agent.v1.AgentEnrollment.Renew:input_type -> anix.agent.v1.RenewAgentCertificateRequest
-	4,  // 5: anix.agent.v1.AgentEnrollment.GetTrustBundle:input_type -> anix.agent.v1.GetAgentTrustBundleRequest
-	7,  // 6: anix.agent.v1.AgentEnrollment.IssueLinkCertificate:input_type -> anix.agent.v1.IssueLinkCertificateRequest
-	9,  // 7: anix.agent.v1.AgentEnrollment.GetLinkTrustBundle:input_type -> anix.agent.v1.GetLinkTrustBundleRequest
-	1,  // 8: anix.agent.v1.AgentEnrollment.Enroll:output_type -> anix.agent.v1.EnrollAgentResponse
-	3,  // 9: anix.agent.v1.AgentEnrollment.Renew:output_type -> anix.agent.v1.RenewAgentCertificateResponse
-	5,  // 10: anix.agent.v1.AgentEnrollment.GetTrustBundle:output_type -> anix.agent.v1.GetAgentTrustBundleResponse
-	8,  // 11: anix.agent.v1.AgentEnrollment.IssueLinkCertificate:output_type -> anix.agent.v1.IssueLinkCertificateResponse
-	10, // 12: anix.agent.v1.AgentEnrollment.GetLinkTrustBundle:output_type -> anix.agent.v1.GetLinkTrustBundleResponse
-	8,  // [8:13] is the sub-list for method output_type
-	3,  // [3:8] is the sub-list for method input_type
-	3,  // [3:3] is the sub-list for extension type_name
-	3,  // [3:3] is the sub-list for extension extendee
-	0,  // [0:3] is the sub-list for field type_name
+	8,  // 0: anix.agent.v1.EnrollAgentResponse.certificate:type_name -> anix.agent.v1.AgentCertificate
+	8,  // 1: anix.agent.v1.JoinResponse.certificate:type_name -> anix.agent.v1.AgentCertificate
+	8,  // 2: anix.agent.v1.RenewAgentCertificateResponse.certificate:type_name -> anix.agent.v1.AgentCertificate
+	13, // 3: anix.agent.v1.IssueLinkCertificateResponse.certificate:type_name -> anix.agent.v1.LinkCertificate
+	0,  // 4: anix.agent.v1.AgentEnrollment.Enroll:input_type -> anix.agent.v1.EnrollAgentRequest
+	2,  // 5: anix.agent.v1.AgentEnrollment.Join:input_type -> anix.agent.v1.JoinRequest
+	4,  // 6: anix.agent.v1.AgentEnrollment.Renew:input_type -> anix.agent.v1.RenewAgentCertificateRequest
+	6,  // 7: anix.agent.v1.AgentEnrollment.GetTrustBundle:input_type -> anix.agent.v1.GetAgentTrustBundleRequest
+	9,  // 8: anix.agent.v1.AgentEnrollment.IssueLinkCertificate:input_type -> anix.agent.v1.IssueLinkCertificateRequest
+	11, // 9: anix.agent.v1.AgentEnrollment.GetLinkTrustBundle:input_type -> anix.agent.v1.GetLinkTrustBundleRequest
+	1,  // 10: anix.agent.v1.AgentEnrollment.Enroll:output_type -> anix.agent.v1.EnrollAgentResponse
+	3,  // 11: anix.agent.v1.AgentEnrollment.Join:output_type -> anix.agent.v1.JoinResponse
+	5,  // 12: anix.agent.v1.AgentEnrollment.Renew:output_type -> anix.agent.v1.RenewAgentCertificateResponse
+	7,  // 13: anix.agent.v1.AgentEnrollment.GetTrustBundle:output_type -> anix.agent.v1.GetAgentTrustBundleResponse
+	10, // 14: anix.agent.v1.AgentEnrollment.IssueLinkCertificate:output_type -> anix.agent.v1.IssueLinkCertificateResponse
+	12, // 15: anix.agent.v1.AgentEnrollment.GetLinkTrustBundle:output_type -> anix.agent.v1.GetLinkTrustBundleResponse
+	10, // [10:16] is the sub-list for method output_type
+	4,  // [4:10] is the sub-list for method input_type
+	4,  // [4:4] is the sub-list for extension type_name
+	4,  // [4:4] is the sub-list for extension extendee
+	0,  // [0:4] is the sub-list for field type_name
 }
 
 func init() { file_api_grpc_agent_v1_agent_enrollment_proto_init() }
@@ -799,7 +1081,7 @@ func file_api_grpc_agent_v1_agent_enrollment_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_grpc_agent_v1_agent_enrollment_proto_rawDesc), len(file_api_grpc_agent_v1_agent_enrollment_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   12,
+			NumMessages:   14,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

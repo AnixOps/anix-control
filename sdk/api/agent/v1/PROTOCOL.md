@@ -26,7 +26,9 @@ certificates. Its one URI SAN names the node:
 `spiffe://anixops/<cluster>/agent/proxy-<id>` or
 `spiffe://anixops/<cluster>/agent/forward-<id>`. `Enroll` takes the node
 credential in metadata (`x-node-kind: forward` with a forward node's token)
-or a one-time `anixagt_...` `enrollment_credential`; `Renew` and
+or a one-time `anixagt_...` `enrollment_credential`; `Join` takes a node
+group's `anixjoin_...` join token and issues the certificate of a node it
+creates in the group ("Joining a node group" below); `Renew` and
 `GetTrustBundle` need the current certificate. Certificates last 7 days and
 are renewed after `renew_after_unix`, two thirds of the lifetime. With a
 certificate the stream's node comes from it, every envelope's `node_id`
@@ -797,6 +799,58 @@ it uses `DesiredOperation`, `OperationAck`, `ObservedState` and the next
   operations `agent.operation` (KernelNodeOps) or
   `POST /admin/nodes/:id/agent-control/operations` accept. Only the kernel's
   campaign worker sends it.
+
+## Joining a node group
+
+`AgentEnrollment.Join` is the bootstrap of a machine that is not a node
+yet (5.0 node onboarding, `docs/design/node-onboarding`, "Join Protocol").
+Its credential is a node group's join token: `anixjoin_` and the base64url
+encoding of 32 random bytes (`agentcontrol.JoinTokenPrefix`). The token
+stands for the group, not for a node, so one install command joins any
+number of machines and each becomes a node of the group. The installer
+tells it from an `anixagt_` enrollment credential, which enrolls an
+existing node, by its prefix. The call needs no client certificate.
+
+`JoinRequest`:
+
+| Field | Meaning |
+|---|---|
+| `csr_der` | PKCS#10 request in DER; only its public key is used, Control ignores its subject and SANs |
+| `join_token` | the group's `anixjoin_...` token |
+| `machine_fingerprint` | lowercase hex SHA-256 of `"anixops-join-v1\n"` followed by the machine ID from `/etc/machine-id`; it selects the node a machine may rejoin and is never authentication |
+| `hostname` | the machine's host name; a new node's name when `requested_name` is empty |
+| `requested_name` | `install.sh --name`; made unique within the group with a `-2`, `-3` suffix |
+| `connect_host` | `install.sh --host`, the address clients connect to; when empty, the first `public_addresses` entry |
+| `public_addresses` | the machine's addresses as Control sees them, from `GET /install/ip` over IPv4 and IPv6, IPv4 first (behind a proxy the gRPC peer address is the proxy's) |
+| `arch`, `os` | the Agent's `GOARCH` and `GOOS` |
+| `agent_version`, `instance_id` | recorded with the enrollment, as for `Enroll` |
+| `reset` | `install.sh --reset`: never rejoin, always create a node |
+
+`JoinResponse` carries the node's `certificate` (an `AgentCertificate`,
+issued as `Enroll` issues it), `node` (`proxy-<id>` or `forward-<id>` by
+the group's kind: the node the Agent runs as), `node_name`, `group`,
+`created` (false when the machine rejoined its earlier node) and `approval`:
+`approved`, or `pending` when the group requires approval and an
+administrator has not approved the node yet. A pending node connects with
+its certificate, but Control withholds its `config.v1` and `users.v1`
+snapshots until it is approved.
+
+**Rejoining.** A machine that lost its local state (a reinstalled Agent,
+`uninstall --purge`) presents the same fingerprint again. Cloned images
+often share `/etc/machine-id`, so Control rejoins the earlier node only when
+all of these hold: a live node of the same group has the same fingerprint,
+its last known public address is one of `public_addresses`, it has not been
+seen on the Agent Control stream for 5 minutes, and `reset` is false. It
+then revokes that node's certificates and issues a new one
+(`created: false`). In every other case it creates a new node. A machine
+that still holds a valid identity does not call `Join`.
+
+**Status.** This is the contract only. Control's `Join` server lands with
+node groups and join tokens in a later phase of the 5.0 onboarding work;
+until then Control answers `Join` with `Unimplemented`. The design refuses
+every unusable token (unknown, deleted or expired group, or a group at its
+node cap) with one answer and no detail (`join_rejected`), audited and rate
+limited per peer; that code joins "Error codes" below with the server.
 
 ## Forward link certificates
 
