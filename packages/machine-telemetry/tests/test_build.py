@@ -41,7 +41,7 @@ class MachineTelemetryPackageTest(unittest.TestCase):
                 (root / "second" / BUILD.ARTIFACT_NAME).read_bytes(),
             )
 
-    def test_manifest_and_archive_bind_real_agent_and_webui(self) -> None:
+    def test_manifest_and_archive_bind_real_agent_without_webui(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_root:
             root = Path(temporary_root)
             output = root / "dist"
@@ -58,10 +58,9 @@ class MachineTelemetryPackageTest(unittest.TestCase):
                 {"agent-linux-amd64": "agent/linux-amd64/plugin"},
                 manifest["entrypoints"],
             )
-            self.assertEqual(
-                manifest["frontend_sha256"],
-                manifest["webui"]["bundle"]["sha256"],
-            )
+            # No administrator WebUI: the node page shows the services table.
+            self.assertEqual("", manifest["frontend_sha256"])
+            self.assertNotIn("webui", manifest)
             self.assertEqual(
                 BUILD.sha256_bytes((output / BUILD.ARTIFACT_NAME).read_bytes()),
                 manifest["artifact_sha256"],
@@ -77,7 +76,6 @@ class MachineTelemetryPackageTest(unittest.TestCase):
                         "config.defaults.json",
                         "config.schema.json",
                         "package.json",
-                        "webui/index.mjs",
                     },
                     set(names),
                 )
@@ -94,16 +92,19 @@ class MachineTelemetryPackageTest(unittest.TestCase):
                 self.assertIsNotNone(extracted)
                 self.assertEqual(agent.path.read_bytes(), extracted.read())
 
-    def test_webui_is_dependency_free(self) -> None:
-        source = (PACKAGE_ROOT / BUILD.WEBUI_PATH).read_bytes()
-        BUILD.validate_webui_source(source)
-        text = source.decode("utf-8")
-        self.assertNotRegex(text, BUILD.STATIC_IMPORT)
-        self.assertNotRegex(text, BUILD.DYNAMIC_IMPORT)
-        self.assertIn("webuiApiVersion: 'anixops.webui/v1'", text)
-        self.assertIn("export default function create(host)", text)
-        self.assertIn("request(STATUS_PATH", text)
-        self.assertIn("const STATUS_PATH = '/api/v3/plugins/machine-telemetry/status?limit=200'", text)
+    def test_package_ships_no_webui(self) -> None:
+        template = json.loads((PACKAGE_ROOT / "manifest.template.json").read_text(encoding="utf-8"))
+        self.assertNotIn("webui", template)
+        self.assertEqual("", template["frontend_sha256"])
+        self.assertFalse((PACKAGE_ROOT / "webui").exists())
+        # The node page reads these routes, so they stay.
+        self.assertEqual(
+            [
+                "/api/v3/plugins/machine-telemetry/status",
+                "/api/v3/plugins/machine-telemetry/nodes/*",
+            ],
+            template["control_routes"],
+        )
 
     def test_tampered_artifact_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_root:

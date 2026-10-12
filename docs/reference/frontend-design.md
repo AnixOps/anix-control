@@ -76,8 +76,8 @@ Load order (`web/src/main.js`): `design/fonts/inter/inter.css`,
   backdrop), `--focus-ring` and `--z-popover` (see "Layer order").
 - **`style.css`**: what is left of the pre-redesign global layer (U9): the
   baseline for bare `<button>`, `<input>`, `<textarea>` and `<select>`, the
-  skip link, and the classes that signed plugin WebUI bundles
-  (`packages/<name>/webui`, `anixops.webui/v1`) render: `.btn`,
+  skip link, and the classes that signed plugin WebUI bundles (optional;
+  `packages/<name>/webui`, `anixops.webui/v1`) render: `.btn`,
   `.btn-secondary`, `.table-container`, `.data-table`, `.empty-state`. The
   plugin configuration forms also use `.btn-primary`, `.btn-sm`,
   `.btn-danger`, `.form-group` and `.required`. Plugins ship separately, so

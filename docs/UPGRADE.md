@@ -3738,3 +3738,28 @@ setup: [`guide/forward-entry-ha.md`](guide/forward-entry-ha.md)).
 - **Routes that relied on hand-made DNS** keep working unbound. Binding one
   in DDNS mode makes Control the owner of the name's A/AAAA records in that
   zone: it replaces records it did not write.
+
+## Package WebUI Bundles Are Optional (Unreleased)
+
+The package builder no longer requires a WebUI bundle, and only the
+packages with a real page still ship one: `forward`, `gost-mesh`,
+`nat-egress` and `nftables-forward`. Nothing to migrate; what operators see:
+
+- **Fewer sidebar entries.** The extension pages
+  `/admin/extensions/<package>` of `subscription`, `proxy-node`, `plan`,
+  `ticket`, `knowledge`, `protocol-runtime`, `affiliate`,
+  `identity-platform`, `notification`, `order`, `payment`, `platform`,
+  `wireguard` and `machine-telemetry` are gone once the packages are updated
+  to this release (the catalog follows the installed release, so a package
+  still at an older release keeps its entry until it is updated). Most
+  only showed the package name and version, and machine-telemetry's showed
+  node telemetry the node pages have; the features are on the core pages
+  (`/admin/subscriptions`, `/admin/nodes`, `/admin/plans`,
+  `/admin/tickets`, `/admin/knowledge`, ...). An old bookmark lands on the
+  plugin center.
+- **The packages are otherwise unchanged.** Their manifests have no `webui`
+  and an empty `frontend_sha256`; their routes, permissions, migrations and
+  hosts are the same. Import and install them as usual; the commercial
+  packages (`.github/workflows/commercial-packages.yml`) and the
+  `identity-platform` bootstrap package build, sign and install the same
+  way.

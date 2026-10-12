@@ -145,7 +145,8 @@ gateway requires an administrator with `machine-telemetry.api`; the package
 host answers the route itself (it is not a compatibility route, so route
 modes do not apply), accepts only `GET` and a decimal node id without
 leading zeros, and again requires an administrator. The manifest declares
-the permission `machine-telemetry.services.view` for the WebUI.
+the permission `machine-telemetry.services.view`; the package ships no WebUI
+bundle of its own (the core node pages show its data).
 
 The host reads its Agent installation's settings through
 `kapi_plugin_configuration_v1` and the node's report through

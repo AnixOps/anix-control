@@ -85,8 +85,7 @@
         "entrypoints",
         "migration_version",
         "control_routes",
-        "frontend_sha256",
-        "webui"
+        "frontend_sha256"
       ],
       "properties": {
         "id": {"type": "string", "minLength": 1},
@@ -106,9 +105,13 @@
         "entrypoints": {"type": "object", "additionalProperties": {"type": "string"}},
         "migration_version": {"type": "integer", "minimum": 0},
         "control_routes": {"type": "array", "items": {"type": "string"}},
-        "frontend_sha256": {"$ref": "#/$defs/digest"},
+        "frontend_sha256": {"oneOf": [{"$ref": "#/$defs/digest"}, {"const": ""}]},
         "webui": {"type": "object"}
-      }
+      },
+      "$comment": "webui is optional: a package without an administrator WebUI leaves it out and keeps frontend_sha256 empty; with it, frontend_sha256 is the bundle digest.",
+      "if": {"required": ["webui"]},
+      "then": {"properties": {"frontend_sha256": {"$ref": "#/$defs/digest"}}},
+      "else": {"properties": {"frontend_sha256": {"const": ""}}}
     },
     "v1": {
       "allOf": [

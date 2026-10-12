@@ -98,35 +98,7 @@
     "/api/v3/plugins/machine-telemetry/status",
     "/api/v3/plugins/machine-telemetry/nodes/*"
   ],
-  "frontend_sha256": "__WEBUI_SHA256__",
-  "webui": {
-    "bundle": {
-      "path": "webui/index.mjs",
-      "sha256": "__WEBUI_SHA256__"
-    },
-    "permissions": [
-      "machine-telemetry.view"
-    ],
-    "menus": [
-      {
-        "id": "machine-telemetry.main",
-        "parent": "operations",
-        "label": "Machine Telemetry",
-        "icon": "activity",
-        "route": "/admin/extensions/machine-telemetry",
-        "permission": "machine-telemetry.view",
-        "order": 100
-      }
-    ],
-    "routes": [
-      {
-        "id": "machine-telemetry.main",
-        "path": "/admin/extensions/machine-telemetry",
-        "export": "default",
-        "permission": "machine-telemetry.view"
-      }
-    ]
-  },
+  "frontend_sha256": "",
   "control_entrypoint": {
     "path": "bin/control-host",
     "sha256": "GENERATED_AT_BUILD"

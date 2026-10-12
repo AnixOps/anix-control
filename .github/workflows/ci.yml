@@ -1543,9 +1543,8 @@ jobs:
       - name: Run Machine Telemetry package unit tests
         run: python3 -m unittest discover -s packages/machine-telemetry/tests -p 'test_*.py' -v
 
-      - name: Run Machine Telemetry WebUI smoke test
-        run: node packages/machine-telemetry/tests/webui_smoke.mjs
-
+      # The WebUI bundle is optional: the contract checks the packages whose
+      # manifest declares one and fails on a stray webui/ directory.
       - name: Run v4 package WebUI contract
         run: node packages/shared/tests/webui_contract.mjs
 

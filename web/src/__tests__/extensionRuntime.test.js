@@ -11,7 +11,6 @@ import {
 import { useUserStore } from '@/stores/user'
 
 const HASH = 'a'.repeat(64)
-const MACHINE_TELEMETRY_HASH = 'b'.repeat(64)
 
 const CoreLayout = { template: '<router-view />' }
 const CorePage = { template: '<div>Core page</div>' }
@@ -207,46 +206,24 @@ describe('admin extension runtime', () => {
     expect(router.getRoutes().map(route => route.path)).toContain(`/admin/extensions/${pluginID}`)
   })
 
-  it('loads the bundled machine-telemetry reference module from the controlled registry', async () => {
+  it('compiles no extension module: without a test loader a catalog entry needs its bundle URL', async () => {
     const router = createTestRouter()
-    const runtime = createRuntime(
-      async () => [catalogEntry({
-        plugin_id: 'machine-telemetry',
-        plugin_name: 'Machine Telemetry',
-        version: '1.1.0',
-        bundle: { path: 'webui/index.mjs', sha256: MACHINE_TELEMETRY_HASH },
-        permissions: ['machine-telemetry.view'],
-        menus: [{
-          id: 'machine-telemetry.main',
-          parent: 'services',
-          label: 'Machine Telemetry',
-          icon: 'activity',
-          route: '/admin/extensions/machine-telemetry',
-          permission: 'machine-telemetry.view',
-          order: 100,
-        }],
-        routes: [{
-          id: 'machine-telemetry.main',
-          path: '/admin/extensions/machine-telemetry',
-          export: 'default',
-          permission: 'machine-telemetry.view',
-        }],
-      })],
-      pluginID => pluginID === 'machine-telemetry'
-        ? () => import('@/extensions/modules/machine-telemetry/index.js')
-        : null,
-    )
+    const runtime = createAdminExtensionRuntime({
+      fetchExtensions: async () => [catalogEntry()],
+      refreshIntervalMs: 0,
+      hasPermission: () => true,
+      allowLocalModules: true,
+    })
 
     const result = await runtime.refresh(router)
 
-    expect(result.errors).toEqual([])
-    expect(result.pluginIDs).toEqual(['machine-telemetry'])
-    expect(router.getRoutes().map(route => route.path)).toContain('/admin/extensions/machine-telemetry')
-    expect(runtime.menus.value[0]).toMatchObject({
-      label: 'Machine Telemetry',
-      to: '/admin/extensions/machine-telemetry',
-      permission: 'machine-telemetry.view',
-    })
+    expect(result.pluginIDs).toEqual([])
+    expect(result.errors).toEqual([expect.objectContaining({
+      code: 'invalid_extension',
+      plugin_id: 'example',
+      message: 'plugin is not present in the local extension registry',
+    })])
+    expect(router.getRoutes().map(route => route.path)).not.toContain('/admin/extensions/example')
   })
 
   it('loads a verified same-origin bundle URL without the local module registry', async () => {

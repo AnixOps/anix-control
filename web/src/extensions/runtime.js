@@ -1,7 +1,6 @@
 import { computed, defineComponent, h, onErrorCaptured, onMounted, readonly, ref, shallowRef } from 'vue'
 import { getKernelExtensions } from '@/api/kernel'
 import { useUserStore } from '@/stores/user'
-import { getLocalExtensionModuleLoader } from './registry'
 import { isWebUIMenuParentToken, normalizeWebUIMenuParent } from './menuRegistry'
 
 const ADMIN_ROUTE_NAME = 'admin'
@@ -477,11 +476,12 @@ function snapshot(menus, errors, skipped, plugins, extensions, capabilities) {
 
 export function createAdminExtensionRuntime(options = {}) {
   const fetchExtensions = options.fetchExtensions || getKernelExtensions
-  const resolveModule = options.resolveModule || getLocalExtensionModuleLoader
+  // The app compiles no extension module: production extensions come only
+  // from the verified package asset URL. Tests may opt into a controlled
+  // local module loader (allowLocalModules with resolveModule) to exercise
+  // catalog validation without issuing browser fetches.
+  const resolveModule = options.resolveModule || (() => null)
   const loadBundleModule = options.loadBundleModule || loadVerifiedBundleModule
-  // Production extensions must originate from the verified package asset URL.
-  // Tests may opt into a controlled local module loader to exercise catalog
-  // validation without issuing browser fetches.
   const allowLocalModules = options.allowLocalModules === true
   const hasPermission = typeof options.hasPermission === 'function' ? options.hasPermission : currentUserHasPermission
   const now = options.now || Date.now

@@ -21,6 +21,23 @@
   applied. At startup the schema gains the flag columns and swaps the unique index on the topology name for
   one on live topologies (`ux_topology_live_name`); see docs/UPGRADE.md.
 
+### Changed
+
+- A package's WebUI bundle is optional. `build_package.py` builds, signs and verifies a manifest without
+  `webui` (an empty `frontend_sha256`, which the kernel and the Agent already accepted), and refuses a
+  `webui/` directory the manifest does not declare. Such a package stores no WebUI asset and the extension
+  catalog leaves it out; `packages/shared/tests/webui_contract.mjs` checks only the packages with a bundle.
+- The live Control WebUI gate loads and revokes the nftables-forward WebUI and checks that identity-platform
+  and machine-telemetry install without one and stay out of the catalog.
+
+### Removed
+
+- The placeholder WebUI pages (a heading and the package version) of subscription, proxy-node, plan, ticket,
+  knowledge, protocol-runtime, affiliate, identity-platform, notification, order, payment, platform and
+  wireguard, and the machine-telemetry extension page, with their `/admin/extensions/*` sidebar entries.
+  The features are on the core pages; machine-telemetry keeps its control routes for the node pages. The
+  web app's test-only local module registry and its machine-telemetry module are gone too.
+
 ## 4.2.1 - 2026-10-12
 
 ### Changed

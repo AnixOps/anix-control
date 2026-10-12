@@ -57,8 +57,15 @@ v4.0.0 (published 2026-07-20) is plugin-only at the routing level only.
   every call to the kernel allowlist in
   `internal/identitybridge/identity_bridge.go`.
 - 11 packages (forward, knowledge, notification, order, payment, plan,
-  protocol-runtime, proxy-node, subscription, ticket, wireguard) are 4-file
+  protocol-runtime, proxy-node, subscription, ticket, wireguard) were 4-file
   placeholders (`manifest.template.json`, `compat/`, `migrations/`, `webui/`).
+  The `webui/` bundle of every placeholder only rendered a heading and the
+  package version, because the builder required one. The WebUI is optional
+  now (Unreleased): those packages, and affiliate, identity-platform,
+  platform and machine-telemetry, ship no WebUI, and their features live in
+  the core admin pages (`/admin/plans`, `/admin/tickets`,
+  `/admin/knowledge`, `/admin/subscriptions`, `/admin/nodes`, ...). Only
+  forward, gost-mesh, nat-egress and nftables-forward ship a bundle.
 - **After v4.0.0.** 23 of the 45 identity-platform routes moved to other
   packages:
   - system configuration, audit and backup (12) to the new `platform`
