@@ -136,6 +136,9 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 	installPublic.GET("/install.sh.sig", agentInstall.Signature)
 	installPublic.GET("/install/agent.env", agentInstall.Metadata)
 	installPublic.GET("/install/agent/:tag/:asset", agentInstall.Artifact)
+	// The caller's address as Control sees it (server.trusted_proxies
+	// applied): the script hands it to the join.
+	installPublic.GET("/install/ip", agentInstall.ClientIP)
 
 	forwardFlowHandler := handler.NewForwardHandler()
 	r.POST("/flow/upload", middleware.AppTokenAuth(), forwardFlowHandler.UploadPanelFlowData)

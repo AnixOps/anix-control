@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC2317 # the fakes are called by the sourced installer.
 # Tests of the Agent installer (internal/agentinstall/install.sh) in a fake
-# root: systemctl, curl, nft, tc, sysctl, the preflight probes (uname, ss,
-# ip, iptables, pkaction, modinfo; df is real unless FAKE_DF_KB is set),
-# the user tools and chown are shell functions, the Agent is a fake binary that "enrolls" when systemctl
-# restarts it. Nothing here touches or reads the host's system.
+# root: systemctl, curl (with Control's /install/ip), nft, tc, sysctl, the
+# preflight probes (uname, ss, ip, iptables, pkaction, modinfo; df is real
+# unless FAKE_DF_KB is set), the user tools, runuser and chown are shell
+# functions, and the Agent is a fake binary whose 'join' writes an identity
+# and answers the node it joined. Nothing here touches or reads the host's
+# system.
 
 set -Eeuo pipefail
 
@@ -27,6 +29,7 @@ ok() {
 readonly CONTROL="https://ctl.example.com"
 readonly TOKEN_A="anixagt_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
 readonly TOKEN_B="anixagt_BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+readonly JOIN_TOKEN="anixjoin_JJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJ"
 readonly GITHUB="https://github.com/AnixOps/anix-agent/releases/download"
 
 # build_release makes the fake Agent release zip and its .dgst.
@@ -35,13 +38,47 @@ build_release() {
   mkdir -p "${dir}/content"
   cat >"${dir}/content/anix-agent" <<'EOF'
 #!/usr/bin/env bash
-# Fake AnixOps Agent: `identity --json` prints what the fake systemctl
-# recorded when it "enrolled".
+# Fake AnixOps Agent: `join` writes the identity record `identity --json`
+# prints and answers the node: FAKE_JOIN_NODE (proxy-12) for a join token,
+# FAKE_ENROLL_NODE (forward-41) for an enrollment token; FAKE_JOIN=fail
+# refuses, FAKE_JOIN=hang never answers. It logs its arguments and the token
+# file's mode, never the token.
 # `forward sysctl-dropin` and `migrate-paths` follow FAKE_DROPIN,
 # FAKE_MIGRATE_HELP and FAKE_MIGRATE; migrate-paths logs its arguments.
 case "${1:-}" in
   identity)
     cat "${ANIX_INSTALL_ROOT}/var/lib/anixops-agent/pki/identity.json" 2>/dev/null || printf '[]\n'
+    ;;
+  join)
+    shift
+    args="$*"
+    token_file=""
+    pki=""
+    while (($# > 0)); do
+      case "$1" in
+        --token-file) token_file="$2"; shift 2 ;;
+        --pki-dir) pki="$2"; shift 2 ;;
+        --control | --grpc | --name | --host | --address) shift 2 ;;
+        *) shift ;;
+      esac
+    done
+    printf 'agent join %s (token file mode %s)\n' "${args}" "$(stat -c '%a' "${ANIX_INSTALL_ROOT}${token_file}")" >>"${FAKE_AGENT_LOG}"
+    case "${FAKE_JOIN:-ok}" in
+      fail)
+        printf 'anix-agent join: rpc error: code = PermissionDenied desc = join_rejected: the join token is not usable\n' >&2
+        exit 1
+        ;;
+      hang) sleep 5 ;;
+    esac
+    token="$(cat "${ANIX_INSTALL_ROOT}${token_file}")"
+    case "${token}" in
+      anixjoin_*) node="${FAKE_JOIN_NODE:-proxy-12}" name="${FAKE_JOIN_NAME:-hk-01}" group=',"group":"HK"' ;;
+      *) node="${FAKE_ENROLL_NODE:-forward-41}" name="relay" group='' ;;
+    esac
+    printf '[{"node": "%s", "dir": "x", "state": "valid", "spiffe_id": "spiffe://anixops/prod/agent/%s", "serial": "abc123", "not_after": "2026-10-10T00:00:00Z", "trust_bundle_cas": 1}]\n' \
+      "${node}" "${node}" >"${ANIX_INSTALL_ROOT}${pki}/identity.json"
+    printf '{"node":"%s","node_name":"%s"%s,"created":%s,"approval":"%s","spiffe_id":"spiffe://anixops/prod/agent/%s","not_after":"2026-10-19T00:00:00Z"}\n' \
+      "${node}" "${name}" "${group}" "${FAKE_CREATED:-true}" "${FAKE_APPROVAL:-approved}" "${node}"
     ;;
   forward)
     [[ "${FAKE_DROPIN:-1}" == "1" && "${2:-}" == "sysctl-dropin" ]] || exit 1
@@ -150,6 +187,13 @@ run_installer() {
     groupdel() { printf 'groupdel %s\n' "$*" >>"${STATE}/log"; grep -vx "$1" "${STATE}/group" >"${STATE}/group.new" || true; mv "${STATE}/group.new" "${STATE}/group"; }
     sleep() { :; }
     chown() { printf 'chown %s\n' "$*" >>"${STATE}/log"; }
+    # The join runs as the Agent's user: the fake runs it as it is.
+    runuser() {
+      printf 'runuser %s\n' "$*" >>"${STATE}/log"
+      while (($# > 0)) && [[ "$1" != "--" ]]; do shift; done
+      shift
+      "$@"
+    }
     getent() {
       case "$1" in
         passwd) grep -qx "$2" "${STATE}/passwd" ;;
@@ -192,26 +236,13 @@ run_installer() {
         is-active) [[ " ${FAKE_ACTIVE:-} " == *" ${*: -1} "* ]]; return ;;
       esac
       printf 'systemctl %s\n' "$*" >>"${STATE}/log"
-      if [[ "$1" == "restart" && "$2" == "anix-agent.service" ]]; then
-        # The fake Agent enrolls with the credential file, then removes it.
-        local credential="${ROOT_DIR}/var/lib/anixops-agent/enroll.credential" node
-        if [[ -f "${credential}" ]]; then
-          stat -c '%a' "${credential}" >"${STATE}/credential-mode"
-          node="$(grep -o '"AgentNode": "[a-z]*-[0-9]*"' "${ROOT_DIR}/etc/anixops/agent/config.json" | cut -d '"' -f 4)"
-          if [[ "${FAKE_ENROLL:-1}" == "1" ]]; then
-            printf '[{"node": "%s", "dir": "x", "state": "valid", "spiffe_id": "spiffe://anixops/prod/agent/%s", "serial": "abc123", "not_after": "2026-10-10T00:00:00Z", "trust_bundle_cas": 1}]\n' \
-              "${node}" "${node}" >"${ROOT_DIR}/var/lib/anixops-agent/pki/identity.json"
-            rm -f "${credential}"
-          fi
-          printf 'enrolled-with %s\n' "$(cat "${credential}" 2>/dev/null || printf 'consumed')" >>"${STATE}/log"
-        fi
-      fi
       return 0
     }
     # The fake Control answers with a Date FAKE_SKEW seconds off this
-    # clock; the gRPC target answers curl with FAKE_GRPC_RC.
+    # clock; the gRPC target answers curl with FAKE_GRPC_RC; /install/ip
+    # answers the address of the family, unless FAKE_IP is down.
     curl() {
-      local out="" url="" headers=""
+      local out="" url="" headers="" family=""
       while (($# > 0)); do
         case "$1" in
           -V)
@@ -220,12 +251,18 @@ run_installer() {
             ;;
           -o) out="$2"; shift 2 ;;
           -D) headers="$2"; shift 2 ;;
+          -4 | -6) family="${1#-}"; shift ;;
           --proto | --retry | --connect-timeout | -m) shift 2 ;;
           -*) shift ;;
           *) url="$1"; shift ;;
         esac
       done
       printf 'curl %s\n' "${url}" >>"${STATE}/log"
+      if [[ "${url}" == "${CONTROL}/install/ip" ]]; then
+        [[ "${FAKE_IP:-up}" == "up" ]] || return 7
+        if [[ "${family}" == "4" ]]; then printf '203.0.113.10\n'; else printf '2001:db8::10\n'; fi
+        return 0
+      fi
       if [[ "${url}" == "https://ctl.example.com:50051/" ]]; then
         return "${FAKE_GRPC_RC:-0}"
       fi
@@ -263,24 +300,35 @@ expect_out() {
 
 build_release
 
-# 1. Fresh install: user, binary, sandboxed unit, config without an API key,
-# credential 0600 consumed by the Agent, legacy runtime removed.
+# 1. Fresh install with a node's enrollment token: user, binary, sandboxed
+# unit, the join run as the Agent's user before the Agent starts, a config
+# for the node the join named without a token or an API key, the token file
+# 0600 and gone, the legacy runtime removed.
 new_root fresh
 metadata
-run_installer --control "${CONTROL}" --node forward-41 --token "${TOKEN_A}"
+run_installer -u "${CONTROL}" -t "${TOKEN_A}"
 expect_status 0 "fresh install"
 [[ -x "${ROOT_DIR}/usr/lib/anixops-agent/anix-agent" ]] || fail "binary not installed"
 [[ "$(readlink "${ROOT_DIR}/usr/local/bin/anix-agent")" == "/usr/lib/anixops-agent/anix-agent" ]] || fail "anix-agent link"
 config="${ROOT_DIR}/etc/anixops/agent/config.json"
 python3 -m json.tool "${config}" >/dev/null || fail "config is not JSON"
-grep -qF '"AgentNode": "forward-41"' "${config}" || fail "config lacks the node"
+grep -qF '"AgentNode": "forward-41"' "${config}" || fail "config lacks the node the join named"
 grep -qF '"NodeID": 41' "${config}" || fail "config lacks the node id"
 grep -qF '"GRPCHost": "ctl.example.com:50051"' "${config}" || fail "config lacks the gRPC target"
-grep -qF '"EnrollCredentialFile": "/var/lib/anixops-agent/enroll.credential"' "${config}" || fail "config lacks the credential file"
-! grep -q 'ApiKey' "${config}" || fail "config must not carry an API key"
+grep -qF '"CertDir": "/var/lib/anixops-agent/pki"' "${config}" || fail "config lacks the identity store"
+! grep -q 'ApiKey\|EnrollCredentialFile\|anixagt_' "${config}" || fail "config must carry no API key and no token"
 [[ "$(stat -c '%a' "${config}")" == "640" ]] || fail "config mode"
-[[ "$(cat "${STATE}/credential-mode")" == "600" ]] || fail "credential mode was $(cat "${STATE}/credential-mode")"
-[[ ! -e "${ROOT_DIR}/var/lib/anixops-agent/enroll.credential" ]] || fail "credential left behind"
+join_line="$(grep '^agent join ' "${STATE}/log")" || fail "the join did not run"
+for word in "--control ${CONTROL}" "--grpc ctl.example.com:50051" "--token-file /var/lib/anixops-agent/join.token" \
+  "--pki-dir /var/lib/anixops-agent/pki" "--json" "--address 203.0.113.10 --address 2001:db8::10" "(token file mode 600)"; do
+  [[ "${join_line}" == *"${word}"* ]] || fail "join lacks ${word}: ${join_line}"
+done
+[[ "${join_line}" != *"--reset"* && "${join_line}" != *"--name"* && "${join_line}" != *"--host"* ]] || fail "join got flags it was not given: ${join_line}"
+grep -q '^runuser -u anixops-agent -- timeout 180 .*/usr/lib/anixops-agent/anix-agent join ' "${STATE}/log" || fail "the join must run as anixops-agent, bounded by --timeout: $(grep runuser "${STATE}/log")"
+grep -qF "chown anixops-agent:anixops-agent ${ROOT_DIR}/var/lib/anixops-agent/join.token" "${STATE}/log" || fail "the token file is not the Agent's"
+[[ ! -e "${ROOT_DIR}/var/lib/anixops-agent/join.token" ]] || fail "token file left behind"
+[[ "$(grep -n '^agent join ' "${STATE}/log" | cut -d: -f1)" -lt "$(grep -n '^systemctl restart anix-agent.service' "${STATE}/log" | cut -d: -f1)" ]] ||
+  fail "the join must finish before the Agent starts"
 [[ "$(stat -c '%a' "${ROOT_DIR}/var/lib/anixops-agent")" == "700" ]] || fail "state dir mode"
 [[ "$(stat -c '%a' "${ROOT_DIR}/var/lib/anixops-gost")" == "750" ]] || fail "gost dir mode"
 unit="${ROOT_DIR}/etc/systemd/system/anix-agent.service"
@@ -312,8 +360,11 @@ expect_out "nftables table inet v2b_forward"
 expect_out "nftables table ip anixops_forward"
 expect_out "systemd unit v2forward-agent.service"
 expect_out "AnixOps Agent v4.2.0 is running (install)"
+expect_out "已接入：relay (forward-41)"
+expect_out "join:        enrolled as forward-41"
+expect_out "node:        forward-41 (relay)"
 sysctl_file="${ROOT_DIR}/etc/sysctl.d/90-anixops-forward.conf"
-grep -qxF 'net.ipv4.ip_forward = 1' "${sysctl_file}" || fail "sysctl file lacks IPv4 forwarding"
+grep -qxF 'net.ipv4.ip_forward = 1' "${sysctl_file}" || fail "sysctl file lacks IPv4 forwarding: a forward node joined"
 grep -qxF 'net.ipv6.conf.all.forwarding = 1' "${sysctl_file}" || fail "sysctl file lacks IPv6 forwarding"
 [[ "$(stat -c '%a' "${sysctl_file}")" == "644" ]] || fail "sysctl file mode"
 grep -qxF "sysctl -e -q -p ${sysctl_file}" "${STATE}/log" || fail "forwarding not applied"
@@ -325,59 +376,68 @@ grep -qxF "RuntimeDirectoryMode=0750" "${unit}" || fail "agent unit lacks Runtim
   fail "forwarding must be on before the Agent starts"
 expect_out "forwarding:  wrote /etc/sysctl.d/90-anixops-forward.conf (net.ipv4.ip_forward=1 net.ipv6.conf.all.forwarding=1); applied"
 expect_out "serial abc123"
+expect_out "Preflight checks for a forward node (forward-41)"
+expect_out "token included, is in this shell's history"
 ! grep -qF "${TOKEN_A}" "${STATE}/out" || fail "the token was printed"
+! grep -qF "${TOKEN_A}" "${STATE}/log" || fail "the token reached a log"
 grep -qF "curl ${GITHUB}/v4.2.0/anix-agent-linux-64.zip.dgst" "${STATE}/log" || fail "checksum not from GitHub"
-ok "fresh install"
+grep -qF "curl ${CONTROL}/install/ip" "${STATE}/log" || fail "the addresses were not asked"
+ok "fresh install with an enrollment token"
 
 # 2. The same command again: upgrade in place, identity kept, token unused.
 : >"${STATE}/log"
-rm -f "${STATE}/credential-mode"
-run_installer --control "${CONTROL}" --node forward-41 --token "${TOKEN_A}"
+run_installer -u "${CONTROL}" -t "${TOKEN_A}"
 expect_status 0 "re-run"
 expect_out "(upgrade)"
-expect_out "already enrolled as forward-41; the token was not used"
+expect_out "already joined as forward-41; the token was not used (add --reset to join again)"
 expect_out "kept /etc/anixops/agent/config.json"
 expect_out "legacy:      nothing to remove"
-[[ ! -e "${STATE}/credential-mode" ]] || fail "re-run wrote the credential"
+! grep -q '^agent join' "${STATE}/log" || fail "re-run joined again"
 grep -qF 'systemctl stop anix-agent.service' "${STATE}/log" || fail "re-run did not stop the old Agent first"
 ok "re-run is an in-place upgrade"
 
-# 3. Another node needs --reset; with it the host enrolls again.
-run_installer --control "${CONTROL}" --node forward-42 --token "${TOKEN_B}"
-expect_status 1 "other node without --reset"
-expect_out "re-run with --reset"
-run_installer --control "${CONTROL}" --node forward-42 --token "${TOKEN_B}" --reset
+# 3. Another token keeps the node unless --reset; with it the host joins
+# again and the old config is kept as a backup.
+: >"${STATE}/log"
+run_installer -u "${CONTROL}" -t "${TOKEN_B}"
+expect_status 0 "another token without --reset"
+expect_out "already joined as forward-41; the token was not used"
+! grep -q '^agent join' "${STATE}/log" || fail "a valid identity joined again without --reset"
+FAKE_ENROLL_NODE=forward-42 run_installer -u "${CONTROL}" -t "${TOKEN_B}" --reset
 expect_status 0 "reset"
 grep -qF '"AgentNode": "forward-42"' "${config}" || fail "reset did not rewrite the config"
 compgen -G "${config}.bak.*" >/dev/null || fail "reset kept no backup of the config"
 expect_out "Discarded this host's Agent identity"
-ok "--reset switches the node"
+grep -q '^agent join .*--reset' "${STATE}/log" || fail "the join was not told --reset"
+ok "--reset joins again"
 
 # 4. A checksum mismatch installs nothing.
 new_root mismatch
 metadata
 printf 'not the release\n' >"${WORK}/bad.zip"
-FAKE_ZIP="${WORK}/bad.zip" run_installer --control "${CONTROL}" --node forward-41 --token "${TOKEN_A}"
+FAKE_ZIP="${WORK}/bad.zip" run_installer -u "${CONTROL}" -t "${TOKEN_A}"
 expect_status 1 "checksum mismatch"
 expect_out "checksum mismatch"
 [[ ! -e "${ROOT_DIR}/usr/lib/anixops-agent" && ! -e "${ROOT_DIR}/etc/systemd/system/anix-agent.service" ]] || fail "a bad download changed the host"
 [[ -f "${ROOT_DIR}/etc/systemd/system/v2forward-agent.service" ]] || fail "a bad download removed the legacy runtime"
+! grep -q '^agent join' "${STATE}/log" || fail "a bad download joined Control"
 ok "checksum mismatch installs nothing"
 
 # 5. Mirrors: Control's digest is used and the cn mirror's never fetched.
 new_root mirror
 metadata "source cn https://mirror.example.cn/anix-agent" "source control ${CONTROL}/install/agent" \
   "sha256 anix-agent-linux-64.zip $(sha256sum "${RELEASE_ZIP}" | awk '{print $1}')"
-run_installer --control "${CONTROL}" --node proxy-7 --token "${TOKEN_A}" --mirror cn
+FAKE_ENROLL_NODE=proxy-7 run_installer -u "${CONTROL}" -t "${TOKEN_A}" --mirror cn
 expect_status 0 "cn mirror"
 grep -qF 'curl https://mirror.example.cn/anix-agent/v4.2.0/anix-agent-linux-64.zip' "${STATE}/log" || fail "cn mirror not used"
 [[ ! -e "${ROOT_DIR}/etc/sysctl.d/90-anixops-forward.conf" ]] || fail "a proxy node got IP forwarding without --forward"
 ! grep -q '^sysctl ' "${STATE}/log" || fail "sysctl ran for a proxy node without --forward"
 expect_out "forwarding:  unchanged (a proxy node; --forward turns IP forwarding on)"
 ! grep -q '\.dgst' "${STATE}/log" || fail "a .dgst was fetched although Control published the digest"
+! grep -q 'Preflight checks for a forward node' "${STATE}/out" || fail "a proxy node got the forward checks"
 new_root fallback
 metadata
-run_installer --control "${CONTROL}" --node proxy-7 --token "${TOKEN_A}" --mirror cn
+run_installer -u "${CONTROL}" -t "${TOKEN_A}" --mirror cn
 expect_status 0 "cn fallback"
 expect_out "the cn mirror is not set up on Control; downloading from GitHub releases"
 ok "mirror selection and trusted digests"
@@ -386,13 +446,13 @@ ok "mirror selection and trusted digests"
 # cannot apply leaves the file for the next boot and only notes it.
 new_root proxyforward
 metadata
-run_installer --control "${CONTROL}" --node proxy-7 --token "${TOKEN_A}" --forward
+FAKE_ENROLL_NODE=proxy-7 run_installer -u "${CONTROL}" -t "${TOKEN_A}" --forward
 expect_status 0 "proxy --forward"
 grep -qxF 'net.ipv4.ip_forward = 1' "${ROOT_DIR}/etc/sysctl.d/90-anixops-forward.conf" || fail "--forward wrote no sysctl file"
 expect_out "; applied"
 new_root sysctlfail
 metadata
-FAKE_DROPIN=0 FAKE_SYSCTL=fail run_installer --control "${CONTROL}" --node forward-41 --token "${TOKEN_A}"
+FAKE_DROPIN=0 FAKE_SYSCTL=fail run_installer -u "${CONTROL}" -t "${TOKEN_A}"
 expect_status 0 "sysctl failure is not fatal"
 [[ -f "${ROOT_DIR}/etc/sysctl.d/90-anixops-forward.conf" ]] || fail "sysctl failure removed the file"
 grep -qF 'Written by the AnixOps installer' "${ROOT_DIR}/etc/sysctl.d/90-anixops-forward.conf" ||
@@ -403,7 +463,7 @@ expect_out "; applies at the next boot"
 ok "IP forwarding for forward nodes"
 
 # 5c. Switching from anix-agent's root install: migrate-paths copies its
-# directories, owned by anixops-agent, before the new unit starts.
+# directories, owned by anixops-agent, before the join and the new unit.
 root_switch() {
   new_root "$1"
   metadata
@@ -411,26 +471,27 @@ root_switch() {
     >"${ROOT_DIR}/etc/systemd/system/anix-agent.service"
 }
 root_switch rootunit
-run_installer --control "${CONTROL}" --node forward-41 --token "${TOKEN_A}"
+run_installer -u "${CONTROL}" -t "${TOKEN_A}"
 expect_status 0 "switch from a root unit"
 grep -qxF "agent migrate-paths --chown anixops-agent --root ${ROOT_DIR}" "${STATE}/log" || fail "migrate-paths not run: $(grep agent "${STATE}/log")"
-[[ "$(grep -n '^agent migrate-paths' "${STATE}/log" | cut -d: -f1)" -lt "$(grep -n '^systemctl restart anix-agent.service' "${STATE}/log" | cut -d: -f1)" ]] ||
-  fail "migrate-paths must run before the new unit starts"
+[[ "$(grep -n '^agent migrate-paths' "${STATE}/log" | cut -d: -f1)" -lt "$(grep -n '^agent join' "${STATE}/log" | cut -d: -f1)" ]] ||
+  fail "migrate-paths must run before the join"
 grep -qxF "User=anixops-agent" "${ROOT_DIR}/etc/systemd/system/anix-agent.service" || fail "the root unit was not replaced"
 expect_out "migration:   ran anix-agent migrate-paths for a root install"
 new_root rootdirs
 metadata
 mkdir -p "${ROOT_DIR}/var/lib/anixops/plugins"
-run_installer --control "${CONTROL}" --node proxy-7 --token "${TOKEN_A}"
+run_installer -u "${CONTROL}" -t "${TOKEN_A}"
 expect_status 0 "switch with the root install's directories"
 grep -q '^agent migrate-paths --chown anixops-agent' "${STATE}/log" || fail "old directories did not trigger migrate-paths"
 root_switch rootfail
-FAKE_MIGRATE=1 run_installer --control "${CONTROL}" --node forward-41 --token "${TOKEN_A}"
+FAKE_MIGRATE=1 run_installer -u "${CONTROL}" -t "${TOKEN_A}"
 expect_status 1 "migrate-paths failure"
 expect_out "anix-agent migrate-paths could not copy"
 ! grep -q '^systemctl restart anix-agent.service' "${STATE}/log" || fail "the Agent started after a failed migration"
+! grep -q '^agent join' "${STATE}/log" || fail "the host joined after a failed migration"
 root_switch rootold
-FAKE_MIGRATE_HELP=1 run_installer --control "${CONTROL}" --node forward-41 --token "${TOKEN_A}"
+FAKE_MIGRATE_HELP=1 run_installer -u "${CONTROL}" -t "${TOKEN_A}"
 expect_status 0 "an Agent without migrate-paths"
 expect_out "cannot migrate a root install's directories"
 ! grep -q '^agent migrate-paths' "${STATE}/log" || fail "migrate-paths ran on an Agent without it"
@@ -444,12 +505,12 @@ if openssl pkeyutl -help 2>&1 | grep -q -- '-rawin'; then
   base64 -w0 "${WORK}/zip.sig.bin" >"${WORK}/zip.sig"
   new_root signed
   metadata
-  ANIX_INSTALL_PUBLIC_KEY="${public}" FAKE_SIG="${WORK}/zip.sig" run_installer --control "${CONTROL}" --node forward-41 --token "${TOKEN_A}"
+  ANIX_INSTALL_PUBLIC_KEY="${public}" FAKE_SIG="${WORK}/zip.sig" run_installer -u "${CONTROL}" -t "${TOKEN_A}"
   expect_status 0 "signed release"
   expect_out "Release signature of anix-agent-linux-64.zip verified"
   new_root badsig
   metadata
-  FAKE_SIG="${WORK}/zip.sig" run_installer --control "${CONTROL}" --node forward-41 --token "${TOKEN_A}"
+  FAKE_SIG="${WORK}/zip.sig" run_installer -u "${CONTROL}" -t "${TOKEN_A}"
   expect_status 1 "signature by another key"
   expect_out "does not verify"
   [[ ! -e "${ROOT_DIR}/usr/lib/anixops-agent" ]] || fail "a bad signature changed the host"
@@ -485,7 +546,7 @@ if openssl pkeyutl -help 2>&1 | grep -q -- '-rawin'; then
   metadata
   make_bundle good
   pack_bundle good
-  ANIX_INSTALL_PUBLIC_KEY="${public}" run_installer --control "${CONTROL}" --node forward-41 --token "${TOKEN_A}" --offline "${BUNDLE}"
+  ANIX_INSTALL_PUBLIC_KEY="${public}" run_installer -u "${CONTROL}" -t "${TOKEN_A}" --offline "${BUNDLE}"
   expect_status 0 "offline install"
   expect_out "Release signature of SHA256SUMS verified"
   expect_out "Release signature of anix-agent-linux-64.zip verified"
@@ -493,12 +554,13 @@ if openssl pkeyutl -help 2>&1 | grep -q -- '-rawin'; then
   [[ -x "${ROOT_DIR}/usr/lib/anixops-agent/anix-agent" ]] || fail "offline install installed no Agent"
   ! grep -q '\.zip\|\.dgst' "${STATE}/log" || fail "an offline install downloaded: $(grep curl "${STATE}/log")"
   grep -qF 'curl https://ctl.example.com:50051/' "${STATE}/log" || fail "offline preflight did not check the gRPC target"
+  grep -q '^agent join ' "${STATE}/log" || fail "an offline install did not join"
 
   offline_case() {
     local name="$1" message="$2"
     new_root "offline-${name}"
     metadata
-    ANIX_INSTALL_PUBLIC_KEY="${public}" run_installer --control "${CONTROL}" --node forward-41 --token "${TOKEN_A}" --offline "${BUNDLE}"
+    ANIX_INSTALL_PUBLIC_KEY="${public}" run_installer -u "${CONTROL}" -t "${TOKEN_A}" --offline "${BUNDLE}"
     expect_status 1 "offline ${name}"
     expect_out "${message}"
     [[ ! -e "${ROOT_DIR}/usr/lib/anixops-agent" ]] || fail "offline ${name}: the host changed"
@@ -533,27 +595,28 @@ if openssl pkeyutl -help 2>&1 | grep -q -- '-rawin'; then
   BUNDLE="${WORK}/good.tar.gz"
   new_root offline-arch
   metadata
-  FAKE_ARCH=aarch64 ANIX_INSTALL_PUBLIC_KEY="${public}" run_installer --control "${CONTROL}" --node forward-41 --token "${TOKEN_A}" --offline "${BUNDLE}"
+  FAKE_ARCH=aarch64 ANIX_INSTALL_PUBLIC_KEY="${public}" run_installer -u "${CONTROL}" -t "${TOKEN_A}" --offline "${BUNDLE}"
   expect_status 1 "offline bundle for another architecture"
   expect_out "it is not for arm64"
   new_root offline-otherkey
   metadata
-  run_installer --control "${CONTROL}" --node forward-41 --token "${TOKEN_A}" --offline "${BUNDLE}"
+  run_installer -u "${CONTROL}" -t "${TOKEN_A}" --offline "${BUNDLE}"
   expect_status 1 "offline bundle signed by another key"
   expect_out "the release signature of SHA256SUMS does not verify"
   new_root offline-noopenssl
   metadata
-  FAKE_MISSING=openssl run_installer --control "${CONTROL}" --node forward-41 --token "${TOKEN_A}" --offline "${BUNDLE}"
+  FAKE_MISSING=openssl run_installer -u "${CONTROL}" -t "${TOKEN_A}" --offline "${BUNDLE}"
   expect_status 1 "offline without openssl"
   expect_out "missing tools: openssl"
   new_root offline-nohttps
   metadata
-  FAKE_CONTROL_DOWN=1 ANIX_INSTALL_PUBLIC_KEY="${public}" run_installer --control "${CONTROL}" --node forward-41 --token "${TOKEN_A}" --offline "${BUNDLE}"
+  FAKE_CONTROL_DOWN=1 FAKE_IP=down ANIX_INSTALL_PUBLIC_KEY="${public}" run_installer -u "${CONTROL}" -t "${TOKEN_A}" --offline "${BUNDLE}"
   expect_status 0 "offline install without Control's https"
   expect_out "cannot reach https://ctl.example.com over https"
+  ! grep -q '^agent join .*--address' "${STATE}/log" || fail "addresses passed although Control's https did not answer"
   new_root offline-nogrpc
   metadata
-  FAKE_GRPC_RC=7 ANIX_INSTALL_PUBLIC_KEY="${public}" run_installer --control "${CONTROL}" --node forward-41 --token "${TOKEN_A}" --offline "${BUNDLE}"
+  FAKE_GRPC_RC=7 ANIX_INSTALL_PUBLIC_KEY="${public}" run_installer -u "${CONTROL}" -t "${TOKEN_A}" --offline "${BUNDLE}"
   expect_status 1 "offline install without the gRPC target"
   expect_out "cannot connect to the gRPC target"
   ok "offline bundles"
@@ -561,55 +624,135 @@ else
   printf 'skip - release signatures (OpenSSL without -rawin)\n'
 fi
 
-# 7. Enrollment that never completes fails with a hint and keeps the install.
-new_root stuck
+# 7. A join that fails or never answers stops before the Agent starts, says
+# why, keeps the install and removes the token file.
+new_root joinfail
 metadata
-FAKE_ENROLL=0 run_installer --control "${CONTROL}" --node forward-41 --token "${TOKEN_A}" --timeout 4
-expect_status 1 "enrollment timeout"
-expect_out "did not enroll within 4s"
-expect_out "journalctl -u anix-agent.service"
-ok "enrollment timeout"
+FAKE_JOIN=fail run_installer -u "${CONTROL}" -t "${JOIN_TOKEN}"
+expect_status 1 "join refused"
+expect_out "join_rejected: the join token is not usable"
+expect_out "the join failed (anix-agent join exit 1)"
+expect_out "copy the current command from Control"
+[[ -x "${ROOT_DIR}/usr/lib/anixops-agent/anix-agent" ]] || fail "a failed join removed the install"
+[[ ! -e "${ROOT_DIR}/var/lib/anixops-agent/join.token" ]] || fail "a failed join left the token file"
+[[ ! -e "${ROOT_DIR}/etc/anixops/agent/config.json" ]] || fail "a failed join wrote a config"
+! grep -q '^systemctl restart anix-agent.service' "${STATE}/log" || fail "the Agent started without an identity"
+new_root joinhang
+metadata
+FAKE_JOIN=hang run_installer -u "${CONTROL}" -t "${JOIN_TOKEN}" --timeout 1
+expect_status 1 "join timeout"
+expect_out "the join did not finish within 1s"
+[[ ! -e "${ROOT_DIR}/var/lib/anixops-agent/join.token" ]] || fail "a timed-out join left the token file"
+ok "a failed join"
 
-# 8. Arguments and platforms.
+# 8. Joining a node group: --name and --host reach the join; the node the
+# join created gets the config; a pending node is told so; a join token
+# from the environment leaves nothing in the history.
+new_root group
+metadata
+run_installer -u "${CONTROL}" -t "${JOIN_TOKEN}" --name hk-01 --host hk.nodes.example.com
+expect_status 0 "group join"
+grep -q '^agent join .*--name hk-01 --host hk.nodes.example.com --address 203.0.113.10 --address 2001:db8::10' "${STATE}/log" ||
+  fail "join arguments: $(grep '^agent join' "${STATE}/log")"
+grep -qF '"AgentNode": "proxy-12"' "${ROOT_DIR}/etc/anixops/agent/config.json" || fail "config lacks the joined node"
+grep -qF '"NodeID": 12' "${ROOT_DIR}/etc/anixops/agent/config.json" || fail "config lacks the joined node's id"
+expect_out "已接入：hk-01 (proxy-12)"
+expect_out "join:        created proxy-12 in the node group HK"
+expect_out "forwarding:  unchanged (a proxy node; --forward turns IP forwarding on)"
+expect_out "token included, is in this shell's history"
+! grep -q '等待审批' "${STATE}/out" || fail "an approved node was told to wait"
+! grep -qF "${JOIN_TOKEN}" "${STATE}/out" || fail "the join token was printed"
+: >"${STATE}/log"
+run_installer -u "${CONTROL}" -t "${JOIN_TOKEN}"
+expect_status 0 "group join re-run"
+expect_out "already joined as proxy-12; the token was not used"
+! grep -q '^agent join' "${STATE}/log" || fail "a re-run joined the group again"
+new_root group-pending
+metadata
+FAKE_APPROVAL=pending FAKE_CREATED=false ANIX_AGENT_TOKEN="${JOIN_TOKEN}" run_installer -u "${CONTROL}"
+expect_status 0 "pending join"
+expect_out "join:        rejoined proxy-12 in the node group HK"
+expect_out "等待审批：节点组 HK 要求管理员批准新节点"
+! grep -q "shell's history" "${STATE}/out" || fail "a token from the environment is not in the history"
+new_root group-noip
+metadata
+FAKE_IP=down run_installer -u "${CONTROL}" -t "${JOIN_TOKEN}"
+expect_status 0 "join without /install/ip"
+! grep -q '^agent join .*--address' "${STATE}/log" || fail "addresses passed although /install/ip did not answer"
+ok "joining a node group"
+
+# 8b. A forward group: the host turns out a forward node after the join, so
+# the forward checks run then, and a failure stops before the Agent starts;
+# the same command continues once fixed, without joining again.
+new_root group-forward
+metadata
+FAKE_JOIN_NODE=forward-7 run_installer -u "${CONTROL}" -t "${JOIN_TOKEN}"
+expect_status 0 "forward group join"
+expect_out "Preflight checks for a forward node (forward-7)"
+grep -qxF 'net.ipv4.ip_forward = 1' "${ROOT_DIR}/etc/sysctl.d/90-anixops-forward.conf" || fail "a forward group's node got no IP forwarding"
+new_root group-forward-fail
+metadata
+FAKE_JOIN_NODE=forward-7 FAKE_NFT=0.9.6 run_installer -u "${CONTROL}" -t "${JOIN_TOKEN}"
+expect_status 1 "forward group join on a host that cannot forward"
+expect_out "preflight: FAIL  nftables 0.9.6 is older than 0.9.7"
+expect_out "this host joined Control as forward-7, a forward node, but preflight found 1 problem(s)"
+! grep -q '^systemctl restart anix-agent.service' "${STATE}/log" || fail "the Agent started on a host that cannot forward"
+: >"${STATE}/log"
+FAKE_JOIN_NODE=forward-7 run_installer -u "${CONTROL}" -t "${JOIN_TOKEN}"
+expect_status 0 "re-run after the fix"
+! grep -q '^agent join' "${STATE}/log" || fail "the fixed host joined again"
+grep -q '^systemctl restart anix-agent.service' "${STATE}/log" || fail "the fixed host's Agent did not start"
+ok "a forward group's node"
+
+# 9. Arguments and platforms.
 new_root args
 metadata
+long_name="$(printf 'n%.0s' {1..65})"
 for case in \
-  "2|node-group tokens are not supported|--control ${CONTROL} --node forward-41 --token ${TOKEN_A} --group edge" \
-  "2|--offline pkg.tar: no such file|--control ${CONTROL} --node forward-41 --offline pkg.tar" \
+  "2|--node is gone: the token names its node or its node group|-u ${CONTROL} --node forward-41 -t ${TOKEN_A}" \
+  "2|--group is gone|-u ${CONTROL} --group edge -t ${JOIN_TOKEN}" \
+  "2|--offline pkg.tar: no such file|-u ${CONTROL} -t ${TOKEN_A} --offline pkg.tar" \
   "2|unknown argument to uninstall: --bogus|uninstall --bogus" \
-  "2|--port-range must be FROM-TO|--control ${CONTROL} --node forward-41 --token ${TOKEN_A} --port-range 30000-20000" \
-  "2|--port-range must be FROM-TO|--control ${CONTROL} --node forward-41 --token ${TOKEN_A} --port-range 1-70000" \
-  "2|--control is required|--node forward-41 --token ${TOKEN_A}" \
-  "2|--control must be https|--control http://ctl.example.com --node forward-41 --token ${TOKEN_A}" \
-  "2|--node must be proxy-<id> or forward-<id>|--control ${CONTROL} --node module-1 --token ${TOKEN_A}" \
-  "2|is not an AnixOps enrollment token|--control ${CONTROL} --node forward-41 --token secret" \
-  "2|--mirror must be control, cn or github|--control ${CONTROL} --node forward-41 --token ${TOKEN_A} --mirror ftp" \
-  "2|--reset needs --token|--control ${CONTROL} --node forward-41 --reset" \
-  "2|unknown argument|--control ${CONTROL} --node forward-41 --bogus" \
-  "1|is not enrolled: --token is required|--control=${CONTROL} --node=forward-41"; do
+  "2|--port-range must be FROM-TO|-u ${CONTROL} -t ${TOKEN_A} --port-range 30000-20000" \
+  "2|--port-range must be FROM-TO|-u ${CONTROL} -t ${TOKEN_A} --port-range 1-70000" \
+  "2|-u (--control) is required|-t ${TOKEN_A}" \
+  "2|-u (--control) must be https|--control http://ctl.example.com -t ${TOKEN_A}" \
+  "2|is not an AnixOps join token (anixjoin_...) or enrollment token (anixagt_...)|-u ${CONTROL} -t secret" \
+  "2|is not an AnixOps join token|-u ${CONTROL} -t anixjoin_short" \
+  "2|--mirror must be control, cn or github|-u ${CONTROL} -t ${TOKEN_A} --mirror ftp" \
+  "2|--reset needs a token (-t)|-u ${CONTROL} --reset" \
+  "2|--name must be at most 64 characters|-u ${CONTROL} -t ${JOIN_TOKEN} --name ${long_name}" \
+  "2|--host must be a host name or an IP address|-u ${CONTROL} -t ${JOIN_TOKEN} --host a/b" \
+  "2|-t needs a value|-u ${CONTROL} -t" \
+  "2|unknown argument|-u ${CONTROL} --bogus" \
+  "1|has not joined Control: a token (-t) is required|--control=${CONTROL}"; do
   IFS='|' read -r want message args <<<"${case}"
   # shellcheck disable=SC2086 # the case's arguments are words.
   run_installer ${args}
   expect_status "${want}" "${args}"
   expect_out "${message}"
 done
-FAKE_ARCH=riscv64 run_installer --control "${CONTROL}" --node forward-41 --token "${TOKEN_A}"
+FAKE_ARCH=riscv64 run_installer -u "${CONTROL}" -t "${TOKEN_A}"
 expect_status 1 "riscv64"
 expect_out "unsupported architecture riscv64"
+FAKE_MISSING="runuser setpriv" run_installer -u "${CONTROL}" -t "${TOKEN_A}"
+expect_status 1 "no runuser"
+expect_out "missing tools: util-linux"
 rm -rf "${ROOT_DIR}/run/systemd"
-run_installer --control "${CONTROL}" --node forward-41 --token "${TOKEN_A}"
+run_installer -u "${CONTROL}" -t "${TOKEN_A}"
 expect_status 1 "no systemd"
 expect_out "systemd is required"
 mkdir -p "${ROOT_DIR}/sbin" && : >"${ROOT_DIR}/sbin/openrc-run"
-run_installer --control "${CONTROL}" --node forward-41 --token "${TOKEN_A}"
+run_installer -u "${CONTROL}" -t "${TOKEN_A}"
 expect_status 1 "OpenRC"
 expect_out "OpenRC is not supported"
 ok "arguments and platforms"
 
-# 9. Preflight: a healthy forward node passes every check.
+# 10. Preflight: a healthy forward node passes every check. Before a fresh
+# join the forward checks run up front only with --forward.
 new_root pfok
 metadata
-run_installer --control "${CONTROL}" --node forward-41 --token "${TOKEN_A}"
+run_installer -u "${CONTROL}" -t "${TOKEN_A}" --forward
 expect_status 0 "healthy preflight"
 for line in "preflight: ok    systemd 252" "preflight: ok    Linux 6.1.0-18-amd64" "preflight: ok    nftables 1.0.6" \
   "preflight: ok    conntrack (nf_conntrack loaded)" "preflight: ok    polkit 122" \
@@ -620,12 +763,14 @@ for line in "preflight: ok    systemd 252" "preflight: ok    Linux 6.1.0-18-amd6
   expect_out "${line}"
 done
 ! grep -q 'preflight: FAIL\|note: preflight' "${STATE}/out" || fail "a healthy host got a preflight warning: $(grep preflight "${STATE}/out")"
+! grep -q 'Preflight checks for a forward node' "${STATE}/out" || fail "the forward checks ran twice"
 [[ "$(grep -n '^curl https://ctl.example.com:50051/' "${STATE}/log" | cut -d: -f1)" -lt "$(grep -n 'anix-agent-linux-64.zip$' "${STATE}/log" | head -n 1 | cut -d: -f1)" ]] ||
   fail "preflight must run before the download"
 ok "preflight passes on a healthy forward node"
 
 # pf_case NAME STATUS MESSAGE "VAR=value ..." [installer arguments]: one
-# preflight check in a fresh root. A failure must leave the host unchanged.
+# preflight check in a fresh root, a forward node declared up front. A
+# failure must leave the host unchanged.
 pf_case() {
   local name="$1" want="$2" message="$3" envs="$4" assignment
   shift 4
@@ -633,7 +778,7 @@ pf_case() {
   metadata
   for assignment in ${envs}; do export "${assignment?}"; done
   if (($# == 0)); then
-    set -- --control "${CONTROL}" --node forward-41 --token "${TOKEN_A}"
+    set -- -u "${CONTROL}" -t "${TOKEN_A}" --forward
   fi
   run_installer "$@"
   for assignment in ${envs}; do unset "${assignment%%=*}"; done
@@ -645,6 +790,7 @@ pf_case() {
       fail "preflight ${name}: a failed check changed the host"
     [[ -f "${ROOT_DIR}/etc/systemd/system/v2forward-agent.service" ]] || fail "preflight ${name}: a failed check removed the legacy runtime"
     ! grep -q 'anix-agent-linux-64.zip$' "${STATE}/log" || fail "preflight ${name}: the Agent was downloaded after a failed check"
+    ! grep -q '^agent join' "${STATE}/log" || fail "preflight ${name}: the host joined after a failed check"
   fi
 }
 
@@ -652,7 +798,7 @@ pf_case systemd-old 1 "preflight: FAIL  systemd 239 is older than 240" "FAKE_SYS
 pf_case systemd-sandbox 0 "systemd 245 ignores ProtectProc= and ProcSubset=" "FAKE_SYSTEMD=245"
 pf_case kernel-old 1 "preflight: FAIL  Linux 5.4.0-150-generic is older than 5.10" "FAKE_KERNEL=5.4.0-150-generic"
 pf_case kernel-old-proxy 0 "Linux 5.4.0-150-generic is older than 5.10: this node cannot forward with nftables later" \
-  "FAKE_KERNEL=5.4.0-150-generic" --control "${CONTROL}" --node proxy-7 --token "${TOKEN_A}"
+  "FAKE_KERNEL=5.4.0-150-generic FAKE_ENROLL_NODE=proxy-7" -u "${CONTROL}" -t "${TOKEN_A}"
 pf_case nft-missing 1 "preflight: FAIL  nft is missing" "FAKE_MISSING=nft"
 expect_out "fix: apt-get install -y nftables"
 pf_case nft-old 1 "preflight: FAIL  nftables 0.9.6 is older than 0.9.7" "FAKE_NFT=0.9.6"
@@ -660,11 +806,11 @@ pf_case tc-missing 0 "tc is missing: bandwidth limits are off" "FAKE_MISSING=tc"
 new_root pf-conntrack
 metadata
 rm -f "${ROOT_DIR}/proc/sys/net/netfilter/nf_conntrack_max"
-FAKE_MODINFO=1 run_installer --control "${CONTROL}" --node forward-41 --token "${TOKEN_A}"
+FAKE_MODINFO=1 run_installer -u "${CONTROL}" -t "${TOKEN_A}"
 expect_status 0 "conntrack as a module"
 expect_out "preflight: ok    conntrack (nf_conntrack loads on first use)"
 rm -f "${ROOT_DIR}/proc/sys/net/netfilter/nf_conntrack_max"
-run_installer --control "${CONTROL}" --node forward-41
+run_installer -u "${CONTROL}"
 expect_status 0 "conntrack missing"
 expect_out "conntrack (nf_conntrack) is neither loaded nor installed"
 pf_case polkit-old 0 "polkit 0.105 reads no rules from /etc/polkit-1/rules.d" "FAKE_POLKIT=0.105"
@@ -676,7 +822,7 @@ metadata
 mkdir -p "${ROOT_DIR}/etc/ufw" "${ROOT_DIR}/etc/default"
 printf 'ENABLED=yes\n' >"${ROOT_DIR}/etc/ufw/ufw.conf"
 printf 'DEFAULT_FORWARD_POLICY="DROP"\n' >"${ROOT_DIR}/etc/default/ufw"
-run_installer --control "${CONTROL}" --node forward-41 --token "${TOKEN_A}"
+run_installer -u "${CONTROL}" -t "${TOKEN_A}" --forward
 expect_status 0 "ufw"
 expect_out 'ufw is active with DEFAULT_FORWARD_POLICY="DROP"'
 pf_case disk 1 "preflight: FAIL  only 0 MiB free for /usr/lib/anixops-agent" "FAKE_DF_KB=1000"
@@ -693,37 +839,38 @@ pf_case two-fails 1 "preflight found 2 problem(s)" "FAKE_KERNEL=4.19.0 FAKE_GRPC
 new_root pf-ports
 metadata
 printf 'tcp LISTEN 0 4096 0.0.0.0:22 0.0.0.0:*\ntcp LISTEN 0 4096 [::]:20005 [::]:*\nudp UNCONN 0 0 127.0.0.1:20009 0.0.0.0:*\n' >"${STATE}/ss"
-run_installer --control "${CONTROL}" --node forward-41 --token "${TOKEN_A}" --port-range 20000-20010
+run_installer -u "${CONTROL}" -t "${TOKEN_A}" --port-range 20000-20010
 expect_status 0 "ports in use"
 expect_out "ports 20005 20009 of the forward port range 20000-20010 are in use"
-run_installer --control "${CONTROL}" --node forward-41 --port-range 30000-30010
+run_installer -u "${CONTROL}" --port-range 30000-30010
 expect_status 0 "free port range"
 expect_out "preflight: ok    no listener in the forward port range 30000-30010"
 pf_case skip 0 "preflight checks were skipped (--skip-preflight)" "FAKE_KERNEL=4.19.0" \
-  --control "${CONTROL}" --node forward-41 --token "${TOKEN_A}" --skip-preflight
+  -u "${CONTROL}" -t "${TOKEN_A}" --skip-preflight
 [[ -x "${ROOT_DIR}/usr/lib/anixops-agent/anix-agent" ]] || fail "--skip-preflight did not install"
 ! grep -q 'preflight: FAIL' "${STATE}/out" || fail "--skip-preflight still ran the checks"
+! grep -q 'Preflight checks for a forward node' "${STATE}/out" || fail "--skip-preflight ran the forward checks after the join"
 ok "preflight checks pass, warn and fail with a fix"
 
-# 10. IPv6 SLAAC interfaces: a warning, or accept_ra = 2 with --accept-ra,
+# 11. IPv6 SLAAC interfaces: a warning, or accept_ra = 2 with --accept-ra,
 # kept by a later run without the flag.
 pf_case slaac 0 "ignore router advertisements on eth0" "FAKE_RA=eth0"
 ! grep -q 'accept_ra' "${ROOT_DIR}/etc/sysctl.d/90-anixops-forward.conf" || fail "accept_ra written without --accept-ra"
-FAKE_RA=eth0 run_installer --control "${CONTROL}" --node forward-41 --accept-ra
+FAKE_RA=eth0 run_installer -u "${CONTROL}" --accept-ra
 expect_status 0 "--accept-ra"
 expect_out "the drop-in sets accept_ra = 2 on eth0 (--accept-ra)"
 grep -qxF 'net.ipv6.conf.eth0.accept_ra = 2' "${ROOT_DIR}/etc/sysctl.d/90-anixops-forward.conf" || fail "--accept-ra wrote no accept_ra"
 expect_out "accept_ra = 2 on eth0); applied"
-FAKE_RA=eth0 run_installer --control "${CONTROL}" --node forward-41
+FAKE_RA=eth0 run_installer -u "${CONTROL}"
 expect_status 0 "re-run keeps accept_ra"
 [[ "$(grep -c 'accept_ra = 2' "${ROOT_DIR}/etc/sysctl.d/90-anixops-forward.conf")" == "1" ]] || fail "a re-run lost or doubled accept_ra"
 ok "IPv6 accept_ra for SLAAC interfaces"
 
-# 11. Uninstall keeps the identity; --purge removes everything the Agent
+# 12. Uninstall keeps the identity; --purge removes everything the Agent
 # owns and nothing it does not.
 new_root uninstall
 metadata
-run_installer --control "${CONTROL}" --node forward-41 --token "${TOKEN_A}"
+run_installer -u "${CONTROL}" -t "${TOKEN_A}"
 expect_status 0 "install before uninstall"
 printf 'inet anixops_fwd\n' >>"${STATE}/nft-tables"
 printf 'inet anixops_fwd\n' >"${STATE}/nft-owned"
@@ -749,9 +896,9 @@ grep -qx anixops-agent "${STATE}/passwd" || fail "uninstall without --purge remo
   fail "the updater must stop before the Agent"
 expect_out "they stay in the kernel until a reboot or uninstall --purge"
 expect_out "revoke its credentials or delete the node there"
-run_installer --control "${CONTROL}" --node forward-41
+run_installer -u "${CONTROL}"
 expect_status 0 "re-install after uninstall"
-expect_out "already enrolled as forward-41; the token was not used"
+expect_out "already joined as forward-41"
 ok "uninstall keeps the identity for a re-install"
 
 : >"${STATE}/log"

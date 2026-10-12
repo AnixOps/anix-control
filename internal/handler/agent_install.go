@@ -160,6 +160,18 @@ func (h *AgentInstallHandler) Script(c *gin.Context) {
 	c.Data(http.StatusOK, "text/x-shellscript; charset=utf-8", agentinstall.Script)
 }
 
+// ClientIP serves /install/ip: the caller's address as Control sees it,
+// as text. The install script asks over IPv4 and IPv6 and hands the answers
+// to the join (JoinRequest.public_addresses), because the gRPC peer address
+// is a proxy's when Control sits behind one. gin's ClientIP applies
+// server.trusted_proxies (internal/requestorigin): a forwarded address is
+// taken only from a trusted proxy.
+func (h *AgentInstallHandler) ClientIP(c *gin.Context) {
+	c.Header("Cache-Control", "no-store")
+	c.Header("X-Content-Type-Options", "nosniff")
+	c.String(http.StatusOK, "%s\n", c.ClientIP())
+}
+
 // Signature serves the script's release signature once it verifies with
 // the official key: a stale or foreign file is never served.
 func (h *AgentInstallHandler) Signature(c *gin.Context) {
