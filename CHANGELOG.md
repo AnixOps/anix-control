@@ -27,6 +27,9 @@
   `webui` (an empty `frontend_sha256`, which the kernel and the Agent already accepted), and refuses a
   `webui/` directory the manifest does not declare. Such a package stores no WebUI asset and the extension
   catalog leaves it out; `packages/shared/tests/webui_contract.mjs` checks only the packages with a bundle.
+- The WebUI bundles of forward, gost-mesh, nat-egress and nftables-forward use only the WebUI class contract
+  (plus one `<package>-extension` class on their root), not unstyled names such as `page-header` or
+  `stats-grid`; `pluginWebuiClasses.test.js` enforces it.
 - The live Control WebUI gate loads and revokes the nftables-forward WebUI and checks that identity-platform
   and machine-telemetry install without one and stay out of the catalog.
 

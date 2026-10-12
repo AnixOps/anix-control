@@ -96,9 +96,11 @@ the design tokens). A change that has to break one is a WebUI contract
 change (`anixops.webui/v2`), not a Control refactor.
 `web/src/__tests__/pluginWebuiClasses.test.js` fails when one of them loses
 its rule in `style.css`, and checks that the bundled packages use them.
-Other class names a bundle uses (`page-header`, `stats-grid`, ...) are
-the plugin's own: Control gives them no style and promises nothing about
-them.
+Control gives any other class name no style and promises nothing about it.
+The official bundles therefore use only these classes, plus one class named
+after their package on their root element (`nftables-forward-extension`) as
+a hook; the same test fails on any other class, so a bundle cannot rely on
+an unstyled look-alike of a Control class (`page-header`, `stats-grid`).
 
 Backend package APIs are admitted only through the kernel gateway namespace
 `/api/v3/plugins/<plugin-id>/...`. A signed manifest may register exact routes
