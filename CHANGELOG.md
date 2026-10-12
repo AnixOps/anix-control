@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 4.2.1 - 2026-10-11
+
 ### Changed
 
 - CI installs golangci-lint from its pinned, checksum-verified release binary instead of compiling it
