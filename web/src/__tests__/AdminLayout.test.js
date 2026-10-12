@@ -108,6 +108,18 @@ describe('AdminLayout.vue', () => {
     expect(current[0].classes()).toContain('is-active')
   })
 
+  it('lists 部署编排 under 网络, after the Agents, and selects it on its page', async () => {
+    const { wrapper } = await mountLayout('/admin/deployments')
+    mounted = wrapper
+    const network = wrapper.get('[data-nav-group="network"]')
+    expect(network.findAll('a[data-nav-item]').map(link => link.attributes('data-nav-item'))).toEqual(['nodes', 'agents', 'deployments'])
+    const link = network.get('a[data-nav-item="deployments"]')
+    expect(link.attributes('href')).toBe('/admin/deployments')
+    expect(link.attributes('aria-current')).toBe('page')
+    expect(wrapper.get('[data-nav-group="extensions"]').findAll('a[data-nav-item]').map(item => item.attributes('data-nav-item'))).toEqual(['plugins'])
+    expect(wrapper.findAll('.admin-crumbs li').map(item => item.text())).toEqual(['Network', 'Deployments'])
+  })
+
   it('lists invite codes under 用户 and selects it on its page', async () => {
     for (const edition of ['community', 'commercial']) {
       setEdition(edition)

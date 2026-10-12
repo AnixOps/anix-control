@@ -3763,6 +3763,8 @@ packages with a real page still ship one: `forward`, `gost-mesh`,
   packages (`.github/workflows/commercial-packages.yml`) and the
   `identity-platform` bootstrap package build, sign and install the same
   way.
+- **部署编排 moved.** It is under 网络 now (after NodeX Agents), with its own
+  subtitle; 扩展 keeps 插件中心 and the plugin menus.
 - **New 服务状态 column on 节点.** It summarizes each node's systemd
   services from machine-telemetry (the 服务 section of the node page) in one
   call per page, `GET /api/v3/plugins/machine-telemetry/nodes/services`. The

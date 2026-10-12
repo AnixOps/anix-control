@@ -41,8 +41,10 @@ describe('navigation/menu.js: buildAdminMenu', () => {
     // flux-clone 转发 and 转发节点 were removed in v4.2 (F5d).
     expect(network.map(item => [item.id, item.to])).toEqual([
       ['nodes', '/admin/nodes'],
-      ['agents', '/admin/agent']
+      ['agents', '/admin/agent'],
+      ['deployments', '/admin/deployments']
     ])
+    expect(groups.find(group => group.id === 'extensions').items.map(item => item.id)).toEqual(['plugins'])
   })
 
   it('hides 商业 and shows subscription templates in the community edition', () => {
@@ -101,7 +103,7 @@ describe('navigation/menu.js: buildAdminMenu', () => {
     })
     const extensions = groups.find(group => group.id === 'extensions').items
     expect(extensions.map(item => item.id)).toEqual([
-      'plugins', 'deployments', 'payment.main', 'service-b.main', 'service-a.main', 'ops.main', 'legacy.main'
+      'plugins', 'payment.main', 'service-b.main', 'service-a.main', 'ops.main', 'legacy.main'
     ])
     expect(extensions.find(item => item.id === 'legacy.main').parent).toBe('extensions')
     const system = groups.find(group => group.id === 'system').items
@@ -249,7 +251,8 @@ describe('forwarding area capability', () => {
     expect(items.map(item => [item.id, item.label])).toEqual([
       ['nodes', 'shell.admin.items.nodes'],
       ['forward-v4', 'shell.admin.items.forward'],
-      ['agents', 'shell.admin.items.agents']
+      ['agents', 'shell.admin.items.agents'],
+      ['deployments', 'shell.admin.items.deployments']
     ])
     for (const path of ['/admin/forward/overview', '/admin/forward/routes/01J/edit', '/admin/forward/inventory/forward-41']) {
       expect(activeMenuItem(withV4, path)?.item.id).toBe('forward-v4')

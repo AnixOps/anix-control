@@ -626,7 +626,11 @@ whose route lands in another pull request). Empty
 groups are dropped. `activeMenuItem()` selects exactly one item per path (an
 exact `to`, then a `match` entry, then a sub-path). `Node` (节点,
 `/admin/nodes`) and `ForwardNode` (转发节点, `/admin/forward/nodes`) are
-separate items. `useAdminMenu()` / `useUserMenu()`
+separate items. 网络 holds 节点, 转发, NodeX Agents and 部署编排
+(topologies, node roles and deployments); 扩展 holds 插件中心 and the plugin
+menus. Only the packages with a WebUI bundle (forward, gost-mesh,
+nat-egress, nftables-forward) add a plugin menu, and the forward package's
+is left out while the core forwarding pages are there. `useAdminMenu()` / `useUserMenu()`
 (`navigation/useNavigation.js`) wire it to the stores; the sidebar,
 breadcrumb, palette and user navigation all render from it. Icons come from
 the closed map in `navigation/icons.js`.

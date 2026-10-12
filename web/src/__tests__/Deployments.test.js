@@ -170,6 +170,8 @@ describe('Deployments', () => {
     expect(kernelApi.getKernelPluginReleases).not.toHaveBeenCalled()
     expect(kernelApi.getKernelInstallations).not.toHaveBeenCalled()
     expect(deploymentTab(wrapper, 'topologies').attributes('aria-selected')).toBe('true')
+    // Its own subtitle, not the plugin center's.
+    expect(wrapper.get('.ui-page-header__description').text()).toBe('Manage topologies, node roles, and deployments.')
     wrapper.unmount()
   })
 

@@ -1,6 +1,6 @@
 <template>
   <section class="deployment-center" :aria-busy="loading ? 'true' : 'false'">
-    <UiPageHeader :title="t('pageTitles.admin.deployments')" :description="t('control.subtitle')">
+    <UiPageHeader :title="t('pageTitles.admin.deployments')" :description="t('control.deploymentsSubtitle')">
       <template #actions>
         <UiIconButton
           data-testid="refresh-deployments"
