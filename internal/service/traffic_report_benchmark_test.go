@@ -108,19 +108,38 @@ func reportLatencies(b *testing.B, latencies []time.Duration, elapsed time.Durat
 	b.ReportMetric(float64(latencies[len(latencies)-1].Microseconds())/1000, "max-ms")
 }
 
+// paceSpeedup compresses the design's time in the paced benchmark: a node
+// reports once a minute in the design and once every 60s/paceSpeedup here.
+const paceSpeedup = 20
+
+// pacedRun is how long the paced benchmark runs, whatever b.N is; with b.N of
+// 1 (the CI smoke, -benchtime=1x) it runs pacedSmokeRun.
+const (
+	pacedRun      = 6 * time.Second
+	pacedSmokeRun = time.Second
+)
+
 // BenchmarkTrafficReportSQLite measures what the single writer of a SQLite
 // database sustains for the traffic reports of N nodes with A active users
 // (docs/design/single-binary Appendix B). Run it with
 //
-//		go test ./internal/service -run '^$' -bench TrafficReportSQLite -benchtime 2000x
+//	TMPDIR=/path/on/the/database/disk //	go test ./internal/service -run '^$' -bench TrafficReportSQLite -benchtime 3000x
 //
-//	  - serial: one report at a time. reports/s is the commit rate of the
-//	    writer for a report of A/N users; p99-ms is the time one report holds
-//	    the write lock (the design's target is 50 ms).
-//	  - concurrent: N nodes report at once, the way N Agent streams do.
-//	    reports/s is the capacity (the design needs N/60 a second, one report
-//	    per node and minute) and p99-ms is a report's wait and service time
-//	    with the writers queued behind each other.
+// The temporary directory must be on the disk the database will live on: a
+// tmpfs has no fsync. The three sub-benchmarks of each scale are:
+//
+//   - serial: one report at a time. reports/s is the commit rate of the
+//     writer for a report of A/N users; p99-ms is the time one report holds
+//     the write lock (the design's target is 50 ms).
+//   - paced: N nodes report once every 60s/paceSpeedup, each with the
+//     heartbeat write and the online-user count a real stream adds, for
+//     pacedRun, so the load is the design's times paceSpeedup and below the
+//     capacity. p99-ms is the latency a report sees in that load.
+//   - concurrent: N nodes report back to back, the way N Agent streams
+//     would if they never paused. reports/s is the capacity (the design
+//     needs N/60 a second, one report per node and minute); p99-ms is a
+//     report's wait and service time with the writers saturated and queued
+//     behind each other, which no real load reaches.
 func BenchmarkTrafficReportSQLite(b *testing.B) {
 	for _, scale := range trafficReportScales {
 		b.Run(scale.name, func(b *testing.B) {
@@ -141,6 +160,60 @@ func BenchmarkTrafficReportSQLite(b *testing.B) {
 				elapsed := time.Since(started)
 				b.StopTimer()
 				reportLatencies(b, latencies, elapsed)
+			})
+			b.Run("paced", func(b *testing.B) {
+				fixture := newTrafficReportFixture(b, scale.nodes, scale.active, scale.users)
+				period := time.Minute / paceSpeedup
+				var group sync.WaitGroup
+				var failed atomic.Int64
+				results := make([][]time.Duration, scale.nodes)
+				run := pacedRun
+				if b.N == 1 {
+					run = pacedSmokeRun
+				}
+				deadline := time.Now().Add(run)
+				b.ReportAllocs()
+				b.ResetTimer()
+				started := time.Now()
+				for n := 0; n < scale.nodes; n++ {
+					group.Add(1)
+					go func() {
+						defer group.Done()
+						random := rand.New(rand.NewSource(int64(n) + 1))
+						// Nodes do not report in step: a random phase.
+						next := started.Add(time.Duration(random.Int63n(int64(period))))
+						for sequence := int64(0); next.Before(deadline); sequence++ {
+							time.Sleep(time.Until(next))
+							next = next.Add(period)
+							// The heartbeat of the node's stream (once a
+							// minute after the liveness throttle), then its
+							// traffic report.
+							if err := fixture.nodes.UpdateLastCheckAt(fixture.nodeIDs[n]); err != nil {
+								failed.Add(1)
+							}
+							at := time.Now()
+							if err := fixture.report(n, sequence, random); err != nil {
+								failed.Add(1)
+								continue
+							}
+							results[n] = append(results[n], time.Since(at))
+						}
+					}()
+				}
+				group.Wait()
+				elapsed := time.Since(started)
+				b.StopTimer()
+				if failed.Load() > 0 {
+					b.Fatalf("%d writes failed", failed.Load())
+				}
+				var all []time.Duration
+				for _, latencies := range results {
+					all = append(all, latencies...)
+				}
+				if len(all) == 0 {
+					b.Fatal("no report ran")
+				}
+				reportLatencies(b, all, elapsed)
 			})
 			b.Run("concurrent", func(b *testing.B) {
 				fixture := newTrafficReportFixture(b, scale.nodes, scale.active, scale.users)
