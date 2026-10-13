@@ -3,7 +3,6 @@ import { ADMIN_PAGE_SECTIONS } from '@/navigation/sections'
 
 const PAGE_TITLE_KEYS = {
   '/login': 'pageTitles.auth.login',
-  '/claim': 'pageTitles.auth.claim',
   '/user/dashboard': 'pageTitles.user.dashboard',
   '/user/subscribe': 'pageTitles.user.subscribe',
   '/user/knowledge': 'pageTitles.user.knowledge',
@@ -37,8 +36,7 @@ const DESCRIPTION_RULES = [
   { prefix: '/admin/forward', key: 'app.meta.forwardDescription' },
   { prefix: '/admin', key: 'app.meta.adminDescription' },
   { prefix: '/user', key: 'app.meta.userDescription' },
-  { prefix: '/login', key: 'app.meta.loginDescription' },
-  { prefix: '/claim', key: 'app.meta.loginDescription' }
+  { prefix: '/login', key: 'app.meta.loginDescription' }
 ]
 
 // The community edition names plans subscription templates.

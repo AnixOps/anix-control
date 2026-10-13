@@ -96,7 +96,7 @@ const routes = [
   {
     path: '/claim',
     component: Claim,
-    meta: { hashIsData: true, titleKey: 'pageTitles.auth.claim' }
+    meta: { hashIsData: true, titleKey: 'claim.pageTitle' }
   },
   // User Routes
   {

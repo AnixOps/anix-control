@@ -16,12 +16,7 @@
         </header>
 
         <!-- A panel nobody has claimed yet: how to create the first administrator. -->
-        <p v-if="claimable && step === 'password' && mode === 'login'" class="auth__hint" data-auth-claim-hint>
-          <UiIcon :icon="Info" :size="16" />
-          <i18n-t keypath="auth.signIn.noAdmin" tag="span" scope="global">
-            <template #command><code class="auth__code">sudo anix-control admin claim-link</code></template>
-          </i18n-t>
-        </p>
+        <ClaimHint :visible="step === 'password' && mode === 'login'" />
 
         <!-- Email and password (sign in), or the registration form. -->
         <form
@@ -95,7 +90,9 @@
 
         <!-- Second step: the 6-digit code. -->
         <form v-else-if="step === 'mfa'" class="auth__form" novalidate data-auth-form="mfa" @submit.prevent="submitCode()">
-          <UiOtpField
+          <component
+            :is="otpField"
+            v-if="otpField"
             ref="otpRef"
             v-model="code"
             :label="t('auth.mfa.code')"
@@ -181,24 +178,26 @@
 // "忘记密码" is not offered: the backend has no password-reset endpoint.
 // Registration (when the public config allows it) asks for an invite code
 // only when auth.registration.require_invite is on. While the panel has no
-// administrator (GET /api/v5/claim/status) the card says how to create the
-// first one: the claim link the server prints.
-import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
+// administrator the card says how to create the first one (ClaimHint).
+import { computed, defineAsyncComponent, nextTick, onMounted, reactive, ref, shallowRef, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { ChevronLeft, CircleAlert, Info, Smartphone } from '@lucide/vue'
+import { ChevronLeft, CircleAlert, Smartphone } from '@lucide/vue'
 import { useUserStore } from '@/stores/user'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { login, register } from '@/api/auth'
-import { getClaimStatus } from '@/api/claim'
 import { useEdition } from '@/composables/useEdition'
 import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
 import BrandLockup from '@/components/common/BrandLockup.vue'
 import UiButton from '@/ui/UiButton.vue'
 import UiIcon from '@/ui/UiIcon.vue'
-import UiOtpField from '@/ui/UiOtpField.vue'
 import UiPasswordField from '@/ui/UiPasswordField.vue'
 import UiTextField from '@/ui/UiTextField.vue'
 import { useToast } from '@/ui/composables/useToast'
+
+// The "no administrator yet" note (GET /api/v5/claim/status) loads after
+// the form, in its own chunk: the sign-in page's first visit carries none of
+// the claim code (web/bundle-budget.json).
+const ClaimHint = defineAsyncComponent(() => import('@/components/auth/ClaimHint.vue'))
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -219,7 +218,6 @@ const loading = ref(false)
 const formError = ref('')
 const errors = reactive({ email: '', password: '', confirm: '', invite: '', code: '', recovery: '' })
 const challenge = reactive({ email: '', methods: [] })
-const claimable = ref(false)
 
 const headingRef = ref(null)
 const emailRef = ref(null)
@@ -247,9 +245,17 @@ watch(registrationEnabled, (enabled) => {
   if (!enabled && mode.value === 'register') switchMode()
 })
 
+// The 6-digit code field is needed only for a second step: it loads once
+// the sign-in form shows, not with the page (web/bundle-budget.json), and
+// takes the focus if that step is already open when it arrives.
+const otpField = shallowRef(null)
+
 onMounted(() => {
   void loadEdition()
-  getClaimStatus().then((value) => { claimable.value = value }, () => {})
+  import('@/ui/UiOtpField.vue').then((module) => {
+    otpField.value = module.default
+    if (step.value === 'mfa') focusStep()
+  }, () => {})
 })
 
 function clearErrors() {
@@ -575,30 +581,6 @@ defineExpose({ mode, step })
 .auth__alert :deep(.ui-icon) {
   flex: none;
   margin-top: 2px;
-}
-
-.auth__hint {
-  display: flex;
-  gap: var(--space-2);
-  align-items: flex-start;
-  padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius-sm);
-  background: var(--bg-grouped);
-  color: var(--label-1);
-  font-size: var(--type-callout-size);
-  line-height: var(--type-callout-line);
-}
-
-.auth__hint :deep(.ui-icon) {
-  flex: none;
-  margin-top: 2px;
-  color: var(--accent);
-}
-
-.auth__code {
-  font-family: var(--font-mono);
-  font-size: var(--type-callout-size);
-  overflow-wrap: anywhere;
 }
 
 .auth__switch {

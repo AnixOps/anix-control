@@ -45,6 +45,7 @@ test('claims the panel with the link and signs in, the token only in the claim b
   const calls = await installFixtures(page)
   await page.goto(`/claim#${TOKEN}`)
   await expect(page.getByRole('heading', { level: 1, name: 'Create the first administrator' })).toBeVisible()
+  await expect(page).toHaveTitle(/^Create the first administrator \| /)
   // Read once and taken out of the address bar.
   await expect.poll(() => page.evaluate(() => window.location.hash)).toBe('')
   expect(page.url()).not.toContain('anixclaim_')

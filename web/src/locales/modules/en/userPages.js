@@ -11,8 +11,7 @@ export default {
       password: 'Password',
       submit: 'Sign in',
       noAccount: 'New here?',
-      register: 'Create an account',
-      noAdmin: 'This panel has no administrator yet. Run {command} on the server and open the link it prints.'
+      register: 'Create an account'
     },
     register: {
       title: 'Create your account',

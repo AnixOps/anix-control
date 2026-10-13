@@ -87,8 +87,7 @@
 import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { CircleAlert } from '@lucide/vue'
-import { getClaimStatus, submitClaim } from '@/api/claim'
-import { login } from '@/api/auth'
+import { getClaimStatus, signInAfterClaim, submitClaim } from '@/api/claim'
 import { useUserStore } from '@/stores/user'
 import { useAppI18n } from '@/composables/useAppI18n'
 import BrandLockup from '@/components/common/BrandLockup.vue'
@@ -241,7 +240,7 @@ function panelPayload(res) {
 // but a token (a network error, a second step) leads to the sign-in page.
 async function signIn(credentials) {
   try {
-    const payload = panelPayload(await login(credentials))
+    const payload = panelPayload(await signInAfterClaim(credentials))
     if (payload?.token && !payload.mfa_required && !payload.mfa_enrollment_required) {
       userStore.login(payload.token, { id: payload.user_id, email: payload.email, is_admin: payload.is_admin })
       router.push(payload.is_admin ? '/admin/dashboard' : '/user/dashboard')

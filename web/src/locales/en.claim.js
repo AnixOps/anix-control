@@ -3,6 +3,8 @@
 // (web/bundle-budget.json). Written for English readers.
 export default {
   claim: {
+    pageTitle: 'Create the first administrator',
+    signInHint: 'This panel has no administrator yet. Run {command} on the server and open the link it prints.',
     title: 'Create the first administrator',
     subtitle: 'This panel has no administrator yet. Choose the email and password you will sign in with.',
     loading: 'Checking the link…',

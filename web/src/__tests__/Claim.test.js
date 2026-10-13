@@ -19,10 +19,7 @@ vi.mock('vue-router', () => ({
 vi.mock('@/api/claim', () => ({
   getClaimStatus: (...args) => mockStatus(...args),
   submitClaim: (...args) => mockSubmit(...args),
-}))
-
-vi.mock('@/api/auth', () => ({
-  login: (...args) => mockLogin(...args),
+  signInAfterClaim: (...args) => mockLogin(...args),
 }))
 
 const TOKEN = 'anixclaim_' + 'Ab9-_'.repeat(8) + 'xyz'

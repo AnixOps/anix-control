@@ -2,6 +2,8 @@
 // （web/bundle-budget.json）。为中文读者撰写，不是从英文翻译。
 export default {
   claim: {
+    pageTitle: '创建首个管理员',
+    signInHint: '这个面板还没有管理员。在服务器上运行 {command}，再打开它打印的链接。',
     title: '创建首个管理员',
     subtitle: '这个面板还没有管理员。设置以后用来登录的邮箱和密码。',
     loading: '正在检查链接…',

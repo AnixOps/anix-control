@@ -171,8 +171,7 @@ export default {
   },
   pageTitles: {
     auth: {
-      login: '登录',
-      claim: '创建首个管理员'
+      login: '登录'
     },
     user: {
       dashboard: '概览',
