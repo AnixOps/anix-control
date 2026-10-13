@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/ed25519"
 	"errors"
 	"fmt"
 	"log"
@@ -10,7 +9,6 @@ import (
 
 	"github.com/AnixOps/anix-control/v5/internal/authn"
 	compatv2 "github.com/AnixOps/anix-control/v5/internal/compat/v2"
-	"github.com/AnixOps/anix-control/v5/internal/config"
 	"github.com/AnixOps/anix-control/v5/internal/database"
 	"github.com/AnixOps/anix-control/v5/internal/identitycutover"
 	"github.com/AnixOps/anix-control/v5/internal/identityimport"
@@ -65,13 +63,6 @@ func (rt *serverRuntime) startIdentityKeys() error {
 	rt.workers.Go("identity account importer", runner.Serve)
 	identitycutover.SetDefault(&identitycutover.Service{
 		DB: database.Get(), Importer: importer, Hosts: hosts, Freeze: compatv2.DefaultRouteFreeze(),
-		PublicKey: func() (ed25519.PublicKey, error) {
-			cfg := config.Get()
-			if cfg == nil || cfg.Plugins.OfficialPublicKey == "" {
-				return nil, service.ErrPluginTrustRootRequired
-			}
-			return service.ParseOfficialPluginPublicKey(cfg.Plugins.OfficialPublicKey)
-		},
 		RefreshKeys: func(ctx context.Context) error {
 			conn, err := connect()
 			if err != nil {

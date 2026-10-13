@@ -14,10 +14,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The administrator routes the built-in packages made obsolete
-// (single-binary design, section 4.3) answer 404, not 405, for a signed-in
-// administrator and without a session alike, and the routes the remaining
-// status view, the Agent and the packages need stay.
+// The administrator routes the built-in packages made obsolete (import,
+// install and the route modes; single-binary design, section 4.3) answer
+// 404, not 405, for a signed-in administrator and without a session alike,
+// and the routes the remaining status view, the Agent and the packages need
+// stay.
 func TestSetup_RemovedPluginCenterRoutesAnswerNotFound(t *testing.T) {
 	r, cfg := setupTestRouter(t)
 	defer teardownTestRouter(t)
@@ -43,6 +44,11 @@ func TestSetup_RemovedPluginCenterRoutesAnswerNotFound(t *testing.T) {
 		{http.MethodPost, "/api/v3/plugin-releases"},
 		{http.MethodPost, "/api/v3/plugin-releases/1/artifact"},
 		{http.MethodPut, "/api/v3/plugin-installations"},
+		{http.MethodGet, "/api/v4/kernel/route-modes"},
+		{http.MethodPost, "/api/v4/kernel/route-modes"},
+		{http.MethodPost, "/api/v4/kernel/route-modes/rollback"},
+		{http.MethodGet, "/api/v4/kernel/route-modes/revisions"},
+		{http.MethodGet, "/api/v4/kernel/route-modes/mismatches"},
 	} {
 		for name, authorization := range map[string]string{"administrator": "Bearer " + session, "anonymous": ""} {
 			response := do(probe.method, probe.path, authorization)

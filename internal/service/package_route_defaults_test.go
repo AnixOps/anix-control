@@ -2,18 +2,27 @@ package service
 
 import (
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"slices"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/packagebridge"
+	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 // rehearsedPackages are the 15 packages the owner signed off after the
@@ -25,20 +34,12 @@ var rehearsedPackages = [][]string{
 	{"subscription", "forward", "proxy-node", "gost-mesh", "wireguard"},
 }
 
-// useRouteDefaultPolicy sets the process's default policy for one test.
-func useRouteDefaultPolicy(t *testing.T, policy string) {
-	t.Helper()
-	previous := PackageRouteDefaultPolicy()
-	SetPackageRouteDefaultPolicy(policy)
-	t.Cleanup(func() { SetPackageRouteDefaultPolicy(previous) })
-}
-
-// TestPackageRouteDefaultsGate is the gate on the default set: it is exactly
+// TestPackageRouteDefaultsGate is the gate on the rehearsed list: it is exactly
 // the rehearsed list (testdata/rehearsed-routes.json, the R5 record), every
 // route is native-flagged for its package in the extraction map, and none is
 // identity's, kernel-owned or a WebSocket route. A route that becomes
-// native-flagged later fails nothing here and does not default to native:
-// it joins the set only by an explicit change of both files.
+// native-flagged later fails nothing here and does not run natively: it
+// joins the list only by an explicit change of both files.
 func TestPackageRouteDefaultsGate(t *testing.T) {
 	defaults, err := LoadPackageRouteDefaults()
 	require.NoError(t, err)
@@ -96,7 +97,6 @@ func TestPackageRouteDefaultsGate(t *testing.T) {
 			assert.Equal(t, RouteCatalogNativeFlagged, entry.Mode, "%s must be native-flagged", route)
 			assert.NotEqual(t, RouteCatalogKernelOwned, entry.Mode, route)
 			assert.NotContains(t, IdentityGroupARoutes, route)
-			assert.NotContains(t, IdentityAccountReadRoutes, route)
 			transport, known := transports[route]
 			require.True(t, known, "%s is not in v2-package-route-catalog.json", route)
 			assert.NotEqual(t, "websocket", transport, route)
@@ -139,31 +139,19 @@ func TestPackageReleaseAtLeast(t *testing.T) {
 	}
 }
 
-func TestPackageRouteDefaultPolicy(t *testing.T) {
-	useRouteDefaultPolicy(t, PackageRouteDefaultRehearsed)
-	assert.Equal(t, PackageRouteDefaultRehearsed, PackageRouteDefaultPolicy())
+func TestPackageRouteDefaultsSummary(t *testing.T) {
 	summary, err := PackageRouteDefaultsSummary()
 	require.NoError(t, err)
-	assert.Contains(t, summary, "policy rehearsed")
-	assert.Contains(t, summary, "130 routes of 14 packages default to native")
-
-	SetPackageRouteDefaultPolicy(" Legacy ")
-	assert.Equal(t, PackageRouteDefaultLegacy, PackageRouteDefaultPolicy())
-	summary, err = PackageRouteDefaultsSummary()
-	require.NoError(t, err)
-	assert.Contains(t, summary, "policy legacy")
-	assert.Contains(t, summary, "0 routes default to native")
-
-	SetPackageRouteDefaultPolicy("anything else")
-	assert.Equal(t, PackageRouteDefaultRehearsed, PackageRouteDefaultPolicy())
+	assert.Contains(t, summary, "the 130 rehearsed routes of 14 packages")
+	assert.Contains(t, summary, "every other route runs its legacy handler")
+	assert.NotContains(t, summary, "default_mode")
 }
 
 // TestResolveEffectivePackageRouteModesOnlyDefaultsTheSet resolves every
-// package of the extraction map at a new release with nothing stored:
-// exactly the 130 rehearsed routes come out native; every other
-// native-flagged route (identity's among them) stays legacy.
+// package of the extraction map at a new release: exactly the 130 rehearsed
+// routes come out native; every other native-flagged route (identity's
+// among them) stays legacy.
 func TestResolveEffectivePackageRouteModesOnlyDefaultsTheSet(t *testing.T) {
-	useRouteDefaultPolicy(t, PackageRouteDefaultRehearsed)
 	db := openRouteModeSQLite(t)
 	prepareRouteModeDB(t, db)
 	defaults, err := LoadPackageRouteDefaults()
@@ -176,27 +164,30 @@ func TestResolveEffectivePackageRouteModesOnlyDefaultsTheSet(t *testing.T) {
 	}
 	native := 0
 	for packageID := range packages {
-		modes, sources, err := ResolveEffectivePackageRouteModes(db, packageID, "9.9.9", map[string]string{})
+		modes, err := ResolveEffectivePackageRouteModes(db, packageID, "9.9.9")
 		require.NoError(t, err)
 		for route, mode := range modes {
 			require.Equal(t, packagebridge.RouteModeNative, mode, route)
-			require.True(t, defaults.Includes(packageID, route), "%s defaults to native but is not in the set", route)
-			require.Equal(t, RouteModeSourceDefault, sources[route])
+			require.True(t, defaults.Includes(packageID, route), "%s runs natively but is not in the list", route)
 			native++
 		}
 	}
 	assert.Equal(t, 130, native)
 
 	// Identity group A follows the authority only.
-	modes, _, err := ResolveEffectivePackageRouteModes(db, IdentityPlatformPackageID, "9.9.9", map[string]string{})
+	modes, err := ResolveEffectivePackageRouteModes(db, IdentityPlatformPackageID, "9.9.9")
 	require.NoError(t, err)
 	assert.Empty(t, modes)
 }
 
+// testCompatibilityRoute is one compatibility route a test package declares.
+type testCompatibilityRoute struct {
+	Method, LegacyPath, PackageRoute, Transport string
+}
+
 // knowledgeRoutes are knowledge's six compatibility routes as the rehearsed
-// release declares them (all in the default set), plus one the default set
-// does not hold.
-var knowledgeRoutes = []compatibilityRoute{
+// release declares them (all in the list), plus one the list does not hold.
+var knowledgeRoutes = []testCompatibilityRoute{
 	{Method: "GET", LegacyPath: "/api/v2/admin/knowledge", PackageRoute: "knowledge.admin.knowledge.get", Transport: "http"},
 	{Method: "POST", LegacyPath: "/api/v2/admin/knowledge", PackageRoute: "knowledge.admin.knowledge.post", Transport: "http"},
 	{Method: "DELETE", LegacyPath: "/api/v2/admin/knowledge/:id", PackageRoute: "knowledge.admin.knowledge.id.delete", Transport: "http"},
@@ -211,16 +202,6 @@ var knowledgeDefaultRoutes = []string{
 	"knowledge.admin.knowledge.post", "knowledge.article.list", "knowledge.user.knowledge.id.get",
 }
 
-func knowledgeCatalog() map[string]RouteCatalogEntry {
-	catalog := map[string]RouteCatalogEntry{
-		"knowledge.bridged.get": {PackageID: "knowledge", RouteID: "knowledge.bridged.get", Mode: RouteCatalogBridged},
-	}
-	for _, route := range knowledgeDefaultRoutes {
-		catalog[route] = RouteCatalogEntry{PackageID: "knowledge", RouteID: route, Mode: RouteCatalogNativeFlagged}
-	}
-	return catalog
-}
-
 func nativeModes(routes ...string) map[string]string {
 	modes := map[string]string{}
 	for _, route := range routes {
@@ -229,40 +210,126 @@ func nativeModes(routes ...string) map[string]string {
 	return modes
 }
 
-func storedRouteModes(t *testing.T, db *gorm.DB, installationID uint) map[string]string {
+// seedRouteModePackageVersion registers, stores and installs a signed v2
+// Control release version of packageID that declares routes.
+func seedRouteModePackageVersion(t *testing.T, db *gorm.DB, packageID, version string, routes []testCompatibilityRoute) (ed25519.PublicKey, model.PluginInstallation) {
 	t.Helper()
-	configuration, err := GetPluginConfiguration(db, installationID)
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)
-	_, stored, _, err := splitPackageRouteModes(configuration.ConfigJSON)
+	declared := make([]map[string]string, 0, len(routes))
+	for _, route := range routes {
+		envelope := "panel"
+		if route.Transport == "websocket" {
+			envelope = "websocket"
+		}
+		declared = append(declared, map[string]string{
+			"method": route.Method, "legacy_path": route.LegacyPath, "package_route": route.PackageRoute,
+			"envelope": envelope, "transport": route.Transport,
+		})
+	}
+	routeDocument, err := json.Marshal(map[string]any{"api_version": "v2", "package_id": packageID, "routes": declared})
 	require.NoError(t, err)
-	return stored
+	entrypoint := []byte("#!/bin/sh\nexit 0\n")
+	migrations := []byte(`{"format":"anixops.migrations/v1","migrations":[],"package_id":"` + packageID + `","version":"` + version + `"}`)
+	artifact := kernelTestV2Package(t, map[string][]byte{
+		"bin/control-host": entrypoint, "compat/v2-routes.json": routeDocument, "migrations/index.json": migrations,
+	})
+	digest := func(value []byte) string { sum := sha256.Sum256(value); return hex.EncodeToString(sum[:]) }
+	manifest := PluginManifest{
+		ID: packageID, Name: packageID, Version: version, APIVersion: pluginManifestAPIVersionV2, Publisher: "AnixOps",
+		Targets: []string{"control"}, ArtifactSHA256: digest(artifact),
+		ControlEntrypoint:   &PluginEntrypoint{Path: "bin/control-host", SHA256: digest(entrypoint)},
+		Migrations:          &PluginMigrations{Index: "migrations/index.json", SHA256: digest(migrations)},
+		CompatibilityRoutes: &PluginCompatibilityRoutes{Path: "compat/v2-routes.json", SHA256: digest(routeDocument)},
+		RouteContractDigest: digest(routeDocument),
+	}
+	canonical, err := CanonicalPluginManifest(manifest)
+	require.NoError(t, err)
+	release, err := RegisterPluginRelease(db, string(canonical), base64.StdEncoding.EncodeToString(ed25519.Sign(privateKey, canonical)), publicKey)
+	require.NoError(t, err)
+	_, err = StorePluginArtifact(db, release.ID, artifact)
+	require.NoError(t, err)
+	installation := model.PluginInstallation{
+		PluginID: packageID, Target: "control", DesiredVersion: version, ObservedVersion: version,
+		State: "healthy", Enabled: true, LifecycleGeneration: 7,
+	}
+	require.NoError(t, db.Create(&installation).Error)
+	return publicKey, installation
+}
+
+func prepareRouteModeDB(t *testing.T, db *gorm.DB) {
+	t.Helper()
+	require.NoError(t, MigrateKernelModelsForTest(db))
+	require.NoError(t, db.AutoMigrate(&model.User{}, &model.OperationLog{}))
+}
+
+// openRouteModePostgres opens ANIX_TEST_POSTGRES_DSN, or POSTGRES_TEST_DSN,
+// on a throwaway schema; it refuses a database whose name lacks "test".
+func openRouteModePostgres(t *testing.T) *gorm.DB {
+	t.Helper()
+	base := strings.TrimSpace(os.Getenv("ANIX_TEST_POSTGRES_DSN"))
+	if base == "" {
+		base = strings.TrimSpace(os.Getenv("POSTGRES_TEST_DSN"))
+	}
+	if base == "" {
+		t.Skip("ANIX_TEST_POSTGRES_DSN and POSTGRES_TEST_DSN are not set")
+	}
+	admin, err := gorm.Open(postgres.Open(base), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+	require.NoError(t, err)
+	adminDB, err := admin.DB()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = adminDB.Close() })
+	var databaseName string
+	require.NoError(t, admin.Raw("SELECT current_database()").Scan(&databaseName).Error)
+	if !strings.Contains(strings.ToLower(databaseName), "test") {
+		t.Skipf("refusing to run destructive postgres test against database %q", databaseName)
+	}
+	suffix := make([]byte, 4)
+	_, err = rand.Read(suffix)
+	require.NoError(t, err)
+	schema := "route_modes_" + hex.EncodeToString(suffix)
+	require.NoError(t, admin.Exec(`CREATE SCHEMA "`+schema+`"`).Error)
+	t.Cleanup(func() { _ = admin.Exec(`DROP SCHEMA IF EXISTS "` + schema + `" CASCADE`).Error })
+	db, err := gorm.Open(postgres.Open(base+" search_path="+schema), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+	require.NoError(t, err)
+	sqlDB, err := db.DB()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = sqlDB.Close() })
+	return db
+}
+
+func openRouteModeSQLite(t *testing.T) *gorm.DB {
+	t.Helper()
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+	require.NoError(t, err)
+	sqlDB, err := db.DB()
+	require.NoError(t, err)
+	sqlDB.SetMaxOpenConns(1)
+	t.Cleanup(func() { _ = sqlDB.Close() })
+	return db
 }
 
 func TestRouteModeDefaultsSQLite(t *testing.T) {
 	runRouteModeDefaultsSuite(t, openRouteModeSQLite)
 }
 
-// TestPostgresRouteModeDefaults runs the default-mode suite on PostgreSQL;
+// TestPostgresRouteModeDefaults runs the route-mode suite on PostgreSQL;
 // CI's PostgreSQL regression job selects it by its name.
 func TestPostgresRouteModeDefaults(t *testing.T) {
 	runRouteModeDefaultsSuite(t, openRouteModePostgres)
 }
 
 func runRouteModeDefaultsSuite(t *testing.T, open func(*testing.T) *gorm.DB) {
-	t.Run("rc.5 install without routes", func(t *testing.T) { testRouteModeDefaultsFreshInstall(t, open(t)) })
-	t.Run("explicit legacy", func(t *testing.T) { testRouteModeDefaultsExplicitLegacy(t, open(t)) })
-	t.Run("rollback", func(t *testing.T) { testRouteModeDefaultsRollback(t, open(t)) })
-	t.Run("whole package set", func(t *testing.T) { testRouteModeDefaultsWholePackage(t, open(t)) })
-	t.Run("kill switch", func(t *testing.T) { testRouteModeDefaultsKillSwitch(t, open(t)) })
+	t.Run("rehearsed release", func(t *testing.T) { testRouteModeDefaultsRehearsedRelease(t, open(t)) })
 	t.Run("package too old", func(t *testing.T) { testRouteModeDefaultsTooOld(t, open(t)) })
-	t.Run("identity untouched", func(t *testing.T) { testRouteModeDefaultsIdentity(t, open(t)) })
+	t.Run("identity group A follows the authority", func(t *testing.T) { testRouteModeDefaultsIdentity(t, open(t)) })
 }
 
-func seedKnowledgeRC5(t *testing.T, db *gorm.DB, version string) (*RouteModeAdmin, PackageHostOperations, model.PluginInstallation) {
+func seedKnowledge(t *testing.T, db *gorm.DB, version string) PackageHostOperations {
 	t.Helper()
 	prepareRouteModeDB(t, db)
-	publicKey, installation := seedRouteModePackageVersion(t, db, "knowledge", version, knowledgeRoutes)
-	return &RouteModeAdmin{DB: db, PublicKey: publicKey, Catalog: knowledgeCatalog()}, PackageHostOperations{DB: db}, installation
+	seedRouteModePackageVersion(t, db, "knowledge", version, knowledgeRoutes)
+	return PackageHostOperations{DB: db}
 }
 
 func hostModes(t *testing.T, operations PackageHostOperations, version string) map[string]string {
@@ -272,234 +339,60 @@ func hostModes(t *testing.T, operations PackageHostOperations, version string) m
 	return config.RouteModes
 }
 
-// An rc.5-shaped installation stores no routes key: the rehearsed routes
-// run natively from the default, the others stay legacy, and the host gets
-// the resolved map.
-func testRouteModeDefaultsFreshInstall(t *testing.T, db *gorm.DB) {
-	useRouteDefaultPolicy(t, PackageRouteDefaultRehearsed)
-	admin, operations, installation := seedKnowledgeRC5(t, db, "4.1.0-rc.5")
-	configuration, err := GetPluginConfiguration(db, installation.ID)
-	require.NoError(t, err)
-	assert.NotContains(t, configuration.ConfigJSON, `"routes"`)
-
-	packages, err := admin.List(context.Background(), "knowledge", nil)
-	require.NoError(t, err)
-	require.Len(t, packages, 1)
-	assert.Equal(t, PackageRouteDefaultState{Policy: "rehearsed", Routes: 6, MinVersion: "4.1.0-rc.5", Source: RouteModeSourceDefault}, packages[0].Defaults)
-	for _, route := range knowledgeDefaultRoutes {
-		entry := routeModeEntry(t, packages, route)
-		assert.Equal(t, "native", entry.Effective, route)
-		assert.Equal(t, "native", entry.Configured, route)
-		assert.Empty(t, entry.Stored, route)
-		assert.Equal(t, RouteModeSourceDefault, entry.Source, route)
-	}
-	bridged := routeModeEntry(t, packages, "knowledge.bridged.get")
-	assert.Equal(t, "legacy", bridged.Effective)
-	assert.Equal(t, RouteModeSourceUnset, bridged.Source)
+// At the rehearsed release, and at any later one, the host is told to run
+// exactly the listed routes natively; the others stay legacy.
+func testRouteModeDefaultsRehearsedRelease(t *testing.T, db *gorm.DB) {
+	operations := seedKnowledge(t, db, "4.1.0-rc.5")
 	assert.Equal(t, nativeModes(knowledgeDefaultRoutes...), hostModes(t, operations, "4.1.0-rc.5"))
 
 	// The final release clears the rehearsed rc.
-	_, sources, err := ResolveEffectivePackageRouteModes(db, "knowledge", "4.1.0", nil)
+	modes, err := ResolveEffectivePackageRouteModes(db, "knowledge", "4.1.0")
 	require.NoError(t, err)
-	assert.Equal(t, RouteModeSourceDefault, sources["knowledge.article.list"])
-
-	// Switching a defaulted route to native changes nothing.
-	result, err := admin.Set(context.Background(), RouteModeChangeRequest{PackageID: "knowledge", Routes: []string{"knowledge.article.list"}, Mode: "native", Confirm: true, Reason: "x"}, cliActor)
-	require.NoError(t, err)
-	assert.Empty(t, result.Changes)
-	assert.Empty(t, result.GroupID)
+	assert.Equal(t, nativeModes(knowledgeDefaultRoutes...), modes)
 }
 
-// set --mode legacy on a defaulted route stores an explicit legacy, which
-// stays legacy; the other defaulted routes stay native.
-func testRouteModeDefaultsExplicitLegacy(t *testing.T, db *gorm.DB) {
-	useRouteDefaultPolicy(t, PackageRouteDefaultRehearsed)
-	admin, operations, installation := seedKnowledgeRC5(t, db, "4.1.0-rc.5")
-	ctx := context.Background()
-
-	result, err := admin.Set(ctx, RouteModeChangeRequest{PackageID: "knowledge", Routes: []string{"knowledge.article.list"}, Mode: "legacy", Reason: "keep legacy"}, cliActor)
-	require.NoError(t, err)
-	require.NotEmpty(t, result.GroupID)
-	assert.Equal(t, []RouteModeChange{{RouteID: "knowledge.article.list", From: "native", To: "legacy"}}, result.Changes)
-	assert.Equal(t, map[string]string{"knowledge.article.list": "legacy"}, storedRouteModes(t, db, installation.ID))
-
-	packages, err := admin.List(ctx, "knowledge", nil)
-	require.NoError(t, err)
-	entry := routeModeEntry(t, packages, "knowledge.article.list")
-	assert.Equal(t, "legacy", entry.Effective)
-	assert.Equal(t, "legacy", entry.Configured)
-	assert.Equal(t, "legacy", entry.Stored)
-	assert.Equal(t, RouteModeSourceStored, entry.Source)
-	modes := hostModes(t, operations, "4.1.0-rc.5")
-	assert.NotContains(t, modes, "knowledge.article.list")
-	assert.Len(t, modes, 5)
-
-	// Repeating it changes nothing.
-	again, err := admin.Set(ctx, RouteModeChangeRequest{PackageID: "knowledge", Routes: []string{"knowledge.article.list"}, Mode: "legacy"}, cliActor)
-	require.NoError(t, err)
-	assert.Empty(t, again.Changes)
-
-	// Back to native: the stored mode is native.
-	back, err := admin.Set(ctx, RouteModeChangeRequest{PackageID: "knowledge", Routes: []string{"knowledge.article.list"}, Mode: "native", Confirm: true, Reason: "again"}, cliActor)
-	require.NoError(t, err)
-	assert.Equal(t, []RouteModeChange{{RouteID: "knowledge.article.list", From: "legacy", To: "native"}}, back.Changes)
-	assert.Equal(t, nativeModes(knowledgeDefaultRoutes...), hostModes(t, operations, "4.1.0-rc.5"))
-
-	revisions, err := admin.Revisions(ctx, "knowledge", 0)
-	require.NoError(t, err)
-	require.Len(t, revisions, 2)
-}
-
-// A rollback of a defaulted package writes an explicit legacy for each
-// defaulted route, with revision rows and an audit entry.
-func testRouteModeDefaultsRollback(t *testing.T, db *gorm.DB) {
-	useRouteDefaultPolicy(t, PackageRouteDefaultRehearsed)
-	admin, operations, installation := seedKnowledgeRC5(t, db, "4.1.0-rc.5")
-	ctx := context.Background()
-
-	rollback, err := admin.Rollback(ctx, "knowledge", "incident 42", cliActor)
-	require.NoError(t, err)
-	require.NotEmpty(t, rollback.GroupID)
-	require.Len(t, rollback.Changes, len(knowledgeDefaultRoutes))
-	for _, change := range rollback.Changes {
-		assert.Equal(t, "native", change.From, change.RouteID)
-		assert.Equal(t, "legacy", change.To, change.RouteID)
-	}
-	assert.Empty(t, hostModes(t, operations, "4.1.0-rc.5"))
-	stored := storedRouteModes(t, db, installation.ID)
-	assert.Len(t, stored, len(knowledgeDefaultRoutes))
-	for _, route := range knowledgeDefaultRoutes {
-		assert.Equal(t, "legacy", stored[route], route)
-	}
-
-	packages, err := admin.List(ctx, "knowledge", nil)
-	require.NoError(t, err)
-	for _, entry := range packages[0].Routes {
-		assert.Equal(t, "legacy", entry.Effective, entry.RouteID)
-	}
-
-	revisions, err := admin.Revisions(ctx, "knowledge", 0)
-	require.NoError(t, err)
-	require.Len(t, revisions, len(knowledgeDefaultRoutes))
-	for _, revision := range revisions {
-		assert.Equal(t, model.RouteModeRevisionActionRollback, revision.Action)
-		assert.Equal(t, "native", revision.FromMode)
-		assert.Equal(t, "legacy", revision.ToMode)
-		assert.Equal(t, "incident 42", revision.Reason)
-		assert.Equal(t, rollback.GroupID, revision.GroupID)
-	}
-	var audits []model.OperationLog
-	require.NoError(t, db.Find(&audits).Error)
-	require.Len(t, audits, 1)
-	assert.Equal(t, "route_mode_rollback", audits[0].Action)
-
-	// The pinned legacy survives a later kill switch flip.
-	SetPackageRouteDefaultPolicy(PackageRouteDefaultLegacy)
-	SetPackageRouteDefaultPolicy(PackageRouteDefaultRehearsed)
-	assert.Empty(t, hostModes(t, operations, "4.1.0-rc.5"))
-
-	idle, err := admin.Rollback(ctx, "knowledge", "", cliActor)
-	require.NoError(t, err)
-	assert.Empty(t, idle.Changes)
-	assert.Empty(t, idle.GroupID)
-}
-
-// The whole-package set compares against the effective modes.
-func testRouteModeDefaultsWholePackage(t *testing.T, db *gorm.DB) {
-	useRouteDefaultPolicy(t, PackageRouteDefaultRehearsed)
-	admin, operations, _ := seedKnowledgeRC5(t, db, "4.1.0-rc.5")
-	ctx := context.Background()
-
-	native, err := admin.Set(ctx, RouteModeChangeRequest{PackageID: "knowledge", Mode: "native", Confirm: true, Reason: "x"}, cliActor)
-	require.NoError(t, err)
-	assert.Empty(t, native.Changes, "every native-capable route already runs natively by default")
-	assert.Equal(t, []RouteModeSkip{{RouteID: "knowledge.bridged.get", Reason: "bridged: the package has no native implementation yet"}}, native.Skipped)
-
-	legacy, err := admin.Set(ctx, RouteModeChangeRequest{PackageID: "knowledge", Mode: "legacy"}, cliActor)
-	require.NoError(t, err)
-	assert.Len(t, legacy.Changes, len(knowledgeDefaultRoutes))
-	assert.Empty(t, hostModes(t, operations, "4.1.0-rc.5"))
-}
-
-// The kill switch turns every default off; a stored mode still wins.
-func testRouteModeDefaultsKillSwitch(t *testing.T, db *gorm.DB) {
-	useRouteDefaultPolicy(t, PackageRouteDefaultLegacy)
-	admin, operations, _ := seedKnowledgeRC5(t, db, "4.1.0-rc.5")
-	ctx := context.Background()
-
-	assert.Empty(t, hostModes(t, operations, "4.1.0-rc.5"))
-	packages, err := admin.List(ctx, "knowledge", nil)
-	require.NoError(t, err)
-	assert.Equal(t, RouteModeSourceKillSwitch, packages[0].Defaults.Source)
-	assert.Contains(t, packages[0].Defaults.Note, "default_mode is legacy")
-	for _, route := range knowledgeDefaultRoutes {
-		entry := routeModeEntry(t, packages, route)
-		assert.Equal(t, "legacy", entry.Effective, route)
-		assert.Equal(t, "legacy", entry.Configured, route)
-		assert.Equal(t, RouteModeSourceKillSwitch, entry.Source, route)
-	}
-	// A rollback has nothing to do.
-	idle, err := admin.Rollback(ctx, "knowledge", "", cliActor)
-	require.NoError(t, err)
-	assert.Empty(t, idle.Changes)
-
-	// An operator's stored native still applies.
-	set, err := admin.Set(ctx, RouteModeChangeRequest{PackageID: "knowledge", Routes: []string{"knowledge.article.list"}, Mode: "native", Confirm: true, Reason: "x"}, cliActor)
-	require.NoError(t, err)
-	assert.Equal(t, []RouteModeChange{{RouteID: "knowledge.article.list", From: "legacy", To: "native"}}, set.Changes)
-	assert.Equal(t, nativeModes("knowledge.article.list"), hostModes(t, operations, "4.1.0-rc.5"))
-
-	// Lifting the switch restores the defaults.
-	SetPackageRouteDefaultPolicy(PackageRouteDefaultRehearsed)
-	assert.Equal(t, nativeModes(knowledgeDefaultRoutes...), hostModes(t, operations, "4.1.0-rc.5"))
-}
-
-// A release older than the rehearsed one stays legacy and the list says
-// why.
+// A release older than the rehearsed one stays legacy.
 func testRouteModeDefaultsTooOld(t *testing.T, db *gorm.DB) {
-	useRouteDefaultPolicy(t, PackageRouteDefaultRehearsed)
-	admin, operations, _ := seedKnowledgeRC5(t, db, "4.0.0")
+	operations := seedKnowledge(t, db, "4.0.0")
 	assert.Empty(t, hostModes(t, operations, "4.0.0"))
-	packages, err := admin.List(context.Background(), "knowledge", nil)
-	require.NoError(t, err)
-	assert.Equal(t, RouteModeSourcePackageTooOld, packages[0].Defaults.Source)
-	assert.Contains(t, packages[0].Defaults.Note, "4.0.0 is older than 4.1.0-rc.5")
-	for _, route := range knowledgeDefaultRoutes {
-		entry := routeModeEntry(t, packages, route)
-		assert.Equal(t, "legacy", entry.Effective, route)
-		assert.Equal(t, RouteModeSourcePackageTooOld, entry.Source, route)
-	}
 }
 
-// Identity's routes are not in the default set: identity group A follows
-// the authority only, and the rest of identity-platform stays legacy.
+// Identity's routes are not in the list: identity group A follows the
+// authority only, and the rest of identity-platform stays legacy.
 func testRouteModeDefaultsIdentity(t *testing.T, db *gorm.DB) {
-	useRouteDefaultPolicy(t, PackageRouteDefaultRehearsed)
 	prepareRouteModeDB(t, db)
-	routes := []compatibilityRoute{{Method: "GET", LegacyPath: "/api/v2/admin/invite-codes", PackageRoute: "identity.admin.invite_codes.get", Transport: "http"}}
-	catalog := map[string]RouteCatalogEntry{"identity.admin.invite_codes.get": {PackageID: IdentityPlatformPackageID, Mode: RouteCatalogNativeFlagged}}
+	routes := []testCompatibilityRoute{{Method: "GET", LegacyPath: "/api/v2/admin/invite-codes", PackageRoute: "identity.admin.invite_codes.get", Transport: "http"}}
 	for i, route := range IdentityGroupARoutes {
-		routes = append(routes, compatibilityRoute{Method: "POST", LegacyPath: "/api/v2/group-a/" + string(rune('a'+i)), PackageRoute: route, Transport: "http"})
-		catalog[route] = RouteCatalogEntry{PackageID: IdentityPlatformPackageID, Mode: RouteCatalogNativeFlagged}
+		routes = append(routes, testCompatibilityRoute{Method: "POST", LegacyPath: "/api/v2/group-a/" + string(rune('a'+i)), PackageRoute: route, Transport: "http"})
 	}
-	publicKey, _ := seedRouteModePackageVersion(t, db, IdentityPlatformPackageID, "4.1.0-rc.5", routes)
-	admin := &RouteModeAdmin{DB: db, PublicKey: publicKey, Catalog: catalog}
-	packages, err := admin.List(context.Background(), IdentityPlatformPackageID, nil)
+	seedRouteModePackageVersion(t, db, IdentityPlatformPackageID, "4.1.0-rc.5", routes)
+	host := packagebridge.HostIdentity{PackageID: IdentityPlatformPackageID, Version: "4.1.0-rc.5", Generation: 7}
+	config, err := PackageHostOperations{DB: db}.PackageConfig(context.Background(), host)
 	require.NoError(t, err)
-	assert.Equal(t, PackageRouteDefaultState{Policy: "rehearsed"}, packages[0].Defaults)
-	for _, entry := range packages[0].Routes {
-		assert.Equal(t, "legacy", entry.Effective, entry.RouteID)
-		assert.Equal(t, RouteModeSourceUnset, entry.Source, entry.RouteID)
-	}
+	assert.Empty(t, config.RouteModes, "before the cutover every identity route is legacy")
 
-	// Once identity is authoritative group A is native from the authority,
-	// never from the default set.
-	require.NoError(t, db.Save(&model.IdentityAuthority{ID: 1, State: model.IdentityAuthorityIdentity}).Error)
-	modes, sources, err := ResolveEffectivePackageRouteModes(db, IdentityPlatformPackageID, "4.1.0-rc.5", map[string]string{})
-	require.NoError(t, err)
-	assert.Len(t, modes, len(IdentityGroupARoutes))
-	for route := range modes {
-		assert.True(t, slices.Contains(IdentityGroupARoutes, route), route)
-		assert.Equal(t, RouteModeSourceIdentityAuthority, sources[route])
+	for _, state := range []string{model.IdentityAuthorityIdentity, model.IdentityAuthorityFinalized} {
+		require.NoError(t, db.Save(&model.IdentityAuthority{ID: 1, State: state}).Error)
+		config, err = PackageHostOperations{DB: db}.PackageConfig(context.Background(), host)
+		require.NoError(t, err)
+		assert.Len(t, config.RouteModes, len(IdentityGroupARoutes), state)
+		for route, mode := range config.RouteModes {
+			assert.True(t, slices.Contains(IdentityGroupARoutes, route), route)
+			assert.Equal(t, packagebridge.RouteModeNative, mode, route)
+		}
 	}
+	require.NoError(t, db.Save(&model.IdentityAuthority{ID: 1, State: model.IdentityAuthorityImporting}).Error)
+	config, err = PackageHostOperations{DB: db}.PackageConfig(context.Background(), host)
+	require.NoError(t, err)
+	assert.Empty(t, config.RouteModes, "a rollback returns group A to legacy")
+}
+
+func TestPackageRouteCatalogParsesTheEmbeddedMap(t *testing.T) {
+	catalog, err := PackageRouteCatalog()
+	require.NoError(t, err)
+	assert.Equal(t, RouteCatalogNativeFlagged, catalog["knowledge.article.list"].Mode)
+	assert.Equal(t, "knowledge", catalog["knowledge.article.list"].PackageID)
+	assert.Equal(t, RouteCatalogKernelOwned, catalog["platform.admin.system.backup.post"].Mode)
+	_, err = parsePackageRouteCatalog([]byte(`{`))
+	require.Error(t, err)
 }

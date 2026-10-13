@@ -66,7 +66,7 @@ func TestSetup_AdminAPITokens(t *testing.T) {
 	// Reads on every administrator group; none is refused as unauthenticated.
 	for _, path := range []string{
 		"/api/v3/access-groups?scope_id=forward",
-		"/api/v4/kernel/route-modes/revisions",
+		"/api/v4/kernel/alerts",
 		"/api/v2/admin/forward/runtime/status",
 		"/api/v2/admin/agent/list",
 	} {
@@ -81,7 +81,7 @@ func TestSetup_AdminAPITokens(t *testing.T) {
 	// Writes: the admin scope reaches the handler, the read scope does not.
 	group := `{"scope_id":"forward","name":"by-token","enabled":true}`
 	assert.Equal(t, http.StatusCreated, do(http.MethodPost, "/api/v3/access-groups", adminToken, group).Code)
-	for _, path := range []string{"/api/v3/access-groups", "/api/v4/kernel/route-modes", "/api/v2/admin/agent/tasks", "/api/v2/admin/users"} {
+	for _, path := range []string{"/api/v3/access-groups", "/api/v4/kernel/node-groups", "/api/v2/admin/agent/tasks", "/api/v2/admin/users"} {
 		response := do(http.MethodPost, path, readToken, group)
 		assert.Equal(t, http.StatusForbidden, response.Code, path)
 		assert.Contains(t, response.Body.String(), "api_token_forbidden", path)

@@ -57,10 +57,20 @@
 //     minProgramVersions for the number to this release's version.
 //  4. Run the tests. TestFreshSchemaEqualsTheLegacySchema compares the fresh
 //     schema with the one the models build, and adopts a database at the
-//     baseline; a migration that changes a model or creates a table records
-//     that in the legacy oracle, in postBaselineIndexes or laterModels (see
+//     baseline; a migration that changes a model, creates a table or drops
+//     one with its model records that in the legacy oracle, in
+//     postBaselineIndexes, laterModels or retiredKernelModels (see
 //     docs/reference/database-migrations.md, "Changing a model").
 //     TestUpgradedSchemaEqualsFresh checks the upgrade from every earlier
 //     step, and TestTemplateMigrationAppliesSQLAndGoInOneTransaction is the
 //     template for a step's own test.
+//
+// # The steps
+//
+//   - 0001_baseline: the schema of release 4.2.1.
+//   - 0002_server_log_buckets: hourly v2_server_log buckets.
+//   - 0003_acme_cache: the panel certificate store (v5_acme_cache).
+//   - 0004_drop_route_modes: drops the route-mode revisions and the shadow
+//     mismatch samples, and removes the stored route modes from the Control
+//     package configurations, audited (drop_route_modes.go).
 package migrations

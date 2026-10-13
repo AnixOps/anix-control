@@ -351,6 +351,10 @@ func main() {
 // run starts Control and blocks until shutdown. It returns the process exit
 // code so that deferred cleanup (cache, database) runs before os.Exit.
 func run() int {
+	if reason, removed := removedCommand(os.Args[1:]); removed {
+		_, _ = fmt.Fprintln(os.Stderr, reason)
+		return 2
+	}
 	migrateOnly := takeMigrateCommand()
 	adminArguments := takeAdminCommand()
 	nodeSecretsArguments := takeNodeSecretsCommand()
@@ -630,7 +634,6 @@ func (rt *serverRuntime) start(cfg *config.Config, intervals pluginPollIntervals
 		rt.workers.Go("plugin host health poller", func(ctx context.Context) {
 			hosts.PollHealth(ctx, pluginHostHealthPollInterval)
 		})
-		rt.startShadowSampleCollector(hosts)
 		artifacts, cleanupArtifacts, err := newControlPluginArtifactResolver(cfg)
 		if err != nil {
 			return fmt.Errorf("initialize Control plugin artifact resolver: %w", err)

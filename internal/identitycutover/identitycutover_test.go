@@ -118,7 +118,6 @@ func newFixture(t *testing.T) *fixture {
 	f.service = &Service{
 		DB:          kernel,
 		Importer:    &identityimport.Importer{DB: kernel, Connect: func() (grpc.ClientConnInterface, error) { return conn, nil }},
-		PublicKey:   func() (ed25519.PublicKey, error) { return publicKey, nil },
 		RefreshKeys: func(context.Context) error { return nil },
 		Hosts:       f.hosts, Freeze: f.freeze, Settle: 50 * time.Millisecond, Hold: time.Millisecond,
 		OnFinalized: func() { f.finalized++ },
@@ -208,70 +207,28 @@ func (f *fixture) events(t *testing.T) []string {
 	return actions
 }
 
-func allNative(t *testing.T) string {
-	t.Helper()
-	modes := map[string]string{}
-	for _, route := range service.IdentityGroupARoutes {
-		modes[route] = packagebridge.RouteModeNative
-	}
-	document, err := json.Marshal(map[string]any{"routes": modes})
-	require.NoError(t, err)
-	return string(document)
-}
-
-// groupAIn is a route-mode document with every group A route in mode,
-// except the routes in except, which it leaves out.
-func groupAIn(t *testing.T, mode string, except map[string]bool) string {
-	t.Helper()
-	modes := map[string]string{}
-	for _, route := range service.IdentityGroupARoutes {
-		if !except[route] {
-			modes[route] = mode
-		}
-	}
-	document, err := json.Marshal(map[string]any{"routes": modes})
-	require.NoError(t, err)
-	return string(document)
-}
-
 func (f *fixture) setAuthority(t *testing.T, state string) {
 	t.Helper()
 	require.NoError(t, f.kernel.Save(&model.IdentityAuthority{ID: 1, State: state, UpdatedAt: f.now}).Error)
 }
 
-// A group A route the stored route modes do not name (an installation
-// whose cutover predates the route, such as the user's own subscription
-// reset) is native while identity is authoritative and legacy before; a
-// stored legacy mode still counts as legacy.
-func TestGroupARoutesMissingFromTheStoredModesFollowTheAuthority(t *testing.T) {
-	const added = "identity.user.subscription.reset.post"
-	require.Contains(t, service.IdentityGroupARoutes, added)
-	withoutAdded := groupAIn(t, packagebridge.RouteModeNative, map[string]bool{added: true})
-
-	t.Run("kernel state: missing is legacy", func(t *testing.T) {
-		f := newFixture(t)
-		require.NoError(t, f.setModes(`{"routes":{}}`))
-		require.Equal(t, map[string]int{packagebridge.RouteModeLegacy: len(service.IdentityGroupARoutes)}, f.groupAModes(t))
-		require.ErrorContains(t, f.setModes(withoutAdded), "switch together", "the missing route counts as legacy")
-	})
-
-	for _, state := range []string{model.IdentityAuthorityIdentity, model.IdentityAuthorityFinalized} {
-		t.Run(state+" state: missing is native", func(t *testing.T) {
-			f := newFixture(t)
-			f.setAuthority(t, state)
-			// The older document, written before the route joined group A:
-			// accepted, and the host is told to serve the route natively.
-			require.NoError(t, f.setModes(withoutAdded))
-			require.Equal(t, map[string]int{packagebridge.RouteModeNative: len(service.IdentityGroupARoutes)}, f.groupAModes(t))
-			// A configuration change that names no group A route is not refused.
-			require.NoError(t, f.setModes(`{"routes":{"identity.user.profile.get":"native"}}`))
-			require.Equal(t, map[string]int{packagebridge.RouteModeNative: len(service.IdentityGroupARoutes)}, f.groupAModes(t))
-			// A stored legacy mode is legacy: mixed group A is still refused,
-			// and so is all of it legacy.
-			require.ErrorContains(t, f.setModes(`{"routes":{"`+added+`":"legacy"}}`), "switch together")
-			require.ErrorContains(t, f.setModes(groupAIn(t, packagebridge.RouteModeLegacy, nil)), "stays native")
-		})
+// Group A's route mode follows the authority, and nothing stores it:
+// legacy before the cutover (kernel and importing), native while identity
+// is authoritative (identity and finalized).
+func TestGroupAFollowsTheAuthority(t *testing.T) {
+	f := newFixture(t)
+	require.Equal(t, map[string]int{packagebridge.RouteModeLegacy: len(service.IdentityGroupARoutes)}, f.groupAModes(t))
+	for state, mode := range map[string]string{
+		model.IdentityAuthorityImporting: packagebridge.RouteModeLegacy,
+		model.IdentityAuthorityIdentity:  packagebridge.RouteModeNative,
+		model.IdentityAuthorityFinalized: packagebridge.RouteModeNative,
+		model.IdentityAuthorityKernel:    packagebridge.RouteModeLegacy,
+	} {
+		f.setAuthority(t, state)
+		require.Equal(t, map[string]int{mode: len(service.IdentityGroupARoutes)}, f.groupAModes(t), state)
 	}
+	// A configuration document cannot carry route modes any more.
+	require.ErrorContains(t, f.setModes(`{"routes":{"identity.auth.login":"native"}}`), "was removed")
 }
 
 func (f *fixture) setModes(document string) error {
@@ -321,8 +278,7 @@ func TestCutoverHandsGroupAToIdentityWithTheLatestLegacyChanges(t *testing.T) {
 	require.True(t, accounts[0].Banned)
 
 	// Group A cannot be switched back behind the authority's back.
-	require.ErrorContains(t, f.setModes(groupAIn(t, packagebridge.RouteModeLegacy, nil)), "stays native")
-	require.ErrorContains(t, f.setModes(`{"routes":{"identity.auth.login":"legacy"}}`), "switch together")
+	require.ErrorContains(t, f.setModes(`{"routes":{"identity.auth.login":"legacy"}}`), "was removed")
 	_, err = f.service.Importer.Run(ctx, true)
 	require.ErrorIs(t, err, identityimport.ErrNotImportable)
 	_, err = f.service.Cutover(ctx, 1)
@@ -363,7 +319,6 @@ func TestRollbackReturnsGroupAToLegacyUntilFinalize(t *testing.T) {
 	require.Equal(t, map[string]int{packagebridge.RouteModeLegacy: len(service.IdentityGroupARoutes)}, f.groupAModes(t))
 	_, err = f.service.Rollback(ctx, 1)
 	require.ErrorIs(t, err, ErrNotReady)
-	require.ErrorContains(t, f.setModes(allNative(t)), "only once identity is authoritative")
 
 	_, err = f.service.Cutover(ctx, 1)
 	require.NoError(t, err, "cutting over again re-imports what changed meanwhile")
@@ -396,7 +351,7 @@ func TestFinalizeRemovesLegacyCredentialsADayAfterTheCutover(t *testing.T) {
 	_, err = f.service.Rollback(ctx, 1)
 	require.ErrorIs(t, err, ErrFinal)
 	require.ErrorIs(t, f.service.Finalize(ctx, 1, true), ErrFinal)
-	require.ErrorContains(t, f.setModes(groupAIn(t, packagebridge.RouteModeLegacy, nil)), "stays native")
+	require.Equal(t, map[string]int{packagebridge.RouteModeNative: len(service.IdentityGroupARoutes)}, f.groupAModes(t))
 }
 
 func TestOneAuthorityChangeAtATime(t *testing.T) {
@@ -430,73 +385,27 @@ func TestStartRunsTheChangeInTheBackground(t *testing.T) {
 	require.Contains(t, f.service.Latest().Error, "already authoritative")
 }
 
-// routesWith is a route configuration: group A in groupA's mode (legacy
-// leaves it out) plus extra.
-func routesWith(t *testing.T, groupA string, extra map[string]string) string {
-	t.Helper()
-	modes := map[string]string{}
-	if groupA != packagebridge.RouteModeLegacy {
-		for _, route := range service.IdentityGroupARoutes {
-			modes[route] = groupA
-		}
-	}
-	for route, mode := range extra {
-		modes[route] = mode
-	}
-	document, err := json.Marshal(map[string]any{"routes": modes})
-	require.NoError(t, err)
-	return string(document)
-}
-
-// The account reads leave legacy only while identity is authoritative, on
-// their own; the rollback returns them to legacy. The resets, which touch
-// only the subscriber, switch at any time.
-func TestAccountReadsFollowTheAuthority(t *testing.T) {
+// Identity's account reads and the resets are not in the rehearsed list:
+// they stay legacy whatever the authority, and the cutover and rollback do
+// not touch them.
+func TestAccountReadsStayLegacy(t *testing.T) {
 	f := newFixture(t)
 	ctx := context.Background()
-	profile, detail := "identity.user.profile.get", "identity.admin.users.id.get"
-	list, stats := "identity.admin.users.get", "identity.admin.users.stats.get"
-	require.Subset(t, service.IdentityAccountReadRoutes, []string{profile, detail, list, stats})
-	resets := map[string]string{
-		"identity.admin.users.id.reset_traffic.post":   packagebridge.RouteModeNative,
-		"identity.admin.users.id.reset_subscribe.post": packagebridge.RouteModeNative,
+	reads := []string{
+		"identity.user.profile.get", "identity.user.dashboard.get", "identity.admin.users.id.get",
+		"identity.admin.users.get", "identity.admin.users.stats.get",
+		"identity.admin.users.id.reset_traffic.post", "identity.admin.users.id.reset_subscribe.post",
 	}
-	require.NoError(t, f.setModes(routesWith(t, packagebridge.RouteModeLegacy, resets)), "resets switch before any cutover")
-	for _, route := range []string{profile, list, stats} {
-		for _, mode := range []string{packagebridge.RouteModeNative, packagebridge.RouteModeShadow} {
-			require.ErrorContains(t, f.setModes(routesWith(t, packagebridge.RouteModeLegacy, map[string]string{route: mode})),
-				"leaves legacy mode only once identity is authoritative", route)
-		}
-	}
+	require.Equal(t, map[string]int{packagebridge.RouteModeLegacy: len(reads)}, f.modesOf(t, reads))
 	_, err := f.service.Importer.Run(ctx, false)
 	require.NoError(t, err)
-	for _, route := range []string{detail, list, stats} {
-		require.ErrorContains(t, f.setModes(routesWith(t, packagebridge.RouteModeLegacy, map[string]string{route: packagebridge.RouteModeNative})),
-			"leaves legacy mode only once identity is authoritative", "an import is not authority")
-	}
-
 	_, err = f.service.Cutover(ctx, 1)
 	require.NoError(t, err)
-	require.Equal(t, map[string]int{packagebridge.RouteModeLegacy: len(service.IdentityAccountReadRoutes)}, f.modesOf(t, service.IdentityAccountReadRoutes),
-		"the cutover leaves the reads to the operator")
-	reads := map[string]string{
-		profile: packagebridge.RouteModeNative, detail: packagebridge.RouteModeShadow,
-		list: packagebridge.RouteModeNative, stats: packagebridge.RouteModeShadow,
-	}
-	for route, mode := range resets {
-		reads[route] = mode
-	}
-	require.NoError(t, f.setModes(routesWith(t, packagebridge.RouteModeNative, reads)))
-	require.ErrorContains(t, f.setModes(routesWith(t, packagebridge.RouteModeNative, map[string]string{profile: packagebridge.RouteModeNative, "identity.auth.login": packagebridge.RouteModeLegacy})),
-		"switch together", "the reads do not count as group A")
-
+	require.Equal(t, map[string]int{packagebridge.RouteModeLegacy: len(reads)}, f.modesOf(t, reads))
 	_, err = f.service.Rollback(ctx, 1)
 	require.NoError(t, err)
-	require.Equal(t, map[string]int{packagebridge.RouteModeLegacy: len(service.IdentityAccountReadRoutes)}, f.modesOf(t, service.IdentityAccountReadRoutes))
+	require.Equal(t, map[string]int{packagebridge.RouteModeLegacy: len(reads)}, f.modesOf(t, reads))
 	require.Equal(t, map[string]int{packagebridge.RouteModeLegacy: len(service.IdentityGroupARoutes)}, f.groupAModes(t))
-	require.Equal(t, map[string]int{packagebridge.RouteModeNative: len(resets)}, f.modesOf(t, []string{
-		"identity.admin.users.id.reset_traffic.post", "identity.admin.users.id.reset_subscribe.post",
-	}), "the rollback leaves the resets alone")
 }
 
 // modesOf counts the configured modes of routes.

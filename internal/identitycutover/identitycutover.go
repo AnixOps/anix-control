@@ -1,14 +1,13 @@
 // Package identitycutover moves credential authority between the kernel's
 // legacy handlers and the identity module, for identity-platform's group A
-// (service.IdentityGroupARoutes):
+// (service.IdentityGroupARoutes). Group A's route mode follows the authority
+// (service.ResolvePackageRouteModes): native while identity is
+// authoritative, legacy otherwise. Nothing stores it.
 //   - the cutover catches identity up with delta imports, pauses group A,
-//     imports the last changes, then switches group A to native and the
-//     authority to identity in one transaction, and waits until the
-//     identity hosts serve group A natively;
-//   - a rollback, possible until finalize, switches back to legacy, and
-//     returns identity's account reads (service.IdentityAccountReadRoutes),
-//     which the operator may have switched on their own since, to legacy
-//     with it;
+//     imports the last changes, then switches the authority to identity and
+//     waits until the identity hosts serve group A natively;
+//   - a rollback, possible until finalize, switches the authority back, and
+//     group A to legacy with it;
 //   - finalize, a day after the cutover, removes the legacy credentials.
 //
 // Every change is recorded in v4_kernel_identity_cutover.
@@ -16,7 +15,6 @@ package identitycutover
 
 import (
 	"context"
-	"crypto/ed25519"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -64,14 +62,12 @@ type Freeze interface {
 type Service struct {
 	DB       *gorm.DB
 	Importer *identityimport.Importer
-	// PublicKey returns the official package trust root.
-	PublicKey func() (ed25519.PublicKey, error)
 	// RefreshKeys pulls identity's token keys; the cutover needs them so
 	// Control verifies the tokens identity issues.
 	RefreshKeys func(ctx context.Context) error
 	Hosts       Hosts
 	Freeze      Freeze
-	// Settle bounds the wait for the hosts to apply new route modes
+	// Settle bounds the wait for the hosts to apply the new route modes
 	// (default 30s; hosts poll every 5s).
 	Settle time.Duration
 	// Hold keeps group A paused after a host confirmed the new modes, so
@@ -98,7 +94,8 @@ type Service struct {
 // Report describes a finished cutover or rollback.
 type Report struct {
 	Action string `json:"action"`
-	// Revision is the identity-platform configuration revision written.
+	// Revision is the identity-platform configuration revision the hosts
+	// had to read: the authority change does not write the configuration.
 	Revision int64 `json:"revision"`
 	// Imported counts the accounts the catch-up and final delta imports
 	// sent, and Deleted the deletions.
@@ -125,19 +122,12 @@ func duration(value, fallback time.Duration) time.Duration {
 	return fallback
 }
 
-// authorityModes are the route modes an authority change writes: group A in
-// mode and, when the change goes back to legacy, identity's account reads
-// too, which leave legacy only while identity is authoritative. A cutover
-// leaves the reads as they are; the operator switches them.
+// authorityModes are the route modes an authority change moves: group A,
+// in mode.
 func authorityModes(mode string) map[string]string {
-	modes := make(map[string]string, len(service.IdentityGroupARoutes)+len(service.IdentityAccountReadRoutes))
+	modes := make(map[string]string, len(service.IdentityGroupARoutes))
 	for _, route := range service.IdentityGroupARoutes {
 		modes[route] = mode
-	}
-	if mode == packagebridge.RouteModeLegacy {
-		for _, route := range service.IdentityAccountReadRoutes {
-			modes[route] = mode
-		}
 	}
 	return modes
 }
@@ -161,7 +151,7 @@ func (s *Service) Cutover(ctx context.Context, actorID uint) (Report, error) {
 	case state != model.IdentityAuthorityImporting || (checkpoint.CompletedAt == 0 && !checkpoint.Delta):
 		return report, fmt.Errorf("%w: run a full account import first (POST /api/v4/kernel/identity/import)", ErrNotReady)
 	}
-	installation, publicKey, err := s.target(ctx)
+	installation, err := s.target(ctx)
 	if err != nil {
 		return report, err
 	}
@@ -193,16 +183,16 @@ func (s *Service) Cutover(ctx context.Context, actorID uint) (Report, error) {
 	report.Imported += final.Accounts
 	report.Deleted += final.Deleted
 	detail, _ := json.Marshal(map[string]any{"imported": report.Imported, "deleted": report.Deleted})
-	report.Revision, err = s.switchAuthority(ctx, publicKey, installation.ID, model.IdentityAuthorityIdentity,
-		packagebridge.RouteModeNative, actorID, model.IdentityCutoverActionCutover, string(detail))
+	report.Revision, err = s.switchAuthority(ctx, installation.ID, model.IdentityAuthorityIdentity,
+		actorID, model.IdentityCutoverActionCutover, string(detail))
 	if err != nil {
 		return report, fmt.Errorf("switch group A to identity: %w", err)
 	}
 	if err := s.awaitHosts(ctx, installation, report.Revision, packagebridge.RouteModeNative); err != nil {
 		cause := fmt.Errorf("the identity hosts did not serve group A natively: %w", err)
 		restore := context.WithoutCancel(ctx)
-		revision, restoreErr := s.switchAuthority(restore, publicKey, installation.ID, model.IdentityAuthorityImporting,
-			packagebridge.RouteModeLegacy, actorID, model.IdentityCutoverActionAborted, cause.Error())
+		revision, restoreErr := s.switchAuthority(restore, installation.ID, model.IdentityAuthorityImporting,
+			actorID, model.IdentityCutoverActionAborted, cause.Error())
 		if restoreErr != nil {
 			return report, errors.Join(cause, fmt.Errorf("restore legacy group A: %w", restoreErr))
 		}
@@ -244,7 +234,7 @@ func (s *Service) Rollback(ctx context.Context, actorID uint) (Report, error) {
 	default:
 		return report, fmt.Errorf("%w: identity is not authoritative (state %q)", ErrNotReady, state)
 	}
-	installation, publicKey, err := s.target(ctx)
+	installation, err := s.target(ctx)
 	if err != nil {
 		return report, err
 	}
@@ -257,8 +247,8 @@ func (s *Service) Rollback(ctx context.Context, actorID uint) (Report, error) {
 	if err := s.drain(ctx); err != nil {
 		return report, err
 	}
-	report.Revision, err = s.switchAuthority(ctx, publicKey, installation.ID, model.IdentityAuthorityImporting,
-		packagebridge.RouteModeLegacy, actorID, model.IdentityCutoverActionRollback, "")
+	report.Revision, err = s.switchAuthority(ctx, installation.ID, model.IdentityAuthorityImporting,
+		actorID, model.IdentityCutoverActionRollback, "")
 	if err != nil {
 		return report, fmt.Errorf("switch group A to legacy: %w", err)
 	}
@@ -328,25 +318,14 @@ func (s *Service) Finalize(ctx context.Context, actorID uint, force bool) error 
 	return nil
 }
 
-// target returns identity-platform's enabled Control installation and the
-// trust root that verifies its configuration.
-func (s *Service) target(ctx context.Context) (model.PluginInstallation, ed25519.PublicKey, error) {
+// target returns identity-platform's enabled Control installation.
+func (s *Service) target(ctx context.Context) (model.PluginInstallation, error) {
 	var installation model.PluginInstallation
 	err := s.DB.WithContext(ctx).Where("plugin_id = ? AND target = ?", service.IdentityPlatformPackageID, "control").Take(&installation).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) || (err == nil && !installation.Enabled) {
-		return installation, nil, fmt.Errorf("%w: identity-platform is not installed and enabled", ErrNotReady)
+		return installation, fmt.Errorf("%w: identity-platform is not installed and enabled", ErrNotReady)
 	}
-	if err != nil {
-		return installation, nil, err
-	}
-	if s.PublicKey == nil {
-		return installation, nil, service.ErrPluginTrustRootRequired
-	}
-	publicKey, err := s.PublicKey()
-	if err != nil {
-		return installation, nil, err
-	}
-	return installation, publicKey, nil
+	return installation, err
 }
 
 func (s *Service) drain(ctx context.Context) error {
@@ -358,15 +337,18 @@ func (s *Service) drain(ctx context.Context) error {
 	return nil
 }
 
-// switchAuthority sets the authority state and the route modes of
-// authorityModes in one transaction, and records the event.
-func (s *Service) switchAuthority(ctx context.Context, publicKey ed25519.PublicKey, installationID uint, state, mode string, actorID uint, action, detail string) (int64, error) {
+// switchAuthority sets the authority state, which moves group A's route
+// mode with it (service.ResolvePackageRouteModes), and records the event in
+// one transaction. It returns identity-platform's configuration revision,
+// which the change leaves as it is: the hosts pick the new modes up at their
+// next configuration poll.
+func (s *Service) switchAuthority(ctx context.Context, installationID uint, state string, actorID uint, action, detail string) (int64, error) {
 	var revision int64
 	err := service.WithAgentLifecycleTransaction(s.DB.WithContext(ctx), func(tx *gorm.DB) error {
 		if err := setAuthority(tx, state, s.now()); err != nil {
 			return err
 		}
-		configuration, err := service.SetPackageRouteModesTx(tx, publicKey, installationID, authorityModes(mode), actorID)
+		configuration, err := service.GetPluginConfiguration(tx, installationID)
 		if err != nil {
 			return err
 		}
