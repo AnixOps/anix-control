@@ -2,6 +2,7 @@ import request from '@/utils/request'
 
 const KERNEL_API_BASE_URL = '/api/v3'
 const KERNEL_V4_API_BASE_URL = '/api/v4'
+const PANEL_API_BASE_URL = '/api/v5'
 
 function v3(config) {
   return request({ ...config, baseURL: KERNEL_API_BASE_URL })
@@ -9,6 +10,10 @@ function v3(config) {
 
 function v4(config) {
   return request({ ...config, baseURL: KERNEL_V4_API_BASE_URL })
+}
+
+function v5(config) {
+  return request({ ...config, baseURL: PANEL_API_BASE_URL })
 }
 
 function unwrap(response) {
@@ -403,8 +408,8 @@ export async function createKernelAgentInstallToken(node, ttlSeconds) {
 // What an install command needs from this Control, checked without a network
 // call (any administrator): { ready, checks: [{ id, ok, level, message, fix }] }.
 // `ready` is false while a check of level "error" fails; a failed "warning"
-// does not block the command. Ids: public_url, grpc, ca, mtls_mode,
-// agent_release, script_signature.
+// does not block the command. Ids: public_url, panel_certificate, grpc,
+// grpc_certificate, ca, mtls_mode, agent_release, script_signature.
 export async function getKernelInstallReadiness() {
   return unwrap(await v4({ url: '/kernel/agents/install-readiness', method: 'get' }))
 }
@@ -582,4 +587,21 @@ export async function getKernelRouteModeMismatches({ packageID, routeID, limit }
   if (routeID) params.route_id = routeID
   if (limit) params.limit = limit
   return unwrap(await v4({ url: '/kernel/route-modes/mismatches', method: 'get', params }))
+}
+
+// The certificates Control serves itself (GET /api/v5/panel/status, any
+// administrator): { certificate: { mode (acme|files|external), state
+// (not_configured|pending|valid|failed), domain, grpc_name, certificates:
+// [{ name, roles, source, state, serving (acme|file|self_signed),
+// publicly_trusted, not_after, renew_at, renewal_failing, last_error,
+// problem, fix, next_attempt_at }] } }.
+export async function getPanelStatus() {
+  return unwrap(await v5({ url: '/panel/status', method: 'get' }))
+}
+
+// Asks Control to request the failing certificates again now, within its
+// limit of three requests per name and hour. Answers { retry: { retrying,
+// waiting, healthy }, certificate }.
+export async function retryPanelCertificates() {
+  return unwrap(await v5({ url: '/panel/certificates/retry', method: 'post' }))
 }

@@ -112,6 +112,14 @@ export default {
         builtinPackageFailed: {
           title: 'The built-in package {name} is not running',
           hint: 'Its pages and routes are unavailable. Fix the cause in the Control log and restart Control.'
+        },
+        panelCertificate: {
+          ending: 'The certificate for {name} is about to expire',
+          endingHint: 'Ends {date}. The panel renews it by itself and has not: see anix-control tls status on the server.',
+          endingFilesHint: 'Ends {date}. Replace the certificate files with a renewed certificate; the panel reloads them.',
+          failed: 'The panel has no usable certificate for {name}',
+          renewalFailing: 'The certificate for {name} could not be renewed',
+          hint: 'The panel serves a temporary certificate meanwhile; see anix-control tls status on the server.'
         }
       },
       nodesFailed: 'Couldn’t load node status',

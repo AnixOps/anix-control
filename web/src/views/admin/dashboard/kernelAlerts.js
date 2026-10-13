@@ -28,7 +28,9 @@ const KIND_ICONS = {
   identity_import_stalled: Hourglass,
   identity_cutover_not_finalized: Hourglass,
   builtin_package_invalid: ShieldAlert,
-  builtin_package_failed: ServerCog
+  builtin_package_failed: ServerCog,
+  panel_certificate_expiring: FileKey,
+  panel_certificate_renewal_failing: ShieldAlert
 }
 
 export const KERNEL_ALERT_KINDS = Object.freeze(Object.keys(KIND_ICONS))
@@ -41,6 +43,11 @@ export function alertIcon(alert) {
 }
 
 const text = value => (typeof value === 'string' || typeof value === 'number' ? String(value) : '')
+
+// Whether `t` knows key: vue-i18n answers an unknown key with the key.
+function i18nHas(t, key) {
+  return t(key, { name: '' }) !== key
+}
 
 // A node alert's holder name: the node's name, else its reference (proxy-12).
 function holderName(alert, detail) {
@@ -95,6 +102,22 @@ export function alertText(alert, { t, format }) {
       const kind = alert.kind === 'builtin_package_invalid' ? 'builtinPackageInvalid' : 'builtinPackageFailed'
       title = t(`${base}.${kind}.title`, { name: text(detail.package_id) || text(alert.subject) })
       hint = t(`${base}.${kind}.hint`)
+      break
+    }
+    case 'panel_certificate_expiring': {
+      const name = text(detail.name) || text(alert.subject)
+      title = t(`${base}.panelCertificate.ending`, { name })
+      hint = t(`${base}.panelCertificate.${detail.source === 'files' ? 'endingFilesHint' : 'endingHint'}`, { date: date(detail.not_after) })
+      break
+    }
+    case 'panel_certificate_renewal_failing': {
+      const name = text(detail.name) || text(alert.subject)
+      title = t(`${base}.panelCertificate.${detail.state === 'failed' ? 'failed' : 'renewalFailing'}`, { name })
+      // The fix in the reader's words (the shell's certificate banner has
+      // them per problem), else the server's, else where to look.
+      const fixKey = `shell.admin.certificate.fixes.${text(detail.problem)}`
+      if (detail.problem && i18nHas(t, fixKey)) hint = t(fixKey, { name })
+      else hint = text(detail.fix) || t(`${base}.panelCertificate.hint`)
       break
     }
     default:

@@ -597,7 +597,9 @@ export default {
     },
     checks: {
       public_url: '面板地址',
-      grpc: 'gRPC 地址和证书',
+      panel_certificate: '面板证书',
+      grpc: 'gRPC 地址',
+      grpc_certificate: 'gRPC 证书',
       ca: '节点证书的签发密钥',
       mtls_mode: 'Agent 认证方式',
       agent_release: 'Agent 版本',
@@ -605,7 +607,9 @@ export default {
     },
     fixes: {
       public_url: '把 agent_install.public_url 设为节点访问面板的 https 地址（例如 https://panel.example.com），然后重启面板。经反向代理时，还要把代理加入 server.trusted_proxies。',
-      grpc: '开启 grpc.enabled，设置 grpc.tls_cert_file 和 grpc.tls_key_file（节点信任的证书）；节点连的地址不同于面板地址时，再设置 agent_install.grpc_target。然后重启面板。',
+      panel_certificate: '节点通过 https 下载安装脚本，不接受不受信任的证书。页面顶部的横幅写明了证书没有就绪的原因；处理后在横幅里点“重新申请”（或在服务器上运行 anix-control tls retry）。',
+      grpc: '设置 domain（会开启 gRPC 监听），或开启 grpc.enabled；节点连的地址不同于面板地址时，再设置 agent_install.grpc_target。然后重启面板。',
+      grpc_certificate: '节点用系统自带的证书机构校验 gRPC 证书，不接受其他证书。设置 domain（面板在 CDN 后面时，再把 grpc.public_name 设为一个只解析不代理的域名），面板会自动申请；页面顶部的横幅写明了还没就绪的原因。',
       ca: '把 module_runtime.ca_kek（环境变量 ANIX_CONTROL_MODULE_RUNTIME_CA_KEK）设为 32 字节密钥，可用 openssl rand -base64 32 生成，然后重启面板。',
       mtls_mode: '删除 agent_control.mtls（默认就是 required），或把它设为 required，然后重启面板。',
       agent_release: '把 agent_install.agent_version 设为已发布的 Agent 版本号（例如 v4.2.0），或把 Agent 发行包放进 agent_install.artifact_dir，然后重启面板。',

@@ -597,7 +597,9 @@ export default {
     },
     checks: {
       public_url: 'Control’s address',
-      grpc: 'gRPC address and certificate',
+      panel_certificate: 'Panel certificate',
+      grpc: 'gRPC address',
+      grpc_certificate: 'gRPC certificate',
       ca: 'Key that signs node certificates',
       mtls_mode: 'Agent authentication',
       agent_release: 'Agent release',
@@ -605,7 +607,9 @@ export default {
     },
     fixes: {
       public_url: 'Set agent_install.public_url to the https address nodes reach Control at (for example https://panel.example.com) and restart Control. Behind a reverse proxy, also list the proxy in server.trusted_proxies.',
-      grpc: 'Set grpc.enabled, and grpc.tls_cert_file and grpc.tls_key_file (a certificate nodes trust). When nodes dial a different address than Control’s own, set agent_install.grpc_target. Then restart Control.',
+      panel_certificate: 'Nodes download the install script over https and refuse an untrusted certificate. The banner at the top says why the certificate is not ready; fix that, then use Request again there (or anix-control tls retry on the server).',
+      grpc: 'Set domain (it turns the gRPC listener on), or grpc.enabled. When nodes dial a different address than Control’s own, set agent_install.grpc_target. Then restart Control.',
+      grpc_certificate: 'Nodes verify the gRPC certificate against their system CAs and refuse anything else. Set domain (and, behind a CDN, grpc.public_name to a DNS-only name) so Control obtains one; the banner at the top says why it is not ready yet.',
       ca: 'Set module_runtime.ca_kek (environment variable ANIX_CONTROL_MODULE_RUNTIME_CA_KEK) to a 32-byte key, for example from openssl rand -base64 32, and restart Control.',
       mtls_mode: 'Remove agent_control.mtls (required is the default) or set it to required, and restart Control.',
       agent_release: 'Set agent_install.agent_version to a published Agent release (for example v4.2.0), or put the Agent release in agent_install.artifact_dir, and restart Control.',

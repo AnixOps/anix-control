@@ -135,6 +135,7 @@ describe('NodeJoinSheet', () => {
       checks: [
         { id: 'public_url', ok: false, level: 'error', message: 'Nodes would use http://10.0.0.5:8080, which is not https.', fix: 'Set agent_install.public_url' },
         { id: 'grpc', ok: false, level: 'error', message: 'The gRPC listener is off.', fix: 'Set grpc.enabled' },
+        { id: 'grpc_certificate', ok: false, level: 'error', message: 'Control is still requesting the gRPC certificate for panel.example.com.', fix: 'Wait a minute.' },
         { id: 'ca', ok: true, level: 'error', message: 'The built-in agent CA is on.', fix: '' },
         { id: 'script_signature', ok: false, level: 'warning', message: 'does not verify', fix: 'x' }
       ]
@@ -145,11 +146,16 @@ describe('NodeJoinSheet', () => {
     const dialog = await sheet()
     const blocked = await within(dialog).findByTestId('join-blocked')
     const checks = within(blocked).getAllByRole('listitem')
-    expect(checks).toHaveLength(2)
+    expect(checks).toHaveLength(3)
     expect(checks[0].textContent).toContain('Control’s address')
     expect(checks[0].textContent).toContain('agent_install.public_url to the https address')
     expect(checks[0].textContent).toContain('which is not https')
-    expect(checks[1].textContent).toContain('gRPC address and certificate')
+    expect(checks[1].textContent).toContain('gRPC address')
+    // The certificate the Agents verify: its own name, the fix in the
+    // reader's words, and the server's reason.
+    expect(checks[2].textContent).toContain('gRPC certificate')
+    expect(checks[2].textContent).toContain('system CAs')
+    expect(checks[2].textContent).toContain('still requesting')
     // No command, and nothing was created or read for one.
     expect(within(dialog).queryByTestId('join-command-text')).toBeNull()
     expect(kernel.listKernelNodeGroups).not.toHaveBeenCalled()
