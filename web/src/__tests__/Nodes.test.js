@@ -8,6 +8,7 @@ import { screen, within } from '@testing-library/vue'
 import { toastMessages } from './helpers/feedback'
 import userEvent from '@testing-library/user-event'
 import Nodes from '@/views/admin/Nodes.vue'
+import { closeAgentUpgrade, useAgentUpgradeSheet } from '@/composables/useAgentUpgradeSheet'
 
 const adminApi = vi.hoisted(() => ({
   getNode: vi.fn(),
@@ -74,6 +75,21 @@ describe('Nodes.vue', () => {
     kernelApi.getKernelAgentTransports.mockResolvedValue({ nodes: [] })
     kernelApi.listKernelNodeGroups.mockResolvedValue({ groups: [] })
     telemetryApi.getNodesServicesSummary.mockResolvedValue([])
+  })
+
+  it('has 升级节点 next to 接入节点 in the header, and it opens the shell\'s upgrade sheet', async () => {
+    closeAgentUpgrade()
+    const { wrapper } = await mountNodes()
+    const header = wrapper.get('.ui-page-header')
+    const labels = header.findAll('button').map(button => button.text())
+    expect(labels.indexOf('Upgrade nodes')).toBeGreaterThan(-1)
+    expect(labels.indexOf('Join a node')).toBe(labels.indexOf('Upgrade nodes') + 1)
+    const { open, requested } = useAgentUpgradeSheet()
+    expect(open.value).toBe(false)
+    await wrapper.get('[data-testid="upgrade-nodes"]').trigger('click')
+    expect(open.value).toBe(true)
+    expect(requested.value).toBe(true)
+    closeAgentUpgrade()
   })
 
   it('stops follow-up requests and shows the error state when the nodes do not load', async () => {

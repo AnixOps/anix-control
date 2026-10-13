@@ -2,6 +2,7 @@
   <div class="list-page nodes-page">
     <UiPageHeader :title="t('admin.nodes.title')" :description="t('admin.nodes.subtitle')">
       <template #actions>
+        <UiButton :icon="Rocket" data-testid="upgrade-nodes" @click="openAgentUpgrade">{{ t('shell.palette.actions.upgradeNodes') }}</UiButton>
         <UiButton variant="primary" :icon="Terminal" data-testid="join-node" @click="openJoin()">{{ t('admin.nodes.join.title') }}</UiButton>
       </template>
     </UiPageHeader>
@@ -168,7 +169,7 @@
 // ForwardNode.
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Check, FileText, Layers, Pencil, RefreshCcw, Server, SquareArrowOutUpRight, Terminal, Trash2, X } from '@lucide/vue'
+import { Check, FileText, Layers, Pencil, RefreshCcw, Rocket, Server, SquareArrowOutUpRight, Terminal, Trash2, X } from '@lucide/vue'
 import { getNodeStats } from '@/api/admin'
 import { approveKernelNode, getKernelAdminNodes, rejectKernelNode } from '@/api/kernel'
 import UiBadge from '@/ui/UiBadge.vue'
@@ -182,6 +183,7 @@ import UiUsageBar from '@/ui/UiUsageBar.vue'
 import { useConfirm } from '@/ui/composables/useConfirm'
 import { useFormat } from '@/ui/composables/useFormat'
 import { useToast } from '@/ui/composables/useToast'
+import { openAgentUpgrade } from '@/composables/useAgentUpgradeSheet'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { useRouteIntent } from '@/composables/useRouteIntent'
 import { SORT_ORDERS, createListSort } from '@/utils/listSort'
