@@ -314,7 +314,7 @@ func TestCreateSubscriberConsumesTheInviteCode(t *testing.T) {
 	requireCode(t, err, codes.FailedPrecondition)
 }
 
-// An administrator's code (registration control, every edition) admits a
+// An administrator's code (registration control) admits a
 // registration through the identity module and attributes no inviter.
 func TestCreateSubscriberConsumesAnAdministratorsInviteCode(t *testing.T) {
 	f := newFixture(t)

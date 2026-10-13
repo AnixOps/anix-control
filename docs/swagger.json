@@ -9656,7 +9656,7 @@
         },
         "/api/v4/public/config": {
             "get": {
-                "description": "产品版本 (community / commercial)、该版本隐藏的包，以及注册是否需要邀请码",
+                "description": "注册是否需要邀请码；edition 固定为 commercial、hidden_packages 固定为空（版本区分已取消，全部官方包内置）",
                 "produces": [
                     "application/json"
                 ],

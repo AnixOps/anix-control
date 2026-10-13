@@ -30,7 +30,6 @@ x-control: &control
     - ${STAGING_WORK}/bootstrap:/app/bootstrap/identity-platform:ro
   environment: &control-env
     ANIX_CONTROL_ENV: production
-    ANIX_CONTROL_APP_EDITION: commercial
     ANIX_CONTROL_LOG_FORMAT: json
     ANIX_CONTROL_DATABASE_DRIVER: postgres
     ANIX_CONTROL_DATABASE_HOST: postgres

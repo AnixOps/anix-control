@@ -20,7 +20,6 @@ import (
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	forwardv1 "github.com/AnixOps/anix-control/sdk/api/forward/v1"
-	"github.com/AnixOps/anix-control/v5/internal/edition"
 	"github.com/AnixOps/anix-control/v5/internal/kernelforward"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/packagebridge"
@@ -376,10 +375,8 @@ func TestUnauthorizedHostIsRefused(t *testing.T) {
 }
 
 // The manifest declares the control route the kernel serves at
-// /api/v4/forward/*, and the capability the API needs; every endpoint is
-// outside the prefixes config/editions.json reserves for the commercial
-// edition, unless it is commercial itself.
-func TestManifestAndEditions(t *testing.T) {
+// /api/v4/forward/*, and the capability the API needs.
+func TestManifestDeclaresTheAPI(t *testing.T) {
 	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "packages", "forward", "manifest.template.json"))
 	require.NoError(t, err)
 	var manifest struct {
@@ -391,21 +388,6 @@ func TestManifestAndEditions(t *testing.T) {
 	assert.Equal(t, service.PluginControlBridgeRouteID("forward", v4api.Route), v4api.RouteID,
 		"the host recognizes the route id the kernel dispatches the API with")
 	assert.Contains(t, manifest.Capabilities, service.CapabilityForward)
-
-	community := edition.New("community")
-	commercial := edition.New("commercial")
-	for _, endpoint := range v4api.Endpoints() {
-		path := v4api.PublicPrefix + strings.ReplaceAll(strings.ReplaceAll(endpoint.Pattern, "{id}", "1"), "{ref}", "forward-1")
-		switch endpoint.Edition {
-		case v4api.EditionAll:
-			assert.False(t, community.HidesPath(path), "%s is in both editions", path)
-		case v4api.EditionCommercial:
-			assert.True(t, community.HidesPath(path), "%s is commercial: it must sit under a commercial prefix", path)
-			assert.False(t, commercial.HidesPath(path))
-		default:
-			t.Errorf("%s has edition %q", path, endpoint.Edition)
-		}
-	}
 }
 
 // probingNodes is a NodeChecker whose every node runs the forward checks

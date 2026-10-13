@@ -298,17 +298,15 @@ func TestToggleNode(t *testing.T) {
 	assert.Equal(t, "node_in_use", body["error"].(map[string]any)["violations"].([]any)[0].(map[string]any)["code"])
 }
 
-// Every endpoint is in both editions (H23); a commercial one must sit under
-// a prefix config/editions.json reserves, which the kernel hides in the
-// community edition (internal/tests/forwardv4 checks the table).
-func TestEndpointsAreCommunityAdminEndpoints(t *testing.T) {
+// Every endpoint is an administrator endpoint; user self-service arrives
+// with v4.3.
+func TestEndpointsAreAdminEndpoints(t *testing.T) {
 	seen := map[string]bool{}
 	for _, endpoint := range Endpoints() {
 		key := endpoint.Method + " " + endpoint.Pattern
 		assert.False(t, seen[key], "duplicate %s", key)
 		seen[key] = true
-		assert.Equal(t, EditionAll, endpoint.Edition, key)
-		assert.NotContains(t, endpoint.Pattern, "/self", "user self-service is commercial (v4.3)")
+		assert.NotContains(t, endpoint.Pattern, "/self", "user self-service arrives with v4.3")
 		assert.NotEmpty(t, endpoint.Summary, key)
 	}
 	assert.Len(t, seen, 40)

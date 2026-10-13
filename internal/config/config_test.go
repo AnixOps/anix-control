@@ -552,21 +552,15 @@ func TestLogConfig(t *testing.T) {
 	assert.Equal(t, 100, got.Log.MaxSize)
 }
 
-func TestAppEditionDefaultsToCommunityAndRejectsUnknownValues(t *testing.T) {
-	loaded, err := load("", nil)
+// app.edition is gone; a file or variable that still sets it does not stop
+// the start.
+func TestRetiredAppEditionStillLoads(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	require.NoError(t, os.WriteFile(path, []byte("app:\n  subscribe_path: s\n  edition: commercial\n"), 0o600))
+	_, err := load(path, nil)
 	require.NoError(t, err)
-	require.Equal(t, EditionCommunity, loaded.App.Edition)
-
-	loaded, err = load("", []string{"ANIX_CONTROL_APP_EDITION=commercial"})
+	_, err = load("", []string{"ANIX_CONTROL_APP_EDITION=community"})
 	require.NoError(t, err)
-	require.Equal(t, EditionCommercial, loaded.App.Edition)
-
-	_, err = load("", []string{"ANIX_CONTROL_APP_EDITION=enterprise"})
-	require.ErrorContains(t, err, "invalid app.edition")
-
-	require.Equal(t, EditionCommunity, AppConfig{}.EditionOrDefault())
-	require.Equal(t, EditionCommunity, AppConfig{Edition: "bogus"}.EditionOrDefault())
-	require.Equal(t, EditionCommercial, AppConfig{Edition: " Commercial "}.EditionOrDefault())
 }
 
 func TestForwardAnixOpsExperimentalDefaultsOff(t *testing.T) {

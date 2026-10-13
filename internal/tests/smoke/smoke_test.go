@@ -331,10 +331,9 @@ func (s *SmokeTestSuite) TestAPIV2GroupExists() {
 	// Should respond (likely 401 since no auth, not 404)
 	assert.NotEqual(s.T(), http.StatusNotFound, w.Code, "v2/user/subscription route should exist")
 
-	// The default community edition answers the plan purchase list as an
-	// undeclared route.
+	// There are no product editions: the plan purchase list is served.
 	req = httptest.NewRequest("GET", "/api/v2/user/plan", nil)
 	w = httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
-	assert.Equal(s.T(), http.StatusNotFound, w.Code, "v2/user/plan is commercial")
+	assert.NotEqual(s.T(), http.StatusNotFound, w.Code, "v2/user/plan route should exist")
 }

@@ -15,9 +15,9 @@ import (
 
 // InviteCodeAdminHandler serves the administrator's invite codes
 // (registration control): list, generate and revoke. identity-platform
-// declares the routes and the identity bridge relays them here, in every
-// edition; commissions, withdrawals and invite statistics stay in the
-// affiliate package (InviteHandler).
+// declares the routes and the identity bridge relays them here;
+// commissions, withdrawals and invite statistics stay in the affiliate
+// package (InviteHandler).
 type InviteCodeAdminHandler struct {
 	inviteService *service.InviteService
 	now           func() time.Time

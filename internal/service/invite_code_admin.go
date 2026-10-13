@@ -10,8 +10,8 @@ import (
 	"gorm.io/gorm"
 )
 
-// Administrator's invite codes: registration control, served in every
-// edition by identity-platform (GET, POST /api/v2/admin/invite/codes and
+// Administrator's invite codes: registration control, served by
+// identity-platform (GET, POST /api/v2/admin/invite/codes and
 // DELETE /api/v2/admin/invite/codes/:id). Commissions, withdrawals and the
 // invite statistics stay with the affiliate package.
 //
