@@ -70,7 +70,7 @@ func TestNodeProtocolTableName(t *testing.T) {
 }
 
 func TestNodeGroupTableName(t *testing.T) {
-	assert.Equal(t, "v2_node_group", NodeGroup{}.TableName())
+	assert.Equal(t, "v5_node_group", NodeGroup{}.TableName())
 }
 
 func TestAuthorizedKeyTableName(t *testing.T) {

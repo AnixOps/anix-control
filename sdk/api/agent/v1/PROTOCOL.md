@@ -833,7 +833,12 @@ the group's kind: the node the Agent runs as), `node_name`, `group`,
 `approved`, or `pending` when the group requires approval and an
 administrator has not approved the node yet. A pending node connects with
 its certificate, but Control withholds its `config.v1` and `users.v1`
-snapshots until it is approved.
+snapshots until it is approved: no `ConfigSnapshot` and no `UserDelta`
+reach the session, and a `node.sync` of the node fails as offline. Once an
+administrator approves it, Control pushes the configuration on the open
+session and starts its users within a second. A rejected node is disabled
+and its certificates are revoked (`agent_cert_revoked` at the next
+heartbeat).
 
 **Rejoining.** A machine that lost its local state (a reinstalled Agent,
 `uninstall --purge`) presents the same fingerprint again. Cloned images
@@ -845,12 +850,29 @@ then revokes that node's certificates and issues a new one
 (`created: false`). In every other case it creates a new node. A machine
 that still holds a valid identity does not call `Join`.
 
-**Status.** This is the contract only. Control's `Join` server lands with
-node groups and join tokens in a later phase of the 5.0 onboarding work;
-until then Control answers `Join` with `Unimplemented`. The design refuses
-every unusable token (unknown, deleted or expired group, or a group at its
-node cap) with one answer and no detail (`join_rejected`), audited and rate
-limited per peer; that code joins "Error codes" below with the server.
+**Refusals.** Every unusable token (malformed or unknown, of a deleted
+group, expired, or of a group at its node cap) gets one answer without
+detail: `PermissionDenied` with `join_rejected` ("Error codes" below).
+Control audits each refusal with the reason and the peer's address
+(`agent_join_rejected`). A rejoin is not counted against the node cap. Join
+is rate limited per peer address (`ResourceExhausted`, no code: retry
+later). A malformed field (a fingerprint that is not hex SHA-256, an
+address that is not an IP address) is `InvalidArgument`.
+
+**What a join creates.** A new node gets the group's defaults (rate, tags,
+monthly traffic limit and reset day, sort) and, in a proxy group, the
+protocols of the group's template, each with its own secrets (a Reality key
+pair and short ID, a Shadowsocks 2022 server key, a WireGuard server key
+pair) and port (fixed, or random in a range and distinct from the node's
+other protocols), in the group's subscription groups. A forward group's
+node is a forward node, created as the forward inventory creates one. The
+enrollment is recorded with method `join_token`, the certificate is issued
+as `Enroll` issues it, and the join is audited as `agent_join`; the
+administrators are notified after the commit.
+
+**Status.** Control serves `Join` (5.0 node groups, Control's
+`internal/nodegroup`); an administrator manages groups and their tokens
+under `/api/v4/kernel/node-groups`.
 
 ## Forward link certificates
 
@@ -984,6 +1006,7 @@ their JSON body.
 | `agent_cert_wrong_cluster` | `Unauthenticated` | the same | an agent certificate of another cluster: enroll with this Control |
 | `agent_cert_wrong_node` | `Unauthenticated`, or `PermissionDenied` for an envelope or the v2board services | `ControlStream`, the v2board services | the certificate names another node than `x-node-id` or `x-node-kind`, an envelope's `node_id`, or is a forward node's on the proxy-only v2board services: a configuration error of the Agent; keep the certificate |
 | `agent_enrollment_rejected` | `Unauthenticated` | `Enroll` | the bootstrap is unusable (unknown, used, expired or revoked enrollment credential, wrong node key or token, malformed `x-node-id` or `x-node-kind`, none given); one answer for all, so credentials cannot be probed |
+| `join_rejected` | `PermissionDenied` | `Join` | the join token is unusable: malformed or unknown, its group deleted, expired, or at its node cap; one answer for all, so tokens cannot be probed. Ask the administrator for the current command (the token may have been reset) |
 | `link_cert_not_negotiated` | `FailedPrecondition` | `IssueLinkCertificate` | the node's Agent did not negotiate `forward.v1` in its last `Hello`: ask again after a `HelloAck` that lists it |
 | `link_cert_request_invalid` | `InvalidArgument` | `IssueLinkCertificate` | the CSR is malformed, uses an unsupported key or the agent certificate's key, or names anything but the node's DNS name and SPIFFE ID: an Agent bug; fix the request, with a fresh key |
 | `link_cert_unavailable` | `FailedPrecondition` | `IssueLinkCertificate`, `GetLinkTrustBundle` | this Control issues no link certificates (no built-in CA, an external PKI, `agent_control.mtls: off`) or has no link CA yet: keep the current link certificate and retry later |

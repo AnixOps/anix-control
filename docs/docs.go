@@ -8634,6 +8634,323 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v4/kernel/node-groups": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "The live node groups by sort and id, each with its defaults, protocol template, subscription groups, token reset and expiry times, and its live and pending nodes counted. Never the join token.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "List node groups",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "A node group of kind proxy or forward with a new join token (sealed under module_runtime.ca_kek, which must be set). Its defaults (rate, tags, monthly_limit_bytes, reset_day, sort) are copied to every node the token creates; a proxy group's protocol_template lists the protocols each new node gets (tls none, or reality for vless; port or port_range) and subscription_group_ids the subscription groups they join. The answer does not carry the token: GET .../command shows the install command. Audited.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Create a node group",
+                "parameters": [
+                    {
+                        "description": "the group",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/nodegroup.GroupInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v4/kernel/node-groups/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "One live node group, as List shows it.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Get a node group",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "node group id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Replaces every field of a group but its kind (which cannot change) and its token. Nodes that joined keep what they got; the defaults and the template apply to later joins. Audited.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Update a node group",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "node group id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "the group",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/nodegroup.GroupInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Soft-deletes a group: its token joins nothing from then on and its name can be used again. Refused (409 node_group_in_use) while the group has live nodes. Audited.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Delete a node group",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "node group id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v4/kernel/node-groups/{id}/command": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "The install command for every mirror (curl -fsSL \u003ccontrol\u003e/install.sh | sudo bash -s -- -u \u003ccontrol\u003e -t \u003canixjoin_...\u003e), the join token, its expiry and the uninstall command. The same command joins any number of machines until the token expires or is reset. Super administrators only; every read is audited as a token reveal (node_group_join_token_reveal).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Show a node group's install command",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "node group id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v4/kernel/node-groups/{id}/reset-token": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Replaces the group's join token: every earlier install command stops working; nodes that joined keep their certificates. GET .../command shows the new command. Super administrators only; audited (node_group_join_token_reset).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Reset a node group's join token",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "node group id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v4/kernel/nodes/{id}/approve": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Approves a node that joined a group requiring approval: Control starts sending it its configuration (config.v1) and its users (users.v1). 409 node_not_pending for any other node. Audited (node_approve).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Approve a pending node",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "proxy-\u003cid\u003e or forward-\u003cid\u003e",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v4/kernel/nodes/{id}/reject": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Rejects a node that joined a group requiring approval: the node is disabled and marked rejected (it no longer counts toward its group), and its Agent certificates are revoked, which ends its stream at the next heartbeat. 409 node_not_pending for any other node. Audited (node_reject).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Reject a pending node",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "proxy-\u003cid\u003e or forward-\u003cid\u003e",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/v4/kernel/nodes/{id}/traffic": {
             "get": {
                 "security": [
@@ -11721,6 +12038,9 @@ const docTemplate = `{
                     "type": "string"
                 }
             }
+        },
+        "nodegroup.GroupInput": {
+            "type": "object"
         },
         "service.TelegramCallback": {
             "type": "object",

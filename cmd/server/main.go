@@ -868,6 +868,7 @@ func startGRPCServer(cfg *config.Config) (*grpcserver.Server, string, error) {
 		return nil, "", err
 	}
 	grpcCfg.AgentPKI = agentPKI
+	grpcCfg.OnJoin = adminJoinNotifier{db: database.Get(), cfg: cfg}.Notify
 
 	server := grpcserver.NewServer(grpcCfg)
 	if err := server.Start(); err != nil {

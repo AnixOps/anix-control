@@ -42,7 +42,6 @@ func schemaModels() []any {
 		&model.Node{},
 		&model.NodeProtocol{},
 		&model.WireGuardPeer{},
-		&model.NodeGroup{},
 		&model.AuthorizedKey{},
 		// 流量与统计日志
 		&model.TrafficLog{},
@@ -186,7 +185,7 @@ func bootstrapDatabase(ctx context.Context, cfg *config.Config, env string) erro
 		{"forward bridge schema", forwardlegacy.UnlessDropped(service.EnsureForwardBridgeSchema)},
 		{"forward runtime job schema", forwardlegacy.UnlessDropped(service.EnsureForwardRuntimeJobSchema)},
 		{"forward port binding schema", forwardlegacy.UnlessDropped(service.EnsureForwardPortBindingSchema)},
-		{"forward node metrics_port column", service.EnsureForwardNodeMetricsPortColumn},
+		{"forward node columns", service.EnsureForwardNodeColumns},
 		{"agent diagnostic task schema", service.EnsureAgentDiagnosticTaskSchema},
 	} {
 		if err := step.run(db); err != nil {

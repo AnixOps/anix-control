@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	agentv1pb "github.com/AnixOps/anix-control/sdk/api/agent/v1"
@@ -13,8 +15,11 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/agenttransport"
 	"github.com/AnixOps/anix-control/v4/internal/config"
 	"github.com/AnixOps/anix-control/v4/internal/database"
+	"github.com/AnixOps/anix-control/v4/internal/kernelforward"
+	"github.com/AnixOps/anix-control/v4/internal/middleware"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/AnixOps/anix-control/v4/internal/modulepki"
+	"github.com/AnixOps/anix-control/v4/internal/nodegroup"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -30,6 +35,41 @@ func databaseForAgentChecks() *gorm.DB { return database.Get() }
 type AgentEnrollmentGRPCServer struct {
 	agentv1pb.UnimplementedAgentEnrollmentServer
 	auth *AgentAuthenticator
+	// onJoin is told of every committed join, in its own goroutine (the
+	// administrators' notification); nil tells no one.
+	onJoin func(nodegroup.Joined)
+}
+
+// Join rate limit per peer address: joins are rare (one per machine), so a
+// peer that calls more often probes tokens or loops.
+const (
+	joinRatePerSecond = 0.5
+	joinBurst         = 20
+)
+
+var (
+	joinLimiterMu   sync.Mutex
+	joinLimiterOnce sync.Once
+	joinLimiter     = middleware.NewRateLimiter(joinRatePerSecond, joinBurst, middleware.WithTTL(10*time.Minute))
+)
+
+// allowJoin takes a token of peer's join bucket.
+func allowJoin(peer string) bool {
+	joinLimiterOnce.Do(func() { joinLimiter.StartCleanup(time.Minute) })
+	joinLimiterMu.Lock()
+	limiter := joinLimiter
+	joinLimiterMu.Unlock()
+	return limiter.Allow(peer)
+}
+
+// setJoinLimiter replaces the join limiter, for tests; it returns the
+// previous one.
+func setJoinLimiter(limiter *middleware.RateLimiter) *middleware.RateLimiter {
+	joinLimiterMu.Lock()
+	defer joinLimiterMu.Unlock()
+	previous := joinLimiter
+	joinLimiter = limiter
+	return previous
 }
 
 var _ agentv1pb.AgentEnrollmentServer = (*AgentEnrollmentGRPCServer)(nil)
@@ -38,6 +78,12 @@ var _ agentv1pb.AgentEnrollmentServer = (*AgentEnrollmentGRPCServer)(nil)
 // agent PKI. Without one, every call answers FailedPrecondition.
 func NewAgentEnrollmentGRPCServer(auth *AgentAuthenticator) *AgentEnrollmentGRPCServer {
 	return &AgentEnrollmentGRPCServer{auth: auth}
+}
+
+// WithJoinNotifier sets who is told of every committed join.
+func (s *AgentEnrollmentGRPCServer) WithJoinNotifier(notify func(nodegroup.Joined)) *AgentEnrollmentGRPCServer {
+	s.onJoin = notify
+	return s
 }
 
 func (s *AgentEnrollmentGRPCServer) service() (*agentpki.Service, error) {
@@ -128,6 +174,52 @@ func (s *AgentEnrollmentGRPCServer) bootstrap(ctx context.Context, credential st
 		method = model.AgentEnrollmentMethodForwardToken
 	}
 	return agentpki.Bootstrap{Method: method, Node: node, Secret: secret}, nil
+}
+
+// Join makes the calling machine a node of the group whose join token it
+// presents, or rejoins its earlier node (nodegroup.Join), and issues the
+// node's certificate. It needs no client certificate. Every unusable token
+// answers PermissionDenied with join_rejected and no detail.
+func (s *AgentEnrollmentGRPCServer) Join(ctx context.Context, request *agentv1pb.JoinRequest) (*agentv1pb.JoinResponse, error) {
+	response, err := s.join(ctx, request)
+	return answer(ctx, response, err)
+}
+
+func (s *AgentEnrollmentGRPCServer) join(ctx context.Context, request *agentv1pb.JoinRequest) (*agentv1pb.JoinResponse, error) {
+	pki, err := s.service()
+	if err != nil {
+		return nil, err
+	}
+	peer := remoteHost(ctx)
+	if !allowJoin(peer) {
+		return nil, status.Error(codes.ResourceExhausted, "too many join attempts from this address; retry in a minute")
+	}
+	groups := &nodegroup.Service{DB: databaseForAgentChecks(), PKI: pki, OnJoin: s.onJoin}
+	joined, err := groups.Join(ctx, nodegroup.JoinRequest{
+		Token: request.GetJoinToken(), CSRDER: request.GetCsrDer(), MachineFingerprint: request.GetMachineFingerprint(),
+		Hostname: request.GetHostname(), RequestedName: request.GetRequestedName(), ConnectHost: request.GetConnectHost(),
+		PublicAddresses: request.GetPublicAddresses(), Arch: request.GetArch(), OS: request.GetOs(),
+		AgentVersion: request.GetAgentVersion(), InstanceID: request.GetInstanceId(), Reset: request.GetReset_(), PeerAddress: peer,
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, nodegroup.ErrJoinRejected):
+			slog.Warn("agent join rejected", "component", "agent-pki", "addr", peer)
+			return nil, refuseAgent(agentcontrol.ErrorCodeJoinRejected, codes.PermissionDenied, "the join token is not usable")
+		case errors.Is(err, nodegroup.ErrInvalidJoin), errors.Is(err, kernelforward.ErrInvalidRequest):
+			return nil, status.Error(codes.InvalidArgument, err.Error())
+		case errors.Is(err, nodegroup.ErrJoinTemplate):
+			slog.Error("agent join: the group's protocol template does not build", "component", "agent-pki", "addr", peer, "error", err)
+			return nil, status.Error(codes.FailedPrecondition, err.Error())
+		}
+		return nil, agentPKIStatus(err)
+	}
+	slog.Info("agent joined", "component", "agent-pki", "node", joined.Node.String(), "group", joined.GroupName,
+		"created", joined.Created, "approval", joined.Approval, "serial", joined.Issued.Serial, "addr", peer)
+	return &agentv1pb.JoinResponse{
+		Certificate: agentCertificateMessage(joined.Issued), Node: joined.Node.String(), NodeName: joined.NodeName,
+		Group: joined.GroupName, Created: joined.Created, Approval: joined.Approval,
+	}, nil
 }
 
 // Renew issues a new certificate to the holder of a valid one.

@@ -2,28 +2,33 @@
 # AnixOps Agent installer: one-command node onboarding.
 #
 #   curl -fsSL https://<control>/install.sh | sudo bash -s -- \
-#     --control https://<control> --node forward-41 --token anixagt_... \
-#     [--mirror control|cn|github] [--reset] [--forward] [--timeout 180] \
-#     [--offline bundle.tar.gz] [--port-range 20000-30000] [--accept-ra] \
-#     [--skip-preflight]
+#     -u https://<control> -t anixjoin_... \
+#     [--name hk-01] [--host 203.0.113.5] [--mirror control|cn|github] \
+#     [--reset] [--forward] [--timeout 180] [--offline bundle.tar.gz] \
+#     [--port-range 20000-30000] [--accept-ra] [--skip-preflight]
 #   sudo bash install.sh uninstall [--purge]
 #
-# Copy the command from the node page in Control ("复制安装命令"): it carries a
-# single-use enrollment token bound to the node. The script first checks the
-# host (preflight: systemd, kernel, nftables, polkit, firewalls, disk, clock
-# skew and Control's https and gRPC addresses) and changes nothing when a
-# check fails. It then installs the
+# Copy the command from Control (节点 › 接入节点). Its token says what the
+# machine becomes: a node group's join token (anixjoin_...) makes it a new
+# node of the group, the same command on any number of machines; a one-time
+# enrollment token (anixagt_...) enrolls the existing node it is bound to
+# (moving a node to a new machine, or after a credential rotation). The
+# script first checks the host (preflight: systemd, kernel, nftables,
+# polkit, firewalls, disk, clock skew and Control's https and gRPC
+# addresses) and changes nothing when a check fails. It then installs the
 # AnixOps Agent as a systemd service running as the unprivileged user
 # anixops-agent (ambient CAP_NET_ADMIN and CAP_NET_BIND_SERVICE, sandboxed),
 # removes the legacy forward runtime of this host (the nftables tables
 # inet v2b_forward, ip v2b_forward and ip anixops_forward, and the clean
-# agent's v2forward-agent service), turns on IP forwarding for a forward
-# node (/etc/sysctl.d/90-anixops-forward.conf; a proxy node with --forward),
-# migrates the directories of an earlier root install of the Agent, starts
-# the Agent and waits until it has enrolled with Control. Running the same
-# command again is safe: it upgrades the Agent in place and keeps its
-# identity unless --reset is given. --offline installs from a bundle made by
-# 'anix-control agent offline-bundle' (no downloads; enrolling still needs
+# agent's v2forward-agent service), migrates the directories of an earlier
+# root install of the Agent, and joins Control: 'anix-agent join', run as
+# anixops-agent, exchanges the token for the node's certificate and names
+# the node. It then writes the configuration for that node, turns on IP
+# forwarding for a forward node (/etc/sysctl.d/90-anixops-forward.conf; a
+# proxy node with --forward) and starts the Agent. Running the same command
+# again is safe: it upgrades the Agent in place and keeps its identity
+# unless --reset is given. --offline installs from a bundle made by
+# 'anix-control agent offline-bundle' (no downloads; joining still needs
 # Control). 'uninstall' removes the Agent and keeps its identity; --purge
 # also removes its state, users and the forwarding objects it owns.
 #
@@ -67,7 +72,11 @@ readonly CONFIG_FILE="${CONFIG_DIR}/config.json"
 readonly STATE_DIR="/var/lib/anixops-agent"
 readonly PKI_DIR="${STATE_DIR}/pki"
 readonly STREAM_DIR="${STATE_DIR}/stream"
-readonly CREDENTIAL_FILE="${STATE_DIR}/enroll.credential"
+# The token reaches 'anix-agent join' in this file (0600, the Agent's),
+# removed as soon as the join returns; it is never written to the
+# configuration. enroll.credential is the file earlier releases left.
+readonly TOKEN_FILE="${STATE_DIR}/join.token"
+readonly LEGACY_CREDENTIAL_FILE="${STATE_DIR}/enroll.credential"
 readonly UPGRADE_DIR="${STATE_DIR}/upgrade"
 readonly UPDATER_REQUEST="${UPGRADE_DIR}/request.json"
 readonly GOST_DIR="/var/lib/anixops-gost"
@@ -107,8 +116,13 @@ readonly SKEW_FAIL=300       # seconds: TLS certificates stop verifying
 readonly MIN_FREE_KB=$((200 * 1024))
 
 CONTROL_URL=""
+# NODE is the node this host runs as, proxy-<id> or forward-<id>: from the
+# existing configuration on a re-run, else from the join.
 NODE=""
 TOKEN="${ANIX_AGENT_TOKEN:-}"
+TOKEN_ON_COMMAND_LINE=0
+NODE_NAME=""
+CONNECT_HOST=""
 MIRROR="control"
 RESET=0
 FORWARD=0
@@ -121,6 +135,7 @@ SKIP_PREFLIGHT=0
 ACCEPT_RA=0
 PORT_RANGE=""
 PREFLIGHT_FAILS=0
+FORWARD_CHECKED=0
 
 META_VERSION=""
 META_GRPC=""
@@ -134,7 +149,12 @@ EXPECTED_DIGEST=""
 SOURCE=""
 INSTALL_MODE="install"
 CONFIG_STATE=""
-CREDENTIAL_STATE=""
+JOIN_STATE=""
+JOIN_GROUP=""
+JOIN_APPROVAL=""
+JOIN_SPIFFE=""
+JOIN_NOT_AFTER=""
+PUBLIC_ADDRESSES=()
 FORWARDING_STATE=""
 MIGRATION_STATE=""
 FORWARDING_NOTE=""
@@ -166,28 +186,35 @@ version_ge() {
 }
 
 # forward_node tells whether this host forwards: a forward node, or a proxy
-# node installed with --forward.
+# node installed with --forward. Before a fresh join the node is not known
+# yet: then only --forward says so.
 forward_node() { [[ "${NODE}" == forward-* ]] || ((FORWARD)); }
 
 usage() {
   cat <<'EOF'
-Usage: install.sh --control <https://control> --node <proxy-<id>|forward-<id>> --token <anixagt_...> [options]
+Usage: install.sh -u <https://control> -t <anixjoin_...|anixagt_...> [options]
        install.sh uninstall [--purge]
 
-  --control URL         the Control address nodes reach (from the copied command)
-  --node NODE           the node the token is bound to: proxy-<id> or forward-<id>
-  --token TOKEN         the single-use enrollment token (or ANIX_AGENT_TOKEN)
+  -u, --control URL     the Control address nodes reach (from the copied command)
+  -t, --token TOKEN     a node group's join token (anixjoin_...: this host becomes a
+                        new node of the group), or a node's one-time enrollment token
+                        (anixagt_...: this host becomes that node); or ANIX_AGENT_TOKEN
+  --name NAME           the new node's name (default: this host's name; Control adds
+                        -2, -3 when the group has it already)
+  --host HOST           the address clients connect to (default: this host's public
+                        address as Control sees it)
   --mirror M            where the Agent is downloaded from: control (default), cn, github
   --offline FILE        install from an offline bundle (anix-control agent offline-bundle);
-                        nothing is downloaded, enrolling still needs Control
-  --reset               discard this host's Agent identity and enroll again (needs --token)
-  --forward             turn on IP forwarding on a proxy node too (always on for forward-<id>)
+                        nothing is downloaded, joining still needs Control
+  --reset               discard this host's Agent identity and join again (needs a token);
+                        with a join token Control always creates a new node
+  --forward             turn on IP forwarding on a proxy node too (always on for a
+                        forward node)
   --accept-ra           keep accepting IPv6 router advertisements on SLAAC interfaces
                         with forwarding on (net.ipv6.conf.<if>.accept_ra = 2)
   --port-range FROM-TO  the node's forward port range: preflight lists ports in use there
   --skip-preflight      install although a preflight check fails (not recommended)
-  --timeout SECONDS     how long to wait for the Agent to enroll (default 180)
-  --group GROUP         node-group tokens (not supported by this Control yet)
+  --timeout SECONDS     how long the join may take (default 180)
   -h, --help            show this help
 
 Running the same command again upgrades the Agent in place and keeps its
@@ -232,7 +259,7 @@ parse_args() {
         flag="${flag%%=*}"
         shift
         ;;
-      --control | --node | --token | --mirror | --timeout | --group | --offline | --port-range)
+      -u | -t | --control | --token | --name | --host | --mirror | --timeout | --offline | --port-range | --node | --group)
         (($# >= 2)) || die 2 "${flag} needs a value"
         value="$2"
         shift 2
@@ -242,14 +269,18 @@ parse_args() {
         ;;
     esac
     case "${flag}" in
-      --control) CONTROL_URL="${value%/}" ;;
-      --node) NODE="${value}" ;;
-      --token) TOKEN="${value}" ;;
+      -u | --control) CONTROL_URL="${value%/}" ;;
+      -t | --token)
+        TOKEN="${value}"
+        TOKEN_ON_COMMAND_LINE=1
+        ;;
+      --name) NODE_NAME="${value}" ;;
+      --host) CONNECT_HOST="${value}" ;;
       --mirror) MIRROR="${value}" ;;
       --timeout) TIMEOUT="${value}" ;;
       --offline) OFFLINE="${value}" ;;
       --port-range) PORT_RANGE="${value}" ;;
-      --group) die 2 "node-group tokens are not supported by this Control yet; copy the command from the node's page (a node-bound token)" ;;
+      --node | --group) die 2 "${flag} is gone: the token names its node or its node group. Copy the current command from Control (install.sh -u <control> -t <token>)" ;;
       *) die 2 "unknown argument: ${flag} (see --help)" ;;
     esac
   done
@@ -271,11 +302,16 @@ parse_uninstall_args() {
 }
 
 validate_args() {
-  [[ -n "${CONTROL_URL}" ]] || die 2 "--control is required (copy the command from the node page)"
-  [[ "${CONTROL_URL}" =~ ^https://[^/?#[:space:]\'\"]+$ ]] || die 2 "--control must be https://host[:port], not ${CONTROL_URL}"
-  [[ "${NODE}" =~ ^(proxy|forward)-[1-9][0-9]{0,9}$ ]] || die 2 "--node must be proxy-<id> or forward-<id>"
-  if [[ -n "${TOKEN}" && ! "${TOKEN}" =~ ^anixagt_[A-Za-z0-9_-]{20,}$ ]]; then
-    die 2 "--token is not an AnixOps enrollment token (anixagt_...)"
+  [[ -n "${CONTROL_URL}" ]] || die 2 "-u (--control) is required (copy the command from Control)"
+  [[ "${CONTROL_URL}" =~ ^https://[^/?#[:space:]\'\"]+$ ]] || die 2 "-u (--control) must be https://host[:port], not ${CONTROL_URL}"
+  if [[ -n "${TOKEN}" && ! "${TOKEN}" =~ ^anixjoin_[A-Za-z0-9_-]{43}$ && ! "${TOKEN}" =~ ^anixagt_[A-Za-z0-9_-]{20,}$ ]]; then
+    die 2 "-t (--token) is not an AnixOps join token (anixjoin_...) or enrollment token (anixagt_...)"
+  fi
+  if [[ -n "${NODE_NAME}" ]] && { ((${#NODE_NAME} > 64)) || [[ "${NODE_NAME}" == *[[:cntrl:]]* ]]; }; then
+    die 2 "--name must be at most 64 characters without control characters"
+  fi
+  if [[ -n "${CONNECT_HOST}" && ! "${CONNECT_HOST}" =~ ^[A-Za-z0-9._:-]{1,253}$ ]]; then
+    die 2 "--host must be a host name or an IP address (without brackets or a port)"
   fi
   case "${MIRROR}" in
     control | cn | github) ;;
@@ -283,7 +319,7 @@ validate_args() {
   esac
   [[ "${TIMEOUT}" =~ ^[1-9][0-9]{0,4}$ ]] || die 2 "--timeout must be a number of seconds"
   if ((RESET)) && [[ -z "${TOKEN}" ]]; then
-    die 2 "--reset needs --token: the Agent enrolls again"
+    die 2 "--reset needs a token (-t): the host joins again"
   fi
   if [[ -n "${OFFLINE}" && ! -f "${OFFLINE}" ]]; then
     die 2 "--offline ${OFFLINE}: no such file (copy the bundle to this host first)"
@@ -319,6 +355,10 @@ require_tools() {
   for tool in curl sha256sum install mktemp getent groupadd useradd usermod; do
     have "${tool}" || missing+=("${tool}")
   done
+  # The join runs as the Agent's user.
+  if ! have runuser && ! have setpriv; then
+    missing+=("util-linux")
+  fi
   if ! have unzip && ! have python3; then
     missing+=("unzip")
   fi
@@ -611,6 +651,7 @@ preflight() {
     check_polkit
     check_firewalls
     check_ipv6_ra
+    FORWARD_CHECKED=1
   fi
   check_ports
   check_disk
@@ -817,7 +858,7 @@ migrate_root_install() {
   root_install || return 0
   bin="$(path "${LIB_DIR}/anix-agent")"
   if ! "${bin}" migrate-paths --help >/dev/null 2>&1; then
-    note "the Agent ${META_VERSION} cannot migrate a root install's directories (no migrate-paths); it enrolls again with the token"
+    note "the Agent ${META_VERSION} cannot migrate a root install's directories (no migrate-paths); this host joins again with the token"
     MIGRATION_STATE="not migrated (the Agent has no migrate-paths)"
     return 0
   fi
@@ -919,8 +960,7 @@ render_config() {
       "NodeID": ${node_id},
       "AgentIdentity": {
         "Enroll": "auto",
-        "CertDir": "${PKI_DIR}",
-        "EnrollCredentialFile": "${CREDENTIAL_FILE}"
+        "CertDir": "${PKI_DIR}"
       },
       "AgentStream": {"StateDir": "${STREAM_DIR}"}
     }
@@ -929,13 +969,13 @@ render_config() {
 EOF
 }
 
+# write_config writes the configuration for NODE, keeping an existing one
+# for the same node unless --reset was given; a replaced one is kept as
+# config.json.bak.<time>. It carries no token: the identity is enrolled.
 write_config() {
   local config
   config="$(path "${CONFIG_FILE}")"
-  if [[ -f "${config}" ]] && ((RESET == 0)); then
-    if ! grep -q "\"AgentNode\": \"${NODE}\"" "${config}"; then
-      die "this host's Agent is installed for another node (${CONFIG_FILE}); re-run with --reset and a token for ${NODE} to switch it"
-    fi
+  if [[ -f "${config}" ]] && ((RESET == 0)) && grep -q "\"AgentNode\": \"${NODE}\"" "${config}"; then
     CONFIG_STATE="kept ${CONFIG_FILE}"
     return 0
   fi
@@ -949,24 +989,145 @@ write_config() {
   CONFIG_STATE="wrote ${CONFIG_FILE}"
 }
 
-write_credential() {
-  local file tmp
-  file="$(path "${CREDENTIAL_FILE}")"
+# existing_node prints the node of this host's configuration, or nothing.
+existing_node() {
+  local config
+  config="$(path "${CONFIG_FILE}")"
+  [[ -f "${config}" ]] || return 0
+  grep -o '"AgentNode": "[a-z]*-[0-9]*"' "${config}" | head -n 1 | cut -d '"' -f 4 || true
+}
+
+# load_existing_node sets NODE from the configuration of an earlier install,
+# unless --reset discards it: a re-run knows its node before the join.
+load_existing_node() {
+  local node
+  ((RESET == 0)) || return 0
+  node="$(existing_node)"
+  if [[ "${node}" =~ ^(proxy|forward)-[1-9][0-9]{0,9}$ ]]; then
+    NODE="${node}"
+  fi
+}
+
+# detect_addresses asks Control for this host's address over IPv4 and IPv6
+# (GET /install/ip, as Control's https listener sees it, trusted proxies
+# applied): the join hands them to Control, which names the node's host
+# after the first and rejoins a reinstalled machine by them. A family that
+# does not answer is left out.
+detect_addresses() {
+  local family address
+  PUBLIC_ADDRESSES=()
+  for family in 4 6; do
+    address="$(curl -fsS -g "-${family}" --proto '=https' --connect-timeout 5 -m 10 "${CONTROL_URL}/install/ip" 2>/dev/null | tr -d '[:space:]')" || address=""
+    if [[ "${address}" =~ ^[0-9A-Fa-f:.]{2,45}$ ]]; then
+      PUBLIC_ADDRESSES+=("${address}")
+    fi
+  done
+}
+
+# as_agent runs a command as the Agent's user, which owns the identity
+# store.
+as_agent() {
+  if have runuser; then
+    runuser -u "${AGENT_USER}" -- "$@"
+  else
+    setpriv --reuid="${AGENT_USER}" --regid="${AGENT_USER}" --init-groups -- "$@"
+  fi
+}
+
+# json_string prints a string field of a one-line JSON object.
+json_string() {
+  local pattern="\"$2\"[[:space:]]*:[[:space:]]*\"([^\"]*)\""
+  [[ "$1" =~ ${pattern} ]] && printf '%s' "${BASH_REMATCH[1]}"
+}
+
+# join_control exchanges the token for this host's identity: 'anix-agent
+# join', run as the Agent's user, writes the key and the certificate into
+# the identity store and prints the node it joined as one JSON object. A
+# host that already has a valid identity skips it and keeps its node.
+join_control() {
+  local bin token_file output status=0 args=() address join_command=() created
+  rm -f "$(path "${LEGACY_CREDENTIAL_FILE}")"
   if ((RESET)); then
     find "$(path "${PKI_DIR}")" -mindepth 1 -delete
     info "Discarded this host's Agent identity (--reset)"
-  elif enrolled; then
-    CREDENTIAL_STATE="already enrolled as ${NODE}; the token was not used"
-    rm -f "${file}"
+  elif [[ -n "${NODE}" ]] && enrolled; then
+    JOIN_STATE="already joined as ${NODE}; the token was not used (add --reset to join again)"
+    [[ -n "${TOKEN}" ]] || JOIN_STATE="already joined as ${NODE}"
     return 0
   fi
-  [[ -n "${TOKEN}" ]] || die "this host's Agent is not enrolled: --token is required"
-  tmp="$(umask 077 && mktemp "${file}.XXXXXX")"
-  printf '%s\n' "${TOKEN}" >"${tmp}"
-  chmod 0600 "${tmp}"
-  chown "${AGENT_USER}:${AGENT_USER}" "${tmp}"
-  mv -f "${tmp}" "${file}"
-  CREDENTIAL_STATE="enrollment token written to ${CREDENTIAL_FILE} (mode 0600; the Agent removes it after use)"
+  [[ -n "${TOKEN}" ]] || die "this host's Agent has no valid identity: a token (-t) is required; copy the command from Control"
+  detect_addresses
+  bin="$(path "${LIB_DIR}/anix-agent")"
+  token_file="$(path "${TOKEN_FILE}")"
+  (umask 077 && printf '%s\n' "${TOKEN}" >"${token_file}")
+  chmod 0600 "${token_file}"
+  chown "${AGENT_USER}:${AGENT_USER}" "${token_file}"
+  args=(join --control "${CONTROL_URL}" --grpc "${META_GRPC}" --token-file "${TOKEN_FILE}" --pki-dir "${PKI_DIR}" --json)
+  [[ -z "${NODE_NAME}" ]] || args+=(--name "${NODE_NAME}")
+  [[ -z "${CONNECT_HOST}" ]] || args+=(--host "${CONNECT_HOST}")
+  for address in "${PUBLIC_ADDRESSES[@]}"; do
+    args+=(--address "${address}")
+  done
+  ((RESET == 0)) || args+=(--reset)
+  join_command=("${bin}")
+  if have timeout; then
+    join_command=(timeout "${TIMEOUT}" "${bin}")
+  fi
+  if [[ "${TOKEN}" == anixjoin_* ]]; then
+    info "Joining the node group at ${CONTROL_URL} (gRPC ${META_GRPC})"
+  else
+    info "Enrolling the node of the token at ${CONTROL_URL} (gRPC ${META_GRPC})"
+  fi
+  output="$(as_agent "${join_command[@]}" "${args[@]}" 2>"${TMP_DIR}/join.err")" || status=$?
+  rm -f "${token_file}"
+  if ((status != 0)); then
+    sed 's/^/[anixops]   /' "${TMP_DIR}/join.err" >&2 || true
+    if ((status == 124)); then
+      printf '[anixops] error: the join did not finish within %ss.\n' "${TIMEOUT}" >&2
+    else
+      printf '[anixops] error: the join failed (anix-agent join exit %s).\n' "${status}" >&2
+    fi
+    printf '[anixops]   join_rejected or agent_enrollment_rejected: the token was reset, expired, used or its group is full; copy the current command from Control.\n' >&2
+    printf '[anixops]   Otherwise check that this host reaches the gRPC target %s with TLS. The install is kept: re-run the command.\n' "${META_GRPC}" >&2
+    exit 1
+  fi
+  output="$(printf '%s' "${output}" | tr -d '\n')"
+  NODE="$(json_string "${output}" node)" || NODE=""
+  [[ "${NODE}" =~ ^(proxy|forward)-[1-9][0-9]{0,9}$ ]] || die "anix-agent join answered no node: ${output:0:200}"
+  NODE_NAME="$(json_string "${output}" node_name)" || NODE_NAME=""
+  JOIN_GROUP="$(json_string "${output}" group)" || JOIN_GROUP=""
+  JOIN_APPROVAL="$(json_string "${output}" approval)" || JOIN_APPROVAL=""
+  JOIN_SPIFFE="$(json_string "${output}" spiffe_id)" || JOIN_SPIFFE=""
+  JOIN_NOT_AFTER="$(json_string "${output}" not_after)" || JOIN_NOT_AFTER=""
+  created="created"
+  [[ ! "${output}" =~ \"created\"[[:space:]]*:[[:space:]]*false ]] || created="rejoined"
+  if [[ -n "${JOIN_GROUP}" ]]; then
+    JOIN_STATE="${created} ${NODE} in the node group ${JOIN_GROUP}"
+  else
+    JOIN_STATE="enrolled as ${NODE}"
+  fi
+  info "已接入：${NODE_NAME:-${NODE}} (${NODE})"
+}
+
+# post_join_preflight runs the forward checks for a host that the join made
+# a forward node: before the join its kind was not known. A failure stops
+# the script before the Agent starts; the identity is kept, so the same
+# command continues once the cause is fixed.
+post_join_preflight() {
+  if ((SKIP_PREFLIGHT || FORWARD_CHECKED)) || ! forward_node; then
+    return 0
+  fi
+  info "Preflight checks for a forward node (${NODE})"
+  PREFLIGHT_FAILS=0
+  check_kernel
+  check_nftables
+  check_polkit
+  check_firewalls
+  check_ipv6_ra
+  FORWARD_CHECKED=1
+  if ((PREFLIGHT_FAILS > 0)); then
+    die "this host joined Control as ${NODE}, a forward node, but preflight found ${PREFLIGHT_FAILS} problem(s), see above; the Agent was not started. Fix them and re-run the same command (the identity is kept), or add --skip-preflight"
+  fi
 }
 
 # cleanup_legacy removes the legacy forward runtime of this host before the
@@ -1286,38 +1447,32 @@ install_units() {
   # The updater acts only on a request an Agent with upgrade.v1 writes.
   systemctl enable --now "${UPDATER_PATH}" >/dev/null 2>&1 || note "cannot enable ${UPDATER_PATH}: Control cannot upgrade this Agent until it is"
   systemctl enable "${SERVICE}" >/dev/null
+}
+
+# start_agent starts the Agent once its identity and configuration exist.
+start_agent() {
   systemctl restart "${SERVICE}"
 }
 
-wait_enrolled() {
-  local waited=0
-  info "Waiting for the Agent to enroll with Control (up to ${TIMEOUT}s)"
-  while ((waited < TIMEOUT)); do
-    if enrolled; then
-      return 0
-    fi
-    sleep 2
-    waited=$((waited + 2))
-  done
-  printf '[anixops] error: the Agent did not enroll within %ss.\n' "${TIMEOUT}" >&2
-  printf '[anixops]   Check: journalctl -u %s -n 50 --no-pager\n' "${SERVICE}" >&2
-  printf '[anixops]   A used or expired token needs a new command from the node page; re-run it (the install is kept).\n' >&2
-  exit 1
-}
-
 print_summary() {
-  local status item
+  local status item spiffe not_after
   status="$(identity_status)"
+  spiffe="$(identity_field "${status}" spiffe_id)"
+  not_after="$(identity_field "${status}" not_after)"
   info "AnixOps Agent ${META_VERSION} is running (${INSTALL_MODE})"
   if [[ -n "${OFFLINE}" ]]; then
     printf '  source:      %s\n' "${SOURCE}"
   fi
-  printf '  node:        %s\n' "${NODE}"
-  printf '  identity:    %s (serial %s, expires %s)\n' "$(identity_field "${status}" spiffe_id)" \
-    "$(identity_field "${status}" serial)" "$(identity_field "${status}" not_after)"
+  if [[ -n "${NODE_NAME}" ]]; then
+    printf '  node:        %s (%s)\n' "${NODE}" "${NODE_NAME}"
+  else
+    printf '  node:        %s\n' "${NODE}"
+  fi
+  printf '  identity:    %s (serial %s, expires %s)\n' "${spiffe:-${JOIN_SPIFFE}}" \
+    "$(identity_field "${status}" serial)" "${not_after:-${JOIN_NOT_AFTER}}"
   printf '  control:     %s (gRPC %s)\n' "${CONTROL_URL}" "${META_GRPC}"
+  printf '  join:        %s\n' "${JOIN_STATE}"
   printf '  config:      %s\n' "${CONFIG_STATE}"
-  printf '  credential:  %s\n' "${CREDENTIAL_STATE}"
   printf '  forwarding:  %s\n' "${FORWARDING_STATE}"
   if [[ -n "${MIGRATION_STATE}" ]]; then
     printf '  migration:   %s\n' "${MIGRATION_STATE}"
@@ -1334,6 +1489,12 @@ print_summary() {
   for item in "${NOTES[@]}"; do
     printf '  note:        %s\n' "${item}"
   done
+  if [[ "${JOIN_APPROVAL}" == "pending" ]]; then
+    info "等待审批：节点组 ${JOIN_GROUP} 要求管理员批准新节点。管理员批准前，Control 不会向 ${NODE} 下发配置和用户。"
+  fi
+  if ((TOKEN_ON_COMMAND_LINE)); then
+    info "The install command, token included, is in this shell's history. Clear it if others use this account (history -c, or delete the line from ~/.bash_history); reset the token in Control if it leaked."
+  fi
 }
 
 cleanup_tmp() {
@@ -1357,7 +1518,7 @@ take_lock() {
 # changed.
 require_token() {
   if [[ -z "${TOKEN}" && ! -f "$(path "${CONFIG_FILE}")" ]]; then
-    die "this host's Agent is not enrolled: --token is required (copy the command from the node page)"
+    die "this host's Agent has not joined Control: a token (-t) is required (copy the command from Control)"
   fi
 }
 
@@ -1516,6 +1677,7 @@ main() {
   detect_platform
   require_tools
   require_token
+  load_existing_node
   take_lock
   TMP_DIR="$(mktemp -d)"
   trap cleanup_tmp EXIT
@@ -1537,12 +1699,13 @@ main() {
   ensure_users
   stop_running_agent
   install_files
-  write_config
-  write_credential
   cleanup_legacy
-  enable_forwarding
   install_units
-  wait_enrolled
+  join_control
+  write_config
+  post_join_preflight
+  enable_forwarding
+  start_agent
   print_summary
 }
 

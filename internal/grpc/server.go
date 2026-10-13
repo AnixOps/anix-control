@@ -10,6 +10,7 @@ import (
 	agentv1pb "github.com/AnixOps/anix-control/sdk/api/agent/v1"
 	pb "github.com/AnixOps/anix-control/v4/api/grpc/v2boardpb"
 	"github.com/AnixOps/anix-control/v4/internal/agentpki"
+	"github.com/AnixOps/anix-control/v4/internal/nodegroup"
 	"github.com/AnixOps/anix-control/v4/internal/panicrecovery"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -47,6 +48,10 @@ type ServerConfig struct {
 	// AgentLegacySunset is agent_control.legacy_sunset, announced to legacy
 	// agents in preferred mode; zero announces none.
 	AgentLegacySunset time.Time
+	// OnJoin is told of every machine that joined a node group
+	// (AgentEnrollment.Join), after the join committed, in its own
+	// goroutine: the administrators' notification. nil tells no one.
+	OnJoin func(nodegroup.Joined)
 }
 
 // DefaultServerConfig 默认配置
@@ -156,7 +161,7 @@ func (s *Server) Start() error {
 	// counter (their ids overlap proxy node ids).
 	GetAgentControlManager().UseRevisionStore(NewDatabaseRevisionStore(databaseForAgentChecks))
 	agentv1pb.RegisterAgentControlServiceServer(s.grpcServer, NewAgentControlGRPCServer(nil).WithAuthenticator(agents))
-	agentv1pb.RegisterAgentEnrollmentServer(s.grpcServer, NewAgentEnrollmentGRPCServer(agents))
+	agentv1pb.RegisterAgentEnrollmentServer(s.grpcServer, NewAgentEnrollmentGRPCServer(agents).WithJoinNotifier(s.config.OnJoin))
 	agentv1pb.RegisterAgentArtifactsServer(s.grpcServer, NewAgentArtifactsGRPCServer(agents))
 
 	// 启动服务器

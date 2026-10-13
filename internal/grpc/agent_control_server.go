@@ -736,6 +736,7 @@ func NewAgentControlGRPCServer(manager *AgentControlManager) *AgentControlGRPCSe
 		heartbeatIntervalSeconds: defaultAgentHeartbeatIntervalSeconds,
 	}
 	followForwardStates(server.manager, server.forwardManager)
+	followApprovals(server.manager, server.forwardManager)
 	return server
 }
 

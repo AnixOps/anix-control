@@ -145,15 +145,16 @@ func TestInstallTokenIssuesSingleUseNodeBoundToken(t *testing.T) {
 	assert.False(t, data.Script.Signed)
 	assert.Equal(t, "https://ctl.example.com/install.sh", data.Script.URL)
 
+	// -u and -t only: the enrollment credential names its node.
 	require.Len(t, data.Commands, 3)
-	want := "curl -fsSL https://ctl.example.com/install.sh | sudo bash -s -- --control https://ctl.example.com --node " +
-		nodeName + " --token " + data.Credential
+	want := "curl -fsSL https://ctl.example.com/install.sh | sudo bash -s -- -u https://ctl.example.com -t " + data.Credential
 	assert.Equal(t, agentinstall.MirrorControl, data.Commands[0].Mirror)
 	assert.Equal(t, want, data.Commands[0].Command)
 	assert.Equal(t, want+" --mirror cn", data.Commands[1].Command)
 	assert.Equal(t, "curl -fsSL https://github.com/AnixOps/anix-control/releases/download/"+
-		"v"+strings.TrimPrefix(ReleaseVersion, "v")+"/agent-install.sh | sudo bash -s -- --control https://ctl.example.com --node "+
-		nodeName+" --token "+data.Credential+" --mirror github", data.Commands[2].Command)
+		"v"+strings.TrimPrefix(ReleaseVersion, "v")+"/agent-install.sh | sudo bash -s -- -u https://ctl.example.com -t "+
+		data.Credential+" --mirror github", data.Commands[2].Command)
+	assert.NotContains(t, data.Commands[0].Command, "--node")
 
 	// Only the hash is stored.
 	var stored model.AgentEnrollment
@@ -229,10 +230,10 @@ func TestInstallTokenRendersIPv6AndPorts(t *testing.T) {
 	response := env.post(t, 7, `{"node":"`+proxy+`"}`)
 	require.Equal(t, http.StatusCreated, response.Code, response.Body.String())
 	data := decodeInstallToken(t, response).Data
-	assert.Equal(t, "curl -fsSLg 'https://[2001:db8::1]:8443/install.sh' | sudo bash -s -- --control 'https://[2001:db8::1]:8443' --node "+
-		proxy+" --token "+data.Credential, data.Commands[0].Command)
+	assert.Equal(t, "curl -fsSLg 'https://[2001:db8::1]:8443/install.sh' | sudo bash -s -- -u 'https://[2001:db8::1]:8443' -t "+
+		data.Credential, data.Commands[0].Command)
 	for _, command := range data.Commands {
-		assert.Contains(t, command.Command, " | sudo bash -s -- --control ", "the -- ends bash's options")
+		assert.Contains(t, command.Command, " | sudo bash -s -- -u ", "the -- ends bash's options")
 	}
 
 	metadata := env.get("/install/agent.env")

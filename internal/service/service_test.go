@@ -6276,6 +6276,31 @@ func (s *SubscriptionServiceTestSuite) TestNodeProtocolToParsedNode() {
 	_ = resp
 }
 
+// A node awaiting approval, or rejected, is not offered to subscribers even
+// while its Agent is connected: Control sends it no users.
+func (s *SubscriptionServiceTestSuite) TestInternalNodesLeaveOutNodesAwaitingApproval() {
+	now := time.Now().Unix()
+	group := &model.SubscriptionGroup{Name: "Approval Group", Priority: 5, Enable: 1}
+	s.Require().NoError(database.Get().Create(group).Error)
+	for i, approval := range []string{model.NodeApprovalApproved, model.NodeApprovalPending, model.NodeApprovalRejected, ""} {
+		node := &model.Node{
+			Name: fmt.Sprintf("approval-%d", i), Host: fmt.Sprintf("approval-%d.example.com", i), Port: 443, Rate: 1, Show: 1,
+			Status: model.NodeStatusOnline, LastCheckAt: &now, Approval: approval, APIKey: fmt.Sprintf("approval-key-%d", i),
+		}
+		s.Require().NoError(database.Get().Create(node).Error)
+		protocol := &model.NodeProtocol{NodeID: node.ID, Name: "VMess", Type: model.ProtocolVMess, Port: 8080, Enable: 1, Show: 1}
+		s.Require().NoError(database.Get().Create(protocol).Error)
+		s.Require().NoError(database.Get().Exec("INSERT INTO v2_subscription_group_node_protocols (subscription_group_id, node_protocol_id) VALUES (?, ?)", group.ID, protocol.ID).Error)
+	}
+	parsed, err := s.svc.getInternalNodes(s.testUser, &model.TemplateRenderContext{UUID: "uuid"}, []*model.SubscriptionGroup{group})
+	s.Require().NoError(err)
+	servers := []string{}
+	for _, node := range parsed {
+		servers = append(servers, node.Server)
+	}
+	s.ElementsMatch([]string{"approval-0.example.com", "approval-3.example.com"}, servers, "approved nodes only (a node created without the column's value is approved)")
+}
+
 // =====================================================
 // NodeService SyncProtocolToNode Test
 // =====================================================

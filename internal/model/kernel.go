@@ -538,5 +538,6 @@ func KernelModels() []any {
 		&KernelForwardDNSProvider{}, &KernelForwardDNSBinding{}, &KernelForwardDNSNode{},
 		&AdminAPIToken{},
 		&KernelAlert{},
+		&NodeGroup{},
 	}
 }

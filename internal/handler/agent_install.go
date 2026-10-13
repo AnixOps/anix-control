@@ -78,8 +78,11 @@ type installScriptInfo struct {
 }
 
 // CreateInstallToken issues a single-use enrollment token bound to a node
-// and returns the install command for every mirror. Super administrators
-// only; agentpki writes the token's audit entry.
+// and returns the install command for every mirror (-u <control> -t
+// <anixagt_...>: the token names its node). It enrolls an existing node, for
+// moving a node to a new machine or after a credential rotation; new
+// machines join a node group instead. Super administrators only; agentpki
+// writes the token's audit entry.
 func (h *AgentInstallHandler) CreateInstallToken(c *gin.Context) {
 	db := h.db()
 	ok, err := service.IsSuperAdmin(db, kernelActorID(c))
@@ -143,7 +146,7 @@ func (h *AgentInstallHandler) CreateInstallToken(c *gin.Context) {
 	c.Header("Cache-Control", "no-store")
 	kernelData(c, http.StatusCreated, installTokenResponse{
 		Enrollment: row, Credential: credential, Node: node.String(), ExpiresAt: expires,
-		AgentVersion: settings.AgentVersion, Commands: settings.Commands(node.String(), credential),
+		AgentVersion: settings.AgentVersion, Commands: settings.Commands(credential),
 		Script: installScriptInfo{
 			URL: settings.ControlURL + "/install.sh", SignatureURL: settings.ControlURL + "/install.sh.sig", Signed: signatureErr == nil,
 		},
@@ -155,6 +158,18 @@ func (h *AgentInstallHandler) Script(c *gin.Context) {
 	c.Header("Cache-Control", "no-cache")
 	c.Header("X-Content-Type-Options", "nosniff")
 	c.Data(http.StatusOK, "text/x-shellscript; charset=utf-8", agentinstall.Script)
+}
+
+// ClientIP serves /install/ip: the caller's address as Control sees it,
+// as text. The install script asks over IPv4 and IPv6 and hands the answers
+// to the join (JoinRequest.public_addresses), because the gRPC peer address
+// is a proxy's when Control sits behind one. gin's ClientIP applies
+// server.trusted_proxies (internal/requestorigin): a forwarded address is
+// taken only from a trusted proxy.
+func (h *AgentInstallHandler) ClientIP(c *gin.Context) {
+	c.Header("Cache-Control", "no-store")
+	c.Header("X-Content-Type-Options", "nosniff")
+	c.String(http.StatusOK, "%s\n", c.ClientIP())
 }
 
 // Signature serves the script's release signature once it verifies with

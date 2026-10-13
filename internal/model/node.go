@@ -35,6 +35,17 @@ type Node struct {
 	// 父子节点 (中转链路: 落地节点为根, 转发节点为子, 支持多级)
 	ParentID *uint `gorm:"index" json:"parent_id"` // 上级节点ID, nil=根节点(落地节点)
 
+	// Node groups (internal/nodegroup): the group whose join token created
+	// the node, the machine fingerprint it joined with (it selects the node
+	// a reinstalled machine may rejoin, never authentication), its approval
+	// (NodeApproval*) and the public address it joined from. They stay out
+	// of the /api/v2 answers, which the packages' native routes must match
+	// byte for byte; the node group API answers them.
+	NodeGroupID        *uint  `gorm:"index" json:"-"`
+	MachineFingerprint string `gorm:"size:64;index" json:"-"`
+	Approval           string `gorm:"size:16;not null;default:'approved'" json:"-"`
+	LastPublicAddress  string `gorm:"size:64" json:"-"`
+
 	// 月流量限额 (仅本节点自身, 不含子节点单独限额; 子节点流量会同时累加到父节点)
 	MonthlyLimit    *int64 `json:"monthly_limit"`                      // 月流量限额(字节), nil=不限
 	MonthlyUpload   int64  `gorm:"default:0" json:"monthly_upload"`    // 本月已用上传流量
@@ -159,19 +170,6 @@ type WireGuardPeer struct {
 
 func (WireGuardPeer) TableName() string {
 	return "v2_wireguard_peer"
-}
-
-// NodeGroup 节点分组
-type NodeGroup struct {
-	ID        uint      `gorm:"primaryKey" json:"id"`
-	Name      string    `gorm:"size:100" json:"name"`
-	Sort      int       `gorm:"default:0" json:"sort"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-}
-
-func (NodeGroup) TableName() string {
-	return "v2_node_group"
 }
 
 // AuthorizedKey 授权密钥 (用于节点自动注册)

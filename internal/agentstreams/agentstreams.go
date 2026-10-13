@@ -98,6 +98,9 @@ var (
 	// ErrOperationPending: the operation id is already in flight on the
 	// session.
 	ErrOperationPending = errors.New("agent operation is already pending")
+	// ErrPendingApproval: the node joined a group requiring approval and
+	// waits for it; Control sends it no configuration until then.
+	ErrPendingApproval = errors.New("agent node is pending approval")
 )
 
 // ObservedHandler receives every observed state an agent reports on its

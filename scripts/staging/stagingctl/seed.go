@@ -210,24 +210,18 @@ func syncSequences(tx *gorm.DB) error {
 func ptr[T any](value T) *T { return &value }
 
 func init() {
-	registerSeed(10, "node groups, plans and users", seedUsersAndPlans)
+	registerSeed(10, "plans and users", seedUsersAndPlans)
 }
 
-// seedUsersAndPlans writes node groups, plans and the member base: three
+// seedUsersAndPlans writes plans and the member base: three
 // administrators (the bootstrap super administrator, a second one and a
 // staff member), members with plans, banned and expired members and
-// members without any data.
+// members without any data. Plans, members and nodes share four plan group
+// ids (group_id: standard, premium, HK and JP); the kernel keeps no table
+// of them, so the world records the ids only.
 func seedUsersAndPlans(s *Seeder) {
-	groups := []model.NodeGroup{
-		{Name: "Standard", Sort: 1}, {Name: "Premium", Sort: 2}, {Name: "香港 HK", Sort: 3}, {Name: "日本 JP", Sort: 4},
-	}
-	for i := range groups {
-		groups[i].CreatedAt, groups[i].UpdatedAt = s.At(Days(-200)), s.At(Days(-200))
-	}
-	s.Create(&groups)
-	for _, group := range groups {
-		s.World.Add("node_group", group.ID)
-	}
+	groups := []uint{1, 2, 3, 4}
+	s.World.Add("node_group", groups...)
 
 	type planShape struct {
 		name     string
@@ -256,7 +250,7 @@ func seedUsersAndPlans(s *Seeder) {
 	for i, shape := range shapes {
 		content := fmt.Sprintf("<p>%s: %d GB, synthetic staging plan</p>", shape.name, shape.gb)
 		plans[i] = model.Plan{
-			GroupID: groups[shape.group].ID, TransferEnable: shape.gb, Name: shape.name, Content: &content, Show: shape.show,
+			GroupID: groups[shape.group], TransferEnable: shape.gb, Name: shape.name, Content: &content, Show: shape.show,
 			Sort: ptr(i + 1), Renew: shape.renew, MonthPrice: shape.month, QuarterPrice: shape.quarter, YearPrice: shape.year,
 			OnetimePrice: shape.onetime, ResetPrice: shape.reset, CapacityLimit: shape.capacity,
 			DeviceLimit: ptr(3 + i%3), SpeedLimit: ptr[int64](int64(100 * (1 + i%4))),

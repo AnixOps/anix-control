@@ -534,7 +534,85 @@ POST /api/v4/kernel/agents/rotate-credentials
 「同时更换节点的 API 密钥」；成功后在结果对话框里显示一次凭据（默认遮罩，可复制）、有效期倒计时、吊销了多少
 证书与注册记录，以及指南链接。凭据只保存在这个对话框的状态里，关闭对话框或离开页面即清除，不会写入浏览器存储、
 URL 或日志。控制台不知道当前管理员是不是超级管理员，所以对所有管理员显示这个按钮，收到 403 时在确认框里说明原因。
-不显示 `--reset` 安装命令：这个选项在 Agent 的发布里还没有。
+不显示安装命令：把凭据交给机器后按 [Agent 安装](agent-onboarding.md#rotating-a-nodes-credentials)
+的 `-u <control> -t <anixagt_…> --reset` 命令重新注册。
+
+### 节点组与接入令牌
+
+节点组（5.0）持有一个接入令牌（`anixjoin_…`）和它创建的节点的默认值：在任意机器上运行节点组的安装命令，
+这台机器就成为该组的一个新节点（`proxy` 组建 `v2_node`，`forward` 组建转发节点）。运维步骤见
+[Agent 安装](agent-onboarding.md#joining-a-node-group)。所有写操作和令牌读取都记入操作日志
+（`v2_operation_log`，module `node_group`），应答中只有 `.../command` 会带令牌。
+
+```http
+# 节点组（管理员）
+GET    /api/v4/kernel/node-groups                 # {"data": {"groups": [...]}}，按 sort、id 排序
+POST   /api/v4/kernel/node-groups                 # 201，创建并生成令牌（需要 module_runtime.ca_kek）
+GET    /api/v4/kernel/node-groups/:id
+PUT    /api/v4/kernel/node-groups/:id             # 替换除 kind 和令牌外的全部字段
+DELETE /api/v4/kernel/node-groups/:id             # 软删除；组内还有存活节点时 409 node_group_in_use
+
+# 令牌（仅超级管理员）
+GET    /api/v4/kernel/node-groups/:id/command     # 安装命令、令牌、到期时间、卸载命令；每次读取记为 node_group_join_token_reveal
+POST   /api/v4/kernel/node-groups/:id/reset-token # 换新令牌，之前的命令全部失效；记为 node_group_join_token_reset
+
+# 待审批节点（管理员；:id 为 proxy-<id> 或 forward-<id>）
+POST   /api/v4/kernel/nodes/:id/approve           # 批准：开始下发配置（config.v1）和用户（users.v1）；记为 node_approve
+POST   /api/v4/kernel/nodes/:id/reject            # 拒绝：停用节点、吊销其证书；记为 node_reject
+```
+
+创建与更新的请求体：
+
+```json
+{
+  "name": "HK", "kind": "proxy",
+  "max_nodes": 0, "require_approval": false,
+  "rate": 1, "tags": ["hk"], "monthly_limit_bytes": 0, "reset_day": 1, "sort": 0,
+  "token_expires_at": null,
+  "subscription_group_ids": [1],
+  "protocol_template": [
+    {"name": "VLESS Reality", "type": "vless", "port": 443, "tls": "reality",
+     "reality": {"server_name": "www.example.com", "dest": "www.example.com:443"},
+     "settings": {"flow": "xtls-rprx-vision"}},
+    {"name": "SS 2022", "type": "shadowsocks", "port_range": [20000, 40000],
+     "settings": {"method": "2022-blake3-aes-128-gcm"}}
+  ]
+}
+```
+
+- `name`：存活的组之间唯一（部分唯一索引 `WHERE deleted = 0`），重名返回 `409 name_taken`；删除后名称可重用。
+- `kind`：`proxy` 或 `forward`，创建后不能改；`forward` 组没有 `protocol_template` 和 `subscription_group_ids`。
+- `max_nodes`：组内存活节点上限，`0` 不限；`require_approval`：新节点先待审批。
+- `rate`（默认 1）、`tags`、`monthly_limit_bytes`（`0` 不限）、`reset_day`（1-28，默认 1）、`sort`：复制给组新建的
+  每个节点（转发节点只取 `tags`）。之后改组不会改已有节点。
+- `token_expires_at`：可选，必须是未来时间，之后令牌不再接入任何机器。
+- `subscription_group_ids`：必须都存在，模板中的协议加入这些订阅分组。
+- `protocol_template`：每个新代理节点获得的协议。本版本支持 `vless`（`tls` 为 `none` 或 `reality`）、`vmess`、
+  `shadowsocks`（`settings.method` 必填）、`wireguard`（`tls` 为 `none`）；`port` 与 `port_range`（`[from, to]`，
+  每个节点随机取一个不与本节点其它协议冲突的端口）二选一；`transport` 默认 `tcp`；`reality.dest` 默认
+  `<server_name>:443`。Reality 密钥对与 short ID、Shadowsocks 2022 `server_key`、WireGuard 服务端密钥由 Control
+  为每个节点单独生成，模板里写这些字段会被拒绝（`400 invalid_request`）。
+
+应答（不含令牌）：`id`、上述字段、`token_reset_at`、`token_expires_at`、`token_expired`、
+`nodes: {"live", "pending"}`（被拒绝的节点不计入）、`created_at`、`updated_at`。
+
+`GET .../command` 的应答：`{"data": {"group", "token", "token_expires_at", "agent_version", "commands":
+[{"mirror", "command", "available", "note"}], "uninstall_command", "script": {"url", "signature_url", "signed"}}}`，
+`Cache-Control: no-store`。命令形如
+`curl -fsSL https://panel.example.com/install.sh | sudo bash -s -- -u https://panel.example.com -t anixjoin_…`，
+`cn`、`github` 两个下载源分别加 `--mirror cn`、`--mirror github`。`POST /api/v4/kernel/agents/install-tokens`
+（某个已有节点的一次性 `anixagt_` 令牌）应答里的命令也是 `-u … -t …` 这一形状。
+
+错误码：`400 invalid_request`（字段或模板无效）、`403 super_admin_required`、`404 not_found`、`409 name_taken`、
+`409 node_group_in_use`、`409 ca_kek_missing`（未设置 `module_runtime.ca_kek`）、`409 agent_install_unconfigured`
+（Control 不知道节点可访问的 https 地址）、`409 join_token_unsealable`（`ca_kek` 已变更：重置令牌）、
+`404 node_not_found`、`409 node_not_pending`。
+
+机器用令牌接入走 gRPC `AgentEnrollment.Join`（[`PROTOCOL.md`](../../sdk/api/agent/v1/PROTOCOL.md) 「Joining a
+node group」）：不可用的令牌一律返回 `PermissionDenied` 和错误码 `join_rejected`，原因只写进操作日志
+`agent_join_rejected`；成功的接入记为 `agent_join`，并在提交后通知管理员（`node.joined`）。安装脚本通过公开的
+`GET /install/ip`（与其它 `/install` 路由一样限流）取得本机地址：应答为纯文本 IP，按 `server.trusted_proxies`
+取 gin `ClientIP`。
 
 ### 授权密钥管理
 

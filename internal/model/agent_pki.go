@@ -12,6 +12,10 @@ const (
 	AgentEnrollmentMethodNodeAPIKey = "node_api_key" // #nosec G101 -- names an enrollment method, not a credential.
 	// AgentEnrollmentMethodForwardToken is a forward node's token.
 	AgentEnrollmentMethodForwardToken = "forward_token"
+	// AgentEnrollmentMethodJoinToken is a node group's anixjoin_ join token
+	// (AgentEnrollment.Join): the machine became, or rejoined, a node of the
+	// group. The token is the group's, so the enrollment keeps no hash.
+	AgentEnrollmentMethodJoinToken = "join_token" // #nosec G101 -- names an enrollment method, not a credential.
 )
 
 // AgentEnrollment is one way into the agent PKI for a node: a one-time

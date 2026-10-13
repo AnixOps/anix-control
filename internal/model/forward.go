@@ -46,6 +46,16 @@ type ForwardNode struct {
 	MaxConn int    `json:"max_conn"`                // 最大连接数
 	Enabled bool   `gorm:"default:true" json:"enabled"`
 
+	// Node groups (internal/nodegroup), as on v2_node: the group whose join
+	// token created the node, the machine fingerprint it joined with, its
+	// approval (NodeApproval*) and the public address it joined from.
+	// service.EnsureForwardNodeColumns adds them to existing tables; the
+	// frozen v2 forward answers do not show them.
+	NodeGroupID        *uint  `gorm:"index" json:"-"`
+	MachineFingerprint string `gorm:"size:64;index" json:"-"`
+	Approval           string `gorm:"size:16;not null;default:'approved'" json:"-"`
+	LastPublicAddress  string `gorm:"size:64" json:"-"`
+
 	// 统计
 	TotalUpload   int64 `json:"total_upload"`
 	TotalDownload int64 `json:"total_download"`

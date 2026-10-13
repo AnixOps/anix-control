@@ -29,6 +29,7 @@ func TestPackageRolloutModelsUseKernelOwnedTables(t *testing.T) {
 		KernelForwardDNSProvider{}: "v4_kernel_forward_dns_provider",
 		KernelForwardDNSBinding{}:  "v4_kernel_forward_dns_binding",
 		KernelForwardDNSNode{}:     "v4_kernel_forward_dns_node",
+		NodeGroup{}:                "v5_node_group",
 	}
 
 	registered := make(map[reflect.Type]bool)

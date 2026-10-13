@@ -1,15 +1,17 @@
 // Package agentinstall is one-command node onboarding (forward-sdk.md,
-// section 9): the install script Control serves at /install.sh, its release
-// signature, the release metadata the script reads from
-// /install/agent.env, and the install commands the node page copies.
+// section 9, and the 5.0 node groups, docs/design/node-onboarding): the
+// install script Control serves at /install.sh, its release signature, the
+// release metadata the script reads from /install/agent.env, and the
+// install commands an administrator copies.
 //
 // The script is static: the same bytes are embedded here, served by every
 // Control and published as the release asset agent-install.sh, so one
 // release signature (Ed25519 by the official package root, the format of
 // the packages archive's .sig) verifies all copies. What differs per
-// Control — its address, the node and the one-time token — travels in the
-// command line; what differs per release — the Agent version, mirrors and
-// checksums — comes from /install/agent.env.
+// Control — its address and the token (a node group's join token, or a
+// node's one-time enrollment credential) — travels in the command line;
+// what differs per release — the Agent version, mirrors and checksums —
+// comes from /install/agent.env.
 package agentinstall
 
 import (
@@ -139,14 +141,17 @@ type CommandInput struct {
 	ControlURL string
 	// ScriptURL is where the command downloads the script.
 	ScriptURL string
-	Node      string
-	Token     string
-	Mirror    string
+	// Token is a node group's anixjoin_ join token, which makes the machine
+	// a node of the group, or a one-time anixagt_ enrollment credential,
+	// which enrolls the existing node it is bound to. The script tells them
+	// apart by the prefix.
+	Token  string
+	Mirror string
 }
 
 // RenderCommand returns the one-line install command:
 //
-//	curl -fsSL <script> | sudo bash -s -- --control <url> --node <node> --token <t> [--mirror m]
+//	curl -fsSL <script> | sudo bash -s -- -u <url> -t <token> [--mirror m]
 //
 // The "--" ends bash's own options, so every later word reaches the script.
 // curl gets -g (no URL globbing) when the URL has an IPv6 literal.
@@ -157,7 +162,7 @@ func RenderCommand(input CommandInput) string {
 	}
 	words := []string{
 		curl, ShellQuote(input.ScriptURL), "|", "sudo", "bash", "-s", "--",
-		"--control", ShellQuote(input.ControlURL), "--node", ShellQuote(input.Node), "--token", ShellQuote(input.Token),
+		"-u", ShellQuote(input.ControlURL), "-t", ShellQuote(input.Token),
 	}
 	if input.Mirror != "" && input.Mirror != MirrorControl {
 		words = append(words, "--mirror", ShellQuote(input.Mirror))
@@ -190,9 +195,13 @@ func (s Settings) ScriptURL(mirror string) string {
 	return s.ControlURL + "/install.sh"
 }
 
-// Commands renders the command for every mirror. node and token are
-// validated by the caller.
-func (s Settings) Commands(node, token string) []Command {
+// UninstallCommand removes the Agent from a machine; with --purge it also
+// removes its identity, state and users.
+const UninstallCommand = "sudo anix-agent uninstall"
+
+// Commands renders the command for every mirror. The token is validated by
+// the caller.
+func (s Settings) Commands(token string) []Command {
 	metadata := s.Metadata()
 	commands := make([]Command, 0, len(Mirrors))
 	for _, mirror := range Mirrors {
@@ -212,7 +221,7 @@ func (s Settings) Commands(node, token string) []Command {
 			command.Note = "the script and the Agent come from GitHub releases; the token still enrolls with this Control"
 		}
 		command.Command = RenderCommand(CommandInput{
-			ControlURL: s.ControlURL, ScriptURL: s.ScriptURL(mirror), Node: node, Token: token, Mirror: mirror,
+			ControlURL: s.ControlURL, ScriptURL: s.ScriptURL(mirror), Token: token, Mirror: mirror,
 		})
 		commands = append(commands, command)
 	}

@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/agentstreams"
 	"github.com/AnixOps/anix-control/v4/internal/kernelnodeops"
 	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/nodegroup"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -64,6 +66,9 @@ const (
 	// configTriggerForward: a plan moved the node's forwarding generation
 	// (agent_control_forward.go).
 	configTriggerForward = "forward"
+	// configTriggerApproval: an administrator approved a node that was
+	// pending approval (nodegroup.OnApproval).
+	configTriggerApproval = "approval"
 )
 
 // configStatusTimeout bounds the recording of a ConfigStatus that outlives
@@ -114,7 +119,13 @@ func (c *AgentControlConnection) sendConfig(snapshot *agentv1pb.ConfigSnapshot, 
 // data plane ends right after applying), and nothing else would ever ask the
 // agent to report that revision again. The agent answers an unchanged
 // snapshot without a reload, with the status the kernel is missing.
+//
+// A node pending approval is sent nothing (approvalPending): approving it
+// pushes the configuration (followApprovals).
 func pushDesiredConfig(ctx context.Context, connection *AgentControlConnection, node agentcontrol.AgentNode, trigger string) error {
+	if approvalPending(ctx, node) {
+		return nil
+	}
 	db := databaseForAgentChecks()
 	row, _, err := kernelnodeops.RefreshDesiredConfig(ctx, db, node, time.Now())
 	if err != nil {
@@ -130,6 +141,96 @@ func pushDesiredConfig(ctx context.Context, connection *AgentControlConnection, 
 	}
 	_, err = connection.sendConfig(kernelnodeops.ConfigSnapshotOf(row), force, trigger)
 	return err
+}
+
+// approvalPending tells whether node joined a group requiring approval and
+// waits for it (nodegroup, owner decision D4): Control then sends it no
+// configuration (config.v1) and no users (users.v1). A node whose approval
+// cannot be read counts as pending, so a database failure never releases a
+// pending node's users.
+func approvalPending(ctx context.Context, node agentcontrol.AgentNode) bool {
+	db := databaseForAgentChecks()
+	if db == nil {
+		return true
+	}
+	pending, err := nodegroup.PendingApproval(ctx, db, node)
+	if err != nil {
+		if ctx.Err() == nil {
+			slog.Warn("agent control: the node's approval could not be read; its configuration and users are withheld", "component", "agent-control", "node", node.String(), "error", err)
+		}
+		return true
+	}
+	return pending
+}
+
+// approvalStateManagers are the managers whose sessions an approval
+// reaches: every AgentControlGRPCServer's.
+var (
+	approvalStateOnce     sync.Once
+	approvalStateMu       sync.Mutex
+	approvalStateManagers = map[*AgentControlManager]string{}
+)
+
+// followApprovals makes an administrator's approval of a pending node push
+// the node's configuration on the managers' sessions at once. Its users
+// start within a poll interval (waitForApproval).
+func followApprovals(proxy, forward *AgentControlManager) {
+	approvalStateMu.Lock()
+	if proxy != nil {
+		approvalStateManagers[proxy] = agentcontrol.NodeKindProxy
+	}
+	if forward != nil {
+		approvalStateManagers[forward] = agentcontrol.NodeKindForward
+	}
+	approvalStateMu.Unlock()
+	approvalStateOnce.Do(func() { nodegroup.OnApproval(pushApprovedConfig) })
+}
+
+// pushApprovedConfig pushes an approved node's configuration on its
+// session, when it has one that negotiated config.v1.
+func pushApprovedConfig(node agentcontrol.AgentNode) {
+	approvalStateMu.Lock()
+	var targets []*AgentControlConnection
+	for manager, kind := range approvalStateManagers {
+		if kind != node.Kind {
+			continue
+		}
+		manager.mu.RLock()
+		connection := manager.connections[node.ID]
+		manager.mu.RUnlock()
+		if connection != nil && connection.configNegotiated {
+			targets = append(targets, connection)
+		}
+	}
+	approvalStateMu.Unlock()
+	for _, connection := range targets {
+		go func(connection *AgentControlConnection) {
+			ctx, cancel := context.WithTimeout(context.WithoutCancel(connection.stream.Context()), forwardHelloTimeout)
+			defer cancel()
+			if err := pushDesiredConfig(ctx, connection, node, configTriggerApproval); err != nil {
+				slog.Debug("agent config: the push after an approval failed", "component", "agent-control", "node", node.String(), "error", err)
+			}
+		}(connection)
+	}
+}
+
+// approvalPoll is how often a pending node's user sender checks whether the
+// node was approved. A variable so tests can lower it.
+var approvalPoll = time.Second
+
+// waitForApproval returns once node is not pending approval, or with ctx's
+// error when the session ends first.
+func waitForApproval(ctx context.Context, node agentcontrol.AgentNode) error {
+	for approvalPending(ctx, node) {
+		timer := time.NewTimer(approvalPoll)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
+		case <-timer.C:
+		}
+	}
+	return ctx.Err()
 }
 
 // startConfigRefresh rebuilds the session's desired configuration every
@@ -232,6 +333,9 @@ func (s *AgentStreams) PushConfig(ctx context.Context, node agentcontrol.AgentNo
 	if !connection.configNegotiated {
 		return "", false, classified{sentinel: agentstreams.ErrCapabilityMissing, cause: fmt.Errorf("agent node %s does not advertise capability %q", node, agentcontrol.CapabilityConfig+"."+agentcontrol.CapabilityVersionV1)}
 	}
+	if approvalPending(ctx, node) {
+		return "", false, classified{sentinel: agentstreams.ErrPendingApproval, cause: fmt.Errorf("agent node %s is pending approval: Control sends it no configuration until an administrator approves it", node)}
+	}
 	sent, err := connection.sendConfig(snapshot, true, configTriggerSync)
 	if err != nil {
 		return "", false, classified{sentinel: agentstreams.ErrNotConnected, cause: err}
@@ -283,7 +387,7 @@ type configMetrics struct {
 // configTriggers and configResults are the label values, in the order the
 // metrics are written.
 var (
-	configTriggers = []string{configTriggerHello, configTriggerSync, configTriggerRefresh, configTriggerForward}
+	configTriggers = []string{configTriggerHello, configTriggerSync, configTriggerRefresh, configTriggerForward, configTriggerApproval}
 	configResults  = []string{model.ConfigVerdictApplied, model.ConfigVerdictFailed, model.ConfigVerdictStale, model.ConfigVerdictMismatch, configStatusUnrecorded}
 )
 
@@ -318,7 +422,7 @@ func (m *configMetrics) status(verdict string) {
 // WriteAgentConfigPrometheus renders the configuration push counters and
 // the lagging-node gauge in the Prometheus text format.
 func WriteAgentConfigPrometheus(body *strings.Builder) {
-	body.WriteString("# HELP anixops_agent_config_snapshots_sent_total ConfigSnapshot messages sent on the Agent Control stream, by trigger: hello (reconcile), sync (node.sync), refresh (a rebuild moved the revision) or forward (a plan moved the node's forwarding generation).\n")
+	body.WriteString("# HELP anixops_agent_config_snapshots_sent_total ConfigSnapshot messages sent on the Agent Control stream, by trigger: hello (reconcile), sync (node.sync), refresh (a rebuild moved the revision), forward (a plan moved the node's forwarding generation) or approval (an administrator approved a pending node).\n")
 	body.WriteString("# TYPE anixops_agent_config_snapshots_sent_total counter\n")
 	for _, trigger := range configTriggers {
 		body.WriteString("anixops_agent_config_snapshots_sent_total{trigger=\"" + trigger + "\"} " + strconv.FormatUint(agentConfigMetrics.snapshots[trigger].Load(), 10) + "\n")

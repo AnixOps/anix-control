@@ -72,6 +72,11 @@ const (
 	// enrollment credential, wrong node key or token, disabled node): one
 	// answer, so credentials cannot be probed.
 	ErrorCodeEnrollmentRejected = "agent_enrollment_rejected"
+	// ErrorCodeJoinRejected answers AgentEnrollment.Join (PermissionDenied)
+	// for any unusable join token: unknown, of a deleted group, expired, or
+	// of a group at its node cap. One answer, without detail, so tokens
+	// cannot be probed; Control audits the reason.
+	ErrorCodeJoinRejected = "join_rejected"
 )
 
 // Node kinds of an agent identity.

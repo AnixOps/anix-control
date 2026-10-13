@@ -1740,6 +1740,10 @@ below). As built:
   `agent-install.sh`. A static script cannot know its Control or node, so
   the command names them:
   `curl -fsSL https://<control>/install.sh | sudo bash -s -- --control https://<control> --node forward-41 --token <t> [--mirror cn|github]`.
+  5.0 replaced it with `-u <control> -t <token>`: the token names its node
+  (an `anixagt_` enrollment token) or its node group (an `anixjoin_` join
+  token), and the script runs `anix-agent join` before the Agent starts
+  (`docs/guide/agent-onboarding.md`, `docs/design/node-onboarding`).
 - **Signature.** The release job signs the script with the official
   package root (`plugins.official_public_key`, Ed25519 over the exact
   bytes, base64: the packages archive's `.sig` format) and publishes
@@ -1751,12 +1755,12 @@ below). As built:
   (`agent_install.artifact_dir`, served at `/install/agent/<tag>/<asset>`),
   its SHA-256. The checksum comes from Control, else GitHub, never from the
   mirror; a `.sig` next to an Agent asset is verified with the official key.
-- **Node groups are not implemented.** Tokens bind to an existing node:
-  forward nodes have no group model and creating the node on first use needs
-  a change to `agentpki.Enroll`. `--group` is accepted by the parser and
-  refused with that reason.
-  5.0 replaces this with node groups and join tokens: see
-  [`../design/node-onboarding/README.md`](../design/node-onboarding/README.md).
+- **Node groups came with 5.0.** In 4.2 tokens bound to an existing node
+  and `--group` was refused. 5.0 adds node groups (`v5_node_group`, proxy
+  or forward): a group's `anixjoin_` token creates a node of the group the
+  first time a machine uses it (`AgentEnrollment.Join`, `internal/nodegroup`);
+  a forward group's node is created as the forward inventory creates one.
+  `--group` and `--node` are gone.
 - **Preflight (O2).** After reading `/install/agent.env` (or the bundle)
   and before changing anything the script checks: systemd ≥ 240 (fail;
   < 247 warns about the gost sandbox), the kernel ≥ 5.10 and nft ≥ 0.9.7 on

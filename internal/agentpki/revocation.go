@@ -20,6 +20,9 @@ const (
 	RevokeReasonCredentialsRevoked    = "credentials_revoked"
 	RevokeReasonCredentialsRotated    = "credentials_rotated"
 	maxRevocationCacheEntriesBeforeGC = 4096
+	// RevokeReasonNodeRejected: an administrator rejected a node that
+	// joined a group requiring approval (internal/nodegroup).
+	RevokeReasonNodeRejected = "node_rejected"
 )
 
 // revocationEpoch changes whenever this process revokes agent
