@@ -722,6 +722,9 @@ type AgentControlGRPCServer struct {
 	nodeService              *service.NodeService
 	reports                  *agentReportSinks
 	heartbeatIntervalSeconds uint32
+	// liveness keeps the touches of a node's liveness from reaching the
+	// database more than once per AgentLivenessWriteInterval.
+	liveness *livenessThrottle
 }
 
 func NewAgentControlGRPCServer(manager *AgentControlManager) *AgentControlGRPCServer {
@@ -734,6 +737,7 @@ func NewAgentControlGRPCServer(manager *AgentControlManager) *AgentControlGRPCSe
 		nodeService:              service.NewNodeService(),
 		reports:                  newAgentReportSinks(),
 		heartbeatIntervalSeconds: defaultAgentHeartbeatIntervalSeconds,
+		liveness:                 newLivenessThrottle(AgentLivenessWriteInterval),
 	}
 	followForwardStates(server.manager, server.forwardManager)
 	followApprovals(server.manager, server.forwardManager)
@@ -748,8 +752,33 @@ func (s *AgentControlGRPCServer) WithAuthenticator(auth *AgentAuthenticator) *Ag
 	return s
 }
 
-// touchNode records an agent's liveness in the table that owns its node.
+// touchNode records an agent's liveness in the table that owns its node, at
+// most once per AgentLivenessWriteInterval: a heartbeat or a report inside
+// the interval of the last write changes nothing in the database.
 func (s *AgentControlGRPCServer) touchNode(node agentcontrol.AgentNode) error {
+	if !s.liveness.due(node) {
+		return nil
+	}
+	return s.writeLiveness(node)
+}
+
+// touchNodeNow writes an agent's liveness whatever was written before: its
+// stream just started.
+func (s *AgentControlGRPCServer) touchNodeNow(node agentcontrol.AgentNode) error {
+	s.liveness.written(node)
+	return s.writeLiveness(node)
+}
+
+func (s *AgentControlGRPCServer) writeLiveness(node agentcontrol.AgentNode) error {
+	err := s.persistLiveness(node)
+	if err != nil {
+		// The next touch writes again instead of waiting out the interval.
+		s.liveness.forget(node)
+	}
+	return err
+}
+
+func (s *AgentControlGRPCServer) persistLiveness(node agentcontrol.AgentNode) error {
 	if node.Kind == agentcontrol.NodeKindForward {
 		return databaseForAgentChecks().Model(&model.ForwardNode{}).Where("id = ?", node.ID).Updates(map[string]any{
 			"status": model.ForwardNodeStatusOnline, "last_check": time.Now(),
@@ -850,7 +879,7 @@ func (s *AgentControlGRPCServer) controlStream(stream agentv1pb.AgentControlServ
 	connection.forwardNegotiated = agentcontrol.Negotiated(hello.Capabilities, connection.ServerCapabilities, agentcontrol.CapabilityForward)
 
 	agenttransport.Seen(stream.Context(), principal.sighting(hello.AgentVersion))
-	if err := s.touchNode(agentNode); err != nil {
+	if err := s.touchNodeNow(agentNode); err != nil {
 		slog.Warn("failed to persist agent hello heartbeat", "component", "agent-control", "node", agentNode.String(), "error", err)
 	}
 	// The node's forwarding capabilities and configuration format, before
@@ -932,7 +961,8 @@ func (s *AgentControlGRPCServer) controlStream(stream agentv1pb.AgentControlServ
 			}
 			connection.touch(payload.Heartbeat.ObservedRevision)
 			connection.recordAgentMetrics(payload.Heartbeat.Metrics, time.Now())
-			// Throttled by the recorder: at most one write a minute.
+			// Throttled by the recorder: at most one write a minute. The
+			// liveness of the node is throttled the same way (touchNode).
 			agenttransport.Seen(stream.Context(), principal.sighting(hello.AgentVersion))
 			if err := s.touchNode(agentNode); err != nil {
 				slog.Warn("failed to persist agent heartbeat", "component", "agent-control", "node", agentNode.String(), "error", err)

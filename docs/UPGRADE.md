@@ -57,6 +57,19 @@ the node page's 诊断 section (service status, restart, log tail, the forward c
 certificate columns, and the 升级节点 sheet (⌘K), which starts a staged Agent upgrade.
 The `/api/v2/admin/agent/*` routes still answer until a later release removes them.
 
+**Upgrading to 5.0 (in progress): old log rows are deleted after 400 days, and
+the traffic log is hourly.** A singleton worker deletes `v2_server_log` and
+`v2_audit_log` rows older than 400 days and `v2_node_log` rows older than
+30 days, every hour in small batches; archive older rows first if you need
+them ([`reference/traffic-stats-operations.md`](reference/traffic-stats-operations.md)).
+The first start of the new version merges traffic-log rows that share an
+hourly bucket key and creates the unique index `idx_v2_server_log_bucket` in
+one transaction; new reports add to the hour's row, so the table stops growing
+with every report and a node's time series is unchanged. A SQLite file is now
+opened with one writer and four read connections, WAL, `synchronous=NORMAL`
+and a 10 second busy timeout (`reference/configuration.md`); nothing needs to
+be configured.
+
 **Upgrading to v4.2: the flux forwarding API and pages are removed.** Among
 the v2 routes that answer 404 are those that create, update, delete, pause,
 resume or diagnose a forward, the administrator's legacy rule, forward node,

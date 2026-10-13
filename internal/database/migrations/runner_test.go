@@ -3,6 +3,7 @@ package migrations_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strconv"
 	"testing"
 	"testing/fstest"
@@ -95,13 +96,15 @@ func TestMigrateRefusesADatabaseANewerProgramMigrated(t *testing.T) {
 		db := open(t)
 		_, err := migrations.Migrate(ctx, db, migrateOptions())
 		require.NoError(t, err)
+		known := len(steps(t))
+		future := fmt.Sprintf("%04d", known+1)
 		require.NoError(t, db.Create(&migrations.MigrationRecord{
-			Version: 2, Name: "from_the_future", Checksum: "sha256:00", AppliedAt: time.Now(), ProgramVersion: "5.1.0",
+			Version: known + 1, Name: "from_the_future", Checksum: "sha256:00", AppliedAt: time.Now(), ProgramVersion: "5.1.0",
 		}).Error)
 
 		_, err = migrations.Migrate(ctx, db, migrateOptions())
-		requireRefused(t, err, "newer AnixOps Control", "0002_from_the_future", "Control 5.1.0", "this program (Control 4.2.1)",
-			"knows migrations up to 0001", "restore the backup")
+		requireRefused(t, err, "newer AnixOps Control", future+"_from_the_future", "Control 5.1.0", "this program (Control 4.2.1)",
+			fmt.Sprintf("knows migrations up to %04d", known), "restore the backup")
 	})
 }
 

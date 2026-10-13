@@ -770,4 +770,6 @@ SELECT schemaname, sequencename, last_value FROM pg_sequences ORDER BY schemanam
 
 作为对照，P1 之前同样 N = 50、A = 1000 时，`v2_server_log` 每天新增约 144 万行（每分钟每用户一行）。
 
-SQLite 在这台 VPS 磁盘上每秒能提交多少个 WAL 事务是 `unknown`，由 P1 的基准在 CI 机器上测出下限后填入本表；表中最大一档每秒约 10 个写事务，长事务（单个事务内逐用户更新）比事务数更值得关注，所以 P1 把逐用户 UPDATE 改为一条批量语句。每个事务持锁时间的目标是 p99 小于 50 ms。
+表中最大一档每秒约 10 个写事务，长事务（单个事务内逐用户更新）比事务数更值得关注，所以 P1 把逐用户 UPDATE 改为一条批量语句。每个事务持锁时间的目标是 p99 小于 50 ms。
+
+**P1 实测（开发机的 ext4 虚拟磁盘，不是生产 VPS；`TMPDIR` 必须指向数据盘，tmpfs 没有 fsync）。** WAL、`synchronous=NORMAL` 下，单行 UPDATE 事务每秒约 24 000 至 32 000 个（P1 之前的 `synchronous=FULL` 为每秒约 320 至 350 个）。N = 200、A = 5000 时，一次完整上报（批次登记、小时桶 upsert、用户计数、节点计数、在线人数）串行每秒约 660 至 1300 次；N 个节点同时不停上报的饱和吞吐每秒约 400 至 1000 次，是表中最大一档的 40 倍以上，P1 之前在 N = 10 就有约 1% 的上报因 `database is locked` 失败，N = 50 时约 10%。一次上报持写锁的 p50 约 0.7 ms；p99 在 WAL 自动检查点把 fsync 放在提交路径上时为 12 至 47 ms，关闭自动检查点时为 1.3 ms，所以尾部全部来自检查点。命令：`TMPDIR=<数据盘目录> go test ./internal/service -run '^$' -bench 'TrafficReportSQLite|NodeLivenessWriteSQLite' -benchtime 3000x`。生产 VPS 的磁盘上用同一命令复测后再定是否把检查点移出提交路径。

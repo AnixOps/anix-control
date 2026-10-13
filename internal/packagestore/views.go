@@ -110,9 +110,9 @@ var KernelAPIViews = []KernelAPIView{
 		Query:  "SELECT id, invite_user_id FROM v2_user",
 	},
 	{
-		// Each node traffic report's bytes per user, its rate and when it
-		// was logged, for the machine-telemetry package's traffic charts and
-		// ranking. No node, token or credential.
+		// The bytes a user used on a node in an hour (log_at is the start of
+		// the hour), their rate, for the machine-telemetry package's traffic
+		// charts and ranking. No node, token or credential.
 		Name:   "kapi_traffic_log_v1",
 		Source: "v2_server_log",
 		Query:  "SELECT user_id, u, d, rate, log_at FROM v2_server_log",

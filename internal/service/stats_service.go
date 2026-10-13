@@ -513,6 +513,12 @@ func (s *StatsService) GetHourlyTraffic(hours int, userID uint) ([]HourlyTraffic
 }
 
 // GetTrafficLogMeta returns lightweight diagnostics for traffic chart pages.
+//
+// The latest report time is the latest row's log_at, which is the start of an
+// hour for a row of an hourly bucket. A bucket's created_at is the time of
+// the report that last touched it (addTrafficLogs), so when the latest row
+// is on an hour boundary the latest report is read from it: the dashboard
+// tells a stalled report path by the age of this time.
 func (s *StatsService) GetTrafficLogMeta(userID uint) (TrafficLogMeta, error) {
 	var latest sql.NullInt64
 	query := s.db.Model(&model.TrafficLog{})
@@ -525,7 +531,24 @@ func (s *StatsService) GetTrafficLogMeta(userID uint) (TrafficLogMeta, error) {
 	if !latest.Valid {
 		return TrafficLogMeta{}, nil
 	}
-	return TrafficLogMeta{LatestLogAt: latest.Int64}, nil
+	at := latest.Int64
+	if at%model.TrafficLogBucketSeconds == 0 {
+		var newest []model.TrafficLog
+		bucket := s.db.Model(&model.TrafficLog{}).Where("log_at = ?", at)
+		if userID > 0 {
+			bucket = bucket.Where("user_id = ?", userID)
+		}
+		if err := bucket.Select("created_at").Order("created_at DESC").Limit(1).Find(&newest).Error; err != nil {
+			return TrafficLogMeta{}, err
+		}
+		if len(newest) == 1 {
+			// Only a time inside the bucket's hour is a report time.
+			if reported := newest[0].CreatedAt.Unix(); reported >= at && reported < at+model.TrafficLogBucketSeconds {
+				at = reported
+			}
+		}
+	}
+	return TrafficLogMeta{LatestLogAt: at}, nil
 }
 
 // UserTrafficRank 单个用户的流量排行项

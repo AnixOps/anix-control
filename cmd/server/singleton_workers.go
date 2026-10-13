@@ -15,6 +15,7 @@ import (
 	grpcserver "github.com/AnixOps/anix-control/v5/internal/grpc"
 	"github.com/AnixOps/anix-control/v5/internal/kernelforward"
 	"github.com/AnixOps/anix-control/v5/internal/kernelnodeops"
+	"github.com/AnixOps/anix-control/v5/internal/retention"
 	"github.com/AnixOps/anix-control/v5/internal/service"
 )
 
@@ -117,5 +118,8 @@ func runSingletonWorkers(ctx context.Context, bridgeEnabled bool) {
 	// one digest of what needs them. One process only, or they would all
 	// notify.
 	run(kernelAlertMonitor(database.Get(), config.Get()).Run)
+	// Retention of the traffic, node and audit logs: deletes expired rows
+	// in batches every hour and compacts the SQLite file (internal/retention).
+	run(retention.NewWorker(database.Get()).Run)
 	wg.Wait()
 }

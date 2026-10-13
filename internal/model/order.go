@@ -36,21 +36,56 @@ func (Order) TableName() string {
 	return "v2_order"
 }
 
-// TrafficLog 流量日志
+// TrafficLog is one hourly bucket of the traffic one user used on one node:
+// the bytes of every report in LogAt's hour, as reported (before Rate). A
+// report adds to the row of its (node, hour, user, server type, rate) key
+// with an upsert on TrafficLogBucketIndex, so a node's reports of an hour
+// are one row per user instead of one row per report. Rows written before
+// the buckets exist keep their own LogAt (a report's second): readers sum
+// rows, so they stay valid next to the buckets.
+//
+// CreatedAt is the time of the report that last touched the row: the one that
+// inserted it, or the latest that added to it, so the newest bucket's
+// CreatedAt is the latest report's time even though LogAt is the hour.
+//
+// The raw log is kept for the retention of internal/retention.
 type TrafficLog struct {
 	ID         uint      `gorm:"primaryKey" json:"id"`
-	UserID     uint      `gorm:"index;index:idx_server_log_log_at_user_id,priority:2" json:"user_id"`
-	ServerID   uint      `gorm:"index" json:"server_id"`
-	ServerType string    `gorm:"size:20" json:"server_type"`
+	UserID     uint      `gorm:"index;index:idx_server_log_log_at_user_id,priority:2;uniqueIndex:idx_v2_server_log_bucket,priority:3" json:"user_id"`
+	ServerID   uint      `gorm:"index;uniqueIndex:idx_v2_server_log_bucket,priority:1" json:"server_id"`
+	ServerType string    `gorm:"size:20;uniqueIndex:idx_v2_server_log_bucket,priority:4" json:"server_type"`
 	U          int64     `json:"u"` // upload bytes
 	D          int64     `json:"d"` // download bytes
-	Rate       float64   `gorm:"default:1" json:"rate"`
-	LogAt      int64     `gorm:"index;index:idx_server_log_log_at_user_id,priority:1" json:"log_at"`
+	Rate       float64   `gorm:"default:1;uniqueIndex:idx_v2_server_log_bucket,priority:5" json:"rate"`
+	LogAt      int64     `gorm:"index;index:idx_server_log_log_at_user_id,priority:1;uniqueIndex:idx_v2_server_log_bucket,priority:2" json:"log_at"` // start of the hour, Unix seconds
 	CreatedAt  time.Time `json:"created_at"`
 }
 
 func (TrafficLog) TableName() string {
 	return "v2_server_log"
+}
+
+const (
+	// TrafficLogBucketSeconds is the width of a TrafficLog bucket. Readers
+	// group rows by (log_at / 3600), so a bucket is one of their hours.
+	TrafficLogBucketSeconds = 3600
+	// TrafficLogBucketIndex is the unique index on the bucket key, the
+	// conflict target of the upsert.
+	TrafficLogBucketIndex = "idx_v2_server_log_bucket"
+)
+
+// TrafficLogBucketColumns are the columns of the bucket key, in the order of
+// TrafficLogBucketIndex.
+var TrafficLogBucketColumns = []string{"server_id", "log_at", "user_id", "server_type", "rate"}
+
+// TrafficLogBucketStart returns the start of the bucket (the UTC hour) that
+// contains the Unix time at.
+func TrafficLogBucketStart(at int64) int64 {
+	start := at - at%TrafficLogBucketSeconds
+	if at < 0 && at%TrafficLogBucketSeconds != 0 {
+		start -= TrafficLogBucketSeconds
+	}
+	return start
 }
 
 // OnlineLog 在线日志

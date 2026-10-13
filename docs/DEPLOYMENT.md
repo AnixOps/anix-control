@@ -391,6 +391,8 @@ database:
   database: "config/data/v2board.db"
 ```
 
+SQLite 的连接参数是内置的，不是配置项：一个写连接加 4 个只读连接，WAL，`synchronous=NORMAL`，10 秒忙等待，事务以 `BEGIN IMMEDIATE` 开始；流量日志 `v2_server_log` 按小时合并，并由后台任务按保留期（400 天）分批清理。详见 [`reference/configuration.md`](reference/configuration.md) 与 [`reference/traffic-stats-operations.md`](reference/traffic-stats-operations.md)。
+
 PostgreSQL（推荐生产）：
 
 ```yaml

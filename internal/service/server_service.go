@@ -143,9 +143,9 @@ func (s *ServerService) RecordTrafficLog(serverType model.ServerType, serverID u
 		U:          upload,
 		D:          download,
 		Rate:       rate,
-		LogAt:      time.Now().Unix(),
+		LogAt:      model.TrafficLogBucketStart(time.Now().Unix()),
 	}
-	return s.db.Create(&log).Error
+	return addTrafficLogs(s.db, []model.TrafficLog{log})
 }
 
 // BatchRecordTrafficLog 批量记录流量日志
@@ -161,7 +161,7 @@ func (s *ServerService) BatchRecordTrafficLog(serverType model.ServerType, serve
 	rate = normalizeTrafficRate(rate)
 
 	logs := make([]model.TrafficLog, 0, len(traffics))
-	now := time.Now().Unix()
+	now := model.TrafficLogBucketStart(time.Now().Unix())
 
 	for userID, traffic := range traffics {
 		logs = append(logs, model.TrafficLog{
@@ -175,7 +175,38 @@ func (s *ServerService) BatchRecordTrafficLog(serverType model.ServerType, serve
 		})
 	}
 
-	return s.db.CreateInBatches(logs, 100).Error
+	return addTrafficLogs(s.db, logs)
+}
+
+// trafficLogBatch is the number of v2_server_log rows of one INSERT.
+const trafficLogBatch = 100
+
+// addTrafficLogs adds traffic to hourly buckets of the traffic log: a row
+// of a bucket that exists gets the bytes added to its u and d, any other is
+// inserted. The rows' LogAt is the start of their hour
+// (model.TrafficLogBucketStart) and the key of one call is unique per user,
+// as PostgreSQL does not update a row twice in one statement.
+func addTrafficLogs(tx *gorm.DB, logs []model.TrafficLog) error {
+	if len(logs) == 0 {
+		return nil
+	}
+	table := model.TrafficLog{}.TableName()
+	columns := make([]clause.Column, len(model.TrafficLogBucketColumns))
+	for i, name := range model.TrafficLogBucketColumns {
+		columns[i] = clause.Column{Name: name}
+	}
+	// The table's name qualifies the old value: PostgreSQL rejects the bare
+	// column as ambiguous with excluded. created_at moves to the report's
+	// time, so a bucket's created_at is its latest report (the dashboard's
+	// "latest report" reads it, GetTrafficLogMeta).
+	return tx.Clauses(clause.OnConflict{
+		Columns: columns,
+		DoUpdates: clause.Set{
+			{Column: clause.Column{Name: "u"}, Value: gorm.Expr(table + ".u + excluded.u")},
+			{Column: clause.Column{Name: "d"}, Value: gorm.Expr(table + ".d + excluded.d")},
+			{Column: clause.Column{Name: "created_at"}, Value: gorm.Expr("excluded.created_at")},
+		},
+	}).CreateInBatches(logs, trafficLogBatch).Error
 }
 
 // RecordNodeTrafficReport atomically applies a node traffic report. Node
@@ -260,6 +291,7 @@ func planNodeTrafficReport(serverType model.ServerType, nodeID uint, traffics ma
 	rate = normalizeTrafficRate(rate)
 	now := at.Unix()
 	plan := &nodeTrafficReportPlan{serverType: serverType, nodeID: nodeID, now: now}
+	bucket := model.TrafficLogBucketStart(now)
 	plan.logs = make([]model.TrafficLog, 0, len(traffics))
 	plan.entries = make([]subscriber.TrafficEntry, 0, len(traffics))
 	for userID, traffic := range traffics {
@@ -278,7 +310,7 @@ func planNodeTrafficReport(serverType model.ServerType, nodeID uint, traffics ma
 			U:          traffic[0],
 			D:          traffic[1],
 			Rate:       rate,
-			LogAt:      now,
+			LogAt:      bucket,
 		})
 	}
 	dayStart := time.Unix(now, 0).In(time.Local)
@@ -289,7 +321,7 @@ func planNodeTrafficReport(serverType model.ServerType, nodeID uint, traffics ma
 }
 
 func (p *nodeTrafficReportPlan) applyTx(tx *gorm.DB) error {
-	if err := tx.CreateInBatches(p.logs, 100).Error; err != nil {
+	if err := addTrafficLogs(tx, p.logs); err != nil {
 		return err
 	}
 	if p.totalUpload > 0 || p.totalDownload > 0 {

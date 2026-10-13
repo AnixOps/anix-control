@@ -193,6 +193,48 @@ func TestReloadPicksUpOtherWritersAndPrunes(t *testing.T) {
 	require.Zero(t, sessions, "an expired session revocation is pruned")
 }
 
+func countDeletes(t *testing.T, db *gorm.DB) *int {
+	t.Helper()
+	deletes := new(int)
+	require.NoError(t, db.Callback().Delete().Before("gorm:delete").Register("test:count_deletes", func(*gorm.DB) { *deletes++ }))
+	return deletes
+}
+
+// The tables are read at every reload, but pruned at most every
+// PruneInterval, and a prune with nothing to delete writes nothing.
+func TestReloadPrunesAtMostEveryPruneInterval(t *testing.T) {
+	db := testDB(t)
+	clock := time.Now()
+	store := NewStore(db, 25*time.Hour)
+	store.now = func() time.Time { return clock }
+	deletes := countDeletes(t, db)
+	ctx := context.Background()
+
+	require.NoError(t, store.Reload(ctx))
+	require.Zero(t, *deletes, "an empty table is read and not written")
+
+	// An old revocation appears: the next reload reads it but leaves it.
+	require.NoError(t, Write(db, Revocation{UserID: 8, NotBefore: clock.Add(-48 * time.Hour)}))
+	require.NoError(t, Write(db, Revocation{UserID: 7, NotBefore: clock}))
+	clock = clock.Add(5 * time.Second)
+	require.NoError(t, store.Reload(ctx))
+	require.Zero(t, *deletes)
+	var users int64
+	require.NoError(t, db.Model(&model.IdentityRevocation{}).Count(&users).Error)
+	require.Equal(t, int64(2), users, "not pruned inside the interval")
+	require.True(t, store.Revoked(legacyClaims(7, clock.Add(-time.Minute))), "but every reload reads: a revocation of another process applies")
+
+	clock = clock.Add(PruneInterval)
+	require.NoError(t, store.Reload(ctx))
+	require.Equal(t, 1, *deletes, "one DELETE, for the table that had an expired row")
+	require.NoError(t, db.Model(&model.IdentityRevocation{}).Count(&users).Error)
+	require.Equal(t, int64(1), users)
+
+	clock = clock.Add(PruneInterval)
+	require.NoError(t, store.Reload(ctx))
+	require.Equal(t, 1, *deletes, "nothing left to prune: no write")
+}
+
 // Identity tokens follow the token version: one identity issues right after
 // a versioned revocation, within the same second, keeps working, while the
 // kernel's own tokens of that second stop working.

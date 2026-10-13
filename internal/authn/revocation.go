@@ -124,6 +124,14 @@ type userBounds struct {
 	tokenVersion      uint64
 }
 
+// PruneInterval is how often Reload deletes the rows that no longer revoke
+// any unexpired token. Every reload still reads the tables, so a revocation
+// written by another process takes effect within the reload interval; a row
+// that is expired only has to go eventually, and each DELETE is a write
+// transaction of its own, which a reload every few seconds should not take
+// (docs/design/single-binary section 3.4).
+const PruneInterval = 5 * time.Minute
+
 // Store answers revocation checks from memory. It loads the tables at start,
 // applies revocations this process makes at once (Remember), and reloads
 // periodically to pick up revocations written elsewhere.
@@ -140,6 +148,8 @@ type Store struct {
 	// recent holds revocations remembered while a reload may be reading the
 	// tables, so the reload's swap cannot drop them.
 	recent []remembered
+	// lastPrune is when Reload last pruned the tables; guarded by mu.
+	lastPrune time.Time
 }
 
 type remembered struct {
@@ -231,20 +241,22 @@ func (s *Store) applyLocked(r Revocation) {
 	}
 }
 
-// Reload replaces the cache with the tables, after deleting rows that no
-// longer revoke any unexpired token.
+// Reload replaces the cache with the tables. The rows that no longer revoke
+// any unexpired token are deleted first, at most every PruneInterval and only
+// when there are any.
 func (s *Store) Reload(ctx context.Context) error {
 	// Anything remembered before this point was committed before the reads
 	// below, so they see it.
 	started := time.Now()
 	now := s.now()
 	db := s.db.WithContext(ctx)
-	if err := db.Where("token_version = 0 AND not_before < ?", now.Add(-s.maxTokenLifetime)).
-		Delete(&model.IdentityRevocation{}).Error; err != nil {
-		return err
-	}
-	if err := db.Where("expires_at < ?", now).Delete(&model.IdentitySessionRevocation{}).Error; err != nil {
-		return err
+	if s.claimPrune(now) {
+		if err := s.prune(db, now); err != nil {
+			s.mu.Lock()
+			s.lastPrune = time.Time{}
+			s.mu.Unlock()
+			return err
+		}
 	}
 	var userRows []model.IdentityRevocation
 	if err := db.Find(&userRows).Error; err != nil {
@@ -278,6 +290,39 @@ func (s *Store) Reload(ctx context.Context) error {
 	}
 	s.recent = kept
 	return nil
+}
+
+// claimPrune reports whether a prune is due at now, and marks it done: the
+// first reload prunes, then one per PruneInterval.
+func (s *Store) claimPrune(now time.Time) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.lastPrune.IsZero() && !now.Before(s.lastPrune) && now.Sub(s.lastPrune) < PruneInterval {
+		return false
+	}
+	s.lastPrune = now
+	return true
+}
+
+// prune deletes the user revocations older than any token lifetime and the
+// expired session revocations. A DELETE that matches no row is a write
+// transaction all the same, so each is preceded by a read.
+func (s *Store) prune(db *gorm.DB, now time.Time) error {
+	if err := deleteWhere(db, &model.IdentityRevocation{}, "token_version = 0 AND not_before < ?", now.Add(-s.maxTokenLifetime)); err != nil {
+		return err
+	}
+	return deleteWhere(db, &model.IdentitySessionRevocation{}, "expires_at < ?", now)
+}
+
+func deleteWhere(db *gorm.DB, value any, query string, args ...any) error {
+	var found []int
+	if err := db.Model(value).Select("1").Where(query, args...).Limit(1).Scan(&found).Error; err != nil {
+		return err
+	}
+	if len(found) == 0 {
+		return nil
+	}
+	return db.Where(query, args...).Delete(value).Error
 }
 
 // Run reloads every interval until ctx ends; errors go to report.
