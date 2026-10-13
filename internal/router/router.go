@@ -439,14 +439,11 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			admin.DELETE("/system/configs/:key", registeredPackageRoute(v2PackageGateway.Serve, "platform", "platform.admin.system.configs.key.delete", systemHandler.DeleteConfig))
 			admin.GET("/system/audit-logs", registeredPackageRoute(v2PackageGateway.Serve, "platform", "platform.admin.system.audit_logs.get", systemHandler.GetAuditLogs))
 
-			// ========== 备份管理 ==========
-			admin.GET("/system/backup/config", registeredPackageRoute(v2PackageGateway.Serve, "platform", "platform.admin.system.backup.config.get", systemHandler.GetBackupConfig))
-			admin.PUT("/system/backup/config", registeredPackageRoute(v2PackageGateway.Serve, "platform", "platform.admin.system.backup.config.put", systemHandler.UpdateBackupConfig))
-			admin.POST("/system/backup", registeredPackageRoute(v2PackageGateway.Serve, "platform", "platform.admin.system.backup.post", systemHandler.CreateBackup))
-			admin.GET("/system/backups", registeredPackageRoute(v2PackageGateway.Serve, "platform", "platform.admin.system.backups.get", systemHandler.ListBackups))
-			admin.GET("/system/backup/stats", registeredPackageRoute(v2PackageGateway.Serve, "platform", "platform.admin.system.backup.stats.get", systemHandler.GetBackupStats))
-			admin.DELETE("/system/backups/:id", registeredPackageRoute(v2PackageGateway.Serve, "platform", "platform.admin.system.backups.id.delete", systemHandler.DeleteBackup))
-			admin.POST("/system/backups/:id/restore", registeredPackageRoute(v2PackageGateway.Serve, "platform", "platform.admin.system.backups.id.restore.post", systemHandler.RestoreBackup))
+			// The backup routes (/system/backup*, /system/backups*) are gone:
+			// their schedule, retention and S3 settings ran nothing and the
+			// online restore overwrote the open database. Backups are
+			// /api/v5/backups; a restore runs on the server
+			// (`anix-control backup restore`).
 
 			// ========== 负载均衡管理 ==========
 			lbHandler := handler.NewLoadBalancerHandler()
@@ -863,7 +860,10 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 
 	// API v5: the panel's own state, with v4's admission model. The
 	// certificates Control serves (the console's banner reads them) and a
-	// retry of the failing ones.
+	// retry of the failing ones; the backups (list, back up now, and the
+	// download, which needs a super administrator and is audited). There
+	// is no restore route: a restore runs on the server with Control
+	// stopped.
 	v5 := r.Group("/api/v5")
 	v5.Use(adminLimiter.Middleware())
 	v5.Use(adminAPIToken)
@@ -874,5 +874,9 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		panelStatus := handler.NewPanelStatusHandler()
 		v5.GET("/panel/status", panelStatus.Status)
 		v5.POST("/panel/certificates/retry", panelStatus.RetryCertificates)
+		backups := handler.NewBackupsHandler()
+		v5.GET("/backups", backups.List)
+		v5.POST("/backups", backups.Create)
+		v5.GET("/backups/:id/download", backups.Download)
 	}
 }

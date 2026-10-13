@@ -9,6 +9,7 @@ Always prepare these inputs first:
 - `config/config.yaml` (local, gitignored; copy from [`config/config.yaml.example`](../../config/config.yaml.example), the `domain` line)
   - the operator keys ([configuration](configuration.md#operator-keys)); the deprecated keys still read until later milestones (the database, `forward_runtime`) go here too
 - `data_dir/root.key` (`/var/lib/anix-control` by default): the root key, which Control creates at its first start
+- `data_dir/backups/`: the backups Control takes of a SQLite panel every day and before every migration ([backups.md](backups.md)); `anix-control backup create` takes one now
 - `.env` (local, gitignored; copy from [`.env.example`](../../.env.example))
   - optional Docker Compose and installer env file
   - use it for deployment-specific ports or metadata; runtime selection comes from `config/config.yaml.forward_runtime`

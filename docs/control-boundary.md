@@ -39,6 +39,7 @@ Before you try to start the panel, keep these rules straight:
 
 - the configuration is nine operator keys over built-in values; an ordinary file is `domain: panel.example.com` (template: [`config/config.yaml.example`](../config/config.yaml.example)), read through `-config`, `ANIX_CONTROL_CONFIG` or `config/config.yaml`, strictly: deprecated 4.x keys warn, unknown keys stop the start ([`reference/configuration.md`](reference/configuration.md))
 - the root key is `data_dir/root.key`, created or adopted at the first start; it seals the stored keys and derives the JWT secret, and the start refuses a key that cannot open the stored CA
+- on SQLite Control backs itself up into `data_dir/backups` (daily, before every pending migration, on request) and verifies every bundle; a start that cannot take its pre-migration backup migrates nothing and stops, and a restore runs only with Control stopped (`data_dir/control.lock`) ([`reference/backups.md`](reference/backups.md))
 - local `go run` does not auto-load `.env` (template: [`.env.example`](../.env.example))
 - `forward_runtime` (deprecated, read until M5) is the canonical runtime entry
 - `InitForwardRuntimeSystemConfig` normalizes the YAML contents and writes them into `v2_system_config`

@@ -786,58 +786,6 @@ export function getSystemAuditLogs(params) {
   })
 }
 
-export function getBackupConfig() {
-  return request({
-    url: '/admin/system/backup/config',
-    method: 'get'
-  })
-}
-
-export function updateBackupConfig(data) {
-  return request({
-    url: '/admin/system/backup/config',
-    method: 'put',
-    data
-  })
-}
-
-export function createBackup(type = 'database') {
-  return request({
-    url: '/admin/system/backup',
-    method: 'post',
-    params: { type }
-  })
-}
-
-export function getBackups(params) {
-  return request({
-    url: '/admin/system/backups',
-    method: 'get',
-    params
-  })
-}
-
-export function getBackupStats() {
-  return request({
-    url: '/admin/system/backup/stats',
-    method: 'get'
-  })
-}
-
-export function deleteBackup(id) {
-  return request({
-    url: `/admin/system/backups/${id}`,
-    method: 'delete'
-  })
-}
-
-export function restoreBackup(id) {
-  return request({
-    url: `/admin/system/backups/${id}/restore`,
-    method: 'post'
-  })
-}
-
 export function getLoadBalancers(params) {
   return request({
     url: '/admin/loadbalancers',
@@ -1081,13 +1029,6 @@ export default {
   setSystemConfig,
   deleteSystemConfig,
   getSystemAuditLogs,
-  getBackupConfig,
-  updateBackupConfig,
-  createBackup,
-  getBackups,
-  getBackupStats,
-  deleteBackup,
-  restoreBackup,
   getLoadBalancers,
   createLoadBalancer,
   updateLoadBalancer,

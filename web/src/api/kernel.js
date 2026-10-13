@@ -538,3 +538,33 @@ export async function getPanelStatus() {
 export async function retryPanelCertificates() {
   return unwrap(await v5({ url: '/panel/certificates/retry', method: 'post' }))
 }
+
+// The panel's backups (GET /api/v5/backups, any administrator): { supported,
+// reason (why not, on PostgreSQL), backups: [{ id, file, type
+// (daily|pre-migration|manual|verify), size, sha256, created_at, verified_at,
+// verify_status (pending|passed|failed), verify_error, program_version,
+// schema_version }], summary: { last_verified (a backup or null), stale,
+// stale_after_hours, next_daily_at, directory }, retention: { daily, weekly,
+// pre_migration_days, manual, verify } }.
+export async function getPanelBackups() {
+  return unwrap(await v5({ url: '/backups', method: 'get' }))
+}
+
+// Back up now: a manual bundle (POST /api/v5/backups, any administrator).
+// Answers { backup } pending verification, which follows in the background.
+// 409 backups_need_sqlite or backup_in_progress.
+export async function createPanelBackup() {
+  return unwrap(await v5({ url: '/backups', method: 'post', timeout: 300_000 }))
+}
+
+// Downloads a bundle (GET /api/v5/backups/:id/download). It holds the root
+// key: a super administrator only (403 super_admin_required), and audited.
+// Answers { blob, filename }.
+export async function downloadPanelBackup(id) {
+  const response = await v5({
+    url: `/backups/${encodeURIComponent(id)}/download`, method: 'get', responseType: 'blob', rawResponse: true, timeout: 0
+  })
+  const disposition = String(response?.headers?.['content-disposition'] || '')
+  const match = /filename="([^"]+)"/.exec(disposition)
+  return { blob: response.data, filename: match ? match[1] : `backup-${id}.tar` }
+}

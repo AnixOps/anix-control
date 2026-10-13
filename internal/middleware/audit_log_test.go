@@ -96,6 +96,39 @@ func TestAuditLogRecordsCredentialReveals(t *testing.T) {
 	require.False(t, auditedRead(http.MethodHead, "/api/v2/admin/nodes/7/credentials"))
 }
 
+// A backup bundle holds the root key: its download is recorded like a
+// write, as backups/download; the list is not.
+func TestAuditLogRecordsBackupDownloads(t *testing.T) {
+	previousMode := gin.Mode()
+	gin.SetMode(gin.ReleaseMode)
+	t.Cleanup(func() { gin.SetMode(previousMode) })
+	var logged bytes.Buffer
+	previousLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&logged, nil)))
+	t.Cleanup(func() { slog.SetDefault(previousLogger) })
+
+	router := gin.New()
+	router.Use(func(c *gin.Context) { c.Set("user_id", uint(1)); c.Set("email", "root@example.test") })
+	router.Use(AuditLog())
+	router.GET("/api/v5/backups", func(c *gin.Context) { c.Status(http.StatusOK) })
+	router.GET("/api/v5/backups/:id/download", func(c *gin.Context) { c.Data(http.StatusOK, "application/x-tar", []byte("bundle bytes")) })
+	router.POST("/api/v5/backups", func(c *gin.Context) { c.Status(http.StatusCreated) })
+
+	router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/api/v5/backups", nil))
+	require.Empty(t, logged.String(), "the list is not recorded")
+
+	router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/api/v5/backups/3/download", nil))
+	require.Contains(t, logged.String(), `"path":"/api/v5/backups/3/download"`)
+	require.Contains(t, logged.String(), `"module":"backups"`)
+	require.Contains(t, logged.String(), `"action":"download"`)
+	require.Contains(t, logged.String(), `"user_id":"1"`)
+	require.NotContains(t, logged.String(), "bundle bytes")
+
+	logged.Reset()
+	router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/api/v5/backups", nil))
+	require.Contains(t, logged.String(), `"action":"create"`, "a manual backup is recorded like any write")
+}
+
 // A user's reset of their own subscription link is recorded like the
 // administrator's reset, as user/reset_subscribe, without its body: the
 // body is the user's password or one-time code. Other user requests are

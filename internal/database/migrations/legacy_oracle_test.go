@@ -59,9 +59,56 @@ func legacySchemaModels() []any {
 		&model.NotificationTemplate{}, &model.NotificationLog{},
 		&model.UserMFA{}, &model.MFALoginAttempt{},
 		&model.UserLevel{}, &model.InviteCode{}, &model.CommissionRecord{}, &model.CommissionWithdraw{}, &model.InviteConfig{},
-		&model.LoadBalancer{}, &model.SystemConfig{}, &model.BackupRecord{}, &model.BackupConfig{}, &model.OperationLog{}, &model.AuditLog{},
+		&model.LoadBalancer{}, &model.SystemConfig{}, &keptBackupRecord{}, &keptBackupConfig{}, &model.OperationLog{}, &model.AuditLog{},
 	}
 }
+
+// keptBackupRecord is model.BackupRecord as the baseline created it. The
+// model went with the old backup service (Control's backups are v5_backup);
+// its table stays in the schema, unused, until a cleanup migration drops
+// it, so both the baseline's start and today's create it.
+type keptBackupRecord struct {
+	ID        uint   `gorm:"primaryKey"`
+	Name      string `gorm:"size:100"`
+	Type      string `gorm:"size:20"`
+	Size      int64
+	Path      string `gorm:"size:255"`
+	Status    int    `gorm:"default:0"`
+	Error     string `gorm:"type:text"`
+	Auto      bool   `gorm:"default:false"`
+	CreatedBy *uint
+
+	CompletedAt *time.Time
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
+func (keptBackupRecord) TableName() string { return "v2_backup_record" }
+
+// keptBackupConfig is model.BackupConfig as the baseline created it: the
+// schedule, retention and S3 settings nothing executed. Kept like
+// keptBackupRecord.
+type keptBackupConfig struct {
+	ID             uint   `gorm:"primaryKey"`
+	Enabled        bool   `gorm:"default:false"`
+	AutoBackup     bool   `gorm:"default:false"`
+	Schedule       string `gorm:"size:50"`
+	RetentionDays  int    `gorm:"default:7"`
+	BackupDatabase bool   `gorm:"default:true"`
+	BackupFiles    bool   `gorm:"default:false"`
+	StorageType    string `gorm:"size:20;default:local"`
+	StoragePath    string `gorm:"size:255"`
+	S3Bucket       string `gorm:"size:100"`
+	S3Region       string `gorm:"size:50"`
+	S3Endpoint     string `gorm:"size:255"`
+	S3AccessKey    string `gorm:"size:100"`
+	S3SecretKey    string `gorm:"size:100"`
+
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+func (keptBackupConfig) TableName() string { return "v2_backup_config" }
 
 // postBaselineIndexes are the indexes later migrations added to the models:
 // the legacy start of the baseline did not create them. legacyPrepare drops
@@ -79,6 +126,7 @@ var postBaselineIndexes = []struct{ table, index string }{
 func laterModels() []any {
 	return []any{
 		&model.ACMECacheEntry{}, // 0003_acme_cache
+		&model.Backup{},         // 0005_backups
 	}
 }
 

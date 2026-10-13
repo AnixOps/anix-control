@@ -86,85 +86,53 @@ export default {
       }
     },
     backup: {
-      auto: {
-        title: '自动备份',
-        description: '按固定间隔备份，只保留最近几份。',
-        enabled: '自动备份',
-        enabledHelp: '关闭后只能手动备份。',
-        interval: '备份间隔',
-        hours: '小时',
-        keepCount: '保留份数',
-        keepCountHelp: '超出后删除最早的备份。',
-        copies: '份',
-        positiveInteger: '请输入不小于 1 的整数',
-        loadFailed: '无法加载备份设置',
-        saved: '备份设置已保存',
-        saveFailed: '无法保存备份设置'
-      },
-      contents: {
-        title: '备份内容',
-        database: '数据库',
-        files: '文件'
-      },
-      storage: {
-        title: '存储位置',
-        type: '存储类型',
-        local: '本地',
-        s3: 'S3 兼容存储',
-        path: '本地目录',
-        pathPlaceholder: 'backups',
-        pathHelp: '相对路径从面板的工作目录算起。',
-        bucket: 'Bucket',
-        bucketPlaceholder: 'panel-backups',
-        bucketRequired: '使用 S3 时必须填写 Bucket',
-        region: 'Region',
-        regionPlaceholder: 'us-east-1',
-        endpoint: 'Endpoint（可选）',
-        endpointPlaceholder: 'https://s3.amazonaws.com',
-        endpointInvalid: '请输入以 http:// 或 https:// 开头的地址',
-        accessKey: 'Access Key',
-        secretKey: 'Secret Key',
-        keepCurrent: '留空保留当前值',
-        sensitiveWithValue: '已保存，内容隐藏。留空保留，填写新值则替换。',
-        sensitiveWithoutValue: '尚未设置，请填写后保存。'
+      title: '备份',
+      description: 'Control 每天 03:00 到 05:00 之间、每次数据库迁移之前以及你要求时，备份数据库、根密钥和配置，并逐个验证备份能否还原。',
+      backupNow: '立即备份',
+      created: '已备份到 {file}，正在验证。',
+      createFailed: '无法备份',
+      busy: '已有备份或验证在进行，请稍后再试。',
+      loadFailed: '无法加载备份列表',
+      unsupported: '备份需要 SQLite',
+      unsupportedHint: '这个面板使用 PostgreSQL，Control 的备份不覆盖它。请用 pg_dump 备份数据库，并和 root.key 一起保存。',
+      summary: {
+        label: '备份状态',
+        lastVerified: '上次验证通过的备份',
+        none: '还没有',
+        stale: '已超过 {hours} 小时',
+        current: '正常',
+        nextDaily: '下次自动备份',
+        directory: '服务器上的目录'
       },
       list: {
-        title: '备份',
-        description: '已有的备份文件。只有已完成的备份可以用来恢复。',
-        backupNow: '立即备份',
-        filename: '文件名',
-        status: '状态',
+        title: '本机的备份',
+        file: '文件',
+        type: '类型',
         size: '大小',
-        createdAt: '创建时间',
-        restore: '恢复…',
+        createdAt: '备份时间',
+        verified: '验证',
         empty: '还没有备份',
-        emptyDescription: '开启自动备份，或者现在备份一次。',
-        loadFailed: '无法加载备份列表',
-        started: '已开始备份',
-        startFailed: '无法开始备份',
-        deleted: '已删除备份 {filename}',
-        deleteFailed: '无法删除备份',
-        restored: '已用备份恢复数据',
-        restoreFailed: '无法恢复备份'
+        emptyDescription: 'Control 启动几分钟后会自动备份第一次，也可以现在备份。',
+        download: '下载',
+        downloadFailed: '无法下载备份',
+        superAdminRequired: '只有超级管理员可以下载备份：备份里有面板的根密钥。'
       },
-      stats: {
-        totalCount: '备份数',
-        totalSize: '总大小',
-        lastBackup: '最近一次',
-        loadFailed: '无法加载备份统计'
+      types: {
+        daily: '每日',
+        'pre-migration': '迁移前',
+        manual: '手动',
+        verify: '验证测试'
       },
-      status: {
-        pending: '进行中',
-        completed: '已完成',
-        failed: '失败'
+      verify: {
+        pending: '尚未验证',
+        passed: '验证通过',
+        failed: '验证未通过'
       },
-      confirm: {
-        deleteTitle: '删除备份 {filename}？',
-        deleteMessage: '备份文件会被永久删除，之后不能再用它恢复。此操作无法撤销。',
-        deleteAction: '删除备份',
-        restoreTitle: '用备份 {filename} 恢复？',
-        restoreMessage: '当前数据会被这份备份覆盖，备份之后的改动都会丢失。此操作无法撤销。',
-        restoreAction: '恢复备份'
+      retention: 'Control 保留最近 {daily} 个每日备份、此前 {weekly} 周每周最新的一个每日备份、最近 {days} 天内所有迁移前备份，以及最近 {manual} 个手动备份。最近一个验证通过的备份永远不会删除。',
+      restore: {
+        title: '还原',
+        description: '还原会替换数据库，所以只能在停止 Control 后在服务器上进行，不能在本页操作。Control 再次启动时会自动迁移较旧的备份。',
+        commands: '在服务器上执行'
       }
     },
     balancer: {

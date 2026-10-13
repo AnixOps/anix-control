@@ -43,18 +43,6 @@ export function readSystemPayload(res, fallbackMessage) {
   return payload
 }
 
-export function readBackupPayload(res, fallbackMessage) {
-  const payload = ensureSystemSuccess(res, fallbackMessage)
-  if (!payload || typeof payload !== 'object') return {}
-  if (Object.prototype.hasOwnProperty.call(payload, 'code')) {
-    return payload.data && typeof payload.data === 'object' ? payload.data : {}
-  }
-  if (payload.data && typeof payload.data === 'object' && Object.prototype.hasOwnProperty.call(payload.data, 'data')) {
-    return payload.data.data && typeof payload.data.data === 'object' ? payload.data.data : {}
-  }
-  return payload.data && typeof payload.data === 'object' ? payload.data : payload
-}
-
 // systemErrorText: the most useful message of an axios error, an Error, or
 // a panel envelope error.
 export function systemErrorText(error) {

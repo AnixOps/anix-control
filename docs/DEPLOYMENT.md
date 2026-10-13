@@ -669,27 +669,55 @@ docker compose logs --tail=100 api
 
 ## 8. 备份与恢复
 
-### 备份
+### SQLite：Control 自己备份
 
-SQLite：
+使用 SQLite 时，Control 自己备份，不需要 `crontab`。每个备份是 `data_dir/backups/`
+（默认 `/var/lib/anix-control/backups/`，目录 0700、文件 0600）里的一个 tar 包，
+内含数据库的一致快照、`root.key`、Control 读取的配置文件和清单
+（详见 [`reference/backups.md`](reference/backups.md)）：
+
+- 每天本地时间 03:00 到 05:00 之间（具体分钟由域名决定）备份一次；
+- 每次启动有待执行的表结构迁移时，先备份一次（`pre-migration`），备份失败就不迁移、不启动；
+- 后台 系统设置 → 备份 的「立即备份」或 `anix-control backup create` 随时备份。
+
+每个备份都会还原到 `data_dir/tmp/` 里验证（校验和、`PRAGMA integrity_check`、迁移记录、
+包里的根密钥能解开包里数据库的 CA）。验证失败告警 `backup_verify_failed`，
+超过 36 小时没有验证通过的备份告警 `backup_stale`；首页显示「上次验证通过的备份」。
+保留最近 7 个每日备份、此前 4 周每周一个、30 天内所有迁移前备份和最近 3 个手动备份，
+最近一个验证通过的备份永远不删。
 
 ```bash
-cp config/data/v2board.db config/data/v2board.db.backup
+sudo anix-control backup list      # 列出备份和验证结果
+sudo anix-control backup create    # 立即备份并验证
+sudo anix-control backup verify    # 再次验证最新的备份
 ```
 
-PostgreSQL：
+备份包里有根密钥，**和根密钥一样保管**：本地备份不加密（密钥就在旁边，加密没有意义），
+复制到别处时请自行加密。后台只有超级管理员能下载备份，下载记入审计日志。
+
+### SQLite：还原
+
+还原只在服务器上、停止 Control 后进行，后台没有还原按钮：
+
+```bash
+sudo systemctl stop anix-control
+sudo anix-control backup restore /var/lib/anix-control/backups/<备份包>.tar --replace
+sudo systemctl start anix-control
+```
+
+Control 在运行时（它持有 `data_dir/control.lock`）还原会被拒绝。目标里已有数据库、
+`root.key` 或不同的配置文件时，不带 `--replace` 会拒绝；带 `--replace` 时先把它们移到
+`data_dir/replaced-<UTC 时间>/`，从不删除。较旧版本的备份在下次启动时照常迁移；
+较新版本迁移过的数据库会被拒绝。
+
+### PostgreSQL
+
+Control 的备份只支持 SQLite；PostgreSQL 请用 `pg_dump`，并把 `root.key` 一起保存：
 
 ```bash
 docker exec anix-control-db pg_dump -U v2board v2board > backup.sql
+docker exec -i anix-control-db psql -U v2board v2board < backup.sql   # 恢复
 ```
-
-### 恢复（PostgreSQL）
-
-```bash
-docker exec -i anix-control-db psql -U v2board v2board < backup.sql
-```
-
-建议使用 `crontab` 做每日自动备份，并设置保留策略。
 
 数据库迁移的 dry-run 与 rollback 步骤见 [`reference/sqlite-to-postgres-migration.md`](reference/sqlite-to-postgres-migration.md)。
 

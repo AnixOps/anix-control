@@ -30,7 +30,9 @@ const bootstrapLockKey int64 = 0x616e6978626f6f74
 // the migrate command) uses the database. The schema comes from the ordered
 // migrations (internal/database/migrations), in every environment: they
 // create it in an empty database, adopt one an earlier Control created and
-// refuse one a newer Control migrated. On PostgreSQL it holds a session
+// refuse one a newer Control migrated. Before a pending migration runs on a
+// database that is not empty, a pre-migration backup is taken
+// (preMigrationBackup). On PostgreSQL it holds a session
 // advisory lock, so concurrent Control processes (a rolling update, a
 // migrate job next to a starting server) run it one at a time instead of
 // racing on DDL and seed rows.
@@ -42,7 +44,7 @@ func bootstrapDatabase(ctx context.Context, cfg *config.Config) error {
 	}
 	defer release()
 
-	if _, err := migrations.Migrate(ctx, db, migrations.Options{ProgramVersion: version, Logf: log.Printf}); err != nil {
+	if _, err := migrations.Migrate(ctx, db, migrations.Options{ProgramVersion: version, Logf: log.Printf, BeforeMigrate: preMigrationBackup(log.Printf)}); err != nil {
 		return fmt.Errorf("database schema: %w", err)
 	}
 	// The root key must open what the database holds sealed before anything

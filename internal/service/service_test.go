@@ -102,8 +102,6 @@ func (s *ServiceTestSuite) SetupSuite() {
 			&model.TelegramUser{},
 			&model.TelegramChat{},
 			&model.SystemConfig{},
-			&model.BackupConfig{},
-			&model.BackupRecord{},
 			// Server models
 			&model.ServerVMess{},
 			&model.ServerVLESS{},
@@ -3495,69 +3493,6 @@ func TestSystemConfigService(t *testing.T) {
 	suite.Run(t, new(SystemConfigServiceTestSuite))
 }
 
-// BackupServiceTestSuite 备份服务测试套件
-type BackupServiceTestSuite struct {
-	ServiceTestSuite
-	svc *BackupService
-}
-
-func (s *BackupServiceTestSuite) SetupSuite() {
-	s.ServiceTestSuite.SetupSuite()
-}
-
-func (s *BackupServiceTestSuite) TearDownSuite() {
-	s.ServiceTestSuite.TearDownSuite()
-}
-
-func (s *BackupServiceTestSuite) SetupTest() {
-	s.ServiceTestSuite.SetupTest()
-	s.svc = NewBackupService(database.Get())
-}
-
-func (s *BackupServiceTestSuite) TestGetConfig() {
-	cfg, err := s.svc.GetConfig()
-	assert.NoError(s.T(), err)
-	assert.NotNil(s.T(), cfg)
-	assert.False(s.T(), cfg.Enabled)
-}
-
-func (s *BackupServiceTestSuite) TestUpdateConfig() {
-	cfg := &model.BackupConfig{
-		Enabled:        true,
-		AutoBackup:     true,
-		RetentionDays:  14,
-		BackupDatabase: true,
-		StorageType:    "local",
-		StoragePath:    s.T().TempDir(),
-	}
-
-	err := s.svc.UpdateConfig(cfg)
-	assert.NoError(s.T(), err)
-
-	found, _ := s.svc.GetConfig()
-	assert.True(s.T(), found.Enabled)
-	assert.Equal(s.T(), 14, found.RetentionDays)
-}
-
-func (s *BackupServiceTestSuite) TestListBackups() {
-	records, total, err := s.svc.ListBackups(1, 10)
-	assert.NoError(s.T(), err)
-	assert.GreaterOrEqual(s.T(), total, int64(0))
-	assert.NotNil(s.T(), records)
-}
-
-func (s *BackupServiceTestSuite) TestGetBackupStats() {
-	stats, err := s.svc.GetBackupStats()
-	assert.NoError(s.T(), err)
-	assert.NotNil(s.T(), stats)
-	assert.Contains(s.T(), stats, "total_backups")
-	assert.Contains(s.T(), stats, "total_size")
-}
-
-func TestBackupService(t *testing.T) {
-	suite.Run(t, new(BackupServiceTestSuite))
-}
-
 // ForwardRuleServiceTestSuite 转发规则服务测试套件
 type ForwardRuleServiceTestSuite struct {
 	ServiceTestSuite
@@ -5014,82 +4949,6 @@ func (s *MFAServiceTestSuite) TestVerify() {
 	valid, err := s.svc.Verify(user.ID, "code1", "backup")
 	assert.NoError(s.T(), err)
 	assert.True(s.T(), valid)
-}
-
-// =====================================================
-// BackupService Tests
-// =====================================================
-
-func (s *BackupServiceTestSuite) TestCreateBackup() {
-	// Update config with valid path
-	cfg := &model.BackupConfig{
-		Enabled:        true,
-		AutoBackup:     false,
-		RetentionDays:  7,
-		BackupDatabase: true,
-		StorageType:    "local",
-		StoragePath:    s.T().TempDir(),
-	}
-	assert.NoError(s.T(), s.svc.UpdateConfig(cfg))
-	// Create backup (will fail for non-existent db, but function runs)
-	record, err := s.svc.CreateBackup("database", nil)
-	// Record should be created even if backup fails
-	assert.NotNil(s.T(), record)
-	_ = err
-}
-
-func (s *BackupServiceTestSuite) TestDeleteBackup() {
-	// Create a backup record
-	record := &model.BackupRecord{
-		Name:   "test_delete_backup",
-		Type:   "database",
-		Status: 1,
-		Path:   filepath.Join(s.T().TempDir(), "test.db"),
-	}
-	database.Get().Create(record)
-
-	err := s.svc.DeleteBackup(record.ID)
-	assert.NoError(s.T(), err)
-
-	// Verify deleted
-	var count int64
-	database.Get().Model(&model.BackupRecord{}).Where("id = ?", record.ID).Count(&count)
-	assert.Equal(s.T(), int64(0), count)
-}
-
-func (s *BackupServiceTestSuite) TestCleanupOldBackups() {
-	// Create config with retention
-	cfg := &model.BackupConfig{
-		Enabled:       true,
-		RetentionDays: 1, // Clean backups older than 1 day
-	}
-	assert.NoError(s.T(), s.svc.UpdateConfig(cfg))
-	// Create old backup record
-	oldRecord := &model.BackupRecord{
-		Name:      "old_backup",
-		Type:      "database",
-		Status:    1,
-		CreatedAt: time.Now().AddDate(0, 0, -3), // 3 days ago
-	}
-	database.Get().Create(oldRecord)
-
-	// Create new backup record
-	newRecord := &model.BackupRecord{
-		Name:   "new_backup",
-		Type:   "database",
-		Status: 1,
-	}
-	database.Get().Create(newRecord)
-
-	err := s.svc.CleanupOldBackups()
-	assert.NoError(s.T(), err)
-
-	// Old should be deleted, new should remain
-	var oldCount, newCount int64
-	database.Get().Model(&model.BackupRecord{}).Where("id = ?", oldRecord.ID).Count(&oldCount)
-	database.Get().Model(&model.BackupRecord{}).Where("id = ?", newRecord.ID).Count(&newCount)
-	assert.Equal(s.T(), int64(0), oldCount)
-	assert.Equal(s.T(), int64(1), newCount)
 }
 
 // =====================================================

@@ -2,7 +2,7 @@
 // icon and link each alert gets, and the text composed from its `kind` and
 // `detail` (the server's own `message` is English, for notifications; it is
 // only the fallback for a kind this build does not know). Pure functions.
-import { CalendarClock, FileKey, Hourglass, ShieldAlert, ServerCog, ServerOff } from '@lucide/vue'
+import { CalendarClock, DatabaseBackup, FileKey, Hourglass, ShieldAlert, ServerCog, ServerOff } from '@lucide/vue'
 
 // critical is danger, everything else warning (the dashboard has no third tone).
 export function alertTone(alert) {
@@ -10,8 +10,10 @@ export function alertTone(alert) {
 }
 
 // "proxy-12" is node 12 of the proxy list; "forward-12" a forward node, whose
-// page is keyed by that whole reference (the forwarding area, v4.2).
+// page is keyed by that whole reference (the forwarding area, v4.2). The
+// backup alerts open 系统设置 → 备份.
 export function alertRoute(alert) {
+  if (alert?.subject_kind === 'backups') return '/admin/system/backup'
   if (alert?.subject_kind !== 'node') return null
   const match = /^(proxy|forward)-(\d+)$/.exec(String(alert.subject || ''))
   if (!match) return null
@@ -30,7 +32,9 @@ const KIND_ICONS = {
   builtin_package_invalid: ShieldAlert,
   builtin_package_failed: ServerCog,
   panel_certificate_expiring: FileKey,
-  panel_certificate_renewal_failing: ShieldAlert
+  panel_certificate_renewal_failing: ShieldAlert,
+  backup_verify_failed: DatabaseBackup,
+  backup_stale: DatabaseBackup
 }
 
 export const KERNEL_ALERT_KINDS = Object.freeze(Object.keys(KIND_ICONS))
@@ -120,6 +124,16 @@ export function alertText(alert, { t, format }) {
       else hint = text(detail.fix) || t(`${base}.panelCertificate.hint`)
       break
     }
+    case 'backup_verify_failed':
+      title = t(`${base}.backupVerifyFailed.title`, { name: text(detail.file) || text(alert.subject) })
+      hint = t(`${base}.backupVerifyFailed.hint`, { date: date(detail.created_at) })
+      break
+    case 'backup_stale':
+      title = t(`${base}.backupStale.title`, { hours: text(detail.stale_after_hours) || '36' })
+      hint = detail.last_verified_created_at
+        ? t(`${base}.backupStale.hint`, { date: date(detail.last_verified_created_at) })
+        : t(`${base}.backupStale.never`)
+      break
     default:
       title = text(alert?.message) || text(alert?.kind) || text(alert?.key)
   }

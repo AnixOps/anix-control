@@ -29,8 +29,12 @@ const (
 	// kernel (/api/v4/admin/*): its writes are audited like the /api/v2
 	// admin routes'. A bulk request carries ids and an action, no credential.
 	auditLogPrefixV4Admin = "/api/v4/admin/"
-	maxBodyLogLength      = 512  // bytes to include in slog output
-	maxBodyDBLength       = 4096 // bytes to persist in database
+	// auditLogPrefixV5 is the panel's own administrator API (/api/v5/*:
+	// the certificates, the backups). Its writes carry no body worth
+	// keeping, and it has one audited read, the backup download.
+	auditLogPrefixV5 = "/api/v5/"
+	maxBodyLogLength = 512  // bytes to include in slog output
+	maxBodyDBLength  = 4096 // bytes to persist in database
 )
 
 // auditBodyCapture copies at most limit bytes while the downstream handler
@@ -62,8 +66,9 @@ const AuditActionKey = "audit_action"
 
 // AuditLog returns a gin middleware that records all admin API operations
 // to both structured slog output and the v2_audit_log database table.
-// It applies to requests whose path starts with /api/v2/admin/, /api/v3/ or
-// /api/v4/forward/, and to the user writes in auditedUserWrites.
+// It applies to requests whose path starts with /api/v2/admin/, /api/v3/,
+// /api/v4/forward/, /api/v4/admin/ or /api/v5/, and to the user writes in
+// auditedUserWrites.
 func AuditLog() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// The v3 control kernel is administrator-only at the router boundary.
@@ -77,7 +82,8 @@ func AuditLog() gin.HandlerFunc {
 		}
 		userWrite := auditedUserWrite(c.Request.Method, c.Request.URL.Path)
 		if !userWrite && !strings.HasPrefix(c.Request.URL.Path, auditLogPrefixV2) && !strings.HasPrefix(c.Request.URL.Path, auditLogPrefixV3) &&
-			!strings.HasPrefix(c.Request.URL.Path, auditLogPrefixV4Forward) && !strings.HasPrefix(c.Request.URL.Path, auditLogPrefixV4Admin) {
+			!strings.HasPrefix(c.Request.URL.Path, auditLogPrefixV4Forward) && !strings.HasPrefix(c.Request.URL.Path, auditLogPrefixV4Admin) &&
+			!strings.HasPrefix(c.Request.URL.Path, auditLogPrefixV5) {
 			c.Next()
 			return
 		}
@@ -286,6 +292,10 @@ func persistAuditLog(db *gorm.DB, userID *uint, email, method, path, module, act
 // secrets, so these reads are recorded like writes, as "reveal".
 var revealPath = regexp.MustCompile(`^/api/v2/admin/nodes/[^/]+/credentials/?$`)
 
+// backupDownloadPath matches the download of a backup bundle, which holds
+// the root key: a credential-class read, recorded as "download".
+var backupDownloadPath = regexp.MustCompile(`^/api/v5/backups/[^/]+/download/?$`)
+
 // auditedUserWrites are the user API writes recorded in the audit log like
 // the administrator's: a user's reset of their own subscription link, the
 // self-service twin of POST /api/v2/admin/users/:id/reset-subscribe.
@@ -330,7 +340,7 @@ func auditExempt(method, path string) bool {
 // auditedRead reports whether a read is recorded in the audit log: one
 // that reveals a secret.
 func auditedRead(method, path string) bool {
-	return method == http.MethodGet && revealPath.MatchString(path)
+	return method == http.MethodGet && (revealPath.MatchString(path) || backupDownloadPath.MatchString(path))
 }
 
 // extractModuleAndAction derives a human-readable module and action from the URL path and HTTP method.
@@ -348,6 +358,8 @@ func extractModuleAndAction(path, method string) (module, action string) {
 		prefix = "/api/v4/"
 	case strings.HasPrefix(path, auditLogPrefixV4Admin):
 		prefix = auditLogPrefixV4Admin
+	case strings.HasPrefix(path, auditLogPrefixV5):
+		prefix = auditLogPrefixV5
 	}
 	trimmed := strings.TrimPrefix(path, prefix)
 	if trimmed == "" {
@@ -410,7 +422,10 @@ func extractModuleAndAction(path, method string) (module, action string) {
 		action = "delete"
 	default:
 		action = strings.ToLower(method)
-		if auditedRead(method, path) {
+		switch {
+		case method == http.MethodGet && backupDownloadPath.MatchString(path):
+			action = "download"
+		case auditedRead(method, path):
 			action = "reveal"
 		}
 	}

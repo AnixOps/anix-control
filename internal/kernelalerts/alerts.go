@@ -6,7 +6,9 @@
 // certificate stores and the phase tables read-only, keeps one row per
 // alert in v4_kernel_alert, and sends the administrators one digest of the
 // alerts that are new, worse or due again. GET /api/v4/kernel/alerts lists
-// the rows. Nothing here changes a certificate or a phase.
+// the rows. It also watches the backups: a bundle that failed its
+// verification, and no verified bundle for too long. Nothing here changes a
+// certificate, a phase or a backup.
 package kernelalerts
 
 import (
@@ -59,6 +61,12 @@ const (
 	// serves the self-signed fallback (no node can connect), warning while
 	// the old certificate still lasts.
 	KindPanelCertificateRenewalFailing = "panel_certificate_renewal_failing"
+	// KindBackupVerifyFailed: the newest backup bundle that was verified
+	// failed its verification (internal/backup): it would not restore.
+	KindBackupVerifyFailed = "backup_verify_failed"
+	// KindBackupStale: no backup bundle that passed its verification is
+	// younger than BackupStaleAfter (and the database is older than that).
+	KindBackupStale = "backup_stale"
 )
 
 // Subject kinds.
@@ -71,6 +79,8 @@ const (
 	SubjectPackage     = "package"
 	// SubjectPanelCertificate: a certificate of the panel, by name.
 	SubjectPanelCertificate = "panel_certificate"
+	// SubjectBackups: the panel's backups, one subject ("backups").
+	SubjectBackups = "backups"
 )
 
 // finalizeInterruptedAfter is how long a started finalize may take before

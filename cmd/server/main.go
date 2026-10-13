@@ -365,6 +365,10 @@ func run() int {
 	if code, handled := runConfigCommand(os.Args[1:], os.Stdout, os.Stderr); handled {
 		return code
 	}
+	// `backup ...` opens the database itself, without migrating it.
+	if code, handled := runBackupCommand(os.Args[1:], os.Stdout, os.Stderr); handled {
+		return code
+	}
 	migrateOnly := takeMigrateCommand()
 	adminArguments := takeAdminCommand()
 	nodeSecretsArguments := takeNodeSecretsCommand()
@@ -464,6 +468,9 @@ func run() int {
 		env = "development"
 	}
 	log.Printf("Environment: %s", env)
+
+	releaseBackups := setupBackups(cfg, resolvedConfigPath, serverStart || migrateOnly)
+	defer releaseBackups()
 
 	// 初始化数据库
 	if err := database.Init(&cfg.Database); err != nil {

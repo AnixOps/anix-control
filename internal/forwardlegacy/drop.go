@@ -26,8 +26,9 @@ const DefaultLockTimeout = 10 * time.Second
 
 // Backup is the database backup a drop accepted.
 type Backup struct {
-	// Source is "backup_record" (Control's own backup service) or
-	// "operator" (--backup-taken).
+	// Source is "control_backup" (a verified bundle of Control's backups,
+	// v5_backup) or "operator" (--backup-taken). Drops recorded before the
+	// bundles say "backup_record" (the former backup service).
 	Source     string    `json:"source"`
 	Path       string    `json:"path"`
 	SizeBytes  int64     `json:"size_bytes"`
@@ -55,8 +56,11 @@ type Preconditions struct {
 // PreconditionOptions configure the checks.
 type PreconditionOptions struct {
 	// BackupPath is the operator's database backup (--backup-taken); empty
-	// looks for a backup Control's backup service made.
+	// looks for a verified bundle of Control's backups in BackupDir.
 	BackupPath string
+	// BackupDir is Control's bundle directory (data_dir/backups); empty
+	// accepts only the operator's backup.
+	BackupDir string
 	// SkipBackup leaves the backup check out (the status command, which
 	// only reports).
 	SkipBackup bool
@@ -140,7 +144,7 @@ func CheckPreconditions(ctx context.Context, db *gorm.DB, options PreconditionOp
 	}
 
 	if !options.SkipBackup {
-		backup, err := findBackup(db, options.BackupPath, now)
+		backup, err := findBackup(db, options.BackupPath, options.BackupDir, now)
 		if err != nil {
 			result.Blockers = append(result.Blockers, err.Error())
 		}
@@ -181,9 +185,9 @@ func staleTables(db *gorm.DB, record *model.ForwardLegacyArchive) ([]string, err
 }
 
 // findBackup answers the database backup the drop accepts: the operator's
-// file, or else a successful database or full backup of Control's backup
-// service (SQLite only). Either must be at most BackupMaxAge old.
-func findBackup(db *gorm.DB, operatorPath string, now time.Time) (*Backup, error) {
+// file, or else a bundle of Control's backups (SQLite only) that passed its
+// verification, in dir. Either must be at most BackupMaxAge old.
+func findBackup(db *gorm.DB, operatorPath, dir string, now time.Time) (*Backup, error) {
 	if strings.TrimSpace(operatorPath) != "" {
 		backup, err := describeBackup(operatorPath, now)
 		if err != nil {
@@ -192,23 +196,22 @@ func findBackup(db *gorm.DB, operatorPath string, now time.Time) (*Backup, error
 		backup.Source = "operator"
 		return backup, nil
 	}
-	if db.Migrator().HasTable(&model.BackupRecord{}) {
-		var records []model.BackupRecord
-		if err := db.Where("status = ? AND type IN ?", 1, []string{"database", "full"}).
-			Where("completed_at IS NOT NULL AND completed_at >= ?", now.Add(-BackupMaxAge)).
-			Order("completed_at DESC").Find(&records).Error; err != nil {
+	if strings.TrimSpace(dir) != "" && db.Migrator().HasTable(&model.Backup{}) {
+		var rows []model.Backup
+		if err := db.Where("verify_status = ? AND created_at >= ?", model.BackupVerifyPassed, now.Add(-BackupMaxAge)).
+			Order("created_at DESC").Find(&rows).Error; err != nil {
 			return nil, err
 		}
-		for _, record := range records {
-			backup, err := describeBackup(record.Path, now)
+		for _, row := range rows {
+			backup, err := describeBackup(filepath.Join(dir, filepath.Base(row.Path)), now)
 			if err != nil {
 				continue
 			}
-			backup.Source, backup.RecordID = "backup_record", record.ID
+			backup.Source, backup.RecordID = "control_backup", row.ID
 			return backup, nil
 		}
 	}
-	return nil, errors.New("no database backup of the last 24 hours: take one (on SQLite Control's backup of type database or full; on PostgreSQL pg_dump) and pass its file with --backup-taken <path>")
+	return nil, errors.New("no database backup of the last 24 hours: take one (on SQLite `anix-control backup create`, which writes and verifies a bundle; on PostgreSQL pg_dump, whose file you pass with --backup-taken <path>)")
 }
 
 // describeBackup checks a backup file: a non-empty regular file modified
@@ -248,7 +251,9 @@ type DropOptions struct {
 	// Confirm must be ConfirmPhrase exactly.
 	Confirm    string
 	BackupPath string
-	Actor      string
+	// BackupDir is Control's bundle directory (PreconditionOptions).
+	BackupDir string
+	Actor     string
 	// LockTimeout bounds the wait for a table lock on PostgreSQL;
 	// DefaultLockTimeout when zero.
 	LockTimeout time.Duration
@@ -287,7 +292,7 @@ func Drop(ctx context.Context, db *gorm.DB, options DropOptions) (*DropResult, e
 	if options.Confirm != ConfirmPhrase {
 		reasons = append(reasons, fmt.Sprintf("the confirmation phrase is wrong: pass --confirm %q exactly", ConfirmPhrase))
 	}
-	pre, err := CheckPreconditions(ctx, db, PreconditionOptions{BackupPath: options.BackupPath, Now: now})
+	pre, err := CheckPreconditions(ctx, db, PreconditionOptions{BackupPath: options.BackupPath, BackupDir: options.BackupDir, Now: now})
 	if err != nil {
 		return nil, err
 	}

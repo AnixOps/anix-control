@@ -67,6 +67,10 @@ const (
 	// LabelACMECache derives the key that seals the ACME cache entries
 	// holding a private key (internal/panelcert).
 	LabelACMECache = "anixops acme cache v1"
+	// LabelFingerprint derives the bytes whose SHA-256 is the key's
+	// fingerprint (Key.Fingerprint): a backup manifest names its root key
+	// without a digest of the key itself.
+	LabelFingerprint = "anixops root key fingerprint v1"
 )
 
 const (
@@ -129,6 +133,14 @@ func (k Key) DerivedJWTSecret() string {
 // form identity.kek takes (standard base64 of 32 bytes).
 func (k Key) DerivedIdentityKEK() string {
 	return base64.StdEncoding.EncodeToString(k.Derive(LabelIdentityKEK))
+}
+
+// Fingerprint names the key without revealing anything about it:
+// "sha256:" and the hex SHA-256 of its LabelFingerprint derivation. Two
+// backup bundles with the same fingerprint carry the same root key.
+func (k Key) Fingerprint() string {
+	sum := sha256.Sum256(k.Derive(LabelFingerprint))
+	return "sha256:" + hex.EncodeToString(sum[:])
 }
 
 // Generate returns a new random root key.

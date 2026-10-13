@@ -76,7 +76,7 @@ var operatorKeys = []Key{
 	{Path: "grpc.port", Description: "The port of the node gRPC listener; nodes dial <grpc.public_name or domain>:<grpc.port>."},
 	{Path: "grpc.public_name", Description: "Only when domain sits behind a CDN: another name that reaches this machine directly, for the nodes' gRPC (mutual TLS cannot cross a CDN)."},
 	{Path: "subscribe_path", Description: "The subscription path (/<subscribe_path>/:token). Change it only to keep links already handed out working.", field: "app.subscribe_path"},
-	{Path: "data_dir", Description: "The data directory: the root key (root.key) and, later, the database and backups. Absolute."},
+	{Path: "data_dir", Description: "The data directory: the root key (root.key), the backups (backups/) and, later, the database. Absolute."},
 }
 
 //go:embed deprecated_keys.yaml

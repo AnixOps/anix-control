@@ -121,5 +121,9 @@ func runSingletonWorkers(ctx context.Context, bridgeEnabled bool) {
 	// Retention of the traffic, node and audit logs: deletes expired rows
 	// in batches every hour and compacts the SQLite file (internal/retention).
 	run(retention.NewWorker(database.Get()).Run)
+	// Backups (internal/backup): the daily bundle at the panel's time
+	// between 03:00 and 05:00, its verification and the retention; at its
+	// start it verifies the pre-migration bundle of this start.
+	run(backupWorker(config.Get()).Run)
 	wg.Wait()
 }

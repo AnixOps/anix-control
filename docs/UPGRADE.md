@@ -200,6 +200,10 @@ Before touching production:
   compatibility surfaces.
 - Confirm the maintenance window and rollback owner.
 - Back up the database and active config.
+- **Upgrading past 4.2.x on SQLite: the first start takes a pre-migration
+  backup into `data_dir/backups` and does not start when it cannot write it;
+  check the free space and the directory's owner first**
+  ([Backups Are Built In](#backups-are-built-in)).
 - If the release mentions schema or data changes, record the migration dry-run
   evidence attached to the GitHub Release.
 - Verify the deployment type: systemd binary, Docker Compose, or another
@@ -464,6 +468,62 @@ Automation that seeded an administrator through `ANIX_CONTROL_ADMIN_PASSWORD`
 now runs the command and posts the token, email and password to
 `POST /api/v5/claim` (201 on success; the CI smokes in `.github/workflows/ci.yml`
 show it).
+
+## Backups Are Built In
+
+From the release after 4.2.x on, Control backs itself up on SQLite and the
+backup settings of 4.x are gone ([`reference/backups.md`](reference/backups.md)).
+
+**What it does.** Every bundle is one tar file in `data_dir/backups/`
+(`/var/lib/anix-control/backups/`, or `<install dir>/data/backups` with the
+installer's unit) holding a consistent snapshot of the database, `root.key`,
+the configuration file and a manifest. Control takes one every day between
+03:00 and 05:00 local time, one before every schema migration and one when
+you ask (系统设置 → 备份 → 立即备份, or `anix-control backup create`), verifies
+each by restoring it into `data_dir/tmp/`, keeps 7 daily, 4 weekly, 30 days of
+pre-migration and the newest 3 manual bundles, and alerts
+(`backup_verify_failed`, `backup_stale`) when a bundle would not restore or no
+verified bundle is younger than 36 hours. The dashboard shows the last
+verified backup.
+
+**The first start of this release backs up first.** It has pending
+migrations (at least `0005_backups`, which creates `v5_backup`), so it takes a
+`pre-migration` bundle of the database as 4.2.x left it before it adopts and
+migrates it. **When that backup cannot be written, nothing is migrated and
+Control does not start**: the log names the cause. Make sure the data
+directory is writable by the service user and has at least three times the
+database's size free. `anix-control migrate` does the same.
+
+**Rolling back the binary** means restoring that pre-migration bundle with
+Control stopped, then starting the older binary:
+
+```bash
+sudo systemctl stop anix-control
+sudo anix-control backup restore <data_dir>/backups/anix-control-<time>-pre-migration.tar --replace
+# install the previous binary, then
+sudo systemctl start anix-control
+```
+
+The restore moves the current database, `root.key` and configuration aside
+into `data_dir/replaced-<UTC time>/` and never deletes them. A 4.2.x binary
+does not read `v5_backup` or the migration tables; restoring the
+pre-migration bundle gives it the database exactly as it left it.
+
+**What went away.** The backup settings page (automatic backups, interval,
+retention, contents, local folder or S3), which nothing executed, the backup
+statistics, deletion and the online restore, with their routes
+(`/api/v2/admin/system/backup/config`, `/backup`, `/backups`,
+`/backup/stats`, `/backups/:id`, `/backups/:id/restore`, which answer 404) and
+the `backup` settings namespace (`kernel.settings.backup.*`). The tables
+`v2_backup_config` and `v2_backup_record` stay, unused, until a cleanup
+migration drops them. Files the old service wrote stay where they were
+(`backups/` under the old working directory by default): keep or delete them
+yourself. `forward legacy drop` now accepts a verified Control bundle of the
+last 24 hours as its backup.
+
+**PostgreSQL** keeps backing up with `pg_dump` (keep `root.key` with it):
+the backup commands, page and alerts say that backups need SQLite and do
+nothing else.
 
 ## Artifact Verification
 
@@ -904,7 +964,9 @@ refuses to start on a database a newer Control migrated (it has a migration
 this binary does not know, or a `min_program_version` above it) and logs
 `this database was migrated by a newer AnixOps Control ...` with the version
 that migrated it. Rolling back the binary therefore means restoring the
-database backup taken before the upgrade, or installing that version or a
+database backup taken before the upgrade (on SQLite, the `pre-migration`
+bundle the newer release took at its first start:
+[Backups Are Built In](#backups-are-built-in)), or installing that version or a
 newer one. Releases before this one (4.2.x and older) do not read the
 migration tables: started on a migrated database they run their old schema
 steps as before, and the next start of this release accepts the result.

@@ -1,499 +1,223 @@
 <template>
   <div class="settings-section" data-settings-panel="backup">
-    <UiSection :title="t('adminSettings.backup.auto.title')" :description="t('adminSettings.backup.auto.description')">
-      <UiSkeleton v-if="showConfigSkeleton" variant="card" :label="t('adminSettings.loading')" />
+    <UiSection :title="t('adminSettings.backup.title')" :description="t('adminSettings.backup.description')">
+      <template #actions>
+        <UiButton
+          variant="primary"
+          :icon="DatabaseBackup"
+          :loading="creating"
+          :disabled="!supported"
+          data-test="backup-now"
+          @click="createNow"
+        >{{ t('adminSettings.backup.backupNow') }}</UiButton>
+      </template>
+
+      <UiSkeleton v-if="showSkeleton" variant="card" :label="t('adminSettings.loading')" />
       <UiErrorState
-        v-else-if="backupConfigError"
+        v-else-if="loadError"
         compact
         heading-tag="h3"
-        :title="t('adminSettings.backup.auto.loadFailed')"
-        :error="backupConfigError"
-        @retry="fetchBackupConfig"
+        :title="t('adminSettings.backup.loadFailed')"
+        :error="loadError"
+        @retry="load"
       />
-      <template v-else-if="!backupConfigLoading">
-        <UiGroupedList>
-          <UiGroupedListRow :label="t('adminSettings.backup.auto.enabled')" :description="t('adminSettings.backup.auto.enabledHelp')" label-for="backup-enabled">
-            <UiSwitch id="backup-enabled" v-model="backupConfig.enabled" />
-          </UiGroupedListRow>
-          <UiGroupedListRow :label="t('adminSettings.backup.auto.interval')" label-for="backup-interval">
-            <UiNumberField
-              class="settings-number"
-              id="backup-interval"
-              v-model="backupConfig.interval"
-              size="md"
-              :min="1"
-              :unit="t('adminSettings.backup.auto.hours')"
-              :error="intervalError"
-            />
-          </UiGroupedListRow>
-          <UiGroupedListRow :label="t('adminSettings.backup.auto.keepCount')" :description="t('adminSettings.backup.auto.keepCountHelp')" label-for="backup-keep-count">
-            <UiNumberField
-              class="settings-number"
-              id="backup-keep-count"
-              v-model="backupConfig.keep_count"
-              size="md"
-              :min="1"
-              :unit="t('adminSettings.backup.auto.copies')"
-              :error="keepCountError"
-            />
-          </UiGroupedListRow>
-        </UiGroupedList>
+      <NodeNotice v-else-if="loaded && !supported" tone="info" data-test="backup-unsupported">
+        <strong>{{ t('adminSettings.backup.unsupported') }}</strong>
+        <span class="backup-notice__line">{{ t('adminSettings.backup.unsupportedHint') }}</span>
+      </NodeNotice>
+      <template v-else-if="loaded">
+        <dl class="backup-summary" :aria-label="t('adminSettings.backup.summary.label')" data-test="backup-summary">
+          <div class="backup-summary__item" data-test="backup-last-verified">
+            <dt>{{ t('adminSettings.backup.summary.lastVerified') }}</dt>
+            <dd>
+              <strong v-if="lastVerified" :title="format.dateTime(lastVerified.created_at)">{{ format.relativeTime(lastVerified.created_at) }}</strong>
+              <strong v-else>{{ t('adminSettings.backup.summary.none') }}</strong>
+              <UiBadge
+                :tone="summary.stale ? 'warning' : 'success'"
+                :label="summary.stale ? t('adminSettings.backup.summary.stale', { hours: summary.stale_after_hours || 36 }) : t('adminSettings.backup.summary.current')"
+                data-test="backup-freshness"
+              />
+            </dd>
+          </div>
+          <div class="backup-summary__item">
+            <dt>{{ t('adminSettings.backup.summary.nextDaily') }}</dt>
+            <dd><strong>{{ summary.next_daily_at ? format.dateTime(summary.next_daily_at) : '—' }}</strong></dd>
+          </div>
+          <div class="backup-summary__item">
+            <dt>{{ t('adminSettings.backup.summary.directory') }}</dt>
+            <dd><code class="backup-summary__path">{{ summary.directory || '—' }}</code></dd>
+          </div>
+        </dl>
 
-        <UiGroupedList :title="t('adminSettings.backup.contents.title')">
-          <UiGroupedListRow :label="t('adminSettings.backup.contents.database')" label-for="backup-database">
-            <UiSwitch id="backup-database" v-model="backupConfig.backup_database" />
-          </UiGroupedListRow>
-          <UiGroupedListRow :label="t('adminSettings.backup.contents.files')" label-for="backup-files">
-            <UiSwitch id="backup-files" v-model="backupConfig.backup_files" />
-          </UiGroupedListRow>
-        </UiGroupedList>
-
-        <UiGroupedList :title="t('adminSettings.backup.storage.title')">
-          <UiGroupedListRow :label="t('adminSettings.backup.storage.type')">
-            <UiSegmentedControl
-              v-model="backupConfig.storage_type"
-              size="sm"
-              :aria-label="t('adminSettings.backup.storage.type')"
-              :options="storageTypeOptions"
+        <UiDataTable
+          :columns="columns"
+          :rows="backups"
+          :label="t('adminSettings.backup.list.title')"
+          :row-label="backup => backup.file"
+          storage-key="admin.system.backups"
+          :page-size="20"
+          :empty-icon="Archive"
+          :empty-title="t('adminSettings.backup.list.empty')"
+          :empty-description="t('adminSettings.backup.list.emptyDescription')"
+          state-heading-tag="h3"
+          :row-actions="rowActions"
+        >
+          <template #cell-type="{ row }">{{ typeLabel(row.type) }}</template>
+          <template #cell-verify_status="{ row }">
+            <UiBadge
+              :tone="VERIFY_TONES[row.verify_status] || 'neutral'"
+              :label="verifyLabel(row.verify_status)"
+              :title="row.verify_error || undefined"
+              :data-verify="row.verify_status"
             />
-          </UiGroupedListRow>
-          <UiGroupedListRow v-if="backupConfig.storage_type === 'local'" stacked>
-            <UiTextField
-              id="backup-storage-path"
-              v-model="backupConfig.storage_path"
-              size="md"
-              :label="t('adminSettings.backup.storage.path')"
-              :placeholder="t('adminSettings.backup.storage.pathPlaceholder')"
-              :help="t('adminSettings.backup.storage.pathHelp')"
-            />
-          </UiGroupedListRow>
-          <template v-else>
-            <UiGroupedListRow stacked>
-              <div class="form-grid backup-s3">
-                <UiTextField
-                  id="backup-s3-bucket"
-                  v-model="backupConfig.s3_bucket"
-                  size="md"
-                  required
-                  :label="t('adminSettings.backup.storage.bucket')"
-                  :placeholder="t('adminSettings.backup.storage.bucketPlaceholder')"
-                  :error="bucketError"
-                />
-                <UiTextField
-                  id="backup-s3-region"
-                  v-model="backupConfig.s3_region"
-                  size="md"
-                  :label="t('adminSettings.backup.storage.region')"
-                  :placeholder="t('adminSettings.backup.storage.regionPlaceholder')"
-                />
-                <UiTextField
-                  id="backup-s3-endpoint"
-                  v-model="backupConfig.s3_endpoint"
-                  class="form-grid__full"
-                  size="md"
-                  type="url"
-                  :label="t('adminSettings.backup.storage.endpoint')"
-                  :placeholder="t('adminSettings.backup.storage.endpointPlaceholder')"
-                  :error="endpointError"
-                />
-                <UiTextField
-                  id="backup-s3-access-key"
-                  v-model="backupConfig.s3_access_key"
-                  size="md"
-                  autocomplete="off"
-                  :label="t('adminSettings.backup.storage.accessKey')"
-                  :placeholder="backupConfig.s3_access_key_has_value ? t('adminSettings.backup.storage.keepCurrent') : ''"
-                  :help="sensitiveHelp('s3_access_key')"
-                />
-                <UiPasswordField
-                  id="backup-s3-secret-key"
-                  v-model="backupConfig.s3_secret_key"
-                  size="md"
-                  autocomplete="new-password"
-                  :label="t('adminSettings.backup.storage.secretKey')"
-                  :help="sensitiveHelp('s3_secret_key')"
-                />
-              </div>
-            </UiGroupedListRow>
           </template>
-        </UiGroupedList>
+        </UiDataTable>
+        <p class="backup-retention">{{ retentionText }}</p>
       </template>
     </UiSection>
 
-    <UiSection :title="t('adminSettings.backup.list.title')" :description="t('adminSettings.backup.list.description')">
-      <template #actions>
-        <UiButton variant="primary" :icon="DatabaseBackup" :loading="creatingBackup" data-test="backup-now" @click="createBackupRequest">{{ t('adminSettings.backup.list.backupNow') }}</UiButton>
-      </template>
-      <dl class="list-page__summary backup-stats" data-test="backup-stats">
-        <div class="stat-item"><dt>{{ t('adminSettings.backup.stats.totalCount') }}</dt><dd class="stat-value"><strong>{{ format.number(backupStats.total_count || 0) }}</strong></dd></div>
-        <div class="stat-item"><dt>{{ t('adminSettings.backup.stats.totalSize') }}</dt><dd class="stat-value"><strong>{{ formatSize(backupStats.total_size) }}</strong></dd></div>
-        <div class="stat-item"><dt>{{ t('adminSettings.backup.stats.lastBackup') }}</dt><dd class="stat-value"><strong>{{ backupStats.last_backup ? format.dateTime(backupStats.last_backup) : '—' }}</strong></dd></div>
-      </dl>
-      <UiDataTable
-        :columns="backupColumns"
-        :rows="backups"
-        :label="t('adminSettings.backup.list.title')"
-        :row-label="backup => backup.filename"
-        storage-key="admin.system.backups"
-        :page-size="20"
-        :loading="backupsLoading"
-        :error="backupsError"
-        :error-title="t('adminSettings.backup.list.loadFailed')"
-        :empty-icon="Archive"
-        :empty-title="t('adminSettings.backup.list.empty')"
-        :empty-description="t('adminSettings.backup.list.emptyDescription')"
-        state-heading-tag="h3"
-        :row-actions="backupActions"
-        @retry="fetchBackups"
-      >
-        <template #cell-status="{ row }">
-          <UiBadge :tone="BACKUP_TONES[row.status] || 'neutral'" :label="getStatusLabel(row.status)" />
-        </template>
-        <template #empty-actions>
-          <UiButton variant="primary" :icon="DatabaseBackup" :loading="creatingBackup" @click="createBackupRequest">{{ t('adminSettings.backup.list.backupNow') }}</UiButton>
-        </template>
-      </UiDataTable>
+    <UiSection :title="t('adminSettings.backup.restore.title')" :description="t('adminSettings.backup.restore.description')">
+      <UiCodeBlock :label="t('adminSettings.backup.restore.commands')" :code="restoreCommands" max-height="" data-test="backup-restore-commands" />
     </UiSection>
-
-    <SettingsSaveBar
-      :visible="backupDirty"
-      :saving="backupSaving"
-      :invalid="backupInvalid"
-      @save="saveBackupConfig"
-      @discard="discardBackupConfig"
-    />
   </div>
 </template>
 
 <script setup>
-// 系统设置 → 备份: the automatic backup settings (saved with the save bar),
-// the backup statistics and the backups (back up now, restore, delete).
-// Endpoints unchanged: GET/PUT /admin/backup/config, POST /admin/backup,
-// GET /admin/backups, GET /admin/backup/stats, POST
-// /admin/backups/:id/restore, DELETE /admin/backups/:id.
+// 系统设置 → 备份 (docs/reference/backups.md): the bundles Control keeps in
+// data_dir/backups with their verification, the last verified backup and
+// the next automatic one, 立即备份, and a bundle's download (a super
+// administrator only: it holds the root key). There is no restore here: a
+// restore replaces the database, so it runs on the server with Control
+// stopped (`anix-control backup restore`); the page shows the commands.
+// Endpoints: GET/POST /api/v5/backups, GET /api/v5/backups/:id/download.
 import { computed, onMounted, ref } from 'vue'
-import { Archive, DatabaseBackup, History, Trash2 } from '@lucide/vue'
-import {
-  createBackup,
-  deleteBackup,
-  getBackupConfig,
-  getBackups,
-  getBackupStats,
-  restoreBackup,
-  updateBackupConfig
-} from '@/api/admin'
+import { Archive, DatabaseBackup, Download } from '@lucide/vue'
+import { createPanelBackup, downloadPanelBackup, getPanelBackups } from '@/api/kernel'
 import { useAppI18n } from '@/composables/useAppI18n'
-import { useUnsavedChanges } from '@/composables/useUnsavedChanges'
-import SettingsSaveBar from '@/components/admin/settings/SettingsSaveBar.vue'
 import UiBadge from '@/ui/UiBadge.vue'
 import UiButton from '@/ui/UiButton.vue'
+import UiCodeBlock from '@/ui/UiCodeBlock.vue'
 import UiDataTable from '@/ui/UiDataTable.vue'
 import UiErrorState from '@/ui/UiErrorState.vue'
-import UiGroupedList from '@/ui/UiGroupedList.vue'
-import UiGroupedListRow from '@/ui/UiGroupedListRow.vue'
-import UiNumberField from '@/ui/UiNumberField.vue'
-import UiPasswordField from '@/ui/UiPasswordField.vue'
 import UiSection from '@/ui/UiSection.vue'
-import UiSegmentedControl from '@/ui/UiSegmentedControl.vue'
 import UiSkeleton from '@/ui/UiSkeleton.vue'
-import UiSwitch from '@/ui/UiSwitch.vue'
-import UiTextField from '@/ui/UiTextField.vue'
-import { useConfirm } from '@/ui/composables/useConfirm'
 import { useDelayedLoading } from '@/ui/composables/useDelayedLoading'
 import { useFormat } from '@/ui/composables/useFormat'
 import { useToast } from '@/ui/composables/useToast'
-import { ensureSystemMutation, ensureSystemSuccess, readBackupPayload, readSystemPayload, systemErrorText } from './systemResponse'
+import NodeNotice from '@/views/admin/nodes/NodeNotice.vue'
 
-const { t, translateLiteral } = useAppI18n()
+const { t, te } = useAppI18n()
 const format = useFormat()
 const toast = useToast()
-const confirm = useConfirm()
 
-const BACKUP_TONES = { pending: 'info', completed: 'success', failed: 'danger' }
+const VERIFY_TONES = { passed: 'success', failed: 'danger', pending: 'info' }
 
-const createBackupConfigForm = (source = {}) => ({
-  enabled: Boolean(source.enabled),
-  interval: Number.isFinite(Number(source.interval)) && Number(source.interval) > 0
-    ? Number(source.interval)
-    : Number.isFinite(Number(source.retention_days)) && Number(source.retention_days) > 0
-      ? Number(source.retention_days)
-      : 24,
-  keep_count: Number.isFinite(Number(source.keep_count)) && Number(source.keep_count) > 0
-    ? Number(source.keep_count)
-    : Number.isFinite(Number(source.retention_days)) && Number(source.retention_days) > 0
-      ? Number(source.retention_days)
-      : 7,
-  backup_database: source.backup_database !== false,
-  backup_files: Boolean(source.backup_files),
-  storage_type: String(source.storage_type || 'local').trim().toLowerCase() || 'local',
-  storage_path: String(source.storage_path || 'backups'),
-  s3_bucket: String(source.s3_bucket || ''),
-  s3_region: String(source.s3_region || ''),
-  s3_endpoint: String(source.s3_endpoint || ''),
-  s3_access_key: source.s3_access_key_sensitive ? '' : String(source.s3_access_key || ''),
-  s3_secret_key: source.s3_secret_key_sensitive ? '' : String(source.s3_secret_key || ''),
-  s3_access_key_display_value: String(source.s3_access_key_display_value || ''),
-  s3_secret_key_display_value: String(source.s3_secret_key_display_value || ''),
-  s3_access_key_sensitive: Boolean(source.s3_access_key_sensitive),
-  s3_secret_key_sensitive: Boolean(source.s3_secret_key_sensitive),
-  s3_access_key_has_value: Boolean(source.s3_access_key_has_value),
-  s3_secret_key_has_value: Boolean(source.s3_secret_key_has_value)
-})
-
-const backupConfig = ref(createBackupConfigForm())
-const savedBackupConfig = ref(JSON.stringify(backupConfig.value))
-const backupConfigLoading = ref(false)
-const backupConfigError = ref(null)
-const backupSaving = ref(false)
-const showConfigSkeleton = useDelayedLoading(backupConfigLoading)
-
+const loading = ref(false)
+const loaded = ref(false)
+const loadError = ref(null)
+const supported = ref(true)
 const backups = ref([])
-const backupsLoading = ref(false)
-const backupsError = ref(null)
-const backupStats = ref({})
-const creatingBackup = ref(false)
+const summary = ref({})
+const retention = ref({})
+const creating = ref(false)
+const showSkeleton = useDelayedLoading(() => loading.value && !loaded.value)
 
-const storageTypeOptions = computed(() => [
-  { value: 'local', label: t('adminSettings.backup.storage.local') },
-  { value: 's3', label: t('adminSettings.backup.storage.s3') }
+const lastVerified = computed(() => summary.value?.last_verified || null)
+
+const typeLabel = type => (te(`adminSettings.backup.types.${type}`) ? t(`adminSettings.backup.types.${type}`) : type || '—')
+const verifyLabel = status => (te(`adminSettings.backup.verify.${status}`) ? t(`adminSettings.backup.verify.${status}`) : status || '—')
+
+const columns = computed(() => [
+  { key: 'file', label: t('adminSettings.backup.list.file'), primary: true, hideable: false, truncate: true, minWidth: 220, maxWidth: 420 },
+  { key: 'type', label: t('adminSettings.backup.list.type'), nowrap: true },
+  { key: 'verify_status', label: t('adminSettings.backup.list.verified'), secondary: true, nowrap: true },
+  { key: 'size', label: t('adminSettings.backup.list.size'), numeric: true, align: 'end', sortable: true, nowrap: true, format: value => format.bytes(Number(value || 0)) },
+  { key: 'created_at', label: t('adminSettings.backup.list.createdAt'), nowrap: true, sortable: true, firstDirection: 'desc', format: value => (value ? format.dateTime(value) : '—') }
 ])
 
-const translateText = (value, fallback) => {
-  const text = String(value ?? '').trim()
-  return text ? translateLiteral(text) : fallback
-}
-const resolveSystemError = (error, fallbackKey) => translateText(systemErrorText(error), t(fallbackKey))
-
-// Validation as you type ------------------------------------------------------
-
-const positiveInteger = value => Number.isInteger(Number(value)) && Number(value) >= 1 && value !== null && value !== ''
-const intervalError = computed(() => (positiveInteger(backupConfig.value.interval) ? '' : t('adminSettings.backup.auto.positiveInteger')))
-const keepCountError = computed(() => (positiveInteger(backupConfig.value.keep_count) ? '' : t('adminSettings.backup.auto.positiveInteger')))
-const bucketError = computed(() => (
-  backupConfig.value.storage_type === 's3' && !String(backupConfig.value.s3_bucket || '').trim()
-    ? t('adminSettings.backup.storage.bucketRequired')
-    : ''
-))
-const endpointError = computed(() => {
-  const value = String(backupConfig.value.s3_endpoint || '').trim()
-  if (backupConfig.value.storage_type !== 's3' || !value) return ''
-  try {
-    const url = new URL(value)
-    return url.protocol === 'http:' || url.protocol === 'https:' ? '' : t('adminSettings.backup.storage.endpointInvalid')
-  } catch {
-    return t('adminSettings.backup.storage.endpointInvalid')
-  }
-})
-const backupInvalid = computed(() => Boolean(intervalError.value || keepCountError.value || bucketError.value || endpointError.value))
-const backupDirty = computed(() => JSON.stringify(backupConfig.value) !== savedBackupConfig.value)
-
-function sensitiveHelp(field) {
-  if (!backupConfig.value[`${field}_sensitive`]) return ''
-  return backupConfig.value[`${field}_has_value`]
-    ? t('adminSettings.backup.storage.sensitiveWithValue')
-    : t('adminSettings.backup.storage.sensitiveWithoutValue')
-}
-
-// Payload ---------------------------------------------------------------------
-
-const hasEmptySensitiveBackupField = (form) => {
-  if (!form || typeof form !== 'object') return false
-  const accessKeyEmpty = Boolean(form.s3_access_key_sensitive && form.s3_access_key_has_value && String(form.s3_access_key || '').trim() === '')
-  const secretKeyEmpty = Boolean(form.s3_secret_key_sensitive && form.s3_secret_key_has_value && String(form.s3_secret_key || '').trim() === '')
-  return accessKeyEmpty || secretKeyEmpty
-}
-
-const buildBackupConfigPayload = (form) => {
-  const normalizedStorageType = String(form.storage_type || 'local').trim().toLowerCase() || 'local'
-  const preserveExistingSensitive = hasEmptySensitiveBackupField(form)
-  return {
-    enabled: !!form.enabled,
-    auto_backup: !!form.enabled,
-    interval: Number.isFinite(Number(form.interval)) && Number(form.interval) > 0 ? Number(form.interval) : 24,
-    keep_count: Number.isFinite(Number(form.keep_count)) && Number(form.keep_count) > 0 ? Number(form.keep_count) : 7,
-    backup_database: !!form.backup_database,
-    backup_files: !!form.backup_files,
-    storage_type: normalizedStorageType,
-    storage_path: normalizedStorageType === 'local' ? String(form.storage_path || '').trim() : String(form.storage_path || ''),
-    s3_bucket: normalizedStorageType === 's3' ? String(form.s3_bucket || '').trim() : String(form.s3_bucket || ''),
-    s3_region: normalizedStorageType === 's3' ? String(form.s3_region || '').trim() : String(form.s3_region || ''),
-    s3_endpoint: normalizedStorageType === 's3' ? String(form.s3_endpoint || '').trim() : String(form.s3_endpoint || ''),
-    s3_access_key: normalizedStorageType === 's3' ? String(form.s3_access_key || '').trim() : String(form.s3_access_key || ''),
-    s3_secret_key: normalizedStorageType === 's3' ? String(form.s3_secret_key || '').trim() : String(form.s3_secret_key || ''),
-    preserve_existing_sensitive: preserveExistingSensitive
-  }
-}
-
-const readBackupList = (res, fallbackKey) => {
-  const payload = readBackupPayload(res, t(fallbackKey))
-  return Array.isArray(payload?.list) ? payload.list : []
-}
-
-const formatSize = (bytes) => {
-  if (!bytes) return '0 B'
-  return format.bytes(Number(bytes))
-}
-
-const getStatusLabel = (status) => {
-  switch (status) {
-    case 'pending': return t('adminSettings.backup.status.pending')
-    case 'completed': return t('adminSettings.backup.status.completed')
-    case 'failed': return t('adminSettings.backup.status.failed')
-    default: return status || '—'
-  }
-}
-
-const backupColumns = computed(() => [
-  { key: 'filename', label: t('adminSettings.backup.list.filename'), primary: true, sortable: true, hideable: false, truncate: true, minWidth: 200, maxWidth: 360 },
-  { key: 'status', label: t('adminSettings.backup.list.status'), secondary: true, nowrap: true },
-  { key: 'size', label: t('adminSettings.backup.list.size'), numeric: true, align: 'end', sortable: true, nowrap: true, format: value => formatSize(value) },
-  { key: 'created_at', label: t('adminSettings.backup.list.createdAt'), nowrap: true, sortable: true, firstDirection: 'desc', format: value => (value ? format.dateTime(value) : '—') },
-  { key: 'id', label: 'ID', numeric: true, hidden: true }
-])
-
-const backupActions = backup => [
-  { key: 'restore', label: t('adminSettings.backup.list.restore'), icon: History, disabled: backup.status !== 'completed', onSelect: () => restoreBackupRequest(backup) },
-  { key: 'delete', label: t('common.actions.delete'), icon: Trash2, danger: true, separatorBefore: true, onSelect: () => deleteBackupRequest(backup) }
+const rowActions = backup => [
+  { key: 'download', label: t('adminSettings.backup.list.download'), icon: Download, onSelect: () => download(backup) }
 ]
 
-// Requests --------------------------------------------------------------------
+const retentionText = computed(() => t('adminSettings.backup.retention', {
+  daily: retention.value.daily ?? 7,
+  weekly: retention.value.weekly ?? 4,
+  days: retention.value.pre_migration_days ?? 30,
+  manual: retention.value.manual ?? 3
+}))
 
-function commitBackupConfig(form) {
-  backupConfig.value = form
-  savedBackupConfig.value = JSON.stringify(form)
-}
-
-const fetchBackupConfig = async () => {
-  backupConfigLoading.value = true
-  backupConfigError.value = null
-  try {
-    const res = await getBackupConfig()
-    const payload = readBackupPayload(res, t('adminSettings.backup.auto.loadFailed'))
-    if (payload && typeof payload === 'object') {
-      commitBackupConfig(createBackupConfigForm(payload))
-    }
-  } catch (err) {
-    backupConfigError.value = resolveSystemError(err, 'adminSettings.backup.auto.loadFailed')
-  } finally {
-    backupConfigLoading.value = false
-  }
-}
-
-const saveBackupConfig = async () => {
-  if (backupSaving.value || backupInvalid.value) return
-  backupSaving.value = true
-  try {
-    await ensureSystemMutation(
-      updateBackupConfig(buildBackupConfigPayload(backupConfig.value)),
-      t('adminSettings.backup.auto.saveFailed')
-    )
-    // Saved secrets are stored now: blank fields keep them from here on.
-    const saved = { ...backupConfig.value }
-    for (const field of ['s3_access_key', 's3_secret_key']) {
-      if (saved[`${field}_sensitive`] && String(saved[field] || '').trim()) {
-        saved[`${field}_has_value`] = true
-        saved[field] = ''
-      }
-    }
-    commitBackupConfig(saved)
-    toast.success(t('adminSettings.backup.auto.saved'))
-  } catch (err) {
-    toast.error(resolveSystemError(err, 'adminSettings.backup.auto.saveFailed'))
-  } finally {
-    backupSaving.value = false
-  }
-}
-
-function discardBackupConfig() {
-  backupConfig.value = JSON.parse(savedBackupConfig.value)
-}
-
-useUnsavedChanges(backupDirty, { discard: discardBackupConfig })
-
-const fetchBackups = async () => {
-  backupsLoading.value = true
-  backupsError.value = null
-  try {
-    const res = await getBackups()
-    backups.value = readBackupList(res, 'adminSettings.backup.list.loadFailed')
-  } catch (err) {
-    backups.value = []
-    backupsError.value = resolveSystemError(err, 'adminSettings.backup.list.loadFailed')
-  } finally {
-    backupsLoading.value = false
-  }
-}
-
-const readBackupStats = (res) => {
-  const payload = readSystemPayload(res, t('adminSettings.backup.stats.loadFailed'))
-  return payload && typeof payload === 'object' && !Array.isArray(payload) ? payload : {}
-}
-
-const fetchBackupStats = async () => {
-  try {
-    const res = await getBackupStats()
-    backupStats.value = readBackupStats(res)
-  } catch (err) {
-    // The numbers above the table are a summary; the table shows load errors.
-    backupStats.value = {}
-    console.error(t('adminSettings.backup.stats.loadFailed'), err)
-  }
-}
-
-const createBackupRequest = async () => {
-  if (creatingBackup.value) return
-  creatingBackup.value = true
-  try {
-    await ensureSystemMutation(createBackup(), t('adminSettings.backup.list.startFailed'))
-    toast.success(t('adminSettings.backup.list.started'))
-    fetchBackups()
-    fetchBackupStats()
-  } catch (err) {
-    toast.error(resolveSystemError(err, 'adminSettings.backup.list.startFailed'))
-  } finally {
-    creatingBackup.value = false
-  }
-}
-
-const confirmBackupAction = (options, request, fallbackKey) => confirm({
-  tone: 'danger',
-  ...options,
-  onConfirm: async () => {
-    try {
-      ensureSystemSuccess(await request(), t(fallbackKey))
-    } catch (err) {
-      throw new Error(resolveSystemError(err, fallbackKey))
-    }
-  }
+const restoreCommands = computed(() => {
+  const directory = summary.value?.directory || '/var/lib/anix-control/backups'
+  const file = backups.value.find(backup => backup.verify_status === 'passed')?.file || '<bundle>.tar'
+  return [
+    'sudo systemctl stop anix-control',
+    `sudo anix-control backup restore ${directory}/${file} --replace`,
+    'sudo systemctl start anix-control'
+  ].join('\n')
 })
 
-const deleteBackupRequest = async (backup) => {
-  const confirmed = await confirmBackupAction({
-    title: t('adminSettings.backup.confirm.deleteTitle', { filename: backup.filename }),
-    message: t('adminSettings.backup.confirm.deleteMessage'),
-    confirmLabel: t('adminSettings.backup.confirm.deleteAction')
-  }, () => deleteBackup(backup.id), 'adminSettings.backup.list.deleteFailed')
-  if (!confirmed) return
-  toast.success(t('adminSettings.backup.list.deleted', { filename: backup.filename }))
-  fetchBackups()
-  fetchBackupStats()
+// The kernel API answers { data } (getPanelBackups returns what is in it)
+// and { error: { code, message } }.
+function errorCode(error) {
+  return error?.response?.data?.error?.code || ''
 }
 
-const restoreBackupRequest = async (backup) => {
-  const confirmed = await confirmBackupAction({
-    title: t('adminSettings.backup.confirm.restoreTitle', { filename: backup.filename }),
-    message: t('adminSettings.backup.confirm.restoreMessage'),
-    confirmLabel: t('adminSettings.backup.confirm.restoreAction')
-  }, () => restoreBackup(backup.id), 'adminSettings.backup.list.restoreFailed')
-  if (!confirmed) return
-  toast.success(t('adminSettings.backup.list.restored'))
+function errorMessage(error, fallbackKey) {
+  return error?.response?.data?.error?.message || error?.message || t(fallbackKey)
 }
 
-onMounted(() => {
-  fetchBackupConfig()
-  fetchBackups()
-  fetchBackupStats()
-})
+async function load() {
+  loading.value = true
+  loadError.value = null
+  try {
+    const answer = await getPanelBackups()
+    const data = answer && typeof answer === 'object' ? answer : {}
+    supported.value = data.supported !== false
+    backups.value = Array.isArray(data.backups) ? data.backups : []
+    summary.value = data.summary && typeof data.summary === 'object' ? data.summary : {}
+    retention.value = data.retention && typeof data.retention === 'object' ? data.retention : {}
+    loaded.value = true
+  } catch (error) {
+    loadError.value = errorMessage(error, 'adminSettings.backup.loadFailed')
+  } finally {
+    loading.value = false
+  }
+}
+
+async function createNow() {
+  if (creating.value) return
+  creating.value = true
+  try {
+    const answer = await createPanelBackup()
+    const file = answer?.backup?.file || ''
+    toast.success(t('adminSettings.backup.created', { file }))
+    await load()
+  } catch (error) {
+    toast.error(errorCode(error) === 'backup_in_progress' ? t('adminSettings.backup.busy') : errorMessage(error, 'adminSettings.backup.createFailed'))
+  } finally {
+    creating.value = false
+  }
+}
+
+async function download(backup) {
+  try {
+    const { blob, filename } = await downloadPanelBackup(backup.id)
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = filename || backup.file
+    link.click()
+    URL.revokeObjectURL(url)
+  } catch (error) {
+    if (error?.response?.status === 403) {
+      toast.error(t('adminSettings.backup.list.superAdminRequired'))
+      return
+    }
+    toast.error(t('adminSettings.backup.list.downloadFailed'))
+  }
+}
+
+onMounted(load)
 </script>
 
 <style scoped>
@@ -508,25 +232,46 @@ onMounted(() => {
   gap: var(--space-5);
 }
 
-.backup-s3 {
-  width: 100%;
-}
-
-.backup-stats {
+.backup-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: var(--space-4);
   margin: 0;
 }
 
-.backup-stats .stat-item {
+.backup-summary__item {
   display: flex;
+  flex-direction: column;
   gap: var(--space-1);
+  min-width: 0;
 }
 
-.backup-stats dd {
+.backup-summary__item dt {
+  color: var(--label-2);
+  font-size: var(--type-callout-size);
+}
+
+.backup-summary__item dd {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
   margin: 0;
 }
 
-.settings-number {
-  width: 160px;
-  max-width: 100%;
+.backup-summary__path {
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono);
+  font-size: var(--type-callout-size);
+}
+
+.backup-retention {
+  margin: 0;
+  color: var(--label-2);
+  font-size: var(--type-callout-size);
+}
+
+.backup-notice__line {
+  display: block;
 }
 </style>

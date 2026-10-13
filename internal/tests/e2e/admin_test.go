@@ -110,8 +110,6 @@ func (s *AdminE2ETestSuite) SetupSuite() {
 		&model.ForwardRuntimeJob{},
 		&model.ForwardTrafficCursor{},
 		&model.ForwardStats{},
-		&model.BackupConfig{},
-		&model.BackupRecord{},
 		&model.OperationLog{},
 		&model.AuditLog{},
 		&model.Event{},

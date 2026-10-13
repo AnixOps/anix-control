@@ -59,11 +59,11 @@ PostgreSQL), not the systemd installer.
   rollback, and a sustained canary.
 - [ ] Move the legacy business domains out of the kernel. Every `/api/v2`
   business route is registered through `registeredPackageRoute`
-  (`internal/router/router.go`) and served by a package host. Of the 243
-  routes, 177 are `native-flagged` and 130 of them run natively by default
+  (`internal/router/router.go`) and served by a package host. Of the 236
+  routes, 173 are `native-flagged` and 126 of them run natively by default
   (`config/package-extraction.json`, `config/package-route-defaults.json`);
   13 are still `bridged` back into the in-kernel gin handlers and services
-  (`internal/identitybridge/identity_bridge.go` for identity-platform) and 53
+  (`internal/identitybridge/identity_bridge.go` for identity-platform) and 50
   are `kernel-owned`. The legacy handlers, services, workers and tables stay
   in the kernel, as the `legacy` fallback and as the owner of the tables.
   Design, platform gaps, and milestones M0-M4:

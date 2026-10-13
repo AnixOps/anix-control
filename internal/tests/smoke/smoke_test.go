@@ -78,7 +78,7 @@ func (s *SmokeTestSuite) SetupSuite() {
 		&model.SystemConfig{}, &model.PaymentGateway{}, &model.PaymentRecord{},
 		&model.ForwardNode{}, &model.Forward{}, &model.ForwardRule{},
 		&model.ForwardTunnel{}, &model.ForwardUserTunnel{}, &model.ForwardPortBinding{}, &model.ForwardRuntimeJob{},
-		&model.ForwardTrafficCursor{}, &model.BackupConfig{}, &model.BackupRecord{},
+		&model.ForwardTrafficCursor{},
 		&model.OperationLog{}, &model.LoadBalancer{},
 		&model.UserSubscriptionGroup{}, &model.PlanSubscriptionGroup{},
 		&model.Event{}, &model.SubscriptionGroup{}, &model.SubscriptionTemplate{},

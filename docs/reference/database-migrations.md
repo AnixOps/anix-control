@@ -24,6 +24,10 @@ Each migration runs in one transaction together with its record, on SQLite
 and PostgreSQL alike: a failing migration leaves nothing behind, and the
 start stops with the error.
 
+Before it applies a pending step to a database that is not empty, the start
+takes a `pre-migration` backup on SQLite ([`backups.md`](backups.md)); when
+that backup fails, nothing is migrated and the start stops with the reason.
+
 After the migrations the start seeds what every database has, as before: the
 default service scopes, the official plugin catalog and the plugin target
 locks; the node secret split state rows; the module and forward link CAs; the
@@ -141,6 +145,7 @@ every migration has both files; afterwards only the SQLite file remains.
 | `0002_server_log_buckets` | `v2_server_log` holds hourly buckets: rows of one key are merged, then the unique bucket index is created |
 | `0003_acme_cache` | Creates `v5_acme_cache`, the store of the panel's own certificates (the ACME account key, the certificates with their keys, challenge answers in flight, the self-signed fallback; entries holding a key are sealed) |
 | `0004_drop_route_modes` | Drops `v4_kernel_route_mode_revision` and `v4_kernel_shadow_mismatch_sample`, and removes the stored route-mode map (the `routes` key) from every Control package configuration in a new revision, writing each removed map to `v2_operation_log` first (action `route_modes_removed`, user `system/migration`). Route modes come only from the rehearsed list since ([`../UPGRADE.md`](../UPGRADE.md#plugin-center-reduced-to-package-status)) |
+| `0005_backups` | Creates `v5_backup`, one row per backup bundle in `<data_dir>/backups` with the result of its latest verification ([`backups.md`](backups.md)) |
 
 ## Adding A Migration
 

@@ -35,7 +35,7 @@ func fluxModels() []any {
 		&model.User{}, &model.Node{}, &model.ForwardNode{}, &model.ForwardRule{}, &model.ForwardRoute{}, &model.ForwardLog{},
 		&model.ForwardStats{}, &model.ForwardTunnel{}, &model.ForwardUserTunnel{}, &model.Forward{}, &model.ForwardPortBinding{},
 		&model.SpeedLimit{}, &model.ForwardRuntimeJob{}, &model.ForwardTrafficCursor{}, &model.ForwardCleanAgent{},
-		&model.ForwardAgentBridgeTask{}, &model.AgentTransport{}, &model.AgentCertificate{}, &model.BackupRecord{},
+		&model.ForwardAgentBridgeTask{}, &model.AgentTransport{}, &model.AgentCertificate{}, &model.Backup{},
 	}
 }
 
@@ -458,7 +458,10 @@ func runDrop(t *testing.T, db *gorm.DB) {
 	assert.Nil(t, written)
 }
 
-func TestDropAcceptsControlBackupRecord(t *testing.T) {
+// A bundle of Control's backups that passed its verification in the last
+// 24 hours stands for the backup; a failed or pending one does not, nor one
+// outside the bundle directory the command names.
+func TestDropAcceptsAVerifiedControlBackup(t *testing.T) {
 	db := openSQLite(t)
 	ctx := context.Background()
 	require.NoError(t, db.Create(&model.ForwardNode{ID: 1, Name: "agent", Host: "192.0.2.1", Enabled: true}).Error)
@@ -467,21 +470,26 @@ func TestDropAcceptsControlBackupRecord(t *testing.T) {
 	require.NoError(t, err)
 	_, err = Check(ctx, db, CheckOptions{Now: start})
 	require.NoError(t, err)
-	path := filepath.Join(t.TempDir(), "backup_20261004_115900.db")
-	require.NoError(t, os.WriteFile(path, []byte("SQLite format 3"), 0o600))
-	require.NoError(t, os.Chtimes(path, start, start))
-	completed := start.Add(-time.Minute)
-	// A failed backup and a files-only backup do not count.
-	require.NoError(t, db.Create(&model.BackupRecord{Name: "failed", Type: "database", Status: 2, Path: path, CompletedAt: &completed}).Error)
-	require.NoError(t, db.Create(&model.BackupRecord{Name: "files", Type: "files", Status: 1, Path: path, CompletedAt: &completed}).Error)
-	_, err = Drop(ctx, db, DropOptions{Confirm: ConfirmPhrase, Now: start})
+	dir := t.TempDir()
+	name := "anix-control-20261004T115900Z-manual.tar"
+	require.NoError(t, os.WriteFile(filepath.Join(dir, name), []byte("a bundle"), 0o600))
+	require.NoError(t, os.Chtimes(filepath.Join(dir, name), start, start))
+	created := start.Add(-time.Minute)
+	require.NoError(t, db.Create(&model.Backup{Path: "failed.tar", Type: "manual", CreatedAt: created, VerifyStatus: model.BackupVerifyFailed}).Error)
+	require.NoError(t, db.Create(&model.Backup{Path: name, Type: "manual", CreatedAt: created, VerifyStatus: model.BackupVerifyPending}).Error)
+	_, err = Drop(ctx, db, DropOptions{Confirm: ConfirmPhrase, BackupDir: dir, Now: start})
 	require.ErrorContains(t, err, "no database backup")
-	record := model.BackupRecord{Name: "ok", Type: "database", Status: 1, Path: path, CompletedAt: &completed}
-	require.NoError(t, db.Create(&record).Error)
-	result, err := Drop(ctx, db, DropOptions{Confirm: ConfirmPhrase, Now: start})
+	require.ErrorContains(t, err, "anix-control backup create")
+	require.NoError(t, db.Model(&model.Backup{}).Where("path = ?", name).Update("verify_status", model.BackupVerifyPassed).Error)
+	_, err = Drop(ctx, db, DropOptions{Confirm: ConfirmPhrase, Now: start})
+	require.ErrorContains(t, err, "no database backup", "without the bundle directory only --backup-taken counts")
+	var row model.Backup
+	require.NoError(t, db.Where("path = ?", name).Take(&row).Error)
+	result, err := Drop(ctx, db, DropOptions{Confirm: ConfirmPhrase, BackupDir: dir, Now: start})
 	require.NoError(t, err)
-	assert.Equal(t, "backup_record", result.Backup.Source)
-	assert.Equal(t, record.ID, result.Backup.RecordID)
+	assert.Equal(t, "control_backup", result.Backup.Source)
+	assert.Equal(t, row.ID, result.Backup.RecordID)
+	assert.Equal(t, filepath.Join(dir, name), result.Backup.Path)
 }
 
 // TestPostgresDropIsAtomic: a table another session holds makes the drop

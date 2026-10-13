@@ -3666,317 +3666,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/admin/system/backup": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员手动创建系统备份",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-系统"
-                ],
-                "summary": "创建备份",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "default": "database",
-                        "description": "备份类型 (database/full)",
-                        "name": "type",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/system/backup/config": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员获取系统备份配置",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-系统"
-                ],
-                "summary": "获取备份配置",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            },
-            "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员更新系统备份配置",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-系统"
-                ],
-                "summary": "更新备份配置",
-                "parameters": [
-                    {
-                        "description": "备份配置",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.BackupConfig"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/system/backup/stats": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员获取备份统计数据",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-系统"
-                ],
-                "summary": "获取备份统计",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/system/backups": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员获取备份记录列表",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-系统"
-                ],
-                "summary": "获取备份列表",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "default": 1,
-                        "description": "页码",
-                        "name": "page",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "default": 20,
-                        "description": "每页数量",
-                        "name": "page_size",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/system/backups/{id}": {
-            "delete": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员删除指定备份记录",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-系统"
-                ],
-                "summary": "删除备份",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "备份ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/system/backups/{id}/restore": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员从备份恢复系统",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-系统"
-                ],
-                "summary": "恢复备份",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "备份ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
         "/admin/system/configs": {
             "get": {
                 "security": [
@@ -9423,6 +9112,125 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v5/backups": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "The bundles in data_dir/backups, newest first, in data.backups: id, file, type (daily, pre-migration, manual, verify), size, sha256, created_at, verified_at, verify_status (pending, passed, failed), verify_error, program_version, schema_version. data.summary has last_verified (the newest bundle that passed its verification, or null), stale (no verified bundle younger than stale_after_hours, 36, on a database older than that), next_daily_at and directory; data.retention the built-in retention. On PostgreSQL data.supported is false and data.reason says why: backups need SQLite. Any administrator; no secret.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "The backup bundles and the last verified backup",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Writes a manual bundle of the database, root.key and the configuration file into data_dir/backups and answers it (201, data.backup, verify_status pending); its verification follows in the background and the list shows the result. 409 backups_need_sqlite on PostgreSQL, 409 backup_in_progress while another backup or verification runs. Any administrator.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Back up now",
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v5/backups/{id}/download": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Streams the bundle (application/x-tar, attachment). A bundle holds the root key, which opens every key Control keeps, so only a super administrator may download one, and every download is in the audit log (action download). 403 super_admin_required, 404 backup_not_found.",
+                "produces": [
+                    "application/x-tar"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Download a backup bundle",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "backup id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "file"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/v5/claim": {
             "post": {
                 "description": "Public, rate limited. The body is {token, email, password}: the token is the fragment of the link ` + "`" + `anix-control admin claim-link` + "`" + ` printed (https://\u003cdomain\u003e/claim#anixclaim_...). 201 with data {user_id, email, next: \"/login\"}: the administrator exists, the token is used up and the page signs in with the same email and password. 404 not_found once the panel has an administrator (whatever the token); 403 claim_invalid when the token is not the pending link's (a newer link replaces an older one); 410 claim_expired; 400 invalid_request or invalid_email; 422 weak_password (fewer than 12 characters) or password_too_long (more than 72 bytes); 409 email_taken; 503 identity_unavailable when identity holds the credentials and cannot be reached (nothing changed). The body is never logged; the audit row holds admin_claimed, the email and the source address.",
@@ -11472,62 +11280,6 @@ const docTemplate = `{
                 },
                 "transfer_enable": {
                     "type": "integer"
-                }
-            }
-        },
-        "model.BackupConfig": {
-            "type": "object",
-            "properties": {
-                "auto_backup": {
-                    "type": "boolean"
-                },
-                "backup_database": {
-                    "type": "boolean"
-                },
-                "backup_files": {
-                    "type": "boolean"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "enabled": {
-                    "type": "boolean"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "retention_days": {
-                    "description": "保留天数",
-                    "type": "integer"
-                },
-                "s3_access_key": {
-                    "type": "string"
-                },
-                "s3_bucket": {
-                    "type": "string"
-                },
-                "s3_endpoint": {
-                    "type": "string"
-                },
-                "s3_region": {
-                    "type": "string"
-                },
-                "s3_secret_key": {
-                    "type": "string"
-                },
-                "schedule": {
-                    "description": "cron表达式",
-                    "type": "string"
-                },
-                "storage_path": {
-                    "type": "string"
-                },
-                "storage_type": {
-                    "description": "local/s3/ftp",
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
                 }
             }
         },

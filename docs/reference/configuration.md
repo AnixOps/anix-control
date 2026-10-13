@@ -33,7 +33,7 @@ domain: panel.example.com
 | `grpc.port` | `50051` | The node gRPC port; nodes dial `<grpc.public_name or domain>:<grpc.port>`. |
 | `grpc.public_name` | `domain` | Only when `domain` sits behind a CDN: a DNS-only name that reaches this machine, for the nodes' mutual TLS. Not `grpc.host`, which was a listen address. |
 | `subscribe_path` | `s` | The subscription path (`/<subscribe_path>/:token`). Change it only to keep links already handed out working. |
-| `data_dir` | `/var/lib/anix-control` | The data directory: `root.key` (and, with the later milestones, the database and the backups). Absolute. |
+| `data_dir` | `/var/lib/anix-control` | The data directory: `root.key`, the backups (`backups/`, [backups.md](backups.md)), their scratch space (`tmp/`) and the lock a running Control holds (`control.lock`); with a later milestone the database too. Absolute. |
 
 [Panel Address, Listeners And Certificates](#panel-address-listeners-and-certificates)
 describes the modes in detail.

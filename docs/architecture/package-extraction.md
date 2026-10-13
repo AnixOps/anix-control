@@ -11,8 +11,9 @@ open work in [`../../TODO.md`](../../TODO.md).
 
 > 中文摘要：v4.0.0 的「插件化」只到路由层；本文定义「一个领域真正住在插件里」
 > 的验收标准、目标机制（存储租约 + 按路由模式 + 类型化内核操作，均已实现）、
-> 保留下来的旧计划约束，以及 M0–M4 里程碑。243 条 v2 路由中，177 条
-> `native-flagged`，13 条 `bridged`（待契约），53 条 `kernel-owned`（按设计留在内核）。
+> 保留下来的旧计划约束，以及 M0–M4 里程碑。236 条 v2 路由中，173 条
+> `native-flagged`，13 条 `bridged`（待契约），50 条 `kernel-owned`（按设计留在内核）。
+> 5.0（M2 P10）删除了 platform 包的 7 条旧备份路由（备份改为内核的 `/api/v5/backups`）。
 > v4.2（F5d）删除了 forward 包的 53 条 `bridged` flux 路由；forward 包不再接管任何表，
 > 其余 32 条 v2 路由全部交给内核处理，直到 F5c 删表。
 
@@ -24,9 +25,11 @@ context, not a commitment.
 
 v4.0.0 (published 2026-07-20) is plugin-only at the routing level only.
 
-- All 243 `/api/v2` routes in `config/v2-package-route-catalog.json` enter the
+- All 236 `/api/v2` routes in `config/v2-package-route-catalog.json` enter the
   package gateway (v4.2 removed the forward package's 53 `bridged` flux
-  routes, F5d; [`forward-sdk.md`](forward-sdk.md) section 10). 214 are registered with `registeredPackageRoute`
+  routes, F5d; [`forward-sdk.md`](forward-sdk.md) section 10; 5.0 removed
+  platform's 7 backup routes, whose settings ran nothing: the backups are
+  `/api/v5/backups`, [`../reference/backups.md`](../reference/backups.md)). 207 are registered with `registeredPackageRoute`
   (`internal/router/router.go`), which registers the legacy gin handler into
   `packagebridge.DefaultRouteRegistry()` and returns the gateway; the 26
   `identity-platform` routes use the bare `v2PackageGateway.Serve` (their
@@ -35,13 +38,13 @@ v4.0.0 (published 2026-07-20) is plugin-only at the routing level only.
 - `config/package-extraction.json` records each route's extraction mode
   (`bridged`, `kernel-owned`, `native-flagged` or `native`; section 3.2) and
   where its legacy handler lives
-  (`router`, `identity-bridge` or `none`). 177 routes are `native-flagged`:
+  (`router`, `identity-bridge` or `none`). 173 routes are `native-flagged`:
   identity-platform (23: group A's 16, the profile, dashboard, user detail,
   user list and user statistics, and the traffic and subscription resets),
   affiliate (10), gost-mesh (3), knowledge (6),
   machine-telemetry (3), notification (23), order (13), payment (20), plan
-  (7), platform (5), protocol-runtime (14), proxy-node (18), subscription (23),
-  ticket (8) and wireguard (1). 53 routes are `kernel-owned`: they stay in the
+  (7), platform (1), protocol-runtime (14), proxy-node (18), subscription (23),
+  ticket (8) and wireguard (1). 50 routes are `kernel-owned`: they stay in the
   kernel by design, and each row says why. The other 13 are `bridged` until a
   kernel contract lets their package serve them (section 3.2 lists what
   unblocks them). None is `native` yet. The identity routes are
@@ -103,7 +106,7 @@ v4.0.0 (published 2026-07-20) is plugin-only at the routing level only.
 - Outside the package gate, kernel handlers serve `/api/v1/server/UniProxy/*`,
   `/{subscribe_path}/:token`, `/api/v1/client/subscribe`, and `/flow/upload`.
 
-Route modes per package (2026-10-04, after F5d):
+Route modes per package (2026-10-13, after F5d and the backup routes' removal):
 
 | Package | `native-flagged` | `bridged` | `kernel-owned` |
 |---|---|---|---|
@@ -117,13 +120,13 @@ Route modes per package (2026-10-04, after F5d):
 | order | 13 | 0 | 0 |
 | payment | 20 | 0 | 0 |
 | plan | 7 | 0 | 0 |
-| platform | 5 | 0 | 7 |
+| platform | 1 | 0 | 4 |
 | protocol-runtime | 14 | 0 | 6 |
 | proxy-node | 18 | 7 | 6 |
 | subscription | 23 | 2 | 0 |
 | ticket | 8 | 0 | 0 |
 | wireguard | 1 | 0 | 0 |
-| **all** | **177** | **13** | **53** |
+| **all** | **173** | **13** | **50** |
 
 Reusable pieces that already exist:
 
@@ -203,7 +206,8 @@ host polls every 5 s
 
 - `native`: a route of `config/package-route-defaults.json`, the rehearsed
   list (decision H8: 151 routes in 4.1.0, 130 of 14 packages from v4.2, the
-  forward package's 21 left with F5d), once the installed release is at
+  forward package's 21 left with F5d; 126 since platform's 4 backup routes
+  went in 5.0), once the installed release is at
   least the package's `min_version` (`4.1.0-rc.5`); and identity group A
   while identity is authoritative. The list is explicit: a route that
   becomes `native-flagged` later does not run natively until it is added to
@@ -229,10 +233,10 @@ by `check_plugin_only_routes.py` (counts in section 1).
 
 | Mode | Meaning | Routes |
 |---|---|---|
-| `native-flagged` | the package host has a native handler, proved by a parity test; the legacy handler stays, so every runtime mode works | 177 |
+| `native-flagged` | the package host has a native handler, proved by a parity test; the legacy handler stays, so every runtime mode works | 173 |
 | `native` | the legacy handler is deleted and the host answers alone | 0 |
 | `bridged` | the host only relays, until a kernel contract lets the package serve the route | 13 |
-| `kernel-owned` | the host only relays, by design: the route stays in the kernel, and the row's `reason` says why | 53 |
+| `kernel-owned` | the host only relays, by design: the route stays in the kernel, and the row's `reason` says why | 50 |
 
 A `bridged` or `kernel-owned` route is registered and relayed alike: it is
 in its host's `bridgedRoutes`, and no other source of its package names it,
@@ -240,8 +244,7 @@ so it has no native handler. The `kernel-owned` routes:
 
 - platform: the generic system configuration routes (no package gets a
   settings grant over every namespace,
-  [`settings-service.md`](settings-service.md#routes)) and backup creation,
-  deletion and restore (archives on the kernel's disk);
+  [`settings-service.md`](settings-service.md#routes));
 - machine-telemetry: the system information (the kernel binary's build
   metadata) and the monitoring WebSocket;
 - protocol-runtime: the agent channel (registration, heartbeat, task poll,
@@ -309,7 +312,7 @@ legacy handler or package, serves it.
 |---|---|---|
 | KernelIdentity ([`identity-service.md`](identity-service.md)) | `kernel.identity.v1` | identity-platform |
 | KernelSubscriber ([`subscriber-service.md`](subscriber-service.md)): entitlements, traffic, credentials, balance, directory, subscription groups, the subscription summary the kernel caches | `kernel.subscriber.<family>.v1` | plan and order (entitlements), identity-platform and forward (resets), affiliate (balance), subscription (groups, summary) |
-| KernelSettings ([`settings-service.md`](settings-service.md)): settings per namespace, secrets masked without the namespace's `secrets` capability | `kernel.settings.<namespace>.<read\|write\|secrets>.v1` | notification (`mail`), affiliate (`invite`), gost-mesh (`nodex`), platform (`backup`) |
+| KernelSettings ([`settings-service.md`](settings-service.md)): settings per namespace, secrets masked without the namespace's `secrets` capability | `kernel.settings.<namespace>.<read\|write\|secrets>.v1` | notification (`mail`), affiliate (`invite`), gost-mesh (`nodex`) |
 | KernelOrder ([`order-service.md`](order-service.md)): a paid payment record completes its order | `kernel.order.complete.v1` | payment |
 | KernelTelemetry ([`kernel-caches.md`](kernel-caches.md)): the administrator dashboard's snapshot from the kernel's cache, the online users as a count | `kernel.telemetry.dashboard.v1` | machine-telemetry |
 | KernelNodeOps ([`node-ops-service.md`](node-ops-service.md)): typed, idempotent node operations with a ledger, polling and a watch stream | `kernel.nodeops.<forward\|nodeconfig\|diagnose\|agents\|credentials>.v1` | gost-mesh (diagnose), protocol-runtime (nodeconfig, agents, diagnose), proxy-node (nodeconfig, credentials, diagnose) |
@@ -442,24 +445,17 @@ The planned `kernel.entitlement.apply.v1` became
     calls of both sides and compares them.
   - One stays bridged: the public webhook (`/sub` needs the subscription
     token).
-- **Platform (in place).** 5 of 12 routes: the backup list and statistics
-  on the adopted `v2_backup_record` table, the system audit log through
-  `kapi_system_audit_log_v1`, and the backup configuration (GET and PUT)
-  through KernelSettings (namespace `backup`, read and write, no secrets),
-  proved by `internal/tests/platformcompat`.
-  - The package no longer adopts `v2_backup_config`: it never holds the S3
-    keys, which KernelSettings answers masked, as the kernel's handler
-    shows them. The parity test gives these routes no storage.
-  - The update is written by the kernel: it saves the row, records the
-    audit entry its handler records and makes the backup service reload
-    the copy it keeps in memory, which backup creation reads. The parity
-    test compares the rows, the audit entries and that copy.
-  - Seven are `kernel-owned`:
-    - the system configuration routes: they reach every key of the
-      protected `v2_system_config`, and a grant over every key holds every
-      secret ([`settings-service.md`](settings-service.md#routes));
-    - creating, deleting and restoring backups: archives of the database
-      and files on the kernel's disk.
+- **Platform (in place).** 1 of 5 routes: the system audit log through
+  `kapi_system_audit_log_v1`, proved by `internal/tests/platformcompat`.
+  - Four are `kernel-owned`: the system configuration routes reach every
+    key of the protected `v2_system_config`, and a grant over every key
+    holds every secret ([`settings-service.md`](settings-service.md#routes)).
+  - The seven backup routes it served or relayed until 5.0 (the list, the
+    statistics, the configuration read and update, creation, deletion and
+    the online restore) are gone with the backup settings nothing executed:
+    the backups are the kernel's `/api/v5/backups` and
+    `anix-control backup` ([`../reference/backups.md`](../reference/backups.md)).
+    The package adopts no table any more and holds no settings capability.
 - **Plan (in place).** The first module that changes shared subscriber
   state. All 7 routes run on the adopted `v2_plan` and `v2_event` tables,
   proved by `internal/tests/plancompat`.

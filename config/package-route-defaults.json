@@ -66,11 +66,7 @@
       "batch": 2,
       "min_version": "4.1.0-rc.5",
       "routes": [
-        "platform.admin.system.audit_logs.get",
-        "platform.admin.system.backup.config.get",
-        "platform.admin.system.backup.config.put",
-        "platform.admin.system.backup.stats.get",
-        "platform.admin.system.backups.get"
+        "platform.admin.system.audit_logs.get"
       ]
     },
     {

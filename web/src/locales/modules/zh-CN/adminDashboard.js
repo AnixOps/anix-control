@@ -20,7 +20,14 @@ export default {
       revenue: '本月收入',
       revenueDetail: '今日 {today} · 累计 {total}',
       orders: '待支付订单',
-      ordersDetail: '共 {total} · 已完成 {paid}'
+      ordersDetail: '共 {total} · 已完成 {paid}',
+      backup: '上次验证通过的备份',
+      backupNone: '还没有',
+      backupAge: '{age}前',
+      backupTaken: '备份于 {date}',
+      backupStale: '已超过 {hours} 小时',
+      backupUnsupported: '备份需要 SQLite',
+      backupUnknown: '备份状态未加载'
     },
     traffic: {
       title: '24 小时流量',
@@ -120,6 +127,15 @@ export default {
           failed: '面板没有可用的 {name} 证书',
           renewalFailing: '{name} 的证书续期失败',
           hint: '面板暂时使用临时证书；在服务器上运行 anix-control tls status 查看原因。'
+        },
+        backupVerifyFailed: {
+          title: '备份 {name} 未通过验证',
+          hint: '创建于 {date}，无法用于还原。请在服务器上运行 anix-control backup create，并查看 Control 日志。'
+        },
+        backupStale: {
+          title: '最近 {hours} 小时内没有验证通过的备份',
+          hint: '最近一个验证通过的备份创建于 {date}。请查看 Control 日志中的备份任务，或立即备份。',
+          never: '面板还没有验证通过的备份。请查看 Control 日志中的备份任务，或立即备份。'
         }
       },
       nodesFailed: '无法加载节点状态',

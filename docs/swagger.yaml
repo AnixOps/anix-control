@@ -403,44 +403,6 @@ definitions:
     - email
     - password
     type: object
-  model.BackupConfig:
-    properties:
-      auto_backup:
-        type: boolean
-      backup_database:
-        type: boolean
-      backup_files:
-        type: boolean
-      created_at:
-        type: string
-      enabled:
-        type: boolean
-      id:
-        type: integer
-      retention_days:
-        description: 保留天数
-        type: integer
-      s3_access_key:
-        type: string
-      s3_bucket:
-        type: string
-      s3_endpoint:
-        type: string
-      s3_region:
-        type: string
-      s3_secret_key:
-        type: string
-      schedule:
-        description: cron表达式
-        type: string
-      storage_path:
-        type: string
-      storage_type:
-        description: local/s3/ftp
-        type: string
-      updated_at:
-        type: string
-    type: object
   model.InviteConfig:
     properties:
       auto_generate:
@@ -3440,207 +3402,6 @@ paths:
       summary: Get system audit logs
       tags:
       - Admin System
-  /admin/system/backup:
-    post:
-      consumes:
-      - application/json
-      description: 管理员手动创建系统备份
-      parameters:
-      - default: database
-        description: 备份类型 (database/full)
-        in: query
-        name: type
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: 创建备份
-      tags:
-      - 管理端-系统
-  /admin/system/backup/config:
-    get:
-      consumes:
-      - application/json
-      description: 管理员获取系统备份配置
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: 获取备份配置
-      tags:
-      - 管理端-系统
-    put:
-      consumes:
-      - application/json
-      description: 管理员更新系统备份配置
-      parameters:
-      - description: 备份配置
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/model.BackupConfig'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties: true
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: 更新备份配置
-      tags:
-      - 管理端-系统
-  /admin/system/backup/stats:
-    get:
-      consumes:
-      - application/json
-      description: 管理员获取备份统计数据
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: 获取备份统计
-      tags:
-      - 管理端-系统
-  /admin/system/backups:
-    get:
-      consumes:
-      - application/json
-      description: 管理员获取备份记录列表
-      parameters:
-      - default: 1
-        description: 页码
-        in: query
-        name: page
-        type: integer
-      - default: 20
-        description: 每页数量
-        in: query
-        name: page_size
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: 获取备份列表
-      tags:
-      - 管理端-系统
-  /admin/system/backups/{id}:
-    delete:
-      consumes:
-      - application/json
-      description: 管理员删除指定备份记录
-      parameters:
-      - description: 备份ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: 删除备份
-      tags:
-      - 管理端-系统
-  /admin/system/backups/{id}/restore:
-    post:
-      consumes:
-      - application/json
-      description: 管理员从备份恢复系统
-      parameters:
-      - description: 备份ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: 恢复备份
-      tags:
-      - 管理端-系统
   /admin/system/configs:
     get:
       consumes:
@@ -7418,6 +7179,97 @@ paths:
       summary: 公开配置
       tags:
       - 系统
+  /api/v5/backups:
+    get:
+      description: 'The bundles in data_dir/backups, newest first, in data.backups:
+        id, file, type (daily, pre-migration, manual, verify), size, sha256, created_at,
+        verified_at, verify_status (pending, passed, failed), verify_error, program_version,
+        schema_version. data.summary has last_verified (the newest bundle that passed
+        its verification, or null), stale (no verified bundle younger than stale_after_hours,
+        36, on a database older than that), next_daily_at and directory; data.retention
+        the built-in retention. On PostgreSQL data.supported is false and data.reason
+        says why: backups need SQLite. Any administrator; no secret.'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: The backup bundles and the last verified backup
+      tags:
+      - Kernel
+    post:
+      description: Writes a manual bundle of the database, root.key and the configuration
+        file into data_dir/backups and answers it (201, data.backup, verify_status
+        pending); its verification follows in the background and the list shows the
+        result. 409 backups_need_sqlite on PostgreSQL, 409 backup_in_progress while
+        another backup or verification runs. Any administrator.
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Back up now
+      tags:
+      - Kernel
+  /api/v5/backups/{id}/download:
+    get:
+      description: Streams the bundle (application/x-tar, attachment). A bundle holds
+        the root key, which opens every key Control keeps, so only a super administrator
+        may download one, and every download is in the audit log (action download).
+        403 super_admin_required, 404 backup_not_found.
+      parameters:
+      - description: backup id
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/x-tar
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: file
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Download a backup bundle
+      tags:
+      - Kernel
   /api/v5/claim:
     post:
       consumes:
