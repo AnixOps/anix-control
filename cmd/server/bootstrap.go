@@ -159,8 +159,14 @@ func bootstrapDatabase(ctx context.Context, cfg *config.Config, env string) erro
 		return fmt.Errorf("apply configured plugin trust root: %w", err)
 	}
 	// The official packages built into this binary. A package that fails is
-	// reported and never stops the start.
-	bootstrapBuiltinPackages(db, cfg, log.Printf)
+	// reported and never stops the start. A binary without them (a
+	// development build) imports identity-platform from
+	// plugins.identity_bootstrap_package_dir, as before.
+	if embedded := bootstrapBuiltinPackages(db, cfg, log.Printf); !embedded {
+		if err := service.BootstrapIdentityPlatformPackage(db, cfg.Plugins.OfficialPublicKey, cfg.Plugins.IdentityBootstrapPackageDir); err != nil {
+			return fmt.Errorf("bootstrap identity platform package: %w", err)
+		}
+	}
 
 	// 初始化管理员账号、默认订阅分组、默认套餐、环境变量中的默认授权密钥
 	if err := service.InitAdmin(cfg); err != nil {
@@ -317,18 +323,20 @@ func ensureModulePKI(ctx context.Context, cfg *config.Config, db *gorm.DB) error
 // logs what happened to each. It runs under the bootstrap lock at every
 // start; a package that fails is logged and raised as a kernel alert
 // (builtin_package_invalid, builtin_package_failed), and Control starts.
-func bootstrapBuiltinPackages(db *gorm.DB, cfg *config.Config, logf func(string, ...any)) {
-	if strings.TrimSpace(cfg.Plugins.IdentityBootstrapPackageDir) != "" {
-		logf("plugins.identity_bootstrap_package_dir is ignored: the official packages, identity-platform included, are built into Control")
-	}
+// It reports whether the binary embeds packages (an unreadable set counts:
+// it is a broken release binary, not a development build).
+func bootstrapBuiltinPackages(db *gorm.DB, cfg *config.Config, logf func(string, ...any)) bool {
 	set, err := builtinpkg.Default()
 	if err != nil {
 		logf("WARNING: the built-in packages of this binary cannot be read: %v. No official package was installed or upgraded; reinstall a verified release binary.", err)
-		return
+		return true
 	}
 	if set.Empty() {
-		logf("This binary embeds no official packages (a development build without `make build`); none were installed or upgraded.")
-		return
+		logf("This binary embeds no official packages (a development build without `make build`).")
+		return false
+	}
+	if strings.TrimSpace(cfg.Plugins.IdentityBootstrapPackageDir) != "" {
+		logf("plugins.identity_bootstrap_package_dir is ignored: the official packages, identity-platform included, are built into Control")
 	}
 	failed := 0
 	for _, result := range service.BootstrapBuiltinPackages(db, cfg.Plugins.OfficialPublicKey, set) {
@@ -342,6 +350,7 @@ func bootstrapBuiltinPackages(db *gorm.DB, cfg *config.Config, logf func(string,
 		}
 	}
 	logf("Built-in packages: %d embedded, %d failed (signing key %s).", len(set.Packages), failed, builtinSigningKeyID(set))
+	return true
 }
 
 // builtinSigningKeyID names the key the embedded packages were signed with,
