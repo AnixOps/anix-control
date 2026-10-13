@@ -49,8 +49,19 @@ export const SCREENS = {
   'admin-agents': { fixture: agent, scenario: 'list' },
   'admin-plugins': { fixture: plugins, scenario: 'list' },
   'admin-nodes': { fixture: nodes, scenario: 'list' },
+  // 接入节点: the dialog while it waits for the first machine, with two
+  // machines joined (one waits for approval) and on a Control that cannot hand
+  // out a command yet; the node group tab and a group's edit sheet; the
+  // nodes waiting for approval; and a node's 部署 section.
+  'admin-nodes-awaiting': { fixture: nodes, scenario: 'awaiting' },
+  'admin-node-join': { fixture: nodes, scenario: 'join' },
+  'admin-node-joined': { fixture: nodes, scenario: 'joined' },
+  'admin-node-join-blocked': { fixture: nodes, scenario: 'joinBlocked' },
+  'admin-node-groups': { fixture: nodes, scenario: 'groups' },
+  'admin-node-group-edit': { fixture: nodes, scenario: 'groupEdit' },
   'admin-node-detail': { fixture: nodeDetail, scenario: 'overview' },
   'admin-node-services': { fixture: nodeDetail, scenario: 'services' },
+  'admin-node-deploy': { fixture: nodeDetail, scenario: 'deploy' },
   // The node's traffic over time, and rotating its Agent credentials.
   'admin-node-traffic': { fixture: nodeDetail, scenario: 'traffic' },
   'admin-node-traffic-empty': { fixture: nodeDetail, scenario: 'trafficEmpty' },

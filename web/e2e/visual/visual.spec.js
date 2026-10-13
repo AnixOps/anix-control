@@ -17,11 +17,20 @@ const SHOTS = [
   ['user-subscribe', [DESKTOP]],
   ['admin-dashboard', [DESKTOP, PHONE]],
   ['admin-users', [DESKTOP, PHONE]],
-  // The Agent connection and certificate columns of the node list, and the
-  // subscription group's member table.
+  // The node list (certificate, Agent version and last seen), the nodes
+  // waiting for approval, 接入节点 (waiting, with machines joined, and blocked
+  // by what the Control lacks), the node group tab and a group's edit sheet,
+  // and the subscription group's member table.
   ['admin-nodes', [DESKTOP, PHONE]],
+  ['admin-nodes-awaiting', [DESKTOP]],
+  ['admin-node-join', [DESKTOP]],
+  ['admin-node-joined', [DESKTOP, PHONE]],
+  ['admin-node-join-blocked', [DESKTOP]],
+  ['admin-node-groups', [DESKTOP, PHONE]],
+  ['admin-node-group-edit', [DESKTOP]],
   ['admin-subscription-members', [DESKTOP, PHONE]],
   ['admin-node-detail', [DESKTOP]],
+  ['admin-node-deploy', [DESKTOP]],
   ['admin-node-services', [DESKTOP]],
   // The node's traffic over time (and its empty state), the credentials
   // section's rotate action as a confirmation and as its one-time result,
