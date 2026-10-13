@@ -834,8 +834,16 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		// its wildcard name with /kernel/nodes/:id/traffic).
 		v4.POST("/kernel/nodes/:id/approve", nodeGroups.ApproveNode)
 		v4.POST("/kernel/nodes/:id/reject", nodeGroups.RejectNode)
+		// Node diagnostics (5.0 node page, 诊断): whitelisted actions of the
+		// Agent's agent.diagnostic operation run on the node's Agent Control
+		// stream, answered in the request; a restart needs a super
+		// administrator, every call is in the operation log.
+		nodeDiagnostics := handler.NewNodeDiagnosticsHandler()
+		v4.POST("/kernel/nodes/:id/diagnostics", nodeDiagnostics.Run)
+		v4.GET("/kernel/nodes/:id/diagnostics", nodeDiagnostics.List)
 		// Staged Agent upgrades (forward-sdk.md section 9, O4; H19).
 		upgrades := handler.NewAgentUpgradesHandler()
+		v4.GET("/kernel/agents/upgrade-plan", upgrades.Plan)
 		v4.POST("/kernel/agents/upgrades", upgrades.Start)
 		v4.GET("/kernel/agents/upgrades", upgrades.List)
 		v4.GET("/kernel/agents/upgrades/:id", upgrades.Get)

@@ -331,6 +331,18 @@ definitions:
     - name
     - scope
     type: object
+  handler.nodeDiagnosticRequest:
+    properties:
+      action:
+        type: string
+      params:
+        additionalProperties: {}
+        type: object
+      timeout_seconds:
+        description: 'TimeoutSeconds bounds the wait for the result: 1 to 120, default
+          30.'
+        type: integer
+    type: object
   handler.rotateAgentCredentialsRequest:
     properties:
       node:
@@ -6629,6 +6641,31 @@ paths:
       summary: Agent transport inventory
       tags:
       - Kernel
+  /api/v4/kernel/agents/upgrade-plan:
+    get:
+      description: 'The Agent release a campaign pushes by default (agent_install.agent_version,
+        else the Agent release this Control was built with, else its own release),
+        this Control''s release, how many nodes a campaign would include now (enabled
+        nodes whose Agent was seen on the Agent Control stream), the default batches
+        with the rules of H19 (first batch at most 5%, each batch at least 30 minutes,
+        a batch rolls back above 5% failures or after 10 minutes without a reconnect),
+        the active campaign if there is one, and whether the caller may start one
+        (can_start: super administrators). When the https address nodes reach Control
+        is not configured, configured is false with unconfigured_reason and target_version
+        empty. Administrators read it; Start verifies the release files.'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: What an Agent upgrade would do now
+      tags:
+      - Kernel
   /api/v4/kernel/agents/upgrades:
     get:
       description: The latest Agent upgrade campaigns, newest first, each with its
@@ -7171,6 +7208,77 @@ paths:
       security:
       - BearerAuth: []
       summary: Approve a pending node
+      tags:
+      - Kernel
+  /api/v4/kernel/nodes/{id}/diagnostics:
+    get:
+      description: 'The actions the node''s Agent runs now (from its Agent Control
+        session: connected, agent_version, diagnostics for agent.diagnostic, forward_checks
+        for diag.v1), the services a task may name, the time bounds, whether the caller
+        may restart services (can_restart), and the newest recorded tasks with their
+        results (limit 1 to 50, default 10; a proxy node''s generic actions only:
+        forward nodes and forward checks keep no history, only the operation log).'
+      parameters:
+      - description: proxy-<id> or forward-<id>
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: tasks to list, 1 to 50
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: What a node can diagnose, and its latest diagnostics
+      tags:
+      - Kernel
+    post:
+      consumes:
+      - application/json
+      description: 'Runs one whitelisted diagnostic on the node''s Agent over the
+        Agent Control stream and answers its result within the request. Generic actions:
+        service_status, service_restart (super administrators only) and log_tail (params
+        service "gost", lines up to 1000); forward checks forward.listen, forward.port_conflict,
+        forward.connect and forward.udp_probe (params route_id, hop_index, optional
+        generation, timeout_ms, upstream, target_policy) when the Agent advertises
+        diag.v1. timeout_seconds is 1 to 120, default 30. 200 with success false means
+        the Agent ran the task and it failed; 409 node_offline, diagnostics_unsupported
+        or node_pending_approval when the Agent cannot take it; 409 diagnostic_busy
+        while another diagnostic of the node runs; 504 diagnostic_timeout when the
+        Agent reports no result in time. Every call is recorded in the operation log
+        (module node_diagnostic).'
+      parameters:
+      - description: proxy-<id> or forward-<id>
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: action, params, timeout_seconds
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.nodeDiagnosticRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Run a diagnostic on a node
       tags:
       - Kernel
   /api/v4/kernel/nodes/{id}/reject:

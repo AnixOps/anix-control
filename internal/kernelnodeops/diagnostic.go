@@ -286,25 +286,38 @@ func (x agentDiagnosticExecutor) Execute(ctx context.Context, run *Run) Outcome 
 	return observedOutcome(observed, result)
 }
 
-// completeDiagnosticTask records the result an agent reported on the
-// stream in the task's row, as the agent API's result report does.
-func completeDiagnosticTask(db *gorm.DB, task agentstreams.DiagnosticTask, node agentcontrol.AgentNode, observed *agentv1pb.ObservedState) {
-	var report struct {
-		Success    bool   `json:"success"`
-		Output     string `json:"output"`
-		Error      string `json:"error"`
-		DurationMS int64  `json:"duration_ms"`
-	}
+// diagnosticReport is the state an agent.diagnostic operation ends with
+// (the Agent's diagnostic.State): the generic answer, plus the structured
+// result of a forward check.
+type diagnosticReport struct {
+	Success    bool            `json:"success"`
+	Output     string          `json:"output"`
+	Error      string          `json:"error"`
+	DurationMS int64           `json:"duration_ms"`
+	Result     json.RawMessage `json:"result,omitempty"`
+}
+
+// decodeDiagnosticReport reads an agent's terminal state of a diagnostic
+// task. An agent that ended the operation without the generic answer is
+// judged by the phase and its message.
+func decodeDiagnosticReport(observed *agentv1pb.ObservedState) diagnosticReport {
+	var report diagnosticReport
 	succeeded := observed.GetPhase() == agentv1pb.ObservedPhase_OBSERVED_PHASE_SUCCEEDED
 	if len(observed.GetStateJson()) > 0 && json.Unmarshal(observed.GetStateJson(), &report) == nil {
 		report.Success = report.Success && succeeded
 	} else {
-		report.Success = succeeded
-		report.Error = observed.GetMessage()
+		report = diagnosticReport{Success: succeeded, Error: observed.GetMessage()}
 	}
 	if !report.Success && report.Error == "" {
 		report.Error = observed.GetMessage()
 	}
+	return report
+}
+
+// completeDiagnosticTask records the result an agent reported on the
+// stream in the task's row, as the agent API's result report does.
+func completeDiagnosticTask(db *gorm.DB, task agentstreams.DiagnosticTask, node agentcontrol.AgentNode, observed *agentv1pb.ObservedState) {
+	report := decodeDiagnosticReport(observed)
 	_ = service.NewAgentDiagnosticTaskService(db).CompleteTask(task.ID, uint(node.ID), task.Action, report.Success, report.Output, report.Error, report.DurationMS)
 }
 

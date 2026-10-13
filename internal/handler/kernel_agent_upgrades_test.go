@@ -97,6 +97,7 @@ func newUpgradeTestEnv(t *testing.T) *upgradeTestEnv {
 		c.Set("email", "root@example.com")
 	})
 	handler := &AgentUpgradesHandler{db: func() *gorm.DB { return db }, config: func() *config.Config { return env.cfg }}
+	router.GET("/upgrade-plan", handler.Plan)
 	router.POST("/upgrades", handler.Start)
 	router.GET("/upgrades", handler.List)
 	router.GET("/upgrades/:id", handler.Get)
@@ -196,4 +197,49 @@ func TestAgentUpgradesNeedHTTPS(t *testing.T) {
 	code, answer := env.do(t, http.MethodPost, "/upgrades", `{}`, "")
 	assert.Equal(t, http.StatusConflict, code, answer)
 	assert.Equal(t, "agent_install_unconfigured", answer["error"].(map[string]any)["code"])
+}
+
+// The plan is what the start form shows: the Agent release Control pins,
+// the nodes a campaign would include, the batches of H19, whether the
+// caller may start, and the active campaign.
+func TestAgentUpgradePlan(t *testing.T) {
+	env := newUpgradeTestEnv(t)
+
+	code, answer := env.do(t, http.MethodGet, "/upgrade-plan", "", "8")
+	require.Equal(t, http.StatusOK, code, answer)
+	plan := answer["data"].(map[string]any)
+	assert.Equal(t, "v4.2.0", plan["target_version"])
+	assert.Equal(t, "v4.2.0", plan["control_version"])
+	assert.Equal(t, true, plan["configured"])
+	assert.EqualValues(t, 3, plan["eligible_nodes"])
+	assert.Equal(t, false, plan["can_start"], "staff read the plan, a super administrator starts")
+	assert.Equal(t, "", plan["active_campaign_id"])
+	assert.EqualValues(t, 1800, plan["min_batch_seconds"])
+	assert.EqualValues(t, 5, plan["first_batch_max_percent"])
+	batches := plan["batches"].([]any)
+	require.Len(t, batches, 3)
+	assert.EqualValues(t, 5, batches[0].(map[string]any)["percent"])
+	assert.EqualValues(t, 25, batches[1].(map[string]any)["percent"])
+	assert.EqualValues(t, 100, batches[2].(map[string]any)["percent"])
+
+	code, answer = env.do(t, http.MethodGet, "/upgrade-plan", "", "")
+	require.Equal(t, http.StatusOK, code)
+	assert.Equal(t, true, answer["data"].(map[string]any)["can_start"])
+
+	code, answer = env.do(t, http.MethodPost, "/upgrades", `{}`, "")
+	require.Equal(t, http.StatusCreated, code, answer)
+	id := answer["data"].(map[string]any)["id"].(string)
+	code, answer = env.do(t, http.MethodGet, "/upgrade-plan", "", "")
+	require.Equal(t, http.StatusOK, code)
+	assert.Equal(t, id, answer["data"].(map[string]any)["active_campaign_id"])
+
+	// Without an https address the plan still answers, saying why no
+	// release is named.
+	env.cfg.AgentInstall.PublicURL = ""
+	code, answer = env.do(t, http.MethodGet, "/upgrade-plan", "", "")
+	require.Equal(t, http.StatusOK, code)
+	plan = answer["data"].(map[string]any)
+	assert.Equal(t, false, plan["configured"])
+	assert.Equal(t, "", plan["target_version"])
+	assert.Contains(t, plan["unconfigured_reason"], "https")
 }
