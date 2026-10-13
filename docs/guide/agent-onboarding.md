@@ -46,6 +46,10 @@ On Control:
   `public_url`'s host and `grpc.port`. Behind a reverse proxy, also list it
   in `server.trusted_proxies`: the script asks `GET /install/ip` for the
   machine's address, and only a trusted proxy's forwarded address counts.
+- The install paths (`/install.sh`, `/install.sh.sig`, `/install/agent.env`,
+  `/install/ip` and `/install/agent/<tag>/<asset>`) are served on both
+  listeners, the API port (8080) and the UI port (3000, which forwards them),
+  so a reverse proxy that sends the whole host to the UI port serves them too.
 - Only a super administrator (an administrator who is not staff and not
   banned) can show a group's command or reset its token, and issue
   enrollment tokens.
@@ -232,9 +236,12 @@ The Agent then shows as connected over mTLS on **Agent 连接方式**
 1. Checks its arguments, root, the architecture and systemd; a first install
    without a token (`-t`) stops here. A machine that ran the script before
    knows its node from `/etc/anixops/agent/config.json`.
-2. Reads `https://<control>/install/agent.env`: the Agent release (Control's
-   own version, H25), the gRPC target, the mirrors and, when Control holds
-   the release, its SHA-256. With `--offline` it reads the bundle instead.
+2. Reads `https://<control>/install/agent.env`: the Agent release (the one
+   this Control was released with, `config/AGENT_RELEASE`: a Control patch
+   release can ship an unchanged Agent, so it need not carry the Control's
+   number; `agent_install.agent_version` overrides it), the gRPC target, the
+   mirrors and, when Control holds the release, its SHA-256. With
+   `--offline` it reads the bundle instead.
 3. Runs the [preflight checks](#preflight-checks) and stops, with a reason
    and a fix for each failed check, before anything changes.
 4. Downloads the release, checks its SHA-256 and, when the release has a
@@ -630,6 +637,7 @@ split or an identity cutover left unfinished) with what clears each.
 | Message | Cause and fix |
 |---|---|
 | `agent_install_unconfigured` on the node page | Control does not know an https address nodes reach: set `agent_install.public_url`; on a development build also `agent_install.agent_version` |
+| the Agent download answers 404 | `/install/agent.env` names an Agent tag the Agent repository does not have. A release build names the Agent release it was released with; an older Control (4.2.1 and before) asks for `v` + its own version, so set `agent_install.agent_version` to an existing tag such as `v4.2.0` |
 | `agent_pki_disabled` | the built-in agent CA is off: set `module_runtime.ca_kek` |
 | `node_disabled` on a rotation | enable the node first ([rotation](#rotating-a-nodes-credentials)) |
 | `cannot reach .../install/agent.env` | the node cannot reach Control over https (DNS, firewall, certificate) |

@@ -465,11 +465,13 @@ echo "==> Building panel binary from ${REPO_ROOT}"
 cd "${REPO_ROOT}"
 VERSION="${VERSION:-$(sed -n 's/^[[:space:]]*DefaultVersion[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' internal/branding/branding.go | head -n1)}"
 VERSION="${VERSION:-dev}"
+# The Agent release this Control installs on nodes (config/AGENT_RELEASE).
+AGENT_RELEASE="${AGENT_RELEASE:-$(tr -d '[:space:]' < config/AGENT_RELEASE 2>/dev/null || true)}"
 BUILD_TIME=$(date +%Y%m%d%H%M%S)
 BUILD_CODE="${BUILD_TIME}"
 GIT_COMMIT=$(git -c "safe.directory=${REPO_ROOT}" rev-parse --short HEAD 2>/dev/null || echo unknown)
 "${GO_BIN}" build \
-  -ldflags "-X main.version=${VERSION} -X main.buildTime=${BUILD_TIME} -X main.buildCode=${BUILD_CODE} -X main.commit=${GIT_COMMIT}" \
+  -ldflags "-X main.version=${VERSION} -X main.agentRelease=${AGENT_RELEASE} -X main.buildTime=${BUILD_TIME} -X main.buildCode=${BUILD_CODE} -X main.commit=${GIT_COMMIT}" \
   -o "${BUILD_OUTPUT}" \
   cmd/server/main.go
 NEW_SIZE=$(stat -c%s "${BUILD_OUTPUT}")

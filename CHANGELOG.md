@@ -2,6 +2,33 @@
 
 ## Unreleased
 
+### Fixed
+
+- The UI listener (port 3000) serves the install paths: `/install.sh`, `/install.sh.sig`, `/install/agent.env`,
+  `/install/ip` and `/install/agent/:tag/:asset` are forwarded to the API listener, as `/api` and the subscription
+  path are. They were registered on the API listener only, so a reverse proxy that sends the whole host to port 3000
+  (every Nginx, Caddy and Helm example in the docs) answered `curl .../install.sh | sudo bash` with the SPA's
+  `index.html`. Rate limits and the signature check stay on the API side. The hop from the UI listener to the API
+  listener is always trusted, so a `server.trusted_proxies` without loopback (or an empty list, or a specific
+  `server.host`) no longer makes every client look like the UI server, and a proxy that sets only `X-Real-IP` is
+  honoured on that hop.
+- The node installer asks for the Agent release the Control was released with, not for `v` + the Control's version.
+  A Control patch release can ship an unchanged Agent (4.2.1 pins Agent v4.2.0), and the Agent repository then
+  has no tag with the Control's number, so `/install/agent.env` named a release that does not exist and every node
+  install failed with 404. `config/AGENT_RELEASE` holds the tag; the release binaries embed it
+  (`-X main.agentRelease`), the Makefile, the Dockerfile (`AGENT_RELEASE` build argument) and `deploy_panel.sh`
+  inject it too. `agent_install.agent_version` still overrides it, and a development build keeps its own
+  version. `prepare_release.py` takes `--agent-tag` (default: keep the file's value), and
+  `check_release_version.py` and the release workflow check require a `vX.Y.Z[-rc.N]` tag in the file and in
+  the release build step.
+- A plan created in the admin UI is on sale. `v2_plan.show` defaulted to 0, the plan form had no `show` field, and
+  the user's plan list holds only `show = 1`, so a new plan was invisible to every user. `POST /api/v2/admin/plans`
+  now stores `show = 1` when the body omits `show` (or sends `null`); an explicit `show: 0` is kept, and updates
+  still write the body as given. The plan form has an 上架 / On sale switch (on for a new plan, the stored value on
+  edit), and the plan list and details show a 在售 / 已下架 badge. The kernel handler and the plan package's
+  native route behave alike (`internal/tests/plancompat`); the native route serves the request by default, so a
+  panel needs this release's `plan` package for the create default (the form change is in the web app).
+
 ### Added
 
 - The Agent contract has an `AgentEnrollment.Join` RPC (`JoinRequest`, `JoinResponse`), and the SDK names
@@ -27,6 +54,12 @@
 
 ### Changed
 
+- The required "Frontend Build" job audits only the shipped frontend dependencies, strictly
+  (`npm audit --omit=dev --audit-level=moderate`). The development tools are audited by the nightly
+  `Nightly Security` run (`npm audit (web)`, `npm run audit:check`), which keeps `web/audit-allowlist.json` and
+  its expiry dates: the braces and sprintf-js waivers (2026-11-02, 2026-11-05) can no longer turn pull requests
+  red, and an expired or new development advisory fails the nightly run instead.
+  `check_release_workflow.sh` requires the strict production audit in the job and refuses the waiver check there.
 - A package's WebUI bundle is optional. `build_package.py` builds, signs and verifies a manifest without
   `webui` (an empty `frontend_sha256`, which the kernel and the Agent already accepted), and refuses a
   `webui/` directory the manifest does not declare. Such a package stores no WebUI asset and the extension

@@ -1,5 +1,5 @@
 {
-  "$comment": "Advisories waived for development dependencies only. Shipped (production) dependencies are always audited strictly. Each entry expires; after its expiry CI fails again. Owner approved GHSA-vfj7-8cjw-p6xm on 2026-10-03. Owner approved GHSA-hp3w-g68c-fv3c on 2026-10-06.",
+  "$comment": "Advisories waived for development dependencies only. Shipped (production) dependencies are always audited strictly. Each entry expires; after its expiry the nightly audit (Nightly Security, npm audit (web)) fails again. The required pull-request job audits only shipped dependencies and does not read this file. Owner approved GHSA-vfj7-8cjw-p6xm on 2026-10-03. Owner approved GHSA-hp3w-g68c-fv3c on 2026-10-06.",
   "advisories": [
     {
       "id": "GHSA-vfj7-8cjw-p6xm",

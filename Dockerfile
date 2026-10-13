@@ -41,11 +41,14 @@ COPY . .
 ARG TARGETOS=linux
 ARG TARGETARCH
 ARG VERSION=dev
+# The Agent release tag nodes install (config/AGENT_RELEASE); empty in a
+# development build, which then installs "v" + VERSION.
+ARG AGENT_RELEASE
 ARG BUILD_TIME
 ARG BUILD_CODE
 ARG COMMIT=unknown
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -trimpath \
-    -ldflags="-s -w -X main.version=${VERSION} -X main.buildTime=${BUILD_TIME} -X main.buildCode=${BUILD_CODE} -X main.commit=${COMMIT}" \
+    -ldflags="-s -w -X main.version=${VERSION} -X main.agentRelease=${AGENT_RELEASE} -X main.buildTime=${BUILD_TIME} -X main.buildCode=${BUILD_CODE} -X main.commit=${COMMIT}" \
     -o /out/anix-control ./cmd/server
 
 # Runtime base shared by both targets. /var/lib/anixops is the mount point for

@@ -2211,9 +2211,14 @@ jobs:
         working-directory: web
         run: npm run design:check
 
-      - name: Audit frontend dependencies
+      # Shipped (production) dependencies only, strictly: no waivers, so
+      # this required job cannot turn red because a development tool has an
+      # advisory with no fix. The development tools, with the dated waivers
+      # in web/audit-allowlist.json, are audited by the nightly security
+      # workflow (npm audit (web)), which fails visibly without blocking.
+      - name: Audit shipped frontend dependencies
         working-directory: web
-        run: npm run audit:check
+        run: npm audit --omit=dev --audit-level=moderate
 
       # ESLint (no native dialogs, no legacy classes, no bare tables on list
       # pages) and stylelint (colour tokens, type and radius scale, no legacy
@@ -2390,13 +2395,17 @@ jobs:
         shell: bash
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
+          # The Agent release this Control installs on nodes. A Control patch
+          # release can ship with an unchanged Agent, so it is not "v${VERSION}".
+          # The tag gate checked its format (check_release_version.py).
+          AGENT_RELEASE="$(tr -d '[:space:]' < config/AGENT_RELEASE)"
           BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           BUILD_CODE="${GITHUB_RUN_NUMBER:-0}"
           COMMIT="${GITHUB_SHA::12}"
           PRIMARY_BIN_NAME="anix-control-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}"
 
           CGO_ENABLED=0 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} \
-            go build -ldflags="-s -w -X main.version=${VERSION} -X main.buildTime=${BUILD_TIME} -X main.buildCode=${BUILD_CODE} -X main.commit=${COMMIT}" \
+            go build -ldflags="-s -w -X main.version=${VERSION} -X main.agentRelease=${AGENT_RELEASE} -X main.buildTime=${BUILD_TIME} -X main.buildCode=${BUILD_CODE} -X main.commit=${COMMIT}" \
             -o "${PRIMARY_BIN_NAME}" ./cmd/server
 
           mkdir -p dist

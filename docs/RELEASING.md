@@ -12,10 +12,15 @@ publishes everything. Nothing is built locally.
 
    ```bash
    python3 config/scripts/prepare_release.py 4.1.0
+   python3 config/scripts/prepare_release.py 4.2.0 --agent-tag v4.2.0
    ```
 
    The script turns the `## Unreleased` entries into `## 4.1.0 - <today>`,
-   leaving an empty `## Unreleased` on top. It sets the version wherever the
+   leaving an empty `## Unreleased` on top. `--agent-tag` names the
+   anix-agent release this Control installs on nodes (`config/AGENT_RELEASE`,
+   see [the Agent pin](#what-the-tag-pipeline-does)); without it the file keeps
+   its value, so a patch release over an unchanged Agent names the Agent tag
+   it already had. It sets the version wherever the
    tree declares it:
    - branding;
    - Makefile;
@@ -24,7 +29,8 @@ publishes everything. Nothing is built locally.
    - example configurations;
    - the Helm chart's `appVersion` (its default image tag; the chart's own
      `version` is a separate SemVer);
-   - README.
+   - README;
+   - `config/AGENT_RELEASE`, only with `--agent-tag`.
 
    Then it checks the result with `config/scripts/check_release_version.py`.
 2. Open a pull request (`release: v4.1.0`) and merge it once CI passes.
@@ -102,6 +108,16 @@ version `latest`.
     anix-agent checkout (packages, cross-repository E2E, live WebUI gate)
     takes its ref from it. Move it to the Agent's release commit with every
     Agent tag, in the pull request that prepares the Control release.
+  - `config/AGENT_RELEASE` is the one line that names that release's tag
+    (`v4.2.0`). The release binaries embed it (`-X main.agentRelease`), and
+    it is the Agent a node installs unless `agent_install.agent_version`
+    says otherwise. The Agent version is not the Control's: a patch release
+    can ship an unchanged Agent, and the Agent repository has no tag with
+    the Control's number then. `check_release_version.py` (the tag gate)
+    requires the file to hold `vX.Y.Z` or `vX.Y.Z-rc.N`; that the tag exists
+    in `anix-agent`, and that `AGENT_REF` is its commit, cannot be checked
+    offline: tag the Agent first (the Agent tag is asked for first,
+    `docs/architecture/forward-sdk.md` H25), then set both.
   - `plugin-package-release-test` runs `govulncheck` over the four Agent
     commands the plugin binaries are built from and fails for a
     vulnerability their call graph reaches, so a vulnerable Agent
@@ -176,8 +192,11 @@ failed job fails the run, and the failing job names the finding:
   `control-center`), at the version `ci.yml` pins.
 - **gosec**: the production gate exactly as `ci.yml` runs it, plus the `sdk`
   and `identity` gates.
-- **npm audit** of `web/` through `npm run audit:check`, so the waivers in
-  `web/audit-allowlist.json` and their expiry dates apply.
+- **npm audit** of `web/` through `npm run audit:check`: shipped and
+  development dependencies, so the waivers in `web/audit-allowlist.json` and
+  their expiry dates apply here and only here. When a waiver expires, an
+  advisory is new or an entry is no longer reported, this job fails the run;
+  renew it with the owner's approval or fix the dependency.
 - **relay fuzz**: every fuzz target of `sdk/forward/relay` and
   `sdk/forward/relay/link` for 60 seconds each. The corpus the engine learns
   is cached from night to night, and a failing input is uploaded as the
@@ -185,7 +204,10 @@ failed job fails the run, and the failing job names the finding:
   its package to reproduce it with a plain `go test`.
 
 The pull-request pipeline keeps its own `govulncheck` and `gosec` jobs; this
-workflow does not replace them.
+workflow does not replace them. Its required "Frontend Build" job audits only
+the shipped frontend dependencies, strictly (`npm audit --omit=dev
+--audit-level=moderate`, no waivers): an advisory in a development tool with no
+fix shows up in the nightly run and never blocks an unrelated pull request.
 
 ## Verifying A Release
 

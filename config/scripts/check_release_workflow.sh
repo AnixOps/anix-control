@@ -294,6 +294,11 @@ check_release_workflow() {
   require_agent_checkouts_use_pin || failed=1
   require_job_text plugin-package-release-test "govulncheck ./cmd/nftables-forward" "pinned Agent plugin vulnerability scan" || failed=1
   require_text "-exclude-dir=config/scripts/testdata" "full gosec excludes the non-compiling AST fixture directory" || failed=1
+  # The required frontend job audits shipped dependencies only, strictly. The
+  # development tools and their dated waivers belong to the nightly security
+  # workflow, so an advisory with no fix cannot block unrelated pull requests.
+  require_named_step_text frontend-build "Audit shipped frontend dependencies" "npm audit --omit=dev --audit-level=moderate" "required frontend job audits shipped dependencies strictly" || failed=1
+  reject_job_text frontend-build "audit:check" "development-dependency waivers in the required frontend job" || failed=1
   require_text "scripts/tests/test_identity_bootstrap_install.sh" "identity bootstrap installer regression test" || failed=1
 
   # Tests gate the release.
@@ -327,7 +332,11 @@ check_release_workflow() {
   require_job_text plugin-package-publish "path: release-assets/" "signed package artifact holds the release assets only" || failed=1
   require_job_text plugin-package-publish "name: signed-plugin-releases" "signed package artifact" || failed=1
 
-  # Binaries.
+  # Binaries carry the Agent release tag they were released with: a Control
+  # patch release can ship an unchanged Agent, so the installer must not ask
+  # for "v" + the Control version.
+  require_named_step_text release-binaries "Build binary" "config/AGENT_RELEASE" "release binaries read the pinned Agent release tag" || failed=1
+  require_named_step_text release-binaries "Build binary" "-X main.agentRelease=\${AGENT_RELEASE}" "release binaries carry the pinned Agent release tag" || failed=1
   for pair in \
     linux/amd64 \
     linux/arm64 \
@@ -439,6 +448,9 @@ run_self_test() {
     "s/--formal-release/--unsigned-release/" \
     "s/check_release_version.py --tag/check_release_version.py --self-test/" \
     "s/body_path: release\/RELEASE_NOTES.md/generate_release_notes: true/" \
+    "s/-X main.agentRelease=/-X main.agentReleaseX=/" \
+    "s#< config/AGENT_RELEASE#< config/agent-release#" \
+    "s/npm audit --omit=dev --audit-level=moderate/npm run audit:check/" \
     "s/AGENT_REF: '/AGENT_REF_X: '/" \
     '0,/ref: \${{ env.AGENT_REF }}/s//ref: 0000000000000000000000000000000000000000/' \
     "s#govulncheck ./cmd/nftables-forward#echo ./cmd/nftables-forward#" \

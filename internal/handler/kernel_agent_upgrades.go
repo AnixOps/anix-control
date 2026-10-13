@@ -96,7 +96,7 @@ func (h *AgentUpgradesHandler) Start(c *gin.Context) {
 	}
 	settings, err := agentinstall.ResolveSettings(agentinstall.SettingsInput{
 		ControlURL: controlURL, GRPCTarget: install.GRPCTarget, GRPCPort: cfg.GRPC.Port,
-		AgentVersion: install.AgentVersion, ReleaseVersion: ReleaseVersion, ArtifactDir: install.ArtifactDir, CNMirrorURL: install.CNMirrorURL,
+		AgentVersion: install.AgentVersion, PinnedAgentVersion: AgentRelease, ReleaseVersion: ReleaseVersion, ArtifactDir: install.ArtifactDir, CNMirrorURL: install.CNMirrorURL,
 	})
 	if err != nil {
 		kernelError(c, http.StatusConflict, "agent_install_unconfigured", err.Error())

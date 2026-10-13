@@ -60,7 +60,7 @@ func runAgentUpgradeCommand(ctx context.Context, cfg *config.Config, db *gorm.DB
 		}
 		settings, err := agentinstall.ResolveSettings(agentinstall.SettingsInput{
 			ControlURL: address, GRPCTarget: install.GRPCTarget, GRPCPort: cfg.GRPC.Port,
-			AgentVersion: install.AgentVersion, ReleaseVersion: handler.ReleaseVersion, ArtifactDir: install.ArtifactDir, CNMirrorURL: install.CNMirrorURL,
+			AgentVersion: install.AgentVersion, PinnedAgentVersion: handler.AgentRelease, ReleaseVersion: handler.ReleaseVersion, ArtifactDir: install.ArtifactDir, CNMirrorURL: install.CNMirrorURL,
 		})
 		if err != nil {
 			return fmt.Errorf("%w (or pass -control https://<control>)", err)

@@ -255,6 +255,82 @@ describe('Admin Plans flow', () => {
     expect(mockAssignPlanToUser).toHaveBeenCalled()
   })
 
+  // The user's plan list holds only plans with show = 1, and the form had no
+  // show field: a plan created in the UI was never on sale.
+  it('puts a new plan on sale by default and can create it off sale', async () => {
+    mockGetPlans.mockResolvedValue({ data: [] })
+
+    const wrapper = mount(Plans, { attachTo: document.body })
+    await flushPromises()
+
+    wrapper.vm.openCreateModal()
+    await nextTick()
+    const switchControl = () => inBody('[data-test="plan-show-switch"]')
+    expect(switchControl().attributes('aria-checked')).toBe('true')
+    await inBody('[data-test="plan-name-input"]').setValue('Starter')
+    await inBody('[data-test="plan-save-button"]').trigger('click')
+    await flushPromises()
+    expect(mockCreatePlan).toHaveBeenLastCalledWith(expect.objectContaining({ name: 'Starter', show: 1 }))
+
+    wrapper.vm.openCreateModal()
+    await nextTick()
+    // The switch starts on again; it is not the previous form's state.
+    expect(switchControl().attributes('aria-checked')).toBe('true')
+    await inBody('[data-test="plan-name-input"]').setValue('Hidden')
+    await switchControl().trigger('click')
+    expect(switchControl().attributes('aria-checked')).toBe('false')
+    await inBody('[data-test="plan-save-button"]').trigger('click')
+    await flushPromises()
+    expect(mockCreatePlan).toHaveBeenLastCalledWith(expect.objectContaining({ name: 'Hidden', show: 0 }))
+  })
+
+  it('keeps the stored sale state of a plan on edit and lets it be changed', async () => {
+    const offSale = { id: 11, name: 'Legacy', transfer_enable: 10, speed_limit: 0, device_limit: 0, month_price: 500, show: 0, sort: 2 }
+    const onSale = { id: 12, name: 'Current', transfer_enable: 10, speed_limit: 0, device_limit: 0, month_price: 500, show: 1 }
+    mockGetPlans.mockResolvedValue({ data: [offSale, onSale] })
+
+    const wrapper = mount(Plans, { attachTo: document.body })
+    await flushPromises()
+    const switchControl = () => inBody('[data-test="plan-show-switch"]')
+
+    wrapper.vm.edit(offSale)
+    await nextTick()
+    expect(switchControl().attributes('aria-checked')).toBe('false')
+    await inBody('[data-test="plan-save-button"]').trigger('click')
+    await flushPromises()
+    expect(mockUpdatePlan).toHaveBeenLastCalledWith(11, expect.objectContaining({ show: 0, sort: 2 }))
+
+    wrapper.vm.edit(offSale)
+    await nextTick()
+    await switchControl().trigger('click')
+    await inBody('[data-test="plan-save-button"]').trigger('click')
+    await flushPromises()
+    expect(mockUpdatePlan).toHaveBeenLastCalledWith(11, expect.objectContaining({ show: 1 }))
+
+    wrapper.vm.edit(onSale)
+    await nextTick()
+    expect(switchControl().attributes('aria-checked')).toBe('true')
+    await switchControl().trigger('click')
+    await inBody('[data-test="plan-save-button"]').trigger('click')
+    await flushPromises()
+    expect(mockUpdatePlan).toHaveBeenLastCalledWith(12, expect.objectContaining({ show: 0 }))
+  })
+
+  it('marks each plan in the list as on sale or off sale', async () => {
+    mockGetPlans.mockResolvedValue({
+      data: [
+        { id: 21, name: 'Sold', transfer_enable: 10, show: 1 },
+        { id: 22, name: 'Withdrawn', transfer_enable: 10, show: 0 },
+      ],
+    })
+
+    const wrapper = mount(Plans, { attachTo: document.body })
+    await flushPromises()
+
+    const badges = wrapper.findAll('[data-test="plan-show-badge"]').map(badge => badge.text())
+    expect(badges).toEqual(['On sale', 'Off sale'])
+  })
+
   it('shows plan prices in the commercial edition', async () => {
     setEdition('commercial')
     const plan = { id: 6, name: 'Pro', transfer_enable: 50, speed_limit: 0, device_limit: 0, month_price: 1990 }

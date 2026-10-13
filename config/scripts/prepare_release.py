@@ -1,11 +1,16 @@
 #!/usr/bin/env python3
 """Prepare a release commit: set every declared version and date the CHANGELOG.
 
-Usage: config/scripts/prepare_release.py 4.1.0 [--date YYYY-MM-DD]
+Usage: config/scripts/prepare_release.py 4.1.0 [--date YYYY-MM-DD] [--agent-tag vX.Y.Z]
 
 It sets the version wherever check_release_version.py looks for it, turns
 the CHANGELOG "## Unreleased" entries into "## <version> - <date>" (leaving
 an empty Unreleased section on top), and runs check_release_version.py.
+
+--agent-tag names the anix-agent release this Control installs on nodes
+(config/AGENT_RELEASE, injected into the release build). Without it the file
+keeps its value: a Control patch release that ships an unchanged Agent names
+the Agent tag it already had.
 Commit the result through a pull request, then tag the merged commit
 v<version>; docs/RELEASING.md has the whole flow.
 """
@@ -22,6 +27,7 @@ import tempfile
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+AGENT_RELEASE_FILE = "config/AGENT_RELEASE"
 VERSION_PATTERN = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+(?:-(?:alpha|beta|rc)(?:\.[0-9]+)?)?$")
 
 # (file, pattern whose group 1 is the version); the first match is replaced,
@@ -98,15 +104,30 @@ def load_version_checker():
     return module
 
 
-def prepare_release(root: Path, version: str, date: str) -> None:
+def set_agent_release(path: Path, tag: str) -> None:
+    if not path.is_file():
+        raise PrepareError(f"{path}: not found")
+    path.write_text(tag + "\n", encoding="utf-8")
+
+
+def prepare_release(root: Path, version: str, date: str, agent_tag: str | None = None) -> None:
     if not VERSION_PATTERN.fullmatch(version):
         raise PrepareError(f"unsupported version {version!r}: use X.Y.Z or X.Y.Z-(alpha|beta|rc)[.N]")
+    checker = load_version_checker()
+    if agent_tag is not None:
+        # Refused before any file changes.
+        try:
+            checker.validate_agent_tag(agent_tag)
+        except ValueError as error:
+            raise PrepareError(str(error)) from error
     date_changelog(root / "CHANGELOG.md", version, date)
+    if agent_tag is not None:
+        set_agent_release(root / AGENT_RELEASE_FILE, agent_tag)
     for relative, pattern in TEXT_SURFACES:
         set_text_version(root / relative, pattern, version)
     for relative, count in JSON_SURFACES:
         set_json_versions(root / relative, count, version)
-    load_version_checker().check_release_version(root, f"v{version}")
+    checker.check_release_version(root, f"v{version}")
 
 
 def self_test() -> None:
@@ -131,6 +152,9 @@ def self_test() -> None:
         text = changelog.read_text(encoding="utf-8")
         if "## Unreleased\n\n## 4.1.0 - 2026-10-01\n\n### Added" not in text:
             raise AssertionError(f"CHANGELOG not dated as expected:\n{text}")
+        # Without --agent-tag the Agent release keeps its value.
+        agent_release = root / AGENT_RELEASE_FILE
+        assert agent_release.read_text(encoding="utf-8") == "v4.2.0\n"
         for bad, message in (("4.1.0", "already has"), ("4.2.0", "is empty"), ("v4.2", "unsupported")):
             try:
                 prepare_release(root, bad, "2026-10-02")
@@ -139,6 +163,30 @@ def self_test() -> None:
                     raise AssertionError(f"{bad}: unexpected error {error}") from error
             else:
                 raise AssertionError(f"{bad}: should have been refused")
+
+    # --agent-tag sets the pinned Agent release; a malformed tag is refused
+    # before anything changes.
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary)
+        checker.write_fixture(root, "4.0.0")
+        changelog = root / "CHANGELOG.md"
+        changelog_text = "# Changelog\n\n## Unreleased\n\n- A change.\n\n## 4.0.0 - 2026-07-17\n"
+        changelog.write_text(changelog_text, encoding="utf-8")
+        agent_release = root / AGENT_RELEASE_FILE
+        for bad in ("4.3.0", "v4.3", "latest", "v4.3.0-beta.1", ""):
+            try:
+                prepare_release(root, "4.1.0", "2026-10-01", agent_tag=bad)
+            except PrepareError as error:
+                if "Agent release tag" not in str(error):
+                    raise AssertionError(f"{bad!r}: unexpected error {error}") from error
+            else:
+                raise AssertionError(f"{bad!r}: should have been refused")
+            if changelog.read_text(encoding="utf-8") != changelog_text or agent_release.read_text(encoding="utf-8") != "v4.2.0\n":
+                raise AssertionError(f"{bad!r}: files changed although the tag was refused")
+        prepare_release(root, "4.1.0", "2026-10-01", agent_tag="v4.3.0-rc.1")
+        if agent_release.read_text(encoding="utf-8") != "v4.3.0-rc.1\n":
+            raise AssertionError(f"Agent release not set: {agent_release.read_text(encoding='utf-8')!r}")
+        checker.check_release_version(root, "v4.1.0")
 
     # A tree whose chart has no appVersion cannot be prepared: the release
     # would ship a chart that deploys another release's image.
@@ -162,6 +210,10 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("version", nargs="?", help="release version, without the leading v")
     parser.add_argument("--date", default=datetime.date.today().isoformat(), help="release date (default: today)")
+    parser.add_argument(
+        "--agent-tag",
+        help="the anix-agent release tag this Control installs on nodes, such as v4.2.0 (default: keep config/AGENT_RELEASE)",
+    )
     parser.add_argument("--self-test", action="store_true", help="run the built-in self-test")
     args = parser.parse_args()
     if args.self_test:
@@ -170,7 +222,7 @@ def main() -> int:
     if not args.version:
         parser.error("the release version is required")
     try:
-        prepare_release(REPO_ROOT, args.version, args.date)
+        prepare_release(REPO_ROOT, args.version, args.date, args.agent_tag)
     except (PrepareError, ValueError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1

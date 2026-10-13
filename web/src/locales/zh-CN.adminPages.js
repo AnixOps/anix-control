@@ -392,6 +392,9 @@ export default {
       },
       placeholders: {
         name: '请输入模板名称'
+      },
+      help: {
+        show: '关闭后，用户看不到这个模板。'
       }
     },
     assignModal: {
@@ -424,7 +427,8 @@ export default {
       transfer: '流量',
       limits: '限制',
       monthPrice: '月付价格',
-      subscriptionGroups: '订阅分组'
+      subscriptionGroups: '订阅分组',
+      status: '状态'
     },
     actions: {
       create: '新建套餐',
@@ -451,13 +455,15 @@ export default {
         transfer: '流量额度',
         speedLimit: '速率限制',
         deviceLimit: '设备限制',
-        monthPrice: '月付价格（分）'
+        monthPrice: '月付价格（分）',
+        show: '上架'
       },
       placeholders: {
         name: '请输入套餐名称'
       },
       help: {
-        zeroUnlimited: '0 表示不限制。'
+        zeroUnlimited: '0 表示不限制。',
+        show: '关闭后，用户在购买页看不到这个套餐；已购买的用户不受影响。'
       }
     },
     assignModal: {
@@ -485,7 +491,9 @@ export default {
       speedLimitMbps: '{value} Mbps',
       deviceLimitCount: '{value} 台',
       noGroups: '无',
-      noGroupsHint: '这个套餐还没有授予订阅分组。'
+      noGroupsHint: '这个套餐还没有授予订阅分组。',
+      onSale: '在售',
+      offSale: '已下架'
     },
     confirm: {
       deleteTitle: '删除套餐 {name}？',

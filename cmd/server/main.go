@@ -90,6 +90,10 @@ var (
 	buildTime  = "unknown"
 	buildCode  = ""
 	commit     = "unknown"
+	// agentRelease is the Agent release tag this build was released with
+	// (config/AGENT_RELEASE, set with -X main.agentRelease). Empty in a
+	// development build.
+	agentRelease = ""
 )
 
 func init() {
@@ -178,6 +182,7 @@ func formatDisplayVersion(baseVersion, code string) string {
 func syncBuildInfo() {
 	handler.BuildVersion = formatDisplayVersion(version, buildCode)
 	handler.ReleaseVersion = version
+	handler.AgentRelease = agentRelease
 	handler.BuildTime = buildTime
 	handler.BuildCode = buildCode
 	handler.BuildCommit = commit
@@ -1009,7 +1014,7 @@ func removeStaleArtifactCopies(root string) {
 // newAPIServer creates the API server with proper timeouts.
 func newAPIServer(cfg *config.Config) (*http.Server, error) {
 	r := gin.New()
-	if err := applyTrustedProxies(r, cfg.Server.TrustedProxies); err != nil {
+	if err := applyTrustedProxies(r, serverTrustedProxies(cfg)); err != nil {
 		return nil, fmt.Errorf("configure trusted proxies for API server: %w", err)
 	}
 	router.Setup(r, cfg)
@@ -1059,7 +1064,7 @@ func newFrontendServer(cfg *config.Config) (*http.Server, error) {
 	}
 
 	r := gin.New()
-	if err := applyTrustedProxies(r, cfg.Server.TrustedProxies); err != nil {
+	if err := applyTrustedProxies(r, serverTrustedProxies(cfg)); err != nil {
 		return nil, fmt.Errorf("configure trusted proxies for frontend server: %w", err)
 	}
 	r.Use(gin.Recovery())
@@ -1081,6 +1086,16 @@ func newFrontendServer(cfg *config.Config) (*http.Server, error) {
 	r.Any("/"+subPath+"/*path", func(c *gin.Context) {
 		proxyAPI(c, apiTarget)
 	})
+
+	// 节点安装脚本和 Agent 发布文件只注册在 API 监听上，而文档里的反向代理
+	// 配置把整个域名转发到这个监听：没有这些路由时 SPA 回退会返回 index.html，
+	// `curl .../install.sh | sudo bash` 执行的就是 HTML。
+	// Limits, the signature check and the client address stay on the API side.
+	for _, route := range installProxyRoutes {
+		r.GET(route, func(c *gin.Context) {
+			proxyAPI(c, apiTarget)
+		})
+	}
 
 	// 静态文件服务。Hash assets can be cached aggressively; the SPA HTML
 	// entry below must stay uncached so deploys do not serve stale bundles.
@@ -1129,6 +1144,82 @@ func frontendAPIProxyTarget(cfg *config.Config) string {
 		Scheme: "http",
 		Host:   net.JoinHostPort(host, strconv.Itoa(cfg.Server.Port)),
 	}).String()
+}
+
+// installProxyRoutes are the public node-onboarding downloads the API router
+// serves (internal/router/router.go): the signed install script, its
+// signature, the release metadata, the caller's address and the Agent release
+// assets. The frontend listener forwards them to the API listener.
+var installProxyRoutes = []string{
+	"/install.sh",
+	"/install.sh.sig",
+	"/install/agent.env",
+	"/install/ip",
+	"/install/agent/:tag/:asset",
+}
+
+// serverTrustedProxies is the trust list both listeners are configured with:
+// server.trusted_proxies, plus the address the frontend listener dials the
+// API listener from when it is enabled. That hop is Control's own, so the API
+// listener always honours the forwarding headers proxyAPI writes: a list
+// that leaves loopback out, an empty list, or a server.host that is a
+// specific address would otherwise make every client look like the UI
+// server (one shared rate-limit bucket, /install/ip answering 127.0.0.1).
+func serverTrustedProxies(cfg *config.Config) []string {
+	configured := cfg.Server.TrustedProxies
+	if !cfg.Frontend.Enable {
+		return configured
+	}
+	hops := frontendHopSources(cfg)
+	if len(hops) == 0 {
+		return configured
+	}
+	base := configured
+	if base == nil {
+		base = requestorigin.DefaultTrustedProxies
+	}
+	policy, err := requestorigin.NewPolicy(base)
+	if err != nil {
+		// An invalid entry is reported by applyTrustedProxies.
+		return configured
+	}
+	out := append([]string(nil), base...)
+	added := false
+	for _, hop := range hops {
+		ip := net.ParseIP(hop)
+		if ip == nil || policy.TrustedIP(ip) {
+			continue
+		}
+		out = append(out, hop)
+		added = true
+	}
+	if !added {
+		return configured
+	}
+	return out
+}
+
+// frontendHopSources are the addresses the frontend listener connects from
+// when it proxies to the API listener: the address it dials (a connection to
+// a local address is made from that address).
+func frontendHopSources(cfg *config.Config) []string {
+	target, err := url.Parse(frontendAPIProxyTarget(cfg))
+	if err != nil {
+		return nil
+	}
+	host := target.Hostname()
+	if ip := net.ParseIP(host); ip != nil {
+		return []string{ip.String()}
+	}
+	addresses, err := net.LookupIP(host)
+	if err != nil {
+		return nil
+	}
+	out := make([]string, 0, len(addresses))
+	for _, ip := range addresses {
+		out = append(out, ip.String())
+	}
+	return out
 }
 
 // runFrontendServer starts the frontend server (blocking).
@@ -1237,6 +1328,12 @@ func proxyAPI(c *gin.Context, target string) {
 		}
 		c.Request.Header.Del(name)
 	}
+	// The chain the API listener walks is the address this server resolved:
+	// from a trusted proxy that is the X-Forwarded-For chain, or the
+	// X-Real-IP address of a proxy that sends only that header (dropped above).
+	if trustedPeer && origin.ClientIP != "" && !sameIP(origin.ClientIP, c.RemoteIP()) {
+		c.Request.Header.Set(requestorigin.HeaderForwardedFor, origin.ClientIP)
+	}
 	c.Request.Header.Set(requestorigin.HeaderForwardedProto, origin.Scheme)
 	if origin.Host != "" {
 		c.Request.Header.Set(requestorigin.HeaderForwardedHost, origin.Host)
@@ -1252,4 +1349,10 @@ func proxyAPI(c *gin.Context, target string) {
 	}
 
 	proxy.ServeHTTP(c.Writer, c.Request)
+}
+
+// sameIP reports whether a and b are the same address.
+func sameIP(a, b string) bool {
+	left, right := net.ParseIP(a), net.ParseIP(b)
+	return left != nil && right != nil && left.Equal(right)
 }

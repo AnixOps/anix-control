@@ -288,7 +288,12 @@ func TestPlanWriteRoutesParity(t *testing.T) {
 		{Name: "create", Path: "/api/v2/admin/plans", Principal: admin, Mask: created, Body: []byte(`{"group_id":2,"transfer_enable":50,"speed_limit":100,` +
 			`"device_limit":3,"name":"New","content":"c","show":1,"sort":5,"renew":1,"reset_price":10,"reset_traffic_method":2,"capacity_limit":7,` +
 			`"month_price":1,"quarter_price":2,"half_year_price":3,"year_price":4,"two_year_price":5,"three_year_price":6,"onetime_price":7}`)},
+		// A plan created without a show value is on sale (the user's plan list
+		// holds only show = 1); an explicit 0 keeps the plan off sale.
 		{Name: "create with defaults", Path: "/api/v2/admin/plans", Principal: admin, Mask: created, Body: []byte(`{"name":"Bare"}`)},
+		{Name: "show explicitly off", Path: "/api/v2/admin/plans", Principal: admin, Mask: created, Body: []byte(`{"name":"Hidden","show":0}`)},
+		{Name: "show null is on sale", Path: "/api/v2/admin/plans", Principal: admin, Mask: created, Body: []byte(`{"name":"Null","show":null}`)},
+		{Name: "show in another spelling", Path: "/api/v2/admin/plans", Principal: admin, Mask: created, Body: []byte(`{"name":"Cased","Show":0}`)},
 		// The community edition's subscription templates carry no price.
 		{Name: "a subscription template without prices", Path: "/api/v2/admin/plans", Principal: admin, Mask: created,
 			Body: []byte(`{"name":"Template","group_id":2,"transfer_enable":100,"speed_limit":50,"device_limit":3}`)},

@@ -197,8 +197,9 @@ type AgentInstallConfig struct {
 	// GRPCTarget is the host:port of the gRPC listener nodes dial (TLS);
 	// empty uses PublicURL's host and grpc.port.
 	GRPCTarget string `yaml:"grpc_target"`
-	// AgentVersion is the Agent release tag installed; empty uses
-	// "v" + app.version (Control and the Agent share version numbers, H25).
+	// AgentVersion is the Agent release tag installed; empty uses the Agent
+	// release this Control was released with (config/AGENT_RELEASE, set by
+	// the release build), or "v" + app.version in a development build.
 	AgentVersion string `yaml:"agent_version"`
 	// ArtifactDir holds Agent release assets as <dir>/<tag>/<asset> with
 	// their .dgst (and .sig) files; Control then serves them at

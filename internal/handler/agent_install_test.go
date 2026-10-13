@@ -264,6 +264,32 @@ func TestInstallTokenNeedsAnHTTPSAddress(t *testing.T) {
 	assert.Equal(t, http.StatusConflict, response.Code, "a development build names no Agent release")
 }
 
+// The Agent release a release build carries is what /install/agent.env and
+// the install command name; a Control whose own version has no Agent tag
+// (a patch release over an unchanged Agent) still gives nodes a real one.
+func TestInstallMetadataNamesTheAgentReleaseTheControlWasBuiltWith(t *testing.T) {
+	env := newInstallTestEnv(t)
+	env.cfg.AgentInstall.AgentVersion = ""
+	previousVersion, previousAgent := ReleaseVersion, AgentRelease
+	ReleaseVersion, AgentRelease = "4.2.1", "v4.2.0"
+	t.Cleanup(func() { ReleaseVersion, AgentRelease = previousVersion, previousAgent })
+
+	metadata := env.get("/install/agent.env")
+	require.Equal(t, http.StatusOK, metadata.Code)
+	assert.Contains(t, metadata.Body.String(), "agent_version v4.2.0\n")
+
+	// agent_install.agent_version overrides it.
+	env.cfg.AgentInstall.AgentVersion = "v4.1.0"
+	metadata = env.get("/install/agent.env")
+	assert.Contains(t, metadata.Body.String(), "agent_version v4.1.0\n")
+
+	// Without a pin the Control's version is used, as before.
+	env.cfg.AgentInstall.AgentVersion = ""
+	AgentRelease = ""
+	metadata = env.get("/install/agent.env")
+	assert.Contains(t, metadata.Body.String(), "agent_version v4.2.1\n")
+}
+
 func TestInstallTokenWithoutBuiltinPKI(t *testing.T) {
 	env := newInstallTestEnv(t)
 	handler := &AgentInstallHandler{
