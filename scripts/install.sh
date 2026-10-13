@@ -1019,6 +1019,9 @@ Restart=on-failure
 RestartSec=5
 LimitNOFILE=65535
 NoNewPrivileges=true
+# tls.mode acme and files bind :443 and :80 as this user (docs/reference/configuration.md,
+# "Ports"); without the capability a configuration that sets domain stops at the start.
+AmbientCapabilities=CAP_NET_BIND_SERVICE
 PrivateTmp=true
 ProtectHome=true
 ReadWritePaths=${INSTALL_DIR}

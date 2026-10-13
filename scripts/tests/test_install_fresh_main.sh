@@ -219,6 +219,8 @@ check "fresh: the config sets no env (Control always runs as production)" test -
 check "fresh: the unit gives Control its data directory" \
   grep -qxF "Environment=ANIX_CONTROL_DATA_DIR=${FRESH}/data" "${SYSTEMD_UNIT_DIR}/anix-control.service"
 check "fresh: the data directory is private" test "$(stat -c '%a' "${FRESH}/data")" = 700
+check "fresh: the unit lets a non-root Control bind 443 and 80 (tls.mode acme and files)" \
+  grep -qxF "AmbientCapabilities=CAP_NET_BIND_SERVICE" "${SYSTEMD_UNIT_DIR}/anix-control.service"
 check "fresh: the release checksums were verified" grep -qF "Verified the signature of SHA256SUMS.txt" "${temporary}/fresh.log"
 check "fresh: no identity package is staged (the packages are built in)" test ! -e "${FRESH}/bootstrap"
 no_identity_package_dir() { ! grep -qE 'identity_bootstrap_package_dir: "/' "$1"; }

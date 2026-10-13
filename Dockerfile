@@ -91,8 +91,14 @@ ENV HOME=/home/anixops \
     ANIX_CONTROL_LISTEN=0.0.0.0:8080
 USER 10001:10001
 EXPOSE 8080 50051
+# tls.mode external serves plain http on 8080 (listen); acme and files serve
+# https on 443 and an http redirect on 80, and no 8080: the probe tries the
+# plain address first and the https one second (-k: it asks for 127.0.0.1,
+# not for the certificate's name).
 HEALTHCHECK --interval=15s --timeout=5s --start-period=60s --retries=3 \
-    CMD curl -fsS http://127.0.0.1:8080/readyz >/dev/null || exit 1
+    CMD curl -fsS http://127.0.0.1:8080/readyz >/dev/null \
+        || curl -fskS https://127.0.0.1:443/readyz >/dev/null \
+        || exit 1
 ENTRYPOINT ["/usr/bin/tini", "--", "/app/anix-control"]
 
 # Release image: the binary (with the official packages built in) and the

@@ -84,7 +84,8 @@ services:
     # gRPC and plugin hosts: allow the full ordered shutdown.
     stop_grace_period: 90s
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/readyz"]
+      # tls.mode external listens on 8080; acme and files serve https on 443 only.
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/readyz || curl -fskS https://127.0.0.1:443/readyz"]
       interval: 15s
       timeout: 5s
       start_period: 60s
