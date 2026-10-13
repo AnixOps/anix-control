@@ -36,6 +36,7 @@ func TestDerivationVectorsArePinned(t *testing.T) {
 		LabelIdentityKEK: "21d8803b23adf3f896a385e041f97feb206b9c6fae85290476295c1e5002308c",
 		LabelJoinToken:   "6a5cfab8e87ece9007324999e3063c613a48d36e82c64ae97f4f67bf010b2a49",
 		LabelACMECache:   "8ff73fe535bfc80c51848fe8a7f0df8fbb97dd4e93a699d555a521c315418290",
+		LabelFingerprint: "f3f1860386c7b5900a5ef09a39e258d9a7f35a1a16d30ac41dda8b5bb8e74fdc",
 	}
 	for label, want := range vectors {
 		assert.Equal(t, want, fmt.Sprintf("%x", key.Derive(label)), label)
@@ -48,6 +49,10 @@ func TestDerivationVectorsArePinned(t *testing.T) {
 	assert.Equal(t, "anixops identity kek v1", LabelIdentityKEK)
 	assert.Equal(t, "anixops node-group join token v1", LabelJoinToken)
 	assert.Equal(t, "anixops acme cache v1", LabelACMECache)
+	assert.Equal(t, "anixops root key fingerprint v1", LabelFingerprint)
+	// A backup manifest's fingerprint: the SHA-256 of the derivation, never
+	// of the key.
+	assert.Equal(t, "sha256:4a3fd9c77dbf7c84d2c8fd731a942c6c23d1bd6dc28648b65a79e729190da23d", key.Fingerprint())
 }
 
 func TestKeyNeverFormatsItsBytes(t *testing.T) {
