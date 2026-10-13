@@ -7,10 +7,13 @@
 #           checkout: local development, the PR smoke test and edge images.
 #   release copies the exact GitHub Release artifacts from the named build
 #           context "artifacts" (see the docker job in .github/workflows/ci.yml):
-#             artifacts/anix-control-linux-<arch>
+#             artifacts/anix-control-linux-<arch>     (the official packages built in)
 #             artifacts/web/public/
-#             artifacts/bootstrap/identity-platform/  (signed package, 3 files)
 #             artifacts/bootstrap/agent-install/      (agent-install.sh.sig)
+#
+# The source binary embeds no official packages (internal/builtinpkg/dist is
+# empty in a checkout): mount a signed identity-platform package and set
+# ANIX_CONTROL_PLUGINS_IDENTITY_BOOTSTRAP_PACKAGE_DIR, as the smoke tests do.
 #
 # The image runs as uid 10001 without a config file: configure it with
 # ANIX_CONTROL_* environment variables (anix-control -print-env) or mount a
@@ -86,15 +89,12 @@ HEALTHCHECK --interval=15s --timeout=5s --start-period=60s --retries=3 \
     CMD curl -fsS http://127.0.0.1:8080/readyz >/dev/null || exit 1
 ENTRYPOINT ["/usr/bin/tini", "--", "/app/anix-control"]
 
-# Release image: the binary, frontend and identity bootstrap package attached
-# to the GitHub Release, byte for byte.
+# Release image: the binary (with the official packages built in) and the
+# frontend attached to the GitHub Release, byte for byte.
 FROM runtime-base AS release
 ARG TARGETARCH
 COPY --from=artifacts --chmod=0755 anix-control-linux-${TARGETARCH} /app/anix-control
 COPY --from=artifacts web/public/ /app/web/public/
-COPY --from=artifacts bootstrap/identity-platform/ /app/bootstrap/identity-platform/
-# A fresh database imports the signed identity package on first start.
-ENV ANIX_CONTROL_PLUGINS_IDENTITY_BOOTSTRAP_PACKAGE_DIR=/app/bootstrap/identity-platform
 # The release signature of the install script served at /install.sh.sig.
 COPY --from=artifacts bootstrap/agent-install/ /app/bootstrap/agent-install/
 ENV ANIX_CONTROL_AGENT_INSTALL_SIGNATURE_FILE=/app/bootstrap/agent-install/agent-install.sh.sig

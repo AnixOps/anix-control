@@ -1233,147 +1233,22 @@ def verify_builtin_set(
         raise PackageBuildError("built-in package public key does not match the official public key")
 
 
-# The GitHub Release ships every package of one release as a single archive
-# instead of five assets per package. PACKAGE_SPECS (narrowed by --package) is
-# the only list of what goes in; the archive bytes carry a detached signature
-# made by the same Ed25519 key and openssl step as each manifest signature.
-RELEASE_ARCHIVE_PREFIX = "anix-control-packages"
-RELEASE_ARCHIVE_PACKAGE_SUFFIXES = (".anxp", ".manifest.json", ".manifest.sig", ".sbom.spdx.json")
-RELEASE_ARCHIVE_PUBLIC_KEY = "official-public-key.pem"
-RELEASE_ARCHIVE_COMPRESSLEVEL = 6
-
-
-def release_archive_name(version: str) -> str:
-    return f"{RELEASE_ARCHIVE_PREFIX}-{version}.tar.gz"
-
-
-def release_archive_members(selected: tuple[PackageSpec, ...], version: str) -> list[str]:
-    """Return the archive member names, relative to the archive's top directory."""
-    names = [RELEASE_ARCHIVE_PUBLIC_KEY]
-    for spec in selected:
-        names.extend(f"{spec.package_id}-{version}{suffix}" for suffix in RELEASE_ARCHIVE_PACKAGE_SUFFIXES)
-    return sorted(names)
-
-
-def write_release_archive(
-    output: Path,
-    selected: tuple[PackageSpec, ...],
-    version: str,
-    official_public_key: bytes,
-    destination: Path,
-) -> Path:
-    top = f"{RELEASE_ARCHIVE_PREFIX}-{version}"
-    destination.mkdir(parents=True, exist_ok=True)
-    archive_path = destination / release_archive_name(version)
-    descriptor, temporary_name = tempfile.mkstemp(prefix=f".{archive_path.name}.", dir=destination)
-    temporary = Path(temporary_name)
-    try:
-        with os.fdopen(descriptor, "wb") as handle:
-            with gzip.GzipFile(
-                fileobj=handle, mode="wb", compresslevel=RELEASE_ARCHIVE_COMPRESSLEVEL, mtime=0, filename=""
-            ) as compressor:
-                with tarfile.open(fileobj=compressor, mode="w", format=tarfile.USTAR_FORMAT) as archive:
-                    for name in release_archive_members(selected, version):
-                        info = tarfile.TarInfo(f"{top}/{name}")
-                        info.mode = 0o644
-                        info.uid = 0
-                        info.gid = 0
-                        info.uname = ""
-                        info.gname = ""
-                        info.mtime = 0
-                        info.type = tarfile.REGTYPE
-                        if name == RELEASE_ARCHIVE_PUBLIC_KEY:
-                            data = ed25519_public_key_pem(official_public_key)
-                            info.size = len(data)
-                            archive.addfile(info, io.BytesIO(data))
-                            continue
-                        source = output / name
-                        if source.is_symlink() or not source.is_file():
-                            raise PackageBuildError(f"release archive input is not a regular file: {name}")
-                        info.size = source.stat().st_size
-                        with source.open("rb") as member:
-                            archive.addfile(info, member)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.chmod(temporary, 0o644)
-        os.replace(temporary, archive_path)
-    finally:
-        if temporary.exists():
-            temporary.unlink()
-    return archive_path
-
-
-def verify_release_archive(
-    archive_path: Path,
-    selected: tuple[PackageSpec, ...],
-    version: str,
-    official_public_key: bytes,
-) -> None:
-    """Check the archive signature, its exact member set and every package in it."""
-    signature_path = archive_path.with_name(archive_path.name + ".sig")
-    if archive_path.is_symlink() or not archive_path.is_file():
-        raise PackageBuildError(f"release archive is not a regular file: {archive_path}")
-    if signature_path.is_symlink() or not signature_path.is_file():
-        raise PackageBuildError(f"release archive signature is missing: {signature_path}")
-    verify_signature_with_official_root(archive_path, signature_path, official_public_key, "release archive signature")
-    top = f"{RELEASE_ARCHIVE_PREFIX}-{version}"
-    expected = [f"{top}/{name}" for name in release_archive_members(selected, version)]
-    with tempfile.TemporaryDirectory(prefix="anixops-package-archive-") as temporary:
-        root = Path(temporary)
-        try:
-            with tarfile.open(archive_path, mode="r:gz") as archive:
-                members = archive.getmembers()
-                names = [member.name for member in members]
-                if names != expected:
-                    missing = sorted(set(expected) - set(names))
-                    extra = sorted(set(names) - set(expected))
-                    raise PackageBuildError(f"release archive member set mismatch; missing={missing}, extra={extra}")
-                for member in members:
-                    if not member.isfile() or member.mtime != 0 or member.uid != 0 or member.gid != 0:
-                        raise PackageBuildError(f"release archive member metadata is not deterministic: {member.name}")
-                    handle = archive.extractfile(member)
-                    if handle is None:
-                        raise PackageBuildError(f"release archive member cannot be read: {member.name}")
-                    with handle, (root / Path(member.name).name).open("wb") as target:
-                        shutil.copyfileobj(handle, target)
-        except (tarfile.TarError, OSError, EOFError) as error:
-            raise PackageBuildError(f"read release archive: {error}") from error
-        embedded_key = derive_ed25519_public_key_from_pem(root / RELEASE_ARCHIVE_PUBLIC_KEY)
-        if not hmac.compare_digest(embedded_key, official_public_key):
-            raise PackageBuildError("release archive public key does not match the official public key")
-        for spec in selected:
-            verify_output(root, spec, version, official_public_key, require_public_key=False)
-
-
-def build_release_archive(
-    output: Path,
-    selected: tuple[PackageSpec, ...],
-    version: str,
-    signer: Signer,
-    official_public_key: bytes,
-    destination: Path,
-) -> Path:
-    # Package outputs are checked against the configured root before they are
-    # bundled; the formal --verify-release run stays a separate release step.
-    for spec in selected:
-        verify_output(output, spec, version, official_public_key)
-    archive_path = write_release_archive(output, selected, version, official_public_key, destination)
-    signature = base64.b64encode(signer.sign_file(archive_path, "release archive")) + b"\n"
-    atomic_write(archive_path.with_name(archive_path.name + ".sig"), signature, 0o644)
-    verify_release_archive(archive_path, selected, version, official_public_key)
-    return archive_path
-
-
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     scope = parser.add_mutually_exclusive_group(required=True)
     scope.add_argument("--all", action="store_true", help="Build every official package.")
-    scope.add_argument("--package", choices=[spec.package_id for spec in PACKAGE_SPECS], help="Build one package.")
+    scope.add_argument(
+        "--package",
+        action="append",
+        choices=[spec.package_id for spec in PACKAGE_SPECS],
+        help="Build one package; repeat for several (with --builtin, the index lists them).",
+    )
     parser.add_argument("--version", required=True, help="Stable package version applied to every selected artifact.")
     parser.add_argument(
         "--out",
         type=Path,
-        help="Directory for .anxp, manifest, signature, and SBOM files (not used by --verify-release-archive).",
+        required=True,
+        help="Directory for .anxp, manifest, signature, and SBOM files (and index.json with --builtin).",
     )
     parser.add_argument("--goos", default="linux", help="Legacy single-platform GOOS selector (default: linux).")
     parser.add_argument("--goarch", default="amd64", help="Legacy single-platform GOARCH selector (default: amd64).")
@@ -1416,21 +1291,6 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Verify existing selected artifacts against --official-public-key without building new artifacts.",
     )
-    release_mode.add_argument(
-        "--release-archive",
-        type=Path,
-        metavar="DIR",
-        help=(
-            "Bundle the existing selected outputs in --out into DIR/anix-control-packages-VERSION.tar.gz and sign it "
-            "with --signing-key, which must match --official-public-key."
-        ),
-    )
-    release_mode.add_argument(
-        "--verify-release-archive",
-        type=Path,
-        metavar="ARCHIVE",
-        help="Verify a release package archive, its .sig and every package in it against --official-public-key.",
-    )
     parser.add_argument(
         "--official-public-key",
         type=Path,
@@ -1443,7 +1303,9 @@ def main() -> int:
     args = parse_args()
     try:
         version = require_safe_segment(args.version, "version")
-        selected = PACKAGE_SPECS if args.all else tuple(spec for spec in PACKAGE_SPECS if spec.package_id == args.package)
+        if args.package and len(set(args.package)) != len(args.package):
+            raise PackageBuildError("--package names a package twice")
+        selected = PACKAGE_SPECS if args.all else tuple(spec for spec in PACKAGE_SPECS if spec.package_id in args.package)
         if args.platform and (args.goos != "linux" or args.goarch != "amd64"):
             raise PackageBuildError("--platform cannot be combined with --goos or --goarch")
         platforms = normalize_platforms(args.platform or [args.goos + "/" + args.goarch])
@@ -1464,37 +1326,13 @@ def main() -> int:
                 raise PackageBuildError(
                     f"runtime binary input {package_id}:{runtime_name}@{platform_name(platform)} is outside the selected platform scope"
                 )
-        if args.out is None and args.verify_release_archive is None:
-            raise PackageBuildError("--out is required")
         if args.builtin:
             if args.platform or args.goos != "linux" or args.goarch != "amd64":
                 raise PackageBuildError("--builtin packages hold no binary: they take no platform")
             if agent_inputs or runtime_inputs:
                 raise PackageBuildError("--builtin packages hold no Agent or runtime binary")
-            if args.release_archive is not None or args.verify_release_archive is not None:
-                raise PackageBuildError("--builtin packages are embedded in Control, not bundled in a release archive")
-        archive_mode = args.release_archive is not None or args.verify_release_archive is not None
-        if args.official_public_key is not None and not (args.formal_release or args.verify_release or archive_mode):
-            raise PackageBuildError(
-                "--official-public-key requires --formal-release, --verify-release, --release-archive or --verify-release-archive"
-            )
-        if args.verify_release_archive is not None:
-            if args.signing_key is not None:
-                raise PackageBuildError("release archive verification does not accept --signing-key")
-            official_public_key = load_official_public_key(args.official_public_key, "release archive verification")
-            verify_release_archive(args.verify_release_archive, selected, version, official_public_key)
-            print(f"verified {args.verify_release_archive} and its {len(selected)} packages against the configured official root")
-            return 0
-        if args.release_archive is not None:
-            if args.signing_key is None:
-                raise PackageBuildError("release archive requires --signing-key")
-            official_public_key = load_official_public_key(args.official_public_key, "release archive")
-            with signer_for_build(args.signing_key, official_public_key) as signer:
-                archive_path = build_release_archive(
-                    args.out, selected, version, signer, official_public_key, args.release_archive
-                )
-            print(f"wrote and verified {archive_path} and {archive_path.name}.sig with {len(selected)} packages")
-            return 0
+        if args.official_public_key is not None and not (args.formal_release or args.verify_release):
+            raise PackageBuildError("--official-public-key requires --formal-release or --verify-release")
         if args.verify_release:
             if args.signing_key is not None:
                 raise PackageBuildError("release artifact verification does not accept --signing-key")

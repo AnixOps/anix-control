@@ -967,19 +967,29 @@ class BuiltinPackageSetTest(unittest.TestCase):
             self.assertNotEqual(0, tampered.returncode)
             self.assertIn(b"digest", tampered.stderr)
 
-    def test_builtin_rejects_binary_inputs_and_release_archives(self) -> None:
+    def test_builtin_rejects_binary_inputs(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             common = [sys.executable, str(BUILDER), "--package", "machine-telemetry", "--builtin", "--version", "5.0.0", "--out", str(root / "dist")]
             for extra, message in (
                 (["--platform", "linux/amd64"], b"no platform"),
                 (agent_binary_arguments(root, package_ids=("machine-telemetry",)), b"no Agent or runtime binary"),
-                (["--release-archive", str(root / "assets"), "--signing-key", str(root / "missing.pem")], b"release archive"),
+                (["--package", "machine-telemetry"], b"twice"),
             ):
                 result = run_command(common + extra)
                 self.assertNotEqual(0, result.returncode, extra)
                 self.assertIn(message, result.stderr, extra)
             self.assertFalse((root / "dist").exists())
+
+    def test_builtin_subset_lists_the_selected_packages(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / "dist"
+            result = run_command(
+                [sys.executable, str(BUILDER), "--package", "knowledge", "--package", "identity-platform", "--builtin", "--version", "5.0.0", "--out", str(output)]
+            )
+            self.assertEqual(0, result.returncode, result.stderr.decode("utf-8", errors="replace"))
+            index = json.loads((output / "index.json").read_text(encoding="utf-8"))
+            self.assertEqual(["identity-platform", "knowledge"], [entry["id"] for entry in index["packages"]])
 
     def test_full_package_manifest_still_names_its_host_binaries(self) -> None:
         # The format the cross-repository E2E and the module image use.

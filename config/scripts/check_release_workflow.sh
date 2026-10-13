@@ -46,11 +46,12 @@ Usage: config/scripts/check_release_workflow.sh [--self-test|--help]
 
 Statically checks the release workflow essentials: a version tag (with an
 optional alpha, beta or rc suffix) that must match the tree's declared version,
-tests gating the release, every official package signed with the protected
-official root and shipped in one signed packages archive (plus the identity
-bootstrap package the installer and image use), multi-platform binaries, a signed multi-architecture GHCR image
-with SBOM and provenance, a source SBOM, checksums, and a GitHub Release whose
-body is the tag's CHANGELOG section. See docs/RELEASING.md.
+tests gating the release, every official package built in the slim built-in
+format and signed with the protected official root before the binaries embed
+it, linux/amd64 and linux/arm64 binaries only, a signed multi-architecture GHCR
+image with SBOM and provenance, a source SBOM, checksums signed with the official
+root (SHA256SUMS.txt.sig), no package asset, and a GitHub Release whose body is
+the tag's CHANGELOG section. See docs/RELEASING.md.
 EOF
 }
 
@@ -299,7 +300,7 @@ check_release_workflow() {
   # workflow, so an advisory with no fix cannot block unrelated pull requests.
   require_named_step_text frontend-build "Audit shipped frontend dependencies" "npm audit --omit=dev --audit-level=moderate" "required frontend job audits shipped dependencies strictly" || failed=1
   reject_job_text frontend-build "audit:check" "development-dependency waivers in the required frontend job" || failed=1
-  require_text "scripts/tests/test_identity_bootstrap_install.sh" "identity bootstrap installer regression test" || failed=1
+  require_text "scripts/tests/test_plugin_execution_install.sh" "package execution installer regression test" || failed=1
 
   # Tests gate the release.
   for dependency in "${RELEASE_BINARY_GATES[@]}"; do
@@ -316,21 +317,24 @@ check_release_workflow() {
   require_job_text backend-test 'test "${SHARDS_RESULT}" = success' "Backend Tests requires every shard to pass" || failed=1
   require_job_text backend-test "--merge-coverage coverage.out" "Backend Tests merges the shard coverage profiles" || failed=1
 
-  # Official packages: all of them, signed with the protected root.
+  # Official packages: all of them, in the built-in format, signed with the
+  # protected root. They are built before the binaries, which embed them.
   require_job_text plugin-package-publish "packages/shared/build_package.py" "official package builder" || failed=1
   require_job_text plugin-package-publish "--all" "every official package is built" || failed=1
+  require_job_text plugin-package-publish "--builtin" "built-in package format" || failed=1
   require_job_text plugin-package-publish "--formal-release" "signed package build" || failed=1
   require_job_text plugin-package-publish "--verify-release" "signed package verification" || failed=1
   require_job_text plugin-package-publish "ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY" "protected package signing key" || failed=1
   require_job_text plugin-package-publish "candidate configuration does not match the protected official package root" "signing root matches the shipped trust root" || failed=1
   require_job_text plugin-package-publish "unset ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY" "signing secret environment cleanup" || failed=1
-  require_job_text plugin-package-publish "agent_args+=(--agent-binary" "explicit Agent binary mappings" || failed=1
-  require_job_text plugin-package-publish "runtime_args+=(--runtime-binary" "explicit GOST runtime mappings" || failed=1
-  require_job_text plugin-package-publish "--platform linux/amd64" "amd64 package platform" || failed=1
-  require_job_text plugin-package-publish "--platform linux/arm64" "arm64 package platform" || failed=1
-  require_job_text plugin-package-publish "--release-archive release-assets" "signed packages archive" || failed=1
-  require_job_text plugin-package-publish "path: release-assets/" "signed package artifact holds the release assets only" || failed=1
-  require_job_text plugin-package-publish "name: signed-plugin-releases" "signed package artifact" || failed=1
+  require_job_text plugin-package-publish "name: builtin-packages" "built-in package set artifact" || failed=1
+  require_job_text plugin-package-publish "path: release-assets/" "signed release asset artifact holds the release assets only" || failed=1
+  require_job_text plugin-package-publish "name: signed-plugin-releases" "signed release asset artifact" || failed=1
+  reject_job_text plugin-package-publish "--release-archive" "per-release packages archive" || failed=1
+  reject_job_text plugin-package-publish "--agent-binary" "Agent plugin payloads in the release" || failed=1
+  require_job_text release-binaries "name: builtin-packages" "release binaries download the built-in package set" || failed=1
+  require_job_text release-binaries "path: internal/builtinpkg/dist/" "release binaries embed the built-in package set" || failed=1
+  require_named_step_text release-binaries "Verify the built-in package set" "--verify-release" "release binaries verify the built-in set against the shipped root" || failed=1
 
   # Binaries carry the Agent release tag they were released with: a Control
   # patch release can ship an unchanged Agent, so the installer must not ask
@@ -339,13 +343,17 @@ check_release_workflow() {
   require_named_step_text release-binaries "Build binary" "-X main.agentRelease=\${AGENT_RELEASE}" "release binaries carry the pinned Agent release tag" || failed=1
   for pair in \
     linux/amd64 \
-    linux/arm64 \
-    windows/amd64 \
-    windows/arm64 \
-    darwin/amd64 \
-    darwin/arm64; do
+    linux/arm64; do
     require_release_binary_pair "${pair}" || failed=1
   done
+  # Control runs its built-in package hosts as Linux processes.
+  if [[ "$(release_binary_pairs | wc -l)" -ne 2 ]]; then
+    echo "release binary matrix pairs found:" >&2
+    release_binary_pairs >&2
+    fail "the release binary matrix must hold linux/amd64 and linux/arm64 only" || failed=1
+  else
+    echo "ok: release binary matrix is linux/amd64 and linux/arm64 only"
+  fi
   require_text "release-binary-\${{ matrix.goos }}-\${{ matrix.goarch }}" "per-platform release binary artifact upload" || failed=1
 
   # Container image: supply-chain signed.
@@ -357,7 +365,7 @@ check_release_workflow() {
   require_job_text docker "provenance: mode=max" "release image provenance attestation" || failed=1
   require_job_text docker "sbom: true" "release image SBOM attestation" || failed=1
   require_job_text docker "cosign sign" "signed release image digest" || failed=1
-  require_job_text docker "identity-platform" "identity bootstrap package in the image" || failed=1
+  reject_job_text docker "bootstrap/identity-platform" "identity bootstrap package in the image" || failed=1
   require_job_text docker "bootstrap/agent-install" "Agent installer signature in the image" || failed=1
   require_job_text plugin-package-publish "release-assets/agent-install.sh.sig" "signed Agent installer" || failed=1
   reject_job_text docker "DOCKER_PASSWORD" "Docker Hub release credentials" || failed=1
@@ -371,23 +379,25 @@ check_release_workflow() {
   require_job_text release "config/scripts/generate_release_notes.py" "release notes from the CHANGELOG" || failed=1
   require_job_text release "config/scripts/generate_release_manifest.py" "release manifest" || failed=1
   require_job_text release "sha256sum * > SHA256SUMS.txt" "release checksums" || failed=1
+  require_named_step_text release "Sign the release checksums" "-rawin -in release/SHA256SUMS.txt" "signed release checksums" || failed=1
+  require_named_step_text release "Sign the release checksums" "release/SHA256SUMS.txt.sig" "release checksum signature asset" || failed=1
   require_job_text release "config/scripts/verify_release_artifacts.py" "release artifact verification" || failed=1
-  require_job_text release "--verify-release-archive" "packages archive signature and contents verification" || failed=1
+  require_job_text release "--builtin-packages builtin-packages" "release manifest lists the built-in packages" || failed=1
+  require_job_text release "--official-public-key release/official-public-key.raw" "release checksums verified against the shipped root" || failed=1
   for asset in \
-    '"anix-control-packages-${version}.tar.gz"' \
-    '"anix-control-packages-${version}.tar.gz.sig"' \
-    '"identity-platform-${version}.anxp"' \
-    '"identity-platform-${version}.manifest.json"' \
-    '"identity-platform-${version}.manifest.sig"' \
+    official-public-key.raw \
     agent-install.sh \
     agent-install.sh.sig \
+    SHA256SUMS.txt.sig \
     anix-control-frontend.tar.gz \
     anix-control-linux-amd64.tar.gz \
-    anix-control-linux-arm64.tar.gz \
-    anix-control-windows-arm64.exe.zip \
-    anix-control-darwin-arm64.tar.gz; do
+    anix-control-linux-arm64.tar.gz; do
     require_job_text release "--require ${asset}" "release asset ${asset}" || failed=1
   done
+  # The packages are inside the binaries: no package asset is published.
+  reject_job_text release "--require anix-control-packages-" "packages archive release asset" || failed=1
+  reject_job_text release '--require "identity-platform-' "identity bootstrap package release asset" || failed=1
+  reject_job_text release "--verify-release-archive" "packages archive verification" || failed=1
   require_job_text release "softprops/action-gh-release" "GitHub release creation action" || failed=1
   require_job_text release "body_path: release/RELEASE_NOTES.md" "release body from the CHANGELOG" || failed=1
   require_job_text release "prerelease: \${{ contains(github.ref_name, '-') }}" "suffixed tags are prereleases" || failed=1
@@ -456,7 +466,11 @@ run_self_test() {
     "s#govulncheck ./cmd/nftables-forward#echo ./cmd/nftables-forward#" \
     "s/anix-control-linux-amd64.tar.gz/anix-control-linux.tar.gz/g" \
     "s/go-security, backend-test/backend-test/" \
-    "s/--verify-release-archive/--skip-release-archive/" \
+    "s/--builtin-packages builtin-packages/--packages-dir builtin-packages/" \
+    "s#release/SHA256SUMS.txt.sig#release/SHA256SUMS.sig#g" \
+    "s#path: internal/builtinpkg/dist/#path: builtin-packages/#" \
+    "s/            --builtin \\\\/            --full \\\\/" \
+    "s/            goarch: arm64/            goarch: arm64\n          - goos: windows\n            goarch: amd64/" \
     's/test "\${SHARDS_RESULT}" = success/true/' \
     's/needs: \[changes, backend-test-shard\]/needs: [changes]/' \
     's/!cancelled() && needs.changes.outputs.code/needs.changes.outputs.code/' \

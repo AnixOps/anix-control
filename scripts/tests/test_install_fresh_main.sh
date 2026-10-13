@@ -3,7 +3,7 @@
 # script exits 0, and so does the update that follows it.
 #
 # main() and everything it calls are the installer's own, in particular
-# backup_current_release: test_identity_bootstrap_install.sh stubs it, which
+# backup_current_release: test_plugin_execution_install.sh stubs it, which
 # hid that a host with no previous release (nothing to back up) aborted there
 # with status 1 before the binary, the unit or the service were installed. Only
 # what needs a real host is replaced: the root check, systemctl, chown, curl
@@ -74,17 +74,17 @@ chmod 0755 "${temporary}/stage/bin/${binary}"
 tar -czf "${RELEASE_DIR}/${archive}" -C "${temporary}/stage/bin" "${binary}"
 printf '<!doctype html><title>fixture</title>\n' >"${temporary}/stage/web/index.html"
 tar -czf "${RELEASE_DIR}/anix-control-frontend.tar.gz" -C "${temporary}/stage/web" index.html
-package_version="${VERSION_UNDER_TEST#v}"
-for suffix in anxp manifest.json manifest.sig; do
-  printf 'fixture %s\n' "${suffix}" >"${RELEASE_DIR}/identity-platform-${package_version}.${suffix}"
-done
 (
   cd "${RELEASE_DIR}"
-  sha256sum -- "${archive}" anix-control-frontend.tar.gz \
-    "identity-platform-${package_version}.anxp" \
-    "identity-platform-${package_version}.manifest.json" \
-    "identity-platform-${package_version}.manifest.sig" >SHA256SUMS.txt
+  sha256sum -- "${archive}" anix-control-frontend.tar.gz >SHA256SUMS.txt
 )
+# The checksums are signed like the release job signs them, with a test key
+# the installer is told to trust in place of the official one.
+openssl genpkey -algorithm ED25519 -out "${temporary}/release-key.pem" 2>/dev/null
+openssl pkeyutl -sign -inkey "${temporary}/release-key.pem" -rawin \
+  -in "${RELEASE_DIR}/SHA256SUMS.txt" -out "${temporary}/checksums.bin"
+base64 -w0 "${temporary}/checksums.bin" >"${RELEASE_DIR}/SHA256SUMS.txt.sig"
+OFFICIAL_PUBLIC_KEY="$(openssl pkey -in "${temporary}/release-key.pem" -pubout -outform DER 2>/dev/null | tail -c 32 | base64)"
 
 # curl serves the release assets, the version-matched configuration template
 # and the health and login endpoints; it records every URL and login payload.
@@ -194,10 +194,11 @@ check "fresh: the unit starts the installed binary with the installed config" \
   grep -qxF "ExecStart=${FRESH}/bin/anix-control -config ${FRESH}/config/config.yaml" "${SYSTEMD_UNIT_DIR}/anix-control.service"
 check "fresh: the config is written" test -s "${FRESH}/config/config.yaml"
 check "fresh: the config is production" test "$(top_level env "${FRESH}/config/config.yaml")" = production
-check "fresh: the identity bootstrap package is staged" \
-  test -s "${FRESH}/bootstrap/identity-platform-${package_version}/identity-platform-${package_version}.anxp"
-check "fresh: the identity bootstrap directory is configured" \
-  grep -qF "identity_bootstrap_package_dir: \"${FRESH}/bootstrap/identity-platform-${package_version}\"" "${FRESH}/config/config.yaml"
+check "fresh: the release checksums were verified" grep -qF "Verified the signature of SHA256SUMS.txt" "${temporary}/fresh.log"
+check "fresh: no identity package is staged (the packages are built in)" test ! -e "${FRESH}/bootstrap"
+no_identity_package_dir() { ! grep -qE 'identity_bootstrap_package_dir: "/' "$1"; }
+check "fresh: no identity package directory is configured" no_identity_package_dir "${FRESH}/config/config.yaml"
+check "fresh: package execution is on" grep -qE '^[[:space:]]+control_execution_enabled: true' "${FRESH}/config/config.yaml"
 check "fresh: the CA key is generated" test -s "${FRESH}/config/secrets/module_ca_kek"
 check "fresh: the bootstrap password file is written" test -s "${FRESH}/.bootstrap-admin-password"
 check "fresh: nothing was backed up (there was no previous release)" \
