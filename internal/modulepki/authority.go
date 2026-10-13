@@ -534,3 +534,26 @@ func parseCertificatePEM(value string) (*x509.Certificate, error) {
 	}
 	return x509.ParseCertificate(block.Bytes)
 }
+
+// VerifyKEK opens, with kek, the sealed private key of every current and
+// next module CA in db, whatever its cluster: it proves that kek is the key
+// that sealed them before anything signs with them. It returns how many keys
+// it opened; an error names the first CA whose key does not open (a
+// retired CA is not checked: it signs nothing any more).
+func VerifyKEK(ctx context.Context, db *gorm.DB, kek []byte) (int, error) {
+	var rows []model.ServiceCA
+	if err := db.WithContext(ctx).Where("state IN ?", []string{model.ServiceCAStateCurrent, model.ServiceCAStateNext}).
+		Order("id").Find(&rows).Error; err != nil {
+		return 0, fmt.Errorf("read the module CAs: %w", err)
+	}
+	for _, row := range rows {
+		authority, err := New(Options{DB: db, Cluster: row.Cluster, KEK: kek})
+		if err != nil {
+			return 0, err
+		}
+		if _, err := authority.unseal(row); err != nil {
+			return 0, err
+		}
+	}
+	return len(rows), nil
+}

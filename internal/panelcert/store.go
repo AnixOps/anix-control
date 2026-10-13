@@ -9,22 +9,24 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/AnixOps/anix-control/v5/internal/model"
+	"github.com/AnixOps/anix-control/v5/internal/rootkey"
 	"golang.org/x/crypto/acme/autocert"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
 
 // Sealing of the entries that hold private keys: AES-256-GCM under a key
-// derived with HKDF-SHA256 from the root key (module_runtime.ca_kek), the
+// derived with HKDF-SHA256 from the root key (internal/rootkey), the
 // entry's key bound as additional data so that a sealed value copied to
 // another key never opens.
 const (
-	sealInfo          = "anixops acme cache v1"
+	sealInfo          = rootkey.LabelACMECache
 	sealAdditionalTag = "anixops acme cache v1:"
 	kekSize           = 32
 )
@@ -39,7 +41,7 @@ const (
 
 // ErrSealed means an entry cannot be opened: the root key changed or the
 // row was altered.
-var ErrSealed = errors.New("panel certificate store: a sealed entry cannot be opened (module_runtime.ca_kek changed or the row was altered)")
+var ErrSealed = errors.New("panel certificate store: a sealed entry cannot be opened (the root key changed or the row was altered)")
 
 // Store keeps the panel certificate entries in v5_acme_cache. With a root
 // key every entry but the public ones (challenge answers, the status, a
@@ -248,4 +250,26 @@ func (c *directoryCache) Delete(ctx context.Context, key string) error {
 // (the key autocert uses for an ECDSA certificate).
 func certificateKey(directoryURL, name string) string {
 	return directoryPrefix(directoryURL) + name
+}
+
+// VerifyKEK opens, with kek (the root key), one sealed entry of
+// v5_acme_cache when there is one: it tells whether kek is the key the
+// stored ACME account and certificate keys were sealed with. It reports
+// whether there was an entry to open.
+func VerifyKEK(ctx context.Context, db *gorm.DB, kek []byte) (bool, error) {
+	var rows []model.ACMECacheEntry
+	if err := db.WithContext(ctx).Where("sealed = ?", true).Order("cache_key").Limit(1).Find(&rows).Error; err != nil {
+		return false, fmt.Errorf("read the panel certificate store: %w", err)
+	}
+	if len(rows) == 0 {
+		return false, nil
+	}
+	store, err := NewStore(db, kek, nil)
+	if err != nil {
+		return true, err
+	}
+	if _, err := store.open(rows[0].Key, rows[0].Data); err != nil {
+		return true, fmt.Errorf("the panel certificate entry %q cannot be opened: %w", rows[0].Key, err)
+	}
+	return true, nil
 }

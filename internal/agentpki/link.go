@@ -614,3 +614,24 @@ func requireForwardNegotiated(tx *gorm.DB, node agentcontrol.AgentNode) error {
 	}
 	return nil
 }
+
+// VerifyLinkKEK opens, with kek, the sealed private key of every current
+// and next forward link CA in db, whatever its cluster (see
+// modulepki.VerifyKEK). It returns how many keys it opened.
+func VerifyLinkKEK(ctx context.Context, db *gorm.DB, kek []byte) (int, error) {
+	var rows []model.ForwardLinkCA
+	if err := db.WithContext(ctx).Where("state IN ?", []string{model.ForwardLinkCAStateCurrent, model.ForwardLinkCAStateNext}).
+		Order("id").Find(&rows).Error; err != nil {
+		return 0, fmt.Errorf("read the forward link CAs: %w", err)
+	}
+	for _, row := range rows {
+		authority, err := NewLinkAuthority(LinkAuthorityOptions{DB: db, Cluster: row.Cluster, KEK: kek})
+		if err != nil {
+			return 0, err
+		}
+		if _, err := authority.unseal(row); err != nil {
+			return 0, err
+		}
+	}
+	return len(rows), nil
+}
