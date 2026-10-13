@@ -210,8 +210,10 @@ func TestOfficialPluginAlphaProfiles(t *testing.T) {
 		runtimeDir       string
 	}{
 		{name: "development", path: "config.dev.yaml.example", executionEnabled: true, dispatchEnabled: true, grpcEnabled: true, runtimeDir: ""},
-		{name: "release installer fail closed", path: "config.yaml.example", executionEnabled: false, dispatchEnabled: false, grpcEnabled: true, runtimeDir: "/var/lib/anixops/plugin-hosts"},
-		{name: "production fail closed", path: "config.prod.yaml", executionEnabled: false, dispatchEnabled: false, grpcEnabled: false, runtimeDir: "/var/lib/anixops/plugin-hosts"},
+		// The built-in packages run as package hosts in every profile; Agent
+		// dispatch and topology execution stay off outside development.
+		{name: "release installer", path: "config.yaml.example", executionEnabled: true, dispatchEnabled: false, grpcEnabled: true, runtimeDir: "/var/lib/anixops/plugin-hosts"},
+		{name: "production", path: "config.prod.yaml", executionEnabled: true, dispatchEnabled: false, grpcEnabled: false, runtimeDir: "/var/lib/anixops/plugin-hosts"},
 	}
 
 	for _, profile := range profiles {
