@@ -43,6 +43,7 @@ type ArtifactRef struct {
 	Version          string
 	ArtifactPath     string
 	ArtifactSHA256   string
+	Builtin          bool
 	EntrypointPath   string
 	EntrypointSHA256 string
 	ManifestPath     string

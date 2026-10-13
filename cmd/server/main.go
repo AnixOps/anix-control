@@ -342,6 +342,11 @@ func serveAssetFiles(frontendPath string) gin.HandlerFunc {
 }
 
 func main() {
+	// A package host started by the kernel runs before anything else: it
+	// loads no configuration and prints no banner.
+	if code, handled := runPackageHostCommand(os.Args[1:]); handled {
+		os.Exit(code)
+	}
 	if code := run(); code != 0 {
 		os.Exit(code)
 	}

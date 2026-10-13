@@ -116,3 +116,9 @@ v2board.bak.*
 /control
 /packages/*/control
 *.bck.yml
+
+# Built-in packages (internal/builtinpkg): the build writes them into dist/;
+# only the placeholder that keeps go:embed valid is tracked.
+!internal/builtinpkg/dist/
+internal/builtinpkg/dist/*
+!internal/builtinpkg/dist/README.md

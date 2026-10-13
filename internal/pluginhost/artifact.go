@@ -19,10 +19,16 @@ import (
 // them to a signed package release. The manager verifies every supplied digest
 // again immediately before starting the entrypoint.
 type ArtifactRef struct {
-	PackageID        string
-	Version          string
-	ArtifactPath     string
-	ArtifactSHA256   string
+	PackageID      string
+	Version        string
+	ArtifactPath   string
+	ArtifactSHA256 string
+	// Builtin marks a host linked into the Control binary (the signed
+	// manifest's control_entrypoint.builtin): the launcher executes the
+	// running binary as `package-host <PackageID>` (SelfExecutable) and the
+	// entrypoint fields stay empty. Otherwise EntrypointPath is the
+	// materialized host binary, checked against EntrypointSHA256.
+	Builtin          bool
 	EntrypointPath   string
 	EntrypointSHA256 string
 	ManifestPath     string
@@ -50,6 +56,7 @@ type MigrationStep struct {
 func sameArtifactRelease(left, right ArtifactRef) bool {
 	return left.PackageID == right.PackageID &&
 		left.Version == right.Version &&
+		left.Builtin == right.Builtin &&
 		left.ArtifactSHA256 == right.ArtifactSHA256 &&
 		left.EntrypointSHA256 == right.EntrypointSHA256 &&
 		left.ManifestSHA256 == right.ManifestSHA256
@@ -68,7 +75,11 @@ func verifyArtifactRef(ref ArtifactRef) error {
 	if _, err := verifyFileDigest(ref.ArtifactPath, ref.ArtifactSHA256, false); err != nil {
 		return err
 	}
-	if _, err := verifyFileDigest(ref.EntrypointPath, ref.EntrypointSHA256, true); err != nil {
+	if ref.Builtin {
+		if ref.EntrypointPath != "" || ref.EntrypointSHA256 != "" {
+			return fmt.Errorf("%w: a built-in host has no entrypoint file", ErrHostIncompatible)
+		}
+	} else if _, err := verifyFileDigest(ref.EntrypointPath, ref.EntrypointSHA256, true); err != nil {
 		return err
 	}
 	manifestBytes, err := verifyFileDigest(ref.ManifestPath, ref.ManifestSHA256, false)
