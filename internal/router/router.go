@@ -863,7 +863,10 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 
 	// API v5: the panel's own state, with v4's admission model. The
 	// certificates Control serves (the console's banner reads them) and a
-	// retry of the failing ones.
+	// retry of the failing ones; the backups (list, back up now, and the
+	// download, which needs a super administrator and is audited). There
+	// is no restore route: a restore runs on the server with Control
+	// stopped.
 	v5 := r.Group("/api/v5")
 	v5.Use(adminLimiter.Middleware())
 	v5.Use(adminAPIToken)
@@ -874,5 +877,9 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		panelStatus := handler.NewPanelStatusHandler()
 		v5.GET("/panel/status", panelStatus.Status)
 		v5.POST("/panel/certificates/retry", panelStatus.RetryCertificates)
+		backups := handler.NewBackupsHandler()
+		v5.GET("/backups", backups.List)
+		v5.POST("/backups", backups.Create)
+		v5.GET("/backups/:id/download", backups.Download)
 	}
 }
