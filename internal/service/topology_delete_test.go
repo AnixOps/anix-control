@@ -185,7 +185,7 @@ func TestDeleteTopologyWithLiveRevisionNeedsTopologyExecution(t *testing.T) {
 
 	_, err = DeleteTopology(fixture.db, TopologyDeleteInput{TopologyID: fixture.topology.ID, ActorID: 1, ExecutionEnabled: false})
 	require.ErrorIs(t, err, ErrTopologyTeardownRequiresExecution)
-	require.Contains(t, err.Error(), "plugins.topology_execution_enabled")
+	require.Contains(t, err.Error(), "topology execution (off until M4)")
 
 	// Nothing changed: the topology is live and its plan still planned.
 	stored := unscopedTopology(t, fixture.db, fixture.topology.ID)

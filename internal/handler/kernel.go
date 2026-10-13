@@ -321,7 +321,7 @@ func (h *KernelHandler) dispatchPluginControlRoute(c *gin.Context, pluginID, req
 		}
 		return
 	}
-	if !cfg.Plugins.ControlExecutionEnabled || h.controlPluginHosts == nil {
+	if h.controlPluginHosts == nil {
 		kernelError(c, http.StatusBadGateway, "plugin_host_unavailable", "plugin host is unavailable")
 		return
 	}
@@ -607,7 +607,9 @@ func (h *KernelHandler) UpdatePluginInstallationConfiguration(c *gin.Context) {
 		return
 	}
 	var queuedAgentOperations []*model.KernelOperation
-	dispatchEnabled := cfg.Plugins.DispatchEnabled
+	// Agent plugin dispatch is off until M4: the assignments record the new
+	// revision and no Agent operation is queued.
+	dispatchEnabled := agentPluginDispatchEnabled()
 	configuration, err := service.UpdatePluginConfigurationWithValidatorAndHook(
 		h.db, publicKey, installationID, string(req.Config), req.ExpectedRevision, kernelActorID(c), nil,
 		func(tx *gorm.DB, installation model.PluginInstallation, configuration model.PluginConfiguration) error {
@@ -644,13 +646,11 @@ func (h *KernelHandler) UpdatePluginInstallationConfiguration(c *gin.Context) {
 		}
 	}
 	var queuedOperation *model.KernelOperation
-	if cfg.Plugins.ControlExecutionEnabled {
-		if updatedInstallation.Target == "control" && updatedInstallation.Enabled {
-			queuedOperation, err = enqueueControlPluginOperation(h.db, updatedInstallation, "plugin.configure", updatedInstallation.DesiredVersion)
-			if err != nil {
-				kernelError(c, http.StatusConflict, "plugin_operation_rejected", err.Error())
-				return
-			}
+	if updatedInstallation.Target == "control" && updatedInstallation.Enabled {
+		queuedOperation, err = enqueueControlPluginOperation(h.db, updatedInstallation, "plugin.configure", updatedInstallation.DesiredVersion)
+		if err != nil {
+			kernelError(c, http.StatusConflict, "plugin_operation_rejected", err.Error())
+			return
 		}
 	}
 	if queuedOperation != nil {
@@ -687,9 +687,8 @@ func (h *KernelHandler) UpsertPluginInstallation(c *gin.Context) {
 	var row model.PluginInstallation
 	var queuedOperation *model.KernelOperation
 	var queuedAgentOperations []*model.KernelOperation
-	cfg := config.Get()
-	controlExecutionEnabled := cfg != nil && cfg.Plugins.ControlExecutionEnabled
-	dispatchEnabled := cfg != nil && cfg.Plugins.DispatchEnabled
+	controlExecutionEnabled := true
+	dispatchEnabled := agentPluginDispatchEnabled()
 	err := service.WithAgentLifecycleTransaction(h.db, func(tx *gorm.DB) error {
 		row = model.PluginInstallation{}
 		queuedOperation = nil
@@ -835,11 +834,6 @@ func (h *KernelHandler) UpsertPluginInstallation(c *gin.Context) {
 func (h *KernelHandler) PluginInstallationAction(c *gin.Context) {
 	installationID, ok := parseKernelID(c, "id")
 	if !ok {
-		return
-	}
-	cfg := config.Get()
-	if cfg == nil || !cfg.Plugins.ControlExecutionEnabled {
-		kernelError(c, http.StatusConflict, "control_plugin_execution_disabled", "Control plugin execution is disabled")
 		return
 	}
 	var req struct {
@@ -1536,8 +1530,9 @@ func (h *KernelHandler) UpsertAssignment(c *gin.Context) {
 	}
 	var row model.NodeServiceAssignment
 	var queued []*model.KernelOperation
-	cfg := config.Get()
-	dispatchEnabled := cfg != nil && cfg.Plugins.DispatchEnabled
+	// Agent plugin dispatch is off until M4: the lifecycle records the
+	// desired state and no Agent operation is queued.
+	dispatchEnabled := agentPluginDispatchEnabled()
 	err := service.WithAgentLifecycleTransaction(h.db, func(tx *gorm.DB) error {
 		row = model.NodeServiceAssignment{}
 		queued = nil
@@ -1680,8 +1675,9 @@ func (h *KernelHandler) DeleteAssignment(c *gin.Context) {
 	}
 	var assignment model.NodeServiceAssignment
 	var queued []*model.KernelOperation
-	cfg := config.Get()
-	dispatchEnabled := cfg != nil && cfg.Plugins.DispatchEnabled
+	// Agent plugin dispatch is off until M4: the lifecycle records the
+	// desired state and no Agent operation is queued.
+	dispatchEnabled := agentPluginDispatchEnabled()
 	err := service.WithAgentLifecycleTransaction(h.db, func(tx *gorm.DB) error {
 		assignment = model.NodeServiceAssignment{}
 		queued = nil
@@ -2044,10 +2040,17 @@ func (h *KernelHandler) PreviewDeployment(c *gin.Context) {
 	kernelData(c, http.StatusOK, preview)
 }
 
-func topologyExecutionEnabled() bool {
-	cfg := config.Get()
-	return cfg != nil && cfg.Plugins.TopologyExecutionEnabled
-}
+// Agent plugin dispatch and topology execution are off until M4
+// (service.AgentPluginDispatchEnabled, service.TopologyExecutionEnabled), and
+// no setting changes them: assignments and configuration changes record the
+// desired state without queueing an Agent operation, and deployment apply and
+// rollback answer topology_execution_disabled. The handlers read the
+// constants through these functions only so that the tests keep the M4 paths
+// covered.
+var (
+	agentPluginDispatchEnabled = func() bool { return service.AgentPluginDispatchEnabled }
+	topologyExecutionEnabled   = func() bool { return service.TopologyExecutionEnabled }
+)
 
 func (h *KernelHandler) GetDeploymentStatus(c *gin.Context) {
 	deploymentID, ok := parseKernelID(c, "id")

@@ -98,7 +98,7 @@ func TestAgentPluginPackageCrossRepositoryE2E(t *testing.T) {
 	require.LessOrEqual(t, len(artifact), service.MaxPluginArtifactBytes)
 	previousConfig := config.Get()
 	cfg := &config.Config{Plugins: config.PluginConfig{
-		OfficialPublicKey: base64.StdEncoding.EncodeToString(publicKey), ControlExecutionEnabled: true,
+		OfficialPublicKey: base64.StdEncoding.EncodeToString(publicKey),
 	}}
 	config.Set(cfg)
 	t.Cleanup(func() { config.Set(previousConfig) })

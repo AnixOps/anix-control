@@ -46,7 +46,7 @@ func installForwardPackage(t *testing.T) (*KernelHandler, *capturingPluginHostMa
 	previousConfig := config.Get()
 	config.Set(&config.Config{
 		Plugins: config.PluginConfig{
-			OfficialPublicKey: base64.StdEncoding.EncodeToString(publicKey), ControlExecutionEnabled: true, ControlHostRequestTimeout: "2s",
+			OfficialPublicKey: base64.StdEncoding.EncodeToString(publicKey), ControlHostRequestTimeout: "2s",
 		},
 	})
 	t.Cleanup(func() { config.Set(previousConfig) })

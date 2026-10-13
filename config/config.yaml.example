@@ -98,20 +98,19 @@ forward:
   # ANIX_CONTROL_FORWARD_ANIXOPS_EXPERIMENTAL
   anixops_experimental: false
 
-# Base64-encoded Ed25519 public key used to verify official AnixOps plugin
-# manifests before a release can be registered through /api/v3.
+# Base64-encoded Ed25519 public key that verifies the built-in packages at
+# every start.
 plugins:
   # Official AnixOps Ed25519 release trust root (raw public key, base64).
   official_public_key: "jW26nr2tbthASoeq6RmIpx8Ah+uhPNIv9V1ewRVb1VE="
   # Ignored: the official packages, identity-platform included, are built
   # into Control and installed at every start. Leave it empty.
   identity_bootstrap_package_dir: ""
-  # Normal product installs keep package execution disabled until a documented
-  # canary explicitly enables it. Signed catalog and WebUI inspection remain
-  # available while this worker is off.
-  # Runs the built-in packages' hosts; without them the /api/v2 routes
-  # answer 502. Keep it on.
-  control_execution_enabled: true
+  # The built-in packages' hosts always run, and Agent plugin dispatch and
+  # topology execution are off until M4: control_execution_enabled,
+  # dispatch_enabled, dispatch_poll_interval, topology_execution_enabled and
+  # topology_poll_interval are gone (a file that sets them still loads; each
+  # key is ignored with a warning).
   control_poll_interval: "5s"
   # Local-only Control package host supervision. This is a private Unix-socket
   # runtime directory, not a network listener.
@@ -126,15 +125,6 @@ plugins:
   # kernel host client (502 plugin_response_too_large).
   # control_host_max_request_bytes: 1048576
   # control_host_max_response_bytes: 1048576
-  # Keep Control-to-Agent lifecycle delivery disabled in the normal template.
-  # Use config.dev.yaml.example or an operator-approved canary profile to turn
-  # it on after the Agent Supervisor and rollback plan are ready.
-  dispatch_enabled: false
-  dispatch_poll_interval: "5s"
-  # Declarative topology execution remains opt-in and also requires
-  # dispatch_enabled so planned revisions cannot alter legacy traffic.
-  topology_execution_enabled: false
-  topology_poll_interval: "5s"
 
 # Canonical forward runtime config for Windows/Linux/local binary/Docker.
 # Startup order:
@@ -290,16 +280,6 @@ alerts:
   ca_expiry_days: 60
   renotify_interval: "24h"
   phase_stuck_after: "72h"
-
-# Route modes of v2 Control packages (anix-control routes list/set/rollback).
-# rehearsed (default since 4.1.0): the 151 routes of the 15 packages that
-# passed the staging rehearsal (config/package-route-defaults.json) run their
-# native handlers when no mode is stored for them and the installed package is
-# at least the rehearsed release. legacy: the kill switch; every route without
-# a stored mode keeps its legacy handler, exactly as in 4.0. A mode stored with
-# `anix-control routes set` or `routes rollback` always wins.
-package_routes:
-  default_mode: "rehearsed"
 
 admin:
   email: "control@anixops.com"

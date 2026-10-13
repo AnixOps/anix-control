@@ -479,7 +479,7 @@ func TestKernelMachineTelemetryPluginRouteFailsClosedWithoutHost(t *testing.T) {
 	require.NoError(t, err)
 	previousConfig := config.Get()
 	config.Set(&config.Config{Plugins: config.PluginConfig{
-		OfficialPublicKey: base64.StdEncoding.EncodeToString(publicKey), ControlExecutionEnabled: true,
+		OfficialPublicKey: base64.StdEncoding.EncodeToString(publicKey),
 	}})
 	t.Cleanup(func() { config.Set(previousConfig) })
 
@@ -551,7 +551,7 @@ func TestPluginRouteGatewayDoesNotUseRegistryFallback(t *testing.T) {
 	require.NoError(t, err)
 	previousConfig := config.Get()
 	config.Set(&config.Config{Plugins: config.PluginConfig{
-		OfficialPublicKey: base64.StdEncoding.EncodeToString(publicKey), ControlExecutionEnabled: true,
+		OfficialPublicKey: base64.StdEncoding.EncodeToString(publicKey),
 	}})
 	t.Cleanup(func() { config.Set(previousConfig) })
 
@@ -593,7 +593,7 @@ func TestPluginRouteGatewayDispatchesResolvedGenerationToHost(t *testing.T) {
 	require.NoError(t, err)
 	previousConfig := config.Get()
 	config.Set(&config.Config{Plugins: config.PluginConfig{
-		OfficialPublicKey: base64.StdEncoding.EncodeToString(publicKey), ControlExecutionEnabled: true, ControlHostRequestTimeout: "2s",
+		OfficialPublicKey: base64.StdEncoding.EncodeToString(publicKey), ControlHostRequestTimeout: "2s",
 	}})
 	t.Cleanup(func() { config.Set(previousConfig) })
 
@@ -700,7 +700,7 @@ func TestKernelControlPluginRollbackActionQueuesDurableOperation(t *testing.T) {
 	require.NoError(t, err)
 	previousConfig := config.Get()
 	config.Set(&config.Config{Plugins: config.PluginConfig{
-		OfficialPublicKey: base64.StdEncoding.EncodeToString(publicKey), ControlExecutionEnabled: true,
+		OfficialPublicKey: base64.StdEncoding.EncodeToString(publicKey),
 	}})
 	t.Cleanup(func() { config.Set(previousConfig) })
 
@@ -832,7 +832,7 @@ func TestKernelTopologyDeploymentPlanStatusAndExecutionGate(t *testing.T) {
 	require.Equal(t, http.StatusConflict, recorder.Code, recorder.Body.String())
 	require.Contains(t, recorder.Body.String(), "topology_execution_disabled")
 
-	config.Set(&config.Config{Plugins: config.PluginConfig{TopologyExecutionEnabled: true}})
+	enableTopologyExecution(t)
 	recorder = performKernelHandlerRequest(t, http.MethodPost, path+"/apply", "", "/deployments/:id/apply", handler.ApplyDeployment)
 	require.Equal(t, http.StatusAccepted, recorder.Code, recorder.Body.String())
 	require.NoError(t, db.First(&deployment, deployment.ID).Error)

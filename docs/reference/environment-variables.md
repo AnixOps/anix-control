@@ -148,8 +148,6 @@ This table is generated from the code and checked by
 | `ANIX_CONTROL_MODULE_RUNTIME_LISTEN` | `module_runtime.listen` | string | `:7443` |
 | `ANIX_CONTROL_MODULE_RUNTIME_PKI` | `module_runtime.pki` | string | `builtin` |
 | `ANIX_CONTROL_MODULE_RUNTIME_TRUST_BUNDLE_FILE` | `module_runtime.trust_bundle_file` | string |  |
-| `ANIX_CONTROL_PACKAGE_ROUTES_DEFAULT_MODE` | `package_routes.default_mode` | string | `rehearsed` |
-| `ANIX_CONTROL_PLUGINS_CONTROL_EXECUTION_ENABLED` | `plugins.control_execution_enabled` | bool | `true` |
 | `ANIX_CONTROL_PLUGINS_CONTROL_HOST_ARTIFACT_DIR` | `plugins.control_host_artifact_dir` | string |  |
 | `ANIX_CONTROL_PLUGINS_CONTROL_HOST_MAX_REQUEST_BYTES` | `plugins.control_host_max_request_bytes` | int | `0` |
 | `ANIX_CONTROL_PLUGINS_CONTROL_HOST_MAX_RESPONSE_BYTES` | `plugins.control_host_max_response_bytes` | int | `0` |
@@ -158,12 +156,8 @@ This table is generated from the code and checked by
 | `ANIX_CONTROL_PLUGINS_CONTROL_HOST_STARTUP_TIMEOUT` | `plugins.control_host_startup_timeout` | string | `5s` |
 | `ANIX_CONTROL_PLUGINS_CONTROL_HOST_WEBSOCKET_SESSION_TIMEOUT` | `plugins.control_host_websocket_session_timeout` | string | `24h` |
 | `ANIX_CONTROL_PLUGINS_CONTROL_POLL_INTERVAL` | `plugins.control_poll_interval` | string | `5s` |
-| `ANIX_CONTROL_PLUGINS_DISPATCH_ENABLED` | `plugins.dispatch_enabled` | bool | `false` |
-| `ANIX_CONTROL_PLUGINS_DISPATCH_POLL_INTERVAL` | `plugins.dispatch_poll_interval` | string | `5s` |
 | `ANIX_CONTROL_PLUGINS_IDENTITY_BOOTSTRAP_PACKAGE_DIR` | `plugins.identity_bootstrap_package_dir` | string |  |
 | `ANIX_CONTROL_PLUGINS_OFFICIAL_PUBLIC_KEY` | `plugins.official_public_key` | string | `jW26nr2tbthASoeq6RmIpx8Ah+uhPNIv9V1ewRVb1VE=` |
-| `ANIX_CONTROL_PLUGINS_TOPOLOGY_EXECUTION_ENABLED` | `plugins.topology_execution_enabled` | bool | `false` |
-| `ANIX_CONTROL_PLUGINS_TOPOLOGY_POLL_INTERVAL` | `plugins.topology_poll_interval` | string | `5s` |
 | `ANIX_CONTROL_SERVER_CORS_ALLOWED_HEADERS` | `server.cors.allowed_headers` | list | `Content-Type,Authorization,X-API-Key` |
 | `ANIX_CONTROL_SERVER_CORS_ALLOWED_METHODS` | `server.cors.allowed_methods` | list | `GET,POST,PUT,DELETE,OPTIONS,PATCH` |
 | `ANIX_CONTROL_SERVER_CORS_ALLOWED_ORIGINS` | `server.cors.allowed_origins` | list |  |

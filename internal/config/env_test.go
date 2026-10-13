@@ -15,7 +15,7 @@ func TestApplyEnvOverridesEverySupportedType(t *testing.T) {
 	unknown, err := ApplyEnv(loaded, []string{
 		"ANIX_CONTROL_DATABASE_PASSWORD=p@ss word",
 		"ANIX_CONTROL_DATABASE_PORT=6543",
-		"ANIX_CONTROL_PLUGINS_CONTROL_EXECUTION_ENABLED=true",
+		"ANIX_CONTROL_PLUGINS_CONTROL_POLL_INTERVAL=2s",
 		"ANIX_CONTROL_PLUGINS_CONTROL_HOST_MAX_RESPONSE_BYTES=2097152",
 		"ANIX_CONTROL_AUTH_LOGIN_RATE_LIMIT_ENABLED=false",
 		"ANIX_CONTROL_SERVER_TRUSTED_PROXIES=10.0.0.0/8, 192.168.0.0/16 ,",
@@ -26,7 +26,7 @@ func TestApplyEnvOverridesEverySupportedType(t *testing.T) {
 	assert.Empty(t, unknown)
 	assert.Equal(t, "p@ss word", loaded.Database.Password)
 	assert.Equal(t, 6543, loaded.Database.Port)
-	assert.True(t, loaded.Plugins.ControlExecutionEnabled)
+	assert.Equal(t, "2s", loaded.Plugins.ControlPollInterval)
 	assert.EqualValues(t, 2097152, loaded.Plugins.ControlHostMaxResponseBytes)
 	require.NotNil(t, loaded.Auth.LoginRateLimit.Enabled)
 	assert.False(t, *loaded.Auth.LoginRateLimit.Enabled)
@@ -104,7 +104,7 @@ func TestLoadWithoutConfigFileUsesBuiltInDefaultsAndEnvironment(t *testing.T) {
 	assert.Equal(t, "postgres", loaded.Database.Driver)
 	assert.Equal(t, "db.internal", loaded.Database.Host)
 	assert.Equal(t, "container-secret", loaded.JWT.Secret)
-	assert.True(t, loaded.Plugins.ControlExecutionEnabled)
+	assert.Equal(t, "5s", loaded.Plugins.ControlPollInterval)
 	assert.Empty(t, loaded.Plugins.ControlHostRuntimeDir, "container defaults use private temporary host directories")
 	assert.Equal(t, "jW26nr2tbthASoeq6RmIpx8Ah+uhPNIv9V1ewRVb1VE=", loaded.Plugins.OfficialPublicKey)
 	require.NoError(t, loaded.ValidateForServer())

@@ -72,7 +72,6 @@ app:
   subscribe_path: "s"
 plugins:
   official_public_key: "jW26nr2tbthASoeq6RmIpx8Ah+uhPNIv9V1ewRVb1VE="
-  control_execution_enabled: true
   control_poll_interval: "5s"
   # Empty host directories use private temporary directories under $TMPDIR;
   # package artifacts are re-materialized from the database on start.
@@ -81,10 +80,6 @@ plugins:
   control_host_startup_timeout: "5s"
   control_host_request_timeout: "30s"
   control_host_websocket_session_timeout: "24h"
-  dispatch_enabled: false
-  dispatch_poll_interval: "5s"
-  topology_execution_enabled: false
-  topology_poll_interval: "5s"
 module_runtime:
   # Network modules (separate services over gRPC with mTLS). Off by default:
   # every package runs as a local child process.
@@ -141,13 +136,6 @@ agent_install:
   artifact_dir: ""
   cn_mirror_url: ""
   signature_file: ""
-package_routes:
-  # Route modes of v2 Control packages whose installation stores none:
-  # rehearsed (the 4.1 default) runs the routes that passed the staging
-  # rehearsal (config/package-route-defaults.json) natively once the
-  # installed package is at least the rehearsed release; legacy keeps every
-  # such route on its legacy handler, as in 4.0 (the kill switch).
-  default_mode: "rehearsed"
 alerts:
   # The alert monitor (GET /api/v4/kernel/alerts): certificates that were not
   # renewed in time, CAs close to their end, and phased processes (the node

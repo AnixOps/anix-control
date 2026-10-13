@@ -108,7 +108,6 @@ func seedV2KnowledgePackage(t *testing.T, cfg *config.Config) (ed25519.PublicKey
 	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)
 	cfg.Plugins.OfficialPublicKey = base64.StdEncoding.EncodeToString(publicKey)
-	cfg.Plugins.ControlExecutionEnabled = true
 	config.Set(cfg)
 	require.NoError(t, service.MigrateKernelModelsForTest(database.GetDB()))
 

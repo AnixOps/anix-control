@@ -36,9 +36,10 @@ func newKernelAgentAssignmentFixture(t *testing.T, pluginID string) *kernelAgent
 	require.NoError(t, err)
 	previousConfig := config.Get()
 	config.Set(&config.Config{Plugins: config.PluginConfig{
-		OfficialPublicKey: base64.StdEncoding.EncodeToString(publicKey), DispatchEnabled: true,
+		OfficialPublicKey: base64.StdEncoding.EncodeToString(publicKey),
 	}})
 	t.Cleanup(func() { config.Set(previousConfig) })
+	enableAgentPluginDispatch(t)
 
 	registerKernelAgentRelease(t, db, privateKey, publicKey, pluginID, "1.0.0")
 	node := model.Node{Name: pluginID + "-node", Host: "127.0.0.1", APIKey: pluginID + "-key", Status: model.NodeStatusOnline}
@@ -97,9 +98,10 @@ func TestKernelAssignmentQueuesAgentInstallUpdateEnableAndDisable(t *testing.T) 
 	require.NoError(t, err)
 	previousConfig := config.Get()
 	config.Set(&config.Config{Plugins: config.PluginConfig{
-		OfficialPublicKey: base64.StdEncoding.EncodeToString(publicKey), DispatchEnabled: true,
+		OfficialPublicKey: base64.StdEncoding.EncodeToString(publicKey),
 	}})
 	t.Cleanup(func() { config.Set(previousConfig) })
+	enableAgentPluginDispatch(t)
 
 	artifact := []byte("handler-agent-lifecycle-package")
 	digest := sha256.Sum256(artifact)
@@ -275,9 +277,10 @@ func TestKernelAssignmentClearAndDeleteUseObservedVersion(t *testing.T) {
 		lifecycle.ActiveEnabled = false
 		lifecycle.ActiveRevision = 0
 		require.NoError(t, fixture.db.Save(&lifecycle).Error)
-		previousConfig := config.Get()
-		config.Set(&config.Config{Plugins: config.PluginConfig{OfficialPublicKey: base64.StdEncoding.EncodeToString(fixture.publicKey)}})
-		t.Cleanup(func() { config.Set(previousConfig) })
+		// Dispatch off, as in this release (service.AgentPluginDispatchEnabled).
+		previousDispatch := agentPluginDispatchEnabled
+		agentPluginDispatchEnabled = func() bool { return false }
+		t.Cleanup(func() { agentPluginDispatchEnabled = previousDispatch })
 
 		path := "/nodes/" + strconv.FormatUint(uint64(fixture.node.ID), 10) + "/assignments/" + strconv.FormatUint(uint64(fixture.assignment.ID), 10)
 		recorder := performKernelHandlerRequest(
@@ -363,8 +366,9 @@ func TestKernelAssignmentClearAndDeleteUseObservedVersion(t *testing.T) {
 func TestKernelAssignmentRollsBackDesiredStateWhenAgentChainCannotBeBuilt(t *testing.T) {
 	db := newKernelHandlerTestDB(t, &model.Node{})
 	previousConfig := config.Get()
-	config.Set(&config.Config{Plugins: config.PluginConfig{DispatchEnabled: true}})
+	config.Set(&config.Config{})
 	t.Cleanup(func() { config.Set(previousConfig) })
+	enableAgentPluginDispatch(t)
 	node := model.Node{Name: "rollback-node", Host: "127.0.0.1"}
 	require.NoError(t, db.Create(&node).Error)
 	pluginID := "rollback-agent-assignment"
@@ -388,4 +392,36 @@ func TestKernelAssignmentRollsBackDesiredStateWhenAgentChainCannotBeBuilt(t *tes
 	require.NoError(t, db.Model(&model.KernelOperation{}).Count(&operationCount).Error)
 	require.Zero(t, assignmentCount)
 	require.Zero(t, operationCount)
+}
+
+// In this release Agent plugin dispatch is off (service.AgentPluginDispatchEnabled):
+// an assignment change and an Agent configuration change record the desired
+// state and queue no Agent operation.
+func TestKernelAgentChangesQueueNothingWhileDispatchIsOff(t *testing.T) {
+	require.False(t, service.AgentPluginDispatchEnabled, "Agent plugin dispatch stays off until M4")
+	fixture := newKernelAgentAssignmentFixture(t, "handler-agent-dispatch-off")
+	previousDispatch := agentPluginDispatchEnabled
+	agentPluginDispatchEnabled = func() bool { return service.AgentPluginDispatchEnabled }
+	t.Cleanup(func() { agentPluginDispatchEnabled = previousDispatch })
+	var before int64
+	require.NoError(t, fixture.db.Model(&model.KernelOperation{}).Count(&before).Error)
+
+	path := "/nodes/" + strconv.FormatUint(uint64(fixture.node.ID), 10) + "/assignments"
+	body := `{"service_scope":"forward","plugin_id":"` + fixture.pluginID + `","role":"telemetry","desired_version":"1.0.0","desired_config_revision":2,"enabled":false}`
+	recorder := performKernelHandlerRequest(t, http.MethodPut, path, body, "/nodes/:id/assignments", (&KernelHandler{db: fixture.db}).UpsertAssignment)
+	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+	require.Empty(t, recorder.Header().Get("X-AnixOps-Operation-Chain"))
+	var assignment model.NodeServiceAssignment
+	require.NoError(t, fixture.db.First(&assignment, fixture.assignment.ID).Error)
+	require.False(t, assignment.Enabled, "the desired state is recorded")
+
+	configPath := "/plugin-installations/" + strconv.FormatUint(uint64(fixture.installation.ID), 10) + "/config"
+	recorder = performKernelHandlerRequest(t, http.MethodPut, configPath, `{"config":{"interval":45},"expected_revision":2}`,
+		"/plugin-installations/:id/config", (&KernelHandler{db: fixture.db}).UpdatePluginInstallationConfiguration)
+	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+	require.Empty(t, recorder.Header().Get("X-AnixOps-Operation-Chain"))
+
+	var after int64
+	require.NoError(t, fixture.db.Model(&model.KernelOperation{}).Count(&after).Error)
+	require.Equal(t, before, after, "no Agent operation is queued")
 }

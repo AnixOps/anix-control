@@ -435,8 +435,11 @@ write_fresh_config() {
 }
 
 # The official packages, identity-platform included, are built into the
-# binary and installed at every start; their hosts need package execution on
-# and runtime directories the systemd unit may write. An existing
+# binary and installed at every start; their hosts always run and need
+# runtime directories the systemd unit may write. The plugins.* switches
+# Control no longer reads (control_execution_enabled, dispatch_enabled,
+# topology_execution_enabled and their poll intervals) are dropped from the
+# plugins section; Control would ignore them with a warning. An existing
 # plugins.identity_bootstrap_package_dir is left as it is: Control ignores it.
 configure_plugin_execution_config() {
   [[ -f "${CONFIG_FILE}" ]] || die "Configuration file is missing: ${CONFIG_FILE}"
@@ -474,10 +477,6 @@ configure_plugin_execution_config() {
       return value
     }
     function emit_missing() {
-      if (!execution_seen) {
-        print "  control_execution_enabled: true"
-        execution_seen = 1
-      }
       if (configure_runtime_paths && !host_runtime_seen) {
         print "  control_host_runtime_dir: \"" host_runtime_dir "\""
         host_runtime_seen = 1
@@ -500,9 +499,7 @@ configure_plugin_execution_config() {
       emit_missing()
       in_plugins = 0
     }
-    in_plugins && /^[[:space:]]+control_execution_enabled:/ {
-      print "  control_execution_enabled: true"
-      execution_seen = 1
+    in_plugins && /^[[:space:]]+(control_execution_enabled|dispatch_enabled|dispatch_poll_interval|topology_execution_enabled|topology_poll_interval):/ {
       next
     }
     in_plugins && /^[[:space:]]+control_host_runtime_dir:/ {
@@ -530,13 +527,10 @@ configure_plugin_execution_config() {
       if (in_plugins) {
         emit_missing()
       }
-      if (!plugins_seen) {
+      if (!plugins_seen && configure_runtime_paths) {
         print "plugins:"
-        print "  control_execution_enabled: true"
-        if (configure_runtime_paths) {
-          print "  control_host_runtime_dir: \"" host_runtime_dir "\""
-          print "  control_host_artifact_dir: \"" artifact_dir "\""
-        }
+        print "  control_host_runtime_dir: \"" host_runtime_dir "\""
+        print "  control_host_artifact_dir: \"" artifact_dir "\""
       }
     }
   ' "${CONFIG_FILE}" > "${temporary}"; then

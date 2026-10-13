@@ -198,7 +198,8 @@ check "fresh: the release checksums were verified" grep -qF "Verified the signat
 check "fresh: no identity package is staged (the packages are built in)" test ! -e "${FRESH}/bootstrap"
 no_identity_package_dir() { ! grep -qE 'identity_bootstrap_package_dir: "/' "$1"; }
 check "fresh: no identity package directory is configured" no_identity_package_dir "${FRESH}/config/config.yaml"
-check "fresh: package execution is on" grep -qE '^[[:space:]]+control_execution_enabled: true' "${FRESH}/config/config.yaml"
+no_removed_plugin_switches() { ! grep -qE '^[[:space:]]+(control_execution_enabled|dispatch_enabled|topology_execution_enabled):' "$1"; }
+check "fresh: no removed plugins.* switch is written" no_removed_plugin_switches "${FRESH}/config/config.yaml"
 check "fresh: the CA key is generated" test -s "${FRESH}/config/secrets/module_ca_kek"
 check "fresh: the bootstrap password file is written" test -s "${FRESH}/.bootstrap-admin-password"
 check "fresh: nothing was backed up (there was no previous release)" \

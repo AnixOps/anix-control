@@ -59,7 +59,7 @@ func identityCutoverError(c *gin.Context, err error) {
 func startIdentityChange(c *gin.Context, action string) {
 	cutover := identitycutover.Default()
 	if cutover == nil {
-		kernelError(c, http.StatusServiceUnavailable, "identity_unavailable", "identity cutover needs Control package hosts (plugins.control_execution_enabled)")
+		kernelError(c, http.StatusServiceUnavailable, "identity_unavailable", "identity cutover needs the Control package hosts, which are not running")
 		return
 	}
 	if err := cutover.Start(c.Request.Context(), action, kernelActorID(c)); err != nil {
@@ -96,7 +96,7 @@ func FinalizeIdentity(c *gin.Context) {
 	}
 	cutover := identitycutover.Default()
 	if cutover == nil {
-		kernelError(c, http.StatusServiceUnavailable, "identity_unavailable", "identity finalize needs Control package hosts (plugins.control_execution_enabled)")
+		kernelError(c, http.StatusServiceUnavailable, "identity_unavailable", "identity finalize needs the Control package hosts, which are not running")
 		return
 	}
 	if err := cutover.Finalize(c.Request.Context(), kernelActorID(c), request.Force); err != nil {
@@ -125,7 +125,7 @@ func StartIdentityImport(c *gin.Context) {
 	case errors.Is(err, identityimport.ErrRunning):
 		kernelError(c, http.StatusConflict, "identity_import_running", err.Error())
 	case errors.Is(err, identityimport.ErrNotInitialized):
-		kernelError(c, http.StatusServiceUnavailable, "identity_unavailable", "account import needs Control package hosts (plugins.control_execution_enabled)")
+		kernelError(c, http.StatusServiceUnavailable, "identity_unavailable", "account import needs the Control package hosts, which are not running")
 	case err != nil:
 		kernelError(c, http.StatusInternalServerError, "identity_import_failed", err.Error())
 	default:
