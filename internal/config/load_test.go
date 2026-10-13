@@ -278,7 +278,7 @@ func TestIgnoredKeysKeepTheBuiltInValue(t *testing.T) {
 			case reflect.Int, reflect.Int64:
 				value = "424242"
 			case reflect.Bool, reflect.Pointer:
-				value = fmt.Sprint(!(field.Kind() == reflect.Bool && field.Bool()))
+				value = fmt.Sprint(field.Kind() != reflect.Bool || !field.Bool())
 			case reflect.Slice:
 				value = "[ignored]"
 			}

@@ -221,8 +221,8 @@ func resolveKey(write bool, dataDir, path string, legacy *Key, adopted File, res
 	existing, err := createExclusive(dataDir, path, created)
 	switch {
 	case err != nil:
-		return nil, fmt.Errorf("Control keeps its root key in %s and cannot create it: %v. "+
-			"Make data_dir (ANIX_CONTROL_DATA_DIR) a directory the user Control runs as can write, for example install -d -m 0700 -o <user> %s", path, err, dataDir)
+		return nil, fmt.Errorf("the root key %s cannot be created: %v. Control keeps its root key there: "+
+			"make data_dir (ANIX_CONTROL_DATA_DIR) a directory the user Control runs as can write, for example install -d -m 0700 -o <user> %s", path, err, dataDir)
 	case existing != nil:
 		res.Key, res.KeySource, res.Stored = existing.Key, SourceFile, true
 		return existing, nil

@@ -308,7 +308,7 @@ func TestResolveInAnUnwritableDirectory(t *testing.T) {
 	// No legacy key: Control cannot start without a root key.
 	_, err := Resolve(Options{DataDir: dataDir, Write: true})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "cannot create it")
+	assert.Contains(t, err.Error(), "cannot be created")
 	assert.Contains(t, err.Error(), "ANIX_CONTROL_DATA_DIR")
 
 	// A legacy key keeps working from the configuration, with a warning.
