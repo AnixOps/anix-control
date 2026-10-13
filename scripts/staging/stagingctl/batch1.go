@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v5/internal/model"
 )
 
 // Batch 1: knowledge + ticket.

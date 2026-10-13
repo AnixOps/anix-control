@@ -12,10 +12,10 @@ import (
 
 	agentcontrol "github.com/AnixOps/anix-control/sdk/agentcontrol"
 	agentv1pb "github.com/AnixOps/anix-control/sdk/api/agent/v1"
-	"github.com/AnixOps/anix-control/v4/internal/agentstreams"
-	"github.com/AnixOps/anix-control/v4/internal/kernelnodeops"
-	"github.com/AnixOps/anix-control/v4/internal/model"
-	"github.com/AnixOps/anix-control/v4/internal/nodegroup"
+	"github.com/AnixOps/anix-control/v5/internal/agentstreams"
+	"github.com/AnixOps/anix-control/v5/internal/kernelnodeops"
+	"github.com/AnixOps/anix-control/v5/internal/model"
+	"github.com/AnixOps/anix-control/v5/internal/nodegroup"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )

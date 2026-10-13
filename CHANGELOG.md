@@ -120,6 +120,10 @@
   machine with a valid identity skips the join. The script ends with a reminder that the command is in the shell
   history. The install-token API answer renders the same command shape. Needs an anix-agent release with
   `anix-agent join`.
+- The root Go module is `github.com/AnixOps/anix-control/v5` (it was `.../v4`): `go.mod`, every import, the
+  protobuf `go_package` of `api/grpc/v2board.proto` (regenerated), the CI package filters and the gates that
+  name the path. Only the import path changes; the product version and every wire contract stay as they are.
+  The SDK and identity modules keep their paths.
 
 ### Removed
 

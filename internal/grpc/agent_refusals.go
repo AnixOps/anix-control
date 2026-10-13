@@ -4,7 +4,7 @@ import (
 	"errors"
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
-	"github.com/AnixOps/anix-control/v4/internal/agentpki"
+	"github.com/AnixOps/anix-control/v5/internal/agentpki"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"

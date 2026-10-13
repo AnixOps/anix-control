@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/AnixOps/anix-control/sdk/packagebridgesdk"
-	"github.com/AnixOps/anix-control/v4/internal/packagebridge"
+	"github.com/AnixOps/anix-control/v5/internal/packagebridge"
 	"github.com/stretchr/testify/require"
 )
 

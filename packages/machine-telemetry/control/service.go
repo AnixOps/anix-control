@@ -12,7 +12,7 @@ import (
 	kerneltelemetryv1 "github.com/AnixOps/anix-control/sdk/api/kerneltelemetry/v1"
 	"github.com/AnixOps/anix-control/sdk/packagestoresdk"
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
-	"github.com/AnixOps/anix-control/v4/packages/machine-telemetry/native"
+	"github.com/AnixOps/anix-control/v5/packages/machine-telemetry/native"
 	"google.golang.org/grpc"
 	"gorm.io/gorm"
 )

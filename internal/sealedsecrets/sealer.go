@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	configtables "github.com/AnixOps/anix-control/v4/config"
-	"github.com/AnixOps/anix-control/v4/internal/nodesecrets"
+	configtables "github.com/AnixOps/anix-control/v5/config"
+	"github.com/AnixOps/anix-control/v5/internal/nodesecrets"
 )
 
 // Placeholder is the masked value of a node secret. Sent back, it keeps

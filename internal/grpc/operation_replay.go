@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	agentv1pb "github.com/AnixOps/anix-control/sdk/api/agent/v1"
-	"github.com/AnixOps/anix-control/v4/internal/service"
+	"github.com/AnixOps/anix-control/v5/internal/service"
 	"google.golang.org/protobuf/proto"
 )
 

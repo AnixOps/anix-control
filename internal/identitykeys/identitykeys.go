@@ -15,7 +15,7 @@ import (
 
 	identityv1 "github.com/AnixOps/anix-control/sdk/api/identity/v1"
 	"github.com/AnixOps/anix-control/sdk/identitytoken"
-	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v5/internal/model"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"

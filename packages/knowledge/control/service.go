@@ -6,7 +6,7 @@ import (
 
 	"github.com/AnixOps/anix-control/sdk/packagestoresdk"
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
-	"github.com/AnixOps/anix-control/v4/packages/knowledge/native"
+	"github.com/AnixOps/anix-control/v5/packages/knowledge/native"
 	"gorm.io/gorm"
 )
 

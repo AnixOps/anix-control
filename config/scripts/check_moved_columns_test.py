@@ -8,7 +8,7 @@ from pathlib import Path
 
 
 SCRIPT = Path(__file__).resolve().parent / "check_moved_columns.sh"
-MODULE = "github.com/AnixOps/anix-control/v4"
+MODULE = "github.com/AnixOps/anix-control/v5"
 
 # A stand-in for gorm: the gate recognizes a *gorm.DB by its package path.
 FAKE_GORM = {

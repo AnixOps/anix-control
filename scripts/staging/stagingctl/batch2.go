@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v5/internal/model"
 )
 
 // Batch 2: notification + platform + machine-telemetry + protocol-runtime.

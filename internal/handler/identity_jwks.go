@@ -4,7 +4,7 @@ import (
 	"net/http"
 
 	"github.com/AnixOps/anix-control/sdk/identitytoken"
-	"github.com/AnixOps/anix-control/v4/internal/authn"
+	"github.com/AnixOps/anix-control/v5/internal/authn"
 	"github.com/gin-gonic/gin"
 )
 

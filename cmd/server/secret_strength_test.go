@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/AnixOps/anix-control/v4/internal/config"
+	"github.com/AnixOps/anix-control/v5/internal/config"
 )
 
 func TestLogSecretStrengthWarnsOncePerWeakSecretAndNeverEchoesIt(t *testing.T) {

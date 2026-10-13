@@ -393,7 +393,7 @@ checkout's SDK.
 **Independence from the kernel.** The module has no dependency on the kernel
 module: Go forbids it from importing the kernel's `internal/` packages, and
 `check_package_boundaries.sh` also rejects any dependency on
-`github.com/AnixOps/anix-control/v4`. Tests that exercise the SDK against the
+`github.com/AnixOps/anix-control/v5`. Tests that exercise the SDK against the
 kernel's real bridge live in the kernel module (`internal/tests/bridgecontract`).
 
 **Consumers.** Other AnixOps services depend only on this module, never on

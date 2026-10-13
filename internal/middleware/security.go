@@ -3,7 +3,7 @@ package middleware
 import (
 	"strings"
 
-	"github.com/AnixOps/anix-control/v4/internal/requestorigin"
+	"github.com/AnixOps/anix-control/v5/internal/requestorigin"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )

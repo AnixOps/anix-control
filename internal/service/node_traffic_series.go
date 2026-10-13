@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v5/internal/model"
 )
 
 // Granularities of a node's traffic series.

@@ -34,7 +34,7 @@ var websocketPaths = map[string]struct{}{
 	"/api/v2/node/ws":          {},
 }
 
-const controlConfigImportPath = "github.com/AnixOps/anix-control/v4/internal/config"
+const controlConfigImportPath = "github.com/AnixOps/anix-control/v5/internal/config"
 
 type route struct {
 	Method          string `json:"method"`

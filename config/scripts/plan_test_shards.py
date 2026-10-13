@@ -25,7 +25,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-MODULE = "github.com/AnixOps/anix-control/v4/"
+MODULE = "github.com/AnixOps/anix-control/v5/"
 
 # Seconds per package, the mean of five go_dev and pull request runs
 # (2026-10-02) for backend ("Backend Tests" with coverage); postgres:

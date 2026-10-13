@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/sdk/v2compat"
-	"github.com/AnixOps/anix-control/v4/internal/database"
-	"github.com/AnixOps/anix-control/v4/internal/model"
-	"github.com/AnixOps/anix-control/v4/internal/subscriber"
+	"github.com/AnixOps/anix-control/v5/internal/database"
+	"github.com/AnixOps/anix-control/v5/internal/model"
+	"github.com/AnixOps/anix-control/v5/internal/subscriber"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )

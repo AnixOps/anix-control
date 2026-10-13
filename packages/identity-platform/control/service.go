@@ -11,8 +11,8 @@ import (
 	kernelsubscriberv1 "github.com/AnixOps/anix-control/sdk/api/kernelsubscriber/v1"
 	"github.com/AnixOps/anix-control/sdk/packagestoresdk"
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
-	identityplatform "github.com/AnixOps/anix-control/v4/packages/identity-platform"
-	"github.com/AnixOps/anix-control/v4/packages/identity-platform/native"
+	identityplatform "github.com/AnixOps/anix-control/v5/packages/identity-platform"
+	"github.com/AnixOps/anix-control/v5/packages/identity-platform/native"
 	"google.golang.org/grpc"
 	"gorm.io/gorm"
 )

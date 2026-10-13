@@ -9,10 +9,10 @@ import (
 	"io"
 	"strings"
 
-	"github.com/AnixOps/anix-control/v4/internal/agentinstall"
-	"github.com/AnixOps/anix-control/v4/internal/agentupgrade"
-	"github.com/AnixOps/anix-control/v4/internal/config"
-	"github.com/AnixOps/anix-control/v4/internal/handler"
+	"github.com/AnixOps/anix-control/v5/internal/agentinstall"
+	"github.com/AnixOps/anix-control/v5/internal/agentupgrade"
+	"github.com/AnixOps/anix-control/v5/internal/config"
+	"github.com/AnixOps/anix-control/v5/internal/handler"
 	"gorm.io/gorm"
 )
 

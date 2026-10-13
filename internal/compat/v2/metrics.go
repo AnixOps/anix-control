@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/AnixOps/anix-control/v4/internal/sealedsecrets"
+	"github.com/AnixOps/anix-control/v5/internal/sealedsecrets"
 )
 
 // Gateway error codes. They are the complete, fixed set of values for the

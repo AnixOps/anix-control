@@ -11,8 +11,8 @@ import (
 	agentv1pb "github.com/AnixOps/anix-control/sdk/api/agent/v1"
 	forwardv1 "github.com/AnixOps/anix-control/sdk/api/forward/v1"
 	"github.com/AnixOps/anix-control/sdk/forward/wire"
-	"github.com/AnixOps/anix-control/v4/internal/kernelforward"
-	"github.com/AnixOps/anix-control/v4/internal/service"
+	"github.com/AnixOps/anix-control/v5/internal/kernelforward"
+	"github.com/AnixOps/anix-control/v5/internal/service"
 )
 
 // Forwarding on the Agent Control stream (forward.v1; forward-sdk.md

@@ -3,19 +3,19 @@ package middleware
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"github.com/AnixOps/anix-control/v4/internal/adminapitoken"
-	"github.com/AnixOps/anix-control/v4/internal/authn"
-	"github.com/AnixOps/anix-control/v4/internal/logging"
+	"github.com/AnixOps/anix-control/v5/internal/adminapitoken"
+	"github.com/AnixOps/anix-control/v5/internal/authn"
+	"github.com/AnixOps/anix-control/v5/internal/logging"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/AnixOps/anix-control/v4/internal/config"
-	"github.com/AnixOps/anix-control/v4/internal/database"
-	"github.com/AnixOps/anix-control/v4/internal/model"
-	"github.com/AnixOps/anix-control/v4/internal/nodesecrets"
-	"github.com/AnixOps/anix-control/v4/internal/service"
+	"github.com/AnixOps/anix-control/v5/internal/config"
+	"github.com/AnixOps/anix-control/v5/internal/database"
+	"github.com/AnixOps/anix-control/v5/internal/model"
+	"github.com/AnixOps/anix-control/v5/internal/nodesecrets"
+	"github.com/AnixOps/anix-control/v5/internal/service"
 	"github.com/gin-gonic/gin"
 )
 

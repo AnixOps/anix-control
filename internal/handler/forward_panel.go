@@ -6,7 +6,7 @@ import (
 
 	"github.com/AnixOps/anix-control/sdk/v2compat"
 
-	"github.com/AnixOps/anix-control/v4/internal/service"
+	"github.com/AnixOps/anix-control/v5/internal/service"
 	"github.com/gin-gonic/gin"
 )
 

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/AnixOps/anix-control/v4/internal/pluginhost"
+	"github.com/AnixOps/anix-control/v5/internal/pluginhost"
 	"github.com/stretchr/testify/assert"
 )
 

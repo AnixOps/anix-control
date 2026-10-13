@@ -15,11 +15,11 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
-	"github.com/AnixOps/anix-control/v4/internal/agentinstall"
-	"github.com/AnixOps/anix-control/v4/internal/agentpki"
-	"github.com/AnixOps/anix-control/v4/internal/config"
-	grpcserver "github.com/AnixOps/anix-control/v4/internal/grpc"
-	"github.com/AnixOps/anix-control/v4/internal/handler"
+	"github.com/AnixOps/anix-control/v5/internal/agentinstall"
+	"github.com/AnixOps/anix-control/v5/internal/agentpki"
+	"github.com/AnixOps/anix-control/v5/internal/config"
+	grpcserver "github.com/AnixOps/anix-control/v5/internal/grpc"
+	"github.com/AnixOps/anix-control/v5/internal/handler"
 	"gorm.io/gorm"
 )
 

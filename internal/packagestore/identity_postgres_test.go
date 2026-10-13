@@ -7,9 +7,9 @@ import (
 
 	"github.com/AnixOps/anix-control/sdk/packagebridgesdk"
 	"github.com/AnixOps/anix-control/sdk/packagestoresdk"
-	"github.com/AnixOps/anix-control/v4/internal/model"
-	identityplatform "github.com/AnixOps/anix-control/v4/packages/identity-platform"
-	"github.com/AnixOps/anix-control/v4/packages/identity-platform/native"
+	"github.com/AnixOps/anix-control/v5/internal/model"
+	identityplatform "github.com/AnixOps/anix-control/v5/packages/identity-platform"
+	"github.com/AnixOps/anix-control/v5/packages/identity-platform/native"
 	"github.com/stretchr/testify/require"
 )
 

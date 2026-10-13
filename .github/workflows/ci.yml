@@ -1032,7 +1032,7 @@ jobs:
     env:
       SHARD: ${{ matrix.shard }}
       # TestDeadlinesEndStartedOperationsTimedOut uses a 300 ms deadline.
-      SERIAL_PACKAGES: github.com/AnixOps/anix-control/v4/internal/kernelnodeops
+      SERIAL_PACKAGES: github.com/AnixOps/anix-control/v5/internal/kernelnodeops
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -1051,7 +1051,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p shard
-          go list ./internal/... | grep -v '^github.com/AnixOps/anix-control/v4/internal/tests/integration' | grep -v '^github.com/AnixOps/anix-control/v4/internal/tests/e2e' > coverage-packages.txt
+          go list ./internal/... | grep -v '^github.com/AnixOps/anix-control/v5/internal/tests/integration' | grep -v '^github.com/AnixOps/anix-control/v5/internal/tests/e2e' > coverage-packages.txt
           go list ./... | grep -vxF -f coverage-packages.txt > other-packages.txt
           python3 config/scripts/plan_test_shards.py --suite backend --shards 3 --shard "${SHARD}" < coverage-packages.txt > "shard/coverage-packages-${SHARD}.txt"
           python3 config/scripts/plan_test_shards.py --suite backend --shards 3 --shard "${SHARD}" < other-packages.txt > "shard/other-packages-${SHARD}.txt"
@@ -1201,7 +1201,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          go list ./internal/... | grep -v '^github.com/AnixOps/anix-control/v4/internal/tests/integration' | grep -v '^github.com/AnixOps/anix-control/v4/internal/tests/e2e' | sort > coverage-packages.txt
+          go list ./internal/... | grep -v '^github.com/AnixOps/anix-control/v5/internal/tests/integration' | grep -v '^github.com/AnixOps/anix-control/v5/internal/tests/e2e' | sort > coverage-packages.txt
           go list ./... | grep -vxF -f coverage-packages.txt | sort > other-packages.txt
           for kind in coverage other; do
             cat shard/${kind}-packages-{1,2,3}.txt | sort > "ran-${kind}.txt"

@@ -43,8 +43,9 @@ GitHub Releases publish only `anix-control-*` artifacts and the
 `anixops/anix-control` Docker image. Existing installations upgrade in place
 through the AnixOps installer, which preserves their configuration and data.
 
-The new Go module is `github.com/AnixOps/anix-control/v4`. Stable and
-prerelease tags are accepted in these forms:
+The Go module is `github.com/AnixOps/anix-control/v5` (the 4.x tags were built
+with `github.com/AnixOps/anix-control/v4`). Stable and prerelease tags are
+accepted in these forms:
 
 - `v4.0.0`
 - `v4.0.0-alpha.1`

@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	configtables "github.com/AnixOps/anix-control/v4/config"
+	configtables "github.com/AnixOps/anix-control/v5/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

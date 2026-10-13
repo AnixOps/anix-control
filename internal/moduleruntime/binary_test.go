@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/AnixOps/anix-control/v4/internal/modulepki"
+	"github.com/AnixOps/anix-control/v5/internal/modulepki"
 	"github.com/stretchr/testify/require"
 )
 

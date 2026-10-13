@@ -15,8 +15,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/AnixOps/anix-control/v4/internal/branding"
-	"github.com/AnixOps/anix-control/v4/internal/requestorigin"
+	"github.com/AnixOps/anix-control/v5/internal/branding"
+	"github.com/AnixOps/anix-control/v5/internal/requestorigin"
 	"gopkg.in/yaml.v3"
 )
 

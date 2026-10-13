@@ -8,7 +8,7 @@
 #   forbids it from importing the kernel's internal packages.
 set -euo pipefail
 
-module='github.com/AnixOps/anix-control/v4'
+module='github.com/AnixOps/anix-control/v5'
 go_workspace="${GOWORK:-off}"
 
 # "<package> <internal import>": reason.

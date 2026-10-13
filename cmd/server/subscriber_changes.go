@@ -5,11 +5,11 @@ import (
 	"log"
 	"time"
 
-	"github.com/AnixOps/anix-control/v4/internal/agentreports"
-	"github.com/AnixOps/anix-control/v4/internal/database"
-	"github.com/AnixOps/anix-control/v4/internal/kernelsettings"
-	"github.com/AnixOps/anix-control/v4/internal/shadowsamples"
-	"github.com/AnixOps/anix-control/v4/internal/subscriber"
+	"github.com/AnixOps/anix-control/v5/internal/agentreports"
+	"github.com/AnixOps/anix-control/v5/internal/database"
+	"github.com/AnixOps/anix-control/v5/internal/kernelsettings"
+	"github.com/AnixOps/anix-control/v5/internal/shadowsamples"
+	"github.com/AnixOps/anix-control/v5/internal/subscriber"
 )
 
 // subscriberChangePrune is how often the subscriber change log, the

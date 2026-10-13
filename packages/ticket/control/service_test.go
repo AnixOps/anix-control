@@ -7,7 +7,7 @@ import (
 
 	"github.com/AnixOps/anix-control/sdk/packagebridgesdk"
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
-	"github.com/AnixOps/anix-control/v4/packages/ticket/native"
+	"github.com/AnixOps/anix-control/v5/packages/ticket/native"
 	"github.com/stretchr/testify/require"
 )
 

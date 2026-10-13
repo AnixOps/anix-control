@@ -1,7 +1,7 @@
 package handler
 
 import (
-	"github.com/AnixOps/anix-control/v4/internal/lease"
+	"github.com/AnixOps/anix-control/v5/internal/lease"
 	"net/http"
 	"runtime"
 	"strconv"
@@ -9,14 +9,14 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/AnixOps/anix-control/v4/internal/agenttransport"
-	"github.com/AnixOps/anix-control/v4/internal/branding"
-	compatv2 "github.com/AnixOps/anix-control/v4/internal/compat/v2"
-	"github.com/AnixOps/anix-control/v4/internal/database"
-	controlgrpc "github.com/AnixOps/anix-control/v4/internal/grpc"
-	"github.com/AnixOps/anix-control/v4/internal/kernelforward"
-	"github.com/AnixOps/anix-control/v4/internal/nodesecrets"
-	"github.com/AnixOps/anix-control/v4/internal/pluginhost"
+	"github.com/AnixOps/anix-control/v5/internal/agenttransport"
+	"github.com/AnixOps/anix-control/v5/internal/branding"
+	compatv2 "github.com/AnixOps/anix-control/v5/internal/compat/v2"
+	"github.com/AnixOps/anix-control/v5/internal/database"
+	controlgrpc "github.com/AnixOps/anix-control/v5/internal/grpc"
+	"github.com/AnixOps/anix-control/v5/internal/kernelforward"
+	"github.com/AnixOps/anix-control/v5/internal/nodesecrets"
+	"github.com/AnixOps/anix-control/v5/internal/pluginhost"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )

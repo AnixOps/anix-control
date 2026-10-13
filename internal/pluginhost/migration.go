@@ -10,7 +10,7 @@ import (
 	"time"
 
 	pluginhostv1 "github.com/AnixOps/anix-control/sdk/api/pluginhost/v1"
-	"github.com/AnixOps/anix-control/v4/internal/packagebridge"
+	"github.com/AnixOps/anix-control/v5/internal/packagebridge"
 )
 
 // MigrationInput is passed through to the verified package host. Checkpoint

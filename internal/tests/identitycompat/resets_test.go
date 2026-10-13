@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/AnixOps/anix-control/v4/internal/handler"
-	"github.com/AnixOps/anix-control/v4/internal/model"
-	"github.com/AnixOps/anix-control/v4/internal/tests/packagecompat"
-	"github.com/AnixOps/anix-control/v4/packages/identity-platform/native"
+	"github.com/AnixOps/anix-control/v5/internal/handler"
+	"github.com/AnixOps/anix-control/v5/internal/model"
+	"github.com/AnixOps/anix-control/v5/internal/tests/packagecompat"
+	"github.com/AnixOps/anix-control/v5/packages/identity-platform/native"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )

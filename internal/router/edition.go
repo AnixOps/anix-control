@@ -3,8 +3,8 @@ package router
 import (
 	"strings"
 
-	compatv2 "github.com/AnixOps/anix-control/v4/internal/compat/v2"
-	"github.com/AnixOps/anix-control/v4/internal/edition"
+	compatv2 "github.com/AnixOps/anix-control/v5/internal/compat/v2"
+	"github.com/AnixOps/anix-control/v5/internal/edition"
 	"github.com/gin-gonic/gin"
 )
 

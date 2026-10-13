@@ -363,7 +363,7 @@ func UnresolvedGinReceiver(r *gin.Engine) {
         source = SAMPLE_ROUTER.read_text(encoding="utf-8").replace(
             'import "github.com/gin-gonic/gin"',
             """import (
-\t\"github.com/AnixOps/anix-control/v4/internal/config\"
+\t\"github.com/AnixOps/anix-control/v5/internal/config\"
 \t\"github.com/gin-gonic/gin\"
 )""",
         )
@@ -441,7 +441,7 @@ var _ = globalEngine.GET("/api/v2/uninventoried", hiddenHandler.Get)
         source = SAMPLE_ROUTER.read_text(encoding="utf-8").replace(
             'import "github.com/gin-gonic/gin"',
             """import (
-\t\"github.com/AnixOps/anix-control/v4/internal/config\"
+\t\"github.com/AnixOps/anix-control/v5/internal/config\"
 \t\"github.com/gin-gonic/gin\"
 )""",
         )
@@ -488,7 +488,7 @@ func RangeShadowedSubscribeNormalizer(r *gin.Engine) {
         source = SAMPLE_ROUTER.read_text(encoding="utf-8").replace(
             'import "github.com/gin-gonic/gin"',
             """import (
-\t\"github.com/AnixOps/anix-control/v4/internal/config\"
+\t\"github.com/AnixOps/anix-control/v5/internal/config\"
 \t\"github.com/gin-gonic/gin\"
 )""",
         )
@@ -552,7 +552,7 @@ func PreSafeClosureAlias(r *gin.Engine) {
         source = SAMPLE_ROUTER.read_text(encoding="utf-8").replace(
             'import "github.com/gin-gonic/gin"',
             """import (
-\t\"github.com/AnixOps/anix-control/v4/internal/config\"
+\t\"github.com/AnixOps/anix-control/v5/internal/config\"
 \t\"github.com/gin-gonic/gin\"
 )""",
         )

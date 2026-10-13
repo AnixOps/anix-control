@@ -5,8 +5,8 @@ import (
 	"time"
 
 	agentv1pb "github.com/AnixOps/anix-control/sdk/api/agent/v1"
-	"github.com/AnixOps/anix-control/v4/internal/agentstreams"
-	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v5/internal/agentstreams"
+	"github.com/AnixOps/anix-control/v5/internal/model"
 	"google.golang.org/protobuf/proto"
 )
 

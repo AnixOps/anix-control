@@ -14,8 +14,8 @@ import (
 	"strings"
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
-	"github.com/AnixOps/anix-control/v4/internal/config"
-	"github.com/AnixOps/anix-control/v4/internal/modulepki"
+	"github.com/AnixOps/anix-control/v5/internal/config"
+	"github.com/AnixOps/anix-control/v5/internal/modulepki"
 )
 
 // Join tokens: anixjoin_ and the base64url encoding (no padding) of 32

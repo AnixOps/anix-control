@@ -7,7 +7,7 @@ import (
 	kernelsettingsv1 "github.com/AnixOps/anix-control/sdk/api/kernelsettings/v1"
 	"github.com/AnixOps/anix-control/sdk/packagestoresdk"
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
-	"github.com/AnixOps/anix-control/v4/packages/notification/native"
+	"github.com/AnixOps/anix-control/v5/packages/notification/native"
 	"google.golang.org/grpc"
 	"gorm.io/gorm"
 )

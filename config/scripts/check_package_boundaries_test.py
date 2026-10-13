@@ -8,7 +8,7 @@ from pathlib import Path
 
 
 SCRIPT = Path(__file__).resolve().parent / "check_package_boundaries.sh"
-MODULE = "github.com/AnixOps/anix-control/v4"
+MODULE = "github.com/AnixOps/anix-control/v5"
 SDK_MODULE = "github.com/AnixOps/anix-control/sdk"
 IDENTITY_MODULE = "github.com/AnixOps/anix-control/identity"
 
@@ -62,7 +62,7 @@ class PackageBoundariesTest(unittest.TestCase):
         result = self.run_gate({
             "packages/demo/control/main.go": "package main\n\nfunc main() {}\n",
             "kernelapi/api.go": "package kernelapi\n\nconst Version = 4\n",
-            "sdk/go.mod": f"module {SDK_MODULE}\n\ngo 1.22\n\nrequire {MODULE} v4.0.0\n\nreplace {MODULE} => ../\n",
+            "sdk/go.mod": f"module {SDK_MODULE}\n\ngo 1.22\n\nrequire {MODULE} v5.0.0\n\nreplace {MODULE} => ../\n",
             "sdk/client/client.go": f"package client\n\nimport \"{MODULE}/kernelapi\"\n\nconst Version = kernelapi.Version\n",
         })
         self.assertNotEqual(0, result.returncode)
@@ -73,7 +73,7 @@ class PackageBoundariesTest(unittest.TestCase):
         result = self.run_gate({
             "packages/demo/control/main.go": "package main\n\nfunc main() {}\n",
             "kernelapi/api.go": "package kernelapi\n\nconst Version = 4\n",
-            "identity/go.mod": f"module {IDENTITY_MODULE}\n\ngo 1.22\n\nrequire {MODULE} v4.0.0\n\nreplace {MODULE} => ../\n",
+            "identity/go.mod": f"module {IDENTITY_MODULE}\n\ngo 1.22\n\nrequire {MODULE} v5.0.0\n\nreplace {MODULE} => ../\n",
             "identity/token/token.go": f"package token\n\nimport \"{MODULE}/kernelapi\"\n\nconst Version = kernelapi.Version\n",
         })
         self.assertNotEqual(0, result.returncode)

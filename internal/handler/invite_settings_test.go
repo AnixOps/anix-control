@@ -3,7 +3,7 @@ package handler
 import (
 	"testing"
 
-	"github.com/AnixOps/anix-control/v4/internal/packagestore"
+	"github.com/AnixOps/anix-control/v5/internal/packagestore"
 	"github.com/stretchr/testify/require"
 )
 

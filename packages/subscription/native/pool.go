@@ -6,7 +6,7 @@ import (
 
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
 	"github.com/AnixOps/anix-control/sdk/v2compat"
-	"github.com/AnixOps/anix-control/v4/packages/subscription/native/model"
+	"github.com/AnixOps/anix-control/v5/packages/subscription/native/model"
 )
 
 // Route ids of the protocol pool routes, which read the views of the node

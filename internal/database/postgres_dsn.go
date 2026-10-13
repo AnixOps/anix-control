@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/AnixOps/anix-control/v4/internal/config"
+	"github.com/AnixOps/anix-control/v5/internal/config"
 )
 
 // PostgresDSN builds a PostgreSQL keyword/value connection string from cfg.

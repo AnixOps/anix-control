@@ -10,7 +10,7 @@ import (
 	"time"
 
 	forwardv1 "github.com/AnixOps/anix-control/sdk/api/forward/v1"
-	"github.com/AnixOps/anix-control/v4/internal/kernelforward"
+	"github.com/AnixOps/anix-control/v5/internal/kernelforward"
 )
 
 // forward dns: entry HA through DNS (forward-sdk.md section 7.4, L2). A

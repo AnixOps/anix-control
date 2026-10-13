@@ -3,9 +3,9 @@ package service
 import (
 	"testing"
 
-	appconfig "github.com/AnixOps/anix-control/v4/internal/config"
-	"github.com/AnixOps/anix-control/v4/internal/forwardlegacy"
-	"github.com/AnixOps/anix-control/v4/internal/model"
+	appconfig "github.com/AnixOps/anix-control/v5/internal/config"
+	"github.com/AnixOps/anix-control/v5/internal/forwardlegacy"
+	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
