@@ -15,6 +15,7 @@ import (
 
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // Manager runs the backups of one Control: it writes bundles, verifies
@@ -213,8 +214,16 @@ func (m *Manager) record(ctx context.Context, bundle *Bundle) (*model.Backup, er
 	if !m.hasTable(ctx) {
 		return row, nil
 	}
-	if err := m.db().WithContext(ctx).Create(row).Error; err != nil {
+	// Another process reading the directory may have recorded the bundle
+	// first (sync): then that row is the bundle's.
+	db := m.db().WithContext(ctx)
+	if err := db.Clauses(clause.OnConflict{DoNothing: true}).Create(row).Error; err != nil {
 		return row, err
+	}
+	if row.ID == 0 {
+		if err := db.Where("path = ?", row.Path).Take(row).Error; err != nil {
+			return row, err
+		}
 	}
 	return row, nil
 }
@@ -418,7 +427,9 @@ func (m *Manager) sync(ctx context.Context) error {
 		if manifest, err := ReadManifest(filepath.Join(m.Dir(), file.name)); err == nil {
 			row.CreatedAt, row.ProgramVersion, row.SchemaVersion = manifest.CreatedAt, manifest.ProgramVersion, manifest.SchemaVersion
 		}
-		if err := m.db().WithContext(ctx).Create(&row).Error; err != nil {
+		// Several processes may read the directory at once (the server's
+		// worker, a backup command): the first row of a bundle wins.
+		if err := m.db().WithContext(ctx).Clauses(clause.OnConflict{DoNothing: true}).Create(&row).Error; err != nil {
 			return fmt.Errorf("record %s: %w", file.name, err)
 		}
 	}

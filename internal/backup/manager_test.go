@@ -204,3 +204,20 @@ func TestManagerAnswersBusy(t *testing.T) {
 	m.mu.Unlock()
 	require.ErrorIs(t, err, ErrBusy)
 }
+
+// Two processes may record one bundle (a backup command's create and the
+// server's directory sync): one row, whoever comes first.
+func TestRecordingABundleTwiceKeepsOneRow(t *testing.T) {
+	ctx := context.Background()
+	p := newPanel(t)
+	bundle := p.write(t, TypeManual, time.Now())
+	server, command := p.manager(), p.manager()
+	_, err := server.List(ctx)
+	require.NoError(t, err)
+	row, err := command.record(ctx, bundle)
+	require.NoError(t, err)
+	require.NotZero(t, row.ID)
+	rows := backupRows(t, p.db)
+	require.Len(t, rows, 1)
+	assert.Equal(t, rows[0].ID, row.ID)
+}
