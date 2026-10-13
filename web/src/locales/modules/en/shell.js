@@ -102,7 +102,7 @@ export default {
         close: 'close'
       },
       actions: {
-        addNode: 'Add a node',
+        addNode: 'Join a node',
         addUser: 'Add a user',
         newForwardRoute: 'New forwarding route',
         themeLight: 'Use light appearance',

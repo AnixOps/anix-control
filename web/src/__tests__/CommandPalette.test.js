@@ -62,7 +62,7 @@ describe('CommandPalette.vue', () => {
     // Actions first, then every page the admin can see.
     const groups = within(dialog).getAllByRole('group').map(group => group.getAttribute('data-palette-group'))
     expect(groups).toEqual(['actions', 'pages'])
-    expect(optionNames(dialog)).toEqual(expect.arrayContaining(['Add a node', 'Add a user', 'Dashboard', 'Plugin Center', 'Account']))
+    expect(optionNames(dialog)).toEqual(expect.arrayContaining(['Join a node', 'Add a user', 'Dashboard', 'Plugin Center', 'Account']))
     // The flux-clone pages and their setup wizard were removed (F5d).
     expect(optionNames(dialog)).not.toContain('Forward setup wizard')
     expect(optionNames(dialog)).not.toContain('Tunnels')
@@ -87,15 +87,17 @@ describe('CommandPalette.vue', () => {
     const user = userEvent.setup()
     const router = await renderPalette()
     const { dialog, input } = await openPalette()
-    await user.type(input, 'add')
-    await waitFor(() => expect(optionNames(dialog)).toEqual(['Add a node', 'Add a user']))
+    await user.type(input, 'node')
+    await waitFor(() => expect(optionNames(dialog)).toContain('Join a node'))
+    const names = optionNames(dialog)
+    expect(names.length).toBeGreaterThan(1)
     const first = input.getAttribute('aria-activedescendant')
-    await user.keyboard('{ArrowDown}')
-    const second = input.getAttribute('aria-activedescendant')
-    expect(second).not.toBe(first)
-    expect(document.getElementById(second).textContent).toContain('Add a user')
+    for (let i = 0; i < names.indexOf('Join a node'); i += 1) await user.keyboard('{ArrowDown}')
+    const active = input.getAttribute('aria-activedescendant')
+    if (names.indexOf('Join a node') > 0) expect(active).not.toBe(first)
+    expect(document.getElementById(active).textContent).toContain('Join a node')
     await user.keyboard('{Enter}')
-    await waitFor(() => expect(router.currentRoute.value.fullPath).toBe('/admin/users?create=1'))
+    await waitFor(() => expect(router.currentRoute.value.fullPath).toBe('/admin/nodes?join=1'))
   })
 
   it('finds users by email through the user list filter', async () => {

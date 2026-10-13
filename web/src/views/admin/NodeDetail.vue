@@ -58,7 +58,7 @@
         <NodeCredentialsSection :node="node" @open-protocols="section = 'protocols'" />
       </template>
       <template #deploy>
-        <NodeDeploySection :node="node" :deploy="deploy" />
+        <NodeDeploySection :node="node" />
       </template>
       <template #logs>
         <NodeLogsSection :node="node" />
@@ -82,7 +82,7 @@
 // action calls the same endpoints as the node list. 服务 shows only when the
 // node's machine-telemetry release reports a services table, and loads its
 // code when opened.
-import { computed, defineAsyncComponent, reactive, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { ChevronLeft, Pencil, RefreshCcw, ServerOff } from '@lucide/vue'
 import { getNode, getNodes } from '@/api/admin'
@@ -109,7 +109,6 @@ import {
   NODE_SECTIONS, OPTIONAL_NODE_SECTIONS, displayStatus, knownNodeName, listQuery, normalizeNode, readNodeList, readNodePayload, statusName
 } from './nodes/nodeData'
 import { useNodeActions } from './nodes/useNodeActions'
-import { useNodeDeploy } from './nodes/useNodeDeploy'
 
 const NodeServicesSection = defineAsyncComponent(() => import('./nodes/NodeServicesSection.vue'))
 // 流量 draws a chart: its code (and ECharts) load when the section opens.
@@ -119,8 +118,6 @@ const { t } = useAppI18n()
 const route = useRoute()
 const router = useRouter()
 const { syncingNodeIds, syncNode } = useNodeActions()
-// Page-level, so a key generated in 部署 survives switching sections.
-const deploy = reactive(useNodeDeploy())
 
 const node = ref(null)
 const loading = ref(false)

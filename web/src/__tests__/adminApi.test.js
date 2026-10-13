@@ -78,14 +78,6 @@ describe('admin api mapping', () => {
         expected: { url: '/admin/protocol-templates', method: 'get' },
       },
       {
-        call: () => adminApi.getAuthKeys(),
-        expected: { url: '/admin/auth-keys', method: 'get' },
-      },
-      {
-        call: () => adminApi.generateAuthKey({ name: 'tokyo', expire_days: 0 }),
-        expected: { url: '/admin/auth-keys', method: 'post', data: { name: 'tokyo', expire_days: 0 } },
-      },
-      {
         call: () => adminApi.getSubscriptionGroups(),
         expected: { url: '/admin/subscription/groups', method: 'get' },
       },
@@ -293,14 +285,6 @@ describe('admin api mapping', () => {
           url: '/admin/plans/6/assign',
           method: 'post',
           data: { user_id: 12 },
-        },
-      },
-      {
-        call: () => adminApi.createNode({ name: 'edge' }),
-        expected: {
-          url: '/admin/nodes',
-          method: 'post',
-          data: { name: 'edge' },
         },
       },
       {

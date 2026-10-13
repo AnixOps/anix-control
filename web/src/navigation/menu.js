@@ -125,7 +125,7 @@ export { ADMIN_PAGE_SECTIONS }
 // Quick actions in the command palette open an existing create flow. Each is
 // shown only when its page is in the visible menu (`page` = menu item id).
 export const ADMIN_QUICK_ACTIONS = Object.freeze([
-  { id: 'add-node', page: 'nodes', icon: 'nodes', labelKey: 'shell.palette.actions.addNode', to: { path: '/admin/nodes', query: { create: '1' } } },
+  { id: 'join-node', page: 'nodes', icon: 'nodes', labelKey: 'shell.palette.actions.addNode', to: { path: '/admin/nodes', query: { join: '1' } } },
   { id: 'add-user', page: 'users', icon: 'users', labelKey: 'shell.palette.actions.addUser', to: { path: '/admin/users', query: { create: '1' } } },
   { id: 'forward-route', page: 'forward-v4', icon: 'forward', labelKey: 'shell.palette.actions.newForwardRoute', to: { path: '/admin/forward/routes/new' } }
 ])

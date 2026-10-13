@@ -172,14 +172,6 @@ export function getNodeCredentials(id) {
   })
 }
 
-export function createNode(data) {
-  return request({
-    url: '/admin/nodes',
-    method: 'post',
-    data
-  })
-}
-
 export function updateNode(id, data) {
   return request({
     url: `/admin/nodes/${id}`,
@@ -243,22 +235,6 @@ export function generateWireGuardKeypair() {
   return request({
     url: '/admin/wireguard/keypair',
     method: 'post'
-  })
-}
-
-export function getAuthKeys() {
-  return request({
-    url: '/admin/auth-keys',
-    method: 'get'
-  })
-}
-
-// The answer is the only one that shows the key; the list masks it.
-export function generateAuthKey(data) {
-  return request({
-    url: '/admin/auth-keys',
-    method: 'post',
-    data
   })
 }
 
@@ -1052,7 +1028,6 @@ export default {
   getNode,
   getNodeStats,
   getNodeLogs,
-  createNode,
   getNodeCredentials,
   updateNode,
   deleteNode,
@@ -1062,8 +1037,6 @@ export default {
   updateNodeProtocol,
   deleteNodeProtocol,
   getProtocolTemplates,
-  getAuthKeys,
-  generateAuthKey,
   getSubscriptionGroups,
   createSubscriptionGroup,
   updateSubscriptionGroup,

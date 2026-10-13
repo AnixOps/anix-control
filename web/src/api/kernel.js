@@ -358,6 +358,92 @@ export async function createKernelAgentInstallToken(node, ttlSeconds) {
   return unwrap(await v4({ url: '/kernel/agents/install-tokens', method: 'post', data }))
 }
 
+// What an install command needs from this Control, checked without a network
+// call (any administrator): { ready, checks: [{ id, ok, level, message, fix }] }.
+// `ready` is false while a check of level "error" fails; a failed "warning"
+// does not block the command. Ids: public_url, grpc, ca, mtls_mode,
+// agent_release, script_signature.
+export async function getKernelInstallReadiness() {
+  return unwrap(await v4({ url: '/kernel/agents/install-readiness', method: 'get' }))
+}
+
+// Node groups (5.0 node onboarding). A group's join token makes any machine
+// that runs its install command a node of the group.
+//
+// The list answers { groups: [...] }: each group with its defaults,
+// protocol_template, subscription_group_ids, token_reset_at,
+// token_expires_at, token_expired and nodes { live, pending }. Never a token.
+export async function listKernelNodeGroups() {
+  return unwrap(await v4({ url: '/kernel/node-groups', method: 'get' }))
+}
+
+// The first group of a panel needs no input: this creates the default group
+// (一个 VLESS Reality 协议，随机端口，加入默认订阅分组) when none exists and
+// answers the first group otherwise: { group, created }. 409 ca_kek_missing
+// without module_runtime.ca_kek.
+export async function ensureKernelDefaultNodeGroup() {
+  return unwrap(await v4({ url: '/kernel/node-groups/default', method: 'post' }))
+}
+
+// input: { name, kind: 'proxy' | 'forward', max_nodes, require_approval,
+// rate, tags, monthly_limit_bytes, reset_day, sort, protocol_template,
+// subscription_group_ids, token_expires_at }. Errors: 400 invalid_request
+// (the message names the field, e.g. "protocol_template[0]: ..."), 409
+// name_taken, 409 ca_kek_missing.
+export async function createKernelNodeGroup(input) {
+  return unwrap(await v4({ url: '/kernel/node-groups', method: 'post', data: input }))
+}
+
+// Replaces every field of the group but its kind and its token.
+export async function updateKernelNodeGroup(id, input) {
+  return unwrap(await v4({ url: `/kernel/node-groups/${encodeURIComponent(id)}`, method: 'put', data: input }))
+}
+
+// 409 node_group_in_use while the group has live nodes.
+export async function deleteKernelNodeGroup(id) {
+  return unwrap(await v4({ url: `/kernel/node-groups/${encodeURIComponent(id)}`, method: 'delete' }))
+}
+
+// The group's install commands (one per download source), join token, expiry
+// and the uninstall command. Super administrators only (403
+// super_admin_required); every read is audited.
+export async function getKernelNodeGroupCommand(id) {
+  return unwrap(await v4({ url: `/kernel/node-groups/${encodeURIComponent(id)}/command`, method: 'get' }))
+}
+
+// Replaces the group's token: every earlier command stops working. Super
+// administrators only.
+export async function resetKernelNodeGroupToken(id) {
+  return unwrap(await v4({ url: `/kernel/node-groups/${encodeURIComponent(id)}/reset-token`, method: 'post' }))
+}
+
+// The group's live nodes, newest first: { nodes: [{ id, node, kind, name,
+// host, approval, online, last_seen, agent_version, created_at }] }.
+export async function getKernelNodeGroupNodes(id) {
+  return unwrap(await v4({ url: `/kernel/node-groups/${encodeURIComponent(id)}/nodes`, method: 'get' }))
+}
+
+// Approve or reject a node that joined a group requiring approval. `node` is
+// "proxy-<id>" or "forward-<id>". 409 node_not_pending for any other node.
+export async function approveKernelNode(node) {
+  return unwrap(await v4({ url: `/kernel/nodes/${encodeURIComponent(node)}/approve`, method: 'post' }))
+}
+
+export async function rejectKernelNode(node) {
+  return unwrap(await v4({ url: `/kernel/nodes/${encodeURIComponent(node)}/reject`, method: 'post' }))
+}
+
+// The console's node list: GET /api/v2/admin/nodes' rows (same query: page,
+// page_size, search, status, group_id, sort, order) with each node's
+// `approval` (approved, pending or rejected), `node_group_id` and
+// `node_group_name`; `approval` and `node_group_id` also filter. Answers
+// { total, list }.
+export async function getKernelAdminNodes(params = {}) {
+  const config = { url: '/admin/nodes', method: 'get' }
+  if (Object.keys(params).length) config.params = params
+  return unwrap(await v4(config))
+}
+
 // Rotate a node's Agent credentials (administrators with the super
 // administrator right only). Revokes every Agent certificate, enrollment and
 // forward link certificate of the node, optionally replaces a proxy node's API

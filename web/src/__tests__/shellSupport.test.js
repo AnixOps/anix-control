@@ -72,11 +72,11 @@ describe('useRouteIntent', () => {
     await flushPromises()
     expect(later).toHaveBeenCalledWith({ email: 'a@b.test' })
     expect(router.currentRoute.value.fullPath).toBe('/admin/users')
-    // Another page's instruction (the palette's 添加节点 while on users).
-    await router.push('/admin/nodes?create=1')
+    // Another page's instruction (the palette's 接入节点 while on users).
+    await router.push('/admin/nodes?join=1')
     await flushPromises()
     expect(later).toHaveBeenCalledTimes(1)
-    expect(router.currentRoute.value.fullPath).toBe('/admin/nodes?create=1')
+    expect(router.currentRoute.value.fullPath).toBe('/admin/nodes?join=1')
   })
 
   it('is empty without a router or without the keys', () => {

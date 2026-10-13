@@ -102,7 +102,7 @@ export default {
         close: '关闭'
       },
       actions: {
-        addNode: '添加节点',
+        addNode: '接入节点',
         addUser: '添加用户',
         newForwardRoute: '新建转发路由',
         themeLight: '切换到浅色外观',

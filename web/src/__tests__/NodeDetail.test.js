@@ -22,9 +22,7 @@ const api = vi.hoisted(() => ({
   updateNodeProtocol: vi.fn(),
   deleteNodeProtocol: vi.fn(),
   getProtocolTemplates: vi.fn(),
-  generateWireGuardKeypair: vi.fn(),
-  getAuthKeys: vi.fn(),
-  generateAuthKey: vi.fn()
+  generateWireGuardKeypair: vi.fn()
 }))
 
 vi.mock('@/api/admin', () => api)
@@ -38,7 +36,12 @@ const telemetry = vi.hoisted(() => ({
 vi.mock('@/api/machineTelemetry', async importOriginal => ({ ...(await importOriginal()), ...telemetry }))
 
 // The node's Agent connection and certificate (GET /api/v4/kernel/agents/transports?node=proxy-5).
-const kernelApi = vi.hoisted(() => ({ getKernelAgentTransports: vi.fn(), getKernelNodeTraffic: vi.fn(), rotateKernelAgentCredentials: vi.fn() }))
+const kernelApi = vi.hoisted(() => ({
+  getKernelAgentTransports: vi.fn(),
+  getKernelNodeTraffic: vi.fn(),
+  rotateKernelAgentCredentials: vi.fn(),
+  createKernelAgentInstallToken: vi.fn()
+}))
 vi.mock('@/api/kernel', async importOriginal => ({ ...(await importOriginal()), ...kernelApi }))
 
 // The traffic chart draws with ECharts; the engine is not needed to see what it is given.
@@ -103,13 +106,13 @@ describe('NodeDetail', () => {
       ]
     })
     api.getNodeLogs.mockResolvedValue({ data: { list: [{ id: 1, level: 'error', source: 'xray', message: 'listen failed', created_at: 1790000000 }], total: 1 } })
-    api.getAuthKeys.mockResolvedValue({ data: [] })
     for (const fn of Object.values(telemetry)) fn.mockReset()
     telemetry.nodeHasServicesTable.mockResolvedValue(false)
     kernelApi.getKernelAgentTransports.mockReset()
     kernelApi.getKernelAgentTransports.mockResolvedValue({ nodes: [] })
     kernelApi.getKernelNodeTraffic.mockReset()
     kernelApi.rotateKernelAgentCredentials.mockReset()
+    kernelApi.createKernelAgentInstallToken.mockReset()
     engine.charts.length = 0
     vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
   })
@@ -369,11 +372,47 @@ describe('NodeDetail', () => {
     expect(api.getNodeCredentials).toHaveBeenCalledTimes(1)
   })
 
-  it('shows the registration key and the Agent config in Deployment', async () => {
+  it('offers a new machine, the uninstall command and the certificate in Deployment, and no registration key or Ansible', async () => {
+    kernelApi.getKernelAgentTransports.mockResolvedValue({
+      nodes: [{
+        node: 'proxy-5', certificate_state: 'valid',
+        last_certificate: { serial: 'ab12', not_after: '2999-02-01T12:00:00Z', renew_after: '2999-01-01T00:00:00Z' },
+        connection: { type: 'mtls_stream', transport: 'mtls-stream' }
+      }]
+    })
     await renderPage('/admin/nodes/5?section=deploy')
-    expect(await screen.findByTestId('agent-config')).toBeTruthy()
-    expect(api.getAuthKeys).toHaveBeenCalledTimes(1)
-    expect(screen.getByRole('button', { name: 'Open deployment helper' })).toBeTruthy()
+
+    expect(await screen.findByRole('heading', { name: 'Move to a new machine' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Generate install command' })).toBeTruthy()
+    expect(screen.getByTestId('uninstall-command').textContent).toContain('sudo anix-agent uninstall')
+    await waitFor(() => expect(screen.getByTestId('node-certificate').getAttribute('data-certificate')).toBe('valid'))
+    expect(kernelApi.getKernelAgentTransports).toHaveBeenCalledWith({ nodes: ['proxy-5'] })
+    for (const gone of ['Registration key', 'Agent registration', 'Open deployment helper', 'Connection settings', 'Ansible']) {
+      expect(screen.queryByText(gone)).toBeNull()
+    }
+    expect(screen.queryByTestId('agent-config')).toBeNull()
+  })
+
+  it('issues an enrollment command bound to this node from Move to a new machine', async () => {
+    const user = userEvent.setup()
+    kernelApi.createKernelAgentInstallToken.mockResolvedValue({
+      node: 'proxy-5', expires_at: '2999-01-01T00:00:00Z', commands: [{ mirror: 'control', available: true, command: 'curl -fsSL https://ctl.example/install.sh | sudo bash -s -- -u https://ctl.example -t anixagt_x' }],
+      script: { signed: true }
+    })
+    await renderPage('/admin/nodes/5?section=deploy')
+    await user.click(await screen.findByRole('button', { name: 'Generate install command' }))
+    const sheet = await screen.findByRole('dialog', { name: 'Move to a new machine' })
+    await user.click(within(sheet).getByRole('button', { name: 'Generate install command' }))
+    await waitFor(() => expect(kernelApi.createKernelAgentInstallToken).toHaveBeenCalledWith('proxy-5', 3600))
+    expect(await within(sheet).findByText(/anixagt_x/)).toBeTruthy()
+  })
+
+  it('tells the administrator what a revoked certificate means for the next step', async () => {
+    kernelApi.getKernelAgentTransports.mockResolvedValue({
+      nodes: [{ node: 'proxy-5', certificate_state: 'revoked', last_certificate: { serial: 'ab12', not_after: '2026-10-08T00:00:00Z', revoked_at: '2026-10-03T12:00:00Z' }, connection: { type: 'offline' } }]
+    })
+    await renderPage('/admin/nodes/5?section=deploy')
+    expect((await screen.findByTestId('deploy-certificate-notice')).textContent).toContain('no longer works')
   })
 
   it('disables a node with the edit body and status 3 after a confirmation', async () => {

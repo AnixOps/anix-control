@@ -170,14 +170,14 @@ describe('navigation/menu.js: palette entries', () => {
     expect(paths).not.toContain('/admin/orders')
     // The flux-clone pages and their wizard were removed in v4.2 (F5d).
     expect(paths.filter(path => path.startsWith('/admin/forward'))).toEqual([])
-    expect(actions.map(action => action.id)).toEqual(['add-node', 'add-user'])
-    expect(actions.find(action => action.id === 'add-node').to).toEqual({ path: '/admin/nodes', query: { create: '1' } })
+    expect(actions.map(action => action.id)).toEqual(['join-node', 'add-user'])
+    expect(actions.find(action => action.id === 'join-node').to).toEqual({ path: '/admin/nodes', query: { join: '1' } })
   })
 
   it('offers a quick action only when its page is visible', () => {
     const groups = buildAdminMenu({ t }).map(group => ({ ...group, items: group.items.filter(item => item.id !== 'nodes') }))
     const { actions } = paletteEntries({ t, groups })
-    expect(actions.map(action => action.id)).not.toContain('add-node')
+    expect(actions.map(action => action.id)).not.toContain('join-node')
   })
 
   it('lists the sections of settings-style pages under their page (UI U7)', () => {

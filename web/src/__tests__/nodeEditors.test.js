@@ -1,71 +1,14 @@
-// The node page's editors without the page (UI U7): the Agent config and
-// Ansible files of useNodeDeploy, and the protocol request bodies of
-// useProtocolEditor (unchanged from the pre-redesign page).
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+// The node page's editors without the page (UI U7): the protocol request
+// bodies of useProtocolEditor (unchanged from the pre-redesign page) and the
+// node data helpers.
+import { describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
-import { isLoopbackGRPCHost, useNodeDeploy } from '@/views/admin/nodes/useNodeDeploy'
 import { useProtocolEditor } from '@/views/admin/nodes/useProtocolEditor'
 import { buildNodePayload, displayStatus, nodeFormFrom, parentCandidatesFor } from '@/views/admin/nodes/nodeData'
 
 vi.mock('@/api/admin', () => ({
-  getAuthKeys: vi.fn(),
-  generateAuthKey: vi.fn(),
   getNodeCredentials: vi.fn()
 }))
-
-const KEY = 'jW26nr2tbthASoeq6RmIpx8Ah+uhPNIv9V1ewRVb1VE='
-const config = deploy => JSON.parse(deploy.configSnippet.value.slice(deploy.configSnippet.value.indexOf('\n') + 1)).Nodes[0]
-
-describe('useNodeDeploy', () => {
-  let deploy
-  beforeEach(() => { deploy = useNodeDeploy() })
-
-  it('keeps the Plugin Supervisor canary off until it is opted in and complete', () => {
-    expect(config(deploy)).not.toHaveProperty('PluginSupervisorEnabled')
-    Object.assign(deploy.deploySettings, { pluginSupervisorEnabled: true, grpcUseTLS: true })
-    expect(deploy.pluginSupervisorCanaryReady.value).toBe(false)
-    expect(config(deploy)).not.toHaveProperty('PluginSupervisorEnabled')
-
-    deploy.deploySettings.pluginOfficialPublicKey = KEY
-    expect(deploy.pluginSupervisorCanaryReady.value).toBe(true)
-    expect(config(deploy)).toMatchObject({
-      AgentControlEnabled: true,
-      PluginSupervisorEnabled: true,
-      PluginRoot: '/var/lib/anixops/plugins',
-      PluginSocketDir: '/run/anixops/plugins',
-      PluginOfficialPublicKey: KEY
-    })
-    expect(deploy.deployGroupVarsPreview.value).toContain('plugin_supervisor_enabled: true')
-    expect(deploy.deployGroupVarsPreview.value).toContain(`plugin_official_public_key: "${KEY}"`)
-  })
-
-  it('refuses a plaintext external gRPC endpoint and an invalid trust root', () => {
-    Object.assign(deploy.deploySettings, {
-      panelApiHost: 'https://panel.example.test',
-      grpcHost: 'control.example.test:50051',
-      grpcUseTLS: false,
-      pluginSupervisorEnabled: true,
-      pluginOfficialPublicKey: KEY
-    })
-    expect(deploy.agentControlEnabled.value).toBe(false)
-    expect(deploy.pluginSupervisorCanaryReady.value).toBe(false)
-    expect(config(deploy)).toMatchObject({ ApiHost: 'https://panel.example.test', AgentControlEnabled: false, GRPCUseTLS: false })
-
-    Object.assign(deploy.deploySettings, { grpcHost: '[::1]:50051', pluginOfficialPublicKey: 'not-a-public-key' })
-    expect(deploy.agentControlEnabled.value).toBe(true)
-    expect(deploy.pluginSupervisorCanaryError.value).toContain('Ed25519')
-    deploy.deploySettings.pluginOfficialPublicKey = KEY.slice(0, -1)
-    expect(deploy.pluginSupervisorCanaryReady.value).toBe(false)
-  })
-
-  it('recognises loopback gRPC hosts only', () => {
-    expect(isLoopbackGRPCHost('127.0.0.1:50051')).toBe(true)
-    expect(isLoopbackGRPCHost('localhost')).toBe(true)
-    expect(isLoopbackGRPCHost('[::1]:50051')).toBe(true)
-    expect(isLoopbackGRPCHost('10.0.0.1:50051')).toBe(false)
-    expect(isLoopbackGRPCHost('http://127.0.0.1:50051')).toBe(false)
-  })
-})
 
 describe('useProtocolEditor', () => {
   it('sends masked secrets back as the placeholder, which keeps the stored values', () => {
@@ -133,10 +76,9 @@ describe('useProtocolEditor', () => {
 describe('node data', () => {
   it('builds the node body the form has always sent', () => {
     const form = nodeFormFrom({ id: 3, name: 'hk', host: 'hk.example', tags: 'HK', rate: 1.5, sort: 2, status: 1, parent_id: 1, monthly_limit: 2 * 1024 ** 3, monthly_reset_day: 5 })
-    expect(buildNodePayload(form, { editing: true })).toEqual({
+    expect(buildNodePayload(form)).toEqual({
       name: 'hk', host: 'hk.example', tags: 'HK', rate: 1.5, sort: 2, parent_id: 1, monthly_limit: 2 * 1024 ** 3, monthly_reset_day: 5, status: 1
     })
-    expect(buildNodePayload(nodeFormFrom(null))).not.toHaveProperty('status')
   })
 
   it('leaves the node and its descendants out of the parent candidates', () => {

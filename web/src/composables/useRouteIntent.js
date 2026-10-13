@@ -2,7 +2,7 @@ import { onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 // useRouteIntent reads one-shot instructions from the URL query, such as the
-// command palette's "添加节点" (/admin/nodes?create=1) or a user search
+// command palette's "接入节点" (/admin/nodes?join=1) or a user search
 // result (/admin/users?email=...), and removes them from the address bar,
 // so a reload or a shared link does not repeat them.
 //

@@ -1,6 +1,6 @@
 // Node list feedback (UI U4 → U7): the row "…" menu, a typed-name
-// ConfirmDialog for deleting a node, the add/edit sheet with inline errors,
-// and toasts for sync.
+// ConfirmDialog for deleting a node, the edit sheet with inline errors,
+// the confirmation of rejecting a node and toasts for sync.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor, within } from '@testing-library/vue'
 import userEvent from '@testing-library/user-event'
@@ -10,25 +10,25 @@ import UiHost from '@/ui/UiHost.vue'
 import { toastMessages, toasts } from './helpers/feedback'
 
 const api = vi.hoisted(() => ({
-  getNodes: vi.fn(),
   getNodeStats: vi.fn(),
-  createNode: vi.fn(),
   updateNode: vi.fn(),
   deleteNode: vi.fn(),
   getNodeCredentials: vi.fn(),
-  syncNodeProtocol: vi.fn(),
-  getAuthKeys: vi.fn(),
-  generateAuthKey: vi.fn()
+  syncNodeProtocol: vi.fn()
 }))
 
 vi.mock('@/api/admin', () => api)
 
-// The Agent connection and the services summary of the nodes in view are not
-// what these tests are about.
-vi.mock('@/api/kernel', async importOriginal => ({
-  ...(await importOriginal()),
-  getKernelAgentTransports: vi.fn(async () => ({ nodes: [] }))
+// The Agent connection of the nodes in view is not what these tests are
+// about; the list and the groups are.
+const kernel = vi.hoisted(() => ({
+  getKernelAdminNodes: vi.fn(),
+  getKernelAgentTransports: vi.fn(),
+  listKernelNodeGroups: vi.fn(),
+  approveKernelNode: vi.fn(),
+  rejectKernelNode: vi.fn()
 }))
+vi.mock('@/api/kernel', async importOriginal => ({ ...(await importOriginal()), ...kernel }))
 vi.mock('@/api/machineTelemetry', async importOriginal => ({
   ...(await importOriginal()),
   getNodesServicesSummary: vi.fn(async () => [])
@@ -62,12 +62,13 @@ async function rowAction(user, name) {
 
 describe('Nodes dialogs and feedback', () => {
   beforeEach(() => {
-    for (const fn of Object.values(api)) fn.mockReset()
+    for (const fn of [...Object.values(api), ...Object.values(kernel)]) fn.mockReset()
     vi.spyOn(console, 'error').mockImplementation(() => {})
-    api.getNodes.mockResolvedValue({ data: { list: [node], total: 1 } })
+    kernel.getKernelAdminNodes.mockResolvedValue({ list: [node], total: 1 })
+    kernel.getKernelAgentTransports.mockResolvedValue({ nodes: [] })
+    kernel.listKernelNodeGroups.mockResolvedValue({ groups: [] })
     api.getNodeStats.mockResolvedValue({ data: { total: 1, online: 1, offline: 0, pending: 0 } })
     api.getNodeCredentials.mockResolvedValue({ data: { api_key: '' } })
-    api.getAuthKeys.mockResolvedValue({ data: [] })
   })
 
   afterEach(() => {
@@ -119,32 +120,59 @@ describe('Nodes dialogs and feedback', () => {
     expect(toasts()).toHaveLength(0)
   })
 
-  it('validates the node sheet inline, saves and reports with a toast', async () => {
+  it('validates the edit sheet inline, keeps a failed save in it and reports a save with a toast', async () => {
     const user = userEvent.setup()
-    api.createNode.mockRejectedValueOnce({ response: { data: { error: 'duplicate name' } } }).mockResolvedValueOnce({ data: {} })
+    api.updateNode.mockRejectedValueOnce({ response: { data: { error: 'duplicate name' } } }).mockResolvedValueOnce({ data: {} })
     await renderPage()
 
-    const opener = screen.getByRole('button', { name: 'Add node' })
-    await user.click(opener)
-    const sheet = await screen.findByRole('dialog', { name: 'Add node' })
+    const opener = await rowAction(user, 'Edit')
+    const sheet = await screen.findByRole('dialog', { name: 'Edit node' })
     expect(sheet.classList.contains('ui-sheet')).toBe(true)
-    await user.click(within(sheet).getByRole('button', { name: 'Add node' }))
-    expect(within(sheet).getAllByText('Required')).toHaveLength(2)
-    expect(api.createNode).not.toHaveBeenCalled()
+    const name = within(sheet).getByRole('textbox', { name: /Name/ })
+    await user.clear(name)
+    await user.click(within(sheet).getByRole('button', { name: 'Save changes' }))
+    expect(within(sheet).getAllByText('Required')).toHaveLength(1)
+    expect(api.updateNode).not.toHaveBeenCalled()
 
-    await user.type(within(sheet).getByRole('textbox', { name: /Name/ }), 'sg-02')
-    await user.type(within(sheet).getByRole('textbox', { name: /Address/ }), 'sg.example.test')
-    await user.click(within(sheet).getByRole('button', { name: 'Add node' }))
+    await user.type(name, 'sg-02')
+    await user.click(within(sheet).getByRole('button', { name: 'Save changes' }))
     await waitFor(() => expect(within(sheet).getByRole('alert').textContent).toContain('duplicate name'))
-    expect(screen.getByRole('dialog', { name: 'Add node' })).toBeTruthy()
+    expect(screen.getByRole('dialog', { name: 'Edit node' })).toBeTruthy()
 
-    await user.click(within(sheet).getByRole('button', { name: 'Add node' }))
+    await user.click(within(sheet).getByRole('button', { name: 'Save changes' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
-    expect(api.createNode).toHaveBeenLastCalledWith({
-      name: 'sg-02', host: 'sg.example.test', tags: '', rate: 1, sort: 0, parent_id: null, monthly_limit: null, monthly_reset_day: 1
+    expect(api.updateNode).toHaveBeenLastCalledWith(5, {
+      name: 'sg-02', host: 'hk.example.test', tags: '', rate: 1, sort: 0, parent_id: null, monthly_limit: null, monthly_reset_day: 1, status: 1
     })
-    expect(toastMessages('success')).toEqual(['Node sg-02 added'])
+    expect(toastMessages('success')).toEqual(['Node sg-02 saved'])
     await waitFor(() => expect(document.activeElement).toBe(opener))
+  })
+
+  it('has no way to add a node by hand: the header has one entry, Join a node', async () => {
+    await renderPage()
+    expect(screen.queryByRole('button', { name: 'Add node' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Registration key' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Deploy parent nodes' })).toBeNull()
+    expect(screen.getAllByRole('button', { name: 'Join a node' })).toHaveLength(1)
+  })
+
+  it('asks before rejecting a node that waits, then rejects it', async () => {
+    const user = userEvent.setup()
+    kernel.getKernelAdminNodes.mockResolvedValue({ list: [{ ...node, status: 0, approval: 'pending' }], total: 1 })
+    kernel.rejectKernelNode.mockResolvedValue({ node: 'proxy-5', approval: 'rejected' })
+    await renderPage()
+
+    await rowAction(user, 'Reject')
+    let dialog = await screen.findByRole('alertdialog', { name: 'Reject node hk-01?' })
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
+    expect(kernel.rejectKernelNode).not.toHaveBeenCalled()
+
+    await rowAction(user, 'Reject')
+    dialog = await screen.findByRole('alertdialog')
+    await user.click(within(dialog).getByRole('button', { name: 'Reject' }))
+    await waitFor(() => expect(kernel.rejectKernelNode).toHaveBeenCalledWith('proxy-5'))
+    await waitFor(() => expect(toastMessages('success')).toEqual(['hk-01 rejected']))
   })
 
   it('edits a node from the row menu with the status field', async () => {
@@ -177,32 +205,5 @@ describe('Nodes dialogs and feedback', () => {
     const { router } = await renderPage()
     await rowAction(user, 'Manage protocols')
     await waitFor(() => expect(router.currentRoute.value.fullPath).toBe('/admin/nodes/5?section=protocols'))
-  })
-
-  it('shows a failed key generation inside the registration key sheet and copies with a toast', async () => {
-    const user = userEvent.setup()
-    api.generateAuthKey.mockRejectedValueOnce(new Error('quota reached')).mockResolvedValueOnce({ code: 0, data: { id: 9, key: 'fresh-key' } })
-    const clipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard')
-    const secure = Object.getOwnPropertyDescriptor(window, 'isSecureContext')
-    const writeText = vi.fn().mockResolvedValue(undefined)
-    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
-    Object.defineProperty(window, 'isSecureContext', { value: true, configurable: true })
-    try {
-      await renderPage()
-      await user.click(screen.getByRole('button', { name: 'Registration key' }))
-      const sheet = await screen.findByRole('dialog', { name: 'Registration key' })
-      await user.click(within(sheet).getByRole('button', { name: 'Generate key' }))
-      expect((await within(sheet).findByRole('alert')).textContent).toContain('quota reached')
-
-      await user.click(within(sheet).getByRole('button', { name: 'Generate key' }))
-      await waitFor(() => expect(within(sheet).getByRole('button', { name: 'Copy key' })).toBeTruthy())
-      await user.click(within(sheet).getByRole('button', { name: 'Copy key' }))
-      expect(writeText).toHaveBeenCalledWith('fresh-key')
-    } finally {
-      if (clipboard) Object.defineProperty(navigator, 'clipboard', clipboard)
-      else delete navigator.clipboard
-      if (secure) Object.defineProperty(window, 'isSecureContext', secure)
-      else delete window.isSecureContext
-    }
   })
 })
