@@ -28,7 +28,6 @@ export default {
         knowledge: 'Help Center content',
         nodes: 'Nodes',
         forward: 'Forwarding',
-        agents: 'NodeX Agents',
         plugins: 'Plugin Center',
         deployments: 'Deployments',
         settings: 'Settings',

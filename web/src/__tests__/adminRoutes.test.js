@@ -61,8 +61,6 @@ describe('admin routes', () => {
       '/admin/knowledge',
       '/admin/mfa',
       '/admin/system',
-      '/admin/agent',
-      '/admin/agent/transports',
       '/admin/plugins',
       '/admin/plugins/route-modes',
       '/admin/deployments',
@@ -83,6 +81,13 @@ describe('admin routes', () => {
     for (const path of expectedPaths) {
       const matched = router.resolve(path).matched
       expect(matched.length > 0 && !matched.at(-1).path.includes(':pathMatch'), path).toBe(true)
+    }
+  })
+
+  it('sends the removed Agent pages to the node list (5.0, D7)', () => {
+    for (const path of ['/admin/agent', '/admin/agent/list', '/admin/agent/transports', '/admin/agent/tasks/7']) {
+      const matched = router.resolve(path).matched
+      expect(matched.at(-1).redirect, path).toBe('/admin/nodes')
     }
   })
 

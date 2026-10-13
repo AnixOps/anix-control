@@ -36,8 +36,6 @@ const AdminNotifications = () => import('@/views/admin/Notifications.vue')
 const AdminInvite = () => import('@/views/admin/Invite.vue')
 const AdminInviteCodes = () => import('@/views/admin/InviteCodes.vue')
 const AdminSystem = () => import('@/views/admin/System.vue')
-const AdminAgent = () => import('@/views/admin/Agent.vue')
-const AdminAgentTransports = () => import('@/views/admin/AgentTransports.vue')
 const AdminPlugins = () => import('@/views/admin/Plugins.vue')
 const AdminRouteModes = () => import('@/views/admin/RouteModes.vue')
 const AdminDeployments = () => import('@/views/admin/Deployments.vue')
@@ -315,14 +313,11 @@ const routes = [
         component: AdminSystem
       },
       {
-        path: 'agent',
-        component: AdminAgent
-      },
-      {
-        // Agent transport inventory (A2-6), below NodeX Agents.
-        path: 'agent/transports',
-        component: AdminAgentTransports,
-        meta: WIDE
+        // NodeX Agents and Agent 连接方式 are gone (5.0, D7): diagnostics are
+        // the node page's 诊断 section, the connection columns the node
+        // list's, the upgrade a ⌘K action.
+        path: 'agent/:rest(.*)*',
+        redirect: '/admin/nodes'
       },
       {
         path: 'plugins',

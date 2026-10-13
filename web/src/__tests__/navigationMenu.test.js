@@ -42,7 +42,6 @@ describe('navigation/menu.js: buildAdminMenu', () => {
     // flux-clone 转发 and 转发节点 were removed in v4.2 (F5d).
     expect(network.map(item => [item.id, item.to])).toEqual([
       ['nodes', '/admin/nodes'],
-      ['agents', '/admin/agent'],
       ['deployments', '/admin/deployments']
     ])
     expect(groups.find(group => group.id === 'extensions').items.map(item => item.id)).toEqual(['plugins'])
@@ -148,7 +147,6 @@ describe('navigation/menu.js: active item', () => {
     ['/admin/dashboard', 'dashboard'],
     ['/admin/monitor', 'monitor'],
     ['/admin/monitor/traffic', 'monitor'],
-    ['/admin/agent', 'agents'],
     ['/admin/nodes', 'nodes'],
     ['/admin/plans', 'plans']
   ])('selects exactly one item for %s', (path, expected) => {
@@ -267,7 +265,6 @@ describe('forwarding area capability', () => {
     expect(items.map(item => [item.id, item.label])).toEqual([
       ['nodes', 'shell.admin.items.nodes'],
       ['forward-v4', 'shell.admin.items.forward'],
-      ['agents', 'shell.admin.items.agents'],
       ['deployments', 'shell.admin.items.deployments']
     ])
     for (const path of ['/admin/forward/overview', '/admin/forward/routes/01J/edit', '/admin/forward/inventory/forward-41']) {

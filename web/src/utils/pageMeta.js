@@ -20,8 +20,6 @@ const PAGE_TITLE_KEYS = {
   '/admin/tickets': 'pageTitles.admin.tickets',
   '/admin/coupons': 'pageTitles.admin.coupons',
   '/admin/knowledge': 'pageTitles.admin.knowledge',
-  '/admin/agent': 'pageTitles.admin.forwardAgents',
-  '/admin/agent/transports': 'pageTitles.admin.agentTransports',
   '/admin/control': 'pageTitles.admin.control',
   '/admin/plugins': 'pageTitles.admin.plugins',
   '/admin/plugins/route-modes': 'pageTitles.admin.routeModes',

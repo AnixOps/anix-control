@@ -838,37 +838,6 @@ export function restoreBackup(id) {
   })
 }
 
-export function getAgents() {
-  return request({
-    url: '/admin/agent/list',
-    method: 'get'
-  })
-}
-
-export function createAgentTask(data) {
-  return request({
-    url: '/admin/agent/tasks',
-    method: 'post',
-    data
-  })
-}
-
-export function executeAgentCommand(data) {
-  return request({
-    url: '/admin/agent/execute',
-    method: 'post',
-    data
-  })
-}
-
-export function listAgentDiagnosticTasks(params) {
-  return request({
-    url: '/admin/agent/tasks',
-    method: 'get',
-    params
-  })
-}
-
 export function getLoadBalancers(params) {
   return request({
     url: '/admin/loadbalancers',
@@ -1119,10 +1088,6 @@ export default {
   getBackupStats,
   deleteBackup,
   restoreBackup,
-  getAgents,
-  createAgentTask,
-  executeAgentCommand,
-  listAgentDiagnosticTasks,
   getLoadBalancers,
   createLoadBalancer,
   updateLoadBalancer,

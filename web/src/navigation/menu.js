@@ -76,7 +76,6 @@ export const ADMIN_MENU = Object.freeze([
         capability: 'forward.v4',
         match: FORWARD_V4_PATHS.map(path => `${path}/`).concat(FORWARD_V4_PATHS)
       },
-      { id: 'agents', to: '/admin/agent', icon: 'agents', labelKey: 'shell.admin.items.agents' },
       { id: 'deployments', to: '/admin/deployments', icon: 'deployments', labelKey: 'shell.admin.items.deployments' }
     ]
   },
