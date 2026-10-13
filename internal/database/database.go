@@ -42,6 +42,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -59,11 +60,22 @@ import (
 var (
 	db          *gorm.DB
 	initialized bool
+	// sqlLogOutput is where the text format's SQL log goes: stdout for the
+	// server, stderr for a command whose stdout is its result
+	// (SetSQLLogOutput).
+	sqlLogOutput io.Writer = os.Stdout
 	// readPools are the SQLite read connection pools of the handles Open
 	// made, by the handle's writer connection pool; none for an in-memory
 	// database and for PostgreSQL.
 	readPools sync.Map // *sql.DB -> []*sql.DB
 )
+
+// SetSQLLogOutput sends the text format's SQL log of the handles opened
+// afterwards to w. Commands that print their result on stdout (the module,
+// agent and admin commands) send it to stderr.
+func SetSQLLogOutput(w io.Writer) {
+	sqlLogOutput = w
+}
 
 // Init 初始化数据库连接
 func Init(cfg *config.DatabaseConfig) error {
@@ -127,7 +139,7 @@ func Open(cfg *config.DatabaseConfig) (*gorm.DB, error) {
 	}
 
 	// logger.Default's writer, or the JSON handler's.
-	var sqlLogWriter logger.Writer = log.New(os.Stdout, "\r\n", log.LstdFlags)
+	var sqlLogWriter logger.Writer = log.New(sqlLogOutput, "\r\n", log.LstdFlags)
 	colorful := true
 	if logging.JSON() {
 		sqlLogWriter = log.New(logging.StdWriter(), "", 0)
