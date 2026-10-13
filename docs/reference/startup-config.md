@@ -130,18 +130,29 @@ The runtime flow is now:
    or adopts `module_runtime.ca_kek` into it) and derive the JWT secret and
    the identity KEK from it unless they were adopted
 3. normalize sqlite path, frontend path, and ansible runtime paths
-4. initialize database
-5. prepare the database (below): the migrations, then the check that the
-   root key opens the stored CA keys (a key that cannot stops the start),
-   then the seeds and `InitForwardRuntimeSystemConfig`
-6. persist the parsed runtime snapshot into `v2_system_config`
-7. load the panel certificates (`internal/panelcert`): the ones stored in
+4. take a shared lock on `data_dir/control.lock`, held until the process
+   exits (the server and `migrate`): `anix-control backup restore` needs it
+   exclusively, so a restore never runs under a Control, and a start while a
+   restore runs stops with "a backup restore is running"
+   ([backups.md](backups.md#restore))
+5. initialize database
+6. prepare the database (below): the migrations (before a pending one on a
+   database that is not empty, a `pre-migration` backup; when it fails,
+   nothing is migrated and the start stops), then the check that the root
+   key opens the stored CA keys (a key that cannot stops the start), then
+   the seeds and `InitForwardRuntimeSystemConfig`
+7. persist the parsed runtime snapshot into `v2_system_config`
+8. load the panel certificates (`internal/panelcert`): the ones stored in
    `v5_acme_cache`, the certificate files, and the self-signed fallback, so
    that every listener serves the right certificate from its first handshake
-8. bind the node gRPC listener, then every HTTP listener of `tls.mode`; a
+9. bind the node gRPC listener, then every HTTP listener of `tls.mode`; a
    port that is taken stops the start
-9. start the background workers, among them the certificate loop, which
-   sends the first ACME request at once and never blocks a handshake
+10. start the background workers, among them the certificate loop, which
+    sends the first ACME request at once and never blocks a handshake, and
+    the backup worker (in the process that holds the singleton lease): it
+    verifies the newest unverified bundle (this start's pre-migration
+    backup), applies the retention and backs up daily
+    ([backups.md](backups.md))
 
 Before step 7, a database without an administrator logs one line,
 ``No administrator yet. Run `sudo anix-control admin claim-link` to get the

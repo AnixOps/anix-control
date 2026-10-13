@@ -1,6 +1,6 @@
 # 单程序、自带证书与内嵌 SQLite（M2）
 
-**状态：** 2026-10-13 草案，待所有者审阅。方向已由所有者选定（[运维简化路线图](../ops-simplification/README.md) 的 S1、S2、S4），本文只把它落成可实施、可拆 PR 的设计，不重新讨论方向。
+**状态：** 2026-10-13 草案，待所有者审阅。P10（自动备份、验证与还原，N32、N33）已实现，与 3.8、3.9 的差别见 3.8 末尾的「实现（P10）」。方向已由所有者选定（[运维简化路线图](../ops-simplification/README.md) 的 S1、S2、S4），本文只把它落成可实施、可拆 PR 的设计，不重新讨论方向。
 
 **兼容性：** 无。只有一位维护者和使用者；生产面板今天没有节点（所有者口述）。旧的安装形态、配置文件和 PostgreSQL 部署都不保留迁移路径，唯一的例外是生产库的一次性导入。
 
@@ -477,6 +477,17 @@ sudo anix-control import-postgres \
 **加密：本地包不加密。** 备份包和数据库、根密钥在同一块盘上，能读到备份目录的人也能读到 `control.db` 和 `root.key`，用根密钥加密备份既不增加保护，又会造成循环依赖（解开备份需要的密钥就在备份里）。保护靠权限：目录 0700、文件 0600、属主 `anix-control`。异地副本（S11，M4）离开这台机器，必须加密，届时用一把单独的恢复密钥，在后台显示一次由所有者保存，不用根密钥。
 
 **下载。** 后台“下载最新备份”只对超级管理员开放，下载前重新输入密码，写审计。
+
+**实现（P10）。** 见 [backups.md](../../reference/backups.md)。与上文的差别：
+
+- 备份包是不压缩的 `anix-control-<UTC 时间>-<类型>.tar`（文件名不含版本，版本在清单里），成员为 `manifest.json`、`database.sqlite`、`root.key`、`config.yaml`（Control 读取了配置文件时才有）；清单另记主机名和根密钥指纹（根密钥按标签 `anixops root key fingerprint v1` 派生值的 SHA-256，不是密钥本身的摘要）。
+- 快照：`VACUUM INTO` 在一条专用的短连接上执行（读连接池是 `query_only`，执行不了；写连接执行会挡住所有写入）。它本身是一个读事务，WAL 下不等也不挡唯一的写连接；测试在持续写入时连拍快照，并在写连接持有写事务时完成快照。写入过程：临时文件写完、fsync、以硬链接改为最终名（不覆盖同名包），失败不留任何文件；剩余空间小于库大小 3 倍时拒绝。
+- 每日时间：本地 03:00–05:00 之间、由域名（没有域名时主机名）的哈希决定的固定分钟，不是 03:30 加随机数；最新每日备份超过 26 小时时（新面板、错过时间），启动 2 分钟后补一次。`pre-upgrade` 类型留给 P11；另有 `verify` 类型（只为端到端验证）。
+- 保留：最近 7 个每日、此前 4 个 ISO 周（有每日备份的最近 4 周）每周最新的每日备份、30 天内所有迁移前备份、最近 3 个手动、最近 1 个 verify，以及最近一个验证通过的包。删除前以非阻塞方式独占包文件的 flock，正在验证、下载或还原的包（持有共享锁）不删。
+- 验证：每日备份后、每次迁移前或手动备份后（迁移前的包在 Control 启动后由备份任务验证），以及启动时验证最新的未验证包。步骤比上文多“本程序能否打开该库”（`migrations.Check`，与启动相同的拒绝信息）。`v5_backup` 列为 `id, path, type, size, sha256, created_at, verified_at, verify_status, verify_error, program_version, schema_version`（迁移 `0005_backups`）；目录里的文件为准，表随之同步。告警 `backup_verify_failed`、`backup_stale`（36 小时内没有验证通过的包，库本身早于 36 小时；72 小时后为 critical）。
+- 还原：`anix-control backup restore <包> [--replace] [--data-dir D]`。运行中的 Control（和 `migrate`）对 `data_dir/control.lock` 持有共享 flock，还原需要独占；另外用 `F_GETLK` 检查是否有进程持有数据库文件或 `-shm` 的 SQLite 锁。较新程序迁移过的库按 P2 的信息拒绝（按迁移号判断，不按程序版本号，以便回滚到同结构的旧补丁版本）。配置写到 Control 读取的配置文件；没有配置文件时写到 `data_dir/config.yaml.restored`。以 root 运行时，写出的文件和目录归数据目录的属主。
+- 下载：`GET /api/v5/backups/:id/download` 只对超级管理员开放并写审计（`backups/download`），**未要求重新输入密码**（待所有者决定）。列表和立即备份为 `GET`/`POST /api/v5/backups`。
+- 删除：旧的 `BackupService`（含 `CleanupOldBackups`、旧的 `VACUUM INTO` 辅助函数和在线还原）、7 条 `/api/v2/admin/system/backup*` 路由（现答 404）、platform 包的备份处理和 `kernel.settings.backup.*` 命名空间、`model.BackupRecord`/`BackupConfig`。`v2_backup_record`、`v2_backup_config` 两张表保留到后续的清理迁移。
 
 ### 3.9 还原和迁机（N33）
 

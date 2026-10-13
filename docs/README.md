@@ -42,6 +42,7 @@ Use this tree like NodeX:
 - Container design and multi-replica status: [`architecture/container-deployment.md`](architecture/container-deployment.md)
 - Native systemd install (the alternative to containers): [`guide/release-installation.md`](guide/release-installation.md)
 - Upgrade runbook: [`UPGRADE.md`](UPGRADE.md)
+- Backups and restore (daily, pre-migration and manual bundles, verification, retention, `anix-control backup`): [`reference/backups.md`](reference/backups.md)
 - V4 plugin-only upgrade: [`guide/v4-plugin-only-upgrade.md`](guide/v4-plugin-only-upgrade.md)
 - V4 plugin-only rollback: [`guide/v4-plugin-only-rollback.md`](guide/v4-plugin-only-rollback.md)
 - Official package signing root rotation: [`guide/release-root-rotation.md`](guide/release-root-rotation.md)
