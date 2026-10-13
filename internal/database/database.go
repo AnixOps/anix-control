@@ -46,6 +46,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -127,16 +128,7 @@ func Open(cfg *config.DatabaseConfig) (*gorm.DB, error) {
 		return nil, fmt.Errorf("unsupported database driver: %s (supported: sqlite, postgres)", cfg.Driver)
 	}
 
-	// 配置日志级别
-	logLevel := logger.Info
-	switch cfg.LogLevel {
-	case "silent":
-		logLevel = logger.Silent
-	case "error":
-		logLevel = logger.Error
-	case "warn":
-		logLevel = logger.Warn
-	}
+	logLevel := sqlLogLevel(cfg.LogLevel)
 
 	// logger.Default's writer, or the JSON handler's.
 	var sqlLogWriter logger.Writer = log.New(sqlLogOutput, "\r\n", log.LstdFlags)
@@ -185,6 +177,23 @@ func Open(cfg *config.DatabaseConfig) (*gorm.DB, error) {
 	}
 
 	return handle, nil
+}
+
+// sqlLogLevel is database.log_level as GORM's level: silent, error, warn or
+// info. Empty and unknown values are error, the built-in default
+// (defaults.yaml): a configuration file without a database section leaves
+// the value empty, and info would log every statement.
+func sqlLogLevel(value string) logger.LogLevel {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "silent":
+		return logger.Silent
+	case "warn":
+		return logger.Warn
+	case "info":
+		return logger.Info
+	default:
+		return logger.Error
+	}
 }
 
 // newSQLLogger returns GORM's SQL logger: logger.Default's settings at the

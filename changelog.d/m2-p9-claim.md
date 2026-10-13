@@ -40,6 +40,13 @@
 - The Compose files, `control.env.example` and the Helm chart (0.5.0) no
   longer carry `ANIX_CONTROL_ADMIN_*`; their notes name the claim command.
 
+### Fixed
+
+- An empty `database.log_level` logs SQL errors only, like the built-in
+  default `error`. A configuration file without a `database` section (the
+  installer's) left it empty, and Control then logged every statement at
+  info level (values were never logged).
+
 ### Removed
 
 - `admin.email` and `admin.password` (and `ANIX_CONTROL_ADMIN_EMAIL`,
