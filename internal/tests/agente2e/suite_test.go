@@ -144,9 +144,7 @@ func newSuite(t *testing.T) *suite {
 	t.Cleanup(func() { c.proc.Stop(t, 10*time.Second) })
 	c.db = openTestDB(t, postgresDSN, c.sqlitePath)
 	c.Login(t)
-	for _, id := range []string{"protocol-runtime", "forward", "machine-telemetry"} {
-		c.InstallPackage(t, s.pkgs[id])
-	}
+	c.InstallPackages(t, s.keys.SigningPublicKey, s.pkgs["protocol-runtime"], s.pkgs["forward"], s.pkgs["machine-telemetry"])
 	s.sink = newTrafficSink(t)
 	s.proxy = newTCPProxy(t, c.GRPCAddr())
 	t.Logf("environment ready in %s (database %s, netns %t)", time.Since(started).Round(time.Second), c.dbDriver, s.netns)

@@ -16,20 +16,31 @@ chown() { :; }
 CONFIG_FILE="${temporary}/config.yaml"
 APP_USER="$(id -gn)"
 
-# The official packages are built into the binary: the installer turns
-# package execution on and never writes an identity package directory.
+# The official packages are built into the binary and always run: the
+# installer drops the plugins.* switches Control no longer reads, keeps the
+# other keys and never writes an identity package directory.
 printf '%s\n' \
   'app:' \
   '  name: "AnixOps Control"' \
   'plugins:' \
   '  official_public_key: "test-root"' \
   '  control_execution_enabled: false' \
-  '  dispatch_enabled: false' >"${CONFIG_FILE}"
+  '  control_poll_interval: "5s"' \
+  '  dispatch_enabled: false' \
+  '  dispatch_poll_interval: "5s"' \
+  '  topology_execution_enabled: false' \
+  '  topology_poll_interval: "5s"' \
+  'grpc:' \
+  '  enabled: true' >"${CONFIG_FILE}"
 
 configure_plugin_execution_config
-grep -Fx '  control_execution_enabled: true' "${CONFIG_FILE}" >/dev/null
-grep -Fx '  dispatch_enabled: false' "${CONFIG_FILE}" >/dev/null
-[[ "$(grep -c '^[[:space:]]*control_execution_enabled:' "${CONFIG_FILE}")" -eq 1 ]]
+grep -Fx '  official_public_key: "test-root"' "${CONFIG_FILE}" >/dev/null
+grep -Fx '  control_poll_interval: "5s"' "${CONFIG_FILE}" >/dev/null
+grep -Fx '  enabled: true' "${CONFIG_FILE}" >/dev/null
+if grep -qE '^[[:space:]]*(control_execution_enabled|dispatch_enabled|dispatch_poll_interval|topology_execution_enabled|topology_poll_interval):' "${CONFIG_FILE}"; then
+  printf 'the installer must drop the removed plugins.* switches\n' >&2
+  exit 1
+fi
 if grep -q 'identity_bootstrap_package_dir' "${CONFIG_FILE}"; then
   printf 'the installer must not write an identity package directory\n' >&2
   exit 1
@@ -40,8 +51,10 @@ printf '%s\n' \
   '  name: "AnixOps Control"' >"${CONFIG_FILE}"
 
 configure_plugin_execution_config
-grep -Fx 'plugins:' "${CONFIG_FILE}" >/dev/null
-grep -Fx '  control_execution_enabled: true' "${CONFIG_FILE}" >/dev/null
+if grep -q 'control_execution_enabled' "${CONFIG_FILE}"; then
+  printf 'the installer must not write control_execution_enabled\n' >&2
+  exit 1
+fi
 if grep -q 'identity_bootstrap_package_dir' "${CONFIG_FILE}"; then
   printf 'the installer must not write an identity package directory\n' >&2
   exit 1
@@ -55,7 +68,6 @@ printf '%s\n' \
 
 configure_plugin_execution_config
 grep -Fx '  identity_bootstrap_package_dir: "/srv/operator-selected-bootstrap"' "${CONFIG_FILE}" >/dev/null
-grep -Fx '  control_execution_enabled: true' "${CONFIG_FILE}" >/dev/null
 
 FRESH_CONFIG=1
 VERSION="v4.0.0"

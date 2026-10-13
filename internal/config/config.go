@@ -62,7 +62,6 @@ type Config struct {
 	Identity       IdentityConfig       `yaml:"identity"`
 	AgentControl   AgentControlConfig   `yaml:"agent_control"`
 	AgentInstall   AgentInstallConfig   `yaml:"agent_install"`
-	PackageRoutes  PackageRoutesConfig  `yaml:"package_routes"`
 	Alerts         AlertsConfig         `yaml:"alerts"`
 }
 
@@ -227,44 +226,6 @@ type AgentInstallConfig struct {
 	SignatureFile string `yaml:"signature_file"`
 }
 
-// PackageRoutesConfig sets the route modes the kernel hands v2 Control
-// package hosts for routes whose installation stores no mode.
-type PackageRoutesConfig struct {
-	// DefaultMode is the default policy:
-	//   - "rehearsed" (the default from 4.1.0): the routes listed in
-	//     config/package-route-defaults.json, which passed the staging
-	//     rehearsal, run natively when the installation stores no mode for
-	//     them and the installed package release is at least the rehearsed
-	//     one;
-	//   - "legacy": no route defaults to native; every route without a
-	//     stored mode runs its legacy handler, as in 4.0 (the kill switch).
-	// A stored mode (anix-control routes set/rollback) always wins.
-	DefaultMode string `yaml:"default_mode"`
-}
-
-// Package route default policies (package_routes.default_mode).
-const (
-	PackageRoutesDefaultRehearsed = "rehearsed"
-	PackageRoutesDefaultLegacy    = "legacy"
-)
-
-// DefaultModeOrDefault returns the configured policy, rehearsed when
-// empty.
-func (p PackageRoutesConfig) DefaultModeOrDefault() string {
-	if mode := strings.ToLower(strings.TrimSpace(p.DefaultMode)); mode != "" {
-		return mode
-	}
-	return PackageRoutesDefaultRehearsed
-}
-
-func (p PackageRoutesConfig) validate() error {
-	switch p.DefaultModeOrDefault() {
-	case PackageRoutesDefaultRehearsed, PackageRoutesDefaultLegacy:
-		return nil
-	}
-	return fmt.Errorf("invalid package_routes.default_mode %q: use rehearsed or legacy", p.DefaultMode)
-}
-
 // AgentControlConfig configures how AnixOps Agents authenticate on the
 // node-facing gRPC listener (grpc.*) and on the legacy AnixOps-agent HTTP
 // and WebSocket paths (node-ops-service.md, section 5.6).
@@ -392,13 +353,14 @@ type IdentityConfig struct {
 	KEK string `yaml:"kek"`
 }
 
-// PluginConfig controls the official plugin trust root and the opt-in durable
-// lifecycle dispatcher. Third-party plugin execution is intentionally
-// unsupported by the control kernel.
+// PluginConfig controls the official plugin trust root and the package
+// hosts of the built-in packages, which always run. Third-party plugin
+// execution is intentionally unsupported by the control kernel. Agent plugin
+// dispatch and topology execution are off until M4 and have no setting
+// (service.AgentPluginDispatchEnabled, service.TopologyExecutionEnabled).
 type PluginConfig struct {
 	OfficialPublicKey                  string `yaml:"official_public_key"`
 	IdentityBootstrapPackageDir        string `yaml:"identity_bootstrap_package_dir"`
-	ControlExecutionEnabled            bool   `yaml:"control_execution_enabled"`
 	ControlPollInterval                string `yaml:"control_poll_interval"`
 	ControlHostRuntimeDir              string `yaml:"control_host_runtime_dir"`
 	ControlHostArtifactDir             string `yaml:"control_host_artifact_dir"`
@@ -407,10 +369,6 @@ type PluginConfig struct {
 	ControlHostWebSocketSessionTimeout string `yaml:"control_host_websocket_session_timeout"`
 	ControlHostMaxRequestBytes         int64  `yaml:"control_host_max_request_bytes"`
 	ControlHostMaxResponseBytes        int64  `yaml:"control_host_max_response_bytes"`
-	DispatchEnabled                    bool   `yaml:"dispatch_enabled"`
-	DispatchPollInterval               string `yaml:"dispatch_poll_interval"`
-	TopologyExecutionEnabled           bool   `yaml:"topology_execution_enabled"`
-	TopologyPollInterval               string `yaml:"topology_poll_interval"`
 }
 
 const (
@@ -780,7 +738,8 @@ func load(path string, environ []string) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	for _, name := range unknown {
+	// The removed keys (deprecated.go) are reported with their reason.
+	for _, name := range ignoreRemovedKeys(data, unknown) {
 		log.Printf("Ignoring unknown configuration variable %s (see anix-control -print-env)", name)
 	}
 	normalizeBrandDefaults(loaded)
@@ -802,9 +761,6 @@ func load(path string, environ []string) (*Config, error) {
 	}
 	if _, err := requestorigin.NewPolicy(loaded.Server.TrustedProxies); err != nil {
 		return nil, fmt.Errorf("server.trusted_proxies: %w", err)
-	}
-	if err := loaded.PackageRoutes.validate(); err != nil {
-		return nil, err
 	}
 	if err := loaded.Alerts.validate(); err != nil {
 		return nil, err

@@ -30,11 +30,13 @@ import (
 // legacyModelsPrepare builds the schema from today's models, which later
 // migrations change, plus the tables later migrations create (laterModels).
 // legacyPrepare is the legacy start as it was at the baseline: the same,
-// less what later migrations added to the models (postBaselineIndexes) and
-// without the later tables. A migration that changes a model records what
-// it added in postBaselineIndexes, one that creates a table lists its model
-// in laterModels (docs/reference/database-migrations.md, "Changing a
-// model").
+// less what later migrations added to the models (postBaselineIndexes),
+// without the later tables, plus the tables later migrations dropped with
+// their models (retiredKernelModels). A migration that changes a model
+// records what it added in postBaselineIndexes, one that creates a table
+// lists its model in laterModels, one that drops a table with its model
+// keeps a frozen copy in retiredKernelModels
+// (docs/reference/database-migrations.md, "Changing a model").
 
 // legacySchemaModels is cmd/server's schemaModels() at 4eb87485.
 func legacySchemaModels() []any {
@@ -80,6 +82,58 @@ func laterModels() []any {
 	}
 }
 
+// retiredRouteModeRevision is model.RouteModeRevision as the baseline
+// created it; 0004_drop_route_modes dropped the table and the model.
+type retiredRouteModeRevision struct {
+	ID             uint      `gorm:"primaryKey"`
+	GroupID        string    `gorm:"size:36;not null;index"`
+	PackageID      string    `gorm:"size:120;not null;index"`
+	RouteID        string    `gorm:"size:191;not null"`
+	Action         string    `gorm:"size:16;not null"`
+	FromMode       string    `gorm:"size:16;not null"`
+	ToMode         string    `gorm:"size:16;not null"`
+	ActorUserID    uint      `gorm:"not null;default:0"`
+	Actor          string    `gorm:"size:191;not null;default:''"`
+	Reason         string    `gorm:"type:text;not null;default:''"`
+	ConfigRevision int64     `gorm:"not null"`
+	CreatedAt      time.Time `gorm:"not null;index"`
+}
+
+func (retiredRouteModeRevision) TableName() string { return "v4_kernel_route_mode_revision" }
+
+// retiredShadowMismatchSample is model.ShadowMismatchSample as the
+// baseline created it; 0004_drop_route_modes dropped the table and the
+// model.
+type retiredShadowMismatchSample struct {
+	ID             uint      `gorm:"primaryKey"`
+	PackageID      string    `gorm:"size:120;not null;uniqueIndex:idx_v4_shadow_sample_key,priority:1;index:idx_v4_shadow_sample_route,priority:1"`
+	SampleID       string    `gorm:"size:32;not null;uniqueIndex:idx_v4_shadow_sample_key,priority:2"`
+	RouteID        string    `gorm:"size:191;not null;index:idx_v4_shadow_sample_route,priority:2"`
+	PackageVersion string    `gorm:"size:64;not null;default:''"`
+	Method         string    `gorm:"size:16;not null;default:''"`
+	Path           string    `gorm:"size:512;not null;default:''"`
+	LegacyStatus   int       `gorm:"not null;default:0"`
+	NativeStatus   int       `gorm:"not null;default:0"`
+	DiffJSON       string    `gorm:"type:text;not null"`
+	DiffTruncated  bool      `gorm:"not null;default:false"`
+	RequestID      string    `gorm:"size:128;not null;default:''"`
+	ObservedAt     time.Time `gorm:"not null;index;index:idx_v4_shadow_sample_route,priority:3"`
+	CreatedAt      time.Time `gorm:"not null"`
+}
+
+func (retiredShadowMismatchSample) TableName() string { return "v4_kernel_shadow_mismatch_sample" }
+
+// retiredKernelModels are the kernel models later migrations dropped with
+// their tables, frozen as the baseline had them: the legacy start of the
+// baseline created them, today's models do not. legacyPrepare creates them,
+// legacyModelsPrepare does not (a regenerated baseline file would list them
+// after the other kernel tables).
+func retiredKernelModels() []any {
+	return []any{
+		&retiredRouteModeRevision{}, &retiredShadowMismatchSample{}, // 0004_drop_route_modes
+	}
+}
+
 // legacyPrepare is the legacy start's schema work at the baseline on db.
 // production is the env: "production" only creates missing tables of the
 // application models, development and test AutoMigrate them all. The
@@ -87,6 +141,7 @@ func laterModels() []any {
 func legacyPrepare(t *testing.T, db *gorm.DB, production bool) {
 	t.Helper()
 	require.NoError(t, legacyPrepareErr(db, production))
+	require.NoError(t, db.AutoMigrate(retiredKernelModels()...))
 	for _, added := range postBaselineIndexes {
 		require.NoError(t, db.Exec("DROP INDEX "+added.index).Error)
 	}

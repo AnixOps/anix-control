@@ -1,6 +1,6 @@
 {
   "format": "anixops.package-route-defaults/v1",
-  "comment": "Routes that run natively by default (package_routes.default_mode: rehearsed) when the Control installation stores no mode for them and the installed package release is at least min_version. Each package passed the staging rehearsal (R5, 2026-10-03: every read route at least 200 shadow comparisons with 0 mismatches over at least 2 hours; every write route reconciled with 0 differences) and was signed off by the owner (H7, H8). A route enters this list only by an explicit change here and in internal/service/testdata/rehearsed-routes.json; being native-flagged in package-extraction.json is not enough. The forward package left the set in v4.2 (F5d): it serves no v2 route natively.",
+  "comment": "The routes that run natively once the installed package release is at least min_version. Route modes come only from this list: nothing stores or switches them, identity group A follows the identity authority, and every other route runs its legacy handler. Each package passed the staging rehearsal (R5, 2026-10-03: every read route at least 200 shadow comparisons with 0 mismatches over at least 2 hours; every write route reconciled with 0 differences) and was signed off by the owner (H7, H8). A route enters this list only by an explicit change here and in internal/service/testdata/rehearsed-routes.json; being native-flagged in package-extraction.json is not enough. The forward package left the set in v4.2 (F5d): it serves no v2 route natively.",
   "default_mode": "native",
   "packages": [
     {

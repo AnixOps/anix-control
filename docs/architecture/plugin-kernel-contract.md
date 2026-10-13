@@ -9,13 +9,29 @@ unchanged.
 The kernel persists signed plugin releases, installation intent, scoped access
 groups, verified immutable plugin artifacts, node assignments, topology
 revisions, deployments, and idempotent operations. Control-target lifecycle
-operations may be executed by the opt-in in-process Control executor; Agent
-target operations are dispatched only when the Agent bridge flag is enabled.
-The kernel still does not switch forwarding traffic. A deployment created
-through `/api/v3/deployments` stays inert until an operator calls apply and the
-feature-gated topology executor is running. `plugins.topology_execution_enabled`
-defaults to false and startup refuses it unless `plugins.dispatch_enabled` is
-also true.
+operations are executed by the in-process Control executor, which always
+runs: the built-in packages' hosts start with Control. Agent plugin dispatch
+and topology execution are off until M4 brings the Agent plugins, and no
+setting turns them on (`service.AgentPluginDispatchEnabled` and
+`service.TopologyExecutionEnabled` are `false`; the code paths stay). Node
+assignments and Agent configuration changes record the desired state and
+queue no Agent operation, and a deployment created through
+`/api/v3/deployments` stays planned: apply and rollback answer
+`409 topology_execution_disabled`. The kernel does not switch forwarding
+traffic.
+
+**What an administrator can do with a package** (single-binary design,
+section 4.3): read its state (`GET /api/v3/plugins`, `/plugin-releases`,
+`/plugin-installations`, `/operations`), restart its host
+(`POST /api/v3/plugin-installations/:id/actions` with `"action":"restart"`,
+the only action), and edit the configuration of a package that declares
+settings (`GET` and `PUT /api/v3/plugin-installations/:id/config`). The
+console shows this in 系统设置 → 内置包 (`/admin/system/packages`). Import
+(`POST /api/v3/plugin-releases` and `/:id/artifact`), install, update,
+rollback, enable and disable (`PUT /api/v3/plugin-installations`, the other
+actions) and the route-mode administration (`/api/v4/kernel/route-modes*`,
+`anix-control routes`) were removed: the removed routes answer `404`, another
+action answers `400 unsupported_plugin_action`.
 
 ## Built-in Packages
 
@@ -137,8 +153,7 @@ Third-party packages remain unsupported for execution: only official
 
 Set `plugins.official_public_key` to the Base64-encoded Ed25519 public key for
 the AnixOps release signer. Every built-in package is verified against it at
-every start, and `POST /api/v3/plugin-releases` rejects requests until this
-key is configured. The manifest signature covers the canonical
+every start. The manifest signature covers the canonical
 `PluginManifest` JSON representation; configuration schema JSON is normalized
 before signing and verification.
 
@@ -147,19 +162,21 @@ later catalog, configuration, and v2 route reads re-verify a release with the
 trust root bound to it. Only one root is active: at startup Control activates
 the configured `plugins.official_public_key` and retires every other recorded
 root (`service.EnsurePluginTrustRoot`), so releases signed by a retired root
-stop verifying until they are re-signed and imported as a new version.
+stop verifying; the built-in set of the running binary is signed by the
+active root.
 Changing the configured key is therefore a root rotation; follow
 [`../guide/release-root-rotation.md`](../guide/release-root-rotation.md).
 
 Only official `AnixOps` manifests are accepted. A plugin installation or
-operation must reference a registered release. Disabling an installation marks
-it disabled and preserves its database state; no purge endpoint is exposed.
+operation must reference a registered release. No route disables an
+installation any more (the bootstrap enables a disabled one again at the next
+start), and no purge endpoint is exposed.
 
 ## Artifact Repository
 
-The start-up bootstrap stores each built-in package's slim artifact the same
-way. `POST /api/v3/plugin-releases/:id/artifact` stores the release artifact after
-checking its SHA-256 against the signed manifest. Stored artifacts are
+The start-up bootstrap stores each built-in package's slim artifact
+(`service.StorePluginArtifact`) after checking its SHA-256 against the signed
+manifest; no route uploads an artifact any more. Stored artifacts are
 content-addressed by `plugins/<plugin>/<version>/<sha256>.artifact` metadata
 and immutable for a release. Re-uploading the same bytes is idempotent; changing
 the bytes for an existing release is rejected.
@@ -229,12 +246,11 @@ official release, enabled version-bound Control installation, local artifact,
 registered route, and `plugin_api` resource grants. If no explicit
 `plugin_api` grant exists for that plugin, legacy admins remain compatible
 during the 3.x transition; once such a grant exists, group membership is
-required. With `plugins.control_execution_enabled=true`, the gateway dispatches
-to the version-exact local Control executor after admission. The first
-reference executor is the read-only `machine-telemetry` status route. With the
-flag off, or when no executor is registered, the gateway remains fail-closed
-and returns `501 plugin_route_not_implemented`; this preserves the legacy
-production path.
+required. The gateway dispatches to the version-exact local Control executor
+after admission. The first reference executor is the read-only
+`machine-telemetry` status route. When no host runs, the gateway stays
+fail-closed and returns `502 plugin_host_unavailable`; when no executor is
+registered, `501 plugin_route_not_implemented`.
 
 An enabled installation requires both a signed release and a verified artifact.
 This creates a reproducible package-manager fact before the dispatcher or Agent
@@ -302,8 +318,9 @@ it verifies the index digest, the package and version, every step id
 and exposes the verified steps on the artifact reference. v4.0.0 indexes carry
 no step digests; the kernel computes them from the packaged scripts.
 
-When a Control installation is enabled, updated, or rolled back, the kernel
-compiles the same-target dependency closure into a durable lifecycle plan.
+When a Control installation is enabled or updated (by the start-up bootstrap;
+no administrator route does it any more), the kernel compiles the
+same-target dependency closure into a durable lifecycle plan.
 Dependencies execute first, the root operation remains the user-visible
 operation, and failed, timed-out, cancelled, or superseded apply work stops
 later expansion. Changed steps are compensated in reverse order by restoring
@@ -311,7 +328,7 @@ the previous installation snapshot or disabling newly introduced packages.
 Disabling an installed package is rejected while another enabled package on
 the same target depends on it. Target-level transaction locks serialize these
 checks across concurrent Control workers. These checks and plans only create
-package-manager intent; the dispatcher flags remain off by default.
+package-manager intent; Agent plugin dispatch stays off until M4.
 
 ## Package Configuration
 
@@ -324,24 +341,21 @@ plugin process. A configuration document is package-level intent, not an
 implicit command to every node. Node assignment expansion and per-node
 `plugin.configure` operations remain an explicit dispatcher step.
 
-The top-level key `routes` is reserved by the kernel for Control packages. It
-maps v2 route ids to a route mode:
+A host runs each of its v2 compatibility routes in one of three modes:
 
 | Mode | Meaning |
 |------|---------|
-| `legacy` (default, also when absent, except below) | the host passes the request through the bridge to the legacy handler |
-| `shadow` | GET only: the legacy result is returned, the host runs its native implementation in the background and counts mismatches |
+| `legacy` (default) | the host passes the request through the bridge to the legacy handler |
+| `shadow` | GET only: the legacy result is returned, the host runs its native implementation in the background and counts mismatches (the SDK router supports it; the kernel no longer hands it out) |
 | `native` | the host answers with its native implementation |
 
-A route the map does not name is `legacy`, with two exceptions the kernel
-resolves (`ResolveEffectivePackageRouteModes`): identity group A follows the
-identity authority, and a route of the rehearsed default set
-(`config/package-route-defaults.json`) is `native` while
-`package_routes.default_mode` is `rehearsed` (the default) and the installed
-release is at least the package's `min_version`. A stored mode, `legacy`
-included, always wins; the route-mode administration therefore stores an
-explicit `legacy` for a route of the default set (any other `legacy` is
-removed from the map).
+Nothing stores or switches a route's mode (single-binary design, section
+4.3). The kernel resolves it (`ResolveEffectivePackageRouteModes`): a route of
+the rehearsed list (`config/package-route-defaults.json`) is `native` once
+the installed release is at least the package's `min_version`, identity group
+A is `native` while identity is authoritative (it follows the identity
+cutover and rollback), and every other route is `legacy`. N6 (M5) makes every
+route native and deletes the legacy handlers.
 
 A route's runtime mode is not its extraction mode, which
 `config/package-extraction.json` records per route
@@ -351,26 +365,16 @@ are relayed until a kernel contract lets the package serve them, and
 `kernel-owned` routes are relayed by design. A relayed route stays `legacy`
 whatever its runtime mode says.
 
-On `PUT`, the kernel validates `routes` against the verified compatibility
-routes of the installation's release: unknown routes, other modes, `shadow`
-on non-GET routes, and non-legacy WebSocket routes are rejected. It then
-removes the key before applying the package's own `config_schema`, so package
-schemas need not declare it. A Control `plugin.configure` operation completes
-immediately, because hosts pull their configuration.
-
-Operators switch route modes with the route-mode administration rather than
-editing `routes` by hand: the admin API under `/api/v4/kernel/route-modes`,
-the CLI `anix-control routes` and the admin page
-(`internal/service/package_route_mode_admin.go`). It writes through the same
-configuration path, so every rule above holds, and adds its own: `native` only
-for `native-flagged` routes, no switch of `kernel-owned` routes or of identity
-group A (identity cutover only), super administrators only, a confirmation and
-a reason for `native`. Each switch is audited and recorded per route in
-`v4_kernel_route_mode_revision`.
+The top-level configuration key `routes` stays reserved for Control packages:
+it held the stored route-mode map until 5.0, the `0004_drop_route_modes`
+migration removed every stored map (each written to the audit log first,
+action `route_modes_removed`), and a `PUT` that still sets it is refused. A
+Control `plugin.configure` operation completes immediately, because hosts
+pull their configuration.
 
 Hosts read their configuration with the package bridge RPC
 `GetPackageConfig`, which returns the revision, the configuration hash and the
-non-legacy route modes, resolved as above (never the raw stored map). It is
+non-legacy route modes, resolved as above. It is
 the only way a host learns its modes: the lifecycle operation's
 configuration document is not read for them. Unlike `Invoke` and `OpenWebSocket`, session-scoped
 RPCs carry no per-request capability. The caller is authorized by the session
@@ -395,18 +399,10 @@ details document, and `/metrics` exports it as `anixops_package_config_status`,
 `anixops_package_route_mode` and the `anixops_package_native_*` and
 `anixops_package_shadow_*` counters.
 
-The details document also carries `shadow_samples` (added in 4.1.0; a
-kernel that does not read it ignores it): the router's latest 32 shadow
-mismatches of the last 10 minutes, built and sanitized by
-`sdk/shadowsample` before they leave the host (route, method, sanitized
-path, both status codes, request id, observed time and a structural diff of
-at most 64 paths and 8 KB with masked values; never the request body). The
-kernel's collector (`internal/shadowsamples`) reads them after each health
-poll, keeps only samples of routes `config/package-extraction.json` assigns
-to the reporting package, sanitizes them again, replaces the path with the
-route's template, and stores each sample once in
-`v4_kernel_shadow_mismatch_sample` (7 days, 100 per route). A host has no
-other write path to that table. The generic Control host runs on the
+The details document may also carry `shadow_samples` (the router's latest
+shadow mismatches, sanitized by `sdk/shadowsample`); the kernel no longer
+collects them: the sample collector and `v4_kernel_shadow_mismatch_sample`
+went with the route-mode administration. The generic Control host runs on the
 router with no native routes; the native routes of the package hosts are
 listed in `package-extraction.md` and `identity-service.md`.
 
@@ -585,8 +581,8 @@ enabled node/plugin assignments. Topology JSON may reference secrets by ID or
 Observed-state write-back is revision-fenced and monotonic: an Agent result is
 accepted only for the exact deployment revision and known node, stale desired
 or observed revisions are ignored, and a deployment reaches a terminal state
-only after every distinct assigned node has reported. The feature-gated
-executor compiles deployment steps by DAG order, dispatches per-node
+only after every distinct assigned node has reported. The executor (off until
+M4) compiles deployment steps by DAG order, dispatches per-node
 `plugin.configure`/`plugin.enable` or disable operations, fences later steps on
 failure, and rolls back changed steps in reverse DAG order. A succeeded task is
 not sufficient to promote a revision: the executor reads a bounded projection
@@ -612,7 +608,8 @@ Control treats observations stale after two minutes of trusted receipt time.
 Public deployment, observed-state, and operation endpoints expose only fixed
 state and generic error summaries, never the configuration, runtime payload,
 session identity, or raw plugin error.
-This executor is off by default and must not be used as production traffic evidence until the
+This executor is off until M4 (`service.TopologyExecutionEnabled`, no
+setting) and must not be used as production traffic evidence until the
 corresponding protocol package and network tests exist.
 
 ### Deleting a topology
@@ -636,7 +633,7 @@ topologies only (the partial index `ux_topology_live_name ... WHERE deleted =
 | A deployment of the topology executes (any state but `planned`, `succeeded`, `failed`, `rolled_back`, `cancelled`) | 409 `topology_deployment_busy` |
 | Its teardown is running | 409 `topology_deleting` |
 | No active revision, or an active revision without plugin vertices | 200, deleted at once |
-| Active revision with plugin vertices, `plugins.topology_execution_enabled` off | 409 `topology_execution_disabled` |
+| Active revision with plugin vertices, topology execution off (until M4) | 409 `topology_execution_disabled` |
 | Active revision with plugin vertices whose teardown cannot be compiled (for example a removed node assignment) | 422 `topology_teardown_invalid` |
 | Active revision with plugin vertices | 202, teardown deployment started |
 
@@ -678,12 +675,14 @@ byte-identical in Control and Agent. Control tests assert the dispatcher
 produces exactly those `DesiredOperation.payload_json` bytes; Agent tests assert
 the same bytes decode under the active session and re-encode without drift.
 
-When `plugins.dispatch_enabled` is explicitly enabled, the Control dispatcher
-claims pending lifecycle operations, obtains the active Agent stream session,
-constructs the versioned envelope from canonical persisted config, and records
-ACK plus observed state back to the same operation row. It only dispatches the
-currently implemented lifecycle capabilities
-`plugin.inspect/configure/enable/disable/update/rollback/health`; Control
-dependency plans and topology deployment plans create those primitive
-operations instead of bypassing the durable dispatcher. The flag is disabled by
-default, so a 3.x upgrade cannot alter legacy traffic behavior.
+Once Agent plugin dispatch is on (M4; until then
+`service.AgentPluginDispatchEnabled` is `false` and the dispatcher does not
+start), the Control dispatcher claims pending lifecycle operations, obtains
+the active Agent stream session, constructs the versioned envelope from
+canonical persisted config, and records ACK plus observed state back to the
+same operation row. It only dispatches the currently implemented lifecycle
+capabilities `plugin.inspect/configure/enable/disable/update/rollback/health`;
+Control dependency plans and topology deployment plans create those primitive
+operations instead of bypassing the durable dispatcher. The
+`plugins.dispatch_enabled` switch that used to turn it on is gone; a file
+that still sets it loads and the key is ignored with a warning.

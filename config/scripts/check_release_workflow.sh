@@ -260,8 +260,6 @@ require_live_control_webui_gate() {
     "actions/setup-go@v6" \
     "actions/setup-python@v6" \
     "actions/setup-node@v6" \
-    "Checkout pinned Agent source for live Control WebUI E2E" \
-    "ANIXOPS_AGENT_ROOT: \${{ github.workspace }}/V2bX_AnixOps" \
     "npm ci" \
     "npx playwright install --with-deps chromium" \
     "npx playwright test --config playwright.live-control.config.js"; do

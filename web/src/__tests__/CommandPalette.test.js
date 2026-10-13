@@ -62,7 +62,9 @@ describe('CommandPalette.vue', () => {
     // Actions first, then every page the admin can see.
     const groups = within(dialog).getAllByRole('group').map(group => group.getAttribute('data-palette-group'))
     expect(groups).toEqual(['actions', 'pages'])
-    expect(optionNames(dialog)).toEqual(expect.arrayContaining(['Join a node', 'Add a user', 'Dashboard', 'Plugin Center', 'Account']))
+    expect(optionNames(dialog)).toEqual(expect.arrayContaining(['Join a node', 'Add a user', 'Dashboard', 'Built-in packages', 'Account']))
+    // 插件中心 is gone: the built-in packages are a settings section.
+    expect(optionNames(dialog)).not.toContain('Plugin Center')
     // The flux-clone pages and their setup wizard were removed (F5d).
     expect(optionNames(dialog)).not.toContain('Forward setup wizard')
     expect(optionNames(dialog)).not.toContain('Tunnels')
@@ -75,11 +77,11 @@ describe('CommandPalette.vue', () => {
     const user = userEvent.setup()
     const router = await renderPalette()
     const { dialog, input } = await openPalette()
-    await user.type(input, 'plugin')
-    await waitFor(() => expect(optionNames(dialog)).toEqual(['Plugin Center']))
+    await user.type(input, 'built-in')
+    await waitFor(() => expect(optionNames(dialog)).toEqual(['Built-in packages']))
     await waitFor(() => expect(input.getAttribute('aria-activedescendant')).toBeTruthy())
     await user.keyboard('{Enter}')
-    await waitFor(() => expect(router.currentRoute.value.fullPath).toBe('/admin/plugins'))
+    await waitFor(() => expect(router.currentRoute.value.fullPath).toBe('/admin/system/packages'))
     expect(usePalette().open.value).toBe(false)
   })
 

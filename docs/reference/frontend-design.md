@@ -448,7 +448,7 @@ the sweeps. A fixture answer may carry `headers` (`Retry-After` of a 429).
   rotate-credentials confirmation and result, a subscription group's members,
   the forwarding pages, the API tokens list (also with ended and everyone's
   tokens, and empty), its create form and one-time token dialog, settings,
-  monitoring (and a node's traffic in its sheet), plugin center, an empty and
+  monitoring (and a node's traffic in its sheet), the built-in packages, an empty and
   an error state), light and dark at 1440 px and a few at 390 px. Deterministic by design:
   mocked data with fixed timestamps, `Date.now()` fixed with
   `page.clock.setFixedTime`, UTC, English (text in the bundled Inter),
@@ -626,8 +626,8 @@ groups are dropped. `activeMenuItem()` selects exactly one item per path (an
 exact `to`, then a `match` entry, then a sub-path). `Node` (节点,
 `/admin/nodes`) and `ForwardNode` (转发节点, `/admin/forward/nodes`) are
 separate items. 网络 holds 节点, 转发 and 部署编排
-(topologies, node roles and deployments); 扩展 holds 插件中心 and the plugin
-menus. Only the packages with a WebUI bundle (forward, gost-mesh,
+(topologies, node roles and deployments); 扩展 holds only the plugin menus
+(hidden without one: 插件中心 became 系统设置 → 内置包). Only the packages with a WebUI bundle (forward, gost-mesh,
 nat-egress, nftables-forward) add a plugin menu, and the forward package's
 is left out while the core forwarding pages are there. `useAdminMenu()` / `useUserMenu()`
 (`navigation/useNavigation.js`) wire it to the stores; the sidebar,
@@ -902,9 +902,12 @@ Migrated in U6 (also listed in `web/scripts/data-table-pages.mjs`):
   the editor is a wide dialog with the Markdown source and a live preview
   (U5's `parseArticle` + `ArticleBody`: elements, never HTML), a Write /
   Preview switch below 834 px; show / hide from the row menu with 撤销.
-- **插件中心** (`Plugins.vue`): an App Store style card grid (icon, name,
-  publisher, versions, health) with search and health / target chips; the
-  details Sheet and the install dialog keep their behaviour and test ids.
+- **内置包** (`system/SettingsPackages.vue`, a 系统设置 section that replaced
+  插件中心 and its route-mode page): a grouped list of the built-in packages
+  (name, id, version, a state badge, the last error), 重启 behind a
+  confirmation, 配置 for a package that declares settings, and the WebUI
+  extension load errors. `/admin/plugins` and `/admin/plugins/route-modes`
+  redirect to it.
 - **Ansible 机器** (`AnsibleMachines.vue`,
   execution plane: visuals only), **邀请码** (`InviteCodes.vue`, bulk copy
   and revoke: one `POST /api/v4/admin/invite-codes/bulk`), **访问组** (`AccessGroups.vue`, the group opens in a large
@@ -1334,7 +1337,7 @@ fails and retries on its own, so one failing endpoint never blanks the page.
   The user-traffic section keeps `/admin/traffic/hourly`.
 - Old URLs redirect: `/admin/traffic-hourly` → `/admin/monitor/traffic`,
   `/admin/forward/observability` → `/admin/monitor/forward` (query kept).
-- `components/admin/OperationTimeline.vue` (部署编排 and 插件中心) is an
+- `components/admin/OperationTimeline.vue` (部署编排) is an
   ordered timeline list with a state badge per operation; it is listed in
   `scripts/data-table-pages.mjs` so no bare table comes back.
 - 部署编排 keeps its state and API calls in

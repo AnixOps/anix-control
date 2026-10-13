@@ -68,15 +68,7 @@ describe('kernel API', () => {
     })
   })
 
-  it('uploads release artifacts through the v3 package repository endpoint', async () => {
-    await kernelApi.registerKernelPluginRelease('{"id":"machine-telemetry"}', 'signature')
-    expect(mockRequest).toHaveBeenLastCalledWith({
-      baseURL: '/api/v3',
-      url: '/plugin-releases',
-      method: 'post',
-      data: { manifest: '{"id":"machine-telemetry"}', signature: 'signature' }
-    })
-
+  it('reads releases and restarts a built-in package host', async () => {
     await kernelApi.getKernelPluginReleases('machine-telemetry')
     expect(mockRequest).toHaveBeenLastCalledWith({
       baseURL: '/api/v3',
@@ -85,137 +77,34 @@ describe('kernel API', () => {
       params: { plugin_id: 'machine-telemetry' }
     })
 
-    await kernelApi.uploadKernelPluginReleaseArtifact(9, 'YXJ0aWZhY3Q=')
-    expect(mockRequest).toHaveBeenLastCalledWith({
-      baseURL: '/api/v3',
-      url: '/plugin-releases/9/artifact',
-      method: 'post',
-      data: { artifact_base64: 'YXJ0aWZhY3Q=' },
-      timeout: 120_000
-    })
-  })
-
-  it('upserts installations and dispatches idempotent lifecycle actions', async () => {
-    const installation = { plugin_id: 'machine-telemetry', target: 'control', desired_version: '1.1.0', enabled: true }
-    await kernelApi.upsertKernelInstallation(installation)
-    expect(mockRequest).toHaveBeenLastCalledWith({
-      baseURL: '/api/v3',
-      url: '/plugin-installations',
-      method: 'put',
-      data: installation,
-      rawResponse: true
-    })
-
-    await kernelApi.runKernelInstallationAction(7, 'update', { targetVersion: '1.1.0', idempotencyKey: 'request-1' })
-    expect(mockRequest).toHaveBeenLastCalledWith({
-      baseURL: '/api/v3',
-      url: '/plugin-installations/7/actions',
-      method: 'post',
-      data: { action: 'update', target_version: '1.1.0', idempotency_key: 'request-1' },
-      rawResponse: true
-    })
-
-    await kernelApi.runKernelInstallationAction(7, 'rollback', { idempotencyKey: 'request-2' })
-    expect(mockRequest).toHaveBeenLastCalledWith({
-      baseURL: '/api/v3',
-      url: '/plugin-installations/7/actions',
-      method: 'post',
-      data: { action: 'rollback', idempotency_key: 'request-2' },
-      rawResponse: true
-    })
-  })
-
-  it('manages node service assignments through the kernel routes', async () => {
-    const assignment = {
-      service_scope: 'forward',
-      plugin_id: 'gost-mesh',
-      role: 'relay',
-      desired_version: '1.0.0',
-      desired_config_revision: 4,
-      enabled: true,
-      rollout_group: 'canary'
-    }
-    await kernelApi.upsertKernelNodeAssignment(11, assignment)
-    expect(mockRequest).toHaveBeenLastCalledWith({
-      baseURL: '/api/v3',
-      url: '/nodes/11/assignments',
-      method: 'put',
-      data: assignment
-    })
-
-    await kernelApi.deleteKernelNodeAssignment(11, 7)
-    expect(mockRequest).toHaveBeenLastCalledWith({
-      baseURL: '/api/v3',
-      url: '/nodes/11/assignments/7',
-      method: 'delete'
-    })
-  })
-
-  it('manages service-scope access groups, memberships, grants, quotas, and effective access through the kernel routes', async () => {
-    await kernelApi.getKernelAccessGroups('forward')
-    expect(mockRequest).toHaveBeenLastCalledWith({
-      baseURL: '/api/v3', url: '/access-groups', method: 'get', params: { scope_id: 'forward' }
-    })
-
-    const group = { scope_id: 'forward', name: 'canary', description: 'Canary access', enabled: true }
-    await kernelApi.createKernelAccessGroup(group)
-    expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v3', url: '/access-groups', method: 'post', data: group })
-    await kernelApi.updateKernelAccessGroup(7, { name: 'canary', description: '', enabled: false })
-    expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v3', url: '/access-groups/7', method: 'put', data: { name: 'canary', description: '', enabled: false } })
-
-    await kernelApi.addKernelAccessGroupUser(7, 11)
-    expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v3', url: '/access-groups/7/users', method: 'post', data: { user_id: 11 } })
-    await kernelApi.removeKernelAccessGroupUser(7, 11)
-    expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v3', url: '/access-groups/7/users/11', method: 'delete' })
-    await kernelApi.addKernelAccessGroupPlan(7, 4)
-    expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v3', url: '/access-groups/7/plans', method: 'post', data: { plan_id: 4 } })
-    await kernelApi.removeKernelAccessGroupPlan(7, 4)
-    expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v3', url: '/access-groups/7/plans/4', method: 'delete' })
-
-    const grant = { group_id: 7, resource_type: 'plugin_api', resource_id: 'machine-telemetry', permissions: '["machine-telemetry.api"]' }
-    await kernelApi.createKernelResourceGrant(grant)
-    expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v3', url: '/resource-grants', method: 'post', data: grant })
-    await kernelApi.deleteKernelResourceGrant(12)
-    expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v3', url: '/resource-grants/12', method: 'delete' })
-
-    const policy = { group_id: 7, key: 'machine-telemetry.rate', policy: '{"requests_per_minute":60}' }
-    await kernelApi.upsertKernelQuotaPolicy(policy)
-    expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v3', url: '/quota-policies', method: 'put', data: policy })
-    await kernelApi.deleteKernelQuotaPolicy(13)
-    expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v3', url: '/quota-policies/13', method: 'delete' })
-
-    await kernelApi.resolveKernelAccess({ userID: 11, planID: 4, scopeID: 'forward' })
-    expect(mockRequest).toHaveBeenLastCalledWith({
-      baseURL: '/api/v3', url: '/access-groups/resolve', method: 'get', params: { user_id: 11, plan_id: 4, scope_id: 'forward' }
-    })
-    await kernelApi.deleteKernelAccessGroup(7)
-    expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v3', url: '/access-groups/7', method: 'delete' })
-  })
-
-  it('cancels operations through the kernel endpoint', async () => {
-    await kernelApi.cancelKernelOperation('operation-1')
-    expect(mockRequest).toHaveBeenLastCalledWith({
-      baseURL: '/api/v3',
-      url: '/operations/operation-1/cancel',
-      method: 'post',
-      rawResponse: true
-    })
-  })
-
-  it('preserves operation headers for lifecycle responses', async () => {
     mockRequest.mockResolvedValueOnce({
       data: { data: { operation: { id: 'operation-1', state: 'pending' } } },
       headers: {
         'x-anixops-operation-id': 'operation-1',
-        'x-anixops-operation-chain': 'dependency-1,operation-1'
+        'x-anixops-operation-chain': 'operation-1'
       }
     })
-
-    await expect(kernelApi.runKernelInstallationAction(7, 'enable', { idempotencyKey: 'request-3' })).resolves.toEqual({
+    await expect(kernelApi.restartKernelInstallation(7, 'request-1')).resolves.toEqual({
       operation: { id: 'operation-1', state: 'pending' },
       operation_id: 'operation-1',
-      operation_chain: 'dependency-1,operation-1'
+      operation_chain: 'operation-1'
     })
+    expect(mockRequest).toHaveBeenLastCalledWith({
+      baseURL: '/api/v3',
+      url: '/plugin-installations/7/actions',
+      method: 'post',
+      data: { action: 'restart', idempotency_key: 'request-1' },
+      rawResponse: true
+    })
+  })
+
+  it('has no client for the removed import, install and route-mode routes', () => {
+    for (const name of [
+      'registerKernelPluginRelease', 'uploadKernelPluginReleaseArtifact', 'upsertKernelInstallation', 'runKernelInstallationAction',
+      'getKernelRouteModes', 'setKernelRouteModes', 'rollbackKernelRouteModes', 'getKernelRouteModeRevisions', 'getKernelRouteModeMismatches'
+    ]) {
+      expect(kernelApi[name], name).toBeUndefined()
+    }
   })
 
   it('manages topology revisions and deployment lifecycle through the v3 kernel', async () => {
@@ -260,31 +149,6 @@ describe('kernel API', () => {
     mockRequest.mockResolvedValueOnce({ data: result })
     await expect(kernelApi.deleteKernelTopology(3)).resolves.toEqual(result)
     expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v3', url: '/topologies/3', method: 'delete' })
-  })
-
-  it('reads and switches route modes through the v4 kernel', async () => {
-    await kernelApi.getKernelRouteModes('legacy-api')
-    expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v4', url: '/kernel/route-modes', method: 'get', params: { package_id: 'legacy-api' } })
-    await kernelApi.getKernelRouteModes()
-    expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v4', url: '/kernel/route-modes', method: 'get' })
-
-    const input = { package_id: 'legacy-api', routes: ['tickets.list'], mode: 'native', reason: 'canary', confirm: true }
-    await kernelApi.setKernelRouteModes(input)
-    expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v4', url: '/kernel/route-modes', method: 'post', data: input })
-
-    await kernelApi.rollbackKernelRouteModes('legacy-api', 'mismatch')
-    expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v4', url: '/kernel/route-modes/rollback', method: 'post', data: { package_id: 'legacy-api', reason: 'mismatch' } })
-    await kernelApi.rollbackKernelRouteModes('legacy-api')
-    expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v4', url: '/kernel/route-modes/rollback', method: 'post', data: { package_id: 'legacy-api' } })
-
-    await kernelApi.getKernelRouteModeRevisions('legacy-api', 100)
-    expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v4', url: '/kernel/route-modes/revisions', method: 'get', params: { package_id: 'legacy-api', limit: 100 } })
-
-
-    await kernelApi.getKernelRouteModeMismatches({ packageID: 'legacy-api', routeID: 'tickets.list', limit: 50 })
-    expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v4', url: '/kernel/route-modes/mismatches', method: 'get', params: { package_id: 'legacy-api', route_id: 'tickets.list', limit: 50 } })
-    await kernelApi.getKernelRouteModeMismatches()
-    expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v4', url: '/kernel/route-modes/mismatches', method: 'get', params: {} })
   })
 
   it('reads the agent transport inventory through the v4 kernel', async () => {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -20,7 +19,6 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/config"
 	"github.com/AnixOps/anix-control/v5/internal/database"
 	"github.com/AnixOps/anix-control/v5/internal/model"
-	"github.com/AnixOps/anix-control/v5/internal/plugincontrol"
 	"github.com/AnixOps/anix-control/v5/internal/pluginhost"
 	"github.com/AnixOps/anix-control/v5/internal/service"
 	"github.com/gin-gonic/gin"
@@ -29,10 +27,7 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-const (
-	maxControlPluginRequestBody         = 1 << 20
-	maxControlPluginArtifactBase64Bytes = 96 << 20
-)
+const maxControlPluginRequestBody = 1 << 20
 const defaultControlPluginHostRequestTimeout = 30 * time.Second
 const defaultControlPluginHostWebSocketSessionTimeout = 24 * time.Hour
 
@@ -321,7 +316,7 @@ func (h *KernelHandler) dispatchPluginControlRoute(c *gin.Context, pluginID, req
 		}
 		return
 	}
-	if !cfg.Plugins.ControlExecutionEnabled || h.controlPluginHosts == nil {
+	if h.controlPluginHosts == nil {
 		kernelError(c, http.StatusBadGateway, "plugin_host_unavailable", "plugin host is unavailable")
 		return
 	}
@@ -418,33 +413,6 @@ func (h *KernelHandler) ListPluginReleases(c *gin.Context) {
 	kernelData(c, http.StatusOK, rows)
 }
 
-func (h *KernelHandler) RegisterPluginRelease(c *gin.Context) {
-	var req struct {
-		Manifest  string `json:"manifest" binding:"required"`
-		Signature string `json:"signature" binding:"required"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		kernelError(c, http.StatusBadRequest, "invalid_request", err.Error())
-		return
-	}
-	cfg := config.Get()
-	if cfg == nil || strings.TrimSpace(cfg.Plugins.OfficialPublicKey) == "" {
-		kernelError(c, http.StatusServiceUnavailable, "plugin_trust_root_unconfigured", "official plugin public key is not configured")
-		return
-	}
-	publicKey, err := service.ParseOfficialPluginPublicKey(cfg.Plugins.OfficialPublicKey)
-	if err != nil {
-		kernelError(c, http.StatusServiceUnavailable, "plugin_trust_root_invalid", err.Error())
-		return
-	}
-	release, err := service.RegisterPluginRelease(h.db, req.Manifest, req.Signature, publicKey)
-	if err != nil {
-		kernelError(c, http.StatusUnprocessableEntity, "plugin_release_rejected", err.Error())
-		return
-	}
-	kernelData(c, http.StatusCreated, release)
-}
-
 func (h *KernelHandler) GetPluginReleaseArtifact(c *gin.Context) {
 	releaseID, ok := parseKernelID(c, "id")
 	if !ok {
@@ -456,46 +424,6 @@ func (h *KernelHandler) GetPluginReleaseArtifact(c *gin.Context) {
 		return
 	}
 	kernelData(c, http.StatusOK, artifact)
-}
-
-func (h *KernelHandler) UploadPluginReleaseArtifact(c *gin.Context) {
-	releaseID, ok := parseKernelID(c, "id")
-	if !ok {
-		return
-	}
-	var req struct {
-		ArtifactBase64 string `json:"artifact_base64" binding:"required"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		kernelError(c, http.StatusBadRequest, "invalid_request", err.Error())
-		return
-	}
-	if len(req.ArtifactBase64) > maxControlPluginArtifactBase64Bytes {
-		kernelError(c, http.StatusRequestEntityTooLarge, "artifact_too_large", "plugin artifact request exceeds 96 MiB")
-		return
-	}
-	artifactBytes, err := base64.StdEncoding.DecodeString(strings.TrimSpace(req.ArtifactBase64))
-	if err != nil {
-		kernelError(c, http.StatusBadRequest, "invalid_artifact", "artifact_base64 must be base64")
-		return
-	}
-	if len(artifactBytes) > service.MaxPluginArtifactBytes {
-		kernelError(c, http.StatusRequestEntityTooLarge, "artifact_too_large", "decoded plugin artifact exceeds 64 MiB")
-		return
-	}
-	artifact, err := service.StorePluginArtifact(h.db, releaseID, artifactBytes)
-	if err != nil {
-		switch {
-		case errors.Is(err, gorm.ErrRecordNotFound):
-			kernelError(c, http.StatusNotFound, "release_not_found", "verified plugin release not found")
-		case errors.Is(err, service.ErrPluginArtifactImmutable):
-			kernelError(c, http.StatusConflict, "plugin_artifact_immutable", err.Error())
-		default:
-			kernelError(c, http.StatusUnprocessableEntity, "plugin_artifact_rejected", err.Error())
-		}
-		return
-	}
-	kernelData(c, http.StatusCreated, artifact)
 }
 
 func (h *KernelHandler) ServePluginWebUIAsset(c *gin.Context) {
@@ -607,7 +535,9 @@ func (h *KernelHandler) UpdatePluginInstallationConfiguration(c *gin.Context) {
 		return
 	}
 	var queuedAgentOperations []*model.KernelOperation
-	dispatchEnabled := cfg.Plugins.DispatchEnabled
+	// Agent plugin dispatch is off until M4: the assignments record the new
+	// revision and no Agent operation is queued.
+	dispatchEnabled := agentPluginDispatchEnabled()
 	configuration, err := service.UpdatePluginConfigurationWithValidatorAndHook(
 		h.db, publicKey, installationID, string(req.Config), req.ExpectedRevision, kernelActorID(c), nil,
 		func(tx *gorm.DB, installation model.PluginInstallation, configuration model.PluginConfiguration) error {
@@ -644,13 +574,11 @@ func (h *KernelHandler) UpdatePluginInstallationConfiguration(c *gin.Context) {
 		}
 	}
 	var queuedOperation *model.KernelOperation
-	if cfg.Plugins.ControlExecutionEnabled {
-		if updatedInstallation.Target == "control" && updatedInstallation.Enabled {
-			queuedOperation, err = enqueueControlPluginOperation(h.db, updatedInstallation, "plugin.configure", updatedInstallation.DesiredVersion)
-			if err != nil {
-				kernelError(c, http.StatusConflict, "plugin_operation_rejected", err.Error())
-				return
-			}
+	if updatedInstallation.Target == "control" && updatedInstallation.Enabled {
+		queuedOperation, err = enqueueControlPluginOperation(h.db, updatedInstallation, "plugin.configure", updatedInstallation.DesiredVersion)
+		if err != nil {
+			kernelError(c, http.StatusConflict, "plugin_operation_rejected", err.Error())
+			return
 		}
 	}
 	if queuedOperation != nil {
@@ -669,182 +597,17 @@ func (h *KernelHandler) UpdatePluginInstallationConfiguration(c *gin.Context) {
 	kernelData(c, http.StatusOK, configuration)
 }
 
-func (h *KernelHandler) UpsertPluginInstallation(c *gin.Context) {
-	var req struct {
-		PluginID       string `json:"plugin_id" binding:"required"`
-		Target         string `json:"target" binding:"required"`
-		DesiredVersion string `json:"desired_version" binding:"required"`
-		Enabled        bool   `json:"enabled"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		kernelError(c, http.StatusBadRequest, "invalid_request", err.Error())
-		return
-	}
-	if req.Target != "control" && req.Target != "agent" {
-		kernelError(c, http.StatusBadRequest, "invalid_target", "target must be control or agent")
-		return
-	}
-	var row model.PluginInstallation
-	var queuedOperation *model.KernelOperation
-	var queuedAgentOperations []*model.KernelOperation
-	cfg := config.Get()
-	controlExecutionEnabled := cfg != nil && cfg.Plugins.ControlExecutionEnabled
-	dispatchEnabled := cfg != nil && cfg.Plugins.DispatchEnabled
-	err := service.WithAgentLifecycleTransaction(h.db, func(tx *gorm.DB) error {
-		row = model.PluginInstallation{}
-		queuedOperation = nil
-		queuedAgentOperations = nil
-		if err := service.LockPluginInstallationTarget(tx, req.Target); err != nil {
-			return err
-		}
-		var plugin model.Plugin
-		if err := tx.First(&plugin, "id = ? AND official = ?", req.PluginID, true).Error; err != nil {
-			return errors.New("untrusted_plugin")
-		}
-		var release model.PluginRelease
-		if err := tx.First(&release, "plugin_id = ? AND version = ?", req.PluginID, req.DesiredVersion).Error; err != nil {
-			return errors.New("release_not_found")
-		}
-		if err := tx.Where("plugin_id = ? AND target = ?", req.PluginID, req.Target).First(&row).Error; err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-			return err
-		}
-		wasEnabled := row.Enabled
-		oldDesiredVersion, oldObservedVersion := row.DesiredVersion, row.ObservedVersion
-		oldState := row.State
-		isNew := row.ID == 0
-		var previous *model.PluginInstallation
-		if !isNew {
-			copy := row
-			previous = &copy
-		}
-		kind := ""
-		if controlExecutionEnabled && req.Target == "control" {
-			switch {
-			case req.Enabled && (isNew || !wasEnabled):
-				kind = "plugin.enable"
-			case req.Enabled && oldDesiredVersion != req.DesiredVersion:
-				kind = "plugin.update"
-			case !req.Enabled && wasEnabled:
-				kind = "plugin.disable"
-			}
-		}
-		dependencyPlan := kind == "plugin.enable" || kind == "plugin.update"
-		if !dependencyPlan {
-			if err := service.ValidatePluginInstallationPlan(tx, release, req.Target, req.Enabled, row.ID); err != nil {
-				return err
-			}
-		}
-		row.PluginID, row.Target, row.DesiredVersion, row.Enabled = req.PluginID, req.Target, req.DesiredVersion, req.Enabled
-		if isNew || wasEnabled != req.Enabled || oldDesiredVersion != req.DesiredVersion {
-			row.LifecycleGeneration++
-		}
-		if !isNew && oldDesiredVersion != req.DesiredVersion {
-			previousVersion := oldObservedVersion
-			if previousVersion == "" {
-				previousVersion = oldDesiredVersion
-			}
-			if previousVersion != req.DesiredVersion {
-				row.PreviousVersion = previousVersion
-			}
-		}
-		if !row.Enabled {
-			row.State = "disabled"
-			now := time.Now()
-			row.DisabledAt = &now
-		} else {
-			row.DisabledAt = nil
-			if isNew || !wasEnabled || oldDesiredVersion != row.DesiredVersion || oldState == "disabled" {
-				row.State = "pending"
-			} else {
-				row.State = oldState
-			}
-		}
-		if err := tx.Save(&row).Error; err != nil {
-			return err
-		}
-		if row.Target == "agent" {
-			configuration, err := service.GetPluginConfiguration(tx, row.ID)
-			if err != nil {
-				return err
-			}
-			operations, err := service.SyncAgentInstallationAssignments(tx, row, configuration.Revision, dispatchEnabled, time.Now())
-			queuedAgentOperations = operations
-			return err
-		}
-		if !controlExecutionEnabled || row.Target != "control" {
-			return nil
-		}
-		if kind == "" {
-			return nil
-		}
-		if dependencyPlan {
-			operation, enqueueErr := plugincontrol.QueueDependencyLifecyclePlan(tx, plugincontrol.DependencyLifecyclePlanRequest{
-				RootInstallation: row, PreviousRootInstallation: previous, RootRelease: release,
-				RootKind: kind, IdempotencyKey: controlOperationIdempotencyKey(
-					strconv.FormatUint(uint64(row.ID), 10), kind, row.DesiredVersion,
-					strconv.FormatInt(row.LifecycleGeneration, 10), strconv.FormatInt(row.ConfigRevision, 10), strconv.FormatBool(row.Enabled),
-				),
-				DeadlineAt: time.Now().Add(5 * time.Minute),
-			})
-			queuedOperation = operation
-			return enqueueErr
-		}
-		operation, enqueueErr := enqueueControlPluginOperation(tx, row, kind, row.DesiredVersion)
-		queuedOperation = operation
-		return enqueueErr
-	})
-	if err != nil {
-		switch {
-		case err.Error() == "untrusted_plugin":
-			kernelError(c, http.StatusBadRequest, "untrusted_plugin", "only catalogued official plugins can be installed")
-		case err.Error() == "release_not_found":
-			kernelError(c, http.StatusBadRequest, "release_not_found", "verified plugin release not found")
-		case errors.Is(err, service.ErrPluginDependencyUnsatisfied):
-			kernelError(c, http.StatusConflict, "plugin_dependency_unsatisfied", err.Error())
-		case errors.Is(err, service.ErrPluginConflict):
-			kernelError(c, http.StatusConflict, "plugin_conflict", err.Error())
-		case errors.Is(err, service.ErrPluginArtifactRequired):
-			kernelError(c, http.StatusConflict, "plugin_artifact_missing", err.Error())
-		default:
-			kernelError(c, http.StatusConflict, "release_invalid", err.Error())
-		}
-		return
-	}
-	if row.Target == "agent" {
-		if err := service.RefreshAgentPluginInstallationObservedState(h.db, row.PluginID); err != nil {
-			kernelDBError(c, err)
-			return
-		}
-	}
-	if queuedOperation != nil {
-		if err := setPluginOperationResponseHeaders(c, h.db, *queuedOperation); err != nil {
-			kernelDBError(c, err)
-			return
-		}
-	} else if len(queuedAgentOperations) > 0 {
-		ids := make([]string, 0, len(queuedAgentOperations))
-		for _, operation := range queuedAgentOperations {
-			ids = append(ids, operation.ID)
-		}
-		c.Header("X-AnixOps-Operation-ID", ids[0])
-		c.Header("X-AnixOps-Operation-Chain", strings.Join(ids, ","))
-	}
-	kernelData(c, http.StatusOK, service.PublicPluginInstallation(row))
-}
-
+// PluginInstallationAction restarts a built-in package's host: the only
+// action left (single-binary design, section 4.3). Installing, upgrading,
+// rolling back, enabling and disabling are what every start does to the
+// built-in packages, so no administrator action does them.
 func (h *KernelHandler) PluginInstallationAction(c *gin.Context) {
 	installationID, ok := parseKernelID(c, "id")
 	if !ok {
 		return
 	}
-	cfg := config.Get()
-	if cfg == nil || !cfg.Plugins.ControlExecutionEnabled {
-		kernelError(c, http.StatusConflict, "control_plugin_execution_disabled", "Control plugin execution is disabled")
-		return
-	}
 	var req struct {
 		Action         string `json:"action" binding:"required"`
-		TargetVersion  string `json:"target_version"`
 		IdempotencyKey string `json:"idempotency_key" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -852,8 +615,12 @@ func (h *KernelHandler) PluginInstallationAction(c *gin.Context) {
 		return
 	}
 	req.Action = strings.TrimSpace(req.Action)
-	req.TargetVersion = strings.TrimSpace(req.TargetVersion)
 	req.IdempotencyKey = strings.TrimSpace(req.IdempotencyKey)
+	if req.Action != "restart" {
+		kernelError(c, http.StatusBadRequest, "unsupported_plugin_action",
+			"the only package action is restart: Control installs, upgrades and enables its built-in packages at every start")
+		return
+	}
 	if req.IdempotencyKey == "" || len(req.IdempotencyKey) > 160 || strings.ContainsAny(req.IdempotencyKey, "\x00\r\n") {
 		kernelError(c, http.StatusBadRequest, "invalid_idempotency_key", "idempotency_key is invalid")
 		return
@@ -873,15 +640,12 @@ func (h *KernelHandler) PluginInstallationAction(c *gin.Context) {
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&installation, installationID).Error; err != nil {
 			return err
 		}
-		previousInstallation := installation
-		kind := "plugin." + req.Action
-		if req.Action == "restart" {
-			kind = "plugin.enable"
-		}
+		// A restart is an enable of the running generation.
+		const kind = "plugin.enable"
 		stableKey := controlOperationIdempotencyKey("action", strconv.FormatUint(uint64(installation.ID), 10), req.IdempotencyKey)
 		var existing model.KernelOperation
 		if err := tx.First(&existing, "idempotency_key = ?", stableKey).Error; err == nil {
-			if existing.Kind != kind || (req.Action == "update" && existing.TargetVersion != req.TargetVersion) {
+			if existing.Kind != kind {
 				return errors.New("idempotency_key is already bound to a different plugin action")
 			}
 			operation = &existing
@@ -889,87 +653,17 @@ func (h *KernelHandler) PluginInstallationAction(c *gin.Context) {
 		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return err
 		}
-		var existingPlan model.PluginLifecyclePlan
-		if err := tx.First(&existingPlan, "idempotency_key = ?", stableKey).Error; err == nil {
-			if err := tx.First(&existing, "id = ?", existingPlan.RootOperationID).Error; err != nil {
-				return fmt.Errorf("load idempotent lifecycle root operation: %w", err)
-			}
-			if existing.Kind != kind || (req.Action == "update" && existing.TargetVersion != req.TargetVersion) {
-				return errors.New("idempotency_key is already bound to a different plugin action")
-			}
-			operation = &existing
-			return nil
-		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
-			return err
+		if !installation.Enabled {
+			return errors.New("disabled installation cannot be restarted")
 		}
-		targetVersion := installation.DesiredVersion
-		mutated := false
-		switch req.Action {
-		case "enable":
-			installation.Enabled, installation.State, installation.DisabledAt = true, "pending", nil
-			mutated = true
-		case "disable":
-			installation.Enabled, installation.State = false, "disabled"
-			now := time.Now()
-			installation.DisabledAt = &now
-			mutated = true
-		case "update":
-			if req.TargetVersion == "" || req.TargetVersion == installation.DesiredVersion {
-				return errors.New("update target_version must differ from desired_version")
-			}
-			targetVersion = req.TargetVersion
-			previous := installation.ObservedVersion
-			if previous == "" {
-				previous = installation.DesiredVersion
-			}
-			installation.PreviousVersion = previous
-			installation.DesiredVersion, installation.Enabled, installation.State, installation.DisabledAt = targetVersion, true, "pending", nil
-			mutated = true
-		case "rollback":
-			if installation.PreviousVersion == "" {
-				return errors.New("installation has no previous version")
-			}
-			targetVersion = installation.PreviousVersion
-			installation.DesiredVersion, installation.Enabled, installation.State, installation.DisabledAt = targetVersion, true, "pending", nil
-			mutated = true
-		case "restart":
-			if !installation.Enabled {
-				return errors.New("disabled installation cannot be restarted")
-			}
-		case "health", "inspect":
-		default:
-			return errors.New("unsupported Control plugin action")
-		}
-
 		var release model.PluginRelease
-		if err := tx.First(&release, "plugin_id = ? AND version = ?", installation.PluginID, targetVersion).Error; err != nil {
+		if err := tx.First(&release, "plugin_id = ? AND version = ?", installation.PluginID, installation.DesiredVersion).Error; err != nil {
 			return errors.New("verified target release not found")
 		}
-		enabledPlan := installation.Enabled
-		if req.Action == "health" || req.Action == "inspect" || req.Action == "restart" {
-			enabledPlan = true
-		}
-		dependencyPlan := mutated && (req.Action == "enable" || req.Action == "update" || req.Action == "rollback")
-		if !dependencyPlan {
-			if err := service.ValidatePluginInstallationPlan(tx, release, "control", enabledPlan, installation.ID); err != nil {
-				return err
-			}
-		}
-		if mutated {
-			installation.LifecycleGeneration++
-			if err := tx.Save(&installation).Error; err != nil {
-				return err
-			}
-		}
-		if dependencyPlan {
-			queued, err := plugincontrol.QueueDependencyLifecyclePlan(tx, plugincontrol.DependencyLifecyclePlanRequest{
-				RootInstallation: installation, PreviousRootInstallation: &previousInstallation, RootRelease: release,
-				RootKind: kind, IdempotencyKey: stableKey, DeadlineAt: time.Now().Add(5 * time.Minute),
-			})
-			operation = queued
+		if err := service.ValidatePluginInstallationPlan(tx, release, "control", true, installation.ID); err != nil {
 			return err
 		}
-		queued, err := enqueueControlPluginOperationWithKey(tx, installation, kind, targetVersion, stableKey)
+		queued, err := enqueueControlPluginOperationWithKey(tx, installation, kind, installation.DesiredVersion, stableKey)
 		operation = queued
 		return err
 	})
@@ -1536,8 +1230,9 @@ func (h *KernelHandler) UpsertAssignment(c *gin.Context) {
 	}
 	var row model.NodeServiceAssignment
 	var queued []*model.KernelOperation
-	cfg := config.Get()
-	dispatchEnabled := cfg != nil && cfg.Plugins.DispatchEnabled
+	// Agent plugin dispatch is off until M4: the lifecycle records the
+	// desired state and no Agent operation is queued.
+	dispatchEnabled := agentPluginDispatchEnabled()
 	err := service.WithAgentLifecycleTransaction(h.db, func(tx *gorm.DB) error {
 		row = model.NodeServiceAssignment{}
 		queued = nil
@@ -1680,8 +1375,9 @@ func (h *KernelHandler) DeleteAssignment(c *gin.Context) {
 	}
 	var assignment model.NodeServiceAssignment
 	var queued []*model.KernelOperation
-	cfg := config.Get()
-	dispatchEnabled := cfg != nil && cfg.Plugins.DispatchEnabled
+	// Agent plugin dispatch is off until M4: the lifecycle records the
+	// desired state and no Agent operation is queued.
+	dispatchEnabled := agentPluginDispatchEnabled()
 	err := service.WithAgentLifecycleTransaction(h.db, func(tx *gorm.DB) error {
 		assignment = model.NodeServiceAssignment{}
 		queued = nil
@@ -2044,10 +1740,17 @@ func (h *KernelHandler) PreviewDeployment(c *gin.Context) {
 	kernelData(c, http.StatusOK, preview)
 }
 
-func topologyExecutionEnabled() bool {
-	cfg := config.Get()
-	return cfg != nil && cfg.Plugins.TopologyExecutionEnabled
-}
+// Agent plugin dispatch and topology execution are off until M4
+// (service.AgentPluginDispatchEnabled, service.TopologyExecutionEnabled), and
+// no setting changes them: assignments and configuration changes record the
+// desired state without queueing an Agent operation, and deployment apply and
+// rollback answer topology_execution_disabled. The handlers read the
+// constants through these functions only so that the tests keep the M4 paths
+// covered.
+var (
+	agentPluginDispatchEnabled = func() bool { return service.AgentPluginDispatchEnabled }
+	topologyExecutionEnabled   = func() bool { return service.TopologyExecutionEnabled }
+)
 
 func (h *KernelHandler) GetDeploymentStatus(c *gin.Context) {
 	deploymentID, ok := parseKernelID(c, "id")

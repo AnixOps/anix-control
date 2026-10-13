@@ -16,10 +16,9 @@ Rules that apply to every roadmap item:
 
 - An item moves to done only after code, tests, and CI evidence exist.
 - A passing unit or browser test is not a production canary. Agent dispatch
-  and topology execution (`plugins.dispatch_enabled`,
-  `plugins.topology_execution_enabled`) are off by default; turning them on in
-  production is the operator's decision, and staging or canary evidence is
-  worth collecting first, but no release gate requires it
+  and topology execution are off, with no setting, until M4's Agent release
+  manifest brings the Agent plugins; staging or canary evidence is worth
+  collecting then, but no release gate requires it
   ([`docs/RELEASING.md`](docs/RELEASING.md)).
 - Product version tags follow the CHANGELOG and
   [`docs/RELEASING.md`](docs/RELEASING.md), not the Go module import suffix

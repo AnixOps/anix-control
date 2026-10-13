@@ -15,7 +15,7 @@ import nodeDetail from '../fixtures/nodeDetail.js'
 import nodes from '../fixtures/nodes.js'
 import notifications from '../fixtures/notifications.js'
 import orders from '../fixtures/orders.js'
-import plugins from '../fixtures/plugins.js'
+import packages from '../fixtures/packages.js'
 import security from '../fixtures/security.js'
 import subscriptions from '../fixtures/subscriptions.js'
 import system from '../fixtures/system.js'
@@ -46,7 +46,6 @@ export const SCREENS = {
   'admin-tickets': { fixture: tickets, scenario: 'list' },
   'admin-coupons': { fixture: coupons, scenario: 'list' },
   'admin-invite-codes': { fixture: inviteCodes, scenario: 'list' },
-  'admin-plugins': { fixture: plugins, scenario: 'list' },
   'admin-nodes': { fixture: nodes, scenario: 'list' },
   // 接入节点: the dialog while it waits for the first machine, with two
   // machines joined (one waits for approval) and on a Control that cannot hand
@@ -95,6 +94,8 @@ export const SCREENS = {
   'admin-subscriptions': { fixture: subscriptions, scenario: 'list' },
   'admin-subscription-members': { fixture: subscriptions, scenario: 'members' },
   'admin-system': { fixture: system, scenario: 'general' },
+  // 系统设置 → 内置包: the built-in packages (it replaced 插件中心).
+  'admin-system-packages': { fixture: packages, scenario: 'list' },
   'admin-security': { fixture: security, scenario: 'mfa' },
   'admin-access-groups': { fixture: security, scenario: 'groups' },
   // Security → API tokens: the list, with ended and everyone's tokens, empty

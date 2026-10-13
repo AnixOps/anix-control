@@ -101,22 +101,17 @@ func TestUserSubscriptionResetChangesControlsToken(t *testing.T) {
 	require.Equal(t, kernelservice.UserSubscriptionResetRequestID(2, "self-1"), request.RequestID)
 }
 
-// An installation finalized before the route joined group A has no stored
-// mode for it: the kernel resolves it native, and the native handler resets
-// with identity's credentials although Control no longer holds any.
-func TestUserSubscriptionResetWorksOnAFinalizedInstallWithoutItsStoredMode(t *testing.T) {
+// On a finalized install the kernel resolves the user's subscription reset
+// native with the rest of group A (route modes follow the authority, nothing
+// stores them), and the native handler resets with identity's credentials
+// although Control no longer holds any.
+func TestUserSubscriptionResetWorksOnAFinalizedInstall(t *testing.T) {
 	db, identity, _ := controlWithIdentity(t)
 	require.NoError(t, db.Save(&model.IdentityAuthority{ID: 1, State: model.IdentityAuthorityFinalized, UpdatedAt: time.Now()}).Error)
 	require.NoError(t, db.Model(&model.User{}).Where("1 = 1").Update("password", model.UnusableLegacyPassword).Error)
 	require.NoError(t, db.Where("1 = 1").Delete(&model.UserMFA{}).Error)
 
-	stored := map[string]string{}
-	for _, route := range kernelservice.IdentityGroupARoutes {
-		if route != native.UserSubscriptionResetRouteID {
-			stored[route] = "native"
-		}
-	}
-	modes, err := kernelservice.ResolvePackageRouteModes(db, kernelservice.IdentityPlatformPackageID, stored)
+	modes, err := kernelservice.ResolvePackageRouteModes(db, kernelservice.IdentityPlatformPackageID)
 	require.NoError(t, err)
 	require.Equal(t, "native", modes[native.UserSubscriptionResetRouteID])
 

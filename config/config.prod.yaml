@@ -109,9 +109,11 @@ plugins:
   # Ignored: the official packages, identity-platform included, are built
   # into Control and installed at every start. Leave it empty.
   identity_bootstrap_package_dir: ""
-  # Runs the built-in packages' hosts; without them the /api/v2 routes
-  # answer 502. Keep it on.
-  control_execution_enabled: true
+  # The built-in packages' hosts always run, and Agent plugin dispatch and
+  # topology execution are off until M4: control_execution_enabled,
+  # dispatch_enabled, dispatch_poll_interval, topology_execution_enabled and
+  # topology_poll_interval are gone (a file that sets them still loads; each
+  # key is ignored with a warning).
   control_poll_interval: "5s"
   control_host_runtime_dir: "/var/lib/anixops/plugin-hosts"
   control_host_artifact_dir: "/var/lib/anixops/plugin-artifacts"
@@ -125,12 +127,6 @@ plugins:
   # kernel host client (502 plugin_response_too_large).
   # control_host_max_request_bytes: 1048576
   # control_host_max_response_bytes: 1048576
-  dispatch_enabled: false
-  dispatch_poll_interval: "5s"
-  # Topology fan-out creates Agent plugin operations only when explicitly
-  # enabled together with dispatch_enabled. Keep false until canary evidence.
-  topology_execution_enabled: false
-  topology_poll_interval: "5s"
 
 forward_runtime:
   backend: "gost"

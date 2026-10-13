@@ -53,7 +53,6 @@ export default {
         knowledge: '帮助中心内容',
         nodes: '节点',
         forward: '转发',
-        plugins: '插件中心',
         deployments: '部署编排',
         settings: '系统设置',
         security: '安全',

@@ -80,11 +80,12 @@ export const ADMIN_MENU = Object.freeze([
     ]
   },
   {
+    // Only the packages' own WebUI menus land here (EXTENSION_PARENT_GROUPS):
+    // the built-in packages have no page of their own any more, their status
+    // is 系统设置 → 内置包 (/admin/system/packages).
     id: 'extensions',
     labelKey: 'shell.admin.groups.extensions',
-    items: [
-      { id: 'plugins', to: '/admin/plugins', icon: 'plugins', labelKey: 'shell.admin.items.plugins' }
-    ]
+    items: []
   },
   {
     id: 'system',

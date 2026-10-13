@@ -351,6 +351,10 @@ func main() {
 // run starts Control and blocks until shutdown. It returns the process exit
 // code so that deferred cleanup (cache, database) runs before os.Exit.
 func run() int {
+	if reason, removed := removedCommand(os.Args[1:]); removed {
+		_, _ = fmt.Fprintln(os.Stderr, reason)
+		return 2
+	}
 	migrateOnly := takeMigrateCommand()
 	adminArguments := takeAdminCommand()
 	nodeSecretsArguments := takeNodeSecretsCommand()
@@ -400,9 +404,7 @@ func run() int {
 	} else {
 		logging.Setup(cfg.Log)
 	}
-	// Route modes of v2 Control packages without a stored mode
-	// (package_routes.default_mode); the routes command resolves them too.
-	service.SetPackageRouteDefaultPolicy(cfg.PackageRoutes.DefaultModeOrDefault())
+	// The route modes of the v2 Control packages: the rehearsed list.
 	if summary, err := service.PackageRouteDefaultsSummary(); err != nil {
 		log.Fatalf("Invalid package route defaults: %v", err)
 	} else if adminArguments == nil {
@@ -552,8 +554,10 @@ func run() int {
 	return exitCode
 }
 
-// pluginPollIntervals holds the validated poll intervals of the optional
-// plugin control loops.
+// pluginPollIntervals holds the validated poll intervals of the plugin
+// control loops. The Agent plugin dispatcher and the topology executor are
+// off until M4 (service.AgentPluginDispatchEnabled,
+// service.TopologyExecutionEnabled) and have no setting.
 type pluginPollIntervals struct {
 	control  time.Duration
 	dispatch time.Duration
@@ -573,28 +577,10 @@ func parsePluginPollInterval(key, raw string) (time.Duration, error) {
 }
 
 func parsePluginPollIntervals(cfg *config.Config) (pluginPollIntervals, error) {
-	var intervals pluginPollIntervals
+	intervals := pluginPollIntervals{dispatch: service.AgentPluginWorkerPollInterval, topology: service.AgentPluginWorkerPollInterval}
 	var err error
-	if cfg.Plugins.ControlExecutionEnabled {
-		if intervals.control, err = parsePluginPollInterval("plugins.control_poll_interval", cfg.Plugins.ControlPollInterval); err != nil {
-			return intervals, err
-		}
-	}
-	if cfg.Plugins.DispatchEnabled {
-		if !cfg.Panel().GRPCEnabled {
-			return intervals, errors.New("plugin operation dispatch requires the gRPC listener (domain, or grpc.enabled=true)")
-		}
-		if intervals.dispatch, err = parsePluginPollInterval("plugins.dispatch_poll_interval", cfg.Plugins.DispatchPollInterval); err != nil {
-			return intervals, err
-		}
-	}
-	if cfg.Plugins.TopologyExecutionEnabled {
-		if !cfg.Plugins.DispatchEnabled {
-			return intervals, errors.New("topology execution requires plugins.dispatch_enabled=true")
-		}
-		if intervals.topology, err = parsePluginPollInterval("plugins.topology_poll_interval", cfg.Plugins.TopologyPollInterval); err != nil {
-			return intervals, err
-		}
+	if intervals.control, err = parsePluginPollInterval("plugins.control_poll_interval", cfg.Plugins.ControlPollInterval); err != nil {
+		return intervals, err
 	}
 	return intervals, nil
 }
@@ -632,7 +618,8 @@ func (rt *serverRuntime) start(cfg *config.Config, intervals pluginPollIntervals
 		return err
 	}
 	pluginhost.SetDefaultManager(nil)
-	if cfg.Plugins.ControlExecutionEnabled {
+	// The built-in packages always run: their hosts start with Control.
+	{
 		hosts, err := newControlPluginHostManager(cfg)
 		if err != nil {
 			return fmt.Errorf("initialize Control plugin hosts: %w", err)
@@ -647,7 +634,6 @@ func (rt *serverRuntime) start(cfg *config.Config, intervals pluginPollIntervals
 		rt.workers.Go("plugin host health poller", func(ctx context.Context) {
 			hosts.PollHealth(ctx, pluginHostHealthPollInterval)
 		})
-		rt.startShadowSampleCollector(hosts)
 		artifacts, cleanupArtifacts, err := newControlPluginArtifactResolver(cfg)
 		if err != nil {
 			return fmt.Errorf("initialize Control plugin artifact resolver: %w", err)
@@ -675,13 +661,6 @@ func (rt *serverRuntime) start(cfg *config.Config, intervals pluginPollIntervals
 
 	if err := rt.startIdentityKeys(); err != nil {
 		return err
-	}
-
-	if !cfg.Plugins.ControlExecutionEnabled {
-		// Without package execution the listener still serves ModulePKI.
-		if err := rt.startModuleRuntime(cfg, nil); err != nil {
-			return err
-		}
 	}
 
 	// Periodic resets, stats collection, latency probing and the forward job
@@ -728,7 +707,8 @@ func (rt *serverRuntime) start(cfg *config.Config, intervals pluginPollIntervals
 		}()
 	}
 
-	if cfg.Plugins.DispatchEnabled {
+	// Off until M4 (service.AgentPluginDispatchEnabled): the code stays.
+	if service.AgentPluginDispatchEnabled && rt.grpcSrv != nil {
 		bridge, err := grpcserver.NewKernelOperationBridge(database.Get(), rt.grpcSrv.GetAgentControlManager())
 		if err != nil {
 			return fmt.Errorf("initialize plugin operation dispatcher: %w", err)
@@ -740,7 +720,8 @@ func (rt *serverRuntime) start(cfg *config.Config, intervals pluginPollIntervals
 		})
 		log.Printf("Plugin operation dispatcher enabled (poll interval %s)", intervals.dispatch)
 	}
-	if cfg.Plugins.TopologyExecutionEnabled {
+	// Off until M4 (service.TopologyExecutionEnabled): the code stays.
+	if service.TopologyExecutionEnabled && service.AgentPluginDispatchEnabled {
 		executor, err := service.NewTopologyDeploymentExecutor(database.Get())
 		if err != nil {
 			return fmt.Errorf("initialize topology deployment executor: %w", err)

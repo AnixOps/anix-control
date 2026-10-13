@@ -67,9 +67,23 @@ func asKernelAdmin(c *gin.Context) {
 	c.Set("is_admin", true)
 }
 
+// enableTopologyExecution turns on the topology execution M4 brings
+// (service.TopologyExecutionEnabled is false until then), for this test.
 func enableTopologyExecution(t *testing.T) {
 	t.Helper()
-	config.Set(&config.Config{Plugins: config.PluginConfig{DispatchEnabled: true, TopologyExecutionEnabled: true}})
+	previousDispatch, previousExecution := agentPluginDispatchEnabled, topologyExecutionEnabled
+	agentPluginDispatchEnabled = func() bool { return true }
+	topologyExecutionEnabled = func() bool { return true }
+	t.Cleanup(func() { agentPluginDispatchEnabled, topologyExecutionEnabled = previousDispatch, previousExecution })
+}
+
+// enableAgentPluginDispatch turns on the Agent plugin dispatch M4 brings
+// (service.AgentPluginDispatchEnabled is false until then), for this test.
+func enableAgentPluginDispatch(t *testing.T) {
+	t.Helper()
+	previous := agentPluginDispatchEnabled
+	agentPluginDispatchEnabled = func() bool { return true }
+	t.Cleanup(func() { agentPluginDispatchEnabled = previous })
 }
 
 func (f topologyDeleteHandlerFixture) topologyPath(suffix string) string {
@@ -182,7 +196,7 @@ func TestKernelDeleteTopologyWithActiveRevisionStartsATeardown(t *testing.T) {
 	recorder := performKernelHandlerRequest(t, http.MethodDelete, f.topologyPath(""), "", "/topologies/:id", h.DeleteTopology)
 	require.Equal(t, http.StatusConflict, recorder.Code, recorder.Body.String())
 	requireKernelErrorCode(t, recorder.Body.Bytes(), "topology_execution_disabled")
-	require.Contains(t, recorder.Body.String(), "plugins.topology_execution_enabled")
+	require.Contains(t, recorder.Body.String(), "topology execution (off until M4)")
 	var count int64
 	require.NoError(t, f.db.Model(&model.TopologyDeployment{}).Count(&count).Error)
 	require.Zero(t, count)

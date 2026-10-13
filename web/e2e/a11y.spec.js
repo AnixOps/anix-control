@@ -6,7 +6,7 @@ import { SCREENS, openScreen } from './support/screens.js'
 // and phone, with the API mocked. Serious and critical findings fail the
 // build; WCAG 2.2 AA rules plus best practices.
 const VIEWPORTS = { desktop: { width: 1440, height: 900 }, phone: { width: 390, height: 844 } }
-// admin-forward-no-capability leads to 插件中心 (admin-plugins).
+// admin-forward-no-capability leads to 系统设置 → 内置包 (admin-system-packages).
 const SKIP = new Set(['admin-dashboard-error', 'admin-users-empty', 'admin-forward-no-capability', 'admin-forward-editor-blank'])
 
 for (const name of Object.keys(SCREENS).filter(screen => !SKIP.has(screen))) {
@@ -222,30 +222,25 @@ test('an open Combobox list is inside a labelled region and has no axe findings'
   await expect(input).toBeFocused()
 })
 
-// WAI-ARIA tabs: the install targets of the plugin drawer are one tab stop;
-// Left/Right/Home/End move between them and select (Reka Tabs via UiTabs).
-test('plugin drawer target tabs follow the WAI-ARIA tabs keyboard pattern', async ({ page }) => {
-  await openScreen(page, 'admin-plugins')
-  await page.getByTestId('plugin-row-protocol-runtime').click()
-  const drawer = page.getByTestId('plugin-detail-drawer')
-  const tabs = drawer.getByRole('tablist', { name: 'Runtime target' }).getByRole('tab')
+// WAI-ARIA tabs: the node page's sections are one tab stop; Left/Right/
+// Home/End move between them and select (Reka Tabs via UiTabs).
+test('node page tabs follow the WAI-ARIA tabs keyboard pattern', async ({ page }) => {
+  await openScreen(page, 'admin-nodes')
+  const tablist = page.getByRole('tablist', { name: 'Node sections' })
+  const tabs = tablist.getByRole('tab')
   await expect(tabs).toHaveCount(2)
   const [first, second] = [tabs.nth(0), tabs.nth(1)]
   await expect(first).toHaveAttribute('aria-selected', 'true')
 
-  // Tab from the sheet header lands on the selected tab, once.
-  await drawer.getByRole('button', { name: 'Close' }).focus()
-  await page.keyboard.press('Tab')
-  await expect(first).toBeFocused()
+  await first.focus()
   await expect(first).toHaveAttribute('tabindex', '0')
   await expect(second).toHaveAttribute('tabindex', '-1')
-
   await page.keyboard.press('ArrowRight')
   await expect(second).toBeFocused()
   await expect(second).toHaveAttribute('aria-selected', 'true')
   await expect(second).toHaveAttribute('tabindex', '0')
   await expect(first).toHaveAttribute('tabindex', '-1')
-  await expect(drawer.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', await second.getAttribute('id'))
+  await expect(page.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', await second.getAttribute('id'))
 
   await page.keyboard.press('ArrowRight')
   await expect(first).toBeFocused()
@@ -256,11 +251,9 @@ test('plugin drawer target tabs follow the WAI-ARIA tabs keyboard pattern', asyn
   await page.keyboard.press('ArrowLeft')
   await expect(second).toBeFocused()
 
-  // Tab leaves the tablist for the panel instead of walking the tabs.
+  // Tab leaves the tablist instead of walking the tabs.
   await page.keyboard.press('Tab')
-  await expect(drawer.getByRole('tablist').locator(':focus')).toHaveCount(0)
-  const findings = await axeFindings(page, { include: '[data-testid="plugin-detail-drawer"]' })
-  expect(findings, findings.join('\n')).toEqual([])
+  await expect(tablist.locator(':focus')).toHaveCount(0)
 })
 
 // The topology workspace's text fields are labelled controls (UiTextField /

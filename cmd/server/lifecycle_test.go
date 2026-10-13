@@ -83,35 +83,29 @@ func TestFatalErrorsKeepsFirstErrorWithoutBlocking(t *testing.T) {
 
 func TestParsePluginPollIntervals(t *testing.T) {
 	cfg := &appconfig.Config{}
-	cfg.GRPC.Enable = true
-	cfg.Plugins.ControlExecutionEnabled = true
-	cfg.Plugins.DispatchEnabled = true
-	cfg.Plugins.DispatchPollInterval = "2s"
-	cfg.Plugins.TopologyExecutionEnabled = true
-	cfg.Plugins.TopologyPollInterval = "1m"
+	cfg.Plugins.ControlPollInterval = "2s"
 
 	intervals, err := parsePluginPollIntervals(cfg)
 	if err != nil {
 		t.Fatalf("parsePluginPollIntervals() error = %v", err)
 	}
-	want := pluginPollIntervals{control: 5 * time.Second, dispatch: 2 * time.Second, topology: time.Minute}
+	// Agent plugin dispatch and topology execution have no setting (off
+	// until M4): their workers would poll at the built-in interval.
+	want := pluginPollIntervals{control: 2 * time.Second, dispatch: 5 * time.Second, topology: 5 * time.Second}
 	if intervals != want {
 		t.Fatalf("intervals = %+v, want %+v", intervals, want)
 	}
+	cfg.Plugins.ControlPollInterval = ""
+	if intervals, err = parsePluginPollIntervals(cfg); err != nil || intervals.control != 5*time.Second {
+		t.Fatalf("parsePluginPollIntervals() = %+v, %v; want the 5s default", intervals, err)
+	}
 
-	for name, mutate := range map[string]func(*appconfig.Config){
-		"invalid control interval": func(c *appconfig.Config) { c.Plugins.ControlPollInterval = "soon" },
-		"non-positive dispatch":    func(c *appconfig.Config) { c.Plugins.DispatchPollInterval = "0s" },
-		"dispatch without grpc":    func(c *appconfig.Config) { c.GRPC.Enable = false },
-		"topology without dispatch": func(c *appconfig.Config) {
-			c.Plugins.DispatchEnabled = false
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			invalid := *cfg
-			mutate(&invalid)
-			if _, err := parsePluginPollIntervals(&invalid); err == nil {
-				t.Fatal("parsePluginPollIntervals() accepted invalid configuration")
+	for _, invalid := range []string{"soon", "0s", "-1s"} {
+		t.Run(invalid, func(t *testing.T) {
+			cfg := &appconfig.Config{}
+			cfg.Plugins.ControlPollInterval = invalid
+			if _, err := parsePluginPollIntervals(cfg); err == nil {
+				t.Fatal("parsePluginPollIntervals() accepted an invalid control_poll_interval")
 			}
 		})
 	}

@@ -41,23 +41,6 @@ export async function getKernelPluginReleases(pluginID) {
   return unwrap(await v3({ url: '/plugin-releases', method: 'get' }))
 }
 
-export async function registerKernelPluginRelease(manifest, signature) {
-  return unwrap(await v3({
-    url: '/plugin-releases',
-    method: 'post',
-    data: { manifest, signature }
-  }))
-}
-
-export async function uploadKernelPluginReleaseArtifact(releaseID, artifactBase64) {
-  return unwrap(await v3({
-    url: `/plugin-releases/${releaseID}/artifact`,
-    method: 'post',
-    data: { artifact_base64: artifactBase64 },
-    timeout: 120_000
-  }))
-}
-
 export async function getKernelInstallations() {
   return unwrap(await v3({ url: '/plugin-installations', method: 'get' }))
 }
@@ -81,27 +64,13 @@ export async function deleteKernelNodeAssignment(nodeID, assignmentID) {
   }))
 }
 
-export async function upsertKernelInstallation(installation) {
-  return operationResult(await v3({
-    url: '/plugin-installations',
-    method: 'put',
-    data: installation,
-    rawResponse: true,
-  }))
-}
-
-export async function runKernelInstallationAction(installationID, action, options = {}) {
-  const data = {
-    action,
-    idempotency_key: options.idempotencyKey
-  }
-  if (options.targetVersion) {
-    data.target_version = options.targetVersion
-  }
+// Restarts a built-in package's host: the only installation action (the
+// built-in packages are installed, upgraded and enabled at every start).
+export async function restartKernelInstallation(installationID, idempotencyKey) {
   return operationResult(await v3({
     url: `/plugin-installations/${installationID}/actions`,
     method: 'post',
-    data,
+    data: { action: 'restart', idempotency_key: idempotencyKey },
     rawResponse: true,
   }))
 }
@@ -279,32 +248,6 @@ export async function cancelKernelOperation(operationID) {
 
 export async function getKernelExtensions() {
   return unwrap(await v3({ url: '/extensions', method: 'get' }))
-}
-
-// Per-package v2 route modes (legacy / shadow / native), /api/v4.
-export async function getKernelRouteModes(packageID) {
-  const config = { url: '/kernel/route-modes', method: 'get' }
-  if (packageID) config.params = { package_id: packageID }
-  return unwrap(await v4(config))
-}
-
-// input: { package_id, routes?, mode, reason?, confirm? }; switching to
-// native needs confirm: true and a reason.
-export async function setKernelRouteModes(input) {
-  return unwrap(await v4({ url: '/kernel/route-modes', method: 'post', data: input }))
-}
-
-export async function rollbackKernelRouteModes(packageID, reason = '') {
-  const data = { package_id: packageID }
-  if (reason) data.reason = reason
-  return unwrap(await v4({ url: '/kernel/route-modes/rollback', method: 'post', data }))
-}
-
-export async function getKernelRouteModeRevisions(packageID, limit) {
-  const params = {}
-  if (packageID) params.package_id = packageID
-  if (limit) params.limit = limit
-  return unwrap(await v4({ url: '/kernel/route-modes/revisions', method: 'get', params }))
 }
 
 // The agent transport inventory (A2-6), /api/v4: each node's last agent
@@ -577,16 +520,6 @@ export async function createKernelApiToken({ name, scope, expiresInDays, passwor
 // The answer is { api_token, changed } (changed false: it was revoked already).
 export async function revokeKernelApiToken(id) {
   return unwrap(await v4({ url: `/kernel/api-tokens/${encodeURIComponent(id)}`, method: 'delete' }))
-}
-
-// Sanitized shadow-mode mismatch samples (newest first, at most 100):
-// { samples, retention_days, max_per_route }.
-export async function getKernelRouteModeMismatches({ packageID, routeID, limit } = {}) {
-  const params = {}
-  if (packageID) params.package_id = packageID
-  if (routeID) params.route_id = routeID
-  if (limit) params.limit = limit
-  return unwrap(await v4({ url: '/kernel/route-modes/mismatches', method: 'get', params }))
 }
 
 // The certificates Control serves itself (GET /api/v5/panel/status, any

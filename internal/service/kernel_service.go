@@ -2157,20 +2157,9 @@ func updatePluginConfigurationTx(tx *gorm.DB, publicKey ed25519.PublicKey, insta
 		if manifest.ID != installation.PluginID || manifest.Version != installation.DesiredVersion || !manifestSupportsTarget(*manifest, installation.Target) {
 			return errors.New("installation release is not version-bound to its target")
 		}
-		packageConfig, routeModes, hasRouteModes, err := splitPackageRouteModes(canonical)
-		if err != nil {
-			return err
-		}
-		if hasRouteModes {
-			if installation.Target != "control" || manifest.APIVersion != pluginManifestAPIVersionV2 {
-				return fmt.Errorf("configuration key %q is only valid for v2 control packages", PackageRouteModesConfigKey)
-			}
-			if err := validatePackageRouteModes(tx, release, publicKey, routeModes); err != nil {
-				return err
-			}
-		}
+		packageConfig := canonical
 		if installation.Target == "control" {
-			if err := validateIdentityGroupA(tx, installation.PluginID, routeModes); err != nil {
+			if err := rejectRemovedRouteModes(canonical); err != nil {
 				return err
 			}
 		}

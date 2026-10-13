@@ -27,10 +27,9 @@
   linux/arm64 binaries only, and list the built-in packages in
   `RELEASE_MANIFEST.json`. The release image no longer carries an identity
   package. `plugins.identity_bootstrap_package_dir` is ignored by a binary
-  with built-in packages (a development build without them still reads it),
-  and the configuration templates set `plugins.control_execution_enabled:
-  true`. Agent dispatch and topology execution stay off: the release builds
-  no Agent plugin.
+  with built-in packages (a development build without them still reads it).
+  Agent dispatch and topology execution stay off: the release builds no
+  Agent plugin.
 - `GET /api/v4/public/config` answers `edition: commercial` and an empty
   `hidden_packages` on every installation, so the web app shows every page.
 

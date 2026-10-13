@@ -126,7 +126,7 @@ func runForwardLegacyCommand(ctx context.Context, cfg *config.Config, db *gorm.D
 func (c *forwardLegacyCLI) audit(action string, content any) bool {
 	encoded, _ := json.Marshal(content)
 	err := service.NewOperationLogService(c.db.WithContext(c.ctx)).Record(&service.OperationLogInput{
-		Username: service.RouteModeCLIActor, Action: action, Module: "forward", TargetType: "forward_legacy", Content: string(encoded),
+		Username: service.CLIActor, Action: action, Module: "forward", TargetType: "forward_legacy", Content: string(encoded),
 	})
 	return err == nil
 }
@@ -145,7 +145,7 @@ func (c *forwardLegacyCLI) archive(arguments []string) error {
 		return forwardLegacyUsageError()
 	}
 	written, err := forwardlegacy.WriteArchive(c.ctx, c.db, forwardlegacy.WriteOptions{
-		Output: *output, Dir: forwardLegacyArchiveDir(c.cfg), Trigger: "cli", Actor: service.RouteModeCLIActor,
+		Output: *output, Dir: forwardLegacyArchiveDir(c.cfg), Trigger: "cli", Actor: service.CLIActor,
 		ControlVersion: version, Now: c.now(),
 	})
 	if err != nil {
@@ -228,7 +228,7 @@ func (c *forwardLegacyCLI) abandon(arguments []string) error {
 	if err != nil || len(positionals) != 1 {
 		return forwardLegacyUsageError()
 	}
-	status, err := forwardlegacy.Abandon(c.ctx, c.db, positionals[0], *reason, service.RouteModeCLIActor, c.now())
+	status, err := forwardlegacy.Abandon(c.ctx, c.db, positionals[0], *reason, service.CLIActor, c.now())
 	if err != nil {
 		return err
 	}
@@ -245,7 +245,7 @@ func (c *forwardLegacyCLI) drop(arguments []string) error {
 		return forwardLegacyUsageError()
 	}
 	result, err := forwardlegacy.Drop(c.ctx, c.db, forwardlegacy.DropOptions{
-		Confirm: *confirm, BackupPath: *backup, Actor: service.RouteModeCLIActor, Now: c.now(),
+		Confirm: *confirm, BackupPath: *backup, Actor: service.CLIActor, Now: c.now(),
 	})
 	if err != nil {
 		c.audit("forward.legacy_drop_refused", map[string]any{"error": err.Error()})

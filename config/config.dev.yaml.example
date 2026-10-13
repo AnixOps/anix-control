@@ -69,10 +69,11 @@ plugins:
   # Ignored: the official packages, identity-platform included, are built
   # into Control and installed at every start. Leave it empty.
   identity_bootstrap_package_dir: ""
-  # The development profile exercises the complete signed-package control path.
-  # Runs the built-in packages' hosts; without them the /api/v2 routes
-  # answer 502. Keep it on.
-  control_execution_enabled: true
+  # The built-in packages' hosts always run, and Agent plugin dispatch and
+  # topology execution are off until M4: control_execution_enabled,
+  # dispatch_enabled, dispatch_poll_interval, topology_execution_enabled and
+  # topology_poll_interval are gone (a file that sets them still loads; each
+  # key is ignored with a warning).
   control_poll_interval: "5s"
   # Leave this empty to create a unique private local Unix-socket root for
   # this Control process. Explicit configured roots must have trusted ancestry.
@@ -81,12 +82,6 @@ plugins:
   control_host_artifact_dir: ""
   control_host_startup_timeout: "5s"
   control_host_request_timeout: "30s"
-  # Dispatch is enabled against the local gRPC listener for reproducible alpha
-  # acceptance. Agents still keep the legacy HTTP data plane as fallback.
-  dispatch_enabled: true
-  dispatch_poll_interval: "5s"
-  topology_execution_enabled: false
-  topology_poll_interval: "5s"
 
 forward_runtime:
   backend: "gost"

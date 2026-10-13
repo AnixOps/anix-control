@@ -153,7 +153,7 @@ func runForwardCommand(ctx context.Context, db *gorm.DB, arguments []string, std
 func (c *forwardCLI) audit(action, targetType string, content any) bool {
 	encoded, _ := json.Marshal(content)
 	err := service.NewOperationLogService(c.db.WithContext(c.ctx)).Record(&service.OperationLogInput{
-		Username: service.RouteModeCLIActor, Action: action, Module: "forward", TargetType: targetType, Content: string(encoded),
+		Username: service.CLIActor, Action: action, Module: "forward", TargetType: targetType, Content: string(encoded),
 	})
 	return err == nil
 }

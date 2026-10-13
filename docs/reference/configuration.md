@@ -26,7 +26,7 @@ is `ANIX_CONTROL_` plus the upper-cased YAML path joined with underscores:
 |------|------|
 | `database.password` | `ANIX_CONTROL_DATABASE_PASSWORD` |
 | `jwt.secret` | `ANIX_CONTROL_JWT_SECRET` |
-| `plugins.control_execution_enabled` | `ANIX_CONTROL_PLUGINS_CONTROL_EXECUTION_ENABLED` |
+| `plugins.control_poll_interval` | `ANIX_CONTROL_PLUGINS_CONTROL_POLL_INTERVAL` |
 | `server.trusted_proxies` | `ANIX_CONTROL_SERVER_TRUSTED_PROXIES` (comma-separated) |
 
 Rules:
@@ -257,12 +257,11 @@ open the same file with their own 4 connections and the same `busy_timeout`,
 Every official package is built into the binary and installed, upgraded and
 enabled at every start
 ([`../architecture/plugin-kernel-contract.md`](../architecture/plugin-kernel-contract.md#built-in-packages)).
-Three keys bear on it:
+Two keys bear on it:
 
 | Key | Default | Notes |
 |------|------|------|
 | `plugins.official_public_key` (`ANIX_CONTROL_PLUGINS_OFFICIAL_PUBLIC_KEY`) | the AnixOps release root | Every built-in package must verify against it; a package that does not is left out (`builtin_package_invalid`) and Control starts without it. A development build (`make build`) is signed with a development key: `make run` sets the variable to it (`make dev-package-key` prints it). |
-| `plugins.control_execution_enabled` | `true` | Runs the package hosts. Off, the packages are installed but every `/api/v2` route answers 502. Keep it on. |
 | `plugins.identity_bootstrap_package_dir` | empty | Ignored by a binary with built-in packages (every release). A development build without them still imports `identity-platform` from this directory at start. |
 
 `app.edition` is gone: there are no community and commercial editions.
@@ -270,6 +269,24 @@ Orders, payments and affiliate are installed like every other package, and
 a configuration that still sets the key loads (the key is ignored). The
 public `GET /api/v4/public/config` keeps its `edition` (`commercial`) and
 `hidden_packages` (empty) fields for the web app.
+
+The package hosts always run, and Agent plugin dispatch and topology
+execution are off until M4; none of them has a setting.
+
+## Removed Keys
+
+These keys are no longer read. A configuration file or an `ANIX_CONTROL_*`
+variable that still sets one loads, and the start logs one line per key
+(`Ignoring the removed configuration key <key> (set in <source>): <reason>`);
+`internal/config/deprecated.go` lists them. Delete them when convenient
+([`../UPGRADE.md`](../UPGRADE.md#plugin-center-reduced-to-package-status)).
+
+| Key | Why |
+|------|------|
+| `plugins.control_execution_enabled` | The built-in packages always run |
+| `plugins.dispatch_enabled`, `plugins.dispatch_poll_interval` | Agent plugin dispatch is off until M4 brings the Agent plugins |
+| `plugins.topology_execution_enabled`, `plugins.topology_poll_interval` | Topology deployment execution is off until M4 |
+| `package_routes.default_mode` | Route modes come only from the rehearsed list (below) |
 
 ## Unified Forward Runtime Layout
 
@@ -597,29 +614,16 @@ agent_install:
   `SHA256SUMS.sig`, checked with `plugins.official_public_key`) for
   `install.sh --offline`.
 
-## Package Route Defaults
+## Package Route Modes
 
-`package_routes.default_mode` (`ANIX_CONTROL_PACKAGE_ROUTES_DEFAULT_MODE`)
-sets the route mode of v2 Control package routes whose installation stores
-no mode (`anix-control routes`, [`../UPGRADE.md`](../UPGRADE.md#switching-route-modes)).
-
-```yaml
-package_routes:
-  default_mode: "rehearsed"   # rehearsed | legacy
-```
-
-| Policy | Routes without a stored mode |
-|------|------|
-| `rehearsed` (default from 4.1.0) | the 151 routes of `config/package-route-defaults.json` (15 packages that passed the staging rehearsal) run natively when the installed package release is at least its `min_version` (`4.1.0-rc.5`); every other route runs legacy |
-| `legacy` | every route runs legacy, exactly as in 4.0 (the kill switch) |
-
-A stored mode always wins, and identity group A follows the identity
-authority in both policies. Any other value fails startup. The startup log
-line `package route defaults: policy ...` states the policy and how many
-routes default to native; `anix-control routes list` shows each route's
-`SOURCE` (`stored`, `default`, `kill-switch`, `package-too-old`,
-`identity-authority`, `unset`). Package hosts pick a changed policy up at
-their next configuration poll after the restart.
+No key sets them. The route modes of the v2 Control packages come only from
+the rehearsed list, `config/package-route-defaults.json`, which ships in the
+binary: its 130 routes of 14 packages run natively once the installed package
+release is at least its `min_version` (`4.1.0-rc.5`), identity group A
+follows the identity authority, and every other route runs its legacy
+handler. Nothing stores or switches a route's mode any more (the route-mode
+administration and `anix-control routes` were removed). The startup log line
+`package route modes: ...` states the count.
 
 ## Alerts
 

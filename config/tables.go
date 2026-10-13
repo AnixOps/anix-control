@@ -18,11 +18,12 @@ var NodeSecretFields []byte
 //go:embed package-extraction.json
 var PackageExtraction []byte
 
-// PackageRouteDefaults is config/package-route-defaults.json: the routes
-// that run natively by default (package_routes.default_mode: rehearsed) once
-// they passed the staging rehearsal, with the package release each needs.
-// The list is explicit: a route that becomes native-flagged in
-// package-extraction.json does not default to native until it is added here.
+// PackageRouteDefaults is config/package-route-defaults.json, the rehearsed
+// list: the routes that run natively, once they passed the staging
+// rehearsal, with the package release each needs. Route modes come only from
+// it (and identity group A from the identity authority). The list is
+// explicit: a route that becomes native-flagged in package-extraction.json
+// does not run natively until it is added here.
 //
 //go:embed package-route-defaults.json
 var PackageRouteDefaults []byte

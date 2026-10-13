@@ -32,16 +32,33 @@ func moduleUsageError() error {
 	return fmt.Errorf("invalid module command\n%s", moduleCommandUsage)
 }
 
-// takeAdminCommand removes a leading "module", "agent", "agents", "routes",
-// "forward", "tls" or "doctor" command and returns it with its arguments;
-// nil means the process is not running one.
+// takeAdminCommand removes a leading "module", "agent", "agents", "forward",
+// "tls" or "doctor" command and returns it with its arguments; nil means the
+// process is not running one.
 func takeAdminCommand() []string {
-	if len(os.Args) > 1 && (os.Args[1] == "module" || os.Args[1] == "agent" || os.Args[1] == "agents" || os.Args[1] == "routes" || os.Args[1] == "forward" || os.Args[1] == "tls" || os.Args[1] == "doctor") {
+	if len(os.Args) > 1 && (os.Args[1] == "module" || os.Args[1] == "agent" || os.Args[1] == "agents" || os.Args[1] == "forward" || os.Args[1] == "tls" || os.Args[1] == "doctor") {
 		arguments := append([]string{}, os.Args[1:]...)
 		os.Args = os.Args[:1]
 		return arguments
 	}
 	return nil
+}
+
+// removedCommands are the commands earlier releases had, with what replaced
+// them. Running one exits with status 2 and the reason instead of starting
+// the server with the words as stray arguments.
+var removedCommands = map[string]string{
+	"routes": "anix-control routes was removed: the route modes of the v2 packages come only from the rehearsed list (config/package-route-defaults.json) and can no longer be listed or switched",
+}
+
+// removedCommand reports the reason when arguments start with a removed
+// command.
+func removedCommand(arguments []string) (string, bool) {
+	if len(arguments) == 0 {
+		return "", false
+	}
+	reason, removed := removedCommands[arguments[0]]
+	return reason, removed
 }
 
 // adminCommandExitCode is the exit status of a failed admin command: 3 when
@@ -65,9 +82,6 @@ func runAdminCommand(ctx context.Context, cfg *config.Config, db *gorm.DB, argum
 	}
 	if len(arguments) > 0 && arguments[0] == "agents" {
 		return runAgentsCommand(ctx, cfg, db, arguments[1:], stdout)
-	}
-	if len(arguments) > 0 && arguments[0] == "routes" {
-		return runRoutesCommand(ctx, cfg, db, arguments[1:], stdout)
 	}
 	if len(arguments) > 1 && arguments[0] == "forward" && arguments[1] == "legacy" {
 		return runForwardLegacyCommand(ctx, cfg, db, arguments[2:], stdout)

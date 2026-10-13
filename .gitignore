@@ -112,9 +112,11 @@ v2board.bak.*
 !/control-center/internal/plugins/v2board/
 !/control-center/mobile/lib/features/logs/
 
-# Build output of `go build` in the repository root or a package directory
+# Build output of `go build` in the repository root or in a package's host
+# directory. packages/<id>/control/ itself is source (the hosts are libraries
+# Control links), so only the binary a build leaves inside it is ignored.
 /control
-/packages/*/control
+/packages/*/control/control
 *.bck.yml
 
 # Built-in packages (internal/builtinpkg): the build writes them into dist/;

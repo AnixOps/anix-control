@@ -124,14 +124,13 @@ auth:
 	assert.Equal(t, 3600, loadedCfg.Auth.RegisterRateLimit.LockoutSeconds)
 }
 
-func TestLoadPluginDispatchConfig(t *testing.T) {
+func TestLoadPluginConfig(t *testing.T) {
 	resetConfig()
 	configPath := filepath.Join(t.TempDir(), "config.yaml")
 	content := `
 plugins:
   official_public_key: "ZmFrZS1wdWJsaWMta2V5"
   identity_bootstrap_package_dir: "/var/lib/anixops/bootstrap"
-  control_execution_enabled: true
   control_poll_interval: "3s"
   control_host_runtime_dir: "/var/lib/anixops/plugin-hosts"
   control_host_artifact_dir: "/var/lib/anixops/plugin-artifacts"
@@ -140,18 +139,11 @@ plugins:
   control_host_websocket_session_timeout: "6h"
   control_host_max_request_bytes: 2097152
   control_host_max_response_bytes: 8388608
-  dispatch_enabled: true
-  dispatch_poll_interval: 7s
-  topology_execution_enabled: true
-  topology_poll_interval: 11s
 `
 	require.NoError(t, os.WriteFile(configPath, []byte(content), 0o644))
 
 	loaded, err := Load(configPath)
 	require.NoError(t, err)
-	require.True(t, loaded.Plugins.DispatchEnabled)
-	require.True(t, loaded.Plugins.ControlExecutionEnabled)
-	require.True(t, loaded.Plugins.TopologyExecutionEnabled)
 	assert.Equal(t, "3s", loaded.Plugins.ControlPollInterval)
 	assert.Equal(t, "/var/lib/anixops/plugin-hosts", loaded.Plugins.ControlHostRuntimeDir)
 	assert.Equal(t, "/var/lib/anixops/plugin-artifacts", loaded.Plugins.ControlHostArtifactDir)
@@ -160,8 +152,6 @@ plugins:
 	assert.Equal(t, "6h", loaded.Plugins.ControlHostWebSocketSessionTimeout)
 	assert.Equal(t, int64(2<<20), loaded.Plugins.ControlHostRequestBodyLimit())
 	assert.Equal(t, int64(8<<20), loaded.Plugins.ControlHostResponseBodyLimit())
-	assert.Equal(t, "7s", loaded.Plugins.DispatchPollInterval)
-	assert.Equal(t, "11s", loaded.Plugins.TopologyPollInterval)
 	assert.Equal(t, "ZmFrZS1wdWJsaWMta2V5", loaded.Plugins.OfficialPublicKey)
 	assert.Equal(t, "/var/lib/anixops/bootstrap", loaded.Plugins.IdentityBootstrapPackageDir)
 }
@@ -201,19 +191,18 @@ func TestOfficialPluginAlphaProfiles(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, decoded, 32, "official Ed25519 public key must contain 32 raw bytes")
 
+	// The built-in packages run as package hosts in every profile; Agent
+	// dispatch and topology execution are off until M4 and no profile sets
+	// a removed key.
 	profiles := []struct {
-		name             string
-		path             string
-		executionEnabled bool
-		dispatchEnabled  bool
-		grpcEnabled      bool
-		runtimeDir       string
+		name        string
+		path        string
+		grpcEnabled bool
+		runtimeDir  string
 	}{
-		{name: "development", path: "config.dev.yaml.example", executionEnabled: true, dispatchEnabled: true, grpcEnabled: true, runtimeDir: ""},
-		// The built-in packages run as package hosts in every profile; Agent
-		// dispatch and topology execution stay off outside development.
-		{name: "release installer", path: "config.yaml.example", executionEnabled: true, dispatchEnabled: false, grpcEnabled: true, runtimeDir: "/var/lib/anixops/plugin-hosts"},
-		{name: "production", path: "config.prod.yaml", executionEnabled: true, dispatchEnabled: false, grpcEnabled: false, runtimeDir: "/var/lib/anixops/plugin-hosts"},
+		{name: "development", path: "config.dev.yaml.example", grpcEnabled: true, runtimeDir: ""},
+		{name: "release installer", path: "config.yaml.example", grpcEnabled: true, runtimeDir: "/var/lib/anixops/plugin-hosts"},
+		{name: "production", path: "config.prod.yaml", grpcEnabled: false, runtimeDir: "/var/lib/anixops/plugin-hosts"},
 	}
 
 	for _, profile := range profiles {
@@ -221,14 +210,16 @@ func TestOfficialPluginAlphaProfiles(t *testing.T) {
 			resetConfig()
 			t.Cleanup(resetConfig)
 
-			loaded, loadErr := Load(filepath.Join("..", "..", "config", profile.path))
+			path := filepath.Join("..", "..", "config", profile.path)
+			loaded, loadErr := Load(path)
 			require.NoError(t, loadErr)
 			require.Equal(t, officialPublicKey, loaded.Plugins.OfficialPublicKey)
-			assert.Equal(t, profile.executionEnabled, loaded.Plugins.ControlExecutionEnabled)
-			assert.Equal(t, profile.dispatchEnabled, loaded.Plugins.DispatchEnabled)
+			data, readErr := os.ReadFile(path)
+			require.NoError(t, readErr)
+			found, _ := findRemovedKeys(data, nil)
+			assert.Empty(t, found)
 			assert.Equal(t, profile.grpcEnabled, loaded.GRPC.Enable)
 			assert.Equal(t, profile.runtimeDir, loaded.Plugins.ControlHostRuntimeDir)
-			assert.False(t, loaded.Plugins.TopologyExecutionEnabled)
 			if profile.grpcEnabled {
 				assert.Equal(t, "127.0.0.1", loaded.GRPC.Host)
 			}

@@ -879,7 +879,7 @@ describe('Deployments', () => {
     it('shows why the kernel refused a delete', async () => {
       kernelApi.getKernelTopologies.mockResolvedValue([liveMesh])
       kernelApi.deleteKernelTopology.mockRejectedValue({
-        response: { status: 409, data: { error: { code: 'topology_execution_disabled', message: 'topology execution is disabled: enable plugins.topology_execution_enabled' } } },
+        response: { status: 409, data: { error: { code: 'topology_execution_disabled', message: 'topology execution is disabled (off until M4)' } } },
       })
       answerConfirms(true)
       const wrapper = mountDeployments()
@@ -887,7 +887,7 @@ describe('Deployments', () => {
 
       await wrapper.get('[data-testid="delete-topology-4"]').trigger('click')
       await flushPromises()
-      expect(toastMessages('error')).toContain('topology execution is disabled: enable plugins.topology_execution_enabled')
+      expect(toastMessages('error')).toContain('topology execution is disabled (off until M4)')
       expect(wrapper.find('[data-testid="topology-deleting-4"]').exists()).toBe(false)
       expect(wrapper.get('[data-testid="delete-topology-4"]').attributes('disabled')).toBeUndefined()
       wrapper.unmount()

@@ -65,13 +65,25 @@ func TestAgentCommandCreatesEnrollmentCredentials(t *testing.T) {
 func TestTakeAdminCommand(t *testing.T) {
 	saved := os.Args
 	t.Cleanup(func() { os.Args = saved })
-	for _, command := range []string{"module", "agent", "agents", "routes"} {
+	for _, command := range []string{"module", "agent", "agents", "forward"} {
 		os.Args = []string{"anix-control", command, "token", "create"}
 		require.Equal(t, []string{command, "token", "create"}, takeAdminCommand())
 		require.Equal(t, []string{"anix-control"}, os.Args)
 	}
 	os.Args = []string{"anix-control", "-config", "x.yaml"}
 	require.Nil(t, takeAdminCommand())
+
+	// The routes command is gone: it is not an admin command, and running
+	// it reports why instead of starting the server.
+	os.Args = []string{"anix-control", "routes", "list"}
+	require.Nil(t, takeAdminCommand())
+	reason, removed := removedCommand(os.Args[1:])
+	require.True(t, removed)
+	require.Contains(t, reason, "rehearsed list")
+	_, removed = removedCommand([]string{"module"})
+	require.False(t, removed)
+	_, removed = removedCommand(nil)
+	require.False(t, removed)
 }
 
 func TestAgentPKIForGRPC(t *testing.T) {

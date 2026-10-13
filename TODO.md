@@ -44,11 +44,13 @@ PostgreSQL), not the systemd installer.
 
 ## P0: Plugin Platform
 
-- [ ] Keep Supervisor and dynamic plugin execution feature-gated
-  (`plugins.dispatch_enabled` and `plugins.topology_execution_enabled` are off
-  by default) until staging restore smoke, rollout records, a legacy fallback
-  rehearsal and the operator's own canary exist. This is evidence for the
-  operator to collect; no release gate requires it (`docs/RELEASING.md`).
+- [ ] Agent plugin dispatch and topology execution are off with no setting
+  (`service.AgentPluginDispatchEnabled`, `service.TopologyExecutionEnabled`)
+  until M4's Agent release manifest brings the Agent plugins; the cross-repo
+  E2E plugin scenarios skip until then. Staging restore smoke, rollout
+  records, a legacy fallback rehearsal and the operator's own canary are
+  evidence for the operator to collect then; no release gate requires it
+  (`docs/RELEASING.md`).
 - [ ] `gost-mesh` canary evidence. The QUIC/WSS Agent runtime and namespace
   traffic acceptance exist; TUIC is out of v1 scope
   (`packages/gost-mesh/README.md`). Still needed: Control Secret ID to Agent

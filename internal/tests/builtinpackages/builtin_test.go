@@ -179,11 +179,8 @@ auth:
     enabled: false
 plugins:
   official_public_key: %q
-  control_execution_enabled: true
   control_poll_interval: "100ms"
   control_host_startup_timeout: "20s"
-  dispatch_enabled: false
-  topology_execution_enabled: false
 grpc:
   enabled: false
 module_runtime:

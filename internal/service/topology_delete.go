@@ -38,7 +38,7 @@ var (
 	ErrTopologyDeleted = errors.New("topology has been deleted")
 	// ErrTopologyTeardownRequiresExecution refuses deleting a topology whose
 	// active revision runs on nodes while the topology executor is off.
-	ErrTopologyTeardownRequiresExecution = errors.New("topology execution is disabled: a topology with an active revision is deleted only after a teardown deployment removes its plugins from the nodes, which needs plugins.topology_execution_enabled")
+	ErrTopologyTeardownRequiresExecution = errors.New("topology execution is disabled: a topology with an active revision is deleted only after a teardown deployment removes its plugins from the nodes, which needs topology execution (off until M4)")
 	// ErrTopologyTeardownInvalid wraps why the teardown deployment could not
 	// be compiled (for example a vertex whose node assignment was removed).
 	ErrTopologyTeardownInvalid = errors.New("topology teardown cannot be planned")
@@ -55,7 +55,7 @@ var topologyDeploymentIdleStates = []string{
 type TopologyDeleteInput struct {
 	TopologyID uint
 	ActorID    uint
-	// ExecutionEnabled is plugins.topology_execution_enabled: only the
+	// ExecutionEnabled is TopologyExecutionEnabled (off until M4): only the
 	// executor can tear down a topology whose active revision has plugin
 	// vertices.
 	ExecutionEnabled bool

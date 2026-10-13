@@ -205,7 +205,7 @@ GET /api/v2/admin/nodes?sort=last_check_at&order=desc   # 服务端排序
 「服务状态」列显示机器遥测插件上报的 systemd 服务汇总：全部运行为「3/3 正常」，有失败为「N 个失败」，
 没有失败但不全在运行为「2/3 运行中」，另有「无服务」「等待上报」「不支持」「数据过期」；悬停可看计数和上报时间。
 列表加载后对当前页的节点发一次 `GET /api/v3/plugins/machine-telemetry/nodes/services?ids=…` 请求。
-未开启服务采集的节点显示「—」；插件宿主未开启（`plugins.control_execution_enabled`）、未安装机器遥测插件
+未开启服务采集的节点显示「—」；机器遥测包的宿主没有运行（系统设置 → 内置包）
 或管理员没有 `machine-telemetry.api` 权限时，整列显示「—」，列表照常使用。这一列可以在表格设置里隐藏。
 服务采集按节点在节点页「服务」分区开启，见 [`../architecture/package-reports.md`](../architecture/package-reports.md)。
 

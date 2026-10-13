@@ -469,58 +469,6 @@ jobs:
       - name: Run critical benchmark smoke tests
         run: go test -run '^$' -bench=. -benchtime=1x ./internal/service ./internal/handler ./internal/router ./internal/compat/v2
 
-  staging-rehearsal-smoke:
-    name: Staging Rehearsal Smoke
-    runs-on: ubuntu-24.04
-    needs: [changes]
-    if: ${{ needs.changes.outputs.full == 'true' }}
-    timeout-minutes: 20
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v7
-
-      - name: Setup Go
-        uses: actions/setup-go@v6
-        with:
-          go-version: ${{ env.GO_VERSION }}
-          cache: true
-
-      # Local staging rehearsal (scripts/staging, docs/guide/staging-rehearsal.md)
-      # on batch 1 only, with the smoke thresholds (20 compared requests and
-      # 2 minutes of shadow per read route): Compose stack on an internal
-      # network, synthetic data, shadow replay, parity suites and the write
-      # reconciliation twins. Only the packages of batch 1 are built.
-      - name: Bring the staging stack up
-        env:
-          STAGING_PACKAGES: knowledge,ticket
-          STAGING_WORK: ${{ runner.temp }}/staging
-        run: scripts/staging/rehearse.sh up
-
-      - name: Rehearse batch 1 (smoke)
-        env:
-          STAGING_WORK: ${{ runner.temp }}/staging
-        run: scripts/staging/rehearse.sh --batch 1 --smoke
-
-      - name: Upload the batch report
-        if: ${{ always() }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: staging-rehearsal-batch-1
-          path: ${{ runner.temp }}/staging/reports/
-          if-no-files-found: ignore
-
-      - name: Control logs
-        if: ${{ failure() }}
-        env:
-          STAGING_WORK: ${{ runner.temp }}/staging
-        run: scripts/staging/rehearse.sh logs control | tail -150
-
-      - name: Tear the stack down
-        if: ${{ always() }}
-        env:
-          STAGING_WORK: ${{ runner.temp }}/staging
-        run: scripts/staging/rehearse.sh down
-
   go-lint:
     name: Go Lint Gate
     runs-on: ubuntu-24.04
@@ -1284,7 +1232,7 @@ jobs:
         shard: [1, 2, 3, 4]
     env:
       PACKAGES: >-
-        ./internal/packagestore ./internal/tests/integration ./internal/tests/packagecompat ./internal/tests/identitycompat ./internal/tests/knowledgecompat ./internal/tests/ticketcompat ./internal/tests/notificationcompat ./internal/tests/platformcompat ./internal/tests/plancompat ./internal/tests/ordercompat ./internal/tests/paymentcompat ./internal/tests/affiliatecompat ./internal/tests/subscriptioncompat ./internal/tests/proxynodecompat ./internal/tests/protocolruntimecompat ./internal/tests/machinetelemetrycompat ./internal/tests/gostmeshcompat ./internal/tests/wireguardcompat ./internal/nodesecrets ./internal/tests/nodesecretsplit ./internal/kernelnodeops ./internal/tests/bridgecontract ./internal/agentpki ./internal/modulepki ./internal/agentreports ./internal/tests/nodeopsagent ./internal/subscriber ./internal/shadowsamples ./internal/kernelforward ./internal/tests/forwardv4 ./internal/agentupgrade ./internal/database/migrations
+        ./internal/packagestore ./internal/tests/integration ./internal/tests/packagecompat ./internal/tests/identitycompat ./internal/tests/knowledgecompat ./internal/tests/ticketcompat ./internal/tests/notificationcompat ./internal/tests/platformcompat ./internal/tests/plancompat ./internal/tests/ordercompat ./internal/tests/paymentcompat ./internal/tests/affiliatecompat ./internal/tests/subscriptioncompat ./internal/tests/proxynodecompat ./internal/tests/protocolruntimecompat ./internal/tests/machinetelemetrycompat ./internal/tests/gostmeshcompat ./internal/tests/wireguardcompat ./internal/nodesecrets ./internal/tests/nodesecretsplit ./internal/kernelnodeops ./internal/tests/bridgecontract ./internal/agentpki ./internal/modulepki ./internal/agentreports ./internal/tests/nodeopsagent ./internal/subscriber ./internal/kernelforward ./internal/tests/forwardv4 ./internal/agentupgrade ./internal/database/migrations
     services:
       postgres:
         image: postgres:16
@@ -2148,15 +2096,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
 
-      - name: Checkout pinned Agent source for live Control WebUI E2E
-        uses: actions/checkout@v7
-        with:
-          repository: AnixOps/anix-agent
-          ref: ${{ env.AGENT_REF }}
-          path: V2bX_AnixOps
-
-      # The live Control WebUI gate builds a temporary Control binary and a
-      # deterministic official plugin package before Chromium opens the UI.
+      # The live Control WebUI gate builds the signed built-in packages it
+      # needs and a temporary Control binary that embeds them before
+      # Chromium opens the UI.
       - name: Setup Go
         uses: actions/setup-go@v6
         with:
@@ -2215,8 +2157,6 @@ jobs:
 
       - name: Run live Control signed WebUI E2E gate
         working-directory: web
-        env:
-          ANIXOPS_AGENT_ROOT: ${{ github.workspace }}/V2bX_AnixOps
         run: npx playwright test --config playwright.live-control.config.js
 
       - name: Build frontend

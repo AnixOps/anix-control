@@ -66,59 +66,30 @@ func seedKnowledgeRelease(t *testing.T, db *gorm.DB, schema string, capabilities
 	return publicKey, installation
 }
 
-func TestSplitPackageRouteModes(t *testing.T) {
-	rest, modes, present, err := splitPackageRouteModes(`{"port":443,"routes":{"a.b":"native"}}`)
-	require.NoError(t, err)
-	assert.True(t, present)
-	assert.Equal(t, `{"port":443}`, rest)
-	assert.Equal(t, map[string]string{"a.b": "native"}, modes)
-
-	rest, modes, present, err = splitPackageRouteModes(`{"port":443}`)
-	require.NoError(t, err)
-	assert.False(t, present)
-	assert.Nil(t, modes)
-	assert.Equal(t, `{"port":443}`, rest)
-
-	_, _, _, err = splitPackageRouteModes(`{"routes":["native"]}`)
-	require.Error(t, err)
-	_, _, _, err = splitPackageRouteModes(`{"routes":{"a":1}}`)
-	require.Error(t, err)
-
-	rest, _, present, err = splitPackageRouteModes(`[1,2]`)
-	require.NoError(t, err)
-	assert.False(t, present)
-	assert.Equal(t, `[1,2]`, rest)
-}
-
-func TestConfigurationRouteModesAreValidatedAndHiddenFromThePackageSchema(t *testing.T) {
+// Route modes are not configuration any more: a Control package's document
+// that still carries the removed "routes" map is refused, the rest of the
+// document is the package's own.
+func TestConfigurationRefusesTheRemovedRouteModes(t *testing.T) {
 	db := newKernelTestDB(t)
-	// A strict package schema that knows nothing about the reserved key.
 	publicKey, installation := seedRouteModeRelease(t, db, `{"type":"object","additionalProperties":false,"properties":{"port":{"type":"integer"}}}`)
 
-	config, err := UpdatePluginConfigurationWithValidatorAndHook(db, publicKey, installation.ID,
-		`{"port":443,"routes":{"knowledge.article.list":"shadow","knowledge.admin.knowledge.post":"native"}}`, nil, 1, nil, nil)
-	require.NoError(t, err)
-	assert.Contains(t, config.ConfigJSON, `"routes"`, "the stored document keeps the route modes")
+	_, err := UpdatePluginConfigurationWithValidatorAndHook(db, publicKey, installation.ID,
+		`{"port":443,"routes":{"knowledge.article.list":"native"}}`, nil, 1, nil, nil)
+	require.ErrorContains(t, err, `configuration key "routes" was removed`)
+	_, err = UpdatePluginConfigurationWithValidatorAndHook(db, publicKey, installation.ID, `{"routes":{}}`, nil, 1, nil, nil)
+	require.ErrorContains(t, err, "rehearsed list")
 
-	invalid := map[string]string{
-		"foreign route":      `{"routes":{"ticket.list":"native"}}`,
-		"unknown mode":       `{"routes":{"knowledge.article.list":"canary"}}`,
-		"shadow on POST":     `{"routes":{"knowledge.admin.knowledge.post":"shadow"}}`,
-		"native WebSocket":   `{"routes":{"knowledge.ws":"native"}}`,
-		"routes not object":  `{"routes":"native"}`,
-		"schema still holds": `{"port":"https","routes":{}}`,
-	}
-	for name, document := range invalid {
-		_, err := UpdatePluginConfigurationWithValidatorAndHook(db, publicKey, installation.ID, document, nil, 1, nil, nil)
-		assert.Error(t, err, name)
-	}
+	config, err := UpdatePluginConfigurationWithValidatorAndHook(db, publicKey, installation.ID, `{"port":443}`, nil, 1, nil, nil)
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"port":443}`, config.ConfigJSON)
+	_, err = UpdatePluginConfigurationWithValidatorAndHook(db, publicKey, installation.ID, `{"port":"https"}`, nil, 1, nil, nil)
+	require.Error(t, err, "the package schema still holds")
 }
 
 func TestPackageHostOperationsReturnActiveModesOnlyToTheCurrentGeneration(t *testing.T) {
 	db := newKernelTestDB(t)
 	publicKey, installation := seedRouteModeRelease(t, db, "")
-	_, err := UpdatePluginConfigurationWithValidatorAndHook(db, publicKey, installation.ID,
-		`{"routes":{"knowledge.article.list":"shadow","knowledge.admin.knowledge.post":"legacy"}}`, nil, 1, nil, nil)
+	_, err := UpdatePluginConfigurationWithValidatorAndHook(db, publicKey, installation.ID, `{}`, nil, 1, nil, nil)
 	require.NoError(t, err)
 
 	operations := PackageHostOperations{DB: db}
@@ -127,7 +98,7 @@ func TestPackageHostOperationsReturnActiveModesOnlyToTheCurrentGeneration(t *tes
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), config.Revision)
 	assert.NotEmpty(t, config.ConfigHash)
-	assert.Equal(t, map[string]string{"knowledge.article.list": "shadow"}, config.RouteModes, "legacy entries are omitted")
+	assert.Empty(t, config.RouteModes, "4.0.1 is older than the rehearsed release: every route is legacy")
 
 	fenced := map[string]packagebridge.HostIdentity{
 		"stale generation": {PackageID: "knowledge", Version: "4.0.1", Generation: 6},

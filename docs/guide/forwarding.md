@@ -15,7 +15,7 @@ is archived in [`../archive/flux-panel-clone.md`](../archive/flux-panel-clone.md
 - **The forward package.** The pages appear when the installed forward
   package serves `/api/v4/forward/*`. The sidebar then shows 转发. Without
   it, the sidebar has no forwarding entry and a link to the pages leads to
-  插件中心, where the package is installed.
+  系统设置 → 内置包, which shows the package's state.
 - **Permissions.** Any administrator may read and write, subject to the
   package's `forward.api` access group grants. Deleting a route or a node
   needs a super administrator (an administrator who is not staff). Others see
@@ -162,8 +162,8 @@ the same form never applies twice.
 
 | You see | Check |
 |---|---|
-| The 转发 item is missing | The forward package is not installed, is disabled, or predates the v4 API; or your access group lacks `forward.api`. |
-| 转发服务暂时不可用 | The package host has no `ForwardControl` connection. Check the package in 插件中心. |
+| The 转发 item is missing | The forward package failed at start (系统设置 → 内置包 shows it), or your access group lacks `forward.api`. |
+| 转发服务暂时不可用 | The package host has no `ForwardControl` connection. Check the package in 系统设置 → 内置包, and restart it there. |
 | A route stays 同步中 | The node has not applied its desired generation. Open the node page; a node reports at least every minute. |
 | 跳错误 | The node page lists the error per route and hop. Diagnose the route for its listen and port-conflict checks. |
 | Saving node settings lists routes | The new range or reserved ports leave those routes without a port. Widen the range or move the routes. |

@@ -80,10 +80,10 @@ The installer will:
 5. For `v4.*`, place Control host sockets and materialized package artifacts
    under the installation root with service-user-only permissions. The installer
    sets these internal execution paths on both fresh installs and updates so
-   they remain within the systemd writable root. The bootstrap directory is set
-   only when empty and
-   `plugins.control_execution_enabled` is enabled so the identity package can
-   serve login.
+   they remain within the systemd writable root. The package hosts always run
+   (the identity package serves login); the installer no longer writes
+   `plugins.control_execution_enabled` and drops the removed `plugins.*`
+   switches from an existing `config.yaml`.
 6. Download the configuration template that matches the selected tag.
 7. Set `env: "production"` and generate the JWT secret, node API token, and
    first administrator password ([Environment](#environment-production)). The
@@ -388,9 +388,11 @@ recovery.
 ## Upgrade And Rollback
 
 The installer never overwrites an existing SQLite data directory. For `v4.*`,
-it preserves existing configuration except `plugins.control_execution_enabled`
-(set on) and the internal plugin runtime paths that must remain inside the
-systemd writable installation root; an existing
+it preserves existing configuration except the removed `plugins.*` switches
+(`control_execution_enabled`, `dispatch_enabled`, `dispatch_poll_interval`,
+`topology_execution_enabled`, `topology_poll_interval`, which it deletes) and
+the internal plugin runtime paths that must remain inside the systemd
+writable installation root; an existing
 `plugins.identity_bootstrap_package_dir` stays, and Control ignores it. It saves
 the prior configuration in the release backup before replacing binaries. A
 failed health or identity gateway check restores that snapshot.

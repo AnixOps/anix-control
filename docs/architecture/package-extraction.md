@@ -1,6 +1,7 @@
 # Package Extraction Design
 
-Date: 2026-09-29 (status refreshed 2026-10-13: the hosts are built into Control)
+Date: 2026-09-29 (status refreshed 2026-10-13: the hosts are built into
+Control, and route modes come only from the rehearsed list)
 
 This is the design of record for moving business domains out of the Control
 kernel and into signed packages. It replaces the retired plans that lived under
@@ -192,43 +193,36 @@ through the ledger when their host starts (`plugin-kernel-contract.md`,
 A route has two modes: what the code supports (the extraction mode, per
 route) and what an installation runs (the runtime mode).
 
-**Runtime mode** (CURRENT): `legacy` | `shadow` | `native`, in the reserved
-`routes` key of the package's versioned configuration, which the host polls
-every 5 s through the bridge RPC `GetPackageConfig`
+**Runtime mode** (CURRENT): `legacy` | `native` (and `shadow`, which the
+SDK router still implements but the kernel no longer hands out). Nothing
+stores or switches it since the single-binary change (design section 4.3):
+the kernel resolves it (`ResolveEffectivePackageRouteModes`) and hands the
+host the resolved map through the bridge RPC `GetPackageConfig`, which the
+host polls every 5 s
 ([`plugin-kernel-contract.md`](plugin-kernel-contract.md#package-configuration)).
 
-- `legacy` (the default for a route without a stored mode): the host relays
-  the request through the bridge to the legacy handler.
-- Rehearsed default (4.1.0, decision H8): the 151 routes of
-  `config/package-route-defaults.json` (130 of 14 packages from v4.2: the
-  forward package's 21 left with F5d), the 15 packages that passed the
-  staging rehearsal (R5) and were signed off (H7), run `native` when no mode
-  is stored for them, the installed release is at least the package's
-  `min_version` (`4.1.0-rc.5`) and `package_routes.default_mode` is
-  `rehearsed` (the default; `legacy` is the kill switch). The kernel
-  resolves this (`ResolveEffectivePackageRouteModes`) and hands the host
-  the resolved map. The set is explicit: a route that becomes
-  `native-flagged` later does not default to native until it is added to
+- `native`: a route of `config/package-route-defaults.json`, the rehearsed
+  list (decision H8: 151 routes in 4.1.0, 130 of 14 packages from v4.2, the
+  forward package's 21 left with F5d), once the installed release is at
+  least the package's `min_version` (`4.1.0-rc.5`); and identity group A
+  while identity is authoritative. The list is explicit: a route that
+  becomes `native-flagged` later does not run natively until it is added to
   the file and to the gate test's record
   (`internal/service/testdata/rehearsed-routes.json`).
-- `shadow` (GET only): the legacy result is returned; the host runs its
-  native implementation in the background, compares the normalized output
-  and counts mismatches.
-- `native`: the host answers; the legacy handler is not called.
-- Rollback sets the route back to `legacy`, effective within 5 s and audited
-  through the configuration revision history. It acts on the effective
-  mode: a route native by default gets an explicit stored `legacy`. Operators switch and roll
-  back with `anix-control routes`, the admin API
-  `/api/v4/kernel/route-modes` or the admin page; each switch is audited and
-  recorded per route in `v4_kernel_route_mode_revision`, and `routes
-  rollback` returns a whole package to `legacy` in one revision.
+- `legacy`: every other route; the host relays the request through the
+  bridge to the legacy handler.
+- Removed (5.0): the stored per-route modes (the reserved `routes` key of a
+  Control package's configuration, deleted with an audit entry by the
+  `0004_drop_route_modes` migration), `package_routes.default_mode` (the
+  kill switch), the route-mode administration (`anix-control routes`,
+  `/api/v4/kernel/route-modes`, the admin page), the revision history and
+  the stored shadow mismatch samples. Rolling a package back to its legacy
+  handlers is no longer an operator action; N6 (M5) makes every route
+  native and deletes the legacy handlers instead.
 - `sdk/pluginhostsdk.Router` implements the modes, and `sdk/v2compat` keeps
-  the output byte-identical. Route modes and shadow counters are exported
-  on `/metrics`; sanitized samples of shadow mismatches are stored for 7
-  days and listed by `GET /api/v4/kernel/route-modes/mismatches` and the
-  admin page. A route without a native handler stays `legacy`
-  (`mode_unsupported`), and the kernel refuses a non-legacy mode for a
-  WebSocket route.
+  the output byte-identical. Route modes and the native counters are
+  exported on `/metrics`. A route without a native handler stays `legacy`
+  (`mode_unsupported`), and a WebSocket route always relays.
 
 **Extraction mode** (CURRENT): `config/package-extraction.json`, enforced
 by `check_plugin_only_routes.py` (counts in section 1).
@@ -418,8 +412,8 @@ The planned `kernel.entitlement.apply.v1` became
     `internal/tests/knowledgecompat` proves byte parity on SQLite and
     PostgreSQL.
   - Legacy handlers and native routes share the table, so a route's mode
-    (the installation's `routes` configuration, optionally `shadow` for GETs
-    first) can switch either way at any time. There is no import and no
+    could switch either way at any time while modes were stored; since 5.0
+    the rehearsed list decides it (3.2). There is no import and no
     finalize.
   - Deleting the legacy handlers (mode `native`) follows once the operator
     has run natively for a release.

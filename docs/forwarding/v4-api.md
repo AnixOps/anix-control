@@ -35,7 +35,7 @@ were removed in v4.2 (F5d); their contract is archived in
   - The list answers (`GET /routes`, `GET /nodes`, `GET /ansible-machines`)
     carry `can_delete`: whether the caller may `DELETE` (F5b, D7). The
     kernel resolves the rule and passes it to the package as the
-    principal's `super_admin`, the way route modes answer `can_switch`.
+    principal's `super_admin`.
     Only the `/api/v4/forward/` spelling resolves it; the same lists under
     `/api/v4/plugins/forward/` answer `can_delete` false.
 - **Discovery.** `GET /api/v3/extensions` lists each package's

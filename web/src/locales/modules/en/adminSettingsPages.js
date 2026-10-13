@@ -28,6 +28,7 @@ export default {
       backup: 'Backups',
       balancer: 'Load balancing',
       audit: 'Audit log',
+      packages: 'Built-in packages',
       about: 'About'
     },
     general: {
@@ -245,6 +246,32 @@ export default {
       product: 'Product',
       copy: 'Copy details',
       copied: 'Version details copied'
+    },
+    packages: {
+      title: 'Built-in packages',
+      description: 'The official packages built into Control. Control installs, upgrades and enables them at every start.',
+      refresh: 'Refresh',
+      loadFailed: 'The built-in packages didn’t load',
+      empty: {
+        title: 'No built-in packages',
+        description: 'This Control build carries no package: a development build without `make build`.'
+      },
+      version: 'Version {version}',
+      versionChanging: 'Version {from}, starting {to}',
+      versionNotRunning: 'Version {from}; {to} is not running',
+      states: { healthy: 'Running', pending: 'Starting', failed: 'Failed', degraded: 'Degraded', disabled: 'Stopped' },
+      restart: 'Restart',
+      restartNamed: 'Restart {name}',
+      configure: 'Configure',
+      configureNamed: 'Configure {name}',
+      confirm: {
+        title: 'Restart {name}?',
+        message: 'Its host stops and starts again; its pages and API answer as unavailable for a few seconds.'
+      },
+      restarted: '{name} is restarting',
+      restartFailed: 'The package could not be restarted',
+      config: { title: '{name} settings' },
+      note: 'A package that failed at start keeps its routes unavailable until the next start; the dashboard alert and the Control log give the reason. Packages cannot be imported, upgraded, rolled back or disabled: a new Control version brings their new versions.'
     }
   },
   adminNotify: {

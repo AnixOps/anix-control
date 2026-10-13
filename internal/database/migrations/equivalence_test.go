@@ -52,8 +52,9 @@ func requireSameSchema(t *testing.T, want, got *migrations.Schema, what string) 
 // constraints, and the kernel API views the start adds): a model changed
 // or added without a migration fails here. And the runner adopts a
 // database the legacy start built at the baseline (legacyPrepare: today's
-// models less what later migrations added, without the later tables) and
-// applies the later migrations: the upgraded schema is the fresh one.
+// models less what later migrations added, without the later tables, plus
+// the tables they dropped) and applies the later migrations: the upgraded
+// schema is the fresh one.
 func TestFreshSchemaEqualsTheLegacySchema(t *testing.T) {
 	forEachDialect(t, func(t *testing.T, open opener) {
 		ctx := context.Background()
