@@ -86,7 +86,7 @@ func TestBootstrapDatabaseAfterForwardLegacyDrop(t *testing.T) {
 		t.Cleanup(func() { forwardLegacyDataDir = savedDir; config.Set(savedConfig) })
 
 		// A v4.1 database: the first start creates the flux tables.
-		require.NoError(t, bootstrapDatabase(ctx, cfg, "development"))
+		require.NoError(t, bootstrapDatabase(ctx, cfg))
 		db := database.Get()
 		for _, table := range forwardlegacy.DropTables {
 			require.True(t, db.Migrator().HasTable(table), table)
@@ -98,7 +98,7 @@ func TestBootstrapDatabaseAfterForwardLegacyDrop(t *testing.T) {
 		forward := model.Forward{UserID: 1, Name: "f1", TunnelID: tunnel.ID, InPort: 20001, RemoteAddr: "198.51.100.7:443",
 			Status: model.ForwardStatusActive, RuntimeBackend: model.ForwardRuntimeBackendIptablesAnsible}
 		require.NoError(t, db.Create(&forward).Error)
-		require.NoError(t, bootstrapDatabase(ctx, cfg, "development"))
+		require.NoError(t, bootstrapDatabase(ctx, cfg))
 		var backend string
 		require.NoError(t, db.Model(&model.Forward{}).Where("id = ?", forward.ID).Select("runtime_backend").Scan(&backend).Error)
 		assert.Equal(t, model.ForwardRuntimeBackendNftablesAnsible, backend)
@@ -126,10 +126,10 @@ func TestBootstrapDatabaseAfterForwardLegacyDrop(t *testing.T) {
 		settings.ForwardRuntime.NodeX.BaseURL, settings.ForwardRuntime.NodeX.Token = "", ""
 		config.Set(&settings)
 
-		// `migrate` and the server start in either environment, again and
-		// again, and leave the tables dropped.
-		for _, env := range []string{"development", "production", "development"} {
-			require.NoError(t, bootstrapDatabase(ctx, cfg, env), env)
+		// `migrate` and the server start again and again, in every
+		// environment the same schema path, and leave the tables dropped.
+		for range 3 {
+			require.NoError(t, bootstrapDatabase(ctx, cfg))
 		}
 		for _, table := range forwardlegacy.DropTables {
 			assert.False(t, db.Migrator().HasTable(table), table)

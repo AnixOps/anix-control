@@ -506,9 +506,9 @@ func TestSplitTablesAndPhase(t *testing.T) {
 		for _, row := range rows {
 			require.Equal(t, PhaseDualWrite, row.Phase)
 		}
-		// EnsureSchema never changes an existing phase.
+		// EnsureStateRows never changes an existing phase.
 		require.NoError(t, db.Model(&model.NodeSecretSplit{}).Where("table_name = ?", TableNode).Update("phase", PhaseLegacy).Error)
-		require.NoError(t, EnsureSchema(db))
+		require.NoError(t, EnsureStateRows(db))
 		var split model.NodeSecretSplit
 		require.NoError(t, db.First(&split, "table_name = ?", TableNode).Error)
 		require.Equal(t, PhaseLegacy, split.Phase)

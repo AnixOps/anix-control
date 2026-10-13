@@ -217,7 +217,7 @@ func splitRow(db *gorm.DB, table string) (model.NodeSecretSplit, error) {
 	if row.Table != "" {
 		return row, nil
 	}
-	if err := EnsureSchema(db); err != nil {
+	if err := EnsureStateRows(db); err != nil {
 		return row, err
 	}
 	err = db.Where("table_name = ?", table).First(&row).Error

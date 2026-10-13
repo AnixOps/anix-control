@@ -321,7 +321,7 @@ func TestPostgresDrop(t *testing.T) { runDrop(t, openPostgres(t)) }
 func runDrop(t *testing.T, db *gorm.DB) {
 	seed(t, db)
 	ctx := context.Background()
-	require.NoError(t, EnsureSchema(db))
+	require.NoError(t, ensureTables(db))
 	now := start
 	backup := filepath.Join(t.TempDir(), "control.dump")
 	require.NoError(t, os.WriteFile(backup, []byte("-- PostgreSQL database dump"), 0o600))

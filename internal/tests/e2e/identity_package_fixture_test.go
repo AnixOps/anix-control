@@ -101,7 +101,7 @@ func installIdentityPlatformE2EPackage(t testing.TB, cfg *config.Config) func() 
 	cfg.Plugins.OfficialPublicKey = base64.StdEncoding.EncodeToString(publicKey)
 	cfg.Plugins.ControlExecutionEnabled = true
 	config.Set(cfg)
-	require.NoError(t, service.EnsureKernelSchema(database.Get()))
+	require.NoError(t, service.MigrateKernelModelsForTest(database.Get()))
 
 	routes := identityPackageFixtureFile(t, "compat", "v2-routes.json")
 	migrations := identityPackageFixtureFile(t, "migrations", "index.json")

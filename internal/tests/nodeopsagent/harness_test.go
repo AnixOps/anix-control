@@ -118,7 +118,7 @@ func newFixture(t *testing.T, cfg *config.DatabaseConfig) *fixture {
 		&model.Node{}, &model.NodeProtocol{}, &model.AuthorizedKey{}, &model.ForwardNode{}, &model.ForwardRule{}, &model.ForwardTunnel{},
 		&model.AgentDiagnosticTask{}, &model.OperationLog{},
 	))
-	require.NoError(t, service.EnsureKernelSchema(db))
+	require.NoError(t, service.MigrateKernelModelsForTest(db))
 
 	f := &fixture{t: t, db: db, websockets: newFakeWebSockets(), timeout: 20 * time.Second}
 	// The Agent Control managers are the process's: a node id of its own

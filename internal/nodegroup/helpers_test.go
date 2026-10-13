@@ -121,7 +121,7 @@ func newFixture(t *testing.T, db *gorm.DB) *fixture {
 		&model.Node{}, &model.NodeProtocol{}, &model.SubscriptionGroup{}, &model.ForwardNode{}, &model.OperationLog{},
 	}, model.KernelModels()...)
 	require.NoError(t, db.AutoMigrate(models...))
-	require.NoError(t, nodesecrets.EnsureSchema(db))
+	require.NoError(t, nodesecrets.MigrateForTest(db))
 	clk := &clock{now: time.Date(2026, 10, 12, 12, 0, 0, 0, time.UTC)}
 	raw := make([]byte, 32)
 	_, err := rand.Read(raw)

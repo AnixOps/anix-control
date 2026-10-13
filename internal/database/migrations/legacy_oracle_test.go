@@ -1,0 +1,303 @@
+package migrations_test
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"path/filepath"
+	"regexp"
+	"sort"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/AnixOps/anix-control/v5/internal/database/migrations"
+	"github.com/AnixOps/anix-control/v5/internal/forwardlegacy"
+	"github.com/AnixOps/anix-control/v5/internal/lease"
+	"github.com/AnixOps/anix-control/v5/internal/model"
+	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
+)
+
+// The legacy oracle: how Control prepared its schema before the migration
+// runner (cmd/server bootstrapDatabase at go_dev 4eb87485, release 4.2.1):
+// migrateSchema (AutoMigrate of the application models; in production only
+// the missing tables), then the Ensure* schema steps at every start. It is
+// kept here, schema statements only, as the oracle the baseline was
+// recorded from and is compared with (TestBaselineEqualsTheLegacySchema).
+//
+// It builds the schema from today's models. When a later migration changes
+// a model, this oracle no longer describes the baseline: refresh the test
+// then (docs/reference/database-migrations.md, "Changing a model").
+
+// legacySchemaModels is cmd/server's schemaModels() at 4eb87485.
+func legacySchemaModels() []any {
+	return []any{
+		&model.User{}, &model.Plan{}, &model.Order{}, &model.Payment{}, &model.PaymentLog{},
+		&model.ServerVMess{}, &model.ServerVLESS{}, &model.ServerTrojan{}, &model.ServerShadowsocks{},
+		&model.Node{}, &model.NodeProtocol{}, &model.WireGuardPeer{}, &model.AuthorizedKey{},
+		&model.TrafficLog{}, &model.OnlineLog{}, &model.StatUser{}, &model.StatServer{}, &model.NodeLog{},
+		&model.SubscriptionGroup{}, &model.SubscriptionTemplate{}, &model.UserSubscriptionGroup{}, &model.PlanSubscriptionGroup{},
+		&model.Event{},
+		&model.Ticket{}, &model.TicketMessage{},
+		&model.Coupon{}, &model.CouponUsage{},
+		&model.Knowledge{},
+		&model.ForwardNode{}, &model.ForwardRule{}, &model.ForwardRoute{}, &model.ForwardLog{}, &model.ForwardStats{},
+		&model.ForwardTunnel{}, &model.ForwardUserTunnel{}, &model.Forward{}, &model.ForwardPortBinding{}, &model.SpeedLimit{},
+		&model.ForwardRuntimeJob{}, &model.ForwardTrafficCursor{}, &model.ForwardCleanAgent{}, &model.ForwardAgentBridgeTask{},
+		&model.ForwardLatencyBucket{},
+		&model.PaymentGateway{}, &model.PaymentRecord{},
+		&model.TelegramBot{}, &model.TelegramUser{}, &model.TelegramChat{}, &model.TelegramCommand{}, &model.TelegramNotification{},
+		&model.NotificationTemplate{}, &model.NotificationLog{},
+		&model.UserMFA{}, &model.MFALoginAttempt{},
+		&model.UserLevel{}, &model.InviteCode{}, &model.CommissionRecord{}, &model.CommissionWithdraw{}, &model.InviteConfig{},
+		&model.LoadBalancer{}, &model.SystemConfig{}, &model.BackupRecord{}, &model.BackupConfig{}, &model.OperationLog{}, &model.AuditLog{},
+	}
+}
+
+// legacyPrepare is the legacy start's schema work on db. production is
+// the env: "production" only creates missing tables of the application
+// models, development and test AutoMigrate them all. The Ensure* steps run
+// in both.
+func legacyPrepare(t *testing.T, db *gorm.DB, production bool) {
+	t.Helper()
+	require.NoError(t, legacyPrepareErr(db, production))
+}
+
+func legacyPrepareErr(db *gorm.DB, production bool) error {
+	migrator := db.Migrator()
+	// forwardlegacy.EnsureSchema
+	for _, value := range model.ForwardLegacyModels() {
+		if !migrator.HasTable(value) {
+			if err := migrator.CreateTable(value); err != nil {
+				return err
+			}
+		}
+	}
+	// migrateSchema
+	models := forwardlegacy.KeepModels(db, legacySchemaModels())
+	if production {
+		var missing []any
+		for _, value := range models {
+			if !migrator.HasTable(value) {
+				missing = append(missing, value)
+			}
+		}
+		if len(missing) == len(models) {
+			if err := db.AutoMigrate(models...); err != nil {
+				return err
+			}
+		} else {
+			for _, value := range missing {
+				if err := migrator.CreateTable(value); err != nil {
+					return err
+				}
+			}
+		}
+	} else if err := db.AutoMigrate(models...); err != nil {
+		return err
+	}
+	// EnsureWireGuardPeerSchema, EnsureNodeRuntimeHealthSchema
+	if err := db.AutoMigrate(&model.WireGuardPeer{}); err != nil {
+		return err
+	}
+	if err := db.AutoMigrate(&model.Node{}); err != nil {
+		return err
+	}
+	// EnsureKernelSchema (its seeding is SeedKernelDefaults now)
+	if err := db.AutoMigrate(model.KernelModels()...); err != nil {
+		return err
+	}
+	if migrator.HasIndex(&model.Topology{}, model.LegacyTopologyNameIndex) {
+		if err := migrator.DropIndex(&model.Topology{}, model.LegacyTopologyNameIndex); err != nil {
+			return err
+		}
+	}
+	if !migrator.HasIndex(&model.Topology{}, model.TopologyLiveNameIndex) {
+		if err := migrator.CreateIndex(&model.Topology{}, model.TopologyLiveNameIndex); err != nil {
+			return err
+		}
+	}
+	// nodesecrets.EnsureSchema (its state rows are EnsureStateRows now)
+	if err := db.AutoMigrate(&model.NodeCredential{}, &model.ProtocolSecret{}, &model.NodeSecretSplit{}); err != nil {
+		return err
+	}
+	// lease.EnsureSchema
+	if err := db.AutoMigrate(&lease.Record{}); err != nil {
+		return err
+	}
+	// EnsureObservabilitySchema
+	if !migrator.HasTable(&model.ForwardLatencyBucket{}) {
+		if err := db.AutoMigrate(&model.ForwardLatencyBucket{}); err != nil {
+			return err
+		}
+	}
+	// EnsureStatsSchema
+	for _, value := range []any{&model.TrafficLog{}, &model.OnlineLog{}, &model.StatUser{}, &model.StatServer{}} {
+		if err := db.AutoMigrate(value); err != nil {
+			return err
+		}
+	}
+	if !forwardlegacy.Dropped(db) {
+		// EnsureForwardBridgeSchema
+		if !migrator.HasTable(&model.ForwardAgentBridgeTask{}) {
+			if err := db.AutoMigrate(&model.ForwardAgentBridgeTask{}); err != nil {
+				return err
+			}
+		}
+		// EnsureForwardRuntimeJobSchema (its duplicate repair is adoption's)
+		if err := db.AutoMigrate(&model.ForwardRuntimeJob{}); err != nil {
+			return err
+		}
+		if !migrator.HasIndex(&model.ForwardRuntimeJob{}, "idx_forward_runtime_job_active_forward") {
+			if err := db.Exec(fmt.Sprintf(
+				"CREATE UNIQUE INDEX IF NOT EXISTS idx_forward_runtime_job_active_forward ON %s (forward_id) WHERE forward_id IS NOT NULL AND status IN (%d, %d)",
+				model.ForwardRuntimeJob{}.TableName(), model.ForwardRuntimeJobStatusPending, model.ForwardRuntimeJobStatusRunning,
+			)).Error; err != nil {
+				return err
+			}
+		}
+		// EnsureForwardPortBindingSchema (its backfill runs at every start)
+		if err := db.AutoMigrate(&model.ForwardPortBinding{}); err != nil {
+			return err
+		}
+	}
+	// EnsureForwardNodeColumns
+	for _, field := range []string{"MetricsPort", "NodeGroupID", "MachineFingerprint", "Approval", "LastPublicAddress"} {
+		if !migrator.HasColumn(&model.ForwardNode{}, field) {
+			if err := migrator.AddColumn(&model.ForwardNode{}, field); err != nil {
+				return err
+			}
+		}
+	}
+	for _, field := range []string{"NodeGroupID", "MachineFingerprint"} {
+		if !migrator.HasIndex(&model.ForwardNode{}, field) {
+			if err := migrator.CreateIndex(&model.ForwardNode{}, field); err != nil {
+				return err
+			}
+		}
+	}
+	// EnsureAgentDiagnosticTaskSchema
+	if !migrator.HasTable(&model.AgentDiagnosticTask{}) {
+		if err := db.AutoMigrate(&model.AgentDiagnosticTask{}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// ddlRecorder keeps the schema statements a GORM session executes.
+type ddlRecorder struct {
+	logger.Interface
+	statements *[]string
+}
+
+func (r ddlRecorder) LogMode(logger.LogLevel) logger.Interface { return r }
+
+func (r ddlRecorder) Trace(_ context.Context, _ time.Time, fc func() (string, int64), err error) {
+	if err != nil {
+		return
+	}
+	statement, _ := fc()
+	upper := strings.ToUpper(strings.TrimSpace(statement))
+	for _, prefix := range []string{"CREATE ", "ALTER ", "DROP "} {
+		if strings.HasPrefix(upper, prefix) {
+			*r.statements = append(*r.statements, strings.TrimSpace(statement))
+			return
+		}
+	}
+}
+
+var (
+	recordedTable = regexp.MustCompile("^CREATE TABLE [`\"]?([A-Za-z0-9_]+)[`\"]? \\((.*)\\)$")
+	recordedIndex = regexp.MustCompile("^CREATE (?:UNIQUE )?INDEX (?:IF NOT EXISTS )?[`\"]?([A-Za-z0-9_]+)[`\"]? ON [`\"]?([A-Za-z0-9_]+)[`\"]?")
+)
+
+// orderBaseline makes the recorded statements deterministic: GORM emits a
+// table's indexes and foreign keys in map order. The tables keep the order
+// they were created in (GORM orders them by dependency); the constraints of
+// a table are sorted; the indexes follow all tables, by table and name.
+func orderBaseline(t *testing.T, recorded []string) []string {
+	t.Helper()
+	var tables []string
+	indexes := map[string][]string{}
+	indexName := map[string]string{}
+	for _, statement := range recorded {
+		if match := recordedTable.FindStringSubmatch(statement); match != nil {
+			parts, err := migrations.SplitTopLevel(match[2])
+			require.NoError(t, err)
+			var columns, constraints []string
+			for _, part := range parts {
+				if strings.HasPrefix(part, "CONSTRAINT ") {
+					constraints = append(constraints, part)
+				} else {
+					columns = append(columns, part)
+				}
+			}
+			sort.Strings(constraints)
+			prefix := strings.TrimSuffix(statement, "("+match[2]+")")
+			tables = append(tables, prefix+"("+strings.Join(append(columns, constraints...), ",")+")")
+			continue
+		}
+		match := recordedIndex.FindStringSubmatch(statement)
+		require.NotNil(t, match, "the legacy start executed a statement that is neither a table nor an index: %s", statement)
+		indexes[match[2]] = append(indexes[match[2]], statement)
+		indexName[statement] = match[1]
+	}
+	ordered := append([]string(nil), tables...)
+	for _, table := range tables {
+		name := recordedTable.FindStringSubmatch(table)[1]
+		list := indexes[name]
+		sort.Slice(list, func(i, j int) bool { return indexName[list[i]] < indexName[list[j]] })
+		ordered = append(ordered, list...)
+		delete(indexes, name)
+	}
+	require.Empty(t, indexes, "indexes on tables the legacy start did not create")
+	return ordered
+}
+
+// TestWriteBaselineFromTheLegacyOracle is how sql/0001_baseline.*.sql were
+// produced: the statements the legacy start executed on an empty database.
+// It only runs when ANIX_MIGRATIONS_WRITE_BASELINE names a directory, and
+// it writes there, never into sql/: a released migration is never
+// regenerated. The PostgreSQL file needs ANIX_TEST_POSTGRES_DSN.
+func TestWriteBaselineFromTheLegacyOracle(t *testing.T) {
+	dir := strings.TrimSpace(os.Getenv("ANIX_MIGRATIONS_WRITE_BASELINE"))
+	if dir == "" {
+		t.Skip("ANIX_MIGRATIONS_WRITE_BASELINE is not set")
+	}
+	headers := map[string]string{
+		migrations.DialectSQLite:   "SQLite",
+		migrations.DialectPostgres: "PostgreSQL",
+	}
+	forEachDialect(t, func(t *testing.T, open opener) {
+		db := open(t)
+		dialect := migrations.DialectSQLite
+		if db.Name() == "postgres" {
+			dialect = migrations.DialectPostgres
+		}
+		var recorded []string
+		session := db.Session(&gorm.Session{Logger: ddlRecorder{Interface: db.Logger, statements: &recorded}})
+		legacyPrepare(t, session, true)
+		var body strings.Builder
+		fmt.Fprintf(&body, `-- 0001_baseline (%s): the schema a fresh AnixOps Control created before
+-- the migration runner (go_dev 4eb87485, release 4.2.1): the tables and
+-- indexes of the application models, the kernel models and the startup
+-- schema steps, in the order that start created them, flux tables included
+-- (they go with the forwarding cleanup). The kernel API views are not part
+-- of it: packagestore creates them at every start.
+--
+-- Recorded once from that start on an empty database (legacy_oracle_test.go)
+-- and never edited: every database records this file's checksum
+-- (docs/reference/database-migrations.md).
+`, headers[dialect])
+		for _, statement := range orderBaseline(t, recorded) {
+			require.NotContains(t, statement, "\n", "one statement per line")
+			body.WriteString(statement + ";\n")
+		}
+		path := filepath.Join(dir, "0001_baseline."+dialect+".sql")
+		require.NoError(t, os.WriteFile(path, []byte(body.String()), 0o644))
+		t.Logf("wrote %s (%d statements)", path, len(recorded))
+	})
+}

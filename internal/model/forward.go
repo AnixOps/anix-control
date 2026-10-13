@@ -49,8 +49,8 @@ type ForwardNode struct {
 	// Node groups (internal/nodegroup), as on v2_node: the group whose join
 	// token created the node, the machine fingerprint it joined with, its
 	// approval (NodeApproval*) and the public address it joined from.
-	// service.EnsureForwardNodeColumns adds them to existing tables; the
-	// frozen v2 forward answers do not show them.
+	// Adoption (internal/database/migrations) adds them to tables an older
+	// release created; the frozen v2 forward answers do not show them.
 	NodeGroupID        *uint  `gorm:"index" json:"-"`
 	MachineFingerprint string `gorm:"size:64;index" json:"-"`
 	Approval           string `gorm:"size:16;not null;default:'approved'" json:"-"`

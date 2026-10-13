@@ -7,16 +7,9 @@ import (
 	"gorm.io/gorm"
 )
 
-func EnsureForwardPortBindingSchema(db *gorm.DB) error {
-	if db == nil {
-		return fmt.Errorf("database is required")
-	}
-	if err := db.AutoMigrate(&model.ForwardPortBinding{}); err != nil {
-		return err
-	}
-	return BackfillForwardPortBindings(db)
-}
-
+// BackfillForwardPortBindings rebuilds v2_forward_port_binding from the
+// flux forwards and their tunnels. Control runs it at every start after the
+// schema migrations, unless the flux tables were dropped, as it always did.
 func BackfillForwardPortBindings(db *gorm.DB) error {
 	if db == nil {
 		return fmt.Errorf("database is required")

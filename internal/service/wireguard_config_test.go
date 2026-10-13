@@ -69,17 +69,6 @@ func TestProtocolWireGuardTemplate(t *testing.T) {
 	require.Fail(t, "wireguard protocol template missing")
 }
 
-func TestEnsureWireGuardPeerSchema(t *testing.T) {
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
-	require.NoError(t, err)
-	require.NoError(t, EnsureWireGuardPeerSchema(db))
-	require.True(t, db.Migrator().HasTable(&model.WireGuardPeer{}))
-	require.NoError(t, EnsureNodeRuntimeHealthSchema(db))
-	require.True(t, db.Migrator().HasColumn(&model.Node{}, "runtime_healthy"))
-	require.True(t, db.Migrator().HasColumn(&model.Node{}, "runtime_error"))
-	require.True(t, db.Migrator().HasColumn(&model.Node{}, "runtime_checked_at"))
-}
-
 func TestUserDeleteRemovesWireGuardPeers(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)

@@ -109,7 +109,7 @@ func seedV2KnowledgePackage(t *testing.T, cfg *config.Config) (ed25519.PublicKey
 	cfg.Plugins.OfficialPublicKey = base64.StdEncoding.EncodeToString(publicKey)
 	cfg.Plugins.ControlExecutionEnabled = true
 	config.Set(cfg)
-	require.NoError(t, service.EnsureKernelSchema(database.GetDB()))
+	require.NoError(t, service.MigrateKernelModelsForTest(database.GetDB()))
 
 	entrypoint := []byte("#!/bin/sh\nexit 0\n")
 	migrations := []byte(`{"format":"anixops.migrations/v1","migrations":[],"package_id":"knowledge","version":"4.0.0"}`)
@@ -601,7 +601,7 @@ func TestSetup_ContainerProbesNeedNoCredentials(t *testing.T) {
 func TestSetup_V3KernelAccessGroupsRequireAdminAndPersistScope(t *testing.T) {
 	r, cfg := setupTestRouter(t)
 	defer teardownTestRouter(t)
-	require.NoError(t, service.EnsureKernelSchema(database.GetDB()))
+	require.NoError(t, service.MigrateKernelModelsForTest(database.GetDB()))
 
 	payload, err := json.Marshal(gin.H{"scope_id": "forward", "name": "canary", "enabled": true})
 	require.NoError(t, err)
@@ -631,7 +631,7 @@ func TestSetup_V3KernelAccessGroupsRequireAdminAndPersistScope(t *testing.T) {
 func TestSetup_V3KernelAccessGroupDetailUsesStaticResolveRouteAndProtectedDetailRoute(t *testing.T) {
 	r, cfg := setupTestRouter(t)
 	defer teardownTestRouter(t)
-	require.NoError(t, service.EnsureKernelSchema(database.GetDB()))
+	require.NoError(t, service.MigrateKernelModelsForTest(database.GetDB()))
 	require.NoError(t, database.GetDB().AutoMigrate(&model.User{}, &model.Plan{}))
 
 	group := model.AccessGroup{ScopeID: "forward", Name: "detail", Enabled: true}
@@ -667,7 +667,7 @@ func TestSetup_V3KernelAccessGroupDetailUsesStaticResolveRouteAndProtectedDetail
 func TestSetup_V3KernelOperationIsIdempotent(t *testing.T) {
 	r, cfg := setupTestRouter(t)
 	defer teardownTestRouter(t)
-	require.NoError(t, service.EnsureKernelSchema(database.GetDB()))
+	require.NoError(t, service.MigrateKernelModelsForTest(database.GetDB()))
 	manifestJSON, err := service.CanonicalPluginManifest(service.PluginManifest{
 		ID: "subscription", Name: "Subscription", Version: "1.0.0", APIVersion: "v1", Publisher: "AnixOps",
 		Targets: []string{"control"}, ArtifactSHA256: strings.Repeat("a", 64),
@@ -698,7 +698,7 @@ func TestSetup_V3KernelOperationIsIdempotent(t *testing.T) {
 func TestSetup_V3ExtensionsRequiresAdminAndReturnsEmptyCatalog(t *testing.T) {
 	r, cfg := setupTestRouter(t)
 	defer teardownTestRouter(t)
-	require.NoError(t, service.EnsureKernelSchema(database.GetDB()))
+	require.NoError(t, service.MigrateKernelModelsForTest(database.GetDB()))
 
 	request := httptest.NewRequest(http.MethodGet, "/api/v3/extensions", nil)
 	unauthenticated := httptest.NewRecorder()
@@ -1264,7 +1264,7 @@ func TestEveryCataloguedV2RouteResolvesToItsOwnRouteID(t *testing.T) {
 	cfg := &config.Config{Env: "test"}
 	cfg.Plugins.OfficialPublicKey = base64.StdEncoding.EncodeToString(publicKey)
 	config.Set(cfg)
-	require.NoError(t, service.EnsureKernelSchema(database.GetDB()))
+	require.NoError(t, service.MigrateKernelModelsForTest(database.GetDB()))
 
 	_, sourceFile, _, ok := runtime.Caller(0)
 	require.True(t, ok)

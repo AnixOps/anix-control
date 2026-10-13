@@ -136,7 +136,7 @@ func newAgentUsersEnvironment(t *testing.T, initDatabase func(t *testing.T)) *ag
 	initDatabase(t)
 	db := database.Get()
 	requireAutoMigrate(t, &model.Node{}, &model.NodeProtocol{}, &model.Plan{}, &model.User{}, &model.SubscriberChange{}, &model.WireGuardPeer{})
-	require.NoError(t, nodesecrets.EnsureSchema(db))
+	require.NoError(t, nodesecrets.MigrateForTest(db))
 
 	for _, bound := range []struct {
 		value *int

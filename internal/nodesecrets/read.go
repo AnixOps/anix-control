@@ -68,8 +68,8 @@ func ReadPhase(db *gorm.DB, table string) string {
 	}
 }
 
-// SplitInstalled reports whether db holds the split tables (EnsureSchema
-// ran): a database without them (a tool's, or a test's that never created
+// SplitInstalled reports whether db holds the split tables (the schema
+// migrations or MigrateForTest created them): a database without them (a tool's, or a test's that never created
 // the kernel schema) has no credential rows and no endpoint pins. It is
 // cached with the phases.
 func SplitInstalled(db *gorm.DB) bool {

@@ -276,7 +276,7 @@ func (e *RefusedError) Error() string {
 // database and a database backup was taken. Tables already gone are
 // reported, not an error.
 func Drop(ctx context.Context, db *gorm.DB, options DropOptions) (*DropResult, error) {
-	if err := EnsureSchema(db); err != nil {
+	if err := ensureTables(db); err != nil {
 		return nil, err
 	}
 	now := options.Now

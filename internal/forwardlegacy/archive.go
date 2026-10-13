@@ -288,7 +288,7 @@ type WriteOptions struct {
 // WriteArchive builds the archive, writes it (mode 0600, never over an
 // existing file) and records it.
 func WriteArchive(ctx context.Context, db *gorm.DB, options WriteOptions) (*WriteResult, error) {
-	if err := EnsureSchema(db); err != nil {
+	if err := ensureTables(db); err != nil {
 		return nil, err
 	}
 	now := options.Now
@@ -428,7 +428,7 @@ func VerifyArchive(record *model.ForwardLegacyArchive) (*Archive, error) {
 // flux table exists, the tables were not dropped, and no recorded archive
 // file is still there. It answers nil when there was nothing to do.
 func StartupArchive(ctx context.Context, db *gorm.DB, dir, controlVersion string, now time.Time) (*WriteResult, error) {
-	if err := EnsureSchema(db); err != nil {
+	if err := ensureTables(db); err != nil {
 		return nil, err
 	}
 	if Dropped(db) || !AnyDropTablePresent(db) {

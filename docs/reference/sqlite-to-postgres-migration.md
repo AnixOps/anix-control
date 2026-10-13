@@ -103,13 +103,17 @@ PATH=/usr/local/go/bin:$PATH go run ./cmd/sqlite2postgres \
 
 What the import does:
 
-- Runs the current GORM/schema helpers on PostgreSQL.
-- Selects SQLite tables that also exist in PostgreSQL.
+- Prepares the PostgreSQL schema with Control's migrations, as a Control
+  start does ([database-migrations.md](database-migrations.md)): an empty
+  target gets the full schema and its `v5_schema_migration` records.
+- Selects SQLite tables that also exist in PostgreSQL, except the runner's own
+  `v5_schema_migration` and `v5_control_meta`: the target keeps its records,
+  whose checksums are PostgreSQL's.
 - Sorts import order by PostgreSQL foreign keys where possible.
 - Truncates selected PostgreSQL tables with `RESTART IDENTITY CASCADE`.
 - Copies rows table by table.
-- Resets PostgreSQL sequences for tables with an `id` column.
-- Runs forward runtime job schema and forward port binding repair helpers.
+- Resets the PostgreSQL sequences of tables with a serial `id` column.
+- Rebuilds the flux forward port bindings.
 
 ## Switch The Panel
 

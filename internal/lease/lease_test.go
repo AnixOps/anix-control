@@ -23,7 +23,7 @@ func openSQLite(t *testing.T) *gorm.DB {
 	path := filepath.Join(t.TempDir(), "lease.db") + "?_pragma=busy_timeout(5000)"
 	db, err := gorm.Open(sqlite.Open(path), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	require.NoError(t, err)
-	require.NoError(t, EnsureSchema(db))
+	require.NoError(t, db.AutoMigrate(&Record{}))
 	return db
 }
 
@@ -152,7 +152,7 @@ func TestPostgresConcurrentAcquireGrantsOneHolder(t *testing.T) {
 		t.Skipf("refusing to run against database %q", databaseName)
 	}
 	require.NoError(t, db.Migrator().DropTable(&Record{}))
-	require.NoError(t, EnsureSchema(db))
+	require.NoError(t, db.AutoMigrate(&Record{}))
 	t.Cleanup(func() { _ = db.Migrator().DropTable(&Record{}) })
 
 	now := time.Now().UTC()

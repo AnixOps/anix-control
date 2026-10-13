@@ -22,7 +22,7 @@ func TestAgentPluginReleaseRoutesRequireExactNodeAssignmentAndStreamRawBytes(t *
 	router, _ := setupTestRouter(t)
 	defer teardownTestRouter(t)
 	db := database.GetDB()
-	require.NoError(t, service.EnsureKernelSchema(db))
+	require.NoError(t, service.MigrateKernelModelsForTest(db))
 	require.NoError(t, db.AutoMigrate(&model.Node{}))
 
 	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)

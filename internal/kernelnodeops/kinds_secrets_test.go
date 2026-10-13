@@ -174,7 +174,7 @@ func TestPutRawConfigDocument(t *testing.T) {
 func TestSecretsLostWithTheirRequestStoreNothing(t *testing.T) {
 	forEachDatabase(t, func(t *testing.T, db *gorm.DB) {
 		require.NoError(t, db.AutoMigrate(credentialModels...))
-		require.NoError(t, nodesecrets.EnsureSchema(db))
+		require.NoError(t, nodesecrets.MigrateForTest(db))
 		b := newBindings(t)
 		clock := time.Now()
 		h := newHarness(t, db, func(e *Engine) {

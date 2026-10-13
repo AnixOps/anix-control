@@ -563,7 +563,7 @@ func TestAgentControlUsersAndReportsOnOneStream(t *testing.T) {
 	environment := newReportsTestEnvironment(t)
 	// The user list reads the node's protocols and secrets too.
 	requireAutoMigrate(t, &model.NodeProtocol{}, &model.Plan{}, &model.WireGuardPeer{})
-	require.NoError(t, nodesecrets.EnsureSchema(database.GetDB()))
+	require.NoError(t, nodesecrets.MigrateForTest(database.GetDB()))
 	nodeID := uint32(environment.node.ID)
 	stream, helloAck := openReportsSession(t, environment, reportCapabilities(agentcontrol.CapabilityUsers))
 	for _, capability := range []string{agentcontrol.CapabilityUsers, agentcontrol.CapabilityReports} {

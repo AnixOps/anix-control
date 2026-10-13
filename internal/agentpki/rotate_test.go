@@ -199,7 +199,7 @@ func TestRotateCredentialsReplacesTheNodeKey(t *testing.T) {
 		t.Run("phase "+phase, func(t *testing.T) {
 			forEachDatabase(t, func(t *testing.T, f *fixture) {
 				if phase != "legacy" {
-					require.NoError(t, nodesecrets.EnsureSchema(f.db))
+					require.NoError(t, nodesecrets.MigrateForTest(f.db))
 					tables := []string{nodesecrets.TableNode}
 					_, err := nodesecrets.Backfill(t.Context(), f.db, nodesecrets.BackfillOptions{Tables: tables})
 					require.NoError(t, err)

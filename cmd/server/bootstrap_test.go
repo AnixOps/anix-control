@@ -8,8 +8,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/AnixOps/anix-control/v5/internal/config"
+	"github.com/AnixOps/anix-control/v5/internal/database"
+	"github.com/AnixOps/anix-control/v5/internal/database/migrations"
 	"github.com/AnixOps/anix-control/v5/internal/model"
+	"github.com/AnixOps/anix-control/v5/internal/nodesecrets"
 	"github.com/glebarez/sqlite"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -24,41 +30,73 @@ func openSQLite(t *testing.T) *gorm.DB {
 	return db
 }
 
-func TestMigrateSchemaCreatesTheFullSchemaOnAnEmptyProductionDatabase(t *testing.T) {
-	db := openSQLite(t)
-	if err := migrateSchema(db, "production"); err != nil {
-		t.Fatal(err)
-	}
-	for _, value := range schemaModels() {
-		if !db.Migrator().HasTable(value) {
-			t.Fatalf("table for %T was not created", value)
+// Every start prepares the schema with the ordered migrations, in every
+// environment: an empty database gets the schema and the migration
+// records, the next start changes nothing, and a database an earlier
+// Control prepared (without the migration tables) is adopted.
+func TestBootstrapDatabaseMigratesTheSchema(t *testing.T) {
+	bootstrapDatabases(t, func(t *testing.T, cfg *config.Config) {
+		ctx := context.Background()
+		savedDir := forwardLegacyDataDir
+		forwardLegacyDataDir = t.TempDir()
+		t.Cleanup(func() { forwardLegacyDataDir = savedDir })
+
+		for _, env := range []string{"production", "development"} {
+			cfg.Env = env
+			require.NoError(t, bootstrapDatabase(ctx, cfg), env)
 		}
-	}
+		db := database.Get()
+		meta, err := migrations.Meta(ctx, db)
+		require.NoError(t, err)
+		assert.Equal(t, version, meta[migrations.MetaProgramVersion])
+		assert.Equal(t, "fresh", meta[migrations.MetaOrigin])
+		assert.Equal(t, "1", meta[migrations.MetaSchemaVersion])
+		for _, value := range []any{&model.User{}, &model.Plan{}, &model.Ticket{}, &model.NodeGroup{}, &model.AgentDiagnosticTask{}} {
+			assert.True(t, db.Migrator().HasTable(value), "%T", value)
+		}
+		var scopes, splitRows int64
+		require.NoError(t, db.Model(&model.ServiceScope{}).Count(&scopes).Error)
+		require.NoError(t, db.Model(&model.NodeSecretSplit{}).Count(&splitRows).Error)
+		assert.EqualValues(t, 4, scopes, "the kernel defaults are seeded")
+		assert.EqualValues(t, len(nodesecrets.Tables()), splitRows)
+		var views int64
+		if db.Name() == "postgres" {
+			require.NoError(t, db.Raw("SELECT count(*) FROM pg_views WHERE schemaname = current_schema() AND viewname = 'kapi_user_directory_v1'").Scan(&views).Error)
+		} else {
+			require.NoError(t, db.Raw("SELECT count(*) FROM sqlite_master WHERE type = 'view' AND name = 'kapi_user_directory_v1'").Scan(&views).Error)
+		}
+		assert.EqualValues(t, 1, views, "the kernel API views are created after the migrations")
+
+		// A database from before the migrations: the same tables, no
+		// migration records.
+		require.NoError(t, db.Migrator().DropTable(migrations.MigrationTable, migrations.MetaTable))
+		require.NoError(t, bootstrapDatabase(ctx, cfg))
+		meta, err = migrations.Meta(ctx, db)
+		require.NoError(t, err)
+		assert.Equal(t, "adopted", meta[migrations.MetaOrigin])
+	})
 }
 
-func TestMigrateSchemaNeverAltersExistingProductionTables(t *testing.T) {
-	db := openSQLite(t)
-	// An existing, older users table without most current columns.
-	if err := db.Exec(`CREATE TABLE v2_user (id integer primary key, email text)`).Error; err != nil {
-		t.Fatal(err)
-	}
-	if err := migrateSchema(db, "production"); err != nil {
-		t.Fatal(err)
-	}
-	if db.Migrator().HasColumn(&model.User{}, "token") {
-		t.Fatal("production must not add columns to an existing table")
-	}
-	if !db.Migrator().HasTable(&model.Plan{}) || !db.Migrator().HasTable(&model.Ticket{}) {
-		t.Fatal("missing tables must be created")
-	}
+// An older Control refuses to start on a database a newer one migrated,
+// and says what to do.
+func TestBootstrapDatabaseRefusesADatabaseANewerControlMigrated(t *testing.T) {
+	bootstrapDatabases(t, func(t *testing.T, cfg *config.Config) {
+		ctx := context.Background()
+		savedDir := forwardLegacyDataDir
+		forwardLegacyDataDir = t.TempDir()
+		t.Cleanup(func() { forwardLegacyDataDir = savedDir })
+		require.NoError(t, bootstrapDatabase(ctx, cfg))
+		require.NoError(t, database.Get().Create(&migrations.MigrationRecord{
+			Version: 900, Name: "future", Checksum: "sha256:00", AppliedAt: time.Now(), ProgramVersion: "9.0.0",
+		}).Error)
 
-	// Development keeps its full AutoMigrate.
-	if err := migrateSchema(db, "development"); err != nil {
-		t.Fatal(err)
-	}
-	if !db.Migrator().HasColumn(&model.User{}, "token") {
-		t.Fatal("development AutoMigrate must add missing columns")
-	}
+		err := bootstrapDatabase(ctx, cfg)
+		var refused *migrations.RefusedError
+		require.ErrorAs(t, err, &refused)
+		assert.Contains(t, err.Error(), "migrated by a newer AnixOps Control")
+		assert.Contains(t, err.Error(), "Control 9.0.0")
+		assert.Contains(t, err.Error(), "restore the backup")
+	})
 }
 
 func TestTakeMigrateCommandStripsOnlyALeadingMigrate(t *testing.T) {

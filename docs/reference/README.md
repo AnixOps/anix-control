@@ -7,6 +7,7 @@ This section is the operator/developer reference index for `anix-control`.
 - [quickstart.md](quickstart.md): shortest Docker/local startup path
 - [../UPGRADE.md](../UPGRADE.md): GitHub Actions artifact upgrade, verification, and rollback runbook
 - [startup-config.md](startup-config.md): exact backend startup flow and runtime bootstrap order
+- [database-migrations.md](database-migrations.md): the ordered schema migrations, `v5_schema_migration` and `v5_control_meta`, adopting an existing database, when Control refuses a database, and how to add a migration
 - [configuration.md](configuration.md): config source-of-truth, key ownership, and mode-specific examples
 - [forward-runtime-migration.md](forward-runtime-migration.md): old `FORWARD_RUNTIME_*` inputs to the new YAML-only runtime config
 - [wireguard-peer-schema.md](wireguard-peer-schema.md): production schema note for the P0 WireGuard peer custody table

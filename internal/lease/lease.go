@@ -21,7 +21,8 @@ import (
 )
 
 // Record is one named lease. Holder owns it until ExpiresAt; the holder
-// renews it well before then.
+// renews it well before then. The schema migrations create its table
+// (internal/database/migrations).
 type Record struct {
 	Name       string    `gorm:"primaryKey;size:100"`
 	Holder     string    `gorm:"size:200;not null;default:''"`
@@ -32,11 +33,6 @@ type Record struct {
 
 // TableName keeps the lease table with the other kernel tables.
 func (Record) TableName() string { return "v4_kernel_lease" }
-
-// EnsureSchema creates the lease table.
-func EnsureSchema(db *gorm.DB) error {
-	return db.AutoMigrate(&Record{})
-}
 
 // InstanceID identifies this process as a lease holder: the host name (the
 // pod name on Kubernetes) plus a random suffix, so a restarted process never

@@ -18,7 +18,7 @@ import (
 func TestKernelAlertsRouteIsAdminOnlyAndReadOnly(t *testing.T) {
 	r, cfg := setupTestRouter(t)
 	defer teardownTestRouter(t)
-	require.NoError(t, service.EnsureKernelSchema(database.GetDB()))
+	require.NoError(t, service.MigrateKernelModelsForTest(database.GetDB()))
 	now := time.Now().UTC()
 	expires := now.Add(3 * time.Hour)
 	require.NoError(t, database.GetDB().Create(&model.KernelAlert{

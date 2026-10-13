@@ -68,9 +68,11 @@ const (
 	StateAbandoned   = "abandoned"
 )
 
-// EnsureSchema creates the upgrade's own tables. They are new tables:
-// nothing existing is altered.
-func EnsureSchema(db *gorm.DB) error {
+// ensureTables creates the upgrade's own tables when they are missing. In
+// Control's database the schema baseline created them
+// (internal/database/migrations); the commands still create them in a
+// database Control did not prepare, a tool's or a test's.
+func ensureTables(db *gorm.DB) error {
 	for _, value := range model.ForwardLegacyModels() {
 		if db.Migrator().HasTable(value) {
 			continue

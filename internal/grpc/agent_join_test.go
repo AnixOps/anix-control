@@ -49,7 +49,7 @@ func startJoinListener(t *testing.T) *joinListener {
 		cfg.OnJoin = func(j nodegroup.Joined) { joined <- j }
 	})
 	requireAutoMigrate(t, append(model.KernelModels(), &model.SubscriptionGroup{}, &model.NodeProtocol{})...)
-	require.NoError(t, nodesecrets.EnsureSchema(database.Get()))
+	require.NoError(t, nodesecrets.MigrateForTest(database.Get()))
 	kek := make([]byte, 32)
 	_, err := rand.Read(kek)
 	require.NoError(t, err)

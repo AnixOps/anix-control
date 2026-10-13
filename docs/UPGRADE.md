@@ -646,12 +646,36 @@ If a release requires schema/data changes:
 - review release notes before the maintenance window
 - take and verify a database backup first
 - record pre/post row counts for affected tables
-- keep rollback instructions for each changed schema helper
+- keep rollback instructions for each migration the release adds
 - do not combine SQLite-to-PostgreSQL migration with an unrelated feature
   upgrade unless the maintenance plan explicitly approves it
 
 For SQLite-to-PostgreSQL migration, use
 [`reference/sqlite-to-postgres-migration.md`](reference/sqlite-to-postgres-migration.md).
+
+### Database Migrations
+
+Control builds its schema from numbered migrations, in every `env`
+([`reference/database-migrations.md`](reference/database-migrations.md)). The
+first start of this release (or `anix-control migrate`) adopts the existing
+database once: it adds the tables, columns and indexes a fresh install has and
+the database lacks, never changes or drops an existing one, and records the
+baseline in `v5_schema_migration` and `v5_control_meta`. The log says what it
+added (`Database schema: adopted the existing database as 0001_baseline; ...`)
+and lists the differences it kept. A database that is not one a Control start
+prepared is refused and left unchanged.
+
+**An older binary on a newer database.** From this release on, Control
+refuses to start on a database a newer Control migrated (it has a migration
+this binary does not know, or a `min_program_version` above it) and logs
+`this database was migrated by a newer AnixOps Control ...` with the version
+that migrated it. Rolling back the binary therefore means restoring the
+database backup taken before the upgrade, or installing that version or a
+newer one. Releases before this one (4.2.x and older) do not read the
+migration tables: started on a migrated database they run their old schema
+steps as before, and the next start of this release accepts the result.
+Check the recorded state with
+`SELECT * FROM v5_schema_migration; SELECT * FROM v5_control_meta;`.
 
 ### Topologies Can Be Deleted
 

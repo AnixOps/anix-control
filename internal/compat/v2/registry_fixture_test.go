@@ -43,7 +43,7 @@ func newSignedRouteFixture(tb testing.TB, onDisk bool) *signedRouteFixture {
 	// One connection keeps an in-memory database shared by every query.
 	sqlDB.SetMaxOpenConns(1)
 	tb.Cleanup(func() { _ = sqlDB.Close() })
-	require.NoError(tb, service.EnsureKernelSchema(db))
+	require.NoError(tb, service.MigrateKernelModelsForTest(db))
 
 	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(tb, err)

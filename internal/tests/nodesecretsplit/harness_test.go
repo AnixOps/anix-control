@@ -86,7 +86,7 @@ func initKernelDatabase(t *testing.T, name string, cfg *config.DatabaseConfig) b
 		// Phase changes are audited in the operation log.
 		&model.OperationLog{},
 	))
-	require.NoError(t, service.EnsureKernelSchema(db))
-	require.NoError(t, nodesecrets.EnsureSchema(db))
+	require.NoError(t, service.MigrateKernelModelsForTest(db))
+	require.NoError(t, nodesecrets.MigrateForTest(db))
 	return backend{name: name, db: db}
 }

@@ -57,7 +57,7 @@ func newReleaseSigner(t *testing.T) ed25519.PrivateKey {
 // with an artifact of size bytes and assigns it to nodeID.
 func seedArtifactRelease(t *testing.T, db *gorm.DB, signer ed25519.PrivateKey, nodeID uint, pluginID string, size int) artifactRelease {
 	t.Helper()
-	require.NoError(t, service.EnsureKernelSchema(db))
+	require.NoError(t, service.MigrateKernelModelsForTest(db))
 	publicKey, privateKey := signer.Public().(ed25519.PublicKey), signer
 	artifact := make([]byte, size)
 	_, err := rand.Read(artifact)

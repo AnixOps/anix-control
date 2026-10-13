@@ -78,7 +78,7 @@ func setupForwardRuntimeBenchmarkDB(b *testing.B, models ...any) *gorm.DB {
 			b.Fatal(err)
 		}
 	}
-	if err := EnsureForwardRuntimeJobSchema(db); err != nil {
+	if err := MigrateForwardRuntimeJobsForTest(db); err != nil {
 		b.Fatal(err)
 	}
 

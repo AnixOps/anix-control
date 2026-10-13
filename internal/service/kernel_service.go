@@ -92,17 +92,27 @@ type pluginPlatformEntrypoint struct {
 	SHA256       string `json:"sha256"`
 }
 
-// EnsureKernelSchema only migrates new kernel-owned tables and is safe to run
-// in production without touching legacy plugin-owned tables.
-func EnsureKernelSchema(db *gorm.DB) error {
+// MigrateKernelModelsForTest creates the kernel tables with GORM's
+// AutoMigrate and seeds the kernel defaults, on a test's own database.
+// Control prepares its schema with internal/database/migrations and seeds
+// with SeedKernelDefaults.
+func MigrateKernelModelsForTest(db *gorm.DB) error {
 	if db == nil {
 		return errors.New("database is not initialized")
 	}
 	if err := db.AutoMigrate(model.KernelModels()...); err != nil {
 		return err
 	}
-	if err := migrateTopologyLiveNameIndex(db); err != nil {
-		return err
+	return SeedKernelDefaults(db)
+}
+
+// SeedKernelDefaults creates the default service scopes, the official
+// plugin catalog and the plugin target locks that do not exist. It runs at
+// every start, after the schema migrations, so a removed default comes
+// back as it always did.
+func SeedKernelDefaults(db *gorm.DB) error {
+	if db == nil {
+		return errors.New("database is not initialized")
 	}
 	return db.Transaction(func(tx *gorm.DB) error {
 		for i := range defaultServiceScopes {
@@ -125,28 +135,6 @@ func EnsureKernelSchema(db *gorm.DB) error {
 		}
 		return nil
 	})
-}
-
-// migrateTopologyLiveNameIndex replaces the plain unique index on
-// v3_kernel_topology.name with the partial one on live rows. Schemas created
-// before topologies could be deleted carry the plain index under GORM's
-// default name, idx_v3_kernel_topology_name, on SQLite and PostgreSQL alike;
-// it would keep a deleted topology's name taken. AutoMigrate creates missing
-// indexes but never drops one, so the old index is dropped here. Both steps
-// are idempotent and run on every start.
-func migrateTopologyLiveNameIndex(db *gorm.DB) error {
-	migrator := db.Migrator()
-	if migrator.HasIndex(&model.Topology{}, model.LegacyTopologyNameIndex) {
-		if err := migrator.DropIndex(&model.Topology{}, model.LegacyTopologyNameIndex); err != nil {
-			return fmt.Errorf("drop topology name index %s: %w", model.LegacyTopologyNameIndex, err)
-		}
-	}
-	if !migrator.HasIndex(&model.Topology{}, model.TopologyLiveNameIndex) {
-		if err := migrator.CreateIndex(&model.Topology{}, model.TopologyLiveNameIndex); err != nil {
-			return fmt.Errorf("create topology name index %s: %w", model.TopologyLiveNameIndex, err)
-		}
-	}
-	return nil
 }
 
 // LockPluginInstallationTarget must be called inside the transaction that

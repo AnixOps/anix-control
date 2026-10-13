@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"flag"
@@ -12,9 +13,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/AnixOps/anix-control/v5/internal/branding"
 	"github.com/AnixOps/anix-control/v5/internal/config"
 	"github.com/AnixOps/anix-control/v5/internal/database"
-	"github.com/AnixOps/anix-control/v5/internal/model"
+	"github.com/AnixOps/anix-control/v5/internal/database/migrations"
 	"github.com/AnixOps/anix-control/v5/internal/service"
 	"github.com/glebarez/sqlite"
 	"gorm.io/driver/postgres"
@@ -91,13 +93,16 @@ func main() {
 	}
 	importTables := make([]string, 0, len(tables))
 	for _, table := range tables {
-		if pgTables[table] {
+		if pgTables[table] && !runnerTable(table) {
 			importTables = append(importTables, table)
 		}
 	}
 	if len(importTables) != len(tables) {
 		for _, table := range tables {
-			if !pgTables[table] {
+			switch {
+			case runnerTable(table):
+				log.Printf("source table %s is the source's migration record, skipped: the target keeps its own", table)
+			case !pgTables[table]:
 				log.Printf("warning: source table %s does not exist in postgres, skipped", table)
 			}
 		}
@@ -126,9 +131,6 @@ func main() {
 			if err := resetSequence(tx, table); err != nil {
 				return err
 			}
-		}
-		if err := service.EnsureForwardRuntimeJobSchema(tx); err != nil {
-			return err
 		}
 		return service.BackfillForwardPortBindings(tx)
 	})
@@ -169,49 +171,21 @@ func openPostgres(configPath, dsn string) (*gorm.DB, error) {
 	return gorm.Open(postgres.Open(database.PostgresDSN(&cfg.Database)), &gorm.Config{Logger: logger.Default.LogMode(logger.Warn)})
 }
 
+// migrateSchema prepares the target schema with Control's migrations, as
+// Control's own start does: it creates the schema in an empty database and
+// adopts or upgrades one an earlier Control prepared. The schema has the
+// partial unique index on active flux runtime jobs before the copy; every
+// 4.x start created it in the source too, so the source has no duplicates.
 func migrateSchema(db *gorm.DB) error {
-	if err := db.AutoMigrate(allModels()...); err != nil {
-		return err
-	}
-	if err := service.EnsureObservabilitySchema(db); err != nil {
-		return err
-	}
-	if err := service.EnsureStatsSchema(db); err != nil {
-		return err
-	}
-	if err := service.EnsureForwardBridgeSchema(db); err != nil {
-		return err
-	}
-	if err := service.EnsureForwardPortBindingSchema(db); err != nil {
-		return err
-	}
-	if err := service.EnsureForwardNodeColumns(db); err != nil {
-		return err
-	}
-	if err := service.EnsureNodeRuntimeHealthSchema(db); err != nil {
-		return err
-	}
-	return service.EnsureAgentDiagnosticTaskSchema(db)
+	_, err := migrations.Migrate(context.Background(), db, migrations.Options{ProgramVersion: branding.DefaultVersion, Logf: log.Printf})
+	return err
 }
 
-func allModels() []any {
-	models := []any{
-		&model.User{}, &model.Plan{}, &model.Order{}, &model.Payment{}, &model.PaymentLog{},
-		&model.ServerVMess{}, &model.ServerVLESS{}, &model.ServerTrojan{}, &model.ServerShadowsocks{},
-		&model.Node{}, &model.NodeProtocol{}, &model.WireGuardPeer{}, &model.AuthorizedKey{},
-		&model.TrafficLog{}, &model.OnlineLog{}, &model.StatUser{}, &model.StatServer{}, &model.NodeLog{},
-		&model.SubscriptionGroup{}, &model.SubscriptionTemplate{}, &model.UserSubscriptionGroup{}, &model.PlanSubscriptionGroup{},
-		&model.Event{}, &model.Ticket{}, &model.TicketMessage{}, &model.Coupon{}, &model.CouponUsage{}, &model.Knowledge{},
-		&model.ForwardNode{}, &model.ForwardRule{}, &model.ForwardRoute{}, &model.ForwardLog{}, &model.ForwardStats{},
-		&model.ForwardTunnel{}, &model.ForwardUserTunnel{}, &model.Forward{}, &model.ForwardPortBinding{}, &model.SpeedLimit{}, &model.ForwardRuntimeJob{},
-		&model.ForwardTrafficCursor{}, &model.ForwardCleanAgent{}, &model.ForwardAgentBridgeTask{}, &model.ForwardLatencyBucket{},
-		&model.PaymentGateway{}, &model.PaymentRecord{}, &model.TelegramBot{}, &model.TelegramUser{}, &model.TelegramChat{},
-		&model.TelegramCommand{}, &model.TelegramNotification{}, &model.NotificationTemplate{}, &model.NotificationLog{},
-		&model.UserMFA{}, &model.MFALoginAttempt{}, &model.UserLevel{}, &model.InviteCode{}, &model.CommissionRecord{},
-		&model.CommissionWithdraw{}, &model.InviteConfig{}, &model.LoadBalancer{}, &model.SystemConfig{}, &model.BackupRecord{},
-		&model.BackupConfig{}, &model.OperationLog{}, &model.AuditLog{},
-	}
-	return append(models, model.KernelModels()...)
+// runnerTable reports whether table is one of the migration runner's own
+// tables. The target's records describe the target's schema (their
+// checksums are those of its dialect), so the source's are not copied.
+func runnerTable(table string) bool {
+	return table == migrations.MigrationTable || table == migrations.MetaTable
 }
 
 func sqliteTables(db *gorm.DB) ([]string, error) {
@@ -462,6 +436,15 @@ func resetSequence(tx *gorm.DB, table string) error {
 		return err
 	}
 	if !hasID {
+		return nil
+	}
+	// Kernel tables keyed by a text id (v3_kernel_plugin, ...) have no
+	// sequence to move.
+	var serial bool
+	if err := tx.Raw(`SELECT pg_get_serial_sequence(?, 'id') IS NOT NULL`, table).Scan(&serial).Error; err != nil {
+		return err
+	}
+	if !serial {
 		return nil
 	}
 	var max *int64

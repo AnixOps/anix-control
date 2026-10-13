@@ -11,19 +11,6 @@ import (
 	"gorm.io/gorm/logger"
 )
 
-// EnsureForwardBridgeSchema creates the durable clean_agent bridge mapping table if it
-// does not exist. Called unconditionally at startup (including production) because
-// AutoMigrate only runs in dev/test. Idempotent and only touches this new table.
-func EnsureForwardBridgeSchema(db *gorm.DB) error {
-	if db == nil {
-		return nil
-	}
-	if db.Migrator().HasTable(&model.ForwardAgentBridgeTask{}) {
-		return nil
-	}
-	return db.AutoMigrate(&model.ForwardAgentBridgeTask{})
-}
-
 // ForwardAgentBridgeService handles result write-back for clean_agent bridge jobs.
 // It is shared by the agent result handler so that job/forward state transitions stay
 // identical to the local ansible executor semantics.

@@ -53,7 +53,7 @@ func topologyPreviewIssueCodes(preview *TopologyDeploymentPreview) map[string]bo
 func TestPreviewTopologyDeploymentIsReadOnlyAndVerifiesSignedDependencyClosure(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
-	require.NoError(t, EnsureKernelSchema(db))
+	require.NoError(t, MigrateKernelModelsForTest(db))
 	require.NoError(t, db.AutoMigrate(&model.Node{}))
 	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)
@@ -96,7 +96,7 @@ func TestPreviewTopologyDeploymentIsReadOnlyAndVerifiesSignedDependencyClosure(t
 func TestPreviewTopologyDeploymentReturnsStructuredPreflightIssues(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
-	require.NoError(t, EnsureKernelSchema(db))
+	require.NoError(t, MigrateKernelModelsForTest(db))
 	require.NoError(t, db.AutoMigrate(&model.Node{}))
 	node := model.Node{Name: "invalid-preview-node", Host: "127.0.0.1", APIKey: "invalid-preview-key"}
 	require.NoError(t, db.Create(&node).Error)
@@ -130,7 +130,7 @@ func TestPreviewTopologyDeploymentReturnsStructuredPreflightIssues(t *testing.T)
 func TestTopologyDeploymentStatusIncludesSafeOperationTimeline(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
-	require.NoError(t, EnsureKernelSchema(db))
+	require.NoError(t, MigrateKernelModelsForTest(db))
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	deployment := model.TopologyDeployment{
 		TopologyID: 1, RevisionID: 1, State: "failed", FailurePolicy: "stop_and_rollback", CreatedBy: 1,

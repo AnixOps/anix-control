@@ -202,7 +202,7 @@ var credentialModels = []any{
 func newCredentialHarness(t *testing.T, db *gorm.DB) *credentialHarness {
 	t.Helper()
 	require.NoError(t, db.AutoMigrate(credentialModels...))
-	require.NoError(t, nodesecrets.EnsureSchema(db))
+	require.NoError(t, nodesecrets.MigrateForTest(db))
 	kek := make([]byte, 32)
 	_, err := rand.Read(kek)
 	require.NoError(t, err)

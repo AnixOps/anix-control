@@ -136,3 +136,13 @@ func TestNormalizeValueForPostgresBoolColumns(t *testing.T) {
 		})
 	}
 }
+
+// The target keeps its own migration records: a SQLite source's checksums
+// are SQLite's.
+func TestRunnerTablesAreNotCopied(t *testing.T) {
+	for table, want := range map[string]bool{"v5_schema_migration": true, "v5_control_meta": true, "v2_user": false} {
+		if got := runnerTable(table); got != want {
+			t.Fatalf("runnerTable(%q) = %v, want %v", table, got, want)
+		}
+	}
+}
