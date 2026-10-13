@@ -133,7 +133,6 @@
   `/api/v2/admin/agent/*` client functions only they used. Their work moved to the node page's 诊断 section, the
   node list's connection and certificate columns and the 升级节点 sheet. Every backend route stays, and so does
   `GET /api/v4/kernel/agents/transports`.
-  "Joining a node group"). The change is additive, so Agents in the field are unaffected.
 - From the console: the 注册密钥 sheet and panel, the 部署父节点 sheet with its settings and the `useNodeDeploy`
   composable (the Agent `config.json` example and the Ansible inventory), the manual create mode of the node form
   (添加节点; editing stays), and in the node page's 部署 the registration key panel, the connection settings and the
