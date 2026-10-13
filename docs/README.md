@@ -25,6 +25,7 @@ Use this tree like NodeX:
 - Forward SDK: routes, hops, engines and drivers for v4.2 (design, draft for review): [`architecture/forward-sdk.md`](architecture/forward-sdk.md)
 - Node onboarding and admin cleanup for 5.0: group join tokens, one-command onboarding, removals (design, approved): [`design/node-onboarding/README.md`](design/node-onboarding/README.md)
 - Operations simplification roadmap after 5.0: the owner's choices S1 to S11, verified problems and milestones (design, approved): [`design/ops-simplification/README.md`](design/ops-simplification/README.md)
+- Single binary, self-managed certificates and embedded SQLite: milestone M2 of that roadmap (S1, S2, S4 and the configuration surface; design, draft for review): [`design/single-binary/README.md`](design/single-binary/README.md)
 - AnixOps relay protocol: secure transport between forward nodes (design approved, H22): [`architecture/anixops-protocol.md`](architecture/anixops-protocol.md)
 - Package reports on the Agent Control stream, and the privacy of the systemd services report: [`architecture/package-reports.md`](architecture/package-reports.md)
 - Network module runtime (mTLS, module PKI, remote runtime): [`architecture/module-runtime.md`](architecture/module-runtime.md)
