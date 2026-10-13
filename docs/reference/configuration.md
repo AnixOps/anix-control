@@ -153,8 +153,11 @@ grpc:
 
 - The CDN (or the proxy behind it) terminates TLS for `panel.example.com`
   and forwards the whole host, `/install.sh` and `/install/*` included, to
-  `listen`. List a proxy on another machine in `server.trusted_proxies` so
-  that `/install/ip` returns the node's address, not the proxy's.
+  `listen`. The install script reads the node's address from
+  `/install/ip` through the CDN, and Control takes it from
+  `X-Forwarded-For` only from a peer in `server.trusted_proxies`: list the
+  local proxy and the CDN's published address ranges there, or the join
+  records the CDN's address for the node.
 - Nodes fetch `https://panel.example.com/install.sh` through the CDN and
   get `grpc_target grpc.example.com:50051` from `/install/agent.env`; they
   dial that name directly and verify its certificate.

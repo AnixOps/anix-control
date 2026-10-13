@@ -201,6 +201,7 @@ func TestDoctorChecksDNSAndPortsOfTheCDNMode(t *testing.T) {
 	require.Equal(t, doctorWarn, byID["port::80"].Level, "the HTTP-01 port could not be checked")
 	require.Contains(t, byID["port::80"].Fix, "ss -ltnp")
 	require.Equal(t, doctorInfo, byID["firewall"].Level)
+	require.Contains(t, byID["cdn:client_address"].Fix, "server.trusted_proxies")
 
 	// The name moved to this machine: the check passes.
 	env.resolver = fakeResolver{"panel.example.com": {"198.51.100.1"}, "grpc.example.com": {"192.0.2.10"}}

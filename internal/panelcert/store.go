@@ -226,7 +226,14 @@ func (c *directoryCache) Get(ctx context.Context, key string) ([]byte, error) {
 	if c.missing(key) {
 		return nil, autocert.ErrCacheMiss
 	}
-	return c.store.Get(ctx, c.prefix+key)
+	data, err := c.store.Get(ctx, c.prefix+key)
+	if errors.Is(err, ErrSealed) {
+		// Sealed under another root key: what it held is lost, so it is
+		// missing (a new account key, a new certificate) rather than an
+		// error every request would hit.
+		return nil, autocert.ErrCacheMiss
+	}
+	return data, err
 }
 
 func (c *directoryCache) Put(ctx context.Context, key string, data []byte) error {

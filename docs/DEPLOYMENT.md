@@ -489,7 +489,9 @@ grpc:
 节点经 CDN 下载 `https://panel.example.com/install.sh`，从 `/install/agent.env` 得到
 `grpc.example.com:50051` 并直连；Control 通过 ACME 为 `grpc.example.com` 申请公网证书（80 空闲时
 自己应答 HTTP-01，否则经本机代理转发到 `listen`；443 空闲时还会应答 TLS-ALPN-01）。需对公网开放
-`grpc.port` 以及 80（或 443）。
+`grpc.port` 以及 80（或 443）。安装脚本经 CDN 访问 `/install/ip` 取得节点地址，Control 只信任
+`server.trusted_proxies` 中的对端发来的 `X-Forwarded-For`：请把本机代理和 CDN 公布的回源地址段加入其中，
+否则接入时记录的是 CDN 的地址。
 
 **external 模式的 gRPC 证书也可以自己提供**：`tls.cert_file`/`tls.key_file`（或保留旧的
 `grpc.tls_cert_file`/`grpc.tls_key_file`），文件变化后自动重新加载，不再需要重启。例如用 certbot

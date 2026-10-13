@@ -414,8 +414,7 @@ func TestStoredCertificateSurvivesARestartSealed(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 	require.Len(t, ca.Issued(), 1)
 
-	// Another root key opens nothing: the certificate is requested again
-	// rather than served from a row it cannot verify.
+	// Another root key opens nothing.
 	other, err := panelcert.NewStore(db, bytes.Repeat([]byte{9}, 32), nil)
 	require.NoError(t, err)
 	for _, row := range rows {
@@ -424,6 +423,19 @@ func TestStoredCertificateSurvivesARestartSealed(t *testing.T) {
 			require.ErrorIs(t, err, panelcert.ErrSealed)
 		}
 	}
+	again.shutdown()
+
+	// A Control started with another root key treats those rows as
+	// missing: it registers a new account and requests the certificate
+	// again instead of failing on them for good.
+	rekeyed := newHarness(t, db, ca, newClock(), func(o *panelcert.Options) { o.KEK = bytes.Repeat([]byte{9}, 32) })
+	require.Equal(t, panelcert.StatePending, certificateState(rekeyed.m, panelName).State)
+	ca.SetTargets(func(string) string { return rekeyed.addr.httpsAddr }, nil)
+	rekeyed.run(t)
+	waitFor(t, "the certificate under the new root key", 20*time.Second, func() bool {
+		return certificateState(rekeyed.m, panelName).State == panelcert.StateValid
+	})
+	require.Len(t, ca.Issued(), 2)
 }
 
 func TestAnotherDirectoryDoesNotReuseTheCertificate(t *testing.T) {

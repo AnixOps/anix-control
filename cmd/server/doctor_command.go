@@ -212,6 +212,12 @@ func doctorChecks(ctx context.Context, cfg *config.Config, db *gorm.DB, env doct
 		}
 	}
 
+	// The CDN mode: the install script asks /install/ip through the CDN.
+	if panel.Mode == config.TLSModeExternal && panel.GRPCName != "" && panel.GRPCName != panel.Domain && panel.Domain != "" {
+		add("cdn:client_address", doctorInfo, "With the panel behind a CDN, nodes read their own address from https://"+panel.Domain+"/install/ip through the CDN: Control takes the address from X-Forwarded-For only when the connecting peer is in server.trusted_proxies.",
+			"List the local proxy and the CDN's published address ranges in server.trusted_proxies; otherwise /install/ip answers the CDN's address, which the join records for the node.")
+	}
+
 	// Ports.
 	type portCheck struct{ purpose, address, probeName string }
 	var ports []portCheck
