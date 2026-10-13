@@ -141,7 +141,7 @@ Frontend checks are run in CI from a clean checkout:
 ```bash
 cd web
 npm ci
-npm audit --audit-level=moderate
+npm audit --omit=dev --audit-level=moderate
 npm test
 npm run build
 ```

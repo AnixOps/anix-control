@@ -1,9 +1,13 @@
-// Dependency audit for CI.
+// Dependency audit of the nightly security workflow (npm run audit:check).
 //
 // Production dependencies (what ships in the frontend) must have no advisory
 // of moderate severity or above. Development dependencies must not either,
 // except advisories listed in audit-allowlist.json, each with a reason and an
 // expiry date; an expired or unused entry fails the check.
+//
+// The required pull-request job runs only `npm audit --omit=dev
+// --audit-level=moderate`, so a development advisory with no fix cannot turn
+// an unrelated pull request red; this check is where it shows up.
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'

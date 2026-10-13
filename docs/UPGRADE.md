@@ -3276,8 +3276,9 @@ with the rc.3 builds in place of rc.2; the notes below are on top of it.
   imports them as in [Upgrade Procedure](#upgrade-procedure) before the first
   start of a Control that runs them.
 - **npm audit waivers expire:** braces on 2026-11-02 and sprintf-js on
-  2026-11-05 (`web/audit-allowlist.json`); the frontend audit fails after that
-  unless they are renewed or fixed.
+  2026-11-05 (`web/audit-allowlist.json`); the nightly frontend audit fails after
+  that unless they are renewed or fixed. The pull-request job audits only
+  shipped dependencies and does not read the waivers.
 - **Nightly security scan** (`Nightly Security`) runs `govulncheck`, the `gosec`
   gates, the frontend audit and the relay fuzz targets every night
   ([`RELEASING.md`](RELEASING.md)).
@@ -3484,8 +3485,9 @@ apply too, with 4.2.0 in place of rc.3. The notes below are on top of them.
   `affiliate` before the first start of a Control that runs them; the 4.2.0
   `payment` build carries the checkout change above.
 - **npm audit waivers expire:** braces on 2026-11-02 and sprintf-js on
-  2026-11-05 (`web/audit-allowlist.json`); the frontend audit fails after that
-  unless they are renewed or fixed.
+  2026-11-05 (`web/audit-allowlist.json`); the nightly frontend audit fails after
+  that unless they are renewed or fixed. The pull-request job audits only
+  shipped dependencies and does not read the waivers.
 
 ### Rolling Back From 4.2.0
 

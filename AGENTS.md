@@ -159,7 +159,8 @@ Frontend (`web/`, Node.js 22):
 
 ```bash
 cd web && npm ci && npm test && npm run build
-npm audit --audit-level=moderate
+npm audit --omit=dev --audit-level=moderate   # the required Frontend Build gate: shipped dependencies, no waivers
+npm run audit:check                           # nightly: also development tools, with web/audit-allowlist.json
 npm run test:e2e                              # Playwright; needs chromium
 ```
 

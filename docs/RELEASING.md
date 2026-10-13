@@ -192,8 +192,11 @@ failed job fails the run, and the failing job names the finding:
   `control-center`), at the version `ci.yml` pins.
 - **gosec**: the production gate exactly as `ci.yml` runs it, plus the `sdk`
   and `identity` gates.
-- **npm audit** of `web/` through `npm run audit:check`, so the waivers in
-  `web/audit-allowlist.json` and their expiry dates apply.
+- **npm audit** of `web/` through `npm run audit:check`: shipped and
+  development dependencies, so the waivers in `web/audit-allowlist.json` and
+  their expiry dates apply here and only here. When a waiver expires, an
+  advisory is new or an entry is no longer reported, this job fails the run;
+  renew it with the owner's approval or fix the dependency.
 - **relay fuzz**: every fuzz target of `sdk/forward/relay` and
   `sdk/forward/relay/link` for 60 seconds each. The corpus the engine learns
   is cached from night to night, and a failing input is uploaded as the
@@ -201,7 +204,10 @@ failed job fails the run, and the failing job names the finding:
   its package to reproduce it with a plain `go test`.
 
 The pull-request pipeline keeps its own `govulncheck` and `gosec` jobs; this
-workflow does not replace them.
+workflow does not replace them. Its required "Frontend Build" job audits only
+the shipped frontend dependencies, strictly (`npm audit --omit=dev
+--audit-level=moderate`, no waivers): an advisory in a development tool with no
+fix shows up in the nightly run and never blocks an unrelated pull request.
 
 ## Verifying A Release
 

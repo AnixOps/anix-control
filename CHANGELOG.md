@@ -54,6 +54,12 @@
 
 ### Changed
 
+- The required "Frontend Build" job audits only the shipped frontend dependencies, strictly
+  (`npm audit --omit=dev --audit-level=moderate`). The development tools are audited by the nightly
+  `Nightly Security` run (`npm audit (web)`, `npm run audit:check`), which keeps `web/audit-allowlist.json` and
+  its expiry dates: the braces and sprintf-js waivers (2026-11-02, 2026-11-05) can no longer turn pull requests
+  red, and an expired or new development advisory fails the nightly run instead.
+  `check_release_workflow.sh` requires the strict production audit in the job and refuses the waiver check there.
 - A package's WebUI bundle is optional. `build_package.py` builds, signs and verifies a manifest without
   `webui` (an empty `frontend_sha256`, which the kernel and the Agent already accepted), and refuses a
   `webui/` directory the manifest does not declare. Such a package stores no WebUI asset and the extension

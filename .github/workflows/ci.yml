@@ -2211,9 +2211,14 @@ jobs:
         working-directory: web
         run: npm run design:check
 
-      - name: Audit frontend dependencies
+      # Shipped (production) dependencies only, strictly: no waivers, so
+      # this required job cannot turn red because a development tool has an
+      # advisory with no fix. The development tools, with the dated waivers
+      # in web/audit-allowlist.json, are audited by the nightly security
+      # workflow (npm audit (web)), which fails visibly without blocking.
+      - name: Audit shipped frontend dependencies
         working-directory: web
-        run: npm run audit:check
+        run: npm audit --omit=dev --audit-level=moderate
 
       # ESLint (no native dialogs, no legacy classes, no bare tables on list
       # pages) and stylelint (colour tokens, type and radius scale, no legacy

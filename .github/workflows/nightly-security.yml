@@ -108,6 +108,10 @@ jobs:
         working-directory: web
         run: npm ci --ignore-scripts
 
+      # The pull-request pipeline audits only shipped dependencies
+      # (npm audit --omit=dev). This is the one place the development tools
+      # are audited: advisories waived in web/audit-allowlist.json pass until
+      # their expiry date, an expired, unused or new one fails this run.
       - name: Audit shipped and development dependencies
         working-directory: web
         run: npm run audit:check
