@@ -195,7 +195,7 @@ func New(opts Options) (*Manager, error) {
 		opts.AttemptTimeout = defaultAttemptTimeout
 	}
 	if opts.LocalAddresses == nil {
-		opts.LocalAddresses = localAddresses
+		opts.LocalAddresses = LocalAddresses
 	}
 	if opts.Logf == nil {
 		opts.Logf = log.Printf
@@ -211,7 +211,9 @@ func New(opts Options) (*Manager, error) {
 	seen := map[string]bool{}
 	for _, spec := range opts.Certificates {
 		spec.Name = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(spec.Name)), ".")
-		if spec.Name == "" || seen[spec.Name] {
+		// Only certificate files may come without a name (a gRPC listener
+		// of a Control without domain): the files name it.
+		if (spec.Name == "" && spec.Source != SourceFiles) || seen[spec.Name] {
 			return nil, fmt.Errorf("panel certificate: missing or repeated name %q", spec.Name)
 		}
 		seen[spec.Name] = true
@@ -260,7 +262,7 @@ func (m *Manager) Start(ctx context.Context) error {
 	now := m.now()
 	addresses := m.opts.LocalAddresses()
 	for _, s := range m.slots {
-		fallback, err := loadSelfSigned(ctx, m.store, s.spec.Name, addresses, now)
+		fallback, err := loadSelfSigned(ctx, m.store, s.fallbackName(), addresses, now)
 		if fallback == nil {
 			return fmt.Errorf("panel certificate %s: self-signed fallback: %w", s.spec.Name, err)
 		}
@@ -349,12 +351,20 @@ func (m *Manager) refreshFallback(ctx context.Context, s *slot) {
 	if current != nil && current.Leaf != nil && current.Leaf.NotAfter.Sub(now) > selfSignedRenewBefore {
 		return
 	}
-	if fallback, err := loadSelfSigned(ctx, m.store, s.spec.Name, m.opts.LocalAddresses(), now); fallback != nil {
+	if fallback, err := loadSelfSigned(ctx, m.store, s.fallbackName(), m.opts.LocalAddresses(), now); fallback != nil {
 		s.fallback.Store(fallback)
 		if err != nil {
 			m.opts.Logf("Panel certificate %s: the self-signed fallback was not stored: %v", s.spec.Name, err)
 		}
 	}
+}
+
+// fallbackName is the name of s's self-signed fallback.
+func (s *slot) fallbackName() string {
+	if s.spec.Name == "" {
+		return "localhost"
+	}
+	return s.spec.Name
 }
 
 // certificateFor returns what a handshake for s gets now.
@@ -583,6 +593,17 @@ func (m *Manager) servedFrom(certificate *tls.Certificate, serving, name string,
 	return served
 }
 
+// leafName is the first name a certificate covers.
+func leafName(leaf *x509.Certificate) string {
+	if len(leaf.DNSNames) > 0 {
+		return leaf.DNSNames[0]
+	}
+	if len(leaf.IPAddresses) > 0 {
+		return leaf.IPAddresses[0].String()
+	}
+	return leaf.Subject.CommonName
+}
+
 // issuerName is a certificate issuer's display name.
 func issuerName(leaf *x509.Certificate) string {
 	if leaf == nil {
@@ -774,7 +795,7 @@ func (m *Manager) pollRetryRequests(ctx context.Context) {
 // slotStatus is s's status at now.
 func (m *Manager) slotStatus(s *slot, now time.Time) CertificateStatus {
 	status := CertificateStatus{
-		Name: s.spec.Name, Roles: append([]string(nil), s.spec.Roles...), Source: s.spec.Source,
+		Name: s.spec.Name, Names: []string{}, Roles: append([]string(nil), s.spec.Roles...), Source: s.spec.Source,
 		CertFile: s.spec.CertFile, KeyFile: s.spec.KeyFile, Serving: ServingSelfSigned,
 	}
 	s.mu.Lock()
@@ -788,6 +809,9 @@ func (m *Manager) slotStatus(s *slot, now time.Time) CertificateStatus {
 	served := s.served.Load()
 	if served != nil {
 		leaf := served.certificate.Leaf
+		if status.Name == "" {
+			status.Name = leafName(leaf)
+		}
 		status.Issuer = issuerName(leaf)
 		status.NotBefore, status.NotAfter = timeRef(leaf.NotBefore), timeRef(leaf.NotAfter)
 		if s.spec.Source == SourceACME {
@@ -797,13 +821,17 @@ func (m *Manager) slotStatus(s *slot, now time.Time) CertificateStatus {
 	switch {
 	case served != nil && now.Before(served.certificate.Leaf.NotAfter):
 		status.State, status.Serving = StateValid, served.serving
+		status.Names = append(status.Names, served.certificate.Leaf.DNSNames...)
+		for _, address := range served.certificate.Leaf.IPAddresses {
+			status.Names = append(status.Names, address.String())
+		}
 		status.PubliclyTrusted = served.trusted
 		if s.spec.Source == SourceACME && attemptFailed && !now.Before(renewAt(served.certificate.Leaf)) {
 			status.RenewalFailing = true
 		}
 		if !served.trusted && status.Problem == "" {
 			status.Problem = ProblemUntrusted
-			if served.certificate.Leaf.VerifyHostname(s.spec.Name) != nil {
+			if s.spec.Name != "" && served.certificate.Leaf.VerifyHostname(s.spec.Name) != nil {
 				status.Problem = ProblemNameMismatch
 			}
 			status.LastError = "the served certificate does not verify: " + served.trustError
@@ -825,7 +853,7 @@ func (m *Manager) slotStatus(s *slot, now time.Time) CertificateStatus {
 		status.LastError, status.Problem = "", ""
 	}
 	if status.Problem != "" {
-		status.Fix = fixFor(status.Problem, s.spec.Name, s.spec, m.directory)
+		status.Fix = fixFor(status.Problem, status.Name, s.spec, m.directory)
 	}
 	return status
 }
@@ -890,3 +918,13 @@ func (m *Manager) publish(ctx context.Context, force bool) {
 func (m *Manager) GRPCCertificate() (CertificateStatus, bool) {
 	return m.Status().Certificate(RoleGRPC)
 }
+
+var defaultManager atomic.Pointer[Manager]
+
+// SetDefault makes m the process's manager, which the status route and the
+// install readiness read; nil clears it.
+func SetDefault(m *Manager) { defaultManager.Store(m) }
+
+// Default returns the process's manager, nil when none runs (a command, a
+// test).
+func Default() *Manager { return defaultManager.Load() }

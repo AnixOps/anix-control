@@ -149,10 +149,11 @@ func fallbackUsable(leaf *x509.Certificate, name string, addresses []net.IP, now
 	return true
 }
 
-// localAddresses are this machine's global unicast interface addresses:
+// LocalAddresses are this machine's global unicast interface addresses:
 // the fallback names them, so that https://<address>/ opens before the DNS
-// record exists. No network call.
-func localAddresses() []net.IP {
+// record exists, and the DNS check compares a name's records with them.
+// No network call.
+func LocalAddresses() []net.IP {
 	interfaces, err := net.InterfaceAddrs()
 	if err != nil {
 		return nil

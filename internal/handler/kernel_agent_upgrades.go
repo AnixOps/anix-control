@@ -79,12 +79,13 @@ func (h *AgentUpgradesHandler) settings(c *gin.Context) (cfg *config.Config, set
 		return nil, agentinstall.Settings{}, http.StatusServiceUnavailable, errors.New("the configuration is not loaded")
 	}
 	install := cfg.AgentInstall
-	controlURL := strings.TrimRight(strings.TrimSpace(install.PublicURL), "/")
+	panel := cfg.Panel()
+	controlURL := panel.PublicURL
 	if controlURL == "" {
 		controlURL = requestorigin.Resolve(c.Request).BaseURL()
 	}
 	settings, err = agentinstall.ResolveSettings(agentinstall.SettingsInput{
-		ControlURL: controlURL, GRPCTarget: install.GRPCTarget, GRPCPort: cfg.GRPC.Port,
+		ControlURL: controlURL, GRPCTarget: panel.GRPCTarget, GRPCPort: panel.GRPCPort,
 		AgentVersion: install.AgentVersion, PinnedAgentVersion: AgentRelease, ReleaseVersion: ReleaseVersion, ArtifactDir: install.ArtifactDir, CNMirrorURL: install.CNMirrorURL,
 	})
 	if err != nil {

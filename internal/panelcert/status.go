@@ -65,7 +65,10 @@ const (
 // CertificateStatus is what Control knows about one certificate it serves.
 // It holds no secret.
 type CertificateStatus struct {
-	Name   string   `json:"name"`
+	Name string `json:"name"`
+	// Names are the names the served certificate covers (DNS names and
+	// addresses).
+	Names  []string `json:"names"`
 	Roles  []string `json:"roles"`
 	Source string   `json:"source"`
 	State  string   `json:"state"`
@@ -194,4 +197,18 @@ func RequestRetry(ctx context.Context, db *gorm.DB, now time.Time) error {
 		return err
 	}
 	return store.Put(ctx, retryKey, []byte(now.UTC().Format(time.RFC3339Nano)))
+}
+
+// RetryPending tells whether a retry request still waits for the running
+// Control to read it.
+func RetryPending(ctx context.Context, db *gorm.DB) (bool, error) {
+	store, err := NewStore(db, nil, nil)
+	if err != nil {
+		return false, err
+	}
+	_, err = store.Get(ctx, retryKey)
+	if errors.Is(err, autocert.ErrCacheMiss) {
+		return false, nil
+	}
+	return err == nil, err
 }

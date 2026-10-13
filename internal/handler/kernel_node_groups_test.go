@@ -13,12 +13,14 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/AnixOps/anix-control/v5/internal/agentinstall"
 	"github.com/AnixOps/anix-control/v5/internal/agentpki"
 	"github.com/AnixOps/anix-control/v5/internal/config"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/nodegroup"
+	"github.com/AnixOps/anix-control/v5/internal/panelcert"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -30,6 +32,8 @@ type nodeGroupsTestEnv struct {
 	groups *nodegroup.Service
 	kek    string
 	router *gin.Engine
+	// certificates is the panel certificate status the handler reads.
+	certificates panelcert.Status
 }
 
 func newNodeGroupsTestEnv(t *testing.T) *nodeGroupsTestEnv {
@@ -49,6 +53,9 @@ func newNodeGroupsTestEnv(t *testing.T) *nodeGroupsTestEnv {
 			pki:    func() (*agentpki.Service, error) { return install.pki, nil },
 			config: func() *config.Config { return install.cfg },
 			db:     func() *gorm.DB { return db },
+			certificates: func() (panelcert.Status, bool) {
+				return env.certificates, true
+			},
 		},
 	}
 	gin.SetMode(gin.TestMode)
@@ -344,6 +351,11 @@ func TestInstallReadinessAnswer(t *testing.T) {
 	// Configured, it is ready; a key that is not 32 bytes is a problem.
 	env.cfg.GRPC.Enable = true
 	env.cfg.GRPC.TLSCertFile, env.cfg.GRPC.TLSKeyFile = "/etc/anix/grpc.crt", "/etc/anix/grpc.key"
+	notAfter := time.Now().Add(60 * 24 * time.Hour)
+	env.certificates = panelcert.Status{Certificates: []panelcert.CertificateStatus{{
+		Name: "ctl.example.com", Names: []string{"ctl.example.com"}, Roles: []string{panelcert.RoleGRPC},
+		Source: panelcert.SourceFiles, State: panelcert.StateValid, Serving: panelcert.ServingFile, PubliclyTrusted: true, NotAfter: &notAfter,
+	}}}
 	env.cfg.ModuleRuntime.CAKEK = "short"
 	result = read()
 	assert.False(t, result.Ready)
@@ -360,6 +372,26 @@ func TestInstallReadinessAnswer(t *testing.T) {
 		assert.True(t, check.OK, check.ID+": "+check.Message)
 		assert.NotContains(t, check.Message+check.Fix, env.kek, "the key is never echoed")
 	}
+
+	// Agents fail closed on a gRPC certificate they cannot verify: while
+	// Control serves its self-signed fallback the command is blocked, with
+	// the certificate status's reason and fix.
+	env.certificates.Certificates[0].State = panelcert.StateFailed
+	env.certificates.Certificates[0].Serving = panelcert.ServingSelfSigned
+	env.certificates.Certificates[0].LastError = "the certificate in /etc/anix/grpc.crt has ended"
+	env.certificates.Certificates[0].Fix = "Replace the files."
+	result = read()
+	assert.False(t, result.Ready)
+	for _, check := range result.Checks {
+		if check.ID == "grpc_certificate" {
+			assert.False(t, check.OK)
+			assert.Equal(t, "error", check.Level)
+			assert.Contains(t, check.Message, "has ended")
+			assert.Equal(t, "Replace the files.", check.Fix)
+		}
+	}
+	env.certificates.Certificates[0].State = panelcert.StateValid
+	env.certificates.Certificates[0].Serving = panelcert.ServingFile
 
 	// Without a public URL the request's own address stands in, and a
 	// plain-http one is refused.

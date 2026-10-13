@@ -5,16 +5,25 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
+// trustedCertificate is a valid, publicly trusted certificate for name.
+func trustedCertificate(name string) *CertificateFacts {
+	return &CertificateFacts{
+		Name: name, Names: []string{name}, State: CertificateValid, Serving: "acme",
+		PubliclyTrusted: true, NotAfter: time.Date(2027, 1, 10, 0, 0, 0, 0, time.UTC),
+	}
+}
+
 // readyInput is a Control that can hand out a working install command.
 func readyInput() ReadinessInput {
 	return ReadinessInput{
 		PublicURL: "https://panel.example.com", GRPCEnabled: true, GRPCPort: 50051,
-		GRPCTLSCertFile: "/etc/anix/grpc.crt", GRPCTLSKeyFile: "/etc/anix/grpc.key",
+		PanelCertificate: trustedCertificate("panel.example.com"), GRPCCertificate: trustedCertificate("panel.example.com"),
 		BuiltinPKI: true, CAKEK: true, MTLSMode: "required",
 		AgentVersion: "v4.2.0", ReleaseVersion: "4.2.1",
 	}
@@ -42,7 +51,7 @@ func TestReadinessOfAConfiguredControl(t *testing.T) {
 		assert.Empty(t, check.Fix, check.ID)
 		assert.NotEmpty(t, check.Message, check.ID)
 	}
-	assert.Equal(t, []string{CheckPublicURL, CheckGRPC, CheckCA, CheckMTLSMode, CheckAgentRelease, CheckScriptSignature}, ids)
+	assert.Equal(t, []string{CheckPublicURL, CheckPanelCertificate, CheckGRPC, CheckGRPCCertificate, CheckCA, CheckMTLSMode, CheckAgentRelease, CheckScriptSignature}, ids)
 	assert.Contains(t, checkOf(t, readiness, CheckGRPC).Message, "panel.example.com:50051")
 }
 
@@ -52,7 +61,7 @@ func TestReadinessPublicURL(t *testing.T) {
 		ok      bool
 		message string
 	}{
-		"unset and no request origin": {func(in *ReadinessInput) { in.PublicURL = "" }, false, "not set"},
+		"unset and no request origin": {func(in *ReadinessInput) { in.PublicURL = "" }, false, "is set"},
 		"plain http":                  {func(in *ReadinessInput) { in.PublicURL = "http://panel.example.com" }, false, "not https"},
 		"loopback":                    {func(in *ReadinessInput) { in.PublicURL = "https://127.0.0.1:8443" }, false, "loopback"},
 		"localhost":                   {func(in *ReadinessInput) { in.PublicURL = "https://localhost" }, false, "loopback"},
@@ -86,15 +95,13 @@ func TestReadinessGRPC(t *testing.T) {
 	}{
 		"explicit target":    {func(in *ReadinessInput) { in.GRPCTarget = "grpc.example.com:8443" }, true, []string{"grpc.example.com:8443"}},
 		"default port":       {func(in *ReadinessInput) { in.GRPCPort = 0 }, true, []string{"panel.example.com:50051"}},
-		"listener off":       {func(in *ReadinessInput) { in.GRPCEnabled = false }, false, []string{"gRPC listener is off", "grpc.enabled"}},
-		"no certificate":     {func(in *ReadinessInput) { in.GRPCTLSCertFile = "" }, false, []string{"no TLS certificate", "grpc.tls_cert_file"}},
-		"no key":             {func(in *ReadinessInput) { in.GRPCTLSKeyFile = " " }, false, []string{"no TLS certificate"}},
+		"listener off":       {func(in *ReadinessInput) { in.GRPCEnabled = false }, false, []string{"gRPC listener is off", "grpc.enabled", "domain"}},
 		"target not host":    {func(in *ReadinessInput) { in.GRPCTarget = "grpc.example.com" }, false, []string{"not host:port", "agent_install.grpc_target"}},
 		"loopback target":    {func(in *ReadinessInput) { in.GRPCTarget = "127.0.0.1:50051" }, false, []string{"loopback"}},
 		"nothing to resolve": {func(in *ReadinessInput) { in.PublicURL = "" }, false, []string{"cannot work out the gRPC address"}},
 		"everything wrong": {func(in *ReadinessInput) {
-			in.GRPCEnabled, in.GRPCTLSCertFile = false, ""
-		}, false, []string{"listener is off", "no TLS certificate"}},
+			in.GRPCEnabled, in.GRPCTarget = false, "127.0.0.1:50051"
+		}, false, []string{"listener is off", "loopback"}},
 	} {
 		t.Run(name, func(t *testing.T) {
 			in := readyInput()
@@ -224,5 +231,52 @@ func TestReadinessScriptSignature(t *testing.T) {
 		assert.Equal(t, LevelWarning, check.Level)
 		assert.NotEmpty(t, check.Fix)
 		assert.True(t, readiness.Ready)
+	}
+}
+
+// Agents verify the gRPC certificate against their system CAs and fail
+// closed: until Control serves a valid, publicly trusted certificate for
+// the name nodes dial, the command is blocked.
+func TestReadinessCertificates(t *testing.T) {
+	for name, tc := range map[string]struct {
+		mutate   func(*ReadinessInput)
+		id       string
+		ok       bool
+		contains []string
+	}{
+		"no gRPC TLS": {func(in *ReadinessInput) { in.GRPCCertificate = nil }, CheckGRPCCertificate, false,
+			[]string{"no TLS certificate", "domain", "grpc.public_name", "grpc.tls_cert_file"}},
+		"gRPC certificate pending": {func(in *ReadinessInput) { in.GRPCCertificate.State = CertificatePending }, CheckGRPCCertificate, false,
+			[]string{"still requesting", "self-signed", "anix-control tls status"}},
+		"gRPC certificate failed, with the reason and fix": {func(in *ReadinessInput) {
+			in.GRPCCertificate.State, in.GRPCCertificate.Serving = CertificateFailed, "self_signed"
+			in.GRPCCertificate.Error, in.GRPCCertificate.Fix = "the CA refused the certificate: http-01: timeout", "Open port 80."
+		}, CheckGRPCCertificate, false, []string{"not usable", "http-01: timeout", "Open port 80."}},
+		"gRPC certificate from a private CA": {func(in *ReadinessInput) { in.GRPCCertificate.PubliclyTrusted = false }, CheckGRPCCertificate, false,
+			[]string{"does not verify against the system CAs", "public CA"}},
+		"gRPC target the certificate does not cover": {func(in *ReadinessInput) { in.GRPCTarget = "nodes.example.net:50051" }, CheckGRPCCertificate, false,
+			[]string{"nodes.example.net", "panel.example.com"}},
+		"wildcard certificate covers the target": {func(in *ReadinessInput) {
+			in.GRPCTarget = "grpc.example.com:50051"
+			in.GRPCCertificate.Names = []string{"*.example.com"}
+		}, CheckGRPCCertificate, true, []string{"publicly trusted"}},
+		"panel certificate failed": {func(in *ReadinessInput) {
+			in.PanelCertificate.State, in.PanelCertificate.Error = CertificateFailed, "DNS problem: NXDOMAIN"
+		}, CheckPanelCertificate, false, []string{"panel certificate", "NXDOMAIN"}},
+		"panel behind a CDN (external)": {func(in *ReadinessInput) { in.PanelCertificate = nil }, CheckPanelCertificate, true,
+			[]string{"tls.mode external", "CDN"}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			in := readyInput()
+			tc.mutate(&in)
+			readiness := CheckReadiness(in)
+			check := checkOf(t, readiness, tc.id)
+			assert.Equal(t, tc.ok, check.OK, check.Message)
+			assert.Equal(t, LevelError, check.Level)
+			assert.Equal(t, tc.ok, readiness.Ready, "an error-level certificate check blocks the command")
+			for _, part := range tc.contains {
+				assert.Contains(t, check.Message+" "+check.Fix, part)
+			}
+		})
 	}
 }
