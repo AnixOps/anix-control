@@ -66,6 +66,13 @@ type PanelSettings struct {
 	// PlainAddresses are the plain http listeners of external mode: listen,
 	// or the legacy server.host:server.port (and :frontend.port).
 	PlainAddresses []string
+	// ChallengeHTTPAddress and ChallengeTLSAddress are external mode's ACME
+	// challenge listeners when Control obtains a certificate there (the
+	// gRPC name's): port 80 for HTTP-01 and 443 for TLS-ALPN-01, bound when
+	// free. Empty when a plain address already takes the port (it answers
+	// HTTP-01 itself) or nothing is obtained over ACME.
+	ChallengeHTTPAddress string
+	ChallengeTLSAddress  string
 	// WebCertFile and WebKeyFile are the web certificate of files mode.
 	WebCertFile string
 	WebKeyFile  string
@@ -183,6 +190,21 @@ func (c *Config) Panel() PanelSettings {
 		settings.GRPCCertSource = GRPCCertACME
 		if settings.GRPCEnabled {
 			settings.ACMENames = append(settings.ACMENames, settings.GRPCName)
+		}
+	}
+
+	if settings.Mode == TLSModeExternal && settings.NeedsACME() {
+		taken := map[string]bool{}
+		for _, address := range settings.PlainAddresses {
+			if _, port, err := net.SplitHostPort(address); err == nil {
+				taken[port] = true
+			}
+		}
+		if !taken["80"] {
+			settings.ChallengeHTTPAddress = DefaultHTTPAddress
+		}
+		if !taken["443"] {
+			settings.ChallengeTLSAddress = DefaultHTTPSAddress
 		}
 	}
 

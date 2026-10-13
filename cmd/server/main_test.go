@@ -221,79 +221,6 @@ func TestApplyTrustedProxiesSetsTheRequestOriginPolicy(t *testing.T) {
 	}
 }
 
-// The UI server proxies /api to the API listener, which trusts it as a
-// loopback peer: it must pass on only the origin it resolved, never a
-// client's forwarding headers.
-func TestProxyAPIReplacesClientForwardingHeaders(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	previous := requestorigin.Default()
-	t.Cleanup(func() { requestorigin.SetDefault(previous) })
-	defaultPolicy, err := requestorigin.NewPolicy(nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	requestorigin.SetDefault(defaultPolicy)
-
-	var seen http.Header
-	var seenHost, seenPeer string
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		seen, seenHost, seenPeer = r.Header.Clone(), r.Host, r.RemoteAddr
-	}))
-	defer upstream.Close()
-
-	r := gin.New()
-	r.Any("/api/*path", func(c *gin.Context) { proxyAPI(c, upstream.URL) })
-	// A real server (the reverse proxy needs a CloseNotifier) that lets the
-	// test choose the peer address the UI server sees.
-	front := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		req.RemoteAddr = req.Header.Get("X-Test-Peer")
-		req.Header.Del("X-Test-Peer")
-		r.ServeHTTP(w, req)
-	}))
-	defer front.Close()
-	send := func(peer string) {
-		req, err := http.NewRequest(http.MethodGet, front.URL+"/api/v2/forward-agent/install.sh", nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-		req.Host = "panel.example.test"
-		req.Header.Set("X-Test-Peer", peer)
-		req.Header.Set("X-Forwarded-Proto", "https")
-		req.Header.Set("X-Forwarded-Host", "evil.example")
-		req.Header.Set("X-Forwarded-For", "198.51.100.66")
-		req.Header.Set("X-Real-IP", "198.51.100.67")
-		req.Header.Set("Forwarded", "host=evil.example")
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			t.Fatal(err)
-		}
-		_ = resp.Body.Close()
-	}
-
-	send("203.0.113.9:40000")
-	if got := seen.Get("X-Forwarded-Proto"); got != "http" {
-		t.Fatalf("X-Forwarded-Proto = %q, want http", got)
-	}
-	if got := seen.Get("X-Forwarded-Host"); got != "panel.example.test" || seenHost != "panel.example.test" {
-		t.Fatalf("X-Forwarded-Host = %q, Host = %q, want panel.example.test", got, seenHost)
-	}
-	if got := seen.Get("X-Forwarded-For"); got != "203.0.113.9" {
-		t.Fatalf("X-Forwarded-For = %q, want only the real peer", got)
-	}
-	if seen.Get("X-Real-IP") != "" || seen.Get("Forwarded") != "" {
-		t.Fatalf("client forwarding headers passed on: %v", seen)
-	}
-	if !strings.HasPrefix(seenPeer, "127.0.0.1:") {
-		t.Fatalf("upstream peer = %q", seenPeer)
-	}
-
-	send("127.0.0.1:40000")
-	if seen.Get("X-Forwarded-Proto") != "https" || seen.Get("X-Forwarded-Host") != "evil.example" ||
-		seen.Get("X-Forwarded-For") != "198.51.100.66, 127.0.0.1" {
-		t.Fatalf("a trusted proxy's headers were not kept: %v", seen)
-	}
-}
-
 func TestShouldStartForwardAgentBridgeWorkerDisabledByDefault(t *testing.T) {
 	if shouldStartForwardAgentBridgeWorker(nil) {
 		t.Fatal("nil config should not start forward agent bridge worker")
@@ -312,7 +239,8 @@ func TestShouldStartForwardAgentBridgeWorkerWhenLegacyBridgeEnabled(t *testing.T
 }
 
 func TestStartGRPCServerDisabled(t *testing.T) {
-	server, addr, err := startGRPCServer(&appconfig.Config{})
+	cfg := &appconfig.Config{}
+	server, addr, err := startGRPCServer(cfg, cfg.Panel(), nil)
 	if err != nil {
 		t.Fatalf("startGRPCServer() error = %v", err)
 	}
@@ -334,7 +262,7 @@ func TestStartGRPCServerRejectsOccupiedPort(t *testing.T) {
 	cfg.GRPC.Host = "127.0.0.1"
 	cfg.GRPC.Port = port
 
-	server, addr, err := startGRPCServer(cfg)
+	server, addr, err := startGRPCServer(cfg, cfg.Panel(), nil)
 	if err == nil {
 		if server != nil {
 			server.Stop()
@@ -414,31 +342,6 @@ func TestCreateDefaultIndexWritesFile(t *testing.T) {
 	}
 	if got, want := info.Mode().Perm(), os.FileMode(0o600); got != want {
 		t.Fatalf("index.html permissions = %v, want %v", got, want)
-	}
-}
-
-func TestFrontendAPIProxyTargetFollowsSpecificBindAddress(t *testing.T) {
-	cases := []struct {
-		name string
-		host string
-		want string
-	}{
-		{name: "loopback", host: "127.0.0.1", want: "http://127.0.0.1:19080"},
-		{name: "specific IPv4", host: "10.100.0.130", want: "http://10.100.0.130:19080"},
-		{name: "all IPv4", host: "0.0.0.0", want: "http://127.0.0.1:19080"},
-		{name: "all IPv6", host: "::", want: "http://127.0.0.1:19080"},
-		{name: "specific IPv6", host: "2001:db8::10", want: "http://[2001:db8::10]:19080"},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			cfg := &appconfig.Config{}
-			cfg.Server.Host = tc.host
-			cfg.Server.Port = 19080
-			if got := frontendAPIProxyTarget(cfg); got != tc.want {
-				t.Fatalf("frontendAPIProxyTarget() = %q, want %q", got, tc.want)
-			}
-		})
 	}
 }
 

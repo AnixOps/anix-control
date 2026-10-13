@@ -118,7 +118,7 @@ func runOfflineBundleCommand(cfg *config.Config, arguments []string, stdout io.W
 	flags.SetOutput(io.Discard)
 	arch := flags.String("arch", "", "the node's architecture: amd64 or arm64")
 	output := flags.String("o", "", "the bundle file to write (.tar.gz)")
-	controlURL := flags.String("control", "", "the Control address nodes reach (default agent_install.public_url)")
+	controlURL := flags.String("control", "", "the Control address nodes reach (default agent_install.public_url, else https://<domain>)")
 	if err := flags.Parse(arguments); err != nil {
 		return fmt.Errorf("%w\n%s", err, agentCommandUsage)
 	}
@@ -126,12 +126,13 @@ func runOfflineBundleCommand(cfg *config.Config, arguments []string, stdout io.W
 		return agentUsageError()
 	}
 	install := cfg.AgentInstall
+	panel := cfg.Panel()
 	address := *controlURL
 	if address == "" {
-		address = install.PublicURL
+		address = panel.PublicURL
 	}
 	settings, err := agentinstall.ResolveSettings(agentinstall.SettingsInput{
-		ControlURL: address, GRPCTarget: install.GRPCTarget, GRPCPort: cfg.GRPC.Port,
+		ControlURL: address, GRPCTarget: panel.GRPCTarget, GRPCPort: panel.GRPCPort,
 		AgentVersion: install.AgentVersion, PinnedAgentVersion: handler.AgentRelease, ReleaseVersion: handler.ReleaseVersion,
 		ArtifactDir: install.ArtifactDir, CNMirrorURL: install.CNMirrorURL,
 	})
@@ -253,8 +254,8 @@ func agentPKIForGRPC(cfg *config.Config, db *gorm.DB) (*agentpki.Service, error)
 	case err != nil:
 		return nil, fmt.Errorf("agent PKI: %w", err)
 	}
-	if cfg.GRPC.TLSCertFile == "" {
-		log.Printf("Agent enrollment is served without TLS on the gRPC listener: agents can enroll, but cannot present client certificates until grpc.tls_cert_file is set")
+	if !cfg.Panel().GRPCTLS() {
+		log.Printf("Agent enrollment is served without TLS on the gRPC listener: agents can enroll, but cannot present client certificates until domain (or grpc.tls_cert_file) is set")
 	}
 	return pki, nil
 }
@@ -287,15 +288,15 @@ func agentTransportPolicyLog(cfg *config.Config, grpcSrv *grpcserver.Server) str
 		enrollment = "unavailable: the gRPC listener is off (grpc.enabled)"
 	case grpcSrv.AgentPKI() == nil:
 		enrollment = "unavailable: no built-in CA (module_runtime.ca_kek)"
-	case strings.TrimSpace(cfg.GRPC.TLSCertFile) == "":
-		enrollment = "unavailable for client certificates: no TLS on the gRPC listener (grpc.tls_cert_file)"
+	case !grpcSrv.TLSEnabled():
+		enrollment = "unavailable for client certificates: no TLS on the gRPC listener (set domain, or grpc.tls_cert_file)"
 	}
 	if mode == config.AgentMTLSRequired && enrollment != "available" {
 		origin := "set"
 		if !cfg.AgentControl.MTLSExplicit() {
 			origin = "the default since v4.2"
 		}
-		return fmt.Sprintf("WARNING: Agent transports: agent_control.mtls=required (%s): %s; legacy sunset: %s; agent enrollment: %s. No AnixOps Agent can connect: give the kernel grpc.enabled, grpc.tls_cert_file/tls_key_file and module_runtime.ca_kek, or set agent_control.mtls: preferred while nodes migrate (docs/UPGRADE.md, \"Agent Transports: v4.2 Requires Enrolled Agents\").",
+		return fmt.Sprintf("WARNING: Agent transports: agent_control.mtls=required (%s): %s; legacy sunset: %s; agent enrollment: %s. No AnixOps Agent can connect: give the kernel domain (or grpc.enabled with grpc.tls_cert_file/tls_key_file) and module_runtime.ca_kek, or set agent_control.mtls: preferred while nodes migrate (docs/UPGRADE.md, \"Agent Transports: v4.2 Requires Enrolled Agents\").",
 			origin, effect, sunset, enrollment)
 	}
 	next := "Check `anix-control agents transports --check-required` before setting required (the default from v4.2)."

@@ -7,14 +7,10 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"net"
 	"net/http"
-	"net/http/httputil"
-	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -35,11 +31,11 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/kernelnodeops"
 	"github.com/AnixOps/anix-control/v5/internal/lease"
 	"github.com/AnixOps/anix-control/v5/internal/logging"
+	"github.com/AnixOps/anix-control/v5/internal/panelcert"
 	_ "github.com/AnixOps/anix-control/v5/internal/payment/gateways" // register payment gateway plugins
 	"github.com/AnixOps/anix-control/v5/internal/plugincontrol"
 	"github.com/AnixOps/anix-control/v5/internal/pluginhost"
 	"github.com/AnixOps/anix-control/v5/internal/requestorigin"
-	"github.com/AnixOps/anix-control/v5/internal/router"
 	"github.com/AnixOps/anix-control/v5/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -441,11 +437,6 @@ func run() int {
 		env = "development"
 	}
 	log.Printf("Environment: %s", env)
-	if cfg.TLS.Enable {
-		log.Printf("TLS: enabled (domain: %s)", cfg.TLS.Domain)
-	} else {
-		log.Printf("TLS: disabled")
-	}
 
 	// 初始化数据库
 	if err := database.Init(&cfg.Database); err != nil {
@@ -497,15 +488,27 @@ func run() int {
 	rootCtx, stopSignals := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stopSignals()
 
+	// The panel's certificates (internal/panelcert): what is stored, the
+	// files and the self-signed fallback are loaded now, so that every
+	// listener serves the right certificate from its first handshake; the
+	// ACME requests start with the workers.
+	panel := cfg.Panel()
+	certs, err := newPanelCertificates(rootCtx, cfg, panel, database.Get())
+	if err != nil {
+		log.Fatalf("Failed to prepare the panel certificates: %v", err)
+	}
+	panelcert.SetDefault(certs)
+	defer panelcert.SetDefault(nil)
+
 	// Bind the required node-facing listener before starting workers or HTTP
 	// servers. A port conflict must fail startup without exposing a partially
 	// initialized Control instance.
-	grpcSrv, grpcAddr, err := startGRPCServer(cfg)
+	grpcSrv, grpcAddr, err := startGRPCServer(cfg, panel, certs)
 	if err != nil {
 		log.Fatalf("Failed to start gRPC server: %v", err)
 	}
 	if grpcSrv != nil {
-		log.Printf("gRPC server listening on %s", grpcAddr)
+		log.Printf("gRPC server listening on %s (%s)", grpcAddr, describeGRPCTLS(panel))
 	}
 	agenttransport.SetMode(cfg.AgentControl.MTLSOrDefault())
 	log.Print(agentTransportPolicyLog(cfg, grpcSrv))
@@ -525,6 +528,8 @@ func run() int {
 	drainDelay, _ := cfg.Server.DrainDelay() // validated by config.Load
 	rt := &serverRuntime{
 		grpcSrv:    grpcSrv,
+		certs:      certs,
+		panel:      panel,
 		workers:    newBackgroundWorkers(rootCtx),
 		fatal:      newFatalErrors(),
 		drainDelay: drainDelay,
@@ -576,8 +581,8 @@ func parsePluginPollIntervals(cfg *config.Config) (pluginPollIntervals, error) {
 		}
 	}
 	if cfg.Plugins.DispatchEnabled {
-		if !cfg.GRPC.Enable {
-			return intervals, errors.New("plugin operation dispatch requires grpc.enabled=true")
+		if !cfg.Panel().GRPCEnabled {
+			return intervals, errors.New("plugin operation dispatch requires the gRPC listener (domain, or grpc.enabled=true)")
 		}
 		if intervals.dispatch, err = parsePluginPollInterval("plugins.dispatch_poll_interval", cfg.Plugins.DispatchPollInterval); err != nil {
 			return intervals, err
@@ -605,10 +610,13 @@ type serverRuntime struct {
 	controlPluginHosts           *pluginhost.Supervisor
 	controlPluginArtifactCleanup func()
 
-	apiSrv      *http.Server
-	frontendSrv *http.Server
-	servers     sync.WaitGroup
-	drainDelay  time.Duration
+	// certs serves and renews the panel's certificates; panel is the
+	// listener layout; panelServers are its bound listeners.
+	certs        *panelcert.Manager
+	panel        config.PanelSettings
+	panelServers []*panelServer
+	servers      sync.WaitGroup
+	drainDelay   time.Duration
 }
 
 // start launches plugin hosts, background workers and HTTP servers. On error
@@ -695,38 +703,30 @@ func (rt *serverRuntime) start(cfg *config.Config, intervals pluginPollIntervals
 	// 设置Gin模式
 	gin.SetMode(cfg.Server.Mode)
 
-	// Create HTTP servers with proper timeouts before starting goroutines.
-	apiSrv, err := newAPIServer(cfg)
+	// The panel's one handler on the listeners of tls.mode, all bound
+	// before any serves: a port conflict stops the start.
+	handler, err := newPanelHandler(cfg)
 	if err != nil {
 		return err
 	}
-	rt.apiSrv = apiSrv
-	if cfg.Frontend.Enable {
-		frontendSrv, err := newFrontendServer(cfg)
-		if err != nil {
-			return err
-		}
-		rt.frontendSrv = frontendSrv
+	servers, err := bindPanelServers(cfg, rt.panel, rt.certs, handler)
+	if err != nil {
+		return err
 	}
+	rt.panelServers = servers
+	log.Print(describePanel(rt.panel, servers))
+	rt.workers.Go("panel certificates", rt.certs.Run)
 
-	// Start the servers in goroutines. A listener failure triggers shutdown.
-	if rt.frontendSrv != nil {
+	// Serve in goroutines. A listener failure triggers shutdown.
+	for _, server := range rt.panelServers {
 		rt.servers.Add(1)
 		go func() {
 			defer rt.servers.Done()
-			if err := runFrontendServer(rt.frontendSrv, cfg); err != nil && !errors.Is(err, http.ErrServerClosed) {
-				rt.fatal.Report(fmt.Errorf("frontend server: %w", err))
+			if err := server.serve(); err != nil {
+				rt.fatal.Report(fmt.Errorf("panel %s listener: %w", server.purpose, err))
 			}
 		}()
 	}
-
-	rt.servers.Add(1)
-	go func() {
-		defer rt.servers.Done()
-		if err := runAPIServer(rt.apiSrv); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			rt.fatal.Report(fmt.Errorf("API server: %w", err))
-		}
-	}()
 
 	if cfg.Plugins.DispatchEnabled {
 		bridge, err := grpcserver.NewKernelOperationBridge(database.Get(), rt.grpcSrv.GetAgentControlManager())
@@ -786,18 +786,12 @@ func (rt *serverRuntime) shutdown(stopSignals context.CancelFunc) {
 	// Shutdown HTTP servers (drains in-flight requests).
 	httpCtx, cancelHTTP := context.WithTimeout(context.Background(), shutdownTimeout)
 	var httpWg sync.WaitGroup
-	for _, srv := range []struct {
-		name string
-		srv  *http.Server
-	}{{"Frontend", rt.frontendSrv}, {"API", rt.apiSrv}} {
-		if srv.srv == nil {
-			continue
-		}
+	for _, server := range rt.panelServers {
 		httpWg.Add(1)
 		go func() {
 			defer httpWg.Done()
-			if err := srv.srv.Shutdown(httpCtx); err != nil {
-				log.Printf("%s server shutdown error: %v", srv.name, err)
+			if err := server.server.Shutdown(httpCtx); err != nil {
+				log.Printf("Panel %s listener shutdown error: %v", server.purpose, err)
 			}
 		}()
 	}
@@ -854,8 +848,12 @@ func ensureConfiguredPluginTrustRoot(db *gorm.DB, encodedPublicKey string) error
 	return err
 }
 
-func startGRPCServer(cfg *config.Config) (*grpcserver.Server, string, error) {
-	if cfg == nil || !cfg.GRPC.Enable {
+// startGRPCServer binds the node gRPC listener (always with domain, else
+// with grpc.enabled). Its certificate comes from certs per handshake
+// (renewals and reloads reach new connections); without a gRPC
+// certificate (no name and no files) it is plain.
+func startGRPCServer(cfg *config.Config, panel config.PanelSettings, certs *panelcert.Manager) (*grpcserver.Server, string, error) {
+	if cfg == nil || !panel.GRPCEnabled {
 		return nil, "", nil
 	}
 
@@ -863,12 +861,11 @@ func startGRPCServer(cfg *config.Config) (*grpcserver.Server, string, error) {
 	if cfg.GRPC.Host != "" {
 		grpcCfg.Host = cfg.GRPC.Host
 	}
-	if cfg.GRPC.Port > 0 {
-		grpcCfg.Port = cfg.GRPC.Port
-	}
+	grpcCfg.Port = panel.GRPCPort
 	grpcCfg.APIToken = cfg.GRPC.APIToken
-	grpcCfg.TLSCertFile = cfg.GRPC.TLSCertFile
-	grpcCfg.TLSKeyFile = cfg.GRPC.TLSKeyFile
+	if certs != nil && certs.HasRole(panelcert.RoleGRPC) {
+		grpcCfg.GetCertificate = certs.GetCertificate(panelcert.RoleGRPC)
+	}
 	grpcCfg.AgentMTLS = cfg.AgentControl.MTLSOrDefault()
 	grpcCfg.AgentLegacySunset, _ = cfg.AgentControl.LegacySunsetTime() // validated by ValidateForServer
 	agentPKI, err := agentPKIForGRPC(cfg, database.Get())
@@ -1023,227 +1020,6 @@ func removeStaleArtifactCopies(root string) {
 	}
 }
 
-// newAPIServer creates the API server with proper timeouts.
-func newAPIServer(cfg *config.Config) (*http.Server, error) {
-	r := gin.New()
-	if err := applyTrustedProxies(r, serverTrustedProxies(cfg)); err != nil {
-		return nil, fmt.Errorf("configure trusted proxies for API server: %w", err)
-	}
-	router.Setup(r, cfg)
-	router.SetupNotFound(r)
-
-	readTimeout := time.Duration(cfg.Server.ReadTimeout) * time.Second
-	if readTimeout == 0 {
-		readTimeout = 30 * time.Second
-	}
-	writeTimeout := time.Duration(cfg.Server.WriteTimeout) * time.Second
-	if writeTimeout == 0 {
-		writeTimeout = 60 * time.Second
-	}
-
-	return &http.Server{
-		Addr:         fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port),
-		Handler:      r,
-		ReadTimeout:  readTimeout,
-		WriteTimeout: writeTimeout,
-		IdleTimeout:  120 * time.Second,
-	}, nil
-}
-
-// runAPIServer starts the API server (blocking).
-func runAPIServer(srv *http.Server) error {
-	log.Printf("API Server starting on %s", srv.Addr)
-	return srv.ListenAndServe()
-}
-
-// newFrontendServer creates the frontend server with proper timeouts.
-func newFrontendServer(cfg *config.Config) (*http.Server, error) {
-	frontendPath := cfg.Frontend.Path
-	if frontendPath == "" {
-		frontendPath = "web/public"
-	}
-
-	// 检查前端目录是否存在
-	if _, err := os.Stat(frontendPath); os.IsNotExist(err) {
-		log.Printf("Frontend directory '%s' not found, creating a placeholder...", frontendPath)
-		// A read-only root filesystem (containers) cannot hold the placeholder;
-		// the API keeps working and the UI answers 404 until assets exist.
-		if err := os.MkdirAll(frontendPath, 0o750); err != nil {
-			log.Printf("Warning: cannot create frontend directory %q: %v", frontendPath, err)
-		} else if err := createDefaultIndex(frontendPath); err != nil {
-			log.Printf("Warning: cannot create default frontend index in %q: %v", frontendPath, err)
-		}
-	}
-
-	r := gin.New()
-	if err := applyTrustedProxies(r, serverTrustedProxies(cfg)); err != nil {
-		return nil, fmt.Errorf("configure trusted proxies for frontend server: %w", err)
-	}
-	r.Use(gin.Recovery())
-
-	// Probes with draining awareness (/livez, /readyz, /health).
-	health.Default.Register(r)
-
-	// API 代理 - 将 /api 请求转发到 API 服务器
-	apiTarget := frontendAPIProxyTarget(cfg)
-	r.Any("/api/*path", func(c *gin.Context) {
-		proxyAPI(c, apiTarget)
-	})
-
-	// 订阅代理 - 将 /s (或自定义路径) 转发到 API 服务器
-	subPath := cfg.App.SubscribePath
-	if subPath == "" {
-		subPath = "s"
-	}
-	r.Any("/"+subPath+"/*path", func(c *gin.Context) {
-		proxyAPI(c, apiTarget)
-	})
-
-	// 节点安装脚本和 Agent 发布文件只注册在 API 监听上，而文档里的反向代理
-	// 配置把整个域名转发到这个监听：没有这些路由时 SPA 回退会返回 index.html，
-	// `curl .../install.sh | sudo bash` 执行的就是 HTML。
-	// Limits, the signature check and the client address stay on the API side.
-	for _, route := range installProxyRoutes {
-		r.GET(route, func(c *gin.Context) {
-			proxyAPI(c, apiTarget)
-		})
-	}
-
-	// 静态文件服务。Hash assets can be cached aggressively; the SPA HTML
-	// entry below must stay uncached so deploys do not serve stale bundles.
-	assetHandler := serveAssetFiles(frontendPath)
-	r.GET("/assets/*filepath", assetHandler)
-	r.HEAD("/assets/*filepath", assetHandler)
-	r.StaticFile("/favicon.ico", frontendPath+"/favicon.ico")
-
-	// SPA 路由支持 - 所有未匹配的路由返回 index.html
-	r.NoRoute(func(c *gin.Context) {
-		setHTMLNoCacheHeaders(c)
-		c.File(filepath.Join(frontendPath, "index.html"))
-	})
-
-	port := cfg.Frontend.Port
-	if port == 0 {
-		port = 3000
-	}
-
-	readTimeout := time.Duration(cfg.Server.ReadTimeout) * time.Second
-	if readTimeout == 0 {
-		readTimeout = 30 * time.Second
-	}
-	writeTimeout := time.Duration(cfg.Server.WriteTimeout) * time.Second
-	if writeTimeout == 0 {
-		writeTimeout = 60 * time.Second
-	}
-
-	return &http.Server{
-		Addr:         fmt.Sprintf("%s:%d", cfg.Server.Host, port),
-		Handler:      r,
-		ReadTimeout:  readTimeout,
-		WriteTimeout: writeTimeout,
-		IdleTimeout:  120 * time.Second,
-	}, nil
-}
-
-func frontendAPIProxyTarget(cfg *config.Config) string {
-	host := strings.TrimSpace(cfg.Server.Host)
-	if host == "" {
-		host = "127.0.0.1"
-	} else if ip := net.ParseIP(strings.Trim(host, "[]")); ip != nil && ip.IsUnspecified() {
-		host = "127.0.0.1"
-	}
-	return (&url.URL{
-		Scheme: "http",
-		Host:   net.JoinHostPort(host, strconv.Itoa(cfg.Server.Port)),
-	}).String()
-}
-
-// installProxyRoutes are the public node-onboarding downloads the API router
-// serves (internal/router/router.go): the signed install script, its
-// signature, the release metadata, the caller's address and the Agent release
-// assets. The frontend listener forwards them to the API listener.
-var installProxyRoutes = []string{
-	"/install.sh",
-	"/install.sh.sig",
-	"/install/agent.env",
-	"/install/ip",
-	"/install/agent/:tag/:asset",
-}
-
-// serverTrustedProxies is the trust list both listeners are configured with:
-// server.trusted_proxies, plus the address the frontend listener dials the
-// API listener from when it is enabled. That hop is Control's own, so the API
-// listener always honours the forwarding headers proxyAPI writes: a list
-// that leaves loopback out, an empty list, or a server.host that is a
-// specific address would otherwise make every client look like the UI
-// server (one shared rate-limit bucket, /install/ip answering 127.0.0.1).
-func serverTrustedProxies(cfg *config.Config) []string {
-	configured := cfg.Server.TrustedProxies
-	if !cfg.Frontend.Enable {
-		return configured
-	}
-	hops := frontendHopSources(cfg)
-	if len(hops) == 0 {
-		return configured
-	}
-	base := configured
-	if base == nil {
-		base = requestorigin.DefaultTrustedProxies
-	}
-	policy, err := requestorigin.NewPolicy(base)
-	if err != nil {
-		// An invalid entry is reported by applyTrustedProxies.
-		return configured
-	}
-	out := append([]string(nil), base...)
-	added := false
-	for _, hop := range hops {
-		ip := net.ParseIP(hop)
-		if ip == nil || policy.TrustedIP(ip) {
-			continue
-		}
-		out = append(out, hop)
-		added = true
-	}
-	if !added {
-		return configured
-	}
-	return out
-}
-
-// frontendHopSources are the addresses the frontend listener connects from
-// when it proxies to the API listener: the address it dials (a connection to
-// a local address is made from that address).
-func frontendHopSources(cfg *config.Config) []string {
-	target, err := url.Parse(frontendAPIProxyTarget(cfg))
-	if err != nil {
-		return nil
-	}
-	host := target.Hostname()
-	if ip := net.ParseIP(host); ip != nil {
-		return []string{ip.String()}
-	}
-	addresses, err := net.LookupIP(host)
-	if err != nil {
-		return nil
-	}
-	out := make([]string, 0, len(addresses))
-	for _, ip := range addresses {
-		out = append(out, ip.String())
-	}
-	return out
-}
-
-// runFrontendServer starts the frontend server (blocking).
-func runFrontendServer(srv *http.Server, cfg *config.Config) error {
-	if cfg.TLS.Enable && cfg.TLS.CertFile != "" && cfg.TLS.KeyFile != "" {
-		log.Printf("Frontend Server starting on https://%s (serving: %s)", srv.Addr, cfg.Frontend.Path)
-		return srv.ListenAndServeTLS(cfg.TLS.CertFile, cfg.TLS.KeyFile)
-	}
-	log.Printf("Frontend Server starting on http://%s (serving: %s)", srv.Addr, cfg.Frontend.Path)
-	return srv.ListenAndServe()
-}
-
 // createDefaultIndex 创建默认的index.html
 func createDefaultIndex(path string) error {
 	html := `<!DOCTYPE html>
@@ -1305,66 +1081,4 @@ func createDefaultIndex(path string) error {
 </body>
 </html>`
 	return os.WriteFile(filepath.Join(path, "index.html"), []byte(html), 0o600)
-}
-
-// proxyAPI 将 API 请求代理到后端服务器
-func proxyAPI(c *gin.Context, target string) {
-	targetURL, err := url.Parse(target)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "proxy error"})
-		return
-	}
-
-	proxy := httputil.NewSingleHostReverseProxy(targetURL)
-	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
-		log.Printf("Proxy error: %v", err)
-		w.WriteHeader(http.StatusBadGateway)
-		if _, writeErr := io.WriteString(w, `{"error": "API server unavailable"}`); writeErr != nil {
-			log.Printf("Proxy error response write failed: %v", writeErr)
-		}
-	}
-
-	// This server is a reverse proxy in front of the API listener, which
-	// trusts it as a loopback peer: pass on only what it resolved itself.
-	// A client's forwarding headers are dropped, unless this server's own
-	// peer is a trusted proxy, whose X-Forwarded-For chain is kept (the
-	// reverse proxy appends this peer to it).
-	origin := requestorigin.Resolve(c.Request)
-	trustedPeer := requestorigin.Default().TrustedPeer(c.Request)
-	for name := range c.Request.Header {
-		if !requestorigin.IsForwardingHeader(name) {
-			continue
-		}
-		if trustedPeer && http.CanonicalHeaderKey(name) == requestorigin.HeaderForwardedFor {
-			continue
-		}
-		c.Request.Header.Del(name)
-	}
-	// The chain the API listener walks is the address this server resolved:
-	// from a trusted proxy that is the X-Forwarded-For chain, or the
-	// X-Real-IP address of a proxy that sends only that header (dropped above).
-	if trustedPeer && origin.ClientIP != "" && !sameIP(origin.ClientIP, c.RemoteIP()) {
-		c.Request.Header.Set(requestorigin.HeaderForwardedFor, origin.ClientIP)
-	}
-	c.Request.Header.Set(requestorigin.HeaderForwardedProto, origin.Scheme)
-	if origin.Host != "" {
-		c.Request.Header.Set(requestorigin.HeaderForwardedHost, origin.Host)
-	}
-
-	c.Request.URL.Host = targetURL.Host
-	c.Request.URL.Scheme = targetURL.Scheme
-	// Keep the resolved public host as Host too, so the API listener sees
-	// it even where loopback is not a trusted proxy.
-	c.Request.Host = targetURL.Host
-	if origin.Host != "" {
-		c.Request.Host = origin.Host
-	}
-
-	proxy.ServeHTTP(c.Writer, c.Request)
-}
-
-// sameIP reports whether a and b are the same address.
-func sameIP(a, b string) bool {
-	left, right := net.ParseIP(a), net.ParseIP(b)
-	return left != nil && right != nil && left.Equal(right)
 }

@@ -57,6 +57,16 @@ func TestPanelSettingsResolveTheModes(t *testing.T) {
 				require.Equal(t, "https://panel.example.com", p.PublicURL)
 				require.Equal(t, "grpc.example.com:50443", p.GRPCTarget)
 				require.False(t, p.ServesWebTLS())
+				require.Equal(t, ":80", p.ChallengeHTTPAddress, "HTTP-01 for the DNS-only name when port 80 is free")
+				require.Equal(t, ":443", p.ChallengeTLSAddress)
+			},
+		},
+		{
+			name: "a plain listener on port 80 answers HTTP-01 itself",
+			yaml: "domain: panel.example.com\ntls:\n  mode: external\nlisten: 0.0.0.0:80\ngrpc:\n  public_name: grpc.example.com\n",
+			check: func(t *testing.T, p PanelSettings) {
+				require.Empty(t, p.ChallengeHTTPAddress)
+				require.Equal(t, ":443", p.ChallengeTLSAddress)
 			},
 		},
 		{

@@ -7,6 +7,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -871,6 +872,17 @@ func TestSetup_SecurityHeadersAndRequestID(t *testing.T) {
 	w = httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	assert.Empty(t, w.Header().Get("Strict-Transport-Security"))
+
+	// Over Control's own TLS (tls.mode acme or files) no HSTS: a browser
+	// that remembered it could not open the panel while the self-signed
+	// fallback is served.
+	req, _ = http.NewRequest("GET", "/health", nil)
+	req.RemoteAddr = "203.0.113.7:41000"
+	req.TLS = &tls.ConnectionState{}
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Empty(t, w.Header().Get("Strict-Transport-Security"))
+	assert.Equal(t, "nosniff", w.Header().Get("X-Content-Type-Options"))
 }
 
 func TestSetup_RequestIDHonorsInboundHeader(t *testing.T) {

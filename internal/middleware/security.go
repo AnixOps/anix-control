@@ -35,7 +35,7 @@ func SecurityHeaders() gin.HandlerFunc {
 		headers.Set("X-Permitted-Cross-Domain-Policies", "none")
 		headers.Set("Permissions-Policy", "accelerometer=(), autoplay=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()")
 
-		if isSecureRequest(c) {
+		if proxiedHTTPS(c) {
 			headers.Set("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload")
 		}
 
@@ -59,9 +59,16 @@ func isCacheablePath(path string) bool {
 	return false
 }
 
-// isSecureRequest is true over TLS, or when a trusted reverse proxy
-// (server.trusted_proxies) reports https; a client's own X-Forwarded-Proto
-// is ignored.
-func isSecureRequest(c *gin.Context) bool {
-	return requestorigin.Resolve(c.Request).Scheme == "https"
+// proxiedHTTPS is true when a trusted reverse proxy or CDN
+// (server.trusted_proxies) terminated https in front of Control (tls.mode
+// external); a client's own X-Forwarded-Proto is ignored. Over Control's
+// own TLS (tls.mode acme and files) no HSTS is sent: while a certificate
+// request fails Control serves a self-signed fallback, and a browser that
+// remembered HSTS would refuse to open the panel at all.
+func proxiedHTTPS(c *gin.Context) bool {
+	if c.Request.TLS != nil {
+		return false
+	}
+	origin := requestorigin.Resolve(c.Request)
+	return origin.Forwarded && origin.Scheme == "https"
 }
