@@ -2,12 +2,14 @@ package main
 
 import (
 	"context"
+	"errors"
 
 	"github.com/AnixOps/anix-control/v5/internal/builtinpkg"
 	"github.com/AnixOps/anix-control/v5/internal/config"
 	"github.com/AnixOps/anix-control/v5/internal/handler"
 	"github.com/AnixOps/anix-control/v5/internal/kernelalerts"
 	"github.com/AnixOps/anix-control/v5/internal/model"
+	"github.com/AnixOps/anix-control/v5/internal/panelcert"
 	"github.com/AnixOps/anix-control/v5/internal/service"
 	"gorm.io/gorm"
 )
@@ -42,7 +44,8 @@ func kernelAlertMonitor(db *gorm.DB, cfg *config.Config) *kernelalerts.Monitor {
 	}
 	return &kernelalerts.Monitor{
 		DB: db, Settings: cfg.Alerts.Settings(), Notifier: adminAlertNotifier{db: db, cfg: cfg},
-		BuiltinPackages: builtinPackageProblems(db, cfg),
+		BuiltinPackages:   builtinPackageProblems(db, cfg),
+		PanelCertificates: panelCertificateStatus(db),
 	}
 }
 
@@ -63,5 +66,20 @@ func builtinPackageProblems(db *gorm.DB, cfg *config.Config) func(context.Contex
 			})
 		}
 		return problems, nil
+	}
+}
+
+// panelCertificateStatus reads the running certificate manager's status,
+// or, in a process without one, the status stored in the database.
+func panelCertificateStatus(db *gorm.DB) func(context.Context) (panelcert.Status, error) {
+	return func(ctx context.Context) (panelcert.Status, error) {
+		if manager := panelcert.Default(); manager != nil {
+			return manager.Status(), nil
+		}
+		status, err := panelcert.LoadStatus(ctx, db)
+		if errors.Is(err, panelcert.ErrNoStatus) {
+			return panelcert.Status{Certificates: []panelcert.CertificateStatus{}}, nil
+		}
+		return status, err
 	}
 }

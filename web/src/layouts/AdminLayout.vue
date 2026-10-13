@@ -100,6 +100,8 @@
 
       <main id="app-main-content" class="admin-main" tabindex="-1" :aria-label="pageTitle">
         <div class="admin-content" :class="{ 'is-wide': route.meta?.layout === 'wide' }">
+          <!-- Shows only while a certificate the panel serves itself fails. -->
+          <PanelCertificateBanner />
           <ShellRouterView />
         </div>
       </main>
@@ -136,6 +138,7 @@ import { useAgentUpgradeSheet } from '@/composables/useAgentUpgradeSheet'
 import { useAdminMenu } from '@/navigation/useNavigation'
 import { ADMIN_ACCOUNT_PATH } from '@/navigation/menu'
 import AdminNavigation from '@/components/admin/AdminNavigation.vue'
+import PanelCertificateBanner from '@/components/admin/PanelCertificateBanner.vue'
 import BrandLockup from '@/components/common/BrandLockup.vue'
 import AccountMenu from '@/components/shell/AccountMenu.vue'
 import AboutDialog from '@/components/shell/AboutDialog.vue'

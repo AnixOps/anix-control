@@ -1,6 +1,7 @@
 // Package kernelalerts raises the kernel's operational alerts: leaf
 // certificates (Agent, forward link, module) that were not renewed in time,
-// CAs close to their end, and phased processes (the node credential split,
+// CAs close to their end, the panel's own certificates (close to their end,
+// or failing to renew), and phased processes (the node credential split,
 // the identity cutover) left in a non-final phase. A Monitor scans the
 // certificate stores and the phase tables read-only, keeps one row per
 // alert in v4_kernel_alert, and sends the administrators one digest of the
@@ -47,6 +48,17 @@ const (
 	// KindBuiltinPackageFailed: a built-in package verified, but its
 	// installation failed or is not enabled at the built-in version.
 	KindBuiltinPackageFailed = "builtin_package_failed"
+	// KindPanelCertificateExpiring: a certificate Control serves itself
+	// (the panel's, the gRPC listener's) ends within its window: the
+	// smaller of leaf_expiry_days (14) and a sixth of its lifetime. An ACME
+	// certificate is renewed a third of its lifetime before its end, so
+	// this one missed its renewal; files need replacing.
+	KindPanelCertificateExpiring = "panel_certificate_expiring"
+	// KindPanelCertificateRenewalFailing: Control cannot obtain or renew a
+	// certificate it serves, or cannot use its files: critical while it
+	// serves the self-signed fallback (no node can connect), warning while
+	// the old certificate still lasts.
+	KindPanelCertificateRenewalFailing = "panel_certificate_renewal_failing"
 )
 
 // Subject kinds.
@@ -57,6 +69,8 @@ const (
 	SubjectNodeSecrets = "node_secrets" // #nosec G101 -- names a subject kind, not a credential.
 	SubjectIdentity    = "identity"
 	SubjectPackage     = "package"
+	// SubjectPanelCertificate: a certificate of the panel, by name.
+	SubjectPanelCertificate = "panel_certificate"
 )
 
 // finalizeInterruptedAfter is how long a started finalize may take before

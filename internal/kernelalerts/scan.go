@@ -15,6 +15,7 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/config"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/nodesecrets"
+	"github.com/AnixOps/anix-control/v5/internal/panelcert"
 	"gorm.io/gorm"
 )
 
@@ -28,6 +29,9 @@ type Scanner struct {
 	BuiltinPackages func(context.Context) ([]BuiltinPackageProblem, error)
 	// Now defaults to time.Now.
 	Now func() time.Time
+	// PanelCertificates reads the panel certificate status; nil reads the
+	// status the running Control stored in the database.
+	PanelCertificates func(context.Context) (panelcert.Status, error)
 }
 
 // ScanResult is what one scan found.
@@ -62,6 +66,7 @@ func (s *Scanner) Scan(ctx context.Context) (ScanResult, error) {
 		{[]string{KindNodeSecretsSplitStalled, KindNodeSecretsFinalizeInterrupted}, s.nodeSecretsSplit},
 		{[]string{KindIdentityImportStalled, KindIdentityCutoverPending}, s.identityAuthority},
 		{[]string{KindBuiltinPackageInvalid, KindBuiltinPackageFailed}, s.builtinPackages},
+		{[]string{KindPanelCertificateExpiring, KindPanelCertificateRenewalFailing}, s.panelCertificates},
 	} {
 		findings, err := check.run(ctx, now)
 		if ctx.Err() != nil {
@@ -496,9 +501,97 @@ func (s *Scanner) builtinPackages(ctx context.Context, _ time.Time) ([]Finding, 
 	return findings, nil
 }
 
+// panelStatus reads the panel certificate status; no status (no table, or
+// Control never stored one) means no certificate to check.
+func (s *Scanner) panelStatus(ctx context.Context) (panelcert.Status, bool, error) {
+	if s.PanelCertificates != nil {
+		status, err := s.PanelCertificates(ctx)
+		return status, err == nil, err
+	}
+	if !s.DB.WithContext(ctx).Migrator().HasTable(&model.ACMECacheEntry{}) {
+		return panelcert.Status{}, false, nil
+	}
+	status, err := panelcert.LoadStatus(ctx, s.DB)
+	if errors.Is(err, panelcert.ErrNoStatus) {
+		return panelcert.Status{}, false, nil
+	}
+	return status, err == nil, err
+}
+
+// panelCertificates finds the panel's own certificates (the web side's,
+// the gRPC listener's) that end soon or that Control fails to obtain,
+// renew or load.
+func (s *Scanner) panelCertificates(ctx context.Context, now time.Time) ([]Finding, error) {
+	status, ok, err := s.panelStatus(ctx)
+	if err != nil || !ok {
+		return nil, err
+	}
+	var findings []Finding
+	for _, certificate := range status.Certificates {
+		name := plain(certificate.Name)
+		roles := strings.Join(certificate.Roles, ", ")
+		detail := map[string]any{
+			"name": certificate.Name, "roles": certificate.Roles, "source": certificate.Source, "state": certificate.State,
+			"serving": certificate.Serving, "problem": certificate.Problem, "fix": truncate(certificate.Fix, 400),
+		}
+		if certificate.NotAfter != nil {
+			detail["not_after"] = stamp(*certificate.NotAfter)
+		}
+		failing := certificate.State == panelcert.StateFailed || certificate.RenewalFailing
+		if failing {
+			severity := model.KernelAlertWarning
+			message := fmt.Sprintf("Control cannot renew the certificate for %s (%s, from %s); the current one lasts until %s: %s", name, roles, certificate.Source, formatStamp(certificate.NotAfter), plain(certificate.LastError))
+			if certificate.State == panelcert.StateFailed {
+				severity = model.KernelAlertCritical
+				message = fmt.Sprintf("Control has no usable certificate for %s (%s, from %s) and serves a self-signed one: nodes cannot connect and browsers warn. %s", name, roles, certificate.Source, plain(certificate.LastError))
+			}
+			if certificate.Fix != "" {
+				message += " Fix: " + plain(certificate.Fix)
+			}
+			detail["last_error"] = truncate(certificate.LastError, 400)
+			findings = append(findings, Finding{
+				Kind: KindPanelCertificateRenewalFailing, Severity: severity, SubjectKind: SubjectPanelCertificate,
+				Subject: truncate(certificate.Name, 120), Message: truncate(message, 500), ExpiresAt: certificate.NotAfter, Detail: detail,
+			})
+		}
+		if certificate.State != panelcert.StateValid || certificate.NotAfter == nil {
+			continue
+		}
+		var lifetime time.Duration
+		if certificate.NotBefore != nil {
+			lifetime = certificate.NotAfter.Sub(*certificate.NotBefore)
+		}
+		window := leafWindow(lifetime, s.Settings.LeafExpiryDays)
+		remaining := certificate.NotAfter.Sub(now)
+		if remaining > window {
+			continue
+		}
+		advice := "Control renews it by itself; check anix-control tls status for why it has not."
+		if certificate.Source == panelcert.SourceFiles {
+			advice = fmt.Sprintf("Replace %s with a renewed certificate; Control reloads it.", certificate.CertFile)
+		}
+		expires := certificate.NotAfter.UTC()
+		detail["window_hours"] = int64(window / time.Hour)
+		findings = append(findings, Finding{
+			Kind: KindPanelCertificateExpiring, Severity: severityFor(remaining, window), SubjectKind: SubjectPanelCertificate,
+			Subject:   truncate(certificate.Name, 120),
+			Message:   truncate(fmt.Sprintf("The certificate for %s (%s, from %s) ends at %s. %s", name, roles, certificate.Source, stamp(expires), advice), 500),
+			ExpiresAt: &expires, Detail: detail,
+		})
+	}
+	return findings, nil
+}
+
 func lastErrorSuffix(lastError string) string {
 	if strings.TrimSpace(lastError) == "" {
 		return ""
 	}
 	return " (" + truncate(strings.TrimSpace(lastError), 200) + ")"
+}
+
+func formatStamp(t *time.Time) string {
+	if t == nil {
+		return "-"
+	}
+	return stamp(*t)
 }

@@ -9,6 +9,31 @@ export default {
       collapse: '收起侧栏',
       expand: '展开侧栏',
       breadcrumb: '位置',
+      // The banner for the certificates the panel serves itself.
+      certificate: {
+        failed: '{name} 的证书申请失败，面板正在使用临时证书，节点暂时无法接入',
+        pending: '正在为 {name} 申请证书，完成前面板使用临时证书，节点暂时无法接入',
+        renewalFailing: '{name} 的证书续期失败，当前证书 {date} 到期',
+        untrusted: '{name} 的证书不受公共证书机构信任，节点无法接入',
+        reason: '原因：{reason}',
+        retry: '重新申请',
+        retryStarted: '已重新申请，结果稍后显示在这里。',
+        retryWaiting: '一小时内已申请 3 次，下一次在 {date}。',
+        retryFailed: '重新申请没有发出，请稍后再试，或在服务器上运行 anix-control tls retry。',
+        fixes: {
+          dns_unresolved: '为 {name} 添加指向本机的 A（以及 AAAA）记录，不要开启 CDN 代理，然后重新申请。',
+          dns_elsewhere: '{name} 没有解析到本机：把记录改为指向本机并关闭 CDN 代理。面板必须放在 CDN 后面时，改用 tls.mode: external，并把 grpc.public_name 设为一个只解析（不代理）到本机的域名供节点连接。',
+          unreachable: '证书机构连不上 {name} 的 443 和 80 端口：在防火墙和云服务商的安全组里放行这两个端口，并停掉占用它们的其他程序。',
+          challenge_failed: '证书机构访问 {name} 时得到的不是本面板的应答：域名指向了别处，或有 CDN、其他网站在应答。把记录指向本机并关闭代理，或把 /.well-known/acme-challenge/ 转发给本面板。',
+          rate_limited: '触发了证书机构的频率限制，面板会稍后自动重试。不要重装：证书和账户保存在数据库里。',
+          ca_unreachable: '本机连不上证书机构：检查本机的出站 HTTPS（443 端口）和 DNS。',
+          ca_error: '面板会自动重试；也可以在服务器上运行 anix-control tls status 查看详情。',
+          file_unreadable: '检查证书文件和私钥文件是否存在、面板能否读取、内容是否为匹配的 PEM 证书链和私钥；文件改好后面板会自动重新加载。',
+          expired: '证书已经过期：更换为续期后的证书（证书文件会自动重新加载），或按上面的原因处理后重新申请。',
+          name_mismatch: '证书不包含 {name}：换成为这个域名签发的证书。',
+          untrusted: '节点和浏览器只接受公共证书机构签发的证书：换成公共证书机构的证书；设置 domain 并使用 tls.mode: acme 时面板会自动申请。'
+        }
+      },
       groups: {
         overview: '概览',
         users: '用户',

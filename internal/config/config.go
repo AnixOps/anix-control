@@ -33,7 +33,17 @@ var defaultsYAML []byte
 
 // Config is the root application configuration loaded from config.yaml.
 type Config struct {
-	Env            string               `yaml:"env"`
+	Env string `yaml:"env"`
+	// Domain is the panel's name: the web, API, subscription and install
+	// script address (https://<domain>), the name of the certificate Control
+	// obtains in tls.mode acme, and the name nodes dial for gRPC unless
+	// grpc.public_name says otherwise.
+	Domain string `yaml:"domain"`
+	// Listen is the plain HTTP address of tls.mode external, where a CDN or
+	// a reverse proxy that terminates TLS sends the whole host. Empty uses
+	// server.host:server.port (127.0.0.1:8080 by default) and, with the
+	// legacy frontend.enable, server.host:frontend.port too.
+	Listen         string               `yaml:"listen"`
 	Server         ServerConfig         `yaml:"server"`
 	Frontend       FrontendConfig       `yaml:"frontend"`
 	Database       DatabaseConfig       `yaml:"database"`
@@ -486,10 +496,21 @@ const (
 
 // GRPCConfig controls the node-facing gRPC server (AnixOps Agent nodes connect here).
 type GRPCConfig struct {
-	Enable      bool   `yaml:"enabled"`
-	Host        string `yaml:"host"`
-	Port        int    `yaml:"port"`
-	APIToken    string `yaml:"api_token"`
+	// Enable turns the listener on; with domain set it is always on.
+	Enable bool   `yaml:"enabled"`
+	Host   string `yaml:"host"`
+	Port   int    `yaml:"port"`
+	// PublicName is the DNS name nodes dial for gRPC when it is not domain:
+	// a name that resolves straight to this machine while domain sits behind
+	// a CDN, which cannot carry the Agents' mutual TLS. Control obtains a
+	// publicly trusted certificate for it over ACME (or serves
+	// grpc.tls_cert_file, or tls.cert_file in tls.mode external). Empty:
+	// domain.
+	PublicName string `yaml:"public_name"`
+	APIToken   string `yaml:"api_token"`
+	// TLSCertFile and TLSKeyFile are a certificate of the gRPC listener's own
+	// (PEM files, reloaded when they change). Empty: the certificate Control
+	// manages for the gRPC name.
 	TLSCertFile string `yaml:"tls_cert_file"`
 	TLSKeyFile  string `yaml:"tls_key_file"`
 }
@@ -586,12 +607,32 @@ type ForwardRuntimeLatencyConfig struct {
 	RetentionDays    int    `yaml:"retention_days"`
 }
 
-// TLSConfig defines TLS settings.
+// TLSConfig selects who terminates TLS for the web side (tls.mode) and,
+// in files mode, the certificate files.
 type TLSConfig struct {
-	Enable   bool   `yaml:"enable"`
+	// Mode is acme (Control obtains and renews a certificate for domain and
+	// serves https on 443, http on 80 for the ACME challenge and the
+	// redirect), files (Control serves https on 443 with cert_file and
+	// key_file, reloaded when they change) or external (a CDN or a reverse
+	// proxy terminates TLS and sends plain http to listen). Empty: acme when
+	// domain is set, external otherwise.
+	Mode string `yaml:"mode"`
+	// CertFile and KeyFile are PEM files: the web certificate in files mode;
+	// in external mode the gRPC listener's certificate (instead of one
+	// obtained over ACME).
 	CertFile string `yaml:"cert_file"`
 	KeyFile  string `yaml:"key_file"`
-	Domain   string `yaml:"domain"`
+	// Enable is not read: the web side's TLS follows Mode. With cert_file
+	// and no mode the configuration is refused, since it used to serve
+	// https on the web port.
+	//
+	// Deprecated: set tls.mode.
+	Enable bool `yaml:"enable"`
+	// Domain is not read (it was only logged); a log line points at the
+	// top-level domain key.
+	//
+	// Deprecated: set domain.
+	Domain string `yaml:"domain"`
 }
 
 // AdminConfig defines the bootstrap admin account.
@@ -771,6 +812,9 @@ func load(path string, environ []string) (*Config, error) {
 	if err := loaded.AgentInstall.Validate(); err != nil {
 		return nil, err
 	}
+	if err := loaded.validatePanel(); err != nil {
+		return nil, err
+	}
 	switch loaded.Log.Format {
 	case "", "text", "json":
 	default:
@@ -805,6 +849,9 @@ func (c *Config) ValidateForServer() error {
 		return err
 	}
 	if err := c.validateAgentControl(); err != nil {
+		return err
+	}
+	if err := c.panelPrerequisitesError(); err != nil {
 		return err
 	}
 	if c.Env == "production" {
@@ -852,11 +899,12 @@ func (c *Config) validateAgentControl() error {
 // built-in CA. Nil when nothing is missing.
 func (c *Config) RequiredPrerequisitesError() error {
 	mode := AgentMTLSRequired
-	if !c.GRPC.Enable {
-		return fmt.Errorf("agent_control.mtls %q needs the gRPC listener (grpc.enabled): it refuses the legacy agent paths, so enrolled agents can only connect there", mode)
+	panel := c.Panel()
+	if !panel.GRPCEnabled {
+		return fmt.Errorf("agent_control.mtls %q needs the gRPC listener (domain, or grpc.enabled): it refuses the legacy agent paths, so enrolled agents can only connect there", mode)
 	}
-	if strings.TrimSpace(c.GRPC.TLSCertFile) == "" || strings.TrimSpace(c.GRPC.TLSKeyFile) == "" {
-		return fmt.Errorf("agent_control.mtls %q needs TLS on the gRPC listener (grpc.tls_cert_file and grpc.tls_key_file)", mode)
+	if !panel.GRPCTLS() {
+		return fmt.Errorf("agent_control.mtls %q needs TLS on the gRPC listener: set domain (Control then obtains its certificate), or grpc.tls_cert_file and grpc.tls_key_file", mode)
 	}
 	if c.ModuleRuntime.PKIOrDefault() != ModulePKIBuiltin {
 		return fmt.Errorf("agent_control.mtls %q needs the built-in CA: with module_runtime.pki %q the kernel holds no CA key to issue agent certificates", mode, c.ModuleRuntime.PKIOrDefault())

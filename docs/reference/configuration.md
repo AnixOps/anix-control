@@ -44,14 +44,173 @@ Rules:
   `X-Forwarded-Proto`, `X-Forwarded-Host`, `X-Forwarded-For` and
   `X-Real-IP` Control honours (`internal/requestorigin`); from any other peer
   they are ignored. Unset means `127.0.0.1/32,::1/128`; an empty list trusts
-  none; a list replaces the default. The UI listener's own hop to the API
-  listener is always trusted. See `docs/DEPLOYMENT.md` section 6.1.
+  none; a list replaces the default. See `docs/DEPLOYMENT.md` section 6.1.
 
 Without a config file, Control starts from the built-in defaults: `env:
-production`, API on `0.0.0.0:8080`, UI on `3000`, PostgreSQL
+production`, no `domain` (so `tls.mode` external), the one plain listener on
+`127.0.0.1:8080` and `127.0.0.1:3000` (the container image sets
+`ANIX_CONTROL_SERVER_HOST=0.0.0.0`), PostgreSQL
 `anix_control@127.0.0.1:5432`, Control package execution enabled with private
 temporary host directories, gRPC disabled. In production `jwt.secret` is
 required and must not be a template value, or the server refuses to start.
+
+## Panel Address, Listeners And Certificates
+
+One HTTP handler serves everything a browser, a client app and a node
+fetch: the web app (with its SPA fallback), the API, the subscription path,
+`/install.sh` and `/install/*`, the health probes and `/metrics`. A path under
+`/api/`, `/install/`, `/.well-known/` or the subscription path that matches
+no route answers 404, never the web app's HTML. Where that handler listens,
+and who terminates TLS, follows `tls.mode`:
+
+```yaml
+domain: panel.example.com    # the panel's name: https://<domain>
+tls:
+  mode: ""                   # acme | files | external; empty: acme with domain, external without
+  cert_file: ""              # files: the web certificate; external: the gRPC certificate
+  key_file: ""
+listen: ""                   # external only: the plain http address; empty: server.host:server.port
+grpc:
+  port: 50051                # node gRPC port
+  public_name: ""            # the name nodes dial when domain is behind a CDN; empty: domain
+```
+
+| Key | Default | Meaning |
+|------|------|------|
+| `domain` (`ANIX_CONTROL_DOMAIN`) | empty | The panel's DNS name (no scheme, port or address). The install script is `https://<domain>/install.sh`, the ACME certificate's name in `acme` mode and the gRPC name unless `grpc.public_name` is set. With it the gRPC listener is always on. The older `tls.domain` is not read (it was only ever logged). |
+| `tls.mode` (`ANIX_CONTROL_TLS_MODE`) | empty | `acme`: Control obtains and renews a publicly trusted certificate for `domain` and serves https on `:443` and http on `:80` (the ACME HTTP-01 answers; everything else is redirected to https). `files`: https on `:443` with `tls.cert_file`/`tls.key_file`, reloaded when they change; `:80` redirects. `external`: a CDN or a reverse proxy terminates TLS and sends plain http to `listen`. Empty: `acme` with `domain`, `external` without. |
+| `tls.cert_file`, `tls.key_file` | empty | PEM certificate chain and key. `files` mode: the web certificate (and the gRPC one for the same name). `external` mode: the gRPC listener's certificate, instead of one obtained over ACME. Both or neither. |
+| `listen` (`ANIX_CONTROL_LISTEN`) | empty | `external` mode's plain http address (`host:port`; an address, not a name). Loopback is the safe choice: only the proxy on this machine reaches it. Empty: `server.host:server.port` (`127.0.0.1:8080` built in), and with `frontend.enable` also `server.host:frontend.port`, one handler on both (the legacy two-port layout; there is no proxy between them any more). An empty `server.host` is loopback. |
+| `grpc.port` (`ANIX_CONTROL_GRPC_PORT`) | `50051` | Node gRPC port. `/install/agent.env` hands nodes `<gRPC name>:<grpc.port>`. |
+| `grpc.public_name` (`ANIX_CONTROL_GRPC_PUBLIC_NAME`) | empty (`domain`) | The DNS-only name nodes dial for gRPC when `domain` is proxied by a CDN (the CDN mode below). Control obtains a publicly trusted certificate for it over ACME. |
+
+The node gRPC listener's certificate, in this order: `grpc.tls_cert_file`
+and `grpc.tls_key_file` when set (reloaded when they change; kept for
+existing installs); the panel's own certificate when the gRPC name is
+`domain` in `acme` or `files` mode; `tls.cert_file` in `external` mode; else
+a certificate of its own for the gRPC name, over ACME. Without any name and
+any file (no `domain`, no `grpc.public_name`) the gRPC listener is plain, as
+in development and tests, and no Agent can connect. Every TLS listener takes
+its certificate per handshake: a renewed or reloaded certificate reaches the
+next connection without a restart, and Agent streams move to it within 30
+minutes (`MaxConnectionAge`). The client certificate rule of the gRPC
+listener does not change: it asks Agents for their certificate and verifies
+it in the Agent services.
+
+**Ports.** In `acme` and `files` mode Control owns `:443` and `:80` (both
+IPv4 and IPv6); a port taken by another program stops the start. Under
+systemd, a non-root Control needs `AmbientCapabilities=CAP_NET_BIND_SERVICE`
+for them. In `external` mode Control binds `listen`, and when it obtains a
+gRPC certificate over ACME it also binds `:80` (HTTP-01) and `:443`
+(TLS-ALPN-01) when they are free; a challenge port that is taken is shown
+in `anix-control tls status`, and the HTTP-01 request must then reach
+`listen` through the proxy, which answers `/.well-known/acme-challenge/`
+for the gRPC name too.
+
+**ACME.** `golang.org/x/crypto/acme/autocert` against the public CA
+(Let's Encrypt): TLS-ALPN-01 on 443 first, HTTP-01 on 80 second. The first
+request goes out at start, in the background: until it succeeds, and
+whenever no usable certificate is there, every listener serves a
+self-signed fallback (ECDSA P-256, the name and this machine's addresses,
+30 days) and handshakes never wait for the CA. The certificate is renewed a
+third of its lifetime before its end (at most 30 days). Failed requests are
+retried after 1, 5 and 15 minutes, then hourly three times, then every 6
+hours, and Control never makes more than three requests per name within an
+hour, manual retries included. The account key, the certificates and their
+keys live in the database table `v5_acme_cache` (the schema migration
+`0003_acme_cache` creates it), sealed with `module_runtime.ca_kek` (which
+ACME therefore needs: without it the server refuses to start in `acme`
+mode), so a restore or a move to another machine does not request them
+again. No HSTS header is sent over Control's own TLS:
+while the fallback is served a browser that remembered HSTS could not open
+the panel at all. No e-mail address is registered: the panel's own expiry
+alerts replace the CA's reminders.
+
+**Status and failure.** `GET /api/v5/panel/status` (administrators), the
+console's banner, `anix-control tls status` and `anix-control doctor` show
+each certificate: `pending`, `valid` or `failed`, what is served (`acme`,
+`file`, `self_signed`), whether it verifies against the system roots, its
+expiry and renewal, the last error and a fix. While the gRPC certificate is
+not valid and publicly trusted, or the panel's own certificate is not valid,
+the install readiness check (`grpc_certificate`, `panel_certificate`)
+withholds the join command: Agents verify the gRPC certificate against their
+system CAs and fail closed. A panel certificate that is valid but not
+publicly trusted (a CDN's origin certificate in `files` mode) only warns,
+since nodes then download the script through the CDN; the banner shows it
+only for a certificate the nodes dial. The
+alerts `panel_certificate_expiring` and `panel_certificate_renewal_failing`
+notify the administrators ([`kernel-alerts.md`](kernel-alerts.md)).
+`anix-control tls retry` (or **重新申请** in the banner, `POST
+/api/v5/panel/certificates/retry`) tries the failing ones again now.
+
+**The CDN mode.** When the panel's domain must stay behind a CDN (a
+proxying DNS record), the web side goes through the CDN and the nodes come
+straight to this machine:
+
+```yaml
+domain: panel.example.com          # proxied by the CDN
+tls:
+  mode: external
+listen: 127.0.0.1:8080             # the local proxy the CDN talks to; 0.0.0.0:80 when the CDN talks to Control itself
+grpc:
+  public_name: grpc.example.com    # a DNS-only A/AAAA record pointing at this machine
+```
+
+- The CDN (or the proxy behind it) terminates TLS for `panel.example.com`
+  and forwards the whole host, `/install.sh` and `/install/*` included, to
+  `listen`. The install script reads the node's address from
+  `/install/ip` through the CDN, and Control takes it from
+  `X-Forwarded-For` only from a peer in `server.trusted_proxies`: list the
+  local proxy and the CDN's published address ranges there, or the join
+  records the CDN's address for the node.
+- Nodes fetch `https://panel.example.com/install.sh` through the CDN and
+  get `grpc_target grpc.example.com:50051` from `/install/agent.env`; they
+  dial that name directly and verify its certificate.
+- Control obtains the certificate for `grpc.example.com` over ACME: HTTP-01
+  on port 80 works for a DNS-only name (bound by Control when free, else
+  answered on `listen` through the local proxy), TLS-ALPN-01 on 443 when 443
+  is free. Open `grpc.port` and port 80 (or 443) to the internet.
+- With your own certificate for the gRPC name instead, set
+  `tls.cert_file`/`tls.key_file` (external mode) or `grpc.tls_cert_file`.
+- A web certificate of your own on Control (a CDN origin certificate, for
+  example) is `tls.mode: files` with `grpc.public_name` as above.
+
+`agent_install.public_url` and `agent_install.grpc_target` still override
+the derived `https://<domain>` and `<gRPC name>:<grpc.port>`.
+
+`tls.enable` is not read: with `tls.cert_file` and no `tls.mode` Control
+refuses to start (that combination served https on the web port, which is
+now `tls.mode: files` on 443), otherwise a log line says it is ignored.
+`tls.domain` is not read either (a log line points at `domain`), so an
+existing configuration behind a reverse proxy does not move to `acme` by
+itself. `frontend.enable`, `frontend.port` and `server.host`/`server.port`
+remain as the legacy external layout described above.
+
+### Testing ACME
+
+Two environment variables, not configuration keys, point Control at
+another ACME directory, for development, CI and a validation with the
+public CA's staging directory before the real one:
+
+| Variable | Meaning |
+|------|------|
+| `ANIX_CONTROL_ACME_DIRECTORY_URL` | the ACME directory, for example `https://acme-staging-v02.api.letsencrypt.org/directory`; empty: the public CA's production directory. Each directory keeps its own account and certificates in `v5_acme_cache`, so switching back requests a production certificate instead of serving the staging one. The status shows a non-default directory. |
+| `ANIX_CONTROL_ACME_CA_FILE` | extra PEM roots the ACME client trusts for the directory's own https (a test CA) |
+
+A staging certificate is not publicly trusted: the readiness checks keep
+the join command withheld until the production directory issued one.
+
+CI runs `TestPebbleIssuesOverBothChallenges` (`internal/panelcert`)
+against Pebble, the ACME test server, in the E2E Tests job: Pebble
+`v2.10.1` and `pebble-challtestsrv` downloaded by tag and checked by
+SHA-256, every name resolving to 127.0.0.1, with `PEBBLE_VA_NOSLEEP=1`,
+`PEBBLE_AUTHZREUSE=0` and `PEBBLE_WFE_NONCEREJECT=0`. To run it locally,
+start them as that job does (`.github/workflows/ci.yml`) and set
+`ANIX_CONTROL_TEST_PEBBLE_DIRECTORY`, `ANIX_CONTROL_TEST_PEBBLE_CA_FILE` and
+`ANIX_CONTROL_TEST_PEBBLE_ROOTS_URL`; without them the test skips. The unit
+tests use an in-process ACME CA (`internal/panelcert/panelcerttest`) that
+checks the JWS envelope and validates both challenges against the
+listeners under test, but has no DNS, rate limits or CAA.
 
 Container-related settings:
 
@@ -366,8 +525,9 @@ agent_control:
   listener are not needed. Without the CA, or with `pki: external`, `off`,
   `optional` and `preferred` start, but agents cannot enroll (the startup log
   line `Agent transports: ...` says so).
-- `required` needs `grpc.enabled`, `grpc.tls_cert_file`,
-  `grpc.tls_key_file` and the built-in CA for agents to enroll and connect.
+- `required` needs the gRPC listener with TLS (`domain`, or `grpc.enabled`
+  with `grpc.tls_cert_file` and `grpc.tls_key_file`) and the built-in CA for
+  agents to enroll and connect.
   Set explicitly, startup fails without them. Left empty (the v4.2
   default), Control starts and logs a `WARNING: Agent transports: ...` line
   that no Agent can connect until they are set; legacy Agents are refused
@@ -411,18 +571,18 @@ no node group can be created.
 
 ```yaml
 agent_install:
-  public_url: ""      # https address nodes reach; empty: the request's origin
-  grpc_target: ""     # host:port nodes dial; empty: public_url's host and grpc.port
+  public_url: ""      # https address nodes reach; empty: https://<domain>, else the request's origin
+  grpc_target: ""     # host:port nodes dial; empty: grpc.public_name (or domain, else public_url's host) and grpc.port
   agent_version: ""   # Agent release tag; empty: the Agent release this Control was released with
   artifact_dir: ""    # <dir>/<tag>/<asset> (+ .dgst/.sig): Control serves the Agent
   cn_mirror_url: ""   # mainland mirror of the GitHub release downloads
   signature_file: ""  # release signature of the install script (set by the image)
 ```
 
-- Nodes must reach Control over https: without `public_url` the request's
-  origin is used, which behind a reverse proxy is only right when the proxy
-  is in `server.trusted_proxies`; an http origin refuses to issue tokens
-  (`agent_install_unconfigured`).
+- Nodes must reach Control over https: without `public_url` and `domain`
+  the request's origin is used, which behind a reverse proxy is only right
+  when the proxy is in `server.trusted_proxies`; an http origin refuses to
+  issue tokens (`agent_install_unconfigured`).
 - Tokens are AgentPKI one-time enrollment credentials (`anixagt_`, stored as
   SHA-256 in `v4_kernel_agent_enrollment`), bound to a node, valid 1 hour by
   default and at most 7 days.
@@ -465,8 +625,9 @@ their next configuration poll after the restart.
 
 `alerts.*` (`ANIX_CONTROL_ALERTS_*`) configures the alert monitor: Agent,
 forward link and module certificates that were not renewed in time, CAs near
-their end, and phased processes (the node credential split, the identity
-cutover) left in a non-final phase. Every key has a default, so the block can
+their end, the panel's own certificates (ending soon, or failing to renew),
+and phased processes (the node credential split, the identity cutover) left
+in a non-final phase. Every key has a default, so the block can
 be left out.
 
 ```yaml

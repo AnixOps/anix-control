@@ -23,3 +23,10 @@ func apiV2NoRoute(c *gin.Context) {
 		compatv2.WriteRouteNotFound(c)
 	}
 }
+
+// WriteAPIV2NotFound is apiV2NoRoute's answer, for an engine whose NoRoute
+// also serves the web app (the panel handler of cmd/server): an /api/v2
+// path that matches no route answers as SetupNotFound makes it.
+func WriteAPIV2NotFound(c *gin.Context) {
+	compatv2.WriteRouteNotFound(c)
+}

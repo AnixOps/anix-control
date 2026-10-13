@@ -54,12 +54,13 @@ func runAgentUpgradeCommand(ctx context.Context, cfg *config.Config, db *gorm.DB
 	switch command {
 	case "start":
 		install := cfg.AgentInstall
+		panel := cfg.Panel()
 		address := *controlURL
 		if address == "" {
-			address = install.PublicURL
+			address = panel.PublicURL
 		}
 		settings, err := agentinstall.ResolveSettings(agentinstall.SettingsInput{
-			ControlURL: address, GRPCTarget: install.GRPCTarget, GRPCPort: cfg.GRPC.Port,
+			ControlURL: address, GRPCTarget: panel.GRPCTarget, GRPCPort: panel.GRPCPort,
 			AgentVersion: install.AgentVersion, PinnedAgentVersion: handler.AgentRelease, ReleaseVersion: handler.ReleaseVersion, ArtifactDir: install.ArtifactDir, CNMirrorURL: install.CNMirrorURL,
 		})
 		if err != nil {

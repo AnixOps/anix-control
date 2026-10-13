@@ -6,18 +6,48 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Readiness check ids, stable for the console (it shows its own wording per
 // id and the check's message as detail).
 const (
-	CheckPublicURL       = "public_url"
-	CheckGRPC            = "grpc"
-	CheckCA              = "ca"
-	CheckMTLSMode        = "mtls_mode"
-	CheckAgentRelease    = "agent_release"
-	CheckScriptSignature = "script_signature"
+	CheckPublicURL        = "public_url"
+	CheckPanelCertificate = "panel_certificate"
+	CheckGRPC             = "grpc"
+	CheckGRPCCertificate  = "grpc_certificate"
+	CheckCA               = "ca"
+	CheckMTLSMode         = "mtls_mode"
+	CheckAgentRelease     = "agent_release"
+	CheckScriptSignature  = "script_signature"
 )
+
+// Certificate states (internal/panelcert).
+const (
+	CertificatePending = "pending"
+	CertificateValid   = "valid"
+	CertificateFailed  = "failed"
+)
+
+// CertificateFacts is what the readiness check knows of a certificate
+// Control serves (internal/panelcert's status): nodes download the script
+// over the panel's https and verify the gRPC listener's certificate against
+// their system CAs, so either must be valid and publicly trusted.
+type CertificateFacts struct {
+	// Name is the name the certificate is for, Names the names the served
+	// certificate covers.
+	Name  string
+	Names []string
+	// State is pending, valid or failed; Serving what handshakes get (acme,
+	// file, self_signed).
+	State           string
+	Serving         string
+	PubliclyTrusted bool
+	NotAfter        time.Time
+	// Error and Fix are the certificate status's last error and its fix.
+	Error string
+	Fix   string
+}
 
 // Levels of a failed check. An error blocks the install command: it would
 // fail on the machine. A warning does not: the command works, but the
@@ -38,13 +68,19 @@ type ReadinessInput struct {
 	// the administrator reached Control at, used when PublicURL is empty.
 	PublicURL     string
 	RequestOrigin string
-	// GRPCTarget is agent_install.grpc_target.
+	// GRPCTarget is the gRPC target nodes dial: agent_install.grpc_target,
+	// else grpc.public_name (or domain) and grpc.port.
 	GRPCTarget string
-	// GRPCEnabled, GRPCPort, GRPCTLSCertFile and GRPCTLSKeyFile are grpc.*.
-	GRPCEnabled     bool
-	GRPCPort        int
-	GRPCTLSCertFile string
-	GRPCTLSKeyFile  string
+	// GRPCEnabled and GRPCPort are the gRPC listener's (on with domain or
+	// grpc.enabled).
+	GRPCEnabled bool
+	GRPCPort    int
+	// PanelCertificate is the web side's certificate when Control
+	// terminates https itself (tls.mode acme, files); nil when a CDN or
+	// proxy does (external). GRPCCertificate is the gRPC listener's; nil
+	// when the listener has no TLS.
+	PanelCertificate *CertificateFacts
+	GRPCCertificate  *CertificateFacts
 	// BuiltinPKI is module_runtime.pki being builtin; CAKEK is whether
 	// module_runtime.ca_kek is set, and CAKEKProblem why a set key cannot
 	// be used (empty when it can).
@@ -90,16 +126,20 @@ type Readiness struct {
 }
 
 // CheckReadiness tells whether the install command an administrator would
-// copy can work on a machine: nodes must reach Control over https, the
-// gRPC listener must be reachable with TLS, the built-in CA must be there
-// (the group's join token is sealed with its key, and the node's
-// certificate is signed by it), and the Agent release must be one the
-// script can download. It reads the configuration and the files it names,
-// and calls no network.
+// copy can work on a machine: nodes must reach Control over https with a
+// certificate they trust, the gRPC listener must be reachable with a
+// publicly trusted certificate (Agents verify it against their system CAs
+// and fail closed), the built-in CA must be there (the group's join token
+// is sealed with its key, and the node's certificate is signed by it), and
+// the Agent release must be one the script can download. It reads the
+// configuration, the certificate status and the files it names, and calls
+// no network.
 func CheckReadiness(in ReadinessInput) Readiness {
 	checks := []ReadinessCheck{
 		checkPublicURL(in),
+		checkPanelCertificate(in),
 		checkGRPC(in),
+		checkGRPCCertificate(in),
 		checkCA(in),
 		checkMTLSMode(in),
 		checkAgentRelease(in),
@@ -136,10 +176,10 @@ func isLoopbackHost(host string) bool {
 
 func checkPublicURL(in ReadinessInput) ReadinessCheck {
 	check := ReadinessCheck{ID: CheckPublicURL, Level: LevelError}
-	fix := "Set agent_install.public_url to the https address nodes reach Control at (for example https://panel.example.com) and restart Control. Behind a reverse proxy, also list the proxy in server.trusted_proxies."
+	fix := "Set domain to the panel's name (nodes then use https://<domain>), or agent_install.public_url to the https address nodes reach Control at, and restart Control. Behind a reverse proxy, also list the proxy in server.trusted_proxies."
 	value, pinned := effectiveControlURL(in)
 	if value == "" {
-		check.Message = "Control cannot tell the address nodes reach it at: agent_install.public_url is not set."
+		check.Message = "Control cannot tell the address nodes reach it at: neither domain nor agent_install.public_url is set."
 		check.Fix = fix
 		return check
 	}
@@ -159,7 +199,7 @@ func checkPublicURL(in ReadinessInput) ReadinessCheck {
 		check.Message = "Nodes reach Control at " + value + "."
 	default:
 		check.OK = true
-		check.Message = "Nodes reach Control at " + value + ", the address this page was opened with. Set agent_install.public_url to pin it."
+		check.Message = "Nodes reach Control at " + value + ", the address this page was opened with. Set domain to pin it."
 	}
 	return check
 }
@@ -199,15 +239,11 @@ func checkGRPC(in ReadinessInput) ReadinessCheck {
 	}
 	if !in.GRPCEnabled {
 		problems = append(problems, "The gRPC listener is off: nodes join and stay connected there.")
-		fixes = append(fixes, "Set grpc.enabled: true and restart Control.")
-	}
-	if strings.TrimSpace(in.GRPCTLSCertFile) == "" || strings.TrimSpace(in.GRPCTLSKeyFile) == "" {
-		problems = append(problems, "The gRPC listener has no TLS certificate: nodes verify it and present their own certificate.")
-		fixes = append(fixes, "Set grpc.tls_cert_file and grpc.tls_key_file to a certificate for the gRPC host that nodes trust (a publicly trusted one), then restart Control.")
+		fixes = append(fixes, "Set domain (it turns the gRPC listener on), or grpc.enabled: true, and restart Control.")
 	}
 	if len(problems) == 0 {
 		check.OK = true
-		check.Message = "Nodes dial the gRPC listener at " + target + " over TLS."
+		check.Message = "Nodes dial the gRPC listener at " + target + "."
 		return check
 	}
 	check.Message = strings.Join(problems, " ")
@@ -309,5 +345,101 @@ func checkScriptSignature(in ReadinessInput) ReadinessCheck {
 	}
 	check.OK = true
 	check.Message = "The install script's release signature verifies; it is served at /install.sh.sig."
+	return check
+}
+
+// covers tells whether a certificate's names cover host (one wildcard
+// label at most, as TLS clients match).
+func covers(names []string, host string) bool {
+	host = strings.TrimSuffix(strings.ToLower(host), ".")
+	for _, name := range names {
+		name = strings.TrimSuffix(strings.ToLower(name), ".")
+		if name == host {
+			return true
+		}
+		if suffix, ok := strings.CutPrefix(name, "*."); ok {
+			if label, rest, found := strings.Cut(host, "."); found && label != "" && rest == suffix {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// certificateProblem describes a served certificate that nodes would
+// refuse, empty when it is fine.
+func certificateProblem(what string, facts *CertificateFacts) (problem, fix string) {
+	name := facts.Name
+	switch {
+	case facts.State == CertificatePending:
+		return fmt.Sprintf("Control is still requesting the %s certificate for %s; until it has one it serves a self-signed certificate, which nodes refuse.", what, name),
+			"Wait a minute and check again. If it stays pending, run anix-control tls status on the server."
+	case facts.State != CertificateValid:
+		problem = fmt.Sprintf("The %s certificate for %s is not usable, so Control serves a self-signed one, which nodes refuse", what, name)
+		if facts.Error != "" {
+			problem += ": " + facts.Error
+		}
+		fix = facts.Fix
+		if fix == "" {
+			fix = "See anix-control tls status on the server; anix-control tls retry tries again."
+		}
+		return problem + ".", fix
+	case !facts.PubliclyTrusted:
+		problem = fmt.Sprintf("The %s certificate for %s does not verify against the system CAs, and nodes accept only publicly trusted certificates", what, name)
+		if facts.Error != "" {
+			problem += ": " + facts.Error
+		}
+		fix = facts.Fix
+		if fix == "" {
+			fix = "Use a certificate from a public CA: with domain set and tls.mode acme Control obtains one itself."
+		}
+		return problem + ".", fix
+	}
+	return "", ""
+}
+
+func checkPanelCertificate(in ReadinessInput) ReadinessCheck {
+	check := ReadinessCheck{ID: CheckPanelCertificate, Level: LevelError}
+	value, _ := effectiveControlURL(in)
+	if in.PanelCertificate == nil {
+		check.OK = true
+		check.Message = "Control does not terminate https for " + value + " itself (tls.mode external): the CDN or reverse proxy in front of it serves the certificate nodes download the install script with."
+		return check
+	}
+	if problem, fix := certificateProblem("panel", in.PanelCertificate); problem != "" {
+		check.Message, check.Fix = problem, fix
+		if in.PanelCertificate.State == CertificateValid {
+			// Valid but not publicly trusted: a CDN's origin certificate
+			// works behind the CDN, which nodes then go through; only nodes
+			// that reach Control directly refuse it.
+			check.Level = LevelWarning
+			check.Message += " Behind a CDN that accepts it (an origin certificate) the command works; nodes that reach Control directly refuse it."
+		}
+		return check
+	}
+	check.OK = true
+	check.Message = fmt.Sprintf("The panel certificate for %s is publicly trusted and valid until %s.", in.PanelCertificate.Name, in.PanelCertificate.NotAfter.UTC().Format(time.RFC3339))
+	return check
+}
+
+func checkGRPCCertificate(in ReadinessInput) ReadinessCheck {
+	check := ReadinessCheck{ID: CheckGRPCCertificate, Level: LevelError}
+	facts := in.GRPCCertificate
+	if facts == nil {
+		check.Message = "The gRPC listener has no TLS certificate: nodes verify it against their system CAs and present their own certificate."
+		check.Fix = "Set domain (Control obtains a publicly trusted certificate for it; with the panel behind a CDN also grpc.public_name, a DNS-only name for the nodes), or grpc.tls_cert_file and grpc.tls_key_file, then restart Control."
+		return check
+	}
+	if problem, fix := certificateProblem("gRPC", facts); problem != "" {
+		check.Message, check.Fix = problem, fix
+		return check
+	}
+	if host, _, err := net.SplitHostPort(grpcTarget(in)); err == nil && host != "" && len(facts.Names) > 0 && !covers(facts.Names, host) {
+		check.Message = fmt.Sprintf("Nodes dial %s, but the gRPC certificate covers %s: their TLS check fails.", host, strings.Join(facts.Names, ", "))
+		check.Fix = "Make agent_install.grpc_target name a host the certificate covers (or leave it empty), or set grpc.public_name to that host."
+		return check
+	}
+	check.OK = true
+	check.Message = fmt.Sprintf("The gRPC certificate for %s is publicly trusted and valid until %s.", facts.Name, facts.NotAfter.UTC().Format(time.RFC3339))
 	return check
 }

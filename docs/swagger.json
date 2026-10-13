@@ -8237,7 +8237,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Checks, without any network call, what a node needs from this Control before an install command is worth copying: agent_install.public_url (or the address this request came in on) is https; the gRPC target resolves from the settings and the listener is on with TLS; module_runtime.ca_kek is usable (join tokens are sealed with it and node certificates signed by the CA it protects); agent_control.mtls is not off; the Agent release of the pinned version is served by this Control or has a source; the install script's release signature verifies when one is configured. ready is false when a check of level error fails; a failed warning does not block the command. Each check is {id, ok, level, message, fix}. Any administrator.",
+                "description": "Checks, without any network call, what a node needs from this Control before an install command is worth copying: the address nodes use (https://\u003cdomain\u003e, agent_install.public_url, or the address this request came in on) is https; the panel certificate Control serves itself (tls.mode acme, files) is valid and publicly trusted; the gRPC target resolves from the settings and the listener is on; the gRPC certificate is valid, publicly trusted and covers the target (Agents verify it against their system CAs); module_runtime.ca_kek is usable (join tokens are sealed with it and node certificates signed by the CA it protects); agent_control.mtls is not off; the Agent release of the pinned version is served by this Control or has a source; the install script's release signature verifies when one is configured. ready is false when a check of level error fails; a failed warning does not block the command. Each check is {id, ok, level, message, fix}. Any administrator.",
                 "produces": [
                     "application/json"
                 ],
@@ -9667,6 +9667,72 @@
                 "responses": {
                     "200": {
                         "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v5/panel/certificates/retry": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Tries the certificates that are failing (no usable certificate, a renewal that is due or failed, a certificate that does not verify) again now, within the limit of three requests per name and hour; certificate files are read again. 202 with data.retry {retrying, waiting (name: the time the limit allows the next request), healthy} and data.certificate (the status). A process without a certificate manager stores the request for the running Control (data.requested). Any administrator.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Request the failing panel certificates again",
+                "responses": {
+                    "202": {
+                        "description": "Accepted",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v5/panel/status": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "The panel certificate status (internal/panelcert) in data.certificate: mode (acme, files, external), state (not_configured, pending, valid, failed; the worst certificate's), domain, grpc_name, directory (an ACME directory other than the public CA's), persistent (whether keys survive a restart), listeners (ACME challenge listeners that could not bind) and certificates, each with name, names, roles (web, grpc), source (acme, files), state, serving (acme, file, self_signed), publicly_trusted, issuer, not_before, not_after, renew_at, renewal_failing, last_attempt_at, last_success_at, next_attempt_at, last_error, problem and fix. A process without a certificate manager answers the status the running Control stored; 503 panel_status_unavailable when there is none. Any administrator; no secret.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "The certificates the panel serves itself",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true

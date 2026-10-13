@@ -21,10 +21,22 @@ const EnvFileSuffix = "_FILE"
 // ConfigPathEnv names the config file when -config is not given.
 const ConfigPathEnv = EnvPrefix + "CONFIG"
 
+// ACMEDirectoryEnv points Control's ACME client at another directory than
+// the public CA's: a staging directory, or a test CA in CI. It is not a
+// configuration key and is read only from the environment.
+const ACMEDirectoryEnv = EnvPrefix + "ACME_DIRECTORY_URL"
+
+// ACMECAFileEnv names a PEM file of extra roots the ACME client trusts for
+// the directory's https endpoint (a test CA in CI). It is not a
+// configuration key.
+const ACMECAFileEnv = EnvPrefix + "ACME_CA_FILE"
+
 // reservedEnvNames are ANIX_CONTROL_* variables that are not configuration
 // keys: the config path, and the variables the kernel passes to package hosts.
 var reservedEnvNames = map[string]bool{
 	ConfigPathEnv:                          true,
+	ACMEDirectoryEnv:                       true,
+	ACMECAFileEnv:                          true,
 	"ANIX_CONTROL_HOST_SOCKET":             true,
 	"ANIX_CONTROL_HOST_DIR_FD":             true,
 	"ANIX_CONTROL_HOST_MAX_RESPONSE_BYTES": true,
@@ -249,6 +261,9 @@ func PathFromEnv() string {
 // purpose because the code resolves them.
 var emptyDefaultMeanings = map[string]string{
 	"agent_control.mtls": "empty: `" + AgentMTLSDefault + "`",
+	"tls.mode":           "empty: `acme` with `domain`, else `external`",
+	"listen":             "empty: `server.host:server.port`",
+	"grpc.public_name":   "empty: `domain`",
 }
 
 // EnvMarkdownTable renders the variable reference table of

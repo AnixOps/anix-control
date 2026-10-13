@@ -15,6 +15,7 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/database"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/modulepki"
+	"github.com/AnixOps/anix-control/v5/internal/panelcert"
 	"github.com/AnixOps/anix-control/v5/internal/requestorigin"
 	"github.com/AnixOps/anix-control/v5/internal/service"
 	"github.com/gin-gonic/gin"
@@ -47,6 +48,9 @@ type AgentInstallHandler struct {
 	pki    func() (*agentpki.Service, error)
 	config func() *config.Config
 	db     func() *gorm.DB
+	// certificates is the panel certificate status (internal/panelcert);
+	// false when no certificate manager runs.
+	certificates func() (panelcert.Status, bool)
 }
 
 // NewAgentInstallHandler reads the loaded configuration and database on
@@ -56,9 +60,42 @@ func NewAgentInstallHandler() *AgentInstallHandler {
 		pki: func() (*agentpki.Service, error) {
 			return agentpki.FromConfig(config.Get(), database.Get())
 		},
-		config: config.Get,
-		db:     database.Get,
+		config:       config.Get,
+		db:           database.Get,
+		certificates: defaultPanelCertificates,
 	}
+}
+
+// defaultPanelCertificates reads the status of the process's certificate
+// manager.
+func defaultPanelCertificates() (panelcert.Status, bool) {
+	manager := panelcert.Default()
+	if manager == nil {
+		return panelcert.Status{}, false
+	}
+	return manager.Status(), true
+}
+
+// certificateFacts is what the readiness check needs of a certificate:
+// role's in status, or, without a status, a certificate that cannot be
+// known to be usable.
+func certificateFacts(status panelcert.Status, known bool, role, name string) *agentinstall.CertificateFacts {
+	if !known {
+		return &agentinstall.CertificateFacts{Name: name, State: agentinstall.CertificatePending,
+			Error: "the certificate status is not available in this process"}
+	}
+	certificate, ok := status.Certificate(role)
+	if !ok {
+		return nil
+	}
+	facts := &agentinstall.CertificateFacts{
+		Name: certificate.Name, Names: certificate.Names, State: certificate.State, Serving: certificate.Serving,
+		PubliclyTrusted: certificate.PubliclyTrusted, Error: certificate.LastError, Fix: certificate.Fix,
+	}
+	if certificate.NotAfter != nil {
+		facts.NotAfter = *certificate.NotAfter
+	}
+	return facts
 }
 
 type createInstallTokenRequest struct {
@@ -165,7 +202,7 @@ func (h *AgentInstallHandler) CreateInstallToken(c *gin.Context) {
 
 // Readiness godoc
 // @Summary Check that an install command can work
-// @Description Checks, without any network call, what a node needs from this Control before an install command is worth copying: agent_install.public_url (or the address this request came in on) is https; the gRPC target resolves from the settings and the listener is on with TLS; module_runtime.ca_kek is usable (join tokens are sealed with it and node certificates signed by the CA it protects); agent_control.mtls is not off; the Agent release of the pinned version is served by this Control or has a source; the install script's release signature verifies when one is configured. ready is false when a check of level error fails; a failed warning does not block the command. Each check is {id, ok, level, message, fix}. Any administrator.
+// @Description Checks, without any network call, what a node needs from this Control before an install command is worth copying: the address nodes use (https://<domain>, agent_install.public_url, or the address this request came in on) is https; the panel certificate Control serves itself (tls.mode acme, files) is valid and publicly trusted; the gRPC target resolves from the settings and the listener is on; the gRPC certificate is valid, publicly trusted and covers the target (Agents verify it against their system CAs); module_runtime.ca_kek is usable (join tokens are sealed with it and node certificates signed by the CA it protects); agent_control.mtls is not off; the Agent release of the pinned version is served by this Control or has a source; the install script's release signature verifies when one is configured. ready is false when a check of level error fails; a failed warning does not block the command. Each check is {id, ok, level, message, fix}. Any administrator.
 // @Tags Kernel
 // @Produce json
 // @Security BearerAuth
@@ -177,10 +214,10 @@ func (h *AgentInstallHandler) Readiness(c *gin.Context) {
 		kernelError(c, http.StatusServiceUnavailable, "config_unavailable", "the configuration is not loaded")
 		return
 	}
+	panel := cfg.Panel()
 	input := agentinstall.ReadinessInput{
-		PublicURL: cfg.AgentInstall.PublicURL, RequestOrigin: requestorigin.Resolve(c.Request).BaseURL(),
-		GRPCTarget: cfg.AgentInstall.GRPCTarget, GRPCEnabled: cfg.GRPC.Enable, GRPCPort: cfg.GRPC.Port,
-		GRPCTLSCertFile: cfg.GRPC.TLSCertFile, GRPCTLSKeyFile: cfg.GRPC.TLSKeyFile,
+		PublicURL: panel.PublicURL, RequestOrigin: requestorigin.Resolve(c.Request).BaseURL(),
+		GRPCTarget: panel.GRPCTarget, GRPCEnabled: panel.GRPCEnabled, GRPCPort: panel.GRPCPort,
 		BuiltinPKI: cfg.ModuleRuntime.PKIOrDefault() == config.ModulePKIBuiltin, CAKEK: strings.TrimSpace(cfg.ModuleRuntime.CAKEK) != "",
 		MTLSMode:      cfg.AgentControl.MTLSOrDefault(),
 		SignatureFile: cfg.AgentInstall.SignatureFile, OfficialPublicKey: cfg.Plugins.OfficialPublicKey,
@@ -191,6 +228,17 @@ func (h *AgentInstallHandler) Readiness(c *gin.Context) {
 		if _, err := modulepki.ParseKEK(cfg.ModuleRuntime.CAKEK); err != nil {
 			input.CAKEKProblem = err.Error()
 		}
+	}
+	var status panelcert.Status
+	known := false
+	if h.certificates != nil {
+		status, known = h.certificates()
+	}
+	if panel.ServesWebTLS() {
+		input.PanelCertificate = certificateFacts(status, known, panelcert.RoleWeb, panel.Domain)
+	}
+	if panel.GRPCTLS() {
+		input.GRPCCertificate = certificateFacts(status, known, panelcert.RoleGRPC, panel.GRPCName)
 	}
 	c.Header("Cache-Control", "no-store")
 	kernelData(c, http.StatusOK, agentinstall.CheckReadiness(input))
@@ -271,12 +319,13 @@ func (h *AgentInstallHandler) settings(c *gin.Context, cfg *config.Config) (agen
 		return agentinstall.Settings{}, errors.New("the configuration is not loaded")
 	}
 	install := cfg.AgentInstall
-	controlURL := strings.TrimRight(strings.TrimSpace(install.PublicURL), "/")
+	panel := cfg.Panel()
+	controlURL := panel.PublicURL
 	if controlURL == "" {
 		controlURL = requestorigin.Resolve(c.Request).BaseURL()
 	}
 	return agentinstall.ResolveSettings(agentinstall.SettingsInput{
-		ControlURL: controlURL, GRPCTarget: install.GRPCTarget, GRPCPort: cfg.GRPC.Port,
+		ControlURL: controlURL, GRPCTarget: panel.GRPCTarget, GRPCPort: panel.GRPCPort,
 		AgentVersion: install.AgentVersion, PinnedAgentVersion: AgentRelease, ReleaseVersion: ReleaseVersion,
 		ArtifactDir: install.ArtifactDir, CNMirrorURL: install.CNMirrorURL,
 	})

@@ -144,11 +144,18 @@ npm ci
 npm run dev
 ```
 
-Default local URLs:
+Default local URLs (without `domain`, `tls.mode` is external: one plain
+handler for the web app, the API and the install paths, on `server.port` and,
+with `frontend.enable`, on `frontend.port` too):
 
-- UI: `http://127.0.0.1:3000`
+- UI: `http://127.0.0.1:3000` (or `:8080`, the same handler)
 - API: `http://127.0.0.1:8080`
 - health: `http://127.0.0.1:8080/health`
+
+With `domain` set, Control serves https on `:443` and http on `:80` with a
+certificate it obtains itself, or a plain `listen` address behind a CDN or
+proxy (`tls.mode: external`); see
+[`configuration.md`](configuration.md#panel-address-listeners-and-certificates).
 
 ## 4. Docker Startup
 
@@ -175,6 +182,13 @@ The runtime flow is now:
 4. initialize database
 5. prepare the database (below), including `InitForwardRuntimeSystemConfig`
 6. persist the parsed runtime snapshot into `v2_system_config`
+7. load the panel certificates (`internal/panelcert`): the ones stored in
+   `v5_acme_cache`, the certificate files, and the self-signed fallback, so
+   that every listener serves the right certificate from its first handshake
+8. bind the node gRPC listener, then every HTTP listener of `tls.mode`; a
+   port that is taken stops the start
+9. start the background workers, among them the certificate loop, which
+   sends the first ACME request at once and never blocks a handshake
 
 Database preparation runs under a PostgreSQL advisory lock, so several Control
 processes starting together (a rolling update, or `migrate` next to a server)
@@ -222,8 +236,10 @@ That is why local startup and Docker startup now share the same primary config s
 
 Invalid `plugins.*_poll_interval` values, or dispatch/topology flags without
 their prerequisites, stop startup before any listener opens. Once the gRPC
-listener is up, a later failure (for example the API port already in use) runs
-the normal shutdown below and exits with status 1.
+listener is up, a later failure (for example port 443 or the `listen` port
+already in use) runs the normal shutdown below and exits with status 1. A
+certificate that cannot be obtained never stops the start: Control serves
+the self-signed fallback and says why (`anix-control tls status`).
 
 On SIGINT or SIGTERM, Control shuts down in this order: `/readyz` and
 `/health` return 503 (see below), HTTP servers drain for up to 30s, background
@@ -234,7 +250,7 @@ with status 1.
 
 ### Probes And Shutdown
 
-Both the API server (`server.port`) and the UI server (`frontend.port`) answer:
+Every HTTP listener of the panel answers them (they are one handler):
 
 | Path | Meaning |
 |------|------|

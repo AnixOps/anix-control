@@ -43,3 +43,13 @@ func TestPackageRolloutModelsUseKernelOwnedTables(t *testing.T) {
 		require.True(t, registered[reflect.PointerTo(reflect.TypeOf(value))])
 	}
 }
+
+// v5_acme_cache comes from the migration 0003_acme_cache, not from the
+// kernel models: they describe the 0001_baseline schema.
+func TestACMECacheEntryIsCreatedByAMigration(t *testing.T) {
+	require.Equal(t, "v5_acme_cache", ACMECacheEntry{}.TableName())
+	for _, value := range KernelModels() {
+		_, isCache := value.(*ACMECacheEntry)
+		require.False(t, isCache, "v5_acme_cache is created by its migration")
+	}
+}

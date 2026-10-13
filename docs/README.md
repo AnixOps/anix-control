@@ -38,6 +38,7 @@ Use this tree like NodeX:
 ## Install, Upgrade, And Operate
 
 - Deployment guide (Docker Compose, Kubernetes): [`DEPLOYMENT.md`](DEPLOYMENT.md)
+- The panel's address, listeners and own certificates (`domain`, `tls.mode`, the CDN mode with `grpc.public_name`, `anix-control tls` and `doctor`): [`reference/configuration.md`](reference/configuration.md#panel-address-listeners-and-certificates)
 - Container design and multi-replica status: [`architecture/container-deployment.md`](architecture/container-deployment.md)
 - Native systemd install (the alternative to containers): [`guide/release-installation.md`](guide/release-installation.md)
 - Upgrade runbook: [`UPGRADE.md`](UPGRADE.md)

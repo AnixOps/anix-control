@@ -47,6 +47,22 @@ describe('kernel alerts on the dashboard', () => {
     expect(resolved.hint).toMatch(/^Resolved /)
   })
 
+  it('words the panel certificate alerts with the fix for the problem', async () => {
+    await setLocale('en')
+    const t = (key, params) => i18n.global.t(key, params, { locale: 'en' })
+    const format = createFormatter('en')
+    const failing = { kind: 'panel_certificate_renewal_failing', subject: 'panel.example.com', status: 'active', detail: { name: 'panel.example.com', state: 'failed', problem: 'dns_unresolved', fix: 'Server fix.' } }
+    const failed = alertText(failing, { t, format })
+    expect(failed.title).toBe('The panel has no usable certificate for panel.example.com')
+    expect(failed.hint).toContain('A (and AAAA) record for panel.example.com')
+    const renewing = alertText({ ...failing, detail: { ...failing.detail, state: 'valid', problem: 'later_problem' } }, { t, format })
+    expect(renewing.title).toBe('The certificate for panel.example.com could not be renewed')
+    expect(renewing.hint).toBe('Server fix.')
+    const files = alertText({ kind: 'panel_certificate_expiring', subject: 'panel.example.com', status: 'active', detail: { name: 'panel.example.com', source: 'files', not_after: '2026-10-20T10:00:00Z' } }, { t, format })
+    expect(files.title).toBe('The certificate for panel.example.com is about to expire')
+    expect(files.hint).toContain('Replace the certificate files')
+  })
+
   it('falls back to the server message for an unknown kind', () => {
     const t = key => key
     expect(alertText({ kind: 'later_kind', message: 'Look at this', detail: null }, { t, format: createFormatter('en') }).title).toBe('Look at this')

@@ -57,8 +57,10 @@ Current verified deployment truth:
 
 - the currently proven dual-runtime path is `binary + SQLite + systemd`
 - the verified single-UI runtime split is:
-  - AnixOps Control UI on `3000`
-  - AnixOps Control API on `8080`
+  - AnixOps Control web, API and install paths on one handler: `443` and `80`
+    with `domain` (`tls.mode` acme or files), or plain `8080` (and `3000`) in
+    `tls.mode` external behind a CDN or proxy
+  - node gRPC on `50051` (`grpc.port`)
   - NodeX control-plane on `18081`
   - relay gost API on `18080`
 - containers are the primary deployment path: CI runs the image (read-only, non-root, env-only config) against PostgreSQL, the production Compose file, and the Helm chart in kind; a production cutover to containers has not been recorded yet

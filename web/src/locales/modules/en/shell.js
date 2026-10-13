@@ -9,6 +9,31 @@ export default {
       collapse: 'Collapse sidebar',
       expand: 'Expand sidebar',
       breadcrumb: 'Location',
+      // The banner for the certificates the panel serves itself.
+      certificate: {
+        failed: 'The certificate for {name} could not be obtained: the panel serves a temporary certificate and nodes cannot join yet',
+        pending: 'Requesting the certificate for {name}: until it arrives the panel serves a temporary certificate and nodes cannot join',
+        renewalFailing: 'The certificate for {name} could not be renewed; the current one ends {date}',
+        untrusted: 'The certificate for {name} is not trusted by public certificate authorities, so nodes cannot join',
+        reason: 'Reason: {reason}',
+        retry: 'Request again',
+        retryStarted: 'Requested again; the outcome shows here shortly.',
+        retryWaiting: 'Three requests were made within the hour; the next one is at {date}.',
+        retryFailed: 'The request did not go out. Try again later, or run anix-control tls retry on the server.',
+        fixes: {
+          dns_unresolved: 'Add an A (and AAAA) record for {name} pointing at this machine, with no CDN proxy, then request again.',
+          dns_elsewhere: '{name} does not resolve to this machine: point the record here with the CDN proxy off. If the panel must stay behind a CDN, use tls.mode: external and set grpc.public_name to a DNS-only name that resolves here, for the nodes.',
+          unreachable: 'The certificate authority cannot reach {name} on ports 443 and 80: open both in the firewall and the provider\'s security group, and stop any other program that holds them.',
+          challenge_failed: 'The certificate authority reached {name} but did not get this panel\'s answer: the name points elsewhere, or a CDN or another web server answers for it. Point it here with the proxy off, or forward /.well-known/acme-challenge/ to the panel.',
+          rate_limited: 'The certificate authority\'s rate limit was reached; the panel tries again later by itself. Do not reinstall: the certificate and the account are kept in the database.',
+          ca_unreachable: 'This machine cannot reach the certificate authority: check its outbound https (port 443) and DNS.',
+          ca_error: 'The panel tries again by itself; anix-control tls status on the server shows the details.',
+          file_unreadable: 'Check that the certificate and key files exist, can be read by the panel and hold a matching PEM chain and key; the panel reloads them when they change.',
+          expired: 'The certificate has ended: replace it with a renewed one (certificate files are reloaded), or fix the reason above and request again.',
+          name_mismatch: 'The certificate does not cover {name}: use one issued for that name.',
+          untrusted: 'Nodes and browsers accept only certificates from public certificate authorities: use one; with domain set and tls.mode: acme the panel obtains it by itself.'
+        }
+      },
       groups: {
         overview: 'Overview',
         users: 'Users',

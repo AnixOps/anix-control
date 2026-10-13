@@ -28,28 +28,48 @@ groups: `docs/design/node-onboarding`).
 
 On Control:
 
-- The built-in agent CA is on (`module_runtime.ca_kek` with `pki: builtin`)
-  and the gRPC listener has TLS (`grpc.enabled`, `grpc.tls_cert_file`):
-  the Agent joins there (`docs/UPGRADE.md`,
-  "Agent Transports: Preparing For v4.2"). Fresh installs generate the key;
-  the certificate must be publicly trusted for the gRPC target, because the
-  Agent verifies it against the node's system CAs and accepts no private CA
-  ([release installation](release-installation.md#agent-access),
-  `docs/DEPLOYMENT.md` 2.0.2). Node group join tokens are sealed with the
-  same `module_runtime.ca_kek`: without it no group can be created
-  (`409 ca_kek_missing`).
-- Nodes reach Control over **https**. Set `agent_install.public_url` to the
-  address nodes use (for example `https://panel.example.com`) unless the
-  request's origin is already right (behind a reverse proxy it only is when
-  the proxy is in `server.trusted_proxies`). Set `agent_install.grpc_target`
-  when nodes dial the gRPC listener at another host or port than
-  `public_url`'s host and `grpc.port`. Behind a reverse proxy, also list it
-  in `server.trusted_proxies`: the script asks `GET /install/ip` for the
-  machine's address, and only a trusted proxy's forwarded address counts.
+- `domain` is set to the panel's name (`domain: panel.example.com`). Nodes
+  then download the script from `https://<domain>/install.sh` and dial
+  `<domain>:<grpc.port>` (50051) for gRPC, and Control obtains and renews a
+  publicly trusted certificate for that name itself over ACME (`tls.mode`
+  acme, [configuration](../reference/configuration.md#panel-address-listeners-and-certificates)).
+  The certificate must be publicly trusted for the gRPC target, because the
+  Agent verifies it against the node's system CAs, accepts no private CA and
+  sends no credential to a server it cannot verify. Until Control holds one
+  (a first request under way, a DNS record missing, ports 80 and 443 closed)
+  it serves a self-signed certificate, the console shows a banner with the
+  reason and the fix, and the join command is withheld (the readiness checks
+  `panel_certificate` and `grpc_certificate` below).
+- **Behind a CDN.** When the panel's name is proxied by a CDN, nodes cannot
+  use it for gRPC: a CDN does not pass the Agents' mutual TLS. Keep the web
+  side behind the CDN with `tls.mode: external` (the CDN or a proxy on this
+  machine terminates TLS and forwards the whole host to `listen`) and set
+  `grpc.public_name` to a DNS-only name that resolves to this machine
+  (`grpc.example.com`). The install command still uses
+  `https://panel.example.com/install.sh` through the CDN; `/install/agent.env`
+  hands the nodes `grpc.example.com:50051`, and Control obtains the
+  certificate for that name over ACME (HTTP-01 on port 80, TLS-ALPN-01 on
+  443 when free). `anix-control doctor` tells whether each name resolves to
+  this machine or to a CDN.
+- The built-in agent CA is on (`module_runtime.ca_kek` with `pki: builtin`):
+  the Agent joins with the certificate it signs (`docs/UPGRADE.md`,
+  "Agent Transports: Preparing For v4.2"). Fresh installs generate the key.
+  It also seals the ACME keys and the node group join tokens: without it no
+  group can be created (`409 ca_kek_missing`).
+- Without `domain`, set `agent_install.public_url` to the https address nodes
+  use, `grpc.enabled`, and a publicly trusted certificate for the gRPC
+  target in `grpc.tls_cert_file`/`grpc.tls_key_file` (reloaded when it
+  changes; [release installation](release-installation.md#agent-access),
+  `docs/DEPLOYMENT.md` 2.0.2). `agent_install.public_url` and
+  `agent_install.grpc_target` also override the addresses derived from
+  `domain`. Behind a reverse proxy, list it in `server.trusted_proxies`: the
+  script asks `GET /install/ip` for the machine's address, and only a
+  trusted proxy's forwarded address counts.
 - The install paths (`/install.sh`, `/install.sh.sig`, `/install/agent.env`,
-  `/install/ip` and `/install/agent/<tag>/<asset>`) are served on both
-  listeners, the API port (8080) and the UI port (3000, which forwards them),
-  so a reverse proxy that sends the whole host to the UI port serves them too.
+  `/install/ip` and `/install/agent/<tag>/<asset>`) are served by the same
+  listener as the web app and the API, so a CDN or reverse proxy that sends
+  the whole host to Control serves them too, and a mistyped install path
+  answers 404 instead of the web app's HTML.
 - Only a super administrator (an administrator who is not staff and not
   banned) can show a group's command or reset its token, and issue
   enrollment tokens.
@@ -75,9 +95,12 @@ hand):
 
 1. **Control checks itself first.** Before it shows a command it checks,
    with no network call, that the command can work: the address nodes reach
-   is https, the gRPC target resolves and its listener has TLS, the CA key
-   (`module_runtime.ca_kek`) is usable, `agent_control.mtls` is not `off`,
-   the pinned Agent release has a source, and the install script's
+   is https; the panel certificate Control serves itself (`tls.mode` acme or
+   files) is valid and publicly trusted (`panel_certificate`); the gRPC
+   target resolves and its listener runs (`grpc`); the gRPC certificate is
+   valid, publicly trusted and covers the target (`grpc_certificate`); the
+   CA key (`module_runtime.ca_kek`) is usable, `agent_control.mtls` is not
+   `off`, the pinned Agent release has a source, and the install script's
    signature verifies when one is configured. A failing check is shown with
    what to change instead of a command that would fail; a failing warning
    (the signature, an `artifact_dir` without the release) sits above the
@@ -690,7 +713,8 @@ split or an identity cutover left unfinished) with what clears each.
 
 | Message | Cause and fix |
 |---|---|
-| `agent_install_unconfigured` on the node page | Control does not know an https address nodes reach: set `agent_install.public_url`; on a development build also `agent_install.agent_version` |
+| `agent_install_unconfigured` on the node page | Control does not know an https address nodes reach: set `domain` (or `agent_install.public_url`); on a development build also `agent_install.agent_version` |
+| the join dialog shows `Panel certificate` or `gRPC certificate` | Control does not hold a publicly trusted certificate yet: the banner at the top of the console (and `anix-control tls status`) says why, for example no DNS record, ports 80 and 443 closed, or the name proxied by a CDN; fix it and use **Request again** (`anix-control tls retry`) |
 | the Agent download answers 404 | `/install/agent.env` names an Agent tag the Agent repository does not have. A release build names the Agent release it was released with; an older Control (4.2.1 and before) asks for `v` + its own version, so set `agent_install.agent_version` to an existing tag such as `v4.2.0` |
 | `agent_pki_disabled` | the built-in agent CA is off: set `module_runtime.ca_kek` |
 | `node_disabled` on a rotation | enable the node first ([rotation](#rotating-a-nodes-credentials)) |
@@ -705,7 +729,7 @@ split or an identity cutover left unfinished) with what clears each.
 | `ca_kek_missing` when creating a group | set `module_runtime.ca_kek`: join tokens are sealed with it |
 | `preflight found N problem(s)` | each `FAIL` line above has a `fix:`; re-run after fixing, or add `--skip-preflight` |
 | `cannot connect to the gRPC target` | open `grpc.port` from the node to Control, or set `agent_install.grpc_target` to an address nodes reach |
-| `the certificate of the gRPC target ... does not verify` | the gRPC listener needs a certificate for that host from a CA in the node's trust store |
+| `the certificate of the gRPC target ... does not verify` | the gRPC listener needs a certificate for that host from a CA in the node's trust store: with `domain` set Control obtains one; behind a CDN, set `grpc.public_name` to a DNS-only name |
 | `this host's clock is ...s off Control's` | `timedatectl set-ntp true` (or chrony/ntpd) |
 | `the release signature of SHA256SUMS does not verify` | the offline bundle was altered or built from another release; make it again |
 | `the offline bundle has no ... : it is not for arm64` | make the bundle with `-arch` of the node |

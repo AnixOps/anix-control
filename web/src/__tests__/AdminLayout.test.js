@@ -19,6 +19,12 @@ vi.mock('@/api/admin', () => ({
   getUserList: (...args) => mockGetUserList(...args)
 }))
 
+// The certificate banner reads its own API; it is tested apart.
+vi.mock('@/components/admin/PanelCertificateBanner.vue', () => ({
+  __esModule: true,
+  default: { name: 'PanelCertificateBannerStub', template: '<div data-testid="certificate-banner-stub" />' }
+}))
+
 // 升级节点 is loaded with its first opening; the sheet itself is tested apart.
 vi.mock('@/components/admin/AgentUpgradeSheet.vue', () => ({
   __esModule: true,

@@ -11,6 +11,7 @@ import (
 
 	"github.com/AnixOps/anix-control/v5/internal/config"
 	"github.com/AnixOps/anix-control/v5/internal/model"
+	"github.com/AnixOps/anix-control/v5/internal/panelcert"
 	"gorm.io/gorm"
 )
 
@@ -52,6 +53,8 @@ type Monitor struct {
 	Notifier Notifier
 	// BuiltinPackages is the Scanner's built-in package check.
 	BuiltinPackages func(context.Context) ([]BuiltinPackageProblem, error)
+	// PanelCertificates is the Scanner's (nil: the stored status).
+	PanelCertificates func(context.Context) (panelcert.Status, error)
 	// Now defaults to time.Now.
 	Now func() time.Time
 }
@@ -91,7 +94,7 @@ func (m *Monitor) RunOnce(ctx context.Context) (ScanSummary, error) {
 	if !m.DB.WithContext(ctx).Migrator().HasTable(&model.KernelAlert{}) {
 		return summary, nil
 	}
-	scanner := &Scanner{DB: m.DB, Settings: m.Settings, Now: m.Now, BuiltinPackages: m.BuiltinPackages}
+	scanner := &Scanner{DB: m.DB, Settings: m.Settings, Now: m.Now, BuiltinPackages: m.BuiltinPackages, PanelCertificates: m.PanelCertificates}
 	result, err := scanner.Scan(ctx)
 	if err != nil {
 		return summary, err

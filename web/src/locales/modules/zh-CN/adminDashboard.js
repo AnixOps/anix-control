@@ -112,6 +112,14 @@ export default {
         builtinPackageFailed: {
           title: '内置包 {name} 未在运行',
           hint: '相关页面和接口不可用。按 Control 日志排除原因后重启 Control。'
+        },
+        panelCertificate: {
+          ending: '{name} 的证书即将到期',
+          endingHint: '{date} 到期。面板本应自动续期但没有成功：在服务器上运行 anix-control tls status 查看原因。',
+          endingFilesHint: '{date} 到期。把证书文件换成续期后的证书，面板会自动重新加载。',
+          failed: '面板没有可用的 {name} 证书',
+          renewalFailing: '{name} 的证书续期失败',
+          hint: '面板暂时使用临时证书；在服务器上运行 anix-control tls status 查看原因。'
         }
       },
       nodesFailed: '无法加载节点状态',
