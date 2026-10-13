@@ -16,35 +16,39 @@ truth for implemented, partial, planned, compatibility, and deferred features.
   pinned to Go `1.26.9` in CI.
 - Frontend: Vue 3 + Vite under [`web/`](web), Node.js `22` in CI.
 - Default database: SQLite, with PostgreSQL migration/dry-run tooling.
-- Current release: `v4.2.1` (the formal plugin-only Control release). It ships
-  the signed community package set (15 of the 18 packages under `packages/`, in
-  one signed `anix-control-packages-<version>.tar.gz`), package-host lifecycle
-  controls, and compatibility-gated Agent integration. Releases after `v4.0.0`
-  carry no evidence bundle: verify them with `SHA256SUMS.txt`, cosign and the
-  pinned official root ([`docs/UPGRADE.md`](docs/UPGRADE.md#artifact-verification)).
+- Current release: `v5.0.0-rc.1`, a pre-release (the first 5.0 release
+  candidate; [upgrading from 4.2.x](docs/UPGRADE.md#upgrading-from-42x-to-500-rc1)).
+  The 18 official packages under `packages/` are built into the Control
+  binary, which installs, upgrades and enables them at every start; there is
+  no packages archive and nothing to import. Binaries are published for Linux
+  amd64 and arm64 only. Releases after `v4.0.0` carry no evidence bundle:
+  verify them with `SHA256SUMS.txt` and its signature `SHA256SUMS.txt.sig`,
+  cosign and the pinned official root
+  ([`docs/UPGRADE.md`](docs/UPGRADE.md#artifact-verification)).
 - Product delivery line: `v4.0.0-alpha.*` remains immutable historical preview
-  evidence. It is not an alternative trust root or release channel for the
-  formal V4 package cohort.
-- Agent-first status: the `anix.agent.v1` bidirectional gRPC control stream
-  delivers signed package lifecycle work. Legacy data-plane protocols remain
-  available for controlled compatibility and rollback.
+  evidence. It is not an alternative trust root or release channel.
+- Agent-first status: nodes run `anix-agent` on the `anix.agent.v1`
+  bidirectional gRPC control stream; Agent plugin dispatch and topology
+  execution are off until the Agent release carries the Agent plugins (M4).
+  Legacy data-plane protocols remain available for controlled compatibility
+  and rollback.
 
 Do not infer production completeness from a route or UI existing. Check
 [`docs/features.md`](docs/features.md), [`TODO.md`](TODO.md), and
 [`docs/audit/test-gap.md`](docs/audit/test-gap.md) before marking a feature
 complete.
 
-V4 keeps REST/UniProxy, the legacy panel-node gRPC services, and existing
-WebSocket paths available as compatibility surfaces. A fresh plugin-only
-deployment must bootstrap the signed `identity-platform` package from the
-release's own assets before enabling Control package execution; the release
-container image ships that package and imports it on first start, and the
-release installer stages the same package after checking it against
-`SHA256SUMS.txt`. Control verifies its signature against the pinned official
-root at import. Operators should retain the documented rollback plan throughout
-rollout. Package hosts may invoke narrowly scoped, kernel-owned compatibility
-bridge operations to preserve established route semantics; there is no direct
-HTTP fallback when a signed package is unavailable.
+Control keeps REST/UniProxy, the legacy panel-node gRPC services, and existing
+WebSocket paths available as compatibility surfaces. The official packages,
+`identity-platform` included, are built into the release binary: at every
+start Control verifies each one against the pinned official root, installs or
+upgrades it to the binary's version, enables it and runs its package host
+(`anix-control package-host <id>`). Nothing is staged from release assets or
+imported, by the container image or the installer. Operators should retain
+the documented rollback plan throughout rollout. Package hosts may invoke
+narrowly scoped, kernel-owned compatibility bridge operations to preserve
+established route semantics; there is no direct HTTP fallback when a package
+is unavailable.
 
 ## Documentation
 
@@ -93,7 +97,7 @@ tag you name with `--version` and never resolves a moving "latest". Pin the
 production tag:
 
 ```bash
-export VERSION=v4.2.0   # the release tag to install
+export VERSION=v5.0.0-rc.1   # the release tag to install
 curl -fsSL \
   "https://raw.githubusercontent.com/AnixOps/anix-control/${VERSION}/scripts/install.sh" \
   -o /tmp/anix-control-install.sh
@@ -167,18 +171,22 @@ binaries, frontend archives, Docker metadata, checksums, SBOMs, or release
 manifests on a production host.
 
 Release jobs accept stable, alpha, beta, and release-candidate tags such as
-`v4.0.0`, `v4.0.0-alpha.7`, `v4.0.0-beta.1`, and `v4.0.0-rc.1`. Tag builds
-produce:
+`v4.0.0`, `v4.0.0-alpha.7`, `v4.0.0-beta.1`, and `v4.0.0-rc.1`; a suffixed
+tag is published as a pre-release. Tag builds publish the signed image
+`ghcr.io/anixops/anix-control` and these release assets
+([`docs/RELEASING.md`](docs/RELEASING.md#what-the-tag-pipeline-does)):
 
-- multi-platform `anix-control-*` backend artifacts
-- `anix-control-frontend.*` archives
-- checksum file
-- SPDX SBOM
-- migration dry-run evidence
-- Docker metadata
-- machine-readable `RELEASE_MANIFEST.json`
-- operator deployment runbook
-- deterministic `RELEASE_NOTES.md` plus generated GitHub release notes
+- `anix-control-linux-amd64.tar.gz` and `anix-control-linux-arm64.tar.gz`
+  (the official packages built in)
+- `anix-control-frontend.tar.gz`
+- `SHA256SUMS.txt` and its signature `SHA256SUMS.txt.sig`, made with the
+  official package key, whose public half is `official-public-key.raw`
+- the source SBOM `anix-control-source.sbom.spdx.json`
+- `docker-image.txt` (the image digest)
+- the machine-readable `RELEASE_MANIFEST.json`
+- `RELEASE_NOTES.md`, also the release body: the build metadata, the tag's
+  CHANGELOG section and the image digest
+- the Agent installer `agent-install.sh` and its signature `agent-install.sh.sig`
 
 Local deploy scripts that perform source-tree builds are guarded and are not a
 release path. See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) and

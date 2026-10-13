@@ -98,7 +98,7 @@ loopback 或受控私网使用明文；公网部署必须配置 `grpc.tls_cert_f
 
 容器是主部署路径。发布镜像 `ghcr.io/anixops/anix-control` 由 GitHub Actions
 用 Release 附件构建（linux/amd64、linux/arm64），带 SBOM、provenance 和 cosign
-签名；镜像内含本版本的二进制、前端和签名身份引导包，不需要配置文件，全部设置
+签名；镜像内含本版本的二进制（官方包已内置其中）和前端，不需要配置文件，全部设置
 通过 `ANIX_CONTROL_*` 环境变量或 `*_FILE` secret 文件提供（`docker run --rm
 <image> -print-env` 列出全部变量）。Control 本体无状态，数据全部在外部
 PostgreSQL 中，因此迁移到另一台机器只需复制 `control.env` 与 `secrets/`。
@@ -107,7 +107,7 @@ PostgreSQL 中，因此迁移到另一台机器只需复制 `control.env` 与 `s
 
 ```bash
 # 1) 取得本版本的 Compose 文件与模板（与镜像同一个 tag）
-export VERSION=v4.2.0   # 要安装的发布 tag（init-secrets.sh 自 v4.2.0-rc.1 起提供）
+export VERSION=v5.0.0-rc.1   # 要安装的发布 tag（init-secrets.sh 自 v4.2.0-rc.1 起提供）
 mkdir -p /opt/anix-control && cd /opt/anix-control
 base="https://raw.githubusercontent.com/AnixOps/anix-control/${VERSION}"
 curl -fsSLO "${base}/docker-compose.prod.yml"
@@ -220,10 +220,10 @@ CA 签发；v4.2 起 `agent_control.mtls` 默认 `required`，这是 Agent 唯�
 
 ### 2.1 一键安装脚本（systemd，按 tag 安装）
 
-生产环境默认使用 GitHub Release 安装器。它只下载版本匹配的发布二进制、前端包、校验和和单个配置模板，不 clone 仓库，也不在服务器构建 Go、前端或 Docker 镜像。对 `v4` 及之后的主版本，它还会下载并校验签名身份包三件套，暂存到 root 所有的引导目录后验证登录路径：
+生产环境默认使用 GitHub Release 安装器。它只下载版本匹配的发布二进制、前端包、校验和和单个配置模板，不 clone 仓库，也不在服务器构建 Go、前端或 Docker 镜像。它先用官方公钥验证 `SHA256SUMS.txt.sig`，再校验各文件；官方包（含 identity-platform）已内置在二进制中，安装器不再下载或暂存任何包，启动后验证登录路径：
 
 ```bash
-export VERSION=v4.2.0   # 要安装的发布 tag
+export VERSION=v5.0.0-rc.1   # 要安装的发布 tag
 curl -fsSL \
   "https://raw.githubusercontent.com/AnixOps/anix-control/${VERSION}/scripts/install.sh" \
   -o /tmp/anix-control-install.sh

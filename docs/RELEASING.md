@@ -34,7 +34,6 @@ publishes everything. Nothing is built locally.
    - Makefile;
    - Swagger;
    - frontend package;
-   - example configurations;
    - the Helm chart's `appVersion` (its default image tag; the chart's own
      `version` is a separate SemVer);
    - README;
@@ -58,12 +57,33 @@ publishes everything. Nothing is built locally.
    is not 40 lowercase hex characters and a tag that is not `vX.Y.Z` or
    `vX.Y.Z-rc.N`, and changes no file unless it finds every pin.
 2. Open a pull request (`release: v4.1.0`) and merge it once CI passes.
-3. Tag the merged commit and push the tag:
+3. Before you tag, go through the pre-tag checklist:
+   - Run the `Signing Key Check` workflow on `go_dev`
+     (`gh workflow run signing-key-check.yml --ref go_dev -R AnixOps/anix-control`).
+     It proves that the signing secrets are a working pair and match the
+     official root in `internal/config/defaults.yaml`; the tag run signs the
+     packages, the checksums and the Agent installer with them.
+   - Confirm that the latest CI run on `go_dev` (the merged commit) and the
+     latest nightly runs (the `ci.yml` schedule, which runs the race
+     detector, and `Nightly Security`) are green.
+   - Expect live advisories. The tag run's Go Security Scans (`govulncheck`)
+     and Frontend Build (`npm audit --omit=dev --audit-level=moderate`) read
+     the advisory databases of the day, so an advisory published since the
+     last green run fails the tag with nothing changed in the repository. A
+     run of `Nightly Security` that day
+     (`gh workflow run nightly-security.yml -R AnixOps/anix-control`) shows
+     them before the tag does.
+4. Tag the merged commit and push the tag:
 
    ```bash
    git tag v4.1.0 <merge-commit>
    git push origin v4.1.0
    ```
+
+5. Watch the tag run to its end: the release jobs wait for every gate. When a
+   job fails on a flake (a runner, network or registry error, not a test that
+   fails again), use "Re-run failed jobs" on the run page: the jobs that
+   passed keep their results, and the release jobs run once the gates pass.
 
 A suffix (`v4.1.0-rc.1`, `-beta.2`, `-alpha.3`) publishes a prerelease. Only
 unsuffixed tags become the latest release.
@@ -153,7 +173,7 @@ version `latest`.
     that prepares the Control release: `config/scripts/bump_agent_ref.py
     <sha> <agent-tag>` edits exactly these places and `config/AGENT_RELEASE`.
   - `config/AGENT_RELEASE` is the one line that names that release's tag
-    (`v4.2.0`). The release binaries embed it (`-X main.agentRelease`), and
+    (`v5.0.0-rc.1`). The release binaries embed it (`-X main.agentRelease`), and
     it is the Agent a node installs unless `agent_install.agent_version`
     says otherwise. The Agent version is not the Control's: a patch release
     can ship an unchanged Agent, and the Agent repository has no tag with
@@ -175,13 +195,20 @@ version `latest`.
   from the release binaries (the packages are inside them).
   - It is signed with cosign (keyless).
   - It carries SBOM and provenance attestations.
-- **GitHub Release.** 13 assets: the two binary archives, the frontend,
-  `official-public-key.raw`, the source SBOM, `RELEASE_MANIFEST.json`,
-  `RELEASE_NOTES.md`, `SHA256SUMS.txt` and its signature `SHA256SUMS.txt.sig`,
-  `docker-image.txt`, and the Agent installer `agent-install.sh` with its
-  signature `agent-install.sh.sig` (the same file Control serves at
-  `/install.sh`; verify it against the official root as in
-  `docs/guide/agent-onboarding.md`). No package is a release asset.
+- **GitHub Release.** 12 assets, the files of `release/` that the `release`
+  job checks with `verify_release_artifacts.py --require` and uploads:
+  - `anix-control-linux-amd64.tar.gz` and `anix-control-linux-arm64.tar.gz`
+    (`release-binaries`);
+  - `anix-control-frontend.tar.gz`;
+  - `official-public-key.raw`, and the Agent installer `agent-install.sh`
+    with its signature `agent-install.sh.sig` (`plugin-package-publish`;
+    the same file Control serves at `/install.sh`; verify it against the
+    official root as in `docs/guide/agent-onboarding.md`);
+  - `docker-image.txt` (`docker`);
+  - `anix-control-source.sbom.spdx.json`, `RELEASE_NOTES.md`,
+    `RELEASE_MANIFEST.json`, `SHA256SUMS.txt` and `SHA256SUMS.txt.sig`.
+
+  No package is a release asset.
   - `SHA256SUMS.txt.sig` is the Base64 raw Ed25519 signature of
     `SHA256SUMS.txt` made with the package signing key, by the same
     `openssl pkeyutl -sign -rawin` step that signs each manifest. It covers
