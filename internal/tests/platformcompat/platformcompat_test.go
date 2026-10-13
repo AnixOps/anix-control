@@ -48,8 +48,6 @@ var seeded = time.Date(2026, 9, 1, 8, 0, 0, 0, time.UTC)
 
 func uintPtr(v uint) *uint { return &v }
 
-func timePtr(v time.Time) *time.Time { return &v }
-
 // seedViews creates the kernel views; the harness has migrated the tables.
 func seedViews(t testing.TB, db *gorm.DB) {
 	require.NoError(t, packagestore.EnsureKernelAPIViews(db))
