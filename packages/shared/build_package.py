@@ -1,5 +1,16 @@
 #!/usr/bin/env python3
-"""Build deterministic signed AnixOps v2 package artifacts."""
+"""Build deterministic signed AnixOps v2 package artifacts.
+
+Two formats share the manifest, the signing and the verification:
+
+* the full package (default): the slim contents plus the standalone Control
+  host binaries per platform and, for Agent packages, the Agent plugin and its
+  runtimes; tests, the cross-repository E2E and the network module image use it;
+* --builtin: the slim package Control embeds (internal/builtinpkg). It holds no
+  binary: the signed manifest's control_entrypoint is {"builtin": "<id>"}, the
+  host linked into the Control binary (packages/builtin), targets only
+  "control", and index.json lists the set. Releases build this format.
+"""
 
 from __future__ import annotations
 
@@ -39,6 +50,10 @@ WEBUI_VERSION_TOKEN = b"__ANIXOPS_PACKAGE_VERSION__"
 MIGRATION_VERSION_TOKEN = "__ANIXOPS_PACKAGE_VERSION__"
 MIGRATION_ID_PATTERN = re.compile(r"[0-9a-z][0-9a-z_]{0,63}")
 ENTRYPOINT_INDEX_FORMAT = "anixops.package-entrypoints/v1"
+BUILTIN_INDEX_FORMAT = "anixops.builtin-packages/v1"
+BUILTIN_INDEX_NAME = "index.json"
+BUILTIN_PUBLIC_KEY_NAME = "official-public-key.pem"
+BUILTIN_TARGETS = ("control",)
 CONTROL_ENTRYPOINT_INDEX_PATH = "bin/control-entrypoints.json"
 AGENT_ENTRYPOINT_INDEX_PATH = "agent/entrypoints.json"
 SUPPORTED_PLATFORMS = (("linux", "amd64"), ("linux", "arm64"))
@@ -71,32 +86,6 @@ PACKAGE_SPECS = (
     PackageSpec("wireguard", ("control",)),
     PackageSpec("protocol-runtime", ("control",)),
 )
-
-EDITIONS_TABLE = REPO_ROOT / "config" / "editions.json"
-EDITIONS = ("community", "commercial")
-
-
-def commercial_package_ids() -> frozenset[str]:
-    """Return the packages only the commercial edition ships (config/editions.json)."""
-    table = json.loads(EDITIONS_TABLE.read_text(encoding="utf-8"))
-    if table.get("format") != "anixops.editions/v1":
-        raise PackageBuildError(f"{EDITIONS_TABLE} has an unknown format")
-    return frozenset(table.get("commercial_packages", []))
-
-
-def edition_package_specs(edition: str) -> tuple[PackageSpec, ...]:
-    """Return the release package set of an edition: community leaves out the
-    commercial packages, commercial ships every package."""
-    if edition not in EDITIONS:
-        raise PackageBuildError(f"unknown edition {edition!r}")
-    if edition == "commercial":
-        return PACKAGE_SPECS
-    commercial = commercial_package_ids()
-    unknown = commercial - {spec.package_id for spec in PACKAGE_SPECS}
-    if unknown:
-        raise PackageBuildError(f"config/editions.json names unknown packages: {', '.join(sorted(unknown))}")
-    return tuple(spec for spec in PACKAGE_SPECS if spec.package_id not in commercial)
-
 
 MANIFEST_FIELDS = (
     "id",
@@ -383,14 +372,18 @@ def generated_compatibility_routes(package_id: str) -> bytes:
     )
 
 
+# The standalone host binary: packages/builtin/cmd/package-host linked for
+# one package, which runs the package's own host (packages/<id>/control) or
+# the generic host (packages/shared/controlhost). Control runs the same hosts
+# as `anix-control package-host <id>`; --builtin packages carry no binary.
+STANDALONE_HOST_PACKAGE = "./packages/builtin/cmd/package-host"
+
+
 def source_control_host(spec: PackageSpec, version: str, platform: tuple[str, str]) -> bytes:
-    source = package_root(spec.package_id) / "control"
     if shutil.which("go") is None:
         raise PackageBuildError(f"{spec.package_id} Control host requires the Go toolchain")
-    package_path = f"./packages/{spec.package_id}/control" if source.is_dir() else "./packages/shared/controlhost"
-    link_flags = f"-s -w -buildid= -X main.packageVersion={version}"
-    if not source.is_dir():
-        link_flags = f"{link_flags} -X main.packageID={spec.package_id}"
+    package_path = STANDALONE_HOST_PACKAGE
+    link_flags = f"-s -w -buildid= -X main.packageID={spec.package_id} -X main.packageVersion={version}"
     with tempfile.TemporaryDirectory(prefix=f"anixops-{spec.package_id}-host-") as temporary:
         output = Path(temporary) / "control-host"
         environment = os.environ.copy()
@@ -582,6 +575,7 @@ def package_entries(
     runtime_inputs: dict[tuple[str, str, tuple[str, str]], Path],
     *,
     formal_release: bool = False,
+    builtin: bool = False,
 ) -> tuple[list[ArchiveEntry], dict[str, Any]]:
     migrations, migration_entries = source_migrations(spec.package_id, version)
     routes = source_compatibility_routes(spec.package_id)
@@ -592,16 +586,18 @@ def package_entries(
     ]
     if webui is not None:
         entries.append(ArchiveEntry(WEBUI_BUNDLE_PATH, webui, 0o644))
-    control_index_entries: list[dict[str, str]] = []
-    for platform in platforms:
-        control_host = source_control_host(spec, version, platform)
-        control_path = f"bin/control-host-{platform_path_suffix(platform)}"
-        entries.append(ArchiveEntry(control_path, control_host, 0o755))
-        control_index_entries.append(
-            {"architecture": platform_name(platform), "path": control_path, "sha256": sha256_bytes(control_host)}
-        )
-    control_entrypoint = generated_entrypoint_index(control_index_entries)
-    entries.append(ArchiveEntry(CONTROL_ENTRYPOINT_INDEX_PATH, control_entrypoint, 0o644))
+    control_entrypoint = b""
+    if not builtin:
+        control_index_entries: list[dict[str, str]] = []
+        for platform in platforms:
+            control_host = source_control_host(spec, version, platform)
+            control_path = f"bin/control-host-{platform_path_suffix(platform)}"
+            entries.append(ArchiveEntry(control_path, control_host, 0o755))
+            control_index_entries.append(
+                {"architecture": platform_name(platform), "path": control_path, "sha256": sha256_bytes(control_host)}
+            )
+        control_entrypoint = generated_entrypoint_index(control_index_entries)
+        entries.append(ArchiveEntry(CONTROL_ENTRYPOINT_INDEX_PATH, control_entrypoint, 0o644))
     entries.extend(migration_entries)
     source_root = package_root(spec.package_id)
     for relative_path in ("config.schema.json", "config.defaults.json"):
@@ -610,7 +606,8 @@ def package_entries(
             entries.append(ArchiveEntry(relative_path, read_source(source, f"{spec.package_id} {relative_path}"), 0o644))
 
     agent_entrypoint = b""
-    if "agent" in spec.targets:
+    targets = BUILTIN_TARGETS if builtin else spec.targets
+    if "agent" in targets:
         agent_index_entries: list[dict[str, str]] = []
         for platform in platforms:
             agent = source_agent_binary(spec.package_id, platform, agent_inputs)
@@ -622,8 +619,8 @@ def package_entries(
         agent_entrypoint = generated_entrypoint_index(agent_index_entries)
         entries.append(ArchiveEntry(AGENT_ENTRYPOINT_INDEX_PATH, agent_entrypoint, 0o644))
 
-    runtime_entrypoints = generated_runtime_entrypoints(spec, platforms)
-    for runtime_name in spec.runtimes:
+    runtime_entrypoints = {} if builtin else generated_runtime_entrypoints(spec, platforms)
+    for runtime_name in () if builtin else spec.runtimes:
         for platform in platforms:
             runtime_binary = source_runtime_binary(
                 spec.package_id,
@@ -650,7 +647,7 @@ def package_entries(
         "files": file_index,
         "format": PACKAGE_FORMAT,
         "id": spec.package_id,
-        "targets": list(spec.targets),
+        "targets": list(targets),
         "version": version,
     }
     entries.append(ArchiveEntry("package.json", pretty_json(package_index), 0o644))
@@ -675,9 +672,9 @@ def ordered_manifest(template: Any) -> dict[str, Any]:
     return {field: template[field] for field in MANIFEST_FIELDS if field in template}
 
 
-def emitted_manifest_fields(spec: PackageSpec, has_webui: bool = True) -> tuple[str, ...]:
+def emitted_manifest_fields(spec: PackageSpec, has_webui: bool = True, builtin: bool = False) -> tuple[str, ...]:
     omitted = set() if has_webui else {"webui"}
-    if "agent" not in spec.targets:
+    if builtin or "agent" not in spec.targets:
         omitted |= {"agent_entrypoint", "runtime_api_version"}
     return tuple(field for field in MANIFEST_FIELDS if field not in omitted)
 
@@ -688,6 +685,8 @@ def generated_manifest(
     platforms: tuple[tuple[str, str], ...],
     artifact: bytes,
     contents: dict[str, Any],
+    *,
+    builtin: bool = False,
 ) -> dict[str, Any]:
     manifest = ordered_manifest(manifest_template(spec.package_id))
     if manifest["id"] != spec.package_id:
@@ -712,6 +711,11 @@ def generated_manifest(
 
     manifest["version"] = version
     manifest["api_version"] = MANIFEST_API_VERSION
+    if builtin:
+        # The host is the Control binary, released for these platforms; the
+        # package itself holds no binary.
+        manifest["targets"] = list(BUILTIN_TARGETS)
+        platforms = SUPPORTED_PLATFORMS
     manifest["architectures"] = [platform_name(platform) for platform in platforms]
     manifest["artifact_sha256"] = sha256_bytes(artifact)
     manifest["config_schema"] = sorted_json_value(manifest["config_schema"])
@@ -720,10 +724,13 @@ def generated_manifest(
     if webui is not None:
         manifest["frontend_sha256"] = sha256_bytes(contents["webui"])
         webui["bundle"]["sha256"] = manifest["frontend_sha256"]
-    manifest["control_entrypoint"] = {
-        "path": CONTROL_ENTRYPOINT_INDEX_PATH,
-        "sha256": sha256_bytes(contents["control_entrypoint"]),
-    }
+    if builtin:
+        manifest["control_entrypoint"] = {"builtin": spec.package_id}
+    else:
+        manifest["control_entrypoint"] = {
+            "path": CONTROL_ENTRYPOINT_INDEX_PATH,
+            "sha256": sha256_bytes(contents["control_entrypoint"]),
+        }
     manifest["migrations"] = {
         "index": "migrations/index.json",
         "sha256": sha256_bytes(contents["migrations"]),
@@ -734,7 +741,7 @@ def generated_manifest(
     }
     # This contract is deliberately the final compatibility-routes file bytes.
     manifest["route_contract_digest"] = sha256_bytes(contents["routes"])
-    if "agent" in spec.targets:
+    if "agent" in manifest["targets"]:
         manifest["agent_entrypoint"] = {
             "path": AGENT_ENTRYPOINT_INDEX_PATH,
             "sha256": sha256_bytes(contents["agent_entrypoint"]),
@@ -743,7 +750,7 @@ def generated_manifest(
     else:
         del manifest["agent_entrypoint"]
         del manifest["runtime_api_version"]
-    validate_manifest_value(manifest, spec)
+    validate_manifest_value(manifest, spec, builtin=builtin)
     return manifest
 
 
@@ -751,10 +758,11 @@ def valid_digest(value: Any) -> bool:
     return isinstance(value, str) and len(value) == 64 and all(char in "0123456789abcdef" for char in value)
 
 
-def validate_manifest_value(manifest: dict[str, Any], spec: PackageSpec) -> None:
+def validate_manifest_value(manifest: dict[str, Any], spec: PackageSpec, *, builtin: bool = False) -> None:
     has_webui = "webui" in manifest
-    if tuple(manifest) != emitted_manifest_fields(spec, has_webui):
+    if tuple(manifest) != emitted_manifest_fields(spec, has_webui, builtin):
         raise PackageBuildError("generated manifest field order is not canonical")
+    targets = BUILTIN_TARGETS if builtin else spec.targets
     if has_webui:
         webui = manifest["webui"]
         bundle = webui.get("bundle") if isinstance(webui, dict) else None
@@ -771,7 +779,7 @@ def validate_manifest_value(manifest: dict[str, Any], spec: PackageSpec) -> None
         raise PackageBuildError("generated manifest API version is invalid")
     if manifest.get("publisher") != "AnixOps":
         raise PackageBuildError("generated manifest publisher is invalid")
-    if tuple(manifest.get("targets", [])) != spec.targets:
+    if tuple(manifest.get("targets", [])) != targets:
         raise PackageBuildError("generated manifest targets do not match the package matrix")
     architectures = manifest.get("architectures")
     if not isinstance(architectures, list):
@@ -782,24 +790,37 @@ def validate_manifest_value(manifest: dict[str, Any], spec: PackageSpec) -> None
         raise PackageBuildError("generated manifest architectures are invalid") from error
     if len(platforms) != len(architectures) or len(set(platforms)) != len(platforms):
         raise PackageBuildError("generated manifest architectures are invalid")
-    if manifest.get("entrypoints") != generated_runtime_entrypoints(spec, platforms):
+    expected_entrypoints = {} if builtin else generated_runtime_entrypoints(spec, platforms)
+    if manifest.get("entrypoints") != expected_entrypoints:
         raise PackageBuildError("generated manifest runtime entrypoints are invalid")
-    for value in (
+    control_entrypoint = manifest.get("control_entrypoint")
+    if builtin:
+        if control_entrypoint != {"builtin": spec.package_id}:
+            raise PackageBuildError("generated built-in manifest must name its built-in host")
+        if platforms != SUPPORTED_PLATFORMS:
+            raise PackageBuildError("generated built-in manifest must declare linux/amd64 and linux/arm64")
+    digests = [
         manifest.get("artifact_sha256"),
         manifest.get("route_contract_digest"),
-        manifest.get("control_entrypoint", {}).get("sha256") if isinstance(manifest.get("control_entrypoint"), dict) else None,
         manifest.get("migrations", {}).get("sha256") if isinstance(manifest.get("migrations"), dict) else None,
         manifest.get("compatibility_routes", {}).get("sha256") if isinstance(manifest.get("compatibility_routes"), dict) else None,
-    ):
+    ]
+    paths = [("migrations", "index"), ("compatibility_routes", "path")]
+    if not builtin:
+        if isinstance(control_entrypoint, dict) and "builtin" in control_entrypoint:
+            raise PackageBuildError("generated manifest names a built-in host outside --builtin")
+        digests.append(control_entrypoint.get("sha256") if isinstance(control_entrypoint, dict) else None)
+        paths.append(("control_entrypoint", "path"))
+    for value in digests:
         if not valid_digest(value):
             raise PackageBuildError("generated manifest digest is invalid")
-    for key, field in (("control_entrypoint", "path"), ("migrations", "index"), ("compatibility_routes", "path")):
+    for key, field in paths:
         value = manifest.get(key)
         if not isinstance(value, dict):
             raise PackageBuildError(f"generated manifest {key} is required")
         require_relative_path(value.get(field), f"generated manifest {key}")
     agent_entrypoint = manifest.get("agent_entrypoint")
-    if "agent" in spec.targets:
+    if "agent" in targets:
         if not isinstance(agent_entrypoint, dict):
             raise PackageBuildError("generated Agent-target manifest requires agent_entrypoint")
         require_relative_path(agent_entrypoint.get("path"), "generated manifest agent_entrypoint")
@@ -1040,6 +1061,7 @@ def verify_output(
     official_public_key: bytes | None = None,
     formal_release: bool = False,
     require_public_key: bool = True,
+    builtin: bool = False,
 ) -> None:
     stem = f"{spec.package_id}-{version}"
     artifact_path = output / f"{stem}.anxp"
@@ -1055,7 +1077,7 @@ def verify_output(
     manifest = load_json(manifest_path, f"{spec.package_id} generated manifest")
     if not isinstance(manifest, dict):
         raise PackageBuildError("generated manifest must be an object")
-    validate_manifest_value(manifest, spec)
+    validate_manifest_value(manifest, spec, builtin=builtin)
     if manifest.get("id") != spec.package_id or manifest.get("version") != version:
         raise PackageBuildError("generated manifest identity does not match the selected package")
     if formal_release and manifest.get("architectures") != [platform_name(platform) for platform in SUPPORTED_PLATFORMS]:
@@ -1094,7 +1116,11 @@ def verify_output(
                     raise PackageBuildError(f"{spec.package_id} WebUI bundle does not match the manifest digest")
             elif webui_members:
                 raise PackageBuildError(f"{spec.package_id} artifact holds a WebUI bundle its manifest does not declare")
-            for runtime_name in spec.runtimes:
+            if builtin:
+                binaries = [name for name in names if name.startswith(("bin/", "agent/", "runtime/"))]
+                if binaries:
+                    raise PackageBuildError(f"{spec.package_id} built-in artifact must hold no binary: {', '.join(binaries)}")
+            for runtime_name in () if builtin else spec.runtimes:
                 for platform in (parse_platform(value) for value in manifest["architectures"]):
                     entrypoint = runtime_archive_path(runtime_name, platform)
                     member = archive.getmember(entrypoint)
@@ -1129,6 +1155,7 @@ def build_package(
     runtime_inputs: dict[tuple[str, str, tuple[str, str]], Path],
     official_public_key: bytes | None = None,
     formal_release: bool = False,
+    builtin: bool = False,
 ) -> None:
     entries, contents = package_entries(
         spec,
@@ -1137,13 +1164,14 @@ def build_package(
         agent_inputs,
         runtime_inputs,
         formal_release=formal_release,
+        builtin=builtin,
     )
     # Archive order and bytes are fixed before any generated digest is inserted
     # into the signed manifest.
     artifact = deterministic_artifact(entries)
     if len(artifact) > MAX_ARTIFACT_BYTES:
         raise PackageBuildError(f"{spec.package_id} artifact exceeds {MAX_ARTIFACT_BYTES} bytes")
-    manifest = generated_manifest(spec, version, platforms, artifact, contents)
+    manifest = generated_manifest(spec, version, platforms, artifact, contents, builtin=builtin)
     manifest_bytes = canonical_json(manifest)
     signature = base64.b64encode(signer.sign(manifest_bytes)) + b"\n"
     stem = f"{spec.package_id}-{version}"
@@ -1157,156 +1185,70 @@ def build_package(
     }
     for name, data in generated.items():
         atomic_write(output / name, data, 0o644)
-    verify_output(output, spec, version, official_public_key, formal_release)
+    verify_output(output, spec, version, official_public_key, formal_release, builtin=builtin)
 
 
-# The GitHub Release ships every package of one release as a single archive
-# instead of five assets per package. PACKAGE_SPECS (narrowed by --package) is
-# the only list of what goes in; the archive bytes carry a detached signature
-# made by the same Ed25519 key and openssl step as each manifest signature.
-RELEASE_ARCHIVE_PREFIX = "anix-control-packages"
-RELEASE_ARCHIVE_PACKAGE_SUFFIXES = (".anxp", ".manifest.json", ".manifest.sig", ".sbom.spdx.json")
-RELEASE_ARCHIVE_PUBLIC_KEY = "official-public-key.pem"
-RELEASE_ARCHIVE_COMPRESSLEVEL = 6
+# The built-in set: the slim packages Control embeds (internal/builtinpkg)
+# and index.json, which lists them for the kernel's start-up bootstrap.
+def builtin_index(selected: tuple[PackageSpec, ...], version: str) -> bytes:
+    packages = [
+        {
+            "artifact": f"{spec.package_id}-{version}.anxp",
+            "id": spec.package_id,
+            "manifest": f"{spec.package_id}-{version}.manifest.json",
+            "signature": f"{spec.package_id}-{version}.manifest.sig",
+            "version": version,
+        }
+        for spec in sorted(selected, key=lambda item: item.package_id)
+    ]
+    return pretty_json({"format": BUILTIN_INDEX_FORMAT, "packages": packages, "public_key": BUILTIN_PUBLIC_KEY_NAME})
 
 
-def release_archive_name(version: str) -> str:
-    return f"{RELEASE_ARCHIVE_PREFIX}-{version}.tar.gz"
+def write_builtin_index(output: Path, selected: tuple[PackageSpec, ...], version: str, signer: Signer) -> None:
+    atomic_write(output / BUILTIN_PUBLIC_KEY_NAME, signer.public_key, 0o644)
+    atomic_write(output / BUILTIN_INDEX_NAME, builtin_index(selected, version), 0o644)
 
 
-def release_archive_members(selected: tuple[PackageSpec, ...], version: str) -> list[str]:
-    """Return the archive member names, relative to the archive's top directory."""
-    names = [RELEASE_ARCHIVE_PUBLIC_KEY]
-    for spec in selected:
-        names.extend(f"{spec.package_id}-{version}{suffix}" for suffix in RELEASE_ARCHIVE_PACKAGE_SUFFIXES)
-    return sorted(names)
-
-
-def write_release_archive(
+def verify_builtin_set(
     output: Path,
     selected: tuple[PackageSpec, ...],
     version: str,
-    official_public_key: bytes,
-    destination: Path,
-) -> Path:
-    top = f"{RELEASE_ARCHIVE_PREFIX}-{version}"
-    destination.mkdir(parents=True, exist_ok=True)
-    archive_path = destination / release_archive_name(version)
-    descriptor, temporary_name = tempfile.mkstemp(prefix=f".{archive_path.name}.", dir=destination)
-    temporary = Path(temporary_name)
-    try:
-        with os.fdopen(descriptor, "wb") as handle:
-            with gzip.GzipFile(
-                fileobj=handle, mode="wb", compresslevel=RELEASE_ARCHIVE_COMPRESSLEVEL, mtime=0, filename=""
-            ) as compressor:
-                with tarfile.open(fileobj=compressor, mode="w", format=tarfile.USTAR_FORMAT) as archive:
-                    for name in release_archive_members(selected, version):
-                        info = tarfile.TarInfo(f"{top}/{name}")
-                        info.mode = 0o644
-                        info.uid = 0
-                        info.gid = 0
-                        info.uname = ""
-                        info.gname = ""
-                        info.mtime = 0
-                        info.type = tarfile.REGTYPE
-                        if name == RELEASE_ARCHIVE_PUBLIC_KEY:
-                            data = ed25519_public_key_pem(official_public_key)
-                            info.size = len(data)
-                            archive.addfile(info, io.BytesIO(data))
-                            continue
-                        source = output / name
-                        if source.is_symlink() or not source.is_file():
-                            raise PackageBuildError(f"release archive input is not a regular file: {name}")
-                        info.size = source.stat().st_size
-                        with source.open("rb") as member:
-                            archive.addfile(info, member)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.chmod(temporary, 0o644)
-        os.replace(temporary, archive_path)
-    finally:
-        if temporary.exists():
-            temporary.unlink()
-    return archive_path
-
-
-def verify_release_archive(
-    archive_path: Path,
-    selected: tuple[PackageSpec, ...],
-    version: str,
-    official_public_key: bytes,
+    official_public_key: bytes | None = None,
+    formal_release: bool = False,
 ) -> None:
-    """Check the archive signature, its exact member set and every package in it."""
-    signature_path = archive_path.with_name(archive_path.name + ".sig")
-    if archive_path.is_symlink() or not archive_path.is_file():
-        raise PackageBuildError(f"release archive is not a regular file: {archive_path}")
-    if signature_path.is_symlink() or not signature_path.is_file():
-        raise PackageBuildError(f"release archive signature is missing: {signature_path}")
-    verify_signature_with_official_root(archive_path, signature_path, official_public_key, "release archive signature")
-    top = f"{RELEASE_ARCHIVE_PREFIX}-{version}"
-    expected = [f"{top}/{name}" for name in release_archive_members(selected, version)]
-    with tempfile.TemporaryDirectory(prefix="anixops-package-archive-") as temporary:
-        root = Path(temporary)
-        try:
-            with tarfile.open(archive_path, mode="r:gz") as archive:
-                members = archive.getmembers()
-                names = [member.name for member in members]
-                if names != expected:
-                    missing = sorted(set(expected) - set(names))
-                    extra = sorted(set(names) - set(expected))
-                    raise PackageBuildError(f"release archive member set mismatch; missing={missing}, extra={extra}")
-                for member in members:
-                    if not member.isfile() or member.mtime != 0 or member.uid != 0 or member.gid != 0:
-                        raise PackageBuildError(f"release archive member metadata is not deterministic: {member.name}")
-                    handle = archive.extractfile(member)
-                    if handle is None:
-                        raise PackageBuildError(f"release archive member cannot be read: {member.name}")
-                    with handle, (root / Path(member.name).name).open("wb") as target:
-                        shutil.copyfileobj(handle, target)
-        except (tarfile.TarError, OSError, EOFError) as error:
-            raise PackageBuildError(f"read release archive: {error}") from error
-        embedded_key = derive_ed25519_public_key_from_pem(root / RELEASE_ARCHIVE_PUBLIC_KEY)
-        if not hmac.compare_digest(embedded_key, official_public_key):
-            raise PackageBuildError("release archive public key does not match the official public key")
-        for spec in selected:
-            verify_output(root, spec, version, official_public_key, require_public_key=False)
-
-
-def build_release_archive(
-    output: Path,
-    selected: tuple[PackageSpec, ...],
-    version: str,
-    signer: Signer,
-    official_public_key: bytes,
-    destination: Path,
-) -> Path:
-    # Package outputs are checked against the configured root before they are
-    # bundled; the formal --verify-release run stays a separate release step.
+    """Check index.json against the selected packages and verify every one."""
+    index_path = output / BUILTIN_INDEX_NAME
+    if index_path.is_symlink() or not index_path.is_file():
+        raise PackageBuildError(f"built-in package index is missing: {index_path}")
+    if index_path.read_bytes() != builtin_index(selected, version):
+        raise PackageBuildError("built-in package index does not list exactly the selected packages")
     for spec in selected:
-        verify_output(output, spec, version, official_public_key)
-    archive_path = write_release_archive(output, selected, version, official_public_key, destination)
-    signature = base64.b64encode(signer.sign_file(archive_path, "release archive")) + b"\n"
-    atomic_write(archive_path.with_name(archive_path.name + ".sig"), signature, 0o644)
-    verify_release_archive(archive_path, selected, version, official_public_key)
-    return archive_path
+        verify_output(output, spec, version, official_public_key, formal_release, builtin=True)
+    public_key_path = output / BUILTIN_PUBLIC_KEY_NAME
+    if public_key_path.is_symlink() or not public_key_path.is_file():
+        raise PackageBuildError("built-in package set has no public key")
+    if official_public_key is not None and not hmac.compare_digest(
+        derive_ed25519_public_key_from_pem(public_key_path), official_public_key
+    ):
+        raise PackageBuildError("built-in package public key does not match the official public key")
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     scope = parser.add_mutually_exclusive_group(required=True)
-    scope.add_argument("--all", action="store_true", help="Build every v4 package of the --edition release set.")
-    scope.add_argument("--package", choices=[spec.package_id for spec in PACKAGE_SPECS], help="Build one package.")
-    parser.add_argument(
-        "--edition",
-        choices=EDITIONS,
-        default="community",
-        help="Release edition for --all: community (default) leaves out the commercial packages of config/editions.json.",
+    scope.add_argument("--all", action="store_true", help="Build every official package.")
+    scope.add_argument(
+        "--package",
+        action="append",
+        choices=[spec.package_id for spec in PACKAGE_SPECS],
+        help="Build one package; repeat for several (with --builtin, the index lists them).",
     )
     parser.add_argument("--version", required=True, help="Stable package version applied to every selected artifact.")
     parser.add_argument(
         "--out",
         type=Path,
-        help="Directory for .anxp, manifest, signature, and SBOM files (not used by --verify-release-archive).",
+        required=True,
+        help="Directory for .anxp, manifest, signature, and SBOM files (and index.json with --builtin).",
     )
     parser.add_argument("--goos", default="linux", help="Legacy single-platform GOOS selector (default: linux).")
     parser.add_argument("--goarch", default="amd64", help="Legacy single-platform GOARCH selector (default: amd64).")
@@ -1328,6 +1270,15 @@ def parse_args() -> argparse.Namespace:
         default=[],
         help="Runtime binary input PACKAGE_ID:RUNTIME@GOOS/GOARCH=ABSOLUTE_PATH. Repeat for every declared runtime/platform.",
     )
+    parser.add_argument(
+        "--builtin",
+        action="store_true",
+        help=(
+            "Build the slim packages Control embeds (internal/builtinpkg/dist): no host or Agent binaries, "
+            "control_entrypoint {\"builtin\": ID}, and index.json listing the set. Accepts --formal-release "
+            "and --verify-release; no platforms, Agent or runtime binaries."
+        ),
+    )
     parser.add_argument("--signing-key", type=Path, help="PEM Ed25519 key used for an official release signature.")
     release_mode = parser.add_mutually_exclusive_group()
     release_mode.add_argument(
@@ -1339,21 +1290,6 @@ def parse_args() -> argparse.Namespace:
         "--verify-release",
         action="store_true",
         help="Verify existing selected artifacts against --official-public-key without building new artifacts.",
-    )
-    release_mode.add_argument(
-        "--release-archive",
-        type=Path,
-        metavar="DIR",
-        help=(
-            "Bundle the existing selected outputs in --out into DIR/anix-control-packages-VERSION.tar.gz and sign it "
-            "with --signing-key, which must match --official-public-key."
-        ),
-    )
-    release_mode.add_argument(
-        "--verify-release-archive",
-        type=Path,
-        metavar="ARCHIVE",
-        help="Verify a release package archive, its .sig and every package in it against --official-public-key.",
     )
     parser.add_argument(
         "--official-public-key",
@@ -1367,7 +1303,9 @@ def main() -> int:
     args = parse_args()
     try:
         version = require_safe_segment(args.version, "version")
-        selected = edition_package_specs(args.edition) if args.all else tuple(spec for spec in PACKAGE_SPECS if spec.package_id == args.package)
+        if args.package and len(set(args.package)) != len(args.package):
+            raise PackageBuildError("--package names a package twice")
+        selected = PACKAGE_SPECS if args.all else tuple(spec for spec in PACKAGE_SPECS if spec.package_id in args.package)
         if args.platform and (args.goos != "linux" or args.goarch != "amd64"):
             raise PackageBuildError("--platform cannot be combined with --goos or --goarch")
         platforms = normalize_platforms(args.platform or [args.goos + "/" + args.goarch])
@@ -1388,34 +1326,21 @@ def main() -> int:
                 raise PackageBuildError(
                     f"runtime binary input {package_id}:{runtime_name}@{platform_name(platform)} is outside the selected platform scope"
                 )
-        if args.out is None and args.verify_release_archive is None:
-            raise PackageBuildError("--out is required")
-        archive_mode = args.release_archive is not None or args.verify_release_archive is not None
-        if args.official_public_key is not None and not (args.formal_release or args.verify_release or archive_mode):
-            raise PackageBuildError(
-                "--official-public-key requires --formal-release, --verify-release, --release-archive or --verify-release-archive"
-            )
-        if args.verify_release_archive is not None:
-            if args.signing_key is not None:
-                raise PackageBuildError("release archive verification does not accept --signing-key")
-            official_public_key = load_official_public_key(args.official_public_key, "release archive verification")
-            verify_release_archive(args.verify_release_archive, selected, version, official_public_key)
-            print(f"verified {args.verify_release_archive} and its {len(selected)} packages against the configured official root")
-            return 0
-        if args.release_archive is not None:
-            if args.signing_key is None:
-                raise PackageBuildError("release archive requires --signing-key")
-            official_public_key = load_official_public_key(args.official_public_key, "release archive")
-            with signer_for_build(args.signing_key, official_public_key) as signer:
-                archive_path = build_release_archive(
-                    args.out, selected, version, signer, official_public_key, args.release_archive
-                )
-            print(f"wrote and verified {archive_path} and {archive_path.name}.sig with {len(selected)} packages")
-            return 0
+        if args.builtin:
+            if args.platform or args.goos != "linux" or args.goarch != "amd64":
+                raise PackageBuildError("--builtin packages hold no binary: they take no platform")
+            if agent_inputs or runtime_inputs:
+                raise PackageBuildError("--builtin packages hold no Agent or runtime binary")
+        if args.official_public_key is not None and not (args.formal_release or args.verify_release):
+            raise PackageBuildError("--official-public-key requires --formal-release or --verify-release")
         if args.verify_release:
             if args.signing_key is not None:
                 raise PackageBuildError("release artifact verification does not accept --signing-key")
             official_public_key = load_official_public_key(args.official_public_key, "release artifact verification")
+            if args.builtin:
+                verify_builtin_set(args.out, selected, version, official_public_key, formal_release=True)
+                print(f"verified {len(selected)} built-in packages and their index against the configured official root in {args.out}")
+                return 0
             for spec in selected:
                 verify_output(args.out, spec, version, official_public_key, formal_release=True)
             print(f"verified {len(selected)} release package artifacts against the configured official root in {args.out}")
@@ -1427,7 +1352,7 @@ def main() -> int:
                 raise PackageBuildError("formal release requires --signing-key")
             official_public_key = load_official_public_key(args.official_public_key, "formal release")
         with signer_for_build(args.signing_key, official_public_key) as signer:
-            if args.formal_release and platforms != SUPPORTED_PLATFORMS:
+            if args.formal_release and not args.builtin and platforms != SUPPORTED_PLATFORMS:
                 raise PackageBuildError("formal release requires linux/amd64 and linux/arm64 package platforms")
             for spec in selected:
                 build_package(
@@ -1440,11 +1365,16 @@ def main() -> int:
                     runtime_inputs,
                     official_public_key,
                     args.formal_release,
+                    args.builtin,
                 )
+            if args.builtin:
+                write_builtin_index(args.out, selected, version, signer)
+                verify_builtin_set(args.out, selected, version, official_public_key, args.formal_release)
     except PackageBuildError as error:
         print(f"build_package.py: error: {error}", file=os.sys.stderr)
         return 1
-    print(f"built {len(selected)} signed package artifacts and {len(selected)} SBOM files in {args.out}")
+    kind = "built-in package artifacts and their index" if args.builtin else "package artifacts"
+    print(f"built {len(selected)} signed {kind} and {len(selected)} SBOM files in {args.out}")
     return 0
 
 

@@ -18,22 +18,21 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The administrator's invite codes are registration control: in both
-// editions identity-platform serves them through the identity bridge, and a
-// newly generated code admits a registration that requires one. The
-// commissions, withdrawals and invite statistics stay hidden in community.
-func TestAdminInviteCodesAdmitRegistrationInEveryEdition(t *testing.T) {
-	for index, edition := range []string{config.EditionCommunity, config.EditionCommercial} {
+// The administrator's invite codes are registration control:
+// identity-platform serves them through the identity bridge, and a newly
+// generated code admits a registration that requires one.
+func TestAdminInviteCodesAdmitRegistration(t *testing.T) {
+	for index, name := range []string{"registration"} {
 		// Registration is rate limited per client address, across subtests.
 		remoteAddr := fmt.Sprintf("192.0.2.%d:1234", 10+index)
-		t.Run(edition, func(t *testing.T) {
+		t.Run(name, func(t *testing.T) {
 			gin.SetMode(gin.TestMode)
 			cache.InitMemory()
 			cfg := &config.Config{
 				Env:      "test",
 				Database: config.DatabaseConfig{Driver: "sqlite", Database: ":memory:"},
 				JWT:      config.JWTConfig{Secret: "invite-codes-e2e-secret", Expire: 3600},
-				App:      config.AppConfig{APIToken: "invite-codes-e2e-api-token", SubscribePath: "s", Edition: edition},
+				App:      config.AppConfig{APIToken: "invite-codes-e2e-api-token", SubscribePath: "s"},
 			}
 			cfg.Auth.Registration.RequireInvite = true
 			config.Set(cfg)
@@ -136,26 +135,6 @@ func TestAdminInviteCodesAdmitRegistrationInEveryEdition(t *testing.T) {
 			}, "")
 			requirePanelErrorResponse(t, late.Code, late.Body.Bytes(), "invalid or used invite code")
 
-			// Commissions, withdrawals, invite statistics and configuration
-			// stay commercial: community answers them as undeclared routes.
-			if edition == config.EditionCommunity {
-				unknown := serve(http.MethodGet, "/api/v2/no/such/route", nil, token)
-				require.Equal(t, http.StatusNotFound, unknown.Code)
-				for _, route := range []struct{ method, path string }{
-					{http.MethodGet, "/api/v2/admin/invite/stats"},
-					{http.MethodGet, "/api/v2/admin/invite/withdrawals"},
-					{http.MethodPost, "/api/v2/admin/invite/withdrawals/1/process"},
-					{http.MethodGet, "/api/v2/admin/invite/config"},
-					{http.MethodPut, "/api/v2/admin/invite/config"},
-					{http.MethodGet, "/api/v2/user/invite"},
-					{http.MethodPost, "/api/v2/user/invite/generate"},
-					{http.MethodGet, "/api/v2/user/invite/commissions"},
-				} {
-					response := serve(route.method, route.path, nil, token)
-					require.Equal(t, unknown.Code, response.Code, route.path)
-					require.Equal(t, unknown.Body.String(), response.Body.String(), route.path)
-				}
-			}
 		})
 	}
 }

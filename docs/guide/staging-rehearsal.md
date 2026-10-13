@@ -89,9 +89,10 @@ scripts/staging/rehearse.sh up
 ```
 
 It builds Control and `stagingctl`, builds and signs every package at the
-Control version (commercial edition, so batch 3's order, payment and
-affiliate are included) with a throwaway key that the stack trusts, starts
-PostgreSQL and Control (`app.edition: commercial`), registers, uploads and
+Control version (batch 3's order, payment and affiliate included: there are
+no editions) with a throwaway key that the stack trusts, starts
+PostgreSQL and Control (built without the built-in packages, so it imports
+`identity-platform` from its bootstrap directory), registers, uploads and
 enables every package as `UPGRADE.md` ("Package Install Window") describes,
 seeds the synthetic data and snapshots the seeded database as the template
 `staging_seed`.

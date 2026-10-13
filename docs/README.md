@@ -18,7 +18,7 @@ Use this tree like NodeX:
 - 4.0.x RC execution roadmap (historical): [`ROADMAP-4.0.x-RC.md`](ROADMAP-4.0.x-RC.md)
 - 4.0.x RC verification snapshot (historical): [`RC-EVIDENCE-4.0.x.md`](RC-EVIDENCE-4.0.x.md)
 - Product version history and staged-plan status: [`architecture/release-line-status.md`](architecture/release-line-status.md)
-- Plugin kernel contract: [`architecture/plugin-kernel-contract.md`](architecture/plugin-kernel-contract.md)
+- Plugin kernel contract, including the official packages built into Control (installed at every start): [`architecture/plugin-kernel-contract.md`](architecture/plugin-kernel-contract.md#built-in-packages)
 - Package extraction design and current development direction: [`architecture/package-extraction.md`](architecture/package-extraction.md)
 - Order completion contract for the payment callbacks: [`architecture/order-service.md`](architecture/order-service.md)
 - Node operations contract, node credential split and Agent A2 (design, draft): [`architecture/node-ops-service.md`](architecture/node-ops-service.md)

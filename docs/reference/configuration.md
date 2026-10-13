@@ -75,18 +75,24 @@ PostgreSQL connection settings:
 |------|------|------|
 | `forward.anixops_experimental` (`ANIX_CONTROL_FORWARD_ANIXOPS_EXPERIMENTAL`) | `false` | Lets routes use the experimental AnixOps engine and link (`ENGINE_ANIXOPS`, `LINK_SECURITY_ANIXOPS`), the secure relay between forward nodes (`docs/architecture/anixops-protocol.md`). Off, validation and the planner refuse them (`engine_not_enabled`). The Agents need their own switch, `Forward.AnixOps.Enable` in the Agent's JSON configuration (`"Forward": {"AnixOps": {"Enable": true}}`), to advertise the engine, or the planner refuses their nodes. v4.2 ships it as a prototype whose wire format (ALPN `anixops/0`) may change without notice; v4.3 freezes it. |
 
-## Product Edition
+## Built-in Packages
+
+Every official package is built into the binary and installed, upgraded and
+enabled at every start
+([`../architecture/plugin-kernel-contract.md`](../architecture/plugin-kernel-contract.md#built-in-packages)).
+Three keys bear on it:
 
 | Key | Default | Notes |
 |------|------|------|
-| `app.edition` (`ANIX_CONTROL_APP_EDITION`) | `community` | `community` hides orders, payments (every gateway and callback), coupons, the invite commission and plan purchase; plans stay as free subscription templates. `commercial` serves everything. Any other value stops the server at start-up. |
+| `plugins.official_public_key` (`ANIX_CONTROL_PLUGINS_OFFICIAL_PUBLIC_KEY`) | the AnixOps release root | Every built-in package must verify against it; a package that does not is left out (`builtin_package_invalid`) and Control starts without it. A development build (`make build`) is signed with a development key: `make run` sets the variable to it (`make dev-package-key` prints it). |
+| `plugins.control_execution_enabled` | `true` | Runs the package hosts. Off, the packages are installed but every `/api/v2` route answers 502. Keep it on. |
+| `plugins.identity_bootstrap_package_dir` | empty | Ignored by a binary with built-in packages (every release). A development build without them still imports `identity-platform` from this directory at start. |
 
-The commercial packages and routes are listed in `config/editions.json`.
-In the community edition their `/api/v2` routes answer like an undeclared
-route, the web app hides their menus and pages, and the release leaves the
-packages out. The web app reads the edition from the public
-`GET /api/v4/public/config`. Installs that use payments must set
-`commercial` before upgrading past 4.1.0-rc.2 (`docs/UPGRADE.md`).
+`app.edition` is gone: there are no community and commercial editions.
+Orders, payments and affiliate are installed like every other package, and
+a configuration that still sets the key loads (the key is ignored). The
+public `GET /api/v4/public/config` keeps its `edition` (`commercial`) and
+`hidden_packages` (empty) fields for the web app.
 
 ## Unified Forward Runtime Layout
 

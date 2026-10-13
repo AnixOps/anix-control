@@ -1,8 +1,8 @@
 # Kernel Alerts: Certificate Expiry And Stuck Phases
 
 Control watches the things that fail slowly and silently: a certificate whose
-holder stopped renewing it, a CA that is about to end, and a rollout that was
-started and never finished. The **alert monitor** (`internal/kernelalerts`)
+holder stopped renewing it, a CA that is about to end, a rollout that was
+started and never finished, and a built-in package that is not running. The **alert monitor** (`internal/kernelalerts`)
 scans them every 15 minutes, keeps one row per alert in `v4_kernel_alert`,
 sends the administrators one digest of what needs them, and lists the rows at
 `GET /api/v4/kernel/alerts`. It only reads the certificate stores and the
@@ -20,6 +20,8 @@ phase tables: it never renews, revokes or advances anything.
 | `node_secrets_finalize_interrupted` | the legacy table | a finalize started (phase `finalized`, no `finalized_at`) over an hour ago and did not complete | run `anix-control node-secrets finalize -confirm <table>` again: it resumes |
 | `identity_import_stalled` | `authority` | the identity authority sits in `importing` with no progress for `alerts.phase_stuck_after` | resume the import or start the cutover (`POST /api/v4/kernel/identity/import`, `/cutover`) |
 | `identity_cutover_not_finalized` | `authority` | identity owns logins (state `identity`) since the latest cutover event, and the legacy credentials were not finalized for `alerts.phase_stuck_after` | `POST /api/v4/kernel/identity/finalize` (allowed a day after the cutover), or roll back |
+| `builtin_package_invalid` (critical) | the package id (`index` for an unreadable set) | an official package built into the binary does not verify against `plugins.official_public_key` (signature, digest or contents): it was not installed and its routes are unavailable | install a release binary verified against `SHA256SUMS.txt.sig` ([`../RELEASING.md`](../RELEASING.md#verifying-a-release)), or set `plugins.official_public_key` to the key that signed it (a development build: `make dev-package-key`); the start log names that key |
+| `builtin_package_failed` (critical) | the package id | a built-in package verified, but its installation is `failed` (its host does not start, a migration failed, the binary is older than the installed version) or is not enabled at the built-in version | read the reason in the alert and the Control log (`built-in package ... failed`), fix it, restart Control: the start installs and starts it again |
 
 An alert resolves by itself on the next scan after its cause is gone (a new
 certificate exists, the CA was rotated, the phase moved on, the node was

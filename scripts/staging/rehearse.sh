@@ -121,7 +121,7 @@ build() {
       -o "${STAGING_WORK}/bin/stagingctl" ./scripts/staging/stagingctl)
   "${STAGING_WORK}/bin/stagingctl" batches >/dev/null
 
-  echo "== build and sign every package (commercial edition, throwaway key)"
+  echo "== build and sign every package (throwaway key)"
   if [[ ! -f "${STAGING_WORK}/signing.pem" ]]; then
     openssl genpkey -algorithm ed25519 -out "${STAGING_WORK}/signing.pem" 2>/dev/null
     chmod 0600 "${STAGING_WORK}/signing.pem"
@@ -135,7 +135,7 @@ build() {
   fi
   if [[ ${#selected[@]} -eq 0 ]]; then
     # shellcheck disable=SC2046
-    GOWORK=off python3 "${repo_root}/packages/shared/build_package.py" --all --edition commercial \
+    GOWORK=off python3 "${repo_root}/packages/shared/build_package.py" --all \
       --version "${version}" --out "${STAGING_WORK}/packages" --signing-key "${STAGING_WORK}/signing.pem" \
       $(package_inputs machine-telemetry nftables-forward gost-mesh nat-egress) >/dev/null
   else

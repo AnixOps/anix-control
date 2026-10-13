@@ -17,11 +17,128 @@ feature-gated topology executor is running. `plugins.topology_execution_enabled`
 defaults to false and startup refuses it unless `plugins.dispatch_enabled` is
 also true.
 
+## Built-in Packages
+
+Status: implemented (M2, P6; design:
+[`../design/single-binary/README.md`](../design/single-binary/README.md)
+section 4). Every official package is built into the Control binary. There is
+no package to import in the normal flow: Control installs, upgrades and
+enables its own set at every start.
+
+**What a release binary carries.**
+
+- **The hosts.** Every official package's Control host is a library
+  (`packages/<id>/control`, the generic host `packages/shared/controlhost`
+  for `nat-egress` and `nftables-forward`), and `packages/builtin` lists them.
+  Control links all of them: `anix-control package-host <id>` runs one.
+- **The slim signed packages.** `build_package.py --all --builtin` writes, for
+  every package, the signed artifact without any host or Agent binary
+  (compatibility routes, migration index and scripts, configuration schema,
+  WebUI bundle), its canonical manifest and signature, and `index.json`
+  listing the set. The build embeds that directory
+  (`internal/builtinpkg/dist`, `go:embed`) before it compiles Control: the
+  release job builds and verifies the set with the official key first and
+  the binary job verifies it again before `go build`. A checkout without the
+  set (`go build ./...`) embeds none.
+- **Their manifests.** A built-in manifest targets `control` only, declares
+  `linux/amd64` and `linux/arm64`, and names the linked host instead of an
+  entrypoint file: `"control_entrypoint":{"builtin":"<id>"}` (its own id and
+  nothing else; the kernel rejects a built-in entrypoint for the Agent).
+  File entrypoints keep their exact signed bytes: the fields are omitted when
+  empty. The Agent plugin payloads are not built in: Agent dispatch and
+  topology execution stay off (B23).
+
+**Start-up bootstrap** (`service.BootstrapBuiltinPackages`, under the
+bootstrap lock, after the schema and the trust root and before HTTP):
+
+1. Verify every embedded package against `plugins.official_public_key`: the
+   manifest signature, that the manifest is canonical and is the package and
+   version `index.json` names, a v2 Control package with a built-in host, the
+   artifact digest, the migration index and the compatibility routes.
+2. Order the verified packages by `dependencies`; packages without a
+   dependency between them come in the order `identity-platform`,
+   `platform`, then by id. A package whose dependency is missing, invalid or
+   failed, or that is part of a cycle, fails.
+3. For each package: register the release if it is new (a registered release
+   of the same version must be byte-identical), store the slim artifact
+   (idempotent), and make the Control installation enabled at the built-in
+   version: a new installation at lifecycle generation 1, or an update the
+   way an administrator's update makes one (desired and previous version,
+   `pending`, a new lifecycle generation), audited in the same transaction as
+   `builtin_package_installation`. A restart with the same binary changes
+   nothing. A disabled installation is enabled again. An installation never
+   moves to an older version than it wants (an older binary on a newer
+   database): the package fails and says which version to run.
+4. Restart reconciliation of the lifecycle worker then starts every enabled
+   host; a new generation runs the package migrations through the migration
+   ledger (Package Migrations below). Old releases stay registered for audit.
+
+**Failures stay with their package.** A package that does not verify writes
+nothing; one that cannot be registered or installed marks its installation
+`failed` with the reason. Either way the start log says so, the alert scan
+raises `builtin_package_invalid` or `builtin_package_failed`
+([`../reference/kernel-alerts.md`](../reference/kernel-alerts.md)), the
+package's routes answer as unavailable, and Control starts and serves the
+others. Restarting Control retries. A binary without built-in packages (a
+development build) imports `identity-platform` from
+`plugins.identity_bootstrap_package_dir` as before; a binary with them
+ignores that key.
+
+**Launch and attestation.** A built-in host is a child process like any
+other: the same private runtime directory, Unix socket
+(`ANIX_CONTROL_HOST_SOCKET`), package bridge socketpair (FD 4), response
+limit, locale and package environment (`internal/pluginhost/process.go`),
+plus `ANIX_CONTROL_HOST_PACKAGE_VERSION`, the release version the kernel
+verified. Only the executable differs: instead of a materialized, digest-
+checked host binary, the launcher executes the running Control binary as
+`anix-control package-host <id>` (argv\[0\] `anix-control`). What it runs is
+established by these checks, in order:
+
+1. **The binary is the release's.** The release signs `SHA256SUMS.txt` with
+   the official package key (`SHA256SUMS.txt.sig`, Base64 raw Ed25519 over
+   the file's exact bytes, the same `openssl pkeyutl -rawin` signature as
+   every manifest). `scripts/install.sh` verifies that signature with the
+   official key it carries, then the archive the binary comes from against
+   the checksum. Separately signed host binaries no longer exist.
+2. **The release is this binary's.** The kernel materializes a built-in
+   host only for a release whose canonical manifest is byte-identical to the
+   manifest embedded in the running binary for that package
+   (`service.RequireEmbeddedBuiltinRelease`): a built-in entrypoint of any
+   other release, even one signed by the official key, is refused, since the
+   binary has no code for it. The slim artifact and the manifest are still
+   materialized and rehashed before every start (`verifyArtifactRef`).
+3. **The process is the running binary.** When the host supervisor is
+   created the kernel records its executable once (`pluginhost.Self`): on
+   Linux `/proc/self/exe`, its device, inode, size and modification time and
+   its SHA-256, which the start log prints for comparison with the release.
+   Before every host start the launcher re-opens `/proc/self/exe` and refuses
+   to start if it is no longer that file (it changed in place). The child
+   execs `/proc/self/exe`, which the kernel resolves in the new process to
+   the image the parent runs, so a host always runs the parent's bytes, even
+   while an upgrade has replaced the file at the install path. Elsewhere
+   (development machines only) it executes `os.Executable()` and hashes it
+   again before every start.
+4. **The child checks its version.** `package-host <id>` runs only an id
+   `packages/builtin` links, and, when the binary embeds that package, only
+   at the embedded version.
+
+`package-host` reads no configuration and opens no database: a host reaches
+the kernel only through its bridge. With `ANIX_MODULE_MODE=remote` the same
+command runs the host as a network module (mTLS, `module-runtime.md`), at
+the embedded version unless `ANIX_CONTROL_HOST_PACKAGE_VERSION` names it.
+`packages/builtin/cmd/package-host` is the standalone build of the same
+hosts, for the full package format (`build_package.py` without `--builtin`)
+and the network module image.
+
+Third-party packages remain unsupported for execution: only official
+`AnixOps` manifests are accepted, and every built-in package is official.
+
 ## Trust Root
 
 Set `plugins.official_public_key` to the Base64-encoded Ed25519 public key for
-the AnixOps release signer. `POST /api/v3/plugin-releases` rejects requests
-until this key is configured. The manifest signature covers the canonical
+the AnixOps release signer. Every built-in package is verified against it at
+every start, and `POST /api/v3/plugin-releases` rejects requests until this
+key is configured. The manifest signature covers the canonical
 `PluginManifest` JSON representation; configuration schema JSON is normalized
 before signing and verification.
 
@@ -40,7 +157,8 @@ it disabled and preserves its database state; no purge endpoint is exposed.
 
 ## Artifact Repository
 
-`POST /api/v3/plugin-releases/:id/artifact` stores the release artifact after
+The start-up bootstrap stores each built-in package's slim artifact the same
+way. `POST /api/v3/plugin-releases/:id/artifact` stores the release artifact after
 checking its SHA-256 against the signed manifest. Stored artifacts are
 content-addressed by `plugins/<plugin>/<version>/<sha256>.artifact` metadata
 and immutable for a release. Re-uploading the same bytes is idempotent; changing
@@ -89,8 +207,9 @@ These classes are a **stable contract** for plugin WebUIs:
 | `.data-table` | a table: cell padding, header row, separators, row hover |
 | `.empty-state` | the muted, centred "nothing here" text (a table cell) |
 
-Plugins ship and are signed separately from Control, so an installed plugin
-keeps rendering these classes across Control upgrades: Control must not
+Packages are signed separately from Control, and a package from another
+release may still be installed next to a newer Control, so a package keeps
+rendering these classes across Control upgrades: Control must not
 remove or rename them, nor change what they mean (it may restyle them with
 the design tokens). A change that has to break one is a WebUI contract
 change (`anixops.webui/v2`), not a Control refactor.
@@ -424,7 +543,8 @@ through the migration ledger before the operation succeeds:
 3. **Check.** The kernel compares the reported digest with the digest of the
    verified index in the artifact, whose per-step SHA-256 values were checked
    when the artifact was materialized. This proves that the scripts embedded
-   in the host binary are the signed ones.
+   in the host (for a built-in package, the Control binary) are the signed
+   ones.
 4. **Validate.** `RecordPackageValidation` closes the run.
 
 If any step fails, the host is stopped and the lifecycle operation fails. A

@@ -77,24 +77,24 @@ func startHostProcess(ctx context.Context, runtimeRoot *runtimeRoot, ref Artifac
 		cleanup()
 		return nil, fmt.Errorf("%w: host socket path exceeds Unix socket limit", ErrHostIncompatible)
 	}
-	// Rehash every referenced file and snapshot the entrypoint from its opened
-	// descriptor before execution. The staged path cannot be replaced through
-	// the caller-provided source pathname after this point.
+	// Rehash every referenced file before execution.
 	if err := verifyArtifactRef(ref); err != nil {
 		cleanup()
 		return nil, err
 	}
-	_, err = stageVerifiedEntrypoint(ref, directory)
+	command, err := hostCommand(ref, directory)
 	if err != nil {
 		cleanup()
 		return nil, err
 	}
-	command := exec.CommandContext(context.Background(), childRuntimeEntrypoint) // #nosec G204 -- fixed descriptor-relative path after digest-verified staging.
 	// os/exec changes directory before it remaps ExtraFiles to FD 3, so this
 	// parent-side /proc descriptor path preserves the pinned directory for cwd.
 	command.Dir = directory.path(".")
 	command.Env = append(hostEnvironment(childRuntimePath("host.sock"), childRuntimeDirectoryPath, bridgeChild != nil),
 		hostMaxResponseBytesEnvironment+"="+strconv.FormatInt(normalizeMaxResponseBytes(options.maxResponseBytes), 10))
+	if ref.Builtin {
+		command.Env = append(command.Env, BuiltinHostVersionEnvironment+"="+ref.Version)
+	}
 	command.Env = append(command.Env, options.packageEnvironment[ref.PackageID]...)
 	command.ExtraFiles = []*os.File{directory.directory}
 	if bridgeChild != nil {
@@ -147,6 +147,30 @@ func startHostProcess(ctx context.Context, runtimeRoot *runtimeRoot, ref Artifac
 	host.client = client
 	host.leaseID = health.LeaseID
 	return host, nil
+}
+
+// hostCommand returns the process a host start executes. A built-in host is
+// the running Control binary itself (SelfExecutable), checked before every
+// start. Any other host is the materialized entrypoint, snapshotted from its
+// opened descriptor into the private runtime directory after its digest was
+// verified, so the caller-provided source pathname cannot be swapped.
+func hostCommand(ref ArtifactRef, directory *hostRuntimeDir) (*exec.Cmd, error) {
+	if ref.Builtin {
+		self, err := Self()
+		if err != nil {
+			return nil, err
+		}
+		if err := self.Check(); err != nil {
+			return nil, err
+		}
+		command := exec.CommandContext(context.Background(), self.Path, BuiltinHostCommand, ref.PackageID) // #nosec G204 -- the recorded running binary and a verified package id.
+		command.Args[0] = builtinHostArgv0
+		return command, nil
+	}
+	if _, err := stageVerifiedEntrypoint(ref, directory); err != nil {
+		return nil, err
+	}
+	return exec.CommandContext(context.Background(), childRuntimeEntrypoint), nil // #nosec G204 -- fixed descriptor-relative path after digest-verified staging.
 }
 
 func hostEnvironment(socketPath, runtimeDir string, bridgeEnabled ...bool) []string {

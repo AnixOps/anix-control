@@ -24,6 +24,11 @@ file short and enforceable; put explanations in `docs/`.
   `packages/*`, package host processes (`sdk/api/pluginhost`, `sdk/api/packagebridge`,
   `sdk/pluginhostsdk`, `sdk/packagebridgesdk`), and the kernel API under
   `/api/v3` (catalog, releases, installations, operations, deployments).
+  Since M2 the official packages are built in: every host
+  (`packages/<id>/control`) is a library Control links (`packages/builtin`)
+  and runs as `anix-control package-host <id>`, and the signed slim packages
+  are embedded (`internal/builtinpkg`) and installed at every start
+  (`docs/architecture/plugin-kernel-contract.md`, "Built-in Packages").
 - Reality check: every `/api/v2` business route is registered through
   `registeredPackageRoute` in `internal/router/router.go`, goes through the
   package gateway to a package host process, and is bridged back into the
@@ -244,13 +249,15 @@ A release tag `vX.Y.Z[-alpha|-beta|-rc.N]` must match every surface checked by
   landed through a PR on `go_dev` or on a `release/vX.Y` branch runs the
   `ci.yml` tag pipeline. A release branch's version bump is merged back to
   `go_dev` in a follow-up PR (`docs/RELEASING.md`).
-  - It produces signed packages for every package under `packages/`, the
-    binaries, a signed GHCR image with SBOM and provenance, the source SBOM,
-    checksums and the manifest.
-  - The release page ships the packages as one signed
-    `anix-control-packages-<version>.tar.gz` (+ `.sig`), plus the
-    `identity-platform` trio that `scripts/install.sh` downloads by name; one
-    frontend archive (`.tar.gz`). `docs/RELEASING.md` lists every asset.
+  - It builds and signs every package under `packages/` in the built-in
+    format first, then the linux/amd64 and linux/arm64 binaries that embed
+    them (`internal/builtinpkg`; the package hosts are linked in,
+    `packages/builtin`), a signed GHCR image with SBOM and provenance, the
+    source SBOM, the checksums with their signature `SHA256SUMS.txt.sig`
+    (official package key) and the manifest.
+  - No package is a release asset: Control installs, upgrades and enables
+    its built-in set at every start. One frontend archive (`.tar.gz`).
+    `docs/RELEASING.md` lists every asset.
   - The release body is the tag's CHANGELOG section.
 - Cut a release with `config/scripts/prepare_release.py <version>` (it also
   collects the changelog fragments of `changelog.d/`), a pull request, then
@@ -355,14 +362,13 @@ do not cite the archived flux documents (`docs/archive/`) as requirements.
   certificate never authenticates to Control. The desired state names
   identities, never keys or other secrets, and no v4 answer carries a node
   credential.
-- **Editions (H23).** Routes, hops, the nftables, gost and AnixOps engines,
-  limits, counters, load balancing, two-level failover, the circuit
-  breaker, latency, diagnosis, entry HA via DNS, one-command onboarding and
-  staged upgrades are in both editions. User self-service forwarding,
-  forwarding plans, auto-renewal, billing multipliers and resellers are
-  commercial (v4.3 and later); their API prefixes
-  (`/api/v4/forward/self/`, `/plans/`, `/multipliers/`) are reserved in
-  `config/editions.json` and must not appear in the community edition.
+- **One product (B24).** There are no community and commercial editions any
+  more (`app.edition` and `config/editions.json` are gone): orders, payments
+  and affiliate are built in like every other package. User self-service
+  forwarding, forwarding plans, auto-renewal, billing multipliers and
+  resellers (v4.3 and later) become ordinary endpoints of the forward
+  package's v4 API when they are implemented; nothing reserves their
+  prefixes until then.
 - **Security defaults.** Targets are `PUBLIC_ONLY` unless an administrator
   route says `ALLOW_PRIVATE` (never loopback, never on a user's route);
   Control checks at save time and the Agent re-checks every DNS answer.

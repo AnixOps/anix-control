@@ -462,8 +462,7 @@ func writeResolutionError(c *gin.Context, err error) string {
 }
 
 // WriteRouteNotFound answers a request as the gateway answers a route that
-// no active package declares. The edition filter uses it for the routes the
-// configured edition hides, so they cannot be told apart.
+// no active package declares.
 func WriteRouteNotFound(c *gin.Context) string {
 	return writeGatewayError(c, http.StatusNotFound, codeRouteNotFound, "package route is not declared")
 }

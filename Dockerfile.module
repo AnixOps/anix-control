@@ -6,8 +6,10 @@
 #   docker build -f Dockerfile.module --build-arg PACKAGE_ID=identity-platform \
 #     --build-arg PACKAGE_VERSION=4.0.0 -t anix-module-identity-platform .
 #
-# Packages with their own host (packages/<id>/control) build it; the others
-# build the generic host (packages/shared/controlhost).
+# The image runs packages/builtin/cmd/package-host linked for one package: the
+# package's own host (packages/<id>/control) or the generic host
+# (packages/shared/controlhost), the same code Control runs as
+# `anix-control package-host <id>`.
 
 ARG GO_IMAGE=golang:1.26.9-alpine@sha256:cdfd4fe2da6b225d8b40c6b7a105736e548e83ff56d5d8f9394446eeb5eb84e0
 ARG RUNTIME_IMAGE=gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab
@@ -24,11 +26,9 @@ ARG TARGETARCH
 ARG PACKAGE_ID
 ARG PACKAGE_VERSION
 RUN test -n "${PACKAGE_ID}" && test -n "${PACKAGE_VERSION}" \
-    && source="./packages/shared/controlhost" \
-    && if [ -d "./packages/${PACKAGE_ID}/control" ]; then source="./packages/${PACKAGE_ID}/control"; fi \
     && CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -trimpath \
         -ldflags="-s -w -X main.packageID=${PACKAGE_ID} -X main.packageVersion=${PACKAGE_VERSION}" \
-        -o /out/module "${source}" \
+        -o /out/module ./packages/builtin/cmd/package-host \
     && mkdir -p /out/state/certs
 
 FROM ${RUNTIME_IMAGE}

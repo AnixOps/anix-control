@@ -43,6 +43,7 @@ type ArtifactRef struct {
 	Version          string
 	ArtifactPath     string
 	ArtifactSHA256   string
+	Builtin          bool
 	EntrypointPath   string
 	EntrypointSHA256 string
 	ManifestPath     string
@@ -336,4 +337,22 @@ func (m *Supervisor) PackageConn(string) (grpc.ClientConnInterface, error) {
 // BindInstance admits no remote instance without Unix package hosts.
 func (m *Supervisor) BindInstance(context.Context, packagebridge.InstanceBinding) (*packagebridge.GenerationSession, error) {
 	return nil, packagebridge.ErrNotRemote
+}
+
+// BuiltinHostCommand and BuiltinHostVersionEnvironment match the Unix build.
+const (
+	BuiltinHostCommand            = "package-host"
+	BuiltinHostVersionEnvironment = "ANIX_CONTROL_HOST_PACKAGE_VERSION"
+)
+
+// SelfExecutable matches the Unix build; built-in hosts need Unix.
+type SelfExecutable struct {
+	Path   string
+	SHA256 string
+	Pinned bool
+}
+
+// Self fails closed: package hosts need Unix sockets and descriptors.
+func Self() (SelfExecutable, error) {
+	return SelfExecutable{}, fmt.Errorf("%w: built-in package hosts need a Unix system", ErrHostUnavailable)
 }

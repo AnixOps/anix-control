@@ -62,7 +62,7 @@ func buildIdentityPlatformArtifactRef(t *testing.T) ArtifactRef {
 	require.NoError(t, err)
 	directory := t.TempDir()
 	entrypointPath := filepath.Join(directory, "identity-control-host")
-	command := exec.Command("go", "build", "-trimpath", "-buildvcs=false", "-ldflags", "-buildid= -X main.packageVersion=4.0.0", "-o", entrypointPath, "./packages/identity-platform/control")
+	command := exec.Command("go", "build", "-trimpath", "-buildvcs=false", "-ldflags", "-buildid= -X main.packageID=identity-platform -X main.packageVersion=4.0.0", "-o", entrypointPath, "./packages/builtin/cmd/package-host")
 	command.Dir = repoRoot
 	command.Env = append(os.Environ(), "GOWORK=off", "CGO_ENABLED=0")
 	output, err := command.CombinedOutput()

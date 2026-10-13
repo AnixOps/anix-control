@@ -47,6 +47,11 @@ sudo bash /tmp/anix-control-install.sh install \
 rm -f /tmp/anix-control-install.sh
 ```
 
+The installer verifies `SHA256SUMS.txt.sig` against the official key before it
+trusts any checksum (it needs OpenSSL 3, which it installs when missing), then
+the binary and frontend archives against the checksums. The binary carries
+every official package ([Official Packages Are Built In](#official-packages-are-built-in)).
+
 `--grpc-name` is the host name Agents dial for gRPC. When
 `/etc/letsencrypt/live/<name>/` holds a certificate (or you pass
 `--grpc-tls-cert` and `--grpc-tls-key`), the install is ready for Agents at
@@ -278,9 +283,37 @@ A legacy Agent configured by hand (only while `agent_control.mtls` is
 data-plane fallback, and enables both `AgentControlEnabled` and
 `PluginSupervisorEnabled` with the same official public key.
 
-## Import The Signed Official Packages
+## Official Packages Are Built In
 
-The package center is intentionally operator-driven. For `v4.0.0`, verify
+There is nothing to import. Every official package, `identity-platform`,
+`order`, `payment` and `affiliate` included, is inside the Control binary: at
+every start Control verifies each one against `plugins.official_public_key`,
+installs or upgrades it to the binary's version (running its migrations) and
+enables it, then starts its host by running its own binary again
+(`anix-control package-host <id>`). Check the result in the start log:
+
+```bash
+journalctl -u anix-control -n 300 --no-pager | grep -E 'Built-in package|Control executable'
+```
+
+`Built-in packages: 18 embedded, 0 failed` is the expected summary. A package
+that fails is named there with the reason, raises a critical alert on the
+dashboard (`builtin_package_invalid` or `builtin_package_failed`,
+[`../reference/kernel-alerts.md`](../reference/kernel-alerts.md)), and only
+its own pages and routes are unavailable; restart Control after fixing the
+cause. **Control > Plugins** lists the installations and their health.
+
+`scripts/install.sh` trusts the release only after `SHA256SUMS.txt.sig`
+verifies against the official key it carries, so the binary, and with it
+every package host, is the released one. The `Control executable ... (SHA-256
+...)` line is the digest of the running binary: it equals `sha256sum` of the
+binary in the verified `anix-control-linux-<arch>.tar.gz`.
+
+### Importing a package by hand (releases before the built-in packages)
+
+The rest of this section describes the releases that shipped packages as
+separate files (up to 4.2.x). The package center is intentionally
+operator-driven there. For `v4.0.0`, verify
 `v4-release-evidence.tar.gz` on a management workstation before importing any
 package. The verifier and official root below must come from a pre-existing,
 independently trusted Control source distribution and operator trust store.
@@ -312,7 +345,7 @@ signature, choose the matching `.anxp` artifact, and submit each release. The
 UI verifies the signed manifest and artifact digest before it becomes
 installable; do not mix assets from different tags or evidence bundles.
 
-From `v4.1.0-rc.3` on, the package files are not separate release assets: they
+From `v4.1.0-rc.3` to 4.2.x, the package files are not separate release assets: they
 are in the signed `anix-control-packages-<version>.tar.gz`. Check its `.sig`
 against the pinned official root and extract the `.anxp`, `.manifest.json` and
 `.manifest.sig` you import with the commands in
@@ -356,9 +389,10 @@ recovery.
 ## Upgrade And Rollback
 
 The installer never overwrites an existing SQLite data directory. For `v4.*`,
-it preserves existing configuration except an empty identity bootstrap path,
-`plugins.control_execution_enabled`, and the internal plugin runtime paths that
-must remain inside the systemd writable installation root. It saves
+it preserves existing configuration except `plugins.control_execution_enabled`
+(set on) and the internal plugin runtime paths that must remain inside the
+systemd writable installation root; an existing
+`plugins.identity_bootstrap_package_dir` stays, and Control ignores it. It saves
 the prior configuration in the release backup before replacing binaries. A
 failed health or identity gateway check restores that snapshot.
 

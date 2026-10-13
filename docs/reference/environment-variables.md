@@ -44,7 +44,6 @@ This table is generated from the code and checked by
 | `ANIX_CONTROL_ALERTS_PHASE_STUCK_AFTER` | `alerts.phase_stuck_after` | string | `72h` |
 | `ANIX_CONTROL_ALERTS_RENOTIFY_INTERVAL` | `alerts.renotify_interval` | string | `24h` |
 | `ANIX_CONTROL_APP_API_TOKEN` | `app.api_token` | string | secret, no default |
-| `ANIX_CONTROL_APP_EDITION` | `app.edition` | string | `community` |
 | `ANIX_CONTROL_APP_NAME` | `app.name` | string | `AnixOps Control` |
 | `ANIX_CONTROL_APP_SUBSCRIBE_PATH` | `app.subscribe_path` | string | `s` |
 | `ANIX_CONTROL_APP_TRAFFIC_LOG_ENABLE` | `app.traffic_log_enable` | bool | `true` |

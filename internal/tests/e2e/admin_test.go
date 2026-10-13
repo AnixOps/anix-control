@@ -61,8 +61,6 @@ func (s *AdminE2ETestSuite) SetupSuite() {
 			Version:       "test",
 			APIToken:      "test-api-token",
 			SubscribePath: "s",
-			// The admin suite covers orders: the commercial edition.
-			Edition: config.EditionCommercial,
 		},
 		Admin: config.AdminConfig{
 			Email:    "admin@example.com",

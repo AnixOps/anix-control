@@ -50,6 +50,8 @@ Runtime configuration now comes exclusively from `config/config.yaml.forward_run
   - admin UI
   - persistence
   - diagnostics and job views
+  - the official package hosts, built into the binary and run as its own
+    child processes (`anix-control package-host <id>`)
 - `NodeX`
   - internal-only execution control plane
   - stateful `gost` runtime

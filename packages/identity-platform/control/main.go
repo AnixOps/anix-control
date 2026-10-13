@@ -1,8 +1,10 @@
-package main
+// Package control is the identity-platform package's Control host. Control links it
+// and starts it as `anix-control package-host identity-platform` (packages/builtin);
+// packages/builtin/cmd/package-host builds it as a standalone binary.
+package control
 
 import (
 	"context"
-	"log"
 	"os"
 	// Embed the zone database so the TZ passed by the kernel resolves even
 	// without system zoneinfo.
@@ -12,17 +14,17 @@ import (
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
 )
 
-var packageVersion = "4.0.0"
+// PackageID is the official package this host serves.
+const PackageID = "identity-platform"
 
-func main() {
-	err := modulesdk.Run(context.Background(), modulesdk.Options{
-		PackageID: "identity-platform", PackageVersion: packageVersion,
+// Run serves the host for one release of the package until the kernel stops
+// it (SIGTERM) or ctx ends. modulesdk picks the kernel-supervised child
+// process or the network module runtime from the environment.
+func Run(ctx context.Context, version string) error {
+	return modulesdk.Run(ctx, modulesdk.Options{
+		PackageID: PackageID, PackageVersion: version,
 		Build: func(host modulesdk.Host) (pluginhostsdk.Package, error) {
 			return newIdentityHost(host.Bridge, host.LeaseID, os.Getenv, host.Logf)
 		},
 	})
-	if err != nil {
-		log.Printf("identity-platform control host: %v", err)
-		os.Exit(1)
-	}
 }

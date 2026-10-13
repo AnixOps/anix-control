@@ -14,39 +14,46 @@ trap cleanup EXIT
 chown() { :; }
 
 CONFIG_FILE="${temporary}/config.yaml"
-IDENTITY_BOOTSTRAP_DIR="/opt/anixops/control/bootstrap/identity-platform-4.0.0"
 APP_USER="$(id -gn)"
 
+# The official packages are built into the binary: the installer turns
+# package execution on and never writes an identity package directory.
 printf '%s\n' \
   'app:' \
   '  name: "AnixOps Control"' \
   'plugins:' \
   '  official_public_key: "test-root"' \
-  '  identity_bootstrap_package_dir: ""' \
   '  control_execution_enabled: false' \
   '  dispatch_enabled: false' >"${CONFIG_FILE}"
 
-configure_identity_bootstrap_config
-grep -Fx "  identity_bootstrap_package_dir: \"${IDENTITY_BOOTSTRAP_DIR}\"" "${CONFIG_FILE}" >/dev/null
+configure_plugin_execution_config
 grep -Fx '  control_execution_enabled: true' "${CONFIG_FILE}" >/dev/null
-[[ "$(grep -c '^[[:space:]]*identity_bootstrap_package_dir:' "${CONFIG_FILE}")" -eq 1 ]]
+grep -Fx '  dispatch_enabled: false' "${CONFIG_FILE}" >/dev/null
 [[ "$(grep -c '^[[:space:]]*control_execution_enabled:' "${CONFIG_FILE}")" -eq 1 ]]
+if grep -q 'identity_bootstrap_package_dir' "${CONFIG_FILE}"; then
+  printf 'the installer must not write an identity package directory\n' >&2
+  exit 1
+fi
 
 printf '%s\n' \
   'app:' \
   '  name: "AnixOps Control"' >"${CONFIG_FILE}"
 
-configure_identity_bootstrap_config
+configure_plugin_execution_config
 grep -Fx 'plugins:' "${CONFIG_FILE}" >/dev/null
-grep -Fx "  identity_bootstrap_package_dir: \"${IDENTITY_BOOTSTRAP_DIR}\"" "${CONFIG_FILE}" >/dev/null
 grep -Fx '  control_execution_enabled: true' "${CONFIG_FILE}" >/dev/null
+if grep -q 'identity_bootstrap_package_dir' "${CONFIG_FILE}"; then
+  printf 'the installer must not write an identity package directory\n' >&2
+  exit 1
+fi
 
+# An operator's existing directory line stays as it is (Control ignores it).
 printf '%s\n' \
   'plugins:' \
   '  identity_bootstrap_package_dir: "/srv/operator-selected-bootstrap"' \
   '  control_execution_enabled: false' >"${CONFIG_FILE}"
 
-configure_identity_bootstrap_config
+configure_plugin_execution_config
 grep -Fx '  identity_bootstrap_package_dir: "/srv/operator-selected-bootstrap"' "${CONFIG_FILE}" >/dev/null
 grep -Fx '  control_execution_enabled: true' "${CONFIG_FILE}" >/dev/null
 
@@ -57,12 +64,11 @@ PLUGIN_HOST_RUNTIME_DIR="${temporary}/install/runtime/plugin-hosts"
 PLUGIN_ARTIFACT_DIR="${temporary}/install/data/plugin-artifacts"
 printf '%s\n' \
   'plugins:' \
-  '  identity_bootstrap_package_dir: ""' \
   '  control_execution_enabled: false' \
   '  control_host_runtime_dir: "/var/lib/anixops/plugin-hosts"' \
   '  control_host_artifact_dir: "/var/lib/anixops/plugin-artifacts"' >"${CONFIG_FILE}"
 
-configure_identity_bootstrap_config
+configure_plugin_execution_config
 grep -Fx "  control_host_runtime_dir: \"${PLUGIN_HOST_RUNTIME_DIR}\"" "${CONFIG_FILE}" >/dev/null
 grep -Fx "  control_host_artifact_dir: \"${PLUGIN_ARTIFACT_DIR}\"" "${CONFIG_FILE}" >/dev/null
 
@@ -70,25 +76,49 @@ FRESH_CONFIG=0
 VERSION="v4.0.0"
 printf '%s\n' \
   'plugins:' \
-  '  identity_bootstrap_package_dir: ""' \
   '  control_execution_enabled: false' \
   '  control_host_runtime_dir: "/var/lib/anixops/plugin-hosts"' \
   '  control_host_artifact_dir: "/var/lib/anixops/plugin-artifacts"' >"${CONFIG_FILE}"
 
-configure_identity_bootstrap_config
+configure_plugin_execution_config
 grep -Fx "  control_host_runtime_dir: \"${PLUGIN_HOST_RUNTIME_DIR}\"" "${CONFIG_FILE}" >/dev/null
 grep -Fx "  control_host_artifact_dir: \"${PLUGIN_ARTIFACT_DIR}\"" "${CONFIG_FILE}" >/dev/null
 
 printf '%s\n' \
   'plugins:' \
-  '  identity_bootstrap_package_dir: ""' \
   '  control_execution_enabled: false' \
   '  control_host_runtime_dir: "/srv/operator/plugin-hosts"' \
   '  control_host_artifact_dir: "/srv/operator/plugin-artifacts"' >"${CONFIG_FILE}"
 
-configure_identity_bootstrap_config
+configure_plugin_execution_config
 grep -Fx "  control_host_runtime_dir: \"${PLUGIN_HOST_RUNTIME_DIR}\"" "${CONFIG_FILE}" >/dev/null
 grep -Fx "  control_host_artifact_dir: \"${PLUGIN_ARTIFACT_DIR}\"" "${CONFIG_FILE}" >/dev/null
+
+# The installer's key is the shipped official package root.
+configured_root="$(sed -n 's/^[[:space:]]*official_public_key:[[:space:]]*"\([^"]*\)".*/\1/p' "${REPO_ROOT}/config/config.prod.yaml")"
+[[ "${OFFICIAL_PUBLIC_KEY}" == "${configured_root}" ]] || {
+  printf 'scripts/install.sh OFFICIAL_PUBLIC_KEY does not match config/config.prod.yaml\n' >&2
+  exit 1
+}
+
+# SHA256SUMS.txt is trusted only after its signature verifies.
+test_release_checksums_signature() (
+  TMP_DIR="${temporary}/checksums"
+  install -d "${TMP_DIR}"
+  openssl genpkey -algorithm ED25519 -out "${TMP_DIR}/key.pem" 2>/dev/null
+  OFFICIAL_PUBLIC_KEY="$(openssl pkey -in "${TMP_DIR}/key.pem" -pubout -outform DER 2>/dev/null | tail -c 32 | base64)"
+  printf '%s  anix-control-linux-amd64.tar.gz\n' "$(printf 'binary' | sha256sum | cut -d' ' -f1)" >"${TMP_DIR}/SHA256SUMS.txt"
+  openssl pkeyutl -sign -inkey "${TMP_DIR}/key.pem" -rawin -in "${TMP_DIR}/SHA256SUMS.txt" -out "${TMP_DIR}/sig.bin"
+  base64 -w0 "${TMP_DIR}/sig.bin" >"${TMP_DIR}/signature"
+  download_asset() { cp "${TMP_DIR}/signature" "${TMP_DIR}/$1"; }
+  verify_release_checksums >/dev/null
+  printf 'tampered\n' >>"${TMP_DIR}/SHA256SUMS.txt"
+  if (verify_release_checksums >/dev/null 2>&1); then
+    printf 'a tampered SHA256SUMS.txt must be refused\n' >&2
+    exit 1
+  fi
+)
+test_release_checksums_signature
 
 test_normal_v4_main_initializes_plugin_execution_dirs() (
   VERSION=""
@@ -113,12 +143,11 @@ test_normal_v4_main_initializes_plugin_execution_dirs() (
   asset_name() { printf 'anix-control-linux-amd64.tar.gz'; }
   download_asset() { :; }
   verify_asset() { :; }
-  download_identity_bootstrap_assets() { :; }
-  stage_identity_bootstrap_assets() { :; }
+  verify_release_checksums() { :; }
   stop_running_service() { :; }
   backup_current_release() { :; }
   install_release_files() { :; }
-  configure_identity_bootstrap_config() { :; }
+  configure_plugin_execution_config() { :; }
   write_systemd_unit() { :; }
 
   main install --version v4.0.0 --install-dir "${INSTALL_DIR}" --skip-start
@@ -131,23 +160,9 @@ if [[ "${EUID}" -eq 0 ]]; then
   INSTALL_DIR="${temporary}/install"
   VERSION="v4.0.0"
   BACKUP_ROOT="${INSTALL_DIR}/backups"
-  PACKAGE_VERSION="4.0.0"
-  IDENTITY_BOOTSTRAP_DIR="${INSTALL_DIR}/bootstrap/identity-platform-${PACKAGE_VERSION}"
   PLUGIN_HOST_RUNTIME_DIR="${INSTALL_DIR}/runtime/plugin-hosts"
   PLUGIN_ARTIFACT_DIR="${INSTALL_DIR}/data/plugin-artifacts"
   install -d "${TMP_DIR}"
-  for asset in \
-    "identity-platform-${PACKAGE_VERSION}.anxp" \
-    "identity-platform-${PACKAGE_VERSION}.manifest.json" \
-    "identity-platform-${PACKAGE_VERSION}.manifest.sig"; do
-    printf '%s\n' "fixture ${asset}" >"${TMP_DIR}/${asset}"
-  done
-
-  stage_identity_bootstrap_assets
-  [[ "$(stat -c '%a' "${IDENTITY_BOOTSTRAP_DIR}")" == '750' ]]
-  for asset in "${IDENTITY_BOOTSTRAP_DIR}"/*; do
-    [[ "$(stat -c '%a' "${asset}")" == '640' ]]
-  done
 
   printf '%s\n' 'plugins:' >"${CONFIG_FILE}"
   ensure_layout_and_config
@@ -159,18 +174,18 @@ fi
 
 for version in v1.0.0 v3.9.9 v3.10.0-rc.1; do
   VERSION="${version}"
-  if uses_plugin_only_identity_bootstrap; then
-    printf 'identity bootstrap gate must not apply to %s\n' "${version}" >&2
+  if uses_plugin_execution; then
+    printf 'package execution must not apply to %s\n' "${version}" >&2
     exit 1
   fi
 done
 
 for version in v4.0.0 v4.2.0-rc.3 v5.0.0 v10.0.0; do
   VERSION="${version}"
-  if ! uses_plugin_only_identity_bootstrap; then
-    printf 'identity bootstrap gate must apply to %s\n' "${version}" >&2
+  if ! uses_plugin_execution; then
+    printf 'package execution must apply to %s\n' "${version}" >&2
     exit 1
   fi
 done
 
-printf '%s\n' 'identity bootstrap installer configuration tests passed'
+printf '%s\n' 'package execution installer configuration tests passed'

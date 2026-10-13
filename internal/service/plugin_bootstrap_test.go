@@ -6,138 +6,438 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/AnixOps/anix-control/v5/internal/builtinpkg"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
 )
 
-func TestBootstrapIdentityPlatformPackageImportsOnlyVerifiedColdStartPackage(t *testing.T) {
-	db := newKernelTestDB(t)
-	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
-	require.NoError(t, err)
-	directory := writeBootstrapIdentityPlatformPackage(t, publicKey, privateKey)
-
-	require.NoError(t, BootstrapIdentityPlatformPackage(db, base64.StdEncoding.EncodeToString(publicKey), directory))
-
-	var release model.PluginRelease
-	require.NoError(t, db.First(&release, "plugin_id = ? AND version = ?", "identity-platform", "4.0.0").Error)
-	require.Equal(t, PluginTrustRootFingerprint(publicKey), release.TrustRootFingerprint)
-	artifact, err := GetPluginArtifact(db, release.ID)
-	require.NoError(t, err)
-	require.NotEmpty(t, artifact.Data)
-
-	var installation model.PluginInstallation
-	require.NoError(t, db.First(&installation, "plugin_id = ? AND target = ?", "identity-platform", "control").Error)
-	require.Equal(t, "4.0.0", installation.DesiredVersion)
-	require.True(t, installation.Enabled)
-	require.Equal(t, "pending", installation.State)
-	require.EqualValues(t, 1, installation.LifecycleGeneration)
-
-	// A later restart must keep the original desired state and avoid duplicate
-	// release/install records.
-	require.NoError(t, BootstrapIdentityPlatformPackage(db, base64.StdEncoding.EncodeToString(publicKey), directory))
-	var releaseCount, installationCount int64
-	require.NoError(t, db.Model(&model.PluginRelease{}).Where("plugin_id = ?", "identity-platform").Count(&releaseCount).Error)
-	require.NoError(t, db.Model(&model.PluginInstallation{}).Where("plugin_id = ? AND target = ?", "identity-platform", "control").Count(&installationCount).Error)
-	require.EqualValues(t, 1, releaseCount)
-	require.EqualValues(t, 1, installationCount)
+type builtinTestKey struct {
+	public  ed25519.PublicKey
+	private ed25519.PrivateKey
 }
 
-func TestBootstrapIdentityPlatformPackageRejectsWrongRootAndPreservesExistingInstall(t *testing.T) {
-	db := newKernelTestDB(t)
-	trustedPublicKey, trustedPrivateKey, err := ed25519.GenerateKey(rand.Reader)
-	require.NoError(t, err)
-	directory := writeBootstrapIdentityPlatformPackage(t, trustedPublicKey, trustedPrivateKey)
-	wrongPublicKey, _, err := ed25519.GenerateKey(rand.Reader)
-	require.NoError(t, err)
-
-	err = BootstrapIdentityPlatformPackage(db, base64.StdEncoding.EncodeToString(wrongPublicKey), directory)
-	require.Error(t, err)
-
-	var releaseCount int64
-	require.NoError(t, db.Model(&model.PluginRelease{}).Where("plugin_id = ?", "identity-platform").Count(&releaseCount).Error)
-	require.Zero(t, releaseCount)
-
-	require.NoError(t, BootstrapIdentityPlatformPackage(db, base64.StdEncoding.EncodeToString(trustedPublicKey), directory))
-	var installation model.PluginInstallation
-	require.NoError(t, db.First(&installation, "plugin_id = ? AND target = ?", "identity-platform", "control").Error)
-	require.NoError(t, db.Model(&installation).Updates(map[string]any{
-		"desired_version": "operator-selected", "enabled": false, "state": "disabled", "lifecycle_generation": 9,
-	}).Error)
-
-	require.NoError(t, BootstrapIdentityPlatformPackage(db, base64.StdEncoding.EncodeToString(trustedPublicKey), directory))
-	require.NoError(t, db.First(&installation, installation.ID).Error)
-	require.Equal(t, "operator-selected", installation.DesiredVersion)
-	require.False(t, installation.Enabled)
-	require.Equal(t, "disabled", installation.State)
-	require.EqualValues(t, 9, installation.LifecycleGeneration)
-}
-
-func writeBootstrapIdentityPlatformPackage(t *testing.T, publicKey ed25519.PublicKey, privateKey ed25519.PrivateKey) string {
+func newBuiltinTestKey(t *testing.T) builtinTestKey {
 	t.Helper()
-	return writeBootstrapIdentityPlatformPackageVersion(t, privateKey, "4.0.0")
+	public, private, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	return builtinTestKey{public: public, private: private}
 }
 
-// writeBootstrapIdentityPlatformPackageVersion writes the bootstrap trio of
-// identity-platform at version, signed by privateKey.
-func writeBootstrapIdentityPlatformPackageVersion(t *testing.T, privateKey ed25519.PrivateKey, version string) string {
+func (k builtinTestKey) encoded() string { return base64.StdEncoding.EncodeToString(k.public) }
+
+// builtinTestPackage builds one embedded package the way build_package.py
+// --builtin does: a slim artifact without a host binary and a canonical
+// manifest whose control entrypoint is the built-in host, signed with key.
+func builtinTestPackage(t *testing.T, key builtinTestKey, id, version string, mutate func(*PluginManifest)) builtinpkg.Package {
 	t.Helper()
-	signed := signedTestPackage(t, privateKey, "identity-platform", version, nil)
-	directory := t.TempDir()
-	stem := "identity-platform-" + version
-	require.NoError(t, os.WriteFile(filepath.Join(directory, stem+".manifest.json"), []byte(signed.ManifestJSON), 0o644))
-	require.NoError(t, os.WriteFile(filepath.Join(directory, stem+".manifest.sig"), []byte(signed.Signature+"\n"), 0o644))
-	require.NoError(t, os.WriteFile(filepath.Join(directory, stem+".anxp"), signed.Artifact, 0o644))
-	return directory
-}
-
-// testSignedPackage is a v2 Control package: its canonical manifest, the
-// base64 signature over it and the artifact the manifest hashes.
-type testSignedPackage struct {
-	Manifest     PluginManifest
-	ManifestJSON string
-	Signature    string
-	Artifact     []byte
-}
-
-// signedTestPackage builds a minimal v2 Control package of pluginID at
-// version, signed with privateKey (a test key; never the release key).
-// mutate may adjust the manifest before it is signed.
-func signedTestPackage(t *testing.T, privateKey ed25519.PrivateKey, pluginID, version string, mutate func(*PluginManifest)) testSignedPackage {
-	t.Helper()
-	entrypoint := []byte("#!/bin/sh\nexit 0\n")
-	migrations := []byte(`{"format":"anixops.migrations/v1","migrations":[],"package_id":"` + pluginID + `","version":"` + version + `"}`)
-	routes := []byte(`{"api_version":"v2","package_id":"` + pluginID + `","routes":[]}`)
+	migrations := []byte(`{"format":"anixops.migrations/v1","migrations":[],"package_id":"` + id + `","version":"` + version + `"}`)
+	routes := []byte(`{"api_version":"v2","package_id":"` + id + `","routes":[]}`)
 	artifact := kernelTestV2Package(t, map[string][]byte{
-		"bin/control-host":      entrypoint,
 		"compat/v2-routes.json": routes,
 		"migrations/index.json": migrations,
 	})
-	artifactDigest := sha256.Sum256(artifact)
-	entrypointDigest := sha256.Sum256(entrypoint)
-	migrationsDigest := sha256.Sum256(migrations)
-	routesDigest := sha256.Sum256(routes)
-	manifest := PluginManifest{
-		ID: pluginID, Name: pluginID, Version: version, APIVersion: pluginManifestAPIVersionV2,
-		Publisher: "AnixOps", Targets: []string{"control"}, ArtifactSHA256: hex.EncodeToString(artifactDigest[:]),
-		ControlEntrypoint:   &PluginEntrypoint{Path: "bin/control-host", SHA256: hex.EncodeToString(entrypointDigest[:])},
-		Migrations:          &PluginMigrations{Index: "migrations/index.json", SHA256: hex.EncodeToString(migrationsDigest[:])},
-		CompatibilityRoutes: &PluginCompatibilityRoutes{Path: "compat/v2-routes.json", SHA256: hex.EncodeToString(routesDigest[:])},
-		RouteContractDigest: hex.EncodeToString(routesDigest[:]),
+	digest := func(value []byte) string {
+		sum := sha256.Sum256(value)
+		return hex.EncodeToString(sum[:])
 	}
-	if pluginID == "identity-platform" {
-		manifest.Name = "Identity Platform"
+	manifest := PluginManifest{
+		ID: id, Name: id, Version: version, APIVersion: pluginManifestAPIVersionV2,
+		Publisher: "AnixOps", Targets: []string{"control"}, Architectures: []string{"linux/amd64", "linux/arm64"},
+		ArtifactSHA256:      digest(artifact),
+		ControlEntrypoint:   &PluginEntrypoint{Builtin: id},
+		Migrations:          &PluginMigrations{Index: "migrations/index.json", SHA256: digest(migrations)},
+		CompatibilityRoutes: &PluginCompatibilityRoutes{Path: "compat/v2-routes.json", SHA256: digest(routes)},
+		RouteContractDigest: digest(routes),
 	}
 	if mutate != nil {
 		mutate(&manifest)
 	}
 	canonical, err := CanonicalPluginManifest(manifest)
 	require.NoError(t, err)
-	return testSignedPackage{
-		Manifest: manifest, ManifestJSON: string(canonical), Artifact: artifact,
-		Signature: base64.StdEncoding.EncodeToString(ed25519.Sign(privateKey, canonical)),
+	return builtinpkg.Package{
+		ID: id, Version: version, Manifest: canonical, Artifact: artifact,
+		Signature: base64.StdEncoding.EncodeToString(ed25519.Sign(key.private, canonical)),
+	}
+}
+
+func builtinTestSet(packages ...builtinpkg.Package) *builtinpkg.Set {
+	return &builtinpkg.Set{Packages: packages}
+}
+
+func newBuiltinTestDB(t *testing.T, key builtinTestKey) *gorm.DB {
+	t.Helper()
+	db := newKernelTestDB(t)
+	require.NoError(t, db.AutoMigrate(&model.OperationLog{}))
+	_, err := EnsurePluginTrustRoot(db, key.public)
+	require.NoError(t, err)
+	return db
+}
+
+func builtinResults(results []BuiltinPackageResult) map[string]BuiltinPackageResult {
+	out := map[string]BuiltinPackageResult{}
+	for _, result := range results {
+		out[result.ID] = result
+	}
+	return out
+}
+
+func builtinInstallation(t *testing.T, db *gorm.DB, id string) model.PluginInstallation {
+	t.Helper()
+	var installation model.PluginInstallation
+	require.NoError(t, db.First(&installation, "plugin_id = ? AND target = ?", id, "control").Error)
+	return installation
+}
+
+func builtinAuditCount(t *testing.T, db *gorm.DB) int64 {
+	t.Helper()
+	var count int64
+	require.NoError(t, db.Model(&model.OperationLog{}).Where("action = ?", builtinInstallationAction).Count(&count).Error)
+	return count
+}
+
+func TestBuiltinBootstrapColdStartInstallsEveryPackageInOrder(t *testing.T) {
+	key := newBuiltinTestKey(t)
+	db := newBuiltinTestDB(t, key)
+	set := builtinTestSet(
+		builtinTestPackage(t, key, "affiliate", "5.0.0", func(m *PluginManifest) { m.Dependencies = []string{"order"} }),
+		builtinTestPackage(t, key, "identity-platform", "5.0.0", nil),
+		builtinTestPackage(t, key, "order", "5.0.0", nil),
+		builtinTestPackage(t, key, "platform", "5.0.0", nil),
+	)
+
+	results := BootstrapBuiltinPackages(db, key.encoded(), set)
+
+	order := make([]string, 0, len(results))
+	for _, result := range results {
+		require.NoError(t, result.Err, result.ID)
+		require.Equal(t, BuiltinActionInstalled, result.Action, result.ID)
+		order = append(order, result.ID)
+	}
+	// identity first, then platform, then by id with dependencies first.
+	require.Equal(t, []string{"identity-platform", "platform", "order", "affiliate"}, order)
+	for _, id := range order {
+		installation := builtinInstallation(t, db, id)
+		require.Equal(t, "5.0.0", installation.DesiredVersion)
+		require.True(t, installation.Enabled)
+		require.Equal(t, "pending", installation.State)
+		require.EqualValues(t, 1, installation.LifecycleGeneration)
+		var release model.PluginRelease
+		require.NoError(t, db.First(&release, "plugin_id = ? AND version = ?", id, "5.0.0").Error)
+		require.Equal(t, PluginTrustRootFingerprint(key.public), release.TrustRootFingerprint)
+		artifact, err := GetPluginArtifact(db, release.ID)
+		require.NoError(t, err)
+		require.NotEmpty(t, artifact.Data)
+	}
+	require.EqualValues(t, 4, builtinAuditCount(t, db))
+}
+
+func TestBuiltinBootstrapSameVersionRestartIsANoOp(t *testing.T) {
+	key := newBuiltinTestKey(t)
+	db := newBuiltinTestDB(t, key)
+	set := builtinTestSet(builtinTestPackage(t, key, "knowledge", "5.0.0", nil), builtinTestPackage(t, key, "plan", "5.0.0", nil))
+	BootstrapBuiltinPackages(db, key.encoded(), set)
+	require.NoError(t, db.Model(&model.PluginInstallation{}).Where("plugin_id = ?", "knowledge").
+		Updates(map[string]any{"state": "healthy", "observed_version": "5.0.0"}).Error)
+	before := builtinInstallation(t, db, "knowledge")
+	audits := builtinAuditCount(t, db)
+
+	for _, result := range BootstrapBuiltinPackages(db, key.encoded(), set) {
+		require.NoError(t, result.Err)
+		require.Equal(t, BuiltinActionUnchanged, result.Action, result.ID)
+	}
+
+	after := builtinInstallation(t, db, "knowledge")
+	require.Equal(t, before.LifecycleGeneration, after.LifecycleGeneration)
+	require.Equal(t, "healthy", after.State)
+	require.Equal(t, audits, builtinAuditCount(t, db))
+	var releases, artifacts int64
+	require.NoError(t, db.Model(&model.PluginRelease{}).Count(&releases).Error)
+	require.NoError(t, db.Model(&model.PluginArtifact{}).Count(&artifacts).Error)
+	require.EqualValues(t, 2, releases)
+	require.EqualValues(t, 2, artifacts)
+}
+
+func TestBuiltinBootstrapUpgradesToANewVersion(t *testing.T) {
+	key := newBuiltinTestKey(t)
+	db := newBuiltinTestDB(t, key)
+	BootstrapBuiltinPackages(db, key.encoded(), builtinTestSet(builtinTestPackage(t, key, "knowledge", "5.0.0", nil)))
+	require.NoError(t, db.Model(&model.PluginInstallation{}).Where("plugin_id = ?", "knowledge").
+		Updates(map[string]any{"state": "healthy", "observed_version": "5.0.0"}).Error)
+
+	results := BootstrapBuiltinPackages(db, key.encoded(), builtinTestSet(builtinTestPackage(t, key, "knowledge", "5.1.0", nil)))
+
+	require.Len(t, results, 1)
+	require.NoError(t, results[0].Err)
+	require.Equal(t, BuiltinActionUpgraded, results[0].Action)
+	installation := builtinInstallation(t, db, "knowledge")
+	require.Equal(t, "5.1.0", installation.DesiredVersion)
+	require.Equal(t, "5.0.0", installation.PreviousVersion)
+	require.Equal(t, "5.0.0", installation.ObservedVersion, "the lifecycle worker moves the host")
+	require.Equal(t, "pending", installation.State)
+	require.EqualValues(t, 2, installation.LifecycleGeneration, "a new generation runs the migrations again")
+	var releases int64
+	require.NoError(t, db.Model(&model.PluginRelease{}).Where("plugin_id = ?", "knowledge").Count(&releases).Error)
+	require.EqualValues(t, 2, releases, "the old release stays for audit")
+	var audit model.OperationLog
+	require.NoError(t, db.Where("action = ?", builtinInstallationAction).Order("id DESC").First(&audit).Error)
+	require.Contains(t, audit.Content, `"from_version":"5.0.0"`)
+	require.Contains(t, audit.Content, `"to_version":"5.1.0"`)
+}
+
+func TestBuiltinBootstrapEnablesADisabledInstallation(t *testing.T) {
+	key := newBuiltinTestKey(t)
+	db := newBuiltinTestDB(t, key)
+	set := builtinTestSet(builtinTestPackage(t, key, "ticket", "5.0.0", nil))
+	BootstrapBuiltinPackages(db, key.encoded(), set)
+	require.NoError(t, db.Model(&model.PluginInstallation{}).Where("plugin_id = ?", "ticket").
+		Updates(map[string]any{"state": "disabled", "enabled": false, "lifecycle_generation": 4}).Error)
+
+	results := BootstrapBuiltinPackages(db, key.encoded(), set)
+
+	require.Equal(t, BuiltinActionEnabled, results[0].Action)
+	installation := builtinInstallation(t, db, "ticket")
+	require.True(t, installation.Enabled)
+	require.Equal(t, "pending", installation.State)
+	require.EqualValues(t, 5, installation.LifecycleGeneration)
+}
+
+func TestBuiltinBootstrapNeverDowngrades(t *testing.T) {
+	key := newBuiltinTestKey(t)
+	db := newBuiltinTestDB(t, key)
+	BootstrapBuiltinPackages(db, key.encoded(), builtinTestSet(builtinTestPackage(t, key, "plan", "5.1.0", nil)))
+
+	results := BootstrapBuiltinPackages(db, key.encoded(), builtinTestSet(builtinTestPackage(t, key, "plan", "5.0.0", nil)))
+
+	require.Equal(t, BuiltinActionFailed, results[0].Action)
+	require.ErrorContains(t, results[0].Err, "newer than the 5.0.0 this binary carries")
+	installation := builtinInstallation(t, db, "plan")
+	require.Equal(t, "5.1.0", installation.DesiredVersion)
+	require.Equal(t, "pending", installation.State, "the installation is left to its own release")
+
+	problems, err := BuiltinPackageProblems(db, key.encoded(), builtinTestSet(builtinTestPackage(t, key, "plan", "5.0.0", nil)), nil)
+	require.NoError(t, err)
+	require.Len(t, problems, 1)
+	require.Contains(t, problems[0].Reason, "wants 5.1.0")
+}
+
+func TestBuiltinBootstrapMarksAFailedInstallation(t *testing.T) {
+	key := newBuiltinTestKey(t)
+	db := newBuiltinTestDB(t, key)
+	BootstrapBuiltinPackages(db, key.encoded(), builtinTestSet(builtinTestPackage(t, key, "plan", "5.0.0", nil)))
+	// The next binary's release cannot be validated: a conflicting package
+	// is enabled.
+	require.NoError(t, db.Model(&model.PluginInstallation{}).Where("plugin_id = ?", "plan").Update("state", "healthy").Error)
+	conflicting := builtinTestPackage(t, key, "ticket", "5.0.0", nil)
+	BootstrapBuiltinPackages(db, key.encoded(), builtinTestSet(conflicting))
+
+	results := BootstrapBuiltinPackages(db, key.encoded(), builtinTestSet(
+		builtinTestPackage(t, key, "plan", "5.1.0", func(m *PluginManifest) { m.Conflicts = []string{"ticket"} }),
+	))
+
+	require.Equal(t, BuiltinActionFailed, results[0].Action)
+	require.ErrorContains(t, results[0].Err, "conflicts with ticket")
+	installation := builtinInstallation(t, db, "plan")
+	require.Equal(t, "5.0.0", installation.DesiredVersion)
+	require.Equal(t, "failed", installation.State)
+	require.Contains(t, installation.LastError, "built-in package bootstrap")
+}
+
+func TestBuiltinBootstrapRejectsBadSignaturesAndDigestsAndKeepsTheRest(t *testing.T) {
+	key := newBuiltinTestKey(t)
+	other := newBuiltinTestKey(t)
+	db := newBuiltinTestDB(t, key)
+	badSignature := builtinTestPackage(t, key, "order", "5.0.0", nil)
+	badSignature.Signature = builtinTestPackage(t, other, "order", "5.0.0", nil).Signature
+	badDigest := builtinTestPackage(t, key, "payment", "5.0.0", nil)
+	badDigest.Artifact = append(append([]byte(nil), badDigest.Artifact...), 0)
+	notCanonical := builtinTestPackage(t, key, "notification", "5.0.0", nil)
+	notCanonical.Manifest = append([]byte(" "), notCanonical.Manifest...)
+	wrongIndex := builtinTestPackage(t, key, "wireguard", "5.0.0", nil)
+	wrongIndex.Version = "5.0.1"
+	fileHost := builtinTestPackage(t, key, "forward", "5.0.0", func(m *PluginManifest) {
+		m.ControlEntrypoint = &PluginEntrypoint{Path: "bin/control-host", SHA256: m.ArtifactSHA256}
+	})
+	dependent := builtinTestPackage(t, key, "affiliate", "5.0.0", func(m *PluginManifest) { m.Dependencies = []string{"order"} })
+	good := builtinTestPackage(t, key, "knowledge", "5.0.0", nil)
+
+	results := builtinResults(BootstrapBuiltinPackages(db, key.encoded(), builtinTestSet(badSignature, badDigest, notCanonical, wrongIndex, fileHost, dependent, good)))
+
+	require.Equal(t, BuiltinActionInvalid, results["order"].Action)
+	require.ErrorContains(t, results["order"].Err, "signature verification failed")
+	require.Equal(t, BuiltinActionInvalid, results["payment"].Action)
+	require.ErrorContains(t, results["payment"].Err, "hash mismatch")
+	require.Equal(t, BuiltinActionInvalid, results["notification"].Action)
+	require.Equal(t, BuiltinActionInvalid, results["wireguard"].Action)
+	require.Equal(t, BuiltinActionInvalid, results["forward"].Action)
+	require.ErrorContains(t, results["forward"].Err, "built-in host")
+	require.Equal(t, BuiltinActionFailed, results["affiliate"].Action)
+	require.ErrorContains(t, results["affiliate"].Err, "depends on order")
+	require.Equal(t, BuiltinActionInstalled, results["knowledge"].Action)
+	require.NoError(t, results["knowledge"].Err)
+
+	var installations []model.PluginInstallation
+	require.NoError(t, db.Find(&installations).Error)
+	require.Len(t, installations, 1)
+	require.Equal(t, "knowledge", installations[0].PluginID)
+	var releases int64
+	require.NoError(t, db.Model(&model.PluginRelease{}).Count(&releases).Error)
+	require.EqualValues(t, 1, releases, "nothing of an invalid package is written")
+}
+
+func TestBuiltinBootstrapWithAnotherKeyRejectsEveryPackage(t *testing.T) {
+	key := newBuiltinTestKey(t)
+	configured := newBuiltinTestKey(t)
+	db := newBuiltinTestDB(t, configured)
+	set := builtinTestSet(builtinTestPackage(t, key, "knowledge", "5.0.0", nil), builtinTestPackage(t, key, "plan", "5.0.0", nil))
+
+	for _, result := range BootstrapBuiltinPackages(db, configured.encoded(), set) {
+		require.Equal(t, BuiltinActionInvalid, result.Action, result.ID)
+	}
+	for _, result := range BootstrapBuiltinPackages(db, "not base64", set) {
+		require.Equal(t, BuiltinActionInvalid, result.Action, result.ID)
+		require.ErrorContains(t, result.Err, "plugins.official_public_key")
+	}
+	var count int64
+	require.NoError(t, db.Model(&model.PluginInstallation{}).Count(&count).Error)
+	require.Zero(t, count)
+}
+
+func TestBuiltinBootstrapReportsMissingDependenciesAndCycles(t *testing.T) {
+	key := newBuiltinTestKey(t)
+	db := newBuiltinTestDB(t, key)
+	results := builtinResults(BootstrapBuiltinPackages(db, key.encoded(), builtinTestSet(
+		builtinTestPackage(t, key, "order", "5.0.0", func(m *PluginManifest) { m.Dependencies = []string{"payment"} }),
+		builtinTestPackage(t, key, "payment", "5.0.0", func(m *PluginManifest) { m.Dependencies = []string{"order"} }),
+		builtinTestPackage(t, key, "affiliate", "5.0.0", func(m *PluginManifest) { m.Dependencies = []string{"no-such-package"} }),
+		builtinTestPackage(t, key, "plan", "5.0.0", nil),
+	)))
+	require.ErrorContains(t, results["order"].Err, "cycle")
+	require.ErrorContains(t, results["payment"].Err, "cycle")
+	require.ErrorContains(t, results["affiliate"].Err, "does not carry")
+	require.Equal(t, BuiltinActionInstalled, results["plan"].Action)
+}
+
+func TestBuiltinBootstrapRefusesAReleaseRegisteredWithOtherContents(t *testing.T) {
+	key := newBuiltinTestKey(t)
+	db := newBuiltinTestDB(t, key)
+	imported := builtinTestPackage(t, key, "knowledge", "5.0.0", func(m *PluginManifest) { m.Name = "Imported" })
+	_, err := RegisterPluginRelease(db, string(imported.Manifest), imported.Signature, key.public)
+	require.NoError(t, err)
+
+	results := BootstrapBuiltinPackages(db, key.encoded(), builtinTestSet(builtinTestPackage(t, key, "knowledge", "5.0.0", nil)))
+
+	require.Equal(t, BuiltinActionFailed, results[0].Action)
+	require.ErrorContains(t, results[0].Err, "other contents")
+}
+
+func TestBuiltinBootstrapWithoutPackagesDoesNothing(t *testing.T) {
+	key := newBuiltinTestKey(t)
+	db := newBuiltinTestDB(t, key)
+	require.Nil(t, BootstrapBuiltinPackages(db, key.encoded(), &builtinpkg.Set{}))
+	require.Nil(t, BootstrapBuiltinPackages(db, key.encoded(), nil))
+}
+
+func TestBuiltinPackageProblemsReportsWhatNeedsAnAdministrator(t *testing.T) {
+	key := newBuiltinTestKey(t)
+	db := newBuiltinTestDB(t, key)
+	invalid := builtinTestPackage(t, key, "order", "5.0.0", nil)
+	invalid.Signature = builtinTestPackage(t, newBuiltinTestKey(t), "order", "5.0.0", nil).Signature
+	set := builtinTestSet(
+		builtinTestPackage(t, key, "knowledge", "5.0.0", nil),
+		builtinTestPackage(t, key, "plan", "5.0.0", nil),
+		builtinTestPackage(t, key, "ticket", "5.0.0", nil),
+		invalid,
+	)
+	BootstrapBuiltinPackages(db, key.encoded(), set)
+	require.NoError(t, db.Model(&model.PluginInstallation{}).Where("plugin_id = ?", "plan").
+		Updates(map[string]any{"state": "failed", "last_error": "host exited"}).Error)
+	require.NoError(t, db.Model(&model.PluginInstallation{}).Where("plugin_id = ?", "ticket").Update("enabled", false).Error)
+
+	problems, err := BuiltinPackageProblems(db, key.encoded(), set, nil)
+	require.NoError(t, err)
+	byID := map[string]BuiltinPackageStatus{}
+	for _, problem := range problems {
+		byID[problem.ID] = problem
+	}
+	require.Len(t, byID, 3, "knowledge is pending: its host is starting")
+	require.True(t, byID["order"].Invalid)
+	require.Equal(t, "failed", byID["plan"].State)
+	require.Equal(t, "host exited", byID["plan"].LastError)
+	require.Contains(t, byID["ticket"].Reason, "not enabled")
+
+	problems, err = BuiltinPackageProblems(db, key.encoded(), nil, errors.New("broken index"))
+	require.NoError(t, err)
+	require.Equal(t, []BuiltinPackageStatus{{ID: "index", Invalid: true, Reason: "broken index"}}, problems)
+}
+
+// A built-in host release materializes without an entrypoint file, and only
+// for the release this binary carries.
+func TestMaterializeBuiltinHostReleaseRequiresTheEmbeddedManifest(t *testing.T) {
+	key := newBuiltinTestKey(t)
+	db := newBuiltinTestDB(t, key)
+	embedded := builtinTestPackage(t, key, "knowledge", "5.0.0", nil)
+	set := builtinTestSet(embedded)
+	BootstrapBuiltinPackages(db, key.encoded(), set)
+
+	_, err := MaterializePluginControlArtifact(db, key.public, "knowledge", "5.0.0", t.TempDir())
+	require.ErrorIs(t, err, ErrBuiltinReleaseNotEmbedded, "the test binary embeds no knowledge package")
+
+	restore := builtinpkg.SetDefault(set)
+	defer restore()
+	root := t.TempDir()
+	ref, err := MaterializePluginControlArtifact(db, key.public, "knowledge", "5.0.0", root)
+	require.NoError(t, err)
+	require.True(t, ref.Builtin)
+	require.Empty(t, ref.EntrypointPath)
+	require.Empty(t, ref.EntrypointSHA256)
+	require.FileExists(t, ref.ArtifactPath)
+	require.FileExists(t, ref.ManifestPath)
+	require.NoFileExists(t, filepath.Join(filepath.Dir(ref.ArtifactPath), "control-host"))
+	manifest, err := os.ReadFile(ref.ManifestPath)
+	require.NoError(t, err)
+	require.Equal(t, embedded.Manifest, manifest)
+
+	// Another release of the package, even one signed with the official key,
+	// has no code in this binary.
+	newer := builtinTestPackage(t, key, "knowledge", "5.1.0", nil)
+	release, err := RegisterPluginRelease(db, string(newer.Manifest), newer.Signature, key.public)
+	require.NoError(t, err)
+	_, err = StorePluginArtifact(db, release.ID, newer.Artifact)
+	require.NoError(t, err)
+	_, err = MaterializePluginControlArtifact(db, key.public, "knowledge", "5.1.0", root)
+	require.ErrorIs(t, err, ErrBuiltinReleaseNotEmbedded)
+}
+
+func TestBuiltinControlEntrypointManifestRules(t *testing.T) {
+	key := newBuiltinTestKey(t)
+	valid := builtinTestPackage(t, key, "knowledge", "5.0.0", nil)
+	_, err := VerifyPluginRelease(string(valid.Manifest), valid.Signature, key.public)
+	require.NoError(t, err)
+	require.Contains(t, string(valid.Manifest), `"control_entrypoint":{"builtin":"knowledge"}`)
+
+	for name, mutate := range map[string]func(*PluginManifest){
+		"other package": func(m *PluginManifest) { m.ControlEntrypoint = &PluginEntrypoint{Builtin: "plan"} },
+		"also a file":   func(m *PluginManifest) { m.ControlEntrypoint.Path = "bin/control-host" },
+		"agent target": func(m *PluginManifest) {
+			m.Targets = []string{"control", "agent"}
+			m.AgentEntrypoint = &PluginEntrypoint{Path: "agent/entrypoints.json", SHA256: m.ArtifactSHA256}
+			m.RuntimeAPIVersion = agentRuntimeAPIVersionV110
+		},
+		"builtin agent entrypoint": func(m *PluginManifest) {
+			m.Targets = []string{"control", "agent"}
+			m.ControlEntrypoint = &PluginEntrypoint{Path: "bin/control-host", SHA256: m.ArtifactSHA256}
+			m.AgentEntrypoint = &PluginEntrypoint{Builtin: "knowledge"}
+			m.RuntimeAPIVersion = agentRuntimeAPIVersionV110
+		},
+	} {
+		invalid := builtinTestPackage(t, key, "knowledge", "5.0.0", mutate)
+		_, err := VerifyPluginRelease(string(invalid.Manifest), invalid.Signature, key.public)
+		require.Error(t, err, name)
 	}
 }

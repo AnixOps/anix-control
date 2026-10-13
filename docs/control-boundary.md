@@ -6,7 +6,10 @@ It owns:
 - public web UI and panel API (`/api/v2`, routed through the signed-package gateway)
 - the v4 plugin kernel: signed package catalog, releases, installations,
   operations, and deployments under `/api/v3`, plus the package host processes
-  that serve `packages/*`
+  that serve `packages/*`. Every official package is built into the binary:
+  its host is a child process of the same binary (`anix-control package-host
+  <id>`), and the start-up bootstrap installs, upgrades and enables the set
+  (`docs/architecture/plugin-kernel-contract.md`, "Built-in Packages")
 - user, plan, order, ticket, knowledge, and subscription data
 - public proxy-node inventory and UniProxy-compatible APIs
 - the forwarding control plane: the v4.2 forwarding area (`/admin/forward/*`)

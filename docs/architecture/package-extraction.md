@@ -1,6 +1,6 @@
 # Package Extraction Design
 
-Date: 2026-09-29 (status refreshed 2026-10-01)
+Date: 2026-09-29 (status refreshed 2026-10-13: the hosts are built into Control)
 
 This is the design of record for moving business domains out of the Control
 kernel and into signed packages. It replaces the retired plans that lived under
@@ -50,6 +50,16 @@ v4.0.0 (published 2026-07-20) is plugin-only at the routing level only.
   (`internal/compat/v2/registry.go`, `verifiedRouteSource`) -> package host
   process over Unix gRPC -> package bridge (FD 4) -> **the legacy in-kernel
   handler/service**.
+- **Built in (M2, P6).** Every package host is now a library
+  (`packages/<id>/control`, `packages/shared/controlhost`) linked into the
+  Control binary through `packages/builtin`, and runs as a child process of
+  the same binary (`anix-control package-host <id>`). Every official package,
+  `order`, `payment` and `affiliate` included (the editions are gone), is
+  embedded as a slim signed package and installed, upgraded and enabled at
+  every start ([`plugin-kernel-contract.md`](plugin-kernel-contract.md#built-in-packages)).
+  The process boundary, the bridge and the extraction model below are
+  unchanged: a package still reaches the kernel only through its bridge and
+  must not import `internal/` (`check_package_boundaries.sh`).
 - 15 of 16 packages run the generic forwarding host
   `packages/shared/controlhost/service.go` (`build_package.py` falls back to it
   when `packages/<id>/control` is absent). Only `identity-platform` has its own
@@ -118,7 +128,7 @@ Reusable pieces that already exist:
 
 | Piece | Where |
 |-------|-------|
-| Signed package build, compiles `packages/<id>/control` when present | `packages/shared/build_package.py` |
+| Signed package build: the slim built-in set (`--builtin`) or the full format with the standalone host `packages/builtin/cmd/package-host` | `packages/shared/build_package.py` |
 | Versioned, schema-validated package config | `GET/PUT /api/v3/plugin-installations/:id/config` |
 | Rollout/migration ledger models | `internal/model/plugin_rollout.go`, `internal/service/plugin_rollout.go` |
 | Legacy/native comparison harness (`RunRead`, `RunWrite`) | `internal/tests/packagecompat` |

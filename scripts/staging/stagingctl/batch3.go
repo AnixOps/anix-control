@@ -17,7 +17,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// Batch 3: plan + order + payment + affiliate (commercial edition).
+// Batch 3: plan + order + payment + affiliate.
 //
 // Every secret below is a fake that protects nothing: the gateways point at
 // example.com and the staging network has no route out. The EPay key and the

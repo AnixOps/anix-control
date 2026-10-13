@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/sdk/telemetry/systemdreport"
+	"github.com/AnixOps/anix-control/v5/internal/builtinpkg"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/pluginhost"
 	"github.com/google/uuid"
@@ -244,10 +245,20 @@ type PluginManifest struct {
 	RuntimeAPIVersion   string                     `json:"runtime_api_version,omitempty"`
 }
 
+// PluginEntrypoint is a host or Agent plugin entrypoint: a file of the
+// artifact (Path, SHA256), or, for a Control entrypoint only, the host linked
+// into the Control binary (Builtin, the package id; packages/builtin). The
+// fields are omitted when empty, so the signed bytes of a file entrypoint are
+// unchanged: {"path":...,"sha256":...}; a built-in one is {"builtin":"<id>"}.
 type PluginEntrypoint struct {
-	Path   string `json:"path"`
-	SHA256 string `json:"sha256"`
+	Path    string `json:"path,omitempty"`
+	SHA256  string `json:"sha256,omitempty"`
+	Builtin string `json:"builtin,omitempty"`
 }
+
+// BuiltinHost reports a Control entrypoint served by the host linked into
+// the Control binary.
+func (e *PluginEntrypoint) BuiltinHost() bool { return e != nil && e.Builtin != "" }
 
 type PluginMigrations struct {
 	Index  string `json:"index"`
@@ -396,7 +407,14 @@ func (m PluginManifest) Validate() error {
 
 func (m PluginManifest) validateV2Contract() error {
 	if manifestSupportsTarget(m, "control") {
-		if err := validatePluginEntrypoint(m.ControlEntrypoint, "control_entrypoint"); err != nil {
+		if m.ControlEntrypoint.BuiltinHost() {
+			if m.ControlEntrypoint.Builtin != m.ID || m.ControlEntrypoint.Path != "" || m.ControlEntrypoint.SHA256 != "" {
+				return errors.New("control_entrypoint must name the package's own built-in host and nothing else")
+			}
+			if manifestSupportsTarget(m, "agent") {
+				return errors.New("a built-in Control host package must not target the agent")
+			}
+		} else if err := validatePluginEntrypoint(m.ControlEntrypoint, "control_entrypoint"); err != nil {
 			return err
 		}
 	} else if m.ControlEntrypoint != nil {
@@ -425,7 +443,7 @@ func (m PluginManifest) validateV2Contract() error {
 }
 
 func validatePluginEntrypoint(value *PluginEntrypoint, field string) error {
-	if value == nil || !safePluginRelativePath(value.Path) || !validSHA256Hex(value.SHA256) {
+	if value == nil || value.Builtin != "" || !safePluginRelativePath(value.Path) || !validSHA256Hex(value.SHA256) {
 		return fmt.Errorf("%s must declare a canonical path and SHA-256 digest", field)
 	}
 	return nil
@@ -1613,6 +1631,9 @@ func resolvePluginControlEntrypoint(manifest PluginManifest, artifact []byte) ([
 	if manifest.ControlEntrypoint == nil {
 		return nil, "", errors.New("plugin release does not provide a control entrypoint")
 	}
+	if manifest.ControlEntrypoint.BuiltinHost() {
+		return nil, "", errors.New("plugin release names a built-in host, not an entrypoint file")
+	}
 	if manifest.ControlEntrypoint.Path != pluginControlEntrypointIndexPath {
 		entrypoint, err := extractPluginArtifactFile(artifact, manifest.ControlEntrypoint.Path, maxPluginControlEntrypointBytes)
 		if err != nil {
@@ -1683,6 +1704,38 @@ func resolvePluginControlEntrypoint(manifest PluginManifest, artifact []byte) ([
 	return entrypoint, selected.SHA256, nil
 }
 
+// RequireEmbeddedBuiltinRelease admits a built-in host only for the release
+// this Control binary carries: the release's canonical manifest must be
+// byte-identical to the manifest embedded for the package
+// (internal/builtinpkg). The host code is the binary's own, so a built-in
+// entrypoint of any other release (an older or newer one, imported through
+// the API) has nothing to run here.
+func RequireEmbeddedBuiltinRelease(manifest PluginManifest) error {
+	if !manifest.ControlEntrypoint.BuiltinHost() {
+		return errors.New("plugin release does not name a built-in host")
+	}
+	set, err := builtinpkg.Default()
+	if err != nil {
+		return fmt.Errorf("read the built-in packages: %w", err)
+	}
+	embedded, ok := set.Lookup(manifest.ID)
+	if !ok || embedded.Version != manifest.Version {
+		return fmt.Errorf("%w: %s %s names a built-in host, but this Control binary does not carry that release", ErrBuiltinReleaseNotEmbedded, manifest.ID, manifest.Version)
+	}
+	canonical, err := CanonicalPluginManifest(manifest)
+	if err != nil {
+		return err
+	}
+	if !bytes.Equal(canonical, embedded.Manifest) {
+		return fmt.Errorf("%w: %s %s differs from the manifest this Control binary carries", ErrBuiltinReleaseNotEmbedded, manifest.ID, manifest.Version)
+	}
+	return nil
+}
+
+// ErrBuiltinReleaseNotEmbedded rejects a built-in host release this binary
+// does not carry.
+var ErrBuiltinReleaseNotEmbedded = errors.New("built-in package release is not embedded in this Control binary")
+
 // PluginArtifactCopyPrefix names the per-process package copies created
 // under the Control plugin artifact directory.
 const PluginArtifactCopyPrefix = ".anix-package-"
@@ -1724,9 +1777,18 @@ func MaterializePluginControlArtifact(db *gorm.DB, publicKey ed25519.PublicKey, 
 	if err != nil {
 		return pluginhost.ArtifactRef{}, err
 	}
-	entrypoint, entrypointDigest, err := resolvePluginControlEntrypoint(*manifest, artifact.Data)
-	if err != nil {
-		return pluginhost.ArtifactRef{}, err
+	builtinHost := manifest.ControlEntrypoint.BuiltinHost()
+	var entrypoint []byte
+	entrypointDigest := ""
+	if builtinHost {
+		if err := RequireEmbeddedBuiltinRelease(*manifest); err != nil {
+			return pluginhost.ArtifactRef{}, err
+		}
+	} else {
+		entrypoint, entrypointDigest, err = resolvePluginControlEntrypoint(*manifest, artifact.Data)
+		if err != nil {
+			return pluginhost.ArtifactRef{}, err
+		}
 	}
 	routes, err := extractPluginArtifactFile(artifact.Data, manifest.CompatibilityRoutes.Path, maxPluginControlEntrypointBytes)
 	if err != nil {
@@ -1762,7 +1824,10 @@ func MaterializePluginControlArtifact(db *gorm.DB, publicKey ed25519.PublicKey, 
 	}()
 	artifactPath := filepath.Join(directory, "package.anxp")
 	manifestPath := filepath.Join(directory, "manifest.json")
-	entrypointPath := filepath.Join(directory, "control-host")
+	entrypointPath := ""
+	if !builtinHost {
+		entrypointPath = filepath.Join(directory, "control-host")
+	}
 	materializedRoot, err := os.OpenRoot(directory)
 	if err != nil {
 		return pluginhost.ArtifactRef{}, fmt.Errorf("open materialized plugin directory: %w", err)
@@ -1774,8 +1839,10 @@ func MaterializePluginControlArtifact(db *gorm.DB, publicKey ed25519.PublicKey, 
 	if err := writeMaterializedPluginFile(materializedRoot, "manifest.json", canonicalManifest, 0o600); err != nil {
 		return pluginhost.ArtifactRef{}, err
 	}
-	if err := writeMaterializedPluginFile(materializedRoot, "control-host", entrypoint, 0o700); err != nil {
-		return pluginhost.ArtifactRef{}, err
+	if !builtinHost {
+		if err := writeMaterializedPluginFile(materializedRoot, "control-host", entrypoint, 0o700); err != nil {
+			return pluginhost.ArtifactRef{}, err
+		}
 	}
 	manifestDigest := sha256.Sum256(canonicalManifest)
 	ref := pluginhost.ArtifactRef{
@@ -1783,6 +1850,7 @@ func MaterializePluginControlArtifact(db *gorm.DB, publicKey ed25519.PublicKey, 
 		Version:          manifest.Version,
 		ArtifactPath:     artifactPath,
 		ArtifactSHA256:   manifest.ArtifactSHA256,
+		Builtin:          builtinHost,
 		EntrypointPath:   entrypointPath,
 		EntrypointSHA256: entrypointDigest,
 		ManifestPath:     manifestPath,

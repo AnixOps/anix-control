@@ -4,22 +4,28 @@
 from __future__ import annotations
 
 import argparse
+import base64
+import binascii
 import fnmatch
 import hashlib
-import io
 import json
+import subprocess
 import sys
-import tarfile
 import tempfile
 from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from generate_release_manifest import PACKAGE_ARCHIVE_GLOB, release_package_entries  # noqa: E402
+from generate_release_manifest import (  # noqa: E402
+    CHECKSUM_SIGNATURE_NAME,
+    builtin_package_entries,
+    write_fixture_builtin_set,
+)
 
 
 MANIFEST_NAME = "RELEASE_MANIFEST.json"
 CHECKSUM_NAME = "SHA256SUMS.txt"
+ED25519_SPKI_PREFIX = bytes.fromhex("302a300506032b6570032100")
 
 
 class VerificationError(RuntimeError):
@@ -35,7 +41,9 @@ def sha256_file(path: Path) -> str:
 
 
 def release_file_names(release_dir: Path, *, exclude_checksums: bool) -> set[str]:
-    excluded = {CHECKSUM_NAME} if exclude_checksums else set()
+    # The checksums and their signature list neither each other nor
+    # themselves: the signature is written after the checksums.
+    excluded = {CHECKSUM_NAME, CHECKSUM_SIGNATURE_NAME} if exclude_checksums else set()
     return {path.name for path in release_dir.iterdir() if path.is_file() and path.name not in excluded}
 
 
@@ -73,7 +81,7 @@ def read_checksums(path: Path) -> dict[str, str]:
     return entries
 
 
-def verify_manifest(release_dir: Path, manifest_path: Path) -> set[str]:
+def verify_manifest(release_dir: Path, manifest_path: Path, builtin_dir: Path | None = None) -> set[str]:
     manifest = load_manifest(manifest_path)
     if manifest.get("build_source") != "github-actions":
         raise VerificationError("manifest build_source must be github-actions")
@@ -93,7 +101,7 @@ def verify_manifest(release_dir: Path, manifest_path: Path) -> set[str]:
         if not isinstance(name, str):
             raise VerificationError(f"manifest artifact {index} has invalid name")
         validate_flat_name(name, f"manifest artifact {index}")
-        if name in {MANIFEST_NAME, CHECKSUM_NAME}:
+        if name in {MANIFEST_NAME, CHECKSUM_NAME, CHECKSUM_SIGNATURE_NAME}:
             raise VerificationError(f"manifest must not list generated metadata file: {name}")
         if name in manifest_names:
             raise VerificationError(f"duplicate manifest artifact: {name}")
@@ -113,24 +121,47 @@ def verify_manifest(release_dir: Path, manifest_path: Path) -> set[str]:
         extra = sorted(manifest_names - expected_names)
         raise VerificationError(f"manifest artifact set mismatch; missing={missing}, extra={extra}")
 
-    verify_package_listing(release_dir, manifest)
+    verify_package_listing(manifest, builtin_dir)
     return manifest_names
 
 
-def verify_package_listing(release_dir: Path, manifest: dict[str, Any]) -> None:
-    """The packages archive must be signed and listed package by package."""
-    archives = sorted(path.name for path in release_dir.glob(PACKAGE_ARCHIVE_GLOB) if path.is_file())
-    for name in archives:
-        if not (release_dir / f"{name}.sig").is_file():
-            raise VerificationError(f"package archive signature missing: {name}.sig")
+def verify_package_listing(manifest: dict[str, Any], builtin_dir: Path | None) -> None:
+    """The manifest lists exactly the packages the release binaries embed."""
+    if builtin_dir is None:
+        return
     try:
-        expected = release_package_entries(release_dir)
-    except (OSError, ValueError, tarfile.TarError, EOFError) as exc:
-        raise VerificationError(f"cannot read package archive: {exc}") from exc
-    if archives and not expected:
-        raise VerificationError("package archive contains no packages")
+        expected = builtin_package_entries(builtin_dir)
+    except (OSError, ValueError, KeyError) as exc:
+        raise VerificationError(f"cannot read the built-in packages: {exc}") from exc
+    if not expected:
+        raise VerificationError("the release binaries embed no packages")
     if manifest.get("packages", []) != expected:
-        raise VerificationError("manifest packages do not match the package archive contents")
+        raise VerificationError("manifest packages do not match the built-in packages")
+
+
+def verify_checksums_signature(checksum_path: Path, signature_path: Path, official_public_key: Path) -> None:
+    """SHA256SUMS.txt.sig: Base64 raw Ed25519 over SHA256SUMS.txt's exact bytes,
+    made with the official package key (the raw Base64 root of
+    plugins.official_public_key)."""
+    try:
+        raw_key = base64.b64decode(b"".join(official_public_key.read_bytes().split()), validate=True)
+        signature = base64.b64decode(b"".join(signature_path.read_bytes().split()), validate=True)
+    except (OSError, ValueError, binascii.Error) as exc:
+        raise VerificationError(f"cannot read the checksum signature or the official key: {exc}") from exc
+    if len(raw_key) != 32:
+        raise VerificationError("the official public key must be 32 raw Ed25519 bytes")
+    with tempfile.TemporaryDirectory(prefix="anixops-checksums-") as temporary:
+        key_path = Path(temporary) / "official.der"
+        key_path.write_bytes(ED25519_SPKI_PREFIX + raw_key)
+        signature_bin = Path(temporary) / "signature.bin"
+        signature_bin.write_bytes(signature)
+        result = subprocess.run(
+            ["openssl", "pkeyutl", "-verify", "-pubin", "-keyform", "DER", "-inkey", str(key_path), "-rawin",
+             "-in", str(checksum_path), "-sigfile", str(signature_bin)],
+            check=False, capture_output=True, text=True,
+        )
+    if result.returncode != 0:
+        raise VerificationError(f"{signature_path.name} does not verify against the official public key")
 
 
 def verify_checksums(release_dir: Path, checksum_path: Path) -> None:
@@ -164,6 +195,8 @@ def verify_release_artifacts(
     checksum_path: Path,
     required: list[str],
     required_globs: list[str],
+    builtin_dir: Path | None = None,
+    official_public_key: Path | None = None,
 ) -> None:
     if not release_dir.is_dir():
         raise VerificationError(f"release directory not found: {release_dir}")
@@ -172,19 +205,24 @@ def verify_release_artifacts(
     if not checksum_path.is_file():
         raise VerificationError(f"release checksums not found: {checksum_path}")
 
-    verify_manifest(release_dir, manifest_path)
+    verify_manifest(release_dir, manifest_path, builtin_dir)
     verify_checksums(release_dir, checksum_path)
     verify_required_assets(release_dir, required, required_globs)
+    if official_public_key is not None:
+        signature_path = checksum_path.with_name(checksum_path.name + ".sig")
+        if not signature_path.is_file():
+            raise VerificationError(f"checksum signature missing: {signature_path.name}")
+        verify_checksums_signature(checksum_path, signature_path, official_public_key)
 
 
 def write_fixture_file(path: Path, content: bytes) -> None:
     path.write_bytes(content)
 
 
-def write_fixture_manifest(release_dir: Path) -> None:
+def write_fixture_manifest(release_dir: Path, builtin_dir: Path | None = None) -> None:
     artifacts = []
     for path in sorted(release_dir.iterdir(), key=lambda item: item.name):
-        if path.is_file() and path.name not in {MANIFEST_NAME, CHECKSUM_NAME}:
+        if path.is_file() and path.name not in {MANIFEST_NAME, CHECKSUM_NAME, CHECKSUM_SIGNATURE_NAME}:
             artifacts.append({"name": path.name, "size": path.stat().st_size, "sha256": sha256_file(path)})
     manifest = {
         "project": "anix-control",
@@ -196,21 +234,9 @@ def write_fixture_manifest(release_dir: Path) -> None:
         "build_source": "github-actions",
         "manual_deployment_required": True,
         "artifacts": artifacts,
-        "packages": release_package_entries(release_dir),
+        "packages": builtin_package_entries(builtin_dir) if builtin_dir is not None else [],
     }
     (release_dir / MANIFEST_NAME).write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-
-
-def write_fixture_package_archive(path: Path, anxp: bytes) -> None:
-    manifest = json.dumps({"id": "demo", "version": "2.4.0", "artifact_sha256": hashlib.sha256(anxp).hexdigest()})
-    with tarfile.open(path, mode="w:gz") as archive:
-        for name, data in (
-            ("anix-control-packages-2.4.0/demo-2.4.0.anxp", anxp),
-            ("anix-control-packages-2.4.0/demo-2.4.0.manifest.json", manifest.encode("utf-8")),
-        ):
-            info = tarfile.TarInfo(name)
-            info.size = len(data)
-            archive.addfile(info, io.BytesIO(data))
 
 
 def copy_fixture_release(source: Path, target: Path) -> None:
@@ -223,7 +249,7 @@ def copy_fixture_release(source: Path, target: Path) -> None:
 def write_fixture_checksums(release_dir: Path) -> None:
     lines = []
     for path in sorted(release_dir.iterdir(), key=lambda item: item.name):
-        if path.is_file() and path.name != CHECKSUM_NAME:
+        if path.is_file() and path.name not in {CHECKSUM_NAME, CHECKSUM_SIGNATURE_NAME}:
             lines.append(f"{sha256_file(path)}  {path.name}")
     (release_dir / CHECKSUM_NAME).write_text("\n".join(lines) + "\n", encoding="utf-8")
 
@@ -236,129 +262,105 @@ def expect_failure(label: str, func: Any) -> None:
     raise AssertionError(f"expected verification failure: {label}")
 
 
+def sign_fixture_checksums(release_dir: Path, private_key: Path) -> None:
+    """Sign SHA256SUMS.txt the way the release job does."""
+    with tempfile.TemporaryDirectory(prefix="anixops-checksums-") as temporary:
+        signature_bin = Path(temporary) / "signature.bin"
+        subprocess.run(
+            ["openssl", "pkeyutl", "-sign", "-inkey", str(private_key), "-rawin",
+             "-in", str(release_dir / CHECKSUM_NAME), "-out", str(signature_bin)],
+            check=True, capture_output=True,
+        )
+        (release_dir / CHECKSUM_SIGNATURE_NAME).write_bytes(base64.b64encode(signature_bin.read_bytes()) + b"\n")
+
+
+def fixture_key(root: Path, name: str) -> tuple[Path, Path]:
+    private_key = root / f"{name}.pem"
+    subprocess.run(["openssl", "genpkey", "-algorithm", "ED25519", "-out", str(private_key)], check=True, capture_output=True)
+    der = subprocess.run(["openssl", "pkey", "-in", str(private_key), "-pubout", "-outform", "DER"], check=True, capture_output=True).stdout
+    raw = root / f"{name}.raw"
+    raw.write_bytes(base64.b64encode(der[len(ED25519_SPKI_PREFIX):]) + b"\n")
+    return private_key, raw
+
+
 def run_self_test() -> None:
     required = [
-        "OPERATOR_DEPLOYMENT.md",
-        "UPGRADE.md",
-        "verify-machine-telemetry-signature.py",
         "RELEASE_NOTES.md",
         "RELEASE_MANIFEST.json",
         "SHA256SUMS.txt",
+        "SHA256SUMS.txt.sig",
         "docker-image.txt",
-        "migration-dry-run.txt",
+        "official-public-key.raw",
         "anix-control-source.sbom.spdx.json",
         "anix-control-frontend.tar.gz",
         "anix-control-linux-amd64.tar.gz",
         "anix-control-linux-arm64.tar.gz",
-        "anix-control-windows-amd64.exe.zip",
-        "anix-control-windows-arm64.exe.zip",
-        "anix-control-darwin-amd64.tar.gz",
-        "anix-control-darwin-arm64.tar.gz",
     ]
 
     with tempfile.TemporaryDirectory() as tmp:
-        release_dir = Path(tmp) / "release"
+        root = Path(tmp)
+        private_key, official = fixture_key(root, "official")
+        _, other = fixture_key(root, "other")
+        builtin_dir = root / "builtin"
+        write_fixture_builtin_set(builtin_dir)
+        release_dir = root / "release"
         release_dir.mkdir()
         for name in required:
-            if name not in {MANIFEST_NAME, CHECKSUM_NAME}:
+            if name not in {MANIFEST_NAME, CHECKSUM_NAME, CHECKSUM_SIGNATURE_NAME}:
                 write_fixture_file(release_dir / name, f"{name}\n".encode("utf-8"))
-        write_fixture_package_archive(release_dir / "anix-control-packages-2.4.0.tar.gz", b"package bytes")
-        write_fixture_file(release_dir / "anix-control-packages-2.4.0.tar.gz.sig", b"signature\n")
-        write_fixture_manifest(release_dir)
+        write_fixture_manifest(release_dir, builtin_dir)
         write_fixture_checksums(release_dir)
+        sign_fixture_checksums(release_dir, private_key)
 
-        verify_release_artifacts(
-            release_dir=release_dir,
-            manifest_path=release_dir / MANIFEST_NAME,
-            checksum_path=release_dir / CHECKSUM_NAME,
-            required=required,
-            required_globs=["anix-control-linux-*.tar.gz", "anix-control-windows-*.zip"],
-        )
+        def verify(directory: Path, **overrides: Any) -> None:
+            arguments: dict[str, Any] = {
+                "release_dir": directory,
+                "manifest_path": directory / MANIFEST_NAME,
+                "checksum_path": directory / CHECKSUM_NAME,
+                "required": required,
+                "required_globs": ["anix-control-linux-*.tar.gz"],
+                "builtin_dir": builtin_dir,
+                "official_public_key": official,
+            }
+            arguments.update(overrides)
+            verify_release_artifacts(**arguments)
 
-        corrupt_dir = Path(tmp) / "corrupt"
-        corrupt_dir.mkdir()
-        for path in release_dir.iterdir():
-            if path.is_file():
-                write_fixture_file(corrupt_dir / path.name, path.read_bytes())
+        verify(release_dir)
+
+        corrupt_dir = root / "corrupt"
+        copy_fixture_release(release_dir, corrupt_dir)
         (corrupt_dir / "docker-image.txt").write_text("tampered\n", encoding="utf-8")
-        expect_failure(
-            "tampered artifact",
-            lambda: verify_release_artifacts(
-                release_dir=corrupt_dir,
-                manifest_path=corrupt_dir / MANIFEST_NAME,
-                checksum_path=corrupt_dir / CHECKSUM_NAME,
-                required=required,
-                required_globs=[],
-            ),
-        )
+        expect_failure("tampered artifact", lambda: verify(corrupt_dir))
 
-        missing_checksum_dir = Path(tmp) / "missing-checksum"
-        missing_checksum_dir.mkdir()
-        for path in release_dir.iterdir():
-            if path.is_file():
-                write_fixture_file(missing_checksum_dir / path.name, path.read_bytes())
+        missing_checksum_dir = root / "missing-checksum"
+        copy_fixture_release(release_dir, missing_checksum_dir)
         lines = (missing_checksum_dir / CHECKSUM_NAME).read_text(encoding="utf-8").splitlines()
         (missing_checksum_dir / CHECKSUM_NAME).write_text("\n".join(lines[:-1]) + "\n", encoding="utf-8")
-        expect_failure(
-            "missing checksum entry",
-            lambda: verify_release_artifacts(
-                release_dir=missing_checksum_dir,
-                manifest_path=missing_checksum_dir / MANIFEST_NAME,
-                checksum_path=missing_checksum_dir / CHECKSUM_NAME,
-                required=required,
-                required_globs=[],
-            ),
-        )
+        expect_failure("missing checksum entry", lambda: verify(missing_checksum_dir, official_public_key=None))
 
-        expect_failure(
-            "missing required asset",
-            lambda: verify_release_artifacts(
-                release_dir=release_dir,
-                manifest_path=release_dir / MANIFEST_NAME,
-                checksum_path=release_dir / CHECKSUM_NAME,
-                required=required + ["missing-required.txt"],
-                required_globs=[],
-            ),
-        )
+        expect_failure("missing required asset", lambda: verify(release_dir, required=required + ["missing-required.txt"]))
 
-        # A package swapped inside the archive (with refreshed checksums) no
-        # longer matches the per-package listing in the manifest.
-        swapped_dir = Path(tmp) / "swapped-package"
-        copy_fixture_release(release_dir, swapped_dir)
-        write_fixture_package_archive(swapped_dir / "anix-control-packages-2.4.0.tar.gz", b"other package bytes")
-        manifest = load_manifest(swapped_dir / MANIFEST_NAME)
-        for artifact in manifest["artifacts"]:
-            path = swapped_dir / artifact["name"]
-            artifact["size"] = path.stat().st_size
-            artifact["sha256"] = sha256_file(path)
-        (swapped_dir / MANIFEST_NAME).write_text(json.dumps(manifest), encoding="utf-8")
-        write_fixture_checksums(swapped_dir)
-        expect_failure(
-            "package listing mismatch",
-            lambda: verify_release_artifacts(
-                release_dir=swapped_dir,
-                manifest_path=swapped_dir / MANIFEST_NAME,
-                checksum_path=swapped_dir / CHECKSUM_NAME,
-                required=required,
-                required_globs=[],
-            ),
-        )
-
-        unsigned_dir = Path(tmp) / "unsigned-archive"
+        # The checksums must be signed with the official key.
+        expect_failure("checksums signed with another key", lambda: verify(release_dir, official_public_key=other))
+        resigned_dir = root / "edited-checksums"
+        copy_fixture_release(release_dir, resigned_dir)
+        with (resigned_dir / CHECKSUM_NAME).open("a", encoding="utf-8") as handle:
+            handle.write("\n")
+        expect_failure("checksums edited after signing", lambda: verify(resigned_dir))
+        unsigned_dir = root / "unsigned"
         copy_fixture_release(release_dir, unsigned_dir)
-        (unsigned_dir / "anix-control-packages-2.4.0.tar.gz.sig").unlink()
-        write_fixture_manifest(unsigned_dir)
-        write_fixture_checksums(unsigned_dir)
-        expect_failure(
-            "unsigned package archive",
-            lambda: verify_release_artifacts(
-                release_dir=unsigned_dir,
-                manifest_path=unsigned_dir / MANIFEST_NAME,
-                checksum_path=unsigned_dir / CHECKSUM_NAME,
-                required=required,
-                required_globs=[],
-            ),
-        )
+        (unsigned_dir / CHECKSUM_SIGNATURE_NAME).unlink()
+        expect_failure("unsigned checksums", lambda: verify(unsigned_dir, required=[name for name in required if name != CHECKSUM_SIGNATURE_NAME]))
+
+        # The manifest lists exactly the packages the binaries embed.
+        other_builtin = root / "other-builtin"
+        write_fixture_builtin_set(other_builtin)
+        (other_builtin / "demo-2.4.0.manifest.json").write_text('{"id":"demo","version":"2.4.0","artifact_sha256":"0"}', encoding="utf-8")
+        expect_failure("built-in package listing mismatch", lambda: verify(release_dir, builtin_dir=other_builtin))
+        empty_builtin = root / "empty-builtin"
+        empty_builtin.mkdir()
+        (empty_builtin / "index.json").write_text('{"format":"anixops.builtin-packages/v1","packages":[]}', encoding="utf-8")
+        expect_failure("binaries without packages", lambda: verify(release_dir, builtin_dir=empty_builtin))
 
     print("release artifact verification self-test passed")
 
@@ -378,6 +380,18 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--require", action="append", default=[], help="Required release asset file name.")
     parser.add_argument("--require-glob", action="append", default=[], help="Required release asset glob pattern.")
+    parser.add_argument(
+        "--builtin-packages",
+        type=Path,
+        default=None,
+        help="The built-in package directory the release binaries embed; the manifest must list exactly its packages.",
+    )
+    parser.add_argument(
+        "--official-public-key",
+        type=Path,
+        default=None,
+        help="Raw Base64 Ed25519 official key: SHA256SUMS.txt.sig must verify against it.",
+    )
     parser.add_argument("--self-test", action="store_true", help="Run the built-in verification self-test.")
     return parser.parse_args()
 
@@ -397,6 +411,8 @@ def main() -> int:
         checksum_path=checksum_path,
         required=args.require,
         required_globs=args.require_glob,
+        builtin_dir=args.builtin_packages,
+        official_public_key=args.official_public_key,
     )
     print("release artifacts verified")
     return 0

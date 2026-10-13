@@ -1,4 +1,4 @@
-.PHONY: build run dev-config clean test test-unit test-e2e test-coverage test-coverage-html test-frontend
+.PHONY: build build-packages run dev-config clean test test-unit test-e2e test-coverage test-coverage-html test-frontend
 .PHONY: pre-deploy deploy docker-build docker-run lint vet fmt bench grpc-gen swagger
 .PHONY: test-quick test-clean test-summary test-grpc test-cmd test-all test-coverage-all
 
@@ -10,6 +10,11 @@ BUILD_TIME := $(shell date +%Y-%m-%d_%H:%M:%S)
 GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 LDFLAGS := -s -w -X main.version=$(VERSION) -X main.agentRelease=$(AGENT_RELEASE) -X main.buildTime=$(BUILD_TIME) -X main.commit=$(GIT_COMMIT)
 RUN_CONFIG ?= config/config.dev.yaml
+# The official packages Control embeds (internal/builtinpkg), signed with a
+# development key kept in build/: never a release credential. Releases build
+# them in CI with the official key (docs/RELEASING.md).
+BUILTIN_DIST := internal/builtinpkg/dist
+DEV_PACKAGE_KEY := build/dev-package-signing-key.pem
 
 # Go 测试参数
 GO_TEST_FLAGS := -v -race -timeout 5m
@@ -31,21 +36,34 @@ build-web:
 	@echo "Building frontend..."
 	cd web && npm install && npm run build
 
+# The built-in package set: packages first, then the binary that embeds them.
+build-packages:
+	@echo "Building the built-in packages..."
+	@mkdir -p build
+	@test -f $(DEV_PACKAGE_KEY) || { openssl genpkey -algorithm ED25519 -out $(DEV_PACKAGE_KEY) && chmod 0600 $(DEV_PACKAGE_KEY); }
+	find $(BUILTIN_DIST) -type f ! -name README.md -delete
+	GOWORK=off python3 packages/shared/build_package.py --all --builtin --version $(VERSION) --out $(BUILTIN_DIST) --signing-key $(DEV_PACKAGE_KEY)
+
+# The development key's raw public key, the plugins.official_public_key of a
+# binary built here.
+dev-package-key:
+	@openssl pkey -in $(DEV_PACKAGE_KEY) -pubout -outform DER | tail -c 32 | base64
+
 # 编译后端
-build-server:
+build-server: build-packages
 	@echo "Building server..."
 	mkdir -p build
-	GOWORK=off CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)" -o build/anix-control ./cmd/server
+	GOWORK=off CGO_ENABLED=0 go build -trimpath -ldflags "$(LDFLAGS)" -o build/anix-control ./cmd/server
 
 # 编译 Linux 版本
-build-linux:
+build-linux: build-packages
 	@echo "Building for Linux..."
 	mkdir -p build
-	GOWORK=off CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "$(LDFLAGS)" -o build/anix-control-linux ./cmd/server
+	GOWORK=off CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "$(LDFLAGS)" -o build/anix-control-linux ./cmd/server
 
-# 运行开发服务器
-run: dev-config
-	GOWORK=off go run ./cmd/server -config $(RUN_CONFIG)
+# 运行开发服务器: the built-in packages verify against the development key.
+run: dev-config build-packages
+	ANIX_CONTROL_PLUGINS_OFFICIAL_PUBLIC_KEY="$$($(MAKE) -s dev-package-key)" GOWORK=off go run ./cmd/server -config $(RUN_CONFIG)
 
 dev-config:
 	@if [ "$(RUN_CONFIG)" = "config/config.dev.yaml" ] && [ ! -f "$(RUN_CONFIG)" ]; then \
@@ -57,6 +75,7 @@ dev-config:
 # 清理
 clean:
 	rm -f anix-control anix-control-linux build/anix-control build/anix-control-linux $(COVERAGE_FILE) $(COVERAGE_HTML)
+	find $(BUILTIN_DIST) -type f ! -name README.md -delete
 	rm -rf coverage/
 	go clean -testcache
 
@@ -256,7 +275,8 @@ help:
 	@echo ""
 	@echo "编译命令:"
 	@echo "  make build          - 编译前后端"
-	@echo "  make build-server   - 仅编译后端"
+	@echo "  make build-server   - 仅编译后端（先生成内置包，开发密钥签名）"
+	@echo "  make build-packages - 生成内置官方包（internal/builtinpkg/dist）"
 	@echo "  make build-web      - 仅编译前端"
 	@echo "  make build-linux    - 编译 Linux 版本"
 	@echo "  make run            - 运行开发服务器"

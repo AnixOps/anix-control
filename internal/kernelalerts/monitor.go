@@ -50,6 +50,8 @@ type Monitor struct {
 	Settings config.AlertSettings
 	// Notifier may be nil: alerts are then only recorded and listed.
 	Notifier Notifier
+	// BuiltinPackages is the Scanner's built-in package check.
+	BuiltinPackages func(context.Context) ([]BuiltinPackageProblem, error)
 	// Now defaults to time.Now.
 	Now func() time.Time
 }
@@ -89,7 +91,7 @@ func (m *Monitor) RunOnce(ctx context.Context) (ScanSummary, error) {
 	if !m.DB.WithContext(ctx).Migrator().HasTable(&model.KernelAlert{}) {
 		return summary, nil
 	}
-	scanner := &Scanner{DB: m.DB, Settings: m.Settings, Now: m.Now}
+	scanner := &Scanner{DB: m.DB, Settings: m.Settings, Now: m.Now, BuiltinPackages: m.BuiltinPackages}
 	result, err := scanner.Scan(ctx)
 	if err != nil {
 		return summary, err

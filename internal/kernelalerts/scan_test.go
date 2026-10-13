@@ -1,6 +1,8 @@
 package kernelalerts
 
 import (
+	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -280,4 +282,35 @@ func TestMissingForwardNodeTableSkipsForwardNodesOnly(t *testing.T) {
 		require.Len(t, found, 1)
 		assert.Contains(t, found, KindAgentCertificate+"/proxy-"+itoa(proxy.ID))
 	})
+}
+
+func TestScanRaisesBuiltinPackageProblems(t *testing.T) {
+	db := openSQLite(t)
+	scanner := &Scanner{DB: db, Settings: defaultSettings(), BuiltinPackages: func(context.Context) ([]BuiltinPackageProblem, error) {
+		return []BuiltinPackageProblem{
+			{PackageID: "order", Version: "5.0.0", Invalid: true, Reason: "verify the manifest: plugin signature verification failed"},
+			{PackageID: "plan", Version: "5.0.0", State: "failed", LastError: "host exited", Reason: "its installation failed"},
+		}, nil
+	}}
+	result, err := scanner.Scan(t.Context())
+	require.NoError(t, err)
+	require.Empty(t, result.Unevaluated)
+	byKey := map[string]Finding{}
+	for _, finding := range result.Findings {
+		byKey[finding.Key()] = finding
+	}
+	invalid := byKey[KindBuiltinPackageInvalid+"/order"]
+	require.Equal(t, "critical", invalid.Severity)
+	require.Equal(t, SubjectPackage, invalid.SubjectKind)
+	require.Contains(t, invalid.Message, "plugins.official_public_key")
+	failed := byKey[KindBuiltinPackageFailed+"/plan"]
+	require.Equal(t, "critical", failed.Severity)
+	require.Contains(t, failed.Message, "host exited")
+	require.Equal(t, "failed", failed.Detail["state"])
+
+	scanner.BuiltinPackages = func(context.Context) ([]BuiltinPackageProblem, error) { return nil, errors.New("database is gone") }
+	result, err = scanner.Scan(t.Context())
+	require.NoError(t, err)
+	require.True(t, result.Unevaluated[KindBuiltinPackageInvalid])
+	require.True(t, result.Unevaluated[KindBuiltinPackageFailed])
 }

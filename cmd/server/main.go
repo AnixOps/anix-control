@@ -342,6 +342,11 @@ func serveAssetFiles(frontendPath string) gin.HandlerFunc {
 }
 
 func main() {
+	// A package host started by the kernel runs before anything else: it
+	// loads no configuration and prints no banner.
+	if code, handled := runPackageHostCommand(os.Args[1:]); handled {
+		os.Exit(code)
+	}
 	if code := run(); code != 0 {
 		os.Exit(code)
 	}
@@ -909,6 +914,15 @@ func newControlPluginHostManager(cfg *config.Config) (*pluginhost.Supervisor, er
 	bridgeFactory, err := identitybridge.NewFactory(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("configure package bridge: %w", err)
+	}
+	// Built-in package hosts execute this binary again: record its identity
+	// before the first one starts (docs/architecture/plugin-kernel-contract.md,
+	// "Built-in Packages"). The digest is the binary inside the release
+	// archive that SHA256SUMS.txt (signed by SHA256SUMS.txt.sig) covers.
+	if self, err := pluginhost.Self(); err != nil {
+		log.Printf("WARNING: the Control executable cannot be recorded, so no built-in package host can start: %v", err)
+	} else {
+		log.Printf("Control executable %s (SHA-256 %s): built-in package hosts run this file", self.Path, self.SHA256)
 	}
 	return pluginhost.NewManager(pluginhost.ManagerConfig{
 		RuntimeDir: cfg.Plugins.ControlHostRuntimeDir, StartupTimeout: startupTimeout,

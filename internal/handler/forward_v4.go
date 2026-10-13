@@ -4,8 +4,6 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/AnixOps/anix-control/v5/internal/config"
-	"github.com/AnixOps/anix-control/v5/internal/edition"
 	"github.com/AnixOps/anix-control/v5/internal/service"
 	"github.com/gin-gonic/gin"
 )
@@ -14,12 +12,11 @@ import (
 // F5a). The package owns /api/v4/forward/*: the kernel resolves and
 // dispatches it as the package's manifest control route
 // /api/v4/plugins/forward/*, so the package host answers it on
-// ForwardControl (kernel.forward.v1) like any other control route. Two
-// checks stay in the kernel because only it can make them: a DELETE, and
-// a write of a DNS provider (whose credentials it carries), needs a super
-// administrator (as route-mode switches and install tokens do), and the
-// paths config/editions.json reserves for the commercial edition do not
-// exist in the community edition. The list answers (GET /routes, /nodes,
+// ForwardControl (kernel.forward.v1) like any other control route. One
+// check stays in the kernel because only it can make it: a DELETE, and a
+// write of a DNS provider (whose credentials it carries), needs a super
+// administrator (as route-mode switches and install tokens do). The list
+// answers (GET /routes, /nodes,
 // /ansible-machines) learn the first rule through the principal's
 // super_admin, so a UI shows delete only to those who may.
 
@@ -78,10 +75,6 @@ func (h *KernelHandler) ForwardGateway(c *gin.Context) {
 		h.ForwardLegacyArchive(c)
 		return
 	}
-	if edition.For(config.Get()).HidesPath(c.Request.URL.Path) {
-		kernelError(c, http.StatusNotFound, "plugin_route_not_found", "route not found")
-		return
-	}
 	controlPath, ok := forwardV4ControlPath(c.Request.URL.Path)
 	if !ok {
 		kernelError(c, http.StatusNotFound, "plugin_route_not_found", "route not found")
@@ -109,19 +102,15 @@ func (h *KernelHandler) ForwardGateway(c *gin.Context) {
 }
 
 // forwardKernelChecks applies ForwardGateway's kernel checks to the forward
-// package's own spelling, /api/v{3,4}/plugins/forward/*, so neither the
-// super administrator rule nor the community edition's hidden prefixes can
-// be bypassed through it. It answers false after refusing the request.
+// package's own spelling, /api/v{3,4}/plugins/forward/*, so the super
+// administrator rule cannot be bypassed through it. It answers false after
+// refusing the request.
 func (h *KernelHandler) forwardKernelChecks(c *gin.Context) bool {
 	rest := c.Param("route")
 	if rest == "" {
 		rest = "/"
 	}
 	publicPath := ForwardV4Prefix + rest
-	if edition.For(config.Get()).HidesPath(publicPath) {
-		kernelError(c, http.StatusNotFound, "plugin_route_not_found", "route not found")
-		return false
-	}
 	if !forwardV4NeedsSuperAdmin(c.Request.Method, publicPath) {
 		return true
 	}

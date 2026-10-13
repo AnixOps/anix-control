@@ -5,7 +5,6 @@ import (
 
 	"github.com/AnixOps/anix-control/v5/internal/agenttransport"
 	"github.com/AnixOps/anix-control/v5/internal/config"
-	"github.com/AnixOps/anix-control/v5/internal/edition"
 	"github.com/AnixOps/anix-control/v5/internal/handler"
 	"github.com/AnixOps/anix-control/v5/internal/health"
 	"github.com/AnixOps/anix-control/v5/internal/kernelnodeops"
@@ -44,9 +43,6 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 	r.Use(middleware.CORS())
 	r.Use(middleware.Logger())
 	r.Use(middleware.Recovery())
-	// The configured edition (app.edition) hides its commercial /api/v2
-	// routes here, and only here.
-	r.Use(editionRouteFilter(edition.For(cfg)))
 
 	// agent_control.mtls on the legacy AnixOps-agent paths
 	// (node-ops-service.md, section 5.6): deprecation signals in preferred,
@@ -738,7 +734,7 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 	identityPublic := r.Group("/api/v4/identity")
 	identityPublic.Use(publicLimiter.Middleware())
 	identityPublic.GET("/jwks.json", handler.IdentityJWKS)
-	// Public: the edition and registration settings the web app reads first.
+	// Public: the registration settings the web app reads first.
 	publicConfig := r.Group("/api/v4/public")
 	publicConfig.Use(publicLimiter.Middleware())
 	publicConfig.GET("/config", handler.PublicConfigHandler(cfg))

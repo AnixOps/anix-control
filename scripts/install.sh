@@ -34,8 +34,6 @@ COMMAND="install"
 VERSION="${ANIX_CONTROL_VERSION:-${V2BOARD_VERSION:-}}"
 ADMIN_EMAIL="${ADMIN_EMAIL:-}"
 ADMIN_PASSWORD="${ADMIN_PASSWORD:-}"
-PACKAGE_VERSION=""
-IDENTITY_BOOTSTRAP_DIR=""
 PLUGIN_HOST_RUNTIME_DIR=""
 PLUGIN_ARTIFACT_DIR=""
 FRESH_CONFIG=0
@@ -178,23 +176,23 @@ validate_install_dir() {
 install_base_tools() {
   local missing=()
   local command
-  for command in curl tar sha256sum systemctl install useradd; do
+  for command in curl tar sha256sum base64 openssl systemctl install useradd; do
     command -v "${command}" >/dev/null 2>&1 || missing+=("${command}")
   done
   [[ "${#missing[@]}" -eq 0 ]] && return
 
   if command -v apt-get >/dev/null 2>&1; then
     apt-get update
-    apt-get install -y ca-certificates coreutils curl tar
+    apt-get install -y ca-certificates coreutils curl tar openssl
   elif command -v dnf >/dev/null 2>&1; then
-    dnf install -y ca-certificates coreutils curl tar
+    dnf install -y ca-certificates coreutils curl tar openssl
   elif command -v yum >/dev/null 2>&1; then
-    yum install -y ca-certificates coreutils curl tar
+    yum install -y ca-certificates coreutils curl tar openssl
   else
     die "Missing required commands: ${missing[*]}. This installer requires a systemd Linux host."
   fi
 
-  for command in curl tar sha256sum systemctl install useradd; do
+  for command in curl tar sha256sum base64 openssl systemctl install useradd; do
     command -v "${command}" >/dev/null 2>&1 || die "Required command is still unavailable: ${command}"
   done
 }
@@ -204,7 +202,7 @@ validate_version() {
     die "Invalid release tag: ${VERSION}"
 }
 
-uses_plugin_only_identity_bootstrap() {
+uses_plugin_execution() {
   [[ "${VERSION}" =~ ^v([0-9]+)\. ]] && (( 10#${BASH_REMATCH[1]} >= 4 ))
 }
 
@@ -243,34 +241,25 @@ verify_asset() {
   info "Verified SHA-256 for ${name}"
 }
 
-identity_bootstrap_asset_prefix() {
-  [[ -n "${PACKAGE_VERSION}" ]] || die "Identity bootstrap package version is not configured"
-  printf 'identity-platform-%s' "${PACKAGE_VERSION}"
-}
+# The official package key (plugins.official_public_key, config/config.prod.yaml):
+# SHA256SUMS.txt.sig is its Base64 raw Ed25519 signature over SHA256SUMS.txt,
+# made by the release job. A checksum is trusted only after the signature
+# verifies, and the Control binary it covers carries the official packages
+# (their hosts are linked into it).
+OFFICIAL_PUBLIC_KEY="jW26nr2tbthASoeq6RmIpx8Ah+uhPNIv9V1ewRVb1VE="
 
-download_identity_bootstrap_assets() {
-  local prefix asset
-  prefix="$(identity_bootstrap_asset_prefix)"
-  for asset in "${prefix}.anxp" "${prefix}.manifest.json" "${prefix}.manifest.sig"; do
-    download_asset "${asset}"
-    verify_asset "${asset}"
-  done
-}
-
-stage_identity_bootstrap_assets() {
-  local prefix parent asset
-  prefix="$(identity_bootstrap_asset_prefix)"
-  [[ -n "${IDENTITY_BOOTSTRAP_DIR}" ]] || die "Identity bootstrap directory is not configured"
-  parent="${INSTALL_DIR}/bootstrap"
-  [[ ! -L "${parent}" && ! -L "${IDENTITY_BOOTSTRAP_DIR}" ]] || die "Identity bootstrap path must not be a symbolic link"
-  install -d -m 0750 -o root -g "${APP_USER}" "${parent}"
-  install -d -m 0750 -o root -g "${APP_USER}" "${IDENTITY_BOOTSTRAP_DIR}"
-  [[ -d "${IDENTITY_BOOTSTRAP_DIR}" && ! -L "${IDENTITY_BOOTSTRAP_DIR}" ]] || die "Identity bootstrap directory is unsafe"
-  for asset in "${prefix}.anxp" "${prefix}.manifest.json" "${prefix}.manifest.sig"; do
-    [[ -f "${TMP_DIR}/${asset}" && ! -L "${TMP_DIR}/${asset}" ]] || die "Verified identity bootstrap asset is unavailable: ${asset}"
-    install -m 0640 -o root -g "${APP_USER}" "${TMP_DIR}/${asset}" "${IDENTITY_BOOTSTRAP_DIR}/${asset}"
-  done
-  info "Staged verified identity bootstrap package in ${IDENTITY_BOOTSTRAP_DIR}"
+verify_release_checksums() {
+  local signature_bin key_der
+  download_asset "SHA256SUMS.txt.sig"
+  openssl pkeyutl -help 2>&1 | grep -q -- '-rawin' || die "OpenSSL 3 is required to verify the release signature (openssl pkeyutl -rawin)"
+  signature_bin="${TMP_DIR}/SHA256SUMS.txt.sig.bin"
+  key_der="${TMP_DIR}/official-public-key.der"
+  tr -d '[:space:]' < "${TMP_DIR}/SHA256SUMS.txt.sig" | base64 -d > "${signature_bin}" 2>/dev/null || die "SHA256SUMS.txt.sig is not Base64"
+  { printf '\x30\x2a\x30\x05\x06\x03\x2b\x65\x70\x03\x21\x00'; printf '%s' "${OFFICIAL_PUBLIC_KEY}" | base64 -d; } > "${key_der}"
+  openssl pkeyutl -verify -pubin -keyform DER -inkey "${key_der}" -rawin \
+    -in "${TMP_DIR}/SHA256SUMS.txt" -sigfile "${signature_bin}" >/dev/null 2>&1 || \
+    die "SHA256SUMS.txt.sig does not verify against the official key: refusing ${VERSION}"
+  info "Verified the signature of SHA256SUMS.txt"
 }
 
 ensure_app_user() {
@@ -445,13 +434,15 @@ write_fresh_config() {
   warn "The one-time bootstrap password is stored in ${INSTALL_DIR}/.bootstrap-admin-password; move it to a password manager, then delete the file."
 }
 
-configure_identity_bootstrap_config() {
+# The official packages, identity-platform included, are built into the
+# binary and installed at every start; their hosts need package execution on
+# and runtime directories the systemd unit may write. An existing
+# plugins.identity_bootstrap_package_dir is left as it is: Control ignores it.
+configure_plugin_execution_config() {
   [[ -f "${CONFIG_FILE}" ]] || die "Configuration file is missing: ${CONFIG_FILE}"
-  [[ -n "${IDENTITY_BOOTSTRAP_DIR}" ]] || die "Identity bootstrap directory is not configured"
-  validate_config_value "${IDENTITY_BOOTSTRAP_DIR}"
 
   local configure_runtime_paths=0 replace_runtime_paths=0
-  if uses_plugin_only_identity_bootstrap; then
+  if uses_plugin_execution; then
     [[ -n "${PLUGIN_HOST_RUNTIME_DIR}" && -n "${PLUGIN_ARTIFACT_DIR}" ]] || \
       die "Plugin execution directories are not configured"
     validate_install_managed_plugin_dir "${PLUGIN_HOST_RUNTIME_DIR}"
@@ -463,9 +454,8 @@ configure_identity_bootstrap_config() {
   fi
 
   local temporary
-  temporary="$(mktemp "${CONFIG_FILE}.identity-bootstrap.XXXXXX")"
+  temporary="$(mktemp "${CONFIG_FILE}.plugin-execution.XXXXXX")"
   if ! awk \
-    -v bootstrap_dir="${IDENTITY_BOOTSTRAP_DIR}" \
     -v configure_runtime_paths="${configure_runtime_paths}" \
     -v replace_runtime_paths="${replace_runtime_paths}" \
     -v host_runtime_dir="${PLUGIN_HOST_RUNTIME_DIR}" \
@@ -484,10 +474,6 @@ configure_identity_bootstrap_config() {
       return value
     }
     function emit_missing() {
-      if (!bootstrap_seen) {
-        print "  identity_bootstrap_package_dir: \"" bootstrap_dir "\""
-        bootstrap_seen = 1
-      }
       if (!execution_seen) {
         print "  control_execution_enabled: true"
         execution_seen = 1
@@ -513,19 +499,6 @@ configure_identity_bootstrap_config() {
     in_plugins && /^[A-Za-z_][A-Za-z0-9_]*:/ {
       emit_missing()
       in_plugins = 0
-    }
-    in_plugins && /^[[:space:]]+identity_bootstrap_package_dir:/ {
-      existing = $0
-      sub(/^[^:]*:[[:space:]]*/, "", existing)
-      sub(/[[:space:]]+#.*$/, "", existing)
-      gsub(/^[[:space:]]+|[[:space:]]+$/, "", existing)
-      if (existing == "" || existing == "\"\"") {
-        print "  identity_bootstrap_package_dir: \"" bootstrap_dir "\""
-      } else {
-        print
-      }
-      bootstrap_seen = 1
-      next
     }
     in_plugins && /^[[:space:]]+control_execution_enabled:/ {
       print "  control_execution_enabled: true"
@@ -559,7 +532,6 @@ configure_identity_bootstrap_config() {
       }
       if (!plugins_seen) {
         print "plugins:"
-        print "  identity_bootstrap_package_dir: \"" bootstrap_dir "\""
         print "  control_execution_enabled: true"
         if (configure_runtime_paths) {
           print "  control_host_runtime_dir: \"" host_runtime_dir "\""
@@ -569,7 +541,7 @@ configure_identity_bootstrap_config() {
     }
   ' "${CONFIG_FILE}" > "${temporary}"; then
     find "${temporary}" -depth -delete
-    die "Could not update identity bootstrap configuration"
+    die "Could not update the package execution configuration"
   fi
   chmod 0640 "${temporary}"
   chown root:"${APP_USER}" "${temporary}"
@@ -922,7 +894,7 @@ ensure_layout_and_config() {
     "${INSTALL_DIR}" "${INSTALL_DIR}/bin" "${INSTALL_DIR}/config" \
     "${INSTALL_DIR}/config/data" "${INSTALL_DIR}/logs" "${INSTALL_DIR}/web"
   install -d -m 0700 -o root -g root "${BACKUP_ROOT}"
-  if uses_plugin_only_identity_bootstrap; then
+  if uses_plugin_execution; then
     validate_install_managed_plugin_dir "${PLUGIN_HOST_RUNTIME_DIR}"
     validate_install_managed_plugin_dir "${PLUGIN_ARTIFACT_DIR}"
     [[ ! -L "${PLUGIN_HOST_RUNTIME_DIR}" && ! -L "${PLUGIN_ARTIFACT_DIR}" ]] || \
@@ -1029,8 +1001,6 @@ migrate_legacy_layout() {
   BACKUP_ROOT="${MIGRATION_BACKUP_DIR}"
   VERSION_FILE="${INSTALL_DIR}/.release-version"
   TMP_DIR="$(mktemp -d)"
-  PACKAGE_VERSION="${VERSION#v}"
-  IDENTITY_BOOTSTRAP_DIR="${INSTALL_DIR}/bootstrap/identity-platform-${PACKAGE_VERSION}"
   PLUGIN_HOST_RUNTIME_DIR="${INSTALL_DIR}/runtime/plugin-hosts"
   PLUGIN_ARTIFACT_DIR="${INSTALL_DIR}/data/plugin-artifacts"
   CA_KEK_FILE="${INSTALL_DIR}/config/secrets/module_ca_kek"
@@ -1041,18 +1011,15 @@ migrate_legacy_layout() {
   install -d -m 0750 -o "${APP_USER}" -g "${APP_USER}" "${INSTALL_DIR}" "${INSTALL_DIR}/bin" "${INSTALL_DIR}/web" "${INSTALL_DIR}/config/data" "${INSTALL_DIR}/logs" "${TARGET_CONFIG_DIR}" "${TARGET_DATA_DIR}" "${TARGET_LOG_DIR}"
   # Download and verify everything before touching the running legacy service.
   local binary_archive; binary_archive="$(asset_name)"
-  download_asset "SHA256SUMS.txt"; download_asset "${binary_archive}"; download_asset "anix-control-frontend.tar.gz"
+  download_asset "SHA256SUMS.txt"; verify_release_checksums
+  download_asset "${binary_archive}"; download_asset "anix-control-frontend.tar.gz"
   verify_asset "${binary_archive}"; verify_asset "anix-control-frontend.tar.gz"
-  if uses_plugin_only_identity_bootstrap; then
-    download_identity_bootstrap_assets
-    stage_identity_bootstrap_assets
-  fi
   snapshot_migration_state
   stop_legacy_service
   copy_migration_config
   install_release_files "${binary_archive}"
-  if uses_plugin_only_identity_bootstrap; then
-    configure_identity_bootstrap_config
+  if uses_plugin_execution; then
+    configure_plugin_execution_config
   fi
   # A migrated install keeps its configuration: a missing CA key is reported,
   # not generated (enable-agents adds it).
@@ -1258,7 +1225,7 @@ verify_identity_login() {
 }
 
 verify_plugin_only_startup() {
-  if ! uses_plugin_only_identity_bootstrap; then
+  if ! uses_plugin_execution; then
     return 0
   fi
   verify_identity_gateway && verify_identity_login
@@ -1346,8 +1313,6 @@ main() {
 
   set_install_paths
   TMP_DIR="$(mktemp -d)"
-  PACKAGE_VERSION="${VERSION#v}"
-  IDENTITY_BOOTSTRAP_DIR="${INSTALL_DIR}/bootstrap/identity-platform-${PACKAGE_VERSION}"
   # Check the operator's certificate before anything is installed.
   preflight_grpc_tls
 
@@ -1357,20 +1322,17 @@ main() {
   local binary_archive
   binary_archive="$(asset_name)"
   download_asset "SHA256SUMS.txt"
+  verify_release_checksums
   download_asset "${binary_archive}"
   download_asset "anix-control-frontend.tar.gz"
   verify_asset "${binary_archive}"
   verify_asset "anix-control-frontend.tar.gz"
-  if uses_plugin_only_identity_bootstrap; then
-    download_identity_bootstrap_assets
-    stage_identity_bootstrap_assets
-  fi
 
   stop_running_service
   backup_current_release
   install_release_files "${binary_archive}"
-  if uses_plugin_only_identity_bootstrap; then
-    configure_identity_bootstrap_config
+  if uses_plugin_execution; then
+    configure_plugin_execution_config
   fi
   # After the backup, so a failed update restores the previous config. Fresh
   # installs get the CA key; existing ones keep theirs (or are told how to

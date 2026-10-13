@@ -37,6 +37,9 @@ WEIGHTS: dict[str, dict[str, float]] = {
         "internal/service": 31.0,
         "internal/pluginhost": 29.0,
         "internal/tests/identitycompat": 21.1,
+        # Builds cmd/server three times and runs it (estimated; measure it
+        # on the first CI runs).
+        "internal/tests/builtinpackages": 40.0,
         "internal/handler": 17.0,
         "internal/tests/subscriptioncompat": 15.2,
         "internal/tests/ordercompat": 13.5,

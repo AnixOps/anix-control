@@ -4,27 +4,11 @@ import (
 	"strings"
 
 	compatv2 "github.com/AnixOps/anix-control/v5/internal/compat/v2"
-	"github.com/AnixOps/anix-control/v5/internal/edition"
 	"github.com/gin-gonic/gin"
 )
 
-// editionRouteFilter is the one place the configured edition (app.edition)
-// hides routes: a request that matched an /api/v2 route whose package or
-// route id config/editions.json marks commercial is answered, in the
-// community edition, exactly as a route that no package declares. It runs
-// before authentication and rate limits, as the unknown-route answer does.
-func editionRouteFilter(policy *edition.Policy) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		if policy.HidesRequest(c.Request.Method, c.FullPath()) {
-			compatv2.WriteRouteNotFound(c)
-			return
-		}
-		c.Next()
-	}
-}
-
 // SetupNotFound makes an /api/v2 path that matches no route answer like a
-// route the edition hides, so the two cannot be told apart. Call it after
+// route no package declares (the gateway's unknown-route body). Call it after
 // Setup on the API engine. It is outside Setup because the v2 route
 // inventory (config/scripts/v2_route_inventory.go) reads Setup and accepts
 // only route registrations there.

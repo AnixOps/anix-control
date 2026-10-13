@@ -294,7 +294,7 @@ func TestPlanWriteRoutesParity(t *testing.T) {
 		{Name: "show explicitly off", Path: "/api/v2/admin/plans", Principal: admin, Mask: created, Body: []byte(`{"name":"Hidden","show":0}`)},
 		{Name: "show null is on sale", Path: "/api/v2/admin/plans", Principal: admin, Mask: created, Body: []byte(`{"name":"Null","show":null}`)},
 		{Name: "show in another spelling", Path: "/api/v2/admin/plans", Principal: admin, Mask: created, Body: []byte(`{"name":"Cased","Show":0}`)},
-		// The community edition's subscription templates carry no price.
+		// A plan used as a subscription template carries no price.
 		{Name: "a subscription template without prices", Path: "/api/v2/admin/plans", Principal: admin, Mask: created,
 			Body: []byte(`{"name":"Template","group_id":2,"transfer_enable":100,"speed_limit":50,"device_limit":3}`)},
 		{Name: "renew zero keeps the column default", Path: "/api/v2/admin/plans", Principal: admin, Mask: created, Body: []byte(`{"name":"No renew","renew":0}`)},

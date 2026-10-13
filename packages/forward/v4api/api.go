@@ -8,13 +8,10 @@
 // credential.
 //
 // The kernel serves the API as the package's manifest control route
-// /api/v4/plugins/forward/* and keeps two checks of its own: DELETE needs a
-// super administrator, and the paths config/editions.json reserves for the
-// commercial edition (user self-service, plans, multipliers; v4.3) do not
-// exist in the community edition. Every endpoint here is in both editions
-// (H23: core forwarding, load balancing, failover and onboarding);
-// commercial endpoints join Endpoints with EditionCommercial under one of
-// those prefixes.
+// /api/v4/plugins/forward/* and keeps one check of its own: DELETE needs a
+// super administrator. There are no product editions: user self-service,
+// plans and multipliers (v4.3) join Endpoints as ordinary endpoints when
+// they are implemented.
 //
 // Conventions: JSON bodies; contract messages are protojson with the
 // proto field names and enum names ("ENGINE_NFTABLES"). An answer is
@@ -60,12 +57,6 @@ var RouteID = func() string {
 	digest := sha256.Sum256([]byte("forward\x00" + Route))
 	return "forward.control." + hex.EncodeToString(digest[:])
 }()
-
-// Editions an endpoint is served in.
-const (
-	EditionAll        = "all"
-	EditionCommercial = "commercial"
-)
 
 // maxBody bounds a request body (the kernel caps it at 1 MiB too).
 const maxBody = 1 << 20
@@ -126,8 +117,6 @@ type Endpoint struct {
 	Method string
 	// Pattern is the path under the prefix; {name} matches one segment.
 	Pattern string
-	// Edition is EditionAll or EditionCommercial.
-	Edition string
 	// Summary says what it does.
 	Summary string
 	// Replaces names the v2 route it rewrites, if any.
@@ -143,50 +132,50 @@ func Endpoints() []Endpoint {
 }
 
 var endpoints = []Endpoint{
-	{http.MethodGet, "/routes", EditionAll, "List routes", "", (*Service).listRoutes},
-	{http.MethodPost, "/routes", EditionAll, "Create a route", "", (*Service).createRoute},
-	{http.MethodPost, "/routes/preview", EditionAll, "Plan a route without storing it", "", (*Service).previewRoute},
-	{http.MethodGet, "/routes/{id}", EditionAll, "Get a route", "", (*Service).getRoute},
-	{http.MethodPut, "/routes/{id}", EditionAll, "Replace a route at its revision", "", (*Service).updateRoute},
-	{http.MethodDelete, "/routes/{id}", EditionAll, "Delete a route (super administrator)", "", (*Service).deleteRoute},
-	{http.MethodPost, "/routes/{id}/pause", EditionAll, "Pause a route", "", (*Service).pauseRoute},
-	{http.MethodPost, "/routes/{id}/resume", EditionAll, "Resume a route", "", (*Service).resumeRoute},
-	{http.MethodGet, "/routes/{id}/stats", EditionAll, "A route's counters per hop and node, and its hourly series", "", (*Service).routeStats},
-	{http.MethodGet, "/routes/{id}/health", EditionAll, "A route's upstream health", "", (*Service).routeHealth},
-	{http.MethodPost, "/routes/{id}/diagnose", EditionAll, "Diagnose a route: config, hop reachability, delivery and port conflicts", "", (*Service).diagnoseRoute},
+	{http.MethodGet, "/routes", "List routes", "", (*Service).listRoutes},
+	{http.MethodPost, "/routes", "Create a route", "", (*Service).createRoute},
+	{http.MethodPost, "/routes/preview", "Plan a route without storing it", "", (*Service).previewRoute},
+	{http.MethodGet, "/routes/{id}", "Get a route", "", (*Service).getRoute},
+	{http.MethodPut, "/routes/{id}", "Replace a route at its revision", "", (*Service).updateRoute},
+	{http.MethodDelete, "/routes/{id}", "Delete a route (super administrator)", "", (*Service).deleteRoute},
+	{http.MethodPost, "/routes/{id}/pause", "Pause a route", "", (*Service).pauseRoute},
+	{http.MethodPost, "/routes/{id}/resume", "Resume a route", "", (*Service).resumeRoute},
+	{http.MethodGet, "/routes/{id}/stats", "A route's counters per hop and node, and its hourly series", "", (*Service).routeStats},
+	{http.MethodGet, "/routes/{id}/health", "A route's upstream health", "", (*Service).routeHealth},
+	{http.MethodPost, "/routes/{id}/diagnose", "Diagnose a route: config, hop reachability, delivery and port conflicts", "", (*Service).diagnoseRoute},
 
-	{http.MethodGet, "/nodes", EditionAll, "List the node inventory", "GET /api/v2/admin/forward/nodes", (*Service).listNodes},
-	{http.MethodPost, "/nodes", EditionAll, "Add a forward node", "POST /api/v2/admin/forward/nodes", (*Service).createNode},
-	{http.MethodGet, "/nodes/{ref}", EditionAll, "A node with its desired state and latest report", "GET /api/v2/admin/forward/nodes/:id, POST .../:id/check", (*Service).getNode},
-	{http.MethodPut, "/nodes/{ref}", EditionAll, "Replace a forward node's fields", "PUT /api/v2/admin/forward/nodes/:id", (*Service).updateNode},
-	{http.MethodDelete, "/nodes/{ref}", EditionAll, "Delete a forward node (super administrator)", "DELETE /api/v2/admin/forward/nodes/:id", (*Service).deleteNode},
-	{http.MethodPut, "/nodes/{ref}/settings", EditionAll, "Replace a node's forwarding settings", "", (*Service).setNodeSettings},
-	{http.MethodPost, "/nodes/{ref}/toggle", EditionAll, "Enable or disable a forward node", "POST /api/v2/admin/forward/nodes/:id/toggle", (*Service).toggleNode},
+	{http.MethodGet, "/nodes", "List the node inventory", "GET /api/v2/admin/forward/nodes", (*Service).listNodes},
+	{http.MethodPost, "/nodes", "Add a forward node", "POST /api/v2/admin/forward/nodes", (*Service).createNode},
+	{http.MethodGet, "/nodes/{ref}", "A node with its desired state and latest report", "GET /api/v2/admin/forward/nodes/:id, POST .../:id/check", (*Service).getNode},
+	{http.MethodPut, "/nodes/{ref}", "Replace a forward node's fields", "PUT /api/v2/admin/forward/nodes/:id", (*Service).updateNode},
+	{http.MethodDelete, "/nodes/{ref}", "Delete a forward node (super administrator)", "DELETE /api/v2/admin/forward/nodes/:id", (*Service).deleteNode},
+	{http.MethodPut, "/nodes/{ref}/settings", "Replace a node's forwarding settings", "", (*Service).setNodeSettings},
+	{http.MethodPost, "/nodes/{ref}/toggle", "Enable or disable a forward node", "POST /api/v2/admin/forward/nodes/:id/toggle", (*Service).toggleNode},
 
-	{http.MethodGet, "/ansible-machines", EditionAll, "List the Ansible machines", "GET /api/v2/admin/forward/ansible-machines", (*Service).listAnsible},
-	{http.MethodPost, "/ansible-machines", EditionAll, "Add an Ansible machine", "POST /api/v2/admin/forward/ansible-machines", (*Service).createAnsible},
-	{http.MethodGet, "/ansible-machines/{id}", EditionAll, "An Ansible machine", "GET /api/v2/admin/forward/ansible-machines/:id, POST .../:id/check", (*Service).getAnsible},
-	{http.MethodPut, "/ansible-machines/{id}", EditionAll, "Replace an Ansible machine's fields", "PUT /api/v2/admin/forward/ansible-machines/:id", (*Service).updateAnsible},
-	{http.MethodDelete, "/ansible-machines/{id}", EditionAll, "Delete an Ansible machine (super administrator)", "DELETE /api/v2/admin/forward/ansible-machines/:id", (*Service).deleteAnsible},
-	{http.MethodPost, "/ansible-machines/{id}/toggle", EditionAll, "Enable or disable an Ansible machine", "POST /api/v2/admin/forward/ansible-machines/:id/toggle", (*Service).toggleAnsible},
+	{http.MethodGet, "/ansible-machines", "List the Ansible machines", "GET /api/v2/admin/forward/ansible-machines", (*Service).listAnsible},
+	{http.MethodPost, "/ansible-machines", "Add an Ansible machine", "POST /api/v2/admin/forward/ansible-machines", (*Service).createAnsible},
+	{http.MethodGet, "/ansible-machines/{id}", "An Ansible machine", "GET /api/v2/admin/forward/ansible-machines/:id, POST .../:id/check", (*Service).getAnsible},
+	{http.MethodPut, "/ansible-machines/{id}", "Replace an Ansible machine's fields", "PUT /api/v2/admin/forward/ansible-machines/:id", (*Service).updateAnsible},
+	{http.MethodDelete, "/ansible-machines/{id}", "Delete an Ansible machine (super administrator)", "DELETE /api/v2/admin/forward/ansible-machines/:id", (*Service).deleteAnsible},
+	{http.MethodPost, "/ansible-machines/{id}/toggle", "Enable or disable an Ansible machine", "POST /api/v2/admin/forward/ansible-machines/:id/toggle", (*Service).toggleAnsible},
 
-	{http.MethodGet, "/stats", EditionAll, "Traffic totals per route, hop and node, and the hourly series", "POST /api/v2/admin/forward/{nodes,ansible-machines}/:id/sync-stats", (*Service).stats},
-	{http.MethodGet, "/observability/targets", EditionAll, "Every route target with its health", "GET /api/v2/admin/forward/observability/targets", (*Service).observabilityTargets},
-	{http.MethodGet, "/observability/topology", EditionAll, "Nodes, hops and targets as a graph with health", "GET /api/v2/admin/forward/observability/topology", (*Service).observabilityTopology},
-	{http.MethodGet, "/observability/trend", EditionAll, "Hourly traffic trend", "GET /api/v2/admin/forward/observability/trend", (*Service).observabilityTrend},
+	{http.MethodGet, "/stats", "Traffic totals per route, hop and node, and the hourly series", "POST /api/v2/admin/forward/{nodes,ansible-machines}/:id/sync-stats", (*Service).stats},
+	{http.MethodGet, "/observability/targets", "Every route target with its health", "GET /api/v2/admin/forward/observability/targets", (*Service).observabilityTargets},
+	{http.MethodGet, "/observability/topology", "Nodes, hops and targets as a graph with health", "GET /api/v2/admin/forward/observability/topology", (*Service).observabilityTopology},
+	{http.MethodGet, "/observability/trend", "Hourly traffic trend", "GET /api/v2/admin/forward/observability/trend", (*Service).observabilityTrend},
 
-	{http.MethodGet, "/routes/{id}/dns", EditionAll, "A route's entry HA DNS status", "", (*Service).routeDNS},
-	{http.MethodGet, "/dns/kinds", EditionAll, "The DNS provider kinds with their settings and credentials", "", (*Service).dnsKinds},
-	{http.MethodGet, "/dns/providers", EditionAll, "List DNS providers (without credentials)", "", (*Service).listDNSProviders},
-	{http.MethodPost, "/dns/providers", EditionAll, "Add a DNS provider (super administrator)", "", (*Service).createDNSProvider},
-	{http.MethodGet, "/dns/providers/{id}", EditionAll, "A DNS provider (without credentials)", "", (*Service).getDNSProvider},
-	{http.MethodPut, "/dns/providers/{id}", EditionAll, "Replace a DNS provider (super administrator)", "", (*Service).updateDNSProvider},
-	{http.MethodDelete, "/dns/providers/{id}", EditionAll, "Delete a DNS provider (super administrator)", "", (*Service).deleteDNSProvider},
-	{http.MethodGet, "/dns/bindings", EditionAll, "List route DNS bindings", "", (*Service).listDNSBindings},
-	{http.MethodPost, "/dns/bindings", EditionAll, "Bind a route's entries to a DNS name", "", (*Service).createDNSBinding},
-	{http.MethodGet, "/dns/bindings/{id}", EditionAll, "A route DNS binding", "", (*Service).getDNSBinding},
-	{http.MethodPut, "/dns/bindings/{id}", EditionAll, "Replace a binding's record types, TTL and paused flag", "", (*Service).updateDNSBinding},
-	{http.MethodDelete, "/dns/bindings/{id}", EditionAll, "Delete a route DNS binding (super administrator)", "", (*Service).deleteDNSBinding},
+	{http.MethodGet, "/routes/{id}/dns", "A route's entry HA DNS status", "", (*Service).routeDNS},
+	{http.MethodGet, "/dns/kinds", "The DNS provider kinds with their settings and credentials", "", (*Service).dnsKinds},
+	{http.MethodGet, "/dns/providers", "List DNS providers (without credentials)", "", (*Service).listDNSProviders},
+	{http.MethodPost, "/dns/providers", "Add a DNS provider (super administrator)", "", (*Service).createDNSProvider},
+	{http.MethodGet, "/dns/providers/{id}", "A DNS provider (without credentials)", "", (*Service).getDNSProvider},
+	{http.MethodPut, "/dns/providers/{id}", "Replace a DNS provider (super administrator)", "", (*Service).updateDNSProvider},
+	{http.MethodDelete, "/dns/providers/{id}", "Delete a DNS provider (super administrator)", "", (*Service).deleteDNSProvider},
+	{http.MethodGet, "/dns/bindings", "List route DNS bindings", "", (*Service).listDNSBindings},
+	{http.MethodPost, "/dns/bindings", "Bind a route's entries to a DNS name", "", (*Service).createDNSBinding},
+	{http.MethodGet, "/dns/bindings/{id}", "A route DNS binding", "", (*Service).getDNSBinding},
+	{http.MethodPut, "/dns/bindings/{id}", "Replace a binding's record types, TTL and paused flag", "", (*Service).updateDNSBinding},
+	{http.MethodDelete, "/dns/bindings/{id}", "Delete a route DNS binding (super administrator)", "", (*Service).deleteDNSBinding},
 }
 
 // match finds the endpoint of method and the path under the prefix.
