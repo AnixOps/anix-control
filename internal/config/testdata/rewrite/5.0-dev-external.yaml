@@ -1,0 +1,13 @@
+# A configuration of the M2 work before the rewrite: the panel behind a CDN.
+domain: panel.example.com
+tls:
+  mode: external
+  cert_file: /etc/anix-control/tls/fullchain.pem
+  key_file: /etc/anix-control/tls/privkey.pem
+listen: 127.0.0.1:9080
+grpc:
+  public_name: grpc.example.com
+  port: 50051
+server:
+  trusted_proxies: ["127.0.0.1/32"]
+subscribe_path: s

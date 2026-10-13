@@ -45,6 +45,13 @@ func bootstrapDatabase(ctx context.Context, cfg *config.Config) error {
 	if _, err := migrations.Migrate(ctx, db, migrations.Options{ProgramVersion: version, Logf: log.Printf}); err != nil {
 		return fmt.Errorf("database schema: %w", err)
 	}
+	// The root key must open what the database holds sealed before anything
+	// signs, seals or creates a CA with it.
+	if !deferRootKeyCheck {
+		if err := verifyRootKey(ctx, cfg, db, log.Printf); err != nil {
+			return err
+		}
+	}
 	// Seed rows that exist in every database, at every start as before.
 	if err := service.SeedKernelDefaults(db); err != nil {
 		return fmt.Errorf("seed the kernel defaults: %w", err)

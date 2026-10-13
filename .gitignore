@@ -43,7 +43,8 @@ full_internal_test.log
 # Local config
 config/config.yaml
 !config/config.yaml.example
-config/config.dev.yaml
+# make run: the development instance's database and root key
+.dev/
 config/deploy/ssh/*
 !config/deploy/ssh/.gitignore
 config/deploy/ansible/inventory.ini

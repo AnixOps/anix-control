@@ -15,7 +15,10 @@ import (
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	"github.com/AnixOps/anix-control/v5/internal/config"
+	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/modulepki"
+	"github.com/AnixOps/anix-control/v5/internal/rootkey"
+	"gorm.io/gorm"
 )
 
 // Join tokens: anixjoin_ and the base64url encoding (no padding) of 32
@@ -27,7 +30,7 @@ import (
 const (
 	// tokenSealInfo is the HKDF info of the sealing key: the key-encryption
 	// key never seals a token itself, and the derived key seals nothing else.
-	tokenSealInfo = "anixops node-group join token v1" // #nosec G101 -- the HKDF info label, not a credential.
+	tokenSealInfo = rootkey.LabelJoinToken
 	// tokenAdditionalData binds a sealed token to its hash, so a sealed value
 	// copied to another group never opens there.
 	tokenAdditionalData = "anixops-node-group-join-token:" // #nosec G101 -- the AEAD additional data prefix, not a credential.
@@ -133,4 +136,34 @@ func newSealedToken(sealer *tokenSealer) (token, hash, sealed string, err error)
 		return "", "", "", err
 	}
 	return token, hash, sealed, nil
+}
+
+// VerifyKEK opens, with kek (the root key), one sealed join token in db when
+// there is one: it tells whether kek is the key the tokens were sealed with.
+// It reports whether there was a token to open.
+func VerifyKEK(db *gorm.DB, kek []byte) (bool, error) {
+	var groups []model.NodeGroup
+	if err := db.Unscoped().Where("join_token_sealed <> ''").Order("id").Limit(1).Find(&groups).Error; err != nil {
+		return false, fmt.Errorf("read the node groups: %w", err)
+	}
+	if len(groups) == 0 {
+		return false, nil
+	}
+	key, err := hkdf.Key(sha256.New, kek, nil, tokenSealInfo, 32)
+	if err != nil {
+		return true, err
+	}
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return true, err
+	}
+	aead, err := cipher.NewGCM(block)
+	if err != nil {
+		return true, err
+	}
+	sealer := &tokenSealer{aead: aead}
+	if _, err := sealer.open(groups[0].JoinTokenHash, groups[0].JoinTokenSealed); err != nil {
+		return true, fmt.Errorf("the join token of node group %d cannot be opened: %w", groups[0].ID, err)
+	}
+	return true, nil
 }

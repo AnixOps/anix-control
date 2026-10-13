@@ -29,7 +29,7 @@ spec:
               service:
                 name: {{ include "anix-control.fullname" $ }}
                 port:
-                  name: web
+                  name: http
           {{- end }}
     {{- end }}
 {{- end }}

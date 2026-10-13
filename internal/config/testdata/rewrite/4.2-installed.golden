@@ -1,0 +1,60 @@
+# --- the new file ---
+# AnixOps Control configuration, written by `anix-control config rewrite`
+# from /opt/anixops/control/config/config.yaml on 2026-10-13T08:00:00Z.
+# Keys and defaults: docs/reference/configuration.md. The root key and the
+# secrets it adopted are in data_dir/root.key, not in this file.
+domain: panel.example.com
+tls:
+  mode: external
+  cert_file: /opt/anixops/control/config/tls/fullchain.pem
+  key_file: /opt/anixops/control/config/tls/privkey.pem
+grpc:
+  port: 50052
+  public_name: grpc.example.com
+subscribe_path: link
+# Still read until PostgreSQL support ends (M2, P4): the panel keeps its
+# database (a PostgreSQL password stays here until then).
+database:
+  database: /opt/anixops/control/data/v2board.db
+  driver: sqlite
+  log_level: "warn"
+# --- the report ---
+New keys:
+  domain: panel.example.com (from agent_install.public_url); the panel's name
+  tls.mode: external
+  tls.cert_file: /opt/anixops/control/config/tls/fullchain.pem (from grpc.tls_cert_file)
+  tls.key_file: /opt/anixops/control/config/tls/privkey.pem (from grpc.tls_key_file)
+  grpc.port: 50052
+  grpc.public_name: grpc.example.com (from agent_install.grpc_target)
+  subscribe_path: link (from app.subscribe_path); keeps the subscription links already handed out
+
+Kept:
+  database: still read until PostgreSQL support ends (M2, P4): the panel keeps its database (/opt/anixops/control/data/v2board.db)
+
+Dropped:
+  admin.email: still read until M2 (P9), not written: creates the first administrator on an empty database until the one-time claim link replaces it
+  admin.password: still read until M2 (P9), not written: creates the first administrator on an empty database until the one-time claim link replaces it; keep it out of the file once an administrator exists
+  agent_install.cn_mirror_url: still read until M4 (N30), not written: the mainland download mirror of Agent releases, until Control serves the releases itself
+  app.api_token: still read until M5 (N9), not written: the legacy shared token of /flow/upload and the internal v2 routes, removed with them; administrators use admin API tokens
+  env: Control always runs as production (its only effect was requiring jwt.secret, which is now derived); start a development instance with -debug
+  frontend.enable: still read until M2 (P11), not written: serves the web app from frontend.path until the web app is built into the binary
+  frontend.path: still read until M2 (P11), not written: the web app's directory until the web app is built into the binary
+  frontend.port: still read until M2 (P11), not written: a second plain listener of tls.mode external while listen is unset; config rewrite does not carry it, point the reverse proxy at listen
+  grpc.enabled: still read until M2 (P11), not written: turns the gRPC listener on without domain; with domain it always runs
+  grpc.host: still read until M2 (P11), not written: the gRPC listener's address, until it listens on every address
+  identity.kek: adopted, kept in /var/lib/anix-control/root.key
+  jwt.expire: a built-in value (86400 seconds)
+  jwt.secret: adopted, kept in /var/lib/anix-control/root.key
+  module_runtime.ca_kek: the root key, kept in /var/lib/anix-control/root.key
+  plugins.control_execution_enabled: the built-in packages always run; Control starts their hosts at every start
+  plugins.control_host_artifact_dir: still read until M2 (P11), not written: where package hosts' files are kept, until the systemd unit gives Control its directories
+  plugins.control_host_runtime_dir: still read until M2 (P11), not written: where package hosts' sockets live, until the systemd unit gives Control its runtime directory
+  server.host: still read until M2 (P11), not written: the plain listener of tls.mode external while listen is unset; config rewrite does not carry it, set listen
+  server.port: still read until M2 (P11), not written: the plain listener of tls.mode external while listen is unset; config rewrite does not carry it, set listen
+  server.trusted_proxies: still read until M2 (P11), not written: the reverse proxies of a container deployment; afterwards tls.mode acme trusts none and tls.mode external trusts loopback
+  tls.domain: domain comes from agent_install.public_url
+  tls.enable: TLS follows tls.mode
+
+Notes:
+  tls.mode external: the old file did not use ACME, so a reverse proxy keeps terminating TLS for the web side; its gRPC certificate becomes tls.cert_file
+  tls.mode external: point the reverse proxy at 127.0.0.1:8080 for the whole panel (web, /api, subscriptions, /install): it is one listener now

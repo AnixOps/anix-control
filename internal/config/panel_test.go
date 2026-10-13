@@ -184,20 +184,13 @@ func TestTLSEnableWithAModeOrWithoutFilesIsOnlyIgnored(t *testing.T) {
 	require.Equal(t, TLSModeExternal, cfg.Panel().Mode)
 }
 
-func TestPanelACMENeedsTheRootKey(t *testing.T) {
+// ACME keeps its keys sealed with the root key, which every server has:
+// no configuration key is needed for it.
+func TestPanelACMENeedsNoConfiguredKey(t *testing.T) {
 	cfg, err := loadPanelYAML(t, "domain: panel.example.com\n")
 	require.NoError(t, err)
-	err = cfg.ValidateForServer()
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "module_runtime.ca_kek")
-
-	cfg.ModuleRuntime.CAKEK = strings.Repeat("A", 43) + "="
 	require.NoError(t, cfg.ValidateForServer())
-
-	// Files and external without a gRPC ACME name need no key.
-	cfg, err = loadPanelYAML(t, "domain: panel.example.com\ntls:\n  mode: files\n  cert_file: /a\n  key_file: /b\n")
-	require.NoError(t, err)
-	require.NoError(t, cfg.ValidateForServer())
+	require.True(t, cfg.Panel().NeedsACME())
 }
 
 func TestRequiredPrerequisitesFollowThePanelCertificate(t *testing.T) {

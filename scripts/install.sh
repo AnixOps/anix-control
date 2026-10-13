@@ -55,6 +55,8 @@ MIGRATION_SNAPSHOT=""
 # CA_KEK_FILE holds module_runtime.ca_kek; TLS_DIR the gRPC certificate.
 CA_KEK_FILE=""
 TLS_DIR=""
+# DATA_DIR is Control's data_dir (root.key), under INSTALL_DIR.
+DATA_DIR=""
 GRPC_TLS_CERT="${GRPC_TLS_CERT:-}"
 GRPC_TLS_KEY="${GRPC_TLS_KEY:-}"
 GRPC_NAME="${GRPC_NAME:-}"
@@ -241,7 +243,7 @@ verify_asset() {
   info "Verified SHA-256 for ${name}"
 }
 
-# The official package key (plugins.official_public_key, config/config.prod.yaml):
+# The official package key (plugins.official_public_key, internal/config/defaults.yaml):
 # SHA256SUMS.txt.sig is its Base64 raw Ed25519 signature over SHA256SUMS.txt,
 # made by the release job. A checksum is trusted only after the signature
 # verifies, and the Control binary it covers carries the official packages
@@ -349,7 +351,7 @@ validate_install_managed_plugin_dir() {
 
 write_fresh_config() {
   local template="${TMP_DIR}/config.yaml.example"
-  local jwt_secret api_token escaped_email escaped_password
+  local escaped_email escaped_password
 
   # Control's login check (`required,email`) refuses a host name without a dot,
   # so the default is the server's own default administrator
@@ -358,8 +360,6 @@ write_fresh_config() {
   [[ -n "${ADMIN_PASSWORD}" ]] || ADMIN_PASSWORD="$(random_secret)"
   validate_admin_value email "${ADMIN_EMAIL}"
   validate_admin_value password "${ADMIN_PASSWORD}"
-  jwt_secret="$(random_secret)"
-  api_token="$(random_secret)"
   # The values are YAML double-quoted scalars: escape the backslash first, then
   # the double quote.
   escaped_email="${ADMIN_EMAIL//\\/\\\\}"
@@ -371,56 +371,37 @@ write_fresh_config() {
   curl -fsSL --retry 3 --connect-timeout 15 \
     "${RAW_BASE}/${VERSION}/config/config.yaml.example" -o "${template}"
 
-  # The template is the local-development file and says `env: "development"`:
-  # Control would run a full AutoMigrate on every start and skip the production
-  # guards (the template JWT secret is accepted). A host install is production,
-  # as the container defaults are, so the installer sets the env key itself,
-  # and adds it when a template has none.
+  # The template is the operator keys' one line, domain: panel.example.com,
+  # with its comments. This installer does not ask for the domain, so the
+  # line stays a comment: Control then serves plain http on 127.0.0.1:8080
+  # behind the reverse proxy (tls.mode external) until domain is set.
+  # The installer adds the first administrator, which admin.* still creates
+  # on an empty database. The file holds no other secret: the root key in the
+  # data directory (ANIX_CONTROL_DATA_DIR in the unit, write_systemd_unit)
+  # derives the JWT secret.
   # The values reach awk through the environment, not `awk -v`: -v interprets
   # backslash escapes in the value a second time, after the escaping above. The
   # password ab\qcd was escaped to ab\\qcd and unescaped again to "ab\qcd",
   # which is not valid YAML.
-  ANIX_CFG_JWT_SECRET="${jwt_secret}" \
-  ANIX_CFG_API_TOKEN="${api_token}" \
   ANIX_CFG_ADMIN_EMAIL="${escaped_email}" \
   ANIX_CFG_ADMIN_PASSWORD="${escaped_password}" \
   awk '
       BEGIN {
-        jwt_secret = ENVIRON["ANIX_CFG_JWT_SECRET"]
-        api_token = ENVIRON["ANIX_CFG_API_TOKEN"]
         admin_email = ENVIRON["ANIX_CFG_ADMIN_EMAIL"]
         admin_password = ENVIRON["ANIX_CFG_ADMIN_PASSWORD"]
       }
-      /^env:/ {
-        print "env: \"production\""
-        env_seen = 1
-        next
-      }
-      /^[A-Za-z_][A-Za-z0-9_]*:/ {
-        section = $0
-        sub(/:.*/, "", section)
-      }
-      section == "jwt" && $0 ~ /^[[:space:]]+secret:/ {
-        print "  secret: \"" jwt_secret "\""
-        next
-      }
-      section == "app" && $0 ~ /^[[:space:]]+api_token:/ {
-        print "  api_token: \"" api_token "\""
-        next
-      }
-      section == "admin" && $0 ~ /^[[:space:]]+email:/ {
-        print "  email: \"" admin_email "\""
-        next
-      }
-      section == "admin" && $0 ~ /^[[:space:]]+password:/ {
-        print "  password: \"" admin_password "\""
+      /^domain:/ {
+        print "# " $0
         next
       }
       { print }
       END {
-        if (!env_seen) {
-          print "env: \"production\""
-        }
+        print ""
+        print "# Written by the installer: the first administrator, created on an"
+        print "# empty database."
+        print "admin:"
+        print "  email: \"" admin_email "\""
+        print "  password: \"" admin_password "\""
       }
     ' "${template}" > "${CONFIG_FILE}"
 
@@ -999,6 +980,7 @@ migrate_legacy_layout() {
   PLUGIN_ARTIFACT_DIR="${INSTALL_DIR}/data/plugin-artifacts"
   CA_KEK_FILE="${INSTALL_DIR}/config/secrets/module_ca_kek"
   TLS_DIR="${INSTALL_DIR}/config/tls"
+  DATA_DIR="${INSTALL_DIR}/data"
   preflight_grpc_tls
   install_base_tools
   ensure_app_user
@@ -1115,6 +1097,9 @@ write_systemd_unit() {
   if ca_kek_file_in_use; then
     ca_kek_environment="Environment=ANIX_CONTROL_MODULE_RUNTIME_CA_KEK_FILE=${CA_KEK_FILE}"
   fi
+  # The data directory holds root.key: Control generates it, or adopts the
+  # CA key above into it, at its first start.
+  install -d -m 0700 -o "${APP_USER}" -g "${APP_USER}" "${DATA_DIR}"
   cat > "${SYSTEMD_UNIT_DIR}/${SERVICE_NAME}.service" <<EOF
 [Unit]
 Description=AnixOps Control
@@ -1127,6 +1112,7 @@ User=${APP_USER}
 Group=${APP_USER}
 WorkingDirectory=${INSTALL_DIR}
 Environment=HOME=${INSTALL_DIR}
+Environment=ANIX_CONTROL_DATA_DIR=${DATA_DIR}
 ${ca_kek_environment}
 ExecStart=${BINARY_PATH} -config ${CONFIG_FILE}
 Restart=on-failure
@@ -1274,6 +1260,8 @@ set_install_paths() {
   PLUGIN_ARTIFACT_DIR="${INSTALL_DIR}/data/plugin-artifacts"
   CA_KEK_FILE="${INSTALL_DIR}/config/secrets/module_ca_kek"
   TLS_DIR="${INSTALL_DIR}/config/tls"
+  # data_dir: root.key (ANIX_CONTROL_DATA_DIR in the unit).
+  DATA_DIR="${INSTALL_DIR}/data"
 }
 
 main() {

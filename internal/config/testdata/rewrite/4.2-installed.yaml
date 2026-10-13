@@ -1,0 +1,45 @@
+# A 4.2 systemd install with Agent access: the panel behind nginx, the gRPC
+# certificate from certbot, the secrets the installer generated.
+env: "production"
+server:
+  host: "0.0.0.0"
+  port: 8080
+  trusted_proxies: ["127.0.0.1/32", "::1/128"]
+frontend:
+  enable: true
+  port: 3000
+  path: "/opt/anixops/control/web/public"
+database:
+  driver: "sqlite"
+  database: "/opt/anixops/control/data/v2board.db"
+  log_level: "warn"
+jwt:
+  secret: "6f1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f9"
+  expire: 86400
+app:
+  api_token: "0a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f9"
+  subscribe_path: "/link/"
+plugins:
+  control_execution_enabled: true
+  control_host_runtime_dir: "/opt/anixops/control/runtime/plugin-hosts"
+  control_host_artifact_dir: "/opt/anixops/control/runtime/plugin-artifacts"
+grpc:
+  enabled: true
+  host: "0.0.0.0"
+  port: 50052
+  tls_cert_file: "/opt/anixops/control/config/tls/fullchain.pem"
+  tls_key_file: "/opt/anixops/control/config/tls/privkey.pem"
+module_runtime:
+  ca_kek: "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="
+identity:
+  kek: "IdiAOyOt8/iWo4XgQfl/6yBrnG+uhSkEdilcHlACMIw="
+agent_install:
+  public_url: "https://Panel.Example.com"
+  grpc_target: "grpc.example.com:50052"
+  cn_mirror_url: "https://mirror.example.cn/anix-agent"
+admin:
+  email: "admin@example.com"
+  password: "a-bootstrap-password"
+tls:
+  enable: false
+  domain: "panel.example.com"

@@ -1,4 +1,5 @@
 {{- include "anix-control.validateModuleRuntime" . }}
+{{- include "anix-control.validateRootKey" . }}
 {{- if ne (int .Values.replicaCount) 1 }}
 {{- fail "replicaCount must be 1: multi-replica Control is not supported yet (see docs/architecture/container-deployment.md)" }}
 {{- end }}
@@ -73,9 +74,6 @@ spec:
             - name: http
               containerPort: 8080
               protocol: TCP
-            - name: web
-              containerPort: 3000
-              protocol: TCP
             {{- if .Values.grpc.enabled }}
             - name: grpc
               containerPort: 50051
@@ -118,6 +116,12 @@ spec:
         - name: tmp
           emptyDir:
             sizeLimit: {{ .Values.tmpVolume.sizeLimit }}
+        # data_dir: Control adopts the CA key Secret into root.key there at
+        # every start (in memory: the Secret is the key's lasting copy).
+        - name: data
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Mi
         - name: secrets
           secret:
             secretName: {{ include "anix-control.secretName" . }}

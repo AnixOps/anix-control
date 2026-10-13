@@ -45,26 +45,37 @@ func runInstallerFreshConfigScript(t *testing.T) (generated, casesDir string) {
 	return generated, casesDir
 }
 
-// TestInstallerFreshConfigIsProductionAndPassesServerValidation loads the file
-// the installer writes with the real loader. The installer downloads
-// config/config.yaml.example, which says `env: "development"` for local use; a
-// host install must be production, with a generated JWT secret that
-// ValidateForServer accepts.
-func TestInstallerFreshConfigIsProductionAndPassesServerValidation(t *testing.T) {
+// TestInstallerFreshConfigPassesServerValidation loads the file the installer
+// writes with the real loader. The installer downloads
+// config/config.yaml.example (the domain line, which it keeps a comment)
+// and adds the first administrator: the result loads with no unknown key,
+// runs as production in release mode, holds no secret but the administrator
+// password (admin.*, still read until the claim link), and passes the
+// server's checks once the root key derives the JWT secret.
+func TestInstallerFreshConfigPassesServerValidation(t *testing.T) {
 	generated, _ := runInstallerFreshConfigScript(t)
 
 	// An empty environment: the host's ANIX_CONTROL_* variables must not
 	// decide the result.
-	loaded, err := load(generated, []string{})
+	loaded, report, err := LoadFile(generated, []string{})
 	require.NoError(t, err)
 
-	assert.Equal(t, "production", loaded.Env, "a fresh systemd install must not run in development mode")
+	assert.Equal(t, "production", loaded.Env, "a fresh systemd install never runs in development mode")
 	assert.Equal(t, "release", loaded.Server.Mode)
-	require.NoError(t, loaded.ValidateForServer(), "the generated config must pass the production server checks")
-	assert.NotEmpty(t, loaded.JWT.Secret)
-	assert.False(t, placeholderJWTSecrets[loaded.JWT.Secret], "the JWT secret must not be a template value")
-	assert.Empty(t, loaded.SecretStrengthWarnings(), "the generated secrets must not be weak")
+	assert.Empty(t, loaded.Domain, "the installer does not ask for the domain yet")
+	assert.Equal(t, TLSModeExternal, loaded.TLSModeOrDefault())
+	assert.Equal(t, []string{DefaultListenAddress}, loaded.Panel().PlainAddresses, "the install's health check reaches 127.0.0.1:8080")
+	assert.Empty(t, loaded.JWT.Secret, "the root key derives the JWT secret")
+	assert.Empty(t, loaded.App.APIToken)
+	assert.Empty(t, loaded.ModuleRuntime.CAKEK, "the CA key is a file the unit passes, not a config key")
 	assert.NotEmpty(t, loaded.Admin.Password, "a fresh install generates the bootstrap admin password")
+	var deprecated []string
+	for _, key := range report.Deprecated {
+		deprecated = append(deprecated, key.Path)
+	}
+	assert.Equal(t, []string{"admin.email", "admin.password"}, deprecated, "only the first administrator is a deprecated key")
+	require.NoError(t, loaded.ValidateForServer(), "the generated config must pass the server checks")
+	assert.Empty(t, loaded.SecretStrengthWarnings(), "the generated secrets must not be weak")
 }
 
 // TestInstallerDefaultAdminEmailPassesTheLoginCheck: without --admin-email the
@@ -116,7 +127,7 @@ func TestInstallerWritesCredentialsThatLoadVerbatim(t *testing.T) {
 			assert.Equal(t, string(email), loaded.Admin.Email)
 			assert.Equal(t, string(password), loaded.Admin.Password)
 			assert.Equal(t, "production", loaded.Env)
-			assert.NotEmpty(t, loaded.JWT.Secret)
+			assert.Empty(t, loaded.JWT.Secret, "the root key derives it")
 
 			// The install's own login check posts the same values as JSON.
 			var login struct{ Email, Password string }
@@ -174,7 +185,7 @@ func TestInstallerRefusesCredentialsTheConfigCannotCarry(t *testing.T) {
 			require.NoError(t, err)
 
 			config := filepath.Join(t.TempDir(), "config.yaml")
-			yaml := "env: \"production\"\nadmin:\n  email: \"" + escape.Replace(string(email)) +
+			yaml := "admin:\n  email: \"" + escape.Replace(string(email)) +
 				"\"\n  password: \"" + escape.Replace(string(password)) + "\"\n"
 			require.NoError(t, os.WriteFile(config, []byte(yaml), 0o600))
 

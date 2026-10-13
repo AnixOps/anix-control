@@ -69,7 +69,7 @@ func TestLoadSignature(t *testing.T) {
 // The release key in the script is the official package root Control
 // ships, and the comment's verification recipe uses the same key.
 func TestScriptCarriesTheOfficialKey(t *testing.T) {
-	prod, err := os.ReadFile(filepath.Join("..", "..", "config", "config.prod.yaml"))
+	prod, err := os.ReadFile(filepath.Join("..", "..", "internal", "config", "defaults.yaml"))
 	require.NoError(t, err)
 	match := regexp.MustCompile(`official_public_key:\s*"([^"]+)"`).FindSubmatch(prod)
 	require.NotNil(t, match)

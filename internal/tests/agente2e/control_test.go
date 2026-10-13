@@ -59,40 +59,22 @@ func writeControlConfig(t *testing.T, dir string, keys testPKI, identityPackageD
 		sqlitePath = filepath.Join(dir, "control.db")
 		database = "  driver: sqlite\n  database: " + quoted(sqlitePath) + "\n  log_level: silent\n"
 	}
-	config := fmt.Sprintf(`env: development
-server:
-  host: "127.0.0.1"
-  port: %d
-  mode: release
-  read_timeout: 30
-  write_timeout: 30
-  trusted_proxies: []
+	// The operator keys, and the deprecated keys this release still reads:
+	// the database, the test's package key and identity package, the gRPC
+	// listener without a domain (its own test-CA certificate), the CA key
+	// (adopted into data_dir/root.key at the start), the first
+	// administrator, closed registration and the inert flux runtime.
+	config := fmt.Sprintf(`listen: "127.0.0.1:%d"
+data_dir: %s
 frontend:
   enable: false
 database:
-%scache:
-  driver: memory
-log:
-  level: info
-  output: stdout
-jwt:
-  secret: "agent-e2e-not-for-production"
-  expire: 7200
-auth:
-  login_rate_limit:
-    enabled: false
-  register_rate_limit:
-    enabled: false
+%sauth:
   registration:
     enabled: false
-app:
-  name: "AnixOps agent E2E"
-  version: "test"
-  subscribe_path: s
 plugins:
   official_public_key: %s
   identity_bootstrap_package_dir: %s
-  control_poll_interval: "100ms"
 grpc:
   enabled: true
   host: "127.0.0.1"
@@ -100,21 +82,15 @@ grpc:
   tls_cert_file: %s
   tls_key_file: %s
 module_runtime:
-  enabled: false
-  pki: builtin
   ca_kek: %s
-agent_control:
-  mtls: required
 admin:
   email: %s
   password: %s
-tls:
-  enable: false
 forward_runtime:
   backend: clean_agent
   clean_agent:
     legacy_bridge_enabled: false
-`, apiPort, database, quoted(keys.SigningPublicKey), quoted(identityPackageDir), grpcPort,
+`, apiPort, quoted(filepath.Join(dir, "data")), database, quoted(keys.SigningPublicKey), quoted(identityPackageDir), grpcPort,
 		quoted(keys.ServerCertFile), quoted(keys.ServerKeyFile), quoted(keys.CAKEK), quoted(adminEmail), quoted(adminPassword))
 	path := filepath.Join(dir, "config.yaml")
 	require.NoError(t, os.WriteFile(path, []byte(config), 0o600))

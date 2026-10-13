@@ -156,41 +156,24 @@ func newControl(t *testing.T, key signingKey) *control {
 	dir := t.TempDir()
 	port := freePort(t)
 	sqlitePath := filepath.Join(dir, "control.db")
-	config := fmt.Sprintf(`env: development
-server:
-  host: "127.0.0.1"
-  port: %d
-  mode: release
-  trusted_proxies: []
+	// The operator keys, and the deprecated keys this release still reads
+	// (database, the package key of a development build, the first
+	// administrator, the web app switch). The root key is generated in
+	// data_dir at the first start.
+	config := fmt.Sprintf(`listen: "127.0.0.1:%d"
+data_dir: %q
 frontend:
   enable: false
 database:
   driver: sqlite
   database: %q
   log_level: silent
-log:
-  level: info
-  output: stdout
-jwt:
-  secret: "builtin-packages-test-not-for-production"
-  expire: 7200
-auth:
-  login_rate_limit:
-    enabled: false
 plugins:
   official_public_key: %q
-  control_poll_interval: "100ms"
-  control_host_startup_timeout: "20s"
-grpc:
-  enabled: false
-module_runtime:
-  enabled: false
 admin:
   email: %q
   password: %q
-alerts:
-  enabled: false
-`, port, sqlitePath, key.encoded, adminEmail, adminPassword)
+`, port, filepath.Join(dir, "data"), sqlitePath, key.encoded, adminEmail, adminPassword)
 	configPath := filepath.Join(dir, "config.yaml")
 	require.NoError(t, os.WriteFile(configPath, []byte(config), 0o600))
 	db, err := gorm.Open(sqlite.Open(sqlitePath+"?_pragma=busy_timeout(10000)&_pragma=journal_mode(WAL)"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})

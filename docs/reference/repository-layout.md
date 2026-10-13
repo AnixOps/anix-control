@@ -32,7 +32,7 @@ It should not become a dumping ground for:
 | `contracts/` | cross-repository golden fixtures shared with `anix-agent`: `plugin/v1` manifests and `agent/v1` operation envelopes |
 | `web/` | Vue 3 + Vite admin/user frontend: `src/`, Vitest tests in `src/__tests__/`, Playwright specs in `e2e/`, helper scripts in `scripts/`; `src/design/` is the vendored AnixOps Design release ([frontend-design.md](frontend-design.md)) |
 | `control-center/` | Control Center app imported from the archived `Anixops-control-center` repository: its own Go module (`github.com/AnixOps/anix-control/control-center`), Vue web, Flutter client, Helm/deploy/monitoring assets, and the Cloudflare Workers API under `control-center/workers/`; built by `.github/workflows/control-center*.yml` |
-| `config/` | configuration templates (`config.yaml.example`, `config.dev.yaml.example`, `config.prod.yaml`), the `/api/v2` package route catalog (`v2-package-route-catalog.json`), `deploy/`, `docker/`, and `scripts/` (see below) |
+| `config/` | the configuration template (`config.yaml.example`, the `domain` line), the `/api/v2` package route catalog (`v2-package-route-catalog.json`), `deploy/`, `docker/`, and `scripts/` (see below) |
 | `scripts/` | operator-facing scripts: release installer `install.sh`, `install-agent.sh`, `manage.sh`, SQLite/PostgreSQL migration and restore rehearsal, plugin release signing, WireGuard helpers and legacy panel upgrade |
 | `docs/` | documentation tree (see below) plus generated Swagger output (`docs.go`, `swagger.json`, `swagger.yaml`) |
 | `.github/` | CI (`workflows/ci.yml`), SDK sync, Control Center workflows, `CODEOWNERS`, and the branch ruleset description in `BRANCH_PROTECTION.md` |

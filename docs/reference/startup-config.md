@@ -6,133 +6,86 @@ This page describes the exact startup flow after the unified runtime config upda
 
 | Location | Purpose |
 |------|------|
-| `config/config.yaml` (template: [`config/config.yaml.example`](../../config/config.yaml.example)) | canonical startup config for app settings and `forward_runtime` |
-| `ANIX_CONTROL_*` environment variables | per-key overrides and secrets ([configuration.md](configuration.md#environment-variables)) |
+| the configuration file (`-config`, else `ANIX_CONTROL_CONFIG`, else `config/config.yaml` when it exists; template: [`config/config.yaml.example`](../../config/config.yaml.example)) | the operator keys an installation changes, usually `domain` alone ([configuration.md](configuration.md#operator-keys)) |
+| `ANIX_CONTROL_*` environment variables | per-key overrides ([configuration.md](configuration.md#environment-variables)) |
+| `data_dir/root.key` (`/var/lib/anix-control/root.key`) | the root key: generated or adopted at the first start ([configuration.md](configuration.md#the-root-key)) |
 | `.env` (template: [`.env.example`](../../.env.example)) | optional Docker or installer env file |
 | `v2_system_config` | persisted merged runtime snapshot used by runtime services |
 
 Important:
 
-- backend startup reads `-config`, else `ANIX_CONTROL_CONFIG`, else
-  `config/config.yaml` when it exists; an explicitly named file must exist
-- with no config file, startup uses the built-in container defaults; `ANIX_CONTROL_*`
-  variables override either source
+- the built-in values come first, then the file key by key, then the
+  variables; an explicitly named file must exist, and without one Control
+  runs on its built-in values
+- the file is read strictly: a deprecated key warns (still read or
+  ignored), any other unknown key stops the start naming the closest key;
+  `anix-control config check` shows the result without starting
 - local `go run` does not auto-load `.env`
 - runtime services read the forward runtime values that were written into `v2_system_config`
 
-## 2. Minimal Local Config
-
-Copy the template first:
-
-```bash
-cp config/config.yaml.example config/config.yaml
-```
-
-Minimum sqlite example:
+## 2. Minimal Configuration
 
 ```yaml
-env: "development"
-
-server:
-  host: "0.0.0.0"
-  port: 8080
-  mode: "release"
-
-frontend:
-  enable: true
-  port: 3000
-  path: "web/public"
-
-database:
-  driver: "sqlite"
-  database: "config/data/v2board.db"
-
-cache:
-  driver: "memory"
-
-jwt:
-  secret: "replace-with-at-least-32-characters"
-  expire: 86400
-
-app:
-  name: "AnixOps Control"
-  version: "4.0.0"
-  api_token: "replace-with-node-api-token"
-  traffic_log_enable: true
-  subscribe_path: "s"
-
-plugins:
-  # Every official package built into the binary is verified against this
-  # key at start and installed, upgraded and enabled
-  # (docs/architecture/plugin-kernel-contract.md, "Built-in Packages").
-  official_public_key: "jW26nr2tbthASoeq6RmIpx8Ah+uhPNIv9V1ewRVb1VE="
-  # No identity_bootstrap_package_dir: a release binary ignores it (only a
-  # development build without built-in packages reads it). The package hosts
-  # always run; Agent plugin dispatch and topology execution are off until M4.
-  control_poll_interval: "5s"
-  # Use paths writable by the service user. The V4 installer creates these
-  # under its selected installation root with mode 0700.
-  control_host_runtime_dir: "/opt/anixops/control/runtime/plugin-hosts"
-  control_host_artifact_dir: "/opt/anixops/control/data/plugin-artifacts"
-
-grpc:
-  enabled: true
-  host: "127.0.0.1"
-  port: 50051
-  api_token: ""
-  tls_cert_file: ""
-  tls_key_file: ""
-
-admin:
-  email: "admin@example.com"
-  # Required on the first start of an empty database: the server refuses to start
-  # without it. It is never generated or printed.
-  password: ""
-
-forward_runtime:
-  backend: "gost"
-  nodex:
-    base_url: "http://127.0.0.1:18081"
-    token: "replace-with-shared-token"
-    timeout_seconds: 15
+domain: panel.example.com
 ```
 
-This is the `4.0.0` signed-package profile. The pinned value is the raw 32-byte
-AnixOps Ed25519 release public key encoded as Base64. It is public trust
-material, not a private signing key. The V4 release installer fetches and
-checksum-verifies the identity trio automatically, then stages it in a
-root-owned `0750` directory with group-readable `0640` files. For a manual
-deployment, place exactly one verified `identity-platform-<version>.anxp`,
-`identity-platform-<version>.manifest.json`, and
-`identity-platform-<version>.manifest.sig` trio in the configured absolute
-directory with the same ownership and mode requirements before starting
-Control. The bootstrap import is root-pinned and idempotent. It never moves
-an existing installation, except that after the official signing root
-changed it moves an enabled `identity-platform` installation whose release is
-bound to a retired root to a newer package that verifies under the active
-root, so login comes back by itself
-([`../UPGRADE.md`](../UPGRADE.md#identity-platform-recovers-by-itself)). When package
-execution is enabled manually, create the configured Control host runtime and
-artifact directories as non-symlink `0700` directories owned by the Control
-service user. The loopback gRPC bind makes local Control/Agent acceptance
-reproducible while preventing an unauthenticated network listener from
-appearing during installation.
+That is the whole file of an ordinary installation: Control obtains its
+certificate for the domain, serves https on 443 and http on 80, and runs
+the node gRPC listener on 50051. Behind a reverse proxy or CDN that
+terminates TLS:
 
-An Agent keeps `Transport: "http"` for the existing configuration, user, and
-traffic data plane, then independently opts into package operations with
-`AgentControlEnabled` and `PluginSupervisorEnabled`. Do not enable a remote
-Agent by changing `grpc.host` alone: configure server TLS or an HTTP/2 gRPC
-proxy and firewall first.
+```yaml
+domain: panel.example.com
+tls:
+  mode: external
+  cert_file: /etc/anix-control/tls/fullchain.pem   # the nodes' gRPC certificate
+  key_file: /etc/anix-control/tls/privkey.pem
+listen: 127.0.0.1:8080
+```
+
+An earlier (4.x) file still loads: its keys are in the
+[deprecated list](configuration.md#deprecated-keys), each warned about once.
+`anix-control config rewrite --in <old> --out <new>` turns it into the
+operator keys ([UPGRADE](../UPGRADE.md#configuration-rewrite-on-upgrade)).
+While PostgreSQL and the first-administrator password are still read (until
+M2 P4 and P9), a file for a SQLite panel with its first administrator is:
+
+```yaml
+domain: panel.example.com
+database:
+  driver: sqlite
+  database: /opt/anixops/control/config/data/v2board.db
+admin:
+  email: admin@example.com
+  # Required on the first start of an empty database. It is never
+  # generated or printed by Control.
+  password: ""
+```
+
+No secret goes into the file: the root key in `data_dir` derives the JWT
+secret and seals the CA, ACME and join token keys.
 
 ## 3. Local Binary Startup
 
-Backend:
+The development instance:
 
 ```bash
-GOWORK=off go run ./cmd/server -config config/config.yaml
+ANIX_CONTROL_ADMIN_PASSWORD='choose-a-password' make run
 ```
 
-Frontend:
+It keeps its SQLite database and root key in `.dev/` (ignored), serves the
+web app and the API on `http://127.0.0.1:19080` (`tls.mode` external, no
+domain) and gRPC on `127.0.0.1:50052`, runs with `-debug` (gin debug mode,
+debug logging), and verifies the built-in packages against the development
+key. `RUN_CONFIG=<file>` loads a configuration file as well.
+
+Without make:
+
+```bash
+GOWORK=off go run ./cmd/server -debug -config config/config.yaml
+```
+
+Frontend development server:
 
 ```bash
 cd web
@@ -140,13 +93,10 @@ npm ci
 npm run dev
 ```
 
-Default local URLs (without `domain`, `tls.mode` is external: one plain
-handler for the web app, the API and the install paths, on `server.port` and,
-with `frontend.enable`, on `frontend.port` too):
-
-- UI: `http://127.0.0.1:3000` (or `:8080`, the same handler)
-- API: `http://127.0.0.1:8080`
-- health: `http://127.0.0.1:8080/health`
+Without `domain`, `tls.mode` is external: one plain handler for the web app,
+the API and the install paths on `listen` (`127.0.0.1:8080` by default; the
+deprecated `server.port` and `frontend.port` still add their listeners when
+set). Health: `http://127.0.0.1:8080/health`.
 
 With `domain` set, Control serves https on `:443` and http on `:80` with a
 certificate it obtains itself, or a plain `listen` address behind a CDN or
@@ -165,18 +115,26 @@ ANIX_CONTROL_ADMIN_PASSWORD='choose-a-password' docker compose up -d --build
 Production uses `docker-compose.prod.yml` with a released image digest, an
 external PostgreSQL, `control.env` and `secrets/`; see
 [`../DEPLOYMENT.md`](../DEPLOYMENT.md). The containers need no config file: the
-built-in defaults plus `ANIX_CONTROL_*` variables configure them. To keep a
-YAML file instead, mount it and set `ANIX_CONTROL_CONFIG`.
+built-in values plus `ANIX_CONTROL_*` variables configure them (the image
+sets `ANIX_CONTROL_LISTEN=0.0.0.0:8080`). The root key lives in the
+`control-data` volume at `/var/lib/anix-control`, adopted from
+`secrets/module_ca_kek`. To keep a YAML file instead, mount it and set
+`ANIX_CONTROL_CONFIG`.
 
 ## 5. What Happens On Startup
 
 The runtime flow is now:
 
-1. resolve the config file (or use the built-in defaults) and apply `ANIX_CONTROL_*` variables
-2. load app config and `forward_runtime`
+1. load the built-in values, overlay the config file key by key and the
+   `ANIX_CONTROL_*` variables, and log one warning per deprecated key
+2. resolve the root key in `data_dir` (`root.key`; the server generates it,
+   or adopts `module_runtime.ca_kek` into it) and derive the JWT secret and
+   the identity KEK from it unless they were adopted
 3. normalize sqlite path, frontend path, and ansible runtime paths
 4. initialize database
-5. prepare the database (below), including `InitForwardRuntimeSystemConfig`
+5. prepare the database (below): the migrations, then the check that the
+   root key opens the stored CA keys (a key that cannot stops the start),
+   then the seeds and `InitForwardRuntimeSystemConfig`
 6. persist the parsed runtime snapshot into `v2_system_config`
 7. load the panel certificates (`internal/panelcert`): the ones stored in
    `v5_acme_cache`, the certificate files, and the self-signed fallback, so
@@ -268,7 +226,7 @@ least 90 s of termination grace (`stop_grace_period`,
 
 ## 6. Runtime Tuning
 
-If you need to change runtime behavior, edit `config/config.yaml.forward_runtime` before startup. That now includes:
+If you need to change runtime behavior, edit `forward_runtime` in the configuration file before startup (deprecated keys, read until M5). That now includes:
 
 - backend selection under `forward_runtime.backend`
 - NodeX or local ansible runtime details under `forward_runtime.nodex`, `forward_runtime.nftables_ansible`, and the legacy-compatible `forward_runtime.iptables_ansible`

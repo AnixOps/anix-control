@@ -1,9 +1,10 @@
 # AnixOps Control: production Docker Compose deployment.
 #
 # Runs only Control. PostgreSQL is external (a managed database, or the
-# PostgreSQL on this host reached through host.docker.internal). Control is
-# stateless, so moving it to another machine means copying control.env and
-# secrets/ and running the same commands there.
+# PostgreSQL on this host reached through host.docker.internal). Control keeps
+# its root key in the control-data volume, adopted from secrets/module_ca_kek,
+# so moving it to another machine means copying control.env and secrets/ and
+# running the same commands there.
 #
 #   cp config/deploy/compose/control.env.example control.env   # then edit
 #   install -d -m 0750 secrets
@@ -32,6 +33,8 @@ x-control: &control
     # Verified package copies (about 0.5 GB for the official package set) live
     # on the plugin-artifacts volume, not in the RAM-backed /tmp.
     ANIX_CONTROL_PLUGINS_CONTROL_HOST_ARTIFACT_DIR: /var/lib/anixops/artifacts
+    # data_dir: root.key, adopted from secrets/module_ca_kek at the first start.
+    ANIX_CONTROL_DATA_DIR: /var/lib/anix-control
   secrets:
     - jwt_secret
     - db_password
@@ -71,8 +74,8 @@ services:
         condition: service_completed_successfully
     restart: unless-stopped
     ports:
+      # The web app, the API, subscriptions and /install share one port.
       - "${ANIX_CONTROL_BIND:-127.0.0.1}:${ANIX_CONTROL_API_PORT:-8080}:8080"
-      - "${ANIX_CONTROL_BIND:-127.0.0.1}:${ANIX_CONTROL_UI_PORT:-3000}:3000"
       # Node-facing gRPC; publish it on a reachable address when
       # ANIX_CONTROL_GRPC_ENABLED=true in control.env.
       - "${ANIX_CONTROL_GRPC_BIND:-127.0.0.1}:${ANIX_CONTROL_GRPC_PORT:-50051}:50051"
@@ -92,6 +95,8 @@ services:
       # Verified package copies, rebuilt from the database on demand; copies
       # left by an earlier container are removed at start.
       - plugin-artifacts:/var/lib/anixops
+      # data_dir (root.key).
+      - control-data:/var/lib/anix-control
       # Local-ansible forward runtime (forward_runtime.backend: nftables_ansible):
       # mount the inventory and SSH material read-only.
       # - ./ansible/inventory.ini:/app/config/deploy/ansible/inventory.ini:ro
@@ -99,6 +104,7 @@ services:
 
 volumes:
   plugin-artifacts:
+  control-data:
 
 secrets:
   jwt_secret:

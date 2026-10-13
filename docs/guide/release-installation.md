@@ -84,15 +84,20 @@ The installer will:
    (the identity package serves login); the installer no longer writes
    `plugins.control_execution_enabled` and drops the removed `plugins.*`
    switches from an existing `config.yaml`.
-6. Download the configuration template that matches the selected tag.
-7. Set `env: "production"` and generate the JWT secret, node API token, and
-   first administrator password ([Environment](#environment-production)). The
-   first administrator is `--admin-email`, or `admin@anixops.local` without it.
+6. Download the configuration template that matches the selected tag (the
+   `domain` line, which the installer keeps a comment).
+7. Generate the first administrator password and write the first
+   administrator into `config.yaml` ([The configuration file](#environment-production)).
+   The first administrator is `--admin-email`, or `admin@anixops.local`
+   without it. No JWT secret or API token: the root key derives the JWT
+   secret.
 8. Generate the CA key-encryption key (`module_runtime.ca_kek`) in
    `config/secrets/module_ca_kek` (mode 0600, printed only as a fingerprint)
    and, given a publicly trusted certificate, enable gRPC with TLS
    ([Agent access](#agent-access)).
-9. Install and enable `anix-control.service`.
+9. Install and enable `anix-control.service`, with
+   `ANIX_CONTROL_DATA_DIR=<install dir>/data` (mode 0700): Control creates
+   its root key there at the first start, adopting the CA key of step 8.
 10. Start the service and require `http://127.0.0.1:8080/health` to succeed;
    a fresh V4 install also verifies the identity package gateway and login.
 
@@ -164,21 +169,22 @@ empty database instead. Then run `install` again with `--version` and
 
 ### Environment: production
 
-The template is also the local-development file, so it says
-`env: "development"`. A host install is not a development install: the
-installer writes `env: "production"` into the new `config.yaml` (as the
-container defaults are), next to the generated `jwt.secret`.
+Control always runs as production: `env` is no longer read (a file that
+still sets it logs one warning), and a development instance is the
+`-debug` flag. The configuration a fresh install writes is the template's
+commented `domain` line plus the first administrator; without `domain`
+Control serves plain http on `127.0.0.1:8080` behind the reverse proxy
+(`tls.mode` external) ([configuration](../reference/configuration.md#operator-keys)).
 
-- In production Control refuses to start when `jwt.secret` is empty or a
-  template value; in `development` it accepts the template secret. The
-  schema is the same in both: the ordered migrations create it and record it
-  (`docs/reference/database-migrations.md`).
 - Only a **fresh** install writes the file. `update`, `rollback` and
-  `enable-agents` never change `env`. A host installed by an earlier release
-  has `env: "development"`; check with
-  `grep '^env:' /opt/anixops/control/config/config.yaml`. To move it to
-  production, confirm `jwt.secret` is a random value of your own, set
-  `env: "production"` and restart (`sudo systemctl restart anix-control`).
+  `enable-agents` never change it. A file an earlier release wrote keeps
+  working: its keys are deprecated, each logged once, still read or
+  ignored. `sudo anix-control config check --file
+  /opt/anixops/control/config/config.yaml` shows what each does, and
+  `anix-control config rewrite` turns the file into the operator keys
+  ([UPGRADE](../UPGRADE.md#configuration-rewrite-on-upgrade)).
+- An explicitly set `jwt.secret` is adopted into the root key file and kept;
+  a template value is not used.
 
 ## Installed Layout And Operations
 
@@ -188,7 +194,8 @@ container defaults are), next to the generated `jwt.secret`.
 | `/opt/anixops/control/bin/v2board` | Compatibility symlink to the primary binary |
 | `/opt/anixops/control/web/public` | GitHub Actions-built frontend files |
 | `/opt/anixops/control/config/config.yaml` | Persistent control-plane configuration |
-| `/opt/anixops/control/config/secrets/module_ca_kek` | CA key-encryption key (service user, 0600); never replaced; back it up with the database |
+| `/opt/anixops/control/config/secrets/module_ca_kek` | CA key-encryption key (service user, 0600); never replaced; Control adopts it as its root key |
+| `/opt/anixops/control/data/root.key` | The root key (service user, 0600; `ANIX_CONTROL_DATA_DIR` in the unit); back it up with the database |
 | `/opt/anixops/control/config/tls/control.crt`, `control.key` | gRPC certificate (0644) and key (0600) for Agents |
 | `/opt/anixops/control/config/data/v2board.db` | Default SQLite database; filename retained for compatibility |
 | `/opt/anixops/control/runtime/plugin-hosts/` | Service-user-private Control package host sockets and process state |

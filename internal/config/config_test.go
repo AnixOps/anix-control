@@ -4,19 +4,13 @@ import (
 	"encoding/base64"
 	"os"
 	"path/filepath"
-	"sync"
+	"strings"
 	"testing"
 
 	"github.com/AnixOps/anix-control/v5/internal/branding"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-// resetConfig 重置全局配置和 once (仅用于测试)
-func resetConfig() {
-	cfg = nil
-	once = sync.Once{}
-}
 
 func TestSetAndGet(t *testing.T) {
 	cfg := &Config{
@@ -42,13 +36,12 @@ func TestGetNil(t *testing.T) {
 	assert.Nil(t, got)
 }
 
+// TestLoad: a 4.x style file still loads. The keys still read are applied,
+// the ignored ones keep their built-in values, and each warns.
 func TestLoad(t *testing.T) {
 	resetConfig()
 
-	// 创建临时配置文件
-	tmpDir := t.TempDir()
-	configPath := filepath.Join(tmpDir, "config.yaml")
-
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
 	configContent := `
 env: development
 server:
@@ -65,32 +58,35 @@ app:
   name: TestApp
   version: 1.0.0
 `
-	err := os.WriteFile(configPath, []byte(configContent), 0644)
-	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(configPath, []byte(configContent), 0o644))
 
 	loadedCfg, err := Load(configPath)
 	require.NoError(t, err)
 	require.NotNil(t, loadedCfg)
 
-	assert.Equal(t, "development", loadedCfg.Env)
+	assert.Equal(t, "production", loadedCfg.Env, "env is ignored")
 	assert.Equal(t, "127.0.0.1", loadedCfg.Server.Host)
 	assert.Equal(t, 3000, loadedCfg.Server.Port)
-	assert.Equal(t, "debug", loadedCfg.Server.Mode)
+	assert.Equal(t, "release", loadedCfg.Server.Mode, "server.mode is ignored; -debug sets debug")
 	assert.Equal(t, "sqlite", loadedCfg.Database.Driver)
 	assert.Equal(t, "test.db", loadedCfg.Database.Database)
 	assert.Equal(t, "test-secret", loadedCfg.JWT.Secret)
-	assert.Equal(t, 3600, loadedCfg.JWT.Expire)
-	assert.Equal(t, "TestApp", loadedCfg.App.Name)
+	assert.Equal(t, 86400, loadedCfg.JWT.Expire, "jwt.expire is ignored")
+	assert.Equal(t, branding.ControlName, loadedCfg.App.Name, "app.name is ignored")
+	var paths []string
+	for _, key := range loadedCfg.Deprecated.Keys() {
+		paths = append(paths, key.Path)
+	}
+	assert.Equal(t, []string{"app.name", "app.version", "database.database", "database.driver", "env", "jwt.expire", "jwt.secret", "server.host", "server.mode", "server.port"}, paths)
 }
 
+// The registration policy is still read (until M3); the rate limits are
+// built-in values.
 func TestLoadAuthRegistrationConfig(t *testing.T) {
 	resetConfig()
 
-	tmpDir := t.TempDir()
-	configPath := filepath.Join(tmpDir, "config.yaml")
-
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
 	configContent := `
-env: development
 auth:
   register_rate_limit:
     enabled: true
@@ -105,8 +101,7 @@ auth:
     blocked_email_domains:
       - disposable.example
 `
-	err := os.WriteFile(configPath, []byte(configContent), 0644)
-	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(configPath, []byte(configContent), 0o644))
 
 	loadedCfg, err := Load(configPath)
 	require.NoError(t, err)
@@ -118,12 +113,11 @@ auth:
 	assert.True(t, loadedCfg.Auth.Registration.RequireInvite)
 	assert.Equal(t, []string{"example.com"}, loadedCfg.Auth.Registration.AllowedEmailDomains)
 	assert.Equal(t, []string{"disposable.example"}, loadedCfg.Auth.Registration.BlockedEmailDomains)
-	assert.True(t, *loadedCfg.Auth.RegisterRateLimit.Enabled)
-	assert.Equal(t, 4, loadedCfg.Auth.RegisterRateLimit.MaxAttempts)
-	assert.Equal(t, 1800, loadedCfg.Auth.RegisterRateLimit.WindowSeconds)
-	assert.Equal(t, 3600, loadedCfg.Auth.RegisterRateLimit.LockoutSeconds)
+	assert.Equal(t, Defaults().Auth.RegisterRateLimit, loadedCfg.Auth.RegisterRateLimit, "the rate limits are built-in values")
 }
 
+// The plugins keys a deployment still needs are read; the tuning keys and
+// the P7 switches keep their built-in values.
 func TestLoadPluginConfig(t *testing.T) {
 	resetConfig()
 	configPath := filepath.Join(t.TempDir(), "config.yaml")
@@ -131,29 +125,34 @@ func TestLoadPluginConfig(t *testing.T) {
 plugins:
   official_public_key: "ZmFrZS1wdWJsaWMta2V5"
   identity_bootstrap_package_dir: "/var/lib/anixops/bootstrap"
+  control_execution_enabled: false
   control_poll_interval: "3s"
   control_host_runtime_dir: "/var/lib/anixops/plugin-hosts"
   control_host_artifact_dir: "/var/lib/anixops/plugin-artifacts"
-  control_host_startup_timeout: "4s"
-  control_host_request_timeout: "20s"
+  control_host_startup_timeout: "7s"
+  control_host_request_timeout: "45s"
   control_host_websocket_session_timeout: "6h"
   control_host_max_request_bytes: 2097152
-  control_host_max_response_bytes: 8388608
+  control_host_max_response_bytes: 134217728
+  dispatch_enabled: true
+  dispatch_poll_interval: 7s
+  topology_execution_enabled: true
+  topology_poll_interval: 11s
 `
 	require.NoError(t, os.WriteFile(configPath, []byte(content), 0o644))
 
 	loaded, err := Load(configPath)
 	require.NoError(t, err)
-	assert.Equal(t, "3s", loaded.Plugins.ControlPollInterval)
-	assert.Equal(t, "/var/lib/anixops/plugin-hosts", loaded.Plugins.ControlHostRuntimeDir)
-	assert.Equal(t, "/var/lib/anixops/plugin-artifacts", loaded.Plugins.ControlHostArtifactDir)
-	assert.Equal(t, "4s", loaded.Plugins.ControlHostStartupTimeout)
-	assert.Equal(t, "20s", loaded.Plugins.ControlHostRequestTimeout)
-	assert.Equal(t, "6h", loaded.Plugins.ControlHostWebSocketSessionTimeout)
-	assert.Equal(t, int64(2<<20), loaded.Plugins.ControlHostRequestBodyLimit())
-	assert.Equal(t, int64(8<<20), loaded.Plugins.ControlHostResponseBodyLimit())
+	defaults := Defaults().Plugins
 	assert.Equal(t, "ZmFrZS1wdWJsaWMta2V5", loaded.Plugins.OfficialPublicKey)
 	assert.Equal(t, "/var/lib/anixops/bootstrap", loaded.Plugins.IdentityBootstrapPackageDir)
+	assert.Equal(t, "/var/lib/anixops/plugin-hosts", loaded.Plugins.ControlHostRuntimeDir)
+	assert.Equal(t, "/var/lib/anixops/plugin-artifacts", loaded.Plugins.ControlHostArtifactDir)
+	assert.Equal(t, defaults.ControlPollInterval, loaded.Plugins.ControlPollInterval)
+	assert.Equal(t, defaults.ControlHostStartupTimeout, loaded.Plugins.ControlHostStartupTimeout)
+	assert.Equal(t, DefaultControlHostPayloadBytes, loaded.Plugins.ControlHostRequestBodyLimit())
+	assert.Equal(t, DefaultControlHostPayloadBytes, loaded.Plugins.ControlHostResponseBodyLimit(), "an oversized ignored limit cannot stop the start")
+	assert.Len(t, loaded.Deprecated.Keys(), 15)
 }
 
 func TestPluginPayloadLimitsDefaultAndValidate(t *testing.T) {
@@ -175,67 +174,40 @@ func TestPluginPayloadLimitsDefaultAndValidate(t *testing.T) {
 	}
 }
 
-func TestLoadRejectsOversizedPluginPayloadLimit(t *testing.T) {
-	resetConfig()
-	configPath := filepath.Join(t.TempDir(), "config.yaml")
-	require.NoError(t, os.WriteFile(configPath, []byte("plugins:\n  control_host_max_response_bytes: 134217728\n"), 0o600))
-	_, err := Load(configPath)
-	require.ErrorContains(t, err, "plugins.control_host_max_response_bytes")
-	resetConfig()
-}
-
-func TestOfficialPluginAlphaProfiles(t *testing.T) {
+// The shipped template is the one domain line: it loads with no deprecated
+// key, no secret and the built-in values for everything else.
+func TestShippedTemplateIsTheDomainLine(t *testing.T) {
 	const officialPublicKey = "jW26nr2tbthASoeq6RmIpx8Ah+uhPNIv9V1ewRVb1VE="
-
 	decoded, err := base64.StdEncoding.DecodeString(officialPublicKey)
 	require.NoError(t, err)
 	require.Len(t, decoded, 32, "official Ed25519 public key must contain 32 raw bytes")
 
-	// The built-in packages run as package hosts in every profile; Agent
-	// dispatch and topology execution are off until M4 and no profile sets
-	// a removed key.
-	profiles := []struct {
-		name        string
-		path        string
-		grpcEnabled bool
-		runtimeDir  string
-	}{
-		{name: "development", path: "config.dev.yaml.example", grpcEnabled: true, runtimeDir: ""},
-		{name: "release installer", path: "config.yaml.example", grpcEnabled: true, runtimeDir: "/var/lib/anixops/plugin-hosts"},
-		{name: "production", path: "config.prod.yaml", grpcEnabled: false, runtimeDir: "/var/lib/anixops/plugin-hosts"},
-	}
-
-	for _, profile := range profiles {
-		t.Run(profile.name, func(t *testing.T) {
-			resetConfig()
-			t.Cleanup(resetConfig)
-
-			path := filepath.Join("..", "..", "config", profile.path)
-			loaded, loadErr := Load(path)
-			require.NoError(t, loadErr)
-			require.Equal(t, officialPublicKey, loaded.Plugins.OfficialPublicKey)
-			data, readErr := os.ReadFile(path)
-			require.NoError(t, readErr)
-			found, _ := findRemovedKeys(data, nil)
-			assert.Empty(t, found)
-			assert.Equal(t, profile.grpcEnabled, loaded.GRPC.Enable)
-			assert.Equal(t, profile.runtimeDir, loaded.Plugins.ControlHostRuntimeDir)
-			if profile.grpcEnabled {
-				assert.Equal(t, "127.0.0.1", loaded.GRPC.Host)
-			}
-		})
-	}
-}
-
-func TestProductionPluginProfileContainsNoDefaultRemoteCredential(t *testing.T) {
-	resetConfig()
-	t.Cleanup(resetConfig)
-
-	loaded, err := Load(filepath.Join("..", "..", "config", "config.prod.yaml"))
+	path := filepath.Join("..", "..", "config", "config.yaml.example")
+	loaded, report, err := LoadFile(path, nil)
 	require.NoError(t, err)
+	assert.Empty(t, report.Deprecated)
+	assert.Equal(t, "panel.example.com", loaded.Domain)
+	assert.Equal(t, TLSModeACME, loaded.TLSModeOrDefault())
+	assert.Equal(t, officialPublicKey, loaded.Plugins.OfficialPublicKey)
+	assert.Empty(t, loaded.JWT.Secret)
 	assert.Empty(t, loaded.App.APIToken)
 	assert.Empty(t, loaded.GRPC.APIToken)
-	assert.Empty(t, loaded.ForwardRuntime.NodeX.Token)
+	assert.Empty(t, loaded.ModuleRuntime.CAKEK)
+	assert.Empty(t, loaded.Admin.Password)
+
+	data, err := os.ReadFile(path)
+	require.NoError(t, err)
+	var keys []string
+	for _, line := range strings.Split(string(data), "\n") {
+		if line != "" && !strings.HasPrefix(strings.TrimSpace(line), "#") {
+			keys = append(keys, line)
+		}
+	}
+	assert.Equal(t, []string{"domain: panel.example.com"}, keys)
+	for _, retired := range []string{"config.prod.yaml", "config.dev.yaml.example"} {
+		_, err := os.Stat(filepath.Join("..", "..", "config", retired))
+		assert.True(t, os.IsNotExist(err), "%s was replaced by config.yaml.example", retired)
+	}
 }
 
 func TestLoadUsesAnixOpsControlAsDefaultAppName(t *testing.T) {
@@ -315,11 +287,18 @@ forward_runtime:
 	assert.Equal(t, "http://127.0.0.1:18081", loadedCfg.ForwardRuntime.NodeX.BaseURL)
 	assert.Equal(t, "test-nodex-token", loadedCfg.ForwardRuntime.NodeX.Token)
 	assert.Equal(t, 20, loadedCfg.ForwardRuntime.NodeX.TimeoutSeconds)
-	assert.Equal(t, "https://panel.example.com", loadedCfg.ForwardRuntime.CleanAgent.PublicURL)
+	assert.Empty(t, loadedCfg.ForwardRuntime.CleanAgent.PublicURL, "nothing reads it: ignored")
 	assert.Equal(t, 11, loadedCfg.ForwardRuntime.CleanAgent.HeartbeatIntervalSeconds)
 	assert.Equal(t, 121, loadedCfg.ForwardRuntime.CleanAgent.ActionTimeoutSeconds)
-	assert.Equal(t, 3600, loadedCfg.ForwardRuntime.CleanAgent.TokenExpireSeconds)
+	assert.Zero(t, loadedCfg.ForwardRuntime.CleanAgent.TokenExpireSeconds, "nothing reads it: ignored")
 	assert.True(t, loadedCfg.ForwardRuntime.CleanAgent.LegacyBridgeEnabled)
+	var ignored []string
+	for _, key := range loadedCfg.Deprecated.Keys() {
+		if key.Status == KeyIgnored {
+			ignored = append(ignored, key.Path)
+		}
+	}
+	assert.Equal(t, []string{"env", "forward_runtime.clean_agent.public_url", "forward_runtime.clean_agent.token_expire_seconds", "forward_runtime.iptables_ansible"}, ignored)
 }
 
 func TestLoadFileNotFound(t *testing.T) {
@@ -550,10 +529,13 @@ func TestLogConfig(t *testing.T) {
 func TestRetiredAppEditionStillLoads(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.yaml")
 	require.NoError(t, os.WriteFile(path, []byte("app:\n  subscribe_path: s\n  edition: commercial\n"), 0o600))
-	_, err := load(path, nil)
+	loaded, err := load(path, nil)
 	require.NoError(t, err)
-	_, err = load("", []string{"ANIX_CONTROL_APP_EDITION=community"})
+	require.Len(t, loaded.Deprecated.Keys(), 2)
+	loaded, err = load("", []string{"ANIX_CONTROL_APP_EDITION=community"})
 	require.NoError(t, err)
+	require.Len(t, loaded.Deprecated.Keys(), 1)
+	assert.Equal(t, "ANIX_CONTROL_APP_EDITION", loaded.Deprecated.Keys()[0].Source)
 }
 
 func TestForwardAnixOpsExperimentalDefaultsOff(t *testing.T) {
@@ -561,9 +543,10 @@ func TestForwardAnixOpsExperimentalDefaultsOff(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, loaded.Forward.AnixOpsExperimental)
 
+	// The experimental engine stays off: the key is ignored.
 	loaded, err = load("", []string{"ANIX_CONTROL_FORWARD_ANIXOPS_EXPERIMENTAL=true"})
 	require.NoError(t, err)
-	require.True(t, loaded.Forward.AnixOpsExperimental)
+	require.False(t, loaded.Forward.AnixOpsExperimental)
 }
 
 func TestAgentInstallConfigValidate(t *testing.T) {

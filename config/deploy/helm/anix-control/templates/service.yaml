@@ -17,10 +17,6 @@ spec:
       port: {{ .Values.service.httpPort }}
       targetPort: http
       protocol: TCP
-    - name: web
-      port: {{ .Values.service.webPort }}
-      targetPort: web
-      protocol: TCP
     {{- if .Values.moduleRuntime.enabled }}
     # mTLS module listener: ModulePKI and the package bridge of network modules.
     - name: modules

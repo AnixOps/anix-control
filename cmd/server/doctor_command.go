@@ -13,8 +13,8 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/v5/internal/config"
-	"github.com/AnixOps/anix-control/v5/internal/modulepki"
 	"github.com/AnixOps/anix-control/v5/internal/panelcert"
+	"github.com/AnixOps/anix-control/v5/internal/rootkey"
 	"gorm.io/gorm"
 )
 
@@ -124,14 +124,21 @@ func doctorChecks(ctx context.Context, cfg *config.Config, db *gorm.DB, env doct
 			"Set domain to the panel's name (one line in the config file: domain: panel.example.com).")
 	}
 
-	// The root key.
-	if raw := strings.TrimSpace(cfg.ModuleRuntime.CAKEK); raw == "" {
-		add("root_key", doctorFail, "module_runtime.ca_kek is not set: there is no CA for node certificates, node group tokens cannot be sealed and ACME keys cannot be stored.",
-			"Set module_runtime.ca_kek to a 32-byte key (openssl rand -base64 32) and restart Control.")
-	} else if _, err := modulepki.ParseKEK(raw); err != nil {
-		add("root_key", doctorFail, "module_runtime.ca_kek cannot be used: "+err.Error(), "Set module_runtime.ca_kek to 32 bytes, base64 or hex.")
-	} else {
-		add("root_key", doctorOK, "module_runtime.ca_kek is set.", "")
+	// The root key: where it is, and that it opens what the database holds.
+	path := rootkey.Path(cfg.DataDir)
+	switch {
+	case strings.TrimSpace(cfg.ModuleRuntime.CAKEK) == "":
+		add("root_key", doctorFail, "There is no root key: "+path+" does not exist (or this user cannot read it) and module_runtime.ca_kek is not set. Control creates it at its first start.",
+			"Start Control (systemctl start anix-control), or restore root.key from the backup taken with this database into "+path+".")
+	default:
+		if err := verifyRootKey(ctx, cfg, db, func(string, ...any) {}); err != nil {
+			add("root_key", doctorFail, err.Error(), "Restore the root.key that belongs to this database into "+path+" (mode 0600, owned by Control's user).")
+		} else if activeRootKey != nil && !activeRootKey.Stored {
+			add("root_key", doctorWarn, "The root key comes from module_runtime.ca_kek; "+path+" does not hold it yet.",
+				"Start Control once: it adopts the key into "+path+". Then anix-control config rewrite can drop it from the configuration.")
+		} else {
+			add("root_key", doctorOK, "The root key "+path+" opens the keys stored in the database.", "")
+		}
 	}
 
 	// Certificates, as the running Control last stored them.

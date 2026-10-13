@@ -121,12 +121,13 @@ Start an isolated local development instance with:
 make run
 ```
 
-On first use this creates the ignored `config/config.dev.yaml` from
-`config/config.dev.yaml.example`. It listens on `127.0.0.1:19080` for the API,
-`127.0.0.1:19000` for the frontend, and `127.0.0.1:50052` for gRPC, and uses a
-separate development SQLite database. An already running system
-`anix-control` service and its production-style ports are not changed. Set
-`RUN_CONFIG=/path/to/config.yaml` to run with another explicit configuration.
+It keeps its SQLite database and root key in the ignored `.dev/`, serves
+the web app and the API on `127.0.0.1:19080` and gRPC on `127.0.0.1:50052`,
+and runs with `-debug`. An empty database needs
+`ANIX_CONTROL_ADMIN_PASSWORD` for the first administrator. An already running
+system `anix-control` service and its production-style ports are not
+changed. Set `RUN_CONFIG=/path/to/config.yaml` to load a configuration file
+as well.
 
 ```bash
 go test ./...

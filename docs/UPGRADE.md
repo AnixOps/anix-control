@@ -338,8 +338,10 @@ longer read. A file that still sets them loads; each one is logged once at
 start:
 
 ```text
-Ignoring the removed configuration key plugins.dispatch_enabled (set in the configuration file): Agent plugin dispatch is off until the Agent release manifest brings the Agent plugins (M4)
+Configuration: plugins.dispatch_enabled (set in the configuration file) is no longer read and is ignored: Agent plugin dispatch is off until the Agent release manifest brings the Agent plugins (M4).
 ```
+
+(They are entries of the deprecated key list, below.)
 
 Delete them when convenient. `scripts/install.sh update` drops the five
 `plugins.*` lines from `config.yaml` and leaves every other key as it was,
@@ -350,6 +352,82 @@ and deployment apply and rollback answer `409 topology_execution_disabled`.
 
 **Removed tooling.** The staging rehearsal (`scripts/staging`, its guide and
 the CI job) switched route modes and imported packages and is gone.
+
+## Configuration Rewrite On Upgrade
+
+From the release after 4.2.x on, the configuration is nine operator keys
+(`domain`, `tls.mode`, `tls.cert_file`, `tls.key_file`, `listen`,
+`grpc.port`, `grpc.public_name`, `subscribe_path`, `data_dir`), and an
+ordinary file is one line, `domain: panel.example.com`
+([`reference/configuration.md`](reference/configuration.md#operator-keys)).
+
+**An existing file keeps working.** The file no longer replaces the
+built-in values as a whole: every key it does not set keeps its default.
+Every 4.x key is in the deprecated list and is logged once at start, with
+where it is set: the keys whose feature still exists (the database while
+PostgreSQL is supported, the first administrator, the flux forward runtime,
+the legacy listener and gRPC keys, the registration policy, the legacy API
+tokens) are still read; the others (rate limits, timeouts, alert intervals,
+`env`, `server.mode`, `agent_control.*`, `cache.*`, ...) are ignored and the
+built-in value, the 4.2 default, stands. A key that is in no list (a typo)
+stops the start, naming the closest key. Check a file before restarting:
+
+```bash
+sudo anix-control config check --file /opt/anixops/control/config/config.yaml
+```
+
+**The root key.** At the first start the new Control creates
+`data_dir/root.key` (`/var/lib/anix-control`, or the `ANIX_CONTROL_DATA_DIR`
+the installer's unit sets: `<install dir>/data`). With a configured
+`module_runtime.ca_kek` (in the file or, as the installer and the container
+files pass it, `ANIX_CONTROL_MODULE_RUNTIME_CA_KEK_FILE`) the root key takes
+that value, so the CA, the ACME keys, DNS credentials and join tokens stay
+readable; an explicitly set `jwt.secret` and `identity.kek` are recorded in
+`root.key` and stay in use (no one is signed out, identity keeps its signing
+keys). Every start then checks that the root key opens the stored CA keys
+and refuses otherwise, saying what to restore. Back up `root.key` with the
+database from now on.
+
+**Rewriting the file.** After that first start, turn the file into the
+operator keys:
+
+```bash
+sudo anix-control config rewrite --in /opt/anixops/control/config/config.yaml \
+  --out /opt/anixops/control/config/config.yaml --data-dir /opt/anixops/control/data
+```
+
+- `domain` comes from `domain`, else the host of `agent_install.public_url`,
+  else `tls.domain`. Without `domain`, `tls.mode` is `external`.
+- The gRPC certificate files (`grpc.tls_cert_file`, `grpc.tls_key_file`)
+  become `tls.cert_file` and `tls.key_file` with `tls.mode: external` when
+  the old file did not use ACME, which is every 4.x file: the reverse proxy
+  keeps terminating TLS for the web side and must now send the whole panel
+  to `listen` (`127.0.0.1:8080`): the web port 3000 is gone. Without
+  certificate files and with a domain, the result is `tls.mode` acme:
+  Control then wants ports 80 and 443 itself, so stop the reverse proxy
+  first (or add `tls.mode: external`).
+- The host of `agent_install.grpc_target` becomes `grpc.public_name` when it
+  is not `domain`; `grpc.port`, `subscribe_path` (from `app.subscribe_path`),
+  `listen` and `data_dir` are written when they are not the defaults.
+- The `database` section is kept, its SQLite path made absolute, while
+  PostgreSQL is supported (M2, P4); so are a closed or restricted
+  registration (`auth.registration.*`, until M3) and a cluster name other
+  than `default` (`module_runtime.cluster`, in every Agent identity).
+- Every other key is dropped and printed with the reason; the old file stays
+  as `config.yaml.bak-<UTC time>` with its mode and owner.
+- `module_runtime.ca_kek` and `identity.kek` are dropped only when
+  `root.key` holds them (the first start adopted them); otherwise the
+  rewrite writes nothing and says so (`--force` drops them anyway, which
+  leaves what they sealed unreadable). A `jwt.secret` that `root.key` does
+  not record signs every user out once.
+
+Keys the rewrite drops that the release still reads stop having their
+effect with the rewritten file: the first administrator's `admin.*` (needed
+only on an empty database), `app.api_token` and `grpc.api_token`,
+`forward_runtime.*`, `agent_install.agent_version` and `cn_mirror_url`,
+`server.trusted_proxies` and `log.format`. Keep a line
+in the new file when a deployment still needs it; it keeps warning until the
+milestone that removes it.
 
 ## Artifact Verification
 

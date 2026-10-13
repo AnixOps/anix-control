@@ -29,19 +29,23 @@ What the chart does:
   PostgreSQL advisory lock) before the server starts. An init container rather
   than a Helm hook, so it always sees the release's Secret and ConfigMap.
 - Probes: startup and liveness on `/livez`, readiness on `/readyz`; the server
-  keeps serving for `ANIX_CONTROL_SERVER_SHUTDOWN_DRAIN_DELAY` after readiness
-  fails on shutdown, within `terminationGracePeriodSeconds: 90`.
+  keeps serving for 5 seconds after readiness fails on shutdown, within
+  `terminationGracePeriodSeconds: 90`.
 - Security: uid 10001, read-only root filesystem, all capabilities dropped,
   `RuntimeDefault` seccomp, an exec-capable `emptyDir` at `/tmp`.
 - `replicaCount` must be 1 and the strategy is `Recreate`: background workers
   and plugin hosts are still single-instance.
-- Services: `http` (8080) and `web` (3000; the UI server also proxies `/api`),
-  plus an optional `grpc` Service for nodes (`grpc.enabled`). Optional Ingress
-  and Prometheus Operator `ServiceMonitor`.
+- Services: `http` (8080: the web app, the API, subscriptions and `/install`
+  on one port), plus an optional `grpc` Service for nodes (`grpc.enabled`).
+  Optional Ingress and Prometheus Operator `ServiceMonitor`.
+- Root key: Control's data directory is an in-memory `emptyDir` at
+  `/var/lib/anix-control`; the CA key Secret below is the root key's lasting
+  copy, adopted into `root.key` at every start. The chart refuses to render
+  without one.
 - Reverse proxy trust: `config.ANIX_CONTROL_SERVER_TRUSTED_PROXIES` lists the
   peers whose `X-Forwarded-*` headers Control honours (links in install
-  scripts and subscriptions, the client IP). The default keeps loopback (the
-  UI server's `/api` proxy) and the private ranges; narrow the private ranges
+  scripts and subscriptions, the client IP). The default keeps loopback and
+  the private ranges; narrow the private ranges
   to the ingress controller's pod CIDR, and do not expose the Service
   directly while they are trusted (`docs/DEPLOYMENT.md` section 6.1).
 - `ansible.existingSecret` mounts `inventory.ini` and SSH material for the

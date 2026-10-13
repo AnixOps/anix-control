@@ -128,14 +128,17 @@ function quotedYAML(value) {
   return JSON.stringify(String(value))
 }
 
-function controlConfig({ databasePath, frontendPath, publicKey }) {
-  return `env: development
+// The operator keys, and the deprecated keys this release still reads: the
+// two plain listeners of tls.mode external (server.port for the API,
+// frontend.port for the WebUI), the database, the test's package key, the
+// first administrator and the inert flux runtime. Control generates its root
+// key in data_dir.
+function controlConfig({ dataDir, databasePath, frontendPath, publicKey }) {
+  return `data_dir: ${quotedYAML(dataDir)}
+subscribe_path: s
 server:
   host: "127.0.0.1"
   port: ${liveControlAPIPort}
-  mode: release
-  read_timeout: 30
-  write_timeout: 30
   trusted_proxies: []
 frontend:
   enable: true
@@ -145,35 +148,14 @@ database:
   driver: sqlite
   database: ${quotedYAML(databasePath)}
   log_level: error
-cache:
-  driver: memory
-log:
-  level: error
-  output: stdout
-jwt:
-  secret: "live-control-webui-e2e-not-for-production"
-  expire: 3600
 auth:
-  login_rate_limit:
-    enabled: false
-  register_rate_limit:
-    enabled: false
   registration:
     enabled: false
-app:
-  name: "AnixOps live Control WebUI E2E"
-  version: "test"
-  subscribe_path: s
 plugins:
   official_public_key: ${quotedYAML(publicKey)}
-  control_poll_interval: "100ms"
-grpc:
-  enabled: false
 admin:
   email: ${quotedYAML(adminEmail)}
   password: ${quotedYAML(adminPassword)}
-tls:
-  enable: false
 forward_runtime:
   # The live WebUI gate does not exercise the legacy forward runtime. Select
   # its inert pull-agent mode so Control can bootstrap without a NodeX service.
@@ -351,6 +333,7 @@ export default async function setupLiveControlMachineTelemetry() {
     const signing = await createSigningMaterial(tempRoot)
     await buildControlWithPackages(tempRoot, await buildBuiltinPackages(tempRoot, signing), controlBinary)
     await writeFile(configPath, controlConfig({
+      dataDir: path.join(tempRoot, 'data'),
       databasePath,
       frontendPath,
       publicKey: signing.publicKey,

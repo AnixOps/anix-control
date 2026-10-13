@@ -37,11 +37,12 @@ Boundary:
 
 Before you try to start the panel, keep these rules straight:
 
-- the backend always loads `config/config.yaml` through `-config` (template: [`config/config.yaml.example`](../config/config.yaml.example))
+- the configuration is nine operator keys over built-in values; an ordinary file is `domain: panel.example.com` (template: [`config/config.yaml.example`](../config/config.yaml.example)), read through `-config`, `ANIX_CONTROL_CONFIG` or `config/config.yaml`, strictly: deprecated 4.x keys warn, unknown keys stop the start ([`reference/configuration.md`](reference/configuration.md))
+- the root key is `data_dir/root.key`, created or adopted at the first start; it seals the stored keys and derives the JWT secret, and the start refuses a key that cannot open the stored CA
 - local `go run` does not auto-load `.env` (template: [`.env.example`](../.env.example))
-- `config/config.yaml.forward_runtime` is the canonical runtime entry
+- `forward_runtime` (deprecated, read until M5) is the canonical runtime entry
 - `InitForwardRuntimeSystemConfig` normalizes the YAML contents and writes them into `v2_system_config`
-- app settings (`jwt.secret`, `app.api_token`, `admin.*`, database) come from the config file or from `ANIX_CONTROL_*` environment variables; containers use only the variables and the built-in defaults ([`reference/environment-variables.md`](reference/environment-variables.md))
+- the operator keys and the deprecated keys still read (`admin.*`, database) come from the config file or from `ANIX_CONTROL_*` environment variables; containers use only the variables and the built-in values ([`reference/environment-variables.md`](reference/environment-variables.md)); no secret is configuration
 
 The systemd installer [`scripts/install.sh`](../scripts/install.sh) (also reached through [`install.sh`](../install.sh) and [`panel_install.sh`](../panel_install.sh)) generates `config/config.yaml`. Container deployments need no config file.
 
@@ -61,8 +62,8 @@ Current verified deployment truth:
 - the currently proven dual-runtime path is `binary + SQLite + systemd`
 - the verified single-UI runtime split is:
   - AnixOps Control web, API and install paths on one handler: `443` and `80`
-    with `domain` (`tls.mode` acme or files), or plain `8080` (and `3000`) in
-    `tls.mode` external behind a CDN or proxy
+    with `domain` (`tls.mode` acme or files), or plain `listen`
+    (`127.0.0.1:8080`) in `tls.mode` external behind a CDN or proxy
   - node gRPC on `50051` (`grpc.port`)
   - NodeX control-plane on `18081`
   - relay gost API on `18080`
