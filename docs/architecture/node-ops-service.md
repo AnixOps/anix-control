@@ -548,8 +548,9 @@ The kernel chooses the channel. The package never names one, except that
 `KernelOperationBridge`. Two things change in NO-6:
 
 - the dispatchable kinds grow beyond `plugin.*`;
-- the dispatcher runs whenever KernelNodeOps is enabled, not only with
-  `plugins.dispatch_enabled`.
+- the dispatcher runs whenever KernelNodeOps is enabled, not only once Agent
+  plugin dispatch is on (off until M4, `service.AgentPluginDispatchEnabled`;
+  the `plugins.dispatch_enabled` switch is gone).
 
 The bridge's `recoverOnce` assumes one replica, which Control is today.
 

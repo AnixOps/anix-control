@@ -67,17 +67,13 @@ plugins:
   # (docs/architecture/plugin-kernel-contract.md, "Built-in Packages").
   official_public_key: "jW26nr2tbthASoeq6RmIpx8Ah+uhPNIv9V1ewRVb1VE="
   # No identity_bootstrap_package_dir: a release binary ignores it (only a
-  # development build without built-in packages reads it).
-  control_execution_enabled: true
+  # development build without built-in packages reads it). The package hosts
+  # always run; Agent plugin dispatch and topology execution are off until M4.
   control_poll_interval: "5s"
   # Use paths writable by the service user. The V4 installer creates these
   # under its selected installation root with mode 0700.
   control_host_runtime_dir: "/opt/anixops/control/runtime/plugin-hosts"
   control_host_artifact_dir: "/opt/anixops/control/data/plugin-artifacts"
-  dispatch_enabled: true
-  dispatch_poll_interval: "5s"
-  topology_execution_enabled: false
-  topology_poll_interval: "5s"
 
 grpc:
   enabled: true
@@ -227,19 +223,23 @@ version changed.
 on success). Use it as a one-shot Compose service or Kubernetes Job before the
 server starts; the server repeats it idempotently.
 
-With `plugins.control_execution_enabled` (the default), startup starts the
-durable Control lifecycle worker and the package hosts. Agent dispatch
-(`plugins.dispatch_enabled`) and topology execution stay off unless enabled
-explicitly; the release builds no Agent plugin for them.
+Startup always starts the durable Control lifecycle worker and the package
+hosts. Agent plugin dispatch and topology execution stay off until M4: no
+setting turns them on, and the release builds no Agent plugin for them. A
+configuration that still sets one of the removed keys
+(`plugins.control_execution_enabled`, `dispatch_enabled`,
+`dispatch_poll_interval`, `topology_execution_enabled`,
+`topology_poll_interval`, `package_routes.default_mode`) starts; each key is
+logged once as ignored ([`../UPGRADE.md`](../UPGRADE.md#plugin-center-reduced-to-package-status)).
 
 That is why local startup and Docker startup now share the same primary config structure.
 
-Invalid `plugins.*_poll_interval` values, or dispatch/topology flags without
-their prerequisites, stop startup before any listener opens. Once the gRPC
-listener is up, a later failure (for example port 443 or the `listen` port
-already in use) runs the normal shutdown below and exits with status 1. A
-certificate that cannot be obtained never stops the start: Control serves
-the self-signed fallback and says why (`anix-control tls status`).
+An invalid `plugins.control_poll_interval` stops startup before any listener
+opens. Once the gRPC listener is up, a later failure (for example port 443 or
+the `listen` port already in use) runs the normal shutdown below and exits
+with status 1. A certificate that cannot be obtained never stops the start:
+Control serves the self-signed fallback and says why
+(`anix-control tls status`).
 
 On SIGINT or SIGTERM, Control shuts down in this order: `/readyz` and
 `/health` return 503 (see below), HTTP servers drain for up to 30s, background
@@ -288,12 +288,11 @@ After startup, verify:
 6. `/admin/forward/nodes` for NodeX relay/exit topology
 7. `GET /api/v2/admin/forward/runtime/status` works in NodeX mode
 8. `GET /api/v2/admin/forward/runtime/doctor` works when NodeX is reachable
-9. `/admin/control` loads the official package catalog and installation state
+9. `/admin/system/packages` (系统设置 → 内置包) lists the built-in packages, running
 10. an Agent using the same official public key reports an active control stream
 
 For a production-template rehearsal, verify the opposite before adding secrets:
-`control_execution_enabled`, `dispatch_enabled`, `topology_execution_enabled`,
-and `grpc.enabled` must all remain `false`. The production template contains no
+`grpc.enabled` must remain `false`. The production template contains no
 default node API token, gRPC fallback token, or NodeX shared token.
 
 ## 8. Related Docs

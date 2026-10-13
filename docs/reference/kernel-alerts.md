@@ -80,12 +80,9 @@ Only processes with a reliable timestamp in their own rows are checked:
   `identity`, the cutover time is the latest `cutover` event in
   `v4_kernel_identity_cutover`; the row's `updated_at` is also written by a
   rollback and an abort. Without a cutover event no alert is raised.
-- **Route modes are not checked.** `legacy`, `shadow` and `native` are
-  operating modes, not phases of one process: there is no final one, `shadow`
-  is a validation period with its own mismatch gate, and a route's current
-  mode lives in the signed package configuration, not in a table the monitor
-  can read. The revision history (`v4_kernel_route_mode_revision`) has the
-  change times, but cannot say what the current mode is.
+- **Route modes are not checked.** They are not phases of a process: the
+  rehearsed list in the binary decides each route's mode, and nothing stores
+  or switches it.
 
 ## Notifications
 

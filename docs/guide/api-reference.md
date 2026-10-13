@@ -511,7 +511,7 @@ GET /api/v3/plugins/machine-telemetry/nodes/12/services
 
 汇总应答 `{"data": {"nodes": [...]}}`，按请求顺序每个节点一项：`node_id`、`enabled`、`reported`、
 `supported`、`unsupported_reason`、`stale`、`observed_at`、`summary`（`total`、`failed`、`active`、
-`inactive`）。由插件宿主应答：没有开启 `plugins.control_execution_enabled`、没有安装机器遥测插件或
+`inactive`）。由插件宿主应答：机器遥测包的宿主没有运行或
 没有权限时返回错误，管理端「节点」列表的「服务状态」列只显示「—」。字段说明见
 [`../architecture/package-reports.md`](../architecture/package-reports.md)。
 

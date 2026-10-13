@@ -130,6 +130,15 @@ Plain SQL per dialect keeps each migration's checksum meaningful and replays
 the same DDL whatever the models later become. Until PostgreSQL is removed,
 every migration has both files; afterwards only the SQLite file remains.
 
+## The Migrations
+
+| Step | What it does |
+|---|---|
+| `0001_baseline` | The schema of release 4.2.1 (below) |
+| `0002_server_log_buckets` | `v2_server_log` holds hourly buckets: rows of one key are merged, then the unique bucket index is created |
+| `0003_acme_cache` | Creates `v5_acme_cache`, the store of the panel's own certificates (the ACME account key, the certificates with their keys, challenge answers in flight, the self-signed fallback; entries holding a key are sealed) |
+| `0004_drop_route_modes` | Drops `v4_kernel_route_mode_revision` and `v4_kernel_shadow_mismatch_sample`, and removes the stored route-mode map (the `routes` key) from every Control package configuration in a new revision, writing each removed map to `v2_operation_log` first (action `route_modes_removed`, user `system/migration`). Route modes come only from the rehearsed list since ([`../UPGRADE.md`](../UPGRADE.md#plugin-center-reduced-to-package-status)) |
+
 ## Adding A Migration
 
 1. Change the model in `internal/model` as the code needs it.
@@ -158,8 +167,9 @@ The legacy oracle (`legacy_oracle_test.go`) prepares a database in two ways:
   tables later migrations create (`laterModels()`).
 - `legacyPrepare` is the legacy start as it was at the baseline: the same
   model lists less what later migrations added to those models
-  (`postBaselineIndexes`), without the later tables. The adoption tests build
-  their databases with it.
+  (`postBaselineIndexes`), without the later tables, plus the tables later
+  migrations dropped with their models (`retiredKernelModels()`). The
+  adoption tests build their databases with it.
 
 `TestFreshSchemaEqualsTheLegacySchema` has two halves. The first compares the
 fresh schema with the one `legacyModelsPrepare` builds: a model changed or
@@ -173,6 +183,7 @@ changes:
 | Adds an index to a model the baseline has (`0002_server_log_buckets`) | List the index in `postBaselineIndexes`: `legacyPrepare` drops it after building from the models (a column a migration adds is dropped the same way, after its index) |
 | Creates the table of a new model (`0003_acme_cache`) | List the model in `laterModels()`: `legacyModelsPrepare` creates it, `legacyPrepare` does not |
 | Drops a table the oracle still creates (the flux tables in the forwarding cleanup) | Remove it from the oracle's lists |
+| Drops a table together with its model (`0004_drop_route_modes`) | Keep a frozen copy of the model, as the baseline had it, in `retiredKernelModels()`: `legacyPrepare` creates it, `legacyModelsPrepare` does not (today's models no longer have it) |
 
 ## Tests And PostgreSQL
 

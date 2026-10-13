@@ -61,6 +61,15 @@ refuses to start and short secrets keep working; replace them with
 `openssl rand -hex 32` at a restart you choose (changing `jwt.secret` signs
 everyone out).
 
+**Upgrading past 4.2.x: route modes, import and the plugin switches are
+gone.** The first start deletes the stored route modes (audited), the plugin
+center becomes 系统设置 → 内置包, its import and lifecycle routes and
+`anix-control routes` answer 404 or exit, and `plugins.control_execution_enabled`,
+`dispatch_enabled`, `topology_execution_enabled` (with their poll intervals)
+and `package_routes.default_mode` are ignored with a warning. Read
+["Plugin Center Reduced To Package Status"](#plugin-center-reduced-to-package-status)
+before you upgrade.
+
 **Upgrading to 4.1.0: 15 packages now default to native routes.** After the
 upgrade, 151 rehearsed v2 routes are answered by their packages' native
 handlers unless a mode is stored for them. `package_routes.default_mode:
@@ -269,11 +278,78 @@ binary ([`architecture/plugin-kernel-contract.md`](architecture/plugin-kernel-co
   the checksums with the official key; the installer verifies it (OpenSSL 3).
   `plugins.identity_bootstrap_package_dir` is ignored (leave it as it is) and
   the image no longer sets it.
-- **Package execution stays on.** `plugins.control_execution_enabled` must be
-  `true` (the default and what the installer writes): without it every
-  `/api/v2` route answers 502. Agent dispatch and topology execution
-  (`plugins.dispatch_enabled`, `plugins.topology_execution_enabled`) stay
-  off: the release builds no Agent plugin.
+- **Package execution is always on.** The built-in packages' hosts start
+  with Control; Agent plugin dispatch and topology execution stay off until
+  M4 (the release builds no Agent plugin). None of the three has a setting
+  any more: see the next section.
+
+## Plugin Center Reduced To Package Status
+
+The release after 4.2.x also removes what the built-in packages made
+obsolete (single-binary design, section 4.3;
+[`architecture/plugin-kernel-contract.md`](architecture/plugin-kernel-contract.md#current-boundary)).
+
+**The console.** 插件中心 (`/admin/plugins`) and its route-mode page are gone;
+both URLs open 系统设置 → 内置包 (`/admin/system/packages`), which lists each
+built-in package with its version, state and last error, restarts a host
+after a confirmation, and edits the settings of a package that declares
+them. The sidebar's 扩展 group shows only the packages' own WebUI menus.
+
+**The API and the command line.** These answer `404` now:
+`POST /api/v3/plugin-releases`, `POST /api/v3/plugin-releases/:id/artifact`,
+`PUT /api/v3/plugin-installations` and every `/api/v4/kernel/route-modes*`
+route. `POST /api/v3/plugin-installations/:id/actions` accepts only
+`"action":"restart"` (anything else is `400 unsupported_plugin_action`).
+`anix-control routes` exits with status 2 and says why. A script that
+imported or installed a package has nothing to do: Control installs,
+upgrades and enables its built-in set at every start. The Control Center's
+plugin page still offers install, upgrade, enable and disable; against this
+Control those answer `404` (restart and the configuration work).
+
+**Stored route modes are deleted.** A route's mode now comes only from the
+rehearsed list (`config/package-route-defaults.json`): a listed route runs
+natively once the installed package is at least the listed release, identity
+group A follows the identity authority as before, and every other route runs
+its legacy handler. The first start runs the `0004_drop_route_modes`
+migration ([`reference/database-migrations.md`](reference/database-migrations.md)):
+
+- it drops `v4_kernel_route_mode_revision` (the switch history; every switch
+  is also in the audit log) and `v4_kernel_shadow_mismatch_sample`;
+- it removes the `routes` key from every Control package's configuration in a
+  new configuration revision, and writes each removed map to the audit log
+  first (`v2_operation_log`, action `route_modes_removed`, user
+  `system/migration`, the map in `content`).
+
+What that changes for a route an operator switched: a route pinned to
+`legacy` (`anix-control routes set --mode legacy` or `routes rollback`) runs
+natively again if the rehearsed list names it; a route switched to `shadow`
+or `native` that the list does not name runs its legacy handler. To see what
+was stored before the upgrade, run `anix-control routes list` with the old
+binary (`SOURCE stored`); after it,
+`SELECT created_at, target_id, content FROM v2_operation_log WHERE action = 'route_modes_removed';`.
+The migration cannot be undone: going back means restoring the backup taken
+before the upgrade, with the old binary.
+
+**Removed configuration keys.** `plugins.control_execution_enabled`,
+`plugins.dispatch_enabled`, `plugins.dispatch_poll_interval`,
+`plugins.topology_execution_enabled`, `plugins.topology_poll_interval` and
+`package_routes.default_mode` (and their `ANIX_CONTROL_*` variables) are no
+longer read. A file that still sets them loads; each one is logged once at
+start:
+
+```text
+Ignoring the removed configuration key plugins.dispatch_enabled (set in the configuration file): Agent plugin dispatch is off until the Agent release manifest brings the Agent plugins (M4)
+```
+
+Delete them when convenient. `scripts/install.sh update` drops the five
+`plugins.*` lines from `config.yaml` and leaves every other key as it was,
+`package_routes:` included. Agent plugin dispatch and topology execution are
+off until M4 and nothing turns them on: node assignments and Agent
+configuration changes record the desired state without an Agent operation,
+and deployment apply and rollback answer `409 topology_execution_disabled`.
+
+**Removed tooling.** The staging rehearsal (`scripts/staging`, its guide and
+the CI job) switched route modes and imported packages and is gone.
 
 ## Artifact Verification
 
@@ -370,6 +446,10 @@ package signed by another key. Before importing, compare the release's
 differ, stop before enabling any plugin flag.
 
 ## Plugin-Only Bootstrap And Execution
+
+> 4.x only. The `plugins.control_execution_enabled`, `dispatch_enabled` and
+> `topology_execution_enabled` switches below are gone since the built-in
+> packages ([Plugin Center Reduced To Package Status](#plugin-center-reduced-to-package-status)).
 
 `v4.0.0` is the formal plugin-only Control release. A new database must import
 the signed `identity-platform` package before it can serve authenticated
@@ -716,6 +796,7 @@ migration tables: started on a migrated database they run their old schema
 steps as before, and the next start of this release accepts the result.
 Check the recorded state with
 `SELECT * FROM v5_schema_migration; SELECT * FROM v5_control_meta;`.
+The migration `0004_drop_route_modes` deletes the stored route modes ([Plugin Center Reduced To Package Status](#plugin-center-reduced-to-package-status)).
 
 ### Topologies Can Be Deleted
 
@@ -2036,6 +2117,10 @@ IPv4-only `ip v2b_forward` table, and count traffic in both directions.
   ([layout and limits](guide/forward-tunnel-runtime-ops.md#nftables_ansible-rule-layout)).
 
 ## Upgrading To 4.1.0: Packages Now Default To Native Routes
+
+> The kill switch below (`package_routes.default_mode: legacy`) and stored
+> route modes are gone since the release after 4.2.x
+> ([Plugin Center Reduced To Package Status](#plugin-center-reduced-to-package-status)).
 
 **Behaviour changes on upgrade.** From 4.1.0 the 151 v2 routes of the 15
 packages that passed the staging rehearsal run their packages' native
@@ -3686,6 +3771,10 @@ And:
   container log. Change it after the first sign-in.
 
 ## Switching Route Modes
+
+> 4.1 and 4.2 only. Route modes are no longer stored or switched since the
+> release after 4.2.x: see
+> [Plugin Center Reduced To Package Status](#plugin-center-reduced-to-package-status).
 
 Each v2 route of a Control package runs in one of three modes: `legacy` (the
 kernel's legacy handler answers; the default for a route without a stored

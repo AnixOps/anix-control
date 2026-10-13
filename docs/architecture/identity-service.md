@@ -380,11 +380,10 @@ expired (Control).
         2. group A is paused: the v2 gateway answers 503 with `Retry-After`,
            and requests already dispatched finish;
         3. a final delta import;
-        4. in one transaction, the authority becomes `identity` and group A
-           `native`;
-        5. once the identity host reports the new configuration revision and
-           serves group A natively, plus one poll interval for other
-           instances, group A resumes.
+        4. the authority becomes `identity`, which makes group A `native`
+           (the host reads it at its next configuration poll);
+        5. once the identity host serves group A natively, plus one poll
+           interval for other instances, group A resumes.
 
         If the host does not confirm within 30 seconds, both switch back
         (`cutover_aborted`).
@@ -392,16 +391,14 @@ expired (Control).
         `v2_user_mfa` row changed. Disabling MFA in legacy touches the
         user. Every import ends by deleting the identity accounts of deleted
         subscribers, sent as `ImportAccountsRequest.deleted_user_id` (new).
-      - **Consistency.** Configuration writes are refused unless group A's 16
-        routes are native together, and exactly while identity is
-        authoritative. A group A route the stored modes do not name is
-        native while identity is authoritative and legacy before
+      - **Consistency.** Group A's 16 routes are native together, exactly
+        while identity is authoritative: nothing stores their mode since
+        5.0, the kernel derives it from the authority
         (`service.ResolvePackageRouteModes`, used by the host's
-        configuration and by this check), so a route added to group A after
-        a cutover needs no configuration write. Only the cutover and rollback change both. The account
-        reads (profile, dashboard, admin user detail) may leave legacy mode
-        only while identity is authoritative; the rollback returns them to
-        legacy too.
+        configuration), so the cutover and rollback move only the
+        authority, and a route added to group A later needs nothing. The
+        account reads (profile, dashboard, admin user detail) are not in
+        the rehearsed list and stay legacy.
       - **Rollback.** `POST /api/v4/kernel/identity/rollback` pauses group A,
         switches it to legacy and the authority to `importing`.
       - **Finalize.** `POST /api/v4/kernel/identity/finalize`

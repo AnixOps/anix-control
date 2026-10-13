@@ -210,9 +210,10 @@ runs, "N 个失败" when a unit failed, "2/3 运行中" when no unit failed but 
 all run, and 无服务, 等待上报, 不支持 or 数据过期 for the other states; the
 tooltip has the counts and the report time. The cell is "—" for a node that
 does not collect its services, and for every node when the call fails: the
-summary is served by the package host, so it needs
-`plugins.control_execution_enabled`, an enabled machine-telemetry Control
-installation of a release with this route, and `machine-telemetry.api`.
+summary is served by the package host, so it needs a running
+machine-telemetry Control host of a release with this route (the built-in
+package's host always runs unless it failed at start) and
+`machine-telemetry.api`.
 Without them the list works as before.
 
 ### Node page

@@ -55,7 +55,9 @@ Runtime configuration now comes exclusively from `config/config.yaml.forward_run
   - persistence
   - diagnostics and job views
   - the official package hosts, built into the binary and run as its own
-    child processes (`anix-control package-host <id>`)
+    child processes (`anix-control package-host <id>`), always started with
+    Control (no switch); Agent plugin dispatch and topology execution are
+    off until M4
 - `NodeX`
   - internal-only execution control plane
   - stateful `gost` runtime
