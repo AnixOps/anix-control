@@ -175,39 +175,6 @@ func TestKernelAssignmentQueuesAgentInstallUpdateEnableAndDisable(t *testing.T) 
 	require.Equal(t, int64(2), assignment.LifecycleGeneration)
 }
 
-func TestKernelAgentInstallationUpgradeSynchronizesAssignmentVersion(t *testing.T) {
-	fixture := newKernelAgentAssignmentFixture(t, "handler-agent-upgrade")
-	registerKernelAgentRelease(t, fixture.db, fixture.privateKey, fixture.publicKey, fixture.pluginID, "2.0.0")
-
-	body := `{"plugin_id":"` + fixture.pluginID + `","target":"agent","desired_version":"2.0.0","enabled":true}`
-	recorder := performKernelHandlerRequest(
-		t, http.MethodPut, "/plugin-installations", body, "/plugin-installations",
-		(&KernelHandler{db: fixture.db}).UpsertPluginInstallation,
-	)
-	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
-	require.Len(t, strings.Split(recorder.Header().Get("X-AnixOps-Operation-Chain"), ","), 3)
-
-	var assignment model.NodeServiceAssignment
-	require.NoError(t, fixture.db.First(&assignment, fixture.assignment.ID).Error)
-	require.Equal(t, "2.0.0", assignment.DesiredVersion)
-	require.Equal(t, int64(2), assignment.DesiredConfigRevision)
-
-	var lifecycle model.NodePluginLifecycle
-	require.NoError(t, fixture.db.First(&lifecycle, "node_id = ? AND plugin_id = ?", fixture.node.ID, fixture.pluginID).Error)
-	require.Equal(t, "2.0.0", lifecycle.DesiredVersion)
-	require.Equal(t, "1.0.0", lifecycle.ActiveVersion)
-	require.True(t, lifecycle.ActiveEnabled)
-
-	var operations []model.KernelOperation
-	require.NoError(t, fixture.db.Order("revision").Find(&operations).Error)
-	require.Len(t, operations, 6)
-	require.Equal(t, []string{"succeeded", "succeeded", "succeeded"}, []string{operations[0].State, operations[1].State, operations[2].State})
-	for _, operation := range operations[3:] {
-		require.Equal(t, "2.0.0", operation.TargetVersion)
-		require.Equal(t, "pending", operation.State)
-	}
-}
-
 func TestKernelAgentConfigurationUpdateAdvancesAssignmentRevision(t *testing.T) {
 	fixture := newKernelAgentAssignmentFixture(t, "handler-agent-config-sync")
 	path := "/plugin-installations/" + strconv.FormatUint(uint64(fixture.installation.ID), 10) + "/config"
@@ -231,33 +198,6 @@ func TestKernelAgentConfigurationUpdateAdvancesAssignmentRevision(t *testing.T) 
 	require.Len(t, operations, 6)
 	require.Equal(t, "plugin.update", operations[4].Kind)
 	require.JSONEq(t, `{"interval":45}`, operations[4].ConfigJSON)
-}
-
-func TestKernelGlobalAgentDisableQueuesObservedVersionAndDeniesPackage(t *testing.T) {
-	fixture := newKernelAgentAssignmentFixture(t, "handler-agent-global-disable")
-	body := `{"plugin_id":"` + fixture.pluginID + `","target":"agent","desired_version":"1.0.0","enabled":false}`
-	recorder := performKernelHandlerRequest(
-		t, http.MethodPut, "/plugin-installations", body, "/plugin-installations",
-		(&KernelHandler{db: fixture.db}).UpsertPluginInstallation,
-	)
-	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
-	require.Len(t, strings.Split(recorder.Header().Get("X-AnixOps-Operation-Chain"), ","), 1)
-
-	var operations []model.KernelOperation
-	require.NoError(t, fixture.db.Order("revision").Find(&operations).Error)
-	require.Len(t, operations, 4)
-	require.Equal(t, "plugin.disable", operations[3].Kind)
-	require.Equal(t, "1.0.0", operations[3].TargetVersion)
-	_, err := service.LoadAuthorizedAgentPluginMetadata(fixture.db, fixture.node.ID, fixture.pluginID, "1.0.0")
-	require.ErrorIs(t, err, service.ErrAgentPluginAssignmentDenied)
-
-	var assignment model.NodeServiceAssignment
-	require.NoError(t, fixture.db.First(&assignment, fixture.assignment.ID).Error)
-	require.True(t, assignment.Enabled, "global disable must preserve the node role intent")
-	var lifecycle model.NodePluginLifecycle
-	require.NoError(t, fixture.db.First(&lifecycle, "node_id = ? AND plugin_id = ?", fixture.node.ID, fixture.pluginID).Error)
-	require.False(t, lifecycle.DesiredEnabled)
-	require.True(t, lifecycle.ActiveEnabled)
 }
 
 func TestKernelAssignmentClearAndDeleteUseObservedVersion(t *testing.T) {

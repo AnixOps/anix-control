@@ -666,16 +666,17 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 	v3.Use(middleware.AuditLog())
 	{
 		kernel := handler.NewKernelHandler()
+		// The built-in packages: Control installs, upgrades and enables them
+		// at every start, so there is no import, install, update, rollback,
+		// enable or disable route; an installation's only action is restart
+		// (single-binary design, section 4.3).
 		v3.GET("/extensions", kernel.ListExtensions)
 		v3.GET("/extensions/:plugin_id/:version/webui/:sha256/:filename", kernel.ServePluginWebUIAsset)
 		v3.GET("/plugins", kernel.ListPlugins)
 		v3.Any("/plugins/:plugin_id/*route", kernel.PluginRouteGateway)
 		v3.GET("/plugin-releases", kernel.ListPluginReleases)
-		v3.POST("/plugin-releases", kernel.RegisterPluginRelease)
 		v3.GET("/plugin-releases/:id/artifact", kernel.GetPluginReleaseArtifact)
-		v3.POST("/plugin-releases/:id/artifact", kernel.UploadPluginReleaseArtifact)
 		v3.GET("/plugin-installations", kernel.ListPluginInstallations)
-		v3.PUT("/plugin-installations", kernel.UpsertPluginInstallation)
 		v3.POST("/plugin-installations/:id/actions", kernel.PluginInstallationAction)
 		v3.GET("/plugin-installations/:id/config", kernel.GetPluginInstallationConfiguration)
 		v3.PUT("/plugin-installations/:id/config", kernel.UpdatePluginInstallationConfiguration)

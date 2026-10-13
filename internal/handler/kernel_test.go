@@ -10,7 +10,6 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -281,51 +280,6 @@ func TestKernelUpdatePluginInstallationConfigurationUsesSignedSchema(t *testing.
 	require.Contains(t, recorder.Body.String(), "invalid_plugin_configuration")
 }
 
-func TestKernelPluginArtifactUploadAndInstallationGate(t *testing.T) {
-	db := newKernelHandlerTestDB(t)
-	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
-	require.NoError(t, err)
-	previousConfig := config.Get()
-	config.Set(&config.Config{Plugins: config.PluginConfig{OfficialPublicKey: base64.StdEncoding.EncodeToString(publicKey)}})
-	t.Cleanup(func() { config.Set(previousConfig) })
-
-	artifact := []byte("handler-artifact")
-	digest := sha256.Sum256(artifact)
-	manifest := service.PluginManifest{
-		ID: "handler-artifact", Name: "Handler Artifact", Version: "1.0.0", APIVersion: "v1", Publisher: "AnixOps",
-		Targets: []string{"control"}, ArtifactSHA256: hex.EncodeToString(digest[:]),
-	}
-	canonical, err := service.CanonicalPluginManifest(manifest)
-	require.NoError(t, err)
-	release, err := service.RegisterPluginRelease(db, string(canonical), base64.StdEncoding.EncodeToString(ed25519.Sign(privateKey, canonical)), publicKey)
-	require.NoError(t, err)
-
-	installHandler := (&KernelHandler{db: db}).UpsertPluginInstallation
-	installBody := `{"plugin_id":"handler-artifact","target":"control","desired_version":"1.0.0","enabled":true}`
-	recorder := performKernelHandlerRequest(t, http.MethodPut, "/plugin-installations", installBody, "/plugin-installations", installHandler)
-	require.Equal(t, http.StatusConflict, recorder.Code, recorder.Body.String())
-	require.Contains(t, recorder.Body.String(), "plugin_artifact_missing")
-
-	artifactHandler := (&KernelHandler{db: db}).UploadPluginReleaseArtifact
-	artifactPath := "/plugin-releases/" + strconv.FormatUint(uint64(release.ID), 10) + "/artifact"
-	recorder = performKernelHandlerRequest(t, http.MethodPost, artifactPath, `{"artifact_base64":"dGFtcGVyZWQ="}`, "/plugin-releases/:id/artifact", artifactHandler)
-	require.Equal(t, http.StatusUnprocessableEntity, recorder.Code, recorder.Body.String())
-	require.Contains(t, recorder.Body.String(), "plugin_artifact_rejected")
-
-	goodBody := `{"artifact_base64":"` + base64.StdEncoding.EncodeToString(artifact) + `"}`
-	recorder = performKernelHandlerRequest(t, http.MethodPost, artifactPath, goodBody, "/plugin-releases/:id/artifact", artifactHandler)
-	require.Equal(t, http.StatusCreated, recorder.Code, recorder.Body.String())
-	require.Contains(t, recorder.Body.String(), service.PluginArtifactStorageKey(manifest.ID, manifest.Version, manifest.ArtifactSHA256))
-
-	recorder = performKernelHandlerRequest(t, http.MethodPut, "/plugin-installations", installBody, "/plugin-installations", installHandler)
-	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
-	require.Contains(t, recorder.Body.String(), `"state":"pending"`)
-}
-
-func TestControlPluginArtifactUploadSizeBudgetCoversMaximumArtifact(t *testing.T) {
-	require.GreaterOrEqual(t, maxControlPluginArtifactBase64Bytes, base64.StdEncoding.EncodedLen(service.MaxPluginArtifactBytes))
-}
-
 func TestKernelServesVerifiedWebUIAsset(t *testing.T) {
 	db := newKernelHandlerTestDB(t)
 	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
@@ -504,26 +458,12 @@ func TestKernelMachineTelemetryPluginRouteFailsClosedWithoutHost(t *testing.T) {
 		RuntimeHealthy: true, CPUUsage: 23.5, MemoryUsage: 50, DiskUsage: 70,
 	}).Error)
 
-	installRecorder := performKernelHandlerRequest(
-		t, http.MethodPut, "/plugin-installations",
-		`{"plugin_id":"machine-telemetry","target":"control","desired_version":"1.1.0","enabled":true}`,
-		"/plugin-installations", (&KernelHandler{db: db}).UpsertPluginInstallation,
-	)
-	require.Equal(t, http.StatusOK, installRecorder.Code, installRecorder.Body.String())
-	require.Contains(t, installRecorder.Body.String(), `"state":"pending"`)
-	require.NotEmpty(t, installRecorder.Header().Get("X-AnixOps-Operation-ID"))
-	require.Len(t, strings.Split(installRecorder.Header().Get("X-AnixOps-Operation-Chain"), ","), 2)
-	worker, err := plugincontrol.NewOperationWorker(db, acceptingLifecycleDispatcher{
-		pluginID: plugincontrol.MachineTelemetryPluginID, version: plugincontrol.MachineTelemetryVersion,
-	})
-	require.NoError(t, err)
-	processed, err := worker.RunOnce(context.Background())
-	require.NoError(t, err)
-	require.Equal(t, 2, processed)
-	var installation model.PluginInstallation
-	require.NoError(t, db.First(&installation, "plugin_id = ? AND target = ?", manifest.ID, "control").Error)
-	require.Equal(t, "healthy", installation.State)
-	require.Equal(t, manifest.Version, installation.ObservedVersion)
+	// Installed and healthy, the way the start-up bootstrap leaves a
+	// built-in package, but this Control runs no package host.
+	require.NoError(t, db.Create(&model.PluginInstallation{
+		PluginID: manifest.ID, Target: "control", DesiredVersion: manifest.Version, ObservedVersion: manifest.Version,
+		State: "healthy", Enabled: true, LifecycleGeneration: 1,
+	}).Error)
 
 	handler := (&KernelHandler{db: db}).PluginRouteGateway
 	setupAdmin := func(c *gin.Context) {
@@ -646,20 +586,6 @@ func TestPluginRouteGatewayDispatchesResolvedGenerationToHost(t *testing.T) {
 	require.WithinDuration(t, hosts.input.Deadline, hosts.contextDeadline, 50*time.Millisecond)
 }
 
-// acceptingLifecycleDispatcher acknowledges every durable lifecycle operation
-// for exactly one plugin version and fails closed for anything else.
-type acceptingLifecycleDispatcher struct {
-	pluginID string
-	version  string
-}
-
-func (d acceptingLifecycleDispatcher) ExecuteLifecycle(_ context.Context, pluginID, version string, _ plugincontrol.LifecycleRequest) (json.RawMessage, error) {
-	if pluginID != d.pluginID || version != d.version {
-		return nil, errors.New("unexpected plugin lifecycle target")
-	}
-	return json.RawMessage(`{}`), nil
-}
-
 type capturingPluginHostManager struct {
 	input              pluginhost.DispatchInput
 	output             pluginhost.DispatchOutput
@@ -694,7 +620,9 @@ func (*capturingPluginHostManager) Rollback(context.Context, string, string, uin
 	return pluginhost.ErrHostUnavailable
 }
 
-func TestKernelControlPluginRollbackActionQueuesDurableOperation(t *testing.T) {
+// Restart is the only package action: install, update, rollback, enable
+// and disable are what every start does to the built-in packages.
+func TestKernelControlPluginActionsAreRestartOnly(t *testing.T) {
 	db := newKernelHandlerTestDB(t)
 	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)
@@ -704,12 +632,12 @@ func TestKernelControlPluginRollbackActionQueuesDurableOperation(t *testing.T) {
 	}})
 	t.Cleanup(func() { config.Set(previousConfig) })
 
-	const pluginID = "rollback-control"
+	const pluginID = "restart-control"
 	for _, version := range []string{"1.0.0", "2.0.0"} {
-		artifact := []byte("rollback-control-" + version)
+		artifact := []byte("restart-control-" + version)
 		digest := sha256.Sum256(artifact)
 		manifest := service.PluginManifest{
-			ID: pluginID, Name: "Rollback Control", Version: version, APIVersion: "v1", Publisher: "AnixOps",
+			ID: pluginID, Name: "Restart Control", Version: version, APIVersion: "v1", Publisher: "AnixOps",
 			Targets: []string{"control"}, ArtifactSHA256: hex.EncodeToString(digest[:]),
 		}
 		canonical, canonicalErr := service.CanonicalPluginManifest(manifest)
@@ -721,54 +649,51 @@ func TestKernelControlPluginRollbackActionQueuesDurableOperation(t *testing.T) {
 	}
 	installation := model.PluginInstallation{
 		PluginID: pluginID, Target: "control", DesiredVersion: "2.0.0", ObservedVersion: "2.0.0",
-		PreviousVersion: "1.0.0", State: "healthy", Enabled: true, LastError: "control-error-must-not-leak",
+		PreviousVersion: "1.0.0", State: "healthy", Enabled: true, LifecycleGeneration: 3, LastError: "control-error-must-not-leak",
 	}
 	require.NoError(t, db.Create(&installation).Error)
 	path := "/plugin-installations/" + strconv.FormatUint(uint64(installation.ID), 10) + "/actions"
-	body := `{"action":"rollback","idempotency_key":"operator-rollback-1"}`
 	handler := (&KernelHandler{db: db}).PluginInstallationAction
+
+	for _, action := range []string{"rollback", "update", "enable", "disable", "install", "health", "inspect"} {
+		body := `{"action":"` + action + `","target_version":"1.0.0","idempotency_key":"operator-` + action + `"}`
+		recorder := performKernelHandlerRequest(t, http.MethodPost, path, body, "/plugin-installations/:id/actions", handler)
+		require.Equal(t, http.StatusBadRequest, recorder.Code, action+": "+recorder.Body.String())
+		requireKernelErrorCode(t, recorder.Body.Bytes(), "unsupported_plugin_action")
+	}
+	var count int64
+	require.NoError(t, db.Model(&model.KernelOperation{}).Count(&count).Error)
+	require.Zero(t, count, "a refused action queues nothing")
+	var unchanged model.PluginInstallation
+	require.NoError(t, db.First(&unchanged, installation.ID).Error)
+	require.Equal(t, installation.DesiredVersion, unchanged.DesiredVersion)
+	require.Equal(t, installation.LifecycleGeneration, unchanged.LifecycleGeneration)
+	require.True(t, unchanged.Enabled)
+
+	body := `{"action":"restart","idempotency_key":"operator-restart-1"}`
 	recorder := performKernelHandlerRequest(t, http.MethodPost, path, body, "/plugin-installations/:id/actions", handler)
 	require.Equal(t, http.StatusAccepted, recorder.Code, recorder.Body.String())
 	operationID := recorder.Header().Get("X-AnixOps-Operation-ID")
 	require.NotEmpty(t, operationID)
 	require.Equal(t, operationID, recorder.Header().Get("X-AnixOps-Operation-Chain"))
-	require.Contains(t, recorder.Body.String(), `"kind":"plugin.rollback"`)
-	require.Contains(t, recorder.Body.String(), `"target_version":"1.0.0"`)
-	require.Contains(t, recorder.Body.String(), `"health":"pending"`)
+	require.Contains(t, recorder.Body.String(), `"kind":"plugin.enable"`)
+	require.Contains(t, recorder.Body.String(), `"target_version":"2.0.0"`)
 	require.NotContains(t, recorder.Body.String(), "control-error-must-not-leak")
-	require.Contains(t, recorder.Body.String(), `"last_error":"plugin installation reported an error"`)
+	require.NoError(t, db.First(&unchanged, installation.ID).Error)
+	require.Equal(t, installation.LifecycleGeneration, unchanged.LifecycleGeneration, "a restart keeps the generation")
 
-	require.NoError(t, db.First(&installation, installation.ID).Error)
-	require.Equal(t, "1.0.0", installation.DesiredVersion)
-	require.Equal(t, "2.0.0", installation.ObservedVersion)
-	require.Equal(t, "pending", installation.State)
-	var operation model.KernelOperation
-	require.NoError(t, db.First(&operation, "id = ?", operationID).Error)
-	require.Equal(t, "pending", operation.State)
-
+	// The same client identity returns the same operation.
 	recorder = performKernelHandlerRequest(t, http.MethodPost, path, body, "/plugin-installations/:id/actions", handler)
 	require.Equal(t, http.StatusAccepted, recorder.Code, recorder.Body.String())
 	require.Equal(t, operationID, recorder.Header().Get("X-AnixOps-Operation-ID"))
-	require.Equal(t, operationID, recorder.Header().Get("X-AnixOps-Operation-Chain"))
-	var count int64
 	require.NoError(t, db.Model(&model.KernelOperation{}).Where("plugin_id = ?", pluginID).Count(&count).Error)
 	require.Equal(t, int64(1), count)
 
-	// Replaying the same client identity after the original rollback completed
-	// must return the original operation without interpreting the now-swapped
-	// previous_version as a new rollback request.
-	require.NoError(t, db.Model(&operation).Updates(map[string]any{"state": "succeeded"}).Error)
-	require.NoError(t, db.Model(&installation).Updates(map[string]any{
-		"desired_version": "1.0.0", "observed_version": "1.0.0", "previous_version": "2.0.0", "state": "healthy",
-	}).Error)
-	recorder = performKernelHandlerRequest(t, http.MethodPost, path, body, "/plugin-installations/:id/actions", handler)
-	require.Equal(t, http.StatusAccepted, recorder.Code, recorder.Body.String())
-	require.Equal(t, operationID, recorder.Header().Get("X-AnixOps-Operation-ID"))
-	require.Equal(t, operationID, recorder.Header().Get("X-AnixOps-Operation-Chain"))
-	require.NoError(t, db.First(&installation, installation.ID).Error)
-	require.Equal(t, "1.0.0", installation.DesiredVersion)
-	require.Equal(t, "2.0.0", installation.PreviousVersion)
-	require.Equal(t, "healthy", installation.State)
+	// A disabled installation is not restarted.
+	require.NoError(t, db.Model(&model.PluginInstallation{}).Where("id = ?", installation.ID).Update("enabled", false).Error)
+	recorder = performKernelHandlerRequest(t, http.MethodPost, path, `{"action":"restart","idempotency_key":"operator-restart-2"}`, "/plugin-installations/:id/actions", handler)
+	require.Equal(t, http.StatusConflict, recorder.Code, recorder.Body.String())
+	requireKernelErrorCode(t, recorder.Body.Bytes(), "plugin_action_rejected")
 }
 
 func TestKernelCreateTopologyRequiresExistingScope(t *testing.T) {
