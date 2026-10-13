@@ -9,6 +9,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -94,7 +95,7 @@ var tunePanelCertificates func(*panelcert.Options)
 // acmeHTTPClient trusts the extra roots of file for the ACME directory
 // (a test CA in CI) besides the system roots.
 func acmeHTTPClient(file string) (*http.Client, error) {
-	pem, err := os.ReadFile(filepath.Clean(file))
+	pem, err := os.ReadFile(filepath.Clean(file)) // #nosec G703 -- the path is the operator's own environment variable (a test CA in CI), never request data.
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", config.ACMECAFileEnv, err)
 	}
@@ -201,26 +202,46 @@ func httpServer(cfg *config.Config, handler http.Handler) *http.Server {
 }
 
 // httpsRedirect sends every plain request to https on the same host:
-// port 80 of tls.mode acme and files. Only GET and HEAD are redirected.
-func httpsRedirect(domain, httpsAddress string) http.Handler {
+// port 80 of tls.mode acme and files. Only GET and HEAD are redirected, and
+// only to a name of this panel (names: the panel's domain and gRPC name): a
+// request for any other Host is redirected to the panel's domain, so the
+// Host header cannot make this listener an open redirect.
+func httpsRedirect(domain string, names []string, httpsAddress string) http.Handler {
 	_, httpsPort, _ := net.SplitHostPort(httpsAddress)
+	own := make(map[string]struct{}, len(names)+1)
+	for _, name := range append([]string{domain}, names...) {
+		if name = strings.ToLower(strings.TrimSpace(name)); name != "" {
+			own[name] = struct{}{}
+		}
+	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			http.Error(w, "Use https://"+domain, http.StatusBadRequest)
 			return
 		}
-		host, ok := requestorigin.NormalizeHost(r.Host)
-		if !ok {
-			host = domain
-		}
-		if name, _, err := net.SplitHostPort(host); err == nil {
-			host = name
+		host := domain
+		if requested, ok := requestorigin.NormalizeHost(r.Host); ok {
+			name := requested
+			if h, _, err := net.SplitHostPort(requested); err == nil {
+				name = h
+			}
+			name = strings.ToLower(strings.Trim(name, "[]"))
+			if _, known := own[name]; known {
+				host = name
+			}
 		}
 		if httpsPort != "" && httpsPort != "443" && httpsPort != "0" {
 			host = net.JoinHostPort(strings.Trim(host, "[]"), httpsPort)
 		}
-		http.Redirect(w, r, "https://"+host+r.URL.RequestURI(), http.StatusMovedPermanently)
+		target := url.URL{Scheme: "https", Host: host, Path: r.URL.Path, RawQuery: r.URL.RawQuery}
+		http.Redirect(w, r, target.String(), http.StatusMovedPermanently)
 	})
+}
+
+// panelOwnNames are the names a plain-http request may be redirected to:
+// the panel's domain and the gRPC name.
+func panelOwnNames(panel config.PanelSettings) []string {
+	return []string{panel.Domain, panel.GRPCName}
 }
 
 // bindPanelServers binds every listener of the layout before anything
@@ -260,7 +281,7 @@ func bindPanelServers(cfg *config.Config, panel config.PanelSettings, certs *pan
 		if err = bind("https", panel.HTTPSAddress, handler, certs.WebTLSConfig(), false); err == nil {
 			// The redirect names the port https got (443 is left out).
 			httpsAddress := servers[len(servers)-1].listener.Addr().String()
-			err = bind("http (redirect to https, ACME HTTP-01)", panel.HTTPAddress, certs.HTTPHandler(httpsRedirect(panel.Domain, httpsAddress)), nil, false)
+			err = bind("http (redirect to https, ACME HTTP-01)", panel.HTTPAddress, certs.HTTPHandler(httpsRedirect(panel.Domain, panelOwnNames(panel), httpsAddress)), nil, false)
 		}
 	default:
 		for _, address := range panel.PlainAddresses {
@@ -269,7 +290,7 @@ func bindPanelServers(cfg *config.Config, panel config.PanelSettings, certs *pan
 			}
 		}
 		if err == nil && panel.ChallengeHTTPAddress != "" {
-			err = bind("ACME HTTP-01 listener", panel.ChallengeHTTPAddress, certs.HTTPHandler(httpsRedirect(panel.Domain, ":443")), nil, true)
+			err = bind("ACME HTTP-01 listener", panel.ChallengeHTTPAddress, certs.HTTPHandler(httpsRedirect(panel.Domain, panelOwnNames(panel), ":443")), nil, true)
 		}
 		if err == nil && panel.ChallengeTLSAddress != "" {
 			err = bind("ACME TLS-ALPN-01 listener", panel.ChallengeTLSAddress, http.NotFoundHandler(), certs.ChallengeOnlyTLSConfig(), true)

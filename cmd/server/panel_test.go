@@ -292,6 +292,13 @@ func TestACMEModeObtainsTheCertificateAndServesTheSingleListener(t *testing.T) {
 	status, _, header = get(t, client, "http://"+httpAddr+"/install.sh?x=1", map[string]string{"Host": panelTestDomain})
 	require.Equal(t, http.StatusMovedPermanently, status)
 	require.Equal(t, "https://"+net.JoinHostPort(panelTestDomain, httpsPort)+"/install.sh?x=1", header.Get("Location"))
+	// A Host the client chose is never a redirect target: it falls back to
+	// the panel's own name (no open redirect through the Host header).
+	for _, foreign := range []string{"evil.example.net", "evil.example.net:8443", "[::1]", "127.0.0.1"} {
+		status, _, header = get(t, client, "http://"+httpAddr+"/install.sh?x=1", map[string]string{"Host": foreign})
+		require.Equal(t, http.StatusMovedPermanently, status, foreign)
+		require.Equal(t, "https://"+net.JoinHostPort(panelTestDomain, httpsPort)+"/install.sh?x=1", header.Get("Location"), foreign)
+	}
 	request, err := http.NewRequest(http.MethodPost, "http://"+httpAddr+"/api/v2/login", strings.NewReader("{}"))
 	require.NoError(t, err)
 	response, err := client.Do(request)
