@@ -847,4 +847,19 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		v4.POST("/kernel/agents/upgrades/:id/resume", upgrades.Resume)
 		v4.POST("/kernel/agents/upgrades/:id/abort", upgrades.Abort)
 	}
+
+	// API v5: the panel's own state, with v4's admission model. The
+	// certificates Control serves (the console's banner reads them) and a
+	// retry of the failing ones.
+	v5 := r.Group("/api/v5")
+	v5.Use(adminLimiter.Middleware())
+	v5.Use(adminAPIToken)
+	v5.Use(middleware.JWTAuth())
+	v5.Use(middleware.AdminAuth())
+	v5.Use(middleware.AuditLog())
+	{
+		panelStatus := handler.NewPanelStatusHandler()
+		v5.GET("/panel/status", panelStatus.Status)
+		v5.POST("/panel/certificates/retry", panelStatus.RetryCertificates)
+	}
 }
