@@ -2091,6 +2091,54 @@ jobs:
         run: |
           go test -v -count=1 ./internal/tests/e2e/...
 
+      # The panel certificates against a real ACME server
+      # (internal/panelcert, TestPebbleIssuesOverBothChallenges): Pebble and
+      # its test DNS server, every name resolving to 127.0.0.1, pinned and
+      # checked by SHA-256. No random sleeps, nonce rejections or reused
+      # authorizations, so every order validates TLS-ALPN-01 or HTTP-01
+      # again. Without these variables the test skips in Backend Tests.
+      - name: Start Pebble (ACME test server)
+        env:
+          PEBBLE_VERSION: v2.10.1
+          PEBBLE_LINUX_AMD64_SHA256: 4f2fcb5bca8c85c9cf73ad140fccfc0d2be40bd81ab99879c79b7b8a0b4f70ed
+          PEBBLE_CHALLTESTSRV_LINUX_AMD64_SHA256: e93a5aa25ecdf3af2f9fbb2de32b0173e64a2eae81002a4ccfe35fa6f4f60b92
+        run: |
+          set -euo pipefail
+          dir="${RUNNER_TEMP}/pebble"
+          mkdir -p "${dir}"
+          curl -fsSL --retry 3 -o "${dir}/pebble.tar.gz" \
+            "https://github.com/letsencrypt/pebble/releases/download/${PEBBLE_VERSION}/pebble-linux-amd64.tar.gz"
+          curl -fsSL --retry 3 -o "${dir}/challtestsrv.tar.gz" \
+            "https://github.com/letsencrypt/pebble/releases/download/${PEBBLE_VERSION}/pebble-challtestsrv-linux-amd64.tar.gz"
+          echo "${PEBBLE_LINUX_AMD64_SHA256}  ${dir}/pebble.tar.gz" | sha256sum --check --strict
+          echo "${PEBBLE_CHALLTESTSRV_LINUX_AMD64_SHA256}  ${dir}/challtestsrv.tar.gz" | sha256sum --check --strict
+          tar -xzf "${dir}/pebble.tar.gz" -C "${dir}" --strip-components=3 pebble-linux-amd64/linux/amd64/pebble
+          tar -xzf "${dir}/challtestsrv.tar.gz" -C "${dir}" --strip-components=3 pebble-challtestsrv-linux-amd64/linux/amd64/pebble-challtestsrv
+          chmod 0755 "${dir}/pebble" "${dir}/pebble-challtestsrv"
+          openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -days 2 -subj /CN=127.0.0.1 \
+            -addext "subjectAltName=IP:127.0.0.1" -keyout "${dir}/pebble.key" -out "${dir}/pebble.crt"
+          printf '%s\n' '{"pebble": {"listenAddress": "127.0.0.1:14000", "managementListenAddress": "127.0.0.1:15000",' \
+            '"certificate": "pebble.crt", "privateKey": "pebble.key", "httpPort": 5002, "tlsPort": 5001,' \
+            '"ocspResponderURL": "", "externalAccountBindingRequired": false}}' > "${dir}/pebble.json"
+          "${dir}/pebble-challtestsrv" -defaultIPv4 127.0.0.1 -defaultIPv6 "" -dnsserver 127.0.0.1:8053 \
+            -http01 "" -https01 "" -tlsalpn01 "" -doh "" -management 127.0.0.1:8055 > "${dir}/challtestsrv.log" 2>&1 &
+          (cd "${dir}" && PEBBLE_VA_NOSLEEP=1 PEBBLE_AUTHZREUSE=0 PEBBLE_WFE_NONCEREJECT=0 \
+            ./pebble -config pebble.json -dnsserver 127.0.0.1:8053 > pebble.log 2>&1 &)
+          for _ in $(seq 1 30); do
+            curl -fsS --cacert "${dir}/pebble.crt" https://127.0.0.1:14000/dir >/dev/null 2>&1 && break
+            sleep 1
+          done
+          curl -fsS --cacert "${dir}/pebble.crt" https://127.0.0.1:14000/dir >/dev/null
+
+      - name: Issue panel certificates from Pebble
+        env:
+          ANIX_CONTROL_TEST_PEBBLE_DIRECTORY: https://127.0.0.1:14000/dir
+          ANIX_CONTROL_TEST_PEBBLE_CA_FILE: ${{ runner.temp }}/pebble/pebble.crt
+          ANIX_CONTROL_TEST_PEBBLE_ROOTS_URL: https://127.0.0.1:15000/roots/0
+        run: |
+          go test -v -count=1 -run TestPebbleIssuesOverBothChallenges ./internal/panelcert/
+          tail -n 20 "${RUNNER_TEMP}/pebble/pebble.log"
+
   frontend-build:
     name: Frontend Build
     runs-on: ubuntu-24.04

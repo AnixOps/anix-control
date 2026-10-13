@@ -50,19 +50,28 @@ func shortProblemType(value string) string {
 // HTTP-01 and reports only that no challenge type worked, while the CA's
 // documents say why (a timeout on port 80, an NXDOMAIN, a wrong answer).
 // Closing it cuts the issuance's manager off the CA.
+//
+// It also restores the Location header of a finalize answer that lacks it.
+// RFC 8555 does not require one there, the public CA's server sends it, and
+// golang.org/x/crypto/acme needs it to poll an order that is still
+// processing; servers that finalize asynchronously without it (Pebble,
+// the CA test server CI uses) would otherwise fail every issuance. The
+// order's URL is the Location of the answer that named the finalize URL.
 type recordingTransport struct {
 	base   http.RoundTripper
 	closed atomic.Bool
 
 	mu       sync.Mutex
 	problems []caProblem
+	// orders maps a finalize URL to its order's URL.
+	orders map[string]string
 }
 
 func newRecordingTransport(base http.RoundTripper) *recordingTransport {
 	if base == nil {
 		base = http.DefaultTransport
 	}
-	return &recordingTransport{base: base}
+	return &recordingTransport{base: base, orders: map[string]string{}}
 }
 
 func (t *recordingTransport) close() { t.closed.Store(true) }
@@ -87,8 +96,32 @@ func (t *recordingTransport) RoundTrip(request *http.Request) (*http.Response, e
 	response.Body = io.NopCloser(bytes.NewReader(body))
 	if readErr == nil {
 		t.inspect(contentType, body)
+		t.orderLocation(request, response, body)
 	}
 	return response, nil
+}
+
+// orderLocation remembers which order a finalize URL belongs to, and gives
+// a finalize answer without a Location the order's URL.
+func (t *recordingTransport) orderLocation(request *http.Request, response *http.Response, body []byte) {
+	var order struct {
+		Finalize string `json:"finalize"`
+	}
+	if json.Unmarshal(body, &order) != nil || order.Finalize == "" {
+		return
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	location := response.Header.Get("Location")
+	if location != "" {
+		t.orders[order.Finalize] = location
+		return
+	}
+	if request.URL != nil && request.URL.String() == order.Finalize {
+		if known := t.orders[order.Finalize]; known != "" {
+			response.Header.Set("Location", known)
+		}
+	}
 }
 
 // acmeDocument is the part of an ACME answer the transport reads: a
@@ -186,7 +219,13 @@ func (e *issuanceError) Error() string {
 	for _, problem := range e.problems {
 		parts = append(parts, problem.String())
 	}
-	return fmt.Sprintf("the CA refused the certificate: %s", strings.Join(parts, "; "))
+	message := fmt.Sprintf("the CA refused the certificate: %s", strings.Join(parts, "; "))
+	// autocert's own error says how the last order ended when it was not
+	// one of the CA's answers (a request that failed after a challenge).
+	if text := e.err.Error(); !strings.Contains(text, "no viable challenge type") && !strings.Contains(message, text) {
+		message += " (then: " + text + ")"
+	}
+	return message
 }
 
 func (e *issuanceError) Unwrap() error { return e.err }

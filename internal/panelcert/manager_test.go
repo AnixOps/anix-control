@@ -216,6 +216,20 @@ func TestIssuesOverTLSALPN01(t *testing.T) {
 	require.Equal(t, panelcert.StateValid, h.m.Status().State)
 }
 
+// A CA that finalizes asynchronously and leaves the Location header out of
+// its finalize answer (RFC 8555 allows it; Pebble does it) still issues.
+func TestIssuesFromACAThatFinalizesAsynchronously(t *testing.T) {
+	ca := panelcerttest.New(t, 0)
+	ca.SetAsyncFinalize(true)
+	h := newHarness(t, openDB(t), ca, newClock(), nil)
+	ca.SetTargets(func(string) string { return h.addr.httpsAddr }, nil)
+	h.run(t)
+	waitFor(t, "the certificate", 20*time.Second, func() bool { return certificateState(h.m, panelName).State == panelcert.StateValid })
+	leaf, err := handshake(t, h.addr.httpsAddr, panelName, ca.Roots)
+	require.NoError(t, err)
+	require.Equal(t, ca.Issued()[0].SerialNumber, leaf.SerialNumber)
+}
+
 func TestFallsBackToHTTP01WhenTLSALPN01Fails(t *testing.T) {
 	ca := panelcerttest.New(t, 0)
 	h := newHarness(t, openDB(t), ca, newClock(), nil)

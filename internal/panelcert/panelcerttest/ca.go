@@ -86,6 +86,10 @@ type CA struct {
 	validations      []string
 	issued           []*x509.Certificate
 	directoryOffline bool
+	// asyncFinalize answers a finalize with the order still processing and
+	// no Location header, as Pebble does; the next read of the order shows
+	// it valid.
+	asyncFinalize bool
 }
 
 type account struct {
@@ -101,6 +105,8 @@ type order struct {
 	authorizations []string
 	certificate    string
 	problem        *problem
+	// processing: issued, shown valid from the next read on.
+	processing bool
 }
 
 type authorization struct {
@@ -157,6 +163,14 @@ func (ca *CA) SetLifetime(lifetime time.Duration) {
 	ca.mu.Lock()
 	defer ca.mu.Unlock()
 	ca.lifetime = lifetime
+}
+
+// SetAsyncFinalize makes finalize answer like Pebble: the order still
+// processing, without a Location header.
+func (ca *CA) SetAsyncFinalize(async bool) {
+	ca.mu.Lock()
+	defer ca.mu.Unlock()
+	ca.asyncFinalize = async
 }
 
 // SetOffline makes every request answer 503 (true) or serves again.
@@ -406,6 +420,9 @@ func (ca *CA) servePost(w http.ResponseWriter, r *http.Request) {
 		ca.newOrder(w, request)
 	case "order":
 		defer ca.mu.Unlock()
+		if o := ca.orders[id]; o != nil && o.processing {
+			o.processing, o.status = false, acme.StatusValid
+		}
 		ca.writeOrder(w, http.StatusOK, ca.orders[id])
 	case "authz":
 		defer ca.mu.Unlock()
@@ -498,6 +515,11 @@ func (ca *CA) newOrder(w http.ResponseWriter, request *jws) {
 }
 
 func (ca *CA) writeOrder(w http.ResponseWriter, status int, o *order) {
+	ca.writeOrderBody(w, status, o, true)
+}
+
+// writeOrderBody writes an order, with its URL as Location when location.
+func (ca *CA) writeOrderBody(w http.ResponseWriter, status int, o *order, location bool) {
 	if o == nil {
 		writeProblem(w, http.StatusNotFound, "malformed", "no such order")
 		return
@@ -514,13 +536,15 @@ func (ca *CA) writeOrder(w http.ResponseWriter, status int, o *order) {
 		"status": o.status, "identifiers": identifiers, "authorizations": authorizations,
 		"finalize": ca.url("/finalize/" + o.id), "expires": time.Now().Add(time.Hour).UTC().Format(time.RFC3339),
 	}
-	if o.certificate != "" {
+	if o.certificate != "" && o.status == acme.StatusValid {
 		body["certificate"] = ca.url("/cert/" + o.certificate)
 	}
 	if o.problem != nil {
 		body["error"] = o.problem
 	}
-	w.Header().Set("Location", ca.url("/order/"+o.id))
+	if location {
+		w.Header().Set("Location", ca.url("/order/"+o.id))
+	}
 	writeJSON(w, status, body)
 }
 
@@ -736,6 +760,11 @@ func (ca *CA) finalize(w http.ResponseWriter, request *jws, o *order) {
 	id := ca.newID()
 	ca.certificates[id] = chain.Bytes()
 	o.certificate, o.status = id, acme.StatusValid
+	if ca.asyncFinalize {
+		o.status, o.processing = acme.StatusProcessing, true
+		ca.writeOrderBody(w, http.StatusOK, o, false)
+		return
+	}
 	ca.writeOrder(w, http.StatusOK, o)
 }
 
