@@ -689,7 +689,7 @@ jobs:
             -e ANIX_CONTROL_LOG_FORMAT=json
             -e ANIX_CONTROL_ADMIN_PASSWORD=ci-smoke-admin-password-0123456789
           )
-          docker run --rm anix-control:ci -print-env | grep '^ANIX_CONTROL_DATABASE_PASSWORD ' >/dev/null
+          docker run --rm anix-control:ci -print-env | grep '^ANIX_CONTROL_DOMAIN ' >/dev/null
           # One-shot schema preparation, as a Compose service or Kubernetes Job runs it.
           docker run --rm "${common[@]}" anix-control:ci migrate
           docker run -d --name control "${common[@]}" anix-control:ci

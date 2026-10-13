@@ -72,8 +72,8 @@ const (
 const (
 	fieldVersion     = "anixops-root-key"
 	fieldKey         = "key"
-	fieldJWTSecret   = "adopted-jwt-secret"
-	fieldIdentityKEK = "adopted-identity-kek"
+	fieldJWTSecret   = "adopted-jwt-secret"   // #nosec G101 -- the name of a field in root.key, not a credential.
+	fieldIdentityKEK = "adopted-identity-kek" // #nosec G101 -- the name of a field in root.key, not a credential.
 )
 
 // Key is a root key. Its formatting never shows the bytes.
