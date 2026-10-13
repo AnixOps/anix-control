@@ -10,7 +10,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/AnixOps/anix-control/v5/internal/service"
 	"github.com/stretchr/testify/require"
+)
+
+// Why the scenarios that need machine-telemetry on the node skip.
+const (
+	agentDispatchOff   = "Agent plugin dispatch is off until M4 (service.AgentPluginDispatchEnabled): no Agent plugin reaches a node"
+	pluginNotOnTheNode = "machine-telemetry is not installed on the node (Agent plugin dispatch is off until M4, or the previous scenario failed)"
 )
 
 // hostHasSystemd tells whether the machine runs systemd with the cgroup v2
@@ -28,11 +35,15 @@ func hostHasSystemd() bool {
 // package on the node, with the systemd services collector enabled for it.
 // The Agent downloads the manifest and the artifact from AgentArtifacts on
 // the stream (artifacts.v1, the client certificate; no API key exists).
+// Agent plugin dispatch is off until M4 (service.AgentPluginDispatchEnabled):
+// until then the scenario, and the ones that need the plugin on the node,
+// skip.
 func (s *suite) scenarioPluginArtifactsOverMTLS(t *testing.T) string {
+	if !service.AgentPluginDispatchEnabled {
+		return skipped + ":" + agentDispatchOff
+	}
 	pkg := s.pkgs["machine-telemetry"]
-	s.control.API(t, http.MethodPut, "/api/v3/plugin-installations", map[string]any{
-		"plugin_id": pkg.ID, "target": "agent", "desired_version": pkg.Version, "enabled": true,
-	}, nil)
+	s.control.InstallAgentPackage(t, pkg)
 	var agentInstallation *installation
 	for _, row := range s.control.Installations(t) {
 		if row.PluginID == pkg.ID && row.Target == "agent" {
@@ -88,7 +99,7 @@ func (s *suite) scenarioSystemdServicesPanel(t *testing.T) string {
 	// once the collector has had time for its first samples, a short
 	// partition starts a new session.
 	if s.pluginReadyAt.IsZero() {
-		return skipped + ":machine-telemetry is not installed (previous scenario failed)"
+		return skipped + ":" + pluginNotOnTheNode
 	}
 	if wait := 45*time.Second - time.Since(s.pluginReadyAt); wait > 0 {
 		time.Sleep(wait)
@@ -149,6 +160,9 @@ func (s *suite) scenarioSystemdServicesPanel(t *testing.T) string {
 // manual-action incident, sent at once), which reaches Control as
 // MaintenanceEvents (maintenance.v1) and is persisted as a node log.
 func (s *suite) scenarioMaintenanceEvents(t *testing.T) string {
+	if s.pluginReadyAt.IsZero() {
+		return skipped + ":" + pluginNotOnTheNode
+	}
 	before := s.count(t, "SELECT COUNT(*) FROM v2_node_log WHERE node_id = ? AND source = 'maintenance'", s.nodeID)
 	var signatures []string
 	_ = filepath.Walk(s.agent.pluginRoot, func(path string, info os.FileInfo, err error) error {
@@ -269,7 +283,7 @@ func prettyJSON(raw string) string {
 // allocate from the durable cursor; a refusal fails the scenario.
 func (s *suite) scenarioPluginOperationAfterStreamOperations(t *testing.T) string {
 	if s.pluginReadyAt.IsZero() {
-		return skipped + ":machine-telemetry is not installed (previous scenario failed)"
+		return skipped + ":" + pluginNotOnTheNode
 	}
 	var installationID uint
 	for _, row := range s.control.Installations(t) {

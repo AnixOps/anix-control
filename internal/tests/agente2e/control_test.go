@@ -2,7 +2,6 @@ package agente2e
 
 import (
 	"bytes"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -14,6 +13,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/AnixOps/anix-control/v5/internal/model"
+	"github.com/AnixOps/anix-control/v5/internal/service"
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/postgres"
@@ -91,11 +92,7 @@ app:
 plugins:
   official_public_key: %s
   identity_bootstrap_package_dir: %s
-  control_execution_enabled: true
   control_poll_interval: "100ms"
-  dispatch_enabled: true
-  dispatch_poll_interval: "100ms"
-  topology_execution_enabled: false
 grpc:
   enabled: true
   host: "127.0.0.1"
@@ -222,23 +219,64 @@ func (c *control) TryAPI(t *testing.T, method, path string, body any) (int, []by
 	return c.do(t, method, path, body, true)
 }
 
-// InstallPackage registers the signed release, uploads its artifact and
-// installs it on Control, then waits until its host is healthy.
-func (c *control) InstallPackage(t *testing.T, pkg signedPackage) {
+// InstallPackages puts the signed packages where the start-up bootstrap
+// puts the built-in ones: a registered release, its artifact and an enabled
+// Control installation, written while Control is stopped; the restart
+// starts their hosts, and InstallPackages signs in again and waits until
+// they are healthy.
+// Control has no route that imports or installs a package any more (the
+// built-in packages install at every start), and this suite's packages are
+// full packages signed with the suite's key.
+func (c *control) InstallPackages(t *testing.T, publicKey string, pkgs ...signedPackage) {
 	t.Helper()
-	var release struct {
-		Data struct {
-			ID uint `json:"id"`
-		} `json:"data"`
+	key, err := service.ParseOfficialPluginPublicKey(publicKey)
+	require.NoError(t, err)
+	c.proc.Stop(t, 10*time.Second)
+	for _, pkg := range pkgs {
+		release, err := service.RegisterPluginRelease(c.db, string(pkg.Manifest), pkg.Signature, key)
+		require.NoError(t, err, pkg.ID)
+		_, err = service.StorePluginArtifact(c.db, release.ID, pkg.Artifact)
+		require.NoError(t, err, pkg.ID)
+		require.NoError(t, c.db.Transaction(func(tx *gorm.DB) error {
+			if err := service.LockPluginInstallationTarget(tx, "control"); err != nil {
+				return err
+			}
+			if err := service.ValidatePluginInstallationPlan(tx, *release, "control", true, 0); err != nil {
+				return err
+			}
+			return tx.Create(&model.PluginInstallation{
+				PluginID: pkg.ID, Target: "control", DesiredVersion: pkg.Version, State: "pending", Enabled: true, LifecycleGeneration: 1,
+			}).Error
+		}), pkg.ID)
 	}
-	c.API(t, http.MethodPost, "/api/v3/plugin-releases", map[string]string{"manifest": string(pkg.Manifest), "signature": pkg.Signature}, &release)
-	require.NotZero(t, release.Data.ID)
-	c.API(t, http.MethodPost, fmt.Sprintf("/api/v3/plugin-releases/%d/artifact", release.Data.ID),
-		map[string]string{"artifact_base64": base64.StdEncoding.EncodeToString(pkg.Artifact)}, nil)
-	c.API(t, http.MethodPut, "/api/v3/plugin-installations", map[string]any{
-		"plugin_id": pkg.ID, "target": "control", "desired_version": pkg.Version, "enabled": true,
-	}, nil)
-	c.WaitInstallation(t, pkg.ID, "control", pkg.Version)
+	c.Start(t)
+	c.Login(t)
+	for _, pkg := range pkgs {
+		c.WaitInstallation(t, pkg.ID, "control", pkg.Version)
+	}
+}
+
+// InstallAgentPackage makes the package's Agent installation, enabled at
+// the release InstallPackages registered, the way the bootstrap makes a
+// Control one; the node assignments then deploy it (once Agent plugin
+// dispatch is on, in M4).
+func (c *control) InstallAgentPackage(t *testing.T, pkg signedPackage) {
+	t.Helper()
+	require.NoError(t, c.db.Transaction(func(tx *gorm.DB) error {
+		if err := service.LockPluginInstallationTarget(tx, "agent"); err != nil {
+			return err
+		}
+		var release model.PluginRelease
+		if err := tx.Take(&release, "plugin_id = ? AND version = ?", pkg.ID, pkg.Version).Error; err != nil {
+			return err
+		}
+		if err := service.ValidatePluginInstallationPlan(tx, release, "agent", true, 0); err != nil {
+			return err
+		}
+		return tx.Create(&model.PluginInstallation{
+			PluginID: pkg.ID, Target: "agent", DesiredVersion: pkg.Version, State: "pending", Enabled: true, LifecycleGeneration: 1,
+		}).Error
+	}), pkg.ID)
 }
 
 type installation struct {
