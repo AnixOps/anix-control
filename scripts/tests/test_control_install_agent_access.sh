@@ -85,6 +85,7 @@ check "fresh: TLS warning printed" grep -qF "Agents cannot connect yet" <<<"${ou
 check "fresh: no self-signed certificate created" test ! -e "${TLS_DIR}"
 write_systemd_unit
 check "fresh: unit passes the key file" grep -qxF "Environment=ANIX_CONTROL_MODULE_RUNTIME_CA_KEK_FILE=${CA_KEK_FILE}" "${SYSTEMD_UNIT_DIR}/anix-control.service"
+check "fresh: unit names the data directory, where Control adopts the key" grep -qxF "Environment=ANIX_CONTROL_DATA_DIR=${INSTALL_DIR}/data" "${SYSTEMD_UNIT_DIR}/anix-control.service"
 check "fresh: config has no key in it" file_lacks "${key}" "${CONFIG_FILE}"
 
 # --- 2. Re-run and upgrade keep the key.

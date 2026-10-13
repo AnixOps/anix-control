@@ -106,10 +106,10 @@ configure_plugin_execution_config
 grep -Fx "  control_host_runtime_dir: \"${PLUGIN_HOST_RUNTIME_DIR}\"" "${CONFIG_FILE}" >/dev/null
 grep -Fx "  control_host_artifact_dir: \"${PLUGIN_ARTIFACT_DIR}\"" "${CONFIG_FILE}" >/dev/null
 
-# The installer's key is the shipped official package root.
-configured_root="$(sed -n 's/^[[:space:]]*official_public_key:[[:space:]]*"\([^"]*\)".*/\1/p' "${REPO_ROOT}/config/config.prod.yaml")"
+# The installer's key is the built-in official package root.
+configured_root="$(sed -n 's/^[[:space:]]*official_public_key:[[:space:]]*"\([^"]*\)".*/\1/p' "${REPO_ROOT}/internal/config/defaults.yaml")"
 [[ "${OFFICIAL_PUBLIC_KEY}" == "${configured_root}" ]] || {
-  printf 'scripts/install.sh OFFICIAL_PUBLIC_KEY does not match config/config.prod.yaml\n' >&2
+  printf 'scripts/install.sh OFFICIAL_PUBLIC_KEY does not match internal/config/defaults.yaml\n' >&2
   exit 1
 }
 

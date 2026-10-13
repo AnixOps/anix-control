@@ -193,7 +193,10 @@ check "fresh: the systemd unit is written" test -s "${SYSTEMD_UNIT_DIR}/anix-con
 check "fresh: the unit starts the installed binary with the installed config" \
   grep -qxF "ExecStart=${FRESH}/bin/anix-control -config ${FRESH}/config/config.yaml" "${SYSTEMD_UNIT_DIR}/anix-control.service"
 check "fresh: the config is written" test -s "${FRESH}/config/config.yaml"
-check "fresh: the config is production" test "$(top_level env "${FRESH}/config/config.yaml")" = production
+check "fresh: the config sets no env (Control always runs as production)" test -z "$(top_level env "${FRESH}/config/config.yaml")"
+check "fresh: the unit gives Control its data directory" \
+  grep -qxF "Environment=ANIX_CONTROL_DATA_DIR=${FRESH}/data" "${SYSTEMD_UNIT_DIR}/anix-control.service"
+check "fresh: the data directory is private" test "$(stat -c '%a' "${FRESH}/data")" = 700
 check "fresh: the release checksums were verified" grep -qF "Verified the signature of SHA256SUMS.txt" "${temporary}/fresh.log"
 check "fresh: no identity package is staged (the packages are built in)" test ! -e "${FRESH}/bootstrap"
 no_identity_package_dir() { ! grep -qE 'identity_bootstrap_package_dir: "/' "$1"; }

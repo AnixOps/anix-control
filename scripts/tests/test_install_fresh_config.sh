@@ -1,17 +1,18 @@
 #!/usr/bin/env bash
-# The configuration a fresh systemd install writes is a production
-# configuration, and an existing one is never rewritten.
+# The configuration a fresh systemd install writes, and an existing one is
+# never rewritten.
 #
 # config/config.yaml.example is the template the installer downloads for the
-# tag, and it ships `env: "development"` for local use. With that value
-# Control runs a full AutoMigrate on every start and skips the production
-# guards (the template JWT secret is accepted). The installer therefore sets
-# `env: "production"` itself, next to the secrets it generates. Nothing outside
-# a temporary directory is touched and no service is started.
+# tag: the operator keys' one line, domain: panel.example.com, with comments.
+# The installer does not ask for the domain yet, so it keeps that line a
+# comment, and adds the first administrator (admin.*, still read until the
+# claim link replaces it). No other secret goes into the file: the root key
+# in the data directory derives the JWT secret. Nothing outside a temporary
+# directory is touched and no service is started.
 #
 # internal/config/installer_config_test.go runs this script with
 # ANIX_INSTALL_FRESH_CONFIG_OUT=<file>, loads the generated file with the real
-# configuration loader and applies the server's production checks to it. With
+# configuration loader and applies the server's checks to it. With
 # ANIX_INSTALL_FRESH_CONFIG_CASES_DIR=<dir> it also writes the config of each
 # awkward-credential case (<name>.yaml, .email, .password) for the same test,
 # and the values the installer refuses (refused/<name>.email, .password), which
@@ -97,60 +98,37 @@ new_install() {
   ADMIN_EMAIL="" ADMIN_PASSWORD="" FRESH_CONFIG=0
 }
 
-# --- 1. A fresh install writes a production configuration.
+# --- 1. A fresh install writes the template, the domain line kept as a
+#        comment, and the first administrator: no secret but its password.
 new_install fresh
 write_fresh_config >/dev/null 2>&1
 fresh_config="${temporary}/fresh-config.yaml"
 cp "${CONFIG_FILE}" "${fresh_config}"
 check "fresh: template fetched at the installed tag" \
   grep -qxF "${RAW_BASE}/${VERSION}/config/config.yaml.example" "${CURL_URLS}"
-check "fresh: env is production" test "$(top_level env "${CONFIG_FILE}")" = production
-check "fresh: one env key" test "$(grep -c '^env:' "${CONFIG_FILE}")" -eq 1
-check "fresh: no development env left" test "$(grep -c '^env:[[:space:]]*"\?development' "${CONFIG_FILE}")" -eq 0
+check "fresh: the domain line stays a comment" grep -qxF '# domain: panel.example.com' "${CONFIG_FILE}"
+check "fresh: no active domain line" test "$(grep -c '^domain:' "${CONFIG_FILE}")" -eq 0
+check "fresh: no env key (Control always runs as production)" test "$(grep -c '^env:' "${CONFIG_FILE}")" -eq 0
+check "fresh: no jwt secret (the root key derives it)" test "$(grep -c '^jwt:' "${CONFIG_FILE}")" -eq 0
+check "fresh: no api token" test "$(grep -c 'api_token' "${CONFIG_FILE}")" -eq 0
 check "fresh: marked as a fresh config" test "${FRESH_CONFIG}" -eq 1
-jwt_secret="$(config_section_value jwt secret)"
-check "fresh: jwt secret is 64 hex characters" \
-  test "$(printf '%s' "${jwt_secret}" | grep -Ec '^[0-9a-f]{64}$')" -eq 1
-check "fresh: jwt secret is not a template value" \
-  test "${jwt_secret}" != "your-jwt-secret-key-change-in-production" -a \
-       "${jwt_secret}" != "CHANGE-THIS-TO-A-VERY-LONG-RANDOM-STRING-IN-PRODUCTION"
-check "fresh: api token generated" \
-  test "$(config_section_value app api_token | grep -Ec '^[0-9a-f]{64}$')" -eq 1
 check "fresh: bootstrap password file written" test -s "${INSTALL_DIR}/.bootstrap-admin-password"
 check "fresh: admin password generated into the config" \
   test "$(config_section_value admin password)" = "$(cat "${INSTALL_DIR}/.bootstrap-admin-password")"
-# Only the env line and the four generated values differ from the template.
-check "fresh: five lines changed from the template" \
-  test "$(diff "${TEMPLATE}" "${CONFIG_FILE}" | grep -c '^>')" -eq 5
-check "fresh: no line added or lost" \
-  test "$(wc -l <"${TEMPLATE}")" -eq "$(wc -l <"${CONFIG_FILE}")"
-
-# --- 2. A template without an env key still ends up in production.
-new_install noenv
-TEMPLATE="${temporary}/template-without-env.yaml"
-grep -v '^env:' "${REPO_ROOT}/config/config.yaml.example" >"${TEMPLATE}"
-check "noenv: the fixture has no env key" test "$(grep -c '^env:' "${TEMPLATE}")" -eq 0
-write_fresh_config >/dev/null 2>&1
-check "noenv: env is production" test "$(top_level env "${CONFIG_FILE}")" = production
-check "noenv: one env key" test "$(grep -c '^env:' "${CONFIG_FILE}")" -eq 1
-TEMPLATE="${REPO_ROOT}/config/config.yaml.example"
-
-# --- 3. A template that spells the key differently is still replaced.
-new_install spelling
-TEMPLATE="${temporary}/template-spelling.yaml"
-sed 's/^env: "development"$/env: development   # local use/' "${REPO_ROOT}/config/config.yaml.example" >"${TEMPLATE}"
-check "spelling: the fixture spells the key differently" grep -qxF 'env: development   # local use' "${TEMPLATE}"
-write_fresh_config >/dev/null 2>&1
-check "spelling: env is production" test "$(top_level env "${CONFIG_FILE}")" = production
-check "spelling: one env key" test "$(grep -c '^env:' "${CONFIG_FILE}")" -eq 1
-TEMPLATE="${REPO_ROOT}/config/config.yaml.example"
+check "fresh: admin password is 64 hex characters" \
+  test "$(config_section_value admin password | grep -Ec '^[0-9a-f]{64}$')" -eq 1
+# Only the domain line changed from the template; the rest is appended.
+check "fresh: the template is kept, the domain line commented" \
+  test "$(diff "${TEMPLATE}" "${CONFIG_FILE}" | grep -c '^<')" -eq 1
+check "fresh: five lines appended (a blank, two comments, admin)" \
+  test "$(( $(wc -l <"${CONFIG_FILE}") - $(wc -l <"${TEMPLATE}") ))" -eq 6
 
 # --- 4. ensure_layout_and_config (install and update) creates the file only
 #        when it is missing and never rewrites an existing one.
 new_install ensure-fresh
 ensure_layout_and_config >"${temporary}/ensure-fresh.log" 2>&1
 check "ensure: fresh install writes the config" test -s "${CONFIG_FILE}"
-check "ensure: fresh install is production" test "$(top_level env "${CONFIG_FILE}")" = production
+check "ensure: fresh install has the administrator" test -n "$(config_section_value admin email)"
 check "ensure: fresh install is marked fresh" test "${FRESH_CONFIG}" -eq 1
 new_install ensure-existing
 printf '%s\n' '# the operator edited this file' 'env: "development"' 'jwt:' '  secret: "operator-chosen-secret"' >"${CONFIG_FILE}"
