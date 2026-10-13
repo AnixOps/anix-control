@@ -485,8 +485,10 @@ credentials. `kapi_forward_node_v1` exposes every column of
 `v2_system_config` rows that choose the forward runtime backend
 (`forward.runtime.nodex_mode`, `forward.runtime_backend`,
 `forward.runtime.ansible.backend`) and no other row. `kapi_traffic_log_v1`
-exposes `user_id`, `u`, `d`, `rate` and `log_at` of `v2_server_log`: each
-node traffic report's bytes per user, for traffic charts.
+exposes `user_id`, `u`, `d`, `rate` and `log_at` of `v2_server_log`: the
+bytes a user used on a node in an hour (`log_at` is the hour's start; a row per
+node, hour, user, server type and rate, to which every report of the hour adds,
+`docs/reference/traffic-stats-operations.md`), for traffic charts.
 `kapi_package_report_v1` exposes `node_kind`, `node_id`, `plugin_id`, `kind`,
 `version`, `payload_json`, `observed_at` and `received_at` of
 `v4_kernel_package_report_state`, the latest package report of each node,

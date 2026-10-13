@@ -33,7 +33,8 @@ func (SubscriberChange) TableName() string { return "v4_kernel_subscriber_change
 // user's connections, from any node or Agent (subscriber.RecordOnline). It
 // is a table of its own because Control keeps no durable value for it:
 // v2_user has no such column, the online set is a five-minute cache and
-// v2_server_log is purged by the operator. One row per user, written at most
+// v2_server_log keeps hourly buckets that are pruned after their retention.
+// One row per user, written at most
 // once per subscriber.ActivityWriteInterval; a user never seen has no row.
 type UserActivity struct {
 	UserID uint `gorm:"primaryKey;autoIncrement:false" json:"user_id"`

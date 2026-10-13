@@ -69,6 +69,24 @@ PostgreSQL connection settings:
 | `database.timezone` | `Asia/Shanghai` | session `TimeZone`; must be a valid IANA name |
 | `database.dsn` | empty | full connection string used verbatim instead of the fields above |
 
+SQLite connection settings (`database.driver: sqlite`, a database file). They
+are built in, not keys: `database.max_open_conns`, `max_idle_conns` and
+`conn_max_lifetime` apply to PostgreSQL only.
+
+| Setting | Value | Why |
+|------|------|------|
+| connections | one writer, a pool of 4 readers (`query_only`) | SQLite has one write transaction at a time; writers queue in Control instead of waiting inside SQLite, and in WAL mode reads neither block nor wait for the writer. Every write statement and every transaction runs on the writer, plain queries on the readers |
+| `journal_mode` | `WAL` | readers and the writer do not block each other |
+| `synchronous` | `NORMAL` | in WAL mode a commit does not wait for an fsync, the log is synced at checkpoints; a power loss may drop the last commits and never damages the database |
+| `busy_timeout` | 10 seconds | how long a statement waits for a lock another *process* holds: the package hosts write the same file |
+| transactions | `BEGIN IMMEDIATE` | a read-then-write transaction takes the write lock at BEGIN and cannot fail half way with `database is locked` |
+| `auto_vacuum` | `INCREMENTAL` | only for a database file created by this version; the retention worker returns freed pages with `PRAGMA incremental_vacuum` |
+| `foreign_keys` | off | as before: the schema and its data were never run under enforcement |
+
+An in-memory database (`:memory:`, tests) keeps one handle. The package hosts
+open the same file with their own 4 connections and the same `busy_timeout`,
+`synchronous` and WAL settings (`sdk/packagestoresdk`).
+
 ## Experimental Forwarding Engine
 
 | Key | Default | Notes |

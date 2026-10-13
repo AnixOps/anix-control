@@ -5,7 +5,9 @@ traffic pages backed by `v2_server_log`.
 
 ## Runtime Tables
 
-`v2_server_log` stores raw node traffic reports. It is used by:
+`v2_server_log` stores node traffic in hourly buckets: one row per node,
+UTC hour, user, server type and rate, to which every report of that hour
+adds its bytes (see [Hourly Buckets](#hourly-buckets)). It is used by:
 
 - admin dashboard `today_traffic`
 - `/api/v2/admin/traffic/hourly`
@@ -23,6 +25,40 @@ Quota counters are stored separately on `v2_user.u` and `v2_user.d`. Purging old
 `v2_server_log` rows removes historical charts and rankings for that period, but
 it does not reset user quota counters.
 
+## Hourly Buckets
+
+A traffic report no longer inserts a row per user. It adds to the row of its
+bucket key, `(server_id, log_at, user_id, server_type, rate)`, with an upsert
+on the unique index `idx_v2_server_log_bucket`:
+
+- `log_at` is the start of the UTC hour that holds the report, so a node's
+  reports of one hour are one row per user instead of one per report. With 50
+  nodes reporting every minute that is about 60 times fewer rows; the table
+  grows with users and hours, not with reports.
+- `u` and `d` are the bytes as reported, before `rate`; the readers apply the
+  rate to each row and sum, so every reader returns the same numbers as with a
+  row per report. A change of a node's rate inside an hour makes a second row
+  of that hour.
+- The time of a row is the hour, not the second of the report: `log_at` of a
+  bucket is its hour's start. The row's `created_at` is the time of the latest
+  report that added to it, which is how `meta.latest_log_at` of the hourly
+  traffic response (the dashboard's "reports stopped" alert reads its age)
+  stays the time of the latest report and not the hour's start. A reader that
+  cuts a window inside an hour sees the whole hour or none of it: the
+  dashboard's "today" starts at local midnight, which is an hour boundary in
+  every zone with whole-hour offsets; in a zone with a 30 or 45 minute offset
+  the first hour of the day is counted on the earlier day.
+- Rows written by older versions keep their own `log_at` and are not moved.
+  The first start of this version merges rows that already share a bucket key
+  (the same node, second, user, type and rate) into the oldest of them, adding
+  their `u` and `d`, in the same transaction that creates the unique index;
+  rows with an empty value in the key are never merged.
+
+The upsert needs `idx_v2_server_log_bucket`, which is created at startup by
+`EnsureTrafficLogBuckets` (before `EnsureStatsSchema`). A table that has no
+such index, for instance one restored from an older backup, gets it at the next
+start.
+
 ## User Last Online
 
 `v4_kernel_user_activity` (one row per user: `user_id`, `last_online_at` as a
@@ -35,8 +71,8 @@ that passes through a forwarding route is not counted.
 Why a table of its own: Control kept no durable value for it. `v2_user` has
 no `t` column (v2board's last report time; Control never wrote it), `u` and
 `d` carry no time, `last_login_at` is the last sign-in, the online set the
-alive reports fill is a five minute cache, and the traffic log above is purged
-by the operator.
+alive reports fill is a five minute cache, and the traffic log above holds
+hourly buckets and is pruned after its retention.
 
 - **Writes.** The traffic and alive reports call `subscriber.RecordOnline`
   after they committed. It is best effort and throttled: one user is written
@@ -46,8 +82,8 @@ by the operator.
   report by less than a minute; a Control restart writes each online user
   once more. A failed write is logged (`user activity was not recorded`) and
   does not affect the report.
-- **Size.** One row of two integers per user that was ever online, no
-  retention job needed. Deleting a user deletes their row.
+- **Size.** One row of two integers per user that was ever online, so the
+  retention worker leaves it alone. Deleting a user deletes their row.
 - **Nothing is backfilled.** The table starts empty at the upgrade: a user
   shows no last-online time until a node next reports them. To seed it from
   the traffic log (only as far back as the log was kept), run this once,
@@ -103,9 +139,10 @@ reports already fill both tables it reads.
   early hours of the window are zeros, not data; the daily series is not
   affected by a purge.
 - **Cost.** The hourly query reads one node's rows in the window, through
-  `idx_v2_server_log_server_id` or both single-column indexes, and no
-  composite `(server_id, log_at)` index exists: its cost follows the node's
-  retained rows, so the retention below also bounds it. On a throwaway
+  `idx_v2_server_log_bucket`, which starts with `(server_id, log_at)`: its
+  cost follows the node's retained rows, so the retention below also bounds
+  it. The measurement that follows predates the hourly buckets and the
+  composite index, and counted a row per report. On a throwaway
   PostgreSQL 16 with 8.4 million synthetic rows (30 nodes, 14 days, about
   20 000 rows per node and day), one node's hourly series took about 40 ms
   for 24 hours, 90 ms for 7 days and 125 ms for 14 days, against 1.5 s for
@@ -127,6 +164,7 @@ The `TrafficLog` model defines these indexes:
 | `idx_v2_server_log_server_id` | `server_id` | node-scoped investigation |
 | `idx_v2_server_log_log_at` | `log_at` | time-window scans |
 | `idx_server_log_log_at_user_id` | `log_at`, `user_id` | hourly and ranking windows, including optional user filter |
+| `idx_v2_server_log_bucket` (unique) | `server_id`, `log_at`, `user_id`, `server_type`, `rate` | the key of an hourly bucket, the conflict target of the upsert, and a node's hourly window |
 
 The schema baseline (`internal/database/migrations`) creates the stats tables
 and these indexes. Adopting a database an earlier Control created adds the
@@ -138,25 +176,35 @@ and these indexes. Adopting a database an earlier Control created adds the
 
 ## Retention Policy
 
-There is no automatic background purge for `v2_server_log` today. Treat raw
-traffic-log retention as an operator-controlled database maintenance task.
+Control prunes `v2_server_log` itself. A singleton worker (`internal/retention`,
+run by the process that holds the `control.singleton-workers` lease) wakes
+every hour and deletes, oldest first, in batches of 5000 rows with a pause
+between batches:
 
-Recommended defaults:
+| Table | Kept | Dated by |
+| --- | --- | --- |
+| `v2_server_log` | 400 days | `log_at` |
+| `v2_node_log` | 30 days | `created_at` |
+| `v2_audit_log` | 400 days | `created_at` |
 
-- keep at least 31 days of raw rows so the 30 day admin traffic page remains
-  complete
-- keep 90 days on PostgreSQL production deployments when disk budget allows
-- keep 30 to 90 days on SQLite deployments, depending on file size and backup
-  windows
-- archive before purging if historical abuse investigation, billing support, or
-  customer support workflows need older traffic details
+One run deletes at most 2000 batches per table, so a large backlog is cleared
+over the following hours. On SQLite the run then returns up to 5000 free pages
+to the file and runs `PRAGMA optimize`; the pages can only be returned in a
+database created with incremental auto-vacuum, which every database this
+version creates is (an existing file keeps its setting and is compacted by
+`VACUUM`). A run that deletes rows logs `Retention: deleted N rows of <table>`.
 
-Do not purge current-day rows while investigating traffic reporting issues.
+The periods are built in. Raw rows older than 400 days therefore do not
+survive: the daily series of `/api/v4/kernel/nodes/:id/traffic` reads
+`v2_stat_server`, which is not pruned, and the 30 day admin page needs 31 days.
+Archive before the retention if older traffic details matter, with the
+commands below.
 
 ## Manual Archive And Purge
 
-Run these commands only after taking a database backup and confirming the
-retention window for the deployment.
+The retention worker covers the routine case. Run these commands to archive
+before a purge, or to purge sooner than the worker does, only after taking a
+database backup and confirming the retention window for the deployment.
 
 PostgreSQL archive and purge example for rows older than 90 days:
 
