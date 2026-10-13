@@ -170,10 +170,9 @@ installer writes `env: "production"` into the new `config.yaml` (as the
 container defaults are), next to the generated `jwt.secret`.
 
 - In production Control refuses to start when `jwt.secret` is empty or a
-  template value, and it never alters existing tables on start: an empty
-  database gets the full schema, an existing one only the tables it lacks
-  (`docs/reference/startup-config.md`). In `development` it runs a full
-  `AutoMigrate` on every start and accepts the template secret.
+  template value; in `development` it accepts the template secret. The
+  schema is the same in both: the ordered migrations create it and record it
+  (`docs/reference/database-migrations.md`).
 - Only a **fresh** install writes the file. `update`, `rollback` and
   `enable-agents` never change `env`. A host installed by an earlier release
   has `env: "development"`; check with

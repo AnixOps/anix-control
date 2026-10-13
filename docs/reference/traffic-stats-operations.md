@@ -128,11 +128,13 @@ The `TrafficLog` model defines these indexes:
 | `idx_v2_server_log_log_at` | `log_at` | time-window scans |
 | `idx_server_log_log_at_user_id` | `log_at`, `user_id` | hourly and ranking windows, including optional user filter |
 
-`EnsureStatsSchema` runs at startup and calls `AutoMigrate` for the stats
-tables. The regression test
-`TestEnsureStatsSchema_CompletesLegacyTrafficLogTable` verifies that legacy
-`v2_server_log` tables are expanded with `rate`, `log_at`, and
-`idx_server_log_log_at_user_id`.
+The schema baseline (`internal/database/migrations`) creates the stats tables
+and these indexes. Adopting a database an earlier Control created adds the
+`v2_server_log` columns and indexes it lacks (`rate`, `log_at`,
+`idx_server_log_log_at_user_id`, ...); the adoption tests
+(`TestAdoptionCompletesADatabaseAnOlderReleaseLeft`) cover a legacy
+`v2_server_log` without them. See
+[database-migrations.md](database-migrations.md).
 
 ## Retention Policy
 

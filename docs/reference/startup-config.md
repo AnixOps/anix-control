@@ -180,13 +180,20 @@ Database preparation runs under a PostgreSQL advisory lock, so several Control
 processes starting together (a rolling update, or `migrate` next to a server)
 run it one at a time:
 
-- `env: development` / `test`: full `AutoMigrate` of the application models.
-- other environments: an empty database gets the full schema; an existing one
-  only gets tables it does not have. Existing tables, columns and indexes are
-  never altered.
-- then the `Ensure*` schema helpers, the plugin trust root, the built-in
-  package bootstrap, and the default admin, subscription group, plan and
-  authorized key seeds.
+- the schema comes from the ordered migrations in every environment (`env`
+  no longer changes it; [database-migrations.md](database-migrations.md)): an
+  empty database gets every migration, a database an earlier Control prepared
+  is adopted once (missing tables, columns and indexes are added, nothing is
+  altered or dropped), and pending migrations are applied, each in its own
+  transaction. Control refuses to start on a database a newer Control
+  migrated, on a changed migration, and on a non-empty database that is not
+  a Control database, and says what to do.
+- then the seeds that run at every start: the default service scopes, the
+  official plugin catalog and target locks, the node secret split state, the
+  module and forward link CAs, the kernel API views, the plugin trust root,
+  the built-in package bootstrap (below), and the default admin, subscription
+  group, plan and authorized key; while the flux tables exist, the forward
+  runtime settings and port bindings.
 
 The built-in package bootstrap verifies every official package embedded in
 the binary against `plugins.official_public_key` and installs, upgrades and

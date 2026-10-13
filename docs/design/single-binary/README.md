@@ -332,6 +332,7 @@ LimitNOFILE=65535
 - `AutoMigrate`、生产和开发两套建表逻辑、每次启动的 `Ensure*` 加列步骤全部删除（bootstrap.go:214-253, 129-194）。模型仍用于查询。
 - **CI 检查。** 一个测试在空库上跑全部迁移，再对模型做一次 `AutoMigrate` 的 dry-run，二者必须一致（防止改了模型忘写迁移）；另一个测试从上一个发布的基线库（入库的测试夹具）升级上来，与全新安装的 `sqlite_master` 比较，必须一致。
 - 包自己的迁移（目前只有 identity-platform 的四个 SQL，packages/identity-platform/migrations/）不变，仍由 packagestoresdk 在宿主里执行。
+- **实现（P2）。** 见 [database-migrations.md](../../reference/database-migrations.md)。与上文的差别：基线按方言各一个文件（`0001_baseline.sqlite.sql`、`0001_baseline.postgres.sql`，P4 删除后者），内容是迁移前的启动在空库上实际执行的建表和建索引语句，录一次后冻结，而不是从 `sqlite_master` 导出；`kapi_*` 视图不在基线里，仍由每次启动的 `EnsureKernelAPIViews` 创建（部分视图要等节点密钥拆分完成）；最低程序版本的键名是 `min_program_version`；迁移前的自动备份属于 P10。已有库（4.x 和迁移前的 `go_dev` 建的库）第一次启动时被接管：按基线补齐缺少的表、列和索引，只增不改，校验齐全后记为已执行 `0001_baseline`。CI 检查是：全新迁移与测试里保留的旧启动路径逐项一致（防止改了模型忘写迁移），从每个迁移和旧启动的结构升级上来与全新一致，以及 4.0.0、4.1.0、4.2.0 实际建出的库都能接管。
 
 ### 3.4 SQLite 参数和写入方案
 
