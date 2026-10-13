@@ -1,0 +1,132 @@
+# --- the new file ---
+# AnixOps Control configuration, written by `anix-control config rewrite`
+# from /opt/anixops/control/config/config.yaml on 2026-10-13T08:00:00Z.
+# Keys and defaults: docs/reference/configuration.md. The root key and the
+# secrets it adopted are in data_dir/root.key, not in this file.
+domain: your-domain.com
+tls:
+  mode: external
+  cert_file: config/tls/control.crt
+  key_file: config/tls/control.key
+# Still read until PostgreSQL support ends (M2, P4): the panel keeps its
+# database (a PostgreSQL password stays here until then).
+database:
+  conn_max_lifetime: 3600
+  database: "anix_control"
+  driver: "postgres"
+  host: "127.0.0.1"
+  log_level: "error"
+  max_idle_conns: 10
+  max_open_conns: 100
+  password: "your-secure-password"
+  port: 5432
+  username: "anix_control"
+# --- the report ---
+New keys:
+  domain: your-domain.com (from tls.domain); the panel's name
+  tls.mode: external
+  tls.cert_file: config/tls/control.crt (from grpc.tls_cert_file)
+  tls.key_file: config/tls/control.key (from grpc.tls_key_file)
+
+Kept:
+  database: still read until PostgreSQL support ends (M2, P4): the panel keeps its database
+
+Dropped:
+  admin.email: still read until M2 (P9), not written: creates the first administrator on an empty database until the one-time claim link replaces it
+  admin.password: still read until M2 (P9), not written: creates the first administrator on an empty database until the one-time claim link replaces it; keep it out of the file once an administrator exists
+  agent_control.mtls: fixed to required, the 4.2 default; the other modes are removed with the legacy Agent transports
+  app.api_token: still read until M5 (N9), not written: the legacy shared token of /flow/upload and the internal v2 routes, removed with them; administrators use admin API tokens
+  app.edition: there are no editions; orders, payments and affiliate are built in
+  app.name: nothing reads it
+  app.subscribe_path: the default (s)
+  app.traffic_log_enable: nothing reads it
+  app.version: nothing reads it; the version is the binary's
+  auth.login_rate_limit.enabled: login rate limiting is always on
+  auth.login_rate_limit.lockout_seconds: a built-in value (600)
+  auth.login_rate_limit.max_attempts: a built-in value (6)
+  auth.login_rate_limit.window_seconds: a built-in value (300)
+  auth.register_rate_limit.enabled: registration rate limiting is always on
+  auth.register_rate_limit.lockout_seconds: a built-in value (3600)
+  auth.register_rate_limit.max_attempts: a built-in value (5)
+  auth.register_rate_limit.window_seconds: a built-in value (3600)
+  auth.registration.allowed_email_domains: still read until M3 (N35), not written: the registration policy becomes an administrator setting; until then ignoring it would open registration to every address
+  auth.registration.blocked_email_domains: still read until M3 (N35), not written: the registration policy becomes an administrator setting; until then ignoring it would open registration to every address
+  auth.registration.enabled: still read until M3 (N35), not written: the registration policy becomes an administrator setting; until then ignoring it would reopen closed registration
+  auth.registration.require_invite: still read until M3 (N35), not written: the registration policy becomes an administrator setting; until then ignoring it would drop the invite requirement
+  cache.driver: nothing reads it; the cache is in memory
+  cache.redis_db: nothing reads it; the cache is in memory
+  cache.redis_host: nothing reads it; the cache is in memory
+  cache.redis_password: nothing reads it; the cache is in memory
+  cache.redis_port: nothing reads it; the cache is in memory
+  env: Control always runs as production (its only effect was requiring jwt.secret, which is now derived); start a development instance with -debug
+  forward_runtime.backend: still read until M5 (N5), not written: selects the flux forward runtime's backend until the runtime is removed
+  forward_runtime.clean_agent.action_timeout_seconds: still read until M5 (N5), not written: the flux forward runtime, removed with it
+  forward_runtime.clean_agent.heartbeat_interval_seconds: still read until M5 (N5), not written: the flux forward runtime, removed with it
+  forward_runtime.clean_agent.legacy_bridge_enabled: still read until M5 (N5), not written: the flux forward runtime, removed with it
+  forward_runtime.clean_agent.public_url: nothing reads it
+  forward_runtime.clean_agent.token_expire_seconds: nothing reads it
+  forward_runtime.gost_stats.error_log_interval: still read until M5 (N5), not written: the flux forward runtime, removed with it
+  forward_runtime.gost_stats.idle_poll_interval: still read until M5 (N5), not written: the flux forward runtime, removed with it
+  forward_runtime.gost_stats.poll_interval: still read until M5 (N5), not written: the flux forward runtime, removed with it
+  forward_runtime.iptables_ansible: never a key (templates up to 4.2 carried this section); the iptables backend runs with forward_runtime.nftables_ansible
+  forward_runtime.jobs.batch_size: still read until M5 (N5), not written: the flux forward runtime, removed with it
+  forward_runtime.jobs.error_log_interval: still read until M5 (N5), not written: the flux forward runtime, removed with it
+  forward_runtime.jobs.idle_poll_interval: still read until M5 (N5), not written: the flux forward runtime, removed with it
+  forward_runtime.jobs.poll_interval: still read until M5 (N5), not written: the flux forward runtime, removed with it
+  forward_runtime.jobs.timeout_seconds: still read until M5 (N5), not written: the flux forward runtime, removed with it
+  forward_runtime.latency.concurrency: a built-in value (16)
+  forward_runtime.latency.dial_timeout: a built-in value (3s)
+  forward_runtime.latency.dials: a built-in value (5)
+  forward_runtime.latency.error_log_interval: a built-in value (5m)
+  forward_runtime.latency.idle_poll_interval: a built-in value (60s)
+  forward_runtime.latency.poll_interval: a built-in value (60s)
+  forward_runtime.latency.retention_days: a built-in value (7)
+  forward_runtime.nodex.base_url: still read until M5 (N5), not written: the flux forward runtime, removed with it
+  forward_runtime.nodex.timeout_seconds: still read until M5 (N5), not written: the flux forward runtime, removed with it
+  forward_runtime.nodex.token: still read until M5 (N5), not written: the flux forward runtime, removed with it
+  frontend.enable: still read until M2 (P11), not written: serves the web app from frontend.path until the web app is built into the binary
+  frontend.path: still read until M2 (P11), not written: the web app's directory until the web app is built into the binary
+  frontend.port: still read until M2 (P11), not written: a second plain listener of tls.mode external while listen is unset; config rewrite does not carry it, point the reverse proxy at listen
+  grpc.api_token: still read until M5 (N9), not written: the legacy administrator token of the v2board gRPC services, removed with them
+  grpc.enabled: still read until M2 (P11), not written: turns the gRPC listener on without domain; with domain it always runs
+  grpc.host: still read until M2 (P11), not written: the gRPC listener's address, until it listens on every address
+  grpc.port: the default (50051)
+  jwt.expire: a built-in value (86400 seconds)
+  jwt.secret: a template value: derived from the root key from now on
+  log.file_path: nothing reads it; Control logs to standard output
+  log.level: still read until M2 (P11), not written: the JSON log level, until the container files are removed; -debug turns on debug logging
+  log.max_age: nothing reads it
+  log.max_backups: nothing reads it
+  log.max_size: nothing reads it
+  log.output: nothing reads it; Control logs to standard output
+  plugins.control_execution_enabled: the built-in packages always run; Control starts their hosts at every start
+  plugins.control_host_artifact_dir: still read until M2 (P11), not written: where package hosts' files are kept, until the systemd unit gives Control its directories
+  plugins.control_host_request_timeout: a built-in value (30s)
+  plugins.control_host_runtime_dir: still read until M2 (P11), not written: where package hosts' sockets live, until the systemd unit gives Control its runtime directory
+  plugins.control_host_startup_timeout: a built-in value (5s)
+  plugins.control_host_websocket_session_timeout: a built-in value (24h)
+  plugins.control_poll_interval: a built-in value (5s)
+  plugins.dispatch_enabled: Agent plugin dispatch is off until the Agent release manifest brings the Agent plugins (M4)
+  plugins.dispatch_poll_interval: Agent plugin dispatch is off until the Agent release manifest brings the Agent plugins (M4)
+  plugins.identity_bootstrap_package_dir: still read until M2 (P11), not written: imports identity-platform into a development binary that embeds no packages; a release binary ignores it
+  plugins.official_public_key: still read until M2 (P11), not written: the key the built-in packages verify against (development builds sign with their own), until the package index carries it
+  plugins.topology_execution_enabled: topology deployment execution is off until the Agent release manifest brings the Agent plugins (M4)
+  plugins.topology_poll_interval: topology deployment execution is off until the Agent release manifest brings the Agent plugins (M4)
+  server.cors.allow_credentials: a built-in value (false)
+  server.cors.allowed_headers: a built-in value (Content-Type, Authorization, X-API-Key)
+  server.cors.allowed_methods: a built-in value (GET, POST, PUT, DELETE, OPTIONS, PATCH)
+  server.cors.allowed_origins: a built-in value (any origin, without credentials)
+  server.cors.max_age: a built-in value (86400)
+  server.host: still read until M2 (P11), not written: the plain listener of tls.mode external while listen is unset; config rewrite does not carry it, set listen
+  server.mode: release mode is built in; start a development instance with -debug
+  server.port: still read until M2 (P11), not written: the plain listener of tls.mode external while listen is unset; config rewrite does not carry it, set listen
+  server.read_timeout: a built-in value (30 seconds)
+  server.trusted_proxies: still read until M2 (P11), not written: the reverse proxies of a container deployment; afterwards tls.mode acme trusts none and tls.mode external trusts loopback
+  server.write_timeout: a built-in value (30 seconds)
+  tls.cert_file: not used: tls.enable was off (or there is no domain to serve)
+  tls.enable: TLS follows tls.mode
+  tls.key_file: not used: tls.enable was off (or there is no domain to serve)
+
+Notes:
+  tls.mode external: the old file did not use ACME, so a reverse proxy keeps terminating TLS for the web side; its gRPC certificate becomes tls.cert_file
+  tls.mode external: point the reverse proxy at 127.0.0.1:8080 for the whole panel (web, /api, subscriptions, /install): it is one listener now

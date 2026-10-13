@@ -1,0 +1,29 @@
+# --- the new file ---
+# AnixOps Control configuration, written by `anix-control config rewrite`
+# from /opt/anixops/control/config/config.yaml on 2026-10-13T08:00:00Z.
+# Keys and defaults: docs/reference/configuration.md. The root key and the
+# secrets it adopted are in data_dir/root.key, not in this file.
+domain: panel.example.com
+tls:
+  mode: external
+  cert_file: /etc/anix-control/tls/fullchain.pem
+  key_file: /etc/anix-control/tls/privkey.pem
+listen: 127.0.0.1:9080
+grpc:
+  public_name: grpc.example.com
+# --- the report ---
+New keys:
+  domain: panel.example.com; the panel's name
+  tls.mode: external
+  tls.cert_file: /etc/anix-control/tls/fullchain.pem
+  tls.key_file: /etc/anix-control/tls/privkey.pem
+  listen: 127.0.0.1:9080
+  grpc.public_name: grpc.example.com
+
+Dropped:
+  grpc.port: the default (50051)
+  server.trusted_proxies: still read until M2 (P11), not written: the reverse proxies of a container deployment; afterwards tls.mode acme trusts none and tls.mode external trusts loopback
+  subscribe_path: the default (s)
+
+Notes:
+  tls.mode external: point the reverse proxy at 127.0.0.1:9080 for the whole panel (web, /api, subscriptions, /install): it is one listener now
