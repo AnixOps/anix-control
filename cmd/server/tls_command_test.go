@@ -29,8 +29,9 @@ func openCommandDB(t *testing.T) *gorm.DB {
 	sqlDB, err := db.DB()
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = sqlDB.Close() })
-	// Control creates v5_acme_cache with the migration 0003_acme_cache.
-	require.NoError(t, db.AutoMigrate(&model.ACMECacheEntry{}))
+	// Control creates v5_acme_cache with the migration 0003_acme_cache; the
+	// root key check reads the CAs and the node groups.
+	require.NoError(t, db.AutoMigrate(&model.ACMECacheEntry{}, &model.ServiceCA{}, &model.ForwardLinkCA{}, &model.NodeGroup{}))
 	return db
 }
 
@@ -227,8 +228,8 @@ func TestDoctorReportsAFailedCertificateAndAMissingRecord(t *testing.T) {
 		checkPort:      func(string) (string, string) { return panelcert.PortFree, "" },
 	}
 	byID := doctorByID(doctorChecks(context.Background(), cfg, db, env))
-	require.Equal(t, doctorFail, byID["config"].Level, "acme without the root key does not start")
-	require.Equal(t, doctorFail, byID["root_key"].Level)
+	require.Equal(t, doctorOK, byID["config"].Level, "the root key is no configuration key")
+	require.Equal(t, doctorFail, byID["root_key"].Level, "this process has no root key")
 	certificate := byID["certificate:"+panelTestDomain]
 	require.Equal(t, doctorFail, certificate.Level)
 	require.Contains(t, certificate.Message, "self-signed")
@@ -246,7 +247,7 @@ func TestDoctorCommandPrintsAndFails(t *testing.T) {
 	var out bytes.Buffer
 	err := runDoctorCommand(context.Background(), cfg, db, nil, &out)
 	require.ErrorIs(t, err, errDoctorFailed, "no root key")
-	require.Contains(t, out.String(), "[fail] module_runtime.ca_kek is not set")
+	require.Contains(t, out.String(), "[fail] There is no root key")
 	require.Contains(t, out.String(), "       fix: ")
 	require.Contains(t, out.String(), "[warn] domain is not set")
 	require.Equal(t, 1, adminCommandExitCode(err))

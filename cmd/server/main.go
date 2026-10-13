@@ -82,10 +82,13 @@ const shutdownTimeout = 30 * time.Second
 var (
 	configPath string
 	printEnv   bool
-	version    = branding.DefaultVersion
-	buildTime  = "unknown"
-	buildCode  = ""
-	commit     = "unknown"
+	// debugMode runs gin in debug mode and logs at debug level: the
+	// development instance (make run). server.mode and env are built in.
+	debugMode bool
+	version   = branding.DefaultVersion
+	buildTime = "unknown"
+	buildCode = ""
+	commit    = "unknown"
 	// agentRelease is the Agent release tag this build was released with
 	// (config/AGENT_RELEASE, set with -X main.agentRelease). Empty in a
 	// development build.
@@ -95,6 +98,7 @@ var (
 func init() {
 	flag.StringVar(&configPath, "config", defaultConfigPath, "配置文件路径 (or "+config.ConfigPathEnv+")")
 	flag.BoolVar(&printEnv, "print-env", false, "print every ANIX_CONTROL_* configuration variable and exit")
+	flag.BoolVar(&debugMode, "debug", false, "development instance: gin debug mode and debug logging")
 }
 
 const defaultConfigPath = "config/config.yaml"
@@ -162,6 +166,7 @@ func writeEnvTable(w io.Writer) error {
 		printf("%s\t%s\t%s\t%s\n", variable.Name, variable.Type, value, variable.Path)
 	}
 	printf("\nEvery variable also accepts NAME%s=<path> to read the value from a file.\n", config.EnvFileSuffix)
+	printf("The variables of deprecated keys still work or warn: docs/reference/configuration.md lists them.\n")
 	if writeErr != nil {
 		return writeErr
 	}
@@ -355,6 +360,11 @@ func run() int {
 		_, _ = fmt.Fprintln(os.Stderr, reason)
 		return 2
 	}
+	// `config rewrite` and `config check` read configuration files only:
+	// they open no database and need no root key.
+	if code, handled := runConfigCommand(os.Args[1:], os.Stdout, os.Stderr); handled {
+		return code
+	}
 	migrateOnly := takeMigrateCommand()
 	adminArguments := takeAdminCommand()
 	nodeSecretsArguments := takeNodeSecretsCommand()
@@ -392,6 +402,19 @@ func run() int {
 	cfg, err := config.Load(resolvedConfigPath)
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
+	}
+	if debugMode {
+		cfg.Server.Mode = gin.DebugMode
+		cfg.Log.Level = "debug"
+	}
+	// The root key, before anything reads a key: the server creates
+	// root.key (or adopts module_runtime.ca_kek into it); a command only
+	// reads it, so that a command run as another user never creates it.
+	serverStart := !migrateOnly && !jsonCommand && adminArguments == nil
+	deferRootKeyCheck = adminArguments != nil && adminArguments[0] == "doctor"
+	activeRootKey, err = resolveRootKey(cfg, serverStart, log.Printf)
+	if err != nil {
+		log.Fatalf("Root key: %v", err)
 	}
 	if !migrateOnly && !jsonCommand {
 		if err := cfg.ValidateForServer(); err != nil {

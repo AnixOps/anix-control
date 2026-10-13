@@ -68,13 +68,13 @@ func TestSelectConfigPathFallsBackToBuiltInDefaults(t *testing.T) {
 	}
 }
 
-func TestWriteEnvTableListsVariablesWithoutSecretValues(t *testing.T) {
+func TestWriteEnvTableListsTheOperatorVariables(t *testing.T) {
 	var out strings.Builder
 	if err := writeEnvTable(&out); err != nil {
 		t.Fatal(err)
 	}
 	text := out.String()
-	for _, expected := range []string{"ANIX_CONTROL_DATABASE_PASSWORD", "(secret)", "ANIX_CONTROL_SERVER_PORT", "8080", "_FILE"} {
+	for _, expected := range []string{"ANIX_CONTROL_DOMAIN", "ANIX_CONTROL_DATA_DIR", "/var/lib/anix-control", "ANIX_CONTROL_GRPC_PORT", "50051", "_FILE", "deprecated keys"} {
 		if !strings.Contains(text, expected) {
 			t.Fatalf("print-env output lacks %q", expected)
 		}
