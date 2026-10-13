@@ -46,7 +46,11 @@ Runtime configuration now comes exclusively from `config/config.yaml.forward_run
 ## Control Plane Vs Execution Plane
 
 - `anix-control`
-  - public control plane
+  - public control plane: the web app, the API and the install paths on one
+    HTTP handler, with a certificate it obtains and renews itself (`tls.mode`
+    acme), from files (`files`), or TLS terminated in front of it
+    (`external`); the node gRPC listener on `grpc.port`
+    ([`configuration.md`](configuration.md#panel-address-listeners-and-certificates))
   - admin UI
   - persistence
   - diagnostics and job views

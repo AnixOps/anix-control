@@ -1,8 +1,10 @@
 # Kernel Alerts: Certificate Expiry And Stuck Phases
 
 Control watches the things that fail slowly and silently: a certificate whose
-holder stopped renewing it, a CA that is about to end, a rollout that was
-started and never finished, and a built-in package that is not running. The **alert monitor** (`internal/kernelalerts`)
+holder stopped renewing it, a CA that is about to end, the panel's own
+certificate when Control cannot obtain or renew it, a rollout that was
+started and never finished, and a built-in package that is not running.
+The **alert monitor** (`internal/kernelalerts`)
 scans them every 15 minutes, keeps one row per alert in `v4_kernel_alert`,
 sends the administrators one digest of what needs them, and lists the rows at
 `GET /api/v4/kernel/alerts`. It only reads the certificate stores and the
@@ -22,6 +24,8 @@ phase tables: it never renews, revokes or advances anything.
 | `identity_cutover_not_finalized` | `authority` | identity owns logins (state `identity`) since the latest cutover event, and the legacy credentials were not finalized for `alerts.phase_stuck_after` | `POST /api/v4/kernel/identity/finalize` (allowed a day after the cutover), or roll back |
 | `builtin_package_invalid` (critical) | the package id (`index` for an unreadable set) | an official package built into the binary does not verify against `plugins.official_public_key` (signature, digest or contents): it was not installed and its routes are unavailable | install a release binary verified against `SHA256SUMS.txt.sig` ([`../RELEASING.md`](../RELEASING.md#verifying-a-release)), or set `plugins.official_public_key` to the key that signed it (a development build: `make dev-package-key`); the start log names that key |
 | `builtin_package_failed` (critical) | the package id | a built-in package verified, but its installation is `failed` (its host does not start, a migration failed, the binary is older than the installed version) or is not enabled at the built-in version | read the reason in the alert and the Control log (`built-in package ... failed`), fix it, restart Control: the start installs and starts it again |
+| `panel_certificate_expiring` | the certificate's name (`panel.example.com`) | a certificate Control serves itself (the panel's, the gRPC listener's) is inside its [window](#thresholds): an ACME certificate that missed its renewal (renewed a third of its lifetime before the end), or certificate files due for replacement | for ACME, the cause in `anix-control tls status`, then `anix-control tls retry`; for files, replacing them (Control reloads them) |
+| `panel_certificate_renewal_failing` | the certificate's name | Control cannot obtain, renew or load a certificate it serves. `critical` while it serves the self-signed fallback (no node can connect, browsers warn), `warning` while the old certificate still lasts. The message carries the last error and its fix | the fix in the message (a DNS record, a closed port 80 or 443, a CDN proxy on the gRPC name, unreadable files), then `anix-control tls retry` or the console's banner; it resolves once a valid certificate is served. A first request still under way is not an alert |
 
 An alert resolves by itself on the next scan after its cause is gone (a new
 certificate exists, the CA was rotated, the phase moved on, the node was
@@ -39,7 +43,8 @@ window = min(alerts.leaf_expiry_days, one sixth of the certificate's own lifetim
 ```
 
 For the default lifetimes that is 28 hours for the 7-day Agent and link
-certificates and 4 hours for the 24-hour module certificates;
+certificates, 4 hours for the 24-hour module certificates and 14 days for a
+90-day panel certificate;
 `leaf_expiry_days` (default 14) only matters when you lower it below that.
 The lifetime is `not_after - created_at` of the certificate record. Only a
 node's **latest not-revoked** certificate counts: a node that renewed is

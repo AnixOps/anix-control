@@ -49,7 +49,7 @@ loopback 或受控私网使用明文；公网部署必须配置 `grpc.tls_cert_f
 3. 本地开发部署
 4. 生产环境部署建议
 5. 关键配置说明
-6. TLS/HTTPS（6.1 Reverse proxies / `server.trusted_proxies`）
+6. TLS/HTTPS（`tls.mode`；6.1 external 模式：反向代理、CDN / `server.trusted_proxies`）
 7. 监控与日志
 8. 备份与恢复
 9. 常见故障排查
@@ -177,13 +177,14 @@ CA 签发；v4.2 起 `agent_control.mtls` 默认 `required`，这是 Agent 唯�
    Agent 证书（`wrong key-encryption key`），所有 Agent 需重新注册。请与数据库一起备份；
    轮换是手动流程（[`UPGRADE.md`](UPGRADE.md)）。
 2. **Agent 信任的 gRPC 证书。** Agent 用节点的系统根证书校验 Control 的证书（主机名为
-   `agent_install.grpc_target`，否则 `agent_install.public_url` 的主机），**不能**
-   配置私有 CA，所以**自签名证书不可用**，安装器也不会生成。请使用公网可信证书
-   （Let's Encrypt，或反向代理已有的同名证书）：
+   `agent_install.grpc_target`，否则 `grpc.public_name`、`domain` 或 `agent_install.public_url`
+   的主机），**不能**配置私有 CA，所以**自签名证书不可用**。设置了 `domain`（或 CDN 模式的
+   `grpc.public_name`）时 Control 自己通过 ACME 申请并续期，热加载，无需下面的步骤（第 6 节）。
+   否则请使用公网可信证书文件（Let's Encrypt，或反向代理已有的同名证书），文件变化后自动重新加载：
    - Compose：`sudo bash init-secrets.sh --grpc-name grpc.example.com`（自动使用
      `/etc/letsencrypt/live/<name>/`，或加 `--grpc-tls-cert`/`--grpc-tls-key`），再在
-     `.env` 设置 `ANIX_CONTROL_GRPC_BIND=0.0.0.0`。证书续期后重跑同一命令并
-     `restart control`。详见 [`config/deploy/compose/secrets.README.md`](../config/deploy/compose/secrets.README.md)。
+     `.env` 设置 `ANIX_CONTROL_GRPC_BIND=0.0.0.0`。证书续期后重跑同一命令；Control 发现
+     文件变化后自动重新加载，无需重启。详见 [`config/deploy/compose/secrets.README.md`](../config/deploy/compose/secrets.README.md)。
    - Helm：`grpc.enabled=true`、`grpc.tls.secretName=<kubernetes.io/tls Secret>`（cert-manager
      示例见 chart README），`config.ANIX_CONTROL_AGENT_INSTALL_GRPC_TARGET=<name>:50051`。
    - systemd：`install.sh install --version <tag> --grpc-name <name>` 或 `install.sh enable-agents --grpc-name <name>`（见
@@ -442,25 +443,67 @@ jwt:
 
 ## 6. TLS/HTTPS
 
-推荐在 Nginx/Caddy 层处理证书，应用层保持 HTTP 内网监听。
+Control 只有一个 HTTP 处理器：网页、API、订阅路径、`/install.sh` 与 `/install/*`、健康检查
+都在同一个监听上（不再有 8080/3000 两个监听和中间的转发）。谁来终止 TLS 由 `tls.mode` 决定
+（键的完整说明见 [`reference/configuration.md`](reference/configuration.md#panel-address-listeners-and-certificates)）：
 
-### Let's Encrypt（示例）
+| `tls.mode` | 网页侧 | 节点 gRPC 证书 | 适用 |
+|---|---|---|---|
+| `acme`（设置了 `domain` 时的默认值） | Control 自己在 `:443` 提供 https，`:80` 应答 ACME HTTP-01 并把其余请求跳转到 https | 与网页同一张证书（同名时），由 Control 通过 ACME 申请和续期 | 80、443 归 Control，域名不套 CDN 代理 |
+| `external` | CDN 或反向代理终止 TLS，明文转发到 `listen`（默认只监听本机） | `grpc.public_name`（或 `domain`）的证书由 Control 通过 ACME 申请；也可用 `tls.cert_file`/`tls.key_file` | 80/443 被其他网站占用，或面板域名必须套 CDN |
+| `files` | Control 在 `:443` 用 `tls.cert_file`/`tls.key_file` 提供 https，文件变化后自动重新加载 | 同名时用同一张证书 | 自有证书（例如 CDN 回源证书、DNS-01 申请的证书） |
 
-```bash
-# 安装 certbot
-sudo apt update
-sudo apt install -y certbot
+最小配置（`acme`）只有一行：
 
-# 申请证书（以单域名为例）
-sudo certbot certonly --standalone -d panel.example.com
+```yaml
+domain: panel.example.com
 ```
 
-证书路径通常为：
+域名的 A（以及 AAAA）记录指向本机、不开 CDN 代理、80 和 443 对公网开放即可。证书申请在后台进行，
+**任何时候都不会阻塞启动或握手**：证书到手之前、或申请失败时，Control 使用自签证书照常提供服务，
+管理后台顶部显示原因和修复办法，节点接入命令暂不发放（Agent 只信任公网证书，会拒绝自签证书）。
+证书、账户密钥保存在数据库表 `v5_acme_cache` 中，用 `module_runtime.ca_kek` 加密，随数据库备份；
+还原或迁机不会重新申请。查看与重试：
 
-- `/etc/letsencrypt/live/panel.example.com/fullchain.pem`
-- `/etc/letsencrypt/live/panel.example.com/privkey.pem`
+```bash
+anix-control tls status        # 每张证书的状态、到期时间、最近的错误和修复办法
+anix-control tls retry         # 立即重新申请失败的证书（每个域名每小时最多 3 次）
+anix-control doctor            # 配置、证书、DNS（是否指向本机、是否被 CDN 代理）和端口检查
+```
 
-### 6.1 Reverse proxies：反向代理与 `server.trusted_proxies`
+以非 root 运行时需要绑定 80、443 的能力（systemd：`AmbientCapabilities=CAP_NET_BIND_SERVICE`）。
+Control 自己终止 TLS 时不发送 HSTS（自签兜底期间 HSTS 会让浏览器无法打开面板）。
+
+**面板域名在 CDN 后面（CDN 模式）。** Agent 用系统根证书校验 gRPC 证书、且必须直连 gRPC，CDN
+无法转发 Agent 的双向 TLS。所以网页走 CDN，节点直连另一个只解析（不代理）到本机的域名：
+
+```yaml
+domain: panel.example.com          # CDN 代理
+tls:
+  mode: external
+listen: 127.0.0.1:8080             # CDN 回源到本机代理时；CDN 直接回源 Control 时可设 0.0.0.0:80
+grpc:
+  public_name: grpc.example.com    # DNS-only，A/AAAA 指向本机
+```
+
+节点经 CDN 下载 `https://panel.example.com/install.sh`，从 `/install/agent.env` 得到
+`grpc.example.com:50051` 并直连；Control 通过 ACME 为 `grpc.example.com` 申请公网证书（80 空闲时
+自己应答 HTTP-01，否则经本机代理转发到 `listen`；443 空闲时还会应答 TLS-ALPN-01）。需对公网开放
+`grpc.port` 以及 80（或 443）。
+
+**external 模式的 gRPC 证书也可以自己提供**：`tls.cert_file`/`tls.key_file`（或保留旧的
+`grpc.tls_cert_file`/`grpc.tls_key_file`），文件变化后自动重新加载，不再需要重启。例如用 certbot
+（DNS-01 或 standalone）申请：
+
+```bash
+sudo certbot certonly --standalone -d grpc.example.com
+# /etc/letsencrypt/live/grpc.example.com/fullchain.pem 与 privkey.pem
+```
+
+### 6.1 external 模式：反向代理、CDN 与 `server.trusted_proxies`
+
+`tls.mode: external` 时，Control 在 `listen`（未设置时为 `server.host:server.port`，内置默认
+`127.0.0.1:8080`）提供明文 HTTP，由前面的反向代理或 CDN 终止 TLS 并把**整个域名**转发过来。
 
 **从 4.1.0-rc.3 起，Control 只信任 `server.trusted_proxies`
 （`ANIX_CONTROL_SERVER_TRUSTED_PROXIES`）中列出的反向代理发来的转发头。**
@@ -478,10 +521,10 @@ Telegram webhook 地址、发给 package host 的 `request_scheme`/`request_host
 | `[]` / 空环境变量 | 不信任任何代理 |
 | IP 或 CIDR 列表 | 只信任这些地址；**会替换默认值**，本机代理（Nginx、Caddy）仍需要时请保留 `127.0.0.1/32,::1/128` |
 
-Control 自带的 UI 端口（3000）到 API 端口（8080）的转发总是被信任，不需要写进列表。UI 端口把
-`/api`、订阅路径以及节点安装路径（`/install.sh`、`/install.sh.sig`、`/install/agent.env`、
-`/install/ip`、`/install/agent/<tag>/<asset>`）转发到 API 端口，所以反向代理把整个域名指向 3000 即可；
-这些安装路径在 8080 和 3000 两个监听上都可访问，限流和签名检查在 API 一侧。
+网页、API、订阅路径和节点安装路径（`/install.sh`、`/install.sh.sig`、`/install/agent.env`、
+`/install/ip`、`/install/agent/<tag>/<asset>`）都在这一个监听上，代理把整个域名转发过来即可；
+未匹配的 `/install/*`、`/api/*` 路径返回 404，不会返回网页 HTML。没有 `listen` 的旧配置仍按
+`server.port` 和（`frontend.enable` 时）`frontend.port` 两个端口监听，两个端口是同一个处理器。
 
 规则：
 
@@ -498,14 +541,26 @@ Control 自带的 UI 端口（3000）到 API 端口（8080）的转发总是被�
 - 列表中的每个地址都能伪造客户端 IP 和链接 host：只列出真正的代理，
   不要把整个内网或 `0.0.0.0/0` 放进去。
 
-**Nginx（与 Control 同机）**：默认值即可。
+**Nginx（与 Control 同机）**：`trusted_proxies` 用默认值即可。CDN 模式下若 Control 不能自己绑定
+80 端口，还要把 gRPC 域名的 HTTP-01 请求转给 Control（整个域名转发即可）：
+
+```nginx
+server {
+    listen 80;
+    server_name grpc.example.com;
+    location /.well-known/acme-challenge/ {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+    }
+}
+```
 
 ```nginx
 server {
     listen 443 ssl;
     server_name panel.example.com;
     location / {
-        proxy_pass http://127.0.0.1:3000;
+        proxy_pass http://127.0.0.1:8080;   # Control 的 listen
         proxy_set_header Host              $host;
         proxy_set_header X-Forwarded-Host  $host;
         proxy_set_header X-Forwarded-Proto $scheme;
@@ -524,7 +579,7 @@ ANIX_CONTROL_SERVER_TRUSTED_PROXIES=127.0.0.1/32,::1/128,10.0.5.20
 
 ```caddyfile
 panel.example.com {
-    reverse_proxy 127.0.0.1:3000
+    reverse_proxy 127.0.0.1:8080
 }
 ```
 

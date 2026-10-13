@@ -34,7 +34,8 @@ docker compose ps                  # control becomes healthy
 Open:
 
 - panel API: `http://127.0.0.1:8080` (`/readyz` for readiness)
-- admin or user frontend: `http://127.0.0.1:3000`
+- admin or user frontend: `http://127.0.0.1:3000` (the same handler as `:8080`;
+  with `domain` set, `https://<domain>` on 443 instead)
 
 Settings are `ANIX_CONTROL_*` environment variables in `docker-compose.yml`
 (`docker compose run --rm control -print-env` lists all of them). For example,
@@ -98,8 +99,8 @@ forward_runtime:
 
 Current verified single-UI port split:
 
-- AnixOps Control API: `8080`
-- AnixOps Control UI: `3000`
+- AnixOps Control web, API and install paths: `8080` (and `3000`, the same
+  handler) without `domain`; `443` and `80` with `domain` (`tls.mode` acme)
 - NodeX control-plane: `18081`
 - relay gost API: `18080`
 
