@@ -98,13 +98,17 @@ func Open(ctx context.Context, leaser Leaser) (*Store, error) {
 // sqliteConnectionString matches the kernel's settings for the shared file,
 // immediate transactions included: a deferred one that reads before it
 // writes fails with "database is locked" when another process committed
-// after its read began.
+// after its read began. The kernel and every package host write the one
+// file, and a host's writes queue behind the kernel's busy ones, so the
+// busy timeout is 10 seconds (the kernel's SQLiteBusyTimeoutMillis);
+// synchronous NORMAL in WAL mode syncs at checkpoints and not at every
+// commit, as the kernel's connection does.
 func sqliteConnectionString(path string) string {
 	separator := "?"
 	if strings.Contains(path, "?") {
 		separator = "&"
 	}
-	return path + separator + "_pragma=busy_timeout(5000)&_txlock=immediate&_pragma=journal_mode(WAL)"
+	return path + separator + "_pragma=busy_timeout(10000)&_txlock=immediate&_pragma=synchronous(NORMAL)&_pragma=journal_mode(WAL)"
 }
 
 // Prefix is what the __PKG_PREFIX__ migration token expands to: the package

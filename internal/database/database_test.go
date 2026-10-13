@@ -2,6 +2,7 @@ package database
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/AnixOps/anix-control/v5/internal/config"
@@ -9,16 +10,34 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestSQLiteConnectionStringEnablesBusyTimeoutImmediateTransactionsAndWALForFileDatabases(t *testing.T) {
+func TestSQLiteConnectionStringTunesTheWriterConnectionOfFileDatabases(t *testing.T) {
+	const file = "_pragma=busy_timeout(10000)&_txlock=immediate" +
+		"&_pragma=synchronous(NORMAL)&_pragma=auto_vacuum(INCREMENTAL)&_pragma=journal_mode(WAL)"
+	assert.Equal(t, "/var/lib/anixops/control.db?"+file, sqliteConnectionString("/var/lib/anixops/control.db"))
+	assert.Equal(t, "/var/lib/anixops/control.db?cache=shared&"+file, sqliteConnectionString("/var/lib/anixops/control.db?cache=shared"))
+	// auto_vacuum must precede journal_mode: switching to WAL writes the
+	// header, after which auto_vacuum can no longer be chosen.
+	assert.Less(t, strings.Index(file, "auto_vacuum"), strings.Index(file, "journal_mode"))
+}
+
+func TestSQLiteConnectionStringOfInMemoryDatabasesHasNoFileSettings(t *testing.T) {
+	assert.Equal(t, ":memory:?_pragma=busy_timeout(10000)&_txlock=immediate", sqliteConnectionString(":memory:"))
+	assert.Equal(t, "file::memory:?cache=shared&_pragma=busy_timeout(10000)&_txlock=immediate", sqliteConnectionString("file::memory:?cache=shared"))
+	for _, path := range []string{":memory:", "file::memory:?cache=shared", "file:x?mode=memory&cache=shared"} {
+		assert.True(t, sqliteInMemory(path), path)
+	}
+	assert.False(t, sqliteInMemory("/var/lib/anixops/control.db"))
+}
+
+func TestSQLiteReadConnectionStringIsQueryOnlyAndDeferred(t *testing.T) {
 	assert.Equal(t,
-		"/var/lib/anixops/control.db?_pragma=busy_timeout(5000)&_txlock=immediate&_pragma=journal_mode(WAL)",
-		sqliteConnectionString("/var/lib/anixops/control.db"),
+		"/var/lib/anixops/control.db?_pragma=busy_timeout(10000)&_pragma=query_only(1)",
+		sqliteReadConnectionString("/var/lib/anixops/control.db"),
 	)
 	assert.Equal(t,
-		"/var/lib/anixops/control.db?cache=shared&_pragma=busy_timeout(5000)&_txlock=immediate&_pragma=journal_mode(WAL)",
-		sqliteConnectionString("/var/lib/anixops/control.db?cache=shared"),
+		"/var/lib/anixops/control.db?cache=shared&_pragma=busy_timeout(10000)&_pragma=query_only(1)",
+		sqliteReadConnectionString("/var/lib/anixops/control.db?cache=shared"),
 	)
-	assert.Equal(t, ":memory:?_pragma=busy_timeout(5000)&_txlock=immediate", sqliteConnectionString(":memory:"))
 }
 
 func closeDatabase(t testing.TB) {

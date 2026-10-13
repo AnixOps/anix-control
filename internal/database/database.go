@@ -1,12 +1,49 @@
+// Package database opens the kernel's database and hands out its one
+// *gorm.DB (Get, GetDB).
+//
+// # SQLite: one writer, a read pool
+//
+// SQLite allows one write transaction at a time, so on a database file the
+// handle is split in two. Every write statement and every transaction
+// (Begin, Transaction) runs on a single writer connection (MaxOpenConns 1):
+// writers queue in Go instead of busy-waiting inside SQLite, and a
+// transaction begins IMMEDIATE, so it takes the write lock at BEGIN and a
+// read-then-write transaction cannot fail half way with "database is
+// locked". Plain queries (First, Find, Count, Raw SELECT) run on a pool of
+// read connections (SQLiteReadConns, query_only): in WAL mode a reader never
+// blocks the writer or the other way round. Both use WAL, synchronous NORMAL
+// and a 10 second busy timeout, which only matters to a process that is not
+// this one: every package host opens the same file. The routing is GORM's
+// dbresolver plugin; callers keep using the one handle.
+//
+// Rules that follow from the split:
+//
+//   - A read that must see the writes of its own transaction uses the
+//     transaction's handle (tx), never the root handle: the root handle's
+//     reader sees only what was committed, and a write on the root handle
+//     while a transaction is open waits for that transaction to end, so it
+//     is a deadlock when the transaction waits for it.
+//   - A read after a committed write on the root handle sees the write: the
+//     commit finishes before the next statement starts.
+//   - A read that must not race another writer between its read and its
+//     write goes into a transaction (a SELECT ... FOR UPDATE is a write
+//     for the router, and SQLite has no row locks).
+//   - Do not hold a *sql.Conn from the handle's *sql.DB across work that
+//     also uses the handle: the writer pool has one connection.
+//
+// In-memory databases (":memory:", tests) keep a single handle: each
+// connection of an in-memory database is its own database. PostgreSQL has
+// one handle and a pool sized by the database settings; nothing above
+// applies to it.
 package database
 
 import (
+	"database/sql"
 	"fmt"
 	"github.com/AnixOps/anix-control/v5/internal/logging"
 	"log"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/AnixOps/anix-control/v5/internal/config"
@@ -19,6 +56,9 @@ import (
 var (
 	db          *gorm.DB
 	initialized bool
+	// readPools are the SQLite read connection pools behind db; empty for
+	// an in-memory database and for PostgreSQL.
+	readPools []*sql.DB
 )
 
 // Init 初始化数据库连接
@@ -29,6 +69,7 @@ func Init(cfg *config.DatabaseConfig) error {
 	}
 
 	var dialector gorm.Dialector
+	var readDialector gorm.Dialector
 	var err error
 
 	switch cfg.Driver {
@@ -45,6 +86,9 @@ func Init(cfg *config.DatabaseConfig) error {
 		}
 
 		dialector = sqlite.Open(sqliteConnectionString(dbPath))
+		if !sqliteInMemory(dbPath) {
+			readDialector = sqlite.Open(sqliteReadConnectionString(dbPath))
+		}
 
 	case "postgres", "postgresql":
 		// PostgreSQL
@@ -77,6 +121,18 @@ func Init(cfg *config.DatabaseConfig) error {
 	})
 	if err != nil {
 		return fmt.Errorf("failed to connect database: %w", err)
+	}
+
+	if readDialector != nil {
+		pools, err := splitSQLiteHandle(db, readDialector)
+		if err != nil {
+			if sqlDB, dbErr := db.DB(); dbErr == nil {
+				_ = sqlDB.Close()
+			}
+			db = nil
+			return err
+		}
+		readPools = pools
 	}
 
 	// 只有 PostgreSQL 需要设置连接池
@@ -145,26 +201,6 @@ func PackageStorageSource(cfg *config.DatabaseConfig) (string, error) {
 	}
 }
 
-// sqliteConnectionString adds the connection settings Control needs to a
-// SQLite path: a busy timeout, WAL for file databases, and transactions that
-// begin IMMEDIATE. A deferred transaction that reads before it writes cannot
-// upgrade to a writer once another connection committed after its read
-// began, and SQLite fails it with "database is locked" at once, without
-// waiting out the busy timeout; an immediate one waits for the write lock at
-// BEGIN instead.
-func sqliteConnectionString(databasePath string) string {
-	databasePath = strings.TrimSpace(databasePath)
-	separator := "?"
-	if strings.Contains(databasePath, "?") {
-		separator = "&"
-	}
-	dsn := databasePath + separator + "_pragma=busy_timeout(5000)&_txlock=immediate"
-	if databasePath == ":memory:" || strings.HasPrefix(databasePath, "file::memory:") {
-		return dsn
-	}
-	return dsn + "&_pragma=journal_mode(WAL)"
-}
-
 // Get 获取数据库实例
 func Get() *gorm.DB {
 	return db
@@ -184,18 +220,26 @@ func Close() error {
 	if err != nil {
 		return err
 	}
+	var closeErr error
+	for _, pool := range readPools {
+		if err := pool.Close(); err != nil && closeErr == nil {
+			closeErr = err
+		}
+	}
+	readPools = nil
 	if err := sqlDB.Close(); err != nil {
 		return err
 	}
 	db = nil
 	initialized = false
-	return nil
+	return closeErr
 }
 
 // Reset resets the database state (for testing only)
 func Reset() {
 	db = nil
 	initialized = false
+	readPools = nil
 }
 
 // AutoMigrate 自动迁移数据库表
