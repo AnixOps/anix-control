@@ -5,7 +5,9 @@
 # identity-platform as a separate container, then logs in through the v2 API:
 # the request travels kernel gateway -> remote identity module over mTLS ->
 # package bridge -> kernel. The identity package is built and signed with a
-# throwaway key that the kernel is told to trust. It then runs the identity
+# throwaway key that the kernel is told to trust. The administrator is the
+# first one, created through the claim link (`anix-control admin claim-link`
+# in the container, then POST /api/v5/claim). It then runs the identity
 # cutover acceptance (identity_cutover_acceptance.sh), and stops the identity
 # module: new logins fail while issued identity tokens still verify.
 #
@@ -56,8 +58,6 @@ ANIX_CONTROL_DATABASE_USERNAME=${DB_USER}
 ANIX_CONTROL_DATABASE_DATABASE=${DB_NAME}
 ANIX_CONTROL_DATABASE_SSLMODE=disable
 ANIX_CONTROL_LOG_FORMAT=json
-ANIX_CONTROL_ADMIN_EMAIL=admin@example.test
-ANIX_CONTROL_ADMIN_PASSWORD=ModuleSmoke-0123456789
 ANIX_CONTROL_PLUGINS_OFFICIAL_PUBLIC_KEY=${public_key}
 ANIX_CONTROL_PLUGINS_IDENTITY_BOOTSTRAP_PACKAGE_DIR=/app/bootstrap/identity-platform
 EOF
@@ -94,6 +94,21 @@ contains "$("${compose[@]}" run --rm -T --no-deps migrate module runtime set ide
 
 echo "== start Control and the identity module"
 "${compose[@]}" up -d
+
+echo "== the first administrator, through the claim link"
+ready=0
+for _ in $(seq 1 60); do
+  if curl -fsS http://127.0.0.1:8080/readyz >/dev/null 2>&1; then ready=1; break; fi
+  sleep 3
+done
+test "${ready}" = 1 || { echo "Control did not become ready"; exit 1; }
+link="$("${compose[@]}" exec -T control /app/anix-control admin claim-link 2>/dev/null)"
+[[ "${link}" =~ (anixclaim_[A-Za-z0-9_-]{43}) ]] || { echo "admin claim-link printed no link: ${link}"; exit 1; }
+status="$(curl -sS -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' \
+  -d "{\"token\":\"${BASH_REMATCH[1]}\",\"email\":\"admin@example.test\",\"password\":\"ModuleSmoke-0123456789\"}" \
+  http://127.0.0.1:8080/api/v5/claim)"
+test "${status}" = 201 || { echo "the claim answered ${status}"; exit 1; }
+
 login() {
   curl -fsS -H 'Content-Type: application/json' \
     -d '{"email":"admin@example.test","password":"ModuleSmoke-0123456789"}' \

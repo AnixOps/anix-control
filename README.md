@@ -97,9 +97,15 @@ export VERSION=v4.2.0   # the release tag to install
 curl -fsSL \
   "https://raw.githubusercontent.com/AnixOps/anix-control/${VERSION}/scripts/install.sh" \
   -o /tmp/anix-control-install.sh
-sudo bash /tmp/anix-control-install.sh install --version "${VERSION}" --admin-email "admin@example.com"
+sudo bash /tmp/anix-control-install.sh install --version "${VERSION}"
 rm -f /tmp/anix-control-install.sh
 ```
+
+No administrator password is set anywhere: the installer ends by printing a
+one-time link, `https://<domain>/claim#anixclaim_…`, that creates the first
+administrator. It works once, for 24 hours; `anix-control admin claim-link`
+prints a new one while the panel has no administrator (the release
+installation guide has the exact command).
 
 See the [release installation guide](docs/guide/release-installation.md) for the systemd path's
 reverse proxy, update, rollback, and security steps. Existing panel or foreign
@@ -123,8 +129,8 @@ make run
 
 It keeps its SQLite database and root key in the ignored `.dev/`, serves
 the web app and the API on `127.0.0.1:19080` and gRPC on `127.0.0.1:50052`,
-and runs with `-debug`. An empty database needs
-`ANIX_CONTROL_ADMIN_PASSWORD` for the first administrator. An already running
+and runs with `-debug`. On an empty database `make claim-link` prints the
+link that creates the first administrator. An already running
 system `anix-control` service and its production-style ports are not
 changed. Set `RUN_CONFIG=/path/to/config.yaml` to load a configuration file
 as well.

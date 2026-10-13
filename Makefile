@@ -1,4 +1,4 @@
-.PHONY: build build-packages run clean test test-unit test-e2e test-coverage test-coverage-html test-frontend
+.PHONY: build build-packages run claim-link clean test test-unit test-e2e test-coverage test-coverage-html test-frontend
 .PHONY: pre-deploy deploy docker-build docker-run lint vet fmt bench grpc-gen swagger
 .PHONY: test-quick test-clean test-summary test-grpc test-cmd test-all test-coverage-all
 
@@ -66,18 +66,24 @@ build-linux: build-packages
 	mkdir -p build
 	GOWORK=off CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "$(LDFLAGS)" -o build/anix-control-linux ./cmd/server
 
-# 运行开发服务器: the built-in packages verify against the development key.
-# An empty database needs ANIX_CONTROL_ADMIN_PASSWORD for the first
-# administrator (export it before make run).
-run: build-packages
-	@mkdir -p $(DEV_DIR)
-	ANIX_CONTROL_PLUGINS_OFFICIAL_PUBLIC_KEY="$$($(MAKE) -s dev-package-key)" \
+# The development instance's environment (make run, make claim-link): the
+# built-in packages verify against the development key.
+DEV_ENV = ANIX_CONTROL_PLUGINS_OFFICIAL_PUBLIC_KEY="$$($(MAKE) -s dev-package-key)" \
 	ANIX_CONTROL_DATA_DIR=$(DEV_DIR) \
 	ANIX_CONTROL_LISTEN=127.0.0.1:19080 \
 	ANIX_CONTROL_GRPC_ENABLED=true ANIX_CONTROL_GRPC_HOST=127.0.0.1 ANIX_CONTROL_GRPC_PORT=50052 \
 	ANIX_CONTROL_DATABASE_DRIVER=sqlite ANIX_CONTROL_DATABASE_DATABASE=$(DEV_DIR)/control.db \
-	ANIX_CONTROL_ADMIN_EMAIL=$${ANIX_CONTROL_ADMIN_EMAIL:-control-dev@anixops.local} \
-	GOWORK=off go run ./cmd/server -debug $(if $(RUN_CONFIG),-config $(RUN_CONFIG))
+	$(if $(RUN_CONFIG),ANIX_CONTROL_CONFIG=$(RUN_CONFIG))
+
+# 运行开发服务器. On an empty database `make claim-link` prints the one-time
+# link that creates the first administrator.
+run: build-packages
+	@mkdir -p $(DEV_DIR)
+	$(DEV_ENV) GOWORK=off go run ./cmd/server -debug
+
+# The development instance's claim link (after make run started it once).
+claim-link:
+	$(DEV_ENV) GOWORK=off go run ./cmd/server admin claim-link
 
 # 清理
 clean:
@@ -286,6 +292,7 @@ help:
 	@echo "  make build-web      - 仅编译前端"
 	@echo "  make build-linux    - 编译 Linux 版本"
 	@echo "  make run            - 运行开发服务器"
+	@echo "  make claim-link     - 开发实例的首个管理员领取链接"
 	@echo ""
 	@echo "测试命令:"
 	@echo "  make test           - 运行单元测试"

@@ -3,10 +3,9 @@ AnixOps Control {{ .Chart.AppVersion }} is starting ({{ include "anix-control.im
 Readiness:
   kubectl -n {{ .Release.Namespace }} rollout status deployment/{{ include "anix-control.fullname" . }}
 
-First administrator ({{ index .Values.config "ANIX_CONTROL_ADMIN_EMAIL" | default "admin" }}): an empty database needs
-ANIX_CONTROL_ADMIN_PASSWORD_FILE (or ANIX_CONTROL_ADMIN_PASSWORD) before the first start. Without it the migrate init
-container stops with the reason and no password is ever generated:
-  kubectl -n {{ .Release.Namespace }} logs deployment/{{ include "anix-control.fullname" . }} -c migrate
+First administrator: on a fresh database, print the one-time link that creates it (it works once, for
+24 hours; running the command again replaces it), then open it in a browser:
+  kubectl -n {{ .Release.Namespace }} exec deployment/{{ include "anix-control.fullname" . }} -c control -- /app/anix-control admin claim-link
 
 The web app and the API (one port):
   kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "anix-control.fullname" . }} 8080:{{ .Values.service.httpPort }}
