@@ -126,18 +126,17 @@ func (c *Config) TLSModeOrDefault() string {
 	if mode := strings.ToLower(strings.TrimSpace(c.TLS.Mode)); mode != "" {
 		return mode
 	}
-	if c.DomainOrAlias() != "" {
+	if c.PanelDomain() != "" {
 		return TLSModeACME
 	}
 	return TLSModeExternal
 }
 
-// DomainOrAlias returns domain, else the older tls.domain, normalized.
-func (c *Config) DomainOrAlias() string {
-	if domain := normalizeHostName(c.Domain); domain != "" {
-		return domain
-	}
-	return normalizeHostName(c.TLS.Domain)
+// PanelDomain returns domain, normalized. The older tls.domain is not read:
+// it was only ever logged, and taking it now would move an existing
+// configuration behind a reverse proxy to tls.mode acme on its own.
+func (c *Config) PanelDomain() string {
+	return normalizeHostName(c.Domain)
 }
 
 // Panel resolves the listener and certificate layout. It assumes a
@@ -146,7 +145,7 @@ func (c *Config) Panel() PanelSettings {
 	settings := PanelSettings{
 		Mode:         c.TLSModeOrDefault(),
 		ModeExplicit: strings.TrimSpace(c.TLS.Mode) != "",
-		Domain:       c.DomainOrAlias(),
+		Domain:       c.PanelDomain(),
 		GRPCPort:     c.GRPC.Port,
 	}
 	if settings.GRPCPort <= 0 {
@@ -269,16 +268,13 @@ func (c *Config) validatePanel() error {
 	default:
 		return fmt.Errorf("invalid tls.mode %q: use %s", c.TLS.Mode, strings.Join(TLSModes, ", "))
 	}
-	for key, value := range map[string]string{"domain": c.Domain, "tls.domain": c.TLS.Domain, "grpc.public_name": c.GRPC.PublicName} {
+	for key, value := range map[string]string{"domain": c.Domain, "grpc.public_name": c.GRPC.PublicName} {
 		if name := normalizeHostName(value); name != "" && !validDNSName(name) {
 			return fmt.Errorf("invalid %s %q: use a DNS name such as panel.example.com (no scheme, port or path, not an address)", key, value)
 		}
 	}
-	if domain, alias := normalizeHostName(c.Domain), normalizeHostName(c.TLS.Domain); domain != "" && alias != "" && domain != alias {
-		return fmt.Errorf("domain %q and tls.domain %q differ: tls.domain is the older spelling of domain; remove it", c.Domain, c.TLS.Domain)
-	}
 	effective := c.TLSModeOrDefault()
-	if (effective == TLSModeACME || effective == TLSModeFiles) && c.DomainOrAlias() == "" {
+	if (effective == TLSModeACME || effective == TLSModeFiles) && c.PanelDomain() == "" {
 		return fmt.Errorf("tls.mode %s needs domain: the name the panel is served at", effective)
 	}
 	if (strings.TrimSpace(c.TLS.CertFile) == "") != (strings.TrimSpace(c.TLS.KeyFile) == "") {
@@ -304,7 +300,15 @@ func (c *Config) validatePanel() error {
 		}
 	}
 	if c.TLS.Enable {
+		// It used to serve https on the web port with tls.cert_file: refuse
+		// rather than serve that port plain from now on.
+		if strings.TrimSpace(c.TLS.Mode) == "" && strings.TrimSpace(c.TLS.CertFile) != "" {
+			return fmt.Errorf("tls.enable is no longer read: to serve https with tls.cert_file, set domain and tls.mode: files (Control then serves https on 443 and http on 80); behind a reverse proxy or CDN, remove tls.enable")
+		}
 		log.Printf("tls.enable is ignored: the web side's TLS follows tls.mode (%s)", effective)
+	}
+	if strings.TrimSpace(c.TLS.Domain) != "" && c.PanelDomain() == "" {
+		log.Printf("tls.domain is not read: set domain to the panel's name (Control then serves it over https with its own certificate, tls.mode acme)")
 	}
 	return nil
 }

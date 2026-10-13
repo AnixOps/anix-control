@@ -307,11 +307,20 @@ admin:
   # without it. It is never generated or printed.
   password: ""
 
+# The panel's name. With it Control obtains and renews its own certificate
+# (tls.mode acme: https on 443, http on 80, the same certificate on the node
+# gRPC listener). Behind a CDN or a reverse proxy that terminates TLS use
+# tls.mode external with listen, and grpc.public_name for the nodes; with
+# your own certificate files, tls.mode files. Every key and the CDN mode:
+# docs/reference/configuration.md "Panel Address, Listeners And Certificates".
+# domain: "panel.example.com"
+
 tls:
-  enable: false
-  cert_file: ""
+  # mode: ""                  # acme | files | external; empty: acme with domain, external without
+  enable: false               # not read; with cert_file and no mode Control refuses to start
+  cert_file: ""               # files: the web certificate; external: the gRPC certificate
   key_file: ""
-  domain: ""
+  domain: ""                  # not read: set domain above
 
 # Identity module (identity-platform). kek seals identity's token signing keys
 # and is passed only to the local identity-platform host; a network module

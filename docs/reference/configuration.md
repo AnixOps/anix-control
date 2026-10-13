@@ -77,7 +77,7 @@ grpc:
 
 | Key | Default | Meaning |
 |------|------|------|
-| `domain` (`ANIX_CONTROL_DOMAIN`) | empty | The panel's DNS name (no scheme, port or address). The install script is `https://<domain>/install.sh`, the ACME certificate's name in `acme` mode and the gRPC name unless `grpc.public_name` is set. With it the gRPC listener is always on. `tls.domain` is its older spelling. |
+| `domain` (`ANIX_CONTROL_DOMAIN`) | empty | The panel's DNS name (no scheme, port or address). The install script is `https://<domain>/install.sh`, the ACME certificate's name in `acme` mode and the gRPC name unless `grpc.public_name` is set. With it the gRPC listener is always on. The older `tls.domain` is not read (it was only ever logged). |
 | `tls.mode` (`ANIX_CONTROL_TLS_MODE`) | empty | `acme`: Control obtains and renews a publicly trusted certificate for `domain` and serves https on `:443` and http on `:80` (the ACME HTTP-01 answers; everything else is redirected to https). `files`: https on `:443` with `tls.cert_file`/`tls.key_file`, reloaded when they change; `:80` redirects. `external`: a CDN or a reverse proxy terminates TLS and sends plain http to `listen`. Empty: `acme` with `domain`, `external` without. |
 | `tls.cert_file`, `tls.key_file` | empty | PEM certificate chain and key. `files` mode: the web certificate (and the gRPC one for the same name). `external` mode: the gRPC listener's certificate, instead of one obtained over ACME. Both or neither. |
 | `listen` (`ANIX_CONTROL_LISTEN`) | empty | `external` mode's plain http address (`host:port`; an address, not a name). Loopback is the safe choice: only the proxy on this machine reaches it. Empty: `server.host:server.port` (`127.0.0.1:8080` built in), and with `frontend.enable` also `server.host:frontend.port`, one handler on both (the legacy two-port layout; there is no proxy between them any more). An empty `server.host` is loopback. |
@@ -170,9 +170,13 @@ grpc:
 `agent_install.public_url` and `agent_install.grpc_target` still override
 the derived `https://<domain>` and `<gRPC name>:<grpc.port>`.
 
-`tls.enable` is ignored (a log line says so); `frontend.enable`,
-`frontend.port` and `server.host`/`server.port` remain as the legacy
-external layout described above.
+`tls.enable` is not read: with `tls.cert_file` and no `tls.mode` Control
+refuses to start (that combination served https on the web port, which is
+now `tls.mode: files` on 443), otherwise a log line says it is ignored.
+`tls.domain` is not read either (a log line points at `domain`), so an
+existing configuration behind a reverse proxy does not move to `acme` by
+itself. `frontend.enable`, `frontend.port` and `server.host`/`server.port`
+remain as the legacy external layout described above.
 
 ### Testing ACME
 

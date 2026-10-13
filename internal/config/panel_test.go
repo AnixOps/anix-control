@@ -122,11 +122,12 @@ func TestPanelSettingsResolveTheModes(t *testing.T) {
 			},
 		},
 		{
-			name: "tls.domain is the older spelling of domain",
-			yaml: "tls:\n  domain: panel.example.com\n",
+			name: "tls.domain is not read: an existing config stays external",
+			yaml: "tls:\n  domain: panel.example.com\n  enable: false\n",
 			check: func(t *testing.T, p PanelSettings) {
-				require.Equal(t, TLSModeACME, p.Mode)
-				require.Equal(t, "panel.example.com", p.Domain)
+				require.Equal(t, TLSModeExternal, p.Mode)
+				require.Empty(t, p.Domain)
+				require.False(t, p.GRPCEnabled)
 			},
 		},
 		{
@@ -165,13 +166,22 @@ func TestPanelSettingsAreValidated(t *testing.T) {
 		{"grpc:\n  tls_key_file: /a.key\n", "grpc.tls_cert_file and grpc.tls_key_file go together"},
 		{"listen: 8080\n", "invalid listen"},
 		{"listen: panel.example.com:8080\n", "invalid listen"},
-		{"domain: a.example.com\ntls:\n  domain: b.example.com\n", "differ"},
+		{"tls:\n  enable: true\n  cert_file: /a.crt\n  key_file: /a.key\n", "tls.enable is no longer read"},
 	}
 	for _, tc := range tests {
 		_, err := loadPanelYAML(t, tc.yaml)
 		require.Error(t, err, tc.yaml)
 		require.Contains(t, err.Error(), tc.want, tc.yaml)
 	}
+}
+
+func TestTLSEnableWithAModeOrWithoutFilesIsOnlyIgnored(t *testing.T) {
+	cfg, err := loadPanelYAML(t, "domain: panel.example.com\ntls:\n  mode: files\n  enable: true\n  cert_file: /a.crt\n  key_file: /a.key\n")
+	require.NoError(t, err)
+	require.Equal(t, TLSModeFiles, cfg.Panel().Mode)
+	cfg, err = loadPanelYAML(t, "tls:\n  enable: true\n")
+	require.NoError(t, err)
+	require.Equal(t, TLSModeExternal, cfg.Panel().Mode)
 }
 
 func TestPanelACMENeedsTheRootKey(t *testing.T) {

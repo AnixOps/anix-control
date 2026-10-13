@@ -37,7 +37,7 @@ type Config struct {
 	// Domain is the panel's name: the web, API, subscription and install
 	// script address (https://<domain>), the name of the certificate Control
 	// obtains in tls.mode acme, and the name nodes dial for gRPC unless
-	// grpc.public_name says otherwise. Empty: tls.domain, the older spelling.
+	// grpc.public_name says otherwise.
 	Domain string `yaml:"domain"`
 	// Listen is the plain HTTP address of tls.mode external, where a CDN or
 	// a reverse proxy that terminates TLS sends the whole host. Empty uses
@@ -622,11 +622,14 @@ type TLSConfig struct {
 	// obtained over ACME).
 	CertFile string `yaml:"cert_file"`
 	KeyFile  string `yaml:"key_file"`
-	// Enable is ignored: the web side's TLS follows Mode.
+	// Enable is not read: the web side's TLS follows Mode. With cert_file
+	// and no mode the configuration is refused, since it used to serve
+	// https on the web port.
 	//
 	// Deprecated: set tls.mode.
 	Enable bool `yaml:"enable"`
-	// Domain is the older spelling of the top-level domain key.
+	// Domain is not read (it was only logged); a log line points at the
+	// top-level domain key.
 	//
 	// Deprecated: set domain.
 	Domain string `yaml:"domain"`

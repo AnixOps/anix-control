@@ -47,8 +47,10 @@
   change instead of read once at start.
 - `agent_install.public_url` defaults to `https://<domain>` and
   `agent_install.grpc_target` to `<grpc.public_name or domain>:<grpc.port>`.
-- `tls.enable` is ignored (logged); `tls.domain` is the older spelling of
-  `domain`.
+- `tls.enable` is not read: with `tls.cert_file` and no `tls.mode` Control
+  refuses to start (use `domain` and `tls.mode: files`, https on 443);
+  otherwise it is ignored with a log line. `tls.domain` is not read either
+  (set `domain`).
 
 ### Security
 
