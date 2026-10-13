@@ -320,3 +320,33 @@ func TestSQLiteConcurrentWritersAndReadersDoNotFailLocked(t *testing.T) {
 	require.Positive(t, hostTx.Load())
 	require.Positive(t, reads.Load())
 }
+
+// The readiness ping asks a reader: it answers while a transaction holds the
+// writer connection.
+func TestPingContextDoesNotWaitForTheWriter(t *testing.T) {
+	db, _ := initFileDatabase(t)
+	require.NoError(t, db.AutoMigrate(&splitCounter{}))
+	require.NoError(t, PingContext(context.Background()))
+
+	holding, release := make(chan struct{}), make(chan struct{})
+	done := make(chan error, 1)
+	go func() {
+		done <- db.Transaction(func(tx *gorm.DB) error {
+			if err := tx.Create(&splitCounter{ID: 9}).Error; err != nil {
+				return err
+			}
+			close(holding)
+			<-release
+			return nil
+		})
+	}()
+	<-holding
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	require.NoError(t, PingContext(ctx), "the writer connection is busy, a reader answers")
+	close(release)
+	require.NoError(t, <-done)
+
+	require.NoError(t, Close())
+	require.Error(t, PingContext(context.Background()), "no database, no answer")
+}

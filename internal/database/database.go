@@ -38,7 +38,9 @@
 package database
 
 import (
+	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -237,6 +239,26 @@ func Close() error {
 	db = nil
 	initialized = false
 	return nil
+}
+
+// PingContext checks that the process's database answers. On a SQLite file
+// it asks a read connection: the single writer connection is held for the
+// length of a transaction or a backup, and a readiness probe must not fail
+// for waiting behind one.
+func PingContext(ctx context.Context) error {
+	if db == nil {
+		return errors.New("database is not initialized")
+	}
+	writer, err := db.DB()
+	if err != nil {
+		return err
+	}
+	if pools, ok := readPools.Load(writer); ok {
+		if readers := pools.([]*sql.DB); len(readers) > 0 {
+			return readers[0].PingContext(ctx)
+		}
+	}
+	return writer.PingContext(ctx)
 }
 
 // CloseHandle closes a handle Open (or Init) made: its writer connection and

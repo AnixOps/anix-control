@@ -451,9 +451,7 @@ func run() int {
 	if err := database.Init(&cfg.Database); err != nil {
 		log.Fatalf("Failed to init database: %v", err)
 	}
-	if sqlDB, err := database.Get().DB(); err == nil {
-		health.Default.SetDatabasePinger(sqlDB.PingContext)
-	}
+	health.Default.SetDatabasePinger(database.PingContext)
 	defer func() {
 		if err := database.Close(); err != nil {
 			log.Printf("Database close error: %v", err)
