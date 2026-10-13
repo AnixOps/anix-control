@@ -16,12 +16,12 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/AnixOps/anix-control/v4/internal/agentinstall"
-	appconfig "github.com/AnixOps/anix-control/v4/internal/config"
-	"github.com/AnixOps/anix-control/v4/internal/handler"
-	"github.com/AnixOps/anix-control/v4/internal/model"
-	"github.com/AnixOps/anix-control/v4/internal/requestorigin"
-	"github.com/AnixOps/anix-control/v4/internal/service"
+	"github.com/AnixOps/anix-control/v5/internal/agentinstall"
+	appconfig "github.com/AnixOps/anix-control/v5/internal/config"
+	"github.com/AnixOps/anix-control/v5/internal/handler"
+	"github.com/AnixOps/anix-control/v5/internal/model"
+	"github.com/AnixOps/anix-control/v5/internal/requestorigin"
+	"github.com/AnixOps/anix-control/v5/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
@@ -481,7 +481,7 @@ func TestMainBuildInfoLdflagsPopulateHandlerBuildInfo(t *testing.T) {
 		"./cmd/server",
 		"-run", "^TestMainBuildInfoLdflagsPopulateHandlerBuildInfo$",
 		"-count=1",
-		"-ldflags", "-X github.com/AnixOps/anix-control/v4/cmd/server.version=9.8.7 -X github.com/AnixOps/anix-control/v4/cmd/server.buildTime=2026-07-08T00:00:00Z -X github.com/AnixOps/anix-control/v4/cmd/server.buildCode=456 -X github.com/AnixOps/anix-control/v4/cmd/server.commit=abcdef123456 -X github.com/AnixOps/anix-control/v4/cmd/server.agentRelease=v9.8.6",
+		"-ldflags", "-X github.com/AnixOps/anix-control/v5/cmd/server.version=9.8.7 -X github.com/AnixOps/anix-control/v5/cmd/server.buildTime=2026-07-08T00:00:00Z -X github.com/AnixOps/anix-control/v5/cmd/server.buildCode=456 -X github.com/AnixOps/anix-control/v5/cmd/server.commit=abcdef123456 -X github.com/AnixOps/anix-control/v5/cmd/server.agentRelease=v9.8.6",
 	)
 	cmd.Dir = repoRoot
 	cmd.Env = append(os.Environ(), "V2BOARD_BUILDINFO_LDFLAGS_CHILD=1")

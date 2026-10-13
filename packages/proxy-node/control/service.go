@@ -7,7 +7,7 @@ import (
 	kernelnodeopsv1 "github.com/AnixOps/anix-control/sdk/api/kernelnodeops/v1"
 	"github.com/AnixOps/anix-control/sdk/packagestoresdk"
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
-	"github.com/AnixOps/anix-control/v4/packages/proxy-node/native"
+	"github.com/AnixOps/anix-control/v5/packages/proxy-node/native"
 	"google.golang.org/grpc"
 	"gorm.io/gorm"
 )

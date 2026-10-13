@@ -38,13 +38,13 @@ import (
 
 	kernelorderv1 "github.com/AnixOps/anix-control/sdk/api/kernelorder/v1"
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
-	"github.com/AnixOps/anix-control/v4/internal/handler"
-	"github.com/AnixOps/anix-control/v4/internal/kernelorder"
-	"github.com/AnixOps/anix-control/v4/internal/model"
-	"github.com/AnixOps/anix-control/v4/internal/packagebridge"
-	"github.com/AnixOps/anix-control/v4/internal/service"
-	"github.com/AnixOps/anix-control/v4/internal/tests/packagecompat"
-	"github.com/AnixOps/anix-control/v4/packages/payment/native"
+	"github.com/AnixOps/anix-control/v5/internal/handler"
+	"github.com/AnixOps/anix-control/v5/internal/kernelorder"
+	"github.com/AnixOps/anix-control/v5/internal/model"
+	"github.com/AnixOps/anix-control/v5/internal/packagebridge"
+	"github.com/AnixOps/anix-control/v5/internal/service"
+	"github.com/AnixOps/anix-control/v5/internal/tests/packagecompat"
+	"github.com/AnixOps/anix-control/v5/packages/payment/native"
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/require"
@@ -57,7 +57,7 @@ import (
 	"gorm.io/gorm/logger"
 
 	// The kernel's server registers its payment gateways (EPay).
-	_ "github.com/AnixOps/anix-control/v4/internal/payment/gateways"
+	_ "github.com/AnixOps/anix-control/v5/internal/payment/gateways"
 )
 
 // paymentHost is the identity the kernel serves the payment host as.

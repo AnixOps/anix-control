@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/AnixOps/anix-control/v4/internal/agentws"
-	"github.com/AnixOps/anix-control/v4/internal/pluginhost"
-	"github.com/AnixOps/anix-control/v4/internal/requestorigin"
-	"github.com/AnixOps/anix-control/v4/internal/sealedsecrets"
+	"github.com/AnixOps/anix-control/v5/internal/agentws"
+	"github.com/AnixOps/anix-control/v5/internal/pluginhost"
+	"github.com/AnixOps/anix-control/v5/internal/requestorigin"
+	"github.com/AnixOps/anix-control/v5/internal/sealedsecrets"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )

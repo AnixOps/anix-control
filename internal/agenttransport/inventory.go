@@ -7,9 +7,9 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
-	"github.com/AnixOps/anix-control/v4/internal/agentstreams"
-	"github.com/AnixOps/anix-control/v4/internal/model"
-	"github.com/AnixOps/anix-control/v4/internal/modulepki"
+	"github.com/AnixOps/anix-control/v5/internal/agentstreams"
+	"github.com/AnixOps/anix-control/v5/internal/model"
+	"github.com/AnixOps/anix-control/v5/internal/modulepki"
 	"gorm.io/gorm"
 )
 

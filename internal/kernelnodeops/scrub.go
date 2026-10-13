@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	kernelnodeopsv1 "github.com/AnixOps/anix-control/sdk/api/kernelnodeops/v1"
-	"github.com/AnixOps/anix-control/v4/internal/service"
+	"github.com/AnixOps/anix-control/v5/internal/service"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )

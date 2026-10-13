@@ -11,7 +11,7 @@ import (
 	kernelsettingsv1 "github.com/AnixOps/anix-control/sdk/api/kernelsettings/v1"
 	"github.com/AnixOps/anix-control/sdk/packagebridgesdk"
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
-	"github.com/AnixOps/anix-control/v4/packages/platform/native"
+	"github.com/AnixOps/anix-control/v5/packages/platform/native"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 )

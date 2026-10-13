@@ -3,11 +3,11 @@
 Date: 2026-07-08 (inventory in "Current Shape" and "CI/CD Baseline" refreshed
 2026-09-29, after PR #8 removed dead code and the legacy proxy test tooling)
 
-This is the current audit baseline for `github.com/AnixOps/anix-control/v4`. It is a working document: items marked as gaps remain open until backed by code, tests, CI evidence, or operational runbooks.
+This is the current audit baseline for `github.com/AnixOps/anix-control/v5`. It is a working document: items marked as gaps remain open until backed by code, tests, CI evidence, or operational runbooks.
 
 ## Current Shape
 
-- Go module: `github.com/AnixOps/anix-control/v4`
+- Go module: `github.com/AnixOps/anix-control/v5`
 - Go version in `go.mod`: `go 1.25.0` (module minimum) with `toolchain go1.26.8`
 - CI Go version: `1.26.8` (`GO_VERSION` in `.github/workflows/ci.yml`)
 - Current package count from `GOWORK=off go list ./...`: 40

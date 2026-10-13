@@ -6,9 +6,9 @@ import (
 	"log"
 	"time"
 
-	"github.com/AnixOps/anix-control/v4/internal/authn"
-	"github.com/AnixOps/anix-control/v4/internal/config"
-	"github.com/AnixOps/anix-control/v4/internal/database"
+	"github.com/AnixOps/anix-control/v5/internal/authn"
+	"github.com/AnixOps/anix-control/v5/internal/config"
+	"github.com/AnixOps/anix-control/v5/internal/database"
 )
 
 // tokenRevocationRefresh is how often revocations written by other processes

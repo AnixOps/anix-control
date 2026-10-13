@@ -3,9 +3,9 @@ package identitycompat
 import (
 	"testing"
 
-	"github.com/AnixOps/anix-control/v4/internal/handler"
-	"github.com/AnixOps/anix-control/v4/internal/model"
-	"github.com/AnixOps/anix-control/v4/internal/tests/packagecompat"
+	"github.com/AnixOps/anix-control/v5/internal/handler"
+	"github.com/AnixOps/anix-control/v5/internal/model"
+	"github.com/AnixOps/anix-control/v5/internal/tests/packagecompat"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"

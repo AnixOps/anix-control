@@ -7,15 +7,15 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
-	"github.com/AnixOps/anix-control/v4/internal/agentstreams"
-	"github.com/AnixOps/anix-control/v4/internal/agentupgrade"
-	"github.com/AnixOps/anix-control/v4/internal/config"
-	"github.com/AnixOps/anix-control/v4/internal/database"
-	"github.com/AnixOps/anix-control/v4/internal/forwardlegacy"
-	grpcserver "github.com/AnixOps/anix-control/v4/internal/grpc"
-	"github.com/AnixOps/anix-control/v4/internal/kernelforward"
-	"github.com/AnixOps/anix-control/v4/internal/kernelnodeops"
-	"github.com/AnixOps/anix-control/v4/internal/service"
+	"github.com/AnixOps/anix-control/v5/internal/agentstreams"
+	"github.com/AnixOps/anix-control/v5/internal/agentupgrade"
+	"github.com/AnixOps/anix-control/v5/internal/config"
+	"github.com/AnixOps/anix-control/v5/internal/database"
+	"github.com/AnixOps/anix-control/v5/internal/forwardlegacy"
+	grpcserver "github.com/AnixOps/anix-control/v5/internal/grpc"
+	"github.com/AnixOps/anix-control/v5/internal/kernelforward"
+	"github.com/AnixOps/anix-control/v5/internal/kernelnodeops"
+	"github.com/AnixOps/anix-control/v5/internal/service"
 )
 
 const (

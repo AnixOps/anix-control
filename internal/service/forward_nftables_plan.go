@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v5/internal/model"
 )
 
 // The nftables_ansible forward path keeps every forward in one inet table.

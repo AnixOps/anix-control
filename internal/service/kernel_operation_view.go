@@ -4,7 +4,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v5/internal/model"
 )
 
 // KernelOperationStatus is the public, non-secret projection of a durable

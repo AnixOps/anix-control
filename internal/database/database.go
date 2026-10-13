@@ -2,14 +2,14 @@ package database
 
 import (
 	"fmt"
-	"github.com/AnixOps/anix-control/v4/internal/logging"
+	"github.com/AnixOps/anix-control/v5/internal/logging"
 	"log"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/AnixOps/anix-control/v4/internal/config"
+	"github.com/AnixOps/anix-control/v5/internal/config"
 	"github.com/glebarez/sqlite" // 纯Go实现的SQLite驱动，无需CGO
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"

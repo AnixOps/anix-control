@@ -11,8 +11,8 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/AnixOps/anix-control/v4/internal/agenttransport"
-	"github.com/AnixOps/anix-control/v4/internal/config"
+	"github.com/AnixOps/anix-control/v5/internal/agenttransport"
+	"github.com/AnixOps/anix-control/v5/internal/config"
 	"gorm.io/gorm"
 )
 

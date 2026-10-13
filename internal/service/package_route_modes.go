@@ -10,9 +10,9 @@ import (
 	"net/http"
 	"sort"
 
-	"github.com/AnixOps/anix-control/v4/internal/model"
-	"github.com/AnixOps/anix-control/v4/internal/packagebridge"
-	"github.com/AnixOps/anix-control/v4/internal/packagestore"
+	"github.com/AnixOps/anix-control/v5/internal/model"
+	"github.com/AnixOps/anix-control/v5/internal/packagebridge"
+	"github.com/AnixOps/anix-control/v5/internal/packagestore"
 	"gorm.io/gorm"
 )
 

@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/AnixOps/anix-control/v4/internal/config"
-	"github.com/AnixOps/anix-control/v4/internal/edition"
-	"github.com/AnixOps/anix-control/v4/internal/utils"
+	"github.com/AnixOps/anix-control/v5/internal/config"
+	"github.com/AnixOps/anix-control/v5/internal/edition"
+	"github.com/AnixOps/anix-control/v5/internal/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )

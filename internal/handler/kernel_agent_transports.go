@@ -7,10 +7,10 @@ import (
 	"strings"
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
-	"github.com/AnixOps/anix-control/v4/internal/agentstreams"
-	"github.com/AnixOps/anix-control/v4/internal/agenttransport"
-	"github.com/AnixOps/anix-control/v4/internal/database"
-	controlgrpc "github.com/AnixOps/anix-control/v4/internal/grpc"
+	"github.com/AnixOps/anix-control/v5/internal/agentstreams"
+	"github.com/AnixOps/anix-control/v5/internal/agenttransport"
+	"github.com/AnixOps/anix-control/v5/internal/database"
+	controlgrpc "github.com/AnixOps/anix-control/v5/internal/grpc"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )

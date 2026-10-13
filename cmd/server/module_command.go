@@ -10,10 +10,10 @@ import (
 	"os"
 	"time"
 
-	"github.com/AnixOps/anix-control/v4/internal/config"
-	"github.com/AnixOps/anix-control/v4/internal/model"
-	"github.com/AnixOps/anix-control/v4/internal/modulepki"
-	"github.com/AnixOps/anix-control/v4/internal/service"
+	"github.com/AnixOps/anix-control/v5/internal/config"
+	"github.com/AnixOps/anix-control/v5/internal/model"
+	"github.com/AnixOps/anix-control/v5/internal/modulepki"
+	"github.com/AnixOps/anix-control/v5/internal/service"
 	"gorm.io/gorm"
 )
 

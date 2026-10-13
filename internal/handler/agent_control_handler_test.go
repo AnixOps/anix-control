@@ -10,8 +10,8 @@ import (
 	"time"
 
 	agentv1pb "github.com/AnixOps/anix-control/sdk/api/agent/v1"
-	controlgrpc "github.com/AnixOps/anix-control/v4/internal/grpc"
-	"github.com/AnixOps/anix-control/v4/internal/model"
+	controlgrpc "github.com/AnixOps/anix-control/v5/internal/grpc"
+	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

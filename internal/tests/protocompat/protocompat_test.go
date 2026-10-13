@@ -28,7 +28,7 @@ import (
 	_ "github.com/AnixOps/anix-control/sdk/api/modulepki/v1"
 	_ "github.com/AnixOps/anix-control/sdk/api/packagebridge/v1"
 	_ "github.com/AnixOps/anix-control/sdk/api/pluginhost/v1"
-	_ "github.com/AnixOps/anix-control/v4/api/grpc/v2boardpb"
+	_ "github.com/AnixOps/anix-control/v5/api/grpc/v2boardpb"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/reflect/protoregistry"

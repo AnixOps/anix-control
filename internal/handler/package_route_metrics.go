@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/AnixOps/anix-control/v4/internal/pluginhost"
+	"github.com/AnixOps/anix-control/v5/internal/pluginhost"
 )
 
 // packageHostHealthDetails is the Health details document written by

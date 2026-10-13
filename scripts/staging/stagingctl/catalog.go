@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	configtables "github.com/AnixOps/anix-control/v4/config"
+	configtables "github.com/AnixOps/anix-control/v5/config"
 )
 
 // Batch is one cutover batch of the v4.1.0 staging rehearsal (owner

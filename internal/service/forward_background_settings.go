@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	appconfig "github.com/AnixOps/anix-control/v4/internal/config"
+	appconfig "github.com/AnixOps/anix-control/v5/internal/config"
 )
 
 type forwardRuntimeJobExecutorSettings struct {

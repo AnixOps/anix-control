@@ -7,11 +7,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/AnixOps/anix-control/v4/internal/agentreports"
-	"github.com/AnixOps/anix-control/v4/internal/cache"
-	"github.com/AnixOps/anix-control/v4/internal/database"
-	"github.com/AnixOps/anix-control/v4/internal/model"
-	"github.com/AnixOps/anix-control/v4/internal/subscriber"
+	"github.com/AnixOps/anix-control/v5/internal/agentreports"
+	"github.com/AnixOps/anix-control/v5/internal/cache"
+	"github.com/AnixOps/anix-control/v5/internal/database"
+	"github.com/AnixOps/anix-control/v5/internal/model"
+	"github.com/AnixOps/anix-control/v5/internal/subscriber"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )

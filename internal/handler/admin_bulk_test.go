@@ -10,7 +10,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/AnixOps/anix-control/v4/internal/middleware"
+	"github.com/AnixOps/anix-control/v5/internal/middleware"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )

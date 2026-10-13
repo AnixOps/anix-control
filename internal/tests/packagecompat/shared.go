@@ -8,7 +8,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/AnixOps/anix-control/v4/internal/config"
+	"github.com/AnixOps/anix-control/v5/internal/config"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )

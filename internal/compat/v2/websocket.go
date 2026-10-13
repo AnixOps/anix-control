@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/AnixOps/anix-control/v4/internal/pluginhost"
-	"github.com/AnixOps/anix-control/v4/internal/utils"
+	"github.com/AnixOps/anix-control/v5/internal/pluginhost"
+	"github.com/AnixOps/anix-control/v5/internal/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 )

@@ -19,7 +19,7 @@ import (
 	kernelorderv1 "github.com/AnixOps/anix-control/sdk/api/kernelorder/v1"
 	"github.com/AnixOps/anix-control/sdk/packagebridgesdk"
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
-	"github.com/AnixOps/anix-control/v4/packages/payment/native"
+	"github.com/AnixOps/anix-control/v5/packages/payment/native"
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"

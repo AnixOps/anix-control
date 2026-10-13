@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/AnixOps/anix-control/v4/internal/agentws"
+	"github.com/AnixOps/anix-control/v5/internal/agentws"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )

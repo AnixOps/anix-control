@@ -10,10 +10,10 @@ import (
 	"os"
 	"strings"
 
-	"github.com/AnixOps/anix-control/v4/internal/model"
-	"github.com/AnixOps/anix-control/v4/internal/nodesecrets"
-	"github.com/AnixOps/anix-control/v4/internal/packagestore"
-	"github.com/AnixOps/anix-control/v4/internal/service"
+	"github.com/AnixOps/anix-control/v5/internal/model"
+	"github.com/AnixOps/anix-control/v5/internal/nodesecrets"
+	"github.com/AnixOps/anix-control/v5/internal/packagestore"
+	"github.com/AnixOps/anix-control/v5/internal/service"
 	"gorm.io/gorm"
 )
 

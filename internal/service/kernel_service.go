@@ -23,8 +23,8 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/sdk/telemetry/systemdreport"
-	"github.com/AnixOps/anix-control/v4/internal/model"
-	"github.com/AnixOps/anix-control/v4/internal/pluginhost"
+	"github.com/AnixOps/anix-control/v5/internal/model"
+	"github.com/AnixOps/anix-control/v5/internal/pluginhost"
 	"github.com/google/uuid"
 	"github.com/santhosh-tekuri/jsonschema/v5"
 	"gorm.io/gorm"

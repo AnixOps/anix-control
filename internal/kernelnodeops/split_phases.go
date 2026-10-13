@@ -4,7 +4,7 @@ import (
 	"context"
 
 	kernelnodeopsv1 "github.com/AnixOps/anix-control/sdk/api/kernelnodeops/v1"
-	"github.com/AnixOps/anix-control/v4/internal/nodesecrets"
+	"github.com/AnixOps/anix-control/v5/internal/nodesecrets"
 	"gorm.io/gorm"
 )
 

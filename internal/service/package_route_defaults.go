@@ -8,8 +8,8 @@ import (
 	"sync"
 	"sync/atomic"
 
-	configtables "github.com/AnixOps/anix-control/v4/config"
-	"github.com/AnixOps/anix-control/v4/internal/packagebridge"
+	configtables "github.com/AnixOps/anix-control/v5/config"
+	"github.com/AnixOps/anix-control/v5/internal/packagebridge"
 	"golang.org/x/mod/semver"
 	"gorm.io/gorm"
 )

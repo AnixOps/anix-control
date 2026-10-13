@@ -11,7 +11,7 @@ import (
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	agentv1pb "github.com/AnixOps/anix-control/sdk/api/agent/v1"
 	kernelnodeopsv1 "github.com/AnixOps/anix-control/sdk/api/kernelnodeops/v1"
-	"github.com/AnixOps/anix-control/v4/internal/agentstreams"
+	"github.com/AnixOps/anix-control/v5/internal/agentstreams"
 )
 
 // AgentSources are the live agent sessions the executors dispatch on and

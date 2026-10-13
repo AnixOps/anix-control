@@ -3,7 +3,7 @@ package service
 import (
 	"strings"
 
-	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v5/internal/model"
 	"gorm.io/gorm"
 )
 

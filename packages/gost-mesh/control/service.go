@@ -7,7 +7,7 @@ import (
 	kernelnodeopsv1 "github.com/AnixOps/anix-control/sdk/api/kernelnodeops/v1"
 	kernelsettingsv1 "github.com/AnixOps/anix-control/sdk/api/kernelsettings/v1"
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
-	"github.com/AnixOps/anix-control/v4/packages/gost-mesh/native"
+	"github.com/AnixOps/anix-control/v5/packages/gost-mesh/native"
 	"google.golang.org/grpc"
 )
 

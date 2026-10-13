@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/AnixOps/anix-control/v4/internal/handler"
-	"github.com/AnixOps/anix-control/v4/internal/utils"
+	"github.com/AnixOps/anix-control/v5/internal/handler"
+	"github.com/AnixOps/anix-control/v5/internal/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

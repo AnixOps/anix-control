@@ -16,8 +16,8 @@ import (
 	"strings"
 	"sync"
 
-	configtables "github.com/AnixOps/anix-control/v4/config"
-	"github.com/AnixOps/anix-control/v4/internal/config"
+	configtables "github.com/AnixOps/anix-control/v5/config"
+	"github.com/AnixOps/anix-control/v5/internal/config"
 )
 
 const editionsFormat = "anixops.editions/v1"

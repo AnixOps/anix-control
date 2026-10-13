@@ -12,7 +12,7 @@ truth for implemented, partial, planned, compatibility, and deferred features.
 ## Current Status
 
 - Main branch: `go_dev`.
-- Backend: Go module `github.com/AnixOps/anix-control/v4`; the toolchain is
+- Backend: Go module `github.com/AnixOps/anix-control/v5`; the toolchain is
   pinned to Go `1.26.9` in CI.
 - Frontend: Vue 3 + Vite under [`web/`](web), Node.js `22` in CI.
 - Default database: SQLite, with PostgreSQL migration/dry-run tooling.
@@ -205,7 +205,7 @@ Some routes intentionally keep legacy or external protocol behavior:
 
 The `v2_*` database tables, `v2board` protobuf wire namespace, and historical
 SQLite path are intentionally retained during the migration. The Go module has
-moved to `github.com/AnixOps/anix-control/v4`.
+moved to `github.com/AnixOps/anix-control/v5`.
 
 Do not change these response shapes without checking
 [`docs/features.md`](docs/features.md) and adding compatibility tests.

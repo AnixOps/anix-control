@@ -11,10 +11,10 @@ import (
 	"time"
 
 	kernelnodeopsv1 "github.com/AnixOps/anix-control/sdk/api/kernelnodeops/v1"
-	"github.com/AnixOps/anix-control/v4/internal/kernelnodeops"
-	"github.com/AnixOps/anix-control/v4/internal/model"
-	"github.com/AnixOps/anix-control/v4/internal/packagebridge"
-	"github.com/AnixOps/anix-control/v4/internal/service"
+	"github.com/AnixOps/anix-control/v5/internal/kernelnodeops"
+	"github.com/AnixOps/anix-control/v5/internal/model"
+	"github.com/AnixOps/anix-control/v5/internal/packagebridge"
+	"github.com/AnixOps/anix-control/v5/internal/service"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )

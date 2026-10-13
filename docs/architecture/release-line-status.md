@@ -27,8 +27,9 @@ v3.1.0 -> v3.2.0 -> v3.3.0 -> v3.4.0 -> v3.5.0 -> v4.0.0
 
 The published tags did not follow every intermediate stage in that sequence;
 `v3.1.0-alpha.2` was a planned candidate, not the next current release. The Go
-module path remains `github.com/AnixOps/anix-control/v4`; import-major version
-and product version are separate contracts.
+module path was `github.com/AnixOps/anix-control/v4` through the 4.x tags (even
+while the product line was still v3.x) and is `github.com/AnixOps/anix-control/v5`
+on `go_dev`; import-major version and product version are separate contracts.
 
 Releases since `v4.0.0` (dates from the CHANGELOG headings): `v4.1.0-rc.1` to
 `v4.1.0-rc.6` (2026-10-01 to 2026-10-03) and the stable `v4.1.0` (2026-10-04);

@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/AnixOps/anix-control/v4/internal/packagebridge"
+	"github.com/AnixOps/anix-control/v5/internal/packagebridge"
 )
 
 type WebSocketInput struct {

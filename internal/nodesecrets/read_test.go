@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )

@@ -12,7 +12,7 @@ import (
 	kernelnodeopsv1 "github.com/AnixOps/anix-control/sdk/api/kernelnodeops/v1"
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
 	"github.com/AnixOps/anix-control/sdk/v2compat"
-	"github.com/AnixOps/anix-control/v4/packages/protocol-runtime/native/model"
+	"github.com/AnixOps/anix-control/v5/packages/protocol-runtime/native/model"
 	"github.com/gin-gonic/gin/binding"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"

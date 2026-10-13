@@ -12,7 +12,7 @@ import (
 	forwardv1 "github.com/AnixOps/anix-control/sdk/api/forward/v1"
 	"github.com/AnixOps/anix-control/sdk/forward/planner"
 	"github.com/AnixOps/anix-control/sdk/forward/validate"
-	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v5/internal/model"
 	"google.golang.org/protobuf/proto"
 	"gorm.io/gorm"
 )

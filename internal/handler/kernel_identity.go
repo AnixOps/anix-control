@@ -4,10 +4,10 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/AnixOps/anix-control/v4/internal/authn"
-	"github.com/AnixOps/anix-control/v4/internal/identitycutover"
-	"github.com/AnixOps/anix-control/v4/internal/identityimport"
-	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v5/internal/authn"
+	"github.com/AnixOps/anix-control/v5/internal/identitycutover"
+	"github.com/AnixOps/anix-control/v5/internal/identityimport"
+	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/gin-gonic/gin"
 )
 

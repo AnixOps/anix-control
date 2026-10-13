@@ -9,11 +9,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/AnixOps/anix-control/v4/internal/config"
-	"github.com/AnixOps/anix-control/v4/internal/database"
-	"github.com/AnixOps/anix-control/v4/internal/pluginhost"
-	"github.com/AnixOps/anix-control/v4/internal/service"
-	"github.com/AnixOps/anix-control/v4/internal/shadowsamples"
+	"github.com/AnixOps/anix-control/v5/internal/config"
+	"github.com/AnixOps/anix-control/v5/internal/database"
+	"github.com/AnixOps/anix-control/v5/internal/pluginhost"
+	"github.com/AnixOps/anix-control/v5/internal/service"
+	"github.com/AnixOps/anix-control/v5/internal/shadowsamples"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )

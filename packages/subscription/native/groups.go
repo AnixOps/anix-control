@@ -5,7 +5,7 @@ import (
 	"errors"
 
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
-	"github.com/AnixOps/anix-control/v4/packages/subscription/native/model"
+	"github.com/AnixOps/anix-control/v5/packages/subscription/native/model"
 	"github.com/gin-gonic/gin/binding"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"

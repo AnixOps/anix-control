@@ -13,9 +13,9 @@ import (
 	"strings"
 	"testing"
 
-	appconfig "github.com/AnixOps/anix-control/v4/internal/config"
-	"github.com/AnixOps/anix-control/v4/internal/handler"
-	"github.com/AnixOps/anix-control/v4/internal/requestorigin"
+	appconfig "github.com/AnixOps/anix-control/v5/internal/config"
+	"github.com/AnixOps/anix-control/v5/internal/handler"
+	"github.com/AnixOps/anix-control/v5/internal/requestorigin"
 	"github.com/gin-gonic/gin"
 )
 

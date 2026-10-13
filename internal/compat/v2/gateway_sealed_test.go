@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	configtables "github.com/AnixOps/anix-control/v4/config"
-	"github.com/AnixOps/anix-control/v4/internal/pluginhost"
-	"github.com/AnixOps/anix-control/v4/internal/sealedsecrets"
+	configtables "github.com/AnixOps/anix-control/v5/config"
+	"github.com/AnixOps/anix-control/v5/internal/pluginhost"
+	"github.com/AnixOps/anix-control/v5/internal/sealedsecrets"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

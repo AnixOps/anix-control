@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/AnixOps/anix-control/v4/internal/authn"
-	"github.com/AnixOps/anix-control/v4/internal/database"
+	"github.com/AnixOps/anix-control/v5/internal/authn"
+	"github.com/AnixOps/anix-control/v5/internal/database"
 	"github.com/gin-gonic/gin"
 )
 

@@ -16,9 +16,9 @@ import (
 	"testing"
 
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
-	"github.com/AnixOps/anix-control/v4/internal/handler"
-	"github.com/AnixOps/anix-control/v4/internal/tests/packagecompat"
-	"github.com/AnixOps/anix-control/v4/packages/wireguard/native"
+	"github.com/AnixOps/anix-control/v5/internal/handler"
+	"github.com/AnixOps/anix-control/v5/internal/tests/packagecompat"
+	"github.com/AnixOps/anix-control/v5/packages/wireguard/native"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"

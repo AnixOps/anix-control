@@ -10,7 +10,7 @@ import (
 	"time"
 
 	identityv1 "github.com/AnixOps/anix-control/sdk/api/identity/v1"
-	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"

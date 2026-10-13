@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/AnixOps/anix-control/v4/internal/model"
-	"github.com/AnixOps/anix-control/v4/internal/utils"
+	"github.com/AnixOps/anix-control/v5/internal/model"
+	"github.com/AnixOps/anix-control/v5/internal/utils"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )

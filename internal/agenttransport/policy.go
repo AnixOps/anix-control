@@ -13,7 +13,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/AnixOps/anix-control/v4/internal/config"
+	"github.com/AnixOps/anix-control/v5/internal/config"
 )
 
 // UpgradeGuideURL is where the deprecation signals point: the UPGRADE

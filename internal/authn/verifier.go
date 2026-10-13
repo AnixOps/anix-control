@@ -13,8 +13,8 @@ import (
 	"sync/atomic"
 
 	"github.com/AnixOps/anix-control/sdk/identitytoken"
-	"github.com/AnixOps/anix-control/v4/internal/config"
-	"github.com/AnixOps/anix-control/v4/internal/utils"
+	"github.com/AnixOps/anix-control/v5/internal/config"
+	"github.com/AnixOps/anix-control/v5/internal/utils"
 )
 
 var (

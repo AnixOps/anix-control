@@ -6,9 +6,9 @@ import (
 	"time"
 
 	kernelsubscriberv1 "github.com/AnixOps/anix-control/sdk/api/kernelsubscriber/v1"
-	"github.com/AnixOps/anix-control/v4/internal/model"
-	"github.com/AnixOps/anix-control/v4/internal/service"
-	"github.com/AnixOps/anix-control/v4/internal/subscriber"
+	"github.com/AnixOps/anix-control/v5/internal/model"
+	"github.com/AnixOps/anix-control/v5/internal/service"
+	"github.com/AnixOps/anix-control/v5/internal/subscriber"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"

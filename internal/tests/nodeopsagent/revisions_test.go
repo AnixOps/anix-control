@@ -11,10 +11,10 @@ import (
 
 	agentv1pb "github.com/AnixOps/anix-control/sdk/api/agent/v1"
 	kernelnodeopsv1 "github.com/AnixOps/anix-control/sdk/api/kernelnodeops/v1"
-	grpcserver "github.com/AnixOps/anix-control/v4/internal/grpc"
-	"github.com/AnixOps/anix-control/v4/internal/model"
-	"github.com/AnixOps/anix-control/v4/internal/service"
-	"github.com/AnixOps/anix-control/v4/internal/tests/fakeagent"
+	grpcserver "github.com/AnixOps/anix-control/v5/internal/grpc"
+	"github.com/AnixOps/anix-control/v5/internal/model"
+	"github.com/AnixOps/anix-control/v5/internal/service"
+	"github.com/AnixOps/anix-control/v5/internal/tests/fakeagent"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

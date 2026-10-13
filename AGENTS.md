@@ -6,7 +6,7 @@ file short and enforceable; put explanations in `docs/`.
 ## Project Overview
 
 - `anix-control` is the AnixOps Control plane: Go module
-  `github.com/AnixOps/anix-control/v4` (gin + GORM on SQLite or PostgreSQL)
+  `github.com/AnixOps/anix-control/v5` (gin + GORM on SQLite or PostgreSQL)
   with the Vue 3 + Vite admin/user frontend in `web/`. The Go toolchain is
   pinned in `go.mod` and in `ci.yml` (`GO_VERSION`).
 - `sdk/` is a second Go module, `github.com/AnixOps/anix-control/sdk`: the

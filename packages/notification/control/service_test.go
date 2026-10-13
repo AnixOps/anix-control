@@ -12,7 +12,7 @@ import (
 	pluginhostv1 "github.com/AnixOps/anix-control/sdk/api/pluginhost/v1"
 	"github.com/AnixOps/anix-control/sdk/packagebridgesdk"
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
-	"github.com/AnixOps/anix-control/v4/packages/notification/native"
+	"github.com/AnixOps/anix-control/v5/packages/notification/native"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 )
