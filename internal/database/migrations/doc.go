@@ -56,8 +56,9 @@
 //     older than this release would misread the converted data, set
 //     minProgramVersions for the number to this release's version.
 //  4. Run the tests. TestFreshSchemaEqualsTheLegacySchema compares the fresh
-//     schema with the one the models build; the first migration that
-//     changes a model also refreshes its adoption half (see
+//     schema with the one the models build, and adopts a database at the
+//     baseline; a migration that changes a model or creates a table records
+//     that in the legacy oracle, in postBaselineIndexes or laterModels (see
 //     docs/reference/database-migrations.md, "Changing a model").
 //     TestUpgradedSchemaEqualsFresh checks the upgrade from every earlier
 //     step, and TestTemplateMigrationAppliesSQLAndGoInOneTransaction is the

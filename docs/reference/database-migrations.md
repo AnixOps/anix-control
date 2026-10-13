@@ -152,15 +152,27 @@ every migration has both files; afterwards only the SQLite file remains.
 
 ### Changing A Model
 
+The legacy oracle (`legacy_oracle_test.go`) prepares a database in two ways:
+
+- `legacyModelsPrepare` is the legacy start with today's models, plus the
+  tables later migrations create (`laterModels()`).
+- `legacyPrepare` is the legacy start as it was at the baseline: the same
+  model lists less what later migrations added to those models
+  (`postBaselineIndexes`), without the later tables. The adoption tests build
+  their databases with it.
+
 `TestFreshSchemaEqualsTheLegacySchema` has two halves. The first compares the
-fresh schema with the one the legacy oracle builds from today's models: it
-keeps guarding that every model change comes with a migration. The second
-adopts an oracle-built database and expects the baseline exactly; it holds
-only while the models are the baseline's. The first migration that changes a
-model removes that second half (adoption stays covered by
-`TestUpgradedSchemaEqualsFresh`, which adopts the recorded baseline, and by the
-adoption tests). A migration that drops a table the oracle still creates (the
-flux tables in the forwarding cleanup) removes it from the oracle's lists.
+fresh schema with the one `legacyModelsPrepare` builds: a model changed or
+added without a migration fails there. The second adopts a database
+`legacyPrepare` built, applies the migrations after the baseline and expects
+the fresh schema exactly. A migration therefore records in the oracle what it
+changes:
+
+| The migration | The oracle |
+|---|---|
+| Adds an index to a model the baseline has (`0002_server_log_buckets`) | List the index in `postBaselineIndexes`: `legacyPrepare` drops it after building from the models (a column a migration adds is dropped the same way, after its index) |
+| Creates the table of a new model (`0003_acme_cache`) | List the model in `laterModels()`: `legacyModelsPrepare` creates it, `legacyPrepare` does not |
+| Drops a table the oracle still creates (the flux tables in the forwarding cleanup) | Remove it from the oracle's lists |
 
 ## Tests And PostgreSQL
 

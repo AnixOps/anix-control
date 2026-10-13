@@ -49,7 +49,9 @@ ports first, `anix-control tls status` shows the outcome. Behind a CDN, use
 `tls.mode: external` with `grpc.public_name`
 ([configuration](reference/configuration.md#panel-address-listeners-and-certificates)).
 Until a certificate is issued Control serves a self-signed one and withholds
-the node join command.
+the node join command. The certificates are kept in the table
+`v5_acme_cache`, which the first start adds with the schema migration
+`0003_acme_cache` ([database migrations](#database-migrations)).
 
 **Weak shared secrets are reported at startup.** A `jwt.secret`,
 `app.api_token` or `grpc.api_token` that is set but shorter than 32 bytes,

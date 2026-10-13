@@ -117,10 +117,11 @@ third of its lifetime before its end (at most 30 days). Failed requests are
 retried after 1, 5 and 15 minutes, then hourly three times, then every 6
 hours, and Control never makes more than three requests per name within an
 hour, manual retries included. The account key, the certificates and their
-keys live in the database table `v5_acme_cache`, sealed with
-`module_runtime.ca_kek` (which ACME therefore needs: without it the server
-refuses to start in `acme` mode), so a restore or a move to another machine
-does not request them again. No HSTS header is sent over Control's own TLS:
+keys live in the database table `v5_acme_cache` (the schema migration
+`0003_acme_cache` creates it), sealed with `module_runtime.ca_kek` (which
+ACME therefore needs: without it the server refuses to start in `acme`
+mode), so a restore or a move to another machine does not request them
+again. No HSTS header is sent over Control's own TLS:
 while the fallback is served a browser that remembered HSTS could not open
 the panel at all. No e-mail address is registered: the panel's own expiry
 alerts replace the CA's reminders.

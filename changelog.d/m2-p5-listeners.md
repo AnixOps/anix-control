@@ -8,7 +8,8 @@
   50051), which `domain` turns on. Certificates come from the public CA
   over TLS-ALPN-01 (443) or HTTP-01 (80), are renewed a third of their
   lifetime before the end and reach new connections without a restart.
-  They are kept in the new table `v5_acme_cache`, sealed with
+  They are kept in the new table `v5_acme_cache` (created by the schema
+  migration `0003_acme_cache` at the first start), sealed with
   `module_runtime.ca_kek` (now required for ACME), so a restore does not
   request them again. While no certificate can be obtained Control starts
   anyway with a self-signed one.
