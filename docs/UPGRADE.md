@@ -110,6 +110,17 @@ completes (earlier installers stopped there without a message). Upgrade
 Control first, then the Agents. Read
 ["Upgrading From 4.2.0-rc.4 To 4.2.0"](#upgrading-from-420-rc4-to-420).
 
+**Next release: the installer uses the Agent release Control was released with.**
+Control 4.2.1 and earlier asked nodes for the Agent tag `v` + its own version,
+and a Control patch release over an unchanged Agent (4.2.1 shipped with Agent
+v4.2.0) therefore sent installs to a tag the Agent repository does not have
+(404). From this release every build carries the Agent tag it was released
+with (`config/AGENT_RELEASE`), and `/install/agent.env`, the install command
+and `anix-control agent upgrade start` use it. `agent_install.agent_version`
+still overrides it, so a pin you set as a workaround may stay or go. A
+development build has no pin and keeps using its own version, or asks for
+`agent_install.agent_version` when that is no release.
+
 ## Fixed Legacy Native Layout
 
 For the specific legacy layout discovered on the old native host

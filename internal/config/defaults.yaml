@@ -122,7 +122,8 @@ agent_control:
 agent_install:
   # One-command node onboarding (GET /install.sh, POST
   # /api/v4/kernel/agents/install-tokens). Empty public_url uses the
-  # request's origin; empty agent_version uses "v" + app.version.
+  # request's origin; empty agent_version uses the Agent release this Control
+  # was released with (a development build: "v" + app.version).
   public_url: ""
   grpc_target: ""
   agent_version: ""

@@ -327,7 +327,11 @@ check_release_workflow() {
   require_job_text plugin-package-publish "path: release-assets/" "signed package artifact holds the release assets only" || failed=1
   require_job_text plugin-package-publish "name: signed-plugin-releases" "signed package artifact" || failed=1
 
-  # Binaries.
+  # Binaries carry the Agent release tag they were released with: a Control
+  # patch release can ship an unchanged Agent, so the installer must not ask
+  # for "v" + the Control version.
+  require_named_step_text release-binaries "Build binary" "config/AGENT_RELEASE" "release binaries read the pinned Agent release tag" || failed=1
+  require_named_step_text release-binaries "Build binary" "-X main.agentRelease=\${AGENT_RELEASE}" "release binaries carry the pinned Agent release tag" || failed=1
   for pair in \
     linux/amd64 \
     linux/arm64 \
@@ -439,6 +443,8 @@ run_self_test() {
     "s/--formal-release/--unsigned-release/" \
     "s/check_release_version.py --tag/check_release_version.py --self-test/" \
     "s/body_path: release\/RELEASE_NOTES.md/generate_release_notes: true/" \
+    "s/-X main.agentRelease=/-X main.agentReleaseX=/" \
+    "s#< config/AGENT_RELEASE#< config/agent-release#" \
     "s/AGENT_REF: '/AGENT_REF_X: '/" \
     '0,/ref: \${{ env.AGENT_REF }}/s//ref: 0000000000000000000000000000000000000000/' \
     "s#govulncheck ./cmd/nftables-forward#echo ./cmd/nftables-forward#" \

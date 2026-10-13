@@ -12,10 +12,15 @@ publishes everything. Nothing is built locally.
 
    ```bash
    python3 config/scripts/prepare_release.py 4.1.0
+   python3 config/scripts/prepare_release.py 4.2.0 --agent-tag v4.2.0
    ```
 
    The script turns the `## Unreleased` entries into `## 4.1.0 - <today>`,
-   leaving an empty `## Unreleased` on top. It sets the version wherever the
+   leaving an empty `## Unreleased` on top. `--agent-tag` names the
+   anix-agent release this Control installs on nodes (`config/AGENT_RELEASE`,
+   see [the Agent pin](#what-the-tag-pipeline-does)); without it the file keeps
+   its value, so a patch release over an unchanged Agent names the Agent tag
+   it already had. It sets the version wherever the
    tree declares it:
    - branding;
    - Makefile;
@@ -24,7 +29,8 @@ publishes everything. Nothing is built locally.
    - example configurations;
    - the Helm chart's `appVersion` (its default image tag; the chart's own
      `version` is a separate SemVer);
-   - README.
+   - README;
+   - `config/AGENT_RELEASE`, only with `--agent-tag`.
 
    Then it checks the result with `config/scripts/check_release_version.py`.
 2. Open a pull request (`release: v4.1.0`) and merge it once CI passes.
@@ -102,6 +108,16 @@ version `latest`.
     anix-agent checkout (packages, cross-repository E2E, live WebUI gate)
     takes its ref from it. Move it to the Agent's release commit with every
     Agent tag, in the pull request that prepares the Control release.
+  - `config/AGENT_RELEASE` is the one line that names that release's tag
+    (`v4.2.0`). The release binaries embed it (`-X main.agentRelease`), and
+    it is the Agent a node installs unless `agent_install.agent_version`
+    says otherwise. The Agent version is not the Control's: a patch release
+    can ship an unchanged Agent, and the Agent repository has no tag with
+    the Control's number then. `check_release_version.py` (the tag gate)
+    requires the file to hold `vX.Y.Z` or `vX.Y.Z-rc.N`; that the tag exists
+    in `anix-agent`, and that `AGENT_REF` is its commit, cannot be checked
+    offline: tag the Agent first (the Agent tag is asked for first,
+    `docs/architecture/forward-sdk.md` H25), then set both.
   - `plugin-package-release-test` runs `govulncheck` over the four Agent
     commands the plugin binaries are built from and fails for a
     vulnerability their call graph reaches, so a vulnerable Agent

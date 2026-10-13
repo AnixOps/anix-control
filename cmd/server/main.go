@@ -90,6 +90,10 @@ var (
 	buildTime  = "unknown"
 	buildCode  = ""
 	commit     = "unknown"
+	// agentRelease is the Agent release tag this build was released with
+	// (config/AGENT_RELEASE, set with -X main.agentRelease). Empty in a
+	// development build.
+	agentRelease = ""
 )
 
 func init() {
@@ -178,6 +182,7 @@ func formatDisplayVersion(baseVersion, code string) string {
 func syncBuildInfo() {
 	handler.BuildVersion = formatDisplayVersion(version, buildCode)
 	handler.ReleaseVersion = version
+	handler.AgentRelease = agentRelease
 	handler.BuildTime = buildTime
 	handler.BuildCode = buildCode
 	handler.BuildCommit = commit

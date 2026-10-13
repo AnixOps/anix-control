@@ -21,8 +21,17 @@ import (
 )
 
 // ReleaseVersion is the running Control's version (set at startup from the
-// build); the Agent it installs carries the same number (H25).
+// build).
 var ReleaseVersion = branding.DefaultVersion
+
+// AgentRelease is the Agent release tag this Control was released with
+// (config/AGENT_RELEASE, set at startup from the release build's -X
+// main.agentRelease). The Agent it installs is that release, unless
+// agent_install.agent_version says otherwise: a Control patch release can
+// ship with an unchanged Agent, so the Agent repository need not have a tag
+// with the Control's number. Empty in a development build, where the
+// Control's version is used (H25).
+var AgentRelease string
 
 // Install token lifetimes (H18): one hour by default, at most seven days.
 const (
@@ -234,7 +243,7 @@ func (h *AgentInstallHandler) settings(c *gin.Context, cfg *config.Config) (agen
 	}
 	return agentinstall.ResolveSettings(agentinstall.SettingsInput{
 		ControlURL: controlURL, GRPCTarget: install.GRPCTarget, GRPCPort: cfg.GRPC.Port,
-		AgentVersion: install.AgentVersion, ReleaseVersion: ReleaseVersion,
+		AgentVersion: install.AgentVersion, PinnedAgentVersion: AgentRelease, ReleaseVersion: ReleaseVersion,
 		ArtifactDir: install.ArtifactDir, CNMirrorURL: install.CNMirrorURL,
 	})
 }

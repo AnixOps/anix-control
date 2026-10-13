@@ -12,6 +12,36 @@ from pathlib import Path
 
 TAG_PATTERN = re.compile(r"^v(?P<version>[0-9]+\.[0-9]+\.[0-9]+(?:-(?:alpha|beta|rc)(?:\.[0-9]+)?)?)$")
 
+# The Agent release this Control installs on nodes: one line, the tag of an
+# anix-agent release. A Control patch release can ship an unchanged Agent, so
+# it is not derived from the Control version. The release build injects it
+# into the binary (-X main.agentRelease). That the tag exists in the Agent
+# repository cannot be checked offline: only its format is.
+AGENT_RELEASE_FILE = "config/AGENT_RELEASE"
+AGENT_TAG_PATTERN = re.compile(r"^v[0-9]+\.[0-9]+\.[0-9]+(?:-rc\.[0-9]+)?$")
+
+
+def validate_agent_tag(tag: str) -> str:
+    if AGENT_TAG_PATTERN.fullmatch(tag) is None:
+        raise ValueError(
+            f"unsupported Agent release tag {tag!r}: use vX.Y.Z or vX.Y.Z-rc.N (the tag of an anix-agent release)"
+        )
+    return tag
+
+
+def read_agent_release(repo_root: Path) -> str:
+    path = repo_root / AGENT_RELEASE_FILE
+    if not path.is_file():
+        raise ValueError(f"{AGENT_RELEASE_FILE} is missing: it names the Agent release this Control installs on nodes")
+    content = path.read_text(encoding="utf-8")
+    tag = content.strip()
+    if "\n" in tag or "\r" in tag:
+        raise ValueError(f"{AGENT_RELEASE_FILE} must hold one line, the Agent release tag")
+    try:
+        return validate_agent_tag(tag)
+    except ValueError as error:
+        raise ValueError(f"{AGENT_RELEASE_FILE}: {error}") from error
+
 
 def require_pattern(path: Path, pattern: str, expected: str, label: str) -> None:
     content = path.read_text(encoding="utf-8")
@@ -104,6 +134,7 @@ def check_release_version(repo_root: Path, tag: str) -> str:
         version,
         "README release",
     )
+    read_agent_release(repo_root)
     return version
 
 
@@ -123,6 +154,7 @@ def write_fixture(root: Path, version: str) -> None:
         "docs/swagger.yaml": f'  version: {version}\n',
         "CHANGELOG.md": f"# Changelog\n\n## {version} - 2026-07-17\n",
         "README.md": f"- Current release: `v{version}`\n",
+        AGENT_RELEASE_FILE: "v4.2.0\n",
     }
     for relative, content in files.items():
         path = root / relative
@@ -173,6 +205,29 @@ def self_test() -> None:
             assert "unsupported release tag" in str(error)
         else:
             raise AssertionError("invalid release tag was accepted")
+
+        # The pinned Agent release is independent of the Control version, but
+        # it must be a release tag: a missing, empty or malformed file would
+        # ship a Control whose installer asks for an Agent that cannot exist.
+        agent_release = root / AGENT_RELEASE_FILE
+        for good in ("v4.2.0\n", "v4.2.0", "v10.0.3-rc.2\n", "  v4.2.0  \n"):
+            agent_release.write_text(good, encoding="utf-8")
+            assert check_release_version(root, f"v{version}") == version, good
+        for bad in ("", "\n", "4.2.0\n", "v4.2\n", "latest\n", "v4.2.0-beta.1\n", "v4.2.0 v4.2.1\n", "v4.2.0\nv4.2.1\n", "V4.2.0\n"):
+            agent_release.write_text(bad, encoding="utf-8")
+            try:
+                check_release_version(root, f"v{version}")
+            except ValueError as error:
+                assert AGENT_RELEASE_FILE in str(error), (bad, error)
+            else:
+                raise AssertionError(f"Agent release {bad!r} was accepted")
+        agent_release.unlink()
+        try:
+            check_release_version(root, f"v{version}")
+        except ValueError as error:
+            assert f"{AGENT_RELEASE_FILE} is missing" in str(error)
+        else:
+            raise AssertionError("a missing Agent release file was accepted")
     print("release version self-test passed")
 
 
@@ -191,8 +246,9 @@ def main() -> int:
         return 0
     if not args.tag:
         raise SystemExit("--tag is required")
-    version = check_release_version(args.repo_root.resolve(), args.tag)
-    print(f"release version surfaces match {version}")
+    repo_root = args.repo_root.resolve()
+    version = check_release_version(repo_root, args.tag)
+    print(f"release version surfaces match {version}; Agent release {read_agent_release(repo_root)}")
     return 0
 
 

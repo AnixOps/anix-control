@@ -388,7 +388,7 @@ no node group can be created.
 agent_install:
   public_url: ""      # https address nodes reach; empty: the request's origin
   grpc_target: ""     # host:port nodes dial; empty: public_url's host and grpc.port
-  agent_version: ""   # Agent release tag; empty: "v" + Control's version (H25)
+  agent_version: ""   # Agent release tag; empty: the Agent release this Control was released with
   artifact_dir: ""    # <dir>/<tag>/<asset> (+ .dgst/.sig): Control serves the Agent
   cn_mirror_url: ""   # mainland mirror of the GitHub release downloads
   signature_file: ""  # release signature of the install script (set by the image)

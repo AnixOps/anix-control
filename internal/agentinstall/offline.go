@@ -23,19 +23,26 @@ import (
 // configuration (agent_install, grpc.port) and build.
 type SettingsInput struct {
 	// ControlURL is agent_install.public_url, or the request's origin.
-	ControlURL     string
-	GRPCTarget     string
-	GRPCPort       int
-	AgentVersion   string
-	ReleaseVersion string
-	ArtifactDir    string
-	CNMirrorURL    string
+	ControlURL string
+	GRPCTarget string
+	GRPCPort   int
+	// AgentVersion is agent_install.agent_version: an operator's override.
+	AgentVersion string
+	// PinnedAgentVersion is the Agent release tag this Control was released
+	// with (config/AGENT_RELEASE, injected into the release build). A Control
+	// patch release can ship with an unchanged Agent, so its own version is
+	// not always an Agent tag. Empty for a development build.
+	PinnedAgentVersion string
+	ReleaseVersion     string
+	ArtifactDir        string
+	CNMirrorURL        string
 }
 
 // ResolveSettings resolves a Control's onboarding settings: the https
 // address nodes reach, the gRPC target (agent_install.grpc_target, else
-// that address's host and grpc.port), and the Agent release (agent_install.
-// agent_version, else "v" + Control's version, H25).
+// that address's host and grpc.port), and the Agent release: agent_install.
+// agent_version, else the Agent release this Control was built with, else
+// (a build that carries none) "v" + Control's version, H25.
 func ResolveSettings(in SettingsInput) (Settings, error) {
 	controlURL := strings.TrimRight(strings.TrimSpace(in.ControlURL), "/")
 	parsed, err := url.Parse(controlURL)
@@ -48,7 +55,14 @@ func ResolveSettings(in SettingsInput) (Settings, error) {
 	controlVersion := "v" + strings.TrimPrefix(strings.TrimSpace(in.ReleaseVersion), "v")
 	agentVersion := strings.TrimSpace(in.AgentVersion)
 	if agentVersion == "" {
-		agentVersion = controlVersion
+		if pinned := strings.TrimSpace(in.PinnedAgentVersion); pinned != "" {
+			agentVersion = "v" + strings.TrimPrefix(pinned, "v")
+			if !ReleaseTagPattern.MatchString(agentVersion) {
+				return Settings{}, fmt.Errorf("the Agent release this Control was built with (%q) is not a release tag: set agent_install.agent_version to the Agent release tag", pinned)
+			}
+		} else {
+			agentVersion = controlVersion
+		}
 	}
 	if !ReleaseTagPattern.MatchString(agentVersion) {
 		return Settings{}, errors.New("this Control is not a release build: set agent_install.agent_version to the Agent release tag")

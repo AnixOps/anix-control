@@ -1750,7 +1750,8 @@ below). As built:
   `agent-install.sh.sig`; the release image ships it and Control serves it
   at `/install.sh.sig` only when it verifies the embedded script.
 - **Release metadata.** `GET /install/agent.env` (public, rate limited)
-  tells the script the Agent release (`v` + Control's version, H25), the
+  tells the script the Agent release (the one this Control was released
+  with, `config/AGENT_RELEASE`; H25), the
   gRPC target, the mirror bases and, when Control holds the release
   (`agent_install.artifact_dir`, served at `/install/agent/<tag>/<asset>`),
   its SHA-256. The checksum comes from Control, else GitHub, never from the
@@ -2501,7 +2502,11 @@ Decided by the owner (2026-10-04):
   keeping the `required` default (section 10). M3-4 and M3-5 are cancelled.
 - **H25:** anix-agent uses Control's version numbers and is released with
   it (for example `v4.2.0-rc.N` for both), and Control's CI pins the same
-  Agent commit. Each Agent tag is still asked first.
+  Agent commit. Each Agent tag is still asked first. A Control patch
+  release can ship an unchanged Agent: every Control build carries the
+  Agent tag it was released with (`config/AGENT_RELEASE`, injected as
+  `-X main.agentRelease`), and that tag, not "v" + Control's version, is
+  what nodes install.
 - **H28** (forward link certificates): as recommended. A dedicated forward
   link CA, separate from the CA of modules, the kernel and Agents, issues
   each forward node a link certificate (DNS name = the node's identity

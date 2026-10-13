@@ -11,10 +11,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"syscall"
 	"testing"
 
+	"github.com/AnixOps/anix-control/v4/internal/agentinstall"
 	appconfig "github.com/AnixOps/anix-control/v4/internal/config"
 	"github.com/AnixOps/anix-control/v4/internal/handler"
 	"github.com/AnixOps/anix-control/v4/internal/model"
@@ -455,6 +457,9 @@ func TestMainBuildInfoLdflagsPopulateHandlerBuildInfo(t *testing.T) {
 		if handler.BuildCommit != "abcdef123456" {
 			t.Fatalf("handler.BuildCommit = %q", handler.BuildCommit)
 		}
+		if handler.AgentRelease != "v9.8.6" {
+			t.Fatalf("handler.AgentRelease = %q, want v9.8.6", handler.AgentRelease)
+		}
 		return
 	}
 
@@ -476,13 +481,30 @@ func TestMainBuildInfoLdflagsPopulateHandlerBuildInfo(t *testing.T) {
 		"./cmd/server",
 		"-run", "^TestMainBuildInfoLdflagsPopulateHandlerBuildInfo$",
 		"-count=1",
-		"-ldflags", "-X github.com/AnixOps/anix-control/v4/cmd/server.version=9.8.7 -X github.com/AnixOps/anix-control/v4/cmd/server.buildTime=2026-07-08T00:00:00Z -X github.com/AnixOps/anix-control/v4/cmd/server.buildCode=456 -X github.com/AnixOps/anix-control/v4/cmd/server.commit=abcdef123456",
+		"-ldflags", "-X github.com/AnixOps/anix-control/v4/cmd/server.version=9.8.7 -X github.com/AnixOps/anix-control/v4/cmd/server.buildTime=2026-07-08T00:00:00Z -X github.com/AnixOps/anix-control/v4/cmd/server.buildCode=456 -X github.com/AnixOps/anix-control/v4/cmd/server.commit=abcdef123456 -X github.com/AnixOps/anix-control/v4/cmd/server.agentRelease=v9.8.6",
 	)
 	cmd.Dir = repoRoot
 	cmd.Env = append(os.Environ(), "V2BOARD_BUILDINFO_LDFLAGS_CHILD=1")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("child go test failed: %v\n%s", err, strings.TrimSpace(string(output)))
+	}
+}
+
+// config/AGENT_RELEASE is the Agent release tag the release build injects
+// (-X main.agentRelease) as the default Agent a node installs. The release
+// tag gate checks the same format (check_release_version.py).
+func TestAgentReleasePinIsAReleaseTag(t *testing.T) {
+	content, err := os.ReadFile(filepath.Join("..", "..", "config", "AGENT_RELEASE"))
+	if err != nil {
+		t.Fatalf("read config/AGENT_RELEASE: %v", err)
+	}
+	tag := strings.TrimSpace(string(content))
+	if !regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$`).MatchString(tag) {
+		t.Fatalf("config/AGENT_RELEASE = %q, want an Agent release tag such as v4.2.0", tag)
+	}
+	if !agentinstall.ReleaseTagPattern.MatchString(tag) {
+		t.Fatalf("config/AGENT_RELEASE = %q is not a tag the installer accepts", tag)
 	}
 }
 
@@ -497,7 +519,7 @@ func TestReleaseBuildCommandsTargetMainBuildInfoVariables(t *testing.T) {
 			t.Fatalf("read %s: %v", path, err)
 		}
 		text := string(content)
-		for _, expected := range []string{"-X main.version=", "-X main.buildTime=", "-X main.buildCode=", "-X main.commit="} {
+		for _, expected := range []string{"-X main.version=", "-X main.agentRelease=", "-X main.buildTime=", "-X main.buildCode=", "-X main.commit="} {
 			if !strings.Contains(text, expected) {
 				t.Fatalf("%s does not set %s in release build ldflags", path, expected)
 			}

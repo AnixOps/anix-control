@@ -132,7 +132,7 @@ func runOfflineBundleCommand(cfg *config.Config, arguments []string, stdout io.W
 	}
 	settings, err := agentinstall.ResolveSettings(agentinstall.SettingsInput{
 		ControlURL: address, GRPCTarget: install.GRPCTarget, GRPCPort: cfg.GRPC.Port,
-		AgentVersion: install.AgentVersion, ReleaseVersion: handler.ReleaseVersion,
+		AgentVersion: install.AgentVersion, PinnedAgentVersion: handler.AgentRelease, ReleaseVersion: handler.ReleaseVersion,
 		ArtifactDir: install.ArtifactDir, CNMirrorURL: install.CNMirrorURL,
 	})
 	if err != nil {

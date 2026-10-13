@@ -216,6 +216,9 @@ A release tag `vX.Y.Z[-alpha|-beta|-rc.N]` must match every surface checked by
 - `config/deploy/helm/anix-control/Chart.yaml` (`appVersion`, the chart's default image tag; the chart's own `version` is a separate SemVer, bumped on template or values changes)
 - `CHANGELOG.md` (first `## X.Y.Z - YYYY-MM-DD` heading)
 - `README.md` (the `- Current release:` line)
+- `config/AGENT_RELEASE` (the anix-agent release tag nodes install, not
+  derived from the Control version; only its `vX.Y.Z[-rc.N]` format is
+  checked; `prepare_release.py --agent-tag` sets it)
 
 ## Release Policy
 

@@ -12,6 +12,15 @@
   listener is always trusted, so a `server.trusted_proxies` without loopback (or an empty list, or a specific
   `server.host`) no longer makes every client look like the UI server, and a proxy that sets only `X-Real-IP` is
   honoured on that hop.
+- The node installer asks for the Agent release the Control was released with, not for `v` + the Control's version.
+  A Control patch release can ship an unchanged Agent (4.2.1 pins Agent v4.2.0), and the Agent repository then
+  has no tag with the Control's number, so `/install/agent.env` named a release that does not exist and every node
+  install failed with 404. `config/AGENT_RELEASE` holds the tag; the release binaries embed it
+  (`-X main.agentRelease`), the Makefile, the Dockerfile (`AGENT_RELEASE` build argument) and `deploy_panel.sh`
+  inject it too. `agent_install.agent_version` still overrides it, and a development build keeps its own
+  version. `prepare_release.py` takes `--agent-tag` (default: keep the file's value), and
+  `check_release_version.py` and the release workflow check require a `vX.Y.Z[-rc.N]` tag in the file and in
+  the release build step.
 
 ### Added
 

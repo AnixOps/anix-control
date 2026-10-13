@@ -181,8 +181,47 @@ func TestResolveSettings(t *testing.T) {
 		"no address":  {ReleaseVersion: "4.2.0"},
 		"http":        {ControlURL: "http://panel.example.com", ReleaseVersion: "4.2.0"},
 		"dev version": {ControlURL: "https://panel.example.com", ReleaseVersion: "dev"},
+		"pinned release that is no tag": {
+			ControlURL: "https://panel.example.com", ReleaseVersion: "4.2.1", PinnedAgentVersion: "latest",
+		},
 	} {
 		_, err := ResolveSettings(in)
 		assert.Error(t, err, name)
 	}
+}
+
+// A Control patch release can ship an unchanged Agent: the release build
+// carries the Agent tag it was released with, and the installer asks for
+// that one, not for "v" + the Control's version (which the Agent repository
+// has no tag for).
+func TestResolveSettingsUsesThePinnedAgentRelease(t *testing.T) {
+	const control = "https://panel.example.com"
+	settings, err := ResolveSettings(SettingsInput{ControlURL: control, ReleaseVersion: "4.2.1", PinnedAgentVersion: "v4.2.0"})
+	require.NoError(t, err)
+	assert.Equal(t, "v4.2.0", settings.AgentVersion, "the pinned Agent, not the Control's version")
+	assert.Equal(t, "v4.2.1", settings.ControlVersion, "the Control's own release stays the Control's")
+
+	// agent_install.agent_version still overrides the pin.
+	settings, err = ResolveSettings(SettingsInput{ControlURL: control, ReleaseVersion: "4.2.1", PinnedAgentVersion: "v4.2.0", AgentVersion: "v4.1.9"})
+	require.NoError(t, err)
+	assert.Equal(t, "v4.1.9", settings.AgentVersion)
+
+	// The pin may be written without the leading v, and may be a release candidate.
+	settings, err = ResolveSettings(SettingsInput{ControlURL: control, ReleaseVersion: "4.3.0-rc.1", PinnedAgentVersion: "4.3.0-rc.1"})
+	require.NoError(t, err)
+	assert.Equal(t, "v4.3.0-rc.1", settings.AgentVersion)
+
+	// A build that carries no pin (a development build) keeps today's
+	// behaviour: the Control's version, or an error when it is no release.
+	settings, err = ResolveSettings(SettingsInput{ControlURL: control, ReleaseVersion: "4.2.1"})
+	require.NoError(t, err)
+	assert.Equal(t, "v4.2.1", settings.AgentVersion)
+	_, err = ResolveSettings(SettingsInput{ControlURL: control, ReleaseVersion: "dev", PinnedAgentVersion: " "})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not a release build")
+
+	// A pin that is no release tag is reported as such.
+	_, err = ResolveSettings(SettingsInput{ControlURL: control, ReleaseVersion: "4.2.1", PinnedAgentVersion: "main"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "agent_install.agent_version")
 }

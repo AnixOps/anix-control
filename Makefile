@@ -4,9 +4,11 @@
 
 # 版本信息
 VERSION := 4.2.1
+# The Agent release this Control installs on nodes (config/AGENT_RELEASE).
+AGENT_RELEASE := $(shell tr -d '[:space:]' < config/AGENT_RELEASE)
 BUILD_TIME := $(shell date +%Y-%m-%d_%H:%M:%S)
 GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-LDFLAGS := -s -w -X main.version=$(VERSION) -X main.buildTime=$(BUILD_TIME) -X main.commit=$(GIT_COMMIT)
+LDFLAGS := -s -w -X main.version=$(VERSION) -X main.agentRelease=$(AGENT_RELEASE) -X main.buildTime=$(BUILD_TIME) -X main.commit=$(GIT_COMMIT)
 RUN_CONFIG ?= config/config.dev.yaml
 
 # Go 测试参数
@@ -186,6 +188,7 @@ docker-build:
 	@echo "Building Docker image (source target)..."
 	docker build --target source \
 		--build-arg VERSION=$(VERSION) \
+		--build-arg AGENT_RELEASE=$(AGENT_RELEASE) \
 		--build-arg BUILD_TIME=$(shell date -u +%Y-%m-%dT%H:%M:%SZ) \
 		--build-arg COMMIT=$(shell git rev-parse --short=12 HEAD 2>/dev/null || echo unknown) \
 		-t anix-control:dev .
