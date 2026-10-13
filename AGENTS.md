@@ -50,8 +50,8 @@ file short and enforceable; put explanations in `docs/`.
   Cross-repository golden fixtures live in `contracts/`.
 - `control-center/` is a separate app; see the Control Center section.
 - Status sources: `docs/features.md` (feature register), `TODO.md` (open work),
-  `CHANGELOG.md` (history). A route or UI existing is not proof a feature is
-  complete.
+  `CHANGELOG.md` (history) and `changelog.d/` (the entries of the next
+  release). A route or UI existing is not proof a feature is complete.
 
 ## Repository Map
 
@@ -171,6 +171,7 @@ bash config/scripts/check_docs_updated.sh --base origin/go_dev --head HEAD
 bash config/scripts/check_docs_updated.sh --self-test
 bash config/scripts/check_release_workflow.sh
 python3 config/scripts/check_mojibake.py                            # GBK mojibake, U+FFFD, private-use, BOM
+python3 config/scripts/changelog_fragments.py check                 # changelog.d/*.md fragments
 python3 config/scripts/check_release_version.py --self-test
 GOWORK=off python3 config/scripts/check_plugin_only_routes.py      # 243 /api/v2 routes vs catalog and packages
 GOWORK=off python3 -m unittest discover -s config/scripts -p '*_test.py'
@@ -197,11 +198,27 @@ fails a diff that touches implementation, CI, deployment, or config surfaces
 build config, `go.mod`/`go.sum`, `Dockerfile`, `docker-compose*.yml`,
 `config/deploy/*`, `config/scripts/*`,
 `config/config.yaml.example`, `config/config.prod.yaml`) unless the same diff
-updates one of `README.md`, `CHANGELOG.md`, `TODO.md`, `ROADMAP.md`,
+updates one of `changelog.d/<slug>.md` (a changelog fragment, not
+`changelog.d/README.md`), `README.md`, `CHANGELOG.md`, `TODO.md`, `ROADMAP.md`,
 `docs/README.md`, `docs/DEPLOYMENT.md`, `docs/features.md`,
 `docs/manual-intervention.md`, or `docs/{audit,forwarding,guide,reference}/*.md`.
-Default: add a `## Unreleased` entry in `CHANGELOG.md` and update the doc the
-change affects.
+Default: add a changelog fragment and update the doc the change affects.
+
+- **Changelog fragments.** A change's changelog entry is its own file,
+  `changelog.d/<slug>.md`: a `### Added`, `### Changed`, `### Deprecated`,
+  `### Removed`, `### Fixed` or `### Security` line and `- ` entries
+  (`changelog.d/README.md` has the format). Bullets that several pull
+  requests add under `## Unreleased` make every merge conflict every other
+  open pull request, and each rebase starts a new CI run.
+- **Checked.** `config/scripts/changelog_fragments.py check` runs in the
+  "Documentation Sync Check" job: file name, headings, entries, whitespace
+  and conflict markers, with file:line messages.
+- **Collected.** `prepare_release.py` merges the fragments into
+  `## Unreleased` (joining its headings, none twice), dates the section and
+  `git rm`s them. A fragment cherry-picked to a release branch is deleted
+  from `go_dev` in the merge-back pull request (`docs/RELEASING.md`).
+- **Direct edits.** Bullets under `## Unreleased` in `CHANGELOG.md` are still
+  accepted and are released with the fragments; new changes use a fragment.
 
 ## Version Bumps
 
@@ -235,9 +252,10 @@ A release tag `vX.Y.Z[-alpha|-beta|-rc.N]` must match every surface checked by
     `identity-platform` trio that `scripts/install.sh` downloads by name; one
     frontend archive (`.tar.gz`). `docs/RELEASING.md` lists every asset.
   - The release body is the tag's CHANGELOG section.
-- Cut a release with `config/scripts/prepare_release.py <version>`, a pull
-  request, then the tag (`docs/RELEASING.md`). There are no release-stage,
-  rehearsal or approval gates.
+- Cut a release with `config/scripts/prepare_release.py <version>` (it also
+  collects the changelog fragments of `changelog.d/`), a pull request, then
+  the tag (`docs/RELEASING.md`). There are no release-stage, rehearsal or
+  approval gates.
 - Never build release artifacts locally or on a production host; local deploy
   scripts are guarded by `config/deploy/check_release_build_policy.sh`.
 - If you change release steps in `ci.yml`, update

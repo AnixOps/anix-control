@@ -252,6 +252,11 @@ jobs:
       - name: Reject GBK mojibake and broken UTF-8
         run: python3 config/scripts/check_mojibake.py
 
+      # One file per change in changelog.d/ (changelog.d/README.md); the
+      # release collects them (config/scripts/prepare_release.py).
+      - name: Check changelog fragments
+        run: python3 config/scripts/changelog_fragments.py check
+
       - name: Validate documentation sync script syntax
         run: bash -n config/scripts/check_docs_updated.sh
 

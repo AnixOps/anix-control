@@ -16,7 +16,8 @@ Usage: config/scripts/check_docs_updated.sh [--base REV] [--head REV|--worktree]
 Checks the changed files between BASE and HEAD. Use --worktree to check tracked
 uncommitted files against BASE. If implementation, frontend,
 CI, deployment, or configuration surfaces changed, the same diff must also
-update a maintained status document such as CHANGELOG.md, TODO.md,
+update a maintained status document such as a changelog fragment
+changelog.d/<slug>.md (not changelog.d/README.md), CHANGELOG.md, TODO.md,
 docs/features.md, docs/manual-intervention.md, docs/audit/*.md, docs/guide/*.md,
 docs/reference/*.md, or docs/forwarding/*.md.
 EOF
@@ -32,6 +33,14 @@ is_documentation_evidence() {
       return 0
       ;;
     docs/audit/*.md|docs/forwarding/*.md|docs/guide/*.md|docs/reference/*.md)
+      return 0
+      ;;
+    # A changelog fragment is the changelog entry of the change (see
+    # changelog.d/README.md). The README documents the format and is not one.
+    changelog.d/README.md|changelog.d/*/*)
+      return 1
+      ;;
+    changelog.d/*.md)
       return 0
       ;;
   esac
@@ -151,6 +160,7 @@ check_docs_updated() {
   cat >&2 <<'EOF'
 
 Update at least one maintained status document in the same change:
+  changelog.d/<slug>.md (a changelog fragment, see changelog.d/README.md)
   CHANGELOG.md
   TODO.md
   ROADMAP.md
@@ -214,6 +224,41 @@ EOF
 
   if ! DOC_SYNC_REPO_ROOT="${tmpdir}" "${BASH_SOURCE[0]}" --base "${base_docs_only}" --head HEAD >/dev/null; then
     echo "self-test failed: docs-only change should pass" >&2
+    return 1
+  fi
+
+  # A changelog fragment is documentation evidence; changelog.d/README.md and
+  # a file in a subdirectory are not, and neither is a deleted fragment.
+  base_fragment="$(git -C "${tmpdir}" rev-parse HEAD)"
+  printf '\nfunc fragment() {}\n' >>"${tmpdir}/internal/example.go"
+  mkdir -p "${tmpdir}/changelog.d/nested"
+  printf '# Fragments\n' >"${tmpdir}/changelog.d/README.md"
+  printf '### Added\n\n- A change.\n' >"${tmpdir}/changelog.d/nested/other.md"
+  git -C "${tmpdir}" add .
+  git -C "${tmpdir}" commit -q -m "source with README and nested file only"
+
+  if DOC_SYNC_REPO_ROOT="${tmpdir}" "${BASH_SOURCE[0]}" --base "${base_fragment}" --head HEAD >/dev/null 2>&1; then
+    echo "self-test failed: changelog.d/README.md and a nested file are not documentation evidence" >&2
+    return 1
+  fi
+
+  printf '### Fixed\n\n- A fix.\n' >"${tmpdir}/changelog.d/fix-example.md"
+  git -C "${tmpdir}" add changelog.d/fix-example.md
+  git -C "${tmpdir}" commit -q -m "add a changelog fragment"
+
+  if ! DOC_SYNC_REPO_ROOT="${tmpdir}" "${BASH_SOURCE[0]}" --base "${base_fragment}" --head HEAD >/dev/null; then
+    echo "self-test failed: source plus a changelog fragment should pass" >&2
+    return 1
+  fi
+
+  base_removed="$(git -C "${tmpdir}" rev-parse HEAD)"
+  printf '\nfunc removed() {}\n' >>"${tmpdir}/internal/example.go"
+  git -C "${tmpdir}" rm -q changelog.d/fix-example.md
+  git -C "${tmpdir}" add internal/example.go
+  git -C "${tmpdir}" commit -q -m "source change that only deletes a fragment"
+
+  if DOC_SYNC_REPO_ROOT="${tmpdir}" "${BASH_SOURCE[0]}" --base "${base_removed}" --head HEAD >/dev/null 2>&1; then
+    echo "self-test failed: deleting a fragment is not documentation evidence" >&2
     return 1
   fi
 

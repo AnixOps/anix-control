@@ -6,7 +6,7 @@ below so that status is recorded in exactly one place.
 | Question | Source of truth |
 |----------|-----------------|
 | What is the current development direction (moving business domains into packages, milestones M0–M4)? | [`docs/architecture/package-extraction.md`](docs/architecture/package-extraction.md) |
-| What is the current release work, and how is a release cut? | The `## Unreleased` section of [`CHANGELOG.md`](CHANGELOG.md) and [`docs/RELEASING.md`](docs/RELEASING.md); the 4.0.x RC roadmap [`docs/ROADMAP-4.0.x-RC.md`](docs/ROADMAP-4.0.x-RC.md) and its evidence snapshot [`docs/RC-EVIDENCE-4.0.x.md`](docs/RC-EVIDENCE-4.0.x.md) are historical |
+| What is the current release work, and how is a release cut? | The `## Unreleased` section of [`CHANGELOG.md`](CHANGELOG.md), the fragments in [`changelog.d/`](changelog.d/README.md) and [`docs/RELEASING.md`](docs/RELEASING.md); the 4.0.x RC roadmap [`docs/ROADMAP-4.0.x-RC.md`](docs/ROADMAP-4.0.x-RC.md) and its evidence snapshot [`docs/RC-EVIDENCE-4.0.x.md`](docs/RC-EVIDENCE-4.0.x.md) are historical |
 | Which product stages shipped, and what is explicitly not complete? | [`docs/architecture/release-line-status.md`](docs/architecture/release-line-status.md) |
 | Is a feature implemented, partial, planned, or deferred? | [`docs/features.md`](docs/features.md) |
 | What concrete work is still open? | [`TODO.md`](TODO.md) |

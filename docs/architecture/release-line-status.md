@@ -193,7 +193,8 @@ historical tag.
 
 For the kernel/package contract, see
 [`plugin-kernel-contract.md`](plugin-kernel-contract.md). Release work is
-tracked in the `## Unreleased` section of `CHANGELOG.md` and cut as
-[`../RELEASING.md`](../RELEASING.md) describes; the 4.0.x RC roadmap and its
-evidence snapshot are historical. Earlier 3.1-to-4.0 planning documents were
-retired; their history remains in Git and `CHANGELOG.md`.
+tracked in the `## Unreleased` section of `CHANGELOG.md` and the fragments in
+`changelog.d/`, and cut as [`../RELEASING.md`](../RELEASING.md) describes; the
+4.0.x RC roadmap and its evidence snapshot are historical. Earlier 3.1-to-4.0
+planning documents were retired; their history remains in Git and
+`CHANGELOG.md`.
