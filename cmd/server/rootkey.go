@@ -2,15 +2,13 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
-	"github.com/AnixOps/anix-control/v5/internal/agentpki"
 	"github.com/AnixOps/anix-control/v5/internal/config"
-	"github.com/AnixOps/anix-control/v5/internal/modulepki"
-	"github.com/AnixOps/anix-control/v5/internal/nodegroup"
-	"github.com/AnixOps/anix-control/v5/internal/panelcert"
 	"github.com/AnixOps/anix-control/v5/internal/rootkey"
+	"github.com/AnixOps/anix-control/v5/internal/rootkeycheck"
 	"gorm.io/gorm"
 )
 
@@ -82,10 +80,10 @@ func rootKeyName() string {
 }
 
 // verifyRootKey checks, before anything uses the key, that the root key
-// opens what the database holds sealed with it: every current and next
-// module CA and forward link CA. A database without a CA must open its
-// sealed ACME cache entry and join token instead (each checked once,
-// cheaply). With a CA, those two only warn: resetting a join token or
+// opens what the database holds sealed with it (rootkeycheck.Check): every
+// current and next module CA and forward link CA. A database without a CA
+// must open its sealed ACME cache entry and join token instead (each checked
+// once, cheaply). With a CA, those two only warn: resetting a join token or
 // requesting a certificate again heals them. Without a root key there is
 // nothing to check.
 func verifyRootKey(ctx context.Context, cfg *config.Config, db *gorm.DB, logf func(string, ...any)) error {
@@ -97,38 +95,15 @@ func verifyRootKey(ctx context.Context, cfg *config.Config, db *gorm.DB, logf fu
 	if err != nil {
 		return fmt.Errorf("%s: %w", rootKeyName(), err)
 	}
-	kek := key.Bytes()
-	refuse := func(what string, cause error) error {
+	err = rootkeycheck.Check(ctx, db, key.Bytes(), func(what string, cause error) {
+		logf("WARNING: %s opens the CA keys but not a stored %s (%v); reset the node group's token or request the certificate again", rootKeyName(), what, cause)
+	})
+	var mismatch *rootkeycheck.Mismatch
+	if errors.As(err, &mismatch) {
 		return fmt.Errorf("%s does not open the %s stored in this database (%v). "+
 			"The database was sealed with another root key: restore the root.key that belongs to this database "+
 			"(from the backup taken with it) into %s, or start with the database that belongs to this key. "+
-			"Control does not start with a root key that cannot open its stored keys", rootKeyName(), what, cause, rootkey.Path(cfg.DataDir))
+			"Control does not start with a root key that cannot open its stored keys", rootKeyName(), mismatch.What, mismatch.Err, rootkey.Path(cfg.DataDir))
 	}
-	moduleCAs, err := modulepki.VerifyKEK(ctx, db, kek)
-	if err != nil {
-		return refuse("module CA key", err)
-	}
-	linkCAs, err := agentpki.VerifyLinkKEK(ctx, db, kek)
-	if err != nil {
-		return refuse("forward link CA key", err)
-	}
-	authoritative := moduleCAs+linkCAs == 0
-	others := []struct {
-		what  string
-		check func() (bool, error)
-	}{
-		{"ACME account or certificate key", func() (bool, error) { return panelcert.VerifyKEK(ctx, db, kek) }},
-		{"node group join token", func() (bool, error) { return nodegroup.VerifyKEK(db, kek) }},
-	}
-	for _, other := range others {
-		_, err := other.check()
-		switch {
-		case err == nil:
-		case authoritative:
-			return refuse(other.what, err)
-		default:
-			logf("WARNING: %s opens the CA keys but not a stored %s (%v); reset the node group's token or request the certificate again", rootKeyName(), other.what, err)
-		}
-	}
-	return nil
+	return err
 }
