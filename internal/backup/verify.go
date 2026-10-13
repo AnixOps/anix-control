@@ -184,7 +184,7 @@ func extract(file io.Reader, work string) (*Manifest, map[string][]byte, error) 
 		if limit > 0 && header.Size > limit {
 			return nil, nil, problem(ProblemMember, "%s is %d bytes, more than a bundle's %s can be", name, header.Size, name)
 		}
-		target, err := os.OpenFile(filepath.Join(work, name), os.O_WRONLY|os.O_CREATE|os.O_EXCL, fileMode) // #nosec G304 -- name is one of the manifest's members, checked above.
+		target, err := os.OpenFile(filepath.Join(work, name), os.O_WRONLY|os.O_CREATE|os.O_EXCL, fileMode) // #nosec G304 G305 -- name is one of the manifest's members, checked above (a fixed set of names, never a path).
 		if err != nil {
 			return nil, nil, err
 		}
@@ -194,7 +194,9 @@ func extract(file io.Reader, work string) (*Manifest, map[string][]byte, error) 
 		if limit > 0 {
 			writers = append(writers, &memory)
 		}
-		written, copyErr := io.Copy(io.MultiWriter(writers...), reader)
+		// Bounded by the size the manifest declares (and the tar header, which
+		// was compared with it above): a member cannot expand past it.
+		written, copyErr := io.CopyN(io.MultiWriter(writers...), reader, want.Size)
 		closeErr := target.Close()
 		if copyErr != nil {
 			return nil, nil, problem(ProblemArchive, "read %s: %v", name, copyErr)

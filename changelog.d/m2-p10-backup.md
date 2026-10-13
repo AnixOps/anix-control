@@ -54,3 +54,9 @@
   404), the platform package's backup handlers and the KernelSettings
   `backup` namespace. The tables `v2_backup_config` and `v2_backup_record`
   stay, unused, until a cleanup migration drops them.
+
+### Fixed
+
+- A `migrate` run (the Compose `migrate` service) or a server in a container with a read-only root file system and no
+  volume at `data_dir` no longer stops with "open control.lock: read-only file system". The shared lock a restore
+  needs exclusively is only taken where the process can create the lock file; elsewhere there is nothing to protect.

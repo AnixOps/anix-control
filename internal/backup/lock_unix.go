@@ -39,12 +39,28 @@ var ErrRestoreRunning = errors.New("a backup restore is running on this data dir
 // none can take it while a restore runs (ErrRestoreRunning). Its holder
 // keeps the returned Lock until it exits; the kernel drops the lock when
 // the process ends, however it ends. A data directory that does not exist
-// yet has nothing to protect: the Lock is then a no-op.
+// yet, or that this process cannot write, has nothing to protect: the Lock
+// is then a no-op.
 func LockService(dataDir string) (*Lock, error) {
 	if _, err := os.Stat(dataDir); errors.Is(err, os.ErrNotExist) {
 		return &Lock{}, nil
 	}
-	return lockFile(filepath.Join(dataDir, LockFileName), unix.LOCK_SH, ErrRestoreRunning)
+	lock, err := lockFile(filepath.Join(dataDir, LockFileName), unix.LOCK_SH, ErrRestoreRunning)
+	if err != nil && lockUnavailable(err) {
+		// A process that cannot create the file cannot be running on a
+		// data directory a restore could change either: a container with a
+		// read-only root file system and no volume at data_dir (the Compose
+		// migrate service), or a data directory owned by another user. It
+		// has nothing to protect and nothing to refuse.
+		return &Lock{}, nil
+	}
+	return lock, err
+}
+
+// lockUnavailable reports an error of creating the lock file that means the
+// directory cannot be written by this process.
+func lockUnavailable(err error) bool {
+	return errors.Is(err, unix.EROFS) || errors.Is(err, unix.EACCES) || errors.Is(err, unix.EPERM)
 }
 
 // LockExclusive takes DataDir/control.lock exclusively, without waiting:
