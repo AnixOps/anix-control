@@ -8,8 +8,8 @@ ANIX_CONTROL_ADMIN_PASSWORD_FILE (or ANIX_CONTROL_ADMIN_PASSWORD) before the fir
 container stops with the reason and no password is ever generated:
   kubectl -n {{ .Release.Namespace }} logs deployment/{{ include "anix-control.fullname" . }} -c migrate
 
-UI and API (the UI server also proxies /api):
-  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "anix-control.fullname" . }} 3000:{{ .Values.service.webPort }}
+The web app and the API (one port):
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "anix-control.fullname" . }} 8080:{{ .Values.service.httpPort }}
 
 AnixOps Agents (they enroll and connect over gRPC with TLS, using the built-in CA):
 {{- if eq (include "anix-control.caKekEnabled" .) "true" }}

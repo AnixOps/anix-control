@@ -126,6 +126,15 @@ false
 {{- end }}
 {{- end -}}
 
+{{/* Fail early without a lasting root key: the pod's data directory is
+lost with the pod, so the CA key Secret is the root key's only lasting copy
+(Control adopts it into root.key at every start). */}}
+{{- define "anix-control.validateRootKey" -}}
+{{- if and (ne (include "anix-control.caKekMapped" .) "true") (ne (include "anix-control.caKekEnabled" .) "true") }}
+{{- fail "Control needs its root key from a Secret: keep caKek.generate, set caKek.existingSecret, or map secrets.files.<key>: ANIX_CONTROL_MODULE_RUNTIME_CA_KEK (a key generated in the pod would be lost with it)" }}
+{{- end }}
+{{- end -}}
+
 {{- define "anix-control.moduleImage" -}}
 {{- $image := .image -}}
 {{- if $image.digest -}}
@@ -143,6 +152,8 @@ false
 {{- define "anix-control.volumeMounts" -}}
 - name: tmp
   mountPath: /tmp
+- name: data
+  mountPath: /var/lib/anix-control
 - name: secrets
   mountPath: /run/secrets/anix-control
   readOnly: true

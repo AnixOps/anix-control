@@ -18,7 +18,10 @@
 # The image runs as uid 10001 without a config file: configure it with
 # ANIX_CONTROL_* environment variables (anix-control -print-env) or mount a
 # config file and set ANIX_CONTROL_CONFIG. It works with a read-only root
-# filesystem when /tmp is a writable, executable tmpfs or volume.
+# filesystem when /tmp is a writable, executable tmpfs or volume. Control
+# keeps its root key in /var/lib/anix-control (data_dir): mount a volume
+# there, or pass the key (ANIX_CONTROL_MODULE_RUNTIME_CA_KEK_FILE), which
+# Control then adopts at every start.
 
 ARG GO_IMAGE=golang:1.26.9-alpine@sha256:cdfd4fe2da6b225d8b40c6b7a105736e548e83ff56d5d8f9394446eeb5eb84e0
 ARG NODE_IMAGE=node:22-alpine@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402
@@ -55,8 +58,9 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -trimpath \
     -o /out/anix-control ./cmd/server
 
 # Runtime base shared by both targets. /var/lib/anixops is the mount point for
-# the package artifact volume; a new named volume inherits its owner (uid 10001)
-# and mode from the image.
+# the package artifact volume and /var/lib/anix-control for the data volume
+# (root.key); a new named volume inherits its owner (uid 10001) and mode from
+# the image.
 FROM ${RUNTIME_IMAGE} AS runtime-base
 # ansible, openssh-client and sshpass serve the local-ansible forward runtime
 # (forward_runtime.backend: nftables_ansible); tini reaps the ssh and ansible
@@ -68,7 +72,8 @@ RUN apt-get update \
 RUN groupadd --gid 10001 anixops \
     && useradd --uid 10001 --gid 10001 --home-dir /home/anixops --create-home --shell /usr/sbin/nologin anixops \
     && install -d -o anixops -g anixops -m 0700 /home/anixops/.ssh \
-    && install -d -o anixops -g anixops -m 0700 /var/lib/anixops
+    && install -d -o anixops -g anixops -m 0700 /var/lib/anixops \
+    && install -d -o anixops -g anixops -m 0700 /var/lib/anix-control
 WORKDIR /app
 # Code, docs and playbooks are owned by root and read-only for the app user.
 COPY docs/swagger.json docs/swagger.yaml ./docs/
@@ -83,9 +88,9 @@ ENV HOME=/home/anixops \
     ANSIBLE_HOME=/tmp/.ansible \
     ANSIBLE_LOCAL_TEMP=/tmp/.ansible/tmp \
     ANSIBLE_SSH_CONTROL_PATH_DIR=/tmp/.ansible/cp \
-    ANIX_CONTROL_SERVER_HOST=0.0.0.0
+    ANIX_CONTROL_LISTEN=0.0.0.0:8080
 USER 10001:10001
-EXPOSE 8080 3000 50051
+EXPOSE 8080 50051
 HEALTHCHECK --interval=15s --timeout=5s --start-period=60s --retries=3 \
     CMD curl -fsS http://127.0.0.1:8080/readyz >/dev/null || exit 1
 ENTRYPOINT ["/usr/bin/tini", "--", "/app/anix-control"]

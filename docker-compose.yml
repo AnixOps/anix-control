@@ -7,7 +7,10 @@
 #   docker compose up -d --build
 #   ANIX_CONTROL_ADMIN_PASSWORD='choose-a-password' docker compose up -d --build
 #                                    # the first start on an empty database needs it
-#   open http://127.0.0.1:3000
+#   open http://127.0.0.1:8080
+#
+# Control generates its root key in the control-data volume at the first
+# start; the JWT secret is derived from it.
 name: anix-control-dev
 
 x-control: &control
@@ -16,17 +19,17 @@ x-control: &control
     context: .
     target: source
   environment:
-    ANIX_CONTROL_ENV: development
     ANIX_CONTROL_DATABASE_HOST: postgres
     ANIX_CONTROL_DATABASE_USERNAME: anix_control
     ANIX_CONTROL_DATABASE_PASSWORD: anix_control
     ANIX_CONTROL_DATABASE_DATABASE: anix_control
-    ANIX_CONTROL_JWT_SECRET: dev-only-jwt-secret-change-me
     ANIX_CONTROL_ADMIN_EMAIL: admin@anixops.local
     ANIX_CONTROL_ADMIN_PASSWORD: ${ANIX_CONTROL_ADMIN_PASSWORD:-}
   read_only: true
   tmpfs:
     - /tmp:rw,exec,mode=1777
+  volumes:
+    - control-data:/var/lib/anix-control
 
 services:
   postgres:
@@ -55,14 +58,16 @@ services:
 
   control:
     <<: *control
+    # A development instance: gin debug mode and debug logging.
+    command: ["-debug"]
     depends_on:
       migrate:
         condition: service_completed_successfully
     ports:
       - "127.0.0.1:8080:8080"
-      - "127.0.0.1:3000:3000"
       - "127.0.0.1:50051:50051"
     stop_grace_period: 90s
 
 volumes:
   postgres-data:
+  control-data:

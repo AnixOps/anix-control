@@ -3,7 +3,7 @@ name: Signing Key Check
 # Proves, without releasing anything, that the organization secrets
 # ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY and ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY
 # are a working Ed25519 pair and match the official package root in
-# config/config.prod.yaml. It signs a random message with the private key,
+# internal/config/defaults.yaml. It signs a random message with the private key,
 # verifies it with the public root, and prints only the public key id (the
 # first 16 hex characters of the SHA-256 of the raw public key). Run it
 # before pushing a release tag and after rotating the key.
@@ -35,9 +35,9 @@ jobs:
           work="$(mktemp -d)"
           trap 'rm -rf "${work}"' EXIT
           chmod 0700 "${work}"
-          configured_root="$(sed -n 's/^[[:space:]]*official_public_key:[[:space:]]*"\([^"]*\)".*/\1/p' config/config.prod.yaml)"
-          [[ -n "${configured_root}" ]] || { echo "config/config.prod.yaml does not declare the official package root" >&2; exit 1; }
-          [[ "${configured_root}" == "${ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY}" ]] || { echo "the public-key secret does not equal official_public_key in config/config.prod.yaml" >&2; exit 1; }
+          configured_root="$(sed -n 's/^[[:space:]]*official_public_key:[[:space:]]*"\([^"]*\)".*/\1/p' internal/config/defaults.yaml)"
+          [[ -n "${configured_root}" ]] || { echo "internal/config/defaults.yaml does not declare the official package root" >&2; exit 1; }
+          [[ "${configured_root}" == "${ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY}" ]] || { echo "the public-key secret does not equal official_public_key in internal/config/defaults.yaml" >&2; exit 1; }
           [[ "$(printf '%s' "${ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY}" | base64 -d | wc -c | tr -d ' ')" == 32 ]] || { echo "the public-key secret is not a raw 32-byte key" >&2; exit 1; }
           printf '%s\n' "${ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY}" >"${work}/key.pem"
           chmod 0600 "${work}/key.pem"
@@ -49,4 +49,4 @@ jobs:
           openssl pkeyutl -sign -inkey "${work}/key.pem" -rawin -in "${work}/message" -out "${work}/message.sig"
           openssl pkeyutl -verify -pubin -keyform DER -inkey "${work}/root.der" -rawin -in "${work}/message" -sigfile "${work}/message.sig" >/dev/null
           key_id="$(printf '%s' "${ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY}" | base64 -d | sha256sum | cut -c1-16)"
-          echo "Signing key check passed: the secrets are a working pair and match config/config.prod.yaml (public key id ${key_id})."
+          echo "Signing key check passed: the secrets are a working pair and match internal/config/defaults.yaml (public key id ${key_id})."

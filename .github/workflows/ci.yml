@@ -679,6 +679,8 @@ jobs:
           common=(
             --network host
             --read-only --tmpfs /tmp:rw,exec,mode=1777
+            # data_dir: Control generates its root key there at the first start.
+            --tmpfs /var/lib/anix-control:rw,mode=0700,uid=10001,gid=10001
             --cap-drop ALL --security-opt no-new-privileges
             -e ANIX_CONTROL_DATABASE_HOST=127.0.0.1
             -e ANIX_CONTROL_DATABASE_USERNAME=postgres
@@ -690,10 +692,7 @@ jobs:
           docker run --rm anix-control:ci -print-env | grep '^ANIX_CONTROL_DATABASE_PASSWORD ' >/dev/null
           # One-shot schema preparation, as a Compose service or Kubernetes Job runs it.
           docker run --rm "${common[@]}" anix-control:ci migrate
-          docker run -d --name control "${common[@]}" \
-            -e ANIX_CONTROL_JWT_SECRET=ci-smoke-jwt-secret-0123456789 \
-            -e ANIX_CONTROL_SERVER_SHUTDOWN_DRAIN_DELAY=2s \
-            anix-control:ci
+          docker run -d --name control "${common[@]}" anix-control:ci
           ready=0
           for _ in $(seq 1 60); do
             if curl -fsS http://127.0.0.1:8080/readyz >/dev/null; then ready=1; break; fi
@@ -702,14 +701,14 @@ jobs:
           docker logs control | tail -40
           test "${ready}" = 1
           curl -fsS http://127.0.0.1:8080/livez
-          curl -fsS http://127.0.0.1:3000/readyz
           test "$(docker exec control id -u)" = 10001
           status="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/api/v3/plugins)"
           test "${status}" = 401 || { echo "unauthenticated /api/v3/plugins returned ${status}"; exit 1; }
           test "$(docker inspect -f '{{.State.Health.Status}}' control)" != unhealthy
           docker stop --time 90 control
           test "$(docker inspect -f '{{.State.ExitCode}}' control)" = 0
-          docker logs control 2>&1 | grep 'Draining: waiting 2s' >/dev/null
+          docker logs control 2>&1 | grep 'Draining: waiting 5s' >/dev/null
+          docker logs control 2>&1 | grep 'Generated the root key /var/lib/anix-control/root.key' >/dev/null
           docker logs control 2>&1 | grep '"level":"INFO"' >/dev/null
           docker rm control
 
@@ -746,7 +745,7 @@ jobs:
           test "${health}" = healthy
           "${compose[@]}" logs migrate | grep 'migrate finished' >/dev/null
           curl -fsS http://127.0.0.1:8080/readyz
-          curl -fsS -o /dev/null http://127.0.0.1:3000/livez
+          "${compose[@]}" logs control | grep 'Adopted module_runtime.ca_kek as the root key' >/dev/null
           "${compose[@]}" stop control
           test "$(docker inspect -f '{{.State.ExitCode}}' "${control_id}")" = 0
           "${compose[@]}" down
@@ -929,10 +928,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          kubectl -n anix port-forward svc/control-anix-control 18080:8080 13000:3000 >/tmp/port-forward.log 2>&1 &
+          kubectl -n anix port-forward svc/control-anix-control 18080:8080 >/tmp/port-forward.log 2>&1 &
           for _ in $(seq 1 30); do curl -fsS http://127.0.0.1:18080/readyz && break; sleep 1; done
           curl -fsS http://127.0.0.1:18080/readyz
-          curl -fsS http://127.0.0.1:13000/livez
+          curl -fsS http://127.0.0.1:18080/livez
           status="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18080/api/v3/plugins)"
           test "${status}" = 401
           # A config change rolls the pod (Recreate) and it becomes ready again.
@@ -1583,9 +1582,9 @@ jobs:
           printf '%s\n' "${ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY}" >"${key_file}"
           chmod 0600 "${key_file}"
           printf '%s\n' "${ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY}" >"${root_file}"
-          configured_root="$(sed -n 's/^[[:space:]]*official_public_key:[[:space:]]*"\([^"]*\)".*/\1/p' config/config.prod.yaml)"
+          configured_root="$(sed -n 's/^[[:space:]]*official_public_key:[[:space:]]*"\([^"]*\)".*/\1/p' internal/config/defaults.yaml)"
           [[ -n "${configured_root}" ]] || {
-            echo "config/config.prod.yaml does not declare the official package root" >&2
+            echo "internal/config/defaults.yaml does not declare the official package root" >&2
             exit 1
           }
           [[ "${configured_root}" == "${ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY}" ]] || {
@@ -2307,8 +2306,8 @@ jobs:
           set -Eeuo pipefail
           root_file="$(mktemp)"
           trap 'rm -f "${root_file}"' EXIT
-          sed -n 's/^[[:space:]]*official_public_key:[[:space:]]*"\([^"]*\)".*/\1/p' config/config.prod.yaml >"${root_file}"
-          [[ -s "${root_file}" ]] || { echo "config/config.prod.yaml does not declare the official package root" >&2; exit 1; }
+          sed -n 's/^[[:space:]]*official_public_key:[[:space:]]*"\([^"]*\)".*/\1/p' internal/config/defaults.yaml >"${root_file}"
+          [[ -s "${root_file}" ]] || { echo "internal/config/defaults.yaml does not declare the official package root" >&2; exit 1; }
           python3 packages/shared/build_package.py \
             --all \
             --builtin \
