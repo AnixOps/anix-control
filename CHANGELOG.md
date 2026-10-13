@@ -2,16 +2,38 @@
 
 ## Unreleased
 
+## 5.0.0-rc.1 - 2026-10-13
+
+### Highlights
+
+The first release candidate of 5.0, the single-binary Control, published as a pre-release. Read
+["Upgrading From 4.2.x To 5.0.0-rc.1"](https://github.com/AnixOps/anix-control/blob/v5.0.0-rc.1/docs/UPGRADE.md#upgrading-from-42x-to-500-rc1)
+in docs/UPGRADE.md before upgrading: back up the database and its key first (the CA key of 4.2.x;
+`data_dir/root.key` from this release on), because the first start migrates the schema.
+
+- **A node joins with one command.** 接入节点 on the node page shows a node group's
+  `curl -fsSL <panel>/install.sh | sudo bash -s -- -u <panel> -t <token>`: the machine installs the Agent and
+  joins the group as a node with its own certificate and the group's defaults. Nodes install Agent `v5.0.0-rc.1`.
+- **One binary with the packages inside.** The 18 official packages are built into the Control binary and
+  installed, upgraded and enabled at every start: nothing to import, no editions, no packages archive. Binaries
+  for linux/amd64 and linux/arm64 only.
+- **Control's own certificate, and a CDN mode.** With `domain` set Control obtains and renews its certificate over
+  ACME and serves https on 443 and the node gRPC listener; `tls.mode: external` with `grpc.public_name` runs
+  behind a CDN or reverse proxy, and `tls.mode: files` serves your own certificate.
+- **One root key and nine configuration keys.** `data_dir/root.key` seals or derives Control's secrets, and the
+  configuration is nine operator keys. A 4.x file still loads (each old key is read or ignored with a warning);
+  `anix-control config check` and `anix-control config rewrite` help move it.
+- **The first administrator claims the panel** with a one-time link (`anix-control admin claim-link`): no
+  administrator password is configured anywhere.
+- **Built-in backups with verification** on SQLite: daily, before every schema migration and on request, each
+  verified by a test restore (`anix-control backup`, 系统设置 → 备份).
+
 ### Fixed
 
-- The UI listener (port 3000) serves the install paths: `/install.sh`, `/install.sh.sig`, `/install/agent.env`,
-  `/install/ip` and `/install/agent/:tag/:asset` are forwarded to the API listener, as `/api` and the subscription
-  path are. They were registered on the API listener only, so a reverse proxy that sends the whole host to port 3000
-  (every Nginx, Caddy and Helm example in the docs) answered `curl .../install.sh | sudo bash` with the SPA's
-  `index.html`. Rate limits and the signature check stay on the API side. The hop from the UI listener to the API
-  listener is always trusted, so a `server.trusted_proxies` without loopback (or an empty list, or a specific
-  `server.host`) no longer makes every client look like the UI server, and a proxy that sets only `X-Real-IP` is
-  honoured on that hop.
+- `curl <panel>/install.sh | sudo bash` works behind a reverse proxy that sends the whole host to the 4.x web
+  port (3000, as the Nginx, Caddy and Helm examples of the 4.2 docs did): there the install paths (`/install.sh`,
+  `/install.sh.sig`, `/install/agent.env`, `/install/agent/:tag/:asset`) answered the web app's `index.html`.
+  Every listener now serves the same handler ("One HTTP listener", under Changed).
 - The node installer asks for the Agent release the Control was released with, not for `v` + the Control's version.
   A Control patch release can ship an unchanged Agent (4.2.1 pins Agent v4.2.0), and the Agent repository then
   has no tag with the Control's number, so `/install/agent.env` named a release that does not exist and every node
@@ -26,24 +48,72 @@
   now stores `show = 1` when the body omits `show` (or sends `null`); an explicit `show: 0` is kept, and updates
   still write the body as given. The plan form has an 上架 / On sale switch (on for a new plan, the stored value on
   edit), and the plan list and details show a 在售 / 已下架 badge. The kernel handler and the plan package's
-  native route behave alike (`internal/tests/plancompat`); the native route serves the request by default, so a
-  panel needs this release's `plan` package for the create default (the form change is in the web app).
+  native route, which serves the request, behave alike (`internal/tests/plancompat`); the built-in `plan` package
+  carries the default.
+- The container image's health check works in every `tls.mode`. It probed `http://127.0.0.1:8080/readyz` only,
+  which exists in `external` mode; with `domain` set and the default `acme` mode, or in `files` mode, Control
+  listens on 443 and 80 and not on 8080, so the container turned `unhealthy` after its start period. The probe
+  now falls back to `https://127.0.0.1:443/readyz`.
+- A `migrate` run (the Compose `migrate` service) or a server in a container with a read-only root file system and no
+  volume at `data_dir` no longer stops with "open control.lock: read-only file system". The shared lock a restore
+  needs exclusively is only taken where the process can create the lock file; elsewhere there is nothing to protect.
+- `cmd/sqlite2postgres` no longer fails on the kernel tables keyed by a text
+  id (`v3_kernel_plugin`, ...) when it resets the sequences.
+- An empty `database.log_level` logs SQL errors only, like the built-in
+  default `error`. A configuration file without a `database` section (the
+  installer's) left it empty, and Control then logged every statement at
+  info level (values were never logged).
+- `.gitignore` no longer hides new source files under
+  `packages/<id>/control/`: only the binary a `go build` leaves there is
+  ignored.
+- The systemd unit `scripts/install.sh` writes has `AmbientCapabilities=CAP_NET_BIND_SERVICE`. A non-root Control
+  binds `:443` and `:80` in `tls.mode` `acme` (the default once `domain` is set) and `files`; the unit gave it no
+  capability, so a fresh install that followed the one-key configuration stopped at the start with
+  `https on :443: listen tcp :443: bind: permission denied`. `tls.mode: external` was unaffected.
 
 ### Added
 
 - The Agent contract has an `AgentEnrollment.Join` RPC (`JoinRequest`, `JoinResponse`), and the SDK names
   the join token prefix `anixjoin_` (`agentcontrol.JoinTokenPrefix`): a machine exchanges a node group's join token and a CSR for
   the certificate of a new node of the group, or of its earlier node (`sdk/api/agent/v1/PROTOCOL.md`,
-  "Joining a node group"). This is the contract only: Control answers `Join` with `Unimplemented` until
-  node groups and join tokens land. The change is additive, so Agents in the field are unaffected.
+  "Joining a node group"). The change is additive, so Agents in the field are unaffected.
+- Node groups (5.0 node onboarding, `docs/design/node-onboarding`): a group (`v5_node_group`, kind `proxy` or
+  `forward`) owns an `anixjoin_` join token and the defaults of the nodes it creates (rate, tags, monthly traffic
+  limit and reset day, sort, a protocol template and subscription groups). The token is stored as its SHA-256 and
+  sealed with AES-256-GCM under a key derived from the root key (HKDF-SHA256), so a super administrator
+  can show the install command again; resetting it invalidates every earlier command. Names are unique among live
+  groups; deleting a group is a soft delete, refused while it has live nodes. Administrator API under
+  `/api/v4/kernel/node-groups` (list, create, get, update, delete; `GET .../command` and `POST .../reset-token` for
+  super administrators), every write and token read audited (`docs/guide/api-reference.md`).
+- Control serves `AgentEnrollment.Join`: in one transaction it finds the group by the token's hash, rejoins a
+  reinstalled machine's earlier node when the rejoin rule holds (same group and fingerprint, its last public address
+  among the machine's, not seen on the Agent Control stream for 5 minutes, no reset; the old certificates are
+  revoked), or creates a node (requested name or host name, made unique with `-2`, `-3`; the group's defaults; for a
+  proxy group the template's protocols with per-node Reality keys and short IDs, Shadowsocks 2022 and WireGuard keys
+  and fixed or random ports, in the group's subscription groups; for a forward group a forward node created as the
+  forward inventory creates one), records a `join_token` enrollment, issues the certificate and audits
+  `agent_join`. Unusable tokens (unknown, deleted group, expired, at `max_nodes`) get `PermissionDenied` with
+  `join_rejected` and no detail, audited with the reason (`agent_join_rejected`); joins are rate limited per peer.
+  Every join notifies the administrators after the commit (`node.joined`: in-app, e-mail, Telegram).
+- Approval per group (`require_approval`): a pending node gets its certificate and connects, but Control sends it no
+  configuration (`config.v1`) and no users (`users.v1`), and subscriptions leave its protocols out, until an
+  administrator approves it
+  (`POST /api/v4/kernel/nodes/:id/approve`), which pushes its configuration at once; rejecting
+  (`.../reject`) disables the node and revokes its certificates.
+- `GET /install/ip` answers the caller's address as Control sees it (`server.trusted_proxies` applied), rate
+  limited like the other `/install` routes; the install script hands the IPv4 and IPv6 answers to the join.
+- Proxy and forward nodes have `node_group_id`, `machine_fingerprint`, `approval` (`approved` for every existing
+  node) and `last_public_address`. They and `v5_node_group` are in the schema `0001_baseline`, and the first start
+  adds them to an existing database (`docs/reference/database-migrations.md`).
 - Topologies can be deleted: `DELETE /api/v3/topologies/:id` (audited like the rest of `/api/v3`) and 删除 on
   部署编排 → 拓扑 and in the topology workspace, after a confirmation. Rows are never removed: the topology gets
   `deleted = 1` and `deleted_at`, disappears from the list and every `/api/v3/topologies/:id/...` route (404),
   and its name can be reused; its revisions, deployments and operations stay in the activity timeline. A
   topology without an active revision is deleted at once (200). One whose active revision runs on nodes is
   first torn down by a teardown deployment that disables every plugin vertex (202, shown as 删除中); it is
-  deleted when the teardown succeeds and kept when the teardown fails or is rolled back. This needs
-  `plugins.topology_execution_enabled` (otherwise 409 `topology_execution_disabled`). A running deployment
+  deleted when the teardown succeeds and kept when the teardown fails or is rolled back. The teardown needs
+  topology execution, which is off in this release (under Changed), so such a topology answers 409
+  `topology_execution_disabled` for now. A running deployment
   blocks the delete (409 `topology_deployment_busy`); planned deployments are cancelled and can no longer be
   applied. At startup the schema gains the flag columns and swaps the unique index on the topology name for
   one on live topologies (`ux_topology_live_name`); see docs/UPGRADE.md.
@@ -75,7 +145,7 @@
   `node_pending_approval` or `diagnostic_busy`, 502 `agent_error`, or 504 `diagnostic_timeout`. A restart needs a
   super administrator; every call is a `v2_operation_log` row (module `node_diagnostic`) written before the task is
   sent. `GET` on the same path says what the node's session runs and lists a proxy node's newest tasks. The
-  response's write deadline is extended past `server.write_timeout` for the request's own wait.
+  response's write deadline is extended past the server's write timeout for the request's own wait.
 - The node page has a 诊断 section (and the forwarding node page a card with the same component): service status,
   restart after a confirmation, log tail of 100, 500 or 1000 lines, the forward checks of a hosted hop, and the
   result with its duration and a copy button, with an empty state for an offline node or an Agent without
@@ -85,6 +155,156 @@
   fixed), how many nodes would be upgraded, and the campaign card; starting asks for a confirmation. New
   `GET /api/v4/kernel/agents/upgrade-plan` answers the release, the eligible node count, the batches and whether the
   caller may start one.
+- The official packages are built into Control. Every package host is
+  linked into the binary (`packages/builtin`) and runs as a child process of
+  the same binary, `anix-control package-host <id>`, with the usual host
+  socket, package bridge and environment. The signed slim packages
+  (`build_package.py --all --builtin`: no host or Agent binary, a manifest
+  whose `control_entrypoint` is `{"builtin": "<id>"}`) are embedded
+  (`internal/builtinpkg`). At every start Control verifies each one against
+  `plugins.official_public_key`, installs or upgrades it to the binary's
+  version (the package migrations run for the new lifecycle generation) and
+  enables it, in dependency order; a restart with the same binary changes
+  nothing. There is no package to import. `make build` and `make run` build
+  a development-key set first (`make dev-package-key`).
+- A built-in package that does not verify or does not run is named in the
+  start log and raised as the critical kernel alerts
+  `builtin_package_invalid` and `builtin_package_failed` (dashboard and
+  digest); only its own routes are unavailable and Control starts anyway.
+- The release signs `SHA256SUMS.txt` with the official package key
+  (`SHA256SUMS.txt.sig`), and `scripts/install.sh` verifies it (OpenSSL 3)
+  before it trusts a checksum. Control logs the path and SHA-256 of its own
+  executable, the file every package host runs.
+- `config/scripts/bump_agent_ref.py <sha> <agent-tag>` moves every Agent pin of a release pull request at once:
+  `AGENT_REF` in `ci.yml` and its literal in `check_release_workflow.sh`, the Agent module path and version label
+  of the cross-repository E2E build (`ci.yml`, `internal/tests/agente2e/build_test.go`) and `config/AGENT_RELEASE`.
+  It refuses a commit that is not a full lowercase SHA and a malformed tag, changes nothing unless it finds every
+  pin, and runs the release workflow check (`docs/RELEASING.md`).
+- A retention worker, run by the process that holds the singleton-workers
+  lease, deletes every hour, in batches of 5000 rows, the rows of
+  `v2_server_log` and `v2_audit_log` older than 400 days and of `v2_node_log`
+  older than 30 days, and on SQLite returns freed pages to the file and runs
+  `PRAGMA optimize`. Archive older rows before upgrading if you need them
+  (`docs/reference/traffic-stats-operations.md`).
+- Control backs itself up on SQLite (`internal/backup`,
+  `docs/reference/backups.md`). A bundle is one tar file in
+  `data_dir/backups` (0700, files 0600) named
+  `anix-control-<UTC time>-<type>.tar`, holding a consistent snapshot of the
+  database (`VACUUM INTO` on its own connection: the panel's writer keeps
+  committing meanwhile), `root.key`, the configuration file Control loaded
+  and a manifest (format, program and schema version, type, host, domain,
+  the root key's fingerprint, every member's size and SHA-256, key row
+  counts). Bundles are not encrypted: treat them like the root key.
+- Backups run every day at the panel's own time between 03:00 and 05:00
+  local (derived from the domain), before every pending schema migration of
+  a database that is not empty (`pre-migration`; when it fails, nothing is
+  migrated and the start stops) and on request: `anix-control backup create`
+  or 系统设置 → 备份 → 立即备份.
+- Every bundle is verified by restoring it into `data_dir/tmp`: checksums,
+  `PRAGMA integrity_check`, the migration records, and that the bundle's root
+  key opens the snapshot's CAs and sealed keys. Results are in the new table
+  `v5_backup` (migration `0005_backups`); kernel alerts
+  `backup_verify_failed` and `backup_stale` (no verified bundle younger than
+  36 hours) join the alert scan, and the dashboard shows the last verified
+  backup with its age.
+- Retention: the newest 7 daily bundles, one per week for the 4 weeks before,
+  every pre-migration bundle of 30 days, the newest 3 manual ones; the newest
+  verified bundle is never removed, nor a bundle being read.
+- `anix-control backup create [-type manual|daily|pre-migration|verify]`,
+  `backup list [-json]`, `backup verify [<bundle>]` and
+  `backup restore <bundle> [--replace] [--data-dir D]`. A restore refuses
+  while Control runs (a running Control holds a shared lock on
+  `data_dir/control.lock`), refuses a target that is not empty unless
+  `--replace` moves it into `data_dir/replaced-<UTC time>/` (never deleting),
+  and refuses a bundle a newer Control migrated. Exit status 0 done, 1 failed,
+  2 usage, 3 refused.
+- `GET /api/v5/backups`, `POST /api/v5/backups` and
+  `GET /api/v5/backups/:id/download` (a super administrator only, written to
+  the audit log as `backups/download`). The audit log now covers `/api/v5`.
+- Control builds its database schema from ordered, numbered migrations
+  (`internal/database/migrations`) and records them in two new tables:
+  `v5_schema_migration` (version, name, checksum, time, program version) and
+  `v5_control_meta` (schema version, the program version that last opened the
+  database, creation time). The first migration, `0001_baseline`, is the schema
+  a fresh 4.2.1 install creates. See `docs/reference/database-migrations.md`.
+- Control obtains and renews its own certificate. With `domain:
+  panel.example.com` (one line) `tls.mode` is `acme`: Control serves the
+  web app, the API, subscriptions and `/install.sh` over https on 443,
+  answers the ACME HTTP-01 challenge and redirects to https on 80, and
+  serves the same certificate on the node gRPC listener (`grpc.port`,
+  50051), which `domain` turns on. Certificates come from the public CA
+  over TLS-ALPN-01 (443) or HTTP-01 (80), are renewed a third of their
+  lifetime before the end and reach new connections without a restart.
+  They are kept in the new table `v5_acme_cache` (created by the schema
+  migration `0003_acme_cache` at the first start), sealed with the root key
+  (`data_dir/root.key`), so a restore does not request them again. While no certificate can be obtained Control starts
+  anyway with a self-signed one.
+- The CDN mode: `tls.mode: external` with `listen` (default loopback)
+  serves plain http for a CDN or reverse proxy that terminates TLS, and
+  `grpc.public_name` names a DNS-only host for the nodes; Control obtains
+  its certificate over ACME and hands it out in `/install/agent.env`
+  (`grpc_target`). `tls.mode: files` serves your own `tls.cert_file` and
+  `tls.key_file`, reloaded when they change.
+- `GET /api/v5/panel/status` and `POST /api/v5/panel/certificates/retry`
+  (administrators), and a banner in the admin console while a certificate
+  fails, is pending, fails to renew or is not publicly trusted, with the
+  reason and the fix.
+- `anix-control tls status`, `anix-control tls retry` and `anix-control
+  doctor` (configuration, root key, certificates, DNS records against this
+  machine's addresses including a CDN hint, ports).
+- Alerts `panel_certificate_expiring` and
+  `panel_certificate_renewal_failing`.
+- Install readiness checks `panel_certificate` and `grpc_certificate`: the
+  join command is withheld while the panel or gRPC certificate is not valid
+  and publicly trusted, because Agents verify it and fail closed.
+- The root key: `data_dir/root.key` (`/var/lib/anix-control`, mode 0600 in
+  a 0700 directory) holds 32 random bytes in a versioned text format. The
+  server generates it at its first start, or adopts a configured
+  `module_runtime.ca_kek` into it so that the CA, ACME keys, DNS credentials
+  and join tokens stay readable. The JWT secret and the identity signing key
+  KEK are derived from it with HKDF-SHA256 (`anixops jwt v1`, `anixops
+  identity kek v1`); an explicitly set `jwt.secret` or `identity.kek` is
+  recorded in `root.key` and kept until a rotation. Every start checks, after
+  the migrations, that the root key opens the stored CA keys and refuses
+  otherwise, naming what to restore; `anix-control doctor` reports the same
+  check. Back up `root.key` with the database.
+- `anix-control config check [--file]` loads a configuration strictly and
+  prints its warnings, layout and root key state (exit 1 when Control would
+  refuse it). `anix-control config rewrite --in <old> --out <new>` turns a
+  4.x file into the operator keys (`docs/UPGRADE.md`, "Configuration Rewrite
+  On Upgrade").
+- The `-debug` flag runs a development instance (gin debug mode, debug
+  logging); `make run` uses it with its database and root key in `.dev/`,
+  the web app and API on `127.0.0.1:19080` and gRPC on `127.0.0.1:50052`.
+- The first administrator claims the panel with a one-time link.
+  `anix-control admin claim-link [-ttl 24h]` prints
+  `https://<domain>/claim#anixclaim_…` on its terminal only (never a log),
+  plus `https://<the machine's public address>/claim#…` while the panel's
+  certificate is not publicly trusted yet. The link works once, for 24
+  hours; running the command again replaces it. Only the token's SHA-256 and
+  expiry are stored (`v5_control_meta`, key `admin_claim`). Once the panel
+  has an administrator the command exits 1. Containers run it with
+  `docker compose ... exec control /app/anix-control admin claim-link` or
+  `kubectl exec ... -c control -- /app/anix-control admin claim-link`;
+  `make claim-link` prints the development instance's link.
+- The claim page `/claim` (no sign-in) reads the token from the URL
+  fragment, which the browser never sends, removes it from the address bar,
+  and posts it with the chosen email and password to the public,
+  rate-limited `POST /api/v5/claim`: 201 creates the administrator, consumes
+  the token in the same transaction and signs in; 404 once an administrator
+  exists, 403 `claim_invalid`, 410 `claim_expired`, 422 `weak_password`
+  (the password needs at least 12 characters and at most 72 bytes), 409
+  `email_taken`. Once identity holds
+  the credentials the account is created through identity. The body is never
+  logged; the audit row holds `admin_claimed`, the email and the source
+  address. `GET /api/v5/claim/status` answers `{claimable}`, and the sign-in
+  page says how to claim a panel that has no administrator yet.
+- 系统设置 → 内置包 (`/admin/system/packages`) shows the built-in packages:
+  each one's name, version, state and last error, a confirmed host restart,
+  the settings of a package that declares them, and the WebUI extension load
+  errors. It replaces 插件中心: `/admin/plugins` and
+  `/admin/plugins/route-modes` redirect to it, and the sidebar's 扩展 group
+  now holds only the packages' own WebUI menus.
 
 ### Changed
 
@@ -102,15 +322,14 @@
 - The WebUI bundles of forward, gost-mesh, nat-egress and nftables-forward use only the WebUI class contract
   (plus one `<package>-extension` class on their root), not unstyled names such as `page-header` or
   `stats-grid`; `pluginWebuiClasses.test.js` enforces it.
-- The live Control WebUI gate loads and revokes the nftables-forward WebUI and checks that identity-platform
-  and machine-telemetry install without one and stay out of the catalog.
+- The live Control WebUI gate loads the nftables-forward WebUI and checks that identity-platform and
+  machine-telemetry, which have none, stay out of the catalog.
 - The node list shows 证书, Agent 版本 and 最后在线 from the Agent inventory (the Agent's own version and last
   sighting, falling back to the node's own); 连接方式 starts hidden and the table settings bring it back. 最后在线
   replaces 最后心跳 and sorts by the last check.
 - 部署 on the node page is 换到新机器 (a single-use enrollment command for this node, formerly 复制安装命令), the
   uninstall command and the certificate's state. The command palette's 添加节点 is 接入节点 (`?join=1`).
 - `/admin/agent` and every path below it redirect to the node list. The node page opens on `?section=diagnostics`.
-
 - The install command is `curl -fsSL <control>/install.sh | sudo bash -s -- -u <control> -t <token>` for both a node
   group's join token and a node's one-time enrollment token (`-u`/`--control`, `-t`/`--token`; the token names its
   node or group). After installing the Agent the script runs `anix-agent join` synchronously as `anixops-agent`
@@ -120,6 +339,172 @@
   machine with a valid identity skips the join. The script ends with a reminder that the command is in the shell
   history. The install-token API answer renders the same command shape. Needs an anix-agent release with
   `anix-agent join`.
+- Releases build the packages before the binaries, publish linux/amd64 and
+  linux/arm64 binaries only, and list the built-in packages in
+  `RELEASE_MANIFEST.json`. The release image no longer carries an identity
+  package. `plugins.identity_bootstrap_package_dir` is ignored by a binary
+  with built-in packages (a development build without them still reads it).
+  Agent dispatch and topology execution stay off: the release builds no
+  Agent plugin.
+- `GET /api/v4/public/config` answers `edition: commercial` and an empty
+  `hidden_packages` on every installation, so the web app shows every page.
+- Changelog entries are one file per change, `changelog.d/<slug>.md` (format in `changelog.d/README.md`), instead of
+  bullets under `## Unreleased` in `CHANGELOG.md`, so a merged pull request no longer makes every other open pull
+  request conflict in the changelog and rebase into a new CI run. A fragment starts with a `### Added`,
+  `### Changed`, `### Deprecated`, `### Removed`, `### Fixed` or `### Security` line and lists `- ` entries. The
+  "Documentation Sync Check" job validates them (`config/scripts/changelog_fragments.py check`) and accepts a
+  fragment as the documentation evidence of a change. `prepare_release.py` merges the fragments into the release
+  section, joining the headings already under `## Unreleased`, and deletes them. Entries written directly under
+  `## Unreleased` stay legal and are released with the fragments.
+- SQLite: a database file is opened with one writer connection and a pool of
+  four read connections (GORM dbresolver), WAL, `synchronous=NORMAL`, a
+  10 second `busy_timeout` and, for a database file created by this version,
+  incremental auto-vacuum. Writes and transactions queue in Control instead of
+  waiting inside SQLite, and reads no longer wait for the writer. The settings
+  are built in; `database.max_open_conns` and its siblings stay PostgreSQL
+  only. The package hosts that share the file use the same timeout and
+  `synchronous` setting (`docs/reference/configuration.md`).
+- The traffic log `v2_server_log` holds hourly buckets: a node's reports of a
+  UTC hour are one row per user, server type and rate (the bytes add up), where
+  every report was a row. All readers give the same numbers; a row's `log_at`
+  is the hour's start. The first start merges rows that already share a bucket
+  key and adds the unique index `idx_v2_server_log_bucket`
+  (`docs/reference/traffic-stats-operations.md`).
+- A traffic report updates the subscribers' `u` and `d` counters 100 to a
+  statement instead of one statement each, with the same results.
+- An Agent's heartbeat, traffic report and log batch write the node's
+  `last_check_at` and status at most once a minute per node
+  (`AgentLivenessWriteInterval`); the Hello of a stream always writes. Readers
+  ask for nodes seen in the last five minutes, so nothing they show changes.
+- The token revocation tables are read every five seconds as before but pruned
+  at most every five minutes, and only when a row has expired.
+- 系统设置 → 备份 lists the bundles with their verification, the last
+  verified backup and the next automatic one, backs up and downloads; it no
+  longer restores. Restore on the server with Control stopped.
+- `anix-control forward legacy drop` accepts a verified Control bundle of
+  the last 24 hours as its database backup, besides `--backup-taken`.
+- The schema no longer depends on `env`: development and test stop running
+  GORM's AutoMigrate at every start, and production stops creating only the
+  missing tables. The first start of this release (or `anix-control migrate`)
+  adopts an existing database once: it adds the tables, columns and indexes a
+  fresh install has and the database lacks, never changes or drops one, and
+  logs what it added and the differences it kept. A non-empty database that a
+  Control start did not prepare is refused and left unchanged.
+- Control refuses to start on a database a newer Control migrated (an unknown
+  migration, or a `min_program_version` above it) and on a released migration
+  that was changed, and says what to do: install that version or a newer one,
+  or restore the backup taken before the upgrade. Rolling back the binary
+  after an upgrade now needs that backup (`docs/UPGRADE.md`, "Database
+  Migrations").
+- `cmd/sqlite2postgres` prepares the PostgreSQL schema with the same
+  migrations and keeps the target's own migration records.
+- One HTTP listener: the API listener (8080) and the web listener (3000)
+  with its reverse proxy to the API are one handler. Without `domain` and
+  `listen`, Control binds `server.host:server.port` (default
+  `127.0.0.1:8080`) and, when a 4.x file sets `frontend.port` with
+  `frontend.enable`, `server.host:frontend.port` with that same handler; a
+  path under `/api/`, `/install/` or the subscription path that matches no
+  route answers 404 instead of the web app's HTML.
+- The built-in `server.host` is `127.0.0.1` (an empty one is loopback
+  too); the container image sets `ANIX_CONTROL_LISTEN=0.0.0.0:8080`
+  instead. Configuration files that set `server.host` keep it.
+- `grpc.tls_cert_file`/`grpc.tls_key_file` are reloaded when the files
+  change instead of read once at start.
+- `agent_install.public_url` defaults to `https://<domain>` and
+  `agent_install.grpc_target` to `<grpc.public_name or domain>:<grpc.port>`.
+- `tls.enable` is not read: with `tls.cert_file` and no `tls.mode` Control
+  refuses to start (use `domain` and `tls.mode: files`, https on 443);
+  otherwise it is ignored with a log line. `tls.domain` is not read either
+  (set `domain`).
+- The configuration is nine operator keys: `domain`, `tls.mode`,
+  `tls.cert_file`, `tls.key_file`, `listen`, `grpc.port`, `grpc.public_name`,
+  `subscribe_path` and `data_dir`. A configuration file overrides the built-in
+  values key by key instead of replacing them, and then the `ANIX_CONTROL_*`
+  variables. The file is read strictly: every 4.x key is in the deprecated
+  list (`internal/config/deprecated_keys.yaml`, the table in
+  `docs/reference/configuration.md`) and is logged once, either still read
+  (its feature still exists: the database, the flux
+  forward runtime, the legacy listener and gRPC keys, the registration
+  policy, the legacy API tokens, `agent_install.*`) or ignored (the 4.2
+  default stands); any other key stops the start, naming the closest key.
+  `environment-variables.md` lists the nine variables.
+- `config/config.yaml.example` is the one-line template `domain:
+  panel.example.com`; `config/config.prod.yaml` and
+  `config/config.dev.yaml.example` are gone. The systemd installer writes the
+  template (its domain line kept a comment) and nothing else, no longer
+  `env`, `jwt.secret`, `app.api_token` or an administrator, and its unit sets
+  `ANIX_CONTROL_DATA_DIR=<install dir>/data`.
+- Containers listen on one port (`ANIX_CONTROL_LISTEN=0.0.0.0:8080`; the web
+  port 3000 is gone) and keep the root key in a `control-data` volume (Helm:
+  an in-memory directory, the CA key Secret being the lasting copy; the chart
+  refuses to render without it).
+- No start creates an administrator any more, and an empty database no
+  longer refuses to start without a password: a panel without an
+  administrator logs one line, ``No administrator yet. Run `sudo
+  anix-control admin claim-link` to get the claim link.``. An existing
+  administrator is not affected.
+- The systemd installer writes no administrator and no
+  `.bootstrap-admin-password` file; after a successful install or update it
+  prints the claim link while the panel has no administrator. Its
+  `--admin-email` and `--admin-password` options are refused with the
+  reason.
+- Commands that print a result on stdout (`admin`, `module`, `agent`,
+  `agents`, `forward`, `tls`, `doctor`) send the text SQL log to stderr.
+- The Compose files, `control.env.example` and the Helm chart (0.5.0) no
+  longer carry `ANIX_CONTROL_ADMIN_*`; their notes name the claim command.
+- The root Go module is `github.com/AnixOps/anix-control/v5` (it was `.../v4`): `go.mod`, every import, the
+  protobuf `go_package` of `api/grpc/v2board.proto` (regenerated), the CI package filters and the gates that
+  name the path. Only the import path changes; the product version and every wire contract stay as they are.
+  The SDK and identity modules keep their paths.
+- Route modes come only from the rehearsed list
+  (`config/package-route-defaults.json`): a listed route runs natively once
+  the installed package is at least the listed release, identity group A
+  follows the identity authority, and every other route runs its legacy
+  handler. The first start runs the `0004_drop_route_modes` migration: it
+  drops `v4_kernel_route_mode_revision` and
+  `v4_kernel_shadow_mismatch_sample`, removes the stored route-mode map (the
+  `routes` key) from every Control package configuration in a new revision,
+  and writes each removed map to the audit log first (action
+  `route_modes_removed`). A route pinned to `legacy` that the list names runs
+  natively again; a route switched to `shadow` or `native` that the list does
+  not name runs its legacy handler. A configuration `PUT` that sets `routes`
+  is refused. The identity cutover and rollback move only the authority.
+- Agent plugin dispatch and topology execution are off until M4 with no
+  setting (`service.AgentPluginDispatchEnabled`,
+  `service.TopologyExecutionEnabled`); the code paths stay. Node assignments
+  and Agent configuration changes record the desired state without an Agent
+  operation, and deployment apply and rollback answer
+  `409 topology_execution_disabled`. The built-in packages' hosts always
+  run.
+- `plugins.control_execution_enabled`, `plugins.dispatch_enabled`,
+  `plugins.dispatch_poll_interval`, `plugins.topology_execution_enabled`,
+  `plugins.topology_poll_interval` and `package_routes.default_mode` (and
+  their `ANIX_CONTROL_*` variables) are no longer read. A configuration that
+  still sets one loads and logs `Ignoring the removed configuration key ...`
+  once per key. `scripts/install.sh` no longer writes
+  `control_execution_enabled` and drops the five `plugins.*` lines from an
+  existing `config.yaml`.
+- `POST /api/v3/plugin-installations/:id/actions` accepts only
+  `"action":"restart"`; any other action answers
+  `400 unsupported_plugin_action`.
+- The live Control WebUI gate builds the signed built-in packages it needs
+  into a temporary Control (`go build -overlay`) instead of importing them,
+  and the frontend job no longer checks out the Agent. The cross-repository
+  Agent suite writes its packages into the database the way the bootstrap
+  does, and its Agent plugin scenarios skip while dispatch is off.
+- The Agent this Control is released with is anix-agent `v5.0.0-rc.1` (commit `9c74e3b5`, `AGENT_REF`): the
+  cross-repository and process end-to-end tests build that Agent, the installer's default Agent release
+  (`config/AGENT_RELEASE`) names its tag, and `anix-agent join` in it is what `install.sh -u/-t` runs.
+
+### Deprecated
+
+- `env`, `server.mode`, the timeouts and CORS lists, `auth` rate limits,
+  `alerts.*`, `agent_control.*`, `jwt.expire`, `forward.anixops_experimental`,
+  `forward_runtime.latency.*`, the `plugins.control_host_*` limits and
+  timeouts, `cache.*`, `app.name`, `app.version`, `app.traffic_log_enable`,
+  `tls.domain` and `log.output`/`file_path`/`max_*` are ignored: their
+  built-in values are the 4.2 defaults (registration rate limiting and the
+  alert monitor always on, Agents always enrolled).
 
 ### Removed
 
@@ -138,38 +523,48 @@
   (添加节点; editing stays), and in the node page's 部署 the registration key panel, the connection settings and the
   Ansible helper. Machines join a node group with its command instead. The `/api/v2` registration key and
   node create routes stay until the node-onboarding removal phase.
-- Node groups (5.0 node onboarding, `docs/design/node-onboarding`): a group (`v5_node_group`, kind `proxy` or
-  `forward`) owns an `anixjoin_` join token and the defaults of the nodes it creates (rate, tags, monthly traffic
-  limit and reset day, sort, a protocol template and subscription groups). The token is stored as its SHA-256 and
-  sealed with AES-256-GCM under a key derived from `module_runtime.ca_kek` (HKDF-SHA256), so a super administrator
-  can show the install command again; resetting it invalidates every earlier command. Names are unique among live
-  groups; deleting a group is a soft delete, refused while it has live nodes. Administrator API under
-  `/api/v4/kernel/node-groups` (list, create, get, update, delete; `GET .../command` and `POST .../reset-token` for
-  super administrators), every write and token read audited (`docs/guide/api-reference.md`).
-- Control serves `AgentEnrollment.Join`: in one transaction it finds the group by the token's hash, rejoins a
-  reinstalled machine's earlier node when the rejoin rule holds (same group and fingerprint, its last public address
-  among the machine's, not seen on the Agent Control stream for 5 minutes, no reset; the old certificates are
-  revoked), or creates a node (requested name or host name, made unique with `-2`, `-3`; the group's defaults; for a
-  proxy group the template's protocols with per-node Reality keys and short IDs, Shadowsocks 2022 and WireGuard keys
-  and fixed or random ports, in the group's subscription groups; for a forward group a forward node created as the
-  forward inventory creates one), records a `join_token` enrollment, issues the certificate and audits
-  `agent_join`. Unusable tokens (unknown, deleted group, expired, at `max_nodes`) get `PermissionDenied` with
-  `join_rejected` and no detail, audited with the reason (`agent_join_rejected`); joins are rate limited per peer.
-  Every join notifies the administrators after the commit (`node.joined`: in-app, e-mail, Telegram).
-- Approval per group (`require_approval`): a pending node gets its certificate and connects, but Control sends it no
-  configuration (`config.v1`) and no users (`users.v1`), and subscriptions leave its protocols out, until an
-  administrator approves it
-  (`POST /api/v4/kernel/nodes/:id/approve`), which pushes its configuration at once; rejecting
-  (`.../reject`) disables the node and revokes its certificates.
-- `GET /install/ip` answers the caller's address as Control sees it (`server.trusted_proxies` applied), rate
-  limited like the other `/install` routes; the install script hands the IPv4 and IPv6 answers to the join.
-- Proxy and forward nodes have `node_group_id`, `machine_fingerprint`, `approval` (`approved` for every existing
-  node) and `last_public_address`, added at start by the existing schema steps (`EnsureNodeRuntimeHealthSchema`,
-  `EnsureForwardNodeColumns`); `v5_node_group` is created with the kernel schema.
-
 - The install script's `--node` and `--group` flags (an old command stops with a pointer to the new one), its wait
   for the Agent to enroll after starting it, and the `enroll.credential` file it wrote.
 - The unused `NodeGroup` model (`v2_node_group`); the staging seed keeps its plan group ids without the table.
+- The community and commercial editions: `app.edition`
+  (`ANIX_CONTROL_APP_EDITION`), `config/editions.json`, the router's edition
+  filter, the forward v4 API's reserved commercial prefixes, the
+  `Commercial Packages` workflow and `build_package.py --edition`. Orders,
+  payments and affiliate are installed in every installation; a
+  configuration that still sets `app.edition` loads and the key is ignored.
+- The release assets `anix-control-packages-<version>.tar.gz` (+ `.sig`),
+  the `identity-platform` package files and the Windows and macOS binaries,
+  and `build_package.py --release-archive` / `--verify-release-archive`.
+- The backup settings (automatic backups, interval, retention, contents,
+  local folder, S3), which nothing executed, the backup statistics,
+  deletion and the online restore, with the routes
+  `/api/v2/admin/system/backup/config` (GET, PUT), `/backup`, `/backups`,
+  `/backup/stats`, `/backups/:id` and `/backups/:id/restore` (they answer
+  404), the platform package's backup handlers and the KernelSettings
+  `backup` namespace. The tables `v2_backup_config` and `v2_backup_record`
+  stay, unused, until a cleanup migration drops them.
+- `admin.email` and `admin.password` (and `ANIX_CONTROL_ADMIN_EMAIL`,
+  `ANIX_CONTROL_ADMIN_PASSWORD`) are ignored with one warning each; remove
+  them from the configuration (`docs/UPGRADE.md`, "The First Administrator
+  Claims The Panel").
+- The plugin center's import, install, update, rollback, enable and disable
+  (`POST /api/v3/plugin-releases`, `POST /api/v3/plugin-releases/:id/artifact`,
+  `PUT /api/v3/plugin-installations`) and the route-mode administration
+  (`GET` and `POST /api/v4/kernel/route-modes`, `/rollback`, `/revisions`,
+  `/mismatches`): the routes answer `404`. Control installs, upgrades and
+  enables its built-in packages at every start.
+- `anix-control routes` (`list`, `set`, `rollback`, `history`): running it
+  exits with status 2 and says why.
+- The shadow mismatch sample collector (`internal/shadowsamples`), the
+  route-mode page, the release import, installation and detail dialogs, and
+  the staging rehearsal (`scripts/staging`, its guide and the Staging
+  Rehearsal Smoke job).
+
+### Security
+
+- No HSTS header over Control's own TLS: a browser that remembered it could
+  not open the panel while the self-signed fallback is served. HSTS stays
+  when a trusted proxy reports https.
 
 ## 4.2.1 - 2026-10-12
 

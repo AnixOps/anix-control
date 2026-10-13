@@ -16,8 +16,10 @@ with systemd. Upgrades are in [`../UPGRADE.md`](../UPGRADE.md).
 
 ## Before You Start
 
-1. Use a fresh Debian 12/Ubuntu 22.04+ host where ports `8080`, `3000`, and,
-   when needed, `50051` are available.
+1. Use a fresh Debian 12/Ubuntu 22.04+ host where port `8080` (loopback)
+   and, when needed, `50051` are available. Without `domain` Control serves
+   plain http on `127.0.0.1:8080` only (the 4.x web port 3000 is gone); with
+   `domain` and its own certificate it needs ports 80 and 443.
 2. Put the panel behind Nginx or Caddy for public TLS. Do not expose the admin
    API directly to the Internet without a reverse proxy and firewall policy.
    gRPC stays on `127.0.0.1:50051` until it has a TLS certificate; with one
@@ -36,7 +38,7 @@ Download the installer from the exact release tag. This fetches one script, not
 the repository checkout:
 
 ```bash
-export VERSION=v4.2.0   # the release tag to install
+export VERSION=v5.0.0-rc.1   # the release tag to install
 curl -fsSL \
   "https://raw.githubusercontent.com/AnixOps/anix-control/${VERSION}/scripts/install.sh" \
   -o /tmp/anix-control-install.sh
@@ -74,9 +76,9 @@ The installer will:
 1. Create the `anixops` service user and `/opt/anixops/control` layout.
 2. Download the GitHub Release binary and frontend packages.
 3. Verify both packages against the release `SHA256SUMS.txt`.
-4. For `v4.*`, download and checksum-verify the signed identity package trio,
-   then stage it under `/opt/anixops/control/bootstrap/` with root ownership.
-5. For `v4.*`, place Control host sockets and materialized package artifacts
+4. Download no package: the official packages, `identity-platform`
+   included, are inside the binary, and nothing is staged for them.
+5. For `v4.*` and later, place Control host sockets and materialized package artifacts
    under the installation root with service-user-only permissions. The installer
    sets these internal execution paths on both fresh installs and updates so
    they remain within the systemd writable root. The package hosts always run
@@ -102,12 +104,11 @@ The installer will:
    ([The first administrator](#the-first-administrator)). With an
    administrator (an update) it prints nothing.
 
-The normal configuration template keeps package execution, Agent dispatch, and
-topology execution disabled. A V4 installer is the explicit exception: it
-enables Control package execution because login is owned by the verified
-identity package, while leaving Agent dispatch and topology execution disabled.
-Existing configuration files retain every other value; a non-empty
-operator-selected bootstrap directory is not replaced.
+No setting turns package execution, Agent plugin dispatch or topology
+execution on or off any more: the built-in packages' hosts always run (the
+identity package serves login), and dispatch and topology execution stay off
+until M4. Existing configuration files retain every other value; an existing
+`plugins.identity_bootstrap_package_dir` stays, and Control ignores it.
 
 ### The first administrator
 
@@ -419,7 +420,7 @@ failed health or identity gateway check restores that snapshot.
 Upgrade to an explicit release:
 
 ```bash
-export TARGET=v4.2.0   # the release tag to upgrade to
+export TARGET=v5.0.0-rc.1   # the release tag to upgrade to
 curl -fsSL \
   "https://raw.githubusercontent.com/AnixOps/anix-control/${TARGET}/scripts/install.sh" \
   -o /tmp/anix-control-install.sh
@@ -430,12 +431,18 @@ rm -f /tmp/anix-control-install.sh
 To roll back the application files, run the same version-pinned installer with
 the previous known-good tag. Configuration and database rollback are separate
 operator decisions; do not restore a database merely because an application
-binary was rolled back. Going back to a 4.1 release from 4.2 also needs the
+binary was rolled back, unless a schema migration ran. Going back from
+5.0.0-rc.1 to 4.2.x is such a case: with Control stopped and the 5.0.0-rc.1
+binary still installed, restore the `pre-migration` backup its first start
+took (`anix-control backup restore ... --replace`, which also puts back the
+configuration and the root key of that moment), then roll back
+([`../UPGRADE.md`](../UPGRADE.md#backups-are-built-in)). Going back to a 4.1
+release from 4.2 also needs the
 package installations moved back, because the official signing root changed
 ([`../UPGRADE.md`](../UPGRADE.md#rolling-back-after-the-import)).
 
 ```bash
-export PREVIOUS=v4.1.0   # the previous known-good tag
+export PREVIOUS=v4.2.1   # the previous known-good tag
 curl -fsSL \
   "https://raw.githubusercontent.com/AnixOps/anix-control/${PREVIOUS}/scripts/install.sh" \
   -o /tmp/anix-control-install.sh
@@ -454,16 +461,15 @@ For older panel products or a coordinated panel/node cutover, follow
   production version selector.
 - Review the script before execution and keep release checksums with the change
   record.
-- Keep the release's `SHA256SUMS.txt` and the packages archive's `.sig` with
-  the deployment record. Only `v4.0.0` has a verified
+- Keep the release's `SHA256SUMS.txt` and `SHA256SUMS.txt.sig` with the
+  deployment record. Only `v4.0.0` has a verified
   `v4-release-evidence.tar.gz`; later releases ship no evidence bundle. Do not
   install a partial package set or bypass an unhealthy package with a direct
   legacy route.
-- Do not use the legacy `install.sh` source/Docker path unless
-  `ANIX_CONTROL_LEGACY_SOURCE_INSTALL=1` is intentionally set for a controlled
-  recovery. It is not the stable release path.
-- `config/secrets/module_ca_kek` is a secret: keep it out of tickets and
-  shell history, and in the same backups as the database.
+- The legacy source/Docker installer is removed: `install.sh` refuses
+  `ANIX_CONTROL_LEGACY_SOURCE_INSTALL=1` with the reason.
+- `config/secrets/module_ca_kek` and `data/root.key` are secrets: keep them
+  out of tickets and shell history, and in the same backups as the database.
 - Release artifacts are built and tested by GitHub Actions. Do not compile a
   replacement binary or frontend bundle on the panel host.
 

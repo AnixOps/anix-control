@@ -54,7 +54,8 @@ It should not become a dumping ground for:
   documentation sync (`check_docs_updated.sh`), changelog fragments
   (`changelog_fragments.py`), release workflow policy
   (`check_release_workflow.sh`), release version surfaces
-  (`check_release_version.py`) and release preparation (`prepare_release.py`),
+  (`check_release_version.py`), release preparation (`prepare_release.py`)
+  and the Agent pin of a release (`bump_agent_ref.py`),
   `/api/v2` package route catalog and plugin-only route checks, Agent SDK
   dependency check, release manifest/notes generators, the artifact verifier,
   and the

@@ -11,6 +11,54 @@ Use this together with:
 - [`features.md`](features.md)
 - [`reference/sqlite-to-postgres-migration.md`](reference/sqlite-to-postgres-migration.md)
 
+## Upgrading From 4.2.x To 5.0.0-rc.1
+
+5.0.0-rc.1 is a pre-release. In order:
+
+1. **Back up.** Take a copy of the database (the SQLite file, or a `pg_dump`)
+   and of the configuration with the CA key it names
+   (`module_runtime.ca_kek`: `config/secrets/module_ca_kek` of the systemd
+   installer, `secrets/module_ca_kek` of Compose, the chart's CA key Secret).
+   A 4.2.x panel has no `data_dir/root.key` yet: the first 5.0.0-rc.1 start
+   creates it from that key (a new one when none is configured). From then
+   on back up `root.key` with every
+   database backup; Control refuses a database its root key cannot open.
+2. **Check the configuration** with the new binary before you replace the
+   running one: `./anix-control config check --file <config.yaml>` from the
+   extracted release archive (it opens no database and writes nothing; exit 1
+   means Control would refuse the file). The configuration is nine operator
+   keys now; a 4.x file keeps loading, every old key read or ignored with a
+   warning, and `anix-control config rewrite` turns it into the new keys after
+   the first start ([Configuration Rewrite On Upgrade](#configuration-rewrite-on-upgrade)).
+   `admin.*`, `app.edition`, the route-mode key `package_routes.default_mode`
+   and the `plugins.*` execution switches are ignored.
+3. **The first start migrates the database.** It adopts the 4.2.x schema as
+   `0001_baseline` and applies `0002_server_log_buckets` to `0005_backups`
+   ([`reference/database-migrations.md`](reference/database-migrations.md#the-migrations)).
+   On SQLite it first takes a `pre-migration` backup into `data_dir/backups`;
+   when it cannot write it, nothing is migrated and Control does not start.
+   On PostgreSQL your own `pg_dump` is the backup. Going back to 4.2.x means
+   restoring that backup with Control stopped, then starting the 4.2.x binary
+   ([Backups Are Built In](#backups-are-built-in),
+   [Database Migrations](#database-migrations),
+   [`reference/backups.md`](reference/backups.md)).
+4. **Release assets** are Linux-only (linux/amd64 and linux/arm64 binaries),
+   with the official packages inside the binary: there is no packages archive
+   and nothing to import ([Official Packages Built In](#official-packages-built-in)).
+   The containers' web port 3000 is gone: the image listens on 8080
+   (`ANIX_CONTROL_LISTEN`), so point a reverse proxy that used 3000 at 8080.
+5. **Nodes.** This Control installs Agent `v5.0.0-rc.1` on nodes, and its
+   join command needs that Agent (`anix-agent join`). Upgrade Control first,
+   then the Agents (升级节点, or `anix-control agent upgrade`).
+6. **The first administrator.** A database without an administrator (a fresh
+   panel) is claimed with a one-time link, `anix-control admin claim-link`; an
+   existing panel keeps its administrators
+   ([The First Administrator Claims The Panel](#the-first-administrator-claims-the-panel)).
+7. **Pages that are gone.** The plugin center (now 系统设置 → 内置包), the
+   NodeX Agents page and the Agent 连接方式 page; `/admin/plugins` and
+   `/admin/agent` redirect
+   ([Plugin Center Reduced To Package Status](#plugin-center-reduced-to-package-status)).
+
 ## Scope
 
 Use this runbook when moving a running panel from one GitHub Release tag to
@@ -38,12 +86,11 @@ Check before restarting:
   start: serve https with `domain` and `tls.mode: files` (port 443), or
   remove `tls.enable` behind a proxy. `tls.domain` is not read.
 - An empty `server.host` binds loopback (the built-in default is
-  `127.0.0.1`; the container image sets `ANIX_CONTROL_SERVER_HOST=0.0.0.0`).
+  `127.0.0.1`; the container image sets `ANIX_CONTROL_LISTEN=0.0.0.0:8080`).
 - `grpc.tls_cert_file` is reloaded when it changes: renewing it no longer
   needs a restart.
 
-To let Control obtain its certificate, set `domain` (and
-`module_runtime.ca_kek`), free ports 80 and 443 (stop nginx or Caddy for
+To let Control obtain its certificate, set `domain`, free ports 80 and 443 (stop nginx or Caddy for
 this name), and restart; `anix-control doctor` checks the DNS record and the
 ports first, `anix-control tls status` shows the outcome. Behind a CDN, use
 `tls.mode: external` with `grpc.public_name`
@@ -86,14 +133,14 @@ upgrade, and read
 Fresh installs now generate the CA key and enable gRPC TLS; existing ones add
 them first (Compose: `secrets/module_ca_kek` must exist before `up`).
 
-**Upgrading to 5.0 (in progress): the NodeX Agents and Agent 连接方式 pages are gone.**
+**Upgrading to 5.0: the NodeX Agents and Agent 连接方式 pages are gone.**
 `/admin/agent` and everything below it redirect to the node list. Their work moved to
 the node page's 诊断 section (service status, restart, log tail, the forward checks;
 `POST /api/v4/kernel/nodes/:id/diagnostics`), the node list's connection and
 certificate columns, and the 升级节点 sheet (⌘K), which starts a staged Agent upgrade.
 The `/api/v2/admin/agent/*` routes still answer until a later release removes them.
 
-**Upgrading to 5.0 (in progress): old log rows are deleted after 400 days, and
+**Upgrading to 5.0: old log rows are deleted after 400 days, and
 the traffic log is hourly.** A singleton worker deletes `v2_server_log` and
 `v2_audit_log` rows older than 400 days and `v2_node_log` rows older than
 30 days, every hour in small batches; archive older rows first if you need
@@ -166,7 +213,7 @@ completes (earlier installers stopped there without a message). Upgrade
 Control first, then the Agents. Read
 ["Upgrading From 4.2.0-rc.4 To 4.2.0"](#upgrading-from-420-rc4-to-420).
 
-**Next release: the installer uses the Agent release Control was released with.**
+**Upgrading to 5.0.0-rc.1: the installer uses the Agent release Control was released with.**
 Control 4.2.1 and earlier asked nodes for the Agent tag `v` + its own version,
 and a Control patch release over an unchanged Agent (4.2.1 shipped with Agent
 v4.2.0) therefore sent installs to a tag the Agent repository does not have

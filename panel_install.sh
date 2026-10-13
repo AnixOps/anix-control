@@ -33,11 +33,11 @@ if [[ -z "${INSTALL_REF}" ]]; then
     previous="${arg}"
   done
   if [[ "${previous}" == "--version" ]]; then
-    printf '[ERROR] --version needs a release tag: --version vX.Y.Z (for example v4.2.0).\n' >&2
+    printf '[ERROR] --version needs a release tag: --version vX.Y.Z (for example v5.0.0-rc.1).\n' >&2
     exit 1
   fi
   if [[ ! "${INSTALL_REF}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)(\.[0-9]+)?)?$ ]]; then
-    printf '[ERROR] Name the release tag to install: --version vX.Y.Z (for example v4.2.0).\n' >&2
+    printf '[ERROR] Name the release tag to install: --version vX.Y.Z (for example v5.0.0-rc.1).\n' >&2
     printf '        The installer is fetched at that tag, never from a moving branch.\n' >&2
     printf '        Commands without --version (preflight, enable-agents) take INSTALL_REF=<tag>.\n' >&2
     exit 1

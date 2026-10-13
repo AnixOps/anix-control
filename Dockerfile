@@ -12,8 +12,8 @@
 #             artifacts/bootstrap/agent-install/      (agent-install.sh.sig)
 #
 # The source binary embeds no official packages (internal/builtinpkg/dist is
-# empty in a checkout): mount a signed identity-platform package and set
-# ANIX_CONTROL_PLUGINS_IDENTITY_BOOTSTRAP_PACKAGE_DIR, as the smoke tests do.
+# empty in a checkout) and starts without installing any. The release
+# binaries carry them.
 #
 # The image runs as uid 10001 without a config file: configure it with
 # ANIX_CONTROL_* environment variables (anix-control -print-env) or mount a
