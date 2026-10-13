@@ -1,3 +1,4 @@
+import { openAgentUpgrade } from '@/composables/useAgentUpgradeSheet'
 import { ADMIN_PAGE_SECTIONS } from './sections'
 
 // Navigation config: the one place that says what the shells show.
@@ -122,12 +123,15 @@ export const EXTENSION_PARENT_GROUPS = Object.freeze({
 // the page titles in the entry chunk do not pull in this file).
 export { ADMIN_PAGE_SECTIONS }
 
-// Quick actions in the command palette open an existing create flow. Each is
-// shown only when its page is in the visible menu (`page` = menu item id).
+// Quick actions in the command palette open an existing create flow (`to`)
+// or run a function (`run`). Each is shown only when its page is in the
+// visible menu (`page` = menu item id).
 export const ADMIN_QUICK_ACTIONS = Object.freeze([
   { id: 'join-node', page: 'nodes', icon: 'nodes', labelKey: 'shell.palette.actions.addNode', to: { path: '/admin/nodes', query: { join: '1' } } },
   { id: 'add-user', page: 'users', icon: 'users', labelKey: 'shell.palette.actions.addUser', to: { path: '/admin/users', query: { create: '1' } } },
-  { id: 'forward-route', page: 'forward-v4', icon: 'forward', labelKey: 'shell.palette.actions.newForwardRoute', to: { path: '/admin/forward/routes/new' } }
+  { id: 'forward-route', page: 'forward-v4', icon: 'forward', labelKey: 'shell.palette.actions.newForwardRoute', to: { path: '/admin/forward/routes/new' } },
+  // 升级节点 opens the sheet the admin shell mounts (no route).
+  { id: 'upgrade-nodes', page: 'nodes', icon: 'deployments', labelKey: 'shell.palette.actions.upgradeNodes', run: openAgentUpgrade }
 ])
 
 export const ADMIN_ACCOUNT_PATH = '/admin/account'
@@ -293,6 +297,7 @@ export function paletteEntries({ t, groups }) {
       label: t(action.labelKey),
       icon: action.icon,
       to: action.to,
+      run: action.run,
       keywords: action.id.replace(/-/g, ' ')
     }))
 

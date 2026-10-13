@@ -105,6 +105,7 @@ export default {
         addNode: '接入节点',
         addUser: '添加用户',
         newForwardRoute: '新建转发路由',
+        upgradeNodes: '升级节点',
         themeLight: '切换到浅色外观',
         themeDark: '切换到深色外观',
         themeSystem: '外观跟随系统',

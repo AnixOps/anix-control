@@ -333,6 +333,15 @@ export async function getKernelAgentUpgrade(id) {
   return unwrap(await v4({ url: `/kernel/agents/upgrades/${encodeURIComponent(id)}`, method: 'get' }))
 }
 
+// What an upgrade would do now: the Agent release a campaign pushes by
+// default (target_version, "" when Control's https address is not set),
+// this Control's release, the nodes it would include (eligible_nodes), the
+// default batches with the H19 minimums, the active campaign's id, and
+// can_start (super administrators).
+export async function getKernelAgentUpgradePlan() {
+  return unwrap(await v4({ url: '/kernel/agents/upgrade-plan', method: 'get' }))
+}
+
 export async function startKernelAgentUpgrade(input = {}) {
   return unwrap(await v4({ url: '/kernel/agents/upgrades', method: 'post', data: input }))
 }

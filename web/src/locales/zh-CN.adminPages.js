@@ -12,6 +12,7 @@ import adminApiTokens from './modules/zh-CN/adminApiTokens'
 import forwardV4 from './modules/zh-CN/forwardV4'
 import forwardDns from './modules/zh-CN/forwardDns'
 import nodeDiagnostics from './modules/zh-CN/nodeDiagnostics'
+import agentUpgradeSheet from './modules/zh-CN/agentUpgradeSheet'
 
 export default {
   ...adminSubscriptionGroups,
@@ -19,6 +20,7 @@ export default {
   ...forwardV4,
   ...forwardDns,
   ...nodeDiagnostics,
+  ...agentUpgradeSheet,
   ...networkPages,
   ...miscPages,
   ...adminSupportPages,
@@ -886,6 +888,7 @@ export default {
     title: 'Agent 升级',
     description: 'Control 按灰度批次推送 Agent 版本（5%、25%、100%，每批至少 30 分钟）；某一批失败超过 5% 时自动回滚该批。',
     empty: '尚无 Agent 升级。超级管理员可执行：',
+    emptyShort: '尚无 Agent 升级。',
     target: 'Agent {version}',
     batchOf: '第 {batch} / {total} 批',
     batchEnds: '最早 {time} 进入下一批',

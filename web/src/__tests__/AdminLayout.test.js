@@ -7,6 +7,7 @@ import { useUserStore } from '@/stores/user'
 import AdminLayout from '@/layouts/AdminLayout.vue'
 import { setEdition } from '@/composables/useEdition'
 import { usePalette } from '@/components/shell/usePalette'
+import { closeAgentUpgrade, openAgentUpgrade } from '@/composables/useAgentUpgradeSheet'
 
 const mockGetSystemInfo = vi.hoisted(() => vi.fn())
 const mockGetUserList = vi.hoisted(() => vi.fn())
@@ -16,6 +17,12 @@ const mockAdminCapabilities = vi.hoisted(() => ({ value: [] }))
 vi.mock('@/api/admin', () => ({
   getSystemInfo: (...args) => mockGetSystemInfo(...args),
   getUserList: (...args) => mockGetUserList(...args)
+}))
+
+// 升级节点 is loaded with its first opening; the sheet itself is tested apart.
+vi.mock('@/components/admin/AgentUpgradeSheet.vue', () => ({
+  __esModule: true,
+  default: { name: 'AgentUpgradeSheetStub', template: '<div data-testid="upgrade-sheet-stub" />' }
 }))
 
 vi.mock('@/extensions/runtime', () => ({
@@ -376,5 +383,19 @@ describe('AdminLayout.vue', () => {
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, shiftKey: true }))
     expect(open.value).toBe(false)
     expect(wrapper.get('[data-palette-trigger]').attributes('aria-keyshortcuts')).toBe('Meta+K Control+K')
+  })
+
+  it('mounts the 升级节点 sheet once, when a page first asks for it', async () => {
+    const { wrapper } = await mountLayout('/admin/nodes')
+    mounted = wrapper
+    expect(wrapper.find('[data-testid="upgrade-sheet-stub"]').exists()).toBe(false)
+    openAgentUpgrade()
+    await flushPromises()
+    expect(wrapper.findAll('[data-testid="upgrade-sheet-stub"]')).toHaveLength(1)
+    closeAgentUpgrade()
+    openAgentUpgrade()
+    await flushPromises()
+    expect(wrapper.findAll('[data-testid="upgrade-sheet-stub"]')).toHaveLength(1)
+    closeAgentUpgrade()
   })
 })

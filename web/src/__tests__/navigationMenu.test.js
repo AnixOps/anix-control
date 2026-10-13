@@ -9,6 +9,7 @@ import {
   paletteEntries
 } from '@/navigation/menu'
 import { normalizeWebUIMenuParent } from '@/extensions/menuRegistry'
+import { closeAgentUpgrade, useAgentUpgradeSheet } from '@/composables/useAgentUpgradeSheet'
 import router from '@/router'
 
 const t = key => key
@@ -170,8 +171,23 @@ describe('navigation/menu.js: palette entries', () => {
     expect(paths).not.toContain('/admin/orders')
     // The flux-clone pages and their wizard were removed in v4.2 (F5d).
     expect(paths.filter(path => path.startsWith('/admin/forward'))).toEqual([])
-    expect(actions.map(action => action.id)).toEqual(['join-node', 'add-user'])
+    expect(actions.map(action => action.id)).toEqual(['join-node', 'add-user', 'upgrade-nodes'])
     expect(actions.find(action => action.id === 'join-node').to).toEqual({ path: '/admin/nodes', query: { join: '1' } })
+  })
+
+  it('offers 升级节点 as an action that opens the shell\'s upgrade sheet (no route)', () => {
+    closeAgentUpgrade()
+    const groups = buildAdminMenu({ t, editionAllows: community })
+    const { actions } = paletteEntries({ t, groups })
+    const upgrade = actions.find(action => action.id === 'upgrade-nodes')
+    expect(upgrade.label).toBe('shell.palette.actions.upgradeNodes')
+    expect(upgrade.to).toBeUndefined()
+    const { open, requested } = useAgentUpgradeSheet()
+    expect(open.value).toBe(false)
+    upgrade.run()
+    expect(open.value).toBe(true)
+    expect(requested.value).toBe(true)
+    closeAgentUpgrade()
   })
 
   it('offers a quick action only when its page is visible', () => {

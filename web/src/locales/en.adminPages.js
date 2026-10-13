@@ -12,6 +12,7 @@ import adminApiTokens from './modules/en/adminApiTokens'
 import forwardV4 from './modules/en/forwardV4'
 import forwardDns from './modules/en/forwardDns'
 import nodeDiagnostics from './modules/en/nodeDiagnostics'
+import agentUpgradeSheet from './modules/en/agentUpgradeSheet'
 
 export default {
   ...adminSubscriptionGroups,
@@ -19,6 +20,7 @@ export default {
   ...forwardV4,
   ...forwardDns,
   ...nodeDiagnostics,
+  ...agentUpgradeSheet,
   ...networkPages,
   ...miscPages,
   ...adminSupportPages,
@@ -886,6 +888,7 @@ export default {
     title: 'Agent upgrades',
     description: 'Control pushes Agent releases in canary batches (5%, 25%, 100%, at least 30 minutes each) and rolls a batch back when more than 5% of it fails.',
     empty: 'No Agent upgrade yet. A super administrator starts one with:',
+    emptyShort: 'No Agent upgrade yet.',
     target: 'Agent {version}',
     batchOf: 'batch {batch} of {total}',
     batchEnds: 'next batch at {time} at the earliest',

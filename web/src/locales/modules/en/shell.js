@@ -105,6 +105,7 @@ export default {
         addNode: 'Join a node',
         addUser: 'Add a user',
         newForwardRoute: 'New forwarding route',
+        upgradeNodes: 'Upgrade nodes',
         themeLight: 'Use light appearance',
         themeDark: 'Use dark appearance',
         themeSystem: 'Match system appearance',
