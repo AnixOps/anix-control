@@ -315,6 +315,62 @@ func TestACMEModeObtainsTheCertificateAndServesTheSingleListener(t *testing.T) {
 	_ = conn.Close()
 }
 
+// A renewal reaches the next connection of both the https listener and the
+// node gRPC listener, without a restart; a connection made before keeps
+// its certificate.
+func TestRenewedCertificateReachesHTTPSAndGRPC(t *testing.T) {
+	cfg := panelTestConfig(t)
+	cfg.Domain = panelTestDomain
+	cfg.GRPC.Host, cfg.GRPC.Port = "127.0.0.1", freePort(t)
+	panel := cfg.Panel()
+	panel.HTTPSAddress, panel.HTTPAddress = "127.0.0.1:0", "127.0.0.1:0"
+	// Nine-second certificates: each is renewed about six seconds after it
+	// was issued (a third of the lifetime before its end).
+	ca := panelcerttest.New(t, 9*time.Second)
+	running := startTestPanel(t, cfg, panel, func(o *panelcert.Options) {
+		o.DirectoryURL, o.Roots = ca.DirectoryURL, ca.Roots
+		o.RetryDelays = []time.Duration{100 * time.Millisecond}
+	})
+	httpsAddr := running.byName["https"]
+	ca.SetTargets(func(string) string { return httpsAddr }, nil)
+	server, grpcAddr, err := startGRPCServer(cfg, cfg.Panel(), running.certs)
+	require.NoError(t, err)
+	t.Cleanup(server.Stop)
+	running.run(t)
+	waitUntil(t, "the first certificate", func() bool { return len(ca.Issued()) >= 1 && running.certs.Status().State == panelcert.StateValid })
+	first := ca.Issued()[0].SerialNumber
+
+	verified := func(address string, protocols ...string) (*big.Int, *tls.Conn) {
+		conn, err := tls.Dial("tcp", address, &tls.Config{ServerName: panelTestDomain, RootCAs: ca.Roots, MinVersion: tls.VersionTLS12, NextProtos: protocols})
+		if err != nil {
+			return nil, nil
+		}
+		return conn.ConnectionState().PeerCertificates[0].SerialNumber, conn
+	}
+	serial, before := verified(grpcAddr, "h2")
+	require.NotNil(t, before)
+	t.Cleanup(func() { _ = before.Close() })
+	require.Equal(t, first, serial)
+
+	renewed := func(serial *big.Int) bool { return serial != nil && serial.Cmp(first) != 0 }
+	waitUntil(t, "the renewed certificate on the https listener", func() bool {
+		serial, conn := verified(httpsAddr, "http/1.1")
+		if conn != nil {
+			_ = conn.Close()
+		}
+		return renewed(serial)
+	})
+	waitUntil(t, "the renewed certificate on the gRPC listener", func() bool {
+		serial, conn := verified(grpcAddr, "h2")
+		if conn != nil {
+			_ = conn.Close()
+		}
+		return renewed(serial)
+	})
+	require.Equal(t, first, before.ConnectionState().PeerCertificates[0].SerialNumber, "an open connection keeps its certificate")
+	require.GreaterOrEqual(t, len(ca.Issued()), 2)
+}
+
 func freePort(t *testing.T) int {
 	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")

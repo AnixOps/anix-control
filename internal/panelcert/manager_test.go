@@ -296,9 +296,9 @@ func TestUnreachableDirectoryIsReported(t *testing.T) {
 }
 
 func TestRenewalReplacesTheCertificateForNewConnections(t *testing.T) {
-	// Six-second certificates: the renewal (a third of the lifetime before
-	// the end) comes about four seconds after each issuance.
-	ca := panelcerttest.New(t, 6*time.Second)
+	// Nine-second certificates: the renewal (a third of the lifetime before
+	// the end) comes about six seconds after each issuance.
+	ca := panelcerttest.New(t, 9*time.Second)
 	h := newHarness(t, openDB(t), ca, newClock(), nil)
 	ca.SetTargets(func(string) string { return h.addr.httpsAddr }, func(string) string { return h.addr.httpAddr })
 	h.run(t)
