@@ -218,6 +218,32 @@ func TestBuiltinBootstrapNeverDowngrades(t *testing.T) {
 	require.ErrorContains(t, results[0].Err, "newer than the 5.0.0 this binary carries")
 	installation := builtinInstallation(t, db, "plan")
 	require.Equal(t, "5.1.0", installation.DesiredVersion)
+	require.Equal(t, "pending", installation.State, "the installation is left to its own release")
+
+	problems, err := BuiltinPackageProblems(db, key.encoded(), builtinTestSet(builtinTestPackage(t, key, "plan", "5.0.0", nil)), nil)
+	require.NoError(t, err)
+	require.Len(t, problems, 1)
+	require.Contains(t, problems[0].Reason, "wants 5.1.0")
+}
+
+func TestBuiltinBootstrapMarksAFailedInstallation(t *testing.T) {
+	key := newBuiltinTestKey(t)
+	db := newBuiltinTestDB(t, key)
+	BootstrapBuiltinPackages(db, key.encoded(), builtinTestSet(builtinTestPackage(t, key, "plan", "5.0.0", nil)))
+	// The next binary's release cannot be validated: a conflicting package
+	// is enabled.
+	require.NoError(t, db.Model(&model.PluginInstallation{}).Where("plugin_id = ?", "plan").Update("state", "healthy").Error)
+	conflicting := builtinTestPackage(t, key, "ticket", "5.0.0", nil)
+	BootstrapBuiltinPackages(db, key.encoded(), builtinTestSet(conflicting))
+
+	results := BootstrapBuiltinPackages(db, key.encoded(), builtinTestSet(
+		builtinTestPackage(t, key, "plan", "5.1.0", func(m *PluginManifest) { m.Conflicts = []string{"ticket"} }),
+	))
+
+	require.Equal(t, BuiltinActionFailed, results[0].Action)
+	require.ErrorContains(t, results[0].Err, "conflicts with ticket")
+	installation := builtinInstallation(t, db, "plan")
+	require.Equal(t, "5.0.0", installation.DesiredVersion)
 	require.Equal(t, "failed", installation.State)
 	require.Contains(t, installation.LastError, "built-in package bootstrap")
 }

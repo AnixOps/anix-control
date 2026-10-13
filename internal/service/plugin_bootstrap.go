@@ -117,7 +117,11 @@ func BootstrapBuiltinPackages(db *gorm.DB, encodedPublicKey string, set *builtin
 		action, err := installBuiltinPackage(db, embedded, *manifest, publicKey)
 		if err != nil {
 			result.Action, result.Err = BuiltinActionFailed, err
-			markBuiltinInstallationFailed(db, id, err)
+			// An installation that wants a newer release is left as it is:
+			// it may run that release (its host starts or fails on its own).
+			if !errors.Is(err, errBuiltinOlderThanInstalled) {
+				markBuiltinInstallationFailed(db, id, err)
+			}
 			continue
 		}
 		result.Action = action
@@ -289,6 +293,10 @@ func ensureBuiltinRelease(db *gorm.DB, manifest PluginManifest, embedded builtin
 	return &existing, nil
 }
 
+// errBuiltinOlderThanInstalled refuses to move an installation to an older
+// version than it wants.
+var errBuiltinOlderThanInstalled = errors.New("the binary carries an older release than the installation")
+
 // ensureBuiltinInstallation makes the package's Control installation enabled
 // at the built-in version. A new installation starts at lifecycle
 // generation 1; any change to an existing one is made the way an
@@ -328,7 +336,7 @@ func ensureBuiltinInstallation(db *gorm.DB, manifest PluginManifest, release mod
 			return nil
 		}
 		if existing.DesiredVersion != manifest.Version && bootstrapReleaseIsNewer(manifest.Version, existing.DesiredVersion) {
-			return fmt.Errorf("the installation wants %s, newer than the %s this binary carries; run %s or newer, or restore the backup taken before the upgrade", existing.DesiredVersion, manifest.Version, existing.DesiredVersion)
+			return fmt.Errorf("%w: the installation wants %s, newer than the %s this binary carries; run %s or newer, or restore the backup taken before the upgrade", errBuiltinOlderThanInstalled, existing.DesiredVersion, manifest.Version, existing.DesiredVersion)
 		}
 		if err := ValidatePluginInstallationPlan(tx, release, "control", true, existing.ID); err != nil {
 			return fmt.Errorf("validate the installation: %w", err)
