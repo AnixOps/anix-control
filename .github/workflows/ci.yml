@@ -748,7 +748,7 @@ jobs:
           "${compose[@]}" logs control | grep 'Adopted module_runtime.ca_kek as the root key' >/dev/null
           "${compose[@]}" stop control
           test "$(docker inspect -f '{{.State.ExitCode}}' "${control_id}")" = 0
-          "${compose[@]}" down
+          "${compose[@]}" down -v
 
       - name: Run identity-platform as a network module with Compose
         shell: bash
