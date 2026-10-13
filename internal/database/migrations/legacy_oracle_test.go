@@ -27,9 +27,11 @@ import (
 // kept here, schema statements only, as the oracle the baseline was
 // recorded from and is compared with (TestBaselineEqualsTheLegacySchema).
 //
-// It builds the schema from today's models. When a later migration changes
-// a model, this oracle no longer describes the baseline: refresh the test
-// then (docs/reference/database-migrations.md, "Changing a model").
+// legacyModelsPrepare builds the schema from today's models, which later
+// migrations change. legacyPrepare is the legacy start as it was at the
+// baseline: the same, less what later migrations added to the models
+// (postBaselineIndexes). A migration that changes a model records what it
+// added there (docs/reference/database-migrations.md, "Changing a model").
 
 // legacySchemaModels is cmd/server's schemaModels() at 4eb87485.
 func legacySchemaModels() []any {
@@ -56,11 +58,32 @@ func legacySchemaModels() []any {
 	}
 }
 
-// legacyPrepare is the legacy start's schema work on db. production is
-// the env: "production" only creates missing tables of the application
-// models, development and test AutoMigrate them all. The Ensure* steps run
-// in both.
+// postBaselineIndexes are the indexes later migrations added to the models:
+// the legacy start of the baseline did not create them. legacyPrepare drops
+// them after building from the models, so the databases it prepares are the
+// baseline's and the adoption tests keep describing databases earlier
+// releases left (an index is dropped here; a column a migration adds would
+// be dropped the same way, after its index).
+var postBaselineIndexes = []struct{ table, index string }{
+	{"v2_server_log", "idx_v2_server_log_bucket"}, // 0002_server_log_buckets
+}
+
+// legacyPrepare is the legacy start's schema work at the baseline on db.
+// production is the env: "production" only creates missing tables of the
+// application models, development and test AutoMigrate them all. The
+// Ensure* steps run in both.
 func legacyPrepare(t *testing.T, db *gorm.DB, production bool) {
+	t.Helper()
+	legacyModelsPrepare(t, db, production)
+	for _, added := range postBaselineIndexes {
+		require.NoError(t, db.Exec("DROP INDEX "+added.index).Error)
+	}
+}
+
+// legacyModelsPrepare is the legacy start's schema work with today's
+// models: the schema TestFreshSchemaEqualsTheLegacySchema compares with the
+// migrations', so a model changed without a migration fails there.
+func legacyModelsPrepare(t *testing.T, db *gorm.DB, production bool) {
 	t.Helper()
 	require.NoError(t, legacyPrepareErr(db, production))
 }

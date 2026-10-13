@@ -2,6 +2,7 @@ package migrations_test
 
 import (
 	"context"
+	"strconv"
 	"testing"
 	"time"
 
@@ -121,7 +122,7 @@ func TestAdoptionCompletesADatabaseAnOlderReleaseLeft(t *testing.T) {
 		meta, err := migrations.Meta(ctx, db)
 		require.NoError(t, err)
 		assert.Equal(t, "adopted", meta[migrations.MetaOrigin])
-		assert.Equal(t, "1", meta[migrations.MetaSchemaVersion])
+		assert.Equal(t, strconv.Itoa(len(steps(t))), meta[migrations.MetaSchemaVersion], "the later migrations are applied after the adoption")
 
 		again, err := migrations.Migrate(ctx, db, migrateOptions())
 		require.NoError(t, err)

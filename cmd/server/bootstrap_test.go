@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -50,7 +51,9 @@ func TestBootstrapDatabaseMigratesTheSchema(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, version, meta[migrations.MetaProgramVersion])
 		assert.Equal(t, "fresh", meta[migrations.MetaOrigin])
-		assert.Equal(t, "1", meta[migrations.MetaSchemaVersion])
+		known, err := migrations.Steps()
+		require.NoError(t, err)
+		assert.Equal(t, strconv.Itoa(len(known)), meta[migrations.MetaSchemaVersion], "every migration is applied")
 		for _, value := range []any{&model.User{}, &model.Plan{}, &model.Ticket{}, &model.NodeGroup{}, &model.AgentDiagnosticTask{}} {
 			assert.True(t, db.Migrator().HasTable(value), "%T", value)
 		}
