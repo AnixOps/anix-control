@@ -3,9 +3,12 @@
 
 Usage: config/scripts/prepare_release.py 4.1.0 [--date YYYY-MM-DD] [--agent-tag vX.Y.Z]
 
-It sets the version wherever check_release_version.py looks for it, turns
-the CHANGELOG "## Unreleased" entries into "## <version> - <date>" (leaving
-an empty Unreleased section on top), and runs check_release_version.py.
+It sets the version wherever check_release_version.py looks for it, merges the
+changelog fragments of changelog.d/ into the CHANGELOG "## Unreleased" section
+(changelog_fragments.py consume) and deletes them, turns the "## Unreleased"
+entries into "## <version> - <date>" (leaving an empty Unreleased section on
+top), and runs check_release_version.py. Entries written directly under
+"## Unreleased" are kept and released together with the fragments.
 
 --agent-tag names the anix-agent release this Control installs on nodes
 (config/AGENT_RELEASE, injected into the release build). Without it the file
@@ -79,8 +82,8 @@ def set_json_versions(path: Path, count: int, version: str) -> None:
     path.write_text(content, encoding="utf-8")
 
 
-def date_changelog(path: Path, version: str, date: str) -> None:
-    content = path.read_text(encoding="utf-8")
+def dated_changelog(content: str, version: str, date: str) -> str:
+    """The changelog text with "## Unreleased" turned into the dated section."""
     if re.search(rf"^##\s+{re.escape(version)}(\s|$)", content, re.MULTILINE):
         raise PrepareError(f"CHANGELOG already has a {version} section")
     heading = re.search(r"^## Unreleased[ \t]*$", content, re.MULTILINE)
@@ -92,7 +95,7 @@ def date_changelog(path: Path, version: str, date: str) -> None:
     if not entries.strip():
         raise PrepareError("CHANGELOG '## Unreleased' is empty: nothing to release")
     dated = f"## Unreleased\n\n## {version} - {date}"
-    path.write_text(content[: heading.start()] + dated + content[heading.end():], encoding="utf-8")
+    return content[: heading.start()] + dated + content[heading.end():]
 
 
 def load_version_checker():
@@ -104,13 +107,23 @@ def load_version_checker():
     return module
 
 
+def load_fragment_collector():
+    spec = importlib.util.spec_from_file_location("changelog_fragments", Path(__file__).with_name("changelog_fragments.py"))
+    if spec is None or spec.loader is None:
+        raise PrepareError("cannot load changelog_fragments.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def set_agent_release(path: Path, tag: str) -> None:
     if not path.is_file():
         raise PrepareError(f"{path}: not found")
     path.write_text(tag + "\n", encoding="utf-8")
 
 
-def prepare_release(root: Path, version: str, date: str, agent_tag: str | None = None) -> None:
+def prepare_release(root: Path, version: str, date: str, agent_tag: str | None = None) -> list[str]:
+    """Prepare the tree for the release; returns the names of the consumed changelog fragments."""
     if not VERSION_PATTERN.fullmatch(version):
         raise PrepareError(f"unsupported version {version!r}: use X.Y.Z or X.Y.Z-(alpha|beta|rc)[.N]")
     checker = load_version_checker()
@@ -120,7 +133,16 @@ def prepare_release(root: Path, version: str, date: str, agent_tag: str | None =
             checker.validate_agent_tag(agent_tag)
         except ValueError as error:
             raise PrepareError(str(error)) from error
-    date_changelog(root / "CHANGELOG.md", version, date)
+    # The fragments are merged and the section dated in memory first, so an
+    # invalid fragment or a CHANGELOG that cannot be released changes no file.
+    collector = load_fragment_collector()
+    changelog = root / "CHANGELOG.md"
+    try:
+        fragments = collector.collect(root)
+        merged = collector.merge_into_changelog(changelog.read_text(encoding="utf-8"), fragments)
+    except collector.FragmentError as error:
+        raise PrepareError(str(error)) from error
+    changelog.write_text(dated_changelog(merged, version, date), encoding="utf-8")
     if agent_tag is not None:
         set_agent_release(root / AGENT_RELEASE_FILE, agent_tag)
     for relative, pattern in TEXT_SURFACES:
@@ -128,6 +150,10 @@ def prepare_release(root: Path, version: str, date: str, agent_tag: str | None =
     for relative, count in JSON_SURFACES:
         set_json_versions(root / relative, count, version)
     checker.check_release_version(root, f"v{version}")
+    # The fragments are deleted last: when a surface above fails, they are
+    # still in the tree and the checkout can be restored as it was.
+    collector.remove_fragments(root, fragments)
+    return [fragment.name for fragment in fragments]
 
 
 def self_test() -> None:
@@ -203,6 +229,69 @@ def self_test() -> None:
                 raise AssertionError(f"unexpected error {error}") from error
         else:
             raise AssertionError("a chart without appVersion should have been refused")
+
+    # Fragments of changelog.d/ join the release section and are removed; the
+    # README stays. An invalid fragment is refused before anything changes.
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary)
+        checker.write_fixture(root, "4.0.0")
+        changelog = root / "CHANGELOG.md"
+        changelog_text = "# Changelog\n\n## Unreleased\n\n### Fixed\n\n- An existing fix.\n\n## 4.0.0 - 2026-07-17\n"
+        changelog.write_text(changelog_text, encoding="utf-8")
+        directory = root / "changelog.d"
+        directory.mkdir()
+        (directory / "README.md").write_text("# Changelog fragments\n", encoding="utf-8")
+        (directory / "b-feature.md").write_text("### Added\n\n- Feature B.\n\n### Fixed\n\n- Fix B.\n", encoding="utf-8")
+        (directory / "a-feature.md").write_text("### Added\n\n- Feature A.\n", encoding="utf-8")
+        (directory / "bad.md").write_text("- An entry before any heading.\n", encoding="utf-8")
+        try:
+            prepare_release(root, "4.1.0", "2026-10-01")
+        except PrepareError as error:
+            if "changelog.d/bad.md:1:" not in str(error):
+                raise AssertionError(f"unexpected error {error}") from error
+        else:
+            raise AssertionError("an invalid fragment should have been refused")
+        if changelog.read_text(encoding="utf-8") != changelog_text or "VERSION := 4.0.0\n" not in (root / "Makefile").read_text(encoding="utf-8"):
+            raise AssertionError("files changed although a fragment was refused")
+        if sorted(path.name for path in directory.iterdir()) != ["README.md", "a-feature.md", "b-feature.md", "bad.md"]:
+            raise AssertionError("fragments were removed although one was refused")
+        (directory / "bad.md").unlink()
+        consumed = prepare_release(root, "4.1.0", "2026-10-01")
+        if consumed != ["a-feature.md", "b-feature.md"]:
+            raise AssertionError(f"consumed {consumed}")
+        expected = (
+            "# Changelog\n\n## Unreleased\n\n## 4.1.0 - 2026-10-01\n\n"
+            "### Added\n\n- Feature A.\n- Feature B.\n\n"
+            "### Fixed\n\n- An existing fix.\n- Fix B.\n\n"
+            "## 4.0.0 - 2026-07-17\n"
+        )
+        if changelog.read_text(encoding="utf-8") != expected:
+            raise AssertionError(f"CHANGELOG not prepared from fragments as expected:\n{changelog.read_text(encoding='utf-8')}")
+        if sorted(path.name for path in directory.iterdir()) != ["README.md"]:
+            raise AssertionError("consumed fragments are still in changelog.d")
+        checker.check_release_version(root, "v4.1.0")
+        try:
+            prepare_release(root, "4.1.1", "2026-10-02")
+        except PrepareError as error:
+            if "is empty" not in str(error):
+                raise AssertionError(f"unexpected error {error}") from error
+        else:
+            raise AssertionError("a release without entries or fragments should have been refused")
+
+    # An empty Unreleased section is enough when fragments carry the entries.
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary)
+        checker.write_fixture(root, "4.0.0")
+        changelog = root / "CHANGELOG.md"
+        changelog.write_text("# Changelog\n\n## Unreleased\n\n## 4.0.0 - 2026-07-17\n", encoding="utf-8")
+        (root / "changelog.d").mkdir()
+        (root / "changelog.d" / "only-fragment.md").write_text("### Security\n\n- A fix.\n", encoding="utf-8")
+        if prepare_release(root, "4.0.1", "2026-10-01") != ["only-fragment.md"]:
+            raise AssertionError("the fragment was not consumed")
+        text = changelog.read_text(encoding="utf-8")
+        if "## Unreleased\n\n## 4.0.1 - 2026-10-01\n\n### Security\n\n- A fix.\n\n## 4.0.0" not in text:
+            raise AssertionError(f"CHANGELOG not prepared from a fragment alone:\n{text}")
+        checker.check_release_version(root, "v4.0.1")
     print("prepare_release self-test passed")
 
 
@@ -222,10 +311,12 @@ def main() -> int:
     if not args.version:
         parser.error("the release version is required")
     try:
-        prepare_release(REPO_ROOT, args.version, args.date, args.agent_tag)
+        consumed = prepare_release(REPO_ROOT, args.version, args.date, args.agent_tag)
     except (PrepareError, ValueError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
+    if consumed:
+        print(f"Merged {len(consumed)} changelog fragment(s) from changelog.d/ into the {args.version} section.")
     print(f"Prepared {args.version}. Commit it through a pull request, then tag the merged commit v{args.version}.")
     return 0
 

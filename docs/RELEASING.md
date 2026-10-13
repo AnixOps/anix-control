@@ -15,8 +15,16 @@ publishes everything. Nothing is built locally.
    python3 config/scripts/prepare_release.py 4.2.0 --agent-tag v4.2.0
    ```
 
-   The script turns the `## Unreleased` entries into `## 4.1.0 - <today>`,
-   leaving an empty `## Unreleased` on top. `--agent-tag` names the
+   The script merges the changelog fragments of `changelog.d/` (one file per
+   change, [format](../changelog.d/README.md)) into `## Unreleased`: their
+   entries join the headings already there, in file-name order, and no
+   heading appears twice. It turns the `## Unreleased` entries into
+   `## 4.1.0 - <today>`, leaving an empty `## Unreleased` on top, and deletes
+   the consumed fragments with `git rm` (`changelog.d/README.md` stays).
+   Entries written directly under `## Unreleased` are released too. An
+   invalid fragment stops it before any file changes;
+   `python3 config/scripts/changelog_fragments.py check` shows why, and
+   `... render` previews what the release will contain. `--agent-tag` names the
    anix-agent release this Control installs on nodes (`config/AGENT_RELEASE`,
    see [the Agent pin](#what-the-tag-pipeline-does)); without it the file keeps
    its value, so a patch release over an unchanged Agent names the Agent tag
@@ -71,14 +79,18 @@ already holds v4.2 work.
      `## Unreleased`, or below a newer release section `go_dev` already has
      (`## 4.2.0-rc.1`, say). The first dated section must stay the version
      `go_dev` declares, since `check_release_version.py` reads the first one;
-   - entries that shipped in the release leave `go_dev`'s `## Unreleased`;
+   - entries that shipped in the release leave `go_dev`'s `## Unreleased`,
+     and so do their fragments: delete the `changelog.d/` files that the
+     release branch consumed (a fix cherry-picked from `go_dev` has the same
+     file name there), or they would be released a second time;
    - the version surfaces come back only while `go_dev` declares an older
      version (`4.1.0-rc.6` → `4.1.0`). Never lower `go_dev`'s version.
 
 **Patch releases** (`vX.Y.Z`, Z > 0) of that line use the same branch. Land
 the fix on `go_dev` first, then bring it to `release/vX.Y` in a pull request
-(cherry-pick). A fix for the old line only goes to the release branch alone,
-and its pull request says so. Then bump, tag and merge back as above.
+(cherry-pick, which carries its changelog fragment). A fix for the old line
+only goes to the release branch alone, and its pull request says so. Then
+bump, tag and merge back as above.
 
 **`latest` on a superseded line.** An unsuffixed tag becomes the latest GitHub
 Release and moves the image's `latest` tag (`make_latest` and `latest=auto` in
