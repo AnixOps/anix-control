@@ -1,58 +1,346 @@
 # Configuration
 
-This page defines the unified configuration scheme for `anix-control`.
+This page defines the configuration of `anix-control`: nine operator keys,
+the root key in the data directory, and the keys earlier releases read.
 
 ## Source Of Truth
 
 | Location | Role | Notes |
 |------|------|------|
- | `config/config.yaml` (template: [`config/config.yaml.example`](../../config/config.yaml.example)) | canonical app and forward runtime config | read on startup when it exists, or when named by `-config` / `ANIX_CONTROL_CONFIG` |
- | built-in defaults ([`internal/config/defaults.yaml`](../../internal/config/defaults.yaml)) | production-shaped container defaults | used instead of a file when no config file is present |
- | `ANIX_CONTROL_*` environment variables | per-key overrides and secrets | applied on top of the file or the built-in defaults; see [Environment Variables](#environment-variables) |
- | `v2_system_config` | persisted runtime snapshot | written on startup from the loaded config and consumed by runtime services and `/admin/system` |
+| `/etc/anix-control/config.yaml` (or `-config <file>`, `ANIX_CONTROL_CONFIG`, `config/config.yaml` next to the binary; template: [`config/config.yaml.example`](../../config/config.yaml.example)) | the operator keys an installation changes, usually `domain` alone | optional: without a file Control runs on its built-in values |
+| built-in values ([`internal/config/defaults.yaml`](../../internal/config/defaults.yaml)) | every default | the file and the variables are overlaid on them key by key |
+| `ANIX_CONTROL_*` environment variables | per-key overrides | applied last; see [Environment Variables](#environment-variables) |
+| `data_dir/root.key` | the root key | not configuration: see [The Root Key](#the-root-key) |
+| `v2_system_config` | persisted runtime snapshot | written on startup from the loaded config and consumed by runtime services and `/admin/system` |
 
-Important:
+The file holds no secret. The root key seals what Control stores and
+derives the JWT secret and the identity signing key KEK.
 
-- local `go run` does not auto-load `.env` (template: [`.env.example`](../../.env.example))
-- `jwt.secret`, `app.api_token`, `admin.*`, database, cache, and frontend settings come from the config file or its `ANIX_CONTROL_*` override
-- the runtime selection resides in `forward_runtime`; startup writes exactly those values into `v2_system_config`
+## Operator Keys
 
-## Environment Variables
+An ordinary installation's whole file:
 
-Every scalar and list key can be set from the environment. The variable name
-is `ANIX_CONTROL_` plus the upper-cased YAML path joined with underscores:
+```yaml
+domain: panel.example.com
+```
 
-| YAML key | Variable |
-|------|------|
-| `database.password` | `ANIX_CONTROL_DATABASE_PASSWORD` |
-| `jwt.secret` | `ANIX_CONTROL_JWT_SECRET` |
-| `plugins.control_poll_interval` | `ANIX_CONTROL_PLUGINS_CONTROL_POLL_INTERVAL` |
-| `server.trusted_proxies` | `ANIX_CONTROL_SERVER_TRUSTED_PROXIES` (comma-separated) |
+| Key | Default | Meaning |
+|------|------|------|
+| `domain` | none; required in `tls.mode` `acme` | The panel's name: the web, API, subscription and install address (`https://<domain>`), the name of the certificate Control obtains, and the name nodes dial for gRPC. |
+| `tls.mode` | `acme` with `domain`, else `external` | `acme`: Control obtains its certificate and serves https on 443 and http on 80. `external`: a reverse proxy or CDN terminates TLS and sends plain http to `listen`. `files`: https on 443 with `tls.cert_file`. |
+| `tls.cert_file`, `tls.key_file` | empty | `external`: the node gRPC listener's certificate (publicly trusted, for the name nodes dial), reloaded when it changes. `files`: the web certificate. |
+| `listen` | `127.0.0.1:8080` | `external` only: the plain http address the reverse proxy sends the whole panel to. |
+| `grpc.port` | `50051` | The node gRPC port; nodes dial `<grpc.public_name or domain>:<grpc.port>`. |
+| `grpc.public_name` | `domain` | Only when `domain` sits behind a CDN: a DNS-only name that reaches this machine, for the nodes' mutual TLS. Not `grpc.host`, which was a listen address. |
+| `subscribe_path` | `s` | The subscription path (`/<subscribe_path>/:token`). Change it only to keep links already handed out working. |
+| `data_dir` | `/var/lib/anix-control` | The data directory: `root.key` (and, with the later milestones, the database and the backups). Absolute. |
 
-Rules:
+[Panel Address, Listeners And Certificates](#panel-address-listeners-and-certificates)
+describes the modes in detail.
 
-- Precedence: config file (or built-in defaults) first, then the environment.
-- `NAME_FILE=/path` reads the value from a file, for Docker and Kubernetes
-  secrets. Setting both `NAME` and `NAME_FILE` is an error.
+### Loading Rules
+
+1. The built-in values come first.
+2. The configuration file overrides them key by key: a key the file does not
+   set keeps its built-in value (the file no longer replaces the defaults as
+   a whole). A key set to nothing (`key:`) keeps it too.
+3. The `ANIX_CONTROL_*` variables override the file.
+
+The YAML is read strictly. An operator key is applied. A key of the
+[deprecated list](#deprecated-keys) is reported once, with where it is set
+and why, and is then either still read (its feature still exists and
+ignoring it would change what a running deployment does) or ignored (the
+built-in value stands). Any other key stops the start, naming the file, the
+line and the closest known key:
+
+```text
+config.yaml:3: unknown configuration key tls.mod; did you mean tls.mode? (docs/reference/configuration.md lists the keys)
+```
+
+While PostgreSQL is supported (until M2, P4), the `database` section keeps
+its 4.x meaning: with a configuration file only the file's `database` keys
+count (an empty `driver` is SQLite at `config/data/v2board.db` next to the
+file); without a file the container defaults apply (PostgreSQL on
+`127.0.0.1`). `app.subscribe_path` is read as `subscribe_path`; setting both
+to different values stops the start.
+
+### Environment Variables
+
+Every operator key has a variable: `ANIX_CONTROL_` plus the upper-cased path
+with `_` for `.` (`grpc.public_name` is `ANIX_CONTROL_GRPC_PUBLIC_NAME`);
+[`environment-variables.md`](environment-variables.md) lists them and
+`anix-control -print-env` prints them.
+
+- `NAME_FILE=/path` reads the value from a file (Docker and Kubernetes
+  secrets). Setting both `NAME` and `NAME_FILE` is an error.
 - Booleans accept `true`/`false`/`1`/`0`; lists are comma-separated.
-- Map-valued keys (`forward_runtime.nftables_ansible.environment` and
-  `extra_vars`) can only be set in the YAML file.
-- Unknown `ANIX_CONTROL_*` names are logged at startup, so typos are visible.
-- `anix-control -print-env` prints every variable with its type and built-in
-  default; secret defaults are never printed.
-- `server.trusted_proxies` (IPs or CIDRs) are the reverse proxies whose
-  `X-Forwarded-Proto`, `X-Forwarded-Host`, `X-Forwarded-For` and
-  `X-Real-IP` Control honours (`internal/requestorigin`); from any other peer
-  they are ignored. Unset means `127.0.0.1/32,::1/128`; an empty list trusts
-  none; a list replaces the default. See `docs/DEPLOYMENT.md` section 6.1.
+- The variables of deprecated keys keep working the way their keys do: still
+  read with the warning, or warned about and ignored (an ignored `NAME_FILE`
+  is never opened). Map-valued keys (`forward_runtime.nftables_ansible.environment`
+  and `extra_vars`) have no variable.
+- An unknown `ANIX_CONTROL_*` variable is reported with the closest known
+  one but does not stop the start: the environment is shared with other
+  tools.
 
-Without a config file, Control starts from the built-in defaults: `env:
-production`, no `domain` (so `tls.mode` external), the one plain listener on
-`127.0.0.1:8080` and `127.0.0.1:3000` (the container image sets
-`ANIX_CONTROL_SERVER_HOST=0.0.0.0`), PostgreSQL
-`anix_control@127.0.0.1:5432`, Control package execution enabled with private
-temporary host directories, gRPC disabled. In production `jwt.secret` is
-required and must not be a template value, or the server refuses to start.
+## The Root Key
+
+Control keeps one secret: 32 random bytes in `root.key` in the data
+directory (mode 0600, the directory 0700, owned by the user Control runs
+as). It is never logged, never part of a status answer, and backups must
+carry it with the database (P10).
+
+| Value | Where it comes from |
+|------|------|
+| the root key | `root.key` when it exists. Otherwise a configured `module_runtime.ca_kek` is adopted: the root key takes its value, so the CA keys, ACME keys, DNS credentials and join tokens it sealed stay readable, and the server writes it to `root.key`. Otherwise the server generates a new key at its first start. |
+| the module and forward link CA keys, DNS provider credentials | sealed with the root key (AES-256-GCM), as with `module_runtime.ca_kek` before |
+| node group join tokens | sealed with HKDF-SHA256(root key, `anixops node-group join token v1`), unchanged |
+| ACME account and certificate keys (`v5_acme_cache`) | sealed with HKDF-SHA256(root key, `anixops acme cache v1`), unchanged |
+| the JWT secret (`jwt.secret`) | a value the configuration sets (explicitly, not a template value) is adopted: recorded in `root.key` at the next start and kept until a rotation, also after the configuration drops it. Otherwise standard base64 of HKDF-SHA256(root key, `anixops jwt v1`). |
+| the identity signing key KEK (`identity.kek`) | adopted the same way; otherwise standard base64 of HKDF-SHA256(root key, `anixops identity kek v1`) |
+
+HKDF-SHA256 here is RFC 5869 without a salt, 32 bytes;
+`internal/rootkey` pins the outputs in tests so that a derivation cannot
+drift.
+
+**The file.** Text, versioned by its first field:
+
+```text
+# AnixOps Control root key. Keep it secret; back it up with the database.
+anixops-root-key: v1
+key: <the 32 bytes, standard base64>
+adopted-jwt-secret: <the adopted jwt.secret, standard base64 of its bytes>
+adopted-identity-kek: <the adopted identity.kek, standard base64 of its 32 bytes>
+```
+
+The two `adopted-` fields are optional; `#` lines and empty lines are
+ignored, and any other field, a repeated field or another version stops the
+start (a damaged file is restored from the backup, never regenerated).
+
+**Who writes it.** Only the server: at its first start, or when it adopts a
+legacy key, and when the configuration sets a `jwt.secret` or `identity.kek`
+that `root.key` does not record yet. Commands (`doctor`, `tls`, `agent`,
+`migrate`, ...) only read it, so one run as root never creates a file the
+service cannot read. A data directory the server cannot write stops the
+first start with what to do (`install -d -m 0700 -o <user> <dir>`, or set
+`data_dir`); with a configured `module_runtime.ca_kek` Control keeps using
+that key and warns instead. A `root.key` other users can read is restricted
+to 0600 (or the start stops). A configured `module_runtime.ca_kek` that is
+not the key in `root.key` stops the start: only one of them sealed the
+database.
+
+**Every start checks it.** After the schema migrations and before anything
+uses the key, Control opens the sealed key of every current and next module
+CA and forward link CA with it; a database without a CA must open its
+sealed ACME entry and a join token instead. A key that cannot open them
+stops the start:
+
+```text
+the root key /var/lib/anix-control/root.key does not open the module CA key stored in this database (...). The database was sealed with another root key: restore the root.key that belongs to this database (from the backup taken with it) into /var/lib/anix-control/root.key, or start with the database that belongs to this key.
+```
+
+`anix-control doctor` reports the same check (`root_key`) instead of
+stopping.
+
+## Checking And Rewriting A Configuration
+
+```bash
+anix-control config check [--file /etc/anix-control/config.yaml]
+anix-control config rewrite --in <old> --out <new> [--data-dir <dir>] [--force]
+```
+
+`config check` loads the file and the `ANIX_CONTROL_*` variables the way the
+server does, prints every deprecated key with what happens to it, the
+resulting layout and what the next start does with the root key, and exits
+1 when the server would refuse to start. It opens no database.
+
+`config rewrite` turns an earlier file into the operator keys, the way an
+upgrade does (`docs/UPGRADE.md`, "Configuration rewrite on upgrade"):
+
+- `domain` from `domain`, else the host of `agent_install.public_url`, else
+  `tls.domain`;
+- `grpc.tls_cert_file` and `grpc.tls_key_file` become `tls.cert_file` and
+  `tls.key_file` with `tls.mode: external` when the old file did not use
+  ACME (a 4.x file: no `domain`, no `tls.mode`); a 4.x file that served
+  https itself (`tls.enable` with `tls.cert_file`) becomes `tls.mode: files`;
+- the host of `agent_install.grpc_target` becomes `grpc.public_name` when it
+  is not `domain`, so nodes keep dialling the same name;
+- `grpc.port`, `subscribe_path` (or `app.subscribe_path`), `listen` and
+  `data_dir` only when they are not the defaults;
+- the `database` section is kept while PostgreSQL is supported, a relative
+  SQLite path made absolute, so the panel keeps its database; so are a
+  closed or restricted registration (`auth.registration.*`) and a cluster
+  name other than `default` (`module_runtime.cluster`), while they are read;
+- every other key is dropped and printed with the reason.
+
+With `--out` equal to `--in` the old file is kept as
+`<name>.bak-<UTC time>` (its mode and owner kept). An existing other
+`--out` is refused. `module_runtime.ca_kek` and `identity.kek` may be dropped
+only when `<data_dir>/root.key` holds them (start the new Control once with
+the old file: it adopts them); otherwise nothing is written, unless
+`--force`. Dropping `jwt.secret` that `root.key` does not hold signs every
+user out once.
+
+## Deprecated Keys
+
+Every key of the 4.2 configuration that is not an operator key, and the
+sections older templates carried. "still read" keeps working, with the
+warning, until the milestone that removes the key's feature; "ignored" is
+warned about and has no effect (the built-in value, today's default,
+stands). The list is `internal/config/deprecated_keys.yaml`.
+
+<!-- BEGIN GENERATED: deprecated configuration keys -->
+| Key | Variable | Status | Removed in | Why |
+|-----|----------|--------|------------|-----|
+| `admin.email` | `ANIX_CONTROL_ADMIN_EMAIL` | still read | M2 (P9) | creates the first administrator on an empty database until the one-time claim link replaces it |
+| `admin.password` | `ANIX_CONTROL_ADMIN_PASSWORD` | still read | M2 (P9) | creates the first administrator on an empty database until the one-time claim link replaces it; keep it out of the file once an administrator exists |
+| `agent_control.legacy_sunset` | `ANIX_CONTROL_AGENT_CONTROL_LEGACY_SUNSET` | ignored | M5 | the legacy Agent transports send no Sunset date; Agents enroll (agent_control.mtls is fixed to required) |
+| `agent_control.mtls` | `ANIX_CONTROL_AGENT_CONTROL_MTLS` | ignored | M5 | fixed to required, the 4.2 default; the other modes are removed with the legacy Agent transports |
+| `agent_install.agent_version` | `ANIX_CONTROL_AGENT_INSTALL_AGENT_VERSION` | still read | M4 (S9) | pins the Agent release nodes install until Control carries its Agent release manifest |
+| `agent_install.artifact_dir` | `ANIX_CONTROL_AGENT_INSTALL_ARTIFACT_DIR` | still read | M4 (N30) | serves Agent releases from this directory until Control downloads and verifies them itself |
+| `agent_install.cn_mirror_url` | `ANIX_CONTROL_AGENT_INSTALL_CN_MIRROR_URL` | still read | M4 (N30) | the mainland download mirror of Agent releases, until Control serves the releases itself |
+| `agent_install.grpc_target` | `ANIX_CONTROL_AGENT_INSTALL_GRPC_TARGET` | still read | M2 (P11) | overrides the gRPC address nodes dial, which is derived from grpc.public_name (or domain) and grpc.port; use `grpc.public_name` |
+| `agent_install.public_url` | `ANIX_CONTROL_AGENT_INSTALL_PUBLIC_URL` | still read | M2 (P11) | overrides the panel address nodes use, which is https://<domain>; config rewrite turns its host into domain; use `domain` |
+| `agent_install.signature_file` | `ANIX_CONTROL_AGENT_INSTALL_SIGNATURE_FILE` | still read | M2 (P11) | the release signature of the Agent install script, until the signature is built into the binary |
+| `alerts.ca_expiry_days` | `ANIX_CONTROL_ALERTS_CA_EXPIRY_DAYS` | ignored | M2 (P8) | a built-in value (60 days) |
+| `alerts.check_interval` | `ANIX_CONTROL_ALERTS_CHECK_INTERVAL` | ignored | M2 (P8) | a built-in value (15m) |
+| `alerts.enabled` | `ANIX_CONTROL_ALERTS_ENABLED` | ignored | M2 (P8) | the alert monitor always runs |
+| `alerts.leaf_expiry_days` | `ANIX_CONTROL_ALERTS_LEAF_EXPIRY_DAYS` | ignored | M2 (P8) | a built-in value (14 days) |
+| `alerts.phase_stuck_after` | `ANIX_CONTROL_ALERTS_PHASE_STUCK_AFTER` | ignored | M2 (P8) | a built-in value (72h) |
+| `alerts.renotify_interval` | `ANIX_CONTROL_ALERTS_RENOTIFY_INTERVAL` | ignored | M2 (P8) | a built-in value (24h) |
+| `app.api_token` | `ANIX_CONTROL_APP_API_TOKEN` | still read | M5 (N9) | the legacy shared token of /flow/upload and the internal v2 routes, removed with them; administrators use admin API tokens |
+| `app.edition` | `ANIX_CONTROL_APP_EDITION` | ignored | M2 (P6) | there are no editions; orders, payments and affiliate are built in |
+| `app.name` | `ANIX_CONTROL_APP_NAME` | ignored | M2 (P8) | nothing reads it |
+| `app.subscribe_path` | `ANIX_CONTROL_APP_SUBSCRIBE_PATH` | still read | M5 | renamed; config rewrite moves it to subscribe_path; use `subscribe_path` |
+| `app.traffic_log_enable` | `ANIX_CONTROL_APP_TRAFFIC_LOG_ENABLE` | ignored | M2 (P8) | nothing reads it |
+| `app.version` | `ANIX_CONTROL_APP_VERSION` | ignored | M2 (P8) | nothing reads it; the version is the binary's |
+| `auth.login_rate_limit.enabled` | `ANIX_CONTROL_AUTH_LOGIN_RATE_LIMIT_ENABLED` | ignored | M2 (P8) | login rate limiting is always on |
+| `auth.login_rate_limit.lockout_seconds` | `ANIX_CONTROL_AUTH_LOGIN_RATE_LIMIT_LOCKOUT_SECONDS` | ignored | M2 (P8) | a built-in value (600) |
+| `auth.login_rate_limit.max_attempts` | `ANIX_CONTROL_AUTH_LOGIN_RATE_LIMIT_MAX_ATTEMPTS` | ignored | M2 (P8) | a built-in value (6) |
+| `auth.login_rate_limit.window_seconds` | `ANIX_CONTROL_AUTH_LOGIN_RATE_LIMIT_WINDOW_SECONDS` | ignored | M2 (P8) | a built-in value (300) |
+| `auth.register_rate_limit.enabled` | `ANIX_CONTROL_AUTH_REGISTER_RATE_LIMIT_ENABLED` | ignored | M2 (P8) | registration rate limiting is always on |
+| `auth.register_rate_limit.lockout_seconds` | `ANIX_CONTROL_AUTH_REGISTER_RATE_LIMIT_LOCKOUT_SECONDS` | ignored | M2 (P8) | a built-in value (3600) |
+| `auth.register_rate_limit.max_attempts` | `ANIX_CONTROL_AUTH_REGISTER_RATE_LIMIT_MAX_ATTEMPTS` | ignored | M2 (P8) | a built-in value (5) |
+| `auth.register_rate_limit.window_seconds` | `ANIX_CONTROL_AUTH_REGISTER_RATE_LIMIT_WINDOW_SECONDS` | ignored | M2 (P8) | a built-in value (3600) |
+| `auth.registration.allowed_email_domains` | `ANIX_CONTROL_AUTH_REGISTRATION_ALLOWED_EMAIL_DOMAINS` | still read | M3 (N35) | the registration policy becomes an administrator setting; until then ignoring it would open registration to every address |
+| `auth.registration.blocked_email_domains` | `ANIX_CONTROL_AUTH_REGISTRATION_BLOCKED_EMAIL_DOMAINS` | still read | M3 (N35) | the registration policy becomes an administrator setting; until then ignoring it would open registration to every address |
+| `auth.registration.enabled` | `ANIX_CONTROL_AUTH_REGISTRATION_ENABLED` | still read | M3 (N35) | the registration policy becomes an administrator setting; until then ignoring it would reopen closed registration |
+| `auth.registration.require_invite` | `ANIX_CONTROL_AUTH_REGISTRATION_REQUIRE_INVITE` | still read | M3 (N35) | the registration policy becomes an administrator setting; until then ignoring it would drop the invite requirement |
+| `cache.driver` | `ANIX_CONTROL_CACHE_DRIVER` | ignored | M2 (P8) | nothing reads it; the cache is in memory |
+| `cache.redis_db` | `ANIX_CONTROL_CACHE_REDIS_DB` | ignored | M2 (P8) | nothing reads it; the cache is in memory |
+| `cache.redis_host` | `ANIX_CONTROL_CACHE_REDIS_HOST` | ignored | M2 (P8) | nothing reads it; the cache is in memory |
+| `cache.redis_password` | `ANIX_CONTROL_CACHE_REDIS_PASSWORD` | ignored | M2 (P8) | nothing reads it; the cache is in memory |
+| `cache.redis_port` | `ANIX_CONTROL_CACHE_REDIS_PORT` | ignored | M2 (P8) | nothing reads it; the cache is in memory |
+| `database.conn_max_lifetime` | `ANIX_CONTROL_DATABASE_CONN_MAX_LIFETIME` | still read | M2 (P4) | the database is SQLite in the data directory after PostgreSQL support ends |
+| `database.database` | `ANIX_CONTROL_DATABASE_DATABASE` | still read | M2 (P4) | the database is SQLite in the data directory after PostgreSQL support ends |
+| `database.driver` | `ANIX_CONTROL_DATABASE_DRIVER` | still read | M2 (P4) | selects SQLite or PostgreSQL until PostgreSQL support ends; ignoring it would switch databases |
+| `database.dsn` | `ANIX_CONTROL_DATABASE_DSN` | still read | M2 (P4) | the database is SQLite in the data directory after PostgreSQL support ends |
+| `database.host` | `ANIX_CONTROL_DATABASE_HOST` | still read | M2 (P4) | the database is SQLite in the data directory after PostgreSQL support ends |
+| `database.log_level` | `ANIX_CONTROL_DATABASE_LOG_LEVEL` | still read | M2 (P4) | the database is SQLite in the data directory after PostgreSQL support ends |
+| `database.max_idle_conns` | `ANIX_CONTROL_DATABASE_MAX_IDLE_CONNS` | still read | M2 (P4) | the database is SQLite in the data directory after PostgreSQL support ends |
+| `database.max_open_conns` | `ANIX_CONTROL_DATABASE_MAX_OPEN_CONNS` | still read | M2 (P4) | the database is SQLite in the data directory after PostgreSQL support ends |
+| `database.password` | `ANIX_CONTROL_DATABASE_PASSWORD` | still read | M2 (P4) | the database is SQLite in the data directory after PostgreSQL support ends |
+| `database.port` | `ANIX_CONTROL_DATABASE_PORT` | still read | M2 (P4) | the database is SQLite in the data directory after PostgreSQL support ends |
+| `database.sslmode` | `ANIX_CONTROL_DATABASE_SSLMODE` | still read | M2 (P4) | the database is SQLite in the data directory after PostgreSQL support ends |
+| `database.timezone` | `ANIX_CONTROL_DATABASE_TIMEZONE` | still read | M2 (P4) | the database is SQLite in the data directory after PostgreSQL support ends |
+| `database.username` | `ANIX_CONTROL_DATABASE_USERNAME` | still read | M2 (P4) | the database is SQLite in the data directory after PostgreSQL support ends |
+| `env` | `ANIX_CONTROL_ENV` | ignored | M2 (P8) | Control always runs as production (its only effect was requiring jwt.secret, which is now derived); start a development instance with -debug |
+| `forward.anixops_experimental` | `ANIX_CONTROL_FORWARD_ANIXOPS_EXPERIMENTAL` | ignored | M2 (P8) | the experimental AnixOps engine stays off (a built-in value) |
+| `forward_runtime.backend` | `ANIX_CONTROL_FORWARD_RUNTIME_BACKEND` | still read | M5 (N5) | selects the flux forward runtime's backend until the runtime is removed |
+| `forward_runtime.clean_agent.action_timeout_seconds` | `ANIX_CONTROL_FORWARD_RUNTIME_CLEAN_AGENT_ACTION_TIMEOUT_SECONDS` | still read | M5 (N5) | the flux forward runtime, removed with it |
+| `forward_runtime.clean_agent.heartbeat_interval_seconds` | `ANIX_CONTROL_FORWARD_RUNTIME_CLEAN_AGENT_HEARTBEAT_INTERVAL_SECONDS` | still read | M5 (N5) | the flux forward runtime, removed with it |
+| `forward_runtime.clean_agent.legacy_bridge_enabled` | `ANIX_CONTROL_FORWARD_RUNTIME_CLEAN_AGENT_LEGACY_BRIDGE_ENABLED` | still read | M5 (N5) | the flux forward runtime, removed with it |
+| `forward_runtime.clean_agent.public_url` | `ANIX_CONTROL_FORWARD_RUNTIME_CLEAN_AGENT_PUBLIC_URL` | ignored | M2 (P8) | nothing reads it |
+| `forward_runtime.clean_agent.token_expire_seconds` | `ANIX_CONTROL_FORWARD_RUNTIME_CLEAN_AGENT_TOKEN_EXPIRE_SECONDS` | ignored | M2 (P8) | nothing reads it |
+| `forward_runtime.gost_stats.error_log_interval` | `ANIX_CONTROL_FORWARD_RUNTIME_GOST_STATS_ERROR_LOG_INTERVAL` | still read | M5 (N5) | the flux forward runtime, removed with it |
+| `forward_runtime.gost_stats.idle_poll_interval` | `ANIX_CONTROL_FORWARD_RUNTIME_GOST_STATS_IDLE_POLL_INTERVAL` | still read | M5 (N5) | the flux forward runtime, removed with it |
+| `forward_runtime.gost_stats.poll_interval` | `ANIX_CONTROL_FORWARD_RUNTIME_GOST_STATS_POLL_INTERVAL` | still read | M5 (N5) | the flux forward runtime, removed with it |
+| `forward_runtime.iptables_ansible.*` | none | ignored | M2 (P8) | never a key (templates up to 4.2 carried this section); the iptables backend runs with forward_runtime.nftables_ansible |
+| `forward_runtime.jobs.batch_size` | `ANIX_CONTROL_FORWARD_RUNTIME_JOBS_BATCH_SIZE` | still read | M5 (N5) | the flux forward runtime, removed with it |
+| `forward_runtime.jobs.error_log_interval` | `ANIX_CONTROL_FORWARD_RUNTIME_JOBS_ERROR_LOG_INTERVAL` | still read | M5 (N5) | the flux forward runtime, removed with it |
+| `forward_runtime.jobs.idle_poll_interval` | `ANIX_CONTROL_FORWARD_RUNTIME_JOBS_IDLE_POLL_INTERVAL` | still read | M5 (N5) | the flux forward runtime, removed with it |
+| `forward_runtime.jobs.poll_interval` | `ANIX_CONTROL_FORWARD_RUNTIME_JOBS_POLL_INTERVAL` | still read | M5 (N5) | the flux forward runtime, removed with it |
+| `forward_runtime.jobs.timeout_seconds` | `ANIX_CONTROL_FORWARD_RUNTIME_JOBS_TIMEOUT_SECONDS` | still read | M5 (N5) | the flux forward runtime, removed with it |
+| `forward_runtime.latency.concurrency` | `ANIX_CONTROL_FORWARD_RUNTIME_LATENCY_CONCURRENCY` | ignored | M2 (P8) | a built-in value (16) |
+| `forward_runtime.latency.dial_timeout` | `ANIX_CONTROL_FORWARD_RUNTIME_LATENCY_DIAL_TIMEOUT` | ignored | M2 (P8) | a built-in value (3s) |
+| `forward_runtime.latency.dials` | `ANIX_CONTROL_FORWARD_RUNTIME_LATENCY_DIALS` | ignored | M2 (P8) | a built-in value (5) |
+| `forward_runtime.latency.error_log_interval` | `ANIX_CONTROL_FORWARD_RUNTIME_LATENCY_ERROR_LOG_INTERVAL` | ignored | M2 (P8) | a built-in value (5m) |
+| `forward_runtime.latency.idle_poll_interval` | `ANIX_CONTROL_FORWARD_RUNTIME_LATENCY_IDLE_POLL_INTERVAL` | ignored | M2 (P8) | a built-in value (60s) |
+| `forward_runtime.latency.poll_interval` | `ANIX_CONTROL_FORWARD_RUNTIME_LATENCY_POLL_INTERVAL` | ignored | M2 (P8) | a built-in value (60s) |
+| `forward_runtime.latency.retention_days` | `ANIX_CONTROL_FORWARD_RUNTIME_LATENCY_RETENTION_DAYS` | ignored | M2 (P8) | a built-in value (7) |
+| `forward_runtime.nftables_ansible.apply_playbook` | `ANIX_CONTROL_FORWARD_RUNTIME_NFTABLES_ANSIBLE_APPLY_PLAYBOOK` | still read | M5 (N5) | the flux forward runtime, removed with it |
+| `forward_runtime.nftables_ansible.become` | `ANIX_CONTROL_FORWARD_RUNTIME_NFTABLES_ANSIBLE_BECOME` | still read | M5 (N5) | the flux forward runtime, removed with it |
+| `forward_runtime.nftables_ansible.command` | `ANIX_CONTROL_FORWARD_RUNTIME_NFTABLES_ANSIBLE_COMMAND` | still read | M5 (N5) | the flux forward runtime, removed with it |
+| `forward_runtime.nftables_ansible.environment` | none (YAML only) | still read | M5 (N5) | the flux forward runtime, removed with it |
+| `forward_runtime.nftables_ansible.extra_vars` | none (YAML only) | still read | M5 (N5) | the flux forward runtime, removed with it |
+| `forward_runtime.nftables_ansible.inventory` | `ANIX_CONTROL_FORWARD_RUNTIME_NFTABLES_ANSIBLE_INVENTORY` | still read | M5 (N5) | the flux forward runtime, removed with it |
+| `forward_runtime.nftables_ansible.remove_playbook` | `ANIX_CONTROL_FORWARD_RUNTIME_NFTABLES_ANSIBLE_REMOVE_PLAYBOOK` | still read | M5 (N5) | the flux forward runtime, removed with it |
+| `forward_runtime.nftables_ansible.target_pattern` | `ANIX_CONTROL_FORWARD_RUNTIME_NFTABLES_ANSIBLE_TARGET_PATTERN` | still read | M5 (N5) | the flux forward runtime, removed with it |
+| `forward_runtime.nftables_ansible.timeout_seconds` | `ANIX_CONTROL_FORWARD_RUNTIME_NFTABLES_ANSIBLE_TIMEOUT_SECONDS` | still read | M5 (N5) | the flux forward runtime, removed with it |
+| `forward_runtime.nftables_ansible.working_dir` | `ANIX_CONTROL_FORWARD_RUNTIME_NFTABLES_ANSIBLE_WORKING_DIR` | still read | M5 (N5) | the flux forward runtime, removed with it |
+| `forward_runtime.nodex.base_url` | `ANIX_CONTROL_FORWARD_RUNTIME_NODEX_BASE_URL` | still read | M5 (N5) | the flux forward runtime, removed with it |
+| `forward_runtime.nodex.timeout_seconds` | `ANIX_CONTROL_FORWARD_RUNTIME_NODEX_TIMEOUT_SECONDS` | still read | M5 (N5) | the flux forward runtime, removed with it |
+| `forward_runtime.nodex.token` | `ANIX_CONTROL_FORWARD_RUNTIME_NODEX_TOKEN` | still read | M5 (N5) | the flux forward runtime, removed with it |
+| `forward_runtime.nodex_mode` | `ANIX_CONTROL_FORWARD_RUNTIME_NODEX_MODE` | still read | M5 (N5) | selects the flux forward runtime's backend until the runtime is removed |
+| `frontend.enable` | `ANIX_CONTROL_FRONTEND_ENABLE` | still read | M2 (P11) | serves the web app from frontend.path until the web app is built into the binary |
+| `frontend.path` | `ANIX_CONTROL_FRONTEND_PATH` | still read | M2 (P11) | the web app's directory until the web app is built into the binary |
+| `frontend.port` | `ANIX_CONTROL_FRONTEND_PORT` | still read | M2 (P11) | a second plain listener of tls.mode external while listen is unset; config rewrite does not carry it, point the reverse proxy at listen; use `listen` |
+| `grpc.api_token` | `ANIX_CONTROL_GRPC_API_TOKEN` | still read | M5 (N9) | the legacy administrator token of the v2board gRPC services, removed with them |
+| `grpc.enabled` | `ANIX_CONTROL_GRPC_ENABLED` | still read | M2 (P11) | turns the gRPC listener on without domain; with domain it always runs |
+| `grpc.host` | `ANIX_CONTROL_GRPC_HOST` | still read | M2 (P11) | the gRPC listener's address, until it listens on every address |
+| `grpc.tls_cert_file` | `ANIX_CONTROL_GRPC_TLS_CERT_FILE` | still read | M2 (P11) | the gRPC listener's own certificate; config rewrite turns it into tls.cert_file with tls.mode external; use `tls.cert_file` |
+| `grpc.tls_key_file` | `ANIX_CONTROL_GRPC_TLS_KEY_FILE` | still read | M2 (P11) | the gRPC listener's own certificate key; config rewrite turns it into tls.key_file with tls.mode external; use `tls.key_file` |
+| `identity.kek` | `ANIX_CONTROL_IDENTITY_KEK` | still read | M5 | derived from the root key; a set value is adopted into root.key at the next start and stays in use until a rotation, so the file need not keep it |
+| `jwt.expire` | `ANIX_CONTROL_JWT_EXPIRE` | ignored | M2 (P8) | a built-in value (86400 seconds) |
+| `jwt.secret` | `ANIX_CONTROL_JWT_SECRET` | still read | M5 | derived from the root key; a set value is adopted into root.key at the next start and stays in use until a rotation, so the file need not keep it |
+| `log.file_path` | `ANIX_CONTROL_LOG_FILE_PATH` | ignored | M2 (P8) | nothing reads it; Control logs to standard output |
+| `log.format` | `ANIX_CONTROL_LOG_FORMAT` | still read | M2 (P11) | JSON lines for container log collectors, until the container files are removed |
+| `log.level` | `ANIX_CONTROL_LOG_LEVEL` | still read | M2 (P11) | the JSON log level, until the container files are removed; -debug turns on debug logging |
+| `log.max_age` | `ANIX_CONTROL_LOG_MAX_AGE` | ignored | M2 (P8) | nothing reads it |
+| `log.max_backups` | `ANIX_CONTROL_LOG_MAX_BACKUPS` | ignored | M2 (P8) | nothing reads it |
+| `log.max_size` | `ANIX_CONTROL_LOG_MAX_SIZE` | ignored | M2 (P8) | nothing reads it |
+| `log.output` | `ANIX_CONTROL_LOG_OUTPUT` | ignored | M2 (P8) | nothing reads it; Control logs to standard output |
+| `module_runtime.bind_timeout` | `ANIX_CONTROL_MODULE_RUNTIME_BIND_TIMEOUT` | still read | M2 (P4) | the remote module runtime, removed with PostgreSQL support |
+| `module_runtime.ca_kek` | `ANIX_CONTROL_MODULE_RUNTIME_CA_KEK` | still read | M5 | the root key; adopted into root.key in data_dir at the next start, after which it must match that file and can be removed |
+| `module_runtime.cert_file` | `ANIX_CONTROL_MODULE_RUNTIME_CERT_FILE` | still read | M2 (P4) | the remote module runtime, removed with PostgreSQL support |
+| `module_runtime.cert_lifetime` | `ANIX_CONTROL_MODULE_RUNTIME_CERT_LIFETIME` | still read | M2 (P4) | the remote module runtime, removed with PostgreSQL support |
+| `module_runtime.cluster` | `ANIX_CONTROL_MODULE_RUNTIME_CLUSTER` | still read | M2 (P4) | names the cluster in every module and Agent identity; ignoring a set value would change the identities of enrolled Agents |
+| `module_runtime.database_host` | `ANIX_CONTROL_MODULE_RUNTIME_DATABASE_HOST` | still read | M2 (P4) | the remote module runtime, removed with PostgreSQL support |
+| `module_runtime.enabled` | `ANIX_CONTROL_MODULE_RUNTIME_ENABLED` | still read | M2 (P4) | the remote module runtime, removed with PostgreSQL support |
+| `module_runtime.key_file` | `ANIX_CONTROL_MODULE_RUNTIME_KEY_FILE` | still read | M2 (P4) | the remote module runtime, removed with PostgreSQL support |
+| `module_runtime.listen` | `ANIX_CONTROL_MODULE_RUNTIME_LISTEN` | still read | M2 (P4) | the remote module runtime, removed with PostgreSQL support |
+| `module_runtime.pki` | `ANIX_CONTROL_MODULE_RUNTIME_PKI` | still read | M2 (P4) | the remote module runtime, removed with PostgreSQL support |
+| `module_runtime.trust_bundle_file` | `ANIX_CONTROL_MODULE_RUNTIME_TRUST_BUNDLE_FILE` | still read | M2 (P4) | the remote module runtime, removed with PostgreSQL support |
+| `package_routes.default_mode` | `ANIX_CONTROL_PACKAGE_ROUTES_DEFAULT_MODE` | ignored | M2 (P7) | route modes come only from the rehearsed list (config/package-route-defaults.json) |
+| `plugins.control_execution_enabled` | `ANIX_CONTROL_PLUGINS_CONTROL_EXECUTION_ENABLED` | ignored | M2 (P7) | the built-in packages always run; Control starts their hosts at every start |
+| `plugins.control_host_artifact_dir` | `ANIX_CONTROL_PLUGINS_CONTROL_HOST_ARTIFACT_DIR` | still read | M2 (P11) | where package hosts' files are kept, until the systemd unit gives Control its directories |
+| `plugins.control_host_max_request_bytes` | `ANIX_CONTROL_PLUGINS_CONTROL_HOST_MAX_REQUEST_BYTES` | ignored | M2 (P8) | a built-in value (1 MiB) |
+| `plugins.control_host_max_response_bytes` | `ANIX_CONTROL_PLUGINS_CONTROL_HOST_MAX_RESPONSE_BYTES` | ignored | M2 (P8) | a built-in value (1 MiB) |
+| `plugins.control_host_request_timeout` | `ANIX_CONTROL_PLUGINS_CONTROL_HOST_REQUEST_TIMEOUT` | ignored | M2 (P8) | a built-in value (30s) |
+| `plugins.control_host_runtime_dir` | `ANIX_CONTROL_PLUGINS_CONTROL_HOST_RUNTIME_DIR` | still read | M2 (P11) | where package hosts' sockets live, until the systemd unit gives Control its runtime directory |
+| `plugins.control_host_startup_timeout` | `ANIX_CONTROL_PLUGINS_CONTROL_HOST_STARTUP_TIMEOUT` | ignored | M2 (P8) | a built-in value (5s) |
+| `plugins.control_host_websocket_session_timeout` | `ANIX_CONTROL_PLUGINS_CONTROL_HOST_WEBSOCKET_SESSION_TIMEOUT` | ignored | M2 (P8) | a built-in value (24h) |
+| `plugins.control_poll_interval` | `ANIX_CONTROL_PLUGINS_CONTROL_POLL_INTERVAL` | ignored | M2 (P8) | a built-in value (5s) |
+| `plugins.dispatch_enabled` | `ANIX_CONTROL_PLUGINS_DISPATCH_ENABLED` | ignored | M2 (P7) | Agent plugin dispatch is off until the Agent release manifest brings the Agent plugins (M4) |
+| `plugins.dispatch_poll_interval` | `ANIX_CONTROL_PLUGINS_DISPATCH_POLL_INTERVAL` | ignored | M2 (P7) | Agent plugin dispatch is off until the Agent release manifest brings the Agent plugins (M4) |
+| `plugins.identity_bootstrap_package_dir` | `ANIX_CONTROL_PLUGINS_IDENTITY_BOOTSTRAP_PACKAGE_DIR` | still read | M2 (P11) | imports identity-platform into a development binary that embeds no packages; a release binary ignores it |
+| `plugins.official_public_key` | `ANIX_CONTROL_PLUGINS_OFFICIAL_PUBLIC_KEY` | still read | M2 (P11) | the key the built-in packages verify against (development builds sign with their own), until the package index carries it |
+| `plugins.topology_execution_enabled` | `ANIX_CONTROL_PLUGINS_TOPOLOGY_EXECUTION_ENABLED` | ignored | M2 (P7) | topology deployment execution is off until the Agent release manifest brings the Agent plugins (M4) |
+| `plugins.topology_poll_interval` | `ANIX_CONTROL_PLUGINS_TOPOLOGY_POLL_INTERVAL` | ignored | M2 (P7) | topology deployment execution is off until the Agent release manifest brings the Agent plugins (M4) |
+| `server.cors.allow_credentials` | `ANIX_CONTROL_SERVER_CORS_ALLOW_CREDENTIALS` | ignored | M2 (P8) | a built-in value (false) |
+| `server.cors.allowed_headers` | `ANIX_CONTROL_SERVER_CORS_ALLOWED_HEADERS` | ignored | M2 (P8) | a built-in value (Content-Type, Authorization, X-API-Key) |
+| `server.cors.allowed_methods` | `ANIX_CONTROL_SERVER_CORS_ALLOWED_METHODS` | ignored | M2 (P8) | a built-in value (GET, POST, PUT, DELETE, OPTIONS, PATCH) |
+| `server.cors.allowed_origins` | `ANIX_CONTROL_SERVER_CORS_ALLOWED_ORIGINS` | ignored | M2 (P8) | a built-in value (any origin, without credentials) |
+| `server.cors.max_age` | `ANIX_CONTROL_SERVER_CORS_MAX_AGE` | ignored | M2 (P8) | a built-in value (86400) |
+| `server.host` | `ANIX_CONTROL_SERVER_HOST` | still read | M2 (P11) | the plain listener of tls.mode external while listen is unset; config rewrite does not carry it, set listen; use `listen` |
+| `server.mode` | `ANIX_CONTROL_SERVER_MODE` | ignored | M2 (P8) | release mode is built in; start a development instance with -debug |
+| `server.port` | `ANIX_CONTROL_SERVER_PORT` | still read | M2 (P11) | the plain listener of tls.mode external while listen is unset; config rewrite does not carry it, set listen; use `listen` |
+| `server.read_timeout` | `ANIX_CONTROL_SERVER_READ_TIMEOUT` | ignored | M2 (P8) | a built-in value (30 seconds) |
+| `server.shutdown_drain_delay` | `ANIX_CONTROL_SERVER_SHUTDOWN_DRAIN_DELAY` | ignored | M2 (P8) | a built-in value (5s) |
+| `server.trusted_proxies` | `ANIX_CONTROL_SERVER_TRUSTED_PROXIES` | still read | M2 (P11) | the reverse proxies of a container deployment; afterwards tls.mode acme trusts none and tls.mode external trusts loopback |
+| `server.write_timeout` | `ANIX_CONTROL_SERVER_WRITE_TIMEOUT` | ignored | M2 (P8) | a built-in value (30 seconds) |
+| `tls.domain` | `ANIX_CONTROL_TLS_DOMAIN` | ignored | M2 (P8) | it was only logged; config rewrite turns it into domain; use `domain` |
+| `tls.enable` | `ANIX_CONTROL_TLS_ENABLE` | still read | M2 (P11) | not used (TLS follows tls.mode); read only to refuse the 4.x combination of tls.enable, tls.cert_file and no tls.mode, which served https on the web port |
+<!-- END GENERATED -->
 
 ## Panel Address, Listeners And Certificates
 
@@ -69,7 +357,7 @@ tls:
   mode: ""                   # acme | files | external; empty: acme with domain, external without
   cert_file: ""              # files: the web certificate; external: the gRPC certificate
   key_file: ""
-listen: ""                   # external only: the plain http address; empty: server.host:server.port
+listen: ""                   # external only: the plain http address; empty: 127.0.0.1:8080
 grpc:
   port: 50051                # node gRPC port
   public_name: ""            # the name nodes dial when domain is behind a CDN; empty: domain
@@ -77,10 +365,10 @@ grpc:
 
 | Key | Default | Meaning |
 |------|------|------|
-| `domain` (`ANIX_CONTROL_DOMAIN`) | empty | The panel's DNS name (no scheme, port or address). The install script is `https://<domain>/install.sh`, the ACME certificate's name in `acme` mode and the gRPC name unless `grpc.public_name` is set. With it the gRPC listener is always on. The older `tls.domain` is not read (it was only ever logged). |
+| `domain` (`ANIX_CONTROL_DOMAIN`) | empty | The panel's DNS name (no scheme, port or address). The install script is `https://<domain>/install.sh`, the ACME certificate's name in `acme` mode and the gRPC name unless `grpc.public_name` is set. With it the gRPC listener is always on. The older `tls.domain` is ignored (it was only ever logged); `config rewrite` turns it into `domain`. |
 | `tls.mode` (`ANIX_CONTROL_TLS_MODE`) | empty | `acme`: Control obtains and renews a publicly trusted certificate for `domain` and serves https on `:443` and http on `:80` (the ACME HTTP-01 answers; everything else is redirected to https). `files`: https on `:443` with `tls.cert_file`/`tls.key_file`, reloaded when they change; `:80` redirects. `external`: a CDN or a reverse proxy terminates TLS and sends plain http to `listen`. Empty: `acme` with `domain`, `external` without. |
 | `tls.cert_file`, `tls.key_file` | empty | PEM certificate chain and key. `files` mode: the web certificate (and the gRPC one for the same name). `external` mode: the gRPC listener's certificate, instead of one obtained over ACME. Both or neither. |
-| `listen` (`ANIX_CONTROL_LISTEN`) | empty | `external` mode's plain http address (`host:port`; an address, not a name). Loopback is the safe choice: only the proxy on this machine reaches it. Empty: `server.host:server.port` (`127.0.0.1:8080` built in), and with `frontend.enable` also `server.host:frontend.port`, one handler on both (the legacy two-port layout; there is no proxy between them any more). An empty `server.host` is loopback. |
+| `listen` (`ANIX_CONTROL_LISTEN`) | empty | `external` mode's plain http address (`host:port`; an address, not a name). Loopback is the safe choice: only the proxy on this machine reaches it. Empty: `127.0.0.1:8080`. While they are still read (until M2, P11), the deprecated `server.host`, `server.port` and `frontend.port` place it instead when they are set: `server.host:server.port` (an empty host is loopback, port 0 is 8080), plus `server.host:frontend.port` with one handler on both. |
 | `grpc.port` (`ANIX_CONTROL_GRPC_PORT`) | `50051` | Node gRPC port. `/install/agent.env` hands nodes `<gRPC name>:<grpc.port>`. |
 | `grpc.public_name` (`ANIX_CONTROL_GRPC_PUBLIC_NAME`) | empty (`domain`) | The DNS-only name nodes dial for gRPC when `domain` is proxied by a CDN (the CDN mode below). Control obtains a publicly trusted certificate for it over ACME. |
 
@@ -118,10 +406,9 @@ retried after 1, 5 and 15 minutes, then hourly three times, then every 6
 hours, and Control never makes more than three requests per name within an
 hour, manual retries included. The account key, the certificates and their
 keys live in the database table `v5_acme_cache` (the schema migration
-`0003_acme_cache` creates it), sealed with `module_runtime.ca_kek` (which
-ACME therefore needs: without it the server refuses to start in `acme`
-mode), so a restore or a move to another machine does not request them
-again. No HSTS header is sent over Control's own TLS:
+`0003_acme_cache` creates it), sealed with the [root key](#the-root-key),
+so a restore or a move to another machine (with `root.key`) does not
+request them again. No HSTS header is sent over Control's own TLS:
 while the fallback is served a browser that remembered HSTS could not open
 the panel at all. No e-mail address is registered: the panel's own expiry
 alerts replace the CA's reminders.
@@ -175,16 +462,16 @@ grpc:
 - A web certificate of your own on Control (a CDN origin certificate, for
   example) is `tls.mode: files` with `grpc.public_name` as above.
 
-`agent_install.public_url` and `agent_install.grpc_target` still override
-the derived `https://<domain>` and `<gRPC name>:<grpc.port>`.
+The deprecated `agent_install.public_url` and `agent_install.grpc_target`
+still override the derived `https://<domain>` and `<gRPC name>:<grpc.port>`
+until M2 (P11).
 
-`tls.enable` is not read: with `tls.cert_file` and no `tls.mode` Control
-refuses to start (that combination served https on the web port, which is
-now `tls.mode: files` on 443), otherwise a log line says it is ignored.
-`tls.domain` is not read either (a log line points at `domain`), so an
-existing configuration behind a reverse proxy does not move to `acme` by
+`tls.enable` has no effect except one: with `tls.cert_file` and no
+`tls.mode` Control refuses to start (that combination served https on the
+web port, which is now `tls.mode: files` on 443). `tls.domain` is ignored, so
+an existing configuration behind a reverse proxy does not move to `acme` by
 itself. `frontend.enable`, `frontend.port` and `server.host`/`server.port`
-remain as the legacy external layout described above.
+remain the legacy external layout described above until M2 (P11).
 
 ### Testing ACME
 
@@ -212,15 +499,21 @@ tests use an in-process ACME CA (`internal/panelcert/panelcerttest`) that
 checks the JWS envelope and validates both challenges against the
 listeners under test, but has no DNS, rate limits or CAA.
 
-Container-related settings:
+Container-related settings (deprecated: still read until the container
+files go in M2, P11):
 
 | Key | Default | Notes |
 |------|------|------|
-| `server.shutdown_drain_delay` | empty (`5s` in built-in defaults) | time to keep serving after `/readyz` starts failing on shutdown; at most `5m` |
 | `log.format` | `text` | `json` writes one JSON object per line to stdout (standard log lines, access logs, GORM); `text` keeps the historical output |
-| `log.level` | `info` | minimum level for structured records in `json` format; standard log lines are always written |
+| `log.level` | `info` | minimum level for structured records in `json` format; standard log lines are always written; `-debug` sets `debug` |
 
-PostgreSQL connection settings:
+On shutdown Control keeps serving for 5 seconds after `/readyz` starts
+failing (built in; `server.shutdown_drain_delay` is ignored). The `-debug`
+flag runs a development instance (gin debug mode, debug logging); `env` and
+`server.mode` are ignored, Control always runs as production.
+
+PostgreSQL connection settings (deprecated: still read until PostgreSQL
+support ends in M2, P4):
 
 | Key | Default | Notes |
 |------|------|------|
@@ -250,14 +543,14 @@ open the same file with their own 4 connections and the same `busy_timeout`,
 
 | Key | Default | Notes |
 |------|------|------|
-| `forward.anixops_experimental` (`ANIX_CONTROL_FORWARD_ANIXOPS_EXPERIMENTAL`) | `false` | Lets routes use the experimental AnixOps engine and link (`ENGINE_ANIXOPS`, `LINK_SECURITY_ANIXOPS`), the secure relay between forward nodes (`docs/architecture/anixops-protocol.md`). Off, validation and the planner refuse them (`engine_not_enabled`). The Agents need their own switch, `Forward.AnixOps.Enable` in the Agent's JSON configuration (`"Forward": {"AnixOps": {"Enable": true}}`), to advertise the engine, or the planner refuses their nodes. v4.2 ships it as a prototype whose wire format (ALPN `anixops/0`) may change without notice; v4.3 freezes it. |
+| `forward.anixops_experimental` (ignored: the built-in value is `false`) | `false` | Lets routes use the experimental AnixOps engine and link (`ENGINE_ANIXOPS`, `LINK_SECURITY_ANIXOPS`), the secure relay between forward nodes (`docs/architecture/anixops-protocol.md`). Off, validation and the planner refuse them (`engine_not_enabled`). The Agents need their own switch, `Forward.AnixOps.Enable` in the Agent's JSON configuration (`"Forward": {"AnixOps": {"Enable": true}}`), to advertise the engine, or the planner refuses their nodes. v4.2 ships it as a prototype whose wire format (ALPN `anixops/0`) may change without notice; v4.3 freezes it. |
 
 ## Built-in Packages
 
 Every official package is built into the binary and installed, upgraded and
 enabled at every start
 ([`../architecture/plugin-kernel-contract.md`](../architecture/plugin-kernel-contract.md#built-in-packages)).
-Two keys bear on it:
+Two deprecated keys, still read until M2 (P11), bear on it:
 
 | Key | Default | Notes |
 |------|------|------|
@@ -266,31 +559,23 @@ Two keys bear on it:
 
 `app.edition` is gone: there are no community and commercial editions.
 Orders, payments and affiliate are installed like every other package, and
-a configuration that still sets the key loads (the key is ignored). The
+a configuration that still sets the key loads (the key is ignored with a
+warning). The
 public `GET /api/v4/public/config` keeps its `edition` (`commercial`) and
 `hidden_packages` (empty) fields for the web app.
 
 The package hosts always run, and Agent plugin dispatch and topology
-execution are off until M4; none of them has a setting.
-
-## Removed Keys
-
-These keys are no longer read. A configuration file or an `ANIX_CONTROL_*`
-variable that still sets one loads, and the start logs one line per key
-(`Ignoring the removed configuration key <key> (set in <source>): <reason>`);
-`internal/config/deprecated.go` lists them. Delete them when convenient
-([`../UPGRADE.md`](../UPGRADE.md#plugin-center-reduced-to-package-status)).
-
-| Key | Why |
-|------|------|
-| `plugins.control_execution_enabled` | The built-in packages always run |
-| `plugins.dispatch_enabled`, `plugins.dispatch_poll_interval` | Agent plugin dispatch is off until M4 brings the Agent plugins |
-| `plugins.topology_execution_enabled`, `plugins.topology_poll_interval` | Topology deployment execution is off until M4 |
-| `package_routes.default_mode` | Route modes come only from the rehearsed list (below) |
+execution are off until M4; none of them has a setting (their 4.2 keys are
+in the [deprecated list](#deprecated-keys), ignored).
 
 ## Unified Forward Runtime Layout
 
-Put the runtime selection in `config/config.yaml`:
+The `forward_runtime` keys belong to the flux forward runtime, which M5
+removes (N5): they are deprecated and still read until then, with a
+warning; `forward_runtime.latency.*` is built in (ignored), and
+`forward_runtime.iptables_ansible` was never a key (ignored; the iptables
+backend runs with `nftables_ansible`). Put the runtime selection in the
+configuration file:
 
 ```yaml
 forward_runtime:
@@ -317,20 +602,6 @@ forward_runtime:
     inventory: "config/deploy/ansible/inventory.ini"
     apply_playbook: "config/deploy/ansible/playbooks/forward_apply_nftables.yml"
     remove_playbook: "config/deploy/ansible/playbooks/forward_remove_nftables.yml"
-    become: false
-    extra_vars: {}
-    command: ""
-    working_dir: "config/deploy/ansible"
-    target_pattern: "{{node.host}}"
-    environment:
-      ANSIBLE_CONFIG: "config/deploy/ansible/ansible.cfg"
-    timeout_seconds: 120
-
-  iptables_ansible:
-    # Legacy compatibility only
-    inventory: "config/deploy/ansible/inventory.ini"
-    apply_playbook: "config/deploy/ansible/playbooks/forward_apply.yml"
-    remove_playbook: "config/deploy/ansible/playbooks/forward_remove.yml"
     become: false
     extra_vars: {}
     command: ""
@@ -406,11 +677,11 @@ Operational rules:
 - no proxy ingress node is required
 - the executor host must have `ansible-playbook`
 - SSH credentials still come from inventory files referenced by the selected ansible block under `config/config.yaml.forward_runtime`
-- `iptables_ansible` remains available only for legacy relay environments that still need the old firewall driver and playbooks
+- the `iptables_ansible` backend runs with the `nftables_ansible` block (a `forward_runtime.iptables_ansible` section is ignored)
 
 ## Path Resolution
 
-The selected local ansible block (`forward_runtime.nftables_ansible` by default, `forward_runtime.iptables_ansible` for legacy hosts) has these path fields normalized on startup:
+The local ansible block (`forward_runtime.nftables_ansible`) has these path fields normalized on startup:
 
 - `inventory`
 - `apply_playbook`
@@ -445,21 +716,16 @@ Legacy compatibility readers still understand:
 ## Control Package Payload Limits
 
 `/api/v2` compatibility routes are served by signed control packages. Two
-`plugins` keys bound the bodies that cross the package boundary:
+built-in limits (1 MiB each) bound the bodies that cross the package
+boundary; their 4.2 keys `plugins.control_host_max_request_bytes` and
+`control_host_max_response_bytes` are ignored, like the other
+`plugins.control_host_*` timeouts and `plugins.control_poll_interval`:
 
-```yaml
-plugins:
-  control_host_max_request_bytes: 1048576   # 0 or unset = 1 MiB
-  control_host_max_response_bytes: 1048576  # 0 or unset = 1 MiB
-```
-
-| Key | Enforced by | Error when exceeded |
+| Limit | Enforced by | Error when exceeded |
 |------|------|------|
-| `control_host_max_request_bytes` | the v2 gateway, before dispatch | `413` `plugin_request_too_large` |
-| `control_host_max_response_bytes` | the package bridge (legacy handler body), the package-host SDK (package response body), the kernel host client | `502` `plugin_response_too_large` |
+| request body, 1 MiB | the v2 gateway, before dispatch | `413` `plugin_request_too_large` |
+| response body, 1 MiB | the package bridge (legacy handler body), the package-host SDK (package response body), the kernel host client | `502` `plugin_response_too_large` |
 
-- Both values are integers in bytes, from `0` (default 1 MiB) to `67108864`
-  (64 MiB). Startup fails on a negative or larger value.
 - The response limit applies to the body only. The SDK additionally allows a
   fixed 64 KiB for status, headers, and identifiers, so a body the bridge
   accepts is never rejected by the host for its envelope.
@@ -511,15 +777,11 @@ for the current state (`running`, `restarting`, `failed`, `exited`,
 
 ## Agent Client Certificates
 
-`agent_control.mtls` (`ANIX_CONTROL_AGENT_CONTROL_MTLS`) sets how AnixOps
-Agents authenticate on their channels: the gRPC listener (`grpc.*`) and the
-legacy agent HTTP and WebSocket paths.
-
-```yaml
-agent_control:
-  mtls: ""              # off | optional | preferred | required; empty: required (v4.2)
-  legacy_sunset: ""     # optional YYYY-MM-DD, announced to legacy agents
-```
+AnixOps Agents authenticate on their channels (the gRPC listener and the
+legacy agent HTTP and WebSocket paths) with enrolled client certificates:
+the mode is `required`, built in. The 4.2 keys `agent_control.mtls` and
+`agent_control.legacy_sunset` are ignored (the other modes go with the
+legacy transports in M5); the table keeps what each mode did:
 
 | Mode | Agents without a client certificate |
 |------|------|
@@ -536,34 +798,26 @@ agent_control:
   third-party node software (XrayR, V2bX) uses, are never signalled or
   refused.
 - Agents get certificates from `anix.agent.v1.AgentEnrollment`, signed by the
-  built-in CA. It needs only `module_runtime.ca_kek`
-  (`ANIX_CONTROL_MODULE_RUNTIME_CA_KEK`, 32 bytes, base64 or hex) with
-  `module_runtime.pki: builtin`; `module_runtime.enabled` and the module
-  listener are not needed. Without the CA, or with `pki: external`, `off`,
-  `optional` and `preferred` start, but agents cannot enroll (the startup log
-  line `Agent transports: ...` says so).
-- `required` needs the gRPC listener with TLS (`domain`, or `grpc.enabled`
-  with `grpc.tls_cert_file` and `grpc.tls_key_file`) and the built-in CA for
-  agents to enroll and connect.
-  Set explicitly, startup fails without them. Left empty (the v4.2
-  default), Control starts and logs a `WARNING: Agent transports: ...` line
-  that no Agent can connect until they are set; legacy Agents are refused
-  either way.
+  built-in CA, whose key the [root key](#the-root-key) seals; every server
+  has it (with the deprecated `module_runtime.pki: external` the kernel holds
+  no CA key and Agents cannot enroll).
+- `required` needs the gRPC listener with TLS (`domain`, or the deprecated
+  `grpc.enabled` with `grpc.tls_cert_file` and `grpc.tls_key_file`) for
+  agents to enroll and connect. Without it Control starts and logs a
+  `WARNING: Agent transports: ...` line that no Agent can connect; legacy
+  Agents are refused either way.
 - Under `required`, startup also warns (`WARNING: Agent transports:
   agent_control.mtls=required refuses N enabled node(s) ...`) when the
   transport inventory still has enabled nodes on a legacy channel (counting
   those seen within the last 7 days) or nodes that never enrolled. It never
   stops the start.
-- `legacy_sunset` (`ANIX_CONTROL_AGENT_CONTROL_LEGACY_SUNSET`) is empty by
-  default, so no `Sunset` header is sent until an operator fixes a date.
 - Before switching to `required` or upgrading to v4.2, run `anix-control
   agents transports --check-required` (exit status 3 while an enabled node
   would be refused: `legacy` or `never_enrolled`; 0 when none;
   `summary.ready_for_required` in `GET /api/v4/kernel/agents/transports`),
   or read the node list's connection and certificate columns. Every node it
   lists must first run
-  an enrolled agent, or be disabled. To keep serving legacy Agents for a
-  while, set `preferred`
+  an enrolled agent, or be disabled
   ([UPGRADE](../UPGRADE.md#agent-transports-v42-requires-enrolled-agents)). `/metrics` has
   `anixops_agent_legacy_requests_total{path}`,
   `anixops_agent_legacy_refused_total{path}` and
@@ -576,15 +830,18 @@ agent_control:
 
 ## Agent Install (One-Command Onboarding)
 
-`agent_install` configures the install commands Control renders, a node
+`agent_install` (deprecated: `public_url`, `grpc_target` and
+`signature_file` are still read until M2, P11, `agent_version`,
+`artifact_dir` and `cn_mirror_url` until M4) configures the install
+commands Control renders, a node
 group's (`GET /api/v4/kernel/node-groups/:id/command`) and an existing
 node's (`POST /api/v4/kernel/agents/install-tokens`), both for super
 administrators, and the public routes the script uses: `GET /install.sh`,
 `/install.sh.sig`, `/install/agent.env`, `/install/agent/<tag>/<asset>` and
 `/install/ip` (the caller's address as Control sees it, with
 `server.trusted_proxies` applied) ([guide](../guide/agent-onboarding.md)).
-Node group join tokens are sealed with `module_runtime.ca_kek`: without it
-no node group can be created.
+Node group join tokens are sealed with a key derived from the
+[root key](#the-root-key).
 
 ```yaml
 agent_install:
@@ -606,7 +863,7 @@ agent_install:
 - `/install.sh.sig` is served only when `signature_file` verifies the
   embedded script with `plugins.official_public_key`; the release image sets
   `ANIX_CONTROL_AGENT_INSTALL_SIGNATURE_FILE`.
-- The subscription path (`app.subscribe_path`) may not be `install`,
+- The subscription path (`subscribe_path`) may not be `install`,
   `install.sh` or start with `install/`.
 - `anix-control agent offline-bundle -arch amd64|arm64 -o <file>
   [-control https://<control>]` writes an offline install bundle from
@@ -627,24 +884,15 @@ administration and `anix-control routes` were removed). The startup log line
 
 ## Alerts
 
-`alerts.*` (`ANIX_CONTROL_ALERTS_*`) configures the alert monitor: Agent,
-forward link and module certificates that were not renewed in time, CAs near
-their end, the panel's own certificates (ending soon, or failing to renew),
-and phased processes (the node credential split, the identity cutover) left
-in a non-final phase. Every key has a default, so the block can
-be left out.
+The alert monitor always runs: Agent, forward link and module certificates
+that were not renewed in time, CAs near their end, the panel's own
+certificates (ending soon, or failing to renew), and phased processes (the
+node credential split, the identity cutover) left in a non-final phase. Its
+settings are built in (the 4.2 `alerts.*` keys are ignored): every 15
+minutes, CAs 60 days before their end, a notification at most every 24
+hours, phases stuck after 72 hours.
 
-```yaml
-alerts:
-  enabled: true
-  check_interval: "15m"
-  leaf_expiry_days: 14
-  ca_expiry_days: 60
-  renotify_interval: "24h"
-  phase_stuck_after: "72h"   # "0" turns the phase alerts off
-```
-
-A leaf certificate alerts inside the smaller of `leaf_expiry_days` and a
+A leaf certificate alerts inside the smaller of 14 days and a
 sixth of its own lifetime (healthy holders renew at two thirds, so a fixed
 14 days would fire for every fresh 7-day certificate). Details, the alert
 kinds and the API are in [`kernel-alerts.md`](kernel-alerts.md).

@@ -1,17 +1,20 @@
 # Environment Variables
 
-Every scalar and list configuration key has an `ANIX_CONTROL_*` variable; the
-name is `ANIX_CONTROL_` plus the upper-cased YAML path joined with
-underscores. Containers normally use only these variables and no config file.
-Rules (precedence, `_FILE` secrets, lists, map-valued keys) are in
+Every operator key has an `ANIX_CONTROL_*` variable; the name is
+`ANIX_CONTROL_` plus the upper-cased YAML path joined with underscores. The
+rules (precedence, `_FILE`, lists) are in
 [`configuration.md`](configuration.md#environment-variables).
 
+- Precedence: the built-in values, then the configuration file key by key,
+  then these variables.
 - `NAME_FILE=/path` reads the value from a file (Docker and Kubernetes secrets).
-- The defaults below are the built-in container defaults
-  ([`internal/config/defaults.yaml`](../../internal/config/defaults.yaml)),
-  used when no config file is loaded. With a config file, its values apply
-  first and variables override them.
-- The running image prints the same list: `docker run --rm <image> -print-env`.
+- The defaults below are the built-in values
+  ([`internal/config/defaults.yaml`](../../internal/config/defaults.yaml)).
+- The variables of the deprecated keys (the 4.2 configuration) still work as
+  their keys do, still read or ignored with a warning; the
+  [deprecated key table](configuration.md#deprecated-keys) lists each with
+  its variable.
+- `anix-control -print-env` prints the same list.
 
 Variables that are not configuration keys:
 

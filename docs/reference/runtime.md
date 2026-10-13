@@ -34,14 +34,13 @@ forward_runtime:
     environment:
       ANSIBLE_CONFIG: "config/deploy/ansible/ansible.cfg"
     timeout_seconds: 120
-  iptables_ansible:
-    # Optional legacy override. Use only for old relay environments.
-    inventory: "config/deploy/ansible/inventory.ini"
-    apply_playbook: "config/deploy/ansible/playbooks/forward_apply.yml"
-    remove_playbook: "config/deploy/ansible/playbooks/forward_remove.yml"
 ```
 
-Runtime configuration now comes exclusively from `config/config.yaml.forward_runtime`. Legacy `FORWARD_RUNTIME_*` variables are no longer consulted during startup.
+Runtime configuration now comes exclusively from `forward_runtime` in the
+configuration file (deprecated keys, read with a warning until the flux
+runtime goes in M5; a `forward_runtime.iptables_ansible` section is ignored,
+the iptables backend runs with `nftables_ansible`). Legacy
+`FORWARD_RUNTIME_*` variables are no longer consulted during startup.
 
 ## Control Plane Vs Execution Plane
 

@@ -11,7 +11,7 @@ Since the official packages are built into Control
 ([`../architecture/plugin-kernel-contract.md`](../architecture/plugin-kernel-contract.md#built-in-packages)),
 a rotation is a Control release: tag a new version whose packages and
 `SHA256SUMS.txt.sig` the new root signs, with `plugins.official_public_key`
-(`config/config.prod.yaml`) and `OFFICIAL_PUBLIC_KEY` (`scripts/install.sh`)
+(`internal/config/defaults.yaml`) and `OFFICIAL_PUBLIC_KEY` (`scripts/install.sh`)
 set to it, and deploy it with the new key configured. On its first start
 Control activates the new root, registers every built-in package of the new
 version under it and moves every installation to that version: nothing is
@@ -93,7 +93,7 @@ Do not rotate while a release tag or a release-tag workflow run is in flight.
 
 On a release tag, `.github/workflows/ci.yml` job `plugin-package-publish`
 requires `ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY` to equal `official_public_key` in
-`config/config.prod.yaml` exactly before signing packages. A mismatch fails the
+`internal/config/defaults.yaml` exactly before signing packages. A mismatch fails the
 tag run closed.
 
 The signing secrets can live at the organization level (shared with
@@ -120,9 +120,8 @@ there in the same change:
 Repository surfaces that carry the public root (check with
 `git grep -l "<old root>"`):
 
-- `config/config.prod.yaml`, `config/config.yaml.example`,
-  `config/config.dev.yaml.example`
-- `internal/config/config_test.go` (`TestOfficialPluginAlphaProfiles`)
+- `internal/config/defaults.yaml` (the built-in `plugins.official_public_key`)
+- `internal/config/config_test.go` (`TestShippedTemplateIsTheDomainLine`)
 - `web/src/__tests__/Nodes.test.js`
 - `docs/reference/startup-config.md`
 
@@ -188,11 +187,9 @@ Record the fingerprint out of band; operators pin it in their trust store
 
    ```bash
    new_root="$(cat "$KEY_DIR/official-public-key.raw")"
-   old_root="$(git show origin/go_dev:config/config.prod.yaml \
+   old_root="$(git show origin/go_dev:internal/config/defaults.yaml \
      | sed -n 's/^[[:space:]]*official_public_key:[[:space:]]*"\([^"]*\)".*/\1/p')"
-   for f in config/config.prod.yaml config/config.yaml.example config/config.dev.yaml.example; do
-     test "$(sed -n 's/^[[:space:]]*official_public_key:[[:space:]]*"\([^"]*\)".*/\1/p' "$f")" = "$new_root"
-   done
+   test "$(sed -n 's/^[[:space:]]*official_public_key:[[:space:]]*"\([^"]*\)".*/\1/p' internal/config/defaults.yaml)" = "$new_root"
    if git grep -q --fixed-strings "$old_root"; then
      echo 'old root still present' >&2; exit 1
    fi
@@ -241,7 +238,7 @@ Never read back or print secret values. For organization-level secrets use
 Then prove the pair in both repositories without releasing anything. The
 manual workflow `Signing Key Check` signs a random message with the private
 key, verifies it with the public root, compares the root with
-`config/config.prod.yaml` (`anix-control`) or `release.yml` (`anix-agent`) and
+`internal/config/defaults.yaml` (`anix-control`) or `release.yml` (`anix-agent`) and
 prints only the public key id:
 
 ```bash

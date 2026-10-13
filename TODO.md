@@ -151,11 +151,6 @@ deliberately in a later PR.
 
 ## Deployment And Repository Hygiene
 
-- [ ] `config/config.prod.yaml`, `config/config.yaml.example`, and the
-  configuration that `install.sh` generates still write a
-  `forward_runtime.iptables_ansible` block, but the config loader
-  (`internal/config/config.go`) only parses `forward_runtime.nftables_ansible`,
-  so that block is ignored. Move the templates to `nftables_ansible`.
 - [ ] Remove hard-coded `/home/dev/...` defaults from
   `config/deploy/deploy_panel.sh`, `config/deploy/ansible/nodes/`,
   `scripts/deploy_wireguard_gost_quic.sh`, and the agent deploy defaults in

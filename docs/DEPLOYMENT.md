@@ -13,18 +13,28 @@
 - [`guide/forward-relay-onboarding.md`](guide/forward-relay-onboarding.md)
 - [`reference/repository-layout.md`](reference/repository-layout.md)
 
-部署前先记住两条规则：
+部署前先记住三条规则：
 
-- 后端始终先读取 `config/config.yaml`；本地 `go run` 不会自动读取 `.env`
-- 启动时会先读取 `config/config.yaml.forward_runtime`，并把这些值写入 `v2_system_config`，不再参考 `FORWARD_RUNTIME_*`
+- 配置只有 9 个操作员键（`domain`、`tls.mode`、`tls.cert_file`、`tls.key_file`、`listen`、
+  `grpc.port`、`grpc.public_name`、`subscribe_path`、`data_dir`），一般安装的配置文件只有
+  `domain: panel.example.com` 一行。先取内置值，再由配置文件逐键覆盖，最后是
+  `ANIX_CONTROL_*` 环境变量。4.x 的其他键都在废弃列表里：仍被读取的键照常生效并在启动时
+  警告一次，其余键被忽略并警告；列表之外的未知键会让 Control 拒绝启动，并提示最接近的键
+  （[`reference/configuration.md`](reference/configuration.md#operator-keys)）。
+  `anix-control config check` 可在启动前检查，`anix-control config rewrite` 把旧文件改写为
+  操作员键（[`UPGRADE.md`](UPGRADE.md#configuration-rewrite-on-upgrade)）。本地 `go run` 不会自动读取 `.env`
+- 配置文件里没有任何秘密。根密钥是数据目录（`data_dir`，默认 `/var/lib/anix-control`）里的
+  `root.key`（0600）：首次启动时生成，或接管已配置的 `module_runtime.ca_kek`；JWT 密钥和
+  identity KEK 由它派生。每次启动先校验它能解开数据库里的 CA 私钥，解不开就拒绝启动。
+  它必须与数据库一起备份（[`reference/configuration.md`](reference/configuration.md#the-root-key)）
+- 启动时会先读取 `forward_runtime`（废弃键，M5 前照读），并把这些值写入 `v2_system_config`，不再参考 `FORWARD_RUNTIME_*`
 
 ## Verified Deployment Baseline (2026-04-07)
 
 当前已经实机验证通过的路径是：
 
 - `binary + SQLite + systemd`
-- AnixOps Control UI: `3000`
-- AnixOps Control API: `8080`
+- AnixOps Control UI 与 API：`8080`（同一个监听；4.x 的 `3000` 端口已合并）
 - NodeX control-plane: `18081`
 - relay gost API: `18080`
 - 已验证运行时：
@@ -128,7 +138,7 @@ curl -fsS http://127.0.0.1:8080/readyz
 
 说明：
 
-- 默认只在 `127.0.0.1` 发布 8080（API）、3000（UI）、50051（gRPC）；对外由宿主机
+- 默认只在 `127.0.0.1` 发布 8080（网页、API、订阅与安装路径共用）、50051（gRPC）；对外由宿主机
   反向代理终止 TLS，示例见 [`config/deploy/examples/nginx/anix-control.conf`](../config/deploy/examples/nginx/anix-control.conf)。
   节点直连 gRPC 时在 `.env` 设置 `ANIX_CONTROL_GRPC_BIND`，并在 `control.env` 设置 `ANIX_CONTROL_GRPC_ENABLED=true`。
 - 数据库在本机时，`ANIX_CONTROL_DATABASE_HOST=host.docker.internal`：PostgreSQL 需在
@@ -137,6 +147,9 @@ curl -fsS http://127.0.0.1:8080/readyz
 - 容器以只读根文件系统、uid 10001、`cap_drop: ALL` 运行；`/tmp` 是可执行 tmpfs
   （插件宿主进程与 ansible 状态）。已验证的插件包副本放在 `plugin-artifacts` 卷
   （`/var/lib/anixops`，约 0.5 GB 磁盘，可随时删除，启动时会按需从数据库重建）。
+- 根密钥：Control 把 `secrets/module_ca_kek` 接管为根密钥，写入 `control-data` 卷
+  （`/var/lib/anix-control/root.key`）；JWT 密钥沿用 `secrets/jwt_secret`（已接管时记录在
+  `root.key` 中）。
 - 迁移到新机器：在新机器上放同样的 `docker-compose.prod.yml`、`.env`、`control.env`、
   `secrets/`，指向同一个数据库（或先 `pg_dump -Fc` / `pg_restore` 迁移数据库），然后
   `docker compose -f docker-compose.prod.yml up -d`。
@@ -168,7 +181,8 @@ AnixOps Agent 通过 gRPC（TLS）注册（AgentEnrollment）并连接，证书�
 CA 签发；v4.2 起 `agent_control.mtls` 默认 `required`，这是 Agent 唯一的连接方式。
 全新安装开箱即就绪，需要两样东西：
 
-1. **CA 密钥**（`module_runtime.ca_kek`，32 字节随机值，base64）。Compose：
+1. **根密钥**（数据目录里的 `root.key`；旧的 `module_runtime.ca_kek`，32 字节随机值，base64，
+   会在首次启动时被接管为根密钥，见 [`reference/configuration.md`](reference/configuration.md#the-root-key)）。Compose：
    `init-secrets.sh` 生成 `secrets/module_ca_kek`（0400，uid 10001），Compose 文件以
    `ANIX_CONTROL_MODULE_RUNTIME_CA_KEK_FILE` 传入；Helm：chart 首次安装时生成
    `<fullname>-ca-kek` Secret（`lookup` 保持升级不变、`immutable`、卸载时保留）；
@@ -410,30 +424,13 @@ database:
 
 ### 缓存
 
-内存缓存（默认）：
-
-```yaml
-cache:
-  driver: "memory"
-```
-
-Redis：
-
-```yaml
-cache:
-  driver: "redis"
-  host: "127.0.0.1"
-  port: 6379
-  password: ""
-  db: 0
-```
+缓存固定为进程内内存缓存，`cache.*` 键已废弃并被忽略。
 
 ### 必填项
 
-```yaml
-jwt:
-  secret: "your-jwt-secret-at-least-32-characters"
-```
+除 `domain`（acme 模式）外没有必填的秘密：JWT 密钥由根密钥派生（`anixops jwt v1`）。
+旧配置里显式设置的 `jwt.secret` 会被接管，记录在 `root.key` 中，此后即使配置文件不再设置也继续使用，
+直到轮换；模板值（`your-jwt-secret-key-change-in-production` 等）不会被接管。
 
 > 弱密钥提示：`jwt.secret`、`app.api_token`、`grpc.api_token` 只要已设置但短于 32 字节、只由少数几个字符组成或仍是模板值，启动时会记录一条 `WARNING`（只写设置名和轮换方法，不含密钥内容）。它不会阻止启动，已有的较短密钥继续可用；用 `openssl rand -hex 32` 生成新值，在下次重启时通过 `ANIX_CONTROL_JWT_SECRET`（或 `..._FILE`）换上。换 `jwt.secret` 会让所有人重新登录。
 
@@ -462,8 +459,8 @@ domain: panel.example.com
 域名的 A（以及 AAAA）记录指向本机、不开 CDN 代理、80 和 443 对公网开放即可。证书申请在后台进行，
 **任何时候都不会阻塞启动或握手**：证书到手之前、或申请失败时，Control 使用自签证书照常提供服务，
 管理后台顶部显示原因和修复办法，节点接入命令暂不发放（Agent 只信任公网证书，会拒绝自签证书）。
-证书、账户密钥保存在数据库表 `v5_acme_cache` 中，用 `module_runtime.ca_kek` 加密，随数据库备份；
-还原或迁机不会重新申请。查看与重试：
+证书、账户密钥保存在数据库表 `v5_acme_cache` 中，用根密钥（`root.key`）加密，随数据库备份；
+还原或迁机（连同 `root.key`）不会重新申请。查看与重试：
 
 ```bash
 anix-control tls status        # 每张证书的状态、到期时间、最近的错误和修复办法
@@ -504,8 +501,8 @@ sudo certbot certonly --standalone -d grpc.example.com
 
 ### 6.1 external 模式：反向代理、CDN 与 `server.trusted_proxies`
 
-`tls.mode: external` 时，Control 在 `listen`（未设置时为 `server.host:server.port`，内置默认
-`127.0.0.1:8080`）提供明文 HTTP，由前面的反向代理或 CDN 终止 TLS 并把**整个域名**转发过来。
+`tls.mode: external` 时，Control 在 `listen`（默认 `127.0.0.1:8080`；废弃的 `server.host`、
+`server.port`、`frontend.port` 在 M2 P11 之前仍会在 `listen` 未设置时决定监听地址）提供明文 HTTP，由前面的反向代理或 CDN 终止 TLS 并把**整个域名**转发过来。
 
 **从 4.1.0-rc.3 起，Control 只信任 `server.trusted_proxies`
 （`ANIX_CONTROL_SERVER_TRUSTED_PROXIES`）中列出的反向代理发来的转发头。**

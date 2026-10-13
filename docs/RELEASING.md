@@ -121,7 +121,7 @@ version `latest`.
   Orders, payments and affiliate are official packages like the others:
   there are no editions and no separate commercial build.
   - The signing root must equal `plugins.official_public_key` in
-    `config/config.prod.yaml`, since Control only accepts packages signed by
+    `internal/config/defaults.yaml`, since Control only accepts packages signed by
     that root.
   - No Agent plugin or GOST runtime is built for the release: Agent
     dispatch stays off until the Agent release carries them (M4).
@@ -146,7 +146,7 @@ version `latest`.
 - **Binaries.** linux/amd64 and linux/arm64 only (the package hosts run as
   Linux processes): each job downloads the `builtin-packages` set into
   `internal/builtinpkg/dist/`, verifies it again against
-  `config/config.prod.yaml`'s root, and builds with `-trimpath`. Plus the
+  `internal/config/defaults.yaml`'s root, and builds with `-trimpath`. Plus the
   frontend archive (`anix-control-frontend.tar.gz`).
 - **Image.** `ghcr.io/anixops/anix-control` for linux/amd64 and linux/arm64,
   from the release binaries (the packages are inside them).
@@ -233,7 +233,7 @@ fix shows up in the nightly run and never blocks an unrelated pull request.
 
 - **Files.** Verify `SHA256SUMS.txt.sig` against `official-public-key.raw`
   (which must equal `plugins.official_public_key` of
-  `config/config.prod.yaml` at the tag), then run `sha256sum -c
+  `internal/config/defaults.yaml` at the tag), then run `sha256sum -c
   SHA256SUMS.txt`:
 
   ```bash

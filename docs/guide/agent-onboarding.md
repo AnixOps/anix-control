@@ -51,11 +51,13 @@ On Control:
   certificate for that name over ACME (HTTP-01 on port 80, TLS-ALPN-01 on
   443 when free). `anix-control doctor` tells whether each name resolves to
   this machine or to a CDN.
-- The built-in agent CA is on (`module_runtime.ca_kek` with `pki: builtin`):
-  the Agent joins with the certificate it signs (`docs/UPGRADE.md`,
-  "Agent Transports: Preparing For v4.2"). Fresh installs generate the key.
-  It also seals the ACME keys and the node group join tokens: without it no
-  group can be created (`409 ca_kek_missing`).
+- The built-in agent CA is on: its key is sealed with the root key
+  (`data_dir/root.key`, created at the first start, or adopted from an
+  earlier `module_runtime.ca_kek`;
+  [configuration](../reference/configuration.md#the-root-key)), and the
+  Agent joins with the certificate it signs (`docs/UPGRADE.md`, "Agent
+  Transports: Preparing For v4.2"). The root key also seals the ACME keys
+  and the node group join tokens.
 - Without `domain`, set `agent_install.public_url` to the https address nodes
   use, `grpc.enabled`, and a publicly trusted certificate for the gRPC
   target in `grpc.tls_cert_file`/`grpc.tls_key_file` (reloaded when it
@@ -716,7 +718,7 @@ split or an identity cutover left unfinished) with what clears each.
 | `agent_install_unconfigured` on the node page | Control does not know an https address nodes reach: set `domain` (or `agent_install.public_url`); on a development build also `agent_install.agent_version` |
 | the join dialog shows `Panel certificate` or `gRPC certificate` | Control does not hold a publicly trusted certificate yet: the banner at the top of the console (and `anix-control tls status`) says why, for example no DNS record, ports 80 and 443 closed, or the name proxied by a CDN; fix it and use **Request again** (`anix-control tls retry`) |
 | the Agent download answers 404 | `/install/agent.env` names an Agent tag the Agent repository does not have. A release build names the Agent release it was released with; an older Control (4.2.1 and before) asks for `v` + its own version, so set `agent_install.agent_version` to an existing tag such as `v4.2.0` |
-| `agent_pki_disabled` | the built-in agent CA is off: set `module_runtime.ca_kek` |
+| `agent_pki_disabled` | the built-in agent CA is off: the deprecated `module_runtime.pki` is `external`, or the command ran without access to `root.key` |
 | `node_disabled` on a rotation | enable the node first ([rotation](#rotating-a-nodes-credentials)) |
 | `cannot reach .../install/agent.env` | the node cannot reach Control over https (DNS, firewall, certificate) |
 | `cannot get the checksum of ...` | `--mirror cn` without GitHub access: put the release in `agent_install.artifact_dir` |
