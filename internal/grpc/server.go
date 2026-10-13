@@ -27,7 +27,12 @@ type ServerConfig struct {
 	APIToken string
 	// JWT Secret (可选，用于 JWT 认证)
 	JWTSecret string
-	// TLS 证书/私钥路径 (可选，都为空时使用明文)
+	// GetCertificate serves the listener's certificate per handshake: the
+	// panel certificates (internal/panelcert), so that a renewed or
+	// reloaded certificate reaches new connections without a restart. It
+	// takes precedence over TLSCertFile.
+	GetCertificate func(*tls.ClientHelloInfo) (*tls.Certificate, error)
+	// TLS 证书/私钥路径 (可选，都为空时使用明文); read once at Start.
 	TLSCertFile string
 	TLSKeyFile  string
 	// Keepalive 时间
@@ -78,18 +83,24 @@ func (s *Server) agentAuthenticator() *AgentAuthenticator {
 	return &AgentAuthenticator{PKI: s.config.AgentPKI, Mode: s.config.AgentMTLS, Sunset: s.config.AgentLegacySunset}
 }
 
-// tlsConfig is the listener's TLS configuration. With the agent PKI the
-// server asks for a client certificate but never requires one in the
-// handshake: agents enroll without one, and legacy agents have none. The
-// Agent services and the interceptors verify a presented certificate
-// against the agent trust bundle, which changes with CA rotation. In
-// agent_control.mtls: off no client certificate is requested.
-func (s *Server) tlsConfig(cert tls.Certificate) *tls.Config {
-	config := &tls.Config{Certificates: []tls.Certificate{cert}}
+// tlsConfig is the listener's TLS configuration: the server certificate
+// per handshake (getCertificate), and with the agent PKI a request for a
+// client certificate that is never required in the handshake: agents
+// enroll without one, and legacy agents have none. The Agent services and
+// the interceptors verify a presented certificate against the agent trust
+// bundle, which changes with CA rotation. In agent_control.mtls: off no
+// client certificate is requested.
+func (s *Server) tlsConfig(getCertificate func(*tls.ClientHelloInfo) (*tls.Certificate, error)) *tls.Config {
+	config := &tls.Config{GetCertificate: getCertificate, MinVersion: tls.VersionTLS12}
 	if s.agentAuthenticator().pki() != nil {
 		config.ClientAuth = tls.RequestClientCert
 	}
 	return config
+}
+
+// TLSEnabled tells whether the listener serves TLS.
+func (s *Server) TLSEnabled() bool {
+	return s.config.GetCertificate != nil || (s.config.TLSCertFile != "" && s.config.TLSKeyFile != "")
 }
 
 // NewServer 创建 gRPC 服务器
@@ -137,13 +148,18 @@ func (s *Server) Start() error {
 		opts = append(opts, grpc.ChainStreamInterceptor(streamInterceptors...))
 	}
 
-	// TLS: 配置了证书/私钥时启用, 否则保持明文 (向后兼容)
-	if s.config.TLSCertFile != "" && s.config.TLSKeyFile != "" {
+	// TLS: the panel certificates, or a certificate file pair read once;
+	// without either the listener stays plain (development and tests).
+	switch {
+	case s.config.GetCertificate != nil:
+		opts = append(opts, grpc.Creds(credentials.NewTLS(s.tlsConfig(s.config.GetCertificate))))
+	case s.config.TLSCertFile != "" && s.config.TLSKeyFile != "":
 		cert, err := tls.LoadX509KeyPair(s.config.TLSCertFile, s.config.TLSKeyFile)
 		if err != nil {
+			_ = lis.Close()
 			return fmt.Errorf("failed to load gRPC TLS cert/key: %w", err)
 		}
-		opts = append(opts, grpc.Creds(credentials.NewTLS(s.tlsConfig(cert))))
+		opts = append(opts, grpc.Creds(credentials.NewTLS(s.tlsConfig(func(*tls.ClientHelloInfo) (*tls.Certificate, error) { return &cert, nil }))))
 	}
 
 	// 创建 gRPC 服务器
