@@ -39,6 +39,12 @@ const SHOTS = [
   ['admin-node-traffic-empty', [DESKTOP]],
   ['admin-node-rotate', [DESKTOP]],
   ['admin-node-rotated', [DESKTOP]],
+  // 诊断 on the node page (a result, offline) and the 升级节点 sheet.
+  ['admin-node-diagnostics', [DESKTOP]],
+  ['admin-node-diagnostics-result', [DESKTOP, PHONE]],
+  ['admin-node-diagnostics-offline', [DESKTOP]],
+  ['admin-agent-upgrade', [DESKTOP, PHONE]],
+  ['admin-agent-upgrade-running', [DESKTOP]],
   ['admin-monitor-node-traffic', [DESKTOP]],
   // The v4.2 forwarding pages (F5b).
   ['admin-forward-overview', [DESKTOP]],

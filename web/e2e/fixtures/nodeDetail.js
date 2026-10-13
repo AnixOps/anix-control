@@ -1,5 +1,6 @@
 import { FIXED_NOW_MS } from './clock.js'
 import { LOGS, NODES, PROTOCOLS, TEMPLATES, envelope } from './nodeData.js'
+import { nodeDiagnosticsAnswer } from './nodeDiagnostics.js'
 import { nodeTrafficAnswer, rotateAnswer } from './nodeTraffic.js'
 import { transportsAnswer } from './transports.js'
 
@@ -36,6 +37,8 @@ const SECTION = {
   notFound: '', error: '', loading: '',
   // 流量 (the node's traffic over time) and 轮换 Agent 凭据 (in 凭据).
   traffic: 'traffic', trafficEmpty: 'traffic', trafficError: 'traffic',
+  // 诊断: the section, with a result shown, and for a node that is offline.
+  diagnostics: 'diagnostics', diagnosticsResult: 'diagnostics', diagnosticsOffline: 'diagnostics',
   credentials: 'credentials', rotate: 'credentials', rotated: 'credentials'
 }
 
@@ -51,6 +54,8 @@ export default {
     let m = path.match(/^\/api\/v4\/kernel\/nodes\/(\d+)\/traffic$/)
     if (m) return nodeTrafficAnswer(m[1], query, { trafficEmpty: 'empty', trafficError: 'error' }[scenario] || 'traffic')
     if (path === '/api/v4/kernel/agents/rotate-credentials' && method === 'POST') return rotateAnswer(body, now)
+    m = path.match(/^\/api\/v4\/kernel\/nodes\/(proxy-\d+)\/diagnostics$/)
+    if (m) return nodeDiagnosticsAnswer(m[1], { method, scenario: scenario === 'diagnosticsOffline' ? 'offline' : '', body })
     // The node's Agent connection and certificate (?node=proxy-108).
     if (path === '/api/v4/kernel/agents/transports') {
       return transportsAnswer(query)
@@ -88,6 +93,11 @@ export default {
   async after(page, { scenario }) {
     if (scenario === 'deployInstall') {
       await page.getByTestId('open-agent-install').click()
+      return
+    }
+    if (scenario === 'diagnosticsResult') {
+      await page.getByTestId('diagnostics-status').click()
+      await page.getByTestId('diagnostics-result').waitFor()
       return
     }
     if (scenario !== 'rotate' && scenario !== 'rotated') return

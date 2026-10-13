@@ -3,7 +3,7 @@
 // e2e/fixtures/ ({ path | pathFor, api(path, ctx), edition, user, setup })
 // plus the scenario it answers with ('empty', 'error', ...). The API answers
 // come from the fixture first, then COMMON, then an empty success envelope.
-import agent from '../fixtures/agent.js'
+import agentUpgrade from '../fixtures/agentUpgrade.js'
 import apiTokens from '../fixtures/apiTokens.js'
 import coupons from '../fixtures/coupons.js'
 import dashboard from '../fixtures/dashboard.js'
@@ -46,7 +46,6 @@ export const SCREENS = {
   'admin-tickets': { fixture: tickets, scenario: 'list' },
   'admin-coupons': { fixture: coupons, scenario: 'list' },
   'admin-invite-codes': { fixture: inviteCodes, scenario: 'list' },
-  'admin-agents': { fixture: agent, scenario: 'list' },
   'admin-plugins': { fixture: plugins, scenario: 'list' },
   'admin-nodes': { fixture: nodes, scenario: 'list' },
   // 接入节点: the dialog while it waits for the first machine, with two
@@ -66,6 +65,13 @@ export const SCREENS = {
   'admin-node-traffic': { fixture: nodeDetail, scenario: 'traffic' },
   'admin-node-traffic-empty': { fixture: nodeDetail, scenario: 'trafficEmpty' },
   'admin-node-traffic-error': { fixture: nodeDetail, scenario: 'trafficError' },
+  // 诊断: the section, a result in it, and a node that is offline.
+  'admin-node-diagnostics': { fixture: nodeDetail, scenario: 'diagnostics' },
+  'admin-node-diagnostics-result': { fixture: nodeDetail, scenario: 'diagnosticsResult' },
+  'admin-node-diagnostics-offline': { fixture: nodeDetail, scenario: 'diagnosticsOffline' },
+  // 升级节点: the sheet opened with ⌘K, with no campaign and with a running one.
+  'admin-agent-upgrade': { fixture: agentUpgrade, scenario: 'upgrade' },
+  'admin-agent-upgrade-running': { fixture: agentUpgrade, scenario: 'upgradeRunning' },
   'admin-node-credentials': { fixture: nodeDetail, scenario: 'credentials' },
   'admin-node-rotate': { fixture: nodeDetail, scenario: 'rotate' },
   'admin-node-rotated': { fixture: nodeDetail, scenario: 'rotated' },

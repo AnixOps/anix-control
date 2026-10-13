@@ -4,6 +4,7 @@
 // unset fields (zeros, false, empty) left out. Everything derives from
 // FIXED_NOW_MS so screenshots are stable. The data is the H16 mockups'
 // (docs/design/forward-ui), moved here when the real pages replaced them.
+import { nodeDiagnosticsAnswer } from './nodeDiagnostics.js'
 import { FIXED_NOW_MS } from './clock.js'
 
 const NOW = FIXED_NOW_MS
@@ -542,6 +543,9 @@ const PATHS = {
 }
 
 export function forwardApi(path, { method, query = {}, body, scenario }) {
+  // 诊断 of the node page: a connected Agent with the forward checks.
+  const diagnostics = path.match(/^\/api\/v4\/kernel\/nodes\/((?:proxy|forward)-\d+)\/diagnostics$/)
+  if (diagnostics) return nodeDiagnosticsAnswer(diagnostics[1], { method, scenario: '', body })
   if (path === '/api/v3/extensions') return scenario === 'no-capability' ? [] : [EXTENSION]
   if (!path.startsWith('/api/v4/forward/')) return undefined
   const rest = path.slice('/api/v4/forward'.length)
