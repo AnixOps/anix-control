@@ -26,6 +26,31 @@ Do not use it for:
 
 Those operations require their own operator approval and rollback plan.
 
+**One HTTP listener, and Control's own certificate (5.0, M2).** The API
+port and the web port are one handler now: the web listener no longer proxies
+to the API listener. A configuration without `domain` keeps both ports
+(`server.port`, and `frontend.port` with `frontend.enable`), so reverse
+proxies and probes keep working; a path under `/api/`, `/install/` or the
+subscription path that matches no route answers 404 instead of the web app.
+Check before restarting:
+
+- `tls.enable: true` with `tls.cert_file` and no `tls.mode` now stops the
+  start: serve https with `domain` and `tls.mode: files` (port 443), or
+  remove `tls.enable` behind a proxy. `tls.domain` is not read.
+- An empty `server.host` binds loopback (the built-in default is
+  `127.0.0.1`; the container image sets `ANIX_CONTROL_SERVER_HOST=0.0.0.0`).
+- `grpc.tls_cert_file` is reloaded when it changes: renewing it no longer
+  needs a restart.
+
+To let Control obtain its certificate, set `domain` (and
+`module_runtime.ca_kek`), free ports 80 and 443 (stop nginx or Caddy for
+this name), and restart; `anix-control doctor` checks the DNS record and the
+ports first, `anix-control tls status` shows the outcome. Behind a CDN, use
+`tls.mode: external` with `grpc.public_name`
+([configuration](reference/configuration.md#panel-address-listeners-and-certificates)).
+Until a certificate is issued Control serves a self-signed one and withholds
+the node join command.
+
 **Weak shared secrets are reported at startup.** A `jwt.secret`,
 `app.api_token` or `grpc.api_token` that is set but shorter than 32 bytes,
 made of a few repeated characters, or still a template value logs one
