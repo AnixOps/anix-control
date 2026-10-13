@@ -434,6 +434,18 @@ sudo anix-control import-postgres \
 
 随之删除：`admin.email`、`admin.password`（config.go:597-601）、`.bootstrap-admin-password` 文件、安装器的 `--admin-email`/`--admin-password`，以及 `InitAdmin` 在没有密码时拒绝启动的规则（init_admin.go:20, 62-64）。
 
+**实现（P9）。** 代码在 `internal/adminclaim`、`cmd/server/admin_command.go`、`internal/handler/claim.go` 和 `web/src/views/Claim.vue`。与上表的差别和补充：
+
+- 管理员指 `v2_user.is_admin = 1` 的账户（被封禁的也算）；身份切到 identity 后它是 identity 的投影，判断不变。
+- `GET /api/v5/claim/status` 只回答 `{claimable}`，含义是“库里还没有管理员”，不说明是否生成过链接或是否过期：链接过期时页面仍显示表单，提交后才告诉持有令牌的人已过期，没有令牌的人只会得到“无效”。
+- 回答码：已有管理员 404；令牌不是当前待领取的 403 `claim_invalid`；过期 410 `claim_expired`；邮箱格式 400；密码规则 422（`weak_password`、`password_too_long`）；邮箱已被普通账户占用 409；identity 不可达 503。成功 201，回答 `{user_id, email, next: "/login"}`，页面随后用同一邮箱和密码走普通登录，不另发会话。
+- 密码规则：仓库没有修改密码接口，采用建账户的规则（至少 6 个字符；bcrypt 最多读 72 字节）。
+- 身份已切到 identity（`identity` 或 `finalized`）时，内核事务里建订阅者和账户关联（`finalize` 前镜像密码哈希）、消耗令牌、写审计，提交后用 identity 的 `ImportAccounts` 单账户导入把账户交给 identity；identity 拒绝时撤销这些行并恢复令牌。`importing` 状态仍走内核路径，下一次增量导入带过去。
+- 命令输出：没有 `domain` 时打印路径和本机监听地址；Control 自己终止 TLS 且网页证书未被公共信任（或还没有证书状态）时，加一行本机第一个公网地址。`-ttl` 取 1 分钟到 24 小时。命令的日志（包括 SQL 日志）走标准错误，标准输出只有链接。
+- 请求体不进任何日志：访问日志从不记录请求体，审计中间件对 `/api/v5/claim` 不捕获请求体，审计行由领取逻辑自己写。限流与公共接口相同（每地址 5 次/秒，突发 10），测试模式下也生效。
+- 领取页面没有语言切换（登录页首次加载的预算），文案是单独的消息组，随页面加载。
+- 安装器（P11 前的最小改动）：不再写 `admin` 和 `.bootstrap-admin-password`，拒绝 `--admin-email`/`--admin-password`，安装或更新成功后以服务用户身份执行一次 `admin claim-link`；已有管理员时不打印。
+
 ### 3.8 自动备份（N32）
 
 **备份包。** `backups/anix-control-<UTC 时间>-<版本>-<类型>.tar.gz`，内容：

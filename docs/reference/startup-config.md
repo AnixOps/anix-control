@@ -47,30 +47,29 @@ An earlier (4.x) file still loads: its keys are in the
 [deprecated list](configuration.md#deprecated-keys), each warned about once.
 `anix-control config rewrite --in <old> --out <new>` turns it into the
 operator keys ([UPGRADE](../UPGRADE.md#configuration-rewrite-on-upgrade)).
-While PostgreSQL and the first-administrator password are still read (until
-M2 P4 and P9), a file for a SQLite panel with its first administrator is:
+While PostgreSQL is still supported (until M2 P4), a file for a SQLite
+panel is:
 
 ```yaml
 domain: panel.example.com
 database:
   driver: sqlite
   database: /opt/anixops/control/config/data/v2board.db
-admin:
-  email: admin@example.com
-  # Required on the first start of an empty database. It is never
-  # generated or printed by Control.
-  password: ""
 ```
 
-No secret goes into the file: the root key in `data_dir` derives the JWT
-secret and seals the CA, ACME and join token keys.
+No secret and no administrator go into the file: the root key in `data_dir`
+derives the JWT secret and seals the CA, ACME and join token keys, and the
+first administrator claims the panel with a one-time link
+([quickstart](quickstart.md#the-first-administrator)). `admin.email` and
+`admin.password` are ignored with a warning.
 
 ## 3. Local Binary Startup
 
 The development instance:
 
 ```bash
-ANIX_CONTROL_ADMIN_PASSWORD='choose-a-password' make run
+make run
+make claim-link    # on an empty database: the link that creates the first administrator
 ```
 
 It keeps its SQLite database and root key in `.dev/` (ignored), serves the
@@ -109,7 +108,7 @@ Development (builds this checkout and runs a throwaway PostgreSQL):
 
 ```bash
 docker compose up -d --build
-ANIX_CONTROL_ADMIN_PASSWORD='choose-a-password' docker compose up -d --build
+docker compose exec control /app/anix-control admin claim-link   # the first administrator's link
 ```
 
 Production uses `docker-compose.prod.yml` with a released image digest, an
@@ -144,6 +143,11 @@ The runtime flow is now:
 9. start the background workers, among them the certificate loop, which
    sends the first ACME request at once and never blocks a handshake
 
+Before step 7, a database without an administrator logs one line,
+``No administrator yet. Run `sudo anix-control admin claim-link` to get the
+claim link.``: the start creates no administrator and generates no link
+or password ([quickstart](quickstart.md#the-first-administrator)).
+
 Database preparation runs under a PostgreSQL advisory lock, so several Control
 processes starting together (a rolling update, or `migrate` next to a server)
 run it one at a time:
@@ -159,9 +163,9 @@ run it one at a time:
 - then the seeds that run at every start: the default service scopes, the
   official plugin catalog and target locks, the node secret split state, the
   module and forward link CAs, the kernel API views, the plugin trust root,
-  the built-in package bootstrap (below), and the default admin, subscription
+  the built-in package bootstrap (below), and the default subscription
   group, plan and authorized key; while the flux tables exist, the forward
-  runtime settings and port bindings.
+  runtime settings and port bindings. No administrator is created.
 
 The built-in package bootstrap verifies every official package embedded in
 the binary against `plugins.official_public_key` and installs, upgrades and

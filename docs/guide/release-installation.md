@@ -42,7 +42,6 @@ curl -fsSL \
   -o /tmp/anix-control-install.sh
 sudo bash /tmp/anix-control-install.sh install \
   --version "${VERSION}" \
-  --admin-email "admin@example.com" \
   --grpc-name grpc.example.com
 rm -f /tmp/anix-control-install.sh
 ```
@@ -62,7 +61,7 @@ command; they fetch `scripts/install.sh` at the tag named by `--version`:
 
 ```bash
 curl -fsSL "https://raw.githubusercontent.com/AnixOps/anix-control/${VERSION}/install.sh" |
-  sudo bash -s -- install --version "${VERSION}" --admin-email "admin@example.com"
+  sudo bash -s -- install --version "${VERSION}"
 ```
 
 Piped from `curl` they never run a `scripts/install.sh` that happens to be in
@@ -86,11 +85,10 @@ The installer will:
    switches from an existing `config.yaml`.
 6. Download the configuration template that matches the selected tag (the
    `domain` line, which the installer keeps a comment).
-7. Generate the first administrator password and write the first
-   administrator into `config.yaml` ([The configuration file](#environment-production)).
-   The first administrator is `--admin-email`, or `admin@anixops.local`
-   without it. No JWT secret or API token: the root key derives the JWT
-   secret.
+7. Write `config.yaml` from the template and nothing else
+   ([The configuration file](#environment-production)): no administrator,
+   no password, no JWT secret or API token. The root key derives the JWT
+   secret, and the first administrator claims the panel (step 11).
 8. Generate the CA key-encryption key (`module_runtime.ca_kek`) in
    `config/secrets/module_ca_kek` (mode 0600, printed only as a fingerprint)
    and, given a publicly trusted certificate, enable gRPC with TLS
@@ -99,7 +97,10 @@ The installer will:
    `ANIX_CONTROL_DATA_DIR=<install dir>/data` (mode 0700): Control creates
    its root key there at the first start, adopting the CA key of step 8.
 10. Start the service and require `http://127.0.0.1:8080/health` to succeed;
-   a fresh V4 install also verifies the identity package gateway and login.
+   a fresh V4 install also verifies the identity package gateway.
+11. While the panel has no administrator, print the one-time claim link
+   ([The first administrator](#the-first-administrator)). With an
+   administrator (an update) it prints nothing.
 
 The normal configuration template keeps package execution, Agent dispatch, and
 topology execution disabled. A V4 installer is the explicit exception: it
@@ -108,55 +109,66 @@ identity package, while leaving Agent dispatch and topology execution disabled.
 Existing configuration files retain every other value; a non-empty
 operator-selected bootstrap directory is not replaced.
 
-The generated initial password is stored at
-`/opt/anixops/control/.bootstrap-admin-password` with restricted permissions. Store it
-in a password manager, sign in, change the password, then remove that file:
+### The first administrator
 
-```bash
-sudo rm -f /opt/anixops/control/.bootstrap-admin-password
+No administrator password is set or stored anywhere. A fresh install ends
+with a link like this, printed to your terminal only:
+
+```text
+Open this link within 24 hours to create the panel's first administrator. It works once.
+
+  https://panel.example.com/claim#anixclaim_...
 ```
 
-To supply an initial password non-interactively, use `--admin-password`. Do
-not put secrets in shell history on shared hosts.
+Open it, choose the administrator's email and password (at least 6
+characters), and the page signs you in. The token after `#` never reaches
+the server in a request line or a log: the page sends it once, in the body of
+`POST /api/v5/claim`. Without `domain` (this installer does not set it yet)
+the command prints `<the panel's address>/claim#anixclaim_...` and the
+local listener: put the address your reverse proxy serves in front of
+`/claim`. While the panel's certificate is not publicly trusted yet it also
+prints `https://<this machine's public address>/claim#...`.
 
-Without `--admin-email` the first administrator is `admin@anixops.local`, the
-server's own default. Control's login check refuses an address whose domain has
-no dot (`admin@localhost`), and the installer does not check an address you
-pass, so give a real one: the install's final login check fails otherwise. The
-email and the password are written to `config.yaml` exactly as given; a
-backslash, a quote, `$`, `&`, `#`, a space and non-ASCII text are all kept.
-A value that cannot be carried unchanged is refused, with the reason, before
-`config.yaml` is written: an empty value, a control character (a line break, a
-tab or a carriage return; a password read with `$(cat file)` from a file with
-Windows line endings ends in one), U+2028 or U+2029, and bytes that are not
-UTF-8 (a password typed in a Latin-1 terminal). Run the command again with the
-value corrected; the next run starts from nothing.
+The link works once and for 24 hours. For a new one (it replaces the
+previous link), run the command as the service user with the unit's
+settings:
+
+```bash
+sudo -u anixops env \
+  ANIX_CONTROL_CONFIG=/opt/anixops/control/config/config.yaml \
+  ANIX_CONTROL_DATA_DIR=/opt/anixops/control/data \
+  ANIX_CONTROL_MODULE_RUNTIME_CA_KEK_FILE=/opt/anixops/control/config/secrets/module_ca_kek \
+  /opt/anixops/control/bin/anix-control admin claim-link
+```
+
+Until someone claims the panel, every start logs ``No administrator yet. Run
+`sudo anix-control admin claim-link` to get the claim link.`` and the sign-in
+page says the same. Once an administrator exists the command refuses (exit
+status 1) and the claim answers 404; administrators add others under Users.
+
+`--admin-email` and `--admin-password` were removed: the installer refuses
+them with the reason. A `config.yaml` that still has an `admin:` section
+loads, and Control ignores it with a warning; an existing administrator
+keeps working unchanged.
 
 ### After an install that stopped without a message
 
 On a host with no previous release, earlier installers stopped with exit 1 and
 no message right after `Staged verified identity bootstrap package`: the service
 user, the directory layout and `config/config.yaml` were written, but no binary,
-unit or service. That `config.yaml` names `admin@localhost` as the
-administrator unless you passed `--admin-email`, an address Control's login
-check refuses, and the host has no CA key. An existing `config.yaml` is never
-rewritten, so running `install` again keeps those values, starts the service
-and, without `--admin-email` and `--admin-password`, reports success. The first
-start then creates the administrator from the file. Control reads `admin.email`
-and `admin.password` only for that, when the database holds no administrator;
-once one exists, editing them changes nothing.
-
-Remove the leftovers before the next `install`, so that it writes a new
-`config.yaml`:
+unit or service. That `config.yaml` named `admin@localhost` as the
+administrator, an address Control's login check refuses, and the host has no
+CA key. Remove the leftovers before the next `install`, so that it writes a
+new `config.yaml`:
 
 ```bash
 sudo rm -f /opt/anixops/control/config/config.yaml /opt/anixops/control/.bootstrap-admin-password
 ```
 
-If you already ran `install` again, the service holds that `admin@localhost`
-administrator, which cannot sign in. On a host where nothing else has been set
-up, stop the service and remove the SQLite database as well, so that the first
-start creates the administrator again from the new file:
+If an earlier release already started with that file, its database holds the
+`admin@localhost` administrator, which cannot sign in, and the claim link is
+refused because an administrator exists. On a host where nothing else has
+been set up, stop the service and remove the SQLite database as well:
 
 ```bash
 sudo systemctl stop anix-control
@@ -164,15 +176,15 @@ sudo rm -f /opt/anixops/control/config/data/v2board.db{,-wal,-shm}
 ```
 
 That discards everything the database holds. With PostgreSQL, start from an
-empty database instead. Then run `install` again with `--version` and
-`--admin-email`.
+empty database instead. Then run `install` again with `--version`: it ends
+with the claim link.
 
 ### Environment: production
 
 Control always runs as production: `env` is no longer read (a file that
 still sets it logs one warning), and a development instance is the
 `-debug` flag. The configuration a fresh install writes is the template's
-commented `domain` line plus the first administrator; without `domain`
+commented `domain` line and nothing else; without `domain`
 Control serves plain http on `127.0.0.1:8080` behind the reverse proxy
 (`tls.mode` external) ([configuration](../reference/configuration.md#operator-keys)).
 

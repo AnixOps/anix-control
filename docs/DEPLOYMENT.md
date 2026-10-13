@@ -121,7 +121,7 @@ cosign verify ghcr.io/anixops/anix-control@sha256:<digest> \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   --certificate-identity-regexp '^https://github.com/AnixOps/anix-control/'
 
-# 3) 编辑 control.env（数据库地址、管理员邮箱等），创建 secrets（容器 uid 10001 可读）
+# 3) 编辑 control.env（数据库地址等），创建 secrets（容器 uid 10001 可读）
 install -d -m 0750 secrets
 printf '%s' '数据库密码' | install -m 0400 -o 10001 -g 10001 /dev/stdin secrets/db_password
 #    生成 jwt_secret 与 CA 密钥 secrets/module_ca_kek（已存在则保留，只打印指纹）；
@@ -130,11 +130,20 @@ sudo bash init-secrets.sh --grpc-name grpc.example.com
 
 # 4) 启动：migrate 一次性服务先准备库结构，control 随后启动
 docker compose -f docker-compose.prod.yml up -d
-# 新库需要 control.env 中已设置 ANIX_CONTROL_ADMIN_PASSWORD（或 _FILE），缺少时 migrate 报错退出
 docker compose -f docker-compose.prod.yml logs migrate
 docker compose -f docker-compose.prod.yml ps             # control 应为 healthy
 curl -fsS http://127.0.0.1:8080/readyz
+
+# 5) 新库：打印一次性领取链接，在浏览器中打开，设置首个管理员的邮箱和密码
+docker compose -f docker-compose.prod.yml exec control /app/anix-control admin claim-link
 ```
+
+首个管理员不再通过配置或环境变量设置（`admin.*` 与 `ANIX_CONTROL_ADMIN_*` 会被忽略并警告）：
+新库启动时只记录一行“No administrator yet. Run `sudo anix-control admin claim-link` to get the claim link.”。
+`admin claim-link` 只把链接打印到执行它的终端，链接一次有效、24 小时内有效，再次执行会作废旧链接；
+没有设置 `domain` 时它打印路径和本机监听地址，把路径接在反向代理对外的地址之后打开即可。
+已有管理员时命令以状态 1 拒绝，领取接口回答 404。详见
+[`reference/quickstart.md`](reference/quickstart.md#the-first-administrator)。
 
 说明：
 
@@ -218,12 +227,14 @@ export VERSION=v4.2.0   # 要安装的发布 tag
 curl -fsSL \
   "https://raw.githubusercontent.com/AnixOps/anix-control/${VERSION}/scripts/install.sh" \
   -o /tmp/anix-control-install.sh
-sudo bash /tmp/anix-control-install.sh install --version "${VERSION}" --admin-email "admin@example.com" \
+sudo bash /tmp/anix-control-install.sh install --version "${VERSION}" \
   --grpc-name grpc.example.com
 rm -f /tmp/anix-control-install.sh
 ```
 
-全新安装会生成 CA 密钥，并在有公网可信证书时开启 gRPC TLS（2.0.2）。
+全新安装会生成 CA 密钥，并在有公网可信证书时开启 gRPC TLS（2.0.2）。安装器不写入任何管理员或密码：
+面板还没有管理员时，它在最后打印一次性领取链接（`anix-control admin claim-link`），打开后设置首个管理员。
+`--admin-email`、`--admin-password` 已删除，传入时安装器拒绝并说明原因。
 
 安装器会验证 Release 中的 SHA-256，保留已有配置和数据库，更新失败时恢复上一个二进制/前端快照。完整步骤、反向代理、升级与回滚说明见 [`guide/release-installation.md`](guide/release-installation.md)。
 
@@ -377,7 +388,7 @@ bash config/deploy/clean_local_build_artifacts.sh --include-deploy-backups
 
 - `config/config.yaml`
   - 启动必读
-  - 管 server/database/cache/jwt/app/admin
+  - 管运营键与仍读取的旧键（database、forward_runtime 等），不含管理员和任何密钥
 `.env`
   - 用于 Docker Compose 或安装器的额外端口、密钥等元数据；运行时选择依旧来源于 `config/config.yaml.forward_runtime`
 - `v2_system_config`

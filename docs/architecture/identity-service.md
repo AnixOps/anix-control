@@ -409,8 +409,12 @@ expired (Control).
         - Control refuses HS256 tokens, from then on and after restarts.
 
         There is no rollback after finalize.
-      - **Bootstrap.** `InitAdmin` creates no default administrator once
-        identity is authoritative.
+      - **Bootstrap.** No start creates an administrator. The first one
+        claims the panel with a one-time link (`anix-control admin
+        claim-link`, `internal/adminclaim`); once identity is authoritative
+        the claim creates a linked subscriber (the password mirrored until
+        finalize) and hands the account to identity with a one-account
+        `ImportAccounts`, undoing the claim when identity refuses.
 13. End-to-end acceptance on Compose and kind (in place).
     - `config/scripts/identity_cutover_acceptance.sh` drives the whole move
       against a running Control.

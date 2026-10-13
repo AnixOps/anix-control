@@ -365,11 +365,12 @@ ordinary file is one line, `domain: panel.example.com`
 built-in values as a whole: every key it does not set keeps its default.
 Every 4.x key is in the deprecated list and is logged once at start, with
 where it is set: the keys whose feature still exists (the database while
-PostgreSQL is supported, the first administrator, the flux forward runtime,
+PostgreSQL is supported, the flux forward runtime,
 the legacy listener and gRPC keys, the registration policy, the legacy API
 tokens) are still read; the others (rate limits, timeouts, alert intervals,
-`env`, `server.mode`, `agent_control.*`, `cache.*`, ...) are ignored and the
-built-in value, the 4.2 default, stands. A key that is in no list (a typo)
+`env`, `server.mode`, `agent_control.*`, `cache.*`, the first
+administrator's `admin.*`, ...) are ignored and the built-in value, the 4.2
+default, stands ([The First Administrator Claims The Panel](#the-first-administrator-claims-the-panel)). A key that is in no list (a typo)
 stops the start, naming the closest key. Check a file before restarting:
 
 ```bash
@@ -422,12 +423,47 @@ sudo anix-control config rewrite --in /opt/anixops/control/config/config.yaml \
   not record signs every user out once.
 
 Keys the rewrite drops that the release still reads stop having their
-effect with the rewritten file: the first administrator's `admin.*` (needed
-only on an empty database), `app.api_token` and `grpc.api_token`,
+effect with the rewritten file: `app.api_token` and `grpc.api_token`,
 `forward_runtime.*`, `agent_install.agent_version` and `cn_mirror_url`,
 `server.trusted_proxies` and `log.format`. Keep a line
 in the new file when a deployment still needs it; it keeps warning until the
 milestone that removes it.
+
+## The First Administrator Claims The Panel
+
+From the release after 4.2.x on, no administrator is configured:
+`admin.email` and `admin.password` (and `ANIX_CONTROL_ADMIN_EMAIL`,
+`ANIX_CONTROL_ADMIN_PASSWORD`, their `_FILE` forms) are ignored with one
+warning each, and an empty database no longer stops the start for want of a
+password ([design](design/single-binary/README.md), N10).
+
+**An existing panel changes nothing.** Its administrators keep their
+accounts, passwords and second factors; a file or an environment that still
+sets `admin.*` starts with the warning. Remove the setting (and a leftover
+`/opt/anixops/control/.bootstrap-admin-password`) at your convenience.
+
+**A fresh panel** starts without an administrator and logs one line,
+``No administrator yet. Run `sudo anix-control admin claim-link` to get the
+claim link.``. The command prints a one-time link,
+`https://<domain>/claim#anixclaim_...`, on its terminal only; open it,
+choose the email and password, and the page signs you in. The link works
+once, for 24 hours, and running the command again replaces it. Once an
+administrator exists the command exits 1 and `POST /api/v5/claim` answers
+404. Where to run it:
+
+| Deployment | Command |
+|---|---|
+| systemd installer | the installer prints the link at the end; for a new one see [release-installation.md](guide/release-installation.md#the-first-administrator) |
+| Compose (production) | `docker compose -f docker-compose.prod.yml exec control /app/anix-control admin claim-link` |
+| Helm | `kubectl -n <namespace> exec deployment/<release>-anix-control -c control -- /app/anix-control admin claim-link` |
+| development (`make run`) | `make claim-link` |
+
+The installer's `--admin-email` and `--admin-password` are refused with the
+reason, and it no longer writes `admin:` or `.bootstrap-admin-password`.
+Automation that seeded an administrator through `ANIX_CONTROL_ADMIN_PASSWORD`
+now runs the command and posts the token, email and password to
+`POST /api/v5/claim` (201 on success; the CI smokes in `.github/workflows/ci.yml`
+show it).
 
 ## Artifact Verification
 

@@ -28,7 +28,9 @@ After the migrations the start seeds what every database has, as before: the
 default service scopes, the official plugin catalog and the plugin target
 locks; the node secret split state rows; the module and forward link CAs; the
 kernel API views (`kapi_*`); the plugin trust root and the identity package;
-the first administrator and the defaults. While the flux tables exist it also
+the defaults. It creates no administrator: the first one claims the panel
+with a one-time link, kept as a hash in `v5_control_meta` (`admin_claim`,
+below). While the flux tables exist it also
 normalizes the forward runtime settings and rebuilds the flux port bindings.
 
 ## The Runner's Tables
@@ -52,6 +54,7 @@ normalizes the forward runtime settings and rebuilds the flux port bindings.
 | `min_program_version` | Only once a migration declared one: the oldest Control that may open the database |
 | `created_at` | When the runner first prepared the database (RFC 3339, UTC) |
 | `origin` | `fresh` (created by the runner) or `adopted` (an earlier Control created it) |
+| `admin_claim` | Only while a first-administrator claim link is pending: `{"sha256", "expires_at", "created_at"}` as JSON, the SHA-256 of the token and its expiry, never the token (`anix-control admin claim-link` writes it, a claim deletes it with the administrator's creation) |
 
 Check them with `sqlite3 control.db 'SELECT * FROM v5_schema_migration; SELECT * FROM v5_control_meta;'`
 or the same `SELECT`s in `psql`.

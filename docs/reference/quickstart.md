@@ -7,7 +7,7 @@ This page is the shortest path to getting `anix-control` running with the unifie
 Always prepare these inputs first:
 
 - `config/config.yaml` (local, gitignored; copy from [`config/config.yaml.example`](../../config/config.yaml.example), the `domain` line)
-  - the operator keys ([configuration](configuration.md#operator-keys)); the deprecated keys still read until later milestones (the database, the first administrator, `forward_runtime`) go here too
+  - the operator keys ([configuration](configuration.md#operator-keys)); the deprecated keys still read until later milestones (the database, `forward_runtime`) go here too
 - `data_dir/root.key` (`/var/lib/anix-control` by default): the root key, which Control creates at its first start
 - `.env` (local, gitignored; copy from [`.env.example`](../../.env.example))
   - optional Docker Compose and installer env file
@@ -19,7 +19,7 @@ Important:
 - `config/config.yaml` holds the operator keys and no secret; `anix-control config check` checks it
 - runtime selection is defined in `forward_runtime` (deprecated, read until M5)
 - merged runtime values are persisted into `v2_system_config`
-- no reusable administrator email or password is shipped with Control; set unique values in `admin.email` and `admin.password` (or the installer's corresponding flags) before first start
+- no administrator, email or password is configured anywhere: on an empty database the first administrator claims the panel with a one-time link, `https://<domain>/claim#anixclaim_…`, that `anix-control admin claim-link` prints (it works once, for 24 hours; [first administrator](#the-first-administrator)). `admin.email` and `admin.password` are ignored with a warning
 - the official packages are built into the release binary and installed at every start; a binary built from a checkout carries them only after `make build` (or `make build-packages`), signed with a development key that `make run` configures (`plugins.official_public_key`); a plain `go build` carries none and imports `identity-platform` from `plugins.identity_bootstrap_package_dir`
 
 ## Docker Quickstart
@@ -28,8 +28,10 @@ Development stack (builds this checkout, runs a throwaway PostgreSQL, no config
 file needed):
 
 ```bash
-ANIX_CONTROL_ADMIN_PASSWORD='choose-a-password' docker compose up -d --build
+docker compose up -d --build
 docker compose ps                  # control becomes healthy
+docker compose exec control /app/anix-control admin claim-link
+                                   # open the link it prints: the first administrator
 ```
 
 Open:
@@ -64,9 +66,9 @@ deployments use `docker-compose.prod.yml` with a released image; see
 cp config/config.yaml.example config/config.yaml
 ```
 
-2. Set `domain` (or remove it to run behind a proxy on `127.0.0.1:8080`),
-   and, for an empty database, `admin.email` and `admin.password`. No JWT
-   secret or API token: the root key derives the JWT secret.
+2. Set `domain` (or remove it to run behind a proxy on `127.0.0.1:8080`).
+   No JWT secret, API token or administrator password: the root key derives
+   the JWT secret, and the first administrator claims the panel (step 5).
 
 3. Start backend:
 
@@ -86,6 +88,31 @@ cd web
 npm ci
 npm run dev
 ```
+
+5. On an empty database, print the claim link and open it (with `make run`,
+   `make claim-link` does the same):
+
+```bash
+GOWORK=off go run ./cmd/server admin claim-link   # reads ANIX_CONTROL_CONFIG or config/config.yaml
+```
+
+## The First Administrator
+
+A fresh panel has no administrator and no password anywhere. The start logs
+one line, ``No administrator yet. Run `sudo anix-control admin claim-link` to
+get the claim link.``, and nothing else; the sign-in page says the same.
+
+- `anix-control admin claim-link [-ttl 24h]` prints
+  `https://<domain>/claim#anixclaim_…` on its terminal only (never a log),
+  plus `https://<this machine's public address>/claim#…` while the panel's
+  certificate is not publicly trusted yet. Without `domain` it prints the
+  path and the local listener instead.
+- The link works once, for at most 24 hours; running the command again
+  replaces it. The token stays in the URL fragment, which the browser never
+  sends: the claim page posts it with the email and password you choose
+  (`POST /api/v5/claim`), creates the administrator and signs you in.
+- Once the panel has an administrator the command refuses (exit status 1),
+  the claim answers 404, and nothing changes for that administrator.
 
 ## Runtime Overrides
 

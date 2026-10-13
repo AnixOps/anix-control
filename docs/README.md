@@ -56,6 +56,7 @@ Use this tree like NodeX:
 - Docker quickstart: [`reference/quickstart.md`](reference/quickstart.md)
 - Environment variables (`ANIX_CONTROL_*`): [`reference/environment-variables.md`](reference/environment-variables.md)
 - Exact startup flow: [`reference/startup-config.md`](reference/startup-config.md)
+- The first administrator (one-time claim link, `anix-control admin claim-link`): [`reference/quickstart.md`](reference/quickstart.md#the-first-administrator)
 - Database schema migrations (adoption, refusals, adding one): [`reference/database-migrations.md`](reference/database-migrations.md)
 - Config source-of-truth: [`reference/configuration.md`](reference/configuration.md)
 - Repository layout: [`reference/repository-layout.md`](reference/repository-layout.md)
