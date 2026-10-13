@@ -21,6 +21,13 @@
   version. `prepare_release.py` takes `--agent-tag` (default: keep the file's value), and
   `check_release_version.py` and the release workflow check require a `vX.Y.Z[-rc.N]` tag in the file and in
   the release build step.
+- A plan created in the admin UI is on sale. `v2_plan.show` defaulted to 0, the plan form had no `show` field, and
+  the user's plan list holds only `show = 1`, so a new plan was invisible to every user. `POST /api/v2/admin/plans`
+  now stores `show = 1` when the body omits `show` (or sends `null`); an explicit `show: 0` is kept, and updates
+  still write the body as given. The plan form has an 上架 / On sale switch (on for a new plan, the stored value on
+  edit), and the plan list and details show a 在售 / 已下架 badge. The kernel handler and the plan package's
+  native route behave alike (`internal/tests/plancompat`); the native route serves the request by default, so a
+  panel needs this release's `plan` package for the create default (the form change is in the web app).
 
 ### Added
 

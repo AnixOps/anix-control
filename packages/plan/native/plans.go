@@ -1,8 +1,11 @@
 package native
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"strings"
 
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
 	"github.com/gin-gonic/gin/binding"
@@ -36,6 +39,12 @@ func (s *Service) AdminCreate(ctx context.Context, request pluginhostsdk.NativeR
 	if err := binding.JSON.BindBody(request.Body, &p); err != nil {
 		return s.panelError("参数错误: " + err.Error())
 	}
+	// A plan created without a show value is on sale, as the kernel's
+	// handler does: the user's plan list holds only show = 1. An explicit 0
+	// is kept.
+	if !jsonFieldGiven(request.Body, "show") {
+		p.Show = 1
+	}
 	db, err := s.Open(ctx)
 	if err != nil {
 		return s.panelError("创建失败: " + err.Error())
@@ -45,6 +54,22 @@ func (s *Service) AdminCreate(ctx context.Context, request pluginhostsdk.NativeR
 	}
 	s.emit(db, "plan.created", &p)
 	return s.panel(p)
+}
+
+// jsonFieldGiven reports whether the JSON object body names field with a
+// value other than null (the name matches case-insensitively, as the struct
+// binding does).
+func jsonFieldGiven(body []byte, field string) bool {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(body, &fields); err != nil {
+		return false
+	}
+	for name, raw := range fields {
+		if strings.EqualFold(name, field) {
+			return !bytes.Equal(bytes.TrimSpace(raw), []byte("null"))
+		}
+	}
+	return false
 }
 
 // AdminGet is GET /api/v2/admin/plans/:id.

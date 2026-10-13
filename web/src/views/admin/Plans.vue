@@ -32,6 +32,13 @@
       <template #empty-actions>
         <UiButton variant="primary" :icon="Plus" @click="openCreateModal">{{ pt('actions.create') }}</UiButton>
       </template>
+      <template #cell-show="{ row }">
+        <UiBadge
+          :tone="isOnSale(row) ? 'success' : 'neutral'"
+          :label="isOnSale(row) ? pt('labels.onSale') : pt('labels.offSale')"
+          data-test="plan-show-badge"
+        />
+      </template>
       <template #cell-groups="{ row }">
         <span v-if="(planGroups[row.id] || []).length" class="plan-groups">
           <UiBadge v-for="group in planGroups[row.id]" :key="group.id" tone="neutral" :dot="false" :label="group.name" />
@@ -50,6 +57,7 @@
     >
       <template v-if="detailPlan">
         <UiGroupedList :title="pt('detail.limits')">
+          <UiGroupedListRow :label="pt('table.status')" :value="isOnSale(detailPlan) ? pt('labels.onSale') : pt('labels.offSale')" />
           <UiGroupedListRow :label="pt('table.transfer')" :value="formatTransfer(detailPlan.transfer_enable)" />
           <UiGroupedListRow :label="pt('table.limits')" :value="formatPlanLimits(detailPlan)" />
           <UiGroupedListRow v-if="isCommercial" :label="pt('table.monthPrice')" :value="formatPrice(detailPlan.month_price)" />
@@ -97,6 +105,13 @@
         <UiTextField v-if="isCommercial" v-model.number="form.month_price" type="number" min="0" :label="pt('planModal.fields.monthPrice')" :help="formatPrice(form.month_price)" data-test="plan-month-price-field" />
         <UiTextField v-model.number="form.speed_limit" type="number" min="0" suffix="Mbps" :label="pt('planModal.fields.speedLimit')" :help="pt('planModal.help.zeroUnlimited')" data-test="plan-speed-limit-input" />
         <UiTextField v-model.number="form.device_limit" type="number" min="0" :label="pt('planModal.fields.deviceLimit')" :help="pt('planModal.help.zeroUnlimited')" data-test="plan-device-limit-input" />
+        <UiSwitch
+          v-model="form.show"
+          class="form-grid__full"
+          data-test="plan-show-switch"
+          :label="pt('planModal.fields.show')"
+          :description="pt('planModal.help.show')"
+        />
       </div>
       <p v-if="planError" class="form-error" role="alert" data-test="plan-save-error">{{ planError }}</p>
       <template #footer="{ close }">
@@ -203,6 +218,7 @@ import UiIconButton from '@/ui/UiIconButton.vue'
 import UiPageHeader from '@/ui/UiPageHeader.vue'
 import UiSearchField from '@/ui/UiSearchField.vue'
 import UiSheet from '@/ui/UiSheet.vue'
+import UiSwitch from '@/ui/UiSwitch.vue'
 import UiTextField from '@/ui/UiTextField.vue'
 import { useConfirm } from '@/ui/composables/useConfirm'
 import { useFormat } from '@/ui/composables/useFormat'
@@ -249,13 +265,19 @@ const assignUserError = ref('')
 const groupError = ref('')
 const togglingGroupId = ref(null)
 
+// `show` is the plan's sale state (v2_plan.show): the user's purchase list
+// holds only plans with show = 1. A new plan starts on sale; the form keeps
+// the stored state when it edits one.
 const form = reactive({
   name: '',
   transfer_enable: 0,
   speed_limit: 0,
   device_limit: 0,
-  month_price: null
+  month_price: null,
+  show: true
 })
+
+const isOnSale = plan => Number(plan?.show) === 1
 
 const assignForm = reactive({
   user_id: null,
@@ -304,6 +326,7 @@ const resetPlanForm = () => {
   form.speed_limit = 0
   form.device_limit = 0
   form.month_price = null
+  form.show = true
   planError.value = ''
   nameError.value = ''
 }
@@ -363,6 +386,7 @@ const columns = computed(() => [
   ...(isCommercial.value
     ? [{ key: 'month_price', label: pt('table.monthPrice'), sortable: true, numeric: true, align: 'end', format: value => formatPrice(value) }]
     : []),
+  { key: 'show', label: pt('table.status'), sortable: true, sortValue: plan => (isOnSale(plan) ? 1 : 0) },
   { key: 'groups', label: pt('table.subscriptionGroups'), secondary: true, sortValue: plan => (planGroups.value[plan.id] || []).length },
   { key: 'id', label: t('miscPages.shared.id'), numeric: true, sortable: true, hidden: true }
 ])
@@ -408,6 +432,7 @@ const edit = (plan) => {
   form.speed_limit = Number(plan.speed_limit || 0)
   form.device_limit = Number(plan.device_limit || 0)
   form.month_price = plan.month_price
+  form.show = isOnSale(plan)
   planError.value = ''
   nameError.value = ''
   showPlanModal.value = true
@@ -454,7 +479,8 @@ const save = async () => {
     transfer_enable: form.transfer_enable,
     speed_limit: Number(form.speed_limit || 0),
     device_limit: Number(form.device_limit || 0),
-    month_price: form.month_price
+    month_price: form.month_price,
+    show: form.show ? 1 : 0
   }
   const payload = editingPlanId.value ? { ...editingPlan.value, ...fields } : fields
 

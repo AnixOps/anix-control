@@ -1,7 +1,10 @@
 package handler
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -13,6 +16,7 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/service"
 	"github.com/AnixOps/anix-control/v4/internal/subscriber"
 	"github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin/binding"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
@@ -489,16 +493,47 @@ func (h *AdminHandler) DeleteUser(c *gin.Context) {
 // @Failure 500 {object} map[string]any
 // @Router /admin/plans [post]
 func (h *AdminHandler) CreatePlan(c *gin.Context) {
+	var body []byte
+	if c.Request.Body != nil {
+		var err error
+		if body, err = io.ReadAll(c.Request.Body); err != nil {
+			panelError(c, "参数错误: "+err.Error())
+			return
+		}
+	}
 	var p model.Plan
-	if err := c.ShouldBindJSON(&p); err != nil {
+	if err := binding.JSON.BindBody(body, &p); err != nil {
 		panelError(c, "参数错误: "+err.Error())
 		return
+	}
+	// A plan created without a show value is on sale: the user's plan list
+	// holds only show = 1, so a plan the administrator creates and never
+	// hears of again would stay invisible. An explicit 0 is kept.
+	if !jsonFieldGiven(body, "show") {
+		p.Show = 1
 	}
 	if err := h.planService.Create(&p); err != nil {
 		panelError(c, "创建失败: "+err.Error())
 		return
 	}
 	panelSuccess(c, p)
+}
+
+// jsonFieldGiven reports whether the JSON object body names field with a
+// value other than null (the name matches case-insensitively, as the struct
+// binding does). A zero value cannot tell an omitted field from an explicit
+// one after binding.
+func jsonFieldGiven(body []byte, field string) bool {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(body, &fields); err != nil {
+		return false
+	}
+	for name, raw := range fields {
+		if strings.EqualFold(name, field) {
+			return !bytes.Equal(bytes.TrimSpace(raw), []byte("null"))
+		}
+	}
+	return false
 }
 
 // GetPlans godoc

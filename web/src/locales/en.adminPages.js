@@ -392,6 +392,9 @@ export default {
       },
       placeholders: {
         name: 'Enter template name'
+      },
+      help: {
+        show: 'When off, users do not see this template.'
       }
     },
     assignModal: {
@@ -424,7 +427,8 @@ export default {
       transfer: 'Traffic',
       limits: 'Limits',
       monthPrice: 'Monthly price',
-      subscriptionGroups: 'Subscription groups'
+      subscriptionGroups: 'Subscription groups',
+      status: 'Status'
     },
     actions: {
       create: 'Create plan',
@@ -451,13 +455,15 @@ export default {
         transfer: 'Traffic quota',
         speedLimit: 'Speed limit',
         deviceLimit: 'Device limit',
-        monthPrice: 'Monthly price (cents)'
+        monthPrice: 'Monthly price (cents)',
+        show: 'On sale'
       },
       placeholders: {
         name: 'Enter plan name'
       },
       help: {
-        zeroUnlimited: '0 means no limit.'
+        zeroUnlimited: '0 means no limit.',
+        show: 'When off, users do not see this plan on the purchase page. Users who already have it are not affected.'
       }
     },
     assignModal: {
@@ -485,7 +491,9 @@ export default {
       speedLimitMbps: '{value} Mbps',
       deviceLimitCount: '{value} devices',
       noGroups: 'None',
-      noGroupsHint: 'This plan grants no subscription groups yet.'
+      noGroupsHint: 'This plan grants no subscription groups yet.',
+      onSale: 'On sale',
+      offSale: 'Off sale'
     },
     confirm: {
       deleteTitle: 'Delete plan {name}?',
