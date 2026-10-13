@@ -158,8 +158,10 @@ func doctorChecks(ctx context.Context, cfg *config.Config, db *gorm.DB, env doct
 				add(id, doctorOK, fmt.Sprintf("%s is valid until %s, issued by %s.", label, formatTime(certificate.NotAfter), certificate.Issuer), "")
 			case certificate.State == panelcert.StateValid && certificate.RenewalFailing:
 				add(id, doctorWarn, fmt.Sprintf("%s is valid until %s, but its renewal fails: %s", label, formatTime(certificate.NotAfter), certificate.LastError), certificate.Fix)
+			case certificate.State == panelcert.StateValid && !servesNodes(certificate.Roles):
+				add(id, doctorWarn, fmt.Sprintf("%s is valid but does not verify against the system CAs: fine behind a CDN that accepts it (an origin certificate); browsers and nodes that reach Control directly refuse it: %s", label, certificate.LastError), certificate.Fix)
 			case certificate.State == panelcert.StateValid:
-				add(id, doctorFail, fmt.Sprintf("%s is valid but does not verify against the system CAs, which nodes and browsers use: %s", label, certificate.LastError), certificate.Fix)
+				add(id, doctorFail, fmt.Sprintf("%s is valid but does not verify against the system CAs, which nodes use: %s", label, certificate.LastError), certificate.Fix)
 			case certificate.State == panelcert.StatePending:
 				add(id, doctorWarn, label+" is being requested; Control serves a self-signed certificate until then.", "Wait a minute, then run anix-control tls status.")
 			default:
@@ -307,4 +309,14 @@ func portOf(address string) string {
 		return address
 	}
 	return port
+}
+
+// servesNodes tells whether a certificate is the one nodes dial (gRPC).
+func servesNodes(roles []string) bool {
+	for _, role := range roles {
+		if role == panelcert.RoleGRPC {
+			return true
+		}
+	}
+	return false
 }

@@ -237,6 +237,20 @@ func TestReadinessScriptSignature(t *testing.T) {
 // Agents verify the gRPC certificate against their system CAs and fail
 // closed: until Control serves a valid, publicly trusted certificate for
 // the name nodes dial, the command is blocked.
+// A panel certificate that is valid but not publicly trusted (a CDN's
+// origin certificate in tls.mode files) only warns: behind the CDN the
+// command works.
+func TestReadinessUntrustedPanelCertificateWarns(t *testing.T) {
+	in := readyInput()
+	in.PanelCertificate.PubliclyTrusted = false
+	readiness := CheckReadiness(in)
+	check := checkOf(t, readiness, CheckPanelCertificate)
+	assert.False(t, check.OK)
+	assert.Equal(t, LevelWarning, check.Level)
+	assert.Contains(t, check.Message, "origin certificate")
+	assert.True(t, readiness.Ready)
+}
+
 func TestReadinessCertificates(t *testing.T) {
 	for name, tc := range map[string]struct {
 		mutate   func(*ReadinessInput)

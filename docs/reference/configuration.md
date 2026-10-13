@@ -129,10 +129,14 @@ alerts replace the CA's reminders.
 console's banner, `anix-control tls status` and `anix-control doctor` show
 each certificate: `pending`, `valid` or `failed`, what is served (`acme`,
 `file`, `self_signed`), whether it verifies against the system roots, its
-expiry and renewal, the last error and a fix. While the panel or gRPC
-certificate is not valid and publicly trusted, the install readiness check
-(`panel_certificate`, `grpc_certificate`) withholds the join command: Agents
-verify the gRPC certificate against their system CAs and fail closed. The
+expiry and renewal, the last error and a fix. While the gRPC certificate is
+not valid and publicly trusted, or the panel's own certificate is not valid,
+the install readiness check (`grpc_certificate`, `panel_certificate`)
+withholds the join command: Agents verify the gRPC certificate against their
+system CAs and fail closed. A panel certificate that is valid but not
+publicly trusted (a CDN's origin certificate in `files` mode) only warns,
+since nodes then download the script through the CDN; the banner shows it
+only for a certificate the nodes dial. The
 alerts `panel_certificate_expiring` and `panel_certificate_renewal_failing`
 notify the administrators ([`kernel-alerts.md`](kernel-alerts.md)).
 `anix-control tls retry` (or **重新申请** in the banner, `POST

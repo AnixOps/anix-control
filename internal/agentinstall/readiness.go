@@ -408,6 +408,13 @@ func checkPanelCertificate(in ReadinessInput) ReadinessCheck {
 	}
 	if problem, fix := certificateProblem("panel", in.PanelCertificate); problem != "" {
 		check.Message, check.Fix = problem, fix
+		if in.PanelCertificate.State == CertificateValid {
+			// Valid but not publicly trusted: a CDN's origin certificate
+			// works behind the CDN, which nodes then go through; only nodes
+			// that reach Control directly refuse it.
+			check.Level = LevelWarning
+			check.Message += " Behind a CDN that accepts it (an origin certificate) the command works; nodes that reach Control directly refuse it."
+		}
 		return check
 	}
 	check.OK = true

@@ -50,13 +50,16 @@ const PROBLEMS = new Set([
 ])
 
 // The certificate that needs attention most: failed, then pending, then a
-// failing renewal or one that is not publicly trusted.
+// failing renewal, then one the nodes dial (gRPC) that is not publicly
+// trusted. A web-only certificate that is not (a CDN's origin certificate)
+// is fine behind the CDN, so it shows nothing.
 function worst(certificates) {
   const rank = certificate => {
     if (certificate.state === 'failed') return 4
     if (certificate.state === 'pending') return 3
     if (certificate.renewal_failing) return 2
-    if (certificate.state === 'valid' && certificate.publicly_trusted === false) return 1
+    const forNodes = (certificate.roles || []).includes('grpc')
+    if (certificate.state === 'valid' && certificate.publicly_trusted === false && forNodes) return 1
     return 0
   }
   return [...certificates].sort((a, b) => rank(b) - rank(a)).find(certificate => rank(certificate) > 0) || null

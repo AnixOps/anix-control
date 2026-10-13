@@ -103,9 +103,18 @@ describe('PanelCertificateBanner', () => {
 
     // A staging CA's certificate: requesting it again would not help.
     kernel.getPanelStatus.mockResolvedValue(status(certificate({ publicly_trusted: false, problem: 'untrusted' })))
-    await mountBanner()
+    const third = await mountBanner()
     expect(screen.getByTestId('panel-certificate-banner').getAttribute('data-state')).toBe('untrusted')
     expect(screen.queryByTestId('panel-certificate-retry')).toBeNull()
+    third.unmount()
+
+    // A web-only origin certificate behind a CDN is fine: no banner.
+    kernel.getPanelStatus.mockResolvedValue(status(
+      certificate({ roles: ['web'], source: 'files', serving: 'file', publicly_trusted: false, problem: 'untrusted' }),
+      certificate({ name: 'grpc.example.com', roles: ['grpc'] })
+    ))
+    await mountBanner()
+    expect(screen.queryByTestId('panel-certificate-banner')).toBeNull()
   })
 
   it('requests again and says when the hourly limit holds it back', async () => {
