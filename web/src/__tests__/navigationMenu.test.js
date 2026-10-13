@@ -9,6 +9,7 @@ import {
   paletteEntries
 } from '@/navigation/menu'
 import { normalizeWebUIMenuParent } from '@/extensions/menuRegistry'
+import { closeAgentUpgrade, useAgentUpgradeSheet } from '@/composables/useAgentUpgradeSheet'
 import router from '@/router'
 
 const t = key => key
@@ -41,7 +42,6 @@ describe('navigation/menu.js: buildAdminMenu', () => {
     // flux-clone 转发 and 转发节点 were removed in v4.2 (F5d).
     expect(network.map(item => [item.id, item.to])).toEqual([
       ['nodes', '/admin/nodes'],
-      ['agents', '/admin/agent'],
       ['deployments', '/admin/deployments']
     ])
     expect(groups.find(group => group.id === 'extensions').items.map(item => item.id)).toEqual(['plugins'])
@@ -147,7 +147,6 @@ describe('navigation/menu.js: active item', () => {
     ['/admin/dashboard', 'dashboard'],
     ['/admin/monitor', 'monitor'],
     ['/admin/monitor/traffic', 'monitor'],
-    ['/admin/agent', 'agents'],
     ['/admin/nodes', 'nodes'],
     ['/admin/plans', 'plans']
   ])('selects exactly one item for %s', (path, expected) => {
@@ -170,14 +169,29 @@ describe('navigation/menu.js: palette entries', () => {
     expect(paths).not.toContain('/admin/orders')
     // The flux-clone pages and their wizard were removed in v4.2 (F5d).
     expect(paths.filter(path => path.startsWith('/admin/forward'))).toEqual([])
-    expect(actions.map(action => action.id)).toEqual(['add-node', 'add-user'])
-    expect(actions.find(action => action.id === 'add-node').to).toEqual({ path: '/admin/nodes', query: { create: '1' } })
+    expect(actions.map(action => action.id)).toEqual(['join-node', 'add-user', 'upgrade-nodes'])
+    expect(actions.find(action => action.id === 'join-node').to).toEqual({ path: '/admin/nodes', query: { join: '1' } })
+  })
+
+  it('offers 升级节点 as an action that opens the shell\'s upgrade sheet (no route)', () => {
+    closeAgentUpgrade()
+    const groups = buildAdminMenu({ t, editionAllows: community })
+    const { actions } = paletteEntries({ t, groups })
+    const upgrade = actions.find(action => action.id === 'upgrade-nodes')
+    expect(upgrade.label).toBe('shell.palette.actions.upgradeNodes')
+    expect(upgrade.to).toBeUndefined()
+    const { open, requested } = useAgentUpgradeSheet()
+    expect(open.value).toBe(false)
+    upgrade.run()
+    expect(open.value).toBe(true)
+    expect(requested.value).toBe(true)
+    closeAgentUpgrade()
   })
 
   it('offers a quick action only when its page is visible', () => {
     const groups = buildAdminMenu({ t }).map(group => ({ ...group, items: group.items.filter(item => item.id !== 'nodes') }))
     const { actions } = paletteEntries({ t, groups })
-    expect(actions.map(action => action.id)).not.toContain('add-node')
+    expect(actions.map(action => action.id)).not.toContain('join-node')
   })
 
   it('lists the sections of settings-style pages under their page (UI U7)', () => {
@@ -251,7 +265,6 @@ describe('forwarding area capability', () => {
     expect(items.map(item => [item.id, item.label])).toEqual([
       ['nodes', 'shell.admin.items.nodes'],
       ['forward-v4', 'shell.admin.items.forward'],
-      ['agents', 'shell.admin.items.agents'],
       ['deployments', 'shell.admin.items.deployments']
     ])
     for (const path of ['/admin/forward/overview', '/admin/forward/routes/01J/edit', '/admin/forward/inventory/forward-41']) {

@@ -87,6 +87,10 @@
               </li>
             </ul>
           </UiCard>
+
+          <UiCard :title="t('nodeDiagnostics.title')" :description="t('nodeDiagnostics.description')">
+            <NodeDiagnosticsSection embedded :node-ref="node.node_ref" :name="node.name" :hops="diagnosticHops" />
+          </UiCard>
         </div>
 
         <div class="node-col">
@@ -181,6 +185,7 @@ import { useAppI18n } from '@/composables/useAppI18n'
 import { useUnsavedChanges } from '@/composables/useUnsavedChanges'
 import AgentInstallSheet from '@/components/admin/AgentInstallSheet.vue'
 import NodeRotateCredentials from '@/views/admin/nodes/NodeRotateCredentials.vue'
+import NodeDiagnosticsSection from '@/views/admin/nodes/NodeDiagnosticsSection.vue'
 import { deleteNode, getNode, listRoutes, newIdempotencyKey, setNodeSettings, settingsBody, toggleNode } from '@/api/forwardV4'
 import EngineChip from '@/components/forward/EngineChip.vue'
 import { forwardErrorMessage, violationText } from '@/components/forward/messages'
@@ -257,6 +262,7 @@ const hops = computed(() => (view.value?.state?.hops || []).map(hop => {
   return {
     key: `${hop.route_id}-${index}`,
     route_id: hop.route_id,
+    hop_index: index,
     route: route?.name || hop.route_id,
     role: t('forwardV4.nodeDetail.roleAt', { role: t(`forwardV4.role.${hop.role || roleOf(index, route?.hops?.length || 1)}`), n: index + 1 }),
     engine: hop.engine,
@@ -265,6 +271,10 @@ const hops = computed(() => (view.value?.state?.hops || []).map(hop => {
     paused: Boolean(hop.paused)
   }
 }))
+// The hops the forward checks of 诊断 can probe.
+const diagnosticHops = computed(() => hops.value.map(hop => ({
+  route_id: hop.route_id, hop_index: hop.hop_index, label: `${hop.route} · ${hop.role}`
+})))
 const hopColumns = computed(() => [
   { key: 'route', label: t('forwardV4.nodeDetail.columns.route'), primary: true },
   { key: 'role', label: t('forwardV4.nodeDetail.columns.role'), secondary: true },

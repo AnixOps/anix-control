@@ -537,6 +537,66 @@ URL 或日志。控制台不知道当前管理员是不是超级管理员，所�
 不显示安装命令：把凭据交给机器后按 [Agent 安装](agent-onboarding.md#rotating-a-nodes-credentials)
 的 `-u <control> -t <anixagt_…> --reset` 命令重新注册。
 
+### 节点诊断
+
+节点页的「诊断」分区（5.0，取代已删除的 NodeX Agents 页）在节点的 Agent 上运行白名单里的检查，走 Agent 控制流
+（`agent.diagnostic`），结果在同一个请求里应答。`:id` 为 `proxy-<id>` 或 `forward-<id>`。
+
+```http
+# 这个节点现在能做什么，以及最近的任务（管理员，v4）
+GET  /api/v4/kernel/nodes/:id/diagnostics                 # ?limit=1..50，默认 10
+# 运行一项诊断，等待 Agent 的结果
+POST /api/v4/kernel/nodes/:id/diagnostics
+```
+
+请求体 `{"action": "...", "params": {...}, "timeout_seconds": 30}`；`timeout_seconds` 为 1 到 120，默认 30，
+超出范围返回 `400 invalid_request`。白名单（其它动作返回 `400 action_not_allowed`，参数不合法返回
+`400 invalid_params`，多余的参数被丢弃）：
+
+| `action` | `params` | 权限 |
+|---|---|---|
+| `service_status` | `service`：`gost` | 管理员 |
+| `log_tail` | `service`：`gost`，`lines`：1 到 1000（默认 100） | 管理员 |
+| `service_restart` | `service`：`gost` | 超级管理员，否则 `403 super_admin_required` |
+| `forward.listen`、`forward.port_conflict` | `route_id`、`hop_index`，可选 `generation`、`timeout_ms` | 管理员，需要 Agent 声明 `diag.v1` |
+| `forward.connect`、`forward.udp_probe` | 同上，另有可选 `upstream`（`host:port`）、`target_policy` | 管理员，需要 Agent 声明 `diag.v1` |
+
+应答 `{"data": {"task_id", "node", "action", "params", "success", "output", "error", "duration_ms",
+"result"?}}`。`success: false` 表示 Agent 跑了任务、任务失败了（状态码仍是 200）；转发检查的结构化结果在
+`result`（`status`、`items[{target, protocol, status, rtt_us}]`）。节点文本会按节点凭据规则脱敏。
+Agent 不能接任务时返回 409：`node_offline`（Agent 没有连着控制流）、`diagnostics_unsupported`（没有声明
+`agent.diagnostic`，转发检查还要 `diag.v1`）、`node_pending_approval`（节点等待批准）、`diagnostic_busy`
+（同一节点同时只跑一项诊断）。Agent 拒绝任务返回 `502 agent_error`；Agent 在时限内没有返回结果返回
+`504 diagnostic_timeout`。节点不存在返回 `404 node_not_found`。
+
+`GET` 的应答：`connected`、`agent_version`、`diagnostics`（声明了 `agent.diagnostic`）、`forward_checks`
+（还声明了 `diag.v1`）、`actions`（这个节点现在能运行的动作，`mutating` 标出重启）、`services`、`log_tail_max`、
+`timeout_seconds {default, max}`、`can_restart`（调用者是不是超级管理员）、`history` 和 `tasks`。代理节点的通用动作
+记入 `v2_agent_diagnostic_task`（与 `GET /api/v2/admin/agent/tasks` 同一张表），`tasks` 列出最新的几条，输出只
+保留末尾 8 KiB；转发节点和转发检查不保留历史（该表以代理节点 ID 为键），`history` 为 `false`。
+
+每一次调用都记入操作日志（`v2_operation_log`，module `node_diagnostic`，action `node_diagnostic_<动作>`，
+`.` 写成 `_`；白名单之外的动作记为 `node_diagnostic_refused`），任务发出之前先写日志行，写不进去就不发。内容
+有节点、动作、归一化后的参数、结果（`completed`、`failed`、`timeout`、`node_offline`、`forbidden` 等）、
+`task_id` 和耗时，不含节点的输出。这个请求最长等 120 秒：反向代理的读超时（常见默认值是 60 秒）要不短于它，
+Control 自己会为这个请求放宽 `server.write_timeout`。
+
+### Agent 升级计划
+
+```http
+# 现在开始升级会做什么（管理员，v4）
+GET  /api/v4/kernel/agents/upgrade-plan
+```
+
+应答 `{"data": {"target_version", "control_version", "configured", "unconfigured_reason", "eligible_nodes",
+"batches": [{"percent", "min_duration_seconds"}], "min_batch_seconds", "first_batch_max_percent",
+"failure_threshold_percent", "reconnect_timeout_seconds", "active_campaign_id", "can_start"}}`：默认推送的
+Agent 版本（`agent_install.agent_version`，否则 Control 自己的版本）、会纳入的节点数（已启用且 Agent 在控制流上
+出现过）、H19 的默认批次和下限、正在进行的升级和调用者能不能开始（超级管理员）。没有配置 https 地址时
+`configured` 为 `false`，`target_version` 为空。开始、暂停、继续和中止仍是
+`POST /api/v4/kernel/agents/upgrades` 及其子路径（超级管理员）；管理端从 ⌘K 的「升级节点」打开面板，
+开始前的确认框写明会升级多少个节点。
+
 ### 节点组与接入令牌
 
 节点组（5.0）持有一个接入令牌（`anixjoin_…`）和它创建的节点的默认值：在任意机器上运行节点组的安装命令，
@@ -548,9 +608,17 @@ URL 或日志。控制台不知道当前管理员是不是超级管理员，所�
 # 节点组（管理员）
 GET    /api/v4/kernel/node-groups                 # {"data": {"groups": [...]}}，按 sort、id 排序
 POST   /api/v4/kernel/node-groups                 # 201，创建并生成令牌（需要 module_runtime.ca_kek）
+POST   /api/v4/kernel/node-groups/default         # 空面板的第一个组：没有存活的组时创建“默认”组，否则应答第一个组
 GET    /api/v4/kernel/node-groups/:id
 PUT    /api/v4/kernel/node-groups/:id             # 替换除 kind 和令牌外的全部字段
 DELETE /api/v4/kernel/node-groups/:id             # 软删除；组内还有存活节点时 409 node_group_in_use
+GET    /api/v4/kernel/node-groups/:id/nodes       # 组内存活节点（接入弹窗每 3 秒轮询）；不含凭据
+
+# 接入前的就绪检查（管理员）
+GET    /api/v4/kernel/agents/install-readiness    # {"data": {"ready", "checks": [{"id", "ok", "level", "message", "fix"}]}}
+
+# 控制台的节点列表（管理员）：/api/v2/admin/nodes 的行，加上审批与节点组
+GET    /api/v4/admin/nodes                        # 同 /api/v2/admin/nodes 的查询参数，另有 approval、node_group_id
 
 # 令牌（仅超级管理员）
 GET    /api/v4/kernel/node-groups/:id/command     # 安装命令、令牌、到期时间、卸载命令；每次读取记为 node_group_join_token_reveal
@@ -595,6 +663,31 @@ POST   /api/v4/kernel/nodes/:id/reject            # 拒绝：停用节点、吊�
 
 应答（不含令牌）：`id`、上述字段、`token_reset_at`、`token_expires_at`、`token_expired`、
 `nodes: {"live", "pending"}`（被拒绝的节点不计入）、`created_at`、`updated_at`。
+
+`POST .../default`：没有任何存活的组时创建默认组并应答 `201 {"data": {"group", "created": true}}`；
+已有组时什么也不改，应答 `200` 和第一个组（按 `sort`、`id`，`created: false`）。默认组名为“默认”，`proxy`，
+模板为一个 VLESS Reality 协议（`reality.server_name` 为 `www.microsoft.com`，随机端口取自 20000-40000，
+`flow` 为 `xtls-rprx-vision`），加入名为“默认”的订阅分组；面板没有这个名字时用安装时预置的 `default`，
+两者都没有则创建“默认”（启用）。任何管理员可调用；未设置 `module_runtime.ca_kek` 时 `409 ca_kek_missing`，
+且什么也不创建。
+
+`GET .../nodes` 的应答：`{"data": {"nodes": [...]}}`，最新的在前；每项 `id`、`node`（`proxy-<id>` 或
+`forward-<id>`，批准与拒绝用它）、`kind`、`name`、`host`、`approval`（`approved` 或 `pending`；被拒绝的不在其中）、
+`online`（已启用且 5 分钟内有过检查，与节点列表同口径）、`last_seen`、`agent_version`、`created_at`。
+
+`GET /api/v4/kernel/agents/install-readiness`：不发起任何网络调用，检查接入命令能否工作。检查项 `id`：
+`public_url`（`agent_install.public_url`，未设置时用请求的来源，须为 https 且不是回环地址）、`grpc`（gRPC 目标可由
+设置得出、监听已开启并配置了 TLS 证书和密钥）、`ca`（内置 CA 且 `module_runtime.ca_kek` 可用：令牌用它封存）、
+`mtls_mode`（`agent_control.mtls` 不为 `off`）、`agent_release`（固定的 Agent 版本是发行版本号；`artifact_dir`
+放着它、或有国内镜像、或来自 GitHub 发布）、`script_signature`（配置了 `signature_file` 时它须验签通过）。每项
+为 `{"id", "ok", "level", "message", "fix"}`：`level` 是失败时的后果，`error` 会使 `ready` 为 `false`，`warning`
+不会（命令仍可用）。`message` 和 `fix` 是英文原文，控制台按 `id` 显示本地化的修复办法。
+
+`GET /api/v4/admin/nodes`：控制台的节点列表。查询参数同 `GET /api/v2/admin/nodes`（`page`、`page_size`、`search`、
+`status`、`group_id`、`sort`、`order`），另有 `approval`（`pending`、`approved`、`rejected`）和 `node_group_id`
+两个筛选条件。应答 `{"data": {"total", "list"}}`，行与 `/api/v2` 的节点行相同（协议与原始配置里的密钥为占位符），
+另带 `approval`、`node_group_id`（手工创建的节点为 `null`）和 `node_group_name`。`/api/v2/admin/nodes` 的形状不变：
+它是包网关的兼容契约。
 
 `GET .../command` 的应答：`{"data": {"group", "token", "token_expires_at", "agent_version", "commands":
 [{"mirror", "command", "available", "note"}], "uninstall_command", "script": {"url", "signature_url", "signed"}}}`，

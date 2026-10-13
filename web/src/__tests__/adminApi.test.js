@@ -78,14 +78,6 @@ describe('admin api mapping', () => {
         expected: { url: '/admin/protocol-templates', method: 'get' },
       },
       {
-        call: () => adminApi.getAuthKeys(),
-        expected: { url: '/admin/auth-keys', method: 'get' },
-      },
-      {
-        call: () => adminApi.generateAuthKey({ name: 'tokyo', expire_days: 0 }),
-        expected: { url: '/admin/auth-keys', method: 'post', data: { name: 'tokyo', expire_days: 0 } },
-      },
-      {
         call: () => adminApi.getSubscriptionGroups(),
         expected: { url: '/admin/subscription/groups', method: 'get' },
       },
@@ -104,14 +96,6 @@ describe('admin api mapping', () => {
       {
         call: () => adminApi.getSubscriptionStats(),
         expected: { url: '/admin/subscription/stats', method: 'get' },
-      },
-      {
-        call: () => adminApi.getAgents(),
-        expected: { url: '/admin/agent/list', method: 'get' },
-      },
-      {
-        call: () => adminApi.listAgentDiagnosticTasks({ limit: 50 }),
-        expected: { url: '/admin/agent/tasks', method: 'get', params: { limit: 50 } },
       },
       {
         call: () => adminApi.getPlans(),
@@ -293,14 +277,6 @@ describe('admin api mapping', () => {
           url: '/admin/plans/6/assign',
           method: 'post',
           data: { user_id: 12 },
-        },
-      },
-      {
-        call: () => adminApi.createNode({ name: 'edge' }),
-        expected: {
-          url: '/admin/nodes',
-          method: 'post',
-          data: { name: 'edge' },
         },
       },
       {
@@ -487,22 +463,6 @@ describe('admin api mapping', () => {
           url: '/admin/system/configs/mail_host',
           method: 'put',
           data: { value: 'smtp.example.com' },
-        },
-      },
-      {
-        call: () => adminApi.createAgentTask({ node_id: 1, command: 'ping' }),
-        expected: {
-          url: '/admin/agent/tasks',
-          method: 'post',
-          data: { node_id: 1, command: 'ping' },
-        },
-      },
-      {
-        call: () => adminApi.executeAgentCommand({ node_id: 1, action: 'service_status' }),
-        expected: {
-          url: '/admin/agent/execute',
-          method: 'post',
-          data: { node_id: 1, action: 'service_status' },
         },
       },
     ]

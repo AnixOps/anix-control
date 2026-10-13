@@ -9,7 +9,7 @@ import { setLocale } from '@/i18n'
 import { inBody } from './helpers/feedback'
 
 const api = vi.hoisted(() => ({ getNode: vi.fn(), listRoutes: vi.fn() }))
-const kernelApi = vi.hoisted(() => ({ rotateKernelAgentCredentials: vi.fn(), createKernelAgentInstallToken: vi.fn() }))
+const kernelApi = vi.hoisted(() => ({ rotateKernelAgentCredentials: vi.fn(), createKernelAgentInstallToken: vi.fn(), getKernelNodeDiagnostics: vi.fn() }))
 vi.mock('@/api/forwardV4', async importOriginal => ({ ...(await importOriginal()), ...api }))
 vi.mock('@/api/kernel', () => kernelApi)
 vi.mock('vue-router', async importOriginal => ({

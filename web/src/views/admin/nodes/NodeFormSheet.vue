@@ -2,8 +2,8 @@
   <UiSheet
     :open="open"
     size="md"
-    :title="node ? t('admin.nodes.form.titleEdit') : t('admin.nodes.form.titleCreate')"
-    :description="node ? node.name : t('admin.nodes.form.createDescription')"
+    :title="t('admin.nodes.form.titleEdit')"
+    :description="node ? node.name : ''"
     :dismissible="!saving"
     data-testid="node-form-sheet"
     @update:open="value => { if (!value) close() }"
@@ -66,7 +66,6 @@
           :help="t('admin.nodes.form.help.monthlyResetDay')"
         />
         <UiSelect
-          v-if="node"
           v-model="form.status"
           class="form-grid__full"
           size="md"
@@ -80,18 +79,19 @@
     <template #footer>
       <UiButton :disabled="saving" @click="close">{{ t('common.actions.cancel') }}</UiButton>
       <UiButton variant="primary" data-testid="save-node" :loading="saving" @click="save">
-        {{ node ? t('admin.nodes.form.save') : t('admin.nodes.form.create') }}
+        {{ t('admin.nodes.form.save') }}
       </UiButton>
     </template>
   </UiSheet>
 </template>
 
 <script setup>
-// Add or edit a node (POST /admin/nodes, PUT /admin/nodes/:id) in a sheet,
-// with the fields and request body of the pre-redesign dialog. The parent
-// list leaves out the node itself and its descendants.
+// Edit a node (PUT /admin/nodes/:id) in a sheet, with the fields and request
+// body of the pre-redesign dialog. Nodes are not added by hand any more: a
+// machine joins a node group with its command (接入节点). The parent list
+// leaves out the node itself and its descendants.
 import { computed, reactive, ref, watch } from 'vue'
-import { createNode, updateNode } from '@/api/admin'
+import { updateNode } from '@/api/admin'
 import UiButton from '@/ui/UiButton.vue'
 import UiNumberField from '@/ui/UiNumberField.vue'
 import UiSelect from '@/ui/UiSelect.vue'
@@ -103,7 +103,7 @@ import { buildNodePayload, nodeFormFrom, parentCandidatesFor, readNodeApiError }
 
 const props = defineProps({
   open: { type: Boolean, default: false },
-  // The node to edit; null adds one.
+  // The node to edit.
   node: { type: Object, default: null },
   // Nodes that can be the parent.
   candidates: { type: Array, default: () => [] }
@@ -158,19 +158,15 @@ async function save() {
   formError.value = ''
   const ok = [validate('name'), validate('address')].every(Boolean)
   if (!ok) return
+  if (!props.node) return
   saving.value = true
-  const editing = Boolean(props.node)
-  const payload = buildNodePayload(form, { editing })
+  const payload = buildNodePayload(form)
   try {
-    if (editing) {
-      await updateNode(props.node.id, payload)
-    } else {
-      await createNode(payload)
-    }
+    await updateNode(props.node.id, payload)
     saving.value = false
     emit('update:open', false)
-    toast.success(t(editing ? 'admin.nodes.messages.nodeSaved' : 'admin.nodes.messages.nodeCreated', { name: payload.name }))
-    emit('saved', { payload, editing })
+    toast.success(t('admin.nodes.messages.nodeSaved', { name: payload.name }))
+    emit('saved', { payload })
   } catch (e) {
     formError.value = t('admin.nodes.messages.saveFailed', { message: readNodeApiError(e) })
   } finally {

@@ -68,6 +68,9 @@ func newNodeGroupsTestEnv(t *testing.T) *nodeGroupsTestEnv {
 	router.PUT("/node-groups/:id", handler.Update)
 	router.DELETE("/node-groups/:id", handler.Delete)
 	router.GET("/node-groups/:id/command", handler.Command)
+	router.GET("/node-groups/:id/nodes", handler.Nodes)
+	router.POST("/node-groups/default", handler.EnsureDefault)
+	router.GET("/install-readiness", handler.install.Readiness)
 	router.POST("/node-groups/:id/reset-token", handler.ResetToken)
 	router.POST("/nodes/:id/approve", handler.ApproveNode)
 	router.POST("/nodes/:id/reject", handler.RejectNode)
@@ -219,4 +222,150 @@ func testCSR(t *testing.T) []byte {
 	der, err := x509.CreateCertificateRequest(rand.Reader, &x509.CertificateRequest{Subject: pkix.Name{CommonName: "x"}}, key)
 	require.NoError(t, err)
 	return der
+}
+
+// The join dialog of an empty panel asks for the default group, then waits
+// on the group's nodes.
+func TestNodeGroupsDefaultAndNodes(t *testing.T) {
+	env := newNodeGroupsTestEnv(t)
+
+	// Without the key-encryption key nothing is created.
+	env.kek = ""
+	response := env.call(t, 8, http.MethodPost, "/node-groups/default", "")
+	assert.Equal(t, http.StatusConflict, response.Code)
+	assert.Equal(t, "ca_kek_missing", errorCode(t, response))
+	var subscriptions int64
+	require.NoError(t, env.db.Model(&model.SubscriptionGroup{}).Count(&subscriptions).Error)
+	assert.Zero(t, subscriptions)
+	env.kek = base64.StdEncoding.EncodeToString(make([]byte, 32))
+
+	// Any administrator may ask: the first call creates the group and the
+	// default subscription group, the second answers the same group.
+	created := env.call(t, 8, http.MethodPost, "/node-groups/default", "")
+	require.Equal(t, http.StatusCreated, created.Code, created.Body.String())
+	first := decodeData[struct {
+		Group   nodegroup.GroupView `json:"group"`
+		Created bool                `json:"created"`
+	}](t, created)
+	assert.True(t, first.Created)
+	assert.Equal(t, nodegroup.DefaultGroupName, first.Group.Name)
+	assert.Equal(t, model.NodeGroupKindProxy, first.Group.Kind)
+	require.Len(t, first.Group.ProtocolTemplate, 1)
+	assert.Equal(t, "reality", first.Group.ProtocolTemplate[0].TLS)
+	require.Len(t, first.Group.SubscriptionGroupIDs, 1)
+	assert.NotContains(t, created.Body.String(), "anixjoin_")
+
+	again := env.call(t, 8, http.MethodPost, "/node-groups/default", "")
+	require.Equal(t, http.StatusOK, again.Code, again.Body.String())
+	second := decodeData[struct {
+		Group   nodegroup.GroupView `json:"group"`
+		Created bool                `json:"created"`
+	}](t, again)
+	assert.False(t, second.Created)
+	assert.Equal(t, first.Group.ID, second.Group.ID)
+
+	// The group's nodes: none yet, then the machines that joined, with the
+	// pending one marked. Never a credential.
+	id := strconv.FormatUint(uint64(first.Group.ID), 10)
+	waiting := env.call(t, 8, http.MethodGet, "/node-groups/"+id+"/nodes", "")
+	require.Equal(t, http.StatusOK, waiting.Code, waiting.Body.String())
+	assert.JSONEq(t, `{"data":{"nodes":[]}}`, waiting.Body.String())
+	assert.Equal(t, "no-store", waiting.Header().Get("Cache-Control"))
+
+	command := decodeData[nodeGroupCommandResponse](t, env.call(t, 7, http.MethodGet, "/node-groups/"+id+"/command", ""))
+	joined, err := env.groups.Join(t.Context(), nodegroup.JoinRequest{
+		Token: command.Token, CSRDER: testCSR(t), RequestedName: "hk-01", PublicAddresses: []string{"203.0.113.5"}, AgentVersion: "v4.2.0",
+	})
+	require.NoError(t, err)
+	listed := env.call(t, 8, http.MethodGet, "/node-groups/"+id+"/nodes", "")
+	require.Equal(t, http.StatusOK, listed.Code, listed.Body.String())
+	nodes := decodeData[struct {
+		Nodes []nodegroup.GroupNode `json:"nodes"`
+	}](t, listed).Nodes
+	require.Len(t, nodes, 1)
+	assert.Equal(t, joined.Node.String(), nodes[0].Node)
+	assert.Equal(t, "hk-01", nodes[0].Name)
+	assert.Equal(t, "203.0.113.5", nodes[0].Host)
+	assert.Equal(t, model.NodeApprovalApproved, nodes[0].Approval)
+	assert.False(t, nodes[0].Online)
+	assert.Equal(t, "v4.2.0", nodes[0].AgentVersion)
+	for _, secret := range []string{"anixjoin_", "api_key", "secret", command.Token} {
+		assert.NotContains(t, listed.Body.String(), secret)
+	}
+
+	assert.Equal(t, http.StatusNotFound, env.call(t, 8, http.MethodGet, "/node-groups/4242/nodes", "").Code)
+	assert.Equal(t, http.StatusBadRequest, env.call(t, 8, http.MethodGet, "/node-groups/x/nodes", "").Code)
+}
+
+// The readiness answer lists every check with its fix; a Control that
+// cannot hand out a working command says why instead.
+func TestInstallReadinessAnswer(t *testing.T) {
+	env := newNodeGroupsTestEnv(t)
+	type answer struct {
+		Ready  bool `json:"ready"`
+		Checks []struct {
+			ID      string `json:"id"`
+			OK      bool   `json:"ok"`
+			Level   string `json:"level"`
+			Message string `json:"message"`
+			Fix     string `json:"fix"`
+		} `json:"checks"`
+	}
+	read := func() answer {
+		response := env.call(t, 8, http.MethodGet, "/install-readiness", "")
+		require.Equal(t, http.StatusOK, response.Code, response.Body.String())
+		assert.Equal(t, "no-store", response.Header().Get("Cache-Control"))
+		return decodeData[answer](t, response)
+	}
+
+	// The test Control has a public https URL and an agent version, and no
+	// gRPC listener or CA key.
+	result := read()
+	assert.False(t, result.Ready)
+	byID := map[string]struct {
+		ok  bool
+		fix string
+	}{}
+	for _, check := range result.Checks {
+		byID[check.ID] = struct {
+			ok  bool
+			fix string
+		}{check.OK, check.Fix}
+	}
+	assert.True(t, byID["public_url"].ok)
+	assert.False(t, byID["grpc"].ok)
+	assert.Contains(t, byID["grpc"].fix, "grpc.enabled")
+	assert.False(t, byID["ca"].ok)
+	assert.Contains(t, byID["ca"].fix, "module_runtime.ca_kek")
+	assert.True(t, byID["mtls_mode"].ok)
+	assert.True(t, byID["agent_release"].ok)
+	assert.True(t, byID["script_signature"].ok)
+
+	// Configured, it is ready; a key that is not 32 bytes is a problem.
+	env.cfg.GRPC.Enable = true
+	env.cfg.GRPC.TLSCertFile, env.cfg.GRPC.TLSKeyFile = "/etc/anix/grpc.crt", "/etc/anix/grpc.key"
+	env.cfg.ModuleRuntime.CAKEK = "short"
+	result = read()
+	assert.False(t, result.Ready)
+	for _, check := range result.Checks {
+		if check.ID == "ca" {
+			assert.False(t, check.OK)
+			assert.Contains(t, check.Message, "cannot be used")
+		}
+	}
+	env.cfg.ModuleRuntime.CAKEK = env.kek
+	result = read()
+	assert.True(t, result.Ready, "%+v", result.Checks)
+	for _, check := range result.Checks {
+		assert.True(t, check.OK, check.ID+": "+check.Message)
+		assert.NotContains(t, check.Message+check.Fix, env.kek, "the key is never echoed")
+	}
+
+	// Without a public URL the request's own address stands in, and a
+	// plain-http one is refused.
+	env.cfg.AgentInstall.PublicURL = ""
+	result = read()
+	assert.False(t, result.Ready)
+	assert.False(t, result.Checks[0].OK)
+	assert.Contains(t, result.Checks[0].Message, "not https")
 }

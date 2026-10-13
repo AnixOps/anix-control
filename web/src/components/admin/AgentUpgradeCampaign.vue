@@ -44,8 +44,8 @@
 
     <p v-if="error" class="agent-upgrade__error" role="alert">{{ error }}</p>
     <div v-if="!campaign && !loading" class="agent-upgrade__empty" data-testid="agent-upgrade-empty">
-      <p>{{ t('agentUpgrades.empty') }}</p>
-      <code>anix-control agent upgrade start</code>
+      <p>{{ showCommand ? t('agentUpgrades.empty') : t('agentUpgrades.emptyShort') }}</p>
+      <code v-if="showCommand">anix-control agent upgrade start</code>
     </div>
 
     <div v-if="campaign" class="agent-upgrade__campaign" data-testid="agent-upgrade-campaign">
@@ -117,6 +117,12 @@ import {
 const STATUSES = ['running', 'paused', 'rolling_back', 'succeeded', 'rolled_back', 'aborted']
 const STATES = ['pending', 'offered', 'upgrading', 'succeeded', 'failed', 'rolled_back', 'skipped']
 const ACTIVE = ['running', 'paused', 'rolling_back']
+
+const props = defineProps({
+  // Say how to start one from the command line (the sheet that has a start
+  // form turns it off).
+  showCommand: { type: Boolean, default: true }
+})
 
 const { t } = useAppI18n()
 const format = useFormat()

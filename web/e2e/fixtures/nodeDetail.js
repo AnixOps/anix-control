@@ -1,5 +1,6 @@
 import { FIXED_NOW_MS } from './clock.js'
 import { LOGS, NODES, PROTOCOLS, TEMPLATES, envelope } from './nodeData.js'
+import { nodeDiagnosticsAnswer } from './nodeDiagnostics.js'
 import { nodeTrafficAnswer, rotateAnswer } from './nodeTraffic.js'
 import { transportsAnswer } from './transports.js'
 
@@ -31,11 +32,13 @@ const SERVICES = {
 
 const SECTION = {
   overview: '', overviewChild: '', protocols: 'protocols', protocolEdit: 'protocols', protocolNew: 'protocols', protocolVisual: 'protocols',
-  protocolsEmpty: 'protocols', credentialsShown: 'credentials', deploy: 'deploy', deployHelper: 'deploy',
+  protocolsEmpty: 'protocols', credentialsShown: 'credentials', deploy: 'deploy', deployInstall: 'deploy',
   logs: 'logs', logsEmpty: 'logs', logsError: 'logs', services: 'services', servicesDisabled: 'services', danger: 'danger', disableConfirm: 'danger', deleteConfirm: 'danger', edit: '',
   notFound: '', error: '', loading: '',
   // 流量 (the node's traffic over time) and 轮换 Agent 凭据 (in 凭据).
   traffic: 'traffic', trafficEmpty: 'traffic', trafficError: 'traffic',
+  // 诊断: the section, with a result shown, and for a node that is offline.
+  diagnostics: 'diagnostics', diagnosticsResult: 'diagnostics', diagnosticsOffline: 'diagnostics',
   credentials: 'credentials', rotate: 'credentials', rotated: 'credentials'
 }
 
@@ -51,6 +54,8 @@ export default {
     let m = path.match(/^\/api\/v4\/kernel\/nodes\/(\d+)\/traffic$/)
     if (m) return nodeTrafficAnswer(m[1], query, { trafficEmpty: 'empty', trafficError: 'error' }[scenario] || 'traffic')
     if (path === '/api/v4/kernel/agents/rotate-credentials' && method === 'POST') return rotateAnswer(body, now)
+    m = path.match(/^\/api\/v4\/kernel\/nodes\/(proxy-\d+)\/diagnostics$/)
+    if (m) return nodeDiagnosticsAnswer(m[1], { method, scenario: scenario === 'diagnosticsOffline' ? 'offline' : '', body })
     // The node's Agent connection and certificate (?node=proxy-108).
     if (path === '/api/v4/kernel/agents/transports') {
       return transportsAnswer(query)
@@ -81,12 +86,20 @@ export default {
       if (scenario === 'servicesDisabled') return { data: { ...SERVICES, enabled: false, reported: false, observed_at: null, units: [], summary: { total: 0, failed: 0, active: 0, inactive: 0 } } }
       return { data: SERVICES }
     }
-    if (path === '/api/v2/admin/auth-keys') return envelope([{ id: 3, name: 'Panel key', key: '********', used: 12 }])
     return undefined
   },
   // 轮换 Agent 凭据: `rotate` stops at the confirmation, `rotated` goes on to
   // the result dialog with the one-time credential.
   async after(page, { scenario }) {
+    if (scenario === 'deployInstall') {
+      await page.getByTestId('open-agent-install').click()
+      return
+    }
+    if (scenario === 'diagnosticsResult') {
+      await page.getByTestId('diagnostics-status').click()
+      await page.getByTestId('diagnostics-result').waitFor()
+      return
+    }
     if (scenario !== 'rotate' && scenario !== 'rotated') return
     await page.getByTestId('rotate-credentials').click()
     await page.getByRole('alertdialog').waitFor()
@@ -94,7 +107,7 @@ export default {
     await page.getByRole('alertdialog').getByRole('button', { name: 'Rotate credentials' }).click()
     await page.getByTestId('rotate-result').waitFor()
   },
-  viewportOnly: ['protocolEdit', 'protocolNew', 'protocolVisual', 'deployHelper', 'disableConfirm', 'deleteConfirm', 'edit'],
+  viewportOnly: ['protocolEdit', 'protocolNew', 'protocolVisual', 'deployInstall', 'disableConfirm', 'deleteConfirm', 'edit'],
   scenarios: {
     overview: async () => {},
     overviewChild: async () => {},
@@ -120,9 +133,8 @@ export default {
       await page.getByTestId('reveal-api-key').click()
     },
     deploy: async () => {},
-    deployHelper: async (page) => {
-      await page.getByTestId('open-deploy-helper').click()
-    },
+    // 部署 › 换到新机器: the sheet that issues the enrollment command (`after`).
+    deployInstall: async () => {},
     logs: async () => {},
     logsEmpty: async () => {},
     logsError: async () => {},

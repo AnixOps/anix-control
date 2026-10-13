@@ -87,10 +87,9 @@ export function splitTags(tags) {
   return String(tags || '').split(',').map(tag => tag.trim()).filter(Boolean)
 }
 
-// The body of POST /admin/nodes and PUT /admin/nodes/:id, as the node form
-// has always sent it; `status` only when editing.
-export function buildNodePayload(form, { editing = false } = {}) {
-  const payload = {
+// The body of PUT /admin/nodes/:id, as the node form has always sent it.
+export function buildNodePayload(form) {
+  return {
     name: form.name,
     host: form.address,
     tags: form.tags,
@@ -98,10 +97,9 @@ export function buildNodePayload(form, { editing = false } = {}) {
     sort: Number(form.sort),
     parent_id: form.parent_id || null,
     monthly_limit: form.monthly_limit_gb ? Math.round(Number(form.monthly_limit_gb) * BYTES_PER_GB) : null,
-    monthly_reset_day: Number(form.monthly_reset_day) || 1
+    monthly_reset_day: Number(form.monthly_reset_day) || 1,
+    status: Number(form.status)
   }
-  if (editing) payload.status = Number(form.status)
-  return payload
 }
 
 export function nodeFormFrom(node) {

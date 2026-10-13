@@ -50,6 +50,13 @@ upgrade, and read
 Fresh installs now generate the CA key and enable gRPC TLS; existing ones add
 them first (Compose: `secrets/module_ca_kek` must exist before `up`).
 
+**Upgrading to 5.0 (in progress): the NodeX Agents and Agent 连接方式 pages are gone.**
+`/admin/agent` and everything below it redirect to the node list. Their work moved to
+the node page's 诊断 section (service status, restart, log tail, the forward checks;
+`POST /api/v4/kernel/nodes/:id/diagnostics`), the node list's connection and
+certificate columns, and the 升级节点 sheet (⌘K), which starts a staged Agent upgrade.
+The `/api/v2/admin/agent/*` routes still answer until a later release removes them.
+
 **Upgrading to v4.2: the flux forwarding API and pages are removed.** Among
 the v2 routes that answer 404 are those that create, update, delete, pause,
 resume or diagnose a forward, the administrator's legacy rule, forward node,
@@ -2507,7 +2514,8 @@ served while Control moves first:
 #### Installing Or Switching A Node With One Command
 
 A 4.2 Control serves the installer for step 1: on the node's page,
-**复制安装命令** issues a single-use enrollment token for the node (super
+**部署 › 换到新机器** (**复制安装命令** in 4.2) issues a single-use enrollment
+token for the node (super
 administrators; 1 hour by default, at most 7 days) and prints the command to
 paste on the node as root:
 

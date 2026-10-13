@@ -359,7 +359,8 @@ agent_control:
   agents transports --check-required` (exit status 3 while an enabled node
   would be refused: `legacy` or `never_enrolled`; 0 when none;
   `summary.ready_for_required` in `GET /api/v4/kernel/agents/transports`),
-  or open NodeX Agents → Agent 连接方式. Every node it lists must first run
+  or read the node list's connection and certificate columns. Every node it
+  lists must first run
   an enrolled agent, or be disabled. To keep serving legacy Agents for a
   while, set `preferred`
   ([UPGRADE](../UPGRADE.md#agent-transports-v42-requires-enrolled-agents)). `/metrics` has

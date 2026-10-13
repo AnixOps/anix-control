@@ -11,12 +11,16 @@ import adminSubscriptionGroups from './modules/en/adminSubscriptionGroups'
 import adminApiTokens from './modules/en/adminApiTokens'
 import forwardV4 from './modules/en/forwardV4'
 import forwardDns from './modules/en/forwardDns'
+import nodeDiagnostics from './modules/en/nodeDiagnostics'
+import agentUpgradeSheet from './modules/en/agentUpgradeSheet'
 
 export default {
   ...adminSubscriptionGroups,
   ...adminApiTokens,
   ...forwardV4,
   ...forwardDns,
+  ...nodeDiagnostics,
+  ...agentUpgradeSheet,
   ...networkPages,
   ...miscPages,
   ...adminSupportPages,
@@ -127,86 +131,6 @@ export default {
       },
       nodeModal: {
         saveLoading: 'Saving...'
-      }
-    },
-    nodeXAgents: {
-      title: 'NodeX Agents',
-      subtitle: 'Only NodeX mode needs agents. Use this page for agent status, remote terminal, and task delivery.',
-      tabs: {
-        agents: 'Online Agents',
-        terminal: 'Remote Terminal',
-        tasks: 'Task History'
-      },
-      actions: {
-        refresh: 'Refresh',
-        execute: 'Run',
-        send: 'Send',
-        cancel: 'Cancel',
-        monitor: 'Monitoring',
-        openTerminal: 'Open in terminal'
-      },
-      table: {
-        nodeId: 'Node',
-        version: 'Version',
-        system: 'System',
-        lastSeen: 'Last Seen',
-        status: 'Status',
-        capabilities: 'Capabilities',
-        taskId: 'Task ID',
-        node: 'Node',
-        command: 'Command / Action',
-        duration: 'Duration',
-        time: 'Time'
-      },
-      status: {
-        online: 'Online',
-        offline: 'Offline',
-        connected: 'Connected',
-        disconnected: 'Disconnected',
-        success: 'Success',
-        failed: 'Failed'
-      },
-      empty: {
-        agents: 'No agents online',
-        agentsDescription: 'An agent appears here when a NodeX node connects to Control.',
-        tasks: 'No task history yet',
-        tasksDescription: 'Commands you run in the terminal and tasks you send are listed here.'
-      },
-      terminal: {
-        chooseNode: 'Choose node',
-        nodeLabel: 'Node #{id}',
-        chooseAction: 'Choose action',
-        output: 'Terminal output',
-        hint: 'Choose an online node and an action, then run it. Only the diagnostic actions Control allows can run.'
-      },
-      diagnosticActions: {
-        service_status: 'Check service status',
-        service_restart: 'Restart service',
-        log_tail: 'Tail service log'
-      },
-      fields: {
-        service: 'Service',
-        lines: 'Lines'
-      },
-      services: {
-        gost: 'GOST'
-      },
-      taskModal: {
-        title: 'Send Task',
-        action: 'Action',
-        timeoutSeconds: 'Timeout (seconds)'
-      },
-      hints: {
-        monitor: 'View monitoring data for node #{id}'
-      },
-      messages: {
-        fetchFailed: 'Agents didn’t load',
-        tasksFetchFailed: 'Task history didn’t load',
-        taskIncomplete: 'Please fill in the required fields',
-        taskSent: 'Task sent',
-        taskSendFailed: 'Send failed: {message}',
-        commandError: 'Error: {message}',
-        selectActionFirst: 'Choose an action first'
       }
     }
   },
@@ -884,6 +808,7 @@ export default {
     title: 'Agent upgrades',
     description: 'Control pushes Agent releases in canary batches (5%, 25%, 100%, at least 30 minutes each) and rolls a batch back when more than 5% of it fails.',
     empty: 'No Agent upgrade yet. A super administrator starts one with:',
+    emptyShort: 'No Agent upgrade yet.',
     target: 'Agent {version}',
     batchOf: 'batch {batch} of {total}',
     batchEnds: 'next batch at {time} at the earliest',
@@ -901,23 +826,9 @@ export default {
     },
     loadFailed: 'Unable to load Agent upgrades'
   },
+  // The channel names of the node page's Agent connection (the page that
+  // listed every node's channel is gone).
   agentTransports: {
-    open: 'Agent transports',
-    subtitle: 'How each node’s agent reaches Control: the mTLS stream, or a legacy channel that v4.2 will refuse.',
-    back: 'NodeX Agents',
-    mode: 'agent_control.mtls: {mode}',
-    modes: {
-      off: 'Client certificates are off; legacy agents are served silently.',
-      optional: 'Client certificates are verified when presented; legacy agents are served silently.',
-      preferred: 'Legacy agents are still served, with deprecation signals.',
-      required: 'Only enrolled agents (client certificates) are accepted on AnixOps Agent channels.'
-    },
-    sunset: 'Legacy sunset: {date}',
-    notice: 'v4.2 makes agent_control.mtls: required the default. Before upgrading, every node marked Legacy must run an Agent that has enrolled; legacy API-key agents will be refused. UniProxy and v2board gRPC (third-party node software) are not affected.',
-    guide: 'Upgrade guide',
-    filterLabel: 'Filter by status',
-    statuses: { all: 'All', mtls: 'mTLS', legacy: 'Legacy', 'third-party': 'Third-party', unseen: 'Not seen' },
-    legacyHint: 'Refused under required',
     transports: {
       'mtls-stream': 'mTLS stream',
       'apikey-stream': 'API key stream',
@@ -926,13 +837,6 @@ export default {
       'clean-agent': 'Clean agent',
       uniproxy: 'UniProxy',
       'v2board-grpc': 'v2board gRPC'
-    },
-    columns: { node: 'Node', status: 'Status', transport: 'Last transport', version: 'Agent version', certificate: 'Certificate', lastSeen: 'Last seen', seenOn: 'Seen on' },
-    certificateUntil: 'until {date}',
-    noCertificate: 'Not enrolled',
-    disabled: 'Disabled',
-    tableLabel: 'Agent transports by node',
-    empty: { title: 'No nodes', description: 'Proxy and forward nodes appear here once they exist.' },
-    loadFailed: 'Unable to load agent transports'
+    }
   }
 }

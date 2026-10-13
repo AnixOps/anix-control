@@ -28,7 +28,6 @@ export default {
         knowledge: 'Help Center content',
         nodes: 'Nodes',
         forward: 'Forwarding',
-        agents: 'NodeX Agents',
         plugins: 'Plugin Center',
         deployments: 'Deployments',
         settings: 'Settings',
@@ -102,9 +101,10 @@ export default {
         close: 'close'
       },
       actions: {
-        addNode: 'Add a node',
+        addNode: 'Join a node',
         addUser: 'Add a user',
         newForwardRoute: 'New forwarding route',
+        upgradeNodes: 'Upgrade nodes',
         themeLight: 'Use light appearance',
         themeDark: 'Use dark appearance',
         themeSystem: 'Match system appearance',

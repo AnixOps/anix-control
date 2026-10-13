@@ -5,11 +5,13 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/AnixOps/anix-control/v4/internal/agentinstall"
 	"github.com/AnixOps/anix-control/v4/internal/agentupgrade"
 	"github.com/AnixOps/anix-control/v4/internal/config"
 	"github.com/AnixOps/anix-control/v4/internal/database"
+	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/AnixOps/anix-control/v4/internal/requestorigin"
 	"github.com/AnixOps/anix-control/v4/internal/service"
 	"github.com/gin-gonic/gin"
@@ -65,6 +67,32 @@ func (h *AgentUpgradesHandler) actor(c *gin.Context) agentupgrade.Actor {
 	return agentupgrade.Actor{UserID: kernelActorID(c), Name: c.GetString("email"), IP: c.ClientIP()}
 }
 
+// settings resolves the Agent install settings of the running Control, as
+// every campaign does: the https address nodes reach, and the Agent
+// release it pins (agent_install.agent_version, else the release this
+// Control was built with, else its own version, H25).
+// status is the HTTP status of the error: 503 without a loaded
+// configuration, 409 when the settings do not resolve.
+func (h *AgentUpgradesHandler) settings(c *gin.Context) (cfg *config.Config, settings agentinstall.Settings, status int, err error) {
+	cfg = h.config()
+	if cfg == nil {
+		return nil, agentinstall.Settings{}, http.StatusServiceUnavailable, errors.New("the configuration is not loaded")
+	}
+	install := cfg.AgentInstall
+	controlURL := strings.TrimRight(strings.TrimSpace(install.PublicURL), "/")
+	if controlURL == "" {
+		controlURL = requestorigin.Resolve(c.Request).BaseURL()
+	}
+	settings, err = agentinstall.ResolveSettings(agentinstall.SettingsInput{
+		ControlURL: controlURL, GRPCTarget: install.GRPCTarget, GRPCPort: cfg.GRPC.Port,
+		AgentVersion: install.AgentVersion, PinnedAgentVersion: AgentRelease, ReleaseVersion: ReleaseVersion, ArtifactDir: install.ArtifactDir, CNMirrorURL: install.CNMirrorURL,
+	})
+	if err != nil {
+		return cfg, agentinstall.Settings{}, http.StatusConflict, err
+	}
+	return cfg, settings, 0, nil
+}
+
 // Start godoc
 // @Summary Start a staged Agent upgrade
 // @Description Pushes an Agent release to every enabled node whose Agent was seen on the Agent Control stream, in batches (default 5%, 25%, 100% of the nodes, at least 30 minutes each; canaries first by node name hash), as the agent.upgrade operation to Agents that negotiated upgrade.v1. A batch rolls back when more than 5% of its offered nodes fail or do not reconnect with the target version within 10 minutes (H19). The release must be in agent_install.artifact_dir with its .sig files and SHA256SUMS(.sig), verified with plugins.official_public_key. Super administrators only; one campaign at a time.
@@ -84,24 +112,12 @@ func (h *AgentUpgradesHandler) Start(c *gin.Context) {
 		kernelError(c, http.StatusBadRequest, "invalid_request", err.Error())
 		return
 	}
-	cfg := h.config()
-	if cfg == nil {
-		kernelError(c, http.StatusServiceUnavailable, "agent_install_unconfigured", "the configuration is not loaded")
+	cfg, settings, status, err := h.settings(c)
+	if err != nil {
+		kernelError(c, status, "agent_install_unconfigured", err.Error())
 		return
 	}
 	install := cfg.AgentInstall
-	controlURL := strings.TrimRight(strings.TrimSpace(install.PublicURL), "/")
-	if controlURL == "" {
-		controlURL = requestorigin.Resolve(c.Request).BaseURL()
-	}
-	settings, err := agentinstall.ResolveSettings(agentinstall.SettingsInput{
-		ControlURL: controlURL, GRPCTarget: install.GRPCTarget, GRPCPort: cfg.GRPC.Port,
-		AgentVersion: install.AgentVersion, PinnedAgentVersion: AgentRelease, ReleaseVersion: ReleaseVersion, ArtifactDir: install.ArtifactDir, CNMirrorURL: install.CNMirrorURL,
-	})
-	if err != nil {
-		kernelError(c, http.StatusConflict, "agent_install_unconfigured", err.Error())
-		return
-	}
 	target := strings.TrimSpace(request.TargetVersion)
 	if target == "" {
 		target = settings.AgentVersion
@@ -125,6 +141,56 @@ func (h *AgentUpgradesHandler) Start(c *gin.Context) {
 		return
 	}
 	kernelData(c, http.StatusCreated, view)
+}
+
+// Plan godoc
+// @Summary What an Agent upgrade would do now
+// @Description The Agent release a campaign pushes by default (agent_install.agent_version, else the Agent release this Control was built with, else its own release), this Control's release, how many nodes a campaign would include now (enabled nodes whose Agent was seen on the Agent Control stream), the default batches with the rules of H19 (first batch at most 5%, each batch at least 30 minutes, a batch rolls back above 5% failures or after 10 minutes without a reconnect), the active campaign if there is one, and whether the caller may start one (can_start: super administrators). When the https address nodes reach Control is not configured, configured is false with unconfigured_reason and target_version empty. Administrators read it; Start verifies the release files.
+// @Tags Kernel
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} map[string]any
+// @Router /api/v4/kernel/agents/upgrade-plan [get]
+func (h *AgentUpgradesHandler) Plan(c *gin.Context) {
+	db := h.db()
+	if db == nil {
+		kernelError(c, http.StatusServiceUnavailable, "database_unavailable", "database is not initialized")
+		return
+	}
+	plan := gin.H{
+		"target_version": "", "control_version": "v" + strings.TrimPrefix(strings.TrimSpace(ReleaseVersion), "v"),
+		"configured": true, "unconfigured_reason": "",
+		"batches": agentupgrade.DefaultBatches(), "min_batch_seconds": int(agentupgrade.MinBatchDuration / time.Second),
+		"first_batch_max_percent": agentupgrade.FirstBatchMaxPercent, "failure_threshold_percent": agentupgrade.FailureThresholdPercent,
+		"reconnect_timeout_seconds": int(agentupgrade.ReconnectTimeout / time.Second),
+	}
+	if _, settings, _, err := h.settings(c); err != nil {
+		plan["configured"], plan["unconfigured_reason"] = false, err.Error()
+	} else {
+		plan["target_version"] = settings.AgentVersion
+	}
+	nodes, err := agentupgrade.Candidates(c.Request.Context(), db, agentupgrade.Exclude{})
+	if err != nil {
+		kernelDBError(c, err)
+		return
+	}
+	plan["eligible_nodes"] = len(nodes)
+	var active []string
+	if err := db.WithContext(c.Request.Context()).Model(&model.AgentUpgradeCampaign{}).Where("active_slot IS NOT NULL").Limit(1).Pluck("id", &active).Error; err != nil {
+		kernelDBError(c, err)
+		return
+	}
+	plan["active_campaign_id"] = ""
+	if len(active) > 0 {
+		plan["active_campaign_id"] = active[0]
+	}
+	super, err := service.IsSuperAdmin(db, kernelActorID(c))
+	if err != nil {
+		kernelDBError(c, err)
+		return
+	}
+	plan["can_start"] = super
+	kernelData(c, http.StatusOK, plan)
 }
 
 // List godoc

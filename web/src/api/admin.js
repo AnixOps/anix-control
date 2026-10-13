@@ -172,14 +172,6 @@ export function getNodeCredentials(id) {
   })
 }
 
-export function createNode(data) {
-  return request({
-    url: '/admin/nodes',
-    method: 'post',
-    data
-  })
-}
-
 export function updateNode(id, data) {
   return request({
     url: `/admin/nodes/${id}`,
@@ -243,22 +235,6 @@ export function generateWireGuardKeypair() {
   return request({
     url: '/admin/wireguard/keypair',
     method: 'post'
-  })
-}
-
-export function getAuthKeys() {
-  return request({
-    url: '/admin/auth-keys',
-    method: 'get'
-  })
-}
-
-// The answer is the only one that shows the key; the list masks it.
-export function generateAuthKey(data) {
-  return request({
-    url: '/admin/auth-keys',
-    method: 'post',
-    data
   })
 }
 
@@ -862,37 +838,6 @@ export function restoreBackup(id) {
   })
 }
 
-export function getAgents() {
-  return request({
-    url: '/admin/agent/list',
-    method: 'get'
-  })
-}
-
-export function createAgentTask(data) {
-  return request({
-    url: '/admin/agent/tasks',
-    method: 'post',
-    data
-  })
-}
-
-export function executeAgentCommand(data) {
-  return request({
-    url: '/admin/agent/execute',
-    method: 'post',
-    data
-  })
-}
-
-export function listAgentDiagnosticTasks(params) {
-  return request({
-    url: '/admin/agent/tasks',
-    method: 'get',
-    params
-  })
-}
-
 export function getLoadBalancers(params) {
   return request({
     url: '/admin/loadbalancers',
@@ -1052,7 +997,6 @@ export default {
   getNode,
   getNodeStats,
   getNodeLogs,
-  createNode,
   getNodeCredentials,
   updateNode,
   deleteNode,
@@ -1062,8 +1006,6 @@ export default {
   updateNodeProtocol,
   deleteNodeProtocol,
   getProtocolTemplates,
-  getAuthKeys,
-  generateAuthKey,
   getSubscriptionGroups,
   createSubscriptionGroup,
   updateSubscriptionGroup,
@@ -1146,10 +1088,6 @@ export default {
   getBackupStats,
   deleteBackup,
   restoreBackup,
-  getAgents,
-  createAgentTask,
-  executeAgentCommand,
-  listAgentDiagnosticTasks,
   getLoadBalancers,
   createLoadBalancer,
   updateLoadBalancer,

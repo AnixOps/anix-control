@@ -1,9 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
-import { nextTick } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { setLocale } from '@/i18n'
-import Agent from '@/views/admin/Agent.vue'
 import Coupons from '@/views/admin/Coupons.vue'
 import InviteCodes from '@/views/admin/InviteCodes.vue'
 import Orders from '@/views/admin/Orders.vue'
@@ -16,14 +14,11 @@ const adminApi = vi.hoisted(() => ({
   banUser: vi.fn(),
   cancelOrder: vi.fn(),
   closeTicket: vi.fn(),
-  createAgentTask: vi.fn(),
   createCoupon: vi.fn(),
   createUser: vi.fn(),
   deleteCoupon: vi.fn(),
-  executeAgentCommand: vi.fn(),
   generateInviteCodes: vi.fn(),
   getAdminUser: vi.fn(),
-  getAgents: vi.fn(),
   getCoupons: vi.fn(),
   getInviteCodes: vi.fn(),
   getOrderList: vi.fn(),
@@ -35,7 +30,6 @@ const adminApi = vi.hoisted(() => ({
   getUserList: vi.fn(),
   getUsersActivity: vi.fn(),
   getUserStats: vi.fn(),
-  listAgentDiagnosticTasks: vi.fn(),
   markOrderPaid: vi.fn(),
   replyTicket: vi.fn(),
   resetUserSubscribe: vi.fn(),
@@ -74,8 +68,6 @@ beforeEach(async () => {
   adminApi.getTickets.mockResolvedValue({ code: 0, data: [] })
   adminApi.getCoupons.mockResolvedValue({ code: 0, data: [] })
   adminApi.getInviteCodes.mockResolvedValue({ code: 0, data: { list: [], total: 0 } })
-  adminApi.getAgents.mockResolvedValue({ code: 0, data: [] })
-  adminApi.listAgentDiagnosticTasks.mockResolvedValue({ code: 0, data: [] })
 })
 
 afterEach(() => {
@@ -199,21 +191,6 @@ describe('list filters in the URL query', () => {
     wrapper.vm.filter = ''
     await flushPromises()
     expect(adminApi.getInviteCodes).toHaveBeenLastCalledWith({ page: 1, page_size: 20 })
-    expect(queryOf(router)).toEqual({})
-  })
-
-  it('Agents: restores the open tab and keeps the task history page in the URL', async () => {
-    const { router, wrapper } = await mountAt(Agent, '/admin/agent', '/admin/agent?tab=tasks&page=2')
-    expect(wrapper.vm.activeTab).toBe('tasks')
-    expect(wrapper.vm.taskPage).toBe(2)
-
-    wrapper.vm.activeTab = 'terminal'
-    await nextTick()
-    await flushPromises()
-    expect(queryOf(router)).toEqual({ tab: 'terminal' })
-
-    wrapper.vm.activeTab = 'agents'
-    await flushPromises()
     expect(queryOf(router)).toEqual({})
   })
 })

@@ -58,7 +58,10 @@
         <NodeCredentialsSection :node="node" @open-protocols="section = 'protocols'" />
       </template>
       <template #deploy>
-        <NodeDeploySection :node="node" :deploy="deploy" />
+        <NodeDeploySection :node="node" />
+      </template>
+      <template #diagnostics>
+        <NodeDiagnosticsSection :node-ref="`proxy-${node.id}`" :name="node.name" />
       </template>
       <template #logs>
         <NodeLogsSection :node="node" />
@@ -77,12 +80,12 @@
 
 <script setup>
 // The node page (plan §7.2, §8.2): back link, name, status and the main
-// actions, then sections — 概览 / 协议 / 凭据 / 部署 / 日志 / 服务 / 危险区 —
+// actions, then sections — 概览 / 流量 / 协议 / 凭据 / 部署 / 诊断 / 日志 / 服务 / 危险区 —
 // kept in the URL (?section=protocols). Reads GET /admin/nodes/:id; every
 // action calls the same endpoints as the node list. 服务 shows only when the
 // node's machine-telemetry release reports a services table, and loads its
 // code when opened.
-import { computed, defineAsyncComponent, reactive, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { ChevronLeft, Pencil, RefreshCcw, ServerOff } from '@lucide/vue'
 import { getNode, getNodes } from '@/api/admin'
@@ -109,9 +112,10 @@ import {
   NODE_SECTIONS, OPTIONAL_NODE_SECTIONS, displayStatus, knownNodeName, listQuery, normalizeNode, readNodeList, readNodePayload, statusName
 } from './nodes/nodeData'
 import { useNodeActions } from './nodes/useNodeActions'
-import { useNodeDeploy } from './nodes/useNodeDeploy'
 
 const NodeServicesSection = defineAsyncComponent(() => import('./nodes/NodeServicesSection.vue'))
+// 诊断 loads its code when the section opens.
+const NodeDiagnosticsSection = defineAsyncComponent(() => import('./nodes/NodeDiagnosticsSection.vue'))
 // 流量 draws a chart: its code (and ECharts) load when the section opens.
 const NodeTrafficSection = defineAsyncComponent(() => import('./nodes/NodeTrafficSection.vue'))
 
@@ -119,8 +123,6 @@ const { t } = useAppI18n()
 const route = useRoute()
 const router = useRouter()
 const { syncingNodeIds, syncNode } = useNodeActions()
-// Page-level, so a key generated in 部署 survives switching sections.
-const deploy = reactive(useNodeDeploy())
 
 const node = ref(null)
 const loading = ref(false)
@@ -143,7 +145,12 @@ const parentName = computed(() => (node.value?.parent_id ? knownNodeName(node.va
 // Whether 服务 applies: null while unknown, then true or false.
 const servicesAvailable = ref(null)
 const hasServices = computed(() => servicesAvailable.value === true)
-const sections = computed(() => NODE_SECTIONS.filter(value => !OPTIONAL_NODE_SECTIONS.includes(value) || (value === 'services' && hasServices.value)))
+// 诊断 (5.0, D7: the NodeX Agents page's checks) sits before 日志.
+const sections = computed(() => {
+  const own = NODE_SECTIONS.filter(value => !OPTIONAL_NODE_SECTIONS.includes(value) || (value === 'services' && hasServices.value))
+  const at = own.indexOf('logs')
+  return at < 0 ? [...own, 'diagnostics'] : [...own.slice(0, at), 'diagnostics', ...own.slice(at)]
+})
 const sectionItems = computed(() => sections.value.map(value => ({ value, label: t(`admin.nodes.detail.sectionNames.${value}`) })))
 
 // ?section= in the URL; 概览 is the default and leaves the query clean. A

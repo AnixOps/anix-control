@@ -4,7 +4,6 @@ import { AGENT_NAME } from '../../../constants/brand'
 export default {
   title: 'Nodes',
   subtitle: 'Proxy nodes that serve subscriptions. Open a node for its protocols, credentials, deployment and logs.',
-  addNode: 'Add node',
   confirm: {
     deleteNodeTitle: 'Delete node {name}?',
     deleteNodeMessage: 'The node and its credentials are removed. This can’t be undone.',
@@ -44,12 +43,14 @@ export default {
     monthlyQuota: 'Monthly quota',
     quotaExceeded: 'Over quota',
     lastHeartbeat: 'Last heartbeat',
+    lastSeen: 'Last seen',
+    nodeGroup: 'Node group',
     connection: 'Connection',
     certificate: 'Certificate',
     serviceStatus: 'Services',
     never: 'Never',
     empty: 'No nodes yet',
-    emptyDescription: `A node appears here when its ${AGENT_NAME} starts with a registration key, or when you add it by hand.`,
+    emptyDescription: 'Choose Join a node and run the command on a machine: it appears here.',
     loadFailed: 'Couldn’t load nodes'
   },
   // The Services column: the machine-telemetry services summary of a node.
@@ -73,10 +74,8 @@ export default {
     manageProtocols: 'Manage protocols',
     syncReload: 'Sync and reload',
     logs: 'View logs',
-    deployParents: 'Deploy parent nodes',
     edit: 'Edit',
     delete: 'Delete',
-    authKey: 'Registration key'
   },
   detail: {
     title: 'Node',
@@ -92,6 +91,7 @@ export default {
       credentials: 'Credentials',
       deploy: 'Deployment',
       traffic: 'Traffic',
+      diagnostics: 'Diagnostics',
       logs: 'Logs',
       services: 'Services',
       danger: 'Danger zone'
@@ -168,10 +168,7 @@ export default {
     }
   },
   form: {
-    titleCreate: 'Add node',
     titleEdit: 'Edit node',
-    createDescription: `Add a node by hand. Nodes whose ${AGENT_NAME} has a registration key add themselves.`,
-    create: 'Add node',
     save: 'Save changes',
     required: 'Required',
     parentNone: 'None (root / exit node)',
@@ -199,74 +196,10 @@ export default {
       monthlyResetDay: '1 to 28.'
     }
   },
-  authKey: {
-    title: 'Registration key',
-    label: 'Registration key',
-    hint: `An ${AGENT_NAME} with this key in its config.json registers its node when it starts. One key can register any number of nodes.`,
-    noKey: 'No key generated yet',
-    copy: 'Copy key',
-    copyConfig: 'Copy config',
-    configTitle: `${AGENT_NAME} config.json`,
-    configHint: 'Paste this into the Agent’s config.json. It carries the key above once you generate one.',
-    editSettings: 'Change connection settings',
-    registeredCount: '{count} nodes registered with this key',
-    generate: 'Generate key',
-    generateAnother: 'Generate a new key',
-    hiddenKey: 'Hidden (********)',
-    hiddenHint: 'Keys are shown once, when generated. Generate a new key to copy it; existing keys keep working.',
-    shownOnce: 'Copy this key now: it isn’t shown again after you leave this page.',
-    defaultName: 'Panel key {date}'
-  },
-  deploy: {
-    title: 'Deploy parent nodes',
-    summaryTitle: '{count} parent nodes',
-    summaryText: 'Inventory, group vars and commands for config/deploy/ansible/nodes. SSH passwords and key paths stay in this page.',
-    warning: 'Use the files with config/deploy/ansible/nodes/deploy_v2bx.yml. Child nodes are deployed separately when needed.',
-    settingsTitle: 'Connection',
-    hostsTitle: 'Hosts',
-    outputTitle: 'Generated files',
-    loading: 'Loading the parent nodes’ credentials…',
-    empty: 'No parent nodes on this page.',
-    commandsLabel: 'Commands',
-    authModes: {
-      password: 'Password',
-      key: 'Private key'
-    },
-    fields: {
-      panelApiHost: 'Control API address',
-      grpcHost: 'gRPC address',
-      grpcServerName: 'gRPC server name',
-      amd64BinaryPath: 'AMD64 binary path',
-      arm64BinaryPath: 'ARM64 binary path',
-      coreType: 'Core',
-      grpcUseTLS: 'Use TLS for gRPC',
-      pluginSupervisorEnabled: 'Plugin Supervisor canary',
-      pluginRoot: 'Plugin state directory',
-      pluginSocketDir: 'Plugin socket directory',
-      pluginOfficialPublicKey: 'Official plugin public key'
-    },
-    pluginSupervisorHint: 'Keeps the data plane as it is and only lets this Agent run signed package lifecycle operations.',
-    pluginSupervisorControlRequired: 'The Plugin Supervisor canary needs TLS on the gRPC address, or a loopback gRPC host.',
-    pluginSupervisorKeyRequired: 'Enter the official plugin public key before copying a Plugin Supervisor canary configuration.',
-    pluginSupervisorKeyInvalid: 'The official plugin public key must be a Base64 Ed25519 public key.',
-    table: {
-      alias: 'Alias',
-      sshHost: 'SSH host',
-      port: 'SSH port',
-      user: 'SSH user',
-      arch: 'Architecture',
-      authMode: 'SSH sign-in',
-      authValue: 'Password or key path'
-    },
-    placeholders: {
-      password: 'Used by sshpass; stays in this page.',
-      privateKey: '~/.ssh/id_ed25519'
-    }
-  },
   install: {
-    title: 'Copy install command',
-    description: 'Install and connect the Agent on node {node} with one command.',
-    intro: 'Generates a single-use enrollment token bound to this node and the install command for each download source. Paste it on the node as root (sudo): the script installs the Agent, removes this machine’s legacy forward runtime and waits until the Agent has enrolled. Running the same command again is safe.',
+    title: 'Move to a new machine',
+    description: 'Install node {node} on another machine with one command.',
+    intro: 'Generates a single-use token bound to this node and the install command for each download source. Paste it on the new machine as root (sudo): the script installs the Agent, removes this machine’s legacy forward runtime and waits until the Agent has joined. Running the same command again is safe. The new machine takes the place of the old one.',
     ttl: 'Token lifetime',
     ttlOptions: {
       hour: '1 hour (default)',
@@ -295,19 +228,21 @@ export default {
     legacy: 'The install removes this machine’s legacy forward runtime (the nftables tables inet v2b_forward, ip v2b_forward and ip anixops_forward, and the v2forward-agent service) and lists what it removed.',
     failed: 'Could not generate the install command'
   },
+
   deploySection: {
     title: 'Deployment',
-    description: `Install and connect this node’s ${AGENT_NAME}.`,
-    registration: 'Agent registration',
-    connection: 'Connection settings',
-    connectionHint: 'They only change the generated files; nothing is saved.',
-    ansible: 'Ansible',
-    ansibleRoot: 'Generate the inventory, group vars and commands to deploy this node with Ansible.',
-    ansibleChild: 'The Ansible helper covers parent nodes only. Deploy this child node separately.',
-    installCommand: 'One-command install',
-    installCommandText: 'Copy one command and paste it on the node to install the Agent and enroll it (single-use token).',
-    openInstall: 'Copy install command',
-    openHelper: 'Open deployment helper'
+    description: `Manage this node’s ${AGENT_NAME}. New machines are not added here: use Nodes › Join a node.`,
+    move: 'Move to a new machine',
+    moveText: 'Move this node to another machine, or join it again after its certificate stopped working. Generates a single-use command to run on the new machine as root.',
+    moveAction: 'Generate install command',
+    certificate: 'Certificate',
+    certificateText: 'The node connects with a certificate; its Agent renews it before it ends.',
+    certificateGone: 'The certificate no longer works, so this node’s Agent cannot connect. Join it again with “Move to a new machine”.',
+    certificateNone: 'This node has no Agent certificate yet. Use “Move to a new machine” to join a machine.',
+    uninstall: 'Uninstall',
+    uninstallText: 'Run it on this node’s machine. Add --purge to remove its identity and data too.',
+    uninstallLabel: 'Run on the node as root',
+    copy: 'Copy command'
   },
   traffic: {
     title: 'Traffic',
@@ -638,6 +573,243 @@ export default {
     enable: 'Run on the node',
     show: 'List in subscriptions'
   },
+  tabs: {
+    label: 'Node sections',
+    nodes: 'Nodes',
+    groups: 'Node groups'
+  },
+  // Join a node: one entry for a new machine (docs/design/node-onboarding).
+  join: {
+    title: 'Join a node',
+    description: 'Run one command on the machine to join. It becomes a node of the node group you pick.',
+    checking: 'Checking that this Control can take nodes…',
+    loading: 'Getting ready…',
+    loadFailed: 'Couldn’t get ready: {message}',
+    retry: 'Try again',
+    recheck: 'Check again',
+    group: 'Node group',
+    newGroup: 'New node group',
+    requiresApproval: 'New nodes wait for your approval',
+    defaultCreated: 'The default node group “{name}” was created for you: one VLESS Reality protocol on a random port, in the default subscription group. Edit it later under Node groups.',
+    blocked: {
+      title: 'Nodes can’t join yet',
+      description: 'Fix these first. A command copied now would fail on the machine.'
+    },
+    checks: {
+      public_url: 'Control’s address',
+      grpc: 'gRPC address and certificate',
+      ca: 'Key that signs node certificates',
+      mtls_mode: 'Agent authentication',
+      agent_release: 'Agent release',
+      script_signature: 'Install script signature'
+    },
+    fixes: {
+      public_url: 'Set agent_install.public_url to the https address nodes reach Control at (for example https://panel.example.com) and restart Control. Behind a reverse proxy, also list the proxy in server.trusted_proxies.',
+      grpc: 'Set grpc.enabled, and grpc.tls_cert_file and grpc.tls_key_file (a certificate nodes trust). When nodes dial a different address than Control’s own, set agent_install.grpc_target. Then restart Control.',
+      ca: 'Set module_runtime.ca_kek (environment variable ANIX_CONTROL_MODULE_RUNTIME_CA_KEK) to a 32-byte key, for example from openssl rand -base64 32, and restart Control.',
+      mtls_mode: 'Remove agent_control.mtls (required is the default) or set it to required, and restart Control.',
+      agent_release: 'Set agent_install.agent_version to a published Agent release (for example v4.2.0), or put the Agent release in agent_install.artifact_dir, and restart Control.',
+      script_signature: 'Point agent_install.signature_file at this version’s agent-install.sh.sig, or leave it empty.'
+    },
+    command: {
+      title: 'Install command',
+      mirror: 'Download source',
+      mirrors: {
+        control: 'Control',
+        cn: 'Mainland mirror',
+        github: 'GitHub',
+        controlHelp: 'The script and the Agent are downloaded from this Control.',
+        cnHelp: 'The script comes from this Control and the Agent from the mainland mirror; checksums always come from Control or GitHub.',
+        githubHelp: 'The script and the Agent come from GitHub releases; the node still joins this Control.'
+      },
+      commandLabel: 'Run on the machine to join, as root',
+      copy: 'Copy command',
+      fallback: 'This download source is not set up: {note}',
+      expires: 'The token ends {time}. The same command joins any number of machines.',
+      neverExpires: 'The token does not expire. The same command joins any number of machines.',
+      expired: 'The token has expired: set a new validity under Node groups › Edit, or reset the token, to join more machines.',
+      history: 'The command contains the token; it stays in the shell history of every machine it ran on.',
+      reset: 'Reset token',
+      resetConfirmTitle: 'Reset the token of “{name}”?',
+      resetConfirmMessage: 'Every command copied before stops working. Nodes that already joined are not affected.',
+      resetDone: 'Token reset. Use the new command.',
+      uninstall: 'Uninstall command',
+      uninstallHelp: 'Run it on the node. Add --purge to remove its identity and data too.',
+      forbidden: 'Only a super administrator can see the join command. Sign in as one.',
+      failed: 'Couldn’t read the join command: {message}'
+    },
+    nodes: {
+      title: 'Machines that joined',
+      waiting: 'Waiting for a machine to join…',
+      waitingHint: 'Run the command above on the machine and it shows up here.',
+      joined: '{name} joined',
+      online: 'Online',
+      connecting: 'Connecting',
+      more: '{count} more that joined earlier are in the node list.'
+    },
+    quick: {
+      name: 'Node group name',
+      namePlaceholder: 'Hong Kong',
+      kind: 'Node type',
+      kindHelp: {
+        proxy: 'Proxy nodes serve the protocols in subscriptions.',
+        forward: 'Forward nodes are the entry or relay machines of forward routes.'
+      },
+      preset: 'Protocols',
+      presets: {
+        'vless-reality': 'VLESS Reality (recommended)',
+        'shadowsocks-2022': 'Shadowsocks 2022',
+        'vless-reality-shadowsocks': 'VLESS Reality + Shadowsocks 2022'
+      },
+      subscriptionGroups: 'Subscription groups',
+      create: 'Create node group',
+      failed: 'Couldn’t create the node group: {message}'
+    }
+  },
+  approval: {
+    pending: 'Awaiting approval',
+    pendingHint: 'This node waits for you: it gets no configuration and no users until you approve it.',
+    approved: 'Approved',
+    rejected: 'Rejected',
+    approve: 'Approve',
+    reject: 'Reject',
+    banner: '{count} machine(s) wait for your approval. They get no configuration and no users until you approve them.',
+    view: 'View',
+    rejectTitle: 'Reject node {name}?',
+    rejectMessage: 'The node is disabled and its certificates are revoked.',
+    approvedToast: '{name} approved',
+    rejectedToast: '{name} rejected',
+    failed: 'Couldn’t do that: {message}'
+  },
+  // Node groups (the tab and its sheet).
+  groups: {
+    summary: 'A node group sets the defaults, the protocols and the join token of its nodes.',
+    add: 'New node group',
+    kinds: {
+      proxy: 'Proxy',
+      forward: 'Forward'
+    },
+    table: {
+      label: 'Node groups',
+      name: 'Name',
+      nodes: 'Nodes',
+      requireApproval: 'Needs approval',
+      token: 'Join token',
+      rate: 'Traffic rate',
+      sort: 'Sort'
+    },
+    nodesLive: '{count}',
+    nodesCount: '{live} node(s), {pending} awaiting approval',
+    nodesPending: '{count} awaiting',
+    toggleApproval: 'New nodes of “{name}” need approval',
+    tokenNever: 'Does not expire',
+    tokenUntil: 'Ends {date}',
+    tokenExpired: 'Expired',
+    tokenExpiredEdit: 'This group’s token has expired. Set a new validity under Edit first.',
+    approvalOn: 'New nodes of “{name}” now need your approval.',
+    approvalOff: 'New nodes of “{name}” no longer need approval.',
+    empty: 'No node groups yet',
+    emptyDescription: 'Choose Join a node: Control makes the default node group and shows the command.',
+    loadFailed: 'Couldn’t load node groups',
+    created: 'Node group {name} created',
+    saved: 'Node group {name} saved',
+    deleted: 'Node group {name} deleted',
+    deleteTitle: 'Delete node group {name}?',
+    deleteMessage: 'Its join token stops working at once. Nodes that already joined are not affected.',
+    deleteAction: 'Delete node group',
+    deleteInUse: 'The group still has nodes: delete or move them first.',
+    nameTaken: 'A node group with this name exists.',
+    caKekMissing: 'module_runtime.ca_kek is not set, so no node group can be created.'
+  },
+  groupForm: {
+    titleCreate: 'New node group',
+    titleEdit: 'Edit node group',
+    createDescription: 'The group’s settings are copied to every node that joins it.',
+    create: 'Create node group',
+    save: 'Save changes',
+    saveFailed: 'Couldn’t save: {message}',
+    joining: 'Joining',
+    noSubscriptionGroups: 'There are no subscription groups yet. Create one under Subscription groups so nodes can appear in subscriptions.',
+    fields: {
+      name: 'Name',
+      kind: 'Type',
+      rate: 'Traffic rate',
+      sort: 'Sort',
+      tags: 'Tags',
+      monthlyLimit: 'Monthly traffic limit',
+      resetDay: 'Monthly reset day',
+      tokenExpiry: 'Token validity',
+      maxNodes: 'Node limit',
+      requireApproval: 'New nodes need my approval',
+      subscriptionGroups: 'Subscription groups'
+    },
+    placeholders: {
+      name: 'Hong Kong',
+      tags: 'hk,iepl,fast'
+    },
+    help: {
+      rate: 'Usage is counted at this rate.',
+      sort: 'Lower numbers come first.',
+      monthlyLimit: 'Leave empty for no limit.',
+      resetDay: '1 to 28.',
+      maxNodes: '0 means no limit.',
+      requireApproval: 'Until you approve it, a node gets no configuration and no users.',
+      subscriptionGroups: 'The protocols of new nodes join these subscription groups. Nodes that already joined stay as they are.'
+    },
+    expiry: {
+      never: 'Does not expire',
+      '7d': '7 days',
+      '30d': '30 days',
+      '90d': '90 days',
+      '365d': '1 year',
+      keep: 'Keep (ends {time})',
+      expired: 'Expired (set a new one)',
+      expiredError: 'The token has expired: choose a new validity.'
+    },
+    template: {
+      title: 'Protocols',
+      description: 'Every new node gets these protocols, with secrets Control generates for each node. A change applies to machines that join afterwards; nodes already there keep theirs.',
+      empty: 'No protocols: a node that joins would have nothing to serve.',
+      protocol: 'Protocol {n}',
+      name: 'Name',
+      namePlaceholder: 'Defaults to the protocol',
+      type: 'Protocol',
+      types: {
+        vless: 'VLESS',
+        vmess: 'VMess',
+        shadowsocks: 'Shadowsocks',
+        wireguard: 'WireGuard'
+      },
+      transport: 'Transport',
+      tls: 'TLS',
+      portMode: 'Port',
+      portModes: {
+        range: 'Random port',
+        fixed: 'Fixed port'
+      },
+      port: 'Port',
+      portFrom: 'Port from',
+      portTo: 'to',
+      serverName: 'Reality site',
+      serverNameHelp: 'A site that answers TLS 1.3.',
+      dest: 'Reality destination',
+      destHelp: 'Empty means site:443.',
+      advanced: 'Advanced',
+      settings: 'Protocol settings (JSON)',
+      transportSettings: 'Transport settings (JSON)',
+      add: 'Add protocol',
+      remove: 'Remove',
+      fixProblems: 'Fix the protocol settings marked below first.',
+      portErrors: {
+        port: 'A port from 1 to 65535.',
+        range: 'Ports from 1 to 65535, the start not above the end.'
+      },
+      jsonErrors: {
+        json: 'Not valid JSON.',
+        object: 'Must be a JSON object.'
+      }
+    }
+  },
   statusText: {
     pending: 'Pending',
     online: 'Online',
@@ -662,7 +834,6 @@ export default {
     saveFailed: 'Couldn’t save: {message}',
     syncSuccess: 'Node “{name}” accepted the sync',
     syncFailed: 'Sync failed: {message}',
-    nodeCreated: 'Node {name} added',
     nodeSaved: 'Node {name} saved',
     nodeDeleted: 'Node {name} deleted',
     nodeDisabled: 'Node {name} disabled',
@@ -671,7 +842,6 @@ export default {
     protocolSaved: 'Protocol {type} :{port} saved',
     protocolDeleted: 'Protocol {type} :{port} deleted',
     generateFailed: 'Couldn’t generate: {message}',
-    deployLoadFailed: 'Couldn’t load the parent nodes’ credentials',
     copied: 'Copied',
     copyFailedManual: 'Couldn’t copy automatically. Select the text and copy it.',
     invalidJsonDetail: 'Invalid JSON: {message}',

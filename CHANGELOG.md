@@ -51,6 +51,40 @@
   ("3/3 正常", "1 个失败", 等待上报, 不支持, 数据过期), loaded for the page in one call to the package's new
   `GET /api/v3/plugins/machine-telemetry/nodes/services?ids=` route. Without the plugin host, the package or
   `machine-telemetry.api` it shows "—" and the list works as before; it can be hidden in the table settings.
+- 接入节点 (5.0 node onboarding): the node page has one entry point for a new machine. It checks first, without any
+  network call, that its command can work (`GET /api/v4/kernel/agents/install-readiness`: the https address nodes
+  reach, the gRPC target and its TLS, the CA key, `agent_control.mtls`, the Agent release, the script signature) and
+  shows each failing check with its fix instead of a command that would fail. A panel without a node group gets the
+  default one the first time (`POST /api/v4/kernel/node-groups/default`: "默认", one VLESS Reality protocol on a random
+  port from 20000 to 40000 in the default subscription group), so the first node needs no input. The dialog shows
+  the group's command with the mirror tabs, copy, the token's end, 重置令牌 and the uninstall command, and lists the
+  machines as they join (`GET /api/v4/kernel/node-groups/:id/nodes`, polled every three seconds).
+- 节点组 tab on the node page: the groups with their live and pending nodes, the approval switch, the token's end and
+  the row actions 接入节点, 编辑 and 删除 (a group with nodes answers "组内还有节点"). The edit sheet has the defaults,
+  the token's validity, the node cap, approval, the subscription groups and the protocol template editor (type,
+  transport, TLS none or Reality, a port or a range, the Reality site), with the API's validation errors.
+- Nodes that wait for approval: a 待确认 filter and badge, 批准 and 拒绝 in the row menu, and a banner for every
+  machine that waits, forward groups included. The console reads `GET /api/v4/admin/nodes`: the `/api/v2` node
+  rows with `approval`, `node_group_id` and `node_group_name` (filters `approval` and `node_group_id`); the
+  `/api/v2/admin/nodes` shape is unchanged.
+- Node diagnostics API: `POST /api/v4/kernel/nodes/:id/diagnostics` (`:id` is `proxy-<id>` or `forward-<id>`) runs
+  one whitelisted `agent.diagnostic` task on the node's Agent Control stream and answers its result in the request
+  (`service_status`, `log_tail` and `service_restart` for `gost`, and the forward checks `forward.listen`,
+  `forward.port_conflict`, `forward.connect`, `forward.udp_probe` when the Agent advertises `diag.v1`).
+  `timeout_seconds` is 1 to 120, default 30; the answer is 409 `node_offline`, `diagnostics_unsupported`,
+  `node_pending_approval` or `diagnostic_busy`, 502 `agent_error`, or 504 `diagnostic_timeout`. A restart needs a
+  super administrator; every call is a `v2_operation_log` row (module `node_diagnostic`) written before the task is
+  sent. `GET` on the same path says what the node's session runs and lists a proxy node's newest tasks. The
+  response's write deadline is extended past `server.write_timeout` for the request's own wait.
+- The node page has a 诊断 section (and the forwarding node page a card with the same component): service status,
+  restart after a confirmation, log tail of 100, 500 or 1000 lines, the forward checks of a hosted hop, and the
+  result with its duration and a copy button, with an empty state for an offline node or an Agent without
+  diagnostics.
+- 升级节点: a sheet (⌘K → 升级节点, or `openAgentUpgrade()` from any page) that starts a staged Agent upgrade. It
+  shows the Agent release Control pins, the batches (default 5%, 25%, 100%; the 30 minute minimum is shown and
+  fixed), how many nodes would be upgraded, and the campaign card; starting asks for a confirmation. New
+  `GET /api/v4/kernel/agents/upgrade-plan` answers the release, the eligible node count, the batches and whether the
+  caller may start one.
 
 ### Changed
 
@@ -70,6 +104,12 @@
   `stats-grid`; `pluginWebuiClasses.test.js` enforces it.
 - The live Control WebUI gate loads and revokes the nftables-forward WebUI and checks that identity-platform
   and machine-telemetry install without one and stay out of the catalog.
+- The node list shows 证书, Agent 版本 and 最后在线 from the Agent inventory (the Agent's own version and last
+  sighting, falling back to the node's own); 连接方式 starts hidden and the table settings bring it back. 最后在线
+  replaces 最后心跳 and sorts by the last check.
+- 部署 on the node page is 换到新机器 (a single-use enrollment command for this node, formerly 复制安装命令), the
+  uninstall command and the certificate's state. The command palette's 添加节点 is 接入节点 (`?join=1`).
+- `/admin/agent` and every path below it redirect to the node list. The node page opens on `?section=diagnostics`.
 
 - The install command is `curl -fsSL <control>/install.sh | sudo bash -s -- -u <control> -t <token>` for both a node
   group's join token and a node's one-time enrollment token (`-u`/`--control`, `-t`/`--token`; the token names its
@@ -88,7 +128,16 @@
   wireguard, and the machine-telemetry extension page, with their `/admin/extensions/*` sidebar entries.
   The features are on the core pages; machine-telemetry keeps its control routes for the node pages. The
   web app's test-only local module registry and its machine-telemetry module are gone too.
-  "Joining a node group"). The change is additive, so Agents in the field are unaffected.
+- The NodeX Agents page (`/admin/agent`, its agent list, remote terminal and task history) and the Agent
+  连接方式 page (`/admin/agent/transports`) with their sidebar entry, locale strings, tests and the four
+  `/api/v2/admin/agent/*` client functions only they used. Their work moved to the node page's 诊断 section, the
+  node list's connection and certificate columns and the 升级节点 sheet. Every backend route stays, and so does
+  `GET /api/v4/kernel/agents/transports`.
+- From the console: the 注册密钥 sheet and panel, the 部署父节点 sheet with its settings and the `useNodeDeploy`
+  composable (the Agent `config.json` example and the Ansible inventory), the manual create mode of the node form
+  (添加节点; editing stays), and in the node page's 部署 the registration key panel, the connection settings and the
+  Ansible helper. Machines join a node group with its command instead. The `/api/v2` registration key and
+  node create routes stay until the node-onboarding removal phase.
 - Node groups (5.0 node onboarding, `docs/design/node-onboarding`): a group (`v5_node_group`, kind `proxy` or
   `forward`) owns an `anixjoin_` join token and the defaults of the nodes it creates (rate, tags, monthly traffic
   limit and reset day, sort, a protocol template and subscription groups). The token is stored as its SHA-256 and

@@ -65,8 +65,57 @@ supported yet. The script checks all of this before it changes anything
 
 A node group owns a join token and the defaults of the nodes it creates.
 Its kind is `proxy` (the machines serve users: `v2_node` rows) or `forward`
-(entry and relay machines of forward routes: forward nodes). The console's
-dialog for groups comes in a later release; until then use the API
+(entry and relay machines of forward routes: forward nodes).
+
+### In The Console
+
+**节点 › 接入节点** is the one entry point for a new machine (it replaces
+the registration key, the parent-node Ansible helper and adding a node by
+hand):
+
+1. **Control checks itself first.** Before it shows a command it checks,
+   with no network call, that the command can work: the address nodes reach
+   is https, the gRPC target resolves and its listener has TLS, the CA key
+   (`module_runtime.ca_kek`) is usable, `agent_control.mtls` is not `off`,
+   the pinned Agent release has a source, and the install script's
+   signature verifies when one is configured. A failing check is shown with
+   what to change instead of a command that would fail; a failing warning
+   (the signature, an `artifact_dir` without the release) sits above the
+   command. The same answer is `GET /api/v4/kernel/agents/install-readiness`.
+2. **A node group is picked or made.** On a panel with no node group the
+   first open creates the default one without asking for anything: **默认**,
+   a proxy group whose template is one VLESS Reality protocol on a random port
+   from 20000 to 40000 (Reality site `www.microsoft.com`), in the default
+   subscription group, so the first node is in subscriptions as soon as it
+   joins. Edit it later under **节点组**. **新建节点组** makes another one with
+   the minimum: a name, proxy or forward and, for a proxy group, one of three
+   protocol presets (it joins the default subscription group, and the
+   others stay one click away in the group's sheet).
+3. **The command.** Super administrators see it with the download source
+   tabs (control, mainland mirror, GitHub), a copy button, when the token
+   ends and **重置令牌** (after a confirmation: every earlier command stops
+   working, nodes that joined keep their certificates). The uninstall command
+   is under it. Other administrators see a note that only a super
+   administrator can show the command.
+4. **Machines appear as they join.** The list under the command shows
+   "等待机器接入…" and then "hk-01 已接入" with the node's id, address,
+   approval and whether it is online (polled every three seconds while the
+   dialog is open). In a group that requires approval the machine carries
+   **批准** and **拒绝**; the node list has a **待确认** filter, a badge on the
+   row and a banner for every machine that waits (forward groups included).
+
+**节点 › 节点组** lists the groups: kind, live and pending nodes, the approval
+switch, when the token ends and the row actions **接入节点** (the dialog for
+that group), **编辑** and **删除** (refused while the group has nodes). The
+edit sheet holds the defaults the nodes copy (rate, tags, monthly limit and
+reset day, sort), the token's validity, the node cap, approval, the
+subscription groups and the protocol template: each protocol's type, name,
+transport, TLS (none, or Reality for VLESS), fixed port or a range, and the
+Reality site. A changed template applies to machines that join afterwards.
+
+### Using The API
+
+The console uses the same routes
 ([reference](api-reference.md#节点组与接入令牌)):
 
 1. Create the group (any administrator):
@@ -194,8 +243,8 @@ node is created; the earlier node stays until you delete it.
 To move a node to a new machine, or to enroll it again after its identity
 was revoked, issue a single-use enrollment token for the node (1 hour by
 default, at most 7 days; super administrators): **节点 › node › 部署 ›
-复制安装命令** for a proxy node, the forward node's page for a forward
-node, or `POST /api/v4/kernel/agents/install-tokens` with
+换到新机器** for a proxy node, the forward node's page for a forward node,
+or `POST /api/v4/kernel/agents/install-tokens` with
 `{"node": "proxy-12"}`. The token is shown once and works once.
 
 1. Pick the download source and copy its command:
@@ -228,8 +277,9 @@ node, or `POST /api/v4/kernel/agents/install-tokens` with
                     - systemd unit v2forward-agent.service
    ```
 
-The Agent then shows as connected over mTLS on **Agent 连接方式**
-(`anix-control agents transports`).
+The Agent then shows as connected over mTLS in the node list's connection and
+certificate columns and on the node's page (`anix-control agents transports`
+lists every node).
 
 ## What The Script Does
 
@@ -579,8 +629,12 @@ anix-control agent upgrade abort -id <campaign> [-rollback]
 ```
 
 The same is `POST /api/v4/kernel/agents/upgrades` (and `GET`, `/:id`,
-`/:id/pause`, `/:id/resume`, `/:id/abort`); the **NodeX Agents → Agent
-transports** page shows the latest campaign. Requirements:
+`/:id/pause`, `/:id/resume`, `/:id/abort`). In the console, **升级节点**
+(⌘K → 升级节点) shows the Agent release this
+Control pins, how many nodes would be upgraded and the batches (5%, 25%, 100%
+by default; the 30 minute minimum cannot be changed), starts the campaign
+after a confirmation and shows the latest one (super administrators start,
+pause, resume and abort). Requirements:
 
 - the release in `agent_install.artifact_dir/<tag>/` with its signatures
   (see [serving the Agent from Control](#serving-the-agent-from-control-or-a-mirror));

@@ -122,8 +122,20 @@ test.describe('invite codes', () => {
 })
 
 test.describe('nodes', () => {
-  test('the Agent connection and certificate of the page come in one call after the list', async ({ page }) => {
+  // 连接 is off by default (the certificate, the Agent version and when the
+  // node was last seen take its room); a table setting the administrator made
+  // earlier turns it on.
+  async function showConnection(page) {
+    await page.addInitScript(() => {
+      localStorage.setItem('anix.table.admin.nodes', JSON.stringify({
+        hidden: ['id', 'nodeGroup', 'load', 'parent', 'traffic', 'monthlyQuota'], density: 'comfortable'
+      }))
+    })
+  }
+
+  test('the Agent connection, certificate and version of the page come in one call after the list', async ({ page }) => {
     const requests = recordRequests(page)
+    await showConnection(page)
     await openScreen(page, 'admin-nodes', { clock: true })
     const chips = page.getByTestId('node-connection')
     await expect(chips.first()).toBeVisible()
@@ -133,6 +145,7 @@ test.describe('nodes', () => {
     const row = name => page.getByRole('row', { name: new RegExp(name) })
     await expect(row('hk-01').getByTestId('node-connection')).toHaveText('mTLS stream')
     await expect(row('hk-01').getByTestId('node-certificate')).toContainText('Valid')
+    await expect(row('hk-01').getByTestId('node-agent-version')).toHaveText('v1.4.2')
     await expect(row('hk-02').getByTestId('node-certificate')).toContainText('Renewal overdue')
     await expect(row('jp-tokyo-01').getByTestId('node-connection')).toHaveText('API key stream')
     await expect(row('sg-01').getByTestId('node-connection')).toHaveText('Legacy')
@@ -146,10 +159,10 @@ test.describe('nodes', () => {
     const requests = recordRequests(page)
     await openScreen(page, 'admin-nodes')
     await expect(page.getByRole('columnheader', { name: 'Status' }).getByRole('button')).toHaveCount(0)
-    await expect(page.getByRole('columnheader', { name: 'Connection' }).getByRole('button')).toHaveCount(0)
-    await page.getByRole('columnheader', { name: /^Last heartbeat/ }).getByRole('button').click()
+    await expect(page.getByRole('columnheader', { name: 'Certificate' }).getByRole('button')).toHaveCount(0)
+    await page.getByRole('columnheader', { name: /^Last seen/ }).getByRole('button').click()
     await expect(page).toHaveURL(/sort=last_check_at&order=desc/)
-    expect(requests.to('/api/v2/admin/nodes').at(-1).query).toMatchObject({ sort: 'last_check_at', order: 'desc', page: '1' })
+    expect(requests.to('/api/v4/admin/nodes').at(-1).query).toMatchObject({ sort: 'last_check_at', order: 'desc', page: '1' })
   })
 
   test('the node page shows the connection, the certificate dates and the renewal', async ({ page }) => {

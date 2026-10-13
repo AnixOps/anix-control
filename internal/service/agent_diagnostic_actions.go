@@ -1,6 +1,9 @@
 package service
 
-import "fmt"
+import (
+	"fmt"
+	"sort"
+)
 
 // AgentDiagnosticActionSpec 描述一个白名单诊断动作允许携带哪些参数，以及是否为变更类操作。
 type AgentDiagnosticActionSpec struct {
@@ -30,6 +33,19 @@ var AgentDiagnosticActions = map[string]AgentDiagnosticActionSpec{
 // 与 clean_agent 体系下的 v2forward-agent 二进制/服务无关，不要混用。
 var agentDiagnosticAllowedServices = map[string]bool{
 	"gost": true,
+}
+
+// AgentDiagnosticServices lists the services the service parameter of the
+// generic actions may name, sorted.
+func AgentDiagnosticServices() []string {
+	services := make([]string, 0, len(agentDiagnosticAllowedServices))
+	for name, allowed := range agentDiagnosticAllowedServices {
+		if allowed {
+			services = append(services, name)
+		}
+	}
+	sort.Strings(services)
+	return services
 }
 
 // ValidateAgentDiagnosticTask 校验 action 是否在白名单内，并将 params 归一化为

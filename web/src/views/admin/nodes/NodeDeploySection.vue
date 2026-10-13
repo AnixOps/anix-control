@@ -1,88 +1,101 @@
 <template>
   <UiSection :title="t('admin.nodes.deploySection.title')" :description="t('admin.nodes.deploySection.description')">
     <div class="node-deploy-section">
-      <UiCard :title="t('admin.nodes.deploySection.registration')" heading-tag="h3">
-        <NodeAuthKeyPanel :deploy="deploy" />
+      <UiCard :title="t('admin.nodes.deploySection.move')" heading-tag="h3">
+        <p class="node-deploy-section__text">{{ t('admin.nodes.deploySection.moveText') }}</p>
+        <template #actions>
+          <UiButton size="sm" variant="primary" :icon="Terminal" data-testid="open-agent-install" @click="installOpen = true">{{ t('admin.nodes.deploySection.moveAction') }}</UiButton>
+        </template>
       </UiCard>
-      <div class="node-deploy-section__side">
-        <UiCard :title="t('admin.nodes.deploySection.installCommand')" heading-tag="h3">
-          <p class="node-deploy-section__text">{{ t('admin.nodes.deploySection.installCommandText') }}</p>
-          <template #actions>
-            <UiButton size="sm" variant="primary" :icon="Terminal" data-testid="open-agent-install" @click="installOpen = true">{{ t('admin.nodes.deploySection.openInstall') }}</UiButton>
-          </template>
-        </UiCard>
-        <UiCard :title="t('admin.nodes.deploySection.connection')" :description="t('admin.nodes.deploySection.connectionHint')" heading-tag="h3">
-          <NodeDeploySettings :deploy="deploy" />
-        </UiCard>
-        <UiCard :title="t('admin.nodes.deploySection.ansible')" heading-tag="h3">
-          <p class="node-deploy-section__text">
-            {{ isRoot ? t('admin.nodes.deploySection.ansibleRoot') : t('admin.nodes.deploySection.ansibleChild') }}
-          </p>
-          <template v-if="isRoot" #actions>
-            <UiButton size="sm" :icon="Terminal" data-testid="open-deploy-helper" @click="deployOpen = true">{{ t('admin.nodes.deploySection.openHelper') }}</UiButton>
-          </template>
-        </UiCard>
-      </div>
+
+      <UiCard :title="t('admin.nodes.deploySection.certificate')" heading-tag="h3">
+        <div class="node-deploy-section__certificate" data-testid="deploy-certificate">
+          <NodeCertificateCell :entry="entry" :status="status" />
+        </div>
+        <NodeNotice v-if="certificateText" :tone="certificateTone" data-testid="deploy-certificate-notice">{{ certificateText }}</NodeNotice>
+        <p v-else class="node-deploy-section__text">{{ t('admin.nodes.deploySection.certificateText') }}</p>
+      </UiCard>
+
+      <UiCard :title="t('admin.nodes.deploySection.uninstall')" heading-tag="h3">
+        <p class="node-deploy-section__text">{{ t('admin.nodes.deploySection.uninstallText') }}</p>
+        <UiCodeBlock
+          :label="t('admin.nodes.deploySection.uninstallLabel')"
+          :code="UNINSTALL_COMMAND"
+          :copy-label="t('admin.nodes.deploySection.copy')"
+          wrap
+          max-height="120px"
+          data-testid="uninstall-command"
+        />
+      </UiCard>
     </div>
-    <NodeDeploySheet v-if="isRoot" v-model:open="deployOpen" :nodes="[node]" :deploy="deploy" />
     <AgentInstallSheet v-model:open="installOpen" :node="`proxy-${node.id}`" :node-label="node.name" />
   </UiSection>
 </template>
 
 <script setup>
-// 部署 section of the node page: the one-command install (a single-use
-// enrollment token), the Agent registration key with its config.json, the
-// connection settings it uses, and, for a parent node, the Ansible helper
-// for this node.
-import { computed, onMounted, ref } from 'vue'
+// 部署 section of the node page: move this node to another machine (a
+// single-use enrollment command bound to the node), the uninstall command, and
+// the state of its Agent certificate. New machines are not added here: they
+// join a node group from 节点 › 接入节点.
+import { computed, onMounted, ref, watch } from 'vue'
 import { Terminal } from '@lucide/vue'
 import UiButton from '@/ui/UiButton.vue'
 import UiCard from '@/ui/UiCard.vue'
+import UiCodeBlock from '@/ui/UiCodeBlock.vue'
 import UiSection from '@/ui/UiSection.vue'
 import AgentInstallSheet from '@/components/admin/AgentInstallSheet.vue'
 import { useAppI18n } from '@/composables/useAppI18n'
-import NodeAuthKeyPanel from './NodeAuthKeyPanel.vue'
-import NodeDeploySettings from './NodeDeploySettings.vue'
-import NodeDeploySheet from './NodeDeploySheet.vue'
+import { useFormat } from '@/ui/composables/useFormat'
+import NodeCertificateCell from './NodeCertificateCell.vue'
+import NodeNotice from './NodeNotice.vue'
+import { certificateOf, nodeRef } from './agentConnection'
+import { useNodeTransports } from './useNodeTransports'
+
+// What `anix-agent uninstall` removes is listed by the Agent itself; --purge
+// also drops its identity and state.
+const UNINSTALL_COMMAND = 'sudo anix-agent uninstall'
 
 const props = defineProps({
-  node: { type: Object, required: true },
-  // reactive(useNodeDeploy()), owned by the page
-  deploy: { type: Object, required: true }
+  node: { type: Object, required: true }
 })
 const { t } = useAppI18n()
-const deployOpen = ref(false)
+const format = useFormat()
 const installOpen = ref(false)
-const isRoot = computed(() => !props.node.parent_id)
+const { entries, status, load } = useNodeTransports()
 
-onMounted(() => props.deploy.loadAuthKeysPreview())
+const entry = computed(() => entries.value.get(nodeRef(props.node.id)) || null)
+const certificate = computed(() => certificateOf(entry.value))
+// What the state means for the next step; empty for a certificate in order.
+const certificateText = computed(() => {
+  if (!entry.value) return ''
+  const { state, overdue, renewAfter } = certificate.value
+  if (overdue) return t('admin.nodes.agent.overdueNotice', { date: format.dateTime(renewAfter) })
+  if (state === 'revoked' || state === 'expired') return t('admin.nodes.deploySection.certificateGone')
+  if (state === 'none') return t('admin.nodes.deploySection.certificateNone')
+  return ''
+})
+const certificateTone = computed(() => (certificate.value.state === 'valid' ? 'warning' : 'danger'))
+
+onMounted(() => load([props.node.id]))
+watch(() => props.node.id, id => load([id]))
 </script>
 
 <style scoped>
 .node-deploy-section {
-  display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
-  gap: var(--space-6);
-  align-items: start;
-}
-
-.node-deploy-section__side {
   display: flex;
   flex-direction: column;
   gap: var(--space-6);
-  min-width: 0;
+  max-width: 720px;
 }
 
 .node-deploy-section__text {
-  margin: 0;
+  margin: 0 0 var(--space-3);
   color: var(--label-2);
   font-size: var(--type-callout-size);
   line-height: var(--type-callout-line);
 }
 
-@media (max-width: 1067.98px) {
-  .node-deploy-section {
-    grid-template-columns: minmax(0, 1fr);
-  }
+.node-deploy-section__certificate {
+  margin-bottom: var(--space-3);
 }
 </style>

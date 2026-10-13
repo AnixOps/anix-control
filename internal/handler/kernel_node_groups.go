@@ -133,6 +133,51 @@ func (h *NodeGroupsHandler) Get(c *gin.Context) {
 	kernelData(c, http.StatusOK, group)
 }
 
+// EnsureDefault godoc
+// @Summary Make sure the panel has a node group
+// @Description Creates the default node group when no live node group exists, and answers the first group otherwise (created tells which): a proxy group named "默认" whose template is one VLESS Reality protocol on a random port from 20000 to 40000, attached to the default subscription group (created when the panel has none), so the first node needs no input. Idempotent and safe to call concurrently. 409 ca_kek_missing without module_runtime.ca_kek. Audited as a node group create when it creates.
+// @Tags Kernel
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} map[string]any
+// @Success 201 {object} map[string]any
+// @Router /api/v4/kernel/node-groups/default [post]
+func (h *NodeGroupsHandler) EnsureDefault(c *gin.Context) {
+	group, created, err := h.groups().EnsureDefault(c.Request.Context(), h.actor(c))
+	if err != nil {
+		h.groupError(c, err)
+		return
+	}
+	status := http.StatusOK
+	if created {
+		status = http.StatusCreated
+	}
+	kernelData(c, status, gin.H{"group": group, "created": created})
+}
+
+// Nodes godoc
+// @Summary List a node group's nodes
+// @Description The group's live nodes (every node of the group but the rejected ones), newest first, for the join dialog that waits for machines: id, node (proxy-<id> or forward-<id>), kind, name, host, approval (approved or pending), online (enabled and checked in within five minutes, as the node list computes it), last_seen, agent_version and created_at. Never a credential. Any administrator.
+// @Tags Kernel
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "node group id"
+// @Success 200 {object} map[string]any
+// @Router /api/v4/kernel/node-groups/{id}/nodes [get]
+func (h *NodeGroupsHandler) Nodes(c *gin.Context) {
+	id, ok := parseKernelID(c, "id")
+	if !ok {
+		return
+	}
+	nodes, err := h.groups().Nodes(c.Request.Context(), id)
+	if err != nil {
+		h.groupError(c, err)
+		return
+	}
+	c.Header("Cache-Control", "no-store")
+	kernelData(c, http.StatusOK, gin.H{"nodes": nodes})
+}
+
 // Create godoc
 // @Summary Create a node group
 // @Description A node group of kind proxy or forward with a new join token (sealed under module_runtime.ca_kek, which must be set). Its defaults (rate, tags, monthly_limit_bytes, reset_day, sort) are copied to every node the token creates; a proxy group's protocol_template lists the protocols each new node gets (tls none, or reality for vless; port or port_range) and subscription_group_ids the subscription groups they join. The answer does not carry the token: GET .../command shows the install command. Audited.

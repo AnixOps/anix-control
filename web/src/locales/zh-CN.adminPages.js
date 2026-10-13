@@ -11,12 +11,16 @@ import adminSubscriptionGroups from './modules/zh-CN/adminSubscriptionGroups'
 import adminApiTokens from './modules/zh-CN/adminApiTokens'
 import forwardV4 from './modules/zh-CN/forwardV4'
 import forwardDns from './modules/zh-CN/forwardDns'
+import nodeDiagnostics from './modules/zh-CN/nodeDiagnostics'
+import agentUpgradeSheet from './modules/zh-CN/agentUpgradeSheet'
 
 export default {
   ...adminSubscriptionGroups,
   ...adminApiTokens,
   ...forwardV4,
   ...forwardDns,
+  ...nodeDiagnostics,
+  ...agentUpgradeSheet,
   ...networkPages,
   ...miscPages,
   ...adminSupportPages,
@@ -127,86 +131,6 @@ export default {
       },
       nodeModal: {
         saveLoading: '\u4fdd\u5b58\u4e2d...'
-      }
-    },
-    nodeXAgents: {
-      title: 'NodeX Agents',
-      subtitle: '\u53ea\u6709 NodeX \u6a21\u5f0f\u9700\u8981 agents\u3002\u8fd9\u4e2a\u9875\u9762\u7528\u4e8e agent \u72b6\u6001\u3001\u8fdc\u7a0b\u7ec8\u7aef\u548c\u4efb\u52a1\u4e0b\u53d1\u3002',
-      tabs: {
-        agents: '\u5728\u7ebf Agent',
-        terminal: '\u8fdc\u7a0b\u7ec8\u7aef',
-        tasks: '\u4efb\u52a1\u5386\u53f2'
-      },
-      actions: {
-        refresh: '\u5237\u65b0',
-        execute: '\u8fd0\u884c',
-        send: '\u53d1\u9001',
-        cancel: '\u53d6\u6d88',
-        monitor: '\u67e5\u770b\u76d1\u63a7',
-        openTerminal: '\u5728\u7ec8\u7aef\u4e2d\u6253\u5f00'
-      },
-      table: {
-        nodeId: '\u8282\u70b9',
-        version: '\u7248\u672c',
-        system: '\u7cfb\u7edf',
-        lastSeen: '\u6700\u540e\u5728\u7ebf',
-        status: '\u72b6\u6001',
-        capabilities: '\u80fd\u529b',
-        taskId: '\u4efb\u52a1 ID',
-        node: '\u8282\u70b9',
-        command: '\u547d\u4ee4 / \u52a8\u4f5c',
-        duration: '\u8017\u65f6',
-        time: '\u65f6\u95f4'
-      },
-      status: {
-        online: '\u5728\u7ebf',
-        offline: '\u79bb\u7ebf',
-        connected: '\u5df2\u8fde\u63a5',
-        disconnected: '\u672a\u8fde\u63a5',
-        success: '\u6210\u529f',
-        failed: '\u5931\u8d25'
-      },
-      empty: {
-        agents: '\u6ca1\u6709\u5728\u7ebf\u7684 Agent',
-        agentsDescription: 'NodeX \u8282\u70b9\u8fde\u4e0a\u63a7\u5236\u9762\u540e\uff0c\u5b83\u7684 Agent \u4f1a\u51fa\u73b0\u5728\u8fd9\u91cc\u3002',
-        tasks: '\u8fd8\u6ca1\u6709\u4efb\u52a1\u8bb0\u5f55',
-        tasksDescription: '\u5728\u7ec8\u7aef\u91cc\u8fd0\u884c\u7684\u547d\u4ee4\u548c\u4e0b\u53d1\u7684\u4efb\u52a1\u4f1a\u5217\u5728\u8fd9\u91cc\u3002'
-      },
-      terminal: {
-        chooseNode: '\u9009\u62e9\u8282\u70b9',
-        nodeLabel: '\u8282\u70b9 #{id}',
-        chooseAction: '\u9009\u62e9\u52a8\u4f5c',
-        output: '\u7ec8\u7aef\u8f93\u51fa',
-        hint: '\u9009\u62e9\u4e00\u4e2a\u5728\u7ebf\u8282\u70b9\u548c\u52a8\u4f5c\u540e\u8fd0\u884c\u3002\u53ea\u80fd\u8fd0\u884c\u63a7\u5236\u9762\u5141\u8bb8\u7684\u8bca\u65ad\u52a8\u4f5c\u3002'
-      },
-      diagnosticActions: {
-        service_status: '\u67e5\u770b\u670d\u52a1\u72b6\u6001',
-        service_restart: '\u91cd\u542f\u670d\u52a1',
-        log_tail: '\u67e5\u770b\u65e5\u5fd7\u5c3e\u90e8'
-      },
-      fields: {
-        service: '\u670d\u52a1',
-        lines: '\u884c\u6570'
-      },
-      services: {
-        gost: 'GOST'
-      },
-      taskModal: {
-        title: '\u4e0b\u53d1\u4efb\u52a1',
-        action: '\u52a8\u4f5c',
-        timeoutSeconds: '\u8d85\u65f6\uff08\u79d2\uff09'
-      },
-      hints: {
-        monitor: '\u67e5\u770b\u8282\u70b9 #{id} \u7684\u76d1\u63a7\u6570\u636e'
-      },
-      messages: {
-        fetchFailed: 'Agent \u5217\u8868\u6ca1\u6709\u52a0\u8f7d\u51fa\u6765',
-        tasksFetchFailed: '\u4efb\u52a1\u5386\u53f2\u6ca1\u6709\u52a0\u8f7d\u51fa\u6765',
-        taskIncomplete: '\u8bf7\u586b\u5199\u5b8c\u6574\u4fe1\u606f',
-        taskSent: '\u4efb\u52a1\u5df2\u53d1\u9001',
-        taskSendFailed: '\u53d1\u9001\u5931\u8d25\uff1a{message}',
-        commandError: '\u9519\u8bef\uff1a{message}',
-        selectActionFirst: '\u8bf7\u5148\u9009\u62e9\u4e00\u4e2a\u52a8\u4f5c'
       }
     }
   },
@@ -884,6 +808,7 @@ export default {
     title: 'Agent 升级',
     description: 'Control 按灰度批次推送 Agent 版本（5%、25%、100%，每批至少 30 分钟）；某一批失败超过 5% 时自动回滚该批。',
     empty: '尚无 Agent 升级。超级管理员可执行：',
+    emptyShort: '尚无 Agent 升级。',
     target: 'Agent {version}',
     batchOf: '第 {batch} / {total} 批',
     batchEnds: '最早 {time} 进入下一批',
@@ -901,23 +826,9 @@ export default {
     },
     loadFailed: '无法加载 Agent 升级'
   },
+  // The channel names of the node page's Agent connection (the page that
+  // listed every node's channel is gone).
   agentTransports: {
-    open: 'Agent 连接方式',
-    subtitle: '查看每个节点的 Agent 如何连接 Control：mTLS 流，或 v4.2 将拒绝的旧版通道。',
-    back: 'NodeX Agents',
-    mode: 'agent_control.mtls：{mode}',
-    modes: {
-      off: '已关闭客户端证书；旧版 Agent 照常服务，不发出提示。',
-      optional: '提供客户端证书时会校验；旧版 Agent 照常服务，不发出提示。',
-      preferred: '旧版 Agent 仍可连接，但会收到弃用提示。',
-      required: 'AnixOps Agent 通道只接受已注册（持有客户端证书）的 Agent。'
-    },
-    sunset: '旧版停用日期：{date}',
-    notice: 'v4.2 起 agent_control.mtls 默认为 required。升级前，所有标记为“旧版”的节点都必须运行已完成注册的 Agent；使用 API 密钥的旧版 Agent 将被拒绝。UniProxy 和 v2board gRPC（第三方节点软件）不受影响。',
-    guide: '升级指南',
-    filterLabel: '按状态筛选',
-    statuses: { all: '全部', mtls: 'mTLS', legacy: '旧版', 'third-party': '第三方', unseen: '未出现' },
-    legacyHint: 'required 模式下会被拒绝',
     transports: {
       'mtls-stream': 'mTLS 流',
       'apikey-stream': 'API 密钥流',
@@ -926,13 +837,6 @@ export default {
       'clean-agent': 'Clean Agent',
       uniproxy: 'UniProxy',
       'v2board-grpc': 'v2board gRPC'
-    },
-    columns: { node: '节点', status: '状态', transport: '最近通道', version: 'Agent 版本', certificate: '证书', lastSeen: '最近出现', seenOn: '出现过的通道' },
-    certificateUntil: '有效至 {date}',
-    noCertificate: '未注册',
-    disabled: '已停用',
-    tableLabel: '各节点的 Agent 连接方式',
-    empty: { title: '暂无节点', description: '创建代理节点或转发节点后会显示在这里。' },
-    loadFailed: 'Agent 连接方式加载失败'
+    }
   }
 }

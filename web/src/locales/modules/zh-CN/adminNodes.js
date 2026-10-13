@@ -4,7 +4,6 @@ import { AGENT_NAME } from '../../../constants/brand'
 export default {
   title: '节点',
   subtitle: '为订阅提供服务的代理节点。打开节点查看协议、凭据、部署和日志。',
-  addNode: '添加节点',
   confirm: {
     deleteNodeTitle: '删除节点 {name}？',
     deleteNodeMessage: '节点和它的凭据会被移除。此操作无法撤销。',
@@ -44,12 +43,14 @@ export default {
     monthlyQuota: '月流量限额',
     quotaExceeded: '本月超限',
     lastHeartbeat: '最后心跳',
+    lastSeen: '最后在线',
+    nodeGroup: '节点组',
     connection: '连接方式',
     certificate: '证书',
     serviceStatus: '服务状态',
     never: '从未',
     empty: '还没有节点',
-    emptyDescription: `${AGENT_NAME} 用注册密钥启动后，节点会自动出现在这里；也可以手动添加。`,
+    emptyDescription: '点“接入节点”，在机器上运行一条命令，节点会自动出现在这里。',
     loadFailed: '无法加载节点'
   },
   // The 服务状态 column: the machine-telemetry services summary of a node.
@@ -73,10 +74,8 @@ export default {
     manageProtocols: '管理协议',
     syncReload: '同步并重载',
     logs: '查看日志',
-    deployParents: '部署父节点',
     edit: '编辑',
     delete: '删除',
-    authKey: '注册密钥'
   },
   detail: {
     title: '节点详情',
@@ -92,6 +91,7 @@ export default {
       credentials: '凭据',
       deploy: '部署',
       traffic: '流量',
+      diagnostics: '诊断',
       logs: '日志',
       services: '服务',
       danger: '危险区'
@@ -168,10 +168,7 @@ export default {
     }
   },
   form: {
-    titleCreate: '添加节点',
     titleEdit: '编辑节点',
-    createDescription: `手动添加节点。配置了注册密钥的 ${AGENT_NAME} 会自动注册节点。`,
-    create: '添加节点',
     save: '保存更改',
     required: '必填',
     parentNone: '无（作为根 / 落地节点）',
@@ -199,74 +196,10 @@ export default {
       monthlyResetDay: '1 到 28。'
     }
   },
-  authKey: {
-    title: '注册密钥',
-    label: '注册密钥',
-    hint: `把这个密钥写进 ${AGENT_NAME} 的 config.json，节点启动时会自动注册到控制面。同一密钥可注册任意多个节点。`,
-    noKey: '还没有生成密钥',
-    copy: '复制密钥',
-    copyConfig: '复制配置',
-    configTitle: `${AGENT_NAME} config.json`,
-    configHint: '把它粘贴到 Agent 的 config.json。生成密钥后，配置会带上上面的密钥。',
-    editSettings: '修改连接设置',
-    registeredCount: '已有 {count} 个节点用这个密钥注册',
-    generate: '生成密钥',
-    generateAnother: '生成新密钥',
-    hiddenKey: '已隐藏（********）',
-    hiddenHint: '密钥只在生成时显示一次。生成新密钥后即可复制；已有密钥仍可继续使用。',
-    shownOnce: '请现在复制：离开本页面后不再显示。',
-    defaultName: '面板密钥 {date}'
-  },
-  deploy: {
-    title: '部署父节点',
-    summaryTitle: '{count} 个父节点',
-    summaryText: '为 config/deploy/ansible/nodes 生成清单、group_vars 和命令。SSH 密码和私钥路径只保留在本页面。',
-    warning: '生成的文件配合 config/deploy/ansible/nodes/deploy_v2bx.yml 使用。子节点如有需要请单独部署。',
-    settingsTitle: '连接',
-    hostsTitle: '主机',
-    outputTitle: '生成的文件',
-    loading: '正在读取父节点凭据…',
-    empty: '本页没有父节点。',
-    commandsLabel: '命令',
-    authModes: {
-      password: '密码',
-      key: '私钥'
-    },
-    fields: {
-      panelApiHost: '控制面 API 地址',
-      grpcHost: 'gRPC 地址',
-      grpcServerName: 'gRPC 服务器名称',
-      amd64BinaryPath: 'AMD64 二进制路径',
-      arm64BinaryPath: 'ARM64 二进制路径',
-      coreType: '核心',
-      grpcUseTLS: 'gRPC 使用 TLS',
-      pluginSupervisorEnabled: '插件 Supervisor 灰度',
-      pluginRoot: '插件状态目录',
-      pluginSocketDir: '插件 Socket 目录',
-      pluginOfficialPublicKey: '官方插件公钥'
-    },
-    pluginSupervisorHint: '数据面保持不变，只让这个 Agent 执行官方签名软件包的生命周期操作。',
-    pluginSupervisorControlRequired: '插件 Supervisor 灰度需要 gRPC 地址使用 TLS，或使用回环 gRPC 主机。',
-    pluginSupervisorKeyRequired: '复制插件 Supervisor 灰度配置前，请填写官方插件公钥。',
-    pluginSupervisorKeyInvalid: '官方插件公钥必须是 Base64 编码的 Ed25519 公钥。',
-    table: {
-      alias: '别名',
-      sshHost: 'SSH 主机',
-      port: 'SSH 端口',
-      user: 'SSH 用户',
-      arch: '架构',
-      authMode: 'SSH 登录方式',
-      authValue: '密码或私钥路径'
-    },
-    placeholders: {
-      password: 'sshpass 使用；只保留在本页面。',
-      privateKey: '~/.ssh/id_ed25519'
-    }
-  },
   install: {
-    title: '复制安装命令',
-    description: '在节点 {node} 上用一条命令安装并接入 Agent。',
-    intro: '生成一个绑定这个节点的一次性注册令牌，以及每个下载源的安装命令。以 root（sudo）在节点上粘贴运行：脚本安装 Agent、清理这台机器上的旧转发运行时，并等待 Agent 完成注册。再次运行同一条命令是安全的。',
+    title: '换到新机器',
+    description: '用一条命令把节点 {node} 装到另一台机器上。',
+    intro: '生成一个绑定这个节点的一次性令牌，以及每个下载源的安装命令。以 root（sudo）在新机器上粘贴运行：脚本安装 Agent、清理这台机器上的旧转发运行时，并等待 Agent 完成接入。再次运行同一条命令是安全的。新机器上的节点会取代原来的机器。',
     ttl: '令牌有效期',
     ttlOptions: {
       hour: '1 小时（默认）',
@@ -295,19 +228,21 @@ export default {
     legacy: '安装时会删除这台机器上的旧转发运行时（nftables 表 inet v2b_forward、ip v2b_forward、ip anixops_forward 和 v2forward-agent 服务），并在结束时列出删除的内容。',
     failed: '无法生成安装命令'
   },
+
   deploySection: {
     title: '部署',
-    description: `安装并连接这个节点的 ${AGENT_NAME}。`,
-    registration: 'Agent 注册',
-    connection: '连接设置',
-    connectionHint: '只影响生成的文件，不会保存。',
-    ansible: 'Ansible',
-    ansibleRoot: '生成用 Ansible 部署这个节点的清单、group_vars 和命令。',
-    ansibleChild: 'Ansible 部署助手只覆盖父节点。这个子节点请单独部署。',
-    installCommand: '一条命令安装',
-    installCommandText: '复制一条命令，在节点上粘贴运行，即可安装 Agent 并完成注册（一次性令牌）。',
-    openInstall: '复制安装命令',
-    openHelper: '打开部署助手'
+    description: `管理这个节点的 ${AGENT_NAME}。新机器不在这里添加：到“节点 › 接入节点”。`,
+    move: '换到新机器',
+    moveText: '把这个节点移到另一台机器，或在证书失效后重新接入。生成一条一次性命令，在新机器上以 root 运行。',
+    moveAction: '生成安装命令',
+    certificate: '证书',
+    certificateText: '节点用证书连接面板，Agent 会在到期前自动续期。',
+    certificateGone: '证书已失效，这个节点的 Agent 连不上。用“换到新机器”重新接入。',
+    certificateNone: '这个节点还没有 Agent 证书。用“换到新机器”接入一台机器。',
+    uninstall: '卸载',
+    uninstallText: '在这台节点机器上运行。加 --purge 会同时删除它的身份和数据。',
+    uninstallLabel: '在节点上以 root 运行',
+    copy: '复制命令'
   },
   traffic: {
     title: '流量',
@@ -638,6 +573,243 @@ export default {
     enable: '在节点上运行',
     show: '在订阅中显示'
   },
+  tabs: {
+    label: '节点分区',
+    nodes: '节点',
+    groups: '节点组'
+  },
+  // 接入节点: one entry for a new machine (docs/design/node-onboarding).
+  join: {
+    title: '接入节点',
+    description: '在要接入的机器上运行一条命令，它会自动成为所选节点组里的节点。',
+    checking: '正在检查面板能否接入节点…',
+    loading: '正在准备…',
+    loadFailed: '无法准备接入：{message}',
+    retry: '重试',
+    recheck: '重新检查',
+    group: '节点组',
+    newGroup: '新建节点组',
+    requiresApproval: '新节点需要你确认',
+    defaultCreated: '已为你建好默认节点组“{name}”：一个 VLESS Reality 协议，端口随机，已加入默认订阅分组。之后可在“节点组”里修改。',
+    blocked: {
+      title: '现在还不能接入节点',
+      description: '先解决下面的问题再复制命令，否则命令会在节点上失败。'
+    },
+    checks: {
+      public_url: '面板地址',
+      grpc: 'gRPC 地址和证书',
+      ca: '节点证书的签发密钥',
+      mtls_mode: 'Agent 认证方式',
+      agent_release: 'Agent 版本',
+      script_signature: '安装脚本签名'
+    },
+    fixes: {
+      public_url: '把 agent_install.public_url 设为节点访问面板的 https 地址（例如 https://panel.example.com），然后重启面板。经反向代理时，还要把代理加入 server.trusted_proxies。',
+      grpc: '开启 grpc.enabled，设置 grpc.tls_cert_file 和 grpc.tls_key_file（节点信任的证书）；节点连的地址不同于面板地址时，再设置 agent_install.grpc_target。然后重启面板。',
+      ca: '把 module_runtime.ca_kek（环境变量 ANIX_CONTROL_MODULE_RUNTIME_CA_KEK）设为 32 字节密钥，可用 openssl rand -base64 32 生成，然后重启面板。',
+      mtls_mode: '删除 agent_control.mtls（默认就是 required），或把它设为 required，然后重启面板。',
+      agent_release: '把 agent_install.agent_version 设为已发布的 Agent 版本号（例如 v4.2.0），或把 Agent 发行包放进 agent_install.artifact_dir，然后重启面板。',
+      script_signature: '把 agent_install.signature_file 指向本版本的 agent-install.sh.sig，或留空。'
+    },
+    command: {
+      title: '安装命令',
+      mirror: '下载源',
+      mirrors: {
+        control: '面板',
+        cn: '国内镜像',
+        github: 'GitHub',
+        controlHelp: '脚本和 Agent 从这个面板下载。',
+        cnHelp: '脚本从这个面板下载，Agent 从国内镜像下载；校验和始终来自面板或 GitHub。',
+        githubHelp: '脚本和 Agent 从 GitHub Releases 下载；节点仍向这个面板接入。'
+      },
+      commandLabel: '在要接入的机器上以 root 运行',
+      copy: '复制命令',
+      fallback: '这个下载源还没配置：{note}',
+      expires: '令牌 {time} 到期。同一条命令可以接入任意多台机器。',
+      neverExpires: '令牌长期有效。同一条命令可以接入任意多台机器。',
+      expired: '令牌已过期：到“节点组 › 编辑”设置新的有效期，或重置令牌，才能继续接入。',
+      history: '命令里含有令牌，运行后会留在那台机器的 shell 历史里。',
+      reset: '重置令牌',
+      resetConfirmTitle: '重置“{name}”的令牌？',
+      resetConfirmMessage: '之前复制的命令会全部失效；已经接入的节点不受影响。',
+      resetDone: '令牌已重置，请使用新的命令。',
+      uninstall: '卸载命令',
+      uninstallHelp: '在节点上运行。加 --purge 会同时删除它的身份和数据。',
+      forbidden: '只有超级管理员可以查看接入命令。请用超级管理员账号登录。',
+      failed: '无法读取接入命令：{message}'
+    },
+    nodes: {
+      title: '已接入的机器',
+      waiting: '等待机器接入…',
+      waitingHint: '在机器上运行上面的命令，它会出现在这里。',
+      joined: '{name} 已接入',
+      online: '在线',
+      connecting: '等待上线',
+      more: '还有 {count} 台更早接入的机器，请到节点列表里查看。'
+    },
+    quick: {
+      name: '节点组名称',
+      namePlaceholder: '香港',
+      kind: '节点类型',
+      kindHelp: {
+        proxy: '代理节点：为用户提供订阅里的协议。',
+        forward: '转发节点：转发线路的入口或中继机器。'
+      },
+      preset: '协议',
+      presets: {
+        'vless-reality': 'VLESS Reality（推荐）',
+        'shadowsocks-2022': 'Shadowsocks 2022',
+        'vless-reality-shadowsocks': 'VLESS Reality + Shadowsocks 2022'
+      },
+      subscriptionGroups: '加入订阅分组',
+      create: '创建节点组',
+      failed: '无法创建节点组：{message}'
+    }
+  },
+  approval: {
+    pending: '待确认',
+    pendingHint: '这个节点还在等你确认：确认前不会收到配置和用户。',
+    approved: '已批准',
+    rejected: '已拒绝',
+    approve: '批准',
+    reject: '拒绝',
+    banner: '有 {count} 台机器等你确认。确认前它们不会收到配置和用户。',
+    view: '查看',
+    rejectTitle: '拒绝节点 {name}？',
+    rejectMessage: '节点会被停用，它的证书会被吊销。',
+    approvedToast: '已批准节点 {name}',
+    rejectedToast: '已拒绝节点 {name}',
+    failed: '无法处理：{message}'
+  },
+  // 节点组 (the tab and its sheet).
+  groups: {
+    summary: '节点组决定新节点的默认设置、协议和接入令牌。',
+    add: '新建节点组',
+    kinds: {
+      proxy: '代理',
+      forward: '转发'
+    },
+    table: {
+      label: '节点组',
+      name: '名称',
+      nodes: '节点',
+      requireApproval: '需确认',
+      token: '接入令牌',
+      rate: '流量倍率',
+      sort: '排序'
+    },
+    nodesLive: '{count} 台',
+    nodesCount: '{live} 台节点，{pending} 台待确认',
+    nodesPending: '{count} 待确认',
+    toggleApproval: '“{name}”的新节点需要确认',
+    tokenNever: '长期有效',
+    tokenUntil: '{date} 到期',
+    tokenExpired: '已过期',
+    tokenExpiredEdit: '这个节点组的令牌已过期。请先在“编辑”里设置新的有效期。',
+    approvalOn: '“{name}”的新节点从现在起需要确认。',
+    approvalOff: '“{name}”的新节点不再需要确认。',
+    empty: '还没有节点组',
+    emptyDescription: '点“接入节点”，面板会建好默认节点组并给出命令。',
+    loadFailed: '无法加载节点组',
+    created: '已创建节点组 {name}',
+    saved: '已保存节点组 {name}',
+    deleted: '已删除节点组 {name}',
+    deleteTitle: '删除节点组 {name}？',
+    deleteMessage: '它的接入令牌立即失效。已接入的节点不受影响。',
+    deleteAction: '删除节点组',
+    deleteInUse: '组内还有节点：请先删除或迁走它们。',
+    nameTaken: '已有同名的节点组。',
+    caKekMissing: '还没有设置 module_runtime.ca_kek，无法创建节点组。'
+  },
+  groupForm: {
+    titleCreate: '新建节点组',
+    titleEdit: '编辑节点组',
+    createDescription: '节点组的设置会复制到之后接入的每个节点。',
+    create: '创建节点组',
+    save: '保存更改',
+    saveFailed: '无法保存：{message}',
+    joining: '接入',
+    noSubscriptionGroups: '还没有订阅分组。先到“订阅分组”创建一个，节点才能出现在订阅里。',
+    fields: {
+      name: '名称',
+      kind: '类型',
+      rate: '流量倍率',
+      sort: '排序',
+      tags: '标签',
+      monthlyLimit: '月流量限额',
+      resetDay: '每月重置日',
+      tokenExpiry: '令牌有效期',
+      maxNodes: '节点数上限',
+      requireApproval: '新节点需要我确认',
+      subscriptionGroups: '订阅分组'
+    },
+    placeholders: {
+      name: '香港',
+      tags: '香港,IEPL,高速'
+    },
+    help: {
+      rate: '用量按这个倍率计算。',
+      sort: '数字小的排在前面。',
+      monthlyLimit: '留空表示不限。',
+      resetDay: '1 到 28。',
+      maxNodes: '0 表示不限。',
+      requireApproval: '确认前，节点不会收到配置和用户。',
+      subscriptionGroups: '新节点的协议会加入这些订阅分组。已经接入的节点保持不变。'
+    },
+    expiry: {
+      never: '长期有效',
+      '7d': '7 天',
+      '30d': '30 天',
+      '90d': '90 天',
+      '365d': '1 年',
+      keep: '保持不变（{time} 到期）',
+      expired: '已过期（请重新设置）',
+      expiredError: '令牌已过期，请选择新的有效期。'
+    },
+    template: {
+      title: '协议',
+      description: '每个新节点都会得到这些协议，密钥由面板为每个节点单独生成。修改只对之后接入的节点生效，已有节点保持不变。',
+      empty: '还没有协议：新节点接入后没有可用的协议。',
+      protocol: '协议 {n}',
+      name: '名称',
+      namePlaceholder: '默认用协议名',
+      type: '协议',
+      types: {
+        vless: 'VLESS',
+        vmess: 'VMess',
+        shadowsocks: 'Shadowsocks',
+        wireguard: 'WireGuard'
+      },
+      transport: '传输',
+      tls: 'TLS',
+      portMode: '端口',
+      portModes: {
+        range: '随机端口',
+        fixed: '固定端口'
+      },
+      port: '端口',
+      portFrom: '端口从',
+      portTo: '到',
+      serverName: 'Reality 伪装站点',
+      serverNameHelp: '必须是支持 TLS 1.3 的网站域名。',
+      dest: 'Reality 回源地址',
+      destHelp: '留空则用 站点:443。',
+      advanced: '高级',
+      settings: '协议设置（JSON）',
+      transportSettings: '传输设置（JSON）',
+      add: '添加协议',
+      remove: '移除',
+      fixProblems: '请先修正标出的协议设置。',
+      portErrors: {
+        port: '端口需在 1 到 65535 之间。',
+        range: '端口范围需在 1 到 65535 之间，且起点不大于终点。'
+      },
+      jsonErrors: {
+        json: '不是有效的 JSON。',
+        object: '需要是 JSON 对象。'
+      }
+    }
+  },
   statusText: {
     pending: '待激活',
     online: '在线',
@@ -662,7 +834,6 @@ export default {
     saveFailed: '无法保存：{message}',
     syncSuccess: '节点“{name}”已接收同步',
     syncFailed: '同步失败：{message}',
-    nodeCreated: '已添加节点 {name}',
     nodeSaved: '已保存节点 {name}',
     nodeDeleted: '已删除节点 {name}',
     nodeDisabled: '已停用节点 {name}',
@@ -671,7 +842,6 @@ export default {
     protocolSaved: '已保存协议 {type} :{port}',
     protocolDeleted: '已删除协议 {type} :{port}',
     generateFailed: '生成失败：{message}',
-    deployLoadFailed: '无法读取父节点凭据',
     copied: '已复制',
     copyFailedManual: '无法自动复制，请选中文本后手动复制。',
     invalidJsonDetail: 'JSON 格式无效：{message}',

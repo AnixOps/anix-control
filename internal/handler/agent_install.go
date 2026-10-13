@@ -14,6 +14,7 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/config"
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/modulepki"
 	"github.com/AnixOps/anix-control/v4/internal/requestorigin"
 	"github.com/AnixOps/anix-control/v4/internal/service"
 	"github.com/gin-gonic/gin"
@@ -160,6 +161,39 @@ func (h *AgentInstallHandler) CreateInstallToken(c *gin.Context) {
 			URL: settings.ControlURL + "/install.sh", SignatureURL: settings.ControlURL + "/install.sh.sig", Signed: signatureErr == nil,
 		},
 	})
+}
+
+// Readiness godoc
+// @Summary Check that an install command can work
+// @Description Checks, without any network call, what a node needs from this Control before an install command is worth copying: agent_install.public_url (or the address this request came in on) is https; the gRPC target resolves from the settings and the listener is on with TLS; module_runtime.ca_kek is usable (join tokens are sealed with it and node certificates signed by the CA it protects); agent_control.mtls is not off; the Agent release of the pinned version is served by this Control or has a source; the install script's release signature verifies when one is configured. ready is false when a check of level error fails; a failed warning does not block the command. Each check is {id, ok, level, message, fix}. Any administrator.
+// @Tags Kernel
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} map[string]any
+// @Router /api/v4/kernel/agents/install-readiness [get]
+func (h *AgentInstallHandler) Readiness(c *gin.Context) {
+	cfg := h.config()
+	if cfg == nil {
+		kernelError(c, http.StatusServiceUnavailable, "config_unavailable", "the configuration is not loaded")
+		return
+	}
+	input := agentinstall.ReadinessInput{
+		PublicURL: cfg.AgentInstall.PublicURL, RequestOrigin: requestorigin.Resolve(c.Request).BaseURL(),
+		GRPCTarget: cfg.AgentInstall.GRPCTarget, GRPCEnabled: cfg.GRPC.Enable, GRPCPort: cfg.GRPC.Port,
+		GRPCTLSCertFile: cfg.GRPC.TLSCertFile, GRPCTLSKeyFile: cfg.GRPC.TLSKeyFile,
+		BuiltinPKI: cfg.ModuleRuntime.PKIOrDefault() == config.ModulePKIBuiltin, CAKEK: strings.TrimSpace(cfg.ModuleRuntime.CAKEK) != "",
+		MTLSMode:      cfg.AgentControl.MTLSOrDefault(),
+		SignatureFile: cfg.AgentInstall.SignatureFile, OfficialPublicKey: cfg.Plugins.OfficialPublicKey,
+		AgentVersion: cfg.AgentInstall.AgentVersion, ReleaseVersion: ReleaseVersion,
+		ArtifactDir: cfg.AgentInstall.ArtifactDir, CNMirrorURL: cfg.AgentInstall.CNMirrorURL,
+	}
+	if input.CAKEK {
+		if _, err := modulepki.ParseKEK(cfg.ModuleRuntime.CAKEK); err != nil {
+			input.CAKEKProblem = err.Error()
+		}
+	}
+	c.Header("Cache-Control", "no-store")
+	kernelData(c, http.StatusOK, agentinstall.CheckReadiness(input))
 }
 
 // Script serves the install script, byte for byte the signed release asset.

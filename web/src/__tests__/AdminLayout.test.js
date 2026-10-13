@@ -7,6 +7,7 @@ import { useUserStore } from '@/stores/user'
 import AdminLayout from '@/layouts/AdminLayout.vue'
 import { setEdition } from '@/composables/useEdition'
 import { usePalette } from '@/components/shell/usePalette'
+import { closeAgentUpgrade, openAgentUpgrade } from '@/composables/useAgentUpgradeSheet'
 
 const mockGetSystemInfo = vi.hoisted(() => vi.fn())
 const mockGetUserList = vi.hoisted(() => vi.fn())
@@ -16,6 +17,12 @@ const mockAdminCapabilities = vi.hoisted(() => ({ value: [] }))
 vi.mock('@/api/admin', () => ({
   getSystemInfo: (...args) => mockGetSystemInfo(...args),
   getUserList: (...args) => mockGetUserList(...args)
+}))
+
+// 升级节点 is loaded with its first opening; the sheet itself is tested apart.
+vi.mock('@/components/admin/AgentUpgradeSheet.vue', () => ({
+  __esModule: true,
+  default: { name: 'AgentUpgradeSheetStub', template: '<div data-testid="upgrade-sheet-stub" />' }
 }))
 
 vi.mock('@/extensions/runtime', () => ({
@@ -98,21 +105,21 @@ describe('AdminLayout.vue', () => {
   })
 
   it('renders the menu config groups and marks one selected item', async () => {
-    const { wrapper } = await mountLayout('/admin/agent/transports')
+    const { wrapper } = await mountLayout('/admin/nodes')
     mounted = wrapper
     const groups = wrapper.findAll('[data-nav-group]').map(group => group.attributes('data-nav-group'))
     expect(groups).toEqual(['overview', 'users', 'network', 'extensions', 'system'])
     const current = wrapper.findAll('#admin-sidebar [aria-current="page"]')
     expect(current).toHaveLength(1)
-    expect(current[0].attributes('data-nav-item')).toBe('agents')
+    expect(current[0].attributes('data-nav-item')).toBe('nodes')
     expect(current[0].classes()).toContain('is-active')
   })
 
-  it('lists 部署编排 under 网络, after the Agents, and selects it on its page', async () => {
+  it('lists 部署编排 under 网络, after the nodes, and selects it on its page', async () => {
     const { wrapper } = await mountLayout('/admin/deployments')
     mounted = wrapper
     const network = wrapper.get('[data-nav-group="network"]')
-    expect(network.findAll('a[data-nav-item]').map(link => link.attributes('data-nav-item'))).toEqual(['nodes', 'agents', 'deployments'])
+    expect(network.findAll('a[data-nav-item]').map(link => link.attributes('data-nav-item'))).toEqual(['nodes', 'deployments'])
     const link = network.get('a[data-nav-item="deployments"]')
     expect(link.attributes('href')).toBe('/admin/deployments')
     expect(link.attributes('aria-current')).toBe('page')
@@ -134,12 +141,12 @@ describe('AdminLayout.vue', () => {
   })
 
   it('shows group › item › page in the breadcrumb', async () => {
-    const { wrapper } = await mountLayout('/admin/agent/transports')
+    const { wrapper } = await mountLayout('/admin/plugins/route-modes')
     mounted = wrapper
     const crumbs = wrapper.findAll('.admin-crumbs li').map(item => item.text())
-    expect(crumbs).toEqual(['Network', 'NodeX Agents', 'Agent transports'])
-    expect(wrapper.get('.admin-crumbs a').attributes('href')).toBe('/admin/agent')
-    expect(wrapper.get('.admin-crumbs [aria-current="page"]').text()).toBe('Agent transports')
+    expect(crumbs).toEqual(['Extensions', 'Plugin Center', 'Route modes'])
+    expect(wrapper.get('.admin-crumbs a').attributes('href')).toBe('/admin/plugins')
+    expect(wrapper.get('.admin-crumbs [aria-current="page"]').text()).toBe('Route modes')
   })
 
   it('shows a group named like the page only once in the breadcrumb', async () => {
@@ -354,9 +361,9 @@ describe('AdminLayout.vue', () => {
     mounted = wrapper
     const title = () => wrapper.get('.admin-crumbs [aria-current="page"]').text()
     expect(title()).toBe('Telegram')
-    await router.push('/admin/agent/transports')
+    await router.push('/admin/plugins/route-modes')
     await flushPromises()
-    expect(title()).toBe('Agent transports')
+    expect(title()).toBe('Route modes')
     await router.push('/admin/account')
     await flushPromises()
     expect(title()).toBe('Account')
@@ -376,5 +383,19 @@ describe('AdminLayout.vue', () => {
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, shiftKey: true }))
     expect(open.value).toBe(false)
     expect(wrapper.get('[data-palette-trigger]').attributes('aria-keyshortcuts')).toBe('Meta+K Control+K')
+  })
+
+  it('mounts the 升级节点 sheet once, when a page first asks for it', async () => {
+    const { wrapper } = await mountLayout('/admin/nodes')
+    mounted = wrapper
+    expect(wrapper.find('[data-testid="upgrade-sheet-stub"]').exists()).toBe(false)
+    openAgentUpgrade()
+    await flushPromises()
+    expect(wrapper.findAll('[data-testid="upgrade-sheet-stub"]')).toHaveLength(1)
+    closeAgentUpgrade()
+    openAgentUpgrade()
+    await flushPromises()
+    expect(wrapper.findAll('[data-testid="upgrade-sheet-stub"]')).toHaveLength(1)
+    closeAgentUpgrade()
   })
 })

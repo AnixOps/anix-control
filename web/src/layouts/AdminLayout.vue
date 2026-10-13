@@ -107,6 +107,9 @@
 
     <CommandPalette :groups="groups" />
     <AboutDialog v-model:open="aboutOpen" />
+    <!-- 升级节点: any page opens it with openAgentUpgrade(); its code loads
+         with the first opening. -->
+    <AgentUpgradeSheet v-if="agentUpgradeRequested" />
   </div>
 </template>
 
@@ -119,15 +122,17 @@
 // (remembered); below 834 px the sidebar is a modal drawer with its own
 // focus loop, Esc and focus return. Content keeps to --size-content-admin
 // unless the route asks for meta.layout = 'wide'.
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Menu, PanelLeftClose, PanelLeftOpen, Search, X } from '@lucide/vue'
 import { useRoute } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { useMediaQuery, NARROW_QUERY } from '@/composables/useMediaQuery'
 import { loadEdition } from '@/composables/useEdition'
+import { loadMessageGroup } from '@/i18n'
 import { resolveRoutePageTitle } from '@/utils/pageMeta'
 import { adminExtensionMenus } from '@/extensions/runtime'
+import { useAgentUpgradeSheet } from '@/composables/useAgentUpgradeSheet'
 import { useAdminMenu } from '@/navigation/useNavigation'
 import { ADMIN_ACCOUNT_PATH } from '@/navigation/menu'
 import AdminNavigation from '@/components/admin/AdminNavigation.vue'
@@ -140,6 +145,13 @@ import { isPaletteShortcut, paletteShortcutLabel, usePalette } from '@/component
 import UiIcon from '@/ui/UiIcon.vue'
 import UiIconButton from '@/ui/UiIconButton.vue'
 
+// 升级节点: loaded with the first openAgentUpgrade(). Its strings are in the
+// adminPages group, which the dashboard loads only when the browser is idle.
+const AgentUpgradeSheet = defineAsyncComponent(async () => {
+  await loadMessageGroup('adminPages').catch(() => {})
+  return import('@/components/admin/AgentUpgradeSheet.vue')
+})
+
 const SIDEBAR_RAIL_KEY = 'admin.sidebar.collapsed'
 
 const route = useRoute()
@@ -147,6 +159,7 @@ const userStore = useUserStore()
 const { t } = useAppI18n()
 const { groups, active } = useAdminMenu()
 const { open: paletteOpen, openPalette } = usePalette()
+const { requested: agentUpgradeRequested } = useAgentUpgradeSheet()
 
 const drawerMode = useMediaQuery(NARROW_QUERY)
 const sidebarOpen = ref(false)

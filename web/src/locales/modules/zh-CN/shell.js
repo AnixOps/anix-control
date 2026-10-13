@@ -28,7 +28,6 @@ export default {
         knowledge: '帮助中心内容',
         nodes: '节点',
         forward: '转发',
-        agents: 'NodeX Agents',
         plugins: '插件中心',
         deployments: '部署编排',
         settings: '系统设置',
@@ -102,9 +101,10 @@ export default {
         close: '关闭'
       },
       actions: {
-        addNode: '添加节点',
+        addNode: '接入节点',
         addUser: '添加用户',
         newForwardRoute: '新建转发路由',
+        upgradeNodes: '升级节点',
         themeLight: '切换到浅色外观',
         themeDark: '切换到深色外观',
         themeSystem: '外观跟随系统',
