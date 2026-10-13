@@ -3,13 +3,16 @@ package middleware
 import (
 	"bytes"
 	"io"
+	"log"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"github.com/AnixOps/anix-control/v5/internal/config"
 	"github.com/AnixOps/anix-control/v5/internal/database"
+	"github.com/AnixOps/anix-control/v5/internal/logging"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
@@ -287,4 +290,51 @@ func TestRecordAuditItems(t *testing.T) {
 	require.Equal(t, "not_found: 用户不存在", rows[1].ErrorMessage)
 	require.Equal(t, "invite", rows[2].Module)
 	require.Equal(t, "delete", rows[2].Action)
+}
+
+// The first administrator's claim carries the claim link's token and the
+// new password: neither the audit log nor the access log (text or JSON)
+// keeps its body, under any prefix. Its handler writes its own audit row.
+func TestClaimBodyIsNeverLogged(t *testing.T) {
+	require.True(t, bodyNeverCaptured("/api/v5/claim"))
+	require.True(t, bodyNeverCaptured("/api/v5/claim/"))
+	require.False(t, bodyNeverCaptured("/api/v5/claim/status"))
+	require.False(t, bodyNeverCaptured("/api/v2/admin/users"))
+
+	previousMode := gin.Mode()
+	gin.SetMode(gin.ReleaseMode)
+	t.Cleanup(func() { gin.SetMode(previousMode) })
+	var logged bytes.Buffer
+	previousLogger, previousWriter, previousGin := slog.Default(), log.Writer(), gin.DefaultWriter
+	t.Cleanup(func() {
+		logging.SetupTo(config.LogConfig{Format: "text"}, io.Discard)
+		slog.SetDefault(previousLogger)
+		log.SetOutput(previousWriter)
+		gin.DefaultWriter = previousGin
+	})
+	gin.DefaultWriter = &logged
+	body := `{"token":"anixclaim_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","email":"owner@example.com","password":"first-owner-Pa55"}`
+	for _, format := range []string{"text", "json"} {
+		logging.SetupTo(config.LogConfig{Format: format}, &logged)
+		if format == "text" {
+			slog.SetDefault(slog.New(slog.NewJSONHandler(&logged, nil)))
+		}
+		router := gin.New()
+		router.Use(Logger(), AuditLog())
+		var seen string
+		router.POST("/api/v5/claim", func(c *gin.Context) {
+			read, _ := io.ReadAll(c.Request.Body)
+			seen = string(read)
+			c.Status(http.StatusCreated)
+		})
+		recorder := httptest.NewRecorder()
+		router.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/api/v5/claim", strings.NewReader(body)))
+		require.Equal(t, http.StatusCreated, recorder.Code)
+		require.Equal(t, body, seen, "the handler reads the whole body")
+		require.Contains(t, logged.String(), "/api/v5/claim", "%s: the access log records the request", format)
+		require.NotContains(t, logged.String(), "anixclaim_", format)
+		require.NotContains(t, logged.String(), "first-owner-Pa55", format)
+		require.NotContains(t, logged.String(), "admin audit log", "%s: the middleware writes no audit record", format)
+		logged.Reset()
+	}
 }

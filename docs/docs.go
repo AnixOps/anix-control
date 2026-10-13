@@ -9423,6 +9423,125 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v5/claim": {
+            "post": {
+                "description": "Public, rate limited. The body is {token, email, password}: the token is the fragment of the link ` + "`" + `anix-control admin claim-link` + "`" + ` printed (https://\u003cdomain\u003e/claim#anixclaim_...). 201 with data {user_id, email, next: \"/login\"}: the administrator exists, the token is used up and the page signs in with the same email and password. 404 not_found once the panel has an administrator (whatever the token); 403 claim_invalid when the token is not the pending link's (a newer link replaces an older one); 410 claim_expired; 400 invalid_request or invalid_email; 422 weak_password (fewer than 6 characters) or password_too_long (more than 72 bytes); 409 email_taken; 503 identity_unavailable when identity holds the credentials and cannot be reached (nothing changed). The body is never logged; the audit row holds admin_claimed, the email and the source address.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Create the first administrator with the claim link",
+                "parameters": [
+                    {
+                        "description": "token, email and password",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.claimRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "410": {
+                        "description": "Gone",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v5/claim/status": {
+            "get": {
+                "description": "Public. data.claimable is true while the panel has no administrator: the claim page then asks for the email and password, and the sign-in page says no administrator exists yet. It says nothing else (not whether a link was issued, nor its expiry).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Whether the panel can be claimed",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/v5/panel/certificates/retry": {
             "post": {
                 "security": [
@@ -11187,6 +11306,21 @@ const docTemplate = `{
                 "rollback": {
                     "description": "Rollback rolls the current batch back before the campaign ends.",
                     "type": "boolean"
+                }
+            }
+        },
+        "handler.claimRequest": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "password": {
+                    "type": "string"
+                },
+                "token": {
+                    "description": "Token is the claim link's fragment, anixclaim_ and 43 characters.",
+                    "type": "string"
                 }
             }
         },
