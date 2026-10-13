@@ -10,7 +10,8 @@ export default {
       password: '密码',
       submit: '登录',
       noAccount: '还没有账户？',
-      register: '注册'
+      register: '注册',
+      noAdmin: '这个面板还没有管理员。在服务器上运行 {command}，再打开它打印的链接。'
     },
     register: {
       title: '创建账户',

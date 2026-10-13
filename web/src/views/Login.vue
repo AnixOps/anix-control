@@ -15,6 +15,14 @@
           </p>
         </header>
 
+        <!-- A panel nobody has claimed yet: how to create the first administrator. -->
+        <p v-if="claimable && step === 'password' && mode === 'login'" class="auth__hint" data-auth-claim-hint>
+          <UiIcon :icon="Info" :size="16" />
+          <i18n-t keypath="auth.signIn.noAdmin" tag="span" scope="global">
+            <template #command><code class="auth__code">sudo anix-control admin claim-link</code></template>
+          </i18n-t>
+        </p>
+
         <!-- Email and password (sign in), or the registration form. -->
         <form
           v-if="step === 'password'"
@@ -172,13 +180,16 @@
 // what to do instead of starting a setup it cannot finish.
 // "忘记密码" is not offered: the backend has no password-reset endpoint.
 // Registration (when the public config allows it) asks for an invite code
-// only when auth.registration.require_invite is on.
+// only when auth.registration.require_invite is on. While the panel has no
+// administrator (GET /api/v5/claim/status) the card says how to create the
+// first one: the claim link the server prints.
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { ChevronLeft, CircleAlert, Smartphone } from '@lucide/vue'
+import { ChevronLeft, CircleAlert, Info, Smartphone } from '@lucide/vue'
 import { useUserStore } from '@/stores/user'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { login, register } from '@/api/auth'
+import { getClaimStatus } from '@/api/claim'
 import { useEdition } from '@/composables/useEdition'
 import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
 import BrandLockup from '@/components/common/BrandLockup.vue'
@@ -208,6 +219,7 @@ const loading = ref(false)
 const formError = ref('')
 const errors = reactive({ email: '', password: '', confirm: '', invite: '', code: '', recovery: '' })
 const challenge = reactive({ email: '', methods: [] })
+const claimable = ref(false)
 
 const headingRef = ref(null)
 const emailRef = ref(null)
@@ -237,6 +249,7 @@ watch(registrationEnabled, (enabled) => {
 
 onMounted(() => {
   void loadEdition()
+  getClaimStatus().then((value) => { claimable.value = value }, () => {})
 })
 
 function clearErrors() {
@@ -562,6 +575,30 @@ defineExpose({ mode, step })
 .auth__alert :deep(.ui-icon) {
   flex: none;
   margin-top: 2px;
+}
+
+.auth__hint {
+  display: flex;
+  gap: var(--space-2);
+  align-items: flex-start;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-sm);
+  background: var(--bg-grouped);
+  color: var(--label-1);
+  font-size: var(--type-callout-size);
+  line-height: var(--type-callout-line);
+}
+
+.auth__hint :deep(.ui-icon) {
+  flex: none;
+  margin-top: 2px;
+  color: var(--accent);
+}
+
+.auth__code {
+  font-family: var(--font-mono);
+  font-size: var(--type-callout-size);
+  overflow-wrap: anywhere;
 }
 
 .auth__switch {

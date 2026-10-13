@@ -9,23 +9,26 @@ export const SUPPORTED_LOCALES = ['zh-CN', 'en']
 // startup, `admin` (the admin shell: navigation, ⌘K, the dashboard) once an
 // admin route opens or an admin is signed in, and `adminPages` (every other
 // admin page and the forward suite) before the first of those pages opens
-// (router/index.js). Only the active locale is loaded; en and zh-CN carry the
+// (router/index.js), and `claim` (the first administrator's claim page) with
+// that page. Only the active locale is loaded; en and zh-CN carry the
 // same keys (localeParity.test.js), so the fallback locale is not fetched up
 // front.
 const localeLoaders = {
   'zh-CN': {
     core: () => import('./locales/zh-CN.js'),
     admin: () => import('./locales/zh-CN.admin.js'),
-    adminPages: () => import('./locales/zh-CN.adminPages.js')
+    adminPages: () => import('./locales/zh-CN.adminPages.js'),
+    claim: () => import('./locales/zh-CN.claim.js')
   },
   en: {
     core: () => import('./locales/en.js'),
     admin: () => import('./locales/en.admin.js'),
-    adminPages: () => import('./locales/en.adminPages.js')
+    adminPages: () => import('./locales/en.adminPages.js'),
+    claim: () => import('./locales/en.claim.js')
   }
 }
 
-export const MESSAGE_GROUPS = ['core', 'admin', 'adminPages']
+export const MESSAGE_GROUPS = ['core', 'admin', 'adminPages', 'claim']
 
 const activeGroups = new Set(['core'])
 const loadedGroups = new Set()

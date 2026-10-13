@@ -36,7 +36,8 @@ export async function scrollBehavior(to, from, savedPosition) {
     await waitUntilReachable(savedPosition.top || 0)
     return { left: savedPosition.left || 0, top: savedPosition.top || 0, behavior: 'instant' }
   }
-  if (to.hash) {
+  // A page whose fragment is data (the claim link's token) has no anchor.
+  if (to.hash && !to.meta?.hashIsData) {
     return { el: to.hash, top: 72 }
   }
   if (from && to.path === from.path) {

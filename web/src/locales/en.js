@@ -170,7 +170,8 @@ export default {
   },
   pageTitles: {
     auth: {
-      login: 'Sign In'
+      login: 'Sign In',
+      claim: 'Create the first administrator'
     },
     user: {
       dashboard: 'Overview',

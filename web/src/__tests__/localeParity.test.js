@@ -8,6 +8,8 @@ import enCore from '@/locales/en.js'
 import enAdmin from '@/locales/en.admin.js'
 import zhAdminPages from '@/locales/zh-CN.adminPages.js'
 import enAdminPages from '@/locales/en.adminPages.js'
+import zhClaim from '@/locales/zh-CN.claim.js'
+import enClaim from '@/locales/en.claim.js'
 
 function flatKeys(value, prefix = '', out = []) {
   for (const [key, child] of Object.entries(value)) {
@@ -29,16 +31,22 @@ describe('locale messages', () => {
   it.each([
     ['core', zhCore, enCore],
     ['admin', zhAdmin, enAdmin],
-    ['adminPages', zhAdminPages, enAdminPages]
+    ['adminPages', zhAdminPages, enAdminPages],
+    ['claim', zhClaim, enClaim]
   ])('%s: zh-CN and en have the same keys', (_group, zh, en) => {
     expect(flatKeys(withoutLegacy(en)).sort()).toEqual(flatKeys(withoutLegacy(zh)).sort())
   })
 
-  it('core, admin and adminPages groups have disjoint namespaces', () => {
-    for (const [core, admin, pages] of [[zhCore, zhAdmin, zhAdminPages], [enCore, enAdmin, enAdminPages]]) {
-      expect(Object.keys(core).filter((key) => key in admin || key in pages)).toEqual([])
-      expect(Object.keys(admin).filter((key) => key in pages)).toEqual([])
+  it('core, admin, adminPages and claim groups have disjoint namespaces', () => {
+    for (const [core, admin, pages, claim] of [[zhCore, zhAdmin, zhAdminPages, zhClaim], [enCore, enAdmin, enAdminPages, enClaim]]) {
+      expect(Object.keys(core).filter((key) => key in admin || key in pages || key in claim)).toEqual([])
+      expect(Object.keys(admin).filter((key) => key in pages || key in claim)).toEqual([])
+      expect(Object.keys(pages).filter((key) => key in claim)).toEqual([])
     }
+  })
+
+  it('the claim page group holds only the claim page', () => {
+    expect(Object.keys(zhClaim)).toEqual(['claim'])
   })
 
   it('the admin shell group holds only what the shell and dashboard read', () => {

@@ -12,6 +12,8 @@ const AdminLayout = () => import('@/layouts/AdminLayout.vue')
 
 // Lazy-loaded views
 const Login = () => import('@/views/Login.vue')
+// The claim page brings its own messages (the `claim` group).
+const Claim = () => Promise.all([import('@/views/Claim.vue'), loadMessageGroup('claim').catch(() => {})]).then(([page]) => page)
 const UserDashboard = () => import('@/views/user/Dashboard.vue')
 const UserSubscribe = () => import('@/views/user/Subscribe.vue')
 const UserKnowledge = () => import('@/views/user/Knowledge.vue')
@@ -87,6 +89,14 @@ const routes = [
     path: '/login',
     component: Login,
     meta: { guest: true }
+  },
+  // The first administrator's claim link (/claim#anixclaim_…): open with or
+  // without a session (not a guest page, so a signed-in visitor is not sent
+  // away with the link). The fragment is the claim token, not an anchor.
+  {
+    path: '/claim',
+    component: Claim,
+    meta: { hashIsData: true, titleKey: 'pageTitles.auth.claim' }
   },
   // User Routes
   {
