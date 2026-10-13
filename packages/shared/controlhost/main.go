@@ -1,10 +1,12 @@
-package main
+// Package controlhost is the generic Control host of the official packages
+// without a host of their own (nat-egress, nftables-forward): every route
+// passes through the package bridge to its legacy handler. Control links it
+// and starts it as `anix-control package-host <id>` (packages/builtin).
+package controlhost
 
 import (
 	"context"
 	"errors"
-	"log"
-	"os"
 	"strings"
 	// Embed the zone database so the TZ passed by the kernel resolves even
 	// without system zoneinfo.
@@ -14,24 +16,14 @@ import (
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
 )
 
-var (
-	packageID      = ""
-	packageVersion = "4.0.0"
-)
-
-func main() {
-	if err := run(); err != nil {
-		log.Printf("generic control package host: %v", err)
-		os.Exit(1)
-	}
-}
-
-func run() error {
-	if strings.TrimSpace(packageID) == "" || strings.TrimSpace(packageVersion) == "" {
+// Run serves the generic host for one release of a package until the kernel
+// stops it (SIGTERM) or ctx ends.
+func Run(ctx context.Context, packageID, version string) error {
+	if strings.TrimSpace(packageID) == "" || strings.TrimSpace(version) == "" {
 		return errors.New("package identity is required")
 	}
-	return modulesdk.Run(context.Background(), modulesdk.Options{
-		PackageID: packageID, PackageVersion: packageVersion,
+	return modulesdk.Run(ctx, modulesdk.Options{
+		PackageID: packageID, PackageVersion: version,
 		Build: func(host modulesdk.Host) (pluginhostsdk.Package, error) {
 			return newGenericService(packageID, host.Bridge, host.LeaseID)
 		},

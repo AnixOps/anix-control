@@ -383,14 +383,18 @@ def generated_compatibility_routes(package_id: str) -> bytes:
     )
 
 
+# The standalone host binary: packages/builtin/cmd/package-host linked for
+# one package, which runs the package's own host (packages/<id>/control) or
+# the generic host (packages/shared/controlhost). Control runs the same hosts
+# as `anix-control package-host <id>`; --builtin packages carry no binary.
+STANDALONE_HOST_PACKAGE = "./packages/builtin/cmd/package-host"
+
+
 def source_control_host(spec: PackageSpec, version: str, platform: tuple[str, str]) -> bytes:
-    source = package_root(spec.package_id) / "control"
     if shutil.which("go") is None:
         raise PackageBuildError(f"{spec.package_id} Control host requires the Go toolchain")
-    package_path = f"./packages/{spec.package_id}/control" if source.is_dir() else "./packages/shared/controlhost"
-    link_flags = f"-s -w -buildid= -X main.packageVersion={version}"
-    if not source.is_dir():
-        link_flags = f"{link_flags} -X main.packageID={spec.package_id}"
+    package_path = STANDALONE_HOST_PACKAGE
+    link_flags = f"-s -w -buildid= -X main.packageID={spec.package_id} -X main.packageVersion={version}"
     with tempfile.TemporaryDirectory(prefix=f"anixops-{spec.package_id}-host-") as temporary:
         output = Path(temporary) / "control-host"
         environment = os.environ.copy()

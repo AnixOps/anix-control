@@ -32,7 +32,7 @@ func buildGenericHost(t *testing.T) string {
 	require.NoError(t, err)
 	binary := filepath.Join(t.TempDir(), "control-host")
 	command := exec.Command("go", "build", "-trimpath", "-buildvcs=false",
-		"-ldflags", "-X main.packageID=knowledge -X main.packageVersion=4.1.0", "-o", binary, "./packages/shared/controlhost")
+		"-ldflags", "-X main.packageID=knowledge -X main.packageVersion=4.1.0", "-o", binary, "./packages/builtin/cmd/package-host")
 	command.Dir = repoRoot
 	command.Env = append(os.Environ(), "GOWORK=off", "CGO_ENABLED=0")
 	output, err := command.CombinedOutput()

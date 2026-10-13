@@ -1,9 +1,10 @@
-package main
+// Package control is the machine-telemetry package's Control host. Control links it
+// and starts it as `anix-control package-host machine-telemetry` (packages/builtin);
+// packages/builtin/cmd/package-host builds it as a standalone binary.
+package control
 
 import (
 	"context"
-	"log"
-	"os"
 	// Embed the zone database so the TZ passed by the kernel resolves even
 	// without system zoneinfo.
 	_ "time/tzdata"
@@ -12,17 +13,17 @@ import (
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
 )
 
-var packageVersion = "4.0.0"
+// PackageID is the official package this host serves.
+const PackageID = "machine-telemetry"
 
-func main() {
-	err := modulesdk.Run(context.Background(), modulesdk.Options{
-		PackageID: "machine-telemetry", PackageVersion: packageVersion,
+// Run serves the host for one release of the package until the kernel stops
+// it (SIGTERM) or ctx ends. modulesdk picks the kernel-supervised child
+// process or the network module runtime from the environment.
+func Run(ctx context.Context, version string) error {
+	return modulesdk.Run(ctx, modulesdk.Options{
+		PackageID: PackageID, PackageVersion: version,
 		Build: func(host modulesdk.Host) (pluginhostsdk.Package, error) {
 			return newMachineTelemetryService(host.Bridge, host.LeaseID)
 		},
 	})
-	if err != nil {
-		log.Printf("machine-telemetry control host: %v", err)
-		os.Exit(1)
-	}
 }
