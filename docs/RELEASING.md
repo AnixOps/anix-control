@@ -41,6 +41,22 @@ publishes everything. Nothing is built locally.
    - `config/AGENT_RELEASE`, only with `--agent-tag`.
 
    Then it checks the result with `config/scripts/check_release_version.py`.
+
+   When the release ships a new Agent, tag the Agent first, then move the
+   Agent pins in the same branch with the commit that tag points to:
+
+   ```bash
+   python3 config/scripts/bump_agent_ref.py <agent-commit-sha> v5.0.0-rc.1
+   ```
+
+   It sets `AGENT_REF` in `ci.yml`, the same commit in the second literal
+   that `config/scripts/check_release_workflow.sh` requires, the Agent module
+   path and version label of the cross-repository E2E build (its `-ldflags`
+   in `ci.yml` and in `internal/tests/agente2e/build_test.go`) and
+   `config/AGENT_RELEASE`, then runs `check_release_workflow.sh`
+   ([the Agent pin](#what-the-tag-pipeline-does)). It refuses a commit that
+   is not 40 lowercase hex characters and a tag that is not `vX.Y.Z` or
+   `vX.Y.Z-rc.N`, and changes no file unless it finds every pin.
 2. Open a pull request (`release: v4.1.0`) and merge it once CI passes.
 3. Tag the merged commit and push the tag:
 
@@ -126,9 +142,16 @@ version `latest`.
   - No Agent plugin or GOST runtime is built for the release: Agent
     dispatch stays off until the Agent release carries them (M4).
   - The pin is `AGENT_REF` in the top-level `env` of `ci.yml`; every
-    anix-agent checkout (package contract tests, cross-repository E2E, live
-    WebUI gate) takes its ref from it. Move it to the Agent's release commit with every
-    Agent tag, in the pull request that prepares the Control release.
+    anix-agent checkout (Plugin Package Release Contracts, Control to Agent
+    Process E2E, Cross-Repo E2E) takes its ref from it.
+    `config/scripts/check_release_workflow.sh` requires the same commit as a
+    second literal (`require_text "AGENT_REF: '<sha>'"`), and the Cross-Repo
+    E2E builds the Agent with its module path in `-ldflags`
+    (`-X github.com/AnixOps/anix-agent/v<major>/cmd.version=<version>-e2e`, in
+    `ci.yml` and in `internal/tests/agente2e/build_test.go`). Move all of them
+    to the Agent's release commit with every Agent tag, in the pull request
+    that prepares the Control release: `config/scripts/bump_agent_ref.py
+    <sha> <agent-tag>` edits exactly these places and `config/AGENT_RELEASE`.
   - `config/AGENT_RELEASE` is the one line that names that release's tag
     (`v4.2.0`). The release binaries embed it (`-X main.agentRelease`), and
     it is the Agent a node installs unless `agent_install.agent_version`
