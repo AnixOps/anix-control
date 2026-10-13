@@ -129,6 +129,7 @@ import { useUserStore } from '@/stores/user'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { useMediaQuery, NARROW_QUERY } from '@/composables/useMediaQuery'
 import { loadEdition } from '@/composables/useEdition'
+import { loadMessageGroup } from '@/i18n'
 import { resolveRoutePageTitle } from '@/utils/pageMeta'
 import { adminExtensionMenus } from '@/extensions/runtime'
 import { useAgentUpgradeSheet } from '@/composables/useAgentUpgradeSheet'
@@ -144,8 +145,12 @@ import { isPaletteShortcut, paletteShortcutLabel, usePalette } from '@/component
 import UiIcon from '@/ui/UiIcon.vue'
 import UiIconButton from '@/ui/UiIconButton.vue'
 
-// 升级节点: loaded with the first openAgentUpgrade().
-const AgentUpgradeSheet = defineAsyncComponent(() => import('@/components/admin/AgentUpgradeSheet.vue'))
+// 升级节点: loaded with the first openAgentUpgrade(). Its strings are in the
+// adminPages group, which the dashboard loads only when the browser is idle.
+const AgentUpgradeSheet = defineAsyncComponent(async () => {
+  await loadMessageGroup('adminPages').catch(() => {})
+  return import('@/components/admin/AgentUpgradeSheet.vue')
+})
 
 const SIDEBAR_RAIL_KEY = 'admin.sidebar.collapsed'
 
