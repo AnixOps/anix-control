@@ -41,6 +41,7 @@ It should not become a dumping ground for:
 | `Dockerfile` / `docker-compose.yml` / `docker-compose.prod.yml` | container build and startup |
 | `Makefile` | local build, run, test, lint, swagger, and gRPC generation targets |
 | `tools.go` | pins the protoc Go plugins and records the expected `protoc` versions |
+| `changelog.d/` | changelog fragments: one Markdown file per change that is not released yet; `config/scripts/prepare_release.py` merges them into `CHANGELOG.md` at release (format in its `README.md`) |
 | `README.md` | canonical repository entrypoint |
 | `AGENTS.md` | contributor/agent rules |
 | `ROADMAP.md` / `TODO.md` / `CHANGELOG.md` | roadmap pointer, open backlog, and change history |
@@ -50,7 +51,8 @@ It should not become a dumping ground for:
 - `scripts/` holds scripts an operator runs on a host (install, manage,
   migrate, sign, rehearse).
 - `config/scripts/` holds repository gates and release tooling that CI runs:
-  documentation sync (`check_docs_updated.sh`), release workflow policy
+  documentation sync (`check_docs_updated.sh`), changelog fragments
+  (`changelog_fragments.py`), release workflow policy
   (`check_release_workflow.sh`), release version surfaces
   (`check_release_version.py`) and release preparation (`prepare_release.py`),
   `/api/v2` package route catalog and plugin-only route checks, Agent SDK
