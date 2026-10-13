@@ -155,3 +155,27 @@ func TestRewriteSmallCases(t *testing.T) {
 	_, err = Rewrite([]byte("app:\n  subscribe_path: api/v2\n"), RewriteOptions{})
 	require.ErrorContains(t, err, "subscribe_path")
 }
+
+// A closed or restricted registration and a cluster name survive the
+// rewrite while they are still read; their defaults are dropped.
+func TestRewriteKeepsAClosedRegistrationAndTheCluster(t *testing.T) {
+	old := "auth:\n  registration:\n    enabled: false\n    require_invite: false\n    allowed_email_domains: [example.com]\n    blocked_email_domains: []\n  login_rate_limit:\n    enabled: false\nmodule_runtime:\n  cluster: prod\n  enabled: false\n"
+	result, err := Rewrite([]byte(old), RewriteOptions{Now: rewriteNow})
+	require.NoError(t, err)
+	body := string(result.Output)
+	assert.Contains(t, body, "auth:\n  registration:\n    allowed_email_domains: [example.com]\n    enabled: false\n")
+	assert.Contains(t, body, "module_runtime:\n  cluster: prod\n")
+	assert.NotContains(t, body, "require_invite")
+	assert.NotContains(t, body, "login_rate_limit")
+	loaded, _, err := loadBytes(result.Output)
+	require.NoError(t, err)
+	require.NotNil(t, loaded.Auth.Registration.Enabled)
+	assert.False(t, *loaded.Auth.Registration.Enabled)
+	assert.Equal(t, []string{"example.com"}, loaded.Auth.Registration.AllowedEmailDomains)
+	assert.Equal(t, "prod", loaded.ModuleRuntime.ClusterOrDefault())
+	assert.Contains(t, result.Report(), "auth.registration.enabled: still read until M3 (N35), and not the built-in value")
+
+	result, err = Rewrite([]byte("auth:\n  registration:\n    enabled: true\nmodule_runtime:\n  cluster: default\n"), RewriteOptions{Now: rewriteNow})
+	require.NoError(t, err)
+	assert.Contains(t, string(result.Output), "Every key has its default.")
+}

@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/url"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -126,7 +127,9 @@ type rewriteLeaf struct {
 //     it is not domain (nodes keep dialling the same name);
 //   - the database section is kept, with a relative SQLite path made
 //     absolute, while PostgreSQL support exists (M2, P4): dropping it would
-//     move the panel to another database;
+//     move the panel to another database; a closed or restricted
+//     registration and a cluster name other than default are kept while
+//     they are read (keptWhileRead);
 //   - only values that differ from the defaults are written; every other
 //     key is dropped with its reason.
 //
@@ -425,6 +428,37 @@ func Rewrite(old []byte, opts RewriteOptions) (*RewriteResult, error) {
 			map[bool]string{true: " (" + fmt.Sprint(newValues["database.database"]) + ")", false: ""}[sqlite]})
 	}
 
+	// Keys still read whose dropping would weaken the panel or change the
+	// nodes' identities are kept while they differ from the built-in value:
+	// a closed or restricted registration, and the cluster in every Agent
+	// identity.
+	for _, leaf := range leaves {
+		if !leaf.known || !keptWhileRead(leaf.path) {
+			continue
+		}
+		key, _ := LookupKey(leaf.path)
+		if key.Status != KeyRead {
+			continue
+		}
+		field, ok := configField(defaults, key.fieldPath())
+		if !ok {
+			continue
+		}
+		value := reflect.New(field.Type())
+		if leaf.node.Kind == yaml.ScalarNode && leaf.node.Tag == "!!null" {
+			continue
+		}
+		if err := leaf.node.Decode(value.Interface()); err != nil || reflect.DeepEqual(value.Elem().Interface(), field.Interface()) ||
+			(field.Kind() == reflect.Slice && value.Elem().Len() == 0 && field.Len() == 0) {
+			continue
+		}
+		node := *leaf.node
+		node.HeadComment, node.LineComment, node.FootComment = "", "", ""
+		newValues[leaf.path] = &node
+		consumed[leaf.path] = leaf.path
+		result.Kept = append(result.Kept, RewriteNote{Key: leaf.path, Reason: "still read until " + key.RemovedIn + ", and not the built-in value: " + key.Reason})
+	}
+
 	// The secrets: root.key must hold them before the file may drop them.
 	if raw := scalar("module_runtime.ca_kek"); raw != "" {
 		consumed["module_runtime.ca_kek"] = "-"
@@ -552,6 +586,12 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
+// keptWhileRead tells which keys still read the rewrite keeps when they
+// differ from the built-in value (besides the database section).
+func keptWhileRead(path string) bool {
+	return strings.HasPrefix(path, "auth.registration.") || path == "module_runtime.cluster"
+}
+
 // rewriteOrder is the order of the new file's keys.
 var rewriteOrder = []string{"domain", "tls.mode", "tls.cert_file", "tls.key_file", "listen", "grpc.port", "grpc.public_name", "subscribe_path", "data_dir"}
 
@@ -594,21 +634,26 @@ func marshalRewrite(values map[string]any, opts RewriteOptions) ([]byte, error) 
 			}
 		}
 	}
-	var databaseKeys []string
+	var kept []string
 	for path := range values {
-		if strings.HasPrefix(path, "database.") {
-			databaseKeys = append(databaseKeys, path)
+		if strings.HasPrefix(path, "database.") || keptWhileRead(path) {
+			kept = append(kept, path)
 		}
 	}
-	sort.Strings(databaseKeys)
-	for _, path := range databaseKeys {
+	sort.Strings(kept)
+	for _, path := range kept {
 		if err := add(path, values[path]); err != nil {
 			return nil, err
 		}
 	}
 	for i := 0; i+1 < len(root.Content); i += 2 {
-		if root.Content[i].Value == "database" {
+		switch root.Content[i].Value {
+		case "database":
 			root.Content[i].HeadComment = "Still read until PostgreSQL support ends (M2, P4): the panel keeps its\ndatabase (a PostgreSQL password stays here until then)."
+		case "auth":
+			root.Content[i].HeadComment = "Still read until the registration policy becomes an administrator\nsetting (M3): the panel keeps its registration rules."
+		case "module_runtime":
+			root.Content[i].HeadComment = "Still read until M2 (P4): the cluster in every Agent and module identity."
 		}
 	}
 
