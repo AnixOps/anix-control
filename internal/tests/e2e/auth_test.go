@@ -86,7 +86,7 @@ func (s *AuthE2ETestSuite) SetupSuite() {
 	s.Require().NoError(err)
 
 	// The first administrator, claimed with a claim link.
-	claimFirstAdministrator(s.T(), "admin@example.com", "admin123456")
+	claimFirstAdministrator(s.T(), "admin@example.com", "admin-pass-123456")
 	s.restoreIdentityHost = installIdentityPlatformE2EPackage(s.T(), s.cfg)
 
 	// 创建路由
@@ -357,7 +357,7 @@ func (s *AuthE2ETestSuite) TestAdminLogin() {
 	// 使用默认管理员账号登录
 	loginBody := map[string]string{
 		"email":    "admin@example.com",
-		"password": "admin123456",
+		"password": "admin-pass-123456",
 	}
 	jsonBody, _ := json.Marshal(loginBody)
 

@@ -111,6 +111,9 @@ get the claim link.``, and nothing else; the sign-in page says the same.
   replaces it. The token stays in the URL fragment, which the browser never
   sends: the claim page posts it with the email and password you choose
   (`POST /api/v5/claim`), creates the administrator and signs you in.
+- The password needs at least 12 characters (counted as characters, not
+  bytes) and at most 72 bytes; a shorter one is refused with `weak_password`
+  (422), and the page says so before it asks the server.
 - Once the panel has an administrator the command refuses (exit status 1),
   the claim answers 404, and nothing changes for that administrator.
 

@@ -199,7 +199,7 @@ func TestClaimRoutesAreRateLimited(t *testing.T) {
 	r := claimRouter(t)
 	statuses := map[int]int{}
 	for range 15 {
-		statuses[postClaim(r, "203.0.113.50", map[string]string{"token": "x", "email": "a@example.com", "password": "secret-1"}).Code]++
+		statuses[postClaim(r, "203.0.113.50", map[string]string{"token": "x", "email": "a@example.com", "password": "secret-pass-12"}).Code]++
 	}
 	assert.Equal(t, 10, statuses[http.StatusForbidden], "the burst is answered")
 	assert.Equal(t, 5, statuses[http.StatusTooManyRequests])

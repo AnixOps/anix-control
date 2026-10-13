@@ -120,7 +120,7 @@ Open this link within 24 hours to create the panel's first administrator. It wor
   https://panel.example.com/claim#anixclaim_...
 ```
 
-Open it, choose the administrator's email and password (at least 6
+Open it, choose the administrator's email and password (at least 12
 characters), and the page signs you in. The token after `#` never reaches
 the server in a request line or a log: the page sends it once, in the body of
 `POST /api/v5/claim`. Without `domain` (this installer does not set it yet)

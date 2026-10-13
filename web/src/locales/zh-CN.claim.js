@@ -7,7 +7,7 @@ export default {
     loading: '正在检查链接…',
     email: '邮箱',
     password: '密码',
-    passwordHelp: '至少 6 个字符。',
+    passwordHelp: '至少 {min} 个字符。',
     confirm: '确认密码',
     submit: '创建管理员',
     done: {
@@ -33,6 +33,7 @@ export default {
     },
     toSignIn: '去登录',
     errors: {
+      passwordShort: '密码至少需要 {min} 个字符。',
       passwordLong: '密码太长，最多 72 个字节。',
       emailTaken: '这个邮箱已有账户，请换一个邮箱。',
       identity: '登录服务暂时无法访问。没有做任何更改，请稍后重试。',

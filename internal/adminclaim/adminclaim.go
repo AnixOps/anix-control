@@ -53,10 +53,10 @@ const (
 	// tokenLength is the prefix and 32 bytes in unpadded base64url.
 	tokenLength = len(TokenPrefix) + 43
 
-	// MinPasswordLength and MaxPasswordBytes are the password rule of every
-	// account Control creates (registration, an administrator's new user):
-	// at least 6 characters, and bcrypt reads at most 72 bytes.
-	MinPasswordLength = 6
+	// MinPasswordLength is the first administrator's shortest password, in
+	// characters (not bytes): the panel's owner needs more than the 6 an
+	// ordinary account does. MaxPasswordBytes is what bcrypt reads.
+	MinPasswordLength = 12
 	MaxPasswordBytes  = 72
 )
 
@@ -239,7 +239,8 @@ func NormalizeEmail(email string) (string, error) {
 	return email, nil
 }
 
-// CheckPassword applies the password rule of every account Control creates.
+// CheckPassword applies the first administrator's password rule: at least
+// MinPasswordLength characters and at most MaxPasswordBytes bytes.
 func CheckPassword(password string) error {
 	switch {
 	case utf8.RuneCountInString(password) < MinPasswordLength:

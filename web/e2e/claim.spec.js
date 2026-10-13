@@ -70,14 +70,16 @@ test('says when the link expired, with the command for a new one', async ({ page
   await expect(page.getByText('sudo anix-control admin claim-link')).toBeVisible()
 })
 
-test('shows the password rule the server applies', async ({ page }) => {
-  const calls = await installFixtures(page, { claim: { status: 422, body: { error: { code: 'weak_password' } } } })
+test('asks for at least 12 characters, as the server does', async ({ page }) => {
+  const calls = await installFixtures(page, { claim: { status: 422, body: { error: { code: 'weak_password', message: 'the password must have at least 12 characters' } } } })
   await page.goto(`/claim#${TOKEN}`)
-  await fill(page, '12345')
-  await expect(page.getByText('Use at least 6 characters.')).toBeVisible()
+  await expect(page.getByText('At least 12 characters.')).toBeVisible()
+  await fill(page, 'eleven-char')
+  await expect(page.getByText('Use at least 12 characters.')).toBeVisible()
   expect(calls.claims).toEqual([])
-  await fill(page, 'long-enough')
-  await expect(page.getByText('Use at least 6 characters.')).toBeVisible()
+  // The server's answer reads the same.
+  await fill(page, 'twelve-chars')
+  await expect(page.getByText('Use at least 12 characters.')).toBeVisible()
   expect(calls.claims).toHaveLength(1)
 })
 

@@ -35,7 +35,7 @@ function refusal(status, code, message = '') {
   return Object.assign(new Error(code), { response: { status, data: { error: { code, message } } } })
 }
 
-async function fill(user, { email = 'owner@example.com', password = 'secret-pass', confirm = password } = {}) {
+async function fill(user, { email = 'owner@example.com', password = 'correct-horse-12', confirm = password } = {}) {
   await user.type(await screen.findByLabelText(/^Email/), email)
   await user.type(screen.getByLabelText(/^Password/), password)
   await user.type(screen.getByLabelText(/^Confirm password/), confirm)
@@ -72,9 +72,9 @@ describe('Claim.vue', () => {
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/admin/dashboard'))
     // The token travels only in the claim's body.
     expect(mockSubmit).toHaveBeenCalledTimes(1)
-    expect(mockSubmit).toHaveBeenCalledWith({ token: TOKEN, email: 'owner@example.com', password: 'secret-pass' })
+    expect(mockSubmit).toHaveBeenCalledWith({ token: TOKEN, email: 'owner@example.com', password: 'correct-horse-12' })
     // Then the ordinary sign-in with what was just chosen, without the token.
-    expect(mockLogin).toHaveBeenCalledWith({ email: 'owner@example.com', password: 'secret-pass' })
+    expect(mockLogin).toHaveBeenCalledWith({ email: 'owner@example.com', password: 'correct-horse-12' })
     expect(JSON.stringify(mockLogin.mock.calls)).not.toContain('anixclaim_')
     expect(useUserStore().token).toBe('admin-token')
     expect(document.body.innerHTML).not.toContain(TOKEN)
@@ -98,12 +98,14 @@ describe('Claim.vue', () => {
     expect(await screen.findByText('Enter your email.')).toBeTruthy()
     expect(screen.getByText('Enter your password.')).toBeTruthy()
 
-    await fill(user, { email: 'owner@example.com', password: '12345' })
-    expect(await screen.findByText('Use at least 6 characters.')).toBeTruthy()
+    // Twelve characters: eleven are refused before the server is asked.
+    expect(screen.getByText('At least 12 characters.')).toBeTruthy()
+    await fill(user, { email: 'owner@example.com', password: '12345678901' })
+    expect(await screen.findByText('Use at least 12 characters.')).toBeTruthy()
     await user.clear(screen.getByLabelText(/^Password/))
     await user.clear(screen.getByLabelText(/^Confirm password/))
-    await user.type(screen.getByLabelText(/^Password/), 'secret-pass')
-    await user.type(screen.getByLabelText(/^Confirm password/), 'secret-pasS')
+    await user.type(screen.getByLabelText(/^Password/), 'correct-horse-12')
+    await user.type(screen.getByLabelText(/^Confirm password/), 'correct-horse-13')
     await user.click(screen.getByRole('button', { name: 'Create administrator' }))
     expect(await screen.findByText('The passwords do not match.')).toBeTruthy()
     expect(mockSubmit).not.toHaveBeenCalled()
@@ -113,9 +115,9 @@ describe('Claim.vue', () => {
     openAt(`#${TOKEN}`)
     render(Claim)
     const user = userEvent.setup()
-    mockSubmit.mockRejectedValueOnce(refusal(422, 'weak_password', 'the password must have at least 6 characters'))
+    mockSubmit.mockRejectedValueOnce(refusal(422, 'weak_password', 'the password must have at least 12 characters'))
     await fill(user)
-    expect(await screen.findByText('Use at least 6 characters.')).toBeTruthy()
+    expect(await screen.findByText('Use at least 12 characters.')).toBeTruthy()
 
     mockSubmit.mockRejectedValueOnce(refusal(409, 'email_taken'))
     await user.click(screen.getByRole('button', { name: 'Create administrator' }))

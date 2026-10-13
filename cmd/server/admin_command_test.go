@@ -108,9 +108,9 @@ func TestAdminClaimLinkPrintsTheLinkWithItsToken(t *testing.T) {
 	assert.Contains(t, again, "within 30 minutes")
 	assert.Contains(t, again, "The link expires at 2026-10-13 08:30 UTC.")
 	claimer := &adminclaim.Claimer{DB: db, Cost: bcrypt.MinCost, Now: func() time.Time { return time.Date(2026, 10, 13, 8, 1, 0, 0, time.UTC) }}
-	_, err = claimer.Claim(context.Background(), adminclaim.Request{Token: token, Email: "owner@example.com", Password: "secret-1"})
+	_, err = claimer.Claim(context.Background(), adminclaim.Request{Token: token, Email: "owner@example.com", Password: "secret-pass-12"})
 	require.ErrorIs(t, err, adminclaim.ErrInvalidToken)
-	_, err = claimer.Claim(context.Background(), adminclaim.Request{Token: newer, Email: "owner@example.com", Password: "secret-1"})
+	_, err = claimer.Claim(context.Background(), adminclaim.Request{Token: newer, Email: "owner@example.com", Password: "secret-pass-12"})
 	require.NoError(t, err)
 }
 
@@ -280,7 +280,7 @@ func TestAdminClaimLinkProcess(t *testing.T) {
 	db, err := database.Open(&config.DatabaseConfig{Driver: "sqlite", Database: databaseFile, LogLevel: "silent"})
 	require.NoError(t, err)
 	_, err = (&adminclaim.Claimer{DB: db, Cost: bcrypt.MinCost}).Claim(context.Background(),
-		adminclaim.Request{Token: token, Email: "owner@example.com", Password: "secret-1"})
+		adminclaim.Request{Token: token, Email: "owner@example.com", Password: "secret-pass-12"})
 	require.NoError(t, err)
 	require.NoError(t, database.CloseHandle(db))
 

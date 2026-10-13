@@ -136,7 +136,7 @@ func (s *AdminE2ETestSuite) SetupSuite() {
 	s.Require().NoError(err)
 
 	// The first administrator, claimed with a claim link.
-	claimFirstAdministrator(s.T(), "admin@example.com", "admin123456")
+	claimFirstAdministrator(s.T(), "admin@example.com", "admin-pass-123456")
 	s.restoreIdentityHost = installIdentityPlatformE2EPackage(s.T(), s.cfg)
 
 	// 创建路由
@@ -144,7 +144,7 @@ func (s *AdminE2ETestSuite) SetupSuite() {
 	router.Setup(s.router, s.cfg)
 
 	// 管理员登录获取 token
-	s.adminToken = s.login("admin@example.com", "admin123456")
+	s.adminToken = s.login("admin@example.com", "admin-pass-123456")
 
 	// 创建普通用户 (使用正确的密码哈希)
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte("userpassword"), bcrypt.DefaultCost)

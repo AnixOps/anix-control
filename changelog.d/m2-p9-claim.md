@@ -17,7 +17,8 @@
   rate-limited `POST /api/v5/claim`: 201 creates the administrator, consumes
   the token in the same transaction and signs in; 404 once an administrator
   exists, 403 `claim_invalid`, 410 `claim_expired`, 422 `weak_password`
-  (the account rule, 6 characters), 409 `email_taken`. Once identity holds
+  (the password needs at least 12 characters and at most 72 bytes), 409
+  `email_taken`. Once identity holds
   the credentials the account is created through identity. The body is never
   logged; the audit row holds `admin_claimed`, the email and the source
   address. `GET /api/v5/claim/status` answers `{claimable}`, and the sign-in

@@ -31,7 +31,7 @@
             id="claim-password"
             v-model="password"
             :label="t('claim.password')"
-            :help="t('claim.passwordHelp')"
+            :help="t('claim.passwordHelp', { min: MIN_PASSWORD })"
             autocomplete="new-password"
             :error="errors.password"
             aria-required="true"
@@ -106,7 +106,9 @@ const { t } = useAppI18n()
 
 const TOKEN_PATTERN = /^anixclaim_[A-Za-z0-9_-]{43}$/
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-const MIN_PASSWORD = 6
+// The first administrator's password rule, as the server applies it
+// (internal/adminclaim MinPasswordLength, MaxPasswordBytes).
+const MIN_PASSWORD = 12
 const MAX_PASSWORD_BYTES = 72
 
 // takeToken reads the claim token from the fragment once and removes it
@@ -188,7 +190,7 @@ function utf8Length(value) {
 function validate() {
   errors.email = !email.value ? t('auth.errors.emailRequired') : (EMAIL_PATTERN.test(email.value) ? '' : t('auth.errors.emailInvalid'))
   if (!password.value) errors.password = t('auth.errors.passwordRequired')
-  else if ([...password.value].length < MIN_PASSWORD) errors.password = t('auth.errors.passwordShort')
+  else if ([...password.value].length < MIN_PASSWORD) errors.password = t('claim.errors.passwordShort', { min: MIN_PASSWORD })
   else if (utf8Length(password.value) > MAX_PASSWORD_BYTES) errors.password = t('claim.errors.passwordLong')
   if (!errors.password && password.value !== confirm.value) errors.confirm = t('auth.errors.passwordMismatch')
   return !errors.email && !errors.password && !errors.confirm
@@ -204,7 +206,7 @@ function refuse(error) {
   const code = response.data?.error?.code || ''
   switch (code) {
     case 'weak_password':
-      errors.password = t('auth.errors.passwordShort')
+      errors.password = t('claim.errors.passwordShort', { min: MIN_PASSWORD })
       return
     case 'password_too_long':
       errors.password = t('claim.errors.passwordLong')

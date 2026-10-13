@@ -8,7 +8,7 @@ export default {
     loading: 'Checking the link…',
     email: 'Email',
     password: 'Password',
-    passwordHelp: 'At least 6 characters.',
+    passwordHelp: 'At least {min} characters.',
     confirm: 'Confirm password',
     submit: 'Create administrator',
     done: {
@@ -34,6 +34,7 @@ export default {
     },
     toSignIn: 'Go to sign in',
     errors: {
+      passwordShort: 'Use at least {min} characters.',
       passwordLong: 'Use a shorter password (at most 72 bytes).',
       emailTaken: 'An account with this email already exists. Use another email.',
       identity: 'The sign-in service is not reachable right now. Nothing was changed; try again in a minute.',

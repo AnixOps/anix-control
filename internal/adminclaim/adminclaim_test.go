@@ -254,7 +254,7 @@ func TestClaimOnlyWithThePendingToken(t *testing.T) {
 	db := openDB(t)
 	claimer := &Claimer{DB: db, Now: fixedClock(issuedAt.Add(time.Hour)), Cost: bcrypt.MinCost}
 	request := func(token string) Request {
-		return Request{Token: token, Email: "owner@example.com", Password: "secret-1"}
+		return Request{Token: token, Email: "owner@example.com", Password: "secret-pass-12"}
 	}
 	// Nothing issued yet.
 	unknown, err := NewToken(cryptoReader{})
@@ -284,19 +284,19 @@ func TestClaimExpires(t *testing.T) {
 	issued, err := Issue(context.Background(), db, DefaultTTL, issuedAt)
 	require.NoError(t, err)
 	late := &Claimer{DB: db, Now: fixedClock(issuedAt.Add(24 * time.Hour)), Cost: bcrypt.MinCost}
-	_, err = late.Claim(context.Background(), Request{Token: issued.Token, Email: "owner@example.com", Password: "secret-1"})
+	_, err = late.Claim(context.Background(), Request{Token: issued.Token, Email: "owner@example.com", Password: "secret-pass-12"})
 	require.ErrorIs(t, err, ErrExpired)
 	// Without the token, an expired claim looks like any wrong token.
 	other, err := NewToken(cryptoReader{})
 	require.NoError(t, err)
-	_, err = late.Claim(context.Background(), Request{Token: other, Email: "owner@example.com", Password: "secret-1"})
+	_, err = late.Claim(context.Background(), Request{Token: other, Email: "owner@example.com", Password: "secret-pass-12"})
 	require.ErrorIs(t, err, ErrInvalidToken)
 	assert.Empty(t, admins(t, db))
 
 	// A new link works again.
 	renewed, err := Issue(context.Background(), db, DefaultTTL, issuedAt.Add(24*time.Hour))
 	require.NoError(t, err)
-	_, err = late.Claim(context.Background(), Request{Token: renewed.Token, Email: "owner@example.com", Password: "secret-1"})
+	_, err = late.Claim(context.Background(), Request{Token: renewed.Token, Email: "owner@example.com", Password: "secret-pass-12"})
 	require.NoError(t, err)
 }
 
@@ -314,23 +314,30 @@ func TestClaimChecksTheEmailAndThePasswordAfterTheToken(t *testing.T) {
 	// A wrong token never learns the password rule.
 	assert.ErrorIs(t, claim(other, "not-an-email", "x"), ErrInvalidToken)
 
-	assert.ErrorIs(t, claim(issued.Token, "", "secret-1"), ErrInvalidEmail)
-	assert.ErrorIs(t, claim(issued.Token, "not-an-email", "secret-1"), ErrInvalidEmail)
-	assert.ErrorIs(t, claim(issued.Token, "admin@localhost", "secret-1"), ErrInvalidEmail, "the sign-in refuses it")
+	assert.ErrorIs(t, claim(issued.Token, "", "secret-pass-12"), ErrInvalidEmail)
+	assert.ErrorIs(t, claim(issued.Token, "not-an-email", "secret-pass-12"), ErrInvalidEmail)
+	assert.ErrorIs(t, claim(issued.Token, "admin@localhost", "secret-pass-12"), ErrInvalidEmail, "the sign-in refuses it")
 	assert.ErrorIs(t, claim(issued.Token, "owner@example.com", ""), ErrWeakPassword)
 	assert.ErrorIs(t, claim(issued.Token, "owner@example.com", "12345"), ErrWeakPassword)
+	assert.ErrorIs(t, claim(issued.Token, "owner@example.com", strings.Repeat("a", MinPasswordLength-1)), ErrWeakPassword)
+	assert.Equal(t, 12, MinPasswordLength)
+	assert.Equal(t, "the password must have at least 12 characters", ErrWeakPassword.Error())
 	assert.ErrorIs(t, claim(issued.Token, "owner@example.com", strings.Repeat("a", 73)), ErrPasswordTooLong)
-	// Six characters, counted as characters: 密码密码密码 is 18 bytes.
-	require.NoError(t, CheckPassword("密码密码密码"))
+	// Characters, not bytes: eleven CJK characters (33 bytes) are too few,
+	// twelve are enough, and 25 (75 bytes) are too many bytes.
+	require.ErrorIs(t, CheckPassword(strings.Repeat("密", 11)), ErrWeakPassword)
+	require.NoError(t, CheckPassword(strings.Repeat("密", 12)))
+	require.ErrorIs(t, CheckPassword(strings.Repeat("密", 25)), ErrPasswordTooLong)
+	require.NoError(t, CheckPassword(strings.Repeat("a", 12)))
 	require.NoError(t, CheckPassword(strings.Repeat("a", 72)))
 
 	require.NoError(t, db.Create(&model.User{Email: "member@example.com", Password: "x", UUID: "u-1", Token: "t-1"}).Error)
-	assert.ErrorIs(t, claim(issued.Token, "member@example.com", "secret-1"), ErrEmailTaken)
+	assert.ErrorIs(t, claim(issued.Token, "member@example.com", "secret-pass-12"), ErrEmailTaken)
 
 	// None of that consumed the token.
 	_, ok := metaValue(t, db)
 	require.True(t, ok)
-	require.NoError(t, claim(issued.Token, "owner@example.com", "123456"))
+	require.NoError(t, claim(issued.Token, "owner@example.com", "123456789012"))
 }
 
 func TestConcurrentClaimsWithOneTokenCreateOneAdministrator(t *testing.T) {
@@ -351,7 +358,7 @@ func TestConcurrentClaimsWithOneTokenCreateOneAdministrator(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			<-start
-			_, errs[i] = claimer.Claim(context.Background(), Request{Token: issued.Token, Email: emails[i], Password: "secret-1"})
+			_, errs[i] = claimer.Claim(context.Background(), Request{Token: issued.Token, Email: emails[i], Password: "secret-pass-12"})
 		}()
 	}
 	close(start)
@@ -402,7 +409,7 @@ func TestClaimThroughIdentityOnceItHoldsTheCredentials(t *testing.T) {
 			setAuthority(t, db, state)
 			issued, err := Issue(context.Background(), db, DefaultTTL, issuedAt)
 			require.NoError(t, err)
-			request := Request{Token: issued.Token, Email: "owner@example.com", Password: "secret-1", SourceIP: "198.51.100.4"}
+			request := Request{Token: issued.Token, Email: "owner@example.com", Password: "secret-pass-12", SourceIP: "198.51.100.4"}
 
 			// Without identity nothing changes and the link keeps working.
 			_, err = (&Claimer{DB: db, Now: fixedClock(issuedAt), Cost: bcrypt.MinCost}).Claim(context.Background(), request)
@@ -432,7 +439,7 @@ func TestClaimThroughIdentityOnceItHoldsTheCredentials(t *testing.T) {
 			assert.Equal(t, result.UserID, pushed.ID)
 			assert.Equal(t, 1, pushed.IsAdmin)
 			assert.Equal(t, "owner@example.com", pushed.Email)
-			assert.NoError(t, bcrypt.CompareHashAndPassword([]byte(pushed.Password), []byte("secret-1")), "identity gets the hash")
+			assert.NoError(t, bcrypt.CompareHashAndPassword([]byte(pushed.Password), []byte("secret-pass-12")), "identity gets the hash")
 			assert.Equal(t, identityimport.AccountUUID(result.UserID), identity.uuids[0])
 
 			created := admins(t, db)
@@ -440,7 +447,7 @@ func TestClaimThroughIdentityOnceItHoldsTheCredentials(t *testing.T) {
 			if state == model.IdentityAuthorityFinalized {
 				assert.Equal(t, model.UnusableLegacyPassword, created[0].Password, "no legacy credential after finalize")
 			} else {
-				assert.NoError(t, bcrypt.CompareHashAndPassword([]byte(created[0].Password), []byte("secret-1")), "mirrored until finalize")
+				assert.NoError(t, bcrypt.CompareHashAndPassword([]byte(created[0].Password), []byte("secret-pass-12")), "mirrored until finalize")
 			}
 			var link model.IdentityAccountLink
 			require.NoError(t, db.Where("user_id = ?", result.UserID).Take(&link).Error)
@@ -458,7 +465,7 @@ func TestClaimWhileImportingStaysWithTheKernel(t *testing.T) {
 	require.NoError(t, err)
 	identity := &fakeIdentity{}
 	result, err := (&Claimer{DB: db, Identity: identity, Now: fixedClock(issuedAt), Cost: bcrypt.MinCost}).Claim(context.Background(),
-		Request{Token: issued.Token, Email: "owner@example.com", Password: "secret-1"})
+		Request{Token: issued.Token, Email: "owner@example.com", Password: "secret-pass-12"})
 	require.NoError(t, err)
 	assert.False(t, result.Identity)
 	assert.Empty(t, identity.accounts, "the next import copies it")
