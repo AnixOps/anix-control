@@ -1,6 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useUserStore } from '@/stores/user'
-import { resolveLegacyControlRedirect } from '@/router/controlLegacy'
+import { BUILTIN_PACKAGES_PATH, resolveLegacyControlRedirect } from '@/router/controlLegacy'
 import { loadEdition, routeAllowedByEdition } from '@/composables/useEdition'
 import { scrollBehavior } from '@/router/scroll'
 import { loadMessageGroup } from '@/i18n'
@@ -36,8 +36,6 @@ const AdminNotifications = () => import('@/views/admin/Notifications.vue')
 const AdminInvite = () => import('@/views/admin/Invite.vue')
 const AdminInviteCodes = () => import('@/views/admin/InviteCodes.vue')
 const AdminSystem = () => import('@/views/admin/System.vue')
-const AdminPlugins = () => import('@/views/admin/Plugins.vue')
-const AdminRouteModes = () => import('@/views/admin/RouteModes.vue')
 const AdminDeployments = () => import('@/views/admin/Deployments.vue')
 // The v4.2 forwarding area (F5b): lazy chunks, opened only with the
 // forward package's v4 API (meta.capability, checked in the guard).
@@ -320,14 +318,10 @@ const routes = [
         redirect: '/admin/nodes'
       },
       {
-        path: 'plugins',
-        component: AdminPlugins
-      },
-      {
-        // Per-package v2 route modes (legacy / shadow / native), below 插件中心.
-        path: 'plugins/route-modes',
-        component: AdminRouteModes,
-        meta: WIDE
+        // 插件中心 and its route modes are gone: the official packages are
+        // built in, and their status is 系统设置 → 内置包.
+        path: 'plugins/:rest(.*)*',
+        redirect: BUILTIN_PACKAGES_PATH
       },
       {
         path: 'deployments',
@@ -477,17 +471,17 @@ router.beforeEach(async (to, from, next) => {
         if (resolved.matched.some(record => record.meta.extension)) {
           const extensionPermission = resolved.meta.extensionPermission
           if (!userStore.hasPermission(extensionPermission)) {
-            next('/admin/plugins')
+            next(BUILTIN_PACKAGES_PATH)
           } else {
             next({ path: to.path, query: to.query, hash: to.hash, replace: true })
           }
         } else {
-          next('/admin/plugins')
+          next(BUILTIN_PACKAGES_PATH)
         }
         return
       }
       if (to.meta.extension && !userStore.hasPermission(to.meta.extensionPermission)) {
-        next('/admin/plugins')
+        next(BUILTIN_PACKAGES_PATH)
         return
       }
       if (to.meta.extension) {
@@ -496,11 +490,12 @@ router.beforeEach(async (to, from, next) => {
       }
       // A page that needs a package capability (the forwarding area needs
       // the forward package's v4 API) waits for the catalog; without the
-      // capability it leads to 插件中心, where the package is installed.
+      // capability it leads to 系统设置 → 内置包, which shows the package's
+      // state.
       if (to.meta.capability) {
         const snapshot = await ensureAdminExtensions(router).catch(() => null)
         if (!snapshot?.capabilities?.includes(to.meta.capability)) {
-          next({ path: '/admin/plugins', replace: true })
+          next({ path: BUILTIN_PACKAGES_PATH, replace: true })
           return
         }
         next()

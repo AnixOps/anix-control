@@ -318,7 +318,8 @@ test('disabled and tampered plugins fail closed without contaminating core admin
   ])
 
   await page.goto('/admin/extensions/tampered-fixture')
-  await expect(page).toHaveURL(/\/admin\/plugins$/)
-  await expect(page.getByRole('heading', { level: 1, name: 'Plugin Center' })).toBeVisible()
+  await expect(page).toHaveURL(/\/admin\/system\/packages$/)
+  await expect(page.getByRole('heading', { level: 1, name: 'Settings' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 2, name: 'Built-in packages' })).toBeVisible()
   await expect(page.getByRole('navigation', { name: 'Admin navigation' }).getByRole('link', { name: 'Dashboard', exact: true })).toBeVisible()
 })

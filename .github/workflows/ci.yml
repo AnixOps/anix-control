@@ -2096,15 +2096,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
 
-      - name: Checkout pinned Agent source for live Control WebUI E2E
-        uses: actions/checkout@v7
-        with:
-          repository: AnixOps/anix-agent
-          ref: ${{ env.AGENT_REF }}
-          path: V2bX_AnixOps
-
-      # The live Control WebUI gate builds a temporary Control binary and a
-      # deterministic official plugin package before Chromium opens the UI.
+      # The live Control WebUI gate builds the signed built-in packages it
+      # needs and a temporary Control binary that embeds them before
+      # Chromium opens the UI.
       - name: Setup Go
         uses: actions/setup-go@v6
         with:
@@ -2163,8 +2157,6 @@ jobs:
 
       - name: Run live Control signed WebUI E2E gate
         working-directory: web
-        env:
-          ANIXOPS_AGENT_ROOT: ${{ github.workspace }}/V2bX_AnixOps
         run: npx playwright test --config playwright.live-control.config.js
 
       - name: Build frontend

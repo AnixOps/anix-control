@@ -36,7 +36,8 @@ const extensionMenus = [
 describe('navigation/menu.js: buildAdminMenu', () => {
   it('orders the groups as plan §4.2 and keeps Node and the forwarding area apart', () => {
     const groups = buildAdminMenu({ t, editionAllows: commercial })
-    expect(groups.map(group => group.id)).toEqual(['overview', 'users', 'network', 'extensions', 'system', 'commerce'])
+    // 扩展 holds only the packages' WebUI menus, so without one it is hidden.
+    expect(groups.map(group => group.id)).toEqual(['overview', 'users', 'network', 'system', 'commerce'])
     const network = groups.find(group => group.id === 'network').items
     // 转发 (the forwarding area) needs the forward package's v4 API; the
     // flux-clone 转发 and 转发节点 were removed in v4.2 (F5d).
@@ -44,7 +45,7 @@ describe('navigation/menu.js: buildAdminMenu', () => {
       ['nodes', '/admin/nodes'],
       ['deployments', '/admin/deployments']
     ])
-    expect(groups.find(group => group.id === 'extensions').items.map(item => item.id)).toEqual(['plugins'])
+    expect(ids(groups)).not.toContain('plugins')
   })
 
   it('hides 商业 and shows subscription templates in the community edition', () => {
@@ -103,7 +104,7 @@ describe('navigation/menu.js: buildAdminMenu', () => {
     })
     const extensions = groups.find(group => group.id === 'extensions').items
     expect(extensions.map(item => item.id)).toEqual([
-      'plugins', 'payment.main', 'service-b.main', 'service-a.main', 'ops.main', 'legacy.main'
+      'payment.main', 'service-b.main', 'service-a.main', 'ops.main', 'legacy.main'
     ])
     expect(extensions.find(item => item.id === 'legacy.main').parent).toBe('extensions')
     const system = groups.find(group => group.id === 'system').items

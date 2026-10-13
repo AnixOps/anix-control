@@ -13,6 +13,8 @@ export const ADMIN_PAGE_SECTIONS = Object.freeze({
     { id: 'settings-backup', to: '/admin/system/backup', labelKey: 'adminSettings.sections.backup' },
     { id: 'settings-balancer', to: '/admin/system/balancer', labelKey: 'adminSettings.sections.balancer' },
     { id: 'settings-audit', to: '/admin/system/audit', labelKey: 'adminSettings.sections.audit' },
+    // 内置包: the status of the built-in packages (it replaces 插件中心).
+    { id: 'settings-packages', to: '/admin/system/packages', labelKey: 'adminSettings.sections.packages' },
     { id: 'settings-about', to: '/admin/system/about', labelKey: 'adminSettings.sections.about' }
   ],
   security: [

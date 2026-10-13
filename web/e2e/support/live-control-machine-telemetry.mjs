@@ -1,5 +1,5 @@
 import { generateKeyPairSync } from 'node:crypto'
-import { access, chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { access, chmod, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { createWriteStream } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -16,9 +16,10 @@ const packageVersion = '4.0.0'
 const adminEmail = 'live-control-webui@anixops.test'
 const adminPassword = 'LiveControlWebUI!2026'
 const goBinary = process.env.ANIXOPS_GO_BIN || 'go'
-// The Agent-target packages the gate installs: machine-telemetry ships no
-// WebUI (its data shows in the node pages), nftables-forward ships one.
-const agentPackages = new Set(['machine-telemetry', 'nftables-forward'])
+// The packages the gate builds into Control: identity-platform (login),
+// machine-telemetry, which ships no WebUI (its data shows in the node
+// pages), and nftables-forward, which ships one.
+const builtinPackages = ['identity-platform', 'machine-telemetry', 'nftables-forward']
 
 function trimOutput(output, maximum = 12_000) {
   return output.length <= maximum ? output : output.slice(-maximum)
@@ -127,7 +128,7 @@ function quotedYAML(value) {
   return JSON.stringify(String(value))
 }
 
-function controlConfig({ databasePath, frontendPath, publicKey, identityBootstrapPackageDir }) {
+function controlConfig({ databasePath, frontendPath, publicKey }) {
   return `env: development
 server:
   host: "127.0.0.1"
@@ -165,11 +166,7 @@ app:
   subscribe_path: s
 plugins:
   official_public_key: ${quotedYAML(publicKey)}
-  identity_bootstrap_package_dir: ${quotedYAML(identityBootstrapPackageDir)}
-  control_execution_enabled: true
   control_poll_interval: "100ms"
-  dispatch_enabled: false
-  topology_execution_enabled: false
 grpc:
   enabled: false
 admin:
@@ -257,99 +254,45 @@ async function createSigningMaterial(tempRoot) {
   return { privateKeyPath, publicKeyPath, publicKey }
 }
 
-async function buildFormalAgentBinary(tempRoot, packageID, goarch) {
-  const agentRoot = process.env.ANIXOPS_AGENT_ROOT
-  if (typeof agentRoot !== 'string' || agentRoot.length === 0) {
-    throw new Error('ANIXOPS_AGENT_ROOT is required to build formal Agent package inputs')
+// Writes the signed slim (built-in) packages, as the release does
+// (build_package.py --builtin), into a directory of its own.
+async function buildBuiltinPackages(tempRoot, signing) {
+  const output = path.join(tempRoot, 'builtin-packages')
+  const arguments_ = ['packages/shared/build_package.py', '--builtin', '--version', packageVersion, '--out', output, '--signing-key', signing.privateKeyPath]
+  for (const packageID of builtinPackages) {
+    arguments_.push('--package', packageID)
   }
-  await access(agentRoot)
-
-  const output = path.join(tempRoot, `${packageID}-linux-${goarch}`)
-  await runCommand(`build ${packageID} Agent binary for linux/${goarch}`, goBinary, [
-    'build',
-    '-trimpath',
-    '-buildvcs=false',
-    '-o', output,
-    `./cmd/${packageID}`,
-  ], {
-    cwd: agentRoot,
-    env: {
-      ...process.env,
-      CGO_ENABLED: '0',
-      GOOS: 'linux',
-      GOARCH: goarch,
-      GOEXPERIMENT: 'jsonv2',
-      GOWORK: 'off',
-    },
-  })
-  await chmod(output, 0o755)
+  await runCommand('build the signed built-in packages', 'python3', arguments_, { cwd: controlRoot })
   return output
 }
 
-async function buildSignedOfficialPackage(tempRoot, signing, packageID) {
-  const packageOutput = path.join(tempRoot, `${packageID}-package`)
-  const arguments_ = [
-    'packages/shared/build_package.py',
-    '--package', packageID,
-    '--version', packageVersion,
-    '--out', packageOutput,
-    '--signing-key', signing.privateKeyPath,
-    '--formal-release',
-    '--official-public-key', signing.publicKeyPath,
-    '--platform', 'linux/amd64',
-    '--platform', 'linux/arm64',
-  ]
-  if (agentPackages.has(packageID)) {
-    for (const goarch of ['amd64', 'arm64']) {
-      const binary = await buildFormalAgentBinary(tempRoot, packageID, goarch)
-      arguments_.push('--agent-binary', `${packageID}@linux/${goarch}=${binary}`)
-    }
+// Builds Control with the packages of setDir in place of
+// internal/builtinpkg/dist, through a go build overlay: the checkout is not
+// touched.
+async function buildControlWithPackages(tempRoot, setDir, controlBinary) {
+  const replace = {}
+  for (const name of await readdir(setDir)) {
+    replace[path.join(controlRoot, 'internal', 'builtinpkg', 'dist', name)] = path.join(setDir, name)
   }
-  await runCommand(`build signed ${packageID} package`, 'python3', arguments_, { cwd: controlRoot })
-	const stem = `${packageID}-${packageVersion}`
-	return {
-		id: packageID,
-		output: packageOutput,
-		artifact: await readFile(path.join(packageOutput, `${stem}.anxp`)),
-		manifest: await readFile(path.join(packageOutput, `${stem}.manifest.json`)),
-		signature: (await readFile(path.join(packageOutput, `${stem}.manifest.sig`), 'utf8')).trim(),
-	}
+  const overlayPath = path.join(tempRoot, 'builtin-overlay.json')
+  await writeFile(overlayPath, JSON.stringify({ Replace: replace }), 'utf8')
+  await runCommand('build real Control binary', goBinary, ['build', '-overlay', overlayPath, '-o', controlBinary, './cmd/server'], {
+    cwd: controlRoot,
+    env: { ...process.env, CGO_ENABLED: '0', GOWORK: 'off' },
+  })
 }
 
-// Registers, uploads and enables the Control installation of each signed
-// package, through the authenticated kernel API.
-async function installSignedPackages(packages) {
-	const login = await loginAsLiveControlAdmin()
+// Waits until the start-up bootstrap has installed every built-in package
+// and its host is healthy.
+async function waitForBuiltinPackages() {
+  const login = await loginAsLiveControlAdmin()
   const token = login?.data?.token
-	if (typeof token !== 'string' || token.length === 0) {
-		throw new Error(`real Control login did not issue an admin token: ${JSON.stringify(login)}`)
-	}
-	await waitForInstallation(token, 'identity-platform', packageVersion)
-  for (const signed of packages) {
-    await installSignedPackage(token, signed)
+  if (typeof token !== 'string' || token.length === 0) {
+    throw new Error(`real Control login did not issue an admin token: ${JSON.stringify(login)}`)
   }
-}
-
-async function installSignedPackage(token, signed) {
-  const release = await apiJSON(`${liveControlAPIURL}/api/v3/plugin-releases`, apiOptions(token, 'POST', {
-    manifest: signed.manifest.toString('utf8'),
-    signature: signed.signature,
-  }))
-  const releaseID = release?.data?.id
-  if (!Number.isSafeInteger(releaseID) || releaseID <= 0) {
-    throw new Error(`real Control did not create the signed package release: ${JSON.stringify(release)}`)
+  for (const packageID of builtinPackages) {
+    await waitForInstallation(token, packageID, packageVersion)
   }
-
-  await apiJSON(`${liveControlAPIURL}/api/v3/plugin-releases/${releaseID}/artifact`, apiOptions(token, 'POST', {
-    artifact_base64: signed.artifact.toString('base64'),
-  }))
-  await apiJSON(`${liveControlAPIURL}/api/v3/plugin-installations`, apiOptions(token, 'PUT', {
-    plugin_id: signed.id,
-    target: 'control',
-    desired_version: packageVersion,
-    enabled: true,
-  }))
-	await waitForInstallation(token, signed.id, packageVersion)
 }
 
 async function terminate(child) {
@@ -405,20 +348,13 @@ export default async function setupLiveControlMachineTelemetry() {
     await access(vite)
 
     await runCommand('build isolated frontend', vite, ['build', '--outDir', frontendPath], { cwd: webRoot })
-    await runCommand('build real Control binary', goBinary, ['build', '-o', controlBinary, './cmd/server'], { cwd: controlRoot })
-
-	const signing = await createSigningMaterial(tempRoot)
-	const identityBootstrap = await buildSignedOfficialPackage(tempRoot, signing, 'identity-platform')
-	const signed = [
-		await buildSignedOfficialPackage(tempRoot, signing, 'machine-telemetry'),
-		await buildSignedOfficialPackage(tempRoot, signing, 'nftables-forward'),
-	]
-	await writeFile(configPath, controlConfig({
-		databasePath,
-		frontendPath,
-		publicKey: signing.publicKey,
-		identityBootstrapPackageDir: identityBootstrap.output,
-	}), 'utf8')
+    const signing = await createSigningMaterial(tempRoot)
+    await buildControlWithPackages(tempRoot, await buildBuiltinPackages(tempRoot, signing), controlBinary)
+    await writeFile(configPath, controlConfig({
+      databasePath,
+      frontendPath,
+      publicKey: signing.publicKey,
+    }), 'utf8')
 
     log = await openLog(logPath)
     child = spawn(controlBinary, ['-config', configPath], {
@@ -430,7 +366,7 @@ export default async function setupLiveControlMachineTelemetry() {
     child.stderr.pipe(log)
     child.once('error', error => log.write(`failed to start Control: ${error.stack || error.message}\n`))
     await waitForHealth(child, 35_000, logPath)
-    await installSignedPackages(signed)
+    await waitForBuiltinPackages()
 
     return async () => {
       await terminate(child)

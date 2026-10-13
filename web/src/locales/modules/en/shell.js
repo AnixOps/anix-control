@@ -53,7 +53,6 @@ export default {
         knowledge: 'Help Center content',
         nodes: 'Nodes',
         forward: 'Forwarding',
-        plugins: 'Plugin Center',
         deployments: 'Deployments',
         settings: 'Settings',
         security: 'Security',

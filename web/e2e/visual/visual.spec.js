@@ -76,8 +76,9 @@ const SHOTS = [
   ['admin-dashboard-alerts-none', [DESKTOP]],
   ['admin-dashboard-alerts-failed', [DESKTOP]],
   ['admin-system', [DESKTOP]],
+  // 系统设置 → 内置包, which replaced 插件中心.
+  ['admin-system-packages', [DESKTOP]],
   ['admin-monitor', [DESKTOP]],
-  ['admin-plugins', [DESKTOP]],
   ['admin-users-empty', [DESKTOP]],
   ['admin-dashboard-error', [DESKTOP]]
 ]

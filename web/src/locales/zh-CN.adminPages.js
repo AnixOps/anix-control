@@ -626,32 +626,19 @@ export default {
     }
   },
   control: {
-    subtitle: '管理官方签名软件包、Control WebUI 扩展与生命周期操作。',
     deploymentsSubtitle: '管理拓扑、节点角色和部署。',
     actions: {
-      refresh: '刷新', refreshing: '刷新中...', importRelease: '导入发行版', install: '安装',
-      configure: '配置', enable: '启用', disable: '禁用', upgrade: '升级', update: '升级', rollback: '回滚', cancel: '取消操作', installOfficialOnly: '需要官方发行版',
+      refresh: '刷新', refreshing: '刷新中...',
+      enable: '启用', disable: '禁用', cancel: '取消操作',
       saving: '保存中...', newAssignment: '新建角色'
-    },
-    pluginCenter: {
-      filters: { search: '搜索插件', health: '按健康状态筛选', target: '按运行目标筛选' },
-      states: { healthy: '健康', attention: '需要关注' },
-      listLabel: '插件',
-      official: '官方签名软件包',
-      loadFailed: '插件目录没有加载出来',
-      empty: '没有符合当前筛选条件的插件',
-      emptyCatalog: { title: '还没有插件', description: '导入一个官方签名发行版，它的插件就会出现在这里。' },
-      detail: { versions: '版本与状态' },
-      operations: { title: '最近插件操作', empty: '暂无最近插件操作' }
     },
     tabs: { assignments: '节点角色', topologies: '拓扑' },
     table: {
-      plugin: '插件', release: '发行版', installation: '安装目标', version: '版本', state: '状态', actions: '操作',
+      plugin: '插件', version: '版本', state: '状态', actions: '操作',
       scope: '作用域', description: '说明', topology: '拓扑', activeRevision: '激活 revision', deployment: '部署',
       operation: '操作', chain: '链', revision: 'revision', deadline: '截止时间', target: '目标', version: '版本', role: '服务角色', configRevision: '配置 revision', rolloutGroup: '灰度组'
     },
-    labels: { releases: '{count} 个发行版', desired: '期望', observed: '实际' },
-    states: { catalogued: '已登记', enabled: '已启用', disabled: '已禁用', loading: '正在加载控制状态...' },
+    states: { enabled: '已启用', disabled: '已禁用' },
     empty: { assignments: '该节点暂无服务角色', topologies: '暂无拓扑', operations: '暂无操作' },
     activity: { scoped: '当前范围活动', all: '全部活动', showAll: '显示全部活动', showScoped: '显示当前范围活动', empty: '当前范围暂无活动' },
     topology: {
@@ -677,20 +664,14 @@ export default {
       createTitle: '新建节点角色', editTitle: '编辑节点角色', deleteTitle: '从该节点删除 {plugin} / {role}？', deleteMessage: '该节点会停止运行这个插件角色。此操作无法撤销。', deleteAction: '删除节点角色',
       emptyHint: '为该节点新建一个角色，指定插件、作用域与版本。', roleHelp: '常用角色：{roles}'
     },
-    install: { title: '安装官方插件', target: '运行目标', version: '发行版本', enableAfterInstall: '安装后立即启用' },
-    update: { title: '升级官方插件' },
+    install: { version: '发行版本' },
     config: {
       title: '插件配置', loading: '正在加载配置...', revision: '配置 revision：{revision}', mode: '配置编辑模式', formMode: '表单', jsonMode: 'JSON',
       selectValue: '请选择', addItem: '添加项目', removeItem: '移除项目', emptyArray: '暂无项目', item: '项目', invalidJSON: 'JSON 无效',
       schemaError: '{path} 的值不符合 Schema', requiredError: '{path} 为必填项'
     },
-    releaseImport: {
-      title: '导入官方签名发行版', manifest: 'Manifest JSON', signature: '签名', artifact: '软件包制品',
-      artifactOptional: '可选；未上传制品的发行版不能安装。'
-    },
     messages: {
-      actionQueued: '{plugin} 的“{action}”操作已提交', operationStatus: '操作 {id} 当前为 {state}，链：{chain}。', installed: '{plugin} 安装意图已保存', configSaved: '{plugin} 配置已保存',
-      releaseImported: '{plugin} {version} 已导入', cancelRequested: '已请求取消操作',
+      configSaved: '{plugin} 配置已保存', cancelRequested: '已请求取消操作',
       assignmentSaved: '{plugin} 节点角色已保存', assignmentStateSaved: '{plugin} 节点角色状态已保存', assignmentDeleted: '{plugin} 节点角色已删除',
       topologyRevisionSaved: '拓扑修订 {revision} 已保存', topologyPlanned: '部署 #{id} 已规划',
       topologyApplyRequested: '已请求应用拓扑部署', topologyRollbackRequested: '已请求回滚拓扑部署', topologyCreated: '拓扑 {name} 已创建',
@@ -698,92 +679,12 @@ export default {
       topologyDeleteFailed: '拓扑 {name} 未删除：拆除部署 #{id} 的结束状态为 {state}'
     },
     errors: {
-      load: '无法加载控制状态', action: '插件操作失败', install: '插件安装失败', configLoad: '无法加载插件配置',
-      configSave: '无法保存插件配置', releaseImport: '发行版导入失败', cancel: '无法取消操作', poll: '无法刷新操作状态',
+      load: '无法加载控制状态', configLoad: '无法加载插件配置',
+      configSave: '无法保存插件配置', cancel: '无法取消操作', poll: '无法刷新操作状态',
       nodesLoad: '无法加载节点', assignmentsLoad: '无法加载节点角色', assignmentSave: '无法保存节点角色', assignmentDelete: '无法删除节点角色',
       topologyLoad: '无法加载拓扑修订', topologyValidate: '无法校验拓扑', topologySave: '无法保存拓扑修订', topologyPlan: '无法规划拓扑部署',
       topologyPreview: '无法预览拓扑部署', topologyStatus: '无法加载部署状态', topologyApply: '无法应用拓扑部署', topologyRollback: '无法回滚拓扑部署', topologyCreate: '无法创建拓扑',
       topologyDelete: '无法删除拓扑'
-    }
-  },
-  routeModes: {
-    open: '路由模式',
-    subtitle: '按软件包切换 v2 路由的旧版、影子和原生模式，并可回滚到旧版。',
-    back: '插件中心',
-    package: '软件包',
-    packageMeta: '版本 {version} · 配置修订 {revision}',
-    packageDisabled: '已停用',
-    superAdminOnly: '仅超级管理员可以切换路由模式。',
-    loadFailed: '路由模式加载失败',
-    empty: { title: '没有声明 v2 路由的软件包', description: '安装并启用声明了 v2 路由的软件包后，即可在这里管理其路由模式。' },
-    modes: { legacy: '旧版', shadow: '影子', native: '原生' },
-    modeDefault: '{mode}（默认）',
-    sources: {
-      stored: '已明确设置',
-      default: '演练通过的默认值：未保存模式',
-      'kill-switch': '默认值已关闭：package_routes.default_mode 为 legacy',
-      'package-too-old': '默认值未生效：软件包早于演练版本',
-      'identity-authority': '跟随身份权威状态',
-      unset: '未保存模式'
-    },
-    defaults: {
-      'kill-switch': '默认原生已关闭（package_routes.default_mode: legacy），未保存模式的路由都走旧版。',
-      'package-too-old': '版本 {version} 早于演练版本 {min}，其路由默认走旧版。'
-    },
-    catalog: { 'native-flagged': '可切原生', bridged: '桥接', 'kernel-owned': '内核接管', native: '原生', none: '未声明' },
-    locked: { kernel_owned: '内核接管', identity_group_a: '身份切换', websocket: 'WebSocket', not_declared: '未声明' },
-    columns: { route: '路由', endpoint: '方法 / 路径', catalog: '资格', configured: '配置模式', effective: '生效模式', shadow: '影子（总数 / 不一致 / 错误）', mismatch: '不一致率', mode: '切换为' },
-    routesLabel: '{package} 的路由',
-    routeMode: '{route} 的模式',
-    effectiveDiffers: '与配置模式不同',
-    hostEffective: '宿主：{mode}',
-    packageMode: '整个软件包的模式',
-    setPackage: '设置整个软件包',
-    rollback: '回滚到旧版',
-    wholePackage: '整个软件包',
-    wholePackageTarget: '{package}（整个软件包）',
-    dialog: {
-      setTitle: '将 {target} 切换为{mode}模式？',
-      setMessage: '不支持该模式的路由会被跳过。此次变更会记入修订历史。',
-      nativeMessage: '原生模式下，请求由软件包自身的实现处理，不再经过内核的旧版处理器。请确认并填写原因，以便审计。',
-      rollbackTitle: '将 {package} 回滚到旧版？',
-      rollbackMessage: '该软件包的所有路由都会恢复为旧版模式，包括默认走原生的路由。',
-      reason: '原因',
-      reasonHelp: '选填，会随修订一并保存。',
-      reasonRequired: '切换到原生模式时必须填写。',
-      confirmSet: '切换模式',
-      confirmNative: '切换到原生',
-      confirmRollback: '回滚'
-    },
-    result: '已变更 {changed} 条路由，跳过 {skipped} 条（配置修订 {revision}）',
-    errors: { switch: '路由模式切换失败', rollback: '回滚失败', revisions: '修订历史加载失败' },
-    revisions: {
-      title: '修订历史',
-      label: '路由模式修订',
-      empty: '暂无路由模式变更',
-      time: '时间', route: '路由', change: '变更', actor: '操作人', reason: '原因', revision: '修订',
-      actions: { set: '设置', rollback: '回滚' }
-    },
-    mismatches: {
-      title: '影子不一致样本',
-      label: '不一致样本',
-      open: '样本（{count}）',
-      lastSeen: '最近 {time}',
-      privacy: '样本在保存前已脱敏：令牌、密码、密钥、UUID 和订阅链接全部隐藏，邮箱只保留首字母和域名，IP 只保留前两段。每条路由保留最近 {max} 条，保存 {days} 天。',
-      loadFailed: '不一致样本加载失败',
-      empty: '没有保存的样本',
-      emptyDescription: '影子运行的结果与旧版不同时，样本会出现在这里。',
-      observed: '发生时间',
-      status: '状态码（旧版 → 原生）',
-      diffColumn: '差异',
-      fields: '{count} 个字段',
-      detail: '样本详情',
-      request: '请求',
-      requestID: '请求 ID',
-      version: '包版本',
-      truncated: '差异已截断',
-      diff: '差异（已脱敏）',
-      copyDiff: '复制差异'
     }
   },
   accessGroups: {

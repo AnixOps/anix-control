@@ -626,32 +626,19 @@ export default {
     }
   },
   control: {
-    subtitle: 'Manage official signed packages, Control WebUI extensions, and lifecycle operations.',
     deploymentsSubtitle: 'Manage topologies, node roles, and deployments.',
     actions: {
-      refresh: 'Refresh', refreshing: 'Refreshing...', importRelease: 'Import release', install: 'Install',
-      configure: 'Configure', enable: 'Enable', disable: 'Disable', upgrade: 'Upgrade', update: 'Upgrade', rollback: 'Rollback', cancel: 'Cancel operation', installOfficialOnly: 'Official release required',
+      refresh: 'Refresh', refreshing: 'Refreshing...',
+      enable: 'Enable', disable: 'Disable', cancel: 'Cancel operation',
       saving: 'Saving...', newAssignment: 'New assignment'
-    },
-    pluginCenter: {
-      filters: { search: 'Search plugins', health: 'Filter by health', target: 'Filter by target' },
-      states: { healthy: 'Healthy', attention: 'Needs attention' },
-      listLabel: 'Plugins',
-      official: 'Official signed package',
-      loadFailed: 'The plugin catalog didn’t load',
-      empty: 'No plugins match the current filters',
-      emptyCatalog: { title: 'No plugins yet', description: 'Import an official signed release to add its plugin to the catalog.' },
-      detail: { versions: 'Versions and state' },
-      operations: { title: 'Recent plugin operations', empty: 'No recent plugin operations' }
     },
     tabs: { assignments: 'Assignments', topologies: 'Topologies' },
     table: {
-      plugin: 'Plugin', release: 'Release', installation: 'Installation', version: 'Version', state: 'State', actions: 'Actions',
+      plugin: 'Plugin', version: 'Version', state: 'State', actions: 'Actions',
       scope: 'Scope', description: 'Description', topology: 'Topology', activeRevision: 'Active revision', deployment: 'Deployment',
       operation: 'Operation', chain: 'Chain', revision: 'Revision', deadline: 'Deadline', target: 'Target', version: 'Version', role: 'Role', configRevision: 'Config revision', rolloutGroup: 'Rollout group'
     },
-    labels: { releases: '{count} releases', desired: 'Desired', observed: 'Observed' },
-    states: { catalogued: 'Catalogued', enabled: 'Enabled', disabled: 'Disabled', loading: 'Loading control state...' },
+    states: { enabled: 'Enabled', disabled: 'Disabled' },
     empty: { assignments: 'No assignments for this node', topologies: 'No topologies', operations: 'No operations' },
     activity: { scoped: 'Selected activity', all: 'All activity', showAll: 'Show all activity', showScoped: 'Show selected activity', empty: 'No activity for the selected scope' },
     topology: {
@@ -677,20 +664,14 @@ export default {
       createTitle: 'Create node assignment', editTitle: 'Edit node assignment', deleteTitle: 'Delete {plugin} / {role} from this node?', deleteMessage: 'The node stops running this plugin role. This can’t be undone.', deleteAction: 'Delete assignment',
       emptyHint: 'Give this node a role: pick the plugin, scope and version.', roleHelp: 'Common roles: {roles}'
     },
-    install: { title: 'Install official plugin', target: 'Runtime target', version: 'Release version', enableAfterInstall: 'Enable immediately after installation' },
-    update: { title: 'Upgrade official plugin' },
+    install: { version: 'Release version' },
     config: {
       title: 'Plugin configuration', loading: 'Loading configuration...', revision: 'Configuration revision: {revision}', mode: 'Configuration editor mode', formMode: 'Form', jsonMode: 'JSON',
       selectValue: 'Select a value', addItem: 'Add item', removeItem: 'Remove item', emptyArray: 'No items', item: 'Item', invalidJSON: 'Invalid JSON',
       schemaError: '{path} does not satisfy the schema', requiredError: '{path} is required'
     },
-    releaseImport: {
-      title: 'Import official signed release', manifest: 'Manifest JSON', signature: 'Signature', artifact: 'Package artifact',
-      artifactOptional: 'Optional; a release without an uploaded artifact cannot be installed.'
-    },
     messages: {
-      actionQueued: '{action} was submitted for {plugin}', operationStatus: 'Operation {id} is {state}. Chain: {chain}.', installed: 'Installation intent was saved for {plugin}', configSaved: 'Configuration was saved for {plugin}',
-      releaseImported: '{plugin} {version} was imported', cancelRequested: 'Operation cancellation was requested',
+      configSaved: 'Configuration was saved for {plugin}', cancelRequested: 'Operation cancellation was requested',
       assignmentSaved: '{plugin} assignment was saved', assignmentStateSaved: '{plugin} assignment state was saved', assignmentDeleted: '{plugin} assignment was deleted',
       topologyRevisionSaved: 'Topology revision {revision} was saved', topologyPlanned: 'Deployment #{id} was planned',
       topologyApplyRequested: 'Deployment apply was requested', topologyRollbackRequested: 'Deployment rollback was requested', topologyCreated: 'Topology {name} was created',
@@ -698,92 +679,12 @@ export default {
       topologyDeleteFailed: 'Topology {name} was kept: teardown deployment #{id} ended as {state}'
     },
     errors: {
-      load: 'Unable to load control state', action: 'Plugin operation failed', install: 'Plugin installation failed', configLoad: 'Unable to load plugin configuration',
-      configSave: 'Unable to save plugin configuration', releaseImport: 'Release import failed', cancel: 'Unable to cancel operation', poll: 'Unable to refresh operation state',
+      load: 'Unable to load control state', configLoad: 'Unable to load plugin configuration',
+      configSave: 'Unable to save plugin configuration', cancel: 'Unable to cancel operation', poll: 'Unable to refresh operation state',
       nodesLoad: 'Unable to load nodes', assignmentsLoad: 'Unable to load node assignments', assignmentSave: 'Unable to save node assignment', assignmentDelete: 'Unable to delete node assignment',
       topologyLoad: 'Unable to load topology revisions', topologyValidate: 'Unable to validate topology', topologySave: 'Unable to save topology revision', topologyPlan: 'Unable to plan topology deployment',
       topologyPreview: 'Unable to preview topology deployment', topologyStatus: 'Unable to load deployment status', topologyApply: 'Unable to apply topology deployment', topologyRollback: 'Unable to roll back topology deployment', topologyCreate: 'Unable to create topology',
       topologyDelete: 'Unable to delete topology'
-    }
-  },
-  routeModes: {
-    open: 'Route modes',
-    subtitle: 'Switch each package’s v2 routes between legacy, shadow and native, and roll back to legacy.',
-    back: 'Plugin Center',
-    package: 'Package',
-    packageMeta: 'Version {version} · config revision {revision}',
-    packageDisabled: 'Disabled',
-    superAdminOnly: 'Only super admins can switch route modes.',
-    loadFailed: 'Route modes didn’t load',
-    empty: { title: 'No packages with v2 routes', description: 'Install and enable a package that declares v2 routes to manage its route modes.' },
-    modes: { legacy: 'Legacy', shadow: 'Shadow', native: 'Native' },
-    modeDefault: '{mode} (default)',
-    sources: {
-      stored: 'Set explicitly',
-      default: 'Rehearsed default: no mode is stored',
-      'kill-switch': 'Default off: package_routes.default_mode is legacy',
-      'package-too-old': 'Default off: the package is older than the rehearsed release',
-      'identity-authority': 'Follows the identity authority',
-      unset: 'No mode stored'
-    },
-    defaults: {
-      'kill-switch': 'Native defaults are off (package_routes.default_mode: legacy). Routes without a stored mode run legacy.',
-      'package-too-old': 'Version {version} is older than {min}, the rehearsed release: its routes default to legacy.'
-    },
-    catalog: { 'native-flagged': 'Native-flagged', bridged: 'Bridged', 'kernel-owned': 'Kernel-owned', native: 'Native', none: 'Undeclared' },
-    locked: { kernel_owned: 'Kernel-owned', identity_group_a: 'Identity cutover', websocket: 'WebSocket', not_declared: 'Not declared' },
-    columns: { route: 'Route', endpoint: 'Method / path', catalog: 'Eligibility', configured: 'Configured', effective: 'Effective', shadow: 'Shadow (total / mismatch / errors)', mismatch: 'Mismatch rate', mode: 'Switch to' },
-    routesLabel: 'Routes of {package}',
-    routeMode: 'Mode of {route}',
-    effectiveDiffers: 'Differs from configured',
-    hostEffective: 'Host: {mode}',
-    packageMode: 'Mode for the whole package',
-    setPackage: 'Set whole package',
-    rollback: 'Roll back to legacy',
-    wholePackage: 'Whole package',
-    wholePackageTarget: '{package} (whole package)',
-    dialog: {
-      setTitle: 'Switch {target} to {mode}?',
-      setMessage: 'Routes that can’t take this mode are skipped. The change is recorded in the revision history.',
-      nativeMessage: 'In native mode the package implementation answers instead of the legacy kernel handler. Confirm and give a reason for the audit trail.',
-      rollbackTitle: 'Roll {package} back to legacy?',
-      rollbackMessage: 'Every route of the package returns to legacy, routes native by default included.',
-      reason: 'Reason',
-      reasonHelp: 'Optional; stored with the revision.',
-      reasonRequired: 'Required to switch to native.',
-      confirmSet: 'Switch mode',
-      confirmNative: 'Switch to native',
-      confirmRollback: 'Roll back'
-    },
-    result: '{changed} routes changed, {skipped} skipped (config revision {revision})',
-    errors: { switch: 'Couldn’t switch the route mode', rollback: 'Couldn’t roll back', revisions: 'Revision history didn’t load' },
-    revisions: {
-      title: 'Revision history',
-      label: 'Route mode revisions',
-      empty: 'No route mode changes yet',
-      time: 'Time', route: 'Route', change: 'Change', actor: 'Actor', reason: 'Reason', revision: 'Revision',
-      actions: { set: 'Set', rollback: 'Rollback' }
-    },
-    mismatches: {
-      title: 'Shadow mismatch samples',
-      label: 'Mismatch samples',
-      open: 'Samples ({count})',
-      lastSeen: 'Last {time}',
-      privacy: 'Samples are masked before they are stored: tokens, passwords, keys, UUIDs and subscription links are hidden, e-mail addresses keep their first letter and domain, IP addresses their first two parts. Each route keeps its latest {max} samples for {days} days.',
-      loadFailed: 'Mismatch samples didn’t load',
-      empty: 'No samples stored',
-      emptyDescription: 'Samples appear here when a shadow run answers differently from legacy.',
-      observed: 'Observed',
-      status: 'Status (legacy → native)',
-      diffColumn: 'Differences',
-      fields: '{count} fields',
-      detail: 'Sample details',
-      request: 'Request',
-      requestID: 'Request ID',
-      version: 'Package version',
-      truncated: 'Diff shortened',
-      diff: 'Differences (masked)',
-      copyDiff: 'Copy diff'
     }
   },
   accessGroups: {

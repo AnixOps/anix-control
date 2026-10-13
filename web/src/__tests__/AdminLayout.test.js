@@ -114,7 +114,8 @@ describe('AdminLayout.vue', () => {
     const { wrapper } = await mountLayout('/admin/nodes')
     mounted = wrapper
     const groups = wrapper.findAll('[data-nav-group]').map(group => group.attributes('data-nav-group'))
-    expect(groups).toEqual(['overview', 'users', 'network', 'extensions', 'system'])
+    // 扩展 holds only the packages' own WebUI menus: none here, so it is hidden.
+    expect(groups).toEqual(['overview', 'users', 'network', 'system'])
     const current = wrapper.findAll('#admin-sidebar [aria-current="page"]')
     expect(current).toHaveLength(1)
     expect(current[0].attributes('data-nav-item')).toBe('nodes')
@@ -129,7 +130,8 @@ describe('AdminLayout.vue', () => {
     const link = network.get('a[data-nav-item="deployments"]')
     expect(link.attributes('href')).toBe('/admin/deployments')
     expect(link.attributes('aria-current')).toBe('page')
-    expect(wrapper.get('[data-nav-group="extensions"]').findAll('a[data-nav-item]').map(item => item.attributes('data-nav-item'))).toEqual(['plugins'])
+    expect(wrapper.find('[data-nav-group="extensions"]').exists()).toBe(false)
+    expect(sidebarPaths(wrapper)).not.toContain('/admin/plugins')
     expect(wrapper.findAll('.admin-crumbs li').map(item => item.text())).toEqual(['Network', 'Deployments'])
   })
 
@@ -146,13 +148,13 @@ describe('AdminLayout.vue', () => {
     }
   })
 
-  it('shows group › item › page in the breadcrumb', async () => {
-    const { wrapper } = await mountLayout('/admin/plugins/route-modes')
+  it('shows the built-in packages as a section of the settings', async () => {
+    const { wrapper } = await mountLayout('/admin/system/packages')
     mounted = wrapper
     const crumbs = wrapper.findAll('.admin-crumbs li').map(item => item.text())
-    expect(crumbs).toEqual(['Extensions', 'Plugin Center', 'Route modes'])
-    expect(wrapper.get('.admin-crumbs a').attributes('href')).toBe('/admin/plugins')
-    expect(wrapper.get('.admin-crumbs [aria-current="page"]').text()).toBe('Route modes')
+    expect(crumbs).toEqual(['System', 'Settings', 'Built-in packages'])
+    expect(wrapper.get('.admin-crumbs a').attributes('href')).toBe('/admin/system')
+    expect(wrapper.get('.admin-crumbs [aria-current="page"]').text()).toBe('Built-in packages')
   })
 
   it('shows a group named like the page only once in the breadcrumb', async () => {
@@ -367,9 +369,9 @@ describe('AdminLayout.vue', () => {
     mounted = wrapper
     const title = () => wrapper.get('.admin-crumbs [aria-current="page"]').text()
     expect(title()).toBe('Telegram')
-    await router.push('/admin/plugins/route-modes')
+    await router.push('/admin/system/packages')
     await flushPromises()
-    expect(title()).toBe('Route modes')
+    expect(title()).toBe('Built-in packages')
     await router.push('/admin/account')
     await flushPromises()
     expect(title()).toBe('Account')

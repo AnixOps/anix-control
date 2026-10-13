@@ -81,10 +81,10 @@ describe('System settings page', () => {
   it('lists the sections as links and shows 通用 at /admin/system', async () => {
     const { wrapper } = await mountAt('/admin/system')
     const links = wrapper.findAll('[data-settings-section]')
-    expect(links.map(link => link.attributes('data-settings-section'))).toEqual(['general', 'runtime', 'backup', 'balancer', 'audit', 'about'])
+    expect(links.map(link => link.attributes('data-settings-section'))).toEqual(['general', 'runtime', 'backup', 'balancer', 'audit', 'packages', 'about'])
     expect(links.map(link => link.attributes('href'))).toEqual([
       '/admin/system/general', '/admin/system/runtime', '/admin/system/backup',
-      '/admin/system/balancer', '/admin/system/audit', '/admin/system/about'
+      '/admin/system/balancer', '/admin/system/audit', '/admin/system/packages', '/admin/system/about'
     ])
     expect(wrapper.get('[aria-current="page"]').attributes('data-settings-section')).toBe('general')
     expect(wrapper.find('[data-settings-panel="general"]').exists()).toBe(true)

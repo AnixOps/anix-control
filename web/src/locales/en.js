@@ -201,8 +201,6 @@ export default {
       forwardV4Node: 'Forwarding node',
       forwardV4Dns: 'DNS providers',
       control: 'Control Kernel',
-      plugins: 'Plugin Center',
-      routeModes: 'Route modes',
       deployments: 'Deployments',
       accessGroups: 'Access groups',
       payment: 'Payments',

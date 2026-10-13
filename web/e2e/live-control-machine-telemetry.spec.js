@@ -1,20 +1,10 @@
 import { test, expect } from '@playwright/test'
 
-// The real Control runs three signed packages: identity-platform (the
-// bootstrap) and machine-telemetry ship no WebUI, nftables-forward ships one.
+// The real Control carries three signed built-in packages, installed by its
+// start-up bootstrap: identity-platform and machine-telemetry ship no WebUI,
+// nftables-forward ships one.
 const extensionID = 'nftables-forward'
 const extensionPath = `/admin/extensions/${extensionID}`
-
-async function operationState(page, operationID) {
-  return page.evaluate(async id => {
-    const token = localStorage.getItem('token')
-    const response = await fetch('/api/v3/operations', {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    const payload = await response.json()
-    return Array.isArray(payload?.data) ? payload.data.find(operation => operation.id === id)?.state ?? '' : ''
-  }, operationID)
-}
 
 async function installations(page) {
   return page.evaluate(async () => {
@@ -25,7 +15,7 @@ async function installations(page) {
   })
 }
 
-test('lists only packages with a WebUI, then loads, serves, and revokes a signed WebUI through real Control', async ({ page }) => {
+test('lists only packages with a WebUI, then loads and serves a signed WebUI through real Control', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('app.locale', 'en'))
 
   // Extension discovery validates and preloads the signed bundle before the
@@ -85,62 +75,9 @@ test('lists only packages with a WebUI, then loads, serves, and revokes a signed
   expect(bundle.headers()['cache-control']).toBe('private, no-store')
   await expect(page.locator('.nftables-forward-extension h1')).toHaveText('nftables Forward')
   expect(await bundle.text()).toContain('NftablesForwardExtension')
-
-  const disable = await page.evaluate(async () => {
-    const token = localStorage.getItem('token')
-    const response = await fetch('/api/v3/plugin-installations', {
-      method: 'PUT',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        plugin_id: 'nftables-forward',
-        target: 'control',
-        desired_version: '4.0.0',
-        enabled: false,
-      }),
-    })
-    return {
-      status: response.status,
-      operationID: response.headers.get('X-AnixOps-Operation-ID'),
-      body: await response.json(),
-    }
-  })
-  expect(disable.status).toBe(200)
-  expect(disable.operationID).toMatch(/^[0-9a-f-]{36}$/i)
-  expect(disable.body.data).toEqual(expect.objectContaining({ enabled: false, state: 'disabled' }))
-  // The Control worker uses a durable 30-second lease. Give an in-flight
-  // SQLite writer one complete lease/retry window rather than turning a slow
-  // terminal write into a false browser failure, while still requiring the
-  // externally visible operation to succeed before checking revocation.
-  await expect.poll(() => operationState(page, disable.operationID), {
-    timeout: 45_000,
-    intervals: [500, 1_000, 2_000],
-  }).toBe('succeeded')
-
-  const revocation = await page.evaluate(async bundleURL => {
-    const token = localStorage.getItem('token')
-    const catalog = await fetch('/api/v3/extensions', { headers: { Authorization: `Bearer ${token}` } })
-    const asset = await fetch(bundleURL, { headers: { Authorization: `Bearer ${token}` } })
-    return {
-      catalogStatus: catalog.status,
-      catalog: await catalog.json(),
-      assetStatus: asset.status,
-    }
-  }, extension.bundle.url)
-  expect(revocation.catalogStatus).toBe(200)
-  expect(revocation.catalog.data).toEqual([])
-  expect(revocation.assetStatus).toBe(404)
-
-  // A new SPA runtime must not retain a menu or dynamically registered route
-  // after the actual Control installation is disabled.
-  await page.reload()
-  await expect(page).toHaveURL(/\/admin\/plugins$/)
-  await expect(page.locator(`a[href="${extensionPath}"]`)).toHaveCount(0)
 })
 
-test('loads the merged native plugin center against the real Control process', async ({ page }) => {
+test('shows the built-in packages of the real Control process', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('app.locale', 'en'))
 
   await page.goto('/login')
@@ -149,13 +86,34 @@ test('loads the merged native plugin center against the real Control process', a
   await page.locator('form[data-auth-form="password"] button[type="submit"]').click()
   await page.waitForURL(/\/admin\/dashboard$/)
 
+  // The old plugin center leads to the built-in packages.
   await page.goto('/admin/plugins')
-  await expect(page.getByTestId('plugin-row-machine-telemetry')).toBeVisible()
-  await page.getByTestId('plugin-row-machine-telemetry').click()
-  await expect(page.getByTestId('plugin-detail-drawer')).toContainText('Machine Telemetry')
+  await expect(page).toHaveURL(/\/admin\/system\/packages$/)
+  for (const pluginID of ['identity-platform', 'machine-telemetry', extensionID]) {
+    const row = page.getByTestId(`package-row-${pluginID}`)
+    await expect(row).toBeVisible()
+    await expect(row).toContainText('Version 4.0.0')
+    await expect(row).toContainText('Running')
+  }
+  for (const action of ['install', 'upgrade', 'rollback', 'enable', 'disable']) {
+    await expect(page.locator(`[data-action="${action}"]`)).toHaveCount(0)
+  }
 
-  const history = page.getByTestId('plugin-operation-history')
-  await expect(history).toBeVisible()
-  await expect(history).toContainText('Recent plugin operations')
-  await expect(page.getByTestId('plugin-detail-drawer')).toContainText('4.0.0')
+  // The removed import, install and route-mode routes answer 404.
+  const statuses = await page.evaluate(async () => {
+    const token = localStorage.getItem('token')
+    const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+    const probes = [
+      ['POST', '/api/v3/plugin-releases'],
+      ['PUT', '/api/v3/plugin-installations'],
+      ['GET', '/api/v4/kernel/route-modes'],
+    ]
+    const answers = []
+    for (const [method, url] of probes) {
+      const response = await fetch(url, { method, headers, body: method === 'GET' ? undefined : '{}' })
+      answers.push(response.status)
+    }
+    return answers
+  })
+  expect(statuses).toEqual([404, 404, 404])
 })

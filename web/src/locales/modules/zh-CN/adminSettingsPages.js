@@ -27,6 +27,7 @@ export default {
       backup: '备份',
       balancer: '负载均衡',
       audit: '审计日志',
+      packages: '内置包',
       about: '关于'
     },
     general: {
@@ -244,6 +245,32 @@ export default {
       product: '产品',
       copy: '复制版本信息',
       copied: '已复制版本信息'
+    },
+    packages: {
+      title: '内置包',
+      description: '编译进 Control 的官方包。Control 每次启动时安装、升级并启用它们。',
+      refresh: '刷新',
+      loadFailed: '内置包没有加载出来',
+      empty: {
+        title: '没有内置包',
+        description: '这个 Control 构建不带任何包：未经 `make build` 的开发构建。'
+      },
+      version: '版本 {version}',
+      versionChanging: '版本 {from}，正在启动 {to}',
+      versionNotRunning: '版本 {from}；{to} 未运行',
+      states: { healthy: '运行中', pending: '启动中', failed: '失败', degraded: '降级', disabled: '已停止' },
+      restart: '重启',
+      restartNamed: '重启 {name}',
+      configure: '配置',
+      configureNamed: '配置 {name}',
+      confirm: {
+        title: '重启 {name}？',
+        message: '它的宿主会停止后再启动；期间几秒内，它的页面和接口会答复不可用。'
+      },
+      restarted: '{name} 正在重启',
+      restartFailed: '无法重启该包',
+      config: { title: '{name} 设置' },
+      note: '启动时失败的包，其路由在下次启动前保持不可用；首页告警和 Control 日志会给出原因。包不能导入、升级、回滚或停用：新的 Control 版本会带来它们的新版本。'
     }
   },
   adminNotify: {

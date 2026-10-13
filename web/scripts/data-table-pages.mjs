@@ -5,8 +5,6 @@
 export const DATA_TABLE_PAGES = [
   'src/views/admin/Users.vue',
   'src/views/admin/Tickets.vue',
-  'src/views/admin/Plugins.vue',
-  'src/views/admin/RouteModes.vue',
   'src/views/admin/Orders.vue',
   'src/views/admin/Coupons.vue',
   'src/views/admin/Plans.vue',
@@ -37,7 +35,7 @@ export const DATA_TABLE_PAGES = [
   'src/views/admin/notifications/NotifyLogs.vue',
   'src/views/admin/Security.vue',
   'src/views/admin/security/ApiTokens.vue',
-  // U8: deployments (the operation timeline is a list, shared with Plugins)
+  // U8: deployments (the operation timeline is a list)
   'src/views/admin/Deployments.vue',
   'src/views/admin/deployments/DeploymentTopologiesPanel.vue',
   'src/views/admin/deployments/DeploymentAssignmentsPanel.vue',

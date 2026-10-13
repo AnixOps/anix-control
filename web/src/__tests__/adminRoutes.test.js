@@ -61,8 +61,7 @@ describe('admin routes', () => {
       '/admin/knowledge',
       '/admin/mfa',
       '/admin/system',
-      '/admin/plugins',
-      '/admin/plugins/route-modes',
+      '/admin/system/packages',
       '/admin/deployments',
       '/admin/control',
       '/admin/access-groups',
@@ -81,6 +80,12 @@ describe('admin routes', () => {
     for (const path of expectedPaths) {
       const matched = router.resolve(path).matched
       expect(matched.length > 0 && !matched.at(-1).path.includes(':pathMatch'), path).toBe(true)
+    }
+  })
+
+  it('sends the removed plugin center and route modes to the built-in packages', () => {
+    for (const path of ['/admin/plugins', '/admin/plugins/route-modes']) {
+      expect(router.resolve(path).matched.at(-1).redirect, path).toBe('/admin/system/packages')
     }
   })
 
@@ -122,7 +127,7 @@ describe('admin routes', () => {
 
     await router.push('/admin/extensions/example')
 
-    expect(router.currentRoute.value.path).toBe('/admin/plugins')
+    expect(router.currentRoute.value.path).toBe('/admin/system/packages')
     removeRoute()
   })
 
@@ -136,7 +141,7 @@ describe('admin routes', () => {
 
     await router.push('/admin/control')
 
-    expect(router.currentRoute.value.path).toBe('/admin/plugins')
+    expect(router.currentRoute.value.path).toBe('/admin/system/packages')
   })
 
   it('allows plugin extension routes when the admin has the route permission', async () => {
