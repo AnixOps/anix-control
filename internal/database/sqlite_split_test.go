@@ -30,6 +30,18 @@ type splitEvent struct {
 	Seq    int
 }
 
+// readPoolsOf returns the read pools behind handle.
+func readPoolsOf(t *testing.T, handle *gorm.DB) []*sql.DB {
+	t.Helper()
+	writer, err := handle.DB()
+	require.NoError(t, err)
+	pools, _ := readPools.Load(writer)
+	if pools == nil {
+		return nil
+	}
+	return pools.([]*sql.DB)
+}
+
 func initFileDatabase(t *testing.T) (*gorm.DB, string) {
 	t.Helper()
 	Reset()
@@ -53,10 +65,11 @@ func TestInitSQLiteFileDatabaseUsesAWriterAndAReadPool(t *testing.T) {
 	writer, err := db.DB()
 	require.NoError(t, err)
 	require.Equal(t, 1, writer.Stats().MaxOpenConnections, "one writer connection")
-	require.Len(t, readPools, 1)
-	require.Equal(t, SQLiteReadConns, readPools[0].Stats().MaxOpenConnections)
+	readers := readPoolsOf(t, db)
+	require.Len(t, readers, 1)
+	require.Equal(t, SQLiteReadConns, readers[0].Stats().MaxOpenConnections)
 
-	for name, pool := range map[string]*sql.DB{"writer": writer, "reader": readPools[0]} {
+	for name, pool := range map[string]*sql.DB{"writer": writer, "reader": readers[0]} {
 		require.Equal(t, "wal", pragmaOf(t, pool, "journal_mode"), name)
 		require.Equal(t, "10000", pragmaOf(t, pool, "busy_timeout"), name)
 		require.Equal(t, "0", pragmaOf(t, pool, "foreign_keys"), name+": foreign keys stay as before")
@@ -64,14 +77,14 @@ func TestInitSQLiteFileDatabaseUsesAWriterAndAReadPool(t *testing.T) {
 	require.Equal(t, "1", pragmaOf(t, writer, "synchronous"), "NORMAL")
 	require.Equal(t, "2", pragmaOf(t, writer, "auto_vacuum"), "INCREMENTAL on a new database")
 	require.Equal(t, "0", pragmaOf(t, writer, "query_only"))
-	require.Equal(t, "1", pragmaOf(t, readPools[0], "query_only"))
+	require.Equal(t, "1", pragmaOf(t, readers[0], "query_only"))
 }
 
 func TestInitSQLiteInMemoryDatabaseKeepsOneHandle(t *testing.T) {
 	Reset()
 	require.NoError(t, Init(&config.DatabaseConfig{Driver: "sqlite", Database: ":memory:", LogLevel: "silent"}))
 	t.Cleanup(func() { require.NoError(t, Close()) })
-	require.Empty(t, readPools, "each connection of an in-memory database is its own database")
+	require.Empty(t, readPoolsOf(t, Get()), "each connection of an in-memory database is its own database")
 	require.NoError(t, Get().AutoMigrate(&splitCounter{}))
 	require.NoError(t, Get().Create(&splitCounter{ID: 1, Value: 7}).Error)
 	var counter splitCounter
@@ -158,11 +171,29 @@ func TestCloseClosesTheReadPool(t *testing.T) {
 	Reset()
 	path := filepath.Join(t.TempDir(), "control.db")
 	require.NoError(t, Init(&config.DatabaseConfig{Driver: "sqlite", Database: path, LogLevel: "silent"}))
-	require.Len(t, readPools, 1)
-	reader := readPools[0]
+	readers := readPoolsOf(t, Get())
+	require.Len(t, readers, 1)
 	require.NoError(t, Close())
-	require.Error(t, reader.PingContext(context.Background()), "the read pool is closed with the writer")
-	require.Empty(t, readPools)
+	require.Error(t, readers[0].PingContext(context.Background()), "the read pool is closed with the writer")
+	require.Nil(t, Get())
+}
+
+// Open hands out a handle of its own, with the same settings, and does not
+// touch the process's one.
+func TestOpenReturnsAnIndependentHandle(t *testing.T) {
+	Reset()
+	path := filepath.Join(t.TempDir(), "own.db")
+	handle, err := Open(&config.DatabaseConfig{Driver: "sqlite", Database: path, LogLevel: "silent"})
+	require.NoError(t, err)
+	require.Nil(t, Get(), "Open does not set the process's handle")
+	readers := readPoolsOf(t, handle)
+	require.Len(t, readers, 1)
+	var value int
+	require.NoError(t, handle.Raw("SELECT query_only FROM pragma_query_only").Scan(&value).Error)
+	require.Equal(t, 1, value)
+	require.NoError(t, CloseHandle(handle))
+	require.Error(t, readers[0].PingContext(context.Background()))
+	require.NoError(t, CloseHandle(nil))
 }
 
 // Kernel writers (immediate read-modify-write transactions and plain

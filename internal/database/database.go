@@ -40,13 +40,14 @@ package database
 import (
 	"database/sql"
 	"fmt"
-	"github.com/AnixOps/anix-control/v5/internal/logging"
 	"log"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/AnixOps/anix-control/v5/internal/config"
+	"github.com/AnixOps/anix-control/v5/internal/logging"
 	"github.com/glebarez/sqlite" // 纯Go实现的SQLite驱动，无需CGO
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -56,9 +57,10 @@ import (
 var (
 	db          *gorm.DB
 	initialized bool
-	// readPools are the SQLite read connection pools behind db; empty for
-	// an in-memory database and for PostgreSQL.
-	readPools []*sql.DB
+	// readPools are the SQLite read connection pools of the handles Open
+	// made, by the handle's writer connection pool; none for an in-memory
+	// database and for PostgreSQL.
+	readPools sync.Map // *sql.DB -> []*sql.DB
 )
 
 // Init 初始化数据库连接
@@ -67,10 +69,23 @@ func Init(cfg *config.DatabaseConfig) error {
 	if initialized && db != nil {
 		return nil
 	}
+	opened, err := Open(cfg)
+	if err != nil {
+		db = nil
+		return err
+	}
+	db = opened
+	initialized = true
+	return nil
+}
 
+// Open opens a database handle as Init does but does not make it the
+// process's handle (Get): the caller owns it and closes it with CloseHandle.
+// A test or a tool that needs a database of its own, with the connection
+// settings of the kernel's, opens it this way.
+func Open(cfg *config.DatabaseConfig) (*gorm.DB, error) {
 	var dialector gorm.Dialector
 	var readDialector gorm.Dialector
-	var err error
 
 	switch cfg.Driver {
 	case "sqlite", "sqlite3", "":
@@ -81,7 +96,7 @@ func Init(cfg *config.DatabaseConfig) error {
 		dir := filepath.Dir(dbPath)
 		if dir != "" && dir != "." {
 			if err := os.MkdirAll(dir, 0o750); err != nil {
-				return fmt.Errorf("failed to create database directory: %w", err)
+				return nil, fmt.Errorf("failed to create database directory: %w", err)
 			}
 		}
 
@@ -95,7 +110,7 @@ func Init(cfg *config.DatabaseConfig) error {
 		dialector = postgres.Open(PostgresDSN(cfg))
 
 	default:
-		return fmt.Errorf("unsupported database driver: %s (supported: sqlite, postgres)", cfg.Driver)
+		return nil, fmt.Errorf("unsupported database driver: %s (supported: sqlite, postgres)", cfg.Driver)
 	}
 
 	// 配置日志级别
@@ -116,30 +131,31 @@ func Init(cfg *config.DatabaseConfig) error {
 		sqlLogWriter = log.New(logging.StdWriter(), "", 0)
 		colorful = false
 	}
-	db, err = gorm.Open(dialector, &gorm.Config{
+	handle, err := gorm.Open(dialector, &gorm.Config{
 		Logger: newSQLLogger(sqlLogWriter, colorful, logLevel),
 	})
 	if err != nil {
-		return fmt.Errorf("failed to connect database: %w", err)
+		return nil, fmt.Errorf("failed to connect database: %w", err)
 	}
 
 	if readDialector != nil {
-		pools, err := splitSQLiteHandle(db, readDialector)
+		pools, err := splitSQLiteHandle(handle, readDialector)
 		if err != nil {
-			if sqlDB, dbErr := db.DB(); dbErr == nil {
+			if sqlDB, dbErr := handle.DB(); dbErr == nil {
 				_ = sqlDB.Close()
 			}
-			db = nil
-			return err
+			return nil, err
 		}
-		readPools = pools
+		if writer, err := handle.DB(); err == nil {
+			readPools.Store(writer, pools)
+		}
 	}
 
 	// 只有 PostgreSQL 需要设置连接池
 	if cfg.Driver == "postgres" || cfg.Driver == "postgresql" {
-		sqlDB, err := db.DB()
+		sqlDB, err := handle.DB()
 		if err != nil {
-			return fmt.Errorf("failed to get database instance: %w", err)
+			return nil, fmt.Errorf("failed to get database instance: %w", err)
 		}
 
 		// 设置连接池
@@ -154,8 +170,7 @@ func Init(cfg *config.DatabaseConfig) error {
 		}
 	}
 
-	initialized = true
-	return nil
+	return handle, nil
 }
 
 // newSQLLogger returns GORM's SQL logger: logger.Default's settings at the
@@ -216,22 +231,35 @@ func Close() error {
 	if db == nil {
 		return nil
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-	var closeErr error
-	for _, pool := range readPools {
-		if err := pool.Close(); err != nil && closeErr == nil {
-			closeErr = err
-		}
-	}
-	readPools = nil
-	if err := sqlDB.Close(); err != nil {
+	if err := CloseHandle(db); err != nil {
 		return err
 	}
 	db = nil
 	initialized = false
+	return nil
+}
+
+// CloseHandle closes a handle Open (or Init) made: its writer connection and
+// the read pool behind it.
+func CloseHandle(handle *gorm.DB) error {
+	if handle == nil {
+		return nil
+	}
+	sqlDB, err := handle.DB()
+	if err != nil {
+		return err
+	}
+	var closeErr error
+	if pools, ok := readPools.LoadAndDelete(sqlDB); ok {
+		for _, pool := range pools.([]*sql.DB) {
+			if err := pool.Close(); err != nil && closeErr == nil {
+				closeErr = err
+			}
+		}
+	}
+	if err := sqlDB.Close(); err != nil {
+		return err
+	}
 	return closeErr
 }
 
@@ -239,7 +267,6 @@ func Close() error {
 func Reset() {
 	db = nil
 	initialized = false
-	readPools = nil
 }
 
 // AutoMigrate 自动迁移数据库表
