@@ -104,6 +104,14 @@ export default {
         identityCutover: {
           title: '身份切换尚未收尾',
           hint: '身份服务自 {date} 起处理登录。请完成收尾，或回滚。'
+        },
+        builtinPackageInvalid: {
+          title: '内置包 {name} 校验失败',
+          hint: '它没有被安装，相关页面和接口不可用。请安装经过校验的发布程序。'
+        },
+        builtinPackageFailed: {
+          title: '内置包 {name} 未在运行',
+          hint: '相关页面和接口不可用。按 Control 日志排除原因后重启 Control。'
         }
       },
       nodesFailed: '无法加载节点状态',

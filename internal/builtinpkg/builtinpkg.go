@@ -18,8 +18,11 @@ package builtinpkg
 
 import (
 	"bytes"
+	"crypto/ed25519"
+	"crypto/x509"
 	"embed"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"io"
@@ -277,4 +280,24 @@ func HostVersion(id, requested string) (string, error) {
 	default:
 		return requested, nil
 	}
+}
+
+// PublicKey decodes the key the build signed the set with (PublicKeyPEM).
+func PublicKey(set *Set) (ed25519.PublicKey, error) {
+	if set == nil || len(set.PublicKeyPEM) == 0 {
+		return nil, errors.New("the built-in packages carry no public key")
+	}
+	block, _ := pem.Decode(set.PublicKeyPEM)
+	if block == nil || block.Type != "PUBLIC KEY" {
+		return nil, errors.New("the built-in public key is not a PEM public key")
+	}
+	parsed, err := x509.ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+		return nil, err
+	}
+	publicKey, ok := parsed.(ed25519.PublicKey)
+	if !ok {
+		return nil, errors.New("the built-in public key is not Ed25519")
+	}
+	return publicKey, nil
 }

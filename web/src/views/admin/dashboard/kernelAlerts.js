@@ -26,7 +26,9 @@ const KIND_ICONS = {
   node_secrets_split_stalled: Hourglass,
   node_secrets_finalize_interrupted: Hourglass,
   identity_import_stalled: Hourglass,
-  identity_cutover_not_finalized: Hourglass
+  identity_cutover_not_finalized: Hourglass,
+  builtin_package_invalid: ShieldAlert,
+  builtin_package_failed: ServerCog
 }
 
 export const KERNEL_ALERT_KINDS = Object.freeze(Object.keys(KIND_ICONS))
@@ -88,6 +90,13 @@ export function alertText(alert, { t, format }) {
       title = t(`${base}.identityCutover.title`)
       hint = t(`${base}.identityCutover.hint`, { date: date(detail.since) })
       break
+    case 'builtin_package_invalid':
+    case 'builtin_package_failed': {
+      const kind = alert.kind === 'builtin_package_invalid' ? 'builtinPackageInvalid' : 'builtinPackageFailed'
+      title = t(`${base}.${kind}.title`, { name: text(detail.package_id) || text(alert.subject) })
+      hint = t(`${base}.${kind}.hint`)
+      break
+    }
     default:
       title = text(alert?.message) || text(alert?.kind) || text(alert?.key)
   }

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 
+	"github.com/AnixOps/anix-control/v5/internal/builtinpkg"
 	"github.com/AnixOps/anix-control/v5/internal/config"
 	"github.com/AnixOps/anix-control/v5/internal/handler"
 	"github.com/AnixOps/anix-control/v5/internal/kernelalerts"
@@ -41,5 +42,26 @@ func kernelAlertMonitor(db *gorm.DB, cfg *config.Config) *kernelalerts.Monitor {
 	}
 	return &kernelalerts.Monitor{
 		DB: db, Settings: cfg.Alerts.Settings(), Notifier: adminAlertNotifier{db: db, cfg: cfg},
+		BuiltinPackages: builtinPackageProblems(db, cfg),
+	}
+}
+
+// builtinPackageProblems is the alert scan's check of the official packages
+// built into this binary (builtin_package_invalid, builtin_package_failed).
+func builtinPackageProblems(db *gorm.DB, cfg *config.Config) func(context.Context) ([]kernelalerts.BuiltinPackageProblem, error) {
+	return func(ctx context.Context) ([]kernelalerts.BuiltinPackageProblem, error) {
+		set, setErr := builtinpkg.Default()
+		statuses, err := service.BuiltinPackageProblems(db.WithContext(ctx), cfg.Plugins.OfficialPublicKey, set, setErr)
+		if err != nil {
+			return nil, err
+		}
+		problems := make([]kernelalerts.BuiltinPackageProblem, 0, len(statuses))
+		for _, status := range statuses {
+			problems = append(problems, kernelalerts.BuiltinPackageProblem{
+				PackageID: status.ID, Version: status.Version, Invalid: status.Invalid,
+				State: status.State, LastError: status.LastError, Reason: status.Reason,
+			})
+		}
+		return problems, nil
 	}
 }

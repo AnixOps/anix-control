@@ -40,6 +40,13 @@ const (
 	// cutover, but legacy credentials were not finalized for
 	// phase_stuck_after.
 	KindIdentityCutoverPending = "identity_cutover_not_finalized"
+	// KindBuiltinPackageInvalid: an official package embedded in the Control
+	// binary does not verify against plugins.official_public_key (signature,
+	// digest, contents), so it was not installed.
+	KindBuiltinPackageInvalid = "builtin_package_invalid"
+	// KindBuiltinPackageFailed: a built-in package verified, but its
+	// installation failed or is not enabled at the built-in version.
+	KindBuiltinPackageFailed = "builtin_package_failed"
 )
 
 // Subject kinds.
@@ -49,6 +56,7 @@ const (
 	SubjectModule      = "module"
 	SubjectNodeSecrets = "node_secrets" // #nosec G101 -- names a subject kind, not a credential.
 	SubjectIdentity    = "identity"
+	SubjectPackage     = "package"
 )
 
 // finalizeInterruptedAfter is how long a started finalize may take before
@@ -69,6 +77,18 @@ const phaseRenotifyFactor = 7
 
 // resolvedRetention is how long a resolved alert stays listed.
 const resolvedRetention = 30 * 24 * time.Hour
+
+// BuiltinPackageProblem is a built-in package that needs an administrator,
+// as the kernel's check reports it (service.BuiltinPackageProblems).
+type BuiltinPackageProblem struct {
+	PackageID string
+	Version   string
+	// Invalid: the embedded package did not verify.
+	Invalid   bool
+	State     string
+	LastError string
+	Reason    string
+}
 
 // Finding is one alert condition a scan found.
 type Finding struct {

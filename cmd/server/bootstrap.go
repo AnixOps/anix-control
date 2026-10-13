@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/v5/internal/agentpki"
+	"github.com/AnixOps/anix-control/v5/internal/builtinpkg"
 	"github.com/AnixOps/anix-control/v5/internal/config"
 	"github.com/AnixOps/anix-control/v5/internal/database"
 	"github.com/AnixOps/anix-control/v5/internal/forwardlegacy"
@@ -157,9 +158,9 @@ func bootstrapDatabase(ctx context.Context, cfg *config.Config, env string) erro
 	if err := ensureConfiguredPluginTrustRoot(db, cfg.Plugins.OfficialPublicKey); err != nil {
 		return fmt.Errorf("apply configured plugin trust root: %w", err)
 	}
-	if err := service.BootstrapIdentityPlatformPackage(db, cfg.Plugins.OfficialPublicKey, cfg.Plugins.IdentityBootstrapPackageDir); err != nil {
-		return fmt.Errorf("bootstrap identity platform package: %w", err)
-	}
+	// The official packages built into this binary. A package that fails is
+	// reported and never stops the start.
+	bootstrapBuiltinPackages(db, cfg, log.Printf)
 
 	// 初始化管理员账号、默认订阅分组、默认套餐、环境变量中的默认授权密钥
 	if err := service.InitAdmin(cfg); err != nil {
@@ -309,4 +310,46 @@ func ensureModulePKI(ctx context.Context, cfg *config.Config, db *gorm.DB) error
 		return fmt.Errorf("create the forward link CA: %w", err)
 	}
 	return nil
+}
+
+// bootstrapBuiltinPackages installs, upgrades and enables the official
+// packages embedded in this binary (service.BootstrapBuiltinPackages) and
+// logs what happened to each. It runs under the bootstrap lock at every
+// start; a package that fails is logged and raised as a kernel alert
+// (builtin_package_invalid, builtin_package_failed), and Control starts.
+func bootstrapBuiltinPackages(db *gorm.DB, cfg *config.Config, logf func(string, ...any)) {
+	if strings.TrimSpace(cfg.Plugins.IdentityBootstrapPackageDir) != "" {
+		logf("plugins.identity_bootstrap_package_dir is ignored: the official packages, identity-platform included, are built into Control")
+	}
+	set, err := builtinpkg.Default()
+	if err != nil {
+		logf("WARNING: the built-in packages of this binary cannot be read: %v. No official package was installed or upgraded; reinstall a verified release binary.", err)
+		return
+	}
+	if set.Empty() {
+		logf("This binary embeds no official packages (a development build without `make build`); none were installed or upgraded.")
+		return
+	}
+	failed := 0
+	for _, result := range service.BootstrapBuiltinPackages(db, cfg.Plugins.OfficialPublicKey, set) {
+		switch result.Action {
+		case service.BuiltinActionInvalid, service.BuiltinActionFailed:
+			failed++
+			logf("WARNING: built-in package %s %s %s: %v. Control starts without it; its routes answer as unavailable.", result.ID, result.Version, result.Action, result.Err)
+		case service.BuiltinActionUnchanged:
+		default:
+			logf("Built-in package %s %s %s.", result.ID, result.Version, result.Action)
+		}
+	}
+	logf("Built-in packages: %d embedded, %d failed (signing key %s).", len(set.Packages), failed, builtinSigningKeyID(set))
+}
+
+// builtinSigningKeyID names the key the embedded packages were signed with,
+// for the log line that compares it with plugins.official_public_key.
+func builtinSigningKeyID(set *builtinpkg.Set) string {
+	publicKey, err := builtinpkg.PublicKey(set)
+	if err != nil {
+		return "unknown"
+	}
+	return service.PluginTrustRootKeyID(publicKey)
 }

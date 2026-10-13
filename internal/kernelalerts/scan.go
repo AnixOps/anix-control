@@ -7,6 +7,7 @@ import (
 	"log"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
@@ -22,6 +23,9 @@ import (
 type Scanner struct {
 	DB       *gorm.DB
 	Settings config.AlertSettings
+	// BuiltinPackages reports the built-in packages that need an
+	// administrator; nil skips the check.
+	BuiltinPackages func(context.Context) ([]BuiltinPackageProblem, error)
 	// Now defaults to time.Now.
 	Now func() time.Time
 }
@@ -57,6 +61,7 @@ func (s *Scanner) Scan(ctx context.Context) (ScanResult, error) {
 		{[]string{KindCAExpiring}, s.authorities},
 		{[]string{KindNodeSecretsSplitStalled, KindNodeSecretsFinalizeInterrupted}, s.nodeSecretsSplit},
 		{[]string{KindIdentityImportStalled, KindIdentityCutoverPending}, s.identityAuthority},
+		{[]string{KindBuiltinPackageInvalid, KindBuiltinPackageFailed}, s.builtinPackages},
 	} {
 		findings, err := check.run(ctx, now)
 		if ctx.Err() != nil {
@@ -457,4 +462,43 @@ func (s *Scanner) identityAuthority(ctx context.Context, now time.Time) ([]Findi
 		}}, nil
 	}
 	return nil, nil
+}
+
+// builtinPackages raises the official packages built into Control that did
+// not verify or whose installation failed (docs/reference/kernel-alerts.md).
+// Both are critical: the package's routes are unavailable.
+func (s *Scanner) builtinPackages(ctx context.Context, _ time.Time) ([]Finding, error) {
+	if s.BuiltinPackages == nil {
+		return nil, nil
+	}
+	problems, err := s.BuiltinPackages(ctx)
+	if err != nil {
+		return nil, err
+	}
+	findings := make([]Finding, 0, len(problems))
+	for _, problem := range problems {
+		detail := map[string]any{"package_id": problem.PackageID, "version": problem.Version, "reason": truncate(problem.Reason, 400)}
+		if problem.Invalid {
+			findings = append(findings, Finding{
+				Kind: KindBuiltinPackageInvalid, Severity: model.KernelAlertCritical, SubjectKind: SubjectPackage, Subject: problem.PackageID,
+				Message: truncate(fmt.Sprintf("The built-in package %s %s does not verify against plugins.official_public_key: %s. It is not installed and its routes are unavailable. Install a release binary verified against SHA256SUMS.txt.sig, or set plugins.official_public_key to the key that signed it.", problem.PackageID, problem.Version, problem.Reason), 480),
+				Detail:  detail,
+			})
+			continue
+		}
+		detail["state"], detail["last_error"] = problem.State, truncate(problem.LastError, 400)
+		findings = append(findings, Finding{
+			Kind: KindBuiltinPackageFailed, Severity: model.KernelAlertCritical, SubjectKind: SubjectPackage, Subject: problem.PackageID,
+			Message: truncate(fmt.Sprintf("The built-in package %s %s is not running: %s%s. Its routes are unavailable; fix the cause and restart Control, which installs and starts it again.", problem.PackageID, problem.Version, problem.Reason, lastErrorSuffix(problem.LastError)), 480),
+			Detail:  detail,
+		})
+	}
+	return findings, nil
+}
+
+func lastErrorSuffix(lastError string) string {
+	if strings.TrimSpace(lastError) == "" {
+		return ""
+	}
+	return " (" + truncate(strings.TrimSpace(lastError), 200) + ")"
 }
