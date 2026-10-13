@@ -82,6 +82,25 @@ type Options struct {
 	Logf func(format string, args ...any)
 	// Now is the clock; nil is time.Now.
 	Now func() time.Time
+	// BeforeMigrate, when set, runs once before the first pending step,
+	// outside any transaction, and only when a step is pending. Control
+	// takes its pre-migration backup there (internal/backup). An error
+	// stops the run before anything changed.
+	BeforeMigrate func(ctx context.Context, pending Pending) error
+}
+
+// Pending is what a run is about to do, for Options.BeforeMigrate.
+type Pending struct {
+	// Steps are the IDs of the steps the run applies, in order.
+	Steps []string
+	// Empty is true when the database has no table and no view: the run
+	// creates the schema.
+	Empty bool
+	// Adopt is true when the run adopts a database an earlier Control
+	// created (tables, no v5_schema_migration).
+	Adopt bool
+	// SchemaVersion is the newest applied step before the run; 0 for none.
+	SchemaVersion int
 }
 
 // Result is what a run did.
@@ -146,6 +165,17 @@ func run(ctx context.Context, db *gorm.DB, steps []Step, options Options) (*Resu
 	}
 	if err := checkApplied(db, dialect, steps, applied, options.ProgramVersion); err != nil {
 		return nil, err
+	}
+	if options.BeforeMigrate != nil {
+		pending, err := pendingSteps(db, steps, applied)
+		if err != nil {
+			return nil, err
+		}
+		if len(pending.Steps) > 0 {
+			if err := options.BeforeMigrate(ctx, pending); err != nil {
+				return nil, fmt.Errorf("before migration %s: %w", pending.Steps[0], err)
+			}
+		}
 	}
 
 	for _, step := range steps {
@@ -252,6 +282,73 @@ func run(ctx context.Context, db *gorm.DB, steps []Step, options Options) (*Resu
 }
 
 var errAlreadyApplied = errors.New("migration already applied")
+
+// pendingSteps answers the steps a run on db would apply.
+func pendingSteps(db *gorm.DB, steps []Step, applied map[int]MigrationRecord) (Pending, error) {
+	var pending Pending
+	for version := range applied {
+		pending.SchemaVersion = max(pending.SchemaVersion, version)
+	}
+	for _, step := range steps {
+		if _, done := applied[step.Version]; !done {
+			pending.Steps = append(pending.Steps, step.ID())
+		}
+	}
+	if len(applied) == 0 && len(pending.Steps) > 0 {
+		empty, err := isEmpty(db)
+		if err != nil {
+			return Pending{}, err
+		}
+		pending.Empty, pending.Adopt = empty, !empty
+	}
+	return pending, nil
+}
+
+// Status is what Check found.
+type Status struct {
+	// SchemaVersion is the newest applied step; 0 for a database the
+	// runner never prepared (empty, or from a Control before the runner).
+	SchemaVersion int
+	// Pending are the IDs of the steps this program would apply.
+	Pending []string
+}
+
+// Check answers whether this program may open db, without changing it: it
+// refuses (*RefusedError, the start's own messages) a database a newer
+// program migrated, one whose applied steps differ from this program's,
+// and one whose min_program_version is newer than programVersion. The
+// backup verification and restore check a bundle's snapshot with it.
+func Check(ctx context.Context, db *gorm.DB, programVersion string) (*Status, error) {
+	if db == nil {
+		return nil, errors.New("database is not initialized")
+	}
+	steps, err := Steps()
+	if err != nil {
+		return nil, fmt.Errorf("load migrations: %w", err)
+	}
+	dialect, err := dialectOf(db)
+	if err != nil {
+		return nil, err
+	}
+	db = db.WithContext(ctx)
+	applied, err := appliedSteps(db)
+	if err != nil {
+		return nil, err
+	}
+	if err := checkApplied(db, dialect, steps, applied, programVersion); err != nil {
+		return nil, err
+	}
+	status := &Status{}
+	for version := range applied {
+		status.SchemaVersion = max(status.SchemaVersion, version)
+	}
+	for _, step := range steps {
+		if _, done := applied[step.Version]; !done {
+			status.Pending = append(status.Pending, step.ID())
+		}
+	}
+	return status, nil
+}
 
 // apply runs a step's statements and Go function in tx.
 func apply(ctx context.Context, tx *gorm.DB, step Step, dialect string) error {

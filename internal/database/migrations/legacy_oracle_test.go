@@ -79,6 +79,7 @@ var postBaselineIndexes = []struct{ table, index string }{
 func laterModels() []any {
 	return []any{
 		&model.ACMECacheEntry{}, // 0003_acme_cache
+		&model.Backup{},         // 0005_backups
 	}
 }
 
