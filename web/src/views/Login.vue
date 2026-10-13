@@ -15,6 +15,9 @@
           </p>
         </header>
 
+        <!-- A panel nobody has claimed yet: how to create the first administrator. -->
+        <ClaimHint :visible="step === 'password' && mode === 'login'" />
+
         <!-- Email and password (sign in), or the registration form. -->
         <form
           v-if="step === 'password'"
@@ -87,7 +90,9 @@
 
         <!-- Second step: the 6-digit code. -->
         <form v-else-if="step === 'mfa'" class="auth__form" novalidate data-auth-form="mfa" @submit.prevent="submitCode()">
-          <UiOtpField
+          <component
+            :is="otpField"
+            v-if="otpField"
             ref="otpRef"
             v-model="code"
             :label="t('auth.mfa.code')"
@@ -172,8 +177,9 @@
 // what to do instead of starting a setup it cannot finish.
 // "忘记密码" is not offered: the backend has no password-reset endpoint.
 // Registration (when the public config allows it) asks for an invite code
-// only when auth.registration.require_invite is on.
-import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
+// only when auth.registration.require_invite is on. While the panel has no
+// administrator the card says how to create the first one (ClaimHint).
+import { computed, defineAsyncComponent, nextTick, onMounted, reactive, ref, shallowRef, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ChevronLeft, CircleAlert, Smartphone } from '@lucide/vue'
 import { useUserStore } from '@/stores/user'
@@ -184,10 +190,14 @@ import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
 import BrandLockup from '@/components/common/BrandLockup.vue'
 import UiButton from '@/ui/UiButton.vue'
 import UiIcon from '@/ui/UiIcon.vue'
-import UiOtpField from '@/ui/UiOtpField.vue'
 import UiPasswordField from '@/ui/UiPasswordField.vue'
 import UiTextField from '@/ui/UiTextField.vue'
 import { useToast } from '@/ui/composables/useToast'
+
+// The "no administrator yet" note (GET /api/v5/claim/status) loads after
+// the form, in its own chunk: the sign-in page's first visit carries none of
+// the claim code (web/bundle-budget.json).
+const ClaimHint = defineAsyncComponent(() => import('@/components/auth/ClaimHint.vue'))
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -235,8 +245,17 @@ watch(registrationEnabled, (enabled) => {
   if (!enabled && mode.value === 'register') switchMode()
 })
 
+// The 6-digit code field is needed only for a second step: it loads once
+// the sign-in form shows, not with the page (web/bundle-budget.json), and
+// takes the focus if that step is already open when it arrives.
+const otpField = shallowRef(null)
+
 onMounted(() => {
   void loadEdition()
+  import('@/ui/UiOtpField.vue').then((module) => {
+    otpField.value = module.default
+    if (step.value === 'mfa') focusStep()
+  }, () => {})
 })
 
 function clearErrors() {

@@ -69,6 +69,12 @@ func AuditLog() gin.HandlerFunc {
 		// The v3 control kernel is administrator-only at the router boundary.
 		// Keep v2's narrower admin prefix so public and user APIs remain out of
 		// the audit stream.
+		// A request whose body is a credential nothing may keep is never
+		// captured, whatever prefix it has; its handler audits it.
+		if bodyNeverCaptured(c.Request.URL.Path) {
+			c.Next()
+			return
+		}
 		userWrite := auditedUserWrite(c.Request.Method, c.Request.URL.Path)
 		if !userWrite && !strings.HasPrefix(c.Request.URL.Path, auditLogPrefixV2) && !strings.HasPrefix(c.Request.URL.Path, auditLogPrefixV3) &&
 			!strings.HasPrefix(c.Request.URL.Path, auditLogPrefixV4Forward) && !strings.HasPrefix(c.Request.URL.Path, auditLogPrefixV4Admin) {
@@ -291,6 +297,20 @@ var auditedUserWrites = map[string]struct{ module, action string }{
 // audit log.
 func auditedUserWrite(method, path string) bool {
 	_, ok := auditedUserWrites[method+" "+strings.TrimSuffix(path, "/")]
+	return ok
+}
+
+// bodyNeverCapturedPaths are the requests whose body no log and no audit
+// row may hold, even redacted: the first administrator's claim (the claim
+// link's token and the new password; adminclaim writes its own audit row
+// with the action, the email and the source address).
+var bodyNeverCapturedPaths = map[string]struct{}{
+	"/api/v5/claim": {},
+}
+
+// bodyNeverCaptured reports whether path is in bodyNeverCapturedPaths.
+func bodyNeverCaptured(path string) bool {
+	_, ok := bodyNeverCapturedPaths[strings.TrimSuffix(path, "/")]
 	return ok
 }
 

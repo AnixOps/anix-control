@@ -843,6 +843,24 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		v4.POST("/kernel/agents/upgrades/:id/abort", upgrades.Abort)
 	}
 
+	// The first administrator's claim link (adminclaim, N10): public, at the
+	// public limiter's rate, which also applies in gin's test mode. The body
+	// (the token and a password) is never logged: the access log records no
+	// body, the audit log never captures it (middleware
+	// bodyNeverCapturedPaths), and the handler writes the one audit row.
+	claimLimiter := middleware.NewRateLimiter(5, 10,
+		middleware.WithTTL(5*time.Minute),
+		middleware.WithTestModeBypass(false),
+	)
+	claimLimiter.StartCleanup(1 * time.Minute)
+	claimHandler := handler.NewClaimHandler()
+	claim := r.Group("/api/v5/claim")
+	claim.Use(claimLimiter.Middleware())
+	{
+		claim.GET("/status", claimHandler.Status)
+		claim.POST("", claimHandler.Claim)
+	}
+
 	// API v5: the panel's own state, with v4's admission model. The
 	// certificates Control serves (the console's banner reads them) and a
 	// retry of the failing ones.

@@ -130,9 +130,9 @@ function quotedYAML(value) {
 
 // The operator keys, and the deprecated keys this release still reads: the
 // two plain listeners of tls.mode external (server.port for the API,
-// frontend.port for the WebUI), the database, the test's package key, the
-// first administrator and the inert flux runtime. Control generates its root
-// key in data_dir.
+// frontend.port for the WebUI), the database, the test's package key and
+// the inert flux runtime. Control generates its root key in data_dir; the
+// first administrator claims the panel (claimFirstAdministrator).
 function controlConfig({ dataDir, databasePath, frontendPath, publicKey }) {
   return `data_dir: ${quotedYAML(dataDir)}
 subscribe_path: s
@@ -153,9 +153,6 @@ auth:
     enabled: false
 plugins:
   official_public_key: ${quotedYAML(publicKey)}
-admin:
-  email: ${quotedYAML(adminEmail)}
-  password: ${quotedYAML(adminPassword)}
 forward_runtime:
   # The live WebUI gate does not exercise the legacy forward runtime. Select
   # its inert pull-agent mode so Control can bootstrap without a NodeX service.
@@ -264,6 +261,27 @@ async function buildControlWithPackages(tempRoot, setDir, controlBinary) {
   })
 }
 
+// The first administrator, as a fresh panel gets it: the claim link
+// `anix-control admin claim-link` prints, claimed through the API.
+async function claimFirstAdministrator(controlBinary, configPath) {
+  const output = await runCommand('print the claim link', controlBinary, ['admin', 'claim-link'], {
+    cwd: controlRoot,
+    env: { ...process.env, ANIX_CONTROL_CONFIG: configPath },
+  })
+  const token = output.match(/anixclaim_[A-Za-z0-9_-]{43}/)?.[0]
+  if (!token) {
+    throw new Error(`admin claim-link printed no link:\n${trimOutput(output)}`)
+  }
+  const response = await fetch(`${liveControlAPIURL}/api/v5/claim`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token, email: adminEmail, password: adminPassword }),
+  })
+  if (response.status !== 201) {
+    throw new Error(`the claim answered ${response.status}: ${(await response.text()).slice(0, 500)}`)
+  }
+}
+
 // Waits until the start-up bootstrap has installed every built-in package
 // and its host is healthy.
 async function waitForBuiltinPackages() {
@@ -349,6 +367,7 @@ export default async function setupLiveControlMachineTelemetry() {
     child.stderr.pipe(log)
     child.once('error', error => log.write(`failed to start Control: ${error.stack || error.message}\n`))
     await waitForHealth(child, 35_000, logPath)
+    await claimFirstAdministrator(controlBinary, configPath)
     await waitForBuiltinPackages()
 
     return async () => {

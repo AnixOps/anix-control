@@ -42,9 +42,11 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -59,11 +61,22 @@ import (
 var (
 	db          *gorm.DB
 	initialized bool
+	// sqlLogOutput is where the text format's SQL log goes: stdout for the
+	// server, stderr for a command whose stdout is its result
+	// (SetSQLLogOutput).
+	sqlLogOutput io.Writer = os.Stdout
 	// readPools are the SQLite read connection pools of the handles Open
 	// made, by the handle's writer connection pool; none for an in-memory
 	// database and for PostgreSQL.
 	readPools sync.Map // *sql.DB -> []*sql.DB
 )
+
+// SetSQLLogOutput sends the text format's SQL log of the handles opened
+// afterwards to w. Commands that print their result on stdout (the module,
+// agent and admin commands) send it to stderr.
+func SetSQLLogOutput(w io.Writer) {
+	sqlLogOutput = w
+}
 
 // Init 初始化数据库连接
 func Init(cfg *config.DatabaseConfig) error {
@@ -115,19 +128,10 @@ func Open(cfg *config.DatabaseConfig) (*gorm.DB, error) {
 		return nil, fmt.Errorf("unsupported database driver: %s (supported: sqlite, postgres)", cfg.Driver)
 	}
 
-	// 配置日志级别
-	logLevel := logger.Info
-	switch cfg.LogLevel {
-	case "silent":
-		logLevel = logger.Silent
-	case "error":
-		logLevel = logger.Error
-	case "warn":
-		logLevel = logger.Warn
-	}
+	logLevel := sqlLogLevel(cfg.LogLevel)
 
 	// logger.Default's writer, or the JSON handler's.
-	var sqlLogWriter logger.Writer = log.New(os.Stdout, "\r\n", log.LstdFlags)
+	var sqlLogWriter logger.Writer = log.New(sqlLogOutput, "\r\n", log.LstdFlags)
 	colorful := true
 	if logging.JSON() {
 		sqlLogWriter = log.New(logging.StdWriter(), "", 0)
@@ -173,6 +177,23 @@ func Open(cfg *config.DatabaseConfig) (*gorm.DB, error) {
 	}
 
 	return handle, nil
+}
+
+// sqlLogLevel is database.log_level as GORM's level: silent, error, warn or
+// info. Empty and unknown values are error, the built-in default
+// (defaults.yaml): a configuration file without a database section leaves
+// the value empty, and info would log every statement.
+func sqlLogLevel(value string) logger.LogLevel {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "silent":
+		return logger.Silent
+	case "warn":
+		return logger.Warn
+	case "info":
+		return logger.Info
+	default:
+		return logger.Error
+	}
 }
 
 // newSQLLogger returns GORM's SQL logger: logger.Default's settings at the

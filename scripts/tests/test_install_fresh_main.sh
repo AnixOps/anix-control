@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # A fresh systemd install runs main() of scripts/install.sh to the end and the
-# script exits 0, and so does the update that follows it.
+# script exits 0, and so does the update that follows it. A fresh install
+# ends with the first administrator's claim link, which the installed
+# Control prints (`anix-control admin claim-link`, run as Control's user);
+# an install whose panel has an administrator prints none.
 #
 # main() and everything it calls are the installer's own, in particular
 # backup_current_release: test_plugin_execution_install.sh stubs it, which
@@ -69,7 +72,26 @@ RELEASE_DIR="${temporary}/release"
 mkdir -p "${RELEASE_DIR}" "${temporary}/stage/bin" "${temporary}/stage/web"
 archive="$(asset_name)"
 binary="${archive%.tar.gz}"
-printf '#!/bin/sh\necho "anix-control fixture"\n' >"${temporary}/stage/bin/${binary}"
+# The installed Control: `admin claim-link` records how it was run and prints
+# a link, refuses with status 1 once CLAIMED exists (an administrator), or
+# fails with status 2 while CLAIM_BROKEN exists. Its log lines go to stderr.
+CLAIM_LOG="${temporary}/claim-link.log"
+CLAIMED="${temporary}/claimed"
+CLAIM_BROKEN="${temporary}/claim-broken"
+: >"${CLAIM_LOG}"
+cat >"${temporary}/stage/bin/${binary}" <<FIXTURE
+#!/bin/sh
+if [ "\$1" = admin ] && [ "\$2" = claim-link ]; then
+  printf '%s|%s|%s\\n' "\${ANIX_CONTROL_CONFIG}" "\${ANIX_CONTROL_DATA_DIR}" "\$(pwd)" >>"${CLAIM_LOG}"
+  echo "fixture log line, never shown on success" >&2
+  if [ -f "${CLAIM_BROKEN}" ]; then echo "admin: database is locked" >&2; exit 2; fi
+  if [ -f "${CLAIMED}" ]; then echo "admin: the panel already has an administrator" >&2; exit 1; fi
+  printf 'Open this link within 24 hours to create the first administrator. It works once.\\n\\n'
+  printf '  https://panel.example.test/claim#anixclaim_FIXTURE\\n'
+  exit 0
+fi
+echo "anix-control fixture"
+FIXTURE
 chmod 0755 "${temporary}/stage/bin/${binary}"
 tar -czf "${RELEASE_DIR}/${archive}" -C "${temporary}/stage/bin" "${binary}"
 printf '<!doctype html><title>fixture</title>\n' >"${temporary}/stage/web/index.html"
@@ -145,7 +167,7 @@ top_level() {
 }
 
 # Nothing from the caller's environment may decide the result.
-ADMIN_EMAIL="" ADMIN_PASSWORD="" GRPC_NAME="" GRPC_TLS_CERT="" GRPC_TLS_KEY=""
+GRPC_NAME="" GRPC_TLS_CERT="" GRPC_TLS_KEY=""
 APP_USER="$(id -un)"
 SERVICE_NAME="anix-control"
 SYSTEMD_UNIT_DIR="${temporary}/systemd"
@@ -204,20 +226,29 @@ check "fresh: no identity package directory is configured" no_identity_package_d
 no_removed_plugin_switches() { ! grep -qE '^[[:space:]]+(control_execution_enabled|dispatch_enabled|topology_execution_enabled):' "$1"; }
 check "fresh: no removed plugins.* switch is written" no_removed_plugin_switches "${FRESH}/config/config.yaml"
 check "fresh: the CA key is generated" test -s "${FRESH}/config/secrets/module_ca_kek"
-check "fresh: the bootstrap password file is written" test -s "${FRESH}/.bootstrap-admin-password"
+check "fresh: no bootstrap password file" test ! -e "${FRESH}/.bootstrap-admin-password"
+check "fresh: the config holds no administrator" test "$(grep -c '^admin:' "${FRESH}/config/config.yaml")" -eq 0
 check "fresh: nothing was backed up (there was no previous release)" \
   test -z "$(find "${FRESH}/backups" -mindepth 1 -maxdepth 1 2>/dev/null)"
 check "fresh: the unit was enabled" grep -qxF "enable anix-control" "${SYSTEMCTL_LOG}"
 check "fresh: the service was started" grep -qxF "restart anix-control" "${SYSTEMCTL_LOG}"
-admin_email="$(awk '/^admin:/ {section = 1; next} /^[A-Za-z_]/ {section = 0} section && /^[[:space:]]+email:/ {gsub(/^[^"]*"|".*$/, ""); print; exit}' "${FRESH}/config/config.yaml")"
-check "fresh: an administrator email is configured" test -n "${admin_email}"
-check "fresh: the login check used the configured administrator" \
-  grep -qF "\"email\":\"${admin_email}\"" "${LOGIN_LOG}"
+check "fresh: the claim link is printed" \
+  grep -qxF "  https://panel.example.test/claim#anixclaim_FIXTURE" "${temporary}/fresh.log"
+check "fresh: after the success message" \
+  test "$(grep -n 'successfully' "${temporary}/fresh.log" | cut -d: -f1)" -lt "$(grep -n 'anixclaim_FIXTURE' "${temporary}/fresh.log" | cut -d: -f1)"
+check "fresh: claim-link ran with the unit's config, data directory and working directory" \
+  grep -qxF "${FRESH}/config/config.yaml|${FRESH}/data|${FRESH}" "${CLAIM_LOG}"
+check "fresh: the command's log lines are not shown" \
+  test "$(grep -c 'fixture log line' "${temporary}/fresh.log")" -eq 0
+no_credential_login() { ! grep -q 'password' "${LOGIN_LOG}"; }
+check "fresh: no login with an administrator password" no_credential_login
 check "fresh: no scratch directory is left behind" test -z "$(ls -A "${TMPDIR}")"
 check "fresh: no account or group command was run" test ! -s "${TRIPWIRE_LOG}"
 
-# --- 2. Update: the same directory, an existing configuration.
+# --- 2. Update: the same directory, an existing configuration, and an
+#        administrator by now.
 config_before="$(sha256sum "${FRESH}/config/config.yaml")"
+: >"${CLAIMED}"
 : >"${SYSTEMCTL_LOG}"
 run_main "${temporary}/update.log" update --version "${VERSION_UNDER_TEST}" \
   --install-dir "${FRESH}" --health-url "http://127.0.0.1:18080/health"
@@ -232,6 +263,10 @@ check "update: the previous release was backed up" test -n "${backup}"
 check "update: the backup holds the binary" test -x "${backup}/anix-control"
 check "update: the backup holds the config" test -s "${backup}/config.yaml"
 check "update: no scratch directory is left behind" test -z "$(ls -A "${TMPDIR}")"
+check "update: no claim link once there is an administrator" \
+  test "$(grep -c 'anixclaim_' "${temporary}/update.log")" -eq 0
+check "update: says the panel has an administrator" \
+  grep -qF "The panel already has an administrator" "${temporary}/update.log"
 
 # --- 3. rollback is the install flow with the requested tag.
 run_main "${temporary}/rollback.log" rollback --version "${VERSION_UNDER_TEST}" \
@@ -248,50 +283,37 @@ check "skip-start: the binary is installed" test -x "${SKIPPED}/bin/anix-control
 check "skip-start: the unit is written" test -s "${SYSTEMD_UNIT_DIR}/anix-control.service"
 check "skip-start: says the start was skipped" grep -qF "service start was skipped" "${temporary}/skip.log"
 
-# --- 5. A bootstrap value that config.yaml or the login check cannot carry
-#        unchanged (a control character, bytes that are not UTF-8) is refused
-#        before config.yaml is written, with the reason. It used to be written
-#        as given: a tab made the install's own login check post invalid JSON
-#        ("Installation failed health verification" for a healthy service), a
-#        carriage return was folded into a space, and either way the next run
-#        kept that config.yaml.
-# refused_main <name> <email> <password> <fragment of the message>
-refused_main() {
-  local name="$1" email="$2" password="$3" fragment="$4"
-  local dir="${temporary}/${name}/control"
+# --- 5. A claim link that cannot be created does not fail the install: the
+#        reason and the command to run are printed.
+: >"${CLAIM_BROKEN}"
+run_main "${temporary}/broken.log" update --version "${VERSION_UNDER_TEST}" \
+  --install-dir "${FRESH}" --health-url "http://127.0.0.1:18080/health"
+rm -f "${CLAIM_BROKEN}"
+check "claim-link failing: main exits 0" test "${RUN_STATUS}" -eq 0
+check "claim-link failing: says so" grep -qF "The claim link could not be created (status 2)" "${temporary}/broken.log"
+check "claim-link failing: shows why" grep -qF "admin: database is locked" "${temporary}/broken.log"
+check "claim-link failing: names the command" grep -qF "admin claim-link" "${temporary}/broken.log"
+
+# --- 6. The removed administrator flags are refused with the reason, before
+#        anything is downloaded or touched.
+for flag in --admin-email --admin-password; do
   : >"${CURL_LOG}"
   : >"${SYSTEMCTL_LOG}"
-  run_main "${temporary}/${name}.log" install --version "${VERSION_UNDER_TEST}" \
-    --install-dir "${dir}" --admin-email "${email}" --admin-password "${password}" \
-    --health-url "http://127.0.0.1:18080/health"
-  check "${name}: main exits 1" test "${RUN_STATUS}" -eq 1
-  check "${name}: says why" grep -qF "${fragment}" "${temporary}/${name}.log"
-  check "${name}: no config.yaml is written" test ! -e "${dir}/config/config.yaml"
-  check "${name}: no bootstrap password file is written" test ! -e "${dir}/.bootstrap-admin-password"
-  check "${name}: no binary is installed" test ! -e "${dir}/bin/anix-control"
-  check "${name}: nothing is downloaded" test ! -s "${CURL_LOG}"
-  check "${name}: the service is not touched" test ! -s "${SYSTEMCTL_LOG}"
-}
-refused_main tab-password admin@example.com $'pa\tss' "must not contain a control character"
-refused_main cr-password admin@example.com $'pass\r' "must not contain a control character"
-refused_main cr-email $'admin@example.com\r' secret "must not contain a control character"
-refused_main latin1-password admin@example.com $'p\xe4ssw\xf6rd' "must be valid UTF-8 text"
-
-# The same directory, corrected: the refusal left nothing behind to trip over.
-run_main "${temporary}/corrected.log" install --version "${VERSION_UNDER_TEST}" \
-  --install-dir "${temporary}/tab-password/control" --admin-email admin@example.com \
-  --admin-password "corrected secret" --health-url "http://127.0.0.1:18080/health"
-check "corrected rerun: main exits 0" test "${RUN_STATUS}" -eq 0
-check "corrected rerun: the password is the corrected one" \
-  grep -qxF '  password: "corrected secret"' "${temporary}/tab-password/control/config/config.yaml"
-check "corrected rerun: the login check posted it" \
-  grep -qF '"password":"corrected secret"' "${LOGIN_LOG}"
+  run_main "${temporary}/removed-flag.log" install --version "${VERSION_UNDER_TEST}" \
+    --install-dir "${temporary}/removed/control" "${flag}" value
+  check "${flag}: main exits 1" test "${RUN_STATUS}" -eq 1
+  check "${flag}: says it was removed and what replaced it" grep -qF -- "${flag} was removed" "${temporary}/removed-flag.log"
+  check "${flag}: names the claim link" grep -qF "anix-control admin claim-link" "${temporary}/removed-flag.log"
+  check "${flag}: nothing is downloaded" test ! -s "${CURL_LOG}"
+  check "${flag}: the service is not touched" test ! -s "${SYSTEMCTL_LOG}"
+  check "${flag}: nothing is installed" test ! -e "${temporary}/removed/control/bin/anix-control"
+done
 
 check "no account or group command was run at all" test ! -s "${TRIPWIRE_LOG}"
 
 if [[ "${failures}" -ne 0 ]]; then
   printf '%d check(s) failed\n' "${failures}"
-  for log in fresh update rollback skip corrected; do
+  for log in fresh update rollback skip broken removed-flag; do
     if [[ -f "${temporary}/${log}.log" ]]; then
       printf -- '--- %s.log (last lines)\n' "${log}"
       tail -n 8 "${temporary}/${log}.log"

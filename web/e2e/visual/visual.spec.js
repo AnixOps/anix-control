@@ -13,6 +13,8 @@ const PHONE = { width: 390, height: 844 }
 // [screen, viewports]: every screen light and dark on desktop; a few on a phone.
 const SHOTS = [
   ['login', [DESKTOP, PHONE]],
+  // The first administrator's claim link (/claim#anixclaim_…).
+  ['claim', [DESKTOP, PHONE]],
   ['user-home', [DESKTOP, PHONE]],
   ['user-subscribe', [DESKTOP]],
   ['admin-dashboard', [DESKTOP, PHONE]],

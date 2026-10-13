@@ -106,3 +106,29 @@ func TestRemovedKeysAreNotConfigurationKeys(t *testing.T) {
 		assert.False(t, strings.HasPrefix(path, "package_routes."), path)
 	}
 }
+
+// admin.* (the first administrator before the claim link, N10) is ignored:
+// a file or an environment that still sets it loads, with one warning per
+// key that never shows the password, and nothing reads it.
+func TestAdminKeysAreIgnoredWithAWarning(t *testing.T) {
+	const password = "operator-chosen-passphrase-7"
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	require.NoError(t, os.WriteFile(path, []byte("domain: panel.example.com\nadmin:\n  email: \"owner@example.com\"\n  password: \""+password+"\"\n"), 0o600))
+	var lines []string
+	restore := captureLog(t, &lines)
+	_, report, err := LoadFile(path, []string{"ANIX_CONTROL_ADMIN_PASSWORD=" + password, "ANIX_CONTROL_ADMIN_EMAIL_FILE=/nonexistent"})
+	restore()
+	require.NoError(t, err)
+	var paths []string
+	for _, key := range report.Deprecated {
+		paths = append(paths, key.Path)
+		assert.Equal(t, KeyIgnored, key.Status, key.Path)
+	}
+	assert.Equal(t, []string{"admin.email", "admin.password"}, paths)
+	output := strings.Join(report.Warnings(), "\n") + strings.Join(lines, "\n")
+	assert.NotContains(t, output, password)
+	assert.Contains(t, output, "Configuration: admin.password (set in the configuration file and ANIX_CONTROL_ADMIN_PASSWORD) is no longer read and is ignored")
+	assert.Contains(t, output, "anix-control admin claim-link")
+	_, field := configFieldTypes["admin.password"]
+	assert.False(t, field, "no configuration field holds it")
+}

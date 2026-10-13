@@ -9,7 +9,7 @@
 #
 # Required environment:
 #   BASE_URL                    Control's HTTP address, e.g. http://127.0.0.1:8080
-#   ADMIN_EMAIL ADMIN_PASSWORD  the administrator Control created
+#   ADMIN_EMAIL ADMIN_PASSWORD  the first administrator, claimed with the claim link
 # On success it leaves ${IDENTITY_TOKEN_FILE} (if set) holding a valid
 # identity token of the administrator.
 set -Eeuo pipefail

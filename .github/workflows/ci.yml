@@ -687,7 +687,6 @@ jobs:
             -e ANIX_CONTROL_DATABASE_PASSWORD=postgres
             -e ANIX_CONTROL_DATABASE_DATABASE=anix_control_smoke
             -e ANIX_CONTROL_LOG_FORMAT=json
-            -e ANIX_CONTROL_ADMIN_PASSWORD=ci-smoke-admin-password-0123456789
           )
           docker run --rm anix-control:ci -print-env | grep '^ANIX_CONTROL_DOMAIN ' >/dev/null
           # One-shot schema preparation, as a Compose service or Kubernetes Job runs it.
@@ -705,6 +704,28 @@ jobs:
           status="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/api/v3/plugins)"
           test "${status}" = 401 || { echo "unauthenticated /api/v3/plugins returned ${status}"; exit 1; }
           test "$(docker inspect -f '{{.State.Health.Status}}' control)" != unhealthy
+          # The first administrator: no password anywhere. The start says how
+          # to claim the panel; the claim link comes from the CLI in the
+          # container and is claimed through the API, once.
+          logs="$(docker logs control 2>&1)"
+          grep -F 'No administrator yet. Run `sudo anix-control admin claim-link`' <<<"${logs}" >/dev/null
+          curl -fsS http://127.0.0.1:8080/api/v5/claim/status | grep -F '"claimable":true' >/dev/null
+          link="$(docker exec control /app/anix-control admin claim-link 2>/dev/null)"
+          [[ "${link}" =~ (anixclaim_[A-Za-z0-9_-]{43}) ]] || { echo "admin claim-link printed no link: ${link}"; exit 1; }
+          token="${BASH_REMATCH[1]}"
+          claim() {
+            curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' \
+              -d "{\"token\":\"$1\",\"email\":\"owner@example.test\",\"password\":\"ci-smoke-owner-0123456789\"}" \
+              http://127.0.0.1:8080/api/v5/claim
+          }
+          test "$(claim "${token}")" = 201
+          test "$(claim "${token}")" = 404
+          curl -fsS http://127.0.0.1:8080/api/v5/claim/status | grep -F '"claimable":false' >/dev/null
+          status=0
+          docker exec control /app/anix-control admin claim-link >/dev/null 2>&1 || status=$?
+          test "${status}" = 1 || { echo "admin claim-link must refuse with 1 once claimed, got ${status}"; exit 1; }
+          logs="$(docker logs control 2>&1)"
+          if grep -F "${token}" <<<"${logs}" >/dev/null; then echo "the claim token reached the logs"; exit 1; fi
           docker stop --time 90 control
           test "$(docker inspect -f '{{.State.ExitCode}}' control)" = 0
           docker logs control 2>&1 | grep 'Draining: waiting 5s' >/dev/null
@@ -723,7 +744,6 @@ jobs:
           cp config/deploy/compose/control.env.example "${work}/control.env"
           sed -i -e 's/^ANIX_CONTROL_DATABASE_USERNAME=.*/ANIX_CONTROL_DATABASE_USERNAME=postgres/' \
                  -e 's/^ANIX_CONTROL_DATABASE_DATABASE=.*/ANIX_CONTROL_DATABASE_DATABASE=anix_control_compose/' "${work}/control.env"
-          printf '%s\n' 'ANIX_CONTROL_ADMIN_PASSWORD=ci-compose-admin-password-0123456789' >> "${work}/control.env"
           install -d -m 0755 "${work}/secrets"
           printf '%s' postgres | sudo install -m 0400 -o 10001 -g 10001 /dev/stdin "${work}/secrets/db_password"
           # The documented fresh-install step: jwt_secret and the CA key.
@@ -746,6 +766,14 @@ jobs:
           "${compose[@]}" logs migrate | grep 'migrate finished' >/dev/null
           curl -fsS http://127.0.0.1:8080/readyz
           "${compose[@]}" logs control | grep 'Adopted module_runtime.ca_kek as the root key' >/dev/null
+          # The first administrator through the claim link, as the Compose
+          # file's comment says.
+          link="$("${compose[@]}" exec -T control /app/anix-control admin claim-link 2>/dev/null)"
+          [[ "${link}" =~ (anixclaim_[A-Za-z0-9_-]{43}) ]] || { echo "admin claim-link printed no link: ${link}"; exit 1; }
+          status="$(curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' \
+            -d "{\"token\":\"${BASH_REMATCH[1]}\",\"email\":\"owner@example.test\",\"password\":\"ci-compose-owner-0123456789\"}" \
+            http://127.0.0.1:8080/api/v5/claim)"
+          test "${status}" = 201 || { echo "the claim answered ${status}"; exit 1; }
           "${compose[@]}" stop control
           test "$(docker inspect -f '{{.State.ExitCode}}' "${control_id}")" = 0
           "${compose[@]}" down -v
@@ -917,8 +945,6 @@ jobs:
             --set image.repository=anix-control --set image.tag=ci --set image.pullPolicy=Never \
             --set secrets.values.jwt_secret=ci-kubernetes-jwt-secret-0123456789 \
             --set secrets.values.db_password=ci-db-password \
-            --set secrets.files.admin_password=ANIX_CONTROL_ADMIN_PASSWORD \
-            --set secrets.values.admin_password=ci-kubernetes-admin-password-0123456789 \
             --wait --timeout 6m
           kubectl -n anix get pods -o wide
           kubectl -n anix logs deployment/control-anix-control -c migrate | tail -5
@@ -934,6 +960,14 @@ jobs:
           curl -fsS http://127.0.0.1:18080/livez
           status="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18080/api/v3/plugins)"
           test "${status}" = 401
+          # The first administrator through the claim link, as the chart's
+          # NOTES say.
+          link="$(kubectl -n anix exec deployment/control-anix-control -c control -- /app/anix-control admin claim-link 2>/dev/null)"
+          [[ "${link}" =~ (anixclaim_[A-Za-z0-9_-]{43}) ]] || { echo "admin claim-link printed no link: ${link}"; exit 1; }
+          status="$(curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' \
+            -d "{\"token\":\"${BASH_REMATCH[1]}\",\"email\":\"owner@example.test\",\"password\":\"ci-kubernetes-owner-0123456789\"}" \
+            http://127.0.0.1:18080/api/v5/claim)"
+          test "${status}" = 201 || { echo "the claim answered ${status}"; exit 1; }
           # A config change rolls the pod (Recreate) and it becomes ready again.
           helm upgrade control config/deploy/helm/anix-control --namespace anix --reuse-values \
             --set config.ANIX_CONTROL_LOG_FORMAT=text --wait --timeout 6m

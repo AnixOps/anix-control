@@ -12,9 +12,9 @@ kubectl -n anix create secret generic anix-control \
 helm install control config/deploy/helm/anix-control -n anix \
   --set secrets.existingSecret=anix-control \
   --set image.digest=sha256:<digest from docker-image.txt> \
-  --set config.ANIX_CONTROL_DATABASE_HOST=postgres.example.internal \
-  --set config.ANIX_CONTROL_ADMIN_EMAIL=admin@example.com
-kubectl -n anix logs deploy/control-anix-control -c migrate   # on an empty database this shows why the first administrator was not created
+  --set config.ANIX_CONTROL_DATABASE_HOST=postgres.example.internal
+# On a fresh database: the one-time link that creates the first administrator.
+kubectl -n anix exec deploy/control-anix-control -c control -- /app/anix-control admin claim-link
 ```
 
 Without `image.digest` or `image.tag` the chart runs

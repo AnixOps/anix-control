@@ -1,12 +1,10 @@
 package service
 
 import (
-	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/base64"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -5894,33 +5892,6 @@ func (s *InitServiceTestSuite) SetupTest() {
 	s.ServiceTestSuite.SetupTest()
 }
 
-func (s *InitServiceTestSuite) TestInitAdmin_RefusesToGeneratePassword() {
-	cfg := &config.Config{Admin: config.AdminConfig{Email: "first@example.com"}}
-
-	err := InitAdmin(cfg)
-	assert.ErrorIs(s.T(), err, ErrAdminPasswordRequired)
-
-	var count int64
-	database.Get().Model(&model.User{}).Where("is_admin = ?", 1).Count(&count)
-	assert.Zero(s.T(), count, "no administrator is created without a configured password")
-}
-
-func (s *InitServiceTestSuite) TestInitAdmin_NeverLogsThePassword() {
-	const password = "operator-chosen-passphrase-7"
-	var logs bytes.Buffer
-	previous := log.Writer()
-	log.SetOutput(&logs)
-	defer log.SetOutput(previous)
-
-	cfg := &config.Config{Admin: config.AdminConfig{Email: "first@example.com", Password: password}}
-	assert.NoError(s.T(), InitAdmin(cfg))
-
-	assert.NotContains(s.T(), logs.String(), password)
-	var admin model.User
-	assert.NoError(s.T(), database.Get().Where("is_admin = ?", 1).First(&admin).Error)
-	assert.NoError(s.T(), bcrypt.CompareHashAndPassword([]byte(admin.Password), []byte(password)))
-}
-
 func (s *InitServiceTestSuite) TestStrPtr() {
 	// Test strPtr function
 	result := strPtr("test string")
@@ -5953,84 +5924,6 @@ func (s *InitServiceTestSuite) TestPtrInt() {
 	negResult := ptrInt(-1)
 	assert.NotNil(s.T(), negResult)
 	assert.Equal(s.T(), -1, *negResult)
-}
-
-func (s *InitServiceTestSuite) TestInitAdmin_NoAdminExists() {
-	// Create config with admin credentials
-	cfg := &config.Config{
-		Admin: config.AdminConfig{
-			Email:    "testadmin@example.com",
-			Password: "testpassword123",
-		},
-		JWT: config.JWTConfig{
-			Secret: "test-jwt-secret",
-			Expire: 86400,
-		},
-	}
-
-	// Call InitAdmin - should create admin
-	assert.NoError(s.T(), InitAdmin(cfg))
-
-	// Verify admin was created
-	var admin model.User
-	err := database.Get().Where("is_admin = ?", 1).First(&admin).Error
-	assert.NoError(s.T(), err)
-	assert.Equal(s.T(), "testadmin@example.com", admin.Email)
-	assert.Equal(s.T(), 1, admin.IsAdmin)
-	assert.NotEmpty(s.T(), admin.UUID)
-	assert.NotEmpty(s.T(), admin.Token)
-}
-
-func (s *InitServiceTestSuite) TestInitAdmin_AdminAlreadyExists() {
-	// Create existing admin
-	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte("existingpass"), bcrypt.DefaultCost)
-	existingAdmin := &model.User{
-		Email:     "existing@example.com",
-		Password:  string(hashedPassword),
-		IsAdmin:   1,
-		UUID:      "existing-uuid",
-		Token:     "existing-token",
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-	}
-	database.Get().Create(existingAdmin)
-
-	// Try to init admin again - should skip
-	cfg := &config.Config{
-		Admin: config.AdminConfig{
-			Email:    "newadmin@example.com",
-			Password: "newpassword123",
-		},
-	}
-
-	assert.NoError(s.T(), InitAdmin(cfg))
-
-	// Verify existing admin unchanged
-	var admin model.User
-	database.Get().Where("is_admin = ?", 1).First(&admin)
-	assert.Equal(s.T(), "existing@example.com", admin.Email)
-}
-
-func (s *InitServiceTestSuite) TestInitAdmin_DefaultEmailWithConfiguredPassword() {
-	// An empty email falls back to the default; the password must still be configured.
-	cfg := &config.Config{
-		Admin: config.AdminConfig{
-			Email:    "",
-			Password: "configured-password-1",
-		},
-		JWT: config.JWTConfig{
-			Secret: "test-jwt-secret",
-			Expire: 86400,
-		},
-	}
-
-	assert.NoError(s.T(), InitAdmin(cfg))
-
-	var admin model.User
-	err := database.Get().Where("is_admin = ?", 1).First(&admin).Error
-	assert.NoError(s.T(), err)
-	assert.Equal(s.T(), "admin@anixops.local", admin.Email)
-	assert.NoError(s.T(), bcrypt.CompareHashAndPassword([]byte(admin.Password), []byte("configured-password-1")))
 }
 
 func (s *InitServiceTestSuite) TestInitSubscriptionDefaults() {

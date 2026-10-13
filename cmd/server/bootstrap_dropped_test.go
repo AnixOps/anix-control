@@ -31,10 +31,6 @@ func bootstrapDatabases(t *testing.T, body func(t *testing.T, cfg *config.Config
 	use := func(t *testing.T, cfg *config.Config) {
 		t.Helper()
 		cfg.Database.LogLevel = "silent"
-		// The first administrator is created on the empty database and needs a configured password.
-		if cfg.Admin.Password == "" {
-			cfg.Admin.Password = "bootstrap-test-password"
-		}
 		_ = database.Close()
 		require.NoError(t, database.Init(&cfg.Database))
 		t.Cleanup(func() { _ = database.Close() })

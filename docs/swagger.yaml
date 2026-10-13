@@ -276,6 +276,16 @@ definitions:
         description: Rollback rolls the current batch back before the campaign ends.
         type: boolean
     type: object
+  handler.claimRequest:
+    properties:
+      email:
+        type: string
+      password:
+        type: string
+      token:
+        description: Token is the claim link's fragment, anixclaim_ and 43 characters.
+        type: string
+    type: object
   handler.createAdminAPITokenRequest:
     properties:
       code:
@@ -7408,6 +7418,102 @@ paths:
       summary: 公开配置
       tags:
       - 系统
+  /api/v5/claim:
+    post:
+      consumes:
+      - application/json
+      description: 'Public, rate limited. The body is {token, email, password}: the
+        token is the fragment of the link `anix-control admin claim-link` printed
+        (https://<domain>/claim#anixclaim_...). 201 with data {user_id, email, next:
+        "/login"}: the administrator exists, the token is used up and the page signs
+        in with the same email and password. 404 not_found once the panel has an administrator
+        (whatever the token); 403 claim_invalid when the token is not the pending
+        link''s (a newer link replaces an older one); 410 claim_expired; 400 invalid_request
+        or invalid_email; 422 weak_password (fewer than 12 characters) or password_too_long
+        (more than 72 bytes); 409 email_taken; 503 identity_unavailable when identity
+        holds the credentials and cannot be reached (nothing changed). The body is
+        never logged; the audit row holds admin_claimed, the email and the source
+        address.'
+      parameters:
+      - description: token, email and password
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.claimRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties: true
+            type: object
+        "410":
+          description: Gone
+          schema:
+            additionalProperties: true
+            type: object
+        "422":
+          description: Unprocessable Entity
+          schema:
+            additionalProperties: true
+            type: object
+        "429":
+          description: Too Many Requests
+          schema:
+            additionalProperties: true
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Create the first administrator with the claim link
+      tags:
+      - Kernel
+  /api/v5/claim/status:
+    get:
+      description: 'Public. data.claimable is true while the panel has no administrator:
+        the claim page then asks for the email and password, and the sign-in page
+        says no administrator exists yet. It says nothing else (not whether a link
+        was issued, nor its expiry).'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "429":
+          description: Too Many Requests
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Whether the panel can be claimed
+      tags:
+      - Kernel
   /api/v5/panel/certificates/retry:
     post:
       description: 'Tries the certificates that are failing (no usable certificate,

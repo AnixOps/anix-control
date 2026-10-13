@@ -14,7 +14,6 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/database"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/router"
-	"github.com/AnixOps/anix-control/v5/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -61,10 +60,6 @@ func (s *AdminE2ETestSuite) SetupSuite() {
 			Version:       "test",
 			APIToken:      "test-api-token",
 			SubscribePath: "s",
-		},
-		Admin: config.AdminConfig{
-			Email:    "admin@example.com",
-			Password: "admin123456",
 		},
 	}
 
@@ -140,8 +135,8 @@ func (s *AdminE2ETestSuite) SetupSuite() {
 	)
 	s.Require().NoError(err)
 
-	// 初始化管理员
-	s.Require().NoError(service.InitAdmin(s.cfg))
+	// The first administrator, claimed with a claim link.
+	claimFirstAdministrator(s.T(), "admin@example.com", "admin-pass-123456")
 	s.restoreIdentityHost = installIdentityPlatformE2EPackage(s.T(), s.cfg)
 
 	// 创建路由
@@ -149,7 +144,7 @@ func (s *AdminE2ETestSuite) SetupSuite() {
 	router.Setup(s.router, s.cfg)
 
 	// 管理员登录获取 token
-	s.adminToken = s.login("admin@example.com", "admin123456")
+	s.adminToken = s.login("admin@example.com", "admin-pass-123456")
 
 	// 创建普通用户 (使用正确的密码哈希)
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte("userpassword"), bcrypt.DefaultCost)

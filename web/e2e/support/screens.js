@@ -5,6 +5,7 @@
 // come from the fixture first, then COMMON, then an empty success envelope.
 import agentUpgrade from '../fixtures/agentUpgrade.js'
 import apiTokens from '../fixtures/apiTokens.js'
+import claim from '../fixtures/claim.js'
 import coupons from '../fixtures/coupons.js'
 import dashboard from '../fixtures/dashboard.js'
 import deployments from '../fixtures/deployments.js'
@@ -29,6 +30,9 @@ export { FIXED_NOW_MS }
 // name → { fixture, scenario }
 export const SCREENS = {
   login: { fixture: user, scenario: 'login' },
+  // The first administrator's claim link: the form, and nothing to claim.
+  claim: { fixture: claim, scenario: 'form' },
+  'claim-none': { fixture: claim, scenario: 'none' },
   'user-home': { fixture: user, scenario: 'home' },
   'user-subscribe': { fixture: user, scenario: 'subscribe' },
   'user-help': { fixture: user, scenario: 'help' },

@@ -10,6 +10,7 @@ import { toastMessages } from './helpers/feedback'
 const mockLogin = vi.hoisted(() => vi.fn())
 const mockRegister = vi.hoisted(() => vi.fn())
 const mockPush = vi.hoisted(() => vi.fn())
+const mockClaimStatus = vi.hoisted(() => vi.fn())
 
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push: mockPush }),
@@ -18,6 +19,10 @@ vi.mock('vue-router', () => ({
 vi.mock('@/api/auth', () => ({
   login: (...args) => mockLogin(...args),
   register: (...args) => mockRegister(...args),
+}))
+
+vi.mock('@/api/claim', () => ({
+  getClaimStatus: (...args) => mockClaimStatus(...args),
 }))
 
 function ok(data) {
@@ -41,7 +46,29 @@ describe('Login.vue', () => {
     mockLogin.mockReset()
     mockRegister.mockReset()
     mockPush.mockReset()
+    mockClaimStatus.mockReset().mockResolvedValue(false)
     setEdition('community', { requireInvite: false })
+  })
+
+  it('says how to create the first administrator only while the panel has none', async () => {
+    mockClaimStatus.mockResolvedValue(true)
+    const view = render(Login)
+    const hint = await screen.findByText(/This panel has no administrator yet/)
+    expect(hint.closest('[data-auth-claim-hint]').textContent).toContain('sudo anix-control admin claim-link')
+    expect(screen.queryByRole('link')).toBeNull()
+    view.unmount()
+
+    mockClaimStatus.mockResolvedValue(false)
+    render(Login)
+    await waitFor(() => expect(mockClaimStatus).toHaveBeenCalledTimes(2))
+    expect(screen.queryByText(/no administrator yet/)).toBeNull()
+  })
+
+  it('shows no hint when the claim status cannot be read', async () => {
+    mockClaimStatus.mockRejectedValue(new Error('offline'))
+    render(Login)
+    await waitFor(() => expect(mockClaimStatus).toHaveBeenCalled())
+    expect(screen.queryByText(/no administrator yet/)).toBeNull()
   })
 
   it('shows one centred card: one H1, email and password, no dead links or decorative stats', async () => {

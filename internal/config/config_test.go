@@ -193,7 +193,6 @@ func TestShippedTemplateIsTheDomainLine(t *testing.T) {
 	assert.Empty(t, loaded.App.APIToken)
 	assert.Empty(t, loaded.GRPC.APIToken)
 	assert.Empty(t, loaded.ModuleRuntime.CAKEK)
-	assert.Empty(t, loaded.Admin.Password)
 
 	data, err := os.ReadFile(path)
 	require.NoError(t, err)
@@ -357,10 +356,6 @@ func TestConfigDefaults(t *testing.T) {
 			Enable: true,
 			Domain: "example.com",
 		},
-		Admin: AdminConfig{
-			Email:    "admin@example.com",
-			Password: "password",
-		},
 	}
 
 	Set(cfg)
@@ -372,7 +367,6 @@ func TestConfigDefaults(t *testing.T) {
 	assert.Equal(t, "postgres", got.Database.Driver)
 	assert.Equal(t, "redis", got.Cache.Driver)
 	assert.True(t, got.TLS.Enable)
-	assert.Equal(t, "admin@example.com", got.Admin.Email)
 }
 
 func TestServerConfig(t *testing.T) {

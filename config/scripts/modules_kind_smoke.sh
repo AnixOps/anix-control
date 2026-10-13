@@ -70,16 +70,13 @@ image:
   pullPolicy: Never
 config:
   ANIX_CONTROL_DATABASE_DATABASE: ${DB_NAME}
-  ANIX_CONTROL_ADMIN_EMAIL: admin@example.test
   ANIX_CONTROL_PLUGINS_OFFICIAL_PUBLIC_KEY: ${public_key}
 secrets:
   files:
-    admin_password: ANIX_CONTROL_ADMIN_PASSWORD
     module_ca_kek: ANIX_CONTROL_MODULE_RUNTIME_CA_KEK
   values:
     jwt_secret: $(openssl rand -hex 32)
     db_password: ${DB_PASSWORD}
-    admin_password: ModuleSmoke-0123456789
     module_ca_kek: $(openssl rand -base64 32)
 moduleRuntime:
   enabled: true
@@ -116,6 +113,21 @@ k rollout status "deployment/${fullname}-module-identity-platform" --timeout=6m
 
 k port-forward "svc/${fullname}" 18090:8080 >"${work}/port-forward.log" 2>&1 &
 port_forward=$!
+
+echo "== the first administrator, through the claim link"
+claimed=""
+for _ in $(seq 1 30); do
+  link="$(control admin claim-link 2>/dev/null || true)"
+  if [[ "${link}" =~ (anixclaim_[A-Za-z0-9_-]{43}) ]]; then
+    claimed="$(curl -sS -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' \
+      -d "{\"token\":\"${BASH_REMATCH[1]}\",\"email\":\"admin@example.test\",\"password\":\"ModuleSmoke-0123456789\"}" \
+      http://127.0.0.1:18090/api/v5/claim 2>/dev/null || true)"
+    [[ "${claimed}" == 201 ]] && break
+  fi
+  sleep 2
+done
+test "${claimed}" = 201 || { echo "the first administrator could not be claimed (${claimed:-no answer})"; exit 1; }
+
 login() {
   curl -fsS -H 'Content-Type: application/json' \
     -d '{"email":"admin@example.test","password":"ModuleSmoke-0123456789"}' \

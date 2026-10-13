@@ -10,6 +10,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/AnixOps/anix-control/v5/internal/adminclaim"
 	"github.com/AnixOps/anix-control/v5/internal/config"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/modulepki"
@@ -33,10 +34,10 @@ func moduleUsageError() error {
 }
 
 // takeAdminCommand removes a leading "module", "agent", "agents", "forward",
-// "tls" or "doctor" command and returns it with its arguments; nil means the
-// process is not running one.
+// "tls", "doctor" or "admin" command and returns it with its arguments; nil
+// means the process is not running one.
 func takeAdminCommand() []string {
-	if len(os.Args) > 1 && (os.Args[1] == "module" || os.Args[1] == "agent" || os.Args[1] == "agents" || os.Args[1] == "forward" || os.Args[1] == "tls" || os.Args[1] == "doctor") {
+	if len(os.Args) > 1 && (os.Args[1] == "module" || os.Args[1] == "agent" || os.Args[1] == "agents" || os.Args[1] == "forward" || os.Args[1] == "tls" || os.Args[1] == "doctor" || os.Args[1] == "admin") {
 		arguments := append([]string{}, os.Args[1:]...)
 		os.Args = os.Args[:1]
 		return arguments
@@ -63,13 +64,14 @@ func removedCommand(arguments []string) (string, bool) {
 
 // adminCommandExitCode is the exit status of a failed admin command: 3 when
 // `agents transports --check-required` finds nodes required would refuse
-// (the upgrade gate), 1 when `doctor` finds a problem or `tls retry` ends
-// with a certificate that is not valid, 2 on any other error.
+// (the upgrade gate), 1 when `doctor` finds a problem, `tls retry` ends
+// with a certificate that is not valid or `admin claim-link` finds an
+// administrator, 2 on any other error.
 func adminCommandExitCode(err error) int {
 	if errors.Is(err, errAgentsNotReady) {
 		return 3
 	}
-	if errors.Is(err, errDoctorFailed) || errors.Is(err, errTLSNotValid) {
+	if errors.Is(err, errDoctorFailed) || errors.Is(err, errTLSNotValid) || errors.Is(err, adminclaim.ErrAdministratorExists) {
 		return 1
 	}
 	return 2
@@ -97,6 +99,9 @@ func runAdminCommand(ctx context.Context, cfg *config.Config, db *gorm.DB, argum
 	}
 	if len(arguments) > 0 && arguments[0] == "doctor" {
 		return runDoctorCommand(ctx, cfg, db, arguments[1:], stdout)
+	}
+	if len(arguments) > 0 && arguments[0] == "admin" {
+		return runAdminClaimCommand(ctx, cfg, db, arguments[1:], stdout)
 	}
 	return moduleUsageError()
 }

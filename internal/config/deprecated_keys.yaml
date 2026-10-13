@@ -21,15 +21,15 @@
 #   subtree:     the key and everything below it (a section a template had)
 #   secret:      the value is a secret (never printed)
 keys:
-  # admin: the first administrator, until the claim link (N10).
+  # admin: the first administrator claims the panel with a one-time link (N10).
   - key: admin.email
-    status: read
+    status: ignored
     removed_in: M2 (P9)
-    reason: creates the first administrator on an empty database until the one-time claim link replaces it
+    reason: the first administrator claims the panel with a one-time link (anix-control admin claim-link); existing administrators are not affected
   - key: admin.password
-    status: read
+    status: ignored
     removed_in: M2 (P9)
-    reason: creates the first administrator on an empty database until the one-time claim link replaces it; keep it out of the file once an administrator exists
+    reason: no administrator password is configured any more; the first administrator claims the panel with a one-time link (anix-control admin claim-link) and existing administrators keep theirs, so remove it
     secret: true
 
   # agent_control: the Agent channels accept enrolled Agents only.

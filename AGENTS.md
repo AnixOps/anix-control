@@ -292,9 +292,11 @@ A release tag `vX.Y.Z[-alpha|-beta|-rc.N]` must match every surface checked by
   fetch the installer at that tag. It never reads `releases/latest` or a
   moving branch, so tagging a release cannot change what an unpinned command
   installs. A fresh install writes the one-line template (its `domain` line
-  kept a comment) and the first administrator into `config.yaml`
-  (`scripts/tests/test_install_fresh_config.sh` and
-  `internal/config/installer_config_test.go`), the unit names the data
+  kept a comment) into `config.yaml`, never an administrator or a password,
+  and ends by printing the first administrator's claim link
+  (`anix-control admin claim-link`; `scripts/tests/test_install_fresh_config.sh`,
+  `test_install_fresh_main.sh` and `internal/config/installer_config_test.go`),
+  the unit names the data
   directory, and `update` never rewrites an existing config
   (`anix-control config rewrite` does, on request). Containers stay the primary deployment. Control Center tags
   (`control-center-v*`) are never marked latest. Operator docs:

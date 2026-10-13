@@ -42,7 +42,8 @@ Before you try to start the panel, keep these rules straight:
 - local `go run` does not auto-load `.env` (template: [`.env.example`](../.env.example))
 - `forward_runtime` (deprecated, read until M5) is the canonical runtime entry
 - `InitForwardRuntimeSystemConfig` normalizes the YAML contents and writes them into `v2_system_config`
-- the operator keys and the deprecated keys still read (`admin.*`, database) come from the config file or from `ANIX_CONTROL_*` environment variables; containers use only the variables and the built-in values ([`reference/environment-variables.md`](reference/environment-variables.md)); no secret is configuration
+- the operator keys and the deprecated keys still read (database, `forward_runtime`) come from the config file or from `ANIX_CONTROL_*` environment variables; containers use only the variables and the built-in values ([`reference/environment-variables.md`](reference/environment-variables.md)); no secret is configuration
+- no administrator is configured: on an empty database the start logs ``No administrator yet. Run `sudo anix-control admin claim-link` to get the claim link.`` and the first administrator claims the panel with that one-time link ([`reference/quickstart.md`](reference/quickstart.md#the-first-administrator)); `admin.*` is ignored with a warning
 
 The systemd installer [`scripts/install.sh`](../scripts/install.sh) (also reached through [`install.sh`](../install.sh) and [`panel_install.sh`](../panel_install.sh)) generates `config/config.yaml`. Container deployments need no config file.
 

@@ -368,7 +368,8 @@ func run() int {
 	migrateOnly := takeMigrateCommand()
 	adminArguments := takeAdminCommand()
 	nodeSecretsArguments := takeNodeSecretsCommand()
-	// Module, agent and node-secrets commands print JSON on stdout.
+	// Module, agent and node-secrets commands print JSON on stdout, and
+	// admin claim-link its link: their logs go to stderr.
 	jsonCommand := adminArguments != nil || nodeSecretsArguments != nil
 	flag.Parse()
 	if printEnv {
@@ -424,6 +425,7 @@ func run() int {
 	if jsonCommand {
 		// Module, agent and node-secrets commands print their result on stdout; logs go to stderr.
 		logging.SetupTo(cfg.Log, os.Stderr)
+		database.SetSQLLogOutput(os.Stderr)
 	} else {
 		logging.Setup(cfg.Log)
 	}
@@ -498,6 +500,8 @@ func run() int {
 		}
 		return 0
 	}
+	// A panel nobody has claimed yet says how to claim it, once per start.
+	noteMissingAdministrator(context.Background(), database.Get(), log.Printf)
 	cache.InitMemory()
 	defer cache.CloseMemory()
 	log.Println("Cache initialized: memory")

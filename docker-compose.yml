@@ -5,9 +5,9 @@
 # docker-compose.prod.yml with a released image and an external database.
 #
 #   docker compose up -d --build
-#   ANIX_CONTROL_ADMIN_PASSWORD='choose-a-password' docker compose up -d --build
-#                                    # the first start on an empty database needs it
-#   open http://127.0.0.1:8080
+#   docker compose exec control /app/anix-control admin claim-link
+#                                    # the one-time link that creates the first administrator
+#   open http://127.0.0.1:8080/claim#anixclaim_...   (the link it printed)
 #
 # Control generates its root key in the control-data volume at the first
 # start; the JWT secret is derived from it.
@@ -23,8 +23,6 @@ x-control: &control
     ANIX_CONTROL_DATABASE_USERNAME: anix_control
     ANIX_CONTROL_DATABASE_PASSWORD: anix_control
     ANIX_CONTROL_DATABASE_DATABASE: anix_control
-    ANIX_CONTROL_ADMIN_EMAIL: admin@anixops.local
-    ANIX_CONTROL_ADMIN_PASSWORD: ${ANIX_CONTROL_ADMIN_PASSWORD:-}
   read_only: true
   tmpfs:
     - /tmp:rw,exec,mode=1777

@@ -51,3 +51,28 @@ func TestInitUsesParameterizedSQLLogger(t *testing.T) {
 		closeDatabase(t)
 	}
 }
+
+// An empty database.log_level (a configuration file without a database
+// section) is error, the built-in default, as an unknown value is: never
+// info, which logs every statement.
+func TestSQLLogLevelDefaultsToError(t *testing.T) {
+	for value, want := range map[string]logger.LogLevel{
+		"": logger.Error, "  ": logger.Error, "error": logger.Error, "verbose": logger.Error,
+		"silent": logger.Silent, "warn": logger.Warn, "info": logger.Info, "INFO": logger.Info, " Warn ": logger.Warn,
+	} {
+		assert.Equal(t, want, sqlLogLevel(value), "log level %q", value)
+	}
+	assert.Equal(t, "error", config.Defaults().Database.LogLevel, "the Go default follows defaults.yaml")
+
+	// Through Init: an empty level logs a failed statement, not a good one.
+	var out bytes.Buffer
+	previous := sqlLogOutput
+	SetSQLLogOutput(&out)
+	t.Cleanup(func() { SetSQLLogOutput(previous) })
+	require.NoError(t, Init(&config.DatabaseConfig{Driver: "sqlite", Database: ":memory:"}))
+	t.Cleanup(func() { closeDatabase(t) })
+	require.NoError(t, Get().Exec("CREATE TABLE quiet (id INTEGER)").Error)
+	assert.NotContains(t, out.String(), "CREATE TABLE quiet")
+	require.Error(t, Get().Exec("INSERT INTO missing_table (id) VALUES (1)").Error)
+	assert.Contains(t, out.String(), "missing_table")
+}

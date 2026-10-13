@@ -80,10 +80,9 @@ func bootstrapDatabase(ctx context.Context, cfg *config.Config) error {
 		}
 	}
 
-	// 初始化管理员账号、默认订阅分组、默认套餐、环境变量中的默认授权密钥
-	if err := service.InitAdmin(cfg); err != nil {
-		return fmt.Errorf("create the first administrator: %w", err)
-	}
+	// The default subscription group, plan and authorization key. No
+	// administrator is created: the first one claims the panel with a
+	// one-time link (anix-control admin claim-link).
 	service.InitSubscriptionDefaults()
 	service.InitDefaultPlan()
 	service.InitDefaultAuthKeyFromEnv()

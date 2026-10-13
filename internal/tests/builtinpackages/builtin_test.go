@@ -23,6 +23,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"syscall"
@@ -132,6 +133,10 @@ type control struct {
 	cmd    *exec.Cmd
 	exited chan struct{}
 	output *syncBuffer
+	// binary is the Control the latest start ran; claimed is set once the
+	// first administrator claimed this database.
+	binary  string
+	claimed bool
 }
 
 type syncBuffer struct {
@@ -157,9 +162,9 @@ func newControl(t *testing.T, key signingKey) *control {
 	port := freePort(t)
 	sqlitePath := filepath.Join(dir, "control.db")
 	// The operator keys, and the deprecated keys this release still reads
-	// (database, the package key of a development build, the first
-	// administrator, the web app switch). The root key is generated in
-	// data_dir at the first start.
+	// (database, the package key of a development build, the web app
+	// switch). The root key is generated in data_dir at the first start; the
+	// first administrator claims the panel (claim).
 	config := fmt.Sprintf(`listen: "127.0.0.1:%d"
 data_dir: %q
 frontend:
@@ -170,10 +175,7 @@ database:
   log_level: silent
 plugins:
   official_public_key: %q
-admin:
-  email: %q
-  password: %q
-`, port, filepath.Join(dir, "data"), sqlitePath, key.encoded, adminEmail, adminPassword)
+`, port, filepath.Join(dir, "data"), sqlitePath, key.encoded)
 	configPath := filepath.Join(dir, "config.yaml")
 	require.NoError(t, os.WriteFile(configPath, []byte(config), 0o600))
 	db, err := gorm.Open(sqlite.Open(sqlitePath+"?_pragma=busy_timeout(10000)&_pragma=journal_mode(WAL)"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
@@ -192,9 +194,10 @@ func (c *control) url(path string) string { return fmt.Sprintf("http://127.0.0.1
 func (c *control) start(binary string) {
 	c.t.Helper()
 	c.output = &syncBuffer{}
+	c.binary = binary
 	c.cmd = exec.Command(binary, "-config", c.config)
 	c.cmd.Dir = c.dir
-	c.cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=" + c.dir, "TMPDIR=" + c.dir, "TZ=UTC"}
+	c.cmd.Env = c.environment()
 	c.cmd.Stdout, c.cmd.Stderr = c.output, c.output
 	c.cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	require.NoError(c.t, c.cmd.Start())
@@ -292,8 +295,39 @@ func (c *control) waitHealthy(version string, skip ...string) map[string]model.P
 	return installations
 }
 
+func (c *control) environment() []string {
+	return []string{"PATH=" + os.Getenv("PATH"), "HOME=" + c.dir, "TMPDIR=" + c.dir, "TZ=UTC"}
+}
+
+// claimToken finds the token in what `admin claim-link` printed.
+var claimToken = regexp.MustCompile(`anixclaim_[A-Za-z0-9_-]{43}`)
+
+// claim creates the first administrator as a fresh panel gets it: the
+// running binary's `admin claim-link`, then POST /api/v5/claim.
+func (c *control) claim() {
+	c.t.Helper()
+	command := exec.Command(c.binary, "admin", "claim-link")
+	command.Dir = c.dir
+	command.Env = append(c.environment(), "ANIX_CONTROL_CONFIG="+c.config)
+	var stdout, stderr bytes.Buffer
+	command.Stdout, command.Stderr = &stdout, &stderr
+	require.NoError(c.t, command.Run(), "admin claim-link\n%s", stderr.String())
+	token := claimToken.FindString(stdout.String())
+	require.NotEmpty(c.t, token, "admin claim-link printed no link:\n%s", stdout.String())
+	body, _ := json.Marshal(map[string]string{"token": token, "email": adminEmail, "password": adminPassword})
+	response, err := http.Post(c.url("/api/v5/claim"), "application/json", bytes.NewReader(body))
+	require.NoError(c.t, err)
+	defer func() { _ = response.Body.Close() }()
+	answer, _ := io.ReadAll(response.Body)
+	require.Equal(c.t, http.StatusCreated, response.StatusCode, string(answer))
+	c.claimed = true
+}
+
 func (c *control) login() {
 	c.t.Helper()
+	if !c.claimed {
+		c.claim()
+	}
 	c.eventually(60*time.Second, "an administrator login", func() bool {
 		body, _ := json.Marshal(map[string]string{"email": adminEmail, "password": adminPassword})
 		response, err := http.Post(c.url("/api/v2/login"), "application/json", bytes.NewReader(body))

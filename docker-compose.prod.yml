@@ -57,9 +57,10 @@ x-control: &control
 
 services:
   # One-shot schema and seed preparation. It holds a PostgreSQL advisory lock,
-  # and the server repeats it idempotently, so re-running is always safe. On a
-  # fresh database without admin.password it prints the generated admin
-  # password: docker compose -f docker-compose.prod.yml logs migrate
+  # and the server repeats it idempotently, so re-running is always safe. It
+  # creates no administrator: on a fresh database the first one claims the
+  # panel with a one-time link,
+  #   docker compose -f docker-compose.prod.yml exec control /app/anix-control admin claim-link
   migrate:
     <<: *control
     command: ["migrate"]
