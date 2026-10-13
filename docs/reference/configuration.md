@@ -191,8 +191,8 @@ stands). The list is `internal/config/deprecated_keys.yaml`.
 <!-- BEGIN GENERATED: deprecated configuration keys -->
 | Key | Variable | Status | Removed in | Why |
 |-----|----------|--------|------------|-----|
-| `admin.email` | `ANIX_CONTROL_ADMIN_EMAIL` | still read | M2 (P9) | creates the first administrator on an empty database until the one-time claim link replaces it |
-| `admin.password` | `ANIX_CONTROL_ADMIN_PASSWORD` | still read | M2 (P9) | creates the first administrator on an empty database until the one-time claim link replaces it; keep it out of the file once an administrator exists |
+| `admin.email` | `ANIX_CONTROL_ADMIN_EMAIL` | ignored | M2 (P9) | the first administrator claims the panel with a one-time link (anix-control admin claim-link); existing administrators are not affected |
+| `admin.password` | `ANIX_CONTROL_ADMIN_PASSWORD` | ignored | M2 (P9) | no administrator password is configured any more; the first administrator claims the panel with a one-time link (anix-control admin claim-link) and existing administrators keep theirs, so remove it |
 | `agent_control.legacy_sunset` | `ANIX_CONTROL_AGENT_CONTROL_LEGACY_SUNSET` | ignored | M5 | the legacy Agent transports send no Sunset date; Agents enroll (agent_control.mtls is fixed to required) |
 | `agent_control.mtls` | `ANIX_CONTROL_AGENT_CONTROL_MTLS` | ignored | M5 | fixed to required, the 4.2 default; the other modes are removed with the legacy Agent transports |
 | `agent_install.agent_version` | `ANIX_CONTROL_AGENT_INSTALL_AGENT_VERSION` | still read | M4 (S9) | pins the Agent release nodes install until Control carries its Agent release manifest |

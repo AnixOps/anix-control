@@ -63,10 +63,6 @@ func (s *AuthE2ETestSuite) SetupSuite() {
 				Enabled: &rateLimitEnabled,
 			},
 		},
-		Admin: config.AdminConfig{
-			Email:    "admin@example.com",
-			Password: "admin123456",
-		},
 	}
 
 	// 注册配置到全局 (必须在中间件初始化前设置)
@@ -89,8 +85,8 @@ func (s *AuthE2ETestSuite) SetupSuite() {
 	)
 	s.Require().NoError(err)
 
-	// 初始化管理员
-	s.Require().NoError(service.InitAdmin(s.cfg))
+	// The first administrator, claimed with a claim link.
+	claimFirstAdministrator(s.T(), "admin@example.com", "admin123456")
 	s.restoreIdentityHost = installIdentityPlatformE2EPackage(s.T(), s.cfg)
 
 	// 创建路由

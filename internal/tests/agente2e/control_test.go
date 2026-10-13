@@ -7,7 +7,9 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -39,6 +41,8 @@ type control struct {
 	dbDriver   string
 	sqlitePath string
 	token      string
+	// claimed is set once the first administrator claimed the database.
+	claimed bool
 }
 
 func (c *control) URL() string      { return "http://127.0.0.1:" + strconv.Itoa(c.apiPort) }
@@ -62,8 +66,9 @@ func writeControlConfig(t *testing.T, dir string, keys testPKI, identityPackageD
 	// The operator keys, and the deprecated keys this release still reads:
 	// the database, the test's package key and identity package, the gRPC
 	// listener without a domain (its own test-CA certificate), the CA key
-	// (adopted into data_dir/root.key at the start), the first
-	// administrator, closed registration and the inert flux runtime.
+	// (adopted into data_dir/root.key at the start), closed registration
+	// and the inert flux runtime. The first administrator claims the panel
+	// (claim).
 	config := fmt.Sprintf(`listen: "127.0.0.1:%d"
 data_dir: %s
 frontend:
@@ -83,15 +88,12 @@ grpc:
   tls_key_file: %s
 module_runtime:
   ca_kek: %s
-admin:
-  email: %s
-  password: %s
 forward_runtime:
   backend: clean_agent
   clean_agent:
     legacy_bridge_enabled: false
 `, apiPort, quoted(filepath.Join(dir, "data")), database, quoted(keys.SigningPublicKey), quoted(identityPackageDir), grpcPort,
-		quoted(keys.ServerCertFile), quoted(keys.ServerKeyFile), quoted(keys.CAKEK), quoted(adminEmail), quoted(adminPassword))
+		quoted(keys.ServerCertFile), quoted(keys.ServerKeyFile), quoted(keys.CAKEK))
 	path := filepath.Join(dir, "config.yaml")
 	require.NoError(t, os.WriteFile(path, []byte(config), 0o600))
 	return path, sqlitePath
@@ -132,10 +134,34 @@ func (c *control) Start(t *testing.T) {
 	}, c.proc)
 }
 
-// Login signs in as the bootstrap administrator (the identity-platform
-// package answers once its host runs).
+// claimToken finds the token in what `admin claim-link` printed.
+var claimToken = regexp.MustCompile(`anixclaim_[A-Za-z0-9_-]{43}`)
+
+// claim creates the first administrator as a fresh panel gets it: Control's
+// `admin claim-link`, with the process's configuration, then
+// POST /api/v5/claim.
+func (c *control) claim(t *testing.T) {
+	t.Helper()
+	command := exec.Command(c.proc.binary, "admin", "claim-link")
+	command.Dir = c.proc.dir
+	command.Env = c.proc.env
+	var stdout, stderr bytes.Buffer
+	command.Stdout, command.Stderr = &stdout, &stderr
+	require.NoError(t, command.Run(), "admin claim-link\n%s", stderr.String())
+	token := claimToken.FindString(stdout.String())
+	require.NotEmpty(t, token, "admin claim-link printed no link:\n%s", stdout.String())
+	status, body := c.do(t, http.MethodPost, "/api/v5/claim", map[string]string{"token": token, "email": adminEmail, "password": adminPassword}, false)
+	require.Equal(t, http.StatusCreated, status, string(body))
+	c.claimed = true
+}
+
+// Login signs in as the first administrator, claiming the panel first (the
+// identity-platform package answers once its host runs).
 func (c *control) Login(t *testing.T) {
 	t.Helper()
+	if !c.claimed {
+		c.claim(t)
+	}
 	eventually(t, 60*time.Second, func() (bool, string) {
 		status, body := c.do(t, http.MethodPost, "/api/v2/login", map[string]string{"email": adminEmail, "password": adminPassword}, false)
 		if status != http.StatusOK {

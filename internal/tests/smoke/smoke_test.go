@@ -57,10 +57,6 @@ func (s *SmokeTestSuite) SetupSuite() {
 			APIToken:      "smoke-api-token",
 			SubscribePath: "s",
 		},
-		Admin: config.AdminConfig{
-			Email:    "admin@smoke.test",
-			Password: "AdminPassword123!",
-		},
 	}
 
 	config.Set(s.cfg)
@@ -93,9 +89,9 @@ func (s *SmokeTestSuite) SetupSuite() {
 	))
 
 	// Create admin user
-	hashed, _ := bcrypt.GenerateFromPassword([]byte(s.cfg.Admin.Password), bcrypt.DefaultCost)
+	hashed, _ := bcrypt.GenerateFromPassword([]byte(smokeAdminPassword), bcrypt.DefaultCost)
 	admin := model.User{
-		Email:    s.cfg.Admin.Email,
+		Email:    smokeAdminEmail,
 		Password: string(hashed),
 		IsAdmin:  1,
 		Token:    uuid.New().String(),
@@ -107,9 +103,9 @@ func (s *SmokeTestSuite) SetupSuite() {
 func (s *SmokeTestSuite) SetupTest() {
 	testutil.CleanupDB(s.db)
 	// Re-create admin after cleanup
-	hashed, _ := bcrypt.GenerateFromPassword([]byte(s.cfg.Admin.Password), bcrypt.DefaultCost)
+	hashed, _ := bcrypt.GenerateFromPassword([]byte(smokeAdminPassword), bcrypt.DefaultCost)
 	admin := model.User{
-		Email:    s.cfg.Admin.Email,
+		Email:    smokeAdminEmail,
 		Password: string(hashed),
 		IsAdmin:  1,
 		Token:    uuid.New().String(),
@@ -126,6 +122,12 @@ func (s *SmokeTestSuite) TearDownTest() {
 	testutil.CleanupDB(s.db)
 }
 
+// The smoke suite's administrator, created directly in the database.
+const (
+	smokeAdminEmail    = "admin@smoke.test"
+	smokeAdminPassword = "AdminPassword123!"
+)
+
 func TestSmoke(t *testing.T) {
 	suite.Run(t, new(SmokeTestSuite))
 }
@@ -139,7 +141,7 @@ func (s *SmokeTestSuite) generateToken(userID uint, email string, isAdmin bool) 
 
 // adminToken returns a valid admin JWT token
 func (s *SmokeTestSuite) adminToken() string {
-	return s.generateToken(1, s.cfg.Admin.Email, true)
+	return s.generateToken(1, smokeAdminEmail, true)
 }
 
 // ============================================================

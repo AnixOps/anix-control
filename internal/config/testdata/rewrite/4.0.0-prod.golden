@@ -32,8 +32,8 @@ Kept:
   database: still read until PostgreSQL support ends (M2, P4): the panel keeps its database
 
 Dropped:
-  admin.email: still read until M2 (P9), not written: creates the first administrator on an empty database until the one-time claim link replaces it
-  admin.password: still read until M2 (P9), not written: creates the first administrator on an empty database until the one-time claim link replaces it; keep it out of the file once an administrator exists
+  admin.email: the first administrator claims the panel with a one-time link (anix-control admin claim-link); existing administrators are not affected
+  admin.password: no administrator password is configured any more; the first administrator claims the panel with a one-time link (anix-control admin claim-link) and existing administrators keep theirs, so remove it
   app.api_token: still read until M5 (N9), not written: the legacy shared token of /flow/upload and the internal v2 routes, removed with them; administrators use admin API tokens
   app.name: nothing reads it
   app.subscribe_path: the default (s)

@@ -1,12 +1,18 @@
 package e2e
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"testing"
+	"time"
 
+	"github.com/AnixOps/anix-control/v5/internal/adminclaim"
 	"github.com/AnixOps/anix-control/v5/internal/database"
+	"github.com/AnixOps/anix-control/v5/internal/database/migrations"
+	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func requireJSONUnmarshal(t testing.TB, data []byte, target any) {
@@ -52,4 +58,18 @@ func requireDatabaseClosed(t testing.TB) {
 	t.Helper()
 
 	require.NoError(t, database.Close())
+}
+
+// claimFirstAdministrator creates the first administrator as a fresh panel
+// does: a claim link (anix-control admin claim-link) and its claim.
+func claimFirstAdministrator(t testing.TB, email, password string) {
+	t.Helper()
+
+	db := database.Get()
+	require.NoError(t, db.AutoMigrate(&migrations.MetaEntry{}, &model.AuditLog{}))
+	issued, err := adminclaim.Issue(context.Background(), db, adminclaim.DefaultTTL, time.Now())
+	require.NoError(t, err)
+	_, err = (&adminclaim.Claimer{DB: db, Cost: bcrypt.MinCost}).Claim(context.Background(),
+		adminclaim.Request{Token: issued.Token, Email: email, Password: password})
+	require.NoError(t, err)
 }

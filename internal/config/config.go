@@ -59,7 +59,6 @@ type Config struct {
 	JWT            JWTConfig            `yaml:"jwt"`
 	Auth           AuthConfig           `yaml:"auth"`
 	App            AppConfig            `yaml:"app"`
-	Admin          AdminConfig          `yaml:"admin"`
 	TLS            TLSConfig            `yaml:"tls"`
 	ForwardRuntime ForwardRuntimeConfig `yaml:"forward_runtime"`
 	Forward        ForwardConfig        `yaml:"forward"`
@@ -601,12 +600,6 @@ type TLSConfig struct {
 	//
 	// Deprecated: set domain.
 	Domain string `yaml:"domain"`
-}
-
-// AdminConfig defines the bootstrap admin account.
-type AdminConfig struct {
-	Email    string `yaml:"email"`
-	Password string `yaml:"password"`
 }
 
 // ServerConfig defines backend server settings.
