@@ -44,7 +44,8 @@ Rules:
   `X-Forwarded-Proto`, `X-Forwarded-Host`, `X-Forwarded-For` and
   `X-Real-IP` Control honours (`internal/requestorigin`); from any other peer
   they are ignored. Unset means `127.0.0.1/32,::1/128`; an empty list trusts
-  none; a list replaces the default. See `docs/DEPLOYMENT.md` section 6.1.
+  none; a list replaces the default. The UI listener's own hop to the API
+  listener is always trusted. See `docs/DEPLOYMENT.md` section 6.1.
 
 Without a config file, Control starts from the built-in defaults: `env:
 production`, API on `0.0.0.0:8080`, UI on `3000`, PostgreSQL

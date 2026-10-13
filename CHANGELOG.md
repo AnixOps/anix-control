@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### Fixed
+
+- The UI listener (port 3000) serves the install paths: `/install.sh`, `/install.sh.sig`, `/install/agent.env`,
+  `/install/ip` and `/install/agent/:tag/:asset` are forwarded to the API listener, as `/api` and the subscription
+  path are. They were registered on the API listener only, so a reverse proxy that sends the whole host to port 3000
+  (every Nginx, Caddy and Helm example in the docs) answered `curl .../install.sh | sudo bash` with the SPA's
+  `index.html`. Rate limits and the signature check stay on the API side. The hop from the UI listener to the API
+  listener is always trusted, so a `server.trusted_proxies` without loopback (or an empty list, or a specific
+  `server.host`) no longer makes every client look like the UI server, and a proxy that sets only `X-Real-IP` is
+  honoured on that hop.
+
 ### Added
 
 - The Agent contract has an `AgentEnrollment.Join` RPC (`JoinRequest`, `JoinResponse`), and the SDK names

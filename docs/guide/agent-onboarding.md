@@ -46,6 +46,10 @@ On Control:
   `public_url`'s host and `grpc.port`. Behind a reverse proxy, also list it
   in `server.trusted_proxies`: the script asks `GET /install/ip` for the
   machine's address, and only a trusted proxy's forwarded address counts.
+- The install paths (`/install.sh`, `/install.sh.sig`, `/install/agent.env`,
+  `/install/ip` and `/install/agent/<tag>/<asset>`) are served on both
+  listeners, the API port (8080) and the UI port (3000, which forwards them),
+  so a reverse proxy that sends the whole host to the UI port serves them too.
 - Only a super administrator (an administrator who is not staff and not
   banned) can show a group's command or reset its token, and issue
   enrollment tokens.
