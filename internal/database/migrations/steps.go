@@ -129,7 +129,7 @@ func loadSteps(files fs.FS, dir string, goFuncs map[int]func(context.Context, *g
 	}
 	for version := range goFuncs {
 		if version < 1 || version > len(steps) {
-			return nil, fmt.Errorf("Go migration %04d has no SQL files", version)
+			return nil, fmt.Errorf("migration %04d has a Go function but no SQL files", version)
 		}
 	}
 	return steps, nil

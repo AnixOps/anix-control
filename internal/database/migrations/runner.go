@@ -280,11 +280,28 @@ func abbreviate(statement string) string {
 	return statement
 }
 
+// tableExists reports whether table is in the schema Control uses. Unlike
+// the GORM migrator's HasTable it answers a failed query with the error, not
+// with false: a lost connection must not look like a database without
+// migrations.
+func tableExists(db *gorm.DB, table string) (bool, error) {
+	query := "SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = ?"
+	if db.Name() == "postgres" {
+		query = "SELECT count(*) FROM pg_tables WHERE schemaname = current_schema() AND tablename = ?"
+	}
+	var count int64
+	if err := db.Raw(query, table).Scan(&count).Error; err != nil {
+		return false, fmt.Errorf("look for %s: %w", table, err)
+	}
+	return count > 0, nil
+}
+
 // appliedSteps reads v5_schema_migration; a database without it has none.
 func appliedSteps(db *gorm.DB) (map[int]MigrationRecord, error) {
 	applied := map[int]MigrationRecord{}
-	if !db.Migrator().HasTable(MigrationTable) {
-		return applied, nil
+	exists, err := tableExists(db, MigrationTable)
+	if err != nil || !exists {
+		return applied, err
 	}
 	var records []MigrationRecord
 	if err := db.Order("version").Find(&records).Error; err != nil {
@@ -377,7 +394,20 @@ func recordProgram(db *gorm.DB, steps []Step, options Options) error {
 	if len(values) == 0 {
 		return nil
 	}
-	return db.Transaction(func(tx *gorm.DB) error { return setMeta(tx, options.Now(), values) })
+	dialect, err := dialectOf(db)
+	if err != nil {
+		return err
+	}
+	return db.Transaction(func(tx *gorm.DB) error {
+		// The tables exist once a step was recorded; IF NOT EXISTS only
+		// matters for a database whose meta table was dropped by hand.
+		for _, statement := range runnerTables[dialect] {
+			if err := tx.Exec(statement).Error; err != nil {
+				return err
+			}
+		}
+		return setMeta(tx, options.Now(), values)
+	})
 }
 
 func setMeta(tx *gorm.DB, now time.Time, values map[string]string) error {
@@ -408,8 +438,9 @@ func setMeta(tx *gorm.DB, now time.Time, values map[string]string) error {
 // metaValue reads one key of v5_control_meta, "" when it or the table is
 // missing.
 func metaValue(db *gorm.DB, key string) (string, error) {
-	if !db.Migrator().HasTable(MetaTable) {
-		return "", nil
+	exists, err := tableExists(db, MetaTable)
+	if err != nil || !exists {
+		return "", err
 	}
 	var entries []MetaEntry
 	if err := db.Where("key = ?", key).Limit(1).Find(&entries).Error; err != nil {
@@ -424,8 +455,9 @@ func metaValue(db *gorm.DB, key string) (string, error) {
 // Meta reads v5_control_meta.
 func Meta(ctx context.Context, db *gorm.DB) (map[string]string, error) {
 	values := map[string]string{}
-	if !db.WithContext(ctx).Migrator().HasTable(MetaTable) {
-		return values, nil
+	exists, err := tableExists(db.WithContext(ctx), MetaTable)
+	if err != nil || !exists {
+		return values, err
 	}
 	var entries []MetaEntry
 	if err := db.WithContext(ctx).Find(&entries).Error; err != nil {
