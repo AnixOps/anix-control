@@ -163,8 +163,8 @@ The following are not claimed, and are not complete, today:
 - `nftables-forward`, `gost-mesh` and `nat-egress` are signed with every
   release but remain Preview/Partial (`docs/features.md`); letting them carry
   production traffic is the operator's decision.
-- The business domains have not moved out of the kernel: 177 of the 243
-  `/api/v2` routes have native package handlers (130 run natively by default),
+- The business domains have not moved out of the kernel: 173 of the 236
+  `/api/v2` routes have native package handlers (126 run natively by default),
   but handlers, services, workers and table ownership stay in the kernel
   (`package-extraction.md`, section 1).
 

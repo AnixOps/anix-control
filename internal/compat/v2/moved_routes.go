@@ -18,7 +18,8 @@ type MovedRoute struct {
 	ToRoute     string
 }
 
-// movedRoutes: system configuration, audit and backup moved to platform;
+// movedRoutes: system configuration and audit moved to platform (the
+// backup routes that moved with them are gone);
 // affiliate commissions, withdrawals and settings to affiliate; the Flux
 // reset-flow endpoint to forward (4.1). The user's invite codes and their
 // generation followed to affiliate, and the Flux speed limits moved from
@@ -40,13 +41,6 @@ var movedRoutes = []MovedRoute{
 	{Method: "GET", LegacyPath: "/api/v2/user/invite/withdrawals", FromPackage: "identity-platform", FromRoute: "identity.user.invite.withdrawals.get", ToPackage: "affiliate", ToRoute: "affiliate.user.invite.withdrawals.get"},
 	{Method: "POST", LegacyPath: "/api/v2/user/reset", FromPackage: "identity-platform", FromRoute: "identity.user.reset.post", ToPackage: "forward", ToRoute: "forward.user.reset.post"},
 	{Method: "GET", LegacyPath: "/api/v2/admin/system/audit-logs", FromPackage: "identity-platform", FromRoute: "identity.admin.system.audit_logs.get", ToPackage: "platform", ToRoute: "platform.admin.system.audit_logs.get"},
-	{Method: "POST", LegacyPath: "/api/v2/admin/system/backup", FromPackage: "identity-platform", FromRoute: "identity.admin.system.backup.post", ToPackage: "platform", ToRoute: "platform.admin.system.backup.post"},
-	{Method: "GET", LegacyPath: "/api/v2/admin/system/backup/config", FromPackage: "identity-platform", FromRoute: "identity.admin.system.backup.config.get", ToPackage: "platform", ToRoute: "platform.admin.system.backup.config.get"},
-	{Method: "PUT", LegacyPath: "/api/v2/admin/system/backup/config", FromPackage: "identity-platform", FromRoute: "identity.admin.system.backup.config.put", ToPackage: "platform", ToRoute: "platform.admin.system.backup.config.put"},
-	{Method: "GET", LegacyPath: "/api/v2/admin/system/backup/stats", FromPackage: "identity-platform", FromRoute: "identity.admin.system.backup.stats.get", ToPackage: "platform", ToRoute: "platform.admin.system.backup.stats.get"},
-	{Method: "GET", LegacyPath: "/api/v2/admin/system/backups", FromPackage: "identity-platform", FromRoute: "identity.admin.system.backups.get", ToPackage: "platform", ToRoute: "platform.admin.system.backups.get"},
-	{Method: "DELETE", LegacyPath: "/api/v2/admin/system/backups/:id", FromPackage: "identity-platform", FromRoute: "identity.admin.system.backups.id.delete", ToPackage: "platform", ToRoute: "platform.admin.system.backups.id.delete"},
-	{Method: "POST", LegacyPath: "/api/v2/admin/system/backups/:id/restore", FromPackage: "identity-platform", FromRoute: "identity.admin.system.backups.id.restore.post", ToPackage: "platform", ToRoute: "platform.admin.system.backups.id.restore.post"},
 	{Method: "GET", LegacyPath: "/api/v2/admin/system/configs", FromPackage: "identity-platform", FromRoute: "identity.admin.system.configs.get", ToPackage: "platform", ToRoute: "platform.admin.system.configs.get"},
 	{Method: "DELETE", LegacyPath: "/api/v2/admin/system/configs/:key", FromPackage: "identity-platform", FromRoute: "identity.admin.system.configs.key.delete", ToPackage: "platform", ToRoute: "platform.admin.system.configs.key.delete"},
 	{Method: "GET", LegacyPath: "/api/v2/admin/system/configs/:key", FromPackage: "identity-platform", FromRoute: "identity.admin.system.configs.key.get", ToPackage: "platform", ToRoute: "platform.admin.system.configs.key.get"},

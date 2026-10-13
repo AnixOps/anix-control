@@ -11,6 +11,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/AnixOps/anix-control/v5/internal/backup"
 	"github.com/AnixOps/anix-control/v5/internal/config"
 	"github.com/AnixOps/anix-control/v5/internal/forwardlegacy"
 	"github.com/AnixOps/anix-control/v5/internal/service"
@@ -50,8 +51,9 @@ transaction and refuses unless: the phrase is exact; the latest archive is
 readable, unchanged and current; every forward node is clean or abandoned;
 no installed package release still adopts one of the tables (its storage
 lease would fail); no Control process runs on the database; and a database backup of the last
-24 hours exists (Control's own on SQLite, or --backup-taken <path>, a
-pg_dump file on PostgreSQL). v2_forward_node and v2_forward_clean_agent
+24 hours exists (on SQLite a verified bundle of Control's backups, from
+anix-control backup create, or --backup-taken <path>, a pg_dump file on
+PostgreSQL). v2_forward_node and v2_forward_clean_agent
 are kept. After the drop, rolling back to 4.1 needs that backup. There is
 no button for it in the web UI on purpose.
 
@@ -239,13 +241,13 @@ func (c *forwardLegacyCLI) abandon(arguments []string) error {
 func (c *forwardLegacyCLI) drop(arguments []string) error {
 	set := flag.NewFlagSet("forward legacy drop", flag.ContinueOnError)
 	confirm := set.String("confirm", "", "the confirmation phrase")
-	backup := set.String("backup-taken", "", "the database backup file")
+	backupTaken := set.String("backup-taken", "", "the database backup file")
 	positionals, err := parseLegacyFlags(set, arguments)
 	if err != nil || len(positionals) != 0 {
 		return forwardLegacyUsageError()
 	}
 	result, err := forwardlegacy.Drop(c.ctx, c.db, forwardlegacy.DropOptions{
-		Confirm: *confirm, BackupPath: *backup, Actor: service.CLIActor, Now: c.now(),
+		Confirm: *confirm, BackupPath: *backupTaken, BackupDir: controlBackupDir(c.cfg), Actor: service.CLIActor, Now: c.now(),
 	})
 	if err != nil {
 		c.audit("forward.legacy_drop_refused", map[string]any{"error": err.Error()})
@@ -255,6 +257,15 @@ func (c *forwardLegacyCLI) drop(arguments []string) error {
 		"archive": result.Record.ArchivePath, "backup": result.Backup})
 	return c.printJSON(map[string]any{"drop": result, "audited": audited,
 		"next": "Start Control again. Rolling back to 4.1 now needs the database backup " + backupPath(result.Backup) + "."})
+}
+
+// controlBackupDir is the directory of Control's backup bundles; "" without
+// a data directory.
+func controlBackupDir(cfg *config.Config) string {
+	if cfg == nil || strings.TrimSpace(cfg.DataDir) == "" {
+		return ""
+	}
+	return backup.Dir(cfg.DataDir)
 }
 
 func backupPath(backup *forwardlegacy.Backup) string {

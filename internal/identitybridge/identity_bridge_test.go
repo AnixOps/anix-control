@@ -199,7 +199,7 @@ func (s *movedRouteResolverStub) Resolve(packageID, routeID, operation string) (
 func TestMovedRouteOperationsRunTheNewOwnersHandler(t *testing.T) {
 	resolver := &movedRouteResolverStub{}
 	operations := movedRouteOperations(resolver)
-	require.Len(t, operations, 27)
+	require.Len(t, operations, 20)
 
 	var configs, reset packagebridge.Operation
 	fromPlan := 0

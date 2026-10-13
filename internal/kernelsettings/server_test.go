@@ -2,7 +2,6 @@ package kernelsettings
 
 import (
 	"context"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -57,7 +56,7 @@ func fixture(t *testing.T, authorizer Authorizer) (*gorm.DB, kernelsettingsv1.Ke
 	sqlDB, err := db.DB()
 	require.NoError(t, err)
 	sqlDB.SetMaxOpenConns(1)
-	require.NoError(t, db.AutoMigrate(&model.SystemConfig{}, &model.BackupConfig{}, &model.OperationLog{}, &model.SettingsRequest{}))
+	require.NoError(t, db.AutoMigrate(&model.SystemConfig{}, &model.OperationLog{}, &model.SettingsRequest{}))
 	require.NoError(t, db.Create(&[]model.SystemConfig{
 		{Key: "forward.runtime.nodex.base_url", Value: "http://nodex.test", Type: "string", Group: "forward_runtime"},
 		{Key: "forward.runtime.nodex.token", Value: "nodex-secret", Type: "string", Group: "forward_runtime"},
@@ -130,8 +129,10 @@ func TestKeysOutsideTheNamespaceAreRefused(t *testing.T) {
 		_, err = server.DeleteSettings(ctx, &kernelsettingsv1.DeleteSettingsRequest{Namespace: "nodex", RequestId: "d:" + key, Keys: []string{key}})
 		require.Equal(t, codes.InvalidArgument, status.Code(err), key)
 	}
-	_, err := server.GetSettings(ctx, &kernelsettingsv1.GetSettingsRequest{Namespace: "backup", Keys: []string{"backup.password"}})
-	require.Equal(t, codes.InvalidArgument, status.Code(err), "a backup key must name a field")
+	// The backup configuration namespace went with the backup settings.
+	_, err := server.GetSettings(ctx, &kernelsettingsv1.GetSettingsRequest{Namespace: "backup"})
+	require.Equal(t, codes.InvalidArgument, status.Code(err), "the backup namespace is gone")
+	require.Contains(t, status.Convert(err).Message(), `unknown settings namespace "backup"`)
 	var mfa model.SystemConfig
 	require.NoError(t, db.Where("key = ?", "security.mfa.config").Take(&mfa).Error)
 	require.JSONEq(t, `{"enforce":true}`, mfa.Value)
@@ -249,29 +250,23 @@ func TestPutKeepsSecretsRecordsAuditAndAppliesOnce(t *testing.T) {
 
 func TestPutValidatesBeforeWriting(t *testing.T) {
 	ctx := context.Background()
-	db, server := fixture(t, capabilities("nodex", service.SettingsAccessWrite).with(capabilities("backup", service.SettingsAccessWrite)))
+	db, server := fixture(t, capabilities("nodex", service.SettingsAccessWrite))
 	entry := func(key, value string) []*kernelsettingsv1.SettingEntry {
 		return []*kernelsettingsv1.SettingEntry{{Key: key, Value: value}}
 	}
 	for name, request := range map[string]*kernelsettingsv1.PutSettingsRequest{
-		"no request id":    {Namespace: "nodex", Entries: entry("forward.runtime.nodex.base_url", "x")},
-		"long request id":  {Namespace: "nodex", RequestId: strings.Repeat("r", 129), Entries: entry("forward.runtime.nodex.base_url", "x")},
-		"no entries":       {Namespace: "nodex", RequestId: "r"},
-		"repeated key":     {Namespace: "nodex", RequestId: "r", Entries: append(entry("forward.runtime.nodex.base_url", "x"), entry("forward.runtime.nodex.base_url", "y")...)},
-		"unknown type":     {Namespace: "nodex", RequestId: "r", Entries: []*kernelsettingsv1.SettingEntry{{Key: "forward.runtime.nodex.base_url", Type: "yaml"}}},
-		"NUL value":        {Namespace: "nodex", RequestId: "r", Entries: entry("forward.runtime.nodex.base_url", "a\x00b")},
-		"bad client ip":    {Namespace: "nodex", RequestId: "r", Entries: entry("forward.runtime.nodex.base_url", "x"), Actor: &kernelsettingsv1.Actor{ClientIp: "nowhere"}},
-		"backup metadata":  {Namespace: "backup", RequestId: "r", Entries: []*kernelsettingsv1.SettingEntry{{Key: "backup.schedule", Value: "x", Group: "g"}}},
-		"backup not bool":  {Namespace: "backup", RequestId: "r", Entries: entry("backup.enabled", "maybe")},
-		"backup not int":   {Namespace: "backup", RequestId: "r", Entries: entry("backup.retention_days", "7d")},
-		"backup not field": {Namespace: "backup", RequestId: "r", Entries: entry("backup.config", "x")},
+		"no request id":   {Namespace: "nodex", Entries: entry("forward.runtime.nodex.base_url", "x")},
+		"long request id": {Namespace: "nodex", RequestId: strings.Repeat("r", 129), Entries: entry("forward.runtime.nodex.base_url", "x")},
+		"no entries":      {Namespace: "nodex", RequestId: "r"},
+		"repeated key":    {Namespace: "nodex", RequestId: "r", Entries: append(entry("forward.runtime.nodex.base_url", "x"), entry("forward.runtime.nodex.base_url", "y")...)},
+		"unknown type":    {Namespace: "nodex", RequestId: "r", Entries: []*kernelsettingsv1.SettingEntry{{Key: "forward.runtime.nodex.base_url", Type: "yaml"}}},
+		"NUL value":       {Namespace: "nodex", RequestId: "r", Entries: entry("forward.runtime.nodex.base_url", "a\x00b")},
+		"bad client ip":   {Namespace: "nodex", RequestId: "r", Entries: entry("forward.runtime.nodex.base_url", "x"), Actor: &kernelsettingsv1.Actor{ClientIp: "nowhere"}},
 	} {
 		_, err := server.PutSettings(ctx, request)
 		require.Equal(t, codes.InvalidArgument, status.Code(err), name)
 	}
 	var count int64
-	require.NoError(t, db.Model(&model.BackupConfig{}).Count(&count).Error)
-	require.Zero(t, count, "a refused backup write creates no row")
 	require.NoError(t, db.Model(&model.SettingsRequest{}).Count(&count).Error)
 	require.Zero(t, count)
 	require.Empty(t, audits(t, db))
@@ -352,7 +347,7 @@ func TestMailWriteKeepsThePasswordSentAsThePlaceholder(t *testing.T) {
 
 func TestDeleteRemovesNamespaceKeysWithTheirAudit(t *testing.T) {
 	ctx := context.Background()
-	db, server := fixture(t, capabilities("nodex", service.SettingsAccessWrite).with(capabilities("backup", service.SettingsAccessWrite)))
+	db, server := fixture(t, capabilities("nodex", service.SettingsAccessWrite))
 	response, err := server.DeleteSettings(ctx, &kernelsettingsv1.DeleteSettingsRequest{
 		Namespace: "nodex", RequestId: "d", Keys: []string{"forward.runtime.nodex.token", "forward.runtime.nodex.absent"},
 		Actor: &kernelsettingsv1.Actor{UserId: ptr(uint64(1))},
@@ -368,103 +363,6 @@ func TestDeleteRemovesNamespaceKeysWithTheirAudit(t *testing.T) {
 	require.Len(t, entries, 1)
 	require.Equal(t, "delete", entries[0].Action)
 	require.JSONEq(t, `{"key":"forward.runtime.nodex.token","group":"forward_runtime","type":"string","sensitive":true,"has_value":true,"preserve_existing":false}`, entries[0].Content)
-
-	_, err = server.DeleteSettings(ctx, &kernelsettingsv1.DeleteSettingsRequest{Namespace: "backup", RequestId: "b", Keys: []string{"backup.enabled"}})
-	require.Equal(t, codes.FailedPrecondition, status.Code(err))
-}
-
-// The backup namespace is the backup configuration row: a write keeps the
-// S3 keys it is told to, records the backup handler's audit entry, and the
-// kernel's backup service reloads its copy before the call returns.
-func TestBackupNamespaceWritesTheRowAndRefreshesTheBackupService(t *testing.T) {
-	ctx := context.Background()
-	db, server := fixture(t, capabilities("backup", service.SettingsAccessRead, service.SettingsAccessWrite))
-
-	listed, err := server.GetSettings(ctx, &kernelsettingsv1.GetSettingsRequest{Namespace: "backup"})
-	require.NoError(t, err)
-	require.Len(t, listed.GetSettings(), 16, "the 13 fields and the row's id and times")
-	require.Equal(t, "backup.auto_backup", listed.GetSettings()[0].GetKey())
-	require.True(t, listed.GetSettings()[0].GetStored(), "with no row the read creates the defaults, as the kernel's handler does")
-	var rows []model.BackupConfig
-	require.NoError(t, db.Find(&rows).Error)
-	require.Len(t, rows, 1)
-	read := values(listed.GetSettings())
-	require.Equal(t, "backups", read["backup.storage_path"])
-	require.Equal(t, "7", read["backup.retention_days"])
-	require.Equal(t, strconv.FormatUint(uint64(rows[0].ID), 10), read["backup.id"])
-	created, err := time.Parse(time.RFC3339Nano, read["backup.created_at"])
-	require.NoError(t, err)
-	require.True(t, created.Equal(rows[0].CreatedAt))
-	again, err := server.GetSettings(ctx, &kernelsettingsv1.GetSettingsRequest{Namespace: "backup"})
-	require.NoError(t, err)
-	require.Equal(t, read, values(again.GetSettings()), "a second read creates nothing")
-
-	backups := service.NewBackupService(db)
-	require.NoError(t, db.Model(&model.BackupConfig{}).Where("id = ?", rows[0].ID).Updates(map[string]any{
-		"storage_type": "s3", "storage_path": "/old", "s3_access_key": "AKIA", "s3_secret_key": "s3cret", "retention_days": 3,
-	}).Error)
-	cached, err := backups.GetConfig()
-	require.NoError(t, err)
-	require.Equal(t, "/old", cached.StoragePath)
-
-	_, err = server.PutSettings(ctx, &kernelsettingsv1.PutSettingsRequest{
-		Namespace: "backup", RequestId: "platform.backup_config:1", Actor: &kernelsettingsv1.Actor{UserId: ptr(uint64(1)), ClientIp: "192.0.2.1"},
-		Entries: []*kernelsettingsv1.SettingEntry{
-			{Key: "backup.enabled", Value: "true"}, {Key: "backup.retention_days", Value: "14"},
-			{Key: "backup.storage_path", Value: "/new"}, {Key: "backup.s3_access_key", Keep: true},
-			{Key: "backup.s3_secret_key", Value: "********"}, {Key: "backup.schedule", Value: "interval:6"},
-		},
-	})
-	require.NoError(t, err)
-	refreshed, err := backups.GetConfig()
-	require.NoError(t, err)
-	require.Equal(t, "/new", refreshed.StoragePath, "the backup service's copy reloaded")
-	require.True(t, refreshed.Enabled)
-	require.Equal(t, 14, refreshed.RetentionDays)
-	require.Equal(t, "AKIA", refreshed.S3AccessKey)
-	require.Equal(t, "s3cret", refreshed.S3SecretKey)
-
-	entries := audits(t, db)
-	require.Len(t, entries, 1)
-	require.Equal(t, "backup_config", entries[0].TargetType)
-	require.Equal(t, "update", entries[0].Action)
-	require.Equal(t, refreshed.ID, *entries[0].TargetID)
-	require.JSONEq(t, `{"enabled":true,"auto_backup":false,"schedule":"interval:6","retention_days":14,"backup_database":true,
-		"backup_files":false,"storage_type":"s3","storage_path":"/new","s3_bucket":"","s3_region":"","s3_endpoint":"",
-		"s3_access_key_has_value":true,"s3_secret_key_has_value":true,"preserved_sensitive_fields":["s3_access_key","s3_secret_key"]}`, entries[0].Content)
-
-	got, err := server.GetSettings(ctx, &kernelsettingsv1.GetSettingsRequest{Namespace: "backup", Keys: []string{"backup.s3_secret_key", "backup.enabled", "backup.updated_at"}})
-	require.NoError(t, err)
-	require.Equal(t, "********", got.GetSettings()[0].GetValue())
-	require.True(t, got.GetSettings()[0].GetMasked())
-	require.Equal(t, "true", got.GetSettings()[1].GetValue())
-	require.True(t, got.GetSettings()[1].GetStored())
-	require.Equal(t, refreshed.UpdatedAt.Format(time.RFC3339Nano), got.GetSettings()[2].GetValue())
-
-	// The row's id and times are read-only.
-	for _, key := range []string{"backup.id", "backup.created_at", "backup.updated_at"} {
-		_, err = server.PutSettings(ctx, &kernelsettingsv1.PutSettingsRequest{Namespace: "backup", RequestId: "ro:" + key,
-			Entries: []*kernelsettingsv1.SettingEntry{{Key: key, Value: "1"}}})
-		require.Equal(t, codes.InvalidArgument, status.Code(err), key)
-	}
-}
-
-// A backup write with no row creates the defaults first, as the kernel's
-// handler does.
-func TestBackupWriteCreatesTheDefaults(t *testing.T) {
-	ctx := context.Background()
-	db, server := fixture(t, capabilities("backup", service.SettingsAccessWrite))
-	_, err := server.PutSettings(ctx, &kernelsettingsv1.PutSettingsRequest{Namespace: "backup", RequestId: "b",
-		Entries: []*kernelsettingsv1.SettingEntry{{Key: "backup.s3_bucket", Value: "bucket"}}})
-	require.NoError(t, err)
-	var rows []model.BackupConfig
-	require.NoError(t, db.Find(&rows).Error)
-	require.Len(t, rows, 1)
-	require.Equal(t, "bucket", rows[0].S3Bucket)
-	require.Equal(t, "backups", rows[0].StoragePath)
-	require.Equal(t, 7, rows[0].RetentionDays)
-	require.True(t, rows[0].BackupDatabase)
-	require.Nil(t, audits(t, db)[0].UserID, "no actor, no user")
 }
 
 func TestUserAgentIsCutToTheAuditColumn(t *testing.T) {

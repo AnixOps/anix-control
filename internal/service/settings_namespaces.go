@@ -22,9 +22,6 @@ const (
 	// SettingsNamespaceForwardRuntime is the forward runtime backend and
 	// its local Ansible settings.
 	SettingsNamespaceForwardRuntime = "forward-runtime"
-	// SettingsNamespaceBackup is the backup configuration row of
-	// v2_backup_config, one key per field (backup.<field>).
-	SettingsNamespaceBackup = "backup"
 )
 
 // Settings capability accesses: kernel.settings.<namespace>.<access>.v1.
@@ -32,17 +29,6 @@ const (
 	SettingsAccessRead    = "read"
 	SettingsAccessWrite   = "write"
 	SettingsAccessSecrets = "secrets"
-)
-
-// SettingsStorage is where a namespace's keys live.
-type SettingsStorage int
-
-const (
-	// SettingsInSystemConfig keys are rows of v2_system_config.
-	SettingsInSystemConfig SettingsStorage = iota
-	// SettingsInBackupConfig keys are the fields of the first
-	// v2_backup_config row.
-	SettingsInBackupConfig
 )
 
 // SettingsAudit is the audit entry a write of the namespace records: the
@@ -55,26 +41,20 @@ const (
 	// SettingsAuditSystemConfig records a system_config entry per key, as
 	// the system configuration handlers do.
 	SettingsAuditSystemConfig
-	// SettingsAuditBackupConfig records a backup_config entry, as the
-	// backup configuration handler does.
-	SettingsAuditBackupConfig
 )
 
-// SettingsNamespace is one entry of the kernel's namespace table.
+// SettingsNamespace is one entry of the kernel's namespace table. Its keys
+// are rows of v2_system_config.
 type SettingsNamespace struct {
 	Name string
 	// Keys are exact keys; Prefixes match the longer keys that start with
 	// them.
 	Keys     []string
 	Prefixes []string
-	Storage  SettingsStorage
 	Audit    SettingsAudit
 	// SecretKeys are secrets the kernel's key-name rule does not catch.
 	SecretKeys []string
 }
-
-// BackupSettingsPrefix starts every key of the backup namespace.
-const BackupSettingsPrefix = "backup."
 
 // settingsNamespaces is the kernel's namespace table. No key may match two
 // entries (TestSettingsNamespacesDoNotOverlap).
@@ -91,7 +71,6 @@ var settingsNamespaces = []SettingsNamespace{
 		Keys:     []string{forwardRuntimeBackendConfigKey, forwardRuntimeNodeXModeConfigKey},
 		Prefixes: []string{"forward.runtime.ansible.", "forward.runtime.iptables_ansible.", "forward.ansible."},
 	},
-	{Name: SettingsNamespaceBackup, Prefixes: []string{BackupSettingsPrefix}, Storage: SettingsInBackupConfig, Audit: SettingsAuditBackupConfig},
 }
 
 // SettingsNamespaces returns the namespace table.
@@ -154,8 +133,8 @@ func SettingsCapability(namespace, access string) string {
 }
 
 // settingsGenerations count the changes of each namespace in this process.
-// A copy of a namespace's settings the kernel keeps in memory (the backup
-// service's configuration, the invite service's) remembers the generation
+// A copy of a namespace's settings the kernel keeps in memory (the invite
+// service's) remembers the generation
 // it loaded at and reloads when it moved: a writer bumps it after its
 // change commits, and a reader reads it before it reads the database, so a
 // copy is never older than its generation.

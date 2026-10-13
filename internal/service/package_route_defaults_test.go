@@ -48,7 +48,9 @@ func TestPackageRouteDefaultsGate(t *testing.T) {
 	require.NoError(t, err)
 	var rehearsed [][3]string
 	require.NoError(t, json.Unmarshal(raw, &rehearsed))
-	require.Len(t, rehearsed, 130)
+	// 130 rehearsed, less the four backup routes removed with the backup
+	// settings (docs/reference/backups.md).
+	require.Len(t, rehearsed, 126)
 	want := make([]string, 0, len(rehearsed))
 	for _, row := range rehearsed {
 		require.Contains(t, []string{"read", "write"}, row[2], row[1])
@@ -63,7 +65,7 @@ func TestPackageRouteDefaultsGate(t *testing.T) {
 	sort.Strings(want)
 	sort.Strings(got)
 	assert.Equal(t, want, got, "config/package-route-defaults.json must list exactly the rehearsed routes")
-	assert.Equal(t, 130, defaults.RouteCount())
+	assert.Equal(t, 126, defaults.RouteCount())
 
 	// The packages and batches the owner signed off, at the rehearsed
 	// release.
@@ -142,13 +144,13 @@ func TestPackageReleaseAtLeast(t *testing.T) {
 func TestPackageRouteDefaultsSummary(t *testing.T) {
 	summary, err := PackageRouteDefaultsSummary()
 	require.NoError(t, err)
-	assert.Contains(t, summary, "the 130 rehearsed routes of 14 packages")
+	assert.Contains(t, summary, "the 126 rehearsed routes of 14 packages")
 	assert.Contains(t, summary, "every other route runs its legacy handler")
 	assert.NotContains(t, summary, "default_mode")
 }
 
 // TestResolveEffectivePackageRouteModesOnlyDefaultsTheSet resolves every
-// package of the extraction map at a new release: exactly the 130 rehearsed
+// package of the extraction map at a new release: exactly the 126 rehearsed
 // routes come out native; every other native-flagged route (identity's
 // among them) stays legacy.
 func TestResolveEffectivePackageRouteModesOnlyDefaultsTheSet(t *testing.T) {
@@ -172,7 +174,7 @@ func TestResolveEffectivePackageRouteModesOnlyDefaultsTheSet(t *testing.T) {
 			native++
 		}
 	}
-	assert.Equal(t, 130, native)
+	assert.Equal(t, 126, native)
 
 	// Identity group A follows the authority only.
 	modes, err := ResolveEffectivePackageRouteModes(db, IdentityPlatformPackageID, "9.9.9")
@@ -392,7 +394,7 @@ func TestPackageRouteCatalogParsesTheEmbeddedMap(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, RouteCatalogNativeFlagged, catalog["knowledge.article.list"].Mode)
 	assert.Equal(t, "knowledge", catalog["knowledge.article.list"].PackageID)
-	assert.Equal(t, RouteCatalogKernelOwned, catalog["platform.admin.system.backup.post"].Mode)
+	assert.Equal(t, RouteCatalogKernelOwned, catalog["platform.admin.system.configs.get"].Mode)
 	_, err = parsePackageRouteCatalog([]byte(`{`))
 	require.Error(t, err)
 }

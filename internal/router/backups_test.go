@@ -49,6 +49,11 @@ func TestBackupRoutes(t *testing.T) {
 	r, cfg := setupTestRouter(t)
 	defer teardownTestRouter(t)
 	db := database.GetDB()
+	// One connection: each connection of an in-memory database is its own
+	// database, and the verification after a backup runs in the background.
+	sqlDB, err := db.DB()
+	require.NoError(t, err)
+	sqlDB.SetMaxOpenConns(1)
 	require.NoError(t, db.AutoMigrate(&model.Backup{}))
 	// A super administrator (1), an administrator who is staff (2).
 	require.NoError(t, db.Create(&model.User{ID: 1, Email: "root@example.com", IsAdmin: 1, Token: "t-1", UUID: "u-1"}).Error)
@@ -144,6 +149,32 @@ func TestBackupRoutes(t *testing.T) {
 
 	// There is no restore route.
 	assert.Equal(t, http.StatusNotFound, call(http.MethodPost, fmt.Sprintf("/api/v5/backups/%d/restore", id), root).Code)
+}
+
+// The old backup routes are gone: their schedule, retention and S3 settings
+// ran nothing, and the online restore overwrote the open database. They
+// answer 404, to an administrator too.
+func TestRemovedBackupRoutesAnswer404(t *testing.T) {
+	r, cfg := setupTestRouter(t)
+	defer teardownTestRouter(t)
+	require.NoError(t, database.GetDB().Create(&model.User{ID: 1, Email: "root@example.com", IsAdmin: 1}).Error)
+	admin, err := utils.GenerateToken(1, "root@example.com", true, cfg.JWT.Secret, cfg.JWT.Expire)
+	require.NoError(t, err)
+	for _, route := range [][2]string{
+		{http.MethodGet, "/api/v2/admin/system/backup/config"},
+		{http.MethodPut, "/api/v2/admin/system/backup/config"},
+		{http.MethodPost, "/api/v2/admin/system/backup"},
+		{http.MethodGet, "/api/v2/admin/system/backups"},
+		{http.MethodGet, "/api/v2/admin/system/backup/stats"},
+		{http.MethodDelete, "/api/v2/admin/system/backups/1"},
+		{http.MethodPost, "/api/v2/admin/system/backups/1/restore"},
+	} {
+		request := httptest.NewRequest(route[0], route[1], nil)
+		request.Header.Set("Authorization", "Bearer "+admin)
+		recorder := httptest.NewRecorder()
+		r.ServeHTTP(recorder, request)
+		assert.Equal(t, http.StatusNotFound, recorder.Code, "%s %s", route[0], route[1])
+	}
 }
 
 // On PostgreSQL the list says why there are no backups and creating one is

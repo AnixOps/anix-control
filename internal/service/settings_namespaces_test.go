@@ -55,7 +55,7 @@ func TestSettingsKeysMapToOneNamespace(t *testing.T) {
 		"forward.runtime_backend":               SettingsNamespaceForwardRuntime,
 		"forward.runtime.ansible.inventory":     SettingsNamespaceForwardRuntime,
 		"forward.ansible.become":                SettingsNamespaceForwardRuntime,
-		"backup.s3_secret_key":                  SettingsNamespaceBackup,
+		"backup.s3_secret_key":                  "",
 		"security.mfa.config":                   "",
 		"scheduler.forward_flow_reset.last_day": "",
 		"site.name":                             "",
@@ -71,22 +71,19 @@ func TestSettingsKeysMapToOneNamespace(t *testing.T) {
 func TestSettingsSecretsFollowTheAdministratorMasking(t *testing.T) {
 	mail, _ := LookupSettingsNamespace(SettingsNamespaceMail)
 	nodex, _ := LookupSettingsNamespace(SettingsNamespaceNodeX)
-	backup, _ := LookupSettingsNamespace(SettingsNamespaceBackup)
 	require.True(t, mail.Secret("notification.email.config"), "declared: the JSON value holds the SMTP password")
 	require.True(t, nodex.Secret("forward.runtime.nodex.token"))
 	require.False(t, nodex.Secret("forward.runtime.nodex.base_url"))
-	require.True(t, backup.Secret("backup.s3_access_key"))
-	require.True(t, backup.Secret("backup.s3_secret_key"))
-	require.False(t, backup.Secret("backup.s3_bucket"))
 }
 
 func TestSettingsCapabilityGrammar(t *testing.T) {
 	require.NoError(t, validateManifestCapabilities([]string{
 		"kernel.settings.mail.read.v1", "kernel.settings.mail.write.v1", "kernel.settings.mail.secrets.v1",
-		"kernel.settings.forward-runtime.write.v1", "kernel.settings.backup.write.v1",
+		"kernel.settings.forward-runtime.write.v1",
 	}))
 	for name, capabilities := range map[string][]string{
 		"unknown namespace":         {"kernel.settings.all.read.v1"},
+		"the removed backup one":    {"kernel.settings.backup.read.v1"},
 		"unknown access":            {"kernel.settings.mail.admin.v1"},
 		"no version":                {"kernel.settings.mail.read"},
 		"secrets without read":      {"kernel.settings.nodex.secrets.v1", "kernel.settings.nodex.write.v1"},

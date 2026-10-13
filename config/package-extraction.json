@@ -932,65 +932,6 @@
       "legacy": "router"
     },
     {
-      "method": "POST",
-      "path": "/api/v2/admin/system/backup",
-      "package_id": "platform",
-      "route_id": "platform.admin.system.backup.post",
-      "mode": "kernel-owned",
-      "legacy": "router",
-      "reason": "writes an archive of the kernel's database and files to the kernel's disk"
-    },
-    {
-      "method": "GET",
-      "path": "/api/v2/admin/system/backup/config",
-      "package_id": "platform",
-      "route_id": "platform.admin.system.backup.config.get",
-      "mode": "native-flagged",
-      "legacy": "router"
-    },
-    {
-      "method": "PUT",
-      "path": "/api/v2/admin/system/backup/config",
-      "package_id": "platform",
-      "route_id": "platform.admin.system.backup.config.put",
-      "mode": "native-flagged",
-      "legacy": "router"
-    },
-    {
-      "method": "GET",
-      "path": "/api/v2/admin/system/backup/stats",
-      "package_id": "platform",
-      "route_id": "platform.admin.system.backup.stats.get",
-      "mode": "native-flagged",
-      "legacy": "router"
-    },
-    {
-      "method": "GET",
-      "path": "/api/v2/admin/system/backups",
-      "package_id": "platform",
-      "route_id": "platform.admin.system.backups.get",
-      "mode": "native-flagged",
-      "legacy": "router"
-    },
-    {
-      "method": "DELETE",
-      "path": "/api/v2/admin/system/backups/:id",
-      "package_id": "platform",
-      "route_id": "platform.admin.system.backups.id.delete",
-      "mode": "kernel-owned",
-      "legacy": "router",
-      "reason": "removes a backup archive from the kernel's disk"
-    },
-    {
-      "method": "POST",
-      "path": "/api/v2/admin/system/backups/:id/restore",
-      "package_id": "platform",
-      "route_id": "platform.admin.system.backups.id.restore.post",
-      "mode": "kernel-owned",
-      "legacy": "router",
-      "reason": "restores the kernel's database and files from an archive on the kernel's disk"
-    },
-    {
       "method": "GET",
       "path": "/api/v2/admin/system/configs",
       "package_id": "platform",

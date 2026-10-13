@@ -1,7 +1,9 @@
 // Package kernelsettings serves the KernelSettings contract
 // (sdk/api/kernelsettings/v1, docs/architecture/settings-service.md) to
-// official packages: the system settings in v2_system_config and the
-// backup configuration row, per namespace (service.SettingsNamespaces).
+// official packages: the system settings in v2_system_config, per namespace
+// (service.SettingsNamespaces). The backup configuration namespace went with
+// the backup settings nothing executed (Control's backups are
+// internal/backup).
 //
 // Every call is authorized for the namespace's capability against the
 // calling host's current generation. Writes run in one transaction with the
@@ -17,8 +19,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"sort"
-	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -147,12 +147,6 @@ func checkKeys(namespace service.SettingsNamespace, keys []string, required bool
 		if !namespace.Contains(key) {
 			return status.Errorf(codes.InvalidArgument, "key %q is not in namespace %q", key, namespace.Name)
 		}
-		if namespace.Storage == service.SettingsInBackupConfig {
-			field := strings.TrimPrefix(key, service.BackupSettingsPrefix)
-			if _, ok := backupFields[field]; !ok && !backupRowFields[field] {
-				return status.Errorf(codes.InvalidArgument, "key %q is not a backup setting", key)
-			}
-		}
 		if seen[key] {
 			return status.Errorf(codes.InvalidArgument, "key %q is repeated", key)
 		}
@@ -186,12 +180,7 @@ func (h *hostServer) GetSettings(ctx context.Context, request *kernelsettingsv1.
 	if err != nil {
 		return nil, err
 	}
-	var settings []*kernelsettingsv1.Setting
-	if namespace.Storage == service.SettingsInBackupConfig {
-		settings, err = getBackup(db, namespace, request.GetKeys(), secrets)
-	} else {
-		settings, err = getSystemConfig(db, namespace, request.GetKeys(), secrets)
-	}
+	settings, err := getSystemConfig(db, namespace, request.GetKeys(), secrets)
 	if err != nil {
 		return nil, failure("get settings", err)
 	}
@@ -286,10 +275,7 @@ func (h *hostServer) PutSettings(ctx context.Context, request *kernelsettingsv1.
 			return nil, err
 		}
 	}
-	// A backup write with no entries saves the row as it is and records its
-	// audit entry, as the kernel's handler does for a request that changes
-	// nothing.
-	if err := checkKeys(namespace, keys, namespace.Storage != service.SettingsInBackupConfig); err != nil {
+	if err := checkKeys(namespace, keys, true); err != nil {
 		return nil, err
 	}
 	actor, err := auditActor(db, request.GetActor())
@@ -303,11 +289,7 @@ func (h *hostServer) PutSettings(ctx context.Context, request *kernelsettingsv1.
 		if err != nil || replayed {
 			return err
 		}
-		if namespace.Storage == service.SettingsInBackupConfig {
-			result.Changes, err = putBackup(tx, namespace, entries, actor)
-		} else {
-			result.Changes, err = putSystemConfig(tx, namespace, entries, actor)
-		}
+		result.Changes, err = putSystemConfig(tx, namespace, entries, actor)
 		if err != nil {
 			return err
 		}
@@ -326,15 +308,6 @@ func (h *hostServer) PutSettings(ctx context.Context, request *kernelsettingsv1.
 func checkEntry(namespace service.SettingsNamespace, entry *kernelsettingsv1.SettingEntry) error {
 	if len(entry.GetValue()) > maxValueBytes || strings.ContainsRune(entry.GetValue(), 0) {
 		return status.Errorf(codes.InvalidArgument, "the value of %q is too long or holds a NUL", entry.GetKey())
-	}
-	if namespace.Storage == service.SettingsInBackupConfig {
-		if backupRowFields[strings.TrimPrefix(entry.GetKey(), service.BackupSettingsPrefix)] {
-			return status.Errorf(codes.InvalidArgument, "backup setting %q is read-only", entry.GetKey())
-		}
-		if entry.GetType() != "" || entry.GetGroup() != "" || entry.GetRemark() != "" {
-			return status.Errorf(codes.InvalidArgument, "backup setting %q takes no type, group or remark", entry.GetKey())
-		}
-		return nil
 	}
 	if !systemConfigTypes[entry.GetType()] {
 		return status.Errorf(codes.InvalidArgument, "type of %q must be one of string, number, boolean, json, bool, int", entry.GetKey())
@@ -406,47 +379,11 @@ func putSystemConfig(tx *gorm.DB, namespace service.SettingsNamespace, entries [
 	return changes, nil
 }
 
-// putBackup writes entries to the backup configuration row as the kernel's
-// backup configuration handler does: the first row, created with the
-// defaults when there is none, and one audit entry naming the secrets kept.
-func putBackup(tx *gorm.DB, namespace service.SettingsNamespace, entries []*kernelsettingsv1.SettingEntry, actor service.SettingsAuditActor) ([]ledgerChange, error) {
-	cfg, err := service.LoadBackupConfig(tx)
-	if err != nil {
-		return nil, err
-	}
-	preserved := make([]string, 0, 2)
-	changes := make([]ledgerChange, 0, len(entries))
-	for _, entry := range entries {
-		field := strings.TrimPrefix(entry.GetKey(), service.BackupSettingsPrefix)
-		if kept(namespace, entry) {
-			if namespace.Secret(entry.GetKey()) {
-				preserved = append(preserved, field)
-			}
-			changes = append(changes, ledgerChange{Key: entry.GetKey(), Kept: true})
-			continue
-		}
-		if err := setBackupField(cfg, field, entry.GetValue()); err != nil {
-			return nil, status.Errorf(codes.InvalidArgument, "%s: %v", entry.GetKey(), err)
-		}
-		changes = append(changes, ledgerChange{Key: entry.GetKey()})
-	}
-	if err := tx.Save(cfg).Error; err != nil {
-		return nil, err
-	}
-	if err := service.NewOperationLogService(tx).Record(service.BackupConfigAuditInput(actor, "update", cfg, preserved)); err != nil {
-		return nil, err
-	}
-	return changes, nil
-}
-
 // DeleteSettings removes keys of one namespace.
 func (h *hostServer) DeleteSettings(ctx context.Context, request *kernelsettingsv1.DeleteSettingsRequest) (*kernelsettingsv1.DeleteSettingsResponse, error) {
 	namespace, db, err := h.authorize(ctx, request.GetNamespace(), service.SettingsAccessWrite)
 	if err != nil {
 		return nil, err
-	}
-	if namespace.Storage == service.SettingsInBackupConfig {
-		return nil, status.Error(codes.FailedPrecondition, "backup settings cannot be deleted")
 	}
 	id, err := requestID(request.GetRequestId())
 	if err != nil {
@@ -586,93 +523,4 @@ func (h *hostServer) record(tx *gorm.DB, id, namespace, method string, result le
 func PruneRequests(db *gorm.DB, now time.Time) (int64, error) {
 	result := db.Where("created_at < ?", now.Add(-RequestRetention)).Delete(&model.SettingsRequest{})
 	return result.RowsAffected, result.Error
-}
-
-// backupFields are the backup namespace's keys (backup.<field>) and the
-// configuration field each one is.
-var backupFields = map[string]func(*model.BackupConfig) any{
-	"enabled":         func(c *model.BackupConfig) any { return &c.Enabled },
-	"auto_backup":     func(c *model.BackupConfig) any { return &c.AutoBackup },
-	"schedule":        func(c *model.BackupConfig) any { return &c.Schedule },
-	"retention_days":  func(c *model.BackupConfig) any { return &c.RetentionDays },
-	"backup_database": func(c *model.BackupConfig) any { return &c.BackupDatabase },
-	"backup_files":    func(c *model.BackupConfig) any { return &c.BackupFiles },
-	"storage_type":    func(c *model.BackupConfig) any { return &c.StorageType },
-	"storage_path":    func(c *model.BackupConfig) any { return &c.StoragePath },
-	"s3_bucket":       func(c *model.BackupConfig) any { return &c.S3Bucket },
-	"s3_region":       func(c *model.BackupConfig) any { return &c.S3Region },
-	"s3_endpoint":     func(c *model.BackupConfig) any { return &c.S3Endpoint },
-	"s3_access_key":   func(c *model.BackupConfig) any { return &c.S3AccessKey },
-	"s3_secret_key":   func(c *model.BackupConfig) any { return &c.S3SecretKey },
-}
-
-// backupRowFields are the backup namespace's read-only keys: the row's id
-// and times, which the kernel's backup configuration answer shows.
-var backupRowFields = map[string]bool{"id": true, "created_at": true, "updated_at": true}
-
-// backupField is a field's value as a setting: a boolean as true or false,
-// a number in decimal, a time in RFC 3339 with its fraction and offset, as
-// encoding/json writes it.
-func backupField(cfg *model.BackupConfig, field string) string {
-	switch field {
-	case "id":
-		return strconv.FormatUint(uint64(cfg.ID), 10)
-	case "created_at":
-		return cfg.CreatedAt.Format(time.RFC3339Nano)
-	case "updated_at":
-		return cfg.UpdatedAt.Format(time.RFC3339Nano)
-	}
-	switch value := backupFields[field](cfg).(type) {
-	case *bool:
-		return strconv.FormatBool(*value)
-	case *int:
-		return strconv.Itoa(*value)
-	case *string:
-		return *value
-	}
-	return ""
-}
-
-func setBackupField(cfg *model.BackupConfig, field, value string) error {
-	switch target := backupFields[field](cfg).(type) {
-	case *bool:
-		parsed, err := strconv.ParseBool(value)
-		if err != nil {
-			return errors.New("not a boolean")
-		}
-		*target = parsed
-	case *int:
-		parsed, err := strconv.Atoi(value)
-		if err != nil {
-			return errors.New("not an integer")
-		}
-		*target = parsed
-	case *string:
-		*target = value
-	}
-	return nil
-}
-
-// getBackup reads backup fields of the first row. When there is none it
-// creates the defaults first, as the kernel's backup configuration handler
-// does on a read, so the answer has the row's id and times.
-func getBackup(db *gorm.DB, namespace service.SettingsNamespace, keys []string, secrets bool) ([]*kernelsettingsv1.Setting, error) {
-	cfg, err := service.LoadBackupConfig(db)
-	if err != nil {
-		return nil, err
-	}
-	if len(keys) == 0 {
-		for field := range backupFields {
-			keys = append(keys, service.BackupSettingsPrefix+field)
-		}
-		for field := range backupRowFields {
-			keys = append(keys, service.BackupSettingsPrefix+field)
-		}
-		sort.Strings(keys)
-	}
-	settings := make([]*kernelsettingsv1.Setting, 0, len(keys))
-	for _, key := range keys {
-		settings = append(settings, shown(namespace, key, backupField(cfg, strings.TrimPrefix(key, service.BackupSettingsPrefix)), true, secrets))
-	}
-	return settings, nil
 }

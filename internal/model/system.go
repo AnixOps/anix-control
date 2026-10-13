@@ -42,53 +42,12 @@ func (SystemConfig) TableName() string {
 	return "v2_system_config"
 }
 
-// BackupRecord 备份记录
-type BackupRecord struct {
-	ID        uint   `gorm:"primaryKey" json:"id"`
-	Name      string `gorm:"size:100" json:"name"`
-	Type      string `gorm:"size:20" json:"type"`       // full/database/files
-	Size      int64  `json:"size"`                      // 文件大小(字节)
-	Path      string `gorm:"size:255" json:"path"`      // 存储路径
-	Status    int    `gorm:"default:0" json:"status"`   // 0=进行中 1=成功 2=失败
-	Error     string `gorm:"type:text" json:"error"`    // 错误信息
-	Auto      bool   `gorm:"default:false" json:"auto"` // 是否自动备份
-	CreatedBy *uint  `json:"created_by"`                // 创建者ID
-
-	CompletedAt *time.Time `json:"completed_at"`
-	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at"`
-}
-
-// TableName 指定表名
-func (BackupRecord) TableName() string {
-	return "v2_backup_record"
-}
-
-// BackupConfig 备份配置
-type BackupConfig struct {
-	ID             uint   `gorm:"primaryKey" json:"id"`
-	Enabled        bool   `gorm:"default:false" json:"enabled"`
-	AutoBackup     bool   `gorm:"default:false" json:"auto_backup"`
-	Schedule       string `gorm:"size:50" json:"schedule"`         // cron表达式
-	RetentionDays  int    `gorm:"default:7" json:"retention_days"` // 保留天数
-	BackupDatabase bool   `gorm:"default:true" json:"backup_database"`
-	BackupFiles    bool   `gorm:"default:false" json:"backup_files"`
-	StorageType    string `gorm:"size:20;default:local" json:"storage_type"` // local/s3/ftp
-	StoragePath    string `gorm:"size:255" json:"storage_path"`
-	S3Bucket       string `gorm:"size:100" json:"s3_bucket"`
-	S3Region       string `gorm:"size:50" json:"s3_region"`
-	S3Endpoint     string `gorm:"size:255" json:"s3_endpoint"`
-	S3AccessKey    string `gorm:"size:100" json:"s3_access_key"`
-	S3SecretKey    string `gorm:"size:100" json:"s3_secret_key"`
-
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-}
-
-// TableName 指定表名
-func (BackupConfig) TableName() string {
-	return "v2_backup_config"
-}
+// The former BackupRecord (v2_backup_record) and BackupConfig
+// (v2_backup_config) models went with the backup settings nothing executed
+// and the online restore: Control's backups are Backup (v5_backup,
+// internal/backup). Both tables stay in the schema, unused, until a cleanup
+// migration drops them; the migration tests keep frozen copies of the two
+// models (internal/database/migrations, legacy_oracle_test.go).
 
 // OperationLog 操作日志
 type OperationLog struct {

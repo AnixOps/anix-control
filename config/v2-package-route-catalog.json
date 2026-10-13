@@ -1035,69 +1035,6 @@
     "transport": "http"
   },
   {
-    "method": "POST",
-    "path": "/api/v2/admin/system/backup",
-    "owner": "platform",
-    "route_id": "platform.admin.system.backup.post",
-    "envelope": "panel",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
-    "method": "GET",
-    "path": "/api/v2/admin/system/backup/config",
-    "owner": "platform",
-    "route_id": "platform.admin.system.backup.config.get",
-    "envelope": "panel",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
-    "method": "PUT",
-    "path": "/api/v2/admin/system/backup/config",
-    "owner": "platform",
-    "route_id": "platform.admin.system.backup.config.put",
-    "envelope": "panel",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
-    "method": "GET",
-    "path": "/api/v2/admin/system/backup/stats",
-    "owner": "platform",
-    "route_id": "platform.admin.system.backup.stats.get",
-    "envelope": "panel",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
-    "method": "GET",
-    "path": "/api/v2/admin/system/backups",
-    "owner": "platform",
-    "route_id": "platform.admin.system.backups.get",
-    "envelope": "panel",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
-    "method": "DELETE",
-    "path": "/api/v2/admin/system/backups/:id",
-    "owner": "platform",
-    "route_id": "platform.admin.system.backups.id.delete",
-    "envelope": "panel",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
-    "method": "POST",
-    "path": "/api/v2/admin/system/backups/:id/restore",
-    "owner": "platform",
-    "route_id": "platform.admin.system.backups.id.restore.post",
-    "envelope": "panel",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
     "method": "GET",
     "path": "/api/v2/admin/system/configs",
     "owner": "platform",
