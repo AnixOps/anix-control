@@ -44,6 +44,10 @@ func (Order) TableName() string {
 // the buckets exist keep their own LogAt (a report's second): readers sum
 // rows, so they stay valid next to the buckets.
 //
+// CreatedAt is the time of the report that last touched the row: the one that
+// inserted it, or the latest that added to it, so the newest bucket's
+// CreatedAt is the latest report's time even though LogAt is the hour.
+//
 // The raw log is kept for the retention of internal/retention.
 type TrafficLog struct {
 	ID         uint      `gorm:"primaryKey" json:"id"`

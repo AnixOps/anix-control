@@ -196,12 +196,15 @@ func addTrafficLogs(tx *gorm.DB, logs []model.TrafficLog) error {
 		columns[i] = clause.Column{Name: name}
 	}
 	// The table's name qualifies the old value: PostgreSQL rejects the bare
-	// column as ambiguous with excluded.
+	// column as ambiguous with excluded. created_at moves to the report's
+	// time, so a bucket's created_at is its latest report (the dashboard's
+	// "latest report" reads it, GetTrafficLogMeta).
 	return tx.Clauses(clause.OnConflict{
 		Columns: columns,
 		DoUpdates: clause.Set{
 			{Column: clause.Column{Name: "u"}, Value: gorm.Expr(table + ".u + excluded.u")},
 			{Column: clause.Column{Name: "d"}, Value: gorm.Expr(table + ".d + excluded.d")},
+			{Column: clause.Column{Name: "created_at"}, Value: gorm.Expr("excluded.created_at")},
 		},
 	}).CreateInBatches(logs, trafficLogBatch).Error
 }

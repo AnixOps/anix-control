@@ -126,3 +126,44 @@ func TestBucketStartRoundsDownToTheUTCHour(t *testing.T) {
 	require.Equal(t, int64(1_791_849_600), model.TrafficLogBucketStart(1_791_849_600+1234))
 	require.Equal(t, int64(-3600), model.TrafficLogBucketStart(-1))
 }
+
+// The latest report time of the traffic meta is precise for buckets: the
+// hour's row keeps the time of its latest report in created_at.
+func TestTrafficLogMetaReadsTheLatestReportOfABucket(t *testing.T) {
+	_, db := activityService(t)
+	stats := &StatsService{db: db}
+	hour := time.Now().Truncate(time.Hour)
+
+	meta, err := stats.GetTrafficLogMeta(0)
+	require.NoError(t, err)
+	require.Zero(t, meta.LatestLogAt, "never reported")
+
+	// Two reports of one hour: the second is 7 minutes after the first.
+	first := hour.Add(time.Second)
+	second := hour.Add(7*time.Minute + 30*time.Second)
+	applyReportAt := func(user uint, at time.Time) {
+		plan, err := planNodeTrafficReport("node", 7, map[uint][2]int64{user: {1, 1}}, 1, at)
+		require.NoError(t, err)
+		for i := range plan.logs {
+			plan.logs[i].CreatedAt = at
+		}
+		require.NoError(t, db.Transaction(plan.applyTx))
+	}
+	applyReportAt(1, first)
+	applyReportAt(1, second)
+	applyReportAt(2, first.Add(time.Minute))
+
+	meta, err = stats.GetTrafficLogMeta(0)
+	require.NoError(t, err)
+	require.Equal(t, second.Unix(), meta.LatestLogAt, "not the hour's start")
+	meta, err = stats.GetTrafficLogMeta(2)
+	require.NoError(t, err)
+	require.Equal(t, first.Add(time.Minute).Unix(), meta.LatestLogAt, "per user")
+
+	// A row that is not on an hour boundary (written by an older version)
+	// is its own time.
+	require.NoError(t, db.Create(&model.TrafficLog{UserID: 3, ServerID: 7, ServerType: "node", U: 1, D: 1, Rate: 1, LogAt: hour.Unix() + 59}).Error)
+	meta, err = stats.GetTrafficLogMeta(3)
+	require.NoError(t, err)
+	require.Equal(t, hour.Unix()+59, meta.LatestLogAt)
+}
