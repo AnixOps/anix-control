@@ -144,8 +144,6 @@ func fixFor(problem, name string, spec Spec, directory string) string {
 		return "The CA's rate limit was reached. Control tries again later by itself; do not reinstall (the certificate and the account are kept in the database)."
 	case ProblemCAUnreachable:
 		return fmt.Sprintf("Control cannot reach the ACME directory %s: check this machine's outbound https (port 443) and DNS.", directory)
-	case ProblemQuota:
-		return "Control made 3 requests for this name within the hour, the most it makes; it tries again when the hour has passed."
 	case ProblemFileUnreadable:
 		return fmt.Sprintf("Check that %s and %s exist, can be read by Control and hold a PEM certificate chain and its private key; Control reloads them when they change.", spec.CertFile, spec.KeyFile)
 	case ProblemExpired:

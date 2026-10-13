@@ -59,7 +59,6 @@ const (
 	ProblemExpired        = "expired"
 	ProblemNameMismatch   = "name_mismatch"
 	ProblemUntrusted      = "untrusted"
-	ProblemQuota          = "quota"
 )
 
 // CertificateStatus is what Control knows about one certificate it serves.
@@ -85,10 +84,12 @@ type CertificateStatus struct {
 	RenewAt *time.Time `json:"renew_at,omitempty"`
 	// RenewalFailing is set while a served certificate is past RenewAt and
 	// the latest attempt to renew it failed.
-	RenewalFailing bool       `json:"renewal_failing"`
-	LastAttemptAt  *time.Time `json:"last_attempt_at,omitempty"`
-	LastSuccessAt  *time.Time `json:"last_success_at,omitempty"`
-	NextAttemptAt  *time.Time `json:"next_attempt_at,omitempty"`
+	RenewalFailing bool `json:"renewal_failing"`
+	// Attempting is set while a request to the CA for it runs.
+	Attempting    bool       `json:"attempting"`
+	LastAttemptAt *time.Time `json:"last_attempt_at,omitempty"`
+	LastSuccessAt *time.Time `json:"last_success_at,omitempty"`
+	NextAttemptAt *time.Time `json:"next_attempt_at,omitempty"`
 	// LastError is the latest failure, Problem its class and Fix what to
 	// change, in English (the console has its own words per Problem).
 	LastError string `json:"last_error,omitempty"`

@@ -117,6 +117,9 @@ func settledSince(status panelcert.Status, since time.Time) bool {
 		return false
 	}
 	for _, certificate := range status.Certificates {
+		if certificate.Attempting {
+			return false
+		}
 		if certificate.State == panelcert.StateValid && !certificate.RenewalFailing {
 			continue
 		}
@@ -163,6 +166,9 @@ func writeTLSStatus(w io.Writer, status panelcert.Status) {
 			}
 		}
 		_, _ = fmt.Fprintln(w)
+		if certificate.Attempting {
+			_, _ = fmt.Fprintln(w, "    a request to the CA is under way")
+		}
 		if certificate.RenewalFailing {
 			_, _ = fmt.Fprintln(w, "    the renewal is failing")
 		}

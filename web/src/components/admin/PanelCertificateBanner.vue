@@ -46,7 +46,7 @@ let timer = null
 
 const PROBLEMS = new Set([
   'dns_unresolved', 'dns_elsewhere', 'unreachable', 'challenge_failed', 'rate_limited', 'ca_unreachable',
-  'ca_error', 'file_unreadable', 'expired', 'name_mismatch', 'untrusted', 'quota'
+  'ca_error', 'file_unreadable', 'expired', 'name_mismatch', 'untrusted'
 ])
 
 // The certificate that needs attention most: failed, then pending, then a

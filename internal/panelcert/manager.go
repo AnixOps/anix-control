@@ -164,6 +164,8 @@ type slot struct {
 	lastError     string
 	problem       string
 	attemptFailed bool
+	// attempting is set while a request to the CA runs.
+	attempting bool
 	// files: the files' last seen stamp.
 	stamp     fileStamp
 	loadedAny bool
@@ -403,20 +405,21 @@ func (m *Manager) stepACME(ctx context.Context, s *slot) time.Duration {
 		return wait
 	}
 	if blockedUntil, blocked := s.quotaBlocked(now, m.opts.MaxAttemptsPerHour); blocked {
+		// The status keeps the last failure; NextAttemptAt says when.
 		s.next = blockedUntil
-		if manual {
-			s.lastError = fmt.Sprintf("a retry was asked for, but %d requests were made for %s within the hour; the next one is at %s", m.opts.MaxAttemptsPerHour, s.spec.Name, blockedUntil.UTC().Format(time.RFC3339))
-			s.problem = ProblemQuota
-		}
 		s.mu.Unlock()
 		return blockedUntil.Sub(now)
 	}
 	s.attempts = append(s.attempts, now)
 	s.lastAttempt = now
+	s.attempting = true
 	s.mu.Unlock()
 	m.publish(ctx, true)
 
 	certificate, err := m.issue(ctx, s)
+	s.mu.Lock()
+	s.attempting = false
+	s.mu.Unlock()
 	if ctx.Err() != nil {
 		return time.Second
 	}
@@ -756,6 +759,12 @@ func (m *Manager) Retry() RetryResult {
 			continue
 		}
 		s.mu.Lock()
+		if s.attempting {
+			// A request is under way; its outcome is the retry's.
+			s.mu.Unlock()
+			result.Retrying = append(result.Retrying, s.spec.Name)
+			continue
+		}
 		if s.spec.Source == SourceACME {
 			if until, blocked := s.quotaBlocked(now, m.opts.MaxAttemptsPerHour); blocked {
 				result.Waiting[s.spec.Name] = until
@@ -807,6 +816,7 @@ func (m *Manager) slotStatus(s *slot, now time.Time) CertificateStatus {
 	status.LastSuccessAt = timeRef(s.lastSuccess)
 	status.NextAttemptAt = timeRef(s.next)
 	status.LastError, status.Problem = s.lastError, s.problem
+	status.Attempting = s.attempting
 	attemptFailed, loadedAny := s.attemptFailed, s.loadedAny
 	s.mu.Unlock()
 

@@ -31,8 +31,7 @@ export default {
           file_unreadable: 'Check that the certificate and key files exist, can be read by the panel and hold a matching PEM chain and key; the panel reloads them when they change.',
           expired: 'The certificate has ended: replace it with a renewed one (certificate files are reloaded), or fix the reason above and request again.',
           name_mismatch: 'The certificate does not cover {name}: use one issued for that name.',
-          untrusted: 'Nodes and browsers accept only certificates from public certificate authorities: use one; with domain set and tls.mode: acme the panel obtains it by itself.',
-          quota: 'Three requests were made for this name within the hour; the panel tries again after the hour.'
+          untrusted: 'Nodes and browsers accept only certificates from public certificate authorities: use one; with domain set and tls.mode: acme the panel obtains it by itself.'
         }
       },
       groups: {

@@ -277,6 +277,39 @@ func TestFailureServesTheSelfSignedFallbackAndSaysWhy(t *testing.T) {
 	})
 }
 
+// While a request runs the status says so, and a retry asked for meanwhile
+// waits for its outcome instead of starting another request.
+func TestStatusShowsARequestUnderWay(t *testing.T) {
+	ca := panelcerttest.New(t, 0)
+	h := newHarness(t, openDB(t), ca, newClock(), func(o *panelcert.Options) {
+		o.RetryDelays = []time.Duration{time.Hour}
+	})
+	// Port 80 accepts and never answers: the HTTP-01 validation hangs for
+	// the test CA's five seconds.
+	silent, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = silent.Close() })
+	go func() {
+		for {
+			conn, err := silent.Accept()
+			if err != nil {
+				return
+			}
+			t.Cleanup(func() { _ = conn.Close() })
+		}
+	}()
+	ca.SetTargets(func(string) string { return "" }, func(string) string { return silent.Addr().String() })
+	h.run(t)
+	waitFor(t, "the request under way", 10*time.Second, func() bool { return certificateState(h.m, panelName).Attempting })
+	require.Equal(t, []string{panelName}, h.m.Retry().Retrying)
+	waitFor(t, "the failure", 20*time.Second, func() bool {
+		status := certificateState(h.m, panelName)
+		return status.State == panelcert.StateFailed && !status.Attempting
+	})
+	time.Sleep(200 * time.Millisecond)
+	require.Len(t, ca.Validations(), 2, "one request (both challenges), not a second one for the retry")
+}
+
 func TestUnreachableDirectoryIsReported(t *testing.T) {
 	ca := panelcerttest.New(t, 0)
 	closed, err := net.Listen("tcp", "127.0.0.1:0")
