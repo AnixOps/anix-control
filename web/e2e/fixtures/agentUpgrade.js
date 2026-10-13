@@ -2,7 +2,7 @@ import nodes from './nodes.js'
 import { FIXED_NOW_MS } from './clock.js'
 import { agentUpgradePlanAnswer } from './nodeDiagnostics.js'
 
-// 升级节点: the sheet over the node list, opened with ⌘K. `upgrade` is the
+// 升级节点: the sheet over the node list, opened with the header button. `upgrade` is the
 // start form with no campaign yet; `upgradeRunning` the form disabled above
 // a running campaign.
 const RUNNING = {
@@ -35,9 +35,7 @@ export default {
     return nodes.api(path, ctx)
   },
   async after(page) {
-    await page.keyboard.press('Control+K')
-    await page.getByRole('combobox').fill('upgrade')
-    await page.keyboard.press('Enter')
+    await page.getByTestId('upgrade-nodes').click()
     await page.getByTestId('agent-upgrade-form').waitFor()
     // The campaign card (loaded apart from the plan).
     await page.locator('[data-testid="agent-upgrade-empty"], [data-testid="agent-upgrade-campaign"]').first().waitFor()
