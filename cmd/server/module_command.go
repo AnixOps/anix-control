@@ -32,11 +32,11 @@ func moduleUsageError() error {
 	return fmt.Errorf("invalid module command\n%s", moduleCommandUsage)
 }
 
-// takeAdminCommand removes a leading "module", "agent", "agents", "routes"
-// or "forward" command and returns it with its arguments; nil means the process
-// is not running one.
+// takeAdminCommand removes a leading "module", "agent", "agents", "routes",
+// "forward", "tls" or "doctor" command and returns it with its arguments;
+// nil means the process is not running one.
 func takeAdminCommand() []string {
-	if len(os.Args) > 1 && (os.Args[1] == "module" || os.Args[1] == "agent" || os.Args[1] == "agents" || os.Args[1] == "routes" || os.Args[1] == "forward") {
+	if len(os.Args) > 1 && (os.Args[1] == "module" || os.Args[1] == "agent" || os.Args[1] == "agents" || os.Args[1] == "routes" || os.Args[1] == "forward" || os.Args[1] == "tls" || os.Args[1] == "doctor") {
 		arguments := append([]string{}, os.Args[1:]...)
 		os.Args = os.Args[:1]
 		return arguments
@@ -46,10 +46,14 @@ func takeAdminCommand() []string {
 
 // adminCommandExitCode is the exit status of a failed admin command: 3 when
 // `agents transports --check-required` finds nodes required would refuse
-// (the upgrade gate), 2 on any other error.
+// (the upgrade gate), 1 when `doctor` finds a problem or `tls retry` ends
+// with a certificate that is not valid, 2 on any other error.
 func adminCommandExitCode(err error) int {
 	if errors.Is(err, errAgentsNotReady) {
 		return 3
+	}
+	if errors.Is(err, errDoctorFailed) || errors.Is(err, errTLSNotValid) {
+		return 1
 	}
 	return 2
 }
@@ -73,6 +77,12 @@ func runAdminCommand(ctx context.Context, cfg *config.Config, db *gorm.DB, argum
 	}
 	if len(arguments) > 0 && arguments[0] == "module" {
 		return runModuleCommand(ctx, cfg, db, arguments[1:], stdout)
+	}
+	if len(arguments) > 0 && arguments[0] == "tls" {
+		return runTLSCommand(ctx, db, arguments[1:], stdout)
+	}
+	if len(arguments) > 0 && arguments[0] == "doctor" {
+		return runDoctorCommand(ctx, cfg, db, arguments[1:], stdout)
 	}
 	return moduleUsageError()
 }
