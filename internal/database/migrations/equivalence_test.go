@@ -46,13 +46,14 @@ func requireSameSchema(t *testing.T, want, got *migrations.Schema, what string) 
 }
 
 // The CI guard of the migrations and the models. The runner's fresh schema
-// is the schema the legacy start builds from today's models (tables,
-// columns, types, nullability, defaults, indexes, unique and foreign key
+// is the schema the legacy start builds from today's models plus the
+// tables later migrations create (legacyModelsPrepare; tables, columns,
+// types, nullability, defaults, indexes, unique and foreign key
 // constraints, and the kernel API views the start adds): a model changed
-// without a migration fails here. And the runner adopts a database the
-// legacy start built at the baseline (legacyPrepare: today's models less
-// what later migrations added) and applies the later migrations: the
-// upgraded schema is the fresh one.
+// or added without a migration fails here. And the runner adopts a
+// database the legacy start built at the baseline (legacyPrepare: today's
+// models less what later migrations added, without the later tables) and
+// applies the later migrations: the upgraded schema is the fresh one.
 func TestFreshSchemaEqualsTheLegacySchema(t *testing.T) {
 	forEachDialect(t, func(t *testing.T, open opener) {
 		ctx := context.Background()

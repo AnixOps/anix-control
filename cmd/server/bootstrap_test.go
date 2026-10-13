@@ -71,8 +71,9 @@ func TestBootstrapDatabaseMigratesTheSchema(t *testing.T) {
 		assert.EqualValues(t, 1, views, "the kernel API views are created after the migrations")
 
 		// A database from before the migrations: the same tables, no
-		// migration records.
-		require.NoError(t, db.Migrator().DropTable(migrations.MigrationTable, migrations.MetaTable))
+		// migration records, and not the tables later migrations add
+		// (0003_acme_cache).
+		require.NoError(t, db.Migrator().DropTable(migrations.MigrationTable, migrations.MetaTable, &model.ACMECacheEntry{}))
 		require.NoError(t, bootstrapDatabase(ctx, cfg))
 		meta, err = migrations.Meta(ctx, db)
 		require.NoError(t, err)

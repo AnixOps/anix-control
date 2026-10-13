@@ -28,10 +28,13 @@ import (
 // recorded from and is compared with (TestBaselineEqualsTheLegacySchema).
 //
 // legacyModelsPrepare builds the schema from today's models, which later
-// migrations change. legacyPrepare is the legacy start as it was at the
-// baseline: the same, less what later migrations added to the models
-// (postBaselineIndexes). A migration that changes a model records what it
-// added there (docs/reference/database-migrations.md, "Changing a model").
+// migrations change, plus the tables later migrations create (laterModels).
+// legacyPrepare is the legacy start as it was at the baseline: the same,
+// less what later migrations added to the models (postBaselineIndexes) and
+// without the later tables. A migration that changes a model records what
+// it added in postBaselineIndexes, one that creates a table lists its model
+// in laterModels (docs/reference/database-migrations.md, "Changing a
+// model").
 
 // legacySchemaModels is cmd/server's schemaModels() at 4eb87485.
 func legacySchemaModels() []any {
@@ -68,24 +71,35 @@ var postBaselineIndexes = []struct{ table, index string }{
 	{"v2_server_log", "idx_v2_server_log_bucket"}, // 0002_server_log_buckets
 }
 
+// laterModels are the models of the tables later migrations create: the
+// legacy start never had them, so legacyPrepare does not create them and
+// legacyModelsPrepare does.
+func laterModels() []any {
+	return []any{
+		&model.ACMECacheEntry{}, // 0003_acme_cache
+	}
+}
+
 // legacyPrepare is the legacy start's schema work at the baseline on db.
 // production is the env: "production" only creates missing tables of the
 // application models, development and test AutoMigrate them all. The
 // Ensure* steps run in both.
 func legacyPrepare(t *testing.T, db *gorm.DB, production bool) {
 	t.Helper()
-	legacyModelsPrepare(t, db, production)
+	require.NoError(t, legacyPrepareErr(db, production))
 	for _, added := range postBaselineIndexes {
 		require.NoError(t, db.Exec("DROP INDEX "+added.index).Error)
 	}
 }
 
 // legacyModelsPrepare is the legacy start's schema work with today's
-// models: the schema TestFreshSchemaEqualsTheLegacySchema compares with the
-// migrations', so a model changed without a migration fails there.
+// models, plus the tables later migrations create: the schema
+// TestFreshSchemaEqualsTheLegacySchema compares with the migrations', so a
+// model changed or added without a migration fails there.
 func legacyModelsPrepare(t *testing.T, db *gorm.DB, production bool) {
 	t.Helper()
 	require.NoError(t, legacyPrepareErr(db, production))
+	require.NoError(t, db.AutoMigrate(laterModels()...))
 }
 
 func legacyPrepareErr(db *gorm.DB, production bool) error {

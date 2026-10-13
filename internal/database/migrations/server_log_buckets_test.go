@@ -14,6 +14,18 @@ import (
 
 const bucketsStep = "0002_server_log_buckets"
 
+// afterTheBaseline are the IDs of the steps after 0001_baseline, the
+// buckets step first: what a database at the baseline applies.
+func afterTheBaseline(t *testing.T) []string {
+	t.Helper()
+	var ids []string
+	for _, step := range steps(t)[1:] {
+		ids = append(ids, step.ID())
+	}
+	require.Equal(t, bucketsStep, ids[0])
+	return ids
+}
+
 // serverLogRow is a v2_server_log row as the tests read it.
 type serverLogRow struct {
 	ID         uint
@@ -93,7 +105,7 @@ func TestServerLogBucketsStepMergesDuplicatesBeforeCreatingTheIndex(t *testing.T
 		result, err := migrations.Migrate(ctx, db, migrateOptions())
 		require.NoError(t, err)
 		require.Nil(t, result.Adoption)
-		require.Equal(t, []string{bucketsStep}, result.Applied)
+		require.Equal(t, afterTheBaseline(t), result.Applied)
 		requireMergedBucketRows(t, db)
 
 		records := appliedRecords(t, db)
@@ -121,7 +133,7 @@ func TestAdoptedDatabaseWithDuplicateServerLogRowsGetsTheBucketsStep(t *testing.
 		require.NoError(t, err)
 		require.NotNil(t, result.Adoption, "the database is adopted first")
 		require.Empty(t, result.Adoption.Differences)
-		require.Equal(t, []string{bucketsStep}, result.Applied, "and the later step is applied after the adoption")
+		require.Equal(t, afterTheBaseline(t), result.Applied, "and the later step is applied after the adoption")
 		requireMergedBucketRows(t, db)
 
 		meta, err := migrations.Meta(ctx, db)
@@ -153,7 +165,7 @@ func TestAdoptedDatabaseOfAnOlderReleaseGetsTheKeyColumnBeforeTheBucketsStep(t *
 		require.NoError(t, err)
 		require.NotNil(t, result.Adoption)
 		assert.Equal(t, []string{"v2_server_log.rate"}, result.Adoption.AddedColumns)
-		require.Equal(t, []string{bucketsStep}, result.Applied)
+		require.Equal(t, afterTheBaseline(t), result.Applied)
 
 		// The added column's default (1) gave the three rows one key.
 		var rows []serverLogRow
@@ -183,7 +195,7 @@ func TestReleasedDatabasesWithDuplicateServerLogRowsGetTheBucketsStep(t *testing
 			result, err := migrations.Migrate(ctx, db, migrateOptions())
 			require.NoError(t, err)
 			require.NotNil(t, result.Adoption)
-			require.Equal(t, []string{bucketsStep}, result.Applied)
+			require.Equal(t, afterTheBaseline(t), result.Applied)
 			if hasTable {
 				requireMergedBucketRows(t, db)
 			} else {
