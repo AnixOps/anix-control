@@ -312,17 +312,3 @@ func (c *Config) validatePanel() error {
 	}
 	return nil
 }
-
-// panelPrerequisitesError names what the certificate layout needs from the
-// rest of the configuration: ACME keeps its account and certificate keys in
-// the database sealed with module_runtime.ca_kek.
-func (c *Config) panelPrerequisitesError() error {
-	panel := c.Panel()
-	if !panel.NeedsACME() {
-		return nil
-	}
-	if strings.TrimSpace(c.ModuleRuntime.CAKEK) == "" {
-		return fmt.Errorf("the ACME certificates for %s keep their keys in the database sealed with module_runtime.ca_kek: set it (%sMODULE_RUNTIME_CA_KEK; generate one with openssl rand -base64 32)", strings.Join(panel.ACMENames, ", "), EnvPrefix)
-	}
-	return nil
-}

@@ -4,14 +4,13 @@ import (
 	"fmt"
 	"os"
 	"reflect"
-	"sort"
 	"strconv"
 	"strings"
 )
 
 // EnvPrefix starts every configuration environment variable. A variable name
 // is the upper-cased yaml path joined with underscores, for example
-// database.password -> ANIX_CONTROL_DATABASE_PASSWORD.
+// grpc.public_name -> ANIX_CONTROL_GRPC_PUBLIC_NAME.
 const EnvPrefix = "ANIX_CONTROL_"
 
 // EnvFileSuffix selects the file variant of a variable: the value is read from
@@ -43,72 +42,41 @@ var reservedEnvNames = map[string]bool{
 	"ANIX_CONTROL_PACKAGE_BRIDGE_FD":       true,
 }
 
-// EnvVar describes one configuration key that can be set from the environment.
+// EnvVar describes one operator key and its variable.
 type EnvVar struct {
-	Name    string // ANIX_CONTROL_DATABASE_PASSWORD
-	Path    string // database.password
+	Name    string // ANIX_CONTROL_DOMAIN
+	Path    string // domain
 	Type    string // string, bool, int, list
 	Default string // value in the supplied config; empty for secrets
 	Secret  bool
+	// Description says what the key does.
+	Description string
 }
 
-type envField struct {
-	EnvVar
-	value reflect.Value
-}
-
-// EnvVars lists every environment-settable key with its value in cfg, sorted
-// by name. Secret values are never included.
+// EnvVars lists the operator keys with their value in cfg, in their
+// documented order. The deprecated keys' variables are still read or warned
+// about (deprecated_keys.yaml) but are not listed here.
 func EnvVars(cfg *Config) []EnvVar {
 	if cfg == nil {
 		cfg = &Config{}
 	}
-	fields := envFields(cfg)
-	vars := make([]EnvVar, 0, len(fields))
-	for _, field := range fields {
-		entry := field.EnvVar
+	var vars []EnvVar
+	for _, key := range OperatorKeys() {
+		field, ok := configField(cfg, key.fieldPath())
+		if !ok {
+			continue
+		}
+		typeName, ok := envTypeName(field.Type())
+		if !ok {
+			continue
+		}
+		entry := EnvVar{Name: key.EnvName(), Path: key.Path, Type: typeName, Secret: key.Secret, Description: key.Description}
 		if !entry.Secret {
-			entry.Default = formatEnvValue(field.value)
+			entry.Default = formatEnvValue(field)
 		}
 		vars = append(vars, entry)
 	}
 	return vars
-}
-
-// ApplyEnv overrides cfg with ANIX_CONTROL_* entries from environ ("KEY=value"
-// pairs, as returned by os.Environ). It returns the ANIX_CONTROL_* names that
-// match no configuration key so the caller can warn about typos.
-func ApplyEnv(cfg *Config, environ []string) ([]string, error) {
-	values := make(map[string]string, len(environ))
-	for _, entry := range environ {
-		name, value, ok := strings.Cut(entry, "=")
-		if ok && strings.HasPrefix(name, EnvPrefix) {
-			values[name] = value
-		}
-	}
-	known := make(map[string]bool)
-	for _, field := range envFields(cfg) {
-		known[field.Name] = true
-		known[field.Name+EnvFileSuffix] = true
-		raw, set, err := lookupEnvValue(values, field.Name)
-		if err != nil {
-			return nil, err
-		}
-		if !set {
-			continue
-		}
-		if err := setEnvValue(field.value, raw); err != nil {
-			return nil, fmt.Errorf("invalid %s for %s: %w", field.Name, field.Path, err)
-		}
-	}
-	var unknown []string
-	for name := range values {
-		if !known[name] && !reservedEnvNames[name] {
-			unknown = append(unknown, name)
-		}
-	}
-	sort.Strings(unknown)
-	return unknown, nil
 }
 
 func lookupEnvValue(values map[string]string, name string) (string, bool, error) {
@@ -125,43 +93,6 @@ func lookupEnvValue(values map[string]string, name string) (string, bool, error)
 		return strings.TrimRight(string(data), "\r\n"), true, nil
 	default:
 		return value, direct, nil
-	}
-}
-
-func envFields(cfg *Config) []envField {
-	var fields []envField
-	collectEnvFields(reflect.ValueOf(cfg).Elem(), nil, &fields)
-	sort.Slice(fields, func(i, j int) bool { return fields[i].Name < fields[j].Name })
-	return fields
-}
-
-func collectEnvFields(value reflect.Value, path []string, fields *[]envField) {
-	valueType := value.Type()
-	for index := 0; index < valueType.NumField(); index++ {
-		structField := valueType.Field(index)
-		key, _, _ := strings.Cut(structField.Tag.Get("yaml"), ",")
-		if key == "" || key == "-" || !structField.IsExported() {
-			continue
-		}
-		fieldPath := append(append([]string(nil), path...), key)
-		fieldValue := value.Field(index)
-		if structField.Type.Kind() == reflect.Struct {
-			collectEnvFields(fieldValue, fieldPath, fields)
-			continue
-		}
-		typeName, ok := envTypeName(structField.Type)
-		if !ok {
-			continue // maps and free-form values are YAML-only
-		}
-		*fields = append(*fields, envField{
-			EnvVar: EnvVar{
-				Name:   EnvPrefix + strings.ToUpper(strings.Join(fieldPath, "_")),
-				Path:   strings.Join(fieldPath, "."),
-				Type:   typeName,
-				Secret: secretConfigKey(key),
-			},
-			value: fieldValue,
-		})
 	}
 }
 
@@ -183,15 +114,6 @@ func envTypeName(fieldType reflect.Type) (string, bool) {
 		}
 	}
 	return "", false
-}
-
-func secretConfigKey(key string) bool {
-	switch key {
-	case "password", "secret", "token", "api_token", "redis_password", "dsn", "ca_kek", "kek":
-		return true
-	default:
-		return false
-	}
 }
 
 func setEnvValue(target reflect.Value, raw string) error {
@@ -260,10 +182,10 @@ func PathFromEnv() string {
 // emptyDefaultMeanings explains the built-in defaults that are empty on
 // purpose because the code resolves them.
 var emptyDefaultMeanings = map[string]string{
-	"agent_control.mtls": "empty: `" + AgentMTLSDefault + "`",
-	"tls.mode":           "empty: `acme` with `domain`, else `external`",
-	"listen":             "empty: `server.host:server.port`",
-	"grpc.public_name":   "empty: `domain`",
+	"domain":           "none; required in `tls.mode` `acme`",
+	"tls.mode":         "empty: `acme` with `domain`, else `external`",
+	"listen":           "empty: `" + DefaultListenAddress + "`",
+	"grpc.public_name": "empty: `domain`",
 }
 
 // EnvMarkdownTable renders the variable reference table of
@@ -283,6 +205,37 @@ func EnvMarkdownTable(cfg *Config) string {
 			value = ""
 		}
 		_, _ = fmt.Fprintf(&builder, "| `%s` | `%s` | %s | %s |\n", variable.Name, variable.Path, variable.Type, value)
+	}
+	return builder.String()
+}
+
+// DeprecatedKeysMarkdownTable renders the deprecated key table of
+// docs/reference/configuration.md from deprecated_keys.yaml.
+func DeprecatedKeysMarkdownTable() string {
+	var builder strings.Builder
+	builder.WriteString("| Key | Variable | Status | Removed in | Why |\n")
+	builder.WriteString("|-----|----------|--------|------------|-----|\n")
+	for _, key := range Keys() {
+		if !key.Deprecated() {
+			continue
+		}
+		variable := "`" + key.EnvName() + "`"
+		path := "`" + key.Path + "`"
+		switch {
+		case key.Subtree:
+			path, variable = "`"+key.Path+".*`", "none"
+		case !envCapable(key):
+			variable = "none (YAML only)"
+		}
+		status := "ignored"
+		if key.Status == KeyRead {
+			status = "still read"
+		}
+		why := key.Reason
+		if key.Replacement != "" {
+			why += "; use `" + key.Replacement + "`"
+		}
+		_, _ = fmt.Fprintf(&builder, "| %s | %s | %s | %s | %s |\n", path, variable, status, key.RemovedIn, why)
 	}
 	return builder.String()
 }

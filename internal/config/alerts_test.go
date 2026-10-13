@@ -33,16 +33,14 @@ func TestAlertSettingsFromConfigAndEnvironment(t *testing.T) {
 	require.Equal(t, 12*time.Hour, settings.RenotifyInterval)
 	require.Zero(t, settings.PhaseStuckAfter, `"0" turns the phase alerts off`)
 
-	cfg := Defaults()
-	_, err := ApplyEnv(cfg, []string{
+	// The alert settings are built-in values: the keys are ignored.
+	loaded, report, err := LoadFile("", []string{
 		EnvPrefix + "ALERTS_ENABLED=false", EnvPrefix + "ALERTS_LEAF_EXPIRY_DAYS=3", EnvPrefix + "ALERTS_PHASE_STUCK_AFTER=48h",
 	})
 	require.NoError(t, err)
-	got := cfg.Alerts.Settings()
-	require.False(t, got.Enabled)
-	require.Equal(t, 3, got.LeafExpiryDays)
-	require.Equal(t, 48*time.Hour, got.PhaseStuckAfter)
-	require.Equal(t, 60, got.CAExpiryDays)
+	require.Len(t, report.Deprecated, 3)
+	require.Equal(t, Defaults().Alerts.Settings(), loaded.Alerts.Settings())
+	require.True(t, loaded.Alerts.Settings().Enabled)
 }
 
 func TestAlertsConfigValidation(t *testing.T) {
@@ -61,21 +59,13 @@ func TestAlertsConfigValidation(t *testing.T) {
 	}
 }
 
-func TestLoadRejectsABadAlertsBlock(t *testing.T) {
+// A bad alerts block in an old file cannot stop the start: it is ignored.
+func TestLoadIgnoresAnAlertsBlock(t *testing.T) {
 	resetConfig()
 	defer resetConfig()
 	path := filepath.Join(t.TempDir(), "config.yaml")
-	require.NoError(t, os.WriteFile(path, []byte("env: development\nalerts:\n  check_interval: \"1s\"\n"), 0o600))
-	_, err := Load(path)
-	require.ErrorContains(t, err, "alerts.check_interval")
-}
-
-// TestShippedConfigsKeepTheAlertDefaults: the example template spells the
-// alert defaults out, so copying it changes nothing.
-func TestShippedConfigsKeepTheAlertDefaults(t *testing.T) {
-	resetConfig()
-	defer resetConfig()
-	loaded, err := Load(filepath.Join("..", "..", "config", "config.yaml.example"))
+	require.NoError(t, os.WriteFile(path, []byte("alerts:\n  check_interval: \"1s\"\n"), 0o600))
+	loaded, err := Load(path)
 	require.NoError(t, err)
 	require.Equal(t, Defaults().Alerts.Settings(), loaded.Alerts.Settings())
 }

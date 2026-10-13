@@ -60,7 +60,7 @@ func TestAgentControlMTLSValidation(t *testing.T) {
 	cfg = valid()
 	cfg.AgentControl.MTLS = mode
 	cfg.ModuleRuntime = ModuleRuntimeConfig{}
-	require.ErrorContains(t, cfg.ValidateForServer(), "module_runtime.ca_kek")
+	require.ErrorContains(t, cfg.ValidateForServer(), "root key")
 	cfg = valid()
 	cfg.AgentControl.MTLS = mode
 	cfg.ModuleRuntime.PKI = ModulePKIExternal
@@ -90,29 +90,22 @@ func TestAgentControlLegacySunset(t *testing.T) {
 	cfg := &Config{AgentControl: AgentControlConfig{LegacySunset: "next spring"}}
 	require.ErrorContains(t, cfg.ValidateForServer(), "agent_control.legacy_sunset")
 
-	// Both keys come from the environment like every other key.
-	cfg = &Config{}
-	_, err = ApplyEnv(cfg, []string{EnvPrefix + "AGENT_CONTROL_MTLS=required", EnvPrefix + "AGENT_CONTROL_LEGACY_SUNSET=2027-03-31"})
+	// Both keys are built in now: a variable that sets one is ignored.
+	loaded, report, err := LoadFile("", []string{EnvPrefix + "AGENT_CONTROL_MTLS=preferred", EnvPrefix + "AGENT_CONTROL_LEGACY_SUNSET=2027-03-31"})
 	require.NoError(t, err)
-	require.Equal(t, AgentMTLSRequired, cfg.AgentControl.MTLSOrDefault())
-	require.Equal(t, "2027-03-31", cfg.AgentControl.LegacySunset)
+	require.Len(t, report.Deprecated, 2)
+	require.Equal(t, AgentMTLSRequired, loaded.AgentControl.MTLSOrDefault())
+	require.False(t, loaded.AgentControl.MTLSExplicit())
+	require.Empty(t, loaded.AgentControl.LegacySunset)
 }
 
-// TestShippedConfigsLeaveTheAgentModeToTheDefault: the templates leave
-// agent_control.mtls empty, so they follow the v4.2 default (required) and
-// start without gRPC TLS or the CA (a warning, not a refusal).
-func TestShippedConfigsLeaveTheAgentModeToTheDefault(t *testing.T) {
-	for _, name := range []string{"config.yaml.example", "config.prod.yaml"} {
-		resetConfig()
-		loaded, err := Load(filepath.Join("..", "..", "config", name))
-		require.NoError(t, err, name)
-		require.False(t, loaded.AgentControl.MTLSExplicit(), name)
-		require.Equal(t, AgentMTLSRequired, loaded.AgentControl.MTLSOrDefault(), name)
-		require.NoError(t, loaded.validateAgentControl(), name)
-	}
-	resetConfig()
-	loaded, err := Load(filepath.Join("..", "..", "config", "config.dev.yaml.example"))
+// TestShippedConfigLeavesTheAgentModeToTheDefault: the template follows the
+// default (required) and starts without gRPC TLS or the CA (a warning, not
+// a refusal).
+func TestShippedConfigLeavesTheAgentModeToTheDefault(t *testing.T) {
+	loaded, _, err := LoadFile(filepath.Join("..", "..", "config", "config.yaml.example"), nil)
 	require.NoError(t, err)
-	require.Equal(t, AgentMTLSPreferred, loaded.AgentControl.MTLSOrDefault(), "the development template serves local API-key agents")
-	resetConfig()
+	require.False(t, loaded.AgentControl.MTLSExplicit())
+	require.Equal(t, AgentMTLSRequired, loaded.AgentControl.MTLSOrDefault())
+	require.NoError(t, loaded.validateAgentControl())
 }

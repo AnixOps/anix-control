@@ -1,0 +1,682 @@
+# The configuration keys that are not operator keys any more
+# (docs/design/single-binary/README.md, section 5): every key of the 4.2
+# configuration (the 151 keys of docs/reference/environment-variables.md as
+# 4.2 shipped it, and the four keys the panel certificate work added and
+# then replaced), and the keys historic templates carried. Control embeds
+# this file; docs/reference/configuration.md shows it as a table
+# (TestDeprecatedKeyReferenceIsCurrent).
+#
+# Every entry:
+#   key:         the dotted YAML path; its variable is ANIX_CONTROL_ plus the
+#                path upper-cased with dots turned into underscores
+#   status:      read    - still applied, with a warning: the feature it
+#                          selects still exists, and ignoring it would change
+#                          what a running deployment does;
+#                ignored - warned once and not applied: the built-in value
+#                          (today's default) stands
+#   removed_in:  the milestone (and pull request) that removes the key's
+#                reader or its feature
+#   reason:      why, for the warning
+#   replacement: the operator key that takes over, when there is one
+#   subtree:     the key and everything below it (a section a template had)
+#   secret:      the value is a secret (never printed)
+keys:
+  # admin: the first administrator, until the claim link (N10).
+  - key: admin.email
+    status: read
+    removed_in: M2 (P9)
+    reason: creates the first administrator on an empty database until the one-time claim link replaces it
+  - key: admin.password
+    status: read
+    removed_in: M2 (P9)
+    reason: creates the first administrator on an empty database until the one-time claim link replaces it; keep it out of the file once an administrator exists
+    secret: true
+
+  # agent_control: the Agent channels accept enrolled Agents only.
+  - key: agent_control.legacy_sunset
+    status: ignored
+    removed_in: M5
+    reason: the legacy Agent transports send no Sunset date; Agents enroll (agent_control.mtls is fixed to required)
+  - key: agent_control.mtls
+    status: ignored
+    removed_in: M5
+    reason: fixed to required, the 4.2 default; the other modes are removed with the legacy Agent transports
+
+  # agent_install: derived from domain, or read until a later milestone.
+  - key: agent_install.agent_version
+    status: read
+    removed_in: M4 (S9)
+    reason: pins the Agent release nodes install until Control carries its Agent release manifest
+  - key: agent_install.artifact_dir
+    status: read
+    removed_in: M4 (N30)
+    reason: serves Agent releases from this directory until Control downloads and verifies them itself
+  - key: agent_install.cn_mirror_url
+    status: read
+    removed_in: M4 (N30)
+    reason: the mainland download mirror of Agent releases, until Control serves the releases itself
+  - key: agent_install.grpc_target
+    status: read
+    removed_in: M2 (P11)
+    reason: overrides the gRPC address nodes dial, which is derived from grpc.public_name (or domain) and grpc.port
+    replacement: grpc.public_name
+  - key: agent_install.public_url
+    status: read
+    removed_in: M2 (P11)
+    reason: overrides the panel address nodes use, which is https://<domain>; config rewrite turns its host into domain
+    replacement: domain
+  - key: agent_install.signature_file
+    status: read
+    removed_in: M2 (P11)
+    reason: the release signature of the Agent install script, until the signature is built into the binary
+
+  # alerts: the built-in values are the 4.2 defaults.
+  - key: alerts.ca_expiry_days
+    status: ignored
+    removed_in: M2 (P8)
+    reason: a built-in value (60 days)
+  - key: alerts.check_interval
+    status: ignored
+    removed_in: M2 (P8)
+    reason: a built-in value (15m)
+  - key: alerts.enabled
+    status: ignored
+    removed_in: M2 (P8)
+    reason: the alert monitor always runs
+  - key: alerts.leaf_expiry_days
+    status: ignored
+    removed_in: M2 (P8)
+    reason: a built-in value (14 days)
+  - key: alerts.phase_stuck_after
+    status: ignored
+    removed_in: M2 (P8)
+    reason: a built-in value (72h)
+  - key: alerts.renotify_interval
+    status: ignored
+    removed_in: M2 (P8)
+    reason: a built-in value (24h)
+
+  # app
+  - key: app.api_token
+    status: read
+    removed_in: M5 (N9)
+    reason: the legacy shared token of /flow/upload and the internal v2 routes, removed with them; administrators use admin API tokens
+    secret: true
+  - key: app.edition
+    status: ignored
+    removed_in: M2 (P6)
+    reason: there are no editions; orders, payments and affiliate are built in
+  - key: app.name
+    status: ignored
+    removed_in: M2 (P8)
+    reason: nothing reads it
+  - key: app.subscribe_path
+    status: read
+    removed_in: M5
+    reason: renamed; config rewrite moves it to subscribe_path
+    replacement: subscribe_path
+  - key: app.traffic_log_enable
+    status: ignored
+    removed_in: M2 (P8)
+    reason: nothing reads it
+  - key: app.version
+    status: ignored
+    removed_in: M2 (P8)
+    reason: nothing reads it; the version is the binary's
+
+  # auth: rate limits are built-in values; the registration policy is read
+  # until it becomes an administrator setting.
+  - key: auth.login_rate_limit.enabled
+    status: ignored
+    removed_in: M2 (P8)
+    reason: login rate limiting is always on
+  - key: auth.login_rate_limit.lockout_seconds
+    status: ignored
+    removed_in: M2 (P8)
+    reason: a built-in value (600)
+  - key: auth.login_rate_limit.max_attempts
+    status: ignored
+    removed_in: M2 (P8)
+    reason: a built-in value (6)
+  - key: auth.login_rate_limit.window_seconds
+    status: ignored
+    removed_in: M2 (P8)
+    reason: a built-in value (300)
+  - key: auth.register_rate_limit.enabled
+    status: ignored
+    removed_in: M2 (P8)
+    reason: registration rate limiting is always on
+  - key: auth.register_rate_limit.lockout_seconds
+    status: ignored
+    removed_in: M2 (P8)
+    reason: a built-in value (3600)
+  - key: auth.register_rate_limit.max_attempts
+    status: ignored
+    removed_in: M2 (P8)
+    reason: a built-in value (5)
+  - key: auth.register_rate_limit.window_seconds
+    status: ignored
+    removed_in: M2 (P8)
+    reason: a built-in value (3600)
+  - key: auth.registration.allowed_email_domains
+    status: read
+    removed_in: M3 (N35)
+    reason: the registration policy becomes an administrator setting; until then ignoring it would open registration to every address
+  - key: auth.registration.blocked_email_domains
+    status: read
+    removed_in: M3 (N35)
+    reason: the registration policy becomes an administrator setting; until then ignoring it would open registration to every address
+  - key: auth.registration.enabled
+    status: read
+    removed_in: M3 (N35)
+    reason: the registration policy becomes an administrator setting; until then ignoring it would reopen closed registration
+  - key: auth.registration.require_invite
+    status: read
+    removed_in: M3 (N35)
+    reason: the registration policy becomes an administrator setting; until then ignoring it would drop the invite requirement
+
+  # cache: Control has an in-memory cache only.
+  - key: cache.driver
+    status: ignored
+    removed_in: M2 (P8)
+    reason: nothing reads it; the cache is in memory
+  - key: cache.redis_db
+    status: ignored
+    removed_in: M2 (P8)
+    reason: nothing reads it; the cache is in memory
+  - key: cache.redis_host
+    status: ignored
+    removed_in: M2 (P8)
+    reason: nothing reads it; the cache is in memory
+  - key: cache.redis_password
+    status: ignored
+    removed_in: M2 (P8)
+    reason: nothing reads it; the cache is in memory
+    secret: true
+  - key: cache.redis_port
+    status: ignored
+    removed_in: M2 (P8)
+    reason: nothing reads it; the cache is in memory
+
+  # database: selects and connects the database while PostgreSQL is
+  # supported. With a configuration file the section keeps its 4.x meaning:
+  # the file's database keys alone (an empty driver is SQLite); without one
+  # the container defaults (PostgreSQL on 127.0.0.1) apply.
+  - key: database.conn_max_lifetime
+    status: read
+    removed_in: M2 (P4)
+    reason: the database is SQLite in the data directory after PostgreSQL support ends
+  - key: database.database
+    status: read
+    removed_in: M2 (P4)
+    reason: the database is SQLite in the data directory after PostgreSQL support ends
+  - key: database.driver
+    status: read
+    removed_in: M2 (P4)
+    reason: selects SQLite or PostgreSQL until PostgreSQL support ends; ignoring it would switch databases
+  - key: database.dsn
+    status: read
+    removed_in: M2 (P4)
+    reason: the database is SQLite in the data directory after PostgreSQL support ends
+    secret: true
+  - key: database.host
+    status: read
+    removed_in: M2 (P4)
+    reason: the database is SQLite in the data directory after PostgreSQL support ends
+  - key: database.log_level
+    status: read
+    removed_in: M2 (P4)
+    reason: the database is SQLite in the data directory after PostgreSQL support ends
+  - key: database.max_idle_conns
+    status: read
+    removed_in: M2 (P4)
+    reason: the database is SQLite in the data directory after PostgreSQL support ends
+  - key: database.max_open_conns
+    status: read
+    removed_in: M2 (P4)
+    reason: the database is SQLite in the data directory after PostgreSQL support ends
+  - key: database.password
+    status: read
+    removed_in: M2 (P4)
+    reason: the database is SQLite in the data directory after PostgreSQL support ends
+    secret: true
+  - key: database.port
+    status: read
+    removed_in: M2 (P4)
+    reason: the database is SQLite in the data directory after PostgreSQL support ends
+  - key: database.sslmode
+    status: read
+    removed_in: M2 (P4)
+    reason: the database is SQLite in the data directory after PostgreSQL support ends
+  - key: database.timezone
+    status: read
+    removed_in: M2 (P4)
+    reason: the database is SQLite in the data directory after PostgreSQL support ends
+  - key: database.username
+    status: read
+    removed_in: M2 (P4)
+    reason: the database is SQLite in the data directory after PostgreSQL support ends
+
+  # env and server: built-in production behaviour; the development instance
+  # runs with the -debug flag.
+  - key: env
+    status: ignored
+    removed_in: M2 (P8)
+    reason: Control always runs as production (its only effect was requiring jwt.secret, which is now derived); start a development instance with -debug
+  - key: server.cors.allow_credentials
+    status: ignored
+    removed_in: M2 (P8)
+    reason: a built-in value (false)
+  - key: server.cors.allowed_headers
+    status: ignored
+    removed_in: M2 (P8)
+    reason: a built-in value (Content-Type, Authorization, X-API-Key)
+  - key: server.cors.allowed_methods
+    status: ignored
+    removed_in: M2 (P8)
+    reason: a built-in value (GET, POST, PUT, DELETE, OPTIONS, PATCH)
+  - key: server.cors.allowed_origins
+    status: ignored
+    removed_in: M2 (P8)
+    reason: a built-in value (any origin, without credentials)
+  - key: server.cors.max_age
+    status: ignored
+    removed_in: M2 (P8)
+    reason: a built-in value (86400)
+  - key: server.host
+    status: read
+    removed_in: M2 (P11)
+    reason: the plain listener of tls.mode external while listen is unset; config rewrite does not carry it, set listen
+    replacement: listen
+  - key: server.mode
+    status: ignored
+    removed_in: M2 (P8)
+    reason: release mode is built in; start a development instance with -debug
+  - key: server.port
+    status: read
+    removed_in: M2 (P11)
+    reason: the plain listener of tls.mode external while listen is unset; config rewrite does not carry it, set listen
+    replacement: listen
+  - key: server.read_timeout
+    status: ignored
+    removed_in: M2 (P8)
+    reason: a built-in value (30 seconds)
+  - key: server.shutdown_drain_delay
+    status: ignored
+    removed_in: M2 (P8)
+    reason: a built-in value (5s)
+  - key: server.trusted_proxies
+    status: read
+    removed_in: M2 (P11)
+    reason: the reverse proxies of a container deployment; afterwards tls.mode acme trusts none and tls.mode external trusts loopback
+  - key: server.write_timeout
+    status: ignored
+    removed_in: M2 (P8)
+    reason: a built-in value (30 seconds)
+
+  # forward: the experimental engine stays off.
+  - key: forward.anixops_experimental
+    status: ignored
+    removed_in: M2 (P8)
+    reason: the experimental AnixOps engine stays off (a built-in value)
+
+  # forward_runtime: the flux forward runtime, removed with it (N5); the
+  # latency prober's settings are built-in values.
+  - key: forward_runtime.backend
+    status: read
+    removed_in: M5 (N5)
+    reason: selects the flux forward runtime's backend until the runtime is removed
+  - key: forward_runtime.clean_agent.action_timeout_seconds
+    status: read
+    removed_in: M5 (N5)
+    reason: the flux forward runtime, removed with it
+  - key: forward_runtime.clean_agent.heartbeat_interval_seconds
+    status: read
+    removed_in: M5 (N5)
+    reason: the flux forward runtime, removed with it
+  - key: forward_runtime.clean_agent.legacy_bridge_enabled
+    status: read
+    removed_in: M5 (N5)
+    reason: the flux forward runtime, removed with it
+  - key: forward_runtime.clean_agent.public_url
+    status: ignored
+    removed_in: M2 (P8)
+    reason: nothing reads it
+  - key: forward_runtime.clean_agent.token_expire_seconds
+    status: ignored
+    removed_in: M2 (P8)
+    reason: nothing reads it
+  - key: forward_runtime.gost_stats.error_log_interval
+    status: read
+    removed_in: M5 (N5)
+    reason: the flux forward runtime, removed with it
+  - key: forward_runtime.gost_stats.idle_poll_interval
+    status: read
+    removed_in: M5 (N5)
+    reason: the flux forward runtime, removed with it
+  - key: forward_runtime.gost_stats.poll_interval
+    status: read
+    removed_in: M5 (N5)
+    reason: the flux forward runtime, removed with it
+  - key: forward_runtime.iptables_ansible
+    status: ignored
+    removed_in: M2 (P8)
+    reason: never a key (templates up to 4.2 carried this section); the iptables backend runs with forward_runtime.nftables_ansible
+    subtree: true
+  - key: forward_runtime.jobs.batch_size
+    status: read
+    removed_in: M5 (N5)
+    reason: the flux forward runtime, removed with it
+  - key: forward_runtime.jobs.error_log_interval
+    status: read
+    removed_in: M5 (N5)
+    reason: the flux forward runtime, removed with it
+  - key: forward_runtime.jobs.idle_poll_interval
+    status: read
+    removed_in: M5 (N5)
+    reason: the flux forward runtime, removed with it
+  - key: forward_runtime.jobs.poll_interval
+    status: read
+    removed_in: M5 (N5)
+    reason: the flux forward runtime, removed with it
+  - key: forward_runtime.jobs.timeout_seconds
+    status: read
+    removed_in: M5 (N5)
+    reason: the flux forward runtime, removed with it
+  - key: forward_runtime.latency.concurrency
+    status: ignored
+    removed_in: M2 (P8)
+    reason: a built-in value (16)
+  - key: forward_runtime.latency.dial_timeout
+    status: ignored
+    removed_in: M2 (P8)
+    reason: a built-in value (3s)
+  - key: forward_runtime.latency.dials
+    status: ignored
+    removed_in: M2 (P8)
+    reason: a built-in value (5)
+  - key: forward_runtime.latency.error_log_interval
+    status: ignored
+    removed_in: M2 (P8)
+    reason: a built-in value (5m)
+  - key: forward_runtime.latency.idle_poll_interval
+    status: ignored
+    removed_in: M2 (P8)
+    reason: a built-in value (60s)
+  - key: forward_runtime.latency.poll_interval
+    status: ignored
+    removed_in: M2 (P8)
+    reason: a built-in value (60s)
+  - key: forward_runtime.latency.retention_days
+    status: ignored
+    removed_in: M2 (P8)
+    reason: a built-in value (7)
+  - key: forward_runtime.nftables_ansible.apply_playbook
+    status: read
+    removed_in: M5 (N5)
+    reason: the flux forward runtime, removed with it
+  - key: forward_runtime.nftables_ansible.become
+    status: read
+    removed_in: M5 (N5)
+    reason: the flux forward runtime, removed with it
+  - key: forward_runtime.nftables_ansible.command
+    status: read
+    removed_in: M5 (N5)
+    reason: the flux forward runtime, removed with it
+  - key: forward_runtime.nftables_ansible.environment
+    status: read
+    removed_in: M5 (N5)
+    reason: the flux forward runtime, removed with it
+  - key: forward_runtime.nftables_ansible.extra_vars
+    status: read
+    removed_in: M5 (N5)
+    reason: the flux forward runtime, removed with it
+  - key: forward_runtime.nftables_ansible.inventory
+    status: read
+    removed_in: M5 (N5)
+    reason: the flux forward runtime, removed with it
+  - key: forward_runtime.nftables_ansible.remove_playbook
+    status: read
+    removed_in: M5 (N5)
+    reason: the flux forward runtime, removed with it
+  - key: forward_runtime.nftables_ansible.target_pattern
+    status: read
+    removed_in: M5 (N5)
+    reason: the flux forward runtime, removed with it
+  - key: forward_runtime.nftables_ansible.timeout_seconds
+    status: read
+    removed_in: M5 (N5)
+    reason: the flux forward runtime, removed with it
+  - key: forward_runtime.nftables_ansible.working_dir
+    status: read
+    removed_in: M5 (N5)
+    reason: the flux forward runtime, removed with it
+  - key: forward_runtime.nodex.base_url
+    status: read
+    removed_in: M5 (N5)
+    reason: the flux forward runtime, removed with it
+  - key: forward_runtime.nodex.timeout_seconds
+    status: read
+    removed_in: M5 (N5)
+    reason: the flux forward runtime, removed with it
+  - key: forward_runtime.nodex.token
+    status: read
+    removed_in: M5 (N5)
+    reason: the flux forward runtime, removed with it
+    secret: true
+  - key: forward_runtime.nodex_mode
+    status: read
+    removed_in: M5 (N5)
+    reason: selects the flux forward runtime's backend until the runtime is removed
+
+  # frontend: the web app and its second listener, until the web app is
+  # built into the binary.
+  - key: frontend.enable
+    status: read
+    removed_in: M2 (P11)
+    reason: serves the web app from frontend.path until the web app is built into the binary
+  - key: frontend.path
+    status: read
+    removed_in: M2 (P11)
+    reason: the web app's directory until the web app is built into the binary
+  - key: frontend.port
+    status: read
+    removed_in: M2 (P11)
+    reason: a second plain listener of tls.mode external while listen is unset; config rewrite does not carry it, point the reverse proxy at listen
+    replacement: listen
+
+  # grpc: the node listener runs with domain; the rest is read until the
+  # installer and the container files are replaced.
+  - key: grpc.api_token
+    status: read
+    removed_in: M5 (N9)
+    reason: the legacy administrator token of the v2board gRPC services, removed with them
+    secret: true
+  - key: grpc.enabled
+    status: read
+    removed_in: M2 (P11)
+    reason: turns the gRPC listener on without domain; with domain it always runs
+  - key: grpc.host
+    status: read
+    removed_in: M2 (P11)
+    reason: the gRPC listener's address, until it listens on every address
+  - key: grpc.tls_cert_file
+    status: read
+    removed_in: M2 (P11)
+    reason: the gRPC listener's own certificate; config rewrite turns it into tls.cert_file with tls.mode external
+    replacement: tls.cert_file
+  - key: grpc.tls_key_file
+    status: read
+    removed_in: M2 (P11)
+    reason: the gRPC listener's own certificate key; config rewrite turns it into tls.key_file with tls.mode external
+    replacement: tls.key_file
+
+  # Secrets now kept in the data directory or derived from the root key.
+  - key: identity.kek
+    status: read
+    removed_in: M5
+    reason: derived from the root key; a set value is adopted into root.key at the next start and stays in use until a rotation, so the file need not keep it
+    secret: true
+  - key: jwt.expire
+    status: ignored
+    removed_in: M2 (P8)
+    reason: a built-in value (86400 seconds)
+  - key: jwt.secret
+    status: read
+    removed_in: M5
+    reason: derived from the root key; a set value is adopted into root.key at the next start and stays in use until a rotation, so the file need not keep it
+    secret: true
+
+  # log: journald takes plain text after the container files go.
+  - key: log.file_path
+    status: ignored
+    removed_in: M2 (P8)
+    reason: nothing reads it; Control logs to standard output
+  - key: log.format
+    status: read
+    removed_in: M2 (P11)
+    reason: JSON lines for container log collectors, until the container files are removed
+  - key: log.level
+    status: read
+    removed_in: M2 (P11)
+    reason: the JSON log level, until the container files are removed; -debug turns on debug logging
+  - key: log.max_age
+    status: ignored
+    removed_in: M2 (P8)
+    reason: nothing reads it
+  - key: log.max_backups
+    status: ignored
+    removed_in: M2 (P8)
+    reason: nothing reads it
+  - key: log.max_size
+    status: ignored
+    removed_in: M2 (P8)
+    reason: nothing reads it
+  - key: log.output
+    status: ignored
+    removed_in: M2 (P8)
+    reason: nothing reads it; Control logs to standard output
+
+  # module_runtime: the remote module runtime, removed with PostgreSQL.
+  - key: module_runtime.bind_timeout
+    status: read
+    removed_in: M2 (P4)
+    reason: the remote module runtime, removed with PostgreSQL support
+  - key: module_runtime.ca_kek
+    status: read
+    removed_in: M5
+    reason: the root key; adopted into root.key in data_dir at the next start, after which it must match that file and can be removed
+    secret: true
+  - key: module_runtime.cert_file
+    status: read
+    removed_in: M2 (P4)
+    reason: the remote module runtime, removed with PostgreSQL support
+  - key: module_runtime.cert_lifetime
+    status: read
+    removed_in: M2 (P4)
+    reason: the remote module runtime, removed with PostgreSQL support
+  - key: module_runtime.cluster
+    status: read
+    removed_in: M2 (P4)
+    reason: names the cluster in every module and Agent identity; ignoring a set value would change the identities of enrolled Agents
+  - key: module_runtime.database_host
+    status: read
+    removed_in: M2 (P4)
+    reason: the remote module runtime, removed with PostgreSQL support
+  - key: module_runtime.enabled
+    status: read
+    removed_in: M2 (P4)
+    reason: the remote module runtime, removed with PostgreSQL support
+  - key: module_runtime.key_file
+    status: read
+    removed_in: M2 (P4)
+    reason: the remote module runtime, removed with PostgreSQL support
+  - key: module_runtime.listen
+    status: read
+    removed_in: M2 (P4)
+    reason: the remote module runtime, removed with PostgreSQL support
+  - key: module_runtime.pki
+    status: read
+    removed_in: M2 (P4)
+    reason: the remote module runtime, removed with PostgreSQL support
+  - key: module_runtime.trust_bundle_file
+    status: read
+    removed_in: M2 (P4)
+    reason: the remote module runtime, removed with PostgreSQL support
+
+  # package_routes and plugins: the built-in packages.
+  - key: package_routes.default_mode
+    status: ignored
+    removed_in: M2 (P7)
+    reason: route modes come only from the rehearsed list (config/package-route-defaults.json)
+  - key: plugins.control_execution_enabled
+    status: ignored
+    removed_in: M2 (P7)
+    reason: the built-in packages always run; Control starts their hosts at every start
+  - key: plugins.control_host_artifact_dir
+    status: read
+    removed_in: M2 (P11)
+    reason: where package hosts' files are kept, until the systemd unit gives Control its directories
+  - key: plugins.control_host_max_request_bytes
+    status: ignored
+    removed_in: M2 (P8)
+    reason: a built-in value (1 MiB)
+  - key: plugins.control_host_max_response_bytes
+    status: ignored
+    removed_in: M2 (P8)
+    reason: a built-in value (1 MiB)
+  - key: plugins.control_host_request_timeout
+    status: ignored
+    removed_in: M2 (P8)
+    reason: a built-in value (30s)
+  - key: plugins.control_host_runtime_dir
+    status: read
+    removed_in: M2 (P11)
+    reason: where package hosts' sockets live, until the systemd unit gives Control its runtime directory
+  - key: plugins.control_host_startup_timeout
+    status: ignored
+    removed_in: M2 (P8)
+    reason: a built-in value (5s)
+  - key: plugins.control_host_websocket_session_timeout
+    status: ignored
+    removed_in: M2 (P8)
+    reason: a built-in value (24h)
+  - key: plugins.control_poll_interval
+    status: ignored
+    removed_in: M2 (P8)
+    reason: a built-in value (5s)
+  - key: plugins.dispatch_enabled
+    status: ignored
+    removed_in: M2 (P7)
+    reason: Agent plugin dispatch is off until the Agent release manifest brings the Agent plugins (M4)
+  - key: plugins.dispatch_poll_interval
+    status: ignored
+    removed_in: M2 (P7)
+    reason: Agent plugin dispatch is off until the Agent release manifest brings the Agent plugins (M4)
+  - key: plugins.identity_bootstrap_package_dir
+    status: read
+    removed_in: M2 (P11)
+    reason: imports identity-platform into a development binary that embeds no packages; a release binary ignores it
+  - key: plugins.official_public_key
+    status: read
+    removed_in: M2 (P11)
+    reason: the key the built-in packages verify against (development builds sign with their own), until the package index carries it
+  - key: plugins.topology_execution_enabled
+    status: ignored
+    removed_in: M2 (P7)
+    reason: topology deployment execution is off until the Agent release manifest brings the Agent plugins (M4)
+  - key: plugins.topology_poll_interval
+    status: ignored
+    removed_in: M2 (P7)
+    reason: topology deployment execution is off until the Agent release manifest brings the Agent plugins (M4)
+
+  # tls
+  - key: tls.domain
+    status: ignored
+    removed_in: M2 (P8)
+    reason: it was only logged; config rewrite turns it into domain
+    replacement: domain
+  - key: tls.enable
+    status: read
+    removed_in: M2 (P11)
+    reason: not used (TLS follows tls.mode); read only to refuse the 4.x combination of tls.enable, tls.cert_file and no tls.mode, which served https on the web port

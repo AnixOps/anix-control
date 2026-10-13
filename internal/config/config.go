@@ -25,15 +25,22 @@ var (
 	once sync.Once
 )
 
-// defaultsYAML is the configuration used when Control starts without a config
-// file (the container model); ANIX_CONTROL_* variables override it.
+// defaultsYAML holds the built-in values: the defaults of the operator keys,
+// and the values of the keys that are no longer read. A configuration file
+// and the ANIX_CONTROL_* variables are overlaid on them key by key.
 //
 //go:embed defaults.yaml
 var defaultsYAML []byte
 
-// Config is the root application configuration loaded from config.yaml.
+// Config is Control's configuration. Its YAML paths are the keys of
+// keys.go: the operator keys, and the deprecated keys of
+// deprecated_keys.yaml that are still read. The fields of keys that are no
+// longer read keep their built-in values.
 type Config struct {
 	Env string `yaml:"env"`
+	// DataDir is the data directory (data_dir): root.key and, later, the
+	// database and the backups.
+	DataDir string `yaml:"data_dir"`
 	// Domain is the panel's name: the web, API, subscription and install
 	// script address (https://<domain>), the name of the certificate Control
 	// obtains in tls.mode acme, and the name nodes dial for gRPC unless
@@ -63,6 +70,9 @@ type Config struct {
 	AgentControl   AgentControlConfig   `yaml:"agent_control"`
 	AgentInstall   AgentInstallConfig   `yaml:"agent_install"`
 	Alerts         AlertsConfig         `yaml:"alerts"`
+	// Deprecated records the deprecated keys the configuration sets
+	// (deprecated_keys.yaml): Load logs one warning per key.
+	Deprecated DeprecatedConfig `yaml:"-"`
 }
 
 // ForwardConfig holds the switches of the v4.2 forwarding engines
@@ -703,10 +713,10 @@ type AppConfig struct {
 	// loads, and the key is ignored like any other unknown key.
 }
 
-// Load reads the configuration once per process. A non-empty path names a
-// YAML file; an empty path starts from the built-in defaults (defaults.yaml),
-// which is how containers run without a config file. ANIX_CONTROL_*
-// environment variables override either source.
+// Load reads the configuration once per process (LoadFile) and logs one
+// warning per deprecated key it sets and per unknown ANIX_CONTROL_*
+// variable. A non-empty path names a YAML file; an empty path starts from
+// the built-in defaults alone.
 func Load(path string) (*Config, error) {
 	var err error
 	once.Do(func() {
@@ -721,65 +731,22 @@ func Load(path string) (*Config, error) {
 }
 
 func load(path string, environ []string) (*Config, error) {
-	data := defaultsYAML
-	if path != "" {
-		var err error
-		data, err = os.ReadFile(path) // #nosec G304 -- config path is supplied by the operator or test harness, not by an HTTP user.
-		if err != nil {
-			return nil, err
-		}
+	loaded, report, err := LoadFile(path, environ)
+	for _, warning := range report.Warnings() {
+		log.Print(warning)
 	}
-
-	loaded := &Config{}
-	if err := yaml.Unmarshal(data, loaded); err != nil {
-		return nil, err
-	}
-	unknown, err := ApplyEnv(loaded, environ)
-	if err != nil {
-		return nil, err
-	}
-	// The removed keys (deprecated.go) are reported with their reason.
-	for _, name := range ignoreRemovedKeys(data, unknown) {
-		log.Printf("Ignoring unknown configuration variable %s (see anix-control -print-env)", name)
-	}
-	normalizeBrandDefaults(loaded)
-	if loaded.Server.Mode == "" && loaded.Env == "production" {
-		loaded.Server.Mode = "release"
-	}
-	loaded.App.SubscribePath, err = NormalizeSubscribePath(loaded.App.SubscribePath)
-	if err != nil {
-		return nil, fmt.Errorf("invalid app.subscribe_path: %w", err)
-	}
-	if err := loaded.Plugins.ValidatePayloadLimits(); err != nil {
-		return nil, err
-	}
-	if err := loaded.Database.validateConnectionSettings(); err != nil {
-		return nil, err
-	}
-	if _, err := loaded.Server.DrainDelay(); err != nil {
-		return nil, err
-	}
-	if _, err := requestorigin.NewPolicy(loaded.Server.TrustedProxies); err != nil {
-		return nil, fmt.Errorf("server.trusted_proxies: %w", err)
-	}
-	if err := loaded.Alerts.validate(); err != nil {
-		return nil, err
-	}
-	if err := loaded.AgentInstall.Validate(); err != nil {
-		return nil, err
-	}
-	if err := loaded.validatePanel(); err != nil {
-		return nil, err
-	}
-	switch loaded.Log.Format {
-	case "", "text", "json":
-	default:
-		return nil, fmt.Errorf("invalid log.format %q: use text or json", loaded.Log.Format)
-	}
-	return loaded, nil
+	return loaded, err
 }
 
-// Defaults returns a fresh copy of the built-in container defaults.
+// validateTrustedProxies checks server.trusted_proxies.
+func validateTrustedProxies(proxies []string) error {
+	if _, err := requestorigin.NewPolicy(proxies); err != nil {
+		return fmt.Errorf("server.trusted_proxies: %w", err)
+	}
+	return nil
+}
+
+// Defaults returns a fresh copy of the built-in values.
 func Defaults() *Config {
 	defaults := &Config{}
 	if err := yaml.Unmarshal(defaultsYAML, defaults); err != nil {
@@ -795,8 +762,15 @@ var placeholderJWTSecrets = map[string]bool{
 	"CHANGE-THIS-TO-A-VERY-LONG-RANDOM-STRING-IN-PRODUCTION": true,
 }
 
-// ValidateForServer rejects settings the server must not start with. In
-// production the JWT secret must be set and must not be a template value.
+// PlaceholderJWTSecret tells whether secret is a template value of the old
+// configuration files: Control does not adopt one (the root key derives the
+// secret instead).
+func PlaceholderJWTSecret(secret string) bool {
+	return placeholderJWTSecrets[strings.TrimSpace(secret)]
+}
+
+// ValidateForServer rejects settings the server must not start with. The
+// JWT secret, once the root key is resolved, must not be a template value.
 func (c *Config) ValidateForServer() error {
 	if c == nil {
 		return fmt.Errorf("configuration is missing")
@@ -807,17 +781,8 @@ func (c *Config) ValidateForServer() error {
 	if err := c.validateAgentControl(); err != nil {
 		return err
 	}
-	if err := c.panelPrerequisitesError(); err != nil {
-		return err
-	}
-	if c.Env == "production" {
-		secret := strings.TrimSpace(c.JWT.Secret)
-		if secret == "" {
-			return fmt.Errorf("jwt.secret is required in production (set %sJWT_SECRET or %sJWT_SECRET%s)", EnvPrefix, EnvPrefix, EnvFileSuffix)
-		}
-		if placeholderJWTSecrets[secret] {
-			return fmt.Errorf("jwt.secret still has the template value; generate a random secret")
-		}
+	if placeholderJWTSecrets[strings.TrimSpace(c.JWT.Secret)] {
+		return fmt.Errorf("jwt.secret still has the template value: remove it, and the root key derives the secret")
 	}
 	return nil
 }
@@ -866,7 +831,7 @@ func (c *Config) RequiredPrerequisitesError() error {
 		return fmt.Errorf("agent_control.mtls %q needs the built-in CA: with module_runtime.pki %q the kernel holds no CA key to issue agent certificates", mode, c.ModuleRuntime.PKIOrDefault())
 	}
 	if strings.TrimSpace(c.ModuleRuntime.CAKEK) == "" {
-		return fmt.Errorf("agent_control.mtls %q needs the built-in CA, which signs agent certificates: set module_runtime.ca_kek (%sMODULE_RUNTIME_CA_KEK); module_runtime.enabled is not needed", mode, EnvPrefix)
+		return fmt.Errorf("agent_control.mtls %q needs the built-in CA, which signs agent certificates with the root key: start Control so that it creates root.key in data_dir (%s)", mode, c.DataDir)
 	}
 	return nil
 }
@@ -885,9 +850,7 @@ func (m ModuleRuntimeConfig) validate() error {
 	}
 	switch m.PKIOrDefault() {
 	case ModulePKIBuiltin:
-		if strings.TrimSpace(m.CAKEK) == "" {
-			return fmt.Errorf("module_runtime.ca_kek is required for the built-in PKI (set %sMODULE_RUNTIME_CA_KEK or %sMODULE_RUNTIME_CA_KEK%s)", EnvPrefix, EnvPrefix, EnvFileSuffix)
-		}
+		// The built-in CA's key is the root key, which every server has.
 	case ModulePKIExternal:
 		if m.TrustBundleFile == "" || m.CertFile == "" || m.KeyFile == "" {
 			return fmt.Errorf("module_runtime.trust_bundle_file, cert_file and key_file are required for the external PKI")

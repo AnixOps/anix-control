@@ -1,22 +1,28 @@
-# Built-in defaults used when Control starts without a config file, which is
-# the container deployment model: every value below can be overridden with an
-# ANIX_CONTROL_* environment variable (see `anix-control -print-env`).
-# Secrets (jwt.secret, database.password, ...) have no default.
+# Control's built-in values. A configuration file and the ANIX_CONTROL_*
+# variables are overlaid on them key by key (internal/config/load.go). The
+# operator keys (keys.go) come first; the other values are those of the keys
+# that are no longer read, or of deprecated keys that are still read
+# (deprecated_keys.yaml). Secrets have no value here: the root key in
+# data_dir seals the stored ones and derives the rest.
 env: "production"
 # The panel's name (https://<domain>). With it Control obtains its own
 # certificate (tls.mode acme) and runs the node gRPC listener.
 domain: ""
-# tls.mode external's plain http address; empty: server.host:server.port.
+# tls.mode external's plain http address; empty: 127.0.0.1:8080 (or the
+# deprecated server.host, server.port and frontend.port when they are set).
 listen: ""
+# The data directory: root.key (mode 0600, directory 0700).
+data_dir: "/var/lib/anix-control"
 tls:
   # acme, files or external; empty: acme with domain, external without.
   mode: ""
   cert_file: ""
   key_file: ""
 server:
-  # Loopback only: the container image sets ANIX_CONTROL_SERVER_HOST=0.0.0.0.
-  host: "127.0.0.1"
-  port: 8080
+  # Deprecated: tls.mode external's plain listener while listen is unset
+  # (empty host: loopback; port 0: 8080).
+  host: ""
+  port: 0
   mode: "release"
   read_timeout: 30
   write_timeout: 30
@@ -34,8 +40,11 @@ server:
     max_age: 86400
 frontend:
   enable: true
-  port: 3000
+  # Deprecated: a second plain listener of tls.mode external (0: none).
+  port: 0
   path: "web/public"
+# Without a configuration file (containers); a file's database keys replace
+# this section as a whole while PostgreSQL is supported.
 database:
   driver: "postgres"
   host: "127.0.0.1"
