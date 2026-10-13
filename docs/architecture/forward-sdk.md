@@ -57,7 +57,7 @@ is the v4.2 forwarding redesign. It replaces the flux-panel clone
 9. [Node onboarding](#9-node-onboarding)
 10. [Upgrade from v4.1](#10-upgrade-from-v41)
 11. [Metering](#11-metering)
-12. [Editions](#12-editions)
+12. [Editions (retired)](#12-editions-retired)
 13. [Testing](#13-testing)
 14. [Security](#14-security)
 15. [Rollout](#15-rollout)
@@ -2167,9 +2167,9 @@ cancelled. They split three ways:
 - Multipliers, forwarding plans and auto-renewal are v4.3 and commercial
   (section 12).
 
-## 12. Editions
+## 12. Editions (retired)
 
-`config/editions.json` lists commercial packages and routes. Which forwarding
+The editions were listed in `config/editions.json` (removed in M2). Which forwarding
 features go into which edition was decided by the owner on 2026-10-04
 (H23), as proposed:
 
@@ -2184,17 +2184,14 @@ features go into which edition was decided by the owner on 2026-10-04
 | Forwarding plans, auto-renewal, billing multipliers (v4.3) | no | yes |
 | Resellers and panel federation (v4.4) | no | yes |
 
-As built (F5a):
-
-- Every `/api/v4/forward/*` endpoint is in both editions.
-- `config/editions.json` `commercial_api_prefixes` reserves
-  `/api/v4/forward/self/`, `/plans/` and `/multipliers/` for v4.3. The
-  community edition answers them as routes that do not exist, in the kernel,
-  before the package (`edition.Policy.HidesPath`).
-- Each endpoint of the package carries an edition (`v4api.Endpoints`), and a
-  commercial one must sit under a reserved prefix.
-- User self-service needs a user-facing route group in v4.3, since `/api/v4`
-  is administrator-only.
+As built (F5a), then superseded by M2 (B24, `docs/design/single-binary/README.md`
+section 4.4): there are no editions any more. `app.edition`,
+`config/editions.json` and the kernel's prefix filter are gone, the commercial
+column above is served by every installation, and the endpoints carry no
+edition. The v4.3 features become ordinary endpoints of the package when they
+are implemented; nothing reserves `/api/v4/forward/self/`, `/plans/` or
+`/multipliers/` until then. User self-service still needs a user-facing route
+group in v4.3, since `/api/v4` is administrator-only.
 
 ## 13. Testing
 

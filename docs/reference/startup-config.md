@@ -62,9 +62,12 @@ app:
   subscribe_path: "s"
 
 plugins:
+  # Every official package built into the binary is verified against this
+  # key at start and installed, upgraded and enabled
+  # (docs/architecture/plugin-kernel-contract.md, "Built-in Packages").
   official_public_key: "jW26nr2tbthASoeq6RmIpx8Ah+uhPNIv9V1ewRVb1VE="
-  # Required for a new plugin-only database before package execution is enabled.
-  identity_bootstrap_package_dir: "/var/lib/anixops/bootstrap"
+  # No identity_bootstrap_package_dir: a release binary ignores it (only a
+  # development build without built-in packages reads it).
   control_execution_enabled: true
   control_poll_interval: "5s"
   # Use paths writable by the service user. The V4 installer creates these
@@ -181,18 +184,32 @@ run it one at a time:
 - other environments: an empty database gets the full schema; an existing one
   only gets tables it does not have. Existing tables, columns and indexes are
   never altered.
-- then the `Ensure*` schema helpers, the plugin trust root, the identity
-  package bootstrap import, and the default admin, subscription group, plan
-  and authorized key seeds.
+- then the `Ensure*` schema helpers, the plugin trust root, the built-in
+  package bootstrap, and the default admin, subscription group, plan and
+  authorized key seeds.
+
+The built-in package bootstrap verifies every official package embedded in
+the binary against `plugins.official_public_key` and installs, upgrades and
+enables it, in dependency order; a restart with the same binary changes
+nothing. A package that fails is logged (`WARNING: built-in package ...`) and
+raised as a kernel alert, and the start goes on
+([`../architecture/plugin-kernel-contract.md`](../architecture/plugin-kernel-contract.md#built-in-packages)).
+A binary built without them (`go build` from a checkout; `make build` embeds
+a development-key set) imports `identity-platform` from
+`plugins.identity_bootstrap_package_dir` instead. When the package host
+supervisor starts, Control logs its own executable and SHA-256, starts every
+enabled package's host as a child process of the same binary
+(`anix-control package-host <id>`) and runs the migrations of a package whose
+version changed.
 
 `anix-control migrate [flags]` runs only this preparation and exits (status 0
 on success). Use it as a one-shot Compose service or Kubernetes Job before the
 server starts; the server repeats it idempotently.
 
-When the alpha plugin profile is enabled, startup also exposes the signed
-package APIs, starts the durable Control lifecycle worker, and dispatches ready
-operations to authenticated Agent control streams. Topology execution remains
-off until a separate canary decision.
+With `plugins.control_execution_enabled` (the default), startup starts the
+durable Control lifecycle worker and the package hosts. Agent dispatch
+(`plugins.dispatch_enabled`) and topology execution stay off unless enabled
+explicitly; the release builds no Agent plugin for them.
 
 That is why local startup and Docker startup now share the same primary config structure.
 

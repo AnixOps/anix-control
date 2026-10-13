@@ -155,8 +155,11 @@ Before touching production:
   evidence attached to the GitHub Release.
 - Verify the deployment type: systemd binary, Docker Compose, or another
   operator-managed wrapper.
-- **Upgrading past 4.1.0-rc.2 with payments, orders, coupons or the invite
-  commission in use: set `app.edition: commercial` first**
+- **Upgrading to the release with built-in packages (after 4.2.x): read
+  [Official Packages Built In](#official-packages-built-in)** first. There is
+  no package to import and no edition to choose any more.
+- **Upgrading past 4.1.0-rc.2 (up to 4.2.x) with payments, orders, coupons or
+  the invite commission in use: set `app.edition: commercial` first**
   ([Community Edition By Default](#community-edition-by-default-set-commercial-before-upgrading)).
 - **Upgrading past 4.1.0-rc.2 behind a reverse proxy that is not on the
   same host: list it in `server.trusted_proxies` first**
@@ -197,21 +200,61 @@ Evidence to keep:
 - `/health` output before and after upgrade
 - rollback decision
 
+## Official Packages Built In
+
+From the release after 4.2.x on, every official package is inside the Control
+binary ([`architecture/plugin-kernel-contract.md`](architecture/plugin-kernel-contract.md#built-in-packages)):
+
+- **Nothing to import.** At every start Control verifies each built-in package
+  against `plugins.official_public_key`, installs it or upgrades the
+  installation to the binary's version (a new lifecycle generation, so the
+  package migrations run), enables it, and starts its host by running its
+  own binary again (`anix-control package-host <id>`). The first start after
+  the upgrade moves every installed package to the new version; a restart
+  with the same binary changes nothing. Back up the database first, as for
+  every upgrade: a package never moves to an older version, so going back
+  means restoring that backup with the old binary.
+- **One product.** `app.edition` is gone, and so is the separate commercial
+  build: `order`, `payment` and `affiliate` are installed in every
+  installation, and the web app shows their pages. A configuration that
+  still sets `app.edition` (or `ANIX_CONTROL_APP_EDITION`) loads; the key is
+  ignored.
+- **Failures stay with their package.** A package that does not verify or
+  does not start is named in the start log (`built-in package ... invalid`
+  or `failed`) and raised as a critical alert; its routes are unavailable and
+  every other package and Control keep running. Fix the cause and restart.
+- **Release assets.** The release no longer carries
+  `anix-control-packages-<version>.tar.gz` or the `identity-platform` files,
+  and only linux/amd64 and linux/arm64 binaries. `SHA256SUMS.txt.sig` signs
+  the checksums with the official key; the installer verifies it (OpenSSL 3).
+  `plugins.identity_bootstrap_package_dir` is ignored (leave it as it is) and
+  the image no longer sets it.
+- **Package execution stays on.** `plugins.control_execution_enabled` must be
+  `true` (the default and what the installer writes): without it every
+  `/api/v2` route answers 502. Agent dispatch and topology execution
+  (`plugins.dispatch_enabled`, `plugins.topology_execution_enabled`) stay
+  off: the release builds no Agent plugin.
+
 ## Artifact Verification
 
 Download artifacts from the GitHub Release for the target tag.
 [`RELEASING.md`](RELEASING.md) lists what every release carries. At minimum,
 download:
 
-- the matching `anix-control-<os>-<arch>.tar.gz` backend artifact (or the
-  matching Windows `.exe.zip`)
+- the matching `anix-control-linux-<arch>.tar.gz` backend artifact (releases
+  up to 4.2.x also attached Windows and macOS builds)
 - `anix-control-frontend.tar.gz` (releases up to `v4.1.0-rc.2` also attached
   `anix-control-frontend.zip` with the same files)
-- `SHA256SUMS.txt`
+- `SHA256SUMS.txt` and, from the built-in packages release on,
+  `SHA256SUMS.txt.sig` with `official-public-key.raw`
 - `RELEASE_MANIFEST.json`
 - `RELEASE_NOTES.md`
 
-Every official package is built at the release version and shipped inside one
+From the built-in packages release on, the packages are inside the binary and
+`RELEASE_MANIFEST.json` lists them under `packages` (id, version, slim
+artifact and manifest SHA-256). Verify `SHA256SUMS.txt.sig` before the
+checksums ([`RELEASING.md`](RELEASING.md#verifying-a-release)). Up to 4.2.x,
+every official package is built at the release version and shipped inside one
 signed archive, `anix-control-packages-<version>.tar.gz`, with its detached
 signature `anix-control-packages-<version>.tar.gz.sig`. The archive holds, for
 each package ID, `<plugin-id>-<version>.anxp`, `.manifest.json`,
@@ -1442,6 +1485,10 @@ approval: finalize the node credential split
 ([Phase P3](#finalizing-the-node-credential-split-phase-p3)).
 
 ### Community Edition By Default: Set `commercial` Before Upgrading
+
+> Superseded by the built-in packages release: there are no editions any more
+> ([Official Packages Built In](#official-packages-built-in)). This section
+> applies to 4.1.0-rc.3 up to 4.2.x.
 
 > **Action required for paid installs.** From 4.1.0-rc.3 Control runs as the
 > **community** edition unless the configuration says otherwise. If this

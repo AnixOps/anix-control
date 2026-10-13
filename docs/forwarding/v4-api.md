@@ -54,29 +54,17 @@ were removed in v4.2 (F5d); their contract is archived in
   release that declares the control route is installed. Before that they
   answer `404 plugin_route_not_found`.
 
-## Editions (H23)
+## One Product
 
-Everything on this page is in both editions: routes, load balancing,
-failover, the node inventory, statistics and onboarding.
-
-`config/editions.json` reserves these prefixes for the commercial
-edition's v4.3 features:
-
-| Prefix | For |
-|---|---|
-| `/api/v4/forward/self/` | user self-service forwarding |
-| `/api/v4/forward/plans/` | forward plans and renewal |
-| `/api/v4/forward/multipliers/` | billing multipliers |
-
-- The community edition answers a request under these prefixes as a route
-  that does not exist (`404 plugin_route_not_found`), before it reaches the
-  package.
-- No endpoint is served under them yet.
-- In the package, every endpoint carries an edition (`v4api.Endpoints`). A
-  commercial endpoint must sit under one of these prefixes, which
-  `internal/tests/forwardv4` checks.
-- User self-service needs a user-facing route group, because `/api/v4` is
-  administrator-only. That is v4.3 work.
+There are no editions any more (M2, B24): everything on this page, and the
+v4.3 features (user self-service forwarding, forward plans and renewal,
+billing multipliers), is served by every installation. No prefix is
+reserved: those features become ordinary endpoints of the package
+(`v4api.Endpoints`) when they are implemented, and until then a request
+under `/api/v4/forward/self/`, `/plans/` or `/multipliers/` reaches the
+package like any other path and is answered as an unknown endpoint. User
+self-service needs a user-facing route group, because `/api/v4` is
+administrator-only. That is v4.3 work.
 
 ## Conventions
 

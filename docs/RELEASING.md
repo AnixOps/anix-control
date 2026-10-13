@@ -109,16 +109,25 @@ version `latest`.
   policy jobs. The `needs` lists of `plugin-package-publish` and
   `release-binaries` in `ci.yml` name them, and
   `config/scripts/check_release_workflow.sh` fails if one is dropped.
-- **Official packages.** Every package under `packages/` is built at the tag's
-  version and signed with the protected key `ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY`.
+- **Official packages, first.** `plugin-package-publish` builds every package
+  under `packages/` (`PACKAGE_SPECS` in `packages/shared/build_package.py` is
+  the one list) in the built-in format at the tag's version
+  (`build_package.py --all --builtin --formal-release`) and signs it with the
+  protected key `ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY`, then verifies the set
+  (`--verify-release`) and hands it to the binary job as the
+  `builtin-packages` artifact. A built-in package holds no binary: Control
+  links every package host and embeds the set
+  ([`architecture/plugin-kernel-contract.md`](architecture/plugin-kernel-contract.md#built-in-packages)).
+  Orders, payments and affiliate are official packages like the others:
+  there are no editions and no separate commercial build.
   - The signing root must equal `plugins.official_public_key` in
     `config/config.prod.yaml`, since Control only accepts packages signed by
     that root.
-  - Agent packages embed Agent binaries from the pinned `anix-agent` commit
-    and a checksum-pinned GOST runtime.
+  - No Agent plugin or GOST runtime is built for the release: Agent
+    dispatch stays off until the Agent release carries them (M4).
   - The pin is `AGENT_REF` in the top-level `env` of `ci.yml`; every
-    anix-agent checkout (packages, cross-repository E2E, live WebUI gate)
-    takes its ref from it. Move it to the Agent's release commit with every
+    anix-agent checkout (package contract tests, cross-repository E2E, live
+    WebUI gate) takes its ref from it. Move it to the Agent's release commit with every
     Agent tag, in the pull request that prepares the Control release.
   - `config/AGENT_RELEASE` is the one line that names that release's tag
     (`v4.2.0`). The release binaries embed it (`-X main.agentRelease`), and
@@ -134,31 +143,30 @@ version `latest`.
     commands the plugin binaries are built from and fails for a
     vulnerability their call graph reaches, so a vulnerable Agent
     dependency cannot reach the signed packages.
-- **Binaries.** Linux, Windows and macOS builds for amd64 and arm64, plus the
+- **Binaries.** linux/amd64 and linux/arm64 only (the package hosts run as
+  Linux processes): each job downloads the `builtin-packages` set into
+  `internal/builtinpkg/dist/`, verifies it again against
+  `config/config.prod.yaml`'s root, and builds with `-trimpath`. Plus the
   frontend archive (`anix-control-frontend.tar.gz`).
 - **Image.** `ghcr.io/anixops/anix-control` for linux/amd64 and linux/arm64,
-  with the signed identity bootstrap package inside.
+  from the release binaries (the packages are inside them).
   - It is signed with cosign (keyless).
   - It carries SBOM and provenance attestations.
-- **GitHub Release.** About 20 assets: the six binaries, the frontend,
+- **GitHub Release.** 13 assets: the two binary archives, the frontend,
   `official-public-key.raw`, the source SBOM, `RELEASE_MANIFEST.json`,
-  `RELEASE_NOTES.md`, `SHA256SUMS.txt`, `docker-image.txt`, the Agent
-  installer `agent-install.sh` with its signature `agent-install.sh.sig`
-  (the same file Control serves at `/install.sh`; verify it against the
-  official root as in `docs/guide/agent-onboarding.md`), and the packages:
-  - `anix-control-packages-<version>.tar.gz` holds every package's `.anxp`,
-    `.manifest.json`, `.manifest.sig` and `.sbom.spdx.json`, plus one
-    `official-public-key.pem`. `build_package.py --release-archive` writes
-    it from the `--all` build, so `PACKAGE_SPECS` in
-    `packages/shared/build_package.py` is the one list of what ships.
-  - `anix-control-packages-<version>.tar.gz.sig` is the Base64 Ed25519
-    signature of the archive bytes, made with the package signing key by the
-    same `openssl pkeyutl -sign -rawin` step that signs each manifest.
-  - `identity-platform-<version>.anxp`, `.manifest.json` and `.manifest.sig`
-    stay separate assets: `scripts/install.sh` downloads them by
-    name.
-  - `RELEASE_MANIFEST.json` lists each package under `packages` (id,
-    version, `.anxp` size and SHA-256, manifest SHA-256).
+  `RELEASE_NOTES.md`, `SHA256SUMS.txt` and its signature `SHA256SUMS.txt.sig`,
+  `docker-image.txt`, and the Agent installer `agent-install.sh` with its
+  signature `agent-install.sh.sig` (the same file Control serves at
+  `/install.sh`; verify it against the official root as in
+  `docs/guide/agent-onboarding.md`). No package is a release asset.
+  - `SHA256SUMS.txt.sig` is the Base64 raw Ed25519 signature of
+    `SHA256SUMS.txt` made with the package signing key, by the same
+    `openssl pkeyutl -sign -rawin` step that signs each manifest. It covers
+    the Control binaries, and through them every package host and built-in
+    package: `scripts/install.sh` verifies it before it trusts a checksum.
+  - `RELEASE_MANIFEST.json` lists each built-in package under `packages`
+    (id, version, slim artifact size and SHA-256, manifest SHA-256), from
+    the verified set (`generate_release_manifest.py --builtin-packages`).
 
   The release body is the tag's CHANGELOG section.
 
@@ -223,8 +231,20 @@ fix shows up in the nightly run and never blocks an unrelated pull request.
 
 ## Verifying A Release
 
-- **Files.** Run `sha256sum -c SHA256SUMS.txt`, and see
-  [`UPGRADE.md`](UPGRADE.md#artifact-verification).
+- **Files.** Verify `SHA256SUMS.txt.sig` against `official-public-key.raw`
+  (which must equal `plugins.official_public_key` of
+  `config/config.prod.yaml` at the tag), then run `sha256sum -c
+  SHA256SUMS.txt`:
+
+  ```bash
+  { printf '\x30\x2a\x30\x05\x06\x03\x2b\x65\x70\x03\x21\x00'; base64 -d official-public-key.raw; } > official.der
+  base64 -d SHA256SUMS.txt.sig > SHA256SUMS.txt.sig.bin
+  openssl pkeyutl -verify -pubin -keyform DER -inkey official.der -rawin \
+    -in SHA256SUMS.txt -sigfile SHA256SUMS.txt.sig.bin
+  sha256sum -c --ignore-missing SHA256SUMS.txt
+  ```
+
+  See also [`UPGRADE.md`](UPGRADE.md#artifact-verification).
 - **Image.** Verify the image with:
 
   ```bash
@@ -233,10 +253,11 @@ fix shows up in the nightly run and never blocks an unrelated pull request.
     --certificate-identity-regexp '^https://github.com/AnixOps/anix-control/'
   ```
 
-- **Packages.** Check the archive signature and extract a package as in
-  [`UPGRADE.md`](UPGRADE.md#getting-a-package-from-the-release). Control
-  verifies every package manifest against its configured official root on
-  import.
+- **Packages.** They are inside the binary. At every start Control verifies
+  each built-in package against its configured official root and logs the
+  key that signed them and its own SHA-256 (`Control executable ... (SHA-256
+  ...)`), which equals `sha256sum` of the binary extracted from the verified
+  archive.
 
 ## History
 

@@ -5,6 +5,22 @@ signs every package manifest and whose public half is
 `plugins.official_public_key`. It was extracted from the retired 2026-07-20
 root-rotation plan and design (`git show 57c62541:docs/superpowers/plans/2026-07-20-v4-release-root-rotation.md`).
 
+## With Built-in Packages (After 4.2.x)
+
+Since the official packages are built into Control
+([`../architecture/plugin-kernel-contract.md`](../architecture/plugin-kernel-contract.md#built-in-packages)),
+a rotation is a Control release: tag a new version whose packages and
+`SHA256SUMS.txt.sig` the new root signs, with `plugins.official_public_key`
+(`config/config.prod.yaml`) and `OFFICIAL_PUBLIC_KEY` (`scripts/install.sh`)
+set to it, and deploy it with the new key configured. On its first start
+Control activates the new root, registers every built-in package of the new
+version under it and moves every installation to that version: nothing is
+imported and login does not go down. The releases signed by the old root stay
+registered and bound to it. A package re-signed at the same version is
+refused (`release ... is already registered under another trust root`): a
+rotation always comes with a new version. The rest of this runbook describes
+the releases up to 4.2.x, whose packages were imported.
+
 ## How Control Treats The Root
 
 - Control has exactly **one active root**. At startup `cmd/server/main.go`

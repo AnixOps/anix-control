@@ -19,6 +19,7 @@ Important:
 - runtime selection is defined in `config/config.yaml.forward_runtime`
 - merged runtime values are persisted into `v2_system_config`
 - no reusable administrator email or password is shipped with Control; set unique values in `admin.email` and `admin.password` (or the installer's corresponding flags) before first start
+- the official packages are built into the release binary and installed at every start; a binary built from a checkout carries them only after `make build` (or `make build-packages`), signed with a development key that `make run` configures (`plugins.official_public_key`); a plain `go build` carries none and imports `identity-platform` from `plugins.identity_bootstrap_package_dir`
 
 ## Docker Quickstart
 
