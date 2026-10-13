@@ -24,6 +24,7 @@ Use this tree like NodeX:
 - Node operations contract, node credential split and Agent A2 (design, draft): [`architecture/node-ops-service.md`](architecture/node-ops-service.md)
 - Forward SDK: routes, hops, engines and drivers for v4.2 (design, draft for review): [`architecture/forward-sdk.md`](architecture/forward-sdk.md)
 - Node onboarding and admin cleanup for 5.0: group join tokens, one-command onboarding, removals (design, approved): [`design/node-onboarding/README.md`](design/node-onboarding/README.md)
+- Operations simplification roadmap after 5.0: the owner's choices S1 to S11, verified problems and milestones (design, approved): [`design/ops-simplification/README.md`](design/ops-simplification/README.md)
 - AnixOps relay protocol: secure transport between forward nodes (design approved, H22): [`architecture/anixops-protocol.md`](architecture/anixops-protocol.md)
 - Package reports on the Agent Control stream, and the privacy of the systemd services report: [`architecture/package-reports.md`](architecture/package-reports.md)
 - Network module runtime (mTLS, module PKI, remote runtime): [`architecture/module-runtime.md`](architecture/module-runtime.md)
