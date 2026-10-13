@@ -98,6 +98,12 @@ export const SCREENS = {
   'admin-subscriptions': { fixture: subscriptions, scenario: 'list' },
   'admin-subscription-members': { fixture: subscriptions, scenario: 'members' },
   'admin-system': { fixture: system, scenario: 'general' },
+  // 系统设置 → 备份: the bundles with their verification, none yet, a stale
+  // last verified backup, and a panel on PostgreSQL.
+  'admin-system-backup': { fixture: system, scenario: 'backup' },
+  'admin-system-backup-empty': { fixture: system, scenario: 'backupEmpty' },
+  'admin-system-backup-stale': { fixture: system, scenario: 'backupStale' },
+  'admin-system-backup-unsupported': { fixture: system, scenario: 'backupUnsupported' },
   // 系统设置 → 内置包: the built-in packages (it replaced 插件中心).
   'admin-system-packages': { fixture: packages, scenario: 'list' },
   'admin-security': { fixture: security, scenario: 'mfa' },
@@ -164,6 +170,7 @@ export async function openScreen(page, name, { theme = 'light', locale = 'en', c
     if (answer === undefined && COMMON[url.pathname]) answer = COMMON[url.pathname](fixture)
     if (answer?.__status) return route.fulfill({ status: answer.__status, contentType: 'application/json', headers: answer.headers, body: JSON.stringify(answer.body || {}) })
     if (answer?.__text) return route.fulfill({ status: 200, contentType: 'text/plain', body: answer.__text })
+    if (answer?.__file) return route.fulfill({ status: 200, contentType: answer.__file.type, headers: { 'Content-Disposition': `attachment; filename="${answer.__file.name}"` }, body: answer.__file.body })
     if (answer === undefined) answer = { code: 0, data: null }
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(answer) })
   })

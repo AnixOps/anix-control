@@ -3,7 +3,7 @@ import { mount, flushPromises } from '@vue/test-utils'
 import SettingsBackup from '@/views/admin/system/SettingsBackup.vue'
 import SettingsBalancer from '@/views/admin/system/SettingsBalancer.vue'
 import SettingsGeneral from '@/views/admin/system/SettingsGeneral.vue'
-import { answerConfirms, toastMessages } from './helpers/feedback'
+import { toastMessages } from './helpers/feedback'
 
 const adminApi = vi.hoisted(() => ({
   getSystemConfig: vi.fn(),
@@ -11,13 +11,6 @@ const adminApi = vi.hoisted(() => ({
   setSystemConfig: vi.fn(),
   getSystemConfigs: vi.fn(),
   getSystemAuditLogs: vi.fn(),
-  getBackupConfig: vi.fn(),
-  updateBackupConfig: vi.fn(),
-  createBackup: vi.fn(),
-  getBackups: vi.fn(),
-  getBackupStats: vi.fn(),
-  deleteBackup: vi.fn(),
-  restoreBackup: vi.fn(),
   getLoadBalancers: vi.fn(),
   createLoadBalancer: vi.fn(),
   updateLoadBalancer: vi.fn(),
@@ -27,7 +20,14 @@ const adminApi = vi.hoisted(() => ({
   runForwardRuntimeDoctor: vi.fn()
 }))
 
+const kernelApi = vi.hoisted(() => ({
+  getPanelBackups: vi.fn(),
+  createPanelBackup: vi.fn(),
+  downloadPanelBackup: vi.fn()
+}))
+
 vi.mock('@/api/admin', () => adminApi)
+vi.mock('@/api/kernel', () => kernelApi)
 
 function mountSection(component = SettingsBackup) {
   return mount(component, {
@@ -42,6 +42,32 @@ function mountSection(component = SettingsBackup) {
   })
 }
 
+const HOUR = 3_600_000
+
+// GET /api/v5/backups as getPanelBackups answers it (the data of the
+// server's answer).
+function backupsAnswer({ stale = false, supported = true, backups } = {}) {
+  const now = Date.now()
+  const list = backups ?? [
+    { id: 3, file: 'anix-control-20261013T034107Z-daily.tar', type: 'daily', size: 2_097_152, created_at: new Date(now - 2 * HOUR).toISOString(), verify_status: 'passed', verified_at: new Date(now - 2 * HOUR + 60_000).toISOString(), verify_error: '' },
+    { id: 2, file: 'anix-control-20261012T034107Z-manual.tar', type: 'manual', size: 2_000_000, created_at: new Date(now - 26 * HOUR).toISOString(), verify_status: 'failed', verify_error: 'integrity: PRAGMA integrity_check: database disk image is malformed' },
+    { id: 1, file: 'anix-control-20261011T034107Z-pre-migration.tar', type: 'pre-migration', size: 1_900_000, created_at: new Date(now - 50 * HOUR).toISOString(), verify_status: 'pending', verify_error: '' }
+  ]
+  return {
+    supported,
+    reason: supported ? '' : 'backups need SQLite: this Control runs on PostgreSQL',
+    backups: supported ? list : [],
+    summary: {
+      last_verified: supported ? list.find(backup => backup.verify_status === 'passed') || null : null,
+      stale,
+      stale_after_hours: 36,
+      next_daily_at: new Date(now + 10 * HOUR).toISOString(),
+      directory: '/var/lib/anix-control/backups'
+    },
+    retention: { daily: 7, weekly: 4, pre_migration_days: 30, manual: 3, verify: 1 }
+  }
+}
+
 describe('System settings: backups, subscription domains and load balancers', () => {
   beforeEach(() => {
     vi.resetAllMocks()
@@ -50,25 +76,6 @@ describe('System settings: backups, subscription domains and load balancers', ()
     adminApi.setSystemConfig.mockResolvedValue({})
     adminApi.getSystemConfigs.mockResolvedValue({ data: { list: [] } })
     adminApi.getSystemAuditLogs.mockResolvedValue({ data: { data: { list: [], total: 0, page: 1, page_size: 20 } } })
-    adminApi.getBackupConfig.mockResolvedValue({
-      data: {
-        enabled: true,
-        interval: 12,
-        keep_count: 6,
-        storage_type: 's3',
-        s3_bucket: 'panel-backups',
-        s3_access_key_sensitive: true,
-        s3_access_key_has_value: true,
-        s3_secret_key_sensitive: true,
-        s3_secret_key_has_value: true
-      }
-    })
-    adminApi.updateBackupConfig.mockResolvedValue({})
-    adminApi.createBackup.mockResolvedValue({})
-    adminApi.getBackups.mockResolvedValue({ data: { list: [] } })
-    adminApi.getBackupStats.mockResolvedValue({ data: {} })
-    adminApi.deleteBackup.mockResolvedValue({})
-    adminApi.restoreBackup.mockResolvedValue({})
     adminApi.getLoadBalancers.mockResolvedValue({ data: { list: [] } })
     adminApi.createLoadBalancer.mockResolvedValue({})
     adminApi.updateLoadBalancer.mockResolvedValue({})
@@ -76,121 +83,104 @@ describe('System settings: backups, subscription domains and load balancers', ()
     adminApi.runHealthCheck.mockResolvedValue({})
     adminApi.getForwardRuntimeStatus.mockResolvedValue({ data: { data: null } })
     adminApi.runForwardRuntimeDoctor.mockResolvedValue({ data: { data: null } })
+    kernelApi.getPanelBackups.mockResolvedValue(backupsAnswer())
+    kernelApi.createPanelBackup.mockResolvedValue({ backup: { id: 4, file: 'anix-control-20261013T120000Z-manual.tar', verify_status: 'pending' } })
   })
 
-  it('sends preserve_existing_sensitive when sensitive S3 keys are left blank', async () => {
-    const wrapper = mountSection(SettingsBackup)
-    await flushPromises()
-    adminApi.updateBackupConfig.mockClear()
-
-    wrapper.vm.backupConfig = {
-      ...wrapper.vm.backupConfig,
-      enabled: true,
-      interval: 8,
-      keep_count: 5,
-      backup_database: true,
-      backup_files: false,
-      storage_type: 's3',
-      s3_bucket: 'panel-backups',
-      s3_region: 'us-east-1',
-      s3_endpoint: '',
-      s3_access_key: '',
-      s3_secret_key: '',
-      s3_access_key_sensitive: true,
-      s3_access_key_has_value: true,
-      s3_secret_key_sensitive: true,
-      s3_secret_key_has_value: true
-    }
-
-    await wrapper.vm.saveBackupConfig()
-
-    expect(adminApi.updateBackupConfig).toHaveBeenCalledTimes(1)
-    const payload = adminApi.updateBackupConfig.mock.calls[0][0]
-    expect(payload.storage_type).toBe('s3')
-    expect(payload.s3_bucket).toBe('panel-backups')
-    expect(payload.s3_access_key).toBe('')
-    expect(payload.s3_secret_key).toBe('')
-    expect(payload.preserve_existing_sensitive).toBe(true)
-  })
-
-  it('loads backup config from legacy and panel envelope payloads', async () => {
+  it('lists the bundles with their verification and the last verified backup', async () => {
     const wrapper = mountSection(SettingsBackup)
     await flushPromises()
 
-    expect(wrapper.vm.backupConfig.interval).toBe(12)
-    expect(wrapper.vm.backupConfig.keep_count).toBe(6)
-    expect(wrapper.vm.backupConfig.storage_type).toBe('s3')
-
-    adminApi.getBackupConfig.mockResolvedValueOnce({
-      code: 0,
-      msg: '操作成功',
-      data: {
-        enabled: false,
-        interval: 18,
-        keep_count: 9,
-        storage_type: 'local',
-        storage_path: 'daily-backups'
-      },
-      ts: 1783526400000
-    })
-
-    await wrapper.vm.fetchBackupConfig()
-    await flushPromises()
-
-    expect(wrapper.vm.backupConfig.enabled).toBe(false)
-    expect(wrapper.vm.backupConfig.interval).toBe(18)
-    expect(wrapper.vm.backupConfig.keep_count).toBe(9)
-    expect(wrapper.vm.backupConfig.storage_type).toBe('local')
-    expect(wrapper.vm.backupConfig.storage_path).toBe('daily-backups')
+    const text = wrapper.text()
+    expect(text).toContain('anix-control-20261013T034107Z-daily.tar')
+    expect(text).toContain('Before a migration')
+    expect(wrapper.find('[data-verify="passed"]').text()).toBe('Verified')
+    expect(wrapper.find('[data-verify="failed"]').text()).toBe('Verification failed')
+    expect(wrapper.find('[data-verify="failed"]').attributes('title')).toContain('integrity_check')
+    expect(wrapper.find('[data-verify="pending"]').text()).toBe('Not verified yet')
+    const lastVerified = wrapper.find('[data-test="backup-last-verified"]')
+    expect(lastVerified.text()).toContain('2 hours ago')
+    expect(wrapper.find('[data-test="backup-freshness"]').text()).toBe('Up to date')
+    expect(text).toContain('/var/lib/anix-control/backups')
+    expect(text).toContain('the newest 7 daily backups')
+    // No restore in the console: the commands for the server.
+    const commands = wrapper.find('[data-test="backup-restore-commands"]').text()
+    expect(commands).toContain('sudo systemctl stop anix-control')
+    expect(commands).toContain('sudo anix-control backup restore /var/lib/anix-control/backups/anix-control-20261013T034107Z-daily.tar --replace')
+    expect(text).not.toMatch(/Restore…/)
 
     wrapper.unmount()
   })
 
-  it('loads backup records from legacy and panel envelope payloads', async () => {
-    adminApi.getBackups
-      .mockResolvedValueOnce({
-        data: {
-          list: [
-            {
-              id: 1,
-              filename: 'legacy-backup.zip',
-              status: 'completed'
-            }
-          ]
-        }
-      })
-      .mockResolvedValueOnce({
-        code: 0,
-        msg: '操作成功',
-        data: {
-          list: [
-            {
-              id: 2,
-              filename: 'panel-backup.zip',
-              status: 'completed'
-            }
-          ],
-          total: 1
-        },
-        ts: 1783526400000
-      })
+  it('warns when no verified backup is recent enough, and when there is none', async () => {
+    kernelApi.getPanelBackups.mockResolvedValueOnce(backupsAnswer({ stale: true }))
+    let wrapper = mountSection(SettingsBackup)
+    await flushPromises()
+    expect(wrapper.find('[data-test="backup-freshness"]').text()).toBe('Older than 36 hours')
+    wrapper.unmount()
 
+    kernelApi.getPanelBackups.mockResolvedValueOnce(backupsAnswer({ stale: true, backups: [] }))
+    wrapper = mountSection(SettingsBackup)
+    await flushPromises()
+    expect(wrapper.find('[data-test="backup-last-verified"]').text()).toContain('None yet')
+    expect(wrapper.text()).toContain('No backups yet')
+    wrapper.unmount()
+  })
+
+  it('says why there are no backups on PostgreSQL and offers no backup', async () => {
+    kernelApi.getPanelBackups.mockResolvedValueOnce(backupsAnswer({ supported: false }))
     const wrapper = mountSection(SettingsBackup)
     await flushPromises()
+    expect(wrapper.find('[data-test="backup-unsupported"]').text()).toContain('Backups need SQLite')
+    expect(wrapper.find('[data-test="backup-now"]').attributes('disabled')).toBeDefined()
+    wrapper.unmount()
+  })
 
-    expect(wrapper.vm.backups).toHaveLength(1)
-    expect(wrapper.vm.backups[0].filename).toBe('legacy-backup.zip')
-
-    await wrapper.vm.fetchBackups()
+  it('backs up now and reloads the list; a running backup is said so', async () => {
+    const wrapper = mountSection(SettingsBackup)
     await flushPromises()
+    kernelApi.getPanelBackups.mockClear()
 
-    expect(wrapper.vm.backups).toHaveLength(1)
-    expect(wrapper.vm.backups[0]).toMatchObject({
-      id: 2,
-      filename: 'panel-backup.zip',
-      status: 'completed'
-    })
+    await wrapper.find('[data-test="backup-now"]').trigger('click')
+    await flushPromises()
+    expect(kernelApi.createPanelBackup).toHaveBeenCalledTimes(1)
+    expect(toastMessages('success')).toEqual([expect.stringContaining('anix-control-20261013T120000Z-manual.tar')])
+    expect(kernelApi.getPanelBackups).toHaveBeenCalledTimes(1)
 
+    kernelApi.createPanelBackup.mockRejectedValueOnce({ response: { status: 409, data: { error: { code: 'backup_in_progress', message: 'another backup or verification is running' } } } })
+    await wrapper.find('[data-test="backup-now"]').trigger('click')
+    await flushPromises()
+    expect(toastMessages('error')).toEqual([expect.stringContaining('already running')])
+
+    wrapper.unmount()
+  })
+
+  it('shows a load failure as an error state', async () => {
+    kernelApi.getPanelBackups.mockRejectedValueOnce({ response: { status: 500, data: { error: { code: 'backups_unreadable', message: 'permission denied' } } } })
+    const wrapper = mountSection(SettingsBackup)
+    await flushPromises()
+    expect(wrapper.text()).toContain('Couldn’t load the backups')
+    expect(wrapper.text()).toContain('permission denied')
+    wrapper.unmount()
+  })
+
+  it('downloads a bundle, and tells an administrator who is not super why not', async () => {
+    const wrapper = mountSection(SettingsBackup)
+    await flushPromises()
+    const createObjectURL = vi.fn(() => 'blob:bundle')
+    const revokeObjectURL = vi.fn()
+    vi.stubGlobal('URL', { createObjectURL, revokeObjectURL })
+    kernelApi.downloadPanelBackup.mockResolvedValueOnce({ blob: new Blob(['tar']), filename: 'anix-control-20261013T034107Z-daily.tar' })
+
+    await wrapper.vm.download({ id: 3, file: 'anix-control-20261013T034107Z-daily.tar' })
+    expect(kernelApi.downloadPanelBackup).toHaveBeenCalledWith(3)
+    expect(createObjectURL).toHaveBeenCalledTimes(1)
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:bundle')
+
+    kernelApi.downloadPanelBackup.mockRejectedValueOnce({ response: { status: 403, data: { error: { code: 'super_admin_required' } } } })
+    await wrapper.vm.download({ id: 3, file: 'anix-control-20261013T034107Z-daily.tar' })
+    expect(toastMessages('error')).toEqual([expect.stringContaining('Only a super administrator can download a backup')])
+    vi.unstubAllGlobals()
     wrapper.unmount()
   })
 
@@ -227,164 +217,6 @@ describe('System settings: backups, subscription domains and load balancers', ()
     wrapper.unmount()
   })
 
-  it('renders backup stats from legacy and panel envelope payloads', async () => {
-    adminApi.getBackupStats
-      .mockResolvedValueOnce({
-        data: {
-          last_backup: null,
-          total_count: 2,
-          total_size: 2048
-        }
-      })
-      .mockResolvedValueOnce({
-        code: 0,
-        msg: '操作成功',
-        data: {
-          last_backup: null,
-          total_count: 3,
-          total_size: 4096
-        },
-        ts: 1783526400000
-      })
-
-    const wrapper = mountSection(SettingsBackup)
-    await flushPromises()
-
-    let statValues = wrapper.findAll('.backup-stats .stat-value').map(node => node.text())
-    expect(statValues).toEqual(['2', '2.00 KB', '—'])
-
-    await wrapper.vm.fetchBackupStats()
-    await flushPromises()
-
-    statValues = wrapper.findAll('.backup-stats .stat-value').map(node => node.text())
-    expect(statValues).toEqual(['3', '4.00 KB', '—'])
-
-    wrapper.unmount()
-  })
-
-  it('shows backup load failures as error states instead of empty lists', async () => {
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
-    adminApi.getBackupConfig.mockResolvedValueOnce({
-      code: -1,
-      msg: 'backup config rejected',
-      data: null,
-      ts: 1783526400000
-    })
-    adminApi.getBackups.mockResolvedValueOnce({
-      code: -1,
-      msg: 'backup list rejected',
-      data: null,
-      ts: 1783526400000
-    })
-    adminApi.getBackupStats.mockResolvedValueOnce({
-      code: -1,
-      msg: 'backup stats rejected',
-      data: null,
-      ts: 1783526400000
-    })
-
-    const wrapper = mountSection(SettingsBackup)
-    await flushPromises()
-
-    expect(wrapper.vm.backupConfigError).toBe('backup config rejected')
-    expect(wrapper.vm.backupsError).toBe('backup list rejected')
-    expect(wrapper.text()).toContain('backup config rejected')
-    expect(wrapper.text()).toContain('backup list rejected')
-    expect(wrapper.vm.backups).toEqual([])
-    expect(wrapper.vm.backupStats).toEqual({})
-    expect(consoleError.mock.calls.map(call => call[1]?.message)).toContain('backup stats rejected')
-
-    consoleError.mockRestore()
-    wrapper.unmount()
-  })
-
-  it('does not report backup config save success when enveloped response fails', async () => {
-    const wrapper = mountSection(SettingsBackup)
-    await flushPromises()
-    adminApi.updateBackupConfig.mockResolvedValueOnce({
-      code: -1,
-      msg: 'backup config save rejected',
-      data: null,
-      ts: 1783526400000
-    })
-
-    await wrapper.vm.saveBackupConfig()
-    await flushPromises()
-
-    expect(toastMessages('error')).toEqual([expect.stringContaining('backup config save rejected')])
-    expect(toastMessages('success')).toEqual([])
-
-    wrapper.unmount()
-  })
-
-  it('does not refresh backups when enveloped create response fails', async () => {
-    const wrapper = mountSection(SettingsBackup)
-    await flushPromises()
-    adminApi.getBackups.mockClear()
-    adminApi.getBackupStats.mockClear()
-    adminApi.createBackup.mockResolvedValueOnce({
-      code: -1,
-      msg: 'backup create rejected',
-      data: null,
-      ts: 1783526400000
-    })
-
-    await wrapper.vm.createBackupRequest()
-    await flushPromises()
-
-    expect(toastMessages('error')).toEqual([expect.stringContaining('backup create rejected')])
-    expect(toastMessages('success')).toEqual([])
-    expect(adminApi.getBackups).not.toHaveBeenCalled()
-    expect(adminApi.getBackupStats).not.toHaveBeenCalled()
-
-    wrapper.unmount()
-  })
-
-  it('does not refresh backups when enveloped delete response fails', async () => {
-    const wrapper = mountSection(SettingsBackup)
-    await flushPromises()
-    adminApi.getBackups.mockClear()
-    adminApi.getBackupStats.mockClear()
-    adminApi.deleteBackup.mockResolvedValueOnce({
-      code: -1,
-      msg: 'backup delete rejected',
-      data: null,
-      ts: 1783526400000
-    })
-
-    const confirms = answerConfirms(true)
-    await wrapper.vm.deleteBackupRequest({ id: 1, filename: 'rejected.zip' })
-    await flushPromises()
-
-    // The confirmation keeps the failure inline; nothing is refreshed.
-    expect(confirms.last()).toMatchObject({ tone: 'danger', title: 'Delete backup rejected.zip?' })
-    expect(confirms.errors.map(error => error.message)).toEqual([expect.stringContaining('backup delete rejected')])
-    expect(adminApi.getBackups).not.toHaveBeenCalled()
-    expect(adminApi.getBackupStats).not.toHaveBeenCalled()
-
-    wrapper.unmount()
-  })
-
-  it('does not report restore success when enveloped response fails', async () => {
-    const wrapper = mountSection(SettingsBackup)
-    await flushPromises()
-    adminApi.restoreBackup.mockResolvedValueOnce({
-      code: -1,
-      msg: 'backup restore rejected',
-      data: null,
-      ts: 1783526400000
-    })
-
-    const confirms = answerConfirms(true)
-    await wrapper.vm.restoreBackupRequest({ id: 1, filename: 'rejected.zip' })
-    await flushPromises()
-
-    expect(confirms.last()).toMatchObject({ tone: 'danger', title: 'Restore from rejected.zip?', confirmLabel: 'Restore backup' })
-    expect(confirms.errors.map(error => error.message)).toEqual([expect.stringContaining('backup restore rejected')])
-    expect(toastMessages('success')).toEqual([])
-
-    wrapper.unmount()
-  })
 
   it('loads load balancers from legacy and panel envelope payloads', async () => {
     adminApi.getLoadBalancers

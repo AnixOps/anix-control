@@ -42,10 +42,21 @@ function kernelAlerts(now) {
   }
 }
 
+// GET /api/v5/backups: the last verified backup, taken a little over four
+// hours before the fixed clock.
+function backups(now) {
+  const lastVerified = { id: 4, file: 'anix-control-20261002T034107Z-daily.tar', type: 'daily', size: 18874368, created_at: iso(now, -4 * 3_600_000 - 18 * 60_000), verified_at: iso(now, -4 * 3_600_000 - 17 * 60_000), verify_status: 'passed', verify_error: '' }
+  return { data: { supported: true, backups: [lastVerified], summary: { last_verified: lastVerified, stale: false, stale_after_hours: 36, next_daily_at: iso(now, 19 * 3_600_000), directory: '/var/lib/anix-control/backups' }, retention: { daily: 7, weekly: 4, pre_migration_days: 30, manual: 3, verify: 1 } } }
+}
+
 export default {
   path: '/admin/dashboard',
   edition: 'community',
   api(path, { scenario, query, now }) {
+    if (path === '/api/v5/backups') {
+      if (scenario === 'empty') return { data: { supported: true, backups: [], summary: { last_verified: null, stale: true, stale_after_hours: 36, next_daily_at: iso(now ?? FIXED_NOW_MS, 19 * 3_600_000) }, retention: {} } }
+      return backups(now ?? FIXED_NOW_MS)
+    }
     if (path === '/api/v4/kernel/alerts') {
       if (scenario === 'alertsFailed') return { __status: 500, body: { error: { code: 'internal', message: 'the alert store is unavailable' } } }
       const { active, resolved } = kernelAlerts(now ?? FIXED_NOW_MS)

@@ -14,13 +14,6 @@ const adminApi = vi.hoisted(() => ({
   deleteSystemConfig: vi.fn(),
   getSystemConfigs: vi.fn(),
   getSystemAuditLogs: vi.fn(),
-  getBackupConfig: vi.fn(),
-  updateBackupConfig: vi.fn(),
-  createBackup: vi.fn(),
-  getBackups: vi.fn(),
-  getBackupStats: vi.fn(),
-  deleteBackup: vi.fn(),
-  restoreBackup: vi.fn(),
   getLoadBalancers: vi.fn(),
   createLoadBalancer: vi.fn(),
   updateLoadBalancer: vi.fn(),
@@ -31,7 +24,14 @@ const adminApi = vi.hoisted(() => ({
   getSystemInfo: vi.fn()
 }))
 
+const kernelApi = vi.hoisted(() => ({
+  getPanelBackups: vi.fn(),
+  createPanelBackup: vi.fn(),
+  downloadPanelBackup: vi.fn()
+}))
+
 vi.mock('@/api/admin', () => adminApi)
+vi.mock('@/api/kernel', async (importOriginal) => ({ ...(await importOriginal()), ...kernelApi }))
 
 enableAutoUnmount(afterEach)
 
@@ -66,9 +66,7 @@ describe('System settings page', () => {
     adminApi.getSubscriptionSettings.mockResolvedValue({ data: { subscribe_path: '/s', subscribe_domains: [] } })
     adminApi.getSystemConfigs.mockResolvedValue({ data: { list: [] } })
     adminApi.getSystemAuditLogs.mockResolvedValue({ data: { data: { list: [], total: 0, page: 1, page_size: 20 } } })
-    adminApi.getBackupConfig.mockResolvedValue({ data: {} })
-    adminApi.getBackups.mockResolvedValue({ data: { list: [] } })
-    adminApi.getBackupStats.mockResolvedValue({ data: {} })
+    kernelApi.getPanelBackups.mockResolvedValue({ supported: true, backups: [], summary: {}, retention: {} })
     adminApi.getLoadBalancers.mockResolvedValue({ data: { list: [] } })
     adminApi.getForwardRuntimeStatus.mockResolvedValue({ data: { data: null } })
     adminApi.getSystemInfo.mockResolvedValue({ code: 0, data: { version: '4.1.0', build_code: '202610020001', commit: 'abc123', build_time: '2026-10-02' } })
@@ -94,7 +92,7 @@ describe('System settings page', () => {
   it('loads only the section in the URL and switches with the path', async () => {
     const { wrapper, router } = await mountAt('/admin/system/backup')
     expect(wrapper.find('[data-settings-panel="backup"]').exists()).toBe(true)
-    expect(adminApi.getBackupConfig).toHaveBeenCalledTimes(1)
+    expect(kernelApi.getPanelBackups).toHaveBeenCalledTimes(1)
     expect(adminApi.getSystemAuditLogs).not.toHaveBeenCalled()
     expect(adminApi.getSystemConfigs).not.toHaveBeenCalled()
 
@@ -120,8 +118,8 @@ describe('System settings page', () => {
   })
 
   it('asks before leaving a section with unsaved changes', async () => {
-    const { wrapper, router } = await mountAt('/admin/system/backup')
-    await wrapper.get('#backup-enabled').trigger('click')
+    const { wrapper, router } = await mountAt('/admin/system/general')
+    await wrapper.get('#settings-subscription-domains').setValue('sub1.example.com\ncdn.example.net')
     await flushPromises()
     expect(wrapper.find('[data-test="settings-save-bar"]').exists()).toBe(true)
 
@@ -129,8 +127,8 @@ describe('System settings page', () => {
     await router.push('/admin/system/audit')
     await flushPromises()
     expect(stay.last()).toMatchObject({ title: 'Discard unsaved changes?', confirmLabel: 'Discard changes', tone: 'danger' })
-    expect(router.currentRoute.value.path).toBe('/admin/system/backup')
-    expect(wrapper.find('[data-settings-panel="backup"]').exists()).toBe(true)
+    expect(router.currentRoute.value.path).toBe('/admin/system/general')
+    expect(wrapper.find('[data-settings-panel="general"]').exists()).toBe(true)
     stay.stop?.()
 
     answerConfirms(true)

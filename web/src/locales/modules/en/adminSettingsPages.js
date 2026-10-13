@@ -87,85 +87,53 @@ export default {
       }
     },
     backup: {
-      auto: {
-        title: 'Automatic backups',
-        description: 'Back up on a schedule and keep only the latest copies.',
-        enabled: 'Automatic backups',
-        enabledHelp: 'When off, back up by hand.',
-        interval: 'Every',
-        hours: 'hours',
-        keepCount: 'Keep',
-        keepCountHelp: 'The oldest backup is deleted beyond this.',
-        copies: 'copies',
-        positiveInteger: 'Enter a whole number of 1 or more',
-        loadFailed: 'Couldn’t load the backup settings',
-        saved: 'Backup settings saved',
-        saveFailed: 'Couldn’t save the backup settings'
-      },
-      contents: {
-        title: 'What to back up',
-        database: 'Database',
-        files: 'Files'
-      },
-      storage: {
-        title: 'Storage',
-        type: 'Storage type',
-        local: 'Local',
-        s3: 'S3-compatible',
-        path: 'Local folder',
-        pathPlaceholder: 'backups',
-        pathHelp: 'Relative paths start at the panel’s working directory.',
-        bucket: 'Bucket',
-        bucketPlaceholder: 'panel-backups',
-        bucketRequired: 'S3 storage needs a bucket',
-        region: 'Region',
-        regionPlaceholder: 'us-east-1',
-        endpoint: 'Endpoint (optional)',
-        endpointPlaceholder: 'https://s3.amazonaws.com',
-        endpointInvalid: 'Enter an address starting with http:// or https://',
-        accessKey: 'Access key',
-        secretKey: 'Secret key',
-        keepCurrent: 'Leave empty to keep the current value',
-        sensitiveWithValue: 'Saved and hidden. Leave it empty to keep it, or enter a new one to replace it.',
-        sensitiveWithoutValue: 'Not set yet. Enter it and save.'
+      title: 'Backups',
+      description: 'Control backs up its database, root key and configuration every day between 03:00 and 05:00, before every database migration and when you ask, and checks that each backup restores.',
+      backupNow: 'Back up now',
+      created: 'Backed up to {file}. It’s being verified.',
+      createFailed: 'Couldn’t back up',
+      busy: 'A backup or verification is already running. Try again in a moment.',
+      loadFailed: 'Couldn’t load the backups',
+      unsupported: 'Backups need SQLite',
+      unsupportedHint: 'This panel runs on PostgreSQL, which Control’s backups don’t cover. Back the database up with pg_dump and keep root.key with it.',
+      summary: {
+        label: 'Backup status',
+        lastVerified: 'Last verified backup',
+        none: 'None yet',
+        stale: 'Older than {hours} hours',
+        current: 'Up to date',
+        nextDaily: 'Next automatic backup',
+        directory: 'Folder on the server'
       },
       list: {
-        title: 'Backups',
-        description: 'Your backup files. Only completed backups can be restored.',
-        backupNow: 'Back up now',
-        filename: 'File',
-        status: 'Status',
+        title: 'Backups on this server',
+        file: 'File',
+        type: 'Type',
         size: 'Size',
-        createdAt: 'Created',
-        restore: 'Restore…',
+        createdAt: 'Taken',
+        verified: 'Verification',
         empty: 'No backups yet',
-        emptyDescription: 'Turn on automatic backups, or back up now.',
-        loadFailed: 'Couldn’t load the backups',
-        started: 'Backup started',
-        startFailed: 'Couldn’t start the backup',
-        deleted: 'Deleted {filename}',
-        deleteFailed: 'Couldn’t delete the backup',
-        restored: 'Data restored from the backup',
-        restoreFailed: 'Couldn’t restore the backup'
+        emptyDescription: 'The first automatic backup runs a few minutes after Control starts. You can also back up now.',
+        download: 'Download',
+        downloadFailed: 'Couldn’t download the backup',
+        superAdminRequired: 'Only a super administrator can download a backup: it holds the panel’s root key.'
       },
-      stats: {
-        totalCount: 'Backups',
-        totalSize: 'Total size',
-        lastBackup: 'Latest',
-        loadFailed: 'Couldn’t load the backup statistics'
+      types: {
+        daily: 'Daily',
+        'pre-migration': 'Before a migration',
+        manual: 'Manual',
+        verify: 'Verification test'
       },
-      status: {
-        pending: 'In progress',
-        completed: 'Completed',
-        failed: 'Failed'
+      verify: {
+        pending: 'Not verified yet',
+        passed: 'Verified',
+        failed: 'Verification failed'
       },
-      confirm: {
-        deleteTitle: 'Delete backup {filename}?',
-        deleteMessage: 'The file is deleted for good and can’t be used to restore any more. You can’t undo this.',
-        deleteAction: 'Delete backup',
-        restoreTitle: 'Restore from {filename}?',
-        restoreMessage: 'This backup replaces the current data; every change made since it was taken is lost. You can’t undo this.',
-        restoreAction: 'Restore backup'
+      retention: 'Control keeps the newest {daily} daily backups, the newest daily backup of each of the {weekly} weeks before, every backup taken before a migration in the last {days} days and the newest {manual} manual ones. The newest verified backup is never deleted.',
+      restore: {
+        title: 'Restore',
+        description: 'A restore replaces the database, so it runs on the server while Control is stopped, never from this page. Control migrates an older backup when it starts again.',
+        commands: 'Commands on the server'
       }
     },
     balancer: {

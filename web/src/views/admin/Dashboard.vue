@@ -26,6 +26,19 @@
             :loading="metric.loading"
           />
         </RouterLink>
+        <RouterLink to="/admin/system/backup" class="dashboard-page__metric-link" data-metric="backup">
+          <UiMetricCard
+            :label="t('adminDashboard.metrics.backup')"
+            :icon="DatabaseBackup"
+            :value="backupMetric.value"
+            :loading="backupsLoading && !backupsLoaded"
+          >
+            <template #detail>
+              <UiBadge v-if="backupMetric.warning" tone="warning" :label="backupMetric.warning" data-backup-stale />
+              <span v-else>{{ backupMetric.detail }}</span>
+            </template>
+          </UiMetricCard>
+        </RouterLink>
       </section>
 
       <UiCard :title="t('adminDashboard.traffic.title')" :description="t('adminDashboard.traffic.description')" as="section">
@@ -88,22 +101,27 @@
 </template>
 
 <script setup>
-// 仪表盘 (plan §7.4 dashboard template, §8.2): four metric cards (users,
-// online / total nodes, today's traffic, open tickets) → the 24-hour traffic
+// 仪表盘 (plan §7.4 dashboard template, §8.2): five metric cards (users,
+// online / total nodes, today's traffic, open tickets, the last verified
+// backup) → the 24-hour traffic
 // chart → two columns: what needs attention (offline nodes, open tickets,
 // stalled traffic reports; pending orders in the commercial edition) and
 // the recent audit log. Every number comes from an existing endpoint:
 // GET /admin/dashboard (cached 60 s; 刷新 asks refresh=true),
 // /admin/traffic/hourly (24 h), /admin/ticket, /admin/nodes (offline ones)
-// /admin/system/audit-logs and GET /api/v4/kernel/alerts (certificates and
-// stalled phases, merged into 需要处理). Each block loads, fails and retries on its
-// own. Revenue and orders stay commercial-only.
+// /admin/system/audit-logs, GET /api/v4/kernel/alerts (certificates and
+// stalled phases, merged into 需要处理) and GET /api/v5/backups (the fifth
+// card, 上次验证通过的备份: its age, a warning when it is older than the
+// backup_stale threshold). Each block loads, fails and retries on its own.
+// Revenue and orders stay commercial-only.
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
-import { Activity, CircleDollarSign, LifeBuoy, ReceiptText, RotateCw, Server, Users } from '@lucide/vue'
+import { Activity, CircleDollarSign, DatabaseBackup, LifeBuoy, ReceiptText, RotateCw, Server, Users } from '@lucide/vue'
 import { getDashboard, getKernelAlerts, getNodes, getSystemAuditLogs, getTickets, getTrafficHourly } from '@/api/admin'
+import { getPanelBackups } from '@/api/kernel'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { useEdition } from '@/composables/useEdition'
+import UiBadge from '@/ui/UiBadge.vue'
 import UiButton from '@/ui/UiButton.vue'
 import UiCard from '@/ui/UiCard.vue'
 import UiChart from '@/ui/UiChart.vue'
@@ -157,6 +175,14 @@ let alertsRequest = 0
 const activity = ref([])
 const activityLoading = ref(false)
 const activityError = ref(null)
+
+// The backups' state (GET /api/v5/backups): the last verified backup and
+// whether it is too old. It loads apart from the rest and never keeps the
+// page busy.
+const backups = ref(null)
+const backupsLoading = ref(false)
+const backupsLoaded = ref(false)
+const backupsError = ref(null)
 
 const loading = computed(() => statsLoading.value || trafficLoading.value || ticketsLoading.value || nodesLoading.value || activityLoading.value)
 
@@ -228,6 +254,24 @@ const metrics = computed(() => {
       loading: ticketsLoading.value && !tickets.value
     }
   ]
+})
+
+const backupMetric = computed(() => {
+  if (backupsError.value) return { value: '—', detail: t('adminDashboard.metrics.backupUnknown'), warning: '' }
+  const state = backups.value
+  if (!state) return { value: '—', detail: '', warning: '' }
+  if (state.supported === false) return { value: '—', detail: t('adminDashboard.metrics.backupUnsupported'), warning: '' }
+  const last = state.summary?.last_verified
+  const stale = state.summary?.stale ? t('adminDashboard.metrics.backupStale', { hours: state.summary?.stale_after_hours || 36 }) : ''
+  if (!last) return { value: t('adminDashboard.metrics.backupNone'), detail: '', warning: stale }
+  // The age as a short duration ("4h ago"), which fits a fifth card on a
+  // desktop row; the exact time is the detail.
+  const seconds = Math.max(0, (Date.now() - new Date(last.created_at).getTime()) / 1000)
+  return {
+    value: t('adminDashboard.metrics.backupAge', { age: format.duration(seconds, { units: 1 }) }),
+    detail: t('adminDashboard.metrics.backupTaken', { date: format.dateTime(last.created_at) }),
+    warning: stale
+  }
 })
 
 const commerceMetrics = computed(() => {
@@ -372,8 +416,23 @@ function setAlertsView(view) {
   return loadAlerts()
 }
 
+async function loadBackups() {
+  backupsLoading.value = true
+  try {
+    const answer = await getPanelBackups()
+    backups.value = answer && typeof answer === 'object' ? answer : {}
+    backupsError.value = null
+  } catch (error) {
+    backups.value = null
+    backupsError.value = error
+  } finally {
+    backupsLoading.value = false
+    backupsLoaded.value = true
+  }
+}
+
 function loadAll(refreshCache = false) {
-  return Promise.all([loadStats(refreshCache), loadTraffic(), loadTickets(), loadNodes(), loadActivity(), loadAlerts()])
+  return Promise.all([loadStats(refreshCache), loadTraffic(), loadTickets(), loadNodes(), loadActivity(), loadAlerts(), loadBackups()])
 }
 
 function refresh() {
@@ -398,7 +457,8 @@ onMounted(() => loadAll(false))
 
 .dashboard-page__metrics {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  /* Five cards fit one row of a desktop. */
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
   gap: var(--space-4);
 }
 

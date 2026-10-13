@@ -18,7 +18,12 @@ const engine = vi.hoisted(() => ({
   init: vi.fn()
 }))
 
+const kernelApi = vi.hoisted(() => ({
+  getPanelBackups: vi.fn()
+}))
+
 vi.mock('@/api/admin', () => adminApi)
+vi.mock('@/api/kernel', () => kernelApi)
 vi.mock('@/ui/internal/echarts.js', () => ({ init: engine.init, registerTheme: engine.registerTheme }))
 
 const NOW = Math.floor(Date.now() / 1000)
@@ -82,6 +87,9 @@ describe('Admin Dashboard', () => {
       }
     })
     adminApi.getKernelAlerts.mockResolvedValue({ alerts: [], summary: { active: 0, critical: 0, warning: 0 } })
+    kernelApi.getPanelBackups.mockResolvedValue({
+      supported: true, backups: [], summary: { last_verified: { id: 3, file: 'anix-control-daily.tar', created_at: new Date(Date.now() - 5 * 3600_000).toISOString() }, stale: false, stale_after_hours: 36 }
+    })
     adminApi.getSystemAuditLogs.mockResolvedValue({
       data: { data: { list: [{ id: 91, action: 'delete', module: 'nodes', username: 'root', content: 'Deleted node sg-03', status: 'success', created_at: NOW - 120 }], total: 1 } }
     })
@@ -101,16 +109,48 @@ describe('Admin Dashboard', () => {
     expect(adminApi.getNodes).toHaveBeenCalledWith({ page: 1, page_size: 200 })
     expect(adminApi.getSystemAuditLogs).toHaveBeenCalledWith({ page: 1, page_size: 6 })
     expect(adminApi.getKernelAlerts).toHaveBeenCalledWith({ status: 'active' })
+    expect(kernelApi.getPanelBackups).toHaveBeenCalledTimes(1)
     wrapper.unmount()
   })
 
-  it('shows the four metric cards of the dashboard template', async () => {
+  it('shows the age of the last verified backup, with a warning when it is too old', async () => {
+    let wrapper = mountDashboard()
+    await flushPromises()
+    const card = () => wrapper.get('[data-metric="backup"]')
+    expect(card().text()).toContain('Last verified backup')
+    expect(card().get('[data-metric-value]').text()).toBe('5h ago')
+    expect(card().find('[data-backup-stale]').exists()).toBe(false)
+    expect(wrapper.findAllComponents(RouterLinkStub).map(link => link.props('to'))).toContain('/admin/system/backup')
+    wrapper.unmount()
+
+    kernelApi.getPanelBackups.mockResolvedValueOnce({ supported: true, backups: [], summary: { last_verified: null, stale: true, stale_after_hours: 36 } })
+    wrapper = mountDashboard()
+    await flushPromises()
+    expect(card().get('[data-metric-value]').text()).toBe('None yet')
+    expect(card().get('[data-backup-stale]').text()).toBe('Older than 36 hours')
+    wrapper.unmount()
+
+    kernelApi.getPanelBackups.mockResolvedValueOnce({ supported: false, reason: 'backups need SQLite' })
+    wrapper = mountDashboard()
+    await flushPromises()
+    expect(card().text()).toContain('Backups need SQLite')
+    wrapper.unmount()
+
+    kernelApi.getPanelBackups.mockRejectedValueOnce(new Error('offline'))
+    wrapper = mountDashboard()
+    await flushPromises()
+    expect(card().text()).toContain('Backups didn’t load')
+    expect(wrapper.get('[data-metric="users"] [data-metric-value]').text()).toBe('42')
+    wrapper.unmount()
+  })
+
+  it('shows the metric cards of the dashboard template', async () => {
     setEdition('community')
     const wrapper = mountDashboard()
     await flushPromises()
 
     const cards = wrapper.findAll('[data-metric]')
-    expect(cards.map(card => card.attributes('data-metric'))).toEqual(['users', 'nodes', 'traffic', 'tickets'])
+    expect(cards.map(card => card.attributes('data-metric'))).toEqual(['users', 'nodes', 'traffic', 'tickets', 'backup'])
     const value = key => wrapper.get(`[data-metric="${key}"] [data-metric-value]`).text()
     expect(value('users')).toBe('42')
     expect(wrapper.get('[data-metric="users"] [data-metric-trend]').text()).toBe('+3 today')

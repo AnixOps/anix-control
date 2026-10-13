@@ -20,7 +20,14 @@ export default {
       revenue: 'Revenue this month',
       revenueDetail: '{today} today · {total} in total',
       orders: 'Orders awaiting payment',
-      ordersDetail: '{total} in total · {paid} completed'
+      ordersDetail: '{total} in total · {paid} completed',
+      backup: 'Last verified backup',
+      backupNone: 'None yet',
+      backupAge: '{age} ago',
+      backupTaken: 'Taken {date}',
+      backupStale: 'Older than {hours} hours',
+      backupUnsupported: 'Backups need SQLite',
+      backupUnknown: 'Backups didn’t load'
     },
     traffic: {
       title: 'Traffic, last 24 hours',

@@ -20,7 +20,14 @@ export default {
       revenue: '本月收入',
       revenueDetail: '今日 {today} · 累计 {total}',
       orders: '待支付订单',
-      ordersDetail: '共 {total} · 已完成 {paid}'
+      ordersDetail: '共 {total} · 已完成 {paid}',
+      backup: '上次验证通过的备份',
+      backupNone: '还没有',
+      backupAge: '{age}前',
+      backupTaken: '备份于 {date}',
+      backupStale: '已超过 {hours} 小时',
+      backupUnsupported: '备份需要 SQLite',
+      backupUnknown: '备份状态未加载'
     },
     traffic: {
       title: '24 小时流量',
