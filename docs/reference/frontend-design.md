@@ -590,8 +590,7 @@ router, so the login page loads neither.
   `ForwardSuiteNav` once above the page: the flux-panel sub-navigation as
   links: 快速配置向导 (an accent pill), 流量转发 / 隧道 / 限速 as a segmented
   control (U7; its own row on phones), NodeX 拓扑
-  and a 更多 menu (Ansible 机器, 本地运行时, NodeX 运行时, NodeX Agents,
-  可观测性) whose button names the current page when it is one of them. The
+  and a 更多 menu (Ansible 机器, 本地运行时, NodeX 运行时, 可观测性) whose button names the current page when it is one of them. The
   pages and the sidebar no longer repeat it; routes and the seven legacy
   redirects are unchanged.
 
@@ -626,7 +625,7 @@ whose route lands in another pull request). Empty
 groups are dropped. `activeMenuItem()` selects exactly one item per path (an
 exact `to`, then a `match` entry, then a sub-path). `Node` (节点,
 `/admin/nodes`) and `ForwardNode` (转发节点, `/admin/forward/nodes`) are
-separate items. 网络 holds 节点, 转发, NodeX Agents and 部署编排
+separate items. 网络 holds 节点, 转发 and 部署编排
 (topologies, node roles and deployments); 扩展 holds 插件中心 and the plugin
 menus. Only the packages with a WebUI bundle (forward, gost-mesh,
 nat-egress, nftables-forward) add a plugin menu, and the forward package's
@@ -906,7 +905,7 @@ Migrated in U6 (also listed in `web/scripts/data-table-pages.mjs`):
 - **插件中心** (`Plugins.vue`): an App Store style card grid (icon, name,
   publisher, versions, health) with search and health / target chips; the
   details Sheet and the install dialog keep their behaviour and test ids.
-- **NodeX Agents** (`Agent.vue`), **Ansible 机器** (`AnsibleMachines.vue`,
+- **Ansible 机器** (`AnsibleMachines.vue`,
   execution plane: visuals only), **邀请码** (`InviteCodes.vue`, bulk copy
   and revoke: one `POST /api/v4/admin/invite-codes/bulk`), **访问组** (`AccessGroups.vue`, the group opens in a large
   Sheet with members, plans, grants, quotas and a danger zone).
@@ -951,7 +950,7 @@ template and the first detail page (plan §7.2). Page-local parts live in
                         节点组: UiDataTable of the groups; "…" → 接入节点 / 编辑 / 删除
 /admin/nodes/:id        back link · name · status badge · 编辑 · 同步并重载 (primary)
   ?section=             UiTabs variant="segmented":
-                        overview | traffic | protocols | credentials | deploy | logs | danger
+                        overview | traffic | protocols | credentials | deploy | diagnostics | logs | services | danger
 ```
 
 - **Detail page template.** `UiPageHeader` with the `#back` slot (a link
@@ -1070,6 +1069,38 @@ template and the first detail page (plan §7.2). Page-local parts live in
   offers the action to every administrator; a 403 shows the reason inside the
   confirmation and turns the button into a sentence, and a disabled node's
   button is off with its reason (the route answers 409 `node_disabled`).
+- **Diagnostics.** 诊断 (`nodes/NodeDiagnosticsSection.vue`, a lazy chunk
+  loaded when the section opens; the forwarding node page shows the same
+  component in a card) replaces the NodeX Agents page (5.0, D7). It reads
+  `GET /api/v4/kernel/nodes/:id/diagnostics` (`:id` is `proxy-<id>` or
+  `forward-<id>`): whether the Agent is connected, its version, the actions
+  its session advertises (`agent.diagnostic`; the forward checks also need
+  `diag.v1`) and a proxy node's newest recorded tasks. An offline node and an
+  Agent without diagnostics get an empty state. Buttons: 查看服务状态, 重启服务
+  (a danger confirmation, disabled with a note when `can_restart` is false:
+  only super administrators), and 查看日志 with 100 / 500 / 1000 lines. A run
+  is one `POST` that waits for the result (30 s, a restart 60 s; the request
+  timeout is 10 s longer); the panel shows the result's status, duration,
+  error and output in a copyable `UiCodeBlock`, or the refusal's message by
+  its error code. A forward node adds the forward checks (监听, 端口冲突, TCP
+  连接, UDP 探测) for one of the hops it hosts, from the hop list of its
+  node page, and lists the probed upstreams with their round-trip time.
+  Forward nodes keep no history (the task table is keyed by proxy node id).
+- **Upgrade.** 升级节点 (`components/admin/AgentUpgradeSheet.vue`) is a
+  `UiSheet` the admin shell mounts once (`AdminLayout.vue`, loaded with its
+  first opening). `composables/useAgentUpgradeSheet.js` exports
+  `openAgentUpgrade()`; any page calls it, and ⌘K has the action 升级节点
+  (`ADMIN_QUICK_ACTIONS`, `run` instead of `to`). The sheet reads
+  `GET /api/v4/kernel/agents/upgrade-plan` each time it opens: the target
+  release (editable, default the Agent version Control pins), the batches
+  (default 5, 25, 100 cumulative %, validated like the server: the first at
+  most 5, the last 100, increasing) with the 30 minute minimum shown, not
+  editable, the number of nodes that would upgrade, and the H19 rollback
+  rules. 开始升级 asks for a confirmation naming the node count, then
+  `POST /api/v4/kernel/agents/upgrades` (super administrators; the form is
+  disabled with its reason when the plan says `can_start: false`, a campaign
+  is active, nothing is configured or no node is eligible). The campaign card
+  (`AgentUpgradeCampaign.vue`: pause, resume, abort, roll back) is below it.
 - **Secrets.** 凭据 calls `GET /admin/nodes/:id/credentials` only on 读取 API
   密钥 (the server audits every read) and shows the API key in a masked
   `UiCopyField`; the shared secret is never shown. Protocol secrets stay

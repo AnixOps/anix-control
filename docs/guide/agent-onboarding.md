@@ -277,8 +277,9 @@ or `POST /api/v4/kernel/agents/install-tokens` with
                     - systemd unit v2forward-agent.service
    ```
 
-The Agent then shows as connected over mTLS on **Agent 连接方式**
-(`anix-control agents transports`).
+The Agent then shows as connected over mTLS in the node list's connection and
+certificate columns and on the node's page (`anix-control agents transports`
+lists every node).
 
 ## What The Script Does
 
@@ -628,8 +629,12 @@ anix-control agent upgrade abort -id <campaign> [-rollback]
 ```
 
 The same is `POST /api/v4/kernel/agents/upgrades` (and `GET`, `/:id`,
-`/:id/pause`, `/:id/resume`, `/:id/abort`); the **NodeX Agents → Agent
-transports** page shows the latest campaign. Requirements:
+`/:id/pause`, `/:id/resume`, `/:id/abort`). In the console, **升级节点**
+(⌘K → 升级节点) shows the Agent release this
+Control pins, how many nodes would be upgraded and the batches (5%, 25%, 100%
+by default; the 30 minute minimum cannot be changed), starts the campaign
+after a confirmation and shows the latest one (super administrators start,
+pause, resume and abort). Requirements:
 
 - the release in `agent_install.artifact_dir/<tag>/` with its signatures
   (see [serving the Agent from Control](#serving-the-agent-from-control-or-a-mirror));

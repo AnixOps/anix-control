@@ -67,6 +67,24 @@
   machine that waits, forward groups included. The console reads `GET /api/v4/admin/nodes`: the `/api/v2` node
   rows with `approval`, `node_group_id` and `node_group_name` (filters `approval` and `node_group_id`); the
   `/api/v2/admin/nodes` shape is unchanged.
+- Node diagnostics API: `POST /api/v4/kernel/nodes/:id/diagnostics` (`:id` is `proxy-<id>` or `forward-<id>`) runs
+  one whitelisted `agent.diagnostic` task on the node's Agent Control stream and answers its result in the request
+  (`service_status`, `log_tail` and `service_restart` for `gost`, and the forward checks `forward.listen`,
+  `forward.port_conflict`, `forward.connect`, `forward.udp_probe` when the Agent advertises `diag.v1`).
+  `timeout_seconds` is 1 to 120, default 30; the answer is 409 `node_offline`, `diagnostics_unsupported`,
+  `node_pending_approval` or `diagnostic_busy`, 502 `agent_error`, or 504 `diagnostic_timeout`. A restart needs a
+  super administrator; every call is a `v2_operation_log` row (module `node_diagnostic`) written before the task is
+  sent. `GET` on the same path says what the node's session runs and lists a proxy node's newest tasks. The
+  response's write deadline is extended past `server.write_timeout` for the request's own wait.
+- The node page has a 诊断 section (and the forwarding node page a card with the same component): service status,
+  restart after a confirmation, log tail of 100, 500 or 1000 lines, the forward checks of a hosted hop, and the
+  result with its duration and a copy button, with an empty state for an offline node or an Agent without
+  diagnostics.
+- 升级节点: a sheet (⌘K → 升级节点, or `openAgentUpgrade()` from any page) that starts a staged Agent upgrade. It
+  shows the Agent release Control pins, the batches (default 5%, 25%, 100%; the 30 minute minimum is shown and
+  fixed), how many nodes would be upgraded, and the campaign card; starting asks for a confirmation. New
+  `GET /api/v4/kernel/agents/upgrade-plan` answers the release, the eligible node count, the batches and whether the
+  caller may start one.
 
 ### Changed
 
@@ -91,6 +109,7 @@
   replaces 最后心跳 and sorts by the last check.
 - 部署 on the node page is 换到新机器 (a single-use enrollment command for this node, formerly 复制安装命令), the
   uninstall command and the certificate's state. The command palette's 添加节点 is 接入节点 (`?join=1`).
+- `/admin/agent` and every path below it redirect to the node list. The node page opens on `?section=diagnostics`.
 
 - The install command is `curl -fsSL <control>/install.sh | sudo bash -s -- -u <control> -t <token>` for both a node
   group's join token and a node's one-time enrollment token (`-u`/`--control`, `-t`/`--token`; the token names its
@@ -109,6 +128,11 @@
   wireguard, and the machine-telemetry extension page, with their `/admin/extensions/*` sidebar entries.
   The features are on the core pages; machine-telemetry keeps its control routes for the node pages. The
   web app's test-only local module registry and its machine-telemetry module are gone too.
+- The NodeX Agents page (`/admin/agent`, its agent list, remote terminal and task history) and the Agent
+  连接方式 page (`/admin/agent/transports`) with their sidebar entry, locale strings, tests and the four
+  `/api/v2/admin/agent/*` client functions only they used. Their work moved to the node page's 诊断 section, the
+  node list's connection and certificate columns and the 升级节点 sheet. Every backend route stays, and so does
+  `GET /api/v4/kernel/agents/transports`.
   "Joining a node group"). The change is additive, so Agents in the field are unaffected.
 - From the console: the 注册密钥 sheet and panel, the 部署父节点 sheet with its settings and the `useNodeDeploy`
   composable (the Agent `config.json` example and the Ansible inventory), the manual create mode of the node form
