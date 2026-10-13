@@ -52,7 +52,7 @@ sudo bash scripts/install.sh rollback
 发布实际提供的是 `anix-agent-linux-64.zip`、`anix-agent-linux-arm64-v8a.zip` 和各自的
 `.dgst`（`v4.2.0-rc.1` 起另有 `.sig`、`SHA256SUMS` 和 `SHA256SUMS.sig`）。请改用：
 
-- 节点页面的“复制安装命令”（需要 4.2 Control，见
+- 节点详情页“部署”里的“换到新机器”（4.2 中叫“复制安装命令”，需要 4.2 Control，见
   [Agent 接入指南](agent-onboarding.md)）；
 - 仍是旧 V2bX 布局的节点，用 Agent 自带的 root 安装器（anix-agent 仓库
   `docs/INSTALL.md` 的 “Root Install With scripts/install.sh” 和

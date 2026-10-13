@@ -2507,7 +2507,8 @@ served while Control moves first:
 #### Installing Or Switching A Node With One Command
 
 A 4.2 Control serves the installer for step 1: on the node's page,
-**复制安装命令** issues a single-use enrollment token for the node (super
+**部署 › 换到新机器** (**复制安装命令** in 4.2) issues a single-use enrollment
+token for the node (super
 administrators; 1 hour by default, at most 7 days) and prints the command to
 paste on the node as root:
 

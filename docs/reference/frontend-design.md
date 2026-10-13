@@ -650,8 +650,8 @@ focus returns to where it was. It lists:
   suite pages placed where the sidebar puts them, the account page);
   matching is case-insensitive on the label, the group and the route words,
   so "tunnel" also finds 隧道管理.
-- **Actions**: the existing create flows of visible pages: 添加节点
-  (`/admin/nodes?create=1`), 添加用户 (`/admin/users?create=1`) and 转发快速向导
+- **Actions**: the existing create flows of visible pages: 接入节点
+  (`/admin/nodes?join=1`), 添加用户 (`/admin/users?create=1`) and 转发快速向导
   (`/admin/forward/setup`); appearance and language switches. The pages read
   the one-shot query with `useRouteIntent()` and remove it from the URL.
 - **Users** (two characters or more, 250 ms debounce): the email filter of
@@ -943,9 +943,12 @@ template and the first detail page (plan §7.2). Page-local parts live in
 `web/src/views/admin/nodes/`.
 
 ```
-/admin/nodes            UiPageHeader (注册密钥 · 部署父节点 · 添加节点)
-                        UiDataTable: search + status chips + sort (?q= &status= &sort= &order= &page=)
-                        row → node page; "…" → 打开 / 协议 / 日志 / 同步 / 编辑 / 删除
+/admin/nodes            UiPageHeader (接入节点, the one entry point)
+                        approval banner · UiTabs: 节点 | 节点组 (?tab=groups)
+                        节点: UiDataTable: search + status chips (+ 待确认) + sort
+                              (?q= &status= &sort= &order= &page=)
+                        row → node page; "…" → [批准 / 拒绝] 打开 / 协议 / 日志 / 同步 / 编辑 / 删除
+                        节点组: UiDataTable of the groups; "…" → 接入节点 / 编辑 / 删除
 /admin/nodes/:id        back link · name · status badge · 编辑 · 同步并重载 (primary)
   ?section=             UiTabs variant="segmented":
                         overview | traffic | protocols | credentials | deploy | logs | danger
@@ -957,8 +960,8 @@ template and the first detail page (plan §7.2). Page-local parts live in
   default section leaves the query clean, `router.replace`); each section is
   a `UiSection` with grouped lists, cards or a `UiDataTable`. Panels mount
   when shown, so a section loads its data the first time it opens; state that
-  must survive switching (a just-generated registration key) belongs to the
-  page. The route sets `meta.titleKey`, so the breadcrumb reads
+  must survive switching belongs to the page. The route sets
+  `meta.titleKey`, so the breadcrumb reads
   网络 › 节点 › 节点详情.
 - **Status.** The list endpoint reports online/offline from the last
   heartbeat; `GET /admin/nodes/:id` returns the stored column, so
@@ -969,20 +972,54 @@ template and the first detail page (plan §7.2). Page-local parts live in
   most 200; the nodes are joined by `proxy-<id>`, never `forward-<id>`).
   The list calls it once per page after the list has loaded
   (`nodes/useNodeTransports.js`: a late answer for another page is dropped, a
-  failure only turns the two cells into "暂不可用") and has two columns: 连接方式,
-  a `UiBadge` chip (mTLS 流 success, API 密钥流 info, 旧版 warning, 第三方
-  and 离线 neutral: the node's own status badge already says offline), and 证书,
+  failure only turns the cells into "暂不可用") and gives four columns: 证书,
   a chip (有效 success, 续期逾期 warning, 已吊销 and 已过期 danger, 无证书
-  neutral) with the day that matters (until / expired / revoked). The overview's
+  neutral) with the day that matters (until / expired / revoked); Agent 版本
+  (the Agent's own, from its stream Hello, else the node row's); 最后在线 (the
+  inventory's last sighting, else the node's last check; it sorts by
+  `last_check_at`); and 连接方式, a `UiBadge` chip (mTLS 流 success, API 密钥流
+  info, 旧版 warning, 第三方 and 离线 neutral: the node's own status badge
+  already says offline), which starts hidden because a node that joined has
+  one channel. The overview's
   *Agent connection* group (`NodeAgentConnection.vue`) loads the node's own row
   and lists the connection, its transport, when it was last seen, the
   certificate state, `not_after`, `renew_after` and, for a revoked one,
   `revoked_at` and `revoke_reason`. A valid certificate past `renew_after`
   is "续期逾期" with a notice (the Agent did not renew in time); a revoked
   one says the Agent has to enroll again. Neither call holds the page up.
-  The columns are not sortable: the API has no sort for them. To make room
-  at 1440 px 版本 and 负载 start hidden (the node page has both; the table
-  settings bring them back).
+  Only 最后在线 sorts: the API has no sort for the others. To make room at
+  1440 px 连接方式 and 负载 start hidden (the node page has both; the table
+  settings bring them back), as do 节点组 and the id.
+- **Joining a node.** 接入节点 (`nodes/NodeJoinSheet.vue`, state in
+  `useNodeJoin.js`) is the only way to add a machine. On open it calls
+  `GET /api/v4/kernel/agents/install-readiness` (nothing is created or shown
+  for a command that would fail: each failing check shows its fix, and a
+  failing warning only sits above the command), then the node groups; a panel
+  with none gets the default group from `POST /api/v4/kernel/node-groups/default`
+  (VLESS Reality on a random port, in the default subscription group). The
+  command (`GET …/command`, super administrators: a 403 says so) has the mirror
+  tabs, copy, when the token ends, 重置令牌 behind a confirmation and the
+  uninstall command; the token is only in the dialog's state and goes when it
+  closes. `GET …/nodes` is polled every three seconds while the dialog is open
+  ("等待机器接入…", then "hk-01 已接入" with the node, address, approval and
+  whether it is online; a node waiting for approval carries 批准 and 拒绝). A
+  group can be made inline (`NodeGroupQuickCreate.vue`: name, type and a
+  protocol preset, in the default subscription group).
+- **Node groups.** 节点组 (`nodes/NodeGroupsPanel.vue`, `useNodeGroups.js`)
+  lists the groups with their live and pending counts, the approval switch
+  (a PUT of the group as listed with one field changed), when the token ends,
+  and 接入节点 / 编辑 / 删除 (a 409 reads "组内还有节点"). The edit sheet
+  (`NodeGroupSheet.vue`) holds the defaults the nodes copy, the token's
+  validity, the node cap, approval, the subscription groups and the protocol
+  template (`NodeGroupTemplateEditor.vue`); the API's validation errors name
+  the field (`protocol_template[0]: …`) and show in the sheet.
+- **Approval.** The list endpoint of the console is `GET /api/v4/admin/nodes`
+  (the `/api/v2` rows with `approval`, `node_group_id` and `node_group_name`;
+  the `/api/v2` list keeps its shape, which the package gateway's
+  compatibility tests pin). A node whose `approval` is `pending` has a 待确认
+  badge, 批准 and 拒绝 in its row menu (`POST /api/v4/kernel/nodes/proxy-<id>/approve`
+  and `…/reject`, the latter after a confirmation), and the page's banner
+  counts the machines waiting in every group, forward groups included.
 - **Traffic.** 流量 (`nodes/NodeTrafficSection.vue`, a lazy chunk, loaded
   when the section opens) draws `GET /api/v4/kernel/nodes/:id/traffic`
   through `nodes/NodeTrafficChart.vue`, which the live monitor's sheet reuses.
@@ -1035,14 +1072,17 @@ template and the first detail page (plan §7.2). Page-local parts live in
   button is off with its reason (the route answers 409 `node_disabled`).
 - **Secrets.** 凭据 calls `GET /admin/nodes/:id/credentials` only on 读取 API
   密钥 (the server audits every read) and shows the API key in a masked
-  `UiCopyField`; the shared secret is never shown. Registration keys are
-  shown once, when generated. Protocol secrets stay `********` and are sent
-  back as such.
-- **Pieces.** `useNodeDeploy` (registration key, connection settings,
-  config.json, Ansible inventory), `useProtocolEditor` (JSON / form editor and
-  request bodies), `useNodeActions` (sync, typed-name delete), `nodeData`
-  (payload readers, request bodies, status), and one component per sheet or
-  section. `NodeCodeBlock` shows generated files with a copy button.
+  `UiCopyField`; the shared secret is never shown. Protocol secrets stay
+  `********` and are sent back as such.
+- **Deployment.** 部署 has three cards: 换到新机器 (`AgentInstallSheet`: a
+  single-use `anixagt_` command for this node), the uninstall command and the
+  certificate's state with what it means for the next step. There is no
+  registration key and no Ansible helper in the console any more.
+- **Pieces.** `useNodeJoin` (the dialog), `useNodeGroups` (the groups tab),
+  `nodeGroupData` (group and template forms and bodies), `useProtocolEditor`
+  (JSON / form editor and request bodies), `useNodeActions` (sync, typed-name
+  delete), `nodeData` (payload readers, request bodies, status), and one
+  component per sheet or section.
 
 ## Forward suite and the wizard template (U7)
 

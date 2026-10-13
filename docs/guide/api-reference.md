@@ -548,9 +548,17 @@ URL 或日志。控制台不知道当前管理员是不是超级管理员，所�
 # 节点组（管理员）
 GET    /api/v4/kernel/node-groups                 # {"data": {"groups": [...]}}，按 sort、id 排序
 POST   /api/v4/kernel/node-groups                 # 201，创建并生成令牌（需要 module_runtime.ca_kek）
+POST   /api/v4/kernel/node-groups/default         # 空面板的第一个组：没有存活的组时创建“默认”组，否则应答第一个组
 GET    /api/v4/kernel/node-groups/:id
 PUT    /api/v4/kernel/node-groups/:id             # 替换除 kind 和令牌外的全部字段
 DELETE /api/v4/kernel/node-groups/:id             # 软删除；组内还有存活节点时 409 node_group_in_use
+GET    /api/v4/kernel/node-groups/:id/nodes       # 组内存活节点（接入弹窗每 3 秒轮询）；不含凭据
+
+# 接入前的就绪检查（管理员）
+GET    /api/v4/kernel/agents/install-readiness    # {"data": {"ready", "checks": [{"id", "ok", "level", "message", "fix"}]}}
+
+# 控制台的节点列表（管理员）：/api/v2/admin/nodes 的行，加上审批与节点组
+GET    /api/v4/admin/nodes                        # 同 /api/v2/admin/nodes 的查询参数，另有 approval、node_group_id
 
 # 令牌（仅超级管理员）
 GET    /api/v4/kernel/node-groups/:id/command     # 安装命令、令牌、到期时间、卸载命令；每次读取记为 node_group_join_token_reveal
@@ -595,6 +603,31 @@ POST   /api/v4/kernel/nodes/:id/reject            # 拒绝：停用节点、吊�
 
 应答（不含令牌）：`id`、上述字段、`token_reset_at`、`token_expires_at`、`token_expired`、
 `nodes: {"live", "pending"}`（被拒绝的节点不计入）、`created_at`、`updated_at`。
+
+`POST .../default`：没有任何存活的组时创建默认组并应答 `201 {"data": {"group", "created": true}}`；
+已有组时什么也不改，应答 `200` 和第一个组（按 `sort`、`id`，`created: false`）。默认组名为“默认”，`proxy`，
+模板为一个 VLESS Reality 协议（`reality.server_name` 为 `www.microsoft.com`，随机端口取自 20000-40000，
+`flow` 为 `xtls-rprx-vision`），加入名为“默认”的订阅分组；面板没有这个名字时用安装时预置的 `default`，
+两者都没有则创建“默认”（启用）。任何管理员可调用；未设置 `module_runtime.ca_kek` 时 `409 ca_kek_missing`，
+且什么也不创建。
+
+`GET .../nodes` 的应答：`{"data": {"nodes": [...]}}`，最新的在前；每项 `id`、`node`（`proxy-<id>` 或
+`forward-<id>`，批准与拒绝用它）、`kind`、`name`、`host`、`approval`（`approved` 或 `pending`；被拒绝的不在其中）、
+`online`（已启用且 5 分钟内有过检查，与节点列表同口径）、`last_seen`、`agent_version`、`created_at`。
+
+`GET /api/v4/kernel/agents/install-readiness`：不发起任何网络调用，检查接入命令能否工作。检查项 `id`：
+`public_url`（`agent_install.public_url`，未设置时用请求的来源，须为 https 且不是回环地址）、`grpc`（gRPC 目标可由
+设置得出、监听已开启并配置了 TLS 证书和密钥）、`ca`（内置 CA 且 `module_runtime.ca_kek` 可用：令牌用它封存）、
+`mtls_mode`（`agent_control.mtls` 不为 `off`）、`agent_release`（固定的 Agent 版本是发行版本号；`artifact_dir`
+放着它、或有国内镜像、或来自 GitHub 发布）、`script_signature`（配置了 `signature_file` 时它须验签通过）。每项
+为 `{"id", "ok", "level", "message", "fix"}`：`level` 是失败时的后果，`error` 会使 `ready` 为 `false`，`warning`
+不会（命令仍可用）。`message` 和 `fix` 是英文原文，控制台按 `id` 显示本地化的修复办法。
+
+`GET /api/v4/admin/nodes`：控制台的节点列表。查询参数同 `GET /api/v2/admin/nodes`（`page`、`page_size`、`search`、
+`status`、`group_id`、`sort`、`order`），另有 `approval`（`pending`、`approved`、`rejected`）和 `node_group_id`
+两个筛选条件。应答 `{"data": {"total", "list"}}`，行与 `/api/v2` 的节点行相同（协议与原始配置里的密钥为占位符），
+另带 `approval`、`node_group_id`（手工创建的节点为 `null`）和 `node_group_name`。`/api/v2/admin/nodes` 的形状不变：
+它是包网关的兼容契约。
 
 `GET .../command` 的应答：`{"data": {"group", "token", "token_expires_at", "agent_version", "commands":
 [{"mirror", "command", "available", "note"}], "uninstall_command", "script": {"url", "signature_url", "signed"}}}`，
