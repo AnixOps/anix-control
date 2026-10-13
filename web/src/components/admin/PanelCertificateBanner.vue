@@ -86,7 +86,9 @@ const notice = computed(() => {
     const date = certificate.not_after ? format.dateTime(certificate.not_after) : ''
     return { state: 'renewal_failing', tone: 'warning', title: t(`${base}.renewalFailing`, { name, date }), reason, fix: fixText(certificate), retry: true }
   }
-  return { state: 'untrusted', tone: 'warning', title: t(`${base}.untrusted`, { name }), reason, fix: fixText(certificate), retry: true }
+  // A CA's certificate that does not verify (a staging directory) would only
+  // come back the same; files are read again.
+  return { state: 'untrusted', tone: 'warning', title: t(`${base}.untrusted`, { name }), reason, fix: fixText(certificate), retry: certificate.source === 'files' }
 })
 
 async function load() {

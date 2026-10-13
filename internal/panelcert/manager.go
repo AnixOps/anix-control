@@ -738,15 +738,19 @@ type RetryResult struct {
 }
 
 // Retry tries the certificates that are failing (no usable certificate, a
-// renewal that is due or failed, a certificate that does not verify) again
-// now, within the hourly limit; certificate files are read again.
+// renewal that is due or failed) again now, within the hourly limit;
+// certificate files that are not usable or do not verify are read again.
 func (m *Manager) Retry() RetryResult {
 	result := RetryResult{Retrying: []string{}, Healthy: []string{}, Waiting: map[string]time.Time{}}
 	now := m.now()
 	for _, s := range m.slots {
 		status := m.slotStatus(s, now)
 		renewalDue := status.RenewAt != nil && !now.Before(*status.RenewAt)
-		needed := status.State != StateValid || status.RenewalFailing || !status.PubliclyTrusted || renewalDue
+		// A certificate the CA issued that does not verify (a staging
+		// directory) is not requested again: the same CA would answer the
+		// same; files are read again.
+		reload := s.spec.Source == SourceFiles && !status.PubliclyTrusted
+		needed := status.State != StateValid || status.RenewalFailing || renewalDue || reload
 		if !needed {
 			result.Healthy = append(result.Healthy, s.spec.Name)
 			continue
