@@ -170,10 +170,18 @@ func Dir(dataDir string) string { return filepath.Join(dataDir, DirName) }
 // ScratchDir is the scratch directory of dataDir.
 func ScratchDir(dataDir string) string { return filepath.Join(dataDir, ScratchDirName) }
 
-// ensureDir creates dir with mode 0700 and tightens an existing one.
+// ensureDir creates dir with mode 0700 and tightens an existing one. A
+// directory it creates as root gets the owner of its parent: a command run
+// with sudo must not leave directories the service user cannot write.
 func ensureDir(dir string) error {
+	_, statErr := os.Stat(dir)
 	if err := os.MkdirAll(dir, dirMode); err != nil {
 		return err
+	}
+	if os.IsNotExist(statErr) {
+		if err := ownTo(dir); err != nil {
+			return err
+		}
 	}
 	return os.Chmod(dir, dirMode)
 }

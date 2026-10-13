@@ -197,6 +197,12 @@ func Write(ctx context.Context, source Source, t string, now time.Time) (*Bundle
 	if err := fail("publish"); err != nil {
 		return nil, err
 	}
+	// Run as root (sudo anix-control backup create), the bundle gets the
+	// owner of the backup directory, so the service can verify and remove
+	// it.
+	if err := ownTo(partialPath); err != nil {
+		return nil, err
+	}
 	name, err := publish(partialPath, dir, manifest.CreatedAt, t)
 	if err != nil {
 		return nil, err

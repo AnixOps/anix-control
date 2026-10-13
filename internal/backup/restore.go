@@ -190,6 +190,9 @@ func Restore(ctx context.Context, options RestoreOptions) (*RestoreResult, error
 		if err := os.Mkdir(result.ReplacedDir, dirMode); err != nil {
 			return nil, fmt.Errorf("prepare %s: %w", result.ReplacedDir, err)
 		}
+		if err := ownTo(result.ReplacedDir); err != nil {
+			return nil, err
+		}
 		for _, path := range existing {
 			name := filepath.Base(path)
 			if path == configTarget {
