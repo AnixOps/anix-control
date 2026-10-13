@@ -91,6 +91,7 @@ export default {
       credentials: 'Credentials',
       deploy: 'Deployment',
       traffic: 'Traffic',
+      diagnostics: 'Diagnostics',
       logs: 'Logs',
       services: 'Services',
       danger: 'Danger zone'

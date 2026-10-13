@@ -349,6 +349,39 @@ export async function abortKernelAgentUpgrade(id, rollback = false) {
   return unwrap(await v4({ url: `/kernel/agents/upgrades/${encodeURIComponent(id)}/abort`, method: 'post', data: { rollback } }))
 }
 
+// Node diagnostics (5.0 node page, 诊断), `node` is "proxy-<id>" or
+// "forward-<id>". The listing says what the node's Agent session runs
+// (connected, diagnostics, forward_checks, actions, services, can_restart)
+// and, for a proxy node, its newest recorded tasks.
+export async function getKernelNodeDiagnostics(node, limit) {
+  const config = { url: `/kernel/nodes/${encodeURIComponent(node)}/diagnostics`, method: 'get' }
+  if (limit) config.params = { limit }
+  return unwrap(await v4(config))
+}
+
+// Runs one whitelisted action on the node's Agent and waits for its result
+// (the request lasts up to timeoutSeconds, 1 to 120, default 30):
+// service_status, service_restart (super administrators), log_tail
+// ({ service, lines }) and the forward checks forward.listen,
+// forward.port_conflict, forward.connect, forward.udp_probe ({ route_id,
+// hop_index }). The answer is { task_id, node, action, params, success,
+// output, error, duration_ms, result? }; success false is an answer too.
+// Refusals carry error.code: node_offline, diagnostics_unsupported,
+// node_pending_approval, diagnostic_busy (409), super_admin_required (403),
+// action_not_allowed, invalid_params (400), diagnostic_timeout (504),
+// agent_error (502).
+export async function runKernelNodeDiagnostic(node, { action, params = {}, timeoutSeconds } = {}) {
+  const data = { action, params }
+  const seconds = Number(timeoutSeconds) > 0 ? Number(timeoutSeconds) : 30
+  if (timeoutSeconds) data.timeout_seconds = seconds
+  return unwrap(await v4({
+    url: `/kernel/nodes/${encodeURIComponent(node)}/diagnostics`,
+    method: 'post',
+    data,
+    timeout: (seconds + 10) * 1000
+  }))
+}
+
 // One-command node onboarding: a single-use enrollment token bound to the
 // node ("proxy-<id>" or "forward-<id>") and the install command for every
 // mirror. Super administrators only; the token is shown once.

@@ -11,12 +11,14 @@ import adminSubscriptionGroups from './modules/en/adminSubscriptionGroups'
 import adminApiTokens from './modules/en/adminApiTokens'
 import forwardV4 from './modules/en/forwardV4'
 import forwardDns from './modules/en/forwardDns'
+import nodeDiagnostics from './modules/en/nodeDiagnostics'
 
 export default {
   ...adminSubscriptionGroups,
   ...adminApiTokens,
   ...forwardV4,
   ...forwardDns,
+  ...nodeDiagnostics,
   ...networkPages,
   ...miscPages,
   ...adminSupportPages,

@@ -91,6 +91,7 @@ export default {
       credentials: '凭据',
       deploy: '部署',
       traffic: '流量',
+      diagnostics: '诊断',
       logs: '日志',
       services: '服务',
       danger: '危险区'
