@@ -492,6 +492,9 @@ in docs/UPGRADE.md before upgrading: back up the database and its key first (the
   and the frontend job no longer checks out the Agent. The cross-repository
   Agent suite writes its packages into the database the way the bootstrap
   does, and its Agent plugin scenarios skip while dispatch is off.
+- The Agent this Control is released with is anix-agent `v5.0.0-rc.1` (commit `9c74e3b5`, `AGENT_REF`): the
+  cross-repository and process end-to-end tests build that Agent, the installer's default Agent release
+  (`config/AGENT_RELEASE`) names its tag, and `anix-agent join` in it is what `install.sh -u/-t` runs.
 
 ### Deprecated
 

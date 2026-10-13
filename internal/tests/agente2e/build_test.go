@@ -91,7 +91,7 @@ func buildBinaries(t *testing.T, dir string) binaries {
 	} else {
 		require.NoError(t, os.MkdirAll(binDir, 0o755))
 		goBuild(t, "go", out.ControlRoot, out.Control, buildEnv(), "./cmd/server")
-		version := "-X github.com/AnixOps/anix-agent/v4/cmd.version=" + agentE2EVersion
+		version := "-X github.com/AnixOps/anix-agent/v5/cmd.version=" + agentE2EVersion
 		goBuild(t, agentGo(), out.AgentRoot, out.Agent, buildEnv(), "-trimpath", "-tags", agentBuildTags, "-ldflags", version, ".")
 		goBuild(t, agentGo(), out.AgentRoot, out.TelemetryAMD64, buildEnv("GOOS=linux", "GOARCH=amd64"), "-trimpath", "-buildvcs=false", "./cmd/machine-telemetry")
 		goBuild(t, agentGo(), out.AgentRoot, out.TelemetryARM64, buildEnv("GOOS=linux", "GOARCH=arm64"), "-trimpath", "-buildvcs=false", "./cmd/machine-telemetry")
@@ -101,7 +101,7 @@ func buildBinaries(t *testing.T, dir string) binaries {
 }
 
 // agentE2EVersion is the version the suite's Agent build reports.
-const agentE2EVersion = "4.2.0-e2e"
+const agentE2EVersion = "5.0.0-rc.1-e2e"
 
 func gitHead(dir string) string {
 	output, err := exec.Command("git", "-C", dir, "rev-parse", "HEAD").Output()

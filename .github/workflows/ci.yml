@@ -36,7 +36,7 @@ env:
   # The one anix-agent commit every checkout below builds and tests: the
   # signed Agent plugins, the cross-repository E2E and the live WebUI gate.
   # Move it to the Agent release commit with every Agent tag (docs/RELEASING.md).
-  AGENT_REF: '95fa91b7d8207a768b6eefabacec07f15a8f1135'   # anix-agent v4.2.0
+  AGENT_REF: '9c74e3b52b8e7ff80d13809ddadc75e9feca32b0'   # anix-agent v5.0.0-rc.1
 
 jobs:
   changes:
@@ -1951,7 +1951,7 @@ jobs:
           mkdir -p "${E2E_BIN}" "${E2E_LOGS}"
           go build -o "${E2E_BIN}/anix-control" ./cmd/server
           go -C V2bX_AnixOps build -trimpath -tags sing \
-            -ldflags "-X github.com/AnixOps/anix-agent/v4/cmd.version=4.2.0-e2e" \
+            -ldflags "-X github.com/AnixOps/anix-agent/v5/cmd.version=5.0.0-rc.1-e2e" \
             -o "${E2E_BIN}/anix-agent" .
           for arch in amd64 arm64; do
             GOOS=linux GOARCH="${arch}" go -C V2bX_AnixOps build -trimpath -buildvcs=false \

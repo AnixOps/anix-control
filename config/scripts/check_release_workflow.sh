@@ -289,7 +289,7 @@ check_release_workflow() {
   require_named_step_text go-quality "Install pinned protoc" "sha256sum -c" "pinned protoc checksum verification" || failed=1
   require_text "GOST_VERSION: '3.2.6'" "pinned GOST runtime version" || failed=1
   require_text "GOST_LINUX_ARM64_BINARY_SHA256" "pinned arm64 GOST binary checksum" || failed=1
-  require_text "AGENT_REF: '95fa91b7d8207a768b6eefabacec07f15a8f1135'" "pinned Agent source commit" || failed=1
+  require_text "AGENT_REF: '9c74e3b52b8e7ff80d13809ddadc75e9feca32b0'" "pinned Agent source commit" || failed=1
   require_agent_checkouts_use_pin || failed=1
   require_job_text plugin-package-release-test "govulncheck ./cmd/nftables-forward" "pinned Agent plugin vulnerability scan" || failed=1
   require_text "-exclude-dir=config/scripts/testdata" "full gosec excludes the non-compiling AST fixture directory" || failed=1
