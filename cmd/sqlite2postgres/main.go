@@ -438,6 +438,15 @@ func resetSequence(tx *gorm.DB, table string) error {
 	if !hasID {
 		return nil
 	}
+	// Kernel tables keyed by a text id (v3_kernel_plugin, ...) have no
+	// sequence to move.
+	var serial bool
+	if err := tx.Raw(`SELECT pg_get_serial_sequence(?, 'id') IS NOT NULL`, table).Scan(&serial).Error; err != nil {
+		return err
+	}
+	if !serial {
+		return nil
+	}
 	var max *int64
 	if err := tx.Raw("SELECT MAX(id) FROM " + quoteIdent(table)).Scan(&max).Error; err != nil {
 		return err
