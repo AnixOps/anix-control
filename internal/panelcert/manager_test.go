@@ -558,6 +558,32 @@ func TestFilesAreReloadedWhenTheyChange(t *testing.T) {
 	require.Equal(t, panelcert.StateValid, certificateState(h.m, panelName).State)
 }
 
+// The gRPC listener with certificate files of its own for the panel's name
+// serves them, not the web certificate of the same name.
+func TestEachListenerGetsItsOwnCertificateForTheSameName(t *testing.T) {
+	dir := t.TempDir()
+	webCert, webKey := filepath.Join(dir, "web.crt"), filepath.Join(dir, "web.key")
+	grpcCert, grpcKey := filepath.Join(dir, "grpc.crt"), filepath.Join(dir, "grpc.key")
+	webSerial := writeKeyPair(t, webCert, webKey, panelName, time.Now().Add(30*24*time.Hour))
+	grpcSerial := writeKeyPair(t, grpcCert, grpcKey, panelName, time.Now().Add(30*24*time.Hour))
+	m, err := panelcert.New(panelcert.Options{Mode: "files", Domain: panelName, Logf: t.Logf, Certificates: []panelcert.Spec{
+		{Name: panelName, Roles: []string{panelcert.RoleWeb}, Source: panelcert.SourceFiles, CertFile: webCert, KeyFile: webKey},
+		{Roles: []string{panelcert.RoleGRPC}, Source: panelcert.SourceFiles, CertFile: grpcCert, KeyFile: grpcKey},
+	}})
+	require.NoError(t, err)
+	require.NoError(t, m.Start(context.Background()))
+	for role, want := range map[string]*big.Int{panelcert.RoleWeb: webSerial, panelcert.RoleGRPC: grpcSerial} {
+		for _, sni := range []string{panelName, ""} {
+			certificate, err := m.GetCertificate(role)(&tls.ClientHelloInfo{ServerName: sni})
+			require.NoError(t, err)
+			require.Equal(t, want, certificate.Leaf.SerialNumber, "%s listener, SNI %q", role, sni)
+		}
+	}
+	grpcStatus, ok := m.GRPCCertificate()
+	require.True(t, ok)
+	require.Equal(t, panelName, grpcStatus.Name, "an unnamed certificate is named after what it covers")
+}
+
 func TestMissingFilesFailToTheFallback(t *testing.T) {
 	dir := t.TempDir()
 	ca := panelcerttest.New(t, 0)

@@ -672,19 +672,32 @@ func (m *Manager) challengeCertificate(hello *tls.ClientHelloInfo) (*tls.Certifi
 	return m.responder.GetCertificate(hello)
 }
 
-// slotFor picks the certificate of a handshake.
+// slotFor picks the certificate of a handshake on a listener of role: the
+// role's certificate for the name asked for (SNI), else the role's first.
+// Only a listener no certificate is meant for picks by name alone: the gRPC
+// listener with certificate files of its own for the panel's name must not
+// get the web certificate because the names match.
 func (m *Manager) slotFor(role, serverName string) *slot {
 	name := strings.TrimSuffix(strings.ToLower(serverName), ".")
-	var fallback *slot
+	var first, named *slot
 	for _, s := range m.slots {
+		if !hasRole(s.spec.Roles, role) {
+			if named == nil && name != "" && s.spec.Name == name {
+				named = s
+			}
+			continue
+		}
 		if name != "" && s.spec.Name == name {
 			return s
 		}
-		if fallback == nil && hasRole(s.spec.Roles, role) {
-			fallback = s
+		if first == nil {
+			first = s
 		}
 	}
-	return fallback
+	if first != nil {
+		return first
+	}
+	return named
 }
 
 func hasRole(roles []string, role string) bool {
