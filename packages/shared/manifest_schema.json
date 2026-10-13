@@ -31,6 +31,20 @@
         }
       }
     },
+    "builtinHost": {
+      "$comment": "A Control host linked into the Control binary (packages/builtin): a --builtin package carries no host binary and targets only control.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "builtin"
+      ],
+      "properties": {
+        "builtin": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
     "migrations": {
       "type": "object",
       "additionalProperties": false,
@@ -131,7 +145,7 @@
           ],
           "properties": {
             "api_version": {"const": "v2"},
-            "control_entrypoint": {"$ref": "#/$defs/file"},
+            "control_entrypoint": {"oneOf": [{"$ref": "#/$defs/file"}, {"$ref": "#/$defs/builtinHost"}]},
             "agent_entrypoint": {"oneOf": [{"$ref": "#/$defs/file"}, {"type": "null"}]},
             "migrations": {"$ref": "#/$defs/migrations"},
             "compatibility_routes": {"$ref": "#/$defs/compatibilityRoutes"},

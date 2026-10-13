@@ -712,10 +712,8 @@ func main() {
             self.assertIn(b"package bridge capability is required", host_bytes)
             self.assertNotIn(b"host is not implemented in the manifest stage", host_bytes)
 
-    def test_commercial_package_without_webui_builds_signs_and_verifies_as_a_release(self) -> None:
-        # The commercial workflow builds these with --formal-release on both
-        # platforms, then checks them with --verify-release.
-        self.assertIn("order", BUILD_PACKAGE_MODULE.commercial_package_ids())
+    def test_package_without_webui_builds_signs_and_verifies_as_a_release(self) -> None:
+        # A formal release on both platforms, checked with --verify-release.
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             signing_key, official_root = generate_ed25519_signer(root, "official")
@@ -784,16 +782,13 @@ func main() {
             self.assertEqual(package_id, migrations["package_id"])
             self.assertEqual("__ANIXOPS_PACKAGE_VERSION__", migrations["version"])
 
-    def test_edition_package_sets(self) -> None:
-        every = [spec.package_id for spec in BUILD_PACKAGE_MODULE.PACKAGE_SPECS]
-        commercial = [spec.package_id for spec in BUILD_PACKAGE_MODULE.edition_package_specs("commercial")]
-        community = [spec.package_id for spec in BUILD_PACKAGE_MODULE.edition_package_specs("community")]
-        self.assertEqual(every, commercial)
-        self.assertEqual([package_id for package_id in every if package_id not in {"affiliate", "order", "payment"}], community)
-        self.assertIn("plan", community, "subscription templates need the plan package")
-        self.assertEqual(frozenset({"affiliate", "order", "payment"}), BUILD_PACKAGE_MODULE.commercial_package_ids())
-        with self.assertRaises(BUILD_PACKAGE_MODULE.PackageBuildError):
-            BUILD_PACKAGE_MODULE.edition_package_specs("enterprise")
+    def test_every_official_package_is_in_the_release_set(self) -> None:
+        # Orders, payments and affiliate are official packages like the
+        # others: there is no edition that leaves them out.
+        ids = {spec.package_id for spec in BUILD_PACKAGE_MODULE.PACKAGE_SPECS}
+        self.assertEqual(18, len(ids))
+        self.assertTrue({"affiliate", "order", "payment", "plan"} <= ids)
+        self.assertFalse(hasattr(BUILD_PACKAGE_MODULE, "edition_package_specs"))
 
     def test_all_v4_packages_materialize_signed_v2_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -820,14 +815,11 @@ func main() {
 
             artifacts = sorted(output.glob("*.anxp"))
             sboms = sorted(output.glob("*.sbom.spdx.json"))
-            # --all builds the community edition by default: every package
-            # but the commercial ones of config/editions.json.
-            self.assertEqual(15, len(artifacts))
-            self.assertEqual(15, len(sboms))
-            self.assertIn(output / "identity-platform-4.0.0.anxp", artifacts)
-            self.assertIn(output / "plan-4.0.0.anxp", artifacts)
-            for commercial in ("affiliate", "order", "payment"):
-                self.assertNotIn(output / f"{commercial}-4.0.0.anxp", artifacts)
+            # --all builds every official package.
+            self.assertEqual(18, len(artifacts))
+            self.assertEqual(18, len(sboms))
+            for package_id in ("identity-platform", "plan", "affiliate", "order", "payment"):
+                self.assertIn(output / f"{package_id}-4.0.0.anxp", artifacts)
 
             for artifact_path in artifacts:
                 stem = artifact_path.name.removesuffix(".anxp")
@@ -887,6 +879,117 @@ func main() {
                         ["linux/amd64"],
                         [entry["architecture"] for entry in json.loads(control_index.read() if control_index else b"{}")["entries"]],
                     )
+
+
+class BuiltinPackageSetTest(unittest.TestCase):
+    """--builtin: the slim packages Control embeds (internal/builtinpkg)."""
+
+    def selected_ids(self) -> list[str]:
+        return sorted(spec.package_id for spec in BUILD_PACKAGE_MODULE.PACKAGE_SPECS)
+
+    def test_builtin_set_holds_no_binary_and_names_the_built_in_host(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / "dist"
+            result = run_command([sys.executable, str(BUILDER), "--all", "--builtin", "--version", "5.0.0", "--out", str(output)])
+            self.assertEqual(0, result.returncode, result.stderr.decode("utf-8", errors="replace"))
+
+            index = json.loads((output / "index.json").read_text(encoding="utf-8"))
+            self.assertEqual("anixops.builtin-packages/v1", index["format"])
+            self.assertEqual("official-public-key.pem", index["public_key"])
+            self.assertTrue((output / "official-public-key.pem").read_bytes().startswith(b"-----BEGIN PUBLIC KEY-----"))
+            ids = [entry["id"] for entry in index["packages"]]
+            self.assertEqual(sorted(ids), ids)
+            self.assertEqual(self.selected_ids(), ids)
+            for entry in index["packages"]:
+                package_id = entry["id"]
+                self.assertEqual("5.0.0", entry["version"])
+                manifest_bytes = (output / entry["manifest"]).read_bytes()
+                manifest = json.loads(manifest_bytes)
+                self.assertEqual(BUILD_PACKAGE_MODULE.canonical_json(manifest), manifest_bytes)
+                self.assertEqual({"builtin": package_id}, manifest["control_entrypoint"], package_id)
+                self.assertEqual(["control"], manifest["targets"], package_id)
+                self.assertEqual(["linux/amd64", "linux/arm64"], manifest["architectures"], package_id)
+                self.assertEqual({}, manifest["entrypoints"], package_id)
+                self.assertNotIn("agent_entrypoint", manifest)
+                self.assertNotIn("runtime_api_version", manifest)
+                self.assertIn(b'"control_entrypoint":{"builtin":"' + package_id.encode() + b'"}', manifest_bytes)
+                artifact = (output / entry["artifact"]).read_bytes()
+                self.assertEqual(hashlib.sha256(artifact).hexdigest(), manifest["artifact_sha256"])
+                self.assertLess(len(artifact), 256 << 10, package_id)
+                with tarfile.open(fileobj=io.BytesIO(artifact), mode="r:") as archive:
+                    names = archive.getnames()
+                    package_index = json.loads(archive.extractfile("package.json").read())
+                self.assertEqual(["control"], package_index["targets"])
+                self.assertFalse([name for name in names if name.startswith(("bin/", "agent/", "runtime/"))], package_id)
+                self.assertIn("compat/v2-routes.json", names)
+                self.assertIn("migrations/index.json", names)
+                self.assertEqual("webui" in manifest, "webui/index.mjs" in names, package_id)
+
+    def test_builtin_formal_release_verifies_against_the_official_root(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            signing_key, official_root = generate_ed25519_signer(root, "official")
+            _, other_root = generate_ed25519_signer(root, "other")
+            output = root / "dist"
+            common = [sys.executable, str(BUILDER), "--all", "--builtin", "--version", "5.0.0", "--out", str(output)]
+            built = run_command(
+                common + ["--formal-release", "--signing-key", str(signing_key), "--official-public-key", str(official_root)]
+            )
+            self.assertEqual(0, built.returncode, built.stderr.decode("utf-8", errors="replace"))
+            verified = run_command(common + ["--verify-release", "--official-public-key", str(official_root)])
+            self.assertEqual(0, verified.returncode, verified.stderr.decode("utf-8", errors="replace"))
+            self.assertIn(b"built-in packages", verified.stdout)
+
+            wrong_root = run_command(common + ["--verify-release", "--official-public-key", str(other_root)])
+            self.assertNotEqual(0, wrong_root.returncode)
+
+            index_path = output / "index.json"
+            index = json.loads(index_path.read_text(encoding="utf-8"))
+            index["packages"] = index["packages"][1:]
+            index_path.write_text(json.dumps(index), encoding="utf-8")
+            partial = run_command(common + ["--verify-release", "--official-public-key", str(official_root)])
+            self.assertNotEqual(0, partial.returncode)
+            self.assertIn(b"index", partial.stderr)
+
+    def test_builtin_verification_rejects_a_tampered_package(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            signing_key, official_root = generate_ed25519_signer(root, "official")
+            output = root / "dist"
+            common = [sys.executable, str(BUILDER), "--package", "plan", "--builtin", "--version", "5.0.0", "--out", str(output)]
+            built = run_command(
+                common + ["--formal-release", "--signing-key", str(signing_key), "--official-public-key", str(official_root)]
+            )
+            self.assertEqual(0, built.returncode, built.stderr.decode("utf-8", errors="replace"))
+            artifact = output / "plan-5.0.0.anxp"
+            artifact.write_bytes(artifact.read_bytes() + b"\0")
+            tampered = run_command(common + ["--verify-release", "--official-public-key", str(official_root)])
+            self.assertNotEqual(0, tampered.returncode)
+            self.assertIn(b"digest", tampered.stderr)
+
+    def test_builtin_rejects_binary_inputs_and_release_archives(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            common = [sys.executable, str(BUILDER), "--package", "machine-telemetry", "--builtin", "--version", "5.0.0", "--out", str(root / "dist")]
+            for extra, message in (
+                (["--platform", "linux/amd64"], b"no platform"),
+                (agent_binary_arguments(root, package_ids=("machine-telemetry",)), b"no Agent or runtime binary"),
+                (["--release-archive", str(root / "assets"), "--signing-key", str(root / "missing.pem")], b"release archive"),
+            ):
+                result = run_command(common + extra)
+                self.assertNotEqual(0, result.returncode, extra)
+                self.assertIn(message, result.stderr, extra)
+            self.assertFalse((root / "dist").exists())
+
+    def test_full_package_manifest_still_names_its_host_binaries(self) -> None:
+        # The format the cross-repository E2E and the module image use.
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / "packages"
+            result = run_command([sys.executable, str(BUILDER), "--package", "plan", "--version", "5.0.0", "--out", str(output)])
+            self.assertEqual(0, result.returncode, result.stderr.decode("utf-8", errors="replace"))
+            manifest = json.loads((output / "plan-5.0.0.manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual("bin/control-entrypoints.json", manifest["control_entrypoint"]["path"])
+            self.assertNotIn("builtin", manifest["control_entrypoint"])
 
 
 if __name__ == "__main__":
