@@ -65,7 +65,7 @@ is_implementation_surface() {
     config/deploy/*|config/scripts/*)
       return 0
       ;;
-    config/config.yaml.example|config/config.prod.yaml)
+    config/config.yaml.example)
       return 0
       ;;
   esac

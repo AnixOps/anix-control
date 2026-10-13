@@ -147,7 +147,7 @@ Always run Go with `GOWORK=off`; the module is not part of any `go.work`.
 GOWORK=off go build ./... && GOWORK=off go vet ./...
 GOWORK=off go test ./... -count=1 -p=1        # the full suite; CI runs it in Backend Tests (plus sdk, identity)
 GOWORK=off go test ./cmd/server -count=1      # reads Dockerfile, ci.yml, deploy_panel.sh
-make run              # isolated dev instance: API 127.0.0.1:19080, UI :19000, gRPC :50052
+make run              # isolated dev instance (.dev/): web and API 127.0.0.1:19080, gRPC 127.0.0.1:50052, -debug
 make build            # frontend (web/public) + backend (build/anix-control)
 make docker-build     # container image, Dockerfile "source" target (anix-control:dev)
 docker compose up -d --build   # development stack with a throwaway PostgreSQL
@@ -202,7 +202,7 @@ fails a diff that touches implementation, CI, deployment, or config surfaces
 (`.github/workflows/*`, `api/*`, `cmd/*`, `internal/*`, `web/src/*` and web
 build config, `go.mod`/`go.sum`, `Dockerfile`, `docker-compose*.yml`,
 `config/deploy/*`, `config/scripts/*`,
-`config/config.yaml.example`, `config/config.prod.yaml`) unless the same diff
+`config/config.yaml.example`) unless the same diff
 updates one of `changelog.d/<slug>.md` (a changelog fragment, not
 `changelog.d/README.md`), `README.md`, `CHANGELOG.md`, `TODO.md`, `ROADMAP.md`,
 `docs/README.md`, `docs/DEPLOYMENT.md`, `docs/features.md`,
@@ -235,7 +235,6 @@ A release tag `vX.Y.Z[-alpha|-beta|-rc.N]` must match every surface checked by
 - `cmd/server/main.go` (`// @version`)
 - `web/package.json` and `web/package-lock.json` (`version` and `packages[""].version`)
 - `docs/swagger.json`, `docs/swagger.yaml`, `docs/docs.go` (regenerate with `make swagger`)
-- `config/config.yaml.example`, `config/config.prod.yaml`, `config/config.dev.yaml.example` (`app.version`)
 - `config/deploy/helm/anix-control/Chart.yaml` (`appVersion`, the chart's default image tag; the chart's own `version` is a separate SemVer, bumped on template or values changes)
 - `CHANGELOG.md` (first `## X.Y.Z - YYYY-MM-DD` heading)
 - `README.md` (the `- Current release:` line)
@@ -276,18 +275,28 @@ A release tag `vX.Y.Z[-alpha|-beta|-rc.N]` must match every surface checked by
   `config/deploy/compose/` (external PostgreSQL), `config/deploy/helm/anix-control`
   (single replica), `docker-compose.yml` (development). Container design and
   multi-replica blockers: `docs/architecture/container-deployment.md`.
-- Configuration for containers is `ANIX_CONTROL_*` environment variables
+- The configuration is nine operator keys (`domain`, `tls.*`, `listen`,
+  `grpc.port`, `grpc.public_name`, `subscribe_path`, `data_dir`) in
+  `internal/config/keys.go`, each with an `ANIX_CONTROL_*` variable
   (`docs/reference/environment-variables.md`, generated and checked by
-  `TestEnvironmentVariableReferenceIsCurrent`). A new config key changes that
-  file: regenerate it in the same PR.
+  `TestEnvironmentVariableReferenceIsCurrent`). The loader is strict: every
+  other key is either in `internal/config/deprecated_keys.yaml` (still read
+  or ignored, with a warning; its table in `docs/reference/configuration.md`
+  is checked by `TestDeprecatedKeyReferenceIsCurrent`) or refused. A new
+  operator key changes both documents: regenerate them in the same PR; a key
+  that goes away moves to the deprecated list with its reason. Secrets are
+  never configuration: the root key (`data_dir/root.key`) seals or derives
+  them.
 - `scripts/install.sh` (systemd) installs the release tag it is given:
   `--version vX.Y.Z` is required, and `install.sh` and `panel_install.sh`
   fetch the installer at that tag. It never reads `releases/latest` or a
   moving branch, so tagging a release cannot change what an unpinned command
-  installs. A fresh install writes `env: "production"` into `config.yaml`
-  (the template says `development`; `scripts/tests/test_install_fresh_config.sh`
-  and `internal/config/installer_config_test.go`), and `update` never rewrites
-  an existing config. Containers stay the primary deployment. Control Center tags
+  installs. A fresh install writes the one-line template (its `domain` line
+  kept a comment) and the first administrator into `config.yaml`
+  (`scripts/tests/test_install_fresh_config.sh` and
+  `internal/config/installer_config_test.go`), the unit names the data
+  directory, and `update` never rewrites an existing config
+  (`anix-control config rewrite` does, on request). Containers stay the primary deployment. Control Center tags
   (`control-center-v*`) are never marked latest. Operator docs:
   `docs/DEPLOYMENT.md`, `docs/UPGRADE.md`, `docs/guide/release-installation.md`.
 

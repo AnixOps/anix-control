@@ -58,7 +58,7 @@ internal/tests/
 
 # Config files, credentials and operator inventories never enter the image
 config/config.yaml
-config/config.prod.yaml
+.dev/
 config/tls/
 config/deploy/ssh/
 config/deploy/**/inventory.ini

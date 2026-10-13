@@ -39,9 +39,6 @@ TEXT_SURFACES: tuple[tuple[str, str], ...] = (
     ("internal/branding/branding.go", r'^\s*DefaultVersion\s*=\s*"([^"]+)"'),
     ("Makefile", r"^VERSION\s*:=\s*(\S+)"),
     ("cmd/server/main.go", r"^//\s*@version\s+(\S+)"),
-    ("config/config.yaml.example", r'^\s{2}version:\s*"([^"]+)"'),
-    ("config/config.prod.yaml", r'^\s{2}version:\s*"([^"]+)"'),
-    ("config/config.dev.yaml.example", r'^\s{2}version:\s*"([^"]+)"'),
     # The chart's default image tag. Its own `version` is not a release surface.
     ("config/deploy/helm/anix-control/Chart.yaml", r'^appVersion:\s*"([^"]+)"'),
     ("docs/docs.go", r'^\s*Version:\s*"([^"]+)"'),

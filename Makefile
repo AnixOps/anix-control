@@ -1,4 +1,4 @@
-.PHONY: build build-packages run dev-config clean test test-unit test-e2e test-coverage test-coverage-html test-frontend
+.PHONY: build build-packages run clean test test-unit test-e2e test-coverage test-coverage-html test-frontend
 .PHONY: pre-deploy deploy docker-build docker-run lint vet fmt bench grpc-gen swagger
 .PHONY: test-quick test-clean test-summary test-grpc test-cmd test-all test-coverage-all
 
@@ -9,7 +9,12 @@ AGENT_RELEASE := $(shell tr -d '[:space:]' < config/AGENT_RELEASE)
 BUILD_TIME := $(shell date +%Y-%m-%d_%H:%M:%S)
 GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 LDFLAGS := -s -w -X main.version=$(VERSION) -X main.agentRelease=$(AGENT_RELEASE) -X main.buildTime=$(BUILD_TIME) -X main.commit=$(GIT_COMMIT)
-RUN_CONFIG ?= config/config.dev.yaml
+# The development instance (make run): its database and data directory
+# (root.key) under DEV_DIR, plain http (web and API) on 127.0.0.1:19080,
+# gRPC on 127.0.0.1:50052, debug mode. RUN_CONFIG names a configuration file
+# to load as well; the variables below override it.
+DEV_DIR ?= $(CURDIR)/.dev
+RUN_CONFIG ?=
 # The official packages Control embeds (internal/builtinpkg), signed with a
 # development key kept in build/: never a release credential. Releases build
 # them in CI with the official key (docs/RELEASING.md).
@@ -62,15 +67,17 @@ build-linux: build-packages
 	GOWORK=off CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "$(LDFLAGS)" -o build/anix-control-linux ./cmd/server
 
 # 运行开发服务器: the built-in packages verify against the development key.
-run: dev-config build-packages
-	ANIX_CONTROL_PLUGINS_OFFICIAL_PUBLIC_KEY="$$($(MAKE) -s dev-package-key)" GOWORK=off go run ./cmd/server -config $(RUN_CONFIG)
-
-dev-config:
-	@if [ "$(RUN_CONFIG)" = "config/config.dev.yaml" ] && [ ! -f "$(RUN_CONFIG)" ]; then \
-		cp config/config.dev.yaml.example "$(RUN_CONFIG)"; \
-		echo "Created $(RUN_CONFIG) from the isolated development template"; \
-	fi
-	@test -f "$(RUN_CONFIG)" || { echo "Run config not found: $(RUN_CONFIG)" >&2; exit 1; }
+# An empty database needs ANIX_CONTROL_ADMIN_PASSWORD for the first
+# administrator (export it before make run).
+run: build-packages
+	@mkdir -p $(DEV_DIR)
+	ANIX_CONTROL_PLUGINS_OFFICIAL_PUBLIC_KEY="$$($(MAKE) -s dev-package-key)" \
+	ANIX_CONTROL_DATA_DIR=$(DEV_DIR) \
+	ANIX_CONTROL_LISTEN=127.0.0.1:19080 \
+	ANIX_CONTROL_GRPC_ENABLED=true ANIX_CONTROL_GRPC_HOST=127.0.0.1 ANIX_CONTROL_GRPC_PORT=50052 \
+	ANIX_CONTROL_DATABASE_DRIVER=sqlite ANIX_CONTROL_DATABASE_DATABASE=$(DEV_DIR)/control.db \
+	ANIX_CONTROL_ADMIN_EMAIL=$${ANIX_CONTROL_ADMIN_EMAIL:-control-dev@anixops.local} \
+	GOWORK=off go run ./cmd/server -debug $(if $(RUN_CONFIG),-config $(RUN_CONFIG))
 
 # 清理
 clean:
@@ -214,17 +221,16 @@ docker-build:
 
 # 运行 Docker 容器 (needs a reachable PostgreSQL; override DOCKER_RUN_ENV)
 DOCKER_RUN_ENV ?= -e ANIX_CONTROL_DATABASE_HOST=host.docker.internal \
-	-e ANIX_CONTROL_DATABASE_PASSWORD=anix_control \
-	-e ANIX_CONTROL_JWT_SECRET=dev-only-jwt-secret-change-me \
-	-e ANIX_CONTROL_ENV=development
+	-e ANIX_CONTROL_DATABASE_PASSWORD=anix_control
 docker-run:
 	@echo "Running Docker container..."
 	docker run -d --name anix-control \
 		--add-host host.docker.internal:host-gateway \
 		--read-only --tmpfs /tmp:rw,exec,mode=1777 \
-		-p 127.0.0.1:8080:8080 -p 127.0.0.1:3000:3000 \
+		-v anix-control-data:/var/lib/anix-control \
+		-p 127.0.0.1:8080:8080 \
 		$(DOCKER_RUN_ENV) \
-		anix-control:dev
+		anix-control:dev -debug
 
 # 停止 Docker 容器
 docker-stop:

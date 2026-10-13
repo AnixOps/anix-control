@@ -89,19 +89,6 @@ def check_release_version(repo_root: Path, tag: str) -> str:
         "frontend lockfile root package",
     )
     require_json_version(repo_root / "docs/swagger.json", ("info", "version"), version, "Swagger output")
-    require_pattern(
-        repo_root / "config/config.yaml.example",
-        r'^\s{2}version:\s*"([^"]+)"',
-        version,
-        "default configuration",
-    )
-    for config_name in ("config/config.prod.yaml", "config/config.dev.yaml.example"):
-        require_pattern(
-            repo_root / config_name,
-            r'^\s{2}version:\s*"([^"]+)"',
-            version,
-            config_name,
-        )
     # The Helm chart's default image tag is its appVersion. The chart's own
     # `version` is a separate SemVer and is not checked.
     require_pattern(
@@ -146,9 +133,6 @@ def write_fixture(root: Path, version: str) -> None:
         "web/package.json": json.dumps({"version": version}),
         "web/package-lock.json": json.dumps({"version": version, "packages": {"": {"version": version}}}),
         "docs/swagger.json": json.dumps({"info": {"version": version}}),
-        "config/config.yaml.example": f'app:\n  version: "{version}"\n',
-        "config/config.prod.yaml": f'app:\n  version: "{version}"\n',
-        "config/config.dev.yaml.example": f'app:\n  version: "{version}"\n',
         "config/deploy/helm/anix-control/Chart.yaml": f'apiVersion: v2\nname: anix-control\nversion: 0.3.0\nappVersion: "{version}"\n',
         "docs/docs.go": f'\tVersion: "{version}",\n',
         "docs/swagger.yaml": f'  version: {version}\n',
