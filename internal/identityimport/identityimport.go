@@ -379,6 +379,55 @@ func backupCodeDigests(stored string) ([]string, error) {
 	return digests, nil
 }
 
+// ImportAccount hands identity one account the kernel just created while
+// identity is authoritative (the first administrator's claim link): the
+// account, its password hash and its UUID, in an import of its own. It
+// does not touch the authority row or the checkpoint, and does not take the
+// import lock: an authoritative identity refuses full and delta imports
+// (ErrNotImportable), and a new user id overwrites nothing.
+func (i *Importer) ImportAccount(ctx context.Context, user model.User, accountUUID string) error {
+	if i == nil || i.Connect == nil {
+		return ErrNotInitialized
+	}
+	conn, err := i.Connect()
+	if err != nil {
+		return fmt.Errorf("reach the identity module: %w", err)
+	}
+	imported, err := importedAccount(user, accountUUID, nil)
+	if err != nil {
+		return err
+	}
+	stream, err := identityv1.NewIdentityServiceClient(conn).ImportAccounts(ctx)
+	if err != nil {
+		return fmt.Errorf("open import: %w", err)
+	}
+	head := &identityv1.ImportAccountsRequest{Value: &identityv1.ImportAccountsRequest_Header{Header: &identityv1.ImportHeader{
+		ImportId: "account-" + uuid.NewString(), Delta: true, Checkpoint: fmt.Sprintf("account:%d", user.ID),
+	}}}
+	if err := stream.Send(head); err != nil {
+		return sendFailure(stream, "send import header", err)
+	}
+	if err := stream.Send(&identityv1.ImportAccountsRequest{Value: &identityv1.ImportAccountsRequest_Account{Account: imported}}); err != nil {
+		return sendFailure(stream, fmt.Sprintf("send account %d", user.ID), err)
+	}
+	response, err := stream.CloseAndRecv()
+	if err != nil {
+		return fmt.Errorf("import account: %w", err)
+	}
+	if response.GetAccounts() != 1 {
+		return fmt.Errorf("identity stored %d of 1 account", response.GetAccounts())
+	}
+	return nil
+}
+
+// ImportAccount hands identity one account through the runner's importer.
+func (r *Runner) ImportAccount(ctx context.Context, user model.User, accountUUID string) error {
+	if r == nil {
+		return ErrNotInitialized
+	}
+	return r.importer.ImportAccount(ctx, user, accountUUID)
+}
+
 // Runner runs imports in the background for the server's lifetime.
 type Runner struct {
 	importer *Importer

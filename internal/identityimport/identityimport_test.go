@@ -244,6 +244,38 @@ func TestImportsStopOnceIdentityIsAuthoritative(t *testing.T) {
 	require.ErrorIs(t, err, ErrNotInitialized)
 }
 
+// ImportAccount hands one new account to an authoritative identity (the
+// first administrator's claim link) without touching the import state.
+func TestImportAccountHandsOneAccountToAnAuthoritativeIdentity(t *testing.T) {
+	f := newFixture(t)
+	authority := model.IdentityAuthority{ID: 1, State: model.IdentityAuthorityIdentity, Checkpoint: `{"import_id":"full-1","completed_at":1}`, UpdatedAt: time.Now()}
+	require.NoError(t, f.kernel.Create(&authority).Error)
+	hash, err := bcrypt.GenerateFromPassword([]byte("secret-1"), bcrypt.MinCost)
+	require.NoError(t, err)
+	user := model.User{ID: 7, Email: "owner@example.test", Password: string(hash), IsAdmin: 1, CreatedAt: time.Now()}
+	ctx := context.Background()
+	require.NoError(t, f.importer.ImportAccount(ctx, user, AccountUUID(7)))
+
+	accounts, err := f.store.Get(ctx, []uint64{7})
+	require.NoError(t, err)
+	require.Len(t, accounts, 1)
+	require.True(t, accounts[0].IsAdmin)
+	require.Equal(t, "owner@example.test", accounts[0].Email)
+	require.Equal(t, AccountUUID(7), accounts[0].AccountUUID)
+	require.NoError(t, bcrypt.CompareHashAndPassword([]byte(accounts[0].PasswordHash), []byte("secret-1")))
+
+	var stored model.IdentityAuthority
+	require.NoError(t, f.kernel.First(&stored, 1).Error)
+	require.Equal(t, authority.State, stored.State)
+	require.Equal(t, authority.Checkpoint, stored.Checkpoint, "the import state is not touched")
+
+	f.identity.failOn = f.identity.calls + 1
+	require.Error(t, f.importer.ImportAccount(ctx, model.User{ID: 8, Email: "other@example.test", Password: string(hash), IsAdmin: 1}, AccountUUID(8)))
+	require.ErrorIs(t, (&Importer{}).ImportAccount(ctx, user, AccountUUID(7)), ErrNotInitialized)
+	var runner *Runner
+	require.ErrorIs(t, runner.ImportAccount(ctx, user, AccountUUID(7)), ErrNotInitialized)
+}
+
 func TestRunnerStartsOneImportAtATime(t *testing.T) {
 	f := newFixture(t)
 	f.seed(t)
