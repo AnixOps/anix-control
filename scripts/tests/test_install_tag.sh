@@ -59,7 +59,7 @@ parse_flags() {
   timeout 20 bash -c 'set -Eeuo pipefail; source "$1"; shift; parse_args "$@"' _ \
     "${REPO_ROOT}/scripts/install.sh" "$@"
 }
-for flag in --version --admin-email --admin-password --install-dir --health-url --grpc-name; do
+for flag in --version --install-dir --health-url --grpc-name; do
   status=0
   parse_flags install "${flag}" >/dev/null 2>"${workdir}/bare-flag.err" || status=$?
   [[ "${status}" -eq 1 ]] || fail "a bare ${flag} must exit 1, got ${status}"
@@ -70,8 +70,17 @@ parse_flags install --version >/dev/null 2>"${workdir}/bare-flag.err" || true
 grep -F -- "for example --version v4.2.0" "${workdir}/bare-flag.err" >/dev/null ||
   fail "a bare --version must name an example tag, got: $(cat "${workdir}/bare-flag.err")"
 # A flag with its value still parses.
-parse_flags install --version v4.2.0 --admin-email admin@example.com >/dev/null 2>&1 ||
+parse_flags install --version v4.2.0 --grpc-name grpc.example.com >/dev/null 2>&1 ||
   fail "flags with values must still parse"
+# The administrator flags are gone: the first administrator claims the panel
+# with the link the installer prints.
+for flag in --admin-email --admin-password; do
+  status=0
+  parse_flags install --version v4.2.0 "${flag}" value >/dev/null 2>"${workdir}/removed-flag.err" || status=$?
+  [[ "${status}" -eq 1 ]] || fail "${flag} must exit 1, got ${status}"
+  grep -F -- "${flag} was removed" "${workdir}/removed-flag.err" >/dev/null ||
+    fail "${flag} must say it was removed, got: $(cat "${workdir}/removed-flag.err")"
+done
 
 # The forwarders run in a directory that has no scripts/install.sh next to
 # them, so they take the download path. A stub curl records the URL.
@@ -106,17 +115,17 @@ for forwarder in install.sh panel_install.sh; do
   : >"${CURL_LOG}"
   out="$(env -u INSTALL_REF -u ANIX_CONTROL_VERSION -u V2BOARD_VERSION -u REPO_OWNER -u REPO_NAME \
     PATH="${workdir}/bin:${PATH}" CURL_LOG="${CURL_LOG}" \
-    bash "${script}" install --version v4.2.0 --admin-email admin@example.com)"
+    bash "${script}" install --version v4.2.0 --grpc-name grpc.example.com)"
   [[ "$(head -n 1 "${CURL_LOG}")" == "${base}/v4.2.0/scripts/install.sh" ]] ||
     fail "${forwarder}: --version v4.2.0 must fetch the installer at v4.2.0, got $(head -n 1 "${CURL_LOG}")"
-  [[ "${out}" == "stub-installer install --version v4.2.0 --admin-email admin@example.com" ]] ||
+  [[ "${out}" == "stub-installer install --version v4.2.0 --grpc-name grpc.example.com" ]] ||
     fail "${forwarder}: the installer must receive the original arguments, got: ${out}"
 
   # A command that names no tag is refused, and nothing is downloaded.
   : >"${CURL_LOG}"
   if env -u INSTALL_REF -u ANIX_CONTROL_VERSION -u V2BOARD_VERSION -u REPO_OWNER -u REPO_NAME \
     PATH="${workdir}/bin:${PATH}" CURL_LOG="${CURL_LOG}" \
-    bash "${script}" install --admin-email admin@example.com >/dev/null 2>"${workdir}/forwarder.err"; then
+    bash "${script}" install --grpc-name grpc.example.com >/dev/null 2>"${workdir}/forwarder.err"; then
     fail "${forwarder}: a command without a tag must fail"
   fi
   [[ ! -s "${CURL_LOG}" ]] || fail "${forwarder}: nothing may be downloaded without a tag"
@@ -154,7 +163,7 @@ for forwarder in install.sh panel_install.sh; do
     : >"${CURL_LOG}"
     if env -u INSTALL_REF -u ANIX_CONTROL_VERSION -u V2BOARD_VERSION -u REPO_OWNER -u REPO_NAME \
       PATH="${workdir}/bin:${PATH}" CURL_LOG="${CURL_LOG}" ${tag_env:+ANIX_CONTROL_VERSION="${tag_env}"} \
-      bash "${script}" install --admin-email admin@example.com --version >/dev/null 2>"${workdir}/forwarder.err"; then
+      bash "${script}" install --grpc-name grpc.example.com --version >/dev/null 2>"${workdir}/forwarder.err"; then
       fail "${forwarder}: a bare --version must fail (ANIX_CONTROL_VERSION='${tag_env}')"
     fi
     [[ ! -s "${CURL_LOG}" ]] || fail "${forwarder}: nothing may be downloaded for a bare --version"
@@ -174,10 +183,10 @@ for forwarder in install.sh panel_install.sh; do
   : >"${CURL_LOG}"
   out="$(cd "${decoy}" && env -u INSTALL_REF -u ANIX_CONTROL_VERSION -u V2BOARD_VERSION -u REPO_OWNER -u REPO_NAME \
     PATH="${workdir}/bin:${PATH}" CURL_LOG="${CURL_LOG}" \
-    bash -s -- install --version v4.2.0 --admin-email admin@example.com <"${script}")"
+    bash -s -- install --version v4.2.0 --grpc-name grpc.example.com <"${script}")"
   [[ "$(head -n 1 "${CURL_LOG}")" == "${base}/v4.2.0/scripts/install.sh" ]] ||
     fail "${forwarder}: piped from a directory with scripts/install.sh it must fetch the installer at the tag, got '$(head -n 1 "${CURL_LOG}")', output: ${out}"
-  [[ "${out}" == "stub-installer install --version v4.2.0 --admin-email admin@example.com" ]] ||
+  [[ "${out}" == "stub-installer install --version v4.2.0 --grpc-name grpc.example.com" ]] ||
     fail "${forwarder}: piped from a directory with scripts/install.sh it ran the wrong installer: ${out}"
 
   : >"${CURL_LOG}"

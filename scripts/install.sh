@@ -32,8 +32,6 @@ BACKUP_DIR=""
 SKIP_START=0
 COMMAND="install"
 VERSION="${ANIX_CONTROL_VERSION:-${V2BOARD_VERSION:-}}"
-ADMIN_EMAIL="${ADMIN_EMAIL:-}"
-ADMIN_PASSWORD="${ADMIN_PASSWORD:-}"
 PLUGIN_HOST_RUNTIME_DIR=""
 PLUGIN_ARTIFACT_DIR=""
 FRESH_CONFIG=0
@@ -88,8 +86,6 @@ resolves a moving "latest" release. Containers are the primary deployment
 
 Options:
   --version <tag>          Release tag to install, for example v4.2.0. Required for install and update.
-  --admin-email <email>    Bootstrap admin email on a fresh installation.
-  --admin-password <text>  Bootstrap admin password on a fresh installation.
   --install-dir <path>     Installation root. Default: /opt/anixops/control.
   --health-url <url>       Health endpoint to verify after start.
   --skip-start             Install files and systemd unit without starting the service.
@@ -99,6 +95,11 @@ Options:
   --grpc-tls-key <path>    Its private key.
   --plan <path>            Preflight JSON output path (default: migration-plan.json).
   -h, --help               Show this help.
+
+No administrator password is set or stored anywhere: while the panel has no
+administrator, the installer ends by printing a one-time link,
+https://<domain>/claim#anixclaim_..., that creates the first one (it works
+for 24 hours; `anix-control admin claim-link` prints a new one).
 
 A fresh install generates the CA key-encryption key (module_runtime.ca_kek,
 config/secrets/module_ca_kek, mode 0600) and, given a publicly trusted
@@ -280,69 +281,6 @@ validate_config_value() {
     die "Bootstrap values must be non-empty and must not contain a double quote or newline."
 }
 
-# admin_value_error <value> prints why a bootstrap administrator email or
-# password cannot be carried unchanged, and nothing when it can.
-#
-# The value goes into config.yaml as a YAML double-quoted scalar (the backslash
-# and the double quote escaped by write_fresh_config) and into the JSON of the
-# install's own login check (json_escape escapes the same two characters). Not
-# every character survives both:
-#   - the YAML loader refuses U+0001-U+001F except tab, U+007F, U+0080-U+009F
-#     except U+0085, U+FFFE and U+FFFF, and reads a carriage return, U+0085,
-#     U+2028 and U+2029 as line breaks (folded into a space, or trimmed with
-#     the blanks next to them);
-#   - a raw tab loads, but is not valid in a JSON string;
-#   - bytes that are not UTF-8 make config.yaml unreadable.
-# Accepted, such a value made the install fail late or run with another
-# password, and the next run kept that config.yaml. Everything else is carried
-# exactly: printable ASCII, a space and any other UTF-8 text.
-#
-# It runs in a subshell with LC_ALL=C, so that bash matches bytes whatever the
-# host's locale, and takes one well-formed UTF-8 sequence at a time (RFC 3629:
-# no overlong form, no surrogate, nothing above U+10FFFF), minus the characters
-# listed above.
-admin_value_error() (
-  LC_ALL=C
-  local rest="$1"
-  [[ -n "${rest}" ]] || { printf 'empty'; return 0; }
-  case "${rest}" in
-    *[[:cntrl:]]*) printf 'control'; return 0 ;;
-  esac
-  while [[ -n "${rest}" ]]; do
-    case "${rest}" in
-      # one, two, three and four bytes
-      [$'\040'-$'\176']*) rest="${rest:1}" ;;                      # U+0020-U+007E
-      $'\302'[$'\240'-$'\277']*) rest="${rest:2}" ;;               # U+00A0-U+00BF
-      [$'\303'-$'\337'][$'\200'-$'\277']*) rest="${rest:2}" ;;     # U+00C0-U+07FF
-      $'\340'[$'\240'-$'\277'][$'\200'-$'\277']*) rest="${rest:3}" ;;  # U+0800-U+0FFF
-      [$'\341'$'\343'-$'\354'][$'\200'-$'\277'][$'\200'-$'\277']*) rest="${rest:3}" ;;  # U+1000-U+1FFF, U+3000-U+CFFF
-      $'\342\200'[$'\200'-$'\247'$'\252'-$'\277']*) rest="${rest:3}" ;;  # U+2000-U+203F but U+2028, U+2029
-      $'\342'[$'\201'-$'\277'][$'\200'-$'\277']*) rest="${rest:3}" ;;  # U+2040-U+2FFF
-      $'\355'[$'\200'-$'\237'][$'\200'-$'\277']*) rest="${rest:3}" ;;  # U+D000-U+D7FF
-      $'\356'[$'\200'-$'\277'][$'\200'-$'\277']*) rest="${rest:3}" ;;  # U+E000-U+EFFF
-      $'\357'[$'\200'-$'\276'][$'\200'-$'\277']*) rest="${rest:3}" ;;  # U+F000-U+FFBF
-      $'\357\277'[$'\200'-$'\275']*) rest="${rest:3}" ;;           # U+FFC0-U+FFFD
-      $'\360'[$'\220'-$'\277'][$'\200'-$'\277'][$'\200'-$'\277']*) rest="${rest:4}" ;;  # U+10000-U+3FFFF
-      [$'\361'-$'\363'][$'\200'-$'\277'][$'\200'-$'\277'][$'\200'-$'\277']*) rest="${rest:4}" ;;  # U+40000-U+FFFFF
-      $'\364'[$'\200'-$'\217'][$'\200'-$'\277'][$'\200'-$'\277']*) rest="${rest:4}" ;;  # U+100000-U+10FFFF
-      *) printf 'text'; return 0 ;;
-    esac
-  done
-)
-
-# validate_admin_value <email|password> <value> refuses a bootstrap value that
-# config.yaml and the login check cannot carry (see admin_value_error).
-validate_admin_value() {
-  local what="$1" problem
-  problem="$(admin_value_error "$2")"
-  case "${problem}" in
-    "") ;;
-    empty) die "The bootstrap admin ${what} must not be empty." ;;
-    control) die "The bootstrap admin ${what} must not contain a control character (a line break, a tab or a carriage return, for example)." ;;
-    *) die "The bootstrap admin ${what} must be valid UTF-8 text without control characters or line and paragraph separators (U+2028, U+2029)." ;;
-  esac
-}
-
 validate_install_managed_plugin_dir() {
   local value="$1"
   [[ -n "${value}" && "${value}" == "${INSTALL_DIR}/"* && "${value}" != *$'\n'* && "${value}" != *'"'* && "${value}" != *'..'* ]] || \
@@ -351,21 +289,6 @@ validate_install_managed_plugin_dir() {
 
 write_fresh_config() {
   local template="${TMP_DIR}/config.yaml.example"
-  local escaped_email escaped_password
-
-  # Control's login check (`required,email`) refuses a host name without a dot,
-  # so the default is the server's own default administrator
-  # (internal/service/init_admin.go), not admin@localhost.
-  [[ -n "${ADMIN_EMAIL}" ]] || ADMIN_EMAIL="admin@anixops.local"
-  [[ -n "${ADMIN_PASSWORD}" ]] || ADMIN_PASSWORD="$(random_secret)"
-  validate_admin_value email "${ADMIN_EMAIL}"
-  validate_admin_value password "${ADMIN_PASSWORD}"
-  # The values are YAML double-quoted scalars: escape the backslash first, then
-  # the double quote.
-  escaped_email="${ADMIN_EMAIL//\\/\\\\}"
-  escaped_email="${escaped_email//\"/\\\"}"
-  escaped_password="${ADMIN_PASSWORD//\\/\\\\}"
-  escaped_password="${escaped_password//\"/\\\"}"
 
   info "Downloading the version-matched configuration template"
   curl -fsSL --retry 3 --connect-timeout 15 \
@@ -375,44 +298,21 @@ write_fresh_config() {
   # with its comments. This installer does not ask for the domain, so the
   # line stays a comment: Control then serves plain http on 127.0.0.1:8080
   # behind the reverse proxy (tls.mode external) until domain is set.
-  # The installer adds the first administrator, which admin.* still creates
-  # on an empty database. The file holds no other secret: the root key in the
-  # data directory (ANIX_CONTROL_DATA_DIR in the unit, write_systemd_unit)
-  # derives the JWT secret.
-  # The values reach awk through the environment, not `awk -v`: -v interprets
-  # backslash escapes in the value a second time, after the escaping above. The
-  # password ab\qcd was escaped to ab\\qcd and unescaped again to "ab\qcd",
-  # which is not valid YAML.
-  ANIX_CFG_ADMIN_EMAIL="${escaped_email}" \
-  ANIX_CFG_ADMIN_PASSWORD="${escaped_password}" \
+  # The file holds no secret and no administrator: the root key in the data
+  # directory (ANIX_CONTROL_DATA_DIR in the unit, write_systemd_unit)
+  # derives the JWT secret, and the first administrator claims the panel
+  # with the link print_claim_link shows at the end.
   awk '
-      BEGIN {
-        admin_email = ENVIRON["ANIX_CFG_ADMIN_EMAIL"]
-        admin_password = ENVIRON["ANIX_CFG_ADMIN_PASSWORD"]
-      }
       /^domain:/ {
         print "# " $0
         next
       }
       { print }
-      END {
-        print ""
-        print "# Written by the installer: the first administrator, created on an"
-        print "# empty database."
-        print "admin:"
-        print "  email: \"" admin_email "\""
-        print "  password: \"" admin_password "\""
-      }
     ' "${template}" > "${CONFIG_FILE}"
 
   chmod 0640 "${CONFIG_FILE}"
   chown root:"${APP_USER}" "${CONFIG_FILE}"
   FRESH_CONFIG=1
-  printf '%s\n' "${ADMIN_PASSWORD}" > "${INSTALL_DIR}/.bootstrap-admin-password"
-  chmod 0640 "${INSTALL_DIR}/.bootstrap-admin-password"
-  chown root:"${APP_USER}" "${INSTALL_DIR}/.bootstrap-admin-password"
-  warn "Fresh installation: bootstrap admin email is ${ADMIN_EMAIL}"
-  warn "The one-time bootstrap password is stored in ${INSTALL_DIR}/.bootstrap-admin-password; move it to a password manager, then delete the file."
 }
 
 # The official packages, identity-platform included, are built into the
@@ -1185,30 +1085,52 @@ verify_identity_gateway() {
   return 1
 }
 
-verify_identity_login() {
-  if [[ "${FRESH_CONFIG}" -ne 1 && ( -z "${ADMIN_EMAIL}" || -z "${ADMIN_PASSWORD}" ) ]]; then
-    return 0
-  fi
-  local login_url payload response
-  login_url="$(identity_login_url)"
-  payload="{\"email\":\"$(json_escape "${ADMIN_EMAIL}")\",\"password\":\"$(json_escape "${ADMIN_PASSWORD}")\"}"
-  for _ in $(seq 1 30); do
-    response="$(curl -fsS --connect-timeout 5 --max-time 15 -H 'Content-Type: application/json' --data "${payload}" "${login_url}" || true)"
-    if [[ "${response}" == *'"code":0'* ]]; then
-      info "Identity package login verification succeeded"
-      return 0
-    fi
-    sleep 2
-  done
-  warn "Identity package login verification failed"
-  return 1
-}
-
 verify_plugin_only_startup() {
   if ! uses_plugin_execution; then
     return 0
   fi
-  verify_identity_gateway && verify_identity_login
+  verify_identity_gateway
+}
+
+# run_control_command <arguments...> runs the installed Control as its own
+# user, with the unit's configuration, data directory and working directory,
+# so that a database file it may create belongs to Control.
+run_control_command() {
+  local environment=("ANIX_CONTROL_CONFIG=${CONFIG_FILE}" "ANIX_CONTROL_DATA_DIR=${DATA_DIR}" "HOME=${INSTALL_DIR}")
+  if ca_kek_file_in_use; then
+    environment+=("ANIX_CONTROL_MODULE_RUNTIME_CA_KEK_FILE=${CA_KEK_FILE}")
+  fi
+  if [[ "$(id -un)" == "${APP_USER}" ]]; then
+    (cd "${INSTALL_DIR}" && env "${environment[@]}" "${BINARY_PATH}" "$@")
+  elif command -v runuser >/dev/null 2>&1; then
+    (cd "${INSTALL_DIR}" && runuser -u "${APP_USER}" -- env "${environment[@]}" "${BINARY_PATH}" "$@")
+  else
+    (cd "${INSTALL_DIR}" && sudo -u "${APP_USER}" env "${environment[@]}" "${BINARY_PATH}" "$@")
+  fi
+}
+
+# print_claim_link prints, while the panel has no administrator, the
+# one-time link that creates the first one (anix-control admin claim-link).
+# The link goes to this terminal only: the command logs to stderr, which is
+# kept aside and shown only when the command fails. With an administrator the
+# command exits 1 and nothing is printed.
+print_claim_link() {
+  local link status=0
+  link="$(run_control_command admin claim-link 2>"${TMP_DIR}/claim-link.log")" || status=$?
+  case "${status}" in
+    0)
+      printf '\n%s\n\n' "${link}"
+      ;;
+    1)
+      info "The panel already has an administrator; sign in as before."
+      ;;
+    *)
+      warn "The claim link could not be created (status ${status}):"
+      tail -n 5 "${TMP_DIR}/claim-link.log" >&2 || true
+      warn "Create it yourself: sudo -u ${APP_USER} ANIX_CONTROL_CONFIG=${CONFIG_FILE} ANIX_CONTROL_DATA_DIR=${DATA_DIR} ${BINARY_PATH} admin claim-link"
+      ;;
+  esac
+  return 0
 }
 
 parse_args() {
@@ -1224,14 +1146,15 @@ parse_args() {
       --version)
         [[ "$#" -ge 2 ]] || die "--version requires a release tag, for example --version v4.2.0"
         ;;
-      --admin-email|--admin-password|--install-dir|--health-url|--plan|--grpc-name|--grpc-tls-cert|--grpc-tls-key)
+      --install-dir|--health-url|--plan|--grpc-name|--grpc-tls-cert|--grpc-tls-key)
         [[ "$#" -ge 2 ]] || die "$1 requires a value (see --help)"
         ;;
     esac
     case "$1" in
       --version) VERSION="${2:-}"; shift 2 ;;
-      --admin-email) ADMIN_EMAIL="${2:-}"; shift 2 ;;
-      --admin-password) ADMIN_PASSWORD="${2:-}"; shift 2 ;;
+      --admin-email|--admin-password)
+        die "$1 was removed: no administrator password is configured any more. The installer prints a one-time link that creates the first administrator (anix-control admin claim-link)."
+        ;;
       --install-dir)
         INSTALL_DIR="${2:-}"
         INSTALL_DIR_EXPLICIT=1
@@ -1336,6 +1259,7 @@ main() {
   fi
 
   info "Installed ${VERSION} successfully."
+  print_claim_link
   # Not `[[ ... ]] && info ...`: as the last statement of main its status 1 (not
   # a rollback) became the exit status of a successful install.
   if [[ "${COMMAND}" == "rollback" ]]; then
