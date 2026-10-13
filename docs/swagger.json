@@ -5387,6 +5387,117 @@
                 }
             }
         },
+        "/api/v4/admin/nodes": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "与 GET /api/v2/admin/nodes 同口径的节点列表 (分页、搜索、状态与订阅分组筛选、排序、在线状态、协议, 协议与原始配置里的密钥为占位符), 每个节点另带 approval (approved、pending 或 rejected)、node_group_id 和 node_group_name。approval 与 node_group_id 可作筛选条件。/api/v2 的节点列表形状不变。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-节点"
+                ],
+                "summary": "节点列表 (含审批与节点组)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "页码",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "每页数量",
+                        "name": "page_size",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "名称或地址包含",
+                        "name": "search",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "节点状态",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "订阅分组 ID",
+                        "name": "group_id",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "pending",
+                            "approved",
+                            "rejected"
+                        ],
+                        "type": "string",
+                        "description": "审批状态",
+                        "name": "approval",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "节点组 ID",
+                        "name": "node_group_id",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "id",
+                            "name",
+                            "host",
+                            "sort",
+                            "created_at",
+                            "last_check_at",
+                            "cpu_usage",
+                            "online_users"
+                        ],
+                        "type": "string",
+                        "description": "排序字段: id, name, host, sort, created_at, last_check_at, cpu_usage, online_users; 缺省为管理员排序",
+                        "name": "sort",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "asc",
+                            "desc"
+                        ],
+                        "type": "string",
+                        "default": "asc",
+                        "description": "排序方向, 仅与 sort 同用",
+                        "name": "order",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/v4/admin/subscription-groups/{id}/members": {
             "get": {
                 "security": [
@@ -8119,6 +8230,32 @@
                 }
             }
         },
+        "/api/v4/kernel/agents/install-readiness": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Checks, without any network call, what a node needs from this Control before an install command is worth copying: agent_install.public_url (or the address this request came in on) is https; the gRPC target resolves from the settings and the listener is on with TLS; module_runtime.ca_kek is usable (join tokens are sealed with it and node certificates signed by the CA it protects); agent_control.mtls is not off; the Agent release of the pinned version is served by this Control or has a source; the install script's release signature verifies when one is configured. ready is false when a check of level error fails; a failed warning does not block the command. Each check is {id, ok, level, message, fix}. Any administrator.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Check that an install command can work",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/v4/kernel/agents/rotate-credentials": {
             "post": {
                 "security": [
@@ -8696,6 +8833,39 @@
                 }
             }
         },
+        "/api/v4/kernel/node-groups/default": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Creates the default node group when no live node group exists, and answers the first group otherwise (created tells which): a proxy group named \"默认\" whose template is one VLESS Reality protocol on a random port from 20000 to 40000, attached to the default subscription group (created when the panel has none), so the first node needs no input. Idempotent and safe to call concurrently. 409 ca_kek_missing without module_runtime.ca_kek. Audited as a node group create when it creates.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Make sure the panel has a node group",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/v4/kernel/node-groups/{id}": {
             "get": {
                 "security": [
@@ -8824,6 +8994,41 @@
                     "Kernel"
                 ],
                 "summary": "Show a node group's install command",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "node group id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v4/kernel/node-groups/{id}/nodes": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "The group's live nodes (every node of the group but the rejected ones), newest first, for the join dialog that waits for machines: id, node (proxy-\u003cid\u003e or forward-\u003cid\u003e), kind, name, host, approval (approved or pending), online (enabled and checked in within five minutes, as the node list computes it), last_seen, agent_version and created_at. Never a credential. Any administrator.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "List a node group's nodes",
                 "parameters": [
                     {
                         "type": "integer",

@@ -65,6 +65,12 @@ func (s *NodeService) GetNodes(params NodeListParams) (*NodeListResult, error) {
 	if params.Search != "" {
 		query = query.Where("name LIKE ? OR host LIKE ?", "%"+params.Search+"%", "%"+params.Search+"%")
 	}
+	if params.Approval != "" {
+		query = query.Where("approval = ?", params.Approval)
+	}
+	if params.NodeGroupID != nil {
+		query = query.Where("node_group_id = ?", *params.NodeGroupID)
+	}
 
 	// 获取总数
 	if err := query.Count(&total).Error; err != nil {
@@ -1091,6 +1097,11 @@ type NodeListParams struct {
 	// NodeSortColumns, never request text; empty keeps the administrator's
 	// order ("sort ASC, id DESC").
 	OrderBy string
+	// Approval keeps the nodes in one approval state (model.NodeApproval*),
+	// and NodeGroupID those that joined one node group. The /api/v2 list
+	// leaves both unset; the console's /api/v4/admin/nodes list sets them.
+	Approval    string
+	NodeGroupID *uint
 }
 
 // NodeSortColumns are the columns GET /api/v2/admin/nodes sorts by (the sort

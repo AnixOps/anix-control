@@ -778,6 +778,9 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		// route for each id through the same package gateway, so each item
 		// runs wherever its route's mode puts it.
 		v4.GET("/admin/users/activity", handler.NewAdminUserActivityHandler().List)
+		// The console's node list: GET /api/v2/admin/nodes with each node's
+		// approval and node group (its /api/v2 shape is a contract).
+		v4.GET("/admin/nodes", handler.NewAdminNodesHandler().List)
 		v4.GET("/admin/subscription-groups/:id/members", handler.NewAdminGroupMembersHandler().List)
 		bulk := handler.NewAdminBulkHandler(handler.GatewayBulkRunner(v2PackageGateway.Serve))
 		v4.POST("/admin/users/bulk", bulk.Users)
@@ -806,6 +809,9 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		agents := handler.NewAgentPKIHandler()
 		v4.POST("/kernel/agents/enrollment-tokens", agents.CreateEnrollmentToken)
 		v4.POST("/kernel/agents/install-tokens", agentInstall.CreateInstallToken)
+		// What an install command needs from this Control, checked without
+		// a network call (any administrator).
+		v4.GET("/kernel/agents/install-readiness", agentInstall.Readiness)
 		v4.POST("/kernel/agents/rotate-credentials", agents.RotateCredentials)
 		v4.GET("/kernel/agents/transports", handler.NewAgentTransportsHandler(agentPolicy).List)
 		// Node groups (5.0 node onboarding): a group's join token makes any
@@ -815,10 +821,14 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		nodeGroups := handler.NewNodeGroupsHandler(agentInstall)
 		v4.GET("/kernel/node-groups", nodeGroups.List)
 		v4.POST("/kernel/node-groups", nodeGroups.Create)
+		// The first group of a panel needs no input: the join dialog asks
+		// for this one (the default group, created once).
+		v4.POST("/kernel/node-groups/default", nodeGroups.EnsureDefault)
 		v4.GET("/kernel/node-groups/:id", nodeGroups.Get)
 		v4.PUT("/kernel/node-groups/:id", nodeGroups.Update)
 		v4.DELETE("/kernel/node-groups/:id", nodeGroups.Delete)
 		v4.GET("/kernel/node-groups/:id/command", nodeGroups.Command)
+		v4.GET("/kernel/node-groups/:id/nodes", nodeGroups.Nodes)
 		v4.POST("/kernel/node-groups/:id/reset-token", nodeGroups.ResetToken)
 		// :id is the node, proxy-<id> or forward-<id> (the segment shares
 		// its wildcard name with /kernel/nodes/:id/traffic).
