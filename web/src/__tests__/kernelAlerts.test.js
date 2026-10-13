@@ -10,8 +10,9 @@ describe('kernel alerts on the dashboard', () => {
     expect(alertTone({})).toBe('warning')
   })
 
-  it('links node subjects only', () => {
+  it('links node subjects and the backups', () => {
     expect(alertRoute({ subject_kind: 'node', subject: 'proxy-12' })).toBe('/admin/nodes/12')
+    expect(alertRoute({ subject_kind: 'backups', subject: 'backups' })).toBe('/admin/system/backup')
     expect(alertRoute({ subject_kind: 'node', subject: 'forward-5' })).toBe('/admin/forward/inventory/forward-5')
     expect(alertRoute({ subject_kind: 'node', subject: 'proxy-x' })).toBeNull()
     expect(alertRoute({ subject_kind: 'ca', subject: 'service_ca:k1' })).toBeNull()
@@ -61,6 +62,19 @@ describe('kernel alerts on the dashboard', () => {
     const files = alertText({ kind: 'panel_certificate_expiring', subject: 'panel.example.com', status: 'active', detail: { name: 'panel.example.com', source: 'files', not_after: '2026-10-20T10:00:00Z' } }, { t, format })
     expect(files.title).toBe('The certificate for panel.example.com is about to expire')
     expect(files.hint).toContain('Replace the certificate files')
+  })
+
+  it('words the backup alerts with the bundle and its date', async () => {
+    await setLocale('en')
+    const t = (key, params) => i18n.global.t(key, params, { locale: 'en' })
+    const format = createFormatter('en')
+    const failed = alertText({ kind: 'backup_verify_failed', subject: 'backups', status: 'active', detail: { file: 'anix-control-20261013T034107Z-daily.tar', created_at: '2026-10-13T03:41:07Z', error: 'integrity: ...' } }, { t, format })
+    expect(failed.title).toBe('The backup anix-control-20261013T034107Z-daily.tar failed its verification')
+    expect(failed.hint).toContain('It would not restore')
+    const stale = alertText({ kind: 'backup_stale', subject: 'backups', status: 'active', detail: { stale_after_hours: 36, last_verified_created_at: '2026-10-11T03:41:07Z' } }, { t, format })
+    expect(stale.title).toBe('No verified backup in the last 36 hours')
+    expect(stale.hint).toContain('The newest verified backup was taken')
+    expect(alertText({ kind: 'backup_stale', status: 'active', detail: {} }, { t, format }).hint).toContain('no verified backup yet')
   })
 
   it('falls back to the server message for an unknown kind', () => {

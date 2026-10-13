@@ -67,6 +67,7 @@ func (s *Scanner) Scan(ctx context.Context) (ScanResult, error) {
 		{[]string{KindIdentityImportStalled, KindIdentityCutoverPending}, s.identityAuthority},
 		{[]string{KindBuiltinPackageInvalid, KindBuiltinPackageFailed}, s.builtinPackages},
 		{[]string{KindPanelCertificateExpiring, KindPanelCertificateRenewalFailing}, s.panelCertificates},
+		{[]string{KindBackupVerifyFailed, KindBackupStale}, s.backups},
 	} {
 		findings, err := check.run(ctx, now)
 		if ctx.Err() != nil {

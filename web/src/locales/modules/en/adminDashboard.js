@@ -120,6 +120,15 @@ export default {
           failed: 'The panel has no usable certificate for {name}',
           renewalFailing: 'The certificate for {name} could not be renewed',
           hint: 'The panel serves a temporary certificate meanwhile; see anix-control tls status on the server.'
+        },
+        backupVerifyFailed: {
+          title: 'The backup {name} failed its verification',
+          hint: 'Taken {date}. It would not restore: run anix-control backup create on the server and read the Control log.'
+        },
+        backupStale: {
+          title: 'No verified backup in the last {hours} hours',
+          hint: 'The newest verified backup was taken {date}. Check the backup worker in the Control log, or back up now.',
+          never: 'The panel has no verified backup yet. Check the backup worker in the Control log, or back up now.'
         }
       },
       nodesFailed: 'Couldn’t load node status',

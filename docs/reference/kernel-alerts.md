@@ -3,12 +3,14 @@
 Control watches the things that fail slowly and silently: a certificate whose
 holder stopped renewing it, a CA that is about to end, the panel's own
 certificate when Control cannot obtain or renew it, a rollout that was
-started and never finished, and a built-in package that is not running.
+started and never finished, a built-in package that is not running, and
+backups that would not restore or stopped.
 The **alert monitor** (`internal/kernelalerts`)
 scans them every 15 minutes, keeps one row per alert in `v4_kernel_alert`,
 sends the administrators one digest of what needs them, and lists the rows at
 `GET /api/v4/kernel/alerts`. It only reads the certificate stores and the
-phase tables: it never renews, revokes or advances anything.
+phase tables and the backup records: it never renews, revokes, advances or
+backs up anything.
 
 ## Alert Kinds
 
@@ -26,6 +28,8 @@ phase tables: it never renews, revokes or advances anything.
 | `builtin_package_failed` (critical) | the package id | a built-in package verified, but its installation is `failed` (its host does not start, a migration failed, the binary is older than the installed version) or is not enabled at the built-in version | read the reason in the alert and the Control log (`built-in package ... failed`), fix it, restart Control: the start installs and starts it again |
 | `panel_certificate_expiring` | the certificate's name (`panel.example.com`) | a certificate Control serves itself (the panel's, the gRPC listener's) is inside its [window](#thresholds): an ACME certificate that missed its renewal (renewed a third of its lifetime before the end), or certificate files due for replacement | for ACME, the cause in `anix-control tls status`, then `anix-control tls retry`; for files, replacing them (Control reloads them) |
 | `panel_certificate_renewal_failing` | the certificate's name | Control cannot obtain, renew or load a certificate it serves. `critical` while it serves the self-signed fallback (no node can connect, browsers warn), `warning` while the old certificate still lasts. The message carries the last error and its fix | the fix in the message (a DNS record, a closed port 80 or 443, a CDN proxy on the gRPC name, unreadable files), then `anix-control tls retry` or the console's banner; it resolves once a valid certificate is served. A first request still under way is not an alert |
+| `backup_verify_failed` (critical) | `backups` | the newest backup bundle that was verified failed its verification ([`backups.md`](backups.md#verification)): the archive, a checksum, `PRAGMA integrity_check`, the migration records or the root key; the alert names the bundle and the error | `anix-control backup list` and the Control log for the cause, then `anix-control backup create` (it writes and verifies a new bundle); it resolves once a newer bundle passes. SQLite only |
+| `backup_stale` | `backups` | no bundle that passed its verification is younger than 36 hours (a database younger than that, a new panel, does not alert). `critical` after 72 hours | the backup worker's lines in the Control log (`Backup: ...`: free space, permissions of `data_dir/backups`), then `anix-control backup create` or 立即备份 on the backup page. SQLite only: on PostgreSQL neither backup alert is raised |
 
 An alert resolves by itself on the next scan after its cause is gone (a new
 certificate exists, the CA was rotated, the phase moved on, the node was
