@@ -108,7 +108,7 @@ func forEachAgents(t *testing.T, body func(t *testing.T, f *agentsFixture)) {
 		model.KernelNodeOperationModels()...)
 	packagecompat.ForEachKernelDatabase(t, models, func(t *testing.T, db *gorm.DB) {
 		cache.InitMemory()
-		require.NoError(t, service.EnsureKernelSchema(db))
+		require.NoError(t, service.MigrateKernelModelsForTest(db))
 		f := &agentsFixture{t: t, db: db, agents: handler.NewAgentHandler()}
 		// The Agent Control managers are the process's: node ids of their
 		// own keep this fixture's revisions and operations apart.

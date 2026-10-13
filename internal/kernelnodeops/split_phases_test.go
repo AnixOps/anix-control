@@ -33,7 +33,7 @@ func TestSplitPhasesFrom(t *testing.T) {
 		for table, phase := range answer() {
 			require.Equal(t, kernelnodeopsv1.SecretSplitPhase_SECRET_SPLIT_PHASE_LEGACY, phase, table)
 		}
-		require.NoError(t, nodesecrets.EnsureSchema(db))
+		require.NoError(t, nodesecrets.MigrateForTest(db))
 		phases := answer()
 		require.Equal(t, kernelnodeopsv1.SecretSplitPhase_SECRET_SPLIT_PHASE_DUAL_WRITE, phases["v2_node"])
 		require.Equal(t, kernelnodeopsv1.SecretSplitPhase_SECRET_SPLIT_PHASE_LEGACY, phases["v2_forward_runtime_job"], "not a split table")

@@ -192,7 +192,7 @@ func TestPhaseRollbackAndRefusedPhases(t *testing.T) {
 func TestSetPhaseNeedsTheAuditLog(t *testing.T) {
 	db := openSQLite(t)
 	require.NoError(t, db.AutoMigrate(legacyModels...))
-	require.NoError(t, EnsureSchema(db))
+	require.NoError(t, MigrateForTest(db))
 	_, err := SetPhase(context.Background(), db, PhaseOptions{Phase: PhaseDualWrite})
 	require.ErrorContains(t, err, "v2_operation_log")
 }
@@ -204,7 +204,7 @@ func TestReadPhaseDefaultsToTheLegacyColumns(t *testing.T) {
 	require.NoError(t, db.AutoMigrate(legacyModels...))
 	require.Equal(t, PhaseDualWrite, ReadPhase(db, TableNode))
 	// An unknown phase reads as dual_write.
-	require.NoError(t, EnsureSchema(db))
+	require.NoError(t, MigrateForTest(db))
 	require.NoError(t, db.Model(&model.NodeSecretSplit{}).Where("table_name = ?", TableNode).Update("phase", "sideways").Error)
 	invalidatePhases(db)
 	require.Equal(t, PhaseDualWrite, ReadPhase(db, TableNode))

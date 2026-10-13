@@ -24,7 +24,7 @@ func TestSetup_AdminV4UserActivity(t *testing.T) {
 	r, cfg := setupTestRouter(t)
 	defer teardownTestRouter(t)
 	db := database.GetDB()
-	require.NoError(t, service.EnsureKernelSchema(db))
+	require.NoError(t, service.MigrateKernelModelsForTest(db))
 	for _, id := range []uint{1, 2, 3} {
 		require.NoError(t, db.Create(&model.User{ID: id, Email: fmt.Sprintf("activity%d@example.test", id), Token: fmt.Sprintf("t%d", id), UUID: fmt.Sprintf("u%d", id)}).Error)
 	}

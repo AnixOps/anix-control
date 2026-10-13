@@ -21,7 +21,7 @@ func credentialOpsDB(t *testing.T) *gorm.DB {
 	sqlDB.SetMaxOpenConns(1)
 	require.NoError(t, db.AutoMigrate(&model.Node{}, &model.NodeProtocol{}, &model.SubscriptionGroup{}, &model.WireGuardPeer{}, &model.ForwardNode{},
 		&model.AgentCertificate{}, &model.AgentEnrollment{}))
-	require.NoError(t, nodesecrets.EnsureSchema(db))
+	require.NoError(t, nodesecrets.MigrateForTest(db))
 	return db
 }
 

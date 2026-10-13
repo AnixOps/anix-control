@@ -21,7 +21,7 @@ func TestNodeSecretsCommand(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, db.AutoMigrate(&model.Node{}, &model.NodeProtocol{}, &model.WireGuardPeer{}, &model.AuthorizedKey{},
 		&model.ForwardNode{}, &model.ForwardCleanAgent{}, &model.OperationLog{}))
-	require.NoError(t, nodesecrets.EnsureSchema(db))
+	require.NoError(t, nodesecrets.MigrateForTest(db))
 	require.NoError(t, db.Create(&model.Node{Name: "n", Host: "203.0.113.40", APIKey: "fake-cli-key", Secret: "fake-cli-secret"}).Error)
 	require.NoError(t, db.Create(&[]model.ForwardNode{
 		{ID: 3, Name: "no-port", Host: "203.0.113.41", Port: 443, APIToken: "fake-cli-relay-token"},
@@ -124,7 +124,7 @@ func TestNodeSecretsFinalizeAndUnsplitCommands(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, db.AutoMigrate(&model.Node{}, &model.NodeProtocol{}, &model.WireGuardPeer{}, &model.AuthorizedKey{},
 		&model.ForwardNode{}, &model.ForwardCleanAgent{}, &model.OperationLog{}))
-	require.NoError(t, nodesecrets.EnsureSchema(db))
+	require.NoError(t, nodesecrets.MigrateForTest(db))
 	node := model.Node{Name: "n", Host: "203.0.113.40", APIKey: "fake-cli-key", Secret: "fake-cli-secret"}
 	require.NoError(t, db.Create(&node).Error)
 	ctx := context.Background()

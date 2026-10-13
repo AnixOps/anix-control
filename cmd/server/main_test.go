@@ -119,7 +119,7 @@ func TestEnsureConfiguredPluginTrustRootActivatesOnlyConfiguredRoot(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := service.EnsureKernelSchema(db); err != nil {
+	if err := service.MigrateKernelModelsForTest(db); err != nil {
 		t.Fatal(err)
 	}
 	firstPublicKey, _, err := ed25519.GenerateKey(rand.Reader)

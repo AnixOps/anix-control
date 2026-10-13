@@ -66,7 +66,7 @@ func TestStorageHostMigratesThroughTheLedgerOnPostgres(t *testing.T) {
 
 func runStorageHostMigration(t *testing.T, db *gorm.DB, driver, storageSource string) {
 	t.Helper()
-	require.NoError(t, service.EnsureKernelSchema(db))
+	require.NoError(t, service.MigrateKernelModelsForTest(db))
 	publicKey := seedStorageFixtureRelease(t, db)
 	operations := service.PackageHostOperations{
 		DB: db, FallbackPublicKey: publicKey,

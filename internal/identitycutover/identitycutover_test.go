@@ -90,7 +90,7 @@ type fixture struct {
 func newFixture(t *testing.T) *fixture {
 	t.Helper()
 	kernel := openSQLite(t)
-	require.NoError(t, service.EnsureKernelSchema(kernel))
+	require.NoError(t, service.MigrateKernelModelsForTest(kernel))
 	require.NoError(t, kernel.AutoMigrate(&model.User{}, &model.UserMFA{}))
 	publicKey := seedIdentityPlatformRelease(t, kernel)
 

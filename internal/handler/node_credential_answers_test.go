@@ -101,7 +101,7 @@ var pinnedCredentialAnswers = map[string]string{
 func (s *NodeCredentialAnswersTestSuite) SetupTest() {
 	s.HandlerTestSuite.SetupTest()
 	s.Require().NoError(s.db.AutoMigrate(&model.ForwardCleanAgent{}, &model.WireGuardPeer{}))
-	s.Require().NoError(nodesecrets.EnsureSchema(s.db))
+	s.Require().NoError(nodesecrets.MigrateForTest(s.db))
 }
 
 func (s *NodeCredentialAnswersTestSuite) serve(method, pattern, path, body string, handler gin.HandlerFunc) (int, string) {

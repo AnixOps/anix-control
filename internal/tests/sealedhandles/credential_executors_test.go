@@ -27,7 +27,7 @@ func realCredentials(t *testing.T) *harness {
 		require.NoError(t, (&kernelnodeops.Credentials{}).Register(registry))
 	})
 	require.NoError(t, h.db.AutoMigrate(&model.NodeCredential{}, &model.ProtocolSecret{}, &model.NodeSecretSplit{}, &model.AgentEnrollment{}, &model.AgentCertificate{}))
-	require.NoError(t, nodesecrets.EnsureSchema(h.db))
+	require.NoError(t, nodesecrets.MigrateForTest(h.db))
 	return h
 }
 

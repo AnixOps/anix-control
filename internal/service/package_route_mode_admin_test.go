@@ -96,7 +96,7 @@ func seedRouteModePackageVersion(t *testing.T, db *gorm.DB, packageID, version s
 
 func prepareRouteModeDB(t *testing.T, db *gorm.DB) {
 	t.Helper()
-	require.NoError(t, EnsureKernelSchema(db))
+	require.NoError(t, MigrateKernelModelsForTest(db))
 	require.NoError(t, db.AutoMigrate(&model.User{}, &model.OperationLog{}))
 }
 

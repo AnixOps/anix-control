@@ -26,7 +26,7 @@ func newNodePluginObservedStateFixture(t *testing.T, capabilities []string) node
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
-	require.NoError(t, EnsureKernelSchema(db))
+	require.NoError(t, MigrateKernelModelsForTest(db))
 	require.NoError(t, db.AutoMigrate(&model.Node{}))
 	node := model.Node{Name: "observed-state-node", Host: "127.0.0.1", APIKey: "observed-state-key"}
 	require.NoError(t, db.Create(&node).Error)

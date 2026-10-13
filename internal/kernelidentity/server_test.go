@@ -48,7 +48,7 @@ func newFixture(t *testing.T) *fixture {
 	require.NoError(t, database.Init(&config.DatabaseConfig{Driver: "sqlite", Database: ":memory:"}))
 	t.Cleanup(func() { require.NoError(t, database.Close()) })
 	db := database.Get()
-	require.NoError(t, service.EnsureKernelSchema(db))
+	require.NoError(t, service.MigrateKernelModelsForTest(db))
 	require.NoError(t, db.AutoMigrate(&model.User{}, &model.UserMFA{}, &model.Plan{}, &model.WireGuardPeer{}, &model.SystemConfig{}))
 	cfg := &config.Config{JWT: config.JWTConfig{Secret: testSecret, Expire: 3600}}
 	config.Set(cfg)

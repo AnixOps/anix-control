@@ -26,7 +26,7 @@ func TestRoutesCommandSetsAndRollsBackRouteModes(t *testing.T) {
 	require.NoError(t, err)
 	sqlDB.SetMaxOpenConns(1)
 	t.Cleanup(func() { _ = sqlDB.Close() })
-	require.NoError(t, service.EnsureKernelSchema(db))
+	require.NoError(t, service.MigrateKernelModelsForTest(db))
 	require.NoError(t, db.AutoMigrate(&model.User{}, &model.OperationLog{}))
 	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)

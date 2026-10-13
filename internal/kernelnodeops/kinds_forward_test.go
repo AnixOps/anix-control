@@ -124,8 +124,8 @@ func setConfig(t *testing.T, configs *service.SystemConfigService, values map[st
 func newForwardHarness(t *testing.T, db *gorm.DB, options ...func(*Engine)) *forwardHarness {
 	t.Helper()
 	require.NoError(t, db.AutoMigrate(&model.SystemConfig{}, &model.ForwardRuntimeJob{}, &model.ForwardPortBinding{}, &model.ForwardUserTunnel{}, &model.SpeedLimit{}, &model.OperationLog{}))
-	require.NoError(t, service.EnsureForwardRuntimeJobSchema(db))
-	require.NoError(t, nodesecrets.EnsureSchema(db))
+	require.NoError(t, service.MigrateForwardRuntimeJobsForTest(db))
+	require.NoError(t, nodesecrets.MigrateForTest(db))
 	for _, id := range []uint{10, 11, 12} {
 		require.NoError(t, db.Model(&model.ForwardNode{}).Where("id = ?", id).Updates(map[string]any{
 			"api_port": 18080, "api_token": fmt.Sprintf("relay-token-%d", id), "type": model.ForwardNodeTypeRelay, "enabled": true,

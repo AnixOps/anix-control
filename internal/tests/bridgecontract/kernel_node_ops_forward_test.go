@@ -24,7 +24,7 @@ import (
 func seedForward(t *testing.T, db *gorm.DB, nodex string) {
 	t.Helper()
 	require.NoError(t, db.AutoMigrate(&model.ForwardNode{}, &model.ForwardTunnel{}, &model.Forward{}, &model.ForwardRuntimeJob{}, &model.SystemConfig{}, &model.ForwardUserTunnel{}, &model.SpeedLimit{}))
-	require.NoError(t, service.EnsureForwardRuntimeJobSchema(db))
+	require.NoError(t, service.MigrateForwardRuntimeJobsForTest(db))
 	require.NoError(t, db.Create(&model.ForwardNode{ID: 10, Name: "relay", Type: model.ForwardNodeTypeRelay, Host: "198.51.100.10", Port: 443, APIPort: 18080, APIToken: "relay-token", Enabled: true}).Error)
 	require.NoError(t, db.Create(&model.ForwardTunnel{ID: 30, Name: "tunnel", InNodeID: 10, Type: 1}).Error)
 	require.NoError(t, db.Create(&model.Forward{ID: 40, UserID: 1, Name: "web", TunnelID: 30, InPort: 1000, RemoteAddr: "203.0.113.1:80"}).Error)

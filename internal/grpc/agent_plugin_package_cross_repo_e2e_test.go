@@ -109,7 +109,7 @@ func TestAgentPluginPackageCrossRepositoryE2E(t *testing.T) {
 	}))
 	require.NoError(t, database.AutoMigrate(&model.Node{}))
 	db := database.GetDB()
-	require.NoError(t, service.EnsureKernelSchema(db))
+	require.NoError(t, service.MigrateKernelModelsForTest(db))
 	t.Cleanup(func() { require.NoError(t, database.Close()) })
 
 	release, err := service.RegisterPluginRelease(db, string(canonicalManifest), signature, publicKey)

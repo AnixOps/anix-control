@@ -83,7 +83,7 @@ func (a *revisionTestAgent) next(operationID string) *agentv1pb.DesiredOperation
 func newRevisionTestEnvironment(t *testing.T) *agentControlTestEnvironment {
 	t.Helper()
 	environment := newAgentControlTestEnvironment(t)
-	require.NoError(t, service.EnsureKernelSchema(database.GetDB()))
+	require.NoError(t, service.MigrateKernelModelsForTest(database.GetDB()))
 	environment.manager.UseRevisionStore(NewDatabaseRevisionStore(database.GetDB))
 	return environment
 }

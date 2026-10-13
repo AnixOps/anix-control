@@ -26,7 +26,7 @@ func TestSetup_AdminAPITokens(t *testing.T) {
 	r, cfg := setupTestRouter(t)
 	defer teardownTestRouter(t)
 	db := database.GetDB()
-	require.NoError(t, service.EnsureKernelSchema(db))
+	require.NoError(t, service.MigrateKernelModelsForTest(db))
 	require.NoError(t, db.AutoMigrate(&model.OperationLog{}, &model.UserMFA{}))
 	const password = "router test password"
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.MinCost)

@@ -114,14 +114,11 @@ func IsTombstone(value string) bool {
 	return strings.HasPrefix(value, tombstonePrefix)
 }
 
-// EnsureSchema creates the split tables and gives every split table its
-// state row, in phase dual_write: the release that ships the writer starts
-// P1. It never changes the phase of an existing row, and never alters a
-// legacy table.
-func EnsureSchema(db *gorm.DB) error {
-	if err := db.AutoMigrate(&model.NodeCredential{}, &model.ProtocolSecret{}, &model.NodeSecretSplit{}); err != nil {
-		return err
-	}
+// EnsureStateRows gives every split table its state row, in phase
+// dual_write: the release that ships the writer starts P1. It never changes
+// the phase of an existing row. Control runs it at every start, after the
+// schema migrations created the split tables.
+func EnsureStateRows(db *gorm.DB) error {
 	now := time.Now().UTC()
 	for _, table := range Tables() {
 		row := model.NodeSecretSplit{Table: table, Phase: PhaseDualWrite, UpdatedAt: now}
@@ -130,6 +127,16 @@ func EnsureSchema(db *gorm.DB) error {
 		}
 	}
 	return nil
+}
+
+// MigrateForTest creates the split tables with GORM's AutoMigrate and their
+// state rows, on a test's or a tool's own database; Control's are created
+// by internal/database/migrations.
+func MigrateForTest(db *gorm.DB) error {
+	if err := db.AutoMigrate(&model.NodeCredential{}, &model.ProtocolSecret{}, &model.NodeSecretSplit{}); err != nil {
+		return err
+	}
+	return EnsureStateRows(db)
 }
 
 // installed reports whether the split tables exist. Control creates them at

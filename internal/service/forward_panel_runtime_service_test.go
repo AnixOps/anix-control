@@ -551,7 +551,7 @@ func (s *PanelForwardRuntimeServiceTestSuite) TestApply_IptablesAnsibleQueuesLoc
 
 func (s *PanelForwardRuntimeServiceTestSuite) TestApply_LocalAnsibleRejectsDuplicateActiveJob() {
 	db := newMinimalForwardRuntimeTestDB(s.T())
-	assert.NoError(s.T(), EnsureForwardRuntimeJobSchema(db))
+	assert.NoError(s.T(), MigrateForwardRuntimeJobsForTest(db))
 	svc := NewPanelForwardRuntimeService(db)
 	setForwardRuntimeBackendForTest(s.T(), db, model.ForwardRuntimeBackendNftablesAnsible)
 

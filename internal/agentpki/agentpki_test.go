@@ -474,7 +474,7 @@ func TestEnrollReadsNodeCredentialsByPhase(t *testing.T) {
 		ctx := t.Context()
 		// The fixture has the node tables only.
 		tables := []string{nodesecrets.TableNode, nodesecrets.TableForwardNode}
-		require.NoError(t, nodesecrets.EnsureSchema(f.db))
+		require.NoError(t, nodesecrets.MigrateForTest(f.db))
 		_, err := nodesecrets.Backfill(ctx, f.db, nodesecrets.BackfillOptions{Tables: tables})
 		require.NoError(t, err)
 		_, err = nodesecrets.Verify(ctx, f.db, nodesecrets.VerifyOptions{Tables: tables})

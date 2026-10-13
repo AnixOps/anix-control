@@ -146,7 +146,7 @@ func initTestDB() *gorm.DB {
 	); err != nil {
 		panic("failed to migrate handler test database: " + err.Error())
 	}
-	if err := service.EnsureKernelSchema(testDB); err != nil {
+	if err := service.MigrateKernelModelsForTest(testDB); err != nil {
 		panic("failed to migrate kernel handler test database: " + err.Error())
 	}
 

@@ -130,7 +130,7 @@ type CheckOptions struct {
 // Check runs every path on the forward nodes, records each node's result
 // and answers the nodes' standing.
 func Check(ctx context.Context, db *gorm.DB, options CheckOptions) ([]NodeStatus, error) {
-	if err := EnsureSchema(db); err != nil {
+	if err := ensureTables(db); err != nil {
 		return nil, err
 	}
 	now := options.Now
@@ -335,7 +335,7 @@ func Abandon(ctx context.Context, db *gorm.DB, given, reason, actor string, now 
 	if reason == "" {
 		return NodeStatus{}, errors.New("a reason is required (--reason)")
 	}
-	if err := EnsureSchema(db); err != nil {
+	if err := ensureTables(db); err != nil {
 		return NodeStatus{}, err
 	}
 	info, err := ResolveNode(ctx, db, given)

@@ -35,7 +35,7 @@ func NodeSplitModels() []any {
 func FinalizeNodeSplit(t testing.TB, db *gorm.DB, tables ...string) {
 	t.Helper()
 	ctx := context.Background()
-	require.NoError(t, nodesecrets.EnsureSchema(db))
+	require.NoError(t, nodesecrets.MigrateForTest(db))
 	nodesecrets.ForgetPhases(db)
 	_, err := nodesecrets.Backfill(ctx, db, nodesecrets.BackfillOptions{Tables: tables, Restart: true})
 	require.NoError(t, err)

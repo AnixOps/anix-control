@@ -229,8 +229,9 @@ func (NodePluginLifecycle) TableName() string { return "v3_kernel_node_plugin_li
 
 // TopologyLiveNameIndex is the unique index on the names of live topologies.
 // It is partial (WHERE deleted = 0), so a deleted topology's name can be
-// reused; service.EnsureKernelSchema replaces the plain unique index older
-// schemas carry (LegacyTopologyNameIndex) with it.
+// reused. Adopting a database an earlier Control created
+// (internal/database/migrations) drops the plain unique index older schemas
+// carry (LegacyTopologyNameIndex) and creates this one.
 const (
 	TopologyLiveNameIndex   = "ux_topology_live_name"
 	LegacyTopologyNameIndex = "idx_v3_kernel_topology_name"

@@ -34,7 +34,7 @@ func newKernelHandlerTestDB(t *testing.T, extra ...any) *gorm.DB {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
-	require.NoError(t, service.EnsureKernelSchema(db))
+	require.NoError(t, service.MigrateKernelModelsForTest(db))
 	if len(extra) > 0 {
 		require.NoError(t, db.AutoMigrate(extra...))
 	}

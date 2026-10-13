@@ -29,7 +29,7 @@ func TestKernelTopologyDeleteRouteIsAdminOnlyAndAudited(t *testing.T) {
 	sqlDB, err := db.DB()
 	require.NoError(t, err)
 	sqlDB.SetMaxOpenConns(1)
-	require.NoError(t, service.EnsureKernelSchema(db))
+	require.NoError(t, service.MigrateKernelModelsForTest(db))
 	require.NoError(t, db.AutoMigrate(&model.AuditLog{}))
 	admin, err := utils.GenerateToken(1, "admin@example.com", true, cfg.JWT.Secret, cfg.JWT.Expire)
 	require.NoError(t, err)

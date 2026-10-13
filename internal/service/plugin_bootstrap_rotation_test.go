@@ -53,7 +53,7 @@ func startControlWithRoot(db *gorm.DB, key rotationKey, bootstrapDir string) err
 // bootstrap runs.
 func prepareRotationDB(t *testing.T, db *gorm.DB, withOperationLog bool) {
 	t.Helper()
-	require.NoError(t, EnsureKernelSchema(db))
+	require.NoError(t, MigrateKernelModelsForTest(db))
 	if withOperationLog {
 		require.NoError(t, db.AutoMigrate(&model.OperationLog{}))
 	}

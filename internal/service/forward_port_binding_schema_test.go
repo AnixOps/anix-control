@@ -10,16 +10,16 @@ import (
 	"gorm.io/gorm"
 )
 
-func TestEnsureForwardPortBindingSchema(t *testing.T) {
-	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "binding.db")), &gorm.Config{})
-	assert.NoError(t, err)
-
-	assert.NoError(t, EnsureForwardPortBindingSchema(db))
-	assert.True(t, db.Migrator().HasTable(&model.ForwardPortBinding{}))
-	assert.True(t, db.Migrator().HasIndex(&model.ForwardPortBinding{}, "idx_forward_port_binding_socket"))
+// migrateAndBackfillPortBindings creates the binding table the way the
+// schema baseline does and runs the start's backfill.
+func migrateAndBackfillPortBindings(db *gorm.DB) error {
+	if err := db.AutoMigrate(&model.ForwardPortBinding{}); err != nil {
+		return err
+	}
+	return BackfillForwardPortBindings(db)
 }
 
-func TestEnsureForwardPortBindingSchema_BackfillsExistingForwards(t *testing.T) {
+func TestBackfillForwardPortBindings_BackfillsExistingForwards(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "binding.db")), &gorm.Config{})
 	assert.NoError(t, err)
 	assert.NoError(t, db.AutoMigrate(&model.ForwardTunnel{}, &model.Forward{}))
@@ -44,7 +44,7 @@ func TestEnsureForwardPortBindingSchema_BackfillsExistingForwards(t *testing.T) 
 	}
 	assert.NoError(t, db.Create(forward).Error)
 
-	assert.NoError(t, EnsureForwardPortBindingSchema(db))
+	assert.NoError(t, migrateAndBackfillPortBindings(db))
 	assert.NoError(t, db.Create(&model.ForwardPortBinding{
 		ForwardID:  9999,
 		NodeID:     99,
@@ -52,7 +52,7 @@ func TestEnsureForwardPortBindingSchema_BackfillsExistingForwards(t *testing.T) 
 		ListenAddr: "127.0.0.1",
 		InPort:     12000,
 	}).Error)
-	assert.NoError(t, EnsureForwardPortBindingSchema(db))
+	assert.NoError(t, migrateAndBackfillPortBindings(db))
 
 	var bindings []model.ForwardPortBinding
 	assert.NoError(t, db.Order("transport ASC").Find(&bindings).Error)
@@ -66,7 +66,7 @@ func TestEnsureForwardPortBindingSchema_BackfillsExistingForwards(t *testing.T) 
 	}
 }
 
-func TestEnsureForwardPortBindingSchema_BackfillsWithStoredRuntimeBackend(t *testing.T) {
+func TestBackfillForwardPortBindings_BackfillsWithStoredRuntimeBackend(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "binding.db")), &gorm.Config{})
 	assert.NoError(t, err)
 	assert.NoError(t, db.AutoMigrate(&model.ForwardTunnel{}, &model.Forward{}))
@@ -93,7 +93,7 @@ func TestEnsureForwardPortBindingSchema_BackfillsWithStoredRuntimeBackend(t *tes
 	}
 	assert.NoError(t, db.Create(forward).Error)
 
-	assert.NoError(t, EnsureForwardPortBindingSchema(db))
+	assert.NoError(t, migrateAndBackfillPortBindings(db))
 
 	var binding model.ForwardPortBinding
 	assert.NoError(t, db.Where("forward_id = ? AND transport = ?", forward.ID, "tcp").First(&binding).Error)
@@ -101,7 +101,7 @@ func TestEnsureForwardPortBindingSchema_BackfillsWithStoredRuntimeBackend(t *tes
 	assert.Equal(t, "127.0.0.1", binding.ListenAddr)
 }
 
-func TestEnsureForwardPortBindingSchema_RejectsExistingConflicts(t *testing.T) {
+func TestBackfillForwardPortBindings_RejectsExistingConflicts(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "binding.db")), &gorm.Config{})
 	assert.NoError(t, err)
 	assert.NoError(t, db.AutoMigrate(&model.ForwardTunnel{}, &model.Forward{}))
@@ -143,7 +143,7 @@ func TestEnsureForwardPortBindingSchema_RejectsExistingConflicts(t *testing.T) {
 		Status:     model.ForwardStatusPaused,
 	}).Error)
 
-	err = EnsureForwardPortBindingSchema(db)
+	err = migrateAndBackfillPortBindings(db)
 	assert.ErrorContains(t, err, "port binding conflict")
 
 	var count int64

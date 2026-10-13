@@ -33,13 +33,23 @@ func newKernelTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
-	require.NoError(t, EnsureKernelSchema(db))
+	require.NoError(t, MigrateKernelModelsForTest(db))
 	return db
 }
 
-func TestEnsureKernelSchemaSeedsOfficialServiceScopes(t *testing.T) {
+// SeedKernelDefaults runs at every start: it is idempotent, and a removed
+// default comes back.
+func TestSeedKernelDefaultsSeedsOfficialServiceScopes(t *testing.T) {
 	db := newKernelTestDB(t)
-	require.NoError(t, EnsureKernelSchema(db))
+	require.NoError(t, SeedKernelDefaults(db))
+	require.NoError(t, db.Delete(&model.ServiceScope{}, "id = ?", "proxy").Error)
+	require.NoError(t, SeedKernelDefaults(db))
+
+	var plugins, locks int64
+	require.NoError(t, db.Model(&model.Plugin{}).Count(&plugins).Error)
+	require.NoError(t, db.Model(&model.PluginTargetLock{}).Count(&locks).Error)
+	require.EqualValues(t, len(officialPluginCatalog), plugins)
+	require.EqualValues(t, 2, locks)
 
 	var scopes []model.ServiceScope
 	require.NoError(t, db.Order("id").Find(&scopes).Error)
@@ -1203,7 +1213,7 @@ func TestStorePluginArtifactRetriesTransientSQLiteWriterContention(t *testing.T)
 	databasePath := filepath.Join(t.TempDir(), "plugin-artifact-lock.db")
 	db, err := gorm.Open(sqlite.Open(databasePath+"?_pragma=busy_timeout(1)"), &gorm.Config{})
 	require.NoError(t, err)
-	require.NoError(t, EnsureKernelSchema(db))
+	require.NoError(t, MigrateKernelModelsForTest(db))
 	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)
 	artifact := kernelTestArtifact("sqlite-retry")
@@ -1326,7 +1336,7 @@ func TestGetPluginConfigurationReturnsQuietDefaultWhenDocumentIsMissing(t *testi
 	testLogger := logger.New(log.New(&databaseLogs, "", 0), logger.Config{LogLevel: logger.Warn})
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: testLogger})
 	require.NoError(t, err)
-	require.NoError(t, EnsureKernelSchema(db))
+	require.NoError(t, MigrateKernelModelsForTest(db))
 
 	installation := model.PluginInstallation{
 		PluginID: "machine-telemetry", Target: "agent", DesiredVersion: "1.1.0", State: "pending",

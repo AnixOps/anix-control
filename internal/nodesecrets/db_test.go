@@ -46,7 +46,7 @@ func prepareDatabase(t *testing.T, db *gorm.DB) {
 	require.NoError(t, db.AutoMigrate(legacyModels...))
 	// Phase changes are audited in the operation log.
 	require.NoError(t, db.AutoMigrate(&model.OperationLog{}))
-	require.NoError(t, EnsureSchema(db))
+	require.NoError(t, MigrateForTest(db))
 }
 
 // testConfig leaves out the foreign keys of the legacy models (a peer's

@@ -460,7 +460,7 @@ func run() int {
 		}
 	}()
 
-	if err := bootstrapDatabase(context.Background(), cfg, env); err != nil {
+	if err := bootstrapDatabase(context.Background(), cfg); err != nil {
 		log.Fatalf("Failed to prepare database: %v", err)
 	}
 	if migrateOnly {

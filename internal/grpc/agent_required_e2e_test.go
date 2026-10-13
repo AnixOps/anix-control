@@ -129,7 +129,7 @@ func TestAgentStreamUnderRequiredNeedsNoLegacyPath(t *testing.T) {
 	requireAutoMigrate(t, append(model.KernelNodeOperationModels(), model.KernelForwardModels()...)...)
 	requireAutoMigrate(t, &model.Plan{}, &model.User{}, &model.SubscriberChange{}, &model.SubscriberRequest{}, &model.WireGuardPeer{},
 		&model.TrafficLog{}, &model.StatServer{}, &model.NodeLog{}, &model.AgentReportBatch{}, &model.ForwardCleanAgent{})
-	require.NoError(t, nodesecrets.EnsureSchema(db))
+	require.NoError(t, nodesecrets.MigrateForTest(db))
 	ctx := testContext(t)
 	nodeID := uint32(l.proxy.ID)
 	// The listener serves the process's managers, which keep each node's

@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/AnixOps/anix-control/v5/internal/config"
+	"github.com/AnixOps/anix-control/v5/internal/database/migrations"
 	"github.com/AnixOps/anix-control/v5/internal/forwardlegacy"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/stretchr/testify/assert"
@@ -31,8 +32,8 @@ func (f legacyFakeCleaner) CleanNode(_ context.Context, node forwardlegacy.NodeI
 // longer create the dropped tables.
 func TestForwardLegacyCommand(t *testing.T) {
 	db := openSQLite(t)
-	require.NoError(t, forwardlegacy.EnsureSchema(db))
-	require.NoError(t, migrateSchema(db, "development"))
+	_, err := migrations.Migrate(context.Background(), db, migrations.Options{ProgramVersion: version})
+	require.NoError(t, err)
 	require.NoError(t, db.AutoMigrate(&model.AgentTransport{}, &model.AgentCertificate{}))
 	require.NoError(t, db.Create(&model.ForwardNode{ID: 1, Name: "hk", Type: "relay", Host: "192.0.2.1", APIToken: "node-secret-token-1", Enabled: true}).Error)
 	require.NoError(t, db.Create(&model.ForwardNode{ID: 2, Name: "gone", Type: "exit", Host: "192.0.2.2", Enabled: true}).Error)
@@ -108,9 +109,9 @@ func TestForwardLegacyCommand(t *testing.T) {
 	}
 	assert.True(t, db.Migrator().HasTable("v2_forward_node"))
 
-	// The next start (development or production) leaves them dropped.
-	require.NoError(t, migrateSchema(db, "development"))
-	require.NoError(t, migrateSchema(db, "production"))
+	// The next start's schema step leaves them dropped.
+	_, err = migrations.Migrate(context.Background(), db, migrations.Options{ProgramVersion: version})
+	require.NoError(t, err)
 	for _, step := range []func(*gorm.DB) error{
 		forwardlegacy.UnlessDropped(func(db *gorm.DB) error { return db.AutoMigrate(&model.ForwardRuntimeJob{}) }),
 	} {

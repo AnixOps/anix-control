@@ -53,7 +53,7 @@ func TestKernelOperationBridgeCrossRepositoryAgentProcess(t *testing.T) {
 	}))
 	requireAutoMigrate(t, &model.Node{})
 	db := database.GetDB()
-	require.NoError(t, service.EnsureKernelSchema(db))
+	require.NoError(t, service.MigrateKernelModelsForTest(db))
 	t.Cleanup(func() { requireDatabaseClosed(t) })
 
 	const apiKey = "cross-repository-agent-key"
