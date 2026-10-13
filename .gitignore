@@ -122,3 +122,5 @@ v2board.bak.*
 !internal/builtinpkg/dist/
 internal/builtinpkg/dist/*
 !internal/builtinpkg/dist/README.md
+# Recorded schemas of released databases for the adoption tests.
+!internal/database/migrations/testdata/releases/*.sql.gz
