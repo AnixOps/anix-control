@@ -3,8 +3,19 @@
 # ANIX_CONTROL_* environment variable (see `anix-control -print-env`).
 # Secrets (jwt.secret, database.password, ...) have no default.
 env: "production"
+# The panel's name (https://<domain>). With it Control obtains its own
+# certificate (tls.mode acme) and runs the node gRPC listener.
+domain: ""
+# tls.mode external's plain http address; empty: server.host:server.port.
+listen: ""
+tls:
+  # acme, files or external; empty: acme with domain, external without.
+  mode: ""
+  cert_file: ""
+  key_file: ""
 server:
-  host: "0.0.0.0"
+  # Loopback only: the container image sets ANIX_CONTROL_SERVER_HOST=0.0.0.0.
+  host: "127.0.0.1"
   port: 8080
   mode: "release"
   read_timeout: 30
@@ -104,9 +115,12 @@ forward_runtime:
     concurrency: 16
     retention_days: 7
 grpc:
+  # Always on with domain.
   enabled: false
   host: "0.0.0.0"
   port: 50051
+  # The name nodes dial when domain sits behind a CDN; empty: domain.
+  public_name: ""
 agent_control:
   # Client certificates on the AnixOps Agent channels: off, optional,
   # preferred or required. Empty means required, the default from 4.2: the

@@ -82,7 +82,8 @@ ENV HOME=/home/anixops \
     ANSIBLE_CONFIG=/app/config/deploy/ansible/ansible.cfg \
     ANSIBLE_HOME=/tmp/.ansible \
     ANSIBLE_LOCAL_TEMP=/tmp/.ansible/tmp \
-    ANSIBLE_SSH_CONTROL_PATH_DIR=/tmp/.ansible/cp
+    ANSIBLE_SSH_CONTROL_PATH_DIR=/tmp/.ansible/cp \
+    ANIX_CONTROL_SERVER_HOST=0.0.0.0
 USER 10001:10001
 EXPOSE 8080 3000 50051
 HEALTHCHECK --interval=15s --timeout=5s --start-period=60s --retries=3 \
