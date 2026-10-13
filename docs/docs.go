@@ -9112,6 +9112,125 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v5/backups": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "The bundles in data_dir/backups, newest first, in data.backups: id, file, type (daily, pre-migration, manual, verify), size, sha256, created_at, verified_at, verify_status (pending, passed, failed), verify_error, program_version, schema_version. data.summary has last_verified (the newest bundle that passed its verification, or null), stale (no verified bundle younger than stale_after_hours, 36, on a database older than that), next_daily_at and directory; data.retention the built-in retention. On PostgreSQL data.supported is false and data.reason says why: backups need SQLite. Any administrator; no secret.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "The backup bundles and the last verified backup",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Writes a manual bundle of the database, root.key and the configuration file into data_dir/backups and answers it (201, data.backup, verify_status pending); its verification follows in the background and the list shows the result. 409 backups_need_sqlite on PostgreSQL, 409 backup_in_progress while another backup or verification runs. Any administrator.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Back up now",
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v5/backups/{id}/download": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Streams the bundle (application/x-tar, attachment). A bundle holds the root key, which opens every key Control keeps, so only a super administrator may download one, and every download is in the audit log (action download). 403 super_admin_required, 404 backup_not_found.",
+                "produces": [
+                    "application/x-tar"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Download a backup bundle",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "backup id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "file"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/v5/claim": {
             "post": {
                 "description": "Public, rate limited. The body is {token, email, password}: the token is the fragment of the link ` + "`" + `anix-control admin claim-link` + "`" + ` printed (https://\u003cdomain\u003e/claim#anixclaim_...). 201 with data {user_id, email, next: \"/login\"}: the administrator exists, the token is used up and the page signs in with the same email and password. 404 not_found once the panel has an administrator (whatever the token); 403 claim_invalid when the token is not the pending link's (a newer link replaces an older one); 410 claim_expired; 400 invalid_request or invalid_email; 422 weak_password (fewer than 12 characters) or password_too_long (more than 72 bytes); 409 email_taken; 503 identity_unavailable when identity holds the credentials and cannot be reached (nothing changed). The body is never logged; the audit row holds admin_claimed, the email and the source address.",

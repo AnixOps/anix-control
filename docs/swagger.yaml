@@ -7179,6 +7179,97 @@ paths:
       summary: 公开配置
       tags:
       - 系统
+  /api/v5/backups:
+    get:
+      description: 'The bundles in data_dir/backups, newest first, in data.backups:
+        id, file, type (daily, pre-migration, manual, verify), size, sha256, created_at,
+        verified_at, verify_status (pending, passed, failed), verify_error, program_version,
+        schema_version. data.summary has last_verified (the newest bundle that passed
+        its verification, or null), stale (no verified bundle younger than stale_after_hours,
+        36, on a database older than that), next_daily_at and directory; data.retention
+        the built-in retention. On PostgreSQL data.supported is false and data.reason
+        says why: backups need SQLite. Any administrator; no secret.'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: The backup bundles and the last verified backup
+      tags:
+      - Kernel
+    post:
+      description: Writes a manual bundle of the database, root.key and the configuration
+        file into data_dir/backups and answers it (201, data.backup, verify_status
+        pending); its verification follows in the background and the list shows the
+        result. 409 backups_need_sqlite on PostgreSQL, 409 backup_in_progress while
+        another backup or verification runs. Any administrator.
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Back up now
+      tags:
+      - Kernel
+  /api/v5/backups/{id}/download:
+    get:
+      description: Streams the bundle (application/x-tar, attachment). A bundle holds
+        the root key, which opens every key Control keeps, so only a super administrator
+        may download one, and every download is in the audit log (action download).
+        403 super_admin_required, 404 backup_not_found.
+      parameters:
+      - description: backup id
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/x-tar
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: file
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Download a backup bundle
+      tags:
+      - Kernel
   /api/v5/claim:
     post:
       consumes:
