@@ -298,7 +298,7 @@ func (s *AgentControlGRPCServer) applyLogBatch(node agentcontrol.AgentNode, batc
 // applyNodeStatus writes a NodeStatus as ReportStatus and the runtime-health
 // report write theirs. It is never acknowledged.
 func (s *AgentControlGRPCServer) applyNodeStatus(node agentcontrol.AgentNode, report *agentv1pb.NodeStatus) error {
-	return s.nodeService.RecordAgentNodeStatus(uint(node.ID), service.AgentNodeStatus{
+	err := s.nodeService.RecordAgentNodeStatus(uint(node.ID), service.AgentNodeStatus{
 		CPUUsage:       report.CpuUsagePercent,
 		MemoryUsage:    report.MemoryUsagePercent,
 		DiskUsage:      report.DiskUsagePercent,
@@ -306,4 +306,10 @@ func (s *AgentControlGRPCServer) applyNodeStatus(node agentcontrol.AgentNode, re
 		RuntimeHealthy: report.RuntimeHealthy,
 		RuntimeError:   report.RuntimeError,
 	})
+	if err == nil {
+		// The status write set last_check_at: the touches of the next
+		// interval need not.
+		s.liveness.written(node)
+	}
+	return err
 }
