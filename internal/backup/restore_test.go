@@ -187,6 +187,7 @@ func TestRestoreRefusesWhileControlRuns(t *testing.T) {
 	p := newPanel(t)
 	bundle := p.write(t, TypeDaily, time.Now())
 	tg := newTarget(t)
+	require.NoError(t, os.MkdirAll(tg.dataDir, 0o700))
 	running, err := LockService(tg.dataDir)
 	require.NoError(t, err)
 	_, err = Restore(context.Background(), tg.options(bundle.Path))
@@ -204,6 +205,15 @@ func TestRestoreRefusesWhileControlRuns(t *testing.T) {
 	held, err := LockService(tg.dataDir)
 	require.NoError(t, err)
 	held.Release()
+	info, err := os.Stat(filepath.Join(tg.dataDir, LockFileName))
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o644), info.Mode().Perm(), "whoever created it, every Control can open it")
+
+	// Without a data directory there is nothing to lock.
+	missing, err := LockService(filepath.Join(t.TempDir(), "absent"))
+	require.NoError(t, err)
+	missing.Release()
+	assert.NoDirExists(t, filepath.Join(t.TempDir(), "absent"))
 }
 
 // Another process with the database open (a Control without the lock, a

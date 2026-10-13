@@ -38,8 +38,12 @@ var ErrRestoreRunning = errors.New("a backup restore is running on this data dir
 // hold it at once; a restore cannot take it while any of them does, and
 // none can take it while a restore runs (ErrRestoreRunning). Its holder
 // keeps the returned Lock until it exits; the kernel drops the lock when
-// the process ends, however it ends.
+// the process ends, however it ends. A data directory that does not exist
+// yet has nothing to protect: the Lock is then a no-op.
 func LockService(dataDir string) (*Lock, error) {
+	if _, err := os.Stat(dataDir); errors.Is(err, os.ErrNotExist) {
+		return &Lock{}, nil
+	}
 	return lockFile(filepath.Join(dataDir, LockFileName), unix.LOCK_SH, ErrRestoreRunning)
 }
 
@@ -50,14 +54,16 @@ func LockExclusive(dataDir string) (*Lock, error) {
 	return lockFile(filepath.Join(dataDir, LockFileName), unix.LOCK_EX, ErrServiceRunning)
 }
 
+// lockFileMode: the lock file holds nothing; everyone who may run Control
+// on the data directory must be able to open it, whoever created it.
+const lockFileMode os.FileMode = 0o644
+
 func lockFile(path string, how int, busy error) (*Lock, error) {
-	if err := ensureDir(filepath.Dir(path)); err != nil {
-		return nil, err
-	}
-	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, fileMode) // #nosec G304 -- the lock file of the data directory.
+	file, err := os.OpenFile(path, os.O_RDONLY|os.O_CREATE, lockFileMode) // #nosec G304,G302 -- the lock file of the data directory; it holds nothing.
 	if err != nil {
 		return nil, fmt.Errorf("open %s: %w", path, err)
 	}
+	_ = ownTo(path)
 	if err := unix.Flock(int(file.Fd()), how|unix.LOCK_NB); err != nil { // #nosec G115 -- a file descriptor fits an int.
 		_ = file.Close()
 		if errors.Is(err, unix.EWOULDBLOCK) {

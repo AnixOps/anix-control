@@ -100,6 +100,10 @@ var RowCountTables = []string{"v2_user", "v2_node", "v2_order"}
 // ErrNeedsSQLite answers every backup operation on PostgreSQL.
 var ErrNeedsSQLite = errors.New("backups need SQLite: this Control runs on PostgreSQL, whose data Control's backups do not cover. Back the database up with pg_dump and keep root.key with it")
 
+// ErrInMemory answers a backup of an in-memory database (a test): there is
+// nothing to keep.
+var ErrInMemory = errors.New("the database is in memory: there is nothing to back up")
+
 // Manifest is manifest.json.
 type Manifest struct {
 	Format         string    `json:"format"`

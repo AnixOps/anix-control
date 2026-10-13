@@ -83,7 +83,7 @@ func (p *panel) manager() *Manager {
 	return &Manager{
 		DataDir: p.dataDir, Driver: "sqlite", DatabasePath: p.dbPath, ConfigPath: p.configPath,
 		RootKey: func() ([]byte, error) { return os.ReadFile(rootkey.Path(p.dataDir)) },
-		Domain:  "panel.example.com", ProgramVersion: testVersion, DB: p.db,
+		Domain:  "panel.example.com", ProgramVersion: testVersion, DB: func() *gorm.DB { return p.db },
 		HostName: func() (string, error) { return "panel-host", nil },
 	}
 }

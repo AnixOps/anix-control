@@ -36,9 +36,9 @@ type Manager struct {
 	Domain string
 	// ProgramVersion is this Control's version.
 	ProgramVersion string
-	// DB is the live database, where v5_backup is; nil works on the
-	// directory alone.
-	DB *gorm.DB
+	// DB answers the live database, where v5_backup is; nil (or a nil
+	// answer) works on the directory alone.
+	DB func() *gorm.DB
 	// Now defaults to time.Now; HostName to os.Hostname.
 	Now      func() time.Time
 	HostName func() (string, error)
@@ -94,7 +94,7 @@ func (m *Manager) Supported() error {
 		return errors.New("data_dir is empty: backups are kept in data_dir/backups")
 	}
 	if inMemory(m.DatabasePath) {
-		return errors.New("the database is in memory: there is nothing to back up")
+		return ErrInMemory
 	}
 	return nil
 }
@@ -188,10 +188,19 @@ func (m *Manager) source() (Source, error) {
 	}, nil
 }
 
+// db answers the live database; nil without one.
+func (m *Manager) db() *gorm.DB {
+	if m.DB == nil {
+		return nil
+	}
+	return m.DB()
+}
+
 // hasTable reports whether the live database has v5_backup: not before the
 // migration that creates it, never without a database.
 func (m *Manager) hasTable(ctx context.Context) bool {
-	return m.DB != nil && m.DB.WithContext(ctx).Migrator().HasTable(&model.Backup{})
+	db := m.db()
+	return db != nil && db.WithContext(ctx).Migrator().HasTable(&model.Backup{})
 }
 
 // record adds a written bundle to v5_backup.
@@ -204,7 +213,7 @@ func (m *Manager) record(ctx context.Context, bundle *Bundle) (*model.Backup, er
 	if !m.hasTable(ctx) {
 		return row, nil
 	}
-	if err := m.DB.WithContext(ctx).Create(row).Error; err != nil {
+	if err := m.db().WithContext(ctx).Create(row).Error; err != nil {
 		return row, err
 	}
 	return row, nil
@@ -240,7 +249,7 @@ func (m *Manager) verify(ctx context.Context, name string) (*model.Backup, error
 	now := m.now()
 	row := &model.Backup{Path: name}
 	if m.hasTable(ctx) {
-		if err := m.DB.WithContext(ctx).Where("path = ?", name).Limit(1).Find(row).Error; err != nil {
+		if err := m.db().WithContext(ctx).Where("path = ?", name).Limit(1).Find(row).Error; err != nil {
 			return nil, err
 		}
 	}
@@ -253,7 +262,7 @@ func (m *Manager) verify(ctx context.Context, name string) (*model.Backup, error
 		m.logf("Backup: verified %s in %s: the bundle restores.", name, time.Since(started).Round(time.Millisecond))
 	}
 	if m.hasTable(ctx) && row.ID != 0 {
-		if err := m.DB.WithContext(ctx).Model(&model.Backup{}).Where("id = ?", row.ID).Updates(map[string]any{
+		if err := m.db().WithContext(ctx).Model(&model.Backup{}).Where("id = ?", row.ID).Updates(map[string]any{
 			"verified_at": row.VerifiedAt, "verify_status": row.VerifyStatus, "verify_error": row.VerifyError,
 		}).Error; err != nil {
 			return row, err
@@ -305,7 +314,7 @@ func (m *Manager) List(ctx context.Context) ([]model.Backup, error) {
 func (m *Manager) list(ctx context.Context) ([]model.Backup, error) {
 	if m.hasTable(ctx) {
 		var rows []model.Backup
-		if err := m.DB.WithContext(ctx).Order("created_at DESC").Order("id DESC").Find(&rows).Error; err != nil {
+		if err := m.db().WithContext(ctx).Order("created_at DESC").Order("id DESC").Find(&rows).Error; err != nil {
 			return nil, err
 		}
 		return rows, nil
@@ -330,7 +339,7 @@ func (m *Manager) Find(ctx context.Context, id uint) (*model.Backup, error) {
 		return nil, gorm.ErrRecordNotFound
 	}
 	var row model.Backup
-	if err := m.DB.WithContext(ctx).First(&row, id).Error; err != nil {
+	if err := m.db().WithContext(ctx).First(&row, id).Error; err != nil {
 		return nil, err
 	}
 	return &row, nil
@@ -392,7 +401,7 @@ func (m *Manager) sync(ctx context.Context) error {
 		return err
 	}
 	var rows []model.Backup
-	if err := m.DB.WithContext(ctx).Find(&rows).Error; err != nil {
+	if err := m.db().WithContext(ctx).Find(&rows).Error; err != nil {
 		return err
 	}
 	known := map[string]bool{}
@@ -409,13 +418,13 @@ func (m *Manager) sync(ctx context.Context) error {
 		if manifest, err := ReadManifest(filepath.Join(m.Dir(), file.name)); err == nil {
 			row.CreatedAt, row.ProgramVersion, row.SchemaVersion = manifest.CreatedAt, manifest.ProgramVersion, manifest.SchemaVersion
 		}
-		if err := m.DB.WithContext(ctx).Create(&row).Error; err != nil {
+		if err := m.db().WithContext(ctx).Create(&row).Error; err != nil {
 			return fmt.Errorf("record %s: %w", file.name, err)
 		}
 	}
 	for _, row := range rows {
 		if !present[row.Path] {
-			if err := m.DB.WithContext(ctx).Delete(&model.Backup{}, row.ID).Error; err != nil {
+			if err := m.db().WithContext(ctx).Delete(&model.Backup{}, row.ID).Error; err != nil {
 				return err
 			}
 		}
@@ -484,7 +493,7 @@ func (m *Manager) Prune(ctx context.Context) ([]Decision, error) {
 		}
 		m.logf("Backup: removed %s (%s).", decision.Name, decision.Reason)
 		if id := ids[decision.Name]; id != 0 && m.hasTable(ctx) {
-			if err := m.DB.WithContext(ctx).Delete(&model.Backup{}, id).Error; err != nil {
+			if err := m.db().WithContext(ctx).Delete(&model.Backup{}, id).Error; err != nil {
 				return decisions, err
 			}
 		}
