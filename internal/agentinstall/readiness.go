@@ -75,6 +75,9 @@ type ReadinessInput struct {
 	// grpc.enabled).
 	GRPCEnabled bool
 	GRPCPort    int
+	// GRPCEdge tells whether a reverse proxy named by grpc.edge_proxies
+	// terminates the nodes' TLS: its certificate is checked there, not here.
+	GRPCEdge bool
 	// PanelCertificate is the web side's certificate when Control
 	// terminates https itself (tls.mode acme, files); nil when a CDN or
 	// proxy does (external). GRPCCertificate is the gRPC listener's; nil
@@ -425,6 +428,11 @@ func checkPanelCertificate(in ReadinessInput) ReadinessCheck {
 func checkGRPCCertificate(in ReadinessInput) ReadinessCheck {
 	check := ReadinessCheck{ID: CheckGRPCCertificate, Level: LevelError}
 	facts := in.GRPCCertificate
+	if in.GRPCEdge {
+		check.OK = true
+		check.Message = "The gRPC certificate is held by the edge proxy that grpc.edge_proxies names: Control cannot check it from here. Check its certificate and expiry on that proxy."
+		return check
+	}
 	if facts == nil {
 		check.Message = "The gRPC listener has no TLS certificate: nodes verify it against their system CAs and present their own certificate."
 		check.Fix = "Set domain (Control obtains a publicly trusted certificate for it; with the panel behind a CDN also grpc.public_name, a DNS-only name for the nodes), or grpc.tls_cert_file and grpc.tls_key_file, then restart Control."

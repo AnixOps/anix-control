@@ -28,6 +28,8 @@ Use this folder when you need implementation detail, clone contracts, runtime op
 
 | Document | Purpose |
 |------|------|
+| [Two-Host Deployment](deploy-two-hosts.md) | The primary layout: the panel on machine A (Docker Compose, no certificate), an nginx edge on machine B that holds every public certificate and carries the nodes' gRPC over 443 |
+| [Single-Host Deployment](deploy-single-host.md) | Panel and nodes on one machine: nginx for the web, the node gRPC direct on 50051 with the same certificate |
 | [Panel Release Installation](release-installation.md) | Tag-pinned GitHub Release installation, update, rollback, and native service operations without cloning/building on the host |
 | [V4 Plugin-Only Upgrade](v4-plugin-only-upgrade.md) | Preconditions and steps for moving to the formal `v4.0.0` package-only release |
 | [V4 Plugin-Only Rollback](v4-plugin-only-rollback.md) | Rollback triggers and restoring a previous verified package generation |

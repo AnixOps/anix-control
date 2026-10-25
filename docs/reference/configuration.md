@@ -1,7 +1,8 @@
 # Configuration
 
-This page defines the configuration of `anix-control`: nine operator keys,
-the root key in the data directory, and the keys earlier releases read.
+This page defines the configuration of `anix-control`: ten operator keys (nine,
+and `grpc.edge_proxies` for a reverse proxy on another machine), the root key
+in the data directory, and the keys earlier releases read.
 
 ## Source Of Truth
 
@@ -32,6 +33,7 @@ domain: panel.example.com
 | `listen` | `127.0.0.1:8080` | `external` only: the plain http address the reverse proxy sends the whole panel to. |
 | `grpc.port` | `50051` | The node gRPC port; nodes dial `<grpc.public_name or domain>:<grpc.port>`. |
 | `grpc.public_name` | `domain` | Only when `domain` sits behind a CDN: a DNS-only name that reaches this machine, for the nodes' mutual TLS. Not `grpc.host`, which was a listen address. |
+| `grpc.edge_proxies` | empty | Non-empty: a reverse proxy on another machine (its addresses, IPs or CIDRs) terminates the nodes' TLS with the public certificate, and sends their gRPC here in plain HTTP/2 over the private network. Control then holds no gRPC certificate. Requires `tls.mode` `external` and no certificate files. The recommended layout: [two hosts](../guide/deploy-two-hosts.md). |
 | `subscribe_path` | `s` | The subscription path (`/<subscribe_path>/:token`). Change it only to keep links already handed out working. |
 | `data_dir` | `/var/lib/anix-control` | The data directory: `root.key`, the backups (`backups/`, [backups.md](backups.md)), their scratch space (`tmp/`) and the lock a running Control holds (`control.lock`); with a later milestone the database too. Absolute. |
 
@@ -371,6 +373,10 @@ grpc:
 | `listen` (`ANIX_CONTROL_LISTEN`) | empty | `external` mode's plain http address (`host:port`; an address, not a name). Loopback is the safe choice: only the proxy on this machine reaches it. Empty: `127.0.0.1:8080`. While they are still read (until M2, P11), the deprecated `server.host`, `server.port` and `frontend.port` place it instead when they are set: `server.host:server.port` (an empty host is loopback, port 0 is 8080), plus `server.host:frontend.port` with one handler on both. |
 | `grpc.port` (`ANIX_CONTROL_GRPC_PORT`) | `50051` | Node gRPC port. `/install/agent.env` hands nodes `<gRPC name>:<grpc.port>`. |
 | `grpc.public_name` (`ANIX_CONTROL_GRPC_PUBLIC_NAME`) | empty (`domain`) | The DNS-only name nodes dial for gRPC when `domain` is proxied by a CDN (the CDN mode below). Control obtains a publicly trusted certificate for it over ACME. |
+| `grpc.edge_proxies` (`ANIX_CONTROL_GRPC_EDGE_PROXIES`) | empty | Addresses (IPs or CIDRs) of a reverse proxy that terminates the nodes' TLS on another machine. Non-empty: the gRPC listener is plain HTTP/2 and admits these addresses only (any other connection is closed before the gRPC layer), reads the node's certificate from the `x-anix-client-cert` header and its address from `x-forwarded-for`, and only from these addresses. `tls.mode` must be `external`; `grpc.tls_cert_file` and `tls.cert_file` must be unset. Nodes dial the proxy: set `agent_install.grpc_target` to its name and port 443. The design: [`design/edge-grpc`](../design/edge-grpc/README.md). |
+
+With `grpc.edge_proxies` the listener holds no certificate and this order does
+not apply: the proxy's certificate is the one nodes verify.
 
 The node gRPC listener's certificate, in this order: `grpc.tls_cert_file`
 and `grpc.tls_key_file` when set (reloaded when they change; kept for

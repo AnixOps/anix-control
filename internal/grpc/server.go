@@ -12,6 +12,7 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/agentpki"
 	"github.com/AnixOps/anix-control/v5/internal/nodegroup"
 	"github.com/AnixOps/anix-control/v5/internal/panicrecovery"
+	"github.com/AnixOps/anix-control/v5/internal/requestorigin"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/keepalive"
@@ -57,6 +58,10 @@ type ServerConfig struct {
 	// (AgentEnrollment.Join), after the join committed, in its own
 	// goroutine: the administrators' notification. nil tells no one.
 	OnJoin func(nodegroup.Joined)
+	// EdgeProxies are the reverse proxies that terminate the nodes' TLS in
+	// front of this listener (grpc.edge_proxies): the listener is then plain
+	// and admits these addresses only. Empty: the listener is TLS.
+	EdgeProxies []string
 }
 
 // DefaultServerConfig 默认配置
@@ -117,10 +122,27 @@ func (s *Server) Start() error {
 		return fmt.Errorf("gRPC TLS cert and key must be configured together")
 	}
 
+	// The edge: a reverse proxy terminates the nodes' TLS; this listener is
+	// plain and admits the proxies only (edge.go). It serves no certificate.
+	var edge *requestorigin.Policy
+	if len(s.config.EdgeProxies) > 0 {
+		if s.config.GetCertificate != nil || s.config.TLSCertFile != "" {
+			return fmt.Errorf("gRPC edge proxies serve no gRPC certificate: the proxy holds the public one")
+		}
+		policy, err := requestorigin.NewPolicy(s.config.EdgeProxies)
+		if err != nil {
+			return fmt.Errorf("gRPC edge proxies: %w", err)
+		}
+		edge = policy
+	}
+
 	addr := fmt.Sprintf("%s:%d", s.config.Host, s.config.Port)
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
 		return fmt.Errorf("failed to listen: %w", err)
+	}
+	if edge != nil {
+		lis = edgeListener{Listener: lis, proxies: edge}
 	}
 	s.listener = lis
 
@@ -151,6 +173,8 @@ func (s *Server) Start() error {
 	// TLS: the panel certificates, or a certificate file pair read once;
 	// without either the listener stays plain (development and tests).
 	switch {
+	case edge != nil:
+		opts = append(opts, grpc.Creds(edgeCredentials{}))
 	case s.config.GetCertificate != nil:
 		opts = append(opts, grpc.Creds(credentials.NewTLS(s.tlsConfig(s.config.GetCertificate))))
 	case s.config.TLSCertFile != "" && s.config.TLSKeyFile != "":

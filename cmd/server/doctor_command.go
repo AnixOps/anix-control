@@ -184,20 +184,27 @@ func doctorChecks(ctx context.Context, cfg *config.Config, db *gorm.DB, env doct
 	// DNS.
 	local := env.localAddresses()
 	// cdnOK: the name may resolve elsewhere (the panel's name in external
-	// mode sits behind a CDN or a proxy); a name nodes dial may not.
+	// mode sits behind a CDN or a proxy); a name nodes dial may not. edge: the
+	// gRPC name is held by the edge proxy named by grpc.edge_proxies, so where
+	// it resolves is that proxy's address, never this machine's.
 	type dnsName struct {
 		id, name string
 		cdnOK    bool
+		edge     bool
 	}
 	var names []dnsName
 	if panel.Domain != "" {
-		names = append(names, dnsName{"dns:panel", panel.Domain, panel.Mode == config.TLSModeExternal && panel.GRPCName != panel.Domain})
+		names = append(names, dnsName{"dns:panel", panel.Domain, panel.Mode == config.TLSModeExternal && panel.GRPCName != panel.Domain, false})
 	}
 	if panel.GRPCEnabled && panel.GRPCName != "" && panel.GRPCName != panel.Domain {
-		names = append(names, dnsName{"dns:grpc", panel.GRPCName, false})
+		names = append(names, dnsName{"dns:grpc", panel.GRPCName, false, panel.GRPCEdge})
 	}
 	for _, entry := range names {
 		report := panelcert.DiagnoseDNS(ctx, env.resolver, entry.name, local)
+		if entry.edge && report.Verdict != panelcert.DNSUnresolved {
+			add(entry.id, doctorInfo, fmt.Sprintf("%s resolves to %s: the edge proxy that grpc.edge_proxies names holds it, not this machine. Check its DNS and certificate on the proxy.", entry.name, strings.Join(report.Addresses, ", ")), "")
+			continue
+		}
 		role := "the panel's name"
 		if entry.id == "dns:grpc" {
 			role = "the name nodes dial for gRPC (grpc.public_name)"
@@ -242,7 +249,12 @@ func doctorChecks(ctx context.Context, cfg *config.Config, db *gorm.DB, env doct
 		}
 	}
 	if panel.GRPCEnabled {
-		ports = append(ports, portCheck{"node gRPC", panel.GRPCAddress, panel.GRPCName})
+		purpose, probeName := "node gRPC", panel.GRPCName
+		if panel.GRPCEdge {
+			// Plain HTTP/2 from the edge proxy only: there is no TLS to probe.
+			purpose, probeName = "node gRPC (plain, from the edge proxy only)", ""
+		}
+		ports = append(ports, portCheck{purpose, panel.GRPCAddress, probeName})
 	}
 	for _, port := range ports {
 		state, detail := env.checkPort(port.address)

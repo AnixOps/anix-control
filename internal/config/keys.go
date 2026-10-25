@@ -75,6 +75,7 @@ var operatorKeys = []Key{
 	{Path: "listen", Description: "tls.mode external only: the plain http address the reverse proxy sends the panel's traffic to."},
 	{Path: "grpc.port", Description: "The port of the node gRPC listener; nodes dial <grpc.public_name or domain>:<grpc.port>."},
 	{Path: "grpc.public_name", Description: "Only when domain sits behind a CDN: another name that reaches this machine directly, for the nodes' gRPC (mutual TLS cannot cross a CDN)."},
+	{Path: "grpc.edge_proxies", Description: "Non-empty: a reverse proxy on another machine (its IPs or CIDRs) terminates the nodes' TLS, with the public certificate, and sends their gRPC here in plain HTTP/2 over the private network. Control then holds no gRPC certificate. Requires tls.mode external and no certificate files."},
 	{Path: "subscribe_path", Description: "The subscription path (/<subscribe_path>/:token). Change it only to keep links already handed out working.", field: "app.subscribe_path"},
 	{Path: "data_dir", Description: "The data directory: the root key (root.key), the backups (backups/) and, later, the database. Absolute."},
 }

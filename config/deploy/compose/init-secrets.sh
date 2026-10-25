@@ -164,6 +164,9 @@ if [[ -n "${GRPC_TLS_CERT}" ]]; then
     printf '%s\n' "${added[@]}" >> "${ENV_FILE}"
   fi
   info "gRPC TLS: ${TLS_DIR}/control.crt (mounted at ${CONTAINER_TLS_DIR}); publish the port with ANIX_CONTROL_GRPC_BIND=0.0.0.0 in .env, then: docker compose -f docker-compose.prod.yml up -d"
+elif env_sets ANIX_CONTROL_GRPC_EDGE_PROXIES; then
+  # The edge proxy holds the public certificate (docs/guide/deploy-two-hosts.md).
+  info "gRPC runs behind the edge proxy in ANIX_CONTROL_GRPC_EDGE_PROXIES: no gRPC certificate belongs on this machine."
 elif ! env_sets ANIX_CONTROL_GRPC_TLS_CERT_FILE; then
   warn "Agents cannot connect yet: gRPC has no TLS certificate."
   warn "Agents verify Control's certificate against the node's system CA roots and cannot pin a private CA, so it must be publicly trusted for the name they dial; a self-signed certificate does not work."

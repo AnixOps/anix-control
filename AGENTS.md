@@ -275,8 +275,9 @@ A release tag `vX.Y.Z[-alpha|-beta|-rc.N]` must match every surface checked by
   `config/deploy/compose/` (external PostgreSQL), `config/deploy/helm/anix-control`
   (single replica), `docker-compose.yml` (development). Container design and
   multi-replica blockers: `docs/architecture/container-deployment.md`.
-- The configuration is nine operator keys (`domain`, `tls.*`, `listen`,
-  `grpc.port`, `grpc.public_name`, `subscribe_path`, `data_dir`) in
+- The configuration is ten operator keys (`domain`, `tls.*`, `listen`,
+  `grpc.port`, `grpc.public_name`, `grpc.edge_proxies` (read only in the edge
+  mode, `docs/design/edge-grpc`), `subscribe_path`, `data_dir`) in
   `internal/config/keys.go`, each with an `ANIX_CONTROL_*` variable
   (`docs/reference/environment-variables.md`, generated and checked by
   `TestEnvironmentVariableReferenceIsCurrent`). The loader is strict: every

@@ -340,6 +340,8 @@ func describeGRPCTLS(panel config.PanelSettings) string {
 		return "TLS with its own ACME certificate for " + panel.GRPCName
 	case config.GRPCCertFiles:
 		return "TLS with " + panel.GRPCCertFile + ", reloaded when it changes"
+	case config.GRPCCertEdge:
+		return "TLS at the edge proxy " + strings.Join(panel.GRPCEdgeProxies, ", ") + " (grpc.edge_proxies): plain HTTP/2 from it only"
 	}
 	return "plain: no domain, grpc.public_name or certificate files; Agents cannot connect"
 }

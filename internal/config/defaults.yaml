@@ -125,6 +125,9 @@ grpc:
   port: 50051
   # The name nodes dial when domain sits behind a CDN; empty: domain.
   public_name: ""
+  # A reverse proxy on another machine that terminates the nodes' TLS; empty:
+  # the listener is TLS itself (docs/design/edge-grpc).
+  edge_proxies: []
 agent_control:
   # Client certificates on the AnixOps Agent channels: off, optional,
   # preferred or required. Empty means required, the default from 4.2: the
