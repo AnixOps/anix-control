@@ -17,6 +17,10 @@ three commands:
 In GitHub Actions (the repository and its logs are public) host addresses
 and names are masked and `run` prints each host's output only with --show-output.
 
+A command may name a secret as @@NAME@@ (NAME one of SECRET_PLACEHOLDERS).
+`run` replaces it with the environment variable NAME just before sending the
+job, so the secret never appears in the workflow inputs or the printed command.
+
 It needs `requests` and `websocket-client` (`pip install requests websocket-client`). The
 GitHub Actions workflow `.github/workflows/jumpserver.yml` runs it with the
 `production` environment's secrets (docs/guide/jumpserver.md).
@@ -39,6 +43,8 @@ import requests
 DEFAULT_ORG = "00000000-0000-0000-0000-000000000002"
 PAGE_SIZE = 100
 RESULT_LIMIT = 20000
+# Secrets a command may name as @@NAME@@; the workflow passes them as env.
+SECRET_PLACEHOLDERS = ("CLOUDFLARE_API_TOKEN",)
 
 
 class JumpServerError(Exception):
@@ -192,7 +198,7 @@ def cmd_run(client, args):
         "is_periodic": False,  # the serializer defaults it to true and then wants a schedule
         "type": "adhoc",
         "module": "shell",
-        "args": ansible_raw(args.cmd),
+        "args": ansible_raw(fill_secrets(args.cmd)),
         "assets": [h["id"] for h in hosts],
         "nodes": [],
         "runas": args.runas,
@@ -230,6 +236,21 @@ def cmd_run(client, args):
     return ok
 
 
+def fill_secrets(cmd):
+    """Replace each @@NAME@@ in cmd with the environment variable NAME."""
+    def secret(match):
+        name = match.group(1)
+        if name not in SECRET_PLACEHOLDERS:
+            raise JumpServerError(f"@@{name}@@ is not a known secret placeholder")
+        value = os.environ.get(name, "")
+        if not value:
+            raise JumpServerError(f"@@{name}@@ is used but {name} is not set")
+        if os.environ.get("GITHUB_ACTIONS") == "true":
+            print(f"::add-mask::{value}")
+        return value
+    return re.sub(r"@@([A-Z0-9_]+)@@", secret, cmd)
+
+
 def job_log(client, task_id, timeout=60):
     """Return the Ansible log of a finished job, which holds each host's output.
 
@@ -262,7 +283,8 @@ def job_log(client, task_id, timeout=60):
             raise JumpServerError(f"task log websocket: {exc}") from exc
     finally:
         ws.close()
-    return strip_ansi("".join(chunks)).replace("\r\n", "\n")
+    # The log ends with NUL padding.
+    return strip_ansi("".join(chunks)).replace("\r\n", "\n").rstrip("\x00\n")
 
 
 def strip_ansi(text):

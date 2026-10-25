@@ -20,6 +20,7 @@ The workflow reads them from the repository's `production` environment
 | `JMS_URL` | variable | `https://jump.anixops.com`, without a trailing slash |
 | `JMS_KEY_ID` | secret | the Access Key ID |
 | `JMS_SECRET` | secret | the Access Key secret |
+| `CLOUDFLARE_API_TOKEN` | secret | optional: a Cloudflare token with only Zone → DNS → Edit, for certbot's DNS-01 renewal on the hosts |
 
 Create the Access Key in JumpServer under the profile menu → 个人信息 →
 API Key, preferably for a dedicated user (for example `api-bot`) with only
@@ -48,6 +49,18 @@ Actions → JumpServer → Run workflow, then choose the action:
   log websocket. Ansible would treat `{{ }}` in the command as a template
   (for example `docker ps --format '{{.Names}}'`), so `jms.py` wraps such a
   command in `{% raw %}` and it runs as written.
+
+Never type a secret into `command`: workflow inputs are shown in the run's
+page. Write `@@CLOUDFLARE_API_TOKEN@@` instead and `jms.py` fills in the
+secret of that name just before it sends the job, masking it in the log.
+Only names listed in `SECRET_PLACEHOLDERS` in `jms.py` are filled in. The
+filled-in command is stored with the job in JumpServer and is briefly visible
+in the host's process list, so pass the secret to a script that writes it to
+a root-only file, for example:
+
+```bash
+echo <base64 script> | base64 -d > /root/setup.sh && CLOUDFLARE_API_TOKEN='@@CLOUDFLARE_API_TOKEN@@' bash /root/setup.sh
+```
 
 The repository is public, and so are its workflow logs. In GitHub Actions
 `jms.py` masks every host address and name (`::add-mask::`), and `run` prints each
