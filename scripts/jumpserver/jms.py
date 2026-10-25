@@ -17,20 +17,23 @@ three commands:
 In GitHub Actions (the repository and its logs are public) host addresses
 and names are masked and `run` prints each host's output only with --show-output.
 
-It needs `requests` and `httpsig` (`pip install requests httpsig`). The
+It needs `requests` (`pip install requests`). The
 GitHub Actions workflow `.github/workflows/jumpserver.yml` runs it with the
 `production` environment's secrets (docs/guide/jumpserver.md).
 """
 
 import argparse
+import base64
+import hashlib
+import hmac
 import json
 import os
 import sys
 import time
 from email.utils import formatdate
+from urllib.parse import urlsplit
 
 import requests
-from httpsig.requests_auth import HTTPSignatureAuth
 
 DEFAULT_ORG = "00000000-0000-0000-0000-000000000002"
 PAGE_SIZE = 100
@@ -41,17 +44,38 @@ class JumpServerError(Exception):
     pass
 
 
+class SignatureAuth(requests.auth.AuthBase):
+    """HTTP Signature (draft-cavage) with hmac-sha256, as JumpServer verifies it."""
+
+    HEADERS = ("(request-target)", "accept", "date")
+
+    def __init__(self, key_id, secret):
+        self.key_id = key_id
+        self.secret = secret.encode()
+
+    def __call__(self, request):
+        url = urlsplit(request.url)
+        target = url.path + (f"?{url.query}" if url.query else "")
+        lines = [
+            f"(request-target): {request.method.lower()} {target}",
+            f"accept: {request.headers['Accept']}",
+            f"date: {request.headers['Date']}",
+        ]
+        digest = hmac.new(self.secret, "\n".join(lines).encode(), hashlib.sha256).digest()
+        request.headers["Authorization"] = (
+            f'Signature keyId="{self.key_id}",algorithm="hmac-sha256",'
+            f'headers="{" ".join(self.HEADERS)}",'
+            f'signature="{base64.b64encode(digest).decode()}"'
+        )
+        return request
+
+
 class Client:
     def __init__(self, url, key_id, secret, org=DEFAULT_ORG, timeout=30):
         self.url = url.rstrip("/")
         self.org = org
         self.timeout = timeout
-        self.auth = HTTPSignatureAuth(
-            key_id=key_id,
-            secret=secret,
-            algorithm="hmac-sha256",
-            headers=["(request-target)", "accept", "date"],
-        )
+        self.auth = SignatureAuth(key_id, secret)
 
     def request(self, method, path, body=None):
         headers = {

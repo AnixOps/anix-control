@@ -54,7 +54,7 @@ where `jms.py run` always prints the output.
 Locally, with the same three variables exported:
 
 ```bash
-pip install requests httpsig
+pip install requests
 python3 scripts/jumpserver/jms.py check
 python3 scripts/jumpserver/jms.py run --cmd 'uptime' --hosts node-1,node-2
 ```
