@@ -6,6 +6,7 @@
   GO-2026-6809 in `crypto/x509` (compromised intermediate certificates are
   distrusted). Control reaches it through the Agent certificate check
   (`agentpki.VerifyPeer`).
-- **follow-redirects 1.16.1** in the frontend (through `axios`), which fixes
+- **follow-redirects 1.16.1** in the panel frontend and the Control Center web
+  app (through `axios`), which fixes
   GHSA-q3jh-wrc6-jgq8 and GHSA-8r9p-f939-6h3c (credential headers kept across
   a cross-origin redirect).
