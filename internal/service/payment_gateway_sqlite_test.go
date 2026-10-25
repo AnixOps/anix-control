@@ -14,7 +14,11 @@ import (
 )
 
 func TestMarkOrderPaidRetriesSQLiteWriterLockAtomically(t *testing.T) {
-	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "payment-lock.db")+"?_pragma=busy_timeout(1)"), &gorm.Config{})
+	// WAL, as Control opens SQLite (internal/database): a commit then never
+	// waits for readers, so the lock holder's commit cannot itself fail with
+	// SQLITE_BUSY while the payment's retry holds a read lock. Writers still
+	// exclude each other, which is the contention under test.
+	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "payment-lock.db")+"?_pragma=busy_timeout(1)&_pragma=journal_mode(WAL)"), &gorm.Config{})
 	require.NoError(t, err)
 	require.NoError(t, db.AutoMigrate(&model.PaymentGateway{}, &model.PaymentRecord{}, &model.Order{}, &model.SubscriberRequest{}))
 	sqlDB, err := db.DB()

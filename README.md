@@ -13,7 +13,7 @@ truth for implemented, partial, planned, compatibility, and deferred features.
 
 - Main branch: `go_dev`.
 - Backend: Go module `github.com/AnixOps/anix-control/v5`; the toolchain is
-  pinned to Go `1.26.9` in CI.
+  pinned to Go `1.26.10` in CI.
 - Frontend: Vue 3 + Vite under [`web/`](web), Node.js `22` in CI.
 - Default database: SQLite, with PostgreSQL migration/dry-run tooling.
 - Current release: `v5.0.0-rc.1`, a pre-release (the first 5.0 release
