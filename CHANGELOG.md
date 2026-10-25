@@ -2,6 +2,97 @@
 
 ## Unreleased
 
+## 5.0.0-rc.2 - 2026-10-25
+
+### Added
+
+- `grpc.edge_proxies` (`ANIX_CONTROL_GRPC_EDGE_PROXIES`): a reverse proxy on
+  another machine terminates the nodes' TLS with the public certificate and
+  sends their gRPC to Control in plain HTTP/2 over the private network. The
+  gRPC listener admits the proxy's addresses only (any other connection is
+  closed before the gRPC layer), takes the node's client certificate from
+  `x-anix-client-cert` and its address from `x-forwarded-for`, and reads
+  those headers from those addresses only. Control verifies the certificate
+  itself and holds no gRPC certificate in this mode. Requires
+  `tls.mode: external`; `grpc.tls_cert_file` and `tls.cert_file` must be unset.
+- Deployment guides: [two-host deployment](docs/guide/deploy-two-hosts.md)
+  (the panel on machine A, an nginx edge on machine B that holds every public
+  certificate) and [single-host deployment](docs/guide/deploy-single-host.md).
+  The nginx example is `config/deploy/examples/nginx/edge-two-hosts.conf`.
+- The JumpServer workflow gains two actions. `control` calls Control's
+  administrator API with an Admin API token kept in the `production`
+  environment (`CONTROL_ADMIN_TOKEN`), prints the answer with node keys and
+  other secrets replaced by `***`, and can generate Reality and Shadowsocks
+  2022 keys inside the request body so they never appear in the public
+  inputs or log. `install-agent` issues a node's install token and runs
+  Control's install command on one JumpServer host without printing the
+  token.
+- The JumpServer workflow's `run` command can name a secret as
+  `@@CLOUDFLARE_API_TOKEN@@`: `jms.py` fills it in from the `production`
+  environment's secret of that name just before sending the job and masks it
+  in the log, so a host can get the token for certbot's DNS-01 renewal
+  without it passing through the workflow inputs.
+- A manual GitHub Actions workflow, JumpServer, reaches the node fleet through
+  JumpServer (`docs/guide/jumpserver.md`). `scripts/jumpserver/jms.py` signs
+  its requests with the Access Key of the `production` environment and
+  checks the key, lists the hosts, or runs a shell command on them through
+  the job center (Ansible). The repository and its workflow logs are public,
+  so in Actions host addresses and names are masked and per-host output is printed
+  only on request.
+- A node runs every enabled protocol, also two of one type (shadowsocks
+  `aes-256-gcm` and shadowsocks 2022 on two ports). The configuration
+  snapshot's `legacy_pull` gains `protocols`: each enabled protocol's
+  UniProxy answer, by protocol id. UniProxy's config pull takes
+  `protocol_id` for the same answer. Left out when the node has a raw
+  configuration. Agent 5.0.0-rc.2 runs each of them in its own inbound;
+  older Agents keep running the node's first protocol.
+
+### Changed
+
+- The configuration is ten operator keys: `grpc.edge_proxies` is read only in
+  the edge mode.
+- `init-secrets.sh` no longer warns about a missing gRPC certificate when
+  `ANIX_CONTROL_GRPC_EDGE_PROXIES` is set.
+
+### Fixed
+
+- The JumpServer workflow's `run` action works end to end: `jms.py` marks its
+  job as a one-off (`is_periodic: false`), which JumpServer's job serializer
+  otherwise assumes true; with `show_output` it reads the job's Ansible log,
+  which holds each host's output, from JumpServer's task log websocket (the
+  only place current JumpServer serves it); a log it cannot fetch no longer
+  fails a job that succeeded; and a command containing `{{ }}` is no longer
+  rejected by Ansible's templating.
+- `jms.py run --show-output` no longer prints the NUL padding that ends
+  JumpServer's job log.
+- **Tests:** `TestWebSocketRelayRegistersBeforeOpeningStream` no longer fails
+  now and then under load (5 of 3000 runs). Its fake host client opened the
+  stream when the test released it even if the relay's context was already
+  cancelled, because the test could finish `Drain` and release the open before
+  the client goroutine reached its `select`, which then picked either ready
+  case.
+
+### Security
+
+- **Go 1.26.10.** The root, `sdk`, `identity` and Control Center modules, the
+  CI and nightly toolchain and the Control and module images
+  (`golang:1.26.10-alpine`, pinned by digest) move to Go 1.26.10, which fixes
+  GO-2026-6809 in `crypto/x509` (compromised intermediate certificates are
+  distrusted). Control reaches it through the Agent certificate check
+  (`agentpki.VerifyPeer`).
+- **follow-redirects 1.16.1** in the panel frontend and the Control Center web
+  app (through `axios`), which fixes
+  GHSA-q3jh-wrc6-jgq8 and GHSA-8r9p-f939-6h3c (credential headers kept across
+  a cross-origin redirect).
+- **The sprintf-js npm audit waiver is dropped.** GHSA-hp3w-g68c-fv3c has no
+  fixed version, but the package was reached only through Histoire's
+  `gray-matter`, `js-yaml` 3 and `argparse` 1, and `js-yaml` 3 uses `argparse`
+  only in its command-line tool. `web/package.json` now overrides the
+  `argparse` that `js-yaml` asks for to `^2.0.1`, `sprintf-js` is no longer in
+  `web/package-lock.json`, and its entry is removed from
+  `web/audit-allowlist.json`. The braces waiver (GHSA-vfj7-8cjw-p6xm) is
+  unchanged. Nothing in the shipped frontend changes.
+
 ## 5.0.0-rc.1 - 2026-10-13
 
 ### Highlights

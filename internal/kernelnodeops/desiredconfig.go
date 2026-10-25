@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
@@ -172,6 +173,23 @@ func buildLegacyPull(db *gorm.DB, id uint, protocols []map[string]any) map[strin
 		}
 	}
 	pull["types"] = types
+	// "protocols": the answer for each enabled protocol, by protocol id
+	// (UniProxy's protocol_id), so an Agent runs every protocol of the
+	// node, also two of one type. Left out with a raw configuration, which
+	// the node runs instead of its protocols.
+	answers := map[string]any{}
+	for _, protocol := range protocols {
+		protocolID, ok := protocol["id"].(uint)
+		if !ok {
+			continue
+		}
+		if answer, err := service.BuildUniProxyProtocolConfig(db, id, protocolID); err == nil {
+			answers[strconv.FormatUint(uint64(protocolID), 10)] = answer
+		}
+	}
+	if len(answers) > 0 {
+		pull["protocols"] = answers
+	}
 	return pull
 }
 

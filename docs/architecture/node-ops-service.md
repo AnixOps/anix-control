@@ -1635,7 +1635,10 @@ advertised them.
     holds `legacy_pull`: the UniProxy answer for no node type
     (`default`) and for each type the node serves (`types`), from
     `service.BuildUniProxyNodeConfig`, which the UniProxy handler calls
-    too. Each protocol's `config` is the v2board `GetConfig` source, and
+    too, and for each enabled protocol by id (`protocols`, from
+    `service.BuildUniProxyProtocolConfig`, UniProxy's `protocol_id`; absent
+    with a raw configuration), so an Agent runs every protocol, also two of
+    one type. Each protocol's `config` is the v2board `GetConfig` source, and
     `raw_config` is read through the node credential split as UniProxy
     reads it. So the snapshot carries what the legacy pulls give the node,
     and no other secret (`internal/tests/nodeopsagent` compares the two
