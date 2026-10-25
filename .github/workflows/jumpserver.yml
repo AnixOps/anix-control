@@ -3,8 +3,8 @@ name: JumpServer
 # Runs scripts/jumpserver/jms.py against the JumpServer that manages the node
 # fleet, with the production environment's JMS_KEY_ID and JMS_SECRET secrets
 # and its JMS_URL variable (docs/guide/jumpserver.md). Manual runs only. The
-# repository is public and so are these logs: a run's per-host output is
-# printed only when show_output is set.
+# repository is public and so are these logs: host addresses and names are masked and a
+# run's per-host output is printed only when show_output is set.
 
 on:
   workflow_dispatch:

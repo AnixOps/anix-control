@@ -14,8 +14,8 @@ three commands:
                                          JumpServer's job center (Ansible) and
                                          wait for the result
 
-In GitHub Actions (the repository and its logs are public) `run` prints
-each host's output only with --show-output.
+In GitHub Actions (the repository and its logs are public) host addresses
+and names are masked and `run` prints each host's output only with --show-output.
 
 It needs `requests` and `httpsig` (`pip install requests httpsig`). The
 GitHub Actions workflow `.github/workflows/jumpserver.yml` runs it with the
@@ -82,12 +82,24 @@ class Client:
         while True:
             page = self.get(f"/api/v1/assets/hosts/?limit={PAGE_SIZE}&offset={offset}")
             if isinstance(page, list):  # an unpaginated answer
-                return page
+                return mask_addresses(page)
             found.extend(page.get("results", []))
             offset += PAGE_SIZE
             if not page.get("next") or offset >= page.get("count", 0):
-                return found
+                return mask_addresses(found)
 
+
+def mask_addresses(hosts):
+    """In GitHub Actions, have the runner mask every host address and name.
+
+    The repository is public, so its workflow logs are too.
+    """
+    if os.environ.get("GITHUB_ACTIONS") == "true":
+        for h in hosts:
+            for value in (h.get("address"), h.get("name")):
+                if value:
+                    print(f"::add-mask::{value}", flush=True)
+    return hosts
 
 
 def label(value):
