@@ -46,6 +46,24 @@ func (h *UniProxyHandler) GetConfig(c *gin.Context) {
 
 	var config map[string]any
 
+	// protocol_id asks for one of the node's enabled protocols, so a node
+	// can run two protocols of one type (service.BuildUniProxyProtocolConfig).
+	if protocolIDStr := c.Query("protocol_id"); protocolIDStr != "" {
+		protocolID, err := strconv.ParseUint(protocolIDStr, 10, 32)
+		if err != nil || protocolID == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid protocol_id"})
+			return
+		}
+		config, err = h.nodeService.BuildUniProxyProtocolConfig(uint(nodeID), uint(protocolID))
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "protocol not found"})
+			return
+		}
+		_ = h.nodeService.UpdateLastCheckAt(uint(nodeID))
+		h.sendConfigResponse(c, config)
+		return
+	}
+
 	if nodeType == "" {
 		config, err = h.buildNewNodeConfig(uint(nodeID), "")
 		if err == nil {
