@@ -5,5 +5,4 @@
   its requests with the Access Key of the `production` environment and
   checks the key, lists the hosts, or runs a shell command on them through
   the job center (Ansible). The repository and its workflow logs are public,
-  so in Actions host addresses are masked and per-host output is printed
-  only on request.
+  so in Actions per-host command output is printed only on request.

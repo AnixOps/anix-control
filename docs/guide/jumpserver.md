@@ -45,9 +45,9 @@ Actions → JumpServer → Run workflow, then choose the action:
   every active host) through the job center, waits for it and prints the
   summary. The run fails when any host fails.
 
-The repository is public, and so are its workflow logs. In GitHub Actions
-`jms.py` masks every host address (`::add-mask::`), and `run` prints each
-host's output only when `show_output` is ticked. Leave it off for commands
+The repository is public, and so are its workflow logs. Host names and
+addresses are not secret and are printed, but in GitHub Actions `run` prints
+each host's output only when `show_output` is ticked. Leave it off for commands
 whose output may hold anything private, and run those locally instead,
 where `jms.py run` always prints the output.
 
