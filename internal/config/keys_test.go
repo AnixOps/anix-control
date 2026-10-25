@@ -13,7 +13,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The operator keys are exactly the table of the design's section 5.
+// The operator keys are exactly the table of the design's section 5, plus
+// grpc.edge_proxies (docs/design/edge-grpc), which is read only in the edge
+// mode.
 func TestOperatorKeysAreTheDesignTable(t *testing.T) {
 	var paths []string
 	for _, key := range OperatorKeys() {
@@ -21,7 +23,7 @@ func TestOperatorKeysAreTheDesignTable(t *testing.T) {
 		assert.NotEmpty(t, key.Description, key.Path)
 		assert.False(t, key.Secret, "the configuration file holds no secret: %s", key.Path)
 	}
-	assert.Equal(t, []string{"domain", "tls.mode", "tls.cert_file", "tls.key_file", "listen", "grpc.port", "grpc.public_name", "subscribe_path", "data_dir"}, paths)
+	assert.Equal(t, []string{"domain", "tls.mode", "tls.cert_file", "tls.key_file", "listen", "grpc.port", "grpc.public_name", "grpc.edge_proxies", "subscribe_path", "data_dir"}, paths)
 }
 
 // Every key an earlier release or template knew is an operator key or in

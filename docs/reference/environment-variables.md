@@ -39,6 +39,7 @@ This table is generated from the code and checked by
 | `ANIX_CONTROL_LISTEN` | `listen` | string | empty: `127.0.0.1:8080` |
 | `ANIX_CONTROL_GRPC_PORT` | `grpc.port` | int | `50051` |
 | `ANIX_CONTROL_GRPC_PUBLIC_NAME` | `grpc.public_name` | string | empty: `domain` |
+| `ANIX_CONTROL_GRPC_EDGE_PROXIES` | `grpc.edge_proxies` | list |  |
 | `ANIX_CONTROL_SUBSCRIBE_PATH` | `subscribe_path` | string | `s` |
 | `ANIX_CONTROL_DATA_DIR` | `data_dir` | string | `/var/lib/anix-control` |
 <!-- END GENERATED -->

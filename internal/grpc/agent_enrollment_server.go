@@ -191,6 +191,11 @@ func (s *AgentEnrollmentGRPCServer) join(ctx context.Context, request *agentv1pb
 		return nil, err
 	}
 	peer := remoteHost(ctx)
+	if peer == "" && isEdgeConnection(ctx) {
+		// The record and the rejoin rule need the node's address, and the rate
+		// limit is per address: without it the edge proxy is misconfigured.
+		return nil, status.Error(codes.FailedPrecondition, "the edge proxy sent no client address (x-forwarded-for)")
+	}
 	if !allowJoin(peer) {
 		return nil, status.Error(codes.ResourceExhausted, "too many join attempts from this address; retry in a minute")
 	}

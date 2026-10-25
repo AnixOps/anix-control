@@ -99,6 +99,17 @@ check "refuse: nothing written" test ! -e "${dir}/secrets"
 unset GRPC_TLS_TRUST_CA_FILE
 check "refuse: test CA is not a system root" refused "does not verify" --dir "${dir}" --grpc-tls-cert "${pki}/server.crt" --grpc-tls-key "${pki}/server.key"
 
+# 8. Edge: a reverse proxy on another machine holds the certificate, so the
+# missing one is no warning and no certificate belongs here.
+dir="${temporary}/edge"
+mkdir -p "${dir}"
+cp "${REPO_ROOT}/config/deploy/compose/control.env.example" "${dir}/control.env"
+printf '%s\n' "ANIX_CONTROL_GRPC_EDGE_PROXIES=10.0.0.2" >> "${dir}/control.env"
+output="$(run --dir "${dir}")"
+check "edge: no missing-certificate warning" lacks "Agents cannot connect yet" "${output}"
+check "edge: says the proxy holds the certificate" grep -qF "behind the edge proxy" <<<"${output}"
+check "edge: no certificate created" test ! -e "${dir}/tls/control.crt"
+
 if [[ "${failures}" -ne 0 ]]; then
   printf '%d check(s) failed\n' "${failures}"
   exit 1

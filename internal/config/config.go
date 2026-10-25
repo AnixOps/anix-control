@@ -474,7 +474,13 @@ type GRPCConfig struct {
 	// grpc.tls_cert_file, or tls.cert_file in tls.mode external). Empty:
 	// domain.
 	PublicName string `yaml:"public_name"`
-	APIToken   string `yaml:"api_token"`
+	// EdgeProxies are the addresses (IPs or CIDRs) of the reverse proxy that
+	// terminates the nodes' TLS on another machine (docs/design/edge-grpc).
+	// Non-empty: the gRPC listener serves plain HTTP/2 to those addresses
+	// only and takes each node's client certificate from the proxy's
+	// X-Anix-Client-Cert header. Empty: the listener is TLS.
+	EdgeProxies []string `yaml:"edge_proxies"`
+	APIToken    string   `yaml:"api_token"`
 	// TLSCertFile and TLSKeyFile are a certificate of the gRPC listener's own
 	// (PEM files, reloaded when they change). Empty: the certificate Control
 	// manages for the gRPC name.

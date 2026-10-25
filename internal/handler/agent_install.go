@@ -237,7 +237,8 @@ func (h *AgentInstallHandler) Readiness(c *gin.Context) {
 	if panel.ServesWebTLS() {
 		input.PanelCertificate = certificateFacts(status, known, panelcert.RoleWeb, panel.Domain)
 	}
-	if panel.GRPCTLS() {
+	input.GRPCEdge = panel.GRPCEdge
+	if panel.GRPCTLS() && !panel.GRPCEdge {
 		input.GRPCCertificate = certificateFacts(status, known, panelcert.RoleGRPC, panel.GRPCName)
 	}
 	c.Header("Cache-Control", "no-store")

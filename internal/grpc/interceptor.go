@@ -403,8 +403,15 @@ func StreamLoggingInterceptor() grpc.StreamServerInterceptor {
 	}
 }
 
-// GetPeerAddr 从上下文获取客户端地址
+// GetPeerAddr 从上下文获取客户端地址。经边缘代理（grpc.edge_proxies）时是
+// 代理转发的节点地址（只有主机，没有端口），没有时为 "unknown"。
 func GetPeerAddr(ctx context.Context) string {
+	if isEdgeConnection(ctx) {
+		if address := edgeClientAddress(ctx); address != "" {
+			return address
+		}
+		return "unknown"
+	}
 	p, ok := peer.FromContext(ctx)
 	if !ok {
 		return "unknown"

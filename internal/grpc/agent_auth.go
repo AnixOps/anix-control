@@ -117,11 +117,15 @@ func (a *AgentAuthenticator) recheck(ctx context.Context, principal agentPrincip
 }
 
 // peerCertificateChain returns the raw client certificate chain of the
-// call's TLS connection, nil when the client presented none.
+// call's TLS connection, or the one an edge proxy vouched for
+// (EdgeClientCertHeader); nil when the client presented none.
 func peerCertificateChain(ctx context.Context) [][]byte {
 	remote, ok := peer.FromContext(ctx)
 	if !ok || remote.AuthInfo == nil {
 		return nil
+	}
+	if isEdgeConnection(ctx) {
+		return edgeClientChain(ctx)
 	}
 	info, ok := remote.AuthInfo.(credentials.TLSInfo)
 	if !ok || len(info.State.PeerCertificates) == 0 {
@@ -282,11 +286,16 @@ func (p agentPrincipal) sighting(agentVersion string) agenttransport.Sighting {
 	return sighting
 }
 
-// remoteHost returns the client's address without the port.
+// remoteHost returns the client's address without the port. Through an
+// edge proxy the peer is the proxy, so the node's address is the one the
+// proxy vouched for (X-Forwarded-For).
 func remoteHost(ctx context.Context) string {
 	remote, ok := peer.FromContext(ctx)
 	if !ok || remote.Addr == nil {
 		return ""
+	}
+	if isEdgeConnection(ctx) {
+		return edgeClientAddress(ctx)
 	}
 	address := remote.Addr.String()
 	if host, _, err := net.SplitHostPort(address); err == nil {

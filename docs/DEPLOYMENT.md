@@ -11,12 +11,14 @@
 - [`reference/configuration.md`](reference/configuration.md)
 - [`reference/runtime.md`](reference/runtime.md)
 - [`guide/forward-relay-onboarding.md`](guide/forward-relay-onboarding.md)
+- 部署方式（二选一）：[双机部署](guide/deploy-two-hosts.md)，面板机 A 与边缘机 B（nginx 持有全部证书，节点 gRPC 经 443 进入）；
+  [单机部署](guide/deploy-single-host.md)，面板与节点都在一台机器上
 - [`reference/repository-layout.md`](reference/repository-layout.md)
 
 部署前先记住三条规则：
 
-- 配置只有 9 个操作员键（`domain`、`tls.mode`、`tls.cert_file`、`tls.key_file`、`listen`、
-  `grpc.port`、`grpc.public_name`、`subscribe_path`、`data_dir`），一般安装的配置文件只有
+- 配置只有 10 个操作员键（`domain`、`tls.mode`、`tls.cert_file`、`tls.key_file`、`listen`、
+  `grpc.port`、`grpc.public_name`、`grpc.edge_proxies`（只在边缘模式读取）、`subscribe_path`、`data_dir`），一般安装的配置文件只有
   `domain: panel.example.com` 一行。先取内置值，再由配置文件逐键覆盖，最后是
   `ANIX_CONTROL_*` 环境变量。4.x 的其他键都在废弃列表里：仍被读取的键照常生效并在启动时
   警告一次，其余键被忽略并警告；列表之外的未知键会让 Control 拒绝启动，并提示最接近的键

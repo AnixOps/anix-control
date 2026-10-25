@@ -6,6 +6,8 @@ import (
 	"net"
 	"strconv"
 	"strings"
+
+	"github.com/AnixOps/anix-control/v5/internal/requestorigin"
 )
 
 // TLS modes (tls.mode): who terminates TLS for the web side.
@@ -37,6 +39,9 @@ const (
 	// grpc.public_name, no certificate files): development and tests. Agents
 	// cannot connect to such a listener.
 	GRPCCertNone = "none"
+	// GRPCCertEdge: a reverse proxy named by grpc.edge_proxies terminates the
+	// nodes' TLS with its own certificate; Control holds none for gRPC.
+	GRPCCertEdge = "edge"
 )
 
 // Listener addresses Control owns in tls.mode acme and files, and the
@@ -89,6 +94,11 @@ type PanelSettings struct {
 	GRPCCertSource string
 	GRPCCertFile   string
 	GRPCKeyFile    string
+	// GRPCEdge tells whether a reverse proxy terminates the nodes' TLS in
+	// front of the gRPC listener (grpc.edge_proxies); GRPCEdgeProxies are
+	// the proxy's addresses, the only peers the listener admits.
+	GRPCEdge        bool
+	GRPCEdgeProxies []string
 	// PublicURL is the https address nodes and browsers use:
 	// agent_install.public_url, else https://<domain>; empty when unknown
 	// (then the request's origin is used).
@@ -165,6 +175,11 @@ func (c *Config) Panel() PanelSettings {
 	}
 
 	settings.GRPCEnabled = c.GRPC.Enable || settings.Domain != ""
+	if len(c.GRPC.EdgeProxies) > 0 {
+		settings.GRPCEnabled = true
+		settings.GRPCEdge = true
+		settings.GRPCEdgeProxies = append([]string(nil), c.GRPC.EdgeProxies...)
+	}
 	grpcHost := strings.TrimSpace(c.GRPC.Host)
 	if grpcHost == "" {
 		grpcHost = "0.0.0.0"
@@ -177,6 +192,8 @@ func (c *Config) Panel() PanelSettings {
 	grpcCert, grpcKey := strings.TrimSpace(c.GRPC.TLSCertFile), strings.TrimSpace(c.GRPC.TLSKeyFile)
 	webCert, webKey := strings.TrimSpace(c.TLS.CertFile), strings.TrimSpace(c.TLS.KeyFile)
 	switch {
+	case settings.GRPCEdge:
+		settings.GRPCCertSource = GRPCCertEdge
 	case grpcCert != "" && grpcKey != "":
 		settings.GRPCCertSource, settings.GRPCCertFile, settings.GRPCKeyFile = GRPCCertFiles, grpcCert, grpcKey
 	case settings.GRPCName == "":
@@ -285,6 +302,17 @@ func (c *Config) validatePanel() error {
 	}
 	if (strings.TrimSpace(c.GRPC.TLSCertFile) == "") != (strings.TrimSpace(c.GRPC.TLSKeyFile) == "") {
 		return fmt.Errorf("grpc.tls_cert_file and grpc.tls_key_file go together")
+	}
+	if len(c.GRPC.EdgeProxies) > 0 {
+		if _, err := requestorigin.NewPolicy(c.GRPC.EdgeProxies); err != nil {
+			return fmt.Errorf("grpc.edge_proxies: %w", err)
+		}
+		if effective != TLSModeExternal {
+			return fmt.Errorf("grpc.edge_proxies needs tls.mode external: the proxy terminates TLS for the panel and the nodes, and Control serves plain http behind it")
+		}
+		if strings.TrimSpace(c.GRPC.TLSCertFile) != "" || strings.TrimSpace(c.TLS.CertFile) != "" {
+			return fmt.Errorf("grpc.edge_proxies excludes grpc.tls_cert_file and tls.cert_file: the public certificate stays on the proxy")
+		}
 	}
 	if listen := strings.TrimSpace(c.Listen); listen != "" {
 		host, port, err := net.SplitHostPort(listen)
