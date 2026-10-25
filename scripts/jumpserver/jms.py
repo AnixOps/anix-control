@@ -17,7 +17,7 @@ three commands:
 In GitHub Actions (the repository and its logs are public) host addresses
 and names are masked and `run` prints each host's output only with --show-output.
 
-It needs `requests` (`pip install requests`). The
+It needs `requests` and `websocket-client` (`pip install requests websocket-client`). The
 GitHub Actions workflow `.github/workflows/jumpserver.yml` runs it with the
 `production` environment's secrets (docs/guide/jumpserver.md).
 """
@@ -78,12 +78,20 @@ class Client:
         self.timeout = timeout
         self.auth = SignatureAuth(key_id, secret)
 
-    def request(self, method, path, body=None):
-        headers = {
+    def headers(self):
+        return {
             "Accept": "application/json",
             "X-JMS-ORG": self.org,
             "Date": formatdate(usegmt=True),
         }
+
+    def signed_headers(self, method, path):
+        """Headers with the signature, for a request requests does not send."""
+        request = requests.Request(method, self.url + path, headers=self.headers()).prepare()
+        return dict(self.auth(request).headers)
+
+    def request(self, method, path, body=None):
+        headers = self.headers()
         response = requests.request(
             method, self.url + path, json=body, headers=headers,
             auth=self.auth, timeout=self.timeout,
@@ -125,6 +133,13 @@ def mask_addresses(hosts):
                 if value:
                     print(f"::add-mask::{value}", flush=True)
     return hosts
+
+
+def ansible_raw(cmd):
+    """Keep Ansible from templating the command: it would choke on {{ }}."""
+    if any(t in cmd for t in ("{{", "{%", "{#")):
+        return "{% raw %}" + cmd + "{% endraw %}"
+    return cmd
 
 
 def label(value):
@@ -177,7 +192,7 @@ def cmd_run(client, args):
         "is_periodic": False,  # the serializer defaults it to true and then wants a schedule
         "type": "adhoc",
         "module": "shell",
-        "args": args.cmd,
+        "args": ansible_raw(args.cmd),
         "assets": [h["id"] for h in hosts],
         "nodes": [],
         "runas": args.runas,
@@ -205,7 +220,7 @@ def cmd_run(client, args):
         print("Output:  hidden (--show-output prints the job log; workflow logs are public)")
         return ok
     try:
-        output = job_log(client, (job or {}).get("id"), task_id)
+        output = job_log(client, task_id)
     except JumpServerError as exc:
         print(f"Output:  unavailable ({str(exc)[:200]})")
         return ok
@@ -215,28 +230,38 @@ def cmd_run(client, args):
     return ok
 
 
-def job_log(client, job_id, task_id):
-    """Return the Ansible log of a finished job, which holds each host's output."""
-    execution_id = task_id
-    if job_id:
-        # The task id is normally the execution's id; look it up in case it is not.
-        try:
-            page = client.get(f"/api/v1/ops/job-executions/?job_id={job_id}&limit=20")
-            rows = page.get("results", []) if isinstance(page, dict) else page or []
-            for row in rows:
-                if row.get("task_id") == task_id and row.get("id"):
-                    execution_id = row["id"]
-                    break
-        except JumpServerError:
-            pass
-    chunks, mark = [], ""
-    for _ in range(50):
-        path = f"/api/v1/ops/ansible/job-execution/{execution_id}/log/"
-        page = client.get(path + (f"?mark={mark}" if mark else "")) or {}
-        chunks.append(page.get("data") or "")
-        if page.get("end") or not page.get("mark") or page.get("mark") == mark:
-            break
-        mark = page["mark"]
+def job_log(client, task_id, timeout=60):
+    """Return the Ansible log of a finished job, which holds each host's output.
+
+    JumpServer serves it only over the task log websocket, which accepts the
+    same signed headers as the REST API. The task id is the execution's id.
+    """
+    import websocket  # websocket-client
+
+    path = "/ws/ops/tasks/log/"
+    url = client.url.replace("https://", "wss://", 1).replace("http://", "ws://", 1) + path
+    headers = client.signed_headers("GET", path)
+    try:
+        ws = websocket.create_connection(
+            url, header=[f"{k}: {v}" for k, v in headers.items()],
+            suppress_origin=True, timeout=timeout,
+        )
+    except (websocket.WebSocketException, OSError) as exc:
+        raise JumpServerError(f"task log websocket: {exc}") from exc
+    chunks = []
+    try:
+        ws.send(json.dumps({"task": task_id, "type": "ansible"}))
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            message = json.loads(ws.recv())
+            if message.get("event") in ("end", "unavailable"):
+                break
+            chunks.append(message.get("message") or "")
+    except (websocket.WebSocketException, OSError, ValueError) as exc:
+        if not chunks:
+            raise JumpServerError(f"task log websocket: {exc}") from exc
+    finally:
+        ws.close()
     return strip_ansi("".join(chunks)).replace("\r\n", "\n")
 
 

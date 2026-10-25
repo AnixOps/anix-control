@@ -43,7 +43,11 @@ Actions → JumpServer → Run workflow, then choose the action:
 - `run`: runs `command` (default `uptime`) as `runas` (default `root`) on the
   hosts named in `hosts` (comma-separated names or addresses; empty means
   every active host) through the job center, waits for it and prints the
-  summary. The run fails when any host fails.
+  summary. The run fails when any host fails. With `show_output` it then
+  prints the job's Ansible log, which JumpServer serves only over its task
+  log websocket. Ansible would treat `{{ }}` in the command as a template
+  (for example `docker ps --format '{{.Names}}'`), so `jms.py` wraps such a
+  command in `{% raw %}` and it runs as written.
 
 The repository is public, and so are its workflow logs. In GitHub Actions
 `jms.py` masks every host address and name (`::add-mask::`), and `run` prints each
@@ -54,7 +58,7 @@ where `jms.py run` always prints the output.
 Locally, with the same three variables exported:
 
 ```bash
-pip install requests
+pip install requests websocket-client
 python3 scripts/jumpserver/jms.py check
 python3 scripts/jumpserver/jms.py run --cmd 'uptime' --hosts node-1,node-2
 ```
