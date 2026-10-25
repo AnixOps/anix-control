@@ -60,7 +60,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install client dependencies
-        run: python -m pip install --disable-pip-version-check requests==2.32.3
+        run: python -m pip install --disable-pip-version-check requests==2.32.3 websocket-client==1.8.0
 
       - name: Run jms.py ${{ inputs.action }}
         env:
