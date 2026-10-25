@@ -2,7 +2,9 @@ name: JumpServer
 
 # Runs scripts/jumpserver/jms.py against the JumpServer that manages the node
 # fleet, with the production environment's JMS_KEY_ID and JMS_SECRET secrets
-# and its JMS_URL variable (docs/guide/jumpserver.md). Manual runs only.
+# and its JMS_URL variable (docs/guide/jumpserver.md). Manual runs only. The
+# repository is public and so are these logs: host addresses are masked and a
+# run's per-host output is printed only when show_output is set.
 
 on:
   workflow_dispatch:
@@ -31,6 +33,11 @@ on:
         required: false
         type: string
         default: 'root'
+      show_output:
+        description: 'Print each host''s output for run. The repository is public, so the log is too'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -64,9 +71,12 @@ jobs:
           COMMAND: ${{ inputs.command }}
           HOSTS: ${{ inputs.hosts }}
           RUNAS: ${{ inputs.runas }}
+          SHOW_OUTPUT: ${{ inputs.show_output }}
         run: |
           if [ "$ACTION" = run ]; then
-            python scripts/jumpserver/jms.py run --cmd "$COMMAND" --hosts "$HOSTS" --runas "$RUNAS"
+            show=()
+            if [ "$SHOW_OUTPUT" = true ]; then show=(--show-output); fi
+            python scripts/jumpserver/jms.py run --cmd "$COMMAND" --hosts "$HOSTS" --runas "$RUNAS" "${show[@]}"
           else
             python scripts/jumpserver/jms.py "$ACTION"
           fi

@@ -43,7 +43,13 @@ Actions → JumpServer → Run workflow, then choose the action:
 - `run`: runs `command` (default `uptime`) as `runas` (default `root`) on the
   hosts named in `hosts` (comma-separated names or addresses; empty means
   every active host) through the job center, waits for it and prints the
-  summary and each host's output. The run fails when any host fails.
+  summary. The run fails when any host fails.
+
+The repository is public, and so are its workflow logs. In GitHub Actions
+`jms.py` masks every host address (`::add-mask::`), and `run` prints each
+host's output only when `show_output` is ticked. Leave it off for commands
+whose output may hold anything private, and run those locally instead,
+where `jms.py run` always prints the output.
 
 Locally, with the same three variables exported:
 

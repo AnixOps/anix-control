@@ -14,6 +14,9 @@ three commands:
                                          JumpServer's job center (Ansible) and
                                          wait for the result
 
+In GitHub Actions (the repository and its logs are public) host addresses
+are masked and `run` prints each host's output only with --show-output.
+
 It needs `requests` and `httpsig` (`pip install requests httpsig`). The
 GitHub Actions workflow `.github/workflows/jumpserver.yml` runs it with the
 `production` environment's secrets (docs/guide/jumpserver.md).
@@ -79,11 +82,23 @@ class Client:
         while True:
             page = self.get(f"/api/v1/assets/hosts/?limit={PAGE_SIZE}&offset={offset}")
             if isinstance(page, list):  # an unpaginated answer
-                return page
+                return mask_addresses(page)
             found.extend(page.get("results", []))
             offset += PAGE_SIZE
             if not page.get("next") or offset >= page.get("count", 0):
-                return found
+                return mask_addresses(found)
+
+
+def mask_addresses(hosts):
+    """In GitHub Actions, have the runner mask every host address in the log.
+
+    The repository is public, so its workflow logs are too.
+    """
+    if os.environ.get("GITHUB_ACTIONS") == "true":
+        for h in hosts:
+            if h.get("address"):
+                print(f"::add-mask::{h['address']}", flush=True)
+    return hosts
 
 
 def label(value):
@@ -158,6 +173,9 @@ def cmd_run(client, args):
     result = client.get(f"/api/v1/ops/job-execution/result/{task_id}/")
     print(f"Status:  {label(detail.get('status'))} in {detail.get('time_cost')}s")
     print("Summary: " + json.dumps(detail.get("summary"), ensure_ascii=False, indent=2))
+    if not args.show_output:
+        print("Result:  hidden (--show-output prints each host's output; workflow logs are public)")
+        return 0 if detail.get("is_success") else 1
     output = json.dumps((result or {}).get("result"), ensure_ascii=False, indent=2)
     if len(output) > RESULT_LIMIT:
         output = output[:RESULT_LIMIT] + "\n... (truncated)"
@@ -175,7 +193,10 @@ def main(argv=None):
     run.add_argument("--hosts", default="", help="comma-separated host names or addresses; empty means all active hosts")
     run.add_argument("--runas", default="root", help="the account to run as (default root)")
     run.add_argument("--timeout", type=int, default=60, help="seconds the command may run (default 60)")
+    run.add_argument("--show-output", action="store_true", help="print each host's output (the default outside GitHub Actions)")
     args = parser.parse_args(argv)
+    if args.command == "run" and os.environ.get("GITHUB_ACTIONS") != "true":
+        args.show_output = True
 
     missing = [k for k in ("JMS_URL", "JMS_KEY_ID", "JMS_SECRET") if not os.environ.get(k)]
     if missing:
