@@ -28,6 +28,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import sys
 import time
 from email.utils import formatdate
@@ -197,17 +198,50 @@ def cmd_run(client, args):
             raise JumpServerError(f"task {task_id} still running after {args.timeout + 120}s")
         time.sleep(3)
 
-    result = client.get(f"/api/v1/ops/job-execution/result/{task_id}/")
     print(f"Status:  {label(detail.get('status'))} in {detail.get('time_cost')}s")
     print("Summary: " + json.dumps(detail.get("summary"), ensure_ascii=False, indent=2))
+    ok = 0 if detail.get("is_success") else 1
     if not args.show_output:
-        print("Result:  hidden (--show-output prints each host's output; workflow logs are public)")
-        return 0 if detail.get("is_success") else 1
-    output = json.dumps((result or {}).get("result"), ensure_ascii=False, indent=2)
+        print("Output:  hidden (--show-output prints the job log; workflow logs are public)")
+        return ok
+    try:
+        output = job_log(client, (job or {}).get("id"), task_id)
+    except JumpServerError as exc:
+        print(f"Output:  unavailable ({str(exc)[:200]})")
+        return ok
     if len(output) > RESULT_LIMIT:
         output = output[:RESULT_LIMIT] + "\n... (truncated)"
-    print("Result:  " + output)
-    return 0 if detail.get("is_success") else 1
+    print("Output:\n" + output)
+    return ok
+
+
+def job_log(client, job_id, task_id):
+    """Return the Ansible log of a finished job, which holds each host's output."""
+    execution_id = task_id
+    if job_id:
+        # The task id is normally the execution's id; look it up in case it is not.
+        try:
+            page = client.get(f"/api/v1/ops/job-executions/?job_id={job_id}&limit=20")
+            rows = page.get("results", []) if isinstance(page, dict) else page or []
+            for row in rows:
+                if row.get("task_id") == task_id and row.get("id"):
+                    execution_id = row["id"]
+                    break
+        except JumpServerError:
+            pass
+    chunks, mark = [], ""
+    for _ in range(50):
+        path = f"/api/v1/ops/ansible/job-execution/{execution_id}/log/"
+        page = client.get(path + (f"?mark={mark}" if mark else "")) or {}
+        chunks.append(page.get("data") or "")
+        if page.get("end") or not page.get("mark") or page.get("mark") == mark:
+            break
+        mark = page["mark"]
+    return strip_ansi("".join(chunks)).replace("\r\n", "\n")
+
+
+def strip_ansi(text):
+    return re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", text)
 
 
 def main(argv=None):
