@@ -2,7 +2,7 @@ module github.com/AnixOps/anix-control/control-center
 
 go 1.26.0
 
-toolchain go1.26.9
+toolchain go1.26.10
 
 require (
 	github.com/charmbracelet/bubbles v0.17.0
