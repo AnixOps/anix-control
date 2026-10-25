@@ -206,8 +206,12 @@ stream equivalent.
     `raw_config`, its enabled `protocols` (each `config` is what the v2board
     `GetConfig` of that type renders) and `legacy_pull`: `default`, the
     UniProxy configuration answer for no `node_type`, and `types`, the
-    answer for each node type the node serves, by normalized type. A pull
-    that UniProxy would refuse is left out. An Agent that applied
+    answer for each node type the node serves, by normalized type (the
+    first protocol of that type), and `protocols`, the answer for each
+    enabled protocol by protocol id (UniProxy's `protocol_id`; absent with
+    a `raw_config`). An Agent runs the first protocol from `default` and
+    the others from `protocols`, so a node serves two protocols of one
+    type. A pull that UniProxy would refuse is left out. An Agent that applied
     `legacy_pull` runs what the legacy pull would have given it. A forward
     node's document holds its node row, `legacy_rules` (the rules
     `GET /api/v2/forward/agent/rules` serves, with the node's role) and

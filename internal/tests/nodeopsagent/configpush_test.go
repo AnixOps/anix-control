@@ -295,6 +295,60 @@ func uniProxyAnswer(t *testing.T, nodeID uint, nodeType string) (int, []byte) {
 	return recorder.Code, recorder.Body.Bytes()
 }
 
+// uniProxyProtocolAnswer is the UniProxy config pull for one protocol
+// (protocol_id) of the node.
+func uniProxyProtocolAnswer(t *testing.T, nodeID, protocolID uint) (int, []byte) {
+	t.Helper()
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	target := "/api/v1/server/UniProxy/config?node_id=" + strconv.FormatUint(uint64(nodeID), 10) +
+		"&protocol_id=" + strconv.FormatUint(uint64(protocolID), 10)
+	c.Request = httptest.NewRequest(http.MethodGet, target, nil)
+	handler.NewUniProxyHandler().GetConfig(c)
+	return recorder.Code, recorder.Body.Bytes()
+}
+
+// Two protocols of one type on one node (shadowsocks and shadowsocks 2022
+// on two ports): legacy_pull.types holds the first, and
+// legacy_pull.protocols holds both, by protocol id, so an Agent runs both.
+func TestConfigSnapshotCarriesEveryProtocolOfOneType(t *testing.T) {
+	forEachBackend(t, func(t *testing.T, f *fixture) {
+		classic := model.NodeProtocol{NodeID: f.proxy.ID, Name: "ss", Type: model.ProtocolShadowsocks, Port: 11111, Enable: 1, Sort: 1}
+		require.NoError(t, f.db.Create(&classic).Error)
+		modern := model.NodeProtocol{NodeID: f.proxy.ID, Name: "ss2022", Type: model.ProtocolShadowsocks, Port: 11112, Enable: 1, Sort: 2}
+		require.NoError(t, f.db.Create(&modern).Error)
+		disabled := model.NodeProtocol{NodeID: f.proxy.ID, Name: "off", Type: model.ProtocolShadowsocks, Port: 11113, Sort: 3}
+		require.NoError(t, f.db.Create(&disabled).Error)
+		// enable's column default is 1: the zero value is written apart.
+		require.NoError(t, f.db.Model(&disabled).Update("enable", 0).Error)
+
+		agent := f.proxyAgent(fakeagent.Script{Capabilities: configCapabilities()})
+		require.Len(t, agent.Snapshots(), 1)
+		var document map[string]any
+		require.NoError(t, json.Unmarshal(agent.Snapshots()[0].GetConfigJson(), &document))
+		pull := document["legacy_pull"].(map[string]any)
+		byProtocol, _ := pull["protocols"].(map[string]any)
+		require.Len(t, byProtocol, 3, "the vless protocol and both shadowsocks protocols; not the disabled one")
+		ports := map[string]any{}
+		for _, protocol := range []model.NodeProtocol{f.protocol, classic, modern} {
+			key := strconv.FormatUint(uint64(protocol.ID), 10)
+			answer, ok := byProtocol[key].(map[string]any)
+			require.True(t, ok, "protocol %s", key)
+			ports[key] = answer["server_port"]
+			code, body := uniProxyProtocolAnswer(t, f.proxy.ID, protocol.ID)
+			require.Equal(t, http.StatusOK, code, string(body))
+			assert.Equal(t, canonical(t, body), canonical(t, reencode(t, answer)), "protocol %s", key)
+		}
+		assert.EqualValues(t, 11111, ports[strconv.FormatUint(uint64(classic.ID), 10)])
+		assert.EqualValues(t, 11112, ports[strconv.FormatUint(uint64(modern.ID), 10)])
+		code, _ := uniProxyProtocolAnswer(t, f.proxy.ID, disabled.ID)
+		assert.Equal(t, http.StatusNotFound, code, "a disabled protocol is not served")
+		byType := pull["types"].(map[string]any)
+		assert.EqualValues(t, 11111, byType["shadowsocks"].(map[string]any)["server_port"], "the type's answer stays the first of the type")
+	})
+}
+
 // canonical decodes JSON into a generic value, for equality.
 func canonical(t *testing.T, raw []byte) any {
 	t.Helper()
@@ -332,7 +386,7 @@ func TestConfigSnapshotParityWithTheLegacyPull(t *testing.T) {
 	forEachBackend(t, func(t *testing.T, f *fixture) {
 		agent := f.proxyAgent(fakeagent.Script{Capabilities: configCapabilities()})
 		require.Len(t, agent.Snapshots(), 1)
-		check := func(snapshot *agentv1pb.ConfigSnapshot, types []string) {
+		check := func(snapshot *agentv1pb.ConfigSnapshot, types []string, protocolIDs []uint) {
 			t.Helper()
 			var document map[string]any
 			require.NoError(t, json.Unmarshal(snapshot.GetConfigJson(), &document))
@@ -349,6 +403,17 @@ func TestConfigSnapshotParityWithTheLegacyPull(t *testing.T) {
 				code, body := uniProxyAnswer(t, f.proxy.ID, nodeType)
 				require.Equal(t, http.StatusOK, code, string(body))
 				assert.Equal(t, canonical(t, body), canonical(t, reencode(t, byType[nodeType])), nodeType)
+				legacy = append(legacy, string(body))
+			}
+			// Each protocol's answer, by protocol id, against UniProxy's
+			// protocol_id pull; none with a raw configuration.
+			byProtocol, _ := pull["protocols"].(map[string]any)
+			assert.Len(t, byProtocol, len(protocolIDs))
+			for _, protocolID := range protocolIDs {
+				code, body := uniProxyProtocolAnswer(t, f.proxy.ID, protocolID)
+				require.Equal(t, http.StatusOK, code, string(body))
+				key := strconv.FormatUint(uint64(protocolID), 10)
+				assert.Equal(t, canonical(t, body), canonical(t, reencode(t, byProtocol[key])), "protocol %s", key)
 				legacy = append(legacy, string(body))
 			}
 			// Each protocol's config against the v2board GetConfig.
@@ -384,7 +449,7 @@ func TestConfigSnapshotParityWithTheLegacyPull(t *testing.T) {
 				}
 			}
 		}
-		check(agent.Snapshots()[0], []string{"vless"})
+		check(agent.Snapshots()[0], []string{"vless"}, []uint{f.protocol.ID})
 		assert.Contains(t, string(agent.Snapshots()[0].GetConfigJson()), realityKey, "the protocol's key, as UniProxy sends it")
 
 		// A raw configuration replaces the protocols in the UniProxy pull.
@@ -394,7 +459,9 @@ func TestConfigSnapshotParityWithTheLegacyPull(t *testing.T) {
 		require.Equal(t, kernelnodeopsv1.OperationState_OPERATION_STATE_SUCCEEDED, synced.GetState(), synced.GetError())
 		snapshots := agent.Snapshots()
 		require.Len(t, snapshots, 2)
-		check(snapshots[1], []string{"trojan"})
+		check(snapshots[1], []string{"trojan"}, nil)
+		code, _ := uniProxyProtocolAnswer(t, f.proxy.ID, f.protocol.ID)
+		assert.Equal(t, http.StatusNotFound, code, "a raw configuration replaces the protocols")
 		assert.Contains(t, string(snapshots[1].GetConfigJson()), "fake-raw-trojan-password-0123")
 	})
 }

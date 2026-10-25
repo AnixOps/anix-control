@@ -75,6 +75,50 @@ func (s *NodeService) BuildUniProxyConfig(nodeID uint, preferredType string) (ma
 	return completeUniProxyConfig(config), nil
 }
 
+// ErrUniProxyProtocolNotServed reports a protocol the node does not serve
+// on its own: it is not one of the node's enabled protocols, or the node
+// has a raw configuration, which UniProxy answers instead of its protocols.
+var ErrUniProxyProtocolNotServed = errors.New("the node does not serve this protocol on its own")
+
+// BuildUniProxyProtocolConfig builds the configuration UniProxy answers a
+// proxy node for one of its enabled protocols (the protocol_id query): what
+// BuildUniProxyNodeConfig answers for that protocol's type when it is the
+// first of its type. A node runs each of its protocols this way, also two
+// of one type (shadowsocks and shadowsocks 2022 on two ports).
+// ErrUniProxyProtocolNotServed when the node has a raw configuration or no
+// such enabled protocol; gorm.ErrRecordNotFound when the node does not
+// exist.
+func BuildUniProxyProtocolConfig(db *gorm.DB, nodeID, protocolID uint) (map[string]any, error) {
+	return (&NodeService{db: db}).BuildUniProxyProtocolConfig(nodeID, protocolID)
+}
+
+// BuildUniProxyProtocolConfig is BuildUniProxyProtocolConfig over the
+// service's database.
+func (s *NodeService) BuildUniProxyProtocolConfig(nodeID, protocolID uint) (map[string]any, error) {
+	node, err := s.GetNode(nodeID)
+	if err != nil {
+		return nil, err
+	}
+	if node.RawConfig != nil && *node.RawConfig != "" {
+		return nil, ErrUniProxyProtocolNotServed
+	}
+	protocols, err := s.GetProtocols(nodeID)
+	if err != nil {
+		return nil, err
+	}
+	for i := range protocols {
+		if protocols[i].ID != protocolID || protocols[i].Enable != 1 {
+			continue
+		}
+		config := make(map[string]any)
+		for k, v := range BuildNodeProtocolConfig(node, &protocols[i]) {
+			config[k] = v
+		}
+		return completeUniProxyConfig(config), nil
+	}
+	return nil, ErrUniProxyProtocolNotServed
+}
+
 // completeUniProxyConfig sets type from node_type when it is missing, as
 // UniProxy does before it answers.
 func completeUniProxyConfig(config map[string]any) map[string]any {
