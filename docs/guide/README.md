@@ -40,6 +40,7 @@ Use this folder when you need implementation detail, clone contracts, runtime op
 | Document | Purpose |
 |------|------|
 | [Node Management](node-management.md) | Node registration, heartbeat, protocol config and operations |
+| [JumpServer Node Access](jumpserver.md) | Reaching the node fleet through JumpServer: API credentials, the manual JumpServer workflow, running commands through Ansible |
 | [Installing The Agent With One Command](agent-onboarding.md) | Single-use install tokens, the signed `install.sh`, mirrors, re-runs and the legacy forward cleanup |
 | [Subscription System](subscription-system.md) | Subscription groups, templates and formatting |
 | [Client Compatibility](client-compatibility.md) | V2bX/XrayR and related compatibility notes |
