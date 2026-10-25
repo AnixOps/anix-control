@@ -50,6 +50,24 @@ Actions → JumpServer → Run workflow, then choose the action:
   (for example `docker ps --format '{{.Names}}'`), so `jms.py` wraps such a
   command in `{% raw %}` and it runs as written.
 
+- `control`: calls Control's administrator API (`api_method`, `api_path`,
+  `api_body`) at the `CONTROL_URL` variable (default
+  `https://new-x.kalijerry.uk`) with the `CONTROL_ADMIN_TOKEN` secret, an
+  Admin-scope token from **Security → API tokens**
+  ([Admin API tokens](admin-api-tokens.md)). The answer is printed with every
+  secret field (`api_key`, `secret`, `credential`, `token`, `password`,
+  `private_key`, `server_key`, `psk`) replaced by `***`. In `api_body`,
+  `@@NEW_REALITY_KEY@@` becomes a new X25519 private key (its public key is
+  printed) and `@@NEW_SS2022_KEY_16@@` / `@@NEW_SS2022_KEY_32@@` a new
+  Shadowsocks 2022 key of that many bytes, so keys never pass through the
+  inputs.
+- `install-agent`: asks Control for a one-hour install token for `node`
+  (`proxy-<id>`) and runs Control's install command on the single host named in
+  `hosts`, under `systemd-run` so it outlives the job's 60-second limit. The
+  token is masked and never printed. The installer logs to
+  `/root/anix-agent-install.log`; read it with a later `run`
+  (`tail -n 30 /root/anix-agent-install.log`).
+
 Never type a secret into `command`: workflow inputs are shown in the run's
 page. Write `@@CLOUDFLARE_API_TOKEN@@` instead and `jms.py` fills in the
 secret of that name just before it sends the job, masking it in the log.

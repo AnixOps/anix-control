@@ -13,6 +13,11 @@ three commands:
                                          run a shell command on the hosts with
                                          JumpServer's job center (Ansible) and
                                          wait for the result
+    jms.py control --method GET --path /api/v2/admin/nodes [--body JSON]
+                                         call Control's administrator API
+    jms.py install-agent --hosts host --node proxy-12
+                                         install and enroll the Agent of a
+                                         Control node on a JumpServer host
 
 In GitHub Actions (the repository and its logs are public) host addresses
 and names are masked and `run` prints each host's output only with --show-output.
@@ -20,6 +25,13 @@ and names are masked and `run` prints each host's output only with --show-output
 A command may name a secret as @@NAME@@ (NAME one of SECRET_PLACEHOLDERS).
 `run` replaces it with the environment variable NAME just before sending the
 job, so the secret never appears in the workflow inputs or the printed command.
+
+`control` and `install-agent` reach Control at CONTROL_URL with the admin API
+token CONTROL_ADMIN_TOKEN (docs/reference/admin-api-tokens.md). A `control`
+body may hold generated secrets, filled in on the runner and masked:
+@@NEW_REALITY_KEY@@ (an X25519 private key; its public key is printed) and
+@@NEW_SS2022_KEY_16@@ / @@NEW_SS2022_KEY_32@@ (a Shadowsocks 2022 key). Secret
+fields of Control's answer are masked before it is printed.
 
 It needs `requests` and `websocket-client` (`pip install requests websocket-client`). The
 GitHub Actions workflow `.github/workflows/jumpserver.yml` runs it with the
@@ -33,6 +45,8 @@ import hmac
 import json
 import os
 import re
+import secrets
+import shlex
 import sys
 import time
 from email.utils import formatdate
@@ -191,7 +205,8 @@ def cmd_run(client, args):
     hosts = select_hosts(client.hosts(), args.hosts)
     if not hosts:
         raise JumpServerError("no active hosts to run on")
-    print(f"Running {args.cmd!r} as {args.runas} on {len(hosts)} hosts: "
+    shown = getattr(args, "describe", None) or repr(args.cmd)
+    print(f"Running {shown} as {args.runas} on {len(hosts)} hosts: "
           + ", ".join(h.get("name", "") for h in hosts))
     job = client.post("/api/v1/ops/jobs/", {
         "instant": True,
@@ -234,6 +249,171 @@ def cmd_run(client, args):
         output = output[:RESULT_LIMIT] + "\n... (truncated)"
     print("Output:\n" + output)
     return ok
+
+
+def mask(value):
+    """Have the GitHub runner mask value in the log from here on."""
+    if value and os.environ.get("GITHUB_ACTIONS") == "true":
+        print(f"::add-mask::{value}", flush=True)
+
+
+# Fields of a Control answer whose values are secrets.
+SECRET_FIELD = re.compile(
+    r"(^|_)(api_key|secret|credential|token|password|private_key|privatekey|server_key|psk|preshared_key)$",
+    re.IGNORECASE,
+)
+
+
+def redact(value, key=""):
+    """Mask and replace the secret fields of a decoded JSON answer."""
+    if isinstance(value, dict):
+        return {k: redact(v, k) for k, v in value.items()}
+    if isinstance(value, list):
+        return [redact(v, key) for v in value]
+    if isinstance(value, str) and value and SECRET_FIELD.search(key):
+        mask(value)
+        return "***"
+    return value
+
+
+X25519_P = 2**255 - 19
+
+
+def x25519(scalar, u):
+    """RFC 7748 X25519 on 32-byte little-endian strings."""
+    k = bytearray(scalar)
+    k[0] &= 248
+    k[31] &= 127
+    k[31] |= 64
+    k = int.from_bytes(k, "little")
+    x1 = int.from_bytes(u, "little") & ((1 << 255) - 1)
+    x2, z2, x3, z3, swap = 1, 0, x1, 1, 0
+    for t in reversed(range(255)):
+        bit = (k >> t) & 1
+        swap ^= bit
+        if swap:
+            x2, x3, z2, z3 = x3, x2, z3, z2
+        swap = bit
+        a, b = x2 + z2, x2 - z2
+        aa, bb = a * a % X25519_P, b * b % X25519_P
+        e = aa - bb
+        c, d = x3 + z3, x3 - z3
+        da, cb = d * a % X25519_P, c * b % X25519_P
+        x3, z3 = (da + cb) ** 2 % X25519_P, x1 * (da - cb) ** 2 % X25519_P
+        x2, z2 = aa * bb % X25519_P, e * (aa + 121665 * e) % X25519_P
+    if swap:
+        x2, z2 = x3, z3
+    return (x2 * pow(z2, X25519_P - 2, X25519_P) % X25519_P).to_bytes(32, "little")
+
+
+def b64url(raw):
+    return base64.urlsafe_b64encode(raw).decode().rstrip("=")
+
+
+def fill_generated(body):
+    """Replace the @@NEW_...@@ placeholders of a control body with new secrets."""
+    def generated(match):
+        name = match.group(1)
+        if name == "NEW_REALITY_KEY":
+            private = secrets.token_bytes(32)
+            value = b64url(private)
+            mask(value)
+            print(f"Generated Reality key pair, public key {b64url(x25519(private, (9).to_bytes(32, 'little')))}")
+            return value
+        if name in ("NEW_SS2022_KEY_16", "NEW_SS2022_KEY_32"):
+            value = base64.b64encode(secrets.token_bytes(int(name[-2:]))).decode()
+            mask(value)
+            return value
+        raise JumpServerError(f"@@{name}@@ is not a known generated secret")
+    return re.sub(r"@@(NEW_[A-Z0-9_]+)@@", generated, body)
+
+
+class Control:
+    """Control's administrator API with an admin API token."""
+
+    def __init__(self, url, token, timeout=30):
+        self.url = url.rstrip("/")
+        self.token = token
+        self.timeout = timeout
+
+    def request(self, method, path, body=None):
+        if not path.startswith("/api/"):
+            raise JumpServerError("the path must start with /api/")
+        response = requests.request(
+            method, self.url + path, json=body, timeout=self.timeout,
+            headers={"Authorization": f"Bearer {self.token}", "Accept": "application/json"},
+        )
+        try:
+            answer = response.json() if response.content else None
+        except ValueError:
+            answer = response.text[:500]
+        return response.status_code, answer
+
+
+def control_client():
+    missing = [k for k in ("CONTROL_URL", "CONTROL_ADMIN_TOKEN") if not os.environ.get(k)]
+    if missing:
+        raise JumpServerError("missing environment: " + ", ".join(missing))
+    mask(os.environ["CONTROL_ADMIN_TOKEN"])
+    return Control(os.environ["CONTROL_URL"], os.environ["CONTROL_ADMIN_TOKEN"])
+
+
+def cmd_control(_client, args):
+    control = control_client()
+    body = None
+    if args.body:
+        try:
+            body = json.loads(fill_generated(args.body))
+        except ValueError as exc:
+            raise JumpServerError(f"the body is not JSON: {exc}") from exc
+    method = args.method.upper()
+    status, answer = control.request(method, args.path, body)
+    print(f"{method} {args.path}: HTTP {status}")
+    print(json.dumps(redact(answer), ensure_ascii=False, indent=2)[:RESULT_LIMIT])
+    return 0 if status < 400 else 1
+
+
+def cmd_install_agent(client, args):
+    """Install and enroll a node's Agent on one host.
+
+    Control issues a one-hour install token for the node; the host runs
+    Control's install command under systemd-run (it outlives the job
+    timeout), logging to /root/anix-agent-install.log. Read the log with a
+    later `run`.
+    """
+    hosts = select_hosts(client.hosts(), args.hosts)
+    if len(hosts) != 1:
+        raise JumpServerError("install-agent needs exactly one host")
+    control = control_client()
+    status, answer = control.request("POST", "/api/v4/kernel/agents/install-tokens",
+                                     {"node": args.node, "ttl_seconds": 3600})
+    if status >= 400 or not isinstance(answer, dict):
+        print(json.dumps(redact(answer), ensure_ascii=False, indent=2)[:2000])
+        raise JumpServerError(f"install token for {args.node}: HTTP {status}")
+    data = answer.get("data") or {}
+    mask(data.get("credential"))
+    commands = {c.get("mirror"): c for c in data.get("commands") or []}
+    chosen = commands.get(args.mirror) or {}
+    if not chosen.get("command"):
+        raise JumpServerError(f"Control offers no {args.mirror} install command")
+    if not chosen.get("available", True):
+        print(f"Note: {chosen.get('note')}")
+    print(f"Install token for {data.get('node')}, Agent {data.get('agent_version')}, "
+          f"expires {data.get('expires_at')}")
+    # The job already runs as root, and a host need not have sudo.
+    command = chosen["command"].replace("| sudo bash", "| bash")
+    script = "#!/bin/bash\nset -o pipefail\n" + command + "\n"
+    encoded = base64.b64encode(script.encode()).decode()
+    mask(encoded)
+    unit = "anix-agent-install-" + re.sub(r"[^a-z0-9-]", "-", args.node)
+    remote = (
+        f"echo {encoded} | base64 -d > /root/anix-agent-install.sh && chmod 700 /root/anix-agent-install.sh && "
+        f"systemd-run --unit={unit}-$(date +%s) --collect "
+        f"bash -c {shlex.quote('bash /root/anix-agent-install.sh > /root/anix-agent-install.log 2>&1')} && echo launched"
+    )
+    args.cmd, args.timeout = remote, 60
+    args.describe = f"the anix-agent installer for {args.node}"
+    return cmd_run(client, args)
 
 
 def fill_secrets(cmd):
@@ -302,19 +482,33 @@ def main(argv=None):
     run.add_argument("--runas", default="root", help="the account to run as (default root)")
     run.add_argument("--timeout", type=int, default=60, help="seconds the command may run (default 60)")
     run.add_argument("--show-output", action="store_true", help="print each host's output (the default outside GitHub Actions)")
+    control = sub.add_parser("control", help="call Control's administrator API")
+    control.add_argument("--method", default="GET", help="the HTTP method (default GET)")
+    control.add_argument("--path", required=True, help="the API path, for example /api/v2/admin/nodes")
+    control.add_argument("--body", default="", help="a JSON body; may hold @@NEW_...@@ placeholders")
+    install = sub.add_parser("install-agent", help="install and enroll a Control node's Agent on one host")
+    install.add_argument("--hosts", required=True, help="the JumpServer host")
+    install.add_argument("--node", required=True, help="the Control node, proxy-<id> or forward-<id>")
+    install.add_argument("--mirror", default="control", choices=("control", "cn", "github"),
+                         help="where the host downloads the Agent (default control)")
+    install.add_argument("--runas", default="root", help="the account to run as (default root)")
+    install.add_argument("--show-output", action="store_true", help="print the host's output")
     args = parser.parse_args(argv)
-    if args.command == "run" and os.environ.get("GITHUB_ACTIONS") != "true":
+    if args.command in ("run", "install-agent") and os.environ.get("GITHUB_ACTIONS") != "true":
         args.show_output = True
 
     missing = [k for k in ("JMS_URL", "JMS_KEY_ID", "JMS_SECRET") if not os.environ.get(k)]
+    if args.command == "control":
+        missing = []  # Control only
     if missing:
         print("missing environment: " + ", ".join(missing), file=sys.stderr)
         return 2
-    client = Client(
+    client = None if args.command == "control" else Client(
         os.environ["JMS_URL"], os.environ["JMS_KEY_ID"], os.environ["JMS_SECRET"],
         org=os.environ.get("JMS_ORG") or DEFAULT_ORG,
     )
-    commands = {"check": cmd_check, "hosts": cmd_hosts, "run": cmd_run}
+    commands = {"check": cmd_check, "hosts": cmd_hosts, "run": cmd_run,
+                "control": cmd_control, "install-agent": cmd_install_agent}
     try:
         return commands[args.command](client, args)
     except (JumpServerError, requests.RequestException) as exc:
