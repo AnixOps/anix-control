@@ -800,7 +800,7 @@ when coming from a release candidate.
   binary.** Login, registration and reset attempts are limited atomically per account, the second
   factor is limited per account and can no longer be replaced by a session alone, an unknown
   e-mail costs the same work as a wrong password, and infrastructure error text no longer reaches
-  unauthenticated clients. None of it takes effect until the rc.3 package is imported and the
+  unauthenticated clients. None of it takes effect until the rc.4 package is imported and the
   installation is moved to it (docs/UPGRADE.md, "4.2.0-rc.2 To 4.2.0-rc.3").
 - **Credential revocation can no longer lose a race with a renewal:** an Agent or module
   certificate that was being issued while its credentials were revoked is covered by the
@@ -822,8 +822,8 @@ when coming from a release candidate.
 - Rolling back to 4.1.0 after the import: `config/scripts/rollback_installations.py` does it in
   order (below).
 - Commercial packages without a new-root build: the signed 4.2.0-rc.2 builds exist (attached to
-  the v4.2.0-rc.2 release); rc.3 builds appear when the `Commercial Packages` workflow is run
-  with the rc.3 tag.
+  the v4.2.0-rc.2 release); rc.4 builds appear when the `Commercial Packages` workflow is run
+  with the rc.4 tag.
 - API token creation after the identity cutover needs a sign-in at most ten minutes old: **still
   so**, but a stale sign-in now has its own code, `step_up_sign_in_stale`.
 - `x/crypto`: v0.57.0 in the root, Control Center and `sdk` modules.
@@ -836,9 +836,14 @@ when coming from a release candidate.
   fixed in Go 1.26.9; `x/net/http2` fixed in v0.60.0). The root and Control Center modules, the CI
   and nightly toolchain and the Control and module images (`golang:1.26.9-alpine`, pinned by
   digest) move to them, and the `sdk` and `identity` modules move to `go 1.26.0` with the same
-  `x/net` v0.60.0. The Agent builds with Go 1.26.9 and `x/net` v0.60.0 in its own module from this
-  release; four reachable advisories in its hysteria and quic-go dependencies are not fixed
-  here, and the Agent's CHANGELOG lists them.
+  `x/net` v0.60.0. The standalone Agent release `v4.2.0-rc.4` builds with Go 1.26.9 and `x/net`
+  v0.60.0 in its own module; four reachable advisories in its hysteria and quic-go dependencies
+  are not fixed there, and the Agent's CHANGELOG lists them.
+  **The four Agent plugin binaries in this release's signed packages archive (`machine-telemetry`,
+  `nftables-forward`, `gost-mesh` and `nat-egress`) do not have these fixes.** They were built from
+  the Agent's rc.3 source (commit `acf54a02`, the commit the CI workflow pins) with Go 1.26.9 and
+  carry `x/net` v0.58.0, which `govulncheck` reports for GO-2026-6603, 6611, 6612 and 6617. The
+  fix reaches them with the next build.
 
 - **Security:** the server logs a startup `WARNING` for each weak shared secret (`jwt.secret`,
   `app.api_token`, `grpc.api_token`): set but shorter than 32 bytes, a template value, or only a few

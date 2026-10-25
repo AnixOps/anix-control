@@ -267,7 +267,7 @@ the link certificate carries only that name.
 ### 3.3 Primitives
 
 - Go's `crypto/tls`, `crypto/x509`, `crypto/ecdsa` and `crypto/rand` only,
-  with the module's toolchain (Go 1.25, toolchain 1.26). QUIC uses the same
+  with the module's toolchain (Go 1.26). QUIC uses the same
   `crypto/tls` through its QUIC API; the QUIC library adds no cryptography
   of its own.
 - Cipher suites and key exchange: Go's TLS 1.3 defaults (AES-128-GCM,
@@ -761,8 +761,10 @@ data, flow control, reset, ping and close replace those frames, and leaves
 **Dependency (decision P2).** `quic-go` v0.59.1, MIT, pinned in `sdk/go.mod`:
 the version already in the kernel module's requirements, the first one with the
 fixes of all its Go advisories (GO-2026-5676, an HTTP/3 QPACK issue in a package this module
-does not import, was fixed in it), and its `go 1.24` directive keeps the module's
-`go 1.25`. It brings `golang.org/x/crypto`, `x/net` and `x/sys` (BSD-3-Clause)
+does not import, was fixed in it), and its `go 1.24` directive is below the
+module's `go 1.26.0` (the floor since 4.2.0-rc.4, set by `golang.org/x/crypto`
+v0.57.0, `x/net` v0.60.0 and `x/sys` v0.48.0). It brings `golang.org/x/crypto`,
+`x/net` and `x/sys` (BSD-3-Clause)
 into the build; no other module is built. `quic-go/qpack` (MIT) and, for
 quic-go's own tests and tools, `go.uber.org/mock` (Apache-2.0), `gcassert` and
 `kr/pretty` (MIT) appear in the module graph only. `anix-agent` takes the version
