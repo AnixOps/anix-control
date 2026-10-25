@@ -1,17 +1,19 @@
 # Repository Audit Baseline
 
 Date: 2026-07-08 (inventory in "Current Shape" and "CI/CD Baseline" refreshed
-2026-09-29, after PR #8 removed dead code and the legacy proxy test tooling)
+2026-10-25 for the Go versions, the package and test counts and the release
+assets; the refresh of 2026-09-29 followed PR #8, which removed dead code and
+the legacy proxy test tooling)
 
 This is the current audit baseline for `github.com/AnixOps/anix-control/v5`. It is a working document: items marked as gaps remain open until backed by code, tests, CI evidence, or operational runbooks.
 
 ## Current Shape
 
 - Go module: `github.com/AnixOps/anix-control/v5`
-- Go version in `go.mod`: `go 1.25.0` (module minimum) with `toolchain go1.26.8`
-- CI Go version: `1.26.8` (`GO_VERSION` in `.github/workflows/ci.yml`)
-- Current package count from `GOWORK=off go list ./...`: 40
-- Current Go test file count under `cmd`, `internal`, and `config`: 141 (169 repository-wide)
+- Go version in `go.mod`: `go 1.26.0` (module minimum) with `toolchain go1.26.9`
+- CI Go version: `1.26.9` (`GO_VERSION` in `.github/workflows/ci.yml`)
+- Current package count from `GOWORK=off go list ./...`: 141
+- Current Go test file count under `cmd`, `internal`, and `config`: 558 (730 repository-wide)
 - Primary backend entry point: `cmd/server/main.go`
 - Supporting commands: `cmd/migrate`, `cmd/sqlite2postgres`, `cmd/wgrotate`
   (`cmd/configgen`, `cmd/integration-test`, `cmd/report`, `cmd/subtest`, and
@@ -200,7 +202,7 @@ Current workflow files:
 
 Current CI coverage includes:
 
-- Go setup pinned to `1.26.8` for Actions verification and release artifact generation.
+- Go setup pinned to `1.26.9` for Actions verification and release artifact generation.
 - Workflow actions refreshed to current major versions to avoid Node.js 20 action-runtime deprecation warnings.
 - `go mod tidy` diff check.
 - `gofmt` check.
@@ -219,10 +221,9 @@ Current CI coverage includes:
 - PostgreSQL stats regression job.
 - Forward runtime, gRPC coverage-gated, and command-focused jobs.
 - Release tag gate for `vX.Y.Z` and prerelease candidate tags such as `vX.Y.Z-rc.1`.
-- Multi-platform release binaries for linux, darwin, and windows on amd64/arm64.
+- Release binaries for linux on amd64 and arm64 only.
 - Release checksums.
-- Release assets include `OPERATOR_DEPLOYMENT.md` with the manual deployment, verification, and rollback flow.
-- Release assets include `UPGRADE.md` with the operator upgrade, artifact verification, migration-evidence, and rollback flow.
+- The operator runbooks `docs/UPGRADE.md` and `docs/DEPLOYMENT.md` are in the tagged tree; they are not release assets.
 - Release assets include `RELEASE_MANIFEST.json` with GitHub Actions run metadata and per-artifact hashes.
 - Release assets include deterministic `RELEASE_NOTES.md` generated from `CHANGELOG.md`.
 - `docs/UPGRADE.md` now documents GitHub Actions artifact verification, systemd/Docker upgrade paths, migration evidence, rollback, and post-upgrade records.

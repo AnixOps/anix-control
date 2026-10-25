@@ -183,8 +183,9 @@ commercial packages (`order`, `payment`, `affiliate`) have no build signed
 with the new root ([the warning](#commercial-packages-have-no-new-root-build)).
 Read ["The Official Signing Root Changes (v4.2)"](#the-official-signing-root-changes-v42).
 
-**Upgrading to 4.2.0-rc.3: the identity security fixes are in a package, and
-nothing moves it for you.** The login, registration, reset and second-factor
+**Upgrading to 4.2.0-rc.3 (published as 4.2.0-rc.4): the identity security
+fixes are in a package, and nothing moves it for you.** The login,
+registration, reset and second-factor
 fixes of rc.3 live in the `identity-platform` package, not in the Control
 binary: starting rc.3 registers the new package release but leaves a healthy
 installation on the release it runs. Until you move it
@@ -251,8 +252,11 @@ Before touching production:
   backup into `data_dir/backups` and does not start when it cannot write it;
   check the free space and the directory's owner first**
   ([Backups Are Built In](#backups-are-built-in)).
-- If the release mentions schema or data changes, record the migration dry-run
-  evidence attached to the GitHub Release.
+- If the release mentions schema or data changes, rehearse the upgrade on a
+  restored copy of the backup
+  ([Database And Migration Notes](#database-and-migration-notes)) and keep the
+  output with the upgrade record. Releases from 4.1.0 on carry no migration
+  dry-run evidence.
 - Verify the deployment type: systemd binary, Docker Compose, or another
   operator-managed wrapper.
 - **Upgrading to the release with built-in packages (after 4.2.x): read
@@ -3588,6 +3592,15 @@ recovery, the way out is the rollback below or restoring the database backup.
 
 ## Upgrading From 4.2.0-rc.2 To 4.2.0-rc.3
 
+> **Control rc.3 was tagged but never published** (its release pipeline failed
+> the Go security gate; the Agent's v4.2.0-rc.3 release does exist). Control
+> and Agent share a version number: wherever this section says rc.3 for a
+> release, asset or version, use `4.2.0-rc.4` (`VERSION=4.2.0-rc.4`,
+> `desired_version` `4.2.0-rc.4`, the `agent-install.sh` asset of the rc.4
+> Control release, the rc.4 Agent). rc.4 carries every rc.3 change and adds the
+> Go 1.26.9 and `x/net` v0.60.0 update; the bullet on source builds below says
+> where that update does not reach.
+
 rc.3 changes no table and no signing root: nothing under any `migrations`
 directory differs from rc.2, and the root is the same
 `jW26nr2tbthASoeq6RmIpx8Ah+uhPNIv9V1ewRVb1VE=`. The Agent and Control share a
@@ -3687,9 +3700,15 @@ with the rc.3 builds in place of rc.2; the notes below are on top of it.
 - **Source builds need Go 1.26** (the root module, the `sdk` and `identity`
   modules and the Control Center module). Release images use
   `golang:1.26.9-alpine` from v4.2.0-rc.4.
-  The Agent (`anix-agent`) builds with Go 1.26.9 and `x/net` v0.60.0 from
-  v4.2.0-rc.4. Four reachable advisories in its hysteria and quic-go dependencies
-  are not fixed in that release; the Agent's CHANGELOG lists them.
+  The Agent (`anix-agent`) release v4.2.0-rc.4 builds with Go 1.26.9 and
+  `x/net` v0.60.0. Four reachable advisories in its hysteria and quic-go
+  dependencies are not fixed in that release; the Agent's CHANGELOG lists them.
+  Known gap: the four Agent plugin binaries inside the signed packages archive
+  of Control v4.2.0-rc.4 (`machine-telemetry`, `nftables-forward`, `gost-mesh`
+  and `nat-egress`) were built from the Agent's rc.3 source (`acf54a02`). They
+  use Go 1.26.9 but carry `x/net` v0.58.0, so the `x/net/http2` advisories
+  GO-2026-6603, 6611, 6612 and 6617 are not closed in them until the next
+  build. The standalone Agent release is on `x/net` v0.60.0.
 
 ### For The Release Owner
 
