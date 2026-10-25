@@ -1013,7 +1013,7 @@ info:
     url: https://opensource.org/licenses/MIT
   termsOfService: https://github.com/AnixOps/anix-control
   title: AnixOps Control API
-  version: 5.0.0-rc.1
+  version: 5.0.0-rc.2
 paths:
   /admin/agent/execute:
     post:

@@ -3,7 +3,7 @@
 .PHONY: test-quick test-clean test-summary test-grpc test-cmd test-all test-coverage-all
 
 # 版本信息
-VERSION := 5.0.0-rc.1
+VERSION := 5.0.0-rc.2
 # The Agent release this Control installs on nodes (config/AGENT_RELEASE).
 AGENT_RELEASE := $(shell tr -d '[:space:]' < config/AGENT_RELEASE)
 BUILD_TIME := $(shell date +%Y-%m-%d_%H:%M:%S)
