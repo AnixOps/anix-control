@@ -58,8 +58,8 @@ Actions → JumpServer → Run workflow, then choose the action:
   secret field (`api_key`, `secret`, `credential`, `token`, `password`,
   `private_key`, `server_key`, `psk`) replaced by `***`. In `api_body`,
   `@@NEW_REALITY_KEY@@` becomes a new X25519 private key (its public key is
-  printed) and `@@NEW_SS2022_KEY_16@@` / `@@NEW_SS2022_KEY_32@@` a new
-  Shadowsocks 2022 key of that many bytes, so keys never pass through the
+  printed, and `@@NEW_REALITY_PUBLIC_KEY@@` in the same body becomes it) and
+  `@@NEW_SS2022_KEY_16@@` / `@@NEW_SS2022_KEY_32@@` a new Shadowsocks 2022 key of that many bytes, so keys never pass through the
   inputs.
 - `install-agent`: asks Control for a one-hour install token for `node`
   (`proxy-<id>`) and runs Control's install command on the single host named in

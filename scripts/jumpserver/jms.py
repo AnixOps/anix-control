@@ -29,7 +29,8 @@ job, so the secret never appears in the workflow inputs or the printed command.
 `control` and `install-agent` reach Control at CONTROL_URL with the admin API
 token CONTROL_ADMIN_TOKEN (docs/reference/admin-api-tokens.md). A `control`
 body may hold generated secrets, filled in on the runner and masked:
-@@NEW_REALITY_KEY@@ (an X25519 private key; its public key is printed) and
+@@NEW_REALITY_KEY@@ (an X25519 private key; its public key is printed, and
+@@NEW_REALITY_PUBLIC_KEY@@ in the same body becomes it) and
 @@NEW_SS2022_KEY_16@@ / @@NEW_SS2022_KEY_32@@ (a Shadowsocks 2022 key). Secret
 fields of Control's answer are masked before it is printed.
 
@@ -311,15 +312,28 @@ def b64url(raw):
 
 
 def fill_generated(body):
-    """Replace the @@NEW_...@@ placeholders of a control body with new secrets."""
+    """Replace the @@NEW_...@@ placeholders of a control body with new secrets.
+
+    @@NEW_REALITY_PUBLIC_KEY@@ is the public key of the body's
+    @@NEW_REALITY_KEY@@, which is generated once per body.
+    """
+    reality = {}
+
+    def reality_pair():
+        if not reality:
+            private = secrets.token_bytes(32)
+            reality["private"] = b64url(private)
+            reality["public"] = b64url(x25519(private, (9).to_bytes(32, "little")))
+            mask(reality["private"])
+            print(f"Generated Reality key pair, public key {reality['public']}")
+        return reality
+
     def generated(match):
         name = match.group(1)
         if name == "NEW_REALITY_KEY":
-            private = secrets.token_bytes(32)
-            value = b64url(private)
-            mask(value)
-            print(f"Generated Reality key pair, public key {b64url(x25519(private, (9).to_bytes(32, 'little')))}")
-            return value
+            return reality_pair()["private"]
+        if name == "NEW_REALITY_PUBLIC_KEY":
+            return reality_pair()["public"]
         if name in ("NEW_SS2022_KEY_16", "NEW_SS2022_KEY_32"):
             value = base64.b64encode(secrets.token_bytes(int(name[-2:]))).decode()
             mask(value)
