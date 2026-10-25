@@ -173,10 +173,12 @@ def cmd_run(client, args):
           + ", ".join(h.get("name", "") for h in hosts))
     job = client.post("/api/v1/ops/jobs/", {
         "instant": True,
+        "is_periodic": False,  # the serializer defaults it to true and then wants a schedule
         "type": "adhoc",
         "module": "shell",
         "args": args.cmd,
         "assets": [h["id"] for h in hosts],
+        "nodes": [],
         "runas": args.runas,
         "runas_policy": "privileged_first",
         "timeout": args.timeout,
