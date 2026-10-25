@@ -10,13 +10,15 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: 'check: test the key; hosts: list the hosts; run: run a shell command through Ansible'
+        description: 'check: test the key; hosts: list the hosts; run: run a shell command through Ansible; control: call a Control admin API; install-agent: enroll a node''s Agent on one host'
         required: true
         type: choice
         options:
           - check
           - hosts
           - run
+          - control
+          - install-agent
         default: check
       command:
         description: 'Shell command for run'
@@ -33,6 +35,31 @@ on:
         required: false
         type: string
         default: 'root'
+      node:
+        description: 'Control node for install-agent, e.g. proxy-29'
+        required: false
+        type: string
+        default: ''
+      api_method:
+        description: 'HTTP method for control'
+        required: false
+        type: choice
+        options:
+          - GET
+          - POST
+          - PUT
+          - DELETE
+        default: GET
+      api_path:
+        description: 'Admin API path for control, e.g. /api/v2/admin/nodes'
+        required: false
+        type: string
+        default: ''
+      api_body:
+        description: 'JSON body for control; @@NEW_REALITY_KEY@@ and @@NEW_SS2022_KEY_16@@/_32@@ are generated'
+        required: false
+        type: string
+        default: ''
       show_output:
         description: 'Print each host''s output for run. The repository is public, so the log is too'
         required: false
@@ -69,16 +96,27 @@ jobs:
           JMS_SECRET: ${{ secrets.JMS_SECRET }}
           # Filled into a command's @@CLOUDFLARE_API_TOKEN@@ by jms.py.
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          # Control and its admin API token for control and install-agent.
+          CONTROL_URL: ${{ vars.CONTROL_URL || 'https://new-x.kalijerry.uk' }}
+          CONTROL_ADMIN_TOKEN: ${{ secrets.CONTROL_ADMIN_TOKEN }}
           ACTION: ${{ inputs.action }}
           COMMAND: ${{ inputs.command }}
           HOSTS: ${{ inputs.hosts }}
           RUNAS: ${{ inputs.runas }}
           SHOW_OUTPUT: ${{ inputs.show_output }}
+          NODE: ${{ inputs.node }}
+          API_METHOD: ${{ inputs.api_method }}
+          API_PATH: ${{ inputs.api_path }}
+          API_BODY: ${{ inputs.api_body }}
         run: |
+          show=()
+          if [ "$SHOW_OUTPUT" = true ]; then show=(--show-output); fi
           if [ "$ACTION" = run ]; then
-            show=()
-            if [ "$SHOW_OUTPUT" = true ]; then show=(--show-output); fi
             python scripts/jumpserver/jms.py run --cmd "$COMMAND" --hosts "$HOSTS" --runas "$RUNAS" "${show[@]}"
+          elif [ "$ACTION" = control ]; then
+            python scripts/jumpserver/jms.py control --method "$API_METHOD" --path "$API_PATH" --body "$API_BODY"
+          elif [ "$ACTION" = install-agent ]; then
+            python scripts/jumpserver/jms.py install-agent --hosts "$HOSTS" --node "$NODE" --runas "$RUNAS" "${show[@]}"
           else
             python scripts/jumpserver/jms.py "$ACTION"
           fi
