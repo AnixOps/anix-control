@@ -173,6 +173,9 @@ def cmd_run(client, args):
           + ", ".join(h.get("name", "") for h in hosts))
     job = client.post("/api/v1/ops/jobs/", {
         "instant": True,
+        # JumpServer's job serializer defaults is_periodic to true and then
+        # rejects a job without a crontab or interval.
+        "is_periodic": False,
         "type": "adhoc",
         "module": "shell",
         "args": args.cmd,
