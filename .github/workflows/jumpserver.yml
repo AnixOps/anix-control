@@ -67,6 +67,8 @@ jobs:
           JMS_URL: ${{ vars.JMS_URL }}
           JMS_KEY_ID: ${{ secrets.JMS_KEY_ID }}
           JMS_SECRET: ${{ secrets.JMS_SECRET }}
+          # Filled into a command's @@CLOUDFLARE_API_TOKEN@@ by jms.py.
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           ACTION: ${{ inputs.action }}
           COMMAND: ${{ inputs.command }}
           HOSTS: ${{ inputs.hosts }}
