@@ -95,6 +95,7 @@ export const SUBSCRIPTION_FORMATS = Object.freeze([
   { value: 'quantumultx', nameKey: 'quantumultx', ext: 'conf' },
   { value: 'sing-box', nameKey: 'singBox', ext: 'json' },
   { value: 'wireguard', nameKey: 'wireguard', ext: 'conf' },
+  { value: 'iwan', nameKey: 'iwan', ext: 'conf' },
   { value: 'json', nameKey: 'json', ext: 'json' },
   { value: 'base64json', nameKey: 'base64json', ext: 'txt' }
 ])

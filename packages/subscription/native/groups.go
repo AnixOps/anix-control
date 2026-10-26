@@ -35,6 +35,7 @@ func (s *Service) Formats(context.Context, pluginhostsdk.NativeRequest) (pluginh
 		{"id": "base64json", "name": "Base64 JSON", "description": "Base64 编码的分组 JSON 格式"},
 		{"id": "sing-box", "name": "Sing-box", "description": "适用于 Sing-box, Nekobox 等"},
 		{"id": "wireguard", "name": "WireGuard", "description": "原生 WireGuard 配置，适用于 WireGuard/Shadowrocket/Loon 等支持导入 .conf 的客户端"},
+		{"id": "iwan", "name": "iWAN (iwand)", "description": "Panabit iWAN 登录信息，iwand 客户端配置；OpenWrt、Panabit 客户端按其中的服务器、端口、用户名、口令手工填写"},
 	})
 }
 
@@ -49,6 +50,7 @@ func (s *Service) ProtocolTypes(context.Context, pluginhostsdk.NativeRequest) (p
 		{"id": "hysteria2", "name": "Hysteria2", "description": "Hysteria2 协议", "supports_tls": true, "supports_reality": false},
 		{"id": "tuic", "name": "TUIC", "description": "TUIC 协议", "supports_tls": true, "supports_reality": false},
 		{"id": "wireguard", "name": "WireGuard", "description": "WireGuard 用户接入协议", "supports_tls": false, "supports_reality": false},
+		{"id": "iwan", "name": "Panabit iWAN", "description": "iWAN 三层隧道（不加密）", "supports_tls": false, "supports_reality": false},
 	})
 }
 

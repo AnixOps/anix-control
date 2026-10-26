@@ -107,6 +107,10 @@ const (
 	ProtocolTUIC        ProtocolType = "tuic"
 	ProtocolAnyTLS      ProtocolType = "anytls"
 	ProtocolWireGuard   ProtocolType = "wireguard"
+	// ProtocolIWAN is a Panabit iWAN layer-3 tunnel served by anixcore. It
+	// has no encryption and no subscription link: users enter the login by
+	// hand or use the iwand configuration (subscription format "iwan").
+	ProtocolIWAN ProtocolType = "iwan"
 )
 
 // NodeProtocol 节点协议配置
@@ -304,6 +308,15 @@ func GetProtocolTemplates() []ProtocolTemplate {
 			DefaultPort: 51820,
 			TLS:         0,
 			Settings:    `{"cidr":"10.66.0.0/24","server_address":"10.66.0.1/24","server_public_key":"","mtu":1280,"dns":["1.1.1.1","8.8.8.8"],"allowed_ips":["0.0.0.0/0"],"tunnel_type":"quic","relay":{"backend":"gost","mode":"relay+quic","role":"entry","wss_compat":false,"wss_path":"/ws","wss_secure":true,"wss_server_name":"","wss_ca_file":"","wss_cert_file":"","wss_key_file":"","exit_nat":true,"entry_stats":true,"server":"","server_port":0,"tun_port":8421,"entry_tun_address":"172.31.66.2/24","exit_tun_address":"172.31.66.1/24","outbound_iface":"","routing_table":0,"routing_priority":0}}`,
+			Transport:   "udp",
+		},
+		{
+			Type:        ProtocolIWAN,
+			Name:        "Panabit iWAN",
+			Description: "UDP 三层隧道，接入 iwand、OpenWrt、Panabit 等 iWAN 客户端；协议不加密，只适合可信线路",
+			DefaultPort: 4500,
+			TLS:         0,
+			Settings:    `{"pool":"10.66.0.0/16","mtu":1400,"dns_upstream":"1.1.1.1","allow_encrypt":true,"allow_client_to_client":false,"fixed_addresses":{}}`,
 			Transport:   "udp",
 		},
 	}

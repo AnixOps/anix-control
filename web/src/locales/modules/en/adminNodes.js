@@ -512,6 +512,26 @@ export default {
       valid: 'Valid JSON',
       invalid: 'Invalid JSON'
     },
+    iwan: {
+      title: 'Panabit iWAN',
+      unencrypted: 'Not encrypted',
+      unencryptedHint: 'iWAN has no encryption or integrity protection: devices on the path can read and change the traffic. Use it only on links you trust (spec §9).',
+      fields: {
+        pool: 'Address pool',
+        mtu: 'MTU',
+        dnsUpstream: 'DNS upstream',
+        allowEncrypt: 'Allow XOR masking',
+        allowClientToClient: 'Allow user-to-user traffic',
+        fixedAddresses: 'Fixed addresses'
+      },
+      hints: {
+        pool: 'IPv4 network (/8 to /30); its first address is the gateway.',
+        dnsUpstream: 'Where the gateway relays DNS: an IP or IP:port.',
+        allowEncrypt: 'XOR only hides traffic from casual inspection; it is not encryption.',
+        fixedAddresses: 'One "user id=address" per line, inside the pool and not the gateway.',
+        login: 'Users log in with their panel user id and the first 16 hex digits of their UUID; the iWAN format on the subscription page gives them an iwand configuration.'
+      }
+    },
     wireguard: {
       sections: {
         access: 'WireGuard access',
