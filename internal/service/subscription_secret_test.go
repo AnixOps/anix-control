@@ -60,3 +60,28 @@ func TestWireGuardSubscriptionNeverCarriesServerPrivateKey(t *testing.T) {
 	require.NotContains(t, string(body), serverPrivate)
 	require.NotContains(t, string(body), "server_private_key")
 }
+
+// A VLESS Reality protocol reaches every client format with its flow, its SNI
+// and a uTLS fingerprint; a client without the flow is rejected by an inbound
+// that requires xtls-rprx-vision.
+func TestVLESSRealityProtocolCarriesFlowSNIAndFingerprint(t *testing.T) {
+	svc := &SubscriptionService{}
+	settings := `{"flow":"xtls-rprx-vision"}`
+	reality := `{"dest":"www.example.com:443","private_key":"server-secret","public_key":"pbk-1","server_name":"www.example.com","short_id":"ab12"}`
+	node := &model.Node{ID: 57, Name: "DE", Host: "de.example.com", CreatedAt: time.Now()}
+	protocol := &model.NodeProtocol{ID: 41, NodeID: 57, Name: "Reality", Type: model.ProtocolVLESS, Port: 443, TLS: 2,
+		Settings: &settings, RealitySettings: &reality}
+	ctx := &model.TemplateRenderContext{UserID: 1, UUID: "uuid-1"}
+
+	parsed := svc.nodeProtocolToParsedNode(node, protocol, ctx)
+	require.Equal(t, "xtls-rprx-vision", parsed.Flow)
+	require.Equal(t, "www.example.com", parsed.ServerName, "the SNI falls back to the Reality server name")
+	require.Equal(t, "chrome", parsed.TLSFingerprint)
+	require.Equal(t, "pbk-1", parsed.RealityPublicKey)
+
+	tlsSettings := `{"server_name":"cdn.example.com","fingerprint":"firefox"}`
+	protocol.TLSSettings = &tlsSettings
+	parsed = svc.nodeProtocolToParsedNode(node, protocol, ctx)
+	require.Equal(t, "cdn.example.com", parsed.ServerName)
+	require.Equal(t, "firefox", parsed.TLSFingerprint)
+}
