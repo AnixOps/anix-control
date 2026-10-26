@@ -27,6 +27,30 @@ definitions:
         description: RetentionDays is how long a row is kept.
         type: integer
     type: object
+  egressroute.Input:
+    properties:
+      domains:
+        items:
+          type: string
+        type: array
+      enabled:
+        type: boolean
+      exit_host:
+        type: string
+      exit_node_id:
+        type: integer
+      name:
+        type: string
+      relay_port:
+        type: integer
+      rotate_key:
+        description: |-
+          RotateKey replaces the relay key (update only); a new route always
+          gets one.
+        type: boolean
+      source_node_id:
+        type: integer
+    type: object
   handler.AgentHeartbeatRequest:
     properties:
       node_id:
@@ -6799,6 +6823,108 @@ paths:
       security:
       - BearerAuth: []
       summary: Revoke an admin API token
+      tags:
+      - Kernel
+  /api/v4/kernel/egress-routes:
+    get:
+      description: 'Every egress route by id: its source and exit node, the exit host
+        and relay port, its domains, whether it is enabled, and the state of each
+        node (applied, pending or failed with the Agent''s error). Never the relay
+        key.'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List egress routes
+      tags:
+      - Kernel
+    post:
+      consumes:
+      - application/json
+      description: 'Sends the domains the source node''s users open out through the
+        exit node: the exit node''s Agent serves a Shadowsocks 2022 relay on relay_port
+        with a key Control generates, the source node''s Agent routes the domains
+        to it (exit_host, or the exit node''s host). Both nodes get it with their
+        next configuration. A bare domain matches its subdomains too; full:, domain:,
+        keyword: and regexp: entries are kept. 409 port_taken when the exit node uses
+        the port. Audited.'
+      parameters:
+      - description: the route
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/egressroute.Input'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Create an egress route
+      tags:
+      - Kernel
+  /api/v4/kernel/egress-routes/{id}:
+    delete:
+      description: Removes the route; both nodes drop it with their next configuration.
+        Audited.
+      parameters:
+      - description: egress route id
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete an egress route
+      tags:
+      - Kernel
+    put:
+      consumes:
+      - application/json
+      description: Replaces every field of the route; rotate_key replaces its relay
+        key too. Audited.
+      parameters:
+      - description: egress route id
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: the route
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/egressroute.Input'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Update an egress route
       tags:
       - Kernel
   /api/v4/kernel/node-groups:

@@ -119,7 +119,7 @@ func openSQLiteForTest(t *testing.T, name string, pragmas ...string) *gorm.DB {
 
 func seedNodeOps(t *testing.T, db *gorm.DB) {
 	t.Helper()
-	require.NoError(t, db.AutoMigrate(append(model.KernelNodeOperationModels(), &model.Node{})...))
+	require.NoError(t, db.AutoMigrate(append(append(model.KernelNodeOperationModels(), &model.EgressRoute{}), &model.Node{})...))
 	require.NoError(t, db.Create(&[]model.Node{{ID: 1, Name: "edge-1", APIKey: "key-1"}, {ID: 2, Name: "edge-2", APIKey: "key-2"}}).Error)
 }
 

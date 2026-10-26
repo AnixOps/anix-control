@@ -200,6 +200,7 @@ export default {
       forwardV4Nodes: 'Forwarding nodes',
       forwardV4Node: 'Forwarding node',
       forwardV4Dns: 'DNS providers',
+      forwardEgress: 'Domain egress',
       control: 'Control Kernel',
       deployments: 'Deployments',
       accessGroups: 'Access groups',

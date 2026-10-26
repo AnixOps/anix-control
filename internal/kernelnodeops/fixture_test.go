@@ -92,7 +92,7 @@ func seed(t *testing.T, db *gorm.DB) {
 	t.Helper()
 	require.NoError(t, db.AutoMigrate(append(model.KernelNodeOperationModels(),
 		&model.Node{}, &model.NodeProtocol{}, &model.ForwardNode{}, &model.ForwardCleanAgent{},
-		&model.ForwardTunnel{}, &model.Forward{}, &model.ForwardRule{}, &model.AuthorizedKey{})...))
+		&model.ForwardTunnel{}, &model.Forward{}, &model.ForwardRule{}, &model.AuthorizedKey{}, &model.EgressRoute{})...))
 	exit := uint(11)
 	agentNode := uint(10)
 	require.NoError(t, db.Create(&[]model.Node{{ID: 1, Name: "proxy-1", APIKey: "node-key-1"}, {ID: 2, Name: "proxy-2", APIKey: "node-key-2"}}).Error)

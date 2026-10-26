@@ -128,6 +128,7 @@ func laterModels() []any {
 		&model.ACMECacheEntry{},  // 0003_acme_cache
 		&model.Backup{},          // 0005_backups
 		&model.DestinationStat{}, // 0006_destination_stats
+		&model.EgressRoute{},     // 0007_egress_routes
 	}
 }
 

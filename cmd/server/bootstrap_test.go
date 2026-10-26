@@ -72,8 +72,9 @@ func TestBootstrapDatabaseMigratesTheSchema(t *testing.T) {
 
 		// A database from before the migrations: the same tables, no
 		// migration records, and not the tables later migrations add
-		// (0003_acme_cache, 0005_backups, 0006_destination_stats).
-		require.NoError(t, db.Migrator().DropTable(migrations.MigrationTable, migrations.MetaTable, &model.ACMECacheEntry{}, &model.Backup{}, &model.DestinationStat{}))
+		// (0003_acme_cache, 0005_backups, 0006_destination_stats,
+		// 0007_egress_routes).
+		require.NoError(t, db.Migrator().DropTable(migrations.MigrationTable, migrations.MetaTable, &model.ACMECacheEntry{}, &model.Backup{}, &model.DestinationStat{}, &model.EgressRoute{}))
 		require.NoError(t, bootstrapDatabase(ctx, cfg))
 		meta, err = migrations.Meta(ctx, db)
 		require.NoError(t, err)

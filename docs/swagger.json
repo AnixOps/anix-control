@@ -8614,6 +8614,150 @@
                 }
             }
         },
+        "/api/v4/kernel/egress-routes": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Every egress route by id: its source and exit node, the exit host and relay port, its domains, whether it is enabled, and the state of each node (applied, pending or failed with the Agent's error). Never the relay key.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "List egress routes",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Sends the domains the source node's users open out through the exit node: the exit node's Agent serves a Shadowsocks 2022 relay on relay_port with a key Control generates, the source node's Agent routes the domains to it (exit_host, or the exit node's host). Both nodes get it with their next configuration. A bare domain matches its subdomains too; full:, domain:, keyword: and regexp: entries are kept. 409 port_taken when the exit node uses the port. Audited.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Create an egress route",
+                "parameters": [
+                    {
+                        "description": "the route",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/egressroute.Input"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v4/kernel/egress-routes/{id}": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Replaces every field of the route; rotate_key replaces its relay key too. Audited.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Update an egress route",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "egress route id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "the route",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/egressroute.Input"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Removes the route; both nodes drop it with their next configuration. Audited.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Delete an egress route",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "egress route id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/v4/kernel/node-groups": {
             "get": {
                 "security": [
@@ -10924,6 +11068,39 @@
                 },
                 "retention_days": {
                     "description": "RetentionDays is how long a row is kept.",
+                    "type": "integer"
+                }
+            }
+        },
+        "egressroute.Input": {
+            "type": "object",
+            "properties": {
+                "domains": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "exit_host": {
+                    "type": "string"
+                },
+                "exit_node_id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "relay_port": {
+                    "type": "integer"
+                },
+                "rotate_key": {
+                    "description": "RotateKey replaces the relay key (update only); a new route always\ngets one.",
+                    "type": "boolean"
+                },
+                "source_node_id": {
                     "type": "integer"
                 }
             }
