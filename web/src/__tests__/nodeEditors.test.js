@@ -102,6 +102,40 @@ describe('useProtocolEditor', () => {
     expect(editor.protocolForm).toMatchObject({ type: 'trojan', port: 9443, tls: 1, transport: 'ws' })
     expect(editor.selectedTemplate.value).toBe('Trojan')
   })
+
+  it('offers only the transports and TLS modes the protocol type runs on', async () => {
+    const editor = useProtocolEditor()
+    editor.startEdit({ id: 7, type: 'hysteria2', port: 11111, tls: 1, transport: 'udp' })
+    editor.protocolForm.mode = 'visual'
+    await nextTick()
+    expect(editor.protocolForm).toMatchObject({ type: 'hysteria2', tls: 1, transport: 'udp' })
+
+    // Switching to Shadowsocks drops Hysteria2's UDP and TLS.
+    editor.protocolForm.type = 'shadowsocks'
+    await nextTick()
+    expect(editor.protocolForm).toMatchObject({ tls: 0, transport: 'tcp' })
+    expect(editor.buildPayload().payload).toMatchObject({ type: 'shadowsocks', tls: 0, transport: 'tcp' })
+
+    // A VLESS transport is kept, and Reality moves it to one Reality runs on.
+    editor.protocolForm.type = 'vless'
+    editor.protocolForm.transport = 'ws'
+    await nextTick()
+    editor.protocolForm.tls = 2
+    await nextTick()
+    expect(editor.protocolForm.transport).toBe('tcp')
+  })
+
+  it('refuses a transport the protocol cannot run on when saving JSON', () => {
+    const editor = useProtocolEditor()
+    editor.startCreate()
+    editor.jsonEditorContent.value = JSON.stringify({ type: 'shadowsocks', port: 8388, tls: 0, transport: 'ws' })
+    expect(editor.buildPayload()).toMatchObject({ error: 'unsupported', problem: { field: 'transport', type: 'shadowsocks', value: 'ws' } })
+    editor.jsonEditorContent.value = JSON.stringify({ type: 'vmess', port: 443, tls: 2, transport: 'tcp' })
+    expect(editor.buildPayload()).toMatchObject({ error: 'unsupported', problem: { field: 'tls', type: 'vmess', value: 2 } })
+    // The tcp an old editor stored for Hysteria2 is sent as udp.
+    editor.jsonEditorContent.value = JSON.stringify({ type: 'hysteria2', port: 443, tls: 1, transport: 'tcp' })
+    expect(editor.buildPayload().payload).toMatchObject({ transport: 'udp', tls: 1 })
+  })
 })
 
 describe('node data', () => {

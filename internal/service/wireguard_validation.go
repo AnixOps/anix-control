@@ -25,6 +25,9 @@ func ValidateNodeProtocol(protocol *model.NodeProtocol) error {
 	if protocol == nil {
 		return errors.New("协议不能为空")
 	}
+	if err := validateProtocolTransport(protocol); err != nil {
+		return fmt.Errorf("%w: %v", ErrInvalidNodeProtocol, err)
+	}
 	if strings.EqualFold(strings.TrimSpace(string(protocol.Type)), string(model.ProtocolWireGuard)) {
 		if err := validateWireGuardProtocol(protocol); err != nil {
 			return fmt.Errorf("%w: %v", ErrInvalidNodeProtocol, err)
