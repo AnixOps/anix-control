@@ -28,7 +28,10 @@ for (const [file, chunk] of Object.entries(graph.chunks)) {
   for (const css of chunk.css || []) files.add(css)
 }
 for (const file of files) {
-  sizes[file] = gzipSync(readFileSync(path.join(publicDir, file))).length
+  // A chunk that holds only CSS (a stylesheet several lazy pages share)
+  // has its empty JavaScript file removed by the build: it downloads nothing.
+  const filePath = path.join(publicDir, file)
+  sizes[file] = existsSync(filePath) ? gzipSync(readFileSync(filePath)).length : 0
 }
 
 const result = evaluateBudget(graph, sizes, budget)
