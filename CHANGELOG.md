@@ -2,6 +2,36 @@
 
 ## Unreleased
 
+## 5.0.0-rc.6 - 2026-10-26
+
+### Added
+
+- Domain egress routes (转发 → 分流). An egress route sends what a proxy
+  node's users open on chosen domains out through another proxy node, for
+  example AI services from Hong Kong through Japan, while other traffic keeps
+  leaving from the node itself. `GET/POST /api/v4/kernel/egress-routes` and
+  `PUT/DELETE /api/v4/kernel/egress-routes/{id}` manage them; the list shows
+  whether each node's Agent applied the route. Both nodes get the route in
+  the member `egress` of their desired configuration (additive: a node
+  without routes has no such member and keeps its hash). The hop is a
+  Shadowsocks 2022 relay on the exit node with a key Control generates; it is
+  never answered, audited or put in a subscription. The member names no
+  kernel (domains, relay protocol, host, port, method, key), so a later Agent
+  core such as networkcore takes the same routes. Needs an Agent with egress
+  support; only protocols on its Xray core take routes.
+- 诊断 on every proxy node: the generic actions (service status, restart,
+  log tail) also accept the service `anix-agent`, the node's Agent itself.
+  `GET /api/v4/kernel/nodes/{id}/diagnostics` lists the services per node in
+  `services`: `anix-agent` on a proxy node, plus `gost` where it forwards; a
+  forward node keeps `gost`. The panel offers a service choice when a node
+  runs more than one. Needs anix-agent 5.0.0-rc.6 or later, which advertises
+  `agent.diagnostic` on every proxy node.
+
+### Changed
+
+- Control installs anix-agent v5.0.0-rc.6 on nodes. That release runs egress
+  routes on the Xray core and offers 诊断 on every proxy node.
+
 ## 5.0.0-rc.5 - 2026-10-26
 
 ### Changed
