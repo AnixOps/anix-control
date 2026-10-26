@@ -828,6 +828,13 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		v4.GET("/kernel/node-groups/:id/command", nodeGroups.Command)
 		v4.GET("/kernel/node-groups/:id/nodes", nodeGroups.Nodes)
 		v4.POST("/kernel/node-groups/:id/reset-token", nodeGroups.ResetToken)
+		// Egress routes: domains a proxy node's users open that leave
+		// through another proxy node (internal/egressroute).
+		egressRoutes := handler.NewEgressRoutesHandler()
+		v4.GET("/kernel/egress-routes", egressRoutes.List)
+		v4.POST("/kernel/egress-routes", egressRoutes.Create)
+		v4.PUT("/kernel/egress-routes/:id", egressRoutes.Update)
+		v4.DELETE("/kernel/egress-routes/:id", egressRoutes.Delete)
 		// :id is the node, proxy-<id> or forward-<id> (the segment shares
 		// its wildcard name with /kernel/nodes/:id/traffic).
 		v4.POST("/kernel/nodes/:id/approve", nodeGroups.ApproveNode)

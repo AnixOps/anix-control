@@ -11,6 +11,7 @@ import adminSubscriptionGroups from './modules/en/adminSubscriptionGroups'
 import adminApiTokens from './modules/en/adminApiTokens'
 import forwardV4 from './modules/en/forwardV4'
 import forwardDns from './modules/en/forwardDns'
+import egressRoutes from './modules/en/egressRoutes'
 import nodeDiagnostics from './modules/en/nodeDiagnostics'
 import agentUpgradeSheet from './modules/en/agentUpgradeSheet'
 
@@ -19,6 +20,7 @@ export default {
   ...adminApiTokens,
   ...forwardV4,
   ...forwardDns,
+  ...egressRoutes,
   ...nodeDiagnostics,
   ...agentUpgradeSheet,
   ...networkPages,

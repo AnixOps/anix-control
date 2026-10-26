@@ -568,3 +568,28 @@ export async function downloadPanelBackup(id) {
   const match = /filename="([^"]+)"/.exec(disposition)
   return { blob: response.data, filename: match ? match[1] : `backup-${id}.tar` }
 }
+
+// Egress routes: domains a proxy node's users open that leave through
+// another proxy node. { routes: [{ id, name, source_node, exit_node (each
+// { id, name, host, exists }), exit_host, relay_port, method, domains,
+// enabled, source_state, exit_state (each { state: applied | pending |
+// failed, error? }) }] }. Never the relay key.
+export async function listKernelEgressRoutes() {
+  return unwrap(await v4({ url: '/kernel/egress-routes', method: 'get' }))
+}
+
+// input: { name, source_node_id, exit_node_id, exit_host, relay_port,
+// domains: [], enabled }. Errors: 400 invalid_request (the message names the
+// field), 409 port_taken.
+export async function createKernelEgressRoute(input) {
+  return unwrap(await v4({ url: '/kernel/egress-routes', method: 'post', data: input }))
+}
+
+// Replaces every field; rotate_key: true replaces the relay key too.
+export async function updateKernelEgressRoute(id, input) {
+  return unwrap(await v4({ url: `/kernel/egress-routes/${encodeURIComponent(id)}`, method: 'put', data: input }))
+}
+
+export async function deleteKernelEgressRoute(id) {
+  return unwrap(await v4({ url: `/kernel/egress-routes/${encodeURIComponent(id)}`, method: 'delete' }))
+}

@@ -12,6 +12,7 @@ import (
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	"github.com/AnixOps/anix-control/sdk/forward/wire"
+	"github.com/AnixOps/anix-control/v5/internal/egressroute"
 	"github.com/AnixOps/anix-control/v5/internal/kernelforward"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/nodesecrets"
@@ -138,6 +139,15 @@ func buildProxyDesiredConfig(db *gorm.DB, id uint) (map[string]any, error) {
 	}
 	document["protocols"] = rendered
 	document["legacy_pull"] = buildLegacyPull(db, id, rendered)
+	// The node's egress routes (internal/egressroute), only when it takes
+	// part in one: the documents of the other nodes keep their hash.
+	egress, err := egressroute.NodeMember(db, id)
+	if err != nil {
+		return nil, err
+	}
+	if egress != nil {
+		document["egress"] = egress
+	}
 	return document, nil
 }
 

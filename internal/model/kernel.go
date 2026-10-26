@@ -540,5 +540,6 @@ func KernelModels() []any {
 		&AdminAPIToken{},
 		&KernelAlert{},
 		&NodeGroup{},
+		&EgressRoute{},
 	}
 }

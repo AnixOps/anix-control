@@ -101,5 +101,7 @@ func (KernelNodeOperationEvent) TableName() string { return "v4_kernel_node_oper
 
 // KernelNodeOperationModels are the KernelNodeOps tables.
 func KernelNodeOperationModels() []any {
-	return []any{&KernelNodeOperation{}, &KernelNodeOperationTarget{}, &KernelNodeOperationEvent{}, &KernelNodeDesiredConfig{}, &KernelNodeConfigStatus{}}
+	return []any{&KernelNodeOperation{}, &KernelNodeOperationTarget{}, &KernelNodeOperationEvent{}, &KernelNodeDesiredConfig{}, &KernelNodeConfigStatus{},
+		// The desired configuration of a proxy node reads its egress routes.
+		&EgressRoute{}}
 }
