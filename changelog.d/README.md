@@ -74,6 +74,6 @@ that they do not conflict.
 
 A fix that is cherry-picked to a `release/vX.Y` branch carries its fragment,
 and that branch's release consumes it. In the follow-up pull request that
-merges the release back to `go_dev`, delete the fragments with the same file
-names from `go_dev`'s `changelog.d/` (`docs/RELEASING.md`), as its entries
+merges the release back to `main`, delete the fragments with the same file
+names from `main`'s `changelog.d/` (`docs/RELEASING.md`), as its entries
 already shipped.

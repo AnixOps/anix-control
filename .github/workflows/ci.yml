@@ -1,21 +1,21 @@
 name: CI/CD Pipeline
 
 # Maintenance branches (release/vX.Y, docs/RELEASING.md) get the same checks
-# as go_dev: their pull requests run the fast lane and their pushes the full
+# as main: their pull requests run the fast lane and their pushes the full
 # lane. Release tags may be on either.
 on:
   push:
-    branches: [ go_dev, 'release/**' ]
+    branches: [ main, 'release/**' ]
     tags: [ 'v*.*.*' ]
   pull_request:
-    branches: [ go_dev, 'release/**' ]
+    branches: [ main, 'release/**' ]
     types: [ opened, synchronize, reopened, labeled ]
   schedule:
-    # Nightly full run on go_dev.
+    # Nightly full run on main.
     - cron: '17 19 * * *'
   workflow_dispatch:
 
-# Superseded pull-request runs are cancelled. Every other run (go_dev and
+# Superseded pull-request runs are cancelled. Every other run (main and
 # release branch pushes, the nightly, manual runs) gets its own group, because
 # GitHub drops a run that is pending behind a running run of the same group when
 # a newer one queues, and a dropped push run leaves that commit with no CI
@@ -2489,7 +2489,7 @@ jobs:
             BUILD_CODE=${{ steps.build_meta.outputs.build_code }}
             COMMIT=${{ steps.build_meta.outputs.commit }}
           # The runtime-base layers (apt packages for both architectures) come
-          # from the go_dev edge build; a cache written from a tag ref would
+          # from the main edge build; a cache written from a tag ref would
           # only be readable by that same tag, so the release does not export
           # one.
           cache-from: type=gha,scope=docker-edge
@@ -2527,7 +2527,7 @@ jobs:
     name: Publish Edge Docker Image
     runs-on: ubuntu-24.04
     needs: [docker-smoke, go-quality, go-security, backend-test, frontend-build]
-    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/go_dev' }}
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     permissions:
       contents: read
       packages: write

@@ -156,7 +156,7 @@ import { useAppI18n } from '@/composables/useAppI18n'
 import NodeNotice from './NodeNotice.vue'
 import { ROTATE_REASON_MAX, ROTATE_TTL_SECONDS, useCredentialRotation } from './useCredentialRotation'
 
-const GUIDE_URL = 'https://github.com/AnixOps/anix-control/blob/go_dev/docs/guide/agent-onboarding.md#rotating-a-nodes-credentials'
+const GUIDE_URL = 'https://github.com/AnixOps/anix-control/blob/main/docs/guide/agent-onboarding.md#rotating-a-nodes-credentials'
 const TTL_LABELS = { 3600: 'hour', 21600: 'sixHours', 86400: 'day', 604800: 'week' }
 
 const props = defineProps({

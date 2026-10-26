@@ -2,16 +2,16 @@ name: Control Center Workers CI
 
 # Ported from the archived AnixOps/Anixops-control-center-worker repository
 # (.github/workflows/ci.yml). Deployment is not done here: Cloudflare Workers
-# Builds deploys control-center/workers from go_dev.
+# Builds deploys control-center/workers from main.
 
 on:
   push:
-    branches: [ go_dev ]
+    branches: [ main ]
     paths:
       - 'control-center/workers/**'
       - '.github/workflows/control-center-workers.yml'
   pull_request:
-    branches: [ go_dev ]
+    branches: [ main ]
     paths:
       - 'control-center/workers/**'
       - '.github/workflows/control-center-workers.yml'

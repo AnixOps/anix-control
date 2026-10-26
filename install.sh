@@ -9,7 +9,7 @@ set -euo pipefail
 
 if [[ "${ANIX_CONTROL_LEGACY_SOURCE_INSTALL:-${V2BOARD_LEGACY_SOURCE_INSTALL:-0}}" == "1" ]]; then
   printf '[ERROR] The source/Docker Compose installer was removed because it built images on the target host.\n' >&2
-  printf '        Deploy the released image instead: https://github.com/AnixOps/anix-control/blob/go_dev/docs/DEPLOYMENT.md\n' >&2
+  printf '        Deploy the released image instead: https://github.com/AnixOps/anix-control/blob/main/docs/DEPLOYMENT.md\n' >&2
   exit 1
 fi
 

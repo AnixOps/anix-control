@@ -2,7 +2,7 @@ name: Nightly Security
 
 # The pull-request pipeline checks the code a change touches; advisories are
 # published against code nobody touched. This workflow runs the same security
-# tools every night against go_dev, plus a bounded real fuzz run of the relay,
+# tools every night against main, plus a bounded real fuzz run of the relay,
 # so a new advisory or a crash input shows up the next morning instead of
 # failing an unrelated pull request. Every job fails the run on a finding.
 
@@ -36,7 +36,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
         with:
-          ref: go_dev
+          ref: main
 
       - name: Setup Go
         uses: actions/setup-go@v6
@@ -60,7 +60,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
         with:
-          ref: go_dev
+          ref: main
 
       - name: Setup Go
         uses: actions/setup-go@v6
@@ -95,7 +95,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
         with:
-          ref: go_dev
+          ref: main
 
       - name: Setup Node
         uses: actions/setup-node@v6
@@ -128,7 +128,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
         with:
-          ref: go_dev
+          ref: main
 
       - name: Setup Go
         uses: actions/setup-go@v6

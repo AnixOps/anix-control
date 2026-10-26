@@ -61,7 +61,7 @@ func UnitFile(u Unit) ([]byte, error) {
 # the Agent keeps forwarding.
 [Unit]
 Description=AnixOps forward relay (` + OwnerMark + `)
-Documentation=https://github.com/AnixOps/anix-control/blob/go_dev/docs/architecture/anixops-protocol.md
+Documentation=https://github.com/AnixOps/anix-control/blob/main/docs/architecture/anixops-protocol.md
 After=network-online.target
 Wants=network-online.target
 # Without a configuration there is nothing to serve: the driver writes it on

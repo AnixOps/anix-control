@@ -352,7 +352,7 @@ password instead of failing.
 - **Image.** `Dockerfile.module` builds one module image per package: the
   package's own host, or the generic host. The base is distroless and the
   image runs as uid 65532.
-  - `go_dev` publishes `ghcr.io/anixops/anix-module-identity-platform:edge`
+  - `main` publishes `ghcr.io/anixops/anix-module-identity-platform:edge`
     and `:sha-<commit>`, signed with cosign.
 - **Compose.** The `docker-compose.modules.yml` overlay; see
   [`config/deploy/compose/modules.md`](../../config/deploy/compose/modules.md).
@@ -452,7 +452,7 @@ client certificate and `Bind`. What runs is enforced outside the kernel:
   their strict request-metadata decoding keep working in the `local` runtime.
 - The signed manifest does not carry `control_runtime` yet, and releases do
   not publish module images yet. Until then, pin module images by digest from
-  the `go_dev` builds, and verify them with `cosign verify`.
+  the `main` builds, and verify them with `cosign verify`.
 
 ## Delivery
 

@@ -1236,7 +1236,7 @@ render_agent_unit() {
 # (agent-install.sh); re-running the installer rewrites it.
 [Unit]
 Description=AnixOps Agent
-Documentation=https://github.com/AnixOps/anix-control/blob/go_dev/docs/guide/agent-onboarding.md
+Documentation=https://github.com/AnixOps/anix-control/blob/main/docs/guide/agent-onboarding.md
 After=network-online.target
 Wants=network-online.target
 
@@ -1293,7 +1293,7 @@ render_gost_unit() {
 # of its own so that restarting or upgrading the Agent keeps forwarding.
 [Unit]
 Description=AnixOps forward gost (anixops-forward-driver gost v1)
-Documentation=https://github.com/AnixOps/anix-control/blob/go_dev/docs/architecture/forward-sdk.md
+Documentation=https://github.com/AnixOps/anix-control/blob/main/docs/architecture/forward-sdk.md
 After=network-online.target
 Wants=network-online.target
 # Without a configuration there is nothing to serve: the driver writes it
@@ -1357,7 +1357,7 @@ render_updater_path() {
 # Written by the AnixOps installer; re-running the installer rewrites it.
 [Unit]
 Description=AnixOps Agent updater trigger
-Documentation=https://github.com/AnixOps/anix-control/blob/go_dev/docs/architecture/forward-sdk.md
+Documentation=https://github.com/AnixOps/anix-control/blob/main/docs/architecture/forward-sdk.md
 
 [Path]
 PathExists=${UPDATER_REQUEST}
@@ -1381,7 +1381,7 @@ render_updater_service() {
 # Written by the AnixOps installer; re-running the installer rewrites it.
 [Unit]
 Description=AnixOps Agent updater
-Documentation=https://github.com/AnixOps/anix-control/blob/go_dev/docs/architecture/forward-sdk.md
+Documentation=https://github.com/AnixOps/anix-control/blob/main/docs/architecture/forward-sdk.md
 ConditionPathExists=${UPDATER_REQUEST}
 
 [Service]
