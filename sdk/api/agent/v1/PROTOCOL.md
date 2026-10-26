@@ -716,6 +716,60 @@ An Agent without these checks keeps working. Control marks its node steps
 `SKIPPED` (`node_vantage_unavailable`) and dials what it can from its own
 vantage.
 
+### Reality target probe
+
+A proxy node's Agent that lists the capability `reality.probe` (v1) also
+runs the action `reality.probe`: from the node's own network it tells
+whether a site can serve as a REALITY target (dest and SNI). Control sends
+it for Reality target probing (`internal/realitytarget`,
+`/api/v4/kernel/nodes/{id}/reality-targets/probe`), only to a session that
+lists `agent.diagnostic` and `reality.probe`. The probe is the Agent's own
+code, not a call into a proxy core, so it does not depend on the core.
+
+| Param | Meaning |
+|---|---|
+| `server_name` | a host name, never an address; the Agent resolves it with the node's resolver |
+| `port` | 1 to 65535, default 443 |
+| `timeout_ms` | the TLS checks, 100 to 10000 (default 5000); the REALITY handshake adds up to 12 s |
+
+**The safety rule, mandatory.** The Agent dials only a public address the
+name resolves to (IPv4 first): private, loopback, link-local, shared
+(100.64.0.0/10) and reserved answers are refused as `private_address` and
+nothing is dialled. One dial, one TLS handshake, one `GET /`, then, when
+those pass, one REALITY handshake through the target: a throwaway REALITY
+server on 127.0.0.1 (fresh key pair, the address already dialled as dest)
+and a REALITY client (uTLS fingerprint `chrome`) through it, with the
+REALITY library linked into the Agent. A site can pass every TLS check and
+still break REALITY (www.microsoft.com from a Germany node did), so only
+this tells. A probe never changes the node.
+
+**`result`:**
+
+```json
+{"server_name": "www.example.com", "port": 443, "address": "93.184.215.14:443",
+ "verdict": "ok", "connect_ms": 3, "handshake_ms": 9, "tls_version": "TLS 1.3",
+ "alpn": "h2", "curve": "X25519MLKEM768", "cert_names": ["www.example.com"],
+ "cert_issuer": "DigiCert Inc", "cert_not_after": "2027-01-15T23:59:59Z",
+ "cert_chain_bytes": 3810, "ocsp_stapled": true, "http_status": 200,
+ "server_header": "ECAcc", "cdn": "", "reality_ms": 5012}
+```
+
+- `verdict` is `ok` when the target passes every hard requirement, else
+  `failed` with `failures`, the codes of the requirements it missed, and
+  `error`, the first one's reason: `resolve`, `private_address`, `connect`,
+  `tls_handshake`, `tls13` (not TLS 1.3), `h2` (ALPN not h2), `x25519` (key
+  exchange neither X25519 nor X25519MLKEM768), `certificate` (the chain does
+  not verify for the name), `http` (`GET /` failed), `redirect` (`GET /`
+  redirects to another host; adding or removing `www.` is the same host)
+  and `reality` (the REALITY client did not authenticate through the
+  target, or its data did not arrive).
+- `reality_ms` is the REALITY handshake's time; most of it is the server
+  learning the target's post-handshake records (up to 5 s), so it does not
+  rank targets.
+- `cdn` names the CDN the response headers show (`cloudflare`,
+  `cloudfront`, `fastly`, `akamai`), for Control's ranking.
+- The diagnostic answer's `success` is `verdict == "ok"`.
+
 ## Agent upgrades
 
 `upgrade.v1` lets Control upgrade the Agent (owner decision H19,

@@ -78,4 +78,6 @@
 //     (v5_destination_stat).
 //   - 0007_egress_routes: the domain egress routes between proxy nodes
 //     (v5_egress_route).
+//   - 0008_reality_target_probes: the latest probe of each candidate
+//     REALITY target from each proxy node (v5_reality_target_probe).
 package migrations

@@ -59,12 +59,13 @@ describe('NodeDetail diagnostics section', () => {
     vi.restoreAllMocks()
   })
 
-  it('puts 诊断 before 日志 and loads it only when it opens', async () => {
+  it('puts 诊断 and 目标站 before 日志 and loads 诊断 only when it opens', async () => {
     const { router } = await renderPage('/admin/nodes/5')
     await screen.findByRole('heading', { level: 1, name: 'hk-01' })
     const tabs = screen.getAllByRole('tab').map(tab => tab.textContent.trim())
     expect(tabs.indexOf('Diagnostics')).toBeGreaterThan(-1)
-    expect(tabs.indexOf('Diagnostics')).toBe(tabs.indexOf('Logs') - 1)
+    expect(tabs.indexOf('Diagnostics')).toBe(tabs.indexOf('Targets') - 1)
+    expect(tabs.indexOf('Targets')).toBe(tabs.indexOf('Logs') - 1)
     expect(kernelApi.getKernelNodeDiagnostics).not.toHaveBeenCalled()
 
     await userEvent.click(screen.getByRole('tab', { name: 'Diagnostics' }))

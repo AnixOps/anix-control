@@ -846,6 +846,14 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		nodeDiagnostics := handler.NewNodeDiagnosticsHandler()
 		v4.POST("/kernel/nodes/:id/diagnostics", nodeDiagnostics.Run)
 		v4.GET("/kernel/nodes/:id/diagnostics", nodeDiagnostics.List)
+		// Reality target probing (目标站探测): a proxy node's Agent probes
+		// candidate REALITY targets from its network (reality.probe);
+		// Control ranks them and recommends one; apply writes one into a
+		// Reality protocol of the node.
+		realityTargets := handler.NewRealityTargetsHandler()
+		v4.GET("/kernel/nodes/:id/reality-targets", realityTargets.List)
+		v4.POST("/kernel/nodes/:id/reality-targets/probe", realityTargets.Probe)
+		v4.POST("/kernel/nodes/:id/reality-targets/apply", realityTargets.Apply)
 		// Staged Agent upgrades (forward-sdk.md section 9, O4; H19).
 		upgrades := handler.NewAgentUpgradesHandler()
 		v4.GET("/kernel/agents/upgrade-plan", upgrades.Plan)

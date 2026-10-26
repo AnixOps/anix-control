@@ -1130,3 +1130,8 @@ type NodeListResult struct {
 	Total int64        `json:"total"`
 	List  []model.Node `json:"list"`
 }
+
+// NewNodeServiceFor is NewNodeService on db.
+func NewNodeServiceFor(db *gorm.DB) *NodeService {
+	return &NodeService{db: db}
+}

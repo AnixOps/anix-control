@@ -359,6 +359,36 @@ definitions:
           30.'
         type: integer
     type: object
+  handler.realityTargetApplyRequest:
+    properties:
+      force:
+        description: Force applies a target this node has not probed with verdict
+          ok.
+        type: boolean
+      port:
+        description: Port is the target's port; 443 when absent.
+        type: integer
+      protocol_id:
+        type: integer
+      server_name:
+        type: string
+    type: object
+  handler.realityTargetProbeRequest:
+    properties:
+      candidates:
+        description: Candidates are host names, or host:port, probed before the defaults.
+        items:
+          type: string
+        type: array
+      include_defaults:
+        description: IncludeDefaults adds realitytarget.DefaultCandidates; true when
+          absent.
+        type: boolean
+      timeout_ms:
+        description: 'TimeoutMS is each probe''s time on the Agent: 100 to 10000,
+          default 5000.'
+        type: integer
+    type: object
   handler.rotateAgentCredentialsRequest:
     properties:
       node:
@@ -7247,6 +7277,107 @@ paths:
       security:
       - BearerAuth: []
       summary: Run a diagnostic on a node
+      tags:
+      - Kernel
+  /api/v4/kernel/nodes/{id}/reality-targets:
+    get:
+      description: The node's latest Reality target probes, ranked (targets that passed
+        first by score, then failed ones), the target its Reality protocols use now
+        (current), the recommended target, and whether its Agent runs reality.probe
+        now (support).
+      parameters:
+      - description: proxy-<id>
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: A proxy node's Reality targets
+      tags:
+      - Kernel
+  /api/v4/kernel/nodes/{id}/reality-targets/apply:
+    post:
+      consumes:
+      - application/json
+      description: 'Writes the target into one Reality protocol (tls 2) of the node:
+        reality_settings dest (server_name:port), server_name and, where listed, server_names,
+        and tls_settings server_name (the SNI of the subscription links). The private
+        key and every other setting stay as stored; the node''s Agent picks the change
+        up with its configuration and clients with their next subscription refresh.
+        The node must have probed the target with verdict ok unless force is true
+        (409 target_not_probed). 404 protocol_not_found for a protocol that is not
+        a Reality protocol of the node. Audited (module reality_target, action reality_target_apply).'
+      parameters:
+      - description: proxy-<id>
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: protocol_id, server_name, port, force
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.realityTargetApplyRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Apply a Reality target to a protocol of a proxy node
+      tags:
+      - Kernel
+  /api/v4/kernel/nodes/{id}/reality-targets/probe:
+    post:
+      consumes:
+      - application/json
+      description: 'The node''s Agent probes each candidate (reality.probe: TLS 1.3,
+        ALPN h2, an X25519 key exchange, a certificate valid for the name, no redirect
+        to another host, then a real REALITY handshake through it) from the node''s
+        network, 8 at a time; Control scores the answers, stores the latest per candidate
+        and answers the node''s ranked report, with a probe that gave no answer marked
+        verdict error. candidates are host names or host:port (at most 24 in all);
+        include_defaults (default true) adds the built-in list; timeout_ms is each
+        probe''s TLS time, 100 to 10000, default 5000 (the REALITY handshake adds
+        up to 12 s). 409 node_offline or reality_probe_unsupported when the Agent
+        cannot probe; 409 probe_busy while another run of the node is going. Nothing
+        in the node''s configuration changes. Audited (module reality_target).'
+      parameters:
+      - description: proxy-<id>
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: candidates, include_defaults, timeout_ms
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/handler.realityTargetProbeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Probe Reality targets from a proxy node
       tags:
       - Kernel
   /api/v4/kernel/nodes/{id}/reject:

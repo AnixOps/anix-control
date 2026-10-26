@@ -92,6 +92,7 @@ export default {
       deploy: '部署',
       traffic: '流量',
       diagnostics: '诊断',
+      reality: '目标站',
       logs: '日志',
       services: '服务',
       danger: '危险区'
