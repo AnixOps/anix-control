@@ -131,6 +131,7 @@ func laterModels() []any {
 		&model.EgressRoute{},        // 0007_egress_routes
 		&model.RealityTargetProbe{}, // 0008_reality_target_probes
 		&model.RealityTargetAuto{},  // 0009_reality_target_auto
+		&model.NodeEntry{},          // 0010_node_entries
 	}
 }
 

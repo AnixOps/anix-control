@@ -269,8 +269,8 @@ func (f *V2RayFormatter) formatVLESS(node *model.ParsedNode, ctx *model.Template
 	// 传输层配置
 	f.applyVLESSTransport(params, node)
 
-	return fmt.Sprintf("vless://%s@%s:%d?%s#%s",
-		uuid, node.Server, node.Port, params.Encode(), url.QueryEscape(node.Name)), nil
+	return fmt.Sprintf("vless://%s@%s?%s#%s",
+		uuid, uriHostPort(node.Server, node.Port), params.Encode(), url.QueryEscape(node.Name)), nil
 }
 
 // applyVLESSTransport 应用 VLESS 传输层配置
@@ -364,8 +364,8 @@ func (f *V2RayFormatter) formatTrojan(node *model.ParsedNode, ctx *model.Templat
 		f.applyTrojanTransport(params, node)
 	}
 
-	return fmt.Sprintf("trojan://%s@%s:%d?%s#%s",
-		url.QueryEscape(password), node.Server, node.Port, params.Encode(), url.QueryEscape(node.Name)), nil
+	return fmt.Sprintf("trojan://%s@%s?%s#%s",
+		url.QueryEscape(password), uriHostPort(node.Server, node.Port), params.Encode(), url.QueryEscape(node.Name)), nil
 }
 
 // applyTrojanTransport 应用 Trojan 传输层配置
@@ -426,16 +426,16 @@ func (f *V2RayFormatter) formatShadowsocks(node *model.ParsedNode, ctx *model.Te
 			// ss2022://method:server_key:user_key@server:port#name
 			userKey := generateSS2022UserKey(password, cipher)
 			userInfo := fmt.Sprintf("%s:%s:%s", cipher, serverKey, userKey)
-			return fmt.Sprintf("ss://%s@%s:%d#%s",
+			return fmt.Sprintf("ss://%s@%s#%s",
 				base64.RawURLEncoding.EncodeToString([]byte(userInfo)),
-				node.Server, node.Port, url.QueryEscape(node.Name)), nil
+				uriHostPort(node.Server, node.Port), url.QueryEscape(node.Name)), nil
 		}
 	}
 
 	// 传统 SS 格式: ss://base64(method:password)@server:port#name
 	userInfo := base64.RawURLEncoding.EncodeToString([]byte(cipher + ":" + password))
-	return fmt.Sprintf("ss://%s@%s:%d#%s",
-		userInfo, node.Server, node.Port, url.QueryEscape(node.Name)), nil
+	return fmt.Sprintf("ss://%s@%s#%s",
+		userInfo, uriHostPort(node.Server, node.Port), url.QueryEscape(node.Name)), nil
 }
 
 // generateSS2022UserKey 生成 SS2022 用户密钥。
@@ -494,8 +494,8 @@ func (f *V2RayFormatter) formatHysteria2(node *model.ParsedNode, ctx *model.Temp
 		params.Set("down", down)
 	}
 
-	return fmt.Sprintf("hy2://%s@%s:%d?%s#%s",
-		url.QueryEscape(password), node.Server, node.Port, params.Encode(), url.QueryEscape(node.Name)), nil
+	return fmt.Sprintf("hy2://%s@%s?%s#%s",
+		url.QueryEscape(password), uriHostPort(node.Server, node.Port), params.Encode(), url.QueryEscape(node.Name)), nil
 }
 
 // formatTUIC 格式化 TUIC 链接
@@ -537,8 +537,8 @@ func (f *V2RayFormatter) formatTUIC(node *model.ParsedNode, ctx *model.TemplateR
 		params.Set("udp_relay_mode", udp)
 	}
 
-	return fmt.Sprintf("tuic://%s:%s@%s:%d?%s#%s",
-		uuid, url.QueryEscape(password), node.Server, node.Port, params.Encode(), url.QueryEscape(node.Name)), nil
+	return fmt.Sprintf("tuic://%s:%s@%s?%s#%s",
+		uuid, url.QueryEscape(password), uriHostPort(node.Server, node.Port), params.Encode(), url.QueryEscape(node.Name)), nil
 }
 
 // formatAnyTLS 格式化 AnyTLS 链接
@@ -567,8 +567,8 @@ func (f *V2RayFormatter) formatAnyTLS(node *model.ParsedNode, ctx *model.Templat
 		params.Set("insecure", "1")
 	}
 
-	return fmt.Sprintf("anytls://%s@%s:%d?%s#%s",
-		url.QueryEscape(password), node.Server, node.Port, params.Encode(), url.QueryEscape(node.Name)), nil
+	return fmt.Sprintf("anytls://%s@%s?%s#%s",
+		url.QueryEscape(password), uriHostPort(node.Server, node.Port), params.Encode(), url.QueryEscape(node.Name)), nil
 }
 
 // ClashFormatter Clash YAML 格式化器
@@ -1481,7 +1481,7 @@ func (f *QuantumultXFormatter) formatVMess(node *model.ParsedNode, ctx *model.Te
 
 	// vmess=server:port, method=chacha20-poly1305, password=uuid, obfs=ws, obfs-host=host, obfs-uri=path, tag=name
 	parts := []string{
-		fmt.Sprintf("vmess=%s:%d", node.Server, node.Port),
+		fmt.Sprintf("vmess=%s", uriHostPort(node.Server, node.Port)),
 		fmt.Sprintf("method=%s", "chacha20-poly1305"),
 		fmt.Sprintf("password=%s", uuid),
 	}
@@ -1515,7 +1515,7 @@ func (f *QuantumultXFormatter) formatTrojan(node *model.ParsedNode, ctx *model.T
 
 	// trojan=server:port, password=password, over-tls=true, tls-host=host, tag=name
 	parts := []string{
-		fmt.Sprintf("trojan=%s:%d", node.Server, node.Port),
+		fmt.Sprintf("trojan=%s", uriHostPort(node.Server, node.Port)),
 		fmt.Sprintf("password=%s", password),
 		"over-tls=true",
 	}
@@ -1543,7 +1543,7 @@ func (f *QuantumultXFormatter) formatShadowsocks(node *model.ParsedNode, ctx *mo
 
 	// shadowsocks=server:port, method=cipher, password=password, tag=name
 	parts := []string{
-		fmt.Sprintf("shadowsocks=%s:%d", node.Server, node.Port),
+		fmt.Sprintf("shadowsocks=%s", uriHostPort(node.Server, node.Port)),
 		fmt.Sprintf("method=%s", cipher),
 		fmt.Sprintf("password=%s", password),
 		fmt.Sprintf("tag=%s", node.Name),

@@ -9194,6 +9194,86 @@
                 }
             }
         },
+        "/api/v4/kernel/nodes/{id}/entries": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "The addresses subscribers reach the node at beyond its host, in order: label, kind (direct: the protocols' own ports; nat: a public address whose port ranges map to protocol ports), host, family (ipv4, ipv6 or domain), port map and whether the entry is enabled. A node with enabled entries is offered in subscriptions once per entry and protocol, in place of its host.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "A proxy node's entries",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "proxy-\u003cid\u003e",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Makes the list the node's entries, in that order (at most 32; labels unique, without |). A direct entry has no port map; a NAT entry has 1 to 32 port ranges {from, to, external} that do not overlap: protocol ports from..to are reached at external..external+(to-from). An empty list removes every entry, so the node is reached at its host again. Subscriptions change at once; the node's configuration does not. Audited.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Replace a proxy node's entries",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "proxy-\u003cid\u003e",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "the entries",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.nodeEntriesRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/v4/kernel/nodes/{id}/reality-targets": {
             "get": {
                 "security": [
@@ -11720,6 +11800,17 @@
                 }
             }
         },
+        "handler.nodeEntriesRequest": {
+            "type": "object",
+            "properties": {
+                "entries": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/nodeentry.Input"
+                    }
+                }
+            }
+        },
         "handler.realityTargetApplyRequest": {
             "type": "object",
             "properties": {
@@ -12612,6 +12703,43 @@
                 },
                 "updated_at": {
                     "type": "string"
+                }
+            }
+        },
+        "nodeentry.Input": {
+            "type": "object",
+            "properties": {
+                "enabled": {
+                    "type": "boolean"
+                },
+                "host": {
+                    "type": "string"
+                },
+                "kind": {
+                    "type": "string"
+                },
+                "label": {
+                    "type": "string"
+                },
+                "port_map": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/nodeentry.PortRange"
+                    }
+                }
+            }
+        },
+        "nodeentry.PortRange": {
+            "type": "object",
+            "properties": {
+                "external": {
+                    "type": "integer"
+                },
+                "from": {
+                    "type": "integer"
+                },
+                "to": {
+                    "type": "integer"
                 }
             }
         },

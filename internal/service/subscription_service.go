@@ -17,6 +17,7 @@ import (
 
 	"github.com/AnixOps/anix-control/v5/internal/database"
 	"github.com/AnixOps/anix-control/v5/internal/model"
+	"github.com/AnixOps/anix-control/v5/internal/nodeentry"
 	"github.com/AnixOps/anix-control/v5/internal/nodesecrets"
 	"github.com/AnixOps/anix-control/v5/internal/parser"
 	"github.com/AnixOps/anix-control/v5/internal/subscriber"
@@ -591,6 +592,11 @@ func (s *SubscriptionService) getInternalNodes(user *model.User, ctx *model.Temp
 	// server key) are read through the node credential split.
 	nodesecrets.ResolveProtocols(s.db, protocols)
 
+	entries, err := s.nodeEntries(protocols)
+	if err != nil {
+		return nil, err
+	}
+
 	liveness := make(map[uint]bool)
 	var result []*model.ParsedNode
 	for _, p := range protocols {
@@ -618,8 +624,7 @@ func (s *SubscriptionService) getInternalNodes(user *model.User, ctx *model.Temp
 				continue
 			}
 
-			parsed := s.nodeProtocolToParsedNode(p.Node, &p, ctx)
-			if parsed != nil {
+			for _, parsed := range s.nodeProtocolEntries(p.Node, &p, ctx, entries[p.Node.ID]) {
 				parsed.GroupID = g.ID
 				parsed.GroupName = g.Name
 				result = append(result, parsed)
@@ -628,6 +633,50 @@ func (s *SubscriptionService) getInternalNodes(user *model.User, ctx *model.Temp
 	}
 
 	return result, nil
+}
+
+// nodeEntries loads the enabled entries (internal/nodeentry) of the
+// protocols' nodes.
+func (s *SubscriptionService) nodeEntries(protocols []model.NodeProtocol) (map[uint][]model.NodeEntry, error) {
+	seen := map[uint]bool{}
+	var nodeIDs []uint
+	for _, p := range protocols {
+		if p.Node != nil && !seen[p.Node.ID] {
+			seen[p.Node.ID] = true
+			nodeIDs = append(nodeIDs, p.Node.ID)
+		}
+	}
+	return nodeentry.EnabledByNode(s.db, nodeIDs)
+}
+
+// nodeProtocolEntries is the protocol as subscribers reach it: at the
+// node's host, or once per entry of a node with entries, at the entry's
+// host and port and named after it. A NAT entry that does not map the
+// protocol's port leaves the protocol out for that entry.
+func (s *SubscriptionService) nodeProtocolEntries(node *model.Node, protocol *model.NodeProtocol, ctx *model.TemplateRenderContext, entries []model.NodeEntry) []*model.ParsedNode {
+	if len(entries) == 0 {
+		if parsed := s.nodeProtocolToParsedNode(node, protocol, ctx); parsed != nil {
+			return []*model.ParsedNode{parsed}
+		}
+		return nil
+	}
+	var result []*model.ParsedNode
+	for _, entry := range entries {
+		port, ok := nodeentry.Port(entry, protocol.Port)
+		if !ok {
+			continue
+		}
+		parsed := s.nodeProtocolToParsedNode(node, protocol, ctx)
+		if parsed == nil {
+			continue
+		}
+		parsed.ID = fmt.Sprintf("%s-e%d", parsed.ID, entry.ID)
+		parsed.Name = fmt.Sprintf("%s | %s", parsed.Name, entry.Label)
+		parsed.Server = entry.Host
+		parsed.Port = port
+		result = append(result, parsed)
+	}
+	return result
 }
 
 // maxRelayDepth bounds the walk up a relay chain; validateParentID keeps the

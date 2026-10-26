@@ -73,8 +73,9 @@ func TestBootstrapDatabaseMigratesTheSchema(t *testing.T) {
 		// A database from before the migrations: the same tables, no
 		// migration records, and not the tables later migrations add
 		// (0003_acme_cache, 0005_backups, 0006_destination_stats,
-		// 0007_egress_routes, 0008_reality_target_probes, 0009_reality_target_auto).
-		require.NoError(t, db.Migrator().DropTable(migrations.MigrationTable, migrations.MetaTable, &model.ACMECacheEntry{}, &model.Backup{}, &model.DestinationStat{}, &model.EgressRoute{}, &model.RealityTargetProbe{}, &model.RealityTargetAuto{}))
+		// 0007_egress_routes, 0008_reality_target_probes, 0009_reality_target_auto,
+		// 0010_node_entries).
+		require.NoError(t, db.Migrator().DropTable(migrations.MigrationTable, migrations.MetaTable, &model.ACMECacheEntry{}, &model.Backup{}, &model.DestinationStat{}, &model.EgressRoute{}, &model.RealityTargetProbe{}, &model.RealityTargetAuto{}, &model.NodeEntry{}))
 		require.NoError(t, bootstrapDatabase(ctx, cfg))
 		meta, err = migrations.Meta(ctx, db)
 		require.NoError(t, err)

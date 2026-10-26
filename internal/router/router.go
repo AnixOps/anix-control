@@ -846,6 +846,12 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		nodeDiagnostics := handler.NewNodeDiagnosticsHandler()
 		v4.POST("/kernel/nodes/:id/diagnostics", nodeDiagnostics.Run)
 		v4.GET("/kernel/nodes/:id/diagnostics", nodeDiagnostics.List)
+		// Node entries: the addresses subscribers reach a proxy node at
+		// beyond its host (several lines, native IPv6, provider NAT ports;
+		// internal/nodeentry).
+		nodeEntries := handler.NewNodeEntriesHandler()
+		v4.GET("/kernel/nodes/:id/entries", nodeEntries.List)
+		v4.PUT("/kernel/nodes/:id/entries", nodeEntries.Replace)
 		// Reality target probing (目标站探测): a proxy node's Agent probes
 		// candidate REALITY targets from its network (reality.probe);
 		// Control ranks them and recommends one; apply writes one into a
