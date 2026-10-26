@@ -2120,8 +2120,8 @@ jobs:
           go test -v -count=1 -run TestPebbleIssuesOverBothChallenges ./internal/panelcert/
           tail -n 20 "${RUNNER_TEMP}/pebble/pebble.log"
 
-  frontend-build:
-    name: Frontend Build
+  frontend-checks:
+    name: Frontend Checks
     runs-on: ubuntu-24.04
     needs: [changes]
     if: ${{ needs.changes.outputs.code == 'true' }}
@@ -2172,10 +2172,10 @@ jobs:
       # ESLint (no native dialogs, no legacy classes, no bare tables on list
       # pages) and stylelint (colour tokens, type and radius scale, no legacy
       # variables); both fail on any finding.
-      # Lint, the unit tests and the browser E2E gate mock the API and read
-      # only web/, so a pull request that leaves web/ alone skips them; the
-      # full lane (go_dev pushes, nightly, ci:full) always runs them. The
-      # live Control gate below starts a real Control, so it always runs.
+      # Lint, the unit tests and the browser E2E gate (Frontend E2E) mock the
+      # API and read only web/, so a pull request that leaves web/ alone skips
+      # them; the full lane (main pushes, nightly, ci:full) always runs them.
+      # The live Control gate below starts a real Control, so it always runs.
       - name: Lint frontend
         if: ${{ needs.changes.outputs.web == 'true' }}
         working-directory: web
@@ -2189,11 +2189,6 @@ jobs:
       - name: Install Playwright Chromium
         working-directory: web
         run: npx playwright install --with-deps chromium
-
-      - name: Run frontend browser E2E gate
-        if: ${{ needs.changes.outputs.web == 'true' }}
-        working-directory: web
-        run: npm run test:e2e
 
       - name: Run live Control signed WebUI E2E gate
         working-directory: web
@@ -2225,6 +2220,78 @@ jobs:
         with:
           name: frontend-bundle-size
           path: web/bundle-reports/
+
+  # The mocked browser E2E gate, in three shards that run side by side. Each
+  # shard tests the production bundle (web/playwright.config.js serves
+  # public/ with `vite preview` in CI).
+  frontend-e2e:
+    name: Frontend E2E (${{ matrix.shard }}/3)
+    runs-on: ubuntu-24.04
+    needs: [changes]
+    if: ${{ needs.changes.outputs.web == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        working-directory: web
+        run: npx playwright install --with-deps chromium
+
+      - name: Build frontend
+        working-directory: web
+        run: npm run build
+
+      - name: Run frontend browser E2E gate
+        working-directory: web
+        run: npm run test:e2e -- --shard=${{ matrix.shard }}/3
+
+      - name: Upload the Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: frontend-e2e-report-${{ matrix.shard }}
+          path: |
+            web/playwright-report/
+            web/test-results/
+
+  # The required check. Frontend Checks and the E2E shards run side by side;
+  # this passes when both did (the shards are skipped on a pull request that
+  # leaves web/ alone). Release and Docker jobs need it, and through it the
+  # frontend-dist artifact Frontend Checks uploads.
+  frontend-build:
+    name: Frontend Build
+    runs-on: ubuntu-24.04
+    needs: [changes, frontend-checks, frontend-e2e]
+    if: ${{ !cancelled() && needs.changes.outputs.code == 'true' }}
+    steps:
+      - name: Require the frontend checks and every E2E shard to pass
+        env:
+          CHECKS_RESULT: ${{ needs.frontend-checks.result }}
+          E2E_RESULT: ${{ needs.frontend-e2e.result }}
+          WEB_CHANGED: ${{ needs.changes.outputs.web }}
+        run: |
+          echo "frontend checks: ${CHECKS_RESULT}; E2E shards: ${E2E_RESULT}; web changed: ${WEB_CHANGED}"
+          test "${CHECKS_RESULT}" = success
+          if [ "${WEB_CHANGED}" = true ]; then
+            test "${E2E_RESULT}" = success
+          else
+            test "${E2E_RESULT}" = success -o "${E2E_RESULT}" = skipped
+          fi
 
   # Visual regression (plan §15): key screens with the API mocked, compared
   # with web/e2e/visual/__screenshots__. It runs in the official Playwright

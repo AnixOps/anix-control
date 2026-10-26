@@ -87,8 +87,9 @@ duplicate it here); the docs landing page is `docs/README.md`.
       also covers the forward SDK, for the "Forward Netns E2E" job).
 
     Documentation-only PRs skip the Go jobs. PRs that leave `web/` alone
-    skip Frontend Build's lint, unit tests and mocked browser E2E gate (the
-    job and its live Control gate still run).
+    skip Frontend Checks' lint and unit tests and the mocked browser E2E
+    shards, Frontend E2E (n/3) (Frontend Checks and its live Control gate
+    still run; Frontend Build requires them all).
   - **Full lane.** Every job, including benchmarks.
     It runs on `main` and `release/**` pushes, tags, the nightly
     schedule, manual runs, PRs labelled `ci:full`, and PRs that change the Go
