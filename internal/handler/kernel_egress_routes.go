@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"errors"
+	"math"
 	"net/http"
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
@@ -77,6 +78,9 @@ func (h *EgressRoutesHandler) nodeState(ctx context.Context, states map[uint]egr
 	}
 	state := egressNodeState{State: egressNodePending}
 	defer func() { states[id] = state }()
+	if id > math.MaxUint32 {
+		return state
+	}
 	db := h.db().WithContext(ctx)
 	node := agentcontrol.AgentNode{Kind: agentcontrol.NodeKindProxy, ID: uint32(id)}
 	built, err := kernelnodeops.BuildDesiredConfig(db, node)
