@@ -32,7 +32,8 @@ body may hold generated secrets, filled in on the runner and masked:
 @@NEW_REALITY_KEY@@ (an X25519 private key; its public key is printed, and
 @@NEW_REALITY_PUBLIC_KEY@@ in the same body becomes it) and
 @@NEW_SS2022_KEY_16@@ / @@NEW_SS2022_KEY_32@@ (a Shadowsocks 2022 key). Secret
-fields of Control's answer are masked before it is printed.
+fields of Control's answer are masked, and IP addresses in it replaced with
+a short hash, before it is printed.
 
 It needs `requests` and `websocket-client` (`pip install requests websocket-client`). The
 GitHub Actions workflow `.github/workflows/jumpserver.yml` runs it with the
@@ -43,6 +44,7 @@ import argparse
 import base64
 import hashlib
 import hmac
+import ipaddress
 import json
 import os
 import re
@@ -265,8 +267,29 @@ SECRET_FIELD = re.compile(
 )
 
 
+# IPv4 and IPv6 address candidates in a string; scrub_addresses checks each.
+ADDRESS_CANDIDATE = re.compile(r"\b\d{1,3}(?:\.\d{1,3}){3}\b|[0-9A-Fa-f:]*:[0-9A-Fa-f:]*:[0-9A-Fa-f:.]*")
+
+
+def scrub_addresses(text):
+    """Replace each IP address in text with ip:<first 6 of its sha1>.
+
+    The logs are public and node hosts are often bare addresses; the hash
+    still tells two addresses apart.
+    """
+    def scrub(match):
+        candidate = match.group(0)
+        try:
+            ipaddress.ip_address(candidate)
+        except ValueError:
+            return candidate
+        return "ip:" + hashlib.sha1(candidate.encode()).hexdigest()[:6]
+    return ADDRESS_CANDIDATE.sub(scrub, text)
+
+
 def redact(value, key=""):
-    """Mask and replace the secret fields of a decoded JSON answer."""
+    """Mask and replace the secret fields of a decoded JSON answer, and
+    scrub the IP addresses of every other string."""
     if isinstance(value, dict):
         return {k: redact(v, k) for k, v in value.items()}
     if isinstance(value, list):
@@ -274,6 +297,8 @@ def redact(value, key=""):
     if isinstance(value, str) and value and SECRET_FIELD.search(key):
         mask(value)
         return "***"
+    if isinstance(value, str):
+        return scrub_addresses(value)
     return value
 
 
