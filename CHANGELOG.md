@@ -4,6 +4,12 @@
 
 ## 5.0.0-rc.5 - 2026-10-26
 
+### Changed
+
+- Control installs anix-agent v5.0.0-rc.5 on nodes. That release fixes 访问统计
+  on Xray nodes, which recorded connections with zero upload and download, and
+  records VLESS Vision links, which it skipped.
+
 ### Fixed
 
 - VLESS Reality subscriptions: sing-box and Loon output now carry the
