@@ -8,8 +8,7 @@ on:
     branches: [ main, 'release/**' ]
     tags: [ 'v*.*.*' ]
   pull_request:
-    # go_dev: only until the branch is renamed to main (this PR runs on it).
-    branches: [ main, go_dev, 'release/**' ]
+    branches: [ main, 'release/**' ]
     types: [ opened, synchronize, reopened, labeled ]
   schedule:
     # Nightly full run on main.
