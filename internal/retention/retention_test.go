@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/AnixOps/anix-control/v5/internal/destinationstats"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/require"
@@ -103,6 +104,35 @@ func TestRunOnceDeletesExpiredRowsInBatches(t *testing.T) {
 	again, err := worker.RunOnce(context.Background())
 	require.NoError(t, err)
 	require.Zero(t, again.Deleted["v2_server_log"]+again.Deleted["v2_node_log"]+again.Deleted["v2_audit_log"])
+}
+
+// v5_destination_stat keeps the administrator's retention, 30 days by
+// default, and a policy's retention overrides it.
+func TestRunOnceKeepsTheDestinationStatsRetentionSetting(t *testing.T) {
+	db, _ := openFile(t)
+	require.NoError(t, db.AutoMigrate(&model.DestinationStat{}, &model.SystemConfig{}))
+	var rows []model.DestinationStat
+	for days := 0; days < 60; days++ {
+		rows = append(rows, model.DestinationStat{HourAt: testNow.Add(-time.Duration(days) * 24 * time.Hour).Unix(), NodeID: 1, UserID: 1, Domain: "example.com"})
+	}
+	require.NoError(t, db.Create(&rows).Error)
+	worker := &Worker{DB: db, BatchPause: time.Millisecond, Now: func() time.Time { return testNow }}
+
+	result, err := worker.RunOnce(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, int64(29), result.Deleted["v5_destination_stat"], "30 days kept: the rows of days 31 to 59 go")
+	require.Equal(t, int64(31), count(t, db, "v5_destination_stat"))
+
+	require.NoError(t, destinationstats.SaveSettings(db, destinationstats.Settings{Enabled: true, RetentionDays: 7}))
+	result, err = worker.RunOnce(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, int64(23), result.Deleted["v5_destination_stat"])
+	require.Equal(t, int64(8), count(t, db, "v5_destination_stat"))
+
+	worker.Policy.DestinationStats = 24 * time.Hour
+	result, err = worker.RunOnce(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, int64(6), result.Deleted["v5_destination_stat"], "a policy's retention overrides the setting")
 }
 
 func TestRunOnceKeepsATableWithANegativeRetentionAndHonoursMaxBatches(t *testing.T) {

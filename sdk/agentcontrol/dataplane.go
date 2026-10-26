@@ -46,6 +46,10 @@ const (
 	// downloads its node's plugin releases without the node API key. It
 	// adds no stream payload.
 	CapabilityArtifacts = "artifacts"
+	// CapabilityDestinations: the Agent sends DestinationReport, each
+	// user's traffic by destination domain, and Control answers it with
+	// ReportAck as it answers reports.v1 batches.
+	CapabilityDestinations = "destinations"
 )
 
 // DataPlaneCapabilities are the capabilities of the data plane, the ones
@@ -54,7 +58,7 @@ const (
 // adds no payload but is offered by the same rule.
 var DataPlaneCapabilities = []string{
 	CapabilityConfig, CapabilityUsers, CapabilityReports, CapabilityPackageReports, CapabilityForward, CapabilityMaintenance,
-	CapabilityAlive, CapabilityArtifacts, CapabilityUpgrade,
+	CapabilityAlive, CapabilityArtifacts, CapabilityUpgrade, CapabilityDestinations,
 }
 
 // Negotiated reports whether a data-plane capability is in use on a session:

@@ -5,7 +5,8 @@ export default {
     sectionsLabel: 'Traffic and monitoring sections',
     sections: {
       live: 'Live nodes',
-      traffic: 'User traffic'
+      traffic: 'User traffic',
+      destinations: 'Sites'
     },
     range: {
       label: 'Time range',
@@ -13,6 +14,24 @@ export default {
       '24h': '24 h',
       '7d': '7 d',
       '30d': '30 d'
+    },
+    destinations: {
+      user: 'User',
+      allUsers: 'All users',
+      settings: {
+        title: 'Site statistics',
+        description: 'Nodes report each user\'s traffic by destination domain. Users see their own statistics on their Site statistics page. Off by default; turning it off stops recording at once.',
+        enabled: 'Record site statistics',
+        enabledHint: 'Needs anix-agent with destinations.v1 on the nodes.',
+        retention: 'Keep for',
+        retentionUnit: 'days',
+        retentionHelp: '7 to 180 days. Each active user takes about 25–50 KB a day.',
+        save: 'Save',
+        saved: 'Site statistics settings saved',
+        saveFailed: 'Could not save the settings',
+        loadFailed: 'Could not load the settings'
+      },
+      off: 'Site statistics are off: nothing new is recorded. The history kept is still shown.'
     },
     refresh: 'Refresh',
     live: {

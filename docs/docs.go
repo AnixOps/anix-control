@@ -5268,6 +5268,136 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v4/admin/traffic/destinations": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "最近 hours 小时 (默认 24, 最多 4320) 各目标域名与流量类型 (视频、音乐、通讯、社交、游戏、AI、下载、网站、未知) 的上下行字节与连接数, 来自节点 Agent 的 destinations.v1 上报, 按 UTC 小时汇总。user_id、node_id 为 0 或省略时统计全部用户或节点。domains 按字节从大到小, 最多 limit 个 (默认 50, 最多 500), domain_count 为总数; 空域名是超出 Agent 每窗口上限的其余流量。类型按当前规则判定。settings 为统计开关与保留天数。字节为原始字节, 不乘节点倍率。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-流量"
+                ],
+                "summary": "访问统计 (按目标域名与流量类型)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "小时数, 1 到 4320",
+                        "name": "hours",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "用户 ID",
+                        "name": "user_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "节点 ID",
+                        "name": "node_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "域名条数, 1 到 500",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v4/admin/traffic/destinations/settings": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "访问统计的开关 (默认关闭) 与保留天数 (默认 30, 7 到 180)。关闭时节点上报的统计被丢弃。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-流量"
+                ],
+                "summary": "访问统计设置",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "设置访问统计的开关与保留天数 (7 到 180)。开关立即生效; 超出保留天数的记录在下一次清理 (每小时) 时删除。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-流量"
+                ],
+                "summary": "修改访问统计设置",
+                "parameters": [
+                    {
+                        "description": "设置",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/destinationstats.Settings"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/v4/admin/users/activity": {
             "get": {
                 "security": [
@@ -9112,6 +9242,53 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v4/user/traffic/destinations": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "当前用户最近 hours 小时 (默认 24, 最多 4320) 各目标域名与流量类型的上下行字节与连接数, 字段同 GET /api/v4/admin/traffic/destinations。settings.enabled 为 false 时节点不记录新的统计。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "用户端"
+                ],
+                "summary": "我的访问统计",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "小时数, 1 到 4320",
+                        "name": "hours",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "域名条数, 1 到 500",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/v5/backups": {
             "get": {
                 "security": [
@@ -10737,6 +10914,19 @@ const docTemplate = `{
                     "items": {
                         "type": "string"
                     }
+                }
+            }
+        },
+        "destinationstats.Settings": {
+            "type": "object",
+            "properties": {
+                "enabled": {
+                    "description": "Enabled records the Agents' batches; off, they are dropped.",
+                    "type": "boolean"
+                },
+                "retention_days": {
+                    "description": "RetentionDays is how long a row is kept.",
+                    "type": "integer"
                 }
             }
         },

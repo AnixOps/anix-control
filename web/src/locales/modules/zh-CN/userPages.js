@@ -348,6 +348,59 @@ export default {
         failed: '订单没有创建：{message}'
       }
     },
+    destinationStats: {
+      loadFailed: '访问统计加载失败',
+      empty: '这段时间没有访问记录',
+      summary: {
+        label: '访问统计汇总',
+        total: '总流量',
+        split: '上传 {upload} · 下载 {download}',
+        topCategory: '最多的类型',
+        domains: '访问的网站',
+        connections: '{count} 次连接'
+      },
+      categories: {
+        title: '流量类型',
+        description: '按目标域名归类：加密流量只能看到域名，类型是估算。'
+      },
+      domains: {
+        title: '访问的网站',
+        description: '按域名主体汇总（www.example.com 记作 example.com），按流量从多到少。',
+        label: '访问的网站',
+        domain: '网站',
+        category: '类型',
+        total: '流量',
+        upload: '上传',
+        download: '下载',
+        connections: '连接数',
+        other: '其他（超出单次上报上限）'
+      },
+      category: {
+        video: '视频',
+        music: '音乐',
+        messaging: '通讯',
+        social: '社交',
+        gaming: '游戏',
+        ai: 'AI',
+        download: '下载',
+        web: '网站',
+        unknown: '未知'
+      }
+    },
+    traffic: {
+      title: '访问统计',
+      description: '你通过节点访问的网站和各类流量（视频、通讯、下载等）。只记录域名，看不到具体网址和内容。',
+      rangeLabel: '时间范围',
+      range: {
+        '24h': '24 小时',
+        '7d': '7 天',
+        '30d': '30 天'
+      },
+      retention: '记录保留 {days} 天，之后自动删除。',
+      off: '管理员已关闭访问统计，不再记录新的数据。',
+      empty: '这段时间没有访问记录',
+      emptyHint: '使用节点上网后，一小时内会出现在这里。'
+    },
     orders: {
       title: '订单',
       description: '你的购买记录与支付状态。',

@@ -5,7 +5,8 @@ export default {
     sectionsLabel: '流量与监控分区',
     sections: {
       live: '实时节点',
-      traffic: '用户流量'
+      traffic: '用户流量',
+      destinations: '访问统计'
     },
     range: {
       label: '时间范围',
@@ -13,6 +14,24 @@ export default {
       '24h': '24 小时',
       '7d': '7 天',
       '30d': '30 天'
+    },
+    destinations: {
+      user: '用户',
+      allUsers: '全部用户',
+      settings: {
+        title: '访问统计',
+        description: '节点按目标域名上报每个用户的流量，用户可以在“访问统计”页面看到自己的记录。默认关闭，关闭后立即停止记录。',
+        enabled: '记录访问统计',
+        enabledHint: '节点需要支持 destinations.v1 的 anix-agent。',
+        retention: '保留',
+        retentionUnit: '天',
+        retentionHelp: '7 到 180 天。每个活跃用户每天约占 25–50 KB。',
+        save: '保存',
+        saved: '访问统计设置已保存',
+        saveFailed: '保存设置失败',
+        loadFailed: '设置加载失败'
+      },
+      off: '访问统计已关闭，不再记录新数据；仍显示已保留的记录。'
     },
     refresh: '刷新',
     live: {

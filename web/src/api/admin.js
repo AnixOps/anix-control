@@ -1035,3 +1035,23 @@ export default {
   deleteLoadBalancer,
   runHealthCheck
 }
+
+// Each user's traffic by destination and category, GET
+// /api/v4/admin/traffic/destinations (docs/reference/destination-stats.md):
+// the last `hours`, for one user and node or all (0). Answers { totals,
+// categories, domains, domain_count, settings }.
+export async function getTrafficDestinations({ hours = 24, userId = 0, nodeId = 0, limit = 100 } = {}) {
+  const params = { hours, limit }
+  if (userId) params.user_id = userId
+  if (nodeId) params.node_id = nodeId
+  return dataOf(await adminV4({ url: '/admin/traffic/destinations', method: 'get', params }))
+}
+
+// The statistics' settings: { enabled, retention_days }.
+export async function getDestinationSettings() {
+  return dataOf(await adminV4({ url: '/admin/traffic/destinations/settings', method: 'get' }))
+}
+
+export async function updateDestinationSettings(settings) {
+  return dataOf(await adminV4({ url: '/admin/traffic/destinations/settings', method: 'put', data: settings }))
+}

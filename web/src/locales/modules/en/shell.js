@@ -72,6 +72,7 @@ export default {
         subscribe: 'Subscription',
         knowledge: 'Help Center',
         knowledgeShort: 'Help',
+        traffic: 'Site statistics',
         tickets: 'Tickets',
         account: 'Account',
         plans: 'Plans',

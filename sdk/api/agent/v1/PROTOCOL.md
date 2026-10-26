@@ -93,6 +93,8 @@ are additions to `anix.agent.v1`:
 | Control → Agent | `ControlToAgent.alive_list` (`AliveList` of `UserAlive`) | `alive.v1` |
 | Agent → Control | `AgentArtifacts.GetPluginManifest`, `DownloadPluginArtifact` (`artifacts.proto`; a service, not a stream payload) | `artifacts.v1` |
 | Control → Agent | `DesiredOperation` of kind `agent.upgrade` (an Agent upgrade or rollback; no new message) | `upgrade.v1` |
+| Agent → Control | `AgentToControl.destinations` (`DestinationReport` of `DestinationTraffic`) | `destinations.v1` |
+| Control → Agent | `ControlToAgent.report_ack` (`ReportAck`) answering a `DestinationReport` | `destinations.v1` |
 
 `Hello` gains `config_revision` and `users_cursor`, and `HelloAck` gains
 `server_capabilities`.
@@ -125,8 +127,8 @@ stream equivalent.
   and version `v1`; `sdk/agentcontrol` names them (`CapabilityConfig`,
   `CapabilityUsers`, `CapabilityReports`, `CapabilityPackageReports`,
   `CapabilityForward`, `CapabilityMaintenance`, `CapabilityAlive`,
-  `CapabilityArtifacts`, `CapabilityUpgrade`; `DataPlaneCapabilities` lists
-  them).
+  `CapabilityArtifacts`, `CapabilityUpgrade`, `CapabilityDestinations`;
+  `DataPlaneCapabilities` lists them).
 - The Agent lists the ones it implements in `Hello.capabilities`. Control
   lists the ones it serves in `HelloAck.server_capabilities`.
 - A capability is in use on a session only when both lists have it
@@ -137,8 +139,9 @@ stream equivalent.
     `Hello.config_revision` and `Hello.users_cursor` only then.
   - The Agent sends `ConfigStatus` only with `config.v1`, and `TrafficReport`,
     `LogBatch` and `NodeStatus` only with `reports.v1`, `PackageReport`
-    only with `package-reports.v1`, and `MaintenanceEvents` only with
-    `maintenance.v1`, in `HelloAck.server_capabilities`. Control sends
+    only with `package-reports.v1`, `MaintenanceEvents` only with
+    `maintenance.v1`, and `DestinationReport` only with `destinations.v1`,
+    in `HelloAck.server_capabilities`. Control sends
     `AliveList` only with `alive.v1`. The Agent calls `AgentArtifacts`
     only with `artifacts.v1`.
     Without them it keeps the legacy transports.
@@ -166,6 +169,9 @@ stream equivalent.
     authenticated by client certificate (`AgentArtifacts` reads no node
     API key, so a session on the API key is not offered it).
   - `upgrade.v1` (see "Agent upgrades"): proxy and forward nodes.
+  - `destinations.v1` (see "Destination statistics"): proxy nodes, whatever
+    the administrator's setting, so that turning the statistics on or off
+    needs no reconnect.
 
   `reports.v1` carries one attribute: an Agent that lists it with
   `transient_ack: "v1"` asks for transient report acknowledgements ("Error
@@ -181,8 +187,8 @@ stream equivalent.
 - An Agent that sends a payload the session did not negotiate
   (`config_status` without `config.v1`, or `traffic`, `logs` or `status`
   without `reports.v1`, `package_report` without `package-reports.v1`,
-  `maintenance_events` without `maintenance.v1`, in
-  both lists) gets `InvalidArgument`, naming the
+  `maintenance_events` without `maintenance.v1`, `destinations` without
+  `destinations.v1`, in both lists) gets `InvalidArgument`, naming the
   capability it lacks, with the code `agent_capability_not_negotiated` in
   the trailer, and the stream ends. A Control built before these payloads existed answers
   them the same way, as an unknown payload ("control message payload is
@@ -530,6 +536,29 @@ stream equivalent.
     with a new list.
   - The list holds every user, not only the node's: it is what
     `alivelist` answers, and the Agent reads the entries of its users.
+- **Destination statistics** (`destinations.v1`). Each user's traffic by
+  destination for one window, the source of the 访问统计 pages
+  (`docs/reference/destination-stats.md`).
+  - **The batch.** `DestinationReport.entries` hold, per user, destination
+    and sniffed protocol, the bytes and the connections opened in the
+    window. `domain` is the registrable domain (`example.com` for
+    `www.example.com`), lowercase; a destination without a domain is its
+    address network (`a.b.c.0/24`, a `/48` of IPv6); the traffic beyond the
+    Agent's per-window limit of destinations is one entry with an empty
+    `domain`. At most 50 000 entries; a domain of at most 255 bytes and a
+    protocol of at most 32.
+  - **Delivery.** As a `TrafficReport`: `batch_id` is kept when resent and
+    unique per node among all its report batches
+    (`node:<kind>-<id>:<boot id>:destinations-<sequence>`), Control records
+    it once and answers `ReportAck` (`applied`, a replay, or a refusal with
+    `report_invalid`, `report_batch_id_invalid` or `report_counter_overflow`). A batch
+    Control cannot record now gets the same transient answer as a
+    `TrafficReport` on the session.
+  - **Off.** While the administrator's setting is off, Control claims and
+    drops every batch with `applied: true`, so the Agent forgets it.
+  - The window's end (`window_end_unix_ms`) picks the UTC hour it counts in;
+    a window ending more than 10 minutes ahead of Control's clock, or
+    without an end, counts in the current hour.
 - **Plugin artifacts** (`artifacts.v1`). `AgentArtifacts`
   (`artifacts.proto`, a separate file of the same package) serves an
   enrolled Agent the signed plugin releases assigned to its node: what

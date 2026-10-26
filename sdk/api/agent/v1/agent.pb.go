@@ -898,6 +898,7 @@ type AgentToControl struct {
 	//	*AgentToControl_Status
 	//	*AgentToControl_PackageReport
 	//	*AgentToControl_MaintenanceEvents
+	//	*AgentToControl_Destinations
 	Payload       isAgentToControl_Payload `protobuf_oneof:"payload"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1058,6 +1059,15 @@ func (x *AgentToControl) GetMaintenanceEvents() *MaintenanceEvents {
 	return nil
 }
 
+func (x *AgentToControl) GetDestinations() *DestinationReport {
+	if x != nil {
+		if x, ok := x.Payload.(*AgentToControl_Destinations); ok {
+			return x.Destinations
+		}
+	}
+	return nil
+}
+
 type isAgentToControl_Payload interface {
 	isAgentToControl_Payload()
 }
@@ -1108,6 +1118,13 @@ type AgentToControl_MaintenanceEvents struct {
 	MaintenanceEvents *MaintenanceEvents `protobuf:"bytes,19,opt,name=maintenance_events,json=maintenanceEvents,proto3,oneof"`
 }
 
+type AgentToControl_Destinations struct {
+	// Sent only with destinations.v1 negotiated: the traffic of each user
+	// by destination domain for one window. Control answers it with
+	// report_ack.
+	Destinations *DestinationReport `protobuf:"bytes,20,opt,name=destinations,proto3,oneof"`
+}
+
 func (*AgentToControl_Hello) isAgentToControl_Payload() {}
 
 func (*AgentToControl_Heartbeat) isAgentToControl_Payload() {}
@@ -1127,6 +1144,8 @@ func (*AgentToControl_Status) isAgentToControl_Payload() {}
 func (*AgentToControl_PackageReport) isAgentToControl_Payload() {}
 
 func (*AgentToControl_MaintenanceEvents) isAgentToControl_Payload() {}
+
+func (*AgentToControl_Destinations) isAgentToControl_Payload() {}
 
 type ControlToAgent struct {
 	state        protoimpl.MessageState `protogen:"open.v1"`
@@ -1852,6 +1871,166 @@ func (x *OnlineUser) GetIps() []string {
 	return nil
 }
 
+// DestinationReport carries each user's traffic by destination for one
+// window (destinations.v1). Control records a batch_id once and answers
+// ReportAck, as for a TrafficReport.
+type DestinationReport struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// batch_id is kept when the batch is resent and unique per node among
+	// all its report batches, TrafficReport and LogBatch ones included:
+	// node:<kind>-<id>:<boot id>:destinations-<sequence>.
+	BatchId         string                `protobuf:"bytes,1,opt,name=batch_id,json=batchId,proto3" json:"batch_id,omitempty"`
+	Entries         []*DestinationTraffic `protobuf:"bytes,2,rep,name=entries,proto3" json:"entries,omitempty"`
+	WindowEndUnixMs int64                 `protobuf:"varint,3,opt,name=window_end_unix_ms,json=windowEndUnixMs,proto3" json:"window_end_unix_ms,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *DestinationReport) Reset() {
+	*x = DestinationReport{}
+	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DestinationReport) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DestinationReport) ProtoMessage() {}
+
+func (x *DestinationReport) ProtoReflect() protoreflect.Message {
+	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DestinationReport.ProtoReflect.Descriptor instead.
+func (*DestinationReport) Descriptor() ([]byte, []int) {
+	return file_api_grpc_agent_v1_agent_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *DestinationReport) GetBatchId() string {
+	if x != nil {
+		return x.BatchId
+	}
+	return ""
+}
+
+func (x *DestinationReport) GetEntries() []*DestinationTraffic {
+	if x != nil {
+		return x.Entries
+	}
+	return nil
+}
+
+func (x *DestinationReport) GetWindowEndUnixMs() int64 {
+	if x != nil {
+		return x.WindowEndUnixMs
+	}
+	return 0
+}
+
+// DestinationTraffic is one user's traffic to one destination in a
+// DestinationReport window.
+type DestinationTraffic struct {
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	UserId uint64                 `protobuf:"varint,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	// domain is the registrable domain the connections were sniffed or
+	// dialed to (example.com for www.example.com), lowercase; for a
+	// destination without a domain, the address's network (a.b.c.0/24 or a
+	// /48 of IPv6); empty for the rest of a user's traffic beyond the
+	// Agent's per-window limit.
+	Domain string `protobuf:"bytes,2,opt,name=domain,proto3" json:"domain,omitempty"`
+	// protocol is the sniffed protocol (tls, http, quic, bittorrent, ...),
+	// empty when none was sniffed.
+	Protocol      string `protobuf:"bytes,3,opt,name=protocol,proto3" json:"protocol,omitempty"`
+	UploadBytes   uint64 `protobuf:"varint,4,opt,name=upload_bytes,json=uploadBytes,proto3" json:"upload_bytes,omitempty"`
+	DownloadBytes uint64 `protobuf:"varint,5,opt,name=download_bytes,json=downloadBytes,proto3" json:"download_bytes,omitempty"`
+	// connections counts the connections opened in the window.
+	Connections   uint32 `protobuf:"varint,6,opt,name=connections,proto3" json:"connections,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DestinationTraffic) Reset() {
+	*x = DestinationTraffic{}
+	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DestinationTraffic) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DestinationTraffic) ProtoMessage() {}
+
+func (x *DestinationTraffic) ProtoReflect() protoreflect.Message {
+	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DestinationTraffic.ProtoReflect.Descriptor instead.
+func (*DestinationTraffic) Descriptor() ([]byte, []int) {
+	return file_api_grpc_agent_v1_agent_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *DestinationTraffic) GetUserId() uint64 {
+	if x != nil {
+		return x.UserId
+	}
+	return 0
+}
+
+func (x *DestinationTraffic) GetDomain() string {
+	if x != nil {
+		return x.Domain
+	}
+	return ""
+}
+
+func (x *DestinationTraffic) GetProtocol() string {
+	if x != nil {
+		return x.Protocol
+	}
+	return ""
+}
+
+func (x *DestinationTraffic) GetUploadBytes() uint64 {
+	if x != nil {
+		return x.UploadBytes
+	}
+	return 0
+}
+
+func (x *DestinationTraffic) GetDownloadBytes() uint64 {
+	if x != nil {
+		return x.DownloadBytes
+	}
+	return 0
+}
+
+func (x *DestinationTraffic) GetConnections() uint32 {
+	if x != nil {
+		return x.Connections
+	}
+	return 0
+}
+
 // LogBatch carries node runtime logs (reports.v1). Control records a
 // batch_id once and answers ReportAck.
 type LogBatch struct {
@@ -1864,7 +2043,7 @@ type LogBatch struct {
 
 func (x *LogBatch) Reset() {
 	*x = LogBatch{}
-	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[19]
+	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1876,7 +2055,7 @@ func (x *LogBatch) String() string {
 func (*LogBatch) ProtoMessage() {}
 
 func (x *LogBatch) ProtoReflect() protoreflect.Message {
-	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[19]
+	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1889,7 +2068,7 @@ func (x *LogBatch) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogBatch.ProtoReflect.Descriptor instead.
 func (*LogBatch) Descriptor() ([]byte, []int) {
-	return file_api_grpc_agent_v1_agent_proto_rawDescGZIP(), []int{19}
+	return file_api_grpc_agent_v1_agent_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *LogBatch) GetBatchId() string {
@@ -1923,7 +2102,7 @@ type LogEntry struct {
 
 func (x *LogEntry) Reset() {
 	*x = LogEntry{}
-	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[20]
+	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1935,7 +2114,7 @@ func (x *LogEntry) String() string {
 func (*LogEntry) ProtoMessage() {}
 
 func (x *LogEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[20]
+	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1948,7 +2127,7 @@ func (x *LogEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogEntry.ProtoReflect.Descriptor instead.
 func (*LogEntry) Descriptor() ([]byte, []int) {
-	return file_api_grpc_agent_v1_agent_proto_rawDescGZIP(), []int{20}
+	return file_api_grpc_agent_v1_agent_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *LogEntry) GetLevel() string {
@@ -1993,11 +2172,12 @@ func (x *LogEntry) GetTraceId() string {
 	return ""
 }
 
-// ReportAck answers a TrafficReport or LogBatch by batch_id. applied is true
-// when this delivery recorded the batch, and false when Control had recorded
-// it before (error empty) or refuses it for good (error set). In each case the
-// Agent drops the batch from its spool. Control sends no ReportAck for a batch
-// it cannot record for now, and the Agent resends it later.
+// ReportAck answers a TrafficReport, LogBatch or DestinationReport by
+// batch_id. applied is true when this delivery recorded the batch, and false
+// when Control had recorded it before (error empty) or refuses it for good
+// (error set). In each case the Agent drops the batch from its spool. Control
+// sends no ReportAck for a batch it cannot record for now, and the Agent
+// resends it later.
 type ReportAck struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
 	BatchId string                 `protobuf:"bytes,1,opt,name=batch_id,json=batchId,proto3" json:"batch_id,omitempty"`
@@ -2021,7 +2201,7 @@ type ReportAck struct {
 
 func (x *ReportAck) Reset() {
 	*x = ReportAck{}
-	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[21]
+	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2033,7 +2213,7 @@ func (x *ReportAck) String() string {
 func (*ReportAck) ProtoMessage() {}
 
 func (x *ReportAck) ProtoReflect() protoreflect.Message {
-	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[21]
+	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2046,7 +2226,7 @@ func (x *ReportAck) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReportAck.ProtoReflect.Descriptor instead.
 func (*ReportAck) Descriptor() ([]byte, []int) {
-	return file_api_grpc_agent_v1_agent_proto_rawDescGZIP(), []int{21}
+	return file_api_grpc_agent_v1_agent_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *ReportAck) GetBatchId() string {
@@ -2102,7 +2282,7 @@ type NodeStatus struct {
 
 func (x *NodeStatus) Reset() {
 	*x = NodeStatus{}
-	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[22]
+	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2114,7 +2294,7 @@ func (x *NodeStatus) String() string {
 func (*NodeStatus) ProtoMessage() {}
 
 func (x *NodeStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[22]
+	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2127,7 +2307,7 @@ func (x *NodeStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NodeStatus.ProtoReflect.Descriptor instead.
 func (*NodeStatus) Descriptor() ([]byte, []int) {
-	return file_api_grpc_agent_v1_agent_proto_rawDescGZIP(), []int{22}
+	return file_api_grpc_agent_v1_agent_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *NodeStatus) GetCpuUsagePercent() float64 {
@@ -2208,7 +2388,7 @@ type PackageReport struct {
 
 func (x *PackageReport) Reset() {
 	*x = PackageReport{}
-	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[23]
+	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2220,7 +2400,7 @@ func (x *PackageReport) String() string {
 func (*PackageReport) ProtoMessage() {}
 
 func (x *PackageReport) ProtoReflect() protoreflect.Message {
-	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[23]
+	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2233,7 +2413,7 @@ func (x *PackageReport) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PackageReport.ProtoReflect.Descriptor instead.
 func (*PackageReport) Descriptor() ([]byte, []int) {
-	return file_api_grpc_agent_v1_agent_proto_rawDescGZIP(), []int{23}
+	return file_api_grpc_agent_v1_agent_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *PackageReport) GetPluginId() string {
@@ -2289,7 +2469,7 @@ type MaintenanceEvents struct {
 
 func (x *MaintenanceEvents) Reset() {
 	*x = MaintenanceEvents{}
-	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[24]
+	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2301,7 +2481,7 @@ func (x *MaintenanceEvents) String() string {
 func (*MaintenanceEvents) ProtoMessage() {}
 
 func (x *MaintenanceEvents) ProtoReflect() protoreflect.Message {
-	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[24]
+	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2314,7 +2494,7 @@ func (x *MaintenanceEvents) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MaintenanceEvents.ProtoReflect.Descriptor instead.
 func (*MaintenanceEvents) Descriptor() ([]byte, []int) {
-	return file_api_grpc_agent_v1_agent_proto_rawDescGZIP(), []int{24}
+	return file_api_grpc_agent_v1_agent_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *MaintenanceEvents) GetVersion() string {
@@ -2344,7 +2524,7 @@ type MaintenanceAck struct {
 
 func (x *MaintenanceAck) Reset() {
 	*x = MaintenanceAck{}
-	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[25]
+	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2356,7 +2536,7 @@ func (x *MaintenanceAck) String() string {
 func (*MaintenanceAck) ProtoMessage() {}
 
 func (x *MaintenanceAck) ProtoReflect() protoreflect.Message {
-	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[25]
+	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2369,7 +2549,7 @@ func (x *MaintenanceAck) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MaintenanceAck.ProtoReflect.Descriptor instead.
 func (*MaintenanceAck) Descriptor() ([]byte, []int) {
-	return file_api_grpc_agent_v1_agent_proto_rawDescGZIP(), []int{25}
+	return file_api_grpc_agent_v1_agent_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *MaintenanceAck) GetVersion() string {
@@ -2414,7 +2594,7 @@ type MaintenanceEventResult struct {
 
 func (x *MaintenanceEventResult) Reset() {
 	*x = MaintenanceEventResult{}
-	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[26]
+	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2426,7 +2606,7 @@ func (x *MaintenanceEventResult) String() string {
 func (*MaintenanceEventResult) ProtoMessage() {}
 
 func (x *MaintenanceEventResult) ProtoReflect() protoreflect.Message {
-	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[26]
+	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2439,7 +2619,7 @@ func (x *MaintenanceEventResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MaintenanceEventResult.ProtoReflect.Descriptor instead.
 func (*MaintenanceEventResult) Descriptor() ([]byte, []int) {
-	return file_api_grpc_agent_v1_agent_proto_rawDescGZIP(), []int{26}
+	return file_api_grpc_agent_v1_agent_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *MaintenanceEventResult) GetEventId() string {
@@ -2499,7 +2679,7 @@ type AliveList struct {
 
 func (x *AliveList) Reset() {
 	*x = AliveList{}
-	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[27]
+	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2511,7 +2691,7 @@ func (x *AliveList) String() string {
 func (*AliveList) ProtoMessage() {}
 
 func (x *AliveList) ProtoReflect() protoreflect.Message {
-	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[27]
+	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2524,7 +2704,7 @@ func (x *AliveList) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AliveList.ProtoReflect.Descriptor instead.
 func (*AliveList) Descriptor() ([]byte, []int) {
-	return file_api_grpc_agent_v1_agent_proto_rawDescGZIP(), []int{27}
+	return file_api_grpc_agent_v1_agent_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *AliveList) GetRevision() uint64 {
@@ -2566,7 +2746,7 @@ type UserAlive struct {
 
 func (x *UserAlive) Reset() {
 	*x = UserAlive{}
-	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[28]
+	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2578,7 +2758,7 @@ func (x *UserAlive) String() string {
 func (*UserAlive) ProtoMessage() {}
 
 func (x *UserAlive) ProtoReflect() protoreflect.Message {
-	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[28]
+	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2591,7 +2771,7 @@ func (x *UserAlive) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UserAlive.ProtoReflect.Descriptor instead.
 func (*UserAlive) Descriptor() ([]byte, []int) {
-	return file_api_grpc_agent_v1_agent_proto_rawDescGZIP(), []int{28}
+	return file_api_grpc_agent_v1_agent_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *UserAlive) GetUserId() uint64 {
@@ -2695,7 +2875,7 @@ const file_api_grpc_agent_v1_agent_proto_rawDesc = "" +
 	"state_json\x18\x05 \x01(\fR\tstateJson\x12-\n" +
 	"\x13observed_at_unix_ms\x18\x06 \x01(\x03R\x10observedAtUnixMs\x12\x1d\n" +
 	"\n" +
-	"session_id\x18\a \x01(\tR\tsessionId\"\x85\x06\n" +
+	"session_id\x18\a \x01(\tR\tsessionId\"\xcd\x06\n" +
 	"\x0eAgentToControl\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\tR\trequestId\x12\x17\n" +
@@ -2712,7 +2892,8 @@ const file_api_grpc_agent_v1_agent_proto_rawDesc = "" +
 	"\x04logs\x18\x10 \x01(\v2\x17.anix.agent.v1.LogBatchH\x00R\x04logs\x123\n" +
 	"\x06status\x18\x11 \x01(\v2\x19.anix.agent.v1.NodeStatusH\x00R\x06status\x12E\n" +
 	"\x0epackage_report\x18\x12 \x01(\v2\x1c.anix.agent.v1.PackageReportH\x00R\rpackageReport\x12Q\n" +
-	"\x12maintenance_events\x18\x13 \x01(\v2 .anix.agent.v1.MaintenanceEventsH\x00R\x11maintenanceEventsB\t\n" +
+	"\x12maintenance_events\x18\x13 \x01(\v2 .anix.agent.v1.MaintenanceEventsH\x00R\x11maintenanceEvents\x12F\n" +
+	"\fdestinations\x18\x14 \x01(\v2 .anix.agent.v1.DestinationReportH\x00R\fdestinationsB\t\n" +
 	"\apayload\"\x8d\x05\n" +
 	"\x0eControlToAgent\x12\x1d\n" +
 	"\n" +
@@ -2772,7 +2953,18 @@ const file_api_grpc_agent_v1_agent_proto_rawDesc = "" +
 	"\n" +
 	"OnlineUser\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\x04R\x06userId\x12\x10\n" +
-	"\x03ips\x18\x02 \x03(\tR\x03ips\"X\n" +
+	"\x03ips\x18\x02 \x03(\tR\x03ips\"\x98\x01\n" +
+	"\x11DestinationReport\x12\x19\n" +
+	"\bbatch_id\x18\x01 \x01(\tR\abatchId\x12;\n" +
+	"\aentries\x18\x02 \x03(\v2!.anix.agent.v1.DestinationTrafficR\aentries\x12+\n" +
+	"\x12window_end_unix_ms\x18\x03 \x01(\x03R\x0fwindowEndUnixMs\"\xcd\x01\n" +
+	"\x12DestinationTraffic\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\x04R\x06userId\x12\x16\n" +
+	"\x06domain\x18\x02 \x01(\tR\x06domain\x12\x1a\n" +
+	"\bprotocol\x18\x03 \x01(\tR\bprotocol\x12!\n" +
+	"\fupload_bytes\x18\x04 \x01(\x04R\vuploadBytes\x12%\n" +
+	"\x0edownload_bytes\x18\x05 \x01(\x04R\rdownloadBytes\x12 \n" +
+	"\vconnections\x18\x06 \x01(\rR\vconnections\"X\n" +
 	"\bLogBatch\x12\x19\n" +
 	"\bbatch_id\x18\x01 \x01(\tR\abatchId\x121\n" +
 	"\aentries\x18\x02 \x03(\v2\x17.anix.agent.v1.LogEntryR\aentries\"\xb9\x01\n" +
@@ -2852,7 +3044,7 @@ func file_api_grpc_agent_v1_agent_proto_rawDescGZIP() []byte {
 }
 
 var file_api_grpc_agent_v1_agent_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_api_grpc_agent_v1_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 32)
+var file_api_grpc_agent_v1_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 34)
 var file_api_grpc_agent_v1_agent_proto_goTypes = []any{
 	(ObservedPhase)(0),             // 0: anix.agent.v1.ObservedPhase
 	(*Capability)(nil),             // 1: anix.agent.v1.Capability
@@ -2874,26 +3066,28 @@ var file_api_grpc_agent_v1_agent_proto_goTypes = []any{
 	(*TrafficReport)(nil),          // 17: anix.agent.v1.TrafficReport
 	(*UserTraffic)(nil),            // 18: anix.agent.v1.UserTraffic
 	(*OnlineUser)(nil),             // 19: anix.agent.v1.OnlineUser
-	(*LogBatch)(nil),               // 20: anix.agent.v1.LogBatch
-	(*LogEntry)(nil),               // 21: anix.agent.v1.LogEntry
-	(*ReportAck)(nil),              // 22: anix.agent.v1.ReportAck
-	(*NodeStatus)(nil),             // 23: anix.agent.v1.NodeStatus
-	(*PackageReport)(nil),          // 24: anix.agent.v1.PackageReport
-	(*MaintenanceEvents)(nil),      // 25: anix.agent.v1.MaintenanceEvents
-	(*MaintenanceAck)(nil),         // 26: anix.agent.v1.MaintenanceAck
-	(*MaintenanceEventResult)(nil), // 27: anix.agent.v1.MaintenanceEventResult
-	(*AliveList)(nil),              // 28: anix.agent.v1.AliveList
-	(*UserAlive)(nil),              // 29: anix.agent.v1.UserAlive
-	nil,                            // 30: anix.agent.v1.Capability.AttributesEntry
-	nil,                            // 31: anix.agent.v1.Hello.LabelsEntry
-	nil,                            // 32: anix.agent.v1.Heartbeat.MetricsEntry
+	(*DestinationReport)(nil),      // 20: anix.agent.v1.DestinationReport
+	(*DestinationTraffic)(nil),     // 21: anix.agent.v1.DestinationTraffic
+	(*LogBatch)(nil),               // 22: anix.agent.v1.LogBatch
+	(*LogEntry)(nil),               // 23: anix.agent.v1.LogEntry
+	(*ReportAck)(nil),              // 24: anix.agent.v1.ReportAck
+	(*NodeStatus)(nil),             // 25: anix.agent.v1.NodeStatus
+	(*PackageReport)(nil),          // 26: anix.agent.v1.PackageReport
+	(*MaintenanceEvents)(nil),      // 27: anix.agent.v1.MaintenanceEvents
+	(*MaintenanceAck)(nil),         // 28: anix.agent.v1.MaintenanceAck
+	(*MaintenanceEventResult)(nil), // 29: anix.agent.v1.MaintenanceEventResult
+	(*AliveList)(nil),              // 30: anix.agent.v1.AliveList
+	(*UserAlive)(nil),              // 31: anix.agent.v1.UserAlive
+	nil,                            // 32: anix.agent.v1.Capability.AttributesEntry
+	nil,                            // 33: anix.agent.v1.Hello.LabelsEntry
+	nil,                            // 34: anix.agent.v1.Heartbeat.MetricsEntry
 }
 var file_api_grpc_agent_v1_agent_proto_depIdxs = []int32{
-	30, // 0: anix.agent.v1.Capability.attributes:type_name -> anix.agent.v1.Capability.AttributesEntry
+	32, // 0: anix.agent.v1.Capability.attributes:type_name -> anix.agent.v1.Capability.AttributesEntry
 	1,  // 1: anix.agent.v1.Hello.capabilities:type_name -> anix.agent.v1.Capability
-	31, // 2: anix.agent.v1.Hello.labels:type_name -> anix.agent.v1.Hello.LabelsEntry
+	33, // 2: anix.agent.v1.Hello.labels:type_name -> anix.agent.v1.Hello.LabelsEntry
 	1,  // 3: anix.agent.v1.HelloAck.server_capabilities:type_name -> anix.agent.v1.Capability
-	32, // 4: anix.agent.v1.Heartbeat.metrics:type_name -> anix.agent.v1.Heartbeat.MetricsEntry
+	34, // 4: anix.agent.v1.Heartbeat.metrics:type_name -> anix.agent.v1.Heartbeat.MetricsEntry
 	5,  // 5: anix.agent.v1.Heartbeat.plugin_observations:type_name -> anix.agent.v1.PluginObservedState
 	6,  // 6: anix.agent.v1.PluginObservedState.rule_counters:type_name -> anix.agent.v1.PluginRuleCounter
 	0,  // 7: anix.agent.v1.ObservedState.phase:type_name -> anix.agent.v1.ObservedPhase
@@ -2903,31 +3097,33 @@ var file_api_grpc_agent_v1_agent_proto_depIdxs = []int32{
 	10, // 11: anix.agent.v1.AgentToControl.observed_state:type_name -> anix.agent.v1.ObservedState
 	14, // 12: anix.agent.v1.AgentToControl.config_status:type_name -> anix.agent.v1.ConfigStatus
 	17, // 13: anix.agent.v1.AgentToControl.traffic:type_name -> anix.agent.v1.TrafficReport
-	20, // 14: anix.agent.v1.AgentToControl.logs:type_name -> anix.agent.v1.LogBatch
-	23, // 15: anix.agent.v1.AgentToControl.status:type_name -> anix.agent.v1.NodeStatus
-	24, // 16: anix.agent.v1.AgentToControl.package_report:type_name -> anix.agent.v1.PackageReport
-	25, // 17: anix.agent.v1.AgentToControl.maintenance_events:type_name -> anix.agent.v1.MaintenanceEvents
-	3,  // 18: anix.agent.v1.ControlToAgent.hello_ack:type_name -> anix.agent.v1.HelloAck
-	7,  // 19: anix.agent.v1.ControlToAgent.heartbeat_ack:type_name -> anix.agent.v1.HeartbeatAck
-	8,  // 20: anix.agent.v1.ControlToAgent.desired_operation:type_name -> anix.agent.v1.DesiredOperation
-	13, // 21: anix.agent.v1.ControlToAgent.config:type_name -> anix.agent.v1.ConfigSnapshot
-	16, // 22: anix.agent.v1.ControlToAgent.users:type_name -> anix.agent.v1.UserDelta
-	22, // 23: anix.agent.v1.ControlToAgent.report_ack:type_name -> anix.agent.v1.ReportAck
-	26, // 24: anix.agent.v1.ControlToAgent.maintenance_ack:type_name -> anix.agent.v1.MaintenanceAck
-	28, // 25: anix.agent.v1.ControlToAgent.alive_list:type_name -> anix.agent.v1.AliveList
-	15, // 26: anix.agent.v1.UserDelta.upserts:type_name -> anix.agent.v1.NodeUser
-	18, // 27: anix.agent.v1.TrafficReport.users:type_name -> anix.agent.v1.UserTraffic
-	19, // 28: anix.agent.v1.TrafficReport.online:type_name -> anix.agent.v1.OnlineUser
-	21, // 29: anix.agent.v1.LogBatch.entries:type_name -> anix.agent.v1.LogEntry
-	27, // 30: anix.agent.v1.MaintenanceAck.events:type_name -> anix.agent.v1.MaintenanceEventResult
-	29, // 31: anix.agent.v1.AliveList.entries:type_name -> anix.agent.v1.UserAlive
-	11, // 32: anix.agent.v1.AgentControlService.ControlStream:input_type -> anix.agent.v1.AgentToControl
-	12, // 33: anix.agent.v1.AgentControlService.ControlStream:output_type -> anix.agent.v1.ControlToAgent
-	33, // [33:34] is the sub-list for method output_type
-	32, // [32:33] is the sub-list for method input_type
-	32, // [32:32] is the sub-list for extension type_name
-	32, // [32:32] is the sub-list for extension extendee
-	0,  // [0:32] is the sub-list for field type_name
+	22, // 14: anix.agent.v1.AgentToControl.logs:type_name -> anix.agent.v1.LogBatch
+	25, // 15: anix.agent.v1.AgentToControl.status:type_name -> anix.agent.v1.NodeStatus
+	26, // 16: anix.agent.v1.AgentToControl.package_report:type_name -> anix.agent.v1.PackageReport
+	27, // 17: anix.agent.v1.AgentToControl.maintenance_events:type_name -> anix.agent.v1.MaintenanceEvents
+	20, // 18: anix.agent.v1.AgentToControl.destinations:type_name -> anix.agent.v1.DestinationReport
+	3,  // 19: anix.agent.v1.ControlToAgent.hello_ack:type_name -> anix.agent.v1.HelloAck
+	7,  // 20: anix.agent.v1.ControlToAgent.heartbeat_ack:type_name -> anix.agent.v1.HeartbeatAck
+	8,  // 21: anix.agent.v1.ControlToAgent.desired_operation:type_name -> anix.agent.v1.DesiredOperation
+	13, // 22: anix.agent.v1.ControlToAgent.config:type_name -> anix.agent.v1.ConfigSnapshot
+	16, // 23: anix.agent.v1.ControlToAgent.users:type_name -> anix.agent.v1.UserDelta
+	24, // 24: anix.agent.v1.ControlToAgent.report_ack:type_name -> anix.agent.v1.ReportAck
+	28, // 25: anix.agent.v1.ControlToAgent.maintenance_ack:type_name -> anix.agent.v1.MaintenanceAck
+	30, // 26: anix.agent.v1.ControlToAgent.alive_list:type_name -> anix.agent.v1.AliveList
+	15, // 27: anix.agent.v1.UserDelta.upserts:type_name -> anix.agent.v1.NodeUser
+	18, // 28: anix.agent.v1.TrafficReport.users:type_name -> anix.agent.v1.UserTraffic
+	19, // 29: anix.agent.v1.TrafficReport.online:type_name -> anix.agent.v1.OnlineUser
+	21, // 30: anix.agent.v1.DestinationReport.entries:type_name -> anix.agent.v1.DestinationTraffic
+	23, // 31: anix.agent.v1.LogBatch.entries:type_name -> anix.agent.v1.LogEntry
+	29, // 32: anix.agent.v1.MaintenanceAck.events:type_name -> anix.agent.v1.MaintenanceEventResult
+	31, // 33: anix.agent.v1.AliveList.entries:type_name -> anix.agent.v1.UserAlive
+	11, // 34: anix.agent.v1.AgentControlService.ControlStream:input_type -> anix.agent.v1.AgentToControl
+	12, // 35: anix.agent.v1.AgentControlService.ControlStream:output_type -> anix.agent.v1.ControlToAgent
+	35, // [35:36] is the sub-list for method output_type
+	34, // [34:35] is the sub-list for method input_type
+	34, // [34:34] is the sub-list for extension type_name
+	34, // [34:34] is the sub-list for extension extendee
+	0,  // [0:34] is the sub-list for field type_name
 }
 
 func init() { file_api_grpc_agent_v1_agent_proto_init() }
@@ -2946,6 +3142,7 @@ func file_api_grpc_agent_v1_agent_proto_init() {
 		(*AgentToControl_Status)(nil),
 		(*AgentToControl_PackageReport)(nil),
 		(*AgentToControl_MaintenanceEvents)(nil),
+		(*AgentToControl_Destinations)(nil),
 	}
 	file_api_grpc_agent_v1_agent_proto_msgTypes[11].OneofWrappers = []any{
 		(*ControlToAgent_HelloAck)(nil),
@@ -2963,7 +3160,7 @@ func file_api_grpc_agent_v1_agent_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_grpc_agent_v1_agent_proto_rawDesc), len(file_api_grpc_agent_v1_agent_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   32,
+			NumMessages:   34,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

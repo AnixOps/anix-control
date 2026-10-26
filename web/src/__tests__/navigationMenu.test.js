@@ -226,7 +226,7 @@ describe('navigation/menu.js: palette entries', () => {
     }
     expect(matchesQuery(pages.find(page => page.id === 'monitor-traffic'), 'monitor traffic')).toBe(true)
     // 节点延迟 and 转发 went with the flux observability API (F5d).
-    expect(ADMIN_PAGE_SECTIONS.monitor.map(section => section.id)).toEqual(['monitor-live', 'monitor-traffic'])
+    expect(ADMIN_PAGE_SECTIONS.monitor.map(section => section.id)).toEqual(['monitor-live', 'monitor-traffic', 'monitor-destinations'])
   })
 
   it('matches every query word against label, context and route words', () => {
@@ -242,15 +242,15 @@ describe('navigation/menu.js: palette entries', () => {
 describe('navigation/menu.js: buildUserMenu', () => {
   it('has five tab bar items and hides commercial pages in the community edition', () => {
     const items = buildUserMenu({ t, editionAllows: community })
-    expect(items.map(item => item.id)).toEqual(['dashboard', 'subscribe', 'knowledge', 'tickets', 'account'])
+    expect(items.map(item => item.id)).toEqual(['dashboard', 'subscribe', 'knowledge', 'tickets', 'traffic', 'account'])
     expect(items.filter(item => item.tab)).toHaveLength(5)
     expect(items.find(item => item.id === 'knowledge').shortLabel).toBe('shell.user.items.knowledgeShort')
   })
 
   it('adds plans and orders (not tabs) in the commercial edition', () => {
     const items = buildUserMenu({ t, editionAllows: commercial })
-    expect(items.map(item => item.id)).toEqual(['dashboard', 'subscribe', 'knowledge', 'tickets', 'plans', 'orders', 'account'])
-    expect(items.filter(item => !item.tab).map(item => item.to)).toEqual(['/user/plans', '/user/orders'])
+    expect(items.map(item => item.id)).toEqual(['dashboard', 'subscribe', 'knowledge', 'tickets', 'traffic', 'plans', 'orders', 'account'])
+    expect(items.filter(item => !item.tab).map(item => item.to)).toEqual(['/user/traffic', '/user/plans', '/user/orders'])
   })
 })
 

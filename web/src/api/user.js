@@ -147,3 +147,10 @@ export function resetSubscription(credentials) {
     data: credentials
   })
 }
+
+// The signed-in user's own traffic by destination and category, GET
+// /api/v4/user/traffic/destinations (docs/reference/destination-stats.md).
+export async function getMyTrafficDestinations({ hours = 24, limit = 100 } = {}) {
+  const body = await request({ url: '/user/traffic/destinations', method: 'get', params: { hours, limit }, baseURL: '/api/v4' })
+  return body && typeof body === 'object' && 'data' in body ? body.data : body
+}

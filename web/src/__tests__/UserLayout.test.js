@@ -48,11 +48,11 @@ describe('UserLayout.vue', () => {
     expect(wrapper.find('header [data-account-menu-trigger]').attributes('aria-label')).toBe('Account menu: lin@example.test')
   })
 
-  it('shows 概览 / 订阅 / 帮助中心 / 工单 / 账户 and marks the current page', async () => {
+  it('shows 概览 / 订阅 / 帮助中心 / 工单 / 访问统计 / 账户 and marks the current page', async () => {
     setEdition('community')
     const { wrapper } = await mountLayout('/user/subscribe')
     expect(links(wrapper, 'nav[data-user-nav="top"]')).toEqual([
-      '/user/dashboard', '/user/subscribe', '/user/knowledge', '/user/tickets', '/user/account'
+      '/user/dashboard', '/user/subscribe', '/user/knowledge', '/user/tickets', '/user/traffic', '/user/account'
     ])
     const current = wrapper.findAll('nav[data-user-nav="top"] [aria-current="page"]')
     expect(current.map(link => link.attributes('href'))).toEqual(['/user/subscribe'])
@@ -63,7 +63,7 @@ describe('UserLayout.vue', () => {
     setEdition('commercial')
     const { wrapper } = await mountLayout()
     expect(links(wrapper, 'nav[data-user-nav="top"]')).toEqual([
-      '/user/dashboard', '/user/subscribe', '/user/knowledge', '/user/tickets', '/user/plans', '/user/orders', '/user/account'
+      '/user/dashboard', '/user/subscribe', '/user/knowledge', '/user/tickets', '/user/traffic', '/user/plans', '/user/orders', '/user/account'
     ])
   })
 

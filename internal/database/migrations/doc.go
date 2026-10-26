@@ -73,4 +73,7 @@
 //   - 0004_drop_route_modes: drops the route-mode revisions and the shadow
 //     mismatch samples, and removes the stored route modes from the Control
 //     package configurations, audited (drop_route_modes.go).
+//   - 0005_backups: the backup bundles (v5_backup).
+//   - 0006_destination_stats: each user's traffic by destination
+//     (v5_destination_stat).
 package migrations

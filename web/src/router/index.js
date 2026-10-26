@@ -20,6 +20,7 @@ const UserKnowledge = () => import('@/views/user/Knowledge.vue')
 const UserTickets = () => import('@/views/user/Tickets.vue')
 const UserPlans = () => import('@/views/user/Plans.vue')
 const UserOrders = () => import('@/views/user/Orders.vue')
+const UserTraffic = () => import('@/views/user/Traffic.vue')
 const AdminDashboard = () => import('@/views/admin/Dashboard.vue')
 const AdminMonitor = () => import('@/views/admin/Monitor.vue')
 const AdminUsers = () => import('@/views/admin/Users.vue')
@@ -119,6 +120,10 @@ const routes = [
       {
         path: 'tickets',
         component: UserTickets
+      },
+      {
+        path: 'traffic',
+        component: UserTraffic
       },
       {
         path: 'plans',
