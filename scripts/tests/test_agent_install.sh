@@ -240,9 +240,10 @@ run_installer() {
     }
     # The fake Control answers with a Date FAKE_SKEW seconds off this
     # clock; the gRPC target answers curl with FAKE_GRPC_RC; /install/ip
-    # answers the address of the family, unless FAKE_IP is down.
+    # answers the address of the family, unless FAKE_IP is down; with
+    # FAKE_H2_CUT the zip download breaks unless asked over HTTP/1.1.
     curl() {
-      local out="" url="" headers="" family=""
+      local out="" url="" headers="" family="" http11=0
       while (($# > 0)); do
         case "$1" in
           -V)
@@ -252,12 +253,16 @@ run_installer() {
           -o) out="$2"; shift 2 ;;
           -D) headers="$2"; shift 2 ;;
           -4 | -6) family="${1#-}"; shift ;;
+          --http1.1) http11=1; shift ;;
           --proto | --retry | --connect-timeout | -m) shift 2 ;;
           -*) shift ;;
           *) url="$1"; shift ;;
         esac
       done
       printf 'curl %s\n' "${url}" >>"${STATE}/log"
+      if [[ "${FAKE_H2_CUT:-0}" == "1" && "${http11}" == "0" && "${url}" == *.zip ]]; then
+        return 18
+      fi
       if [[ "${url}" == "${CONTROL}/install/ip" ]]; then
         [[ "${FAKE_IP:-up}" == "up" ]] || return 7
         if [[ "${family}" == "4" ]]; then printf '203.0.113.10\n'; else printf '2001:db8::10\n'; fi
@@ -443,6 +448,14 @@ run_installer -u "${CONTROL}" -t "${TOKEN_A}" --mirror cn
 expect_status 0 "cn fallback"
 expect_out "the cn mirror is not set up on Control; downloading from GitHub releases"
 ok "mirror selection and trusted digests"
+
+# 5a. A download whose HTTP/2 stream is cut is tried again over HTTP/1.1.
+new_root h2cut
+metadata
+FAKE_H2_CUT=1 run_installer -u "${CONTROL}" -t "${TOKEN_A}"
+expect_status 0 "HTTP/2 stream cut"
+expect_out "(curl exit 18); trying again over HTTP/1.1"
+ok "a cut HTTP/2 download is retried over HTTP/1.1"
 
 # 5b. IP forwarding: a proxy node with --forward gets it; a sysctl that
 # cannot apply leaves the file for the next boot and only notes it.
