@@ -716,6 +716,9 @@ func (s *SubscriptionService) nodeProtocolToParsedNode(node *model.Node, protoco
 			if sid, ok := realitySettings["sid"].(string); ok && parsed.RealityShortID == "" {
 				parsed.RealityShortID = sid
 			}
+			if sni, ok := realitySettings["server_name"].(string); ok {
+				parsed.ServerName = sni
+			}
 		}
 	}
 
@@ -723,7 +726,7 @@ func (s *SubscriptionService) nodeProtocolToParsedNode(node *model.Node, protoco
 	if protocol.TLSSettings != nil {
 		var tlsSettings map[string]any
 		if err := json.Unmarshal([]byte(*protocol.TLSSettings), &tlsSettings); err == nil {
-			if sni, ok := tlsSettings["server_name"].(string); ok {
+			if sni, ok := tlsSettings["server_name"].(string); ok && sni != "" {
 				parsed.ServerName = sni
 			}
 			if fp, ok := tlsSettings["fingerprint"].(string); ok {
@@ -733,6 +736,11 @@ func (s *SubscriptionService) nodeProtocolToParsedNode(node *model.Node, protoco
 				parsed.RealityPublicKey = pk
 			}
 		}
+	}
+	// A Reality client needs a uTLS fingerprint: Xray refuses an empty one
+	// and sing-box only speaks Reality over uTLS.
+	if protocol.TLS == 2 && parsed.TLSFingerprint == "" {
+		parsed.TLSFingerprint = "chrome"
 	}
 
 	// 传输层
@@ -754,6 +762,11 @@ func (s *SubscriptionService) nodeProtocolToParsedNode(node *model.Node, protoco
 				parsed.Settings[k] = v
 			}
 		}
+	}
+	// VLESS flow (xtls-rprx-vision): the share-link and Clash formatters read
+	// it from the settings, the sing-box and Loon ones from Flow.
+	if flow, ok := parsed.Settings["flow"].(string); ok {
+		parsed.Flow = flow
 	}
 
 	// Shadowsocks: support both "cipher" and "method" in protocol settings.
