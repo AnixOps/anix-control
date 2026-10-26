@@ -739,6 +739,12 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 	identityUser := r.Group("/api/v4/identity")
 	identityUser.Use(userLimiter.Middleware(), middleware.JWTAuth())
 	identityUser.POST("/logout", handler.IdentityLogout)
+	// The signed-in user's own traffic by destination
+	// (docs/reference/destination-stats.md).
+	destinationStats := handler.NewDestinationStatsHandler()
+	userV4 := r.Group("/api/v4/user")
+	userV4.Use(userLimiter.Middleware(), middleware.JWTAuth())
+	userV4.GET("/traffic/destinations", destinationStats.UserSummary)
 
 	v4 := r.Group("/api/v4")
 	v4.Use(adminLimiter.Middleware())
@@ -776,6 +782,10 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		// approval and node group (its /api/v2 shape is a contract).
 		v4.GET("/admin/nodes", handler.NewAdminNodesHandler().List)
 		v4.GET("/admin/subscription-groups/:id/members", handler.NewAdminGroupMembersHandler().List)
+		// Each user's traffic by destination and category, and its settings.
+		v4.GET("/admin/traffic/destinations", destinationStats.AdminSummary)
+		v4.GET("/admin/traffic/destinations/settings", destinationStats.GetSettings)
+		v4.PUT("/admin/traffic/destinations/settings", destinationStats.PutSettings)
 		bulk := handler.NewAdminBulkHandler(handler.GatewayBulkRunner(v2PackageGateway.Serve))
 		v4.POST("/admin/users/bulk", bulk.Users)
 		v4.POST("/admin/invite-codes/bulk", bulk.InviteCodes)

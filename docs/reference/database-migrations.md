@@ -146,6 +146,7 @@ every migration has both files; afterwards only the SQLite file remains.
 | `0003_acme_cache` | Creates `v5_acme_cache`, the store of the panel's own certificates (the ACME account key, the certificates with their keys, challenge answers in flight, the self-signed fallback; entries holding a key are sealed) |
 | `0004_drop_route_modes` | Drops `v4_kernel_route_mode_revision` and `v4_kernel_shadow_mismatch_sample`, and removes the stored route-mode map (the `routes` key) from every Control package configuration in a new revision, writing each removed map to `v2_operation_log` first (action `route_modes_removed`, user `system/migration`). Route modes come only from the rehearsed list since ([`../UPGRADE.md`](../UPGRADE.md#plugin-center-reduced-to-package-status)) |
 | `0005_backups` | Creates `v5_backup`, one row per backup bundle in `<data_dir>/backups` with the result of its latest verification ([`backups.md`](backups.md)) |
+| `0006_destination_stats` | Creates `v5_destination_stat`, each user's traffic by destination domain, node and hour ([`destination-stats.md`](destination-stats.md)) |
 
 ## Adding A Migration
 

@@ -144,6 +144,7 @@ export const USER_MENU = Object.freeze([
   { id: 'subscribe', to: '/user/subscribe', icon: 'subscribe', labelKey: 'shell.user.items.subscribe', tab: true },
   { id: 'knowledge', to: '/user/knowledge', icon: 'help', labelKey: 'shell.user.items.knowledge', shortLabelKey: 'shell.user.items.knowledgeShort', tab: true },
   { id: 'tickets', to: '/user/tickets', icon: 'conversation', labelKey: 'shell.user.items.tickets', tab: true },
+  { id: 'traffic', to: '/user/traffic', icon: 'traffic', labelKey: 'shell.user.items.traffic' },
   { id: 'plans', to: '/user/plans', icon: 'plans', labelKey: 'shell.user.items.plans', edition: 'commercial' },
   { id: 'orders', to: '/user/orders', icon: 'orders', labelKey: 'shell.user.items.orders', edition: 'commercial' },
   { id: 'account', to: USER_ACCOUNT_PATH, icon: 'account', labelKey: 'shell.user.items.account', tab: true }

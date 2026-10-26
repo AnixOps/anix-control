@@ -349,6 +349,59 @@ export default {
         failed: 'The order was not placed: {message}'
       }
     },
+    destinationStats: {
+      loadFailed: 'Could not load the site statistics',
+      empty: 'No sites visited in this period',
+      summary: {
+        label: 'Site statistics summary',
+        total: 'Total traffic',
+        split: 'Upload {upload} · Download {download}',
+        topCategory: 'Top category',
+        domains: 'Sites visited',
+        connections: '{count} connections'
+      },
+      categories: {
+        title: 'Traffic types',
+        description: 'Classified by destination domain: encrypted traffic only shows the domain, so types are estimates.'
+      },
+      domains: {
+        title: 'Sites visited',
+        description: 'By registrable domain (www.example.com counts as example.com), most traffic first.',
+        label: 'Sites visited',
+        domain: 'Site',
+        category: 'Type',
+        total: 'Traffic',
+        upload: 'Upload',
+        download: 'Download',
+        connections: 'Connections',
+        other: 'Other (beyond the per-report limit)'
+      },
+      category: {
+        video: 'Video',
+        music: 'Music',
+        messaging: 'Messaging',
+        social: 'Social',
+        gaming: 'Gaming',
+        ai: 'AI',
+        download: 'Downloads',
+        web: 'Websites',
+        unknown: 'Unknown'
+      }
+    },
+    traffic: {
+      title: 'Site statistics',
+      description: 'The sites you reached through the nodes and your traffic by type (video, messaging, downloads and more). Only domains are recorded, never full addresses or content.',
+      rangeLabel: 'Period',
+      range: {
+        '24h': '24 hours',
+        '7d': '7 days',
+        '30d': '30 days'
+      },
+      retention: 'Records are kept for {days} days, then deleted.',
+      off: 'Your administrator turned site statistics off: nothing new is recorded.',
+      empty: 'No sites visited in this period',
+      emptyHint: 'Browsing through the nodes shows up here within an hour.'
+    },
     orders: {
       title: 'Orders',
       description: 'What you bought and whether it’s paid.',

@@ -8,6 +8,7 @@ describe('user routes', () => {
       '/user/subscribe',
       '/user/knowledge',
       '/user/tickets',
+      '/user/traffic',
       '/user/plans',
       '/user/orders',
     ]

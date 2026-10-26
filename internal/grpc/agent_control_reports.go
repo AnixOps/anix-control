@@ -13,6 +13,8 @@ import (
 	agentv1pb "github.com/AnixOps/anix-control/sdk/api/agent/v1"
 	"github.com/AnixOps/anix-control/v5/internal/agentreports"
 	"github.com/AnixOps/anix-control/v5/internal/agenttransport"
+	"github.com/AnixOps/anix-control/v5/internal/database"
+	"github.com/AnixOps/anix-control/v5/internal/destinationstats"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/service"
 	"google.golang.org/grpc/codes"
@@ -83,8 +85,10 @@ func reportRefusalCode(err error) string {
 		return agentcontrol.ReportErrorCodeNodeGone
 	case errors.Is(err, agentreports.ErrInvalidBatchID):
 		return agentcontrol.ReportErrorCodeBatchIDInvalid
-	case errors.Is(err, service.ErrNegativeTraffic):
+	case errors.Is(err, service.ErrNegativeTraffic), errors.Is(err, destinationstats.ErrInvalid):
 		return agentcontrol.ReportErrorCodeInvalid
+	case errors.Is(err, destinationstats.ErrOverflow):
+		return agentcontrol.ReportErrorCodeCounterOverflow
 	}
 	return ""
 }
@@ -110,9 +114,20 @@ func (s *AgentControlGRPCServer) servesReports(node agentcontrol.AgentNode, agen
 		agentcontrol.HasCapabilityVersion(agent, agentcontrol.CapabilityReports, agentcontrol.CapabilityVersionV1)
 }
 
-// handleReport applies one traffic, logs or status payload for the stream's
-// node and answers it as described above. It returns an error only when the
-// stream must end.
+// servesDestinations tells whether the HelloAck advertises destinations.v1
+// to an agent: when the agent lists it and the stream's node is a proxy
+// node, whose users the statistics are of. It is offered whatever the
+// administrator's setting, so that turning the statistics on or off takes
+// effect without a reconnect; while they are off, Control drops the
+// batches (internal/destinationstats).
+func servesDestinations(node agentcontrol.AgentNode, agent []*agentv1pb.Capability) bool {
+	return node.Kind == agentcontrol.NodeKindProxy &&
+		agentcontrol.HasCapabilityVersion(agent, agentcontrol.CapabilityDestinations, agentcontrol.CapabilityVersionV1)
+}
+
+// handleReport applies one traffic, logs, status or destinations payload for
+// the stream's node and answers it as described above. It returns an error
+// only when the stream must end.
 func (s *AgentControlGRPCServer) handleReport(manager *AgentControlManager, connection *AgentControlConnection, node agentcontrol.AgentNode, message *agentv1pb.AgentToControl) error {
 	negotiated := agentcontrol.Negotiated(connection.Capabilities, connection.ServerCapabilities, agentcontrol.CapabilityReports)
 	var (
@@ -139,6 +154,15 @@ func (s *AgentControlGRPCServer) handleReport(manager *AgentControlManager, conn
 		}
 		batchID = payload.Logs.BatchId
 		applied, err = s.applyLogBatch(node, payload.Logs)
+	case *agentv1pb.AgentToControl_Destinations:
+		if !agentcontrol.Negotiated(connection.Capabilities, connection.ServerCapabilities, agentcontrol.CapabilityDestinations) {
+			return unnegotiatedPayload("destinations", agentcontrol.CapabilityDestinations)
+		}
+		if payload.Destinations == nil {
+			return status.Error(codes.InvalidArgument, "destinations payload is required")
+		}
+		batchID = payload.Destinations.BatchId
+		applied, err = s.applyDestinationReport(node, payload.Destinations)
 	case *agentv1pb.AgentToControl_Status:
 		if !negotiated {
 			return unnegotiatedPayload("status", agentcontrol.CapabilityReports)
@@ -250,6 +274,26 @@ func (s *AgentControlGRPCServer) applyTrafficReport(node agentcontrol.AgentNode,
 		slog.Warn("failed to update online user count from traffic report", "component", "agent-control", "node", node.String(), "error", err)
 	}
 	return true, nil
+}
+
+// applyDestinationReport records a destinations batch once
+// (internal/destinationstats).
+func (s *AgentControlGRPCServer) applyDestinationReport(node agentcontrol.AgentNode, report *agentv1pb.DestinationReport) (bool, error) {
+	entries := make([]destinationstats.Entry, 0, len(report.Entries))
+	for index, entry := range report.Entries {
+		if entry == nil {
+			return false, refuseReport(agentcontrol.ReportErrorCodeInvalid, "destination entry %d is empty", index)
+		}
+		entries = append(entries, destinationstats.Entry{
+			UserID: entry.UserId, Domain: entry.Domain, Protocol: entry.Protocol,
+			Upload: entry.UploadBytes, Download: entry.DownloadBytes, Connections: entry.Connections,
+		})
+	}
+	var windowEnd time.Time
+	if report.WindowEndUnixMs > 0 {
+		windowEnd = time.UnixMilli(report.WindowEndUnixMs)
+	}
+	return destinationstats.Record(database.Get(), node.Kind, uint(node.ID), report.BatchId, windowEnd, entries, time.Now())
 }
 
 // applyLogBatch records a log batch once, as ReportLogs records the legacy

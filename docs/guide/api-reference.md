@@ -159,6 +159,19 @@ the body.
 | `用户不存在` | the account no longer exists |
 | `重置订阅失败: …` | Control could not reset the token |
 
+### 我的访问统计
+
+```http
+GET /api/v4/user/traffic/destinations?hours=24&limit=50
+```
+
+The signed-in user's own traffic by destination domain and category over the
+last `hours` (1 to 4320, default 24), answered `{"data": {...}}` as the
+administrators' `GET /api/v4/admin/traffic/destinations` below. It is what
+the 访问统计 page shows; `data.settings` says whether the statistics are on
+and how many days they are kept
+([`../reference/destination-stats.md`](../reference/destination-stats.md)).
+
 ---
 
 ## 管理员接口
@@ -354,6 +367,26 @@ subscription links are deliberately not bulk actions.
   `not_found`, `conflict` or `forbidden_self`). A reset sends one
   `Idempotency-Key` per click and the same key again for a failed request and
   for "Retry".
+
+### 访问统计（按目标域名与流量类型）
+
+```http
+GET /api/v4/admin/traffic/destinations?hours=24&user_id=7&node_id=0&limit=50
+GET /api/v4/admin/traffic/destinations/settings
+PUT /api/v4/admin/traffic/destinations/settings
+{"enabled": true, "retention_days": 30}
+```
+
+Each user's traffic by registrable domain (`example.com`) and category
+(`video`, `music`, `messaging`, `social`, `gaming`, `ai`, `download`, `web`,
+`unknown`), recorded from the Agents' `destinations.v1` reports per UTC hour.
+`user_id` and `node_id` 0 or absent mean all; `hours` is 1 to 4320 (default
+24) and `limit` the destinations answered, 1 to 500 (default 50). The answer
+has the totals, `categories` and `domains` by bytes, `domain_count` and the
+`settings`; an invalid parameter is HTTP 400 `invalid_request`. The settings
+are off by default; `retention_days` is 7 to 180 (default 30). The fields,
+the categories' rules and the storage are in
+[`../reference/destination-stats.md`](../reference/destination-stats.md).
 
 ### 订单管理
 

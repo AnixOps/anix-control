@@ -22,6 +22,9 @@ const (
 	// KindMaintenance records maintenance events (maintenance.v1), one
 	// record per event: MaintenanceBatchID.
 	KindMaintenance = "maintenance"
+	// KindDestinations records DestinationReport batches
+	// (destinations.v1, internal/destinationstats).
+	KindDestinations = "destinations"
 )
 
 // maintenancePrefix starts the batch id of a maintenance event, so it never

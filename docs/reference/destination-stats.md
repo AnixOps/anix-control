@@ -1,0 +1,103 @@
+# Destination Statistics (访问统计)
+
+Each user's traffic by destination domain, and by the category the domain
+falls in (video, music, messaging, social, gaming, AI, downloads, websites,
+unknown). Administrators read every user's statistics under
+**流量与监控 → 访问统计** (`/admin/monitor/destinations`); every user reads
+their own under **访问统计** (`/user/traffic`), so they know what the nodes
+record about them and for how long.
+
+The statistics are **off** until an administrator turns them on. They record
+which sites a user reached, which is personal data: before turning them on,
+tell the users in the terms of service what is recorded, for how long and who
+can read it.
+
+## What is recorded
+
+| | |
+|---|---|
+| Source | The Agent's connection hooks (sing-box, Xray, Hysteria 2): each user's connections and bytes by destination, summed per report window and sent on the Agent Control stream (`DestinationReport`, `destinations.v1`, [`PROTOCOL.md`](../../sdk/api/agent/v1/PROTOCOL.md)) |
+| Destination | The **registrable domain** the connection was sniffed or dialed to (TLS SNI, HTTP Host, QUIC SNI): `www.youtube.com` and `rr3---sn-x.googlevideo.com` count as `youtube.com` and `googlevideo.com`. No path, URL, query or content: encrypted traffic shows none of them. A destination without a domain is recorded as its address network (`149.154.167.0/24`, a `/48` for IPv6). The traffic of a user beyond the Agent's per-window limit of destinations is one row with an empty domain ("other"). |
+| Protocol | The sniffed protocol (`tls`, `http`, `quic`, `bittorrent`, ...) or none |
+| Storage | `v5_destination_stat`: one row per UTC hour, node, user, destination and protocol, with upload and download bytes and the connections opened. Raw bytes, without the node's traffic rate. |
+| Not recorded | The user's own address, the destination's address when a domain is known, full host names, URLs |
+
+WireGuard nodes route packets, not connections: they report nothing.
+
+## Categories
+
+A destination's category is judged when it is read, from the rules in
+`internal/destinationstats/categories.go`, so a rule change applies to the
+history too:
+
+1. A sniffed protocol that decides alone: `bittorrent` is a download.
+2. A domain the rule lists name (or a subdomain of one): the lists start
+   from v2fly's `domain-list-community` categories, narrowed to the domains
+   that serve one kind of traffic.
+3. An address network inside a listed network (Telegram's, whose clients
+   connect without a domain): messaging.
+4. Any other domain: websites. Any other address, and "other": unknown.
+
+The categories are estimates. A domain shared by several services
+(`google.com`, `apple.com`, `qq.com`, CDNs such as `cloudfront.net`) counts as
+websites, and large downloads over a general CDN do too. ECH hides the real
+domain behind the provider's public one.
+
+## Settings
+
+| Setting | Key (`v2_system_config`) | Default | |
+|---|---|---|---|
+| On or off | `traffic.destinations.enabled` | `false` | Off, Control acknowledges the Agents' batches and drops them; the history kept is still shown. Takes effect at once, without reconnecting the Agents. |
+| Retention | `traffic.destinations.retention_days` | `30` | 7 to 180 days. The retention worker (hourly) deletes the older rows. |
+
+`GET` and `PUT /api/v4/admin/traffic/destinations/settings` read and change
+them (administrators; the change is audited).
+
+### Storage
+
+About 25 to 50 KB per active user and day: each active user reaches 20 to 40
+destinations in an hour of use.
+
+| Active users | 30 days | 90 days |
+|---|---|---|
+| 100 | 75–150 MB | 225–450 MB |
+| 1000 | 0.75–1.5 GB | 2.3–4.5 GB |
+
+## API
+
+| Route | Who | |
+|---|---|---|
+| `GET /api/v4/admin/traffic/destinations?hours=&user_id=&node_id=&limit=` | administrators | All users and nodes, or one of each |
+| `GET /api/v4/user/traffic/destinations?hours=&limit=` | the signed-in user | Their own |
+
+`hours` is 1 to 4320 (default 24): the whole UTC hours up to and including the
+current one. `limit` is the number of destinations answered, 1 to 500 (default
+50). The answer:
+
+```json
+{"data": {
+  "since_unix_ms": 1792918800000, "until_unix_ms": 1793005200000,
+  "upload": 421, "download": 1591, "connections": 14,
+  "categories": [
+    {"category": "video", "upload": 20, "download": 990, "connections": 4},
+    {"category": "download", "upload": 400, "download": 600, "connections": 9}
+  ],
+  "domains": [
+    {"domain": "youtube.com", "category": "video", "upload": 20, "download": 990, "connections": 4}
+  ],
+  "domain_count": 2,
+  "settings": {"enabled": true, "retention_days": 30}
+}}
+```
+
+`categories` and `domains` are ordered by bytes, largest first;
+`domain_count` counts every destination of the range.
+
+## Agents
+
+Agents send `DestinationReport` once Control offers `destinations.v1`, which it
+offers every proxy node's Agent that lists it, whatever the setting. The
+batches are claimed once per node and batch id (`v4_kernel_agent_report_batch`,
+kind `destinations`), as traffic batches are. The Agent's collector is
+kernel-neutral: it receives the user, destination, sniffed protocol and bytes of
+each connection, so another proxy kernel only has to report the same.

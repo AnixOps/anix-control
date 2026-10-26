@@ -1007,7 +1007,7 @@ func (s *AgentControlGRPCServer) controlStream(stream agentv1pb.AgentControlServ
 			if err := s.handleConfigStatus(stream.Context(), manager, connection, agentNode, payload.ConfigStatus); err != nil {
 				return err
 			}
-		case *agentv1pb.AgentToControl_Traffic, *agentv1pb.AgentToControl_Logs, *agentv1pb.AgentToControl_Status:
+		case *agentv1pb.AgentToControl_Traffic, *agentv1pb.AgentToControl_Logs, *agentv1pb.AgentToControl_Status, *agentv1pb.AgentToControl_Destinations:
 			if err := s.handleReport(manager, connection, agentNode, message); err != nil {
 				return err
 			}
@@ -1177,6 +1177,9 @@ func (s *AgentControlGRPCServer) serverCapabilities(node agentcontrol.AgentNode,
 	}
 	if s.servesAlive(node, agent) {
 		capabilities = append(capabilities, &agentv1pb.Capability{Name: agentcontrol.CapabilityAlive, Version: agentcontrol.CapabilityVersionV1})
+	}
+	if servesDestinations(node, agent) {
+		capabilities = append(capabilities, &agentv1pb.Capability{Name: agentcontrol.CapabilityDestinations, Version: agentcontrol.CapabilityVersionV1})
 	}
 	if servesUpgrade(node, agent) {
 		capabilities = append(capabilities, &agentv1pb.Capability{Name: agentcontrol.CapabilityUpgrade, Version: agentcontrol.CapabilityVersionV1})

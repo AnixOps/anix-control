@@ -15,6 +15,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/AnixOps/anix-control/v5/internal/destinationstats"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"gorm.io/gorm"
 )
@@ -51,6 +52,9 @@ type Policy struct {
 	ServerLog time.Duration
 	NodeLog   time.Duration
 	AuditLog  time.Duration
+	// DestinationStats is v5_destination_stat's; zero reads the
+	// administrator's setting (destinationstats.Settings) at every run.
+	DestinationStats time.Duration
 }
 
 // Resolved returns p with the defaults filled in.
@@ -80,6 +84,7 @@ var targets = []target{
 	{model.TrafficLog{}.TableName(), "log_at", true, func(p Policy) time.Duration { return p.ServerLog }},
 	{model.NodeLog{}.TableName(), "created_at", false, func(p Policy) time.Duration { return p.NodeLog }},
 	{model.AuditLog{}.TableName(), "created_at", false, func(p Policy) time.Duration { return p.AuditLog }},
+	{model.DestinationStat{}.TableName(), "hour_at", true, func(p Policy) time.Duration { return p.DestinationStats }},
 }
 
 // Result is what one run deleted, per table.
@@ -173,6 +178,13 @@ func (w *Worker) RunOnce(ctx context.Context) (Result, error) {
 	}
 	policy := w.Policy.Resolved()
 	db := w.DB.WithContext(ctx)
+	if policy.DestinationStats == 0 && db.Migrator().HasTable(model.DestinationStat{}.TableName()) {
+		settings, err := destinationstats.LoadSettings(db)
+		if err != nil {
+			return result, fmt.Errorf("destination statistics settings: %w", err)
+		}
+		policy.DestinationStats = settings.Retention()
+	}
 	now := w.now()
 	var total int64
 	for _, t := range targets {

@@ -14,6 +14,7 @@ This section is the operator/developer reference index for `anix-control`.
 - [wireguard-peer-schema.md](wireguard-peer-schema.md): production schema note for the P0 WireGuard peer custody table
 - [sqlite-to-postgres-migration.md](sqlite-to-postgres-migration.md): SQLite to PostgreSQL dry-run, import, verification, and rollback runbook
 - [traffic-stats-operations.md](traffic-stats-operations.md): traffic log indexes, query bounds, and retention runbook
+- [destination-stats.md](destination-stats.md): 访问统计, each user's traffic by destination domain and category: what is recorded, the category rules and their limits, the settings, storage and the API
 - [telegram-test-endpoint.md](telegram-test-endpoint.md): `POST /api/v4/kernel/notifications/telegram/test`, the administrator's Telegram bot test and its result classes
 - [kernel-alerts.md](kernel-alerts.md): the alert monitor: certificates that were not renewed, CAs near their end, stuck phases; thresholds, notifications and `GET /api/v4/kernel/alerts`
 - [repository-layout.md](repository-layout.md): root and directory ownership, plus root hygiene rules

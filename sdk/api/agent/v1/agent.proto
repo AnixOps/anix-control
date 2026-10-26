@@ -140,6 +140,10 @@ message AgentToControl {
     // Sent only with maintenance.v1 negotiated: a batch of the Agent's
     // maintenance outbox. Control answers it with maintenance_ack.
     MaintenanceEvents maintenance_events = 19;
+    // Sent only with destinations.v1 negotiated: the traffic of each user
+    // by destination domain for one window. Control answers it with
+    // report_ack.
+    DestinationReport destinations = 20;
   }
 }
 
@@ -248,6 +252,37 @@ message OnlineUser {
   repeated string ips = 2;
 }
 
+// DestinationReport carries each user's traffic by destination for one
+// window (destinations.v1). Control records a batch_id once and answers
+// ReportAck, as for a TrafficReport.
+message DestinationReport {
+  // batch_id is kept when the batch is resent and unique per node among
+  // all its report batches, TrafficReport and LogBatch ones included:
+  // node:<kind>-<id>:<boot id>:destinations-<sequence>.
+  string batch_id = 1;
+  repeated DestinationTraffic entries = 2;
+  int64 window_end_unix_ms = 3;
+}
+
+// DestinationTraffic is one user's traffic to one destination in a
+// DestinationReport window.
+message DestinationTraffic {
+  uint64 user_id = 1;
+  // domain is the registrable domain the connections were sniffed or
+  // dialed to (example.com for www.example.com), lowercase; for a
+  // destination without a domain, the address's network (a.b.c.0/24 or a
+  // /48 of IPv6); empty for the rest of a user's traffic beyond the
+  // Agent's per-window limit.
+  string domain = 2;
+  // protocol is the sniffed protocol (tls, http, quic, bittorrent, ...),
+  // empty when none was sniffed.
+  string protocol = 3;
+  uint64 upload_bytes = 4;
+  uint64 download_bytes = 5;
+  // connections counts the connections opened in the window.
+  uint32 connections = 6;
+}
+
 // LogBatch carries node runtime logs (reports.v1). Control records a
 // batch_id once and answers ReportAck.
 message LogBatch {
@@ -267,11 +302,12 @@ message LogEntry {
   string trace_id = 6;
 }
 
-// ReportAck answers a TrafficReport or LogBatch by batch_id. applied is true
-// when this delivery recorded the batch, and false when Control had recorded
-// it before (error empty) or refuses it for good (error set). In each case the
-// Agent drops the batch from its spool. Control sends no ReportAck for a batch
-// it cannot record for now, and the Agent resends it later.
+// ReportAck answers a TrafficReport, LogBatch or DestinationReport by
+// batch_id. applied is true when this delivery recorded the batch, and false
+// when Control had recorded it before (error empty) or refuses it for good
+// (error set). In each case the Agent drops the batch from its spool. Control
+// sends no ReportAck for a batch it cannot record for now, and the Agent
+// resends it later.
 message ReportAck {
   string batch_id = 1;
   bool applied = 2;

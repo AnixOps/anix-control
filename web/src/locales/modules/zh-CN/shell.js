@@ -72,6 +72,7 @@ export default {
         subscribe: '订阅',
         knowledge: '帮助中心',
         knowledgeShort: '帮助',
+        traffic: '访问统计',
         tickets: '工单',
         account: '账户',
         plans: '套餐',

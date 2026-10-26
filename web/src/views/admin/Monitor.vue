@@ -20,8 +20,8 @@
 <script setup>
 // 流量与监控 (plan §4.2, §8.2): the old 实时监控 (Monitor) and 小时流量
 // (TrafficHourly) pages as sections of one page, by dimension — 实时节点
-// (the live WebSocket fleet) and 用户流量 (hourly traffic of all users or
-// one). The section is in the path (/admin/monitor/:section; 实时节点 is
+// (the live WebSocket fleet), 用户流量 (hourly traffic of all users or
+// one) and 访问统计 (traffic by destination domain and category). The section is in the path (/admin/monitor/:section; 实时节点 is
 // /admin/monitor) and the traffic section's time range in ?range=.
 // /admin/traffic-hourly redirects here. The 节点延迟 and 转发 sections read
 // the flux observability API, removed in v4.2 (F5d): /admin/monitor/forward
@@ -36,8 +36,9 @@ import UiPageHeader from '@/ui/UiPageHeader.vue'
 import UiTabs from '@/ui/UiTabs.vue'
 import MonitorLive from './monitor/MonitorLive.vue'
 import MonitorTraffic from './monitor/MonitorTraffic.vue'
+import MonitorDestinations from './monitor/MonitorDestinations.vue'
 
-const PANELS = { live: MonitorLive, traffic: MonitorTraffic }
+const PANELS = { live: MonitorLive, traffic: MonitorTraffic, destinations: MonitorDestinations }
 const DEFAULT_SECTION = 'live'
 
 const { t } = useAppI18n()
