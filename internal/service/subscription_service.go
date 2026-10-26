@@ -591,6 +591,7 @@ func (s *SubscriptionService) getInternalNodes(user *model.User, ctx *model.Temp
 	// server key) are read through the node credential split.
 	nodesecrets.ResolveProtocols(s.db, protocols)
 
+	liveness := make(map[uint]bool)
 	var result []*model.ParsedNode
 	for _, p := range protocols {
 		if isWireGuardExitProtocol(&p) {
@@ -600,7 +601,7 @@ func (s *SubscriptionService) getInternalNodes(user *model.User, ctx *model.Temp
 			continue
 		}
 
-		if !p.Node.IsOnline() {
+		if !s.nodeServing(p.Node, liveness) {
 			continue
 		}
 		// A node that joined a group requiring approval serves nobody until
@@ -627,6 +628,42 @@ func (s *SubscriptionService) getInternalNodes(user *model.User, ctx *model.Temp
 	}
 
 	return result, nil
+}
+
+// maxRelayDepth bounds the walk up a relay chain; validateParentID keeps the
+// chain free of cycles, the bound only guards rows written around it.
+const maxRelayDepth = 8
+
+// nodeServing tells whether a node is serving subscribers. A relay node (one
+// with a parent) is a port forward to its parent and runs no Agent of its own,
+// so it never heartbeats: it serves while its own heartbeat is fresh or, when
+// it has none, while the nearest upstream node that heartbeats is online.
+// liveness caches the answer by node ID for one subscription build.
+func (s *SubscriptionService) nodeServing(node *model.Node, liveness map[uint]bool) bool {
+	if node.IsOnline() {
+		return true
+	}
+	if node.ParentID == nil || node.LastCheckAt != nil {
+		return false
+	}
+	if serving, ok := liveness[node.ID]; ok {
+		return serving
+	}
+	serving := false
+	parentID := node.ParentID
+	for depth := 0; parentID != nil && depth < maxRelayDepth; depth++ {
+		var parent model.Node
+		if err := s.db.Select("id", "parent_id", "last_check_at").First(&parent, *parentID).Error; err != nil {
+			break
+		}
+		if parent.LastCheckAt != nil {
+			serving = parent.IsOnline()
+			break
+		}
+		parentID = parent.ParentID
+	}
+	liveness[node.ID] = serving
+	return serving
 }
 
 // nodeProtocolToParsedNode 将 NodeProtocol 转换为 ParsedNode
