@@ -26,6 +26,7 @@ Use this tree like NodeX:
 - Node onboarding and admin cleanup for 5.0: group join tokens, one-command onboarding, removals (design, approved): [`design/node-onboarding/README.md`](design/node-onboarding/README.md)
 - Operations simplification roadmap after 5.0: the owner's choices S1 to S11, verified problems and milestones (design, approved): [`design/ops-simplification/README.md`](design/ops-simplification/README.md)
 - Single binary, self-managed certificates and embedded SQLite: milestone M2 of that roadmap (S1, S2, S4 and the configuration surface; design, draft for review): [`design/single-binary/README.md`](design/single-binary/README.md)
+- Network model: every path split into ingress, transport and egress; device → line → ingress/egress, pairing policies, Agent plan and Linux policy routing (design, draft for review): [`design/network-model/README.md`](design/network-model/README.md)
 - AnixOps relay protocol: secure transport between forward nodes (design approved, H22): [`architecture/anixops-protocol.md`](architecture/anixops-protocol.md)
 - Package reports on the Agent Control stream, and the privacy of the systemd services report: [`architecture/package-reports.md`](architecture/package-reports.md)
 - Network module runtime (mTLS, module PKI, remote runtime): [`architecture/module-runtime.md`](architecture/module-runtime.md)
