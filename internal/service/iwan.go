@@ -1,6 +1,7 @@
 package service
 
 import (
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -167,7 +168,7 @@ func validIWANUpstream(text string) bool {
 
 func lastIPv4(prefix netip.Prefix) netip.Addr {
 	octets := prefix.Addr().As4()
-	value := uint32(octets[0])<<24 | uint32(octets[1])<<16 | uint32(octets[2])<<8 | uint32(octets[3])
-	value |= math.MaxUint32 >> prefix.Bits()
-	return netip.AddrFrom4([4]byte{byte(value >> 24), byte(value >> 16), byte(value >> 8), byte(value)})
+	value := binary.BigEndian.Uint32(octets[:]) | math.MaxUint32>>prefix.Bits()
+	binary.BigEndian.PutUint32(octets[:], value)
+	return netip.AddrFrom4(octets)
 }
