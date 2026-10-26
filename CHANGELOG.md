@@ -2,6 +2,90 @@
 
 ## Unreleased
 
+## 5.0.0-rc.7 - 2026-10-26
+
+### Added
+
+- Node entries (入口): the addresses subscribers reach a proxy node at beyond
+  its host, for machines with several lines or address families, such as a
+  domestic relay with a CN2 and a 9929 line where each line has a native
+  IPv6 address and a provider NAT IPv4 address. An entry is direct (the
+  address on each protocol's own port) or NAT (a public address whose port
+  ranges map to protocol ports, typed in by hand). A node with enabled
+  entries is offered in subscriptions once per entry and protocol, in place
+  of its host, named `<node> - <protocol> | <entry>`; a protocol port that a
+  NAT entry does not map is left out for that entry. Nodes without entries
+  are unchanged. `GET /api/v4/kernel/nodes/{id}/entries` lists them and
+  `PUT /api/v4/kernel/nodes/{id}/entries` replaces the list (at most 32,
+  audited, module `node_entry`). They are stored in the new table
+  `v5_node_entry` (migration 0010). The node page shows them under 协议 with
+  an editor sheet (port map lines such as `21000-21099 -> 30000-30099`,
+  public ports first).
+- Reality target probing (目标站探测, phase 1). A proxy node's Agent probes
+  candidate REALITY targets (dest and SNI) from the node's own network with
+  the new `agent.diagnostic` action `reality.probe` (anix-agent advertises
+  the capability `reality.probe`), and Control ranks the answers and
+  recommends one, instead of every node borrowing `www.microsoft.com`.
+  `POST /api/v4/kernel/nodes/{id}/reality-targets/probe` probes the
+  candidates (your own `candidates`, host or host:port, plus a built-in list
+  unless `include_defaults` is false; at most 24, 8 at a time) and answers
+  the ranked report; `GET /api/v4/kernel/nodes/{id}/reality-targets` answers
+  the latest one, the target each Reality protocol of the node uses now and
+  whether its Agent can probe. A target passes on TLS 1.3, ALPN h2, an X25519
+  key exchange, a certificate valid for the name, no redirect to another
+  host and a real REALITY handshake through it on the node (a loopback
+  REALITY server and client in the Agent; www.microsoft.com passed every TLS
+  check from the Germany node and still broke REALITY); passing targets are scored by the node's address prefix, handshake
+  time, post-quantum key exchange, OCSP stapling and chain size, less a CDN
+  and the other nodes already using the target. Probes are stored in the new
+  table `v5_reality_target_probe` (migration 0008) and every run is in the
+  operation log (module `reality_target`). Needs an anix-agent with
+  `reality.probe`; an older Agent answers `reality_probe_unsupported`.
+- Applying a Reality target. `POST /api/v4/kernel/nodes/{id}/reality-targets/apply`
+  (`protocol_id`, `server_name`, `port`, `force`) writes the target into one
+  Reality protocol of the node: `reality_settings` `dest`, `server_name` and,
+  where listed, `server_names`, and `tls_settings` `server_name`, the SNI of
+  the subscription links. The private key and every other setting stay. The
+  node must have probed the target with verdict ok unless `force` is true.
+  Clients must refresh their subscription after a change, or they keep the
+  old SNI and cannot connect. Audited (action `reality_target_apply`).
+- The node page has a 目标站 (Targets) section between 诊断 and 日志: the
+  current target of each Reality protocol, a probe run (your own candidates
+  and the built-in list), the ranked results with the reasons a target
+  fails, the recommendation, and an Apply button per protocol, confirmed.
+- Automatic Reality target selection (目标站探测, phase 3), per proxy node and
+  off by default: `PUT /api/v4/kernel/nodes/{id}/reality-targets/auto`
+  `{"enabled": true}` or the switch in the node page's Targets section.
+  The singleton worker then probes the node's current targets and the
+  built-in candidates every 6 hours. A Reality protocol whose target failed
+  in two runs in a row (the second 15 minutes after the first) moves to the
+  recommended target, the way apply does. A probe that gave no answer is not
+  a failure, and a target that still passes is never replaced for a better
+  score. Each switch is in the operation log (module `reality_target`,
+  action `reality_target_auto_switch`). The state (next and last run, last
+  switch, the last run's outcome) is in the new table
+  `v5_reality_target_auto` (migration 0009) and in the targets report.
+  Clients pick up a switched SNI with their next subscription refresh.
+
+### Changed
+
+- Control installs anix-agent v5.0.0-rc.7 on nodes. That release probes REALITY
+  targets on the node (`reality.probe`, with a real REALITY handshake), runs egress
+  routes on the anixcore core and no longer logs limiter errors for egress relays.
+
+### Fixed
+
+- 诊断 on a proxy node could neither read nor restart the Agent: the Agent
+  runs as `anixops-agent`, which may not read the journal ("No journal files
+  were opened due to insufficient permissions") and which polkit let manage
+  only `anixops-gost.service`. The installer now adds `systemd-journal` to the
+  Agent unit's `SupplementaryGroups` (where the host has that group) and lets
+  `anixops-agent` restart `anix-agent.service`. Re-run the node's install
+  command to apply it to an installed node.
+- Share links (vless, trojan, ss, hy2, tuic, anytls) and Quantumult X lines
+  put an IPv6 server address in brackets (`[2001:db8::1]:443`); without
+  them the link did not parse.
+
 ## 5.0.0-rc.6 - 2026-10-26
 
 ### Added
