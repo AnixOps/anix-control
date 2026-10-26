@@ -84,9 +84,18 @@ func (m *Supervisor) OpenWebSocket(ctx context.Context, input WebSocketInput) (*
 	if err != nil {
 		return nil, err
 	}
+	// The host redeems the capability on its own bridge stream after the
+	// relay is attached, so a successful open must leave it live: the relay
+	// revokes it when it is released (releaseWebSocketRelay). Every failed
+	// open revokes it here.
+	established := false
 	if len(capability) > 0 {
 		input.BridgeCapability = capability
-		defer host.bridge.Revoke(capability)
+		defer func() {
+			if !established {
+				host.bridge.Revoke(capability)
+			}
+		}()
 	}
 	setupCtx, cancelSetupDeadline := context.WithDeadline(ctx, input.Deadline)
 	defer cancelSetupDeadline()
@@ -127,6 +136,7 @@ func (m *Supervisor) OpenWebSocket(ctx context.Context, input WebSocketInput) (*
 		relay.finish(err)
 		return nil, err
 	}
+	established = true
 	return relay, nil
 }
 
@@ -387,6 +397,10 @@ func (h *hostProcess) registerWebSocketRelay(relay *WebSocketRelay) error {
 func (h *hostProcess) releaseWebSocketRelay(relay *WebSocketRelay) {
 	if h == nil {
 		return
+	}
+	// A capability the host never redeemed must not outlive its relay.
+	if h.bridge != nil && len(relay.input.BridgeCapability) > 0 {
+		h.bridge.Revoke(relay.input.BridgeCapability)
 	}
 	h.relayMu.Lock()
 	delete(h.relays, relay)

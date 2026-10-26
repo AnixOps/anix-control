@@ -113,6 +113,13 @@ func TestManagerMintsWebSocketBridgeCapabilityBeforeOpeningTheHostStream(t *test
 	select {
 	case input := <-client.opened:
 		require.Len(t, input.BridgeCapability, 32)
+		// The host redeems the capability after OpenWebSocket returns, so it
+		// must stay live for the relay and end with it.
+		_, live := session.Peek(input.BridgeCapability)
+		require.True(t, live, "the WebSocket bridge capability was revoked before the host could redeem it")
+		relay.finish(nil)
+		_, live = session.Peek(input.BridgeCapability)
+		require.False(t, live, "the WebSocket bridge capability outlived its relay")
 	case <-time.After(time.Second):
 		t.Fatal("host did not receive the WebSocket opening input")
 	}
