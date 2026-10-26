@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Fixed
+
+- A Reality protocol (tls 2) saved without a private key now gets a new
+  X25519 key pair (`private_key` and `public_key` in its reality settings),
+  and one with a private key but no public key gets its public key. Before,
+  Control stored it as it was: the Agent could not build the Reality inbound
+  (`empty "privateKey"`), refused the node's whole new configuration, and
+  kept running the old one, so the protocol's port never listened.
+
 ## 5.0.0-rc.7 - 2026-10-26
 
 ### Added

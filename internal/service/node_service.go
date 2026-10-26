@@ -805,7 +805,9 @@ func (s *NodeService) GetProtocol(id uint) (*model.NodeProtocol, error) {
 // protocol body's "node" created a node without an API key and moved the
 // protocol to it, and its "subscription_groups" were created and linked.
 // Linking protocols to groups has its own route. A secret sent as
-// NodeSecretPlaceholder is stored empty, since nothing is stored yet.
+// NodeSecretPlaceholder is stored empty, since nothing is stored yet. A
+// Reality protocol without a private key gets a key pair
+// (ensureRealityKeyPair).
 func (s *NodeService) CreateProtocol(protocol *model.NodeProtocol) error {
 	protocol.ID = 0
 	protocol.Node = nil
@@ -817,6 +819,9 @@ func (s *NodeService) CreateProtocol(protocol *model.NodeProtocol) error {
 		return errors.New("节点不存在")
 	}
 	keepNodeProtocolSecrets(protocol)
+	if _, err := ensureRealityKeyPair(protocol); err != nil {
+		return err
+	}
 	if err := ValidateNodeProtocol(protocol); err != nil {
 		return err
 	}
@@ -832,7 +837,8 @@ func (s *NodeService) CreateProtocol(protocol *model.NodeProtocol) error {
 // UpdateProtocol 更新协议. The protocol's id and node are never updated, and
 // the update is checked with the values it writes, whatever spelling names
 // them (see columnUpdates). A secret sent as NodeSecretPlaceholder, as the
-// administrator's answers show it, keeps its stored value.
+// administrator's answers show it, keeps its stored value. A Reality
+// protocol left without a private key gets a key pair (ensureRealityKeyPair).
 func (s *NodeService) UpdateProtocol(id uint, updates map[string]any) error {
 	var current model.NodeProtocol
 	if err := s.db.First(&current, id).Error; err != nil {
@@ -873,6 +879,11 @@ func (s *NodeService) UpdateProtocol(id uint, updates map[string]any) error {
 	}
 	candidate.ID = current.ID
 	candidate.NodeID = current.NodeID
+	if changed, err := ensureRealityKeyPair(&candidate); err != nil {
+		return err
+	} else if changed {
+		normalized["reality_settings"] = *candidate.RealitySettings
+	}
 	if err := ValidateNodeProtocol(&candidate); err != nil {
 		return err
 	}
