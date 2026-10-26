@@ -781,7 +781,12 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		// The console's node list: GET /api/v2/admin/nodes with each node's
 		// approval and node group (its /api/v2 shape is a contract).
 		v4.GET("/admin/nodes", handler.NewAdminNodesHandler().List)
-		v4.GET("/admin/subscription-groups/:id/members", handler.NewAdminGroupMembersHandler().List)
+		groupMembers := handler.NewAdminGroupMembersHandler()
+		v4.GET("/admin/subscription-groups/:id/members", groupMembers.List)
+		// A group's node protocols as subscribers see them: their order and
+		// display names (model.SubscriptionGroupProtocol).
+		v4.GET("/admin/subscription-groups/:id/protocol-layout", groupMembers.ProtocolLayout)
+		v4.PUT("/admin/subscription-groups/:id/protocol-layout", groupMembers.ReplaceProtocolLayout)
 		// Each user's traffic by destination and category, and its settings.
 		v4.GET("/admin/traffic/destinations", destinationStats.AdminSummary)
 		v4.GET("/admin/traffic/destinations/settings", destinationStats.GetSettings)

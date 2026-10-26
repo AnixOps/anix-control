@@ -5266,6 +5266,107 @@
                 }
             }
         },
+        "/api/v4/admin/subscription-groups/{id}/protocol-layout": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "列出关联到该分组的全部节点协议 (v2_subscription_group_node_protocols), 按分组顺序: 已排序的在前, 其余按协议 ID。display_name 为订阅中显示的节点名称, 空表示默认的 \"\u003c节点\u003e - \u003c协议\u003e\"。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-订阅"
+                ],
+                "summary": "订阅分组节点协议的显示名称与顺序",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "订阅分组 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "按列表顺序排列该分组的节点协议并设置显示名称 (去除首尾空白, 最多 128 个字符, 不含控制字符; 空表示默认名称)。每项必须是已关联到该分组的协议且只出现一次; 未列出的已关联协议排在其后, 使用默认名称。节点有入口时, 名称后仍追加 \" | \u003c入口\u003e\"。订阅立即生效。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-订阅"
+                ],
+                "summary": "设置订阅分组节点协议的显示名称与顺序",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "订阅分组 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "协议顺序与显示名称",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.groupProtocolLayoutRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/v4/admin/traffic/destinations": {
             "get": {
                 "security": [
@@ -11784,6 +11885,17 @@
                 }
             }
         },
+        "handler.groupProtocolLayoutRequest": {
+            "type": "object",
+            "properties": {
+                "protocols": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/service.GroupProtocolLayoutItem"
+                    }
+                }
+            }
+        },
         "handler.nodeDiagnosticRequest": {
             "type": "object",
             "properties": {
@@ -12766,6 +12878,17 @@
                 },
                 "next_run_at": {
                     "type": "string"
+                }
+            }
+        },
+        "service.GroupProtocolLayoutItem": {
+            "type": "object",
+            "properties": {
+                "display_name": {
+                    "type": "string"
+                },
+                "protocol_id": {
+                    "type": "integer"
                 }
             }
         },

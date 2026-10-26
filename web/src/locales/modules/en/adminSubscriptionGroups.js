@@ -137,6 +137,25 @@ export default {
       emptyDescription: 'Add one and it appears in this group’s subscription.',
       loadFailed: 'Couldn’t load the node templates'
     },
+    layout: {
+      open: 'Order & names',
+      title: 'Order and display names',
+      description: 'Drag to set the order of the nodes in the subscription of “{group}”, and the name each one shows.',
+      listLabel: 'Node protocol order',
+      displayName: 'Display name',
+      defaultHelp: 'No display name: the subscription uses the default name',
+      handle: 'Drag {name} to reorder',
+      handleHelp: 'Drag to reorder, or focus and press ↑ / ↓',
+      moveUp: 'Move up',
+      moveDown: 'Move down',
+      moved: '{name} moved to position {position} of {total}',
+      rename: 'Set display name',
+      tooLong: 'At most {max} characters',
+      controlChar: 'No line breaks or other control characters',
+      save: 'Save',
+      saved: 'Order and display names saved',
+      saveFailed: 'Could not save the order and display names'
+    },
     protocols: {
       title: 'Node protocols',
       description: 'Production node protocols linked to the group. Only protocols set to visible in Nodes can be linked.',

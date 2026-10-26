@@ -34,11 +34,15 @@ const adminApiMock = vi.hoisted(() => ({
 
 const getSubscriptionStatsMock = vi.hoisted(() => vi.fn())
 const getMembersMock = vi.hoisted(() => vi.fn())
+const getLayoutMock = vi.hoisted(() => vi.fn())
+const saveLayoutMock = vi.hoisted(() => vi.fn())
 
 vi.mock('@/api/admin', () => ({
   default: adminApiMock,
   getSubscriptionStats: (...args) => getSubscriptionStatsMock(...args),
-  getSubscriptionGroupMembers: (...args) => getMembersMock(...args)
+  getSubscriptionGroupMembers: (...args) => getMembersMock(...args),
+  getGroupProtocolLayout: (...args) => getLayoutMock(...args),
+  saveGroupProtocolLayout: (...args) => saveLayoutMock(...args)
 }))
 
 enableAutoUnmount(afterEach)
@@ -93,6 +97,8 @@ describe('Admin subscription groups', () => {
     adminApiMock.updateGroupProtocols.mockResolvedValue({})
     getSubscriptionStatsMock.mockResolvedValue({ data: [] })
     getMembersMock.mockResolvedValue({ total: 0, page: 1, page_size: 20, members: [] })
+    getLayoutMock.mockResolvedValue({ group_id: 1, protocols: [] })
+    saveLayoutMock.mockResolvedValue({ group_id: 1, protocols: [] })
   })
 
   afterEach(() => {
@@ -358,6 +364,30 @@ describe('Admin subscription groups', () => {
       await flushPromises()
       expect(wrapper.vm.availableProtocols).toEqual([])
       expect(toastMessages('error')).toEqual(['Couldn’t load the node protocols that can be linked'])
+    })
+
+    it('lists the protocols in the group order with their display names', async () => {
+      adminApiMock.getSubscriptionProtocols.mockResolvedValueOnce({ data: [
+        { id: 1, node_id: 5, node: { name: 'HK' }, name: 'ss', type: 'shadowsocks', port: 1 },
+        { id: 2, node_id: 6, node: { name: 'US' }, name: 'ss', type: 'shadowsocks', port: 2 },
+        { id: 3, node_id: 7, node: { name: 'JP' }, name: 'ss', type: 'shadowsocks', port: 3 }
+      ] })
+      getLayoutMock.mockResolvedValueOnce({ group_id: 1, protocols: [{ protocol_id: 3, display_name: '日本 01' }, { protocol_id: 1, display_name: '' }] })
+      const wrapper = mountSection(GroupProtocols)
+      await flushPromises()
+      expect(getLayoutMock).toHaveBeenCalledWith(1)
+      expect(wrapper.vm.protocols.map(row => [row.id, row.display_name])).toEqual([[3, '日本 01'], [1, ''], [2, '']])
+      expect(wrapper.text()).toContain('日本 01')
+      expect(wrapper.text()).toContain('HK - ss')
+    })
+
+    it('keeps the server order when the layout cannot be read', async () => {
+      adminApiMock.getSubscriptionProtocols.mockResolvedValueOnce({ data: [{ id: 2, name: 'b' }, { id: 1, name: 'a' }] })
+      getLayoutMock.mockRejectedValueOnce(new Error('404'))
+      const wrapper = mountSection(GroupProtocols)
+      await flushPromises()
+      expect(wrapper.vm.protocols.map(row => row.id)).toEqual([1, 2])
+      expect(wrapper.vm.protocolsLoadError).toBe(null)
     })
 
     it('keeps the protocol dialog open when the save fails', async () => {

@@ -896,6 +896,26 @@ export async function getSubscriptionGroupMembers(groupId, { page = 1, pageSize 
   }))
 }
 
+// A subscription group's node protocols as subscribers see them,
+// GET /api/v4/admin/subscription-groups/:id/protocol-layout. Answers
+// { group_id, protocols: [{ protocol_id, display_name }] } with every linked
+// protocol in the group's order; display_name '' is the default
+// "<node> - <protocol>".
+export async function getGroupProtocolLayout(groupId) {
+  return dataOf(await adminV4({ url: `/admin/subscription-groups/${encodeURIComponent(groupId)}/protocol-layout`, method: 'get' }))
+}
+
+// PUT the same path: protocols [{ protocol_id, display_name }] become the
+// group's order and display names (each a linked protocol, once). Answers
+// the layout afterwards.
+export async function saveGroupProtocolLayout(groupId, protocols) {
+  return dataOf(await adminV4({
+    url: `/admin/subscription-groups/${encodeURIComponent(groupId)}/protocol-layout`,
+    method: 'put',
+    data: { protocols: protocols.map(item => ({ protocol_id: Number(item.protocol_id), display_name: String(item.display_name || '') })) }
+  }))
+}
+
 // POST /api/v4/kernel/notifications/telegram/test: sends one fixed test
 // message through the configured bot and answers what Telegram said:
 // { class, ok, message, target, error_code?, reason? }, class one of ok,
@@ -959,6 +979,8 @@ export default {
   updateSubscriptionGroup,
   deleteSubscriptionGroup,
   getSubscriptionGroupMembers,
+  getGroupProtocolLayout,
+  saveGroupProtocolLayout,
   testTelegramBot,
   getKernelAlerts,
   getSubscriptionTemplates,
