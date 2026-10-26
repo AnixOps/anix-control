@@ -25,9 +25,6 @@ func ValidateNodeProtocol(protocol *model.NodeProtocol) error {
 	if protocol == nil {
 		return errors.New("协议不能为空")
 	}
-	if err := validateProtocolTransport(protocol); err != nil {
-		return fmt.Errorf("%w: %v", ErrInvalidNodeProtocol, err)
-	}
 	if strings.EqualFold(strings.TrimSpace(string(protocol.Type)), string(model.ProtocolWireGuard)) {
 		if err := validateWireGuardProtocol(protocol); err != nil {
 			return fmt.Errorf("%w: %v", ErrInvalidNodeProtocol, err)
@@ -37,6 +34,10 @@ func ValidateNodeProtocol(protocol *model.NodeProtocol) error {
 		if err := validateIWANProtocol(protocol); err != nil {
 			return fmt.Errorf("%w: %v", ErrInvalidNodeProtocol, err)
 		}
+	}
+	// After the type's own checks, whose answers callers already pin.
+	if err := validateProtocolTransport(protocol); err != nil {
+		return fmt.Errorf("%w: %v", ErrInvalidNodeProtocol, err)
 	}
 	return nil
 }
