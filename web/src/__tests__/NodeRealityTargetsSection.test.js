@@ -1,5 +1,6 @@
 // 目标站 of a node (Reality target probing): the current targets, a probe
-// run with the ranked results, and applying a target after confirmation.
+// run with the ranked results, applying a target after confirmation, and
+// turning automatic selection on.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor, within } from '@testing-library/vue'
 import userEvent from '@testing-library/user-event'
@@ -11,7 +12,8 @@ import { resetConfirms } from '@/ui/composables/useConfirm'
 const kernelApi = vi.hoisted(() => ({
   getKernelRealityTargets: vi.fn(),
   probeKernelRealityTargets: vi.fn(),
-  applyKernelRealityTarget: vi.fn()
+  applyKernelRealityTarget: vi.fn(),
+  setKernelRealityTargetAuto: vi.fn()
 }))
 
 vi.mock('@/api/kernel', () => kernelApi)
@@ -79,5 +81,20 @@ describe('NodeRealityTargetsSection', () => {
     await user.click(within(dialog).getByRole('button', { name: '应用' }))
     await waitFor(() => expect(kernelApi.applyKernelRealityTarget).toHaveBeenCalledWith('proxy-57', { protocolId: 41, serverName: 'near.example.com', port: 443 }))
     expect((await screen.findByTestId('reality-applied')).textContent).toContain('near.example.com')
+  })
+
+  it('turns automatic selection on after confirmation', async () => {
+    kernelApi.getKernelRealityTargets.mockResolvedValue({ ...listing(), auto: { enabled: false, fail_streak: 0 } })
+    kernelApi.setKernelRealityTargetAuto.mockResolvedValue({ enabled: true, fail_streak: 0 })
+    renderSection()
+    const user = userEvent.setup()
+    const toggle = within(await screen.findByTestId('reality-auto')).getByRole('switch')
+    expect(toggle.getAttribute('aria-checked')).toBe('false')
+    await user.click(toggle)
+    const dialog = await screen.findByRole('alertdialog')
+    expect(dialog.textContent).toContain('更新订阅')
+    await user.click(within(dialog).getByRole('button', { name: '开启' }))
+    await waitFor(() => expect(kernelApi.setKernelRealityTargetAuto).toHaveBeenCalledWith('proxy-57', true))
+    expect((await screen.findByTestId('reality-auto')).textContent).toContain('几分钟内')
   })
 })

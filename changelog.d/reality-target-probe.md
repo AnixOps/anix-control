@@ -32,3 +32,16 @@
   current target of each Reality protocol, a probe run (your own candidates
   and the built-in list), the ranked results with the reasons a target
   fails, the recommendation, and an Apply button per protocol, confirmed.
+- Automatic Reality target selection (目标站探测, phase 3), per proxy node and
+  off by default: `PUT /api/v4/kernel/nodes/{id}/reality-targets/auto`
+  `{"enabled": true}` or the switch in the node page's Targets section.
+  The singleton worker then probes the node's current targets and the
+  built-in candidates every 6 hours. A Reality protocol whose target failed
+  in two runs in a row (the second 15 minutes after the first) moves to the
+  recommended target, the way apply does. A probe that gave no answer is not
+  a failure, and a target that still passes is never replaced for a better
+  score. Each switch is in the operation log (module `reality_target`,
+  action `reality_target_auto_switch`). The state (next and last run, last
+  switch, the last run's outcome) is in the new table
+  `v5_reality_target_auto` (migration 0009) and in the targets report.
+  Clients pick up a switched SNI with their next subscription refresh.

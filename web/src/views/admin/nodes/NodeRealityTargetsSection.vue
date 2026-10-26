@@ -42,6 +42,25 @@
         </ul>
       </div>
 
+      <div class="reality-targets__group" role="group" :aria-label="t('realityTargets.auto.title')" data-testid="reality-auto">
+        <UiSwitch
+          :model-value="Boolean(auto && auto.enabled)"
+          :label="t('realityTargets.auto.title')"
+          :description="t('realityTargets.auto.description')"
+          :disabled="savingAuto || !report.current.length"
+          data-testid="reality-auto-switch"
+          @update:model-value="setAuto"
+        />
+        <ul v-if="auto && (auto.enabled || auto.last_run_at)" class="reality-targets__facts">
+          <li v-if="auto.enabled && auto.next_run_at">{{ t('realityTargets.auto.nextRun', { time: format.dateTime(auto.next_run_at) }) }}</li>
+          <li v-else-if="auto.enabled">{{ t('realityTargets.auto.nextRunSoon') }}</li>
+          <li v-if="auto.last_run_at">{{ t('realityTargets.auto.lastRun', { time: format.dateTime(auto.last_run_at) }) }}</li>
+          <li v-if="auto.last_outcome" data-testid="reality-auto-outcome">{{ t('realityTargets.auto.outcome', { outcome: auto.last_outcome }) }}</li>
+          <li v-if="auto.last_switch_at">{{ t('realityTargets.auto.lastSwitch', { time: format.dateTime(auto.last_switch_at) }) }}</li>
+        </ul>
+        <p v-if="autoError" class="reality-targets__error" role="alert">{{ autoError }}</p>
+      </div>
+
       <div class="reality-targets__group" role="group" :aria-label="t('realityTargets.probe.title')">
         <h3 class="reality-targets__heading">{{ t('realityTargets.probe.title') }}</h3>
         <p v-if="!support || !support.connected" class="reality-targets__hint" data-testid="reality-offline">{{ t('realityTargets.probe.offline') }}</p>
@@ -126,10 +145,13 @@
 // candidate REALITY targets (dest and SNI) from the node's own network
 // (reality.probe), Control ranks them; the administrator applies one to a
 // Reality protocol of the node (confirmed: clients need a subscription
-// refresh). GET/POST /api/v4/kernel/nodes/:id/reality-targets{,/probe,/apply}.
+// refresh), or turns on automatic selection, which rechecks the node every
+// 6 hours and replaces a target that failed twice in a row (confirmed for
+// the same reason). GET/POST /api/v4/kernel/nodes/:id/reality-targets
+// {,/probe,/apply}, PUT .../auto.
 import { computed, onMounted, ref, watch } from 'vue'
 import { Radar, RefreshCw } from '@lucide/vue'
-import { applyKernelRealityTarget, getKernelRealityTargets, probeKernelRealityTargets } from '@/api/kernel'
+import { applyKernelRealityTarget, getKernelRealityTargets, probeKernelRealityTargets, setKernelRealityTargetAuto } from '@/api/kernel'
 import { useAppI18n } from '@/composables/useAppI18n'
 import UiBadge from '@/ui/UiBadge.vue'
 import UiButton from '@/ui/UiButton.vue'
@@ -138,6 +160,7 @@ import UiErrorState from '@/ui/UiErrorState.vue'
 import UiIconButton from '@/ui/UiIconButton.vue'
 import UiSection from '@/ui/UiSection.vue'
 import UiSkeleton from '@/ui/UiSkeleton.vue'
+import UiSwitch from '@/ui/UiSwitch.vue'
 import UiTextarea from '@/ui/UiTextarea.vue'
 import { useConfirm } from '@/ui/composables/useConfirm'
 import { useFormat } from '@/ui/composables/useFormat'
@@ -156,6 +179,9 @@ const confirm = useConfirm()
 
 const report = ref(null)
 const support = ref(null)
+const auto = ref(null)
+const savingAuto = ref(false)
+const autoError = ref('')
 const defaultCount = ref(0)
 const loading = ref(false)
 const loadError = ref(null)
@@ -227,6 +253,7 @@ function failureText(cause) {
 function take(answer) {
   report.value = normalizeReport(answer?.report)
   if (answer?.support) support.value = answer.support
+  if (answer?.auto) auto.value = answer.auto
   if (Array.isArray(answer?.default_candidates)) defaultCount.value = answer.default_candidates.length
 }
 
@@ -282,9 +309,32 @@ async function apply(item, target) {
   await load()
 }
 
+async function setAuto(enabled) {
+  if (savingAuto.value) return
+  if (enabled) {
+    const confirmed = await confirm({
+      title: t('realityTargets.auto.confirmTitle'),
+      message: t('realityTargets.auto.confirmMessage'),
+      confirmLabel: t('realityTargets.auto.confirm')
+    })
+    if (!confirmed) return
+  }
+  savingAuto.value = true
+  autoError.value = ''
+  try {
+    auto.value = await setKernelRealityTargetAuto(props.nodeRef, enabled)
+  } catch (cause) {
+    autoError.value = failureText(cause)
+  } finally {
+    savingAuto.value = false
+  }
+}
+
 watch(() => props.nodeRef, () => {
   report.value = null
   support.value = null
+  auto.value = null
+  autoError.value = ''
   probeError.value = ''
   applyMessage.value = ''
   load()
@@ -365,6 +415,17 @@ defineExpose({ load, probe, report })
   flex-wrap: wrap;
   gap: var(--space-2);
   align-items: center;
+}
+
+.reality-targets__facts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  color: var(--label-2);
+  font-size: var(--type-callout-size);
+  list-style: none;
 }
 
 .reality-targets__list,

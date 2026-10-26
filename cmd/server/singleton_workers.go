@@ -15,6 +15,7 @@ import (
 	grpcserver "github.com/AnixOps/anix-control/v5/internal/grpc"
 	"github.com/AnixOps/anix-control/v5/internal/kernelforward"
 	"github.com/AnixOps/anix-control/v5/internal/kernelnodeops"
+	"github.com/AnixOps/anix-control/v5/internal/realitytarget"
 	"github.com/AnixOps/anix-control/v5/internal/retention"
 	"github.com/AnixOps/anix-control/v5/internal/service"
 )
@@ -112,6 +113,16 @@ func runSingletonWorkers(ctx context.Context, bridgeEnabled bool) {
 	run((&agentupgrade.Worker{
 		Service: &agentupgrade.Service{DB: database.Get()},
 		Streams: func() agentstreams.Streams { return grpcserver.GetAgentStreams() },
+	}).Run)
+	// Automatic Reality target selection (internal/realitytarget, phase 3):
+	// rechecks the nodes that have it on through their Agents here and
+	// replaces a target that failed twice in a row.
+	run((&realitytarget.AutoWorker{
+		Service: &realitytarget.Service{DB: database.Get(), Prober: kernelnodeops.RealityProbes{}},
+		Ready: func(node agentcontrol.AgentNode) bool {
+			return kernelnodeops.RealityProbes{}.Support(node).Capable
+		},
+		Update: service.NewNodeServiceFor(database.Get()).UpdateProtocol,
 	}).Run)
 	// Certificate-expiry and phase alerts (alerts.*): scans the certificate
 	// stores and the phased processes read-only and sends the administrators

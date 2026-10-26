@@ -9203,7 +9203,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "The node's latest Reality target probes, ranked (targets that passed first by score, then failed ones), the target its Reality protocols use now (current), the recommended target, and whether its Agent runs reality.probe now (support).",
+                "description": "The node's latest Reality target probes, ranked (targets that passed first by score, then failed ones), the target its Reality protocols use now (current), the recommended target, whether its Agent runs reality.probe now (support), and its automatic selection (auto: enabled, next and last run, last switch, the last run's outcome).",
                 "produces": [
                     "application/json"
                 ],
@@ -9273,6 +9273,52 @@ const docTemplate = `{
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v4/kernel/nodes/{id}/reality-targets/auto": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "With it on, Control probes the node's current targets and the built-in candidates every 6 hours (from the singleton worker, when the node's Agent is connected to it and runs reality.probe). A Reality protocol whose target failed in two runs in a row, the second 15 minutes after the first, moves to the recommended target, as apply does; a probe that gave no answer is not a failure, and a target that still passes is never replaced for a better score. Each switch is in the operation log (module reality_target, action reality_target_auto_switch). Turning it on makes the node due at once. Audited (action reality_target_auto).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Turn a proxy node's automatic Reality target selection on or off",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "proxy-\u003cid\u003e",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "enabled",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.realityTargetAutoRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/realitytarget.AutoState"
                         }
                     }
                 }
@@ -11695,6 +11741,14 @@ const docTemplate = `{
                 }
             }
         },
+        "handler.realityTargetAutoRequest": {
+            "type": "object",
+            "properties": {
+                "enabled": {
+                    "type": "boolean"
+                }
+            }
+        },
         "handler.realityTargetProbeRequest": {
             "type": "object",
             "properties": {
@@ -12565,6 +12619,29 @@ const docTemplate = `{
         },
         "nodegroup.GroupInput": {
             "type": "object"
+        },
+        "realitytarget.AutoState": {
+            "type": "object",
+            "properties": {
+                "enabled": {
+                    "type": "boolean"
+                },
+                "fail_streak": {
+                    "type": "integer"
+                },
+                "last_outcome": {
+                    "type": "string"
+                },
+                "last_run_at": {
+                    "type": "string"
+                },
+                "last_switch_at": {
+                    "type": "string"
+                },
+                "next_run_at": {
+                    "type": "string"
+                }
+            }
         },
         "service.TelegramCallback": {
             "type": "object",
