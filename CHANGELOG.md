@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Fixed
+
+- VLESS Reality subscriptions: sing-box and Loon output now carry the
+  protocol's `flow` (`xtls-rprx-vision`), so a Vision inbound no longer
+  rejects those clients with "client flow is empty". A Reality protocol
+  without a `tls_settings.fingerprint` gets `chrome` (Xray refuses an empty
+  fingerprint and sing-box needs uTLS for Reality), and the SNI falls back
+  to `reality_settings.server_name` when `tls_settings` has none.
+
 ## 5.0.0-rc.4 - 2026-10-26
 
 ### Added
