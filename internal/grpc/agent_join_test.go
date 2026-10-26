@@ -159,7 +159,7 @@ func TestAgentEnrollCredentialWithoutNodeMetadataUnderRequiredMTLS(t *testing.T)
 // its users until an administrator approves it; then both flow at once.
 func TestAgentControlWithholdsConfigAndUsersFromAPendingNode(t *testing.T) {
 	environment := newAgentUsersEnvironment(t, func(t *testing.T) { requireInMemoryDatabase(t) })
-	requireAutoMigrate(t, append(model.KernelNodeOperationModels(), &model.OperationLog{}, &model.ForwardNode{})...)
+	requireAutoMigrate(t, append(append(model.KernelNodeOperationModels(), &model.EgressRoute{}), &model.OperationLog{}, &model.ForwardNode{})...)
 	previousPoll := approvalPoll
 	approvalPoll = 20 * time.Millisecond
 	t.Cleanup(func() { approvalPoll = previousPoll })
