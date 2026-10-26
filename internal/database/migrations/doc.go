@@ -76,4 +76,6 @@
 //   - 0005_backups: the backup bundles (v5_backup).
 //   - 0006_destination_stats: each user's traffic by destination
 //     (v5_destination_stat).
+//   - 0007_egress_routes: the domain egress routes between proxy nodes
+//     (v5_egress_route).
 package migrations

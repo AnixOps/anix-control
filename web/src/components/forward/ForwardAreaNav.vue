@@ -14,9 +14,10 @@
 </template>
 
 <script setup>
-// The forwarding area's sections (概览 / 路由 / 节点 / DNS), like the other
-// suites, with the polling line (D5: "更新于 N 秒前" and refresh). DNS holds
-// the providers of entry high availability (L2).
+// The forwarding area's sections (概览 / 路由 / 节点 / DNS / 分流), like the
+// other suites, with the polling line (D5: "更新于 N 秒前" and refresh). DNS
+// holds the providers of entry high availability (L2); 分流 the egress
+// routes between proxy nodes.
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { RefreshCw } from '@lucide/vue'
@@ -32,12 +33,13 @@ defineProps({
 const emit = defineEmits(['refresh'])
 const router = useRouter()
 const { t } = useAppI18n()
-const PATHS = { overview: '/admin/forward/overview', routes: '/admin/forward/routes', nodes: '/admin/forward/inventory', dns: '/admin/forward/dns' }
+const PATHS = { overview: '/admin/forward/overview', routes: '/admin/forward/routes', nodes: '/admin/forward/inventory', dns: '/admin/forward/dns', egress: '/admin/forward/egress' }
 const options = computed(() => [
   { value: 'overview', label: t('forwardV4.nav.overview') },
   { value: 'routes', label: t('forwardV4.nav.routes') },
   { value: 'nodes', label: t('forwardV4.nav.nodes') },
-  { value: 'dns', label: t('forwardDns.nav') }
+  { value: 'dns', label: t('forwardDns.nav') },
+  { value: 'egress', label: t('egressRoutes.nav') }
 ])
 
 function go(value) {

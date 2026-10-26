@@ -49,6 +49,7 @@ const ForwardRouteDetail = () => import('@/views/admin/forward/RouteDetail.vue')
 const ForwardNodes = () => import('@/views/admin/forward/Nodes.vue')
 const ForwardNodeView = () => import('@/views/admin/forward/NodeDetail.vue')
 const ForwardDnsProviders = () => import('@/views/admin/forward/DnsProviders.vue')
+const ForwardEgressRoutes = () => import('@/views/admin/forward/EgressRoutes.vue')
 const Account = () => import('@/views/Account.vue')
 const StatusPage = () => import('@/views/StatusPage.vue')
 
@@ -275,6 +276,13 @@ const routes = [
         path: 'forward/dns',
         component: ForwardDnsProviders,
         meta: forwardMeta('pageTitles.admin.forwardV4Dns')
+      },
+      {
+        // 分流: egress routes between proxy nodes, a kernel API of its own
+        // that needs no forward package.
+        path: 'forward/egress',
+        component: ForwardEgressRoutes,
+        meta: { layout: 'wide', titleKey: 'pageTitles.admin.forwardEgress' }
       },
       {
         // The removed flux-clone pages (转发（旧版）, 转发节点（旧版）, the

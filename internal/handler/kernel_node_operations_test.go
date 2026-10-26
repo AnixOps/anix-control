@@ -20,7 +20,7 @@ import (
 func TestKernelNodeOperationsListing(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "kernel.db")), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(model.KernelNodeOperationModels()...))
+	require.NoError(t, db.AutoMigrate(append(model.KernelNodeOperationModels(), &model.EgressRoute{})...))
 	now := time.Now().UTC()
 	for _, row := range []model.KernelNodeOperation{
 		{OperationID: "op-1", RequestID: "node.sync:proxy-1:a", Digest: "d1", PackageID: "proxy-node", PackageGeneration: 2,

@@ -137,7 +137,7 @@ func forEachDatabase(t *testing.T, body func(t *testing.T, db *gorm.DB)) {
 		db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "kernel.db")+"?_pragma=busy_timeout(10000)&_pragma=journal_mode(WAL)"), config)
 		require.NoError(t, err)
 		closeOnCleanup(t, db)
-		require.NoError(t, db.AutoMigrate(model.KernelNodeOperationModels()...))
+		require.NoError(t, db.AutoMigrate(append(model.KernelNodeOperationModels(), &model.EgressRoute{})...))
 		body(t, db)
 	})
 	t.Run("postgres", func(t *testing.T) {
@@ -162,7 +162,7 @@ func forEachDatabase(t *testing.T, body func(t *testing.T, db *gorm.DB)) {
 		db, err := gorm.Open(postgres.Open(base+" search_path="+schema), config)
 		require.NoError(t, err)
 		closeOnCleanup(t, db)
-		require.NoError(t, db.AutoMigrate(model.KernelNodeOperationModels()...))
+		require.NoError(t, db.AutoMigrate(append(model.KernelNodeOperationModels(), &model.EgressRoute{})...))
 		body(t, db)
 	})
 }

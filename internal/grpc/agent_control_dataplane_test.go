@@ -65,7 +65,7 @@ func openDataPlaneSession(t *testing.T, environment *agentControlTestEnvironment
 // (41) is not the node's.
 func TestAgentControlServerAdvertisesTheDataPlane(t *testing.T) {
 	environment := newAgentControlTestEnvironment(t)
-	requireAutoMigrate(t, append(model.KernelNodeOperationModels(), &model.User{}, &model.SubscriberChange{}, &model.NodeProtocol{})...)
+	requireAutoMigrate(t, append(append(model.KernelNodeOperationModels(), &model.EgressRoute{}), &model.User{}, &model.SubscriberChange{}, &model.NodeProtocol{})...)
 	stream, helloAck := openDataPlaneSession(t, environment)
 	require.NotEmpty(t, helloAck.SessionId)
 	for _, capability := range []string{agentcontrol.CapabilityConfig, agentcontrol.CapabilityUsers, agentcontrol.CapabilityReports} {
