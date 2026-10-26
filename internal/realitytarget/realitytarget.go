@@ -36,7 +36,7 @@ const (
 	// get it flagged).
 	MaxCandidates = 24
 	// Concurrency is how many probes of one node run at once.
-	Concurrency = 4
+	Concurrency = 8
 	// DefaultTimeout is a probe's own time on the Agent.
 	DefaultTimeout = 5 * time.Second
 	// MinTimeout and MaxTimeout bound it (the Agent's bounds).
@@ -177,6 +177,8 @@ type ProbeResult struct {
 	RedirectHost   string     `json:"redirect_host,omitempty"`
 	ServerHeader   string     `json:"server_header,omitempty"`
 	CDN            string     `json:"cdn,omitempty"`
+	// RealityMS is the Agent's loopback REALITY handshake through the target.
+	RealityMS int64 `json:"reality_ms,omitempty"`
 }
 
 // VerdictOK is a target that passed every hard requirement; VerdictFailed

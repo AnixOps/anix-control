@@ -53,7 +53,8 @@ export default {
       x25519: '不支持 X25519',
       certificate: '证书无效',
       http: 'HTTP 请求失败',
-      redirect: '跳转到其他域名'
+      redirect: '跳转到其他域名',
+      reality: 'REALITY 握手失败'
     },
     apply: {
       button: '应用',

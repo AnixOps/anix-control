@@ -7,12 +7,14 @@
   recommends one, instead of every node borrowing `www.microsoft.com`.
   `POST /api/v4/kernel/nodes/{id}/reality-targets/probe` probes the
   candidates (your own `candidates`, host or host:port, plus a built-in list
-  unless `include_defaults` is false; at most 24, 4 at a time) and answers
+  unless `include_defaults` is false; at most 24, 8 at a time) and answers
   the ranked report; `GET /api/v4/kernel/nodes/{id}/reality-targets` answers
   the latest one, the target each Reality protocol of the node uses now and
   whether its Agent can probe. A target passes on TLS 1.3, ALPN h2, an X25519
-  key exchange, a certificate valid for the name and no redirect to another
-  host; passing targets are scored by the node's address prefix, handshake
+  key exchange, a certificate valid for the name, no redirect to another
+  host and a real REALITY handshake through it on the node (a loopback
+  REALITY server and client in the Agent; www.microsoft.com passed every TLS
+  check from the Germany node and still broke REALITY); passing targets are scored by the node's address prefix, handshake
   time, post-quantum key exchange, OCSP stapling and chain size, less a CDN
   and the other nodes already using the target. Probes are stored in the new
   table `v5_reality_target_probe` (migration 0008) and every run is in the

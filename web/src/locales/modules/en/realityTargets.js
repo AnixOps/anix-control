@@ -53,7 +53,8 @@ export default {
       x25519: 'no X25519',
       certificate: 'invalid certificate',
       http: 'HTTP request failed',
-      redirect: 'redirects to another host'
+      redirect: 'redirects to another host',
+      reality: 'breaks the REALITY handshake'
     },
     apply: {
       button: 'Apply',

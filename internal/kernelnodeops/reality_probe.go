@@ -17,12 +17,17 @@ import (
 // The Reality target probe of the agent.diagnostic operation
 // (sdk/api/agent/v1/PROTOCOL.md, "Reality target probe"): a proxy node's
 // Agent that lists the capability reality.probe resolves a host name with
-// the node's resolver, completes a TLS handshake and sends GET /, and
-// answers whether the site can serve as a REALITY target from that node.
+// the node's resolver, completes a TLS handshake, sends GET / and tries a
+// REALITY handshake through it, and answers whether the site can serve as
+// a REALITY target from that node.
 const (
 	RealityProbeAction     = "reality.probe"
 	RealityProbeCapability = "reality.probe"
 )
+
+// RealityProbeHandshakeTime is what the Agent adds to timeout_ms for the
+// probe's loopback REALITY handshake (realityprobe.RealityTimeout).
+const RealityProbeHandshakeTime = 12 * time.Second
 
 // ErrRealityProbeUnavailable is the error of a probe the node's Agent
 // cannot run: not connected, or it does not list reality.probe.
@@ -78,7 +83,7 @@ func (p RealityProbes) Probe(ctx context.Context, node agentcontrol.AgentNode, s
 		return nil, ErrRealityProbeUnavailable
 	}
 	timeoutMS := timeout.Milliseconds()
-	deadline := time.Now().Add(timeout + 2*time.Second)
+	deadline := time.Now().Add(timeout + RealityProbeHandshakeTime + 2*time.Second)
 	if ctxDeadline, ok := ctx.Deadline(); ok && ctxDeadline.Before(deadline) {
 		deadline = ctxDeadline
 	}
