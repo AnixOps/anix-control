@@ -125,10 +125,11 @@ var postBaselineIndexes = []struct{ table, index string }{
 // legacyModelsPrepare does.
 func laterModels() []any {
 	return []any{
-		&model.ACMECacheEntry{},  // 0003_acme_cache
-		&model.Backup{},          // 0005_backups
-		&model.DestinationStat{}, // 0006_destination_stats
-		&model.EgressRoute{},     // 0007_egress_routes
+		&model.ACMECacheEntry{},     // 0003_acme_cache
+		&model.Backup{},             // 0005_backups
+		&model.DestinationStat{},    // 0006_destination_stats
+		&model.EgressRoute{},        // 0007_egress_routes
+		&model.RealityTargetProbe{}, // 0008_reality_target_probes
 	}
 }
 

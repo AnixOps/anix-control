@@ -9196,6 +9196,87 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v4/kernel/nodes/{id}/reality-targets": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "The node's latest Reality target probes, ranked (targets that passed first by score, then failed ones), the target its Reality protocols use now (current), the recommended target, and whether its Agent runs reality.probe now (support).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "A proxy node's Reality targets",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "proxy-\u003cid\u003e",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v4/kernel/nodes/{id}/reality-targets/probe": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "The node's Agent probes each candidate (reality.probe: TLS 1.3, ALPN h2, an X25519 key exchange, a certificate valid for the name, no redirect to another host) from the node's network, 4 at a time; Control scores the answers, stores the latest per candidate and answers the node's ranked report, with a probe that gave no answer marked verdict error. candidates are host names or host:port (at most 24 in all); include_defaults (default true) adds the built-in list; timeout_ms is each probe's time, 100 to 10000, default 5000. 409 node_offline or reality_probe_unsupported when the Agent cannot probe; 409 probe_busy while another run of the node is going. Nothing in the node's configuration changes. Audited (module reality_target).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Probe Reality targets from a proxy node",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "proxy-\u003cid\u003e",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "candidates, include_defaults, timeout_ms",
+                        "name": "request",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/handler.realityTargetProbeRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/v4/kernel/nodes/{id}/reject": {
             "post": {
                 "security": [
@@ -11544,6 +11625,26 @@ const docTemplate = `{
                 },
                 "timeout_seconds": {
                     "description": "TimeoutSeconds bounds the wait for the result: 1 to 120, default 30.",
+                    "type": "integer"
+                }
+            }
+        },
+        "handler.realityTargetProbeRequest": {
+            "type": "object",
+            "properties": {
+                "candidates": {
+                    "description": "Candidates are host names, or host:port, probed before the defaults.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "include_defaults": {
+                    "description": "IncludeDefaults adds realitytarget.DefaultCandidates; true when absent.",
+                    "type": "boolean"
+                },
+                "timeout_ms": {
+                    "description": "TimeoutMS is each probe's time on the Agent: 100 to 10000, default 5000.",
                     "type": "integer"
                 }
             }
