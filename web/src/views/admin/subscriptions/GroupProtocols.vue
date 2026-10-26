@@ -1,6 +1,7 @@
 <template>
   <UiSection :title="t('adminSubscriptionGroups.protocols.title')" :description="t('adminSubscriptionGroups.protocols.description')">
     <template #actions>
+      <UiButton :icon="ArrowUpDown" :disabled="protocolsLoading || !protocols.length" data-test="edit-protocol-layout" @click="layoutOpen = true">{{ t('adminSubscriptionGroups.layout.open') }}</UiButton>
       <UiButton :icon="Link2" :loading="availableLoading" data-test="manage-protocols" @click="openManageProtocolsModal">{{ t('adminSubscriptionGroups.protocols.manage') }}</UiButton>
     </template>
     <UiDataTable
@@ -19,6 +20,10 @@
       :row-actions="protocolActions"
       @retry="loadProtocols"
     >
+      <template #cell-display_name="{ row }">
+        <span v-if="row.display_name">{{ row.display_name }}</span>
+        <span v-else class="default-name" :title="t('adminSubscriptionGroups.layout.defaultHelp')">{{ defaultProtocolName(row) }}</span>
+      </template>
       <template #cell-type="{ row }">
         <UiBadge tone="info" :dot="false" :label="String(row.type || '').toUpperCase()" />
       </template>
@@ -32,6 +37,8 @@
         <UiButton variant="primary" :icon="Link2" @click="openManageProtocolsModal">{{ t('adminSubscriptionGroups.protocols.manage') }}</UiButton>
       </template>
     </UiDataTable>
+
+    <GroupProtocolLayoutSheet v-model:open="layoutOpen" :group="group" :protocols="protocols" @saved="onLayoutSaved" />
 
     <UiDialog
       v-model:open="showManageProtocolsModal"
@@ -72,14 +79,16 @@
 </template>
 
 <script setup>
-// The production node protocols linked to one subscription group, and the
-// dialog that picks them from every visible node protocol. Endpoints
-// unchanged: GET/POST /admin/subscription/groups/:id/protocols,
+// The production node protocols linked to one subscription group, in the
+// group's order and with the names its subscription shows (GET /api/v4/
+// admin/subscription-groups/:id/protocol-layout, edited in the 排序与名称
+// sheet), and the dialog that picks them from every visible node protocol.
+// Endpoints unchanged: GET/POST /admin/subscription/groups/:id/protocols,
 // GET /admin/subscription/protocols/available.
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { Link2, Server, SquareArrowOutUpRight } from '@lucide/vue'
-import adminApi from '@/api/admin'
+import { ArrowUpDown, Link2, Pencil, Server, SquareArrowOutUpRight } from '@lucide/vue'
+import adminApi, { getGroupProtocolLayout } from '@/api/admin'
 import { useAppI18n } from '@/composables/useAppI18n'
 import UiBadge from '@/ui/UiBadge.vue'
 import UiButton from '@/ui/UiButton.vue'
@@ -88,6 +97,8 @@ import UiDataTable from '@/ui/UiDataTable.vue'
 import UiDialog from '@/ui/UiDialog.vue'
 import UiSection from '@/ui/UiSection.vue'
 import { useToast } from '@/ui/composables/useToast'
+import GroupProtocolLayoutSheet from './GroupProtocolLayoutSheet.vue'
+import { applyProtocolLayout, defaultProtocolName } from './groupProtocolLayout'
 import { ensureSubscriptionSuccess, readSubscriptionList, subscriptionErrorText } from './subscriptionShared'
 
 const props = defineProps({
@@ -108,10 +119,12 @@ const selectedProtocolIds = ref([])
 const showManageProtocolsModal = ref(false)
 const protocolsSaving = ref(false)
 const protocolsError = ref('')
+const layoutOpen = ref(false)
 
 const columns = computed(() => [
   { key: 'node', label: t('adminSubscriptionGroups.protocols.node'), primary: true, sortable: true, value: protocol => protocol.node?.name || t('adminSubscriptionGroups.protocols.nodeIdFallback', { id: protocol.node_id }) },
-  { key: 'name', label: t('adminSubscriptionGroups.protocols.name'), secondary: true, sortable: true },
+  { key: 'display_name', label: t('adminSubscriptionGroups.layout.displayName'), secondary: true, value: protocol => protocol.display_name || defaultProtocolName(protocol) },
+  { key: 'name', label: t('adminSubscriptionGroups.protocols.name'), sortable: true, breakpoint: 'lg' },
   { key: 'type', label: t('adminSubscriptionGroups.protocols.protocol'), nowrap: true },
   { key: 'port', label: t('adminSubscriptionGroups.protocols.port'), numeric: true, align: 'end' },
   { key: 'show', label: t('adminSubscriptionGroups.protocols.visibility'), breakpoint: 'md', nowrap: true },
@@ -136,15 +149,29 @@ function toggleAllAvailable() {
 }
 
 const protocolActions = protocol => [
+  { key: 'layout', label: t('adminSubscriptionGroups.layout.rename'), icon: Pencil, onSelect: () => { layoutOpen.value = true } },
   { key: 'node', label: t('adminSubscriptionGroups.protocols.goToNode'), icon: SquareArrowOutUpRight, onSelect: () => goToNode(protocol.node_id) }
 ]
+
+// The group's order and display names; without them (an older server)
+// the list keeps its order and default names.
+async function loadLayout() {
+  try {
+    return await getGroupProtocolLayout(props.group.id)
+  } catch {
+    return null
+  }
+}
 
 async function loadProtocols() {
   protocolsLoading.value = true
   protocolsLoadError.value = null
   try {
-    const res = await adminApi.getSubscriptionProtocols(props.group.id)
-    protocols.value = readSubscriptionList(res, t('adminSubscriptionGroups.protocols.loadFailed'))
+    const [res, layout] = await Promise.all([
+      adminApi.getSubscriptionProtocols(props.group.id),
+      loadLayout()
+    ])
+    protocols.value = applyProtocolLayout(readSubscriptionList(res, t('adminSubscriptionGroups.protocols.loadFailed')), layout?.protocols)
   } catch (error) {
     protocols.value = []
     protocolsLoadError.value = subscriptionErrorText(error) || t('adminSubscriptionGroups.protocols.loadFailed')
@@ -196,6 +223,10 @@ async function saveGroupProtocols() {
   }
 }
 
+function onLayoutSaved(layout) {
+  protocols.value = applyProtocolLayout(protocols.value, layout)
+}
+
 function goToNode(nodeId) {
   router.push({ path: '/admin/nodes', query: { id: String(nodeId) } })
 }
@@ -204,6 +235,10 @@ watch(() => props.group?.id, id => { if (id) loadProtocols() }, { immediate: tru
 </script>
 
 <style scoped>
+.default-name {
+  color: var(--label-2);
+}
+
 .pool-head {
   display: flex;
   flex-wrap: wrap;

@@ -347,6 +347,13 @@ definitions:
     - name
     - scope
     type: object
+  handler.groupProtocolLayoutRequest:
+    properties:
+      protocols:
+        items:
+          $ref: '#/definitions/service.GroupProtocolLayoutItem'
+        type: array
+    type: object
   handler.nodeDiagnosticRequest:
     properties:
       action:
@@ -1053,6 +1060,13 @@ definitions:
         type: string
       next_run_at:
         type: string
+    type: object
+  service.GroupProtocolLayoutItem:
+    properties:
+      display_name:
+        type: string
+      protocol_id:
+        type: integer
     type: object
   service.TelegramCallback:
     properties:
@@ -4574,6 +4588,74 @@ paths:
       security:
       - BearerAuth: []
       summary: 订阅分组成员
+      tags:
+      - 管理端-订阅
+  /api/v4/admin/subscription-groups/{id}/protocol-layout:
+    get:
+      description: '列出关联到该分组的全部节点协议 (v2_subscription_group_node_protocols), 按分组顺序:
+        已排序的在前, 其余按协议 ID。display_name 为订阅中显示的节点名称, 空表示默认的 "<节点> - <协议>"。'
+      parameters:
+      - description: 订阅分组 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 订阅分组节点协议的显示名称与顺序
+      tags:
+      - 管理端-订阅
+    put:
+      consumes:
+      - application/json
+      description: 按列表顺序排列该分组的节点协议并设置显示名称 (去除首尾空白, 最多 128 个字符, 不含控制字符; 空表示默认名称)。每项必须是已关联到该分组的协议且只出现一次;
+        未列出的已关联协议排在其后, 使用默认名称。节点有入口时, 名称后仍追加 " | <入口>"。订阅立即生效。
+      parameters:
+      - description: 订阅分组 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 协议顺序与显示名称
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.groupProtocolLayoutRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 设置订阅分组节点协议的显示名称与顺序
       tags:
       - 管理端-订阅
   /api/v4/admin/traffic/destinations:

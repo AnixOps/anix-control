@@ -84,4 +84,6 @@
 //     selection (v5_reality_target_auto).
 //   - 0010_node_entries: the addresses subscribers reach a proxy node at
 //     beyond its host (v5_node_entry).
+//   - 0011_subscription_group_protocols: each subscription group's order and
+//     display names of its node protocols (v5_subscription_group_protocol).
 package migrations

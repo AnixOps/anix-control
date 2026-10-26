@@ -137,6 +137,25 @@ export default {
       emptyDescription: '添加一个，它会出现在这个分组的订阅里。',
       loadFailed: '无法加载节点模板'
     },
+    layout: {
+      open: '排序与名称',
+      title: '排序与显示名称',
+      description: '拖动调整“{group}”订阅中节点的顺序，并设置订阅里显示的名称。',
+      listLabel: '节点协议顺序',
+      displayName: '显示名称',
+      defaultHelp: '未设置显示名称，订阅中使用默认名称',
+      handle: '拖动 {name} 调整顺序',
+      handleHelp: '拖动排序，或聚焦后按 ↑ / ↓',
+      moveUp: '上移',
+      moveDown: '下移',
+      moved: '{name} 已移到第 {position} 位，共 {total} 个',
+      rename: '设置显示名称',
+      tooLong: '最多 {max} 个字符',
+      controlChar: '不能包含换行等控制字符',
+      save: '保存',
+      saved: '已保存顺序与显示名称',
+      saveFailed: '无法保存顺序与显示名称'
+    },
     protocols: {
       title: '节点协议',
       description: '关联到分组的生产节点协议。只有在节点管理中设为可见的协议才能关联。',

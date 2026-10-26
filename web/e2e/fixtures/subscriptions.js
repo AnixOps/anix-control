@@ -78,6 +78,11 @@ export default {
       const page = Number(query.page) || 1
       return { data: { total: list.length, page, page_size: size, members: list.slice((page - 1) * size, page * size) } }
     }
+    // GET /api/v4/admin/subscription-groups/1/protocol-layout: the group's
+    // order and display names of its protocols.
+    if (/^\/api\/v4\/admin\/subscription-groups\/\d+\/protocol-layout$/.test(path)) {
+      return { data: { group_id: 1, protocols: [{ protocol_id: 22, display_name: '日本 Trojan' }, { protocol_id: 21, display_name: '' }] } }
+    }
     if (path === '/api/v2/admin/subscription/groups') {
       if (scenario === 'error') return { code: 500, msg: '订阅服务没有响应', data: null }
       return { code: 0, data: scenario === 'empty' ? [] : GROUPS }

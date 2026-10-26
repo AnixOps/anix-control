@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"text/template"
@@ -604,8 +605,20 @@ func (s *SubscriptionService) getInternalNodes(user *model.User, ctx *model.Temp
 		return nil, err
 	}
 
+	layouts, err := groupProtocolLayouts(s.db, groupIDs)
+	if err != nil {
+		return nil, err
+	}
+	groupPlace := make(map[uint]int, len(groups))
+	for i, g := range groups {
+		if _, seen := groupPlace[g.ID]; !seen {
+			groupPlace[g.ID] = i
+		}
+	}
+
 	liveness := make(map[uint]bool)
 	var result []*model.ParsedNode
+	var keys []groupProtocolKey
 	for _, p := range protocols {
 		if isWireGuardExitProtocol(&p) {
 			continue
@@ -631,15 +644,37 @@ func (s *SubscriptionService) getInternalNodes(user *model.User, ctx *model.Temp
 				continue
 			}
 
-			for _, parsed := range s.nodeProtocolEntries(p.Node, &p, ctx, entries[p.Node.ID]) {
+			name := layouts[groupProtocolKey{g.ID, p.ID}].DisplayName
+			for _, parsed := range s.nodeProtocolEntries(p.Node, &p, ctx, entries[p.Node.ID], name) {
 				parsed.GroupID = g.ID
 				parsed.GroupName = g.Name
 				result = append(result, parsed)
+				keys = append(keys, groupProtocolKey{g.ID, p.ID})
 			}
 		}
 	}
 
-	return result, nil
+	// Group by group, in the user's group order, and each group's protocols
+	// in the group's order (an entry's nodes stay in the entries' order).
+	order := make([]int, len(result))
+	for i := range order {
+		order[i] = i
+	}
+	sort.SliceStable(order, func(i, j int) bool {
+		a, b := keys[order[i]], keys[order[j]]
+		if a.group != b.group {
+			return groupPlace[a.group] < groupPlace[b.group]
+		}
+		if a.protocol == b.protocol {
+			return false
+		}
+		return groupProtocolLess(layouts, a.group, a.protocol, b.protocol)
+	})
+	sorted := make([]*model.ParsedNode, len(result))
+	for i, index := range order {
+		sorted[i] = result[index]
+	}
+	return sorted, nil
 }
 
 // nodeEntries loads the enabled entries (internal/nodeentry) of the
@@ -659,10 +694,14 @@ func (s *SubscriptionService) nodeEntries(protocols []model.NodeProtocol) (map[u
 // nodeProtocolEntries is the protocol as subscribers reach it: at the
 // node's host, or once per entry of a node with entries, at the entry's
 // host and port and named after it. A NAT entry that does not map the
-// protocol's port leaves the protocol out for that entry.
-func (s *SubscriptionService) nodeProtocolEntries(node *model.Node, protocol *model.NodeProtocol, ctx *model.TemplateRenderContext, entries []model.NodeEntry) []*model.ParsedNode {
+// protocol's port leaves the protocol out for that entry. A non-empty name
+// (the group's display name) replaces "<node> - <protocol>".
+func (s *SubscriptionService) nodeProtocolEntries(node *model.Node, protocol *model.NodeProtocol, ctx *model.TemplateRenderContext, entries []model.NodeEntry, name string) []*model.ParsedNode {
 	if len(entries) == 0 {
 		if parsed := s.nodeProtocolToParsedNode(node, protocol, ctx); parsed != nil {
+			if name != "" {
+				parsed.Name = name
+			}
 			return []*model.ParsedNode{parsed}
 		}
 		return nil
@@ -676,6 +715,9 @@ func (s *SubscriptionService) nodeProtocolEntries(node *model.Node, protocol *mo
 		parsed := s.nodeProtocolToParsedNode(node, protocol, ctx)
 		if parsed == nil {
 			continue
+		}
+		if name != "" {
+			parsed.Name = name
 		}
 		parsed.ID = fmt.Sprintf("%s-e%d", parsed.ID, entry.ID)
 		parsed.Name = fmt.Sprintf("%s | %s", parsed.Name, entry.Label)
