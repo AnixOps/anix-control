@@ -395,6 +395,11 @@ func TestAgentControlConfigRefresh(t *testing.T) {
 		&agentv1pb.ConfigStatus{ConfigRevision: row.Revision, ConfigHash: row.ConfigHash, Applied: true}, time.Now())
 	require.NoError(t, err)
 	session := openConfigSession(t, env, row.Revision)
+	// The HelloAck goes out before the Hello reconcile; a heartbeat is
+	// answered only after it, so the host change below cannot reach the
+	// Hello's snapshot instead of the refresher's.
+	session.heartbeat()
+	require.Empty(t, session.untilHeartbeatAck())
 	before := snapshotsSent(configTriggerRefresh)
 	require.NoError(t, database.GetDB().Model(&model.Node{}).Where("id = ?", env.node.ID).Update("host", "192.0.2.10").Error)
 	snapshot := session.next().GetConfig()
