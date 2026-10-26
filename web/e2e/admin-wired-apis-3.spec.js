@@ -184,6 +184,9 @@ test.describe('the table of tokens', () => {
   })
 
   test('has no axe finding of any impact, light and dark, desktop and phone', async ({ page }) => {
+    // Four page loads and four axe runs: about 18 s on an idle machine, past
+    // the 30 s test timeout on a CI runner shared by four workers.
+    test.slow()
     for (const [theme, viewport] of [['light', { width: 1440, height: 900 }], ['dark', { width: 1440, height: 900 }], ['light', { width: 390, height: 844 }], ['dark', { width: 390, height: 844 }]]) {
       await page.setViewportSize(viewport)
       await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' })
