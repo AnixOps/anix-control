@@ -158,6 +158,28 @@ describe('NodeDiagnosticsSection', () => {
     expect(kernelApi.runKernelNodeDiagnostic).toHaveBeenLastCalledWith('proxy-5', { action: 'log_tail', params: { service: 'gost', lines: 500 }, timeoutSeconds: 30 })
   })
 
+  it('picks the service when the node runs more than one', async () => {
+    kernelApi.getKernelNodeDiagnostics.mockResolvedValue(listing({ services: ['anix-agent', 'gost'] }))
+    kernelApi.runKernelNodeDiagnostic.mockResolvedValue(answer())
+    renderSection()
+    await userEvent.click(await screen.findByTestId('diagnostics-status'))
+    expect(kernelApi.runKernelNodeDiagnostic).toHaveBeenLastCalledWith('proxy-5', { action: 'service_status', params: { service: 'anix-agent' }, timeoutSeconds: 30 })
+    await screen.findByTestId('diagnostics-result')
+
+    await userEvent.click(screen.getByRole('combobox', { name: 'Service' }))
+    await userEvent.click(screen.getByRole('option', { name: 'gost' }))
+    await userEvent.click(screen.getByTestId('diagnostics-status'))
+    expect(kernelApi.runKernelNodeDiagnostic).toHaveBeenLastCalledWith('proxy-5', { action: 'service_status', params: { service: 'gost' }, timeoutSeconds: 30 })
+  })
+
+  it('offers no service choice for one service', async () => {
+    kernelApi.getKernelNodeDiagnostics.mockResolvedValue(listing({ services: ['anix-agent'] }))
+    renderSection()
+    await screen.findByTestId('diagnostics-status')
+    expect(screen.queryByTestId('diagnostics-service')).toBeNull()
+    expect(screen.getByText('Service anix-agent')).toBeTruthy()
+  })
+
   it('explains a refusal by its code', async () => {
     kernelApi.getKernelNodeDiagnostics.mockResolvedValue(listing())
     const refusal = (status, code, message = '') => Object.assign(new Error('failed'), { response: { status, data: { error: { code, message } } } })

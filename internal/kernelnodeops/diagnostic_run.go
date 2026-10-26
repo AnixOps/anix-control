@@ -397,6 +397,23 @@ type NodeDiagnosticAction struct {
 	Forward bool `json:"forward"`
 }
 
+// NodeDiagnosticServices lists the services the node's generic actions
+// run on: a proxy node's Agent itself, then gost where the node runs the
+// forward checks; a forward node's gost. Nil when the node runs none.
+func NodeDiagnosticServices(node agentcontrol.AgentNode, support NodeDiagnosticSupport) []string {
+	if !support.Diagnostics {
+		return nil
+	}
+	if node.Kind != agentcontrol.NodeKindProxy {
+		return []string{service.AgentDiagnosticServiceGost}
+	}
+	services := []string{service.AgentDiagnosticServiceAgent}
+	if support.ForwardChecks {
+		services = append(services, service.AgentDiagnosticServiceGost)
+	}
+	return services
+}
+
 // NodeDiagnosticActions lists the actions a node with support may run, the
 // generic ones first, each group by name.
 func NodeDiagnosticActions(support NodeDiagnosticSupport) []NodeDiagnosticAction {

@@ -21,7 +21,8 @@ export default {
       descriptionVersion: 'Agent {version} does not run diagnostics. Upgrade the node’s Agent to use them.'
     },
     service: {
-      title: 'Service {service}'
+      title: 'Service {service}',
+      label: 'Service'
     },
     actions: {
       service_status: 'View service status',
