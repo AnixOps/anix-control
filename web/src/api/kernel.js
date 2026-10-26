@@ -343,7 +343,9 @@ export async function runKernelNodeDiagnostic(node, { action, params = {}, timeo
 // is { report: { node_id, node_address, current: [{ protocol_id, name,
 // server_name, dest }], recommended, targets: [{ server_name, port, verdict
 // (ok | failed | error), score, used_by, probed_at, error, result }] },
-// support: { connected, capable, agent_version }, default_candidates }.
+// support: { connected, capable, agent_version }, auto: { enabled,
+// next_run_at, last_run_at, last_switch_at, fail_streak, last_outcome },
+// default_candidates }.
 export async function getKernelRealityTargets(node) {
   return unwrap(await v4({ url: `/kernel/nodes/${encodeURIComponent(node)}/reality-targets`, method: 'get' }))
 }
@@ -369,6 +371,16 @@ export async function applyKernelRealityTarget(node, { protocolId, serverName, p
     url: `/kernel/nodes/${encodeURIComponent(node)}/reality-targets/apply`,
     method: 'post',
     data: { protocol_id: protocolId, server_name: serverName, port, force }
+  }))
+}
+
+// Turns the node's automatic Reality target selection on or off; answers
+// the auto state.
+export async function setKernelRealityTargetAuto(node, enabled) {
+  return unwrap(await v4({
+    url: `/kernel/nodes/${encodeURIComponent(node)}/reality-targets/auto`,
+    method: 'put',
+    data: { enabled: Boolean(enabled) }
   }))
 }
 

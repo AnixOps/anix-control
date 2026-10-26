@@ -56,6 +56,18 @@ export default {
       redirect: '跳转到其他域名',
       reality: 'REALITY 握手失败'
     },
+    auto: {
+      title: '自动选择',
+      description: '每 6 小时从节点复测一次当前目标站和内置候选；当前目标站连续两次探测失败（第二次在 15 分钟后）就自动换成推荐站。探测没有结果不算失败，还能用的目标站不会因为分数更高而被替换。每次切换都会写入操作日志。',
+      nextRun: '下次复测：{time}',
+      nextRunSoon: '下次复测：几分钟内',
+      lastRun: '上次复测：{time}',
+      outcome: '结果：{outcome}',
+      lastSwitch: '上次自动切换：{time}',
+      confirmTitle: '开启自动选择？',
+      confirmMessage: '自动切换会改动这个节点 Reality 协议的 SNI 和 dest，客户端要更新订阅才能连上新的目标站。',
+      confirm: '开启'
+    },
     apply: {
       button: '应用',
       toProtocol: '应用到 {name}',

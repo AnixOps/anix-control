@@ -56,6 +56,18 @@ export default {
       redirect: 'redirects to another host',
       reality: 'breaks the REALITY handshake'
     },
+    auto: {
+      title: 'Automatic selection',
+      description: 'Every 6 hours the node rechecks its current targets and the built-in candidates; a current target that fails twice in a row (the second check 15 minutes later) is replaced with the recommended one. A probe without an answer is not a failure, and a target that still works is never replaced for a better score. Every switch is in the operation log.',
+      nextRun: 'Next check: {time}',
+      nextRunSoon: 'Next check: within minutes',
+      lastRun: 'Last check: {time}',
+      outcome: 'Outcome: {outcome}',
+      lastSwitch: 'Last automatic switch: {time}',
+      confirmTitle: 'Turn on automatic selection?',
+      confirmMessage: 'A switch changes the SNI and dest of this node\'s Reality protocols; clients must refresh their subscription to reach the new target.',
+      confirm: 'Turn on'
+    },
     apply: {
       button: 'Apply',
       toProtocol: 'Apply to {name}',
