@@ -105,7 +105,7 @@ import ApiTokenCreate from './ApiTokenCreate.vue'
 import { API_TOKEN_MAX_ACTIVE, tokenState } from './apiTokens'
 import { useApiTokens } from './useApiTokens'
 
-const GUIDE_URL = 'https://github.com/AnixOps/anix-control/blob/go_dev/docs/guide/admin-api-tokens.md'
+const GUIDE_URL = 'https://github.com/AnixOps/anix-control/blob/main/docs/guide/admin-api-tokens.md'
 const STATE_TONES = { active: 'success', expiring: 'warning', expired: 'neutral', revoked: 'neutral' }
 
 const { t } = useAppI18n()

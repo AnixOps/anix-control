@@ -336,6 +336,6 @@ Critical commits that should be preserved permanently:
 
 ## Resources
 
-- [GitHub Repository](https://github.com/AnixOps/anix-control/tree/go_dev/control-center) (`control-center/` in `AnixOps/anix-control`)
+- [GitHub Repository](https://github.com/AnixOps/anix-control/tree/main/control-center) (`control-center/` in `AnixOps/anix-control`)
 - [Releases](https://github.com/AnixOps/anix-control/releases) (Control Center releases use `control-center-v*` tags; older releases stay in the archived `AnixOps/Anixops-control-center` repository)
 - [Actions](https://github.com/AnixOps/anix-control/actions/workflows/control-center.yml)

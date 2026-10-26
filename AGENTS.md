@@ -65,12 +65,12 @@ duplicate it here); the docs landing page is `docs/README.md`.
 
 ## Branch And PR Workflow
 
-- `go_dev` is the integration branch. Branch from it, open a PR back to it,
-  and squash-merge. Do not push to `go_dev` directly and do not recreate
+- `main` is the integration branch. Branch from it, open a PR back to it,
+  and squash-merge. Do not push to `main` directly and do not recreate
   `master` or `production`. The only other long-lived branches are the
   maintenance branches `release/vX.Y`, cut with the owner's approval and
-  changed through PRs like `go_dev` (`docs/RELEASING.md`).
-- The `go_dev` ruleset (`.github/BRANCH_PROTECTION.md`) requires a PR with
+  changed through PRs like `main` (`docs/RELEASING.md`).
+- The `main` ruleset (`.github/BRANCH_PROTECTION.md`) requires a PR with
   0 approvals and these checks: Go Quality Gates, Go Lint Gate, Backend Tests,
   Frontend Build, Documentation Sync Check, Release Workflow Policy Check,
   Frontend Visual Regression. No
@@ -90,7 +90,7 @@ duplicate it here); the docs landing page is `docs/README.md`.
     skip Frontend Build's lint, unit tests and mocked browser E2E gate (the
     job and its live Control gate still run).
   - **Full lane.** Every job, including benchmarks.
-    It runs on `go_dev` and `release/**` pushes, tags, the nightly
+    It runs on `main` and `release/**` pushes, tags, the nightly
     schedule, manual runs, PRs labelled `ci:full`, and PRs that change the Go
     dependencies or the classifier.
   - **Workflow changes.** A PR that changes `ci.yml` runs the full lane,
@@ -174,7 +174,7 @@ npm run test:e2e                              # Playwright; needs chromium
 Repository gates you can run locally:
 
 ```bash
-bash config/scripts/check_docs_updated.sh --base origin/go_dev --head HEAD
+bash config/scripts/check_docs_updated.sh --base origin/main --head HEAD
 bash config/scripts/check_docs_updated.sh --self-test
 bash config/scripts/check_release_workflow.sh
 python3 config/scripts/check_mojibake.py                            # GBK mojibake, U+FFFD, private-use, BOM
@@ -184,7 +184,7 @@ GOWORK=off python3 config/scripts/check_plugin_only_routes.py      # 236 /api/v2
 GOWORK=off python3 -m unittest discover -s config/scripts -p '*_test.py'
 for c in pluginhost packagebridge modulepki identity kernelidentity kernelsubscriber kernelsettings kernelorder kerneltelemetry kernelnodeops forward agent; do bash sdk/api/$c/gen.sh; done  # needs protoc 29.2; then git diff must be empty
 GOWORK=off go test ./internal/tests/protocompat                     # contracts may only grow
-python3 config/scripts/check_proto_golden.py --base origin/go_dev   # the golden file only grows (no draft package left)
+python3 config/scripts/check_proto_golden.py --base origin/main   # the golden file only grows (no draft package left)
 ```
 
 Every contract in `contracts/proto/descriptors.golden` is additions-only,
@@ -223,7 +223,7 @@ Default: add a changelog fragment and update the doc the change affects.
 - **Collected.** `prepare_release.py` merges the fragments into
   `## Unreleased` (joining its headings, none twice), dates the section and
   `git rm`s them. A fragment cherry-picked to a release branch is deleted
-  from `go_dev` in the merge-back pull request (`docs/RELEASING.md`).
+  from `main` in the merge-back pull request (`docs/RELEASING.md`).
 - **Direct edits.** Bullets under `## Unreleased` in `CHANGELOG.md` are still
   accepted and are released with the fragments; new changes use a fragment.
 
@@ -247,9 +247,9 @@ A release tag `vX.Y.Z[-alpha|-beta|-rc.N]` must match every surface checked by
 ## Release Policy
 
 - Releases are built only by GitHub Actions: a `v*.*.*` tag on a commit that
-  landed through a PR on `go_dev` or on a `release/vX.Y` branch runs the
+  landed through a PR on `main` or on a `release/vX.Y` branch runs the
   `ci.yml` tag pipeline. A release branch's version bump is merged back to
-  `go_dev` in a follow-up PR (`docs/RELEASING.md`).
+  `main` in a follow-up PR (`docs/RELEASING.md`).
   - It builds and signs every package under `packages/` in the built-in
     format first, then the linux/amd64 and linux/arm64 binaries that embed
     them (`internal/builtinpkg`; the package hosts are linked in,
@@ -273,7 +273,7 @@ A release tag `vX.Y.Z[-alpha|-beta|-rc.N]` must match every surface checked by
   identity package, and publishes `ghcr.io/anixops/anix-control` (linux/amd64
   and linux/arm64, SBOM, provenance, cosign keyless signature, digest in
   `docker-image.txt`); `check_release_workflow.sh` enforces this. Pushes to
-  `go_dev` publish `:edge`. Deployment assets: `docker-compose.prod.yml` and
+  `main` publish `:edge`. Deployment assets: `docker-compose.prod.yml` and
   `config/deploy/compose/` (external PostgreSQL), `config/deploy/helm/anix-control`
   (single replica), `docker-compose.yml` (development). Container design and
   multi-replica blockers: `docs/architecture/container-deployment.md`.
@@ -411,7 +411,7 @@ do not cite the archived flux documents (`docs/archive/`) as requirements.
 - **Validate** with `GOWORK=off go -C sdk test ./forward/... ./api/forward/...`,
   `GOWORK=off go test ./internal/kernelforward ./packages/forward/...
   ./internal/tests/protocompat`,
-  `python3 config/scripts/check_proto_golden.py --base origin/go_dev`, and
+  `python3 config/scripts/check_proto_golden.py --base origin/main`, and
   for UI changes `cd web && npm test && npm run build`.
 
 ## Operator Experience And Root Hygiene
@@ -441,7 +441,7 @@ do not cite the archived flux documents (`docs/archive/`) as requirements.
 - It is a separate Go module (`github.com/AnixOps/anix-control/control-center`, Go 1.26). Run its checks from inside the directory: `cd control-center && go test ./...`; `cd control-center/web && npm test -- --run && npm run build`; `cd control-center/mobile && flutter test`; `cd control-center/workers && npm run typecheck && npm test`.
 - Its CI lives in `.github/workflows/control-center.yml` and `control-center-workers.yml` (path-filtered to `control-center/**`), and its releases in `control-center-release.yml`. Release tags are `control-center-v*`. Never let a Center release become the repository's latest release: the Releases page and the image's `latest` tag follow it, and the latest release must be a Control release.
 - Keep `-exclude-dir=control-center` on gosec, `--exclude control-center` on swag (CI and the Makefile `swagger` target), and `control-center/` in `.dockerignore`.
-- The Workers API deploys through Cloudflare Workers Builds (root `control-center/workers`, branch `go_dev`). A merge to `go_dev` that touches `control-center/workers/**` deploys `api.anixops.com`.
+- The Workers API deploys through Cloudflare Workers Builds (root `control-center/workers`, branch `main`). A merge to `main` that touches `control-center/workers/**` deploys `api.anixops.com`.
 - `control-center/workers/migrations/` is applied to a production D1 database. Only append new migrations; never edit or delete existing ones.
 - The Center's plugin page talks to Control through `/api/v2/login` and `/api/v3`. Its other pages use the Workers `/api/v1` session. Do not add a second Control API contract for it.
 

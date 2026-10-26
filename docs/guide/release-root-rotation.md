@@ -175,9 +175,9 @@ Record the fingerprint out of band; operators pin it in their trust store
 (`ANIXOPS_TRUSTED_OFFICIAL_PUBLIC_KEY` in
 [`release-installation.md`](release-installation.md)).
 
-### 3. Replace the public root in the repository (PR to `go_dev`)
+### 3. Replace the public root in the repository (PR to `main`)
 
-1. Branch from `go_dev`. In `TestOfficialPluginAlphaProfiles`
+1. Branch from `main`. In `TestOfficialPluginAlphaProfiles`
    (`internal/config/config_test.go`) set `officialPublicKey` to the new
    value first, and confirm that
    `GOWORK=off go test ./internal/config -run TestOfficialPluginAlphaProfiles -count=1`
@@ -187,7 +187,7 @@ Record the fingerprint out of band; operators pin it in their trust store
 
    ```bash
    new_root="$(cat "$KEY_DIR/official-public-key.raw")"
-   old_root="$(git show origin/go_dev:internal/config/defaults.yaml \
+   old_root="$(git show origin/main:internal/config/defaults.yaml \
      | sed -n 's/^[[:space:]]*official_public_key:[[:space:]]*"\([^"]*\)".*/\1/p')"
    test "$(sed -n 's/^[[:space:]]*official_public_key:[[:space:]]*"\([^"]*\)".*/\1/p' internal/config/defaults.yaml)" = "$new_root"
    if git grep -q --fixed-strings "$old_root"; then
@@ -242,7 +242,7 @@ key, verifies it with the public root, compares the root with
 prints only the public key id:
 
 ```bash
-gh workflow run signing-key-check.yml -R <org>/anix-control --ref go_dev
+gh workflow run signing-key-check.yml -R <org>/anix-control --ref main
 gh workflow run signing-key-check.yml -R <org>/anix-agent --ref dev_new
 gh run list -R <org>/anix-control --workflow signing-key-check.yml --limit 1
 gh run list -R <org>/anix-agent --workflow signing-key-check.yml --limit 1

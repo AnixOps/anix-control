@@ -1,13 +1,13 @@
 # Releasing
 
 A release is a `vX.Y.Z` tag on a commit that landed through a pull request,
-on `go_dev` or on a maintenance branch `release/vX.Y`
+on `main` or on a maintenance branch `release/vX.Y`
 ([Release Branches](#release-branches)). GitHub Actions builds, signs and
 publishes everything. Nothing is built locally.
 
 ## Cut A Release
 
-1. On a branch from `go_dev` (or from the release branch), set the version
+1. On a branch from `main` (or from the release branch), set the version
    and date the changelog:
 
    ```bash
@@ -58,12 +58,12 @@ publishes everything. Nothing is built locally.
    `vX.Y.Z-rc.N`, and changes no file unless it finds every pin.
 2. Open a pull request (`release: v4.1.0`) and merge it once CI passes.
 3. Before you tag, go through the pre-tag checklist:
-   - Run the `Signing Key Check` workflow on `go_dev`
-     (`gh workflow run signing-key-check.yml --ref go_dev -R AnixOps/anix-control`).
+   - Run the `Signing Key Check` workflow on `main`
+     (`gh workflow run signing-key-check.yml --ref main -R AnixOps/anix-control`).
      It proves that the signing secrets are a working pair and match the
      official root in `internal/config/defaults.yaml`; the tag run signs the
      packages, the checksums and the Agent installer with them.
-   - Confirm that the latest CI run on `go_dev` (the merged commit) and the
+   - Confirm that the latest CI run on `main` (the merged commit) and the
      latest nightly runs (the `ci.yml` schedule, which runs the race
      detector, and `Nightly Security`) are green.
    - Expect live advisories. The tag run's Go Security Scans (`govulncheck`)
@@ -90,9 +90,9 @@ unsuffixed tags become the latest release.
 
 ## Release Branches
 
-When `go_dev` already holds work for the next minor version, release from a
+When `main` already holds work for the next minor version, release from a
 maintenance branch `release/vX.Y` instead. v4.1.0 is the first release cut
-this way: `release/v4.1` is cut from the v4.1.0-rc.6 commit, because `go_dev`
+this way: `release/v4.1` is cut from the v4.1.0-rc.6 commit, because `main`
 already holds v4.2 work.
 
 1. **Cut the branch** from the previous release's tag or commit, with the
@@ -102,28 +102,28 @@ already holds v4.2 work.
    git push origin <tag-or-commit>:refs/heads/release/v4.1
    ```
 
-   The branch is protected like `go_dev` (`.github/BRANCH_PROTECTION.md`).
+   The branch is protected like `main` (`.github/BRANCH_PROTECTION.md`).
 2. **Bump on the branch.** Branch from `release/vX.Y`, run
    `prepare_release.py`, and open the pull request (`release: v4.1.0`)
-   against `release/vX.Y`, not `go_dev`. CI runs on pull requests to
+   against `release/vX.Y`, not `main`. CI runs on pull requests to
    `release/**` with the same required checks.
 3. **Tag the release branch commit** that the pull request merged, as above.
    The tag pipeline does not depend on the branch that holds the commit.
-4. **Merge back.** Open a follow-up pull request to `go_dev` with the
+4. **Merge back.** Open a follow-up pull request to `main` with the
    release's CHANGELOG section and, when they apply, its version surfaces:
-   - the `## X.Y.Z - <date>` section goes directly under `go_dev`'s
-     `## Unreleased`, or below a newer release section `go_dev` already has
+   - the `## X.Y.Z - <date>` section goes directly under `main`'s
+     `## Unreleased`, or below a newer release section `main` already has
      (`## 4.2.0-rc.1`, say). The first dated section must stay the version
-     `go_dev` declares, since `check_release_version.py` reads the first one;
-   - entries that shipped in the release leave `go_dev`'s `## Unreleased`,
+     `main` declares, since `check_release_version.py` reads the first one;
+   - entries that shipped in the release leave `main`'s `## Unreleased`,
      and so do their fragments: delete the `changelog.d/` files that the
-     release branch consumed (a fix cherry-picked from `go_dev` has the same
+     release branch consumed (a fix cherry-picked from `main` has the same
      file name there), or they would be released a second time;
-   - the version surfaces come back only while `go_dev` declares an older
-     version (`4.1.0-rc.6` → `4.1.0`). Never lower `go_dev`'s version.
+   - the version surfaces come back only while `main` declares an older
+     version (`4.1.0-rc.6` → `4.1.0`). Never lower `main`'s version.
 
 **Patch releases** (`vX.Y.Z`, Z > 0) of that line use the same branch. Land
-the fix on `go_dev` first, then bring it to `release/vX.Y` in a pull request
+the fix on `main` first, then bring it to `release/vX.Y` in a pull request
 (cherry-pick, which carries its changelog fragment). A fix for the old line
 only goes to the release branch alone, and its pull request says so. Then
 bump, tag and merge back as above.
@@ -252,7 +252,7 @@ Bump the pin in a pull request of its own, never inside a release pull request:
 ## Nightly Security Scan
 
 The `Nightly Security` workflow (`.github/workflows/nightly-security.yml`)
-runs every night at 03:17 UTC against `go_dev`, and on demand with
+runs every night at 03:17 UTC against `main`, and on demand with
 `gh workflow run nightly-security.yml -R AnixOps/anix-control`. It exists
 because advisories are published against code nobody touched: they would
 otherwise fail an unrelated pull request, or be found on release day. A

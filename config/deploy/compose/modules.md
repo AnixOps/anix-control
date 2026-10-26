@@ -73,7 +73,7 @@ Check that it worked:
 
 **Image versions.** The module's package version must match the version
 installed in Control.
-- `:edge` and `:sha-<commit>` images follow `go_dev`.
+- `:edge` and `:sha-<commit>` images follow `main`.
 - Keep Control and the module image on the same commit.
 
 ## Operations

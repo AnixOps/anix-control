@@ -18,7 +18,7 @@ import (
 
 // UpgradeGuideURL is where the deprecation signals point: the UPGRADE
 // section that walks an operator from legacy agents to enrolled ones.
-const UpgradeGuideURL = "https://github.com/AnixOps/anix-control/blob/go_dev/docs/UPGRADE.md#agent-transports-preparing-for-v42"
+const UpgradeGuideURL = "https://github.com/AnixOps/anix-control/blob/main/docs/UPGRADE.md#agent-transports-preparing-for-v42"
 
 // Policy is the effective agent_control configuration of this process.
 type Policy struct {

@@ -63,7 +63,7 @@ func UnitFile(u Unit) ([]byte, error) {
 # of its own so that restarting or upgrading the Agent keeps forwarding.
 [Unit]
 Description=AnixOps forward gost (` + OwnerMark + `)
-Documentation=https://github.com/AnixOps/anix-control/blob/go_dev/docs/architecture/forward-sdk.md
+Documentation=https://github.com/AnixOps/anix-control/blob/main/docs/architecture/forward-sdk.md
 After=network-online.target
 Wants=network-online.target
 # Without a configuration there is nothing to serve: the driver writes it

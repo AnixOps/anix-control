@@ -457,7 +457,7 @@ For older panel products or a coordinated panel/node cutover, follow
 
 ## Security Notes
 
-- Pin a tag for production. The `go_dev` branch is for integration, not a
+- Pin a tag for production. The `main` branch is for integration, not a
   production version selector.
 - Review the script before execution and keep release checksums with the change
   record.

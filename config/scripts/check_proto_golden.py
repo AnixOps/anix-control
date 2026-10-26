@@ -70,7 +70,7 @@ def read_revision(revision: str) -> str | None:
 
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--base", required=True, help="the revision to compare with, such as origin/go_dev")
+    parser.add_argument("--base", required=True, help="the revision to compare with, such as origin/main")
     parser.add_argument("--head", help="the revision to check; the working tree when omitted")
     args = parser.parse_args(argv)
     base = read_revision(args.base)

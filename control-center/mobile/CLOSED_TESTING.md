@@ -61,7 +61,7 @@
 - 需要有效的AnixOps账户才能登录
 
 ### 反馈方式
-- GitHub: https://github.com/AnixOps/anix-control/tree/go_dev/control-center
+- GitHub: https://github.com/AnixOps/anix-control/tree/main/control-center
 - Email: support@anixops.com
 
 ## 测试人员名单管理

@@ -11,7 +11,7 @@ truth for implemented, partial, planned, compatibility, and deferred features.
 
 ## Current Status
 
-- Main branch: `go_dev`.
+- Main branch: `main`.
 - Backend: Go module `github.com/AnixOps/anix-control/v5`; the toolchain is
   pinned to Go `1.26.10` in CI.
 - Frontend: Vue 3 + Vite under [`web/`](web), Node.js `22` in CI.

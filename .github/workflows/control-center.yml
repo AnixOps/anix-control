@@ -7,13 +7,13 @@ name: Control Center CI
 
 on:
   push:
-    branches: [ go_dev ]
+    branches: [ main ]
     paths:
       - 'control-center/**'
       - '!control-center/workers/**'
       - '.github/workflows/control-center.yml'
   pull_request:
-    branches: [ go_dev ]
+    branches: [ main ]
     paths:
       - 'control-center/**'
       - '!control-center/workers/**'

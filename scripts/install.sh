@@ -1213,7 +1213,7 @@ main() {
     enable_agents
     exit 0
   fi
-  warn "Containers are the primary deployment: https://github.com/AnixOps/anix-control/blob/go_dev/docs/DEPLOYMENT.md"
+  warn "Containers are the primary deployment: https://github.com/AnixOps/anix-control/blob/main/docs/DEPLOYMENT.md"
   require_version
   detect_legacy_layout
   validate_install_dir

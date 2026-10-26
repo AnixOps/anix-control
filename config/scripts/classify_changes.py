@@ -2,7 +2,7 @@
 """Classify a change for the tiered CI pipeline.
 
 Pull requests run the fast lane: the required checks plus the heavy jobs
-whose paths changed. Everything else runs the full lane: go_dev and
+whose paths changed. Everything else runs the full lane: main and
 release/** pushes, tags, the nightly schedule, manual runs, pull requests
 labelled ci:full, and changes to the Go dependencies or this classifier.
 
