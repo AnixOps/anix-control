@@ -12,7 +12,7 @@
   are unchanged. `GET /api/v4/kernel/nodes/{id}/entries` lists them and
   `PUT /api/v4/kernel/nodes/{id}/entries` replaces the list (at most 32,
   audited, module `node_entry`). They are stored in the new table
-  `v5_node_entry` (migration 0009). The node page shows them under 协议 with
+  `v5_node_entry` (migration 0010). The node page shows them under 协议 with
   an editor sheet (port map lines such as `21000-21099 -> 30000-30099`,
   public ports first).
 

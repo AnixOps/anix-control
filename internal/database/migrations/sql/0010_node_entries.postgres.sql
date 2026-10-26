@@ -1,4 +1,4 @@
--- 0009_node_entries (PostgreSQL): v5_node_entry, the addresses subscribers
+-- 0010_node_entries (PostgreSQL): v5_node_entry, the addresses subscribers
 -- reach a proxy node at beyond its host, such as a line's native IPv6
 -- address or a provider NAT address with its port map (internal/nodeentry,
 -- model.NodeEntry).

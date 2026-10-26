@@ -28,6 +28,7 @@ const (
 	realityTargetAuditModule = "reality_target"
 	realityTargetAuditAction = "reality_target_probe"
 	realityTargetApplyAction = "reality_target_apply"
+	realityTargetAutoAction  = "reality_target_auto"
 	// realityTargetRunLimit bounds a whole run: MaxCandidates probes,
 	// Concurrency at a time, each at most MaxTimeout, the REALITY handshake
 	// and the Agent's slack (3 rounds of 24 s).
@@ -81,7 +82,7 @@ func proxyNodeRef(c *gin.Context) (agentcontrol.AgentNode, bool) {
 
 // List godoc
 // @Summary A proxy node's Reality targets
-// @Description The node's latest Reality target probes, ranked (targets that passed first by score, then failed ones), the target its Reality protocols use now (current), the recommended target, and whether its Agent runs reality.probe now (support).
+// @Description The node's latest Reality target probes, ranked (targets that passed first by score, then failed ones), the target its Reality protocols use now (current), the recommended target, whether its Agent runs reality.probe now (support), and its automatic selection (auto: enabled, next and last run, last switch, the last run's outcome).
 // @Tags Kernel
 // @Produce json
 // @Security BearerAuth
@@ -107,7 +108,60 @@ func (h *RealityTargetsHandler) List(c *gin.Context) {
 		kernelDBError(c, err)
 		return
 	}
-	kernelData(c, http.StatusOK, gin.H{"report": report, "support": probes.Support(node), "default_candidates": realitytarget.DefaultCandidates})
+	auto, err := (&realitytarget.Service{DB: db}).AutoState(c.Request.Context(), uint(node.ID))
+	if err != nil {
+		kernelDBError(c, err)
+		return
+	}
+	kernelData(c, http.StatusOK, gin.H{"report": report, "support": probes.Support(node), "auto": auto, "default_candidates": realitytarget.DefaultCandidates})
+}
+
+type realityTargetAutoRequest struct {
+	Enabled *bool `json:"enabled"`
+}
+
+// SetAuto godoc
+// @Summary Turn a proxy node's automatic Reality target selection on or off
+// @Description With it on, Control probes the node's current targets and the built-in candidates every 6 hours (from the singleton worker, when the node's Agent is connected to it and runs reality.probe). A Reality protocol whose target failed in two runs in a row, the second 15 minutes after the first, moves to the recommended target, as apply does; a probe that gave no answer is not a failure, and a target that still passes is never replaced for a better score. Each switch is in the operation log (module reality_target, action reality_target_auto_switch). Turning it on makes the node due at once. Audited (action reality_target_auto).
+// @Tags Kernel
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "proxy-<id>"
+// @Param request body realityTargetAutoRequest true "enabled"
+// @Success 200 {object} realitytarget.AutoState
+// @Router /api/v4/kernel/nodes/{id}/reality-targets/auto [put]
+func (h *RealityTargetsHandler) SetAuto(c *gin.Context) {
+	node, ok := proxyNodeRef(c)
+	if !ok {
+		return
+	}
+	var request realityTargetAutoRequest
+	if err := c.ShouldBindJSON(&request); err != nil || request.Enabled == nil {
+		kernelError(c, http.StatusBadRequest, "invalid_request", "enabled is required")
+		return
+	}
+	db := h.db()
+	if db == nil {
+		kernelError(c, http.StatusServiceUnavailable, "database_unavailable", "database is not initialized")
+		return
+	}
+	if !h.requireNode(c, db, node) {
+		return
+	}
+	audit, err := h.beginAction(c, db, node, realityTargetAutoAction, map[string]any{"node": node.String(), "enabled": *request.Enabled, "outcome": "requested"})
+	if err != nil {
+		kernelError(c, http.StatusInternalServerError, "audit_unavailable", "the operation log could not be written; nothing was changed")
+		return
+	}
+	state, err := (&realitytarget.Service{DB: db}).SetAuto(c.Request.Context(), uint(node.ID), *request.Enabled)
+	if err != nil {
+		audit.end("error", false, nil)
+		kernelDBError(c, err)
+		return
+	}
+	audit.end("completed", true, nil)
+	kernelData(c, http.StatusOK, state)
 }
 
 func (h *RealityTargetsHandler) requireNode(c *gin.Context, db *gorm.DB, node agentcontrol.AgentNode) bool {

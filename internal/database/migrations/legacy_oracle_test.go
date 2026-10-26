@@ -130,7 +130,8 @@ func laterModels() []any {
 		&model.DestinationStat{},    // 0006_destination_stats
 		&model.EgressRoute{},        // 0007_egress_routes
 		&model.RealityTargetProbe{}, // 0008_reality_target_probes
-		&model.NodeEntry{},          // 0009_node_entries
+		&model.RealityTargetAuto{},  // 0009_reality_target_auto
+		&model.NodeEntry{},          // 0010_node_entries
 	}
 }
 

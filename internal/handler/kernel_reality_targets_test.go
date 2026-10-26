@@ -21,7 +21,7 @@ import (
 func newRealityTargetsEnv(t *testing.T) (*diagnosticsEnv, *gin.Engine) {
 	t.Helper()
 	env := newDiagnosticsEnv(t)
-	require.NoError(t, env.db.AutoMigrate(&model.NodeProtocol{}, &model.RealityTargetProbe{}))
+	require.NoError(t, env.db.AutoMigrate(&model.NodeProtocol{}, &model.RealityTargetProbe{}, &model.RealityTargetAuto{}))
 	require.NoError(t, env.db.Model(&model.Node{}).Where("id = ?", 5).Update("last_public_address", "82.139.194.175").Error)
 	handler := &RealityTargetsHandler{db: func() *gorm.DB { return env.db }, probes: func() realityTargetProber {
 		return kernelnodeops.RealityProbes{Sources: func() kernelnodeops.AgentSources { return kernelnodeops.AgentSources{Streams: env.streams} }}
@@ -31,6 +31,7 @@ func newRealityTargetsEnv(t *testing.T) (*diagnosticsEnv, *gin.Engine) {
 	router.GET("/nodes/:id/reality-targets", handler.List)
 	router.POST("/nodes/:id/reality-targets/probe", handler.Probe)
 	router.POST("/nodes/:id/reality-targets/apply", handler.Apply)
+	router.PUT("/nodes/:id/reality-targets/auto", handler.SetAuto)
 	return env, router
 }
 
@@ -178,6 +179,43 @@ func TestRealityTargetsApply(t *testing.T) {
 	require.NoError(t, env.db.Where("action = ?", "reality_target_apply").Order("id").Find(&audits).Error)
 	require.Len(t, audits, 5, "a malformed request is not a call")
 	assert.Equal(t, 1, audits[4].Status)
+}
+
+// Automatic selection is off until turned on; turning it on makes the node
+// due at once and is audited; the report answers it.
+func TestRealityTargetsAuto(t *testing.T) {
+	env, router := newRealityTargetsEnv(t)
+
+	response := serveJSON(router, http.MethodGet, "/nodes/proxy-5/reality-targets", "")
+	require.Equal(t, http.StatusOK, response.Code, response.Body.String())
+	assert.Contains(t, response.Body.String(), `"auto":{"enabled":false,"fail_streak":0}`)
+
+	for _, bad := range []string{`{}`, `{"enabled":"yes"}`} {
+		response = serveJSON(router, http.MethodPut, "/nodes/proxy-5/reality-targets/auto", bad)
+		require.Equal(t, http.StatusBadRequest, response.Code, bad)
+	}
+	response = serveJSON(router, http.MethodPut, "/nodes/proxy-404/reality-targets/auto", `{"enabled":true}`)
+	require.Equal(t, http.StatusNotFound, response.Code)
+
+	response = serveJSON(router, http.MethodPut, "/nodes/proxy-5/reality-targets/auto", `{"enabled":true}`)
+	require.Equal(t, http.StatusOK, response.Code, response.Body.String())
+	var row model.RealityTargetAuto
+	require.NoError(t, env.db.First(&row, "node_id = ?", 5).Error)
+	assert.True(t, row.Enabled)
+	assert.Nil(t, row.NextRunAt)
+
+	response = serveJSON(router, http.MethodGet, "/nodes/proxy-5/reality-targets", "")
+	assert.Contains(t, response.Body.String(), `"auto":{"enabled":true`)
+
+	response = serveJSON(router, http.MethodPut, "/nodes/proxy-5/reality-targets/auto", `{"enabled":false}`)
+	require.Equal(t, http.StatusOK, response.Code)
+	require.NoError(t, env.db.First(&row, "node_id = ?", 5).Error)
+	assert.False(t, row.Enabled)
+
+	var audits []model.OperationLog
+	require.NoError(t, env.db.Where("action = ?", realityTargetAutoAction).Find(&audits).Error)
+	require.Len(t, audits, 2)
+	assert.Equal(t, 1, audits[0].Status)
 }
 
 func itoa(id uint) string { return strconv.FormatUint(uint64(id), 10) }

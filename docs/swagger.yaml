@@ -380,6 +380,11 @@ definitions:
       server_name:
         type: string
     type: object
+  handler.realityTargetAutoRequest:
+    properties:
+      enabled:
+        type: boolean
+    type: object
   handler.realityTargetProbeRequest:
     properties:
       candidates:
@@ -1033,6 +1038,21 @@ definitions:
         type: integer
     type: object
   nodegroup.GroupInput:
+    type: object
+  realitytarget.AutoState:
+    properties:
+      enabled:
+        type: boolean
+      fail_streak:
+        type: integer
+      last_outcome:
+        type: string
+      last_run_at:
+        type: string
+      last_switch_at:
+        type: string
+      next_run_at:
+        type: string
     type: object
   service.TelegramCallback:
     properties:
@@ -7372,10 +7392,11 @@ paths:
       - Kernel
   /api/v4/kernel/nodes/{id}/reality-targets:
     get:
-      description: The node's latest Reality target probes, ranked (targets that passed
-        first by score, then failed ones), the target its Reality protocols use now
-        (current), the recommended target, and whether its Agent runs reality.probe
-        now (support).
+      description: 'The node''s latest Reality target probes, ranked (targets that
+        passed first by score, then failed ones), the target its Reality protocols
+        use now (current), the recommended target, whether its Agent runs reality.probe
+        now (support), and its automatic selection (auto: enabled, next and last run,
+        last switch, the last run''s outcome).'
       parameters:
       - description: proxy-<id>
         in: path
@@ -7430,6 +7451,42 @@ paths:
       security:
       - BearerAuth: []
       summary: Apply a Reality target to a protocol of a proxy node
+      tags:
+      - Kernel
+  /api/v4/kernel/nodes/{id}/reality-targets/auto:
+    put:
+      consumes:
+      - application/json
+      description: With it on, Control probes the node's current targets and the built-in
+        candidates every 6 hours (from the singleton worker, when the node's Agent
+        is connected to it and runs reality.probe). A Reality protocol whose target
+        failed in two runs in a row, the second 15 minutes after the first, moves
+        to the recommended target, as apply does; a probe that gave no answer is not
+        a failure, and a target that still passes is never replaced for a better score.
+        Each switch is in the operation log (module reality_target, action reality_target_auto_switch).
+        Turning it on makes the node due at once. Audited (action reality_target_auto).
+      parameters:
+      - description: proxy-<id>
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: enabled
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.realityTargetAutoRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/realitytarget.AutoState'
+      security:
+      - BearerAuth: []
+      summary: Turn a proxy node's automatic Reality target selection on or off
       tags:
       - Kernel
   /api/v4/kernel/nodes/{id}/reality-targets/probe:
