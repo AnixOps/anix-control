@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   baselines:
@@ -37,3 +37,12 @@ jobs:
         with:
           name: frontend-visual-baselines
           path: web/e2e/visual/__screenshots__/
+
+      - name: Commit the baselines to the branch (temporary)
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add web/e2e/visual/__screenshots__/
+          git commit -m "test(visual): regenerate the forwarding area baselines" || exit 0
+          git push origin "HEAD:${GITHUB_REF_NAME}"
