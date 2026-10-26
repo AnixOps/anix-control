@@ -75,6 +75,12 @@ func (f *WireGuardFormatter) formatNode(node *model.ParsedNode) string {
 	return strings.Join(lines, "\n")
 }
 
+// uriHostPort is server:port for a share link or a Quantumult X line, an
+// IPv6 address in brackets.
+func uriHostPort(server string, port int) string {
+	return wireGuardEndpoint(server, port)
+}
+
 func wireGuardEndpoint(server string, port int) string {
 	host := wireGuardHost(server)
 	return net.JoinHostPort(host, fmt.Sprintf("%d", port))

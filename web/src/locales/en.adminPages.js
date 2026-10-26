@@ -14,6 +14,7 @@ import forwardDns from './modules/en/forwardDns'
 import egressRoutes from './modules/en/egressRoutes'
 import nodeDiagnostics from './modules/en/nodeDiagnostics'
 import realityTargets from './modules/en/realityTargets'
+import nodeEntries from './modules/en/nodeEntries'
 import agentUpgradeSheet from './modules/en/agentUpgradeSheet'
 
 export default {
@@ -24,6 +25,7 @@ export default {
   ...egressRoutes,
   ...nodeDiagnostics,
   ...realityTargets,
+  ...nodeEntries,
   ...agentUpgradeSheet,
   ...networkPages,
   ...miscPages,

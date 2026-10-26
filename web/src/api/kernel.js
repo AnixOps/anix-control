@@ -372,6 +372,25 @@ export async function applyKernelRealityTarget(node, { protocolId, serverName, p
   }))
 }
 
+// A proxy node's entries (入口), `node` is "proxy-<id>": { node_id, entries:
+// [{ id, label, kind (direct | nat), host, family (ipv4 | ipv6 | domain),
+// port_map: [{ from, to, external }], enabled, sort }] }. A node with
+// enabled entries is offered in subscriptions once per entry and protocol.
+export async function getKernelNodeEntries(node) {
+  return unwrap(await v4({ url: `/kernel/nodes/${encodeURIComponent(node)}/entries`, method: 'get' }))
+}
+
+// Replaces the node's entries with `entries` ([{ label, kind, host,
+// port_map, enabled }], in order); an empty list removes them all.
+// Refusals: invalid_request (400) with the reason, not_found (404).
+export async function replaceKernelNodeEntries(node, entries) {
+  return unwrap(await v4({
+    url: `/kernel/nodes/${encodeURIComponent(node)}/entries`,
+    method: 'put',
+    data: { entries }
+  }))
+}
+
 // One-command node onboarding: a single-use enrollment token bound to the
 // node ("proxy-<id>" or "forward-<id>") and the install command for every
 // mirror. Super administrators only; the token is shown once.

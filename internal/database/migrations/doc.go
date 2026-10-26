@@ -80,4 +80,6 @@
 //     (v5_egress_route).
 //   - 0008_reality_target_probes: the latest probe of each candidate
 //     REALITY target from each proxy node (v5_reality_target_probe).
+//   - 0009_node_entries: the addresses subscribers reach a proxy node at
+//     beyond its host (v5_node_entry).
 package migrations

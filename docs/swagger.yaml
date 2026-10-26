@@ -359,6 +359,13 @@ definitions:
           30.'
         type: integer
     type: object
+  handler.nodeEntriesRequest:
+    properties:
+      entries:
+        items:
+          $ref: '#/definitions/nodeentry.Input'
+        type: array
+    type: object
   handler.realityTargetApplyRequest:
     properties:
       force:
@@ -1000,6 +1007,30 @@ definitions:
         type: string
       updated_at:
         type: string
+    type: object
+  nodeentry.Input:
+    properties:
+      enabled:
+        type: boolean
+      host:
+        type: string
+      kind:
+        type: string
+      label:
+        type: string
+      port_map:
+        items:
+          $ref: '#/definitions/nodeentry.PortRange'
+        type: array
+    type: object
+  nodeentry.PortRange:
+    properties:
+      external:
+        type: integer
+      from:
+        type: integer
+      to:
+        type: integer
     type: object
   nodegroup.GroupInput:
     type: object
@@ -7277,6 +7308,66 @@ paths:
       security:
       - BearerAuth: []
       summary: Run a diagnostic on a node
+      tags:
+      - Kernel
+  /api/v4/kernel/nodes/{id}/entries:
+    get:
+      description: 'The addresses subscribers reach the node at beyond its host, in
+        order: label, kind (direct: the protocols'' own ports; nat: a public address
+        whose port ranges map to protocol ports), host, family (ipv4, ipv6 or domain),
+        port map and whether the entry is enabled. A node with enabled entries is
+        offered in subscriptions once per entry and protocol, in place of its host.'
+      parameters:
+      - description: proxy-<id>
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: A proxy node's entries
+      tags:
+      - Kernel
+    put:
+      consumes:
+      - application/json
+      description: 'Makes the list the node''s entries, in that order (at most 32;
+        labels unique, without |). A direct entry has no port map; a NAT entry has
+        1 to 32 port ranges {from, to, external} that do not overlap: protocol ports
+        from..to are reached at external..external+(to-from). An empty list removes
+        every entry, so the node is reached at its host again. Subscriptions change
+        at once; the node''s configuration does not. Audited.'
+      parameters:
+      - description: proxy-<id>
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: the entries
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.nodeEntriesRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Replace a proxy node's entries
       tags:
       - Kernel
   /api/v4/kernel/nodes/{id}/reality-targets:

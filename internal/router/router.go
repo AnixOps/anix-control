@@ -850,6 +850,12 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		// candidate REALITY targets from its network (reality.probe);
 		// Control ranks them and recommends one; apply writes one into a
 		// Reality protocol of the node.
+		// Node entries: the addresses subscribers reach a proxy node at
+		// beyond its host (several lines, native IPv6, provider NAT ports;
+		// internal/nodeentry).
+		nodeEntries := handler.NewNodeEntriesHandler()
+		v4.GET("/kernel/nodes/:id/entries", nodeEntries.List)
+		v4.PUT("/kernel/nodes/:id/entries", nodeEntries.Replace)
 		realityTargets := handler.NewRealityTargetsHandler()
 		v4.GET("/kernel/nodes/:id/reality-targets", realityTargets.List)
 		v4.POST("/kernel/nodes/:id/reality-targets/probe", realityTargets.Probe)

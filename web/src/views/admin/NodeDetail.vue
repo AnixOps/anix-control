@@ -52,7 +52,10 @@
         <NodeTrafficSection :node="node" />
       </template>
       <template #protocols>
-        <NodeProtocolsSection :node="node" @changed="list => { protocolCount = list.length }" />
+        <div class="node-page__stack">
+          <NodeProtocolsSection :node="node" @changed="list => { protocolCount = list.length }" />
+          <NodeEntriesSection :node="node" />
+        </div>
       </template>
       <template #credentials>
         <NodeCredentialsSection :node="node" @open-protocols="section = 'protocols'" />
@@ -121,6 +124,8 @@ const NodeServicesSection = defineAsyncComponent(() => import('./nodes/NodeServi
 const NodeDiagnosticsSection = defineAsyncComponent(() => import('./nodes/NodeDiagnosticsSection.vue'))
 // 目标站 (Reality target probing) loads its code when the section opens.
 const NodeRealityTargetsSection = defineAsyncComponent(() => import('./nodes/NodeRealityTargetsSection.vue'))
+// 入口 (several lines, native IPv6, provider NAT ports) under 协议.
+const NodeEntriesSection = defineAsyncComponent(() => import('./nodes/NodeEntriesSection.vue'))
 // 流量 draws a chart: its code (and ECharts) load when the section opens.
 const NodeTrafficSection = defineAsyncComponent(() => import('./nodes/NodeTrafficSection.vue'))
 
@@ -238,6 +243,14 @@ defineExpose({ node, load, section })
   display: flex;
   flex-direction: column;
   gap: var(--space-6);
+  min-width: 0;
+}
+
+/* 协议 holds two sections: the protocols and the entries. */
+.node-page__stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
   min-width: 0;
 }
 
