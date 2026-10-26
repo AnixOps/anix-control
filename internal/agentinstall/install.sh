@@ -1231,6 +1231,13 @@ enable_forwarding() {
 }
 
 render_agent_unit() {
+  # systemd-journal lets 诊断 read the Agent's own log (journalctl -u); a
+  # host without the group gets none, since a unit naming a missing group
+  # does not start.
+  local groups="${GOST_USER}"
+  if getent group systemd-journal >/dev/null; then
+    groups="${groups} systemd-journal"
+  fi
   cat <<EOF
 # ${SERVICE}: the AnixOps Agent. Written by the AnixOps installer
 # (agent-install.sh); re-running the installer rewrites it.
@@ -1247,8 +1254,9 @@ Restart=on-failure
 RestartSec=5s
 User=${AGENT_USER}
 Group=${AGENT_USER}
-# gost's API and metrics sockets are guarded by the gost group (F4b).
-SupplementaryGroups=${GOST_USER}
+# gost's API and metrics sockets are guarded by the gost group (F4b);
+# systemd-journal reads the journal for 诊断's log tail.
+SupplementaryGroups=${groups}
 UMask=0077
 LimitNOFILE=1048576
 # /run/anixops-agent: the plugins' sockets (ProtectSystem=strict).
@@ -1408,20 +1416,26 @@ EOF
 }
 
 # render_polkit_rule lets the Agent user start, stop and reload
-# anixops-gost.service, and nothing else.
+# anixops-gost.service, and restart its own unit (诊断's service restart),
+# and nothing else.
 render_polkit_rule() {
   cat <<EOF
 // Written by the AnixOps installer: ${AGENT_USER} may start, stop and
-// reload ${GOST_SERVICE} only.
+// reload ${GOST_SERVICE}, and restart ${SERVICE}, only.
 polkit.addRule(function(action, subject) {
-  if (action.id == "org.freedesktop.systemd1.manage-units" &&
-      action.lookup("unit") == "${GOST_SERVICE}" &&
-      subject.user == "${AGENT_USER}") {
-    var verb = action.lookup("verb");
-    if (verb == "start" || verb == "stop" || verb == "restart" ||
-        verb == "reload" || verb == "try-restart" || verb == "reload-or-restart") {
-      return polkit.Result.YES;
-    }
+  if (action.id != "org.freedesktop.systemd1.manage-units" ||
+      subject.user != "${AGENT_USER}") {
+    return;
+  }
+  var unit = action.lookup("unit");
+  var verb = action.lookup("verb");
+  if (unit == "${GOST_SERVICE}" &&
+      (verb == "start" || verb == "stop" || verb == "restart" ||
+       verb == "reload" || verb == "try-restart" || verb == "reload-or-restart")) {
+    return polkit.Result.YES;
+  }
+  if (unit == "${SERVICE}" && (verb == "restart" || verb == "try-restart")) {
+    return polkit.Result.YES;
   }
 });
 EOF

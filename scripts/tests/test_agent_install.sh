@@ -121,7 +121,7 @@ new_root() {
   : >"${STATE}/nft-owned"
   : >"${STATE}/ss"
   : >"${STATE}/passwd"
-  : >"${STATE}/group"
+  printf 'systemd-journal\n' >"${STATE}/group"
   : >"${STATE}/log"
 }
 
@@ -332,7 +332,7 @@ grep -qF "chown anixops-agent:anixops-agent ${ROOT_DIR}/var/lib/anixops-agent/jo
 [[ "$(stat -c '%a' "${ROOT_DIR}/var/lib/anixops-agent")" == "700" ]] || fail "state dir mode"
 [[ "$(stat -c '%a' "${ROOT_DIR}/var/lib/anixops-gost")" == "750" ]] || fail "gost dir mode"
 unit="${ROOT_DIR}/etc/systemd/system/anix-agent.service"
-for line in "User=anixops-agent" "SupplementaryGroups=anixops-gost" "AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE" \
+for line in "User=anixops-agent" "SupplementaryGroups=anixops-gost systemd-journal" "AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE" \
   "CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE" "NoNewPrivileges=yes" "ProtectSystem=strict" \
   "ReadWritePaths=/var/lib/anixops-agent /var/lib/anixops-gost" "RestrictAddressFamilies=AF_INET AF_INET6 AF_NETLINK AF_UNIX" \
   "ExecStart=/usr/lib/anixops-agent/anix-agent server -c /etc/anixops/agent/config.json"; do
@@ -341,6 +341,8 @@ done
 diff -u "${REPO_ROOT}/contracts/forward/v1/gost/anixops-gost.service" "${ROOT_DIR}/etc/systemd/system/anixops-gost.service" >/dev/null ||
   fail "gost unit differs from the contract"
 grep -qF '"anixops-gost.service"' "${ROOT_DIR}/etc/polkit-1/rules.d/50-anixops-agent.rules" || fail "polkit rule"
+grep -qF 'unit == "anix-agent.service" && (verb == "restart" || verb == "try-restart")' \
+  "${ROOT_DIR}/etc/polkit-1/rules.d/50-anixops-agent.rules" || fail "polkit rule lets the Agent restart itself"
 updater="${ROOT_DIR}/etc/systemd/system/anixops-agent-updater.service"
 for line in "Type=oneshot" "ExecStart=/usr/lib/anixops-agent/anix-agent upgrade apply --request /var/lib/anixops-agent/upgrade/request.json" \
   "ProtectSystem=strict" "ReadWritePaths=/usr/lib/anixops-agent /var/lib/anixops-agent"; do
@@ -913,7 +915,9 @@ grep -qx 'inet filter' "${STATE}/nft-tables" || fail "--purge removed a foreign 
 [[ ! -f "${STATE}/tc-eth0" ]] || fail "--purge kept the driver's qdisc"
 [[ -f "${STATE}/tc-eth1" ]] || fail "--purge removed a foreign qdisc"
 ! grep -q 'tc qdisc del dev eth1' "${STATE}/log" || fail "--purge touched eth1's qdisc"
-[[ ! -s "${STATE}/passwd" && ! -s "${STATE}/group" ]] || fail "--purge kept users or groups: $(cat "${STATE}/passwd" "${STATE}/group")"
+# systemd-journal is the host's group: --purge leaves it.
+[[ ! -s "${STATE}/passwd" && "$(cat "${STATE}/group")" == "systemd-journal" ]] ||
+  fail "--purge kept users or groups: $(cat "${STATE}/passwd" "${STATE}/group")"
 expect_out "nftables table inet anixops_fwd"
 expect_out "tc root qdisc af00: on eth0"
 expect_out "IP forwarding stays on until the next boot"
