@@ -401,7 +401,9 @@ func TestAgentControlConfigRefresh(t *testing.T) {
 	require.NotNil(t, snapshot)
 	assert.Equal(t, row.Revision+1, snapshot.ConfigRevision)
 	assert.Contains(t, string(snapshot.ConfigJson), "192.0.2.10")
-	require.Eventually(t, func() bool { return snapshotsSent(configTriggerRefresh) == before+1 }, 5*time.Second, 5*time.Millisecond)
+	// At least one: the counter is process-wide, and another session's
+	// refresher may count a snapshot of its own meanwhile.
+	require.Eventually(t, func() bool { return snapshotsSent(configTriggerRefresh) > before }, 5*time.Second, 5*time.Millisecond)
 }
 
 // The metrics: snapshots by trigger, statuses by result and the lagging
