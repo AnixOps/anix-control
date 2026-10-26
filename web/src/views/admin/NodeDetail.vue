@@ -63,6 +63,9 @@
       <template #diagnostics>
         <NodeDiagnosticsSection :node-ref="`proxy-${node.id}`" :name="node.name" />
       </template>
+      <template #reality>
+        <NodeRealityTargetsSection :node-ref="`proxy-${node.id}`" :name="node.name" />
+      </template>
       <template #logs>
         <NodeLogsSection :node="node" />
       </template>
@@ -116,6 +119,8 @@ import { useNodeActions } from './nodes/useNodeActions'
 const NodeServicesSection = defineAsyncComponent(() => import('./nodes/NodeServicesSection.vue'))
 // 诊断 loads its code when the section opens.
 const NodeDiagnosticsSection = defineAsyncComponent(() => import('./nodes/NodeDiagnosticsSection.vue'))
+// 目标站 (Reality target probing) loads its code when the section opens.
+const NodeRealityTargetsSection = defineAsyncComponent(() => import('./nodes/NodeRealityTargetsSection.vue'))
 // 流量 draws a chart: its code (and ECharts) load when the section opens.
 const NodeTrafficSection = defineAsyncComponent(() => import('./nodes/NodeTrafficSection.vue'))
 
@@ -145,11 +150,12 @@ const parentName = computed(() => (node.value?.parent_id ? knownNodeName(node.va
 // Whether 服务 applies: null while unknown, then true or false.
 const servicesAvailable = ref(null)
 const hasServices = computed(() => servicesAvailable.value === true)
-// 诊断 (5.0, D7: the NodeX Agents page's checks) sits before 日志.
+// 诊断 (5.0, D7: the NodeX Agents page's checks) and 目标站 (Reality target
+// probing) sit before 日志.
 const sections = computed(() => {
   const own = NODE_SECTIONS.filter(value => !OPTIONAL_NODE_SECTIONS.includes(value) || (value === 'services' && hasServices.value))
   const at = own.indexOf('logs')
-  return at < 0 ? [...own, 'diagnostics'] : [...own.slice(0, at), 'diagnostics', ...own.slice(at)]
+  return at < 0 ? [...own, 'diagnostics', 'reality'] : [...own.slice(0, at), 'diagnostics', 'reality', ...own.slice(at)]
 })
 const sectionItems = computed(() => sections.value.map(value => ({ value, label: t(`admin.nodes.detail.sectionNames.${value}`) })))
 

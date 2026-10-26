@@ -339,6 +339,39 @@ export async function runKernelNodeDiagnostic(node, { action, params = {}, timeo
   }))
 }
 
+// Reality target probing (目标站探测), `node` is "proxy-<id>". The report
+// is { report: { node_id, node_address, current: [{ protocol_id, name,
+// server_name, dest }], recommended, targets: [{ server_name, port, verdict
+// (ok | failed | error), score, used_by, probed_at, error, result }] },
+// support: { connected, capable, agent_version }, default_candidates }.
+export async function getKernelRealityTargets(node) {
+  return unwrap(await v4({ url: `/kernel/nodes/${encodeURIComponent(node)}/reality-targets`, method: 'get' }))
+}
+
+// The node's Agent probes the candidates (host or host:port) and, unless
+// includeDefaults is false, the built-in list; a run takes up to 90 s.
+// Refusals carry error.code: node_offline, reality_probe_unsupported,
+// probe_busy (409), invalid_params (400).
+export async function probeKernelRealityTargets(node, { candidates = [], includeDefaults = true } = {}) {
+  return unwrap(await v4({
+    url: `/kernel/nodes/${encodeURIComponent(node)}/reality-targets/probe`,
+    method: 'post',
+    data: { candidates, include_defaults: includeDefaults },
+    timeout: 120 * 1000
+  }))
+}
+
+// Writes a target into one Reality protocol of the node: { previous,
+// applied }. Refusals: target_not_probed (409, unless force),
+// protocol_not_found (404), invalid_params (400).
+export async function applyKernelRealityTarget(node, { protocolId, serverName, port = 443, force = false }) {
+  return unwrap(await v4({
+    url: `/kernel/nodes/${encodeURIComponent(node)}/reality-targets/apply`,
+    method: 'post',
+    data: { protocol_id: protocolId, server_name: serverName, port, force }
+  }))
+}
+
 // One-command node onboarding: a single-use enrollment token bound to the
 // node ("proxy-<id>" or "forward-<id>") and the install command for every
 // mirror. Super administrators only; the token is shown once.

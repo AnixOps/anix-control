@@ -359,6 +359,20 @@ definitions:
           30.'
         type: integer
     type: object
+  handler.realityTargetApplyRequest:
+    properties:
+      force:
+        description: Force applies a target this node has not probed with verdict
+          ok.
+        type: boolean
+      port:
+        description: Port is the target's port; 443 when absent.
+        type: integer
+      protocol_id:
+        type: integer
+      server_name:
+        type: string
+    type: object
   handler.realityTargetProbeRequest:
     properties:
       candidates:
@@ -7288,6 +7302,43 @@ paths:
       security:
       - BearerAuth: []
       summary: A proxy node's Reality targets
+      tags:
+      - Kernel
+  /api/v4/kernel/nodes/{id}/reality-targets/apply:
+    post:
+      consumes:
+      - application/json
+      description: 'Writes the target into one Reality protocol (tls 2) of the node:
+        reality_settings dest (server_name:port), server_name and, where listed, server_names,
+        and tls_settings server_name (the SNI of the subscription links). The private
+        key and every other setting stay as stored; the node''s Agent picks the change
+        up with its configuration and clients with their next subscription refresh.
+        The node must have probed the target with verdict ok unless force is true
+        (409 target_not_probed). 404 protocol_not_found for a protocol that is not
+        a Reality protocol of the node. Audited (module reality_target, action reality_target_apply).'
+      parameters:
+      - description: proxy-<id>
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: protocol_id, server_name, port, force
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.realityTargetApplyRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Apply a Reality target to a protocol of a proxy node
       tags:
       - Kernel
   /api/v4/kernel/nodes/{id}/reality-targets/probe:

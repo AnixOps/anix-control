@@ -92,6 +92,7 @@ export default {
       deploy: 'Deployment',
       traffic: 'Traffic',
       diagnostics: 'Diagnostics',
+      reality: 'Targets',
       logs: 'Logs',
       services: 'Services',
       danger: 'Danger zone'

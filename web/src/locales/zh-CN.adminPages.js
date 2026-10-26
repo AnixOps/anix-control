@@ -13,6 +13,7 @@ import forwardV4 from './modules/zh-CN/forwardV4'
 import forwardDns from './modules/zh-CN/forwardDns'
 import egressRoutes from './modules/zh-CN/egressRoutes'
 import nodeDiagnostics from './modules/zh-CN/nodeDiagnostics'
+import realityTargets from './modules/zh-CN/realityTargets'
 import agentUpgradeSheet from './modules/zh-CN/agentUpgradeSheet'
 
 export default {
@@ -22,6 +23,7 @@ export default {
   ...forwardDns,
   ...egressRoutes,
   ...nodeDiagnostics,
+  ...realityTargets,
   ...agentUpgradeSheet,
   ...networkPages,
   ...miscPages,

@@ -1,10 +1,10 @@
 // Package realitytarget picks REALITY targets (dest and SNI) per proxy node
-// (design: "Reality 目标站探测", phase 1). The node's Agent probes each
+// (design: "Reality 目标站探测", phases 1 and 2). The node's Agent probes each
 // candidate from its own network (reality.probe, kernelnodeops.RealityProbes);
 // this package holds the candidates, scores the answers, keeps the latest
-// probe of each candidate (v5_reality_target_probe) and recommends the
-// best one. It writes no node configuration: applying a target is a later
-// phase.
+// probe of each candidate (v5_reality_target_probe), recommends the best
+// one, and applies a target an administrator picks to a Reality protocol
+// (Apply).
 //
 // Everything here is kernel-neutral: a probe and a target are a host name
 // and a port, whatever core serves the node's REALITY inbound.
@@ -25,6 +25,7 @@ import (
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	"github.com/AnixOps/anix-control/v5/internal/model"
+	"github.com/AnixOps/anix-control/v5/internal/nodesecrets"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -590,4 +591,102 @@ func (s *Service) current(nodeID uint) ([]CurrentTarget, error) {
 		current = append(current, CurrentTarget{ProtocolID: protocol.ID, Name: protocol.Name, ServerName: serverName, Dest: dest})
 	}
 	return current, nil
+}
+
+// ErrNotRealityProtocol refuses an apply to a protocol that is not one of
+// the node's Reality protocols; ErrTargetNotProbed one to a target the node
+// has not probed with verdict ok (unless forced).
+var (
+	ErrNotRealityProtocol = errors.New("the protocol is not a Reality protocol of this node")
+	ErrTargetNotProbed    = errors.New("this node has no passing probe of the target: probe it first")
+)
+
+// ApplyRequest names the target to write into one Reality protocol.
+type ApplyRequest struct {
+	ProtocolID uint
+	Target     Candidate
+	// Force applies a target the node has not probed with verdict ok.
+	Force bool
+}
+
+// ApplyResult is the protocol's target before and after.
+type ApplyResult struct {
+	Previous CurrentTarget `json:"previous"`
+	Applied  CurrentTarget `json:"applied"`
+}
+
+// UpdateProtocol writes protocol columns the way the admin protocol route
+// does (service.NodeService.UpdateProtocol): validated, secrets kept.
+type UpdateProtocol func(protocolID uint, updates map[string]any) error
+
+// Apply writes target into a Reality protocol of node nodeID: reality
+// settings dest (host:port), server_name and, where the settings list them,
+// server_names; and tls settings server_name, which the subscription links
+// carry as the SNI. The rest of the settings, the private key included,
+// stays as stored. Clients pick up the new SNI with their next subscription
+// refresh.
+func (s *Service) Apply(ctx context.Context, nodeID uint, request ApplyRequest, update UpdateProtocol) (*ApplyResult, error) {
+	var protocol model.NodeProtocol
+	err := s.DB.WithContext(ctx).Where("id = ? AND node_id = ?", request.ProtocolID, nodeID).First(&protocol).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) || err == nil && protocol.TLS != 2 {
+		return nil, ErrNotRealityProtocol
+	}
+	if err != nil {
+		return nil, err
+	}
+	if !request.Force {
+		var passed int64
+		err := s.DB.WithContext(ctx).Model(&model.RealityTargetProbe{}).
+			Where("node_id = ? AND server_name = ? AND port = ? AND verdict = ?", nodeID, request.Target.ServerName, request.Target.Port, VerdictOK).
+			Count(&passed).Error
+		if err != nil {
+			return nil, err
+		}
+		if passed == 0 {
+			return nil, ErrTargetNotProbed
+		}
+	}
+	nodesecrets.ResolveProtocol(s.DB, &protocol)
+	serverName, dest, _ := realityNames(protocol.RealitySettings)
+	result := &ApplyResult{Previous: CurrentTarget{ProtocolID: protocol.ID, Name: protocol.Name, ServerName: serverName, Dest: dest}}
+
+	reality, err := settingsObject(protocol.RealitySettings, "reality_settings")
+	if err != nil {
+		return nil, err
+	}
+	reality["dest"] = request.Target.String()
+	reality["server_name"] = request.Target.ServerName
+	if _, listed := reality["server_names"]; listed {
+		reality["server_names"] = []string{request.Target.ServerName}
+	}
+	tlsSettings, err := settingsObject(protocol.TLSSettings, "tls_settings")
+	if err != nil {
+		return nil, err
+	}
+	tlsSettings["server_name"] = request.Target.ServerName
+	realityJSON, err := json.Marshal(reality)
+	if err != nil {
+		return nil, err
+	}
+	tlsJSON, err := json.Marshal(tlsSettings)
+	if err != nil {
+		return nil, err
+	}
+	if err := update(protocol.ID, map[string]any{"reality_settings": string(realityJSON), "tls_settings": string(tlsJSON)}); err != nil {
+		return nil, err
+	}
+	result.Applied = CurrentTarget{ProtocolID: protocol.ID, Name: protocol.Name, ServerName: request.Target.ServerName, Dest: request.Target.String()}
+	return result, nil
+}
+
+// settingsObject decodes a protocol's JSON settings column; empty is {}.
+func settingsObject(column *string, name string) (map[string]any, error) {
+	object := map[string]any{}
+	if column == nil || strings.TrimSpace(*column) == "" {
+		return object, nil
+	}
+	if err := json.Unmarshal([]byte(*column), &object); err != nil || object == nil {
+		return nil, fmt.Errorf("the protocol's %s is not a JSON object", name)
+	}
+	return object, nil
 }

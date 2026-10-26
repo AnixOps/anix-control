@@ -16,6 +16,17 @@
   time, post-quantum key exchange, OCSP stapling and chain size, less a CDN
   and the other nodes already using the target. Probes are stored in the new
   table `v5_reality_target_probe` (migration 0008) and every run is in the
-  operation log (module `reality_target`). Nothing in a node's configuration
-  changes: applying a target is a later phase. Needs an anix-agent with
+  operation log (module `reality_target`). Needs an anix-agent with
   `reality.probe`; an older Agent answers `reality_probe_unsupported`.
+- Applying a Reality target. `POST /api/v4/kernel/nodes/{id}/reality-targets/apply`
+  (`protocol_id`, `server_name`, `port`, `force`) writes the target into one
+  Reality protocol of the node: `reality_settings` `dest`, `server_name` and,
+  where listed, `server_names`, and `tls_settings` `server_name`, the SNI of
+  the subscription links. The private key and every other setting stay. The
+  node must have probed the target with verdict ok unless `force` is true.
+  Clients must refresh their subscription after a change, or they keep the
+  old SNI and cannot connect. Audited (action `reality_target_apply`).
+- The node page has a 目标站 (Targets) section between 诊断 and 日志: the
+  current target of each Reality protocol, a probe run (your own candidates
+  and the built-in list), the ranked results with the reasons a target
+  fails, the recommendation, and an Apply button per protocol, confirmed.

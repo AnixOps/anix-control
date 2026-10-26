@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"net"
 	"net/http"
+	"strconv"
 	"sync"
 	"time"
 
@@ -14,6 +16,7 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/kernelnodeops"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/realitytarget"
+	"github.com/AnixOps/anix-control/v5/internal/service"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -24,15 +27,16 @@ import (
 const (
 	realityTargetAuditModule = "reality_target"
 	realityTargetAuditAction = "reality_target_probe"
+	realityTargetApplyAction = "reality_target_apply"
 	// realityTargetRunLimit bounds a whole run: MaxCandidates probes,
 	// Concurrency at a time, each at most MaxTimeout plus the Agent's slack.
 	realityTargetRunLimit = 90 * time.Second
 )
 
 // RealityTargetsHandler is the administrator API of Reality target probing
-// (目标站探测, phase 1): a proxy node's Agent probes candidate REALITY
-// targets from the node's network, and Control ranks them and recommends
-// one. It changes no node configuration.
+// (目标站探测): a proxy node's Agent probes candidate REALITY targets from
+// the node's network, Control ranks them and recommends one, and an
+// administrator applies one to a Reality protocol of the node.
 type RealityTargetsHandler struct {
 	db       func() *gorm.DB
 	probes   func() realityTargetProber
@@ -214,8 +218,95 @@ func (h *RealityTargetsHandler) Probe(c *gin.Context) {
 	kernelData(c, http.StatusOK, gin.H{"report": report, "support": support})
 }
 
+type realityTargetApplyRequest struct {
+	ProtocolID uint   `json:"protocol_id"`
+	ServerName string `json:"server_name"`
+	// Port is the target's port; 443 when absent.
+	Port int `json:"port"`
+	// Force applies a target this node has not probed with verdict ok.
+	Force bool `json:"force"`
+}
+
+// Apply godoc
+// @Summary Apply a Reality target to a protocol of a proxy node
+// @Description Writes the target into one Reality protocol (tls 2) of the node: reality_settings dest (server_name:port), server_name and, where listed, server_names, and tls_settings server_name (the SNI of the subscription links). The private key and every other setting stay as stored; the node's Agent picks the change up with its configuration and clients with their next subscription refresh. The node must have probed the target with verdict ok unless force is true (409 target_not_probed). 404 protocol_not_found for a protocol that is not a Reality protocol of the node. Audited (module reality_target, action reality_target_apply).
+// @Tags Kernel
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "proxy-<id>"
+// @Param request body realityTargetApplyRequest true "protocol_id, server_name, port, force"
+// @Success 200 {object} map[string]any
+// @Router /api/v4/kernel/nodes/{id}/reality-targets/apply [post]
+func (h *RealityTargetsHandler) Apply(c *gin.Context) {
+	node, ok := proxyNodeRef(c)
+	if !ok {
+		return
+	}
+	var request realityTargetApplyRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		kernelError(c, http.StatusBadRequest, "invalid_request", err.Error())
+		return
+	}
+	if request.ProtocolID == 0 {
+		kernelError(c, http.StatusBadRequest, "invalid_request", "protocol_id is required")
+		return
+	}
+	raw := request.ServerName
+	if request.Port != 0 {
+		raw = net.JoinHostPort(request.ServerName, strconv.Itoa(request.Port))
+	}
+	target, err := realitytarget.ParseCandidate(raw)
+	if err != nil {
+		kernelError(c, http.StatusBadRequest, "invalid_params", err.Error())
+		return
+	}
+	db := h.db()
+	if db == nil {
+		kernelError(c, http.StatusServiceUnavailable, "database_unavailable", "database is not initialized")
+		return
+	}
+	if !h.requireNode(c, db, node) {
+		return
+	}
+	audit, err := h.beginAction(c, db, node, realityTargetApplyAction, map[string]any{
+		"node": node.String(), "protocol_id": request.ProtocolID, "target": target.String(), "force": request.Force, "outcome": "requested",
+	})
+	if err != nil {
+		kernelError(c, http.StatusInternalServerError, "audit_unavailable", "the operation log could not be written; nothing was changed")
+		return
+	}
+	nodes := service.NewNodeServiceFor(db)
+	result, err := (&realitytarget.Service{DB: db}).Apply(c.Request.Context(), uint(node.ID),
+		realitytarget.ApplyRequest{ProtocolID: request.ProtocolID, Target: target, Force: request.Force}, nodes.UpdateProtocol)
+	switch {
+	case errors.Is(err, realitytarget.ErrNotRealityProtocol):
+		audit.end("protocol_not_found", false, nil)
+		kernelError(c, http.StatusNotFound, "protocol_not_found", err.Error())
+		return
+	case errors.Is(err, realitytarget.ErrTargetNotProbed):
+		audit.end("target_not_probed", false, nil)
+		kernelError(c, http.StatusConflict, "target_not_probed", err.Error())
+		return
+	case errors.Is(err, service.ErrInvalidNodeProtocol):
+		audit.end("invalid", false, map[string]any{"reason": truncateText(err.Error(), 200)})
+		kernelError(c, http.StatusBadRequest, "invalid_params", err.Error())
+		return
+	case err != nil:
+		audit.end("error", false, nil)
+		kernelDBError(c, err)
+		return
+	}
+	audit.end("completed", true, map[string]any{"previous": result.Previous.ServerName})
+	kernelData(c, http.StatusOK, result)
+}
+
 // begin writes the operation log row of a run, as failed until it ends.
 func (h *RealityTargetsHandler) begin(c *gin.Context, db *gorm.DB, node agentcontrol.AgentNode, content map[string]any) (*nodeDiagnosticAudit, error) {
+	return h.beginAction(c, db, node, realityTargetAuditAction, content)
+}
+
+func (h *RealityTargetsHandler) beginAction(c *gin.Context, db *gorm.DB, node agentcontrol.AgentNode, action string, content map[string]any) (*nodeDiagnosticAudit, error) {
 	encoded, err := json.Marshal(content)
 	if err != nil {
 		return nil, err
@@ -226,7 +317,7 @@ func (h *RealityTargetsHandler) begin(c *gin.Context, db *gorm.DB, node agentcon
 	}
 	targetID := uint(node.ID)
 	row := model.OperationLog{
-		UserID: userID, Username: truncateText(c.GetString("email"), 100), Action: realityTargetAuditAction, Module: realityTargetAuditModule,
+		UserID: userID, Username: truncateText(c.GetString("email"), 100), Action: action, Module: realityTargetAuditModule,
 		TargetType: "proxy_node", TargetID: &targetID, Content: string(encoded), IP: truncateText(c.ClientIP(), 45), Status: 2,
 	}
 	if err := db.WithContext(c.Request.Context()).Create(&row).Error; err != nil {
