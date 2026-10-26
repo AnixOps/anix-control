@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+## 5.0.0-rc.3 - 2026-10-26
+
+### Added
+
+- The JumpServer workflow's `control` body can say `@@NEW_REALITY_PUBLIC_KEY@@`
+  next to `@@NEW_REALITY_KEY@@`, so a Reality protocol is created with its
+  key pair in one request.
+
+### Changed
+
+- CI: a pull request that leaves `web/` alone skips Frontend Build's lint,
+  unit tests and mocked Playwright gate (about 14 of its 16 minutes); the
+  job, its live Control WebUI gate, the build and the bundle budget still
+  run, and the full lane runs everything. Playwright uses 4 workers in CI.
+
+### Fixed
+
+- The admin live monitor (Traffic & Monitoring → Live nodes) connects again
+  instead of closing right after the handshake and reconnecting forever. A
+  package WebSocket route's bridge capability was revoked as soon as the relay
+  opened, before the package host could redeem it; it now stays live for the
+  relay and is revoked when the relay ends.
+- Subscriptions offer a relay node (a node with a parent) again while the
+  landing node it forwards to is online. A relay runs no Agent and never
+  heartbeats, so every relay was dropped as offline.
+
 ## 5.0.0-rc.2 - 2026-10-25
 
 ### Added
