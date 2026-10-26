@@ -663,11 +663,21 @@ preflight() {
 }
 
 # fetch downloads a URL over https, with the response headers in $3 when
-# given; curl's URL globbing is off for IPv6 literals.
+# given; curl's URL globbing is off for IPv6 literals. Links from mainland
+# China often cut HTTP/2 streams (curl 16, 18, 56, 92), which --retry does
+# not retry: a transfer that fails other than with an HTTP error answer is
+# tried twice more over HTTP/1.1.
 fetch() {
-  local args=(-fsSL -g --proto '=https' --retry 3 --connect-timeout 15 -o "$2")
+  local args=(-fsSL -g --proto '=https' --retry 3 --connect-timeout 15 -o "$2") rc=0
   [[ -z "${3:-}" ]] || args+=(-D "$3")
-  curl "${args[@]}" "$1"
+  curl "${args[@]}" "$1" || rc=$?
+  for _ in 1 2; do
+    ((rc != 0 && rc != 22)) || return "${rc}"
+    note "downloading $1 failed (curl exit ${rc}); trying again over HTTP/1.1"
+    rc=0
+    curl "${args[@]}" --http1.1 "$1" || rc=$?
+  done
+  return "${rc}"
 }
 
 read_metadata() {

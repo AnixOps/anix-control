@@ -10,6 +10,12 @@
   Control stored it as it was: the Agent could not build the Reality inbound
   (`empty "privateKey"`), refused the node's whole new configuration, and
   kept running the old one, so the protocol's port never listened.
+- The Agent install script tries a download again over HTTP/1.1 (twice)
+  when the transfer breaks other than with an HTTP error answer. From
+  mainland China, GitHub and other overseas links often cut HTTP/2 streams
+  (`curl: (18) HTTP/2 stream 1 was not closed cleanly`), which curl's
+  `--retry` does not retry, and the install stopped at the checksum or the
+  Agent download.
 
 ## 5.0.0-rc.7 - 2026-10-26
 
