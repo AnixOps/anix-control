@@ -157,6 +157,7 @@ type ParsedNode struct {
 	// 认证信息 (渲染后填入)
 	UUID     string `json:"uuid,omitempty"`     // VMess/VLESS UUID (用户ID)
 	Password string `json:"password,omitempty"` // Trojan/SS 密码
+	Username string `json:"username,omitempty"` // iWAN 登录名 (面板用户 id)
 
 	// TLS 配置 (tls: 0=None, 1=TLS, 2=Reality)
 	TLSMode        int    `json:"tls_mode"`                   // TLS 模式: 0=无, 1=TLS, 2=Reality
@@ -226,6 +227,8 @@ func (n *ParsedNode) IsValid() bool {
 		return n.Password != "" || n.Cipher != ""
 	case "wireguard":
 		return n.PrivateKey != "" && n.PublicKey != "" && n.PeerIP != ""
+	case "iwan":
+		return n.Username != "" && n.Password != ""
 	default:
 		// Unknown types are considered valid (let downstream handle them)
 		return true
@@ -292,6 +295,7 @@ const (
 	FormatBase64JSON   SubscriptionFormat = "base64json"   // Base64 编码的 JSON (你的自定义格式)
 	FormatSingBox      SubscriptionFormat = "sing-box"     // Sing-box JSON
 	FormatWireGuard    SubscriptionFormat = "wireguard"    // WireGuard 原生配置
+	FormatIWAN         SubscriptionFormat = "iwan"         // iwand 客户端配置 (Panabit iWAN)
 )
 
 // SubscriptionRequest 订阅请求参数

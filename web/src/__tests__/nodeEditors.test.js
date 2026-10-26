@@ -63,6 +63,37 @@ describe('useProtocolEditor', () => {
     expect(JSON.parse(payload.settings).relay.role).toBe('exit')
   })
 
+  it('builds Panabit iWAN settings from the form and reads them back', async () => {
+    const editor = useProtocolEditor()
+    editor.startCreate()
+    editor.protocolForm.mode = 'visual'
+    await nextTick()
+    editor.protocolForm.type = 'iwan'
+    await nextTick()
+    expect(editor.protocolForm).toMatchObject({ port: 4500, tls: 0, transport: 'udp' })
+    Object.assign(editor.iwanForm, {
+      pool: '10.70.0.0/24',
+      mtu: 1380,
+      allowEncrypt: false,
+      fixedAddresses: '7=10.70.0.9\n\n8 10.70.0.10\n'
+    })
+
+    const { payload } = editor.buildPayload()
+    expect(payload).toMatchObject({ type: 'iwan', port: 4500, transport: 'udp', tls: 0 })
+    expect(JSON.parse(payload.settings)).toEqual({
+      pool: '10.70.0.0/24',
+      mtu: 1380,
+      dns_upstream: '1.1.1.1',
+      allow_encrypt: false,
+      allow_client_to_client: false,
+      fixed_addresses: { 7: '10.70.0.9', 8: '10.70.0.10' }
+    })
+
+    const other = useProtocolEditor()
+    other.startEdit({ id: 5, type: 'iwan', port: 4501, transport: 'udp', settings: payload.settings })
+    expect(other.iwanForm).toMatchObject({ pool: '10.70.0.0/24', mtu: 1380, allowEncrypt: false, fixedAddresses: '7=10.70.0.9\n8=10.70.0.10' })
+  })
+
   it('loads a template into the editor and the form', () => {
     const editor = useProtocolEditor()
     editor.startCreate()

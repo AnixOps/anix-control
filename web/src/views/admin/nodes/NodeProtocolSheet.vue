@@ -73,8 +73,9 @@
           @add-path="editor.addWireGuardNetworkPath()"
           @remove-path="index => editor.removeWireGuardNetworkPath(index)"
         />
+        <NodeIwanFields v-if="form.type === 'iwan'" :iwan="editor.iwanForm" />
 
-        <details v-if="form.type !== 'wireguard'" class="node-protocol__advanced">
+        <details v-if="form.type !== 'wireguard' && form.type !== 'iwan'" class="node-protocol__advanced">
           <summary>{{ t('admin.nodes.protocolForm.fields.settings') }}</summary>
           <UiTextarea v-model="form.settings" class="node-protocol__json" :aria-label="t('admin.nodes.protocolForm.fields.settings')" :rows="4" placeholder="{}" spellcheck="false" />
         </details>
@@ -145,6 +146,7 @@ import UiSheet from '@/ui/UiSheet.vue'
 import UiTextarea from '@/ui/UiTextarea.vue'
 import { useToast } from '@/ui/composables/useToast'
 import { useAppI18n } from '@/composables/useAppI18n'
+import NodeIwanFields from './NodeIwanFields.vue'
 import NodeWireGuardFields from './NodeWireGuardFields.vue'
 import { readNodeApiError } from './nodeData'
 import { useNodeCopy } from './useNodeCopy'
@@ -174,7 +176,7 @@ const modeOptions = computed(() => [
 ])
 const typeOptions = computed(() => PROTOCOL_TYPES.map(type => ({
   value: type,
-  label: type === 'wireguard' ? 'WireGuard' : t(`networkPages.nodes.protocols.${type}`)
+  label: { wireguard: 'WireGuard', iwan: 'Panabit iWAN' }[type] || t(`networkPages.nodes.protocols.${type}`)
 })))
 const tlsOptions = computed(() => [
   { value: 0, label: t('admin.nodes.tlsModes.none') },
@@ -183,7 +185,7 @@ const tlsOptions = computed(() => [
 ])
 const transportOptions = computed(() => {
   const options = ['tcp', 'ws', 'grpc', 'quic', 'h2'].map(value => ({ value, label: t(`admin.nodes.transports.${value}`) }))
-  // WireGuard runs over UDP; show it when the protocol says so.
+  // WireGuard and iWAN run over UDP; show it when the protocol says so.
   if (form.transport === 'udp') options.push({ value: 'udp', label: 'UDP' })
   return options
 })

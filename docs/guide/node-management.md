@@ -92,6 +92,24 @@ AnixOps Control 采用 Agent-first 节点管理架构，支持：
 | Hysteria2 | `hysteria2` | Hysteria2 |
 | TUIC | `tuic` | TUIC |
 | AnyTLS | `anytls` | AnyTLS |
+| Panabit iWAN | `iwan` | UDP 三层隧道，不加密，见下文 |
+
+### Panabit iWAN
+
+`iwan` 协议由 anix-agent 的 anixcore 内核提供（networkcore_anixops `docs/protocols/iwan.md` §12），接入 iwand、OpenWrt、Panabit 等 iWAN 客户端。用户的流量进入节点后和其他协议一样走「转发 → 分流」的 egress 路由。**iWAN 没有加密和完整性校验**，只适合可信线路；管理端表单会标出这一点。
+
+协议设置（`settings`）：
+
+| 字段 | 默认 | 说明 |
+|------|------|------|
+| `pool` | `10.66.0.0/16` | 用户地址池，IPv4 /8 到 /30，第一个地址是网关（ping 和 DNS） |
+| `mtu` | `1400` | 576 到 1600 |
+| `dns_upstream` | `1.1.1.1` | 网关 DNS 转发的上游，IP 或 IP:端口 |
+| `allow_encrypt` | `true` | 是否允许客户端请求 XOR 掩码（不是加密） |
+| `allow_client_to_client` | `false` | 用户之间能否互访 |
+| `fixed_addresses` | `{}` | 面板用户 id → 固定地址，须在地址池内、不是网关，且不能重复 |
+
+用户的登录名是面板用户 id，口令是 UUID 去掉连字符后的前 16 位（小写）。用户在订阅页选择 iWAN 格式（`/s/<token>?type=iwan`）得到 iwand 的配置文件，每个 iWAN 节点一节（服务器、端口、用户名、口令、MTU、加密），固定地址写在注释里；OpenWrt 和 Panabit 客户端按其中的值手工填写。iWAN 节点不出现在其他订阅格式里；只有 iWAN 节点的订阅在 V2Ray / Shadowrocket 格式下会改给 iWAN 格式。
 
 ### 配置优先级
 

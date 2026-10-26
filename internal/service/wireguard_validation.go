@@ -30,6 +30,11 @@ func ValidateNodeProtocol(protocol *model.NodeProtocol) error {
 			return fmt.Errorf("%w: %v", ErrInvalidNodeProtocol, err)
 		}
 	}
+	if strings.EqualFold(strings.TrimSpace(string(protocol.Type)), string(model.ProtocolIWAN)) {
+		if err := validateIWANProtocol(protocol); err != nil {
+			return fmt.Errorf("%w: %v", ErrInvalidNodeProtocol, err)
+		}
+	}
 	return nil
 }
 

@@ -148,6 +148,8 @@ func BuildNodeProtocolConfig(node *model.Node, protocol *model.NodeProtocol) map
 		config["allowed_ips"] = configValue(protocolConfig, "allowed_ips", []string{"0.0.0.0/0"})
 		config["tunnel_type"] = configValue(protocolConfig, "tunnel_type", "quic")
 		config["relay"] = wireGuardRelay
+	case "iwan":
+		buildIWANConfig(config, protocolConfig)
 	case "shadowsocks":
 		cipherStr := "aes-256-gcm"
 		if c, ok := protocolConfig["cipher"].(string); ok && c != "" {

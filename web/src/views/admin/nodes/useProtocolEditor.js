@@ -1,11 +1,11 @@
 // State of the protocol editor (UI U7): the JSON editor, the visual form,
-// the WireGuard relay form and the request body of
+// the WireGuard relay form, the iWAN form and the request body of
 // POST/PUT /admin/nodes/:id/protocols[/:protocol_id], unchanged from the
 // pre-redesign page. Masked secrets (********) are sent back as they are:
 // the server keeps the stored value.
 import { computed, reactive, ref, watch } from 'vue'
 
-export const PROTOCOL_TYPES = ['vmess', 'vless', 'trojan', 'shadowsocks', 'hysteria2', 'tuic', 'wireguard']
+export const PROTOCOL_TYPES = ['vmess', 'vless', 'trojan', 'shadowsocks', 'hysteria2', 'tuic', 'wireguard', 'iwan']
 
 export const JSON_PLACEHOLDER = `{
   "type": "vless",
@@ -19,6 +19,46 @@ export const JSON_PLACEHOLDER = `{
   "transport_settings": {},
   "reality_settings": {}
 }`
+
+// Panabit iWAN (anixcore iwan inbound). Fixed addresses are edited as one
+// `user id=address` per line.
+export const defaultIwanForm = () => ({
+  pool: '10.66.0.0/16',
+  mtu: 1400,
+  dnsUpstream: '1.1.1.1',
+  allowEncrypt: true,
+  allowClientToClient: false,
+  fixedAddresses: ''
+})
+
+export function buildIwanSettings(form) {
+  const fixed = {}
+  for (const line of String(form.fixedAddresses || '').split(/\r?\n/)) {
+    const [id, address] = line.split(/[=\s,]+/).filter(Boolean)
+    if (id && address) fixed[id] = address
+  }
+  return {
+    pool: form.pool,
+    mtu: Number(form.mtu) || 1400,
+    dns_upstream: form.dnsUpstream,
+    allow_encrypt: Boolean(form.allowEncrypt),
+    allow_client_to_client: Boolean(form.allowClientToClient),
+    fixed_addresses: fixed
+  }
+}
+
+export function iwanFormFromSettings(settings = {}) {
+  const defaults = defaultIwanForm()
+  const fixed = settings.fixed_addresses && typeof settings.fixed_addresses === 'object' ? settings.fixed_addresses : {}
+  return {
+    pool: settings.pool || defaults.pool,
+    mtu: Number(settings.mtu) || defaults.mtu,
+    dnsUpstream: settings.dns_upstream || defaults.dnsUpstream,
+    allowEncrypt: settings.allow_encrypt ?? defaults.allowEncrypt,
+    allowClientToClient: settings.allow_client_to_client ?? defaults.allowClientToClient,
+    fixedAddresses: Object.entries(fixed).map(([id, address]) => `${id}=${address}`).join('\n')
+  }
+}
 
 export const defaultWireGuardForm = () => ({
   cidr: '10.66.0.0/24',
@@ -257,6 +297,7 @@ export function newProtocolJson() {
 export function useProtocolEditor() {
   const protocolForm = reactive(defaultProtocolForm())
   const wireGuardForm = reactive(defaultWireGuardForm())
+  const iwanForm = reactive(defaultIwanForm())
   const jsonEditorContent = ref('')
   const jsonParseError = ref('')
   const jsonValid = computed(() => jsonParseError.value === '')
@@ -265,6 +306,8 @@ export function useProtocolEditor() {
 
   const resetWireGuardForm = () => Object.assign(wireGuardForm, defaultWireGuardForm())
   const hydrateWireGuardForm = (settings) => Object.assign(wireGuardForm, wireGuardFormFromSettings(settings))
+  const resetIwanForm = () => Object.assign(iwanForm, defaultIwanForm())
+  const hydrateIwanForm = (settings) => Object.assign(iwanForm, iwanFormFromSettings(settings))
 
   function addWireGuardNetworkPath() {
     wireGuardForm.networkPaths.push({ name: '', interface: '', source: '', gateway: '', priority: 100 })
@@ -289,6 +332,16 @@ export function useProtocolEditor() {
       obj.transport = 'udp'
       obj.settings = buildWireGuardSettings(wireGuardForm)
       if (obj.settings.relay.role === 'exit') obj.show = 0
+      obj.tls_settings = {}
+      obj.transport_settings = {}
+      obj.reality_settings = {}
+      return obj
+    }
+    if (protocolForm.type === 'iwan') {
+      obj.port = protocolForm.port || 4500
+      obj.tls = 0
+      obj.transport = 'udp'
+      obj.settings = buildIwanSettings(iwanForm)
       obj.tls_settings = {}
       obj.transport_settings = {}
       obj.reality_settings = {}
@@ -319,6 +372,13 @@ export function useProtocolEditor() {
       }
       hydrateWireGuardForm(settings)
     }
+    if (protocolForm.type === 'iwan') {
+      let settings = json.settings || {}
+      if (typeof settings === 'string') {
+        try { settings = JSON.parse(settings) } catch { settings = {} }
+      }
+      hydrateIwanForm(settings)
+    }
   }
 
   function setJson(json) {
@@ -348,6 +408,12 @@ export function useProtocolEditor() {
       protocolForm.transport = 'udp'
       resetWireGuardForm()
     }
+    if (newType === 'iwan' && oldType !== 'iwan') {
+      protocolForm.port = protocolForm.port === 443 ? 4500 : protocolForm.port
+      protocolForm.tls = 0
+      protocolForm.transport = 'udp'
+      resetIwanForm()
+    }
   })
 
   watch(() => wireGuardForm.wssCompat, (enabled) => {
@@ -366,6 +432,7 @@ export function useProtocolEditor() {
     editing.value = false
     selectedTemplate.value = ''
     resetWireGuardForm()
+    resetIwanForm()
     Object.assign(protocolForm, defaultProtocolForm())
     setJson(newProtocolJson())
   }
@@ -383,6 +450,7 @@ export function useProtocolEditor() {
     selectedTemplate.value = tpl.name
     const json = templateToJson(tpl)
     if (json.type === 'wireguard') hydrateWireGuardForm(json.settings)
+    if (json.type === 'iwan') hydrateIwanForm(json.settings)
     setJson(json)
     jsonToVisual(json)
     protocolForm.mode = 'json'
@@ -459,6 +527,7 @@ export function useProtocolEditor() {
   return {
     protocolForm,
     wireGuardForm,
+    iwanForm,
     jsonEditorContent,
     jsonParseError,
     jsonValid,

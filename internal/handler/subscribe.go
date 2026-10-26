@@ -38,7 +38,7 @@ func NewSubscribeHandler(cfg *config.Config) *SubscribeHandler {
 // GetSubscription 获取用户订阅
 // GET /s/:token
 // 支持 URL 参数:
-//   - type: 指定输出格式 (v2ray, clash, stash, egern, surge, loon, shadowrocket, quantumultx, json, base64json, wireguard)
+//   - type: 指定输出格式 (v2ray, clash, stash, egern, surge, loon, shadowrocket, quantumultx, json, base64json, wireguard, iwan)
 //     也支持 type=auto 或 type=ua，强制按 User-Agent 自动识别格式
 //   - include: 包含节点名关键词 (正则)
 //   - exclude: 排除节点名关键词 (正则)
@@ -741,6 +741,7 @@ func (h *SubscriptionAdminHandler) GetSubscriptionFormats(c *gin.Context) {
 		{"id": "base64json", "name": "Base64 JSON", "description": "Base64 编码的分组 JSON 格式"},
 		{"id": "sing-box", "name": "Sing-box", "description": "适用于 Sing-box, Nekobox 等"},
 		{"id": "wireguard", "name": "WireGuard", "description": "原生 WireGuard 配置，适用于 WireGuard/Shadowrocket/Loon 等支持导入 .conf 的客户端"},
+		{"id": "iwan", "name": "iWAN (iwand)", "description": "Panabit iWAN 登录信息，iwand 客户端配置；OpenWrt、Panabit 客户端按其中的服务器、端口、用户名、口令手工填写"},
 	}
 
 	panelSuccess(c, formats)
@@ -757,6 +758,7 @@ func (h *SubscriptionAdminHandler) GetProtocolTypes(c *gin.Context) {
 		{"id": "hysteria2", "name": "Hysteria2", "description": "Hysteria2 协议", "supports_tls": true, "supports_reality": false},
 		{"id": "tuic", "name": "TUIC", "description": "TUIC 协议", "supports_tls": true, "supports_reality": false},
 		{"id": "wireguard", "name": "WireGuard", "description": "WireGuard 用户接入协议", "supports_tls": false, "supports_reality": false},
+		{"id": "iwan", "name": "Panabit iWAN", "description": "iWAN 三层隧道（不加密）", "supports_tls": false, "supports_reality": false},
 	}
 
 	panelSuccess(c, protocols)

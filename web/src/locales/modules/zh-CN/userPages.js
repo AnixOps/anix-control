@@ -187,6 +187,7 @@ export default {
           quantumultx: 'Quantumult X',
           singBox: 'sing-box（JSON）',
           wireguard: 'WireGuard（.conf）',
+          iwan: 'iWAN（iwand 配置）',
           json: '原始 JSON',
           base64json: 'Base64 JSON'
         }

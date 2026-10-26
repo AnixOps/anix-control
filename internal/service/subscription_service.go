@@ -211,7 +211,8 @@ func (s *SubscriptionService) GetUserSubscription(req *model.SubscriptionRequest
 }
 
 // preferNativeWireGuardFormat prevents user-agent formats based on V2Ray links
-// from silently dropping a subscription that contains only WireGuard profiles.
+// from silently dropping a subscription that contains only WireGuard profiles
+// (or only Panabit iWAN logins, which have no link format either).
 // Mixed subscriptions retain their requested format because there is no common
 // portable container for a WireGuard .conf alongside arbitrary V2Ray links.
 func preferNativeWireGuardFormat(format model.SubscriptionFormat, nodes []*model.ParsedNode) model.SubscriptionFormat {
@@ -221,18 +222,24 @@ func preferNativeWireGuardFormat(format model.SubscriptionFormat, nodes []*model
 		return format
 	}
 
-	hasWireGuard := false
+	nodeType := ""
 	for _, node := range nodes {
 		if node == nil {
 			continue
 		}
-		if node.Type != string(model.ProtocolWireGuard) {
+		if node.Type != string(model.ProtocolWireGuard) && node.Type != string(model.ProtocolIWAN) {
 			return format
 		}
-		hasWireGuard = true
+		if nodeType != "" && node.Type != nodeType {
+			return format
+		}
+		nodeType = node.Type
 	}
-	if hasWireGuard {
+	switch nodeType {
+	case string(model.ProtocolWireGuard):
 		return model.FormatWireGuard
+	case string(model.ProtocolIWAN):
+		return model.FormatIWAN
 	}
 	return format
 }
@@ -848,6 +855,9 @@ func (s *SubscriptionService) nodeProtocolToParsedNode(node *model.Node, protoco
 
 	if parsed.Type == string(model.ProtocolWireGuard) {
 		s.applyWireGuardPeer(parsed, protocol, ctx)
+	}
+	if parsed.Type == string(model.ProtocolIWAN) {
+		applyIWANUser(parsed, ctx)
 	}
 	// After the WireGuard step, which derives the server public key from it.
 	stripServerPrivateKeys(parsed.Settings)

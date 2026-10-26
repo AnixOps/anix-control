@@ -512,6 +512,26 @@ export default {
       valid: 'JSON 有效',
       invalid: 'JSON 无效'
     },
+    iwan: {
+      title: 'Panabit iWAN',
+      unencrypted: '不加密',
+      unencryptedHint: 'iWAN 协议没有加密和完整性校验，流量可被线路上的设备看到和篡改，只适合可信线路（规格 §9）。',
+      fields: {
+        pool: '地址池',
+        mtu: 'MTU',
+        dnsUpstream: 'DNS 上游',
+        allowEncrypt: '允许 XOR 掩码',
+        allowClientToClient: '允许用户互访',
+        fixedAddresses: '固定地址'
+      },
+      hints: {
+        pool: 'IPv4 网段（/8 到 /30），第一个地址是网关。',
+        dnsUpstream: '网关 DNS 转发到的地址，IP 或 IP:端口。',
+        allowEncrypt: 'XOR 只防随手查看，不是加密。',
+        fixedAddresses: '每行一个“用户 id=地址”，地址须在地址池内且不是网关。',
+        login: '用户登录名是面板用户 id，口令是 UUID 去掉连字符后的前 16 位；用户在订阅页选择 iWAN 格式可拿到 iwand 配置。'
+      }
+    },
     wireguard: {
       sections: {
         access: 'WireGuard 接入',
