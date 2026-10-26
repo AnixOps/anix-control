@@ -44,7 +44,7 @@ func validateProtocolTransport(protocol *model.NodeProtocol) error {
 			return fmt.Errorf("%s 不支持 Reality", protocolType)
 		}
 		if !realityTransports[transport] {
-			return fmt.Errorf("Reality 不支持 %s 传输，只能用 tcp、grpc 或 h2", transport)
+			return fmt.Errorf("transport %s 不能用于 Reality，只能用 tcp、grpc 或 h2", transport)
 		}
 	}
 	return nil
