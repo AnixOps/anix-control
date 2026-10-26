@@ -53,6 +53,16 @@
         <div class="node-diagnostics__group" role="group" :aria-label="t('nodeDiagnostics.service.title', { service: serviceName })">
           <h3 class="node-diagnostics__heading">{{ t('nodeDiagnostics.service.title', { service: serviceName }) }}</h3>
           <div class="node-diagnostics__actions">
+            <UiSelect
+              v-if="serviceOptions.length > 1"
+              v-model="service"
+              size="md"
+              class="node-diagnostics__service"
+              :aria-label="t('nodeDiagnostics.service.label')"
+              :options="serviceOptions"
+              :disabled="Boolean(running)"
+              data-testid="diagnostics-service"
+            />
             <UiButton
               v-if="supports('service_status')"
               :icon="Activity"
@@ -242,7 +252,10 @@ let generation = 0
 const rootProps = computed(() => (props.embedded ? {} : { title: t('nodeDiagnostics.title'), description: t('nodeDiagnostics.description') }))
 const isForward = computed(() => props.nodeRef.startsWith('forward-'))
 const actions = computed(() => (Array.isArray(info.value?.actions) ? info.value.actions : []))
-const serviceName = computed(() => (Array.isArray(info.value?.services) && info.value.services[0]) || 'gost')
+const services = computed(() => (Array.isArray(info.value?.services) && info.value.services.length ? info.value.services : ['gost']))
+const service = ref('')
+const serviceName = computed(() => (services.value.includes(service.value) ? service.value : services.value[0]))
+const serviceOptions = computed(() => services.value.map(name => ({ value: name, label: name })))
 const forwardChecks = computed(() => FORWARD_CHECKS.filter(check => supports(check)))
 const showChecks = computed(() => forwardChecks.value.length > 0 && (isForward.value || props.hops.length > 0))
 const lineOptions = computed(() => LOG_LINES
@@ -390,6 +403,7 @@ watch(() => props.hops, (hops) => {
 
 watch(() => props.nodeRef, () => {
   info.value = null
+  service.value = ''
   result.value = null
   runError.value = ''
   load()

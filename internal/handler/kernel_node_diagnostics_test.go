@@ -565,7 +565,7 @@ func TestNodeDiagnosticsList(t *testing.T) {
 		assert.Equal(t, action.Action == "service_restart", action.Mutating)
 	}
 	assert.Equal(t, []string{"log_tail", "service_restart", "service_status"}, names)
-	assert.Equal(t, []string{"gost"}, idle.Services)
+	assert.Equal(t, []string{"anix-agent"}, idle.Services, "a proxy node that does not forward runs its Agent's unit")
 	assert.Equal(t, 1000, idle.LogTailMax)
 	assert.Equal(t, 30, idle.Timeout.Default)
 	assert.Equal(t, 120, idle.Timeout.Max)
@@ -604,4 +604,10 @@ func TestNodeDiagnosticsList(t *testing.T) {
 		}
 	}
 	assert.Equal(t, 4, forwardChecks)
+	assert.Equal(t, []string{"gost"}, other.Services)
+
+	// A forwarding proxy node runs both units, its Agent's first.
+	env.streams.connect(proxy(5), diagnosticsCapabilities, agentcontrol.CapabilityDiag)
+	forwarding := decodeData[listing](t, env.call(t, 7, http.MethodGet, "/nodes/proxy-5/diagnostics", ""))
+	assert.Equal(t, []string{"anix-agent", "gost"}, forwarding.Services)
 }

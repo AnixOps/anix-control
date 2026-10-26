@@ -21,7 +21,8 @@ export default {
       descriptionVersion: 'Agent {version} 不支持诊断。升级节点的 Agent 后可以使用。'
     },
     service: {
-      title: '服务 {service}'
+      title: '服务 {service}',
+      label: '服务'
     },
     actions: {
       service_status: '查看服务状态',
