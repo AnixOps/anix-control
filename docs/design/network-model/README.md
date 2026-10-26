@@ -198,7 +198,7 @@ agent 的职责：
 
 1. 校验设备能力（kind 不支持则整份拒绝并回报原因）。
 2. 为每个出口写策略路由（§6.2），表号与优先级在 agent 自己的区间里分配并记录归属，撤销时只删自己写的规则（与 `nategress` 的 ownership 检查一致）。
-3. 把入口、出口、路径、转发表交给执行内核（anixcore：`PUT /v1/network`；其他内核按各自 adapter）。
+3. 把入口、出口、路径、转发表交给执行内核（anixcore：`PUT /v1/network`；迁移期的 xray / sing-box 按各自 adapter，能力见 §6.3.1）。
 4. 回报每个组件的状态：已应用、健康、当前生效的出口、错误。
 
 ### 6.2 Linux 出口：源地址 + 策略路由
@@ -219,6 +219,22 @@ v6 出口同理（`ip -6`）。内核侧只需要在出站套接字上 `bind(sou
 - **路径选择。** 用户入口按配对策略/规则选出路径；第一段是 `local` 就直接交给出口，否则交给对应传输的出站（WireGuard、ANX-Line、iWAN 出站已存在或在建）。现有 `egress::Router`（域名分流）是 `rules` 模式的一个实现，迁移后它选的是路径而不是一个 SS-2022 服务器。
 - **中继转发。** 收到 hop 入口的流量后按 `forwarding` 表交给下一段，不查用户规则。
 - **健康检查的拥有者：内核。** 每个出口用自己的源地址探测（这样探测走的就是那条线路），失败切换在进程内完成（毫秒级、不改路由表），结果回报给 agent；agent 只在计划变化时改路由表。WireGuard 这类由 agent 直接管理的传输保持现状，健康仍由 agent 做。
+- **iWAN 在用户态终止。** iWAN 是三层隧道，但 anixcore 在进程内终止它（地址池、网关、DNS 都在内核里），解出来的 TCP/UDP 流量和其他入口一样带 `ingress_id` 进入路径选择，可以按规则分流，不需要打开 `ip_forward`，也不需要在 Linux 上为地址池写 SNAT。
+
+#### 6.3.1 内核与适配器
+
+模型本身不绑定内核：组件的 `kind` 由设备 `capabilities` 声明的内核能力决定能否下发。最终目标是 anixcore 取代 xray 和 sing-box，迁移期间它们只作为后备。
+
+| 能力 | anixcore | xray（迁移期） | sing-box（迁移期） |
+|------|----------|----------------|--------------------|
+| 多入口监听、带 `ingress_id` | 是 | 每入口一个 inbound tag | 每入口一个 inbound tag |
+| 出口绑定源地址 | `DirectOutbound` 加源地址 | `sendThrough` | `inet4_bind_address` / `inet6_bind_address` |
+| 规则分流（`rules`） | `egress::Router` | routing rules | route rules |
+| 进程内出口健康检查与切换 | 是 | 部分（`observatory` + balancer） | 部分（`urltest`） |
+| iWAN 入口 / 传输 | **只有 anixcore** | 否 | 否 |
+| ANX、ANX-Line | **只有 anixcore** | 否 | 否 |
+
+iWAN 和 ANX 是我们私有内核里的协议，planner 只会把它们放到声明了 anixcore 对应能力的设备上（§10 第 5 条）。
 
 ### 6.4 Agent 合约（增量，不破坏现有字段）
 
@@ -251,7 +267,7 @@ NetworkStatus {
 - **表号与优先级区间。** Agent 只使用自己的区间（建议表 `20000–20999`、规则优先级 `20000–20999`，可在 Agent 配置里改），所有写入记录在状态文件里，启动时对账：区间内不是自己写的规则报 `network_route_conflict` 而不是覆盖。现有 WireGuard `network_policy` 与 `nategress` 的表号迁入同一区间。
 - **`rp_filter`。** 多线路机器上从 eth1 进来、回包走 eth0 会被严格反向路径过滤丢掉；Agent 对挂了入口的网卡把 `rp_filter` 设为 2（loose），并在回报里写明。
 - **回程对称。** 入口回包必须从进来的线路回去：用户态监听在具体地址上时，回包源地址就是该地址，`ip rule from <入口地址>` 命中该线路的表。所以每条线路至少有一条按入口地址的规则，即使这条线路上没有出口。监听 `::` 的入口要用 `IP_PKTINFO`/`IPV6_RECVPKTINFO`（UDP）或按目的地址 accept 后的本地地址（TCP）回包。
-- **转发与 NAT。** 只有 `kind=nat_direct` 且源地址不是网卡地址、或需要转发内核态流量（WireGuard、iWAN 服务端地址池）时才打开 `ip_forward` 并写 SNAT/MASQUERADE；纯用户态代理不需要。
+- **转发与 NAT。** 只有 `kind=nat_direct` 且源地址不是网卡地址、或需要转发内核态流量（WireGuard）时才打开 `ip_forward` 并写 SNAT/MASQUERADE；纯用户态代理不需要。iWAN 地址池由 anixcore 在用户态终止（§6.3），同样不需要。
 - **MTU/MSS。** 出口可选 `mtu`、`advmss`（写到策略路由上，`nategress` 的 `PolicyRoute` 已有字段）；隧道类传输自己声明 MTU，planner 把一条路径上最小的 MTU 回报到用户入口，用于 UDP 分片决策。
 - **DNS。** 出口可选自己的解析器，解析请求同样绑定出口源地址，避免"走 9929 出去、却用 CN2 解析出来的 CDN 地址"。缺省使用设备的解析器。
 - **动态地址。** 线路地址由 DHCP/SLAAC 分配时，出口的 `source` 可写 `auto`：Agent 用该网卡的首选地址并在变化时重写规则、回报新地址；面板据此刷新订阅里的对外地址。
@@ -321,14 +337,32 @@ v6 进 v4 出跨地址族，由 anixcore 在用户态终止；这台机器若只
 
 如果某段运营商侧已经提供了链路（比如 IPLC 盒子），把那一段登记成 `kind=external` 的传输，两端的设备登记为 `managed=false`，路径仍然完整。
 
-### 7.4 iWAN（Panabit 不动）
+### 7.4 iWAN：客户端协议，也是传输
+
+iWAN 在模型里有两个角色，都只由 anixcore 实现：
+
+1. **用户入口协议。** 用户用 iWAN 官方客户端（iwand、OpenWrt、Panabit）直接连我们的机器，iWAN 是该用户入口 `protocols` 里的一项（面板 #353 已上线）。
+2. **传输。** 两台受管设备之间用 iWAN 作为一段 `kind=iwan` 的传输。
+
+典型路径：用户用 iWAN 官方客户端连一台打通大陆与海外的跨境机，跨境机的出口在海外，再接到落地机，落地机上公网。
 
 ```
-App ─(iWAN)─▶ Panabit 入口 ═IPLC═▶ Panabit 香港 NAT ─▶ 落地机入口 ─▶ 落地机出口
-     外部设备的入口   外部传输     外部设备的出口      受管设备
+iWAN 客户端 ─(iWAN)─▶ 跨境机 ──────── 传输 ────────▶ 落地机 ─▶ 公网
+                    用户入口(iwan)    hop 出口(海外侧)    hop 入口   internet 出口
 ```
 
-Panabit 两端是 `managed=false` 的设备，中间是 `external` 传输；我们只下发落地机的入口和出口。App 端用前置节点链（`via`）先拨 iWAN 再拨落地机，这是客户端侧的同一个模型：iWAN 段的出口接落地机的入口。
+| 设备 | 入口 | 出口 | 角色 |
+|------|------|------|------|
+| 跨境机（大陆 ↔ 海外） | `user`：iWAN（大陆侧线路，**分流在这里做**） | `hop`：海外侧线路 → 落地机 | 用户入口 |
+| 落地机 | `hop`：来自跨境机 | `internet`：`nat_direct` 或 `dedicated_ip` | 最终出口 |
+
+- 跨境机上 anixcore 在用户态终止 iWAN，按规则选路径（例如国内直出走跨境机自己的大陆侧出口，其余走落地机），不需要内核转发地址池。
+- 跨境机 → 落地机这一段可以是 `ss2022_relay`、`anx_line`，或 `iwan`（两端都是 anixcore 时）。
+- 一台跨境机也可以直接用海外侧线路的 `internet` 出口当最终出口，这时路径只有一段 `local` 传输。
+
+**Panabit 不动的情况。** 如果 iWAN 段由第三方 Panabit 设备提供（`App ─▶ Panabit 入口 ═IPLC═▶ Panabit 香港 NAT ─▶ 落地机`），两端登记为 `managed=false` 的设备、中间是 `external` 传输，我们只下发落地机的入口和出口。
+
+**未加密。** iWAN 没有加密和完整性校验，经过 iWAN 段（不论是入口还是传输）的路径在面板上标注"未加密段"（§13、N9）。
 
 ## 8. 扩展点
 
@@ -345,16 +379,16 @@ Panabit 两端是 `managed=false` 的设备，中间是 `external` 传输；我�
 
 | 组件 | kind | 主要 settings | 执行者 |
 |------|------|---------------|--------|
-| 入口 | `direct` | 监听地址/端口、协议列表 | 内核 |
+| 入口 | `direct` | 监听地址/端口、协议列表（含 `iwan`，只有 anixcore） | 内核 |
 | 入口 | `nat` | 监听地址、`port_map`（对外端口段 → 本机端口段） | 内核；端口映射由服务商完成 |
 | 出口 | `nat_direct` | 源地址（或 `auto`）、网关、MASQUERADE 开关 | Agent 写路由，内核绑定 |
 | 出口 | `dedicated_ip` | 源地址、网关 | 同上，不写 NAT |
 | 出口 | `hop` | 源地址、网关（通往下一跳的那条线路） | 同上 |
 | 传输 | `local` | 无 | 内核进程内 |
 | 传输 | `wireguard` | 密钥、对端、MTU、`allowed_ips` | Agent（现有 `core/wireguard`） |
-| 传输 | `anx_line` | 承载、密钥轮换、实验开关 | 内核 |
+| 传输 | `anx_line` | 承载、密钥轮换、实验开关 | 只有 anixcore |
 | 传输 | `ss2022_relay` | 方法、密钥（Control 生成） | 内核（现有分流中继） |
-| 传输 | `iwan` | 账号、服务器、加密开关 | 内核 / App |
+| 传输 | `iwan` | 账号、服务器、MTU、掩码开关 | 只有 anixcore |
 | 传输 | `anixops_relay` | 现有 forward 的 AnixOps 中继链路（`LinkSecurity`/`Carrier`） | forward 引擎 |
 | 传输 | `external` | 只登记，不下发 | 无 |
 
@@ -389,7 +423,7 @@ Control 在保存和生成计划时检查，违反即拒绝并指出是哪条记
 2. 同一设备上监听地址+端口+L4 协议不冲突（含 hop 入口和 forward 产品分配的端口）；`nat` 入口的 `port_map` 段互不重叠、长度一致。
 3. 用户入口与最终出口地址族不同时，入口所在设备必须声明用户态终止能力（内核 DNAT 不跨族）。
 4. 路径无环；每段传输的 `from_egress` 与上一段落在同一设备、`to_ingress` 与下一段落在同一设备；最后一段之后是 `audience=internet` 的出口。
-5. 每段传输两端设备都声明支持该 `kind` 的同一版本（`managed=false` 的一端除外）。
+5. 每段传输两端设备都声明支持该 `kind` 的同一版本（`managed=false` 的一端除外）；用户入口里的每个协议也必须被该设备的内核支持（`iwan`、ANX 只能落在声明了 anixcore 能力的设备上）。
 6. `failover` 列表里的出口都在用户入口所在设备上（或经同一条路径可达）；`cross` 的出口不能等于 `same_line` 的出口（否则提示改用默认）。
 7. 表号、规则优先级在 Agent 区间内且同设备不重复（`0` 由 planner 分配）。
 8. hop 入口不能出现在订阅里；用户入口必须至少配对一个可用出口。
