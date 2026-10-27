@@ -857,6 +857,12 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		nodeEntries := handler.NewNodeEntriesHandler()
 		v4.GET("/kernel/nodes/:id/entries", nodeEntries.List)
 		v4.PUT("/kernel/nodes/:id/entries", nodeEntries.Replace)
+		// Forward routes in subscriptions (加入订阅, Phase 10): a route whose
+		// target is a proxy node's protocol is offered again at its entries
+		// (internal/routesubscription).
+		routeSubscriptions := handler.NewRouteSubscriptionHandler()
+		v4.GET("/kernel/forward-routes/:id/subscription", routeSubscriptions.Get)
+		v4.PUT("/kernel/forward-routes/:id/subscription", routeSubscriptions.Set)
 		// Reality target probing (目标站探测): a proxy node's Agent probes
 		// candidate REALITY targets from its network (reality.probe);
 		// Control ranks them and recommends one; apply writes one into a

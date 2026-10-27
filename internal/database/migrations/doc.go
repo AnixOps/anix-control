@@ -86,4 +86,6 @@
 //     beyond its host (v5_node_entry).
 //   - 0011_subscription_group_protocols: each subscription group's order and
 //     display names of its node protocols (v5_subscription_group_protocol).
+//   - 0012_forward_route_subscriptions: the forward routes published in
+//     subscriptions at their entry nodes (v5_forward_route_subscription).
 package migrations

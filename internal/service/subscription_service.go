@@ -21,6 +21,7 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/nodeentry"
 	"github.com/AnixOps/anix-control/v5/internal/nodesecrets"
 	"github.com/AnixOps/anix-control/v5/internal/parser"
+	"github.com/AnixOps/anix-control/v5/internal/routesubscription"
 	"github.com/AnixOps/anix-control/v5/internal/subscriber"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -609,6 +610,12 @@ func (s *SubscriptionService) getInternalNodes(user *model.User, ctx *model.Temp
 	if err != nil {
 		return nil, err
 	}
+	// Forward routes published in subscriptions (internal/routesubscription)
+	// offer their protocol again at each entry node.
+	offers, err := routesubscription.Offers(s.db)
+	if err != nil {
+		return nil, err
+	}
 	groupPlace := make(map[uint]int, len(groups))
 	for i, g := range groups {
 		if _, seen := groupPlace[g.ID]; !seen {
@@ -645,7 +652,9 @@ func (s *SubscriptionService) getInternalNodes(user *model.User, ctx *model.Temp
 			}
 
 			name := layouts[groupProtocolKey{g.ID, p.ID}].DisplayName
-			for _, parsed := range s.nodeProtocolEntries(p.Node, &p, ctx, entries[p.Node.ID], name) {
+			parsedNodes := s.nodeProtocolEntries(p.Node, &p, ctx, entries[p.Node.ID], name)
+			parsedNodes = append(parsedNodes, s.routeOffers(p.Node, &p, ctx, offers[p.ID], name)...)
+			for _, parsed := range parsedNodes {
 				parsed.GroupID = g.ID
 				parsed.GroupName = g.Name
 				result = append(result, parsed)
@@ -723,6 +732,27 @@ func (s *SubscriptionService) nodeProtocolEntries(node *model.Node, protocol *mo
 		parsed.Name = fmt.Sprintf("%s | %s", parsed.Name, entry.Label)
 		parsed.Server = entry.Host
 		parsed.Port = port
+		result = append(result, parsed)
+	}
+	return result
+}
+
+// routeOffers is the protocol as published forward routes offer it: once
+// per route entry, at the entry's address and port, named after the route.
+func (s *SubscriptionService) routeOffers(node *model.Node, protocol *model.NodeProtocol, ctx *model.TemplateRenderContext, offers []routesubscription.Offer, name string) []*model.ParsedNode {
+	var result []*model.ParsedNode
+	for _, offer := range offers {
+		parsed := s.nodeProtocolToParsedNode(node, protocol, ctx)
+		if parsed == nil {
+			continue
+		}
+		if name != "" {
+			parsed.Name = name
+		}
+		parsed.ID = fmt.Sprintf("%s-r%s-%d", parsed.ID, offer.RouteID, offer.Entry)
+		parsed.Name = fmt.Sprintf("%s | %s", parsed.Name, offer.Label)
+		parsed.Server = offer.Host
+		parsed.Port = offer.Port
 		result = append(result, parsed)
 	}
 	return result

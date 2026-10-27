@@ -403,6 +403,24 @@ export async function replaceKernelNodeEntries(node, entries) {
   }))
 }
 
+// A forward route in subscriptions (加入订阅, Phase 10): { route_id,
+// route_name, published, display_name, protocol: { id, node_id, node_name,
+// name, type, port } | null, entries: [{ node_ref, node_name, host, port }],
+// reason: '' | no_protocol | paused | l4_mismatch | no_entry, message }.
+export async function getRouteSubscription(routeId) {
+  return unwrap(await v4({ url: `/kernel/forward-routes/${encodeURIComponent(routeId)}/subscription`, method: 'get' }))
+}
+
+// Publishes (published true) or withdraws the route; refusals are
+// invalid_request (400) with the reason and not_found (404).
+export async function setRouteSubscription(routeId, published, displayName = '') {
+  return unwrap(await v4({
+    url: `/kernel/forward-routes/${encodeURIComponent(routeId)}/subscription`,
+    method: 'put',
+    data: { published, display_name: displayName }
+  }))
+}
+
 // One-command node onboarding: a single-use enrollment token bound to the
 // node ("proxy-<id>" or "forward-<id>") and the install command for every
 // mirror. Super administrators only; the token is shown once.
