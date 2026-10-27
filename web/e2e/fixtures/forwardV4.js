@@ -542,7 +542,33 @@ const PATHS = {
   'no-capability': '/admin/forward/overview'
 }
 
+// 订阅 of a route's page (Phase 10): the game route reaches no proxy
+// protocol; the edge route is published at its entry hostname.
+function routeSubscription(id, { method, body }) {
+  const item = routeById(id)
+  if (!item) return { __status: 404, body: { error: { code: 'not_found', message: 'route not found' } } }
+  const name = item.route.name
+  if (id !== EDGE) {
+    return { data: { route_id: id, route_name: name, published: false, display_name: '', protocol: null, entries: [], reason: 'no_protocol', message: 'no target of the route is an enabled protocol of a proxy node' } }
+  }
+  const published = method === 'PUT' ? Boolean(body?.published) : true
+  return {
+    data: {
+      route_id: id,
+      route_name: name,
+      published,
+      display_name: method === 'PUT' ? body?.display_name || '' : '',
+      protocol: { id: 501, node_id: 50, node_name: 'tyo-origin', name: 'VLESS', type: 'vless', port: 443 },
+      entries: [{ node_ref: '', node_name: 'edge.example.net', host: 'edge.example.net', port: 30080 }],
+      reason: '',
+      message: ''
+    }
+  }
+}
+
 export function forwardApi(path, { method, query = {}, body, scenario }) {
+  const subscription = path.match(/^\/api\/v4\/kernel\/forward-routes\/([^/]+)\/subscription$/)
+  if (subscription) return routeSubscription(decodeURIComponent(subscription[1]), { method, body })
   // 诊断 of the node page: a connected Agent with the forward checks.
   const diagnostics = path.match(/^\/api\/v4\/kernel\/nodes\/((?:proxy|forward)-\d+)\/diagnostics$/)
   if (diagnostics) return nodeDiagnosticsAnswer(diagnostics[1], { method, scenario: '', body })

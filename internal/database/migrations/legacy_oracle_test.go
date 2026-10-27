@@ -133,6 +133,7 @@ func laterModels() []any {
 		&model.RealityTargetAuto{},         // 0009_reality_target_auto
 		&model.NodeEntry{},                 // 0010_node_entries
 		&model.SubscriptionGroupProtocol{}, // 0011_subscription_group_protocols
+		&model.ForwardRouteSubscription{},  // 0012_forward_route_subscriptions
 	}
 }
 

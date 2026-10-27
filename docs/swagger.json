@@ -8859,6 +8859,86 @@
                 }
             }
         },
+        "/api/v4/kernel/forward-routes/{id}/subscription": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Whether the route is published in subscriptions (加入订阅), the proxy node protocol its targets reach (a target on the node's host or a protocol's own host and the protocol's port, or a loopback target of a last hop on the node), the entries subscribers dial (each entry node's address, or the route's listen address, and its allocated port), and reason/message when the route cannot be offered: no_protocol, paused, l4_mismatch (the route does not forward the protocol's TCP or UDP) or no_entry.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "A forward route's subscription state",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "route id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "published true offers the route's target protocol in the protocol's subscription groups once per entry node, at the entry's address and port, named \"\u003cprotocol's name\u003e | \u003cdisplay_name or route name\u003e\" (the entry node's name added when the route has several); false withdraws it. Publishing needs a target that is an enabled protocol of a proxy node. A paused route, or one that does not forward the protocol's transport, stays published and is offered once fixed. display_name is at most 128 characters, without | or control characters. Audited.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Publish a forward route in subscriptions",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "route id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "published and display name",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.routeSubscriptionRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/v4/kernel/node-groups": {
             "get": {
                 "security": [
@@ -11991,6 +12071,17 @@
                 "ttl_seconds": {
                     "description": "TTLSeconds is the new enrollment credential's lifetime: one hour by\ndefault, from 60 to 604800 (7 days).",
                     "type": "integer"
+                }
+            }
+        },
+        "handler.routeSubscriptionRequest": {
+            "type": "object",
+            "properties": {
+                "display_name": {
+                    "type": "string"
+                },
+                "published": {
+                    "type": "boolean"
                 }
             }
         },

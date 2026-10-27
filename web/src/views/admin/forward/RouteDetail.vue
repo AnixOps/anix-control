@@ -83,6 +83,8 @@
 
       <EntryHaCard v-if="showEntryHa" :route-id="route.id" :can-delete="canDelete" :node-name="nodeName" />
 
+      <RouteSubscriptionCard :route-id="route.id" />
+
       <UiCard :title="t('forwardV4.detail.trafficTitle')">
         <template #actions>
           <UiSegmentedControl v-model="range" size="sm" :aria-label="t('forwardV4.detail.range')" :options="ranges" />
@@ -177,6 +179,7 @@ import EngineChip from '@/components/forward/EngineChip.vue'
 import EntryHaCard from '@/components/forward/EntryHaCard.vue'
 import HopChain from '@/components/forward/HopChain.vue'
 import RouteStatusBadge from '@/components/forward/RouteStatusBadge.vue'
+import RouteSubscriptionCard from '@/components/forward/RouteSubscriptionCard.vue'
 import { forwardErrorMessage } from '@/components/forward/messages'
 import { usePolling } from '@/components/forward/usePolling'
 import { H21_DEFAULTS, hourlySeries, linkLabel, nodeLag, nodeLagging, num, roleOf, routeStatus, statusContext, trafficWindow } from '@/components/forward/routeModel'

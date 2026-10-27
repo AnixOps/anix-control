@@ -659,6 +659,27 @@ export default {
       disable: '禁用节点…',
       delete: '删除节点…'
     },
+    subscription: {
+      title: '订阅',
+      description: '路由的目标是代理节点的协议时，可以把它加入订阅：用户在订阅里多一个节点，连路由的入口，协议、密钥和订阅分组沿用目标协议。',
+      loadFailed: '无法读取订阅状态',
+      noProtocol: '路由的目标不是任何代理节点协议的地址和端口，不能加入订阅。把目标改成落地节点的地址和协议端口（例如 SS 的 11111）。',
+      protocol: '目标是 {node} 的协议 {name}（{type}，端口 {port}）。',
+      publish: '加入订阅',
+      publishHelp: '订阅里这个协议所在的分组都会多出一条，地址和端口是路由入口的。路由暂停时不出现。',
+      displayName: '订阅名称',
+      displayNameHelp: '节点名是「协议名 | 这里的名称」，留空用路由名 {route}。',
+      save: '保存',
+      published: '已加入订阅',
+      withdrawn: '已从订阅移除',
+      saveFailed: '保存失败',
+      reasons: {
+        no_protocol: '目标不再是代理节点的协议，订阅里暂时没有它。',
+        paused: '路由已暂停，订阅里暂时没有它；恢复后自动出现。',
+        l4_mismatch: '路由转发的 TCP/UDP 与目标协议不符（例如 SS 需要 TCP），订阅里暂时没有它。修改路由的协议后自动出现。',
+        no_entry: '入口节点还没有地址或端口，订阅里暂时没有它。'
+      }
+    },
     join: {
       action: '用作转发节点…',
       settings: '转发设置',

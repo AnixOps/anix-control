@@ -658,6 +658,27 @@ export default {
       disable: 'Disable node…',
       delete: 'Delete node…'
     },
+    subscription: {
+      title: 'Subscriptions',
+      description: 'When the route\'s target is a proxy node\'s protocol, the route can be added to subscriptions: subscribers get one more node that connects to the route\'s entry, with the target protocol\'s settings, keys and subscription groups.',
+      loadFailed: 'Could not load the subscription state',
+      noProtocol: 'No target of the route is a proxy node protocol\'s address and port, so it cannot be added to subscriptions. Point the target at the landing node\'s address and the protocol\'s port (such as 11111 for Shadowsocks).',
+      protocol: 'The target is {node}\'s protocol {name} ({type}, port {port}).',
+      publish: 'Add to subscriptions',
+      publishHelp: 'Every subscription group of the protocol gets one more node at the route\'s entry address and port. A paused route is left out.',
+      displayName: 'Subscription name',
+      displayNameHelp: 'The node is named "<protocol> | <this name>"; empty uses the route\'s name {route}.',
+      save: 'Save',
+      published: 'Added to subscriptions',
+      withdrawn: 'Removed from subscriptions',
+      saveFailed: 'Could not save',
+      reasons: {
+        no_protocol: 'The target is no longer a proxy node\'s protocol, so subscriptions leave the route out.',
+        paused: 'The route is paused, so subscriptions leave it out until it resumes.',
+        l4_mismatch: 'The route does not forward the transport the protocol runs on (Shadowsocks needs TCP), so subscriptions leave it out until the route\'s protocol is changed.',
+        no_entry: 'No entry node has an address and a port yet, so subscriptions leave the route out.'
+      }
+    },
     join: {
       action: 'Use for forwarding…',
       settings: 'Forwarding settings',
