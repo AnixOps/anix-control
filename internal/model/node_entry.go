@@ -11,6 +11,10 @@ const (
 	// machine's (a NAT IPv4 entry); PortMap says which public port reaches
 	// which protocol port.
 	NodeEntryNAT = "nat"
+	// NodeEntryIWAN: subscribers log into a Panabit iWAN line (IWANLineID)
+	// and reach Host on the protocol's own port through it. Only AnixOps
+	// Net can follow it; other clients leave the entry out.
+	NodeEntryIWAN = "iwan"
 )
 
 // NodeEntry is one address subscribers reach a node at (internal/nodeentry),
@@ -34,6 +38,9 @@ type NodeEntry struct {
 	Sort      int       `gorm:"not null;default:0" json:"sort"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+	// IWANLineID is the line of an iWAN entry (model.IWANLine); nil for
+	// the other kinds.
+	IWANLineID *uint `gorm:"column:iwan_line_id" json:"iwan_line_id"`
 }
 
 func (NodeEntry) TableName() string { return "v5_node_entry" }

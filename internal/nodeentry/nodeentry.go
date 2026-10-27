@@ -4,11 +4,13 @@
 // native IPv6 address and a provider NAT IPv4 address whose public ports
 // map to the machine's.
 //
-// An entry is direct (the address on each protocol's own port) or NAT (a
-// public address whose port ranges map to protocol ports). A node with
-// enabled entries is offered in subscriptions once per entry and protocol,
-// in place of its host; a protocol port that a NAT entry does not map is
-// left out for that entry. The node's own configuration does not change:
+// An entry is direct (the address on each protocol's own port), NAT (a
+// public address whose port ranges map to protocol ports) or iWAN (the
+// address reached through a Panabit iWAN line, internal/iwanline). A node
+// with enabled direct or NAT entries is offered in subscriptions once per
+// entry and protocol, in place of its host; a protocol port that a NAT entry
+// does not map is left out for that entry. iWAN entries are offered besides
+// the host or those entries, and only to AnixOps Net. The node's own configuration does not change:
 // an Agent, or the forwarder of a relay without one, listens on the
 // protocol ports as before (a relay that is entered over IPv6 and leaves
 // over IPv4 needs a userspace forwarder that listens on [::], since kernel
@@ -35,6 +37,8 @@ var (
 	ErrNotFound = errors.New("node not found")
 	// ErrInvalid: an entry is invalid; the error says which and why.
 	ErrInvalid = errors.New("invalid node entry")
+	// ErrLineNotFound: an iWAN entry names a line that does not exist.
+	ErrLineNotFound = errors.New("iwan line not found")
 )
 
 func invalid(format string, args ...any) error {
@@ -67,18 +71,21 @@ type Input struct {
 	Host    string      `json:"host"`
 	PortMap []PortRange `json:"port_map"`
 	Enabled *bool       `json:"enabled"`
+	// IWANLineID is the line of an iWAN entry.
+	IWANLineID *uint `json:"iwan_line_id"`
 }
 
 // View is one entry as the API answers it.
 type View struct {
-	ID      uint        `json:"id"`
-	Label   string      `json:"label"`
-	Kind    string      `json:"kind"`
-	Host    string      `json:"host"`
-	Family  string      `json:"family"`
-	PortMap []PortRange `json:"port_map"`
-	Enabled bool        `json:"enabled"`
-	Sort    int         `json:"sort"`
+	ID         uint        `json:"id"`
+	Label      string      `json:"label"`
+	Kind       string      `json:"kind"`
+	Host       string      `json:"host"`
+	Family     string      `json:"family"`
+	PortMap    []PortRange `json:"port_map"`
+	Enabled    bool        `json:"enabled"`
+	Sort       int         `json:"sort"`
+	IWANLineID *uint       `json:"iwan_line_id"`
 }
 
 // Actor is who made an administrator's change, for the audit entry.
@@ -131,6 +138,9 @@ func (s *Service) Replace(ctx context.Context, nodeID uint, inputs []Input, acto
 	if err := s.requireNode(ctx, nodeID); err != nil {
 		return nil, err
 	}
+	if err := s.requireLines(ctx, rows); err != nil {
+		return nil, err
+	}
 	now := s.now()
 	err = s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Where("node_id = ?", nodeID).Delete(&model.NodeEntry{}).Error; err != nil {
@@ -170,6 +180,23 @@ func (s *Service) requireNode(ctx context.Context, nodeID uint) error {
 	return nil
 }
 
+// requireLines checks that every iWAN entry's line exists.
+func (s *Service) requireLines(ctx context.Context, rows []model.NodeEntry) error {
+	for i, row := range rows {
+		if row.IWANLineID == nil {
+			continue
+		}
+		var count int64
+		if err := s.DB.WithContext(ctx).Model(&model.IWANLine{}).Where("id = ?", *row.IWANLineID).Count(&count).Error; err != nil {
+			return err
+		}
+		if count == 0 {
+			return fmt.Errorf("%w: entry %d: line %d", ErrLineNotFound, i+1, *row.IWANLineID)
+		}
+	}
+	return nil
+}
+
 var labelPattern = regexp.MustCompile(`^[^\x00-\x1f\x7f|]+$`)
 
 // validate checks the inputs and builds their rows.
@@ -199,6 +226,15 @@ func validate(inputs []Input) ([]model.NodeEntry, error) {
 			if len(input.PortMap) > 0 {
 				return nil, invalid("entry %d: a direct entry uses the protocols' own ports and has no port map", n)
 			}
+		case model.NodeEntryIWAN:
+			if len(input.PortMap) > 0 {
+				return nil, invalid("entry %d: an iWAN entry uses the protocols' own ports and has no port map", n)
+			}
+			if input.IWANLineID == nil || *input.IWANLineID == 0 {
+				return nil, invalid("entry %d: an iWAN entry needs its line (iwan_line_id)", n)
+			}
+			line := *input.IWANLineID
+			row.IWANLineID = &line
 		case model.NodeEntryNAT:
 			if err := validateRanges(input.PortMap); err != nil {
 				return nil, invalid("entry %d: %v", n, err)
@@ -209,7 +245,7 @@ func validate(inputs []Input) ([]model.NodeEntry, error) {
 			}
 			row.PortMap = string(encoded)
 		default:
-			return nil, invalid("entry %d: kind must be %q or %q", n, model.NodeEntryDirect, model.NodeEntryNAT)
+			return nil, invalid("entry %d: kind must be %q, %q or %q", n, model.NodeEntryDirect, model.NodeEntryNAT, model.NodeEntryIWAN)
 		}
 		rows = append(rows, row)
 	}
@@ -243,8 +279,10 @@ func validateRanges(ranges []PortRange) error {
 
 var hostnamePattern = regexp.MustCompile(`^(?i:[a-z0-9_]([a-z0-9_-]{0,61}[a-z0-9_])?)(\.(?i:[a-z0-9_]([a-z0-9_-]{0,61}[a-z0-9_])?))*\.?$`)
 
-// normalizeHost accepts a domain or an IP address (an IPv6 address with or
+// NormalizeHost accepts a domain or an IP address (an IPv6 address with or
 // without brackets) and answers it without brackets.
+func NormalizeHost(value string) (string, error) { return normalizeHost(value) }
+
 func normalizeHost(value string) (string, error) {
 	host := strings.TrimSpace(value)
 	if len(host) >= 2 && strings.HasPrefix(host, "[") && strings.HasSuffix(host, "]") {
@@ -278,7 +316,7 @@ func Family(host string) string {
 func viewOf(row model.NodeEntry) View {
 	return View{
 		ID: row.ID, Label: row.Label, Kind: row.Kind, Host: row.Host, Family: Family(row.Host),
-		PortMap: Ranges(row), Enabled: row.Enabled, Sort: row.Sort,
+		PortMap: Ranges(row), Enabled: row.Enabled, Sort: row.Sort, IWANLineID: row.IWANLineID,
 	}
 }
 
@@ -319,8 +357,8 @@ type Uncovered struct {
 }
 
 // Uncovered answers the node's enabled, shown protocols that no enabled
-// entry offers, by port. A node without enabled entries answers none: it is
-// reached at its host. The panel warns about them, since the protocol still
+// direct or NAT entry offers, by port. A node without enabled direct or NAT
+// entries answers none: it is reached at its host. The panel warns about them, since the protocol still
 // shows online while every subscription skips it.
 func (s *Service) Uncovered(ctx context.Context, nodeID uint) ([]Uncovered, error) {
 	uncovered := []Uncovered{}
@@ -328,7 +366,7 @@ func (s *Service) Uncovered(ctx context.Context, nodeID uint) ([]Uncovered, erro
 	if err != nil {
 		return nil, err
 	}
-	entries := byNode[nodeID]
+	entries, _ := SplitIWAN(byNode[nodeID])
 	if len(entries) == 0 {
 		return uncovered, nil
 	}
@@ -368,10 +406,27 @@ func EnabledByNode(db *gorm.DB, nodeIDs []uint) (map[uint][]model.NodeEntry, err
 	return byNode, nil
 }
 
+// SplitIWAN separates a node's iWAN entries from its direct and NAT ones:
+// those replace the node's host in subscriptions, iWAN entries come besides.
+func SplitIWAN(entries []model.NodeEntry) (addresses, iwan []model.NodeEntry) {
+	for _, entry := range entries {
+		if entry.Kind == model.NodeEntryIWAN {
+			iwan = append(iwan, entry)
+		} else {
+			addresses = append(addresses, entry)
+		}
+	}
+	return addresses, iwan
+}
+
 func writeAudit(tx *gorm.DB, actor Actor, nodeID uint, rows []model.NodeEntry) error {
 	entries := make([]map[string]any, 0, len(rows))
 	for _, row := range rows {
-		entries = append(entries, map[string]any{"label": row.Label, "kind": row.Kind, "family": Family(row.Host), "ranges": len(Ranges(row)), "enabled": row.Enabled})
+		entry := map[string]any{"label": row.Label, "kind": row.Kind, "family": Family(row.Host), "ranges": len(Ranges(row)), "enabled": row.Enabled}
+		if row.IWANLineID != nil {
+			entry["iwan_line_id"] = *row.IWANLineID
+		}
+		entries = append(entries, entry)
 	}
 	encoded, err := json.Marshal(map[string]any{"entries": entries})
 	if err != nil {

@@ -45,7 +45,7 @@ func (h *NodeEntriesHandler) entryError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, nodeentry.ErrNotFound):
 		kernelError(c, http.StatusNotFound, "not_found", "node not found")
-	case errors.Is(err, nodeentry.ErrInvalid):
+	case errors.Is(err, nodeentry.ErrInvalid), errors.Is(err, nodeentry.ErrLineNotFound):
 		kernelError(c, http.StatusBadRequest, "invalid_request", err.Error())
 	default:
 		kernelDBError(c, err)
@@ -54,7 +54,7 @@ func (h *NodeEntriesHandler) entryError(c *gin.Context, err error) {
 
 // List godoc
 // @Summary A proxy node's entries
-// @Description The addresses subscribers reach the node at beyond its host, in order: label, kind (direct: the protocols' own ports; nat: a public address whose port ranges map to protocol ports), host, family (ipv4, ipv6 or domain), port map and whether the entry is enabled; uncovered_protocols lists the enabled, shown protocols (id, name, type, port) that no enabled entry offers, which subscriptions leave out. A node with enabled entries is offered in subscriptions once per entry and protocol, in place of its host.
+// @Description The addresses subscribers reach the node at beyond its host, in order: label, kind (direct: the protocols' own ports; nat: a public address whose port ranges map to protocol ports; iwan: the host reached through a Panabit iWAN line, iwan_line_id, offered to AnixOps Net only and besides the other entries), host, family (ipv4, ipv6 or domain), port map and whether the entry is enabled; uncovered_protocols lists the enabled, shown protocols (id, name, type, port) that no enabled entry offers, which subscriptions leave out. A node with enabled entries is offered in subscriptions once per entry and protocol, in place of its host.
 // @Tags Kernel
 // @Produce json
 // @Security BearerAuth
@@ -77,7 +77,7 @@ func (h *NodeEntriesHandler) List(c *gin.Context) {
 
 // Replace godoc
 // @Summary Replace a proxy node's entries
-// @Description Makes the list the node's entries, in that order (at most 32; labels unique, without |). A direct entry has no port map; a NAT entry has 1 to 32 port ranges {from, to, external} that do not overlap: protocol ports from..to are reached at external..external+(to-from). An empty list removes every entry, so the node is reached at its host again. Subscriptions change at once; the node's configuration does not. The answer lists the entries and uncovered_protocols, as GET does. Audited.
+// @Description Makes the list the node's entries, in that order (at most 32; labels unique, without |). A direct entry has no port map; an iwan entry has no port map and names its line (iwan_line_id, an existing line); a NAT entry has 1 to 32 port ranges {from, to, external} that do not overlap: protocol ports from..to are reached at external..external+(to-from). An empty list removes every entry, so the node is reached at its host again. Subscriptions change at once; the node's configuration does not. The answer lists the entries and uncovered_protocols, as GET does. Audited.
 // @Tags Kernel
 // @Accept json
 // @Produce json

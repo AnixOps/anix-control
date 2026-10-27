@@ -134,6 +134,7 @@ func laterModels() []any {
 		&model.NodeEntry{},                 // 0010_node_entries
 		&model.SubscriptionGroupProtocol{}, // 0011_subscription_group_protocols
 		&model.ForwardRouteSubscription{},  // 0012_forward_route_subscriptions
+		&model.IWANLine{},                  // 0013_iwan_lines
 	}
 }
 

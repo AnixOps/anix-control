@@ -157,7 +157,7 @@ type ParsedNode struct {
 	// 认证信息 (渲染后填入)
 	UUID     string `json:"uuid,omitempty"`     // VMess/VLESS UUID (用户ID)
 	Password string `json:"password,omitempty"` // Trojan/SS 密码
-	Username string `json:"username,omitempty"` // iWAN 登录名 (面板用户 id)
+	Username string `json:"username,omitempty"` // iWAN 登录名 (面板用户 id，或线路共用账号)
 
 	// TLS 配置 (tls: 0=None, 1=TLS, 2=Reality)
 	TLSMode        int    `json:"tls_mode"`                   // TLS 模式: 0=无, 1=TLS, 2=Reality
@@ -199,8 +199,12 @@ type ParsedNode struct {
 	// 协议特定配置 (兼容旧字段)
 	Settings map[string]any `json:"settings,omitempty"`
 
+	// Via is the name of the Panabit iWAN line (SourceType iwan_line) the
+	// node is reached through; only FormatAnixOps carries it.
+	Via string `json:"via,omitempty"`
+
 	// 来源信息
-	SourceType string `json:"source_type"` // template, node, external
+	SourceType string `json:"source_type"` // template, node, external, iwan_line
 	SourceID   uint   `json:"source_id"`   // 来源 ID
 	SourceName string `json:"source_name"` // 来源名称
 	GroupID    uint   `json:"group_id"`    // 所属分组
@@ -296,6 +300,10 @@ const (
 	FormatSingBox      SubscriptionFormat = "sing-box"     // Sing-box JSON
 	FormatWireGuard    SubscriptionFormat = "wireguard"    // WireGuard 原生配置
 	FormatIWAN         SubscriptionFormat = "iwan"         // iwand 客户端配置 (Panabit iWAN)
+	// FormatAnixOps is AnixOps Net's: the V2Ray link list plus iwan://
+	// links and a via field on the links of nodes reached through a
+	// Panabit iWAN line (networkcore docs/architecture/outbound-via.md).
+	FormatAnixOps SubscriptionFormat = "anixops"
 )
 
 // SubscriptionRequest 订阅请求参数

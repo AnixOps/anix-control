@@ -38,7 +38,7 @@ func NewSubscribeHandler(cfg *config.Config) *SubscribeHandler {
 // GetSubscription 获取用户订阅
 // GET /s/:token
 // 支持 URL 参数:
-//   - type: 指定输出格式 (v2ray, clash, stash, egern, surge, loon, shadowrocket, quantumultx, json, base64json, wireguard, iwan)
+//   - type: 指定输出格式 (v2ray, clash, stash, egern, surge, loon, shadowrocket, quantumultx, json, base64json, wireguard, iwan, anixops)
 //     也支持 type=auto 或 type=ua，强制按 User-Agent 自动识别格式
 //   - include: 包含节点名关键词 (正则)
 //   - exclude: 排除节点名关键词 (正则)
@@ -216,6 +216,8 @@ func (h *SubscribeHandler) detectFormatFromUserAgent(ua string) string {
 		`sing-box`:     "sing-box",
 		`s-box`:        "sing-box",
 		`nekobox`:      "sing-box",
+		// AnixOps Net: links plus Panabit iWAN lines (iwan://, via).
+		`anixopsnet`: "anixops",
 	}
 
 	for pattern, format := range patterns {
@@ -742,6 +744,7 @@ func (h *SubscriptionAdminHandler) GetSubscriptionFormats(c *gin.Context) {
 		{"id": "sing-box", "name": "Sing-box", "description": "适用于 Sing-box, Nekobox 等"},
 		{"id": "wireguard", "name": "WireGuard", "description": "原生 WireGuard 配置，适用于 WireGuard/Shadowrocket/Loon 等支持导入 .conf 的客户端"},
 		{"id": "iwan", "name": "iWAN (iwand)", "description": "Panabit iWAN 登录信息，iwand 客户端配置；OpenWrt、Panabit 客户端按其中的服务器、端口、用户名、口令手工填写"},
+		{"id": "anixops", "name": "AnixOps Net", "description": "AnixOps Net 客户端：分享链接，另含 Panabit iWAN 线路（iwan://）和经线路连接的节点（via）"},
 	}
 
 	panelSuccess(c, formats)

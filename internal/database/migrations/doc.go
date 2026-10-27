@@ -88,4 +88,6 @@
 //     display names of its node protocols (v5_subscription_group_protocol).
 //   - 0012_forward_route_subscriptions: the forward routes published in
 //     subscriptions at their entry nodes (v5_forward_route_subscription).
+//   - 0013_iwan_lines: the Panabit iWAN lines (v5_iwan_line) and the line of
+//     an iWAN node entry (v5_node_entry.iwan_line_id).
 package migrations

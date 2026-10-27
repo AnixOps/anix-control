@@ -385,8 +385,8 @@ export async function setKernelRealityTargetAuto(node, enabled) {
 }
 
 // A proxy node's entries (入口), `node` is "proxy-<id>": { node_id, entries:
-// [{ id, label, kind (direct | nat), host, family (ipv4 | ipv6 | domain),
-// port_map: [{ from, to, external }], enabled, sort }] }. A node with
+// [{ id, label, kind (direct | nat | iwan), host, family (ipv4 | ipv6 |
+// domain), port_map: [{ from, to, external }], enabled, sort, iwan_line_id }] }. A node with
 // enabled entries is offered in subscriptions once per entry and protocol.
 export async function getKernelNodeEntries(node) {
   return unwrap(await v4({ url: `/kernel/nodes/${encodeURIComponent(node)}/entries`, method: 'get' }))
@@ -401,6 +401,29 @@ export async function replaceKernelNodeEntries(node, entries) {
     method: 'put',
     data: { entries }
   }))
+}
+
+// Panabit iWAN lines: { lines: [{ id, name, host, port, username, mtu,
+// encrypt, entries }] }, never a password. An iwan node entry reaches its
+// node through a line (iwan_line_id).
+export async function listIWANLines() {
+  return unwrap(await v4({ url: '/kernel/iwan-lines', method: 'get' }))
+}
+
+// Adds a line ({ name, host, port, username, password, mtu, encrypt }):
+// { line }. Refusals: invalid_request (400) with the reason.
+export async function createIWANLine(line) {
+  return unwrap(await v4({ url: '/kernel/iwan-lines', method: 'post', data: line }))
+}
+
+// Changes a line; an empty password keeps the stored one: { line }.
+export async function updateIWANLine(id, line) {
+  return unwrap(await v4({ url: `/kernel/iwan-lines/${encodeURIComponent(id)}`, method: 'put', data: line }))
+}
+
+// Deletes a line; in_use (409) while node entries use it.
+export async function deleteIWANLine(id) {
+  return unwrap(await v4({ url: `/kernel/iwan-lines/${encodeURIComponent(id)}`, method: 'delete' }))
 }
 
 // A forward route in subscriptions (加入订阅, Phase 10): { route_id,

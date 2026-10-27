@@ -3005,6 +3005,7 @@ func (s *SubscribeHandlerTestSuite) TestDetectFormatFromUserAgent() {
 		{"v2rayN/1.0", "v2ray"},
 		{"sing-box/1.0", "sing-box"},
 		{"NekoBox/1.0", "sing-box"},
+		{"AnixOpsNet/1.0", "anixops"},
 		{"Unknown", "v2ray"}, // default
 	}
 

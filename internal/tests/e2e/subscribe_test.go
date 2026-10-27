@@ -77,6 +77,7 @@ func (s *SubscribeE2ETestSuite) SetupSuite() {
 		&model.NodeEntry{},
 		&model.SubscriptionGroupProtocol{},
 		&model.ForwardRouteSubscription{},
+		&model.IWANLine{},
 		&model.SubscriptionGroup{},
 		&model.SubscriptionTemplate{},
 		&model.UserSubscriptionGroup{},
