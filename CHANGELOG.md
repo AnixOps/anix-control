@@ -2,6 +2,60 @@
 
 ## Unreleased
 
+## 5.0.0-rc.8 - 2026-10-27
+
+### Added
+
+- Panabit iWAN nodes. A node protocol of type `iwan` (anixcore's iWAN
+  inbound, a UDP layer-3 tunnel without encryption) carries `pool`, `mtu`,
+  `dns_upstream`, `allow_encrypt`, `allow_client_to_client` and
+  `fixed_addresses` (panel user id to address) to the Agent over UniProxy
+  and gRPC; the settings are validated when the protocol is saved. The admin
+  protocol editor has an iWAN form that marks the protocol unencrypted.
+  Users log in with their user id and the first 16 hex digits of their UUID;
+  the subscription format `iwan` (`?type=iwan`) gives them an iwand
+  configuration. Needs an anix-agent with the anixcore `iwan` mapping.
+- Route diagnosis checks a target that is a proxy node's address against
+  the node's protocols (Control's records, `CONFIG` step with the target).
+  It fails as `target_no_protocol` when no enabled protocol of the node
+  listens on the target's port, listing the node's ports (a route to
+  `:11113` on a node whose Shadowsocks runs on 11111 and 11112 connected and
+  then failed in the client, and its UDP probe only ever said
+  inconclusive), and as `target_l4_mismatch` when the route does not
+  forward the protocol's transport (a UDP-only route to Shadowsocks, or a
+  TCP-only route to Hysteria2, TUIC, WireGuard or iWAN). A matching target
+  reports `target_protocol` with the node and protocol.
+- Subscription groups can order their node protocols and give each one a
+  display name. 订阅分组 → 节点协议 has an 排序与名称 sheet: drag a row (or
+  use ↑/↓ on its handle, or the arrow buttons) into place and type the name
+  subscribers see; an empty name keeps "<node> - <protocol>", and a node with
+  entries still appends " | <entry>". Subscriptions list each group's
+  protocols in that order at once; linked protocols the order leaves out
+  follow by id. The table shows each protocol's name in the subscription.
+  `GET` and `PUT /api/v4/admin/subscription-groups/{id}/protocol-layout`
+  read and replace the order and names (table
+  `v5_subscription_group_protocol`, migration
+  `0011_subscription_group_protocols`).
+
+### Changed
+
+- CI: the mocked browser E2E gate runs in three parallel jobs, Frontend E2E
+  (1/3 to 3/3), against the production bundle (`vite preview` of `public/`)
+  instead of the dev server, and records traces and videos only for a
+  retried test instead of every test. The rest of the old Frontend Build job
+  is now Frontend Checks; Frontend Build, still the required check, passes
+  when Frontend Checks and every shard passed. Locally `npm run test:e2e`
+  still uses the dev server.
+- The proxy node page's 加入转发清单… button is now 用作转发节点…, and its
+  dialog says what it does: routes may use the node as an entry, relay or
+  exit hop. It does not convert the node or change any subscription; to
+  have users connect through a forwarder, add the forwarder's address and
+  port as an entry on the landing node. A node without an Agent (a legacy
+  node) gets a warning that it cannot run a hop until the Agent is
+  installed.
+- A subscription that combines several subscription groups lists the nodes
+  group by group, in the user's group order, instead of by protocol id.
+
 ### Fixed
 
 - A Reality protocol (tls 2) saved without a private key now gets a new
@@ -16,6 +70,29 @@
   (`curl: (18) HTTP/2 stream 1 was not closed cleanly`), which curl's
   `--retry` does not retry, and the install stopped at the checksum or the
   Agent download.
+- The Agent installer installs nftables (apt-get, dnf, yum, apk, pacman or
+  zypper) on a forward node that lacks `nft`, before its forward checks.
+  A host that joined through a node group and only then turned out a
+  forward node used to stop after the join with "nft is missing" and an
+  Agent that never started (shown offline); it now installs nftables and
+  starts the Agent. When no package manager can install it, the check
+  fails as before with the command to run.
+- The node page warns when a node's entries leave a protocol out of every
+  subscription. A node with enabled entries is offered only through them, so
+  an enabled protocol whose port no enabled entry offers (a NAT map written
+  with the public ports as machine ports, as on leikwanhost-sh) disappeared
+  from subscriptions while it still showed online. 入口 now lists those
+  protocols above the table, and `GET`/`PUT /api/v4/kernel/nodes/{id}/entries`
+  answer them as `uncovered_protocols`.
+- The node protocol editor offers only the transports and TLS modes the
+  chosen protocol runs on: Shadowsocks is TCP without TLS, Hysteria2 and TUIC
+  are UDP with TLS, VLESS/VMess/Trojan take tcp, ws, grpc, h2 and
+  httpupgrade, and Reality (VLESS and Trojan) runs on tcp, grpc and h2.
+  Switching the type no longer keeps the previous type's transport (a
+  Hysteria2 protocol switched to Shadowsocks showed UDP and every stream
+  transport). Saving refuses a combination no kernel runs, in the editor and
+  in Control (`ValidateNodeProtocol`); the transport label older editors
+  stored for Shadowsocks, Hysteria2 and TUIC (tcp or udp) is still accepted.
 
 ## 5.0.0-rc.7 - 2026-10-26
 
