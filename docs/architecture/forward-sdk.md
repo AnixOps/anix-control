@@ -1384,7 +1384,15 @@ The stages, in order:
    - one `HEALTH` step per upstream of the node's hop, from the latest
      report: `healthy`, or failed as `unhealthy` or `circuit_open` (with
      the failures in a row and the time the breaker reopens). Without data
-     the step is inconclusive (`no_health`).
+     the step is inconclusive (`no_health`);
+   - one `CONFIG` step with a target, no node, for each target whose host
+     is a proxy node's address (its host or a protocol's own host, compared
+     as written, names unresolved): `target_protocol` when an enabled
+     protocol of the node listens on the target's port, failed as
+     `target_no_protocol` when none does (the message lists the node's
+     ports) or `target_l4_mismatch` when the protocol runs on TCP
+     (Shadowsocks, VLESS, VMess, Trojan, AnyTLS) or UDP (Hysteria2, TUIC,
+     WireGuard, iWAN) and the route does not forward it.
 2. **Node vantage** (vantage `NODE`), for each node whose Agent holds an
    Agent Control session advertising `agent.diagnostic` and `diag.v1`. The
    forward checks of the `agent.diagnostic` operation run on each of its
