@@ -884,18 +884,20 @@ pf_case skip 0 "preflight checks were skipped (--skip-preflight)" "FAKE_KERNEL=4
 ! grep -q 'Preflight checks for a forward node' "${STATE}/out" || fail "--skip-preflight ran the forward checks after the join"
 ok "preflight checks pass, warn and fail with a fix"
 
-# 11. IPv6 SLAAC interfaces: a warning, or accept_ra = 2 with --accept-ra,
-# kept by a later run without the flag.
-pf_case slaac 0 "ignore router advertisements on eth0" "FAKE_RA=eth0"
-! grep -q 'accept_ra' "${ROOT_DIR}/etc/sysctl.d/90-anixops-forward.conf" || fail "accept_ra written without --accept-ra"
-FAKE_RA=eth0 run_installer -u "${CONTROL}" --accept-ra
-expect_status 0 "--accept-ra"
-expect_out "the drop-in sets accept_ra = 2 on eth0 (--accept-ra)"
-grep -qxF 'net.ipv6.conf.eth0.accept_ra = 2' "${ROOT_DIR}/etc/sysctl.d/90-anixops-forward.conf" || fail "--accept-ra wrote no accept_ra"
-expect_out "accept_ra = 2 on eth0); applied"
+# 11. IPv6 SLAAC interfaces: accept_ra = 2 by default, a warning with
+# --no-accept-ra, and kept by a later run with it.
+pf_case slaac 0 "ignore router advertisements on eth0" "FAKE_RA=eth0" -u "${CONTROL}" -t "${TOKEN_A}" --forward --no-accept-ra
+! grep -q 'accept_ra' "${ROOT_DIR}/etc/sysctl.d/90-anixops-forward.conf" || fail "accept_ra written with --no-accept-ra"
 FAKE_RA=eth0 run_installer -u "${CONTROL}"
+expect_status 0 "default accept_ra"
+expect_out "the drop-in sets accept_ra = 2 on eth0"
+grep -qxF 'net.ipv6.conf.eth0.accept_ra = 2' "${ROOT_DIR}/etc/sysctl.d/90-anixops-forward.conf" || fail "the default wrote no accept_ra"
+expect_out "accept_ra = 2 on eth0); applied"
+FAKE_RA=eth0 run_installer -u "${CONTROL}" --no-accept-ra
 expect_status 0 "re-run keeps accept_ra"
 [[ "$(grep -c 'accept_ra = 2' "${ROOT_DIR}/etc/sysctl.d/90-anixops-forward.conf")" == "1" ]] || fail "a re-run lost or doubled accept_ra"
+FAKE_RA=eth0 run_installer -u "${CONTROL}" --accept-ra
+expect_status 0 "the old --accept-ra flag still works"
 ok "IPv6 accept_ra for SLAAC interfaces"
 
 # 12. Uninstall keeps the identity; --purge removes everything the Agent

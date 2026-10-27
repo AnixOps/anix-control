@@ -377,10 +377,10 @@ lists every node).
     sysctl-dropin` prints it) and applies it with
     `sysctl -e -p` (`-e`: a host without IPv6 still gets IPv4). When it
     cannot apply now, the summary notes it and the file applies at the next
-    boot. A proxy node without `--forward` is left as it is. With
-    `--accept-ra` it adds `net.ipv6.conf.<if>.accept_ra = 2` for the
-    interfaces that have an IPv6 default route from router advertisements
-    (SLAAC), and later runs keep those lines.
+    boot. A proxy node without `--forward` is left as it is. Unless
+    `--no-accept-ra` is given it adds `net.ipv6.conf.<if>.accept_ra = 2`
+    for the interfaces that have an IPv6 default route from router
+    advertisements (SLAAC), and later runs keep those lines.
 14. Starts the Agent and prints the summary, and, when the token came on the
     command line, a reminder that the command is in the shell history.
 
@@ -490,9 +490,9 @@ forward node; a machine that a join makes a forward node gets them right
 after the join, before its Agent starts (step 12 above). Pass `--forward`
 to have them checked before anything changes. A forward node without
 `nft` gets nftables from the package manager before the checks, the one
-change preflight makes. A forward node with a SLAAC IPv6 address should
-be installed with `--accept-ra`, or its IPv6 default route expires once
-forwarding is on.
+change preflight makes. A forward node with a SLAAC IPv6 address keeps
+its IPv6 default route: the drop-in sets `accept_ra = 2` on those
+interfaces unless `--no-accept-ra` is given.
 
 | Check | Fails when | Warns when |
 |---|---|---|
@@ -501,7 +501,7 @@ forwarding is on.
 | nftables (forward nodes) | `nft` older than 0.9.7, or missing after the script tried to install nftables with the package manager (apt-get, dnf, yum, apk, pacman or zypper) | `tc` missing (no bandwidth limits); `nf_conntrack` neither loaded nor a module |
 | polkit (forward nodes) | | `pkaction` missing, or older than 0.106: the Agent cannot start or reload `anixops-gost.service`, so gost hops fail (nftables hops work) |
 | Firewalls (forward nodes) | | firewalld active; ufw enabled with `DEFAULT_FORWARD_POLICY="DROP"`; the iptables `FORWARD` policy is `DROP` (Docker sets it) |
-| IPv6 SLAAC (forward nodes) | | an interface with a default route from router advertisements has `accept_ra` other than 2: with forwarding on the kernel ignores router advertisements and the route expires. Re-run with `--accept-ra` |
+| IPv6 SLAAC (forward nodes) | | an interface with a default route from router advertisements has `accept_ra` other than 2: with forwarding on the kernel ignores router advertisements and the route expires. Only with `--no-accept-ra`: otherwise the drop-in sets it |
 | Ports | | with `--port-range FROM-TO` (the node's forward port range in Control), a listener in that range (`ss`). The Agent itself listens on no port; without the flag the check is skipped |
 | Disk | less than 200 MiB free for `/usr/lib/anixops-agent` or the download directory | |
 | Control over https | online: `/install/agent.env` cannot be read with a verified certificate (stops before preflight) | offline: Control's https address is unreachable |

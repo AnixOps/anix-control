@@ -1777,8 +1777,8 @@ below). As built:
   (warn: 0.105 reads only `.pkla`, which cannot be limited to one unit, so
   no `.pkla` is written and gost hops cannot run there), firewalld, ufw's
   forward policy and the iptables `FORWARD DROP` policy (warn), SLAAC
-  interfaces whose `accept_ra` is not 2 (warn; `--accept-ra` writes
-  `net.ipv6.conf.<if>.accept_ra = 2` to the drop-in), listeners in
+  interfaces whose `accept_ra` is not 2 (the drop-in gets
+  `net.ipv6.conf.<if>.accept_ra = 2`; warn only with `--no-accept-ra`), listeners in
   `--port-range` (warn; skipped without it: the Agent listens on no port),
   200 MiB free (fail), Control's https address and the gRPC target with TLS
   verified against the system CAs (fail), and the clock against Control's

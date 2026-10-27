@@ -5,7 +5,7 @@
 #     -u https://<control> -t anixjoin_... \
 #     [--name hk-01] [--host 203.0.113.5] [--mirror control|cn|github] \
 #     [--reset] [--forward] [--timeout 180] [--offline bundle.tar.gz] \
-#     [--port-range 20000-30000] [--accept-ra] [--skip-preflight]
+#     [--port-range 20000-30000] [--no-accept-ra] [--skip-preflight]
 #   sudo bash install.sh uninstall [--purge]
 #
 # Copy the command from Control (节点 › 接入节点). Its token says what the
@@ -134,7 +134,7 @@ ACTION="install"
 PURGE=0
 OFFLINE=""
 SKIP_PREFLIGHT=0
-ACCEPT_RA=0
+ACCEPT_RA=1
 PORT_RANGE=""
 PREFLIGHT_FAILS=0
 FORWARD_CHECKED=0
@@ -212,8 +212,9 @@ Usage: install.sh -u <https://control> -t <anixjoin_...|anixagt_...> [options]
                         with a join token Control always creates a new node
   --forward             turn on IP forwarding on a proxy node too (always on for a
                         forward node)
-  --accept-ra           keep accepting IPv6 router advertisements on SLAAC interfaces
-                        with forwarding on (net.ipv6.conf.<if>.accept_ra = 2)
+  --no-accept-ra        do not write net.ipv6.conf.<if>.accept_ra = 2 for SLAAC
+                        interfaces when forwarding is on (by default it is written, so
+                        the IPv6 default route from router advertisements keeps working)
   --port-range FROM-TO  the node's forward port range: preflight lists ports in use there
   --skip-preflight      install although a preflight check fails (not recommended)
   --timeout SECONDS     how long the join may take (default 180)
@@ -246,11 +247,13 @@ parse_args() {
         usage
         exit 0
         ;;
-      --reset | --forward | --accept-ra | --skip-preflight)
+      --reset | --forward | --accept-ra | --no-accept-ra | --skip-preflight)
         case "${flag}" in
           --reset) RESET=1 ;;
           --forward) FORWARD=1 ;;
+          # The default since accept_ra became automatic; kept for old commands.
           --accept-ra) ACCEPT_RA=1 ;;
+          --no-accept-ra) ACCEPT_RA=0 ;;
           --skip-preflight) SKIP_PREFLIGHT=1 ;;
         esac
         shift
@@ -547,9 +550,9 @@ check_ipv6_ra() {
   if ((${#pending[@]} == 0)); then
     pf_ok "IPv6 router advertisements (no SLAAC interface needs accept_ra = 2)"
   elif ((ACCEPT_RA)); then
-    pf_ok "IPv6 router advertisements: the drop-in sets accept_ra = 2 on ${pending[*]} (--accept-ra)"
+    pf_ok "IPv6 router advertisements: the drop-in sets accept_ra = 2 on ${pending[*]}"
   else
-    pf_warn "IPv6 forwarding makes the kernel ignore router advertisements on ${pending[*]} (accept_ra is not 2): the IPv6 default route learned by SLAAC expires. Re-run with --accept-ra to write net.ipv6.conf.<if>.accept_ra = 2 to ${SYSCTL_FILE}"
+    pf_warn "IPv6 forwarding makes the kernel ignore router advertisements on ${pending[*]} (accept_ra is not 2): the IPv6 default route learned by SLAAC expires. Re-run without --no-accept-ra to write net.ipv6.conf.<if>.accept_ra = 2 to ${SYSCTL_FILE}"
   fi
 }
 
@@ -1221,8 +1224,8 @@ render_sysctl() {
 
 # append_accept_ra adds accept_ra = 2 for the SLAAC interfaces to the new
 # drop-in $2: with forwarding on, the kernel ignores router advertisements
-# on an interface whose accept_ra is 1. It does so with --accept-ra, and
-# keeps the lines an earlier run with --accept-ra wrote to $1.
+# on an interface whose accept_ra is 1. It does so unless --no-accept-ra
+# is given, and keeps the lines an earlier run wrote to $1.
 append_accept_ra() {
   local old="$1" new="$2" iface lines=()
   if [[ -f "${old}" ]]; then
@@ -1237,7 +1240,7 @@ append_accept_ra() {
   fi
   ((${#lines[@]} > 0)) || return 0
   {
-    printf '# SLAAC interfaces keep accepting router advertisements with forwarding on (--accept-ra).\n'
+    printf '# SLAAC interfaces keep accepting router advertisements with forwarding on.\n'
     printf '%s\n' "${lines[@]}" | sed -E 's/ *= */ = /' | sort -u
   } >>"${new}"
   FORWARDING_NOTE="; accept_ra = 2 on $(printf '%s\n' "${lines[@]}" | sed -E 's/^net\.ipv6\.conf\.([^ =]+)\.accept_ra.*/\1/' | sort -u | tr '\n' ' ' | sed 's/ $//')"
