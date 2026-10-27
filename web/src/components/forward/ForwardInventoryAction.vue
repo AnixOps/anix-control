@@ -7,7 +7,9 @@
 // 加入转发清单… on a proxy node's page (D15): a proxy node joins the
 // forwarding inventory through its forwarding settings (PUT
 // /nodes/proxy-<id>/settings with the defaults). Once it is in, the button
-// leads to its 转发设置.
+// leads to its 转发设置. Joining does not convert the node or change any
+// subscription: the dialog says so, and warns when the node has no Agent
+// (a legacy node), which can hold settings but run no hop.
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { Waypoints } from '@lucide/vue'
@@ -26,6 +28,9 @@ const confirm = useConfirm()
 const toast = useToast()
 // '' while unknown, then 'member' or 'outside'.
 const state = ref('')
+// False when the node never negotiated forwarding and advertises no
+// engine: no Agent runs on it.
+const agentReady = ref(true)
 const joining = ref(false)
 
 onMounted(async () => {
@@ -33,6 +38,7 @@ onMounted(async () => {
     const { nodes } = await listNodes({ kind: 'proxy' })
     const node = nodes.find(item => item.node_ref === props.nodeRef)
     state.value = node && node.in_inventory !== false ? 'member' : 'outside'
+    agentReady.value = Boolean(node?.negotiated || node?.capabilities?.engines?.length)
   } catch {
     state.value = ''
   }
@@ -41,7 +47,7 @@ onMounted(async () => {
 async function join() {
   await confirm({
     title: t('forwardV4.join.title', { name: props.name || props.nodeRef }),
-    message: t('forwardV4.join.message'),
+    message: agentReady.value ? t('forwardV4.join.message') : `${t('forwardV4.join.message')} ${t('forwardV4.join.noAgent')}`,
     confirmLabel: t('forwardV4.join.confirm'),
     onConfirm: async () => {
       joining.value = true
