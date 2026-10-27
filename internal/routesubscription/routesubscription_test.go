@@ -45,8 +45,8 @@ func storeRoute(t *testing.T, db *gorm.DB, route *forwardv1.Route, enforced stri
 func kfcRoute(port uint32) *forwardv1.Route {
 	return &forwardv1.Route{
 		Id: "r1", Owner: "admin", Name: "KFC-JP",
-		Listen: &forwardv1.Listen{Port: 15301, Protocol: forwardv1.L4Protocol_L4_PROTOCOL_TCP_UDP},
-		Hops:   []*forwardv1.Hop{{Role: forwardv1.HopRole_HOP_ROLE_ENTRY, NodeRefs: []string{"forward-1"}}},
+		Listen:  &forwardv1.Listen{Port: 15301, Protocol: forwardv1.L4Protocol_L4_PROTOCOL_TCP_UDP},
+		Hops:    []*forwardv1.Hop{{Role: forwardv1.HopRole_HOP_ROLE_ENTRY, NodeRefs: []string{"forward-1"}}},
 		Targets: []*forwardv1.Target{{Host: "104.251.233.29", Port: port}},
 	}
 }

@@ -69,7 +69,7 @@ func (s *ServiceTestSuite) SetupSuite() {
 			&model.NodeProtocol{},
 			&model.NodeEntry{},
 			&model.SubscriptionGroupProtocol{},
-		&model.ForwardRouteSubscription{},
+			&model.ForwardRouteSubscription{},
 			&model.AuthorizedKey{},
 			&model.Event{},
 			&model.UserSubscriptionGroup{},
