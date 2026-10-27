@@ -238,9 +238,9 @@ reject_named_step_text() {
   echo "ok: ${description} is absent"
 }
 
-frontend_build_block() {
+frontend_checks_block() {
   awk '
-    /^  frontend-build:/ { in_job = 1; next }
+    /^  frontend-checks:/ { in_job = 1; next }
     in_job && /^  [A-Za-z0-9_-]+:/ { exit }
     in_job { print }
   ' "${WORKFLOW_PATH}"
@@ -248,9 +248,9 @@ frontend_build_block() {
 
 require_live_control_webui_gate() {
   local block
-  block="$(frontend_build_block)"
+  block="$(frontend_checks_block)"
   if [[ -z "${block}" ]]; then
-    fail "frontend-build job is missing"
+    fail "frontend-checks job is missing"
     return 1
   fi
 
@@ -264,7 +264,7 @@ require_live_control_webui_gate() {
     "npx playwright install --with-deps chromium" \
     "npx playwright test --config playwright.live-control.config.js"; do
     if ! grep -Fq -- "${required}" <<<"${block}"; then
-      fail "frontend-build live Control WebUI gate is missing: ${required}"
+      fail "frontend-checks live Control WebUI gate is missing: ${required}"
       return 1
     fi
   done
@@ -296,8 +296,8 @@ check_release_workflow() {
   # The required frontend job audits shipped dependencies only, strictly. The
   # development tools and their dated waivers belong to the nightly security
   # workflow, so an advisory with no fix cannot block unrelated pull requests.
-  require_named_step_text frontend-build "Audit shipped frontend dependencies" "npm audit --omit=dev --audit-level=moderate" "required frontend job audits shipped dependencies strictly" || failed=1
-  reject_job_text frontend-build "audit:check" "development-dependency waivers in the required frontend job" || failed=1
+  require_named_step_text frontend-checks "Audit shipped frontend dependencies" "npm audit --omit=dev --audit-level=moderate" "required frontend job audits shipped dependencies strictly" || failed=1
+  reject_job_text frontend-checks "audit:check" "development-dependency waivers in the required frontend job" || failed=1
   require_text "scripts/tests/test_plugin_execution_install.sh" "package execution installer regression test" || failed=1
 
   # Tests gate the release.

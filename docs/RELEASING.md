@@ -274,7 +274,7 @@ failed job fails the run, and the failing job names the finding:
   its package to reproduce it with a plain `go test`.
 
 The pull-request pipeline keeps its own `govulncheck` and `gosec` jobs; this
-workflow does not replace them. Its required "Frontend Build" job audits only
+workflow does not replace them. Its required "Frontend Build" check (the audit runs in "Frontend Checks") audits only
 the shipped frontend dependencies, strictly (`npm audit --omit=dev
 --audit-level=moderate`, no waivers): an advisory in a development tool with no
 fix shows up in the nightly run and never blocks an unrelated pull request.

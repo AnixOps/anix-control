@@ -296,7 +296,10 @@ test.describe('creating a token', () => {
     const secret = watchSecret(page)
     await openScreen(page, 'admin-api-token-created', { clock: true })
     await expect(page.getByTestId('api-token-result')).toBeVisible()
+    // Back leaves the app for the blank page the test started on. goBack can
+    // return before that navigation commits, and a goto then would race it.
     await page.goBack().catch(() => {})
+    await page.waitForURL('about:blank')
     await page.goto('/admin/dashboard')
     expect(await secret.where()).toEqual(NOWHERE)
   })
