@@ -488,13 +488,17 @@ need to know that the machine forwards. Before a fresh join they run up
 front only with `--forward` or on a machine whose configuration names a
 forward node; a machine that a join makes a forward node gets them right
 after the join, before its Agent starts (step 12 above). Pass `--forward`
-to have them checked before anything changes.
+to have them checked before anything changes. A forward node without
+`nft` gets nftables from the package manager before the checks, the one
+change preflight makes. A forward node with a SLAAC IPv6 address should
+be installed with `--accept-ra`, or its IPv6 default route expires once
+forwarding is on.
 
 | Check | Fails when | Warns when |
 |---|---|---|
 | systemd (`systemctl --version`) | older than 240 (the units use `Type=exec`) | older than 247 (`ProtectProc=` and `ProcSubset=` are ignored: a weaker gost sandbox) |
 | Kernel (`uname -r`) | older than 5.10 on a forward node (the nftables driver's comments) | older than 5.10 on a proxy node |
-| nftables (forward nodes) | `nft` missing or older than 0.9.7 | `tc` missing (no bandwidth limits); `nf_conntrack` neither loaded nor a module |
+| nftables (forward nodes) | `nft` older than 0.9.7, or missing after the script tried to install nftables with the package manager (apt-get, dnf, yum, apk, pacman or zypper) | `tc` missing (no bandwidth limits); `nf_conntrack` neither loaded nor a module |
 | polkit (forward nodes) | | `pkaction` missing, or older than 0.106: the Agent cannot start or reload `anixops-gost.service`, so gost hops fail (nftables hops work) |
 | Firewalls (forward nodes) | | firewalld active; ufw enabled with `DEFAULT_FORWARD_POLICY="DROP"`; the iptables `FORWARD` policy is `DROP` (Docker sets it) |
 | IPv6 SLAAC (forward nodes) | | an interface with a default route from router advertisements has `accept_ra` other than 2: with forwarding on the kernel ignores router advertisements and the route expires. Re-run with `--accept-ra` |
