@@ -2229,6 +2229,12 @@ jobs:
     runs-on: ubuntu-24.04
     needs: [changes]
     if: ${{ needs.changes.outputs.web == 'true' }}
+    # The official Playwright image carries Chromium and its system
+    # libraries: installing them with apt took from 30 s to 10 minutes.
+    container:
+      image: mcr.microsoft.com/playwright:v1.61.1-noble
+      options: --ipc=host
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -2237,20 +2243,15 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-          cache-dependency-path: web/package-lock.json
-
       - name: Install dependencies
         working-directory: web
         run: npm ci
 
-      - name: Install Playwright Chromium
+      - name: Check the image matches @playwright/test
         working-directory: web
-        run: npx playwright install --with-deps chromium
+        run: |
+          locked=$(node -p "require('./package-lock.json').packages['node_modules/@playwright/test'].version")
+          test "${locked}" = "1.61.1" || { echo "::error::@playwright/test is ${locked}; update the frontend-e2e and frontend-visual image tags"; exit 1; }
 
       - name: Build frontend
         working-directory: web
@@ -2258,6 +2259,8 @@ jobs:
 
       - name: Run frontend browser E2E gate
         working-directory: web
+        env:
+          HOME: /root
         run: npm run test:e2e -- --shard=${{ matrix.shard }}/3
 
       - name: Upload the Playwright report
