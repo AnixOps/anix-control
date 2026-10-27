@@ -144,12 +144,14 @@ jobs:
         run: |
           shellcheck -x scripts/install.sh config/deploy/compose/init-secrets.sh config/deploy/grpc_tls/setup_certbot.sh \
             scripts/tests/test_control_install_agent_access.sh scripts/tests/test_compose_init_secrets.sh \
-            scripts/tests/test_install_fresh_config.sh scripts/tests/test_install_fresh_main.sh
+            scripts/tests/test_install_fresh_config.sh scripts/tests/test_install_fresh_main.sh \
+            scripts/tests/test_install_agent_release.sh
 
       - name: Test Control installer Agent access in a fake root
         run: |
           bash scripts/tests/test_control_install_agent_access.sh
           bash scripts/tests/test_compose_init_secrets.sh
+          bash scripts/tests/test_install_agent_release.sh
 
       # The Agent installer Control serves at /install.sh (one-command node
       # onboarding): shellcheck, then the fake-root tests.

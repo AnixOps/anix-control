@@ -63,6 +63,10 @@ GRPC_NAME="${GRPC_NAME:-}"
 GRPC_TLS_TRUST_CA_FILE="${GRPC_TLS_TRUST_CA_FILE:-}"
 LETSENCRYPT_LIVE_DIR="${LETSENCRYPT_LIVE_DIR:-/etc/letsencrypt/live}"
 SYSTEMD_UNIT_DIR="${SYSTEMD_UNIT_DIR:-/etc/systemd/system}"
+# The Agent release Control installs nodes with, kept in
+# agent_install.artifact_dir so nodes download it from Control.
+AGENT_RELEASE_BASE="${AGENT_RELEASE_BASE:-https://github.com/${REPO_OWNER}/anix-agent/releases/download}"
+AGENT_ARTIFACT_DIR=""
 
 info() { printf '[INFO] %s\n' "$*"; }
 warn() { printf '[WARN] %s\n' "$*" >&2; }
@@ -251,16 +255,20 @@ verify_asset() {
 # (their hosts are linked into it).
 OFFICIAL_PUBLIC_KEY="jW26nr2tbthASoeq6RmIpx8Ah+uhPNIv9V1ewRVb1VE="
 
+# verify_official_signature <file> <signature> checks a Base64 raw Ed25519
+# signature over file by the official key.
+verify_official_signature() {
+  local file="$1" signature="$2"
+  tr -d '[:space:]' < "${signature}" | base64 -d > "${signature}.bin" 2>/dev/null || return 1
+  { printf '\x30\x2a\x30\x05\x06\x03\x2b\x65\x70\x03\x21\x00'; printf '%s' "${OFFICIAL_PUBLIC_KEY}" | base64 -d; } > "${signature}.key.der"
+  openssl pkeyutl -verify -pubin -keyform DER -inkey "${signature}.key.der" -rawin \
+    -in "${file}" -sigfile "${signature}.bin" >/dev/null 2>&1
+}
+
 verify_release_checksums() {
-  local signature_bin key_der
   download_asset "SHA256SUMS.txt.sig"
   openssl pkeyutl -help 2>&1 | grep -q -- '-rawin' || die "OpenSSL 3 is required to verify the release signature (openssl pkeyutl -rawin)"
-  signature_bin="${TMP_DIR}/SHA256SUMS.txt.sig.bin"
-  key_der="${TMP_DIR}/official-public-key.der"
-  tr -d '[:space:]' < "${TMP_DIR}/SHA256SUMS.txt.sig" | base64 -d > "${signature_bin}" 2>/dev/null || die "SHA256SUMS.txt.sig is not Base64"
-  { printf '\x30\x2a\x30\x05\x06\x03\x2b\x65\x70\x03\x21\x00'; printf '%s' "${OFFICIAL_PUBLIC_KEY}" | base64 -d; } > "${key_der}"
-  openssl pkeyutl -verify -pubin -keyform DER -inkey "${key_der}" -rawin \
-    -in "${TMP_DIR}/SHA256SUMS.txt" -sigfile "${signature_bin}" >/dev/null 2>&1 || \
+  verify_official_signature "${TMP_DIR}/SHA256SUMS.txt" "${TMP_DIR}/SHA256SUMS.txt.sig" || \
     die "SHA256SUMS.txt.sig does not verify against the official key: refusing ${VERSION}"
   info "Verified the signature of SHA256SUMS.txt"
 }
@@ -732,6 +740,80 @@ configure_agent_access() {
   elif [[ -z "$(config_section_value grpc tls_cert_file)" || "$(config_section_value grpc enabled)" != "true" ]]; then
     warn_agent_tls_missing
   fi
+}
+
+# configure_agent_artifact_dir points an empty agent_install.artifact_dir at
+# <data_dir>/agent-releases, where sync_agent_release keeps the Agent
+# release: Control then serves it and its checksums to nodes, which need not
+# reach GitHub (mainland hosts often cannot). A configured directory is kept.
+configure_agent_artifact_dir() {
+  [[ -f "${CONFIG_FILE}" ]] || return 0
+  AGENT_ARTIFACT_DIR="$(config_section_value agent_install artifact_dir)"
+  if [[ -z "${AGENT_ARTIFACT_DIR}" ]]; then
+    AGENT_ARTIFACT_DIR="${DATA_DIR}/agent-releases"
+    set_config_section_values agent_install "artifact_dir=\"${AGENT_ARTIFACT_DIR}\""
+    info "agent_install.artifact_dir set to ${AGENT_ARTIFACT_DIR}"
+  fi
+}
+
+# sync_agent_release puts the Agent release the running Control installs
+# (agent_version of /install/agent.env) into AGENT_ARTIFACT_DIR/<tag>/:
+# both architectures' zips with their .dgst and .sig, SHA256SUMS and its
+# signature, checked against the official key. Control reads the directory
+# per request, so no restart is needed. A failure is a warning: nodes then
+# download from GitHub.
+sync_agent_release() {
+  local tag dir stage name zip listed digest missing
+  local files=(SHA256SUMS SHA256SUMS.sig)
+  local zips=(anix-agent-linux-64.zip anix-agent-linux-arm64-v8a.zip)
+  [[ -n "${AGENT_ARTIFACT_DIR}" ]] || return 0
+  tag="$(curl -fsS --max-time 10 "${HEALTH_URL%/*}/install/agent.env" 2>/dev/null | awk '$1 == "agent_version" {print $2; exit}')" || tag=""
+  if [[ ! "${tag}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)(\.[0-9]+)?)?$ ]]; then
+    warn "Control names no Agent release in ${HEALTH_URL%/*}/install/agent.env; the Agent release was not put in ${AGENT_ARTIFACT_DIR}"
+    return 0
+  fi
+  for zip in "${zips[@]}"; do files+=("${zip}" "${zip}.dgst" "${zip}.sig"); done
+  dir="${AGENT_ARTIFACT_DIR}/${tag}"
+  missing=0
+  for name in "${files[@]}"; do
+    [[ -s "${dir}/${name}" ]] || missing=1
+  done
+  if ((missing == 0)); then
+    info "Agent ${tag} is already in ${dir}"
+    return 0
+  fi
+  install -d -m 0755 -o "${APP_USER}" -g "${APP_USER}" "${AGENT_ARTIFACT_DIR}"
+  stage="$(mktemp -d "${AGENT_ARTIFACT_DIR}/.${tag}.XXXXXX")"
+  info "Downloading Agent ${tag} into ${dir} so nodes install it from Control"
+  for name in "${files[@]}"; do
+    if ! curl -fsSL --retry 3 --retry-delay 2 --connect-timeout 15 --max-time 900 \
+      "${AGENT_RELEASE_BASE}/${tag}/${name}" -o "${stage}/${name}"; then
+      find "${stage}" -depth -delete
+      warn "Could not download ${name} of Agent ${tag}; nodes download it from GitHub. Retry: sudo bash install.sh update --version ${VERSION}"
+      return 0
+    fi
+  done
+  if ! verify_official_signature "${stage}/SHA256SUMS" "${stage}/SHA256SUMS.sig"; then
+    find "${stage}" -depth -delete
+    warn "SHA256SUMS of Agent ${tag} does not verify against the official key; it was not installed"
+    return 0
+  fi
+  rm -f "${stage}"/*.bin "${stage}"/*.key.der
+  for zip in "${zips[@]}"; do
+    listed="$(awk -v name="${zip}" '$2 == name || $2 == "*" name {print tolower($1); exit}' "${stage}/SHA256SUMS")"
+    digest="$(sha256sum "${stage}/${zip}" | awk '{print $1}')"
+    if [[ ! "${listed}" =~ ^[0-9a-f]{64}$ || "${listed}" != "${digest}" ]] || ! grep -qi "${digest}" "${stage}/${zip}.dgst"; then
+      find "${stage}" -depth -delete
+      warn "${zip} of Agent ${tag} does not match SHA256SUMS; it was not installed"
+      return 0
+    fi
+  done
+  chmod 0755 "${stage}"
+  chmod 0644 "${stage}"/*
+  chown -R "${APP_USER}:${APP_USER}" "${stage}"
+  rm -rf "${dir}"
+  mv "${stage}" "${dir}"
+  info "Agent ${tag} is in ${dir}: Control serves it to nodes"
 }
 
 backup_ca_kek() {
@@ -1246,6 +1328,7 @@ main() {
   # installs get the CA key; existing ones keep theirs (or are told how to
   # add one).
   configure_agent_access "${FRESH_CONFIG}"
+  configure_agent_artifact_dir
   write_systemd_unit
 
   if [[ "${SKIP_START}" -eq 1 ]]; then
@@ -1262,6 +1345,7 @@ main() {
   fi
 
   info "Installed ${VERSION} successfully."
+  sync_agent_release
   print_claim_link
   # Not `[[ ... ]] && info ...`: as the last statement of main its status 1 (not
   # a rollback) became the exit status of a successful install.
