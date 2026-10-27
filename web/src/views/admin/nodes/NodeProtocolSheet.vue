@@ -60,8 +60,8 @@
         <div class="form-grid">
           <UiSelect v-model="form.type" size="md" :label="t('admin.nodes.protocolForm.fields.type')" :options="typeOptions" required />
           <UiNumberField v-model="form.port" size="md" :min="1" :max="65535" :label="t('admin.nodes.protocolForm.fields.port')" required />
-          <UiSelect v-model="form.tls" size="md" :label="t('admin.nodes.protocolForm.fields.tls')" :options="tlsOptions" />
-          <UiSelect v-model="form.transport" size="md" :label="t('admin.nodes.protocolForm.fields.transport')" :options="transportOptions" />
+          <UiSelect v-model="form.tls" size="md" :label="t('admin.nodes.protocolForm.fields.tls')" :options="tlsOptions" :disabled="tlsOptions.length < 2" data-testid="protocol-tls" />
+          <UiSelect v-model="form.transport" size="md" :label="t('admin.nodes.protocolForm.fields.transport')" :options="transportOptions" :disabled="transportOptions.length < 2" data-testid="protocol-transport" />
           <UiCheckbox v-model="enabled" :label="t('admin.nodes.protocolForm.enable')" />
           <UiCheckbox v-model="shown" :label="t('admin.nodes.protocolForm.show')" />
         </div>
@@ -87,7 +87,7 @@
           <summary>{{ t('admin.nodes.protocolForm.fields.realitySettings') }}</summary>
           <UiTextarea v-model="form.reality_settings" class="node-protocol__json" :aria-label="t('admin.nodes.protocolForm.fields.realitySettings')" :rows="4" placeholder="{}" spellcheck="false" />
         </details>
-        <details v-if="form.transport !== 'tcp'" class="node-protocol__advanced">
+        <details v-if="form.transport !== 'tcp' && !hasFixedTransport(form.type)" class="node-protocol__advanced">
           <summary>{{ t('admin.nodes.protocolForm.fields.transportSettings') }}</summary>
           <UiTextarea v-model="form.transport_settings" class="node-protocol__json" :aria-label="t('admin.nodes.protocolForm.fields.transportSettings')" :rows="4" placeholder="{}" spellcheck="false" />
         </details>
@@ -150,6 +150,7 @@ import NodeIwanFields from './NodeIwanFields.vue'
 import NodeWireGuardFields from './NodeWireGuardFields.vue'
 import { readNodeApiError } from './nodeData'
 import { useNodeCopy } from './useNodeCopy'
+import { capabilitiesOf, hasFixedTransport, transportsFor } from './protocolCapabilities'
 import { JSON_PLACEHOLDER, PROTOCOL_TYPES, useProtocolEditor } from './useProtocolEditor'
 
 const props = defineProps({
@@ -174,21 +175,16 @@ const modeOptions = computed(() => [
   { value: 'json', label: 'JSON' },
   { value: 'visual', label: t('admin.nodes.protocolForm.tabs.visual') }
 ])
-const typeOptions = computed(() => PROTOCOL_TYPES.map(type => ({
-  value: type,
-  label: { wireguard: 'WireGuard', iwan: 'Panabit iWAN' }[type] || t(`networkPages.nodes.protocols.${type}`)
-})))
-const tlsOptions = computed(() => [
-  { value: 0, label: t('admin.nodes.tlsModes.none') },
-  { value: 1, label: t('admin.nodes.tlsModes.standard') },
-  { value: 2, label: t('admin.nodes.tlsModes.reality') }
-])
-const transportOptions = computed(() => {
-  const options = ['tcp', 'ws', 'grpc', 'quic', 'h2'].map(value => ({ value, label: t(`admin.nodes.transports.${value}`) }))
-  // WireGuard and iWAN run over UDP; show it when the protocol says so.
-  if (form.transport === 'udp') options.push({ value: 'udp', label: 'UDP' })
-  return options
-})
+const typeLabel = type => ({ wireguard: 'WireGuard', iwan: 'Panabit iWAN' }[type] || t(`networkPages.nodes.protocols.${type}`))
+const typeOptions = computed(() => PROTOCOL_TYPES.map(type => ({ value: type, label: typeLabel(type) })))
+// TLS modes and transports follow the protocol type (protocolCapabilities):
+// Shadowsocks is TCP without TLS, Hysteria2 and TUIC UDP with TLS.
+const TLS_MODE_KEYS = ['none', 'standard', 'reality']
+const TRANSPORT_KEYS = ['tcp', 'ws', 'grpc', 'quic', 'h2', 'httpupgrade', 'udp']
+const tlsOptions = computed(() => capabilitiesOf(form.type).tls
+  .map(value => ({ value, label: t(`admin.nodes.tlsModes.${TLS_MODE_KEYS[value]}`) })))
+const transportOptions = computed(() => transportsFor(form.type, form.tls, form.transport)
+  .map(value => ({ value, label: t(`admin.nodes.transports.${value}`) })))
 const enabled = computed({ get: () => Boolean(form.enable), set: value => { form.enable = value ? 1 : 0 } })
 const shown = computed({ get: () => Boolean(form.show), set: value => { form.show = value ? 1 : 0 } })
 
@@ -223,6 +219,14 @@ async function save() {
   const built = editor.buildPayload()
   if (built.error === 'invalidJson') {
     formError.value = t('admin.nodes.messages.invalidJsonDetail', { message: built.message })
+    return
+  }
+  if (built.error === 'unsupported') {
+    const { field, type, value } = built.problem
+    const label = field === 'tls'
+      ? t(`admin.nodes.tlsModes.${TLS_MODE_KEYS[value] || 'none'}`)
+      : (TRANSPORT_KEYS.includes(value) ? t(`admin.nodes.transports.${value}`) : value)
+    formError.value = t(`admin.nodes.messages.${field}Unsupported`, { type: typeLabel(type), value: label })
     return
   }
   if (built.error) {

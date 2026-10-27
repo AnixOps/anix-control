@@ -852,9 +852,13 @@ export default {
     ws: 'WebSocket',
     grpc: 'gRPC',
     quic: 'QUIC',
-    h2: 'HTTP/2'
+    h2: 'HTTP/2',
+    httpupgrade: 'HTTPUpgrade',
+    udp: 'UDP'
   },
   messages: {
+    transportUnsupported: '{type} 不能使用 {value} 传输',
+    tlsUnsupported: '{type} 不能使用「{value}」',
     requiredFields: '请填写必填字段',
     saveFailed: '无法保存：{message}',
     syncSuccess: '节点“{name}”已接收同步',

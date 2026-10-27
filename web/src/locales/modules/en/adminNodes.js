@@ -852,9 +852,13 @@ export default {
     ws: 'WebSocket',
     grpc: 'gRPC',
     quic: 'QUIC',
-    h2: 'HTTP/2'
+    h2: 'HTTP/2',
+    httpupgrade: 'HTTPUpgrade',
+    udp: 'UDP'
   },
   messages: {
+    transportUnsupported: '{type} does not run over {value}',
+    tlsUnsupported: '{type} does not take {value}',
     requiredFields: 'Fill in the required fields',
     saveFailed: 'Couldn’t save: {message}',
     syncSuccess: 'Node “{name}” accepted the sync',

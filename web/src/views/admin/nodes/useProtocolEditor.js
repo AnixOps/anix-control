@@ -4,6 +4,7 @@
 // pre-redesign page. Masked secrets (********) are sent back as they are:
 // the server keeps the stored value.
 import { computed, reactive, ref, watch } from 'vue'
+import { adaptTransport, capabilitiesOf, hasFixedTransport, transportProblem } from './protocolCapabilities'
 
 export const PROTOCOL_TYPES = ['vmess', 'vless', 'trojan', 'shadowsocks', 'hysteria2', 'tuic', 'wireguard', 'iwan']
 
@@ -294,6 +295,14 @@ export function newProtocolJson() {
   }
 }
 
+// The transport a type with a single transport is sent with: the old editor
+// stored tcp for Hysteria2 and udp for Shadowsocks, which mean nothing there.
+function fixedTransport(type, transport) {
+  const value = transport || 'tcp'
+  if (hasFixedTransport(type) && (value === 'tcp' || value === 'udp')) return capabilitiesOf(type).transports[0]
+  return value
+}
+
 export function useProtocolEditor() {
   const protocolForm = reactive(defaultProtocolForm())
   const wireGuardForm = reactive(defaultWireGuardForm())
@@ -347,6 +356,7 @@ export function useProtocolEditor() {
       obj.reality_settings = {}
       return obj
     }
+    adaptTransport(obj)
     obj.settings = parseObject(protocolForm.settings)
     obj.tls_settings = parseObject(protocolForm.tls_settings)
     obj.transport_settings = parseObject(protocolForm.transport_settings)
@@ -365,6 +375,7 @@ export function useProtocolEditor() {
     protocolForm.tls_settings = asJsonText(json.tls_settings)
     protocolForm.transport_settings = asJsonText(json.transport_settings)
     protocolForm.reality_settings = asJsonText(json.reality_settings)
+    adaptTransport(protocolForm)
     if (protocolForm.type === 'wireguard') {
       let settings = json.settings || {}
       if (typeof settings === 'string') {
@@ -414,6 +425,13 @@ export function useProtocolEditor() {
       protocolForm.transport = 'udp'
       resetIwanForm()
     }
+    // Shadowsocks has no WebSocket, Hysteria2 no TCP: a new type keeps the
+    // transport and TLS only when it takes them.
+    adaptTransport(protocolForm)
+  })
+
+  watch(() => protocolForm.tls, () => {
+    if (protocolForm.mode === 'visual') adaptTransport(protocolForm)
   })
 
   watch(() => wireGuardForm.wssCompat, (enabled) => {
@@ -478,8 +496,16 @@ export function useProtocolEditor() {
     }
   }
 
-  // { payload } or { error: 'invalidJson', message } / { error: 'required' }.
+  // { payload }, or { error: 'invalidJson', message } / { error: 'required' } /
+  // { error: 'unsupported', problem } (transportProblem).
   function buildPayload() {
+    const built = buildRawPayload()
+    if (built.error) return built
+    const problem = transportProblem(built.payload)
+    return problem ? { error: 'unsupported', problem } : built
+  }
+
+  function buildRawPayload() {
     if (protocolForm.mode === 'json') {
       let json
       try {
@@ -492,7 +518,7 @@ export function useProtocolEditor() {
         port: json.port || 443,
         enable: json.enable ?? 1,
         tls: json.tls ?? 0,
-        transport: json.transport || 'tcp',
+        transport: fixedTransport(json.type || 'vless', json.transport),
         settings: JSON.stringify(json.settings || {}),
         tls_settings: JSON.stringify(json.tls_settings || {}),
         transport_settings: JSON.stringify(json.transport_settings || {}),

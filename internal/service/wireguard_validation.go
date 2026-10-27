@@ -35,6 +35,10 @@ func ValidateNodeProtocol(protocol *model.NodeProtocol) error {
 			return fmt.Errorf("%w: %v", ErrInvalidNodeProtocol, err)
 		}
 	}
+	// After the type's own checks, whose answers callers already pin.
+	if err := validateProtocolTransport(protocol); err != nil {
+		return fmt.Errorf("%w: %v", ErrInvalidNodeProtocol, err)
+	}
 	return nil
 }
 
