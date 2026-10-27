@@ -81,4 +81,15 @@ describe('NodeEntriesSection', () => {
     ])
     expect(await screen.findByText('2001:db8:1::20')).toBeTruthy()
   })
+
+  it('warns about protocols no entry offers', async () => {
+    const nat = { id: 3, label: 'BGP', kind: 'nat', host: '203.0.113.5', family: 'ipv4', port_map: [{ from: 55556, to: 55557, external: 51820 }], enabled: true, sort: 0 }
+    kernelApi.getKernelNodeEntries.mockResolvedValue({ node_id: 58, entries: [nat], uncovered_protocols: [{ id: 47, name: 'SS', type: 'shadowsocks', port: 11111 }] })
+    render({
+      components: { NodeEntriesSection, UiHost },
+      template: '<div><NodeEntriesSection :node="{ id: 58, name: \'le sh\', host: \'sh.example.com\' }" /><UiHost /></div>'
+    })
+    const notice = await screen.findByTestId('node-entries-uncovered')
+    expect(notice.textContent).toContain('SS :11111')
+  })
 })

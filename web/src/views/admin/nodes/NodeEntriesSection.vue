@@ -3,6 +3,9 @@
     <template #actions>
       <UiButton size="md" :icon="Pencil" data-testid="edit-node-entries" :disabled="loading || Boolean(error)" @click="sheetOpen = true">{{ t('nodeEntries.edit') }}</UiButton>
     </template>
+    <NodeNotice v-if="uncovered.length" tone="warning" data-testid="node-entries-uncovered">
+      {{ t('nodeEntries.uncovered', { protocols: uncoveredList }) }}
+    </NodeNotice>
     <UiDataTable
       :columns="columns"
       :rows="entries"
@@ -47,6 +50,7 @@ import UiDataTable from '@/ui/UiDataTable.vue'
 import UiSection from '@/ui/UiSection.vue'
 import { useAppI18n } from '@/composables/useAppI18n'
 import NodeEntriesSheet from './NodeEntriesSheet.vue'
+import NodeNotice from './NodeNotice.vue'
 import { portMapSummary } from './nodeEntriesModel'
 
 const props = defineProps({
@@ -55,6 +59,10 @@ const props = defineProps({
 const { t } = useAppI18n()
 
 const entries = ref([])
+// Enabled protocols no enabled entry offers: subscriptions leave them out
+// although the protocol shows online.
+const uncovered = ref([])
+const uncoveredList = computed(() => uncovered.value.map(p => `${p.name || p.type} :${p.port}`).join(t('nodeEntries.listSeparator')))
 const loading = ref(false)
 const error = ref(null)
 const sheetOpen = ref(false)
@@ -74,6 +82,7 @@ async function load() {
   try {
     const answer = await getKernelNodeEntries(`proxy-${props.node.id}`)
     entries.value = answer?.entries || []
+    uncovered.value = answer?.uncovered_protocols || []
   } catch (e) {
     console.error('Failed to load node entries:', e)
     error.value = e
@@ -84,11 +93,12 @@ async function load() {
 
 function onSaved(answer) {
   entries.value = answer?.entries || []
+  uncovered.value = answer?.uncovered_protocols || []
 }
 
 onMounted(load)
 
-defineExpose({ load, entries })
+defineExpose({ load, entries, uncovered })
 </script>
 
 <style scoped>

@@ -20,7 +20,7 @@ func newService(t *testing.T) *Service {
 	sqlDB, err := db.DB()
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = sqlDB.Close() })
-	require.NoError(t, db.AutoMigrate(&model.Node{}, &model.NodeEntry{}, &model.OperationLog{}))
+	require.NoError(t, db.AutoMigrate(&model.Node{}, &model.NodeProtocol{}, &model.NodeEntry{}, &model.OperationLog{}))
 	require.NoError(t, db.Create(&model.Node{ID: 60, Name: "sh relay", Host: "relay.example.com", APIKey: "k60"}).Error)
 	return New(db)
 }
@@ -107,4 +107,42 @@ func TestPortMapsNATEntriesOnly(t *testing.T) {
 	require.Equal(t, 20443, port)
 	_, ok = Port(entries[2], 8443)
 	require.False(t, ok, "a port the NAT entry does not map")
+}
+
+func TestUncoveredListsProtocolsNoEntryOffers(t *testing.T) {
+	s := newService(t)
+	ctx := context.Background()
+	require.NoError(t, s.DB.Create(&[]model.NodeProtocol{
+		{ID: 1, NodeID: 60, Name: "ss", Type: model.ProtocolType("shadowsocks"), Port: 11111, Enable: 1, Show: 1},
+		{ID: 2, NodeID: 60, Name: "wg", Type: model.ProtocolType("wireguard"), Port: 51820, Enable: 1, Show: 1},
+		{ID: 3, NodeID: 60, Name: "off", Type: model.ProtocolType("shadowsocks"), Port: 11113, Enable: 1, Show: 1},
+	}).Error)
+	require.NoError(t, s.DB.Model(&model.NodeProtocol{}).Where("id = ?", 3).Update("enable", 0).Error)
+
+	// Without entries the node is reached at its host: nothing is left out.
+	uncovered, err := s.Uncovered(ctx, 60)
+	require.NoError(t, err)
+	require.Empty(t, uncovered)
+
+	// The leikwanhost-sh case: a NAT map written the wrong way round
+	// (machine ports 55556/55557) offers neither protocol.
+	_, err = s.Replace(ctx, 60, []Input{{Label: "BGP", Kind: model.NodeEntryNAT, Host: "203.0.113.5", PortMap: []PortRange{{From: 55556, To: 55557, External: 51820}}}}, Actor{})
+	require.NoError(t, err)
+	uncovered, err = s.Uncovered(ctx, 60)
+	require.NoError(t, err)
+	require.Equal(t, []Uncovered{{ID: 1, Name: "ss", Type: "shadowsocks", Port: 11111}, {ID: 2, Name: "wg", Type: "wireguard", Port: 51820}}, uncovered)
+
+	// Mapped right, only the unmapped protocol is left; a direct entry
+	// offers every port.
+	_, err = s.Replace(ctx, 60, []Input{{Label: "BGP", Kind: model.NodeEntryNAT, Host: "203.0.113.5", PortMap: []PortRange{{From: 11111, To: 11111, External: 55557}}}}, Actor{})
+	require.NoError(t, err)
+	uncovered, err = s.Uncovered(ctx, 60)
+	require.NoError(t, err)
+	require.Equal(t, []Uncovered{{ID: 2, Name: "wg", Type: "wireguard", Port: 51820}}, uncovered)
+
+	_, err = s.Replace(ctx, 60, []Input{{Label: "v6", Kind: model.NodeEntryDirect, Host: "2001:db8::1"}}, Actor{})
+	require.NoError(t, err)
+	uncovered, err = s.Uncovered(ctx, 60)
+	require.NoError(t, err)
+	require.Empty(t, uncovered)
 }

@@ -14,6 +14,8 @@ export default {
     enabled: 'Enabled',
     disabled: 'Disabled',
     samePorts: 'Same as the protocols',
+    uncovered: 'Left out of subscriptions: {protocols}. A node with entries is offered only through them, and no enabled entry offers these protocol ports (a NAT map\'s machine ports must be the protocol ports). Map them, or add a direct entry.',
+    listSeparator: ', ',
     saved: 'Saved the entries of {name}; subscriptions use them now',
     columns: {
       label: 'Name',
