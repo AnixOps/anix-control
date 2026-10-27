@@ -159,6 +159,13 @@ run_installer() {
       command -v "$1" >/dev/null 2>&1
     }
     pkaction() { printf 'pkaction version %s\n' "${FAKE_POLKIT:-122}"; }
+    # The package manager installs nftables unless FAKE_PKG_FAIL: nft is
+    # then no longer missing.
+    apt-get() {
+      printf 'apt-get %s\n' "$*" >>"${FAKE_AGENT_LOG}"
+      [[ "${FAKE_PKG_FAIL:-0}" == "0" ]] || return 100
+      [[ "$*" != *"install -y nftables"* ]] || FAKE_MISSING="${FAKE_MISSING//nft/}"
+    }
     modinfo() { [[ "${FAKE_MODINFO:-0}" == "1" ]]; }
     ss() { cat "${STATE}/ss"; }
     ip() {
@@ -717,6 +724,14 @@ FAKE_JOIN_NODE=forward-7 run_installer -u "${CONTROL}" -t "${JOIN_TOKEN}"
 expect_status 0 "re-run after the fix"
 ! grep -q '^agent join' "${STATE}/log" || fail "the fixed host joined again"
 grep -q '^systemctl restart anix-agent.service' "${STATE}/log" || fail "the fixed host's Agent did not start"
+# Without nft, the join's forward checks install nftables first and the
+# Agent starts (the newnb-1488 case stopped after the join).
+new_root group-forward-no-nft
+metadata
+FAKE_JOIN_NODE=forward-7 FAKE_MISSING=nft run_installer -u "${CONTROL}" -t "${JOIN_TOKEN}"
+expect_status 0 "forward group join without nft"
+expect_out "installed nftables (the nftables forward driver needs nft)"
+grep -q '^systemctl restart anix-agent.service' "${STATE}/log" || fail "the Agent did not start after nftables was installed"
 ok "a forward group's node"
 
 # 9. Arguments and platforms.
@@ -814,8 +829,10 @@ pf_case systemd-sandbox 0 "systemd 245 ignores ProtectProc= and ProcSubset=" "FA
 pf_case kernel-old 1 "preflight: FAIL  Linux 5.4.0-150-generic is older than 5.10" "FAKE_KERNEL=5.4.0-150-generic"
 pf_case kernel-old-proxy 0 "Linux 5.4.0-150-generic is older than 5.10: this node cannot forward with nftables later" \
   "FAKE_KERNEL=5.4.0-150-generic FAKE_ENROLL_NODE=proxy-7" -u "${CONTROL}" -t "${TOKEN_A}"
-pf_case nft-missing 1 "preflight: FAIL  nft is missing" "FAKE_MISSING=nft"
+pf_case nft-missing 1 "preflight: FAIL  nft is missing" "FAKE_MISSING=nft FAKE_PKG_FAIL=1"
 expect_out "fix: apt-get install -y nftables"
+pf_case nft-installed 0 "installed nftables (the nftables forward driver needs nft)" "FAKE_MISSING=nft"
+grep -q '^apt-get install -y nftables' "${STATE}/log" || fail "nftables was not installed with apt-get"
 pf_case nft-old 1 "preflight: FAIL  nftables 0.9.6 is older than 0.9.7" "FAKE_NFT=0.9.6"
 pf_case tc-missing 0 "tc is missing: bandwidth limits are off" "FAKE_MISSING=tc"
 new_root pf-conntrack

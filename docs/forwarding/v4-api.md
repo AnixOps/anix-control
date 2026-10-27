@@ -173,7 +173,8 @@ The answer:
 
 - **Steps.**
   - `kind` is the stage:
-    - `CONFIG`: generations, applied, hop errors, the route paused;
+    - `CONFIG`: generations, applied, hop errors, the route paused, and
+      whether a target on a proxy node is one of its protocols;
     - `HEALTH`: one upstream's health and breaker;
     - `LISTEN`, `PORT_CONFLICT`;
     - `TCP_CONNECT`, `UDP_EXCHANGE`: to the next hop;
@@ -186,7 +187,11 @@ The answer:
     `route_enforced`, `healthy`, `unhealthy`, `circuit_open`, `no_health`,
     `node_offline`, `node_vantage_unavailable`, `target_not_allowed`,
     `not_public`, `deadline`, `agent_timeout`, `agent_error`, `reachable`,
-    `unreachable`, `control_udp_not_probed`. The Agent adds its own codes
+    `unreachable`, `control_udp_not_probed`, and, for a target that is a
+    proxy node's address, `target_protocol`, `target_no_protocol` (no
+    enabled protocol of the node listens on the target's port) and
+    `target_l4_mismatch` (the route does not forward the protocol's TCP or
+    UDP). The Agent adds its own codes
     for node steps, such as `no_reply`, `conflict` and `not_listening`.
 - **`ok`** is true when no step `FAILED`. A step `SKIPPED` or
   `INCONCLUSIVE` does not fail a diagnosis, so read `nodes`. A node with

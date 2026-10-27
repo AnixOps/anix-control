@@ -659,10 +659,11 @@ export default {
       delete: 'Delete node…'
     },
     join: {
-      action: 'Add to forwarding…',
+      action: 'Use for forwarding…',
       settings: 'Forwarding settings',
       title: 'Add {name} to the forwarding inventory?',
-      message: 'The node joins with the default forwarding settings (ports 30000–39999); routes can then use it in their hops.',
+      message: 'Routes can then use the node as an entry, relay or exit in their hops (default ports 30000–39999). It stays a proxy node and no subscription changes: to have users connect through a forwarder, add the forwarder\'s address and port as an entry on the landing node.',
+      noAgent: 'This node has no Agent (a legacy node): it cannot run a hop until you install the Agent with the install command on its page.',
       confirm: 'Add',
       done: '{name} joined the forwarding inventory'
     }

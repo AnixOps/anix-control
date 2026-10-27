@@ -27,7 +27,10 @@ import (
 //     every hop, its desired state holds the hop and its latest report runs
 //     the desired generation, applied, without an error for the hop
 //     (PROBE_KIND_CONFIG); every upstream's health and breaker in that
-//     report (PROBE_KIND_HEALTH).
+//     report (PROBE_KIND_HEALTH); for a target that is a proxy node's
+//     address, that one of its enabled protocols listens on the target's
+//     port over a transport the route forwards (PROBE_KIND_CONFIG with the
+//     target, diagnose_target.go).
 //  2. Node vantage, for each node whose Agent advertises agent.diagnostic
 //     and diag.v1 (NodeChecker): the forward checks of agent.diagnostic on
 //     each of its hops: forward.listen (LISTEN), forward.port_conflict
@@ -333,6 +336,7 @@ func (s *Service) diagnose(ctx context.Context, routeID string) (*forwardv1.Diag
 			d.healthSteps(uint32(index), ref) // #nosec G115 -- as above.
 		}
 	}
+	d.targetSteps(ctx)
 
 	// Which nodes can probe.
 	nodes := make([]*forwardv1.DiagnoseNode, 0, len(refs))

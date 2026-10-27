@@ -15,7 +15,9 @@
 # (moving a node to a new machine, or after a credential rotation). The
 # script first checks the host (preflight: systemd, kernel, nftables,
 # polkit, firewalls, disk, clock skew and Control's https and gRPC
-# addresses) and changes nothing when a check fails. It then installs the
+# addresses) and changes nothing when a check fails, except that a forward
+# node without nft gets nftables from the package manager first (also when
+# the join is what makes the host a forward node). It then installs the
 # AnixOps Agent as a systemd service running as the unprivileged user
 # anixops-agent (ambient CAP_NET_ADMIN and CAP_NET_BIND_SERVICE, sandboxed),
 # removes the legacy forward runtime of this host (the nftables tables
@@ -420,6 +422,40 @@ check_kernel() {
   fi
 }
 
+# install_nftables installs nft with the host's package manager on a
+# forward node that lacks it, before the checks: the nftables forward driver
+# needs it, and a host that only learns it is a forward node at the join
+# would otherwise stop after joining. A failed install leaves nft missing,
+# which check_nftables reports with the command to run.
+install_nftables() {
+  have nft && return 0
+  local rc=0
+  info "nft is missing: installing nftables for the forward driver"
+  if have apt-get; then
+    DEBIAN_FRONTEND=noninteractive apt-get install -y nftables >/dev/null 2>&1 ||
+      { DEBIAN_FRONTEND=noninteractive apt-get update >/dev/null 2>&1 && DEBIAN_FRONTEND=noninteractive apt-get install -y nftables >/dev/null 2>&1; } || rc=$?
+  elif have dnf; then
+    dnf install -y nftables >/dev/null 2>&1 || rc=$?
+  elif have yum; then
+    yum install -y nftables >/dev/null 2>&1 || rc=$?
+  elif have apk; then
+    apk add --no-cache nftables >/dev/null 2>&1 || rc=$?
+  elif have pacman; then
+    pacman -S --noconfirm --needed nftables >/dev/null 2>&1 || rc=$?
+  elif have zypper; then
+    zypper --non-interactive install nftables >/dev/null 2>&1 || rc=$?
+  else
+    note "no known package manager to install nftables with"
+    return 0
+  fi
+  if ((rc == 0)) && have nft; then
+    note "installed nftables (the nftables forward driver needs nft)"
+  else
+    note "installing nftables failed (exit ${rc})"
+  fi
+  return 0
+}
+
 check_nftables() {
   local version
   if ! have nft; then
@@ -647,6 +683,7 @@ preflight() {
   check_systemd
   check_kernel
   if forward_node; then
+    install_nftables
     check_nftables
     check_polkit
     check_firewalls
@@ -1130,6 +1167,7 @@ post_join_preflight() {
   info "Preflight checks for a forward node (${NODE})"
   PREFLIGHT_FAILS=0
   check_kernel
+  install_nftables
   check_nftables
   check_polkit
   check_firewalls

@@ -13,6 +13,8 @@ export default {
     enabled: '启用',
     disabled: '停用',
     samePorts: '与协议端口相同',
+    uncovered: '订阅里不会出现：{protocols}。这个节点有入口后只按入口输出，这些协议端口没有被任何启用的入口覆盖（NAT 映射的机器端口要填协议端口）。补上映射，或加一个直连入口。',
+    listSeparator: '、',
     saved: '已保存 {name} 的入口，订阅立即生效',
     columns: {
       label: '名称',

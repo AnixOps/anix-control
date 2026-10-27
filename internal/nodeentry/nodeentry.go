@@ -309,6 +309,48 @@ func Port(row model.NodeEntry, port int) (int, bool) {
 	return 0, false
 }
 
+// Uncovered is an enabled protocol that subscriptions leave out because
+// the node has enabled entries and none of them offers its port.
+type Uncovered struct {
+	ID   uint   `json:"id"`
+	Name string `json:"name"`
+	Type string `json:"type"`
+	Port int    `json:"port"`
+}
+
+// Uncovered answers the node's enabled, shown protocols that no enabled
+// entry offers, by port. A node without enabled entries answers none: it is
+// reached at its host. The panel warns about them, since the protocol still
+// shows online while every subscription skips it.
+func (s *Service) Uncovered(ctx context.Context, nodeID uint) ([]Uncovered, error) {
+	uncovered := []Uncovered{}
+	byNode, err := EnabledByNode(s.DB.WithContext(ctx), []uint{nodeID})
+	if err != nil {
+		return nil, err
+	}
+	entries := byNode[nodeID]
+	if len(entries) == 0 {
+		return uncovered, nil
+	}
+	var protocols []model.NodeProtocol
+	if err := s.DB.WithContext(ctx).Where("node_id = ? AND enable = ? AND show = ?", nodeID, 1, 1).Order("sort ASC, id ASC").Find(&protocols).Error; err != nil {
+		return nil, err
+	}
+	for _, protocol := range protocols {
+		offered := false
+		for _, entry := range entries {
+			if _, ok := Port(entry, protocol.Port); ok {
+				offered = true
+				break
+			}
+		}
+		if !offered {
+			uncovered = append(uncovered, Uncovered{ID: protocol.ID, Name: protocol.Name, Type: string(protocol.Type), Port: protocol.Port})
+		}
+	}
+	return uncovered, nil
+}
+
 // EnabledByNode answers the enabled entries of the nodes, by node id in
 // their order.
 func EnabledByNode(db *gorm.DB, nodeIDs []uint) (map[uint][]model.NodeEntry, error) {
