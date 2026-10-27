@@ -16,7 +16,26 @@
         </legend>
         <UiTextField v-model="form.label" size="md" :label="t('nodeEntries.sheet.label')" required :placeholder="t('nodeEntries.sheet.labelPlaceholder')" :help="t('nodeEntries.sheet.labelHelp')" :error="errors[form.key]?.label" />
         <UiSelect v-model="form.kind" size="md" :label="t('nodeEntries.sheet.kind')" :options="kindOptions" :help="t(`nodeEntries.sheet.kindHelp.${form.kind}`)" />
-        <UiTextField v-model="form.host" size="md" :label="t('nodeEntries.sheet.host')" required :placeholder="form.kind === 'nat' ? '203.0.113.7' : '2001:db8::10'" :error="errors[form.key]?.host" />
+        <UiSelect
+          v-if="form.kind === 'iwan'"
+          v-model="form.lineId"
+          size="md"
+          :label="t('nodeEntries.sheet.line')"
+          required
+          :options="lineOptions"
+          :placeholder="lines.length ? t('nodeEntries.sheet.linePlaceholder') : t('nodeEntries.sheet.noLines')"
+          :help="t('nodeEntries.sheet.lineHelp')"
+          :error="errors[form.key]?.line"
+        />
+        <UiTextField
+          v-model="form.host"
+          size="md"
+          :label="t('nodeEntries.sheet.host')"
+          required
+          :placeholder="form.kind === 'nat' ? '203.0.113.7' : form.kind === 'iwan' ? (node.host || '198.51.100.20') : '2001:db8::10'"
+          :help="form.kind === 'iwan' ? t('nodeEntries.sheet.iwanHostHelp') : ''"
+          :error="errors[form.key]?.host"
+        />
         <UiTextarea
           v-if="form.kind === 'nat'"
           v-model="form.portMap"
@@ -54,7 +73,9 @@ const MAX_ENTRIES = 32
 const props = defineProps({
   open: { type: Boolean, default: false },
   node: { type: Object, required: true },
-  entries: { type: Array, default: () => [] }
+  entries: { type: Array, default: () => [] },
+  // Panabit iWAN lines ({ id, name }) an iwan entry can name.
+  lines: { type: Array, default: () => [] }
 })
 const emit = defineEmits(['update:open', 'saved'])
 const { t } = useAppI18n()
@@ -74,8 +95,11 @@ watch(() => props.open, value => {
 
 const kindOptions = computed(() => [
   { value: 'direct', label: t('nodeEntries.kinds.direct') },
-  { value: 'nat', label: t('nodeEntries.kinds.nat') }
+  { value: 'nat', label: t('nodeEntries.kinds.nat') },
+  { value: 'iwan', label: t('nodeEntries.kinds.iwan') }
 ])
+
+const lineOptions = computed(() => props.lines.map(line => ({ value: line.id, label: line.name })))
 
 function add() {
   forms.value.push(entryForm(null))

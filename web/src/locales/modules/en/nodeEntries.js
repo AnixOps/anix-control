@@ -14,6 +14,7 @@ export default {
     enabled: 'Enabled',
     disabled: 'Disabled',
     samePorts: 'Same as the protocols',
+    viaLine: 'Through {name}',
     uncovered: 'Left out of subscriptions: {protocols}. A node with entries is offered only through them, and no enabled entry offers these protocol ports (a NAT map\'s machine ports must be the protocol ports). Map them, or add a direct entry.',
     listSeparator: ', ',
     saved: 'Saved the entries of {name}; subscriptions use them now',
@@ -27,7 +28,8 @@ export default {
     },
     kinds: {
       direct: 'Direct',
-      nat: 'NAT mapping'
+      nat: 'NAT mapping',
+      iwan: 'Through an iWAN line'
     },
     families: {
       ipv4: 'IPv4',
@@ -46,8 +48,14 @@ export default {
       kind: 'Kind',
       kindHelp: {
         direct: 'Users dial this address on the protocols\' own ports (for example the machine\'s own IPv6 address).',
-        nat: 'The provider maps ports of a public address to the machine; fill in the port map.'
+        nat: 'The provider maps ports of a public address to the machine; fill in the port map.',
+        iwan: 'AnixOps Net logs into a Panabit iWAN line and reaches this node through it. Offered besides the node address and the other entries, for VMess, VLESS, Trojan and Shadowsocks, and only to AnixOps Net.'
       },
+      line: 'iWAN line',
+      linePlaceholder: 'Choose a line',
+      noLines: 'Add a line under iWAN lines first',
+      lineHelp: 'The line\'s shared account goes to every subscriber of this node.',
+      iwanHostHelp: 'The node\'s address as the line\'s exit reaches it, usually the node address.',
       host: 'Address',
       portMap: 'Port map',
       portMapHelp: 'One range per line: public ports -> machine ports, for example 21000-21099 -> 30000-30099. A protocol port the map leaves out is not offered through this entry.',
@@ -58,6 +66,34 @@ export default {
       noPipe: "The name cannot contain {'|'}",
       duplicate: 'This name is used twice',
       badLine: 'Line {line} does not parse, or its two sides differ in length'
+    },
+    lines: {
+      open: 'iWAN lines',
+      title: 'Panabit iWAN lines',
+      description: 'Third-party iWAN ingresses (a Panabit device and its IPLC, say) that AnixOps Net logs into with the line\'s one shared account. Nothing is installed on them. iWAN does not encrypt; the node\'s own protocol encrypts the whole path.',
+      empty: 'No lines yet.',
+      used: '{n} entries use it',
+      add: 'Add line',
+      edit: 'Edit {name}',
+      remove: 'Delete {name}',
+      close: 'Done',
+      name: 'Name',
+      nameHelp: 'Shown in subscriptions as a node; unique.',
+      host: 'Server',
+      port: 'Port',
+      username: 'Username',
+      password: 'Password',
+      passwordKeep: 'Leave empty to keep the stored password.',
+      mtu: 'MTU',
+      mtuHelp: 'Empty or 0 uses the client\'s default; otherwise 576 to 1600.',
+      encrypt: 'XOR masking',
+      encryptHelp: 'Hides the payload from casual inspection; it is not encryption.',
+      badPort: 'A port is 1 to 65535',
+      badMtu: '0, or 576 to 1600',
+      saved: 'Saved the line {name}; subscriptions use it now',
+      removeTitle: 'Delete the line {name}?',
+      removeMessage: 'Subscriptions stop offering it. This cannot be undone.',
+      removeAction: 'Delete line'
     }
   }
 }

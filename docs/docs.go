@@ -8941,6 +8941,150 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v4/kernel/iwan-lines": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Every line by name: id, name, host, port, username, mtu (0 is the client's default), encrypt (XOR masking, not confidentiality) and entries (how many node entries reach their nodes through it). The password is never answered.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "The Panabit iWAN lines",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Adds a line with its shared login (name unique, without |; host a domain or an IP address; port 1-65535; username and password up to 128 characters; mtu 0 or 576-1600). At most 64 lines. Audited without the login.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Add a Panabit iWAN line",
+                "parameters": [
+                    {
+                        "description": "the line",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/iwanline.Input"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v4/kernel/iwan-lines/{id}": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Replaces the line's fields as Create checks them; an empty password keeps the stored one. Subscriptions change at once. Audited without the login.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Change a Panabit iWAN line",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "line id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "the line",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/iwanline.Input"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Deletes a line that no node entry uses (409 in_use otherwise). Audited.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Delete a Panabit iWAN line",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "line id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/v4/kernel/node-groups": {
             "get": {
                 "security": [
@@ -9384,7 +9528,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "The addresses subscribers reach the node at beyond its host, in order: label, kind (direct: the protocols' own ports; nat: a public address whose port ranges map to protocol ports), host, family (ipv4, ipv6 or domain), port map and whether the entry is enabled; uncovered_protocols lists the enabled, shown protocols (id, name, type, port) that no enabled entry offers, which subscriptions leave out. A node with enabled entries is offered in subscriptions once per entry and protocol, in place of its host.",
+                "description": "The addresses subscribers reach the node at beyond its host, in order: label, kind (direct: the protocols' own ports; nat: a public address whose port ranges map to protocol ports; iwan: the host reached through a Panabit iWAN line, iwan_line_id, offered to AnixOps Net only and besides the other entries), host, family (ipv4, ipv6 or domain), port map and whether the entry is enabled; uncovered_protocols lists the enabled, shown protocols (id, name, type, port) that no enabled entry offers, which subscriptions leave out. A node with enabled entries is offered in subscriptions once per entry and protocol, in place of its host.",
                 "produces": [
                     "application/json"
                 ],
@@ -9417,7 +9561,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Makes the list the node's entries, in that order (at most 32; labels unique, without |). A direct entry has no port map; a NAT entry has 1 to 32 port ranges {from, to, external} that do not overlap: protocol ports from..to are reached at external..external+(to-from). An empty list removes every entry, so the node is reached at its host again. Subscriptions change at once; the node's configuration does not. The answer lists the entries and uncovered_protocols, as GET does. Audited.",
+                "description": "Makes the list the node's entries, in that order (at most 32; labels unique, without |). A direct entry has no port map; an iwan entry has no port map and names its line (iwan_line_id, an existing line); a NAT entry has 1 to 32 port ranges {from, to, external} that do not overlap: protocol ports from..to are reached at external..external+(to-from). An empty list removes every entry, so the node is reached at its host again. Subscriptions change at once; the node's configuration does not. The answer lists the entries and uncovered_protocols, as GET does. Audited.",
                 "consumes": [
                     "application/json"
                 ],
@@ -12131,6 +12275,32 @@ const docTemplate = `{
                 }
             }
         },
+        "iwanline.Input": {
+            "type": "object",
+            "properties": {
+                "encrypt": {
+                    "type": "boolean"
+                },
+                "host": {
+                    "type": "string"
+                },
+                "mtu": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "password": {
+                    "type": "string"
+                },
+                "port": {
+                    "type": "integer"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
         "model.AdminCreateUserRequest": {
             "type": "object",
             "required": [
@@ -12921,6 +13091,10 @@ const docTemplate = `{
                 },
                 "host": {
                     "type": "string"
+                },
+                "iwan_line_id": {
+                    "description": "IWANLineID is the line of an iWAN entry.",
+                    "type": "integer"
                 },
                 "kind": {
                     "type": "string"

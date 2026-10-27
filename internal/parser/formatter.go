@@ -31,28 +31,7 @@ func (f *V2RayFormatter) Format(nodes []*model.ParsedNode, ctx *model.TemplateRe
 	var links []string
 
 	for _, node := range nodes {
-		var link string
-		var err error
-
-		switch node.Type {
-		case "vmess":
-			link, err = f.formatVMess(node, ctx)
-		case "vless":
-			link, err = f.formatVLESS(node, ctx)
-		case "trojan":
-			link, err = f.formatTrojan(node, ctx)
-		case "shadowsocks", "ss":
-			link, err = f.formatShadowsocks(node, ctx)
-		case "hysteria2", "hy2":
-			link, err = f.formatHysteria2(node, ctx)
-		case "tuic":
-			link, err = f.formatTUIC(node, ctx)
-		case "anytls":
-			link, err = f.formatAnyTLS(node, ctx)
-		case "wireguard":
-			link, err = f.formatWireGuard(node)
-		}
-
+		link, err := f.link(node, ctx)
 		if err == nil && link != "" {
 			links = append(links, link)
 		}
@@ -61,6 +40,29 @@ func (f *V2RayFormatter) Format(nodes []*model.ParsedNode, ctx *model.TemplateRe
 	content := strings.Join(links, "\n")
 	encoded := base64.StdEncoding.EncodeToString([]byte(content))
 	return []byte(encoded), nil
+}
+
+// link is the node's share link, or "" for a type without one.
+func (f *V2RayFormatter) link(node *model.ParsedNode, ctx *model.TemplateRenderContext) (string, error) {
+	switch node.Type {
+	case "vmess":
+		return f.formatVMess(node, ctx)
+	case "vless":
+		return f.formatVLESS(node, ctx)
+	case "trojan":
+		return f.formatTrojan(node, ctx)
+	case "shadowsocks", "ss":
+		return f.formatShadowsocks(node, ctx)
+	case "hysteria2", "hy2":
+		return f.formatHysteria2(node, ctx)
+	case "tuic":
+		return f.formatTUIC(node, ctx)
+	case "anytls":
+		return f.formatAnyTLS(node, ctx)
+	case "wireguard":
+		return f.formatWireGuard(node)
+	}
+	return "", nil
 }
 
 func (f *V2RayFormatter) formatWireGuard(node *model.ParsedNode) (string, error) {

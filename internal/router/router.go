@@ -857,6 +857,14 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		nodeEntries := handler.NewNodeEntriesHandler()
 		v4.GET("/kernel/nodes/:id/entries", nodeEntries.List)
 		v4.PUT("/kernel/nodes/:id/entries", nodeEntries.Replace)
+		// Panabit iWAN lines: third-party iWAN ingresses AnixOps Net logs
+		// into with a shared account to reach proxy nodes through them
+		// (node entries of kind iwan; internal/iwanline).
+		iwanLines := handler.NewIWANLinesHandler()
+		v4.GET("/kernel/iwan-lines", iwanLines.List)
+		v4.POST("/kernel/iwan-lines", iwanLines.Create)
+		v4.PUT("/kernel/iwan-lines/:id", iwanLines.Update)
+		v4.DELETE("/kernel/iwan-lines/:id", iwanLines.Delete)
 		// Forward routes in subscriptions (加入订阅, Phase 10): a route whose
 		// target is a proxy node's protocol is offered again at its entries
 		// (internal/routesubscription).

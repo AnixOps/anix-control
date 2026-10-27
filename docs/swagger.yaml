@@ -469,6 +469,23 @@ definitions:
           (the default) or one of the bot's admin_ids. Anything else is refused.
         type: integer
     type: object
+  iwanline.Input:
+    properties:
+      encrypt:
+        type: boolean
+      host:
+        type: string
+      mtu:
+        type: integer
+      name:
+        type: string
+      password:
+        type: string
+      port:
+        type: integer
+      username:
+        type: string
+    type: object
   model.AdminCreateUserRequest:
     properties:
       device_limit:
@@ -1035,6 +1052,9 @@ definitions:
         type: boolean
       host:
         type: string
+      iwan_line_id:
+        description: IWANLineID is the line of an iWAN entry.
+        type: integer
       kind:
         type: string
       label:
@@ -7163,6 +7183,104 @@ paths:
       summary: Publish a forward route in subscriptions
       tags:
       - Kernel
+  /api/v4/kernel/iwan-lines:
+    get:
+      description: 'Every line by name: id, name, host, port, username, mtu (0 is
+        the client''s default), encrypt (XOR masking, not confidentiality) and entries
+        (how many node entries reach their nodes through it). The password is never
+        answered.'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: The Panabit iWAN lines
+      tags:
+      - Kernel
+    post:
+      consumes:
+      - application/json
+      description: Adds a line with its shared login (name unique, without |; host
+        a domain or an IP address; port 1-65535; username and password up to 128 characters;
+        mtu 0 or 576-1600). At most 64 lines. Audited without the login.
+      parameters:
+      - description: the line
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/iwanline.Input'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Add a Panabit iWAN line
+      tags:
+      - Kernel
+  /api/v4/kernel/iwan-lines/{id}:
+    delete:
+      description: Deletes a line that no node entry uses (409 in_use otherwise).
+        Audited.
+      parameters:
+      - description: line id
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete a Panabit iWAN line
+      tags:
+      - Kernel
+    put:
+      consumes:
+      - application/json
+      description: Replaces the line's fields as Create checks them; an empty password
+        keeps the stored one. Subscriptions change at once. Audited without the login.
+      parameters:
+      - description: line id
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: the line
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/iwanline.Input'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Change a Panabit iWAN line
+      tags:
+      - Kernel
   /api/v4/kernel/node-groups:
     get:
       description: The live node groups by sort and id, each with its defaults, protocol
@@ -7489,11 +7607,13 @@ paths:
     get:
       description: 'The addresses subscribers reach the node at beyond its host, in
         order: label, kind (direct: the protocols'' own ports; nat: a public address
-        whose port ranges map to protocol ports), host, family (ipv4, ipv6 or domain),
-        port map and whether the entry is enabled; uncovered_protocols lists the enabled,
-        shown protocols (id, name, type, port) that no enabled entry offers, which
-        subscriptions leave out. A node with enabled entries is offered in subscriptions
-        once per entry and protocol, in place of its host.'
+        whose port ranges map to protocol ports; iwan: the host reached through a
+        Panabit iWAN line, iwan_line_id, offered to AnixOps Net only and besides the
+        other entries), host, family (ipv4, ipv6 or domain), port map and whether
+        the entry is enabled; uncovered_protocols lists the enabled, shown protocols
+        (id, name, type, port) that no enabled entry offers, which subscriptions leave
+        out. A node with enabled entries is offered in subscriptions once per entry
+        and protocol, in place of its host.'
       parameters:
       - description: proxy-<id>
         in: path
@@ -7517,11 +7637,12 @@ paths:
       consumes:
       - application/json
       description: 'Makes the list the node''s entries, in that order (at most 32;
-        labels unique, without |). A direct entry has no port map; a NAT entry has
-        1 to 32 port ranges {from, to, external} that do not overlap: protocol ports
-        from..to are reached at external..external+(to-from). An empty list removes
-        every entry, so the node is reached at its host again. Subscriptions change
-        at once; the node''s configuration does not. The answer lists the entries
+        labels unique, without |). A direct entry has no port map; an iwan entry has
+        no port map and names its line (iwan_line_id, an existing line); a NAT entry
+        has 1 to 32 port ranges {from, to, external} that do not overlap: protocol
+        ports from..to are reached at external..external+(to-from). An empty list
+        removes every entry, so the node is reached at its host again. Subscriptions
+        change at once; the node''s configuration does not. The answer lists the entries
         and uncovered_protocols, as GET does. Audited.'
       parameters:
       - description: proxy-<id>

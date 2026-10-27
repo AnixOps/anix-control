@@ -52,11 +52,13 @@ export function entryForm(entry = null) {
     kind: entry?.kind || 'direct',
     host: entry?.host || '',
     portMap: formatPortMap(entry?.port_map),
+    // The Panabit iWAN line of an iwan entry, by id.
+    lineId: entry?.iwan_line_id ?? '',
     enabled: entry ? entry.enabled !== false : true
   }
 }
 
-// validateEntries answers the errors by form key: { label?, host?, portMap? }.
+// validateEntries answers the errors by form key: { label?, host?, portMap?, line? }.
 export function validateEntries(forms, messages) {
   const errors = {}
   const labels = new Set()
@@ -73,19 +75,66 @@ export function validateEntries(forms, messages) {
       if (error) found.portMap = messages.badLine(error)
       else if (!ranges.length) found.portMap = messages.required
     }
+    if (form.kind === 'iwan' && form.lineId === '') found.line = messages.required
     if (Object.keys(found).length) errors[form.key] = found
   }
   return errors
 }
 
 export function entriesRequest(forms) {
-  return forms.map(form => ({
-    label: form.label.trim(),
-    kind: form.kind,
+  return forms.map(form => {
+    const entry = {
+      label: form.label.trim(),
+      kind: form.kind,
+      host: form.host.trim(),
+      port_map: form.kind === 'nat' ? parsePortMap(form.portMap).ranges : [],
+      enabled: form.enabled
+    }
+    if (form.kind === 'iwan') entry.iwan_line_id = Number(form.lineId)
+    return entry
+  })
+}
+
+// lineForm is a Panabit iWAN line as its form edits it; the password is
+// never loaded, and left empty on an edit it stays as it is.
+export function lineForm(line = null) {
+  return {
+    id: line?.id ?? null,
+    name: line?.name || '',
+    host: line?.host || '',
+    port: line?.port ?? null,
+    username: line?.username || '',
+    password: '',
+    mtu: line?.mtu || null,
+    encrypt: Boolean(line?.encrypt)
+  }
+}
+
+// validateLine answers the errors by field: { name?, host?, port?,
+// username?, password?, mtu? }.
+export function validateLine(form, messages) {
+  const errors = {}
+  const name = form.name.trim()
+  if (!name) errors.name = messages.required
+  else if (name.includes('|')) errors.name = messages.noPipe
+  if (!form.host.trim()) errors.host = messages.required
+  if (!Number.isInteger(form.port) || form.port < 1 || form.port > 65535) errors.port = messages.port
+  if (!form.username.trim()) errors.username = messages.required
+  if (form.id === null && !form.password) errors.password = messages.required
+  if (form.mtu !== null && form.mtu !== 0 && (form.mtu < 576 || form.mtu > 1600)) errors.mtu = messages.mtu
+  return errors
+}
+
+export function lineRequest(form) {
+  return {
+    name: form.name.trim(),
     host: form.host.trim(),
-    port_map: form.kind === 'nat' ? parsePortMap(form.portMap).ranges : [],
-    enabled: form.enabled
-  }))
+    port: form.port,
+    username: form.username.trim(),
+    password: form.password,
+    mtu: form.mtu || 0,
+    encrypt: form.encrypt
+  }
 }
 
 // portMapSummary is a short line for the table: "21000-21099 → 30000-30099".

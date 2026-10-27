@@ -1,6 +1,7 @@
 <template>
   <UiSection :title="t('nodeEntries.title')" :description="t('nodeEntries.description')" heading-tag="h2" data-testid="node-entries">
     <template #actions>
+      <UiButton size="md" variant="ghost" :icon="Cable" data-testid="edit-iwan-lines" @click="linesOpen = true">{{ t('nodeEntries.lines.open') }}</UiButton>
       <UiButton size="md" :icon="Pencil" data-testid="edit-node-entries" :disabled="loading || Boolean(error)" @click="sheetOpen = true">{{ t('nodeEntries.edit') }}</UiButton>
     </template>
     <NodeNotice v-if="uncovered.length" tone="warning" data-testid="node-entries-uncovered">
@@ -32,7 +33,8 @@
       </template>
     </UiDataTable>
 
-    <NodeEntriesSheet v-model:open="sheetOpen" :node="node" :entries="entries" @saved="onSaved" />
+    <NodeEntriesSheet v-model:open="sheetOpen" :node="node" :entries="entries" :lines="lines" @saved="onSaved" />
+    <IWANLinesSheet v-model:open="linesOpen" :lines="lines" @changed="loadLines" />
   </UiSection>
 </template>
 
@@ -42,13 +44,14 @@
 // each line's native IPv6 address and a provider NAT address with its port
 // map. A node with enabled entries is offered once per entry and protocol.
 import { computed, onMounted, ref } from 'vue'
-import { Pencil, Plus, Waypoints } from '@lucide/vue'
-import { getKernelNodeEntries } from '@/api/kernel'
+import { Cable, Pencil, Plus, Waypoints } from '@lucide/vue'
+import { getKernelNodeEntries, listIWANLines } from '@/api/kernel'
 import UiBadge from '@/ui/UiBadge.vue'
 import UiButton from '@/ui/UiButton.vue'
 import UiDataTable from '@/ui/UiDataTable.vue'
 import UiSection from '@/ui/UiSection.vue'
 import { useAppI18n } from '@/composables/useAppI18n'
+import IWANLinesSheet from './IWANLinesSheet.vue'
 import NodeEntriesSheet from './NodeEntriesSheet.vue'
 import NodeNotice from './NodeNotice.vue'
 import { portMapSummary } from './nodeEntriesModel'
@@ -66,13 +69,23 @@ const uncoveredList = computed(() => uncovered.value.map(p => `${p.name || p.typ
 const loading = ref(false)
 const error = ref(null)
 const sheetOpen = ref(false)
+// Panabit iWAN lines, for iwan entries and their sheet.
+const lines = ref([])
+const linesOpen = ref(false)
+const lineNames = computed(() => new Map(lines.value.map(line => [line.id, line.name])))
+
+function portsOf(row) {
+  if (row.kind === 'nat') return portMapSummary(row.port_map)
+  if (row.kind === 'iwan') return t('nodeEntries.viaLine', { name: lineNames.value.get(row.iwan_line_id) || `#${row.iwan_line_id}` })
+  return t('nodeEntries.samePorts')
+}
 
 const columns = computed(() => [
   { key: 'label', label: t('nodeEntries.columns.label'), primary: true },
   { key: 'kind', label: t('nodeEntries.columns.kind'), value: row => t(`nodeEntries.kinds.${row.kind}`), secondary: true },
   { key: 'host', label: t('nodeEntries.columns.host') },
   { key: 'family', label: t('nodeEntries.columns.family'), value: row => t(`nodeEntries.families.${row.family}`), breakpoint: 'md' },
-  { key: 'ports', label: t('nodeEntries.columns.ports'), value: row => (row.kind === 'nat' ? portMapSummary(row.port_map) : t('nodeEntries.samePorts')), breakpoint: 'lg' },
+  { key: 'ports', label: t('nodeEntries.columns.ports'), value: portsOf, breakpoint: 'lg' },
   { key: 'enabled', label: t('nodeEntries.columns.status') }
 ])
 
@@ -91,12 +104,24 @@ async function load() {
   }
 }
 
+async function loadLines() {
+  try {
+    lines.value = (await listIWANLines())?.lines || []
+  } catch (e) {
+    // The entries still list without the line names.
+    console.error('Failed to load iWAN lines:', e)
+  }
+}
+
 function onSaved(answer) {
   entries.value = answer?.entries || []
   uncovered.value = answer?.uncovered_protocols || []
 }
 
-onMounted(load)
+onMounted(() => {
+  load()
+  loadLines()
+})
 
 defineExpose({ load, entries, uncovered })
 </script>

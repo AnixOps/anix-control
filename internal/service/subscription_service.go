@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/v5/internal/database"
+	"github.com/AnixOps/anix-control/v5/internal/iwanline"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/nodeentry"
 	"github.com/AnixOps/anix-control/v5/internal/nodesecrets"
@@ -112,6 +113,9 @@ func (s *SubscriptionService) GetUserSubscription(req *model.SubscriptionRequest
 	format := req.Format
 	if format == "" {
 		format = model.FormatV2Ray
+	}
+	if format != model.FormatAnixOps {
+		nodes = withoutIWANLines(nodes)
 	}
 	format = preferNativeWireGuardFormat(format, nodes)
 
@@ -605,6 +609,10 @@ func (s *SubscriptionService) getInternalNodes(user *model.User, ctx *model.Temp
 	if err != nil {
 		return nil, err
 	}
+	lines, err := s.iwanLines(entries)
+	if err != nil {
+		return nil, err
+	}
 
 	layouts, err := groupProtocolLayouts(s.db, groupIDs)
 	if err != nil {
@@ -652,7 +660,7 @@ func (s *SubscriptionService) getInternalNodes(user *model.User, ctx *model.Temp
 			}
 
 			name := layouts[groupProtocolKey{g.ID, p.ID}].DisplayName
-			parsedNodes := s.nodeProtocolEntries(p.Node, &p, ctx, entries[p.Node.ID], name)
+			parsedNodes := s.nodeProtocolEntries(p.Node, &p, ctx, entries[p.Node.ID], lines, name)
 			parsedNodes = append(parsedNodes, s.routeOffers(p.Node, &p, ctx, offers[p.ID], name)...)
 			for _, parsed := range parsedNodes {
 				parsed.GroupID = g.ID
@@ -683,7 +691,92 @@ func (s *SubscriptionService) getInternalNodes(user *model.User, ctx *model.Temp
 	for i, index := range order {
 		sorted[i] = result[index]
 	}
-	return sorted, nil
+	return withIWANLines(sorted, lines), nil
+}
+
+// iwanLines loads the Panabit iWAN lines the entries reach their nodes
+// through.
+func (s *SubscriptionService) iwanLines(entries map[uint][]model.NodeEntry) (map[uint]model.IWANLine, error) {
+	seen := map[uint]bool{}
+	var ids []uint
+	for _, list := range entries {
+		for _, entry := range list {
+			if entry.Kind == model.NodeEntryIWAN && entry.IWANLineID != nil && !seen[*entry.IWANLineID] {
+				seen[*entry.IWANLineID] = true
+				ids = append(ids, *entry.IWANLineID)
+			}
+		}
+	}
+	return iwanline.ByID(s.db, ids)
+}
+
+// withIWANLines puts each line the nodes are reached through before them,
+// in the group of its first node: AnixOps Net logs into the line once and
+// finds it by name, the first node of that name.
+func withIWANLines(nodes []*model.ParsedNode, lines map[uint]model.IWANLine) []*model.ParsedNode {
+	byName := make(map[string]model.IWANLine, len(lines))
+	for _, line := range lines {
+		byName[line.Name] = line
+	}
+	var head []*model.ParsedNode
+	added := map[string]bool{}
+	for _, node := range nodes {
+		line, ok := byName[node.Via]
+		if node.Via == "" || !ok || added[node.Via] {
+			continue
+		}
+		added[node.Via] = true
+		parsed := iwanLineNode(line)
+		parsed.GroupID = node.GroupID
+		parsed.GroupName = node.GroupName
+		head = append(head, parsed)
+	}
+	if len(head) == 0 {
+		return nodes
+	}
+	return append(head, nodes...)
+}
+
+// iwanLineNode is a Panabit iWAN line as a subscription node, with its
+// shared login.
+func iwanLineNode(line model.IWANLine) *model.ParsedNode {
+	return &model.ParsedNode{
+		ID:         fmt.Sprintf("iwan-line-%d", line.ID),
+		Name:       line.Name,
+		Type:       string(model.ProtocolIWAN),
+		Server:     line.Host,
+		Port:       line.Port,
+		Username:   line.Username,
+		Password:   line.Password,
+		MTU:        line.MTU,
+		Settings:   map[string]any{"allow_encrypt": line.Encrypt},
+		SourceType: iwanLineSource,
+		SourceID:   line.ID,
+		SourceName: line.Name,
+	}
+}
+
+// iwanLineSource is the SourceType of a Panabit iWAN line node.
+const iwanLineSource = "iwan_line"
+
+// viaProtocols are the protocols AnixOps Net can run through an iWAN line:
+// the ones that dial TCP (and Shadowsocks UDP) through another node. QUIC
+// protocols and tunnels open their own sockets.
+var viaProtocols = map[model.ProtocolType]bool{
+	model.ProtocolVMess: true, model.ProtocolVLESS: true, model.ProtocolTrojan: true, model.ProtocolShadowsocks: true,
+}
+
+// withoutIWANLines leaves out the nodes only AnixOps Net can follow: the
+// lines and the nodes reached through them.
+func withoutIWANLines(nodes []*model.ParsedNode) []*model.ParsedNode {
+	kept := nodes[:0:0]
+	for _, node := range nodes {
+		if node.Via != "" || node.SourceType == iwanLineSource {
+			continue
+		}
+		kept = append(kept, node)
+	}
+	return kept
 }
 
 // nodeEntries loads the enabled entries (internal/nodeentry) of the
@@ -701,11 +794,49 @@ func (s *SubscriptionService) nodeEntries(protocols []model.NodeProtocol) (map[u
 }
 
 // nodeProtocolEntries is the protocol as subscribers reach it: at the
-// node's host, or once per entry of a node with entries, at the entry's
-// host and port and named after it. A NAT entry that does not map the
-// protocol's port leaves the protocol out for that entry. A non-empty name
-// (the group's display name) replaces "<node> - <protocol>".
-func (s *SubscriptionService) nodeProtocolEntries(node *model.Node, protocol *model.NodeProtocol, ctx *model.TemplateRenderContext, entries []model.NodeEntry, name string) []*model.ParsedNode {
+// node's host, or once per direct or NAT entry of a node with such entries,
+// at the entry's host and port and named after it. A NAT entry that does not
+// map the protocol's port leaves the protocol out for that entry. Besides,
+// once per iWAN entry, at the entry's host through the entry's line (Via),
+// for the protocols that can run through it. A non-empty name (the group's
+// display name) replaces "<node> - <protocol>".
+func (s *SubscriptionService) nodeProtocolEntries(node *model.Node, protocol *model.NodeProtocol, ctx *model.TemplateRenderContext, entries []model.NodeEntry, lines map[uint]model.IWANLine, name string) []*model.ParsedNode {
+	entries, iwanEntries := nodeentry.SplitIWAN(entries)
+	result := s.addressEntries(node, protocol, ctx, entries, name)
+	if !viaProtocols[protocol.Type] {
+		return result
+	}
+	for _, entry := range iwanEntries {
+		line, ok := lines[derefUint(entry.IWANLineID)]
+		if !ok {
+			continue
+		}
+		parsed := s.nodeProtocolToParsedNode(node, protocol, ctx)
+		if parsed == nil {
+			continue
+		}
+		if name != "" {
+			parsed.Name = name
+		}
+		parsed.ID = fmt.Sprintf("%s-i%d", parsed.ID, entry.ID)
+		parsed.Name = fmt.Sprintf("%s | %s", parsed.Name, entry.Label)
+		parsed.Server = entry.Host
+		parsed.Via = line.Name
+		result = append(result, parsed)
+	}
+	return result
+}
+
+func derefUint(value *uint) uint {
+	if value == nil {
+		return 0
+	}
+	return *value
+}
+
+// addressEntries is the protocol at the node's host, or once per direct or
+// NAT entry.
+func (s *SubscriptionService) addressEntries(node *model.Node, protocol *model.NodeProtocol, ctx *model.TemplateRenderContext, entries []model.NodeEntry, name string) []*model.ParsedNode {
 	if len(entries) == 0 {
 		if parsed := s.nodeProtocolToParsedNode(node, protocol, ctx); parsed != nil {
 			if name != "" {

@@ -5,11 +5,15 @@ import userEvent from '@testing-library/user-event'
 import NodeEntriesSection from '@/views/admin/nodes/NodeEntriesSection.vue'
 import UiHost from '@/ui/UiHost.vue'
 import { setLocale } from '@/i18n'
-import { entriesRequest, entryForm, formatPortMap, parsePortMap, validateEntries } from '@/views/admin/nodes/nodeEntriesModel'
+import { entriesRequest, entryForm, formatPortMap, lineForm, lineRequest, parsePortMap, validateEntries, validateLine } from '@/views/admin/nodes/nodeEntriesModel'
 
 const kernelApi = vi.hoisted(() => ({
   getKernelNodeEntries: vi.fn(),
-  replaceKernelNodeEntries: vi.fn()
+  replaceKernelNodeEntries: vi.fn(),
+  listIWANLines: vi.fn(),
+  createIWANLine: vi.fn(),
+  updateIWANLine: vi.fn(),
+  deleteIWANLine: vi.fn()
 }))
 
 vi.mock('@/api/kernel', () => kernelApi)
@@ -45,10 +49,34 @@ describe('nodeEntriesModel', () => {
   })
 })
 
+describe('iWAN entries and lines', () => {
+  it('needs a line for an iwan entry and sends its id', () => {
+    const iwan = { ...entryForm(null), label: 'via HK', kind: 'iwan', host: '198.51.100.20' }
+    expect(validateEntries([iwan], MESSAGES)[iwan.key]).toEqual({ line: 'required' })
+    iwan.lineId = 3
+    expect(validateEntries([iwan], MESSAGES)).toEqual({})
+    expect(entriesRequest([iwan])).toEqual([{ label: 'via HK', kind: 'iwan', host: '198.51.100.20', port_map: [], enabled: true, iwan_line_id: 3 }])
+    expect(entryForm({ label: 'via HK', kind: 'iwan', host: 'h', iwan_line_id: 3 }).lineId).toBe(3)
+  })
+
+  it('validates a line and keeps the password on an edit', () => {
+    const messages = { required: 'required', noPipe: 'pipe', port: 'port', mtu: 'mtu' }
+    const created = { ...lineForm(null), name: 'HK', host: '203.0.113.10', port: 4567, username: 'u' }
+    expect(validateLine(created, messages)).toEqual({ password: 'required' })
+    created.password = 'p'
+    created.mtu = 100
+    expect(validateLine(created, messages)).toEqual({ mtu: 'mtu' })
+    const edited = lineForm({ id: 3, name: 'HK', host: '203.0.113.10', port: 4567, username: 'u', mtu: 0, encrypt: true })
+    expect(validateLine(edited, messages)).toEqual({})
+    expect(lineRequest(edited)).toEqual({ name: 'HK', host: '203.0.113.10', port: 4567, username: 'u', password: '', mtu: 0, encrypt: true })
+  })
+})
+
 describe('NodeEntriesSection', () => {
   beforeEach(async () => {
     await setLocale('zh-CN')
     Object.values(kernelApi).forEach(fn => fn.mockReset())
+    kernelApi.listIWANLines.mockResolvedValue({ lines: [] })
   })
 
   it('lists the entries and replaces the list from the sheet', async () => {
@@ -91,5 +119,33 @@ describe('NodeEntriesSection', () => {
     })
     const notice = await screen.findByTestId('node-entries-uncovered')
     expect(notice.textContent).toContain('SS :11111')
+  })
+
+  it('names the line of an iwan entry and adds lines from its sheet', async () => {
+    const iwan = { id: 4, label: 'via HK', kind: 'iwan', host: '198.51.100.20', family: 'ipv4', port_map: [], enabled: true, sort: 0, iwan_line_id: 3 }
+    kernelApi.getKernelNodeEntries.mockResolvedValue({ node_id: 70, entries: [iwan] })
+    kernelApi.listIWANLines.mockResolvedValue({ lines: [{ id: 3, name: 'HK iWAN', host: '203.0.113.10', port: 4567, username: 'u', mtu: 0, encrypt: false, entries: 1 }] })
+    kernelApi.createIWANLine.mockResolvedValue({ line: { id: 5 } })
+    render({
+      components: { NodeEntriesSection, UiHost },
+      template: '<div><NodeEntriesSection :node="{ id: 70, name: \'US\', host: \'198.51.100.20\' }" /><UiHost /></div>'
+    })
+    expect(await screen.findByText('经由 HK iWAN')).toBeTruthy()
+
+    const user = userEvent.setup()
+    await user.click(screen.getByTestId('edit-iwan-lines'))
+    expect(await screen.findByTestId('iwan-line-3')).toBeTruthy()
+    await user.click(screen.getByTestId('add-iwan-line'))
+    const form = await screen.findByTestId('iwan-line-form')
+    const fields = form.querySelectorAll('input')
+    await user.type(fields[0], 'JP iWAN')
+    await user.type(fields[1], '203.0.113.20')
+    await user.type(fields[2], '4568')
+    await user.type(fields[3], 'shared')
+    await user.type(fields[4], 'secret')
+    await user.click(screen.getByTestId('iwan-line-save'))
+    await waitFor(() => expect(kernelApi.createIWANLine).toHaveBeenCalledTimes(1))
+    expect(kernelApi.createIWANLine).toHaveBeenCalledWith({ name: 'JP iWAN', host: '203.0.113.20', port: 4568, username: 'shared', password: 'secret', mtu: 0, encrypt: false })
+    await waitFor(() => expect(kernelApi.listIWANLines).toHaveBeenCalledTimes(2))
   })
 })
