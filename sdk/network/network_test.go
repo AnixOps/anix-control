@@ -268,6 +268,12 @@ func withForward(t *testing.T) *networkv1.NetworkPlan {
 
 func TestPortForwards(t *testing.T) {
 	require.NoError(t, Check(withForward(t)))
+	full := withForward(t)
+	full.PortForwards[0].Targets[0].Weight, full.PortForwards[0].Targets[1].Priority = 2, 1
+	full.PortForwards[0].Policy = &networkv1.ForwardPolicy{Balance: "failover", ProxyProtocol: "v2", BandwidthBps: 100_000_000, MaxConns: 500,
+		Health:         &networkv1.ForwardHealth{IntervalMs: 5000, TimeoutMs: 2000},
+		CircuitBreaker: &networkv1.ForwardBreaker{FailureThreshold: 3, OpenMs: 30000}}
+	require.NoError(t, Check(full))
 
 	cases := []struct {
 		name      string
@@ -293,6 +299,23 @@ func TestPortForwards(t *testing.T) {
 		{"hop egress", func(p *networkv1.NetworkPlan) {
 			p.PortForwards[0].Next = &networkv1.PortForward_EgressId{EgressId: "eg-ix"}
 		}, "internet egress"},
+		{"balance", func(p *networkv1.NetworkPlan) {
+			p.PortForwards[0].Policy = &networkv1.ForwardPolicy{Balance: "fastest"}
+		}, "balance"},
+		{"proxy protocol", func(p *networkv1.NetworkPlan) {
+			p.PortForwards[0].Policy = &networkv1.ForwardPolicy{ProxyProtocol: "v3"}
+		}, "proxy_protocol"},
+		{"proxy on udp", func(p *networkv1.NetworkPlan) {
+			p.PortForwards[0].Protocols = []string{"udp"}
+			p.PortForwards[0].Policy = &networkv1.ForwardPolicy{ProxyProtocol: "v1"}
+		}, "UDP only"},
+		{"weight", func(p *networkv1.NetworkPlan) { p.PortForwards[0].Targets[0].Weight = 5000 }, "weight"},
+		{"health timeout", func(p *networkv1.NetworkPlan) {
+			p.PortForwards[0].Policy = &networkv1.ForwardPolicy{Health: &networkv1.ForwardHealth{IntervalMs: 1000, TimeoutMs: 2000}}
+		}, "longer than interval"},
+		{"breaker", func(p *networkv1.NetworkPlan) {
+			p.PortForwards[0].Policy = &networkv1.ForwardPolicy{CircuitBreaker: &networkv1.ForwardBreaker{FailureThreshold: 1000}}
+		}, "failure_threshold"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

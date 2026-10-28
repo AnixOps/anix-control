@@ -110,7 +110,8 @@ message PortForward {
   Endpoint listen = 2;
   // "tcp", "udp" or both.
   repeated string protocols = 3;
-  // Balanced by the route's policy (to come); the first one until then.
+  // Balanced by policy; the entry picks the target and the last hop dials
+  // it.
   repeated ForwardTarget targets = 4;
   oneof next {
     // A local internet egress.
@@ -118,6 +119,9 @@ message PortForward {
     // The first transport; the last device forwards it to its egress.
     string transport_id = 6;
   }
+  // The route's balancing, health checks, limits and PROXY header (the
+  // forward.v1 route policy); unset takes the defaults.
+  ForwardPolicy policy = 7;
 }
 
 // ForwardTarget is where a PortForward's traffic goes in the end.
@@ -125,6 +129,41 @@ message ForwardTarget {
   // An IP address or a DNS name, resolved where the traffic leaves.
   string host = 1;
   uint32 port = 2;
+  // Share under round_robin and random; 0 is 1.
+  uint32 weight = 3;
+  // Order under failover, lowest first.
+  uint32 priority = 4;
+}
+
+// ForwardPolicy is how a PortForward runs; 0 or "" takes each default.
+message ForwardPolicy {
+  // round_robin (default), random, ip_hash, least_conn or failover.
+  string balance = 1;
+  ForwardHealth health = 2;
+  ForwardBreaker circuit_breaker = 3;
+  // off (default), v1 or v2: the PROXY header ahead of the client's bytes
+  // on TCP connections to the target.
+  string proxy_protocol = 4;
+  // Bits per second, each direction, shared by the whole forward; 0 is
+  // unlimited.
+  uint64 bandwidth_bps = 5;
+  // Concurrent TCP connections; 0 is unlimited.
+  uint32 max_conns = 6;
+}
+
+// ForwardHealth is the TCP connect check of each target, from the entry
+// through the forward's path (defaults 5000 and 2000 ms).
+message ForwardHealth {
+  uint32 interval_ms = 1;
+  uint32 timeout_ms = 2;
+  bool disabled = 3;
+}
+
+// ForwardBreaker takes a target out after failures in a row (defaults 3
+// and 30000 ms).
+message ForwardBreaker {
+  uint32 failure_threshold = 1;
+  uint32 open_ms = 2;
 }
 
 // Line is one uplink of the device: a network interface and its carrier.
