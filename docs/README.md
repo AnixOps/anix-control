@@ -85,7 +85,7 @@ Use this tree like NodeX:
 
 ## WireGuard
 
-- P0 WireGuard relay plan: [`guide/wireguard-relay.md`](guide/wireguard-relay.md)
+- Removed WireGuard gost relay (archived): [`archive/wireguard-relay.md`](archive/wireguard-relay.md)
 - Peer schema: [`reference/wireguard-peer-schema.md`](reference/wireguard-peer-schema.md)
 - Entry network policy: [`guide/wireguard-network-policy.md`](guide/wireguard-network-policy.md)
 - Peer key rotation: [`guide/wireguard-key-rotation.md`](guide/wireguard-key-rotation.md)

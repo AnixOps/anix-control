@@ -79,8 +79,7 @@ func protocolRoute(method, pattern, routeID string, legacy func(*handler.NodeHan
 func ptr[T any](value T) *T { return &value }
 
 func wireGuardSettings(private, public string) string {
-	return fmt.Sprintf(`{"cidr":"10.8.0.0/24","server_address":"10.8.0.1/24","server_private_key":%q,"server_public_key":%q,"tunnel_type":"quic",`+
-		`"relay":{"server":"relay.example.test","server_port":8443}}`, private, public)
+	return fmt.Sprintf(`{"cidr":"10.8.0.0/24","server_address":"10.8.0.1/24","server_private_key":%q,"server_public_key":%q}`, private, public)
 }
 
 // seedNodes writes nodes 1 to 3 and the protocols of nodes 1 and 2:

@@ -51,12 +51,6 @@ PostgreSQL), not the systemd installer.
   records, a legacy fallback rehearsal and the operator's own canary are
   evidence for the operator to collect then; no release gate requires it
   (`docs/RELEASING.md`).
-- [ ] `gost-mesh` canary evidence. The QUIC/WSS Agent runtime and namespace
-  traffic acceptance exist; TUIC is out of v1 scope
-  (`packages/gost-mesh/README.md`). Still needed: Control Secret ID to Agent
-  private-file materialization/renewal/deletion/audit, MTU and sustained
-  loss/reconnect tests, composed NAT failure rollback, accounting, multi-node
-  rollback, and a sustained canary.
 - [ ] Move the legacy business domains out of the kernel. Every `/api/v2`
   business route is registered through `registeredPackageRoute`
   (`internal/router/router.go`) and served by a package host. Of the 236
@@ -84,17 +78,6 @@ PostgreSQL), not the systemd installer.
 
 - [ ] Keep all audit files current as fixes land.
 - [ ] Keep `docs/features.md` current as new features or feature-status changes land.
-
-## P0: WireGuard Dual-Node Entry/Exit Support
-
-Target path: WireGuard access -> domestic entry termination -> GOST relay+QUIC
--> overseas exit NAT. WSS is a one-click compatibility mode, not the default
-tunnel mode.
-
-- [ ] Add guided entry/exit node selection plus operator migration and rollback evidence.
-- [ ] Verify and, where needed, specialize subscription output for Shadowrocket, Loon, and v2rayN beyond the native `.conf`/sing-box outputs now covered by tests.
-- [ ] Verify Agent runtime application for both domestic entry termination and overseas exit NAT configuration on real entry/exit machines.
-- [ ] Add integration, compatibility, traffic-accounting, limit, and migration tests.
 
 ## P1: Security And Error Handling
 
@@ -141,24 +124,23 @@ deliberately in a later PR.
 - [ ] `cmd/migrate` (XBoard MySQL dump importer) is undocumented;
   `docs/guide/legacy-migration.md` still says there is no one-command
   converter. Document its scope and limits, or remove it.
-- [ ] Control-side configuration validation for the `gost-mesh` and
-  `nftables-forward` packages (and the in-process status/lifecycle executors
-  for those two and `nat-egress`) no longer exists: nothing called it after
-  `7ccd4781`, and PR #8 (`8dfc7b70`) deleted
-  `internal/plugincontrol/{gost_mesh,gost_mesh_validation,nftables_forward,nat_egress}.go`.
-  Rebuild it in the package hosts, or restore it from history before
-  `8dfc7b70` and wire it, before these packages take production traffic.
+- [ ] Control-side configuration validation for the `nftables-forward`
+  package (and the in-process status/lifecycle executors for it and
+  `nat-egress`) no longer exists: nothing called it after `7ccd4781`, and
+  PR #8 (`8dfc7b70`) deleted
+  `internal/plugincontrol/{nftables_forward,nat_egress}.go`. Rebuild it in
+  the package hosts, or restore it from history before `8dfc7b70` and wire
+  it, before these packages take production traffic.
 
 ## Deployment And Repository Hygiene
 
 - [ ] Remove hard-coded `/home/dev/...` defaults from
-  `config/deploy/deploy_panel.sh`, `config/deploy/ansible/nodes/`,
-  `scripts/deploy_wireguard_gost_quic.sh`, and the agent deploy defaults in
+  `config/deploy/deploy_panel.sh`, `config/deploy/ansible/nodes/`, and the
+  agent deploy defaults in
   `web/src/views/admin/nodes/useNodeDeploy.js`.
 
-- [ ] Background workers that contact real infrastructure (forward runtime
-  job executor, forward agent bridge, gost/ansible stats, flow reset, latency
-  prober) cannot be switched off by configuration. Staging and upgrade
+- [ ] Background workers that contact real infrastructure cannot be switched
+  off by configuration. Staging and upgrade
   rehearsals on production copies need network namespace isolation
   (`docs/UPGRADE.md`). Add a config switch for outbound background work.
 

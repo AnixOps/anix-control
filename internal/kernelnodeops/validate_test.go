@@ -52,7 +52,7 @@ func TestValidateNodeConfig(t *testing.T) {
 		require.False(t, answer.GetValid())
 		require.Equal(t, "配置必须是 JSON 对象", answer.GetMessage())
 
-		wireGuard := `{"type":"wireguard","node_type":"wireguard","server_port":51820,"cidr":"10.9.0.0/24","server_address":"10.9.0.1/24","relay":{"backend":"gost","role":"entry","server":"exit.example.com","server_port":8443,"entry_tun_address":"172.31.77.2/24","exit_tun_address":"172.31.77.1/24"},"server_private_key":%q}`
+		wireGuard := `{"type":"wireguard","node_type":"wireguard","server_port":51820,"cidr":"10.9.0.0/24","server_address":"10.9.0.1/24","server_private_key":%q}`
 		answer, err = client.ValidateNodeConfig(ctx, validateRequest(raw, "", fmt.Sprintf(wireGuard, "not-a-key")))
 		require.NoError(t, err)
 		require.False(t, answer.GetValid())
@@ -66,13 +66,13 @@ func TestValidateNodeConfig(t *testing.T) {
 		}
 		private, public, err := service.GenerateWireGuardKeypair()
 		require.NoError(t, err)
-		answer, err = client.ValidateNodeConfig(ctx, validateRequest(raw, "", fmt.Sprintf(`{"type":"wireguard","server_port":51820,"cidr":"10.9.0.0/24","server_address":"10.9.0.1/24","relay":{"backend":"gost","role":"entry","server":"exit.example.com","server_port":8443,"entry_tun_address":"172.31.77.2/24","exit_tun_address":"172.31.77.1/24"},"server_private_key":%q,"server_public_key":%q}`, private, public)))
+		answer, err = client.ValidateNodeConfig(ctx, validateRequest(raw, "", fmt.Sprintf(`{"type":"wireguard","server_port":51820,"cidr":"10.9.0.0/24","server_address":"10.9.0.1/24","server_private_key":%q,"server_public_key":%q}`, private, public)))
 		require.NoError(t, err)
 		require.True(t, answer.GetValid(), "%s %v", answer.GetMessage(), answer.GetIssues())
 
 		// A protocol row, as the package writes it; its settings column
 		// is a JSON string.
-		settings := fmt.Sprintf(`{"cidr":"10.9.0.0/24","server_address":"10.9.0.1/24","relay":{"backend":"gost","role":"entry","server":"exit.example.com","server_port":8443,"entry_tun_address":"172.31.77.2/24","exit_tun_address":"172.31.77.1/24"},"server_private_key":%q,"server_public_key":%q}`, service.NodeSecretPlaceholder, "pub")
+		settings := fmt.Sprintf(`{"cidr":"10.9.0.0/24","server_address":"10.9.0.1/24","server_private_key":%q,"server_public_key":%q}`, service.NodeSecretPlaceholder, "pub")
 		answer, err = client.ValidateNodeConfig(ctx, validateRequest(protocol, "wireguard", fmt.Sprintf(`{"port":51820,"enable":1,"settings":%q}`, settings)))
 		require.NoError(t, err)
 		require.True(t, answer.GetValid(), "%s %v", answer.GetMessage(), answer.GetIssues())

@@ -159,6 +159,6 @@ Do not normalize these responses blindly, because external clients depend on the
 - `docs/forwarding/design.md`: the v4.1 legacy forwarding runtime design, kept until the legacy cleanup (F5c).
 - `docs/forwarding/v4-api.md`: forwarding API contract (`/api/v4/forward/*`).
 - `docs/forwarding/security.md`: forwarding security constraints.
-- `docs/guide/wireguard-relay.md`: P0 WireGuard dual-node relay plan.
+- `docs/archive/wireguard-relay.md`: the removed WireGuard dual-node gost relay (archived).
 - `docs/archive/`: the archived Flux clone guide and flux v2 forwarding contract (removed in v4.2, F5d).
 - `docs/DEPLOYMENT.md`: deployment command and prerequisites.

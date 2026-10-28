@@ -70,8 +70,6 @@
           v-if="form.type === 'wireguard'"
           :wg="editor.wireGuardForm"
           @generate-keypair="createWireGuardKeypair"
-          @add-path="editor.addWireGuardNetworkPath()"
-          @remove-path="index => editor.removeWireGuardNetworkPath(index)"
         />
         <NodeIwanFields v-if="form.type === 'iwan'" :iwan="editor.iwanForm" />
 
@@ -128,7 +126,7 @@
 
 <script setup>
 // Add or edit one protocol of a node. JSON first (the whole protocol as one
-// object), with a visual form for the common fields and the WireGuard relay.
+// object), with a visual form for the common fields and WireGuard.
 // Saves with POST /admin/nodes/:id/protocols or PUT …/protocols/:protocol_id
 // (useProtocolEditor builds the same body as before the redesign).
 import { computed, ref, watch } from 'vue'

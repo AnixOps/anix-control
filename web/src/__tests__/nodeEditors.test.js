@@ -27,7 +27,7 @@ describe('useProtocolEditor', () => {
     expect(JSON.parse(payload.settings)).toEqual({ flow: 'xtls-rprx-vision' })
   })
 
-  it('reports invalid JSON and builds WireGuard relay settings from the form', async () => {
+  it('reports invalid JSON and builds WireGuard settings without a relay', async () => {
     const editor = useProtocolEditor()
     editor.startCreate()
     editor.jsonEditorContent.value = 'not json'
@@ -40,27 +40,19 @@ describe('useProtocolEditor', () => {
     Object.assign(editor.wireGuardForm, {
       cidr: '10.88.0.0/24',
       serverPrivateKey: 'server-private',
-      serverPublicKey: 'server-public',
-      role: 'exit',
-      wssCompat: true,
-      wssPath: '/wireguard',
-      wssCertFile: '/etc/v2bx/relay-cert.pem',
-      wssKeyFile: '/etc/v2bx/relay-key.pem',
-      outboundIface: 'eth0'
+      serverPublicKey: 'server-public'
     })
     await nextTick()
 
     const json = editor.visualToJson()
-    expect(json).toMatchObject({ type: 'wireguard', port: 51820, transport: 'udp', show: 0 })
-    expect(json.settings).toMatchObject({ cidr: '10.88.0.0/24', tunnel_type: 'wss', server_private_key: '', server_public_key: '' })
-    expect(json.settings.relay).toMatchObject({
-      mode: 'relay+wss', role: 'exit', wss_compat: true, wss_path: '/wireguard', wss_secure: false,
-      wss_cert_file: '/etc/v2bx/relay-cert.pem', wss_key_file: '/etc/v2bx/relay-key.pem', outbound_iface: 'eth0'
-    })
+    expect(json).toMatchObject({ type: 'wireguard', port: 51820, transport: 'udp', show: 1 })
+    expect(json.settings).toMatchObject({ cidr: '10.88.0.0/24', server_private_key: 'server-private', server_public_key: 'server-public' })
+    expect(json.settings).not.toHaveProperty('relay')
+    expect(json.settings).not.toHaveProperty('tunnel_type')
 
     const { payload } = editor.buildPayload()
     expect(payload).toMatchObject({ type: 'wireguard', port: 51820, transport: 'udp', tls: 0 })
-    expect(JSON.parse(payload.settings).relay.role).toBe('exit')
+    expect(JSON.parse(payload.settings)).not.toHaveProperty('relay')
   })
 
   it('builds Panabit iWAN settings from the form and reads them back', async () => {
