@@ -74,6 +74,18 @@ type KernelForwardDNSNode struct {
 
 func (KernelForwardDNSNode) TableName() string { return "v4_kernel_forward_dns_node" }
 
+// KernelForwardDNSVantage is a binding's vantage selector (L4,
+// forward-sdk.md section 7.4): the forwarding nodes with the label
+// "key=value" probe the route's entry addresses from the clients' side.
+// A binding without a row has no vantage probes.
+type KernelForwardDNSVantage struct {
+	BindingID uint64    `gorm:"primaryKey;autoIncrement:false" json:"binding_id"`
+	Selector  string    `gorm:"size:200;not null" json:"selector"`
+	UpdatedAt time.Time `gorm:"not null" json:"updated_at"`
+}
+
+func (KernelForwardDNSVantage) TableName() string { return "v4_kernel_forward_dns_vantage" }
+
 // KernelForwardDNSModels are the entry HA tables.
 func KernelForwardDNSModels() []any {
 	return []any{&KernelForwardDNSProvider{}, &KernelForwardDNSBinding{}, &KernelForwardDNSNode{}}

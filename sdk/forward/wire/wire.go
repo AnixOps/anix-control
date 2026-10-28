@@ -25,6 +25,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/netip"
 	"regexp"
 	"unicode/utf8"
 
@@ -284,7 +285,8 @@ func DecodeReport(payload []byte, nodeRef string) (*forwardv1.NodeForwardReport,
 // MaxReportEntries counters, health entries and errors; route ids of 1 to
 // 64 ASCII letters and digits; hop indexes below validate.MaxHops; a
 // counter's node_ref empty or nodeRef, its counter_epoch 1 to
-// MaxEpochBytes bytes, and no (route, hop, epoch) twice; known enums;
+// MaxEpochBytes bytes, and no (route, hop, epoch) twice; at most
+// MaxReportEntries vantage results, each with an IP address; known enums;
 // text within MaxTextBytes.
 func CheckReport(report *forwardv1.NodeForwardReport, nodeRef string) error {
 	if report == nil {
@@ -342,6 +344,23 @@ func CheckReport(report *forwardv1.NodeForwardReport, nodeRef string) error {
 		}
 		if forwardv1.HealthState_name[int32(health.GetState())] == "" {
 			return invalid("health[%d]: unknown state", i)
+		}
+	}
+	if len(report.GetVantage()) > MaxReportEntries {
+		return invalid("more than %d vantage results", MaxReportEntries)
+	}
+	for i, result := range report.GetVantage() {
+		if err := checkHop(result.GetRouteId(), 0); err != nil {
+			return invalid("vantage[%d]: %v", i, err)
+		}
+		if _, err := netip.ParseAddr(result.GetAddress()); err != nil || result.GetPort() > validate.MaxPort {
+			return invalid("vantage[%d]: bad address or port", i)
+		}
+		if len(result.GetNodeRef()) > MaxTextBytes || !utf8.ValidString(result.GetNodeRef()) {
+			return invalid("vantage[%d]: bad node_ref", i)
+		}
+		if forwardv1.HealthState_name[int32(result.GetState())] == "" {
+			return invalid("vantage[%d]: unknown state", i)
 		}
 	}
 	return nil

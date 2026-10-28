@@ -151,6 +151,10 @@ func report() *forwardv1.NodeForwardReport {
 			{RouteId: "01JF1A000000000000000000A1", NodeRef: node, CounterEpoch: "n2", UpBytes: 1},
 		},
 		Health: []*forwardv1.UpstreamHealth{{RouteId: "01JF1A000000000000000000A1", Address: "192.0.2.12", Port: 30000, State: forwardv1.HealthState_HEALTH_STATE_HEALTHY}},
+		Vantage: []*forwardv1.VantageResult{{
+			BindingId: 1, RouteId: "01JF1A000000000000000000A1", NodeRef: "forward-14", Address: "192.0.2.14", Port: 31000,
+			State: forwardv1.HealthState_HEALTH_STATE_UNHEALTHY, ConsecutiveFailures: 3, CheckedAtUnixMs: 1_800_000_000_000,
+		}},
 	}
 }
 
@@ -208,6 +212,11 @@ func TestReportRefusals(t *testing.T) {
 		"health address":    func(r *forwardv1.NodeForwardReport) { r.Health[0].Address = strings.Repeat("a", 254) },
 		"health port":       func(r *forwardv1.NodeForwardReport) { r.Health[0].Port = 70000 },
 		"health state":      func(r *forwardv1.NodeForwardReport) { r.Health[0].State = 9 },
+		"vantage route":     func(r *forwardv1.NodeForwardReport) { r.Vantage[0].RouteId = "" },
+		"vantage address":   func(r *forwardv1.NodeForwardReport) { r.Vantage[0].Address = "entry.example.com" },
+		"vantage port":      func(r *forwardv1.NodeForwardReport) { r.Vantage[0].Port = 70000 },
+		"vantage node":      func(r *forwardv1.NodeForwardReport) { r.Vantage[0].NodeRef = "\xff" },
+		"vantage state":     func(r *forwardv1.NodeForwardReport) { r.Vantage[0].State = 9 },
 		"too many errors": func(r *forwardv1.NodeForwardReport) {
 			r.Errors = make([]*forwardv1.HopError, MaxReportEntries+1)
 		},

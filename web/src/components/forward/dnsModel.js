@@ -34,7 +34,8 @@ export const REASON_TONES = Object.freeze({
   report_stale: 'warning',
   offline: 'danger',
   hop_error: 'danger',
-  upstreams_down: 'danger'
+  upstreams_down: 'danger',
+  vantage_unreachable: 'danger'
 })
 
 export const stateTone = state => STATE_TONES[state] || 'neutral'
@@ -132,7 +133,8 @@ export function bindingDraft(binding, hostname = '') {
       mode: binding.mode || 'DNS_BINDING_MODE_DDNS',
       record_types: binding.record_types?.length ? [...binding.record_types] : ['DNS_RECORD_TYPE_A'],
       ttl: num(binding.ttl) || DEFAULT_TTL,
-      paused: Boolean(binding.paused)
+      paused: Boolean(binding.paused),
+      vantage: binding.vantage || ''
     }
   }
   return {
@@ -144,7 +146,8 @@ export function bindingDraft(binding, hostname = '') {
     mode: 'DNS_BINDING_MODE_DDNS',
     record_types: ['DNS_RECORD_TYPE_A'],
     ttl: DEFAULT_TTL,
-    paused: false
+    paused: false,
+    vantage: ''
   }
 }
 
@@ -179,7 +182,8 @@ const BLOCKER_LABELS = Object.freeze([
   ['zone', 'forwardDns.binding.zone'],
   ['record_name', 'forwardDns.binding.recordName'],
   ['record_types', 'forwardDns.binding.recordTypes'],
-  ['ttl', 'forwardDns.binding.ttl']
+  ['ttl', 'forwardDns.binding.ttl'],
+  ['vantage', 'forwardDns.binding.vantage']
 ])
 
 // bindingBlockers names what keeps a binding from being saved, from the
@@ -195,19 +199,32 @@ function changeableErrors(draft, t) {
   if (!draft.record_types?.length) errors.record_types = t('forwardDns.binding.typeRequired')
   const ttl = Number(draft.ttl)
   if (draft.ttl !== null && draft.ttl !== '' && (!Number.isInteger(ttl) || ttl < 1 || ttl > MAX_TTL)) errors.ttl = t('forwardDns.binding.ttlRange', { max: MAX_TTL })
+  const vantage = String(draft.vantage || '').trim()
+  if (vantage && !VANTAGE_PATTERN.test(vantage)) errors.vantage = t('forwardDns.binding.vantageFormat')
   return errors
 }
 
+// VANTAGE_PATTERN is a node label selector key=value (L4 vantage probes).
+export const VANTAGE_PATTERN = /^[A-Za-z0-9]([A-Za-z0-9._/-]{0,61}[A-Za-z0-9])?=[^=\s][^=]*$/
+
 // bindingRequest is the DnsBinding to write for a route. A new binding in
 // DDNS mode names the entry hostname; an update sends the stored binding
-// whole with record_types, ttl and paused changed (PUT is a full object).
+// whole with record_types, ttl, paused and vantage changed (PUT is a full
+// object).
 export function bindingRequest(draft, routeId, hostname, stored = null) {
   const changeable = {
     record_types: RECORD_TYPES.filter(type => draft.record_types.includes(type)),
     ttl: Number(draft.ttl) || DEFAULT_TTL,
     paused: Boolean(draft.paused)
   }
-  if (stored) return { ...stored, ...changeable }
+  // vantage (L4) is sent only when set; a PUT without it clears it.
+  const vantage = String(draft.vantage || '').trim()
+  if (vantage) changeable.vantage = vantage
+  if (stored) {
+    const out = { ...stored, ...changeable }
+    if (!vantage) delete out.vantage
+    return out
+  }
   return {
     route_id: routeId,
     provider_id: draft.provider_id,
@@ -224,6 +241,7 @@ export function bindingChanged(draft, stored) {
   if (!stored) return Boolean(draft?.enabled)
   const before = bindingDraft(stored)
   return before.paused !== Boolean(draft.paused) ||
+    String(draft.vantage || '').trim() !== before.vantage ||
     (Number(draft.ttl) || DEFAULT_TTL) !== before.ttl ||
     RECORD_TYPES.filter(type => draft.record_types.includes(type)).join() !== RECORD_TYPES.filter(type => before.record_types.includes(type)).join()
 }

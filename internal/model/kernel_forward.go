@@ -205,6 +205,6 @@ func KernelForwardModels() []any {
 		&KernelForwardRoute{}, &KernelForwardAllocation{}, &KernelForwardNode{}, &KernelForwardNodeState{},
 		&KernelForwardNodeReport{}, &KernelForwardCounter{}, &KernelForwardTraffic{}, &KernelForwardRequest{},
 		&KernelForwardPlan{}, &KernelForwardDNSProvider{}, &KernelForwardDNSBinding{}, &KernelForwardDNSNode{},
-		&KernelForwardLatency{},
+		&KernelForwardLatency{}, &KernelForwardDNSVantage{},
 	}
 }

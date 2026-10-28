@@ -524,9 +524,31 @@ message NodeForwardState {
   // applies only a newer one and reports the generation it runs.
   uint64 generation = 2;
   // state_hash is the lowercase hex SHA-256 of the canonical encoding of
-  // hops, so Control and the node agree without comparing contents.
+  // hops (and vantage_probes when there are any), so Control and the node
+  // agree without comparing contents.
   string state_hash = 3;
   repeated NodeHop hops = 4;
+  // vantage_probes are the entry addresses this node dials from the
+  // clients' side for entry HA (L4, forward-sdk.md section 7.4): set on the
+  // nodes whose labels match a DNS binding's vantage selector. They are
+  // part of the hash when present.
+  repeated VantageProbe vantage_probes = 5;
+}
+
+// VantageProbe is one public address of one entry node of a route bound to
+// DNS, dialled (TCP connect) from a vantage node every interval_ms with
+// timeout_ms. The node dials only the probes of its state, and only global
+// unicast addresses.
+message VantageProbe {
+  uint64 binding_id = 1;
+  string route_id = 2;
+  // node_ref is the entry node the address belongs to.
+  string node_ref = 3;
+  string address = 4;
+  uint32 port = 5;
+  // interval_ms defaults to 30000, timeout_ms to 3000.
+  uint32 interval_ms = 6;
+  uint32 timeout_ms = 7;
 }
 
 // NodeHop is what one node does for one hop of one route.
@@ -664,6 +686,24 @@ message NodeForwardReport {
   repeated Counters counters = 6;
   repeated UpstreamHealth health = 7;
   int64 observed_at_unix_ms = 8;
+  // vantage are the results of the node's vantage probes (L4).
+  repeated VantageResult vantage = 9;
+}
+
+// VantageResult is a vantage node's view of one probed entry address. state
+// is UNHEALTHY after 3 failed dials in a row and HEALTHY again after 3
+// successful ones; UNSPECIFIED before the third check.
+message VantageResult {
+  uint64 binding_id = 1;
+  string route_id = 2;
+  string node_ref = 3;
+  string address = 4;
+  uint32 port = 5;
+  HealthState state = 6;
+  uint32 consecutive_failures = 7;
+  // rtt_us is the last connect round trip; 0 when it failed.
+  uint32 rtt_us = 8;
+  int64 checked_at_unix_ms = 9;
 }
 
 enum HealthState {
@@ -1252,6 +1292,12 @@ message DnsBinding {
   bool paused = 9;
   int64 created_at_unix_ms = 10;
   int64 updated_at_unix_ms = 11;
+  // vantage selects the vantage nodes (L4) by a label, "key=value" (for
+  // example "vantage=cn"): every forwarding node with that label dials each
+  // published address of the route's entry nodes from the clients' side,
+  // and an address most of them cannot reach is left out of the records.
+  // Empty: no vantage probes. Replaced on update.
+  string vantage = 12;
 }
 
 message ListDnsBindingsRequest {
@@ -1277,8 +1323,8 @@ message CreateDnsBindingResponse {
 
 message UpdateDnsBindingRequest {
   string request_id = 1;
-  // binding.id names the binding; record_types, ttl and paused are
-  // replaced (an empty one takes its default), the other fields must be
+  // binding.id names the binding; record_types, ttl, paused and vantage
+  // are replaced (an empty one takes its default), the other fields must be
   // unset or unchanged.
   DnsBinding binding = 2;
 }
@@ -1327,8 +1373,13 @@ message DnsEntryNode {
   uint32 bad_streak = 6;
   // reason is the latest evaluation's code: healthy, converging,
   // not_in_inventory, no_address, never_reported, report_stale, offline,
-  // hop_error, upstreams_down.
+  // hop_error, upstreams_down, vantage_unreachable.
   string reason = 7;
+  // unreachable are the addresses the vantage nodes cannot reach (L4),
+  // left out of the records; vantage_nodes counts the vantage nodes with a
+  // fresh result for the node.
+  repeated string unreachable = 8;
+  uint32 vantage_nodes = 9;
 }
 
 // RouteDnsStatus is a route's entry HA status.

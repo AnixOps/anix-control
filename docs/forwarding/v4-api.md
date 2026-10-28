@@ -226,7 +226,7 @@ provider credentials with the least permissions:
 | `GET /dns/bindings` | list bindings | query `route_id`, `provider_id`; `{bindings: [DnsBinding]}` |
 | `POST /dns/bindings` | bind a route | body a `DnsBinding`; `201 {binding}` |
 | `GET /dns/bindings/{id}` | one binding | `{binding}` |
-| `PUT /dns/bindings/{id}` | change a binding | body the whole `DnsBinding`, as `GET` answers it: it replaces `record_types`, `ttl` and `paused`, and an omitted one takes its default (A, 60, false), so dropping AAAA deletes the AAAA records. The other fields cannot change (`immutable`); `{binding}` |
+| `PUT /dns/bindings/{id}` | change a binding | body the whole `DnsBinding`, as `GET` answers it: it replaces `record_types`, `ttl`, `paused` and `vantage`, and an omitted one takes its default (A, 60, false, none), so dropping AAAA deletes the AAAA records. The other fields cannot change (`immutable`); `{binding}` |
 | `DELETE /dns/bindings/{id}` | delete a binding (super administrator) | query `purge=true` deletes the published records first; `{deleted}` |
 
 - **Providers.** `DnsProvider` is `{id, name, kind, config, credential_names,
@@ -244,7 +244,7 @@ provider credentials with the least permissions:
     lists the stored ones. The audit log redacts the request's
     `credentials`.
 - **Bindings.** `DnsBinding` is `{id, route_id, provider_id, zone,
-  record_name, mode, record_types, ttl, paused, created_at_unix_ms,
+  record_name, mode, record_types, ttl, paused, vantage, created_at_unix_ms,
   updated_at_unix_ms}`.
   - The route must have an `entry_hostname`. One binding per route, and per
     provider, zone and name (`binding_exists`).
@@ -257,6 +257,11 @@ provider credentials with the least permissions:
   - `record_types` are `DNS_RECORD_TYPE_A` and/or `_AAAA` (A by default);
     `ttl` 60 by default, at most 86400.
   - A paused binding keeps its records and changes nothing.
+  - `vantage` (optional, L4) is a node label `key=value`, for example
+    `region=cn`. The forwarding nodes carrying it dial every entry address
+    from the clients' side, and an address more of them find down than up
+    is left out of the records (`invalid_format` on `binding.vantage`
+    otherwise). `PUT` replaces it too: leaving it out removes the probes.
 - **Status.** `GET /routes/{id}/dns` answers:
 
   ```json
@@ -276,7 +281,11 @@ provider credentials with the least permissions:
     `rate_limited`, `paused`, `route_missing`, `hostname_mismatch`.
   - `nodes[].reason`: `healthy`, `converging`, `not_in_inventory`,
     `no_address`, `never_reported`, `report_stale`, `offline`,
-    `hop_error`, `upstreams_down`.
+    `hop_error`, `upstreams_down`, `vantage_unreachable` (every address
+    of the node is down from the vantage nodes).
+  - With a `vantage` selector, `nodes[].unreachable` lists the addresses
+    the vantage nodes find down and `nodes[].vantage_nodes` how many
+    vantage nodes judged the node's addresses.
   - In CNAME mode `cname_target` is the name to point `entry_hostname` at.
 - **Timing.** Control evaluates every 10 s. A node leaves rotation after 3
   unhealthy evaluations and rejoins after 3 healthy ones. Control never

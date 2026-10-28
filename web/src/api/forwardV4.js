@@ -353,7 +353,8 @@ export function bindingBody(binding) {
     mode: 'enum',
     record_types: 'strs',
     ttl: 'num',
-    paused: 'bool'
+    paused: 'bool',
+    vantage: 'str'
   }) || {}
 }
 
