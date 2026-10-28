@@ -88,6 +88,9 @@ type AgentControlConnection struct {
 	// forwardNegotiated is whether the session negotiated forward.v1
 	// (agent_control_forward.go); set before the session is registered.
 	forwardNegotiated bool
+	// networkNegotiated is whether the session negotiated network.v1
+	// (agent_control_network.go); set before the session is registered.
+	networkNegotiated bool
 }
 
 func (c *AgentControlConnection) send(message *agentv1pb.ControlToAgent) error {
@@ -740,6 +743,7 @@ func NewAgentControlGRPCServer(manager *AgentControlManager) *AgentControlGRPCSe
 		liveness:                 newLivenessThrottle(AgentLivenessWriteInterval),
 	}
 	followForwardStates(server.manager, server.forwardManager)
+	followNetworkPlans(server.manager, server.forwardManager)
 	followApprovals(server.manager, server.forwardManager)
 	return server
 }
@@ -877,6 +881,7 @@ func (s *AgentControlGRPCServer) controlStream(stream agentv1pb.AgentControlServ
 		connection.configRevision = hello.GetConfigRevision()
 	}
 	connection.forwardNegotiated = agentcontrol.Negotiated(hello.Capabilities, connection.ServerCapabilities, agentcontrol.CapabilityForward)
+	connection.networkNegotiated = agentcontrol.Negotiated(hello.Capabilities, connection.ServerCapabilities, agentcontrol.CapabilityNetwork)
 
 	agenttransport.Seen(stream.Context(), principal.sighting(hello.AgentVersion))
 	if err := s.touchNodeNow(agentNode); err != nil {
@@ -885,6 +890,7 @@ func (s *AgentControlGRPCServer) controlStream(stream agentv1pb.AgentControlServ
 	// The node's forwarding capabilities and configuration format, before
 	// the session starts and the Hello reconcile builds its configuration.
 	s.recordForwardHello(stream.Context(), connection, agentNode, hello)
+	s.recordNetworkHello(stream.Context(), connection, agentNode, hello)
 
 	if err := connection.send(&agentv1pb.ControlToAgent{
 		RequestId:    first.RequestId,
@@ -1171,6 +1177,9 @@ func (s *AgentControlGRPCServer) serverCapabilities(node agentcontrol.AgentNode,
 	}
 	if s.servesForward(node, agent) {
 		capabilities = append(capabilities, &agentv1pb.Capability{Name: agentcontrol.CapabilityForward, Version: agentcontrol.CapabilityVersionV1})
+	}
+	if s.servesNetwork(node, agent) {
+		capabilities = append(capabilities, &agentv1pb.Capability{Name: agentcontrol.CapabilityNetwork, Version: agentcontrol.CapabilityVersionV1})
 	}
 	if s.servesMaintenance(node, agent) {
 		capabilities = append(capabilities, &agentv1pb.Capability{Name: agentcontrol.CapabilityMaintenance, Version: agentcontrol.CapabilityVersionV1})

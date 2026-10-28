@@ -152,16 +152,20 @@ func TestAgentStreamsDispatchToEachNodeKind(t *testing.T) {
 	require.NoError(t, err)
 	forwardClient := openStreamClient(t, ctx, l.dial(t, certificate), forward, true, "agent.ping", "node.reload", "operation.cancel")
 
-	// Sessions, with the identity each authenticated by.
-	proxySession, ok := streams.Session(proxy)
-	require.True(t, ok)
+	// Sessions, with the identity each authenticated by. The server
+	// registers a session right after it sends the HelloAck.
+	var proxySession, forwardSession agentstreams.Session
+	require.Eventually(t, func() bool {
+		var proxyOK, forwardOK bool
+		proxySession, proxyOK = streams.Session(proxy)
+		forwardSession, forwardOK = streams.Session(forward)
+		return proxyOK && forwardOK
+	}, 5*time.Second, 5*time.Millisecond)
 	assert.Equal(t, proxyClient.sessionID, proxySession.SessionID)
 	assert.Equal(t, agentstreams.IdentityAPIKey, proxySession.Identity)
 	assert.Equal(t, agentstreams.TransportControlStream, proxySession.Transport)
 	assert.Equal(t, "streams-test", proxySession.AgentVersion)
 	assert.ElementsMatch(t, []string{"agent.ping", "operation.cancel"}, proxySession.Capabilities)
-	forwardSession, ok := streams.Session(forward)
-	require.True(t, ok)
 	assert.Equal(t, forwardClient.sessionID, forwardSession.SessionID)
 	assert.Equal(t, "spiffe://anixops/test/agent/"+forward.String(), forwardSession.Identity)
 	assert.Equal(t, forward, forwardSession.Node)

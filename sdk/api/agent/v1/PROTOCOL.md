@@ -88,6 +88,8 @@ are additions to `anix.agent.v1`:
 | Agent → Control | `AgentToControl.package_report` (`PackageReport`) | `package-reports.v1` |
 | Control → Agent | `ControlToAgent.config` in format `anixops.nodeconfig/v2` (`NodeForwardState`) | `forward.v1` with `config.v1` |
 | Agent → Control | `AgentToControl.package_report` of kind `forward.report` (`NodeForwardReport`) | `forward.v1` with `package-reports.v1` |
+| Control → Agent | `ControlToAgent.config` with the member `network` (`NetworkPlan`) | `network.v1` with `config.v1` |
+| Agent → Control | `AgentToControl.package_report` of kind `network.status` (`NetworkStatus`) | `network.v1` with `package-reports.v1` |
 | Agent → Control | `AgentToControl.maintenance_events` (`MaintenanceEvents`) | `maintenance.v1` |
 | Control → Agent | `ControlToAgent.maintenance_ack` (`MaintenanceAck` of `MaintenanceEventResult`) | `maintenance.v1` |
 | Control → Agent | `ControlToAgent.alive_list` (`AliveList` of `UserAlive`) | `alive.v1` |
@@ -156,11 +158,14 @@ stream equivalent.
   - `reports.v1`: proxy nodes (a forward node's stream is not offered it
     yet; its reports join with the forward plugins);
   - `package-reports.v1`: proxy nodes, and forward nodes served `forward.v1`
-    (their other package reports are refused: they have no plugin
-    assignments);
+    or `network.v1` (their other package reports are refused: they have no
+    plugin assignments);
   - `forward.v1` (see "Forwarding"): proxy and forward nodes, when the
     `Hello` lists it with a valid `node_capabilities` attribute and Control
     serves the session `config.v1`;
+  - `network.v1` (see "Network model"): proxy and forward nodes, when the
+    `Hello` lists it with a valid `device_capabilities` attribute and
+    Control serves the session `config.v1`;
   - `maintenance.v1` (see "Maintenance events"): proxy nodes, whose node log
     stores the events;
   - `alive.v1` (see "Alive list"): proxy nodes, whose users have device
@@ -348,6 +353,30 @@ stream equivalent.
     `TrafficReport`.
   - A report whose envelope `node_id` is not the stream's node ends the
     stream with `PermissionDenied`, as any other message does.
+- **Network model** (`network.v1`; `docs/design/network-model`,
+  `sdk/network`, contract `anixops.network.v1`, a draft until the Agent
+  executor ships):
+  - **Hello.** The Agent lists `network.v1` with the attribute
+    `device_capabilities`: its `DeviceCapabilities` as protojson (the kinds
+    and versions it runs, its policy-routing range). A missing, oversize or
+    malformed attribute, or one naming another device, leaves `network.v1`
+    out of `server_capabilities` and the stream goes on. Control records
+    the capabilities and whether the session negotiated `network.v1`.
+  - **Plan.** While the device's last `Hello` negotiated it, its
+    configuration document (either format) carries the member `network`:
+    its `NetworkPlan` as protojson with proto field names, stamped with a
+    generation and hash (generation 0 while the model gives the device
+    nothing: the Agent keeps what it runs). A model write that moves the
+    plan pushes the configuration at once. The Agent applies the plan
+    whole or refuses it whole (`Unsupported` lists kinds it does not run).
+  - **Status.** The Agent sends its `NetworkStatus` as a `PackageReport`
+    with `plugin_id` `network`, `kind` `network.status`, `version` `v1`.
+    Control accepts it only on a session that negotiated `network.v1` and
+    refuses (drops, logs and counts) one without it, another version, a
+    future one, and one whose payload fails `network.CheckStatus`
+    (`device_ref` must be the stream's node). Its `public_keys` (the
+    anx-server key of an ANX-Line accepting end) let Control plan the
+    paths waiting for them.
 - **Forwarding** (`forward.v1`; `docs/architecture/forward-sdk.md` section
   8). The node forwards for Control's routes. `sdk/forward/wire` encodes
   and checks every rule below; the Agent and Control both use it.

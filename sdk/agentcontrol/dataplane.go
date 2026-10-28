@@ -56,7 +56,7 @@ const (
 	// document (so it needs config.v1 too) and accepts the device's
 	// NetworkStatus as a PackageReport (with package-reports.v1). The
 	// Agent's Hello lists it with the device's DeviceCapabilities in an
-	// attribute. Control does not serve it yet.
+	// attribute.
 	CapabilityNetwork = "network"
 )
 
@@ -66,7 +66,7 @@ const (
 // adds no payload but is offered by the same rule.
 var DataPlaneCapabilities = []string{
 	CapabilityConfig, CapabilityUsers, CapabilityReports, CapabilityPackageReports, CapabilityForward, CapabilityMaintenance,
-	CapabilityAlive, CapabilityArtifacts, CapabilityUpgrade, CapabilityDestinations,
+	CapabilityAlive, CapabilityArtifacts, CapabilityUpgrade, CapabilityDestinations, CapabilityNetwork,
 }
 
 // Negotiated reports whether a data-plane capability is in use on a session:

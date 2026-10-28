@@ -85,6 +85,8 @@ type DeviceView struct {
 	Negotiated bool       `json:"negotiated"`
 	PublicKeys []string   `json:"public_keys"` // the kinds with a reported key
 	StatusAt   *time.Time `json:"status_at"`
+	// Status is the device's latest NetworkStatus (protojson).
+	Status json.RawMessage `json:"status,omitempty" swaggertype:"object"`
 }
 
 // View is the model as the API shows it: the document with its revision,
@@ -123,8 +125,9 @@ func (s *Service) Get(ctx context.Context) (*View, error) {
 // each device whose plan changed gets a new generation.
 func (s *Service) Replace(ctx context.Context, doc *Document, ifRevision *uint64, actor Actor) (*View, error) {
 	normalize(doc)
+	var changed []string
 	err := s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		row, _, err := loadDocument(tx.Clauses(clause.Locking{Strength: "UPDATE"}))
+		row, _, err := lockModel(tx, s.now())
 		if err != nil {
 			return err
 		}
@@ -146,7 +149,7 @@ func (s *Service) Replace(ctx context.Context, doc *Document, ifRevision *uint64
 		if err := tx.Save(row).Error; err != nil {
 			return err
 		}
-		if _, err := s.replan(tx, doc); err != nil {
+		if changed, err = s.replan(tx, doc); err != nil {
 			return err
 		}
 		return writeAudit(tx, actor, AuditActionReplace, map[string]any{
@@ -157,14 +160,16 @@ func (s *Service) Replace(ctx context.Context, doc *Document, ifRevision *uint64
 	if err != nil {
 		return nil, err
 	}
+	notify(changed)
 	return s.Get(ctx)
 }
 
 // RotateLinkKey gives a transport a new link key, audited, and replans
 // its two devices.
 func (s *Service) RotateLinkKey(ctx context.Context, transportID string, actor Actor) (*View, error) {
+	var changed []string
 	err := s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		_, doc, err := loadDocument(tx.Clauses(clause.Locking{Strength: "UPDATE"}))
+		_, doc, err := lockModel(tx, s.now())
 		if err != nil {
 			return err
 		}
@@ -187,7 +192,7 @@ func (s *Service) RotateLinkKey(ctx context.Context, transportID string, actor A
 			Updates(map[string]any{"sealed_key": sealed, "updated_at": s.now()}).Error; err != nil {
 			return err
 		}
-		if _, err := s.replan(tx, doc); err != nil {
+		if changed, err = s.replan(tx, doc); err != nil {
 			return err
 		}
 		return writeAudit(tx, actor, AuditActionRotate, map[string]any{"transport": transportID})
@@ -195,6 +200,7 @@ func (s *Service) RotateLinkKey(ctx context.Context, transportID string, actor A
 	if err != nil {
 		return nil, err
 	}
+	notify(changed)
 	return s.Get(ctx)
 }
 
@@ -206,8 +212,9 @@ func (s *Service) SetPublicKeys(ctx context.Context, node string, keys map[strin
 	if err != nil {
 		return err
 	}
-	return s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		_, doc, err := loadDocument(tx.Clauses(clause.Locking{Strength: "UPDATE"}))
+	var changed []string
+	err = s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		_, doc, err := lockModel(tx, s.now())
 		if err != nil {
 			return err
 		}
@@ -226,9 +233,13 @@ func (s *Service) SetPublicKeys(ctx context.Context, node string, keys map[strin
 		if err := tx.Save(&row).Error; err != nil {
 			return err
 		}
-		_, err = s.replan(tx, doc)
+		changed, err = s.replan(tx, doc)
 		return err
 	})
+	if err == nil {
+		notify(changed)
+	}
+	return err
 }
 
 // DevicePlan answers a device's current plan, stamped, for its
@@ -285,7 +296,7 @@ func Redacted(plan *networkv1.NetworkPlan) *networkv1.NetworkPlan {
 // replan plans every device and stamps the generations: a device whose
 // plan hash changed gets the next generation, and a device that had a
 // plan and has none now gets an empty one.
-func (s *Service) replan(tx *gorm.DB, doc *Document) (*Result, error) {
+func (s *Service) replan(tx *gorm.DB, doc *Document) ([]string, error) {
 	keys, err := s.openKeys(tx)
 	if err != nil {
 		return nil, err
@@ -298,6 +309,7 @@ func (s *Service) replan(tx *gorm.DB, doc *Document) (*Result, error) {
 	if err != nil {
 		return nil, err
 	}
+	var changed []string
 	stored := map[string]model.NetworkDevice{}
 	for _, row := range rows {
 		stored[row.NodeRef] = row
@@ -326,8 +338,10 @@ func (s *Service) replan(tx *gorm.DB, doc *Document) (*Result, error) {
 		if err := tx.Save(&row).Error; err != nil {
 			return nil, err
 		}
+		changed = append(changed, node)
 	}
-	return result, nil
+	sort.Strings(changed)
+	return changed, nil
 }
 
 // syncKeys gives every anx_line transport a sealed link key and deletes
@@ -405,6 +419,16 @@ func (s *Service) openKeys(db *gorm.DB) (map[string]string, error) {
 	return keys, nil
 }
 
+// lockModel creates the model row when missing and locks it, so writers
+// of the model and the plans take turns.
+func lockModel(tx *gorm.DB, now time.Time) (*model.NetworkModel, *Document, error) {
+	row := model.NetworkModel{ID: modelRowID, UpdatedAt: now}
+	if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&row).Error; err != nil {
+		return nil, nil, fmt.Errorf("network model: create the model row: %w", err)
+	}
+	return loadDocument(tx.Clauses(clause.Locking{Strength: "UPDATE"}))
+}
+
 func loadDocument(db *gorm.DB) (*model.NetworkModel, *Document, error) {
 	var rows []model.NetworkModel
 	if err := db.Where("id = ?", modelRowID).Limit(1).Find(&rows).Error; err != nil {
@@ -453,7 +477,7 @@ func deviceViews(rows []model.NetworkDevice) []DeviceView {
 		}
 		sort.Strings(kinds)
 		views = append(views, DeviceView{Node: row.NodeRef, Generation: row.Generation, PlanHash: row.PlanHash,
-			Negotiated: row.Negotiated, PublicKeys: kinds, StatusAt: row.StatusAt})
+			Negotiated: row.Negotiated, PublicKeys: kinds, StatusAt: row.StatusAt, Status: statusView(row.StatusJSON)})
 	}
 	return views
 }
