@@ -90,7 +90,6 @@
       <form class="nodes-form" novalidate @submit.prevent="create">
         <UiTextField v-model="form.name" size="md" :label="t('forwardV4.nodes.name')" required :error="formErrors.name" />
         <UiTextField v-model="form.host" size="md" :label="t('forwardV4.nodes.host')" required placeholder="203.0.113.10" :error="formErrors.host" />
-        <UiRadioGroup v-model="form.transport" :label="t('forwardV4.nodes.transport')" :options="transportOptions" />
         <UiTextField v-model="form.region" size="md" :label="t('forwardV4.nodes.region')" />
         <div class="nodes-form__pair">
           <UiNumberField v-model="form.first" size="md" :label="t('forwardV4.nodeDetail.rangeFirst')" :min="1" :max="65535" placeholder="30000" />
@@ -112,11 +111,12 @@
 // polls every 15 s while visible (D5).
 import { computed, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { Plus, Power, Server, Settings2, Terminal, Trash2 } from '@lucide/vue'
-import { UiBadge, UiButton, UiDataTable, UiDialog, UiFilterChips, UiNumberField, UiPageHeader, UiRadioGroup, UiTextField, useConfirm, useToast } from '@/ui'
+import { ArrowRightLeft, Plus, Power, Server, Settings2, Terminal, Trash2 } from '@lucide/vue'
+import { UiBadge, UiButton, UiDataTable, UiDialog, UiFilterChips, UiNumberField, UiPageHeader, UiTextField, useConfirm, useToast } from '@/ui'
 import { useAppI18n } from '@/composables/useAppI18n'
 import AgentInstallSheet from '@/components/admin/AgentInstallSheet.vue'
 import { createNode, deleteNode, listNodes, listRoutes, newIdempotencyKey, toggleNode } from '@/api/forwardV4'
+import { convertForwardNode } from '@/api/kernel'
 import EngineChip from '@/components/forward/EngineChip.vue'
 import ForwardAreaNav from '@/components/forward/ForwardAreaNav.vue'
 import { forwardErrorMessage } from '@/components/forward/messages'
@@ -216,6 +216,14 @@ function rowActions(row) {
         onSelect: () => toggle(row)
       },
       {
+        key: 'convert',
+        label: canDelete.value === false ? t('forwardV4.nodes.convertSuperOnly') : t('forwardV4.nodes.convert'),
+        icon: ArrowRightLeft,
+        hidden: row.ansible,
+        disabled: canDelete.value === false,
+        onSelect: () => convert(row)
+      },
+      {
         key: 'delete',
         label: canDelete.value === false ? t('forwardV4.actions.deleteSuperOnly') : (inUse ? t('forwardV4.nodes.deleteInUse') : t('forwardV4.nodes.delete')),
         icon: Trash2,
@@ -271,23 +279,53 @@ async function remove(row) {
   })
 }
 
+// A forward node becomes a regular node without protocols
+// (docs/design/node-unification): a dry run names the new node, then the
+// conversion runs and the new node's install command opens.
+async function convert(row) {
+  let preview
+  try {
+    preview = await convertForwardNode(row.node_ref, true)
+  } catch (error) {
+    toast.error(forwardErrorMessage(t, error))
+    return
+  }
+  await confirm({
+    title: t('forwardV4.nodes.convertTitle', { name: row.name }),
+    message: t('forwardV4.nodes.convertMessage', { to: preview?.to || '', n: preview?.routes?.length || 0 }),
+    confirmLabel: t('forwardV4.nodes.convertRun'),
+    tone: 'danger',
+    requireText: row.name,
+    onConfirm: async () => {
+      let answer
+      try {
+        answer = await convertForwardNode(row.node_ref, false)
+      } catch (error) {
+        throw new Error(forwardErrorMessage(t, error))
+      }
+      toast.success(t('forwardV4.toast.nodeConverted', { name: row.name, to: answer?.to || '' }))
+      await refresh()
+      if (answer?.to) {
+        installNode.value = { node_ref: answer.to, name: row.name }
+        installOpen.value = true
+      }
+    }
+  })
+}
+
 // ---------------------------------------------------------------------------
-// Add a forward node
+// Add an Ansible host (a machine that runs the Agent is a regular node)
 // ---------------------------------------------------------------------------
 
 const createOpen = ref(false)
 const creating = ref(false)
 const createError = ref('')
-const form = reactive({ name: '', host: '', transport: 'NODE_TRANSPORT_AGENT', region: '', first: null, last: null })
+const form = reactive({ name: '', host: '', transport: 'NODE_TRANSPORT_ANSIBLE', region: '', first: null, last: null })
 const formErrors = reactive({ name: '', host: '' })
 let createKey = newIdempotencyKey()
-const transportOptions = computed(() => [
-  { value: 'NODE_TRANSPORT_AGENT', label: t('forwardV4.nodes.agent'), description: t('forwardV4.nodes.agentHelp') },
-  { value: 'NODE_TRANSPORT_ANSIBLE', label: t('forwardV4.nodes.ansible'), description: t('forwardV4.nodes.ansibleHelp') }
-])
 
 function openCreate() {
-  Object.assign(form, { name: '', host: '', transport: 'NODE_TRANSPORT_AGENT', region: '', first: null, last: null })
+  Object.assign(form, { name: '', host: '', transport: 'NODE_TRANSPORT_ANSIBLE', region: '', first: null, last: null })
   createError.value = ''
   formErrors.name = ''
   formErrors.host = ''

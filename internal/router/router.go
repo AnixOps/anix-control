@@ -797,6 +797,9 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		// Node entries: the addresses subscribers reach a proxy node at
 		// beyond its host (several lines, native IPv6, provider NAT ports;
 		// internal/nodeentry).
+		// One machine is one node: a forward node becomes a regular node
+		// without protocols (docs/design/node-unification).
+		v4.POST("/kernel/nodes/:id/convert", handler.NewNodeConvertHandler().Convert)
 		nodeEntries := handler.NewNodeEntriesHandler()
 		v4.GET("/kernel/nodes/:id/entries", nodeEntries.List)
 		v4.PUT("/kernel/nodes/:id/entries", nodeEntries.Replace)

@@ -11,6 +11,17 @@ Use this together with:
 - [`features.md`](features.md)
 - [`reference/sqlite-to-postgres-migration.md`](reference/sqlite-to-postgres-migration.md)
 
+## Upgrading To 5.0.0-rc.11: Forward Nodes Become Regular Nodes
+
+One machine is one node (`docs/design/node-unification`). The upgrade
+rewrites every `forward` node group as a regular group (migration 0017);
+a group without protocols makes relays, and the install commands of relays
+carry `--forward`. New forward nodes are Ansible machines only. Existing
+Agent forward nodes keep working; convert each with **转为常规节点…** on the
+forward Nodes page (or `POST /api/v4/kernel/nodes/forward-<id>/convert`),
+then reinstall the Agent on that machine with the new node's install
+command. Its hops are down from the conversion until the Agent connects.
+
 ## Upgrading From 4.2.x To 5.0.0-rc.1
 
 5.0.0-rc.1 is a pre-release. In order:

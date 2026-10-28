@@ -154,7 +154,7 @@ func TestNodeGroupsAPI(t *testing.T) {
 	updated := env.call(t, 7, http.MethodPut, "/node-groups/"+id, `{"name": "HK 1", "require_approval": true}`)
 	require.Equal(t, http.StatusOK, updated.Code, updated.Body.String())
 	assert.Equal(t, "HK 1", decodeData[nodegroup.GroupView](t, updated).Name)
-	assert.Equal(t, "invalid_request", errorCode(t, env.call(t, 7, http.MethodPut, "/node-groups/"+id, `{"name": "HK 1", "kind": "forward"}`)))
+	assert.Equal(t, "invalid_request", errorCode(t, env.call(t, 7, http.MethodPut, "/node-groups/"+id, `{"name": "HK 1", "kind": "relay"}`)))
 
 	// The command: super administrators only, audited, never cached.
 	for _, user := range []uint{8, 9, 10} {
@@ -171,8 +171,10 @@ func TestNodeGroupsAPI(t *testing.T) {
 	assert.Equal(t, "sudo anix-agent uninstall", command.UninstallCommand)
 	require.Len(t, command.Commands, 3)
 	assert.Equal(t, agentinstall.MirrorControl, command.Commands[0].Mirror)
-	assert.Equal(t, "curl -fsSL https://ctl.example.com/install.sh | sudo bash -s -- -u https://ctl.example.com -t "+command.Token, command.Commands[0].Command)
-	assert.True(t, strings.HasSuffix(command.Commands[2].Command, " -t "+command.Token+" --mirror github"))
+	// The update left the group without a protocol template: it makes
+	// relays, whose command turns forwarding on.
+	assert.Equal(t, "curl -fsSL https://ctl.example.com/install.sh | sudo bash -s -- -u https://ctl.example.com -t "+command.Token+" --forward", command.Commands[0].Command)
+	assert.True(t, strings.HasSuffix(command.Commands[2].Command, " -t "+command.Token+" --mirror github --forward"))
 	assert.Equal(t, "https://ctl.example.com/install.sh", command.Script.URL)
 	var reveals []model.OperationLog
 	require.NoError(t, env.db.Where("action = ?", nodegroup.AuditActionTokenReveal).Find(&reveals).Error)

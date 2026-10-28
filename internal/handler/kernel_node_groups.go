@@ -284,7 +284,8 @@ func (h *NodeGroupsHandler) Command(c *gin.Context) {
 	c.Header("Cache-Control", "no-store")
 	kernelData(c, http.StatusOK, nodeGroupCommandResponse{
 		Group: revealed.Group, Token: revealed.Token, TokenExpiresAt: revealed.Group.TokenExpiresAt,
-		AgentVersion: settings.AgentVersion, Commands: settings.Commands(revealed.Token),
+		// A group without a protocol template makes relays.
+		AgentVersion: settings.AgentVersion, Commands: settings.CommandsFor(revealed.Token, len(revealed.Group.ProtocolTemplate) == 0),
 		UninstallCommand: agentinstall.UninstallCommand,
 		Script: installScriptInfo{
 			URL: settings.ControlURL + "/install.sh", SignatureURL: settings.ControlURL + "/install.sh.sig", Signed: signatureErr == nil,

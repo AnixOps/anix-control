@@ -705,6 +705,13 @@ export async function getNetworkModel() {
   return unwrap(await v4({ url: '/kernel/network', method: 'get' }))
 }
 
+// convertForwardNode turns forward-<id> into a regular node without
+// protocols (docs/design/node-unification); with dryRun it only answers.
+// The answer: { from, to, dry_run, routes }.
+export async function convertForwardNode(ref, dryRun) {
+  return unwrap(await v4({ url: `/kernel/nodes/${encodeURIComponent(ref)}/convert`, method: 'post', data: { dry_run: Boolean(dryRun) } }))
+}
+
 // migrateGostRoutes moves the gost forward routes onto the network model;
 // with dryRun it only reports. The answer: { dry_run, applied, routes,
 // blocked, added, untouched }.

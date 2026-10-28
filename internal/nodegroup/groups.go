@@ -101,10 +101,14 @@ func (s *Service) check(tx *gorm.DB, input GroupInput) (checked, error) {
 	if out.name == "" || utf8.RuneCountInString(out.name) > maxGroupName || hasControl(out.name) {
 		return out, invalid("name is required, at most %d characters, without control characters", maxGroupName)
 	}
+	// One machine is one node (docs/design/node-unification): every group
+	// makes regular nodes, and a group without a protocol template makes
+	// relays. "forward" is still accepted and stored as proxy.
 	out.kind = strings.ToLower(strings.TrimSpace(input.Kind))
-	if out.kind != model.NodeGroupKindProxy && out.kind != model.NodeGroupKindForward {
-		return out, invalid("kind must be proxy or forward")
+	if out.kind != "" && out.kind != model.NodeGroupKindProxy && out.kind != model.NodeGroupKindForward {
+		return out, invalid("kind must be proxy (or forward, which is the same now)")
 	}
+	out.kind = model.NodeGroupKindProxy
 	if input.MaxNodes < 0 || input.MaxNodes > 1<<20 {
 		return out, invalid("max_nodes must be 0 (no cap) or a positive number")
 	}
@@ -144,9 +148,6 @@ func (s *Service) check(tx *gorm.DB, input GroupInput) (checked, error) {
 		return out, err
 	}
 	ids := uniqueIDs(input.SubscriptionGroupIDs)
-	if out.kind == model.NodeGroupKindForward && (len(entries) > 0 || len(ids) > 0) {
-		return out, invalid("a forward group has no protocol_template and no subscription_group_ids: forward nodes serve no protocols")
-	}
 	if len(ids) > 0 {
 		var found int64
 		if err := tx.Model(&model.SubscriptionGroup{}).Where("id IN ?", ids).Count(&found).Error; err != nil {
@@ -473,14 +474,6 @@ func subscriptionGroupsOf(group model.NodeGroup) []uint {
 	return ids
 }
 
-func tagsOf(group model.NodeGroup) []string {
-	var tags []string
-	if group.Tags != "" {
-		_ = json.Unmarshal([]byte(group.Tags), &tags)
-	}
-	return tags
-}
-
 // lockGroup loads a live group for update.
 func lockGroup(tx *gorm.DB, id uint) (model.NodeGroup, error) {
 	var group model.NodeGroup
@@ -493,23 +486,30 @@ func lockGroup(tx *gorm.DB, id uint) (model.NodeGroup, error) {
 	return group, nil
 }
 
-// liveNodes is the query of a group's live nodes in the table of its kind:
-// every node of the group but the rejected ones.
+// liveNodes is the query of a group's live regular nodes: every node of the
+// group but the rejected ones.
 func liveNodes(tx *gorm.DB, group model.NodeGroup) *gorm.DB {
-	var table any = &model.Node{}
-	if group.Kind == model.NodeGroupKindForward {
-		table = &model.ForwardNode{}
-	}
-	return tx.Model(table).Where("node_group_id = ? AND approval <> ?", group.ID, model.NodeApprovalRejected)
+	return tx.Model(&model.Node{}).Where("node_group_id = ? AND approval <> ?", group.ID, model.NodeApprovalRejected)
+}
+
+// liveForwardNodes is the same query of the group's forward nodes: those a
+// forward group made before groups made regular nodes only, until they are
+// converted (kernelforward.ConvertForwardNode).
+func liveForwardNodes(tx *gorm.DB, group model.NodeGroup) *gorm.DB {
+	return tx.Model(&model.ForwardNode{}).Where("node_group_id = ? AND approval <> ?", group.ID, model.NodeApprovalRejected)
 }
 
 func countNodes(tx *gorm.DB, group model.NodeGroup) (NodeCounts, error) {
 	var counts NodeCounts
-	if err := liveNodes(tx, group).Count(&counts.Live).Error; err != nil {
-		return NodeCounts{}, err
-	}
-	if err := liveNodes(tx, group).Where("approval = ?", model.NodeApprovalPending).Count(&counts.Pending).Error; err != nil {
-		return NodeCounts{}, err
+	for _, query := range []func(*gorm.DB, model.NodeGroup) *gorm.DB{liveNodes, liveForwardNodes} {
+		var live, pending int64
+		if err := query(tx, group).Count(&live).Error; err != nil {
+			return NodeCounts{}, err
+		}
+		if err := query(tx, group).Where("approval = ?", model.NodeApprovalPending).Count(&pending).Error; err != nil {
+			return NodeCounts{}, err
+		}
+		counts.Live, counts.Pending = counts.Live+live, counts.Pending+pending
 	}
 	return counts, nil
 }

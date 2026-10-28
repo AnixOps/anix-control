@@ -174,35 +174,32 @@ func TestJoinCreatesAProxyNodeWithTheTemplate(t *testing.T) {
 	})
 }
 
-func TestJoinCreatesAForwardNode(t *testing.T) {
+// A group without a protocol template (or one created as a forward
+// group) makes relays: regular nodes without protocols.
+func TestJoinOfARelayGroupCreatesARegularNode(t *testing.T) {
 	forEachDatabase(t, func(t *testing.T, f *fixture) {
-		group, token := f.createGroup(t, GroupInput{Name: "edge", Kind: "forward", Tags: []string{"iepl", "ansible-machine"}})
+		group, token := f.createGroup(t, GroupInput{Name: "edge", Kind: "forward", Tags: []string{"iepl"}})
+		assert.Equal(t, model.NodeGroupKindProxy, group.Kind, "forward is stored as proxy")
 		joined, err := f.join(t, JoinRequest{Token: token, MachineFingerprint: fingerprint("f"), Hostname: "relay-1", PublicAddresses: []string{"203.0.113.9"}})
 		require.NoError(t, err)
-		assert.Equal(t, agentcontrol.NodeKindForward, joined.Node.Kind)
+		assert.Equal(t, agentcontrol.NodeKindProxy, joined.Node.Kind)
 		assert.Equal(t, "relay-1", joined.NodeName)
 		assert.True(t, joined.Created)
 
-		var node model.ForwardNode
+		var node model.Node
 		require.NoError(t, f.db.First(&node, joined.Node.ID).Error)
 		assert.Equal(t, "relay-1", node.Name)
 		assert.Equal(t, "203.0.113.9", node.Host)
-		assert.True(t, node.Enabled)
-		assert.NotEmpty(t, node.APIToken, "created as the forward inventory creates an Agent node")
 		require.NotNil(t, node.NodeGroupID)
 		assert.Equal(t, group.ID, *node.NodeGroupID)
-		assert.Equal(t, fingerprint("f"), node.MachineFingerprint)
-		assert.Equal(t, model.NodeApprovalApproved, node.Approval)
-		assert.Equal(t, "203.0.113.9", node.LastPublicAddress)
-		assert.JSONEq(t, `["iepl"]`, node.Tags, "never the Ansible machine mark")
-
-		// The forward plan ran in the join's transaction.
-		var plan model.KernelForwardPlan
-		require.NoError(t, f.db.First(&plan).Error)
-		assert.Equal(t, "node_created", plan.Reason)
+		require.NotNil(t, node.Tags)
+		assert.JSONEq(t, `["iepl"]`, *node.Tags)
 		var protocols int64
 		require.NoError(t, f.db.Model(&model.NodeProtocol{}).Count(&protocols).Error)
 		assert.Zero(t, protocols)
+		var forwardNodes int64
+		require.NoError(t, f.db.Model(&model.ForwardNode{}).Count(&forwardNodes).Error)
+		assert.Zero(t, forwardNodes, "no forward node is created any more")
 		assert.Equal(t, "spiffe://anixops/test/agent/"+joined.Node.String(), joined.Issued.Identity.String())
 	})
 }
@@ -452,9 +449,9 @@ func TestJoinPendingApprovalAndDecisions(t *testing.T) {
 		decision, err = f.svc.Reject(t.Context(), forward.Node, f.admin)
 		require.NoError(t, err)
 		assert.Equal(t, model.NodeApprovalRejected, decision.Approval)
-		var node model.ForwardNode
+		var node model.Node
 		require.NoError(t, f.db.First(&node, forward.Node.ID).Error)
-		assert.False(t, node.Enabled)
+		assert.Equal(t, model.NodeStatusDisabled, node.Status)
 		assert.Equal(t, model.NodeApprovalRejected, node.Approval)
 		var certificate model.AgentCertificate
 		require.NoError(t, f.db.Where("serial = ?", forward.Issued.Serial).First(&certificate).Error)

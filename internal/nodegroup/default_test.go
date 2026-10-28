@@ -2,6 +2,7 @@ package nodegroup
 
 import (
 	"encoding/json"
+	"strconv"
 	"testing"
 	"time"
 
@@ -199,41 +200,50 @@ func TestNodesOfAGroup(t *testing.T) {
 	})
 }
 
-func TestNodesOfAForwardGroup(t *testing.T) {
+// A group lists the forward nodes it made before groups made regular
+// nodes only, beside its regular nodes, until they are converted.
+func TestNodesOfAGroupWithALegacyForwardNode(t *testing.T) {
 	forEachDatabase(t, func(t *testing.T, f *fixture) {
 		ctx := t.Context()
 		group, token := f.createGroup(t, GroupInput{Name: "edge", Kind: "forward"})
-		joined, err := f.join(t, JoinRequest{Token: token, MachineFingerprint: fingerprint("f"), RequestedName: "edge-01",
-			PublicAddresses: []string{"203.0.113.9"}, AgentVersion: "v5.0.0"})
+		joined, err := f.join(t, JoinRequest{Token: token, MachineFingerprint: fingerprint("p"), RequestedName: "edge-02",
+			PublicAddresses: []string{"203.0.113.8"}, AgentVersion: "v5.0.0"})
 		require.NoError(t, err)
+		groupID := group.ID
+		legacy := model.ForwardNode{Name: "edge-01", Type: "exit", Host: "203.0.113.9", Port: 7000, Enabled: true,
+			NodeGroupID: &groupID, Approval: model.NodeApprovalApproved}
+		require.NoError(t, f.db.Create(&legacy).Error)
 
 		nodes, err := f.svc.Nodes(ctx, group.ID)
 		require.NoError(t, err)
-		require.Len(t, nodes, 1)
-		assert.Equal(t, "forward", nodes[0].Kind)
+		require.Len(t, nodes, 2)
 		assert.Equal(t, joined.Node.String(), nodes[0].Node)
-		assert.Equal(t, "edge-01", nodes[0].Name)
-		assert.False(t, nodes[0].Online, "it has not connected")
-		assert.Nil(t, nodes[0].LastSeen)
+		assert.Equal(t, "proxy", nodes[0].Kind)
+		assert.Equal(t, "forward", nodes[1].Kind)
+		assert.Equal(t, "forward-"+strconv.FormatUint(uint64(legacy.ID), 10), nodes[1].Node)
+		assert.False(t, nodes[1].Online, "it has not connected")
+		view, err := f.svc.Get(ctx, group.ID)
+		require.NoError(t, err)
+		assert.Equal(t, NodeCounts{Live: 2}, view.Nodes)
 
 		// Online once its Agent checked in; the version is the one of the
 		// Agent's newest stream.
 		now := f.clock.Now()
-		require.NoError(t, f.db.Model(&model.ForwardNode{}).Where("id = ?", joined.Node.ID).
+		require.NoError(t, f.db.Model(&model.ForwardNode{}).Where("id = ?", legacy.ID).
 			Updates(map[string]any{"status": model.ForwardNodeStatusOnline, "last_check": now.Add(-30 * time.Second)}).Error)
 		require.NoError(t, f.db.Create(&model.AgentTransport{
-			NodeKind: "forward", NodeID: uint(joined.Node.ID), Transport: model.AgentTransportMTLSStream, AgentVersion: "v5.0.2",
+			NodeKind: "forward", NodeID: legacy.ID, Transport: model.AgentTransportMTLSStream, AgentVersion: "v5.0.2",
 			FirstSeenAt: now, LastSeenAt: now,
 		}).Error)
 		nodes, err = f.svc.Nodes(ctx, group.ID)
 		require.NoError(t, err)
-		assert.True(t, nodes[0].Online)
-		assert.Equal(t, "v5.0.2", nodes[0].AgentVersion)
+		assert.True(t, nodes[1].Online)
+		assert.Equal(t, "v5.0.2", nodes[1].AgentVersion)
+		assert.Equal(t, "v5.0.0", nodes[0].AgentVersion, "a regular node reports its own")
 
-		// Disabling the node takes it offline.
-		require.NoError(t, f.db.Model(&model.ForwardNode{}).Where("id = ?", joined.Node.ID).Update("enabled", false).Error)
-		nodes, err = f.svc.Nodes(ctx, group.ID)
+		// Names stay unique across both kinds.
+		again, err := f.join(t, JoinRequest{Token: token, RequestedName: "edge-01", PublicAddresses: []string{"203.0.113.7"}})
 		require.NoError(t, err)
-		assert.False(t, nodes[0].Online)
+		assert.Equal(t, "edge-01-2", again.NodeName)
 	})
 }

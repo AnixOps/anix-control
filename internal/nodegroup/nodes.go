@@ -3,6 +3,7 @@ package nodegroup
 import (
 	"context"
 	"errors"
+	"strconv"
 	"time"
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
@@ -50,43 +51,42 @@ func (s *Service) Nodes(ctx context.Context, id uint) ([]GroupNode, error) {
 	}
 	now := s.now()
 	nodes := []GroupNode{}
-	if group.Kind == model.NodeGroupKindForward {
-		var rows []model.ForwardNode
-		if err := liveNodes(db, group).Order("id DESC").Find(&rows).Error; err != nil {
-			return nil, err
+	var rows []model.Node
+	if err := liveNodes(db, group).Order("id DESC").Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	for _, row := range rows {
+		node := GroupNode{
+			ID: row.ID, Node: agentcontrol.AgentNode{Kind: agentcontrol.NodeKindProxy, ID: uint32(row.ID)}.String(), // #nosec G115 -- node ids are below 2^32.
+			Kind: model.NodeGroupKindProxy, Name: row.Name, Host: row.Host, Approval: row.Approval, CreatedAt: row.CreatedAt,
 		}
-		for _, row := range rows {
-			node := GroupNode{
-				ID: row.ID, Node: agentcontrol.AgentNode{Kind: agentcontrol.NodeKindForward, ID: uint32(row.ID)}.String(), // #nosec G115 -- node ids are below 2^32.
-				Kind: model.NodeGroupKindForward, Name: row.Name, Host: row.Host, Approval: row.Approval, CreatedAt: row.CreatedAt,
-			}
-			if !row.LastCheck.IsZero() {
-				seen := row.LastCheck.UTC()
-				node.LastSeen = &seen
-				node.Online = row.Enabled && row.Status == model.ForwardNodeStatusOnline && now.Sub(seen) < onlineWindow
-			}
-			nodes = append(nodes, node)
+		if row.ServerVersion != nil {
+			node.AgentVersion = *row.ServerVersion
 		}
-	} else {
-		var rows []model.Node
-		if err := liveNodes(db, group).Order("id DESC").Find(&rows).Error; err != nil {
-			return nil, err
+		if row.LastCheckAt != nil {
+			seen := time.Unix(*row.LastCheckAt, 0).UTC()
+			node.LastSeen = &seen
+			node.Online = row.Status != model.NodeStatusDisabled && now.Sub(seen) < onlineWindow
 		}
-		for _, row := range rows {
-			node := GroupNode{
-				ID: row.ID, Node: agentcontrol.AgentNode{Kind: agentcontrol.NodeKindProxy, ID: uint32(row.ID)}.String(), // #nosec G115 -- node ids are below 2^32.
-				Kind: model.NodeGroupKindProxy, Name: row.Name, Host: row.Host, Approval: row.Approval, CreatedAt: row.CreatedAt,
-			}
-			if row.ServerVersion != nil {
-				node.AgentVersion = *row.ServerVersion
-			}
-			if row.LastCheckAt != nil {
-				seen := time.Unix(*row.LastCheckAt, 0).UTC()
-				node.LastSeen = &seen
-				node.Online = row.Status != model.NodeStatusDisabled && now.Sub(seen) < onlineWindow
-			}
-			nodes = append(nodes, node)
+		nodes = append(nodes, node)
+	}
+	// The forward nodes the group made before groups made regular nodes
+	// only, until they are converted.
+	var forwardRows []model.ForwardNode
+	if err := liveForwardNodes(db, group).Order("id DESC").Find(&forwardRows).Error; err != nil {
+		return nil, err
+	}
+	for _, row := range forwardRows {
+		node := GroupNode{
+			ID: row.ID, Node: agentcontrol.AgentNode{Kind: agentcontrol.NodeKindForward, ID: uint32(row.ID)}.String(), // #nosec G115 -- node ids are below 2^32.
+			Kind: model.NodeGroupKindForward, Name: row.Name, Host: row.Host, Approval: row.Approval, CreatedAt: row.CreatedAt,
 		}
+		if !row.LastCheck.IsZero() {
+			seen := row.LastCheck.UTC()
+			node.LastSeen = &seen
+			node.Online = row.Enabled && row.Status == model.ForwardNodeStatusOnline && now.Sub(seen) < onlineWindow
+		}
+		nodes = append(nodes, node)
 	}
 	if err := s.fillAgentVersions(ctx, nodes); err != nil {
 		return nil, err
@@ -98,31 +98,29 @@ func (s *Service) Nodes(ctx context.Context, id uint) ([]GroupNode, error) {
 // (forward nodes have no such column) the one their Agent said in its
 // newest stream Hello, from the agent transport inventory's table.
 func (s *Service) fillAgentVersions(ctx context.Context, nodes []GroupNode) error {
-	var missing []uint
-	kind := ""
+	missing := map[string][]uint{}
 	for _, node := range nodes {
 		if node.AgentVersion == "" {
-			missing = append(missing, node.ID)
-			kind = node.Kind
+			missing[node.Kind] = append(missing[node.Kind], node.ID)
 		}
 	}
-	if len(missing) == 0 {
-		return nil
-	}
-	var rows []model.AgentTransport
-	if err := s.DB.WithContext(ctx).Where("node_kind = ? AND node_id IN ? AND agent_version <> ''", kind, missing).
-		Order("last_seen_at DESC").Find(&rows).Error; err != nil {
-		return err
-	}
-	versions := map[uint]string{}
-	for _, row := range rows {
-		if _, ok := versions[row.NodeID]; !ok {
-			versions[row.NodeID] = row.AgentVersion
+	versions := map[string]string{}
+	for kind, ids := range missing {
+		var rows []model.AgentTransport
+		if err := s.DB.WithContext(ctx).Where("node_kind = ? AND node_id IN ? AND agent_version <> ''", kind, ids).
+			Order("last_seen_at DESC").Find(&rows).Error; err != nil {
+			return err
+		}
+		for _, row := range rows {
+			key := kind + "-" + strconv.FormatUint(uint64(row.NodeID), 10)
+			if _, ok := versions[key]; !ok {
+				versions[key] = row.AgentVersion
+			}
 		}
 	}
 	for i := range nodes {
 		if nodes[i].AgentVersion == "" {
-			nodes[i].AgentVersion = versions[nodes[i].ID]
+			nodes[i].AgentVersion = versions[nodes[i].Node]
 		}
 	}
 	return nil

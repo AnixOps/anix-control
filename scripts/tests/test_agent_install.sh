@@ -452,6 +452,7 @@ FAKE_ENROLL_NODE=proxy-7 run_installer -u "${CONTROL}" -t "${TOKEN_A}" --mirror 
 expect_status 0 "cn mirror"
 grep -qF 'curl https://mirror.example.cn/anix-agent/v4.2.0/anix-agent-linux-64.zip' "${STATE}/log" || fail "cn mirror not used"
 [[ ! -e "${ROOT_DIR}/etc/sysctl.d/90-anixops-forward.conf" ]] || fail "a proxy node got IP forwarding without --forward"
+! grep -q '"Forward"' "${ROOT_DIR}/etc/anixops/agent/config.json" || fail "a proxy node got the forward component without --forward"
 ! grep -q '^sysctl ' "${STATE}/log" || fail "sysctl ran for a proxy node without --forward"
 expect_out "forwarding:  unchanged (a proxy node; --forward turns IP forwarding on)"
 ! grep -q '\.dgst' "${STATE}/log" || fail "a .dgst was fetched although Control published the digest"
@@ -479,6 +480,8 @@ FAKE_ENROLL_NODE=proxy-7 run_installer -u "${CONTROL}" -t "${TOKEN_A}" --forward
 expect_status 0 "proxy --forward"
 grep -qxF 'net.ipv4.ip_forward = 1' "${ROOT_DIR}/etc/sysctl.d/90-anixops-forward.conf" || fail "--forward wrote no sysctl file"
 expect_out "; applied"
+grep -qF '"Forward": {"Enable": true, "NodeKind": "proxy", "ProxyNodeID": 7},' "${ROOT_DIR}/etc/anixops/agent/config.json" ||
+  fail "a relay's config lacks the forward component on its own stream"
 new_root sysctlfail
 metadata
 FAKE_DROPIN=0 FAKE_SYSCTL=fail run_installer -u "${CONTROL}" -t "${TOKEN_A}"

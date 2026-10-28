@@ -27,7 +27,7 @@
       <template #cell-name="{ row, card }">
         <span class="group-name">
           <span class="group-name__text">{{ row.name }}</span>
-          <UiBadge v-if="!card" tone="neutral" :dot="false" :label="t(`admin.nodes.groups.kinds.${row.kind}`)" />
+          <UiBadge v-if="!card" tone="neutral" :dot="false" :label="t(`admin.nodes.groups.kinds.${groupKind(row)}`)" />
         </span>
       </template>
       <template #cell-nodes="{ row }">
@@ -66,6 +66,7 @@ import UiDataTable from '@/ui/UiDataTable.vue'
 import UiSwitch from '@/ui/UiSwitch.vue'
 import { useFormat } from '@/ui/composables/useFormat'
 import { useAppI18n } from '@/composables/useAppI18n'
+import { groupKind } from './nodeGroupData'
 
 defineProps({
   groups: { type: Array, default: () => [] },
