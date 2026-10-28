@@ -166,6 +166,12 @@ var (
 		// UI shows as a route's latency. Protected by the prefix; named so
 		// the rule survives a prefix change.
 		"v4_kernel_forward_latency": true, "v4_kernel_forward_dns_vantage": true,
+		// The device network model (docs/design/network-model): the model
+		// document, the transports' sealed ANX-Line link keys and each
+		// device's plan generation and reported keys. A package that could
+		// write them could route a device's traffic anywhere. Protected by
+		// the prefix; named so the rule survives a prefix change.
+		"v4_kernel_network_model": true, "v4_kernel_network_transport_key": true, "v4_kernel_network_device": true,
 	}
 )
 

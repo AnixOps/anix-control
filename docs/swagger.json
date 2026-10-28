@@ -9083,6 +9083,140 @@
                 }
             }
         },
+        "/api/v4/kernel/network": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "The network model document (lines on nodes; user and hop ingresses and internet and hop egresses on lines; ANX-Line transports from a hop egress to another device's hop ingress; paths from a user ingress through transports to an internet egress) with its revision, the paths not planned yet and why (pending: a transport's accepting device has not reported its ANX-Line server key), and each device's plan generation and hash, whether its Agent negotiated network.v1, and which public keys it reported.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "The device network model",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Makes the document the network model. With revision, the stored revision must match (409 revision_conflict). Every device's plan must pass the planner (sdk/network.Check and the cross-device rules: segments chain from device to device, a transport joins two devices and carries one path); otherwise 400 with violations. A new anx_line transport gets a link key sealed under module_runtime.ca_kek (409 kek_required without it); a removed one loses its key. Each device whose plan changed gets a new generation. Answers as GET does. Audited (network_model_replace).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Replace the device network model",
+                "parameters": [
+                    {
+                        "description": "the document",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.networkModelRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v4/kernel/network/devices/{id}/plan": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "The node's current NetworkPlan (anixops.network.v1, protojson with proto field names) with its generation and hash, link keys redacted. 404 when the model gives the node nothing.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "A device's network plan",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "proxy-\u003cid\u003e or forward-\u003cid\u003e",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v4/kernel/network/transports/{id}/rotate-key": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Gives the transport a new random link key and replans its two devices. Answers as GET does. Audited (network_link_key_rotate).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Rotate an ANX-Line transport's link key",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "transport id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/v4/kernel/node-groups": {
             "get": {
                 "security": [
@@ -12120,6 +12254,18 @@
                 }
             }
         },
+        "handler.networkModelRequest": {
+            "type": "object",
+            "properties": {
+                "document": {
+                    "$ref": "#/definitions/networkmodel.Document"
+                },
+                "revision": {
+                    "description": "Revision, when set, must be the stored revision (409 otherwise).",
+                    "type": "integer"
+                }
+            }
+        },
         "handler.nodeDiagnosticRequest": {
             "type": "object",
             "properties": {
@@ -13077,6 +13223,360 @@
                     "type": "string"
                 },
                 "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "networkmodel.AnxLine": {
+            "type": "object",
+            "properties": {
+                "carrier_order": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "egress": {
+                    "description": "l1 (default), l2",
+                    "type": "string"
+                },
+                "faketcp_port": {
+                    "type": "integer"
+                },
+                "fec": {
+                    "type": "boolean"
+                },
+                "multipath": {
+                    "type": "boolean"
+                },
+                "quic_port": {
+                    "type": "integer"
+                },
+                "server_name": {
+                    "type": "string"
+                }
+            }
+        },
+        "networkmodel.Document": {
+            "type": "object",
+            "properties": {
+                "egresses": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/networkmodel.Egress"
+                    }
+                },
+                "ingresses": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/networkmodel.Ingress"
+                    }
+                },
+                "lines": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/networkmodel.Line"
+                    }
+                },
+                "paths": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/networkmodel.Path"
+                    }
+                },
+                "transports": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/networkmodel.Transport"
+                    }
+                }
+            }
+        },
+        "networkmodel.Egress": {
+            "type": "object",
+            "properties": {
+                "advmss": {
+                    "type": "integer"
+                },
+                "audience": {
+                    "description": "internet, hop",
+                    "type": "string"
+                },
+                "disabled": {
+                    "type": "boolean"
+                },
+                "family": {
+                    "description": "v4, v6",
+                    "type": "string"
+                },
+                "gateway": {
+                    "type": "string"
+                },
+                "health": {
+                    "$ref": "#/definitions/networkmodel.HealthCheck"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "kind": {
+                    "description": "nat_direct, dedicated_ip, hop",
+                    "type": "string"
+                },
+                "kind_version": {
+                    "type": "integer"
+                },
+                "line": {
+                    "type": "string"
+                },
+                "masquerade": {
+                    "type": "boolean"
+                },
+                "mtu": {
+                    "type": "integer"
+                },
+                "rule_priority": {
+                    "type": "integer"
+                },
+                "source": {
+                    "description": "an address or \"auto\"",
+                    "type": "string"
+                },
+                "table": {
+                    "type": "integer"
+                }
+            }
+        },
+        "networkmodel.Endpoint": {
+            "type": "object",
+            "properties": {
+                "address": {
+                    "type": "string"
+                },
+                "port": {
+                    "type": "integer"
+                }
+            }
+        },
+        "networkmodel.HealthCheck": {
+            "type": "object",
+            "properties": {
+                "failure_threshold": {
+                    "type": "integer"
+                },
+                "interval_ms": {
+                    "type": "integer"
+                },
+                "recovery_threshold": {
+                    "type": "integer"
+                },
+                "targets": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "timeout_ms": {
+                    "type": "integer"
+                }
+            }
+        },
+        "networkmodel.Ingress": {
+            "type": "object",
+            "properties": {
+                "audience": {
+                    "description": "user, hop",
+                    "type": "string"
+                },
+                "disabled": {
+                    "type": "boolean"
+                },
+                "family": {
+                    "description": "v4, v6",
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "kind": {
+                    "description": "direct, nat",
+                    "type": "string"
+                },
+                "kind_version": {
+                    "type": "integer"
+                },
+                "line": {
+                    "type": "string"
+                },
+                "listen": {
+                    "$ref": "#/definitions/networkmodel.Endpoint"
+                },
+                "pairing": {
+                    "$ref": "#/definitions/networkmodel.Pairing"
+                },
+                "port_map": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/networkmodel.PortMap"
+                    }
+                },
+                "protocols": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "public_host": {
+                    "type": "string"
+                }
+            }
+        },
+        "networkmodel.Line": {
+            "type": "object",
+            "properties": {
+                "carrier": {
+                    "type": "string"
+                },
+                "families": {
+                    "description": "\"v4\", \"v6\"",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "gateway_v4": {
+                    "type": "string"
+                },
+                "gateway_v6": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "interface": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "node": {
+                    "type": "string"
+                }
+            }
+        },
+        "networkmodel.Pairing": {
+            "type": "object",
+            "properties": {
+                "egresses": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "failback_delay_ms": {
+                    "type": "integer"
+                },
+                "fallback_path": {
+                    "type": "string"
+                },
+                "mode": {
+                    "type": "string"
+                },
+                "rules": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/networkmodel.PairingRule"
+                    }
+                }
+            }
+        },
+        "networkmodel.PairingRule": {
+            "type": "object",
+            "properties": {
+                "match": {
+                    "type": "string"
+                },
+                "path_label": {
+                    "type": "string"
+                }
+            }
+        },
+        "networkmodel.Path": {
+            "type": "object",
+            "properties": {
+                "disabled": {
+                    "type": "boolean"
+                },
+                "egress": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "ingress": {
+                    "type": "string"
+                },
+                "labels": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "name": {
+                    "type": "string"
+                },
+                "segments": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "networkmodel.PortMap": {
+            "type": "object",
+            "properties": {
+                "local": {
+                    "$ref": "#/definitions/networkmodel.PortRange"
+                },
+                "public": {
+                    "$ref": "#/definitions/networkmodel.PortRange"
+                }
+            }
+        },
+        "networkmodel.PortRange": {
+            "type": "object",
+            "properties": {
+                "first": {
+                    "type": "integer"
+                },
+                "last": {
+                    "type": "integer"
+                }
+            }
+        },
+        "networkmodel.Transport": {
+            "type": "object",
+            "properties": {
+                "anx_line": {
+                    "$ref": "#/definitions/networkmodel.AnxLine"
+                },
+                "from_egress": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "kind": {
+                    "description": "anx_line (others later)",
+                    "type": "string"
+                },
+                "kind_version": {
+                    "type": "integer"
+                },
+                "mtu": {
+                    "type": "integer"
+                },
+                "to_ingress": {
                     "type": "string"
                 }
             }

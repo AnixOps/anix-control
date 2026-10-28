@@ -354,6 +354,14 @@ definitions:
           $ref: '#/definitions/service.GroupProtocolLayoutItem'
         type: array
     type: object
+  handler.networkModelRequest:
+    properties:
+      document:
+        $ref: '#/definitions/networkmodel.Document'
+      revision:
+        description: Revision, when set, must be the stored revision (409 otherwise).
+        type: integer
+    type: object
   handler.nodeDiagnosticRequest:
     properties:
       action:
@@ -1044,6 +1052,241 @@ definitions:
         description: '协议类型: vmess, vless, trojan, shadowsocks, hysteria2, tuic, anytls'
         type: string
       updated_at:
+        type: string
+    type: object
+  networkmodel.AnxLine:
+    properties:
+      carrier_order:
+        items:
+          type: string
+        type: array
+      egress:
+        description: l1 (default), l2
+        type: string
+      faketcp_port:
+        type: integer
+      fec:
+        type: boolean
+      multipath:
+        type: boolean
+      quic_port:
+        type: integer
+      server_name:
+        type: string
+    type: object
+  networkmodel.Document:
+    properties:
+      egresses:
+        items:
+          $ref: '#/definitions/networkmodel.Egress'
+        type: array
+      ingresses:
+        items:
+          $ref: '#/definitions/networkmodel.Ingress'
+        type: array
+      lines:
+        items:
+          $ref: '#/definitions/networkmodel.Line'
+        type: array
+      paths:
+        items:
+          $ref: '#/definitions/networkmodel.Path'
+        type: array
+      transports:
+        items:
+          $ref: '#/definitions/networkmodel.Transport'
+        type: array
+    type: object
+  networkmodel.Egress:
+    properties:
+      advmss:
+        type: integer
+      audience:
+        description: internet, hop
+        type: string
+      disabled:
+        type: boolean
+      family:
+        description: v4, v6
+        type: string
+      gateway:
+        type: string
+      health:
+        $ref: '#/definitions/networkmodel.HealthCheck'
+      id:
+        type: string
+      kind:
+        description: nat_direct, dedicated_ip, hop
+        type: string
+      kind_version:
+        type: integer
+      line:
+        type: string
+      masquerade:
+        type: boolean
+      mtu:
+        type: integer
+      rule_priority:
+        type: integer
+      source:
+        description: an address or "auto"
+        type: string
+      table:
+        type: integer
+    type: object
+  networkmodel.Endpoint:
+    properties:
+      address:
+        type: string
+      port:
+        type: integer
+    type: object
+  networkmodel.HealthCheck:
+    properties:
+      failure_threshold:
+        type: integer
+      interval_ms:
+        type: integer
+      recovery_threshold:
+        type: integer
+      targets:
+        items:
+          type: string
+        type: array
+      timeout_ms:
+        type: integer
+    type: object
+  networkmodel.Ingress:
+    properties:
+      audience:
+        description: user, hop
+        type: string
+      disabled:
+        type: boolean
+      family:
+        description: v4, v6
+        type: string
+      id:
+        type: string
+      kind:
+        description: direct, nat
+        type: string
+      kind_version:
+        type: integer
+      line:
+        type: string
+      listen:
+        $ref: '#/definitions/networkmodel.Endpoint'
+      pairing:
+        $ref: '#/definitions/networkmodel.Pairing'
+      port_map:
+        items:
+          $ref: '#/definitions/networkmodel.PortMap'
+        type: array
+      protocols:
+        items:
+          type: string
+        type: array
+      public_host:
+        type: string
+    type: object
+  networkmodel.Line:
+    properties:
+      carrier:
+        type: string
+      families:
+        description: '"v4", "v6"'
+        items:
+          type: string
+        type: array
+      gateway_v4:
+        type: string
+      gateway_v6:
+        type: string
+      id:
+        type: string
+      interface:
+        type: string
+      name:
+        type: string
+      node:
+        type: string
+    type: object
+  networkmodel.Pairing:
+    properties:
+      egresses:
+        items:
+          type: string
+        type: array
+      failback_delay_ms:
+        type: integer
+      fallback_path:
+        type: string
+      mode:
+        type: string
+      rules:
+        items:
+          $ref: '#/definitions/networkmodel.PairingRule'
+        type: array
+    type: object
+  networkmodel.PairingRule:
+    properties:
+      match:
+        type: string
+      path_label:
+        type: string
+    type: object
+  networkmodel.Path:
+    properties:
+      disabled:
+        type: boolean
+      egress:
+        type: string
+      id:
+        type: string
+      ingress:
+        type: string
+      labels:
+        items:
+          type: string
+        type: array
+      name:
+        type: string
+      segments:
+        items:
+          type: string
+        type: array
+    type: object
+  networkmodel.PortMap:
+    properties:
+      local:
+        $ref: '#/definitions/networkmodel.PortRange'
+      public:
+        $ref: '#/definitions/networkmodel.PortRange'
+    type: object
+  networkmodel.PortRange:
+    properties:
+      first:
+        type: integer
+      last:
+        type: integer
+    type: object
+  networkmodel.Transport:
+    properties:
+      anx_line:
+        $ref: '#/definitions/networkmodel.AnxLine'
+      from_egress:
+        type: string
+      id:
+        type: string
+      kind:
+        description: anx_line (others later)
+        type: string
+      kind_version:
+        type: integer
+      mtu:
+        type: integer
+      to_ingress:
         type: string
     type: object
   nodeentry.Input:
@@ -7279,6 +7522,106 @@ paths:
       security:
       - BearerAuth: []
       summary: Change a Panabit iWAN line
+      tags:
+      - Kernel
+  /api/v4/kernel/network:
+    get:
+      description: 'The network model document (lines on nodes; user and hop ingresses
+        and internet and hop egresses on lines; ANX-Line transports from a hop egress
+        to another device''s hop ingress; paths from a user ingress through transports
+        to an internet egress) with its revision, the paths not planned yet and why
+        (pending: a transport''s accepting device has not reported its ANX-Line server
+        key), and each device''s plan generation and hash, whether its Agent negotiated
+        network.v1, and which public keys it reported.'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: The device network model
+      tags:
+      - Kernel
+    put:
+      consumes:
+      - application/json
+      description: 'Makes the document the network model. With revision, the stored
+        revision must match (409 revision_conflict). Every device''s plan must pass
+        the planner (sdk/network.Check and the cross-device rules: segments chain
+        from device to device, a transport joins two devices and carries one path);
+        otherwise 400 with violations. A new anx_line transport gets a link key sealed
+        under module_runtime.ca_kek (409 kek_required without it); a removed one loses
+        its key. Each device whose plan changed gets a new generation. Answers as
+        GET does. Audited (network_model_replace).'
+      parameters:
+      - description: the document
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.networkModelRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Replace the device network model
+      tags:
+      - Kernel
+  /api/v4/kernel/network/devices/{id}/plan:
+    get:
+      description: The node's current NetworkPlan (anixops.network.v1, protojson with
+        proto field names) with its generation and hash, link keys redacted. 404 when
+        the model gives the node nothing.
+      parameters:
+      - description: proxy-<id> or forward-<id>
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: A device's network plan
+      tags:
+      - Kernel
+  /api/v4/kernel/network/transports/{id}/rotate-key:
+    post:
+      description: Gives the transport a new random link key and replans its two devices.
+        Answers as GET does. Audited (network_link_key_rotate).
+      parameters:
+      - description: transport id
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Rotate an ANX-Line transport's link key
       tags:
       - Kernel
   /api/v4/kernel/node-groups:

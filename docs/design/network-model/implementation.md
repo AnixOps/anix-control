@@ -16,6 +16,14 @@
 - **状态走 PackageReport。** 与 forward 报告一致，不新增 `AgentToControl` oneof。
 - **时间单位统一为毫秒**（`interval_ms`、`failback_delay_ms`）。
 
+## Control 模型（第 2a 步）
+
+- `internal/networkmodel`：整份文档存一行（`v4_kernel_network_model`，带 revision），`PUT /api/v4/kernel/network` 整份替换；规划器先跑通才落库（跨设备规则：各段首尾相接、传输连接两台不同设备、一条传输只承载一条路径，再加每份计划的 `sdk/network.Check`）。
+- 链路密钥：每条 `anx_line` 传输首次出现时生成 32 字节随机密钥，`ca_kek` AES-256-GCM 封存（`v4_kernel_network_transport_key`），删除传输即删除密钥；`rotate-key` 轮换。
+- 出口设备的 anx-server 公钥记在 `v4_kernel_network_device.public_keys_json`（第 2b 步由 NetworkStatus 写入）；没有公钥时路径列为 pending，不进计划；`failover`/`cross` 的出口都在 pending 路径上时暂按 `same_line`。
+- 每台设备的计划哈希变化即 generation + 1；曾有计划、现在没有的设备下发空计划。
+- 未决：accept 端 c2/c3（QUIC、fake-TCP）监听端口目前只写在 dial 端地址里（传输的 `quic_port` / `faketcp_port`），第 3 步实现 Agent 时再定 accept 端从哪里读。
+
 ## 后续步骤
 
 1. **内核**（线程「内核支持网络模型出口与路径」）：`DirectOutbound` 源地址、`egress:<id>` 出站、`PUT /v1/network` 读同一份 `NetworkPlan`，入站 `ingress` 键挂入口。
