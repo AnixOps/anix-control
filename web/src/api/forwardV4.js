@@ -135,8 +135,10 @@ function convert(value, kind) {
   }
 }
 
-const linkBody = value => pick(value, { security: 'enum', mux: 'bool', server_name: 'str', path: 'str' })
-const hopBody = value => pick(value, { role: 'enum', engine: 'enum', node_refs: 'strs', ingress: linkBody, port: 'num', dial_address: 'str' }) || {}
+const linkBody = value => pick(value, { security: 'enum', mux: 'bool', server_name: 'str', path: 'str', network_transport_id: 'str' })
+const hopBody = value => pick(value, {
+  role: 'enum', engine: 'enum', node_refs: 'strs', ingress: linkBody, port: 'num', dial_address: 'str', network_egress_id: 'str'
+}) || {}
 const targetBody = value => pick(value, { host: 'str', port: 'num', weight: 'num', priority: 'num' }) || {}
 const policyBody = value => pick(value, {
   next_hop: 'enum',
@@ -144,7 +146,8 @@ const policyBody = value => pick(value, {
   health: health => pick(health, { interval_ms: 'num', timeout_ms: 'num', disabled: 'bool' }),
   circuit_breaker: breaker => pick(breaker, { failure_threshold: 'num', open_ms: 'num' }),
   direct: 'enum',
-  target_policy: 'enum'
+  target_policy: 'enum',
+  proxy_protocol: 'enum'
 })
 const limitsBody = value => pick(value, { bandwidth_bps: 'int64', quota_bytes: 'int64', max_conns: 'num', expires_at_unix_ms: 'int64' })
 

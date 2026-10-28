@@ -109,6 +109,42 @@
         <UiButton variant="primary" :loading="importing" @click="runImport">{{ t('forwardV4.import.run') }}</UiButton>
       </template>
     </UiDialog>
+
+    <UiDialog v-model:open="migrateOpen" :title="t('forwardV4.migrate.title')" :description="t('forwardV4.migrate.description')" size="lg" data-testid="forward-migrate">
+      <p v-if="migrateError" class="fwd-note is-danger" role="alert">{{ migrateError }}</p>
+      <template v-if="migration">
+        <p class="fwd-note" role="status">
+          {{ migration.applied ? t('forwardV4.migrate.applied', { n: migration.routes.length }) : t('forwardV4.migrate.summary', { n: migration.routes.length, blocked: migration.blocked.length, untouched: migration.untouched }) }}
+        </p>
+        <h3 v-if="migration.routes.length" class="migrate-head">{{ t('forwardV4.migrate.moving') }}</h3>
+        <ul class="migrate-list">
+          <li v-for="item in migration.routes" :key="item.id">
+            <strong>{{ item.name || item.id }}</strong>
+            <span class="fwd-mono fwd-muted"> {{ item.transports.join(' → ') }}{{ item.transports.length ? ' → ' : '' }}{{ item.egress }}</span>
+            <span v-for="note in item.notes || []" :key="note" class="fwd-muted migrate-note">{{ note }}</span>
+          </li>
+        </ul>
+        <h3 v-if="migration.blocked.length" class="migrate-head">{{ t('forwardV4.migrate.blocked') }}</h3>
+        <ul class="migrate-list">
+          <li v-for="item in migration.blocked" :key="item.id">
+            <strong>{{ item.name || item.id }}</strong>
+            <span v-for="reason in item.reasons" :key="reason" class="fwd-muted migrate-note">{{ reason }}</span>
+          </li>
+        </ul>
+        <p v-if="migration.added.length" class="fwd-muted">{{ t('forwardV4.migrate.added', { list: migration.added.join(', ') }) }}</p>
+      </template>
+      <template #footer="{ close }">
+        <UiButton @click="close">{{ t('forwardV4.common.cancel') }}</UiButton>
+        <UiButton :loading="migrating && migrateDry" @click="runMigration(true)">{{ t('forwardV4.migrate.dryRun') }}</UiButton>
+        <UiButton
+          variant="primary"
+          :loading="migrating && !migrateDry"
+          :disabled="!migration || migration.applied || !migration.routes.length"
+          data-testid="forward-migrate-apply"
+          @click="runMigration(false)"
+        >{{ t('forwardV4.migrate.apply') }}</UiButton>
+      </template>
+    </UiDialog>
   </section>
 </template>
 
@@ -120,10 +156,11 @@
 // Idempotency-Key (D9).
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { Copy, Download, Pause, Pencil, Play, Plus, Route as RouteIcon, Server, Stethoscope, Trash2, Upload } from '@lucide/vue'
+import { Copy, Download, Pause, Pencil, Play, Plus, Route as RouteIcon, Server, Shuffle, Stethoscope, Trash2, Upload } from '@lucide/vue'
 import { UiBadge, UiButton, UiDataTable, UiDialog, UiFilterChips, UiMenu, UiPageHeader, UiSearchField, UiSelect, UiTextarea, useConfirm, useFormat, useToast } from '@/ui'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { createRoute, deleteRoute, newIdempotencyKey, pauseRoute, resumeRoute } from '@/api/forwardV4'
+import { migrateGostRoutes } from '@/api/kernel'
 import ForwardAreaNav from '@/components/forward/ForwardAreaNav.vue'
 import HopChain from '@/components/forward/HopChain.vue'
 import RouteStatusBadge from '@/components/forward/RouteStatusBadge.vue'
@@ -422,13 +459,61 @@ async function runImport() {
   await refresh()
 }
 
+// The one-shot move of the gost routes onto the network model: a dry run
+// first, then apply what it listed.
+const migrateOpen = ref(false)
+const migration = ref(null)
+const migrating = ref(false)
+const migrateDry = ref(true)
+const migrateError = ref('')
+async function runMigration(dryRun) {
+  migrating.value = true
+  migrateDry.value = dryRun
+  migrateError.value = ''
+  try {
+    migration.value = await migrateGostRoutes(dryRun)
+    if (!dryRun) {
+      toast.success(t('forwardV4.migrate.applied', { n: migration.value?.routes?.length || 0 }))
+      refresh()
+    }
+  } catch (error) {
+    migrateError.value = forwardErrorMessage(t, error)
+  } finally {
+    migrating.value = false
+  }
+}
+function openMigration() {
+  migration.value = null
+  migrateError.value = ''
+  migrateOpen.value = true
+  runMigration(true)
+}
+
 const headerMenu = computed(() => [
+  { key: 'migrate', label: t('forwardV4.routes.migrate'), icon: Shuffle, onSelect: openMigration },
   { key: 'import', label: t('forwardV4.routes.import'), icon: Upload, onSelect: () => { importOpen.value = true } },
   { key: 'export', label: selected.value.length ? t('forwardV4.routes.exportSelected', { n: selected.value.length }) : t('forwardV4.routes.exportAll'), icon: Download, disabled: !allRows.value.length, onSelect: exportRoutes }
 ])
 </script>
 
 <style scoped>
+.migrate-head {
+  margin: var(--space-4) 0 var(--space-2);
+  font-size: var(--type-body-size);
+}
+
+.migrate-list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.migrate-note {
+  display: block;
+}
+
 .routes-toolbar {
   display: flex;
   flex-wrap: wrap;

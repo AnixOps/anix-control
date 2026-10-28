@@ -7,11 +7,24 @@
 export const ENGINES = Object.freeze({
   ENGINE_NFTABLES: { short: 'nft', label: 'nftables' },
   ENGINE_GOST: { short: 'gost', label: 'gost' },
-  ENGINE_ANIXOPS: { short: 'anixops', label: 'anixops' }
+  ENGINE_ANIXOPS: { short: 'anixops', label: 'anixops' },
+  ENGINE_NETWORK: { short: 'net', label: 'ANX' }
 })
 
 // Engines the editor offers; anixops only with the experimental flag (D12).
-export const BASE_ENGINES = Object.freeze(['ENGINE_NFTABLES', 'ENGINE_GOST'])
+export const BASE_ENGINES = Object.freeze(['ENGINE_NFTABLES', 'ENGINE_GOST', 'ENGINE_NETWORK'])
+
+// An ENGINE_NETWORK route runs on the network model (anx-node): every hop
+// is a network device, each link a network model transport, the exit an
+// internet egress. It is ENGINE_NETWORK on every hop or on none.
+export const NETWORK_ENGINE = 'ENGINE_NETWORK'
+export const NETWORK_SECURITY = 'LINK_SECURITY_NETWORK'
+
+export const PROXY_PROTOCOLS = Object.freeze(['PROXY_PROTOCOL_OFF', 'PROXY_PROTOCOL_V1', 'PROXY_PROTOCOL_V2'])
+
+export function isNetworkDraft(draft) {
+  return Boolean(draft?.hops?.some(hop => hop.engine === NETWORK_ENGINE))
+}
 
 export const SECURITIES = Object.freeze({
   LINK_SECURITY_RAW: 'RAW',
@@ -19,7 +32,8 @@ export const SECURITIES = Object.freeze({
   LINK_SECURITY_WSS: 'WSS',
   LINK_SECURITY_QUIC: 'QUIC',
   LINK_SECURITY_GRPC: 'gRPC',
-  LINK_SECURITY_ANIXOPS: 'AnixOps'
+  LINK_SECURITY_ANIXOPS: 'AnixOps',
+  LINK_SECURITY_NETWORK: 'ANX'
 })
 
 export const STRATEGIES = Object.freeze([
@@ -242,9 +256,44 @@ function nextKey() {
 }
 
 export function blankHop(index, total, engine = 'ENGINE_GOST') {
-  const hop = { _key: nextKey(), role: roleOf(index, total), engine, node_refs: [], port: 0, portMode: 'auto', dial_address: '' }
-  if (index > 0) hop.ingress = { security: 'LINK_SECURITY_RAW', mux: false, server_name: '', path: '' }
+  const hop = { _key: nextKey(), role: roleOf(index, total), engine, node_refs: [], port: 0, portMode: 'auto', dial_address: '', network_egress_id: '' }
+  if (index > 0) {
+    hop.ingress = engine === NETWORK_ENGINE
+      ? { security: NETWORK_SECURITY, mux: false, server_name: '', path: '', network_transport_id: '' }
+      : { security: 'LINK_SECURITY_RAW', mux: false, server_name: '', path: '', network_transport_id: '' }
+  }
   return hop
+}
+
+// setDraftEngine puts every hop of draft on engine when it enters or leaves
+// the network model (all hops or none); the links follow.
+export function setDraftEngine(draft, index, engine) {
+  const hop = draft.hops[index]
+  const network = engine === NETWORK_ENGINE
+  if (!network && hop.engine !== NETWORK_ENGINE) {
+    hop.engine = engine
+    return
+  }
+  draft.hops.forEach((item, position) => {
+    item.engine = network ? NETWORK_ENGINE : engine
+    if (position > 0) {
+      item.ingress = network
+        ? { security: NETWORK_SECURITY, mux: false, server_name: '', path: '', network_transport_id: item.ingress?.network_transport_id || '' }
+        : { security: 'LINK_SECURITY_RAW', mux: false, server_name: '', path: '', network_transport_id: '' }
+    }
+    if (network) {
+      item.node_refs = item.node_refs.slice(0, 1)
+      item.port = 0
+      item.portMode = 'auto'
+      item.dial_address = ''
+    } else {
+      item.network_egress_id = ''
+    }
+  })
+  if (network) {
+    draft.policy.direct = 'DIRECT_MODE_OFF'
+    draft.listen.portMode = 'explicit'
+  }
 }
 
 export function blankTarget() {
@@ -283,7 +332,8 @@ export function routeToDraft(route = null) {
     port: num(hop.port),
     portMode: num(hop.port) ? 'explicit' : 'auto',
     dial_address: hop.dial_address || '',
-    ...(index > 0 ? { ingress: { security: 'LINK_SECURITY_RAW', mux: false, server_name: '', path: '', ...(hop.ingress || {}) } } : {})
+    network_egress_id: hop.network_egress_id || '',
+    ...(index > 0 ? { ingress: { security: 'LINK_SECURITY_RAW', mux: false, server_name: '', path: '', network_transport_id: '', ...(hop.ingress || {}) } } : {})
   }))
   if (hops[0]) delete hops[0].ingress
   const limits = source?.limits || {}
@@ -314,6 +364,7 @@ export function routeToDraft(route = null) {
       target: source?.policy?.target || 'BALANCE_STRATEGY_ROUND_ROBIN',
       direct: source?.policy?.direct || 'DIRECT_MODE_OFF',
       target_policy: source?.policy?.target_policy || 'TARGET_POLICY_PUBLIC_ONLY',
+      proxy_protocol: source?.policy?.proxy_protocol || 'PROXY_PROTOCOL_OFF',
       health: {
         interval_ms: num(source?.policy?.health?.interval_ms) || null,
         timeout_ms: num(source?.policy?.health?.timeout_ms) || null,
@@ -343,6 +394,13 @@ export function draftToRoute(draft) {
       node_refs: [...hop.node_refs],
       port: index > 0 && hop.portMode === 'explicit' ? num(hop.port) : 0,
       dial_address: index > 0 ? (hop.dial_address || '').trim() : ''
+    }
+    if (hop.engine === NETWORK_ENGINE) {
+      out.port = 0
+      out.dial_address = ''
+      if (index > 0) out.ingress = { security: NETWORK_SECURITY, network_transport_id: hop.ingress?.network_transport_id || '' }
+      if (index === draft.hops.length - 1) out.network_egress_id = hop.network_egress_id || ''
+      return out
     }
     if (index > 0 && hop.ingress) {
       const raw = securityOf(hop) === 'LINK_SECURITY_RAW'
@@ -381,6 +439,7 @@ export function draftToRoute(draft) {
       target: draft.policy.target,
       direct: draft.policy.direct,
       target_policy: draft.policy.target_policy,
+      proxy_protocol: draft.policy.proxy_protocol === 'PROXY_PROTOCOL_OFF' ? '' : (draft.policy.proxy_protocol || ''),
       health: {
         interval_ms: num(draft.policy.health.interval_ms),
         timeout_ms: num(draft.policy.health.timeout_ms),
@@ -407,9 +466,13 @@ export function missingRequired(draft) {
   const out = []
   if (!String(draft.name || '').trim()) out.push('name')
   if (!draft.hops.length) out.push('hops')
+  const network = isNetworkDraft(draft)
   draft.hops.forEach((hop, index) => {
     if (!hop.node_refs.length) out.push(`hops[${index}].node_refs`)
+    if (network && index > 0 && !hop.ingress?.network_transport_id) out.push(`hops[${index}].ingress.network_transport_id`)
+    if (network && index === draft.hops.length - 1 && !hop.network_egress_id) out.push(`hops[${index}].network_egress_id`)
   })
+  if (network && (draft.listen.portMode !== 'explicit' || !num(draft.listen.port))) out.push('listen.port')
   if (!draft.targets.length) out.push('targets')
   draft.targets.forEach((target, index) => {
     if (!String(target.host || '').trim()) out.push(`targets[${index}].host`)

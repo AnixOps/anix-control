@@ -698,3 +698,16 @@ export async function updateKernelEgressRoute(id, input) {
 export async function deleteKernelEgressRoute(id) {
   return unwrap(await v4({ url: `/kernel/egress-routes/${encodeURIComponent(id)}`, method: 'delete' }))
 }
+
+// The device network model (/api/v4/kernel/network): { revision, document:
+// { lines, ingresses, egresses, transports, paths }, pending, devices }.
+export async function getNetworkModel() {
+  return unwrap(await v4({ url: '/kernel/network', method: 'get' }))
+}
+
+// migrateGostRoutes moves the gost forward routes onto the network model;
+// with dryRun it only reports. The answer: { dry_run, applied, routes,
+// blocked, added, untouched }.
+export async function migrateGostRoutes(dryRun) {
+  return unwrap(await v4({ url: '/kernel/network/migrate-gost', method: 'post', data: { dry_run: Boolean(dryRun) } }))
+}

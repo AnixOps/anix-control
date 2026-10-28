@@ -91,7 +91,20 @@
           @update:model-value="value => emit('update', { engine: value })"
         />
         <UiSelect
-          v-if="index > 0"
+          v-if="network && index > 0"
+          :id="fieldId(`${path}.ingress.network_transport_id`)"
+          :model-value="hop.ingress?.network_transport_id || ''"
+          size="md"
+          :label="t('forwardV4.editor.networkTransport')"
+          :options="transportOptions"
+          :placeholder="t('forwardV4.editor.networkTransportPlaceholder')"
+          :error="errorText(`${path}.ingress.network_transport_id`)"
+          :help="t('forwardV4.editor.networkTransportHelp')"
+          data-testid="forward-network-transport"
+          @update:model-value="value => setIngress({ security: 'LINK_SECURITY_NETWORK', network_transport_id: value })"
+        />
+        <UiSelect
+          v-else-if="index > 0"
           :id="fieldId(`${path}.ingress.security`)"
           :model-value="security"
           size="md"
@@ -104,6 +117,21 @@
         <p v-else class="hop-card__note">{{ t('forwardV4.editor.entryNote') }}</p>
       </div>
 
+      <div v-if="network && last" class="hop-card__row">
+        <UiSelect
+          :id="fieldId(`${path}.network_egress_id`)"
+          :model-value="hop.network_egress_id || ''"
+          size="md"
+          :label="t('forwardV4.editor.networkEgress')"
+          :options="egressOptions"
+          :placeholder="t('forwardV4.editor.networkEgressPlaceholder')"
+          :error="errorText(`${path}.network_egress_id`)"
+          :help="t('forwardV4.editor.networkEgressHelp')"
+          data-testid="forward-network-egress"
+          @update:model-value="value => emit('update', { network_egress_id: value })"
+        />
+      </div>
+
       <div v-if="linkError" class="fwd-note is-danger hop-card__fix" role="note">
         <span>{{ t('forwardV4.editor.linkFix', { prev: previousLabel, link: SECURITIES[security] || security }) }}</span>
         <span class="hop-card__fix-actions">
@@ -112,7 +140,7 @@
         </span>
       </div>
 
-      <div v-if="index > 0" class="hop-card__row">
+      <div v-if="index > 0 && !network" class="hop-card__row">
         <UiSwitch
           :id="fieldId(`${path}.ingress.mux`)"
           :model-value="Boolean(hop.ingress?.mux)"
@@ -143,7 +171,7 @@
         />
       </div>
 
-      <div v-if="index > 0" class="hop-card__row">
+      <div v-if="index > 0 && !network" class="hop-card__row">
         <UiField :id="fieldId(`${path}.port`)" :label="t('forwardV4.editor.listenPort')" label-tag="span" :error="errorText(`${path}.port`)" :help="t('forwardV4.editor.hopPortHelp')">
           <template #default="{ labelId }">
             <span class="hop-card__port" role="group" :aria-labelledby="labelId">
@@ -192,7 +220,7 @@ import { ArrowDown, ArrowUp, Plus, Trash2, X } from '@lucide/vue'
 import { UiButton, UiCombobox, UiField, UiIconButton, UiNumberField, UiSegmentedControl, UiSelect, UiSwitch, UiTextField } from '@/ui'
 import { useAppI18n } from '@/composables/useAppI18n'
 import EngineChip from './EngineChip.vue'
-import { BASE_ENGINES, ENGINES, SECURITIES, fieldId, roleOf, securityOf, underField } from './routeModel'
+import { BASE_ENGINES, ENGINES, NETWORK_ENGINE, SECURITIES, fieldId, roleOf, securityOf, underField } from './routeModel'
 
 const props = defineProps({
   hop: { type: Object, required: true },
@@ -202,7 +230,10 @@ const props = defineProps({
   nodes: { type: Array, default: () => [] },
   violations: { type: Array, default: () => [] },
   errorText: { type: Function, required: true },
-  enableAnixOps: { type: Boolean, default: false }
+  enableAnixOps: { type: Boolean, default: false },
+  // The network model's document, for ENGINE_NETWORK hops; null when not
+  // loaded.
+  networkModel: { type: Object, default: null }
 })
 const emit = defineEmits(['update', 'add-node', 'remove-node', 'move', 'remove', 'insert-relay'])
 const { t } = useAppI18n()
@@ -212,6 +243,37 @@ const idBase = computed(() => `fwd-hop-${props.index}`)
 const role = computed(() => roleOf(props.index, props.total))
 const last = computed(() => props.index === props.total - 1)
 const security = computed(() => securityOf(props.hop))
+const network = computed(() => props.hop.engine === NETWORK_ENGINE)
+
+// The network model's devices: the nodes its lines are on.
+const lineNodes = computed(() => new Map((props.networkModel?.lines || []).map(line => [line.id, line.node])))
+const networkNodes = computed(() => [...new Set(lineNodes.value.values())].sort())
+function egressNode(id) {
+  return lineNodes.value.get((props.networkModel?.egresses || []).find(egress => egress.id === id)?.line)
+}
+function ingressNode(id) {
+  return lineNodes.value.get((props.networkModel?.ingresses || []).find(ingress => ingress.id === id)?.line)
+}
+const transportOptions = computed(() => (props.networkModel?.transports || [])
+  .filter(transport => transport.kind === 'anx_line' || transport.kind === 'anx')
+  .map(transport => {
+    const from = egressNode(transport.from_egress) || '?'
+    const to = ingressNode(transport.to_ingress) || '?'
+    const prev = props.previous?.node_refs?.[0]
+    const here = props.hop.node_refs[0]
+    const fits = (!prev || prev === from) && (!here || here === to)
+    const kind = transport.kind === 'anx' ? t('forwardV4.editor.transportJacketed') : (transport.trusted ? t('forwardV4.editor.transportTrusted') : transport.kind)
+    return {
+      value: transport.id,
+      label: `${transport.id} · ${from} → ${to}`,
+      description: fits ? kind : t('forwardV4.editor.transportElsewhere', { from, to }),
+      disabled: !fits && props.hop.ingress?.network_transport_id !== transport.id
+    }
+  }))
+const egressOptions = computed(() => (props.networkModel?.egresses || [])
+  .filter(egress => egress.audience === 'internet' && !egress.disabled)
+  .filter(egress => !props.hop.node_refs[0] || lineNodes.value.get(egress.line) === props.hop.node_refs[0])
+  .map(egress => ({ value: egress.id, label: egress.id, description: `${egress.kind} · ${egress.family} · ${egress.source}` })))
 const hasError = computed(() => underField(props.violations, path.value))
 const linkError = computed(() => props.violations.some(item => item.field === `${path.value}.ingress.security` && item.code === 'link_unsupported'))
 const previousLabel = computed(() => (props.previous
@@ -243,7 +305,11 @@ function addNode(value) {
   queueMicrotask(() => { adding.value = undefined })
 }
 
-const nodeOptions = computed(() => props.nodes
+const nodeOptions = computed(() => (network.value ? networkNodeOptions.value : forwardNodeOptions.value))
+const networkNodeOptions = computed(() => networkNodes.value
+  .filter(ref => !props.hop.node_refs.includes(ref))
+  .map(ref => ({ value: ref, label: nodeName(ref), description: ref, disabled: props.hop.node_refs.length > 0 })))
+const forwardNodeOptions = computed(() => props.nodes
   .filter(node => !props.hop.node_refs.includes(node.node_ref))
   .map(node => {
     const usable = node.enabled !== false && node.in_inventory !== false
@@ -265,6 +331,8 @@ const engineOptions = computed(() => {
   return engines.map(engine => {
     const missing = props.hop.node_refs.filter(ref => !caps(ref, engine)?.available)
     let description = t(`forwardV4.engine.${engine}`)
+    // Network devices are outside the forwarding inventory.
+    if (engine === NETWORK_ENGINE) return { value: engine, label: ENGINES[engine].label, description }
     if (missing.length) description = t('forwardV4.editor.engineMissing', { nodes: missing.map(nodeName).join(', ') })
     return {
       value: engine,

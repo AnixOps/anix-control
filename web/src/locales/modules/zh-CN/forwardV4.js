@@ -35,9 +35,15 @@ export default {
     engine: {
       ENGINE_NFTABLES: '内核 DNAT，几乎不占 CPU；只有 RAW 链路',
       ENGINE_GOST: '支持 TLS / WSS / QUIC / gRPC 与多路复用',
+      ENGINE_NETWORK: '网络模型（anx-node）：可信线路走 ANX-Line，跨境走 A2 外衣',
       ENGINE_ANIXOPS: 'AnixOps 中继协议（实验）',
       anixopsLabel: 'anixops（实验）',
       unavailable: '不可用'
+    },
+    proxyProtocol: {
+      PROXY_PROTOCOL_OFF: '关闭',
+      PROXY_PROTOCOL_V1: 'v1（文本）',
+      PROXY_PROTOCOL_V2: 'v2（二进制）'
     },
     protocol: {
       L4_PROTOCOL_TCP: 'TCP',
@@ -201,6 +207,7 @@ export default {
       title: '路由',
       description: '每条路由是一条从入口到目标的跳链；节点按路由收到期望状态。',
       count: '{n} 条',
+      migrate: '把 gost 路由迁到 ANX',
       more: '更多操作',
       new: '新建路由',
       import: '导入路由 JSON',
@@ -253,6 +260,17 @@ export default {
       message: '它的跳会在下一代从所有节点移除，端口保留 10 分钟。此操作无法撤销。',
       confirm: '删除'
     },
+    migrate: {
+      title: '把 gost 路由迁到网络模型',
+      description: '所有带 gost 跳的路由改成 ANX（网络模型）路由：链路走网络传输（两端都是 iepl/iplc 用裸 ANX-Line，否则用 A2 外衣），入口端口不变。nftables 路由不动。',
+      summary: '{n} 条可以迁移；{blocked} 条留在 gost；{untouched} 条不在 gost 上。',
+      applied: '已把 {n} 条路由迁到网络模型。',
+      moving: '将迁移',
+      blocked: '留在 gost',
+      added: '新增的网络模型组件：{list}',
+      dryRun: '重新检查',
+      apply: '开始迁移'
+    },
     import: {
       title: '导入路由 JSON',
       description: '粘贴一条路由或路由数组（protojson，与导出的格式相同）。每条路由单独创建。',
@@ -276,6 +294,17 @@ export default {
       settingsSavedWarnings: '转发设置已保存；{n} 条路由暂时无法规划，节点保持当前代。'
     },
     editor: {
+      networkTransport: '网络传输',
+      networkTransportPlaceholder: '选择传输',
+      networkTransportHelp: '从上一跳设备到本跳设备的网络模型传输。',
+      transportJacketed: 'ANX + A2 外衣（跨境）',
+      transportTrusted: '裸 ANX-Line（可信线路）',
+      transportElsewhere: '连接 {from} → {to}',
+      networkEgress: '互联网出口',
+      networkEgressPlaceholder: '选择出口',
+      networkEgressHelp: '本设备上拨出到目标的出口。',
+      proxyProtocol: 'PROXY protocol',
+      proxyProtocolHelp: '出口在 TCP 上向目标写的头；v1 仅 ANX 路由可用。',
       newTitle: '新建路由',
       editTitle: '编辑 {name}',
       backToRoute: '路由详情',

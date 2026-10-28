@@ -3,7 +3,7 @@ import { defineComponent, h, nextTick, reactive } from 'vue'
 import { mount } from '@vue/test-utils'
 import {
   diagnosisStages, draftToRoute, entryTraffic, hourlySeries, latencySeries, missingRequired, routeDiff, routeStatus, routeToDraft,
-  runBulk, statusContext, underField, fieldId
+  runBulk, setDraftEngine, statusContext, underField, fieldId
 } from '@/components/forward/routeModel'
 import { useRoutePreview } from '@/components/forward/useRoutePreview'
 
@@ -58,6 +58,41 @@ describe('the editor draft', () => {
     draft.targets[0].host = 'a.example'
     draft.targets[0].port = 443
     expect(missingRequired(draft)).toEqual([])
+  })
+
+  it('puts every hop on the network model or none', () => {
+    const draft = routeToDraft({
+      name: 'sh-hk',
+      listen: { port: 0, protocol: 'L4_PROTOCOL_TCP' },
+      hops: [
+        { engine: 'ENGINE_GOST', node_refs: ['proxy-1'] },
+        { engine: 'ENGINE_GOST', node_refs: ['proxy-2', 'proxy-3'], port: 30000, ingress: { security: 'LINK_SECURITY_TLS', server_name: 'a.example' } }
+      ],
+      targets: [{ host: 'a.example', port: 443 }],
+      policy: { direct: 'DIRECT_MODE_PREFERRED', proxy_protocol: 'PROXY_PROTOCOL_V1' }
+    })
+    setDraftEngine(draft, 1, 'ENGINE_NETWORK')
+    expect(draft.hops.map(hop => hop.engine)).toEqual(['ENGINE_NETWORK', 'ENGINE_NETWORK'])
+    expect(draft.hops[1].node_refs).toEqual(['proxy-2'])
+    expect(draft.policy.direct).toBe('DIRECT_MODE_OFF')
+    expect(missingRequired(draft)).toEqual(['hops[1].ingress.network_transport_id', 'hops[1].network_egress_id', 'listen.port'])
+    draft.hops[1].ingress.network_transport_id = 'tr-hk'
+    draft.hops[1].network_egress_id = 'eg-hk'
+    draft.listen.port = 20022
+    expect(missingRequired(draft)).toEqual([])
+    const route = draftToRoute(draft)
+    expect(route.hops[1]).toEqual({
+      role: 'HOP_ROLE_EXIT', engine: 'ENGINE_NETWORK', node_refs: ['proxy-2'], port: 0, dial_address: '',
+      ingress: { security: 'LINK_SECURITY_NETWORK', network_transport_id: 'tr-hk' }, network_egress_id: 'eg-hk'
+    })
+    expect(route.hops[0].network_egress_id).toBeUndefined()
+    expect(route.policy.proxy_protocol).toBe('PROXY_PROTOCOL_V1')
+    expect(routeToDraft(route).hops[1].network_egress_id).toBe('eg-hk')
+
+    setDraftEngine(draft, 0, 'ENGINE_GOST')
+    expect(draft.hops.map(hop => hop.engine)).toEqual(['ENGINE_GOST', 'ENGINE_GOST'])
+    expect(draft.hops[1].ingress.security).toBe('LINK_SECURITY_RAW')
+    expect(draft.hops[1].network_egress_id).toBe('')
   })
 
   it('maps violation fields to DOM ids and hop prefixes', () => {

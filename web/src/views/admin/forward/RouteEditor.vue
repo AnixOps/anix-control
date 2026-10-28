@@ -116,6 +116,7 @@
                     :violations="violations"
                     :error-text="errorText"
                     :enable-anix-ops="enableAnixOps"
+                    :network-model="networkModel"
                     @update="patch => updateHop(index, patch)"
                     @add-node="ref => hop.node_refs.push(ref)"
                     @remove-node="ref => hop.node_refs.splice(hop.node_refs.indexOf(ref), 1)"
@@ -155,7 +156,8 @@
               <UiSelect :id="fieldId('policy.next_hop')" v-model="draft.policy.next_hop" size="md" :label="t('forwardV4.editor.nextHopStrategy')" :options="strategyOptions" :help="nextHopHelp" :error="errorText('policy.next_hop')" />
               <UiSelect :id="fieldId('policy.target')" v-model="draft.policy.target" size="md" :label="t('forwardV4.editor.targetStrategy')" :options="strategyOptions" :help="targetHelp" :error="errorText('policy.target')" />
             </div>
-            <UiRadioGroup :id="fieldId('policy.direct')" v-model="draft.policy.direct" class="editor-mt" :label="t('forwardV4.editor.direct')" orientation="horizontal" :options="directOptions" :error="errorText('policy.direct')" />
+            <UiRadioGroup v-if="!isNetworkDraft(draft)" :id="fieldId('policy.direct')" v-model="draft.policy.direct" class="editor-mt" :label="t('forwardV4.editor.direct')" orientation="horizontal" :options="directOptions" :error="errorText('policy.direct')" />
+            <UiSelect :id="fieldId('policy.proxy_protocol')" v-model="draft.policy.proxy_protocol" class="editor-mt" size="md" :label="t('forwardV4.editor.proxyProtocol')" :options="proxyProtocolOptions" :help="t('forwardV4.editor.proxyProtocolHelp')" :error="errorText('policy.proxy_protocol')" />
             <div class="editor-subhead">
               <h3 class="editor-subhead__title">{{ t('forwardV4.editor.healthTitle') }}</h3>
               <span class="fwd-muted">{{ t('forwardV4.editor.healthHelp') }}</span>
@@ -250,9 +252,10 @@ import { forwardErrorMessage, violationText } from '@/components/forward/message
 import { useForwardFlags } from '@/components/forward/useForwardFlags'
 import { useRoutePreview } from '@/components/forward/useRoutePreview'
 import {
-  DIRECT_MODES, H21_DEFAULTS, PROTOCOLS, STRATEGIES, TARGET_POLICIES, blankHop, blankTarget, draftToRoute, fieldId, linkLabel,
-  missingRequired, routeDiff, routeToDraft, syncRoles
+  DIRECT_MODES, H21_DEFAULTS, NETWORK_ENGINE, PROTOCOLS, PROXY_PROTOCOLS, STRATEGIES, TARGET_POLICIES, blankHop, blankTarget, draftToRoute,
+  fieldId, isNetworkDraft, linkLabel, missingRequired, routeDiff, routeToDraft, setDraftEngine, syncRoles
 } from '@/components/forward/routeModel'
+import { getNetworkModel } from '@/api/kernel'
 import '@/components/forward/forward.css'
 
 const props = defineProps({
@@ -269,6 +272,8 @@ const { enableAnixOps } = useForwardFlags()
 const editing = computed(() => Boolean(props.id))
 const draft = ref(null)
 const nodes = ref([])
+// The network model's document, for ENGINE_NETWORK routes.
+const networkModel = ref(null)
 const enforced = ref('')
 const loadError = ref(null)
 const saving = ref(false)
@@ -293,13 +298,17 @@ async function load() {
   loadError.value = null
   try {
     const sourceId = props.id || String(currentRoute.query.from || '')
-    const [nodeAnswer, routeAnswer, bindings] = await Promise.all([
+    const [nodeAnswer, routeAnswer, bindings, network] = await Promise.all([
       listNodes(),
       sourceId ? getRoute(sourceId) : Promise.resolve(null),
       // An older package has no DNS API: the editor then has no picker.
-      props.id ? listDnsBindings({ routeId: props.id }).catch(() => null) : Promise.resolve([])
+      props.id ? listDnsBindings({ routeId: props.id }).catch(() => null) : Promise.resolve([]),
+      // ENGINE_NETWORK hops pick from the network model; without it they
+      // have no choices.
+      getNetworkModel().catch(() => null)
     ])
     nodes.value = nodeAnswer.nodes
+    networkModel.value = network?.document || null
     storedBinding.value = bindings?.find(item => item.route_id === props.id) || null
     dnsReady.value = Array.isArray(bindings)
     let route = routeAnswer?.route || null
@@ -413,6 +422,11 @@ function setHopRef(key, el) {
 
 function updateHop(index, patch) {
   const hop = draft.value.hops[index]
+  if (patch.engine && patch.engine !== hop.engine) {
+    setDraftEngine(draft.value, index, patch.engine)
+    const { engine, ...rest } = patch
+    patch = rest
+  }
   Object.assign(hop, patch)
   if (patch.ingress) hop.ingress = { ...patch.ingress }
 }
@@ -436,7 +450,8 @@ function removeHop(index) {
 }
 
 async function addHop() {
-  draft.value.hops.push(blankHop(draft.value.hops.length, draft.value.hops.length + 1))
+  const engine = isNetworkDraft(draft.value) ? NETWORK_ENGINE : undefined
+  draft.value.hops.push(blankHop(draft.value.hops.length, draft.value.hops.length + 1, engine))
   syncRoles(draft.value.hops)
   await nextTick()
   focusField(`hops[${draft.value.hops.length - 1}].node_refs`)
@@ -465,6 +480,7 @@ const portModes = computed(() => [{ value: 'auto', label: t('forwardV4.editor.au
 const protocolOptions = computed(() => PROTOCOLS.map(value => ({ value, label: t(`forwardV4.protocol.${value}`) })))
 const strategyOptions = computed(() => STRATEGIES.map(value => ({ value, label: t(`forwardV4.strategy.${value}`), description: t(`forwardV4.strategyHint.${value}`) })))
 const directOptions = computed(() => DIRECT_MODES.map(value => ({ value, label: t(`forwardV4.direct.${value}`), description: t(`forwardV4.directHint.${value}`) })))
+const proxyProtocolOptions = computed(() => PROXY_PROTOCOLS.map(value => ({ value, label: t(`forwardV4.proxyProtocol.${value}`) })))
 const targetPolicyOptions = computed(() => TARGET_POLICIES.map(value => ({ value, label: t(`forwardV4.targetPolicy.${value}`), description: t(`forwardV4.targetPolicyHint.${value}`) })))
 const chainDescription = computed(() => (enableAnixOps.value ? t('forwardV4.editor.chainDescriptionAnixOps') : t('forwardV4.editor.chainDescription')))
 
