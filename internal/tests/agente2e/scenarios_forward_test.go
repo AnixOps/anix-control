@@ -62,13 +62,9 @@ func (s *suite) forwardStateGeneration(t *testing.T) (uint64, string) {
 }
 
 // forwardEngine is the engine the suite's route uses: the real nftables
-// driver in the netns lane, gost (behind the systemctl and gost stand-ins)
-// otherwise.
+// driver, which only the netns lane can run (gost was removed).
 func (s *suite) forwardEngine() string {
-	if s.netns {
-		return "ENGINE_NFTABLES"
-	}
-	return "ENGINE_GOST"
+	return "ENGINE_NFTABLES"
 }
 
 // scenarioForwardStatePushAndReport creates a one-hop route on the node:
@@ -76,6 +72,9 @@ func (s *suite) forwardEngine() string {
 // node configuration v2 format, forward.v1) and the Agent applies it and
 // reports (forward.report) the generation it holds.
 func (s *suite) scenarioForwardStatePushAndReport(t *testing.T) string {
+	if !s.netns {
+		return skipped + ":forwarding runs in the netns lane (nftables); gost was removed"
+	}
 	previous := s.forwardReport(t)
 	listenPort := freePortInRange(t, 30000, 39999)
 	// Control never forwards to loopback: the target is a sink on another
@@ -106,25 +105,13 @@ func (s *suite) scenarioForwardStatePushAndReport(t *testing.T) string {
 	}, s.agent.proc, s.control.proc)
 	report := s.forwardReport(t)
 	require.Contains(t, report.ReportJSON, s.routeID, "the report covers the route's hop")
-	if s.netns {
-		require.True(t, report.Applied, "the nftables hop applied: %s", prettyJSON(report.ReportJSON))
-		require.Zero(t, report.HopErrors)
-		require.Contains(t, nftTables(t), "inet anixops_fwd", "the driver's table is in the namespace")
-		ruleset, err := exec.Command("nft", "list", "table", "inet", "anixops_fwd").CombinedOutput()
-		require.NoError(t, err, "%s", ruleset)
-		require.Contains(t, string(ruleset), fmt.Sprint(listenPort), "the hop's rules carry the listen port")
-	}
+	require.True(t, report.Applied, "the nftables hop applied: %s", prettyJSON(report.ReportJSON))
+	require.Zero(t, report.HopErrors)
+	require.Contains(t, nftTables(t), "inet anixops_fwd", "the driver's table is in the namespace")
+	ruleset, err := exec.Command("nft", "list", "table", "inet", "anixops_fwd").CombinedOutput()
+	require.NoError(t, err, "%s", ruleset)
+	require.Contains(t, string(ruleset), fmt.Sprint(listenPort), "the hop's rules carry the listen port")
 	evidence := fmt.Sprintf("route %s on %s: generation %d pushed and reported (applied %t, hop errors %d)", routeID, s.forwardEngine(), generation, report.Applied, report.HopErrors)
-	if !s.netns && RealGost() {
-		// gost really forwards: a transfer through the route's listener
-		// reaches the target.
-		require.True(t, report.Applied, "the gost hop applied: %s", prettyJSON(report.ReportJSON))
-		eventually(t, 30*time.Second, func() (bool, string) {
-			err := sinkTransfer(fmt.Sprintf("127.0.0.1:%d", listenPort), 4096, 8192)
-			return err == nil, fmt.Sprint(err)
-		}, s.agent.proc)
-		evidence += "; traffic forwarded through gost"
-	}
 	return evidence
 }
 
@@ -209,11 +196,8 @@ func (s *suite) scenarioForwardDiagnose(t *testing.T) string {
 		}
 	}
 	for _, kind := range []string{"PROBE_KIND_LISTEN", "PROBE_KIND_PORT_CONFLICT", "PROBE_KIND_DELIVERY"} {
-		ok, ran := nodeSteps[kind]
+		_, ran := nodeSteps[kind]
 		require.True(t, ran, "%s from the node: %v", kind, steps)
-		if !s.netns && RealGost() {
-			require.True(t, ok, "%s: %v", kind, steps)
-		}
 	}
 	return strings.Join(steps, "; ")
 }
