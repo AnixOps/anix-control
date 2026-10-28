@@ -31,7 +31,6 @@ ALLOWED_OWNERS = frozenset(
         "wireguard",
         "forward",
         "nftables-forward",
-        "gost-mesh",
         "nat-egress",
     }
 )
@@ -52,7 +51,6 @@ OWNER_ROUTE_PREFIXES = {
     "wireguard": ("wireguard.",),
     "forward": ("forward.",),
     "nftables-forward": ("nftables.",),
-    "gost-mesh": ("gost.",),
     "nat-egress": ("nat.",),
 }
 ALLOWED_ENVELOPES = frozenset({"data", "empty", "panel", "raw", "websocket"})

@@ -124,10 +124,7 @@ func TestGatewaySealsRequestsAndExpandsTheirAnswers(t *testing.T) {
 // handler without the package host, with a metric; without one it is
 // refused. Either way nothing reaches the package.
 func TestGatewayFailsClosedToLegacy(t *testing.T) {
-	route := Route{
-		Method: http.MethodPost, LegacyPath: "/api/v2/admin/forward/test-connection", PackageID: "gost-mesh", Version: "4.1.0",
-		Generation: 5, PackageRoute: "gost.admin.forward.test_connection.post", Envelope: EnvelopePanel,
-	}
+	route := createNodeRoute
 	// A route whose target is a path parameter: a proxy node.
 	byID := Route{
 		Method: http.MethodPut, LegacyPath: "/api/v2/admin/nodes/:id", PackageID: "proxy-node", Version: "4.1.0",
@@ -137,13 +134,12 @@ func TestGatewayFailsClosedToLegacy(t *testing.T) {
 		return pluginhost.DispatchOutput{StatusCode: http.StatusOK, Body: []byte(`{"code":0,"data":null,"msg":"ok","ts":1}`)}
 	}
 	for name, body := range map[string]string{
-		"not json":             `api_token=typed-token`,
-		"a value not a string": `{"api_token":["typed-token"]}`,
+		"not json": `raw_config=typed-private-key`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			host := &sealingHost{answer: answer}
 			gateway := newSealedGateway(t, route, legacySealingHost{host})
-			recorder := gateway.do(http.MethodPost, "/api/v2/admin/forward/test-connection", body)
+			recorder := gateway.do(http.MethodPost, "/api/v2/admin/nodes", body)
 			require.Equal(t, http.StatusOK, recorder.Code)
 			assert.Contains(t, recorder.Body.String(), `"legacy":true`)
 			assert.Empty(t, host.inputs, "the package host never saw the request")
@@ -167,7 +163,7 @@ func TestGatewayFailsClosedToLegacy(t *testing.T) {
 	t.Run("no legacy dispatcher", func(t *testing.T) {
 		host := &sealingHost{answer: answer}
 		gateway := newSealedGateway(t, route, host)
-		recorder := gateway.do(http.MethodPost, "/api/v2/admin/forward/test-connection", `{"api_token":`)
+		recorder := gateway.do(http.MethodPost, "/api/v2/admin/nodes", `{"raw_config":`)
 		require.Equal(t, http.StatusServiceUnavailable, recorder.Code)
 		assert.Contains(t, recorder.Body.String(), codeSealedSecretUnavailable)
 		assert.Empty(t, host.inputs)
@@ -177,10 +173,10 @@ func TestGatewayFailsClosedToLegacy(t *testing.T) {
 	t.Run("no legacy handler for the route", func(t *testing.T) {
 		host := &sealingHost{answer: answer, legacyErr: pluginhost.ErrLegacyUnavailable}
 		gateway := newSealedGateway(t, route, legacySealingHost{host})
-		recorder := gateway.do(http.MethodPost, "/api/v2/admin/forward/test-connection", `{"api_token":`)
+		recorder := gateway.do(http.MethodPost, "/api/v2/admin/nodes", `{"raw_config":`)
 		require.Equal(t, http.StatusServiceUnavailable, recorder.Code)
 		assert.Contains(t, recorder.Body.String(), codeSealedSecretUnavailable)
-		assert.NotContains(t, recorder.Body.String(), "api_token")
+		assert.NotContains(t, recorder.Body.String(), "raw_config")
 		assert.Empty(t, host.inputs)
 	})
 }

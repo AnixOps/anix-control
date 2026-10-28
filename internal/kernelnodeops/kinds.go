@@ -22,7 +22,11 @@ import (
 )
 
 // The operation kinds (node-ops-service.md section 3.3): each is recorded
-// with its operation and answered in Operation.kind.
+// with its operation and answered in Operation.kind. The flux forwarding
+// kinds (forward.*, diagnose.node_stats, diagnose.forward, diagnose.tunnel,
+// diagnose.forward_backend and cleanagent.issue) stay in the contract but
+// lost their executors with the flux runtime and gost: this kernel answers
+// UNIMPLEMENTED to them.
 const (
 	KindForwardApply       = "forward.apply"
 	KindForwardTunnel      = "forward.tunnel"
@@ -632,10 +636,11 @@ func init() {
 			if backend == "" {
 				return nil
 			}
-			if _, known := service.NormalizeForwardRuntimeBackend(backend); !known {
-				return invalid("backend must be gost, nftables_ansible, iptables_ansible or clean_agent")
+			switch backend {
+			case "gost", "nftables_ansible", "iptables_ansible", "clean_agent":
+				return nil
 			}
-			return nil
+			return invalid("backend must be gost, nftables_ansible, iptables_ansible or clean_agent")
 		},
 		resolve: func(*gorm.DB, *kernelnodeopsv1.OperationSpec) (resolution, error) {
 			return resolution{resource: "forward-backend"}, nil

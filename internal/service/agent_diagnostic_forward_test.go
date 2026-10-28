@@ -16,7 +16,7 @@ func TestForwardChecksAreNotAdministratorTasks(t *testing.T) {
 	}
 	_, err := ValidateAgentDiagnosticTask(ForwardCheckConnect, map[string]any{})
 	require.Error(t, err)
-	_, err = ValidateAgentDiagnosticTask(AgentDiagnosticActionServiceStatus, map[string]any{"service": "gost"})
+	_, err = ValidateAgentDiagnosticTask(AgentDiagnosticActionServiceStatus, map[string]any{"service": "anix-agent"})
 	require.NoError(t, err, "the generic whitelist is unchanged")
 }
 
@@ -50,7 +50,7 @@ func TestValidateForwardDiagnosticCheck(t *testing.T) {
 		_, err := ValidateForwardDiagnosticCheck(ForwardCheckConnect, params)
 		assert.Error(t, err, name)
 	}
-	_, err = ValidateForwardDiagnosticCheck("service_status", map[string]any{"service": "gost"})
+	_, err = ValidateForwardDiagnosticCheck("service_status", map[string]any{"service": "anix-agent"})
 	require.Error(t, err)
 	assert.True(t, IsForwardDiagnosticCheck(ForwardCheckPortConflict))
 	assert.False(t, IsForwardDiagnosticCheck(AgentDiagnosticActionLogTail))

@@ -21,9 +21,10 @@
 # AnixOps Agent as a systemd service running as the unprivileged user
 # anixops-agent (ambient CAP_NET_ADMIN and CAP_NET_BIND_SERVICE, sandboxed),
 # removes the legacy forward runtime of this host (the nftables tables
-# inet v2b_forward, ip v2b_forward and ip anixops_forward, and the clean
-# agent's v2forward-agent service), migrates the directories of an earlier
-# root install of the Agent, and joins Control: 'anix-agent join', run as
+# inet v2b_forward, ip v2b_forward and ip anixops_forward, the clean
+# agent's v2forward-agent service, and the gost an earlier install set up:
+# anixops-gost.service, its binary, directory and account), migrates the
+# directories of an earlier root install of the Agent, and joins Control: 'anix-agent join', run as
 # anixops-agent, exchanges the token for the node's certificate and names
 # the node. It then writes the configuration for that node, turns on IP
 # forwarding for a forward node (/etc/sysctl.d/90-anixops-forward.conf; a
@@ -56,9 +57,7 @@ readonly OFFICIAL_PUBLIC_KEY="jW26nr2tbthASoeq6RmIpx8Ah+uhPNIv9V1ewRVb1VE="
 ROOT="${ANIX_INSTALL_ROOT:-}"
 
 readonly AGENT_USER="anixops-agent"
-readonly GOST_USER="anixops-gost"
 readonly SERVICE="anix-agent.service"
-readonly GOST_SERVICE="anixops-gost.service"
 # The privileged updater (forward-sdk.md section 9, O4): the Agent runs as
 # its own user under ProtectSystem=strict and cannot replace its binary.
 # For a Control-pushed upgrade it stages the verified release and writes
@@ -81,11 +80,10 @@ readonly TOKEN_FILE="${STATE_DIR}/join.token"
 readonly LEGACY_CREDENTIAL_FILE="${STATE_DIR}/enroll.credential"
 readonly UPGRADE_DIR="${STATE_DIR}/upgrade"
 readonly UPDATER_REQUEST="${UPGRADE_DIR}/request.json"
-readonly GOST_DIR="/var/lib/anixops-gost"
 readonly UNIT_DIR="/etc/systemd/system"
 readonly POLKIT_RULE="/etc/polkit-1/rules.d/50-anixops-agent.rules"
 readonly LOCK_FILE="/run/anixops-agent-install.lock"
-# IP forwarding for forward nodes: nftables DNAT and gost relays route
+# IP forwarding for forward nodes: nftables DNAT and the relays route
 # packets between interfaces.
 readonly SYSCTL_FILE="/etc/sysctl.d/90-anixops-forward.conf"
 readonly SYSCTL_SETTINGS=("net.ipv4.ip_forward=1" "net.ipv6.conf.all.forwarding=1")
@@ -93,8 +91,11 @@ readonly SYSCTL_SETTINGS=("net.ipv4.ip_forward=1" "net.ipv6.conf.all.forwarding=
 # The legacy forward runtime the new Agent replaces (forward-sdk.md,
 # section 10). Only these named objects are removed, never anything else.
 readonly LEGACY_NFT_TABLES=("inet v2b_forward" "ip v2b_forward" "ip anixops_forward")
-readonly LEGACY_UNITS=("v2forward-agent.service")
-readonly LEGACY_PATHS=("/etc/v2board-forward-agent" "/usr/local/bin/v2forward-agent")
+readonly LEGACY_UNITS=("v2forward-agent.service" "anixops-gost.service")
+readonly LEGACY_PATHS=("/etc/v2board-forward-agent" "/usr/local/bin/v2forward-agent" "/usr/lib/anixops-agent/gost" "/var/lib/anixops-gost")
+# The account of the gost an earlier install set up (the network model
+# replaced gost).
+readonly LEGACY_USER="anixops-gost"
 # The directories of an Agent installed by anix-agent's own root installer
 # (scripts/install.sh): 'anix-agent migrate-paths' copies them to STATE_DIR.
 readonly ROOT_INSTALL_DIRS=("/var/lib/anix-agent" "/var/lib/anixops/plugins")
@@ -111,7 +112,6 @@ readonly FWD_TC_HANDLE="af00:"
 readonly MIN_KERNEL="5.10"   # the nftables driver's table, counter and set element comments
 readonly MIN_NFT="0.9.7"     # the same comments in nft
 readonly MIN_SYSTEMD=240     # Type=exec in the units
-readonly SANDBOX_SYSTEMD=247 # ProtectProc= and ProcSubset= in the gost unit
 readonly MIN_POLKIT="0.106"  # JavaScript rules (/etc/polkit-1/rules.d)
 readonly SKEW_WARN=30        # seconds
 readonly SKEW_FAIL=300       # seconds: TLS certificates stop verifying
@@ -223,8 +223,7 @@ Usage: install.sh -u <https://control> -t <anixjoin_...|anixagt_...> [options]
 Running the same command again upgrades the Agent in place and keeps its
 identity; the token is then not needed and stays unused.
 
-uninstall stops and removes the Agent, anixops-gost.service and their files
-and keeps the identity, configuration and state for a later install;
+uninstall stops and removes the Agent and its files and keeps the identity, configuration and state for a later install;
 --purge also removes those, the users, the sysctl drop-in and the forwarding
 objects the drivers created (the nftables table inet anixops_fwd and the tc
 root qdiscs af00:, only when they carry the drivers' marks).
@@ -400,8 +399,6 @@ check_systemd() {
   elif ((version < MIN_SYSTEMD)); then
     pf_fail "systemd ${version} is older than ${MIN_SYSTEMD}: the Agent's units use Type=exec" \
       "use a distribution with systemd ${MIN_SYSTEMD} or later (Debian 11, Ubuntu 20.04, RHEL 9 or later)"
-  elif ((version < SANDBOX_SYSTEMD)); then
-    pf_warn "systemd ${version} ignores ProtectProc= and ProcSubset= (systemd ${SANDBOX_SYSTEMD}): gost runs with a weaker sandbox"
   else
     pf_ok "systemd ${version}"
   fi
@@ -419,7 +416,7 @@ check_kernel() {
     pf_ok "Linux ${release}"
   elif forward_node; then
     pf_fail "Linux ${release} is older than ${MIN_KERNEL}: the nftables forward driver needs ${MIN_KERNEL} or later" \
-      "upgrade the kernel (Debian 11 backports, Ubuntu 22.04 or later), or forward with gost only (ask the Control administrator)"
+      "upgrade the kernel (Debian 11 backports, Ubuntu 22.04 or later)"
   else
     pf_warn "Linux ${release} is older than ${MIN_KERNEL}: this node cannot forward with nftables later"
   fi
@@ -492,7 +489,7 @@ check_nftables() {
 check_polkit() {
   local version
   if ! have pkaction; then
-    pf_warn "polkit is not installed: the Agent cannot start or reload ${GOST_SERVICE}, so gost hops fail (apt-get install -y polkitd)"
+    pf_warn "polkit is not installed: 诊断 cannot restart the Agent (apt-get install -y polkitd)"
     return 0
   fi
   version="$(pkaction --version 2>/dev/null)" || version=""
@@ -506,7 +503,7 @@ check_polkit() {
   else
     # A .pkla file grants an action for every unit; the installer writes
     # none rather than let the Agent manage any unit.
-    pf_warn "polkit ${version} reads no rules from /etc/polkit-1/rules.d (${MIN_POLKIT} or later): the Agent cannot start or reload ${GOST_SERVICE}, so gost hops fail; nftables hops work. Upgrade polkit (Ubuntu 24.04, Debian 12) to forward with gost"
+    pf_warn "polkit ${version} reads no rules from /etc/polkit-1/rules.d (${MIN_POLKIT} or later): 诊断 cannot restart the Agent. Upgrade polkit (Ubuntu 24.04, Debian 12)"
   fi
 }
 
@@ -920,22 +917,12 @@ migrate_root_install() {
 }
 
 ensure_users() {
-  if ! getent group "${GOST_USER}" >/dev/null; then
-    groupadd --system "${GOST_USER}"
-  fi
-  if ! getent passwd "${GOST_USER}" >/dev/null; then
-    useradd --system --gid "${GOST_USER}" --home-dir "${GOST_DIR}" --no-create-home --shell /usr/sbin/nologin "${GOST_USER}"
-  fi
   if ! getent group "${AGENT_USER}" >/dev/null; then
     groupadd --system "${AGENT_USER}"
   fi
   if ! getent passwd "${AGENT_USER}" >/dev/null; then
-    useradd --system --gid "${AGENT_USER}" --groups "${GOST_USER}" --home-dir "${STATE_DIR}" --no-create-home \
+    useradd --system --gid "${AGENT_USER}" --home-dir "${STATE_DIR}" --no-create-home \
       --shell /usr/sbin/nologin "${AGENT_USER}"
-  else
-    # The Agent reaches gost's API socket through the gost group; nothing
-    # else may join it.
-    usermod --append --groups "${GOST_USER}" "${AGENT_USER}"
   fi
 }
 
@@ -963,8 +950,7 @@ enrolled() {
 stop_running_agent() {
   if [[ -f "$(path "${UNIT_DIR}/${SERVICE}")" ]]; then
     INSTALL_MODE="upgrade"
-    # Forwarding keeps running: rules are in the kernel and gost is its own
-    # unit.
+    # Forwarding keeps running: the rules are in the kernel.
     systemctl stop "${SERVICE}" >/dev/null 2>&1 || true
   fi
 }
@@ -973,10 +959,6 @@ install_files() {
   install -d -m 0755 "$(path "${LIB_DIR}")" "$(path "$(dirname "${BIN_LINK}")")"
   install -m 0755 "${TMP_DIR}/agent/anix-agent" "$(path "${LIB_DIR}/anix-agent.new")"
   mv -f "$(path "${LIB_DIR}/anix-agent.new")" "$(path "${LIB_DIR}/anix-agent")"
-  if [[ -f "${TMP_DIR}/agent/gost" && ! -L "${TMP_DIR}/agent/gost" ]]; then
-    install -m 0755 "${TMP_DIR}/agent/gost" "$(path "${LIB_DIR}/gost.new")"
-    mv -f "$(path "${LIB_DIR}/gost.new")" "$(path "${LIB_DIR}/gost")"
-  fi
   ln -sfn "${LIB_DIR}/anix-agent" "$(path "${BIN_LINK}")"
   printf '%s\n' "${META_VERSION}" >"$(path "${LIB_DIR}/.release-version")"
 
@@ -988,8 +970,6 @@ install_files() {
   migrate_root_install
   install -d -m 0700 "$(path "${PKI_DIR}")" "$(path "${STREAM_DIR}")" "$(path "${UPGRADE_DIR}")"
   chown "${AGENT_USER}:${AGENT_USER}" "$(path "${STATE_DIR}")" "$(path "${PKI_DIR}")" "$(path "${STREAM_DIR}")" "$(path "${UPGRADE_DIR}")"
-  install -d -m 0750 "$(path "${GOST_DIR}")"
-  chown "${AGENT_USER}:${GOST_USER}" "$(path "${GOST_DIR}")"
 }
 
 render_config() {
@@ -1182,8 +1162,9 @@ post_join_preflight() {
 }
 
 # cleanup_legacy removes the legacy forward runtime of this host before the
-# new Agent starts (forward-sdk.md, section 10): the named nftables tables
-# and the clean agent's unit and files. Nothing else is touched.
+# new Agent starts (forward-sdk.md, section 10): the named nftables tables,
+# the clean agent's unit and files, and the gost of an earlier install (its
+# unit, binary, directory and account). Nothing else is touched.
 cleanup_legacy() {
   local table unit legacy_path
   if have nft; then
@@ -1211,6 +1192,16 @@ cleanup_legacy() {
       REMOVED+=("${legacy_path}")
     fi
   done
+  if getent passwd "${LEGACY_USER}" >/dev/null; then
+    if userdel "${LEGACY_USER}" >/dev/null 2>&1; then
+      REMOVED+=("user ${LEGACY_USER}")
+    else
+      note "cannot delete the user ${LEGACY_USER}: userdel ${LEGACY_USER}"
+    fi
+  fi
+  if getent group "${LEGACY_USER}" >/dev/null; then
+    groupdel "${LEGACY_USER}" >/dev/null 2>&1 || note "cannot delete the group ${LEGACY_USER}: groupdel ${LEGACY_USER}"
+  fi
 }
 
 render_sysctl() {
@@ -1285,9 +1276,9 @@ render_agent_unit() {
   # systemd-journal lets 诊断 read the Agent's own log (journalctl -u); a
   # host without the group gets none, since a unit naming a missing group
   # does not start.
-  local groups="${GOST_USER}"
+  local groups=""
   if getent group systemd-journal >/dev/null; then
-    groups="${groups} systemd-journal"
+    groups="SupplementaryGroups=systemd-journal"
   fi
   cat <<EOF
 # ${SERVICE}: the AnixOps Agent. Written by the AnixOps installer
@@ -1305,9 +1296,8 @@ Restart=on-failure
 RestartSec=5s
 User=${AGENT_USER}
 Group=${AGENT_USER}
-# gost's API and metrics sockets are guarded by the gost group (F4b);
 # systemd-journal reads the journal for 诊断's log tail.
-SupplementaryGroups=${groups}
+${groups}
 UMask=0077
 LimitNOFILE=1048576
 # /run/anixops-agent: the plugins' sockets (ProtectSystem=strict).
@@ -1321,7 +1311,7 @@ NoNewPrivileges=yes
 
 # Sandbox (forward-sdk.md, section 14).
 ProtectSystem=strict
-ReadWritePaths=${STATE_DIR} ${GOST_DIR}
+ReadWritePaths=${STATE_DIR}
 ProtectHome=yes
 PrivateTmp=yes
 PrivateDevices=yes
@@ -1336,72 +1326,6 @@ RestrictRealtime=yes
 RestrictSUIDSGID=yes
 LockPersonality=yes
 SystemCallArchitectures=native
-
-[Install]
-WantedBy=multi-user.target
-EOF
-}
-
-# render_gost_unit is contracts/forward/v1/gost/anixops-gost.service, the
-# unit sdk/forward/driver/gost renders (a Control test keeps them equal).
-render_gost_unit() {
-  cat <<'EOF'
-# anixops-gost.service: the gost of the AnixOps Agent's forward driver.
-# Rendered by sdk/forward/driver/gost (UnitFile); installed by the AnixOps
-# installer. The Agent starts, reloads (SIGHUP) and stops it; it is a unit
-# of its own so that restarting or upgrading the Agent keeps forwarding.
-[Unit]
-Description=AnixOps forward gost (anixops-forward-driver gost v1)
-Documentation=https://github.com/AnixOps/anix-control/blob/main/docs/architecture/forward-sdk.md
-After=network-online.target
-Wants=network-online.target
-# Without a configuration there is nothing to serve: the driver writes it
-# on its first apply and deletes it on Remove.
-ConditionPathExists=/var/lib/anixops-gost/gost.json
-
-[Service]
-Type=exec
-ExecStart=/usr/lib/anixops-agent/gost -C /var/lib/anixops-gost/gost.json
-ExecReload=/bin/kill -HUP $MAINPID
-Restart=on-failure
-RestartSec=2s
-TimeoutStopSec=10s
-User=anixops-gost
-Group=anixops-gost
-UMask=0007
-RuntimeDirectory=anixops-gost
-RuntimeDirectoryMode=0750
-LimitNOFILE=1048576
-
-# Privileges: binding ports below 1024, nothing else.
-AmbientCapabilities=CAP_NET_BIND_SERVICE
-CapabilityBoundingSet=CAP_NET_BIND_SERVICE
-NoNewPrivileges=yes
-
-# Sandbox: the file system is read only but for RuntimeDirectory.
-ProtectSystem=strict
-ProtectHome=yes
-PrivateTmp=yes
-PrivateDevices=yes
-ProtectKernelTunables=yes
-ProtectKernelModules=yes
-ProtectKernelLogs=yes
-ProtectControlGroups=yes
-ProtectClock=yes
-ProtectHostname=yes
-ProtectProc=invisible
-ProcSubset=pid
-RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
-RestrictNamespaces=yes
-RestrictRealtime=yes
-RestrictSUIDSGID=yes
-LockPersonality=yes
-MemoryDenyWriteExecute=yes
-RemoveIPC=yes
-SystemCallArchitectures=native
-SystemCallFilter=@system-service
-SystemCallFilter=~@privileged
-SystemCallErrorNumber=EPERM
 
 [Install]
 WantedBy=multi-user.target
@@ -1466,13 +1390,12 @@ SystemCallArchitectures=native
 EOF
 }
 
-# render_polkit_rule lets the Agent user start, stop and reload
-# anixops-gost.service, and restart its own unit (诊断's service restart),
-# and nothing else.
+# render_polkit_rule lets the Agent user restart its own unit (诊断's
+# service restart), and nothing else.
 render_polkit_rule() {
   cat <<EOF
-// Written by the AnixOps installer: ${AGENT_USER} may start, stop and
-// reload ${GOST_SERVICE}, and restart ${SERVICE}, only.
+// Written by the AnixOps installer: ${AGENT_USER} may restart ${SERVICE},
+// only.
 polkit.addRule(function(action, subject) {
   if (action.id != "org.freedesktop.systemd1.manage-units" ||
       subject.user != "${AGENT_USER}") {
@@ -1480,11 +1403,6 @@ polkit.addRule(function(action, subject) {
   }
   var unit = action.lookup("unit");
   var verb = action.lookup("verb");
-  if (unit == "${GOST_SERVICE}" &&
-      (verb == "start" || verb == "stop" || verb == "restart" ||
-       verb == "reload" || verb == "try-restart" || verb == "reload-or-restart")) {
-    return polkit.Result.YES;
-  }
   if (unit == "${SERVICE}" && (verb == "restart" || verb == "try-restart")) {
     return polkit.Result.YES;
   }
@@ -1495,20 +1413,17 @@ EOF
 install_units() {
   install -d -m 0755 "$(path "${UNIT_DIR}")"
   render_agent_unit >"$(path "${UNIT_DIR}/${SERVICE}")"
-  render_gost_unit >"$(path "${UNIT_DIR}/${GOST_SERVICE}")"
   render_updater_service >"$(path "${UNIT_DIR}/${UPDATER_SERVICE}")"
   render_updater_path >"$(path "${UNIT_DIR}/${UPDATER_PATH}")"
-  chmod 0644 "$(path "${UNIT_DIR}/${SERVICE}")" "$(path "${UNIT_DIR}/${GOST_SERVICE}")" \
+  chmod 0644 "$(path "${UNIT_DIR}/${SERVICE}")" \
     "$(path "${UNIT_DIR}/${UPDATER_SERVICE}")" "$(path "${UNIT_DIR}/${UPDATER_PATH}")"
   if [[ -d "$(path "$(dirname "${POLKIT_RULE}")")" ]]; then
     render_polkit_rule >"$(path "${POLKIT_RULE}")"
     chmod 0644 "$(path "${POLKIT_RULE}")"
   else
-    note "polkit is not installed: the Agent cannot start or reload ${GOST_SERVICE} until it is (apt-get install -y polkitd)"
+    note "polkit is not installed: 诊断 cannot restart the Agent until it is (apt-get install -y polkitd)"
   fi
   systemctl daemon-reload
-  # gost stays inert until the Agent writes its configuration.
-  systemctl enable "${GOST_SERVICE}" >/dev/null 2>&1 || note "cannot enable ${GOST_SERVICE}"
   # The updater acts only on a request an Agent with upgrade.v1 writes.
   systemctl enable --now "${UPDATER_PATH}" >/dev/null 2>&1 || note "cannot enable ${UPDATER_PATH}: Control cannot upgrade this Agent until it is"
   systemctl enable "${SERVICE}" >/dev/null
@@ -1651,21 +1566,16 @@ remove_path() {
 }
 
 remove_users() {
-  local user
-  for user in "${AGENT_USER}" "${GOST_USER}"; do
-    if getent passwd "${user}" >/dev/null; then
-      if userdel "${user}"; then
-        REMOVED+=("user ${user}")
-      else
-        note "cannot delete the user ${user}: userdel ${user}"
-      fi
+  if getent passwd "${AGENT_USER}" >/dev/null; then
+    if userdel "${AGENT_USER}"; then
+      REMOVED+=("user ${AGENT_USER}")
+    else
+      note "cannot delete the user ${AGENT_USER}: userdel ${AGENT_USER}"
     fi
-  done
-  for user in "${AGENT_USER}" "${GOST_USER}"; do
-    if getent group "${user}" >/dev/null; then
-      groupdel "${user}" || note "cannot delete the group ${user}: groupdel ${user}"
-    fi
-  done
+  fi
+  if getent group "${AGENT_USER}" >/dev/null; then
+    groupdel "${AGENT_USER}" || note "cannot delete the group ${AGENT_USER}: groupdel ${AGENT_USER}"
+  fi
 }
 
 uninstall() {
@@ -1674,8 +1584,8 @@ uninstall() {
   take_lock
   info "Uninstalling the AnixOps Agent$( ((PURGE)) && printf ' (--purge)')"
   # The updater first, so that nothing replaces the Agent meanwhile, then
-  # the Agent, so that it cannot apply its state again, then gost.
-  for unit in "${UPDATER_PATH}" "${UPDATER_SERVICE}" "${SERVICE}" "${GOST_SERVICE}"; do
+  # the Agent, so that it cannot apply its state again.
+  for unit in "${UPDATER_PATH}" "${UPDATER_SERVICE}" "${SERVICE}"; do
     if [[ -f "$(path "${UNIT_DIR}/${unit}")" ]]; then
       if have systemctl; then
         systemctl disable --now "${unit}" >/dev/null 2>&1 || true
@@ -1687,7 +1597,7 @@ uninstall() {
   remove_path "${POLKIT_RULE}"
   if have systemctl; then
     systemctl daemon-reload >/dev/null 2>&1 || true
-    systemctl reset-failed "${SERVICE}" "${GOST_SERVICE}" "${UPDATER_SERVICE}" >/dev/null 2>&1 || true
+    systemctl reset-failed "${SERVICE}" "${UPDATER_SERVICE}" >/dev/null 2>&1 || true
   fi
   link="$(path "${BIN_LINK}")"
   if [[ -L "${link}" && "$(readlink "${link}")" == "${LIB_DIR}/anix-agent" ]]; then
@@ -1698,14 +1608,13 @@ uninstall() {
   if ((PURGE)); then
     purge_forwarding
     remove_path "${STATE_DIR}"
-    remove_path "${GOST_DIR}"
     remove_path "${CONFIG_DIR}"
     rmdir "$(path /etc/anixops)" 2>/dev/null || true
     remove_path "${SYSCTL_FILE}"
     remove_users
   else
     KEPT+=("${CONFIG_DIR} and ${STATE_DIR}: the identity and configuration, for a later install (uninstall --purge removes them)")
-    KEPT+=("the users ${AGENT_USER} and ${GOST_USER}, ${GOST_DIR} and ${SYSCTL_FILE}")
+    KEPT+=("the user ${AGENT_USER} and ${SYSCTL_FILE}")
     KEPT+=("the forwarding rules in the nftables table ${FWD_TABLE} and the tc qdiscs ${FWD_TC_HANDLE}: they stay in the kernel until a reboot or uninstall --purge")
   fi
   info "The AnixOps Agent is uninstalled"

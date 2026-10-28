@@ -79,7 +79,7 @@ func TestForwardChecksOnTheStream(t *testing.T) {
 		// Refused before anything is sent.
 		_, err = checks.Check(context.Background(), f.forwardNode(), "forward.connect", map[string]any{"route_id": "r1", "hop_index": 9})
 		require.ErrorContains(t, err, "hop_index")
-		_, err = checks.Check(context.Background(), f.forwardNode(), "service_restart", map[string]any{"service": "gost"})
+		_, err = checks.Check(context.Background(), f.forwardNode(), "service_restart", map[string]any{"service": "anix-agent"})
 		require.ErrorContains(t, err, "not a forward diagnostic check")
 		assert.Len(t, agent.Received(), 1)
 	})

@@ -58,25 +58,23 @@ func dispatch(t *testing.T, service pluginhostsdk.Package, route string, request
 
 // Every v2 route of the package relays to the kernel's legacy handler, even
 // with a stored native mode (v4.1 stored native for the old native-flagged
-// routes): the package has no native handler since v4.2 (F5d). Routes
-// outside the package are refused.
+// routes): the package has no native handler. Routes outside the package
+// are refused.
 func TestForwardHostRelaysEveryV2Route(t *testing.T) {
-	bridge := &bridgeStub{modes: map[string]string{"forward.forward.list.post": "native", "forward.user.reset.post": "native", "forward.speed_limit.create.post": "shadow"}}
+	bridge := &bridgeStub{modes: map[string]string{"forward.user.reset.post": "native"}}
 	service, err := newForwardService(bridge, "lease-1")
 	require.NoError(t, err)
 	service.Refresh(context.Background())
-	for _, route := range []string{
-		"forward.forward.list.post", "forward.user.reset.post", "forward.admin.forward.runtime.status.get", "forward.forward_agent.report.post",
-		"forward.speed_limit.create.post",
-	} {
+	for _, route := range []string{"forward.user.reset.post"} {
 		_, effective := service.Mode(route)
 		require.Equal(t, pluginhostsdk.RouteModeLegacy, effective, route)
 		response := dispatch(t, service, route, pluginhostsdk.DispatchRequest{})
 		require.EqualValues(t, 200, response.StatusCode)
 		require.Equal(t, route, bridge.operation)
 	}
-	// The flux routes removed in v4.2 (F5d) are no longer the package's.
-	for _, route := range []string{"forward.forward.create.post", "forward.admin.forward.nodes.get", "forward.speed_limit.update.post"} {
+	// The flux routes, removed with the flux runtime, are no longer the
+	// package's.
+	for _, route := range []string{"forward.forward.create.post", "forward.forward.list.post", "forward.speed_limit.create.post", "forward.forward_agent.report.post"} {
 		_, err = service.Dispatch(context.Background(), pluginhostsdk.DispatchRequest{
 			RouteID: route, BridgeCapability: make([]byte, 32), DeadlineUnixMillis: time.Now().Add(time.Second).UnixMilli(),
 		})
@@ -109,7 +107,7 @@ func TestForwardHostRoutesAreThePackageRoutes(t *testing.T) {
 	sort.Strings(want)
 	sort.Strings(got)
 	require.Equal(t, want, got)
-	require.Len(t, want, 32)
+	require.Len(t, want, 1)
 }
 
 // Since v4.2 (F5d) the package needs only ForwardControl for its v4 API: it

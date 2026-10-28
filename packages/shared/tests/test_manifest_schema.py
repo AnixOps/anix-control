@@ -64,7 +64,7 @@ def generate_rsa_signer(root: Path) -> Path:
 def agent_binary_arguments(
     root: Path,
     platforms: tuple[str, ...] = ("linux/amd64",),
-    package_ids: tuple[str, ...] = ("machine-telemetry", "nftables-forward", "gost-mesh", "nat-egress"),
+    package_ids: tuple[str, ...] = ("machine-telemetry", "nftables-forward", "nat-egress"),
 ) -> list[str]:
     arguments: list[str] = []
     for package_id in package_ids:
@@ -75,15 +75,6 @@ def agent_binary_arguments(
             arguments.extend(["--agent-binary", f"{package_id}@{platform}={binary}"])
     return arguments
 
-
-def runtime_binary_arguments(root: Path, platforms: tuple[str, ...] = ("linux/amd64",)) -> list[str]:
-    arguments: list[str] = []
-    for platform in platforms:
-        binary = root / f"gost-runtime-{platform.replace('/', '-')}.bin"
-        binary.write_bytes(b"#!/bin/sh\nprintf 'gost v3.2.6 test runtime\\n'\n")
-        os.chmod(binary, 0o755)
-        arguments.extend(["--runtime-binary", f"gost-mesh:gost@{platform}={binary}"])
-    return arguments
 
 
 class V4PackageManifestSchemaTest(unittest.TestCase):
@@ -275,7 +266,6 @@ func main() {
                 ("knowledge", ("control",)),
                 ("machine-telemetry", ("control", "agent")),
                 ("nftables-forward", ("control", "agent")),
-                ("gost-mesh", ("control", "agent")),
                 ("nat-egress", ("control", "agent")),
                 ("wireguard", ("control",)),
                 ("protocol-runtime", ("control",)),
@@ -393,114 +383,6 @@ func main() {
                         self.assertIsNotNone(selected)
                         self.assertEqual(entry["sha256"], hashlib.sha256(selected.read() if selected else b"").hexdigest())
 
-    def test_formal_gost_mesh_package_requires_pinned_runtime_inputs(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            signing_key, official_root = generate_ed25519_signer(root, "official")
-            platforms = ("linux/amd64", "linux/arm64")
-            result = run_command(
-                [
-                    sys.executable,
-                    str(BUILDER),
-                    "--package",
-                    "gost-mesh",
-                    "--version",
-                    "4.0.0",
-                    "--out",
-                    str(root / "packages"),
-                    "--formal-release",
-                    "--signing-key",
-                    str(signing_key),
-                    "--official-public-key",
-                    str(official_root),
-                    "--platform",
-                    platforms[0],
-                    "--platform",
-                    platforms[1],
-                    *agent_binary_arguments(root, platforms, ("gost-mesh",)),
-                ]
-            )
-            self.assertNotEqual(0, result.returncode)
-            self.assertIn(b"runtime binary", result.stderr.lower())
-
-    def test_gost_mesh_runtime_payloads_are_pinned_and_packaged(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            spec = next(item for item in BUILD_PACKAGE_MODULE.PACKAGE_SPECS if item.package_id == "gost-mesh")
-            platforms = (("linux", "amd64"), ("linux", "arm64"))
-            agent_inputs = {}
-            runtime_inputs = {}
-            runtime_payloads = {}
-            for platform in platforms:
-                suffix = "-".join(platform)
-                agent = root / f"gost-mesh-agent-{suffix}"
-                runtime_binary = root / f"gost-{suffix}"
-                agent.write_bytes(b"#!/bin/sh\nexit 0\n")
-                runtime_binary.write_bytes(("#!/bin/sh\nprintf 'gost v3.2.6 " + suffix + "\\n'\n").encode())
-                agent.chmod(0o755)
-                runtime_binary.chmod(0o755)
-                agent_inputs[("gost-mesh", platform)] = agent
-                runtime_inputs[("gost-mesh", "gost", platform)] = runtime_binary
-                runtime_payloads[platform] = runtime_binary.read_bytes()
-
-            def runtime_contract(package_id: str, runtime_name: str, platform: tuple[str, str]) -> dict[str, str]:
-                self.assertEqual("gost-mesh", package_id)
-                self.assertEqual("gost", runtime_name)
-                return {"binary_sha256": hashlib.sha256(runtime_payloads[platform]).hexdigest()}
-
-            with mock.patch.object(
-                BUILD_PACKAGE_MODULE,
-                "runtime_binary_contract",
-                side_effect=runtime_contract,
-                create=True,
-            ):
-                entries, contents = BUILD_PACKAGE_MODULE.package_entries(
-                    spec,
-                    "4.0.0",
-                    platforms,
-                    agent_inputs,
-                    runtime_inputs,
-                )
-            artifact = BUILD_PACKAGE_MODULE.deterministic_tar(entries)
-            manifest = BUILD_PACKAGE_MODULE.generated_manifest(spec, "4.0.0", platforms, artifact, contents)
-            self.assertEqual(
-                {
-                    "runtime-gost-linux-amd64": "runtime/linux-amd64/gost",
-                    "runtime-gost-linux-arm64": "runtime/linux-arm64/gost",
-                },
-                manifest["entrypoints"],
-            )
-            paths = {entry.path: entry.data for entry in entries}
-            for platform in platforms:
-                path = f"runtime/{'-'.join(platform)}/gost"
-                self.assertEqual(runtime_payloads[platform], paths[path])
-
-            mismatched_contract = {"binary_sha256": "0" * 64}
-            with mock.patch.object(
-                BUILD_PACKAGE_MODULE,
-                "runtime_binary_contract",
-                return_value=mismatched_contract,
-                create=True,
-            ):
-                with self.assertRaisesRegex(BUILD_PACKAGE_MODULE.PackageBuildError, "runtime binary SHA-256 mismatch"):
-                    BUILD_PACKAGE_MODULE.source_runtime_binary(
-                        "gost-mesh",
-                        "gost",
-                        platforms[0],
-                        runtime_inputs,
-                    )
-
-    def test_shared_gost_runtime_contract_matches_formal_release_workflow(self) -> None:
-        contract = json.loads((REPO_ROOT / "packages" / "gost-mesh" / "runtime-contract.json").read_text(encoding="utf-8"))
-        workflow = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
-        self.assertEqual("anixops.runtime-contract/v1", contract["format"])
-        self.assertEqual("gost", contract["runtime"])
-        self.assertEqual("3.2.6", contract["version"])
-        for goarch, workflow_prefix in (("amd64", "GOST_LINUX_AMD64"), ("arm64", "GOST_LINUX_ARM64")):
-            entry = contract["platforms"]["linux/" + goarch]
-            self.assertIn(f"{workflow_prefix}_ARCHIVE_SHA256: '{entry['archive_sha256']}'", workflow)
-            self.assertIn(f"{workflow_prefix}_BINARY_SHA256: '{entry['binary_sha256']}'", workflow)
-
     def test_artifact_uses_deterministic_gzip_only_when_raw_tar_exceeds_limit(self) -> None:
         entries = [BUILD_PACKAGE_MODULE.ArchiveEntry("runtime/linux-amd64/gost", b"x" * 4096, 0o755)]
         with mock.patch.object(BUILD_PACKAGE_MODULE, "MAX_ARTIFACT_BYTES", 1024):
@@ -518,7 +400,7 @@ func main() {
             spec.package_id for spec in BUILD_PACKAGE_MODULE.PACKAGE_SPECS if BUILD_PACKAGE_MODULE.declares_webui(spec.package_id)
         ]
         # The WebUI bundle is optional; only these packages ship one.
-        self.assertEqual(["forward", "nftables-forward", "gost-mesh", "nat-egress"], with_webui)
+        self.assertEqual(["forward", "nftables-forward", "nat-egress"], with_webui)
         for package_id in with_webui:
             with self.subTest(package_id=package_id):
                 bundle = BUILD_PACKAGE_MODULE.source_webui(package_id, "4.0.0")
@@ -763,7 +645,6 @@ func main() {
             "protocol-runtime",
             "wireguard",
             "forward",
-            "gost-mesh",
             "nftables-forward",
             "nat-egress",
         ):
@@ -786,7 +667,7 @@ func main() {
         # Orders, payments and affiliate are official packages like the
         # others: there is no edition that leaves them out.
         ids = {spec.package_id for spec in BUILD_PACKAGE_MODULE.PACKAGE_SPECS}
-        self.assertEqual(18, len(ids))
+        self.assertEqual(17, len(ids))
         self.assertTrue({"affiliate", "order", "payment", "plan"} <= ids)
         self.assertFalse(hasattr(BUILD_PACKAGE_MODULE, "edition_package_specs"))
 
@@ -804,7 +685,6 @@ func main() {
                     "--out",
                     str(output),
                     *agent_binary_arguments(root),
-                    *runtime_binary_arguments(root),
                 ],
                 cwd=REPO_ROOT,
                 check=False,
@@ -816,8 +696,8 @@ func main() {
             artifacts = sorted(output.glob("*.anxp"))
             sboms = sorted(output.glob("*.sbom.spdx.json"))
             # --all builds every official package.
-            self.assertEqual(18, len(artifacts))
-            self.assertEqual(18, len(sboms))
+            self.assertEqual(17, len(artifacts))
+            self.assertEqual(17, len(sboms))
             for package_id in ("identity-platform", "plan", "affiliate", "order", "payment"):
                 self.assertIn(output / f"{package_id}-4.0.0.anxp", artifacts)
 
@@ -835,7 +715,7 @@ func main() {
                 self.assertRegex(manifest["route_contract_digest"], r"^[0-9a-f]{64}$")
                 self.assertEqual(hashlib.sha256(artifact_path.read_bytes()).hexdigest(), manifest["artifact_sha256"])
                 package_id = manifest["id"]
-                if package_id in {"forward", "nftables-forward", "gost-mesh", "nat-egress"}:
+                if package_id in {"forward", "nftables-forward", "nat-egress"}:
                     self.assertRegex(manifest["frontend_sha256"], r"^[0-9a-f]{64}$")
                     self.assertEqual(manifest["frontend_sha256"], manifest["webui"]["bundle"]["sha256"])
                 else:

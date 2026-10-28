@@ -173,18 +173,6 @@ func (s *ServiceTestSuite) SetupTest() {
 	testutil.CleanupDB(database.Get())
 }
 
-func (s *ServiceTestSuite) TearDownTest() {
-	// Reset pathExists to default after each test
-	pathExists = func(raw string) bool {
-		trimmed := strings.TrimSpace(raw)
-		if trimmed == "" {
-			return false
-		}
-		_, err := os.Stat(trimmed)
-		return err == nil
-	}
-}
-
 // AuthServiceTestSuite 认证服务测试套件
 type AuthServiceTestSuite struct {
 	ServiceTestSuite
@@ -2794,7 +2782,6 @@ func (s *NotificationServiceTestSuite) TearDownTest() {
 	if s.svc != nil {
 		s.svc.Drain()
 	}
-	s.ServiceTestSuite.TearDownTest()
 }
 
 func (s *NotificationServiceTestSuite) SetupTest() {
@@ -3497,62 +3484,6 @@ func TestSystemConfigService(t *testing.T) {
 	suite.Run(t, new(SystemConfigServiceTestSuite))
 }
 
-// ForwardRuleServiceTestSuite 转发规则服务测试套件
-type ForwardRuleServiceTestSuite struct {
-	ServiceTestSuite
-	svc       *ForwardRuleService
-	nodeSvc   *ForwardNodeService
-	relayNode *model.ForwardNode
-	exitNode  *model.ForwardNode
-}
-
-func (s *ForwardRuleServiceTestSuite) SetupSuite() {
-	s.ServiceTestSuite.SetupSuite()
-}
-
-func (s *ForwardRuleServiceTestSuite) TearDownSuite() {
-	s.ServiceTestSuite.TearDownSuite()
-}
-
-func (s *ForwardRuleServiceTestSuite) SetupTest() {
-	s.ServiceTestSuite.SetupTest()
-	s.nodeSvc = NewForwardNodeService(database.Get())
-	s.svc = NewForwardRuleService(database.Get(), s.nodeSvc)
-
-	// 创建中转节点
-	s.relayNode = &model.ForwardNode{
-		Name:     "Test Relay",
-		Type:     model.ForwardNodeTypeRelay,
-		Host:     "192.168.1.100",
-		Port:     443,
-		APIPort:  19090,
-		APIToken: "test-relay-token",
-		Enabled:  true,
-		Status:   model.ForwardNodeStatusOnline,
-	}
-	database.Get().Create(s.relayNode)
-
-	// 创建落地节点
-	s.exitNode = &model.ForwardNode{
-		Name:    "Test Exit",
-		Type:    model.ForwardNodeTypeExit,
-		Host:    "192.168.2.100",
-		Port:    443,
-		Enabled: true,
-		Status:  model.ForwardNodeStatusOnline,
-	}
-	database.Get().Create(s.exitNode)
-}
-
-func (s *ForwardRuleServiceTestSuite) TestGetByID_NotFound() {
-	_, err := s.svc.GetByID(99999)
-	assert.Error(s.T(), err)
-}
-
-func TestForwardRuleService(t *testing.T) {
-	suite.Run(t, new(ForwardRuleServiceTestSuite))
-}
-
 // ptrString 辅助函数
 func ptrString(s string) *string {
 	return &s
@@ -4037,26 +3968,6 @@ func (s *ForwardNodeServiceTestSuite) SkipTestHealthCheck() {
 	// Verify node was checked
 	found, _ := s.svc.GetByID(node.ID)
 	assert.NotZero(s.T(), found.ID)
-}
-
-func (s *ForwardRuleServiceTestSuite) TestGetUserRules() {
-	userID := uint(1)
-	rule := &model.ForwardRule{
-		Name:        "User Rule",
-		Enabled:     true,
-		RelayNodeID: s.relayNode.ID,
-		ListenPort:  10013,
-		Protocol:    "tcp",
-		ExitNodeID:  s.exitNode.ID,
-		TargetHost:  "example.com",
-		TargetPort:  443,
-		UserID:      &userID,
-	}
-	database.Get().Create(rule)
-
-	rules, err := s.svc.GetUserRules(1)
-	assert.NoError(s.T(), err)
-	assert.Len(s.T(), rules, 1)
 }
 
 // Additional InviteService Tests

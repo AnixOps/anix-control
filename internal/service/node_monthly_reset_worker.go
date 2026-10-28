@@ -79,3 +79,7 @@ func (w *NodeMonthlyResetWorker) nextRunTime(now time.Time) time.Time {
 	}
 	return next
 }
+
+func daysInMonth(now time.Time) int {
+	return time.Date(now.Year(), now.Month()+1, 0, 0, 0, 0, 0, now.Location()).Day()
+}

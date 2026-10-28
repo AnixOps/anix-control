@@ -136,9 +136,6 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 	// applied): the script hands it to the join.
 	installPublic.GET("/install/ip", agentInstall.ClientIP)
 
-	forwardFlowHandler := handler.NewForwardHandler()
-	r.POST("/flow/upload", middleware.AppTokenAuth(), forwardFlowHandler.UploadPanelFlowData)
-
 	// API v2
 	v2 := r.Group("/api/v2")
 	v2RouteCache := handler.NewV2RouteCache()
@@ -151,15 +148,6 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		{
 			authPublic.POST("/login", v2PackageGateway.Serve)
 			authPublic.POST("/register", v2PackageGateway.Serve)
-		}
-
-		cleanAgentHandler := handler.NewForwardCleanAgentHandler()
-		forwardAgentPublic := v2.Group("/forward-agent")
-		forwardAgentPublic.Use(publicLimiter.Middleware())
-		{
-			forwardAgentPublic.POST("/register", legacyAgentHTTP, registeredPackageRoute(v2PackageGateway.Serve, "forward", "forward.forward_agent.register.post", cleanAgentHandler.Register))
-			forwardAgentPublic.POST("/heartbeat", legacyAgentHTTP, registeredPackageRoute(v2PackageGateway.Serve, "forward", "forward.forward_agent.heartbeat.post", cleanAgentHandler.Heartbeat))
-			forwardAgentPublic.POST("/report", legacyAgentHTTP, registeredPackageRoute(v2PackageGateway.Serve, "forward", "forward.forward_agent.report.post", cleanAgentHandler.Report))
 		}
 
 		// 支付接口
@@ -352,30 +340,6 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			admin.PUT("/knowledge/:id", registeredPackageRoute(v2PackageGateway.Serve, "knowledge", "knowledge.admin.knowledge.id.put", knowledgeHandler.UpdateArticle))
 			admin.DELETE("/knowledge/:id", registeredPackageRoute(v2PackageGateway.Serve, "knowledge", "knowledge.admin.knowledge.id.delete", knowledgeHandler.DeleteArticle))
 
-			// ========== 流量转发管理 ==========
-			forwardHandler := handler.NewForwardHandler()
-			admin.POST("/forward/list", registeredPackageRoute(v2PackageGateway.Serve, "forward", "forward.admin.forward.list.post", forwardHandler.ListPanelForwards))
-			admin.GET("/forward/runtime/status", registeredPackageRoute(v2PackageGateway.Serve, "forward", "forward.admin.forward.runtime.status.get", forwardHandler.GetPanelRuntimeStatus))
-			admin.GET("/forward/runtime/doctor", registeredPackageRoute(v2PackageGateway.Serve, "forward", "forward.admin.forward.runtime.doctor.get", forwardHandler.DiagnosePanelRuntime))
-			admin.GET("/forward/local/status", registeredPackageRoute(v2PackageGateway.Serve, "forward", "forward.admin.forward.local.status.get", forwardHandler.GetLocalRuntimeStatus))
-			admin.GET("/forward/local/doctor", registeredPackageRoute(v2PackageGateway.Serve, "forward", "forward.admin.forward.local.doctor.get", forwardHandler.DiagnoseLocalRuntime))
-			admin.GET("/forward/nodex/status", registeredPackageRoute(v2PackageGateway.Serve, "gost-mesh", "gost.admin.forward.nodex.status.get", forwardHandler.GetNodeXRuntimeStatus))
-			admin.GET("/forward/nodex/doctor", registeredPackageRoute(v2PackageGateway.Serve, "gost-mesh", "gost.admin.forward.nodex.doctor.get", forwardHandler.DiagnoseNodeXRuntime))
-			// 可观测性 (多入口)
-			admin.GET("/forward/observability/multi-ingress", registeredPackageRoute(v2PackageGateway.Serve, "forward", "forward.admin.forward.observability.multi_ingress.get", forwardHandler.GetObservabilityMultiIngress))
-			admin.POST("/forward/update-order", registeredPackageRoute(v2PackageGateway.Serve, "forward", "forward.admin.forward.update_order.post", forwardHandler.UpdatePanelForwardOrder))
-			admin.POST("/tunnel/create", registeredPackageRoute(v2PackageGateway.Serve, "forward", "forward.admin.tunnel.create.post", forwardHandler.CreatePanelTunnel))
-			admin.POST("/tunnel/list", registeredPackageRoute(v2PackageGateway.Serve, "forward", "forward.admin.tunnel.list.post", forwardHandler.ListPanelAdminTunnels))
-			admin.POST("/tunnel/delete", registeredPackageRoute(v2PackageGateway.Serve, "forward", "forward.admin.tunnel.delete.post", forwardHandler.DeletePanelTunnel))
-			admin.POST("/tunnel/user/tunnel", registeredPackageRoute(v2PackageGateway.Serve, "forward", "forward.admin.tunnel.user.tunnel.post", forwardHandler.ListPanelTunnels))
-			admin.POST("/tunnel/user/assign", registeredPackageRoute(v2PackageGateway.Serve, "forward", "forward.admin.tunnel.user.assign.post", forwardHandler.AssignPanelUserTunnel))
-			admin.POST("/tunnel/user/list", registeredPackageRoute(v2PackageGateway.Serve, "forward", "forward.admin.tunnel.user.list.post", forwardHandler.ListPanelUserTunnels))
-
-			admin.POST("/forward/test-connection", registeredPackageRoute(v2PackageGateway.Serve, "gost-mesh", "gost.admin.forward.test_connection.post", forwardHandler.TestGostConnection))
-
-			// 转发统计
-			admin.GET("/forward/stats", registeredPackageRoute(v2PackageGateway.Serve, "forward", "forward.admin.forward.stats.get", forwardHandler.GetForwardStats))
-
 			// ========== 支付网关管理 ==========
 			paymentGatewayHandler := handler.NewPaymentGatewayHandler()
 
@@ -464,23 +428,8 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			adminCompat := authUser.Group("")
 			adminCompat.Use(middleware.AdminAuth())
 			{
-				forwardCompatHandler := handler.NewForwardHandler()
-				speedLimitHandler := handler.NewSpeedLimitHandler()
 				adminCompat.POST("/user/reset", registeredPackageRoute(v2PackageGateway.Serve, "forward", "forward.user.reset.post", handler.NewAdminHandler().ResetCompatFlow))
-				adminCompat.POST("/speed-limit/create", registeredPackageRoute(v2PackageGateway.Serve, "forward", "forward.speed_limit.create.post", speedLimitHandler.CreatePanelSpeedLimit))
-				adminCompat.POST("/speed-limit/list", registeredPackageRoute(v2PackageGateway.Serve, "forward", "forward.speed_limit.list.post", speedLimitHandler.ListPanelSpeedLimits))
-				adminCompat.POST("/speed-limit/delete", registeredPackageRoute(v2PackageGateway.Serve, "forward", "forward.speed_limit.delete.post", speedLimitHandler.DeletePanelSpeedLimit))
-				adminCompat.POST("/speed-limit/tunnels", registeredPackageRoute(v2PackageGateway.Serve, "forward", "forward.speed_limit.tunnels.post", speedLimitHandler.ListPanelSpeedLimitTunnels))
-				adminCompat.POST("/tunnel/user/assign", registeredPackageRoute(v2PackageGateway.Serve, "forward", "forward.tunnel.user.assign.post", forwardCompatHandler.AssignPanelUserTunnel))
-				adminCompat.POST("/tunnel/user/list", registeredPackageRoute(v2PackageGateway.Serve, "forward", "forward.tunnel.user.list.post", forwardCompatHandler.ListPanelUserTunnels))
 			}
-
-			// 用户转发规则
-			forwardHandler := handler.NewForwardHandler()
-			authUser.GET("/user/forward/rules", registeredPackageRoute(v2PackageGateway.Serve, "forward", "forward.user.forward.rules.get", forwardHandler.GetUserRules))
-			authUser.POST("/forward/list", registeredPackageRoute(v2PackageGateway.Serve, "forward", "forward.forward.list.post", forwardHandler.ListPanelForwards))
-			authUser.POST("/forward/update-order", registeredPackageRoute(v2PackageGateway.Serve, "forward", "forward.forward.update_order.post", forwardHandler.UpdatePanelForwardOrder))
-			authUser.POST("/tunnel/user/tunnel", registeredPackageRoute(v2PackageGateway.Serve, "forward", "forward.tunnel.user.tunnel.post", forwardHandler.ListPanelTunnels))
 
 			// 用户支付
 			paymentGatewayHandler := handler.NewPaymentGatewayHandler()
@@ -609,9 +558,6 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			agentPublic.GET("/ws", legacyAgentWebSocket, registeredPackageWebSocketRoute(v2WebSocketGateway.Serve, "protocol-runtime", "protocol.agent.ws.get", agentHandler.AgentWebSocketUnified, agentHandler.PrepareWebSocketBridge))
 		}
 
-		// 转发规则同步 (Agent 使用)
-		v2.GET("/forward/agent/rules", legacyAgentHTTP, registeredPackageRoute(v2PackageGateway.Serve, "forward", "forward.forward.agent.rules.get", agentHandler.AgentGetForwardRules))
-
 		// Agent 管理接口 (管理员)
 		agentAdmin := v2.Group("/admin/agent")
 		agentAdmin.Use(adminLimiter.Middleware())
@@ -631,9 +577,6 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		internalAPI.Use(adminLimiter.Middleware())
 		internalAPI.Use(middleware.AppTokenAuth())
 		{
-			internalAPI.POST("/forward/traffic/upload", registeredPackageRoute(v2PackageGateway.Serve, "forward", "forward.internal.forward.traffic.upload.post", forwardFlowHandler.UploadPanelFlowData))
-			internalAPI.POST("/forward/traffic/report", registeredPackageRoute(v2PackageGateway.Serve, "forward", "forward.internal.forward.traffic.report.post", forwardFlowHandler.ReportPanelForwardTraffic))
-			internalAPI.POST("/forward/traffic/snapshot", registeredPackageRoute(v2PackageGateway.Serve, "forward", "forward.internal.forward.traffic.snapshot.post", forwardFlowHandler.SnapshotPanelForwardTraffic))
 			// 内部 AuthKey 生成（用于 Ansible 自动化）
 			nodeHandlerForInternal := handler.NewNodeHandler()
 			internalAPI.POST("/auth-keys", registeredPackageRoute(v2PackageGateway.Serve, "proxy-node", "proxy.internal.auth_keys.post", nodeHandlerForInternal.InternalGenerateAuthKey))

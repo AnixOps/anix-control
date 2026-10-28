@@ -176,7 +176,7 @@ func StartKernel(t testing.TB, opts KernelOptions) *Kernel {
 	registry := kernelnodeops.NewRegistry()
 	for _, register := range []func(*kernelnodeops.Registry) error{
 		(&kernelnodeops.Credentials{}).Register, (&kernelnodeops.Retirements{}).Register, (&kernelnodeops.SecretDocuments{}).Register,
-		(&kernelnodeops.Diagnosis{}).Register, (&kernelnodeops.ConnectionTest{}).Register,
+		(&kernelnodeops.Diagnosis{}).Register,
 	} {
 		require.NoError(t, register(registry))
 	}

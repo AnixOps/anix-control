@@ -19,7 +19,6 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/agenttransport"
 	"github.com/AnixOps/anix-control/v5/internal/agentws"
 	"github.com/AnixOps/anix-control/v5/internal/database"
-	"github.com/AnixOps/anix-control/v5/internal/forwardlegacy"
 	"github.com/AnixOps/anix-control/v5/internal/kernelnodeops"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/nodesecrets"
@@ -28,7 +27,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
 )
 
 // agentDiagnosticTaskType is the type of every task an administrator sends
@@ -798,77 +796,7 @@ func (h *AgentHandler) AgentGetTasks(c *gin.Context) {
 		}
 	}
 
-	// 追加持久化的 clean_agent bridge 任务：这些任务存在 DB 里 (重启不丢)，
-	// 只发给目标节点 (node_id 过滤)，取出后原子标记 dispatched 防止并发重复下发。
-	tasks = append(tasks, h.pullBridgeTasks(nodeID)...)
-
 	c.JSON(http.StatusOK, gin.H{"tasks": tasks})
-}
-
-// quietDB is the handler's database with GORM's statement log off, for the
-// statements on a table that Drop may have removed (forwardlegacy): their
-// "no such table" is an answer, not a failure, and the caller logs the
-// failures that are.
-func (h *AgentHandler) quietDB() *gorm.DB {
-	return h.db.Session(&gorm.Session{Logger: logger.Default.LogMode(logger.Silent)})
-}
-
-// pullBridgeTasks 取出该节点尚未下发的 clean_agent bridge 任务并原子标记为 dispatched。
-func (h *AgentHandler) pullBridgeTasks(nodeID uint) []AgentTask {
-	tasks := []AgentTask{}
-	if h.db == nil || nodeID == 0 {
-		return tasks
-	}
-	// Every task poll of every legacy agent comes here, and the table is
-	// gone once the v4.2 upgrade dropped the flux tables (forwardlegacy.Drop):
-	// the node has no bridge task then, and the poll says nothing about it.
-	// Only the database saying the table does not exist means that, so the
-	// statement is the check, with its own failure logged once here, not
-	// by GORM on every poll.
-	var mappings []model.ForwardAgentBridgeTask
-	if err := h.quietDB().
-		Where("node_id = ? AND status = ?", nodeID, model.ForwardAgentBridgeTaskStatusPending).
-		Order("id ASC").
-		Find(&mappings).Error; err != nil {
-		if !forwardlegacy.MissingTable(err, model.ForwardAgentBridgeTask{}.TableName()) {
-			log.Printf("[WARN] agent tasks: load bridge tasks for node %d failed: %v", nodeID, err)
-		}
-		return tasks
-	}
-
-	for idx := range mappings {
-		mapping := mappings[idx]
-		// 原子领取：仅当仍为 pending 时才转为 dispatched，避免并发重复下发。
-		result := h.db.Model(&model.ForwardAgentBridgeTask{}).
-			Where("id = ? AND status = ?", mapping.ID, model.ForwardAgentBridgeTaskStatusPending).
-			Updates(map[string]any{
-				"status":     model.ForwardAgentBridgeTaskStatusDispatched,
-				"dispatched": true,
-			})
-		if result.Error != nil {
-			log.Printf("[WARN] agent tasks: dispatch bridge task %s failed: %v", mapping.TaskID, result.Error)
-			continue
-		}
-		if result.RowsAffected == 0 {
-			continue
-		}
-
-		params := map[string]any{}
-		if trimmed := mapping.Params; trimmed != "" {
-			if err := json.Unmarshal([]byte(trimmed), &params); err != nil {
-				log.Printf("[WARN] agent tasks: bridge task %s params decode failed: %v", mapping.TaskID, err)
-			}
-		}
-
-		tasks = append(tasks, AgentTask{
-			ID:     mapping.TaskID,
-			Type:   mapping.Type,
-			Action: mapping.Action,
-			Params: params,
-		})
-	}
-
-	return tasks
 }
 
 // AgentTask 任务定义
@@ -900,24 +828,7 @@ func (h *AgentHandler) AgentReportResult(c *gin.Context) {
 	// A node reports only its own tasks.
 	result.NodeID = nodeID
 
-	// 若该 task_id 命中持久化的 clean_agent bridge 映射，则回写 runtime job 与 forward 状态。
-	// 幂等：重复上报同一已完成任务直接返回 200，不二次污染终态。
-	if handled, done, err := h.completeBridgeResult(result); errors.Is(err, errAgentTaskNotFound) {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
-		return
-	} else if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	} else if handled {
-		c.JSON(http.StatusOK, gin.H{
-			"message":   "received",
-			"bridged":   true,
-			"duplicate": done,
-		})
-		return
-	}
-
-	// 否则按白名单诊断任务处理，结果落库（重启不丢）。
+	// 按白名单诊断任务处理，结果落库（重启不丢）。
 	var taskStatus *model.AgentDiagnosticTask
 	if h.diagnosticSvc != nil {
 		if err := h.diagnosticSvc.CompleteTask(result.TaskID, result.NodeID, result.Action, result.Success, result.Output, result.Error, result.Duration); errors.Is(err, service.ErrAgentDiagnosticTaskOfAnotherNode) {
@@ -934,33 +845,6 @@ func (h *AgentHandler) AgentReportResult(c *gin.Context) {
 		"message": "received",
 		"data":    taskStatus,
 	})
-}
-
-// completeBridgeResult 处理 clean_agent bridge 任务的结果回写。
-// 返回 (handled, alreadyDone, err)：handled=false 表示该 task_id 不是 bridge 任务
-// (走原内存路径)；handled=true 表示已回写 (或幂等命中已完成态)。
-func (h *AgentHandler) completeBridgeResult(result AgentTaskResult) (bool, bool, error) {
-	if h.db == nil {
-		return false, false, nil
-	}
-	svc := service.NewForwardAgentBridgeService(h.db)
-	mapping, err := svc.LookupBridgeTask(result.TaskID)
-	if err != nil {
-		return false, false, err
-	}
-	if mapping == nil {
-		return false, false, nil
-	}
-	// Another node's forward job is not this node's to complete.
-	if mapping.NodeID != result.NodeID {
-		return false, false, errAgentTaskNotFound
-	}
-
-	done, err := svc.CompleteJob(result.TaskID, result.Success, result.Output, result.Error)
-	if err != nil {
-		return true, false, err
-	}
-	return true, done, nil
 }
 
 // AgentTaskResult 任务结果
@@ -1537,105 +1421,6 @@ type ExecuteCommandRequest struct {
 }
 
 // ========== 转发规则同步 ==========
-
-// AgentGetForwardRules godoc
-// @Summary 获取转发规则
-// @Description Agent 获取该节点的转发规则
-// @Tags Agent
-// @Produce json
-// @Param node_id query int true "节点 ID"
-// @Param X-API-Key header string true "forward node API token"
-// @Success 200 {object} map[string]any
-// @Failure 401 {object} map[string]any
-// @Failure 403 {object} map[string]any
-// @Router /api/v2/forward/agent/rules [get]
-//
-// Only a forward node reads its rules: the request names the node
-// (node_id, or the X-Node-ID header) and carries its API token (the
-// X-API-Key header, or api_key or token), as the agent's other calls do.
-// The route is public, and the rules show where every user's traffic goes.
-func (h *AgentHandler) AgentGetForwardRules(c *gin.Context) {
-	nodeID, err := h.authenticateForwardNodeRequest(c)
-	if err != nil {
-		status := http.StatusUnauthorized
-		if errors.Is(err, errAgentNotForwardNode) {
-			status = http.StatusForbidden
-		}
-		c.JSON(status, gin.H{"error": err.Error()})
-		return
-	}
-
-	// The rules table is gone once the v4.2 upgrade dropped the flux tables
-	// (forwardlegacy.Drop): the node has no rules then, and that is not
-	// logged on every poll. Any other failure is logged and answers as it
-	// always did, no rules.
-	var rules []*model.ForwardRule
-	if err := h.quietDB().Where("relay_node_id = ? OR exit_node_id = ?", nodeID, nodeID).
-		Preload("RelayNode").
-		Preload("ExitNode").
-		Find(&rules).Error; err != nil && !forwardlegacy.MissingTable(err, model.ForwardRule{}.TableName()) {
-		log.Printf("[WARN] agent forward rules: load rules for node %d failed: %v", nodeID, err)
-	}
-
-	// 转换为 Agent 需要的格式
-	var agentRules []ForwardRuleForAgent
-	for _, r := range rules {
-		agentRules = append(agentRules, ForwardRuleForAgent{
-			ID:         r.ID,
-			Enabled:    r.Enabled,
-			ListenPort: r.ListenPort,
-			Protocol:   r.Protocol,
-			TargetHost: r.TargetHost,
-			TargetPort: r.TargetPort,
-		})
-	}
-
-	c.JSON(http.StatusOK, gin.H{"data": agentRules})
-}
-
-// errAgentNotForwardNode refuses a proxy node's credentials where only a
-// forward node may act.
-var errAgentNotForwardNode = errors.New("not a forward node")
-
-// authenticateForwardNodeRequest returns the forward node a REST request
-// authenticates as: the node it names and whose API token it carries. An
-// unknown node and a wrong token are the same error, so the answer does not
-// tell which nodes exist.
-func (h *AgentHandler) authenticateForwardNodeRequest(c *gin.Context) (uint, error) {
-	rawNodeID := c.Query("node_id")
-	if rawNodeID == "" {
-		rawNodeID = c.GetHeader("X-Node-ID")
-	}
-	token := c.GetHeader("X-API-Key")
-	if token == "" {
-		token = c.Query("api_key")
-	}
-	if token == "" {
-		token = c.Query("token")
-	}
-	nodeID, err := strconv.ParseUint(rawNodeID, 10, 32)
-	if err != nil || nodeID == 0 || token == "" {
-		return 0, errors.New("missing node_id or token")
-	}
-	isForwardNode, err := h.verifyForwardNodeToken(uint(nodeID), token)
-	if err != nil {
-		return 0, errAgentInvalidToken
-	}
-	if !isForwardNode {
-		return 0, errAgentNotForwardNode
-	}
-	return uint(nodeID), nil
-}
-
-// ForwardRuleForAgent 转发规则（Agent 格式）
-type ForwardRuleForAgent struct {
-	ID         uint   `json:"id"`
-	Enabled    bool   `json:"enabled"`
-	ListenPort int    `json:"listen_port"`
-	Protocol   string `json:"protocol"`
-	TargetHost string `json:"target_host"`
-	TargetPort int    `json:"target_port"`
-}
 
 // ========== 辅助函数 ==========
 

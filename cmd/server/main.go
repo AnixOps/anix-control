@@ -284,25 +284,6 @@ func resolveSQLitePath(rawDBPath, resolvedConfigPath string) string {
 	return resolveRuntimePath(rawDBPath, resolvedConfigPath)
 }
 
-func resolveForwardRuntimePaths(cfg *config.Config, resolvedConfigPath string) {
-	if cfg == nil {
-		return
-	}
-
-	ansibleCfg := &cfg.ForwardRuntime.NftablesAnsible
-	ansibleCfg.Inventory = resolveRuntimePath(ansibleCfg.Inventory, resolvedConfigPath)
-	ansibleCfg.ApplyPlaybook = resolveRuntimePath(ansibleCfg.ApplyPlaybook, resolvedConfigPath)
-	ansibleCfg.RemovePlaybook = resolveRuntimePath(ansibleCfg.RemovePlaybook, resolvedConfigPath)
-	ansibleCfg.WorkingDir = resolveRuntimePath(ansibleCfg.WorkingDir, resolvedConfigPath)
-
-	if len(ansibleCfg.Environment) == 0 {
-		return
-	}
-	if value := strings.TrimSpace(ansibleCfg.Environment["ANSIBLE_CONFIG"]); value != "" {
-		ansibleCfg.Environment["ANSIBLE_CONFIG"] = resolveRuntimePath(value, resolvedConfigPath)
-	}
-}
-
 // applyTrustedProxies installs server.trusted_proxies: on the gin engine,
 // so Context.ClientIP honours X-Forwarded-For/X-Real-IP only from those
 // proxies, and as the process-wide requestorigin policy, which decides
@@ -318,13 +299,6 @@ func applyTrustedProxies(r *gin.Engine, proxies []string) error {
 	}
 	requestorigin.SetDefault(policy)
 	return nil
-}
-
-func shouldStartForwardAgentBridgeWorker(cfg *config.Config) bool {
-	if cfg == nil {
-		return false
-	}
-	return cfg.ForwardRuntime.CleanAgent.LegacyBridgeEnabled
 }
 
 func setHTMLNoCacheHeaders(c *gin.Context) {
@@ -453,15 +427,12 @@ func run() int {
 			cfg.Database.Host, cfg.Database.Port, cfg.Database.Database, cfg.Database.Username)
 	}
 
-	forwardLegacyDataDir = resolveDataDir(cfg, resolvedConfigPath)
-
 	frontendPath := cfg.Frontend.Path
 	if frontendPath == "" {
 		frontendPath = "web/public"
 	}
 	cfg.Frontend.Path = resolveRuntimePath(frontendPath, resolvedConfigPath)
 	log.Printf("Frontend static path: %s", cfg.Frontend.Path)
-	resolveForwardRuntimePaths(cfg, resolvedConfigPath)
 
 	env := cfg.Env
 	if env == "" {
@@ -697,19 +668,14 @@ func (rt *serverRuntime) start(cfg *config.Config, intervals pluginPollIntervals
 		return err
 	}
 
-	// Periodic resets, stats collection, latency probing and the forward job
-	// executors must run in exactly one Control process per database. They
+	// Periodic resets and latency probing must run in exactly one Control process per database. They
 	// run only while this process holds the singleton-worker lease; another
 	// process (a rolling update, or a second replica) takes over when this
 	// one stops renewing it.
-	bridgeEnabled := shouldStartForwardAgentBridgeWorker(cfg)
-	if !bridgeEnabled {
-		log.Println("Forward clean_agent legacy bridge worker disabled")
-	}
 	elector := &lease.Elector{DB: database.Get(), Name: singletonWorkerLease, Holder: lease.InstanceID(), TTL: singletonWorkerLeaseTTL}
 	rt.workers.Go("singleton worker lease", func(ctx context.Context) {
 		elector.Run(ctx, func(ctx context.Context) {
-			runSingletonWorkers(ctx, bridgeEnabled)
+			runSingletonWorkers(ctx)
 		})
 	})
 

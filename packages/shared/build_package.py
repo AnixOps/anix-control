@@ -81,7 +81,6 @@ PACKAGE_SPECS = (
     PackageSpec("knowledge", ("control",)),
     PackageSpec("machine-telemetry", ("control", "agent")),
     PackageSpec("nftables-forward", ("control", "agent")),
-    PackageSpec("gost-mesh", ("control", "agent"), ("gost",)),
     PackageSpec("nat-egress", ("control", "agent")),
     PackageSpec("wireguard", ("control",)),
     PackageSpec("protocol-runtime", ("control",)),

@@ -147,18 +147,6 @@ func TestEveryWriterDualWrites(t *testing.T) {
 		require.Equal(t, "198.51.100.8:9000", token.Endpoint)
 		requireVerified(t, db)
 
-		// Clean agents: a token for the forward node, then its revocation.
-		issued, err := service.CreateCleanAgentTokenTx(db, service.ForwardCleanAgentCreateInput{Name: "agent", NodeID: &forward.ID})
-		require.NoError(t, err)
-		agentToken := current(t, db, nodesecrets.SubjectCleanAgent, issued.Agent.ID, nodesecrets.KindCleanAgentToken)
-		require.Equal(t, issued.Token, agentToken.Value)
-		require.Equal(t, nodesecrets.StatusActive, agentToken.Status)
-		require.NoError(t, service.RevokeCleanAgentTx(db, issued.Agent.ID))
-		agentToken = current(t, db, nodesecrets.SubjectCleanAgent, issued.Agent.ID, nodesecrets.KindCleanAgentToken)
-		require.Equal(t, nodesecrets.StatusRevoked, agentToken.Status)
-		require.NotNil(t, agentToken.RevokedAt)
-		requireVerified(t, db)
-
 		ansible := &model.ForwardNode{Name: "machine", Type: "exit", Host: "198.51.100.9", Port: 22, APIToken: "fake-forward-token-3", Enabled: true}
 		require.NoError(t, forwards.Create(ansible))
 		ansible.APIToken = ""

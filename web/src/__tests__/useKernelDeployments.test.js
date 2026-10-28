@@ -10,7 +10,7 @@ describe('useKernelDeployments data helpers', () => {
   it('normalizes the assignment payload without changing its kernel field names', () => {
     expect(assignmentPayload({
       service_scope: 'forward',
-      plugin_id: 'gost-mesh',
+      plugin_id: 'nftables-forward',
       role: 'relay',
       desired_version: '1.0.0',
       desired_config_revision: -2,
@@ -18,7 +18,7 @@ describe('useKernelDeployments data helpers', () => {
       rollout_group: 'canary-a',
     })).toEqual({
       service_scope: 'forward',
-      plugin_id: 'gost-mesh',
+      plugin_id: 'nftables-forward',
       role: 'relay',
       desired_version: '1.0.0',
       desired_config_revision: 0,
@@ -34,7 +34,7 @@ describe('useKernelDeployments data helpers', () => {
           key: 'entry',
           kind: 'agent',
           node_id: 11,
-          plugin_id: 'gost-mesh',
+          plugin_id: 'nftables-forward',
           role: 'relay',
           config: '{"listen":{"port":443}}',
         },
@@ -61,7 +61,7 @@ describe('useKernelDeployments data helpers', () => {
       "key": "entry",
       "kind": "agent",
       "node_id": 11,
-      "plugin_id": "gost-mesh",
+      "plugin_id": "nftables-forward",
       "role": "relay",
       "config": {
         "listen": {
@@ -97,7 +97,7 @@ describe('useKernelDeployments data helpers', () => {
           key: 'entry',
           kind: 'agent',
           node_id: 11,
-          plugin_id: 'gost-mesh',
+          plugin_id: 'nftables-forward',
           role: 'relay',
           config: '{"listen":{"port":443}}',
         },

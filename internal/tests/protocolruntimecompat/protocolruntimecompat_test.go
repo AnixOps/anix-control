@@ -51,7 +51,7 @@ func seedTasks(t testing.TB, db *gorm.DB) {
 	for i := 1; i <= 57; i++ {
 		task := model.AgentDiagnosticTask{
 			ID: uint(i), TaskID: fmt.Sprintf("task-%03d", i), NodeID: uint(i%3 + 1), Action: "service_status",
-			Params: `{"service":"gost"}`, Status: statuses[i%4], DurationMS: int64(i * 7),
+			Params: `{"service":"anix-agent"}`, Status: statuses[i%4], DurationMS: int64(i * 7),
 			CreatedAt: seeded.Add(time.Duration(i) * time.Minute), UpdatedAt: seeded.Add(time.Duration(i)*time.Minute + time.Second),
 		}
 		switch i % 4 {

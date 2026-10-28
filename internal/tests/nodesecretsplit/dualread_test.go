@@ -42,8 +42,6 @@ type fleet struct {
 	reality         model.NodeProtocol
 	realityPrivate  string
 	forward         model.ForwardNode
-	agent           model.ForwardCleanAgent
-	agentToken      string
 	wireGuard       model.NodeProtocol
 	user            model.User
 	peer            model.WireGuardPeer
@@ -89,9 +87,6 @@ func newFleet(t *testing.T, db *gorm.DB) *fleet {
 	// so the forward node's id stays clear of the proxy nodes'.
 	f.forward = model.ForwardNode{ID: 900, Name: "relay", Type: "relay", Host: "198.51.100.50", Port: 443, APIPort: 9000, APIToken: "fake-fleet-forward-token", Enabled: true}
 	require.NoError(t, service.NewForwardNodeService(db).Create(&f.forward))
-	issued, err := service.CreateCleanAgentTokenTx(db, service.ForwardCleanAgentCreateInput{Name: "agent", NodeID: &f.forward.ID})
-	require.NoError(t, err)
-	f.agent, f.agentToken = *issued.Agent, issued.Token
 
 	private, err := ecdh.X25519().GenerateKey(rand.Reader)
 	require.NoError(t, err)
@@ -121,7 +116,6 @@ func (f *fleet) readerResults(t *testing.T, db *gorm.DB, round int) map[string]b
 	router.POST("/signed", middleware.NodeAPIKeyAuth(), middleware.SignatureAuth(), ok)
 	agents := handler.NewAgentHandler()
 	router.GET("/agent", agents.RequireAgentNode, ok)
-	router.GET("/forward-rules", agents.AgentGetForwardRules)
 	router.GET("/credentials/:id", handler.NewNodeHandler().GetNodeCredentials)
 	router.GET("/config", middleware.NodeAuth(), handler.NewUniProxyHandler().GetConfig)
 	serve := func(method, path string, nodeID uint, key string, body string, header map[string]string) *httptest.ResponseRecorder {
@@ -204,14 +198,8 @@ func (f *fleet) readerResults(t *testing.T, db *gorm.DB, round int) map[string]b
 	_, err := service.NewNodeService().RegisterNode(&model.NodeRegisterRequest{AuthKey: f.registrationKey, Name: fmt.Sprintf("again-%d", round), Port: 443}, "192.0.2.51")
 	results["registration"] = err == nil
 
-	// The forward node's agent, and its clean agent.
+	// The forward node's agent.
 	results["forward agent"] = serve(http.MethodGet, "/agent", f.forward.ID, "fake-fleet-forward-token", "", nil).Code == http.StatusOK
-	results["forward rules"] = serve(http.MethodGet, "/forward-rules", f.forward.ID, "fake-fleet-forward-token", "", nil).Code == http.StatusOK
-	cleanAgents := service.NewForwardCleanAgentService(db)
-	_, err = cleanAgents.Heartbeat(service.ForwardCleanAgentHeartbeatInput{AgentID: f.agent.ID, Token: f.agentToken})
-	results["clean agent heartbeat"] = err == nil
-	_, err = cleanAgents.Register(service.ForwardCleanAgentRegisterInput{Token: f.agentToken, NodeID: &f.forward.ID})
-	results["clean agent register"] = err == nil
 
 	// The WireGuard peer in a subscription and in the node's user list.
 	peer, err := service.NewSubscriptionService().GetOrCreateWireGuardPeer(f.wireGuard.ID, f.user.ID, "10.66.0.0/24")
@@ -270,8 +258,6 @@ func olderBinaryAuthenticates(t *testing.T, db *gorm.DB, f *fleet) {
 	var forward model.ForwardNode
 	require.NoError(t, db.First(&forward, f.forward.ID).Error)
 	require.Equal(t, "fake-fleet-forward-token", forward.APIToken)
-	var agent model.ForwardCleanAgent
-	require.NoError(t, db.Where("id = ? AND token = ?", f.agent.ID, f.agentToken).First(&agent).Error)
 	var protocol model.NodeProtocol
 	require.NoError(t, db.First(&protocol, f.reality.ID).Error)
 	require.Contains(t, *protocol.RealitySettings, f.realityPrivate)
@@ -321,7 +307,7 @@ func TestEveryReaderInEachPhase(t *testing.T) {
 		for _, counted := range [][2]string{
 			{nodesecrets.TableNode, nodesecrets.KindNodeSharedSecret}, {nodesecrets.TableNode, "raw_config"},
 			{nodesecrets.TableAuthorizedKey, nodesecrets.KindRegistrationKey},
-			{nodesecrets.TableForwardNode, nodesecrets.KindForwardNodeToken}, {nodesecrets.TableCleanAgent, nodesecrets.KindCleanAgentToken},
+			{nodesecrets.TableForwardNode, nodesecrets.KindForwardNodeToken},
 			{nodesecrets.TableNodeProtocol, "reality_settings"}, {nodesecrets.TableWireGuardPeer, "private_key"},
 		} {
 			require.NotZero(t, nodesecrets.FallbackCount(counted[0], counted[1], nodesecrets.FallbackMissing), "%v", counted)
@@ -354,7 +340,6 @@ func (f *fleet) moveLegacySecrets(t *testing.T, db *gorm.DB) {
 			UpdateColumns(map[string]any{"key": nodesecrets.Tombstone(uint64(key.ID)), "key_hash": ""}).Error)
 	}
 	require.NoError(t, db.Model(&model.ForwardNode{}).Where("id = ?", f.forward.ID).UpdateColumn("api_token", "").Error)
-	require.NoError(t, db.Model(&model.ForwardCleanAgent{}).Where("id = ?", f.agent.ID).UpdateColumn("token", nodesecrets.Tombstone(uint64(f.agent.ID))).Error)
 	var protocols []model.NodeProtocol
 	require.NoError(t, db.Where("id IN ?", []uint{f.reality.ID, f.wireGuard.ID}).Find(&protocols).Error)
 	for _, protocol := range protocols {

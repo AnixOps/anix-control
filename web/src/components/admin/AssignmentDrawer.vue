@@ -110,7 +110,6 @@ const OFFICIAL_PLUGIN_ROLES = Object.freeze({
   'machine-telemetry': ['telemetry'],
   'nftables-forward': ['cn_dedicated_nftables', 'entry'],
   'nat-egress': ['nat_egress', 'overseas_exit'],
-  'gost-mesh': ['relay', 'tunnel_entry', 'tunnel_exit', 'cn_standard_tunnel_entry'],
 })
 
 const props = defineProps({

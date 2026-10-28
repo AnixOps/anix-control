@@ -2,12 +2,10 @@ package handler
 
 import (
 	"bytes"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
 	"testing"
-	"time"
 
 	"github.com/AnixOps/anix-control/v5/internal/cache"
 	"github.com/AnixOps/anix-control/v5/internal/config"
@@ -102,23 +100,8 @@ func as(nodeID uint, token string) map[string]string {
 	return map[string]string{"X-Node-ID": strconv.FormatUint(uint64(nodeID), 10), "X-API-Key": token}
 }
 
-// seedBridgeJob queues a forward runtime job for nodeID through the
-// clean_agent bridge.
-func (s *AgentHTTPAuthTestSuite) seedBridgeJob(nodeID uint) (*model.ForwardRuntimeJob, *model.ForwardAgentBridgeTask) {
-	forward := &model.Forward{Name: "bridge-forward", InPort: 30001, RemoteAddr: "127.0.0.1:9000", Status: model.ForwardStatusActive, RuntimeBackend: model.ForwardRuntimeBackendCleanAgent}
-	s.Require().NoError(s.db.Create(forward).Error)
-	now := time.Now()
-	job := &model.ForwardRuntimeJob{Backend: model.ForwardRuntimeBackendCleanAgent, Action: model.ForwardRuntimeJobActionCreate, ResourceType: "panel_forward",
-		ForwardID: &forward.ID, NodeID: &nodeID, Status: model.ForwardRuntimeJobStatusRunning, StartedAt: &now}
-	s.Require().NoError(s.db.Create(job).Error)
-	mapping := &model.ForwardAgentBridgeTask{TaskID: fmt.Sprintf("forward-runtime-job-%d", job.ID), RuntimeJobID: job.ID, NodeID: nodeID, ForwardID: &forward.ID,
-		Action: model.ForwardRuntimeJobActionCreate, Type: "forward", Params: "{}", Status: model.ForwardAgentBridgeTaskStatusPending}
-	s.Require().NoError(s.db.Create(mapping).Error)
-	return job, mapping
-}
-
 func (s *AgentHTTPAuthTestSuite) seedDiagnosticTask(taskID string, nodeID uint, status string) {
-	s.Require().NoError(s.db.Create(&model.AgentDiagnosticTask{TaskID: taskID, NodeID: nodeID, Action: "service_status", Params: `{"service":"gost"}`, Status: status}).Error)
+	s.Require().NoError(s.db.Create(&model.AgentDiagnosticTask{TaskID: taskID, NodeID: nodeID, Action: "service_status", Params: `{"service":"anix-agent"}`, Status: status}).Error)
 }
 
 func (s *AgentHTTPAuthTestSuite) forwardNodeStatus(id uint) int {
@@ -127,14 +110,8 @@ func (s *AgentHTTPAuthTestSuite) forwardNodeStatus(id uint) int {
 	return node.Status
 }
 
-func (s *AgentHTTPAuthTestSuite) requireUntouched(handler *AgentHandler, job *model.ForwardRuntimeJob, mapping *model.ForwardAgentBridgeTask) {
+func (s *AgentHTTPAuthTestSuite) requireUntouched(handler *AgentHandler) {
 	s.Equal(model.ForwardNodeStatusOffline, s.forwardNodeStatus(s.relayA.ID), "a node was marked online")
-	var reloadedMapping model.ForwardAgentBridgeTask
-	s.Require().NoError(s.db.First(&reloadedMapping, mapping.ID).Error)
-	s.Equal(model.ForwardAgentBridgeTaskStatusPending, reloadedMapping.Status, "a queued forward task was taken")
-	var reloadedJob model.ForwardRuntimeJob
-	s.Require().NoError(s.db.First(&reloadedJob, job.ID).Error)
-	s.Equal(model.ForwardRuntimeJobStatusRunning, reloadedJob.Status, "a forward runtime job was completed")
 	var diagnostic model.AgentDiagnosticTask
 	s.Require().NoError(s.db.Where("task_id = ?", "task-a").First(&diagnostic).Error)
 	s.Equal(model.AgentDiagnosticTaskStatusPending, diagnostic.Status, "a diagnostic task was taken or completed")
@@ -148,13 +125,11 @@ func (s *AgentHTTPAuthTestSuite) requireUntouched(handler *AgentHandler, job *mo
 // Without the node's credentials, or with another node's or a wrong token,
 // no route changes anything, behind the kernel's middleware or not.
 func (s *AgentHTTPAuthTestSuite) TestRoutesRefuseRequestsWithoutTheNodesCredentials() {
-	job, mapping := s.seedBridgeJob(s.relayA.ID)
 	s.seedDiagnosticTask("task-a", s.relayA.ID, model.AgentDiagnosticTaskStatusPending)
 	nodeA := strconv.FormatUint(uint64(s.relayA.ID), 10)
 	requests := []struct{ method, path, body string }{
 		{"POST", "/api/v2/agent/heartbeat", `{"node_id":` + nodeA + `}`},
 		{"GET", "/api/v2/agent/tasks?node_id=" + nodeA, ""},
-		{"POST", "/api/v2/agent/result", `{"task_id":"` + mapping.TaskID + `","node_id":` + nodeA + `,"success":true,"output":"forged"}`},
 		{"POST", "/api/v2/agent/result", `{"task_id":"task-a","node_id":` + nodeA + `,"success":true,"output":"forged"}`},
 		{"POST", "/api/v2/agent/result", `{"task_id":"task-forged","node_id":` + nodeA + `,"success":true,"output":"forged"}`},
 		{"POST", "/api/v2/agent/monitor", `{"node_id":` + nodeA + `,"system":{"cpu":99}}`},
@@ -175,13 +150,12 @@ func (s *AgentHTTPAuthTestSuite) TestRoutesRefuseRequestsWithoutTheNodesCredenti
 			}
 		}
 	}
-	s.requireUntouched(handler, job, mapping)
+	s.requireUntouched(handler)
 }
 
 // An authenticated node acts only as itself: it cannot report for another
 // node, take its tasks or complete them.
 func (s *AgentHTTPAuthTestSuite) TestANodeActsOnlyAsItself() {
-	job, mapping := s.seedBridgeJob(s.relayA.ID)
 	s.seedDiagnosticTask("task-a", s.relayA.ID, model.AgentDiagnosticTaskStatusPending)
 	nodeA := strconv.FormatUint(uint64(s.relayA.ID), 10)
 	handler := NewAgentHandler()
@@ -195,8 +169,6 @@ func (s *AgentHTTPAuthTestSuite) TestANodeActsOnlyAsItself() {
 	w = s.send(router, "POST", "/api/v2/agent/result", `{"task_id":"task-a","node_id":`+nodeA+`,"success":true}`, asB)
 	s.Equal(http.StatusForbidden, w.Code, w.Body.String())
 	// Without a node_id the result is node B's: node A's tasks are not found.
-	w = s.send(router, "POST", "/api/v2/agent/result", `{"task_id":"`+mapping.TaskID+`","success":true,"output":"forged"}`, asB)
-	s.Equal(http.StatusNotFound, w.Code, w.Body.String())
 	w = s.send(router, "POST", "/api/v2/agent/result", `{"task_id":"task-a","success":true,"output":"forged"}`, asB)
 	s.Equal(http.StatusNotFound, w.Code, w.Body.String())
 	// The node_id query of the tasks poll names the node that authenticates.
@@ -211,13 +183,7 @@ func (s *AgentHTTPAuthTestSuite) TestANodeActsOnlyAsItself() {
 	asA := as(s.relayA.ID, relayAToken)
 	w = s.send(router, "GET", "/api/v2/agent/tasks", "", asA)
 	s.Equal(http.StatusOK, w.Code, w.Body.String())
-	s.Contains(w.Body.String(), mapping.TaskID)
 	s.Contains(w.Body.String(), `"task-a"`)
-	w = s.send(router, "POST", "/api/v2/agent/result", `{"task_id":"`+mapping.TaskID+`","success":true,"output":"applied"}`, asA)
-	s.Equal(http.StatusOK, w.Code, w.Body.String())
-	var reloadedJob model.ForwardRuntimeJob
-	s.Require().NoError(s.db.First(&reloadedJob, job.ID).Error)
-	s.Equal(model.ForwardRuntimeJobStatusSuccess, reloadedJob.Status)
 	w = s.send(router, "POST", "/api/v2/agent/result", `{"task_id":"task-a","success":true,"output":"active"}`, asA)
 	s.Equal(http.StatusOK, w.Code, w.Body.String())
 	var diagnostic model.AgentDiagnosticTask

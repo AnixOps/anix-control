@@ -239,7 +239,7 @@ func TestNodeDiagnosticsWhitelist(t *testing.T) {
 // (or diag.v1 for the forward checks), answers 409 with a code per cause.
 func TestNodeDiagnosticsUnavailable(t *testing.T) {
 	env := newDiagnosticsEnv(t)
-	status := `{"action":"service_status","params":{"service":"gost"}}`
+	status := `{"action":"service_status","params":{"service":"anix-agent"}}`
 	check := `{"action":"forward.listen","params":{"route_id":"r1","hop_index":0}}`
 
 	response := env.call(t, 7, http.MethodPost, "/nodes/proxy-5/diagnostics", status)
@@ -279,14 +279,14 @@ func TestNodeDiagnosticsRestartNeedsSuperAdmin(t *testing.T) {
 	env.streams.answer = func(*agentv1pb.DesiredOperation) *agentv1pb.ObservedState {
 		return succeeded(`{"success":true,"output":"restarted","duration_ms":9}`)
 	}
-	restart := `{"action":"service_restart","params":{"service":"gost"}}`
+	restart := `{"action":"service_restart","params":{"service":"anix-agent"}}`
 
 	response := env.call(t, 8, http.MethodPost, "/nodes/proxy-5/diagnostics", restart)
 	require.Equal(t, http.StatusForbidden, response.Code)
 	assert.Equal(t, "super_admin_required", errorCode(t, response))
 	assert.Empty(t, env.streams.operations())
 
-	response = env.call(t, 8, http.MethodPost, "/nodes/proxy-5/diagnostics", `{"action":"service_status","params":{"service":"gost"}}`)
+	response = env.call(t, 8, http.MethodPost, "/nodes/proxy-5/diagnostics", `{"action":"service_status","params":{"service":"anix-agent"}}`)
 	require.Equal(t, http.StatusOK, response.Code, response.Body.String())
 
 	response = env.call(t, 7, http.MethodPost, "/nodes/proxy-5/diagnostics", restart)
@@ -316,7 +316,7 @@ func TestNodeDiagnosticsRunOnTheStream(t *testing.T) {
 	}
 
 	response := env.call(t, 7, http.MethodPost, "/nodes/proxy-5/diagnostics",
-		`{"action":"log_tail","params":{"service":"gost","lines":5000,"extra":"dropped"},"timeout_seconds":20}`)
+		`{"action":"log_tail","params":{"service":"anix-agent","lines":5000,"extra":"dropped"},"timeout_seconds":20}`)
 	require.Equal(t, http.StatusOK, response.Code, response.Body.String())
 	result := decodeData[kernelnodeops.NodeDiagnosticResult](t, response)
 	assert.True(t, result.Success)
@@ -342,7 +342,7 @@ func TestNodeDiagnosticsRunOnTheStream(t *testing.T) {
 	require.NoError(t, json.Unmarshal(sent[0].GetPayloadJson(), &payload))
 	assert.Equal(t, "diagnostic", payload.Task.Type)
 	assert.Equal(t, 20, payload.Task.Timeout)
-	assert.Equal(t, map[string]any{"service": "gost", "lines": float64(1000)}, payload.Task.Params)
+	assert.Equal(t, map[string]any{"service": "anix-agent", "lines": float64(1000)}, payload.Task.Params)
 
 	var row model.AgentDiagnosticTask
 	require.NoError(t, env.db.Where("task_id = ?", result.TaskID).First(&row).Error)
@@ -361,7 +361,7 @@ func TestNodeDiagnosticsRunOnTheStream(t *testing.T) {
 	assert.Equal(t, 1, rows[0].Status)
 
 	// The default is 30 seconds.
-	response = env.call(t, 7, http.MethodPost, "/nodes/proxy-5/diagnostics", `{"action":"service_status","params":{"service":"gost"}}`)
+	response = env.call(t, 7, http.MethodPost, "/nodes/proxy-5/diagnostics", `{"action":"service_status","params":{"service":"anix-agent"}}`)
 	require.Equal(t, http.StatusOK, response.Code)
 	sent = env.streams.operations()
 	require.Len(t, sent, 2)
@@ -375,7 +375,7 @@ func TestNodeDiagnosticsRunOnTheStream(t *testing.T) {
 func TestNodeDiagnosticsAgentOutcomes(t *testing.T) {
 	env := newDiagnosticsEnv(t)
 	env.streams.connect(proxy(5), diagnosticsCapabilities)
-	status := `{"action":"service_status","params":{"service":"gost"}}`
+	status := `{"action":"service_status","params":{"service":"anix-agent"}}`
 
 	env.streams.answer = func(*agentv1pb.DesiredOperation) *agentv1pb.ObservedState {
 		return succeeded(`{"success":false,"output":"inactive (dead)","error":"exit status 3","duration_ms":4}`)
@@ -405,7 +405,7 @@ func TestNodeDiagnosticsAgentOutcomes(t *testing.T) {
 
 	env.streams.refuse = ""
 	started := time.Now()
-	response = env.call(t, 7, http.MethodPost, "/nodes/proxy-5/diagnostics", `{"action":"service_status","params":{"service":"gost"},"timeout_seconds":1}`)
+	response = env.call(t, 7, http.MethodPost, "/nodes/proxy-5/diagnostics", `{"action":"service_status","params":{"service":"anix-agent"},"timeout_seconds":1}`)
 	require.Equal(t, http.StatusGatewayTimeout, response.Code, response.Body.String())
 	assert.Equal(t, "diagnostic_timeout", errorCode(t, response))
 	assert.Less(t, time.Since(started), 5*time.Second, "the answer comes at the request's own time")
@@ -429,12 +429,12 @@ func TestNodeDiagnosticsTimeoutBounds(t *testing.T) {
 	}
 	for _, seconds := range []string{"0", "-1", "121", "3600"} {
 		response := env.call(t, 7, http.MethodPost, "/nodes/proxy-5/diagnostics",
-			`{"action":"service_status","params":{"service":"gost"},"timeout_seconds":`+seconds+`}`)
+			`{"action":"service_status","params":{"service":"anix-agent"},"timeout_seconds":`+seconds+`}`)
 		require.Equal(t, http.StatusBadRequest, response.Code, seconds)
 		assert.Equal(t, "invalid_request", errorCode(t, response))
 	}
 	response := env.call(t, 7, http.MethodPost, "/nodes/proxy-5/diagnostics",
-		`{"action":"service_status","params":{"service":"gost"},"timeout_seconds":120}`)
+		`{"action":"service_status","params":{"service":"anix-agent"},"timeout_seconds":120}`)
 	require.Equal(t, http.StatusOK, response.Code)
 	sent := env.streams.operations()
 	require.Len(t, sent, 1)
@@ -489,7 +489,7 @@ func TestNodeDiagnosticsForwardNode(t *testing.T) {
 	assert.Equal(t, "node_diagnostic_forward_connect", rows[0].Action)
 
 	// The proxy node of the same id has no Agent here.
-	response = env.call(t, 7, http.MethodPost, "/nodes/proxy-5/diagnostics", `{"action":"service_status","params":{"service":"gost"}}`)
+	response = env.call(t, 7, http.MethodPost, "/nodes/proxy-5/diagnostics", `{"action":"service_status","params":{"service":"anix-agent"}}`)
 	assert.Equal(t, http.StatusConflict, response.Code)
 }
 
@@ -501,7 +501,7 @@ func TestNodeDiagnosticsOnePerNode(t *testing.T) {
 	env.streams.answer = func(*agentv1pb.DesiredOperation) *agentv1pb.ObservedState {
 		return succeeded(`{"success":true,"output":"ok"}`)
 	}
-	status := `{"action":"service_status","params":{"service":"gost"}}`
+	status := `{"action":"service_status","params":{"service":"anix-agent"}}`
 	first := make(chan *httptest.ResponseRecorder, 1)
 	go func() { first <- env.call(t, 7, http.MethodPost, "/nodes/proxy-5/diagnostics", status) }()
 	require.Eventually(t, func() bool { return len(env.audits(t)) == 1 }, 5*time.Second, 5*time.Millisecond)
@@ -574,7 +574,7 @@ func TestNodeDiagnosticsList(t *testing.T) {
 	assert.Empty(t, idle.Tasks)
 
 	for range 3 {
-		require.Equal(t, http.StatusOK, env.call(t, 7, http.MethodPost, "/nodes/proxy-5/diagnostics", `{"action":"service_status","params":{"service":"gost"}}`).Code)
+		require.Equal(t, http.StatusOK, env.call(t, 7, http.MethodPost, "/nodes/proxy-5/diagnostics", `{"action":"service_status","params":{"service":"anix-agent"}}`).Code)
 	}
 	listed := decodeData[listing](t, env.call(t, 8, http.MethodGet, "/nodes/proxy-5/diagnostics?limit=2", ""))
 	assert.False(t, listed.CanRestart, "staff read, a super administrator restarts")
@@ -604,10 +604,10 @@ func TestNodeDiagnosticsList(t *testing.T) {
 		}
 	}
 	assert.Equal(t, 4, forwardChecks)
-	assert.Equal(t, []string{"gost"}, other.Services)
+	assert.Empty(t, other.Services, "a forward node runs no service of its own since gost went")
 
-	// A forwarding proxy node runs both units, its Agent's first.
+	// A forwarding proxy node runs only its Agent.
 	env.streams.connect(proxy(5), diagnosticsCapabilities, agentcontrol.CapabilityDiag)
 	forwarding := decodeData[listing](t, env.call(t, 7, http.MethodGet, "/nodes/proxy-5/diagnostics", ""))
-	assert.Equal(t, []string{"anix-agent", "gost"}, forwarding.Services)
+	assert.Equal(t, []string{"anix-agent"}, forwarding.Services)
 }

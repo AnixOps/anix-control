@@ -67,7 +67,7 @@ func TestSetup_AdminAPITokens(t *testing.T) {
 	for _, path := range []string{
 		"/api/v3/access-groups?scope_id=forward",
 		"/api/v4/kernel/alerts",
-		"/api/v2/admin/forward/runtime/status",
+		"/api/v2/admin/knowledge",
 		"/api/v2/admin/agent/list",
 	} {
 		for name, token := range map[string]string{"admin": adminToken, "read": readToken} {

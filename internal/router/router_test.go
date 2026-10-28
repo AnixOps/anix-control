@@ -233,8 +233,7 @@ func seedV2TaskEightPackages(t *testing.T, publicKey ed25519.PublicKey, privateK
 	seedV2TaskSixPackage(t, "proxy-node", "Proxy Node", `{"api_version":"v2","package_id":"proxy-node","routes":[{"method":"GET","legacy_path":"/api/v2/admin/nodes","package_route":"proxy.admin.nodes.get","envelope":"data"}]}`, publicKey, privateKey)
 	seedV2TaskSixPackage(t, "protocol-runtime", "Protocol Runtime", `{"api_version":"v2","package_id":"protocol-runtime","routes":[{"method":"GET","legacy_path":"/api/v2/agent/tasks","package_route":"protocol.agent.tasks.get","envelope":"raw"},{"method":"POST","legacy_path":"/api/v2/agent/heartbeat","package_route":"protocol.agent.heartbeat.post","envelope":"raw"}]}`, publicKey, privateKey)
 	seedV2TaskSixPackage(t, "wireguard", "WireGuard", `{"api_version":"v2","package_id":"wireguard","routes":[{"method":"POST","legacy_path":"/api/v2/admin/wireguard/keypair","package_route":"wireguard.admin.wireguard.keypair.post","envelope":"data"}]}`, publicKey, privateKey)
-	seedV2TaskSixPackage(t, "forward", "Forward", `{"api_version":"v2","package_id":"forward","routes":[{"method":"GET","legacy_path":"/api/v2/user/forward/rules","package_route":"forward.user.forward.rules.get","envelope":"data"}]}`, publicKey, privateKey)
-	seedV2TaskSixPackage(t, "gost-mesh", "Gost Mesh", `{"api_version":"v2","package_id":"gost-mesh","routes":[{"method":"GET","legacy_path":"/api/v2/admin/forward/nodex/status","package_route":"gost.admin.forward.nodex.status.get","envelope":"data"}]}`, publicKey, privateKey)
+	seedV2TaskSixPackage(t, "forward", "Forward", `{"api_version":"v2","package_id":"forward","routes":[{"method":"POST","legacy_path":"/api/v2/user/reset","package_route":"forward.user.reset.post","envelope":"data"}]}`, publicKey, privateKey)
 }
 
 func v2TestPackage(t *testing.T, files map[string][]byte) []byte {
@@ -355,8 +354,6 @@ func TestV2TaskEightRepresentativeRoutesUsePackageHosts(t *testing.T) {
 		{method: http.MethodGet, path: "/api/v2/admin/dashboard", routeID: "telemetry.admin.dashboard.get", admin: true},
 		{method: http.MethodGet, path: "/api/v2/admin/nodes", routeID: "proxy.admin.nodes.get", admin: true},
 		{method: http.MethodPost, path: "/api/v2/admin/wireguard/keypair", routeID: "wireguard.admin.wireguard.keypair.post", admin: true},
-		{method: http.MethodGet, path: "/api/v2/user/forward/rules", routeID: "forward.user.forward.rules.get"},
-		{method: http.MethodGet, path: "/api/v2/admin/forward/nodex/status", routeID: "gost.admin.forward.nodex.status.get", admin: true},
 	} {
 		t.Run(test.routeID, func(t *testing.T) {
 			var response *httptest.ResponseRecorder
@@ -496,7 +493,7 @@ func TestAllCataloguedV2RoutesResolveThroughTheirPackageBridge(t *testing.T) {
 		})
 	}
 	require.Equal(t, 26, identityRoutes)
-	require.Equal(t, 210, bridgedRoutes)
+	require.Equal(t, 176, bridgedRoutes)
 }
 
 // Old identity-platform and plan releases still declare the routes that
@@ -511,7 +508,7 @@ func TestMovedV2RoutesKeepTheirOldIdentityRouteIDs(t *testing.T) {
 		catalog[route.Method+" "+route.Path] = route
 	}
 	moved := compatv2.MovedRoutes()
-	require.Len(t, moved, 20)
+	require.Len(t, moved, 16)
 	for _, route := range moved {
 		entry, ok := catalog[route.Method+" "+route.LegacyPath]
 		require.True(t, ok, route.LegacyPath)
@@ -1157,29 +1154,6 @@ func TestSetup_CustomSubscribePath(t *testing.T) {
 	assert.NotEqual(t, http.StatusNotFound, w.Code)
 }
 
-func TestSetup_AdminForwardEndpoints(t *testing.T) {
-	r, _ := setupTestRouter(t)
-	defer teardownTestRouter(t)
-
-	endpoints := []struct {
-		method string
-		path   string
-	}{
-		{"GET", "/api/v2/admin/forward/stats"},
-	}
-
-	for _, ep := range endpoints {
-		t.Run(ep.path, func(t *testing.T) {
-			req, _ := http.NewRequest(ep.method, ep.path, nil)
-			w := httptest.NewRecorder()
-			r.ServeHTTP(w, req)
-
-			// Should return 401 Unauthorized (needs auth)
-			assert.Equal(t, http.StatusUnauthorized, w.Code)
-		})
-	}
-}
-
 func TestSetup_AdminPaymentGatewayEndpoints(t *testing.T) {
 	r, _ := setupTestRouter(t)
 	defer teardownTestRouter(t)
@@ -1281,7 +1255,7 @@ func TestEveryCataloguedV2RouteResolvesToItsOwnRouteID(t *testing.T) {
 	require.True(t, ok)
 	routeFiles, err := filepath.Glob(filepath.Join(filepath.Dir(sourceFile), "..", "..", "packages", "*", "compat", "v2-routes.json"))
 	require.NoError(t, err)
-	require.Len(t, routeFiles, 18)
+	require.Len(t, routeFiles, 17)
 	for _, routeFile := range routeFiles {
 		raw, err := os.ReadFile(routeFile)
 		require.NoError(t, err)

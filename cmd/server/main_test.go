@@ -221,23 +221,6 @@ func TestApplyTrustedProxiesSetsTheRequestOriginPolicy(t *testing.T) {
 	}
 }
 
-func TestShouldStartForwardAgentBridgeWorkerDisabledByDefault(t *testing.T) {
-	if shouldStartForwardAgentBridgeWorker(nil) {
-		t.Fatal("nil config should not start forward agent bridge worker")
-	}
-	if shouldStartForwardAgentBridgeWorker(&appconfig.Config{}) {
-		t.Fatal("legacy bridge worker should be opt-in so clean_agent direct pull owns pending jobs by default")
-	}
-}
-
-func TestShouldStartForwardAgentBridgeWorkerWhenLegacyBridgeEnabled(t *testing.T) {
-	cfg := &appconfig.Config{}
-	cfg.ForwardRuntime.CleanAgent.LegacyBridgeEnabled = true
-	if !shouldStartForwardAgentBridgeWorker(cfg) {
-		t.Fatal("legacy bridge worker should start when clean_agent legacy_bridge_enabled is true")
-	}
-}
-
 func TestStartGRPCServerDisabled(t *testing.T) {
 	cfg := &appconfig.Config{}
 	server, addr, err := startGRPCServer(cfg, cfg.Panel(), nil)

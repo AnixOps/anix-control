@@ -24,7 +24,7 @@ func TestAgentDiagnosticOnTheStream(t *testing.T) {
 			return []byte(`{"success":true,"output":"active (running)","duration_ms":12}`)
 		}})
 		client := f.client()
-		operation := terminal(t, client, "agent.diag:1", diagnosticSpec(f.proxy.ID, "service_status", `{"service":"gost","extra":"dropped"}`))
+		operation := terminal(t, client, "agent.diag:1", diagnosticSpec(f.proxy.ID, "service_status", `{"service":"anix-agent","extra":"dropped"}`))
 		require.Equal(t, kernelnodeopsv1.OperationState_OPERATION_STATE_SUCCEEDED, operation.GetState(), operation.GetError())
 		assert.Equal(t, kernelnodeopsv1.Channel_CHANNEL_AGENT_CONTROL, operation.GetChannel())
 		result := operation.GetResult().GetAgentDiagnostic()
@@ -52,7 +52,7 @@ func TestAgentDiagnosticOnTheStream(t *testing.T) {
 		assert.Equal(t, result.GetTaskId(), payload.Task.ID)
 		assert.Equal(t, "diagnostic", payload.Task.Type)
 		assert.Equal(t, "service_status", payload.Task.Action)
-		assert.Equal(t, map[string]any{"service": "gost"}, payload.Task.Params, "the whitelist drops unknown parameters")
+		assert.Equal(t, map[string]any{"service": "anix-agent"}, payload.Task.Params, "the whitelist drops unknown parameters")
 		assert.Equal(t, 30, payload.Task.Timeout)
 
 		var row model.AgentDiagnosticTask
@@ -61,7 +61,7 @@ func TestAgentDiagnosticOnTheStream(t *testing.T) {
 		assert.True(t, row.Success)
 		assert.Equal(t, "active (running)", row.Output)
 		assert.Equal(t, int64(12), row.DurationMS)
-		assert.JSONEq(t, `{"service":"gost"}`, row.Params)
+		assert.JSONEq(t, `{"service":"anix-agent"}`, row.Params)
 	})
 }
 
@@ -71,7 +71,7 @@ func TestAgentDiagnosticOnTheStream(t *testing.T) {
 func TestAgentDiagnosticOnTheWebSocketAndRefusals(t *testing.T) {
 	forEachBackend(t, func(t *testing.T, f *fixture) {
 		client := f.client()
-		offline := terminal(t, client, "agent.diag:offline", diagnosticSpec(f.proxy.ID, "service_status", `{"service":"gost"}`))
+		offline := terminal(t, client, "agent.diag:offline", diagnosticSpec(f.proxy.ID, "service_status", `{"service":"anix-agent"}`))
 		require.Equal(t, kernelnodeopsv1.OperationState_OPERATION_STATE_FAILED, offline.GetState())
 		assert.Equal(t, kernelnodeopsv1.ErrorCode_ERROR_CODE_NODE_OFFLINE, offline.GetError().GetCode())
 		assert.Equal(t, "node offline", offline.GetError().GetMessage())
@@ -80,7 +80,7 @@ func TestAgentDiagnosticOnTheWebSocketAndRefusals(t *testing.T) {
 		// the WebSocket does.
 		f.proxyAgent(fakeagent.Script{Capabilities: []string{"agent.control", "agent.ping"}})
 		transport := f.websockets.connect(f.proxy.ID, acknowledged)
-		acked := terminal(t, client, "agent.diag:ws", diagnosticSpec(f.proxy.ID, "service_status", `{"service":"gost"}`))
+		acked := terminal(t, client, "agent.diag:ws", diagnosticSpec(f.proxy.ID, "service_status", `{"service":"anix-agent"}`))
 		require.Equal(t, kernelnodeopsv1.OperationState_OPERATION_STATE_SUCCEEDED, acked.GetState(), acked.GetError())
 		assert.Equal(t, kernelnodeopsv1.Channel_CHANNEL_AGENT_WEBSOCKET, acked.GetChannel())
 		result := acked.GetResult().GetAgentDiagnostic()
@@ -93,14 +93,14 @@ func TestAgentDiagnosticOnTheWebSocketAndRefusals(t *testing.T) {
 		assert.Equal(t, model.AgentDiagnosticTaskStatusDispatched, row.Status, "the WebSocket agent reports its result later")
 
 		f.websockets.connect(f.proxy.ID, fallenBack)
-		fallback := terminal(t, client, "agent.diag:fallback", diagnosticSpec(f.proxy.ID, "service_status", `{"service":"gost"}`))
+		fallback := terminal(t, client, "agent.diag:fallback", diagnosticSpec(f.proxy.ID, "service_status", `{"service":"anix-agent"}`))
 		require.Equal(t, kernelnodeopsv1.OperationState_OPERATION_STATE_SUCCEEDED, fallback.GetState(), fallback.GetError())
 		assert.True(t, fallback.GetResult().GetAgentDiagnostic().GetLegacyFallback())
 		assert.False(t, fallback.GetResult().GetAgentDiagnostic().GetAckReceived())
 		assert.Equal(t, "ack timeout after 3s", fallback.GetResult().GetAgentDiagnostic().GetDispatchError())
 
 		f.websockets.connect(f.proxy.ID, undeliverable)
-		lost := terminal(t, client, "agent.diag:lost", diagnosticSpec(f.proxy.ID, "service_status", `{"service":"gost"}`))
+		lost := terminal(t, client, "agent.diag:lost", diagnosticSpec(f.proxy.ID, "service_status", `{"service":"anix-agent"}`))
 		require.Equal(t, kernelnodeopsv1.OperationState_OPERATION_STATE_FAILED, lost.GetState())
 		assert.Equal(t, kernelnodeopsv1.ErrorCode_ERROR_CODE_BACKEND_FAILED, lost.GetError().GetCode())
 		assert.Contains(t, lost.GetError().GetMessage(), "legacy fallback: websocket: close sent")
@@ -126,19 +126,19 @@ func TestAgentDiagnosticFailureReport(t *testing.T) {
 		client := f.client()
 		done := make(chan *kernelnodeopsv1.Operation, 1)
 		go func() {
-			done <- terminal(t, client, "agent.diag:failed", diagnosticSpec(f.proxy.ID, "service_status", `{"service":"gost"}`))
+			done <- terminal(t, client, "agent.diag:failed", diagnosticSpec(f.proxy.ID, "service_status", `{"service":"anix-agent"}`))
 		}()
 		held, err := agent.AwaitKind(awaitTimeout, kernelnodeops.AgentDiagnosticOperation)
 		require.NoError(t, err)
 		require.NoError(t, agent.Complete(held, agentv1pb.ObservedPhase_OBSERVED_PHASE_FAILED, "systemctl: unit not found",
-			map[string]any{"success": false, "error": "unit gost.service not found", "duration_ms": 3}))
+			map[string]any{"success": false, "error": "unit anix-agent.service not found", "duration_ms": 3}))
 		failed := <-done
 		require.Equal(t, kernelnodeopsv1.OperationState_OPERATION_STATE_FAILED, failed.GetState())
 		assert.Equal(t, "systemctl: unit not found", failed.GetError().GetMessage())
 		var row model.AgentDiagnosticTask
 		require.NoError(t, f.db.Where("task_id = ?", held.GetOperationId()).First(&row).Error)
 		assert.Equal(t, model.AgentDiagnosticTaskStatusFailed, row.Status)
-		assert.Equal(t, "unit gost.service not found", row.Error)
+		assert.Equal(t, "unit anix-agent.service not found", row.Error)
 		assert.Equal(t, int64(3), row.DurationMS)
 	})
 }
@@ -162,7 +162,7 @@ func TestLegacyDiagnosticRouteOnTheStream(t *testing.T) {
 	forEachBackend(t, func(t *testing.T, f *fixture) {
 		ctx := context.Background()
 		sources := kernelnodeops.AgentSources{Streams: f.control.Streams}
-		request := kernelnodeops.AgentDiagnosticRequest{NodeID: f.proxy.ID, Action: "service_status", Params: map[string]any{"service": "gost"}}
+		request := kernelnodeops.AgentDiagnosticRequest{NodeID: f.proxy.ID, Action: "service_status", Params: map[string]any{"service": "anix-agent"}}
 
 		_, onStream, err := kernelnodeops.RunAgentDiagnosticOnStream(ctx, f.db, sources, request)
 		require.NoError(t, err)

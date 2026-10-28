@@ -7,14 +7,12 @@ import (
 	"fmt"
 	"log"
 	"strings"
-	"time"
 
 	"github.com/AnixOps/anix-control/v5/internal/agentpki"
 	"github.com/AnixOps/anix-control/v5/internal/builtinpkg"
 	"github.com/AnixOps/anix-control/v5/internal/config"
 	"github.com/AnixOps/anix-control/v5/internal/database"
 	"github.com/AnixOps/anix-control/v5/internal/database/migrations"
-	"github.com/AnixOps/anix-control/v5/internal/forwardlegacy"
 	"github.com/AnixOps/anix-control/v5/internal/modulepki"
 	"github.com/AnixOps/anix-control/v5/internal/nodesecrets"
 	"github.com/AnixOps/anix-control/v5/internal/packagestore"
@@ -89,33 +87,7 @@ func bootstrapDatabase(ctx context.Context, cfg *config.Config) error {
 	service.InitDefaultPlan()
 	service.InitDefaultAuthKeyFromEnv()
 
-	// Seeding the flux runtime's settings also rewrites rows of the flux
-	// tables (forward-sdk.md section 10), and the port bindings are rebuilt
-	// from the flux forwards. Once the v4.2 upgrade dropped those tables
-	// both have nothing left to do, and the old runtime's settings no longer
-	// gate the start.
-	if err := forwardlegacy.UnlessDropped(service.InitForwardRuntimeSystemConfig)(db); err != nil {
-		return fmt.Errorf("initialize forward runtime config: %w", err)
-	}
-	if err := forwardlegacy.UnlessDropped(service.BackfillForwardPortBindings)(db); err != nil {
-		return fmt.Errorf("rebuild the forward port bindings: %w", err)
-	}
-	startupForwardLegacyArchive(ctx, db, cfg)
 	return nil
-}
-
-// startupForwardLegacyArchive archives the flux forwarding data at the
-// first v4.2 start (forward-sdk.md section 10, F5c), under the bootstrap
-// lock so two processes never both write one. A failure is logged loudly
-// but does not stop Control: the drop refuses without an archive anyway.
-func startupForwardLegacyArchive(ctx context.Context, db *gorm.DB, cfg *config.Config) {
-	written, err := forwardlegacy.StartupArchive(ctx, db, forwardLegacyArchiveDir(cfg), version, time.Now())
-	switch {
-	case err != nil:
-		log.Printf("WARNING: the v4.1 forwarding data was not archived: %v. Run `anix-control forward legacy archive -o <file>`; the old tables stay until `forward legacy drop`.", err)
-	case written != nil:
-		log.Printf("Archived the v4.1 forwarding data to %s (mode 0600, SHA-256 %s). The old tables stay until `anix-control forward legacy drop` (docs/UPGRADE.md).", written.Record.Path, written.Record.SHA256)
-	}
 }
 
 // acquireBootstrapLock takes the bootstrap advisory lock on a dedicated

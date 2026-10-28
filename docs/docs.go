@@ -437,82 +437,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/admin/forward/stats": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员获取转发统计数据，包括节点数、在线数、流量等",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-转发"
-                ],
-                "summary": "获取转发统计",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/forward/test-connection": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "测试与 gost 节点的 API 连接是否正常",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-转发"
-                ],
-                "summary": "测试 gost 节点连接",
-                "parameters": [
-                    {
-                        "description": "连接信息",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handler.TestGostConnectionRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
         "/admin/invite/codes": {
             "get": {
                 "security": [
@@ -4976,57 +4900,6 @@ const docTemplate = `{
                 "responses": {
                     "101": {
                         "description": "Switching Protocols"
-                    }
-                }
-            }
-        },
-        "/api/v2/forward/agent/rules": {
-            "get": {
-                "description": "Agent 获取该节点的转发规则",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Agent"
-                ],
-                "summary": "获取转发规则",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "节点 ID",
-                        "name": "node_id",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "forward node API token",
-                        "name": "X-API-Key",
-                        "in": "header",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
                     }
                 }
             }
@@ -9654,7 +9527,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Runs one whitelisted diagnostic on the node's Agent over the Agent Control stream and answers its result within the request. Generic actions: service_status, service_restart (super administrators only) and log_tail (params service \"anix-agent\" on a proxy node or \"gost\" where the node forwards, lines up to 1000); forward checks forward.listen, forward.port_conflict, forward.connect and forward.udp_probe (params route_id, hop_index, optional generation, timeout_ms, upstream, target_policy) when the Agent advertises diag.v1. timeout_seconds is 1 to 120, default 30. 200 with success false means the Agent ran the task and it failed; 409 node_offline, diagnostics_unsupported or node_pending_approval when the Agent cannot take it; 409 diagnostic_busy while another diagnostic of the node runs; 504 diagnostic_timeout when the Agent reports no result in time. Every call is recorded in the operation log (module node_diagnostic).",
+                "description": "Runs one whitelisted diagnostic on the node's Agent over the Agent Control stream and answers its result within the request. Generic actions: service_status, service_restart (super administrators only) and log_tail (params service \"anix-agent\" on a proxy node, lines up to 1000); forward checks forward.listen, forward.port_conflict, forward.connect and forward.udp_probe (params route_id, hop_index, optional generation, timeout_ms, upstream, target_policy) when the Agent advertises diag.v1. timeout_seconds is 1 to 120, default 30. 200 with success false means the Agent ran the task and it failed; 409 node_offline, diagnostics_unsupported or node_pending_approval when the Agent cannot take it; 409 diagnostic_busy while another diagnostic of the node runs; 504 diagnostic_timeout when the Agent reports no result in time. Every call is recorded in the operation log (module node_diagnostic).",
                 "consumes": [
                     "application/json"
                 ],
@@ -10942,42 +10815,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/user/forward/rules": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "用户获取自己的转发规则列表",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "用户端"
-                ],
-                "summary": "获取用户的转发规则",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
         "/user/invite": {
             "get": {
                 "security": [
@@ -12124,24 +11961,6 @@ const docTemplate = `{
                 "url": {
                     "type": "string",
                     "maxLength": 512
-                }
-            }
-        },
-        "handler.TestGostConnectionRequest": {
-            "type": "object",
-            "required": [
-                "api_port",
-                "host"
-            ],
-            "properties": {
-                "api_port": {
-                    "type": "integer"
-                },
-                "api_token": {
-                    "type": "string"
-                },
-                "host": {
-                    "type": "string"
                 }
             }
         },

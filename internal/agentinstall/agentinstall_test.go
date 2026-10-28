@@ -82,26 +82,14 @@ func TestScriptCarriesTheOfficialKey(t *testing.T) {
 	assert.Contains(t, string(Script), "'"+base64.StdEncoding.EncodeToString(der)+"'")
 }
 
-// The script installs anixops-gost.service exactly as the gost driver
-// renders it (contracts/forward/v1/gost).
-func TestScriptGostUnitMatchesTheContract(t *testing.T) {
-	golden, err := os.ReadFile(filepath.Join("..", "..", "contracts", "forward", "v1", "gost", "anixops-gost.service"))
-	require.NoError(t, err)
-	script := string(Script)
-	start := strings.Index(script, "render_gost_unit() {\n  cat <<'EOF'\n")
-	require.GreaterOrEqual(t, start, 0)
-	body := script[start+len("render_gost_unit() {\n  cat <<'EOF'\n"):]
-	end := strings.Index(body, "\nEOF\n")
-	require.GreaterOrEqual(t, end, 0)
-	assert.Equal(t, strings.TrimRight(string(golden), "\n"), body[:end])
-}
-
 // The legacy cleanup names exactly the tables and units of the upgrade
-// order (forward-sdk.md, section 10) and never WireGuard's gost relay.
+// order (forward-sdk.md, section 10) and the gost of an earlier install,
+// and never WireGuard's gost relay.
 func TestScriptLegacyCleanupIsNamed(t *testing.T) {
 	script := string(Script)
 	assert.Contains(t, script, `readonly LEGACY_NFT_TABLES=("inet v2b_forward" "ip v2b_forward" "ip anixops_forward")`)
-	assert.Contains(t, script, `readonly LEGACY_UNITS=("v2forward-agent.service")`)
+	assert.Contains(t, script, `readonly LEGACY_UNITS=("v2forward-agent.service" "anixops-gost.service")`)
+	assert.NotContains(t, script, "render_gost_unit")
 	assert.NotContains(t, script, "gost-wg-relay")
 	assert.NotContains(t, script, "set -x")
 }

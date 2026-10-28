@@ -38,10 +38,6 @@ func openSQLite(t *testing.T) *gorm.DB {
 func TestBootstrapDatabaseMigratesTheSchema(t *testing.T) {
 	bootstrapDatabases(t, func(t *testing.T, cfg *config.Config) {
 		ctx := context.Background()
-		savedDir := forwardLegacyDataDir
-		forwardLegacyDataDir = t.TempDir()
-		t.Cleanup(func() { forwardLegacyDataDir = savedDir })
-
 		for _, env := range []string{"production", "development"} {
 			cfg.Env = env
 			require.NoError(t, bootstrapDatabase(ctx, cfg), env)
@@ -89,9 +85,6 @@ func TestBootstrapDatabaseMigratesTheSchema(t *testing.T) {
 func TestBootstrapDatabaseRefusesADatabaseANewerControlMigrated(t *testing.T) {
 	bootstrapDatabases(t, func(t *testing.T, cfg *config.Config) {
 		ctx := context.Background()
-		savedDir := forwardLegacyDataDir
-		forwardLegacyDataDir = t.TempDir()
-		t.Cleanup(func() { forwardLegacyDataDir = savedDir })
 		require.NoError(t, bootstrapDatabase(ctx, cfg))
 		require.NoError(t, database.Get().Create(&migrations.MigrationRecord{
 			Version: 900, Name: "future", Checksum: "sha256:00", AppliedAt: time.Now(), ProgramVersion: "9.0.0",

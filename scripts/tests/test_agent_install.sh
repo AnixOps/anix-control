@@ -102,26 +102,29 @@ EOF
 }
 
 # new_root prepares an empty fake root with systemd, polkit and a legacy
-# forward runtime.
+# forward runtime (the clean agent and the gost of an earlier install).
 new_root() {
   ROOT_DIR="${WORK}/root-$1"
   mkdir -p "${ROOT_DIR}/run/systemd/system" "${ROOT_DIR}/etc/systemd/system" "${ROOT_DIR}/etc/polkit-1/rules.d" \
     "${ROOT_DIR}/etc/v2board-forward-agent" "${ROOT_DIR}/usr/local/bin" "${WORK}/state-$1" \
     "${ROOT_DIR}/proc/sys/net/netfilter" "${ROOT_DIR}/proc/sys/net/ipv4" "${ROOT_DIR}/proc/sys/net/ipv6/conf/eth0" \
-    "${ROOT_DIR}/sys/class/net/eth0" "${ROOT_DIR}/sys/class/net/eth1" "${ROOT_DIR}/sys/class/net/lo"
+    "${ROOT_DIR}/sys/class/net/eth0" "${ROOT_DIR}/sys/class/net/eth1" "${ROOT_DIR}/sys/class/net/lo" \
+    "${ROOT_DIR}/var/lib/anixops-gost"
   printf '262144\n' >"${ROOT_DIR}/proc/sys/net/netfilter/nf_conntrack_max"
   printf '0\n' >"${ROOT_DIR}/proc/sys/net/ipv4/ip_forward"
   printf '1\n' >"${ROOT_DIR}/proc/sys/net/ipv6/conf/eth0/accept_ra"
   printf '[Unit]\nDescription=clean agent\n' >"${ROOT_DIR}/etc/systemd/system/v2forward-agent.service"
   printf '[Unit]\nDescription=WireGuard gost relay\n' >"${ROOT_DIR}/etc/systemd/system/gost-wg-relay.service"
+  printf '[Unit]\nDescription=AnixOps forward gost\n' >"${ROOT_DIR}/etc/systemd/system/anixops-gost.service"
+  printf '{}\n' >"${ROOT_DIR}/var/lib/anixops-gost/gost.json"
   printf 'panel_url: x\n' >"${ROOT_DIR}/etc/v2board-forward-agent/config.yaml"
   printf '#!/bin/sh\n' >"${ROOT_DIR}/usr/local/bin/v2forward-agent"
   STATE="${WORK}/state-$1"
   printf 'inet v2b_forward\nip anixops_forward\ninet filter\n' >"${STATE}/nft-tables"
   : >"${STATE}/nft-owned"
   : >"${STATE}/ss"
-  : >"${STATE}/passwd"
-  printf 'systemd-journal\n' >"${STATE}/group"
+  printf 'anixops-gost\n' >"${STATE}/passwd"
+  printf 'systemd-journal\nanixops-gost\n' >"${STATE}/group"
   : >"${STATE}/log"
 }
 
@@ -342,17 +345,14 @@ grep -qF "chown anixops-agent:anixops-agent ${ROOT_DIR}/var/lib/anixops-agent/jo
 [[ "$(grep -n '^agent join ' "${STATE}/log" | cut -d: -f1)" -lt "$(grep -n '^systemctl restart anix-agent.service' "${STATE}/log" | cut -d: -f1)" ]] ||
   fail "the join must finish before the Agent starts"
 [[ "$(stat -c '%a' "${ROOT_DIR}/var/lib/anixops-agent")" == "700" ]] || fail "state dir mode"
-[[ "$(stat -c '%a' "${ROOT_DIR}/var/lib/anixops-gost")" == "750" ]] || fail "gost dir mode"
 unit="${ROOT_DIR}/etc/systemd/system/anix-agent.service"
-for line in "User=anixops-agent" "SupplementaryGroups=anixops-gost systemd-journal" "AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE" \
+for line in "User=anixops-agent" "SupplementaryGroups=systemd-journal" "AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE" \
   "CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE" "NoNewPrivileges=yes" "ProtectSystem=strict" \
-  "ReadWritePaths=/var/lib/anixops-agent /var/lib/anixops-gost" "RestrictAddressFamilies=AF_INET AF_INET6 AF_NETLINK AF_UNIX" \
+  "ReadWritePaths=/var/lib/anixops-agent" "RestrictAddressFamilies=AF_INET AF_INET6 AF_NETLINK AF_UNIX" \
   "ExecStart=/usr/lib/anixops-agent/anix-agent server -c /etc/anixops/agent/config.json"; do
   grep -qxF "${line}" "${unit}" || fail "agent unit lacks ${line}"
 done
-diff -u "${REPO_ROOT}/contracts/forward/v1/gost/anixops-gost.service" "${ROOT_DIR}/etc/systemd/system/anixops-gost.service" >/dev/null ||
-  fail "gost unit differs from the contract"
-grep -qF '"anixops-gost.service"' "${ROOT_DIR}/etc/polkit-1/rules.d/50-anixops-agent.rules" || fail "polkit rule"
+! grep -qF 'anixops-gost' "${ROOT_DIR}/etc/polkit-1/rules.d/50-anixops-agent.rules" || fail "the polkit rule still names gost"
 grep -qF 'unit == "anix-agent.service" && (verb == "restart" || verb == "try-restart")' \
   "${ROOT_DIR}/etc/polkit-1/rules.d/50-anixops-agent.rules" || fail "polkit rule lets the Agent restart itself"
 updater="${ROOT_DIR}/etc/systemd/system/anixops-agent-updater.service"
@@ -364,7 +364,14 @@ done
 grep -qxF "PathExists=/var/lib/anixops-agent/upgrade/request.json" "${ROOT_DIR}/etc/systemd/system/anixops-agent-updater.path" || fail "updater path unit"
 grep -qF 'systemctl enable --now anixops-agent-updater.path' "${STATE}/log" || fail "updater path not enabled"
 [[ "$(stat -c '%a' "${ROOT_DIR}/var/lib/anixops-agent/upgrade")" == "700" ]] || fail "upgrade dir mode"
-grep -qF 'useradd --system --gid anixops-agent --groups anixops-gost' "${STATE}/log" || fail "agent user not in the gost group"
+grep -qF 'useradd --system --gid anixops-agent --home-dir' "${STATE}/log" || fail "agent user not created"
+! grep -q 'anixops-gost' "${ROOT_DIR}/etc/systemd/system/anix-agent.service" || fail "the agent unit still names gost"
+for gone in etc/systemd/system/anixops-gost.service var/lib/anixops-gost; do
+  [[ ! -e "${ROOT_DIR}/${gone}" ]] || fail "the earlier install's gost was not retired: ${gone}"
+done
+grep -qF 'systemctl disable --now anixops-gost.service' "${STATE}/log" || fail "the earlier gost was not stopped"
+! grep -qx anixops-gost "${STATE}/passwd" || fail "the gost user was not removed"
+! grep -qx anixops-gost "${STATE}/group" || fail "the gost group was not removed"
 grep -qF 'systemctl enable anix-agent.service' "${STATE}/log" || fail "service not enabled"
 [[ "$(cat "${STATE}/nft-tables")" == "inet filter" ]] || fail "legacy tables left or foreign table removed: $(cat "${STATE}/nft-tables")"
 [[ ! -e "${ROOT_DIR}/etc/systemd/system/v2forward-agent.service" && ! -e "${ROOT_DIR}/etc/v2board-forward-agent" && ! -e "${ROOT_DIR}/usr/local/bin/v2forward-agent" ]] ||
@@ -825,7 +832,7 @@ pf_case() {
 }
 
 pf_case systemd-old 1 "preflight: FAIL  systemd 239 is older than 240" "FAKE_SYSTEMD=239"
-pf_case systemd-sandbox 0 "systemd 245 ignores ProtectProc= and ProcSubset=" "FAKE_SYSTEMD=245"
+pf_case systemd-245 0 "preflight: ok    systemd 245" "FAKE_SYSTEMD=245"
 pf_case kernel-old 1 "preflight: FAIL  Linux 5.4.0-150-generic is older than 5.10" "FAKE_KERNEL=5.4.0-150-generic"
 pf_case kernel-old-proxy 0 "Linux 5.4.0-150-generic is older than 5.10: this node cannot forward with nftables later" \
   "FAKE_KERNEL=5.4.0-150-generic FAKE_ENROLL_NODE=proxy-7" -u "${CONTROL}" -t "${TOKEN_A}"
@@ -913,19 +920,17 @@ printf 'qdisc htb 1: root refcnt 2 r2q 10 default 0x10\n' >"${STATE}/tc-eth1"
 : >"${STATE}/log"
 run_installer uninstall
 expect_status 0 "uninstall"
-for gone in etc/systemd/system/anix-agent.service etc/systemd/system/anixops-gost.service usr/lib/anixops-agent \
+for gone in etc/systemd/system/anix-agent.service usr/lib/anixops-agent \
   usr/local/bin/anix-agent etc/polkit-1/rules.d/50-anixops-agent.rules \
   etc/systemd/system/anixops-agent-updater.service etc/systemd/system/anixops-agent-updater.path; do
   [[ ! -e "${ROOT_DIR}/${gone}" && ! -L "${ROOT_DIR}/${gone}" ]] || fail "uninstall left ${gone}"
 done
-for kept in etc/anixops/agent/config.json var/lib/anixops-agent/pki/identity.json var/lib/anixops-gost etc/sysctl.d/90-anixops-forward.conf; do
+for kept in etc/anixops/agent/config.json var/lib/anixops-agent/pki/identity.json etc/sysctl.d/90-anixops-forward.conf; do
   [[ -e "${ROOT_DIR}/${kept}" ]] || fail "uninstall without --purge removed ${kept}"
 done
 grep -qx 'inet anixops_fwd' "${STATE}/nft-tables" || fail "uninstall without --purge removed the forwarding table"
 [[ -f "${STATE}/tc-eth0" ]] || fail "uninstall without --purge removed the qdisc"
 grep -qx anixops-agent "${STATE}/passwd" || fail "uninstall without --purge removed the user"
-[[ "$(grep -n 'systemctl disable --now anix-agent.service' "${STATE}/log" | cut -d: -f1)" -lt "$(grep -n 'systemctl disable --now anixops-gost.service' "${STATE}/log" | cut -d: -f1)" ]] ||
-  fail "the Agent must stop before gost"
 [[ "$(grep -n 'systemctl disable --now anixops-agent-updater.path' "${STATE}/log" | cut -d: -f1)" -lt "$(grep -n 'systemctl disable --now anix-agent.service' "${STATE}/log" | cut -d: -f1)" ]] ||
   fail "the updater must stop before the Agent"
 expect_out "they stay in the kernel until a reboot or uninstall --purge"
@@ -939,7 +944,7 @@ ok "uninstall keeps the identity for a re-install"
 printf '1\n' >"${ROOT_DIR}/proc/sys/net/ipv4/ip_forward"
 run_installer uninstall --purge
 expect_status 0 "uninstall --purge"
-for gone in etc/anixops var/lib/anixops-agent var/lib/anixops-gost etc/sysctl.d/90-anixops-forward.conf usr/lib/anixops-agent; do
+for gone in etc/anixops var/lib/anixops-agent etc/sysctl.d/90-anixops-forward.conf usr/lib/anixops-agent; do
   [[ ! -e "${ROOT_DIR}/${gone}" ]] || fail "uninstall --purge left ${gone}"
 done
 ! grep -qx 'inet anixops_fwd' "${STATE}/nft-tables" || fail "--purge kept the driver's table"

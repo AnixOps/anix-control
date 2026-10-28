@@ -27,15 +27,9 @@ KERNEL_WORKERS = frozenset({
 # Legacy domain workers still started by the kernel. Remove an entry when its
 # domain moves into a package host; never add one.
 LEGACY_DOMAIN_WORKERS = frozenset({
-    "NewForwardAgentBridgeWorker",
-    "NewForwardAnsibleStatsWorker",
-    "NewForwardFlowResetWorker",
-    "NewForwardGostStatsWorker",
-    "NewForwardLatencyProber",
     "NewNodeMonthlyResetWorker",
-    "NewPanelForwardRuntimeJobExecutor",
 })
-MAX_LEGACY_DOMAIN_WORKERS = 7
+MAX_LEGACY_DOMAIN_WORKERS = 1
 
 WORKER_CONSTRUCTOR = re.compile(
     r"\bservice\.(New[A-Za-z0-9]*(?:Worker|Executor|Prober|Poller|Scheduler|Reconciler|Watcher))\("

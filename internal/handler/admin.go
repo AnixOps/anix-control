@@ -32,11 +32,10 @@ var (
 
 // AdminHandler 管理员处理器
 type AdminHandler struct {
-	userService    *service.UserService
-	orderService   *service.OrderService
-	statsService   *service.StatsService
-	planService    *service.PlanService
-	forwardService *service.PanelForwardService
+	userService  *service.UserService
+	orderService *service.OrderService
+	statsService *service.StatsService
+	planService  *service.PlanService
 }
 
 type compatResetFlowRequest struct {
@@ -47,11 +46,10 @@ type compatResetFlowRequest struct {
 // NewAdminHandler 创建管理员处理器
 func NewAdminHandler() *AdminHandler {
 	return &AdminHandler{
-		userService:    service.NewUserService(),
-		orderService:   service.NewOrderService(),
-		statsService:   service.NewStatsService(),
-		planService:    service.NewPlanService(),
-		forwardService: service.NewPanelForwardService(database.Get()),
+		userService:  service.NewUserService(),
+		orderService: service.NewOrderService(),
+		statsService: service.NewStatsService(),
+		planService:  service.NewPlanService(),
 	}
 }
 
@@ -410,10 +408,8 @@ func (h *AdminHandler) ResetCompatFlow(c *gin.Context) {
 	switch req.Type {
 	case 1:
 		err = h.userService.ResetTraffic(req.ID, service.ForwardUserResetRequestID(req.ID, assignmentToken(c)))
-	case 2:
-		err = h.forwardService.ResetUserTunnelTraffic(req.ID)
 	default:
-		compatError(c, "type must be 1 or 2")
+		compatError(c, "type must be 1")
 		return
 	}
 	if err != nil {

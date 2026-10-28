@@ -210,16 +210,6 @@
       ]
     },
     {
-      "package_id": "gost-mesh",
-      "batch": 4,
-      "min_version": "4.1.0-rc.5",
-      "routes": [
-        "gost.admin.forward.nodex.doctor.get",
-        "gost.admin.forward.nodex.status.get",
-        "gost.admin.forward.test_connection.post"
-      ]
-    },
-    {
       "package_id": "wireguard",
       "batch": 4,
       "min_version": "4.1.0-rc.5",

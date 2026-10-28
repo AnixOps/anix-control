@@ -16,8 +16,6 @@ const adminApi = vi.hoisted(() => ({
   updateLoadBalancer: vi.fn(),
   deleteLoadBalancer: vi.fn(),
   runHealthCheck: vi.fn(),
-  getForwardRuntimeStatus: vi.fn(),
-  runForwardRuntimeDoctor: vi.fn()
 }))
 
 const kernelApi = vi.hoisted(() => ({
@@ -81,8 +79,6 @@ describe('System settings: backups, subscription domains and load balancers', ()
     adminApi.updateLoadBalancer.mockResolvedValue({})
     adminApi.deleteLoadBalancer.mockResolvedValue({})
     adminApi.runHealthCheck.mockResolvedValue({})
-    adminApi.getForwardRuntimeStatus.mockResolvedValue({ data: { data: null } })
-    adminApi.runForwardRuntimeDoctor.mockResolvedValue({ data: { data: null } })
     kernelApi.getPanelBackups.mockResolvedValue(backupsAnswer())
     kernelApi.createPanelBackup.mockResolvedValue({ backup: { id: 4, file: 'anix-control-20261013T120000Z-manual.tar', verify_status: 'pending' } })
   })

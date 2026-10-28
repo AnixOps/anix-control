@@ -26,7 +26,7 @@ func TestRunNodeDiagnosticOnTheStream(t *testing.T) {
 	forEachBackend(t, func(t *testing.T, f *fixture) {
 		ctx := context.Background()
 		_, err := kernelnodeops.RunNodeDiagnostic(ctx, f.db, f.sources(), kernelnodeops.NodeDiagnosticRequest{
-			Node: f.proxyNode(), Action: "service_status", Params: map[string]any{"service": "gost"},
+			Node: f.proxyNode(), Action: "service_status", Params: map[string]any{"service": "anix-agent"},
 		})
 		var unavailable *kernelnodeops.DiagnosticUnavailableError
 		require.ErrorAs(t, err, &unavailable)
@@ -39,13 +39,13 @@ func TestRunNodeDiagnosticOnTheStream(t *testing.T) {
 			return []byte(`{"success":true,"output":"active (running)","duration_ms":12}`)
 		}})
 		result, err := kernelnodeops.RunNodeDiagnostic(ctx, f.db, f.sources(), kernelnodeops.NodeDiagnosticRequest{
-			Node: f.proxyNode(), Action: "log_tail", Params: map[string]any{"service": "gost", "lines": 99999, "extra": "dropped"}, Timeout: 20 * time.Second,
+			Node: f.proxyNode(), Action: "log_tail", Params: map[string]any{"service": "anix-agent", "lines": 99999, "extra": "dropped"}, Timeout: 20 * time.Second,
 		})
 		require.NoError(t, err)
 		assert.True(t, result.Success)
 		assert.Equal(t, "active (running)", result.Output)
 		assert.EqualValues(t, 12, result.DurationMS)
-		assert.Equal(t, map[string]any{"service": "gost", "lines": 1000}, result.Params)
+		assert.Equal(t, map[string]any{"service": "anix-agent", "lines": 1000}, result.Params)
 
 		received := agent.Received()
 		require.Len(t, received, 1)
@@ -62,7 +62,7 @@ func TestRunNodeDiagnosticOnTheStream(t *testing.T) {
 		require.NoError(t, json.Unmarshal(received[0].GetPayloadJson(), &payload))
 		assert.Equal(t, "log_tail", payload.Task.Action)
 		assert.Equal(t, 20, payload.Task.Timeout)
-		assert.Equal(t, map[string]any{"service": "gost", "lines": float64(1000)}, payload.Task.Params)
+		assert.Equal(t, map[string]any{"service": "anix-agent", "lines": float64(1000)}, payload.Task.Params)
 		var row model.AgentDiagnosticTask
 		require.NoError(t, f.db.Where("task_id = ?", result.TaskID).First(&row).Error)
 		assert.Equal(t, model.AgentDiagnosticTaskStatusCompleted, row.Status)
@@ -101,7 +101,7 @@ func TestRunNodeDiagnosticOnTheStream(t *testing.T) {
 func TestRunNodeDiagnosticFailures(t *testing.T) {
 	forEachBackend(t, func(t *testing.T, f *fixture) {
 		ctx := context.Background()
-		request := kernelnodeops.NodeDiagnosticRequest{Node: f.proxyNode(), Action: "service_status", Params: map[string]any{"service": "gost"}}
+		request := kernelnodeops.NodeDiagnosticRequest{Node: f.proxyNode(), Action: "service_status", Params: map[string]any{"service": "anix-agent"}}
 
 		f.proxyAgent(fakeagent.Script{Ack: func(*agentv1pb.DesiredOperation) (bool, string) { return false, "busy" }})
 		_, err := kernelnodeops.RunNodeDiagnostic(ctx, f.db, f.sources(), request)

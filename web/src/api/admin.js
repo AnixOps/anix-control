@@ -472,20 +472,6 @@ export function deleteKnowledge(id) {
   })
 }
 
-export function getForwardRuntimeStatus() {
-  return request({
-    url: '/admin/forward/runtime/status',
-    method: 'get'
-  })
-}
-
-export function runForwardRuntimeDoctor() {
-  return request({
-    url: '/admin/forward/runtime/doctor',
-    method: 'get'
-  })
-}
-
 export function getPaymentGateways() {
   return request({
     url: '/admin/payment/gateways',
@@ -1009,8 +995,6 @@ export default {
   createKnowledge,
   updateKnowledge,
   deleteKnowledge,
-  getForwardRuntimeStatus,
-  runForwardRuntimeDoctor,
   getPaymentGateways,
   createPaymentGateway,
   updatePaymentGateway,

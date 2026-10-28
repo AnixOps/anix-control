@@ -34,7 +34,7 @@ class PluginOnlyWorkersTest(unittest.TestCase):
             test_source=server_source("NewTicketReminderWorker"),
         )
         self.assertEqual(0, result.returncode, result.stderr)
-        self.assertIn("7 legacy domain workers remain", result.stdout)
+        self.assertIn("1 legacy domain workers remain", result.stdout)
 
     def test_rejects_a_new_domain_worker(self) -> None:
         result = self.run_gate(server_source(*sorted(gate.LEGACY_DOMAIN_WORKERS), "NewTicketReminderWorker"))
@@ -42,14 +42,14 @@ class PluginOnlyWorkersTest(unittest.TestCase):
         self.assertIn("new domain worker NewTicketReminderWorker in workers.go:", result.stderr)
 
     def test_requires_removing_an_extracted_worker_from_the_list(self) -> None:
-        remaining = sorted(gate.LEGACY_DOMAIN_WORKERS - {"NewForwardLatencyProber"})
+        remaining = sorted(gate.LEGACY_DOMAIN_WORKERS - {"NewNodeMonthlyResetWorker"})
         result = self.run_gate(server_source(*remaining))
         self.assertNotEqual(0, result.returncode)
-        self.assertIn("NewForwardLatencyProber is no longer started", result.stderr)
+        self.assertIn("NewNodeMonthlyResetWorker is no longer started", result.stderr)
 
     def test_the_legacy_list_only_shrinks(self) -> None:
         self.assertLessEqual(len(gate.LEGACY_DOMAIN_WORKERS), gate.MAX_LEGACY_DOMAIN_WORKERS)
-        self.assertEqual(7, gate.MAX_LEGACY_DOMAIN_WORKERS)
+        self.assertEqual(1, gate.MAX_LEGACY_DOMAIN_WORKERS)
 
 
 if __name__ == "__main__":

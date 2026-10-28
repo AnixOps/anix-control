@@ -313,8 +313,7 @@ func TestTheKernelServesTheCredentialSecretAndRetirementKinds(t *testing.T) {
 	served := map[string]kernelnodeopsv1.OperationFamily{
 		KindCredentialIssue: kernelnodeopsv1.OperationFamily_OPERATION_FAMILY_CREDENTIALS, KindCredentialRevoke: kernelnodeopsv1.OperationFamily_OPERATION_FAMILY_CREDENTIALS,
 		KindRegKeyIssue: kernelnodeopsv1.OperationFamily_OPERATION_FAMILY_CREDENTIALS, KindRegKeyRevoke: kernelnodeopsv1.OperationFamily_OPERATION_FAMILY_CREDENTIALS,
-		KindCleanAgentIssue: kernelnodeopsv1.OperationFamily_OPERATION_FAMILY_CREDENTIALS,
-		KindNodeRetire:      kernelnodeopsv1.OperationFamily_OPERATION_FAMILY_NODE_CONFIG, KindProtocolRetire: kernelnodeopsv1.OperationFamily_OPERATION_FAMILY_NODE_CONFIG,
+		KindNodeRetire: kernelnodeopsv1.OperationFamily_OPERATION_FAMILY_NODE_CONFIG, KindProtocolRetire: kernelnodeopsv1.OperationFamily_OPERATION_FAMILY_NODE_CONFIG,
 		KindSecretsPut: kernelnodeopsv1.OperationFamily_OPERATION_FAMILY_NODE_CONFIG,
 	}
 	for kindName, family := range served {
@@ -599,56 +598,28 @@ func TestRegistrationKeys(t *testing.T) {
 	})
 }
 
-// Clean agents: created as the administrator's agent creation creates
-// them, the token shown once; revoked as the revocation route revokes
-// them. A node's key or token is never revoked in place.
-func TestCleanAgentsAndRevocation(t *testing.T) {
+// The clean agent went with the flux runtime: IssueCleanAgent has no
+// executor and a clean agent's token is neither issued nor revoked. A
+// node's key or token is never revoked in place.
+func TestCleanAgentsWereRemoved(t *testing.T) {
 	forEachDatabase(t, func(t *testing.T, db *gorm.DB) {
 		h := newCredentialHarness(t, db)
 		client := h.client(forwardHost, allFamilies())
 		created := h.bindings.open(forwardHost, "forward.admin.forward.agents.post", nil, `{"name":"relay-agent","nodeId":10}`)
-		_, err := client.SubmitOperation(context.Background(), &kernelnodeopsv1.SubmitOperationRequest{RequestId: "cleanagent.issue:unbound", Operation: cleanAgentIssue("relay-agent", 10)})
-		require.Equal(t, codes.PermissionDenied, status.Code(err))
-		_, err = client.SubmitOperation(context.Background(), &kernelnodeopsv1.SubmitOperationRequest{RequestId: "cleanagent.issue:gone", Operation: cleanAgentIssue("relay-agent", 99), Request: created.binding()})
-		require.Equal(t, codes.NotFound, status.Code(err))
+		_, err := client.SubmitOperation(context.Background(), &kernelnodeopsv1.SubmitOperationRequest{RequestId: "cleanagent.issue:1", Operation: cleanAgentIssue("relay-agent", 10), Request: created.binding()})
+		require.Equal(t, codes.Unimplemented, status.Code(err))
 
-		operation, _ := submitBound(t, client, "cleanagent.issue:1", cleanAgentIssue("relay-agent", 10), created)
-		require.Equal(t, kernelnodeopsv1.OperationState_OPERATION_STATE_SUCCEEDED, operation.GetState(), operation.GetError())
-		result := operation.GetResult().GetCredential()
-		require.Equal(t, kernelnodeopsv1.NodeKind_NODE_KIND_CLEAN_AGENT, result.GetSubject().GetKind())
-		require.Equal(t, kernelnodeopsv1.CredentialKind_CREDENTIAL_KIND_CLEAN_AGENT_TOKEN, result.GetKind())
-		shown := h.bindings.shown(created, result.GetReveal())
-		var agent model.ForwardCleanAgent
-		require.NoError(t, db.First(&agent, result.GetSubject().GetId()).Error)
-		require.Equal(t, "relay-agent", agent.Name)
-		require.Equal(t, uint(10), *agent.NodeID)
-		require.True(t, strings.HasPrefix(agent.Token, "v2fa_"))
-		require.Equal(t, agent.Token, shown["token"])
-		row, ok := credentialRow(t, db, nodesecrets.SubjectCleanAgent, uint64(agent.ID), nodesecrets.KindCleanAgentToken)
-		require.True(t, ok)
-		require.Equal(t, agent.Token, row.Value)
-		require.Equal(t, row.ID, result.GetCredentialId())
-		requireNoSecret(t, db, operation, agent.Token)
-
-		// Revoke it, as the route does; the split row follows.
+		require.NoError(t, db.AutoMigrate(&model.ForwardCleanAgent{}))
+		agent := model.ForwardCleanAgent{Name: "relay-agent", Token: "v2fa_relay-agent"}
+		require.NoError(t, db.Create(&agent).Error)
 		subject := nodeRef(kernelnodeopsv1.NodeKind_NODE_KIND_CLEAN_AGENT, uint64(agent.ID))
-		operation, _ = submitBound(t, client, "credential.revoke:clean-agent", revokeSpec(subject, kernelnodeopsv1.CredentialKind_CREDENTIAL_KIND_UNSPECIFIED), nil)
-		require.Equal(t, kernelnodeopsv1.OperationState_OPERATION_STATE_SUCCEEDED, operation.GetState(), operation.GetError())
-		require.NoError(t, db.First(&agent, agent.ID).Error)
-		require.Equal(t, model.ForwardCleanAgentStatusRevoked, agent.Status)
-		require.NotNil(t, agent.RevokedAt)
-		row, ok = credentialRow(t, db, nodesecrets.SubjectCleanAgent, uint64(agent.ID), nodesecrets.KindCleanAgentToken)
-		require.True(t, ok)
-		require.Equal(t, nodesecrets.StatusRevoked, row.Status)
-		again, applied := submitBound(t, client, "credential.revoke:clean-agent", revokeSpec(subject, kernelnodeopsv1.CredentialKind_CREDENTIAL_KIND_UNSPECIFIED), nil)
-		require.False(t, applied)
-		require.Equal(t, operation.GetOperationId(), again.GetOperationId())
-
-		// A clean agent's token is not issued with IssueCredential, and a
-		// node's token is not revoked in place.
+		operation, _ := submitBound(t, client, "credential.revoke:clean-agent", revokeSpec(subject, kernelnodeopsv1.CredentialKind_CREDENTIAL_KIND_UNSPECIFIED), nil)
+		require.Equal(t, kernelnodeopsv1.OperationState_OPERATION_STATE_FAILED, operation.GetState())
+		require.Equal(t, kernelnodeopsv1.ErrorCode_ERROR_CODE_VALIDATION_FAILED, operation.GetError().GetCode())
 		operation, _ = submitBound(t, client, "credential.issue:clean-agent", issueSpec(subject, kernelnodeopsv1.CredentialKind_CREDENTIAL_KIND_CLEAN_AGENT_TOKEN, "", true), created)
 		require.Equal(t, kernelnodeopsv1.OperationState_OPERATION_STATE_FAILED, operation.GetState())
 		require.Equal(t, kernelnodeopsv1.ErrorCode_ERROR_CODE_VALIDATION_FAILED, operation.GetError().GetCode())
+
 		operation, _ = submitBound(t, client, "credential.revoke:forward-10", revokeSpec(nodeRef(forwardKind, 10), kernelnodeopsv1.CredentialKind_CREDENTIAL_KIND_FORWARD_NODE_TOKEN), nil)
 		require.Equal(t, kernelnodeopsv1.OperationState_OPERATION_STATE_FAILED, operation.GetState())
 		require.Equal(t, kernelnodeopsv1.ErrorCode_ERROR_CODE_VALIDATION_FAILED, operation.GetError().GetCode())
@@ -710,21 +681,9 @@ func TestIssuedCredentialsAgreeInBothPhases(t *testing.T) {
 			require.Equal(t, authKey.Key, regKey.Value, phase)
 			require.Equal(t, authKey.KeyHash, regKey.KeyHash, phase)
 
-			agentRequest := h.bindings.open(forwardHost, "forward.admin.forward.agents.post", nil, `{}`)
-			operation, _ = submitBound(t, forward, "cleanagent.issue"+suffix, cleanAgentIssue("agent"+suffix, forwardID), agentRequest)
-			require.Equal(t, kernelnodeopsv1.OperationState_OPERATION_STATE_SUCCEEDED, operation.GetState(), operation.GetError())
-			var agent model.ForwardCleanAgent
-			require.NoError(t, db.First(&agent, operation.GetResult().GetCredential().GetSubject().GetId()).Error)
-			agentToken, ok := credentialRow(t, db, nodesecrets.SubjectCleanAgent, uint64(agent.ID), nodesecrets.KindCleanAgentToken)
-			require.True(t, ok)
-			require.Equal(t, agent.Token, agentToken.Value, phase)
-			found, err := nodesecrets.CleanAgentByToken(db, agent.Token)
-			require.NoError(t, err)
-			require.Equal(t, agent.ID, found.ID)
-
 			// The seeded rows were never dual-written; the backfill copies
 			// them and leaves the executors' rows as they are.
-			_, err = nodesecrets.Backfill(context.Background(), db, nodesecrets.BackfillOptions{Restart: true})
+			_, err := nodesecrets.Backfill(context.Background(), db, nodesecrets.BackfillOptions{Restart: true})
 			require.NoError(t, err)
 			_, err = nodesecrets.Verify(context.Background(), db, nodesecrets.VerifyOptions{})
 			require.NoError(t, err, "the old and new forms agree after every executor, in %s", phase)

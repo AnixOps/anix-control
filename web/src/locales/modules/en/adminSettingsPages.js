@@ -19,12 +19,11 @@ export default {
   },
   adminSettings: {
     title: 'Settings',
-    subtitle: 'Subscription domains, configuration keys, forward runtime, backups, load balancing and the audit log.',
+    subtitle: 'Subscription domains, configuration keys, backups, load balancing and the audit log.',
     navLabel: 'Settings sections',
     loading: 'Loading…',
     sections: {
       general: 'General',
-      runtime: 'Forward runtime',
       backup: 'Backups',
       balancer: 'Load balancing',
       audit: 'Audit log',
@@ -75,15 +74,6 @@ export default {
         deleteAction: 'Delete key',
         deleteFailed: 'Couldn’t delete the configuration key',
         deleted: 'Deleted {key}'
-      }
-    },
-    runtime: {
-      modes: {
-        title: 'Execution mode',
-        description: 'Where forwards run: the stateful NodeX control plane, or the local Ansible executor on the panel host. Change them on their own pages.'
-      },
-      commands: {
-        title: 'Operator commands'
       }
     },
     backup: {

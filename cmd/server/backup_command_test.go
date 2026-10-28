@@ -271,9 +271,6 @@ func TestRestoreThenStartMigrates(t *testing.T) {
 	activeRootKey, err = resolveRootKey(cfg, true, t.Logf)
 	require.NoError(t, err)
 	assert.True(t, activeRootKey.Key.Equal(f.key), "the restored root key")
-	savedDir := forwardLegacyDataDir
-	forwardLegacyDataDir = t.TempDir()
-	t.Cleanup(func() { forwardLegacyDataDir = savedDir })
 	savedManager := backup.Default()
 	t.Cleanup(func() { backup.SetDefault(savedManager) })
 	release := setupBackups(cfg, f.configPath, true)
@@ -335,9 +332,6 @@ func TestPreMigrationBackupFailureStopsTheStart(t *testing.T) {
 	backup.SetDefault(newBackupManager(cfg, f.configPath, database.Get))
 	_ = database.Close()
 	require.NoError(t, database.Init(&cfg.Database))
-	savedDir := forwardLegacyDataDir
-	forwardLegacyDataDir = t.TempDir()
-	t.Cleanup(func() { forwardLegacyDataDir = savedDir })
 	cfg.ModuleRuntime.CAKEK = f.key.Base64()
 	require.NoError(t, database.Get().Exec("SELECT 1").Error)
 	_ = bootstrapDatabase(ctx, cfg) // the first administrator needs a password or a claim; the schema is what counts

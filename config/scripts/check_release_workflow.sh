@@ -287,8 +287,6 @@ check_release_workflow() {
   reject_job_text go-quality "arduino/setup-protoc@v3" "third-party protoc setup action" || failed=1
   require_named_step_text go-quality "Install pinned protoc" "protocolbuffers/protobuf/releases/download/v29.2/protoc-29.2-linux-x86_64.zip" "pinned official protoc download" || failed=1
   require_named_step_text go-quality "Install pinned protoc" "sha256sum -c" "pinned protoc checksum verification" || failed=1
-  require_text "GOST_VERSION: '3.2.6'" "pinned GOST runtime version" || failed=1
-  require_text "GOST_LINUX_ARM64_BINARY_SHA256" "pinned arm64 GOST binary checksum" || failed=1
   require_text "AGENT_REF: 'f99c7b903a73a980f567601df4b971a0c814ec3a'" "pinned Agent source commit" || failed=1
   require_agent_checkouts_use_pin || failed=1
   require_job_text plugin-package-release-test "govulncheck ./cmd/nftables-forward" "pinned Agent plugin vulnerability scan" || failed=1

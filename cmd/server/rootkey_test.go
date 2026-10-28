@@ -164,10 +164,6 @@ func TestVerifyRootKeyChecksTheACMECache(t *testing.T) {
 func TestBootstrapDatabaseRefusesAnotherRootKey(t *testing.T) {
 	bootstrapDatabases(t, func(t *testing.T, cfg *config.Config) {
 		ctx := context.Background()
-		savedDir := forwardLegacyDataDir
-		forwardLegacyDataDir = t.TempDir()
-		t.Cleanup(func() { forwardLegacyDataDir = savedDir })
-
 		cfg.ModuleRuntime.CAKEK = base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{6}, 32))
 		require.NoError(t, bootstrapDatabase(ctx, cfg), "the first start creates the CA with the key")
 		authority, err := modulepki.FromConfig(cfg.ModuleRuntime, database.Get())

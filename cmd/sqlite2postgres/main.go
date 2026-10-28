@@ -17,7 +17,6 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/config"
 	"github.com/AnixOps/anix-control/v5/internal/database"
 	"github.com/AnixOps/anix-control/v5/internal/database/migrations"
-	"github.com/AnixOps/anix-control/v5/internal/service"
 	"github.com/glebarez/sqlite"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -132,7 +131,7 @@ func main() {
 				return err
 			}
 		}
-		return service.BackfillForwardPortBindings(tx)
+		return nil
 	})
 	if err != nil {
 		log.Fatalf("import failed: %v", err)

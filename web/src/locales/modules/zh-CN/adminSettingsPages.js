@@ -18,12 +18,11 @@ export default {
   },
   adminSettings: {
     title: '系统设置',
-    subtitle: '订阅域名、配置项、转发运行时、备份、负载均衡与审计日志。',
+    subtitle: '订阅域名、配置项、备份、负载均衡与审计日志。',
     navLabel: '设置分区',
     loading: '正在加载…',
     sections: {
       general: '通用',
-      runtime: '转发运行时',
       backup: '备份',
       balancer: '负载均衡',
       audit: '审计日志',
@@ -74,15 +73,6 @@ export default {
         deleteAction: '删除配置项',
         deleteFailed: '无法删除配置项',
         deleted: '已删除配置项 {key}'
-      }
-    },
-    runtime: {
-      modes: {
-        title: '运行方式',
-        description: '转发的执行面：NodeX 有状态控制面，或面板主机上的本地 Ansible 执行器。在对应页面修改配置。'
-      },
-      commands: {
-        title: '运维命令'
       }
     },
     backup: {

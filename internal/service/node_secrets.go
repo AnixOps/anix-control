@@ -1,12 +1,6 @@
 package service
 
 import (
-	"bytes"
-	"encoding/json"
-	"errors"
-	"io"
-	"strings"
-
 	"github.com/AnixOps/anix-control/sdk/v2compat"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/nodesecrets"
@@ -61,30 +55,6 @@ func RedactNodeSecretsJSON(config string) string {
 // the whole stored value. Arrays are matched by position.
 func KeepNodeSecretsJSON(incoming, stored string) string {
 	return v2compat.KeepNodeSecrets(incoming, stored)
-}
-
-// decodeNodeSecretJSON decodes one JSON value, keeping numbers as written.
-func decodeNodeSecretJSON(config string) (any, bool) {
-	decoder := json.NewDecoder(strings.NewReader(config))
-	decoder.UseNumber()
-	var value any
-	if err := decoder.Decode(&value); err != nil {
-		return nil, false
-	}
-	if _, err := decoder.Token(); !errors.Is(err, io.EOF) {
-		return nil, false
-	}
-	return value, true
-}
-
-func encodeNodeSecretJSON(value any) string {
-	var buffer bytes.Buffer
-	encoder := json.NewEncoder(&buffer)
-	encoder.SetEscapeHTML(false)
-	if err := encoder.Encode(value); err != nil {
-		return NodeSecretPlaceholder
-	}
-	return strings.TrimSuffix(buffer.String(), "\n")
 }
 
 // RedactNodeProtocol masks the secrets in a node protocol's settings for an

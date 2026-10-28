@@ -520,38 +520,6 @@ func (s *AgentHandlerTestSuite) TestGetTaskResult_NotFound() {
 	assert.Equal(s.T(), http.StatusNotFound, w.Code)
 }
 
-// ========== AgentGetForwardRules 测试 ==========
-
-func (s *AgentHandlerTestSuite) TestAgentGetForwardRules() {
-	// 创建转发规则
-	rule := &model.ForwardRule{
-		Name:        "Test Rule",
-		Enabled:     true,
-		RelayNodeID: s.testNode.ID,
-		ListenPort:  8080,
-		Protocol:    "tcp",
-		ExitNodeID:  s.testNode2.ID,
-		TargetHost:  "10.0.0.1",
-		TargetPort:  80,
-	}
-	s.db.Create(rule)
-
-	handler := NewAgentHandler()
-	s.router.GET("/api/v2/forward/agent/rules", handler.AgentGetForwardRules)
-
-	req, _ := http.NewRequest("GET", fmt.Sprintf("/api/v2/forward/agent/rules?node_id=%d", s.testNode.ID), nil)
-	req.Header.Set("X-API-Key", s.testNode.APIToken)
-	w := httptest.NewRecorder()
-	s.router.ServeHTTP(w, req)
-
-	assert.Equal(s.T(), http.StatusOK, w.Code)
-
-	var resp map[string]any
-	s.Require().NoError(json.Unmarshal(w.Body.Bytes(), &resp))
-	data := resp["data"].([]any)
-	assert.Len(s.T(), data, 1)
-}
-
 // ========== ListAgents 测试 ==========
 
 func (s *AgentHandlerTestSuite) TestListAgents_Empty() {
@@ -665,7 +633,7 @@ func (s *AgentHandlerTestSuite) TestCreateTask_Success() {
 		NodeID:  s.testNode.ID,
 		Type:    "diagnostic",
 		Action:  "service_status",
-		Params:  map[string]any{"service": "gost"},
+		Params:  map[string]any{"service": "anix-agent"},
 		Timeout: 30,
 	}
 	jsonBody, _ := json.Marshal(body)
@@ -702,7 +670,7 @@ func (s *AgentHandlerTestSuite) TestCreateTask_RefusesOtherTaskTypes() {
 	for _, taskType := range []string{"forward", "shell", "Diagnostic", ""} {
 		body, _ := json.Marshal(map[string]any{
 			"node_id": s.testNode.ID, "type": taskType, "action": "service_restart",
-			"params": map[string]any{"service": "gost"},
+			"params": map[string]any{"service": "anix-agent"},
 		})
 		req, _ := http.NewRequest("POST", "/admin/agent/tasks", bytes.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
@@ -751,7 +719,7 @@ func (s *AgentHandlerTestSuite) TestExecuteCommand_Success() {
 	body := ExecuteCommandRequest{
 		NodeID:  s.testNode.ID,
 		Action:  "service_status",
-		Params:  map[string]any{"service": "gost"},
+		Params:  map[string]any{"service": "anix-agent"},
 		Timeout: 30,
 	}
 	jsonBody, _ := json.Marshal(body)

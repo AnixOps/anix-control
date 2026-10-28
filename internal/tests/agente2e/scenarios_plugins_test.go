@@ -223,7 +223,7 @@ func (s *suite) scenarioAliveList(t *testing.T) string {
 }
 
 // scenarioDiagnostic runs agent.diagnostic on the stream (no WebSocket
-// exists under mtls: required): service_status and log_tail of gost.
+// exists under mtls: required): service_status and log_tail of the Agent.
 func (s *suite) scenarioDiagnostic(t *testing.T) string {
 	var evidence []string
 	for _, action := range []string{"service_status", "log_tail"} {
@@ -233,7 +233,7 @@ func (s *suite) scenarioDiagnostic(t *testing.T) string {
 			} `json:"data"`
 		}
 		s.control.API(t, http.MethodPost, "/api/v2/admin/agent/tasks", map[string]any{
-			"node_id": s.nodeID, "type": "diagnostic", "action": action, "params": map[string]any{"service": "gost", "lines": 5}, "timeout": 20,
+			"node_id": s.nodeID, "type": "diagnostic", "action": action, "params": map[string]any{"service": "anix-agent", "lines": 5}, "timeout": 20,
 		}, &answer)
 		var task struct {
 			TaskID  string

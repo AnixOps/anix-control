@@ -71,7 +71,7 @@ func TestKernelNodeOpsCredentialRoundTrip(t *testing.T) {
 		capabilities, err := client.GetCapabilities(background, &kernelnodeopsv1.GetCapabilitiesRequest{})
 		require.NoError(t, err)
 		require.Equal(t, []string{
-			kernelnodeops.KindCleanAgentIssue, kernelnodeops.KindCredentialIssue, kernelnodeops.KindCredentialRevoke, kernelnodeops.KindNodeRetire,
+			kernelnodeops.KindCredentialIssue, kernelnodeops.KindCredentialRevoke, kernelnodeops.KindNodeRetire,
 			kernelnodeops.KindProtocolRetire, kernelnodeops.KindRegKeyIssue, kernelnodeops.KindRegKeyRevoke, kernelnodeops.KindSecretsPut,
 		}, capabilities.GetKinds())
 

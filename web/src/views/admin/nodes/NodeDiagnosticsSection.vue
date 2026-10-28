@@ -252,7 +252,7 @@ let generation = 0
 const rootProps = computed(() => (props.embedded ? {} : { title: t('nodeDiagnostics.title'), description: t('nodeDiagnostics.description') }))
 const isForward = computed(() => props.nodeRef.startsWith('forward-'))
 const actions = computed(() => (Array.isArray(info.value?.actions) ? info.value.actions : []))
-const services = computed(() => (Array.isArray(info.value?.services) && info.value.services.length ? info.value.services : ['gost']))
+const services = computed(() => (Array.isArray(info.value?.services) && info.value.services.length ? info.value.services : ['anix-agent']))
 const service = ref('')
 const serviceName = computed(() => (services.value.includes(service.value) ? service.value : services.value[0]))
 const serviceOptions = computed(() => services.value.map(name => ({ value: name, label: name })))

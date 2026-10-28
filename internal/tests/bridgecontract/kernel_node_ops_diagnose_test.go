@@ -7,6 +7,9 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	kernelnodeopsv1 "github.com/AnixOps/anix-control/sdk/api/kernelnodeops/v1"
 	"github.com/AnixOps/anix-control/v5/internal/kernelnodeops"
 	"github.com/AnixOps/anix-control/v5/internal/model"
@@ -69,7 +72,7 @@ func TestKernelNodeOpsDiagnosisRoundTrip(t *testing.T) {
 
 		capabilities, err := client.GetCapabilities(background, &kernelnodeopsv1.GetCapabilitiesRequest{})
 		require.NoError(t, err)
-		require.Equal(t, []string{kernelnodeops.KindDiagnoseEndpoints, kernelnodeops.KindDiagnoseForward, kernelnodeops.KindDiagnoseNodeStats, kernelnodeops.KindDiagnoseTunnel}, capabilities.GetKinds())
+		require.Equal(t, []string{kernelnodeops.KindDiagnoseEndpoints}, capabilities.GetKinds())
 		require.Equal(t, []kernelnodeopsv1.OperationFamily{kernelnodeopsv1.OperationFamily_OPERATION_FAMILY_DIAGNOSE}, capabilities.GetGrantedFamilies())
 
 		watchCtx, stopWatch := context.WithCancel(background)
@@ -119,17 +122,10 @@ func TestKernelNodeOpsDiagnosisRoundTrip(t *testing.T) {
 		require.False(t, repeat.GetApplied())
 		require.Equal(t, got.GetOperation().GetOperationId(), repeat.GetOperation().GetOperationId())
 
-		diagnosed, err := client.SubmitOperation(background, &kernelnodeopsv1.SubmitOperationRequest{
+		_, err = client.SubmitOperation(background, &kernelnodeopsv1.SubmitOperationRequest{
 			RequestId: "diagnose.forward:40:bridge", Wait: kernelnodeopsv1.WaitMode_WAIT_MODE_TERMINAL,
 			Operation: &kernelnodeopsv1.OperationSpec{Operation: &kernelnodeopsv1.OperationSpec_DiagnoseForward{DiagnoseForward: &kernelnodeopsv1.DiagnoseForward{ForwardId: 40}}},
 		})
-		require.NoError(t, err)
-		require.Equal(t, kernelnodeopsv1.OperationState_OPERATION_STATE_SUCCEEDED, diagnosed.GetOperation().GetState())
-		outcomes := diagnosed.GetOperation().GetResult().GetDiagnosis().GetOutcomes()
-		require.Len(t, outcomes, 2)
-		require.True(t, outcomes[0].GetSuccess())
-		require.Equal(t, "203.0.113.1", outcomes[0].GetTargetIp())
-		require.False(t, outcomes[1].GetSuccess())
-		require.Equal(t, "不能诊断内网或本机地址", outcomes[1].GetMessage(), "the kernel dials no loopback target for a package")
+		require.Equal(t, codes.Unimplemented, status.Code(err), "the v3 forward diagnosis went with the v4.1 forwarding runtime")
 	})
 }

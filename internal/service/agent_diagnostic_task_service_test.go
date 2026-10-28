@@ -26,7 +26,7 @@ func TestPullPendingTasksDispatchesOnlyWhitelistedActions(t *testing.T) {
 	db := openDiagnosticTaskDB(t)
 	svc := NewAgentDiagnosticTaskService(db)
 	rows := []model.AgentDiagnosticTask{
-		{TaskID: "task-ok", NodeID: 7, Action: "log_tail", Params: `{"service":"gost","lines":5000,"path":"/etc/shadow"}`, Status: model.AgentDiagnosticTaskStatusPending},
+		{TaskID: "task-ok", NodeID: 7, Action: "log_tail", Params: `{"service":"anix-agent","lines":5000,"path":"/etc/shadow"}`, Status: model.AgentDiagnosticTaskStatusPending},
 		{TaskID: "task-shell", NodeID: 7, Action: "shell", Params: `{"command":"id"}`, Status: model.AgentDiagnosticTaskStatusPending},
 		{TaskID: "task-service", NodeID: 7, Action: "service_restart", Params: `{"service":"sshd"}`, Status: model.AgentDiagnosticTaskStatusPending},
 		{TaskID: "task-params", NodeID: 7, Action: "service_status", Params: `not json`, Status: model.AgentDiagnosticTaskStatusPending},
@@ -38,7 +38,7 @@ func TestPullPendingTasksDispatchesOnlyWhitelistedActions(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, dispatched, 1)
 	require.Equal(t, "task-ok", dispatched[0].TaskID)
-	require.JSONEq(t, `{"service":"gost","lines":1000}`, dispatched[0].Params)
+	require.JSONEq(t, `{"service":"anix-agent","lines":1000}`, dispatched[0].Params)
 
 	statuses := map[string]string{}
 	var stored []model.AgentDiagnosticTask

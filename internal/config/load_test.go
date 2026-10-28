@@ -366,7 +366,6 @@ func TestLoadEnvironment(t *testing.T) {
 	assert.Equal(t, []string{"10.0.0.0/8", "192.168.0.0/16"}, loaded.Server.TrustedProxies)
 	require.NotNil(t, loaded.Auth.Registration.Enabled)
 	assert.False(t, *loaded.Auth.Registration.Enabled)
-	assert.Equal(t, "nodex-token", loaded.ForwardRuntime.NodeX.Token)
 	assert.Equal(t, []UnknownVariable{{Name: "ANIX_CONTROL_DATABSE_PASSWORD", Closest: "ANIX_CONTROL_DATABASE_PASSWORD"}}, report.UnknownEnv)
 	assert.Contains(t, report.Warnings()[len(report.Warnings())-1], "did you mean ANIX_CONTROL_DATABASE_PASSWORD?")
 	var sources []string
