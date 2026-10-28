@@ -19,7 +19,8 @@
 - The `gost-mesh` official package (its Control host, WebUI, release
   gate and pinned gost runtime). Control now builds 17 official packages.
 - 诊断's generic actions name only `anix-agent`: the Agent no longer runs
-  gost, so `gost` is refused as a service.
+  gost, so `gost` is refused as a service (the cross-repo E2E reads the
+  Agent's own unit instead).
 
 ### Changed
 
