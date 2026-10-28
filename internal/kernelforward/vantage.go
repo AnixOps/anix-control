@@ -38,6 +38,10 @@ const (
 	// VantageInterval and VantageTimeout are a probe's defaults.
 	VantageInterval = 30 * time.Second
 	VantageTimeout  = 3 * time.Second
+	// vantageIntervalMs and vantageTimeoutMs are the same, as the probe
+	// carries them.
+	vantageIntervalMs uint32 = 30_000
+	vantageTimeoutMs  uint32 = 3_000
 	// MaxVantageProbes bounds the probes of one node.
 	MaxVantageProbes = 512
 	// maxVantageSelector bounds a selector (the column's size).
@@ -152,7 +156,7 @@ func addVantageProbes(tx *gorm.DB, states map[string]*forwardv1.NodeForwardState
 			for _, address := range publicAddresses(addresses[ref], bindingTypes(binding)) {
 				targets = append(targets, &forwardv1.VantageProbe{
 					BindingId: binding.ID, RouteId: route.GetId(), NodeRef: ref, Address: address, Port: port,
-					IntervalMs: uint32(VantageInterval.Milliseconds()), TimeoutMs: uint32(VantageTimeout.Milliseconds()),
+					IntervalMs: vantageIntervalMs, TimeoutMs: vantageTimeoutMs,
 				})
 			}
 		}
