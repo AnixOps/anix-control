@@ -34,7 +34,7 @@ export default {
     },
     engine: {
       ENGINE_NFTABLES: '内核 DNAT，几乎不占 CPU；只有 RAW 链路',
-      ENGINE_GOST: '支持 TLS / WSS / QUIC / gRPC 与多路复用',
+      ENGINE_GOST: '已移除：请把路由迁到 ANX',
       ENGINE_NETWORK: '网络模型（anx-node）：可信线路走 ANX-Line，跨境走 A2 外衣',
       ENGINE_ANIXOPS: 'AnixOps 中继协议（实验）',
       anixopsLabel: 'anixops（实验）',
@@ -103,6 +103,8 @@ export default {
       healthy: '正常',
       quotaHint: '提高配额后自动恢复',
       expiredHint: '延长到期时间后自动恢复',
+      gost_removed: '已停止 · gost 已移除',
+      gost_removedHint: '在路由页迁到 ANX，或删除它',
       filter: {
         healthy: '正常',
         degraded: '降级',
@@ -126,7 +128,8 @@ export default {
       deleteRoute: '删除路由…',
       deleteSuperOnly: '删除（仅超级管理员）',
       raiseQuota: '提高配额…',
-      extendExpiry: '延长到期…'
+      extendExpiry: '延长到期…',
+      migrateGost: '迁到 ANX…'
     },
     errors: {
       super_admin_required: '仅超级管理员可删除。',
@@ -318,7 +321,8 @@ export default {
       viewPreview: '查看预览',
       enforced: {
         quota: '此路由因配额用尽被 Control 强制暂停。提高或清空配额后，下一次规划自动恢复；“恢复”对它无效。',
-        expired: '此路由已到期，被 Control 强制暂停。延长或清空到期时间后，下一次规划自动恢复。'
+        expired: '此路由已到期，被 Control 强制暂停。延长或清空到期时间后，下一次规划自动恢复。',
+        gost_removed: '此路由仍在 gost 上，而 gost 已移除：Control 不再规划它，它保留原来的端口。请在路由页用“把 gost 路由迁到 ANX”迁移，或删除它。'
       },
       basics: '基本信息',
       name: '名称',
@@ -351,7 +355,6 @@ export default {
       removeHop: '删除第 {n} 跳',
       moved: '第 {from} 跳已移到第 {to} 位',
       removed: '已删除第 {n} 跳',
-      inserted: '已在第 {n} 位插入 gost 中转',
       addHop: '添加一跳',
       targetsBelow: '目标（见下方）',
       nodes: '节点',
@@ -375,7 +378,6 @@ export default {
       entryNote: '入口监听的地址和端口在“入口监听”里设置；限额只作用于入口。',
       previousEngine: '第 {n} 跳的 {engine}',
       linkFix: '{prev} 无法发起 {link}。可以：',
-      insertRelay: '在前面插入 gost 中转',
       useRaw: '改为 RAW',
       mux: '多路复用',
       muxHelp: '多个连接共用一条加密链路；RAW 不可用。',

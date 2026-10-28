@@ -56,6 +56,9 @@ const (
 const (
 	EnforcedQuota   = "quota"
 	EnforcedExpired = "expired"
+	// EnforcedGostRemoved: a route still on the removed gost engine, which
+	// is left out of the plan until it is migrated or deleted.
+	EnforcedGostRemoved = "gost_removed"
 )
 
 var (

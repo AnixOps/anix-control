@@ -20,11 +20,6 @@
 // A Source answers the live connections per upstream address and port.
 // What each driver can provide:
 //
-//   - gost: (*gost.Driver).ActiveConns counts the host's established TCP
-//     connections and connected UDP sockets to each upstream (ss, no
-//     privilege). It is exact for RAW upstreams; an encrypted or
-//     multiplexed link counts its carriers, not the streams inside them;
-//     an upstream that several hops share counts once for all of them.
 //   - nftables: the forwarded connections are conntrack entries, not
 //     sockets, and reading conntrack needs netlink with CAP_NET_ADMIN,
 //     which this standard-library-only SDK does not do. The Agent (F3b)

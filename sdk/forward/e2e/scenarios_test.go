@@ -74,11 +74,7 @@ func newStarOf(t *testing.T, engine model.Engine, ids ...string) *star {
 		s.targets = append(s.targets, th)
 	}
 	addrs = append(addrs, s.client.a4, s.client.a6)
-	if engine == model.EngineGost {
-		s.entry = l.gostNode(entry1, ent, addrs...)
-	} else {
-		s.entry = l.node(entry1, ent, limit, addrs...)
-	}
+	s.entry = l.node(entry1, ent, limit, addrs...)
 	return s
 }
 

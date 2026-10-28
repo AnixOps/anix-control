@@ -8,7 +8,52 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/networkmodel"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 )
+
+// legacyGost stores route as a gost route kept from before gost was
+// removed: it is created on nftables, then rewritten in place.
+func (f *fixture) legacyGost(requestID string, route *forwardv1.Route) *forwardv1.Route {
+	f.t.Helper()
+	nft := proto.Clone(route).(*forwardv1.Route)
+	for _, hop := range nft.Hops {
+		hop.Engine = forwardv1.Engine_ENGINE_NFTABLES
+		if len(hop.NodeRefs) > 1 {
+			hop.NodeRefs = hop.NodeRefs[:1]
+		}
+	}
+	nft.Policy = nil
+	created := f.create(requestID, nft)
+	stored := proto.Clone(route).(*forwardv1.Route)
+	stored.Id, stored.Revision = created.GetId(), created.GetRevision()
+	stored.CreatedAtUnixMs, stored.UpdatedAtUnixMs = created.GetCreatedAtUnixMs(), created.GetUpdatedAtUnixMs()
+	encoded, err := encodeRoute(stored)
+	require.NoError(f.t, err)
+	require.NoError(f.t, f.db.Model(&model.KernelForwardRoute{}).Where("id = ?", stored.GetId()).Update("route_json", encoded).Error)
+	return stored
+}
+
+// Control takes no new gost hop, on create or update.
+func TestGostRoutesAreRefused(t *testing.T) {
+	db := openSQLite(t)
+	migrate(t, db)
+	f := newFixture(t, db)
+	caps := nftCaps(forwardv1.Engine_ENGINE_NFTABLES, forwardv1.Engine_ENGINE_GOST)
+	f.hello(entry, caps)
+	f.hello(exit, caps)
+	_, err := f.service.CreateRoute(f.ctx, "gost-create", gostRoute(0))
+	var refusal *RefusedError
+	require.ErrorAs(t, err, &refusal)
+	require.Equal(t, "hops[0].engine", refusal.Violations[0].Field)
+	require.Contains(t, refusal.Violations[0].Message, "ENGINE_GOST was removed")
+
+	created := f.create("nft-create", twoHop(0))
+	update := gostRoute(0)
+	update.Id = created.GetId()
+	_, err = f.service.UpdateRoute(f.ctx, "gost-update", update, created.GetRevision())
+	require.ErrorAs(t, err, &refusal)
+	require.Equal(t, "hops[0].engine", refusal.Violations[0].Field)
+}
 
 func gostRoute(port uint32) *forwardv1.Route {
 	route := twoHop(port)
@@ -40,14 +85,16 @@ func TestMigrateGostRoutes(t *testing.T) {
 	}}, nil, networkmodel.Actor{Name: "admin"})
 	require.NoError(t, err)
 
-	gost := f.create("migrate-1", gostRoute(0))
+	// Routes stored before gost was removed: created on nftables, then
+	// rewritten in place, as Control no longer takes a gost hop.
+	gost := f.legacyGost("migrate-1", gostRoute(0))
 	nft := f.create("migrate-2", twoHop(0))
 	ha := gostRoute(0)
 	ha.Hops[1].NodeRefs = []string{exit.String(), "forward-13"}
 	ha.Policy = &forwardv1.Policy{NextHop: forwardv1.BalanceStrategy_BALANCE_STRATEGY_FAILOVER}
 	require.NoError(t, db.Model(&model.ForwardNode{}).Where("id = ?", 13).Update("enabled", true).Error)
 	f.hello(agentcontrol.AgentNode{Kind: agentcontrol.NodeKindForward, ID: 13}, caps)
-	blocked := f.create("migrate-3", ha)
+	blocked := f.legacyGost("migrate-3", ha)
 	var port uint32
 	for _, allocation := range f.allocations() {
 		if allocation.RouteID == gost.GetId() && allocation.HopIndex == 0 {
@@ -55,6 +102,24 @@ func TestMigrateGostRoutes(t *testing.T) {
 		}
 	}
 	require.NotZero(t, port)
+
+	// The routes left on gost are not planned, show why, and keep their
+	// ports.
+	_, err = f.service.Replan(f.ctx, "test")
+	require.NoError(t, err)
+	var row model.KernelForwardRoute
+	require.NoError(t, db.Where("id = ?", gost.GetId()).First(&row).Error)
+	require.Equal(t, EnforcedGostRemoved, row.Enforced)
+	for _, hop := range f.state(entry).GetHops() {
+		require.NotEqual(t, gost.GetId(), hop.GetRouteId(), "a gost route is not planned")
+	}
+	held := false
+	for _, allocation := range f.allocations() {
+		if allocation.RouteID == gost.GetId() && allocation.HopIndex == 0 {
+			held = allocation.Port == port && allocation.ReleasedAt == nil
+		}
+	}
+	require.True(t, held, "a gost route keeps its entry port")
 
 	dry, err := f.service.MigrateGostRoutes(f.ctx, true, networkmodel.Actor{Name: "admin"})
 	require.NoError(t, err)

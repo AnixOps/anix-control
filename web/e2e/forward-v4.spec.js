@@ -40,7 +40,7 @@ test('creates a route: preview, save, detail and diagnosis', async ({ page }) =>
   expect(planned).toEqual({
     name: 'e2e-edge',
     listen: { protocol: 'L4_PROTOCOL_TCP' },
-    hops: [{ role: 'HOP_ROLE_ENTRY', engine: 'ENGINE_GOST', node_refs: ['forward-41'] }],
+    hops: [{ role: 'HOP_ROLE_ENTRY', engine: 'ENGINE_NFTABLES', node_refs: ['forward-41'] }],
     targets: [{ host: 'origin.example.com', port: 443 }],
     policy: { next_hop: 'BALANCE_STRATEGY_ROUND_ROBIN', target: 'BALANCE_STRATEGY_ROUND_ROBIN', direct: 'DIRECT_MODE_OFF', target_policy: 'TARGET_POLICY_PUBLIC_ONLY' }
   })
@@ -72,8 +72,8 @@ test('maps the preview violations to their fields', async ({ page }) => {
   await expect(page.getByTestId('forward-save')).toBeDisabled()
   await summary.locator('[data-violation-field="targets[0].host"]').click()
   await expect(page.getByLabel('Target 1 host')).toBeFocused()
-  // The link fix: insert a gost relay before the TLS exit.
-  await expect(page.getByRole('button', { name: 'Insert a gost relay before' })).toBeVisible()
+  // The link fix: fall back to RAW.
+  await expect(page.getByRole('button', { name: 'Use RAW' })).toBeVisible()
 })
 
 test('saves a node’s forwarding settings', async ({ page }) => {

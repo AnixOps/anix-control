@@ -20,6 +20,7 @@ describe('route status', () => {
   it('puts enforced before paused before health (D8)', () => {
     expect(routeStatus({ route: { ...route, paused: true }, enforced: 'quota' }, context)).toBe('quota')
     expect(routeStatus({ route: { ...route, paused: true }, enforced: 'expired' }, context)).toBe('expired')
+    expect(routeStatus({ route, enforced: 'gost_removed' }, context)).toBe('gost_removed')
     expect(routeStatus({ route: { ...route, paused: true } }, context)).toBe('paused')
     expect(routeStatus({ route }, context)).toBe('error')
     expect(routeStatus({ route }, { ...context, hopErrorRoutes: new Set() })).toBe('degraded')

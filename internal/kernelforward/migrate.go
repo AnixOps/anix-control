@@ -158,7 +158,8 @@ func (s *Service) MigrateGostRoutes(ctx context.Context, dryRun bool, actor netw
 	return report, nil
 }
 
-// allocatedEntryPorts answers each route's active entry port.
+// allocatedEntryPorts answers each route's active entry port; a route left
+// on gost holds its allocation until it is migrated.
 func allocatedEntryPorts(db *gorm.DB) (map[string]uint32, error) {
 	var rows []model.KernelForwardAllocation
 	if err := db.Where("hop_index = ? AND released_at IS NULL", 0).Find(&rows).Error; err != nil {

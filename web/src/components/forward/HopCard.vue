@@ -135,7 +135,6 @@
       <div v-if="linkError" class="fwd-note is-danger hop-card__fix" role="note">
         <span>{{ t('forwardV4.editor.linkFix', { prev: previousLabel, link: SECURITIES[security] || security }) }}</span>
         <span class="hop-card__fix-actions">
-          <UiButton size="sm" :icon="Plus" @click="emit('insert-relay')">{{ t('forwardV4.editor.insertRelay') }}</UiButton>
           <UiButton size="sm" @click="setIngress({ security: 'LINK_SECURITY_RAW', mux: false })">{{ t('forwardV4.editor.useRaw') }}</UiButton>
         </span>
       </div>
@@ -235,7 +234,7 @@ const props = defineProps({
   // loaded.
   networkModel: { type: Object, default: null }
 })
-const emit = defineEmits(['update', 'add-node', 'remove-node', 'move', 'remove', 'insert-relay'])
+const emit = defineEmits(['update', 'add-node', 'remove-node', 'move', 'remove'])
 const { t } = useAppI18n()
 
 const path = computed(() => `hops[${props.index}]`)
@@ -328,6 +327,8 @@ const forwardNodeOptions = computed(() => props.nodes
 const engineOptions = computed(() => {
   const engines = [...BASE_ENGINES]
   if (props.enableAnixOps || props.hop.engine === 'ENGINE_ANIXOPS') engines.push('ENGINE_ANIXOPS')
+  // A route left on the removed gost engine still shows it.
+  if (props.hop.engine === 'ENGINE_GOST') engines.push('ENGINE_GOST')
   return engines.map(engine => {
     const missing = props.hop.node_refs.filter(ref => !caps(ref, engine)?.available)
     let description = t(`forwardV4.engine.${engine}`)

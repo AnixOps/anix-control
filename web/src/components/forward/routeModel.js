@@ -6,13 +6,14 @@
 
 export const ENGINES = Object.freeze({
   ENGINE_NFTABLES: { short: 'nft', label: 'nftables' },
+  // gost was removed; routes left on it still show it.
   ENGINE_GOST: { short: 'gost', label: 'gost' },
   ENGINE_ANIXOPS: { short: 'anixops', label: 'anixops' },
   ENGINE_NETWORK: { short: 'net', label: 'ANX' }
 })
 
 // Engines the editor offers; anixops only with the experimental flag (D12).
-export const BASE_ENGINES = Object.freeze(['ENGINE_NFTABLES', 'ENGINE_GOST', 'ENGINE_NETWORK'])
+export const BASE_ENGINES = Object.freeze(['ENGINE_NFTABLES', 'ENGINE_NETWORK'])
 
 // An ENGINE_NETWORK route runs on the network model (anx-node): every hop
 // is a network device, each link a network model transport, the exit an
@@ -57,7 +58,7 @@ export const HOUR_MS = 3_600_000
 // Status keys in badge order (worst first; docs/design/forward-ui README).
 export const STATUS_ORDER = Object.freeze(['quota', 'expired', 'paused', 'error', 'degraded', 'syncing', 'healthy'])
 export const STATUS_TONES = Object.freeze({
-  quota: 'warning', expired: 'warning', paused: 'neutral', error: 'danger', degraded: 'warning', syncing: 'info', healthy: 'success'
+  quota: 'warning', expired: 'warning', gost_removed: 'danger', paused: 'neutral', error: 'danger', degraded: 'warning', syncing: 'info', healthy: 'success'
 })
 
 export function roleOf(index, total) {
@@ -76,7 +77,7 @@ export function linkLabel(hop, mux = '·mux') {
 }
 
 export function isEnforced(enforced) {
-  return enforced === 'quota' || enforced === 'expired'
+  return enforced === 'quota' || enforced === 'expired' || enforced === 'gost_removed'
 }
 
 export function num(value) {
@@ -134,6 +135,7 @@ export function nodeLagging(node) {
 export function routeStatus({ route, enforced } = {}, context = {}) {
   if (enforced === 'quota') return 'quota'
   if (enforced === 'expired') return 'expired'
+  if (enforced === 'gost_removed') return 'gost_removed'
   if (route?.paused) return 'paused'
   const id = route?.id
   if (id && context.hopErrorRoutes?.has(id)) return 'error'
@@ -255,7 +257,7 @@ function nextKey() {
   return `k${keySeq}`
 }
 
-export function blankHop(index, total, engine = 'ENGINE_GOST') {
+export function blankHop(index, total, engine = 'ENGINE_NFTABLES') {
   const hop = { _key: nextKey(), role: roleOf(index, total), engine, node_refs: [], port: 0, portMode: 'auto', dial_address: '', network_egress_id: '' }
   if (index > 0) {
     hop.ingress = engine === NETWORK_ENGINE
@@ -324,7 +326,7 @@ export function fromLocalInput(text) {
 export function routeToDraft(route = null) {
   const source = route ? JSON.parse(JSON.stringify(route)) : null
   const hops = (source?.hops?.length ? source.hops : [{}]).map((hop, index, list) => ({
-    ...blankHop(index, list.length, hop.engine || 'ENGINE_GOST'),
+    ...blankHop(index, list.length, hop.engine || 'ENGINE_NFTABLES'),
     ...hop,
     _key: nextKey(),
     role: roleOf(index, list.length),

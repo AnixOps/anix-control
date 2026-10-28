@@ -90,6 +90,13 @@ import { usePolling } from '@/components/forward/usePolling'
 import { hourlySeries, isEnforced, nodeLag, nodeLagging, nodeOnline, num } from '@/components/forward/routeModel'
 import '@/components/forward/forward.css'
 
+// The action that lifts each enforcement.
+const ENFORCED_ACTIONS = {
+  quota: 'forwardV4.actions.raiseQuota',
+  expired: 'forwardV4.actions.extendExpiry',
+  gost_removed: 'forwardV4.actions.migrateGost'
+}
+
 const router = useRouter()
 const { t } = useAppI18n()
 const fmt = useFormat()
@@ -190,8 +197,8 @@ const attention = computed(() => {
       tone: 'warning',
       title: item.route.name,
       detail: t(`forwardV4.status.${item.enforced}Hint`),
-      action: t(item.enforced === 'quota' ? 'forwardV4.actions.raiseQuota' : 'forwardV4.actions.extendExpiry'),
-      to: `/admin/forward/routes/${item.route.id}/edit#limits`
+      action: t(ENFORCED_ACTIONS[item.enforced] || 'forwardV4.actions.extendExpiry'),
+      to: item.enforced === 'gost_removed' ? '/admin/forward/routes' : `/admin/forward/routes/${item.route.id}/edit#limits`
     })
   }
   return out

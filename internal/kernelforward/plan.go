@@ -185,7 +185,15 @@ func (s *Service) replanTx(tx *gorm.DB, routes []storedRoute, now time.Time) (Pl
 	}
 	effective := make([]*forwardv1.Route, 0, len(routes))
 	enforced := make(map[string]string, len(routes))
+	// A route left on gost is not planned, but holds its ports until it is
+	// migrated (its clients keep the entry port) or deleted.
+	held := map[string]bool{}
 	for _, stored := range routes {
+		if onGost(stored.route) {
+			enforced[stored.route.GetId()] = EnforcedGostRemoved
+			held[stored.route.GetId()] = true
+			continue
+		}
 		reason := enforcement(stored.route, used[stored.route.GetId()], now)
 		enforced[stored.route.GetId()] = reason
 		route := stored.route
@@ -194,6 +202,12 @@ func (s *Service) replanTx(tx *gorm.DB, routes []storedRoute, now time.Time) (Pl
 			route.Paused = true
 		}
 		effective = append(effective, route)
+	}
+	for key, slot := range previous {
+		if held[key.RouteID] {
+			taken[key] = slot
+			delete(previous, key)
+		}
 	}
 	result, err := planner.Plan(effective, inv.nodes, previous, planner.Options{
 		Cluster: s.cluster(), ReservedPorts: inv.reserved, Taken: taken, Now: now, EnableAnixOps: s.anixOpsEnabled(),
@@ -215,7 +229,7 @@ func (s *Service) replanTx(tx *gorm.DB, routes []storedRoute, now time.Time) (Pl
 		return PlanOutcome{}, err
 	}
 	outcome.Changed = changed
-	if err := writeAllocations(tx, result.Allocations, now); err != nil {
+	if err := writeAllocations(tx, result.Allocations, held, now); err != nil {
 		return PlanOutcome{}, err
 	}
 	for _, stored := range routes {
@@ -294,13 +308,17 @@ func loadAllocations(tx *gorm.DB, now time.Time) (previous, taken planner.Alloca
 	return previous, taken, nil
 }
 
-// writeAllocations makes the active allocations exactly allocations.
-func writeAllocations(tx *gorm.DB, allocations planner.Allocations, now time.Time) error {
+// writeAllocations makes the active allocations exactly allocations, but
+// for the held routes', which stay as they are.
+func writeAllocations(tx *gorm.DB, allocations planner.Allocations, held map[string]bool, now time.Time) error {
 	var rows []model.KernelForwardAllocation
 	if err := tx.Where("released_at IS NULL").Find(&rows).Error; err != nil {
 		return fmt.Errorf("kernel forward: load allocations: %w", err)
 	}
 	for _, row := range rows {
+		if held[row.RouteID] {
+			continue
+		}
 		key := planner.Key{RouteID: row.RouteID, HopIndex: row.HopIndex, NodeRef: row.NodeRef}
 		slot, kept := allocations[key]
 		if kept && slot.Port == row.Port && slot.Mark == row.Mark {

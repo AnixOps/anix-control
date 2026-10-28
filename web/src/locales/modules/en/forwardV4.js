@@ -33,7 +33,7 @@ export default {
     },
     engine: {
       ENGINE_NFTABLES: 'Kernel DNAT, almost no CPU; RAW links only',
-      ENGINE_GOST: 'TLS / WSS / QUIC / gRPC and multiplexing',
+      ENGINE_GOST: 'Removed: move the route to ANX',
       ENGINE_NETWORK: 'Network model (anx-node): ANX-Line on trusted lines, the A2 jacket across borders',
       ENGINE_ANIXOPS: 'AnixOps relay protocol (experimental)',
       anixopsLabel: 'anixops (experimental)',
@@ -102,6 +102,8 @@ export default {
       healthy: 'Healthy',
       quotaHint: 'Resumes when the quota is raised',
       expiredHint: 'Resumes when the expiry is extended',
+      gost_removed: 'Stopped · gost removed',
+      gost_removedHint: 'Move it to ANX from the routes page, or delete it',
       filter: {
         healthy: 'Healthy',
         degraded: 'Degraded',
@@ -125,7 +127,8 @@ export default {
       deleteRoute: 'Delete route…',
       deleteSuperOnly: 'Delete (super administrators only)',
       raiseQuota: 'Raise quota…',
-      extendExpiry: 'Extend expiry…'
+      extendExpiry: 'Extend expiry…',
+      migrateGost: 'Move to ANX…'
     },
     errors: {
       super_admin_required: 'Only a super administrator may delete.',
@@ -317,7 +320,8 @@ export default {
       viewPreview: 'View preview',
       enforced: {
         quota: 'Control paused this route because its quota is used up. Raise or clear the quota and it resumes at the next plan; Resume does nothing for it.',
-        expired: 'Control paused this route because it expired. Extend or clear the expiry and it resumes at the next plan.'
+        expired: 'Control paused this route because it expired. Extend or clear the expiry and it resumes at the next plan.',
+        gost_removed: 'This route is still on gost, which was removed: Control no longer plans it, and it keeps its ports. Move it to ANX from the routes page (Move gost routes to ANX), or delete it.'
       },
       basics: 'Basics',
       name: 'Name',
@@ -350,7 +354,6 @@ export default {
       removeHop: 'Remove hop {n}',
       moved: 'Hop {from} moved to position {to}',
       removed: 'Removed hop {n}',
-      inserted: 'Inserted a gost relay at position {n}',
       addHop: 'Add a hop',
       targetsBelow: 'Targets (below)',
       nodes: 'Nodes',
@@ -374,7 +377,6 @@ export default {
       entryNote: 'The entry address and port are under Entry; limits apply at the entry only.',
       previousEngine: 'Hop {n}’s {engine}',
       linkFix: '{prev} cannot originate {link}. You can:',
-      insertRelay: 'Insert a gost relay before',
       useRaw: 'Use RAW',
       mux: 'Multiplexing',
       muxHelp: 'Connections share one encrypted link; not with RAW.',

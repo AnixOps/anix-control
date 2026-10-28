@@ -7,8 +7,8 @@ import (
 )
 
 // Env is one isolated host for one scenario: an in-memory host for the
-// fake driver, a set of network namespaces for the nftables and gost
-// drivers (F2d). Factory makes a fresh one for every scenario; the
+// fake driver, a set of network namespaces for the nftables driver
+// (F2d). Factory makes a fresh one for every scenario; the
 // factory registers its own teardown with t.Cleanup.
 type Env interface {
 	// NewDriver answers a driver bound to the host. Calling it again
@@ -17,7 +17,7 @@ type Env interface {
 	NewDriver(t testing.TB) driver.Driver
 	// Owned lists the driver-owned objects now on the host, as stable
 	// strings in a stable order (an nft listing of "inet anixops_fwd"
-	// without counter values, the gost services). Two hosts running the
+	// without counter values). Two hosts running the
 	// same artifact list the same objects; a host the driver owns nothing
 	// on lists none.
 	Owned(t testing.TB) []string
@@ -49,7 +49,7 @@ type TrafficSource interface {
 }
 
 // ApplyFaulter makes the next Apply fail inside the engine (nft -f refuses
-// the transaction, gost refuses the config) after the driver started it.
+// the transaction) after the driver started it.
 type ApplyFaulter interface {
 	FailNextApply(t testing.TB)
 }
