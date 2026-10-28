@@ -224,6 +224,11 @@ enum Engine {
   // The AnixOps relay protocol (v4.3). Refused by the planner until a node
   // advertises it.
   ENGINE_ANIXOPS = 3;
+  // The node's network-model kernel (anixcore / anx-node over network.v1;
+  // docs/design/network-model/implementation.md, step 5): the entry is a
+  // port forward of the node's NetworkPlan, the link an anx_line transport
+  // of the network model. Not part of NodeForwardState.
+  ENGINE_NETWORK = 4;
 }
 
 // HopRole is a hop's place in the route.
@@ -259,6 +264,10 @@ enum LinkSecurity {
   LINK_SECURITY_GRPC = 5;
   // The AnixOps relay protocol (v4.3).
   LINK_SECURITY_ANIXOPS = 6;
+  // A transport of the network model (LinkTransport.network_transport_id):
+  // anx_line on trusted links (IX, private line), anx across borders;
+  // ENGINE_NETWORK hops only.
+  LINK_SECURITY_NETWORK = 7;
 }
 
 // AnixOpsCarrier is the transport carrier of a LINK_SECURITY_ANIXOPS link
@@ -396,6 +405,10 @@ message Hop {
   // private-line address. Empty uses the node's primary address. Only with
   // a single node in node_refs.
   string dial_address = 6;
+  // network_egress_id is the network model's internet egress on the hop's
+  // device that dials the targets; only on an ENGINE_NETWORK EXIT hop,
+  // required there. Routes over one transport share its egress.
+  string network_egress_id = 7;
 }
 
 // LinkTransport is the transport between two hops.
@@ -412,6 +425,11 @@ message LinkTransport {
   // carrier is the transport carrier; only for LINK_SECURITY_ANIXOPS,
   // refused on other links. Unspecified means ANIXOPS_CARRIER_AUTO.
   AnixOpsCarrier carrier = 5;
+  // network_transport_id is the network model's transport the link runs
+  // over; only for LINK_SECURITY_NETWORK, required there. Its
+  // dialing end is on the previous hop's device, its accepting end on this
+  // hop's. Several routes may share one transport.
+  string network_transport_id = 6;
 }
 
 // Target is a destination behind the last hop.

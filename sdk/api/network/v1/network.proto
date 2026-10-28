@@ -97,6 +97,34 @@ message NetworkPlan {
   // Where traffic arriving over a transport goes next, on a relay or the
   // last device of a path. A relay never consults user rules (N5).
   repeated Forwarding forwarding = 9;
+  // Panel forwarding routes that enter at this device (forward.v1
+  // ENGINE_NETWORK; implementation.md step 5).
+  repeated PortForward port_forwards = 10;
+}
+
+// PortForward relays a listen port to fixed targets, as a panel forwarding
+// route does: the entry of a forward.v1 route whose hops are ENGINE_NETWORK.
+message PortForward {
+  // The forward.v1 route id.
+  string id = 1;
+  Endpoint listen = 2;
+  // "tcp", "udp" or both.
+  repeated string protocols = 3;
+  // Balanced by the route's policy (to come); the first one until then.
+  repeated ForwardTarget targets = 4;
+  oneof next {
+    // A local internet egress.
+    string egress_id = 5;
+    // The first transport; the last device forwards it to its egress.
+    string transport_id = 6;
+  }
+}
+
+// ForwardTarget is where a PortForward's traffic goes in the end.
+message ForwardTarget {
+  // An IP address or a DNS name, resolved where the traffic leaves.
+  string host = 1;
+  uint32 port = 2;
 }
 
 // Line is one uplink of the device: a network interface and its carrier.
@@ -362,4 +390,17 @@ message NetworkStatus {
   repeated InterfaceFact interfaces = 5;
   repeated PublicKey public_keys = 6;
   int64 observed_at_unix_ms = 7;
+  repeated PortForwardStatus port_forwards = 8;
+}
+
+// PortForwardStatus is a port forward's state and bytes. The counters grow
+// from the start of the device's kernel process; a lower value than the
+// last report starts a new epoch.
+message PortForwardStatus {
+  string id = 1;
+  ComponentState state = 2;
+  string detail = 3;
+  // Client to target, and back.
+  uint64 up_bytes = 4;
+  uint64 down_bytes = 5;
 }

@@ -35,6 +35,11 @@ const (
 	// The AnixOps relay protocol (v4.3). Refused by the planner until a node
 	// advertises it.
 	Engine_ENGINE_ANIXOPS Engine = 3
+	// The node's network-model kernel (anixcore / anx-node over network.v1;
+	// docs/design/network-model/implementation.md, step 5): the entry is a
+	// port forward of the node's NetworkPlan, the link an anx_line transport
+	// of the network model. Not part of NodeForwardState.
+	Engine_ENGINE_NETWORK Engine = 4
 )
 
 // Enum value maps for Engine.
@@ -44,12 +49,14 @@ var (
 		1: "ENGINE_NFTABLES",
 		2: "ENGINE_GOST",
 		3: "ENGINE_ANIXOPS",
+		4: "ENGINE_NETWORK",
 	}
 	Engine_value = map[string]int32{
 		"ENGINE_UNSPECIFIED": 0,
 		"ENGINE_NFTABLES":    1,
 		"ENGINE_GOST":        2,
 		"ENGINE_ANIXOPS":     3,
+		"ENGINE_NETWORK":     4,
 	}
 )
 
@@ -205,6 +212,10 @@ const (
 	LinkSecurity_LINK_SECURITY_GRPC LinkSecurity = 5
 	// The AnixOps relay protocol (v4.3).
 	LinkSecurity_LINK_SECURITY_ANIXOPS LinkSecurity = 6
+	// A transport of the network model (LinkTransport.network_transport_id):
+	// anx_line on trusted links (IX, private line), anx across borders;
+	// ENGINE_NETWORK hops only.
+	LinkSecurity_LINK_SECURITY_NETWORK LinkSecurity = 7
 )
 
 // Enum value maps for LinkSecurity.
@@ -217,6 +228,7 @@ var (
 		4: "LINK_SECURITY_QUIC",
 		5: "LINK_SECURITY_GRPC",
 		6: "LINK_SECURITY_ANIXOPS",
+		7: "LINK_SECURITY_NETWORK",
 	}
 	LinkSecurity_value = map[string]int32{
 		"LINK_SECURITY_UNSPECIFIED": 0,
@@ -226,6 +238,7 @@ var (
 		"LINK_SECURITY_QUIC":        4,
 		"LINK_SECURITY_GRPC":        5,
 		"LINK_SECURITY_ANIXOPS":     6,
+		"LINK_SECURITY_NETWORK":     7,
 	}
 )
 
@@ -1277,9 +1290,13 @@ type Hop struct {
 	// dial_address overrides the address the previous hop dials, for a
 	// private-line address. Empty uses the node's primary address. Only with
 	// a single node in node_refs.
-	DialAddress   string `protobuf:"bytes,6,opt,name=dial_address,json=dialAddress,proto3" json:"dial_address,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	DialAddress string `protobuf:"bytes,6,opt,name=dial_address,json=dialAddress,proto3" json:"dial_address,omitempty"`
+	// network_egress_id is the network model's internet egress on the hop's
+	// device that dials the targets; only on an ENGINE_NETWORK EXIT hop,
+	// required there. Routes over one transport share its egress.
+	NetworkEgressId string `protobuf:"bytes,7,opt,name=network_egress_id,json=networkEgressId,proto3" json:"network_egress_id,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *Hop) Reset() {
@@ -1354,6 +1371,13 @@ func (x *Hop) GetDialAddress() string {
 	return ""
 }
 
+func (x *Hop) GetNetworkEgressId() string {
+	if x != nil {
+		return x.NetworkEgressId
+	}
+	return ""
+}
+
 // LinkTransport is the transport between two hops.
 type LinkTransport struct {
 	state    protoimpl.MessageState `protogen:"open.v1"`
@@ -1368,9 +1392,14 @@ type LinkTransport struct {
 	Path string `protobuf:"bytes,4,opt,name=path,proto3" json:"path,omitempty"`
 	// carrier is the transport carrier; only for LINK_SECURITY_ANIXOPS,
 	// refused on other links. Unspecified means ANIXOPS_CARRIER_AUTO.
-	Carrier       AnixOpsCarrier `protobuf:"varint,5,opt,name=carrier,proto3,enum=anixops.forward.v1.AnixOpsCarrier" json:"carrier,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Carrier AnixOpsCarrier `protobuf:"varint,5,opt,name=carrier,proto3,enum=anixops.forward.v1.AnixOpsCarrier" json:"carrier,omitempty"`
+	// network_transport_id is the network model's transport the link runs
+	// over; only for LINK_SECURITY_NETWORK, required there. Its
+	// dialing end is on the previous hop's device, its accepting end on this
+	// hop's. Several routes may share one transport.
+	NetworkTransportId string `protobuf:"bytes,6,opt,name=network_transport_id,json=networkTransportId,proto3" json:"network_transport_id,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *LinkTransport) Reset() {
@@ -1436,6 +1465,13 @@ func (x *LinkTransport) GetCarrier() AnixOpsCarrier {
 		return x.Carrier
 	}
 	return AnixOpsCarrier_ANIXOPS_CARRIER_UNSPECIFIED
+}
+
+func (x *LinkTransport) GetNetworkTransportId() string {
+	if x != nil {
+		return x.NetworkTransportId
+	}
+	return ""
 }
 
 // Target is a destination behind the last hop.
@@ -7996,21 +8032,23 @@ const file_api_forward_v1_forward_proto_rawDesc = "" +
 	"\aaddress\x18\x01 \x01(\tR\aaddress\x12\x12\n" +
 	"\x04port\x18\x02 \x01(\rR\x04port\x12:\n" +
 	"\bprotocol\x18\x03 \x01(\x0e2\x1e.anixops.forward.v1.L4ProtocolR\bprotocol\x12%\n" +
-	"\x0eentry_hostname\x18\x04 \x01(\tR\rentryHostname\"\xfb\x01\n" +
+	"\x0eentry_hostname\x18\x04 \x01(\tR\rentryHostname\"\xa7\x02\n" +
 	"\x03Hop\x12/\n" +
 	"\x04role\x18\x01 \x01(\x0e2\x1b.anixops.forward.v1.HopRoleR\x04role\x122\n" +
 	"\x06engine\x18\x02 \x01(\x0e2\x1a.anixops.forward.v1.EngineR\x06engine\x12\x1b\n" +
 	"\tnode_refs\x18\x03 \x03(\tR\bnodeRefs\x12;\n" +
 	"\aingress\x18\x04 \x01(\v2!.anixops.forward.v1.LinkTransportR\aingress\x12\x12\n" +
 	"\x04port\x18\x05 \x01(\rR\x04port\x12!\n" +
-	"\fdial_address\x18\x06 \x01(\tR\vdialAddress\"\xd2\x01\n" +
+	"\fdial_address\x18\x06 \x01(\tR\vdialAddress\x12*\n" +
+	"\x11network_egress_id\x18\a \x01(\tR\x0fnetworkEgressId\"\x84\x02\n" +
 	"\rLinkTransport\x12<\n" +
 	"\bsecurity\x18\x01 \x01(\x0e2 .anixops.forward.v1.LinkSecurityR\bsecurity\x12\x10\n" +
 	"\x03mux\x18\x02 \x01(\bR\x03mux\x12\x1f\n" +
 	"\vserver_name\x18\x03 \x01(\tR\n" +
 	"serverName\x12\x12\n" +
 	"\x04path\x18\x04 \x01(\tR\x04path\x12<\n" +
-	"\acarrier\x18\x05 \x01(\x0e2\".anixops.forward.v1.AnixOpsCarrierR\acarrier\"d\n" +
+	"\acarrier\x18\x05 \x01(\x0e2\".anixops.forward.v1.AnixOpsCarrierR\acarrier\x120\n" +
+	"\x14network_transport_id\x18\x06 \x01(\tR\x12networkTransportId\"d\n" +
 	"\x06Target\x12\x12\n" +
 	"\x04host\x18\x01 \x01(\tR\x04host\x12\x12\n" +
 	"\x04port\x18\x02 \x01(\rR\x04port\x12\x16\n" +
@@ -8578,12 +8616,13 @@ const file_api_forward_v1_forward_proto_rawDesc = "" +
 	"\x12GetLatencyResponse\x12;\n" +
 	"\abuckets\x18\x01 \x03(\v2!.anixops.forward.v1.LatencyBucketR\abuckets\x12\x1b\n" +
 	"\tbucket_ms\x18\x02 \x01(\x03R\bbucketMs\x12\x1c\n" +
-	"\ttruncated\x18\x03 \x01(\bR\ttruncated*Z\n" +
+	"\ttruncated\x18\x03 \x01(\bR\ttruncated*n\n" +
 	"\x06Engine\x12\x16\n" +
 	"\x12ENGINE_UNSPECIFIED\x10\x00\x12\x13\n" +
 	"\x0fENGINE_NFTABLES\x10\x01\x12\x0f\n" +
 	"\vENGINE_GOST\x10\x02\x12\x12\n" +
-	"\x0eENGINE_ANIXOPS\x10\x03*^\n" +
+	"\x0eENGINE_ANIXOPS\x10\x03\x12\x12\n" +
+	"\x0eENGINE_NETWORK\x10\x04*^\n" +
 	"\aHopRole\x12\x18\n" +
 	"\x14HOP_ROLE_UNSPECIFIED\x10\x00\x12\x12\n" +
 	"\x0eHOP_ROLE_ENTRY\x10\x01\x12\x12\n" +
@@ -8594,7 +8633,7 @@ const file_api_forward_v1_forward_proto_rawDesc = "" +
 	"\x17L4_PROTOCOL_UNSPECIFIED\x10\x00\x12\x13\n" +
 	"\x0fL4_PROTOCOL_TCP\x10\x01\x12\x13\n" +
 	"\x0fL4_PROTOCOL_UDP\x10\x02\x12\x17\n" +
-	"\x13L4_PROTOCOL_TCP_UDP\x10\x03*\xbd\x01\n" +
+	"\x13L4_PROTOCOL_TCP_UDP\x10\x03*\xd8\x01\n" +
 	"\fLinkSecurity\x12\x1d\n" +
 	"\x19LINK_SECURITY_UNSPECIFIED\x10\x00\x12\x15\n" +
 	"\x11LINK_SECURITY_RAW\x10\x01\x12\x15\n" +
@@ -8602,7 +8641,8 @@ const file_api_forward_v1_forward_proto_rawDesc = "" +
 	"\x11LINK_SECURITY_WSS\x10\x03\x12\x16\n" +
 	"\x12LINK_SECURITY_QUIC\x10\x04\x12\x16\n" +
 	"\x12LINK_SECURITY_GRPC\x10\x05\x12\x19\n" +
-	"\x15LINK_SECURITY_ANIXOPS\x10\x06*\x9d\x01\n" +
+	"\x15LINK_SECURITY_ANIXOPS\x10\x06\x12\x19\n" +
+	"\x15LINK_SECURITY_NETWORK\x10\a*\x9d\x01\n" +
 	"\x0eAnixOpsCarrier\x12\x1f\n" +
 	"\x1bANIXOPS_CARRIER_UNSPECIFIED\x10\x00\x12\x18\n" +
 	"\x14ANIXOPS_CARRIER_AUTO\x10\x01\x12\x1b\n" +

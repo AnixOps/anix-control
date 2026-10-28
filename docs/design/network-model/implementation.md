@@ -37,3 +37,61 @@
 2. **Control**：`Line` / `Ingress` / `Egress` / `Transport` / `Path` 表（`NodeEntry` 双写），`anx_line` 链路密钥用 `ca_kek` 封存，planner 生成每设备计划随 `ConfigSnapshot` 下发（只给协商了 `network.v1` 的会话），接收 `NetworkStatus`，出口设备的 anx-server 公钥从状态的 `public_keys` 取。
 3. **Agent**：`network.v1` 执行器——出口策略路由（20000–20999，抽自 `nategress` 与 WireGuard `network_policy`）、`anx_line` 链路：`dial` 端写 anx-node 的 `anx_line.links`，`accept` 端经 anx-server 管理面 `AddUsers`/`AddLinks`；状态由 `LinkStats` 填。
 4. **转发规则并入路径**（N8）：一条转发规则是一条目标固定的路径，入口设备上 forward 入站 `outbound = anx-line:<transport id>`。
+
+## 第 5 步：转发规则整体迁入网络模型，删除 gost（N8）
+
+所有者在 2026-10-28 决定：转发规则一次性迁入网络模型，删掉 gost；AnixOps 中继也并入网络模型；nftables（内核 DNAT）保留，作为不经过我们内核的纯端口映射引擎。
+
+**传输按链路是否可信来选（所有者 2026-10-28）**
+
+- ANX-Line（`anx_line`）不带外衣，只用在国内或可信链路上：用户入口直连 IX、专线（IPLC/IEPL）入口，以及我们自己控制的两端之间。
+- 跨境段（经公网出境）走 ANX-A 系列，也就是带外衣的 ANX（anx-node 的 `anx` 入站形态）。网络模型为它新增传输类型 `anx`，在 ANX-A 传输落地之前，跨境段暂用 WireGuard。
+- 规划器按段选择：入口到 IX 或专线入口用 `anx_line`，经公网出境的段用 `anx`。不允许把 `anx_line` 放在公网跨境段上；由于 Line 的可信与否只有 Control 知道，这条规则在规划器里检查，不在 Agent 或合约校验里检查。
+
+客户端只连入口端口，gost 只在我们自己的节点之间做链路，所以迁移对用户透明，切换时链路会重连一次。
+
+**一条规则映射成什么**
+
+- 入口设备上的一个端口转发（`PortForward`）。
+- 若干条传输，按跳串起来：可信段用 `anx_line`，跨境段用 `anx`（ANX-A）。这相当于商业中转面板里的「隧道」，多条规则可以共用。
+- 最后一跳设备上的出口。
+
+**内核要补的能力（替代 gost 前必须先有）**
+
+1. forward 入站支持多个目标：轮询、随机、IP 哈希、最少连接、按优先级故障切换，并带健康检查和熔断。参数直接沿用 forward.v1 的 `Policy`，目标在最后一跳解析和拨出。
+2. 中继：hop 入口进来的流量按 `forwarding` 交给下一条传输。Agent 侧要放开「transport → transport」，anx-server 接收后转给本机 anx-node 的下一条链路。
+3. 入口高可用：同一个 `PortForward` 下发到多个入口设备。
+4. 每条规则的限速、最大连接数和 PROXY protocol（v1/v2）。
+
+**合约**
+
+- forward.v1：
+  - `Engine.ENGINE_NETWORK = 4`、`LinkSecurity.LINK_SECURITY_NETWORK = 7`（链路走网络模型的某条传输，`anx_line` 或 `anx`）。
+  - `LinkTransport.network_transport_id = 6`。
+  - `Hop.network_egress_id = 7`。
+  - 迁移完成后，gost 的取值（ENGINE_GOST，以及 TLS / WSS / QUIC / GRPC 链路）只保留编号，规划器拒绝这些取值。
+- network.v1：
+  - `NetworkPlan.port_forwards`，消息为 `PortForward{id, listen, protocols, targets, oneof next}`，之后再加 policy 和 limits。
+  - `NetworkStatus.port_forwards`，携带累计字节，Control 写入 `KernelForwardCounter`。
+
+**迁移**
+
+- Control 提供一次性迁移：
+  - 每对相邻跳生成或复用一条传输：两端之间是 IX、专线或国内链路时用 `anx_line`，经公网跨境时用 `anx`（未落地前用 `wireguard`）。
+  - nftables 规则不迁移，原样保留。
+  - 规则改成 ENGINE_NETWORK，出口沿用该节点的互联网出口。
+  - 先 dry-run 列出变化，再执行。
+- 转发专用节点改为安装 anx-node 和 anx-server，不再装 gost。
+- 最后删除：
+  - Agent 的 gost 驱动（forward/gostswap、plugin/gostmesh），以及安装脚本里的 gost。
+  - Control 的 `internal/gost` 和 gost 下发。
+
+**顺序**
+
+1. 合约。
+2. 内核：多目标与策略、限速、PROXY protocol，以及 ANX-A 作为网络模型传输（anx-node 拨出、anx-server 接收）。
+3. Agent：PortForward、中继转发、计数。
+4. Control：规划与迁移。
+5. 面板。
+6. 灰度迁移。
+7. 删除 gost。
