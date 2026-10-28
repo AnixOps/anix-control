@@ -13567,7 +13567,7 @@
                     "type": "string"
                 },
                 "kind": {
-                    "description": "anx_line (others later)",
+                    "description": "anx_line, anx",
                     "type": "string"
                 },
                 "kind_version": {
@@ -13578,6 +13578,9 @@
                 },
                 "to_ingress": {
                     "type": "string"
+                },
+                "trusted": {
+                    "type": "boolean"
                 }
             }
         },

@@ -357,7 +357,7 @@ iWAN 客户端 ─(iWAN)─▶ 跨境机 ──────── 传输 ──�
 | 落地机 | `hop`：来自跨境机 | `internet`：`nat_direct` 或 `dedicated_ip` | 最终出口 |
 
 - 跨境机上 anixcore 在用户态终止 iWAN，按规则选路径（例如国内直出走跨境机自己的大陆侧出口，其余走落地机），不需要内核转发地址池。
-- 跨境机 → 落地机这一段可以是 `ss2022_relay`、`anx_line`，或 `iwan`（两端都是 anixcore 时）。
+- 跨境机 → 落地机这一段可以是 `ss2022_relay`、`anx`（ANX-A，A2 外衣），或 `iwan`（两端都是 anixcore 时）。裸的 `anx_line` 只用在可信段（IX、专线、国内），文档里要标 `trusted`；跨境不用 WireGuard（所有者 2026-10-28，见 implementation.md 第 5 步）。
 - 一台跨境机也可以直接用海外侧线路的 `internet` 出口当最终出口，这时路径只有一段 `local` 传输。
 
 **Panabit 不动的情况。** 如果 iWAN 段由第三方 Panabit 设备提供（`App ─▶ Panabit 入口 ═IPLC═▶ Panabit 香港 NAT ─▶ 落地机`），两端登记为 `managed=false` 的设备、中间是 `external` 传输，我们只下发落地机的入口和出口。
