@@ -354,6 +354,12 @@ definitions:
           $ref: '#/definitions/service.GroupProtocolLayoutItem'
         type: array
     type: object
+  handler.migrateGostRequest:
+    properties:
+      dry_run:
+        description: DryRun answers the report without changing anything.
+        type: boolean
+    type: object
   handler.networkModelRequest:
     properties:
       document:
@@ -493,6 +499,65 @@ definitions:
         type: integer
       username:
         type: string
+    type: object
+  kernelforward.BlockedRoute:
+    properties:
+      id:
+        type: string
+      name:
+        type: string
+      reasons:
+        items:
+          type: string
+        type: array
+    type: object
+  kernelforward.MigratedRoute:
+    properties:
+      egress:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      notes:
+        description: |-
+          Notes are what changes beyond the engine: a direct mode dropped,
+          hop ports left to the transports.
+        items:
+          type: string
+        type: array
+      owner:
+        type: string
+      transports:
+        items:
+          type: string
+        type: array
+    type: object
+  kernelforward.Migration:
+    properties:
+      added:
+        description: |-
+          Added are the network model components the migration adds, by kind
+          ("egress", "ingress", "transport") and id.
+        items:
+          type: string
+        type: array
+      applied:
+        description: Applied is true when the routes moved.
+        type: boolean
+      blocked:
+        items:
+          $ref: '#/definitions/kernelforward.BlockedRoute'
+        type: array
+      dry_run:
+        type: boolean
+      routes:
+        items:
+          $ref: '#/definitions/kernelforward.MigratedRoute'
+        type: array
+      untouched:
+        description: Untouched counts the routes not on gost.
+        type: integer
     type: object
   model.AdminCreateUserRequest:
     properties:
@@ -7601,6 +7666,43 @@ paths:
       security:
       - BearerAuth: []
       summary: A device's network plan
+      tags:
+      - Kernel
+  /api/v4/kernel/network/migrate-gost:
+    post:
+      consumes:
+      - application/json
+      description: 'One-shot migration of every forward.v1 route with an ENGINE_GOST
+        hop to ENGINE_NETWORK (docs/design/network-model/implementation.md step 5).
+        Each pair of adjacent hops runs over a network model transport: one already
+        joining the two devices, or an added one (bare anx_line between nodes labelled
+        link=iepl or link=iplc, the A2-jacketed anx kind with the gost link''s server
+        name otherwise), with the hop egress and hop ingress (port 24443, dialed at
+        the hop''s dial address or the node''s first address) it needs; the exit leaves
+        by its device''s internet egress, added as nat_direct when missing; the entry
+        keeps its allocated port. nftables routes are not touched. A route whose hop
+        has several nodes, whose device has no line, or whose untrusted link has no
+        server name stays on gost and is listed under blocked with the reasons. With
+        dry_run nothing changes. Otherwise the network model document is replaced
+        (audited) and every listed route changes in one plan (409 when the plan refuses
+        it).'
+      parameters:
+      - description: dry_run
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.migrateGostRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/kernelforward.Migration'
+      security:
+      - BearerAuth: []
+      summary: Move the gost forward routes onto the network model
       tags:
       - Kernel
   /api/v4/kernel/network/transports/{id}/rotate-key:

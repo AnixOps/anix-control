@@ -26,7 +26,7 @@ import (
 func newForwardTestEnvironment(t *testing.T) *agentControlTestEnvironment {
 	t.Helper()
 	environment := newConfigTestEnvironment(t)
-	requireAutoMigrate(t, append(model.KernelForwardModels(), &model.ForwardNode{})...)
+	requireAutoMigrate(t, append(append(model.KernelForwardModels(), &model.ForwardNode{}), model.NetworkModels()...)...)
 	return environment
 }
 

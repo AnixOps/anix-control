@@ -462,3 +462,35 @@ func TestStamp(t *testing.T) {
 		t.Fatal("vantage probes do not change the hash")
 	}
 }
+
+func TestNetworkRoutesAreValidatedOnly(t *testing.T) {
+	network := &forwardv1.Route{
+		Id: routeID(2), Owner: "admin",
+		Listen: &forwardv1.Listen{Port: 40001, Protocol: forwardv1.L4Protocol_L4_PROTOCOL_TCP},
+		Hops: []*forwardv1.Hop{{
+			Role: forwardv1.HopRole_HOP_ROLE_ENTRY, Engine: forwardv1.Engine_ENGINE_NETWORK,
+			NodeRefs: []string{"proxy-7"}, NetworkEgressId: "eg-1",
+		}},
+		Targets: []*forwardv1.Target{{Host: "198.51.100.7", Port: 443}},
+	}
+	routes := []*forwardv1.Route{twoHop(routeID(1), 0), network}
+	if res := mustPlan(t, routes, nil, Options{}); !hasViolation(res, routeID(2), "hops[0].engine", validate.CodeEngineNotEnabled) {
+		t.Fatalf("not enabled: %v", res.Violations)
+	}
+	res := mustPlan(t, routes, nil, Options{EnableNetwork: true})
+	if len(res.Violations) > 0 {
+		t.Fatal(res.Violations)
+	}
+	if _, ok := res.States["proxy-7"]; ok {
+		t.Fatal("an ENGINE_NETWORK route has no NodeForwardState")
+	}
+	for key := range res.Allocations {
+		if key.RouteID == routeID(2) {
+			t.Fatalf("allocation %v", key)
+		}
+	}
+	network.Hops[0].NetworkEgressId = ""
+	if res := mustPlan(t, routes, nil, Options{EnableNetwork: true}); !hasViolation(res, routeID(2), "hops[0].network_egress_id", validate.CodeRequired) {
+		t.Fatalf("validated: %v", res.Violations)
+	}
+}

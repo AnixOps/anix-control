@@ -22,6 +22,11 @@ type Options struct {
 	// stays false until the AnixOps protocol ships (v4.3); even then a node
 	// must advertise the engine.
 	EnableAnixOps bool
+	// EnableNetwork allows ENGINE_NETWORK and LINK_SECURITY_NETWORK routes,
+	// which Control plans on its network model (network.v1) instead of
+	// into NodeForwardState; their nodes are network devices, outside the
+	// node inventory.
+	EnableNetwork bool
 	// OnCreate with a non-zero Now requires limits.expires_at_unix_ms, when
 	// set, to be after Now. An update may keep an expiry that has passed.
 	OnCreate bool
@@ -52,6 +57,10 @@ func Route(r *model.Route, opts Options) Violations {
 	checkLimits(c, r, opts)
 	checkLabels(c, r)
 	checkPorts(c, r, opts)
+	if r.IsNetwork() {
+		checkNetwork(c, r)
+		return c.out
+	}
 	if len(opts.Nodes) > 0 {
 		checkInventory(c, r, opts)
 	}

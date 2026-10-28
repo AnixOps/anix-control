@@ -51,3 +51,6 @@ type NetworkDevice struct {
 }
 
 func (NetworkDevice) TableName() string { return "v4_kernel_network_device" }
+
+// NetworkModels are the network model's tables.
+func NetworkModels() []any { return []any{&NetworkModel{}, &NetworkTransportKey{}, &NetworkDevice{}} }

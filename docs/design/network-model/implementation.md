@@ -69,13 +69,20 @@ PortForward 由 Agent 转成 anixcore 的 forward 入站（出站为 `egress:<id
 **合约**
 
 - forward.v1：
-  - `Engine.ENGINE_NETWORK = 4`、`LinkSecurity.LINK_SECURITY_NETWORK = 7`（链路走网络模型的某条传输，`anx_line` 或 `anx`）、`ProxyProtocol.PROXY_PROTOCOL_V1 = 3`。在 Control 能规划之前，校验拒绝这三个新值。
+  - `Engine.ENGINE_NETWORK = 4`、`LinkSecurity.LINK_SECURITY_NETWORK = 7`（链路走网络模型的某条传输，`anx_line` 或 `anx`）、`ProxyProtocol.PROXY_PROTOCOL_V1 = 3`。SDK 校验默认拒绝这三个新值，Control 用 `validate.Options.EnableNetwork` 打开。
   - `LinkTransport.network_transport_id = 6`。
   - `Hop.network_egress_id = 7`。
   - 迁移完成后，gost 的取值（ENGINE_GOST，以及 TLS / WSS / QUIC / GRPC 链路）只保留编号，规划器拒绝这些取值。
 - network.v1：
   - `NetworkPlan.port_forwards`，消息为 `PortForward{id, listen, protocols, targets, oneof next}`，之后再加 policy 和 limits。
   - `NetworkStatus.port_forwards`，携带累计字节，Control 写入 `KernelForwardCounter`。
+
+**Control 的规划（已实现）**
+
+- ENGINE_NETWORK 路由规则：每一跳都是 ENGINE_NETWORK，每跳一个设备；入口端口必须显式给出；后续跳不填 port、dial_address、mux、server_name、path，链路填 `network_transport_id`，出口填 `network_egress_id`；不支持直连模式。不查转发节点库存，因为这些节点是网络模型设备。
+- forward.v1 规划器只校验这类路由，不生成 NodeForwardState，也不分配端口。每次接受的规划在同一事务里重新规划网络模型：路由变成入口设备的 PortForward，链路按传输规划，到期或超配额的路由暂停后端口转发随之撤下。
+- 入口没写监听地址时用 `::`。目标策略取 `policy.target`，限速和最大连接数取 `limits`，健康检查、熔断、PROXY 头照搬。
+- NetworkStatus 的 port_forwards 计入路由的第 0 跳计数：字节比上次小就是内核重启，开新的计数周期（`network-<毫秒>`）；比已存计数旧的状态忽略；达到配额触发重新规划。
 
 **迁移**
 
@@ -84,6 +91,7 @@ PortForward 由 Agent 转成 anixcore 的 forward 入站（出站为 `egress:<id
   - nftables 规则不迁移，原样保留。
   - 规则改成 ENGINE_NETWORK，出口沿用该节点的互联网出口。
   - 先 dry-run 列出变化，再执行。
+  - 已实现：`POST /api/v4/kernel/network/migrate-gost`（`dry_run`）。新增组件以 `mig-` 开头；新加的跳入口监听 24443，拨号地址取跳的 dial_address 或节点第一个地址；两端都标了 link=iepl/iplc 才用裸 `anx_line`，否则用 `anx`，SNI 取原 gost 链路的 server_name，没有就列为受阻；入口沿用已分配端口，客户端不用改。一跳多节点（出口 HA）、设备没有线路的路由留在 gost 并列出原因。所有可迁的路由在同一次规划里一起改，规划被拒则都不改。
 - 转发专用节点改为安装 anx-node 和 anx-server，不再装 gost。
 - 最后删除：
   - Agent 的 gost 驱动（forward/gostswap、plugin/gostmesh），以及安装脚本里的 gost。

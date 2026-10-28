@@ -40,7 +40,7 @@ func startLinkListener(t *testing.T, mode string, withLink bool) *linkListener {
 	var authority *modulepki.Authority
 	var pki *agentpki.Service
 	l := startAgentListenerWith(t, mode, false, func(cfg *ServerConfig) {
-		requireAutoMigrate(t, append(model.KernelForwardModels(), &model.ForwardLinkCA{}, &model.ForwardLinkCertificate{})...)
+		requireAutoMigrate(t, append(append(model.KernelForwardModels(), &model.ForwardLinkCA{}, &model.ForwardLinkCertificate{}), model.NetworkModels()...)...)
 		db := database.Get()
 		kek := make([]byte, 32)
 		_, err := rand.Read(kek)
