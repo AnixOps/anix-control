@@ -610,7 +610,59 @@ func checkPortForward(forward *networkv1.PortForward, forwards map[string]*netwo
 			return fmt.Errorf("targets[%d]: %v", j, err)
 		}
 	}
+	if err := checkForwardPolicy(forward); err != nil {
+		return fmt.Errorf("policy: %w", err)
+	}
 	return checkNext(forward.GetEgressId(), forward.GetTransportId(), egresses, transports)
+}
+
+// Forward policy bounds.
+const (
+	MaxTargetWeight     = 1000
+	MaxHealthIntervalMs = 3_600_000
+	MaxBreakerOpenMs    = 3_600_000
+	MaxBreakerThreshold = 100
+)
+
+var (
+	forwardBalances = map[string]bool{"": true, "round_robin": true, "random": true, "ip_hash": true, "least_conn": true, "failover": true}
+	proxyProtocols  = map[string]bool{"": true, "off": true, "v1": true, "v2": true}
+)
+
+func checkForwardPolicy(forward *networkv1.PortForward) error {
+	for j, target := range forward.GetTargets() {
+		if target.GetWeight() > MaxTargetWeight || target.GetPriority() > MaxTargetWeight {
+			return fmt.Errorf("targets[%d]: weight and priority are at most %d", j, MaxTargetWeight)
+		}
+	}
+	policy := forward.GetPolicy()
+	if !forwardBalances[policy.GetBalance()] {
+		return fmt.Errorf("balance %q must be round_robin, random, ip_hash, least_conn or failover", policy.GetBalance())
+	}
+	if !proxyProtocols[policy.GetProxyProtocol()] {
+		return fmt.Errorf("proxy_protocol %q must be off, v1 or v2", policy.GetProxyProtocol())
+	}
+	if p := policy.GetProxyProtocol(); p == "v1" || p == "v2" {
+		tcp := false
+		for _, protocol := range forward.GetProtocols() {
+			tcp = tcp || protocol == "tcp"
+		}
+		if !tcp {
+			return fmt.Errorf("the PROXY header is written on TCP; this forward is UDP only")
+		}
+	}
+	health := policy.GetHealth()
+	if health.GetIntervalMs() > MaxHealthIntervalMs || health.GetTimeoutMs() > MaxHealthIntervalMs {
+		return fmt.Errorf("health interval_ms and timeout_ms are at most %d", MaxHealthIntervalMs)
+	}
+	if health.GetIntervalMs() > 0 && health.GetTimeoutMs() > health.GetIntervalMs() {
+		return fmt.Errorf("health timeout_ms is longer than interval_ms")
+	}
+	breaker := policy.GetCircuitBreaker()
+	if breaker.GetFailureThreshold() > MaxBreakerThreshold || breaker.GetOpenMs() > MaxBreakerOpenMs {
+		return fmt.Errorf("circuit_breaker failure_threshold is at most %d and open_ms at most %d", MaxBreakerThreshold, MaxBreakerOpenMs)
+	}
+	return nil
 }
 
 func checkNext(egressID, transportID string, egresses map[string]*networkv1.Egress, transports map[string]*networkv1.Transport) error {
