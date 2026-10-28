@@ -24,7 +24,7 @@ func TestHostsMatchThePackageMatrix(t *testing.T) {
 		packages = append(packages, filepath.Base(filepath.Dir(manifest)))
 	}
 	sort.Strings(packages)
-	require.Len(t, packages, 18)
+	require.Len(t, packages, 17)
 	require.Equal(t, packages, IDs())
 	for _, host := range Hosts() {
 		_, err := os.Stat(filepath.Join("..", host.ID, "control", "main.go"))

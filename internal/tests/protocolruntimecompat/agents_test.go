@@ -354,22 +354,22 @@ func TestAgentTasksParity(t *testing.T) {
 			return []byte(fmt.Sprintf(`{"node_id":%d,"type":"diagnostic","action":%q,"params":%s,"timeout":20}`, node, action, params))
 		}
 
-		f.compare(t, "POST", tasks, packagecompat.Case{Name: "an offline node", Path: tasks, Body: body(f.quiet, "service_status", `{"service":"gost"}`)})
+		f.compare(t, "POST", tasks, packagecompat.Case{Name: "an offline node", Path: tasks, Body: body(f.quiet, "service_status", `{"service":"anix-agent"}`)})
 		f.compare(t, "POST", tasks, packagecompat.Case{Name: "a type that is not diagnostic", Path: tasks, Body: []byte(`{"node_id":1,"type":"shell","action":"service_status"}`)})
 		f.compare(t, "POST", tasks, packagecompat.Case{Name: "no action", Path: tasks, Body: []byte(`{"node_id":1,"type":"diagnostic"}`)})
 		f.compare(t, "POST", tasks, packagecompat.Case{Name: "not JSON", Path: tasks, Body: []byte(`{"node_id":`)})
 		f.compare(t, "POST", execute, packagecompat.Case{Name: "execute: no node", Path: execute, Body: []byte(`{"action":"service_status"}`)})
 
 		f.connectStream(fakeagent.Script{})
-		f.compare(t, "POST", tasks, packagecompat.Case{Name: "on the stream", Path: tasks, Body: body(f.stream, "service_status", `{"service":"gost","extra":1}`), Mask: onStream})
+		f.compare(t, "POST", tasks, packagecompat.Case{Name: "on the stream", Path: tasks, Body: body(f.stream, "service_status", `{"service":"anix-agent","extra":1}`), Mask: onStream})
 		f.compare(t, "POST", execute, packagecompat.Case{Name: "execute on the stream", Path: execute,
-			Body: []byte(fmt.Sprintf(`{"node_id":%d,"action":"log_tail","params":{"service":"gost","lines":5000}}`, f.stream)), Mask: onStream})
+			Body: []byte(fmt.Sprintf(`{"node_id":%d,"action":"log_tail","params":{"service":"anix-agent","lines":5000}}`, f.stream)), Mask: onStream})
 		f.compare(t, "POST", tasks, packagecompat.Case{Name: "an action off the whitelist", Path: tasks, Body: body(f.stream, "rm -rf /", `{}`)})
 		f.compare(t, "POST", tasks, packagecompat.Case{Name: "parameters the whitelist refuses", Path: tasks, Body: body(f.stream, "service_status", `{"service":"sshd"}`)})
 
 		f.connectSocket(t)
-		f.compare(t, "POST", tasks, packagecompat.Case{Name: "on the WebSocket", Path: tasks, Body: body(f.socket, "service_status", `{"service":"gost"}`), Mask: onSocket})
+		f.compare(t, "POST", tasks, packagecompat.Case{Name: "on the WebSocket", Path: tasks, Body: body(f.socket, "service_status", `{"service":"anix-agent"}`), Mask: onSocket})
 		f.compare(t, "POST", execute, packagecompat.Case{Name: "execute on the WebSocket", Path: execute,
-			Body: []byte(fmt.Sprintf(`{"node_id":%d,"action":"service_restart","params":{"service":"gost"}}`, f.socket)), Mask: onSocket})
+			Body: []byte(fmt.Sprintf(`{"node_id":%d,"action":"service_restart","params":{"service":"anix-agent"}}`, f.socket)), Mask: onSocket})
 	})
 }
