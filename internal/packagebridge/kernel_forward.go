@@ -98,6 +98,10 @@ func (m *moduleKernelForward) GetTraffic(ctx context.Context, request *forwardv1
 	return callForward(m, ctx, request, forwardv1.ForwardControlServer.GetTraffic)
 }
 
+func (m *moduleKernelForward) GetLatency(ctx context.Context, request *forwardv1.GetLatencyRequest) (*forwardv1.GetLatencyResponse, error) {
+	return callForward(m, ctx, request, forwardv1.ForwardControlServer.GetLatency)
+}
+
 func (m *moduleKernelForward) ListDnsProviders(ctx context.Context, request *forwardv1.ListDnsProvidersRequest) (*forwardv1.ListDnsProvidersResponse, error) {
 	return callForward(m, ctx, request, forwardv1.ForwardControlServer.ListDnsProviders)
 }

@@ -146,6 +146,27 @@ type KernelForwardTraffic struct {
 
 func (KernelForwardTraffic) TableName() string { return "v4_kernel_forward_traffic" }
 
+// KernelForwardLatency is the latency history: five minutes of one
+// upstream's health checks from one node of one hop, folded from the
+// UpstreamHealth of the node's reports (forward-sdk.md section 7.5). A check
+// is counted once: LastCheckedAt is the newest check folded in. Rows older
+// than seven days are pruned by the forwarding maintenance.
+type KernelForwardLatency struct {
+	RouteID       string    `gorm:"primaryKey;size:64" json:"route_id"`
+	HopIndex      uint32    `gorm:"primaryKey" json:"hop_index"`
+	NodeRef       string    `gorm:"primaryKey;size:32" json:"node_ref"`
+	Upstream      string    `gorm:"primaryKey;size:300" json:"upstream"`
+	BucketStart   time.Time `gorm:"primaryKey;index" json:"bucket_start"`
+	Samples       uint32    `gorm:"not null" json:"samples"`
+	Failures      uint32    `gorm:"not null" json:"failures"`
+	RTTSumUs      uint64    `gorm:"column:rtt_sum_us;not null" json:"rtt_sum_us"`
+	RTTMinUs      uint32    `gorm:"column:rtt_min_us;not null" json:"rtt_min_us"`
+	RTTMaxUs      uint32    `gorm:"column:rtt_max_us;not null" json:"rtt_max_us"`
+	LastCheckedAt time.Time `gorm:"not null" json:"last_checked_at"`
+}
+
+func (KernelForwardLatency) TableName() string { return "v4_kernel_forward_latency" }
+
 // KernelForwardRequest records an applied ForwardControl write by its
 // request id, with a hash of the request and the response, so a retry
 // answers the same response once.
@@ -184,5 +205,6 @@ func KernelForwardModels() []any {
 		&KernelForwardRoute{}, &KernelForwardAllocation{}, &KernelForwardNode{}, &KernelForwardNodeState{},
 		&KernelForwardNodeReport{}, &KernelForwardCounter{}, &KernelForwardTraffic{}, &KernelForwardRequest{},
 		&KernelForwardPlan{}, &KernelForwardDNSProvider{}, &KernelForwardDNSBinding{}, &KernelForwardDNSNode{},
+		&KernelForwardLatency{},
 	}
 }

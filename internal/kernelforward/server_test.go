@@ -103,6 +103,10 @@ func TestForwardControlAuthorization(t *testing.T) {
 			_, err := s.GetTraffic(f.ctx, &forwardv1.GetTrafficRequest{})
 			return err
 		},
+		"GetLatency": func(s forwardv1.ForwardControlServer) error {
+			_, err := s.GetLatency(f.ctx, &forwardv1.GetLatencyRequest{RouteId: "x"})
+			return err
+		},
 	}
 	refusals := []struct {
 		name       string

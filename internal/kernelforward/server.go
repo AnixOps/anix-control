@@ -338,6 +338,26 @@ func (h *hostServer) GetTraffic(ctx context.Context, request *forwardv1.GetTraff
 	return &forwardv1.GetTrafficResponse{Buckets: buckets, Truncated: truncated}, nil
 }
 
+// GetLatency answers a route's latency history (L3, latency.go).
+func (h *hostServer) GetLatency(ctx context.Context, request *forwardv1.GetLatencyRequest) (*forwardv1.GetLatencyResponse, error) {
+	svc, err := h.begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var since, until time.Time
+	if ms := request.GetSinceUnixMs(); ms > 0 {
+		since = time.UnixMilli(ms)
+	}
+	if ms := request.GetUntilUnixMs(); ms > 0 {
+		until = time.UnixMilli(ms)
+	}
+	buckets, truncated, err := svc.Latency(ctx, request.GetRouteId(), since, until)
+	if err != nil {
+		return nil, failure(err, nil)
+	}
+	return &forwardv1.GetLatencyResponse{Buckets: buckets, BucketMs: LatencyBucket.Milliseconds(), Truncated: truncated}, nil
+}
+
 // Entry HA through DNS (L2, dns.go): providers, bindings and the route
 // status. No answer carries a credential.
 

@@ -1361,6 +1361,20 @@ Every active check records the connect round trip (`UpstreamHealth.rtt_us`).
 Control composes per-hop and end-to-end latency for each route and shows
 it in the UI, with history.
 
+L3 (implemented, `internal/kernelforward/latency.go`): every report's
+`UpstreamHealth` is folded into five-minute buckets per route, hop, node and
+upstream (`v4_kernel_forward_latency`, migration `0014_forward_latency`):
+the number of checks, the failed ones, and the minimum, sum and maximum
+round trip of the successful ones. A check is counted once (a bucket keeps
+the newest check it folded in, so a report that repeats a check adds
+nothing); checks dated more than a minute ahead or older than the retention
+are ignored. The forwarding maintenance prunes buckets older than seven
+days. `ForwardControl.GetLatency` answers a route's buckets over at most
+seven days, served as `GET /api/v4/forward/routes/{id}/latency`, and the
+route detail page draws each hop's average and maximum with the failed
+checks marked. The resolution is the nodes' report interval, not the check
+interval: a report carries each upstream's latest check only.
+
 ### 7.6 End-to-end diagnosis
 
 **Status: implemented in F3c** (`internal/kernelforward/diagnose.go`,

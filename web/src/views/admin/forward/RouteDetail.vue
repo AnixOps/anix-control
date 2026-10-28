@@ -113,6 +113,25 @@
         </UiDataTable>
       </UiCard>
 
+      <UiCard :title="t('forwardV4.detail.latencyTitle')" :description="t('forwardV4.detail.latencyDescription')">
+        <template #actions>
+          <UiSegmentedControl v-model="latencyRange" size="sm" :aria-label="t('forwardV4.detail.range')" :options="latencyRanges" />
+        </template>
+        <UiChart
+          :option="latencyOption"
+          :label="t('forwardV4.detail.latencyLabel', { range: latencyRangeLabel })"
+          :summary="latencySummary"
+          :table="latencyTable"
+          :height="240"
+          :loading="latencyLoading && !latency.points.length"
+          :error="latencyError"
+          :empty="!latencyLoading && !latencyError && !latency.points.length"
+          :empty-title="t('forwardV4.detail.noLatency')"
+          @retry="loadLatency"
+        />
+        <p v-if="latencyTruncated" class="fwd-note is-warning detail-mt" role="status">{{ t('forwardV4.routes.statsTruncated') }}</p>
+      </UiCard>
+
       <div class="fwd-two">
         <UiCard :title="t('forwardV4.detail.nodesTitle')" :description="t('forwardV4.detail.nodesDescription')">
           <ul class="fwd-list">
@@ -173,7 +192,7 @@ import {
   UiMetricCard, UiPageHeader, UiSegmentedControl, UiSheet, UiSkeleton, UiStatusDot, useConfirm, useFormat, useToast
 } from '@/ui'
 import { useAppI18n } from '@/composables/useAppI18n'
-import { deleteRoute, diagnoseRoute, getNode, getRoute, listNodes, newIdempotencyKey, pauseRoute, resumeRoute, routeStats } from '@/api/forwardV4'
+import { deleteRoute, diagnoseRoute, getNode, getRoute, listNodes, newIdempotencyKey, pauseRoute, resumeRoute, routeLatency, routeStats } from '@/api/forwardV4'
 import DiagnosisPanel from '@/components/forward/DiagnosisPanel.vue'
 import EngineChip from '@/components/forward/EngineChip.vue'
 import EntryHaCard from '@/components/forward/EntryHaCard.vue'
@@ -182,7 +201,7 @@ import RouteStatusBadge from '@/components/forward/RouteStatusBadge.vue'
 import RouteSubscriptionCard from '@/components/forward/RouteSubscriptionCard.vue'
 import { forwardErrorMessage } from '@/components/forward/messages'
 import { usePolling } from '@/components/forward/usePolling'
-import { H21_DEFAULTS, hourlySeries, linkLabel, nodeLag, nodeLagging, num, roleOf, routeStatus, statusContext, trafficWindow } from '@/components/forward/routeModel'
+import { H21_DEFAULTS, hourlySeries, latencySeries, linkLabel, nodeLag, nodeLagging, num, roleOf, routeStatus, statusContext, trafficWindow } from '@/components/forward/routeModel'
 import '@/components/forward/forward.css'
 
 const props = defineProps({
@@ -220,6 +239,7 @@ const { secondsAgo, refresh } = usePolling(async () => {
     loadError.value = ''
     // Traffic refreshes only when it is a minute old (D5).
     void loadStats({ force: false })
+    void loadLatency({ force: false })
   } catch (error) {
     loadError.value = forwardErrorMessage(t, error)
     throw error
@@ -410,6 +430,82 @@ const chartTable = computed(() => ({
     { key: 'up', label: t('forwardV4.traffic.up'), numeric: true, format: bytes }
   ],
   rows: series.value.map(point => ({ hour: pointLabel(point.hour), down: point.down, up: point.up }))
+}))
+
+// ---------------------------------------------------------------------------
+// Latency history (L3): five-minute buckets, each hop's average and largest
+// connect round trip over its nodes and upstreams, failed checks apart.
+// ---------------------------------------------------------------------------
+
+const latencyRange = ref('24h')
+const LATENCY_HOURS = { '24h': 24, '7d': 24 * 7 }
+const latencyRanges = computed(() => Object.keys(LATENCY_HOURS).map(value => ({ value, label: t(`forwardV4.range.${value}`) })))
+const latencyRangeLabel = computed(() => t(`forwardV4.range.${latencyRange.value}`))
+const latency = ref({ hops: [], points: [] })
+const latencyLoading = ref(false)
+const latencyError = ref(null)
+const latencyTruncated = ref(false)
+let latencyAt = 0
+let latencyRangeLoaded = ''
+
+async function loadLatency({ force = true } = {}) {
+  const now = Date.now()
+  if (!force && latencyRangeLoaded === latencyRange.value && now - latencyAt < 60_000) return
+  latencyLoading.value = true
+  try {
+    const answer = await routeLatency(props.id, { since: now - LATENCY_HOURS[latencyRange.value] * 3_600_000, until: now + 300_000 })
+    latency.value = latencySeries(answer?.buckets || [])
+    latencyTruncated.value = Boolean(answer?.truncated)
+    latencyError.value = null
+    latencyAt = now
+    latencyRangeLoaded = latencyRange.value
+  } catch (error) {
+    latencyError.value = forwardErrorMessage(t, error)
+  } finally {
+    latencyLoading.value = false
+  }
+}
+watch(latencyRange, () => loadLatency())
+
+function latencyPointLabel(ms) {
+  const date = new Date(ms)
+  const time = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+  return latencyRange.value === '24h' ? time : `${date.getMonth() + 1}/${date.getDate()} ${time}`
+}
+const msText = value => (value == null ? '—' : `${Number(value).toFixed(1)} ms`)
+const hopName = hop => t('forwardV4.diagnose.hop', { n: Number(hop) + 1 })
+const latencyOption = computed(() => ({
+  tooltip: { trigger: 'axis', valueFormatter: msText },
+  legend: { top: 0 },
+  grid: { left: 8, right: 16, top: 36, bottom: 8, containLabel: true },
+  xAxis: { type: 'category', data: latency.value.points.map(point => latencyPointLabel(point.at)), boundaryGap: false },
+  yAxis: { type: 'value', axisLabel: { formatter: value => `${value} ms` } },
+  series: latency.value.hops.map(hop => ({
+    name: hopName(hop),
+    type: 'line',
+    smooth: true,
+    showSymbol: false,
+    connectNulls: false,
+    data: latency.value.points.map(point => point.hops[hop]?.avgMs ?? null)
+  }))
+}))
+const latencySummary = computed(() => {
+  const last = latency.value.points[latency.value.points.length - 1]
+  const failures = latency.value.points.reduce((sum, point) => sum + Object.values(point.hops).reduce((n, hop) => n + hop.failures, 0), 0)
+  const parts = latency.value.hops.map(hop => `${hopName(hop)} ${msText(last?.hops[hop]?.avgMs)}`)
+  return t('forwardV4.detail.latencySummary', { latest: parts.join(' · ') || '—', failures })
+})
+const latencyTable = computed(() => ({
+  columns: [
+    { key: 'time', label: t('forwardV4.detail.latencyTime') },
+    { key: 'hop', label: t('forwardV4.detail.latencyHopColumn') },
+    { key: 'avg', label: t('forwardV4.detail.latencyAvg'), numeric: true, format: msText },
+    { key: 'max', label: t('forwardV4.detail.latencyMax'), numeric: true, format: msText },
+    { key: 'failures', label: t('forwardV4.detail.latencyFailures'), numeric: true }
+  ],
+  rows: latency.value.points.flatMap(point => latency.value.hops.filter(hop => point.hops[hop]).map(hop => ({
+    time: latencyPointLabel(point.at), hop: hopName(hop), avg: point.hops[hop].avgMs, max: point.hops[hop].maxMs, failures: point.hops[hop].failures
+  })))
 }))
 
 // ---------------------------------------------------------------------------

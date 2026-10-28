@@ -141,6 +141,7 @@ All paths are under `/api/v4/forward`.
 | `POST /routes/{id}/resume` | resume | as pause |
 | `GET /routes/{id}/stats` | traffic of one route | query `since`, `until`; `{counters, series, truncated}`: the ledger's totals per hop and node over all time (`Counters`), and the hourly buckets of the window (`TrafficBucket`) |
 | `GET /routes/{id}/health` | upstream health | `{health: [UpstreamHealth]}` from the latest reports of the route's nodes |
+| `GET /routes/{id}/latency` | latency history | query `since`, `until` (the last 24 hours by default, at most 7 days); `{buckets, bucket_ms, truncated}`: five-minute `LatencyBucket`s per hop, node and upstream with `samples`, `failures` and `rtt_min_us`, `rtt_avg_us`, `rtt_max_us` over the successful checks. Kept for 7 days |
 | `GET /routes/{id}/dns` | entry HA status | `{status}`: the `RouteDnsStatus`. See "Entry HA through DNS" below |
 | `POST /routes/{id}/diagnose` | diagnose the route | optional body `{"timeout_ms": n}` (15000, at most 25000); the `DiagnoseRouteResponse`: `ok`, `steps`, `nodes`, `route_id`, `started_at_unix_ms`, `finished_at_unix_ms`, `cached`. See "Route diagnosis" below |
 

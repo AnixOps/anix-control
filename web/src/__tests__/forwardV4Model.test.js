@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { defineComponent, h, nextTick, reactive } from 'vue'
 import { mount } from '@vue/test-utils'
 import {
-  diagnosisStages, draftToRoute, entryTraffic, hourlySeries, missingRequired, routeDiff, routeStatus, routeToDraft,
+  diagnosisStages, draftToRoute, entryTraffic, hourlySeries, latencySeries, missingRequired, routeDiff, routeStatus, routeToDraft,
   runBulk, statusContext, underField, fieldId
 } from '@/components/forward/routeModel'
 import { useRoutePreview } from '@/components/forward/useRoutePreview'
@@ -186,5 +186,25 @@ describe('the plan preview (D4)', () => {
     expect(request).not.toHaveBeenCalled()
     expect(preview().skipped.value).toBe(true)
     wrapper.unmount()
+  })
+})
+
+describe('latency series', () => {
+  it('weights each hop by its successful checks and keeps failures apart', () => {
+    const series = latencySeries([
+      { hop_index: 0, node_ref: 'forward-1', bucket_start_unix_ms: '600000', samples: 4, failures: 1, rtt_avg_us: 20_000, rtt_max_us: 30_000 },
+      { hop_index: 0, node_ref: 'forward-2', bucket_start_unix_ms: '600000', samples: 1, failures: 0, rtt_avg_us: 40_000, rtt_max_us: 40_000 },
+      { hop_index: 1, node_ref: 'forward-3', bucket_start_unix_ms: '600000', samples: 2, failures: 2, rtt_avg_us: 0, rtt_max_us: 0 },
+      { hop_index: 0, node_ref: 'forward-1', bucket_start_unix_ms: '300000', samples: 2, failures: 0, rtt_avg_us: 10_000, rtt_max_us: 12_000 }
+    ])
+    expect(series.hops).toEqual([0, 1])
+    expect(series.points.map(point => point.at)).toEqual([300_000, 600_000])
+    expect(series.points[0].hops[0]).toEqual({ avgMs: 10, maxMs: 12, failures: 0, samples: 2 })
+    expect(series.points[1].hops[0]).toEqual({ avgMs: 25, maxMs: 40, failures: 1, samples: 5 })
+    expect(series.points[1].hops[1]).toEqual({ avgMs: null, maxMs: null, failures: 2, samples: 2 })
+  })
+
+  it('answers no points without buckets', () => {
+    expect(latencySeries([])).toEqual({ hops: [], points: [] })
   })
 })

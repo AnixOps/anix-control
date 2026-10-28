@@ -110,6 +110,9 @@ func (s *Service) RecordReport(ctx context.Context, node agentcontrol.AgentNode,
 			return fmt.Errorf("kernel forward: store report: %w", err)
 		}
 		result.Stored = true
+		if err := foldLatency(tx, ref, report.GetHealth(), receivedAt); err != nil {
+			return err
+		}
 		entryGrew := map[string]bool{}
 		for _, counter := range report.GetCounters() {
 			grew, err := meter(tx, ref, counter, observedAt)

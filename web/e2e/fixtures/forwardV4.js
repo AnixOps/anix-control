@@ -566,6 +566,30 @@ function routeSubscription(id, { method, body }) {
   }
 }
 
+// The latency history of a route (GET /routes/{id}/latency): the last 24
+// hours in five-minute buckets, each hop's upstream with a gentle daily
+// wave and one bucket of failed checks on the entry.
+function latencyBuckets(id) {
+  const item = routeById(id)
+  if (!item) return []
+  const step = 5 * MIN
+  const end = Math.floor(NOW / step) * step
+  const buckets = []
+  item.route.hops.forEach((hop, index) => {
+    const base = 30_000 + index * 35_000
+    for (let at = end - DAY + step; at <= end; at += step) {
+      const wave = Math.round(6_000 * Math.sin((at / HOUR) * Math.PI / 6))
+      const failed = index === 0 && at === end - 3 * HOUR ? 2 : 0
+      buckets.push({
+        route_id: id, hop_index: index, node_ref: hop.node_refs[0], address: `198.51.100.${60 + index}`, port: 30000 + index,
+        bucket_start_unix_ms: String(at), samples: 5, failures: failed,
+        rtt_min_us: base + wave - 2_000, rtt_avg_us: base + wave, rtt_max_us: base + wave + 9_000
+      })
+    }
+  })
+  return buckets
+}
+
 export function forwardApi(path, { method, query = {}, body, scenario }) {
   const subscription = path.match(/^\/api\/v4\/kernel\/forward-routes\/([^/]+)\/subscription$/)
   if (subscription) return routeSubscription(decodeURIComponent(subscription[1]), { method, body })
@@ -608,6 +632,7 @@ export function forwardApi(path, { method, query = {}, body, scenario }) {
       return data({ counters: [{ route_id: id, node_ref: item.route.hops[0].node_refs[0], up_bytes: '0', down_bytes: '0', active_conns: 1284, total_conns: '98213' }], series: answer.series, truncated: false })
     }
     if (action === 'health') return data({ health: Object.values(HEALTH).flat().filter(entry => entry.route_id === id) })
+    if (action === 'latency') return data({ buckets: latencyBuckets(id), bucket_ms: '300000', truncated: false })
     if (action === 'diagnose') return data(DIAGNOSIS)
     if (action === 'dns') return data({ status: dnsStatus(id) })
   }

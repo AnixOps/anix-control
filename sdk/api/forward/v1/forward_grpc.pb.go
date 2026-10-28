@@ -45,6 +45,7 @@ const (
 	ForwardControl_UpdateDnsBinding_FullMethodName  = "/anixops.forward.v1.ForwardControl/UpdateDnsBinding"
 	ForwardControl_DeleteDnsBinding_FullMethodName  = "/anixops.forward.v1.ForwardControl/DeleteDnsBinding"
 	ForwardControl_GetRouteDns_FullMethodName       = "/anixops.forward.v1.ForwardControl/GetRouteDns"
+	ForwardControl_GetLatency_FullMethodName        = "/anixops.forward.v1.ForwardControl/GetLatency"
 )
 
 // ForwardControlClient is the client API for ForwardControl service.
@@ -176,6 +177,9 @@ type ForwardControlClient interface {
 	// published and desired records, and each entry node's health.
 	// NOT_FOUND for an unknown route.
 	GetRouteDns(ctx context.Context, in *GetRouteDnsRequest, opts ...grpc.CallOption) (*GetRouteDnsResponse, error)
+	// GetLatency answers a route's latency buckets over at most seven days.
+	// NOT_FOUND for an unknown route.
+	GetLatency(ctx context.Context, in *GetLatencyRequest, opts ...grpc.CallOption) (*GetLatencyResponse, error)
 }
 
 type forwardControlClient struct {
@@ -446,6 +450,16 @@ func (c *forwardControlClient) GetRouteDns(ctx context.Context, in *GetRouteDnsR
 	return out, nil
 }
 
+func (c *forwardControlClient) GetLatency(ctx context.Context, in *GetLatencyRequest, opts ...grpc.CallOption) (*GetLatencyResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetLatencyResponse)
+	err := c.cc.Invoke(ctx, ForwardControl_GetLatency_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ForwardControlServer is the server API for ForwardControl service.
 // All implementations must embed UnimplementedForwardControlServer
 // for forward compatibility.
@@ -575,6 +589,9 @@ type ForwardControlServer interface {
 	// published and desired records, and each entry node's health.
 	// NOT_FOUND for an unknown route.
 	GetRouteDns(context.Context, *GetRouteDnsRequest) (*GetRouteDnsResponse, error)
+	// GetLatency answers a route's latency buckets over at most seven days.
+	// NOT_FOUND for an unknown route.
+	GetLatency(context.Context, *GetLatencyRequest) (*GetLatencyResponse, error)
 	mustEmbedUnimplementedForwardControlServer()
 }
 
@@ -662,6 +679,9 @@ func (UnimplementedForwardControlServer) DeleteDnsBinding(context.Context, *Dele
 }
 func (UnimplementedForwardControlServer) GetRouteDns(context.Context, *GetRouteDnsRequest) (*GetRouteDnsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetRouteDns not implemented")
+}
+func (UnimplementedForwardControlServer) GetLatency(context.Context, *GetLatencyRequest) (*GetLatencyResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetLatency not implemented")
 }
 func (UnimplementedForwardControlServer) mustEmbedUnimplementedForwardControlServer() {}
 func (UnimplementedForwardControlServer) testEmbeddedByValue()                        {}
@@ -1152,6 +1172,24 @@ func _ForwardControl_GetRouteDns_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ForwardControl_GetLatency_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetLatencyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ForwardControlServer).GetLatency(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ForwardControl_GetLatency_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ForwardControlServer).GetLatency(ctx, req.(*GetLatencyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ForwardControl_ServiceDesc is the grpc.ServiceDesc for ForwardControl service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1262,6 +1300,10 @@ var ForwardControl_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetRouteDns",
 			Handler:    _ForwardControl_GetRouteDns_Handler,
+		},
+		{
+			MethodName: "GetLatency",
+			Handler:    _ForwardControl_GetLatency_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
