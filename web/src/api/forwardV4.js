@@ -250,6 +250,12 @@ export function routeHealth(id, { signal } = {}) {
   return call({ url: `/routes/${encodeURIComponent(id)}/health`, signal })
 }
 
+// routeLatency: {buckets, bucket_ms, truncated}, the route's five-minute
+// latency buckets per hop, node and upstream over at most 7 days.
+export function routeLatency(id, { since, until, signal } = {}) {
+  return call({ url: `/routes/${encodeURIComponent(id)}/latency`, params: windowParams(since, until), signal })
+}
+
 export function diagnoseRoute(id, { timeoutMs, idempotencyKey } = {}) {
   const data = timeoutMs ? { timeout_ms: timeoutMs } : undefined
   return call({ method: 'post', url: `/routes/${encodeURIComponent(id)}/diagnose`, data, idempotencyKey, timeout: DIAGNOSE_TIMEOUT_MS })

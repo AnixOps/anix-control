@@ -90,4 +90,6 @@
 //     subscriptions at their entry nodes (v5_forward_route_subscription).
 //   - 0013_iwan_lines: the Panabit iWAN lines (v5_iwan_line) and the line of
 //     an iWAN node entry (v5_node_entry.iwan_line_id).
+//   - 0014_forward_latency: the forward routes' latency history
+//     (v4_kernel_forward_latency).
 package migrations

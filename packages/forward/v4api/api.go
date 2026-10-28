@@ -142,6 +142,7 @@ var endpoints = []Endpoint{
 	{http.MethodPost, "/routes/{id}/resume", "Resume a route", "", (*Service).resumeRoute},
 	{http.MethodGet, "/routes/{id}/stats", "A route's counters per hop and node, and its hourly series", "", (*Service).routeStats},
 	{http.MethodGet, "/routes/{id}/health", "A route's upstream health", "", (*Service).routeHealth},
+	{http.MethodGet, "/routes/{id}/latency", "A route's latency history in five-minute buckets", "", (*Service).routeLatency},
 	{http.MethodPost, "/routes/{id}/diagnose", "Diagnose a route: config, hop reachability, delivery and port conflicts", "", (*Service).diagnoseRoute},
 
 	{http.MethodGet, "/nodes", "List the node inventory", "GET /api/v2/admin/forward/nodes", (*Service).listNodes},

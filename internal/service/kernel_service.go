@@ -95,14 +95,15 @@ type pluginPlatformEntrypoint struct {
 // MigrateKernelModelsForTest creates the kernel tables with GORM's
 // AutoMigrate (and the tables of later migrations that a node's desired
 // configuration and the subscriptions read: the egress routes, the node
-// entries and the subscription groups' protocol layouts) and seeds the kernel defaults, on a test's own database.
+// entries and the subscription groups' protocol layouts; and the forward
+// latency history the reports write) and seeds the kernel defaults, on a test's own database.
 // Control prepares its schema with internal/database/migrations and seeds
 // with SeedKernelDefaults.
 func MigrateKernelModelsForTest(db *gorm.DB) error {
 	if db == nil {
 		return errors.New("database is not initialized")
 	}
-	if err := db.AutoMigrate(append(model.KernelModels(), &model.EgressRoute{}, &model.NodeEntry{}, &model.SubscriptionGroupProtocol{}, &model.ForwardRouteSubscription{}, &model.IWANLine{})...); err != nil {
+	if err := db.AutoMigrate(append(model.KernelModels(), &model.EgressRoute{}, &model.NodeEntry{}, &model.SubscriptionGroupProtocol{}, &model.ForwardRouteSubscription{}, &model.IWANLine{}, &model.KernelForwardLatency{})...); err != nil {
 		return err
 	}
 	return SeedKernelDefaults(db)

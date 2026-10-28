@@ -208,6 +208,24 @@ func (s *Service) routeHealth(ctx context.Context, _ Request, params map[string]
 	return data(http.StatusOK, map[string]any{"health": pjList(answer.GetHealth())})
 }
 
+// routeLatency answers a route's latency history (GetLatency): five-minute
+// buckets per hop, node and upstream with the samples, failures and the
+// minimum, average and maximum connect round trips. Filters: since, until
+// (Unix milliseconds; the last 24 hours by default, at most 7 days).
+func (s *Service) routeLatency(ctx context.Context, request Request, params map[string]string) Response {
+	since, until, bad := window(request)
+	if bad != nil {
+		return *bad
+	}
+	answer, err := s.Forward.GetLatency(ctx, &forwardv1.GetLatencyRequest{RouteId: params["id"], SinceUnixMs: since, UntilUnixMs: until})
+	if err != nil {
+		return fromStatus(err)
+	}
+	return data(http.StatusOK, map[string]any{
+		"buckets": pjList(answer.GetBuckets()), "bucket_ms": answer.GetBucketMs(), "truncated": answer.GetTruncated(),
+	})
+}
+
 // diagnoseRoute runs ForwardControl.DiagnoseRoute. The body is optional:
 // {"timeout_ms": n} bounds the diagnosis (15000 by default, at most
 // 25000). The answer is the DiagnoseRouteResponse: ok, the steps with

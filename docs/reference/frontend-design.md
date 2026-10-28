@@ -467,7 +467,9 @@ the sweeps. A fixture answer may carry `headers` (`Retry-After` of a 429).
   ```
 
   Without docker, run the **Frontend Visual Baselines** workflow
-  (`workflow_dispatch`) on the branch and commit the PNGs from its artifact.
+  (`workflow_dispatch`) on the branch and commit the PNGs from its artifact,
+  or dispatch it with `commit: true` to have it commit the changed PNGs to
+  the branch and start the CI/CD Pipeline there itself.
   On a failure the CI job uploads the expected, actual and diff images
   (`frontend-visual-diffs`). Bumping `@playwright/test` means updating the
   image tag in `ci.yml` and `frontend-visual-baselines.yml` and

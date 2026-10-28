@@ -169,6 +169,43 @@ export function hourlySeries(buckets = [], { since, until, routeId = '' } = {}) 
   return out
 }
 
+// latencySeries folds a route's latency buckets (GET /routes/{id}/latency)
+// into one point per bucket: {at, hops: {[hop]: {avgMs, maxMs, failures,
+// samples}}}, each hop over all its nodes and upstreams. avgMs is weighted
+// by the successful checks and is null when every check of the bucket
+// failed; hops lists the hop indexes that reported.
+export function latencySeries(buckets = []) {
+  const byStart = new Map()
+  const hops = new Set()
+  for (const bucket of buckets) {
+    const at = num(bucket.bucket_start_unix_ms)
+    const hop = num(bucket.hop_index)
+    hops.add(hop)
+    const point = byStart.get(at) || { at, hops: {} }
+    const sum = point.hops[hop] || { rtt: 0, ok: 0, max: 0, failures: 0, samples: 0 }
+    const samples = num(bucket.samples)
+    const failures = num(bucket.failures)
+    const ok = Math.max(samples - failures, 0)
+    sum.rtt += num(bucket.rtt_avg_us) * ok
+    sum.ok += ok
+    sum.max = Math.max(sum.max, num(bucket.rtt_max_us))
+    sum.failures += failures
+    sum.samples += samples
+    point.hops[hop] = sum
+    byStart.set(at, point)
+  }
+  const points = [...byStart.values()].sort((a, b) => a.at - b.at).map(point => ({
+    at: point.at,
+    hops: Object.fromEntries(Object.entries(point.hops).map(([hop, sum]) => [hop, {
+      avgMs: sum.ok ? sum.rtt / sum.ok / 1000 : null,
+      maxMs: sum.ok ? sum.max / 1000 : null,
+      failures: sum.failures,
+      samples: sum.samples
+    }]))
+  }))
+  return { hops: [...hops].sort((a, b) => a - b), points }
+}
+
 // trafficWindow: the last `hours` hours up to the end of the current hour.
 export function trafficWindow(now, hours = 24) {
   const until = Math.floor(now / HOUR_MS) * HOUR_MS + HOUR_MS

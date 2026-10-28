@@ -309,7 +309,7 @@ func TestEndpointsAreAdminEndpoints(t *testing.T) {
 		assert.NotContains(t, endpoint.Pattern, "/self", "user self-service arrives with v4.3")
 		assert.NotEmpty(t, endpoint.Summary, key)
 	}
-	assert.Len(t, seen, 40)
+	assert.Len(t, seen, 41)
 }
 
 // diagnoseForward answers DiagnoseRoute; err refuses it.
