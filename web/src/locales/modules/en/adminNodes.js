@@ -534,61 +534,19 @@ export default {
     },
     wireguard: {
       sections: {
-        access: 'WireGuard access',
-        relay: 'Dual-node relay',
-        networkPolicy: 'Entry network paths (optional)'
+        access: 'WireGuard access'
       },
       fields: {
         cidr: 'Peer CIDR',
-        serverAddress: 'Entry interface address',
+        serverAddress: 'Interface address',
         serverPrivateKey: 'Server private key',
         serverPublicKey: 'Server public key',
         mtu: 'MTU',
         dns: 'DNS servers',
-        allowedIps: 'Allowed IPs',
-        role: 'Node role',
-        tunnelType: 'Entry-to-exit tunnel',
-        wssCompat: 'WSS compatibility mode',
-        wssPath: 'WSS path',
-        wssSecure: 'Verify exit certificate',
-        wssServerName: 'WSS server name (SNI)',
-        wssCaFile: 'WSS CA certificate file on entry',
-        wssCertFile: 'WSS certificate file on exit',
-        wssKeyFile: 'WSS private key file on exit',
-        relayServer: 'Exit relay host',
-        relayServerPort: 'Exit relay port',
-        tunPort: 'GOST TUN port',
-        tunName: 'GOST TUN name',
-        entryTunAddress: 'Entry TUN address',
-        exitTunAddress: 'Exit TUN address',
-        outboundIface: 'Exit outbound interface',
-        exitNat: 'Enable exit NAT',
-        routingTable: 'Routing table',
-        routingPriority: 'Routing priority',
-        networkPolicyEnabled: 'Enable multi-path failover',
-        networkPath: 'Network path',
-        pathName: 'Path name',
-        pathInterface: 'Interface',
-        pathSource: 'Source IP',
-        pathGateway: 'Gateway',
-        pathPriority: 'Priority (lower first)',
-        healthInterval: 'Probe interval (seconds)',
-        healthTimeout: 'Probe timeout (seconds)',
-        failureThreshold: 'Failure threshold',
-        failbackDelay: 'Primary failback delay (seconds)'
+        allowedIps: 'Allowed IPs'
       },
       actions: {
-        generateKeypair: 'Generate keypair',
-        addNetworkPath: 'Add network path',
-        removeNetworkPath: 'Remove path {index}'
-      },
-      values: {
-        entry: 'Domestic entry',
-        exit: 'Overseas exit'
-      },
-      hints: {
-        wssCompat: 'QUIC is the default. WSS verifies the exit certificate and is only for compatibility when UDP relay traffic is blocked or unstable.',
-        networkPolicy: 'Only relay-destination traffic is steered, with a separate return route for every source IP. Leave it off on ordinary nodes; the relay host must be an IP address.'
+        generateKeypair: 'Generate keypair'
       }
     },
     enable: 'Run on the node',

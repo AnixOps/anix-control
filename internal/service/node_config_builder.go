@@ -90,43 +90,17 @@ func BuildNodeProtocolConfig(node *model.Node, protocol *model.NodeProtocol) map
 	case "vless":
 		config["flow"] = configValue(protocolConfig, "flow", "")
 	case "wireguard":
-		wireGuardRelay := map[string]any{
-			"backend":           "gost",
-			"mode":              "relay+quic",
-			"role":              "entry",
-			"wss_compat":        false,
-			"wss_path":          "/ws",
-			"wss_secure":        true,
-			"wss_server_name":   "",
-			"wss_ca_file":       "",
-			"wss_cert_file":     "",
-			"wss_key_file":      "",
-			"exit_nat":          true,
-			"entry_stats":       true,
-			"server":            "",
-			"server_port":       0,
-			"tun_port":          8421,
-			"entry_tun_address": "172.31.66.2/24",
-			"exit_tun_address":  "172.31.66.1/24",
-			"outbound_iface":    "",
-			"routing_table":     0,
-			"routing_priority":  0,
-		}
-		if relay, ok := protocolConfig["relay"].(map[string]any); ok {
-			for key, value := range relay {
-				wireGuardRelay[key] = value
-			}
-		}
+		// The relay (entry and exit over gost) was removed with gost. A node
+		// that still stores one gets it as stored, so the Agent refuses it
+		// with its reason instead of silently egressing from the entry.
+		storedRelay, hasRelay := protocolConfig["relay"].(map[string]any)
 		config["cidr"] = configValue(protocolConfig, "cidr", "10.66.0.0/24")
-		if strings.EqualFold(stringSetting(wireGuardRelay, "role", "entry"), "exit") {
-			// The overseas exit only owns GOST/TUN/NAT. Keep entry private keys
-			// out of its runtime config entirely.
+		if hasRelay && strings.EqualFold(stringSetting(storedRelay, "role", "entry"), "exit") {
+			// A former overseas exit terminated no user peers: keep entry
+			// private keys out of its runtime config entirely.
 			config["server_address"] = ""
 			config["server_private_key"] = ""
 			config["server_public_key"] = ""
-			wireGuardRelay["wss_secure"] = false
-			wireGuardRelay["wss_server_name"] = ""
-			wireGuardRelay["wss_ca_file"] = ""
 		} else {
 			config["server_address"] = configValue(protocolConfig, "server_address", "10.66.0.1/24")
 			serverPrivateKey := configValue(protocolConfig, "server_private_key", "")
@@ -140,14 +114,13 @@ func BuildNodeProtocolConfig(node *model.Node, protocol *model.NodeProtocol) map
 			}
 			config["server_private_key"] = serverPrivateKey
 			config["server_public_key"] = serverPublicKey
-			wireGuardRelay["wss_cert_file"] = ""
-			wireGuardRelay["wss_key_file"] = ""
 		}
 		config["mtu"] = configValue(protocolConfig, "mtu", 1280)
 		config["dns"] = configValue(protocolConfig, "dns", []string{"1.1.1.1", "8.8.8.8"})
 		config["allowed_ips"] = configValue(protocolConfig, "allowed_ips", []string{"0.0.0.0/0"})
-		config["tunnel_type"] = configValue(protocolConfig, "tunnel_type", "quic")
-		config["relay"] = wireGuardRelay
+		if hasRelay && len(storedRelay) > 0 {
+			config["relay"] = storedRelay
+		}
 	case "iwan":
 		buildIWANConfig(config, protocolConfig)
 	case "shadowsocks":

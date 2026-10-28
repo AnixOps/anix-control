@@ -72,8 +72,7 @@ func (s *NodeSecretsTestSuite) SetupTest() {
 }
 
 func (s *NodeSecretsTestSuite) wireGuardSettings(privateKey, publicKey string) string {
-	return fmt.Sprintf(`{"cidr":"10.77.0.0/24","server_address":"10.77.0.1/24","server_private_key":%q,"server_public_key":%q,`+
-		`"relay":{"backend":"gost","role":"entry","server":"exit.example.com","server_port":8443,"entry_tun_address":"172.31.77.2/24","exit_tun_address":"172.31.77.1/24"}}`,
+	return fmt.Sprintf(`{"cidr":"10.77.0.0/24","server_address":"10.77.0.1/24","server_private_key":%q,"server_public_key":%q}`,
 		privateKey, publicKey)
 }
 

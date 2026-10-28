@@ -534,61 +534,19 @@ export default {
     },
     wireguard: {
       sections: {
-        access: 'WireGuard 接入',
-        relay: '双机中转',
-        networkPolicy: '入口网络路径（可选）'
+        access: 'WireGuard 接入'
       },
       fields: {
         cidr: 'Peer CIDR',
-        serverAddress: '入口接口地址',
+        serverAddress: '接口地址',
         serverPrivateKey: '服务端私钥',
         serverPublicKey: '服务端公钥',
         mtu: 'MTU',
         dns: 'DNS 服务器',
-        allowedIps: 'Allowed IPs',
-        role: '节点角色',
-        tunnelType: '入口到出口隧道',
-        wssCompat: 'WSS 兼容模式',
-        wssPath: 'WSS 路径',
-        wssSecure: '校验出口证书',
-        wssServerName: 'WSS 服务名称（SNI）',
-        wssCaFile: '入口机 WSS CA 证书文件',
-        wssCertFile: '出口机 WSS 证书文件',
-        wssKeyFile: '出口机 WSS 私钥文件',
-        relayServer: '出口中转主机',
-        relayServerPort: '出口中转端口',
-        tunPort: 'GOST TUN 端口',
-        tunName: 'GOST TUN 名称',
-        entryTunAddress: '入口 TUN 地址',
-        exitTunAddress: '出口 TUN 地址',
-        outboundIface: '出口网卡',
-        exitNat: '启用出口 NAT',
-        routingTable: '路由表',
-        routingPriority: '路由优先级',
-        networkPolicyEnabled: '启用多线路故障转移',
-        networkPath: '网络路径',
-        pathName: '路径名称',
-        pathInterface: '网卡',
-        pathSource: '源 IP',
-        pathGateway: '网关',
-        pathPriority: '优先级（越小越优先）',
-        healthInterval: '探测间隔（秒）',
-        healthTimeout: '探测超时（秒）',
-        failureThreshold: '失败阈值',
-        failbackDelay: '主线恢复等待（秒）'
+        allowedIps: 'Allowed IPs'
       },
       actions: {
-        generateKeypair: '生成密钥对',
-        addNetworkPath: '添加网络路径',
-        removeNetworkPath: '移除路径 {index}'
-      },
-      values: {
-        entry: '国内入口',
-        exit: '海外出口'
-      },
-      hints: {
-        wssCompat: '默认使用 QUIC。WSS 会校验出口证书，只作为 UDP 中转受阻或不稳定时的兼容模式。',
-        networkPolicy: '仅接管到出口中转 IP 的连接，并为每个源 IP 建立独立回程路由。普通节点无需启用；出口主机必须填写 IP 地址。'
+        generateKeypair: '生成密钥对'
       }
     },
     enable: '在节点上运行',

@@ -50,7 +50,7 @@ export const PROTOCOLS = [
   { id: 1, type: 'vless', port: 443, tls: 2, transport: 'tcp', enable: 1, show: 1, settings: '{"flow":"xtls-rprx-vision"}', reality_settings: '{"private_key":"********","public_key":"pPk2","short_id":"ab"}' },
   { id: 2, type: 'hysteria2', port: 8443, tls: 1, transport: 'quic', enable: 1, show: 1, settings: '{"password":"********"}' },
   { id: 3, type: 'trojan', port: 2053, tls: 1, transport: 'ws', enable: 0, show: 0, settings: '{}' },
-  { id: 4, type: 'wireguard', port: 51820, tls: 0, transport: 'udp', enable: 1, show: 1, settings: '{"cidr":"10.66.0.0/24","relay":{"role":"entry","mode":"relay+quic","server":"203.0.113.80","server_port":8443}}' }
+  { id: 4, type: 'wireguard', port: 51820, tls: 0, transport: 'udp', enable: 1, show: 1, settings: '{"cidr":"10.66.0.0/24"}' }
 ]
 
 export const TEMPLATES = [
@@ -58,7 +58,7 @@ export const TEMPLATES = [
   { name: 'Hysteria2', type: 'hysteria2', default_port: 8443, tls: 1, transport: 'quic', description: 'UDP, fast on lossy links' },
   { name: 'Trojan WS', type: 'trojan', default_port: 2053, tls: 1, transport: 'ws', description: 'Trojan over WebSocket + TLS' },
   { name: 'Shadowsocks 2022', type: 'shadowsocks', default_port: 8388, tls: 0, transport: 'tcp', description: '2022-blake3-aes-128-gcm' },
-  { name: 'WireGuard relay', type: 'wireguard', default_port: 51820, tls: 0, transport: 'udp', description: 'Entry/exit relay over GOST' }
+  { name: 'WireGuard', type: 'wireguard', default_port: 51820, tls: 0, transport: 'udp', description: 'WireGuard user access, egressing from the node' }
 ]
 
 const LEVELS = ['info', 'info', 'warning', 'error', 'debug', 'info']

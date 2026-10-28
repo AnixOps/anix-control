@@ -3,7 +3,6 @@ package service
 import (
 	"encoding/base64"
 	"fmt"
-	"strings"
 	"testing"
 	"time"
 
@@ -44,17 +43,9 @@ func TestBuildNodeProtocolConfig_WireGuardDefaults(t *testing.T) {
 	require.Equal(t, "server-private", config["server_private_key"])
 	require.Equal(t, "server-public", config["server_public_key"])
 	require.Equal(t, 1280, config["mtu"])
-	require.Equal(t, "quic", config["tunnel_type"])
 	require.Equal(t, "udp", config["network"])
-	relay, ok := config["relay"].(map[string]any)
-	require.True(t, ok)
-	require.Equal(t, "gost", relay["backend"])
-	require.Equal(t, "entry", relay["role"])
-	require.Equal(t, 8421, relay["tun_port"])
-	require.Equal(t, "172.31.66.2/24", relay["entry_tun_address"])
-	require.Equal(t, "172.31.66.1/24", relay["exit_tun_address"])
-	require.Equal(t, "/ws", relay["wss_path"])
-	require.Equal(t, true, relay["wss_secure"])
+	require.NotContains(t, config, "relay", "the gost relay was removed: the Agent refuses a node with one")
+	require.NotContains(t, config, "tunnel_type")
 }
 
 func TestProtocolWireGuardTemplate(t *testing.T) {
@@ -62,7 +53,7 @@ func TestProtocolWireGuardTemplate(t *testing.T) {
 	for _, template := range templates {
 		if template.Type == model.ProtocolWireGuard {
 			require.Equal(t, 51820, template.DefaultPort)
-			require.Contains(t, template.Settings, `"tunnel_type":"quic"`)
+			require.NotContains(t, template.Settings, `"relay"`)
 			return
 		}
 	}
@@ -212,109 +203,47 @@ func TestPreferNativeWireGuardFormatForLinkOnlyClients(t *testing.T) {
 func TestValidateWireGuardProtocolRejectsUnsafeRuntimeSettings(t *testing.T) {
 	privateKey, publicKey, err := generateWireGuardKeypair()
 	require.NoError(t, err)
-	settings := fmt.Sprintf(`{"cidr":"10.77.0.0/24","server_address":"10.77.0.1/24","server_private_key":%q,"server_public_key":%q,"relay":{"backend":"gost","role":"entry","server":"exit.example.com","server_port":8443,"entry_tun_address":"172.31.77.2/24","exit_tun_address":"172.31.77.1/24"}}`, privateKey, publicKey)
+	settings := fmt.Sprintf(`{"cidr":"10.77.0.0/24","server_address":"10.77.0.1/24","server_private_key":%q,"server_public_key":%q}`, privateKey, publicKey)
 	protocol := &model.NodeProtocol{Type: model.ProtocolWireGuard, Port: 51820, Enable: 1, Settings: &settings}
 	require.NoError(t, ValidateNodeProtocol(protocol))
-
-	validPriority := strings.Replace(settings, `"role":"entry"`, `"role":"entry","routing_priority":32765`, 1)
-	protocol.Settings = &validPriority
-	require.NoError(t, ValidateNodeProtocol(protocol))
-
-	mainTablePriority := strings.Replace(settings, `"role":"entry"`, `"role":"entry","routing_priority":32766`, 1)
-	protocol.Settings = &mainTablePriority
-	require.ErrorIs(t, ValidateNodeProtocol(protocol), ErrInvalidNodeProtocol)
 
 	bad := `{"cidr":"10.77.0.0/33","server_address":"10.77.0.1/24"}`
 	protocol.Settings = &bad
 	require.ErrorIs(t, ValidateNodeProtocol(protocol), ErrInvalidNodeProtocol)
 }
 
-func TestValidateWireGuardNetworkPolicy(t *testing.T) {
+// The relay (entry and exit joined over gost) was removed with gost: a
+// protocol that still carries one is refused, so the admin clears it.
+func TestValidateWireGuardProtocolRefusesTheRemovedRelay(t *testing.T) {
 	privateKey, publicKey, err := generateWireGuardKeypair()
 	require.NoError(t, err)
-	settings := fmt.Sprintf(`{"cidr":"10.77.0.0/24","server_address":"10.77.0.1/24","server_private_key":%q,"server_public_key":%q,"tunnel_type":"wss","relay":{"backend":"gost","mode":"relay+wss","role":"entry","wss_compat":true,"wss_secure":true,"wss_server_name":"exit.example.com","server":"104.251.233.29","server_port":443,"entry_tun_address":"172.31.77.2/24","network_policy":{"version":1,"strategy":"failover","paths":[{"name":"cn2","interface":"eth1","source":"10.8.0.112","gateway":"10.8.0.1","priority":10},{"name":"9929","interface":"eth0","source":"10.7.0.112","gateway":"10.7.0.1","priority":20}],"health_check":{"interval_seconds":10,"timeout_seconds":3,"failure_threshold":3,"recovery_threshold":2,"failback_delay_seconds":300}}}}`, privateKey, publicKey)
-	protocol := &model.NodeProtocol{Type: model.ProtocolWireGuard, Port: 51820, Enable: 1, Settings: &settings}
-	require.NoError(t, ValidateNodeProtocol(protocol))
-
-	domainServer := strings.Replace(settings, `"server":"104.251.233.29"`, `"server":"exit.example.com"`, 1)
-	protocol.Settings = &domainServer
-	require.ErrorIs(t, ValidateNodeProtocol(protocol), ErrInvalidNodeProtocol)
-
-	duplicatePath := strings.Replace(settings, `"name":"9929"`, `"name":"cn2"`, 1)
-	protocol.Settings = &duplicatePath
-	require.ErrorIs(t, ValidateNodeProtocol(protocol), ErrInvalidNodeProtocol)
-
-	mixedFamily := strings.Replace(settings, `"gateway":"10.8.0.1"`, `"gateway":"2001:db8::1"`, 1)
-	protocol.Settings = &mixedFamily
-	require.ErrorIs(t, ValidateNodeProtocol(protocol), ErrInvalidNodeProtocol)
+	for _, relay := range []string{
+		`{"backend":"gost","role":"entry","server":"exit.example.com","server_port":8443}`,
+		`{"role":"exit"}`,
+		`"gost"`,
+	} {
+		settings := fmt.Sprintf(`{"cidr":"10.77.0.0/24","server_address":"10.77.0.1/24","server_private_key":%q,"server_public_key":%q,"relay":%s}`, privateKey, publicKey, relay)
+		protocol := &model.NodeProtocol{Type: model.ProtocolWireGuard, Port: 51820, Enable: 1, Settings: &settings}
+		err := ValidateNodeProtocol(protocol)
+		require.ErrorIs(t, err, ErrInvalidNodeProtocol, relay)
+		require.ErrorContains(t, err, "relay 已随 gost 移除", relay)
+	}
+	empty := fmt.Sprintf(`{"cidr":"10.77.0.0/24","server_address":"10.77.0.1/24","server_private_key":%q,"server_public_key":%q,"relay":{}}`, privateKey, publicKey)
+	require.NoError(t, ValidateNodeProtocol(&model.NodeProtocol{Type: model.ProtocolWireGuard, Port: 51820, Enable: 1, Settings: &empty}))
 }
 
-func TestValidateWireGuardExitCanOmitEntryKeyMaterial(t *testing.T) {
-	settings := `{"cidr":"10.77.0.0/24","mtu":1280,"relay":{"backend":"gost","role":"exit","server_port":8443,"entry_tun_address":"172.31.77.2/24","exit_tun_address":"172.31.77.1/24"}}`
+// A former exit stored before the relay was removed reaches its Agent with
+// its relay, which the Agent refuses, and still without entry key material.
+func TestStoredWireGuardExitKeepsEntryKeysOut(t *testing.T) {
+	settings := `{"cidr":"10.77.0.0/24","mtu":1280,"server_private_key":"entry-private-key","relay":{"backend":"gost","role":"exit","server_port":8443}}`
 	protocol := &model.NodeProtocol{Type: model.ProtocolWireGuard, Enable: 1, Settings: &settings}
-	require.NoError(t, ValidateNodeProtocol(protocol))
-
-	leakedEntryPrivateKey := strings.Replace(settings, `"mtu":1280,`, `"server_private_key":"entry-private-key","mtu":1280,`, 1)
-	protocol.Settings = &leakedEntryPrivateKey
 	require.ErrorIs(t, ValidateNodeProtocol(protocol), ErrInvalidNodeProtocol)
-	protocol.Settings = &settings
 
 	config := BuildNodeProtocolConfig(&model.Node{ID: 1, Host: "exit.example.com"}, protocol)
 	require.Empty(t, config["server_private_key"])
 	require.Empty(t, config["server_public_key"])
 	require.Empty(t, config["server_address"])
-}
-
-func TestValidateWireGuardWSSCertificateContract(t *testing.T) {
-	privateKey, publicKey, err := generateWireGuardKeypair()
-	require.NoError(t, err)
-	entrySettings := fmt.Sprintf(`{"cidr":"10.77.0.0/24","server_address":"10.77.0.1/24","server_private_key":%q,"server_public_key":%q,"tunnel_type":"wss","relay":{"backend":"gost","mode":"relay+wss","role":"entry","wss_compat":true,"wss_path":"/wireguard","wss_secure":true,"wss_server_name":"exit.example.com","wss_ca_file":"/etc/v2bx/relay-ca.pem","server":"exit.example.com","server_port":8443,"entry_tun_address":"172.31.77.2/24","exit_tun_address":"172.31.77.1/24"}}`, privateKey, publicKey)
-	entry := &model.NodeProtocol{Type: model.ProtocolWireGuard, Port: 51820, Enable: 1, Settings: &entrySettings}
-	require.NoError(t, ValidateNodeProtocol(entry))
-
-	insecureEntry := strings.Replace(entrySettings, `"wss_secure":true`, `"wss_secure":false`, 1)
-	entry.Settings = &insecureEntry
-	require.ErrorIs(t, ValidateNodeProtocol(entry), ErrInvalidNodeProtocol)
-
-	leakedEntry := strings.Replace(entrySettings, `"wss_ca_file":`, `"wss_cert_file":"/etc/v2bx/relay-cert.pem","wss_ca_file":`, 1)
-	entry.Settings = &leakedEntry
-	require.ErrorIs(t, ValidateNodeProtocol(entry), ErrInvalidNodeProtocol)
-
-	exitSettings := `{"cidr":"10.77.0.0/24","tunnel_type":"wss","relay":{"backend":"gost","mode":"relay+wss","role":"exit","wss_compat":true,"wss_path":"/wireguard","wss_cert_file":"/etc/v2bx/relay-cert.pem","wss_key_file":"/etc/v2bx/relay-key.pem","server_port":8443,"entry_tun_address":"172.31.77.2/24","exit_tun_address":"172.31.77.1/24"}}`
-	exit := &model.NodeProtocol{Type: model.ProtocolWireGuard, Enable: 1, Settings: &exitSettings}
-	require.NoError(t, ValidateNodeProtocol(exit))
-
-	leakedExit := strings.Replace(exitSettings, `"wss_cert_file":`, `"wss_server_name":"exit.example.com","wss_cert_file":`, 1)
-	exit.Settings = &leakedExit
-	require.ErrorIs(t, ValidateNodeProtocol(exit), ErrInvalidNodeProtocol)
-
-	missingKey := strings.Replace(exitSettings, `"wss_key_file":"/etc/v2bx/relay-key.pem",`, "", 1)
-	exit.Settings = &missingKey
-	require.ErrorIs(t, ValidateNodeProtocol(exit), ErrInvalidNodeProtocol)
-}
-
-func TestBuildNodeProtocolConfigSeparatesWireGuardWSSRoleSecrets(t *testing.T) {
-	entrySettings := `{"tunnel_type":"wss","relay":{"role":"entry","wss_cert_file":"/etc/v2bx/exit-cert.pem","wss_key_file":"/etc/v2bx/exit-key.pem"}}`
-	entry := BuildNodeProtocolConfig(&model.Node{ID: 1, Host: "entry.example.com"}, &model.NodeProtocol{
-		Type:     model.ProtocolWireGuard,
-		Port:     51820,
-		Settings: &entrySettings,
-	})
-	entryRelay := entry["relay"].(map[string]any)
-	require.Empty(t, entryRelay["wss_cert_file"])
-	require.Empty(t, entryRelay["wss_key_file"])
-
-	exitSettings := `{"tunnel_type":"wss","relay":{"role":"exit","wss_secure":true,"wss_server_name":"exit.example.com","wss_ca_file":"/etc/v2bx/relay-ca.pem","wss_cert_file":"/etc/v2bx/exit-cert.pem","wss_key_file":"/etc/v2bx/exit-key.pem"}}`
-	exit := BuildNodeProtocolConfig(&model.Node{ID: 2, Host: "exit.example.com"}, &model.NodeProtocol{
-		Type:     model.ProtocolWireGuard,
-		Settings: &exitSettings,
-	})
-	exitRelay := exit["relay"].(map[string]any)
-	require.Equal(t, false, exitRelay["wss_secure"])
-	require.Empty(t, exitRelay["wss_server_name"])
-	require.Empty(t, exitRelay["wss_ca_file"])
-	require.Equal(t, "/etc/v2bx/exit-cert.pem", exitRelay["wss_cert_file"])
-	require.Equal(t, "/etc/v2bx/exit-key.pem", exitRelay["wss_key_file"])
+	require.Equal(t, "exit", config["relay"].(map[string]any)["role"], "the stored relay goes to the Agent, which refuses it")
 }
 
 func TestBuildNodeProtocolConfigIgnoresLegacyWireGuardCustomRuntimeOverride(t *testing.T) {
@@ -346,39 +275,12 @@ func TestValidateWireGuardRuntimeConfig(t *testing.T) {
 		"server_private_key": privateKey,
 		"server_public_key":  publicKey,
 		"allowed_ips":        []any{"0.0.0.0/0"},
-		"relay": map[string]any{
-			"backend":           "gost",
-			"role":              "entry",
-			"server":            "exit.example.com",
-			"server_port":       8443,
-			"entry_tun_address": "172.31.77.2/24",
-			"exit_tun_address":  "172.31.77.1/24",
-		},
 	}
 	require.NoError(t, ValidateWireGuardRuntimeConfig(config))
 
-	exitConfig := map[string]any{
-		"type":               "wireguard",
-		"node_type":          "wireguard",
-		"server_port":        0,
-		"cidr":               "10.77.0.0/24",
-		"mtu":                1280,
-		"tunnel_type":        "quic",
-		"server_address":     "",
-		"server_private_key": "",
-		"server_public_key":  "",
-		"relay": map[string]any{
-			"backend":           "gost",
-			"role":              "exit",
-			"server_port":       8443,
-			"tun_port":          8421,
-			"entry_tun_address": "172.31.77.2/24",
-			"exit_tun_address":  "172.31.77.1/24",
-		},
-	}
-	require.NoError(t, ValidateWireGuardRuntimeConfig(exitConfig))
-	exitConfig["server_private_key"] = privateKey
-	require.Error(t, ValidateWireGuardRuntimeConfig(exitConfig))
+	config["relay"] = map[string]any{"backend": "gost", "role": "entry", "server": "exit.example.com", "server_port": 8443}
+	require.Error(t, ValidateWireGuardRuntimeConfig(config), "the gost relay was removed")
+	delete(config, "relay")
 
 	config["allowed_ips"] = []any{"::/0"}
 	require.Error(t, ValidateWireGuardRuntimeConfig(config))
@@ -389,7 +291,7 @@ func TestValidateWireGuardRuntimeConfig(t *testing.T) {
 }
 
 func TestValidateWireGuardProtocolRejectsCustomRuntimeOverride(t *testing.T) {
-	settings := `{"cidr":"10.77.0.0/24","server_address":"10.77.0.1/24","server_private_key":"invalid","relay":{"backend":"gost","role":"entry","server":"exit.example.com","server_port":8443,"entry_tun_address":"172.31.77.2/24","exit_tun_address":"172.31.77.1/24"}}`
+	settings := `{"cidr":"10.77.0.0/24","server_address":"10.77.0.1/24","server_private_key":"invalid"}`
 	custom := `{"relay":{"role":"exit"}}`
 	protocol := &model.NodeProtocol{Type: model.ProtocolWireGuard, Port: 51820, Enable: 1, Settings: &settings, CustomConfig: &custom}
 	require.Error(t, ValidateNodeProtocol(protocol))

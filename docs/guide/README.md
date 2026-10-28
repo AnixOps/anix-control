@@ -56,7 +56,6 @@ Use this folder when you need implementation detail, clone contracts, runtime op
 
 | Document | Purpose |
 |------|------|
-| [WireGuard Dual-Node Relay Plan](wireguard-relay.md) | P0 WireGuard access, domestic entry termination, GOST relay+QUIC default transport, WSS compatibility mode, and phased implementation plan |
 | [WireGuard Entry Network Policy](wireguard-network-policy.md) | `relay.network_policy` active/standby uplink failover for WSS entry nodes |
 | [WireGuard Peer Key Rotation](wireguard-key-rotation.md) | `cmd/wgrotate` client credential rotation without changing peer IDs or tunnel IPs |
 

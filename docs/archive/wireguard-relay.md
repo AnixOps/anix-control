@@ -1,5 +1,10 @@
 # WireGuard Dual-Node Relay Plan
 
+> **Archived.** The WireGuard dual-node relay ran on gost and was removed with
+> it: Control refuses `settings.relay` and the Agent refuses a node that
+> carries one. A WireGuard node now terminates its users and egresses itself;
+> cross-border paths run on the network model (ANX-A).
+
 Date: 2026-07-10
 
 Status: Partial/P0. The panel peer-custody/subscription-output slice, admin
