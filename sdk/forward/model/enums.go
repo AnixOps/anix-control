@@ -13,6 +13,9 @@ const (
 	EngineGost Engine = Engine(forwardv1.Engine_ENGINE_GOST)
 	// EngineAnixOps is the AnixOps relay protocol (v4.3).
 	EngineAnixOps Engine = Engine(forwardv1.Engine_ENGINE_ANIXOPS)
+	// EngineNetwork is the device network model's kernel (anx-node,
+	// anx-server); it replaces gost and the AnixOps relay.
+	EngineNetwork Engine = Engine(forwardv1.Engine_ENGINE_NETWORK)
 )
 
 // String answers the contract's name, or the number for an unknown value.
@@ -68,6 +71,7 @@ const (
 	LinkSecurityQUIC        LinkSecurity = LinkSecurity(forwardv1.LinkSecurity_LINK_SECURITY_QUIC)
 	LinkSecurityGRPC        LinkSecurity = LinkSecurity(forwardv1.LinkSecurity_LINK_SECURITY_GRPC)
 	LinkSecurityAnixOps     LinkSecurity = LinkSecurity(forwardv1.LinkSecurity_LINK_SECURITY_ANIXOPS)
+	LinkSecurityNetwork     LinkSecurity = LinkSecurity(forwardv1.LinkSecurity_LINK_SECURITY_NETWORK)
 )
 
 func (s LinkSecurity) String() string { return forwardv1.LinkSecurity(s).String() }
@@ -161,6 +165,7 @@ const (
 	ProxyProtocolUnspecified ProxyProtocol = ProxyProtocol(forwardv1.ProxyProtocol_PROXY_PROTOCOL_UNSPECIFIED)
 	ProxyProtocolOff         ProxyProtocol = ProxyProtocol(forwardv1.ProxyProtocol_PROXY_PROTOCOL_OFF)
 	ProxyProtocolV2          ProxyProtocol = ProxyProtocol(forwardv1.ProxyProtocol_PROXY_PROTOCOL_V2)
+	ProxyProtocolV1          ProxyProtocol = ProxyProtocol(forwardv1.ProxyProtocol_PROXY_PROTOCOL_V1)
 )
 
 func (p ProxyProtocol) String() string { return forwardv1.ProxyProtocol(p).String() }
@@ -169,4 +174,4 @@ func (p ProxyProtocol) String() string { return forwardv1.ProxyProtocol(p).Strin
 func (p ProxyProtocol) IsKnown() bool { _, ok := forwardv1.ProxyProtocol_name[int32(p)]; return ok }
 
 // Enabled reports whether a header is written.
-func (p ProxyProtocol) Enabled() bool { return p == ProxyProtocolV2 }
+func (p ProxyProtocol) Enabled() bool { return p == ProxyProtocolV2 || p == ProxyProtocolV1 }

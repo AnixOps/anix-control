@@ -9,4 +9,5 @@
     cumulative byte counters. `sdk/network` checks both.
   - `anixops.forward.v1` (additions only): `ENGINE_NETWORK`,
     `LINK_SECURITY_NETWORK` with `LinkTransport.network_transport_id`, and
-    `Hop.network_egress_id`. Control does not plan these routes yet.
+    `Hop.network_egress_id`, and `PROXY_PROTOCOL_V1`. Route validation
+    refuses all of these until Control plans network routes.

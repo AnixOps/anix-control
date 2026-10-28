@@ -62,6 +62,8 @@ func anixopsRuleCases() []ruleCase {
 			"hops[2].ingress.carrier", CodeNotApplicable},
 		{"unknown carrier", func(r *model.Route, _ *Options) { r.Hops[2].Ingress.Carrier = 9 }, "hops[2].ingress.carrier", CodeInvalidEnum},
 		{"unknown proxy protocol", func(r *model.Route, _ *Options) { r.Policy.ProxyProtocol = 9 }, "policy.proxy_protocol", CodeInvalidEnum},
+		{"proxy protocol v1", func(r *model.Route, _ *Options) { r.Policy.ProxyProtocol = model.ProxyProtocolV1 },
+			"policy.proxy_protocol", CodeProxyProtocolUnsupported},
 		{"proxy protocol on a gost exit", func(r *model.Route, _ *Options) { r.Policy.ProxyProtocol = model.ProxyProtocolV2 },
 			"policy.proxy_protocol", CodeProxyProtocolUnsupported},
 		{"proxy protocol on an nftables entry", func(r *model.Route, _ *Options) {

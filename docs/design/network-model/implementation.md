@@ -46,6 +46,7 @@
 
 - ANX-Line（`anx_line`）不带外衣，只用在国内或可信链路上：用户入口直连 IX、专线（IPLC/IEPL）入口，以及我们自己控制的两端之间。
 - 跨境段（经公网出境）走 ANX-A 系列，也就是带外衣的 ANX（anx-node 的 `anx` 入站形态）。网络模型为它新增传输类型 `anx`，在 ANX-A 传输落地之前，跨境段暂用 WireGuard。
+- ANX-A 一期：传输类型 `anx` 由 ANX-Line 链路的 l2 形态承载（C1/TCP 加 A2 外衣），复用多跳、统计和换钥；主规格的 ANX 客户端出站放二期（内核线程 2026-10-28 确认）。
 - 规划器按段选择：入口到 IX 或专线入口用 `anx_line`，经公网出境的段用 `anx`。不允许把 `anx_line` 放在公网跨境段上；由于 Line 的可信与否只有 Control 知道，这条规则在规划器里检查，不在 Agent 或合约校验里检查。
 
 客户端只连入口端口，gost 只在我们自己的节点之间做链路，所以迁移对用户透明，切换时链路会重连一次。
@@ -59,14 +60,16 @@
 **内核要补的能力（替代 gost 前必须先有）**
 
 1. forward 入站支持多个目标：轮询、随机、IP 哈希、最少连接、按优先级故障切换，并带健康检查和熔断。参数直接沿用 forward.v1 的 `Policy`，目标在最后一跳解析和拨出。
-2. 中继：hop 入口进来的流量按 `forwarding` 交给下一条传输。Agent 侧要放开「transport → transport」，anx-server 接收后转给本机 anx-node 的下一条链路。
+2. 中继：内核已有（anx-server 按 SetLinkRoutes 把上一跳的链路转给下一条链路）。Agent 在中继设备上把 `forwarding` 的「transport → transport」下发成 SetLinkRoutes。
 3. 入口高可用：同一个 `PortForward` 下发到多个入口设备。
-4. 每条规则的限速、最大连接数和 PROXY protocol（v1/v2）。
+4. 每条规则的限速、最大连接数和 PROXY protocol（v1/v2）。目标选择、健康检查和 PROXY 头都在入口的 forward 入站做，中继对字节透明，所以多跳也成立。
+
+PortForward 由 Agent 转成 anixcore 的 forward 入站（出站为 `egress:<id>` 或 `anx-line:<id>`），状态和字节取自 `/v1/inbounds` 的统计；内核的 `PUT /v1/network` 不读 port_forwards。
 
 **合约**
 
 - forward.v1：
-  - `Engine.ENGINE_NETWORK = 4`、`LinkSecurity.LINK_SECURITY_NETWORK = 7`（链路走网络模型的某条传输，`anx_line` 或 `anx`）。
+  - `Engine.ENGINE_NETWORK = 4`、`LinkSecurity.LINK_SECURITY_NETWORK = 7`（链路走网络模型的某条传输，`anx_line` 或 `anx`）、`ProxyProtocol.PROXY_PROTOCOL_V1 = 3`。在 Control 能规划之前，校验拒绝这三个新值。
   - `LinkTransport.network_transport_id = 6`。
   - `Hop.network_egress_id = 7`。
   - 迁移完成后，gost 的取值（ENGINE_GOST，以及 TLS / WSS / QUIC / GRPC 链路）只保留编号，规划器拒绝这些取值。

@@ -299,6 +299,10 @@ enum ProxyProtocol {
   // PROXY_PROTOCOL_V2 is the binary header of PROXY protocol version 2,
   // written on TCP connections only.
   PROXY_PROTOCOL_V2 = 2;
+  // PROXY_PROTOCOL_V1 is the text header of PROXY protocol version 1,
+  // written on TCP connections only; ENGINE_NETWORK routes only until the
+  // other engines write it.
+  PROXY_PROTOCOL_V1 = 3;
 }
 
 // BalanceStrategy picks an upstream for a new connection.

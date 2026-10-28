@@ -78,6 +78,7 @@ enum anixops.forward.v1.ProbeStatus.PROBE_STATUS_SKIPPED = 4
 enum anixops.forward.v1.ProbeStatus.PROBE_STATUS_UNSPECIFIED = 0
 enum anixops.forward.v1.ProxyProtocol.PROXY_PROTOCOL_OFF = 1
 enum anixops.forward.v1.ProxyProtocol.PROXY_PROTOCOL_UNSPECIFIED = 0
+enum anixops.forward.v1.ProxyProtocol.PROXY_PROTOCOL_V1 = 3
 enum anixops.forward.v1.ProxyProtocol.PROXY_PROTOCOL_V2 = 2
 enum anixops.forward.v1.TargetPolicy.TARGET_POLICY_ALLOW_PRIVATE = 2
 enum anixops.forward.v1.TargetPolicy.TARGET_POLICY_PUBLIC_ONLY = 1

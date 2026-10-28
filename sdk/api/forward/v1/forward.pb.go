@@ -347,6 +347,10 @@ const (
 	// PROXY_PROTOCOL_V2 is the binary header of PROXY protocol version 2,
 	// written on TCP connections only.
 	ProxyProtocol_PROXY_PROTOCOL_V2 ProxyProtocol = 2
+	// PROXY_PROTOCOL_V1 is the text header of PROXY protocol version 1,
+	// written on TCP connections only; ENGINE_NETWORK routes only until the
+	// other engines write it.
+	ProxyProtocol_PROXY_PROTOCOL_V1 ProxyProtocol = 3
 )
 
 // Enum value maps for ProxyProtocol.
@@ -355,11 +359,13 @@ var (
 		0: "PROXY_PROTOCOL_UNSPECIFIED",
 		1: "PROXY_PROTOCOL_OFF",
 		2: "PROXY_PROTOCOL_V2",
+		3: "PROXY_PROTOCOL_V1",
 	}
 	ProxyProtocol_value = map[string]int32{
 		"PROXY_PROTOCOL_UNSPECIFIED": 0,
 		"PROXY_PROTOCOL_OFF":         1,
 		"PROXY_PROTOCOL_V2":          2,
+		"PROXY_PROTOCOL_V1":          3,
 	}
 )
 
@@ -8648,11 +8654,12 @@ const file_api_forward_v1_forward_proto_rawDesc = "" +
 	"\x14ANIXOPS_CARRIER_AUTO\x10\x01\x12\x1b\n" +
 	"\x17ANIXOPS_CARRIER_TLS_TCP\x10\x02\x12\x18\n" +
 	"\x14ANIXOPS_CARRIER_QUIC\x10\x03\x12\x19\n" +
-	"\x15ANIXOPS_CARRIER_PLAIN\x10\x04*^\n" +
+	"\x15ANIXOPS_CARRIER_PLAIN\x10\x04*u\n" +
 	"\rProxyProtocol\x12\x1e\n" +
 	"\x1aPROXY_PROTOCOL_UNSPECIFIED\x10\x00\x12\x16\n" +
 	"\x12PROXY_PROTOCOL_OFF\x10\x01\x12\x15\n" +
-	"\x11PROXY_PROTOCOL_V2\x10\x02*\xd0\x01\n" +
+	"\x11PROXY_PROTOCOL_V2\x10\x02\x12\x15\n" +
+	"\x11PROXY_PROTOCOL_V1\x10\x03*\xd0\x01\n" +
 	"\x0fBalanceStrategy\x12 \n" +
 	"\x1cBALANCE_STRATEGY_UNSPECIFIED\x10\x00\x12 \n" +
 	"\x1cBALANCE_STRATEGY_ROUND_ROBIN\x10\x01\x12\x1b\n" +

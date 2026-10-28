@@ -155,6 +155,8 @@ func checkHopEngine(c *collector, i int, engine model.Engine, opts Options) {
 		c.add(hopField(i, "engine"), CodeInvalidEnum, "unknown engine %d", int32(engine))
 	case engine == model.EngineAnixOps && !opts.EnableAnixOps:
 		c.add(hopField(i, "engine"), CodeEngineNotEnabled, "ENGINE_ANIXOPS is not enabled before v4.3")
+	case engine == model.EngineNetwork:
+		c.add(hopField(i, "engine"), CodeEngineNotEnabled, "ENGINE_NETWORK routes are not planned yet")
 	}
 }
 
@@ -192,6 +194,8 @@ func checkIngress(c *collector, i int, h model.Hop, opts Options) {
 		c.add(field+"security", CodeInvalidEnum, "unknown link security %d", int32(t.Security))
 	case t.Security == model.LinkSecurityAnixOps && !opts.EnableAnixOps:
 		c.add(field+"security", CodeEngineNotEnabled, "LINK_SECURITY_ANIXOPS is not enabled before v4.3")
+	case t.Security == model.LinkSecurityNetwork:
+		c.add(field+"security", CodeEngineNotEnabled, "LINK_SECURITY_NETWORK routes are not planned yet")
 	}
 	if t.ServerName != "" {
 		switch {
@@ -261,6 +265,8 @@ func checkProxyProtocol(c *collector, r *model.Route) {
 	case knownEngine(r.Hops[last].Engine) && !CanProxyProtocol(r.Hops[last].Engine):
 		c.add("policy.proxy_protocol", CodeProxyProtocolUnsupported,
 			"hop %d runs %s, which cannot write a PROXY protocol header", last, r.Hops[last].Engine)
+	case p == model.ProxyProtocolV1:
+		c.add("policy.proxy_protocol", CodeProxyProtocolUnsupported, "PROXY protocol v1 is for ENGINE_NETWORK routes, which are not planned yet")
 	case r.Listen.Protocol == model.L4ProtocolUDP:
 		c.add("policy.proxy_protocol", CodeProxyProtocolUnsupported, "the header is written on TCP connections; this route is UDP only")
 	case last > 0 && r.Policy.Direct == model.DirectPreferred:
