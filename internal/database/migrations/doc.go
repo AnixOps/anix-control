@@ -94,4 +94,8 @@
 //     (v4_kernel_forward_latency).
 //   - 0015_forward_dns_vantage: the vantage selectors of the entry HA DNS
 //     bindings (v4_kernel_forward_dns_vantage).
+//   - 0016_network_model: the device network model, its sealed ANX-Line
+//     link keys and each device's plan generation and reported facts
+//     (v4_kernel_network_model, v4_kernel_network_transport_key,
+//     v4_kernel_network_device).
 package migrations

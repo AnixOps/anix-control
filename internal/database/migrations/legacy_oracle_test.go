@@ -137,6 +137,9 @@ func laterModels() []any {
 		&model.IWANLine{},                  // 0013_iwan_lines
 		&model.KernelForwardLatency{},      // 0014_forward_latency
 		&model.KernelForwardDNSVantage{},   // 0015_forward_dns_vantage
+		&model.NetworkModel{},              // 0016_network_model
+		&model.NetworkTransportKey{},       // 0016_network_model
+		&model.NetworkDevice{},             // 0016_network_model
 	}
 }
 

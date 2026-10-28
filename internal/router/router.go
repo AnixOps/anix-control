@@ -857,6 +857,15 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		nodeEntries := handler.NewNodeEntriesHandler()
 		v4.GET("/kernel/nodes/:id/entries", nodeEntries.List)
 		v4.PUT("/kernel/nodes/:id/entries", nodeEntries.Replace)
+		// The device network model (docs/design/network-model): lines,
+		// ingresses, egresses, ANX-Line transports and paths as one
+		// document, planned into each device's NetworkPlan
+		// (internal/networkmodel).
+		networkModel := handler.NewNetworkModelHandler()
+		v4.GET("/kernel/network", networkModel.Get)
+		v4.PUT("/kernel/network", networkModel.Replace)
+		v4.POST("/kernel/network/transports/:id/rotate-key", networkModel.RotateLinkKey)
+		v4.GET("/kernel/network/devices/:id/plan", networkModel.DevicePlan)
 		// Panabit iWAN lines: third-party iWAN ingresses AnixOps Net logs
 		// into with a shared account to reach proxy nodes through them
 		// (node entries of kind iwan; internal/iwanline).
