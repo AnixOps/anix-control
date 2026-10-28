@@ -1,0 +1,90 @@
+{
+  "device_ref": "proxy-2",
+  "generation": "1",
+  "hash": "9e11744233c2e64a5969e4fab2ba1ba4a567c9362905aacbc285b3b0001e204e",
+  "lines": [
+    {
+      "id": "ln-jp",
+      "name": "JP",
+      "interface": "ens3",
+      "carrier": "softbank",
+      "families": [
+        "FAMILY_V4",
+        "FAMILY_V6"
+      ],
+      "gateway_v4": "203.0.113.1",
+      "gateway_v6": "2001:db8::1"
+    }
+  ],
+  "ingresses": [
+    {
+      "id": "in-hop",
+      "line_id": "ln-jp",
+      "kind": "direct",
+      "kind_version": 1,
+      "audience": "AUDIENCE_HOP",
+      "family": "FAMILY_V4",
+      "listen": {
+        "address": "203.0.113.20",
+        "port": 443
+      },
+      "allowed_peers": [
+        "192.0.2.10/32"
+      ]
+    }
+  ],
+  "egresses": [
+    {
+      "id": "eg-jp",
+      "line_id": "ln-jp",
+      "kind": "nat_direct",
+      "kind_version": 1,
+      "audience": "AUDIENCE_INTERNET",
+      "family": "FAMILY_V4",
+      "source": "203.0.113.20",
+      "routing": {
+        "table": 20001,
+        "rule_priority": 20001
+      },
+      "health": {
+        "targets": [
+          "1.1.1.1:443",
+          "8.8.8.8:443"
+        ],
+        "interval_ms": 10000,
+        "timeout_ms": 2000,
+        "failure_threshold": 3,
+        "recovery_threshold": 2
+      }
+    },
+    {
+      "id": "eg-jp6",
+      "line_id": "ln-jp",
+      "kind": "nat_direct",
+      "kind_version": 1,
+      "audience": "AUDIENCE_INTERNET",
+      "family": "FAMILY_V6",
+      "source": "auto"
+    }
+  ],
+  "transports": [
+    {
+      "id": "tr-jp",
+      "kind": "anx_line",
+      "kind_version": 1,
+      "role": "TRANSPORT_ROLE_ACCEPT",
+      "to_ingress_id": "in-hop",
+      "peer_device_ref": "proxy-1",
+      "anx_line": {
+        "link_id": "tr-jp",
+        "link_key": "5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f"
+      }
+    }
+  ],
+  "forwarding": [
+    {
+      "from_transport_id": "tr-jp",
+      "egress_id": "eg-jp"
+    }
+  ]
+}

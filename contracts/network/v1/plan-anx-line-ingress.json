@@ -1,0 +1,114 @@
+{
+  "device_ref": "proxy-1",
+  "generation": "1",
+  "hash": "5dadd7e30e878d68dd6479da60039f888959cfba0531dbcf988a472dba229028",
+  "lines": [
+    {
+      "id": "ln-ix",
+      "name": "IX",
+      "interface": "eth0",
+      "carrier": "ix",
+      "families": [
+        "FAMILY_V4"
+      ],
+      "gateway_v4": "10.0.0.1"
+    }
+  ],
+  "ingresses": [
+    {
+      "id": "in-ss",
+      "line_id": "ln-ix",
+      "kind": "direct",
+      "kind_version": 1,
+      "audience": "AUDIENCE_USER",
+      "family": "FAMILY_V4",
+      "listen": {
+        "address": "0.0.0.0",
+        "port": 8388
+      },
+      "public_host": "sh.example.com",
+      "protocols": [
+        "ss2022"
+      ],
+      "pairing": {
+        "mode": "PAIRING_MODE_FAILOVER",
+        "egress_ids": [
+          "eg-jp",
+          "eg-hk"
+        ],
+        "failback_delay_ms": 60000
+      }
+    }
+  ],
+  "egresses": [
+    {
+      "id": "eg-ix",
+      "line_id": "ln-ix",
+      "kind": "hop",
+      "kind_version": 1,
+      "audience": "AUDIENCE_HOP",
+      "family": "FAMILY_V4",
+      "source": "auto"
+    }
+  ],
+  "transports": [
+    {
+      "id": "tr-jp",
+      "kind": "anx_line",
+      "kind_version": 1,
+      "role": "TRANSPORT_ROLE_DIAL",
+      "from_egress_id": "eg-ix",
+      "peer_device_ref": "proxy-2",
+      "mtu": 1452,
+      "anx_line": {
+        "link_id": "tr-jp",
+        "link_key": "5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f",
+        "server_public": "anx1-server-public-key-text",
+        "quic_addr": "203.0.113.20:8443",
+        "faketcp_addr": "203.0.113.20:8444",
+        "tcp_addr": "203.0.113.20:443",
+        "carrier_order": [
+          "c1",
+          "c2",
+          "c3"
+        ]
+      }
+    },
+    {
+      "id": "tr-hk",
+      "kind": "anx_line",
+      "kind_version": 1,
+      "role": "TRANSPORT_ROLE_DIAL",
+      "from_egress_id": "eg-ix",
+      "peer_device_ref": "proxy-3",
+      "anx_line": {
+        "link_id": "tr-hk",
+        "link_key": "6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a",
+        "server_public": "anx1-hk-public-key-text",
+        "tcp_addr": "198.51.100.30:443",
+        "egress": "l2",
+        "server_name": "www.example.org"
+      }
+    }
+  ],
+  "paths": [
+    {
+      "id": "pa-jp",
+      "ingress_id": "in-ss",
+      "transport_id": "tr-jp",
+      "labels": [
+        "jp"
+      ],
+      "final_egress_id": "eg-jp"
+    },
+    {
+      "id": "pa-hk",
+      "ingress_id": "in-ss",
+      "transport_id": "tr-hk",
+      "labels": [
+        "hk"
+      ],
+      "final_egress_id": "eg-hk"
+    }
+  ]
+}

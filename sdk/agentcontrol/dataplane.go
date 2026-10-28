@@ -50,6 +50,14 @@ const (
 	// user's traffic by destination domain, and Control answers it with
 	// ReportAck as it answers reports.v1 batches.
 	CapabilityDestinations = "destinations"
+	// CapabilityNetwork: the device runs the network model
+	// (docs/design/network-model, sdk/network). Control carries the
+	// device's NetworkPlan as the member "network" of the nodeconfig
+	// document (so it needs config.v1 too) and accepts the device's
+	// NetworkStatus as a PackageReport (with package-reports.v1). The
+	// Agent's Hello lists it with the device's DeviceCapabilities in an
+	// attribute. Control does not serve it yet.
+	CapabilityNetwork = "network"
 )
 
 // DataPlaneCapabilities are the capabilities of the data plane, the ones

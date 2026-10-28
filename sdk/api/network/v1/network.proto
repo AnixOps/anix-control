@@ -1,0 +1,363 @@
+syntax = "proto3";
+
+package anixops.network.v1;
+
+option go_package = "github.com/AnixOps/anix-control/sdk/api/network/v1;networkv1";
+
+// Draft. This contract is the device network model of
+// docs/design/network-model (N1–N9 decided 2026-10-26): every path a user's
+// traffic takes is ingress → transport → egress, even on one box. Control
+// owns the model (devices, lines, ingresses, egresses, transports, paths)
+// and renders one NetworkPlan per managed device; the device's Agent
+// applies the whole plan (policy routes, transports, the kernel's
+// listeners and outbounds) and reports a NetworkStatus. It rides the Agent
+// Control stream under the capability network.v1 (sdk/network):
+//
+//   - Hello: the Agent lists network.v1 with its DeviceCapabilities as
+//     protojson in the attribute "device_capabilities".
+//   - Desired state: the NetworkPlan as protojson in the member "network"
+//     of the anixops.nodeconfig document of a ConfigSnapshot, so the plan
+//     and the protocol configuration share one config_revision (N7).
+//   - Status: the Agent sends its NetworkStatus as a PackageReport with
+//     plugin_id "network", kind "network.status", version "v1".
+//
+// The package stays in the draft golden policy
+// (config/scripts/check_proto_golden.py) until Control serves it; after
+// that it grows by additions only.
+//
+// Wire conventions, as in the other AnixOps contracts: times are Unix
+// milliseconds (int64 *_unix_ms), ports are uint32 in 1..65535 (0 means
+// "not set"), device references are the Agent identity names
+// ("proxy-<id>", "forward-<id>"), and component ids are Control's (1 to 64
+// ASCII letters, digits, '-' and '_'), unique per component type within a
+// plan. Kinds are lower-case names (§8 of the design); a kind's settings
+// are versioned by kind_version, and a device lists the kinds and versions
+// it runs in DeviceCapabilities. A plan naming a kind or version the device
+// does not run is refused whole.
+
+// Component names the four kinds of model component a plan carries.
+enum Component {
+  COMPONENT_UNSPECIFIED = 0;
+  COMPONENT_LINE = 1;
+  COMPONENT_INGRESS = 2;
+  COMPONENT_EGRESS = 3;
+  COMPONENT_TRANSPORT = 4;
+}
+
+enum Family {
+  FAMILY_UNSPECIFIED = 0;
+  FAMILY_V4 = 1;
+  FAMILY_V6 = 2;
+}
+
+// Audience says who uses an ingress or an egress: users (ingress), the
+// internet (egress), or the next or previous hop of a path.
+enum Audience {
+  AUDIENCE_UNSPECIFIED = 0;
+  AUDIENCE_USER = 1;
+  AUDIENCE_HOP = 2;
+  AUDIENCE_INTERNET = 3;
+}
+
+// KindSupport is one kind a device runs, with the settings versions it
+// accepts and who executes it on the device ("anixcore", "agent", ...).
+message KindSupport {
+  Component component = 1;
+  string kind = 2;
+  repeated uint32 versions = 3;
+  string executor = 4;
+}
+
+// DeviceCapabilities is the Hello attribute of network.v1.
+message DeviceCapabilities {
+  string device_ref = 1;
+  repeated KindSupport kinds = 2;
+  // The policy-routing table and rule-priority range the Agent owns
+  // (inclusive). Zero means the default range 20000–20999.
+  uint32 routing_first = 3;
+  uint32 routing_last = 4;
+}
+
+// NetworkPlan is one managed device's whole network: what it listens on,
+// how it leaves, and the transports with one end on it. The Agent applies
+// it whole and replaces the previous plan.
+message NetworkPlan {
+  string device_ref = 1;
+  // generation grows by one whenever hash changes (sdk/network.Stamp).
+  uint64 generation = 2;
+  // hash is the SHA-256 (hex) of the plan with generation and hash unset
+  // (sdk/network.HashOf).
+  string hash = 3;
+  repeated Line lines = 4;
+  repeated Ingress ingresses = 5;
+  repeated Egress egresses = 6;
+  repeated Transport transports = 7;
+  // Paths that start at a user ingress of this device.
+  repeated Path paths = 8;
+  // Where traffic arriving over a transport goes next, on a relay or the
+  // last device of a path. A relay never consults user rules (N5).
+  repeated Forwarding forwarding = 9;
+}
+
+// Line is one uplink of the device: a network interface and its carrier.
+message Line {
+  string id = 1;
+  string name = 2;
+  // The interface ("eth0"); empty only on an unmanaged device.
+  string interface = 3;
+  // Carrier label: cn2, cmi, 9929, ix, iplc, ...
+  string carrier = 4;
+  repeated Family families = 5;
+  string gateway_v4 = 6;
+  string gateway_v6 = 7;
+}
+
+message Endpoint {
+  string address = 1;
+  uint32 port = 2;
+}
+
+// PortRange is an inclusive range of ports.
+message PortRange {
+  uint32 first = 1;
+  uint32 last = 2;
+}
+
+// PortMap maps a provider's public ports onto the ports the device listens
+// on (an ingress of kind "nat"). Both ranges have the same length.
+message PortMap {
+  PortRange public = 1;
+  PortRange local = 2;
+}
+
+enum PairingMode {
+  PAIRING_MODE_UNSPECIFIED = 0;
+  // Leave over the line the traffic came in on (the default).
+  PAIRING_MODE_SAME_LINE = 1;
+  // Leave over egress_ids[0], another line's egress.
+  PAIRING_MODE_CROSS = 2;
+  // egress_ids in order; the kernel switches on health and fails back.
+  PAIRING_MODE_FAILOVER = 3;
+  // Rules pick a path by label; fallback_path_id when none matches.
+  PAIRING_MODE_RULES = 4;
+}
+
+message PairingRule {
+  // A rule in the kernel's routing syntax (domain_suffix:example.com,
+  // ip_cidr:203.0.113.0/24, ...).
+  string match = 1;
+  string path_label = 2;
+}
+
+// Pairing decides once, at the user ingress, which path traffic takes.
+message Pairing {
+  PairingMode mode = 1;
+  // Final egresses (Path.final_egress_id) of this ingress's paths.
+  repeated string egress_ids = 2;
+  repeated PairingRule rules = 3;
+  string fallback_path_id = 4;
+  // failover: how long an egress stays healthy before traffic fails back.
+  uint32 failback_delay_ms = 5;
+}
+
+// Ingress is where traffic enters the device: users (protocols) or the
+// previous hop (a transport's accepting end).
+message Ingress {
+  string id = 1;
+  string line_id = 2;
+  // "direct" or "nat" (§8.1).
+  string kind = 3;
+  uint32 kind_version = 4;
+  Audience audience = 5;
+  Family family = 6;
+  // What the device binds; the address may be "::".
+  Endpoint listen = 7;
+  // What clients dial: the provider's address of a "nat" ingress.
+  string public_host = 8;
+  repeated PortMap port_map = 9;
+  // audience user: the user protocols ("vless", "ss2022", "anx", ...).
+  repeated string protocols = 10;
+  // audience user only.
+  Pairing pairing = 11;
+  // audience hop: the previous hops' addresses the firewall admits.
+  repeated string allowed_peers = 12;
+}
+
+message Routing {
+  // Zero: the Agent allocates in its range.
+  uint32 table = 1;
+  uint32 rule_priority = 2;
+}
+
+message HealthCheck {
+  // host:port targets probed from the egress's source address.
+  repeated string targets = 1;
+  uint32 interval_ms = 2;
+  uint32 timeout_ms = 3;
+  uint32 failure_threshold = 4;
+  uint32 recovery_threshold = 5;
+}
+
+// Egress is where traffic leaves the device: to the internet, or towards
+// the next hop of a path.
+message Egress {
+  string id = 1;
+  string line_id = 2;
+  // "nat_direct", "dedicated_ip" or "hop" (§8.1).
+  string kind = 3;
+  uint32 kind_version = 4;
+  Audience audience = 5;
+  Family family = 6;
+  // The source address outbound sockets bind; "auto" takes the line
+  // interface's preferred address of the family.
+  string source = 7;
+  // Empty takes the line's gateway of the family.
+  string gateway = 8;
+  Routing routing = 9;
+  HealthCheck health = 10;
+  uint32 mtu = 11;
+  uint32 advmss = 12;
+  // nat_direct whose source is not an interface address: SNAT/MASQUERADE.
+  bool masquerade = 13;
+}
+
+// TransportRole is this device's end of a transport.
+enum TransportRole {
+  TRANSPORT_ROLE_UNSPECIFIED = 0;
+  // The device dials the peer from from_egress_id.
+  TRANSPORT_ROLE_DIAL = 1;
+  // The device accepts the peer on to_ingress_id.
+  TRANSPORT_ROLE_ACCEPT = 2;
+  // Both ends on this device (kind "local").
+  TRANSPORT_ROLE_LOCAL = 3;
+}
+
+// Transport is one segment of a path between two devices, from the
+// previous device's hop egress to the next device's hop ingress. A plan
+// carries the transports with an end on the device, each from that end's
+// point of view.
+message Transport {
+  string id = 1;
+  // "local", "wireguard", "anx_line", "iwan", "ss2022_relay",
+  // "anixops_relay", "external" (§8.1).
+  string kind = 2;
+  uint32 kind_version = 3;
+  TransportRole role = 4;
+  // role dial: the local hop egress the transport leaves by.
+  string from_egress_id = 5;
+  // role accept: the local hop ingress the transport arrives at.
+  string to_ingress_id = 6;
+  // The device at the other end.
+  string peer_device_ref = 7;
+  uint32 mtu = 8;
+  oneof settings {
+    AnxLineSettings anx_line = 20;
+  }
+}
+
+// AnxLineSettings is the public boundary of an ANX-Line link (anix-agent
+// contracts/anx: the mgmt.proto Link). The dialing end runs it as
+// anx-node's anx_line link; the accepting end (anx-server) admits the link
+// key through AddUsers. The link key is generated by Control, sealed at
+// rest, and never leaves the plan: not in status, reports or logs.
+message AnxLineSettings {
+  string link_id = 1;
+  // 32 bytes as 64 lower-case hex digits.
+  string link_key = 2;
+  // role dial: the accepting end's public key (anx-server keygen).
+  string server_public = 3;
+  // role dial: the peer address per carrier, host:port; empty = carrier not
+  // offered. faketcp_addr is IPv4 only.
+  string quic_addr = 4;
+  string faketcp_addr = 5;
+  string tcp_addr = 6;
+  // "l1" or "l2"; empty = l1. l2 accepts tcp_addr only and needs
+  // server_name.
+  string egress = 7;
+  string server_name = 8;
+  // Carrier preference: "c1", "c2", "c3" (or tcp, quic, faketcp). Empty =
+  // the kernel's default order.
+  repeated string carrier_order = 9;
+  bool multipath = 10;
+  bool fec = 11;
+}
+
+// Path starts at a user ingress of this device and names where the
+// traffic goes next: a local egress, or the first transport. The rest of
+// the path is the next devices' forwarding (N3: one link per path).
+message Path {
+  string id = 1;
+  string ingress_id = 2;
+  oneof next {
+    string egress_id = 3;
+    string transport_id = 4;
+  }
+  // Labels pairing rules select ("jp", "streaming").
+  repeated string labels = 5;
+  // The internet egress the path ends at, on whichever device: what
+  // pairing.egress_ids name, so failover can order paths that leave over a
+  // transport. Empty or egress_id when next is a local egress.
+  string final_egress_id = 6;
+}
+
+// Forwarding sends what arrives over from_transport_id on to the next
+// segment or out of a local egress.
+message Forwarding {
+  string from_transport_id = 1;
+  oneof next {
+    string egress_id = 2;
+    string transport_id = 3;
+  }
+}
+
+enum ComponentState {
+  COMPONENT_STATE_UNSPECIFIED = 0;
+  COMPONENT_STATE_APPLIED = 1;
+  COMPONENT_STATE_DEGRADED = 2;
+  COMPONENT_STATE_DOWN = 3;
+  COMPONENT_STATE_UNSUPPORTED = 4;
+  COMPONENT_STATE_ERROR = 5;
+}
+
+message ComponentStatus {
+  Component component = 1;
+  string id = 2;
+  ComponentState state = 3;
+  // For people; never a secret.
+  string detail = 4;
+  // A user ingress: the egress in use now (it changes on failover).
+  string active_egress_id = 5;
+  uint32 rtt_ms = 6;
+  uint32 loss_ppm = 7;
+  int64 changed_at_unix_ms = 8;
+  // A transport: the carrier in use ("c1", "c2", "c3", ...).
+  string carrier = 9;
+}
+
+// InterfaceFact is an observed interface, for line discovery. Control
+// suggests lines from it; an administrator confirms them.
+message InterfaceFact {
+  string name = 1;
+  repeated string addresses = 2;
+  string gateway_v4 = 3;
+  string gateway_v6 = 4;
+}
+
+// PublicKey is a public key the device holds for a kind, which Control
+// hands to the other ends: the anx_line accepting end's server key.
+message PublicKey {
+  string kind = 1;
+  string key = 2;
+}
+
+// NetworkStatus is the device's report of its plan.
+message NetworkStatus {
+  string device_ref = 1;
+  // The plan the status is of.
+  uint64 generation = 2;
+  string plan_hash = 3;
+  repeated ComponentStatus components = 4;
+  repeated InterfaceFact interfaces = 5;
+  repeated PublicKey public_keys = 6;
+  int64 observed_at_unix_ms = 7;
+}
