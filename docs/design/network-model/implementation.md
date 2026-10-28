@@ -22,7 +22,7 @@
 - 链路密钥：每条 `anx_line` 传输首次出现时生成 32 字节随机密钥，`ca_kek` AES-256-GCM 封存（`v4_kernel_network_transport_key`），删除传输即删除密钥；`rotate-key` 轮换。
 - 出口设备的 anx-server 公钥记在 `v4_kernel_network_device.public_keys_json`（第 2b 步由 NetworkStatus 写入）；没有公钥时路径列为 pending，不进计划；`failover`/`cross` 的出口都在 pending 路径上时暂按 `same_line`。
 - 每台设备的计划哈希变化即 generation + 1；曾有计划、现在没有的设备下发空计划。
-- 未决：accept 端 c2/c3（QUIC、fake-TCP）监听端口目前只写在 dial 端地址里（传输的 `quic_port` / `faketcp_port`），第 3 步实现 Agent 时再定 accept 端从哪里读。
+- 已定：accept 端在自己的计划里拿到监听地址：`AnxLineSettings` 的 `tcp_addr` / `quic_addr` / `faketcp_addr` 在 accept 端是本端监听地址（hop ingress 的 listen 地址，端口按载体取传输的 `listen.port` / `quic_port` / `faketcp_port`），dial 端仍是对端地址；`server_public` 只给 dial 端，`Check` 拒绝 accept 端带它。
 
 ## Agent Control 下发与状态（第 2b 步）
 

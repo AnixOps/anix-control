@@ -186,7 +186,8 @@ func TestCheckRefuses(t *testing.T) {
 		}, "no pairing"},
 		{"bad peer", "plan-anx-line-egress.json", func(p *networkv1.NetworkPlan) { p.Ingresses[0].AllowedPeers = []string{"x"} }, "allowed peer"},
 		{"accept without hop ingress", "plan-anx-line-egress.json", func(p *networkv1.NetworkPlan) { p.Transports[0].ToIngressId = "" }, "hop ingress"},
-		{"accept with peer address", "plan-anx-line-egress.json", func(p *networkv1.NetworkPlan) { p.Transports[0].GetAnxLine().TcpAddr = "1.2.3.4:443" }, "dialing end"},
+		{"accept with peer key", "plan-anx-line-egress.json", func(p *networkv1.NetworkPlan) { p.Transports[0].GetAnxLine().ServerPublic = "anx1-key" }, "dialing end"},
+		{"accept with bad listen address", "plan-anx-line-egress.json", func(p *networkv1.NetworkPlan) { p.Transports[0].GetAnxLine().TcpAddr = "nope" }, "address"},
 		{"forward from unknown", "plan-anx-line-egress.json", func(p *networkv1.NetworkPlan) { p.Forwarding[0].FromTransportId = "x" }, "accepting transport"},
 		{"forward twice", "plan-anx-line-egress.json", func(p *networkv1.NetworkPlan) { p.Forwarding = append(p.Forwarding, p.Forwarding[0]) }, "forwarded twice"},
 		{"forward to hop egress", "plan-anx-line-ingress.json", func(p *networkv1.NetworkPlan) {

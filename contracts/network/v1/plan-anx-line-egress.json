@@ -1,7 +1,7 @@
 {
   "device_ref": "proxy-2",
   "generation": "1",
-  "hash": "9e11744233c2e64a5969e4fab2ba1ba4a567c9362905aacbc285b3b0001e204e",
+  "hash": "e9d75d6d655abd226bc6370f8a9478993121598a043f9d100bd81849085e13cb",
   "lines": [
     {
       "id": "ln-jp",
@@ -77,7 +77,10 @@
       "peer_device_ref": "proxy-1",
       "anx_line": {
         "link_id": "tr-jp",
-        "link_key": "5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f"
+        "link_key": "5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f",
+        "quic_addr": "203.0.113.20:8443",
+        "faketcp_addr": "203.0.113.20:8444",
+        "tcp_addr": "203.0.113.20:443"
       }
     }
   ],

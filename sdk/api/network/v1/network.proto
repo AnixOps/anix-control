@@ -266,8 +266,10 @@ message AnxLineSettings {
   string link_key = 2;
   // role dial: the accepting end's public key (anx-server keygen).
   string server_public = 3;
-  // role dial: the peer address per carrier, host:port; empty = carrier not
-  // offered. faketcp_addr is IPv4 only.
+  // Per carrier, host:port; empty = carrier not offered. role dial: the
+  // peer's address; role accept: the address this end listens on (the hop
+  // ingress's listen address, with the transport's port per carrier).
+  // faketcp_addr is IPv4 only.
   string quic_addr = 4;
   string faketcp_addr = 5;
   string tcp_addr = 6;
