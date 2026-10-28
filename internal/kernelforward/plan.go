@@ -225,9 +225,12 @@ func (s *Service) replanTx(tx *gorm.DB, routes []storedRoute, now time.Time) (Pl
 			}
 		}
 	}
-	// The ENGINE_NETWORK routes, with their enforcement, as port forwards.
-	if outcome.network, err = s.network(tx).ReplanTx(tx); err != nil {
-		return PlanOutcome{}, fmt.Errorf("kernel forward: network model: %w", err)
+	// The ENGINE_NETWORK routes, with their enforcement, as port forwards;
+	// a database without the network model's tables has none.
+	if tx.Migrator().HasTable(&model.NetworkModel{}) {
+		if outcome.network, err = s.network(tx).ReplanTx(tx); err != nil {
+			return PlanOutcome{}, fmt.Errorf("kernel forward: network model: %w", err)
+		}
 	}
 	return outcome, nil
 }
