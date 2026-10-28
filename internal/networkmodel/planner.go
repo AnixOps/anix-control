@@ -234,7 +234,7 @@ func Plan(doc *Document, keys map[string]string, devices map[string]Device) (*Re
 			from, to := egresses[transport.FromEgress], ingresses[transport.ToIngress]
 			dialer, accepter := planOf(nodeOf(from.Line)), planOf(nodeOf(to.Line))
 			dialer.Transports = append(dialer.Transports, transportProto(transport, networkv1.TransportRole_TRANSPORT_ROLE_DIAL, nodeOf(to.Line), keys[id], to, devices[nodeOf(to.Line)]))
-			accepter.Transports = append(accepter.Transports, transportProto(transport, networkv1.TransportRole_TRANSPORT_ROLE_ACCEPT, nodeOf(from.Line), keys[id], nil, Device{}))
+			accepter.Transports = append(accepter.Transports, transportProto(transport, networkv1.TransportRole_TRANSPORT_ROLE_ACCEPT, nodeOf(from.Line), keys[id], to, Device{}))
 			forwarding := &networkv1.Forwarding{FromTransportId: id}
 			if j+1 < len(path.Segments) {
 				forwarding.Next = &networkv1.Forwarding_TransportId{TransportId: path.Segments[j+1]}
@@ -399,7 +399,9 @@ func ingressProto(ingress *Ingress, peers []string, finals map[string]bool, path
 }
 
 // transportProto writes one end of a transport. The dialing end gets the
-// accepting device's server key and its hop ingress's addresses.
+// accepting device's server key and its hop ingress's addresses (the public
+// host when there is one); the accepting end gets the addresses it listens
+// on: the hop ingress's listen address with the port of each carrier.
 func transportProto(transport *Transport, role networkv1.TransportRole, peer, key string, to *Ingress, accepter Device) *networkv1.Transport {
 	out := &networkv1.Transport{
 		Id: transport.ID, Kind: transport.Kind, KindVersion: version(transport.KindVersion), Role: role,
@@ -416,13 +418,15 @@ func transportProto(transport *Transport, role networkv1.TransportRole, peer, ke
 	}
 	anx := &networkv1.AnxLineSettings{LinkId: transport.ID, LinkKey: key, CarrierOrder: options.CarrierOrder,
 		Multipath: options.Multipath, Fec: options.FEC, Egress: options.Egress, ServerName: options.ServerName}
-	if role == networkv1.TransportRole_TRANSPORT_ROLE_DIAL {
-		host := to.PublicHost
-		if host == "" {
-			host = to.Listen.Address
+	if to != nil {
+		host := to.Listen.Address
+		if role == networkv1.TransportRole_TRANSPORT_ROLE_DIAL {
+			if to.PublicHost != "" {
+				host = to.PublicHost
+			}
+			anx.ServerPublic = accepter.PublicKeys[network.TransportAnxLine]
 		}
 		port := to.Listen.Port
-		anx.ServerPublic = accepter.PublicKeys[network.TransportAnxLine]
 		anx.TcpAddr = net.JoinHostPort(host, strconv.FormatUint(uint64(port), 10))
 		if options.QUICPort != 0 {
 			anx.QuicAddr = net.JoinHostPort(host, strconv.FormatUint(uint64(options.QUICPort), 10))

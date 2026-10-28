@@ -529,14 +529,21 @@ func checkAnxLine(transport *networkv1.Transport, anx *networkv1.AnxLineSettings
 			return err
 		}
 	}
-	if transport.GetRole() != networkv1.TransportRole_TRANSPORT_ROLE_DIAL {
+	switch transport.GetRole() {
+	case networkv1.TransportRole_TRANSPORT_ROLE_DIAL:
+		if anx.GetServerPublic() == "" {
+			return fmt.Errorf("anx_line server_public is required on the dialing end")
+		}
+	case networkv1.TransportRole_TRANSPORT_ROLE_ACCEPT:
+		// The accepting end gets the addresses it listens on.
+		if anx.GetServerPublic() != "" {
+			return fmt.Errorf("anx_line server_public is for the dialing end")
+		}
+	default:
 		if anx.GetServerPublic() != "" || anx.GetQuicAddr() != "" || anx.GetFaketcpAddr() != "" || anx.GetTcpAddr() != "" {
-			return fmt.Errorf("anx_line peer key and addresses are for the dialing end")
+			return fmt.Errorf("anx_line peer key and addresses are for the transport's ends")
 		}
 		return nil
-	}
-	if anx.GetServerPublic() == "" {
-		return fmt.Errorf("anx_line server_public is required on the dialing end")
 	}
 	if anx.GetQuicAddr() == "" && anx.GetFaketcpAddr() == "" && anx.GetTcpAddr() == "" {
 		return fmt.Errorf("anx_line needs at least one carrier address")

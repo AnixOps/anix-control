@@ -1566,8 +1566,10 @@ type AnxLineSettings struct {
 	LinkKey string `protobuf:"bytes,2,opt,name=link_key,json=linkKey,proto3" json:"link_key,omitempty"`
 	// role dial: the accepting end's public key (anx-server keygen).
 	ServerPublic string `protobuf:"bytes,3,opt,name=server_public,json=serverPublic,proto3" json:"server_public,omitempty"`
-	// role dial: the peer address per carrier, host:port; empty = carrier not
-	// offered. faketcp_addr is IPv4 only.
+	// Per carrier, host:port; empty = carrier not offered. role dial: the
+	// peer's address; role accept: the address this end listens on (the hop
+	// ingress's listen address, with the transport's port per carrier).
+	// faketcp_addr is IPv4 only.
 	QuicAddr    string `protobuf:"bytes,4,opt,name=quic_addr,json=quicAddr,proto3" json:"quic_addr,omitempty"`
 	FaketcpAddr string `protobuf:"bytes,5,opt,name=faketcp_addr,json=faketcpAddr,proto3" json:"faketcp_addr,omitempty"`
 	TcpAddr     string `protobuf:"bytes,6,opt,name=tcp_addr,json=tcpAddr,proto3" json:"tcp_addr,omitempty"`
