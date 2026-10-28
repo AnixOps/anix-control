@@ -165,7 +165,7 @@ var (
 		// The latency history (forward-sdk.md section 7.5, L3): what the
 		// UI shows as a route's latency. Protected by the prefix; named so
 		// the rule survives a prefix change.
-		"v4_kernel_forward_latency": true,
+		"v4_kernel_forward_latency": true, "v4_kernel_forward_dns_vantage": true,
 	}
 )
 

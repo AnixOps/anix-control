@@ -92,6 +92,9 @@
             <span class="fwd-cell-stack">
               <span class="ha-node__name">{{ nodeName(node.node_ref) }}</span>
               <span class="fwd-mono ha-wrap">{{ (node.addresses || []).join(', ') || t('forwardDns.card.noAddress') }}</span>
+              <span v-if="node.unreachable?.length" class="fwd-muted ha-wrap" data-testid="forward-dns-unreachable">
+                {{ t('forwardDns.card.unreachable', { addresses: node.unreachable.join(', '), n: node.vantage_nodes || 0 }) }}
+              </span>
             </span>
             <span class="ha-chips">
               <UiBadge :tone="reasonTone(node.reason)" :label="reasonLabel(node.reason)" />

@@ -551,7 +551,7 @@ func bindingTypes(row model.KernelForwardDNSBinding) []string {
 	return strings.Split(row.RecordTypes, ",")
 }
 
-func bindingView(row model.KernelForwardDNSBinding) *forwardv1.DnsBinding {
+func bindingView(row model.KernelForwardDNSBinding, vantage string) *forwardv1.DnsBinding {
 	mode := forwardv1.DnsBindingMode_DNS_BINDING_MODE_DDNS
 	if row.Mode == DNSModeCNAME {
 		mode = forwardv1.DnsBindingMode_DNS_BINDING_MODE_CNAME
@@ -562,7 +562,7 @@ func bindingView(row model.KernelForwardDNSBinding) *forwardv1.DnsBinding {
 	}
 	return &forwardv1.DnsBinding{
 		Id: row.ID, RouteId: row.RouteID, ProviderId: row.ProviderID, Zone: row.Zone, RecordName: row.RecordName,
-		Mode: mode, RecordTypes: types, Ttl: row.TTL, Paused: row.Paused,
+		Mode: mode, RecordTypes: types, Ttl: row.TTL, Paused: row.Paused, Vantage: vantage,
 		CreatedAtUnixMs: row.CreatedAt.UnixMilli(), UpdatedAtUnixMs: row.UpdatedAt.UnixMilli(),
 	}
 }
@@ -628,6 +628,7 @@ func (s *Service) CreateDNSBinding(ctx context.Context, requestID string, bindin
 	}
 	hash := requestHash(methodCreateDNSBinding, binding)
 	answer := &forwardv1.CreateDnsBindingResponse{}
+	replan := false
 	err = db.Transaction(func(tx *gorm.DB) error {
 		now := s.now()
 		if found, err := replay(tx, requestID, methodCreateDNSBinding, hash, answer); err != nil || found {
@@ -637,15 +638,23 @@ func (s *Service) CreateDNSBinding(ctx context.Context, requestID string, bindin
 		if err != nil {
 			return err
 		}
+		vantage, _ := checkVantage(binding.GetVantage())
 		row.CreatedAt, row.UpdatedAt, row.State = now, now, dnsStatePending
 		if err := tx.Create(&row).Error; err != nil {
 			return fmt.Errorf("kernel forward: create dns binding: %w", err)
 		}
-		answer.Binding = bindingView(row)
+		if err := saveVantage(tx, row.ID, vantage, now); err != nil {
+			return err
+		}
+		replan = vantage != ""
+		answer.Binding = bindingView(row, vantage)
 		return record(tx, requestID, methodCreateDNSBinding, row.RouteID, hash, answer, now)
 	})
 	if err != nil {
 		return nil, err
+	}
+	if replan {
+		s.replanVantage(ctx)
 	}
 	return answer.GetBinding(), nil
 }
@@ -705,6 +714,9 @@ func checkNewBinding(tx *gorm.DB, binding *forwardv1.DnsBinding) (model.KernelFo
 	if problem != nil {
 		violations = append(violations, problem)
 	}
+	if _, problem := checkVantage(binding.GetVantage()); problem != nil {
+		violations = append(violations, problem)
+	}
 	if len(violations) == 0 {
 		var taken []model.KernelForwardDNSBinding
 		if err := tx.Where("route_id = ? OR (provider_id = ? AND zone = ? AND record_name = ?)", routeID, binding.GetProviderId(), zone, name).Find(&taken).Error; err != nil {
@@ -756,6 +768,7 @@ func (s *Service) UpdateDNSBinding(ctx context.Context, requestID string, bindin
 	}
 	hash := requestHash(methodUpdateDNSBinding, binding)
 	answer := &forwardv1.UpdateDnsBindingResponse{}
+	replan := false
 	err = db.Transaction(func(tx *gorm.DB) error {
 		now := s.now()
 		if found, err := replay(tx, requestID, methodUpdateDNSBinding, hash, answer); err != nil || found {
@@ -765,7 +778,11 @@ func (s *Service) UpdateDNSBinding(ctx context.Context, requestID string, bindin
 		if err != nil {
 			return err
 		}
-		current := bindingView(row)
+		selectors, err := loadVantage(tx, row.ID)
+		if err != nil {
+			return err
+		}
+		current := bindingView(row, selectors[row.ID])
 		var violations []*forwardv1.Violation
 		immutable := func(field string, changed bool) {
 			if changed {
@@ -785,6 +802,10 @@ func (s *Service) UpdateDNSBinding(ctx context.Context, requestID string, bindin
 		if problem != nil {
 			violations = append(violations, problem)
 		}
+		vantage, problem := checkVantage(binding.GetVantage())
+		if problem != nil {
+			violations = append(violations, problem)
+		}
 		if len(violations) > 0 {
 			return dnsRefusal(false, violations...)
 		}
@@ -792,11 +813,21 @@ func (s *Service) UpdateDNSBinding(ctx context.Context, requestID string, bindin
 		if err := tx.Model(&row).Select("record_types", "ttl", "paused", "updated_at").Updates(&row).Error; err != nil {
 			return fmt.Errorf("kernel forward: update dns binding: %w", err)
 		}
-		answer.Binding = bindingView(row)
+		if vantage != current.GetVantage() {
+			if err := saveVantage(tx, row.ID, vantage, now); err != nil {
+				return err
+			}
+		}
+		// Pausing or resuming a binding with a selector changes the probes too.
+		replan = vantage != current.GetVantage() || (vantage != "" && row.Paused != current.GetPaused())
+		answer.Binding = bindingView(row, vantage)
 		return record(tx, requestID, methodUpdateDNSBinding, row.RouteID, hash, answer, now)
 	})
 	if err != nil {
 		return nil, err
+	}
+	if replan {
+		s.replanVantage(ctx)
 	}
 	return answer.GetBinding(), nil
 }
@@ -827,12 +858,24 @@ func (s *Service) DeleteDNSBinding(ctx context.Context, requestID string, id uin
 			return err
 		}
 	}
+	selectors, err := loadVantage(db, id)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if selectors[id] != "" {
+			s.replanVantage(ctx)
+		}
+	}()
 	return db.Transaction(func(tx *gorm.DB) error {
 		now := s.now()
 		if found, err := replay(tx, requestID, methodDeleteDNSBinding, hash, answer); err != nil || found {
 			return err
 		}
 		if err := tx.Delete(&model.KernelForwardDNSNode{}, "binding_id = ?", id).Error; err != nil {
+			return err
+		}
+		if err := saveVantage(tx, id, "", now); err != nil {
 			return err
 		}
 		if err := tx.Delete(&model.KernelForwardDNSBinding{}, "id = ?", id).Error; err != nil {
@@ -888,9 +931,13 @@ func (s *Service) ListDNSBindings(ctx context.Context, routeID string, providerI
 	if err := query.Find(&rows).Error; err != nil {
 		return nil, fmt.Errorf("kernel forward: list dns bindings: %w", err)
 	}
+	selectors, err := loadVantage(db)
+	if err != nil {
+		return nil, err
+	}
 	out := make([]*forwardv1.DnsBinding, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, bindingView(row))
+		out = append(out, bindingView(row, selectors[row.ID]))
 	}
 	return out, nil
 }
@@ -950,7 +997,11 @@ func (s *Service) RouteDNS(ctx context.Context, routeID string) (*forwardv1.Rout
 		return status, nil
 	}
 	row := rows[0]
-	status.Binding = bindingView(row)
+	selectors, err := loadVantage(db, row.ID)
+	if err != nil {
+		return nil, err
+	}
+	status.Binding = bindingView(row, selectors[row.ID])
 	if row.Mode == DNSModeCNAME {
 		status.CnameTarget = row.RecordName
 	}
@@ -988,11 +1039,28 @@ func (s *Service) RouteDNS(ctx context.Context, routeID string) (*forwardv1.Rout
 	for _, info := range inv.nodes {
 		addresses[info.GetNodeRef()] = publicAddresses(info.GetAddresses(), bindingTypes(row))
 	}
+	var views map[string]*vantageView
+	if selectors[row.ID] != "" {
+		var reports []model.KernelForwardNodeReport
+		if err := db.Find(&reports).Error; err != nil {
+			return nil, err
+		}
+		byRef := make(map[string]model.KernelForwardNodeReport, len(reports))
+		for _, report := range reports {
+			byRef[report.NodeRef] = report
+		}
+		views = vantageResults(decodeReports(byRef), s.now())[row.ID]
+	}
 	for _, node := range nodes {
-		status.Nodes = append(status.Nodes, &forwardv1.DnsEntryNode{
+		entry := &forwardv1.DnsEntryNode{
 			NodeRef: node.NodeRef, Addresses: addresses[node.NodeRef], Healthy: node.Healthy, InRotation: node.InRotation,
 			GoodStreak: node.GoodStreak, BadStreak: node.BadStreak, Reason: node.Reason,
-		})
+		}
+		if views != nil {
+			_, down, vantageNodes := unreachable(views, addresses[node.NodeRef])
+			entry.Unreachable, entry.VantageNodes = down, uint32(vantageNodes) // #nosec G115 -- bounded by the inventory.
+		}
+		status.Nodes = append(status.Nodes, entry)
 	}
 	return status, nil
 }

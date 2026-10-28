@@ -30,6 +30,21 @@ func StateHash(hops []*forwardv1.NodeHop) string {
 	return hex.EncodeToString(sum[:])
 }
 
+// StateHashOf answers the hash of a state's hops and vantage probes (L4,
+// forward-sdk.md section 7.4). Without probes it is StateHash of its hops,
+// so a state without probes hashes as before.
+func StateHashOf(state *forwardv1.NodeForwardState) string {
+	if len(state.GetVantageProbes()) == 0 {
+		return StateHash(state.GetHops())
+	}
+	b, err := proto.MarshalOptions{Deterministic: true}.Marshal(&forwardv1.NodeForwardState{Hops: state.GetHops(), VantageProbes: state.GetVantageProbes()})
+	if err != nil {
+		panic("planner: encoding hops: " + err.Error())
+	}
+	sum := sha256.Sum256(b)
+	return hex.EncodeToString(sum[:])
+}
+
 // Stamp sets every state's state_hash and generation and answers the
 // generations to keep for the next plan. A node keeps its previous
 // generation while its hash is unchanged; otherwise the generation is the
@@ -42,7 +57,7 @@ func Stamp(states map[string]*forwardv1.NodeForwardState, previous map[string]Ge
 		out[ref] = g
 	}
 	for ref, s := range states {
-		hash := StateHash(s.GetHops())
+		hash := StateHashOf(s)
 		g := previous[ref]
 		if g.StateHash != hash || g.Generation == 0 {
 			g = Generation{Generation: g.Generation + 1, StateHash: hash}

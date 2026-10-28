@@ -117,6 +117,9 @@ export default {
       ttl: 'TTL',
       seconds: 's',
       ttlHelp: 'The shortest your provider allows (60 by default).',
+      vantage: 'Vantage node label',
+      vantageHelp: 'Optional. A key=value label (vantage=cn, say): the forwarding nodes with it dial every entry address from the clients’ side, and an address most of them cannot reach is left out of the records until it recovers.',
+      vantageFormat: 'Use a node label key=value, for example vantage=cn',
       paused: 'Paused',
       pausedHelp: 'Keep the published records and change nothing.',
       cnameInstruction: 'Create this CNAME once where {host} is hosted: {host} → the managed name.',
@@ -163,6 +166,7 @@ export default {
       keepPublished: 'None healthy: published kept',
       entries: 'Entry nodes',
       noAddress: 'No public address',
+      unreachable: 'Unreachable from the vantage nodes: {addresses} ({n} vantage nodes), left out of the records',
       inRotation: 'In rotation',
       outOfRotation: 'Out of rotation',
       joining: 'Healthy {n}/3, joining',
@@ -208,7 +212,8 @@ export default {
       report_stale: 'Report stale',
       offline: 'Offline',
       hop_error: 'Hop error',
-      upstreams_down: 'Upstreams down'
+      upstreams_down: 'Upstreams down',
+      vantage_unreachable: 'Unreachable from vantage'
     },
     codes: {
       secret_store_unavailable: 'Control has no key-encryption key (module_runtime.ca_kek) to seal credentials with.',

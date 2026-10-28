@@ -116,6 +116,9 @@ export default {
       ttl: 'TTL',
       seconds: '秒',
       ttlHelp: '设为服务商允许的最小值（默认 60）。',
+      vantage: '拨测节点标签',
+      vantageHelp: '可选。填 key=value（例如 vantage=cn）：带这个标签的转发节点会从用户那一侧拨测每个入口地址，多数拨测节点连不上的地址会从记录里摘掉，恢复后再加回。',
+      vantageFormat: '格式是节点标签 key=value，例如 vantage=cn',
       paused: '暂停',
       pausedHelp: '保留已发布的记录，不做任何变更。',
       cnameInstruction: '在 {host} 所在的 DNS 中创建一次 CNAME：{host} → 托管名称。',
@@ -162,6 +165,7 @@ export default {
       keepPublished: '无健康入口：保留已发布',
       entries: '入口节点',
       noAddress: '无公网地址',
+      unreachable: '拨测节点连不上：{addresses}（{n} 个拨测节点），已从记录摘掉',
       inRotation: '轮换中',
       outOfRotation: '已移出',
       joining: '健康 {n}/3，即将加入',
@@ -207,7 +211,8 @@ export default {
       report_stale: '上报过期',
       offline: '离线',
       hop_error: '跳错误',
-      upstreams_down: '上游全部不可用'
+      upstreams_down: '上游全部不可用',
+      vantage_unreachable: '拨测全部不通'
     },
     codes: {
       secret_store_unavailable: 'Control 没有用于加密凭据的密钥（module_runtime.ca_kek）。',

@@ -92,4 +92,6 @@
 //     an iWAN node entry (v5_node_entry.iwan_line_id).
 //   - 0014_forward_latency: the forward routes' latency history
 //     (v4_kernel_forward_latency).
+//   - 0015_forward_dns_vantage: the vantage selectors of the entry HA DNS
+//     bindings (v4_kernel_forward_dns_vantage).
 package migrations

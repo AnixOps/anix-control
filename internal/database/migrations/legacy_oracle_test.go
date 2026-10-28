@@ -136,6 +136,7 @@ func laterModels() []any {
 		&model.ForwardRouteSubscription{},  // 0012_forward_route_subscriptions
 		&model.IWANLine{},                  // 0013_iwan_lines
 		&model.KernelForwardLatency{},      // 0014_forward_latency
+		&model.KernelForwardDNSVantage{},   // 0015_forward_dns_vantage
 	}
 }
 

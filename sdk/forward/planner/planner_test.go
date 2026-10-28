@@ -450,4 +450,15 @@ func TestStamp(t *testing.T) {
 	if StateHash(nil) != "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" {
 		t.Fatal("an empty state hashes as empty bytes")
 	}
+	// Vantage probes (L4) change the hash; a state without them hashes as
+	// its hops alone did before.
+	hops := res.States["forward-21"].GetHops()
+	plain := &forwardv1.NodeForwardState{Hops: hops}
+	if StateHashOf(plain) != StateHash(hops) {
+		t.Fatal("a state without probes hashes as its hops")
+	}
+	probed := &forwardv1.NodeForwardState{Hops: hops, VantageProbes: []*forwardv1.VantageProbe{{BindingId: 1, Address: "192.0.2.1", Port: 443}}}
+	if StateHashOf(probed) == StateHash(hops) {
+		t.Fatal("vantage probes do not change the hash")
+	}
 }

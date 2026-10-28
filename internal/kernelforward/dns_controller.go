@@ -415,6 +415,10 @@ type evaluation struct {
 	reports   map[string]model.KernelForwardNodeReport
 	desired   map[string]uint64
 	lastSeen  map[string]time.Time
+	// vantage are the bindings' selectors and the fresh vantage results by
+	// binding and address (L4, vantage.go).
+	selectors map[uint64]string
+	vantage   map[uint64]map[string]*vantageView
 }
 
 // Evaluate runs one pass over every binding.
@@ -468,6 +472,12 @@ func (e *EntryHA) load(db *gorm.DB) (*evaluation, error) {
 	}
 	for _, report := range reports {
 		pass.reports[report.NodeRef] = report
+	}
+	if pass.selectors, err = loadVantage(db); err != nil {
+		return nil, err
+	}
+	if len(pass.selectors) > 0 {
+		pass.vantage = vantageResults(decodeReports(pass.reports), pass.now)
 	}
 	var states []model.KernelForwardNodeState
 	if err := db.Select("node_ref", "generation").Find(&states).Error; err != nil {
@@ -594,6 +604,13 @@ func (e *EntryHA) evaluateBinding(ctx context.Context, db *gorm.DB, pass *evalua
 		}
 		facts := e.facts(pass, ref, types)
 		v, reason := evaluateEntry(binding.RouteID, facts, now)
+		if pass.selectors[binding.ID] != "" {
+			kept, down, _ := unreachable(pass.vantage[binding.ID], facts.Addresses)
+			facts.Addresses = kept
+			if len(kept) == 0 && len(down) > 0 && v != verdictBad {
+				v, reason = verdictBad, dnsReasonVantageUnreachable
+			}
+		}
 		step(&node, v, bootstrap)
 		node.Reason, node.EvaluatedAt = reason, now
 		nodes = append(nodes, node)

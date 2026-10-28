@@ -113,6 +113,17 @@
         />
       </div>
 
+      <UiTextField
+        :id="fieldId('dns.vantage')"
+        :model-value="modelValue.vantage"
+        size="md"
+        :label="t('forwardDns.binding.vantage')"
+        placeholder="vantage=cn"
+        :help="t('forwardDns.binding.vantageHelp')"
+        :error="fieldErrors.vantage"
+        @update:model-value="value => patch({ vantage: value })"
+      />
+
       <UiSwitch
         :model-value="modelValue.paused"
         :label="t('forwardDns.binding.paused')"

@@ -121,6 +121,13 @@ describe('dnsModel', () => {
     expect(model.bindingChanged(edit, BINDING)).toBe(true)
     expect(model.bindingRequest(edit, '01J', 'edge.example.net', BINDING)).toEqual({ ...BINDING, record_types: ['DNS_RECORD_TYPE_A', 'DNS_RECORD_TYPE_AAAA'], ttl: 120, paused: false })
     expect(model.bindingChanged(model.bindingDraft(BINDING), BINDING)).toBe(false)
+    // The vantage selector (L4): sent when set, cleared by leaving it out.
+    const probed = { ...model.bindingDraft(BINDING), vantage: ' vantage=cn ' }
+    expect(model.bindingChanged(probed, BINDING)).toBe(true)
+    expect(model.bindingRequest(probed, '01J', 'edge.example.net', BINDING)).toEqual({ ...BINDING, paused: false, vantage: 'vantage=cn' })
+    const cleared = { ...model.bindingDraft({ ...BINDING, vantage: 'vantage=cn' }), vantage: '' }
+    expect(model.bindingRequest(cleared, '01J', 'edge.example.net', { ...BINDING, vantage: 'vantage=cn' })).not.toHaveProperty('vantage')
+    expect(model.bindingErrors({ ...probed, vantage: 'cn' }, 'edge.example.net', key => key, BINDING)).toEqual({ vantage: 'forwardDns.binding.vantageFormat' })
   })
 
   it('checks the binding draft', () => {

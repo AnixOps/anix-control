@@ -195,6 +195,9 @@ func (s *Service) replanTx(tx *gorm.DB, routes []storedRoute, now time.Time) (Pl
 		outcome.Refused, outcome.Violations = true, result.Violations
 		return outcome, nil
 	}
+	if err := addVantageProbes(tx, result.States, inv.nodes, effective); err != nil {
+		return PlanOutcome{}, err
+	}
 	changed, err := writeStates(tx, result.States, now)
 	if err != nil {
 		return PlanOutcome{}, err

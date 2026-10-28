@@ -1353,7 +1353,40 @@ The API is in [`../forwarding/v4-api.md`](../forwarding/v4-api.md) ("Entry
 HA through DNS"). How to create provider credentials with the least
 permissions is in [`../guide/forward-entry-ha.md`](../guide/forward-entry-ha.md).
 Control does not dial the entries itself for entry HA: a route's entries
-are judged by their own reports and sessions.
+are judged by their own reports and sessions, and, with vantage probes
+(L4), by forwarding nodes on the clients' side.
+
+L4 vantage probes (Control side implemented, `internal/kernelforward/vantage.go`;
+migration `0015_forward_dns_vantage`): an entry node's own reports cannot
+see an entry address that is blocked or null-routed on the clients'
+networks. A binding's optional `vantage` selector (a node label,
+`key=value`, for example `region=cn`; kept in
+`v4_kernel_forward_dns_vantage`) names the forwarding nodes on the clients'
+side that dial the entries:
+
+- **Probes are desired state.** Every plan gives each node whose labels
+  match, other than the route's entry nodes, one `VantageProbe` per public
+  address of each entry node (of the binding's record types) on the entry
+  hop's planned listen port: dial every 30 s with a 3 s timeout. At most
+  512 per node. Paused bindings, paused or enforced routes and UDP-only
+  routes get none. `NodeForwardState.vantage_probes` is part of the state
+  hash (`planner.StateHashOf`; a state without probes hashes as before),
+  so a probe change bumps only the vantage nodes. An Agent dials only what
+  its state names, and only global unicast addresses.
+- **Results are reported.** A vantage node reports each probe as a
+  `VantageResult` in `NodeForwardReport.vantage`: `UNHEALTHY` after 3
+  failed dials in a row, `HEALTHY` after 3 successful ones.
+- **Verdict.** The controller counts, per address, the vantage nodes with a
+  fresh report (150 s) that find it up and down. An address more of them
+  find down than up leaves the binding's desired values; an entry node left
+  with no address is unhealthy (`vantage_unreachable`), so the hysteresis
+  and the never-empty rule above apply unchanged. The route's DNS status
+  lists each node's `unreachable` addresses and how many vantage nodes
+  judged it (`vantage_nodes`).
+- Changing a selector, or pausing or resuming a binding that has one,
+  replans (`dns_vantage`). Clearing it removes the probes.
+- No cloud API is involved: Control changes DNS only; it does not swap
+  elastic IPs.
 
 ### 7.5 Latency probes
 
