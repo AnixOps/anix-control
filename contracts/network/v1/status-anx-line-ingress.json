@@ -1,0 +1,39 @@
+{
+  "device_ref": "proxy-1",
+  "generation": "1",
+  "components": [
+    {
+      "component": "COMPONENT_INGRESS",
+      "id": "in-ss",
+      "state": "COMPONENT_STATE_DEGRADED",
+      "detail": "failed over from eg-jp",
+      "active_egress_id": "eg-hk",
+      "changed_at_unix_ms": "1793170000000"
+    },
+    {
+      "component": "COMPONENT_TRANSPORT",
+      "id": "tr-jp",
+      "state": "COMPONENT_STATE_DOWN",
+      "detail": "no carrier answers",
+      "changed_at_unix_ms": "1793170000000"
+    },
+    {
+      "component": "COMPONENT_TRANSPORT",
+      "id": "tr-hk",
+      "state": "COMPONENT_STATE_APPLIED",
+      "carrier": "c1",
+      "rtt_ms": 38
+    }
+  ],
+  "interfaces": [
+    {
+      "name": "eth0",
+      "addresses": [
+        "10.0.0.10/24"
+      ],
+      "gateway_v4": "10.0.0.1"
+    }
+  ],
+  "observed_at_unix_ms": "1793170005000",
+  "plan_hash": "5dadd7e30e878d68dd6479da60039f888959cfba0531dbcf988a472dba229028"
+}

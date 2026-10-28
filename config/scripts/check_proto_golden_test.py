@@ -41,7 +41,8 @@ class ProtoGoldenTest(unittest.TestCase):
 
     def test_forward_is_frozen(self) -> None:
         self.assertNotIn("anixops.forward.v1", gate.DRAFT_PACKAGES)
-        self.assertEqual(frozenset(), gate.DRAFT_PACKAGES)
+        # Only the network model is a draft, until Control serves network.v1.
+        self.assertEqual(frozenset({"anixops.network.v1"}), gate.DRAFT_PACKAGES)
 
     def test_element_name(self) -> None:
         self.assertEqual("anixops.forward.v1.ForwardControl.CreateRoute",

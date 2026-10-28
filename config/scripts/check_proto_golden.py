@@ -9,9 +9,10 @@ a line together with the element. This gate compares the golden file with
 the base revision's and fails when a line was removed or changed.
 
 A package in DRAFT_PACKAGES may still edit its own lines in the pull request
-that changes its proto (the draft golden policy). There is none now:
-anixops.forward.v1 left the draft policy when F3a served it
-(docs/architecture/forward-sdk.md section 15).
+that changes its proto (the draft golden policy). anixops.network.v1 (the
+device network model, docs/design/network-model) is one until Control
+serves network.v1. anixops.forward.v1 left the draft policy when F3a served
+it (docs/architecture/forward-sdk.md section 15).
 """
 from __future__ import annotations
 
@@ -25,7 +26,7 @@ GOLDEN = "contracts/proto/descriptors.golden"
 
 # Protobuf packages whose golden lines may still change. Never add a package
 # that a released Control, Agent or package serves or calls.
-DRAFT_PACKAGES: frozenset[str] = frozenset()
+DRAFT_PACKAGES: frozenset[str] = frozenset({"anixops.network.v1"})
 
 
 def golden_lines(text: str) -> set[str]:

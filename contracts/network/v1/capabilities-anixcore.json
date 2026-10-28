@@ -1,0 +1,53 @@
+{
+  "device_ref": "proxy-1",
+  "kinds": [
+    {
+      "component": "COMPONENT_INGRESS",
+      "kind": "direct",
+      "versions": [
+        1
+      ],
+      "executor": "anixcore"
+    },
+    {
+      "component": "COMPONENT_INGRESS",
+      "kind": "nat",
+      "versions": [
+        1
+      ],
+      "executor": "anixcore"
+    },
+    {
+      "component": "COMPONENT_EGRESS",
+      "kind": "nat_direct",
+      "versions": [
+        1
+      ],
+      "executor": "agent"
+    },
+    {
+      "component": "COMPONENT_EGRESS",
+      "kind": "hop",
+      "versions": [
+        1
+      ],
+      "executor": "agent"
+    },
+    {
+      "component": "COMPONENT_TRANSPORT",
+      "kind": "local",
+      "versions": [
+        1
+      ],
+      "executor": "anixcore"
+    },
+    {
+      "component": "COMPONENT_TRANSPORT",
+      "kind": "anx_line",
+      "versions": [
+        1
+      ],
+      "executor": "anixcore"
+    }
+  ]
+}

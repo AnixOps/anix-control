@@ -1,0 +1,150 @@
+{
+  "device_ref": "proxy-9",
+  "generation": "1",
+  "hash": "bd58672728603d5661494687058e6e51ea4df78971e5985392637f1f16c164d9",
+  "lines": [
+    {
+      "id": "ln-cn2",
+      "name": "CN2",
+      "interface": "eth0",
+      "carrier": "cn2",
+      "families": [
+        "FAMILY_V4",
+        "FAMILY_V6"
+      ],
+      "gateway_v4": "192.0.2.1",
+      "gateway_v6": "2001:db8:1::1"
+    },
+    {
+      "id": "ln-9929",
+      "name": "9929",
+      "interface": "eth1",
+      "carrier": "9929",
+      "families": [
+        "FAMILY_V4"
+      ],
+      "gateway_v4": "198.51.100.1"
+    }
+  ],
+  "ingresses": [
+    {
+      "id": "in-cn2-v6",
+      "line_id": "ln-cn2",
+      "kind": "direct",
+      "kind_version": 1,
+      "audience": "AUDIENCE_USER",
+      "family": "FAMILY_V6",
+      "listen": {
+        "address": "2001:db8:1::10",
+        "port": 443
+      },
+      "protocols": [
+        "vless"
+      ],
+      "pairing": {
+        "mode": "PAIRING_MODE_SAME_LINE"
+      }
+    },
+    {
+      "id": "in-cn2-nat",
+      "line_id": "ln-cn2",
+      "kind": "nat",
+      "kind_version": 1,
+      "audience": "AUDIENCE_USER",
+      "family": "FAMILY_V4",
+      "listen": {
+        "address": "192.0.2.10",
+        "port": 20000
+      },
+      "public_host": "203.0.113.99",
+      "port_map": [
+        {
+          "public": {
+            "first": 30000,
+            "last": 30019
+          },
+          "local": {
+            "first": 20000,
+            "last": 20019
+          }
+        }
+      ],
+      "protocols": [
+        "vless"
+      ],
+      "pairing": {
+        "mode": "PAIRING_MODE_CROSS",
+        "egress_ids": [
+          "eg-9929"
+        ]
+      }
+    },
+    {
+      "id": "in-9929",
+      "line_id": "ln-9929",
+      "kind": "direct",
+      "kind_version": 1,
+      "audience": "AUDIENCE_USER",
+      "family": "FAMILY_V4",
+      "listen": {
+        "address": "198.51.100.10",
+        "port": 443
+      },
+      "protocols": [
+        "vless",
+        "ss2022"
+      ],
+      "pairing": {
+        "mode": "PAIRING_MODE_SAME_LINE"
+      }
+    }
+  ],
+  "egresses": [
+    {
+      "id": "eg-cn2",
+      "line_id": "ln-cn2",
+      "kind": "nat_direct",
+      "kind_version": 1,
+      "audience": "AUDIENCE_INTERNET",
+      "family": "FAMILY_V4",
+      "source": "192.0.2.10"
+    },
+    {
+      "id": "eg-9929",
+      "line_id": "ln-9929",
+      "kind": "nat_direct",
+      "kind_version": 1,
+      "audience": "AUDIENCE_INTERNET",
+      "family": "FAMILY_V4",
+      "source": "198.51.100.10",
+      "mtu": 1500,
+      "advmss": 1400
+    }
+  ],
+  "transports": [
+    {
+      "id": "tr-local",
+      "kind": "local",
+      "kind_version": 1,
+      "role": "TRANSPORT_ROLE_LOCAL"
+    }
+  ],
+  "paths": [
+    {
+      "id": "pa-cn2-v6",
+      "ingress_id": "in-cn2-v6",
+      "egress_id": "eg-cn2"
+    },
+    {
+      "id": "pa-cn2-nat",
+      "ingress_id": "in-cn2-nat",
+      "egress_id": "eg-9929"
+    },
+    {
+      "id": "pa-9929",
+      "ingress_id": "in-9929",
+      "transport_id": "tr-local",
+      "final_egress_id": "eg-9929"
+    }
+  ]
+}

@@ -26,6 +26,7 @@ import (
 	_ "github.com/AnixOps/anix-control/sdk/api/kernelsubscriber/v1"
 	_ "github.com/AnixOps/anix-control/sdk/api/kerneltelemetry/v1"
 	_ "github.com/AnixOps/anix-control/sdk/api/modulepki/v1"
+	_ "github.com/AnixOps/anix-control/sdk/api/network/v1"
 	_ "github.com/AnixOps/anix-control/sdk/api/packagebridge/v1"
 	_ "github.com/AnixOps/anix-control/sdk/api/pluginhost/v1"
 	_ "github.com/AnixOps/anix-control/v5/api/grpc/v2boardpb"
@@ -49,6 +50,7 @@ var contractPackages = []string{
 	"anixops.kernelsubscriber.v1",
 	"anixops.kerneltelemetry.v1",
 	"anixops.modulepki.v1",
+	"anixops.network.v1",
 	"anixops.packagebridge.v1",
 	"v2board",
 }
