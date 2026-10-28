@@ -2,6 +2,223 @@
 
 ## Unreleased
 
+## 5.0.0-rc.11 - 2026-10-28
+
+### Added
+
+- Entry HA can judge entry addresses from the clients' side: a DNS
+  binding's optional `vantage` selector (a node label such as `region=cn`)
+  has the forwarding nodes carrying it dial every published entry address
+  (`NodeForwardState.vantage_probes`, reported back as
+  `NodeForwardReport.vantage`). An address more of them find down than up
+  leaves the DNS records, with the never-empty rule kept, and the route's
+  DNS status shows the unreachable addresses (migration 0015). The binding
+  form and the entry HA card on the route page show both. Agents need the
+  matching probe loop to report results; until then nothing changes.
+- Forwarding keeps a latency history: every upstream health check the
+  nodes report is folded into five-minute buckets per route, hop, node and
+  upstream (`v4_kernel_forward_latency`, migration 0014), kept for 7 days.
+  `ForwardControl.GetLatency` and `GET /api/v4/forward/routes/{id}/latency`
+  answer them, and the route page draws each hop's latency over the last
+  24 hours or 7 days with the failed checks counted.
+- Panabit iWAN lines: third-party iWAN ingresses (a real Panabit device
+  carrying traffic over an IPLC, for example) that AnixOps Net logs into with
+  each line's one shared account. Control runs nothing on a line.
+  - `GET`/`POST /api/v4/kernel/iwan-lines` and
+    `PUT`/`DELETE /api/v4/kernel/iwan-lines/{id}` manage them: name, host,
+    port, username, password (never answered; an empty one on an update keeps
+    it), MTU and XOR masking. A line that node entries use cannot be deleted.
+    Writes are in the operation log (module `iwan_line`) without the login.
+  - Node entries have a third kind, `iwan` (`iwan_line_id`): the node's
+    VMess, VLESS, Trojan and Shadowsocks protocols are offered again,
+    reached at the entry's host through the line, besides the node's host
+    or its other entries. The node's own protocol encrypts the whole path;
+    iWAN does not.
+  - The node page's 入口 sheet offers the iWAN kind, and its "iWAN lines"
+    sheet manages the lines.
+- Subscription format `anixops` (AnixOps Net, chosen by its User-Agent
+  `AnixOpsNet/...`): the V2Ray link list plus each line as an `iwan://` link
+  and `via=<line name>` on the links reached through it. Other formats leave
+  the lines and those links out. Older AnixOps Net versions skip `iwan://`
+  links; a VMess link with `via` needs a version that reads it.
+- The network model planner takes forward routes (`networkmodel.Forward`:
+  entry node, listen port, targets, policy, transports, egress) and plans
+  each as a port forward on the entry device, with its transports planned
+  once and shared with paths and other forwards that continue the same way.
+  A forward that cannot be planned yet (broken chain, missing key, a
+  transport that continues elsewhere, a taken port, a bad policy) is listed
+  under `pending` with `forward` instead of failing the document.
+  `sdk/network.CheckPortForward` checks a port forward on its own. Nothing
+  feeds forwards in yet.
+- `anixops.network.v1` port forwards carry their route's policy:
+  `PortForward.policy` (`ForwardPolicy`: balance `round_robin` / `random` /
+  `ip_hash` / `least_conn` / `failover`, TCP health checks, circuit breaker,
+  PROXY header `off` / `v1` / `v2`, `bandwidth_bps`, `max_conns`) and target
+  `weight` / `priority`, as the kernel's forward inbound runs them
+  (networkcore #139). `sdk/network` checks the values and bounds.
+- forward.v1 ENGINE_NETWORK routes are planned on the network model: the
+  SDK validates them when `validate.Options.EnableNetwork` is set (every
+  hop ENGINE_NETWORK on one device, an explicit listen port, each link a
+  `network_transport_id`, the exit a `network_egress_id`, PROXY protocol
+  v1 or v2) and the forward.v1 planner leaves them out of NodeForwardState.
+  Control turns each into a port forward of its entry device's
+  NetworkPlan in the same transaction as the route change, pausing it
+  while the kernel enforces the route's expiry or quota.
+- The port forwards' byte counters in NetworkStatus meter the route's
+  entry hop, so traffic statistics and quotas work as for other engines;
+  a lower value than the last one starts a new counter epoch.
+- `POST /api/v4/kernel/network/migrate-gost` moves every gost forward route
+  onto the network model in one plan (`dry_run` reports without changing
+  anything): adjacent hops get a network model transport (bare `anx_line`
+  between nodes labelled `link=iepl`/`link=iplc`, the A2-jacketed `anx`
+  kind with the gost link's server name otherwise) with the hop egress and
+  ingress it needs, the exit an internet egress, and the entry keeps its
+  allocated port. nftables routes stay; routes the model cannot carry yet
+  (several nodes on a hop, a device without a line, an untrusted link
+  without a server name) are listed with the reasons.
+- Agent Control serves `network.v1`: an Agent that lists it with its
+  `device_capabilities` (and config.v1) gets its stamped `NetworkPlan` as
+  the configuration member `network`, pushed as soon as a model write moves
+  its plan generation. Its `NetworkStatus` arrives as a package report
+  (`network` / `network.status` / `v1`, forward nodes included); Control
+  keeps the latest one per device (shown under `devices[].status` of
+  `GET /api/v4/kernel/network`) and its public keys, and a new ANX-Line
+  server key plans the paths that were waiting for it.
+- The device network model on Control (`internal/networkmodel`,
+  migration 0016): an administrator declares lines on nodes, user and hop
+  ingresses, internet and hop egresses, ANX-Line transports between
+  devices and paths as one document (`GET`/`PUT /api/v4/kernel/network`,
+  with an optional revision check). Every device's `NetworkPlan` must pass
+  the planner (sdk/network checks plus the cross-device rules) before the
+  document is stored. Each ANX-Line transport gets a random link key
+  sealed under `module_runtime.ca_kek`
+  (`POST /api/v4/kernel/network/transports/{id}/rotate-key` rotates it);
+  devices get a new plan generation when their plan changes, and
+  `GET /api/v4/kernel/network/devices/{id}/plan` shows a plan with the
+  keys redacted. Paths wait (listed as pending) until the accepting device
+  reports its ANX-Line server key.
+- Draft device network contract `anixops.network.v1`
+  (`sdk/api/network/v1`, docs/design/network-model): the per-device
+  `NetworkPlan` (lines, ingresses, egresses, transports with ANX-Line link
+  settings, paths, relay forwarding), the `DeviceCapabilities` an Agent
+  offers with the capability `network.v1`, and its `NetworkStatus`.
+  `sdk/network` carries them over the Agent Control stream (Hello
+  attribute, nodeconfig member `network`, PackageReport), checks plans
+  against the planner invariants, hashes and stamps them. Golden plans for
+  the Agent and the kernel live in `contracts/network/v1`. Control does not
+  serve it yet.
+- Contracts for moving forward routes onto the device network model, the
+  first step of replacing gost (design: docs/design/network-model,
+  第 5 步):
+  - `anixops.network.v1`: `NetworkPlan.port_forwards` (`PortForward`: a
+    listen endpoint, tcp/udp, 1 to 64 targets, and an internet egress or a
+    dialing transport as next) and `NetworkStatus.port_forwards` with
+    cumulative byte counters. `sdk/network` checks both.
+  - `anixops.forward.v1` (additions only): `ENGINE_NETWORK`,
+    `LINK_SECURITY_NETWORK` with `LinkTransport.network_transport_id`, and
+    `Hop.network_egress_id`, and `PROXY_PROTOCOL_V1`. Route validation
+    refuses all of these until Control plans network routes.
+- `POST /api/v4/kernel/nodes/forward-<id>/convert` turns an Agent forward
+  node into a regular node without protocols, moving its route hops, ports
+  and DNS rows in one step (dry run first; super administrators only). The
+  forward Nodes page offers it as "Make a regular node" and then shows the
+  new node's install command.
+- Panel: the route editor can build ANX network routes (engine "ANX", network transport per link, network egress on the exit, PROXY protocol on the exit), and the Routes page has a "Migrate gost routes" dialog with dry-run and apply.
+
+### Changed
+
+- The systemd Control installer (`scripts/install.sh`) keeps the Agent
+  release Control installs nodes with: an empty `agent_install.artifact_dir`
+  is set to `<data_dir>/agent-releases`, and after a healthy install or
+  update the release `/install/agent.env` names is downloaded into
+  `<artifact_dir>/<tag>/` (both zips with their `.dgst` and `.sig`,
+  `SHA256SUMS` and `SHA256SUMS.sig`, checked against the official key).
+  Nodes then download the Agent and its checksum from Control, so hosts
+  that cannot reach GitHub (mainland China) install with the copied command
+  alone. A failed download is a warning; nodes then use GitHub as before.
+- The Agent install script writes `net.ipv6.conf.<if>.accept_ra = 2` for
+  SLAAC interfaces by default when it turns forwarding on, so a forward
+  node keeps its IPv6 default route without `--accept-ra`. `--no-accept-ra`
+  turns it off; `--accept-ra` is still accepted.
+- Database migration `0013_iwan_lines` adds `v5_iwan_line` and
+  `v5_node_entry.iwan_line_id`.
+- The accepting end of an `anx_line` transport gets its listen addresses in
+  its plan (`tcp_addr` / `quic_addr` / `faketcp_addr`: the hop ingress's
+  listen address with the transport's port per carrier); `server_public`
+  stays the dialing end's only.
+- Network model transports: bare `anx_line` is only for trusted segments
+  (IX, private line, domestic) and needs `trusted: true` in the document.
+  Every other segment, cross-border ones above all, takes the new kind
+  `anx` (ANX-A): planned as an `anx_line` link under the A2 jacket (`l2`,
+  server name required, c1 only), which anx-server shapes. WireGuard is not
+  used across borders.
+- One machine is one node: a relay is a regular node without protocols
+  (`docs/design/node-unification`). Node groups make regular nodes (a
+  group without protocols makes relays; existing forward groups are
+  migrated), new forward nodes are Ansible hosts only, and the install
+  command of a relay carries `--forward`, which turns forwarding on for the
+  regular node.
+- The nightly Go Race Detector runs in three shards and builds the pure-Go
+  SQLite (`modernc.org/...`) without race instrumentation, so it finishes
+  inside its timeout again; the Makefile `-race` targets use the same flag.
+- The Agent install script no longer creates `anixops-gost.service`, the
+  `anixops-gost` account or `/var/lib/anixops-gost`; it retires them with
+  the rest of the legacy forward runtime when an earlier install left them.
+  The Agent unit drops the `anixops-gost` supplementary group and the polkit
+  rule only lets the Agent restart its own unit. `--uninstall` removes only
+  the Agent's own account; the retired `anixops-gost` account goes with the
+  legacy cleanup.
+
+### Removed
+
+- The v3 flux forwarding panel and its runtime, replaced by forward.v1 on
+  the network model: the admin forward, tunnel, NodeX, test-connection and
+  forward statistics routes, the speed-limit routes, the user forward
+  routes, the forward-agent register/heartbeat/report routes,
+  `/api/v2/forward/agent/rules`, `/flow/upload` and the internal forward
+  traffic routes now answer 404. `POST /api/v2/user/reset` stays and
+  accepts only `type: 1` (the user's own traffic).
+- The NodeX, local and Ansible forward runtimes, the gost and Ansible
+  statistics workers, the flux flow-reset worker, the latency prober, the
+  forward-agent bridge worker and `anix-control forward legacy`. The
+  `forward_runtime.*` configuration keys are ignored (a warning names them)
+  and the 系统设置 › 运行时 page is gone. The v3 forward tables stay in the
+  database untouched.
+- The KernelNodeOps `forward.*`, `diagnose.forward`, `diagnose.node_stats`,
+  `diagnose.tunnel`, `diagnose.forward_backend` and `cleanagent.issue`
+  kinds answer UNIMPLEMENTED; `diagnose.endpoints` stays.
+- The `gost-mesh` official package (its Control host, WebUI, release
+  gate and pinned gost runtime). Control now builds 17 official packages.
+- 诊断's generic actions name only `anix-agent`: the Agent no longer runs
+  gost, so `gost` is refused as a service (the cross-repo E2E reads the
+  Agent's own unit instead).
+- The WireGuard dual-node relay (a domestic entry carried to an overseas
+  exit over a gost `relay+quic`/`relay+wss` tunnel), removed with gost; the
+  Agent already refuses a WireGuard node with relay settings. Control
+  refuses `settings.relay` on a WireGuard protocol (clear it to save the
+  protocol), no longer adds a default gost relay or `tunnel_type` to the
+  node config, and the protocol editor has no relay section. A protocol
+  stored with a relay keeps reaching its Agent as stored, which refuses it
+  rather than egress from the entry. The protocol templates describe a
+  single-node WireGuard (a node group template with a relay is refused
+  too), and `scripts/deploy_wireguard_gost_quic.sh` is
+  gone. Cross-border paths run on the network model (ANX-A).
+- The gost forward engine is retired. Control refuses a route with an
+  `ENGINE_GOST` hop on create and update. A stored route still on gost is
+  no longer planned: it shows "gost removed" and keeps its ports until it
+  is moved to ANX (`POST /api/v4/kernel/network/migrate-gost`) or deleted.
+  The SDK's gost driver (`sdk/forward/driver/gost`), its rendered goldens
+  and the gost end-to-end tests are gone. The route editor offers nftables
+  and ANX, and no longer suggests inserting a gost relay. The SDK still
+  validates and plans `ENGINE_GOST`, so the contract fixtures stay readable.
+  The cross-repo Agent end-to-end suite runs its forward route on nftables
+  in the netns lane only; the main lane skips it.
+
+### Fixed
+
+- A flaky Agent Control test no longer fails when the hello ack reaches the
+  client before Control registers the session.
+
 ## 5.0.0-rc.10 - 2026-10-27
 
 ### Added
