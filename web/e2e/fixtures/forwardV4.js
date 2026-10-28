@@ -359,7 +359,8 @@ export function validate(item) {
       const security = entry.ingress?.security || 'LINK_SECURITY_RAW'
       const previous = item.hops[index - 1]
       const originates = (previous.node_refs || []).every(ref => caps(ref, previous.engine)?.link_securities.includes(security))
-      const terminates = (entry.node_refs || []).every(ref => caps(ref, entry.engine)?.link_securities.includes(security))
+      // A node without the engine already has its own violation.
+      const terminates = (entry.node_refs || []).every(ref => !caps(ref, entry.engine) || caps(ref, entry.engine).link_securities.includes(security))
       if (!originates || !terminates) add(`${path}.ingress.security`, 'link_unsupported', `${previous.engine} cannot originate ${security}`)
     }
   })
