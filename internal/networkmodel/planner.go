@@ -3,7 +3,6 @@ package networkmodel
 import (
 	"fmt"
 	"net"
-	"net/netip"
 	"regexp"
 	"sort"
 	"strconv"
@@ -23,8 +22,10 @@ type Device struct {
 // an ANX-Line transport whose accepting device has not reported its
 // server key yet.
 type Pending struct {
-	Path   string `json:"path"`
-	Reason string `json:"reason"`
+	Path string `json:"path,omitempty"`
+	// Forward is a forward route left out instead of a path.
+	Forward string `json:"forward,omitempty"`
+	Reason  string `json:"reason"`
 }
 
 // Result is the planner's answer: one plan per device that has a line,
@@ -47,7 +48,7 @@ var idPattern = regexp.MustCompile(`^[0-9A-Za-z_-]{1,64}$`)
 // the egress's device; a transport joins two different devices and
 // carries at most one path (N3: one link per path); a disabled ingress,
 // egress or path takes its paths out of the plans.
-func Plan(doc *Document, keys map[string]string, devices map[string]Device) (*Result, error) {
+func Plan(doc *Document, keys map[string]string, devices map[string]Device, forwards []Forward) (*Result, error) {
 	var v violations
 	for name, n := range map[string]int{"lines": len(doc.Lines), "ingresses": len(doc.Ingresses), "egresses": len(doc.Egresses),
 		"transports": len(doc.Transports), "paths": len(doc.Paths)} {
@@ -206,8 +207,17 @@ func Plan(doc *Document, keys map[string]string, devices map[string]Device) (*Re
 		}
 	}
 
-	// Transports, paths and forwarding of the active paths.
-	peers := map[string][]string{} // hop ingress id -> dialing sources
+	// Transports, paths and forwarding of the active paths, then the
+	// forwards.
+	p := &planned{plans: planOf, nodeOf: nodeOf, ingresses: ingresses, egresses: egresses, transports: transports,
+		lines: lines, devices: devices, keys: keys, next: map[string]string{}, peers: map[string][]string{},
+		listens: map[string]map[string]string{}}
+	peers := p.peers // hop ingress id -> dialing sources
+	for i := range doc.Ingresses {
+		if ingress := &doc.Ingresses[i]; !ingress.Disabled {
+			p.take(nodeOf(ingress.Line), listenKey(ingress.Listen.Address, ingress.Listen.Port), "ingress "+ingress.ID)
+		}
+	}
 	finals := map[string]map[string]bool{}
 	pathIDs := map[string]bool{}
 	for _, path := range active {
@@ -225,24 +235,11 @@ func Plan(doc *Document, keys map[string]string, devices map[string]Device) (*Re
 			finals[path.Ingress] = map[string]bool{}
 		}
 		finals[path.Ingress][path.Egress] = true
-		for j, id := range path.Segments {
-			transport := transports[id]
-			from, to := egresses[transport.FromEgress], ingresses[transport.ToIngress]
-			dialer, accepter := planOf(nodeOf(from.Line)), planOf(nodeOf(to.Line))
-			dialer.Transports = append(dialer.Transports, transportProto(transport, networkv1.TransportRole_TRANSPORT_ROLE_DIAL, nodeOf(to.Line), keys[id], to, devices[nodeOf(to.Line)]))
-			accepter.Transports = append(accepter.Transports, transportProto(transport, networkv1.TransportRole_TRANSPORT_ROLE_ACCEPT, nodeOf(from.Line), keys[id], to, Device{}))
-			forwarding := &networkv1.Forwarding{FromTransportId: id}
-			if j+1 < len(path.Segments) {
-				forwarding.Next = &networkv1.Forwarding_TransportId{TransportId: path.Segments[j+1]}
-			} else {
-				forwarding.Next = &networkv1.Forwarding_EgressId{EgressId: path.Egress}
-			}
-			accepter.Forwarding = append(accepter.Forwarding, forwarding)
-			if ip, err := netip.ParseAddr(from.Source); err == nil {
-				peers[to.ID] = append(peers[to.ID], netip.PrefixFrom(ip, ip.BitLen()).String())
-			}
+		for j := range path.Segments {
+			p.addTransport(path.Segments[j], continuation(path.Segments, j, path.Egress))
 		}
 	}
+	result.Pending = append(result.Pending, p.planForwards(forwards)...)
 	for i := range doc.Ingresses {
 		ingress := &doc.Ingresses[i]
 		if ingress.Disabled {

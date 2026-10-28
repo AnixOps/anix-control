@@ -50,7 +50,7 @@ func japanKey() map[string]Device {
 }
 
 func TestPlanTwoHops(t *testing.T) {
-	result, err := Plan(twoHops(), map[string]string{"tr-jp": linkKey}, japanKey())
+	result, err := Plan(twoHops(), map[string]string{"tr-jp": linkKey}, japanKey(), nil)
 	require.NoError(t, err)
 	require.Empty(t, result.Pending)
 	require.Len(t, result.Plans, 2)
@@ -81,7 +81,7 @@ func TestPlanTwoHops(t *testing.T) {
 }
 
 func TestPlanPendingWithoutServerKey(t *testing.T) {
-	result, err := Plan(twoHops(), map[string]string{"tr-jp": linkKey}, nil)
+	result, err := Plan(twoHops(), map[string]string{"tr-jp": linkKey}, nil, nil)
 	require.NoError(t, err)
 	require.Equal(t, []Pending{{Path: "pa-jp", Reason: "proxy-2 has not reported its ANX-Line server key"}}, result.Pending)
 	ingress := result.Plans["proxy-1"]
@@ -91,7 +91,7 @@ func TestPlanPendingWithoutServerKey(t *testing.T) {
 	require.Equal(t, networkv1.PairingMode_PAIRING_MODE_SAME_LINE, pairing.GetMode(), "failover without planned paths waits as same_line")
 	require.Empty(t, result.Plans["proxy-2"].GetForwarding())
 
-	result, err = Plan(twoHops(), nil, japanKey())
+	result, err = Plan(twoHops(), nil, japanKey(), nil)
 	require.NoError(t, err)
 	require.Equal(t, "transport tr-jp has no link key", result.Pending[0].Reason)
 }
@@ -99,7 +99,7 @@ func TestPlanPendingWithoutServerKey(t *testing.T) {
 func TestPlanDisabledPath(t *testing.T) {
 	doc := twoHops()
 	doc.Paths[0].Disabled = true
-	result, err := Plan(doc, map[string]string{"tr-jp": linkKey}, japanKey())
+	result, err := Plan(doc, map[string]string{"tr-jp": linkKey}, japanKey(), nil)
 	require.NoError(t, err)
 	require.Empty(t, result.Pending)
 	require.Empty(t, result.Plans["proxy-1"].GetPaths())
@@ -112,7 +112,7 @@ func TestPlanJacketedTransport(t *testing.T) {
 	doc := twoHops()
 	doc.Transports[0] = Transport{ID: "tr-jp", Kind: KindAnx, FromEgress: "eg-ix", ToIngress: "in-hop",
 		AnxLine: &AnxLine{ServerName: "www.example.org"}}
-	result, err := Plan(doc, map[string]string{"tr-jp": linkKey}, japanKey())
+	result, err := Plan(doc, map[string]string{"tr-jp": linkKey}, japanKey(), nil)
 	require.NoError(t, err)
 	for _, node := range []string{"proxy-1", "proxy-2"} {
 		transports := result.Plans[node].GetTransports()
@@ -154,7 +154,7 @@ func TestPlanRefuses(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			doc := twoHops()
 			c.edit(doc)
-			_, err := Plan(doc, map[string]string{"tr-jp": linkKey}, japanKey())
+			_, err := Plan(doc, map[string]string{"tr-jp": linkKey}, japanKey(), nil)
 			var invalid *Invalid
 			require.True(t, errors.As(err, &invalid), "%v", err)
 			require.ErrorIs(t, err, ErrInvalid)

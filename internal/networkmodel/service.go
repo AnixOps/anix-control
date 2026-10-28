@@ -65,6 +65,16 @@ type Service struct {
 	KEK func() string
 	// Now defaults to time.Now.
 	Now func() time.Time
+	// Forwards answers the forward routes on the network model (forward.v1
+	// ENGINE_NETWORK); nil has none.
+	Forwards func(db *gorm.DB) ([]Forward, error)
+}
+
+func (s *Service) forwards(db *gorm.DB) ([]Forward, error) {
+	if s.Forwards == nil {
+		return nil, nil
+	}
+	return s.Forwards(db)
 }
 
 // New returns the service on db.
@@ -110,8 +120,12 @@ func (s *Service) Get(ctx context.Context) (*View, error) {
 		return nil, err
 	}
 	view := &View{Revision: row.Revision, Document: *doc, Pending: []Pending{}, Devices: deviceViews(rows)}
+	forwards, err := s.forwards(db)
+	if err != nil {
+		return nil, err
+	}
 	if keys, err := s.openKeys(db); err == nil {
-		if result, err := Plan(doc, keys, devices); err == nil {
+		if result, err := Plan(doc, keys, devices, forwards); err == nil {
 			view.Pending = append(view.Pending, result.Pending...)
 		}
 	}
@@ -263,7 +277,11 @@ func (s *Service) DevicePlan(ctx context.Context, node string) (plan *networkv1.
 	if err != nil {
 		return nil, false, err
 	}
-	result, err := Plan(doc, keys, devices)
+	forwards, err := s.forwards(db)
+	if err != nil {
+		return nil, false, err
+	}
+	result, err := Plan(doc, keys, devices, forwards)
 	if err != nil {
 		return nil, false, err
 	}
@@ -305,7 +323,11 @@ func (s *Service) replan(tx *gorm.DB, doc *Document) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	result, err := Plan(doc, keys, devices)
+	forwards, err := s.forwards(tx)
+	if err != nil {
+		return nil, err
+	}
+	result, err := Plan(doc, keys, devices, forwards)
 	if err != nil {
 		return nil, err
 	}
