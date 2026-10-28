@@ -66,9 +66,15 @@ nodes and route detail every 15 seconds, overview and routes every
 - Forward nodes and proxy nodes in the inventory, with status, channel
   (Agent over mTLS, or Ansible), Agent version, engines, hops, generation
   (applied / desired) and hop errors.
-- **添加转发节点** adds a forward node (name, host, channel, region and an
-  optional port range). An Agent node then joins with the install command
-  from its page.
+- **添加 Ansible 主机** adds a machine without an Agent (name, host, region
+  and an optional port range). A machine that runs the Agent is a regular
+  node: add it on the nodes page or through a node group; a regular node
+  without protocols is a relay, and its install command turns forwarding
+  on.
+- **转为常规节点…** on an Agent forward node (super administrators) turns it
+  into a regular node without protocols. Its routes move with their ports;
+  then reinstall the Agent with the install command the page opens. Its
+  hops are down until the Agent connects as the new node.
 - **A node's page** shows its health (generation, state hash, hop errors,
   upstreams), the hops it hosts, its engines, the Agent, and its
   **转发设置**: port range, reserved ports, addresses (dial order) and

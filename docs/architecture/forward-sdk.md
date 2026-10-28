@@ -236,6 +236,11 @@ may allocate from, its engines with their capabilities
 (`EngineCapabilities`), and labels such as `link=iepl` that mark trusted
 links. The Agent reports capabilities at enrollment and in every hello.
 
+Since 5.0.0-rc.11 a machine that runs the Agent is a regular node
+(`proxy-<id>`); a relay is a regular node without protocols. Forward nodes
+(`forward-<id>`) are Ansible machines, or Agent forward nodes not yet
+converted (`docs/design/node-unification`).
+
 ### 4.4 Validation
 
 `sdk/forward/validate` holds the rules (implemented in F1b; the package
