@@ -122,7 +122,6 @@
                     @remove-node="ref => hop.node_refs.splice(hop.node_refs.indexOf(ref), 1)"
                     @move="delta => moveHop(index, delta)"
                     @remove="removeHop(index)"
-                    @insert-relay="insertRelay(index)"
                   />
                 </li>
               </template>
@@ -455,17 +454,6 @@ async function addHop() {
   syncRoles(draft.value.hops)
   await nextTick()
   focusField(`hops[${draft.value.hops.length - 1}].node_refs`)
-}
-
-// insertRelay puts a gost relay before hop `index`: gost originates every
-// encrypted link the next hop may terminate (the link_unsupported fix).
-async function insertRelay(index) {
-  const relay = blankHop(index, draft.value.hops.length + 1, 'ENGINE_GOST')
-  draft.value.hops.splice(index, 0, relay)
-  syncRoles(draft.value.hops)
-  announcement.value = t('forwardV4.editor.inserted', { n: index + 1 })
-  await nextTick()
-  focusField(`hops[${index}].node_refs`)
 }
 
 function addLabel() {

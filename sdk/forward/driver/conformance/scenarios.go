@@ -135,10 +135,10 @@ func scRenderIdentity(t *testing.T, h *H) {
 }
 
 func otherEngine(e forwardv1.Engine) forwardv1.Engine {
-	if e == forwardv1.Engine_ENGINE_GOST {
+	if e == forwardv1.Engine_ENGINE_ANIXOPS {
 		return forwardv1.Engine_ENGINE_NFTABLES
 	}
-	return forwardv1.Engine_ENGINE_GOST
+	return forwardv1.Engine_ENGINE_ANIXOPS
 }
 
 func scRenderOtherEngines(t *testing.T, h *H) {

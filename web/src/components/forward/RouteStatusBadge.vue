@@ -1,7 +1,7 @@
 <template>
   <span class="route-status">
     <UiBadge :tone="STATUS_TONES[status] || 'neutral'" :label="t(`forwardV4.status.${status}`)" />
-    <span v-if="hint && (status === 'quota' || status === 'expired')" class="route-status__hint">{{ t(`forwardV4.status.${status}Hint`) }}</span>
+    <span v-if="hint && (status === 'quota' || status === 'expired' || status === 'gost_removed')" class="route-status__hint">{{ t(`forwardV4.status.${status}Hint`) }}</span>
   </span>
 </template>
 

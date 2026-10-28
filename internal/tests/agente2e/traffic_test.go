@@ -136,27 +136,3 @@ func (s *suite) pushTraffic(t *testing.T, user testUser, up, down int64) {
 		down = max(0, down-d)
 	}
 }
-
-// sinkTransfer is one plain request to a sink (or through a forward route
-// to it): up bytes there, down bytes back.
-func sinkTransfer(addr string, up, down int64) error {
-	conn, err := net.DialTimeout("tcp", addr, 5*time.Second)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = conn.Close() }()
-	_ = conn.SetDeadline(time.Now().Add(20 * time.Second))
-	header := binary.BigEndian.AppendUint64(nil, uint64(up))
-	header = binary.BigEndian.AppendUint64(header, uint64(down))
-	if _, err := conn.Write(header); err != nil {
-		return err
-	}
-	if _, err := io.CopyN(conn, zeroReader{}, up); err != nil {
-		return err
-	}
-	received, err := io.CopyN(io.Discard, conn, down)
-	if err != nil {
-		return fmt.Errorf("received %d of %d bytes: %w", received, down, err)
-	}
-	return nil
-}

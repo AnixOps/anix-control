@@ -3,15 +3,15 @@
 // Agent splits a NodeForwardState by engine (Registry.Render), applies each
 // engine's Artifact through that engine's Driver, runs one health loop that
 // calls SetUpstreams, and reports Observe. The nftables driver (F2b/F2c) and
-// the gost driver (F4a/F4b) implement it; sdk/forward/driver/fake is an in-memory
-// one for tests; sdk/forward/driver/conformance checks any of them against
+// the anixops driver implement it (the gost driver was removed with gost);
+// sdk/forward/driver/fake is an in-memory one for tests; sdk/forward/driver/conformance checks any of them against
 // the rules below.
 //
 // # Ownership
 //
 // A driver touches only the objects it owns (the nftables driver: the table
-// "inet anixops_fwd", its tc handles and sysctl drop-in; the gost driver:
-// the anixops-gost unit and its files; owner decision H13). It marks what
+// "inet anixops_fwd", its tc handles and sysctl drop-in; owner decision
+// H13). It marks what
 // it creates so it can tell its objects from others' after a restart. An
 // object with its name but not its mark is foreign: Apply refuses it with
 // ErrNotOwned and Remove leaves it. Applying an artifact that would collide
@@ -90,8 +90,8 @@
 // QuotaEnforcer, and the Agent calls EnforceQuotas after every Observe and
 // Apply. A hop whose counters in its current epoch reached its quota then
 // refuses new connections, as a paused hop does (objects, counters and
-// epoch stay), until the quota is raised above them. The gost driver does
-// this; the nftables driver's named quota is exact and in the kernel.
+// epoch stay), until the quota is raised above them. The nftables driver's
+// named quota is exact and in the kernel.
 //
 // # Remove
 //

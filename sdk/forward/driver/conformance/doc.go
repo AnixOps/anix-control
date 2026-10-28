@@ -2,9 +2,7 @@
 // (docs/architecture/forward-sdk.md section 13): one list of scenarios that
 // every driver in sdk/forward/driver must pass: the in-memory fake, the
 // nftables driver (on a real kernel in a network namespace,
-// nftables.TestNetnsConformance) and the gost driver (against the pinned
-// gost in a network namespace, gost.TestNetnsConformance; on a simulated
-// host, gost.TestConformanceFakeHost).
+// nftables.TestNetnsConformance) and the anixops driver.
 //
 // A driver's test plugs in an environment and runs the suite:
 //

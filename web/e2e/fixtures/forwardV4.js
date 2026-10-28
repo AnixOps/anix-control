@@ -359,7 +359,8 @@ export function validate(item) {
       const security = entry.ingress?.security || 'LINK_SECURITY_RAW'
       const previous = item.hops[index - 1]
       const originates = (previous.node_refs || []).every(ref => caps(ref, previous.engine)?.link_securities.includes(security))
-      const terminates = (entry.node_refs || []).every(ref => caps(ref, entry.engine)?.link_securities.includes(security))
+      // A node without the engine already has its own violation.
+      const terminates = (entry.node_refs || []).every(ref => !caps(ref, entry.engine) || caps(ref, entry.engine).link_securities.includes(security))
       if (!originates || !terminates) add(`${path}.ingress.security`, 'link_unsupported', `${previous.engine} cannot originate ${security}`)
     }
   })
@@ -514,13 +515,13 @@ const EXTENSION = {
   control_routes: ['/api/v4/plugins/forward/*']
 }
 
-// A brand-new route as an operator might first write it: an nftables
-// entry straight into a TLS exit, a reserved entry port and a private
-// target under the public-only policy (three violations).
+// A brand-new route as an operator might first write it: an nftables exit
+// on a node that only ran gost, a reserved entry port and a private target
+// under the public-only policy (three violations).
 export const DRAFT_WITH_PROBLEMS = {
   name: 'game-sha-tyo',
   listen: { port: 443 },
-  hops: [{ engine: 'ENGINE_NFTABLES', node_refs: ['forward-71'] }, { engine: 'ENGINE_GOST', node_refs: ['forward-61', 'forward-62'], ingress: 'LINK_SECURITY_TLS' }],
+  hops: [{ engine: 'ENGINE_NFTABLES', node_refs: ['forward-71'] }, { engine: 'ENGINE_NFTABLES', node_refs: ['forward-61', 'forward-62'] }],
   target: { host: '10.0.3.8', port: 7777 }
 }
 
@@ -681,14 +682,11 @@ export async function fillDraftWithProblems(page) {
   await page.getByLabel('Name').first().fill(draft.name)
   await page.getByRole('group', { name: 'Port mode' }).first().getByText('Fixed').click()
   await page.getByLabel('Entry port').fill(String(draft.listen.port))
-  // The exit's TLS link first: once the entry is nftables the editor offers
-  // only the links it can originate.
+  // A new hop starts on nftables; tyo-exit-02 does not advertise it.
   await page.getByTestId('forward-add-hop').click()
   await chooseNode(page, 1, 'tyo-exit-01')
   await chooseNode(page, 1, 'tyo-exit-02')
-  await chooseOption(page, page.locator('[data-hop-index="1"]').getByLabel('Ingress link'), 'TLS')
   await chooseNode(page, 0, 'sha-iepl-01')
-  await chooseOption(page, page.locator('[data-hop-index="0"]').getByLabel('Engine'), 'nftables')
   await page.getByLabel('Target 1 host').fill(draft.target.host)
   await page.getByLabel('Target 1 port').fill(String(draft.target.port))
   await page.getByLabel('Target 1 port').blur()

@@ -215,17 +215,26 @@ describe('route editor', () => {
 describe('anixops engine (D12)', () => {
   function engineOptions(props) {
     const wrapper = track(mount(HopCard, {
-      props: { hop: { _key: 'k', engine: 'ENGINE_GOST', node_refs: ['forward-61'], portMode: 'auto', dial_address: '', ingress: { security: 'LINK_SECURITY_RAW' } }, index: 1, total: 2, nodes: NODES, errorText: () => '', ...props },
+      props: { hop: { _key: 'k', engine: 'ENGINE_NFTABLES', node_refs: ['forward-61'], portMode: 'auto', dial_address: '', ingress: { security: 'LINK_SECURITY_RAW' } }, index: 1, total: 2, nodes: NODES, errorText: () => '', ...props },
       attachTo: document.body
     }))
     return wrapper.findAllComponents(UiSelect).find(select => select.props('label') === 'Engine').props('options')
   }
 
   it('is offered only with the experimental flag, as 「anixops（实验）」', () => {
-    expect(engineOptions({}).map(option => option.value)).toEqual(['ENGINE_NFTABLES', 'ENGINE_GOST', 'ENGINE_NETWORK'])
+    expect(engineOptions({}).map(option => option.value)).toEqual(['ENGINE_NFTABLES', 'ENGINE_NETWORK'])
     const options = engineOptions({ enableAnixOps: true })
-    expect(options.map(option => option.value)).toEqual(['ENGINE_NFTABLES', 'ENGINE_GOST', 'ENGINE_NETWORK', 'ENGINE_ANIXOPS'])
-    expect(options[3].label).toBe('anixops (experimental)')
+    expect(options.map(option => option.value)).toEqual(['ENGINE_NFTABLES', 'ENGINE_NETWORK', 'ENGINE_ANIXOPS'])
+    expect(options[2].label).toBe('anixops (experimental)')
+  })
+
+  it('offers the removed gost engine only to a hop still on it', () => {
+    const wrapper = track(mount(HopCard, {
+      props: { hop: { _key: 'k', engine: 'ENGINE_GOST', node_refs: ['forward-61'], portMode: 'auto', dial_address: '', ingress: { security: 'LINK_SECURITY_RAW' } }, index: 1, total: 2, nodes: NODES, errorText: () => '' },
+      attachTo: document.body
+    }))
+    const options = wrapper.findAllComponents(UiSelect).find(select => select.props('label') === 'Engine').props('options')
+    expect(options.map(option => option.value)).toEqual(['ENGINE_NFTABLES', 'ENGINE_NETWORK', 'ENGINE_GOST'])
   })
 
   it('picks a network hop\'s transport and egress from the network model', () => {

@@ -148,7 +148,8 @@ func (s *Service) CreateRoute(ctx context.Context, requestID string, route *forw
 		candidateID = newULID(now)
 		candidate.Id, candidate.Revision = candidateID, 1
 		candidate.CreatedAtUnixMs, candidate.UpdatedAtUnixMs = now.UnixMilli(), now.UnixMilli()
-		if violations := validate.Proto(candidate, validate.Options{OnCreate: true, Now: now, EnableAnixOps: s.anixOpsEnabled(), EnableNetwork: true}); len(violations) > 0 {
+		violations := validate.Proto(candidate, validate.Options{OnCreate: true, Now: now, EnableAnixOps: s.anixOpsEnabled(), EnableNetwork: true})
+		if violations = append(violations, gostRemoved(candidate)...); len(violations) > 0 {
 			return "", false, refused(routeViolations(candidate.GetId(), violations), candidate.GetId())
 		}
 		encoded, err := encodeRoute(candidate)
@@ -210,6 +211,9 @@ func (s *Service) UpdateRoute(ctx context.Context, requestID string, route *forw
 		}
 		if rows[0].Revision != expectedRevision {
 			return "", false, ErrRevisionMismatch
+		}
+		if violations := gostRemoved(route); len(violations) > 0 {
+			return "", false, refused(routeViolations(route.GetId(), violations), route.GetId())
 		}
 		candidate := proto.Clone(route).(*forwardv1.Route)
 		candidate.Revision = rows[0].Revision + 1

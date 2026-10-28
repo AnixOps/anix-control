@@ -9,7 +9,9 @@ const (
 	EngineUnspecified Engine = Engine(forwardv1.Engine_ENGINE_UNSPECIFIED)
 	// EngineNFTables is kernel nftables DNAT: RAW links only.
 	EngineNFTables Engine = Engine(forwardv1.Engine_ENGINE_NFTABLES)
-	// EngineGost is gost v3, managed by the Agent.
+	// EngineGost was gost v3. No Agent runs it any more and Control refuses
+	// it; the SDK still validates and plans it so the contract fixtures stay
+	// readable.
 	EngineGost Engine = Engine(forwardv1.Engine_ENGINE_GOST)
 	// EngineAnixOps is the AnixOps relay protocol (v4.3).
 	EngineAnixOps Engine = Engine(forwardv1.Engine_ENGINE_ANIXOPS)

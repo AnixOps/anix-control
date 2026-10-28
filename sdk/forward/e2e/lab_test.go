@@ -16,7 +16,6 @@ import (
 
 	forwardv1 "github.com/AnixOps/anix-control/sdk/api/forward/v1"
 	"github.com/AnixOps/anix-control/sdk/forward/driver"
-	"github.com/AnixOps/anix-control/sdk/forward/driver/gost"
 	"github.com/AnixOps/anix-control/sdk/forward/driver/nftables"
 	"github.com/AnixOps/anix-control/sdk/forward/model"
 	"github.com/AnixOps/anix-control/sdk/forward/planner"
@@ -193,9 +192,8 @@ func (l *lab) serve(ns *netns, id string, addrs ...netip.Addr) *server {
 	return s
 }
 
-// node is a forwarding node: a namespace with forwarding on and a driver,
-// probed there as the Agent probes its host: the nftables driver (node),
-// or the gost driver with gost running in the namespace (gostNode).
+// node is a forwarding node: a namespace with forwarding on and the
+// nftables driver, probed there as the Agent probes its host.
 type node struct {
 	ref   string
 	ns    *netns
@@ -204,8 +202,6 @@ type node struct {
 	drv   driver.Driver
 	// mk makes a driver instance on the node.
 	mk func(testing.TB) driver.Driver
-	// gost supervises a gost node's gost; nil on an nftables node.
-	gost *gost.ProcessSupervisor
 }
 
 // node makes ns a forwarding node. addrs are its NodeInfo addresses: the

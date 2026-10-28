@@ -266,7 +266,7 @@ const statusOptions = computed(() => ['healthy', 'degraded', 'error', 'paused', 
 })))
 const engineOptions = computed(() => {
   const used = new Set(allRows.value.flatMap(row => (row.route.hops || []).map(hop => hop.engine)))
-  const engines = ['ENGINE_NFTABLES', 'ENGINE_GOST', ...(used.has('ENGINE_ANIXOPS') ? ['ENGINE_ANIXOPS'] : [])]
+  const engines = ['ENGINE_NFTABLES', 'ENGINE_NETWORK', ...['ENGINE_GOST', 'ENGINE_ANIXOPS'].filter(engine => used.has(engine))]
   return [{ value: 'all', label: t('forwardV4.routes.allEngines') }, ...engines.map(value => ({ value, label: ENGINES[value].label }))]
 })
 const nodeOptions = computed(() => [
