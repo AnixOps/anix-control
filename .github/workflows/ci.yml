@@ -421,15 +421,31 @@ jobs:
       # The full Go test suite (root module, sdk and identity) runs once, in
       # "Backend Tests"; this job keeps the static gates only.
 
-  # The race detector re-runs the whole suite serially (about 28 min), so it
-  # runs only on the nightly schedule and on manual runs; pushes, pull
-  # requests and tags do not wait for it.
+  # The race detector runs only on the nightly schedule and on manual runs;
+  # pushes, pull requests and tags do not wait for it. Three shards, split by
+  # config/scripts/plan_test_shards.py --suite race over the root module;
+  # shard 1 also runs sdk and identity. The pure-Go SQLite (modernc.org/...)
+  # is built without race instrumentation: it is transpiled C that every
+  # test drives through migrations, and instrumenting it made the run about
+  # seven times slower (the serial run never finished in 40 minutes). Our
+  # own packages stay instrumented. Test binaries are linked four at a time
+  # first, then run two at a time (-p=2), so the race detector's slowdown
+  # does not starve the timing-sensitive tests; SERIAL_PACKAGES run alone.
   go-race:
-    name: Go Race Detector
+    name: Go Race Detector (${{ matrix.shard }}/3)
     runs-on: ubuntu-24.04
     needs: [changes]
     if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
     timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    env:
+      SHARD: ${{ matrix.shard }}
+      RACE_GCFLAGS: -gcflags=modernc.org/...=-race=false
+      # TestDeadlinesEndStartedOperationsTimedOut uses a 300 ms deadline.
+      SERIAL_PACKAGES: github.com/AnixOps/anix-control/v5/internal/kernelnodeops
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -440,11 +456,37 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
-      - name: Run race tests
+      - name: Plan this shard
+        shell: bash
         run: |
-          go test -race ./... -count=1 -p=1
-          go -C sdk test -race ./... -count=1
-          go -C identity test -race ./... -count=1
+          set -euo pipefail
+          go list ./... | python3 config/scripts/plan_test_shards.py --suite race --shards 3 --shard "${SHARD}" > race-packages.txt
+          wc -l race-packages.txt
+
+      - name: Build the race test binaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t packages < race-packages.txt
+          go test -race "${RACE_GCFLAGS}" -count=1 -p=4 -run '^$' "${packages[@]}" > /dev/null
+
+      - name: Run race tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          tr ' ' '\n' <<<"${SERIAL_PACKAGES}" | sed '/^$/d' > serial-packages.txt
+          mapfile -t parallel < <(grep -vxF -f serial-packages.txt race-packages.txt || true)
+          mapfile -t serial < <(grep -xF -f serial-packages.txt race-packages.txt || true)
+          if (( ${#parallel[@]} > 0 )); then
+            go test -race "${RACE_GCFLAGS}" -count=1 -p=2 "${parallel[@]}"
+          fi
+          if (( ${#serial[@]} > 0 )); then
+            go test -race "${RACE_GCFLAGS}" -count=1 -p=1 "${serial[@]}"
+          fi
+          if [[ "${SHARD}" == 1 ]]; then
+            go -C sdk test -race "${RACE_GCFLAGS}" ./... -count=1
+            go -C identity test -race "${RACE_GCFLAGS}" ./... -count=1
+          fi
 
   go-benchmark-smoke:
     name: Go Benchmark Smoke

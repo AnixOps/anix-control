@@ -22,7 +22,12 @@ BUILTIN_DIST := internal/builtinpkg/dist
 DEV_PACKAGE_KEY := build/dev-package-signing-key.pem
 
 # Go 测试参数
-GO_TEST_FLAGS := -v -race -timeout 5m
+# The race detector leaves the pure-Go SQLite (modernc.org/...) without
+# instrumentation: it is transpiled C that every test drives through
+# migrations, and instrumenting it made -race runs about seven times slower.
+# Our own packages stay instrumented.
+RACE_GCFLAGS := -gcflags=modernc.org/...=-race=false
+GO_TEST_FLAGS := -v -race $(RACE_GCFLAGS) -timeout 5m
 COVERAGE_FILE := coverage.out
 COVERAGE_HTML := coverage.html
 
@@ -123,7 +128,7 @@ test-cmd:
 # 快速测试：遇到失败立即停止
 test-quick:
 	@echo "Running tests (fail-fast)..."
-	GOWORK=off go test -v -race -failfast -timeout 5m $(filter-out $@,$(MAKECMDGOALS))
+	GOWORK=off go test -v -race $(RACE_GCFLAGS) -failfast -timeout 5m $(filter-out $@,$(MAKECMDGOALS))
 
 # 运行全部测试（分阶段执行，避免数据库干扰）
 test-all: test-unit test-grpc test-e2e
