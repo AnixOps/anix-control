@@ -154,6 +154,7 @@ func Check(plan *networkv1.NetworkPlan) error {
 	for name, n := range map[string]int{
 		"lines": len(plan.GetLines()), "ingresses": len(plan.GetIngresses()), "egresses": len(plan.GetEgresses()),
 		"transports": len(plan.GetTransports()), "paths": len(plan.GetPaths()), "forwarding": len(plan.GetForwarding()),
+		"port_forwards": len(plan.GetPortForwards()),
 	} {
 		if n > MaxComponents {
 			return invalid("more than %d %s", MaxComponents, name)
@@ -266,6 +267,14 @@ func Check(plan *networkv1.NetworkPlan) error {
 		if err := checkNext(forwarding.GetEgressId(), forwarding.GetTransportId(), egresses, transports); err != nil {
 			return invalid("forwarding[%d]: %v", i, err)
 		}
+	}
+
+	forwards := map[string]*networkv1.PortForward{}
+	for i, forward := range plan.GetPortForwards() {
+		if err := checkPortForward(forward, forwards, egresses, transports, listens); err != nil {
+			return invalid("port_forwards[%d]: %v", i, err)
+		}
+		forwards[forward.GetId()] = forward
 	}
 
 	// Pairing references, now that paths are known.
@@ -563,6 +572,45 @@ func checkAnxLine(transport *networkv1.Transport, anx *networkv1.AnxLineSettings
 		}
 	}
 	return nil
+}
+
+// MaxForwardTargets caps a port forward's targets.
+const MaxForwardTargets = 64
+
+func checkPortForward(forward *networkv1.PortForward, forwards map[string]*networkv1.PortForward,
+	egresses map[string]*networkv1.Egress, transports map[string]*networkv1.Transport, listens map[string]string,
+) error {
+	if err := checkID(forward.GetId(), forwards); err != nil {
+		return err
+	}
+	listen := forward.GetListen()
+	if err := checkListen(listen); err != nil {
+		return fmt.Errorf("listen: %w", err)
+	}
+	key := net.JoinHostPort(canonical(listen.GetAddress()), strconv.Itoa(int(listen.GetPort())))
+	if other, taken := listens[key]; taken {
+		return fmt.Errorf("listen %s is taken by %q", key, other)
+	}
+	listens[key] = forward.GetId()
+	if len(forward.GetProtocols()) == 0 || len(forward.GetProtocols()) > 2 {
+		return fmt.Errorf("protocols must be tcp, udp or both")
+	}
+	seen := map[string]bool{}
+	for _, protocol := range forward.GetProtocols() {
+		if (protocol != "tcp" && protocol != "udp") || seen[protocol] {
+			return fmt.Errorf("protocols must be tcp, udp or both")
+		}
+		seen[protocol] = true
+	}
+	if len(forward.GetTargets()) == 0 || len(forward.GetTargets()) > MaxForwardTargets {
+		return fmt.Errorf("1 to %d targets are required", MaxForwardTargets)
+	}
+	for j, target := range forward.GetTargets() {
+		if err := checkHostPort(net.JoinHostPort(target.GetHost(), strconv.Itoa(int(target.GetPort())))); err != nil {
+			return fmt.Errorf("targets[%d]: %v", j, err)
+		}
+	}
+	return checkNext(forward.GetEgressId(), forward.GetTransportId(), egresses, transports)
 }
 
 func checkNext(egressID, transportID string, egresses map[string]*networkv1.Egress, transports map[string]*networkv1.Transport) error {

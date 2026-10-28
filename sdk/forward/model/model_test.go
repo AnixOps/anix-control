@@ -177,7 +177,7 @@ func TestNodeAndCountersRoundTrip(t *testing.T) {
 		t.Fatalf("carriers and versions: %+v", caps)
 	}
 	if CarrierUnspecified.Effective() != CarrierAuto || CarrierQUIC.Effective() != CarrierQUIC || !CarrierPlain.IsKnown() || AnixOpsCarrier(9).IsKnown() ||
-		!ProxyProtocolV2.Enabled() || ProxyProtocolUnspecified.Enabled() || ProxyProtocolOff.Enabled() || ProxyProtocol(9).IsKnown() {
+		!ProxyProtocolV2.Enabled() || !ProxyProtocolV1.Enabled() || ProxyProtocolUnspecified.Enabled() || ProxyProtocolOff.Enabled() || ProxyProtocol(9).IsKnown() {
 		t.Fatal("enum helpers")
 	}
 	if _, ok := n.Engine(EngineGost); ok {

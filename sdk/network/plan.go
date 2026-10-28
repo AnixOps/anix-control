@@ -129,6 +129,20 @@ func CheckStatus(status *networkv1.NetworkStatus, deviceRef string) error {
 			}
 		}
 	}
+	if len(status.GetPortForwards()) > MaxComponents {
+		return invalid("more than %d port forwards", MaxComponents)
+	}
+	for i, forward := range status.GetPortForwards() {
+		if !idPattern.MatchString(forward.GetId()) {
+			return invalid("port_forwards[%d]: bad id", i)
+		}
+		if networkv1.ComponentState_name[int32(forward.GetState())] == "" {
+			return invalid("port_forwards[%d]: unknown state", i)
+		}
+		if err := checkText(forward.GetDetail()); err != nil {
+			return invalid("port_forwards[%d]: %v", i, err)
+		}
+	}
 	for i, iface := range status.GetInterfaces() {
 		if err := checkText(iface.GetName()); err != nil {
 			return invalid("interfaces[%d]: %v", i, err)

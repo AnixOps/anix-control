@@ -167,6 +167,7 @@ func baseRuleCases() []ruleCase {
 		{"no engine", func(r *model.Route, _ *Options) { r.Hops[0].Engine = 0 }, "hops[0].engine", CodeRequired},
 		{"unknown engine", func(r *model.Route, _ *Options) { r.Hops[0].Engine = 9 }, "hops[0].engine", CodeInvalidEnum},
 		{"anixops engine", func(r *model.Route, _ *Options) { r.Hops[2].Engine = model.EngineAnixOps }, "hops[2].engine", CodeEngineNotEnabled},
+		{"network engine", func(r *model.Route, _ *Options) { r.Hops[2].Engine = model.EngineNetwork }, "hops[2].engine", CodeEngineNotEnabled},
 		{"no nodes", func(r *model.Route, _ *Options) { r.Hops[1].NodeRefs = nil }, "hops[1].node_refs", CodeRequired},
 		{"too many nodes", func(r *model.Route, _ *Options) {
 			r.Hops[2].NodeRefs = nil
@@ -183,6 +184,7 @@ func baseRuleCases() []ruleCase {
 		{"no ingress security", func(r *model.Route, _ *Options) { r.Hops[1].Ingress.Security = 0 }, "hops[1].ingress.security", CodeRequired},
 		{"unknown ingress security", func(r *model.Route, _ *Options) { r.Hops[1].Ingress.Security = 40 }, "hops[1].ingress.security", CodeInvalidEnum},
 		{"anixops link", func(r *model.Route, _ *Options) { r.Hops[2].Ingress.Security = model.LinkSecurityAnixOps }, "hops[2].ingress.security", CodeEngineNotEnabled},
+		{"network link", func(r *model.Route, _ *Options) { r.Hops[2].Ingress.Security = model.LinkSecurityNetwork }, "hops[2].ingress.security", CodeEngineNotEnabled},
 		{"server name on raw", func(r *model.Route, _ *Options) { r.Hops[1].Ingress.ServerName = "x.example" }, "hops[1].ingress.server_name", CodeNotApplicable},
 		{"bad server name", func(r *model.Route, _ *Options) { r.Hops[2].Ingress.ServerName = "a b" }, "hops[2].ingress.server_name", CodeInvalidFormat},
 		{"path on tls", func(r *model.Route, _ *Options) { r.Hops[2].Ingress.Path = "/ws" }, "hops[2].ingress.path", CodeNotApplicable},

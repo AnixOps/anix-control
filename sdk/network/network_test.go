@@ -253,6 +253,70 @@ func TestCheckRefuses(t *testing.T) {
 	}
 }
 
+// withForward adds a port forward over transport tr-jp to the ingress
+// golden plan.
+func withForward(t *testing.T) *networkv1.NetworkPlan {
+	t.Helper()
+	plan := readPlan(t, "plan-anx-line-ingress.json")
+	plan.PortForwards = []*networkv1.PortForward{{
+		Id: "rt-1", Listen: &networkv1.Endpoint{Address: "0.0.0.0", Port: 20001}, Protocols: []string{"tcp", "udp"},
+		Targets: []*networkv1.ForwardTarget{{Host: "10.0.0.5", Port: 22}, {Host: "db.example.com", Port: 5432}},
+		Next:    &networkv1.PortForward_TransportId{TransportId: "tr-jp"},
+	}}
+	return plan
+}
+
+func TestPortForwards(t *testing.T) {
+	require.NoError(t, Check(withForward(t)))
+
+	cases := []struct {
+		name      string
+		breakPlan func(p *networkv1.NetworkPlan)
+		want      string
+	}{
+		{"bad id", func(p *networkv1.NetworkPlan) { p.PortForwards[0].Id = "a b" }, "must be 1 to 64"},
+		{"twice", func(p *networkv1.NetworkPlan) {
+			again := proto.Clone(p.PortForwards[0]).(*networkv1.PortForward)
+			again.Listen.Port++
+			p.PortForwards = append(p.PortForwards, again)
+		}, "listed twice"},
+		{"listen taken by ingress", func(p *networkv1.NetworkPlan) { p.PortForwards[0].Listen.Port = 8388 }, "taken"},
+		{"no protocol", func(p *networkv1.NetworkPlan) { p.PortForwards[0].Protocols = nil }, "protocols"},
+		{"bad protocol", func(p *networkv1.NetworkPlan) { p.PortForwards[0].Protocols = []string{"sctp"} }, "protocols"},
+		{"protocol twice", func(p *networkv1.NetworkPlan) { p.PortForwards[0].Protocols = []string{"tcp", "tcp"} }, "protocols"},
+		{"no target", func(p *networkv1.NetworkPlan) { p.PortForwards[0].Targets = nil }, "targets are required"},
+		{"bad target", func(p *networkv1.NetworkPlan) { p.PortForwards[0].Targets[1].Port = 0 }, "targets[1]"},
+		{"no next", func(p *networkv1.NetworkPlan) { p.PortForwards[0].Next = nil }, "next is required"},
+		{"unknown transport", func(p *networkv1.NetworkPlan) {
+			p.PortForwards[0].Next = &networkv1.PortForward_TransportId{TransportId: "nope"}
+		}, "transport_id"},
+		{"hop egress", func(p *networkv1.NetworkPlan) {
+			p.PortForwards[0].Next = &networkv1.PortForward_EgressId{EgressId: "eg-ix"}
+		}, "internet egress"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			plan := withForward(t)
+			c.breakPlan(plan)
+			err := Check(plan)
+			require.ErrorIs(t, err, ErrInvalid)
+			require.Contains(t, err.Error(), c.want)
+		})
+	}
+}
+
+func TestPortForwardStatus(t *testing.T) {
+	status := &networkv1.NetworkStatus{DeviceRef: "proxy-1", PortForwards: []*networkv1.PortForwardStatus{
+		{Id: "rt-1", State: networkv1.ComponentState_COMPONENT_STATE_APPLIED, UpBytes: 10, DownBytes: 20},
+	}}
+	require.NoError(t, CheckStatus(status, "proxy-1"))
+	status.PortForwards[0].Id = "a b"
+	require.ErrorIs(t, CheckStatus(status, "proxy-1"), ErrInvalid)
+	status.PortForwards[0].Id = "rt-1"
+	status.PortForwards[0].State = 99
+	require.ErrorIs(t, CheckStatus(status, "proxy-1"), ErrInvalid)
+}
+
 func TestUnsupportedRoutingRange(t *testing.T) {
 	plan := readPlan(t, "plan-anx-line-egress.json")
 	caps := &networkv1.DeviceCapabilities{RoutingFirst: 30000, RoutingLast: 30999, Kinds: []*networkv1.KindSupport{
