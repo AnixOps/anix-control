@@ -31,9 +31,10 @@ type Options struct {
 	// route being planned are ignored, so Control may pass every stored
 	// allocation.
 	Taken Allocations
-	// EnableAnixOps, OnCreate and Now are passed to validation
-	// (validate.Options).
+	// EnableAnixOps, EnableNetwork, OnCreate and Now are passed to
+	// validation (validate.Options).
 	EnableAnixOps bool
+	EnableNetwork bool
 	OnCreate      bool
 	Now           time.Time
 }
@@ -178,14 +179,14 @@ func (p *plan) report(routeID, field string, code validate.Code, format string, 
 func (p *plan) run(routes []model.Route) (Result, error) {
 	vopts := validate.Options{
 		Nodes: p.inventory, ReservedPorts: p.opts.ReservedPorts, EnableAnixOps: p.opts.EnableAnixOps,
-		OnCreate: p.opts.OnCreate, Now: p.opts.Now,
+		EnableNetwork: p.opts.EnableNetwork, OnCreate: p.opts.OnCreate, Now: p.opts.Now,
 	}
 	for i := range routes {
 		r := &routes[i]
 		for _, v := range validate.Route(r, vopts) {
 			p.violations = append(p.violations, RouteViolation{RouteID: r.ID, Violation: v})
 		}
-		if len(p.inventory) == 0 {
+		if len(p.inventory) == 0 && !r.IsNetwork() {
 			// Validation skips the inventory rules without an inventory;
 			// the planner cannot plan without one.
 			for hi, h := range r.Hops {
@@ -198,6 +199,9 @@ func (p *plan) run(routes []model.Route) (Result, error) {
 	if len(p.violations) > 0 {
 		return Result{Violations: p.violations}, nil
 	}
+	// ENGINE_NETWORK routes are validated only: Control plans them on its
+	// network model, outside NodeForwardState.
+	routes = slices.DeleteFunc(slices.Clone(routes), func(r model.Route) bool { return r.IsNetwork() })
 
 	planned := map[string]bool{}
 	for i := range routes {

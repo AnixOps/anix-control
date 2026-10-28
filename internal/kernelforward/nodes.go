@@ -575,7 +575,7 @@ func (s *Service) nodeWrite(ctx context.Context, reason string, body func(tx *go
 	if outcome.Refused {
 		logRefusedPlan(reason, outcome.Violations)
 	}
-	notify(outcome.Changed)
+	outcome.notify()
 	return nil
 }
 
@@ -698,7 +698,7 @@ func (s *Service) CreateForwardNodeTx(tx *gorm.DB, nodeRecord *forwardv1.Forward
 		if outcome.Refused {
 			logRefusedPlan("node_created", outcome.Violations)
 		}
-		notify(outcome.Changed)
+		outcome.notify()
 	}, nil
 }
 

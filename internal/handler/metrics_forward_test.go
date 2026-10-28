@@ -11,7 +11,7 @@ import (
 
 // /metrics carries the forwarding gauges (internal/kernelforward).
 func (s *MetricsHandlerTestSuite) TestGetMetrics_IncludesForwardGauges() {
-	require.NoError(s.T(), s.db.AutoMigrate(model.KernelForwardModels()...))
+	require.NoError(s.T(), s.db.AutoMigrate(append(model.KernelForwardModels(), model.NetworkModels()...)...))
 	handler := NewMetricsHandler()
 	s.router.GET("/metrics", handler.GetMetrics)
 	recorder := httptest.NewRecorder()

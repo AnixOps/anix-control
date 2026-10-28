@@ -63,6 +63,7 @@ func TestPlanForwardWaits(t *testing.T) {
 		"egress":        {edit: func(f *Forward, _ *Document) { f.Egress = "eg-ix" }, want: "not an internet egress"},
 		"no key":        {edit: func(*Forward, *Document) {}, keys: map[string]string{}, want: "no link key"},
 		"listen taken":  {edit: func(f *Forward, _ *Document) { f.Listen.Port = 8388 }, want: "taken by ingress in-ss"},
+		"wrong hop":     {edit: func(f *Forward, _ *Document) { f.Via = []string{"proxy-3"} }, want: "hop 1 is on proxy-3"},
 		"bad policy":    {edit: func(f *Forward, _ *Document) { f.Policy.Balance = "fastest" }, want: "balance"},
 		"continues elsewhere": {edit: func(f *Forward, d *Document) {
 			d.Egresses = append(d.Egresses, Egress{ID: "eg-jp2", Line: "ln-jp", Kind: "nat_direct", Audience: "internet", Family: "v4", Source: "auto"})

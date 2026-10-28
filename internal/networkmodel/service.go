@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
@@ -66,15 +67,50 @@ type Service struct {
 	// Now defaults to time.Now.
 	Now func() time.Time
 	// Forwards answers the forward routes on the network model (forward.v1
-	// ENGINE_NETWORK); nil has none.
+	// ENGINE_NETWORK); nil asks the source set by SetForwardSource.
 	Forwards func(db *gorm.DB) ([]Forward, error)
 }
 
+var (
+	forwardSourceMu sync.RWMutex
+	forwardSource   func(db *gorm.DB) ([]Forward, error)
+)
+
+// SetForwardSource sets where every Service without Forwards gets the
+// forward routes: the kernel forward service, which owns the routes. Nil
+// has none.
+func SetForwardSource(source func(db *gorm.DB) ([]Forward, error)) {
+	forwardSourceMu.Lock()
+	defer forwardSourceMu.Unlock()
+	forwardSource = source
+}
+
 func (s *Service) forwards(db *gorm.DB) ([]Forward, error) {
-	if s.Forwards == nil {
+	source := s.Forwards
+	if source == nil {
+		forwardSourceMu.RLock()
+		source = forwardSource
+		forwardSourceMu.RUnlock()
+	}
+	if source == nil {
 		return nil, nil
 	}
-	return s.Forwards(db)
+	return source(db)
+}
+
+// ReplanTx replans every device in tx, which the caller holds, after the
+// forward routes changed; notify tells the devices whose plan changed and
+// is called once tx commits.
+func (s *Service) ReplanTx(tx *gorm.DB) (notifyChanged func(), err error) {
+	_, doc, err := lockModel(tx, s.now())
+	if err != nil {
+		return nil, err
+	}
+	changed, err := s.replan(tx, doc)
+	if err != nil {
+		return nil, err
+	}
+	return func() { notify(changed) }, nil
 }
 
 // New returns the service on db.

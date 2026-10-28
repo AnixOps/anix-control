@@ -10,6 +10,7 @@ import (
 	forwardv1 "github.com/AnixOps/anix-control/sdk/api/forward/v1"
 	"github.com/AnixOps/anix-control/sdk/forward/planner"
 	"github.com/AnixOps/anix-control/v5/internal/model"
+	"github.com/AnixOps/anix-control/v5/internal/networkmodel"
 	"google.golang.org/protobuf/proto"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -23,6 +24,17 @@ type PlanOutcome struct {
 	Warnings   []string
 	// Changed are the nodes whose desired state moved to a new generation.
 	Changed []string
+	// network tells the network model's devices whose plan changed.
+	network func()
+}
+
+// notify tells the nodes whose state, and the devices whose network plan,
+// changed; after the plan's transaction commits.
+func (o PlanOutcome) notify() {
+	notify(o.Changed)
+	if o.network != nil {
+		o.network()
+	}
 }
 
 // storedRoute is a route row with its decoded route.
@@ -86,7 +98,7 @@ func (s *Service) Replan(ctx context.Context, reason string) (PlanOutcome, error
 	if outcome.Refused {
 		logRefusedPlan(reason, outcome.Violations)
 	}
-	notify(outcome.Changed)
+	outcome.notify()
 	return outcome, nil
 }
 
@@ -186,6 +198,7 @@ func (s *Service) replanTx(tx *gorm.DB, routes []storedRoute, now time.Time) (Pl
 	}
 	result, err := planner.Plan(effective, inv.nodes, previous, planner.Options{
 		Cluster: s.cluster(), ReservedPorts: inv.reserved, Taken: taken, Now: now, EnableAnixOps: s.anixOpsEnabled(),
+		EnableNetwork: true,
 	})
 	if err != nil {
 		return PlanOutcome{}, fmt.Errorf("kernel forward: plan: %w", err)
@@ -212,6 +225,10 @@ func (s *Service) replanTx(tx *gorm.DB, routes []storedRoute, now time.Time) (Pl
 				return PlanOutcome{}, fmt.Errorf("kernel forward: route %s enforcement: %w", stored.row.ID, err)
 			}
 		}
+	}
+	// The ENGINE_NETWORK routes, with their enforcement, as port forwards.
+	if outcome.network, err = networkmodel.New(tx).ReplanTx(tx); err != nil {
+		return PlanOutcome{}, fmt.Errorf("kernel forward: network model: %w", err)
 	}
 	return outcome, nil
 }

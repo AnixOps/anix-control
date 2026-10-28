@@ -55,6 +55,7 @@ func (g *forwardGrants) AuthorizeCapability(_ context.Context, host packagebridg
 func newForwardKernel(t *testing.T, db *gorm.DB, grants *forwardGrants) *kernelforward.Server {
 	t.Helper()
 	require.NoError(t, db.AutoMigrate(append(model.KernelForwardModels(), &model.ForwardNode{}, &model.Node{}, &model.NodeProtocol{})...))
+	require.NoError(t, db.AutoMigrate(model.NetworkModels()...))
 	require.NoError(t, db.Create(&[]model.ForwardNode{
 		{ID: 11, Name: "entry", Host: "192.0.2.11", Port: 7000, Enabled: true},
 		{ID: 12, Name: "exit", Host: "192.0.2.12", Port: 7000, Enabled: true},

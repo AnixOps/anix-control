@@ -30,6 +30,9 @@ type Forward struct {
 	// Segments are the transports in order; none when the entry device
 	// dials the targets itself.
 	Segments []string
+	// Via are the nodes of the hops after the entry, when known: segment j
+	// must reach Via[j].
+	Via []string
 	// Egress is the internet egress on the last device.
 	Egress string
 	// Paused routes are left out.
@@ -146,6 +149,9 @@ func (p *planned) whyNot(forward *Forward) string {
 			return fmt.Sprintf("transport %s leaves %s, but the route is at %s", id, node, at)
 		}
 		at = p.nodeOf(to.Line)
+		if j < len(forward.Via) && forward.Via[j] != at {
+			return fmt.Sprintf("transport %s reaches %s, but hop %d is on %s", id, at, j+1, forward.Via[j])
+		}
 		if p.keys[id] == "" {
 			return fmt.Sprintf("transport %s has no link key", id)
 		}

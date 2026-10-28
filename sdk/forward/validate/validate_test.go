@@ -115,7 +115,7 @@ type ruleCase struct {
 }
 
 func ruleCases() []ruleCase {
-	return append(baseRuleCases(), anixopsRuleCases()...)
+	return append(append(baseRuleCases(), anixopsRuleCases()...), networkRuleCases()...)
 }
 
 func baseRuleCases() []ruleCase {

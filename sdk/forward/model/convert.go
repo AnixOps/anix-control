@@ -95,12 +95,13 @@ func (l Listen) ToProto() *forwardv1.Listen {
 // HopFromProto converts a contract hop.
 func HopFromProto(p *forwardv1.Hop) Hop {
 	return Hop{
-		Role:        HopRole(p.GetRole()),
-		Engine:      Engine(p.GetEngine()),
-		NodeRefs:    cloneSlice(p.GetNodeRefs()),
-		Ingress:     LinkTransportFromProto(p.GetIngress()),
-		Port:        p.GetPort(),
-		DialAddress: p.GetDialAddress(),
+		Role:            HopRole(p.GetRole()),
+		Engine:          Engine(p.GetEngine()),
+		NodeRefs:        cloneSlice(p.GetNodeRefs()),
+		Ingress:         LinkTransportFromProto(p.GetIngress()),
+		Port:            p.GetPort(),
+		DialAddress:     p.GetDialAddress(),
+		NetworkEgressID: p.GetNetworkEgressId(),
 	}
 }
 
@@ -108,34 +109,37 @@ func HopFromProto(p *forwardv1.Hop) Hop {
 // empty hop converts to an empty message, not nil.
 func (h *Hop) ToProto() *forwardv1.Hop {
 	return &forwardv1.Hop{
-		Role:        forwardv1.HopRole(h.Role),
-		Engine:      forwardv1.Engine(h.Engine),
-		NodeRefs:    cloneSlice(h.NodeRefs),
-		Ingress:     h.Ingress.ToProto(),
-		Port:        h.Port,
-		DialAddress: h.DialAddress,
+		Role:            forwardv1.HopRole(h.Role),
+		Engine:          forwardv1.Engine(h.Engine),
+		NodeRefs:        cloneSlice(h.NodeRefs),
+		Ingress:         h.Ingress.ToProto(),
+		Port:            h.Port,
+		DialAddress:     h.DialAddress,
+		NetworkEgressId: h.NetworkEgressID,
 	}
 }
 
 // LinkTransportFromProto converts a contract link transport.
 func LinkTransportFromProto(p *forwardv1.LinkTransport) LinkTransport {
 	return LinkTransport{
-		Security:   LinkSecurity(p.GetSecurity()),
-		Mux:        p.GetMux(),
-		ServerName: p.GetServerName(),
-		Path:       p.GetPath(),
-		Carrier:    AnixOpsCarrier(p.GetCarrier()),
+		Security:           LinkSecurity(p.GetSecurity()),
+		Mux:                p.GetMux(),
+		ServerName:         p.GetServerName(),
+		Path:               p.GetPath(),
+		Carrier:            AnixOpsCarrier(p.GetCarrier()),
+		NetworkTransportID: p.GetNetworkTransportId(),
 	}
 }
 
 // ToProto converts the link transport; an empty one converts to nil.
 func (t LinkTransport) ToProto() *forwardv1.LinkTransport {
 	return nonEmpty(&forwardv1.LinkTransport{
-		Security:   forwardv1.LinkSecurity(t.Security),
-		Mux:        t.Mux,
-		ServerName: t.ServerName,
-		Path:       t.Path,
-		Carrier:    forwardv1.AnixOpsCarrier(t.Carrier),
+		Security:           forwardv1.LinkSecurity(t.Security),
+		Mux:                t.Mux,
+		ServerName:         t.ServerName,
+		Path:               t.Path,
+		Carrier:            forwardv1.AnixOpsCarrier(t.Carrier),
+		NetworkTransportId: t.NetworkTransportID,
 	})
 }
 

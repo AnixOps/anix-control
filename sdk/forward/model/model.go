@@ -26,6 +26,17 @@ type Route struct {
 // IsAdmin reports whether the route belongs to an administrator.
 func (r *Route) IsAdmin() bool { return r.Owner == OwnerAdmin }
 
+// IsNetwork reports whether a hop of the route runs ENGINE_NETWORK: the
+// route is then planned on Control's network model.
+func (r *Route) IsNetwork() bool {
+	for _, h := range r.Hops {
+		if h.Engine == EngineNetwork {
+			return true
+		}
+	}
+	return false
+}
+
 // Entry answers the entry hop, or false for a route without hops.
 func (r *Route) Entry() (Hop, bool) {
 	if len(r.Hops) == 0 {
@@ -67,6 +78,9 @@ type Hop struct {
 	// DialAddress overrides the address the previous hop dials; only with
 	// one node.
 	DialAddress string
+	// NetworkEgressID is the network model's internet egress that dials
+	// the targets; only on an ENGINE_NETWORK exit.
+	NetworkEgressID string
 }
 
 // LinkTransport is the transport between two hops
@@ -81,6 +95,9 @@ type LinkTransport struct {
 	Path string
 	// Carrier is the carrier of an ANIXOPS link; unspecified means AUTO.
 	Carrier AnixOpsCarrier
+	// NetworkTransportID is the network model's transport of a NETWORK
+	// link.
+	NetworkTransportID string
 }
 
 // Target is a destination behind the last hop (forwardv1.Target).

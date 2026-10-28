@@ -36,6 +36,16 @@
 //     Options.EnableAnixOps: server_name on an ANIXOPS link is empty or the
 //     identity name of its hop's only node (CodeServerNameUnsupported), and
 //     the PLAIN carrier is for an administrator's route (CodePlainUntrusted).
+//   - network: ENGINE_NETWORK and LINK_SECURITY_NETWORK only with
+//     Options.EnableNetwork (else CodeEngineNotEnabled); network_egress_id
+//     and network_transport_id only on such hops and links
+//     (CodeNotApplicable). An ENGINE_NETWORK route runs it on every hop
+//     (CodeInvalidRelation), one node per hop, an explicit listen port, no
+//     direct mode, no hop port, dial_address, mux, server_name or path;
+//     each link names its network model transport and the exit its
+//     internet egress. PROXY protocol v1 needs an ENGINE_NETWORK exit,
+//     which also writes v2. The inventory rules are skipped: its nodes are
+//     network devices.
 //   - targets: 1..MaxTargets, host an IP literal or DNS name (no port, no
 //     numeric IPv4 forms), port 1..65535, weight at most MaxWeight, no
 //     duplicate host and port; the target policy (CheckTargetAddress), with

@@ -79,6 +79,7 @@ func openPostgres(t *testing.T) *gorm.DB {
 func migrate(t *testing.T, db *gorm.DB) {
 	t.Helper()
 	require.NoError(t, db.AutoMigrate(append(model.KernelForwardModels(), &model.ForwardNode{}, &model.Node{}, &model.NodeProtocol{})...))
+	require.NoError(t, db.AutoMigrate(model.NetworkModels()...))
 }
 
 // clock is a settable time.

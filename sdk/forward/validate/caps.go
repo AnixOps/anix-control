@@ -58,6 +58,7 @@ var engineLinks = map[model.Engine][]model.LinkSecurity{
 		model.LinkSecurityQUIC, model.LinkSecurityGRPC,
 	},
 	model.EngineAnixOps: {model.LinkSecurityAnixOps},
+	model.EngineNetwork: {model.LinkSecurityNetwork},
 }
 
 // EngineLinks answers the link securities engine e can originate and
@@ -84,10 +85,10 @@ func CanMux(e model.Engine) bool {
 }
 
 // CanProxyProtocol reports whether engine e can write a PROXY protocol
-// header toward targets: only the AnixOps engine for now (the gost engine
-// may adopt it later; anixops-protocol.md section 6.5).
+// header toward targets: the AnixOps engine and the network model's kernel
+// (the gost engine may adopt it later; anixops-protocol.md section 6.5).
 func CanProxyProtocol(e model.Engine) bool {
-	return e == model.EngineAnixOps
+	return e == model.EngineAnixOps || e == model.EngineNetwork
 }
 
 // TrustedLinkLabel is the node label that marks a trusted private line

@@ -10,6 +10,7 @@ import (
 	agentv1pb "github.com/AnixOps/anix-control/sdk/api/agent/v1"
 	networkv1 "github.com/AnixOps/anix-control/sdk/api/network/v1"
 	"github.com/AnixOps/anix-control/sdk/network"
+	"github.com/AnixOps/anix-control/v5/internal/kernelforward"
 	"github.com/AnixOps/anix-control/v5/internal/networkmodel"
 	"github.com/AnixOps/anix-control/v5/internal/service"
 )
@@ -108,6 +109,11 @@ func (s *AgentControlGRPCServer) handleNetworkStatus(connection *AgentControlCon
 		agentPackageReportMetrics.result(packageReportUnrecorded)
 		slog.Warn("failed to record agent network status", "component", "agent-control", "node", node.String(), "error", err)
 		return
+	}
+	if len(status.GetPortForwards()) > 0 {
+		if _, err := kernelforward.New(databaseForAgentChecks()).RecordNetworkCounters(ctx, node, status.GetPortForwards(), observedAt); err != nil {
+			slog.Warn("failed to meter agent port forwards", "component", "agent-control", "node", node.String(), "error", err)
+		}
 	}
 	agentPackageReportMetrics.result(packageReportAccepted)
 }
