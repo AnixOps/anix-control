@@ -608,7 +608,12 @@ func TestAgentControlCancellationRequiresAdvertisedCapability(t *testing.T) {
 	_, err = stream.Recv()
 	require.NoError(t, err)
 
-	err = environment.manager.CancelOperation(ctx, uint32(environment.node.ID), "unsupported-cancel", 1)
+	// The hello ack can reach the client before the manager registers the
+	// session, so the first cancel may still find the node not connected.
+	require.Eventually(t, func() bool {
+		err = environment.manager.CancelOperation(ctx, uint32(environment.node.ID), "unsupported-cancel", 1)
+		return err != nil && !strings.Contains(err.Error(), "is not connected")
+	}, time.Second, 10*time.Millisecond)
 	require.ErrorContains(t, err, "does not advertise capability")
 }
 

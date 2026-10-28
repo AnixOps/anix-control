@@ -31,3 +31,8 @@
   rule only lets the Agent restart its own unit. `--uninstall` removes only
   the Agent's own account; the retired `anixops-gost` account goes with the
   legacy cleanup.
+
+### Fixed
+
+- A flaky Agent Control test no longer fails when the hello ack reaches the
+  client before Control registers the session.
