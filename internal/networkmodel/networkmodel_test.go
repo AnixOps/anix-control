@@ -39,7 +39,7 @@ func twoHops() *Document {
 			{ID: "eg-jp", Line: "ln-jp", Kind: "nat_direct", Audience: "internet", Family: "v4", Source: "203.0.113.20"},
 		},
 		Transports: []Transport{
-			{ID: "tr-jp", Kind: "anx_line", FromEgress: "eg-ix", ToIngress: "in-hop", AnxLine: &AnxLine{QUICPort: 8443, CarrierOrder: []string{"c1", "c2"}}},
+			{ID: "tr-jp", Kind: "anx_line", FromEgress: "eg-ix", ToIngress: "in-hop", Trusted: true, AnxLine: &AnxLine{QUICPort: 8443, CarrierOrder: []string{"c1", "c2"}}},
 		},
 		Paths: []Path{{ID: "pa-jp", Ingress: "in-ss", Segments: []string{"tr-jp"}, Egress: "eg-jp", Labels: []string{"jp"}}},
 	}
@@ -106,15 +106,39 @@ func TestPlanDisabledPath(t *testing.T) {
 	require.Empty(t, result.Plans["proxy-2"].GetTransports())
 }
 
+// A cross-border segment takes kind anx: planned as an anx_line link
+// under the A2 jacket (l2), on c1.
+func TestPlanJacketedTransport(t *testing.T) {
+	doc := twoHops()
+	doc.Transports[0] = Transport{ID: "tr-jp", Kind: KindAnx, FromEgress: "eg-ix", ToIngress: "in-hop",
+		AnxLine: &AnxLine{ServerName: "www.example.org"}}
+	result, err := Plan(doc, map[string]string{"tr-jp": linkKey}, japanKey())
+	require.NoError(t, err)
+	for _, node := range []string{"proxy-1", "proxy-2"} {
+		transports := result.Plans[node].GetTransports()
+		require.Len(t, transports, 1, node)
+		require.Equal(t, network.TransportAnxLine, transports[0].GetKind())
+		require.Equal(t, "l2", transports[0].GetAnxLine().GetEgress())
+		require.Equal(t, "www.example.org", transports[0].GetAnxLine().GetServerName())
+		require.Empty(t, transports[0].GetAnxLine().GetQuicAddr())
+	}
+}
+
 func TestPlanRefuses(t *testing.T) {
 	cases := map[string]struct {
 		edit func(d *Document)
 		want string
 	}{
-		"bad node":          {func(d *Document) { d.Lines[0].Node = "node-1" }, "lines[0].node"},
-		"duplicate id":      {func(d *Document) { d.Lines[1].ID = "ln-ix" }, "listed twice"},
-		"unknown line":      {func(d *Document) { d.Ingresses[0].Line = "x" }, "is not a line"},
-		"other kind":        {func(d *Document) { d.Transports[0].Kind = "wireguard" }, "only anx_line"},
+		"bad node":         {func(d *Document) { d.Lines[0].Node = "node-1" }, "lines[0].node"},
+		"duplicate id":     {func(d *Document) { d.Lines[1].ID = "ln-ix" }, "listed twice"},
+		"unknown line":     {func(d *Document) { d.Ingresses[0].Line = "x" }, "is not a line"},
+		"other kind":       {func(d *Document) { d.Transports[0].Kind = "wireguard" }, "must be anx_line or anx"},
+		"bare untrusted":   {func(d *Document) { d.Transports[0].Trusted = false }, "only for trusted segments"},
+		"anx needs a name": {func(d *Document) { d.Transports[0].Kind = KindAnx }, "server name"},
+		"anx on quic": {func(d *Document) {
+			d.Transports[0].Kind = KindAnx
+			d.Transports[0].AnxLine.ServerName = "www.example.org"
+		}, "c1 (TCP) only"},
 		"self transport":    {func(d *Document) { d.Lines[1].Node = "proxy-1" }, "joins proxy-1 to itself"},
 		"transport to user": {func(d *Document) { d.Transports[0].ToIngress = "in-ss" }, "not a hop ingress"},
 		"broken chain": {func(d *Document) {

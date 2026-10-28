@@ -175,7 +175,7 @@ func (s *Service) RotateLinkKey(ctx context.Context, transportID string, actor A
 		}
 		found := false
 		for _, transport := range doc.Transports {
-			found = found || (transport.ID == transportID && transport.Kind == network.TransportAnxLine)
+			found = found || (transport.ID == transportID && isLink(transport.Kind))
 		}
 		if !found {
 			return ErrNotFound
@@ -358,7 +358,7 @@ func (s *Service) syncKeys(tx *gorm.DB, doc *Document) error {
 	want := map[string]bool{}
 	var sealer *keySealer
 	for _, transport := range doc.Transports {
-		if transport.Kind != network.TransportAnxLine || !idPattern.MatchString(transport.ID) {
+		if !isLink(transport.Kind) || !idPattern.MatchString(transport.ID) {
 			continue
 		}
 		want[transport.ID] = true

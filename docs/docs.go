@@ -13569,7 +13569,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "kind": {
-                    "description": "anx_line (others later)",
+                    "description": "anx_line, anx",
                     "type": "string"
                 },
                 "kind_version": {
@@ -13580,6 +13580,9 @@ const docTemplate = `{
                 },
                 "to_ingress": {
                     "type": "string"
+                },
+                "trusted": {
+                    "type": "boolean"
                 }
             }
         },

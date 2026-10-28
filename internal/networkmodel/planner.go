@@ -101,9 +101,7 @@ func Plan(doc *Document, keys map[string]string, devices map[string]Device) (*Re
 		field := fmt.Sprintf("transports[%d]", i)
 		uniqueID(&v, field, transport.ID, transports)
 		transports[transport.ID] = transport
-		if transport.Kind != network.TransportAnxLine {
-			v.add(field+".kind", "only anx_line transports are planned so far")
-		}
+		checkTransportKind(&v, field, transport)
 		from, to := egresses[transport.FromEgress], ingresses[transport.ToIngress]
 		if from == nil || from.Audience != "hop" {
 			v.add(field+".from_egress", "%q is not a hop egress", transport.FromEgress)
@@ -114,9 +112,7 @@ func Plan(doc *Document, keys map[string]string, devices map[string]Device) (*Re
 		if from != nil && to != nil && lines[from.Line] != nil && lines[to.Line] != nil && lines[from.Line].Node == lines[to.Line].Node {
 			v.add(field, "joins %s to itself; a transport joins two devices", lines[from.Line].Node)
 		}
-		if transport.AnxLine != nil && transport.Kind != network.TransportAnxLine {
-			v.add(field+".anx_line", "is for kind anx_line")
-		}
+
 	}
 	paths := map[string]*Path{}
 	for i := range doc.Paths {
@@ -287,6 +283,39 @@ func pendingReason(path *Path, transports map[string]*Transport, ingresses map[s
 	return ""
 }
 
+// checkTransportKind applies the transport rules: bare anx_line on trusted
+// segments only, the jacketed anx (A2 jacket, c1) anywhere.
+func checkTransportKind(v *violations, field string, transport *Transport) {
+	options := transport.AnxLine
+	if options == nil {
+		options = &AnxLine{}
+	}
+	switch transport.Kind {
+	case network.TransportAnxLine:
+		if !transport.Trusted {
+			v.add(field+".kind", "anx_line is bare and only for trusted segments (IX, private line, domestic); set trusted, or use kind anx (A2 jacket) off them")
+		}
+	case KindAnx:
+		if options.Egress != "" && options.Egress != "l2" {
+			v.add(field+".anx_line.egress", "kind anx is the A2 jacket (l2)")
+		}
+		if options.ServerName == "" {
+			v.add(field+".anx_line.server_name", "kind anx needs the jacket's server name")
+		}
+		if options.QUICPort != 0 || options.FakeTCPPort != 0 {
+			v.add(field+".anx_line", "kind anx runs on c1 (TCP) only; no quic_port or faketcp_port")
+		}
+		for _, carrier := range options.CarrierOrder {
+			if carrier != "c1" {
+				v.add(field+".anx_line.carrier_order", "kind anx runs on c1 (TCP) only")
+				break
+			}
+		}
+	default:
+		v.add(field+".kind", "must be anx_line or anx")
+	}
+}
+
 func uniqueID[T any](v *violations, field, id string, seen map[string]T) {
 	if !idPattern.MatchString(id) {
 		v.add(field+".id", "must be 1 to 64 ASCII letters, digits, '-' and '_'")
@@ -404,7 +433,7 @@ func ingressProto(ingress *Ingress, peers []string, finals map[string]bool, path
 // on: the hop ingress's listen address with the port of each carrier.
 func transportProto(transport *Transport, role networkv1.TransportRole, peer, key string, to *Ingress, accepter Device) *networkv1.Transport {
 	out := &networkv1.Transport{
-		Id: transport.ID, Kind: transport.Kind, KindVersion: version(transport.KindVersion), Role: role,
+		Id: transport.ID, Kind: network.TransportAnxLine, KindVersion: version(transport.KindVersion), Role: role,
 		PeerDeviceRef: peer, Mtu: transport.MTU,
 	}
 	if role == networkv1.TransportRole_TRANSPORT_ROLE_DIAL {
@@ -418,6 +447,9 @@ func transportProto(transport *Transport, role networkv1.TransportRole, peer, ke
 	}
 	anx := &networkv1.AnxLineSettings{LinkId: transport.ID, LinkKey: key, CarrierOrder: options.CarrierOrder,
 		Multipath: options.Multipath, Fec: options.FEC, Egress: options.Egress, ServerName: options.ServerName}
+	if transport.Kind == KindAnx {
+		anx.Egress = "l2"
+	}
 	if to != nil {
 		host := to.Listen.Address
 		if role == networkv1.TransportRole_TRANSPORT_ROLE_DIAL {

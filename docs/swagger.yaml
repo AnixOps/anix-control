@@ -1280,7 +1280,7 @@ definitions:
       id:
         type: string
       kind:
-        description: anx_line (others later)
+        description: anx_line, anx
         type: string
       kind_version:
         type: integer
@@ -1288,6 +1288,8 @@ definitions:
         type: integer
       to_ingress:
         type: string
+      trusted:
+        type: boolean
     type: object
   nodeentry.Input:
     properties:

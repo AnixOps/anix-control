@@ -15,6 +15,7 @@ package networkmodel
 import (
 	"errors"
 	"fmt"
+	"github.com/AnixOps/anix-control/sdk/network"
 )
 
 // Document is the network model as the administrator declares it. Ids are
@@ -138,15 +139,31 @@ type AnxLine struct {
 
 // Transport is a segment between two devices, from one device's hop
 // egress to another's hop ingress.
+//
+// Kind anx_line is the bare ANX-Line, only for trusted segments: Trusted
+// says the segment runs over an IX, a private line or a domestic network
+// only. Every other segment, cross-border ones above all, takes kind anx
+// (ANX-A): ANX-Line under the A2 jacket and shaped, planned as an anx_line
+// transport with egress l2 on c1 (TCP). WireGuard is never used across
+// borders (owner, 2026-10-28).
 type Transport struct {
 	ID          string   `json:"id"`
-	Kind        string   `json:"kind"` // anx_line (others later)
+	Kind        string   `json:"kind"` // anx_line, anx
 	FromEgress  string   `json:"from_egress"`
 	ToIngress   string   `json:"to_ingress"`
+	Trusted     bool     `json:"trusted,omitempty"`
 	MTU         uint32   `json:"mtu,omitempty"`
 	AnxLine     *AnxLine `json:"anx_line,omitempty"`
 	KindVersion uint32   `json:"kind_version,omitempty"`
 }
+
+// KindAnx is the jacketed transport kind (ANX-A) of the document; plans
+// carry it as anx_line with egress l2.
+const KindAnx = "anx"
+
+// isLink reports whether a transport of kind runs as an ANX-Line link,
+// with a link key.
+func isLink(kind string) bool { return kind == network.TransportAnxLine || kind == KindAnx }
 
 // Path is a user ingress, the transports in order (none: the egress is on
 // the ingress's device) and the internet egress it leaves by.
