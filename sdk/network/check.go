@@ -583,15 +583,35 @@ func checkPortForward(forward *networkv1.PortForward, forwards map[string]*netwo
 	if err := checkID(forward.GetId(), forwards); err != nil {
 		return err
 	}
-	listen := forward.GetListen()
-	if err := checkListen(listen); err != nil {
-		return fmt.Errorf("listen: %w", err)
+	if err := checkPortForwardFields(forward); err != nil {
+		return err
 	}
+	listen := forward.GetListen()
 	key := net.JoinHostPort(canonical(listen.GetAddress()), strconv.Itoa(int(listen.GetPort())))
 	if other, taken := listens[key]; taken {
 		return fmt.Errorf("listen %s is taken by %q", key, other)
 	}
 	listens[key] = forward.GetId()
+	return checkNext(forward.GetEgressId(), forward.GetTransportId(), egresses, transports)
+}
+
+// CheckPortForward checks what a port forward says on its own: its id,
+// listen endpoint, protocols, targets and policy; Check also checks its
+// listen address and next hop against the plan.
+func CheckPortForward(forward *networkv1.PortForward) error {
+	if !idPattern.MatchString(forward.GetId()) {
+		return invalid("id %q must be 1 to 64 ASCII letters, digits, '-' and '_'", forward.GetId())
+	}
+	if err := checkPortForwardFields(forward); err != nil {
+		return invalid("%v", err)
+	}
+	return nil
+}
+
+func checkPortForwardFields(forward *networkv1.PortForward) error {
+	if err := checkListen(forward.GetListen()); err != nil {
+		return fmt.Errorf("listen: %w", err)
+	}
 	if len(forward.GetProtocols()) == 0 || len(forward.GetProtocols()) > 2 {
 		return fmt.Errorf("protocols must be tcp, udp or both")
 	}
@@ -613,7 +633,7 @@ func checkPortForward(forward *networkv1.PortForward, forwards map[string]*netwo
 	if err := checkForwardPolicy(forward); err != nil {
 		return fmt.Errorf("policy: %w", err)
 	}
-	return checkNext(forward.GetEgressId(), forward.GetTransportId(), egresses, transports)
+	return nil
 }
 
 // Forward policy bounds.
