@@ -34,9 +34,15 @@ export default {
     engine: {
       ENGINE_NFTABLES: 'Kernel DNAT, almost no CPU; RAW links only',
       ENGINE_GOST: 'TLS / WSS / QUIC / gRPC and multiplexing',
+      ENGINE_NETWORK: 'Network model (anx-node): ANX-Line on trusted lines, the A2 jacket across borders',
       ENGINE_ANIXOPS: 'AnixOps relay protocol (experimental)',
       anixopsLabel: 'anixops (experimental)',
       unavailable: 'unavailable'
+    },
+    proxyProtocol: {
+      PROXY_PROTOCOL_OFF: 'Off',
+      PROXY_PROTOCOL_V1: 'v1 (text)',
+      PROXY_PROTOCOL_V2: 'v2 (binary)'
     },
     protocol: {
       L4_PROTOCOL_TCP: 'TCP',
@@ -200,6 +206,7 @@ export default {
       title: 'Routes',
       description: 'Each route is a chain of hops from an entry to its targets; nodes get their desired state from the routes.',
       count: '{n} routes',
+      migrate: 'Move gost routes to ANX',
       more: 'More actions',
       new: 'New route',
       import: 'Import route JSON',
@@ -252,6 +259,17 @@ export default {
       message: 'Its hops leave every node in the next generation and its ports stay held for 10 minutes. This cannot be undone.',
       confirm: 'Delete'
     },
+    migrate: {
+      title: 'Move gost routes to the network model',
+      description: 'Every route with a gost hop becomes an ANX (network model) route: links run over network transports (bare ANX-Line between iepl/iplc nodes, the A2 jacket otherwise), entry ports stay. nftables routes are not touched.',
+      summary: '{n} routes can move; {blocked} stay on gost; {untouched} are not on gost.',
+      applied: 'Moved {n} routes to the network model.',
+      moving: 'Will move',
+      blocked: 'Stay on gost',
+      added: 'Network model components added: {list}',
+      dryRun: 'Check again',
+      apply: 'Move them'
+    },
     import: {
       title: 'Import route JSON',
       description: 'Paste a route or an array of routes (protojson, as exported). Each route is created on its own.',
@@ -275,6 +293,17 @@ export default {
       settingsSavedWarnings: 'Forwarding settings saved; {n} routes cannot plan for now and the nodes keep their generation.'
     },
     editor: {
+      networkTransport: 'Network transport',
+      networkTransportPlaceholder: 'Pick a transport',
+      networkTransportHelp: 'The network model transport from the previous hop\'s device to this one.',
+      transportJacketed: 'ANX with the A2 jacket (cross-border)',
+      transportTrusted: 'Bare ANX-Line (trusted line)',
+      transportElsewhere: 'Joins {from} → {to}',
+      networkEgress: 'Internet egress',
+      networkEgressPlaceholder: 'Pick an egress',
+      networkEgressHelp: 'The egress on this device that dials the targets.',
+      proxyProtocol: 'PROXY protocol',
+      proxyProtocolHelp: 'Header the exit writes toward the targets on TCP; v1 only on ANX routes.',
       newTitle: 'New route',
       editTitle: 'Edit {name}',
       backToRoute: 'Route',

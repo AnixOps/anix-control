@@ -27,6 +27,11 @@ const router = vi.hoisted(() => ({ push: vi.fn() }))
 const route = vi.hoisted(() => ({ query: {}, hash: '', params: {}, path: '/' }))
 
 vi.mock('@/api/forwardV4', async importOriginal => ({ ...(await importOriginal()), ...api }))
+vi.mock('@/api/kernel', async importOriginal => ({
+  ...(await importOriginal()),
+  getNetworkModel: vi.fn(async () => null),
+  migrateGostRoutes: vi.fn(async () => ({ dry_run: true, applied: false, routes: [], blocked: [], added: [], untouched: 0 }))
+}))
 vi.mock('vue-router', async importOriginal => ({
   ...(await importOriginal()),
   useRouter: () => router,
@@ -217,10 +222,36 @@ describe('anixops engine (D12)', () => {
   }
 
   it('is offered only with the experimental flag, as 「anixops（实验）」', () => {
-    expect(engineOptions({}).map(option => option.value)).toEqual(['ENGINE_NFTABLES', 'ENGINE_GOST'])
+    expect(engineOptions({}).map(option => option.value)).toEqual(['ENGINE_NFTABLES', 'ENGINE_GOST', 'ENGINE_NETWORK'])
     const options = engineOptions({ enableAnixOps: true })
-    expect(options.map(option => option.value)).toEqual(['ENGINE_NFTABLES', 'ENGINE_GOST', 'ENGINE_ANIXOPS'])
-    expect(options[2].label).toBe('anixops (experimental)')
+    expect(options.map(option => option.value)).toEqual(['ENGINE_NFTABLES', 'ENGINE_GOST', 'ENGINE_NETWORK', 'ENGINE_ANIXOPS'])
+    expect(options[3].label).toBe('anixops (experimental)')
+  })
+
+  it('picks a network hop\'s transport and egress from the network model', () => {
+    const networkModel = {
+      lines: [{ id: 'ln-sh', node: 'proxy-1' }, { id: 'ln-hk', node: 'proxy-2' }],
+      ingresses: [{ id: 'in-hk', line: 'ln-hk', audience: 'hop' }],
+      egresses: [
+        { id: 'eg-sh', line: 'ln-sh', audience: 'hop' },
+        { id: 'eg-hk', line: 'ln-hk', audience: 'internet', kind: 'nat_direct', family: 'v4', source: 'auto' }
+      ],
+      transports: [{ id: 'tr-hk', kind: 'anx', from_egress: 'eg-sh', to_ingress: 'in-hk' }]
+    }
+    const wrapper = track(mount(HopCard, {
+      props: {
+        hop: { _key: 'k', engine: 'ENGINE_NETWORK', node_refs: ['proxy-2'], portMode: 'auto', dial_address: '', ingress: { security: 'LINK_SECURITY_NETWORK', network_transport_id: '' } },
+        previous: { engine: 'ENGINE_NETWORK', node_refs: ['proxy-1'] },
+        index: 1, total: 2, nodes: NODES, errorText: () => '', networkModel
+      },
+      attachTo: document.body
+    }))
+    const selects = wrapper.findAllComponents(UiSelect)
+    const transport = selects.find(select => select.props('label') === 'Network transport').props('options')
+    expect(transport).toEqual([expect.objectContaining({ value: 'tr-hk', disabled: false })])
+    const egress = selects.find(select => select.props('label') === 'Internet egress').props('options')
+    expect(egress.map(option => option.value)).toEqual(['eg-hk'])
+    expect(selects.find(select => select.props('label') === 'Ingress')).toBeUndefined()
   })
 
   it('stays shown on a hop that already uses it', () => {
