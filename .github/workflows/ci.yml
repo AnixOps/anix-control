@@ -28,11 +28,6 @@ concurrency:
 env:
   GO_VERSION: '1.26.10'
   NODE_VERSION: '22'
-  GOST_VERSION: '3.2.6'
-  GOST_LINUX_AMD64_ARCHIVE_SHA256: 'b39037b0380ea001fb3c0c28441c2e10bfc694f90682739a65b53e55dce5238b'
-  GOST_LINUX_AMD64_BINARY_SHA256: 'a2aea24efb4597b5f57b35b8e1bbcc59f439b80723854d4371f6828b46682ffb'
-  GOST_LINUX_ARM64_ARCHIVE_SHA256: 'f674c8f4a033dc1dfd4f0d5e9602fbe5b0d0f81307bf3794f44b5b5d6d622eae'
-  GOST_LINUX_ARM64_BINARY_SHA256: '343c3e003996ca0437b9cc47dd1500cd0475ba09f5a5f17e50851854e06a1ca7'
   # The one anix-agent commit every checkout below builds and tests: the
   # signed Agent plugins, the cross-repository E2E and the live WebUI gate.
   # Move it to the Agent release commit with every Agent tag (docs/RELEASING.md).
@@ -168,12 +163,10 @@ jobs:
         run: |
           bash -n packages/machine-telemetry/tests/release_gate.sh
           bash -n packages/nftables-forward/tests/release_gate.sh
-          bash -n packages/gost-mesh/tests/release_gate.sh
           bash -n packages/nat-egress/tests/release_gate.sh
           bash -n scripts/sign_plugin_release.sh
           python3 -m py_compile packages/machine-telemetry/build.py packages/machine-telemetry/verify_signature.py
           python3 -m py_compile packages/nftables-forward/build.py packages/nftables-forward/verify_signature.py
-          python3 -m py_compile packages/gost-mesh/build.py packages/gost-mesh/verify_signature.py
           python3 -m py_compile packages/nat-egress/build.py packages/nat-egress/verify_signature.py
 
       - name: Validate release build policy script syntax
@@ -1241,7 +1234,7 @@ jobs:
         shard: [1, 2, 3, 4]
     env:
       PACKAGES: >-
-        ./internal/packagestore ./internal/tests/integration ./internal/tests/packagecompat ./internal/tests/identitycompat ./internal/tests/knowledgecompat ./internal/tests/ticketcompat ./internal/tests/notificationcompat ./internal/tests/platformcompat ./internal/tests/plancompat ./internal/tests/ordercompat ./internal/tests/paymentcompat ./internal/tests/affiliatecompat ./internal/tests/subscriptioncompat ./internal/tests/proxynodecompat ./internal/tests/protocolruntimecompat ./internal/tests/machinetelemetrycompat ./internal/tests/gostmeshcompat ./internal/tests/wireguardcompat ./internal/nodesecrets ./internal/tests/nodesecretsplit ./internal/kernelnodeops ./internal/tests/bridgecontract ./internal/agentpki ./internal/modulepki ./internal/agentreports ./internal/tests/nodeopsagent ./internal/subscriber ./internal/kernelforward ./internal/tests/forwardv4 ./internal/agentupgrade ./internal/database/migrations
+        ./internal/packagestore ./internal/tests/integration ./internal/tests/packagecompat ./internal/tests/identitycompat ./internal/tests/knowledgecompat ./internal/tests/ticketcompat ./internal/tests/notificationcompat ./internal/tests/platformcompat ./internal/tests/plancompat ./internal/tests/ordercompat ./internal/tests/paymentcompat ./internal/tests/affiliatecompat ./internal/tests/subscriptioncompat ./internal/tests/proxynodecompat ./internal/tests/protocolruntimecompat ./internal/tests/machinetelemetrycompat ./internal/tests/wireguardcompat ./internal/nodesecrets ./internal/tests/nodesecretsplit ./internal/kernelnodeops ./internal/tests/bridgecontract ./internal/agentpki ./internal/modulepki ./internal/agentreports ./internal/tests/nodeopsagent ./internal/subscriber ./internal/kernelforward ./internal/tests/forwardv4 ./internal/agentupgrade ./internal/database/migrations
     services:
       postgres:
         image: postgres:16
@@ -1469,25 +1462,12 @@ jobs:
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
             go -C V2bX_AnixOps build -trimpath \
               -o "${GITHUB_WORKSPACE}/package-build/nftables-forward-agent" ./cmd/nftables-forward
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-            go -C V2bX_AnixOps build -trimpath \
-              -o "${GITHUB_WORKSPACE}/package-build/gost-mesh-agent" ./cmd/gost-mesh
           chmod 0755 package-build/nftables-forward-agent
-          chmod 0755 package-build/gost-mesh-agent
           [[ "$(package-build/nftables-forward-agent --version)" == "nftables-forward 1.2.0" ]]
-
-          gost_archive="${RUNNER_TEMP}/gost_${GOST_VERSION}_linux_amd64.tar.gz"
-          curl --fail --location --retry 3 --output "${gost_archive}" \
-            "https://github.com/go-gost/gost/releases/download/v${GOST_VERSION}/gost_${GOST_VERSION}_linux_amd64.tar.gz"
-          echo "${GOST_LINUX_AMD64_ARCHIVE_SHA256}  ${gost_archive}" | sha256sum --check --strict
-          tar -xzf "${gost_archive}" -C "${RUNNER_TEMP}"
-          install -m 0755 "${RUNNER_TEMP}/gost" package-build/gost
-          echo "${GOST_LINUX_AMD64_BINARY_SHA256}  package-build/gost" | sha256sum --check --strict
-          package-build/gost -V
 
       # The Agent plugins ship inside the signed packages, so a vulnerable
       # dependency in them reaches every installation. govulncheck scans the
-      # four commands those binaries are built from and fails the step only for
+      # three commands those binaries are built from and fails the step only for
       # a vulnerability their call graph reaches; a vulnerable package or
       # module they merely import is printed as information. Like go-security,
       # it reads the live advisory database.
@@ -1500,7 +1480,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
-          "$(go env GOPATH)/bin"/govulncheck ./cmd/nftables-forward ./cmd/gost-mesh ./cmd/machine-telemetry ./cmd/nat-egress
+          "$(go env GOPATH)/bin"/govulncheck ./cmd/nftables-forward ./cmd/machine-telemetry ./cmd/nat-egress
 
       - name: Run Machine Telemetry package unit tests
         run: python3 -m unittest discover -s packages/machine-telemetry/tests -p 'test_*.py' -v
@@ -1516,12 +1496,6 @@ jobs:
       - name: Run nftables Forward WebUI smoke test
         run: node packages/nftables-forward/tests/webui_smoke.mjs
 
-      - name: Run GOST Mesh package unit tests
-        run: python3 -m unittest discover -s packages/gost-mesh/tests -p 'test_*.py' -v
-
-      - name: Run GOST Mesh WebUI smoke test
-        run: node packages/gost-mesh/tests/webui_smoke.mjs
-
       - name: Run NAT Egress package unit tests
         run: python3 -m unittest discover -s packages/nat-egress/tests -p 'test_*.py' -v
 
@@ -1536,10 +1510,6 @@ jobs:
           bash packages/nftables-forward/tests/release_gate.sh \
             --agent-binary package-build/nftables-forward-agent \
             | tee nftables-forward-package-contract.txt
-          bash packages/gost-mesh/tests/release_gate.sh \
-            --agent-binary package-build/gost-mesh-agent \
-            --gost package-build/gost \
-            | tee gost-mesh-package-contract.txt
           bash packages/nat-egress/tests/release_gate.sh \
             | tee nat-egress-package-contract.txt
 
@@ -1550,7 +1520,6 @@ jobs:
           path: |
             machine-telemetry-package-contract.txt
             nftables-forward-package-contract.txt
-            gost-mesh-package-contract.txt
             nat-egress-package-contract.txt
 
   plugin-package-publish:
@@ -1817,7 +1786,7 @@ jobs:
   # with a one-time credential; the suite checks the configuration, users,
   # traffic counted once, NodeStatus, maintenance events, the alive list,
   # plugin artifacts over mTLS, the systemd services report and panel,
-  # agent.diagnostic, forward.v1 with the pinned gost and link certificates,
+  # agent.diagnostic, forward.v1 with link certificates,
   # then chaos: Control killed mid-stream, a partition with an Agent crash,
   # an Agent restart, a revoked certificate, the #179 generation reset and
   # clock-skew bounds. The main lane runs on PostgreSQL as the runner user;
@@ -1885,21 +1854,6 @@ jobs:
             sudo apt-get install -y -qq --no-install-recommends "${missing[@]}"
           fi
 
-      # The gost release the Agent pins (H20), checked by SHA-256: the
-      # suite's systemctl stand-in runs it for the gost forward driver.
-      - name: Download the pinned gost
-        shell: bash
-        run: |
-          set -euo pipefail
-          archive="${RUNNER_TEMP}/gost_${GOST_VERSION}_linux_amd64.tar.gz"
-          curl --fail --location --retry 3 --output "${archive}" \
-            "https://github.com/go-gost/gost/releases/download/v${GOST_VERSION}/gost_${GOST_VERSION}_linux_amd64.tar.gz"
-          echo "${GOST_LINUX_AMD64_ARCHIVE_SHA256}  ${archive}" | sha256sum --check --strict
-          mkdir -p "${RUNNER_TEMP}/gost"
-          tar -xzf "${archive}" -C "${RUNNER_TEMP}/gost" gost
-          echo "${GOST_LINUX_AMD64_BINARY_SHA256}  ${RUNNER_TEMP}/gost/gost" | sha256sum --check --strict
-          "${RUNNER_TEMP}/gost/gost" -V
-
       - name: Build Control, the Agent and the suite
         shell: bash
         env:
@@ -1928,7 +1882,7 @@ jobs:
           GOWORK: 'off'
         run: |
           set -euo pipefail
-          ANIXOPS_AGENT_E2E_BIN_DIR="${E2E_BIN}" ANIXOPS_GOST_BIN="${RUNNER_TEMP}/gost/gost" \
+          ANIXOPS_AGENT_E2E_BIN_DIR="${E2E_BIN}" \
           ANIXOPS_AGENT_E2E_LOGDIR="${E2E_LOGS}/main" \
             "${E2E_BIN}/agente2e.test" -test.run '^TestRealAgentEndToEnd$' -test.v -test.timeout 20m 2>&1 \
             | grep -v '\[GIN\]' | tee "${E2E_LOGS}/main-go-test.log"
@@ -1945,7 +1899,7 @@ jobs:
             GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="${RUNNER_TEMP}/root-gocache" HOME="${RUNNER_TEMP}" \
             ANIXOPS_AGENT_E2E=1 ANIXOPS_AGENT_E2E_NETNS=1 \
             ANIXOPS_AGENT_ROOT="${GITHUB_WORKSPACE}/V2bX_AnixOps" ANIXOPS_AGENT_E2E_BIN_DIR="${E2E_BIN}" \
-            ANIXOPS_GOST_BIN="${RUNNER_TEMP}/gost/gost" ANIXOPS_AGENT_E2E_LOGDIR="${E2E_LOGS}/netns" \
+            ANIXOPS_AGENT_E2E_LOGDIR="${E2E_LOGS}/netns" \
             unshare --net -- sh -c 'ip link set lo up && exec "$0" "$@"' \
             "${E2E_BIN}/agente2e.test" \
             -test.run '^TestRealAgentEndToEnd$/^(enroll|config_snapshot|link|forward|chaos_agent_graceful|chaos_control_db)' \

@@ -64,7 +64,7 @@ describe('plugin WebUI CSS class contract', () => {
   // hook on its root element.
   it('the bundled packages use no class but the contract and their own <package>-extension', () => {
     const bundles = webuiBundles()
-    expect(bundles.map(({ packageID }) => packageID).sort()).toEqual(['forward', 'gost-mesh', 'nat-egress', 'nftables-forward'])
+    expect(bundles.map(({ packageID }) => packageID).sort()).toEqual(['forward', 'nat-egress', 'nftables-forward'])
     for (const { packageID, file } of bundles) {
       const foreign = bundleClasses(file).filter(name => !PLUGIN_WEBUI_CLASSES.includes(name) && name !== `${packageID}-extension`)
       expect(foreign, `${packageID} renders classes Control does not style`).toEqual([])

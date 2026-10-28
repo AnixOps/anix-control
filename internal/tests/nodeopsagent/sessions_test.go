@@ -138,7 +138,7 @@ func TestAnswersCarryNoSecret(t *testing.T) {
 		answers = append(answers, terminal(t, client, "secrets:sync-proxy", syncSpec(f.proxyNode(), true)))
 		answers = append(answers, terminal(t, client, "secrets:sync-forward", syncSpec(f.forwardNode(), true)))
 		answers = append(answers, terminal(t, client, "secrets:ping", agentOperationSpec(f.proxy.ID, "agent.ping", "", 5)))
-		answers = append(answers, terminal(t, client, "secrets:diag", diagnosticSpec(f.proxy.ID, "service_status", `{"service":"gost"}`)))
+		answers = append(answers, terminal(t, client, "secrets:diag", diagnosticSpec(f.proxy.ID, "service_status", `{"service":"anix-agent"}`)))
 		sessions, err := client.ListAgentSessions(ctx, &kernelnodeopsv1.ListAgentSessionsRequest{})
 		require.NoError(t, err)
 		answers = append(answers, sessions)

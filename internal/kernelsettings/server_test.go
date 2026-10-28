@@ -2,6 +2,7 @@ package kernelsettings
 
 import (
 	"context"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -47,7 +48,24 @@ func (g grants) with(other grants) grants {
 	return g
 }
 
-var host = packagebridge.HostIdentity{PackageID: "gost-mesh", Version: "4.1.0", Generation: 1}
+// testCleanup runs the cleanups TestMain registers after every test.
+type testCleanup struct{ cleanups []func() }
+
+func (c *testCleanup) Cleanup(f func()) { c.cleanups = append(c.cleanups, f) }
+
+// TestMain adds the demo namespace, a remote service's address, token and
+// timeout (demo.remote.*), which the tests read and write.
+func TestMain(m *testing.M) {
+	cleanup := &testCleanup{}
+	service.AddSettingsNamespacesForTest(cleanup, service.SettingsNamespace{Name: "demo", Prefixes: []string{"demo.remote."}, Audit: service.SettingsAuditSystemConfig})
+	code := m.Run()
+	for _, f := range cleanup.cleanups {
+		f()
+	}
+	os.Exit(code)
+}
+
+var host = packagebridge.HostIdentity{PackageID: "demo-package", Version: "4.1.0", Generation: 1}
 
 func fixture(t *testing.T, authorizer Authorizer) (*gorm.DB, kernelsettingsv1.KernelSettingsServer) {
 	t.Helper()
@@ -58,10 +76,10 @@ func fixture(t *testing.T, authorizer Authorizer) (*gorm.DB, kernelsettingsv1.Ke
 	sqlDB.SetMaxOpenConns(1)
 	require.NoError(t, db.AutoMigrate(&model.SystemConfig{}, &model.OperationLog{}, &model.SettingsRequest{}))
 	require.NoError(t, db.Create(&[]model.SystemConfig{
-		{Key: "forward.runtime.nodex.base_url", Value: "http://nodex.test", Type: "string", Group: "forward_runtime"},
-		{Key: "forward.runtime.nodex.token", Value: "nodex-secret", Type: "string", Group: "forward_runtime"},
-		{Key: "forward.runtime.nodex.timeout_seconds", Value: "  ", Type: "int", Group: "forward_runtime"},
-		{Key: "forward.runtime.nodex_mode", Value: "true", Type: "bool", Group: "forward_runtime"},
+		{Key: "demo.remote.base_url", Value: "http://remote.test", Type: "string", Group: "demo"},
+		{Key: "demo.remote.token", Value: "remote-secret", Type: "string", Group: "demo"},
+		{Key: "demo.remote.timeout_seconds", Value: "  ", Type: "int", Group: "demo"},
+		{Key: "demo.remote_mode", Value: "true", Type: "bool", Group: "demo"},
 		{Key: "notification.email.config", Value: `{"host":"smtp.test","password":"smtp-secret"}`, Type: "json", Group: "notification"},
 		{Key: "invite.frontend.config", Value: `{"code_prefix":"AFF"}`, Type: "json", Group: "invite"},
 		{Key: "invite.", Value: "the bare prefix is no key"},
@@ -88,11 +106,11 @@ func audits(t *testing.T, db *gorm.DB) []model.OperationLog {
 
 func TestEachCallNeedsTheNamespaceCapability(t *testing.T) {
 	ctx := context.Background()
-	_, readOnly := fixture(t, capabilities(service.SettingsNamespaceNodeX, service.SettingsAccessRead))
-	_, err := readOnly.GetSettings(ctx, &kernelsettingsv1.GetSettingsRequest{Namespace: "nodex"})
+	_, readOnly := fixture(t, capabilities("demo", service.SettingsAccessRead))
+	_, err := readOnly.GetSettings(ctx, &kernelsettingsv1.GetSettingsRequest{Namespace: "demo"})
 	require.NoError(t, err)
-	_, err = readOnly.PutSettings(ctx, &kernelsettingsv1.PutSettingsRequest{Namespace: "nodex", RequestId: "r",
-		Entries: []*kernelsettingsv1.SettingEntry{{Key: "forward.runtime.nodex.base_url", Value: "http://x"}}})
+	_, err = readOnly.PutSettings(ctx, &kernelsettingsv1.PutSettingsRequest{Namespace: "demo", RequestId: "r",
+		Entries: []*kernelsettingsv1.SettingEntry{{Key: "demo.remote.base_url", Value: "http://x"}}})
 	require.Equal(t, codes.PermissionDenied, status.Code(err), "reading is not writing")
 	_, err = readOnly.GetSettings(ctx, &kernelsettingsv1.GetSettingsRequest{Namespace: "mail"})
 	require.Equal(t, codes.PermissionDenied, status.Code(err), "one namespace's capability reaches no other")
@@ -107,7 +125,7 @@ func TestEachCallNeedsTheNamespaceCapability(t *testing.T) {
 	require.Equal(t, codes.InvalidArgument, status.Code(err))
 
 	_, fenced := fixture(t, grants{"fenced": true})
-	_, err = fenced.GetSettings(ctx, &kernelsettingsv1.GetSettingsRequest{Namespace: "nodex"})
+	_, err = fenced.GetSettings(ctx, &kernelsettingsv1.GetSettingsRequest{Namespace: "demo"})
 	require.Equal(t, codes.PermissionDenied, status.Code(err))
 }
 
@@ -120,13 +138,13 @@ func TestKeysOutsideTheNamespaceAreRefused(t *testing.T) {
 		everything.with(capabilities(namespace.Name, service.SettingsAccessRead, service.SettingsAccessWrite, service.SettingsAccessSecrets))
 	}
 	db, server := fixture(t, everything)
-	for _, key := range []string{"security.mfa.config", "invite.frontend.config", "forward.runtime.nodex_mode", "forward.runtime.nodex.", "", "forward.runtime.nodex.a b"} {
-		_, err := server.GetSettings(ctx, &kernelsettingsv1.GetSettingsRequest{Namespace: "nodex", Keys: []string{key}})
+	for _, key := range []string{"security.mfa.config", "invite.frontend.config", "demo.remote_mode", "demo.remote.", "", "demo.remote.a b"} {
+		_, err := server.GetSettings(ctx, &kernelsettingsv1.GetSettingsRequest{Namespace: "demo", Keys: []string{key}})
 		require.Equal(t, codes.InvalidArgument, status.Code(err), key)
-		_, err = server.PutSettings(ctx, &kernelsettingsv1.PutSettingsRequest{Namespace: "nodex", RequestId: "p:" + key,
+		_, err = server.PutSettings(ctx, &kernelsettingsv1.PutSettingsRequest{Namespace: "demo", RequestId: "p:" + key,
 			Entries: []*kernelsettingsv1.SettingEntry{{Key: key, Value: "x"}}})
 		require.Equal(t, codes.InvalidArgument, status.Code(err), key)
-		_, err = server.DeleteSettings(ctx, &kernelsettingsv1.DeleteSettingsRequest{Namespace: "nodex", RequestId: "d:" + key, Keys: []string{key}})
+		_, err = server.DeleteSettings(ctx, &kernelsettingsv1.DeleteSettingsRequest{Namespace: "demo", RequestId: "d:" + key, Keys: []string{key}})
 		require.Equal(t, codes.InvalidArgument, status.Code(err), key)
 	}
 	// The backup configuration namespace went with the backup settings.
@@ -138,13 +156,13 @@ func TestKeysOutsideTheNamespaceAreRefused(t *testing.T) {
 	require.JSONEq(t, `{"enforce":true}`, mfa.Value)
 
 	// Listing a namespace answers its own stored keys only, by key.
-	listed, err := server.GetSettings(ctx, &kernelsettingsv1.GetSettingsRequest{Namespace: "nodex"})
+	listed, err := server.GetSettings(ctx, &kernelsettingsv1.GetSettingsRequest{Namespace: "demo"})
 	require.NoError(t, err)
 	var keys []string
 	for _, setting := range listed.GetSettings() {
 		keys = append(keys, setting.GetKey())
 	}
-	require.Equal(t, []string{"forward.runtime.nodex.base_url", "forward.runtime.nodex.timeout_seconds", "forward.runtime.nodex.token"}, keys)
+	require.Equal(t, []string{"demo.remote.base_url", "demo.remote.timeout_seconds", "demo.remote.token"}, keys)
 	listed, err = server.GetSettings(ctx, &kernelsettingsv1.GetSettingsRequest{Namespace: "invite"})
 	require.NoError(t, err)
 	require.Equal(t, map[string]string{"invite.frontend.config": `{"code_prefix":"AFF"}`}, values(listed.GetSettings()))
@@ -152,17 +170,17 @@ func TestKeysOutsideTheNamespaceAreRefused(t *testing.T) {
 
 func TestSecretsAreMaskedWithoutTheSecretsCapability(t *testing.T) {
 	ctx := context.Background()
-	keys := []string{"forward.runtime.nodex.token", "forward.runtime.nodex.base_url", "forward.runtime.nodex.timeout_seconds", "forward.runtime.nodex.missing_token"}
+	keys := []string{"demo.remote.token", "demo.remote.base_url", "demo.remote.timeout_seconds", "demo.remote.missing_token"}
 
-	_, masked := fixture(t, capabilities("nodex", service.SettingsAccessRead).with(capabilities("mail", service.SettingsAccessRead)))
-	got, err := masked.GetSettings(ctx, &kernelsettingsv1.GetSettingsRequest{Namespace: "nodex", Keys: keys})
+	_, masked := fixture(t, capabilities("demo", service.SettingsAccessRead).with(capabilities("mail", service.SettingsAccessRead)))
+	got, err := masked.GetSettings(ctx, &kernelsettingsv1.GetSettingsRequest{Namespace: "demo", Keys: keys})
 	require.NoError(t, err)
 	settings := got.GetSettings()
 	require.Len(t, settings, 4)
-	require.Equal(t, "forward.runtime.nodex.token", settings[0].GetKey(), "answered in the requested order")
+	require.Equal(t, "demo.remote.token", settings[0].GetKey(), "answered in the requested order")
 	require.Equal(t, "********", settings[0].GetValue())
 	require.True(t, settings[0].GetSecret() && settings[0].GetMasked() && settings[0].GetHasValue() && settings[0].GetStored())
-	require.Equal(t, "http://nodex.test", settings[1].GetValue())
+	require.Equal(t, "http://remote.test", settings[1].GetValue())
 	require.False(t, settings[1].GetSecret() || settings[1].GetMasked())
 	require.Equal(t, "string", settings[1].GetType())
 	require.Equal(t, "  ", settings[2].GetValue())
@@ -176,44 +194,44 @@ func TestSecretsAreMaskedWithoutTheSecretsCapability(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, map[string]string{"notification.email.config": "********"}, values(mail.GetSettings()))
 
-	_, clear := fixture(t, capabilities("nodex", service.SettingsAccessRead, service.SettingsAccessSecrets))
-	got, err = clear.GetSettings(ctx, &kernelsettingsv1.GetSettingsRequest{Namespace: "nodex", Keys: keys[:1]})
+	_, clear := fixture(t, capabilities("demo", service.SettingsAccessRead, service.SettingsAccessSecrets))
+	got, err = clear.GetSettings(ctx, &kernelsettingsv1.GetSettingsRequest{Namespace: "demo", Keys: keys[:1]})
 	require.NoError(t, err)
-	require.Equal(t, "nodex-secret", got.GetSettings()[0].GetValue())
+	require.Equal(t, "remote-secret", got.GetSettings()[0].GetValue())
 	require.True(t, got.GetSettings()[0].GetSecret())
 	require.False(t, got.GetSettings()[0].GetMasked())
 }
 
 func TestPutKeepsSecretsRecordsAuditAndAppliesOnce(t *testing.T) {
 	ctx := context.Background()
-	db, server := fixture(t, capabilities("nodex", service.SettingsAccessRead, service.SettingsAccessWrite, service.SettingsAccessSecrets))
+	db, server := fixture(t, capabilities("demo", service.SettingsAccessRead, service.SettingsAccessWrite, service.SettingsAccessSecrets))
 	actor := &kernelsettingsv1.Actor{UserId: ptr(uint64(7)), ClientIp: "192.0.2.4", UserAgent: "ua/1"}
-	before := service.SettingsGeneration("nodex")
-	put := &kernelsettingsv1.PutSettingsRequest{Namespace: "nodex", RequestId: "gost.nodex:1", Actor: actor, Entries: []*kernelsettingsv1.SettingEntry{
-		{Key: "forward.runtime.nodex.token", Value: "********", Remark: "kept"},
-		{Key: "forward.runtime.nodex.base_url", Value: "http://nodex.example", Group: "nodex"},
-		{Key: "forward.runtime.nodex.api_token", Keep: true},
-		{Key: "forward.runtime.nodex.timeout_seconds", Value: "9"},
-		{Key: "forward.runtime.nodex.region", Value: "eu", Type: "string"},
+	before := service.SettingsGeneration("demo")
+	put := &kernelsettingsv1.PutSettingsRequest{Namespace: "demo", RequestId: "demo.remote:1", Actor: actor, Entries: []*kernelsettingsv1.SettingEntry{
+		{Key: "demo.remote.token", Value: "********", Remark: "kept"},
+		{Key: "demo.remote.base_url", Value: "http://remote.example", Group: "demo"},
+		{Key: "demo.remote.api_token", Keep: true},
+		{Key: "demo.remote.timeout_seconds", Value: "9"},
+		{Key: "demo.remote.region", Value: "eu", Type: "string"},
 	}}
 	response, err := server.PutSettings(ctx, put)
 	require.NoError(t, err)
 	require.True(t, response.GetApplied())
-	require.Equal(t, before+1, service.SettingsGeneration("nodex"), "the write bumps the namespace once")
+	require.Equal(t, before+1, service.SettingsGeneration("demo"), "the write bumps the namespace once")
 	changes := response.GetChanges()
 	require.Len(t, changes, 5)
 	require.True(t, changes[0].GetKept())
 	require.False(t, changes[2].GetKept() || changes[2].GetCreated(), "nothing to keep: the key is not created")
 	require.True(t, changes[4].GetCreated())
 
-	got, err := server.GetSettings(ctx, &kernelsettingsv1.GetSettingsRequest{Namespace: "nodex"})
+	got, err := server.GetSettings(ctx, &kernelsettingsv1.GetSettingsRequest{Namespace: "demo"})
 	require.NoError(t, err)
 	require.Equal(t, map[string]string{
-		"forward.runtime.nodex.token": "nodex-secret", "forward.runtime.nodex.base_url": "http://nodex.example",
-		"forward.runtime.nodex.timeout_seconds": "9", "forward.runtime.nodex.region": "eu",
+		"demo.remote.token": "remote-secret", "demo.remote.base_url": "http://remote.example",
+		"demo.remote.timeout_seconds": "9", "demo.remote.region": "eu",
 	}, values(got.GetSettings()))
 	var token model.SystemConfig
-	require.NoError(t, db.Where("key = ?", "forward.runtime.nodex.token").Take(&token).Error)
+	require.NoError(t, db.Where("key = ?", "demo.remote.token").Take(&token).Error)
 	require.Equal(t, "kept", token.Remark, "a kept secret still takes its metadata")
 
 	entries := audits(t, db)
@@ -225,10 +243,10 @@ func TestPutKeepsSecretsRecordsAuditAndAppliesOnce(t *testing.T) {
 	require.Equal(t, "192.0.2.4", entries[0].IP)
 	require.Equal(t, "ua/1", entries[0].UserAgent)
 	require.Empty(t, entries[0].Username)
-	require.JSONEq(t, `{"key":"forward.runtime.nodex.token","group":"forward_runtime","type":"string","sensitive":true,"has_value":true,"preserve_existing":true}`, entries[0].Content)
-	require.NotContains(t, entries[0].Content, "nodex-secret")
+	require.JSONEq(t, `{"key":"demo.remote.token","group":"demo","type":"string","sensitive":true,"has_value":true,"preserve_existing":true}`, entries[0].Content)
+	require.NotContains(t, entries[0].Content, "remote-secret")
 	require.Equal(t, "create", entries[3].Action)
-	require.JSONEq(t, `{"key":"forward.runtime.nodex.region","group":"","type":"string","sensitive":false,"has_value":true,"preserve_existing":false}`, entries[3].Content)
+	require.JSONEq(t, `{"key":"demo.remote.region","group":"","type":"string","sensitive":false,"has_value":true,"preserve_existing":false}`, entries[3].Content)
 
 	// A repeat answers the first result and changes nothing.
 	put.Entries[1].Value = "http://elsewhere"
@@ -238,30 +256,30 @@ func TestPutKeepsSecretsRecordsAuditAndAppliesOnce(t *testing.T) {
 	require.Len(t, again.GetChanges(), 5)
 	require.True(t, again.GetChanges()[4].GetCreated())
 	require.Len(t, audits(t, db), 4)
-	require.Equal(t, before+1, service.SettingsGeneration("nodex"))
-	got, err = server.GetSettings(ctx, &kernelsettingsv1.GetSettingsRequest{Namespace: "nodex", Keys: []string{"forward.runtime.nodex.base_url"}})
+	require.Equal(t, before+1, service.SettingsGeneration("demo"))
+	got, err = server.GetSettings(ctx, &kernelsettingsv1.GetSettingsRequest{Namespace: "demo", Keys: []string{"demo.remote.base_url"}})
 	require.NoError(t, err)
-	require.Equal(t, "http://nodex.example", got.GetSettings()[0].GetValue())
+	require.Equal(t, "http://remote.example", got.GetSettings()[0].GetValue())
 
 	// The id names that write: as a delete it is refused.
-	_, err = server.DeleteSettings(ctx, &kernelsettingsv1.DeleteSettingsRequest{Namespace: "nodex", RequestId: "gost.nodex:1", Keys: []string{"forward.runtime.nodex.region"}})
+	_, err = server.DeleteSettings(ctx, &kernelsettingsv1.DeleteSettingsRequest{Namespace: "demo", RequestId: "demo.remote:1", Keys: []string{"demo.remote.region"}})
 	require.Equal(t, codes.FailedPrecondition, status.Code(err))
 }
 
 func TestPutValidatesBeforeWriting(t *testing.T) {
 	ctx := context.Background()
-	db, server := fixture(t, capabilities("nodex", service.SettingsAccessWrite))
+	db, server := fixture(t, capabilities("demo", service.SettingsAccessWrite))
 	entry := func(key, value string) []*kernelsettingsv1.SettingEntry {
 		return []*kernelsettingsv1.SettingEntry{{Key: key, Value: value}}
 	}
 	for name, request := range map[string]*kernelsettingsv1.PutSettingsRequest{
-		"no request id":   {Namespace: "nodex", Entries: entry("forward.runtime.nodex.base_url", "x")},
-		"long request id": {Namespace: "nodex", RequestId: strings.Repeat("r", 129), Entries: entry("forward.runtime.nodex.base_url", "x")},
-		"no entries":      {Namespace: "nodex", RequestId: "r"},
-		"repeated key":    {Namespace: "nodex", RequestId: "r", Entries: append(entry("forward.runtime.nodex.base_url", "x"), entry("forward.runtime.nodex.base_url", "y")...)},
-		"unknown type":    {Namespace: "nodex", RequestId: "r", Entries: []*kernelsettingsv1.SettingEntry{{Key: "forward.runtime.nodex.base_url", Type: "yaml"}}},
-		"NUL value":       {Namespace: "nodex", RequestId: "r", Entries: entry("forward.runtime.nodex.base_url", "a\x00b")},
-		"bad client ip":   {Namespace: "nodex", RequestId: "r", Entries: entry("forward.runtime.nodex.base_url", "x"), Actor: &kernelsettingsv1.Actor{ClientIp: "nowhere"}},
+		"no request id":   {Namespace: "demo", Entries: entry("demo.remote.base_url", "x")},
+		"long request id": {Namespace: "demo", RequestId: strings.Repeat("r", 129), Entries: entry("demo.remote.base_url", "x")},
+		"no entries":      {Namespace: "demo", RequestId: "r"},
+		"repeated key":    {Namespace: "demo", RequestId: "r", Entries: append(entry("demo.remote.base_url", "x"), entry("demo.remote.base_url", "y")...)},
+		"unknown type":    {Namespace: "demo", RequestId: "r", Entries: []*kernelsettingsv1.SettingEntry{{Key: "demo.remote.base_url", Type: "yaml"}}},
+		"NUL value":       {Namespace: "demo", RequestId: "r", Entries: entry("demo.remote.base_url", "a\x00b")},
+		"bad client ip":   {Namespace: "demo", RequestId: "r", Entries: entry("demo.remote.base_url", "x"), Actor: &kernelsettingsv1.Actor{ClientIp: "nowhere"}},
 	} {
 		_, err := server.PutSettings(ctx, request)
 		require.Equal(t, codes.InvalidArgument, status.Code(err), name)
@@ -347,9 +365,9 @@ func TestMailWriteKeepsThePasswordSentAsThePlaceholder(t *testing.T) {
 
 func TestDeleteRemovesNamespaceKeysWithTheirAudit(t *testing.T) {
 	ctx := context.Background()
-	db, server := fixture(t, capabilities("nodex", service.SettingsAccessWrite))
+	db, server := fixture(t, capabilities("demo", service.SettingsAccessWrite))
 	response, err := server.DeleteSettings(ctx, &kernelsettingsv1.DeleteSettingsRequest{
-		Namespace: "nodex", RequestId: "d", Keys: []string{"forward.runtime.nodex.token", "forward.runtime.nodex.absent"},
+		Namespace: "demo", RequestId: "d", Keys: []string{"demo.remote.token", "demo.remote.absent"},
 		Actor: &kernelsettingsv1.Actor{UserId: ptr(uint64(1))},
 	})
 	require.NoError(t, err)
@@ -357,19 +375,19 @@ func TestDeleteRemovesNamespaceKeysWithTheirAudit(t *testing.T) {
 	require.True(t, response.GetChanges()[0].GetDeleted())
 	require.False(t, response.GetChanges()[1].GetDeleted())
 	var count int64
-	require.NoError(t, db.Model(&model.SystemConfig{}).Where("key = ?", "forward.runtime.nodex.token").Count(&count).Error)
+	require.NoError(t, db.Model(&model.SystemConfig{}).Where("key = ?", "demo.remote.token").Count(&count).Error)
 	require.Zero(t, count)
 	entries := audits(t, db)
 	require.Len(t, entries, 1)
 	require.Equal(t, "delete", entries[0].Action)
-	require.JSONEq(t, `{"key":"forward.runtime.nodex.token","group":"forward_runtime","type":"string","sensitive":true,"has_value":true,"preserve_existing":false}`, entries[0].Content)
+	require.JSONEq(t, `{"key":"demo.remote.token","group":"demo","type":"string","sensitive":true,"has_value":true,"preserve_existing":false}`, entries[0].Content)
 }
 
 func TestUserAgentIsCutToTheAuditColumn(t *testing.T) {
 	ctx := context.Background()
-	db, server := fixture(t, capabilities("nodex", service.SettingsAccessWrite))
-	_, err := server.PutSettings(ctx, &kernelsettingsv1.PutSettingsRequest{Namespace: "nodex", RequestId: "u",
-		Entries: []*kernelsettingsv1.SettingEntry{{Key: "forward.runtime.nodex.base_url", Value: "x"}},
+	db, server := fixture(t, capabilities("demo", service.SettingsAccessWrite))
+	_, err := server.PutSettings(ctx, &kernelsettingsv1.PutSettingsRequest{Namespace: "demo", RequestId: "u",
+		Entries: []*kernelsettingsv1.SettingEntry{{Key: "demo.remote.base_url", Value: "x"}},
 		Actor:   &kernelsettingsv1.Actor{UserAgent: strings.Repeat("é", 300)}})
 	require.NoError(t, err)
 	require.Equal(t, strings.Repeat("é", 255), audits(t, db)[0].UserAgent)
@@ -379,8 +397,8 @@ func TestRequestLedgerPrune(t *testing.T) {
 	db, _ := fixture(t, grants{})
 	now := time.Now()
 	require.NoError(t, db.Create(&[]model.SettingsRequest{
-		{RequestID: "old", Namespace: "nodex", Method: "put", CreatedAt: now.Add(-RequestRetention - time.Hour)},
-		{RequestID: "new", Namespace: "nodex", Method: "put", CreatedAt: now},
+		{RequestID: "old", Namespace: "demo", Method: "put", CreatedAt: now.Add(-RequestRetention - time.Hour)},
+		{RequestID: "new", Namespace: "demo", Method: "put", CreatedAt: now},
 	}).Error)
 	pruned, err := PruneRequests(db, now)
 	require.NoError(t, err)

@@ -4,16 +4,12 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"net/http"
-	"net/http/httptest"
 	"net/netip"
-	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	kernelnodeopsv1 "github.com/AnixOps/anix-control/sdk/api/kernelnodeops/v1"
-	"github.com/AnixOps/anix-control/v5/internal/gost"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/service"
 	"github.com/stretchr/testify/require"
@@ -157,24 +153,6 @@ func checkNodes(record bool, vantage kernelnodeopsv1.Vantage, ids ...uint64) *ke
 	return spec
 }
 
-func nodeStats(id uint64) *kernelnodeopsv1.OperationSpec {
-	return &kernelnodeopsv1.OperationSpec{Operation: &kernelnodeopsv1.OperationSpec_CollectNodeStats{
-		CollectNodeStats: &kernelnodeopsv1.CollectNodeStats{Node: nodeRef(forwardKind, id)},
-	}}
-}
-
-func diagnoseForward(id uint64, vantage kernelnodeopsv1.Vantage) *kernelnodeopsv1.OperationSpec {
-	return &kernelnodeopsv1.OperationSpec{Operation: &kernelnodeopsv1.OperationSpec_DiagnoseForward{
-		DiagnoseForward: &kernelnodeopsv1.DiagnoseForward{ForwardId: id, Vantage: vantage},
-	}}
-}
-
-func diagnoseTunnel(id uint64, vantage kernelnodeopsv1.Vantage) *kernelnodeopsv1.OperationSpec {
-	return &kernelnodeopsv1.OperationSpec{Operation: &kernelnodeopsv1.OperationSpec_DiagnoseTunnel{
-		DiagnoseTunnel: &kernelnodeopsv1.DiagnoseTunnel{TunnelId: id, Vantage: vantage},
-	}}
-}
-
 func forwardNodeRow(t *testing.T, db *gorm.DB, id uint) model.ForwardNode {
 	t.Helper()
 	var node model.ForwardNode
@@ -184,36 +162,10 @@ func forwardNodeRow(t *testing.T, db *gorm.DB, id uint) model.ForwardNode {
 
 // legacyOutcomes maps the legacy route's report into the contract's
 // outcomes, without the probes' timings.
-func legacyOutcomes(report []service.DiagnosisOutcome) []*kernelnodeopsv1.DiagnosisOutcome {
-	outcomes := diagnosisOutcome(context.Background(), report, nil, nil).result.GetDiagnosis().GetOutcomes()
-	for _, outcome := range outcomes {
-		outcome.AverageTimeMs = 0
-	}
-	return outcomes
-}
-
-func withoutTimings(outcomes []*kernelnodeopsv1.DiagnosisOutcome) []*kernelnodeopsv1.DiagnosisOutcome {
-	copied := make([]*kernelnodeopsv1.DiagnosisOutcome, 0, len(outcomes))
-	for _, outcome := range outcomes {
-		clone := proto.Clone(outcome).(*kernelnodeopsv1.DiagnosisOutcome)
-		clone.AverageTimeMs = 0
-		copied = append(copied, clone)
-	}
-	return copied
-}
-
-func requireProtoEqual[M proto.Message](t *testing.T, expected, actual []M) {
-	t.Helper()
-	require.Len(t, actual, len(expected))
-	for i := range expected {
-		require.True(t, proto.Equal(expected[i], actual[i]), "item %d:\nexpected %v\nactual   %v", i, expected[i], actual[i])
-	}
-}
-
 // The kernel serves the four diagnosis kinds, and GetCapabilities lists
 // them.
 func TestTheKernelServesTheDiagnoseKinds(t *testing.T) {
-	diagnosis := []string{KindDiagnoseEndpoints, KindDiagnoseForward, KindDiagnoseNodeStats, KindDiagnoseTunnel}
+	diagnosis := []string{KindDiagnoseEndpoints}
 	require.Subset(t, DefaultExecutors.Kinds(), diagnosis)
 	for _, kindName := range diagnosis {
 		require.Equal(t, kernelnodeopsv1.OperationFamily_OPERATION_FAMILY_DIAGNOSE, FamilyOfKind(kindName))
@@ -354,275 +306,15 @@ func TestCheckEndpointsStopOnCancellation(t *testing.T) {
 }
 
 // metricsServer serves a gost node's Prometheus metrics.
-func metricsServer(t *testing.T, handler http.HandlerFunc) int {
-	t.Helper()
-	server := httptest.NewServer(handler)
-	t.Cleanup(server.Close)
-	return server.Listener.Addr().(*net.TCPAddr).Port
-}
-
-const gostMetrics = "# HELP gost_service_transfer_input_bytes_total in\n" +
-	`gost_service_transfer_input_bytes_total{client="198.51.100.1",service="svc-b"} 100` + "\n" +
-	`gost_service_transfer_input_bytes_total{client="198.51.100.2",service="svc-b"} 23` + "\n" +
-	`gost_service_transfer_output_bytes_total{client="198.51.100.1",service="svc-b"} 7` + "\n" +
-	`gost_service_transfer_input_bytes_total{client="198.51.100.1",service="svc-a"} 5` + "\n" +
-	`gost_service_transfer_output_bytes_total{client="198.51.100.1",service="svc-a"} 6` + "\n"
-
-// CollectNodeStats reads a gost node's metrics endpoint, or an Ansible
-// machine's panel-side counters, as the statistics sync does.
-func TestCollectNodeStats(t *testing.T) {
-	forEachDatabase(t, func(t *testing.T, db *gorm.DB) {
-		port := metricsServer(t, func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path != "/metrics" || r.Header.Get("Authorization") != "" {
-				http.Error(w, "unexpected request", http.StatusBadRequest)
-				return
-			}
-			_, _ = w.Write([]byte(gostMetrics))
-		})
-		require.NoError(t, db.Model(&model.ForwardNode{}).Where("id = ?", 10).Updates(map[string]any{
-			"host": "127.0.0.1", "api_port": 18080, "api_token": "relay-node-token", "metrics_port": port, "type": model.ForwardNodeTypeRelay,
-		}).Error)
-		require.NoError(t, db.Model(&model.ForwardNode{}).Where("id = ?", 11).Updates(map[string]any{"api_port": 18080, "api_token": "exit-node-token", "type": model.ForwardNodeTypeExit}).Error)
-		require.NoError(t, db.Model(&model.ForwardNode{}).Where("id = ?", 12).Updates(map[string]any{
-			"type": model.ForwardNodeTypeRelay, "tags": `["ansible-machine"]`, "current_conn": 3, "total_upload": 1024, "total_download": 2048,
-		}).Error)
-		network := newFakeNetwork(nil)
-		h := diagnosisHarness(t, db, network, nil)
-		h.start(t)
-		client := h.client(forwardHost, allow(service.CapabilityNodeOpsDiagnose))
-
-		operation := submitWait(t, client, "diagnose.node_stats:10", nodeStats(10))
-		require.Equal(t, succeeded, operation.GetState(), "%v", operation.GetError())
-		require.Equal(t, kernelnodeopsv1.Channel_CHANNEL_CONTROL_DIAL, operation.GetChannel())
-		stats := operation.GetResult().GetNodeStats()
-		require.EqualValues(t, 10, stats.GetNode().GetId())
-		require.EqualValues(t, 128, stats.GetUploadBytes())
-		require.EqualValues(t, 13, stats.GetDownloadBytes())
-		require.NotZero(t, stats.GetCollectedAtUnixMs())
-		requireProtoEqual(t, []*kernelnodeopsv1.ServiceTraffic{
-			{Service: "svc-a", InputBytes: 5, OutputBytes: 6}, {Service: "svc-b", InputBytes: 123, OutputBytes: 7},
-		}, stats.GetServices())
-		node := forwardNodeRow(t, db, 10)
-		legacy, err := service.CollectForwardNodeTraffic(context.Background(), gost.NewManager(db), &node, false)
-		require.NoError(t, err)
-		require.Len(t, legacy.Services, len(stats.GetServices()))
-		for _, item := range stats.GetServices() {
-			require.EqualValues(t, legacy.Services[item.GetService()].InBytes, item.GetInputBytes())
-			require.EqualValues(t, legacy.Services[item.GetService()].OutBytes, item.GetOutputBytes())
-		}
-
-		operation = submitWait(t, client, "diagnose.node_stats:12", nodeStats(12))
-		require.Equal(t, succeeded, operation.GetState(), "%v", operation.GetError())
-		require.Equal(t, kernelnodeopsv1.Channel_CHANNEL_LOCAL_ANSIBLE, operation.GetChannel())
-		require.True(t, proto.Equal(&kernelnodeopsv1.NodeStatsResult{
-			Node: nodeRef(forwardKind, 12), UploadBytes: 1024, DownloadBytes: 2048, CurrentConnections: 3,
-			CollectedAtUnixMs: operation.GetResult().GetNodeStats().GetCollectedAtUnixMs(),
-		}, operation.GetResult().GetNodeStats()), "%v", operation.GetResult().GetNodeStats())
-
-		operation = submitWait(t, client, "diagnose.node_stats:11", nodeStats(11))
-		require.Equal(t, failed, operation.GetState())
-		require.Equal(t, kernelnodeopsv1.ErrorCode_ERROR_CODE_VALIDATION_FAILED, operation.GetError().GetCode())
-		require.Equal(t, "metrics endpoint not configured for node 11", operation.GetError().GetMessage())
-		require.False(t, operation.GetError().GetRetryable())
-		require.Nil(t, operation.GetResult())
-		require.Empty(t, network.dials(), "statistics dial no service port")
-	})
-}
-
-// A metrics endpoint that fails is BACKEND_FAILED, with what it answered
-// scrubbed; one that does not answer in time ends TIMED_OUT.
-func TestCollectNodeStatsFailures(t *testing.T) {
-	forEachDatabase(t, func(t *testing.T, db *gorm.DB) {
-		failing := metricsServer(t, func(w http.ResponseWriter, _ *http.Request) {
-			http.Error(w, "denied for relay-node-token; api_token=relay-node-token", http.StatusForbidden)
-		})
-		stuck := make(chan struct{})
-		t.Cleanup(func() { close(stuck) })
-		hanging := metricsServer(t, func(w http.ResponseWriter, r *http.Request) {
-			select {
-			case <-r.Context().Done():
-			case <-stuck:
-			}
-		})
-		require.NoError(t, db.Model(&model.ForwardNode{}).Where("id = ?", 10).Updates(map[string]any{
-			"host": "127.0.0.1", "api_port": 18080, "api_token": "relay-node-token", "metrics_port": failing, "type": model.ForwardNodeTypeExit,
-		}).Error)
-		require.NoError(t, db.Model(&model.ForwardNode{}).Where("id = ?", 11).Updates(map[string]any{
-			"host": "127.0.0.1", "api_port": 18080, "api_token": "exit-node-token", "metrics_port": hanging, "type": model.ForwardNodeTypeExit,
-		}).Error)
-		h := diagnosisHarness(t, db, newFakeNetwork(nil), nil, func(e *Engine) { e.Timeout = 500 * time.Millisecond })
-		h.start(t)
-		client := h.client(forwardHost, allow(service.CapabilityNodeOpsDiagnose))
-
-		operation := submitWait(t, client, "diagnose.node_stats:failing", nodeStats(10))
-		require.Equal(t, failed, operation.GetState())
-		require.Equal(t, kernelnodeopsv1.ErrorCode_ERROR_CODE_BACKEND_FAILED, operation.GetError().GetCode())
-		require.True(t, operation.GetError().GetRetryable())
-		require.Equal(t, "metrics API error: 403 Forbidden - denied for ********; api_token=********\n", operation.GetError().GetMessage())
-
-		began := time.Now()
-		operation = submitWait(t, client, "diagnose.node_stats:hanging", nodeStats(11))
-		require.Equal(t, timedOut, operation.GetState())
-		require.Less(t, time.Since(began), 5*time.Second)
-	})
-}
-
-// prepareForward points forward 40 at targets and makes tunnel 30 a two-hop
-// tunnel from node 10 to node 11.
-func prepareForward(t *testing.T, db *gorm.DB, targets ...string) {
-	t.Helper()
-	require.NoError(t, db.Model(&model.Forward{}).Where("id = ?", 40).Update("remote_addr", strings.Join(targets, ",")).Error)
-	require.NoError(t, db.Model(&model.ForwardTunnel{}).Where("id = ?", 30).Update("type", 2).Error)
-}
-
-// DiagnoseForward dials a forward's targets as the legacy route does for a
-// user: private and loopback targets, and names that resolve to them, are
-// refused without a dial (the SSRF guard of #84). The kernel cannot tell an
-// administrator's diagnosis from a user's before it verifies request
-// bindings, so it applies the user's rule to every forward.
-func TestDiagnoseForwardDialsPublicTargetsOnly(t *testing.T) {
-	forEachDatabase(t, func(t *testing.T, db *gorm.DB) {
-		prepareForward(t, db, "203.0.113.1:80", "203.0.113.2:80", " ", "127.0.0.1:22", "10.0.0.5:80", "localhost:22",
-			"[::1]:22", "169.254.169.254:80", "100.64.0.1:80", "internal.example.test:80", "public.example.test:443", "no-port")
-		network := newFakeNetwork(map[string]string{"203.0.113.1:80": "ok", "203.0.113.7:443": "ok"})
-		network.lookups["internal.example.test"] = []netip.Addr{netip.MustParseAddr("10.0.0.9")}
-		network.lookups["public.example.test"] = []netip.Addr{netip.MustParseAddr("203.0.113.7")}
-		h := diagnosisHarness(t, db, network, nil)
-		client := h.client(forwardHost, allow(service.CapabilityNodeOpsDiagnose))
-		// A forward deleted since the submission is TARGET_GONE. It is
-		// submitted and deleted before the dispatcher runs, so the
-		// executor cannot reach it first.
-		submitted := submit(t, client, "diagnose.forward:41", diagnoseForward(41, kernelnodeopsv1.Vantage_VANTAGE_UNSPECIFIED))
-		require.NoError(t, db.Delete(&model.Forward{}, 41).Error)
-		h.start(t)
-
-		operation := submitWait(t, client, "diagnose.forward:40", diagnoseForward(40, kernelnodeopsv1.Vantage_VANTAGE_UNSPECIFIED))
-		require.Equal(t, succeeded, operation.GetState(), "%v", operation.GetError())
-		require.Equal(t, kernelnodeopsv1.Channel_CHANNEL_CONTROL_DIAL, operation.GetChannel())
-		diagnosis := operation.GetResult().GetDiagnosis()
-		refused := "不能诊断内网或本机地址"
-		outcome := func(success bool, ip string, port int32, message string) *kernelnodeopsv1.DiagnosisOutcome {
-			return &kernelnodeopsv1.DiagnosisOutcome{Success: success, Description: "转发->目标", NodeName: "tunnel", NodeId: "30", TargetIp: ip, TargetPort: port, Message: message}
-		}
-		requireProtoEqual(t, []*kernelnodeopsv1.DiagnosisOutcome{
-			outcome(true, "203.0.113.1", 80, ""),
-			outcome(false, "203.0.113.2", 80, "dial tcp 203.0.113.2:80: connect: connection refused"),
-			outcome(false, "127.0.0.1", 22, refused),
-			outcome(false, "10.0.0.5", 80, refused),
-			outcome(false, "localhost", 22, refused),
-			outcome(false, "::1", 22, refused),
-			outcome(false, "169.254.169.254", 80, refused),
-			outcome(false, "100.64.0.1", 80, refused),
-			outcome(false, "internal.example.test", 80, refused),
-			outcome(true, "public.example.test", 443, ""),
-			outcome(false, "no-port", 0, "无法解析目标地址"),
-		}, withoutTimings(diagnosis.GetOutcomes()))
-		require.ElementsMatch(t, []string{"203.0.113.1:80", "203.0.113.2:80", "203.0.113.7:443"}, network.dials(),
-			"only public addresses are dialled, and a name is dialled at the address checked")
-		require.True(t, proto.Equal(&kernelnodeopsv1.VantageReport{
-			Selected: kernelnodeopsv1.Vantage_VANTAGE_CONTROL, Used: kernelnodeopsv1.Vantage_VANTAGE_CONTROL,
-		}, diagnosis.GetVantage()))
-
-		// The service computes the same for the forward's owner (public targets only).
-		legacy, err := service.NewPanelForwardService(db).DiagnoseForwardTargets(context.Background(), network.probes(), 40, true)
-		require.NoError(t, err)
-		requireProtoEqual(t, legacyOutcomes(legacy.Results), withoutTimings(diagnosis.GetOutcomes()))
-
-		// The forward deleted since its submission is TARGET_GONE.
-		gone := eventually(t, get(t, client, submitted.GetOperation().GetOperationId()), inState(failed))
-		require.Equal(t, kernelnodeopsv1.ErrorCode_ERROR_CODE_TARGET_GONE, gone.GetError().GetCode())
-		require.Equal(t, "转发不存在", gone.GetError().GetMessage())
-	})
-}
-
-// DiagnoseTunnel dials a tunnel's entry and exit nodes, as the legacy route
-// does; a cancelled diagnosis keeps the probes that completed.
-func TestDiagnoseTunnel(t *testing.T) {
-	forEachDatabase(t, func(t *testing.T, db *gorm.DB) {
-		prepareForward(t, db, "203.0.113.1:80")
-		network := newFakeNetwork(map[string]string{"198.51.100.10:22": "ok"})
-		h := diagnosisHarness(t, db, network, nil)
-		client := h.client(forwardHost, allow(service.CapabilityNodeOpsDiagnose))
-		// A tunnel deleted since the submission is TARGET_GONE. It is
-		// submitted and deleted before the dispatcher runs, so the
-		// executor cannot reach it first.
-		submitted := submit(t, client, "diagnose.tunnel:31", diagnoseTunnel(31, kernelnodeopsv1.Vantage_VANTAGE_UNSPECIFIED))
-		require.NoError(t, db.Delete(&model.ForwardTunnel{}, 31).Error)
-		h.start(t)
-
-		operation := submitWait(t, client, "diagnose.tunnel:30", diagnoseTunnel(30, kernelnodeopsv1.Vantage_VANTAGE_UNSPECIFIED))
-		require.Equal(t, succeeded, operation.GetState(), "%v", operation.GetError())
-		requireProtoEqual(t, []*kernelnodeopsv1.DiagnosisOutcome{
-			{Success: true, Description: "管理端->入口节点", NodeName: "relay", NodeId: "10", TargetIp: "198.51.100.10", TargetPort: 22},
-			{Description: "管理端->出口节点", NodeName: "exit", NodeId: "11", TargetIp: "198.51.100.11", TargetPort: 22, Message: "dial tcp 198.51.100.11:22: connect: connection refused"},
-		}, withoutTimings(operation.GetResult().GetDiagnosis().GetOutcomes()))
-		legacy, err := service.NewPanelForwardService(db).DiagnoseTunnelContext(context.Background(), network.probes(), 30)
-		require.NoError(t, err)
-		requireProtoEqual(t, legacyOutcomes(legacy.Results), withoutTimings(operation.GetResult().GetDiagnosis().GetOutcomes()))
-
-		// Cancelled while the entry node hangs: the exit node's probe
-		// completed and is kept.
-		network.mu.Lock()
-		network.behave["198.51.100.10:22"] = "hang"
-		network.mu.Unlock()
-		before := len(network.dials())
-		response, err := client.SubmitOperation(context.Background(), &kernelnodeopsv1.SubmitOperationRequest{
-			RequestId: "diagnose.tunnel:30:cancel", Operation: diagnoseTunnel(30, kernelnodeopsv1.Vantage_VANTAGE_UNSPECIFIED),
-			Wait: kernelnodeopsv1.WaitMode_WAIT_MODE_ACCEPTED,
-		})
-		require.NoError(t, err)
-		// Both nodes were dialled, and only the hanging entry node's probe
-		// is still in flight.
-		require.Eventually(t, func() bool {
-			inFlight, _ := network.busy()
-			return len(network.dials()) == before+2 && inFlight == 1
-		}, 5*time.Second, 5*time.Millisecond)
-		stopped, err := client.CancelOperation(context.Background(), &kernelnodeopsv1.CancelOperationRequest{OperationId: response.GetOperation().GetOperationId()})
-		require.NoError(t, err)
-		require.Equal(t, cancelled, stopped.GetOperation().GetState())
-		requireProtoEqual(t, []*kernelnodeopsv1.DiagnosisOutcome{
-			{Description: "管理端->出口节点", NodeName: "exit", NodeId: "11", TargetIp: "198.51.100.11", TargetPort: 22, Message: "dial tcp 198.51.100.11:22: connect: connection refused"},
-		}, withoutTimings(stopped.GetOperation().GetResult().GetDiagnosis().GetOutcomes()))
-
-		// The tunnel deleted since its submission is TARGET_GONE.
-		gone := eventually(t, get(t, client, submitted.GetOperation().GetOperationId()), inState(failed))
-		require.Equal(t, kernelnodeopsv1.ErrorCode_ERROR_CODE_TARGET_GONE, gone.GetError().GetCode())
-		require.Equal(t, "隧道不存在", gone.GetError().GetMessage())
-	})
-}
-
-// The vantage (D10): Control by default; the node when the agent of every
-// node the diagnosis concerns advertises diag.v1 and Control was not asked
-// for. The kernel does not run diagnoses on agents yet, so it dials from
-// Control either way and says so.
 func TestDiagnosisVantage(t *testing.T) {
 	forEachDatabase(t, func(t *testing.T, db *gorm.DB) {
-		prepareForward(t, db, "203.0.113.1:80")
-		network := newFakeNetwork(map[string]string{"203.0.113.1:80": "ok", "198.51.100.10:22": "ok", "198.51.100.11:22": "ok"})
+		network := newFakeNetwork(map[string]string{"198.51.100.10:22": "ok", "198.51.100.11:22": "ok"})
 		h := diagnosisHarness(t, db, network, agents{10: true, 11: true})
 		h.start(t)
 		client := h.client(forwardHost, allow(service.CapabilityNodeOpsDiagnose))
-		control, node, unspecified := kernelnodeopsv1.Vantage_VANTAGE_CONTROL, kernelnodeopsv1.Vantage_VANTAGE_NODE, kernelnodeopsv1.Vantage_VANTAGE_UNSPECIFIED
+		control, node := kernelnodeopsv1.Vantage_VANTAGE_CONTROL, kernelnodeopsv1.Vantage_VANTAGE_NODE
 		fallback := "the node's agent advertises diag.v1, but this kernel does not run diagnoses on agents yet: it dialled from Control"
 		missing := "the node's agent does not advertise diag.v1: the kernel dialled from Control"
-
-		for i, c := range []struct {
-			spec *kernelnodeopsv1.OperationSpec
-			want *kernelnodeopsv1.VantageReport
-		}{
-			{diagnoseForward(40, unspecified), &kernelnodeopsv1.VantageReport{Requested: unspecified, Selected: node, Used: control, Note: fallback}},
-			{diagnoseForward(40, node), &kernelnodeopsv1.VantageReport{Requested: node, Selected: node, Used: control, Note: fallback}},
-			{diagnoseForward(40, control), &kernelnodeopsv1.VantageReport{Requested: control, Selected: control, Used: control}},
-			{diagnoseTunnel(30, node), &kernelnodeopsv1.VantageReport{Requested: node, Selected: node, Used: control, Note: fallback}},
-			// Tunnel 31's node 12 has no agent advertising diag.v1.
-			{diagnoseTunnel(31, node), &kernelnodeopsv1.VantageReport{Requested: node, Selected: control, Used: control, Note: missing}},
-			{diagnoseTunnel(31, unspecified), &kernelnodeopsv1.VantageReport{Requested: unspecified, Selected: control, Used: control}},
-		} {
-			operation := submitWait(t, client, fmt.Sprintf("diagnose:vantage:%d", i), c.spec)
-			require.Equal(t, succeeded, operation.GetState(), "%v", operation.GetError())
-			require.Equal(t, kernelnodeopsv1.Channel_CHANNEL_CONTROL_DIAL, operation.GetChannel())
-			require.True(t, proto.Equal(c.want, operation.GetResult().GetDiagnosis().GetVantage()), "case %d: %v", i, operation.GetResult().GetDiagnosis().GetVantage())
-		}
 
 		operation := submitWait(t, client, "diagnose.endpoints:vantage", checkNodes(false, node, 10, 12))
 		require.Equal(t, succeeded, operation.GetState())
@@ -630,45 +322,6 @@ func TestDiagnosisVantage(t *testing.T) {
 		require.True(t, proto.Equal(&kernelnodeopsv1.VantageReport{Requested: node, Selected: node, Used: control, Note: fallback}, checks[0].GetVantage()))
 		require.True(t, proto.Equal(&kernelnodeopsv1.VantageReport{Requested: node, Selected: control, Used: control, Note: missing}, checks[1].GetVantage()))
 		require.True(t, checks[0].GetReachable(), "the node vantage still dials from Control")
-	})
-}
-
-// A diagnosis runs a bounded number of probes at once.
-func TestDiagnosisBoundsItsProbes(t *testing.T) {
-	forEachDatabase(t, func(t *testing.T, db *gorm.DB) {
-		behave := map[string]string{}
-		var targets []string
-		for i := 1; i <= 24; i++ {
-			target := fmt.Sprintf("203.0.113.%d:443", i)
-			targets = append(targets, target)
-			behave[target] = "slow"
-		}
-		prepareForward(t, db, targets...)
-		for _, limit := range []int{3, 0} {
-			t.Run(fmt.Sprintf("limit %d", limit), func(t *testing.T) {
-				network := newFakeNetwork(behave)
-				probes := network.probes()
-				probes.Concurrency = limit
-				h := newHarness(t, db)
-				require.NoError(t, (&Diagnosis{Probes: probes}).Register(h.registry))
-				require.NoError(t, db.AutoMigrate(&model.SystemConfig{}))
-				h.start(t)
-				client := h.client(forwardHost, allow(service.CapabilityNodeOpsDiagnose))
-				operation := submitWait(t, client, fmt.Sprintf("diagnose.forward:bounded:%d", limit), diagnoseForward(40, kernelnodeopsv1.Vantage_VANTAGE_UNSPECIFIED))
-				require.Equal(t, succeeded, operation.GetState(), "%v", operation.GetError())
-				require.Len(t, operation.GetResult().GetDiagnosis().GetOutcomes(), 24)
-				for _, outcome := range operation.GetResult().GetDiagnosis().GetOutcomes() {
-					require.True(t, outcome.GetSuccess(), "%v", outcome)
-				}
-				want := limit
-				if want == 0 {
-					want = service.DefaultDiagnosisConcurrency
-				}
-				_, most := network.busy()
-				require.LessOrEqual(t, most, want)
-				require.Greater(t, most, 1, "the probes run concurrently")
-			})
-		}
 	})
 }
 
@@ -703,26 +356,16 @@ func stringsOf(message protoreflect.Message) []string {
 }
 
 // No diagnosis result, error or ledger row carries a node's token or a
-// value at a secret key, even when what a node or its metrics endpoint
-// answered echoes one: the walk reads every string of every operation.
+// value at a secret key, even when what a node answered echoes one: the walk reads every string of every operation.
 func TestDiagnosisResultsCarryNoSecrets(t *testing.T) {
 	forEachDatabase(t, func(t *testing.T, db *gorm.DB) {
-		port := metricsServer(t, func(w http.ResponseWriter, _ *http.Request) {
-			http.Error(w, "relay-SECRET-token-10 rejected; password=hunter22-SECRET", http.StatusUnauthorized)
-		})
-		require.NoError(t, db.Model(&model.ForwardNode{}).Where("id = ?", 10).Updates(map[string]any{
-			"host": "127.0.0.1", "api_port": 18080, "api_token": "relay-SECRET-token-10", "metrics_port": port, "type": model.ForwardNodeTypeExit,
-		}).Error)
 		require.NoError(t, db.Model(&model.ForwardNode{}).Where("id = ?", 11).Updates(map[string]any{"api_port": 18080, "api_token": "exit-SECRET-token-11"}).Error)
-		prepareForward(t, db, "203.0.113.1:80", "203.0.113.9:80")
+		require.NoError(t, db.Model(&model.ForwardNode{}).Where("id = ?", 12).Updates(map[string]any{"api_port": 18080, "api_token": "relay-SECRET-token-12"}).Error)
 		// What a node answers echoes the tokens of the nodes the operation
 		// concerns, and values at secret keys.
 		const leaks = "; api_key=key-SECRET-9 {\"private_key\":\"pk-SECRET\"}"
 		network := newFakeNetwork(map[string]string{
-			"198.51.100.11:22": "refused by exit-SECRET-token-11" + leaks,
-			"127.0.0.1:22":     "refused by relay-SECRET-token-10" + leaks,
-			"203.0.113.1:80":   "refused by exit-SECRET-token-11 and relay-SECRET-token-10" + leaks,
-			"203.0.113.9:80":   "ok",
+			"198.51.100.11:22": "refused by exit-SECRET-token-11 and relay-SECRET-token-12" + leaks,
 		})
 		h := diagnosisHarness(t, db, network, nil)
 		h.start(t)
@@ -731,20 +374,15 @@ func TestDiagnosisResultsCarryNoSecrets(t *testing.T) {
 		var operations []*kernelnodeopsv1.Operation
 		for i, spec := range []*kernelnodeopsv1.OperationSpec{
 			checkNodes(true, kernelnodeopsv1.Vantage_VANTAGE_UNSPECIFIED, 11, 12),
-			nodeStats(10),
-			diagnoseForward(40, kernelnodeopsv1.Vantage_VANTAGE_NODE),
-			diagnoseTunnel(30, kernelnodeopsv1.Vantage_VANTAGE_UNSPECIFIED),
 		} {
 			operation := submitWait(t, client, fmt.Sprintf("diagnose:secrets:%d", i), spec)
 			name, _ := stateName(operation.GetState())
 			require.True(t, Terminal(name), "%v", operation)
 			operations = append(operations, operation)
 		}
-		require.NotEmpty(t, operations[0].GetResult().GetEndpointCheck().GetChecks()[0].GetError())
-		require.Contains(t, operations[1].GetError().GetMessage(), "********")
-		require.Contains(t, operations[2].GetResult().GetDiagnosis().GetOutcomes()[0].GetMessage(), "********")
+		require.Contains(t, operations[0].GetResult().GetEndpointCheck().GetChecks()[0].GetError(), "********")
 
-		secrets := []string{"relay-SECRET-token-10", "exit-SECRET-token-11", "hunter22-SECRET", "key-SECRET-9", "pk-SECRET"}
+		secrets := []string{"relay-SECRET-token-12", "exit-SECRET-token-11", "key-SECRET-9", "pk-SECRET"}
 		for _, operation := range operations {
 			for _, text := range stringsOf(operation.ProtoReflect()) {
 				for _, secret := range secrets {

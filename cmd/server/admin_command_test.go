@@ -221,9 +221,6 @@ func TestStartupNoticeWithoutAnAdministrator(t *testing.T) {
 // environment says.
 func TestBootstrapCreatesNoAdministrator(t *testing.T) {
 	bootstrapDatabases(t, func(t *testing.T, cfg *config.Config) {
-		savedDir := forwardLegacyDataDir
-		forwardLegacyDataDir = t.TempDir()
-		t.Cleanup(func() { forwardLegacyDataDir = savedDir })
 		require.NoError(t, bootstrapDatabase(context.Background(), cfg))
 		var users int64
 		require.NoError(t, database.Get().Model(&model.User{}).Count(&users).Error)

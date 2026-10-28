@@ -44,7 +44,7 @@ const AgentEnrollmentActor = "kernelnodeops"
 
 // Credentials executes the credentials family (node-ops-service.md section
 // 3.3, NO-5): IssueCredential, RevokeCredential, IssueRegistrationKey,
-// RevokeRegistrationKey and IssueCleanAgent. Each runs the function of
+// and RevokeRegistrationKey. Each runs the function of
 // internal/service the legacy route runs, in one transaction with every
 // nodesecrets.Sync and every agent certificate revocation, so native and
 // legacy write identical rows.
@@ -73,7 +73,6 @@ func (c *Credentials) Register(registry *Registry) error {
 		{KindCredentialRevoke, ExecutorFunc(c.revoke)},
 		{KindRegKeyIssue, prepared{prepare: requireBinding, execute: c.issueRegistrationKey}},
 		{KindRegKeyRevoke, ExecutorFunc(c.revokeRegistrationKey)},
-		{KindCleanAgentIssue, prepared{prepare: requireBinding, execute: c.issueCleanAgent}},
 	} {
 		if err := registry.Register(served.kind, served.executor); err != nil {
 			return err
@@ -277,7 +276,7 @@ func (c *Credentials) issue(ctx context.Context, run *Run) Outcome {
 	case kernelnodeopsv1.NodeKind_NODE_KIND_FORWARD:
 		return c.issueForward(ctx, run, id, typed, result)
 	}
-	return Failed(kernelnodeopsv1.ErrorCode_ERROR_CODE_VALIDATION_FAILED, "a clean agent's token is issued with IssueCleanAgent", false)
+	return Failed(kernelnodeopsv1.ErrorCode_ERROR_CODE_VALIDATION_FAILED, "the clean agent was removed with the v4.1 forwarding runtime", false)
 }
 
 func (c *Credentials) issueProxy(ctx context.Context, run *Run, id uint, typed *typedCredential, result *kernelnodeopsv1.CredentialResult) Outcome {
@@ -431,8 +430,8 @@ func (c *Credentials) issueEnrollment(ctx context.Context, run *Run, result *ker
 	return Succeeded(&kernelnodeopsv1.OperationResult{Result: &kernelnodeopsv1.OperationResult_Credential{Credential: result}})
 }
 
-// revoke executes RevokeCredential: a clean agent's token (the legacy
-// revocation), or a node's agent enrollments and certificates. A proxy
+// revoke executes RevokeCredential: a node's agent enrollments and
+// certificates. A proxy
 // node's key and secret and a forward node's token are never revoked in
 // place: no kernel route does, and a node without them cannot be told from
 // one never issued. They are rotated (IssueCredential with replace) or
@@ -440,7 +439,6 @@ func (c *Credentials) issueEnrollment(ctx context.Context, run *Run, result *ker
 func (c *Credentials) revoke(ctx context.Context, run *Run) Outcome {
 	op := run.Operation.GetRevokeCredential()
 	subject := op.GetSubject()
-	id := nodeID(subject.GetId())
 	result := &kernelnodeopsv1.CredentialResult{Subject: nodeRef(subject.GetKind(), subject.GetId()), Kind: op.GetKind()}
 	if outcome, ok := begin(ctx, run, kernelnodeopsv1.Channel_CHANNEL_KERNEL); !ok {
 		return outcome
@@ -448,15 +446,7 @@ func (c *Credentials) revoke(ctx context.Context, run *Run) Outcome {
 	outcome, ok := transact(ctx, run, "revoking the credential", func(tx *gorm.DB) error {
 		switch {
 		case subject.GetKind() == kernelnodeopsv1.NodeKind_NODE_KIND_CLEAN_AGENT:
-			err := service.RevokeCleanAgentTx(tx, id)
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return fail(kernelnodeopsv1.ErrorCode_ERROR_CODE_TARGET_GONE, fmt.Sprintf("clean agent %d not found", id), false)
-			}
-			if err != nil {
-				return err
-			}
-			result.CredentialId, result.Version = currentCredential(tx, nodesecrets.SubjectCleanAgent, id, nodesecrets.KindCleanAgentToken)
-			return nil
+			return fail(kernelnodeopsv1.ErrorCode_ERROR_CODE_VALIDATION_FAILED, "the clean agent was removed with the v4.1 forwarding runtime", false)
 		case op.GetKind() == kernelnodeopsv1.CredentialKind_CREDENTIAL_KIND_AGENT_ENROLLMENT:
 			return agentpki.RevokeNode(ctx, tx, agentNode(subject), agentpki.RevokeReasonCredentialsRevoked)
 		}
@@ -528,40 +518,4 @@ func (c *Credentials) revokeRegistrationKey(ctx context.Context, run *Run) Outco
 		return outcome
 	}
 	return Succeeded(&kernelnodeopsv1.OperationResult{Result: &kernelnodeopsv1.OperationResult_RegistrationKey{RegistrationKey: result}})
-}
-
-// issueCleanAgent executes IssueCleanAgent, as the clean agent creation
-// does, and reveals the agent's token. The result's subject names the new
-// agent.
-func (c *Credentials) issueCleanAgent(ctx context.Context, run *Run) Outcome {
-	op := run.Operation.GetIssueCleanAgent()
-	if outcome, ok := begin(ctx, run, kernelnodeopsv1.Channel_CHANNEL_KERNEL); !ok {
-		return outcome
-	}
-	result := &kernelnodeopsv1.CredentialResult{Kind: kernelnodeopsv1.CredentialKind_CREDENTIAL_KIND_CLEAN_AGENT_TOKEN}
-	outcome, ok := transact(ctx, run, "issuing the clean agent", func(tx *gorm.DB) error {
-		forwardNodeID := nodeID(op.GetForwardNodeId())
-		created, err := service.CreateCleanAgentTokenTx(tx, service.ForwardCleanAgentCreateInput{Name: op.GetName(), NodeID: &forwardNodeID})
-		switch {
-		case errors.Is(err, service.ErrForwardCleanAgentNodeNotFound):
-			return fail(kernelnodeopsv1.ErrorCode_ERROR_CODE_TARGET_GONE, fmt.Sprintf("forward node %d not found", forwardNodeID), false)
-		case errors.Is(err, service.ErrForwardCleanAgentNodeRequired):
-			return fail(kernelnodeopsv1.ErrorCode_ERROR_CODE_VALIDATION_FAILED, err.Error(), false)
-		case err != nil:
-			return err
-		}
-		run.UseSecret(created.Token)
-		handle, err := revealHandle(run, RevealToken, created.Token)
-		if err != nil {
-			return err
-		}
-		result.Subject = nodeRef(kernelnodeopsv1.NodeKind_NODE_KIND_CLEAN_AGENT, uint64(created.Agent.ID))
-		result.CredentialId, result.Version = currentCredential(tx, nodesecrets.SubjectCleanAgent, created.Agent.ID, nodesecrets.KindCleanAgentToken)
-		result.Reveal = []*kernelnodeopsv1.SecretHandle{handle}
-		return nil
-	})
-	if !ok {
-		return outcome
-	}
-	return Succeeded(&kernelnodeopsv1.OperationResult{Result: &kernelnodeopsv1.OperationResult_Credential{Credential: result}})
 }

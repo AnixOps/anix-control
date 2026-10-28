@@ -59,31 +59,31 @@ Dropped:
   cache.redis_password: nothing reads it; the cache is in memory
   cache.redis_port: nothing reads it; the cache is in memory
   env: Control always runs as production (its only effect was requiring jwt.secret, which is now derived); start a development instance with -debug
-  forward_runtime.backend: still read until M5 (N5), not written: selects the flux forward runtime's backend until the runtime is removed
-  forward_runtime.clean_agent.action_timeout_seconds: still read until M5 (N5), not written: the flux forward runtime, removed with it
-  forward_runtime.clean_agent.heartbeat_interval_seconds: still read until M5 (N5), not written: the flux forward runtime, removed with it
-  forward_runtime.clean_agent.legacy_bridge_enabled: still read until M5 (N5), not written: the flux forward runtime, removed with it
-  forward_runtime.clean_agent.public_url: nothing reads it
-  forward_runtime.clean_agent.token_expire_seconds: nothing reads it
-  forward_runtime.gost_stats.error_log_interval: still read until M5 (N5), not written: the flux forward runtime, removed with it
-  forward_runtime.gost_stats.idle_poll_interval: still read until M5 (N5), not written: the flux forward runtime, removed with it
-  forward_runtime.gost_stats.poll_interval: still read until M5 (N5), not written: the flux forward runtime, removed with it
-  forward_runtime.iptables_ansible: never a key (templates up to 4.2 carried this section); the iptables backend runs with forward_runtime.nftables_ansible
-  forward_runtime.jobs.batch_size: still read until M5 (N5), not written: the flux forward runtime, removed with it
-  forward_runtime.jobs.error_log_interval: still read until M5 (N5), not written: the flux forward runtime, removed with it
-  forward_runtime.jobs.idle_poll_interval: still read until M5 (N5), not written: the flux forward runtime, removed with it
-  forward_runtime.jobs.poll_interval: still read until M5 (N5), not written: the flux forward runtime, removed with it
-  forward_runtime.jobs.timeout_seconds: still read until M5 (N5), not written: the flux forward runtime, removed with it
-  forward_runtime.latency.concurrency: a built-in value (16)
-  forward_runtime.latency.dial_timeout: a built-in value (3s)
-  forward_runtime.latency.dials: a built-in value (5)
-  forward_runtime.latency.error_log_interval: a built-in value (5m)
-  forward_runtime.latency.idle_poll_interval: a built-in value (60s)
-  forward_runtime.latency.poll_interval: a built-in value (60s)
-  forward_runtime.latency.retention_days: a built-in value (7)
-  forward_runtime.nodex.base_url: still read until M5 (N5), not written: the flux forward runtime, removed with it
-  forward_runtime.nodex.timeout_seconds: still read until M5 (N5), not written: the flux forward runtime, removed with it
-  forward_runtime.nodex.token: still read until M5 (N5), not written: the flux forward runtime, removed with it
+  forward_runtime.backend: the flux forward runtime (gost, NodeX, Ansible and the clean agent) was removed; the key does nothing, so remove it
+  forward_runtime.clean_agent.action_timeout_seconds: the flux forward runtime (gost, NodeX, Ansible and the clean agent) was removed; the key does nothing, so remove it
+  forward_runtime.clean_agent.heartbeat_interval_seconds: the flux forward runtime (gost, NodeX, Ansible and the clean agent) was removed; the key does nothing, so remove it
+  forward_runtime.clean_agent.legacy_bridge_enabled: the flux forward runtime (gost, NodeX, Ansible and the clean agent) was removed; the key does nothing, so remove it
+  forward_runtime.clean_agent.public_url: the flux forward runtime (gost, NodeX, Ansible and the clean agent) was removed; the key does nothing, so remove it
+  forward_runtime.clean_agent.token_expire_seconds: the flux forward runtime (gost, NodeX, Ansible and the clean agent) was removed; the key does nothing, so remove it
+  forward_runtime.gost_stats.error_log_interval: the flux forward runtime (gost, NodeX, Ansible and the clean agent) was removed; the key does nothing, so remove it
+  forward_runtime.gost_stats.idle_poll_interval: the flux forward runtime (gost, NodeX, Ansible and the clean agent) was removed; the key does nothing, so remove it
+  forward_runtime.gost_stats.poll_interval: the flux forward runtime (gost, NodeX, Ansible and the clean agent) was removed; the key does nothing, so remove it
+  forward_runtime.iptables_ansible: the flux forward runtime (gost, NodeX, Ansible and the clean agent) was removed; the key does nothing, so remove it
+  forward_runtime.jobs.batch_size: the flux forward runtime (gost, NodeX, Ansible and the clean agent) was removed; the key does nothing, so remove it
+  forward_runtime.jobs.error_log_interval: the flux forward runtime (gost, NodeX, Ansible and the clean agent) was removed; the key does nothing, so remove it
+  forward_runtime.jobs.idle_poll_interval: the flux forward runtime (gost, NodeX, Ansible and the clean agent) was removed; the key does nothing, so remove it
+  forward_runtime.jobs.poll_interval: the flux forward runtime (gost, NodeX, Ansible and the clean agent) was removed; the key does nothing, so remove it
+  forward_runtime.jobs.timeout_seconds: the flux forward runtime (gost, NodeX, Ansible and the clean agent) was removed; the key does nothing, so remove it
+  forward_runtime.latency.concurrency: the flux forward runtime (gost, NodeX, Ansible and the clean agent) was removed; the key does nothing, so remove it
+  forward_runtime.latency.dial_timeout: the flux forward runtime (gost, NodeX, Ansible and the clean agent) was removed; the key does nothing, so remove it
+  forward_runtime.latency.dials: the flux forward runtime (gost, NodeX, Ansible and the clean agent) was removed; the key does nothing, so remove it
+  forward_runtime.latency.error_log_interval: the flux forward runtime (gost, NodeX, Ansible and the clean agent) was removed; the key does nothing, so remove it
+  forward_runtime.latency.idle_poll_interval: the flux forward runtime (gost, NodeX, Ansible and the clean agent) was removed; the key does nothing, so remove it
+  forward_runtime.latency.poll_interval: the flux forward runtime (gost, NodeX, Ansible and the clean agent) was removed; the key does nothing, so remove it
+  forward_runtime.latency.retention_days: the flux forward runtime (gost, NodeX, Ansible and the clean agent) was removed; the key does nothing, so remove it
+  forward_runtime.nodex.base_url: the flux forward runtime (gost, NodeX, Ansible and the clean agent) was removed; the key does nothing, so remove it
+  forward_runtime.nodex.timeout_seconds: the flux forward runtime (gost, NodeX, Ansible and the clean agent) was removed; the key does nothing, so remove it
+  forward_runtime.nodex.token: the flux forward runtime (gost, NodeX, Ansible and the clean agent) was removed; the key does nothing, so remove it
   frontend.enable: still read until M2 (P11), not written: serves the web app from frontend.path until the web app is built into the binary
   frontend.path: still read until M2 (P11), not written: the web app's directory until the web app is built into the binary
   frontend.port: still read until M2 (P11), not written: a second plain listener of tls.mode external while listen is unset; config rewrite does not carry it, point the reverse proxy at listen

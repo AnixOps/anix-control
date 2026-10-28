@@ -6,7 +6,11 @@ import (
 	"net"
 	"net/netip"
 	"strings"
+	"time"
 )
+
+// diagnosisTimeout bounds one probe's lookup.
+const diagnosisTimeout = 3 * time.Second
 
 // probeLookup resolves a probe target's host name; tests replace it.
 var probeLookup = func(ctx context.Context, host string) ([]netip.Addr, error) {

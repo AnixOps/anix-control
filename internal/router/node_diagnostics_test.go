@@ -35,7 +35,7 @@ func TestSetup_V4NodeDiagnosticsRequireAdmin(t *testing.T) {
 	admin := testRouterJWT(t, cfg.JWT.Secret, true)
 	for _, route := range []struct{ method, path, body string }{
 		{http.MethodGet, "/api/v4/kernel/nodes/proxy-5/diagnostics", ""},
-		{http.MethodPost, "/api/v4/kernel/nodes/proxy-5/diagnostics", `{"action":"service_status","params":{"service":"gost"}}`},
+		{http.MethodPost, "/api/v4/kernel/nodes/proxy-5/diagnostics", `{"action":"service_status","params":{"service":"anix-agent"}}`},
 		{http.MethodGet, "/api/v4/kernel/agents/upgrade-plan", ""},
 	} {
 		assert.Equal(t, http.StatusUnauthorized, serve(route.method, route.path, route.body, "").Code, route.path)
@@ -47,7 +47,7 @@ func TestSetup_V4NodeDiagnosticsRequireAdmin(t *testing.T) {
 	assert.Contains(t, listed.Body.String(), `"connected":false`)
 	assert.Equal(t, http.StatusNotFound, serve(http.MethodGet, "/api/v4/kernel/nodes/proxy-6/diagnostics", "", admin).Code)
 
-	offline := serve(http.MethodPost, "/api/v4/kernel/nodes/proxy-5/diagnostics", `{"action":"service_status","params":{"service":"gost"}}`, admin)
+	offline := serve(http.MethodPost, "/api/v4/kernel/nodes/proxy-5/diagnostics", `{"action":"service_status","params":{"service":"anix-agent"}}`, admin)
 	require.Equal(t, http.StatusConflict, offline.Code, offline.Body.String())
 	assert.Contains(t, offline.Body.String(), `"node_offline"`)
 	refused := serve(http.MethodPost, "/api/v4/kernel/nodes/proxy-5/diagnostics", `{"action":"bash"}`, admin)

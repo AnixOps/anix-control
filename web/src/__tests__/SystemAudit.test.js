@@ -13,8 +13,6 @@ const adminApi = vi.hoisted(() => ({
   getBackups: vi.fn(),
   getBackupStats: vi.fn(),
   getLoadBalancers: vi.fn(),
-  getForwardRuntimeStatus: vi.fn(),
-  runForwardRuntimeDoctor: vi.fn()
 }))
 
 vi.mock('@/api/admin', () => adminApi)
@@ -40,8 +38,6 @@ describe('System audit logs', () => {
     adminApi.getBackups.mockResolvedValue({ data: { list: [] } })
     adminApi.getBackupStats.mockResolvedValue({ data: {} })
     adminApi.getLoadBalancers.mockResolvedValue({ data: { list: [] } })
-    adminApi.getForwardRuntimeStatus.mockResolvedValue({ data: { data: null } })
-    adminApi.runForwardRuntimeDoctor.mockResolvedValue({ data: { data: null } })
     adminApi.getSystemAuditLogs.mockResolvedValue({
       data: {
         data: {

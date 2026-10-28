@@ -10,7 +10,6 @@ export const ADMIN_PAGE_SECTIONS = Object.freeze({
   ],
   settings: [
     { id: 'settings-general', to: '/admin/system/general', labelKey: 'adminSettings.sections.general' },
-    { id: 'settings-runtime', to: '/admin/system/runtime', labelKey: 'adminSettings.sections.runtime' },
     { id: 'settings-backup', to: '/admin/system/backup', labelKey: 'adminSettings.sections.backup' },
     { id: 'settings-balancer', to: '/admin/system/balancer', labelKey: 'adminSettings.sections.balancer' },
     { id: 'settings-audit', to: '/admin/system/audit', labelKey: 'adminSettings.sections.audit' },

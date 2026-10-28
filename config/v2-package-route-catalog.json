@@ -117,105 +117,6 @@
     "transport": "http"
   },
   {
-    "method": "POST",
-    "path": "/api/v2/admin/forward/list",
-    "owner": "forward",
-    "route_id": "forward.admin.forward.list.post",
-    "envelope": "data",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
-    "method": "GET",
-    "path": "/api/v2/admin/forward/local/doctor",
-    "owner": "forward",
-    "route_id": "forward.admin.forward.local.doctor.get",
-    "envelope": "data",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
-    "method": "GET",
-    "path": "/api/v2/admin/forward/local/status",
-    "owner": "forward",
-    "route_id": "forward.admin.forward.local.status.get",
-    "envelope": "data",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
-    "method": "GET",
-    "path": "/api/v2/admin/forward/nodex/doctor",
-    "owner": "gost-mesh",
-    "route_id": "gost.admin.forward.nodex.doctor.get",
-    "envelope": "data",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
-    "method": "GET",
-    "path": "/api/v2/admin/forward/nodex/status",
-    "owner": "gost-mesh",
-    "route_id": "gost.admin.forward.nodex.status.get",
-    "envelope": "data",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
-    "method": "GET",
-    "path": "/api/v2/admin/forward/observability/multi-ingress",
-    "owner": "forward",
-    "route_id": "forward.admin.forward.observability.multi_ingress.get",
-    "envelope": "data",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
-    "method": "GET",
-    "path": "/api/v2/admin/forward/runtime/doctor",
-    "owner": "forward",
-    "route_id": "forward.admin.forward.runtime.doctor.get",
-    "envelope": "data",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
-    "method": "GET",
-    "path": "/api/v2/admin/forward/runtime/status",
-    "owner": "forward",
-    "route_id": "forward.admin.forward.runtime.status.get",
-    "envelope": "data",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
-    "method": "GET",
-    "path": "/api/v2/admin/forward/stats",
-    "owner": "forward",
-    "route_id": "forward.admin.forward.stats.get",
-    "envelope": "data",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
-    "method": "POST",
-    "path": "/api/v2/admin/forward/test-connection",
-    "owner": "gost-mesh",
-    "route_id": "gost.admin.forward.test_connection.post",
-    "envelope": "data",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
-    "method": "POST",
-    "path": "/api/v2/admin/forward/update-order",
-    "owner": "forward",
-    "route_id": "forward.admin.forward.update_order.post",
-    "envelope": "data",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
     "method": "GET",
     "path": "/api/v2/admin/invite/codes",
     "owner": "identity-platform",
@@ -1206,60 +1107,6 @@
     "transport": "http"
   },
   {
-    "method": "POST",
-    "path": "/api/v2/admin/tunnel/create",
-    "owner": "forward",
-    "route_id": "forward.admin.tunnel.create.post",
-    "envelope": "data",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
-    "method": "POST",
-    "path": "/api/v2/admin/tunnel/delete",
-    "owner": "forward",
-    "route_id": "forward.admin.tunnel.delete.post",
-    "envelope": "data",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
-    "method": "POST",
-    "path": "/api/v2/admin/tunnel/list",
-    "owner": "forward",
-    "route_id": "forward.admin.tunnel.list.post",
-    "envelope": "data",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
-    "method": "POST",
-    "path": "/api/v2/admin/tunnel/user/assign",
-    "owner": "forward",
-    "route_id": "forward.admin.tunnel.user.assign.post",
-    "envelope": "data",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
-    "method": "POST",
-    "path": "/api/v2/admin/tunnel/user/list",
-    "owner": "forward",
-    "route_id": "forward.admin.tunnel.user.list.post",
-    "envelope": "data",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
-    "method": "POST",
-    "path": "/api/v2/admin/tunnel/user/tunnel",
-    "owner": "forward",
-    "route_id": "forward.admin.tunnel.user.tunnel.post",
-    "envelope": "data",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
     "method": "GET",
     "path": "/api/v2/admin/users",
     "owner": "identity-platform",
@@ -1423,90 +1270,9 @@
   },
   {
     "method": "POST",
-    "path": "/api/v2/forward-agent/heartbeat",
-    "owner": "forward",
-    "route_id": "forward.forward_agent.heartbeat.post",
-    "envelope": "data",
-    "middleware_group": "public",
-    "transport": "http"
-  },
-  {
-    "method": "POST",
-    "path": "/api/v2/forward-agent/register",
-    "owner": "forward",
-    "route_id": "forward.forward_agent.register.post",
-    "envelope": "data",
-    "middleware_group": "public",
-    "transport": "http"
-  },
-  {
-    "method": "POST",
-    "path": "/api/v2/forward-agent/report",
-    "owner": "forward",
-    "route_id": "forward.forward_agent.report.post",
-    "envelope": "data",
-    "middleware_group": "public",
-    "transport": "http"
-  },
-  {
-    "method": "GET",
-    "path": "/api/v2/forward/agent/rules",
-    "owner": "forward",
-    "route_id": "forward.forward.agent.rules.get",
-    "envelope": "raw",
-    "middleware_group": "public",
-    "transport": "http"
-  },
-  {
-    "method": "POST",
-    "path": "/api/v2/forward/list",
-    "owner": "forward",
-    "route_id": "forward.forward.list.post",
-    "envelope": "data",
-    "middleware_group": "user",
-    "transport": "http"
-  },
-  {
-    "method": "POST",
-    "path": "/api/v2/forward/update-order",
-    "owner": "forward",
-    "route_id": "forward.forward.update_order.post",
-    "envelope": "data",
-    "middleware_group": "user",
-    "transport": "http"
-  },
-  {
-    "method": "POST",
     "path": "/api/v2/internal/auth-keys",
     "owner": "proxy-node",
     "route_id": "proxy.internal.auth_keys.post",
-    "envelope": "raw",
-    "middleware_group": "internal",
-    "transport": "http"
-  },
-  {
-    "method": "POST",
-    "path": "/api/v2/internal/forward/traffic/report",
-    "owner": "forward",
-    "route_id": "forward.internal.forward.traffic.report.post",
-    "envelope": "data",
-    "middleware_group": "internal",
-    "transport": "http"
-  },
-  {
-    "method": "POST",
-    "path": "/api/v2/internal/forward/traffic/snapshot",
-    "owner": "forward",
-    "route_id": "forward.internal.forward.traffic.snapshot.post",
-    "envelope": "data",
-    "middleware_group": "internal",
-    "transport": "http"
-  },
-  {
-    "method": "POST",
-    "path": "/api/v2/internal/forward/traffic/upload",
-    "owner": "forward",
-    "route_id": "forward.internal.forward.traffic.upload.post",
     "envelope": "raw",
     "middleware_group": "internal",
     "transport": "http"
@@ -1693,74 +1459,11 @@
   },
   {
     "method": "POST",
-    "path": "/api/v2/speed-limit/create",
-    "owner": "forward",
-    "route_id": "forward.speed_limit.create.post",
-    "envelope": "data",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
-    "method": "POST",
-    "path": "/api/v2/speed-limit/delete",
-    "owner": "forward",
-    "route_id": "forward.speed_limit.delete.post",
-    "envelope": "data",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
-    "method": "POST",
-    "path": "/api/v2/speed-limit/list",
-    "owner": "forward",
-    "route_id": "forward.speed_limit.list.post",
-    "envelope": "data",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
-    "method": "POST",
-    "path": "/api/v2/speed-limit/tunnels",
-    "owner": "forward",
-    "route_id": "forward.speed_limit.tunnels.post",
-    "envelope": "data",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
-    "method": "POST",
     "path": "/api/v2/telegram/webhook",
     "owner": "notification",
     "route_id": "notification.telegram.webhook.post",
     "envelope": "raw",
     "middleware_group": "public",
-    "transport": "http"
-  },
-  {
-    "method": "POST",
-    "path": "/api/v2/tunnel/user/assign",
-    "owner": "forward",
-    "route_id": "forward.tunnel.user.assign.post",
-    "envelope": "data",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
-    "method": "POST",
-    "path": "/api/v2/tunnel/user/list",
-    "owner": "forward",
-    "route_id": "forward.tunnel.user.list.post",
-    "envelope": "data",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
-    "method": "POST",
-    "path": "/api/v2/tunnel/user/tunnel",
-    "owner": "forward",
-    "route_id": "forward.tunnel.user.tunnel.post",
-    "envelope": "data",
-    "middleware_group": "user",
     "transport": "http"
   },
   {
@@ -1778,15 +1481,6 @@
     "owner": "identity-platform",
     "route_id": "identity.user.dashboard.get",
     "envelope": "panel",
-    "middleware_group": "user",
-    "transport": "http"
-  },
-  {
-    "method": "GET",
-    "path": "/api/v2/user/forward/rules",
-    "owner": "forward",
-    "route_id": "forward.user.forward.rules.get",
-    "envelope": "data",
     "middleware_group": "user",
     "transport": "http"
   },

@@ -49,12 +49,12 @@ func TestSettingsKeysMapToOneNamespace(t *testing.T) {
 	for key, want := range map[string]string{
 		"notification.email.config":             SettingsNamespaceMail,
 		"invite.frontend.config":                SettingsNamespaceInvite,
-		"forward.runtime.nodex.token":           SettingsNamespaceNodeX,
-		"forward.runtime.nodex.base_url":        SettingsNamespaceNodeX,
-		"forward.runtime.nodex_mode":            SettingsNamespaceForwardRuntime,
-		"forward.runtime_backend":               SettingsNamespaceForwardRuntime,
-		"forward.runtime.ansible.inventory":     SettingsNamespaceForwardRuntime,
-		"forward.ansible.become":                SettingsNamespaceForwardRuntime,
+		"forward.runtime.nodex.token":           "",
+		"forward.runtime.nodex.base_url":        "",
+		"forward.runtime.nodex_mode":            "",
+		"forward.runtime_backend":               "",
+		"forward.runtime.ansible.inventory":     "",
+		"forward.ansible.become":                "",
 		"backup.s3_secret_key":                  "",
 		"security.mfa.config":                   "",
 		"scheduler.forward_flow_reset.last_day": "",
@@ -70,24 +70,23 @@ func TestSettingsKeysMapToOneNamespace(t *testing.T) {
 
 func TestSettingsSecretsFollowTheAdministratorMasking(t *testing.T) {
 	mail, _ := LookupSettingsNamespace(SettingsNamespaceMail)
-	nodex, _ := LookupSettingsNamespace(SettingsNamespaceNodeX)
 	require.True(t, mail.Secret("notification.email.config"), "declared: the JSON value holds the SMTP password")
-	require.True(t, nodex.Secret("forward.runtime.nodex.token"))
-	require.False(t, nodex.Secret("forward.runtime.nodex.base_url"))
+	require.True(t, mail.Secret("notification.email.password"), "the kernel's key-name rule")
+	require.False(t, mail.Secret("notification.email.enabled"))
 }
 
 func TestSettingsCapabilityGrammar(t *testing.T) {
 	require.NoError(t, validateManifestCapabilities([]string{
 		"kernel.settings.mail.read.v1", "kernel.settings.mail.write.v1", "kernel.settings.mail.secrets.v1",
-		"kernel.settings.forward-runtime.write.v1",
+		"kernel.settings.invite.write.v1",
 	}))
 	for name, capabilities := range map[string][]string{
 		"unknown namespace":         {"kernel.settings.all.read.v1"},
 		"the removed backup one":    {"kernel.settings.backup.read.v1"},
 		"unknown access":            {"kernel.settings.mail.admin.v1"},
 		"no version":                {"kernel.settings.mail.read"},
-		"secrets without read":      {"kernel.settings.nodex.secrets.v1", "kernel.settings.nodex.write.v1"},
-		"another namespace's read":  {"kernel.settings.nodex.secrets.v1", "kernel.settings.mail.read.v1"},
+		"secrets without read":      {"kernel.settings.mail.secrets.v1", "kernel.settings.mail.write.v1"},
+		"another namespace's read":  {"kernel.settings.mail.secrets.v1", "kernel.settings.invite.read.v1"},
 		"no namespace":              {"kernel.settings.read.v1"},
 		"underscore namespace name": {"kernel.settings.forward_runtime.read.v1"},
 	} {
@@ -99,8 +98,8 @@ func TestSettingsCapabilityGrammar(t *testing.T) {
 // the other kernel contracts: official, signed, current generation.
 func TestAuthorizeCapabilityGrantsOnlyTheSignedSettingsCapabilities(t *testing.T) {
 	db := newKernelTestDB(t)
-	read := SettingsCapability(SettingsNamespaceNodeX, SettingsAccessRead)
-	secrets := SettingsCapability(SettingsNamespaceNodeX, SettingsAccessSecrets)
+	read := SettingsCapability(SettingsNamespaceMail, SettingsAccessRead)
+	secrets := SettingsCapability(SettingsNamespaceMail, SettingsAccessSecrets)
 	publicKey, _ := seedKnowledgeRelease(t, db, "", []string{read, secrets})
 	operations := PackageHostOperations{DB: db, FallbackPublicKey: publicKey}
 	host := packagebridge.HostIdentity{PackageID: "knowledge", Version: "4.0.1", Generation: 7}
@@ -108,8 +107,8 @@ func TestAuthorizeCapabilityGrantsOnlyTheSignedSettingsCapabilities(t *testing.T
 
 	require.NoError(t, operations.AuthorizeCapability(ctx, host, read))
 	require.NoError(t, operations.AuthorizeCapability(ctx, host, secrets))
-	require.ErrorIs(t, operations.AuthorizeCapability(ctx, host, SettingsCapability(SettingsNamespaceNodeX, SettingsAccessWrite)), ErrCapabilityNotAuthorized)
-	require.ErrorIs(t, operations.AuthorizeCapability(ctx, host, SettingsCapability(SettingsNamespaceMail, SettingsAccessRead)), ErrCapabilityNotAuthorized)
+	require.ErrorIs(t, operations.AuthorizeCapability(ctx, host, SettingsCapability(SettingsNamespaceMail, SettingsAccessWrite)), ErrCapabilityNotAuthorized)
+	require.ErrorIs(t, operations.AuthorizeCapability(ctx, host, SettingsCapability(SettingsNamespaceInvite, SettingsAccessRead)), ErrCapabilityNotAuthorized)
 	require.NoError(t, db.Model(&model.Plugin{}).Where("id = ?", "knowledge").Update("official", false).Error)
 	require.ErrorIs(t, operations.AuthorizeCapability(ctx, host, read), ErrCapabilityNotAuthorized, "only an official package")
 }

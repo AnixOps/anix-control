@@ -106,102 +106,6 @@
       "legacy": "router"
     },
     {
-      "method": "POST",
-      "path": "/api/v2/admin/forward/list",
-      "package_id": "forward",
-      "route_id": "forward.admin.forward.list.post",
-      "mode": "kernel-owned",
-      "legacy": "router",
-      "reason": "legacy flux route on the flux tables, which the forward package no longer adopts (F5d); relayed to the kernel until F5c drops the tables"
-    },
-    {
-      "method": "GET",
-      "path": "/api/v2/admin/forward/local/doctor",
-      "package_id": "forward",
-      "route_id": "forward.admin.forward.local.doctor.get",
-      "mode": "kernel-owned",
-      "legacy": "router",
-      "reason": "diagnoses the kernel's local Ansible executor (paths and files on Control's disk); kept until the runtime moves to agents (A5, D4)"
-    },
-    {
-      "method": "GET",
-      "path": "/api/v2/admin/forward/local/status",
-      "package_id": "forward",
-      "route_id": "forward.admin.forward.local.status.get",
-      "mode": "kernel-owned",
-      "legacy": "router",
-      "reason": "status of the kernel's local Ansible executor (paths and files on Control's disk); kept until the runtime moves to agents (A5, D4)"
-    },
-    {
-      "method": "GET",
-      "path": "/api/v2/admin/forward/nodex/doctor",
-      "package_id": "gost-mesh",
-      "route_id": "gost.admin.forward.nodex.doctor.get",
-      "mode": "native-flagged",
-      "legacy": "router"
-    },
-    {
-      "method": "GET",
-      "path": "/api/v2/admin/forward/nodex/status",
-      "package_id": "gost-mesh",
-      "route_id": "gost.admin.forward.nodex.status.get",
-      "mode": "native-flagged",
-      "legacy": "router"
-    },
-    {
-      "method": "GET",
-      "path": "/api/v2/admin/forward/observability/multi-ingress",
-      "package_id": "forward",
-      "route_id": "forward.admin.forward.observability.multi_ingress.get",
-      "mode": "kernel-owned",
-      "legacy": "router",
-      "reason": "legacy flux route on the flux tables, which the forward package no longer adopts (F5d); relayed to the kernel until F5c drops the tables"
-    },
-    {
-      "method": "GET",
-      "path": "/api/v2/admin/forward/runtime/doctor",
-      "package_id": "forward",
-      "route_id": "forward.admin.forward.runtime.doctor.get",
-      "mode": "kernel-owned",
-      "legacy": "router",
-      "reason": "diagnoses the kernel's own forward executors (NodeX client, Ansible settings, job queue); kept until the runtime moves to agents (A5, D4)"
-    },
-    {
-      "method": "GET",
-      "path": "/api/v2/admin/forward/runtime/status",
-      "package_id": "forward",
-      "route_id": "forward.admin.forward.runtime.status.get",
-      "mode": "kernel-owned",
-      "legacy": "router",
-      "reason": "status of the kernel's own forward executors (NodeX client, Ansible settings, job queue); kept until the runtime moves to agents (A5, D4)"
-    },
-    {
-      "method": "GET",
-      "path": "/api/v2/admin/forward/stats",
-      "package_id": "forward",
-      "route_id": "forward.admin.forward.stats.get",
-      "mode": "kernel-owned",
-      "legacy": "router",
-      "reason": "legacy flux route on the flux tables, which the forward package no longer adopts (F5d); relayed to the kernel until F5c drops the tables"
-    },
-    {
-      "method": "POST",
-      "path": "/api/v2/admin/forward/test-connection",
-      "package_id": "gost-mesh",
-      "route_id": "gost.admin.forward.test_connection.post",
-      "mode": "native-flagged",
-      "legacy": "router"
-    },
-    {
-      "method": "POST",
-      "path": "/api/v2/admin/forward/update-order",
-      "package_id": "forward",
-      "route_id": "forward.admin.forward.update_order.post",
-      "mode": "kernel-owned",
-      "legacy": "router",
-      "reason": "legacy flux route on the flux tables, which the forward package no longer adopts (F5d); relayed to the kernel until F5c drops the tables"
-    },
-    {
       "method": "GET",
       "path": "/api/v2/admin/invite/codes",
       "package_id": "identity-platform",
@@ -1089,60 +993,6 @@
       "legacy": "router"
     },
     {
-      "method": "POST",
-      "path": "/api/v2/admin/tunnel/create",
-      "package_id": "forward",
-      "route_id": "forward.admin.tunnel.create.post",
-      "mode": "kernel-owned",
-      "legacy": "router",
-      "reason": "legacy flux route on the flux tables, which the forward package no longer adopts (F5d); relayed to the kernel until F5c drops the tables"
-    },
-    {
-      "method": "POST",
-      "path": "/api/v2/admin/tunnel/delete",
-      "package_id": "forward",
-      "route_id": "forward.admin.tunnel.delete.post",
-      "mode": "kernel-owned",
-      "legacy": "router",
-      "reason": "legacy flux route on the flux tables, which the forward package no longer adopts (F5d); relayed to the kernel until F5c drops the tables"
-    },
-    {
-      "method": "POST",
-      "path": "/api/v2/admin/tunnel/list",
-      "package_id": "forward",
-      "route_id": "forward.admin.tunnel.list.post",
-      "mode": "kernel-owned",
-      "legacy": "router",
-      "reason": "legacy flux route on the flux tables, which the forward package no longer adopts (F5d); relayed to the kernel until F5c drops the tables"
-    },
-    {
-      "method": "POST",
-      "path": "/api/v2/admin/tunnel/user/assign",
-      "package_id": "forward",
-      "route_id": "forward.admin.tunnel.user.assign.post",
-      "mode": "kernel-owned",
-      "legacy": "router",
-      "reason": "legacy flux route on the flux tables, which the forward package no longer adopts (F5d); relayed to the kernel until F5c drops the tables"
-    },
-    {
-      "method": "POST",
-      "path": "/api/v2/admin/tunnel/user/list",
-      "package_id": "forward",
-      "route_id": "forward.admin.tunnel.user.list.post",
-      "mode": "kernel-owned",
-      "legacy": "router",
-      "reason": "legacy flux route on the flux tables, which the forward package no longer adopts (F5d); relayed to the kernel until F5c drops the tables"
-    },
-    {
-      "method": "POST",
-      "path": "/api/v2/admin/tunnel/user/tunnel",
-      "package_id": "forward",
-      "route_id": "forward.admin.tunnel.user.tunnel.post",
-      "mode": "kernel-owned",
-      "legacy": "router",
-      "reason": "legacy flux route on the flux tables, which the forward package no longer adopts (F5d); relayed to the kernel until F5c drops the tables"
-    },
-    {
       "method": "GET",
       "path": "/api/v2/admin/users",
       "package_id": "identity-platform",
@@ -1295,92 +1145,11 @@
     },
     {
       "method": "POST",
-      "path": "/api/v2/forward-agent/heartbeat",
-      "package_id": "forward",
-      "route_id": "forward.forward_agent.heartbeat.post",
-      "mode": "kernel-owned",
-      "legacy": "router",
-      "reason": "clean agent channel: the token-authenticated agent claims runtime jobs from the kernel; removed in 5.0 (D3/D8)"
-    },
-    {
-      "method": "POST",
-      "path": "/api/v2/forward-agent/register",
-      "package_id": "forward",
-      "route_id": "forward.forward_agent.register.post",
-      "mode": "kernel-owned",
-      "legacy": "router",
-      "reason": "clean agent channel: authenticates the agent's token and records it in the kernel; replaced by A2 enrollment, removed in 5.0 (D3/D8)"
-    },
-    {
-      "method": "POST",
-      "path": "/api/v2/forward-agent/report",
-      "package_id": "forward",
-      "route_id": "forward.forward_agent.report.post",
-      "mode": "kernel-owned",
-      "legacy": "router",
-      "reason": "clean agent channel: the token-authenticated agent completes its runtime jobs and reports traffic in the kernel; removed in 5.0 (D3/D8)"
-    },
-    {
-      "method": "GET",
-      "path": "/api/v2/forward/agent/rules",
-      "package_id": "forward",
-      "route_id": "forward.forward.agent.rules.get",
-      "mode": "kernel-owned",
-      "legacy": "router",
-      "reason": "agent channel: authenticated by a forward node's API token in the kernel; A2 pushes the rules instead, removed in 5.0 (D3/D8)"
-    },
-    {
-      "method": "POST",
-      "path": "/api/v2/forward/list",
-      "package_id": "forward",
-      "route_id": "forward.forward.list.post",
-      "mode": "kernel-owned",
-      "legacy": "router",
-      "reason": "legacy flux route on the flux tables, which the forward package no longer adopts (F5d); relayed to the kernel until F5c drops the tables"
-    },
-    {
-      "method": "POST",
-      "path": "/api/v2/forward/update-order",
-      "package_id": "forward",
-      "route_id": "forward.forward.update_order.post",
-      "mode": "kernel-owned",
-      "legacy": "router",
-      "reason": "legacy flux route on the flux tables, which the forward package no longer adopts (F5d); relayed to the kernel until F5c drops the tables"
-    },
-    {
-      "method": "POST",
       "path": "/api/v2/internal/auth-keys",
       "package_id": "proxy-node",
       "route_id": "proxy.internal.auth_keys.post",
       "mode": "native-flagged",
       "legacy": "router"
-    },
-    {
-      "method": "POST",
-      "path": "/api/v2/internal/forward/traffic/report",
-      "package_id": "forward",
-      "route_id": "forward.internal.forward.traffic.report.post",
-      "mode": "kernel-owned",
-      "legacy": "router",
-      "reason": "flow report: forward, subscriber and permission traffic change in one kernel transaction, as callers send no batch id; until A2 batches (D4)"
-    },
-    {
-      "method": "POST",
-      "path": "/api/v2/internal/forward/traffic/snapshot",
-      "package_id": "forward",
-      "route_id": "forward.internal.forward.traffic.snapshot.post",
-      "mode": "kernel-owned",
-      "legacy": "router",
-      "reason": "flow snapshot: forward, subscriber and permission traffic change in one kernel transaction, as callers send no batch id; until A2 batches (D4)"
-    },
-    {
-      "method": "POST",
-      "path": "/api/v2/internal/forward/traffic/upload",
-      "package_id": "forward",
-      "route_id": "forward.internal.forward.traffic.upload.post",
-      "mode": "kernel-owned",
-      "legacy": "router",
-      "reason": "flow upload: forward, subscriber and permission traffic change in one kernel transaction, as callers send no batch id; until A2 batches (D4)"
     },
     {
       "method": "POST",
@@ -1548,74 +1317,11 @@
     },
     {
       "method": "POST",
-      "path": "/api/v2/speed-limit/create",
-      "package_id": "forward",
-      "route_id": "forward.speed_limit.create.post",
-      "mode": "kernel-owned",
-      "legacy": "router",
-      "reason": "legacy flux route on the flux tables, which the forward package no longer adopts (F5d); relayed to the kernel until F5c drops the tables"
-    },
-    {
-      "method": "POST",
-      "path": "/api/v2/speed-limit/delete",
-      "package_id": "forward",
-      "route_id": "forward.speed_limit.delete.post",
-      "mode": "kernel-owned",
-      "legacy": "router",
-      "reason": "legacy flux route on the flux tables, which the forward package no longer adopts (F5d); relayed to the kernel until F5c drops the tables"
-    },
-    {
-      "method": "POST",
-      "path": "/api/v2/speed-limit/list",
-      "package_id": "forward",
-      "route_id": "forward.speed_limit.list.post",
-      "mode": "kernel-owned",
-      "legacy": "router",
-      "reason": "legacy flux route on the flux tables, which the forward package no longer adopts (F5d); relayed to the kernel until F5c drops the tables"
-    },
-    {
-      "method": "POST",
-      "path": "/api/v2/speed-limit/tunnels",
-      "package_id": "forward",
-      "route_id": "forward.speed_limit.tunnels.post",
-      "mode": "kernel-owned",
-      "legacy": "router",
-      "reason": "legacy flux route on the flux tables, which the forward package no longer adopts (F5d); relayed to the kernel until F5c drops the tables"
-    },
-    {
-      "method": "POST",
       "path": "/api/v2/telegram/webhook",
       "package_id": "notification",
       "route_id": "notification.telegram.webhook.post",
       "mode": "bridged",
       "legacy": "router"
-    },
-    {
-      "method": "POST",
-      "path": "/api/v2/tunnel/user/assign",
-      "package_id": "forward",
-      "route_id": "forward.tunnel.user.assign.post",
-      "mode": "kernel-owned",
-      "legacy": "router",
-      "reason": "legacy flux route on the flux tables, which the forward package no longer adopts (F5d); relayed to the kernel until F5c drops the tables"
-    },
-    {
-      "method": "POST",
-      "path": "/api/v2/tunnel/user/list",
-      "package_id": "forward",
-      "route_id": "forward.tunnel.user.list.post",
-      "mode": "kernel-owned",
-      "legacy": "router",
-      "reason": "legacy flux route on the flux tables, which the forward package no longer adopts (F5d); relayed to the kernel until F5c drops the tables"
-    },
-    {
-      "method": "POST",
-      "path": "/api/v2/tunnel/user/tunnel",
-      "package_id": "forward",
-      "route_id": "forward.tunnel.user.tunnel.post",
-      "mode": "kernel-owned",
-      "legacy": "router",
-      "reason": "legacy flux route on the flux tables, which the forward package no longer adopts (F5d); relayed to the kernel until F5c drops the tables"
     },
     {
       "method": "POST",
@@ -1632,15 +1338,6 @@
       "route_id": "identity.user.dashboard.get",
       "mode": "native-flagged",
       "legacy": "identity-bridge"
-    },
-    {
-      "method": "GET",
-      "path": "/api/v2/user/forward/rules",
-      "package_id": "forward",
-      "route_id": "forward.user.forward.rules.get",
-      "mode": "kernel-owned",
-      "legacy": "router",
-      "reason": "legacy flux route on the flux tables, which the forward package no longer adopts (F5d); relayed to the kernel until F5c drops the tables"
     },
     {
       "method": "GET",

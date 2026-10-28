@@ -70,9 +70,6 @@ func TestOlderReadersAuthenticateEveryNode(t *testing.T) {
 		require.NoError(t, err)
 		forward := &model.ForwardNode{Name: "relay", Type: "relay", Host: "198.51.100.30", Port: 443, APIPort: 9000, APIToken: "fake-forward-token", Enabled: true}
 		require.NoError(t, service.NewForwardNodeService(db).Create(forward))
-		agents := service.NewForwardCleanAgentService(db)
-		agent, err := service.CreateCleanAgentTokenTx(db, service.ForwardCleanAgentCreateInput{Name: "agent", NodeID: &forward.ID})
-		require.NoError(t, err)
 
 		columns := legacyColumns(t, db)
 		_, err = nodesecrets.Backfill(ctx, db, nodesecrets.BackfillOptions{})
@@ -120,15 +117,10 @@ func TestOlderReadersAuthenticateEveryNode(t *testing.T) {
 			}
 		}
 
-		// The registration key still registers, the clean agent still
-		// authenticates, and the forward node's token is where its agent
-		// and the gost manager read it.
+		// The registration key still registers, and the forward node's
+		// token is where its agent reads it.
 		_, err = nodes.RegisterNode(&model.NodeRegisterRequest{AuthKey: registrationKey, Name: "again", Port: 443}, "192.0.2.31")
 		require.NoError(t, err)
-		_, err = agents.Heartbeat(service.ForwardCleanAgentHeartbeatInput{AgentID: agent.Agent.ID, Token: agent.Token})
-		require.NoError(t, err)
-		_, err = agents.Heartbeat(service.ForwardCleanAgentHeartbeatInput{AgentID: agent.Agent.ID, Token: "fake-wrong-token"})
-		require.ErrorIs(t, err, service.ErrForwardCleanAgentUnauthorized)
 		var stored model.ForwardNode
 		require.NoError(t, db.First(&stored, forward.ID).Error)
 		require.Equal(t, "fake-forward-token", stored.APIToken)

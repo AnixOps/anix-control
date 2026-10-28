@@ -19,8 +19,6 @@ const adminApi = vi.hoisted(() => ({
   updateLoadBalancer: vi.fn(),
   deleteLoadBalancer: vi.fn(),
   runHealthCheck: vi.fn(),
-  getForwardRuntimeStatus: vi.fn(),
-  runForwardRuntimeDoctor: vi.fn(),
   getSystemInfo: vi.fn()
 }))
 
@@ -68,7 +66,6 @@ describe('System settings page', () => {
     adminApi.getSystemAuditLogs.mockResolvedValue({ data: { data: { list: [], total: 0, page: 1, page_size: 20 } } })
     kernelApi.getPanelBackups.mockResolvedValue({ supported: true, backups: [], summary: {}, retention: {} })
     adminApi.getLoadBalancers.mockResolvedValue({ data: { list: [] } })
-    adminApi.getForwardRuntimeStatus.mockResolvedValue({ data: { data: null } })
     adminApi.getSystemInfo.mockResolvedValue({ code: 0, data: { version: '4.1.0', build_code: '202610020001', commit: 'abc123', build_time: '2026-10-02' } })
   })
 
@@ -79,9 +76,9 @@ describe('System settings page', () => {
   it('lists the sections as links and shows 通用 at /admin/system', async () => {
     const { wrapper } = await mountAt('/admin/system')
     const links = wrapper.findAll('[data-settings-section]')
-    expect(links.map(link => link.attributes('data-settings-section'))).toEqual(['general', 'runtime', 'backup', 'balancer', 'audit', 'packages', 'about'])
+    expect(links.map(link => link.attributes('data-settings-section'))).toEqual(['general', 'backup', 'balancer', 'audit', 'packages', 'about'])
     expect(links.map(link => link.attributes('href'))).toEqual([
-      '/admin/system/general', '/admin/system/runtime', '/admin/system/backup',
+      '/admin/system/general', '/admin/system/backup',
       '/admin/system/balancer', '/admin/system/audit', '/admin/system/packages', '/admin/system/about'
     ])
     expect(wrapper.get('[aria-current="page"]').attributes('data-settings-section')).toBe('general')

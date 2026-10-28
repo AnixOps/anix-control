@@ -16,12 +16,6 @@ const (
 	// SettingsNamespaceInvite is the affiliate's frontend settings
 	// (invite.*).
 	SettingsNamespaceInvite = "invite"
-	// SettingsNamespaceNodeX is the NodeX control plane address, shared
-	// token and timeout (forward.runtime.nodex.*).
-	SettingsNamespaceNodeX = "nodex"
-	// SettingsNamespaceForwardRuntime is the forward runtime backend and
-	// its local Ansible settings.
-	SettingsNamespaceForwardRuntime = "forward-runtime"
 )
 
 // Settings capability accesses: kernel.settings.<namespace>.<access>.v1.
@@ -65,12 +59,22 @@ var settingsNamespaces = []SettingsNamespace{
 		SecretKeys: []string{"notification.email.config"},
 	},
 	{Name: SettingsNamespaceInvite, Prefixes: []string{"invite."}, Audit: SettingsAuditSystemConfig},
-	{Name: SettingsNamespaceNodeX, Prefixes: []string{"forward.runtime.nodex."}, Audit: SettingsAuditSystemConfig},
-	{
-		Name: SettingsNamespaceForwardRuntime, Audit: SettingsAuditSystemConfig,
-		Keys:     []string{forwardRuntimeBackendConfigKey, forwardRuntimeNodeXModeConfigKey},
-		Prefixes: []string{"forward.runtime.ansible.", "forward.runtime.iptables_ansible.", "forward.ansible."},
-	},
+}
+
+// AddSettingsNamespacesForTest adds namespaces to the table until the test
+// ends.
+func AddSettingsNamespacesForTest(t interface{ Cleanup(func()) }, namespaces ...SettingsNamespace) {
+	saved := settingsNamespaces
+	settingsNamespaces = append(append([]SettingsNamespace(nil), saved...), namespaces...)
+	for _, namespace := range namespaces {
+		settingsGenerations[namespace.Name] = new(atomic.Uint64)
+	}
+	t.Cleanup(func() {
+		settingsNamespaces = saved
+		for _, namespace := range namespaces {
+			delete(settingsGenerations, namespace.Name)
+		}
+	})
 }
 
 // SettingsNamespaces returns the namespace table.

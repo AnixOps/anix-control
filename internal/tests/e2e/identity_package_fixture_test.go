@@ -169,7 +169,6 @@ func installTaskEightE2EPackages(t testing.TB, publicKey ed25519.PublicKey, priv
 		{id: "protocol-runtime", name: "Protocol Runtime"},
 		{id: "wireguard", name: "WireGuard"},
 		{id: "forward", name: "Forward"},
-		{id: "gost-mesh", name: "Gost Mesh"},
 	} {
 		routes := packageFixtureFile(t, packageSpec.id, "compat", "v2-routes.json")
 		migrations, err := json.Marshal(map[string]any{

@@ -51,17 +51,8 @@ const AUDIT = Array.from({ length: 8 }, (_, i) => ({
   status: i === 3 ? 'failed' : 'success',
   created_at: new Date(Date.UTC(2026, 9, 2, 9, 0 - i * 7)).toISOString()
 }))
-const STATUS = {
-  config: { backend: 'nftables_ansible', nodeXMode: false },
-  attachment: { model: 'stateless', description: 'Local ansible executor on the panel host' },
-  runtimeReady: { ready: true, reason: 'ansible-playbook found, inventory present' },
-  reachability: { ready: true, reason: 'executor reachable' },
-  localAnsible: { command: 'ansible-playbook', commandFound: true, inventoryExists: true, applyPlaybookExists: true, removePlaybookExists: true, workingDirExists: true },
-  warnings: ['inventory has 1 host without ansible_user']
-}
 const SECTION = {
   general: 'general', dirty: 'general', invalid: 'general', configDialog: 'general', configError: 'general',
-  runtime: 'runtime',
   backup: 'backup', backupEmpty: 'backup', backupStale: 'backup', backupUnsupported: 'backup', backupStaff: 'backup',
   balancer: 'balancer', balancerDialog: 'balancer', balancerEmpty: 'balancer',
   audit: 'audit', auditEmpty: 'audit', auditError: 'audit',
@@ -98,7 +89,6 @@ export default {
       if (scenario === 'auditEmpty') return { code: 0, data: { list: [], total: 0, page: 1, page_size: 20 } }
       return { code: 0, data: { list: AUDIT, total: 46, page: Number(query.page) || 1, page_size: 20 } }
     }
-    if (path === '/api/v2/admin/forward/runtime/status') return { code: 0, data: STATUS }
     if (path === '/api/v2/admin/system/info') {
       if (scenario === 'aboutError') return { __status: 502, body: { msg: '遥测插件没有响应' } }
       return { code: 0, data: { version: '4.1.0-rc.4', build_code: '202610020001', commit: 'a1b2c3d4e5f6', build_time: '2026-10-02T01:00:00Z' } }
@@ -121,7 +111,6 @@ export default {
       await page.getByRole('dialog').getByRole('button', { name: '保存' }).click()
     },
     configError: async () => {},
-    runtime: async () => {},
     backup: async () => {},
     backupEmpty: async () => {},
     backupStale: async () => {},

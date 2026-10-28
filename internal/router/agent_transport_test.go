@@ -71,10 +71,6 @@ func TestLegacyAgentPathsFollowAgentControlMTLS(t *testing.T) {
 		{http.MethodPost, "/api/v2/node/runtime-health"},
 		{http.MethodPost, "/api/v2/node/register"},
 		{http.MethodGet, "/api/v2/node/ws"},
-		{http.MethodGet, "/api/v2/forward/agent/rules?node_id=" + nodeID},
-		{http.MethodPost, "/api/v2/forward-agent/heartbeat"},
-		{http.MethodPost, "/api/v2/forward-agent/register"},
-		{http.MethodPost, "/api/v2/forward-agent/report"},
 	} {
 		host.lastRouteID = ""
 		answer := send(strict, test.method, test.path)

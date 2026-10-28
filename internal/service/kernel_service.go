@@ -45,7 +45,6 @@ var officialPluginCatalog = []model.Plugin{
 	{ID: "machine-telemetry", Name: "Machine Telemetry", Publisher: "AnixOps", Official: true},
 	{ID: "nftables-forward", Name: "nftables Forward", Publisher: "AnixOps", Official: true},
 	{ID: "nat-egress", Name: "NAT Egress", Publisher: "AnixOps", Official: true},
-	{ID: "gost-mesh", Name: "GOST Mesh", Publisher: "AnixOps", Official: true},
 	{ID: "wireguard", Name: "WireGuard", Publisher: "AnixOps", Official: true},
 	{ID: "protocol-runtime", Name: "Protocol Runtime", Publisher: "AnixOps", Official: true},
 }

@@ -28,18 +28,13 @@ var AgentDiagnosticActions = map[string]AgentDiagnosticActionSpec{
 	AgentDiagnosticActionLogTail:        {Params: []string{"service", "lines"}, Mutating: false},
 }
 
-// The services the generic actions may name: gost, which a forwarding node
-// runs, and the proxy node's Agent itself (anix-agent.service).
-const (
-	AgentDiagnosticServiceGost  = "gost"
-	AgentDiagnosticServiceAgent = "anix-agent"
-)
+// AgentDiagnosticServiceAgent is the one service the generic actions may
+// name: the proxy node's Agent itself (anix-agent.service). gost went with
+// the v4.1 forwarding runtime.
+const AgentDiagnosticServiceAgent = "anix-agent"
 
 // agentDiagnosticAllowedServices 是 service 参数允许的枚举值，不能是任意字符串。
-// 注意：这里管理的是 NodeX Agent 所在机器上的服务（gost 转发进程与代理节点的
-// anix-agent 本身），与 clean_agent 体系下的 v2forward-agent 二进制/服务无关，不要混用。
 var agentDiagnosticAllowedServices = map[string]bool{
-	AgentDiagnosticServiceGost:  true,
 	AgentDiagnosticServiceAgent: true,
 }
 

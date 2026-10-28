@@ -1,6 +1,0 @@
-{
-  "api_version": "anixops.gost-mesh/v1",
-  "apply": false,
-  "rollback_on_exit": true,
-  "tunnels": []
-}

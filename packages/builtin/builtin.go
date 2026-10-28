@@ -20,7 +20,6 @@ import (
 
 	affiliate "github.com/AnixOps/anix-control/v5/packages/affiliate/control"
 	forward "github.com/AnixOps/anix-control/v5/packages/forward/control"
-	gostmesh "github.com/AnixOps/anix-control/v5/packages/gost-mesh/control"
 	identityplatform "github.com/AnixOps/anix-control/v5/packages/identity-platform/control"
 	knowledge "github.com/AnixOps/anix-control/v5/packages/knowledge/control"
 	machinetelemetry "github.com/AnixOps/anix-control/v5/packages/machine-telemetry/control"
@@ -64,7 +63,6 @@ func generic(id string) Host {
 var hosts = []Host{
 	{ID: affiliate.PackageID, Run: affiliate.Run},
 	{ID: forward.PackageID, Run: forward.Run},
-	{ID: gostmesh.PackageID, Run: gostmesh.Run},
 	{ID: identityplatform.PackageID, Run: identityplatform.Run},
 	{ID: knowledge.PackageID, Run: knowledge.Run},
 	{ID: machinetelemetry.PackageID, Run: machinetelemetry.Run},

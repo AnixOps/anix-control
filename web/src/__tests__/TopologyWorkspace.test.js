@@ -26,7 +26,7 @@ vi.mock('@antv/g6', () => ({
 
 const revisionDetail = {
   revision: { id: 7, message: 'Published revision' },
-  vertices: [{ key: 'entry', kind: 'agent', node_id: 11, plugin_id: 'gost-mesh', role: 'relay', config: '{"port":443}' }],
+  vertices: [{ key: 'entry', kind: 'agent', node_id: 11, plugin_id: 'nftables-forward', role: 'relay', config: '{"port":443}' }],
   edges: [],
 }
 
@@ -314,7 +314,7 @@ describe('TopologyWorkspace graph preview', () => {
       revisionDetail: {
         revision: { id: 7, message: 'Published revision' },
         vertices: [
-          { key: 'entry', kind: 'agent', node_id: 11, plugin_id: 'gost-mesh', role: 'relay', config: '{}' },
+          { key: 'entry', kind: 'agent', node_id: 11, plugin_id: 'nftables-forward', role: 'relay', config: '{}' },
           { key: 'exit', kind: 'agent', node_id: 12, plugin_id: 'nat-egress', role: 'nat_egress', config: '{}' },
         ],
         edges: [{ source_key: 'entry', target_key: 'exit', protocol: 'tls', config: '{}' }],

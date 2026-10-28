@@ -221,83 +221,32 @@ func TestLoadUsesAnixOpsControlAsDefaultAppName(t *testing.T) {
 	assert.Equal(t, branding.ControlName, loadedCfg.App.Name)
 }
 
-func TestLoadForwardRuntimeConfig(t *testing.T) {
+func TestLoadIgnoresTheRemovedForwardRuntime(t *testing.T) {
 	resetConfig()
 
-	tmpDir := t.TempDir()
-	configPath := filepath.Join(tmpDir, "config.yaml")
-
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
 	configContent := `
-env: development
 forward_runtime:
-  nodex_mode: true
   backend: gost
-  jobs:
-    poll_interval: 7s
-    idle_poll_interval: 30s
-    error_log_interval: 1m
-    batch_size: 4
-    timeout_seconds: 90
-  gost_stats:
-    poll_interval: 45s
-    idle_poll_interval: 2m
-    error_log_interval: 5m
   nodex:
     base_url: http://127.0.0.1:18081
     token: test-nodex-token
-    timeout_seconds: 20
   clean_agent:
-    public_url: https://panel.example.com
-    heartbeat_interval_seconds: 11
-    action_timeout_seconds: 121
-    token_expire_seconds: 3600
     legacy_bridge_enabled: true
   iptables_ansible:
     inventory: config/deploy/ansible/inventory.ini
-    apply_playbook: config/deploy/ansible/playbooks/forward_apply.yml
-    remove_playbook: config/deploy/ansible/playbooks/forward_remove.yml
-    working_dir: config/deploy/ansible
-    target_pattern: "{{node.host}}"
-    timeout_seconds: 120
-    become: true
-    extra_vars:
-      retry: 3
-    environment:
-      ANSIBLE_CONFIG: config/deploy/ansible/ansible.cfg
 `
-	err := os.WriteFile(configPath, []byte(configContent), 0644)
-	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(configPath, []byte(configContent), 0644))
 
 	loadedCfg, err := Load(configPath)
 	require.NoError(t, err)
-	require.NotNil(t, loadedCfg)
-	require.NotNil(t, loadedCfg.ForwardRuntime.NodeXMode)
-
-	assert.True(t, *loadedCfg.ForwardRuntime.NodeXMode)
-	assert.Equal(t, "gost", loadedCfg.ForwardRuntime.Backend)
-	assert.Equal(t, "7s", loadedCfg.ForwardRuntime.Jobs.PollInterval)
-	assert.Equal(t, "30s", loadedCfg.ForwardRuntime.Jobs.IdlePollInterval)
-	assert.Equal(t, "1m", loadedCfg.ForwardRuntime.Jobs.ErrorLogInterval)
-	assert.Equal(t, 4, loadedCfg.ForwardRuntime.Jobs.BatchSize)
-	assert.Equal(t, 90, loadedCfg.ForwardRuntime.Jobs.TimeoutSeconds)
-	assert.Equal(t, "45s", loadedCfg.ForwardRuntime.GostStats.PollInterval)
-	assert.Equal(t, "2m", loadedCfg.ForwardRuntime.GostStats.IdlePollInterval)
-	assert.Equal(t, "5m", loadedCfg.ForwardRuntime.GostStats.ErrorLogInterval)
-	assert.Equal(t, "http://127.0.0.1:18081", loadedCfg.ForwardRuntime.NodeX.BaseURL)
-	assert.Equal(t, "test-nodex-token", loadedCfg.ForwardRuntime.NodeX.Token)
-	assert.Equal(t, 20, loadedCfg.ForwardRuntime.NodeX.TimeoutSeconds)
-	assert.Empty(t, loadedCfg.ForwardRuntime.CleanAgent.PublicURL, "nothing reads it: ignored")
-	assert.Equal(t, 11, loadedCfg.ForwardRuntime.CleanAgent.HeartbeatIntervalSeconds)
-	assert.Equal(t, 121, loadedCfg.ForwardRuntime.CleanAgent.ActionTimeoutSeconds)
-	assert.Zero(t, loadedCfg.ForwardRuntime.CleanAgent.TokenExpireSeconds, "nothing reads it: ignored")
-	assert.True(t, loadedCfg.ForwardRuntime.CleanAgent.LegacyBridgeEnabled)
 	var ignored []string
 	for _, key := range loadedCfg.Deprecated.Keys() {
 		if key.Status == KeyIgnored {
 			ignored = append(ignored, key.Path)
 		}
 	}
-	assert.Equal(t, []string{"env", "forward_runtime.clean_agent.public_url", "forward_runtime.clean_agent.token_expire_seconds", "forward_runtime.iptables_ansible"}, ignored)
+	assert.Equal(t, []string{"forward_runtime.backend", "forward_runtime.clean_agent.legacy_bridge_enabled", "forward_runtime.iptables_ansible", "forward_runtime.nodex.base_url", "forward_runtime.nodex.token"}, ignored)
 }
 
 func TestLoadFileNotFound(t *testing.T) {

@@ -49,7 +49,7 @@ func (f *fleet) secretsOf(t *testing.T, db *gorm.DB) []string {
 	require.NoError(t, db.First(&wireGuard, f.wireGuard.ID).Error)
 	values := []string{
 		f.created.APIKey, f.created.Secret, f.registered.APIKey, f.registered.Secret, f.rawNode.APIKey, f.rawNode.Secret,
-		"fake-plain-key", f.registrationKey, f.rawPrivate, f.realityPrivate, "fake-fleet-forward-token", f.agentToken,
+		"fake-plain-key", f.registrationKey, f.rawPrivate, f.realityPrivate, "fake-fleet-forward-token",
 		f.peer.PrivateKey, f.peer.PresharedKey,
 	}
 	for _, position := range nodesecrets.SecretPositions(*wireGuard.Settings) {
@@ -309,7 +309,9 @@ func TestSplitViewsAndAdoptionWaitForFinalize(t *testing.T) {
 			require.True(t, viewExists(t, db, view), view)
 			var rows []map[string]any
 			require.NoError(t, db.Table(view).Find(&rows).Error)
-			require.NotEmpty(t, rows, view)
+			if view != "kapi_forward_clean_agent_v1" { // the clean agent went with the v4.1 forwarding runtime: no fleet row
+				require.NotEmpty(t, rows, view)
+			}
 			for _, row := range rows {
 				for column, value := range row {
 					require.False(t, movedColumns[column], "%s shows %s", view, column)

@@ -320,154 +320,153 @@ keys:
     removed_in: M2 (P8)
     reason: the experimental AnixOps engine stays off (a built-in value)
 
-  # forward_runtime: the flux forward runtime, removed with it (N5); the
-  # latency prober's settings are built-in values.
+  # forward_runtime: the flux forward runtime, removed with it (N5).
   - key: forward_runtime.backend
-    status: read
+    status: ignored
     removed_in: M5 (N5)
-    reason: selects the flux forward runtime's backend until the runtime is removed
+    reason: the flux forward runtime (gost, NodeX, Ansible and the clean agent) was removed; the key does nothing, so remove it
   - key: forward_runtime.clean_agent.action_timeout_seconds
-    status: read
+    status: ignored
     removed_in: M5 (N5)
-    reason: the flux forward runtime, removed with it
+    reason: the flux forward runtime (gost, NodeX, Ansible and the clean agent) was removed; the key does nothing, so remove it
   - key: forward_runtime.clean_agent.heartbeat_interval_seconds
-    status: read
+    status: ignored
     removed_in: M5 (N5)
-    reason: the flux forward runtime, removed with it
+    reason: the flux forward runtime (gost, NodeX, Ansible and the clean agent) was removed; the key does nothing, so remove it
   - key: forward_runtime.clean_agent.legacy_bridge_enabled
-    status: read
+    status: ignored
     removed_in: M5 (N5)
-    reason: the flux forward runtime, removed with it
+    reason: the flux forward runtime (gost, NodeX, Ansible and the clean agent) was removed; the key does nothing, so remove it
   - key: forward_runtime.clean_agent.public_url
     status: ignored
     removed_in: M2 (P8)
-    reason: nothing reads it
+    reason: the flux forward runtime (gost, NodeX, Ansible and the clean agent) was removed; the key does nothing, so remove it
   - key: forward_runtime.clean_agent.token_expire_seconds
     status: ignored
     removed_in: M2 (P8)
-    reason: nothing reads it
+    reason: the flux forward runtime (gost, NodeX, Ansible and the clean agent) was removed; the key does nothing, so remove it
   - key: forward_runtime.gost_stats.error_log_interval
-    status: read
+    status: ignored
     removed_in: M5 (N5)
-    reason: the flux forward runtime, removed with it
+    reason: the flux forward runtime (gost, NodeX, Ansible and the clean agent) was removed; the key does nothing, so remove it
   - key: forward_runtime.gost_stats.idle_poll_interval
-    status: read
+    status: ignored
     removed_in: M5 (N5)
-    reason: the flux forward runtime, removed with it
+    reason: the flux forward runtime (gost, NodeX, Ansible and the clean agent) was removed; the key does nothing, so remove it
   - key: forward_runtime.gost_stats.poll_interval
-    status: read
+    status: ignored
     removed_in: M5 (N5)
-    reason: the flux forward runtime, removed with it
+    reason: the flux forward runtime (gost, NodeX, Ansible and the clean agent) was removed; the key does nothing, so remove it
   - key: forward_runtime.iptables_ansible
     status: ignored
     removed_in: M2 (P8)
-    reason: never a key (templates up to 4.2 carried this section); the iptables backend runs with forward_runtime.nftables_ansible
+    reason: the flux forward runtime (gost, NodeX, Ansible and the clean agent) was removed; the key does nothing, so remove it
     subtree: true
   - key: forward_runtime.jobs.batch_size
-    status: read
+    status: ignored
     removed_in: M5 (N5)
-    reason: the flux forward runtime, removed with it
+    reason: the flux forward runtime (gost, NodeX, Ansible and the clean agent) was removed; the key does nothing, so remove it
   - key: forward_runtime.jobs.error_log_interval
-    status: read
+    status: ignored
     removed_in: M5 (N5)
-    reason: the flux forward runtime, removed with it
+    reason: the flux forward runtime (gost, NodeX, Ansible and the clean agent) was removed; the key does nothing, so remove it
   - key: forward_runtime.jobs.idle_poll_interval
-    status: read
+    status: ignored
     removed_in: M5 (N5)
-    reason: the flux forward runtime, removed with it
+    reason: the flux forward runtime (gost, NodeX, Ansible and the clean agent) was removed; the key does nothing, so remove it
   - key: forward_runtime.jobs.poll_interval
-    status: read
+    status: ignored
     removed_in: M5 (N5)
-    reason: the flux forward runtime, removed with it
+    reason: the flux forward runtime (gost, NodeX, Ansible and the clean agent) was removed; the key does nothing, so remove it
   - key: forward_runtime.jobs.timeout_seconds
-    status: read
+    status: ignored
     removed_in: M5 (N5)
-    reason: the flux forward runtime, removed with it
+    reason: the flux forward runtime (gost, NodeX, Ansible and the clean agent) was removed; the key does nothing, so remove it
   - key: forward_runtime.latency.concurrency
     status: ignored
     removed_in: M2 (P8)
-    reason: a built-in value (16)
+    reason: the flux forward runtime (gost, NodeX, Ansible and the clean agent) was removed; the key does nothing, so remove it
   - key: forward_runtime.latency.dial_timeout
     status: ignored
     removed_in: M2 (P8)
-    reason: a built-in value (3s)
+    reason: the flux forward runtime (gost, NodeX, Ansible and the clean agent) was removed; the key does nothing, so remove it
   - key: forward_runtime.latency.dials
     status: ignored
     removed_in: M2 (P8)
-    reason: a built-in value (5)
+    reason: the flux forward runtime (gost, NodeX, Ansible and the clean agent) was removed; the key does nothing, so remove it
   - key: forward_runtime.latency.error_log_interval
     status: ignored
     removed_in: M2 (P8)
-    reason: a built-in value (5m)
+    reason: the flux forward runtime (gost, NodeX, Ansible and the clean agent) was removed; the key does nothing, so remove it
   - key: forward_runtime.latency.idle_poll_interval
     status: ignored
     removed_in: M2 (P8)
-    reason: a built-in value (60s)
+    reason: the flux forward runtime (gost, NodeX, Ansible and the clean agent) was removed; the key does nothing, so remove it
   - key: forward_runtime.latency.poll_interval
     status: ignored
     removed_in: M2 (P8)
-    reason: a built-in value (60s)
+    reason: the flux forward runtime (gost, NodeX, Ansible and the clean agent) was removed; the key does nothing, so remove it
   - key: forward_runtime.latency.retention_days
     status: ignored
     removed_in: M2 (P8)
-    reason: a built-in value (7)
+    reason: the flux forward runtime (gost, NodeX, Ansible and the clean agent) was removed; the key does nothing, so remove it
   - key: forward_runtime.nftables_ansible.apply_playbook
-    status: read
+    status: ignored
     removed_in: M5 (N5)
-    reason: the flux forward runtime, removed with it
+    reason: the flux forward runtime (gost, NodeX, Ansible and the clean agent) was removed; the key does nothing, so remove it
   - key: forward_runtime.nftables_ansible.become
-    status: read
+    status: ignored
     removed_in: M5 (N5)
-    reason: the flux forward runtime, removed with it
+    reason: the flux forward runtime (gost, NodeX, Ansible and the clean agent) was removed; the key does nothing, so remove it
   - key: forward_runtime.nftables_ansible.command
-    status: read
+    status: ignored
     removed_in: M5 (N5)
-    reason: the flux forward runtime, removed with it
+    reason: the flux forward runtime (gost, NodeX, Ansible and the clean agent) was removed; the key does nothing, so remove it
   - key: forward_runtime.nftables_ansible.environment
-    status: read
+    status: ignored
     removed_in: M5 (N5)
-    reason: the flux forward runtime, removed with it
+    reason: the flux forward runtime (gost, NodeX, Ansible and the clean agent) was removed; the key does nothing, so remove it
   - key: forward_runtime.nftables_ansible.extra_vars
-    status: read
+    status: ignored
     removed_in: M5 (N5)
-    reason: the flux forward runtime, removed with it
+    reason: the flux forward runtime (gost, NodeX, Ansible and the clean agent) was removed; the key does nothing, so remove it
   - key: forward_runtime.nftables_ansible.inventory
-    status: read
+    status: ignored
     removed_in: M5 (N5)
-    reason: the flux forward runtime, removed with it
+    reason: the flux forward runtime (gost, NodeX, Ansible and the clean agent) was removed; the key does nothing, so remove it
   - key: forward_runtime.nftables_ansible.remove_playbook
-    status: read
+    status: ignored
     removed_in: M5 (N5)
-    reason: the flux forward runtime, removed with it
+    reason: the flux forward runtime (gost, NodeX, Ansible and the clean agent) was removed; the key does nothing, so remove it
   - key: forward_runtime.nftables_ansible.target_pattern
-    status: read
+    status: ignored
     removed_in: M5 (N5)
-    reason: the flux forward runtime, removed with it
+    reason: the flux forward runtime (gost, NodeX, Ansible and the clean agent) was removed; the key does nothing, so remove it
   - key: forward_runtime.nftables_ansible.timeout_seconds
-    status: read
+    status: ignored
     removed_in: M5 (N5)
-    reason: the flux forward runtime, removed with it
+    reason: the flux forward runtime (gost, NodeX, Ansible and the clean agent) was removed; the key does nothing, so remove it
   - key: forward_runtime.nftables_ansible.working_dir
-    status: read
+    status: ignored
     removed_in: M5 (N5)
-    reason: the flux forward runtime, removed with it
+    reason: the flux forward runtime (gost, NodeX, Ansible and the clean agent) was removed; the key does nothing, so remove it
   - key: forward_runtime.nodex.base_url
-    status: read
+    status: ignored
     removed_in: M5 (N5)
-    reason: the flux forward runtime, removed with it
+    reason: the flux forward runtime (gost, NodeX, Ansible and the clean agent) was removed; the key does nothing, so remove it
   - key: forward_runtime.nodex.timeout_seconds
-    status: read
+    status: ignored
     removed_in: M5 (N5)
-    reason: the flux forward runtime, removed with it
+    reason: the flux forward runtime (gost, NodeX, Ansible and the clean agent) was removed; the key does nothing, so remove it
   - key: forward_runtime.nodex.token
-    status: read
+    status: ignored
     removed_in: M5 (N5)
-    reason: the flux forward runtime, removed with it
+    reason: the flux forward runtime (gost, NodeX, Ansible and the clean agent) was removed; the key does nothing, so remove it
     secret: true
   - key: forward_runtime.nodex_mode
-    status: read
+    status: ignored
     removed_in: M5 (N5)
-    reason: selects the flux forward runtime's backend until the runtime is removed
+    reason: the flux forward runtime (gost, NodeX, Ansible and the clean agent) was removed; the key does nothing, so remove it
 
   # frontend: the web app and its second listener, until the web app is
   # built into the binary.

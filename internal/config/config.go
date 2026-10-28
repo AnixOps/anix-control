@@ -50,25 +50,24 @@ type Config struct {
 	// a reverse proxy that terminates TLS sends the whole host. Empty uses
 	// server.host:server.port (127.0.0.1:8080 by default) and, with the
 	// legacy frontend.enable, server.host:frontend.port too.
-	Listen         string               `yaml:"listen"`
-	Server         ServerConfig         `yaml:"server"`
-	Frontend       FrontendConfig       `yaml:"frontend"`
-	Database       DatabaseConfig       `yaml:"database"`
-	Cache          CacheConfig          `yaml:"cache"`
-	Log            LogConfig            `yaml:"log"`
-	JWT            JWTConfig            `yaml:"jwt"`
-	Auth           AuthConfig           `yaml:"auth"`
-	App            AppConfig            `yaml:"app"`
-	TLS            TLSConfig            `yaml:"tls"`
-	ForwardRuntime ForwardRuntimeConfig `yaml:"forward_runtime"`
-	Forward        ForwardConfig        `yaml:"forward"`
-	Plugins        PluginConfig         `yaml:"plugins"`
-	GRPC           GRPCConfig           `yaml:"grpc"`
-	ModuleRuntime  ModuleRuntimeConfig  `yaml:"module_runtime"`
-	Identity       IdentityConfig       `yaml:"identity"`
-	AgentControl   AgentControlConfig   `yaml:"agent_control"`
-	AgentInstall   AgentInstallConfig   `yaml:"agent_install"`
-	Alerts         AlertsConfig         `yaml:"alerts"`
+	Listen        string              `yaml:"listen"`
+	Server        ServerConfig        `yaml:"server"`
+	Frontend      FrontendConfig      `yaml:"frontend"`
+	Database      DatabaseConfig      `yaml:"database"`
+	Cache         CacheConfig         `yaml:"cache"`
+	Log           LogConfig           `yaml:"log"`
+	JWT           JWTConfig           `yaml:"jwt"`
+	Auth          AuthConfig          `yaml:"auth"`
+	App           AppConfig           `yaml:"app"`
+	TLS           TLSConfig           `yaml:"tls"`
+	Forward       ForwardConfig       `yaml:"forward"`
+	Plugins       PluginConfig        `yaml:"plugins"`
+	GRPC          GRPCConfig          `yaml:"grpc"`
+	ModuleRuntime ModuleRuntimeConfig `yaml:"module_runtime"`
+	Identity      IdentityConfig      `yaml:"identity"`
+	AgentControl  AgentControlConfig  `yaml:"agent_control"`
+	AgentInstall  AgentInstallConfig  `yaml:"agent_install"`
+	Alerts        AlertsConfig        `yaml:"alerts"`
 	// Deprecated records the deprecated keys the configuration sets
 	// (deprecated_keys.yaml): Load logs one warning per key.
 	Deprecated DeprecatedConfig `yaml:"-"`
@@ -509,75 +508,6 @@ type RegistrationAuthConfig struct {
 	RequireInvite       bool     `yaml:"require_invite"`
 	AllowedEmailDomains []string `yaml:"allowed_email_domains"`
 	BlockedEmailDomains []string `yaml:"blocked_email_domains"`
-}
-
-// ForwardRuntimeConfig stores the canonical forward runtime settings from config.yaml.
-type ForwardRuntimeConfig struct {
-	NodeXMode       *bool                          `yaml:"nodex_mode"`
-	Backend         string                         `yaml:"backend"`
-	NodeX           ForwardRuntimeNodeXConfig      `yaml:"nodex"`
-	CleanAgent      ForwardRuntimeCleanAgentConfig `yaml:"clean_agent"`
-	NftablesAnsible ForwardRuntimeAnsibleConfig    `yaml:"nftables_ansible"`
-	Jobs            ForwardRuntimeJobsConfig       `yaml:"jobs"`
-	GostStats       ForwardRuntimeGostStatsConfig  `yaml:"gost_stats"`
-	Latency         ForwardRuntimeLatencyConfig    `yaml:"latency"`
-}
-
-// ForwardRuntimeNodeXConfig stores NodeX or gost runtime settings.
-type ForwardRuntimeNodeXConfig struct {
-	BaseURL        string `yaml:"base_url"`
-	Token          string `yaml:"token"`
-	TimeoutSeconds int    `yaml:"timeout_seconds"`
-}
-
-// ForwardRuntimeCleanAgentConfig stores clean-room forward agent defaults.
-type ForwardRuntimeCleanAgentConfig struct {
-	PublicURL                string `yaml:"public_url"`
-	HeartbeatIntervalSeconds int    `yaml:"heartbeat_interval_seconds"`
-	ActionTimeoutSeconds     int    `yaml:"action_timeout_seconds"`
-	TokenExpireSeconds       int    `yaml:"token_expire_seconds"`
-	LegacyBridgeEnabled      bool   `yaml:"legacy_bridge_enabled"`
-}
-
-// ForwardRuntimeAnsibleConfig stores local ansible runtime settings.
-type ForwardRuntimeAnsibleConfig struct {
-	Inventory      string            `yaml:"inventory"`
-	ApplyPlaybook  string            `yaml:"apply_playbook"`
-	RemovePlaybook string            `yaml:"remove_playbook"`
-	Become         bool              `yaml:"become"`
-	ExtraVars      map[string]any    `yaml:"extra_vars"`
-	Command        string            `yaml:"command"`
-	WorkingDir     string            `yaml:"working_dir"`
-	TargetPattern  string            `yaml:"target_pattern"`
-	Environment    map[string]string `yaml:"environment"`
-	TimeoutSeconds int               `yaml:"timeout_seconds"`
-}
-
-// ForwardRuntimeJobsConfig stores local ansible job executor polling settings.
-type ForwardRuntimeJobsConfig struct {
-	PollInterval     string `yaml:"poll_interval"`
-	IdlePollInterval string `yaml:"idle_poll_interval"`
-	ErrorLogInterval string `yaml:"error_log_interval"`
-	BatchSize        int    `yaml:"batch_size"`
-	TimeoutSeconds   int    `yaml:"timeout_seconds"`
-}
-
-// ForwardRuntimeGostStatsConfig stores gost stats polling settings.
-type ForwardRuntimeGostStatsConfig struct {
-	PollInterval     string `yaml:"poll_interval"`
-	IdlePollInterval string `yaml:"idle_poll_interval"`
-	ErrorLogInterval string `yaml:"error_log_interval"`
-}
-
-// ForwardRuntimeLatencyConfig stores latency prober (TCPing) settings.
-type ForwardRuntimeLatencyConfig struct {
-	PollInterval     string `yaml:"poll_interval"`
-	IdlePollInterval string `yaml:"idle_poll_interval"`
-	ErrorLogInterval string `yaml:"error_log_interval"`
-	Dials            int    `yaml:"dials"`
-	DialTimeout      string `yaml:"dial_timeout"`
-	Concurrency      int    `yaml:"concurrency"`
-	RetentionDays    int    `yaml:"retention_days"`
 }
 
 // TLSConfig selects who terminates TLS for the web side (tls.mode) and,

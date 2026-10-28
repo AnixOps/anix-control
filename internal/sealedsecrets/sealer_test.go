@@ -142,7 +142,7 @@ func TestEveryListedRouteAndFieldIsSubstituted(t *testing.T) {
 		}
 		assert.Equal(t, len(handles(sealed.Body)), sealed.Count, id)
 	}
-	assert.Equal(t, 7, requestRoutes, "the request routes of node-ops-service.md sections 3.7 and 6 (the forward node routes removed in F5d)")
+	assert.Equal(t, 6, requestRoutes, "the request routes of node-ops-service.md sections 3.7 and 6 (the forward node routes removed in F5d, the gost test connection with the v4.1 forwarding runtime)")
 }
 
 // The placeholder keeps the stored secret, and empty values carry none:

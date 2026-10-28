@@ -213,7 +213,7 @@ func TestCreateTaskLegacyAnswers(t *testing.T) {
 	t.Run("acknowledged", func(t *testing.T) {
 		h, ackDone, cleanup := ackingAgentHandler(t, node.ID, true)
 		defer cleanup()
-		recorder := post(h, "/admin/agent/tasks", map[string]any{"node_id": node.ID, "type": "diagnostic", "action": "service_status", "params": map[string]any{"service": "gost"}, "timeout": 30})
+		recorder := post(h, "/admin/agent/tasks", map[string]any{"node_id": node.ID, "type": "diagnostic", "action": "service_status", "params": map[string]any{"service": "anix-agent"}, "timeout": 30})
 		require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
 		require.NoError(t, <-ackDone)
 		data := panelData(t, recorder)
@@ -235,13 +235,13 @@ func TestCreateTaskLegacyAnswers(t *testing.T) {
 		assert.Equal(t, data["task_id"], row["task_id"])
 		assert.Equal(t, "dispatched", row["status"])
 		assert.Equal(t, "service_status", row["action"])
-		assert.JSONEq(t, `{"service":"gost"}`, row["params"].(string))
+		assert.JSONEq(t, `{"service":"anix-agent"}`, row["params"].(string))
 	})
 
 	t.Run("legacy fallback after a missing acknowledgement", func(t *testing.T) {
 		h, received, cleanup := ackingAgentHandler(t, node.ID, false)
 		defer cleanup()
-		recorder := post(h, "/admin/agent/execute", map[string]any{"node_id": node.ID, "action": "service_status", "params": map[string]any{"service": "gost"}, "timeout": 5})
+		recorder := post(h, "/admin/agent/execute", map[string]any{"node_id": node.ID, "action": "service_status", "params": map[string]any{"service": "anix-agent"}, "timeout": 5})
 		require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
 		require.NoError(t, <-received)
 		data := panelData(t, recorder)

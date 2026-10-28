@@ -99,25 +99,6 @@ module_runtime:
   cert_lifetime: "24h"
   bind_timeout: "2m"
   database_host: ""
-forward_runtime:
-  jobs:
-    poll_interval: "5s"
-    idle_poll_interval: "30s"
-    error_log_interval: "1m"
-    batch_size: 10
-    timeout_seconds: 120
-  gost_stats:
-    poll_interval: "30s"
-    idle_poll_interval: "2m"
-    error_log_interval: "5m"
-  latency:
-    poll_interval: "60s"
-    idle_poll_interval: "60s"
-    error_log_interval: "5m"
-    dials: 5
-    dial_timeout: "3s"
-    concurrency: 16
-    retention_days: 7
 grpc:
   # Always on with domain.
   enabled: false

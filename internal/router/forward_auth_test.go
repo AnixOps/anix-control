@@ -33,13 +33,6 @@ func TestSetup_ForwardCompatAdminEndpoints_RequireAdmin(t *testing.T) {
 		adminStatus int
 	}{
 		{method: http.MethodPost, path: "/api/v2/user/reset", body: "{}", adminStatus: http.StatusServiceUnavailable},
-		{method: http.MethodPost, path: "/api/v2/tunnel/user/list", body: "{}", adminStatus: http.StatusServiceUnavailable},
-		{method: http.MethodGet, path: "/api/v2/admin/forward/runtime/status", adminStatus: http.StatusServiceUnavailable},
-		{method: http.MethodGet, path: "/api/v2/admin/forward/runtime/doctor", adminStatus: http.StatusServiceUnavailable},
-		{method: http.MethodGet, path: "/api/v2/admin/forward/local/status", adminStatus: http.StatusServiceUnavailable},
-		{method: http.MethodGet, path: "/api/v2/admin/forward/local/doctor", adminStatus: http.StatusServiceUnavailable},
-		{method: http.MethodGet, path: "/api/v2/admin/forward/nodex/status", adminStatus: http.StatusServiceUnavailable},
-		{method: http.MethodGet, path: "/api/v2/admin/forward/nodex/doctor", adminStatus: http.StatusServiceUnavailable},
 	}
 
 	for _, ep := range endpoints {
@@ -92,60 +85,8 @@ func TestSetup_ForwardCompatAdminEndpoints_RequireAdmin(t *testing.T) {
 	}
 }
 
-func TestSetup_ForwardUserEndpoints_RequireJWT(t *testing.T) {
-	r, cfg := setupTestRouter(t)
-	defer teardownTestRouter(t)
-
-	userToken := testRouterJWT(t, cfg.JWT.Secret, false)
-	adminToken := testRouterJWT(t, cfg.JWT.Secret, true)
-
-	endpoints := []struct {
-		method string
-		path   string
-	}{
-		{method: http.MethodPost, path: "/api/v2/forward/list"},
-		{method: http.MethodPost, path: "/api/v2/tunnel/user/tunnel"},
-	}
-
-	for _, ep := range endpoints {
-		t.Run(ep.path, func(t *testing.T) {
-			t.Run("no auth", func(t *testing.T) {
-				req, err := http.NewRequest(ep.method, ep.path, nil)
-				require.NoError(t, err)
-
-				w := httptest.NewRecorder()
-				r.ServeHTTP(w, req)
-
-				assert.Equal(t, http.StatusUnauthorized, w.Code)
-			})
-
-			t.Run("user jwt", func(t *testing.T) {
-				req, err := http.NewRequest(ep.method, ep.path, nil)
-				require.NoError(t, err)
-				req.Header.Set("Authorization", "Bearer "+userToken)
-
-				w := httptest.NewRecorder()
-				r.ServeHTTP(w, req)
-
-				assert.Equal(t, http.StatusServiceUnavailable, w.Code)
-			})
-
-			t.Run("admin jwt", func(t *testing.T) {
-				req, err := http.NewRequest(ep.method, ep.path, nil)
-				require.NoError(t, err)
-				req.Header.Set("Authorization", "Bearer "+adminToken)
-
-				w := httptest.NewRecorder()
-				r.ServeHTTP(w, req)
-
-				assert.Equal(t, http.StatusServiceUnavailable, w.Code)
-			})
-		})
-	}
-}
-
-// The flux forwarding API was removed in v4.2 (F5d): its v2 routes are not
-// registered, and /api/v4/forward/* replaces them.
+// The flux forwarding API was removed with the flux runtime and gost: its
+// v2 routes are not registered, and /api/v4/forward/* replaces them.
 func TestFluxForwardRoutesAreRemoved(t *testing.T) {
 	r, cfg := setupTestRouter(t)
 	defer teardownTestRouter(t)
@@ -166,6 +107,22 @@ func TestFluxForwardRoutesAreRemoved(t *testing.T) {
 		{http.MethodGet, "/api/v2/admin/forward/observability/topology"},
 		{http.MethodGet, "/api/v2/admin/forward/agents"},
 		{http.MethodGet, "/api/v2/forward-agent/install.sh"},
+		{http.MethodPost, "/api/v2/forward-agent/register"},
+		{http.MethodPost, "/api/v2/forward-agent/heartbeat"},
+		{http.MethodPost, "/api/v2/forward-agent/report"},
+		{http.MethodGet, "/api/v2/forward/agent/rules"},
+		{http.MethodPost, "/api/v2/forward/list"},
+		{http.MethodPost, "/api/v2/admin/forward/list"},
+		{http.MethodGet, "/api/v2/admin/forward/runtime/status"},
+		{http.MethodGet, "/api/v2/admin/forward/nodex/status"},
+		{http.MethodPost, "/api/v2/admin/forward/test-connection"},
+		{http.MethodGet, "/api/v2/admin/forward/stats"},
+		{http.MethodPost, "/api/v2/admin/tunnel/create"},
+		{http.MethodPost, "/api/v2/tunnel/user/list"},
+		{http.MethodPost, "/api/v2/speed-limit/list"},
+		{http.MethodGet, "/api/v2/user/forward/rules"},
+		{http.MethodPost, "/api/v2/internal/forward/traffic/upload"},
+		{http.MethodPost, "/flow/upload"},
 	} {
 		req, err := http.NewRequest(ep.method, ep.path, strings.NewReader("{}"))
 		require.NoError(t, err)
