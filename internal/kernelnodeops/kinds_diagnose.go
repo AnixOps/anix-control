@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"time"
 
 	kernelnodeopsv1 "github.com/AnixOps/anix-control/sdk/api/kernelnodeops/v1"
 	"github.com/AnixOps/anix-control/v5/internal/model"
@@ -46,15 +45,6 @@ type Diagnosis struct {
 	// none. No forward node holds an Agent Control session before A2-1, so
 	// the kernel's default has none.
 	Agents AgentDirectory
-	// Now stamps the results; time.Now when nil.
-	Now func() time.Time
-}
-
-func (d *Diagnosis) now() time.Time {
-	if d.Now != nil {
-		return d.Now()
-	}
-	return time.Now()
 }
 
 // Register serves the diagnose kinds on registry.

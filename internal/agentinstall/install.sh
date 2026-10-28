@@ -1193,7 +1193,11 @@ cleanup_legacy() {
     fi
   done
   if getent passwd "${LEGACY_USER}" >/dev/null; then
-    userdel "${LEGACY_USER}" >/dev/null 2>&1 && REMOVED+=("user ${LEGACY_USER}") || note "cannot delete the user ${LEGACY_USER}: userdel ${LEGACY_USER}"
+    if userdel "${LEGACY_USER}" >/dev/null 2>&1; then
+      REMOVED+=("user ${LEGACY_USER}")
+    else
+      note "cannot delete the user ${LEGACY_USER}: userdel ${LEGACY_USER}"
+    fi
   fi
   if getent group "${LEGACY_USER}" >/dev/null; then
     groupdel "${LEGACY_USER}" >/dev/null 2>&1 || note "cannot delete the group ${LEGACY_USER}: groupdel ${LEGACY_USER}"
@@ -1562,21 +1566,16 @@ remove_path() {
 }
 
 remove_users() {
-  local user
-  for user in "${AGENT_USER}"; do
-    if getent passwd "${user}" >/dev/null; then
-      if userdel "${user}"; then
-        REMOVED+=("user ${user}")
-      else
-        note "cannot delete the user ${user}: userdel ${user}"
-      fi
+  if getent passwd "${AGENT_USER}" >/dev/null; then
+    if userdel "${AGENT_USER}"; then
+      REMOVED+=("user ${AGENT_USER}")
+    else
+      note "cannot delete the user ${AGENT_USER}: userdel ${AGENT_USER}"
     fi
-  done
-  for user in "${AGENT_USER}"; do
-    if getent group "${user}" >/dev/null; then
-      groupdel "${user}" || note "cannot delete the group ${user}: groupdel ${user}"
-    fi
-  done
+  fi
+  if getent group "${AGENT_USER}" >/dev/null; then
+    groupdel "${AGENT_USER}" || note "cannot delete the group ${AGENT_USER}: groupdel ${AGENT_USER}"
+  fi
 }
 
 uninstall() {

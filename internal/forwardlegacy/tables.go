@@ -68,22 +68,6 @@ const (
 	StateAbandoned   = "abandoned"
 )
 
-// ensureTables creates the upgrade's own tables when they are missing. In
-// Control's database the schema baseline created them
-// (internal/database/migrations); the commands still create them in a
-// database Control did not prepare, a tool's or a test's.
-func ensureTables(db *gorm.DB) error {
-	for _, value := range model.ForwardLegacyModels() {
-		if db.Migrator().HasTable(value) {
-			continue
-		}
-		if err := db.Migrator().CreateTable(value); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // LatestDrop answers the recorded drop, nil when the tables were not
 // dropped.
 func LatestDrop(db *gorm.DB) (*model.ForwardLegacyDrop, error) {
@@ -193,15 +177,6 @@ func UnlessDropped(step func(*gorm.DB) error) func(*gorm.DB) error {
 		}
 		return step(db)
 	}
-}
-
-// presentTables answers which of tables exist.
-func presentTables(db *gorm.DB, tables []string) map[string]bool {
-	present := make(map[string]bool, len(tables))
-	for _, table := range tables {
-		present[table] = db.Migrator().HasTable(table)
-	}
-	return present
 }
 
 // AnyDropTablePresent reports whether one of the flux tables exists.

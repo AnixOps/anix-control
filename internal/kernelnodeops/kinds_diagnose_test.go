@@ -88,12 +88,6 @@ func (n *fakeNetwork) lookup(_ context.Context, host string) ([]netip.Addr, erro
 	return nil, fmt.Errorf("lookup %s: no such host", host)
 }
 
-func (n *fakeNetwork) dials() []string {
-	n.mu.Lock()
-	defer n.mu.Unlock()
-	return append([]string(nil), n.dialled...)
-}
-
 func (n *fakeNetwork) busy() (int, int) {
 	n.mu.Lock()
 	defer n.mu.Unlock()

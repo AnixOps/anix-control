@@ -27,4 +27,6 @@
   `anixops-gost` account or `/var/lib/anixops-gost`; it retires them with
   the rest of the legacy forward runtime when an earlier install left them.
   The Agent unit drops the `anixops-gost` supplementary group and the polkit
-  rule only lets the Agent restart its own unit.
+  rule only lets the Agent restart its own unit. `--uninstall` removes only
+  the Agent's own account; the retired `anixops-gost` account goes with the
+  legacy cleanup.
