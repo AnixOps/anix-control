@@ -145,7 +145,7 @@ func (s *Service) Latency(ctx context.Context, routeID string, since, until time
 			}
 		}
 		if ok := row.Samples - row.Failures; ok > 0 {
-			bucket.RttAvgUs = uint32(row.RTTSumUs / uint64(ok))
+			bucket.RttAvgUs = uint32(row.RTTSumUs / uint64(ok)) // #nosec G115 -- an average of uint32 round trips fits in uint32.
 		}
 		out = append(out, bucket)
 	}
