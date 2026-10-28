@@ -129,12 +129,12 @@ func TestPlanRefuses(t *testing.T) {
 		edit func(d *Document)
 		want string
 	}{
-		"bad node":          {func(d *Document) { d.Lines[0].Node = "node-1" }, "lines[0].node"},
-		"duplicate id":      {func(d *Document) { d.Lines[1].ID = "ln-ix" }, "listed twice"},
-		"unknown line":      {func(d *Document) { d.Ingresses[0].Line = "x" }, "is not a line"},
-		"other kind":        {func(d *Document) { d.Transports[0].Kind = "wireguard" }, "must be anx_line or anx"},
-		"bare untrusted":    {func(d *Document) { d.Transports[0].Trusted = false }, "only for trusted segments"},
-		"anx needs a name":  {func(d *Document) { d.Transports[0].Kind = KindAnx }, "server name"},
+		"bad node":         {func(d *Document) { d.Lines[0].Node = "node-1" }, "lines[0].node"},
+		"duplicate id":     {func(d *Document) { d.Lines[1].ID = "ln-ix" }, "listed twice"},
+		"unknown line":     {func(d *Document) { d.Ingresses[0].Line = "x" }, "is not a line"},
+		"other kind":       {func(d *Document) { d.Transports[0].Kind = "wireguard" }, "must be anx_line or anx"},
+		"bare untrusted":   {func(d *Document) { d.Transports[0].Trusted = false }, "only for trusted segments"},
+		"anx needs a name": {func(d *Document) { d.Transports[0].Kind = KindAnx }, "server name"},
 		"anx on quic": {func(d *Document) {
 			d.Transports[0].Kind = KindAnx
 			d.Transports[0].AnxLine.ServerName = "www.example.org"
