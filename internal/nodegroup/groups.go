@@ -474,14 +474,6 @@ func subscriptionGroupsOf(group model.NodeGroup) []uint {
 	return ids
 }
 
-func tagsOf(group model.NodeGroup) []string {
-	var tags []string
-	if group.Tags != "" {
-		_ = json.Unmarshal([]byte(group.Tags), &tags)
-	}
-	return tags
-}
-
 // lockGroup loads a live group for update.
 func lockGroup(tx *gorm.DB, id uint) (model.NodeGroup, error) {
 	var group model.NodeGroup
