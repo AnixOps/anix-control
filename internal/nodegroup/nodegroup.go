@@ -19,7 +19,6 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/v5/internal/agentpki"
-	"github.com/AnixOps/anix-control/v5/internal/kernelforward"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"gorm.io/gorm"
 )
@@ -84,9 +83,6 @@ type Service struct {
 	Now func() time.Time
 	// PKI issues the certificates of joining machines; Join needs it.
 	PKI *agentpki.Service
-	// Forward creates the nodes of forward groups; kernelforward.New(DB)
-	// when nil.
-	Forward *kernelforward.Service
 	// OnJoin, when set, is called in its own goroutine after a join
 	// committed (the administrators' notification). It must not block the
 	// join, and a failure is its own to report.
@@ -101,13 +97,6 @@ func (s *Service) now() time.Time {
 		return s.Now().UTC()
 	}
 	return time.Now().UTC()
-}
-
-func (s *Service) forward() *kernelforward.Service {
-	if s.Forward != nil {
-		return s.Forward
-	}
-	return kernelforward.New(s.DB)
 }
 
 // Actor is who made an administrator's change, for the audit entry.

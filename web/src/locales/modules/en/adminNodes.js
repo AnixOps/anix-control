@@ -635,8 +635,8 @@ export default {
       namePlaceholder: 'Hong Kong',
       kind: 'Node type',
       kindHelp: {
-        proxy: 'Proxy nodes serve the protocols in subscriptions.',
-        forward: 'Forward nodes are the entry or relay machines of forward routes.'
+        proxy: 'Regular nodes serve the protocols in subscriptions.',
+        forward: 'Relays are regular nodes without protocols: the entry or relay machines of forward routes (ANX relays).'
       },
       preset: 'Protocols',
       presets: {
@@ -669,8 +669,8 @@ export default {
     summary: 'A node group sets the defaults, the protocols and the join token of its nodes.',
     add: 'New node group',
     kinds: {
-      proxy: 'Proxy',
-      forward: 'Forward'
+      proxy: 'Regular',
+      forward: 'Relay'
     },
     table: {
       label: 'Node groups',

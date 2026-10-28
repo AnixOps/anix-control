@@ -98,4 +98,6 @@
 //     link keys and each device's plan generation and reported facts
 //     (v4_kernel_network_model, v4_kernel_network_transport_key,
 //     v4_kernel_network_device).
+//   - 0017_node_groups_make_regular_nodes: every node group makes regular
+//     nodes; former forward groups become proxy groups without a template.
 package migrations

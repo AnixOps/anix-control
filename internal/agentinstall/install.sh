@@ -972,11 +972,18 @@ install_files() {
   chown "${AGENT_USER}:${AGENT_USER}" "$(path "${STATE_DIR}")" "$(path "${PKI_DIR}")" "$(path "${STREAM_DIR}")" "$(path "${UPGRADE_DIR}")"
 }
 
+# render_config writes NODE's configuration. A regular node that relays
+# (--forward) gets the forward component on its own stream ("Forward"); a
+# forward node's Agent runs it without a core.
 render_config() {
-  local node_id="${NODE#*-}"
+  local node_id="${NODE#*-}" forward=""
+  if [[ "${NODE}" == proxy-* ]] && ((FORWARD)); then
+    forward='
+  "Forward": {"Enable": true, "NodeKind": "proxy", "ProxyNodeID": '"${node_id}"'},'
+  fi
   cat <<EOF
 {
-  "Log": {"Level": "info", "Output": ""},
+  "Log": {"Level": "info", "Output": ""},${forward}
   "Cores": [],
   "Nodes": [
     {

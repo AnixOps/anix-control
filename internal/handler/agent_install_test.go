@@ -9,6 +9,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/base64"
 	"encoding/json"
+	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -145,15 +146,16 @@ func TestInstallTokenIssuesSingleUseNodeBoundToken(t *testing.T) {
 	assert.False(t, data.Script.Signed)
 	assert.Equal(t, "https://ctl.example.com/install.sh", data.Script.URL)
 
-	// -u and -t only: the enrollment credential names its node.
+	// -u and -t: the enrollment credential names its node; a forward node
+	// relays, so --forward too.
 	require.Len(t, data.Commands, 3)
 	want := "curl -fsSL https://ctl.example.com/install.sh | sudo bash -s -- -u https://ctl.example.com -t " + data.Credential
 	assert.Equal(t, agentinstall.MirrorControl, data.Commands[0].Mirror)
-	assert.Equal(t, want, data.Commands[0].Command)
-	assert.Equal(t, want+" --mirror cn", data.Commands[1].Command)
+	assert.Equal(t, want+" --forward", data.Commands[0].Command)
+	assert.Equal(t, want+" --mirror cn --forward", data.Commands[1].Command)
 	assert.Equal(t, "curl -fsSL https://github.com/AnixOps/anix-control/releases/download/"+
 		"v"+strings.TrimPrefix(ReleaseVersion, "v")+"/agent-install.sh | sudo bash -s -- -u https://ctl.example.com -t "+
-		data.Credential+" --mirror github", data.Commands[2].Command)
+		data.Credential+" --mirror github --forward", data.Commands[2].Command)
 	assert.NotContains(t, data.Commands[0].Command, "--node")
 
 	// Only the hash is stored.
@@ -373,4 +375,19 @@ func TestInstallMetadataAndArtifacts(t *testing.T) {
 	commands := decodeInstallToken(t, env.post(t, 7, `{"node":"`+proxy+`"}`)).Data.Commands
 	assert.True(t, commands[0].Available)
 	assert.True(t, commands[1].Available)
+}
+
+// A regular node relays, and its install command turns forwarding on, when
+// it has no protocols or is in the forwarding inventory.
+func TestInstallCommandForwardForRelays(t *testing.T) {
+	env := newInstallTestEnv(t)
+	require.NoError(t, env.db.AutoMigrate(&model.NodeProtocol{}, &model.KernelForwardNode{}))
+	node := agentcontrol.AgentNode{Kind: agentcontrol.NodeKindProxy, ID: uint32(env.node.ID)}
+	assert.True(t, relays(env.db, node), "no protocols: a relay")
+	require.NoError(t, env.db.Create(&model.NodeProtocol{NodeID: env.node.ID, Name: "vless", Type: "vless", Port: 443}).Error)
+	assert.False(t, relays(env.db, node), "it serves users")
+	require.NoError(t, env.db.Create(&model.KernelForwardNode{NodeRef: node.String(), NodeKind: node.Kind, NodeID: uint64(node.ID),
+		CreatedAt: time.Now(), UpdatedAt: time.Now()}).Error)
+	assert.True(t, relays(env.db, node), "a hop of forward routes too")
+	assert.True(t, relays(env.db, agentcontrol.AgentNode{Kind: agentcontrol.NodeKindForward, ID: 1}))
 }

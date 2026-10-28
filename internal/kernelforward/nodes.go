@@ -3,6 +3,7 @@ package kernelforward
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -579,7 +580,13 @@ func (s *Service) nodeWrite(ctx context.Context, reason string, body func(tx *go
 	return nil
 }
 
-// CreateForwardNode adds a forward node, as ForwardControl.CreateForwardNode.
+// ErrAgentForwardNodeRetired explains why CreateForwardNode refuses an
+// Agent node: one machine is one node (docs/design/node-unification).
+var ErrAgentForwardNodeRetired = errors.New("a machine running the Agent is a regular node now: add it on the nodes page (or join a node group); a relay is a regular node without protocols")
+
+// CreateForwardNode adds an Ansible machine, as
+// ForwardControl.CreateForwardNode. An Agent node is refused
+// (ErrAgentForwardNodeRetired): it is a regular node.
 func (s *Service) CreateForwardNode(ctx context.Context, requestID string, nodeRecord *forwardv1.ForwardNodeRecord, settings *forwardv1.NodeSettings) (*forwardv1.NodeSummary, error) {
 	requestID, err := checkRequestID(requestID)
 	if err != nil {
@@ -593,6 +600,9 @@ func (s *Service) CreateForwardNode(ctx context.Context, requestID string, nodeR
 	}
 	if err := checkRecord(nodeRecord); err != nil {
 		return nil, err
+	}
+	if nodeRecord.GetTransport() != forwardv1.NodeTransport_NODE_TRANSPORT_ANSIBLE {
+		return nil, fmt.Errorf("%w: %s", ErrInvalidRequest, ErrAgentForwardNodeRetired)
 	}
 	var nodeSettings NodeSettings
 	if settings != nil {
@@ -612,7 +622,7 @@ func (s *Service) CreateForwardNode(ctx context.Context, requestID string, nodeR
 		if settings != nil {
 			stored = &nodeSettings
 		}
-		row, err := createNodeTx(tx, nodeRecord, stored, nil, now)
+		row, err := createNodeTx(tx, nodeRecord, stored, now)
 		created = row
 		return false, err
 	}, func(tx *gorm.DB, _ PlanOutcome, now time.Time) error {
@@ -635,15 +645,11 @@ func (s *Service) CreateForwardNode(ctx context.Context, requestID string, nodeR
 
 // createNodeTx writes a new forward node: the row, with the credential the
 // v2 paths still read (applyRecord), its token in the split tables
-// (ForwardNodeService.Create) and, when given, its settings. mutate, when
-// set, edits the row before it is written.
-func createNodeTx(tx *gorm.DB, nodeRecord *forwardv1.ForwardNodeRecord, settings *NodeSettings, mutate func(*model.ForwardNode), now time.Time) (model.ForwardNode, error) {
+// (ForwardNodeService.Create) and, when given, its settings.
+func createNodeTx(tx *gorm.DB, nodeRecord *forwardv1.ForwardNodeRecord, settings *NodeSettings, now time.Time) (model.ForwardNode, error) {
 	created := model.ForwardNode{Enabled: true, Status: model.ForwardNodeStatusOffline, CreatedAt: now, UpdatedAt: now}
 	if err := applyRecord(&created, nodeRecord, true); err != nil {
 		return model.ForwardNode{}, err
-	}
-	if mutate != nil {
-		mutate(&created)
 	}
 	if err := service.NewForwardNodeService(tx).Create(&created); err != nil {
 		return model.ForwardNode{}, fmt.Errorf("kernel forward: create forward node: %w", err)
@@ -658,48 +664,6 @@ func createNodeTx(tx *gorm.DB, nodeRecord *forwardv1.ForwardNodeRecord, settings
 		}
 	}
 	return created, nil
-}
-
-// CreateForwardNodeTx adds a forward node in the caller's transaction, as
-// CreateForwardNode does without its request ledger: the row (mutate, when
-// set, edits it before it is written) and the replan, under the plan lock.
-// A node group join (internal/nodegroup) creates its forward node so, in the
-// transaction that issues the node's certificate. The caller runs the
-// returned function once its transaction committed: it hands the nodes whose
-// desired state moved to the Agent Control stream, as every committed plan
-// does.
-func (s *Service) CreateForwardNodeTx(tx *gorm.DB, nodeRecord *forwardv1.ForwardNodeRecord, mutate func(*model.ForwardNode)) (model.ForwardNode, func(), error) {
-	if nodeRecord == nil || nodeRecord.GetId() != 0 {
-		return model.ForwardNode{}, nil, fmt.Errorf("%w: a new node record is required", ErrInvalidRequest)
-	}
-	if err := checkRecord(nodeRecord); err != nil {
-		return model.ForwardNode{}, nil, err
-	}
-	now := s.now()
-	if _, err := lockPlan(tx, now); err != nil {
-		return model.ForwardNode{}, nil, err
-	}
-	created, err := createNodeTx(tx, nodeRecord, nil, mutate, now)
-	if err != nil {
-		return model.ForwardNode{}, nil, err
-	}
-	routes, err := loadRoutes(tx)
-	if err != nil {
-		return model.ForwardNode{}, nil, err
-	}
-	outcome, err := s.replanTx(tx, routes, now)
-	if err != nil {
-		return model.ForwardNode{}, nil, err
-	}
-	if err := recordPlan(tx, outcome, "node_created", now); err != nil {
-		return model.ForwardNode{}, nil, err
-	}
-	return created, func() {
-		if outcome.Refused {
-			logRefusedPlan("node_created", outcome.Violations)
-		}
-		outcome.notify()
-	}, nil
 }
 
 // loadForwardNode loads a forward node row for update; ErrNodeNotFound when

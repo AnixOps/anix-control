@@ -9481,6 +9481,51 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v4/kernel/nodes/{id}/convert": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "One machine is one node: a relay is a regular (proxy) node without user protocols, which runs the network model and ANX relays. This creates that node from forward-\u003cid\u003e (name, host, group, tags, approval; hidden from subscribers; no protocols), copies its forwarding settings and last reported engines, moves every route hop, port allocation and DNS node row to it (routes keep their ports) and deletes the forward node, which revokes its Agent's certificates. Every route's plan must accept the change (409 plan_refused otherwise). 409 not_convertible for an Ansible machine or a forward node the network model names. With dry_run nothing changes and to names the node it would be. Then reinstall the Agent on the machine with the new node's install command; its hops are down until it connects. Super administrators only. Audited (module forward, node_convert).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Turn a forward node into a regular node",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "forward-\u003cid\u003e",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "dry_run",
+                        "name": "request",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/handler.nodeConvertRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/kernelforward.Conversion"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v4/kernel/nodes/{id}/diagnostics": {
             "get": {
                 "security": [
@@ -12135,6 +12180,14 @@ const docTemplate = `{
                 }
             }
         },
+        "handler.nodeConvertRequest": {
+            "type": "object",
+            "properties": {
+                "dry_run": {
+                    "type": "boolean"
+                }
+            }
+        },
         "handler.nodeDiagnosticRequest": {
             "type": "object",
             "properties": {
@@ -12328,6 +12381,27 @@ const docTemplate = `{
                     "items": {
                         "type": "string"
                     }
+                }
+            }
+        },
+        "kernelforward.Conversion": {
+            "type": "object",
+            "properties": {
+                "dry_run": {
+                    "type": "boolean"
+                },
+                "from": {
+                    "type": "string"
+                },
+                "routes": {
+                    "description": "Routes are the ids of the routes whose hops moved.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "to": {
+                    "type": "string"
                 }
             }
         },

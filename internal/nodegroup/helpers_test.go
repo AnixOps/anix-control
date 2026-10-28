@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/v5/internal/agentpki"
-	"github.com/AnixOps/anix-control/v5/internal/kernelforward"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/modulepki"
 	"github.com/AnixOps/anix-control/v5/internal/nodesecrets"
@@ -135,7 +134,6 @@ func newFixture(t *testing.T, db *gorm.DB) *fixture {
 	f := &fixture{db: db, clock: clk, kek: kek, pki: pki, admin: Actor{UserID: 7, Name: "root@example.com", IP: "192.0.2.10"}}
 	f.svc = &Service{
 		DB: db, KEK: func() string { return f.kek }, Now: clk.Now, PKI: pki,
-		Forward: &kernelforward.Service{DB: db, Cluster: func() string { return "test" }, AnixOps: func() bool { return false }, Now: clk.Now},
 	}
 	for _, name := range []string{"Standard", "Premium"} {
 		group := model.SubscriptionGroup{Name: name, Enable: 1}

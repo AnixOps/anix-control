@@ -14,7 +14,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
-	forwardv1 "github.com/AnixOps/anix-control/sdk/api/forward/v1"
 	"github.com/AnixOps/anix-control/v5/internal/agentpki"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/nodesecrets"
@@ -141,8 +140,8 @@ func (r *joinRefusal) Unwrap() error { return ErrJoinRejected }
 //     -2, -3 suffix; the connect host, else the first public address; the
 //     group's defaults; pending approval when the group requires it. A
 //     proxy node gets the template's protocols with their own secrets and
-//     ports, in the group's subscription groups; a forward node is created
-//     as the forward inventory creates one.
+//     ports, in the group's subscription groups (a group without a
+//     template makes relays: nodes without protocols).
 //  4. It records a join_token enrollment, issues the certificate as Enroll
 //     does and writes the agent_join audit entry.
 //
@@ -181,11 +180,11 @@ func (s *Service) Join(ctx context.Context, request JoinRequest) (Joined, error)
 			joined.Node, joined.NodeName, joined.Approval = target.node, target.name, approvalOf(target.approval)
 		} else {
 			if group.MaxNodes > 0 {
-				var live int64
-				if err := liveNodes(tx, group).Count(&live).Error; err != nil {
+				counts, err := countNodes(tx, group)
+				if err != nil {
 					return err
 				}
-				if live >= int64(group.MaxNodes) {
+				if counts.Live >= int64(group.MaxNodes) {
 					return &joinRefusal{reason: refusalMaxNodes, group: &group}
 				}
 			}
@@ -366,36 +365,35 @@ func (s *Service) rejoinTarget(tx *gorm.DB, group model.NodeGroup, request JoinR
 		lastCheck *time.Time
 	}
 	var candidates []candidate
-	if group.Kind == model.NodeGroupKindForward {
-		var nodes []model.ForwardNode
-		if err := liveNodes(tx, group).Where("machine_fingerprint = ? AND enabled = ?", request.MachineFingerprint, true).
-			Order("id DESC").Find(&nodes).Error; err != nil {
-			return nil, err
+	var nodes []model.Node
+	if err := liveNodes(tx, group).Where("machine_fingerprint = ? AND status <> ?", request.MachineFingerprint, model.NodeStatusDisabled).
+		Order("id DESC").Find(&nodes).Error; err != nil {
+		return nil, err
+	}
+	for _, node := range nodes {
+		var lastCheck *time.Time
+		if node.LastCheckAt != nil {
+			at := time.Unix(*node.LastCheckAt, 0).UTC()
+			lastCheck = &at
 		}
-		for _, node := range nodes {
-			lastCheck := node.LastCheck
-			candidates = append(candidates, candidate{
-				node: agentcontrol.AgentNode{Kind: agentcontrol.NodeKindForward, ID: uint32(node.ID)}, // #nosec G115 -- node ids are below 2^32.
-				name: node.Name, approval: node.Approval, address: node.LastPublicAddress, lastCheck: &lastCheck,
-			})
-		}
-	} else {
-		var nodes []model.Node
-		if err := liveNodes(tx, group).Where("machine_fingerprint = ? AND status <> ?", request.MachineFingerprint, model.NodeStatusDisabled).
-			Order("id DESC").Find(&nodes).Error; err != nil {
-			return nil, err
-		}
-		for _, node := range nodes {
-			var lastCheck *time.Time
-			if node.LastCheckAt != nil {
-				at := time.Unix(*node.LastCheckAt, 0).UTC()
-				lastCheck = &at
-			}
-			candidates = append(candidates, candidate{
-				node: agentcontrol.AgentNode{Kind: agentcontrol.NodeKindProxy, ID: uint32(node.ID)}, // #nosec G115 -- node ids are below 2^32.
-				name: node.Name, approval: node.Approval, address: node.LastPublicAddress, lastCheck: lastCheck,
-			})
-		}
+		candidates = append(candidates, candidate{
+			node: agentcontrol.AgentNode{Kind: agentcontrol.NodeKindProxy, ID: uint32(node.ID)}, // #nosec G115 -- node ids are below 2^32.
+			name: node.Name, approval: node.Approval, address: node.LastPublicAddress, lastCheck: lastCheck,
+		})
+	}
+	// A machine of a forward node the group made earlier gets that node
+	// back, as before.
+	var forwardNodes []model.ForwardNode
+	if err := liveForwardNodes(tx, group).Where("machine_fingerprint = ? AND enabled = ?", request.MachineFingerprint, true).
+		Order("id DESC").Find(&forwardNodes).Error; err != nil {
+		return nil, err
+	}
+	for _, node := range forwardNodes {
+		lastCheck := node.LastCheck
+		candidates = append(candidates, candidate{
+			node: agentcontrol.AgentNode{Kind: agentcontrol.NodeKindForward, ID: uint32(node.ID)}, // #nosec G115 -- node ids are below 2^32.
+			name: node.Name, approval: node.Approval, address: node.LastPublicAddress, lastCheck: &lastCheck,
+		})
 	}
 	for _, candidate := range candidates {
 		if candidate.address == "" || !contains(request.PublicAddresses, candidate.address) {
@@ -449,33 +447,6 @@ func (s *Service) createNode(tx *gorm.DB, group model.NodeGroup, request JoinReq
 		publicAddress = request.PublicAddresses[0]
 	}
 	groupID := group.ID
-	if group.Kind == model.NodeGroupKindForward {
-		created, after, err := s.forward().CreateForwardNodeTx(tx, &forwardv1.ForwardNodeRecord{
-			Name: name, Host: host, Enabled: true, Transport: forwardv1.NodeTransport_NODE_TRANSPORT_AGENT,
-		}, func(node *model.ForwardNode) {
-			node.NodeGroupID, node.MachineFingerprint, node.Approval, node.LastPublicAddress = &groupID, request.MachineFingerprint, approval, publicAddress
-			// The group's tags, but never the inventory's mark of an
-			// Ansible machine: a joined node runs the Agent.
-			var tags []string
-			for _, tag := range tagsOf(group) {
-				if tag != service.ForwardNodeInventoryTagAnsibleMachine {
-					tags = append(tags, tag)
-				}
-			}
-			if len(tags) > 0 {
-				encoded, _ := json.Marshal(tags)
-				node.Tags = string(encoded)
-			}
-		})
-		if err != nil {
-			return joinedNode{}, nil, err
-		}
-		return joinedNode{
-			node: agentcontrol.AgentNode{Kind: agentcontrol.NodeKindForward, ID: uint32(created.ID)}, // #nosec G115 -- node ids are below 2^32.
-			name: created.Name, approval: approval,
-		}, []func(){after}, nil
-	}
-
 	node := model.Node{
 		Name: name, Host: host, Port: 443, Status: model.NodeStatusPending, Rate: group.Rate, TrafficRate: 1, Sort: group.Sort, Show: 1,
 		MonthlyResetDay: group.ResetDay, NodeGroupID: &groupID, MachineFingerprint: request.MachineFingerprint,
@@ -580,10 +551,14 @@ func nodeName(request JoinRequest) string {
 // uniqueName returns base, or base-2, base-3, ... : the first name no live
 // node of the group has.
 func uniqueName(tx *gorm.DB, group model.NodeGroup, base string) (string, error) {
-	var names []string
+	var names, forwardNames []string
 	if err := liveNodes(tx, group).Pluck("name", &names).Error; err != nil {
 		return "", err
 	}
+	if err := liveForwardNodes(tx, group).Pluck("name", &forwardNames).Error; err != nil {
+		return "", err
+	}
+	names = append(names, forwardNames...)
 	taken := make(map[string]bool, len(names))
 	for _, name := range names {
 		taken[name] = true

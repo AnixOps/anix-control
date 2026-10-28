@@ -89,15 +89,15 @@ func runNodeRegistry(t *testing.T, db *gorm.DB) {
 	}, &forwardv1.NodeSettings{PortRange: &forwardv1.PortRange{First: 31000, Last: 31999}})
 	require.NoError(t, err)
 	assert.Equal(t, created.GetNodeRef(), again.GetNodeRef(), "a retry answers the recorded node")
-	_, err = f.service.CreateForwardNode(ctx, "node-1", &forwardv1.ForwardNodeRecord{Name: "other", Host: "192.0.2.32"}, nil)
+	_, err = f.service.CreateForwardNode(ctx, "node-1", &forwardv1.ForwardNodeRecord{Name: "other", Host: "192.0.2.32", Transport: forwardv1.NodeTransport_NODE_TRANSPORT_ANSIBLE}, nil)
 	assert.ErrorIs(t, err, ErrRequestConflict)
 
-	agentNode, err := f.service.CreateForwardNode(ctx, "node-2", &forwardv1.ForwardNodeRecord{Name: "jp-exit", Host: "192.0.2.41", Role: "exit"}, nil)
-	require.NoError(t, err)
-	assert.False(t, agentNode.GetInInventory(), "a node without settings joins with its Agent's Hello")
-	var agentRow model.ForwardNode
-	require.NoError(t, db.First(&agentRow, agentNode.GetRecord().GetId()).Error)
-	assert.Len(t, agentRow.APIToken, 32, "an Agent node keeps a legacy credential no answer carries")
+	// A machine running the Agent is a regular node now.
+	for _, transport := range []forwardv1.NodeTransport{forwardv1.NodeTransport_NODE_TRANSPORT_UNSPECIFIED, forwardv1.NodeTransport_NODE_TRANSPORT_AGENT} {
+		_, err = f.service.CreateForwardNode(ctx, "node-2", &forwardv1.ForwardNodeRecord{Name: "jp-exit", Host: "192.0.2.41", Role: "exit", Transport: transport}, nil)
+		assert.ErrorIs(t, err, ErrInvalidRequest)
+		assert.ErrorContains(t, err, "regular node")
+	}
 
 	for _, bad := range []*forwardv1.ForwardNodeRecord{
 		{Host: "192.0.2.1"},
@@ -106,7 +106,7 @@ func runNodeRegistry(t *testing.T, db *gorm.DB) {
 		{Name: "x", Host: "h", Role: "entry"},
 		{Name: "x", Host: "h", Port: 70000},
 		{Name: "x", Host: "h", Role: "exit", Transport: forwardv1.NodeTransport_NODE_TRANSPORT_ANSIBLE},
-		{Id: 5, Name: "x", Host: "h"},
+		{Id: 5, Name: "x", Host: "h", Transport: forwardv1.NodeTransport_NODE_TRANSPORT_ANSIBLE},
 	} {
 		_, err := f.service.CreateForwardNode(ctx, "bad", bad, nil)
 		assert.ErrorIs(t, err, ErrInvalidRequest, "%v", bad)
@@ -250,9 +250,13 @@ func TestServerNodeMethods(t *testing.T) {
 	assert.Equal(t, codes.NotFound, status.Code(err))
 	_, err = server.SetNodeSettings(ctx, &forwardv1.SetNodeSettingsRequest{NodeRef: "forward-11", Settings: &forwardv1.NodeSettings{Addresses: []string{"not-ip"}}})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
-	created, err := server.CreateForwardNode(ctx, &forwardv1.CreateForwardNodeRequest{RequestId: "n1", Node: &forwardv1.ForwardNodeRecord{Name: "n", Host: "192.0.2.9"}})
+	created, err := server.CreateForwardNode(ctx, &forwardv1.CreateForwardNodeRequest{RequestId: "n1", Node: &forwardv1.ForwardNodeRecord{
+		Name: "n", Host: "192.0.2.9", Transport: forwardv1.NodeTransport_NODE_TRANSPORT_ANSIBLE,
+	}})
 	require.NoError(t, err)
 	assert.Equal(t, "forward", created.GetNode().GetKind())
+	_, err = server.CreateForwardNode(ctx, &forwardv1.CreateForwardNodeRequest{RequestId: "n2", Node: &forwardv1.ForwardNodeRecord{Name: "a", Host: "192.0.2.10"}})
+	assert.Equal(t, codes.InvalidArgument, status.Code(err), "an Agent node is a regular node")
 
 	route := f.create("route-1", twoHop(0))
 	_, err = server.DeleteForwardNode(ctx, &forwardv1.DeleteForwardNodeRequest{RequestId: "d1", Id: 11})

@@ -68,7 +68,7 @@ func TestGroupCRUDWithAPartialUniqueName(t *testing.T) {
 		assert.False(t, updated.RequireApproval)
 		assert.Equal(t, 1.0, updated.Rate)
 		assert.Empty(t, updated.SubscriptionGroupIDs)
-		_, err = f.svc.Update(ctx, created.ID, GroupInput{Name: "HK 2", Kind: "forward"}, f.admin)
+		_, err = f.svc.Update(ctx, created.ID, GroupInput{Name: "HK 2", Kind: "edge"}, f.admin)
 		assert.ErrorIs(t, err, ErrInvalid)
 		_, err = f.svc.Update(ctx, 4242, GroupInput{Name: "x"}, f.admin)
 		assert.ErrorIs(t, err, ErrNotFound)
@@ -128,12 +128,7 @@ func TestGroupValidation(t *testing.T) {
 		"missing subscription group": {
 			Name: "g", Kind: "proxy", SubscriptionGroupIDs: []uint{4242},
 		},
-		"forward template": {
-			Name: "g", Kind: "forward", ProtocolTemplate: rawJSON(t, []map[string]any{{"type": "vmess", "port": 80}}),
-		},
-		"forward subscriptions": {
-			Name: "g", Kind: "forward", SubscriptionGroupIDs: []uint{f.subscriptions[0].ID},
-		},
+		"unknown kind": {Name: "g", Kind: "relay"},
 		"bad template": {Name: "g", Kind: "proxy", ProtocolTemplate: rawJSON(t, []map[string]any{{"type": "hysteria2", "port": 443}})},
 	}
 	for name, input := range cases {

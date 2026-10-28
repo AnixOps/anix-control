@@ -106,7 +106,7 @@ import NodeGroupQuickCreate from './NodeGroupQuickCreate.vue'
 import NodeJoinCommand from './NodeJoinCommand.vue'
 import NodeJoinNodes from './NodeJoinNodes.vue'
 import NodeNotice from './NodeNotice.vue'
-import { readKernelError } from './nodeGroupData'
+import { groupKind, readKernelError } from './nodeGroupData'
 import { useNodeJoin } from './useNodeJoin'
 
 const props = defineProps({
@@ -127,7 +127,7 @@ const creating = ref(false)
 
 const groupOptions = computed(() => join.groups.value.map(group => ({
   value: group.id,
-  label: `${group.name} · ${t(`admin.nodes.groups.kinds.${group.kind}`)}`
+  label: `${group.name} · ${t(`admin.nodes.groups.kinds.${groupKind(group)}`)}`
 })))
 
 const groupSummary = computed(() => {

@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_PORT_RANGE, DEFAULT_REALITY_SERVER_NAME, PRESET_KEYS, PROTOCOL_PRESETS, adaptProtocol, blankProtocol,
-  buildGroupInput, buildQuickGroupInput, entryFromProtocol, groupFormFrom, hasProblems, inputFromGroup,
+  buildGroupInput, buildQuickGroupInput, entryFromProtocol, groupFormFrom, groupKind, hasProblems, inputFromGroup,
   jsonObjectError, pickDefaultSubscriptionGroup, protocolFromEntry, protocolProblems, readKernelError
 } from '@/views/admin/nodes/nodeGroupData'
 
@@ -89,6 +89,14 @@ describe('group bodies', () => {
   it('sends an unchanged list body with one field changed', () => {
     expect(inputFromGroup(group, { require_approval: false })).toMatchObject({ name: 'HK', require_approval: false, token_expires_at: '2999-01-01T00:00:00Z', subscription_group_ids: [9, 10] })
     expect(inputFromGroup({ name: 'x', kind: 'forward' }).protocol_template).toEqual([])
+  })
+
+  it('shows a group without protocols as a relay group', () => {
+    // The API stores every group as proxy (docs/design/node-unification).
+    const relay = { name: 'CN relay', kind: 'proxy', protocol_template: [] }
+    expect(groupKind(relay)).toBe('forward')
+    expect(groupKind(group)).toBe('proxy')
+    expect(groupFormFrom(relay, { now: NOW }).kind).toBe('forward')
   })
 
   it('maps the token validity choices', () => {

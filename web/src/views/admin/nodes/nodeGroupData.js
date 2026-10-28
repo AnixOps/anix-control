@@ -7,6 +7,13 @@ export const BYTES_PER_GB = 1024 * 1024 * 1024
 
 export const NODE_GROUP_KINDS = Object.freeze(['proxy', 'forward'])
 
+// Every node a group makes is a regular node (docs/design/node-unification):
+// the API stores every group as proxy, and a group without protocols makes
+// relays. The console still shows such a group as a relay ("forward") group.
+export function groupKind(group) {
+  return Array.isArray(group?.protocol_template) && group.protocol_template.length > 0 ? 'proxy' : 'forward'
+}
+
 // The protocol types a template may name, and each one's transports and TLS
 // modes (internal/nodegroup/template.go): Reality is VLESS only and runs on
 // tcp, grpc and h2.
@@ -199,7 +206,7 @@ export function groupFormFrom(group, { now = Date.now() } = {}) {
   if (hasExpiry) expiry = group.token_expired || expires <= now ? 'expired' : 'keep'
   return {
     name: group.name || '',
-    kind: group.kind || 'proxy',
+    kind: groupKind(group),
     rate: Number(group.rate) || 1,
     tagsText: Array.isArray(group.tags) ? group.tags.join(', ') : '',
     monthlyLimitGb: group.monthly_limit_bytes ? group.monthly_limit_bytes / BYTES_PER_GB : null,
@@ -228,8 +235,9 @@ export function expiryFor(form, now = Date.now()) {
   return days ? new Date(now + days * 86_400_000).toISOString() : null
 }
 
-// The body of POST/PUT /kernel/node-groups. A forward group has no template
-// and no subscription groups (the API refuses both).
+// The body of POST/PUT /kernel/node-groups. A relay ("forward") group has
+// no template and no subscription groups: its nodes are regular nodes
+// without protocols.
 export function buildGroupInput(form, { now = Date.now() } = {}) {
   const proxy = form.kind === 'proxy'
   const input = {

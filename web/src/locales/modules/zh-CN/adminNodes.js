@@ -635,8 +635,8 @@ export default {
       namePlaceholder: '香港',
       kind: '节点类型',
       kindHelp: {
-        proxy: '代理节点：为用户提供订阅里的协议。',
-        forward: '转发节点：转发线路的入口或中继机器。'
+        proxy: '常规节点：为用户提供订阅里的协议。',
+        forward: '中转：同样是常规节点，只是不带协议，用作转发线路的入口或中继（ANX 中转）。'
       },
       preset: '协议',
       presets: {
@@ -669,8 +669,8 @@ export default {
     summary: '节点组决定新节点的默认设置、协议和接入令牌。',
     add: '新建节点组',
     kinds: {
-      proxy: '代理',
-      forward: '转发'
+      proxy: '常规',
+      forward: '中转'
     },
     table: {
       label: '节点组',
