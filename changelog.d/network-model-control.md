@@ -12,4 +12,4 @@
   devices get a new plan generation when their plan changes, and
   `GET /api/v4/kernel/network/devices/{id}/plan` shows a plan with the
   keys redacted. Paths wait (listed as pending) until the accepting device
-  reports its ANX-Line server key. Plans do not reach Agents yet.
+  reports its ANX-Line server key.

@@ -24,6 +24,13 @@
 - 每台设备的计划哈希变化即 generation + 1；曾有计划、现在没有的设备下发空计划。
 - 未决：accept 端 c2/c3（QUIC、fake-TCP）监听端口目前只写在 dial 端地址里（传输的 `quic_port` / `faketcp_port`），第 3 步实现 Agent 时再定 accept 端从哪里读。
 
+## Agent Control 下发与状态（第 2b 步）
+
+- 协商：Hello 列出 `network.v1` 且带合法 `device_capabilities`（`device_ref` 等于本会话节点），并且本会话协商了 config.v1，HelloAck 才列 `network.v1`；forward 节点同时获得 package-reports.v1。
+- 每次 Hello 记录协商标志与能力（`v4_kernel_network_device.negotiated` / `capabilities_json`）；标志为真时设备配置文档带成员 `network`（无计划时只有 `device_ref`、generation 0），否则不带。
+- 模型写入使设备 generation 变化后，提交即推送这些设备的配置（触发 `network`）；分钟级刷新兜底。
+- `NetworkStatus` 以 PackageReport（`network` / `network.status` / `v1`）上报；只在协商了 `network.v1` 的会话接受，`device_ref` 必须是本节点；最新一份存 `status_json`，其 `public_keys` 写入公钥并重新规划（pending 路径随之进入计划）。
+
 ## 后续步骤
 
 1. **内核**（线程「内核支持网络模型出口与路径」）：`DirectOutbound` 源地址、`egress:<id>` 出站、`PUT /v1/network` 读同一份 `NetworkPlan`，入站 `ingress` 键挂入口。

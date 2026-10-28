@@ -12,9 +12,11 @@ import (
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	"github.com/AnixOps/anix-control/sdk/forward/wire"
+	"github.com/AnixOps/anix-control/sdk/network"
 	"github.com/AnixOps/anix-control/v5/internal/egressroute"
 	"github.com/AnixOps/anix-control/v5/internal/kernelforward"
 	"github.com/AnixOps/anix-control/v5/internal/model"
+	"github.com/AnixOps/anix-control/v5/internal/networkmodel"
 	"github.com/AnixOps/anix-control/v5/internal/nodesecrets"
 	"github.com/AnixOps/anix-control/v5/internal/service"
 	"gorm.io/gorm"
@@ -77,6 +79,14 @@ func BuildDesiredConfig(db *gorm.DB, node agentcontrol.AgentNode) (*DesiredConfi
 	if negotiated {
 		format = ForwardConfigFormat
 		document[wire.NodeConfigMember] = member
+	}
+	// The device network plan (network.v1) is a member of either format.
+	negotiated, member, err = networkmodel.NodeConfigMember(db, node)
+	if err != nil {
+		return nil, err
+	}
+	if negotiated {
+		document[network.NodeConfigMember] = member
 	}
 	return newDesiredConfig(node, format, document)
 }

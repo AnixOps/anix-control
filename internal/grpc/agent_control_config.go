@@ -66,6 +66,9 @@ const (
 	// configTriggerForward: a plan moved the node's forwarding generation
 	// (agent_control_forward.go).
 	configTriggerForward = "forward"
+	// configTriggerNetwork: a write moved the device's network plan
+	// generation (agent_control_network.go).
+	configTriggerNetwork = "network"
 	// configTriggerApproval: an administrator approved a node that was
 	// pending approval (nodegroup.OnApproval).
 	configTriggerApproval = "approval"
@@ -387,7 +390,7 @@ type configMetrics struct {
 // configTriggers and configResults are the label values, in the order the
 // metrics are written.
 var (
-	configTriggers = []string{configTriggerHello, configTriggerSync, configTriggerRefresh, configTriggerForward, configTriggerApproval}
+	configTriggers = []string{configTriggerHello, configTriggerSync, configTriggerRefresh, configTriggerForward, configTriggerNetwork, configTriggerApproval}
 	configResults  = []string{model.ConfigVerdictApplied, model.ConfigVerdictFailed, model.ConfigVerdictStale, model.ConfigVerdictMismatch, configStatusUnrecorded}
 )
 
