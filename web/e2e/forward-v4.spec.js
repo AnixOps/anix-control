@@ -72,8 +72,8 @@ test('maps the preview violations to their fields', async ({ page }) => {
   await expect(page.getByTestId('forward-save')).toBeDisabled()
   await summary.locator('[data-violation-field="targets[0].host"]').click()
   await expect(page.getByLabel('Target 1 host')).toBeFocused()
-  // The link fix: fall back to RAW.
-  await expect(page.getByRole('button', { name: 'Use RAW' })).toBeVisible()
+  // The exit node that does not run nftables.
+  await expect(summary.locator('[data-violation-field="hops[1].engine"]')).toBeVisible()
 })
 
 test('saves a node’s forwarding settings', async ({ page }) => {
