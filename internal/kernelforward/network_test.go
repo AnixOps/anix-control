@@ -20,7 +20,8 @@ func networkFixture(t *testing.T) (*fixture, *gorm.DB, *networkmodel.Service) {
 	migrate(t, db)
 	require.NoError(t, db.AutoMigrate(&model.OperationLog{}))
 	f := newFixture(t, db)
-	network := networkmodel.New(db)
+	f.service.NetworkKEK = func() string { return testKEK }
+	network := f.service.network(db)
 	_, err := network.Replace(f.ctx, &networkmodel.Document{
 		Lines: []networkmodel.Line{{ID: "ln-hk", Node: "proxy-21", Interface: "eth0", Families: []string{"v4"}, GatewayV4: "203.0.113.1"}},
 		Egresses: []networkmodel.Egress{

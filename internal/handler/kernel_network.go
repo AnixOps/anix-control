@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/AnixOps/anix-control/v5/internal/database"
+	"github.com/AnixOps/anix-control/v5/internal/kernelforward"
 	"github.com/AnixOps/anix-control/v5/internal/networkmodel"
 	"github.com/gin-gonic/gin"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -142,4 +143,39 @@ func (h *NetworkModelHandler) DevicePlan(c *gin.Context) {
 		return
 	}
 	c.Data(http.StatusOK, "application/json; charset=utf-8", append(append([]byte(`{"data":`), encoded...), '}'))
+}
+
+type migrateGostRequest struct {
+	// DryRun answers the report without changing anything.
+	DryRun bool `json:"dry_run"`
+}
+
+// MigrateGost godoc
+// @Summary Move the gost forward routes onto the network model
+// @Description One-shot migration of every forward.v1 route with an ENGINE_GOST hop to ENGINE_NETWORK (docs/design/network-model/implementation.md step 5). Each pair of adjacent hops runs over a network model transport: one already joining the two devices, or an added one (bare anx_line between nodes labelled link=iepl or link=iplc, the A2-jacketed anx kind with the gost link's server name otherwise), with the hop egress and hop ingress (port 24443, dialed at the hop's dial address or the node's first address) it needs; the exit leaves by its device's internet egress, added as nat_direct when missing; the entry keeps its allocated port. nftables routes are not touched. A route whose hop has several nodes, whose device has no line, or whose untrusted link has no server name stays on gost and is listed under blocked with the reasons. With dry_run nothing changes. Otherwise the network model document is replaced (audited) and every listed route changes in one plan (409 when the plan refuses it).
+// @Tags Kernel
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body migrateGostRequest true "dry_run"
+// @Success 200 {object} kernelforward.Migration
+// @Router /api/v4/kernel/network/migrate-gost [post]
+func (h *NetworkModelHandler) MigrateGost(c *gin.Context) {
+	var request migrateGostRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		kernelError(c, http.StatusBadRequest, "invalid_request", err.Error())
+		return
+	}
+	report, err := kernelforward.New(h.db()).MigrateGostRoutes(c.Request.Context(), request.DryRun, h.actor(c))
+	var refused *kernelforward.RefusedError
+	switch {
+	case errors.As(err, &refused):
+		kernelError(c, http.StatusConflict, "plan_refused", err.Error())
+	case errors.Is(err, kernelforward.ErrRevisionMismatch):
+		kernelError(c, http.StatusConflict, "revision_conflict", err.Error())
+	case err != nil:
+		h.modelError(c, err)
+	default:
+		kernelData(c, http.StatusOK, report)
+	}
 }

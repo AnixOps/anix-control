@@ -91,6 +91,7 @@ PortForward 由 Agent 转成 anixcore 的 forward 入站（出站为 `egress:<id
   - nftables 规则不迁移，原样保留。
   - 规则改成 ENGINE_NETWORK，出口沿用该节点的互联网出口。
   - 先 dry-run 列出变化，再执行。
+  - 已实现：`POST /api/v4/kernel/network/migrate-gost`（`dry_run`）。新增组件以 `mig-` 开头；新加的跳入口监听 24443，拨号地址取跳的 dial_address 或节点第一个地址；两端都标了 link=iepl/iplc 才用裸 `anx_line`，否则用 `anx`，SNI 取原 gost 链路的 server_name，没有就列为受阻；入口沿用已分配端口，客户端不用改。一跳多节点（出口 HA）、设备没有线路的路由留在 gost 并列出原因。所有可迁的路由在同一次规划里一起改，规划被拒则都不改。
 - 转发专用节点改为安装 anx-node 和 anx-server，不再装 gost。
 - 最后删除：
   - Agent 的 gost 驱动（forward/gostswap、plugin/gostmesh），以及安装脚本里的 gost。

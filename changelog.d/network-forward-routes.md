@@ -11,3 +11,12 @@
 - The port forwards' byte counters in NetworkStatus meter the route's
   entry hop, so traffic statistics and quotas work as for other engines;
   a lower value than the last one starts a new counter epoch.
+- `POST /api/v4/kernel/network/migrate-gost` moves every gost forward route
+  onto the network model in one plan (`dry_run` reports without changing
+  anything): adjacent hops get a network model transport (bare `anx_line`
+  between nodes labelled `link=iepl`/`link=iplc`, the A2-jacketed `anx`
+  kind with the gost link's server name otherwise) with the hop egress and
+  ingress it needs, the exit an internet egress, and the entry keeps its
+  allocated port. nftables routes stay; routes the model cannot carry yet
+  (several nodes on a hop, a device without a line, an untrusted link
+  without a server name) are listed with the reasons.

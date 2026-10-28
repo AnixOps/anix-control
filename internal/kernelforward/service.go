@@ -32,6 +32,7 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/config"
 	"github.com/AnixOps/anix-control/v5/internal/forwardddns"
 	"github.com/AnixOps/anix-control/v5/internal/model"
+	"github.com/AnixOps/anix-control/v5/internal/networkmodel"
 	"github.com/AnixOps/anix-control/v5/internal/service"
 	"google.golang.org/protobuf/encoding/protojson"
 	"gorm.io/gorm"
@@ -139,6 +140,9 @@ type Service struct {
 	// AnixOps answers whether routes may use the experimental AnixOps engine
 	// (forward.anixops_experimental); the configuration's value when nil.
 	AnixOps func() bool
+	// NetworkKEK answers the network model's key-encryption key
+	// (module_runtime.ca_kek); the configuration's value when nil.
+	NetworkKEK func() string
 	// Now defaults to time.Now.
 	Now func() time.Time
 	// Checks runs the forward checks of agent.diagnostic on the nodes'
@@ -179,6 +183,13 @@ func (s *Service) cluster() string {
 
 // anixOpsEnabled reports the forward.anixops_experimental switch: it sets the
 // planner's and the validation's EnableAnixOps.
+// network answers the network model on db.
+func (s *Service) network(db *gorm.DB) *networkmodel.Service {
+	network := networkmodel.New(db)
+	network.KEK, network.Now = s.NetworkKEK, s.Now
+	return network
+}
+
 func (s *Service) anixOpsEnabled() bool {
 	if s.AnixOps != nil {
 		return s.AnixOps()

@@ -10,7 +10,6 @@ import (
 	forwardv1 "github.com/AnixOps/anix-control/sdk/api/forward/v1"
 	"github.com/AnixOps/anix-control/sdk/forward/planner"
 	"github.com/AnixOps/anix-control/v5/internal/model"
-	"github.com/AnixOps/anix-control/v5/internal/networkmodel"
 	"google.golang.org/protobuf/proto"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -227,7 +226,7 @@ func (s *Service) replanTx(tx *gorm.DB, routes []storedRoute, now time.Time) (Pl
 		}
 	}
 	// The ENGINE_NETWORK routes, with their enforcement, as port forwards.
-	if outcome.network, err = networkmodel.New(tx).ReplanTx(tx); err != nil {
+	if outcome.network, err = s.network(tx).ReplanTx(tx); err != nil {
 		return PlanOutcome{}, fmt.Errorf("kernel forward: network model: %w", err)
 	}
 	return outcome, nil
