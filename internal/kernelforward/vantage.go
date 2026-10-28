@@ -114,17 +114,22 @@ func saveVantage(tx *gorm.DB, bindingID uint64, selector string, now time.Time) 
 // other than the route's entry nodes. routes are the effective routes of
 // the plan.
 func addVantageProbes(tx *gorm.DB, states map[string]*forwardv1.NodeForwardState, nodes []*forwardv1.NodeInfo, routes []*forwardv1.Route) error {
-	selectors, err := loadVantage(tx)
+	// Most plans have no unpaused binding: the selectors are read only
+	// when there is one.
+	var bindings []model.KernelForwardDNSBinding
+	if err := tx.Where("paused = ?", false).Order("id").Find(&bindings).Error; err != nil {
+		return fmt.Errorf("kernel forward: load dns bindings: %w", err)
+	}
+	if len(bindings) == 0 {
+		return nil
+	}
+	ids := make([]uint64, 0, len(bindings))
+	for _, binding := range bindings {
+		ids = append(ids, binding.ID)
+	}
+	selectors, err := loadVantage(tx, ids...)
 	if err != nil || len(selectors) == 0 {
 		return err
-	}
-	ids := make([]uint64, 0, len(selectors))
-	for id := range selectors {
-		ids = append(ids, id)
-	}
-	var bindings []model.KernelForwardDNSBinding
-	if err := tx.Where("id IN ? AND paused = ?", ids, false).Order("id").Find(&bindings).Error; err != nil {
-		return fmt.Errorf("kernel forward: load dns bindings: %w", err)
 	}
 	byRoute := make(map[string]*forwardv1.Route, len(routes))
 	for _, route := range routes {
