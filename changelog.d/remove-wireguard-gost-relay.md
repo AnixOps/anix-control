@@ -8,5 +8,6 @@
   node config, and the protocol editor has no relay section. A protocol
   stored with a relay keeps reaching its Agent as stored, which refuses it
   rather than egress from the entry. The protocol templates describe a
-  single-node WireGuard, and `scripts/deploy_wireguard_gost_quic.sh` is
+  single-node WireGuard (a node group template with a relay is refused
+  too), and `scripts/deploy_wireguard_gost_quic.sh` is
   gone. Cross-border paths run on the network model (ANX-A).

@@ -28,7 +28,7 @@ const proxyTemplate = `[
 	{"name": "SS 2022", "type": "shadowsocks", "port_range": [20000, 20003], "settings": {"method": "2022-blake3-aes-128-gcm"}},
 	{"name": "VMess WS", "type": "vmess", "port_range": [20000, 20003], "transport": "ws", "transport_settings": {"path": "/v"}},
 	{"name": "WireGuard", "type": "wireguard", "port": 51820,
-	 "settings": {"cidr": "10.66.0.0/24", "server_address": "10.66.0.1/24", "relay": {"server": "198.51.100.1", "server_port": 8421}}}
+	 "settings": {"cidr": "10.66.0.0/24", "server_address": "10.66.0.1/24"}}
 ]`
 
 func decodeDocument(t *testing.T, document *string) map[string]any {
