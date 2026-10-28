@@ -136,9 +136,13 @@ duplicate it here); the docs landing page is `docs/README.md`.
     - "Smoke Tests" and "E2E Tests" start at once as well.
     - The edge image publish still waits for the Go quality and security
       gates, Backend Tests, the frontend and the Docker smoke.
-  - **Race detector** (`go test -race`, about 28 min serially). It runs only
-    in the nightly schedule and manual runs, with a 40-minute timeout, and no
+  - **Race detector** ("Go Race Detector (1/3)" to "(3/3)", `go test
+    -race`). It runs only in the nightly schedule and manual runs, and no
     release job waits for it. Check the latest nightly run before tagging.
+    `plan_test_shards.py --suite race` splits the packages; shard 1 also
+    runs `sdk` and `identity`. The pure-Go SQLite is built without race
+    instrumentation (`-gcflags=modernc.org/...=-race=false`, also in the
+    Makefile): instrumenting it made the run about seven times slower.
   - Skipped jobs count as passed for the required checks, so conditions stay
     job-level `if:`. Never use a workflow-level `paths` filter.
 

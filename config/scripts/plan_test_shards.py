@@ -29,8 +29,8 @@ MODULE = "github.com/AnixOps/anix-control/v5/"
 
 # Seconds per package, the mean of five go_dev and pull request runs
 # (2026-10-02) for backend ("Backend Tests" with coverage); postgres:
-# "Package Storage PostgreSQL", see its comment. Keys are relative to
-# MODULE.
+# "Package Storage PostgreSQL", see its comment; race: "Go Race Detector",
+# see its comment. Keys are relative to MODULE.
 WEIGHTS: dict[str, dict[str, float]] = {
     "backend": {
         "internal/moduleruntime": 31.3,
@@ -60,6 +60,48 @@ WEIGHTS: dict[str, dict[str, float]] = {
         "internal/kernelidentity": 1.6,
         "internal/tests/platformcompat": 1.2,
         "internal/kernelsubscriber": 1.1,
+    },
+    "race": {
+        # The nightly run of 2026-10-27 (-race, -p=1, SQLite still
+        # instrumented); proxynodecompat, subscriptioncompat,
+        # protocolruntimecompat and smoke from a local -race run (2026-10-28).
+        # Without SQLite instrumentation every package is faster, the
+        # SQLite-heavy ones most.
+        "internal/service": 244.5,
+        "internal/backup": 199.0,
+        "internal/database/migrations": 173.5,
+        "internal/tests/proxynodecompat": 158.8,
+        "cmd/server": 146.7,
+        "internal/tests/nodeopsagent": 138.2,
+        "internal/handler": 126.6,
+        "internal/tests/identitycompat": 113.2,
+        "internal/tests/subscriptioncompat": 103.9,
+        "internal/tests/protocolruntimecompat": 77.7,
+        "internal/tests/ordercompat": 67.8,
+        "internal/subscriber": 61.6,
+        "internal/tests/builtinpackages": 61.2,
+        "internal/moduleruntime": 58.8,
+        "internal/tests/nodesecretsplit": 56.4,
+        "internal/grpc": 55.4,
+        "internal/router": 51.2,
+        "internal/kernelnodeops": 46.6,
+        "internal/tests/paymentcompat": 43.9,
+        "internal/tests/affiliatecompat": 40.2,
+        "internal/tests/notificationcompat": 27.9,
+        "internal/adminclaim": 22.9,
+        "internal/panelcert": 22.2,
+        "internal/tests/e2e": 22.1,
+        "internal/nodegroup": 21.1,
+        "internal/pluginhost": 16.3,
+        "internal/kernelidentity": 14.3,
+        "internal/nodesecrets": 12.9,
+        "internal/tests/smoke": 12.1,
+        "internal/tests/machinetelemetrycompat": 11.9,
+        "internal/compat/v2": 11.7,
+        "internal/plugincontrol": 10.7,
+        "internal/identitycutover": 9.8,
+        "internal/kernelforward": 9.1,
+        "internal/tests/plancompat": 7.0,
     },
     "postgres": {
         # The mean of 12 runs of 2026-10-04 (11 pull request and go_dev runs,
@@ -178,7 +220,7 @@ def self_test() -> None:
             for shard in split:
                 assert shard == [package for package in packages if package in shard], "input order must be kept"
     # Balanced: no shard above the mean by more than the heaviest package.
-    for suite, shards in (("backend", 3), ("postgres", 4)):
+    for suite, shards in (("backend", 3), ("postgres", 4), ("race", 3)):
         packages = list(WEIGHTS[suite])
         load = loads(packages, suite, shards)
         heaviest = max(WEIGHTS[suite].values()) + OVERHEAD
