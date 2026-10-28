@@ -8,3 +8,5 @@
   and the gost end-to-end tests are gone. The route editor offers nftables
   and ANX, and no longer suggests inserting a gost relay. The SDK still
   validates and plans `ENGINE_GOST`, so the contract fixtures stay readable.
+  The cross-repo Agent end-to-end suite runs its forward route on nftables
+  in the netns lane only; the main lane skips it.
