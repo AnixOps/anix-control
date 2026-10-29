@@ -5,7 +5,6 @@ import (
 	"net"
 	"net/http"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -15,21 +14,12 @@ import (
 
 // scenarioLinkCertificate: once forward.v1 is negotiated the Agent asks
 // Control's link CA for its forward link certificate (H28) over the agent
-// certificate's mTLS and installs it in gost's directory.
+// certificate's mTLS. Since gost was removed only the anixops relay asks for
+// one, and the suite does not run the relay (Forward.AnixOps.Enable is off),
+// so the scenario is skipped; Control's IssueLinkCertificate keeps its unit
+// tests.
 func (s *suite) scenarioLinkCertificate(t *testing.T) string {
-	var row struct {
-		Serial   string
-		DNSName  string
-		SPIFFEID string
-	}
-	eventually(t, 60*time.Second, func() (bool, string) {
-		require.NoError(t, s.control.db.Raw("SELECT serial, dns_name, spiffe_id FROM v4_kernel_forward_link_certificate WHERE node_kind = 'proxy' AND node_id = ? AND revoked_at IS NULL ORDER BY not_after DESC LIMIT 1", s.nodeID).Scan(&row).Error)
-		return row.Serial != "", "no link certificate issued"
-	}, s.agent.proc, s.control.proc)
-	for _, name := range []string{"link.crt", "link.key", "link-ca.crt"} {
-		require.FileExists(t, filepath.Join(s.agent.gostDir, "tls", name))
-	}
-	return fmt.Sprintf("link certificate %s for %s (%s)", row.Serial, row.DNSName, row.SPIFFEID)
+	return skipped + ":the Agent asks for a link certificate only for the anixops relay, which the suite does not run; gost was removed"
 }
 
 type forwardReport struct {
