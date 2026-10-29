@@ -168,8 +168,9 @@ describe('navigation/menu.js: palette entries', () => {
     expect(new Set(paths).size).toBe(paths.length)
     expect(paths).toContain('/admin/account')
     expect(paths).not.toContain('/admin/orders')
-    // The flux-clone pages and their wizard were removed in v4.2 (F5d).
-    expect(paths.filter(path => path.startsWith('/admin/forward'))).toEqual([])
+    // The flux-clone pages and their wizard were removed in v4.2 (F5d);
+    // without the forward package only 分流 (a kernel API) is left.
+    expect(paths.filter(path => path.startsWith('/admin/forward'))).toEqual(['/admin/forward/egress'])
     expect(actions.map(action => action.id)).toEqual(['join-node', 'add-user', 'upgrade-nodes'])
     expect(actions.find(action => action.id === 'join-node').to).toEqual({ path: '/admin/nodes', query: { join: '1' } })
   })
@@ -254,26 +255,29 @@ describe('navigation/menu.js: buildUserMenu', () => {
   })
 })
 
-// F5b: the v4.2 forwarding area needs the forward package's v4 API.
+// The forwarding pages are sections of 节点, the one network area
+// (docs/design/node-unification); 概览, 路由 and DNS need the forward
+// package's v4 API, 分流 does not.
 describe('forwarding area capability', () => {
-  it('shows 转发 for the forwarding area only with the capability', () => {
-    const without = buildAdminMenu({ t, editionAllows: () => true })
+  it('has no 转发 item: the forwarding pages are sections of 节点', () => {
     const network = groups => groups.find(group => group.id === 'network').items
-    expect(network(without).map(item => item.id)).not.toContain('forward-v4')
-
+    const without = buildAdminMenu({ t, editionAllows: () => true })
     const withV4 = buildAdminMenu({ t, editionAllows: () => true, hasCapability: name => name === 'forward.v4' })
-    const items = network(withV4)
-    expect(items.map(item => [item.id, item.label])).toEqual([
-      ['nodes', 'shell.admin.items.nodes'],
-      ['forward-v4', 'shell.admin.items.forward'],
-      ['deployments', 'shell.admin.items.deployments']
-    ])
-    for (const path of ['/admin/forward/overview', '/admin/forward/routes/01J/edit']) {
-      expect(activeMenuItem(withV4, path)?.item.id).toBe('forward-v4')
+    for (const groups of [without, withV4]) {
+      expect(network(groups).map(item => [item.id, item.label])).toEqual([
+        ['nodes', 'shell.admin.items.nodes'],
+        ['deployments', 'shell.admin.items.deployments']
+      ])
     }
-    // The forwarding settings of a node are under 节点 (one node page).
-    expect(activeMenuItem(withV4, '/admin/forward/inventory/forward-41')?.item.id).toBe('nodes')
-    const { actions } = paletteEntries({ t, groups: withV4 })
-    expect(actions.map(action => action.id)).toContain('forward-route')
+    for (const path of ['/admin/forward/overview', '/admin/forward/routes/01J/edit', '/admin/forward/egress', '/admin/forward/inventory/forward-41']) {
+      expect(activeMenuItem(withV4, path)?.item.id).toBe('nodes')
+    }
+
+    const sectionIds = groups => paletteEntries({ t, groups }).pages.map(page => page.id)
+    expect(sectionIds(without)).toContain('forward-egress')
+    expect(sectionIds(without)).not.toContain('forward-routes')
+    expect(sectionIds(withV4)).toEqual(expect.arrayContaining(['forward-overview', 'forward-routes', 'forward-dns', 'forward-egress']))
+    expect(paletteEntries({ t, groups: without }).actions.map(action => action.id)).not.toContain('forward-route')
+    expect(paletteEntries({ t, groups: withV4 }).actions.map(action => action.id)).toContain('forward-route')
   })
 })

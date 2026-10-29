@@ -214,7 +214,7 @@ test('the route page shows entry high availability and unbinds with purge', asyn
 
 test('the DNS page is a section of the forwarding area', async ({ page }) => {
   await openScreen(page, 'admin-forward-routes', { clock: true })
-  await page.getByRole('group', { name: 'Forwarding' }).getByRole('button', { name: 'DNS' }).click()
+  await page.getByRole('group', { name: 'Nodes and forwarding' }).getByRole('button', { name: 'DNS' }).click()
   await expect(page).toHaveURL(/\/admin\/forward\/dns$/)
-  await expect(page.locator('#admin-sidebar a[href="/admin/forward/overview"]')).toHaveAttribute('aria-current', 'page')
+  await expect(page.locator('#admin-sidebar a[href="/admin/nodes"]')).toHaveAttribute('aria-current', 'page')
 })

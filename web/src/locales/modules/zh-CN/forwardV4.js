@@ -13,8 +13,8 @@ const STRATEGY = {
 export default {
   forwardV4: {
     nav: {
-      label: '转发',
-      overview: '概览',
+      label: '节点与转发',
+      overview: '转发概览',
       routes: '路由',
       nodes: '节点'
     },

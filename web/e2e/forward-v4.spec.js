@@ -99,5 +99,5 @@ test('the forwarding area needs the forward package’s v4 API', async ({ page }
   await openScreen(page, 'admin-forward-no-capability', { clock: true })
   // Without the capability the area leads to 系统设置 → 内置包.
   await expect(page).toHaveURL(/\/admin\/system\/packages$/)
-  await expect(page.locator('#admin-sidebar a[href="/admin/forward/overview"]')).toHaveCount(0)
+  await expect(page.locator('#admin-sidebar a[href^="/admin/forward"]')).toHaveCount(0)
 })
