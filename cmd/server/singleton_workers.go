@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
+	"github.com/AnixOps/anix-control/v5/internal/agentinstall"
 	"github.com/AnixOps/anix-control/v5/internal/agentstreams"
 	"github.com/AnixOps/anix-control/v5/internal/agentupgrade"
 	"github.com/AnixOps/anix-control/v5/internal/config"
@@ -72,6 +73,10 @@ func runSingletonWorkers(ctx context.Context) {
 	run((&agentupgrade.Worker{
 		Service: &agentupgrade.Service{DB: database.Get()},
 		Streams: func() agentstreams.Streams { return grpcserver.GetAgentStreams() },
+		Kernels: func() ([]agentcontrol.UpgradeKernel, error) {
+			cfg := config.Get()
+			return agentinstall.UpgradeKernels(cfg.AgentInstall.ArtifactDir, cfg.Panel().PublicURL)
+		},
 	}).Run)
 	// Automatic Reality target selection (internal/realitytarget, phase 3):
 	// rechecks the nodes that have it on through their Agents here and

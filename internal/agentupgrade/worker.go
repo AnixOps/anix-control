@@ -48,6 +48,12 @@ type Worker struct {
 	Streams func() agentstreams.Streams
 	// Interval defaults to DefaultInterval.
 	Interval time.Duration
+	// Kernels returns the kernel packages offered with the upgrade (the
+	// newest anx-node release Control holds, agentinstall.UpgradeKernels);
+	// nil or an error offers none. With kernels, a node that already runs
+	// the target is offered the upgrade too: its Agent installs a kernel it
+	// lacks, or answers current.
+	Kernels func() ([]agentcontrol.UpgradeKernel, error)
 }
 
 var observeOnce sync.Once
@@ -284,6 +290,14 @@ func (w *Worker) offer(ctx context.Context, campaign *model.AgentUpgradeCampaign
 		log.Printf("Agent upgrade campaign %s: artifacts: %v", campaign.ID, err)
 		return
 	}
+	var kernels []agentcontrol.UpgradeKernel
+	if w.Kernels != nil {
+		var err error
+		if kernels, err = w.Kernels(); err != nil {
+			log.Printf("Agent upgrade campaign %s: offered without a kernel: %v", campaign.ID, err)
+			kernels = nil
+		}
+	}
 	var batches []Batch
 	_ = json.Unmarshal([]byte(campaign.BatchesJSON), &batches)
 	batchEnd := now
@@ -306,7 +320,7 @@ func (w *Worker) offer(ctx context.Context, campaign *model.AgentUpgradeCampaign
 				w.logged(w.skip(ctx, node, now, CodeOffline, "the node's Agent was not connected during its batch"))
 			}
 			continue
-		case agentcontrol.SameAgentVersion(session.AgentVersion, campaign.TargetVersion):
+		case agentcontrol.SameAgentVersion(session.AgentVersion, campaign.TargetVersion) && len(kernels) == 0:
 			w.logged(w.updateNode(ctx, node, []string{model.AgentUpgradeNodePending}, func(n *model.AgentUpgradeNode) {
 				n.State, n.FromVersion, n.FinishedAt = model.AgentUpgradeNodeSucceeded, session.AgentVersion, &now
 				n.ReconnectedAt = &session.ConnectedAt
@@ -318,7 +332,7 @@ func (w *Worker) offer(ctx context.Context, campaign *model.AgentUpgradeCampaign
 		}
 		request := agentcontrol.UpgradeRequest{
 			Schema: agentcontrol.UpgradeSchemaV1, CampaignID: campaign.ID, Action: agentcontrol.UpgradeActionUpgrade,
-			TargetVersion: campaign.TargetVersion, Artifacts: artifacts,
+			TargetVersion: campaign.TargetVersion, Artifacts: artifacts, Kernels: kernels,
 		}
 		if releaseTag(session.AgentVersion) != "" {
 			request.PreviousVersion = releaseTag(session.AgentVersion)

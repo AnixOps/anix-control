@@ -74,6 +74,9 @@ func runAgentUpgradeCommand(ctx context.Context, cfg *config.Config, db *gorm.DB
 		if err != nil {
 			return err
 		}
+		if _, err := agentinstall.UpgradeKernels(install.ArtifactDir, settings.ControlURL); err != nil {
+			return err
+		}
 		campaign, err := service.Start(ctx, agentupgrade.StartRequest{
 			TargetVersion: target, ControlVersion: handler.ReleaseVersion, Artifacts: artifacts,
 			Exclude: agentupgrade.Exclude{Nodes: splitList(*exclude), Tags: splitList(*excludeTags)}, Reason: *reason, Actor: actor,

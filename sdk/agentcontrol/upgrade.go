@@ -35,6 +35,14 @@ const (
 	MaxUpgradeRequestBytes = 16 << 10
 	// MaxUpgradeArtifactBytes bounds an artifact's size (the release zip).
 	MaxUpgradeArtifactBytes = 256 << 20
+	// KernelAnxNode is UpgradeKernel.Name of anx-node, AnixOps' own node
+	// kernel with ANX (the private anx release), which the Agent runs as
+	// its anixcore core.
+	KernelAnxNode = "anx-node"
+	// MaxUpgradeKernelBytes bounds a kernel package's size.
+	MaxUpgradeKernelBytes = 64 << 20
+	// maxKernelManifestBytes bounds UpgradeKernel.Sums and SumsSignature.
+	maxKernelManifestBytes = 4 << 10
 )
 
 // Phases an Agent reports in the ObservedState.state_json of an
@@ -81,6 +89,27 @@ type UpgradeArtifact struct {
 	Signature string `json:"signature"`
 }
 
+// UpgradeKernel is one architecture's kernel package that comes with an
+// upgrade: the Agent's updater installs it next to the Agent binary, and
+// the Agent then runs it as its anixcore core. Name is KernelAnxNode,
+// Version its release without "v" (0.1.0-alpha.2), Asset the release
+// tarball, served at URL. The trust is the kernel release's own signature:
+// Sums is its SHA256SUMS, SumsSignature the SSH signature of Sums
+// (`ssh-keygen -Y sign`, the release's SHA256SUMS.sig), which the Agent
+// verifies with the kernel release key it embeds, never a key Control
+// sends; SHA256 must be Asset's line in Sums.
+type UpgradeKernel struct {
+	Name          string `json:"name"`
+	Version       string `json:"version"`
+	Arch          string `json:"arch"`
+	Asset         string `json:"asset"`
+	URL           string `json:"url"`
+	SHA256        string `json:"sha256"`
+	Size          int64  `json:"size"`
+	Sums          string `json:"sums"`
+	SumsSignature string `json:"sums_signature"`
+}
+
 // UpgradeRequest is the payload_json of an agent.upgrade operation.
 // Fields may be added; an Agent ignores the ones it does not know.
 type UpgradeRequest struct {
@@ -94,6 +123,11 @@ type UpgradeRequest struct {
 	// rollback. Empty when Control did not know it.
 	PreviousVersion string            `json:"previous_version,omitempty"`
 	Artifacts       []UpgradeArtifact `json:"artifacts,omitempty"`
+	// Kernels are the kernel packages to install with the upgrade, at most
+	// one per architecture. An Agent that already runs TargetVersion
+	// installs a kernel it does not have yet; one that predates them
+	// ignores the field.
+	Kernels []UpgradeKernel `json:"kernels,omitempty"`
 }
 
 // UpgradeState is the state_json of an agent.upgrade ObservedState.
@@ -108,6 +142,9 @@ var (
 	upgradeArchPattern    = regexp.MustCompile(`^[a-z0-9]{1,16}$`)
 	upgradeAssetPattern   = regexp.MustCompile(`^anix-agent-linux-[a-z0-9-]+\.zip$`)
 	upgradeSHA256Pattern  = regexp.MustCompile(`^[0-9a-f]{64}$`)
+	// KernelVersionPattern matches a kernel release version (no "v").
+	KernelVersionPattern = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)\.[0-9]+)?$`)
+	kernelAssetPattern   = regexp.MustCompile(`^anx-node-[0-9a-z.-]+-[a-z0-9_]+-linux-musl\.tar\.gz$`)
 )
 
 // ErrInvalidUpgradeRequest wraps every reason ParseUpgradeRequest refuses.
@@ -154,7 +191,7 @@ func (r UpgradeRequest) Validate() error {
 	}
 	switch r.Action {
 	case UpgradeActionRollback:
-		if len(r.Artifacts) != 0 {
+		if len(r.Artifacts) != 0 || len(r.Kernels) != 0 {
 			return invalid("a rollback carries no artifacts")
 		}
 		return nil
@@ -189,7 +226,71 @@ func (r UpgradeRequest) Validate() error {
 			return invalid("artifact signature of %s is not base64 of an Ed25519 signature", artifact.Arch)
 		}
 	}
+	return validateKernels(r.Kernels, invalid)
+}
+
+func validateKernels(kernels []UpgradeKernel, invalid func(string, ...any) error) error {
+	if len(kernels) > 8 {
+		return invalid("an upgrade carries at most 8 kernels")
+	}
+	seen := map[string]bool{}
+	for _, kernel := range kernels {
+		if kernel.Name != KernelAnxNode {
+			return invalid("kernel %q is not %s", kernel.Name, KernelAnxNode)
+		}
+		if !KernelVersionPattern.MatchString(kernel.Version) {
+			return invalid("kernel version %q is not a release version", kernel.Version)
+		}
+		if !upgradeArchPattern.MatchString(kernel.Arch) || seen[kernel.Arch] {
+			return invalid("kernel architecture %q is malformed or repeated", kernel.Arch)
+		}
+		seen[kernel.Arch] = true
+		if !kernelAssetPattern.MatchString(kernel.Asset) || !strings.HasPrefix(kernel.Asset, KernelAnxNode+"-"+kernel.Version+"-") {
+			return invalid("kernel asset %q is not the %s %s package", kernel.Asset, KernelAnxNode, kernel.Version)
+		}
+		parsed, err := url.Parse(kernel.URL)
+		if err != nil || parsed.Scheme != "https" || parsed.Host == "" || len(kernel.URL) > 2048 {
+			return invalid("kernel url of %s must be an https URL", kernel.Arch)
+		}
+		if !upgradeSHA256Pattern.MatchString(kernel.SHA256) {
+			return invalid("kernel sha256 of %s is not lowercase hex SHA-256", kernel.Arch)
+		}
+		if kernel.Size <= 0 || kernel.Size > MaxUpgradeKernelBytes {
+			return invalid("kernel size of %s must be 1 to %d bytes", kernel.Arch, MaxUpgradeKernelBytes)
+		}
+		if kernel.Sums == "" || len(kernel.Sums) > maxKernelManifestBytes {
+			return invalid("kernel sums of %s must be 1 to %d bytes", kernel.Arch, maxKernelManifestBytes)
+		}
+		if sum, ok := KernelSum(kernel.Sums, kernel.Asset); !ok || sum != kernel.SHA256 {
+			return invalid("kernel sums of %s do not list %s with its sha256", kernel.Arch, kernel.Asset)
+		}
+		if !strings.HasPrefix(strings.TrimSpace(kernel.SumsSignature), "-----BEGIN SSH SIGNATURE-----") || len(kernel.SumsSignature) > maxKernelManifestBytes {
+			return invalid("kernel sums_signature of %s is not an SSH signature", kernel.Arch)
+		}
+	}
 	return nil
+}
+
+// KernelSum returns the SHA-256 that a SHA256SUMS manifest (sha256sum
+// output: "<hex>  <name>", or "<hex> *<name>") lists for name.
+func KernelSum(sums, name string) (string, bool) {
+	for _, line := range strings.Split(sums, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) == 2 && strings.TrimPrefix(fields[1], "*") == name && upgradeSHA256Pattern.MatchString(fields[0]) {
+			return fields[0], true
+		}
+	}
+	return "", false
+}
+
+// Kernel returns the kernel package of arch.
+func (r UpgradeRequest) Kernel(arch string) (UpgradeKernel, bool) {
+	for _, kernel := range r.Kernels {
+		if kernel.Arch == arch {
+			return kernel, true
+		}
+	}
+	return UpgradeKernel{}, false
 }
 
 // Artifact returns the artifact of arch.

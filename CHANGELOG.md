@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### Added
+
+- Agent upgrade campaigns install anx-node, AnixOps' own node kernel with
+  ANX, with the Agent. Control serves an anx-node release copied into
+  `<agent_install.artifact_dir>/anx-node/<version>/` at
+  `/install/kernel/anx-node/<version>/<file>`. `agent.upgrade` gains
+  `kernels`, which carries the newest release's package, its `SHA256SUMS` and
+  the SSH signature that the Agent verifies. With kernels, nodes that already
+  run the target are offered the upgrade too, so their Agent installs a
+  kernel it lacks. A campaign refuses to start while the release there is
+  incomplete.
+
 ## 5.0.0-rc.10 - 2026-10-27
 
 ### Added
