@@ -275,8 +275,10 @@ const groupFormOpen = ref(false)
 const editingGroup = ref(null)
 
 // ?tab=groups or ?tab=hosts; 节点 is the default and leaves the query clean.
-// 转发主机 (the forward hosts that are not regular nodes) is there while the
-// forward API answers.
+// 转发主机 (the forward hosts that are not regular nodes) needs the forward
+// API, and shows only while there is a host or it is asked for (?tab=hosts,
+// where /admin/forward/inventory leads): once every machine is a regular
+// node, the page has just 节点 and 节点组.
 const TABS = ['groups', 'hosts']
 function setTab(value) {
   const query = { ...route.query }
@@ -295,7 +297,7 @@ const tab = computed({
 const tabItems = computed(() => [
   { value: 'nodes', label: t('admin.nodes.tabs.nodes') },
   { value: 'groups', label: t('admin.nodes.tabs.groups'), count: groupsState.groups.value.length },
-  ...(forward.available.value ? [{ value: 'hosts', label: t('admin.nodes.tabs.hosts'), count: forward.hosts.value.length }] : [])
+  ...(forward.available.value && (forward.hosts.value.length > 0 || route?.query?.tab === 'hosts') ? [{ value: 'hosts', label: t('admin.nodes.tabs.hosts'), count: forward.hosts.value.length }] : [])
 ])
 
 // One machine, one node (docs/design/node-unification): a regular node with

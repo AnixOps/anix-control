@@ -128,6 +128,19 @@ describe('Nodes.vue', () => {
     expect(panel.text()).not.toContain('sh-relay')
   })
 
+  it('has no forward hosts tab once every machine is a regular node, unless it is asked for', async () => {
+    kernelApi.getKernelAdminNodes.mockResolvedValue({ list: [{ id: 2, name: 'sh-relay', host: 'sh.example', protocols: [] }], total: 1 })
+    forwardApi.listNodes.mockResolvedValue({ canDelete: true, nodes: [{ node_ref: 'proxy-2', kind: 'proxy', in_inventory: true }] })
+    forwardApi.listRoutes.mockResolvedValue({ routes: [] })
+
+    const { wrapper } = await mountNodes()
+    expect(wrapper.findAll('[role="tab"]').map(item => item.text()).join(' ')).not.toContain('Forward hosts')
+    expect(wrapper.get('[data-testid="node-role"]').text()).toBe('Relay')
+
+    const asked = await mountNodes('/admin/nodes?tab=hosts')
+    expect(asked.wrapper.get('[data-testid="forward-hosts-panel"]').text()).toContain('No forward hosts')
+  })
+
   it('has no relay data and no forward hosts tab without the forward package', async () => {
     kernelApi.getKernelAdminNodes.mockResolvedValue({ list: [{ id: 1, name: 'hk-exit', host: 'hk.example', protocols: [{ id: 1 }] }], total: 1 })
 
