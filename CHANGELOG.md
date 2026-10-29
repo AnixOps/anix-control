@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 5.0.0-rc.13 - 2026-10-29
+
+### Changed
+
+- Pins Agent v5.0.0-rc.13, which runs a VMess/VLESS node whose `network`
+  Control leaves empty (plain TCP) on Xray instead of failing with
+  `unknown transport protocol`. That failure rolled back the rc.12 Agent
+  upgrade campaign.
+
 ## 5.0.0-rc.12 - 2026-10-29
 
 ### Added
