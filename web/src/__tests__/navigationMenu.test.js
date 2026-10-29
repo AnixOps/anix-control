@@ -268,9 +268,11 @@ describe('forwarding area capability', () => {
       ['forward-v4', 'shell.admin.items.forward'],
       ['deployments', 'shell.admin.items.deployments']
     ])
-    for (const path of ['/admin/forward/overview', '/admin/forward/routes/01J/edit', '/admin/forward/inventory/forward-41']) {
+    for (const path of ['/admin/forward/overview', '/admin/forward/routes/01J/edit']) {
       expect(activeMenuItem(withV4, path)?.item.id).toBe('forward-v4')
     }
+    // The forwarding settings of a node are under 节点 (one node page).
+    expect(activeMenuItem(withV4, '/admin/forward/inventory/forward-41')?.item.id).toBe('nodes')
     const { actions } = paletteEntries({ t, groups: withV4 })
     expect(actions.map(action => action.id)).toContain('forward-route')
   })

@@ -535,7 +535,7 @@ const PATHS = {
   'editor-preview': `/admin/forward/routes/${GAME}/edit`,
   route: `/admin/forward/routes/${GAME}`,
   diagnose: `/admin/forward/routes/${GAME}?diagnose=1`,
-  nodes: '/admin/forward/inventory',
+  nodes: '/admin/nodes?tab=hosts',
   node: '/admin/forward/inventory/forward-51',
   dns: '/admin/forward/dns',
   'route-ha': `/admin/forward/routes/${EDGE}`,

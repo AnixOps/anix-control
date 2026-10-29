@@ -45,6 +45,7 @@ export default {
     lastHeartbeat: 'Last heartbeat',
     lastSeen: 'Last seen',
     nodeGroup: 'Node group',
+    role: 'Role',
     connection: 'Connection',
     certificate: 'Certificate',
     serviceStatus: 'Services',
@@ -555,7 +556,15 @@ export default {
   tabs: {
     label: 'Node sections',
     nodes: 'Nodes',
-    groups: 'Node groups'
+    groups: 'Node groups',
+    hosts: 'Forward hosts'
+  },
+  // 角色 of a regular node (docs/design/node-unification).
+  roles: {
+    exit: 'Exit',
+    relay: 'Relay',
+    hops: '{n} hops',
+    unconvertedBanner: '{count} old forward nodes are not regular nodes yet: once converted they are listed here and can carry ANX relays.'
   },
   // Join a node: one entry for a new machine (docs/design/node-onboarding).
   join: {

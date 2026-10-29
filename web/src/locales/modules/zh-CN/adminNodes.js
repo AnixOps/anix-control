@@ -45,6 +45,7 @@ export default {
     lastHeartbeat: '最后心跳',
     lastSeen: '最后在线',
     nodeGroup: '节点组',
+    role: '角色',
     connection: '连接方式',
     certificate: '证书',
     serviceStatus: '服务状态',
@@ -555,7 +556,15 @@ export default {
   tabs: {
     label: '节点分区',
     nodes: '节点',
-    groups: '节点组'
+    groups: '节点组',
+    hosts: '转发主机'
+  },
+  // 角色 of a regular node (docs/design/node-unification).
+  roles: {
+    exit: '落地',
+    relay: '中转',
+    hops: '{n} 跳',
+    unconvertedBanner: '有 {count} 台旧转发节点还没转为常规节点：转换后它们出现在这个列表里，并能承载 ANX 中转。'
   },
   // 接入节点: one entry for a new machine (docs/design/node-onboarding).
   join: {

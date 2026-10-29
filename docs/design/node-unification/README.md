@@ -48,6 +48,23 @@ the Agent is a regular node; forward routes and the network model name it
   down until it connects. The forward Nodes page offers this as
   "Make a regular node".
 
+## One node page
+
+The console shows one node list (`/admin/nodes`). The forwarding area's own
+node list (`/admin/forward/inventory`) is gone: it opens the node page's
+转发主机 tab.
+
+- **角色.** Each regular node shows 落地 when it has protocols and 中转 when
+  it has none or carries hops of forward routes (both at once is fine), with
+  its hop count and hop errors from the forwarding inventory.
+- **转发主机.** The forwarding machines that are not regular nodes: Ansible
+  hosts (添加 Ansible 主机 is here) and Agent forward nodes not yet converted
+  (转为常规节点, and a banner on the 节点 tab while any is left). The tab is
+  there only while the forward API answers.
+- **转发设置.** A node in the forwarding inventory has 转发设置 in its row
+  menu (`/admin/forward/inventory/<ref>`, ports, addresses and hosted hops);
+  that page goes back to the node.
+
 ## Not yet
 
 - Merging the tables (`v2_forward_node` remains for Ansible hosts and

@@ -45,6 +45,12 @@ vi.mock('@/api/kernel', async importOriginal => ({ ...(await importOriginal()), 
 const telemetryApi = vi.hoisted(() => ({ getNodesServicesSummary: vi.fn() }))
 vi.mock('@/api/machineTelemetry', async importOriginal => ({ ...(await importOriginal()), ...telemetryApi }))
 
+// The forwarding inventory (GET /api/v4/forward/nodes and /routes): the
+// relay role of the regular nodes and the 转发主机 tab. Without the forward
+// package the calls fail and the page shows neither.
+const forwardApi = vi.hoisted(() => ({ listNodes: vi.fn(), listRoutes: vi.fn() }))
+vi.mock('@/api/forwardV4', async importOriginal => ({ ...(await importOriginal()), ...forwardApi }))
+
 const Stub = { template: '<div />' }
 
 async function mountNodes(path = '/admin/nodes') {
@@ -75,6 +81,74 @@ describe('Nodes.vue', () => {
     kernelApi.getKernelAgentTransports.mockResolvedValue({ nodes: [] })
     kernelApi.listKernelNodeGroups.mockResolvedValue({ groups: [] })
     telemetryApi.getNodesServicesSummary.mockResolvedValue([])
+    forwardApi.listNodes.mockRejectedValue(new Error('404'))
+    forwardApi.listRoutes.mockRejectedValue(new Error('404'))
+  })
+
+  it('shows every machine as one node list: 落地 and 中转 roles, and the forward hosts in their own tab', async () => {
+    kernelApi.getKernelAdminNodes.mockResolvedValue({
+      list: [
+        { id: 1, name: 'hk-exit', host: 'hk.example', protocols: [{ id: 1 }] },
+        { id: 2, name: 'sh-relay', host: 'sh.example', protocols: [] },
+        { id: 3, name: 'jp-both', host: 'jp.example', protocols: [{ id: 2 }] }
+      ],
+      total: 3
+    })
+    forwardApi.listNodes.mockResolvedValue({
+      canDelete: true,
+      nodes: [
+        { node_ref: 'proxy-2', kind: 'proxy', name: 'sh-relay', in_inventory: true, desired_hops: 2 },
+        { node_ref: 'proxy-3', kind: 'proxy', name: 'jp-both', in_inventory: true, desired_hops: 1, hop_errors: 1 },
+        { node_ref: 'forward-7', kind: 'forward', name: 'old-relay', record: { transport: 'NODE_TRANSPORT_AGENT' } },
+        { node_ref: 'forward-8', kind: 'forward', name: 'ansible-box', record: { transport: 'NODE_TRANSPORT_ANSIBLE' } }
+      ]
+    })
+    forwardApi.listRoutes.mockResolvedValue({ routes: [] })
+
+    const { wrapper, router } = await mountNodes()
+
+    const roles = wrapper.findAll('[data-testid="node-role"]').map(cell => cell.text())
+    expect(roles[0]).toBe('Exit')
+    expect(roles[1]).toContain('Relay')
+    expect(roles[1]).toContain('2 hops')
+    expect(roles[2]).toContain('Exit')
+    expect(roles[2]).toContain('Relay')
+    expect(roles[2]).toContain('1 hop error')
+    // Only the Agent forward node waits for 转为常规节点.
+    expect(wrapper.get('[data-testid="unconverted-banner"]').text()).toContain('1 old forward nodes')
+
+    const hostsTab = wrapper.findAll('[role="tab"]').find(item => item.text().includes('Forward hosts'))
+    expect(hostsTab.text()).toContain('2')
+    await wrapper.get('[data-testid="unconverted-banner-view"]').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.query).toEqual({ tab: 'hosts' })
+    const panel = wrapper.get('[data-testid="forward-hosts-panel"]')
+    expect(panel.text()).toContain('old-relay')
+    expect(panel.text()).toContain('ansible-box')
+    expect(panel.text()).not.toContain('sh-relay')
+  })
+
+  it('has no forward hosts tab once every machine is a regular node, unless it is asked for', async () => {
+    kernelApi.getKernelAdminNodes.mockResolvedValue({ list: [{ id: 2, name: 'sh-relay', host: 'sh.example', protocols: [] }], total: 1 })
+    forwardApi.listNodes.mockResolvedValue({ canDelete: true, nodes: [{ node_ref: 'proxy-2', kind: 'proxy', in_inventory: true }] })
+    forwardApi.listRoutes.mockResolvedValue({ routes: [] })
+
+    const { wrapper } = await mountNodes()
+    expect(wrapper.findAll('[role="tab"]').map(item => item.text()).join(' ')).not.toContain('Forward hosts')
+    expect(wrapper.get('[data-testid="node-role"]').text()).toBe('Relay')
+
+    const asked = await mountNodes('/admin/nodes?tab=hosts')
+    expect(asked.wrapper.get('[data-testid="forward-hosts-panel"]').text()).toContain('No forward hosts')
+  })
+
+  it('has no relay data and no forward hosts tab without the forward package', async () => {
+    kernelApi.getKernelAdminNodes.mockResolvedValue({ list: [{ id: 1, name: 'hk-exit', host: 'hk.example', protocols: [{ id: 1 }] }], total: 1 })
+
+    const { wrapper } = await mountNodes('/admin/nodes?tab=hosts')
+
+    expect(wrapper.find('[data-testid="forward-hosts-panel"]').exists()).toBe(false)
+    expect(wrapper.findAll('[role="tab"]').map(item => item.text()).join(' ')).not.toContain('Forward hosts')
+    expect(wrapper.get('[data-testid="node-role"]').text()).toBe('Exit')
   })
 
   it('has 升级节点 next to 接入节点 in the header, and it opens the shell\'s upgrade sheet', async () => {
