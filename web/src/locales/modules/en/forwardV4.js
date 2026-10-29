@@ -12,8 +12,8 @@ const STRATEGY = {
 export default {
   forwardV4: {
     nav: {
-      label: 'Forwarding',
-      overview: 'Overview',
+      label: 'Nodes and forwarding',
+      overview: 'Forwarding',
       routes: 'Routes',
       nodes: 'Nodes'
     },

@@ -1,5 +1,6 @@
 <template>
   <div class="list-page nodes-page">
+    <ForwardAreaNav area="nodes" />
     <UiPageHeader :title="t('admin.nodes.title')" :description="t('admin.nodes.subtitle')">
       <template #actions>
         <UiButton :icon="Rocket" data-testid="upgrade-nodes" @click="openAgentUpgrade">{{ t('shell.palette.actions.upgradeNodes') }}</UiButton>
@@ -207,6 +208,7 @@ import { useAppI18n } from '@/composables/useAppI18n'
 import { useRouteIntent } from '@/composables/useRouteIntent'
 import { SORT_ORDERS, createListSort } from '@/utils/listSort'
 import { num } from '@/components/forward/routeModel'
+import ForwardAreaNav from '@/components/forward/ForwardAreaNav.vue'
 import ForwardHostsPanel from './nodes/ForwardHostsPanel.vue'
 import NodeCertificateCell from './nodes/NodeCertificateCell.vue'
 import NodeConnectionBadge from './nodes/NodeConnectionBadge.vue'

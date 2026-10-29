@@ -18,21 +18,13 @@ import { ADMIN_PAGE_SECTIONS } from './sections'
 //   optional   true: shown only when the router has the route (for a page
 //              whose route lands in a separate pull request)
 //   capability shown only when a package provides it (extensions/runtime.js
-//              catalogCapabilities, e.g. forward.v4)
+//              catalogCapabilities, e.g. forward.v4); page sections
+//              (sections.js) take it too
 //
 // Plugin menus (extensions/runtime.js, signed WebUI contract) are merged in
 // by their `parent`: services and operations go to 扩展 (Extensions),
 // system to 系统 (System), unknown parents to 扩展. Each plugin menu needs
 // its permission and must not belong to a package the edition hides.
-
-// The forwarding area (F5b): its sections under /admin/forward/. The
-// flux-clone pages that shared the prefix were removed in v4.2 (F5d).
-export const FORWARD_V4_PATHS = Object.freeze(['/admin/forward/overview', '/admin/forward/routes', '/admin/forward/dns'])
-
-export function isForwardV4Path(path) {
-  const value = String(path || '')
-  return FORWARD_V4_PATHS.some(base => value === base || value.startsWith(`${base}/`))
-}
 
 export const ADMIN_MENU = Object.freeze([
   {
@@ -61,22 +53,14 @@ export const ADMIN_MENU = Object.freeze([
   {
     id: 'network',
     labelKey: 'shell.admin.groups.network',
-    // 节点 is every machine, relays included (docs/design/node-unification):
-    // a node's forwarding settings (/admin/forward/inventory/<ref>) select it
-    // too, and the forwarding area has no node list of its own.
-    // 转发 needs the forward package's v4 API (F5b); the flux-clone pages
-    // (转发（旧版）, 转发节点（旧版）) were removed in v4.2 (F5d). 部署编排
-    // (topologies, node roles, deployments) belongs with the nodes.
+    // 节点 is the one network area (docs/design/node-unification): every
+    // machine, relays included, and the forwarding pages (概览, 路由, DNS,
+    // 分流 and a node's 转发设置) as its sections under /admin/forward/,
+    // switched by the area's segmented control. There is no separate 转发
+    // item. 部署编排 (topologies, node roles, deployments) belongs with the
+    // nodes.
     items: [
-      { id: 'nodes', to: '/admin/nodes', icon: 'nodes', labelKey: 'shell.admin.items.nodes', match: ['/admin/forward/inventory/'] },
-      {
-        id: 'forward-v4',
-        to: '/admin/forward/overview',
-        icon: 'forward',
-        labelKey: 'shell.admin.items.forward',
-        capability: 'forward.v4',
-        match: FORWARD_V4_PATHS.map(path => `${path}/`).concat(FORWARD_V4_PATHS)
-      },
+      { id: 'nodes', to: '/admin/nodes', icon: 'nodes', labelKey: 'shell.admin.items.nodes', match: ['/admin/forward/'] },
       { id: 'deployments', to: '/admin/deployments', icon: 'deployments', labelKey: 'shell.admin.items.deployments' }
     ]
   },
@@ -126,11 +110,13 @@ export { ADMIN_PAGE_SECTIONS }
 
 // Quick actions in the command palette open an existing create flow (`to`)
 // or run a function (`run`). Each is shown only when its page is in the
-// visible menu (`page` = menu item id).
+// visible menu (`page` = menu item id) and, with `section`, that section of
+// the page is visible too.
 export const ADMIN_QUICK_ACTIONS = Object.freeze([
   { id: 'join-node', page: 'nodes', icon: 'nodes', labelKey: 'shell.palette.actions.addNode', to: { path: '/admin/nodes', query: { join: '1' } } },
   { id: 'add-user', page: 'users', icon: 'users', labelKey: 'shell.palette.actions.addUser', to: { path: '/admin/users', query: { create: '1' } } },
-  { id: 'forward-route', page: 'forward-v4', icon: 'forward', labelKey: 'shell.palette.actions.newForwardRoute', to: { path: '/admin/forward/routes/new' } },
+  // 新建转发路由 needs the 路由 section (the forward package).
+  { id: 'forward-route', page: 'nodes', section: 'forward-routes', icon: 'forward', labelKey: 'shell.palette.actions.newForwardRoute', to: { path: '/admin/forward/routes/new' } },
   // 升级节点 opens the sheet the admin shell mounts (no route).
   { id: 'upgrade-nodes', page: 'nodes', icon: 'deployments', labelKey: 'shell.palette.actions.upgradeNodes', run: openAgentUpgrade }
 ])
@@ -199,6 +185,7 @@ export function buildAdminMenu({
         icon: item.icon,
         match: item.match || [],
         exact: Boolean(item.exact),
+        sections: (ADMIN_PAGE_SECTIONS[item.id] || []).filter(section => !section.capability || hasCapability(section.capability)),
         source: 'core'
       }))
   }))
@@ -283,7 +270,7 @@ export function paletteEntries({ t, groups }) {
   // Sections of settings-style pages, under their page.
   for (const group of groups) {
     for (const item of group.items) {
-      for (const section of ADMIN_PAGE_SECTIONS[item.id] || []) {
+      for (const section of item.sections || ADMIN_PAGE_SECTIONS[item.id] || []) {
         add({ id: section.id, to: section.to, label: t(section.labelKey), icon: item.icon }, `${group.label} · ${item.label}`)
       }
     }
@@ -291,8 +278,9 @@ export function paletteEntries({ t, groups }) {
   add({ id: 'account', to: ADMIN_ACCOUNT_PATH, label: t('shell.admin.items.account'), icon: 'account' }, '')
 
   const visibleIds = new Set(groups.flatMap(group => group.items.map(item => item.id)))
+  const visibleSections = new Set(pages.map(page => page.id))
   const actions = ADMIN_QUICK_ACTIONS
-    .filter(action => visibleIds.has(action.page))
+    .filter(action => visibleIds.has(action.page) && (!action.section || visibleSections.has(action.section)))
     .map(action => ({
       id: action.id,
       kind: 'action',
