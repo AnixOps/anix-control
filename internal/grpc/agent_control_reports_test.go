@@ -70,6 +70,11 @@ func openReportsSession(t *testing.T, environment *agentControlTestEnvironment, 
 	require.NoError(t, err)
 	helloAck := message.GetHelloAck()
 	require.NotNil(t, helloAck)
+	// The server registers the session just after it sends the HelloAck.
+	require.Eventually(t, func() bool {
+		snapshot, connected := environment.manager.Connection(uint32(environment.node.ID))
+		return connected && snapshot.SessionID == helloAck.SessionId
+	}, 5*time.Second, 5*time.Millisecond)
 	return stream, helloAck
 }
 
