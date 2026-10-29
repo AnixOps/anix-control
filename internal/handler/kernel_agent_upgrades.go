@@ -128,6 +128,12 @@ func (h *AgentUpgradesHandler) Start(c *gin.Context) {
 		kernelError(c, http.StatusConflict, "agent_release_unverified", err.Error())
 		return
 	}
+	// The worker offers the newest anx-node release with the upgrade; a
+	// release that is there but incomplete is refused here.
+	if _, err := agentinstall.UpgradeKernels(install.ArtifactDir, settings.ControlURL); err != nil {
+		kernelError(c, http.StatusConflict, "kernel_release_unverified", err.Error())
+		return
+	}
 	campaign, err := h.service().Start(c.Request.Context(), agentupgrade.StartRequest{
 		TargetVersion: target, ControlVersion: ReleaseVersion, Artifacts: artifacts, Batches: request.Batches,
 		Exclude: request.Exclude, Reason: request.Reason, Actor: h.actor(c),

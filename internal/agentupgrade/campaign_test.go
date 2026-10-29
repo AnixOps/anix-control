@@ -3,6 +3,7 @@ package agentupgrade
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -366,6 +367,34 @@ func TestNodeAlreadyAtTarget(t *testing.T) {
 	campaign := f.start(StartRequest{})
 	f.tick()
 	assert.Empty(t, f.streams.operations())
+	assert.Equal(t, model.AgentUpgradeNodeSucceeded, f.nodeState(campaign.ID, node).State)
+}
+
+// With kernels, a node that already runs the target is offered the
+// upgrade, so that its Agent installs the kernel, which travels in the
+// operation.
+func TestKernelsReachNodesAtTarget(t *testing.T) {
+	f := newFixture(t, openSQLite(t))
+	node := f.addProxy(1, "")
+	f.streams.connect(node, "4.2.0", start, "upgrade.v1")
+	kernel := agentcontrol.UpgradeKernel{
+		Name: agentcontrol.KernelAnxNode, Version: "0.1.0-alpha.2", Arch: "amd64", Asset: "anx-node-0.1.0-alpha.2-x86_64-linux-musl.tar.gz",
+		URL:    "https://control.example/install/kernel/anx-node/0.1.0-alpha.2/anx-node-0.1.0-alpha.2-x86_64-linux-musl.tar.gz",
+		SHA256: strings.Repeat("b", 64), Size: 10, Sums: strings.Repeat("b", 64) + "  anx-node-0.1.0-alpha.2-x86_64-linux-musl.tar.gz\n",
+		SumsSignature: "-----BEGIN SSH SIGNATURE-----\nU1NIU0lH\n-----END SSH SIGNATURE-----\n",
+	}
+	f.worker.Kernels = func() ([]agentcontrol.UpgradeKernel, error) { return []agentcontrol.UpgradeKernel{kernel}, nil }
+	campaign := f.start(StartRequest{})
+	f.tick()
+	operation := f.lastOperation(node).operation
+	request, err := agentcontrol.ParseUpgradeRequest(operation.GetPayloadJson())
+	require.NoError(t, err)
+	assert.Equal(t, []agentcontrol.UpgradeKernel{kernel}, request.Kernels)
+	assert.Equal(t, model.AgentUpgradeNodeOffered, f.nodeState(campaign.ID, node).State)
+	// The Agent installs the kernel, restarts and reconnects.
+	f.upgrade(node, "v4.2.0")
+	f.clock.Advance(ConfigGrace)
+	f.tick()
 	assert.Equal(t, model.AgentUpgradeNodeSucceeded, f.nodeState(campaign.ID, node).State)
 }
 

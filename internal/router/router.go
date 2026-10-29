@@ -132,6 +132,7 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 	installPublic.GET("/install.sh.sig", agentInstall.Signature)
 	installPublic.GET("/install/agent.env", agentInstall.Metadata)
 	installPublic.GET("/install/agent/:tag/:asset", agentInstall.Artifact)
+	installPublic.GET("/install/kernel/anx-node/:version/:file", agentInstall.Kernel)
 	// The caller's address as Control sees it (server.trusted_proxies
 	// applied): the script hands it to the join.
 	installPublic.GET("/install/ip", agentInstall.ClientIP)

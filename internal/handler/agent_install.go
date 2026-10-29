@@ -314,6 +314,25 @@ func (h *AgentInstallHandler) Artifact(c *gin.Context) {
 	c.File(path)
 }
 
+// Kernel serves a file of an anx-node release from
+// agent_install.artifact_dir (<dir>/anx-node/<version>/<file>), which
+// Agent upgrades install with the Agent.
+func (h *AgentInstallHandler) Kernel(c *gin.Context) {
+	cfg := h.config()
+	path, err := agentinstall.KernelPath(cfg.AgentInstall.ArtifactDir, c.Param("version"), c.Param("file"))
+	if err != nil {
+		kernelError(c, http.StatusNotFound, "not_found", "no such kernel release file on this Control")
+		return
+	}
+	info, err := os.Stat(path)
+	if err != nil || !info.Mode().IsRegular() {
+		kernelError(c, http.StatusNotFound, "not_found", "no such kernel release file on this Control")
+		return
+	}
+	c.Header("Cache-Control", "public, max-age=3600")
+	c.File(path)
+}
+
 // settings resolves the onboarding settings of this Control.
 func (h *AgentInstallHandler) settings(c *gin.Context, cfg *config.Config) (agentinstall.Settings, error) {
 	if cfg == nil {
