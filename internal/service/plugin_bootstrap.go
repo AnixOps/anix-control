@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/AnixOps/anix-control/v5/internal/builtinpkg"
 	"github.com/AnixOps/anix-control/v5/internal/model"
@@ -102,6 +103,9 @@ func BootstrapBuiltinPackages(db *gorm.DB, encodedPublicKey string, set *builtin
 		}
 		manifests[embedded.ID] = manifest
 	}
+	if db != nil {
+		retireBuiltinPackages(db)
+	}
 	order, orderErrs := orderBuiltinPackages(manifests)
 	for id, err := range orderErrs {
 		results[id].Action, results[id].Err = BuiltinActionFailed, err
@@ -131,6 +135,34 @@ func BootstrapBuiltinPackages(db *gorm.DB, encodedPublicKey string, set *builtin
 		out = append(out, *results[id])
 	}
 	return out
+}
+
+// retiredBuiltinPackages are official packages a release removed. An
+// enabled installation left behind by an older Control names capabilities
+// this binary no longer knows, and installation validation reads every
+// enabled installation: one such row fails every built-in package.
+var retiredBuiltinPackages = []string{"gost-mesh"}
+
+// retireBuiltinPackages disables the installations of retired packages,
+// once, with an audit entry; their rows and releases stay for the record.
+func retireBuiltinPackages(db *gorm.DB) {
+	for _, id := range retiredBuiltinPackages {
+		_ = db.Transaction(func(tx *gorm.DB) error {
+			var installation model.PluginInstallation
+			if err := tx.First(&installation, "plugin_id = ? AND target = ? AND enabled = ?", id, "control", true).Error; err != nil {
+				return err
+			}
+			now := time.Now()
+			fromGeneration := installation.LifecycleGeneration
+			installation.Enabled, installation.State, installation.DisabledAt = false, "disabled", &now
+			installation.LastError = "retired: this release of Control no longer ships the package"
+			installation.LifecycleGeneration++
+			if err := tx.Save(&installation).Error; err != nil {
+				return err
+			}
+			return recordBuiltinInstallation(tx, installation, installation.DesiredVersion, installation.DesiredVersion, fromGeneration, "retired")
+		})
+	}
 }
 
 // sortedKeys lists the packages that were not in the install order: those

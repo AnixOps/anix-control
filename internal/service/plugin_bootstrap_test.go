@@ -207,6 +207,31 @@ func TestBuiltinBootstrapEnablesADisabledInstallation(t *testing.T) {
 	require.EqualValues(t, 5, installation.LifecycleGeneration)
 }
 
+// A retired package's enabled installation names capabilities this binary
+// no longer knows (gost-mesh's nodex settings after it was removed): the
+// bootstrap disables it instead of failing every other package on it.
+func TestBuiltinBootstrapDisablesARetiredPackage(t *testing.T) {
+	key := newBuiltinTestKey(t)
+	db := newBuiltinTestDB(t, key)
+	BootstrapBuiltinPackages(db, key.encoded(), builtinTestSet(builtinTestPackage(t, key, "gost-mesh", "5.0.0", nil)))
+	require.True(t, builtinInstallation(t, db, "gost-mesh").Enabled)
+	require.NoError(t, db.Model(&model.PluginRelease{}).Where("plugin_id = ?", "gost-mesh").
+		Update("manifest_json", `{"id":"gost-mesh","capabilities":["kernel.settings.nodex.read.v1"]}`).Error)
+	audits := builtinAuditCount(t, db)
+
+	results := BootstrapBuiltinPackages(db, key.encoded(), builtinTestSet(builtinTestPackage(t, key, "ticket", "5.0.0", nil)))
+
+	require.Equal(t, BuiltinActionInstalled, results[0].Action, "%v", results[0].Err)
+	retired := builtinInstallation(t, db, "gost-mesh")
+	require.False(t, retired.Enabled)
+	require.Equal(t, "disabled", retired.State)
+	require.NotNil(t, retired.DisabledAt)
+	require.Equal(t, audits+2, builtinAuditCount(t, db), "the retirement and the new installation are audited")
+
+	BootstrapBuiltinPackages(db, key.encoded(), builtinTestSet(builtinTestPackage(t, key, "ticket", "5.0.0", nil)))
+	require.Equal(t, audits+2, builtinAuditCount(t, db), "a disabled retired package is left alone")
+}
+
 func TestBuiltinBootstrapNeverDowngrades(t *testing.T) {
 	key := newBuiltinTestKey(t)
 	db := newBuiltinTestDB(t, key)
