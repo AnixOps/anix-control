@@ -80,6 +80,15 @@ publishes everything. Nothing is built locally.
    git push origin v4.1.0
    ```
 
+   Without a machine that may push tags, run the `Release Tag` workflow on
+   `main` instead (`gh workflow run release-tag.yml --ref main -f tag=v4.1.0
+   -f commit=<merge-commit> -R AnixOps/anix-control`). It refuses a commit
+   that is not on `main`, an existing tag, or a tree that does not declare
+   the version, pushes the tag with the workflow token and, since that push
+   starts no workflow, dispatches the CI/CD Pipeline on the tag; the tag gate
+   accepts a dispatch on a release tag as it does a push. Agent releases have
+   the same workflow in anix-agent (`release.yml` on the tag).
+
 5. Watch the tag run to its end: the release jobs wait for every gate. When a
    job fails on a flake (a runner, network or registry error, not a test that
    fails again), use "Re-run failed jobs" on the run page: the jobs that

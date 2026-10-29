@@ -6,6 +6,9 @@
 
 ### Added
 
+- The `Release Tag` workflow tags a commit of `main` after the version
+  check and starts the CI/CD Pipeline on the tag, for releases cut without
+  a machine that may push tags (`docs/RELEASING.md`).
 - Entry HA can judge entry addresses from the clients' side: a DNS
   binding's optional `vantage` selector (a node label such as `region=cn`)
   has the forwarding nodes carrying it dial every published entry address
