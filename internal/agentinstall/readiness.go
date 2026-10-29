@@ -97,13 +97,16 @@ type ReadinessInput struct {
 	// plugins.official_public_key.
 	SignatureFile     string
 	OfficialPublicKey string
-	// AgentVersion is agent_install.agent_version (empty: the Agent shares
-	// Control's number), ReleaseVersion Control's version, ArtifactDir
-	// agent_install.artifact_dir and CNMirrorURL agent_install.cn_mirror_url.
-	AgentVersion   string
-	ReleaseVersion string
-	ArtifactDir    string
-	CNMirrorURL    string
+	// AgentVersion is agent_install.agent_version, PinnedAgentVersion the
+	// Agent release this Control was built with (both empty: the Agent
+	// shares Control's number), ReleaseVersion Control's version,
+	// ArtifactDir agent_install.artifact_dir and CNMirrorURL
+	// agent_install.cn_mirror_url.
+	AgentVersion       string
+	PinnedAgentVersion string
+	ReleaseVersion     string
+	ArtifactDir        string
+	CNMirrorURL        string
 }
 
 // ReadinessCheck is one check of an install command's prerequisites.
@@ -290,11 +293,15 @@ func checkMTLSMode(in ReadinessInput) ReadinessCheck {
 	return check
 }
 
-// agentVersion is the Agent release the command installs, and whether it
-// is pinned by agent_install.agent_version.
+// agentVersion is the Agent release the command installs, as
+// ResolveSettings picks it, and whether it is pinned (by
+// agent_install.agent_version or by the build).
 func agentVersion(in ReadinessInput) (version string, pinned bool) {
 	if version = strings.TrimSpace(in.AgentVersion); version != "" {
 		return version, true
+	}
+	if version = strings.TrimSpace(in.PinnedAgentVersion); version != "" {
+		return "v" + strings.TrimPrefix(version, "v"), true
 	}
 	control := strings.TrimSpace(in.ReleaseVersion)
 	if control == "" {
