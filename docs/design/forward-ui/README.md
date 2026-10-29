@@ -58,6 +58,12 @@ Every file in `shots/` is named `<screen>-<desktop|phone>-<light|dark>.webp`.
     nodes (Ansible hosts, unconverted forward nodes). `/admin/forward/inventory`
     opens that tab; a node's 转发设置 page (`/admin/forward/inventory/<ref>`)
     stays and belongs to 节点 in the sidebar.
+  - *Since 5.0.0-rc.14:* there is no 转发 sidebar item either. 节点 is the
+    one network area: the node page and the forwarding pages share one
+    segmented control (节点 / 转发概览 / 路由 / DNS / 分流), every
+    `/admin/forward/` page selects 节点 in the sidebar, and the command
+    palette finds the forwarding pages as sections of 节点 (概览, 路由 and
+    DNS with the forward package only).
 - Detail pages and the editor sit under their section, with a back link.
 - The sidebar keeps one 转发 item (see D1 for where it lives).
 

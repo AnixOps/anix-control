@@ -61,6 +61,9 @@ node list (`/admin/forward/inventory`) is gone: it opens the node page's
   hosts (添加 Ansible 主机 is here) and Agent forward nodes not yet converted
   (转为常规节点, and a banner on the 节点 tab while any is left). The tab is
   there only while the forward API answers.
+- **One area.** The sidebar has no 转发 item: the node page and the
+  forwarding pages (转发概览, 路由, DNS, 分流) share one segmented control,
+  and every `/admin/forward/` page selects 节点.
 - **转发设置.** A node in the forwarding inventory has 转发设置 in its row
   menu (`/admin/forward/inventory/<ref>`, ports, addresses and hosted hops);
   that page goes back to the node.
