@@ -187,9 +187,10 @@ describe('AdminLayout.vue', () => {
       expect(paths).not.toContain('/admin/forward/nodes')
       expect(paths).not.toContain('/admin/extensions/forward')
       expect(wrapper.get('#admin-sidebar a[href="/admin/forward/overview"]').attributes('aria-current')).toBe('page')
+      // A node's forwarding settings belong to 节点 (one node page).
       await router.push('/admin/forward/inventory/forward-41')
       await flushPromises()
-      expect(wrapper.get('#admin-sidebar a[href="/admin/forward/overview"]').attributes('aria-current')).toBe('page')
+      expect(wrapper.get('#admin-sidebar a[href="/admin/nodes"]').attributes('aria-current')).toBe('page')
     } finally {
       mockAdminCapabilities.value = []
       mockAdminExtensionMenus.value = []

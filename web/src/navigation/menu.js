@@ -27,7 +27,7 @@ import { ADMIN_PAGE_SECTIONS } from './sections'
 
 // The forwarding area (F5b): its sections under /admin/forward/. The
 // flux-clone pages that shared the prefix were removed in v4.2 (F5d).
-export const FORWARD_V4_PATHS = Object.freeze(['/admin/forward/overview', '/admin/forward/routes', '/admin/forward/inventory', '/admin/forward/dns'])
+export const FORWARD_V4_PATHS = Object.freeze(['/admin/forward/overview', '/admin/forward/routes', '/admin/forward/dns'])
 
 export function isForwardV4Path(path) {
   const value = String(path || '')
@@ -61,13 +61,14 @@ export const ADMIN_MENU = Object.freeze([
   {
     id: 'network',
     labelKey: 'shell.admin.groups.network',
-    // Node (proxy service, /admin/nodes) and the forwarding area's nodes
-    // (/admin/forward/inventory) are different resources: separate items.
+    // 节点 is every machine, relays included (docs/design/node-unification):
+    // a node's forwarding settings (/admin/forward/inventory/<ref>) select it
+    // too, and the forwarding area has no node list of its own.
     // 转发 needs the forward package's v4 API (F5b); the flux-clone pages
     // (转发（旧版）, 转发节点（旧版）) were removed in v4.2 (F5d). 部署编排
     // (topologies, node roles, deployments) belongs with the nodes.
     items: [
-      { id: 'nodes', to: '/admin/nodes', icon: 'nodes', labelKey: 'shell.admin.items.nodes' },
+      { id: 'nodes', to: '/admin/nodes', icon: 'nodes', labelKey: 'shell.admin.items.nodes', match: ['/admin/forward/inventory/'] },
       {
         id: 'forward-v4',
         to: '/admin/forward/overview',

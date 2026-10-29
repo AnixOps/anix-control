@@ -51,6 +51,13 @@ Every file in `shots/` is named `<screen>-<desktop|phone>-<light|dark>.webp`.
 
 - The forwarding area has three sections: 概览 / 路由 / 节点. They are a
   segmented control at the top, like the other suites.
+  - *Since 5.0.0-rc.13:* 节点 left the area (概览 / 路由 / DNS / 分流 now).
+    Every Agent machine is a regular node (`docs/design/node-unification`),
+    so the node page (`/admin/nodes`) lists them all with their 落地 / 中转
+    role, and its 转发主机 tab holds the forward hosts that are not regular
+    nodes (Ansible hosts, unconverted forward nodes). `/admin/forward/inventory`
+    opens that tab; a node's 转发设置 page (`/admin/forward/inventory/<ref>`)
+    stays and belongs to 节点 in the sidebar.
 - Detail pages and the editor sit under their section, with a back link.
 - The sidebar keeps one 转发 item (see D1 for where it lives).
 

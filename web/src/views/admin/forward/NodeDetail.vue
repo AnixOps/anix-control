@@ -6,7 +6,7 @@
     <template v-else>
       <UiPageHeader :title="node.name || node.node_ref">
         <template #back>
-          <RouterLink class="fwd-back" to="/admin/forward/inventory"><ChevronLeft :size="16" aria-hidden="true" /> {{ t('forwardV4.nav.nodes') }}</RouterLink>
+          <RouterLink class="fwd-back" :to="backTo"><ChevronLeft :size="16" aria-hidden="true" /> {{ t('forwardV4.nav.nodes') }}</RouterLink>
         </template>
         <template #meta>
           <UiBadge :status="nodeState(node)" />
@@ -195,6 +195,14 @@ import '@/components/forward/forward.css'
 
 const props = defineProps({
   nodeRef: { type: String, required: true }
+})
+
+// Back to the node page: a regular node's own page, a forward host's tab
+// (the forwarding area has no node list: docs/design/node-unification).
+const HOSTS = { path: '/admin/nodes', query: { tab: 'hosts' } }
+const backTo = computed(() => {
+  const match = /^proxy-(\d+)$/.exec(props.nodeRef)
+  return match ? `/admin/nodes/${match[1]}` : HOSTS
 })
 
 const router = useRouter()
@@ -410,7 +418,7 @@ async function remove() {
         throw new Error(forwardErrorMessage(t, error))
       }
       toast.success(t('forwardV4.toast.nodeDeleted', { name }))
-      router.push('/admin/forward/inventory')
+      router.push(HOSTS)
     }
   })
 }

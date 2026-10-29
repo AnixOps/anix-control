@@ -47,7 +47,7 @@
         </div>
       </template>
       <template #empty-actions>
-        <UiButton :icon="Server" @click="router.push('/admin/forward/inventory')">{{ t('forwardV4.routes.viewNodes') }}</UiButton>
+        <UiButton :icon="Server" @click="router.push('/admin/nodes')">{{ t('forwardV4.routes.viewNodes') }}</UiButton>
         <UiButton variant="primary" :icon="Plus" @click="router.push('/admin/forward/routes/new')">{{ t('forwardV4.routes.new') }}</UiButton>
       </template>
 

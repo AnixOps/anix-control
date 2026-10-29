@@ -94,9 +94,11 @@ describe('404, 无权限 and account routes', () => {
       '/admin/forward/observability', '/admin/local', '/admin/nodex', '/admin/tunnel', '/admin/limit', '/admin/monitor/forward']) {
       expect(router.resolve(from).matched.at(-1).redirect, from).toBe('/admin/forward/overview')
     }
-    for (const path of ['/admin/forward/overview', '/admin/forward/routes', '/admin/forward/routes/new', '/admin/forward/inventory', '/admin/forward/inventory/forward-41']) {
+    for (const path of ['/admin/forward/overview', '/admin/forward/routes', '/admin/forward/routes/new', '/admin/forward/inventory/forward-41']) {
       expect(router.resolve(path).matched.at(-1).redirect, path).toBeUndefined()
     }
+    // The forwarding node list joined the node page (docs/design/node-unification).
+    expect(router.resolve('/admin/forward/inventory').matched.at(-1).redirect).toEqual({ path: '/admin/nodes', query: { tab: 'hosts' } })
   })
 })
 
