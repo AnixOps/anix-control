@@ -343,6 +343,13 @@ export function validate(item) {
   const port = item.listen?.port || 0;
   (item.hops || []).forEach((entry, index) => {
     const path = `hops[${index}]`
+    // A network model hop is a device of the network model, not of the
+    // forwarding inventory: its transport and egress are the model's.
+    if (entry.engine === 'ENGINE_NETWORK') {
+      if (index > 0 && !NETWORK_MODEL.transports.some(item => item.id === entry.ingress?.network_transport_id)) add(`${path}.ingress.network_transport_id`, 'not_found', 'no such network model transport')
+      if (index === item.hops.length - 1 && !NETWORK_MODEL.egresses.some(item => item.id === entry.network_egress_id)) add(`${path}.network_egress_id`, 'not_found', 'no such network model egress')
+      return
+    }
     for (const ref of entry.node_refs || []) {
       const summary = byRef(ref)
       if (!summary || !summary.enabled) { add(`${path}.node_refs`, 'unknown_node', `node ${ref} is not in the inventory`); continue }
@@ -515,13 +522,34 @@ const EXTENSION = {
   control_routes: ['/api/v4/plugins/forward/*']
 }
 
-// A brand-new route as an operator might first write it: an nftables exit
-// on a node that only ran gost, a reserved entry port and a private target
-// under the public-only policy (three violations).
+// The device network model (GET /api/v4/kernel/network) new routes run on
+// (ENGINE_NETWORK, ANX): a line per device, an ANX transport from Shanghai
+// to Tokyo and an internet egress on each exit.
+export const NETWORK_MODEL = {
+  lines: [
+    { id: 'ln-sha', node: 'forward-71' },
+    { id: 'ln-hk', node: 'forward-41' },
+    { id: 'ln-sg', node: 'forward-51' },
+    { id: 'ln-tyo', node: 'forward-61' }
+  ],
+  ingresses: [{ id: 'in-tyo', line: 'ln-tyo', audience: 'hop' }],
+  egresses: [
+    { id: 'eg-sha', line: 'ln-sha', audience: 'hop' },
+    { id: 'eg-hk', line: 'ln-hk', audience: 'internet', kind: 'nat_direct', family: 'v4', source: 'auto' },
+    { id: 'eg-sg', line: 'ln-sg', audience: 'internet', kind: 'nat_direct', family: 'v4', source: 'auto' },
+    { id: 'eg-tyo', line: 'ln-tyo', audience: 'internet', kind: 'nat_direct', family: 'v4', source: 'auto' }
+  ],
+  transports: [{ id: 'tr-sha-tyo', kind: 'anx', from_egress: 'eg-sha', to_ingress: 'in-tyo' }],
+  paths: []
+}
+
+// A brand-new ANX route as an operator might first write it: Shanghai to
+// Tokyo over the ANX transport, with a private target under the
+// public-only policy (a violation).
 export const DRAFT_WITH_PROBLEMS = {
   name: 'game-sha-tyo',
   listen: { port: 443 },
-  hops: [{ engine: 'ENGINE_NFTABLES', node_refs: ['forward-71'] }, { engine: 'ENGINE_NFTABLES', node_refs: ['forward-61', 'forward-62'] }],
+  hops: [{ engine: 'ENGINE_NETWORK', node_refs: ['forward-71'] }, { engine: 'ENGINE_NETWORK', node_refs: ['forward-61'], transport: 'tr-sha-tyo', egress: 'eg-tyo' }],
   target: { host: '10.0.3.8', port: 7777 }
 }
 
@@ -532,6 +560,8 @@ const PATHS = {
   'routes-empty': '/admin/forward/routes',
   editor: '/admin/forward/routes/new',
   'editor-blank': '/admin/forward/routes/new',
+  // 复制为新路由 of the two-entry route: a new route that keeps its entries.
+  'editor-copy-ha': `/admin/forward/routes/new?from=${EDGE}`,
   'editor-preview': `/admin/forward/routes/${GAME}/edit`,
   route: `/admin/forward/routes/${GAME}`,
   diagnose: `/admin/forward/routes/${GAME}?diagnose=1`,
@@ -597,6 +627,7 @@ export function forwardApi(path, { method, query = {}, body, scenario }) {
   const diagnostics = path.match(/^\/api\/v4\/kernel\/nodes\/((?:proxy|forward)-\d+)\/diagnostics$/)
   if (diagnostics) return nodeDiagnosticsAnswer(diagnostics[1], { method, scenario: '', body })
   if (path === '/api/v3/extensions') return scenario === 'no-capability' ? [] : [EXTENSION]
+  if (path === '/api/v4/kernel/network') return { data: { revision: '3', document: NETWORK_MODEL, pending: [], devices: [] } }
   if (!path.startsWith('/api/v4/forward/')) return undefined
   const rest = path.slice('/api/v4/forward'.length)
   const data = value => ({ data: value })
@@ -678,14 +709,16 @@ export default {
 // fillDraftWithProblems types DRAFT_WITH_PROBLEMS into the new-route editor.
 export async function fillDraftWithProblems(page) {
   const draft = DRAFT_WITH_PROBLEMS
+  const exit = draft.hops[1]
   await page.getByLabel('Name').first().fill(draft.name)
   await page.getByRole('group', { name: 'Port mode' }).first().getByText('Fixed').click()
   await page.getByLabel('Entry port').fill(String(draft.listen.port))
-  // A new hop starts on nftables; tyo-exit-02 does not advertise it.
+  await chooseNode(page, 0, 'sha-iepl-01')
+  // A new hop runs on the network model (ANX), like the first.
   await page.getByTestId('forward-add-hop').click()
   await chooseNode(page, 1, 'tyo-exit-01')
-  await chooseNode(page, 1, 'tyo-exit-02')
-  await chooseNode(page, 0, 'sha-iepl-01')
+  await chooseOption(page, page.locator('[data-hop-index="1"]').getByRole('combobox', { name: 'Network transport' }), exit.transport)
+  await chooseOption(page, page.locator('[data-hop-index="1"]').getByRole('combobox', { name: 'Internet egress' }), exit.egress)
   await page.getByLabel('Target 1 host').fill(draft.target.host)
   await page.getByLabel('Target 1 port').fill(String(draft.target.port))
   await page.getByLabel('Target 1 port').blur()

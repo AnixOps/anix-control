@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
 import { openScreen } from './support/screens.js'
 import { expectToast } from './support/toasts.js'
-import { EDGE, chooseNode } from './fixtures/forwardV4.js'
+import { EDGE } from './fixtures/forwardV4.js'
 
 // Entry HA through DNS (L2) against the mocked /api/v4/forward
 // (e2e/fixtures/forwardV4.js): the providers page with write-only
@@ -73,12 +73,12 @@ test('a provider write by an administrator who is not a super administrator', as
   await expect(page.getByTestId('forward-dns-add')).toBeDisabled()
 })
 
-test('binds a new two-entry route’s hostname after creating it', async ({ page }) => {
+test('binds a copied two-entry route’s hostname after creating it', async ({ page }) => {
   const writes = recordWrites(page)
-  await openScreen(page, 'admin-forward-editor-blank', { clock: true })
+  // Two entries are a route from before the network model: copy one (复制为
+  // 新路由), which keeps its entries and their hostname.
+  await openScreen(page, 'admin-forward-editor-copy-ha', { clock: true })
   await page.getByLabel('Name').first().fill('e2e-ha')
-  await chooseNode(page, 0, 'hk-edge-01')
-  await chooseNode(page, 0, 'hk-edge-02')
   await page.getByLabel('Entry hostname').fill('ha.example.net')
   await page.getByLabel('Target 1 host').fill('origin.example.com')
   await page.getByLabel('Target 1 port').fill('443')
@@ -106,10 +106,10 @@ test('binds a new two-entry route’s hostname after creating it', async ({ page
 })
 
 test('the binding picker shows Required only after a field was left and keeps the zone in step with the hostname', async ({ page }) => {
-  await openScreen(page, 'admin-forward-editor-blank', { clock: true })
+  // Two entries are a route from before the network model: copy one (复制为
+  // 新路由), which keeps its entries and their hostname.
+  await openScreen(page, 'admin-forward-editor-copy-ha', { clock: true })
   await page.getByLabel('Name').first().fill('e2e-ha-timing')
-  await chooseNode(page, 0, 'hk-edge-01')
-  await chooseNode(page, 0, 'hk-edge-02')
   await page.getByLabel('Entry hostname').fill('ha.example.net')
 
   const picker = page.getByTestId('forward-dns-picker')
@@ -132,10 +132,10 @@ test('the binding picker shows Required only after a field was left and keeps th
 })
 
 test('a binding that is on but incomplete says why Save is disabled', async ({ page }) => {
-  await openScreen(page, 'admin-forward-editor-blank', { clock: true })
+  // Two entries are a route from before the network model: copy one (复制为
+  // 新路由), which keeps its entries and their hostname.
+  await openScreen(page, 'admin-forward-editor-copy-ha', { clock: true })
   await page.getByLabel('Name').first().fill('e2e-ha-hint')
-  await chooseNode(page, 0, 'hk-edge-01')
-  await chooseNode(page, 0, 'hk-edge-02')
   await page.getByLabel('Entry hostname').fill('ha.example.net')
   await page.getByLabel('Target 1 host').fill('origin.example.com')
   await page.getByLabel('Target 1 port').fill('443')
