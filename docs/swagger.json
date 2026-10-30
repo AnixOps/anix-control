@@ -9671,6 +9671,84 @@
                 }
             }
         },
+        "/api/v4/kernel/nodes/{id}/network": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "The interface the network model's automatic egresses of the node leave by (interface; source_v4 and gateway_v4, source_v6 and gateway_v6 on it; empty: the default route) and the port its automatic hop ingress listens on (hop_port; 0: 24443). A node behind NAT is reached at the NAT entry (GET /api/v4/kernel/nodes/{id}/entries) whose port map covers hop_port. 404 for an unknown node.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "A device's network settings",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "proxy-\u003cid\u003e or forward-\u003cid\u003e",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/networkmodel.NodeSettings"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Replaces the node's network settings (see GET) and replans: the automatic lines, egresses, hop ingresses and transports of the routes through the node follow them. A source address needs the interface, a gateway its source address; 400 with violations otherwise, 404 for an unknown node. Audited (network_node_settings).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Set a device's network settings",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "proxy-\u003cid\u003e or forward-\u003cid\u003e",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "the settings",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/networkmodel.NodeSettings"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/networkmodel.NodeSettings"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v4/kernel/nodes/{id}/reality-targets": {
             "get": {
                 "security": [
@@ -13441,6 +13519,29 @@
                     "type": "string"
                 },
                 "node": {
+                    "type": "string"
+                }
+            }
+        },
+        "networkmodel.NodeSettings": {
+            "type": "object",
+            "properties": {
+                "gateway_v4": {
+                    "type": "string"
+                },
+                "gateway_v6": {
+                    "type": "string"
+                },
+                "hop_port": {
+                    "type": "integer"
+                },
+                "interface": {
+                    "type": "string"
+                },
+                "source_v4": {
+                    "type": "string"
+                },
+                "source_v6": {
                     "type": "string"
                 }
             }

@@ -403,6 +403,25 @@ export async function replaceKernelNodeEntries(node, entries) {
   }))
 }
 
+// A node's network settings, `node` is "proxy-<id>" or "forward-<id>": {
+// interface, source_v4, gateway_v4, source_v6, gateway_v6, hop_port }. The
+// network model's automatic egresses of the node leave by the interface
+// (empty: the default route); its automatic hop ingress listens on hop_port
+// (0: 24443), reached through a NAT entry whose port map covers it.
+export async function getKernelNodeNetwork(node) {
+  return unwrap(await v4({ url: `/kernel/nodes/${encodeURIComponent(node)}/network`, method: 'get' }))
+}
+
+// Replaces the node's network settings and replans the routes through it.
+// Refusals: invalid_request (400) with violations, not_found (404).
+export async function setKernelNodeNetwork(node, settings) {
+  return unwrap(await v4({
+    url: `/kernel/nodes/${encodeURIComponent(node)}/network`,
+    method: 'put',
+    data: settings
+  }))
+}
+
 // Panabit iWAN lines: { lines: [{ id, name, host, port, username, mtu,
 // encrypt, entries }] }, never a password. An iwan node entry reaches its
 // node through a line (iwan_line_id).

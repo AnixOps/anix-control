@@ -170,11 +170,11 @@ func (s *Service) Get(ctx context.Context) (*View, error) {
 	if err != nil {
 		return nil, err
 	}
-	hosts, err := hostsFor(db, forwards)
+	facts, err := devicesFor(db, forwards)
 	if err != nil {
 		return nil, err
 	}
-	full, forwards := complete(doc, forwards, hosts)
+	full, forwards := complete(doc, forwards, facts)
 	if keys, err := s.openKeys(db); err == nil {
 		if result, err := Plan(full, keys, devices, forwards); err == nil {
 			view.Pending = append(view.Pending, result.Pending...)
@@ -478,11 +478,11 @@ func (s *Service) completed(db *gorm.DB, doc *Document) (*Document, []Forward, e
 	if err != nil {
 		return nil, nil, err
 	}
-	hosts, err := hostsFor(db, forwards)
+	facts, err := devicesFor(db, forwards)
 	if err != nil {
 		return nil, nil, err
 	}
-	full, forwards := complete(doc, forwards, hosts)
+	full, forwards := complete(doc, forwards, facts)
 	return full, forwards, nil
 }
 

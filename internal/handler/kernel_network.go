@@ -179,3 +179,62 @@ func (h *NetworkModelHandler) MigrateGost(c *gin.Context) {
 		kernelData(c, http.StatusOK, report)
 	}
 }
+
+// NodeNetwork godoc
+// @Summary A device's network settings
+// @Description The interface the network model's automatic egresses of the node leave by (interface; source_v4 and gateway_v4, source_v6 and gateway_v6 on it; empty: the default route) and the port its automatic hop ingress listens on (hop_port; 0: 24443). A node behind NAT is reached at the NAT entry (GET /api/v4/kernel/nodes/{id}/entries) whose port map covers hop_port. 404 for an unknown node.
+// @Tags Kernel
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "proxy-<id> or forward-<id>"
+// @Success 200 {object} networkmodel.NodeSettings
+// @Router /api/v4/kernel/nodes/{id}/network [get]
+func (h *NetworkModelHandler) NodeNetwork(c *gin.Context) {
+	node, ok := parseNodeRef(c)
+	if !ok {
+		return
+	}
+	settings, err := networkmodel.New(h.db()).NodeSettings(c.Request.Context(), node.String())
+	if err != nil {
+		h.settingsError(c, err)
+		return
+	}
+	kernelData(c, http.StatusOK, settings)
+}
+
+// SetNodeNetwork godoc
+// @Summary Set a device's network settings
+// @Description Replaces the node's network settings (see GET) and replans: the automatic lines, egresses, hop ingresses and transports of the routes through the node follow them. A source address needs the interface, a gateway its source address; 400 with violations otherwise, 404 for an unknown node. Audited (network_node_settings).
+// @Tags Kernel
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "proxy-<id> or forward-<id>"
+// @Param request body networkmodel.NodeSettings true "the settings"
+// @Success 200 {object} networkmodel.NodeSettings
+// @Router /api/v4/kernel/nodes/{id}/network [put]
+func (h *NetworkModelHandler) SetNodeNetwork(c *gin.Context) {
+	node, ok := parseNodeRef(c)
+	if !ok {
+		return
+	}
+	var request networkmodel.NodeSettings
+	if err := c.ShouldBindJSON(&request); err != nil {
+		kernelError(c, http.StatusBadRequest, "invalid_request", err.Error())
+		return
+	}
+	settings, err := networkmodel.New(h.db()).SetNodeSettings(c.Request.Context(), node.String(), request, h.actor(c))
+	if err != nil {
+		h.settingsError(c, err)
+		return
+	}
+	kernelData(c, http.StatusOK, settings)
+}
+
+func (h *NetworkModelHandler) settingsError(c *gin.Context, err error) {
+	if errors.Is(err, networkmodel.ErrUnknownNode) {
+		kernelError(c, http.StatusNotFound, "not_found", err.Error())
+		return
+	}
+	h.modelError(c, err)
+}

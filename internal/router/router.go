@@ -814,6 +814,8 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		v4.POST("/kernel/network/transports/:id/rotate-key", networkModel.RotateLinkKey)
 		v4.GET("/kernel/network/devices/:id/plan", networkModel.DevicePlan)
 		v4.POST("/kernel/network/migrate-gost", networkModel.MigrateGost)
+		v4.GET("/kernel/nodes/:id/network", networkModel.NodeNetwork)
+		v4.PUT("/kernel/nodes/:id/network", networkModel.SetNodeNetwork)
 		// Panabit iWAN lines: third-party iWAN ingresses AnixOps Net logs
 		// into with a shared account to reach proxy nodes through them
 		// (node entries of kind iwan; internal/iwanline).

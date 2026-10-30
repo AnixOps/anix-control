@@ -456,6 +456,9 @@ func transportProto(transport *Transport, role networkv1.TransportRole, peer, ke
 			anx.ServerPublic = accepter.PublicKeys[network.TransportAnxLine]
 		}
 		port := to.Listen.Port
+		if role == networkv1.TransportRole_TRANSPORT_ROLE_DIAL {
+			port = publicPort(to, port)
+		}
 		anx.TcpAddr = net.JoinHostPort(host, strconv.FormatUint(uint64(port), 10))
 		if options.QUICPort != 0 {
 			anx.QuicAddr = net.JoinHostPort(host, strconv.FormatUint(uint64(options.QUICPort), 10))
@@ -466,4 +469,15 @@ func transportProto(transport *Transport, role networkv1.TransportRole, peer, ke
 	}
 	out.Settings = &networkv1.Transport_AnxLine{AnxLine: anx}
 	return out
+}
+
+// publicPort answers the port a dialer reaches ingress's local port at: the
+// public port a NAT ingress maps it to, or the port itself.
+func publicPort(ingress *Ingress, port uint32) uint32 {
+	for _, m := range ingress.PortMap {
+		if port >= m.Local.First && port <= m.Local.Last {
+			return m.Public.First + (port - m.Local.First)
+		}
+	}
+	return port
 }

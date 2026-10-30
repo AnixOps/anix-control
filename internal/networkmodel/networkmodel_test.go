@@ -179,7 +179,7 @@ func newService(t *testing.T) *Service {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = sqlDB.Close() })
 	require.NoError(t, db.AutoMigrate(&model.Node{}, &model.ForwardNode{}, &model.OperationLog{},
-		&model.NetworkModel{}, &model.NetworkTransportKey{}, &model.NetworkDevice{}, &model.AgentTransport{}))
+		&model.NetworkModel{}, &model.NetworkTransportKey{}, &model.NetworkDevice{}, &model.NodeNetwork{}, &model.AgentTransport{}))
 	for _, id := range []uint{1, 2} {
 		require.NoError(t, db.Create(&model.Node{ID: id, Name: "n", Host: "h.example.com", APIKey: "k" + string(rune('0'+id))}).Error)
 	}

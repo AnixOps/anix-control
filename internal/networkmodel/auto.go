@@ -9,6 +9,7 @@ import (
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	"github.com/AnixOps/anix-control/sdk/network"
 	"github.com/AnixOps/anix-control/v5/internal/model"
+	"github.com/AnixOps/anix-control/v5/internal/nodeentry"
 	"gorm.io/gorm"
 )
 
@@ -18,13 +19,21 @@ import (
 // under ids that start with AutoPrefix, which the document cannot use:
 //
 //   - a line auto-<node> on a device without one;
-//   - an internet egress auto-<node>-internet (nat_direct, source auto) on
-//     a device whose route exit, or extra entry, has none;
+//   - an internet egress auto-<node>-internet (nat_direct) on a device
+//     whose route exit, or extra entry, has none;
 //   - for a hop without a transport, a hop egress auto-<node>-hop on the
 //     dialing device, a hop ingress auto-<node>-hop on the next device
 //     (listening on AutoHopPort, reached at the node's address) and the
 //     transport auto-<from>-<to> between them: kind anx (ANX-A, the A2
 //     jacket), since Control cannot tell a trusted segment.
+//
+// A device's own network settings (model.NodeNetwork, owner 2026-10-30:
+// NAT and multi-line machines) shape them: the auto line is on the
+// settings' interface and the auto egresses leave from its source address
+// (policy routed through its gateway) instead of by the default route; the
+// hop ingress listens on the settings' hop port, and when a NAT node entry
+// maps that port it is a NAT ingress reached at the entry's address and
+// public port.
 //
 // The auto transports get link keys like declared ones (syncAutoKeys).
 // Declared components are never changed: a device with lines keeps them,
@@ -37,17 +46,70 @@ const (
 	AutoServerName = "www.apple.com"
 )
 
-// NodeAddress is a device's address for the hops that reach it: the
-// node's host.
-type NodeAddress struct {
-	Node string
-	Host string
+// natEntry is a NAT node entry: the public address and port ranges a
+// device is reached at.
+type natEntry struct {
+	Host   string
+	Ranges []nodeentry.PortRange
+}
+
+// device is what the completer knows of a device: the node's host, its
+// network settings and its enabled NAT entries.
+type device struct {
+	Host    string
+	Network model.NodeNetwork
+	NAT     []natEntry
+}
+
+// hopPort answers the port the device's hop ingress listens on.
+func (d device) hopPort() uint32 {
+	if d.Network.HopPort != 0 {
+		return d.Network.HopPort
+	}
+	return AutoHopPort
+}
+
+// natFor answers the NAT entry of family that maps port, and the public
+// port it maps it to.
+func (d device) natFor(family string, port uint32) (natEntry, uint32, bool) {
+	for _, entry := range d.NAT {
+		if hostFamily(entry.Host) != family {
+			continue
+		}
+		for _, r := range entry.Ranges {
+			if int(port) >= r.From && int(port) <= r.To {
+				return entry, uint32(r.External + int(port) - r.From), true // #nosec G115 -- nodeentry validates ports to 1-65535.
+			}
+		}
+	}
+	return natEntry{}, 0, false
+}
+
+// source answers the source of the device's auto egresses of family: the
+// settings' address on their interface, or auto (the default route).
+func (d device) source(family string) string {
+	address := d.Network.SourceV4
+	if family == "v6" {
+		address = d.Network.SourceV6
+	}
+	if d.Network.Interface == "" || address == "" {
+		return network.SourceAuto
+	}
+	return address
+}
+
+// hostFamily answers v6 for an IPv6 literal, v4 for anything else.
+func hostFamily(host string) string {
+	if ip, err := netip.ParseAddr(strings.Trim(host, "[]")); err == nil && ip.Unmap().Is6() {
+		return "v6"
+	}
+	return "v4"
 }
 
 // autoCompleter adds the auto components to a copy of a document.
 type autoCompleter struct {
-	doc   *Document
-	hosts map[string]string
+	doc     *Document
+	devices map[string]device
 	// lineOf is the first line of each device.
 	lineOf map[string]string
 	nodeOf map[string]string
@@ -58,7 +120,7 @@ type autoCompleter struct {
 // and forwards with their transports and exit egress filled in. A hop
 // Control cannot link (its device has no address) keeps an empty
 // transport and waits.
-func complete(doc *Document, forwards []Forward, hosts map[string]string) (*Document, []Forward) {
+func complete(doc *Document, forwards []Forward, devices map[string]device) (*Document, []Forward) {
 	out := &Document{
 		Lines:      append([]Line(nil), doc.Lines...),
 		Ingresses:  append([]Ingress(nil), doc.Ingresses...),
@@ -66,7 +128,7 @@ func complete(doc *Document, forwards []Forward, hosts map[string]string) (*Docu
 		Transports: append([]Transport(nil), doc.Transports...),
 		Paths:      doc.Paths,
 	}
-	a := &autoCompleter{doc: out, hosts: hosts, lineOf: map[string]string{}, nodeOf: map[string]string{}, ids: map[string]bool{}}
+	a := &autoCompleter{doc: out, devices: devices, lineOf: map[string]string{}, nodeOf: map[string]string{}, ids: map[string]bool{}}
 	for _, line := range out.Lines {
 		if _, ok := a.lineOf[line.Node]; !ok {
 			a.lineOf[line.Node] = line.ID
@@ -143,7 +205,16 @@ func (a *autoCompleter) line(node string) string {
 		return id
 	}
 	id := AutoPrefix + node
-	a.doc.Lines = append(a.doc.Lines, Line{ID: id, Node: node, Name: "auto"})
+	settings := a.devices[node].Network
+	line := Line{ID: id, Node: node, Name: "auto", Interface: settings.Interface,
+		GatewayV4: settings.GatewayV4, GatewayV6: settings.GatewayV6}
+	if settings.SourceV4 != "" {
+		line.Families = append(line.Families, "v4")
+	}
+	if settings.SourceV6 != "" {
+		line.Families = append(line.Families, "v6")
+	}
+	a.doc.Lines = append(a.doc.Lines, line)
 	a.lineOf[node], a.nodeOf[id] = id, node
 	return id
 }
@@ -151,10 +222,7 @@ func (a *autoCompleter) line(node string) string {
 // family answers the address family of node's host: v6 for an IPv6
 // literal, else v4.
 func (a *autoCompleter) family(node string) string {
-	if ip, err := netip.ParseAddr(strings.Trim(a.hosts[node], "[]")); err == nil && ip.Unmap().Is6() {
-		return "v6"
-	}
-	return "v4"
+	return hostFamily(a.devices[node].Host)
 }
 
 // internetEgress answers node's enabled internet egress (the first by id),
@@ -173,7 +241,7 @@ func (a *autoCompleter) internetEgress(node string) string {
 	id := AutoPrefix + node + "-internet"
 	if a.add(id) {
 		a.doc.Egresses = append(a.doc.Egresses, Egress{ID: id, Line: a.line(node), Kind: network.EgressNATDirect,
-			Audience: "internet", Family: a.family(node), Source: network.SourceAuto})
+			Audience: "internet", Family: a.family(node), Source: a.devices[node].source(a.family(node))})
 	}
 	return id
 }
@@ -182,30 +250,37 @@ func (a *autoCompleter) internetEgress(node string) string {
 // it with its hop egress and hop ingress; "" when the next device has no
 // address to be reached at.
 func (a *autoCompleter) transport(from, to string) string {
-	host := strings.TrimSpace(a.hosts[to])
+	next := a.devices[to]
+	host := strings.TrimSpace(next.Host)
 	if host == "" || from == to {
 		return ""
 	}
-	egress, ingress := AutoPrefix+from+"-hop", AutoPrefix+to+"-hop"
-	if a.family(to) == "v6" {
+	family := a.family(to)
+	port := next.hopPort()
+	ingress := Ingress{Line: a.line(to), Kind: network.IngressDirect, Audience: "hop", Family: family,
+		Listen: Endpoint{Address: "0.0.0.0", Port: port}, PublicHost: strings.Trim(host, "[]")}
+	if family == "v6" {
+		ingress.Listen.Address = "::"
+	}
+	if entry, public, ok := next.natFor(family, port); ok {
+		ingress.Kind, ingress.PublicHost = network.IngressNAT, strings.Trim(entry.Host, "[]")
+		ingress.PortMap = []PortMap{{Public: PortRange{First: public, Last: public}, Local: PortRange{First: port, Last: port}}}
+	}
+	egress, ingressID := AutoPrefix+from+"-hop", AutoPrefix+to+"-hop"
+	if family == "v6" {
 		egress += "6"
 	}
 	if a.add("e:" + egress) {
 		a.doc.Egresses = append(a.doc.Egresses, Egress{ID: egress, Line: a.line(from), Kind: network.EgressHop,
-			Audience: "hop", Family: a.family(to), Source: network.SourceAuto})
+			Audience: "hop", Family: family, Source: a.devices[from].source(family)})
 	}
-	if a.add("i:" + ingress) {
-		address := "0.0.0.0"
-		if a.family(to) == "v6" {
-			address = "::"
-		}
-		a.doc.Ingresses = append(a.doc.Ingresses, Ingress{ID: ingress, Line: a.line(to), Kind: network.IngressDirect,
-			Audience: "hop", Family: a.family(to), Listen: Endpoint{Address: address, Port: AutoHopPort},
-			PublicHost: strings.Trim(host, "[]")})
+	if a.add("i:" + ingressID) {
+		ingress.ID = ingressID
+		a.doc.Ingresses = append(a.doc.Ingresses, ingress)
 	}
 	id := AutoPrefix + from + "-" + to
 	if a.add("t:" + id) {
-		a.doc.Transports = append(a.doc.Transports, Transport{ID: id, Kind: KindAnx, FromEgress: egress, ToIngress: ingress,
+		a.doc.Transports = append(a.doc.Transports, Transport{ID: id, Kind: KindAnx, FromEgress: egress, ToIngress: ingressID,
 			AnxLine: &AnxLine{ServerName: AutoServerName}})
 	}
 	return id
@@ -289,17 +364,19 @@ func agentNodes(db *gorm.DB) ([]AgentNode, error) {
 	return out, nil
 }
 
-// hostsFor answers the hosts of the devices forwards name after their
-// entries, the ones Control may link to.
-func hostsFor(db *gorm.DB, forwards []Forward) (map[string]string, error) {
-	hosts := map[string]string{}
+// devicesFor answers what the completer needs of the devices forwards
+// name: their hosts, network settings and enabled NAT entries.
+func devicesFor(db *gorm.DB, forwards []Forward) (map[string]device, error) {
+	devices := map[string]device{}
 	var proxies, others []uint
+	refs := map[string]bool{}
 	for _, forward := range forwards {
-		for _, ref := range forward.Via {
+		for _, ref := range append(append([]string(nil), forward.Entries...), forward.Via...) {
 			node, err := agentcontrol.ParseAgentNode(ref)
-			if err != nil || node.ID == 0 {
+			if err != nil || node.ID == 0 || refs[ref] {
 				continue
 			}
+			refs[ref] = true
 			if node.Kind == agentcontrol.NodeKindProxy {
 				proxies = append(proxies, uint(node.ID))
 			} else {
@@ -307,13 +384,35 @@ func hostsFor(db *gorm.DB, forwards []Forward) (map[string]string, error) {
 			}
 		}
 	}
+	if len(refs) == 0 {
+		return devices, nil
+	}
+	set := func(ref string, edit func(d *device)) {
+		d := devices[ref]
+		edit(&d)
+		devices[ref] = d
+	}
 	if len(proxies) > 0 {
 		var rows []model.Node
-		if err := db.Select("id", "host").Where("id IN ?", proxies).Find(&rows).Error; err != nil {
+		err := db.Select("id", "host").Where("id IN ?", proxies).Find(&rows).Error
+		if err != nil {
 			return nil, err
 		}
 		for _, row := range rows {
-			hosts[agentcontrol.AgentNode{Kind: agentcontrol.NodeKindProxy, ID: uint32(row.ID)}.String()] = row.Host // #nosec G115 -- node ids are 32-bit (agentcontrol.AgentNode).
+			set(proxyRef(row.ID), func(d *device) { d.Host = row.Host })
+		}
+		entries := map[uint][]model.NodeEntry{}
+		if db.Migrator().HasTable(&model.NodeEntry{}) {
+			if entries, err = nodeentry.EnabledByNode(db, proxies); err != nil {
+				return nil, err
+			}
+		}
+		for id, rows := range entries {
+			for _, row := range rows {
+				if row.Kind == model.NodeEntryNAT {
+					set(proxyRef(id), func(d *device) { d.NAT = append(d.NAT, natEntry{Host: row.Host, Ranges: nodeentry.Ranges(row)}) })
+				}
+			}
 		}
 	}
 	if len(others) > 0 {
@@ -322,8 +421,26 @@ func hostsFor(db *gorm.DB, forwards []Forward) (map[string]string, error) {
 			return nil, err
 		}
 		for _, row := range rows {
-			hosts[agentcontrol.AgentNode{Kind: agentcontrol.NodeKindForward, ID: uint32(row.ID)}.String()] = row.Host // #nosec G115 -- node ids are 32-bit (agentcontrol.AgentNode).
+			ref := agentcontrol.AgentNode{Kind: agentcontrol.NodeKindForward, ID: uint32(row.ID)}.String() // #nosec G115 -- node ids are 32-bit (agentcontrol.AgentNode).
+			set(ref, func(d *device) { d.Host = row.Host })
 		}
 	}
-	return hosts, nil
+	if db.Migrator().HasTable(&model.NodeNetwork{}) {
+		keys := make([]string, 0, len(refs))
+		for ref := range refs {
+			keys = append(keys, ref)
+		}
+		var rows []model.NodeNetwork
+		if err := db.Where("node_ref IN ?", keys).Find(&rows).Error; err != nil {
+			return nil, err
+		}
+		for _, row := range rows {
+			set(row.NodeRef, func(d *device) { d.Network = row })
+		}
+	}
+	return devices, nil
+}
+
+func proxyRef(id uint) string {
+	return agentcontrol.AgentNode{Kind: agentcontrol.NodeKindProxy, ID: uint32(id)}.String() // #nosec G115 -- node ids are 32-bit (agentcontrol.AgentNode).
 }

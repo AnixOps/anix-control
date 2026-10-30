@@ -15,6 +15,7 @@ import egressRoutes from './modules/zh-CN/egressRoutes'
 import nodeDiagnostics from './modules/zh-CN/nodeDiagnostics'
 import realityTargets from './modules/zh-CN/realityTargets'
 import nodeEntries from './modules/zh-CN/nodeEntries'
+import nodeNetwork from './modules/zh-CN/nodeNetwork'
 import agentUpgradeSheet from './modules/zh-CN/agentUpgradeSheet'
 
 export default {
@@ -26,6 +27,7 @@ export default {
   ...nodeDiagnostics,
   ...realityTargets,
   ...nodeEntries,
+  ...nodeNetwork,
   ...agentUpgradeSheet,
   ...networkPages,
   ...miscPages,
