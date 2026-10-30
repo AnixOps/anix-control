@@ -1311,9 +1311,11 @@ LimitNOFILE=1048576
 RuntimeDirectory=anixops-agent
 RuntimeDirectoryMode=0750
 
-# Privileges (H13): nftables and tc over netlink, low ports; nothing else.
-AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
-CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
+# Privileges (H13): nftables and tc over netlink, low ports, and raw
+# sockets for ANX-Line's fake-TCP carrier (c3, anx-node and anx-server);
+# nothing else.
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_NET_RAW
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_NET_RAW
 NoNewPrivileges=yes
 
 # Sandbox (forward-sdk.md, section 14).

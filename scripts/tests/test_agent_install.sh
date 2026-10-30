@@ -346,8 +346,8 @@ grep -qF "chown anixops-agent:anixops-agent ${ROOT_DIR}/var/lib/anixops-agent/jo
   fail "the join must finish before the Agent starts"
 [[ "$(stat -c '%a' "${ROOT_DIR}/var/lib/anixops-agent")" == "700" ]] || fail "state dir mode"
 unit="${ROOT_DIR}/etc/systemd/system/anix-agent.service"
-for line in "User=anixops-agent" "SupplementaryGroups=systemd-journal" "AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE" \
-  "CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE" "NoNewPrivileges=yes" "ProtectSystem=strict" \
+for line in "User=anixops-agent" "SupplementaryGroups=systemd-journal" "AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_NET_RAW" \
+  "CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_NET_RAW" "NoNewPrivileges=yes" "ProtectSystem=strict" \
   "ReadWritePaths=/var/lib/anixops-agent" "RestrictAddressFamilies=AF_INET AF_INET6 AF_NETLINK AF_UNIX" \
   "ExecStart=/usr/lib/anixops-agent/anix-agent server -c /etc/anixops/agent/config.json"; do
   grep -qxF "${line}" "${unit}" || fail "agent unit lacks ${line}"

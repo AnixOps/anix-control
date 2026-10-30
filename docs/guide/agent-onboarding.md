@@ -384,13 +384,15 @@ lists every node).
 14. Starts the Agent and prints the summary, and, when the token came on the
     command line, a reminder that the command is in the shell history.
 
-The Agent runs as `anixops-agent`, not root, with only `CAP_NET_ADMIN` and
-`CAP_NET_BIND_SERVICE`, `NoNewPrivileges`, `ProtectSystem=strict` (writable:
-`/var/lib/anixops-agent`, `/var/lib/anixops-gost`, and its
+The Agent runs as `anixops-agent`, not root, with only `CAP_NET_ADMIN`,
+`CAP_NET_BIND_SERVICE` and `CAP_NET_RAW` (raw sockets for ANX-Line's
+fake-TCP carrier, which anx-node and anx-server use),
+`NoNewPrivileges`, `ProtectSystem=strict` (writable:
+`/var/lib/anixops-agent`, and its
 `RuntimeDirectory` `/run/anixops-agent` (0750) for the plugins' sockets),
 `ProtectHome`,
 `PrivateTmp` and `RestrictAddressFamilies=AF_INET AF_INET6 AF_NETLINK
-AF_UNIX`. gost runs as `anixops-gost` with `CAP_NET_BIND_SERVICE` only.
+AF_UNIX`.
 
 ## Running It Again
 
