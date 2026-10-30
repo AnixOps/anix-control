@@ -2,6 +2,76 @@
 
 ## Unreleased
 
+## 5.0.0-rc.17 - 2026-10-30
+
+### Changed
+
+- Pins Agent v5.0.0-rc.17: port forwards report their targets' health,
+  and an Agent with anx-node installed starts again (the anixcore runtime
+  directory moved below the unit's `RuntimeDirectory`; the rc.16 upgrade
+  was reverted for it).
+
+### Added
+
+- Manual Agent upgrade: **升级节点** has a 手动选择 mode that upgrades only
+  the ticked nodes, at once in a single batch without the 30 minute
+  minimum (a failed node is still rolled back). The upgrade plan lists the
+  eligible nodes with their name and current Agent version, and
+  `POST /api/v4/kernel/agents/upgrades` takes `"nodes"` for it.
+- ANX routes can have several entry devices for entry HA (with
+  `listen.entry_hostname`). Each entry device runs the route's port
+  forward: the first on the transport the route names, the others on a
+  transport of their own into the same ingress (or, on a single-hop route,
+  an internet egress of their own), chosen by the network model. An entry
+  without one waits on its own while the others run. Health, latency,
+  diagnosis and the DNS binding judge every entry device, so DNS fails
+  over between them.
+- ANX routes get health, latency history, diagnosis and DNS entry failover.
+  The entry's anixcore checks each target through the whole route and the
+  Agent reports the result in the port forward's status
+  (`PortForwardStatus.targets`). Control serves it as the route's health
+  (`GET /routes/{id}/health`, now with `node_ref` on each item), folds it
+  into the latency history, diagnoses the route from the network model
+  (device plan, port forward, transports, egress, target health, a dial of
+  the entry), and lets the DNS binding judge the entry device by the same
+  facts. The route page reads its health table from the route's health.
+
+### Changed
+
+- ANX routes no longer need a hand-written network model: the route editor
+  lists every node whose Agent is connected, and a hop's transport and the
+  exit's egress default to 自动. Control then adds what the route needs to
+  the plans (a line on the device, an internet egress, and an ANX link on
+  port 24443 with its link key), under `auto-` ids the model document
+  cannot use. `GET /api/v4/kernel/network` returns these devices as
+  `nodes`.
+- Install commands no longer carry `--forward`, and new route hops run only
+  on the network model (ANX): the route editor has no engine picker for them.
+  A route still on nftables keeps showing its engine. The script still
+  accepts `--forward` from older commands.
+- The node page's engine card no longer lists gost (removed) and anixops
+  (never enabled), which an Agent still reports as unavailable. It lists ANX,
+  the network model's anx-node, instead. The route editor no longer offers
+  the anixops engine; a hop already on gost or anixops still shows it.
+
+### Removed
+
+- `POST /api/v4/kernel/nodes/forward-<id>/convert` is gone, with the rest of
+  the proxy/forward split: there is nothing left to convert to. Node groups
+  no longer take or show a `kind`; every group makes regular nodes, and one
+  without protocols makes nodes that only run the network model (ANX).
+- Nodes no longer come in two kinds. The node page drops the role column, the
+  "Forward hosts" tab, the unconverted-node banner and the convert-to-forward
+  buttons; node groups drop the regular/relay choice. A group with no
+  protocols ("None" preset) gives nodes that only run the network model (ANX).
+  `/admin/forward/inventory` now opens the node page.
+
+### Fixed
+
+- The JumpServer `run` action (and the dev build deploy that uses it) no
+  longer fails because one host in the fleet has no Python: Ansible cannot
+  run the command there, so the run warns and goes on.
+
 ## 5.0.0-rc.16 - 2026-10-30
 
 ### Changed
