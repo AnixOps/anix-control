@@ -580,3 +580,51 @@ func TestUndeliveredRollbackIsMarked(t *testing.T) {
 	assert.Equal(t, model.AgentUpgradeRolledBack, f.campaign(campaign.ID).Status)
 	assert.Equal(t, CodeRollbackUnconfirm, f.nodeState(campaign.ID, node).ErrorCode)
 }
+
+// A manual upgrade offers exactly the chosen nodes at once and finishes as
+// soon as they have settled, without the 30-minute batch minimum.
+func TestManualUpgrade(t *testing.T) {
+	db := openSQLite(t)
+	f := newFixture(t, db)
+	proxy := f.addProxy(1, "")
+	f.addProxy(2, "")
+	forward := f.addForward(2, "")
+	for _, node := range []agentcontrol.AgentNode{proxy, forward} {
+		f.streams.connect(node, "v4.1.0", start.Add(-time.Hour), "upgrade.v1")
+	}
+	ctx := context.Background()
+	for name, request := range map[string]StartRequest{
+		"with batches": {Nodes: []string{"proxy-1"}, Batches: DefaultBatches()},
+		"with exclude": {Nodes: []string{"proxy-1"}, Exclude: Exclude{Nodes: []string{"proxy-2"}}},
+		"bad name":     {Nodes: []string{"node-1"}},
+	} {
+		request.TargetVersion, request.Artifacts = "v4.2.0", testArtifacts()
+		_, err := f.service.Start(ctx, request)
+		assert.ErrorIs(t, err, ErrInvalid, name)
+	}
+	_, err := f.service.Start(ctx, StartRequest{TargetVersion: "v4.2.0", Artifacts: testArtifacts(), Nodes: []string{"proxy-1", "forward-9"}})
+	require.ErrorIs(t, err, ErrNoNodes)
+	assert.Contains(t, err.Error(), "forward-9")
+
+	campaign := f.start(StartRequest{Nodes: []string{"forward-2", " proxy-1"}})
+	view := f.campaign(campaign.ID)
+	require.Equal(t, 2, view.Total)
+	require.Len(t, view.Batches, 1)
+	f.tick()
+	require.Len(t, f.streams.operations(), 2)
+	f.upgrade(proxy, "v4.2.0")
+	f.upgrade(forward, "v4.2.0")
+	f.tick()
+	f.tick()
+	assert.Equal(t, model.AgentUpgradeSucceeded, f.campaign(campaign.ID).Status)
+
+	eligible, err := Candidates(ctx, db, Exclude{})
+	require.NoError(t, err)
+	described, err := Describe(ctx, db, eligible)
+	require.NoError(t, err)
+	require.Len(t, described, 3)
+	for _, node := range described {
+		assert.Equal(t, node.NodeRef, node.Name, "the fixture names a node by its ref")
+		assert.Equal(t, "v4.1.0", node.AgentVersion)
+	}
+}

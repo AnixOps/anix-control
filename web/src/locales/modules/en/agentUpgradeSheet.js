@@ -20,6 +20,15 @@ export default {
       rules: 'A batch rolls back when more than {percent}% of its nodes fail or do not reconnect with the new version within {minutes} minutes.',
       reason: 'Note (optional)',
       reasonPlaceholder: 'For example: upgrade to v4.2.0',
+      nodes: 'Nodes',
+      nodeVersion: 'Agent {version} now',
+      mode: 'Upgrade mode',
+      modes: {
+        staged: 'Staged',
+        manual: 'Choose nodes',
+        stagedHelp: 'Upgrades every eligible node in batches, a small canary batch first.',
+        manualHelp: 'Upgrades only the ticked nodes, all at once, without batch minimums.'
+      },
       submit: 'Start upgrade',
       noneEligible: 'No node can be upgraded: a node must be enabled and its Agent seen by Control.',
       active: 'An upgrade is running. Let it end, or abort it, before starting another.',
@@ -28,7 +37,8 @@ export default {
     },
     confirm: {
       title: 'Upgrade {n} node to {version}? | Upgrade {n} nodes to {version}?',
-      message: 'Pushed in batches: {batches}, at least {minutes} minutes each. You can pause, abort or roll back at any time.'
+      message: 'Pushed in batches: {batches}, at least {minutes} minutes each. You can pause, abort or roll back at any time.',
+      manualMessage: 'Upgrades these nodes now: {nodes}. A node that fails or does not reconnect with the new version within 10 minutes is rolled back.'
     },
     errors: {
       target: 'Write the target as a release tag, for example v4.2.0.',

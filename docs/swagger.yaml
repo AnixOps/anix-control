@@ -448,6 +448,13 @@ definitions:
         type: array
       exclude:
         $ref: '#/definitions/agentupgrade.Exclude'
+      nodes:
+        description: |-
+          Nodes, when set, upgrade exactly these nodes at once (manual
+          upgrade); batches and exclude must then be empty.
+        items:
+          type: string
+        type: array
       reason:
         type: string
       target_version:
@@ -6919,7 +6926,8 @@ paths:
       description: 'The Agent release a campaign pushes by default (agent_install.agent_version,
         else the Agent release this Control was built with, else its own release),
         this Control''s release, how many nodes a campaign would include now (enabled
-        nodes whose Agent was seen on the Agent Control stream), the default batches
+        nodes whose Agent was seen on the Agent Control stream) and which (nodes:
+        node_ref, name, agent_version, for a manual upgrade), the default batches
         with the rules of H19 (first batch at most 5%, each batch at least 30 minutes,
         a batch rolls back above 5% failures or after 10 minutes without a reconnect),
         the active campaign if there is one, and whether the caller may start one
@@ -6965,17 +6973,19 @@ paths:
     post:
       consumes:
       - application/json
-      description: Pushes an Agent release to every enabled node whose Agent was seen
-        on the Agent Control stream, in batches (default 5%, 25%, 100% of the nodes,
-        at least 30 minutes each; canaries first by node name hash), as the agent.upgrade
-        operation to Agents that negotiated upgrade.v1. A batch rolls back when more
-        than 5% of its offered nodes fail or do not reconnect with the target version
-        within 10 minutes (H19). The release must be in agent_install.artifact_dir
+      description: 'Pushes an Agent release to every enabled node whose Agent was
+        seen on the Agent Control stream, in batches (default 5%, 25%, 100% of the
+        nodes, at least 30 minutes each; canaries first by node name hash), as the
+        agent.upgrade operation to Agents that negotiated upgrade.v1. With nodes (proxy-<id>,
+        forward-<id>, each eligible) it is a manual upgrade instead: exactly those
+        nodes in one batch with no minimum duration; batches and exclude must be empty.
+        A batch rolls back when more than 5% of its offered nodes fail or do not reconnect
+        with the target version within 10 minutes (H19). The release must be in agent_install.artifact_dir
         with its .sig files and SHA256SUMS(.sig), verified with plugins.official_public_key.
-        Super administrators only; one campaign at a time.
+        Super administrators only; one campaign at a time.'
       parameters:
       - description: target_version (default this Control's Agent release), batches,
-          exclude {nodes, tags}, reason
+          exclude {nodes, tags}, nodes (manual upgrade), reason
         in: body
         name: request
         required: true
@@ -7334,6 +7344,26 @@ paths:
       summary: Update an egress route
       tags:
       - Kernel
+  /api/v4/kernel/features:
+    get:
+      description: 'The running build''s channel (dev for a dev build built from main,
+        stable for a release) and the features gated on it (internal/features): a
+        feature in the dev stage runs in dev builds only. The admin UI hides what
+        is off.'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: data.channel, data.version and data.features [{name, description,
+            stage, enabled}]
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List the gated features
+      tags:
+      - Kernel
   /api/v4/kernel/forward-routes/{id}/subscription:
     get:
       description: 'Whether the route is published in subscriptions (加入订阅), the proxy
@@ -7654,11 +7684,11 @@ paths:
     post:
       consumes:
       - application/json
-      description: 'A node group with a new join token (sealed
-        under module_runtime.ca_kek, which must be set). Its defaults (rate, tags,
-        monthly_limit_bytes, reset_day, sort) are copied to every node the token creates;
-        a proxy group''s protocol_template lists the protocols each new node gets
-        (tls none, or reality for vless; port or port_range) and subscription_group_ids
+      description: 'A node group with a new join token (sealed under module_runtime.ca_kek,
+        which must be set). Its defaults (rate, tags, monthly_limit_bytes, reset_day,
+        sort) are copied to every node the token creates; protocol_template lists
+        the protocols each new node gets (empty: the node only runs the network model,
+        ANX) (tls none, or reality for vless; port or port_range) and subscription_group_ids
         the subscription groups they join. The answer does not carry the token: GET
         .../command shows the install command. Audited.'
       parameters:
@@ -7729,9 +7759,8 @@ paths:
     put:
       consumes:
       - application/json
-      description: Replaces every field of a group but its kind (which cannot change)
-        and its token. Nodes that joined keep what they got; the defaults and the
-        template apply to later joins. Audited.
+      description: Replaces every field of a group but its token. Nodes that joined
+        keep what they got; the defaults and the template apply to later joins. Audited.
       parameters:
       - description: node group id
         in: path

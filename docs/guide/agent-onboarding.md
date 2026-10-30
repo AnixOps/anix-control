@@ -665,7 +665,12 @@ The same is `POST /api/v4/kernel/agents/upgrades` (and `GET`, `/:id`,
 Control pins, how many nodes would be upgraded and the batches (5%, 25%, 100%
 by default; the 30 minute minimum cannot be changed), starts the campaign
 after a confirmation and shows the latest one (super administrators start,
-pause, resume and abort). Requirements:
+pause, resume and abort). Its **手动选择** mode upgrades only the nodes you tick
+from the list of eligible nodes (with their current Agent version), all at
+once in one batch with no 30 minute minimum; a node that fails or does not
+reconnect with the new version within 10 minutes is still rolled back. The
+API takes the same as `"nodes": ["proxy-1", "forward-2"]` (without
+`batches` or `exclude`). Requirements:
 
 - the release in `agent_install.artifact_dir/<tag>/` with its signatures
   (see [serving the Agent from Control](#serving-the-agent-from-control-or-a-mirror));

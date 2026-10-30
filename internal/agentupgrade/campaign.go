@@ -147,8 +147,20 @@ type StartRequest struct {
 	// Batches default to DefaultBatches.
 	Batches []Batch
 	Exclude Exclude
-	Reason  string
-	Actor   Actor
+	// Nodes, when set, make a manual upgrade: exactly these nodes
+	// (proxy-<id>, forward-<id>), each one eligible, in a single batch
+	// with no minimum duration (ManualBatches); the administrator chose
+	// them, so no canary. The failure threshold and the rollback still
+	// apply. Batches and Exclude must then be empty.
+	Nodes  []string
+	Reason string
+	Actor  Actor
+}
+
+// ManualBatches is the single batch of a manual upgrade: every chosen node
+// at once, done as soon as each has settled.
+func ManualBatches() []Batch {
+	return []Batch{{Percent: 100}}
 }
 
 // ValidateBatches checks batches against H19: 1 to MaxBatches, cumulative
@@ -309,6 +321,93 @@ func parseTags(raw string) []string {
 	return tags
 }
 
+// validateManual checks a manual upgrade's request: 1 to 1000 node names,
+// no batches and no exclusions.
+func validateManual(request StartRequest) error {
+	if len(request.Batches) > 0 || len(request.Exclude.Nodes) > 0 || len(request.Exclude.Tags) > 0 {
+		return fmt.Errorf("%w: a manual upgrade names its nodes; batches and exclude are empty", ErrInvalid)
+	}
+	if len(request.Nodes) > 1000 {
+		return fmt.Errorf("%w: at most 1000 nodes", ErrInvalid)
+	}
+	for _, name := range request.Nodes {
+		if _, err := agentcontrol.ParseAgentNode(strings.TrimSpace(name)); err != nil {
+			return fmt.Errorf("%w: node %q is not proxy-<id> or forward-<id>", ErrInvalid, name)
+		}
+	}
+	return nil
+}
+
+// chosen answers the eligible nodes named, in canary order; a named node
+// that is not eligible refuses the upgrade.
+func chosen(eligible []agentcontrol.AgentNode, names []string) ([]agentcontrol.AgentNode, error) {
+	wanted := map[string]bool{}
+	for _, name := range names {
+		wanted[strings.TrimSpace(name)] = true
+	}
+	out := make([]agentcontrol.AgentNode, 0, len(wanted))
+	for _, node := range eligible {
+		if wanted[node.String()] {
+			out = append(out, node)
+			delete(wanted, node.String())
+		}
+	}
+	if len(wanted) > 0 {
+		missing := make([]string, 0, len(wanted))
+		for name := range wanted {
+			missing = append(missing, name)
+		}
+		sort.Strings(missing)
+		return nil, fmt.Errorf("%w: not enabled or its Agent was never seen on the Agent Control stream: %s", ErrNoNodes, strings.Join(missing, ", "))
+	}
+	return out, nil
+}
+
+// EligibleNode is a node a campaign may include, as the plan lists it.
+type EligibleNode struct {
+	NodeRef string `json:"node_ref"`
+	Name    string `json:"name"`
+	// AgentVersion is the version its Agent last reported on the stream.
+	AgentVersion string `json:"agent_version"`
+}
+
+// Describe answers the eligible nodes with their names and Agent versions,
+// in the order given.
+func Describe(ctx context.Context, db *gorm.DB, nodes []agentcontrol.AgentNode) ([]EligibleNode, error) {
+	var seen []model.AgentTransport
+	if err := db.WithContext(ctx).Where("transport IN ?", []string{model.AgentTransportMTLSStream, model.AgentTransportAPIKeyStream}).
+		Order("last_seen_at").Find(&seen).Error; err != nil {
+		return nil, err
+	}
+	versions := map[string]string{}
+	for _, row := range seen {
+		if row.AgentVersion != "" {
+			versions[agentcontrol.AgentNode{Kind: row.NodeKind, ID: uint32(row.NodeID)}.String()] = row.AgentVersion // #nosec G115 -- node ids are 32-bit (agentcontrol.AgentNode).
+		}
+	}
+	var proxies []model.Node
+	if err := db.WithContext(ctx).Select("id", "name").Find(&proxies).Error; err != nil {
+		return nil, err
+	}
+	var forwards []model.ForwardNode
+	if err := db.WithContext(ctx).Select("id", "name").Find(&forwards).Error; err != nil {
+		return nil, err
+	}
+	names := map[string]string{}
+	for _, node := range proxies {
+		names[agentcontrol.AgentNode{Kind: agentcontrol.NodeKindProxy, ID: uint32(node.ID)}.String()] = node.Name // #nosec G115 -- node ids are 32-bit (agentcontrol.AgentNode).
+	}
+	for _, node := range forwards {
+		names[agentcontrol.AgentNode{Kind: agentcontrol.NodeKindForward, ID: uint32(node.ID)}.String()] = node.Name // #nosec G115 -- node ids are 32-bit (agentcontrol.AgentNode).
+	}
+	out := make([]EligibleNode, 0, len(nodes))
+	for _, node := range nodes {
+		ref := node.String()
+		out = append(out, EligibleNode{NodeRef: ref, Name: names[ref], AgentVersion: versions[ref]})
+	}
+	return out, nil
+}
+
 func validateExclude(exclude Exclude) error {
 	if len(exclude.Nodes) > 1000 || len(exclude.Tags) > 100 {
 		return fmt.Errorf("%w: at most 1000 excluded nodes and 100 excluded tags", ErrInvalid)
@@ -346,12 +445,20 @@ func (s *Service) Start(ctx context.Context, request StartRequest) (model.AgentU
 	if err := probe.Validate(); err != nil {
 		return model.AgentUpgradeCampaign{}, fmt.Errorf("%w: %v", ErrInvalid, err)
 	}
+	manual := len(request.Nodes) > 0
 	batches := request.Batches
-	if len(batches) == 0 {
-		batches = DefaultBatches()
-	}
-	if err := ValidateBatches(batches); err != nil {
-		return model.AgentUpgradeCampaign{}, err
+	if manual {
+		if err := validateManual(request); err != nil {
+			return model.AgentUpgradeCampaign{}, err
+		}
+		batches = ManualBatches()
+	} else {
+		if len(batches) == 0 {
+			batches = DefaultBatches()
+		}
+		if err := ValidateBatches(batches); err != nil {
+			return model.AgentUpgradeCampaign{}, err
+		}
 	}
 	if err := validateExclude(request.Exclude); err != nil {
 		return model.AgentUpgradeCampaign{}, err
@@ -392,6 +499,11 @@ func (s *Service) Start(ctx context.Context, request StartRequest) (model.AgentU
 		if err != nil {
 			return err
 		}
+		if manual {
+			if nodes, err = chosen(nodes, request.Nodes); err != nil {
+				return err
+			}
+		}
 		if len(nodes) == 0 {
 			return fmt.Errorf("%w: no enabled node's Agent was seen on the Agent Control stream (after exclusions)", ErrNoNodes)
 		}
@@ -416,7 +528,7 @@ func (s *Service) Start(ctx context.Context, request StartRequest) (model.AgentU
 		}
 		return writeAudit(tx, request.Actor, AuditActionStart, map[string]any{
 			"campaign_id": campaign.ID, "target_version": target, "nodes": len(nodes), "batches": batches,
-			"exclude": request.Exclude, "reason": campaign.Reason,
+			"exclude": request.Exclude, "manual_nodes": request.Nodes, "reason": campaign.Reason,
 		})
 	})
 	if err != nil {
