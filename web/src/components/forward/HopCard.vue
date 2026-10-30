@@ -82,6 +82,7 @@
 
       <div class="hop-card__row">
         <UiSelect
+          v-if="engineOptions.length > 1"
           :id="fieldId(`${path}.engine`)"
           :model-value="hop.engine"
           size="md"
@@ -325,7 +326,9 @@ const forwardNodeOptions = computed(() => props.nodes
 
 const engineOptions = computed(() => {
   const engines = [...BASE_ENGINES]
-  // Routes left on the removed gost and anixops engines still show them.
+  // Routes left on nftables and the removed gost and anixops engines still
+  // show them.
+  if (props.hop.engine === 'ENGINE_NFTABLES') engines.push('ENGINE_NFTABLES')
   if (props.hop.engine === 'ENGINE_ANIXOPS') engines.push('ENGINE_ANIXOPS')
   if (props.hop.engine === 'ENGINE_GOST') engines.push('ENGINE_GOST')
   return engines.map(engine => {

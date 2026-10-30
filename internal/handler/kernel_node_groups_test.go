@@ -169,10 +169,9 @@ func TestNodeGroupsAPI(t *testing.T) {
 	assert.Equal(t, "sudo anix-agent uninstall", command.UninstallCommand)
 	require.Len(t, command.Commands, 3)
 	assert.Equal(t, agentinstall.MirrorControl, command.Commands[0].Mirror)
-	// The update left the group without a protocol template: it makes
-	// relays, whose command turns forwarding on.
-	assert.Equal(t, "curl -fsSL https://ctl.example.com/install.sh | sudo bash -s -- -u https://ctl.example.com -t "+command.Token+" --forward", command.Commands[0].Command)
-	assert.True(t, strings.HasSuffix(command.Commands[2].Command, " -t "+command.Token+" --mirror github --forward"))
+	// No command carries --forward, even for a group without protocols.
+	assert.Equal(t, "curl -fsSL https://ctl.example.com/install.sh | sudo bash -s -- -u https://ctl.example.com -t "+command.Token, command.Commands[0].Command)
+	assert.True(t, strings.HasSuffix(command.Commands[2].Command, " -t "+command.Token+" --mirror github"))
 	assert.Equal(t, "https://ctl.example.com/install.sh", command.Script.URL)
 	var reveals []model.OperationLog
 	require.NoError(t, env.db.Where("action = ?", nodegroup.AuditActionTokenReveal).Find(&reveals).Error)

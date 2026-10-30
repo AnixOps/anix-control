@@ -446,7 +446,9 @@ function removeHop(index) {
 }
 
 async function addHop() {
-  const engine = isNetworkDraft(draft.value) ? NETWORK_ENGINE : undefined
+  // A new hop runs on the network model, unless the route is still on an
+  // older engine.
+  const engine = isNetworkDraft(draft.value) || !draft.value.hops.length ? NETWORK_ENGINE : draft.value.hops[0].engine
   draft.value.hops.push(blankHop(draft.value.hops.length, draft.value.hops.length + 1, engine))
   syncRoles(draft.value.hops)
   await nextTick()
