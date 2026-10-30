@@ -2,6 +2,36 @@
 
 ## Unreleased
 
+## 5.0.0-rc.16 - 2026-10-30
+
+### Changed
+
+- Pins Agent v5.0.0-rc.16: kernel upgrades install anx-server (ANX-Line's
+  accepting end) next to anx-node, the cross-border l2 jacket falls back to
+  the site it wears (`--dest`), the forwarding sysctl drop-in raises the
+  socket buffers to 8 MiB, and the Agent accepts dev build versions.
+
+### Added
+
+- Dev builds, an internal test channel (`docs/RELEASING.md`, "Dev builds"):
+  after every green `main`, `.github/workflows/dev-release.yml` publishes a
+  pre-release such as `v5.0.0-rc.15.dev.42` holding Control and the Agent at
+  the same version, signed with the official key. A manual run with `deploy`
+  installs it on the production Control after a database dump. Release tags,
+  `install.sh`, `agent_install.agent_version`, the Agent installer and Agent
+  upgrade requests accept these versions, and the node page's github mirror
+  downloads a dev Agent from the Control pre-release.
+- Feature flags for unfinished work (`internal/features`): a feature in the
+  dev stage runs in dev builds only. `GET /api/v4/kernel/features` lists the
+  build's channel and the gated features.
+
+### Fixed
+
+- The Agent unit the install script writes adds `CAP_NET_RAW` to its ambient
+  and bounding capabilities: ANX-Line's fake-TCP carrier (c3), which anx-node
+  and the Agent's anx-server run, needs raw sockets and failed without it.
+  Re-run the install script on a node to rewrite its unit.
+
 ## 5.0.0-rc.15 - 2026-10-29
 
 ### Changed
