@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	networkv1 "github.com/AnixOps/anix-control/sdk/api/network/v1"
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
+	networkv1 "github.com/AnixOps/anix-control/sdk/api/network/v1"
 	"github.com/stretchr/testify/require"
 )
 
