@@ -108,24 +108,22 @@ func TestGroupValidation(t *testing.T) {
 	negative, zero, huge := -1.0, 0.0, 1001.0
 	past := f.clock.Now().Add(-time.Minute)
 	cases := map[string]GroupInput{
-		"no name":            {Kind: "proxy"},
-		"control characters": {Name: "a\x01b", Kind: "proxy"},
-		"long name":          {Name: strings.Repeat("n", 101), Kind: "proxy"},
-		"kind":               {Name: "g", Kind: "relay"},
-		"max nodes":          {Name: "g", Kind: "proxy", MaxNodes: -1},
-		"negative rate":      {Name: "g", Kind: "proxy", Rate: &negative},
-		"zero rate":          {Name: "g", Kind: "proxy", Rate: &zero},
-		"huge rate":          {Name: "g", Kind: "proxy", Rate: &huge},
-		"monthly limit":      {Name: "g", Kind: "proxy", MonthlyLimitBytes: -1},
-		"reset day":          {Name: "g", Kind: "proxy", ResetDay: 29},
-		"empty tag":          {Name: "g", Kind: "proxy", Tags: []string{" "}},
-		"too many tags":      {Name: "g", Kind: "proxy", Tags: strings.Split("a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q", ",")},
-		"expired token":      {Name: "g", Kind: "proxy", TokenExpiresAt: &past},
+		"no name":            {},
+		"control characters": {Name: "a\x01b"},
+		"long name":          {Name: strings.Repeat("n", 101)},
+		"max nodes":          {Name: "g", MaxNodes: -1},
+		"negative rate":      {Name: "g", Rate: &negative},
+		"zero rate":          {Name: "g", Rate: &zero},
+		"huge rate":          {Name: "g", Rate: &huge},
+		"monthly limit":      {Name: "g", MonthlyLimitBytes: -1},
+		"reset day":          {Name: "g", ResetDay: 29},
+		"empty tag":          {Name: "g", Tags: []string{" "}},
+		"too many tags":      {Name: "g", Tags: strings.Split("a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q", ",")},
+		"expired token":      {Name: "g", TokenExpiresAt: &past},
 		"missing subscription group": {
-			Name: "g", Kind: "proxy", SubscriptionGroupIDs: []uint{4242},
+			Name: "g", SubscriptionGroupIDs: []uint{4242},
 		},
-		"unknown kind": {Name: "g", Kind: "relay"},
-		"bad template": {Name: "g", Kind: "proxy", ProtocolTemplate: rawJSON(t, []map[string]any{{"type": "hysteria2", "port": 443}})},
+		"bad template": {Name: "g", ProtocolTemplate: rawJSON(t, []map[string]any{{"type": "hysteria2", "port": 443}})},
 	}
 	for name, input := range cases {
 		_, err := f.svc.Create(ctx, input, f.admin)
