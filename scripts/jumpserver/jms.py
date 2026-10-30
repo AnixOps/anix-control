@@ -417,12 +417,49 @@ def control_client():
     return Control(os.environ["CONTROL_URL"], os.environ["CONTROL_ADMIN_TOKEN"])
 
 
+DETECTED_FIELDS = ("address_v4", "address_v6", "gateway_v4", "gateway_v6")
+
+
+def fill_detected(control, body):
+    """Replace each @@DETECTED:<node>:<interface>:<field>@@ of a control body
+    with what the node's Agent detected on that interface, masked.
+
+    field is address_v4 / address_v6 (the first address, without its prefix
+    length) or gateway_v4 / gateway_v6. The logs are public, so addresses
+    never pass through the inputs.
+    """
+    views = {}
+
+    def detected(match):
+        node, name, field = match.group(1), match.group(2), match.group(3)
+        if field not in DETECTED_FIELDS:
+            raise JumpServerError(f"@@DETECTED:...:{field}@@: field is one of {', '.join(DETECTED_FIELDS)}")
+        if node not in views:
+            status, answer = control.request("GET", f"/api/v4/kernel/nodes/{node}/network")
+            if status >= 400 or not isinstance(answer, dict):
+                raise JumpServerError(f"network of {node}: HTTP {status}")
+            views[node] = (answer.get("data") or answer).get("detected") or []
+        found = [i for i in views[node] if i.get("name") == name]
+        if not found:
+            raise JumpServerError(f"{node} reports no interface {name}")
+        if field.startswith("address_"):
+            addresses = found[0].get("addresses_" + field[-2:]) or []
+            value = addresses[0].split("/")[0] if addresses else ""
+        else:
+            value = found[0].get(field) or ""
+        if not value:
+            raise JumpServerError(f"{node} {name} has no {field}")
+        mask(value)
+        return value
+    return re.sub(r"@@DETECTED:([A-Za-z0-9_-]+):([A-Za-z0-9._@-]+):([a-z0-9_]+)@@", detected, body)
+
+
 def cmd_control(_client, args):
     control = control_client()
     body = None
     if args.body:
         try:
-            body = json.loads(fill_generated(args.body))
+            body = json.loads(fill_detected(control, fill_generated(args.body)))
         except ValueError as exc:
             raise JumpServerError(f"the body is not JSON: {exc}") from exc
     method = args.method.upper()
