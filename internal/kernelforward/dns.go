@@ -1039,14 +1039,16 @@ func (s *Service) RouteDNS(ctx context.Context, routeID string) (*forwardv1.Rout
 	for _, info := range inv.nodes {
 		addresses[info.GetNodeRef()] = publicAddresses(info.GetAddresses(), bindingTypes(row))
 	}
-	// An ENGINE_NETWORK route's entry device is on the network model.
+	// An ENGINE_NETWORK route's entry devices are on the network model.
 	if route, err := s.GetRoute(ctx, routeID); err == nil {
 		if forward, ok := networkForward(route); ok {
-			devices, err := loadNetworkDevices(db, []string{forward.Entry})
+			devices, err := loadNetworkDevices(db, forward.Entries)
 			if err != nil {
 				return nil, err
 			}
-			addresses[forward.Entry] = publicAddresses(deviceAddresses(db, forward.Entry, devices[forward.Entry].Status), bindingTypes(row))
+			for _, entry := range forward.Entries {
+				addresses[entry] = publicAddresses(deviceAddresses(db, entry, devices[entry].Status), bindingTypes(row))
+			}
 		}
 	}
 	var views map[string]*vantageView

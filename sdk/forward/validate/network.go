@@ -12,8 +12,10 @@ var networkIDPattern = regexp.MustCompile(`^[0-9A-Za-z_-]{1,64}$`)
 
 // checkNetwork applies the rules of an ENGINE_NETWORK route (network-model
 // implementation.md step 5): every hop is on the network model, on one
-// device; each link is a network model transport, which decides where its
-// hop listens; the exit names the internet egress that dials the targets.
+// device, except the entry, whose several devices are entry HA (each runs
+// the port forward over a transport of its own into hop 1, or by an
+// internet egress of its own, chosen by the network model); each link is
+// a network model transport, which decides where its hop listens; the exit names the internet egress that dials the targets.
 // The entry listens on an explicit port, since the network model allocates
 // none.
 func checkNetwork(c *collector, r *model.Route) {
@@ -30,8 +32,8 @@ func checkNetwork(c *collector, r *model.Route) {
 			c.add(hopField(i, "engine"), CodeInvalidRelation, "a route runs ENGINE_NETWORK on every hop or on none")
 			continue
 		}
-		if len(h.NodeRefs) > 1 {
-			c.add(hopField(i, "node_refs"), CodeRequiresSingleNode, "an ENGINE_NETWORK hop is one device")
+		if i > 0 && len(h.NodeRefs) > 1 {
+			c.add(hopField(i, "node_refs"), CodeRequiresSingleNode, "an ENGINE_NETWORK hop after the entry is one device")
 		}
 		switch {
 		case i == last && h.NetworkEgressID == "":

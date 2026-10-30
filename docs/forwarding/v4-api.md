@@ -140,7 +140,7 @@ All paths are under `/api/v4/forward`.
 | `POST /routes/{id}/pause` | pause | `{route, enforced}`; the route keeps its ports, marks, counters and quota, and the drivers drop its traffic; a paused route is answered unchanged |
 | `POST /routes/{id}/resume` | resume | as pause |
 | `GET /routes/{id}/stats` | traffic of one route | query `since`, `until`; `{counters, series, truncated}`: the ledger's totals per hop and node over all time (`Counters`), and the hourly buckets of the window (`TrafficBucket`) |
-| `GET /routes/{id}/health` | upstream health | `{health: [UpstreamHealth]}` from the latest reports of the route's nodes, each with the `node_ref` that checked it. An ANX (`ENGINE_NETWORK`) route's comes from its entry device's network status: the entry's checks dial each target through the whole route, so they are hop 0's upstreams |
+| `GET /routes/{id}/health` | upstream health | `{health: [UpstreamHealth]}` from the latest reports of the route's nodes, each with the `node_ref` that checked it. An ANX (`ENGINE_NETWORK`) route's comes from its entry devices' network status: each entry's checks dial each target through the whole route, so they are hop 0's upstreams, one set per entry device |
 | `GET /routes/{id}/latency` | latency history | query `since`, `until` (the last 24 hours by default, at most 7 days); `{buckets, bucket_ms, truncated}`: five-minute `LatencyBucket`s per hop, node and upstream with `samples`, `failures` and `rtt_min_us`, `rtt_avg_us`, `rtt_max_us` over the successful checks. Kept for 7 days |
 | `GET /routes/{id}/dns` | entry HA status | `{status}`: the `RouteDnsStatus`. See "Entry HA through DNS" below |
 | `POST /routes/{id}/diagnose` | diagnose the route | optional body `{"timeout_ms": n}` (15000, at most 25000); the `DiagnoseRouteResponse`: `ok`, `steps`, `nodes`, `route_id`, `started_at_unix_ms`, `finished_at_unix_ms`, `cached`. See "Route diagnosis" below |
@@ -203,7 +203,8 @@ The answer:
   hop is asked to dial a private target only on an administrator's route
   with `TARGET_POLICY_ALLOW_PRIVATE`.
 - **ANX routes.** An `ENGINE_NETWORK` route is diagnosed on the network
-  model. `CONFIG` per device: it negotiated network.v1
+  model (each entry device of a route with several is judged on its
+  own). `CONFIG` per device: it negotiated network.v1
   (`not_on_network_model`), runs the plan generation Control wants
   (`never_reported`, `not_applied`), and the route's components on it are
   up: the entry's port forward (`hop_error`), the `anx_line` transports and

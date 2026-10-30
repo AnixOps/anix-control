@@ -1285,7 +1285,11 @@ type Hop struct {
 	// node_refs are the nodes that serve this hop. Several nodes on ENTRY
 	// are entry HA (each runs the same listener); several on RELAY or EXIT
 	// are the previous hop's upstreams, balanced by Policy.next_hop (the
-	// exit-level failover).
+	// exit-level failover). An ENGINE_NETWORK hop is one device, except the
+	// entry: its first device starts on hop 1's network_transport_id (or
+	// leaves by network_egress_id on a single-hop route), and each other
+	// device on a transport of its own into the same ingress (or by an
+	// internet egress of its own), chosen by the network model.
 	NodeRefs []string `protobuf:"bytes,3,rep,name=node_refs,json=nodeRefs,proto3" json:"node_refs,omitempty"`
 	// ingress is how the previous hop reaches this one. Ignored on ENTRY,
 	// whose ingress is Route.listen.

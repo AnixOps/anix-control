@@ -297,7 +297,7 @@ export default {
     editor: {
       networkTransport: 'Network transport',
       networkTransportPlaceholder: 'Pick a transport',
-      networkTransportHelp: 'The network model transport from the previous hop\'s device to this one.',
+      networkTransportHelp: 'The network model transport from the previous hop\'s first device to this one; other entry devices use a transport of their own into the same ingress.',
       transportJacketed: 'ANX with the A2 jacket (cross-border)',
       transportTrusted: 'Bare ANX-Line (trusted line)',
       transportElsewhere: 'Joins {from} → {to}',

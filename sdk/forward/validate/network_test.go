@@ -75,4 +75,14 @@ func TestNetworkRoutes(t *testing.T) {
 	if vs := Route(&r, Options{}); !vs.Has("hops[0].engine", CodeEngineNotEnabled) {
 		t.Fatalf("not enabled: %v", vs)
 	}
+	// Several entry devices are entry HA, with the DNS name clients use.
+	r = networkRoute()
+	r.Hops[0].NodeRefs = []string{"proxy-21", "proxy-22"}
+	if vs := Route(&r, Options{EnableNetwork: true}); !vs.Has("listen.entry_hostname", CodeRequired) || len(vs) != 1 {
+		t.Fatalf("several entries without a name: %v", vs)
+	}
+	r.Listen.EntryHostname = "sh.example.net"
+	if vs := Route(&r, Options{EnableNetwork: true}); len(vs) != 0 {
+		t.Fatalf("several entries: %v", vs)
+	}
 }

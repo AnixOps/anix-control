@@ -36,7 +36,7 @@ import (
 //     upstream of the entry hop is down. A node still converging (its
 //     report behind its desired generation, or not applied) is neither
 //     healthy nor unhealthy: its streaks do not move.
-//   - The entry device of an ENGINE_NETWORK route is judged on the network
+//   - Each entry device of an ENGINE_NETWORK route is judged on the network
 //     model instead (evaluateNetworkEntry): a public address (its node's or
 //     an interface's), its network status received within
 //     DNSReportStaleAfter, its Agent online, the route's port forward

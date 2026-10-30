@@ -298,7 +298,7 @@ export default {
     editor: {
       networkTransport: '网络传输',
       networkTransportPlaceholder: '选择传输',
-      networkTransportHelp: '从上一跳设备到本跳设备的网络模型传输。',
+      networkTransportHelp: '从上一跳第一个设备到本跳设备的网络模型传输；其他入口设备自动使用各自通往同一入站的传输。',
       transportJacketed: 'ANX + A2 外衣（跨境）',
       transportTrusted: '裸 ANX-Line（可信线路）',
       transportElsewhere: '连接 {from} → {to}',

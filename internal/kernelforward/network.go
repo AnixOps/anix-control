@@ -17,7 +17,7 @@ import (
 
 // ENGINE_NETWORK routes (network-model implementation.md step 5) are
 // validated here but planned on the network model: the entry becomes a
-// port forward of its device's NetworkPlan, each link a network model
+// port forward of each entry device's NetworkPlan, each link a network model
 // transport, the exit an internet egress. The network model asks this
 // service for them; every accepted plan replans the network model in the
 // same transaction, so a route and its port forward change together.
@@ -55,7 +55,7 @@ func networkForward(route *forwardv1.Route) (networkmodel.Forward, bool) {
 	}
 	forward := networkmodel.Forward{
 		ID:        route.GetId(),
-		Entry:     hops[0].GetNodeRefs()[0],
+		Entries:   append([]string(nil), hops[0].GetNodeRefs()...),
 		Listen:    networkmodel.Endpoint{Address: address, Port: route.GetListen().GetPort()},
 		Protocols: networkProtocols(route.GetListen().GetProtocol()),
 		Policy:    networkPolicy(route),

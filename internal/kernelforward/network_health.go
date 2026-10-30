@@ -13,13 +13,13 @@ import (
 	"gorm.io/gorm"
 )
 
-// Health of ENGINE_NETWORK routes. The entry device runs the route as a
+// Health of ENGINE_NETWORK routes. Each entry device runs the route as a
 // port forward, whose checks dial each target through the route's whole
 // path (the anx_line transports and the exit's egress) and report in the
 // device's NetworkStatus (PortForwardStatus.targets). So a route's health
-// is its entry's, as hop 0's upstreams being the targets, and the same
-// checks feed the latency history, the diagnosis and the entry HA DNS
-// controller. Nothing here reads the forward.v1 reports.
+// is its entries', as hop 0's upstreams being the targets checked by each
+// entry, and the same checks feed the latency history, the diagnosis and
+// the entry HA DNS controller. Nothing here reads the forward.v1 reports.
 
 var networkHealthStates = map[networkv1.TargetHealthState]forwardv1.HealthState{
 	networkv1.TargetHealthState_TARGET_HEALTH_STATE_HEALTHY:      forwardv1.HealthState_HEALTH_STATE_HEALTHY,
@@ -92,18 +92,20 @@ func (d networkDevice) portForward(routeID string) *networkv1.PortForwardStatus 
 }
 
 // networkRouteHealth answers an ENGINE_NETWORK route's health from its
-// entry device's latest status.
+// entry devices' latest status, in the order of the entries.
 func networkRouteHealth(db *gorm.DB, route *forwardv1.Route) ([]*forwardv1.UpstreamHealth, error) {
 	forward, _ := networkForward(route)
-	devices, err := loadNetworkDevices(db, []string{forward.Entry})
+	devices, err := loadNetworkDevices(db, forward.Entries)
 	if err != nil {
 		return nil, err
 	}
-	status := devices[forward.Entry].portForward(route.GetId())
-	if status == nil {
-		return nil, nil
+	var out []*forwardv1.UpstreamHealth
+	for _, entry := range forward.Entries {
+		if status := devices[entry].portForward(route.GetId()); status != nil {
+			out = append(out, networkHealth(entry, status)...)
+		}
 	}
-	return networkHealth(forward.Entry, status), nil
+	return out, nil
 }
 
 // deviceAddresses answers a device's public addresses, in their canonical
