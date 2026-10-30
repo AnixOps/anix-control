@@ -489,8 +489,13 @@ func TestNetworkRoutesAreValidatedOnly(t *testing.T) {
 			t.Fatalf("allocation %v", key)
 		}
 	}
+	// Without an egress, Control picks the exit device's own.
 	network.Hops[0].NetworkEgressId = ""
-	if res := mustPlan(t, routes, nil, Options{EnableNetwork: true}); !hasViolation(res, routeID(2), "hops[0].network_egress_id", validate.CodeRequired) {
+	if res := mustPlan(t, routes, nil, Options{EnableNetwork: true}); len(res.Violations) > 0 {
+		t.Fatalf("auto egress: %v", res.Violations)
+	}
+	network.Hops[0].NetworkEgressId = "eg 1"
+	if res := mustPlan(t, routes, nil, Options{EnableNetwork: true}); !hasViolation(res, routeID(2), "hops[0].network_egress_id", validate.CodeInvalidFormat) {
 		t.Fatalf("validated: %v", res.Violations)
 	}
 }
