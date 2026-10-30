@@ -9680,7 +9680,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "The interface the network model's automatic egresses of the node leave by (interface; source_v4 and gateway_v4, source_v6 and gateway_v6 on it; empty: the default route) and the port its automatic hop ingress listens on (hop_port; 0: 24443). A node behind NAT is reached at the NAT entry (GET /api/v4/kernel/nodes/{id}/entries) whose port map covers hop_port. 404 for an unknown node.",
+                "description": "The interface the network model's automatic egresses of the node leave by (interface; source_v4 and gateway_v4, source_v6 and gateway_v6 on it; empty: the default route) and the port its automatic hop ingress listens on (hop_port; 0: 24443). A node behind NAT is reached at the NAT entry (GET /api/v4/kernel/nodes/{id}/entries) whose port map covers hop_port. detected lists the interfaces the node's Agent last reported (name, addresses_v4, addresses_v6, gateway_v4, gateway_v6; empty before an Agent that reports them), detected_at when. 404 for an unknown node.",
                 "produces": [
                     "application/json"
                 ],
@@ -9701,7 +9701,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/networkmodel.NodeSettings"
+                            "$ref": "#/definitions/networkmodel.NodeNetworkView"
                         }
                     }
                 }
@@ -9712,7 +9712,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Replaces the node's network settings (see GET) and replans: the automatic lines, egresses, hop ingresses and transports of the routes through the node follow them. A source address needs the interface, a gateway its source address; 400 with violations otherwise, 404 for an unknown node. Audited (network_node_settings).",
+                "description": "Replaces the node's network settings (see GET) and replans: the automatic lines, egresses, hop ingresses and transports of the routes through the node follow them. A source address needs the interface, a gateway its source address; 400 with violations otherwise, 404 for an unknown node. Answers like GET. Audited (network_node_settings).",
                 "consumes": [
                     "application/json"
                 ],
@@ -9745,7 +9745,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/networkmodel.NodeSettings"
+                            "$ref": "#/definitions/networkmodel.NodeNetworkView"
                         }
                     }
                 }
@@ -13314,7 +13314,43 @@ const docTemplate = `{
                 "quic_port": {
                     "type": "integer"
                 },
+                "reverse": {
+                    "type": "boolean"
+                },
+                "reverse_host": {
+                    "description": "ReverseHost is the dialing device's address the accepting device\nreaches; ReversePort its reverse listener port (0 = 24444).",
+                    "type": "string"
+                },
+                "reverse_port": {
+                    "type": "integer"
+                },
                 "server_name": {
+                    "type": "string"
+                }
+            }
+        },
+        "networkmodel.DetectedInterface": {
+            "type": "object",
+            "properties": {
+                "addresses_v4": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "addresses_v6": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "gateway_v4": {
+                    "type": "string"
+                },
+                "gateway_v6": {
+                    "type": "string"
+                },
+                "name": {
                     "type": "string"
                 }
             }
@@ -13521,6 +13557,38 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "node": {
+                    "type": "string"
+                }
+            }
+        },
+        "networkmodel.NodeNetworkView": {
+            "type": "object",
+            "properties": {
+                "detected": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/networkmodel.DetectedInterface"
+                    }
+                },
+                "detected_at": {
+                    "type": "string"
+                },
+                "gateway_v4": {
+                    "type": "string"
+                },
+                "gateway_v6": {
+                    "type": "string"
+                },
+                "hop_port": {
+                    "type": "integer"
+                },
+                "interface": {
+                    "type": "string"
+                },
+                "source_v4": {
+                    "type": "string"
+                },
+                "source_v6": {
                     "type": "string"
                 }
             }

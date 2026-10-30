@@ -139,18 +139,25 @@ func (s *Service) RecordStatus(ctx context.Context, node agentcontrol.AgentNode,
 
 // Status answers node's latest NetworkStatus, nil without one.
 func (s *Service) Status(ctx context.Context, node string) (*networkv1.NetworkStatus, error) {
+	status, _, err := s.latestStatus(ctx, node)
+	return status, err
+}
+
+// latestStatus answers node's latest NetworkStatus and when it was
+// observed, nil without one.
+func (s *Service) latestStatus(ctx context.Context, node string) (*networkv1.NetworkStatus, *time.Time, error) {
 	var rows []model.NetworkDevice
 	if err := s.DB.WithContext(ctx).Where("node_ref = ?", node).Limit(1).Find(&rows).Error; err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if len(rows) == 0 || rows[0].StatusJSON == "" {
-		return nil, nil
+		return nil, nil, nil
 	}
 	status := &networkv1.NetworkStatus{}
 	if err := (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal([]byte(rows[0].StatusJSON), status); err != nil {
-		return nil, fmt.Errorf("network model: %s: stored status is corrupt: %w", node, err)
+		return nil, nil, fmt.Errorf("network model: %s: stored status is corrupt: %w", node, err)
 	}
-	return status, nil
+	return status, rows[0].StatusAt, nil
 }
 
 // NodeConfigMember answers what a device's configuration document carries
