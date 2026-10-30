@@ -40,7 +40,6 @@ func TestEnsureDefaultCreatesTheFirstGroup(t *testing.T) {
 		require.NoError(t, err)
 		assert.True(t, created)
 		assert.Equal(t, DefaultGroupName, view.Name)
-		assert.Equal(t, model.NodeGroupKindProxy, view.Kind)
 		assert.False(t, view.RequireApproval)
 		assert.Equal(t, []uint{f.subscriptions[0].ID}, view.SubscriptionGroupIDs, "the panel's seeded default subscription group")
 		require.Len(t, view.ProtocolTemplate, 1)
@@ -109,8 +108,8 @@ func TestEnsureDefaultCreatesTheSubscriptionGroupWhenThereIsNone(t *testing.T) {
 func TestEnsureDefaultLeavesAPanelWithGroupsAlone(t *testing.T) {
 	forEachDatabase(t, func(t *testing.T, f *fixture) {
 		ctx := t.Context()
-		forward, _ := f.createGroup(t, GroupInput{Name: "edge", Kind: "forward", Sort: 1})
-		proxy, _ := f.createGroup(t, GroupInput{Name: "HK", Kind: "proxy", Sort: 0})
+		forward, _ := f.createGroup(t, GroupInput{Name: "edge", Sort: 1})
+		proxy, _ := f.createGroup(t, GroupInput{Name: "HK", Sort: 0})
 
 		view, created, err := f.svc.EnsureDefault(ctx, f.admin)
 		require.NoError(t, err)
@@ -140,7 +139,7 @@ func TestEnsureDefaultNeedsTheKeyEncryptionKey(t *testing.T) {
 func TestNodesOfAGroup(t *testing.T) {
 	forEachDatabase(t, func(t *testing.T, f *fixture) {
 		ctx := t.Context()
-		group, token := f.createGroup(t, GroupInput{Name: "HK", Kind: "proxy", RequireApproval: true})
+		group, token := f.createGroup(t, GroupInput{Name: "HK", RequireApproval: true})
 
 		empty, err := f.svc.Nodes(ctx, group.ID)
 		require.NoError(t, err)
@@ -205,7 +204,7 @@ func TestNodesOfAGroup(t *testing.T) {
 func TestNodesOfAGroupWithALegacyForwardNode(t *testing.T) {
 	forEachDatabase(t, func(t *testing.T, f *fixture) {
 		ctx := t.Context()
-		group, token := f.createGroup(t, GroupInput{Name: "edge", Kind: "forward"})
+		group, token := f.createGroup(t, GroupInput{Name: "edge"})
 		joined, err := f.join(t, JoinRequest{Token: token, MachineFingerprint: fingerprint("p"), RequestedName: "edge-02",
 			PublicAddresses: []string{"203.0.113.8"}, AgentVersion: "v5.0.0"})
 		require.NoError(t, err)

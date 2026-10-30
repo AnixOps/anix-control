@@ -98,7 +98,7 @@ describe('404, 无权限 and account routes', () => {
       expect(router.resolve(path).matched.at(-1).redirect, path).toBeUndefined()
     }
     // The forwarding node list joined the node page (docs/design/node-unification).
-    expect(router.resolve('/admin/forward/inventory').matched.at(-1).redirect).toEqual({ path: '/admin/nodes', query: { tab: 'hosts' } })
+    expect(router.resolve('/admin/forward/inventory').matched.at(-1).redirect).toBe('/admin/nodes')
   })
 })
 

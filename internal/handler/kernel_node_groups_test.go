@@ -119,7 +119,7 @@ func TestNodeGroupsAPI(t *testing.T) {
 	env := newNodeGroupsTestEnv(t)
 
 	created := env.call(t, 7, http.MethodPost, "/node-groups", `{
-		"name": "HK", "kind": "proxy", "require_approval": true, "max_nodes": 5, "rate": 1.5, "tags": ["hk"],
+		"name": "HK", "require_approval": true, "max_nodes": 5, "rate": 1.5, "tags": ["hk"],
 		"protocol_template": [{"name": "VLESS Reality", "type": "vless", "port": 443, "tls": "reality",
 			"reality": {"server_name": "www.example.com"}, "settings": {"flow": "xtls-rprx-vision"}}]
 	}`)
@@ -133,9 +133,8 @@ func TestNodeGroupsAPI(t *testing.T) {
 	id := strconv.FormatUint(uint64(group.ID), 10)
 
 	for body, code := range map[string]string{
-		`{"name": "HK", "kind": "forward"}`: "name_taken",
-		`{"name": "x", "kind": "relay"}`:    "invalid_request",
-		`{"name": "x", "kind": "proxy", "protocol_template": [{"type": "vless", "port": 443, "tls": "acme"}]}`: "invalid_request",
+		`{"name": "HK"}`: "name_taken",
+		`{"name": "x", "protocol_template": [{"type": "vless", "port": 443, "tls": "acme"}]}`: "invalid_request",
 		`{"name": 1}`: "invalid_request",
 	} {
 		response := env.call(t, 7, http.MethodPost, "/node-groups", body)
@@ -154,7 +153,6 @@ func TestNodeGroupsAPI(t *testing.T) {
 	updated := env.call(t, 7, http.MethodPut, "/node-groups/"+id, `{"name": "HK 1", "require_approval": true}`)
 	require.Equal(t, http.StatusOK, updated.Code, updated.Body.String())
 	assert.Equal(t, "HK 1", decodeData[nodegroup.GroupView](t, updated).Name)
-	assert.Equal(t, "invalid_request", errorCode(t, env.call(t, 7, http.MethodPut, "/node-groups/"+id, `{"name": "HK 1", "kind": "relay"}`)))
 
 	// The command: super administrators only, audited, never cached.
 	for _, user := range []uint{8, 9, 10} {
@@ -214,14 +212,14 @@ func TestNodeGroupsAPI(t *testing.T) {
 
 	// A group with live nodes is not deleted.
 	assert.Equal(t, "node_group_in_use", errorCode(t, env.call(t, 7, http.MethodDelete, "/node-groups/"+id, "")))
-	empty := decodeData[nodegroup.GroupView](t, env.call(t, 7, http.MethodPost, "/node-groups", `{"name": "edge", "kind": "forward"}`))
+	empty := decodeData[nodegroup.GroupView](t, env.call(t, 7, http.MethodPost, "/node-groups", `{"name": "edge"}`))
 	deleted := env.call(t, 7, http.MethodDelete, "/node-groups/"+strconv.FormatUint(uint64(empty.ID), 10), "")
 	require.Equal(t, http.StatusOK, deleted.Code, deleted.Body.String())
 	assert.Equal(t, http.StatusNotFound, env.call(t, 7, http.MethodGet, "/node-groups/"+strconv.FormatUint(uint64(empty.ID), 10), "").Code)
 
 	// Without the key-encryption key no group is created.
 	env.kek = ""
-	assert.Equal(t, "ca_kek_missing", errorCode(t, env.call(t, 7, http.MethodPost, "/node-groups", `{"name": "y", "kind": "proxy"}`)))
+	assert.Equal(t, "ca_kek_missing", errorCode(t, env.call(t, 7, http.MethodPost, "/node-groups", `{"name": "y"}`)))
 }
 
 func testCSR(t *testing.T) []byte {
@@ -258,7 +256,6 @@ func TestNodeGroupsDefaultAndNodes(t *testing.T) {
 	}](t, created)
 	assert.True(t, first.Created)
 	assert.Equal(t, nodegroup.DefaultGroupName, first.Group.Name)
-	assert.Equal(t, model.NodeGroupKindProxy, first.Group.Kind)
 	require.Len(t, first.Group.ProtocolTemplate, 1)
 	assert.Equal(t, "reality", first.Group.ProtocolTemplate[0].TLS)
 	require.Len(t, first.Group.SubscriptionGroupIDs, 1)

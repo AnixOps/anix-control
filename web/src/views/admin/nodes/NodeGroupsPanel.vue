@@ -24,10 +24,9 @@
       <template #empty-actions>
         <UiButton variant="primary" :icon="Terminal" data-testid="groups-empty-join" @click="emit('join', null)">{{ t('admin.nodes.join.title') }}</UiButton>
       </template>
-      <template #cell-name="{ row, card }">
+      <template #cell-name="{ row }">
         <span class="group-name">
           <span class="group-name__text">{{ row.name }}</span>
-          <UiBadge v-if="!card" tone="neutral" :dot="false" :label="t(`admin.nodes.groups.kinds.${groupKind(row)}`)" />
         </span>
       </template>
       <template #cell-nodes="{ row }">
@@ -66,7 +65,6 @@ import UiDataTable from '@/ui/UiDataTable.vue'
 import UiSwitch from '@/ui/UiSwitch.vue'
 import { useFormat } from '@/ui/composables/useFormat'
 import { useAppI18n } from '@/composables/useAppI18n'
-import { groupKind } from './nodeGroupData'
 
 defineProps({
   groups: { type: Array, default: () => [] },

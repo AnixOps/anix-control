@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_PORT_RANGE, DEFAULT_REALITY_SERVER_NAME, PRESET_KEYS, PROTOCOL_PRESETS, adaptProtocol, blankProtocol,
-  buildGroupInput, buildQuickGroupInput, entryFromProtocol, groupFormFrom, groupKind, hasProblems, inputFromGroup,
+  buildGroupInput, buildQuickGroupInput, entryFromProtocol, groupFormFrom, hasProblems, inputFromGroup,
   jsonObjectError, pickDefaultSubscriptionGroup, protocolFromEntry, protocolProblems, readKernelError
 } from '@/views/admin/nodes/nodeGroupData'
 
@@ -58,7 +58,7 @@ describe('protocol templates', () => {
   })
 
   it('has presets that a server accepts: one Reality protocol on a random port to start from', () => {
-    expect(PRESET_KEYS).toEqual(['vless-reality', 'shadowsocks-2022', 'vless-reality-shadowsocks'])
+    expect(PRESET_KEYS).toEqual(['vless-reality', 'shadowsocks-2022', 'vless-reality-shadowsocks', 'none'])
     const [vless] = PROTOCOL_PRESETS['vless-reality']()
     expect(entryFromProtocol(vless)).toEqual({
       name: 'VLESS Reality', type: 'vless', transport: 'tcp', tls: 'reality', port_range: [20000, 40000],
@@ -70,7 +70,7 @@ describe('protocol templates', () => {
 
 describe('group bodies', () => {
   const group = {
-    id: 3, name: 'HK', kind: 'proxy', max_nodes: 5, require_approval: true, rate: 1.5, tags: ['hk', 'iepl'],
+    id: 3, name: 'HK', max_nodes: 5, require_approval: true, rate: 1.5, tags: ['hk', 'iepl'],
     monthly_limit_bytes: 2 * 1024 ** 3, reset_day: 5, sort: 2, subscription_group_ids: [9, 10],
     protocol_template: [{ name: 'SS', type: 'shadowsocks', port: 8388, transport: 'tcp', tls: 'none', settings: { method: '2022-blake3-aes-128-gcm' } }],
     token_expires_at: '2999-01-01T00:00:00Z', token_expired: false
@@ -78,9 +78,9 @@ describe('group bodies', () => {
 
   it('turns a group into the form and back into the body it was', () => {
     const form = groupFormFrom(group, { now: NOW })
-    expect(form).toMatchObject({ name: 'HK', kind: 'proxy', tagsText: 'hk, iepl', monthlyLimitGb: 2, resetDay: 5, maxNodes: 5, requireApproval: true, expiry: 'keep' })
+    expect(form).toMatchObject({ name: 'HK', tagsText: 'hk, iepl', monthlyLimitGb: 2, resetDay: 5, maxNodes: 5, requireApproval: true, expiry: 'keep' })
     expect(buildGroupInput(form, { now: NOW })).toEqual({
-      name: 'HK', kind: 'proxy', max_nodes: 5, require_approval: true, rate: 1.5, tags: ['hk', 'iepl'],
+      name: 'HK', max_nodes: 5, require_approval: true, rate: 1.5, tags: ['hk', 'iepl'],
       monthly_limit_bytes: 2 * 1024 ** 3, reset_day: 5, sort: 2, token_expires_at: '2999-01-01T00:00:00Z',
       protocol_template: group.protocol_template, subscription_group_ids: [9, 10]
     })
@@ -88,15 +88,13 @@ describe('group bodies', () => {
 
   it('sends an unchanged list body with one field changed', () => {
     expect(inputFromGroup(group, { require_approval: false })).toMatchObject({ name: 'HK', require_approval: false, token_expires_at: '2999-01-01T00:00:00Z', subscription_group_ids: [9, 10] })
-    expect(inputFromGroup({ name: 'x', kind: 'forward' }).protocol_template).toEqual([])
+    expect(inputFromGroup({ name: 'x' }).protocol_template).toEqual([])
   })
 
-  it('shows a group without protocols as a relay group', () => {
-    // The API stores every group as proxy (docs/design/node-unification).
-    const relay = { name: 'CN relay', kind: 'proxy', protocol_template: [] }
-    expect(groupKind(relay)).toBe('forward')
-    expect(groupKind(group)).toBe('proxy')
-    expect(groupFormFrom(relay, { now: NOW }).kind).toBe('forward')
+  it('has no group kind: a group without protocols is the same kind of group', () => {
+    const plain = { name: 'CN', protocol_template: [] }
+    expect(groupFormFrom(plain, { now: NOW })).not.toHaveProperty('kind')
+    expect(buildGroupInput(groupFormFrom(plain, { now: NOW }), { now: NOW })).not.toHaveProperty('kind')
   })
 
   it('maps the token validity choices', () => {
@@ -114,19 +112,19 @@ describe('group bodies', () => {
     expect(body.tags).toEqual(['hk', 'iepl', 'fast'])
   })
 
-  it('sends a forward group no template and no subscription groups', () => {
-    const body = buildGroupInput({ ...groupFormFrom(null), name: 'edge', kind: 'forward', subscriptionGroupIds: [9] }, { now: NOW })
+  it('sends a group without protocols an empty template', () => {
+    const body = buildGroupInput({ ...groupFormFrom(null), name: 'edge', protocols: [], subscriptionGroupIds: [9] }, { now: NOW })
     expect(body.protocol_template).toEqual([])
-    expect(body.subscription_group_ids).toEqual([])
+    expect(body.subscription_group_ids).toEqual([9])
   })
 
   it('builds the minimum group of the join dialog', () => {
-    expect(buildQuickGroupInput({ name: ' HK ', kind: 'proxy', preset: 'shadowsocks-2022', subscriptionGroupIds: [9] })).toEqual({
-      name: 'HK', kind: 'proxy', subscription_group_ids: [9],
+    expect(buildQuickGroupInput({ name: ' HK ', preset: 'shadowsocks-2022', subscriptionGroupIds: [9] })).toEqual({
+      name: 'HK', subscription_group_ids: [9],
       protocol_template: [{ name: 'Shadowsocks 2022', type: 'shadowsocks', transport: 'tcp', tls: 'none', port_range: [20000, 40000], settings: { method: '2022-blake3-aes-128-gcm' } }]
     })
-    expect(buildQuickGroupInput({ name: 'edge', kind: 'forward', preset: 'vless-reality', subscriptionGroupIds: [9] })).toEqual({
-      name: 'edge', kind: 'forward', protocol_template: [], subscription_group_ids: []
+    expect(buildQuickGroupInput({ name: 'edge', preset: 'none', subscriptionGroupIds: [9] })).toEqual({
+      name: 'edge', protocol_template: [], subscription_group_ids: []
     })
   })
 })

@@ -180,7 +180,7 @@ func (h *NodeGroupsHandler) Nodes(c *gin.Context) {
 
 // Create godoc
 // @Summary Create a node group
-// @Description A node group of kind proxy or forward with a new join token (sealed under module_runtime.ca_kek, which must be set). Its defaults (rate, tags, monthly_limit_bytes, reset_day, sort) are copied to every node the token creates; a proxy group's protocol_template lists the protocols each new node gets (tls none, or reality for vless; port or port_range) and subscription_group_ids the subscription groups they join. The answer does not carry the token: GET .../command shows the install command. Audited.
+// @Description A node group with a new join token (sealed under module_runtime.ca_kek, which must be set). Its defaults (rate, tags, monthly_limit_bytes, reset_day, sort) are copied to every node the token creates; protocol_template lists the protocols each new node gets (empty: the node only runs the network model, ANX) (tls none, or reality for vless; port or port_range) and subscription_group_ids the subscription groups they join. The answer does not carry the token: GET .../command shows the install command. Audited.
 // @Tags Kernel
 // @Accept json
 // @Produce json
@@ -204,7 +204,7 @@ func (h *NodeGroupsHandler) Create(c *gin.Context) {
 
 // Update godoc
 // @Summary Update a node group
-// @Description Replaces every field of a group but its kind (which cannot change) and its token. Nodes that joined keep what they got; the defaults and the template apply to later joins. Audited.
+// @Description Replaces every field of a group but its token. Nodes that joined keep what they got; the defaults and the template apply to later joins. Audited.
 // @Tags Kernel
 // @Accept json
 // @Produce json

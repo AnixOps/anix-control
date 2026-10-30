@@ -261,11 +261,10 @@ const routes = [
         meta: forwardMeta('pageTitles.admin.forwardV4RouteEdit')
       },
       {
-        // The forwarding area's node list joined the node page (one machine,
-        // one node: docs/design/node-unification); its forward hosts are the
-        // 转发主机 tab there. A node's forwarding settings stay below.
+        // The forwarding area's node list joined the node page: there is
+        // one kind of node.
         path: 'forward/inventory',
-        redirect: { path: '/admin/nodes', query: { tab: 'hosts' } }
+        redirect: '/admin/nodes'
       },
       {
         path: 'forward/inventory/:nodeRef',

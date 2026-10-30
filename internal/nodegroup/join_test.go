@@ -43,7 +43,7 @@ func TestJoinCreatesAProxyNodeWithTheTemplate(t *testing.T) {
 	forEachDatabase(t, func(t *testing.T, f *fixture) {
 		rate := 2.0
 		group, token := f.createGroup(t, GroupInput{
-			Name: "HK", Kind: "proxy", Rate: &rate, Tags: []string{"hk"}, MonthlyLimitBytes: 1 << 40, ResetDay: 9, Sort: 4,
+			Name: "HK", Rate: &rate, Tags: []string{"hk"}, MonthlyLimitBytes: 1 << 40, ResetDay: 9, Sort: 4,
 			ProtocolTemplate:     json.RawMessage(proxyTemplate),
 			SubscriptionGroupIDs: []uint{f.subscriptions[0].ID, f.subscriptions[1].ID},
 		})
@@ -174,12 +174,11 @@ func TestJoinCreatesAProxyNodeWithTheTemplate(t *testing.T) {
 	})
 }
 
-// A group without a protocol template (or one created as a forward
-// group) makes relays: regular nodes without protocols.
+// A group without a protocol template makes relays: regular nodes without
+// protocols.
 func TestJoinOfARelayGroupCreatesARegularNode(t *testing.T) {
 	forEachDatabase(t, func(t *testing.T, f *fixture) {
-		group, token := f.createGroup(t, GroupInput{Name: "edge", Kind: "forward", Tags: []string{"iepl"}})
-		assert.Equal(t, model.NodeGroupKindProxy, group.Kind, "forward is stored as proxy")
+		group, token := f.createGroup(t, GroupInput{Name: "edge", Tags: []string{"iepl"}})
 		joined, err := f.join(t, JoinRequest{Token: token, MachineFingerprint: fingerprint("f"), Hostname: "relay-1", PublicAddresses: []string{"203.0.113.9"}})
 		require.NoError(t, err)
 		assert.Equal(t, agentcontrol.NodeKindProxy, joined.Node.Kind)
@@ -206,8 +205,8 @@ func TestJoinOfARelayGroupCreatesARegularNode(t *testing.T) {
 
 func TestJoinNamesAreUniqueWithinTheGroup(t *testing.T) {
 	forEachDatabase(t, func(t *testing.T, f *fixture) {
-		_, token := f.createGroup(t, GroupInput{Name: "g", Kind: "proxy"})
-		_, other := f.createGroup(t, GroupInput{Name: "h", Kind: "proxy"})
+		_, token := f.createGroup(t, GroupInput{Name: "g"})
+		_, other := f.createGroup(t, GroupInput{Name: "h"})
 		var names []string
 		for i := 0; i < 3; i++ {
 			joined, err := f.join(t, JoinRequest{Token: token, Hostname: "hk", PublicAddresses: []string{"203.0.113." + strconv.Itoa(i+1)}})
@@ -230,9 +229,9 @@ func TestJoinNamesAreUniqueWithinTheGroup(t *testing.T) {
 func TestJoinRefusalsAreOneAnswerAndAudited(t *testing.T) {
 	forEachDatabase(t, func(t *testing.T, f *fixture) {
 		past := f.clock.Now().Add(time.Hour)
-		capped, cappedToken := f.createGroup(t, GroupInput{Name: "capped", Kind: "proxy", MaxNodes: 1})
-		expiring, expiringToken := f.createGroup(t, GroupInput{Name: "expiring", Kind: "proxy", TokenExpiresAt: &past})
-		deleted, deletedToken := f.createGroup(t, GroupInput{Name: "deleted", Kind: "proxy"})
+		capped, cappedToken := f.createGroup(t, GroupInput{Name: "capped", MaxNodes: 1})
+		expiring, expiringToken := f.createGroup(t, GroupInput{Name: "expiring", TokenExpiresAt: &past})
+		deleted, deletedToken := f.createGroup(t, GroupInput{Name: "deleted"})
 		require.NoError(t, f.svc.Delete(t.Context(), deleted.ID, f.admin))
 		_, err := f.join(t, JoinRequest{Token: cappedToken, Hostname: "a", PublicAddresses: []string{"203.0.113.1"}})
 		require.NoError(t, err)
@@ -274,7 +273,7 @@ func TestJoinRefusalsAreOneAnswerAndAudited(t *testing.T) {
 
 func TestJoinRefusesMalformedRequests(t *testing.T) {
 	f := newFixture(t, openSQLite(t))
-	_, token := f.createGroup(t, GroupInput{Name: "g", Kind: "proxy"})
+	_, token := f.createGroup(t, GroupInput{Name: "g"})
 	for name, request := range map[string]JoinRequest{
 		"fingerprint":      {Token: token, MachineFingerprint: "abc", PublicAddresses: []string{"203.0.113.1"}},
 		"address":          {Token: token, PublicAddresses: []string{"not-an-ip"}},
@@ -310,7 +309,7 @@ func TestJoinRefusesMalformedRequests(t *testing.T) {
 
 func TestJoinRejoinRule(t *testing.T) {
 	forEachDatabase(t, func(t *testing.T, f *fixture) {
-		group, token := f.createGroup(t, GroupInput{Name: "g", Kind: "proxy", MaxNodes: 1, ProtocolTemplate: json.RawMessage(`[{"type":"vmess","port":8080}]`)})
+		group, token := f.createGroup(t, GroupInput{Name: "g", MaxNodes: 1, ProtocolTemplate: json.RawMessage(`[{"type":"vmess","port":8080}]`)})
 		print := fingerprint("m")
 		first, err := f.join(t, JoinRequest{Token: token, MachineFingerprint: print, Hostname: "m", PublicAddresses: []string{"203.0.113.7", "2001:db8::7"}})
 		require.NoError(t, err)
@@ -359,7 +358,7 @@ func TestJoinRejoinRule(t *testing.T) {
 		// heartbeat: never handed to the joining machine. (A group and a
 		// machine of their own: the nodes above share this machine's
 		// fingerprint and address.)
-		_, seenToken := f.createGroup(t, GroupInput{Name: "seen", Kind: "proxy"})
+		_, seenToken := f.createGroup(t, GroupInput{Name: "seen"})
 		seenPrint := fingerprint("s")
 		online, err := f.join(t, JoinRequest{Token: seenToken, MachineFingerprint: seenPrint, Hostname: "s", PublicAddresses: []string{"203.0.113.20"}})
 		require.NoError(t, err)
@@ -392,7 +391,7 @@ func TestJoinRejoinRule(t *testing.T) {
 		again, err := f.join(t, JoinRequest{Token: token, MachineFingerprint: print, Hostname: "m", PublicAddresses: []string{"203.0.113.7"}})
 		require.NoError(t, err)
 		assert.False(t, again.Created)
-		_, otherToken := f.createGroup(t, GroupInput{Name: "other", Kind: "proxy"})
+		_, otherToken := f.createGroup(t, GroupInput{Name: "other"})
 		elsewhere, err := f.join(t, JoinRequest{Token: otherToken, MachineFingerprint: print, Hostname: "m", PublicAddresses: []string{"203.0.113.7"}})
 		require.NoError(t, err)
 		assert.True(t, elsewhere.Created, "a fingerprint never rejoins across groups")
@@ -410,8 +409,8 @@ func TestJoinRejoinRule(t *testing.T) {
 
 func TestJoinPendingApprovalAndDecisions(t *testing.T) {
 	forEachDatabase(t, func(t *testing.T, f *fixture) {
-		_, token := f.createGroup(t, GroupInput{Name: "g", Kind: "proxy", RequireApproval: true})
-		_, forwardToken := f.createGroup(t, GroupInput{Name: "f", Kind: "forward", RequireApproval: true})
+		_, token := f.createGroup(t, GroupInput{Name: "g", RequireApproval: true})
+		_, forwardToken := f.createGroup(t, GroupInput{Name: "f", RequireApproval: true})
 		joined, err := f.join(t, JoinRequest{Token: token, Hostname: "p", PublicAddresses: []string{"203.0.113.1"}})
 		require.NoError(t, err)
 		assert.Equal(t, model.NodeApprovalPending, joined.Approval)
@@ -481,7 +480,7 @@ func TestJoinPendingApprovalAndDecisions(t *testing.T) {
 
 func TestJoinNotifiesAfterTheCommit(t *testing.T) {
 	f := newFixture(t, openSQLite(t))
-	_, token := f.createGroup(t, GroupInput{Name: "HK", Kind: "proxy", RequireApproval: true})
+	_, token := f.createGroup(t, GroupInput{Name: "HK", RequireApproval: true})
 	type notice struct {
 		joined Joined
 		stored bool

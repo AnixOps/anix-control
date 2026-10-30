@@ -18,12 +18,6 @@
     <UiTabs v-model="tab" variant="underline" :aria-label="t('admin.nodes.tabs.label')" :items="tabItems">
       <template #nodes>
         <div class="nodes-tab">
-          <NodeNotice v-if="forward.unconverted.value.length > 0" tone="info" data-testid="unconverted-banner">
-            {{ t('admin.nodes.roles.unconvertedBanner', { count: forward.unconverted.value.length }) }}
-            <template #actions>
-              <UiButton size="sm" data-testid="unconverted-banner-view" @click="tab = 'hosts'">{{ t('admin.nodes.approval.view') }}</UiButton>
-            </template>
-          </NodeNotice>
           <NodeNotice v-if="overQuotaNodes.length > 0" tone="warning" data-testid="quota-banner">
             {{ t('admin.nodes.messages.quotaExceededBanner', { count: overQuotaNodes.length }) }}
           </NodeNotice>
@@ -107,13 +101,6 @@
                 <UiBadge v-if="isOverQuota(row)" tone="warning" :label="t('admin.nodes.table.quotaExceeded')" />
               </span>
             </template>
-            <template #cell-role="{ row }">
-              <span class="node-badges" data-testid="node-role">
-                <UiBadge v-for="role in rolesOf(row)" :key="role" :tone="role === 'exit' ? 'info' : 'neutral'" :dot="false" :label="t(`admin.nodes.roles.${role}`)" />
-                <span v-if="num(relayOf(row)?.desired_hops)" class="node-muted">{{ t('admin.nodes.roles.hops', { n: num(relayOf(row).desired_hops) }) }}</span>
-                <UiBadge v-if="num(relayOf(row)?.hop_errors)" tone="danger" :label="t('forwardV4.nodes.hopErrors', { n: num(relayOf(row).hop_errors) })" />
-              </span>
-            </template>
             <template #cell-nodeGroup="{ row }">
               <span v-if="row.node_group_name">{{ row.node_group_name }}</span>
               <span v-else class="node-muted">—</span>
@@ -161,9 +148,6 @@
           @toggle-approval="(group, value) => toggleApproval(group, value)"
         />
       </template>
-      <template #hosts>
-        <ForwardHostsPanel :inventory="forward" @changed="forward.load()" />
-      </template>
     </UiTabs>
 
     <NodeFormSheet v-model:open="formOpen" :node="editingNode" :candidates="nodes" @saved="reload" />
@@ -182,14 +166,11 @@
 // inventory call after the list has loaded (it never holds the list up), and
 // so does their systemd services summary (服务状态, the machine-telemetry
 // package's; a dash without the package, its host or its permission). 节点组
-// lists the node groups behind the join command. Relays are regular nodes too
-// (docs/design/node-unification): the 角色 column says 落地 and / or 中转
-// from the protocols and the forwarding inventory, and 转发主机 lists the
-// forwarding machines that are not regular nodes (Ansible hosts and Agent
-// forward nodes not yet converted); the forwarding area has no node list.
+// lists the node groups behind the join command. There is one kind of node:
+// relaying is the network model's (ANX), not a kind of node.
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Check, FileText, Layers, Pencil, RefreshCcw, Rocket, Server, SquareArrowOutUpRight, Terminal, Trash2, Waypoints, X } from '@lucide/vue'
+import { Check, FileText, Layers, Pencil, RefreshCcw, Rocket, Server, SquareArrowOutUpRight, Terminal, Trash2, X } from '@lucide/vue'
 import { getNodeStats } from '@/api/admin'
 import { approveKernelNode, getKernelAdminNodes, rejectKernelNode } from '@/api/kernel'
 import UiBadge from '@/ui/UiBadge.vue'
@@ -207,9 +188,7 @@ import { openAgentUpgrade } from '@/composables/useAgentUpgradeSheet'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { useRouteIntent } from '@/composables/useRouteIntent'
 import { SORT_ORDERS, createListSort } from '@/utils/listSort'
-import { num } from '@/components/forward/routeModel'
 import ForwardAreaNav from '@/components/forward/ForwardAreaNav.vue'
-import ForwardHostsPanel from './nodes/ForwardHostsPanel.vue'
 import NodeCertificateCell from './nodes/NodeCertificateCell.vue'
 import NodeConnectionBadge from './nodes/NodeConnectionBadge.vue'
 import NodeFormSheet from './nodes/NodeFormSheet.vue'
@@ -224,7 +203,6 @@ import {
   rememberListQuery, rememberNodeNames, splitTags, statusName
 } from './nodes/nodeData'
 import { readKernelError } from './nodes/nodeGroupData'
-import { useForwardInventory } from './nodes/useForwardInventory'
 import { useNodeActions } from './nodes/useNodeActions'
 import { useNodeGroups } from './nodes/useNodeGroups'
 import { useNodeServiceStatus } from './nodes/useNodeServiceStatus'
@@ -238,7 +216,6 @@ const toast = useToast()
 const confirm = useConfirm()
 const { syncingNodeIds, syncNode, confirmDelete } = useNodeActions()
 const groupsState = useNodeGroups()
-const forward = useForwardInventory()
 
 const STATUS_VALUES = Object.keys(NODE_STATUS)
 // The filter chip of nodes waiting for approval (GET /admin/nodes?approval=pending),
@@ -276,12 +253,8 @@ const joinGroupId = ref(null)
 const groupFormOpen = ref(false)
 const editingGroup = ref(null)
 
-// ?tab=groups or ?tab=hosts; 节点 is the default and leaves the query clean.
-// 转发主机 (the forward hosts that are not regular nodes) needs the forward
-// API, and shows only while there is a host or it is asked for (?tab=hosts,
-// where /admin/forward/inventory leads): once every machine is a regular
-// node, the page has just 节点 and 节点组.
-const TABS = ['groups', 'hosts']
+// ?tab=groups; 节点 is the default and leaves the query clean.
+const TABS = ['groups']
 function setTab(value) {
   const query = { ...route.query }
   if (TABS.includes(value)) query.tab = value
@@ -291,36 +264,18 @@ function setTab(value) {
 const tab = computed({
   get: () => {
     const value = route?.query?.tab
-    if (value === 'hosts') return forward.available.value ? 'hosts' : 'nodes'
     return value === 'groups' ? 'groups' : 'nodes'
   },
   set: (value) => { void setTab(value) }
 })
 const tabItems = computed(() => [
   { value: 'nodes', label: t('admin.nodes.tabs.nodes') },
-  { value: 'groups', label: t('admin.nodes.tabs.groups'), count: groupsState.groups.value.length },
-  ...(forward.available.value && (forward.hosts.value.length > 0 || route?.query?.tab === 'hosts') ? [{ value: 'hosts', label: t('admin.nodes.tabs.hosts'), count: forward.hosts.value.length }] : [])
+  { value: 'groups', label: t('admin.nodes.tabs.groups'), count: groupsState.groups.value.length }
 ])
 
-// One machine, one node (docs/design/node-unification): a regular node with
-// protocols is a 落地 (exit) for subscriptions; one without protocols, or one
-// carrying hops of forward routes, is a 中转 (relay). Both at once is fine.
-const relayOf = node => forward.byRef.value.get(nodeRef(node.id))
-function rolesOf(node) {
-  const roles = []
-  const relay = relayOf(node)
-  if (node.protocols?.length) roles.push('exit')
-  if (!node.protocols?.length || num(relay?.desired_hops) > 0) roles.push('relay')
-  return roles
-}
-
 const overQuotaNodes = computed(() => nodes.value.filter(isOverQuota))
-// Machines waiting for approval in any group, forward groups included; the
-// proxy ones are in this list, the forward ones in their group's dialog.
+// Machines waiting for approval in any group.
 const pendingApprovals = computed(() => groupsState.pendingTotal.value)
-const pendingProxyApprovals = computed(() => groupsState.groups.value
-  .filter(group => group.kind === 'proxy')
-  .reduce((sum, group) => sum + Number(group.nodes?.pending || 0), 0))
 
 // The API's `status` filter (the stored status), and 待确认.
 const statusChips = computed(() => [...['online', 'offline', 'disabled', 'pending'].map(value => ({
@@ -356,7 +311,6 @@ const columns = computed(() => [
   { key: 'id', label: t('admin.nodes.table.id'), numeric: true, hidden: true, width: 72 },
   { key: 'name', label: t('admin.nodes.table.name'), primary: true, hideable: false },
   { key: 'address', label: t('admin.nodes.table.address'), secondary: true, nowrap: true },
-  { key: 'role', label: t('admin.nodes.table.role'), nowrap: true, value: node => rolesOf(node).map(role => t(`admin.nodes.roles.${role}`)).join(' '), card: false },
   { key: 'nodeGroup', label: t('admin.nodes.table.nodeGroup'), nowrap: true, value: node => node.node_group_name || '', hidden: true, card: false },
   { key: 'protocols', label: t('admin.nodes.table.protocols'), numeric: true, align: 'end', nowrap: true, value: node => node.protocols?.length || 0, card: false },
   { key: 'status', label: t('admin.nodes.table.status') },
@@ -381,9 +335,6 @@ const nodeActions = node => [
   { key: 'open', label: t('admin.nodes.actions.open'), icon: SquareArrowOutUpRight, onSelect: () => openDetail(node), separatorBefore: node.approval === 'pending' },
   { key: 'protocols', label: t('admin.nodes.actions.manageProtocols'), icon: Layers, onSelect: () => openDetail(node, 'protocols') },
   { key: 'logs', label: t('admin.nodes.actions.logs'), icon: FileText, onSelect: () => openDetail(node, 'logs') },
-  // The node's forwarding settings (ports, addresses, hops) once it is in
-  // the forwarding inventory.
-  { key: 'forward', label: t('forwardV4.nodes.settings'), icon: Waypoints, hidden: !relayOf(node) || relayOf(node).in_inventory === false, onSelect: () => router.push(`/admin/forward/inventory/${nodeRef(node.id)}`) },
   { key: 'sync', label: t('admin.nodes.actions.syncReload'), icon: RefreshCcw, disabled: syncingNodeIds.has(node.id), onSelect: () => syncNode(node) },
   { key: 'edit', label: t('admin.nodes.actions.edit'), icon: Pencil, onSelect: () => openEdit(node) },
   { key: 'delete', label: t('admin.nodes.actions.delete'), icon: Trash2, danger: true, separatorBefore: true, onSelect: () => deleteFromList(node) }
@@ -460,7 +411,7 @@ async function reload() {
 
 // A join, an approval or a group edit changed the list and the groups.
 async function reloadAll() {
-  await Promise.all([reload(), groupsState.load(), forward.load()])
+  await Promise.all([reload(), groupsState.load()])
 }
 
 // A header click sorts the whole list on the server, from the first page.
@@ -499,14 +450,9 @@ function clearFilters() {
   else searchNow()
 }
 
-// The banner's 查看: the proxy nodes waiting for approval, filtered on the
-// nodes tab; when only forward nodes wait, the groups tab, where each group
-// has its count and 接入节点 lists them with 批准 and 拒绝.
+// The banner's 查看: the nodes waiting for approval, filtered on the nodes
+// tab.
 async function showAwaiting() {
-  if (pendingProxyApprovals.value === 0) {
-    if (tab.value !== 'groups') await setTab('groups')
-    return
-  }
   if (tab.value !== 'nodes') await setTab('nodes')
   statusFilter.value = AWAITING
 }
@@ -582,7 +528,6 @@ onMounted(async () => {
   if (routeIntent.join === '1') openJoin()
   syncQuery({ url: false })
   void groupsState.load()
-  void forward.load()
   if (await loadNodes()) await loadStats()
 })
 

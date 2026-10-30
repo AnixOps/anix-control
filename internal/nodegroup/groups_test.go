@@ -17,13 +17,12 @@ func TestGroupCRUDWithAPartialUniqueName(t *testing.T) {
 		ctx := t.Context()
 		rate := 1.5
 		created, err := f.svc.Create(ctx, GroupInput{
-			Name: " HK ", Kind: "proxy", MaxNodes: 10, RequireApproval: true, Rate: &rate, Tags: []string{"hk", "iepl", "hk"},
+			Name: " HK ", MaxNodes: 10, RequireApproval: true, Rate: &rate, Tags: []string{"hk", "iepl", "hk"},
 			MonthlyLimitBytes: 1 << 40, ResetDay: 15, Sort: 3,
 			SubscriptionGroupIDs: []uint{f.subscriptions[1].ID, f.subscriptions[0].ID, f.subscriptions[1].ID},
 		}, f.admin)
 		require.NoError(t, err)
 		assert.Equal(t, "HK", created.Name)
-		assert.Equal(t, model.NodeGroupKindProxy, created.Kind)
 		assert.Equal(t, 10, created.MaxNodes)
 		assert.True(t, created.RequireApproval)
 		assert.Equal(t, 1.5, created.Rate)
@@ -42,7 +41,7 @@ func TestGroupCRUDWithAPartialUniqueName(t *testing.T) {
 		assert.NotContains(t, stored.JoinTokenSealed, "anixjoin_")
 
 		// Defaults.
-		forward, err := f.svc.Create(ctx, GroupInput{Name: "edge", Kind: "forward"}, f.admin)
+		forward, err := f.svc.Create(ctx, GroupInput{Name: "edge"}, f.admin)
 		require.NoError(t, err)
 		assert.Equal(t, 1.0, forward.Rate)
 		assert.Equal(t, 1, forward.ResetDay)
@@ -50,7 +49,7 @@ func TestGroupCRUDWithAPartialUniqueName(t *testing.T) {
 		assert.Equal(t, []uint{}, forward.SubscriptionGroupIDs)
 
 		// Names are unique among live groups.
-		_, err = f.svc.Create(ctx, GroupInput{Name: "HK", Kind: "forward"}, f.admin)
+		_, err = f.svc.Create(ctx, GroupInput{Name: "HK"}, f.admin)
 		assert.ErrorIs(t, err, ErrNameTaken)
 		_, err = f.svc.Update(ctx, forward.ID, GroupInput{Name: "HK"}, f.admin)
 		assert.ErrorIs(t, err, ErrNameTaken)
@@ -60,16 +59,13 @@ func TestGroupCRUDWithAPartialUniqueName(t *testing.T) {
 		require.Len(t, listed, 2)
 		assert.Equal(t, "edge", listed[0].Name, "by sort, then id")
 
-		// Update replaces the fields; the kind cannot change.
+		// Update replaces the fields.
 		updated, err := f.svc.Update(ctx, created.ID, GroupInput{Name: "HK 2", MaxNodes: 0, ResetDay: 2}, f.admin)
 		require.NoError(t, err)
 		assert.Equal(t, "HK 2", updated.Name)
-		assert.Equal(t, model.NodeGroupKindProxy, updated.Kind)
 		assert.False(t, updated.RequireApproval)
 		assert.Equal(t, 1.0, updated.Rate)
 		assert.Empty(t, updated.SubscriptionGroupIDs)
-		_, err = f.svc.Update(ctx, created.ID, GroupInput{Name: "HK 2", Kind: "edge"}, f.admin)
-		assert.ErrorIs(t, err, ErrInvalid)
 		_, err = f.svc.Update(ctx, 4242, GroupInput{Name: "x"}, f.admin)
 		assert.ErrorIs(t, err, ErrNotFound)
 
@@ -83,7 +79,7 @@ func TestGroupCRUDWithAPartialUniqueName(t *testing.T) {
 		require.NoError(t, f.db.Unscoped().First(&deleted, created.ID).Error)
 		assert.EqualValues(t, 1, deleted.Deleted)
 		require.NotNil(t, deleted.DeletedAt)
-		again, err := f.svc.Create(ctx, GroupInput{Name: "HK 2", Kind: "proxy"}, f.admin)
+		again, err := f.svc.Create(ctx, GroupInput{Name: "HK 2"}, f.admin)
 		require.NoError(t, err, "a deleted group's name can be used again")
 		assert.NotEqual(t, created.ID, again.ID)
 
@@ -112,24 +108,22 @@ func TestGroupValidation(t *testing.T) {
 	negative, zero, huge := -1.0, 0.0, 1001.0
 	past := f.clock.Now().Add(-time.Minute)
 	cases := map[string]GroupInput{
-		"no name":            {Kind: "proxy"},
-		"control characters": {Name: "a\x01b", Kind: "proxy"},
-		"long name":          {Name: strings.Repeat("n", 101), Kind: "proxy"},
-		"kind":               {Name: "g", Kind: "relay"},
-		"max nodes":          {Name: "g", Kind: "proxy", MaxNodes: -1},
-		"negative rate":      {Name: "g", Kind: "proxy", Rate: &negative},
-		"zero rate":          {Name: "g", Kind: "proxy", Rate: &zero},
-		"huge rate":          {Name: "g", Kind: "proxy", Rate: &huge},
-		"monthly limit":      {Name: "g", Kind: "proxy", MonthlyLimitBytes: -1},
-		"reset day":          {Name: "g", Kind: "proxy", ResetDay: 29},
-		"empty tag":          {Name: "g", Kind: "proxy", Tags: []string{" "}},
-		"too many tags":      {Name: "g", Kind: "proxy", Tags: strings.Split("a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q", ",")},
-		"expired token":      {Name: "g", Kind: "proxy", TokenExpiresAt: &past},
+		"no name":            {},
+		"control characters": {Name: "a\x01b"},
+		"long name":          {Name: strings.Repeat("n", 101)},
+		"max nodes":          {Name: "g", MaxNodes: -1},
+		"negative rate":      {Name: "g", Rate: &negative},
+		"zero rate":          {Name: "g", Rate: &zero},
+		"huge rate":          {Name: "g", Rate: &huge},
+		"monthly limit":      {Name: "g", MonthlyLimitBytes: -1},
+		"reset day":          {Name: "g", ResetDay: 29},
+		"empty tag":          {Name: "g", Tags: []string{" "}},
+		"too many tags":      {Name: "g", Tags: strings.Split("a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q", ",")},
+		"expired token":      {Name: "g", TokenExpiresAt: &past},
 		"missing subscription group": {
-			Name: "g", Kind: "proxy", SubscriptionGroupIDs: []uint{4242},
+			Name: "g", SubscriptionGroupIDs: []uint{4242},
 		},
-		"unknown kind": {Name: "g", Kind: "relay"},
-		"bad template": {Name: "g", Kind: "proxy", ProtocolTemplate: rawJSON(t, []map[string]any{{"type": "hysteria2", "port": 443}})},
+		"bad template": {Name: "g", ProtocolTemplate: rawJSON(t, []map[string]any{{"type": "hysteria2", "port": 443}})},
 	}
 	for name, input := range cases {
 		_, err := f.svc.Create(ctx, input, f.admin)
@@ -140,7 +134,7 @@ func TestGroupValidation(t *testing.T) {
 	assert.Zero(t, count, "a refused group writes nothing")
 
 	future := f.clock.Now().Add(24 * time.Hour)
-	group, err := f.svc.Create(ctx, GroupInput{Name: "g", Kind: "proxy", TokenExpiresAt: &future}, f.admin)
+	group, err := f.svc.Create(ctx, GroupInput{Name: "g", TokenExpiresAt: &future}, f.admin)
 	require.NoError(t, err)
 	require.NotNil(t, group.TokenExpiresAt)
 	assert.False(t, group.TokenExpired)
@@ -152,23 +146,23 @@ func TestGroupValidation(t *testing.T) {
 
 func TestGroupsNeedTheKeyEncryptionKey(t *testing.T) {
 	f := newFixture(t, openSQLite(t))
-	group, _ := f.createGroup(t, GroupInput{Name: "g", Kind: "proxy"})
+	group, _ := f.createGroup(t, GroupInput{Name: "g"})
 	f.kek = ""
-	_, err := f.svc.Create(t.Context(), GroupInput{Name: "h", Kind: "proxy"}, f.admin)
+	_, err := f.svc.Create(t.Context(), GroupInput{Name: "h"}, f.admin)
 	assert.ErrorIs(t, err, ErrNoKEK)
 	_, err = f.svc.RevealToken(t.Context(), group.ID, f.admin)
 	assert.ErrorIs(t, err, ErrNoKEK)
 	_, err = f.svc.ResetToken(t.Context(), group.ID, f.admin)
 	assert.ErrorIs(t, err, ErrNoKEK)
 	f.kek = "not a key"
-	_, err = f.svc.Create(t.Context(), GroupInput{Name: "h", Kind: "proxy"}, f.admin)
+	_, err = f.svc.Create(t.Context(), GroupInput{Name: "h"}, f.admin)
 	assert.ErrorIs(t, err, ErrNoKEK)
 }
 
 func TestJoinTokenSealingAndReset(t *testing.T) {
 	forEachDatabase(t, func(t *testing.T, f *fixture) {
 		ctx := t.Context()
-		group, token := f.createGroup(t, GroupInput{Name: "g", Kind: "proxy"})
+		group, token := f.createGroup(t, GroupInput{Name: "g"})
 		assert.True(t, ValidToken(token), token)
 		assert.True(t, strings.HasPrefix(token, "anixjoin_"))
 		raw, err := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(token, "anixjoin_"))
@@ -229,7 +223,7 @@ func TestJoinTokenSealingAndReset(t *testing.T) {
 
 func TestGroupDeleteRefusedWithLiveNodes(t *testing.T) {
 	forEachDatabase(t, func(t *testing.T, f *fixture) {
-		group, token := f.createGroup(t, GroupInput{Name: "g", Kind: "proxy", RequireApproval: true})
+		group, token := f.createGroup(t, GroupInput{Name: "g", RequireApproval: true})
 		joined, err := f.join(t, JoinRequest{Token: token, Hostname: "a", PublicAddresses: []string{"203.0.113.1"}})
 		require.NoError(t, err)
 		err = f.svc.Delete(t.Context(), group.ID, f.admin)

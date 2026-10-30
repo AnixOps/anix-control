@@ -27,11 +27,9 @@ const (
 )
 
 // GroupInput is an administrator's node group: the body of a create, and of
-// an update, which replaces every field but the kind.
+// an update, which replaces every field.
 type GroupInput struct {
 	Name string `json:"name"`
-	// Kind is proxy or forward; it cannot change.
-	Kind string `json:"kind"`
 	// MaxNodes caps the group's live nodes; 0 is no cap.
 	MaxNodes        int  `json:"max_nodes"`
 	RequireApproval bool `json:"require_approval"`
@@ -43,10 +41,11 @@ type GroupInput struct {
 	// resets; 1 when absent.
 	ResetDay int `json:"reset_day"`
 	Sort     int `json:"sort"`
-	// ProtocolTemplate is the JSON list of template.go; proxy groups only.
+	// ProtocolTemplate is the JSON list of template.go; empty for a node
+	// that only runs the network model (ANX).
 	ProtocolTemplate json.RawMessage `json:"protocol_template"`
 	// SubscriptionGroupIDs are the subscription groups the template's
-	// protocols join; proxy groups only.
+	// protocols join.
 	SubscriptionGroupIDs []uint `json:"subscription_group_ids"`
 	// TokenExpiresAt, when set, ends the token's use; it must be in the
 	// future.
@@ -58,7 +57,6 @@ type GroupInput struct {
 type GroupView struct {
 	ID                   uint            `json:"id"`
 	Name                 string          `json:"name"`
-	Kind                 string          `json:"kind"`
 	MaxNodes             int             `json:"max_nodes"`
 	RequireApproval      bool            `json:"require_approval"`
 	Rate                 float64         `json:"rate"`
@@ -86,12 +84,12 @@ type NodeCounts struct {
 
 // checked is a validated GroupInput in its stored form.
 type checked struct {
-	name, kind, tags, template, subscriptionGroups string
-	maxNodes, resetDay, sort                       int
-	requireApproval                                bool
-	rate                                           float64
-	monthlyLimit                                   int64
-	expiresAt                                      *time.Time
+	name, tags, template, subscriptionGroups string
+	maxNodes, resetDay, sort                 int
+	requireApproval                          bool
+	rate                                     float64
+	monthlyLimit                             int64
+	expiresAt                                *time.Time
 }
 
 // check validates input against tx (the subscription groups must exist).
@@ -101,14 +99,6 @@ func (s *Service) check(tx *gorm.DB, input GroupInput) (checked, error) {
 	if out.name == "" || utf8.RuneCountInString(out.name) > maxGroupName || hasControl(out.name) {
 		return out, invalid("name is required, at most %d characters, without control characters", maxGroupName)
 	}
-	// One machine is one node (docs/design/node-unification): every group
-	// makes regular nodes, and a group without a protocol template makes
-	// relays. "forward" is still accepted and stored as proxy.
-	out.kind = strings.ToLower(strings.TrimSpace(input.Kind))
-	if out.kind != "" && out.kind != model.NodeGroupKindProxy && out.kind != model.NodeGroupKindForward {
-		return out, invalid("kind must be proxy (or forward, which is the same now)")
-	}
-	out.kind = model.NodeGroupKindProxy
 	if input.MaxNodes < 0 || input.MaxNodes > 1<<20 {
 		return out, invalid("max_nodes must be 0 (no cap) or a positive number")
 	}
@@ -248,7 +238,7 @@ func (s *Service) Create(ctx context.Context, input GroupInput, actor Actor) (Gr
 		}
 		now := s.now()
 		group = model.NodeGroup{
-			Name: fields.name, Kind: fields.kind, JoinTokenHash: hash, JoinTokenSealed: sealed, TokenResetAt: now,
+			Name: fields.name, Kind: model.NodeGroupKindProxy, JoinTokenHash: hash, JoinTokenSealed: sealed, TokenResetAt: now,
 			CreatedAt: now, UpdatedAt: now,
 		}
 		fields.apply(&group)
@@ -256,7 +246,7 @@ func (s *Service) Create(ctx context.Context, input GroupInput, actor Actor) (Gr
 			return err
 		}
 		return writeAudit(tx, actor, AuditActionCreate, auditTargetGroup, group.ID, map[string]any{
-			"group": group.Name, "kind": group.Kind, "require_approval": group.RequireApproval, "max_nodes": group.MaxNodes,
+			"group": group.Name, "require_approval": group.RequireApproval, "max_nodes": group.MaxNodes,
 		})
 	})
 	if err != nil {
@@ -271,7 +261,7 @@ func (c checked) apply(group *model.NodeGroup) {
 	group.ProtocolTemplate, group.SubscriptionGroupIDs, group.TokenExpiresAt = c.template, c.subscriptionGroups, c.expiresAt
 }
 
-// Update replaces a group's fields; the kind cannot change. Nodes that
+// Update replaces a group's fields but its token. Nodes that
 // joined keep what they got: a changed template applies to later joins.
 func (s *Service) Update(ctx context.Context, id uint, input GroupInput, actor Actor) (GroupView, error) {
 	err := s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -279,15 +269,9 @@ func (s *Service) Update(ctx context.Context, id uint, input GroupInput, actor A
 		if err != nil {
 			return err
 		}
-		if strings.TrimSpace(input.Kind) == "" {
-			input.Kind = group.Kind
-		}
 		fields, err := s.check(tx, input)
 		if err != nil {
 			return err
-		}
-		if fields.kind != group.Kind {
-			return invalid("kind cannot change: create a new group")
 		}
 		if taken, err := nameTaken(tx, fields.name, id); err != nil {
 			return err
@@ -303,7 +287,7 @@ func (s *Service) Update(ctx context.Context, id uint, input GroupInput, actor A
 			return err
 		}
 		return writeAudit(tx, actor, AuditActionUpdate, auditTargetGroup, id, map[string]any{
-			"group": group.Name, "kind": group.Kind, "require_approval": group.RequireApproval, "max_nodes": group.MaxNodes,
+			"group": group.Name, "require_approval": group.RequireApproval, "max_nodes": group.MaxNodes,
 		})
 	})
 	if err != nil {
@@ -330,7 +314,7 @@ func (s *Service) Delete(ctx context.Context, id uint, actor Actor) error {
 		if err := tx.Delete(&group).Error; err != nil {
 			return err
 		}
-		return writeAudit(tx, actor, AuditActionDelete, auditTargetGroup, id, map[string]any{"group": group.Name, "kind": group.Kind})
+		return writeAudit(tx, actor, AuditActionDelete, auditTargetGroup, id, map[string]any{"group": group.Name})
 	})
 }
 
@@ -443,7 +427,7 @@ func (s *Service) List(ctx context.Context) ([]GroupView, error) {
 
 func (s *Service) view(group model.NodeGroup, counts NodeCounts) GroupView {
 	view := GroupView{
-		ID: group.ID, Name: group.Name, Kind: group.Kind, MaxNodes: group.MaxNodes, RequireApproval: group.RequireApproval,
+		ID: group.ID, Name: group.Name, MaxNodes: group.MaxNodes, RequireApproval: group.RequireApproval,
 		Rate: group.Rate, Tags: []string{}, MonthlyLimitBytes: group.MonthlyLimitBytes, ResetDay: group.ResetDay, Sort: group.Sort,
 		ProtocolTemplate: templateOf(group), SubscriptionGroupIDs: subscriptionGroupsOf(group),
 		TokenResetAt: group.TokenResetAt, TokenExpiresAt: group.TokenExpiresAt, Nodes: counts,
@@ -493,8 +477,7 @@ func liveNodes(tx *gorm.DB, group model.NodeGroup) *gorm.DB {
 }
 
 // liveForwardNodes is the same query of the group's forward nodes: those a
-// forward group made before groups made regular nodes only, until they are
-// converted (kernelforward.ConvertForwardNode).
+// forward group made before groups made regular nodes only.
 func liveForwardNodes(tx *gorm.DB, group model.NodeGroup) *gorm.DB {
 	return tx.Model(&model.ForwardNode{}).Where("node_group_id = ? AND approval <> ?", group.ID, model.NodeApprovalRejected)
 }

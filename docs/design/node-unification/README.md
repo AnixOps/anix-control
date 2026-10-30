@@ -35,42 +35,19 @@ the Agent is a regular node; forward routes and the network model name it
   group without a template, carries `--forward`: the installer writes
   `Forward.Enable` with `NodeKind: proxy` and the node id, so the Agent
   forwards on its proxy stream.
-- **Existing forward nodes are converted.**
-  `POST /api/v4/kernel/nodes/forward-<id>/convert` (super administrators,
-  `dry_run` first) creates the regular node (name, host, group, tags,
-  machine fingerprint, approval; `show` 0; fresh credentials), copies the
-  inventory row with its last reported engines, renames every route hop,
-  port allocation and DNS node row, deletes the forward node (revoking its
-  certificates) and replans, all in one transaction under the plan lock.
-  Routes keep their ports. A refused plan, an Ansible host, or a network
-  model that names the node refuses the conversion. The machine then
-  reinstalls the Agent with the new node's install command; its hops are
-  down until it connects. The forward Nodes page offers this as
-  "Make a regular node".
+- **No conversion.** An Agent forward node is not converted (the convert
+  endpoint is gone): delete it and install the Agent again with a node
+  group's command.
 
 ## One node page
 
-The console shows one node list (`/admin/nodes`). The forwarding area's own
-node list (`/admin/forward/inventory`) is gone: it opens the node page's
-转发主机 tab.
-
-- **角色.** Each regular node shows 落地 when it has protocols and 中转 when
-  it has none or carries hops of forward routes (both at once is fine), with
-  its hop count and hop errors from the forwarding inventory.
-- **转发主机.** The forwarding machines that are not regular nodes: Ansible
-  hosts (添加 Ansible 主机 is here) and Agent forward nodes not yet converted
-  (转为常规节点, and a banner on the 节点 tab while any is left). The tab is
-  there only while the forward API answers.
-- **One area.** The sidebar has no 转发 item: the node page and the
-  forwarding pages (转发概览, 路由, DNS, 分流) share one segmented control,
-  and every `/admin/forward/` page selects 节点.
-- **转发设置.** A node in the forwarding inventory has 转发设置 in its row
-  menu (`/admin/forward/inventory/<ref>`, ports, addresses and hosted hops);
-  that page goes back to the node.
+The console shows one node list (`/admin/nodes`) with one kind of node: no
+role column, no 转发主机 tab, no convert action. `/admin/forward/inventory`
+opens the node page. Relaying runs on the network model (ANX).
 
 ## Not yet
 
 - Merging the tables (`v2_forward_node` remains for Ansible hosts and
-  unconverted nodes).
+  Agent forward nodes from before rc.11).
 - `v2_node.parent_id` relay children, which become network-model paths.
 - Agents stop sending a node kind once no Agent forward node is left.
