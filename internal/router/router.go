@@ -709,6 +709,7 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		v4.POST("/kernel/modules/ca/rotate", modules.RotateCA)
 		v4.GET("/kernel/modules/trust-bundle", modules.TrustBundle)
 		v4.GET("/kernel/identity", handler.IdentityStatus)
+		v4.GET("/kernel/features", handler.ListFeatures)
 		v4.POST("/kernel/identity/import", handler.StartIdentityImport)
 		v4.POST("/kernel/identity/cutover", handler.StartIdentityCutover)
 		v4.POST("/kernel/identity/rollback", handler.StartIdentityRollback)

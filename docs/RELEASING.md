@@ -232,6 +232,50 @@ version `latest`.
 `config/scripts/check_release_workflow.sh` keeps these essentials in the
 workflow. Change it in the same pull request as any release step.
 
+## Dev Builds
+
+Dev builds are the internal test channel: a feature merged to `main` can be
+tried on a test Control and test nodes without waiting for the next release.
+`.github/workflows/dev-release.yml` cuts one after every green `main` push
+CI of this repository, every three hours when `anix-agent`'s `main` moved,
+and on a manual run.
+
+- **Version.** The release the tree declares plus `.dev.<run number>`:
+  `v5.0.0-rc.15.dev.42` after `v5.0.0-rc.15`. After a stable `vX.Y.Z` it is
+  `vX.Y.(Z+1)-alpha.0.dev.<run>`. Both are valid SemVer and order between the
+  release before and the next one, so a test node can go on from a dev build
+  to the next release (the Agent refuses downgrades). Control and the Agent
+  always carry the same dev version.
+- **What is built.** The newest commit of each `main` whose push CI passed:
+  Control (linux amd64 and arm64, the signed built-in packages embedded,
+  `agentRelease` set to the same tag), the frontend, and the Agent from the
+  public `anix-agent` repository, packaged and signed as its `release.yml`
+  does. All of it is one pre-release of this repository, never marked
+  latest; the notes name both commits. Nothing is built when neither
+  repository moved (`force` builds anyway). The 15 newest dev builds are
+  kept; older ones are deleted with their tags.
+- **Installing.** `install.sh update --version <dev tag>` installs Control
+  and, because the Agent of a dev tag is in this repository's pre-release,
+  fills `agent_install.artifact_dir` from there. The node page's github
+  mirror points dev tags here too (`agentinstall.GitHubAgentBase`). The
+  manual run with `deploy` does this on the production Control through
+  JumpServer, after a database dump (the five newest `pre-dev` dumps and
+  configuration backups are kept); `install.sh` restores the previous
+  release when the new one fails its health check. Move test nodes with an
+  ordinary Agent upgrade campaign to the dev tag.
+- **Older Agents.** An Agent before the release that taught it `.dev.N`
+  versions (after `v5.0.0-rc.15`) cannot take a dev build: upgrade it to that
+  release first.
+- **Feature flags.** A feature still being built is registered in
+  `internal/features` with the dev stage and checked with
+  `features.Enabled(name)`: it runs in dev builds only, so releases cut from
+  the same `main` keep it off. `GET /api/v4/kernel/features` lists the
+  channel and every gated feature. When the feature is done, move it to the
+  stable stage; a release later, remove the entry and the checks.
+
+Dev builds are not releases: `ci.yml`'s tag gate does not take their tags,
+no container image is published, and `CHANGELOG.md` does not list them.
+
 ## Runner Image
 
 Every Linux job in `.github/workflows/` runs on the pinned label

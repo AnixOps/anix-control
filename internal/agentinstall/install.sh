@@ -730,7 +730,7 @@ read_metadata() {
       *) ;;
     esac
   done <"${file}"
-  [[ "${META_VERSION}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)(\.[0-9]+)?)?$ ]] || die "Control's install metadata names no Agent release"
+  [[ "${META_VERSION}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)(\.[0-9]+(\.dev\.[0-9]+)?)?)?$ ]] || die "Control's install metadata names no Agent release"
   [[ -n "${META_GRPC}" ]] || die "Control's install metadata names no gRPC target (agent_install.grpc_target)"
   [[ "${META_GRPC}" =~ ^[][A-Za-z0-9.:-]+:[0-9]{1,5}$ ]] || die "Control's gRPC target ${META_GRPC} is not host:port"
   ASSET="${META_ASSET[${ARCH}]:-}"
