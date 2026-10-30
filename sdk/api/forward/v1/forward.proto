@@ -749,6 +749,9 @@ message UpstreamHealth {
   // rtt_us is the last connect round trip; 0 when it failed.
   uint32 rtt_us = 8;
   int64 checked_at_unix_ms = 9;
+  // node_ref is the node that checked; set in GetRouteHealth answers only
+  // (a report's are its node's).
+  string node_ref = 10;
 }
 
 enum ProbeKind {

@@ -126,10 +126,11 @@ func networkPolicy(route *forwardv1.Route) *networkv1.ForwardPolicy {
 const networkEpochPrefix = "network-"
 
 // RecordNetworkCounters meters the port forwards of node's NetworkStatus
-// as the entry hops of their ENGINE_NETWORK routes. A port forward's bytes
-// grow from the start of the device's kernel, so a lower value than the
-// stored one starts a new counter epoch, named after when it was seen; a
-// status older than the stored counter is skipped. Growth that reaches a
+// as the entry hops of their ENGINE_NETWORK routes, and folds their target
+// health checks into the latency history (latency.go). A port forward's
+// bytes grow from the start of the device's kernel, so a lower value than
+// the stored one starts a new counter epoch, named after when it was seen;
+// a status older than the stored counter is skipped. Growth that reaches a
 // route's quota replans, as a forward.v1 report does.
 func (s *Service) RecordNetworkCounters(ctx context.Context, node agentcontrol.AgentNode, forwards []*networkv1.PortForwardStatus, observedAt time.Time) (ReportResult, error) {
 	db, err := s.db(ctx)
@@ -153,6 +154,9 @@ func (s *Service) RecordNetworkCounters(ctx context.Context, node agentcontrol.A
 			}
 			if known == 0 {
 				continue
+			}
+			if err := foldLatency(tx, ref, networkHealth(ref, forward), s.now()); err != nil {
+				return err
 			}
 			var rows []model.KernelForwardCounter
 			if err := tx.Where("route_id = ? AND hop_index = ? AND node_ref = ? AND counter_epoch LIKE ?", forward.GetId(), 0, ref, networkEpochPrefix+"%").
