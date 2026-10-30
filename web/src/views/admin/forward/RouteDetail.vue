@@ -192,7 +192,7 @@ import {
   UiMetricCard, UiPageHeader, UiSegmentedControl, UiSheet, UiSkeleton, UiStatusDot, useConfirm, useFormat, useToast
 } from '@/ui'
 import { useAppI18n } from '@/composables/useAppI18n'
-import { deleteRoute, diagnoseRoute, getNode, getRoute, listNodes, newIdempotencyKey, pauseRoute, resumeRoute, routeLatency, routeStats } from '@/api/forwardV4'
+import { deleteRoute, diagnoseRoute, getNode, getRoute, listNodes, newIdempotencyKey, pauseRoute, resumeRoute, routeHealth, routeLatency, routeStats } from '@/api/forwardV4'
 import DiagnosisPanel from '@/components/forward/DiagnosisPanel.vue'
 import EngineChip from '@/components/forward/EngineChip.vue'
 import EntryHaCard from '@/components/forward/EntryHaCard.vue'
@@ -224,11 +224,14 @@ const nodes = ref([])
 const canDelete = ref(null)
 // node_ref → GET /nodes/{ref} answer ({node, state, report}).
 const views = ref(new Map())
+// The route's upstream health, each with the node that checked it (GET
+// /routes/{id}/health): an ANX route's from its entry's target checks.
+const health = ref([])
 const loadError = ref('')
 
 const { secondsAgo, refresh } = usePolling(async () => {
   try {
-    const [answer, nodeAnswer] = await Promise.all([getRoute(props.id), listNodes()])
+    const [answer, nodeAnswer, healthAnswer] = await Promise.all([getRoute(props.id), listNodes(), routeHealth(props.id).catch(() => null)])
     route.value = answer?.route || null
     enforced.value = answer?.enforced || ''
     nodes.value = nodeAnswer.nodes
@@ -236,6 +239,7 @@ const { secondsAgo, refresh } = usePolling(async () => {
     const refs = Array.from(new Set((route.value?.hops || []).flatMap(hop => hop.node_refs || []))).slice(0, MAX_NODE_VIEWS)
     const details = await Promise.all(refs.map(ref => getNode(ref).catch(() => null)))
     views.value = new Map(refs.map((ref, index) => [ref, details[index]]))
+    health.value = healthAnswer?.health || []
     loadError.value = ''
     // Traffic refreshes only when it is a minute old (D5).
     void loadStats({ force: false })
@@ -256,7 +260,7 @@ const nodeRefs = computed(() => Array.from(new Set((route.value?.hops || []).fla
 // This route's hop errors and upstream health, per node.
 const reportOf = ref => views.value.get(ref)?.report || null
 const routeErrors = ref => (reportOf(ref)?.errors || []).filter(error => error.route_id === props.id)
-const routeHealthOf = ref => (reportOf(ref)?.health || []).filter(item => item.route_id === props.id)
+const routeHealthOf = ref => health.value.filter(item => item.node_ref === ref)
 const allHealth = computed(() => nodeRefs.value.flatMap(ref => routeHealthOf(ref).map(item => ({ ...item, node_ref: ref }))))
 const allErrors = computed(() => nodeRefs.value.flatMap(routeErrors))
 

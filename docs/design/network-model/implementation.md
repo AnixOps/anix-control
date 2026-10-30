@@ -83,6 +83,7 @@ PortForward 由 Agent 转成 anixcore 的 forward 入站（出站为 `egress:<id
 - forward.v1 规划器只校验这类路由，不生成 NodeForwardState，也不分配端口。每次接受的规划在同一事务里重新规划网络模型：路由变成入口设备的 PortForward，链路按传输规划，到期或超配额的路由暂停后端口转发随之撤下。
 - 入口没写监听地址时用 `::`。目标策略取 `policy.target`，限速和最大连接数取 `limits`，健康检查、熔断、PROXY 头照搬。
 - NetworkStatus 的 port_forwards 计入路由的第 0 跳计数：字节比上次小就是内核重启，开新的计数周期（`network-<毫秒>`）；比已存计数旧的状态忽略；达到配额触发重新规划。
+- 目标健康：`PortForwardStatus.targets`（`ForwardTargetHealth`：状态、连续失败、熔断截止、最近一次检查的往返和时间）由 Agent 从 anixcore 的 `GET /v1/inbounds/{tag}/targets` 取得。入口的检查经整条路径拨到目标，所以记作第 0 跳、入口设备的上游健康：`GET /routes/{id}/health`、延迟历史、诊断和 DNS 入口切换都读它，不再依赖 forward.v1 报告。
 
 **迁移**
 

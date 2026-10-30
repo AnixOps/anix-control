@@ -353,6 +353,62 @@ func (ComponentState) EnumDescriptor() ([]byte, []int) {
 	return file_api_network_v1_network_proto_rawDescGZIP(), []int{5}
 }
 
+type TargetHealthState int32
+
+const (
+	// No check or connection tried the target yet.
+	TargetHealthState_TARGET_HEALTH_STATE_UNKNOWN TargetHealthState = 0
+	TargetHealthState_TARGET_HEALTH_STATE_HEALTHY TargetHealthState = 1
+	// Failures in a row, below the circuit breaker's threshold.
+	TargetHealthState_TARGET_HEALTH_STATE_UNHEALTHY TargetHealthState = 2
+	// The breaker is open: connections skip the target until
+	// circuit_open_until_unix_ms.
+	TargetHealthState_TARGET_HEALTH_STATE_CIRCUIT_OPEN TargetHealthState = 3
+)
+
+// Enum value maps for TargetHealthState.
+var (
+	TargetHealthState_name = map[int32]string{
+		0: "TARGET_HEALTH_STATE_UNKNOWN",
+		1: "TARGET_HEALTH_STATE_HEALTHY",
+		2: "TARGET_HEALTH_STATE_UNHEALTHY",
+		3: "TARGET_HEALTH_STATE_CIRCUIT_OPEN",
+	}
+	TargetHealthState_value = map[string]int32{
+		"TARGET_HEALTH_STATE_UNKNOWN":      0,
+		"TARGET_HEALTH_STATE_HEALTHY":      1,
+		"TARGET_HEALTH_STATE_UNHEALTHY":    2,
+		"TARGET_HEALTH_STATE_CIRCUIT_OPEN": 3,
+	}
+)
+
+func (x TargetHealthState) Enum() *TargetHealthState {
+	p := new(TargetHealthState)
+	*p = x
+	return p
+}
+
+func (x TargetHealthState) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (TargetHealthState) Descriptor() protoreflect.EnumDescriptor {
+	return file_api_network_v1_network_proto_enumTypes[6].Descriptor()
+}
+
+func (TargetHealthState) Type() protoreflect.EnumType {
+	return &file_api_network_v1_network_proto_enumTypes[6]
+}
+
+func (x TargetHealthState) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use TargetHealthState.Descriptor instead.
+func (TargetHealthState) EnumDescriptor() ([]byte, []int) {
+	return file_api_network_v1_network_proto_rawDescGZIP(), []int{6}
+}
+
 // KindSupport is one kind a device runs, with the settings versions it
 // accepts and who executes it on the device ("anixcore", "agent", ...).
 type KindSupport struct {
@@ -2673,8 +2729,13 @@ type PortForwardStatus struct {
 	State  ComponentState         `protobuf:"varint,2,opt,name=state,proto3,enum=anixops.network.v1.ComponentState" json:"state,omitempty"`
 	Detail string                 `protobuf:"bytes,3,opt,name=detail,proto3" json:"detail,omitempty"`
 	// Client to target, and back.
-	UpBytes       uint64 `protobuf:"varint,4,opt,name=up_bytes,json=upBytes,proto3" json:"up_bytes,omitempty"`
-	DownBytes     uint64 `protobuf:"varint,5,opt,name=down_bytes,json=downBytes,proto3" json:"down_bytes,omitempty"`
+	UpBytes   uint64 `protobuf:"varint,4,opt,name=up_bytes,json=upBytes,proto3" json:"up_bytes,omitempty"`
+	DownBytes uint64 `protobuf:"varint,5,opt,name=down_bytes,json=downBytes,proto3" json:"down_bytes,omitempty"`
+	// The targets' health as the device's checks see it, in the plan's
+	// order. The checks dial through the forward's path, so a relayed
+	// forward's are end to end from the entry. Empty from a kernel without
+	// target health.
+	Targets       []*ForwardTargetHealth `protobuf:"bytes,6,rep,name=targets,proto3" json:"targets,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2740,6 +2801,109 @@ func (x *PortForwardStatus) GetUpBytes() uint64 {
 func (x *PortForwardStatus) GetDownBytes() uint64 {
 	if x != nil {
 		return x.DownBytes
+	}
+	return 0
+}
+
+func (x *PortForwardStatus) GetTargets() []*ForwardTargetHealth {
+	if x != nil {
+		return x.Targets
+	}
+	return nil
+}
+
+// ForwardTargetHealth is one port forward target's health.
+type ForwardTargetHealth struct {
+	state                  protoimpl.MessageState `protogen:"open.v1"`
+	Host                   string                 `protobuf:"bytes,1,opt,name=host,proto3" json:"host,omitempty"`
+	Port                   uint32                 `protobuf:"varint,2,opt,name=port,proto3" json:"port,omitempty"`
+	State                  TargetHealthState      `protobuf:"varint,3,opt,name=state,proto3,enum=anixops.network.v1.TargetHealthState" json:"state,omitempty"`
+	ConsecutiveFailures    uint32                 `protobuf:"varint,4,opt,name=consecutive_failures,json=consecutiveFailures,proto3" json:"consecutive_failures,omitempty"`
+	CircuitOpenUntilUnixMs int64                  `protobuf:"varint,5,opt,name=circuit_open_until_unix_ms,json=circuitOpenUntilUnixMs,proto3" json:"circuit_open_until_unix_ms,omitempty"`
+	// The last active check's connect round trip; 0 when it failed or none
+	// ran.
+	RttUs uint32 `protobuf:"varint,6,opt,name=rtt_us,json=rttUs,proto3" json:"rtt_us,omitempty"`
+	// When the last active check ran; 0 when none did.
+	CheckedAtUnixMs int64 `protobuf:"varint,7,opt,name=checked_at_unix_ms,json=checkedAtUnixMs,proto3" json:"checked_at_unix_ms,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *ForwardTargetHealth) Reset() {
+	*x = ForwardTargetHealth{}
+	mi := &file_api_network_v1_network_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ForwardTargetHealth) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ForwardTargetHealth) ProtoMessage() {}
+
+func (x *ForwardTargetHealth) ProtoReflect() protoreflect.Message {
+	mi := &file_api_network_v1_network_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ForwardTargetHealth.ProtoReflect.Descriptor instead.
+func (*ForwardTargetHealth) Descriptor() ([]byte, []int) {
+	return file_api_network_v1_network_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *ForwardTargetHealth) GetHost() string {
+	if x != nil {
+		return x.Host
+	}
+	return ""
+}
+
+func (x *ForwardTargetHealth) GetPort() uint32 {
+	if x != nil {
+		return x.Port
+	}
+	return 0
+}
+
+func (x *ForwardTargetHealth) GetState() TargetHealthState {
+	if x != nil {
+		return x.State
+	}
+	return TargetHealthState_TARGET_HEALTH_STATE_UNKNOWN
+}
+
+func (x *ForwardTargetHealth) GetConsecutiveFailures() uint32 {
+	if x != nil {
+		return x.ConsecutiveFailures
+	}
+	return 0
+}
+
+func (x *ForwardTargetHealth) GetCircuitOpenUntilUnixMs() int64 {
+	if x != nil {
+		return x.CircuitOpenUntilUnixMs
+	}
+	return 0
+}
+
+func (x *ForwardTargetHealth) GetRttUs() uint32 {
+	if x != nil {
+		return x.RttUs
+	}
+	return 0
+}
+
+func (x *ForwardTargetHealth) GetCheckedAtUnixMs() int64 {
+	if x != nil {
+		return x.CheckedAtUnixMs
 	}
 	return 0
 }
@@ -2959,14 +3123,23 @@ const file_api_network_v1_network_proto_rawDesc = "" +
 	"\vpublic_keys\x18\x06 \x03(\v2\x1d.anixops.network.v1.PublicKeyR\n" +
 	"publicKeys\x12-\n" +
 	"\x13observed_at_unix_ms\x18\a \x01(\x03R\x10observedAtUnixMs\x12J\n" +
-	"\rport_forwards\x18\b \x03(\v2%.anixops.network.v1.PortForwardStatusR\fportForwards\"\xaf\x01\n" +
+	"\rport_forwards\x18\b \x03(\v2%.anixops.network.v1.PortForwardStatusR\fportForwards\"\xf2\x01\n" +
 	"\x11PortForwardStatus\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x128\n" +
 	"\x05state\x18\x02 \x01(\x0e2\".anixops.network.v1.ComponentStateR\x05state\x12\x16\n" +
 	"\x06detail\x18\x03 \x01(\tR\x06detail\x12\x19\n" +
 	"\bup_bytes\x18\x04 \x01(\x04R\aupBytes\x12\x1d\n" +
 	"\n" +
-	"down_bytes\x18\x05 \x01(\x04R\tdownBytes*\x80\x01\n" +
+	"down_bytes\x18\x05 \x01(\x04R\tdownBytes\x12A\n" +
+	"\atargets\x18\x06 \x03(\v2'.anixops.network.v1.ForwardTargetHealthR\atargets\"\xad\x02\n" +
+	"\x13ForwardTargetHealth\x12\x12\n" +
+	"\x04host\x18\x01 \x01(\tR\x04host\x12\x12\n" +
+	"\x04port\x18\x02 \x01(\rR\x04port\x12;\n" +
+	"\x05state\x18\x03 \x01(\x0e2%.anixops.network.v1.TargetHealthStateR\x05state\x121\n" +
+	"\x14consecutive_failures\x18\x04 \x01(\rR\x13consecutiveFailures\x12:\n" +
+	"\x1acircuit_open_until_unix_ms\x18\x05 \x01(\x03R\x16circuitOpenUntilUnixMs\x12\x15\n" +
+	"\x06rtt_us\x18\x06 \x01(\rR\x05rttUs\x12+\n" +
+	"\x12checked_at_unix_ms\x18\a \x01(\x03R\x0fcheckedAtUnixMs*\x80\x01\n" +
 	"\tComponent\x12\x19\n" +
 	"\x15COMPONENT_UNSPECIFIED\x10\x00\x12\x12\n" +
 	"\x0eCOMPONENT_LINE\x10\x01\x12\x15\n" +
@@ -2999,7 +3172,12 @@ const file_api_network_v1_network_proto_rawDesc = "" +
 	"\x18COMPONENT_STATE_DEGRADED\x10\x02\x12\x18\n" +
 	"\x14COMPONENT_STATE_DOWN\x10\x03\x12\x1f\n" +
 	"\x1bCOMPONENT_STATE_UNSUPPORTED\x10\x04\x12\x19\n" +
-	"\x15COMPONENT_STATE_ERROR\x10\x05B>Z<github.com/AnixOps/anix-control/sdk/api/network/v1;networkv1b\x06proto3"
+	"\x15COMPONENT_STATE_ERROR\x10\x05*\x9e\x01\n" +
+	"\x11TargetHealthState\x12\x1f\n" +
+	"\x1bTARGET_HEALTH_STATE_UNKNOWN\x10\x00\x12\x1f\n" +
+	"\x1bTARGET_HEALTH_STATE_HEALTHY\x10\x01\x12!\n" +
+	"\x1dTARGET_HEALTH_STATE_UNHEALTHY\x10\x02\x12$\n" +
+	" TARGET_HEALTH_STATE_CIRCUIT_OPEN\x10\x03B>Z<github.com/AnixOps/anix-control/sdk/api/network/v1;networkv1b\x06proto3"
 
 var (
 	file_api_network_v1_network_proto_rawDescOnce sync.Once
@@ -3013,86 +3191,90 @@ func file_api_network_v1_network_proto_rawDescGZIP() []byte {
 	return file_api_network_v1_network_proto_rawDescData
 }
 
-var file_api_network_v1_network_proto_enumTypes = make([]protoimpl.EnumInfo, 6)
-var file_api_network_v1_network_proto_msgTypes = make([]protoimpl.MessageInfo, 27)
+var file_api_network_v1_network_proto_enumTypes = make([]protoimpl.EnumInfo, 7)
+var file_api_network_v1_network_proto_msgTypes = make([]protoimpl.MessageInfo, 28)
 var file_api_network_v1_network_proto_goTypes = []any{
-	(Component)(0),             // 0: anixops.network.v1.Component
-	(Family)(0),                // 1: anixops.network.v1.Family
-	(Audience)(0),              // 2: anixops.network.v1.Audience
-	(PairingMode)(0),           // 3: anixops.network.v1.PairingMode
-	(TransportRole)(0),         // 4: anixops.network.v1.TransportRole
-	(ComponentState)(0),        // 5: anixops.network.v1.ComponentState
-	(*KindSupport)(nil),        // 6: anixops.network.v1.KindSupport
-	(*DeviceCapabilities)(nil), // 7: anixops.network.v1.DeviceCapabilities
-	(*NetworkPlan)(nil),        // 8: anixops.network.v1.NetworkPlan
-	(*PortForward)(nil),        // 9: anixops.network.v1.PortForward
-	(*ForwardTarget)(nil),      // 10: anixops.network.v1.ForwardTarget
-	(*ForwardPolicy)(nil),      // 11: anixops.network.v1.ForwardPolicy
-	(*ForwardHealth)(nil),      // 12: anixops.network.v1.ForwardHealth
-	(*ForwardBreaker)(nil),     // 13: anixops.network.v1.ForwardBreaker
-	(*Line)(nil),               // 14: anixops.network.v1.Line
-	(*Endpoint)(nil),           // 15: anixops.network.v1.Endpoint
-	(*PortRange)(nil),          // 16: anixops.network.v1.PortRange
-	(*PortMap)(nil),            // 17: anixops.network.v1.PortMap
-	(*PairingRule)(nil),        // 18: anixops.network.v1.PairingRule
-	(*Pairing)(nil),            // 19: anixops.network.v1.Pairing
-	(*Ingress)(nil),            // 20: anixops.network.v1.Ingress
-	(*Routing)(nil),            // 21: anixops.network.v1.Routing
-	(*HealthCheck)(nil),        // 22: anixops.network.v1.HealthCheck
-	(*Egress)(nil),             // 23: anixops.network.v1.Egress
-	(*Transport)(nil),          // 24: anixops.network.v1.Transport
-	(*AnxLineSettings)(nil),    // 25: anixops.network.v1.AnxLineSettings
-	(*Path)(nil),               // 26: anixops.network.v1.Path
-	(*Forwarding)(nil),         // 27: anixops.network.v1.Forwarding
-	(*ComponentStatus)(nil),    // 28: anixops.network.v1.ComponentStatus
-	(*InterfaceFact)(nil),      // 29: anixops.network.v1.InterfaceFact
-	(*PublicKey)(nil),          // 30: anixops.network.v1.PublicKey
-	(*NetworkStatus)(nil),      // 31: anixops.network.v1.NetworkStatus
-	(*PortForwardStatus)(nil),  // 32: anixops.network.v1.PortForwardStatus
+	(Component)(0),              // 0: anixops.network.v1.Component
+	(Family)(0),                 // 1: anixops.network.v1.Family
+	(Audience)(0),               // 2: anixops.network.v1.Audience
+	(PairingMode)(0),            // 3: anixops.network.v1.PairingMode
+	(TransportRole)(0),          // 4: anixops.network.v1.TransportRole
+	(ComponentState)(0),         // 5: anixops.network.v1.ComponentState
+	(TargetHealthState)(0),      // 6: anixops.network.v1.TargetHealthState
+	(*KindSupport)(nil),         // 7: anixops.network.v1.KindSupport
+	(*DeviceCapabilities)(nil),  // 8: anixops.network.v1.DeviceCapabilities
+	(*NetworkPlan)(nil),         // 9: anixops.network.v1.NetworkPlan
+	(*PortForward)(nil),         // 10: anixops.network.v1.PortForward
+	(*ForwardTarget)(nil),       // 11: anixops.network.v1.ForwardTarget
+	(*ForwardPolicy)(nil),       // 12: anixops.network.v1.ForwardPolicy
+	(*ForwardHealth)(nil),       // 13: anixops.network.v1.ForwardHealth
+	(*ForwardBreaker)(nil),      // 14: anixops.network.v1.ForwardBreaker
+	(*Line)(nil),                // 15: anixops.network.v1.Line
+	(*Endpoint)(nil),            // 16: anixops.network.v1.Endpoint
+	(*PortRange)(nil),           // 17: anixops.network.v1.PortRange
+	(*PortMap)(nil),             // 18: anixops.network.v1.PortMap
+	(*PairingRule)(nil),         // 19: anixops.network.v1.PairingRule
+	(*Pairing)(nil),             // 20: anixops.network.v1.Pairing
+	(*Ingress)(nil),             // 21: anixops.network.v1.Ingress
+	(*Routing)(nil),             // 22: anixops.network.v1.Routing
+	(*HealthCheck)(nil),         // 23: anixops.network.v1.HealthCheck
+	(*Egress)(nil),              // 24: anixops.network.v1.Egress
+	(*Transport)(nil),           // 25: anixops.network.v1.Transport
+	(*AnxLineSettings)(nil),     // 26: anixops.network.v1.AnxLineSettings
+	(*Path)(nil),                // 27: anixops.network.v1.Path
+	(*Forwarding)(nil),          // 28: anixops.network.v1.Forwarding
+	(*ComponentStatus)(nil),     // 29: anixops.network.v1.ComponentStatus
+	(*InterfaceFact)(nil),       // 30: anixops.network.v1.InterfaceFact
+	(*PublicKey)(nil),           // 31: anixops.network.v1.PublicKey
+	(*NetworkStatus)(nil),       // 32: anixops.network.v1.NetworkStatus
+	(*PortForwardStatus)(nil),   // 33: anixops.network.v1.PortForwardStatus
+	(*ForwardTargetHealth)(nil), // 34: anixops.network.v1.ForwardTargetHealth
 }
 var file_api_network_v1_network_proto_depIdxs = []int32{
 	0,  // 0: anixops.network.v1.KindSupport.component:type_name -> anixops.network.v1.Component
-	6,  // 1: anixops.network.v1.DeviceCapabilities.kinds:type_name -> anixops.network.v1.KindSupport
-	14, // 2: anixops.network.v1.NetworkPlan.lines:type_name -> anixops.network.v1.Line
-	20, // 3: anixops.network.v1.NetworkPlan.ingresses:type_name -> anixops.network.v1.Ingress
-	23, // 4: anixops.network.v1.NetworkPlan.egresses:type_name -> anixops.network.v1.Egress
-	24, // 5: anixops.network.v1.NetworkPlan.transports:type_name -> anixops.network.v1.Transport
-	26, // 6: anixops.network.v1.NetworkPlan.paths:type_name -> anixops.network.v1.Path
-	27, // 7: anixops.network.v1.NetworkPlan.forwarding:type_name -> anixops.network.v1.Forwarding
-	9,  // 8: anixops.network.v1.NetworkPlan.port_forwards:type_name -> anixops.network.v1.PortForward
-	15, // 9: anixops.network.v1.PortForward.listen:type_name -> anixops.network.v1.Endpoint
-	10, // 10: anixops.network.v1.PortForward.targets:type_name -> anixops.network.v1.ForwardTarget
-	11, // 11: anixops.network.v1.PortForward.policy:type_name -> anixops.network.v1.ForwardPolicy
-	12, // 12: anixops.network.v1.ForwardPolicy.health:type_name -> anixops.network.v1.ForwardHealth
-	13, // 13: anixops.network.v1.ForwardPolicy.circuit_breaker:type_name -> anixops.network.v1.ForwardBreaker
+	7,  // 1: anixops.network.v1.DeviceCapabilities.kinds:type_name -> anixops.network.v1.KindSupport
+	15, // 2: anixops.network.v1.NetworkPlan.lines:type_name -> anixops.network.v1.Line
+	21, // 3: anixops.network.v1.NetworkPlan.ingresses:type_name -> anixops.network.v1.Ingress
+	24, // 4: anixops.network.v1.NetworkPlan.egresses:type_name -> anixops.network.v1.Egress
+	25, // 5: anixops.network.v1.NetworkPlan.transports:type_name -> anixops.network.v1.Transport
+	27, // 6: anixops.network.v1.NetworkPlan.paths:type_name -> anixops.network.v1.Path
+	28, // 7: anixops.network.v1.NetworkPlan.forwarding:type_name -> anixops.network.v1.Forwarding
+	10, // 8: anixops.network.v1.NetworkPlan.port_forwards:type_name -> anixops.network.v1.PortForward
+	16, // 9: anixops.network.v1.PortForward.listen:type_name -> anixops.network.v1.Endpoint
+	11, // 10: anixops.network.v1.PortForward.targets:type_name -> anixops.network.v1.ForwardTarget
+	12, // 11: anixops.network.v1.PortForward.policy:type_name -> anixops.network.v1.ForwardPolicy
+	13, // 12: anixops.network.v1.ForwardPolicy.health:type_name -> anixops.network.v1.ForwardHealth
+	14, // 13: anixops.network.v1.ForwardPolicy.circuit_breaker:type_name -> anixops.network.v1.ForwardBreaker
 	1,  // 14: anixops.network.v1.Line.families:type_name -> anixops.network.v1.Family
-	16, // 15: anixops.network.v1.PortMap.public:type_name -> anixops.network.v1.PortRange
-	16, // 16: anixops.network.v1.PortMap.local:type_name -> anixops.network.v1.PortRange
+	17, // 15: anixops.network.v1.PortMap.public:type_name -> anixops.network.v1.PortRange
+	17, // 16: anixops.network.v1.PortMap.local:type_name -> anixops.network.v1.PortRange
 	3,  // 17: anixops.network.v1.Pairing.mode:type_name -> anixops.network.v1.PairingMode
-	18, // 18: anixops.network.v1.Pairing.rules:type_name -> anixops.network.v1.PairingRule
+	19, // 18: anixops.network.v1.Pairing.rules:type_name -> anixops.network.v1.PairingRule
 	2,  // 19: anixops.network.v1.Ingress.audience:type_name -> anixops.network.v1.Audience
 	1,  // 20: anixops.network.v1.Ingress.family:type_name -> anixops.network.v1.Family
-	15, // 21: anixops.network.v1.Ingress.listen:type_name -> anixops.network.v1.Endpoint
-	17, // 22: anixops.network.v1.Ingress.port_map:type_name -> anixops.network.v1.PortMap
-	19, // 23: anixops.network.v1.Ingress.pairing:type_name -> anixops.network.v1.Pairing
+	16, // 21: anixops.network.v1.Ingress.listen:type_name -> anixops.network.v1.Endpoint
+	18, // 22: anixops.network.v1.Ingress.port_map:type_name -> anixops.network.v1.PortMap
+	20, // 23: anixops.network.v1.Ingress.pairing:type_name -> anixops.network.v1.Pairing
 	2,  // 24: anixops.network.v1.Egress.audience:type_name -> anixops.network.v1.Audience
 	1,  // 25: anixops.network.v1.Egress.family:type_name -> anixops.network.v1.Family
-	21, // 26: anixops.network.v1.Egress.routing:type_name -> anixops.network.v1.Routing
-	22, // 27: anixops.network.v1.Egress.health:type_name -> anixops.network.v1.HealthCheck
+	22, // 26: anixops.network.v1.Egress.routing:type_name -> anixops.network.v1.Routing
+	23, // 27: anixops.network.v1.Egress.health:type_name -> anixops.network.v1.HealthCheck
 	4,  // 28: anixops.network.v1.Transport.role:type_name -> anixops.network.v1.TransportRole
-	25, // 29: anixops.network.v1.Transport.anx_line:type_name -> anixops.network.v1.AnxLineSettings
+	26, // 29: anixops.network.v1.Transport.anx_line:type_name -> anixops.network.v1.AnxLineSettings
 	0,  // 30: anixops.network.v1.ComponentStatus.component:type_name -> anixops.network.v1.Component
 	5,  // 31: anixops.network.v1.ComponentStatus.state:type_name -> anixops.network.v1.ComponentState
-	28, // 32: anixops.network.v1.NetworkStatus.components:type_name -> anixops.network.v1.ComponentStatus
-	29, // 33: anixops.network.v1.NetworkStatus.interfaces:type_name -> anixops.network.v1.InterfaceFact
-	30, // 34: anixops.network.v1.NetworkStatus.public_keys:type_name -> anixops.network.v1.PublicKey
-	32, // 35: anixops.network.v1.NetworkStatus.port_forwards:type_name -> anixops.network.v1.PortForwardStatus
+	29, // 32: anixops.network.v1.NetworkStatus.components:type_name -> anixops.network.v1.ComponentStatus
+	30, // 33: anixops.network.v1.NetworkStatus.interfaces:type_name -> anixops.network.v1.InterfaceFact
+	31, // 34: anixops.network.v1.NetworkStatus.public_keys:type_name -> anixops.network.v1.PublicKey
+	33, // 35: anixops.network.v1.NetworkStatus.port_forwards:type_name -> anixops.network.v1.PortForwardStatus
 	5,  // 36: anixops.network.v1.PortForwardStatus.state:type_name -> anixops.network.v1.ComponentState
-	37, // [37:37] is the sub-list for method output_type
-	37, // [37:37] is the sub-list for method input_type
-	37, // [37:37] is the sub-list for extension type_name
-	37, // [37:37] is the sub-list for extension extendee
-	0,  // [0:37] is the sub-list for field type_name
+	34, // 37: anixops.network.v1.PortForwardStatus.targets:type_name -> anixops.network.v1.ForwardTargetHealth
+	6,  // 38: anixops.network.v1.ForwardTargetHealth.state:type_name -> anixops.network.v1.TargetHealthState
+	39, // [39:39] is the sub-list for method output_type
+	39, // [39:39] is the sub-list for method input_type
+	39, // [39:39] is the sub-list for extension type_name
+	39, // [39:39] is the sub-list for extension extendee
+	0,  // [0:39] is the sub-list for field type_name
 }
 
 func init() { file_api_network_v1_network_proto_init() }
@@ -3120,8 +3302,8 @@ func file_api_network_v1_network_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_network_v1_network_proto_rawDesc), len(file_api_network_v1_network_proto_rawDesc)),
-			NumEnums:      6,
-			NumMessages:   27,
+			NumEnums:      7,
+			NumMessages:   28,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

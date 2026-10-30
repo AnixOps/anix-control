@@ -662,7 +662,7 @@ export function forwardApi(path, { method, query = {}, body, scenario }) {
       const answer = stats({ ...query, route_id: id })
       return data({ counters: [{ route_id: id, node_ref: item.route.hops[0].node_refs[0], up_bytes: '0', down_bytes: '0', active_conns: 1284, total_conns: '98213' }], series: answer.series, truncated: false })
     }
-    if (action === 'health') return data({ health: Object.values(HEALTH).flat().filter(entry => entry.route_id === id) })
+    if (action === 'health') return data({ health: Object.entries(HEALTH).flatMap(([ref, list]) => list.filter(entry => entry.route_id === id).map(entry => ({ ...entry, node_ref: ref }))) })
     if (action === 'latency') return data({ buckets: latencyBuckets(id), bucket_ms: '300000', truncated: false })
     if (action === 'diagnose') return data(DIAGNOSIS)
     if (action === 'dns') return data({ status: dnsStatus(id) })

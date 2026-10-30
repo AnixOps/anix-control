@@ -318,15 +318,21 @@ func (s *Service) Traffic(ctx context.Context, routeID string, since, until time
 }
 
 // RouteHealth answers the health of every upstream of a route's hops from
-// its nodes' latest reports (ForwardControl.GetRouteHealth). ErrNotFound
-// for an unknown route.
+// its nodes' latest reports (ForwardControl.GetRouteHealth), each with the
+// node that checked it; an ENGINE_NETWORK route's from its entry device's
+// latest network status (network_health.go). ErrNotFound for an unknown
+// route.
 func (s *Service) RouteHealth(ctx context.Context, routeID string) ([]*forwardv1.UpstreamHealth, error) {
-	if _, err := s.GetRoute(ctx, routeID); err != nil {
+	route, err := s.GetRoute(ctx, routeID)
+	if err != nil {
 		return nil, err
 	}
 	db, err := s.db(ctx)
 	if err != nil {
 		return nil, err
+	}
+	if _, ok := networkForward(route); ok {
+		return networkRouteHealth(db, route)
 	}
 	var refs []string
 	if err := db.Model(&model.KernelForwardAllocation{}).Distinct("node_ref").
@@ -348,6 +354,7 @@ func (s *Service) RouteHealth(ctx context.Context, routeID string) ([]*forwardv1
 		}
 		for _, health := range report.GetHealth() {
 			if health.GetRouteId() == routeID {
+				health.NodeRef = row.NodeRef
 				out = append(out, health)
 			}
 		}

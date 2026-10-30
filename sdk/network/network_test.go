@@ -338,6 +338,23 @@ func TestPortForwardStatus(t *testing.T) {
 	status.PortForwards[0].Id = "rt-1"
 	status.PortForwards[0].State = 99
 	require.ErrorIs(t, CheckStatus(status, "proxy-1"), ErrInvalid)
+	status.PortForwards[0].State = networkv1.ComponentState_COMPONENT_STATE_APPLIED
+	status.PortForwards[0].Targets = []*networkv1.ForwardTargetHealth{
+		{Host: "203.0.113.9", Port: 443, State: networkv1.TargetHealthState_TARGET_HEALTH_STATE_HEALTHY, RttUs: 1200, CheckedAtUnixMs: 1},
+	}
+	require.NoError(t, CheckStatus(status, "proxy-1"))
+	for _, broken := range []func(*networkv1.ForwardTargetHealth){
+		func(target *networkv1.ForwardTargetHealth) { target.Port = 0 },
+		func(target *networkv1.ForwardTargetHealth) { target.Host = "" },
+		func(target *networkv1.ForwardTargetHealth) { target.State = 99 },
+		func(target *networkv1.ForwardTargetHealth) { target.CheckedAtUnixMs = -1 },
+	} {
+		target := proto.Clone(status.PortForwards[0].Targets[0]).(*networkv1.ForwardTargetHealth)
+		broken(target)
+		bad := proto.Clone(status).(*networkv1.NetworkStatus)
+		bad.PortForwards[0].Targets = []*networkv1.ForwardTargetHealth{target}
+		require.ErrorIs(t, CheckStatus(bad, "proxy-1"), ErrInvalid)
+	}
 }
 
 func TestUnsupportedRoutingRange(t *testing.T) {

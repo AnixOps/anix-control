@@ -140,7 +140,7 @@ All paths are under `/api/v4/forward`.
 | `POST /routes/{id}/pause` | pause | `{route, enforced}`; the route keeps its ports, marks, counters and quota, and the drivers drop its traffic; a paused route is answered unchanged |
 | `POST /routes/{id}/resume` | resume | as pause |
 | `GET /routes/{id}/stats` | traffic of one route | query `since`, `until`; `{counters, series, truncated}`: the ledger's totals per hop and node over all time (`Counters`), and the hourly buckets of the window (`TrafficBucket`) |
-| `GET /routes/{id}/health` | upstream health | `{health: [UpstreamHealth]}` from the latest reports of the route's nodes |
+| `GET /routes/{id}/health` | upstream health | `{health: [UpstreamHealth]}` from the latest reports of the route's nodes, each with the `node_ref` that checked it. An ANX (`ENGINE_NETWORK`) route's comes from its entry device's network status: the entry's checks dial each target through the whole route, so they are hop 0's upstreams |
 | `GET /routes/{id}/latency` | latency history | query `since`, `until` (the last 24 hours by default, at most 7 days); `{buckets, bucket_ms, truncated}`: five-minute `LatencyBucket`s per hop, node and upstream with `samples`, `failures` and `rtt_min_us`, `rtt_avg_us`, `rtt_max_us` over the successful checks. Kept for 7 days |
 | `GET /routes/{id}/dns` | entry HA status | `{status}`: the `RouteDnsStatus`. See "Entry HA through DNS" below |
 | `POST /routes/{id}/diagnose` | diagnose the route | optional body `{"timeout_ms": n}` (15000, at most 25000); the `DiagnoseRouteResponse`: `ok`, `steps`, `nodes`, `route_id`, `started_at_unix_ms`, `finished_at_unix_ms`, `cached`. See "Route diagnosis" below |
@@ -202,6 +202,18 @@ The answer:
 - **Public targets only.** Control never dials a private address. A last
   hop is asked to dial a private target only on an administrator's route
   with `TARGET_POLICY_ALLOW_PRIVATE`.
+- **ANX routes.** An `ENGINE_NETWORK` route is diagnosed on the network
+  model. `CONFIG` per device: it negotiated network.v1
+  (`not_on_network_model`), runs the plan generation Control wants
+  (`never_reported`, `not_applied`), and the route's components on it are
+  up: the entry's port forward (`hop_error`), the `anx_line` transports and
+  the exit's egress (`component_down`, or `component_degraded`, which is
+  `INCONCLUSIVE`). `HEALTH` per target from the entry's checks, which prove
+  delivery end to end (`no_health` when the entry reports none: a UDP-only
+  route, checks disabled, or an Agent or anixcore without target health).
+  No node checks run (`nodes[].node_vantage` is false with a note); Control
+  dials the entry's listener (the listen address, else the device's first
+  public address), and the targets only when the entry reports no health.
 - **Rate.** A diagnosis of the same route from the last 10 seconds, or one
   still running, is answered again with `cached` true. At most 4
   diagnoses run at once per Control process; another is
@@ -282,7 +294,12 @@ provider credentials with the least permissions:
   - `nodes[].reason`: `healthy`, `converging`, `not_in_inventory`,
     `no_address`, `never_reported`, `report_stale`, `offline`,
     `hop_error`, `upstreams_down`, `vantage_unreachable` (every address
-    of the node is down from the vantage nodes).
+    of the node is down from the vantage nodes), `not_on_network_model`.
+  - An ANX route's entry device is judged on the network model: its
+    addresses are its node's public address and its interfaces' public
+    addresses; it is healthy when its network status is at most 150 s old,
+    its Agent is online, the route's port forward is applied and not every
+    target is down by the entry's checks.
   - With a `vantage` selector, `nodes[].unreachable` lists the addresses
     the vantage nodes find down and `nodes[].vantage_nodes` how many
     vantage nodes judged the node's addresses.

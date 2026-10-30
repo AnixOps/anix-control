@@ -3284,8 +3284,11 @@ type UpstreamHealth struct {
 	// rtt_us is the last connect round trip; 0 when it failed.
 	RttUs           uint32 `protobuf:"varint,8,opt,name=rtt_us,json=rttUs,proto3" json:"rtt_us,omitempty"`
 	CheckedAtUnixMs int64  `protobuf:"varint,9,opt,name=checked_at_unix_ms,json=checkedAtUnixMs,proto3" json:"checked_at_unix_ms,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// node_ref is the node that checked; set in GetRouteHealth answers only
+	// (a report's are its node's).
+	NodeRef       string `protobuf:"bytes,10,opt,name=node_ref,json=nodeRef,proto3" json:"node_ref,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *UpstreamHealth) Reset() {
@@ -3379,6 +3382,13 @@ func (x *UpstreamHealth) GetCheckedAtUnixMs() int64 {
 		return x.CheckedAtUnixMs
 	}
 	return 0
+}
+
+func (x *UpstreamHealth) GetNodeRef() string {
+	if x != nil {
+		return x.NodeRef
+	}
+	return ""
 }
 
 type ProbeRequest struct {
@@ -8222,7 +8232,7 @@ const file_api_forward_v1_forward_proto_rawDesc = "" +
 	"\x05state\x18\x06 \x01(\x0e2\x1f.anixops.forward.v1.HealthStateR\x05state\x121\n" +
 	"\x14consecutive_failures\x18\a \x01(\rR\x13consecutiveFailures\x12\x15\n" +
 	"\x06rtt_us\x18\b \x01(\rR\x05rttUs\x12+\n" +
-	"\x12checked_at_unix_ms\x18\t \x01(\x03R\x0fcheckedAtUnixMs\"\xe0\x02\n" +
+	"\x12checked_at_unix_ms\x18\t \x01(\x03R\x0fcheckedAtUnixMs\"\xfb\x02\n" +
 	"\x0eUpstreamHealth\x12\x19\n" +
 	"\broute_id\x18\x01 \x01(\tR\arouteId\x12\x1b\n" +
 	"\thop_index\x18\x02 \x01(\rR\bhopIndex\x12\x18\n" +
@@ -8232,7 +8242,9 @@ const file_api_forward_v1_forward_proto_rawDesc = "" +
 	"\x14consecutive_failures\x18\x06 \x01(\rR\x13consecutiveFailures\x12:\n" +
 	"\x1acircuit_open_until_unix_ms\x18\a \x01(\x03R\x16circuitOpenUntilUnixMs\x12\x15\n" +
 	"\x06rtt_us\x18\b \x01(\rR\x05rttUs\x12+\n" +
-	"\x12checked_at_unix_ms\x18\t \x01(\x03R\x0fcheckedAtUnixMs\"\xb3\x01\n" +
+	"\x12checked_at_unix_ms\x18\t \x01(\x03R\x0fcheckedAtUnixMs\x12\x19\n" +
+	"\bnode_ref\x18\n" +
+	" \x01(\tR\anodeRef\"\xb3\x01\n" +
 	"\fProbeRequest\x12\x19\n" +
 	"\bprobe_id\x18\x01 \x01(\tR\aprobeId\x12\x19\n" +
 	"\broute_id\x18\x02 \x01(\tR\arouteId\x12\x1b\n" +
