@@ -101,7 +101,7 @@ func buildBinaries(t *testing.T, dir string) binaries {
 }
 
 // agentE2EVersion is the version the suite's Agent build reports.
-const agentE2EVersion = "5.0.0-rc.17-e2e"
+const agentE2EVersion = "5.0.0-rc.18-e2e"
 
 func gitHead(dir string) string {
 	output, err := exec.Command("git", "-C", dir, "rev-parse", "HEAD").Output()
