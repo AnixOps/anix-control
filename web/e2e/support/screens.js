@@ -88,7 +88,6 @@ export const SCREENS = {
   'admin-forward-editor-preview': { fixture: forwardV4, scenario: 'editor-preview' },
   'admin-forward-route': { fixture: forwardV4, scenario: 'route' },
   'admin-forward-diagnose': { fixture: forwardV4, scenario: 'diagnose' },
-  'admin-forward-nodes': { fixture: forwardV4, scenario: 'nodes' },
   'admin-forward-node': { fixture: forwardV4, scenario: 'node' },
   // Entry HA through DNS (L2).
   'admin-forward-dns': { fixture: forwardV4, scenario: 'dns' },

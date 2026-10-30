@@ -55,7 +55,6 @@ const SHOTS = [
   ['admin-forward-editor', [DESKTOP, PHONE]],
   ['admin-forward-editor-preview', [DESKTOP]],
   ['admin-forward-route', [DESKTOP]],
-  ['admin-forward-nodes', [DESKTOP, PHONE]],
   ['admin-forward-node', [DESKTOP]],
   // Entry HA through DNS (L2).
   ['admin-forward-dns', [DESKTOP, PHONE]],

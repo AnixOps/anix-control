@@ -45,7 +45,6 @@ export default {
     lastHeartbeat: 'Last heartbeat',
     lastSeen: 'Last seen',
     nodeGroup: 'Node group',
-    role: 'Role',
     connection: 'Connection',
     certificate: 'Certificate',
     serviceStatus: 'Services',
@@ -556,15 +555,7 @@ export default {
   tabs: {
     label: 'Node sections',
     nodes: 'Nodes',
-    groups: 'Node groups',
-    hosts: 'Forward hosts'
-  },
-  // 角色 of a regular node (docs/design/node-unification).
-  roles: {
-    exit: 'Exit',
-    relay: 'Relay',
-    hops: '{n} hops',
-    unconvertedBanner: '{count} old forward nodes are not regular nodes yet: once converted they are listed here and can carry ANX relays.'
+    groups: 'Node groups'
   },
   // Join a node: one entry for a new machine (docs/design/node-onboarding).
   join: {
@@ -642,16 +633,12 @@ export default {
     quick: {
       name: 'Node group name',
       namePlaceholder: 'Hong Kong',
-      kind: 'Node type',
-      kindHelp: {
-        proxy: 'Regular nodes serve the protocols in subscriptions.',
-        forward: 'Relays are regular nodes without protocols: the entry or relay machines of forward routes (ANX relays).'
-      },
       preset: 'Protocols',
       presets: {
         'vless-reality': 'VLESS Reality (recommended)',
         'shadowsocks-2022': 'Shadowsocks 2022',
-        'vless-reality-shadowsocks': 'VLESS Reality + Shadowsocks 2022'
+        'vless-reality-shadowsocks': 'VLESS Reality + Shadowsocks 2022',
+        none: 'No protocols (runs only the ANX network model)'
       },
       subscriptionGroups: 'Subscription groups',
       create: 'Create node group',
@@ -677,10 +664,6 @@ export default {
   groups: {
     summary: 'A node group sets the defaults, the protocols and the join token of its nodes.',
     add: 'New node group',
-    kinds: {
-      proxy: 'Regular',
-      forward: 'Relay'
-    },
     table: {
       label: 'Node groups',
       name: 'Name',
@@ -724,7 +707,6 @@ export default {
     noSubscriptionGroups: 'There are no subscription groups yet. Create one under Subscription groups so nodes can appear in subscriptions.',
     fields: {
       name: 'Name',
-      kind: 'Type',
       rate: 'Traffic rate',
       sort: 'Sort',
       tags: 'Tags',

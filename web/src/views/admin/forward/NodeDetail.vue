@@ -10,7 +10,6 @@
         </template>
         <template #meta>
           <UiBadge :status="nodeState(node)" />
-          <UiBadge :tone="isProxy ? 'info' : 'neutral'" :dot="false" :label="isProxy ? t('forwardV4.nodes.proxy') : t('forwardV4.nodes.forward')" />
           <span class="fwd-mono node-ref">{{ [node.node_ref, node.host].filter(Boolean).join(' · ') }}</span>
         </template>
         <template #actions>
@@ -201,7 +200,7 @@ const props = defineProps({
 
 // Back to the node page: a regular node's own page, a forward host's tab
 // (the forwarding area has no node list: docs/design/node-unification).
-const HOSTS = { path: '/admin/nodes', query: { tab: 'hosts' } }
+const HOSTS = { path: '/admin/nodes' }
 const backTo = computed(() => {
   const match = /^proxy-(\d+)$/.exec(props.nodeRef)
   return match ? `/admin/nodes/${match[1]}` : HOSTS

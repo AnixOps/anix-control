@@ -292,8 +292,6 @@ export default {
       nodeEnabled: '已启用 {name}',
       nodeDisabled: '已禁用 {name}',
       nodeDeleted: '已删除节点 {name}',
-      nodeConverted: '{name} 已转为常规节点 {to}，请在机器上重装 Agent',
-      nodeCreated: '已添加节点 {name}',
       settingsSaved: '转发设置已保存，所有路由已重新规划。',
       settingsSavedWarnings: '转发设置已保存；{n} 条路由暂时无法规划，节点保持当前代。'
     },
@@ -583,63 +581,20 @@ export default {
       }
     },
     nodes: {
-      title: '转发主机',
-      description: '不是常规节点的转发机器：没有 Agent、由 Ansible 下发的主机，以及还没转为常规节点的旧转发节点。运行 Agent 的中转和落地都在「节点」里。',
-      add: '添加 Ansible 主机',
-      loadFailed: '无法加载节点',
-      emptyTitle: '没有转发主机',
-      emptyDescription: '所有运行 Agent 的机器都已是常规节点。只有没有 Agent 的 Ansible 主机才在这里添加。',
-      unconverted: '待转为常规节点',
-      unconvertedHint: '旧的 Agent 转发节点：转为常规节点后它就和其他节点一样出现在「节点」里，并能承载 ANX 中转。',
-      kindFilter: '类型',
-      flagFilter: '需要处理',
-      forward: '转发节点',
-      proxy: '代理节点',
-      lagging: '同步落后',
-      withErrors: '有跳错误',
       agent: 'Agent · mTLS',
       ansible: 'Ansible（无 Agent）',
-      agentHelp: '节点运行 AnixOps Agent，通过 mTLS 连接 Control。',
-      ansibleHelp: '没有 Agent 的主机，由 Control 通过 Ansible 下发。',
-      columns: {
-        node: '节点',
-        status: '状态',
-        kind: '通道',
-        agent: 'Agent',
-        engines: '引擎',
-        hops: '跳数',
-        generation: '代（已应用 / 期望）',
-        errors: '跳错误'
-      },
       lag: '落后 {n} 代',
       converged: '已收敛',
       neverReported: '未上报',
       reportedAt: '{when}上报',
       hopErrors: '{n} 个跳错误',
-      note: '代 = 节点已应用的状态代 / Control 期望的代。节点每次上报时更新；本页每 15 秒刷新一次。',
-      settings: '转发设置',
-      install: '安装或重装 Agent',
       enable: '启用',
       disable: '禁用…',
-      disableInUse: '禁用（被路由使用）',
       delete: '删除节点…',
-      deleteInUse: '删除（被路由使用）',
       disableTitle: '禁用 {name}？',
       disableMessage: '禁用后节点离开转发清单，不再收到期望状态。',
       deleteTitle: '删除节点 {name}？',
-      deleteMessage: '同时移除它的转发清单条目并吊销 Agent 证书。此操作无法撤销。',
-      createTitle: '添加 Ansible 主机',
-      createDescription: '这里只添加没有 Agent、由 Ansible 下发的主机。运行 Agent 的机器请到节点页添加常规节点或加入节点组：不带协议的常规节点就是中转。',
-      convert: '转为常规节点…',
-      convertSuperOnly: '转为常规节点（仅超级管理员）',
-      convertTitle: '把 {name} 转为常规节点？',
-      convertMessage: '将新建常规节点 {to}（不带协议，不进订阅），{n} 条路由的跳和端口一并迁移，然后删除这个转发节点并吊销它的证书。之后要用新节点的安装命令在这台机器上重装 Agent，重装完成前它的跳会中断。',
-      convertRun: '转换',
-      name: '名称',
-      host: '主机地址',
-      transport: '通道',
-      region: '地区（可选）',
-      createRun: '添加'
+      deleteMessage: '同时移除它的转发清单条目并吊销 Agent 证书。此操作无法撤销。'
     },
     nodeDetail: {
       loadFailed: '无法加载节点',
@@ -728,15 +683,6 @@ export default {
         l4_mismatch: '路由转发的 TCP/UDP 与目标协议不符（例如 SS 需要 TCP），订阅里暂时没有它。修改路由的协议后自动出现。',
         no_entry: '入口节点还没有地址或端口，订阅里暂时没有它。'
       }
-    },
-    join: {
-      action: '用作转发节点…',
-      settings: '转发设置',
-      title: '把 {name} 加入转发清单？',
-      message: '加入后，这个节点可以在路由的跳里当入口、中转或出口（默认端口范围 30000–39999）。节点本身仍是代理节点，订阅也不会变：要让用户经转发机连接，在落地节点的「入口」里填转发机地址和端口。',
-      noAgent: '注意：这个节点没有 Agent（旧版节点），加入后也无法在它上面转发。先在节点页用安装命令装上 Agent。',
-      confirm: '加入',
-      done: '{name} 已加入转发清单'
     }
   }
 }

@@ -9,32 +9,23 @@
       :error="nameError"
       data-testid="quick-group-name"
     />
-    <UiSegmentedControl
-      v-model="form.kind"
-      :aria-label="t('admin.nodes.join.quick.kind')"
-      :options="kindOptions"
-      data-testid="quick-group-kind"
+    <UiSelect
+      v-model="form.preset"
+      size="md"
+      :label="t('admin.nodes.join.quick.preset')"
+      :options="presetOptions"
+      data-testid="quick-group-preset"
     />
-    <p class="quick-create__hint">{{ t(`admin.nodes.join.quick.kindHelp.${form.kind}`) }}</p>
-    <template v-if="form.kind === 'proxy'">
-      <UiSelect
-        v-model="form.preset"
-        size="md"
-        :label="t('admin.nodes.join.quick.preset')"
-        :options="presetOptions"
-        data-testid="quick-group-preset"
+    <fieldset v-if="form.preset !== 'none' && subscriptionGroups.length" class="quick-create__groups">
+      <legend>{{ t('admin.nodes.join.quick.subscriptionGroups') }}</legend>
+      <UiCheckbox
+        v-for="group in subscriptionGroups"
+        :key="group.id"
+        :model-value="form.subscriptionGroupIds.includes(group.id)"
+        :label="group.name"
+        @update:model-value="checked => toggle(group.id, checked)"
       />
-      <fieldset v-if="subscriptionGroups.length" class="quick-create__groups">
-        <legend>{{ t('admin.nodes.join.quick.subscriptionGroups') }}</legend>
-        <UiCheckbox
-          v-for="group in subscriptionGroups"
-          :key="group.id"
-          :model-value="form.subscriptionGroupIds.includes(group.id)"
-          :label="group.name"
-          @update:model-value="checked => toggle(group.id, checked)"
-        />
-      </fieldset>
-    </template>
+    </fieldset>
     <p v-if="error" class="form-error" role="alert" data-testid="quick-group-error">{{ error }}</p>
     <div class="quick-create__actions">
       <UiButton :disabled="saving" @click="emit('cancel')">{{ t('common.actions.cancel') }}</UiButton>
@@ -44,18 +35,16 @@
 </template>
 
 <script setup>
-// The minimum of a node group, inline in the join dialog: a name, proxy or
-// forward and, for a proxy group, one of the protocol presets. The rest is
-// the groups tab's edit sheet.
+// The minimum of a node group, inline in the join dialog: a name and one of
+// the protocol presets (or none). The rest is the groups tab's edit sheet.
 import { computed, onMounted, reactive, ref } from 'vue'
 import { getSubscriptionGroups } from '@/api/admin'
 import UiButton from '@/ui/UiButton.vue'
 import UiCheckbox from '@/ui/UiCheckbox.vue'
-import UiSegmentedControl from '@/ui/UiSegmentedControl.vue'
 import UiSelect from '@/ui/UiSelect.vue'
 import UiTextField from '@/ui/UiTextField.vue'
 import { useAppI18n } from '@/composables/useAppI18n'
-import { DEFAULT_PRESET, NODE_GROUP_KINDS, PRESET_KEYS, buildQuickGroupInput, pickDefaultSubscriptionGroup, readKernelError } from './nodeGroupData'
+import { DEFAULT_PRESET, PRESET_KEYS, buildQuickGroupInput, pickDefaultSubscriptionGroup, readKernelError } from './nodeGroupData'
 import { readNodeList } from './nodeData'
 
 const props = defineProps({
@@ -65,13 +54,12 @@ const props = defineProps({
 const emit = defineEmits(['cancel'])
 const { t } = useAppI18n()
 
-const form = reactive({ name: '', kind: 'proxy', preset: DEFAULT_PRESET, subscriptionGroupIds: [] })
+const form = reactive({ name: '', preset: DEFAULT_PRESET, subscriptionGroupIds: [] })
 const subscriptionGroups = ref([])
 const nameError = ref('')
 const error = ref('')
 const saving = ref(false)
 
-const kindOptions = computed(() => NODE_GROUP_KINDS.map(value => ({ value, label: t(`admin.nodes.groups.kinds.${value}`) })))
 const presetOptions = computed(() => PRESET_KEYS.map(value => ({ value, label: t(`admin.nodes.join.quick.presets.${value}`) })))
 
 function toggle(id, checked) {
@@ -120,12 +108,6 @@ async function submit() {
   padding: var(--space-4);
   border-radius: var(--radius-md);
   background: var(--fill-1);
-}
-
-.quick-create__hint {
-  margin: 0;
-  color: var(--label-2);
-  font-size: var(--type-caption-size);
 }
 
 .quick-create__groups {

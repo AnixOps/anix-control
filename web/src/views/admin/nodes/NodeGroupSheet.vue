@@ -22,14 +22,6 @@
             data-testid="group-name"
             @blur="validateName"
           />
-          <UiSegmentedControl
-            v-if="!group"
-            v-model="form.kind"
-            class="form-grid__full"
-            :aria-label="t('admin.nodes.groupForm.fields.kind')"
-            :options="kindOptions"
-            data-testid="group-kind"
-          />
           <UiNumberField
             v-model="form.rate"
             size="md"
@@ -97,30 +89,28 @@
         />
       </section>
 
-      <template v-if="form.kind === 'proxy'">
-        <section class="dialog-section">
-          <h3 class="dialog-section__title">{{ t('admin.nodes.groupForm.fields.subscriptionGroups') }}</h3>
-          <p class="group-form__text">{{ t('admin.nodes.groupForm.help.subscriptionGroups') }}</p>
-          <p v-if="subscriptionGroups.length === 0" class="group-form__text" data-testid="group-no-subscription-groups">
-            {{ t('admin.nodes.groupForm.noSubscriptionGroups') }}
-          </p>
-          <div v-else class="group-form__checks" role="group" :aria-label="t('admin.nodes.groupForm.fields.subscriptionGroups')">
-            <UiCheckbox
-              v-for="item in subscriptionGroups"
-              :key="item.id"
-              :model-value="form.subscriptionGroupIds.includes(item.id)"
-              :label="item.name"
-              @update:model-value="checked => toggleSubscriptionGroup(item.id, checked)"
-            />
-          </div>
-        </section>
+      <section class="dialog-section">
+        <h3 class="dialog-section__title">{{ t('admin.nodes.groupForm.fields.subscriptionGroups') }}</h3>
+        <p class="group-form__text">{{ t('admin.nodes.groupForm.help.subscriptionGroups') }}</p>
+        <p v-if="subscriptionGroups.length === 0" class="group-form__text" data-testid="group-no-subscription-groups">
+          {{ t('admin.nodes.groupForm.noSubscriptionGroups') }}
+        </p>
+        <div v-else class="group-form__checks" role="group" :aria-label="t('admin.nodes.groupForm.fields.subscriptionGroups')">
+          <UiCheckbox
+            v-for="item in subscriptionGroups"
+            :key="item.id"
+            :model-value="form.subscriptionGroupIds.includes(item.id)"
+            :label="item.name"
+            @update:model-value="checked => toggleSubscriptionGroup(item.id, checked)"
+          />
+        </div>
+      </section>
 
-        <section class="dialog-section">
-          <h3 class="dialog-section__title">{{ t('admin.nodes.groupForm.template.title') }}</h3>
-          <p class="group-form__text">{{ t('admin.nodes.groupForm.template.description') }}</p>
-          <NodeGroupTemplateEditor v-model="form.protocols" :validate="validated" />
-        </section>
-      </template>
+      <section class="dialog-section">
+        <h3 class="dialog-section__title">{{ t('admin.nodes.groupForm.template.title') }}</h3>
+        <p class="group-form__text">{{ t('admin.nodes.groupForm.template.description') }}</p>
+        <NodeGroupTemplateEditor v-model="form.protocols" :validate="validated" />
+      </section>
 
       <p v-if="formError" class="form-error" role="alert" data-testid="group-form-error">{{ formError }}</p>
     </form>
@@ -138,7 +128,7 @@
 // Create or edit a node group (POST /kernel/node-groups, PUT
 // /kernel/node-groups/:id): the defaults every new node copies, how machines
 // join (token validity, node cap, approval), the subscription groups its
-// protocols join and, for a proxy group, the protocol template. A changed
+// protocols join and the protocol template (none: the node only runs ANX). A changed
 // template applies to machines that join afterwards; nodes already there keep
 // their protocols. The API's validation errors (they name the field, such as
 // "protocol_template[0]: ...") show in the sheet.
@@ -148,7 +138,6 @@ import { createKernelNodeGroup, updateKernelNodeGroup } from '@/api/kernel'
 import UiButton from '@/ui/UiButton.vue'
 import UiCheckbox from '@/ui/UiCheckbox.vue'
 import UiNumberField from '@/ui/UiNumberField.vue'
-import UiSegmentedControl from '@/ui/UiSegmentedControl.vue'
 import UiSelect from '@/ui/UiSelect.vue'
 import UiSheet from '@/ui/UiSheet.vue'
 import UiSwitch from '@/ui/UiSwitch.vue'
@@ -158,7 +147,7 @@ import { useAppI18n } from '@/composables/useAppI18n'
 import NodeGroupTemplateEditor from './NodeGroupTemplateEditor.vue'
 import { readNodeList } from './nodeData'
 import {
-  NODE_GROUP_KINDS, TOKEN_EXPIRY_DAYS, buildGroupInput, groupFormFrom, hasProblems, pickDefaultSubscriptionGroup,
+  TOKEN_EXPIRY_DAYS, buildGroupInput, groupFormFrom, hasProblems, pickDefaultSubscriptionGroup,
   protocolProblems, readKernelError
 } from './nodeGroupData'
 
@@ -178,7 +167,6 @@ const saving = ref(false)
 const validated = ref(false)
 const subscriptionGroups = ref([])
 
-const kindOptions = computed(() => NODE_GROUP_KINDS.map(value => ({ value, label: t(`admin.nodes.groups.kinds.${value}`) })))
 const expiryOptions = computed(() => {
   const options = [{ value: 'never', label: t('admin.nodes.groupForm.expiry.never') }]
   for (const value of Object.keys(TOKEN_EXPIRY_DAYS)) options.push({ value, label: t(`admin.nodes.groupForm.expiry.${value}`) })
@@ -237,7 +225,7 @@ async function save() {
   validated.value = true
   const nameOk = validateName()
   errors.expiry = form.expiry === 'expired' ? t('admin.nodes.groupForm.expiry.expiredError') : ''
-  const protocolsOk = form.kind !== 'proxy' || form.protocols.every(protocol => !hasProblems(protocolProblems(protocol)))
+  const protocolsOk = form.protocols.every(protocol => !hasProblems(protocolProblems(protocol)))
   if (!nameOk || errors.expiry) return
   if (!protocolsOk) {
     formError.value = t('admin.nodes.groupForm.template.fixProblems')

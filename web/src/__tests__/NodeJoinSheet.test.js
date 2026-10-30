@@ -38,7 +38,7 @@ const READY = {
 }
 
 const group = (extra = {}) => ({
-  id: 1, name: '默认', kind: 'proxy', nodes: { live: 0, pending: 0 }, require_approval: false,
+  id: 1, name: '默认', nodes: { live: 0, pending: 0 }, require_approval: false,
   token_expires_at: null, token_expired: false, token_reset_at: '2026-10-12T00:00:00Z', ...extra
 })
 
@@ -58,7 +58,7 @@ const command = (token = 'anixjoin_AAAA', extra = {}) => ({
 })
 
 const joined = (extra = {}) => ({
-  id: 12, node: 'proxy-12', kind: 'proxy', name: 'hk-01', host: '203.0.113.5', approval: 'approved',
+  id: 12, node: 'proxy-12', name: 'hk-01', host: '203.0.113.5', approval: 'approved',
   online: false, last_seen: null, agent_version: 'v5.0.0', created_at: '2026-10-12T00:00:00Z', ...extra
 })
 
@@ -118,7 +118,7 @@ describe('NodeJoinSheet', () => {
   })
 
   it('does not create a group when the panel already has one, and opens the group asked for', async () => {
-    kernel.listKernelNodeGroups.mockResolvedValue({ groups: [group(), group({ id: 2, name: 'edge', kind: 'forward' })] })
+    kernel.listKernelNodeGroups.mockResolvedValue({ groups: [group(), group({ id: 2, name: 'edge' })] })
     kernel.getKernelNodeGroupCommand.mockImplementation(async id => command(`anixjoin_${id}`))
     mountSheet({ groupId: 2 })
 
@@ -327,7 +327,7 @@ describe('NodeJoinSheet', () => {
 
     await waitFor(() => expect(kernel.createKernelNodeGroup).toHaveBeenCalledTimes(1))
     const body = kernel.createKernelNodeGroup.mock.calls[0][0]
-    expect(body).toMatchObject({ name: 'HK', kind: 'proxy', subscription_group_ids: [9] })
+    expect(body).toMatchObject({ name: 'HK', subscription_group_ids: [9] })
     expect(body.protocol_template).toHaveLength(1)
     expect(body.protocol_template[0]).toMatchObject({ type: 'vless', tls: 'reality', transport: 'tcp', port_range: [20000, 40000] })
     expect(body.protocol_template[0].reality.server_name).toBeTruthy()
