@@ -4,13 +4,6 @@
 
 ## 5.0.0-rc.17 - 2026-10-30
 
-### Changed
-
-- Pins Agent v5.0.0-rc.17: port forwards report their targets' health,
-  and an Agent with anx-node installed starts again (the anixcore runtime
-  directory moved below the unit's `RuntimeDirectory`; the rc.16 upgrade
-  was reverted for it).
-
 ### Added
 
 - Manual Agent upgrade: **升级节点** has a 手动选择 mode that upgrades only
@@ -37,6 +30,11 @@
   facts. The route page reads its health table from the route's health.
 
 ### Changed
+
+- Pins Agent v5.0.0-rc.17: port forwards report their targets' health,
+  and an Agent with anx-node installed starts again (the anixcore runtime
+  directory moved below the unit's `RuntimeDirectory`; the rc.16 upgrade
+  was reverted for it).
 
 - ANX routes no longer need a hand-written network model: the route editor
   lists every node whose Agent is connected, and a hop's transport and the
