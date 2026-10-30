@@ -367,9 +367,9 @@ do not cite the archived flux documents (`docs/archive/`) as requirements.
   handles and its sysctl drop-in; the gost driver the `anixops-gost` unit
   and its files. A foreign object is never changed (`ErrNotOwned`,
   `ErrConflict`). The Agent runs as a dedicated user with ambient
-  `CAP_NET_ADMIN` and `CAP_NET_BIND_SERVICE` in the systemd sandbox of
-  forward-sdk.md section 14; gost runs as its own user with
-  `CAP_NET_BIND_SERVICE` only; root is only for the installer and the
+  `CAP_NET_ADMIN`, `CAP_NET_BIND_SERVICE` and `CAP_NET_RAW` (ANX-Line's
+  fake-TCP carrier) in the systemd sandbox of forward-sdk.md section 14;
+  root is only for the installer and the
   signed-artifact updater unit. Uninstall and the v4.2 cleanup remove
   exactly what we installed plus the named legacy tables.
 - **Link certificates (H28).** Node-to-node encryption uses per-node link
