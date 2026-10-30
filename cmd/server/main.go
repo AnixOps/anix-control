@@ -24,6 +24,7 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/cache"
 	"github.com/AnixOps/anix-control/v5/internal/config"
 	"github.com/AnixOps/anix-control/v5/internal/database"
+	"github.com/AnixOps/anix-control/v5/internal/features"
 	grpcserver "github.com/AnixOps/anix-control/v5/internal/grpc"
 	"github.com/AnixOps/anix-control/v5/internal/handler"
 	"github.com/AnixOps/anix-control/v5/internal/health"
@@ -183,6 +184,7 @@ func formatDisplayVersion(baseVersion, code string) string {
 func syncBuildInfo() {
 	handler.BuildVersion = formatDisplayVersion(version, buildCode)
 	handler.ReleaseVersion = version
+	features.SetVersion(version)
 	handler.AgentRelease = agentRelease
 	handler.BuildTime = buildTime
 	handler.BuildCode = buildCode

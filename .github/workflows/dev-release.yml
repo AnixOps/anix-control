@@ -1,0 +1,549 @@
+name: Dev Release
+
+# Dev builds (docs/RELEASING.md, "Dev builds"): an internal test channel that
+# does not wait for a release. Every green main of this repository (and of
+# anix-agent, picked up by the schedule) gives one pre-release that holds
+# Control AND the Agent at the same version, the release before plus
+# ".dev.<run>" (v5.0.0-rc.15.dev.42): newer than that release, older than the
+# next, so a test node can go on to the next release. Both are signed with
+# the official key like a release. Features registered with the dev stage
+# (internal/features) run in these builds only.
+#
+# The Agent is built here from the public anix-agent repository and
+# published in this repository's pre-release: Control's installer fetches a
+# dev Agent from here into agent_install.artifact_dir, and nodes upgrade from
+# Control. Nothing here starts ci.yml (a tag pushed with the workflow token
+# starts no workflow) and the tag gate does not take dev tags.
+#
+# deploy (manual) installs the build on the production Control through
+# JumpServer, after a database dump; Agents move with a normal upgrade
+# campaign on the nodes chosen for testing.
+on:
+  workflow_run:
+    workflows: [CI/CD Pipeline]
+    types: [completed]
+    branches: [main]
+  schedule:
+    # anix-agent merges start nothing here: pick them up every three hours.
+    - cron: '41 */3 * * *'
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: 'Install the dev build on the production Control (database dump first)'
+        required: false
+        type: boolean
+        default: false
+      force:
+        description: 'Build even when neither repository moved since the last dev build'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dev-release
+  cancel-in-progress: false
+
+env:
+  GO_VERSION: '1.26.10'
+  NODE_VERSION: '22'
+  AGENT_REPOSITORY: AnixOps/anix-agent
+  # Dev builds kept; older ones are deleted with their tags.
+  KEEP_DEV_RELEASES: '15'
+
+jobs:
+  plan:
+    name: Plan the dev build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+    if: >-
+      ${{ (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+      || (github.event_name != 'workflow_run' && github.ref == 'refs/heads/main') }}
+    outputs:
+      build: ${{ steps.plan.outputs.build }}
+      tag: ${{ steps.plan.outputs.tag }}
+      control_sha: ${{ steps.plan.outputs.control_sha }}
+      agent_sha: ${{ steps.plan.outputs.agent_sha }}
+      deploy_tag: ${{ steps.plan.outputs.deploy_tag }}
+    steps:
+      # The newest commit of each main whose push CI passed: a dev build is
+      # never cut from a red or untested commit.
+      - name: Find the commits and the version
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FORCE: ${{ inputs.force || 'false' }}
+          RUN_NUMBER: ${{ github.run_number }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          api() { curl -fsS --retry 3 -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" "${GITHUB_API_URL}$1"; }
+          green() { api "/repos/$1/actions/workflows/$2/runs?branch=main&event=push&status=success&per_page=1" | jq -r '.workflow_runs[0].head_sha // empty'; }
+          control_sha="$(green "${GITHUB_REPOSITORY}" ci.yml)"
+          agent_sha="$(green "${AGENT_REPOSITORY}" release.yml)"
+          [[ "${control_sha}" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::no green main commit of ${GITHUB_REPOSITORY}"; exit 1; }
+          [[ "${agent_sha}" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::no green main commit of ${AGENT_REPOSITORY}"; exit 1; }
+          echo "Control ${control_sha}, Agent ${agent_sha}"
+
+          # The release this build follows is the version the tree declares
+          # (config/scripts/prepare_release.py sets it with every release).
+          base="$(api "/repos/${GITHUB_REPOSITORY}/contents/internal/branding/branding.go?ref=${control_sha}" | jq -r .content | base64 -d \
+            | sed -n 's/^[[:space:]]*DefaultVersion[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p')"
+          if [[ "${base}" =~ ^[0-9]+\.[0-9]+\.[0-9]+-(alpha|beta|rc)\.[0-9]+$ ]]; then
+            tag="v${base}.dev.${RUN_NUMBER}"
+          elif [[ "${base}" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            tag="v${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.$((BASH_REMATCH[3] + 1))-alpha.0.dev.${RUN_NUMBER}"
+          else
+            echo "::error::cannot follow the declared version ${base}"; exit 1
+          fi
+
+          # The newest dev build names its commits in its notes.
+          latest="$(api "/repos/${GITHUB_REPOSITORY}/releases?per_page=50" \
+            | jq -c '[.[] | select(.tag_name | contains(".dev."))] | sort_by(.created_at) | last // empty')"
+          latest_tag="$(jq -r '.tag_name // empty' <<<"${latest:-null}")"
+          body="$(jq -r '.body // empty' <<<"${latest:-null}")"
+          build=true
+          if [[ "${FORCE}" != true ]] && grep -qx "Control commit: ${control_sha}" <<<"${body}" && grep -qx "Agent commit: ${agent_sha}" <<<"${body}"; then
+            build=false
+            echo "Neither repository moved since ${latest_tag}: nothing to build."
+          fi
+          deploy_tag="${latest_tag}"
+          [[ "${build}" == true ]] && deploy_tag="${tag}"
+          {
+            echo "build=${build}"
+            echo "tag=${tag}"
+            echo "control_sha=${control_sha}"
+            echo "agent_sha=${agent_sha}"
+            echo "deploy_tag=${deploy_tag}"
+          } >>"$GITHUB_OUTPUT"
+          {
+            echo "### Dev build"
+            echo
+            echo "- Version: \`${tag}\` (build: ${build})"
+            echo "- Control: \`${control_sha}\`"
+            echo "- Agent: \`${agent_sha}\`"
+          } >>"$GITHUB_STEP_SUMMARY"
+
+  packages:
+    name: Sign the built-in packages
+    runs-on: ubuntu-24.04
+    needs: plan
+    if: ${{ needs.plan.outputs.build == 'true' }}
+    steps:
+      - name: Checkout Control
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.plan.outputs.control_sha }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.x'
+
+      # As ci.yml's plugin-package-publish, at the dev version.
+      - name: Build and sign the built-in package set
+        env:
+          ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY: ${{ secrets.ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY }}
+          ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY: ${{ secrets.ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY }}
+          TAG: ${{ needs.plan.outputs.tag }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          [[ -n "${ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY}" && -n "${ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY}" ]] || {
+            echo "the official signing key and root are required" >&2; exit 1
+          }
+          key_file="$(mktemp)"
+          root_file="$(mktemp)"
+          trap 'rm -f "${key_file}" "${root_file}"' EXIT
+          printf '%s\n' "${ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY}" >"${key_file}"
+          chmod 0600 "${key_file}"
+          printf '%s\n' "${ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY}" >"${root_file}"
+          configured_root="$(sed -n 's/^[[:space:]]*official_public_key:[[:space:]]*"\([^"]*\)".*/\1/p' internal/config/defaults.yaml)"
+          [[ -n "${configured_root}" && "${configured_root}" == "${ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY}" ]] || {
+            echo "internal/config/defaults.yaml does not declare the protected official package root" >&2; exit 1
+          }
+          unset ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY
+          mkdir -p builtin-packages release-assets
+          python3 packages/shared/build_package.py --all --builtin --version "${TAG#v}" --out builtin-packages \
+            --formal-release --signing-key "${key_file}" --official-public-key "${root_file}"
+          python3 packages/shared/build_package.py --all --builtin --version "${TAG#v}" --out builtin-packages \
+            --verify-release --official-public-key "${root_file}"
+          cp "${root_file}" release-assets/official-public-key.raw
+          install -m 0644 internal/agentinstall/install.sh release-assets/agent-install.sh
+          signature_bin="$(mktemp)"
+          official_der="$(mktemp)"
+          openssl pkeyutl -sign -inkey "${key_file}" -rawin -in release-assets/agent-install.sh -out "${signature_bin}"
+          printf '%s\n' "$(base64 -w0 "${signature_bin}")" >release-assets/agent-install.sh.sig
+          { printf '\x30\x2a\x30\x05\x06\x03\x2b\x65\x70\x03\x21\x00'; base64 -d "${root_file}"; } >"${official_der}"
+          openssl pkeyutl -verify -pubin -keyform DER -inkey "${official_der}" -rawin \
+            -in release-assets/agent-install.sh -sigfile "${signature_bin}"
+          rm -f "${signature_bin}" "${official_der}"
+
+      - name: Upload the built-in package set
+        uses: actions/upload-artifact@v7
+        with:
+          name: dev-builtin-packages
+          path: builtin-packages/
+
+      - name: Upload the signed assets
+        uses: actions/upload-artifact@v7
+        with:
+          name: dev-signed-assets
+          path: release-assets/
+
+  control:
+    name: Build Control (${{ matrix.goarch }})
+    runs-on: ubuntu-24.04
+    needs: [plan, packages]
+    strategy:
+      fail-fast: true
+      matrix:
+        goarch: [amd64, arm64]
+    steps:
+      - name: Checkout Control
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.plan.outputs.control_sha }}
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Download the built-in package set
+        uses: actions/download-artifact@v8
+        with:
+          name: dev-builtin-packages
+          path: internal/builtinpkg/dist/
+
+      - name: Verify the built-in package set
+        env:
+          TAG: ${{ needs.plan.outputs.tag }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          root_file="$(mktemp)"
+          trap 'rm -f "${root_file}"' EXIT
+          sed -n 's/^[[:space:]]*official_public_key:[[:space:]]*"\([^"]*\)".*/\1/p' internal/config/defaults.yaml >"${root_file}"
+          python3 packages/shared/build_package.py --all --builtin --version "${TAG#v}" --out internal/builtinpkg/dist \
+            --verify-release --official-public-key "${root_file}"
+
+      # The Agent this Control installs is the one built with it.
+      - name: Build Control
+        env:
+          TAG: ${{ needs.plan.outputs.tag }}
+          COMMIT: ${{ needs.plan.outputs.control_sha }}
+          GOARCH: ${{ matrix.goarch }}
+          BUILD_CODE: ${{ github.run_number }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          name="anix-control-linux-${GOARCH}"
+          CGO_ENABLED=0 GOOS=linux go build -trimpath \
+            -ldflags="-s -w -X main.version=${TAG#v} -X main.agentRelease=${TAG} -X main.buildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ) -X main.buildCode=${BUILD_CODE} -X main.commit=${COMMIT::12}" \
+            -o "${name}" ./cmd/server
+          mkdir -p dist
+          tar -czf "dist/${name}.tar.gz" "${name}"
+
+      - name: Upload the binary
+        uses: actions/upload-artifact@v7
+        with:
+          name: dev-control-${{ matrix.goarch }}
+          path: dist/*
+
+  frontend:
+    name: Build the frontend
+    runs-on: ubuntu-24.04
+    needs: plan
+    if: ${{ needs.plan.outputs.build == 'true' }}
+    steps:
+      - name: Checkout Control
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.plan.outputs.control_sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Build
+        working-directory: web
+        run: |
+          npm ci
+          npm run build
+
+      - name: Archive
+        run: |
+          mkdir -p dist
+          tar -czf dist/anix-control-frontend.tar.gz -C web/public .
+
+      - name: Upload the frontend
+        uses: actions/upload-artifact@v7
+        with:
+          name: dev-frontend
+          path: dist/*
+
+  agent:
+    name: Build the Agent (${{ matrix.asset_name }})
+    runs-on: ubuntu-24.04
+    needs: plan
+    if: ${{ needs.plan.outputs.build == 'true' }}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - goarch: amd64
+            asset_name: linux-64
+          - goarch: arm64
+            asset_name: linux-arm64-v8a
+    env:
+      GOOS: linux
+      GOARCH: ${{ matrix.goarch }}
+      CGO_ENABLED: 0
+    steps:
+      - name: Checkout the Agent
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ env.AGENT_REPOSITORY }}
+          ref: ${{ needs.plan.outputs.agent_sha }}
+
+      - name: Read the Agent's Go toolchain
+        id: go
+        run: echo "version=$(sed -n 's/^toolchain go//p' go.mod)" >>"$GITHUB_OUTPUT"
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ steps.go.outputs.version }}
+          cache: true
+
+      - name: Enforce the Agent's release build policy
+        run: bash scripts/check_release_build_policy.sh
+
+      # As anix-agent's release.yml build job, at the dev version.
+      - name: Build the Agent and the anixops relay
+        env:
+          TAG: ${{ needs.plan.outputs.tag }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p build_assets
+          GOEXPERIMENT=jsonv2 go build -o build_assets/anix-agent \
+            -tags "anixcore sing xray hysteria2 with_quic with_grpc with_utls with_wireguard with_acme with_gvisor" -trimpath \
+            -ldflags "-X 'github.com/AnixOps/anix-agent/v5/cmd.version=${TAG}' -s -w -buildid="
+          ln -s anix-agent build_assets/V2bX
+          (cd cmd/anixops-relay && go build -o ../../build_assets/anixops-relay -trimpath \
+            -ldflags "-X 'github.com/AnixOps/anix-control/sdk/forward/driver/anixops/relayd.Version=${TAG}' -s -w -buildid=" .)
+          cp README.md LICENSE example/*.json build_assets/
+          for name in geoip geosite; do
+            curl -fsSL --retry 3 "https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/${name}.dat" -o "build_assets/${name}.dat"
+          done
+
+      - name: Package
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          pushd build_assets
+          touch -mt "$(date +%Y01010000)" ./*
+          touch -h -mt "$(date +%Y01010000)" V2bX
+          zip -9yr "../anix-agent-${{ matrix.asset_name }}.zip" .
+          popd
+          file="anix-agent-${{ matrix.asset_name }}.zip"
+          for method in md5 sha1 sha256 sha512; do
+            openssl dgst "-${method}" "${file}" | sed 's/([^)]*)//g' >>"${file}.dgst"
+          done
+          python3 scripts/check_release_assets.py zip --zip "${file}"
+          mkdir -p dist
+          mv "${file}" "${file}.dgst" dist/
+
+      - name: Upload the package
+        uses: actions/upload-artifact@v7
+        with:
+          name: dev-agent-${{ matrix.asset_name }}
+          path: dist/*
+
+  publish:
+    name: Publish the dev build
+    runs-on: ubuntu-24.04
+    needs: [plan, packages, control, frontend, agent]
+    permissions:
+      contents: write
+    steps:
+      # Not dev-builtin-packages: the binaries embed them.
+      - name: Download the signed assets
+        uses: actions/download-artifact@v8
+        with:
+          name: dev-signed-assets
+          path: release
+
+      - name: Download Control
+        uses: actions/download-artifact@v8
+        with:
+          pattern: dev-control-*
+          path: release
+          merge-multiple: true
+
+      - name: Download the frontend
+        uses: actions/download-artifact@v8
+        with:
+          name: dev-frontend
+          path: release
+
+      - name: Download the Agent
+        uses: actions/download-artifact@v8
+        with:
+          pattern: dev-agent-*
+          path: release
+          merge-multiple: true
+
+      # The Agent's assets as anix-agent's release.yml signs them, then
+      # Control's: SHA256SUMS.txt over every asset, signed.
+      - name: Write the checksums and sign them
+        working-directory: release
+        env:
+          ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY: ${{ secrets.ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          [[ -n "${ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY}" ]] || { echo "the official signing key is required" >&2; exit 1; }
+          key_file="$(mktemp)"
+          official_der="$(mktemp)"
+          signature_bin="$(mktemp)"
+          trap 'rm -f "${key_file}" "${official_der}" "${signature_bin}"' EXIT
+          printf '%s\n' "${ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY}" >"${key_file}"
+          chmod 0600 "${key_file}"
+          unset ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY
+          { printf '\x30\x2a\x30\x05\x06\x03\x2b\x65\x70\x03\x21\x00'; base64 -d official-public-key.raw; } >"${official_der}"
+          sign() {
+            openssl pkeyutl -sign -inkey "${key_file}" -rawin -in "$1" -out "${signature_bin}"
+            printf '%s\n' "$(base64 -w0 "${signature_bin}")" >"$1.sig"
+            openssl pkeyutl -verify -pubin -keyform DER -inkey "${official_der}" -rawin -in "$1" -sigfile "${signature_bin}"
+          }
+          packages=(anix-agent-linux-64.zip anix-agent-linux-arm64-v8a.zip)
+          sha256sum "${packages[@]}" >SHA256SUMS
+          for file in "${packages[@]}" SHA256SUMS; do sign "${file}"; done
+          sha256sum -- * >SHA256SUMS.txt
+          sign SHA256SUMS.txt
+          for name in anix-control-linux-amd64.tar.gz anix-control-linux-arm64.tar.gz anix-control-frontend.tar.gz \
+            agent-install.sh agent-install.sh.sig official-public-key.raw SHA256SUMS.txt.sig SHA256SUMS.sig \
+            anix-agent-linux-64.zip.sig anix-agent-linux-64.zip.dgst anix-agent-linux-arm64-v8a.zip.sig anix-agent-linux-arm64-v8a.zip.dgst; do
+            [[ -s "${name}" ]] || { echo "missing ${name}" >&2; exit 1; }
+          done
+
+      - name: Write the notes
+        env:
+          TAG: ${{ needs.plan.outputs.tag }}
+          CONTROL_SHA: ${{ needs.plan.outputs.control_sha }}
+          AGENT_SHA: ${{ needs.plan.outputs.agent_sha }}
+        run: |
+          cat >notes.md <<EOF
+          Internal dev build: not a release. Control and the Agent built together from main, signed with the official key.
+          Install it on a test Control with \`install.sh update --version ${TAG}\` (the Agent goes into agent_install.artifact_dir), then upgrade the test nodes to ${TAG}.
+
+          Control commit: ${CONTROL_SHA}
+          Agent commit: ${AGENT_SHA}
+          Build: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+          EOF
+
+      - name: Create the pre-release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ needs.plan.outputs.tag }}
+          target_commitish: ${{ needs.plan.outputs.control_sha }}
+          name: Dev build ${{ needs.plan.outputs.tag }}
+          body_path: notes.md
+          files: release/*
+          prerelease: true
+          make_latest: false
+
+      - name: Delete old dev builds
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          api() { curl -fsS --retry 3 -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" "$@"; }
+          api "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
+            | jq -r --argjson keep "${KEEP_DEV_RELEASES}" '[.[] | select(.tag_name | contains(".dev."))] | sort_by(.created_at) | reverse | .[$keep:][] | "\(.id) \(.tag_name)"' \
+            | while read -r id tag; do
+                echo "Deleting ${tag}"
+                api -X DELETE "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/releases/${id}"
+                api -X DELETE "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/git/refs/tags/${tag}" || true
+              done
+
+  deploy:
+    name: Install the dev build on the production Control
+    runs-on: ubuntu-24.04
+    needs: [plan, publish]
+    if: >-
+      ${{ !cancelled() && github.event_name == 'workflow_dispatch' && inputs.deploy && needs.plan.result == 'success'
+      && needs.plan.outputs.deploy_tag != ''
+      && (needs.publish.result == 'success' || (needs.publish.result == 'skipped' && needs.plan.outputs.build == 'false')) }}
+    environment: production
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install client dependencies
+        run: python -m pip install --disable-pip-version-check requests==2.32.3 websocket-client==1.8.0
+
+      # Three JumpServer runs on every active host, each script gated on the
+      # host that has the tool (fr-test-upgrade recipe): the database dump,
+      # the upgrade (in its own systemd unit: it restarts Control), and the
+      # wait for its result. install.sh restores the previous release when
+      # the new one fails its health check.
+      - name: Dump the database, upgrade, check
+        env:
+          JMS_URL: ${{ vars.JMS_URL }}
+          JMS_KEY_ID: ${{ secrets.JMS_KEY_ID }}
+          JMS_SECRET: ${{ secrets.JMS_SECRET }}
+          TAG: ${{ needs.plan.outputs.deploy_tag }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          [[ "${TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-(alpha|beta|rc)\.[0-9]+\.dev\.[0-9]+$ ]] || { echo "not a dev build: ${TAG}"; exit 1; }
+          echo "Installing ${TAG}"
+          run() { python scripts/jumpserver/jms.py run --cmd "echo $(base64 -w0 "$1") | base64 -d | bash" --timeout "$2" --show-output; }
+
+          cat >dump.sh <<'EOF'
+          [ -d /root/pg-backups ] && command -v pg_dump >/dev/null || exit 0
+          set -e
+          f=/root/pg-backups/anix_control_v2board-pre-dev-$(date -u +%Y%m%d%H%M%S).dump
+          sudo -u postgres pg_dump -Fc anix_control_v2board > "$f"
+          ls -t /root/pg-backups/anix_control_v2board-pre-dev-*.dump | tail -n +6 | xargs -r rm -f
+          ls -l "$f" | awk '{print $5, $9}'
+          EOF
+          cat >upgrade.sh <<EOF
+          [ -x /opt/anixops/control/bin/anix-control ] || exit 0
+          set -e
+          ts=\$(date -u +%Y%m%d%H%M%S)
+          cp -a /opt/anixops/control/config/config.yaml /opt/anixops/control/config/config.yaml.bak-pre-dev-\$ts
+          ls -t /opt/anixops/control/config/config.yaml.bak-pre-dev-* | tail -n +6 | xargs -r rm -f
+          curl -fsSL --retry 3 -o /root/install-dev.sh https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${TAG}/scripts/install.sh
+          rm -f /root/dev-upgrade.log
+          systemd-run --unit anix-dev-upgrade-\$ts --collect bash -c 'bash /root/install-dev.sh update --version ${TAG} > /root/dev-upgrade.log 2>&1; echo "exit=\$?" >> /root/dev-upgrade.log'
+          echo "upgrade to ${TAG} started"
+          EOF
+          cat >check.sh <<'EOF'
+          [ -x /opt/anixops/control/bin/anix-control ] || exit 0
+          for i in $(seq 1 150); do grep -q '^exit=' /root/dev-upgrade.log 2>/dev/null && break; sleep 5; done
+          tail -n 20 /root/dev-upgrade.log
+          journalctl -u anix-control --since '15 min ago' --no-pager | grep -m1 "Built-in packages" || true
+          grep -qx 'exit=0' /root/dev-upgrade.log
+          EOF
+          run dump.sh 600
+          run upgrade.sh 120
+          run check.sh 840
+          echo "### Installed ${TAG} on the production Control" >>"$GITHUB_STEP_SUMMARY"

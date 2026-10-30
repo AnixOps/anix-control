@@ -301,7 +301,7 @@ func (a AgentInstallConfig) Validate() error {
 
 // agentReleaseTagPattern matches the release tags the Agent is published
 // with.
-var agentReleaseTagPattern = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)(\.[0-9]+)?)?$`)
+var agentReleaseTagPattern = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)(\.[0-9]+(\.dev\.[0-9]+)?)?)?$`)
 
 // Agent listener client certificate modes (agent_control.mtls).
 const (
