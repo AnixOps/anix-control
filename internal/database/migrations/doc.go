@@ -100,4 +100,6 @@
 //     v4_kernel_network_device).
 //   - 0017_node_groups_make_regular_nodes: every node group makes regular
 //     nodes; former forward groups become proxy groups without a template.
+//   - 0018_node_network: each device's own network settings, which the
+//     network model's automatic components follow (v4_kernel_node_network).
 package migrations

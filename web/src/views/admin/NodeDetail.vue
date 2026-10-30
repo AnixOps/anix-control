@@ -54,6 +54,7 @@
         <div class="node-page__stack">
           <NodeProtocolsSection :node="node" @changed="list => { protocolCount = list.length }" />
           <NodeEntriesSection :node="node" />
+          <NodeNetworkSection :node-ref="`proxy-${node.id}`" />
         </div>
       </template>
       <template #credentials>
@@ -124,6 +125,7 @@ const NodeDiagnosticsSection = defineAsyncComponent(() => import('./nodes/NodeDi
 const NodeRealityTargetsSection = defineAsyncComponent(() => import('./nodes/NodeRealityTargetsSection.vue'))
 // 入口 (several lines, native IPv6, provider NAT ports) under 协议.
 const NodeEntriesSection = defineAsyncComponent(() => import('./nodes/NodeEntriesSection.vue'))
+const NodeNetworkSection = defineAsyncComponent(() => import('./nodes/NodeNetworkSection.vue'))
 // 流量 draws a chart: its code (and ECharts) load when the section opens.
 const NodeTrafficSection = defineAsyncComponent(() => import('./nodes/NodeTrafficSection.vue'))
 
