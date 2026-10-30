@@ -3,7 +3,6 @@ import { flushPromises, mount } from '@vue/test-utils'
 import UiDataTable from '@/ui/UiDataTable.vue'
 import UiSelect from '@/ui/UiSelect.vue'
 import { setEdition } from '@/composables/useEdition'
-import { setForwardFlags } from '@/components/forward/useForwardFlags'
 import { inBody, toasts } from './helpers/feedback'
 
 const api = vi.hoisted(() => ({
@@ -84,7 +83,6 @@ beforeEach(() => {
 
 afterEach(() => {
   while (mounted.length) mounted.pop().unmount()
-  setForwardFlags({ enableAnixOps: false })
   vi.useRealTimers()
 })
 
@@ -221,11 +219,8 @@ describe('anixops engine (D12)', () => {
     return wrapper.findAllComponents(UiSelect).find(select => select.props('label') === 'Engine').props('options')
   }
 
-  it('is offered only with the experimental flag, as 「anixops（实验）」', () => {
+  it('is not offered to a new hop: the editor offers nftables and ANX', () => {
     expect(engineOptions({}).map(option => option.value)).toEqual(['ENGINE_NFTABLES', 'ENGINE_NETWORK'])
-    const options = engineOptions({ enableAnixOps: true })
-    expect(options.map(option => option.value)).toEqual(['ENGINE_NFTABLES', 'ENGINE_NETWORK', 'ENGINE_ANIXOPS'])
-    expect(options[2].label).toBe('anixops (experimental)')
   })
 
   it('offers the removed gost engine only to a hop still on it', () => {

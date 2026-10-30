@@ -115,7 +115,6 @@
                     :nodes="nodes"
                     :violations="violations"
                     :error-text="errorText"
-                    :enable-anix-ops="enableAnixOps"
                     :network-model="networkModel"
                     @update="patch => updateHop(index, patch)"
                     @add-node="ref => hop.node_refs.push(ref)"
@@ -248,7 +247,6 @@ import { DNS_HINT_ID, bindingBlockers, bindingChanged, bindingDraft, bindingErro
 import HopCard from '@/components/forward/HopCard.vue'
 import PreviewPanel from '@/components/forward/PreviewPanel.vue'
 import { forwardErrorMessage, violationText } from '@/components/forward/messages'
-import { useForwardFlags } from '@/components/forward/useForwardFlags'
 import { useRoutePreview } from '@/components/forward/useRoutePreview'
 import {
   DIRECT_MODES, H21_DEFAULTS, NETWORK_ENGINE, PROTOCOLS, PROXY_PROTOCOLS, STRATEGIES, TARGET_POLICIES, blankHop, blankTarget, draftToRoute,
@@ -266,7 +264,6 @@ const router = useRouter()
 const currentRoute = useRoute()
 const { t, te } = useAppI18n()
 const toast = useToast()
-const { enableAnixOps } = useForwardFlags()
 
 const editing = computed(() => Boolean(props.id))
 const draft = ref(null)
@@ -470,7 +467,7 @@ const strategyOptions = computed(() => STRATEGIES.map(value => ({ value, label: 
 const directOptions = computed(() => DIRECT_MODES.map(value => ({ value, label: t(`forwardV4.direct.${value}`), description: t(`forwardV4.directHint.${value}`) })))
 const proxyProtocolOptions = computed(() => PROXY_PROTOCOLS.map(value => ({ value, label: t(`forwardV4.proxyProtocol.${value}`) })))
 const targetPolicyOptions = computed(() => TARGET_POLICIES.map(value => ({ value, label: t(`forwardV4.targetPolicy.${value}`), description: t(`forwardV4.targetPolicyHint.${value}`) })))
-const chainDescription = computed(() => (enableAnixOps.value ? t('forwardV4.editor.chainDescriptionAnixOps') : t('forwardV4.editor.chainDescription')))
+const chainDescription = computed(() => t('forwardV4.editor.chainDescription'))
 
 // D11: LEAST_CONN on nftables is approximate until the Agent reports
 // conntrack counts. The hop that balances is the one before the choice.
