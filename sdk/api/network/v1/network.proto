@@ -349,6 +349,17 @@ message AnxLineSettings {
   repeated string carrier_order = 9;
   bool multipath = 10;
   bool fec = 11;
+  // Reverse dial-back: the accepting end opens no port and dials the
+  // dialing end instead, which then runs the link over that connection
+  // (contracts/anx BOUNDARY.md: --reverse-listen, Link.reverse,
+  // SetReverseDials). The carrier addresses are empty, egress is l1 (c1).
+  bool reverse = 12;
+  // reverse, role dial: the address this end listens on for the accepting
+  // end's dial-backs (anx-node anx_line.reverse_listen).
+  string reverse_listen = 13;
+  // reverse, role accept: host:port of the dialing end's reverse listener,
+  // the address this end dials (a ReverseDial of SetReverseDials).
+  string reverse_dial = 14;
 }
 
 // Path starts at a user ingress of this device and names where the

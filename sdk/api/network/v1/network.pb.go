@@ -2056,9 +2056,20 @@ type AnxLineSettings struct {
 	ServerName string `protobuf:"bytes,8,opt,name=server_name,json=serverName,proto3" json:"server_name,omitempty"`
 	// Carrier preference: "c1", "c2", "c3" (or tcp, quic, faketcp). Empty =
 	// the kernel's default order.
-	CarrierOrder  []string `protobuf:"bytes,9,rep,name=carrier_order,json=carrierOrder,proto3" json:"carrier_order,omitempty"`
-	Multipath     bool     `protobuf:"varint,10,opt,name=multipath,proto3" json:"multipath,omitempty"`
-	Fec           bool     `protobuf:"varint,11,opt,name=fec,proto3" json:"fec,omitempty"`
+	CarrierOrder []string `protobuf:"bytes,9,rep,name=carrier_order,json=carrierOrder,proto3" json:"carrier_order,omitempty"`
+	Multipath    bool     `protobuf:"varint,10,opt,name=multipath,proto3" json:"multipath,omitempty"`
+	Fec          bool     `protobuf:"varint,11,opt,name=fec,proto3" json:"fec,omitempty"`
+	// Reverse dial-back: the accepting end opens no port and dials the
+	// dialing end instead, which then runs the link over that connection
+	// (contracts/anx BOUNDARY.md: --reverse-listen, Link.reverse,
+	// SetReverseDials). The carrier addresses are empty, egress is l1 (c1).
+	Reverse bool `protobuf:"varint,12,opt,name=reverse,proto3" json:"reverse,omitempty"`
+	// reverse, role dial: the address this end listens on for the accepting
+	// end's dial-backs (anx-node anx_line.reverse_listen).
+	ReverseListen string `protobuf:"bytes,13,opt,name=reverse_listen,json=reverseListen,proto3" json:"reverse_listen,omitempty"`
+	// reverse, role accept: host:port of the dialing end's reverse listener,
+	// the address this end dials (a ReverseDial of SetReverseDials).
+	ReverseDial   string `protobuf:"bytes,14,opt,name=reverse_dial,json=reverseDial,proto3" json:"reverse_dial,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2168,6 +2179,27 @@ func (x *AnxLineSettings) GetFec() bool {
 		return x.Fec
 	}
 	return false
+}
+
+func (x *AnxLineSettings) GetReverse() bool {
+	if x != nil {
+		return x.Reverse
+	}
+	return false
+}
+
+func (x *AnxLineSettings) GetReverseListen() string {
+	if x != nil {
+		return x.ReverseListen
+	}
+	return ""
+}
+
+func (x *AnxLineSettings) GetReverseDial() string {
+	if x != nil {
+		return x.ReverseDial
+	}
+	return ""
 }
 
 // Path starts at a user ingress of this device and names where the
@@ -3057,7 +3089,7 @@ const file_api_network_v1_network_proto_rawDesc = "" +
 	"\x03mtu\x18\b \x01(\rR\x03mtu\x12@\n" +
 	"\banx_line\x18\x14 \x01(\v2#.anixops.network.v1.AnxLineSettingsH\x00R\aanxLineB\n" +
 	"\n" +
-	"\bsettings\"\xd3\x02\n" +
+	"\bsettings\"\xb7\x03\n" +
 	"\x0fAnxLineSettings\x12\x17\n" +
 	"\alink_id\x18\x01 \x01(\tR\x06linkId\x12\x19\n" +
 	"\blink_key\x18\x02 \x01(\tR\alinkKey\x12#\n" +
@@ -3071,7 +3103,10 @@ const file_api_network_v1_network_proto_rawDesc = "" +
 	"\rcarrier_order\x18\t \x03(\tR\fcarrierOrder\x12\x1c\n" +
 	"\tmultipath\x18\n" +
 	" \x01(\bR\tmultipath\x12\x10\n" +
-	"\x03fec\x18\v \x01(\bR\x03fec\"\xc1\x01\n" +
+	"\x03fec\x18\v \x01(\bR\x03fec\x12\x18\n" +
+	"\areverse\x18\f \x01(\bR\areverse\x12%\n" +
+	"\x0ereverse_listen\x18\r \x01(\tR\rreverseListen\x12!\n" +
+	"\freverse_dial\x18\x0e \x01(\tR\vreverseDial\"\xc1\x01\n" +
 	"\x04Path\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
 	"\n" +

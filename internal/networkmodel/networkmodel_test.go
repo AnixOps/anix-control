@@ -124,6 +124,38 @@ func TestPlanJacketedTransport(t *testing.T) {
 	}
 }
 
+// A reversed link: the accepting device (proxy-2) opens no port and dials
+// the dialing device's reverse listener.
+func TestPlanReverseTransport(t *testing.T) {
+	doc := twoHops()
+	doc.Transports[0].AnxLine = &AnxLine{Reverse: true, ReverseHost: "198.51.100.7"}
+	result, err := Plan(doc, map[string]string{"tr-jp": linkKey}, japanKey(), nil)
+	require.NoError(t, err)
+	require.Empty(t, result.Pending)
+
+	dial := result.Plans["proxy-1"].GetTransports()[0].GetAnxLine()
+	require.True(t, dial.GetReverse())
+	require.Equal(t, "0.0.0.0:24444", dial.GetReverseListen())
+	require.Empty(t, dial.GetReverseDial())
+	require.Equal(t, "anx1-japan", dial.GetServerPublic())
+	require.Equal(t, []string{"c1"}, dial.GetCarrierOrder())
+	require.Empty(t, dial.GetTcpAddr())
+	require.Empty(t, dial.GetQuicAddr())
+
+	accept := result.Plans["proxy-2"].GetTransports()[0].GetAnxLine()
+	require.True(t, accept.GetReverse())
+	require.Equal(t, "198.51.100.7:24444", accept.GetReverseDial())
+	require.Empty(t, accept.GetReverseListen())
+	require.Empty(t, accept.GetTcpAddr())
+	require.Empty(t, accept.GetServerPublic())
+
+	doc.Transports[0].AnxLine = &AnxLine{Reverse: true, ReverseHost: "2001:db8::7", ReversePort: 30000}
+	result, err = Plan(doc, map[string]string{"tr-jp": linkKey}, japanKey(), nil)
+	require.NoError(t, err)
+	require.Equal(t, "[::]:30000", result.Plans["proxy-1"].GetTransports()[0].GetAnxLine().GetReverseListen())
+	require.Equal(t, "[2001:db8::7]:30000", result.Plans["proxy-2"].GetTransports()[0].GetAnxLine().GetReverseDial())
+}
+
 func TestPlanRefuses(t *testing.T) {
 	cases := map[string]struct {
 		edit func(d *Document)
@@ -147,8 +179,19 @@ func TestPlanRefuses(t *testing.T) {
 		"shared transport": {func(d *Document) {
 			d.Paths = append(d.Paths, Path{ID: "pa-2", Ingress: "in-ss", Segments: []string{"tr-jp"}, Egress: "eg-jp"})
 		}, "one link per path"},
-		"plan check":   {func(d *Document) { d.Egresses[1].Source = "2001:db8::1" }, "plans[proxy-2]"},
-		"pairing mode": {func(d *Document) { d.Ingresses[0].Pairing.Mode = "random" }, "pairing mode"},
+		"plan check":           {func(d *Document) { d.Egresses[1].Source = "2001:db8::1" }, "plans[proxy-2]"},
+		"pairing mode":         {func(d *Document) { d.Ingresses[0].Pairing.Mode = "random" }, "pairing mode"},
+		"reverse needs a host": {func(d *Document) { d.Transports[0].AnxLine = &AnxLine{Reverse: true} }, "dialing device's address"},
+		"reverse on quic": {func(d *Document) {
+			d.Transports[0].AnxLine = &AnxLine{Reverse: true, ReverseHost: "198.51.100.7", QUICPort: 8443}
+		}, "c1 only"},
+		"reverse jacketed": {func(d *Document) {
+			d.Transports[0].Kind = KindAnx
+			d.Transports[0].AnxLine = &AnxLine{Reverse: true, ReverseHost: "198.51.100.7", ServerName: "www.example.org"}
+		}, "only bare anx_line"},
+		"reverse host alone": {func(d *Document) {
+			d.Transports[0].AnxLine = &AnxLine{ReverseHost: "198.51.100.7"}
+		}, "need reverse"},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
