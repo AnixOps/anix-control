@@ -52,16 +52,15 @@ describe('the editor draft', () => {
   })
 
   it('lists the required fields a preview waits for (D4)', () => {
-    // A new route runs on the network model (ANX): its exit needs an egress
-    // and its listen port is explicit.
+    // A new route runs on the network model (ANX): its listen port is
+    // explicit; Control picks the transports and the egress left out.
     const draft = routeToDraft()
     expect(draft.hops[0].engine).toBe('ENGINE_NETWORK')
     expect(missingRequired(draft)).toEqual([
-      'name', 'hops[0].node_refs', 'hops[0].network_egress_id', 'listen.port', 'targets[0].host', 'targets[0].port'
+      'name', 'hops[0].node_refs', 'listen.port', 'targets[0].host', 'targets[0].port'
     ])
     draft.name = 'x'
     draft.hops[0].node_refs.push('proxy-41')
-    draft.hops[0].network_egress_id = 'egress-1'
     draft.listen.portMode = 'explicit'
     draft.listen.port = 30000
     draft.targets[0].host = 'a.example'
@@ -84,7 +83,7 @@ describe('the editor draft', () => {
     expect(draft.hops.map(hop => hop.engine)).toEqual(['ENGINE_NETWORK', 'ENGINE_NETWORK'])
     expect(draft.hops[1].node_refs).toEqual(['proxy-2'])
     expect(draft.policy.direct).toBe('DIRECT_MODE_OFF')
-    expect(missingRequired(draft)).toEqual(['hops[1].ingress.network_transport_id', 'hops[1].network_egress_id', 'listen.port'])
+    expect(missingRequired(draft)).toEqual(['listen.port'])
     draft.hops[1].ingress.network_transport_id = 'tr-hk'
     draft.hops[1].network_egress_id = 'eg-hk'
     draft.listen.port = 20022

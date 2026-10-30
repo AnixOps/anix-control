@@ -80,6 +80,7 @@ PortForward 由 Agent 转成 anixcore 的 forward 入站（出站为 `egress:<id
 **Control 的规划（已实现）**
 
 - ENGINE_NETWORK 路由规则：每一跳都是 ENGINE_NETWORK，入口之后每跳一个设备；入口端口必须显式给出；后续跳不填 port、dial_address、mux、server_name、path，链路填 `network_transport_id`，出口填 `network_egress_id`；不支持直连模式。不查转发节点库存，因为这些节点是网络模型设备。
+- 自动补全（2026-10-30）：路由只需选设备，链路的 `network_transport_id` 和出口的 `network_egress_id` 可留空，由 Control 补齐。补出的组件只进计划、不写回文档，id 以 `auto-` 开头（文档不得使用）：没有线路的设备得到线路 `auto-<node>`；出口（及无链路路由的其他入口）没有互联网出口时得到 `auto-<node>-internet`（nat_direct，source auto）；留空的链路得到上一设备的跳出口 `auto-<from>-hop`、本设备的跳入口 `auto-<to>-hop`（监听 24443，对外地址取节点 host）和传输 `auto-<from>-<to>`（`anx`，A2 外衣，SNI www.apple.com），链路密钥与声明的传输一样生成。节点没有 host 时该链路留空、路由待定。声明的组件从不改动。`GET /api/v4/kernel/network` 的 `nodes` 列出所有已连上 Control 且未停用的 Agent 节点，路由编辑器从这里选设备。
 - forward.v1 规划器只校验这类路由，不生成 NodeForwardState，也不分配端口。每次接受的规划在同一事务里重新规划网络模型：路由变成入口设备的 PortForward，链路按传输规划，到期或超配额的路由暂停后端口转发随之撤下。
 - 入口没写监听地址时用 `::`。目标策略取 `policy.target`，限速和最大连接数取 `limits`，健康检查、熔断、PROXY 头照搬。
 - NetworkStatus 的 port_forwards 计入路由的第 0 跳计数：字节比上次小就是内核重启，开新的计数周期（`network-<毫秒>`）；比已存计数旧的状态忽略；达到配额触发重新规划。

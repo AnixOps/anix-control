@@ -296,6 +296,9 @@ export default {
       settingsSavedWarnings: '转发设置已保存；{n} 条路由暂时无法规划，节点保持当前代。'
     },
     editor: {
+      networkAuto: '自动',
+      networkTransportAuto: '由 Control 在两台设备间建立 ANX（A2 外衣）链路，端口 24443',
+      networkEgressAuto: '使用该设备自己的互联网出口，没有时自动添加',
       networkTransport: '网络传输',
       networkTransportPlaceholder: '选择传输',
       networkTransportHelp: '从上一跳设备到本跳设备的网络模型传输。',
@@ -364,7 +367,7 @@ export default {
       removeNode: '移除 {name}',
       addNode: '为第 {n} 跳添加节点',
       addNodePlaceholder: '添加节点…',
-      noNodes: '没有可用节点',
+      noNodes: '还没有 Agent 节点：Agent 连上 Control 后节点会出现在这里',
       nodeUnusable: '已禁用或不在转发清单',
       portRange: '端口 {first}–{last}',
       engine: '引擎',

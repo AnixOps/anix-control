@@ -142,6 +142,9 @@ type View struct {
 	Document Document     `json:"document"`
 	Pending  []Pending    `json:"pending"`
 	Devices  []DeviceView `json:"devices"`
+	// Nodes are the devices a route may use (Agent nodes), whether or not
+	// the document has lines on them.
+	Nodes []AgentNode `json:"nodes"`
 }
 
 // Get answers the model.
@@ -155,13 +158,25 @@ func (s *Service) Get(ctx context.Context) (*View, error) {
 	if err != nil {
 		return nil, err
 	}
-	view := &View{Revision: row.Revision, Document: *doc, Pending: []Pending{}, Devices: deviceViews(rows)}
+	nodes, err := agentNodes(db)
+	if err != nil {
+		return nil, err
+	}
+	view := &View{Revision: row.Revision, Document: *doc, Pending: []Pending{}, Devices: deviceViews(rows), Nodes: nodes}
+	if view.Nodes == nil {
+		view.Nodes = []AgentNode{}
+	}
 	forwards, err := s.forwards(db)
 	if err != nil {
 		return nil, err
 	}
+	hosts, err := hostsFor(db, forwards)
+	if err != nil {
+		return nil, err
+	}
+	full, forwards := complete(doc, forwards, hosts)
 	if keys, err := s.openKeys(db); err == nil {
-		if result, err := Plan(doc, keys, devices, forwards); err == nil {
+		if result, err := Plan(full, keys, devices, forwards); err == nil {
 			view.Pending = append(view.Pending, result.Pending...)
 		}
 	}
@@ -183,6 +198,9 @@ func (s *Service) Replace(ctx context.Context, doc *Document, ifRevision *uint64
 		}
 		if ifRevision != nil && *ifRevision != row.Revision {
 			return ErrConflict
+		}
+		if err := checkNoAuto(doc); err != nil {
+			return err
 		}
 		if err := requireNodes(tx, doc); err != nil {
 			return err
@@ -313,11 +331,11 @@ func (s *Service) DevicePlan(ctx context.Context, node string) (plan *networkv1.
 	if err != nil {
 		return nil, false, err
 	}
-	forwards, err := s.forwards(db)
+	full, forwards, err := s.completed(db, doc)
 	if err != nil {
 		return nil, false, err
 	}
-	result, err := Plan(doc, keys, devices, forwards)
+	result, err := Plan(full, keys, devices, forwards)
 	if err != nil {
 		return nil, false, err
 	}
@@ -351,6 +369,13 @@ func Redacted(plan *networkv1.NetworkPlan) *networkv1.NetworkPlan {
 // plan hash changed gets the next generation, and a device that had a
 // plan and has none now gets an empty one.
 func (s *Service) replan(tx *gorm.DB, doc *Document) ([]string, error) {
+	full, forwards, err := s.completed(tx, doc)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.syncAutoKeys(tx, full); err != nil {
+		return nil, err
+	}
 	keys, err := s.openKeys(tx)
 	if err != nil {
 		return nil, err
@@ -359,11 +384,7 @@ func (s *Service) replan(tx *gorm.DB, doc *Document) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	forwards, err := s.forwards(tx)
-	if err != nil {
-		return nil, err
-	}
-	result, err := Plan(doc, keys, devices, forwards)
+	result, err := Plan(full, keys, devices, forwards)
 	if err != nil {
 		return nil, err
 	}
@@ -426,6 +447,73 @@ func (s *Service) syncKeys(tx *gorm.DB, doc *Document) error {
 		if sealer == nil {
 			var err error
 			if sealer, err = s.sealer(); err != nil {
+				return err
+			}
+		}
+		sealed, err := sealer.newKey(transport.ID)
+		if err != nil {
+			return err
+		}
+		now := s.now()
+		if err := tx.Create(&model.NetworkTransportKey{TransportID: transport.ID, SealedKey: sealed, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
+			return err
+		}
+	}
+	var gone []string
+	for id := range have {
+		if !want[id] && !strings.HasPrefix(id, AutoPrefix) {
+			gone = append(gone, id)
+		}
+	}
+	if len(gone) > 0 {
+		return tx.Where("transport_id IN ?", gone).Delete(&model.NetworkTransportKey{}).Error
+	}
+	return nil
+}
+
+// completed answers doc with Control's auto components and the forward
+// routes on it (complete).
+func (s *Service) completed(db *gorm.DB, doc *Document) (*Document, []Forward, error) {
+	forwards, err := s.forwards(db)
+	if err != nil {
+		return nil, nil, err
+	}
+	hosts, err := hostsFor(db, forwards)
+	if err != nil {
+		return nil, nil, err
+	}
+	full, forwards := complete(doc, forwards, hosts)
+	return full, forwards, nil
+}
+
+// syncAutoKeys gives every auto transport of full a sealed link key and
+// deletes the keys of auto transports that are gone. Without a
+// key-encryption key the auto transports have none, and their routes
+// wait.
+func (s *Service) syncAutoKeys(tx *gorm.DB, full *Document) error {
+	var rows []model.NetworkTransportKey
+	if err := tx.Where("transport_id LIKE ?", AutoPrefix+"%").Find(&rows).Error; err != nil {
+		return err
+	}
+	have := map[string]bool{}
+	for _, row := range rows {
+		have[row.TransportID] = true
+	}
+	want := map[string]bool{}
+	var sealer *keySealer
+	for _, transport := range full.Transports {
+		if !strings.HasPrefix(transport.ID, AutoPrefix) || !idPattern.MatchString(transport.ID) {
+			continue
+		}
+		want[transport.ID] = true
+		if have[transport.ID] {
+			continue
+		}
+		if sealer == nil {
+			var err error
+			if sealer, err = s.sealer(); errors.Is(err, ErrNoKEK) {
+				return nil
+			} else if err != nil {
 				return err
 			}
 		}

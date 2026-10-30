@@ -472,8 +472,6 @@ export function missingRequired(draft) {
   const network = isNetworkDraft(draft)
   draft.hops.forEach((hop, index) => {
     if (!hop.node_refs.length) out.push(`hops[${index}].node_refs`)
-    if (network && index > 0 && !hop.ingress?.network_transport_id) out.push(`hops[${index}].ingress.network_transport_id`)
-    if (network && index === draft.hops.length - 1 && !hop.network_egress_id) out.push(`hops[${index}].network_egress_id`)
   })
   if (network && (draft.listen.portMode !== 'explicit' || !num(draft.listen.port))) out.push('listen.port')
   if (!draft.targets.length) out.push('targets')

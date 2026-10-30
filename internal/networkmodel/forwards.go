@@ -155,6 +155,9 @@ func (p *planned) entryChain(forward *Forward, k int) ([]string, string, string)
 		return nil, candidates[0].ID, ""
 	}
 	first := p.transports[forward.Segments[0]]
+	if forward.Segments[0] == "" {
+		return nil, "", noLink(forward, 0)
+	}
 	if first == nil {
 		return nil, "", fmt.Sprintf("%q is not a transport", forward.Segments[0])
 	}
@@ -201,6 +204,9 @@ func (p *planned) whyNot(forward *Forward, entry string, segments []string, egre
 	}
 	for j, id := range segments {
 		transport := p.transports[id]
+		if id == "" {
+			return noLink(forward, j)
+		}
 		if transport == nil {
 			return fmt.Sprintf("%q is not a transport", id)
 		}
@@ -293,4 +299,13 @@ func (p *planned) planForwards(forwards []Forward) []Pending {
 		}
 	}
 	return pending
+}
+
+// noLink says why hop j+1 has no transport: Control links a hop only to a
+// device whose Agent it knows, at the node's address.
+func noLink(forward *Forward, j int) string {
+	if j < len(forward.Via) {
+		return fmt.Sprintf("hop %d names no transport, and Control cannot link to %s: it is not an Agent node with an address", j+1, forward.Via[j])
+	}
+	return fmt.Sprintf("hop %d names neither a transport nor a device", j+1)
 }

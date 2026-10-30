@@ -295,6 +295,9 @@ export default {
       settingsSavedWarnings: 'Forwarding settings saved; {n} routes cannot plan for now and the nodes keep their generation.'
     },
     editor: {
+      networkAuto: 'Automatic',
+      networkTransportAuto: 'Control links the two devices over ANX (A2 jacket) on port 24443',
+      networkEgressAuto: 'The device\'s own internet egress, added when it has none',
       networkTransport: 'Network transport',
       networkTransportPlaceholder: 'Pick a transport',
       networkTransportHelp: 'The network model transport from the previous hop\'s device to this one.',
@@ -363,7 +366,7 @@ export default {
       removeNode: 'Remove {name}',
       addNode: 'Add a node to hop {n}',
       addNodePlaceholder: 'Add node…',
-      noNodes: 'No nodes available',
+      noNodes: 'No Agent nodes yet: a node appears once its Agent connects',
       nodeUnusable: 'Disabled or not in the inventory',
       portRange: 'ports {first}–{last}',
       engine: 'Engine',

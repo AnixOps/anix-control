@@ -346,8 +346,8 @@ export function validate(item) {
     // A network model hop is a device of the network model, not of the
     // forwarding inventory: its transport and egress are the model's.
     if (entry.engine === 'ENGINE_NETWORK') {
-      if (index > 0 && !NETWORK_MODEL.transports.some(item => item.id === entry.ingress?.network_transport_id)) add(`${path}.ingress.network_transport_id`, 'not_found', 'no such network model transport')
-      if (index === item.hops.length - 1 && !NETWORK_MODEL.egresses.some(item => item.id === entry.network_egress_id)) add(`${path}.network_egress_id`, 'not_found', 'no such network model egress')
+      if (index > 0 && entry.ingress?.network_transport_id && !NETWORK_MODEL.transports.some(item => item.id === entry.ingress?.network_transport_id)) add(`${path}.ingress.network_transport_id`, 'not_found', 'no such network model transport')
+      if (index === item.hops.length - 1 && entry.network_egress_id && !NETWORK_MODEL.egresses.some(item => item.id === entry.network_egress_id)) add(`${path}.network_egress_id`, 'not_found', 'no such network model egress')
       return
     }
     for (const ref of entry.node_refs || []) {
@@ -627,7 +627,7 @@ export function forwardApi(path, { method, query = {}, body, scenario }) {
   const diagnostics = path.match(/^\/api\/v4\/kernel\/nodes\/((?:proxy|forward)-\d+)\/diagnostics$/)
   if (diagnostics) return nodeDiagnosticsAnswer(diagnostics[1], { method, scenario: '', body })
   if (path === '/api/v3/extensions') return scenario === 'no-capability' ? [] : [EXTENSION]
-  if (path === '/api/v4/kernel/network') return { data: { revision: '3', document: NETWORK_MODEL, pending: [], devices: [] } }
+  if (path === '/api/v4/kernel/network') return { data: { revision: '3', document: NETWORK_MODEL, pending: [], devices: [], nodes: [...new Set(NETWORK_MODEL.lines.map(line => line.node))].map(node => ({ node, name: node })) } }
   if (!path.startsWith('/api/v4/forward/')) return undefined
   const rest = path.slice('/api/v4/forward'.length)
   const data = value => ({ data: value })

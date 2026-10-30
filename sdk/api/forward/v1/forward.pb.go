@@ -1302,8 +1302,9 @@ type Hop struct {
 	// a single node in node_refs.
 	DialAddress string `protobuf:"bytes,6,opt,name=dial_address,json=dialAddress,proto3" json:"dial_address,omitempty"`
 	// network_egress_id is the network model's internet egress on the hop's
-	// device that dials the targets; only on an ENGINE_NETWORK EXIT hop,
-	// required there. Routes over one transport share its egress.
+	// device that dials the targets; only on an ENGINE_NETWORK EXIT hop.
+	// Empty there lets Control pick the device's first internet egress (or
+	// add one). Routes over one transport share its egress.
 	NetworkEgressId string `protobuf:"bytes,7,opt,name=network_egress_id,json=networkEgressId,proto3" json:"network_egress_id,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
@@ -1404,9 +1405,10 @@ type LinkTransport struct {
 	// refused on other links. Unspecified means ANIXOPS_CARRIER_AUTO.
 	Carrier AnixOpsCarrier `protobuf:"varint,5,opt,name=carrier,proto3,enum=anixops.forward.v1.AnixOpsCarrier" json:"carrier,omitempty"`
 	// network_transport_id is the network model's transport the link runs
-	// over; only for LINK_SECURITY_NETWORK, required there. Its
-	// dialing end is on the previous hop's device, its accepting end on this
-	// hop's. Several routes may share one transport.
+	// over; only for LINK_SECURITY_NETWORK. Its dialing end is on the
+	// previous hop's device, its accepting end on this hop's. Empty there
+	// lets Control link the two devices with a transport of its own (ANX-A,
+	// id auto-<from>-<to>). Several routes may share one transport.
 	NetworkTransportId string `protobuf:"bytes,6,opt,name=network_transport_id,json=networkTransportId,proto3" json:"network_transport_id,omitempty"`
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
