@@ -287,7 +287,7 @@ check_release_workflow() {
   reject_job_text go-quality "arduino/setup-protoc@v3" "third-party protoc setup action" || failed=1
   require_named_step_text go-quality "Install pinned protoc" "protocolbuffers/protobuf/releases/download/v29.2/protoc-29.2-linux-x86_64.zip" "pinned official protoc download" || failed=1
   require_named_step_text go-quality "Install pinned protoc" "sha256sum -c" "pinned protoc checksum verification" || failed=1
-  require_text "AGENT_REF: '1fc41002e126fe326f9fe98a3334818e0edb5700'" "pinned Agent source commit" || failed=1
+  require_text "AGENT_REF: 'e43d0f3f1fad2a70cf330b1f6aa36187c549c770'" "pinned Agent source commit" || failed=1
   require_agent_checkouts_use_pin || failed=1
   require_job_text plugin-package-release-test "govulncheck ./cmd/nftables-forward" "pinned Agent plugin vulnerability scan" || failed=1
   require_text "-exclude-dir=config/scripts/testdata" "full gosec excludes the non-compiling AST fixture directory" || failed=1

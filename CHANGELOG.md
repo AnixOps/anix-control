@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+## 5.0.0-rc.19 - 2026-10-30
+
+### Added
+
+- ANX-Line reverse dial-back in the network model: a transport's
+  `anx_line.reverse` (with `reverse_host`, `reverse_port`, default 24444)
+  has the accepting device open no port and dial the dialing device's
+  reverse listener instead. Plans carry `reverse`, `reverse_listen` (dialing
+  end) and `reverse_dial` (accepting end) and no carrier addresses; only
+  bare `anx_line` (l1, c1) runs reversed.
+
+### Changed
+
+- Nodes install Agent v5.0.0-rc.19. A node whose network plan routes over
+  ANX (Control's automatic routes) no longer refuses the plan after the
+  upgrade with `this Agent does not run COMPONENT_EGRESS hop v1`: anixcore
+  with anx-node lists the hop egress. Because of that refusal, the rc.18
+  Agent upgrade rolled back. The Agent also runs ANX-Line reverse dial-back.
+
 ## 5.0.0-rc.18 - 2026-10-30
 
 ### Added
