@@ -305,9 +305,12 @@ function addNode(value) {
 }
 
 const nodeOptions = computed(() => (network.value ? networkNodeOptions.value : forwardNodeOptions.value))
+// A network hop is one device, except the entry: its other devices are
+// entry HA, each on a transport (or egress) of its own that the network
+// model chooses.
 const networkNodeOptions = computed(() => networkNodes.value
   .filter(ref => !props.hop.node_refs.includes(ref))
-  .map(ref => ({ value: ref, label: nodeName(ref), description: ref, disabled: props.hop.node_refs.length > 0 })))
+  .map(ref => ({ value: ref, label: nodeName(ref), description: ref, disabled: props.index > 0 && props.hop.node_refs.length > 0 })))
 const forwardNodeOptions = computed(() => props.nodes
   .filter(node => !props.hop.node_refs.includes(node.node_ref))
   .map(node => {

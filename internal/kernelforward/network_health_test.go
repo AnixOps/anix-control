@@ -21,15 +21,22 @@ import (
 // and the route's port forward with targets.
 func networkStatus(t *testing.T, f *fixture, db *gorm.DB, network *networkmodel.Service, routeID string, state networkv1.ComponentState, targets ...*networkv1.ForwardTargetHealth) {
 	t.Helper()
-	require.NoError(t, network.RecordHello(f.ctx, proxy, &networkv1.DeviceCapabilities{}))
+	deviceStatus(t, f, db, network, proxy, "203.0.113.21/24", routeID, state, targets...)
+}
+
+// deviceStatus records node's network status at now, with the public
+// interface address address.
+func deviceStatus(t *testing.T, f *fixture, db *gorm.DB, network *networkmodel.Service, node agentcontrol.AgentNode, address, routeID string, state networkv1.ComponentState, targets ...*networkv1.ForwardTargetHealth) {
+	t.Helper()
+	require.NoError(t, network.RecordHello(f.ctx, node, &networkv1.DeviceCapabilities{}))
 	var device model.NetworkDevice
-	require.NoError(t, db.First(&device, "node_ref = ?", proxy.String()).Error)
+	require.NoError(t, db.First(&device, "node_ref = ?", node.String()).Error)
 	status := &networkv1.NetworkStatus{
-		DeviceRef: proxy.String(), Generation: device.Generation,
-		Interfaces:   []*networkv1.InterfaceFact{{Name: "eth0", Addresses: []string{"10.0.0.2/24", "203.0.113.21/24"}}},
+		DeviceRef: node.String(), Generation: device.Generation,
+		Interfaces:   []*networkv1.InterfaceFact{{Name: "eth0", Addresses: []string{"10.0.0.2/24", address}}},
 		PortForwards: []*networkv1.PortForwardStatus{{Id: routeID, State: state, Targets: targets}},
 	}
-	require.NoError(t, network.RecordStatus(f.ctx, proxy, status, f.clock.Now()))
+	require.NoError(t, network.RecordStatus(f.ctx, node, status, f.clock.Now()))
 }
 
 // The entry's target checks are the route's health (hop 0, checked by the
@@ -232,4 +239,92 @@ func TestEntryHAOnNetworkRoute(t *testing.T) {
 	require.False(t, status.GetNodes()[0].GetInRotation())
 	require.Equal(t, dnsReasonUpstreamsDown, status.GetNodes()[0].GetReason())
 	require.Equal(t, dnsStateDegraded, status.GetState())
+}
+
+// A route with two entry devices: each runs the port forward by an
+// internet egress of its own, reports its own target checks, is diagnosed
+// and is judged for the entry HA DNS name on its own.
+func TestNetworkRouteSeveralEntries(t *testing.T) {
+	resetDiagnosesForTest()
+	f, db, network := networkFixture(t)
+	second := agentcontrol.AgentNode{Kind: agentcontrol.NodeKindProxy, ID: 22}
+	require.NoError(t, db.Create(&model.Node{ID: 22, Name: "proxy-2", Host: "proxy2.example.com", Port: 443, APIKey: "proxy2-key", Status: model.NodeStatusOnline}).Error)
+	view, err := network.Get(f.ctx)
+	require.NoError(t, err)
+	doc := view.Document
+	doc.Lines = append(doc.Lines, networkmodel.Line{ID: "ln-hk2", Node: second.String(), Interface: "eth0", Families: []string{"v4"}, GatewayV4: "203.0.113.1"})
+	doc.Egresses = append(doc.Egresses, networkmodel.Egress{ID: "eg-hk2", Line: "ln-hk2", Kind: "nat_direct", Audience: "internet", Family: "v4", Source: "auto"})
+	_, err = network.Replace(f.ctx, &doc, &view.Revision, networkmodel.Actor{Name: "admin"})
+	require.NoError(t, err)
+
+	fake := &fakeDNS{sets: map[string][]string{}}
+	f.service.DNSKEK = func() string { return testKEK }
+	f.service.NewDNSProvider = func(string, map[string]string, map[string]string) (forwardddns.Provider, error) { return fake, nil }
+	route := networkRoute(&forwardv1.Route{
+		Listen: &forwardv1.Listen{Port: 20022, Protocol: forwardv1.L4Protocol_L4_PROTOCOL_TCP, EntryHostname: hostnameA},
+	})
+	route.Hops[0].NodeRefs = []string{proxy.String(), second.String()}
+	route = f.create("network-1", route)
+	for node, egress := range map[string]string{proxy.String(): "eg-hk", second.String(): "eg-hk2"} {
+		plan, found, err := network.DevicePlan(f.ctx, node)
+		require.NoError(t, err)
+		require.True(t, found, node)
+		require.Len(t, plan.GetPortForwards(), 1, node)
+		require.Equal(t, egress, plan.GetPortForwards()[0].GetEgressId(), node)
+	}
+
+	healthy := &networkv1.ForwardTargetHealth{Host: "198.51.100.10", Port: 22, State: networkv1.TargetHealthState_TARGET_HEALTH_STATE_HEALTHY, RttUs: 700, CheckedAtUnixMs: 1}
+	down := &networkv1.ForwardTargetHealth{Host: "198.51.100.10", Port: 22, State: networkv1.TargetHealthState_TARGET_HEALTH_STATE_CIRCUIT_OPEN, ConsecutiveFailures: 3}
+	report := func(secondTarget *networkv1.ForwardTargetHealth) {
+		networkStatus(t, f, db, network, route.GetId(), networkv1.ComponentState_COMPONENT_STATE_APPLIED, healthy)
+		deviceStatus(t, f, db, network, second, "203.0.113.22/24", route.GetId(), networkv1.ComponentState_COMPONENT_STATE_APPLIED, secondTarget)
+	}
+	report(healthy)
+	health, err := f.service.RouteHealth(f.ctx, route.GetId())
+	require.NoError(t, err)
+	require.Len(t, health, 2)
+	require.Equal(t, []string{proxy.String(), second.String()}, []string{health[0].GetNodeRef(), health[1].GetNodeRef()})
+
+	var mu sync.Mutex
+	var dialed []string
+	f.service.Probes.Dial = func(_ context.Context, _, address string, _ time.Duration) (net.Conn, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		dialed = append(dialed, address)
+		client, server := net.Pipe()
+		_ = server.Close()
+		return client, nil
+	}
+	answer, err := f.service.DiagnoseRoute(f.ctx, route.GetId(), 0)
+	require.NoError(t, err)
+	require.True(t, answer.GetOk(), "%v", answer.GetSteps())
+	require.Len(t, stepsOf(answer, forwardv1.ProbeKind_PROBE_KIND_CONFIG), 2)
+	require.Len(t, stepsOf(answer, forwardv1.ProbeKind_PROBE_KIND_HEALTH), 2)
+	require.ElementsMatch(t, []string{"203.0.113.21:20022", "203.0.113.22:20022"}, dialed)
+
+	provider, err := f.service.CreateDNSProvider(f.ctx, "provider-1", &forwardv1.DnsProvider{
+		Name: "cf", Kind: forwardv1.DnsProviderKind_DNS_PROVIDER_KIND_CLOUDFLARE,
+	}, map[string]string{forwardddns.CredentialAPIToken: cfSecret})
+	require.NoError(t, err)
+	_, err = f.service.CreateDNSBinding(f.ctx, "binding-1", &forwardv1.DnsBinding{
+		RouteId: route.GetId(), ProviderId: provider.GetId(), Zone: "example.com",
+	})
+	require.NoError(t, err)
+	ha := &EntryHA{Service: f.service, LocalSession: func(agentcontrol.AgentNode) bool { return true }}
+	require.NoError(t, ha.Evaluate(f.ctx))
+	require.Equal(t, []string{"set hk.example.com A 203.0.113.21,203.0.113.22"}, fake.take())
+
+	// The second entry's checks fail: it leaves rotation, the first stays.
+	for range DNSRemoveAfter {
+		f.clock.Advance(DNSEvaluateInterval)
+		report(down)
+		require.NoError(t, ha.Evaluate(f.ctx))
+	}
+	require.Equal(t, []string{"set hk.example.com A 203.0.113.21"}, fake.take())
+	status, err := f.service.RouteDNS(f.ctx, route.GetId())
+	require.NoError(t, err)
+	require.Len(t, status.GetNodes(), 2)
+	for _, node := range status.GetNodes() {
+		require.Equal(t, node.GetNodeRef() == proxy.String(), node.GetInRotation(), node.GetNodeRef())
+	}
 }

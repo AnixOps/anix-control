@@ -18,17 +18,19 @@ import (
 //
 //  1. Control's records: per device, that it negotiated network.v1, that
 //     its latest status runs the plan generation Control wants, and that
-//     the route's components on it are up: the entry's port forward, the
+//     the route's components on it are up: each entry's port forward, the
 //     anx_line transports between the hops and the exit's egress
-//     (PROBE_KIND_CONFIG); each target's health from the entry's port
-//     forward (PROBE_KIND_HEALTH). The entry's checks dial through the
+//     (PROBE_KIND_CONFIG); each target's health from each entry's port
+//     forward (PROBE_KIND_HEALTH). The transport (or egress) the network
+//     model chose for an entry after the first is not named by the route,
+//     so it is judged by that entry's port forward and target checks. The entry's checks dial through the
 //     route's whole path, so a healthy target is delivery proven end to
 //     end. The target config steps are the forward routes' (stage 1 of
 //     diagnose.go).
 //  2. No node checks run: agent.diagnostic's forward checks read the
 //     forward component's state. The nodes are listed with a note.
-//  3. Control vantage: a TCP connect to the entry's listener, and to the
-//     targets only when the entry reports no health for them.
+//  3. Control vantage: a TCP connect to each entry's listener, and to the
+//     targets only when no entry reports health for them.
 
 // Step codes of network routes.
 const (
@@ -60,14 +62,14 @@ func (d *diagnosis) diagnoseNetwork(ctx context.Context, started time.Time) (*fo
 		components[forward.Egress] = true
 	}
 	for index, hop := range d.route.GetHops() {
-		if len(hop.GetNodeRefs()) == 0 {
-			continue
+		for _, ref := range hop.GetNodeRefs() {
+			d.networkConfigStep(uint32(index), ref, devices[ref], components, index == 0) // #nosec G115 -- validate bounds hops to MaxHops.
 		}
-		ref := hop.GetNodeRefs()[0]
-		d.networkConfigStep(uint32(index), ref, devices[ref], components, index == 0) // #nosec G115 -- validate bounds hops to MaxHops.
 	}
-	entry := devices[forward.Entry]
-	reported := d.networkHealthSteps(forward.Entry, entry)
+	reported := false
+	for _, entry := range forward.Entries {
+		reported = d.networkHealthSteps(entry, devices[entry]) || reported
+	}
 	d.targetSteps(ctx)
 
 	nodes := make([]*forwardv1.DiagnoseNode, 0, len(refs))
@@ -80,7 +82,11 @@ func (d *diagnosis) diagnoseNetwork(ctx context.Context, started time.Time) (*fo
 		nodes = append(nodes, node)
 	}
 
-	d.networkControlProbes(ctx, forward.Entry, deviceAddresses(db, forward.Entry, entry.Status), !reported)
+	entries := make(map[string][]string, len(forward.Entries))
+	for _, entry := range forward.Entries {
+		entries[entry] = deviceAddresses(db, entry, devices[entry].Status)
+	}
+	d.networkControlProbes(ctx, forward.Entries, entries, !reported)
 	return d.answer(started, nodes), nil
 }
 
@@ -180,20 +186,24 @@ func (d *diagnosis) networkHealthSteps(ref string, device networkDevice) (report
 	return true
 }
 
-// networkControlProbes dials the entry's listener from Control, and the
-// targets when withTargets (the entry reports no health for them).
-func (d *diagnosis) networkControlProbes(ctx context.Context, entry string, addresses []string, withTargets bool) {
+// networkControlProbes dials each entry's listener from Control, at the
+// route's listen address or the entry's first public address, and the
+// targets when withTargets (no entry reports health for them).
+func (d *diagnosis) networkControlProbes(ctx context.Context, entries []string, addresses map[string][]string, withTargets bool) {
 	tcp, _ := routeProtocols(d.route)
 	port := d.route.GetListen().GetPort()
-	host := d.route.GetListen().GetAddress()
-	if addr, err := netip.ParseAddr(host); err != nil || addr.IsUnspecified() {
-		host = ""
-		if len(addresses) > 0 {
-			host = addresses[0]
-		}
-	}
 	var dials []*forwardv1.DiagnoseStep
-	if host != "" && port != 0 {
+	for _, entry := range entries {
+		host := d.route.GetListen().GetAddress()
+		if addr, err := netip.ParseAddr(host); err != nil || addr.IsUnspecified() {
+			host = ""
+			if len(addresses[entry]) > 0 {
+				host = addresses[entry][0]
+			}
+		}
+		if host == "" || port == 0 {
+			continue
+		}
 		address := hostPort(host, port)
 		if tcp {
 			dials = append(dials, &forwardv1.DiagnoseStep{NodeRef: entry, Kind: forwardv1.ProbeKind_PROBE_KIND_LISTEN, Vantage: vantageControl, Target: address, Protocol: protoTCP})
