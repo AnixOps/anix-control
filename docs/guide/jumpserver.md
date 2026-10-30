@@ -44,7 +44,9 @@ Actions → JumpServer → Run workflow, then choose the action:
 - `run`: runs `command` (default `uptime`) as `runas` (default `root`) on the
   hosts named in `hosts` (comma-separated names or addresses; empty means
   every active host) through the job center, waits for it and prints the
-  summary. The run fails when any host fails. With `show_output` it then
+  summary. The run fails when any host fails, except a host without Python,
+  where Ansible cannot run the command at all: the run warns and goes on
+  (scripts gate on a file of the host they are for). With `show_output` it then
   prints the job's Ansible log, which JumpServer serves only over its task
   log websocket. Ansible would treat `{{ }}` in the command as a template
   (for example `docker ps --format '{{.Names}}'`), so `jms.py` wraps such a

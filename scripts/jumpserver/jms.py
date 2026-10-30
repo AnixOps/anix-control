@@ -184,6 +184,18 @@ def select_hosts(hosts, names):
     return chosen
 
 
+# Ansible's answer for a host whose Python interpreter is missing.
+NO_PYTHON = "you probably need to set the interpreter"
+
+
+def without_python(summary):
+    """Tell whether every failed host of a job's summary failed only for
+    having no Python, with none unreachable."""
+    summary = summary or {}
+    failures = summary.get("failures") or {}
+    return bool(failures) and not summary.get("dark") and all(NO_PYTHON in str(v) for v in failures.values())
+
+
 def cmd_check(client, _args):
     profile = client.get("/api/v1/users/profile/")
     hosts = client.hosts()
@@ -240,6 +252,14 @@ def cmd_run(client, args):
     print(f"Status:  {label(detail.get('status'))} in {detail.get('time_cost')}s")
     print("Summary: " + json.dumps(detail.get("summary"), ensure_ascii=False, indent=2))
     ok = 0 if detail.get("is_success") else 1
+    if ok and without_python(detail.get("summary")):
+        # A host without Python cannot run Ansible's shell module, so the
+        # command never ran there. The scripts given to run gate on a file
+        # of the host they are for, and their own check fails when that
+        # host is the one without Python.
+        print("::warning::the command did not run on hosts without Python "
+              "(Ansible cannot run modules there); every other host succeeded", flush=True)
+        ok = 0
     if not args.show_output:
         print("Output:  hidden (--show-output prints the job log; workflow logs are public)")
         return ok
