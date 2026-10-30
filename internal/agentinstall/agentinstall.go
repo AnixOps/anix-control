@@ -165,14 +165,11 @@ type CommandInput struct {
 	// apart by the prefix.
 	Token  string
 	Mirror string
-	// Forward adds --forward: the node relays (forwarding on a regular
-	// node, docs/design/node-unification).
-	Forward bool
 }
 
 // RenderCommand returns the one-line install command:
 //
-//	curl -fsSL <script> | sudo bash -s -- -u <url> -t <token> [--mirror m] [--forward]
+//	curl -fsSL <script> | sudo bash -s -- -u <url> -t <token> [--mirror m]
 //
 // The "--" ends bash's own options, so every later word reaches the script.
 // curl gets -g (no URL globbing) when the URL has an IPv6 literal.
@@ -187,9 +184,6 @@ func RenderCommand(input CommandInput) string {
 	}
 	if input.Mirror != "" && input.Mirror != MirrorControl {
 		words = append(words, "--mirror", ShellQuote(input.Mirror))
-	}
-	if input.Forward {
-		words = append(words, "--forward")
 	}
 	return strings.Join(words, " ")
 }
@@ -224,12 +218,9 @@ func (s Settings) ScriptURL(mirror string) string {
 const UninstallCommand = "sudo anix-agent uninstall"
 
 // Commands renders the command for every mirror. The token is validated by
-// the caller.
-func (s Settings) Commands(token string) []Command { return s.CommandsFor(token, false) }
-
-// CommandsFor renders the command for every mirror, with --forward for a
-// node that relays.
-func (s Settings) CommandsFor(token string, forward bool) []Command {
+// the caller. Relaying runs on the network model, so no command carries
+// --forward.
+func (s Settings) Commands(token string) []Command {
 	metadata := s.Metadata()
 	commands := make([]Command, 0, len(Mirrors))
 	for _, mirror := range Mirrors {
@@ -249,7 +240,7 @@ func (s Settings) CommandsFor(token string, forward bool) []Command {
 			command.Note = "the script and the Agent come from GitHub releases; the token still enrolls with this Control"
 		}
 		command.Command = RenderCommand(CommandInput{
-			ControlURL: s.ControlURL, ScriptURL: s.ScriptURL(mirror), Token: token, Mirror: mirror, Forward: forward,
+			ControlURL: s.ControlURL, ScriptURL: s.ScriptURL(mirror), Token: token, Mirror: mirror,
 		})
 		commands = append(commands, command)
 	}

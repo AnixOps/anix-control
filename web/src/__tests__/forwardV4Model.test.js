@@ -52,10 +52,18 @@ describe('the editor draft', () => {
   })
 
   it('lists the required fields a preview waits for (D4)', () => {
+    // A new route runs on the network model (ANX): its exit needs an egress
+    // and its listen port is explicit.
     const draft = routeToDraft()
-    expect(missingRequired(draft)).toEqual(['name', 'hops[0].node_refs', 'targets[0].host', 'targets[0].port'])
+    expect(draft.hops[0].engine).toBe('ENGINE_NETWORK')
+    expect(missingRequired(draft)).toEqual([
+      'name', 'hops[0].node_refs', 'hops[0].network_egress_id', 'listen.port', 'targets[0].host', 'targets[0].port'
+    ])
     draft.name = 'x'
-    draft.hops[0].node_refs.push('forward-41')
+    draft.hops[0].node_refs.push('proxy-41')
+    draft.hops[0].network_egress_id = 'egress-1'
+    draft.listen.portMode = 'explicit'
+    draft.listen.port = 30000
     draft.targets[0].host = 'a.example'
     draft.targets[0].port = 443
     expect(missingRequired(draft)).toEqual([])

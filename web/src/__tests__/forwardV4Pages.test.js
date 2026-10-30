@@ -219,8 +219,16 @@ describe('anixops engine (D12)', () => {
     return wrapper.findAllComponents(UiSelect).find(select => select.props('label') === 'Engine').props('options')
   }
 
-  it('is not offered to a new hop: the editor offers nftables and ANX', () => {
-    expect(engineOptions({}).map(option => option.value)).toEqual(['ENGINE_NFTABLES', 'ENGINE_NETWORK'])
+  it('is not offered to a new hop: a hop still on nftables keeps it beside ANX', () => {
+    expect(engineOptions({}).map(option => option.value)).toEqual(['ENGINE_NETWORK', 'ENGINE_NFTABLES'])
+  })
+
+  it('has no engine picker on an ANX hop: ANX is the only engine', () => {
+    const wrapper = track(mount(HopCard, {
+      props: { hop: { _key: 'k', engine: 'ENGINE_NETWORK', node_refs: [], portMode: 'auto', dial_address: '', ingress: { security: 'LINK_SECURITY_NETWORK', network_transport_id: '' } }, index: 1, total: 2, nodes: NODES, errorText: () => '' },
+      attachTo: document.body
+    }))
+    expect(wrapper.findAllComponents(UiSelect).find(select => select.props('label') === 'Engine')).toBeUndefined()
   })
 
   it('offers the removed gost engine only to a hop still on it', () => {
@@ -229,7 +237,7 @@ describe('anixops engine (D12)', () => {
       attachTo: document.body
     }))
     const options = wrapper.findAllComponents(UiSelect).find(select => select.props('label') === 'Engine').props('options')
-    expect(options.map(option => option.value)).toEqual(['ENGINE_NFTABLES', 'ENGINE_NETWORK', 'ENGINE_GOST'])
+    expect(options.map(option => option.value)).toEqual(['ENGINE_NETWORK', 'ENGINE_GOST'])
   })
 
   it('picks a network hop\'s transport and egress from the network model', () => {
