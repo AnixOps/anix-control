@@ -116,6 +116,7 @@
                     :violations="violations"
                     :error-text="errorText"
                     :network-model="networkModel"
+                    :network-nodes="networkNodes"
                     @update="patch => updateHop(index, patch)"
                     @add-node="ref => hop.node_refs.push(ref)"
                     @remove-node="ref => hop.node_refs.splice(hop.node_refs.indexOf(ref), 1)"
@@ -268,8 +269,10 @@ const toast = useToast()
 const editing = computed(() => Boolean(props.id))
 const draft = ref(null)
 const nodes = ref([])
-// The network model's document, for ENGINE_NETWORK routes.
+// The network model's document, for ENGINE_NETWORK routes, and the Agent
+// nodes they may use.
 const networkModel = ref(null)
+const networkNodes = ref([])
 const enforced = ref('')
 const loadError = ref(null)
 const saving = ref(false)
@@ -305,6 +308,7 @@ async function load() {
     ])
     nodes.value = nodeAnswer.nodes
     networkModel.value = network?.document || null
+    networkNodes.value = network?.nodes || []
     storedBinding.value = bindings?.find(item => item.route_id === props.id) || null
     dnsReady.value = Array.isArray(bindings)
     let route = routeAnswer?.route || null

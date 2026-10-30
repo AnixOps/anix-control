@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import UiDataTable from '@/ui/UiDataTable.vue'
 import UiSelect from '@/ui/UiSelect.vue'
+import UiCombobox from '@/ui/UiCombobox.vue'
 import { setEdition } from '@/composables/useEdition'
 import { inBody, toasts } from './helpers/feedback'
 
@@ -260,10 +261,27 @@ describe('anixops engine (D12)', () => {
     }))
     const selects = wrapper.findAllComponents(UiSelect)
     const transport = selects.find(select => select.props('label') === 'Network transport').props('options')
-    expect(transport).toEqual([expect.objectContaining({ value: 'tr-hk', disabled: false })])
+    expect(transport).toEqual([expect.objectContaining({ value: '*', label: 'Automatic' }), expect.objectContaining({ value: 'tr-hk', disabled: false })])
     const egress = selects.find(select => select.props('label') === 'Internet egress').props('options')
-    expect(egress.map(option => option.value)).toEqual(['eg-hk'])
+    expect(egress.map(option => option.value)).toEqual(['*', 'eg-hk'])
     expect(selects.find(select => select.props('label') === 'Ingress')).toBeUndefined()
+    // 自动 is stored as no id.
+    selects.find(select => select.props('label') === 'Network transport').vm.$emit('update:modelValue', '*')
+    expect(wrapper.emitted('update').at(-1)[0].ingress.network_transport_id).toBe('')
+  })
+
+  it('offers every Agent node to a network hop, with or without a line', () => {
+    const wrapper = track(mount(HopCard, {
+      props: {
+        hop: { _key: 'k', engine: 'ENGINE_NETWORK', node_refs: [], portMode: 'auto', dial_address: '' },
+        index: 0, total: 1, nodes: [], errorText: () => '',
+        networkModel: { lines: [{ id: 'ln-sh', node: 'proxy-1' }] },
+        networkNodes: [{ node: 'proxy-1', name: 'SH' }, { node: 'forward-7', name: 'HK relay' }]
+      },
+      attachTo: document.body
+    }))
+    const options = wrapper.findComponent(UiCombobox).props('options')
+    expect(options.map(option => [option.value, option.label])).toEqual([['forward-7', 'HK relay'], ['proxy-1', 'SH']])
   })
 
   it('stays shown on a hop that already uses it', () => {

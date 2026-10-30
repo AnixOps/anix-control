@@ -42,13 +42,13 @@ func networkRuleCases() []ruleCase {
 		{"network: mixed engines", onNetwork(func(r *model.Route) { r.Hops[0].Engine = model.EngineNFTables }), "hops[0].engine", CodeInvalidRelation},
 		{"network: several nodes", onNetwork(func(r *model.Route) { r.Hops[1].NodeRefs = []string{"proxy-41", "proxy-42"} }),
 			"hops[1].node_refs", CodeRequiresSingleNode},
-		{"network: no egress", onNetwork(func(r *model.Route) { r.Hops[1].NetworkEgressID = "" }), "hops[1].network_egress_id", CodeRequired},
 		{"network: bad egress", onNetwork(func(r *model.Route) { r.Hops[1].NetworkEgressID = "eg hk" }), "hops[1].network_egress_id", CodeInvalidFormat},
 		{"network: egress on the entry", onNetwork(func(r *model.Route) { r.Hops[0].NetworkEgressID = "eg-sh" }), "hops[0].network_egress_id", CodeNotApplicable},
 		{"network: hop port", onNetwork(func(r *model.Route) { r.Hops[1].Port = 20000 }), "hops[1].port", CodeNotApplicable},
 		{"network: dial address", onNetwork(func(r *model.Route) { r.Hops[1].DialAddress = "10.0.0.41" }), "hops[1].dial_address", CodeNotApplicable},
-		{"network: no transport", onNetwork(func(r *model.Route) { r.Hops[1].Ingress.NetworkTransportID = "" }),
-			"hops[1].ingress.network_transport_id", CodeRequired},
+		{"network: neither transport nor device", onNetwork(func(r *model.Route) {
+			r.Hops[1].Ingress.NetworkTransportID, r.Hops[1].NodeRefs = "", nil
+		}), "hops[1].node_refs", CodeRequired},
 		{"network: bad transport", onNetwork(func(r *model.Route) { r.Hops[1].Ingress.NetworkTransportID = "tr/1" }),
 			"hops[1].ingress.network_transport_id", CodeInvalidFormat},
 		{"network: mux", onNetwork(func(r *model.Route) { r.Hops[1].Ingress.Mux = true }), "hops[1].ingress.security", CodeNotApplicable},
@@ -84,5 +84,12 @@ func TestNetworkRoutes(t *testing.T) {
 	r.Listen.EntryHostname = "sh.example.net"
 	if vs := Route(&r, Options{EnableNetwork: true}); len(vs) != 0 {
 		t.Fatalf("several entries: %v", vs)
+	}
+	// Without a transport or an egress, Control links the devices and
+	// picks the exit's egress.
+	r = networkRoute()
+	r.Hops[1].Ingress.NetworkTransportID, r.Hops[1].NetworkEgressID = "", ""
+	if vs := Route(&r, Options{EnableNetwork: true}); len(vs) != 0 {
+		t.Fatalf("auto transport and egress: %v", vs)
 	}
 }

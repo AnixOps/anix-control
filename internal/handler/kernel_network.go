@@ -57,7 +57,7 @@ func (h *NetworkModelHandler) actor(c *gin.Context) networkmodel.Actor {
 
 // Get godoc
 // @Summary The device network model
-// @Description The network model document (lines on nodes; user and hop ingresses and internet and hop egresses on lines; ANX-Line transports from a hop egress to another device's hop ingress; paths from a user ingress through transports to an internet egress) with its revision, the paths not planned yet and why (pending: a transport's accepting device has not reported its ANX-Line server key), and each device's plan generation and hash, whether its Agent negotiated network.v1, and which public keys it reported.
+// @Description The network model document (lines on nodes; user and hop ingresses and internet and hop egresses on lines; ANX-Line transports from a hop egress to another device's hop ingress; paths from a user ingress through transports to an internet egress) with its revision, the paths not planned yet and why (pending: a transport's accepting device has not reported its ANX-Line server key), and each device's plan generation and hash, whether its Agent negotiated network.v1, and which public keys it reported, and the devices a route may use (nodes: every enabled node whose Agent connected, by node reference and name).
 // @Tags Kernel
 // @Produce json
 // @Security BearerAuth
