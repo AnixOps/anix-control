@@ -13,8 +13,8 @@ const STRATEGY = {
 export default {
   forwardV4: {
     nav: {
-      label: '转发',
-      overview: '概览',
+      label: '节点与转发',
+      overview: '转发概览',
       routes: '路由',
       nodes: '节点'
     },
@@ -583,12 +583,14 @@ export default {
       }
     },
     nodes: {
-      title: '节点',
-      description: '转发清单里的节点：转发节点和加入转发的代理节点。角色属于跳，同一个节点可以是一条路由的入口、另一条的出口。',
+      title: '转发主机',
+      description: '不是常规节点的转发机器：没有 Agent、由 Ansible 下发的主机，以及还没转为常规节点的旧转发节点。运行 Agent 的中转和落地都在「节点」里。',
       add: '添加 Ansible 主机',
       loadFailed: '无法加载节点',
-      emptyTitle: '转发清单是空的',
-      emptyDescription: '添加转发节点，或在代理节点页把代理节点加入转发清单。',
+      emptyTitle: '没有转发主机',
+      emptyDescription: '所有运行 Agent 的机器都已是常规节点。只有没有 Agent 的 Ansible 主机才在这里添加。',
+      unconverted: '待转为常规节点',
+      unconvertedHint: '旧的 Agent 转发节点：转为常规节点后它就和其他节点一样出现在「节点」里，并能承载 ANX 中转。',
       kindFilter: '类型',
       flagFilter: '需要处理',
       forward: '转发节点',
@@ -602,7 +604,7 @@ export default {
       columns: {
         node: '节点',
         status: '状态',
-        kind: '类型与通道',
+        kind: '通道',
         agent: 'Agent',
         engines: '引擎',
         hops: '跳数',

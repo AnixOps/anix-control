@@ -172,24 +172,23 @@ describe('AdminLayout.vue', () => {
     expect(wrapper.get('.admin-crumbs a').attributes('href')).toBe('/admin/system')
   })
 
-  // F5b: with the forward package's v4 API the sidebar gets 转发, the
-  // forwarding area; the package's own menu entry is left out. The
-  // flux-clone pages (转发（旧版）, 转发节点（旧版）) were removed in F5d.
-  it('adds the v4 forwarding area when the forward package provides it', async () => {
+  // With the forward package's v4 API the forwarding pages are sections of
+  // 节点 (one network area, no 转发 item); the package's own menu entry is
+  // left out. The flux-clone pages were removed in F5d.
+  it('keeps the v4 forwarding pages under 节点 when the forward package provides them', async () => {
     mockAdminCapabilities.value = ['forward.v4']
     mockAdminExtensionMenus.value = [{ pluginID: 'forward', id: 'forward.main', parent: 'operations', label: 'Forward', icon: 'network', to: '/admin/extensions/forward', permission: 'forward.view', order: 150 }]
     try {
       const { wrapper, router } = await mountLayout('/admin/forward/routes/01J')
       mounted = wrapper
       const paths = sidebarPaths(wrapper)
-      expect(paths).toContain('/admin/forward/overview')
-      expect(paths).not.toContain('/admin/forward')
-      expect(paths).not.toContain('/admin/forward/nodes')
+      expect(paths.filter(path => path.startsWith('/admin/forward'))).toEqual([])
       expect(paths).not.toContain('/admin/extensions/forward')
-      expect(wrapper.get('#admin-sidebar a[href="/admin/forward/overview"]').attributes('aria-current')).toBe('page')
+      expect(wrapper.get('#admin-sidebar a[href="/admin/nodes"]').attributes('aria-current')).toBe('page')
+      // A node's forwarding settings belong to 节点 too.
       await router.push('/admin/forward/inventory/forward-41')
       await flushPromises()
-      expect(wrapper.get('#admin-sidebar a[href="/admin/forward/overview"]').attributes('aria-current')).toBe('page')
+      expect(wrapper.get('#admin-sidebar a[href="/admin/nodes"]').attributes('aria-current')).toBe('page')
     } finally {
       mockAdminCapabilities.value = []
       mockAdminExtensionMenus.value = []

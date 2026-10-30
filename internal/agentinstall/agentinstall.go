@@ -48,6 +48,23 @@ const (
 	MetadataFormat = "1"
 )
 
+// IsDevBuild reports whether a release tag names a dev build: the Agent and
+// Control built together from main after the release before ".dev."
+// (docs/RELEASING.md, "Dev builds"), published as a pre-release of this
+// repository only.
+func IsDevBuild(tag string) bool {
+	return ReleaseTagPattern.MatchString(tag) && strings.Contains(tag, ".dev.")
+}
+
+// GitHubAgentBase is where GitHub serves the assets of Agent release tag:
+// a dev build's are in the Control pre-release of the same tag.
+func GitHubAgentBase(tag string) string {
+	if IsDevBuild(tag) {
+		return ControlReleaseBase
+	}
+	return AgentReleaseBase
+}
+
 // Mirrors the install command can name (--mirror).
 const (
 	MirrorControl = "control"
@@ -65,8 +82,9 @@ var Assets = map[string]string{
 }
 
 var (
-	// ReleaseTagPattern matches release tags (Control's and the Agent's).
-	ReleaseTagPattern = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)(\.[0-9]+)?)?$`)
+	// ReleaseTagPattern matches release tags (Control's and the Agent's),
+	// dev builds (v5.0.0-rc.15.dev.42, IsDevBuild) included.
+	ReleaseTagPattern = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)(\.[0-9]+(\.dev\.[0-9]+)?)?)?$`)
 	assetPattern      = regexp.MustCompile(`^anix-agent-linux-[a-z0-9-]+\.zip(\.dgst|\.sig)?$`)
 	sha256Pattern     = regexp.MustCompile(`^[0-9a-f]{64}$`)
 	dgstLinePattern   = regexp.MustCompile(`^SHA(?:2-)?256(?:\([^)]*\))?=\s*([0-9a-fA-F]{64})\s*$`)
@@ -254,7 +272,7 @@ type Metadata struct {
 func (s Settings) Metadata() Metadata {
 	metadata := Metadata{
 		AgentVersion: s.AgentVersion, GRPCTarget: s.GRPCTarget,
-		Sources: map[string]string{MirrorGitHub: AgentReleaseBase}, SHA256: map[string]string{},
+		Sources: map[string]string{MirrorGitHub: GitHubAgentBase(s.AgentVersion)}, SHA256: map[string]string{},
 	}
 	if mirror := strings.TrimRight(strings.TrimSpace(s.CNMirrorURL), "/"); mirror != "" {
 		metadata.Sources[MirrorCN] = mirror

@@ -221,7 +221,7 @@ func (h *AgentInstallHandler) Readiness(c *gin.Context) {
 		BuiltinPKI: cfg.ModuleRuntime.PKIOrDefault() == config.ModulePKIBuiltin, CAKEK: strings.TrimSpace(cfg.ModuleRuntime.CAKEK) != "",
 		MTLSMode:      cfg.AgentControl.MTLSOrDefault(),
 		SignatureFile: cfg.AgentInstall.SignatureFile, OfficialPublicKey: cfg.Plugins.OfficialPublicKey,
-		AgentVersion: cfg.AgentInstall.AgentVersion, ReleaseVersion: ReleaseVersion,
+		AgentVersion: cfg.AgentInstall.AgentVersion, PinnedAgentVersion: AgentRelease, ReleaseVersion: ReleaseVersion,
 		ArtifactDir: cfg.AgentInstall.ArtifactDir, CNMirrorURL: cfg.AgentInstall.CNMirrorURL,
 	}
 	if input.CAKEK {

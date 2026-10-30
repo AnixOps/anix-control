@@ -24,6 +24,7 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/cache"
 	"github.com/AnixOps/anix-control/v5/internal/config"
 	"github.com/AnixOps/anix-control/v5/internal/database"
+	"github.com/AnixOps/anix-control/v5/internal/features"
 	grpcserver "github.com/AnixOps/anix-control/v5/internal/grpc"
 	"github.com/AnixOps/anix-control/v5/internal/handler"
 	"github.com/AnixOps/anix-control/v5/internal/health"
@@ -43,7 +44,7 @@ import (
 )
 
 // @title AnixOps Control API
-// @version 5.0.0-rc.12
+// @version 5.0.0-rc.15
 // @description AnixOps Control 统一控制面 API 文档
 // @description 支持用户管理、节点管理、订阅系统、支付网关、流量转发等功能
 // @termsOfService https://github.com/AnixOps/anix-control
@@ -183,6 +184,7 @@ func formatDisplayVersion(baseVersion, code string) string {
 func syncBuildInfo() {
 	handler.BuildVersion = formatDisplayVersion(version, buildCode)
 	handler.ReleaseVersion = version
+	features.SetVersion(version)
 	handler.AgentRelease = agentRelease
 	handler.BuildTime = buildTime
 	handler.BuildCode = buildCode

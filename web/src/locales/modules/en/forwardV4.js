@@ -12,8 +12,8 @@ const STRATEGY = {
 export default {
   forwardV4: {
     nav: {
-      label: 'Forwarding',
-      overview: 'Overview',
+      label: 'Nodes and forwarding',
+      overview: 'Forwarding',
       routes: 'Routes',
       nodes: 'Nodes'
     },
@@ -582,12 +582,14 @@ export default {
       }
     },
     nodes: {
-      title: 'Nodes',
-      description: 'The forwarding inventory: forward nodes and the proxy nodes that joined it. Roles belong to hops; one node can be one route’s entry and another’s exit.',
+      title: 'Forward hosts',
+      description: 'Forwarding machines that are not regular nodes: hosts without an Agent that Control manages with Ansible, and old forward nodes not yet made regular nodes. Relays and exits that run the Agent are under Nodes.',
       add: 'Add Ansible host',
       loadFailed: 'Could not load nodes',
-      emptyTitle: 'The inventory is empty',
-      emptyDescription: 'Add a forward node, or add a proxy node to the inventory from its page.',
+      emptyTitle: 'No forward hosts',
+      emptyDescription: 'Every machine that runs the Agent is a regular node. Add a host here only when it has no Agent and Ansible manages it.',
+      unconverted: 'To make a regular node',
+      unconvertedHint: 'An old Agent forward node: once it is a regular node it is listed under Nodes like the others and can carry ANX relays.',
       kindFilter: 'Kind',
       flagFilter: 'Needs attention',
       forward: 'Forward node',
@@ -601,7 +603,7 @@ export default {
       columns: {
         node: 'Node',
         status: 'Status',
-        kind: 'Kind and channel',
+        kind: 'Channel',
         agent: 'Agent',
         engines: 'Engines',
         hops: 'Hops',

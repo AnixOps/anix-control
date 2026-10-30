@@ -2,6 +2,45 @@
 
 ## Unreleased
 
+## 5.0.0-rc.15 - 2026-10-29
+
+### Changed
+
+- Control and the Agent release together again: this release pins Agent
+  v5.0.0-rc.15 (unchanged from Agent rc.13, which treats an empty VMess/VLESS
+  network as tcp). From here on every Control release ships an Agent release
+  with the same number.
+
+### Fixed
+
+- The install readiness check (节点 → Agent 版本) checks the Agent release
+  this Control was built with. Before, a Control-only release such as
+  5.0.0-rc.14 looked for an Agent of its own number in
+  `agent_install.artifact_dir` and warned to set `agent_install.agent_version`,
+  although install commands and upgrade campaigns already used the pinned
+  Agent release.
+
+## 5.0.0-rc.14 - 2026-10-29
+
+### Changed
+
+- The sidebar has no 转发 item any more. 节点 is the one network area: the
+  node page, 转发概览, 路由, DNS and 分流 share one segmented control at the
+  top of each page, and the command palette finds the forwarding pages as
+  sections of 节点. Links and bookmarks to `/admin/forward/...` keep working.
+
+## 5.0.0-rc.13 - 2026-10-29
+
+### Changed
+
+- The console has one node page. 节点 (`/admin/nodes`) lists every machine
+  with a 角色 column: 落地 for a node with protocols, 中转 for one without
+  protocols or carrying forward-route hops, with its hop count and hop
+  errors. The forwarding area loses its 节点 section: `/admin/forward/inventory`
+  opens the node page's new 转发主机 tab, which holds Ansible hosts and
+  forward nodes not yet converted (with 转为常规节点). A node's 转发设置 is in
+  its row menu.
+
 ## 5.0.0-rc.12 - 2026-10-29
 
 ### Added

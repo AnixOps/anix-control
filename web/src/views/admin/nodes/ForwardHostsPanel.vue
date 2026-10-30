@@ -1,13 +1,5 @@
 <template>
-  <section class="fwd-page" data-testid="forward-nodes">
-    <ForwardAreaNav area="nodes" :seconds-ago="secondsAgo" :loading="loading" refreshable @refresh="refresh" />
-
-    <UiPageHeader :title="t('forwardV4.nodes.title')" :description="t('forwardV4.nodes.description')">
-      <template #actions>
-        <UiButton variant="primary" :icon="Plus" data-testid="forward-add-node" @click="openCreate">{{ t('forwardV4.nodes.add') }}</UiButton>
-      </template>
-    </UiPageHeader>
-
+  <div class="hosts-panel" data-testid="forward-hosts-panel">
     <UiDataTable
       :columns="columns"
       :rows="rows"
@@ -15,9 +7,7 @@
       :label="t('forwardV4.nodes.title')"
       :row-label="row => row.name"
       :row-actions="rowActions"
-      :loading="loading && !loaded"
-      :error="loadError"
-      :error-title="t('forwardV4.nodes.loadFailed')"
+      :loading="inventory.loading.value && !inventory.available.value"
       :filtered="filtered"
       :empty-icon="Server"
       :empty-title="t('forwardV4.nodes.emptyTitle')"
@@ -25,17 +15,17 @@
       activatable
       :card-fields="4"
       @row-activate="row => router.push(`/admin/forward/inventory/${row.node_ref}`)"
-      @clear-filters="kind = ''; flag = ''"
-      @retry="refresh"
+      @clear-filters="flag = ''"
     >
-      <template v-if="allRows.length" #toolbar>
-        <div class="nodes-toolbar">
-          <UiFilterChips v-model="kind" :label="t('forwardV4.nodes.kindFilter')" :options="kindOptions" />
-          <UiFilterChips v-model="flag" :label="t('forwardV4.nodes.flagFilter')" :options="flagOptions" />
-        </div>
+      <template #toolbar>
+        <p class="hosts-panel__summary">{{ t('forwardV4.nodes.description') }}</p>
+        <UiFilterChips v-if="allRows.length" v-model="flag" :label="t('forwardV4.nodes.flagFilter')" :options="flagOptions" />
+      </template>
+      <template #toolbar-end>
+        <UiButton :icon="Plus" data-testid="forward-add-node" @click="openCreate">{{ t('forwardV4.nodes.add') }}</UiButton>
       </template>
       <template #empty-actions>
-        <UiButton variant="primary" :icon="Plus" @click="openCreate">{{ t('forwardV4.nodes.add') }}</UiButton>
+        <UiButton :icon="Plus" @click="openCreate">{{ t('forwardV4.nodes.add') }}</UiButton>
       </template>
 
       <template #cell-name="{ row }">
@@ -48,10 +38,8 @@
         <UiBadge :status="row.state" />
       </template>
       <template #cell-kind="{ row }">
-        <span class="fwd-cell-stack">
-          <span><UiBadge v-if="row.kind === 'proxy'" tone="info" :dot="false" :label="t('forwardV4.nodes.proxy')" /><template v-else>{{ t('forwardV4.nodes.forward') }}</template></span>
-          <span class="fwd-muted">{{ row.ansible ? t('forwardV4.nodes.ansible') : t('forwardV4.nodes.agent') }}</span>
-        </span>
+        <UiBadge v-if="row.ansible" tone="neutral" :dot="false" :label="t('forwardV4.nodes.ansible')" />
+        <UiBadge v-else tone="warning" :dot="false" :label="t('forwardV4.nodes.unconverted')" :title="t('forwardV4.nodes.unconvertedHint')" />
       </template>
       <template #cell-agent="{ row }">
         <span class="fwd-mono">{{ row.capabilities?.agent_version || '—' }}</span>
@@ -102,60 +90,50 @@
         <UiButton variant="primary" :loading="creating" @click="create">{{ t('forwardV4.nodes.createRun') }}</UiButton>
       </template>
     </UiDialog>
-  </section>
+  </div>
 </template>
 
 <script setup>
-// 节点 (F5b): the forwarding inventory, forward nodes and proxy nodes that
-// joined it (D15, 「代理节点」). Generations are applied / desired; the page
-// polls every 15 s while visible (D5).
+// 转发主机 on the node page (docs/design/node-unification): the machines of
+// the forwarding inventory that are not regular nodes, Ansible hosts (no
+// Agent) and Agent forward nodes not yet converted (转为常规节点). Regular
+// nodes, relays included, are in the 节点 tab with their relay role. The
+// node page owns the inventory (useForwardInventory) and reloads it after
+// every change here. Generations are applied / desired.
 import { computed, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ArrowRightLeft, Plus, Power, Server, Settings2, Terminal, Trash2 } from '@lucide/vue'
-import { UiBadge, UiButton, UiDataTable, UiDialog, UiFilterChips, UiNumberField, UiPageHeader, UiTextField, useConfirm, useToast } from '@/ui'
+import { UiBadge, UiButton, UiDataTable, UiDialog, UiFilterChips, UiNumberField, UiTextField, useConfirm, useToast } from '@/ui'
 import { useAppI18n } from '@/composables/useAppI18n'
 import AgentInstallSheet from '@/components/admin/AgentInstallSheet.vue'
-import { createNode, deleteNode, listNodes, listRoutes, newIdempotencyKey, toggleNode } from '@/api/forwardV4'
+import { createNode, deleteNode, newIdempotencyKey, toggleNode } from '@/api/forwardV4'
 import { convertForwardNode } from '@/api/kernel'
 import EngineChip from '@/components/forward/EngineChip.vue'
-import ForwardAreaNav from '@/components/forward/ForwardAreaNav.vue'
 import { forwardErrorMessage } from '@/components/forward/messages'
-import { usePolling } from '@/components/forward/usePolling'
 import { SECURITIES, nodeLag, nodeState, num } from '@/components/forward/routeModel'
 import '@/components/forward/forward.css'
+
+const props = defineProps({
+  // useForwardInventory() of the node page.
+  inventory: { type: Object, required: true }
+})
+const emit = defineEmits(['changed'])
 
 const router = useRouter()
 const { t } = useAppI18n()
 const toast = useToast()
 const confirm = useConfirm()
 
-const nodes = ref([])
-const routes = ref([])
-const canDelete = ref(null)
-const loaded = ref(false)
-const loadError = ref(null)
-const { loading, secondsAgo, refresh } = usePolling(async () => {
-  try {
-    const [nodeAnswer, routeAnswer] = await Promise.all([listNodes(), listRoutes()])
-    nodes.value = nodeAnswer.nodes
-    canDelete.value = nodeAnswer.canDelete
-    routes.value = routeAnswer.routes
-    loaded.value = true
-    loadError.value = null
-  } catch (error) {
-    loadError.value = { message: forwardErrorMessage(t, error) }
-    throw error
-  }
-}, { interval: 15_000 })
+const canDelete = computed(() => props.inventory.canDelete.value)
+const refresh = () => emit('changed')
 
-const kind = ref('')
 const flag = ref('')
 
 function usedBy(ref) {
-  return routes.value.filter(item => (item.route?.hops || []).some(hop => (hop.node_refs || []).includes(ref)))
+  return props.inventory.routes.value.filter(item => (item.route?.hops || []).some(hop => (hop.node_refs || []).includes(ref)))
 }
 
-const allRows = computed(() => nodes.value.map(node => ({
+const allRows = computed(() => props.inventory.hosts.value.map(node => ({
   ...node,
   name: node.name || node.node_ref,
   state: nodeState(node),
@@ -165,17 +143,12 @@ const allRows = computed(() => nodes.value.map(node => ({
 })))
 
 const rows = computed(() => allRows.value.filter(row => {
-  if (kind.value && row.kind !== kind.value) return false
   if (flag.value === 'lagging' && row.lag <= 0) return false
   if (flag.value === 'errors' && !num(row.hop_errors)) return false
   return true
 }))
-const filtered = computed(() => Boolean(kind.value || flag.value))
+const filtered = computed(() => Boolean(flag.value))
 
-const kindOptions = computed(() => [
-  { value: 'forward', label: t('forwardV4.nodes.forward'), count: allRows.value.filter(row => row.kind === 'forward').length },
-  { value: 'proxy', label: t('forwardV4.nodes.proxy'), count: allRows.value.filter(row => row.kind === 'proxy').length }
-])
 const flagOptions = computed(() => [
   { value: 'lagging', label: t('forwardV4.nodes.lagging'), count: allRows.value.filter(row => row.lag > 0).length },
   { value: 'errors', label: t('forwardV4.nodes.withErrors'), count: allRows.value.filter(row => num(row.hop_errors)).length }
@@ -201,39 +174,34 @@ const installNode = ref(null)
 
 function rowActions(row) {
   const inUse = row.routes.length > 0
-  const actions = [
+  return [
     { key: 'settings', label: t('forwardV4.nodes.settings'), icon: Settings2, onSelect: () => router.push(`/admin/forward/inventory/${row.node_ref}`) },
-    { key: 'install', label: t('forwardV4.nodes.install'), icon: Terminal, hidden: row.ansible, onSelect: () => { installNode.value = row; installOpen.value = true } }
+    { key: 'install', label: t('forwardV4.nodes.install'), icon: Terminal, hidden: row.ansible, onSelect: () => { installNode.value = row; installOpen.value = true } },
+    {
+      key: 'toggle',
+      label: row.enabled === false ? t('forwardV4.nodes.enable') : (inUse ? t('forwardV4.nodes.disableInUse') : t('forwardV4.nodes.disable')),
+      icon: Power,
+      separatorBefore: true,
+      disabled: row.enabled !== false && inUse,
+      onSelect: () => toggle(row)
+    },
+    {
+      key: 'convert',
+      label: canDelete.value === false ? t('forwardV4.nodes.convertSuperOnly') : t('forwardV4.nodes.convert'),
+      icon: ArrowRightLeft,
+      hidden: row.ansible,
+      disabled: canDelete.value === false,
+      onSelect: () => convert(row)
+    },
+    {
+      key: 'delete',
+      label: canDelete.value === false ? t('forwardV4.actions.deleteSuperOnly') : (inUse ? t('forwardV4.nodes.deleteInUse') : t('forwardV4.nodes.delete')),
+      icon: Trash2,
+      danger: true,
+      disabled: inUse || canDelete.value === false,
+      onSelect: () => remove(row)
+    }
   ]
-  if (row.kind === 'forward') {
-    actions.push(
-      {
-        key: 'toggle',
-        label: row.enabled === false ? t('forwardV4.nodes.enable') : (inUse ? t('forwardV4.nodes.disableInUse') : t('forwardV4.nodes.disable')),
-        icon: Power,
-        separatorBefore: true,
-        disabled: row.enabled !== false && inUse,
-        onSelect: () => toggle(row)
-      },
-      {
-        key: 'convert',
-        label: canDelete.value === false ? t('forwardV4.nodes.convertSuperOnly') : t('forwardV4.nodes.convert'),
-        icon: ArrowRightLeft,
-        hidden: row.ansible,
-        disabled: canDelete.value === false,
-        onSelect: () => convert(row)
-      },
-      {
-        key: 'delete',
-        label: canDelete.value === false ? t('forwardV4.actions.deleteSuperOnly') : (inUse ? t('forwardV4.nodes.deleteInUse') : t('forwardV4.nodes.delete')),
-        icon: Trash2,
-        danger: true,
-        disabled: inUse || canDelete.value === false,
-        onSelect: () => remove(row)
-      }
-    )
-  }
-  return actions
 }
 
 async function toggle(row) {
@@ -345,8 +313,8 @@ async function create() {
     createOpen.value = false
     toast.success(t('forwardV4.toast.nodeCreated', { name: form.name }))
     const ref = answer?.node?.node_ref
+    refresh()
     if (ref) router.push(`/admin/forward/inventory/${ref}`)
-    else await refresh()
   } catch (error) {
     createError.value = forwardErrorMessage(t, error)
   } finally {
@@ -356,11 +324,10 @@ async function create() {
 </script>
 
 <style scoped>
-.nodes-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-4);
-  align-items: center;
+.hosts-panel__summary {
+  margin: 0;
+  color: var(--label-2);
+  font-size: var(--type-callout-size);
 }
 
 .nodes-name {
