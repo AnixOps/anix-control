@@ -84,6 +84,12 @@ func TestSnapshotUnderConcurrentWriters(t *testing.T) {
 			commitsMu.Lock()
 			commits = append(commits, time.Now())
 			commitsMu.Unlock()
+			// A writer that never pauses grows the WAL faster than the
+			// snapshots' read transactions let it checkpoint, so every
+			// VACUUM INTO reads a longer log: under -race the 25 snapshots
+			// ran past the 10 minute test timeout. A short pause still
+			// commits throughout every snapshot.
+			time.Sleep(2 * time.Millisecond)
 		}
 	}()
 
