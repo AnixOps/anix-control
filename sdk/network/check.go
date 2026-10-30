@@ -47,6 +47,9 @@ const (
 	MaxComponents = 4096
 	// MaxTextBytes caps the free-text fields; longer ones are refused.
 	MaxTextBytes = 1024
+	// MaxKeyBytes caps a public key in its text form: an anx-server hybrid
+	// key (X25519 and ML-KEM-768) is about 2.5 KB of text.
+	MaxKeyBytes = 8192
 	// MaxPort is the highest port.
 	MaxPort = 65535
 )
@@ -534,10 +537,11 @@ func checkAnxLine(transport *networkv1.Transport, anx *networkv1.AnxLineSettings
 	default:
 		return fmt.Errorf("anx_line egress must be l1 or l2")
 	}
-	for _, text := range []string{anx.GetServerPublic(), anx.GetServerName()} {
-		if err := checkText(text); err != nil {
-			return err
-		}
+	if err := checkKey(anx.GetServerPublic()); err != nil {
+		return err
+	}
+	if err := checkText(anx.GetServerName()); err != nil {
+		return err
 	}
 	switch transport.GetRole() {
 	case networkv1.TransportRole_TRANSPORT_ROLE_DIAL:
@@ -798,6 +802,17 @@ func canonical(address string) string {
 		return ip.Unmap().String()
 	}
 	return address
+}
+
+// checkKey is checkText for a public key, which may run to MaxKeyBytes.
+func checkKey(key string) error {
+	if len(key) > MaxKeyBytes {
+		return fmt.Errorf("a key exceeds %d bytes", MaxKeyBytes)
+	}
+	if !utf8.ValidString(key) {
+		return fmt.Errorf("a key is not UTF-8")
+	}
+	return nil
 }
 
 func checkText(text string) error {
