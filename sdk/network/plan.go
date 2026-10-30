@@ -184,7 +184,7 @@ func CheckStatus(status *networkv1.NetworkStatus, deviceRef string) error {
 		if !kindPattern.MatchString(key.GetKind()) || key.GetKey() == "" {
 			return invalid("public_keys[%d]: needs a kind and a key", i)
 		}
-		if err := checkText(key.GetKey()); err != nil {
+		if err := checkKey(key.GetKey()); err != nil {
 			return invalid("public_keys[%d]: %v", i, err)
 		}
 	}

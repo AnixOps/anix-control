@@ -162,6 +162,23 @@ func TestStatusReportRoundTrip(t *testing.T) {
 	require.ErrorIs(t, err, ErrInvalid)
 }
 
+// An anx-server hybrid key (X25519 and ML-KEM-768) runs past MaxTextBytes
+// in its text form; the status carries it, and the dialing end's plan.
+func TestHybridServerKeyFits(t *testing.T) {
+	key := "anx1-" + strings.Repeat("a", 2440)
+	status := &networkv1.NetworkStatus{DeviceRef: "proxy-1", PublicKeys: []*networkv1.PublicKey{{Kind: TransportAnxLine, Key: key}}}
+	_, err := StatusReport(status)
+	require.NoError(t, err)
+
+	plan := readPlan(t, "plan-anx-line-ingress.json")
+	plan.Transports[0].GetAnxLine().ServerPublic = key
+	require.NoError(t, Check(plan))
+
+	status.PublicKeys[0].Key = strings.Repeat("a", MaxKeyBytes+1)
+	_, err = StatusReport(status)
+	require.ErrorIs(t, err, ErrInvalid)
+}
+
 // TestCheckRefuses: one broken copy of a golden plan per invariant, each
 // refused with a message naming the problem.
 func TestCheckRefuses(t *testing.T) {
