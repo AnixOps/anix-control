@@ -229,7 +229,6 @@ const props = defineProps({
   nodes: { type: Array, default: () => [] },
   violations: { type: Array, default: () => [] },
   errorText: { type: Function, required: true },
-  enableAnixOps: { type: Boolean, default: false },
   // The network model's document, for ENGINE_NETWORK hops; null when not
   // loaded.
   networkModel: { type: Object, default: null }
@@ -326,8 +325,8 @@ const forwardNodeOptions = computed(() => props.nodes
 
 const engineOptions = computed(() => {
   const engines = [...BASE_ENGINES]
-  if (props.enableAnixOps || props.hop.engine === 'ENGINE_ANIXOPS') engines.push('ENGINE_ANIXOPS')
-  // A route left on the removed gost engine still shows it.
+  // Routes left on the removed gost and anixops engines still show them.
+  if (props.hop.engine === 'ENGINE_ANIXOPS') engines.push('ENGINE_ANIXOPS')
   if (props.hop.engine === 'ENGINE_GOST') engines.push('ENGINE_GOST')
   return engines.map(engine => {
     const missing = props.hop.node_refs.filter(ref => !caps(ref, engine)?.available)
@@ -345,7 +344,7 @@ const engineOptions = computed(() => {
 })
 
 const securityOptions = computed(() => Object.keys(SECURITIES)
-  .filter(key => key !== 'LINK_SECURITY_ANIXOPS' || props.enableAnixOps || security.value === key)
+  .filter(key => key !== 'LINK_SECURITY_ANIXOPS' || security.value === key)
   .map(key => {
     const originates = props.previous?.node_refs.every(ref => caps(ref, props.previous.engine)?.link_securities?.includes(key)) ?? true
     const terminates = props.hop.node_refs.every(ref => caps(ref, props.hop.engine)?.link_securities?.includes(key))

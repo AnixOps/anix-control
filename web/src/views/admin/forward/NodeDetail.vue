@@ -72,14 +72,16 @@
           <UiCard :title="t('forwardV4.nodeDetail.engines')" :description="enginesDescription">
             <p v-if="!engines.length" class="fwd-muted">{{ t('forwardV4.nodeDetail.noEngines') }}</p>
             <ul v-else class="fwd-list">
-              <li v-for="engine in engines" :key="engine.engine" class="fwd-list__item">
+              <li v-for="engine in engines" :key="engine.engine" class="fwd-list__item" data-testid="node-engine" :data-engine="engine.engine">
                 <span class="fwd-cell-stack">
                   <span class="node-engine-head"><EngineChip :engine="engine.engine" :unavailable="!engine.available" /> <span class="fwd-mono">{{ engine.version }}</span></span>
                   <span class="fwd-muted">{{ t('forwardV4.nodeDetail.links', { list: (engine.link_securities || []).map(s => SECURITIES[s] || s).join(' / ') || '—' }) }}</span>
-                  <span class="fwd-muted">{{ t('forwardV4.nodeDetail.strategies', { list: (engine.strategies || []).map(s => t(`forwardV4.strategy.${s}`)).join(', ') || '—' }) }}</span>
+                  <span v-if="engine.network" class="fwd-muted">{{ t('forwardV4.engine.ENGINE_NETWORK') }}</span>
+                  <span v-else class="fwd-muted">{{ t('forwardV4.nodeDetail.strategies', { list: (engine.strategies || []).map(s => t(`forwardV4.strategy.${s}`)).join(', ') || '—' }) }}</span>
                 </span>
                 <span class="node-caps">
-                  <UiBadge v-if="!engine.available" tone="danger" :label="engine.unavailable_reason || t('forwardV4.engine.unavailable')" />
+                  <UiBadge v-if="engine.network" tone="neutral" :dot="false" :label="t('forwardV4.nodeDetail.anxManaged')" />
+                  <UiBadge v-else-if="!engine.available" tone="danger" :label="engine.unavailable_reason || t('forwardV4.engine.unavailable')" />
                   <template v-else>
                     <UiBadge v-for="cap in capsOf(engine)" :key="cap" tone="neutral" :dot="false" :label="cap" />
                   </template>
@@ -190,7 +192,7 @@ import { deleteNode, getNode, listRoutes, newIdempotencyKey, setNodeSettings, se
 import EngineChip from '@/components/forward/EngineChip.vue'
 import { forwardErrorMessage, violationText } from '@/components/forward/messages'
 import { usePolling } from '@/components/forward/usePolling'
-import { SECURITIES, nodeLag, nodeState, num, roleOf } from '@/components/forward/routeModel'
+import { NETWORK_ENGINE, NETWORK_SECURITY, SECURITIES, nodeLag, nodeState, num, roleOf } from '@/components/forward/routeModel'
 import '@/components/forward/forward.css'
 
 const props = defineProps({
@@ -233,7 +235,15 @@ const lag = computed(() => nodeLag(node.value))
 const errors = computed(() => report.value?.errors || [])
 const upstreams = computed(() => report.value?.health || [])
 const healthyUpstreams = computed(() => upstreams.value.filter(item => item.state === 'HEALTH_STATE_HEALTHY').length)
-const engines = computed(() => node.value?.capabilities?.engines || node.value?.info?.engines || [])
+// gost and anixops are gone from the Agent; an older Agent still reports
+// them, and they are left out. ANX (the network model's anx-node) is not a
+// forwarding engine the Agent reports, so it is listed when missing.
+const RETIRED_ENGINES = new Set(['ENGINE_GOST', 'ENGINE_ANIXOPS'])
+const ANX_ENGINE = Object.freeze({ engine: NETWORK_ENGINE, available: true, network: true, link_securities: [NETWORK_SECURITY] })
+const engines = computed(() => {
+  const reported = (node.value?.capabilities?.engines || node.value?.info?.engines || []).filter(engine => !RETIRED_ENGINES.has(engine.engine))
+  return reported.some(engine => engine.engine === NETWORK_ENGINE) ? reported : [...reported, ANX_ENGINE]
+})
 const usedBy = computed(() => routes.value)
 const routeName = id => routes.value.find(item => item.route?.id === id)?.route?.name || id
 const short = hash => (hash ? String(hash).slice(0, 12) : '')
