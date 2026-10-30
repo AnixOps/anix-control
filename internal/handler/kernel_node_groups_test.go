@@ -258,7 +258,6 @@ func TestNodeGroupsDefaultAndNodes(t *testing.T) {
 	}](t, created)
 	assert.True(t, first.Created)
 	assert.Equal(t, nodegroup.DefaultGroupName, first.Group.Name)
-	assert.Equal(t, model.NodeGroupKindProxy, first.Group.Kind)
 	require.Len(t, first.Group.ProtocolTemplate, 1)
 	assert.Equal(t, "reality", first.Group.ProtocolTemplate[0].TLS)
 	require.Len(t, first.Group.SubscriptionGroupIDs, 1)

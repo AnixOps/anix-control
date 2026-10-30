@@ -55,7 +55,7 @@ func startJoinListener(t *testing.T) *joinListener {
 	require.NoError(t, err)
 	groups := &nodegroup.Service{DB: database.Get(), KEK: func() string { return base64.StdEncoding.EncodeToString(kek) }, PKI: l.pki}
 	group, err := groups.Create(t.Context(), nodegroup.GroupInput{
-		Name: "HK", Kind: "proxy", ProtocolTemplate: json.RawMessage(`[{"type":"vmess","port":8080}]`),
+		Name: "HK", ProtocolTemplate: json.RawMessage(`[{"type":"vmess","port":8080}]`),
 	}, nodegroup.Actor{Name: "test"})
 	require.NoError(t, err)
 	revealed, err := groups.RevealToken(t.Context(), group.ID, nodegroup.Actor{Name: "test"})

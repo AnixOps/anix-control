@@ -319,14 +319,6 @@ A node is `forward-<id>` (a forward node, `v2_forward_node`) or `proxy-<id>`
     `NODE_TRANSPORT_ANSIBLE`); any other transport is `400`. A machine that
     runs the Agent is a regular node: a relay is a proxy node without
     protocols, added on the nodes page or through a node group.
-  - `POST /api/v4/kernel/nodes/forward-<id>/convert` (super administrator,
-    body `{"dry_run": bool}`) turns an Agent forward node into a new proxy
-    node and moves its route hops, port allocations and DNS rows to it in
-    one replanned transaction; routes keep their ports. The answer is
-    `{from, to, dry_run, routes}`. `409 not_convertible` for an Ansible
-    machine or a node the network model names, `409 plan_refused` when a
-    route would no longer plan. The machine then reinstalls the Agent with
-    the new node's install command (which carries `--forward`).
 - **Credentials.** A new Agent node gets the legacy credential the remaining
   v2 agent paths read until the legacy runtime goes (F5c), but no answer ever carries it, and an update never
   changes it. The node enrolls its Agent with an install token
