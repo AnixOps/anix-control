@@ -24,6 +24,8 @@
 - 每台设备的计划哈希变化即 generation + 1；曾有计划、现在没有的设备下发空计划。
 - 已定：accept 端在自己的计划里拿到监听地址：`AnxLineSettings` 的 `tcp_addr` / `quic_addr` / `faketcp_addr` 在 accept 端是本端监听地址（hop ingress 的 listen 地址，端口按载体取传输的 `listen.port` / `quic_port` / `faketcp_port`），dial 端仍是对端地址；`server_public` 只给 dial 端，`Check` 拒绝 accept 端带它。
 
+- 反向回连（2026-10-30，anx `docs/ANX-LINE-REVERSE-v0.1-draft.md`）：传输的 `anx_line.reverse = true` 时 accept 端（出口）不开端口，主动连 dial 端的反向监听（`reverse_host:reverse_port`，端口默认 24444）。计划里两端都不带载体地址：dial 端带 `reverse_listen`（`0.0.0.0:<port>`，`reverse_host` 是 IPv6 时 `[::]:<port>`）与 `server_public`，accept 端带 `reverse_dial`；`carrier_order` 固定 `c1`。只允许裸 `anx_line`（l1），不能同时配 `quic_port` / `faketcp_port` / `multipath`；`Check` 按角色检查这两个字段。Agent 侧：dial 端写 anx-node 的 `anx_line.reverse_listen` 与链路 `reverse`，accept 端不为该传输监听，改用 anx-server 的 `SetReverseDials`。
+
 ## Agent Control 下发与状态（第 2b 步）
 
 - 协商：Hello 列出 `network.v1` 且带合法 `device_capabilities`（`device_ref` 等于本会话节点），并且本会话协商了 config.v1，HelloAck 才列 `network.v1`；forward 节点同时获得 package-reports.v1。

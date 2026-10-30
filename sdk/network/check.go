@@ -135,7 +135,8 @@ func RoutingRange(caps *networkv1.DeviceCapabilities) (first, last uint32) {
 //     egress; accept: a hop ingress; local: neither); anx_line settings
 //     are present exactly for kind anx_line, with link_id equal to the
 //     transport id, a 64-hex link key, and for the dialing end the server
-//     key and at least one carrier address;
+//     key and at least one carrier address (a reverse link has none: its
+//     dialing end has reverse_listen, its accepting end reverse_dial);
 //   - a path starts at a user ingress and goes to an internet egress or a
 //     dialing transport; forwarding leaves an accepting transport the same
 //     way, each transport at most once.
@@ -554,6 +555,12 @@ func checkAnxLine(transport *networkv1.Transport, anx *networkv1.AnxLineSettings
 		}
 		return nil
 	}
+	if anx.GetReverse() {
+		return checkAnxLineReverse(transport, anx)
+	}
+	if anx.GetReverseListen() != "" || anx.GetReverseDial() != "" {
+		return fmt.Errorf("anx_line reverse_listen and reverse_dial need reverse")
+	}
 	if anx.GetQuicAddr() == "" && anx.GetFaketcpAddr() == "" && anx.GetTcpAddr() == "" {
 		return fmt.Errorf("anx_line needs at least one carrier address")
 	}
@@ -809,4 +816,28 @@ func knownComponent(c networkv1.Component) bool {
 
 func knownFamily(f networkv1.Family) bool {
 	return networkv1.Family_name[int32(f)] != ""
+}
+
+// checkAnxLineReverse checks a reversed link: the accepting end dials the
+// dialing end's reverse listener, so neither end has carrier addresses;
+// the dialing end has reverse_listen, the accepting end reverse_dial. Only
+// l1 runs reversed.
+func checkAnxLineReverse(transport *networkv1.Transport, anx *networkv1.AnxLineSettings) error {
+	if anx.GetEgress() == "l2" {
+		return fmt.Errorf("anx_line reverse runs on l1 only")
+	}
+	if anx.GetQuicAddr() != "" || anx.GetFaketcpAddr() != "" || anx.GetTcpAddr() != "" {
+		return fmt.Errorf("anx_line reverse takes no carrier address")
+	}
+	addr, other := anx.GetReverseListen(), anx.GetReverseDial()
+	if transport.GetRole() == networkv1.TransportRole_TRANSPORT_ROLE_ACCEPT {
+		addr, other = other, addr
+	}
+	if addr == "" || other != "" {
+		return fmt.Errorf("anx_line reverse: the dialing end needs reverse_listen, the accepting end reverse_dial")
+	}
+	if err := checkHostPort(addr); err != nil {
+		return fmt.Errorf("anx_line reverse address %q: %w", addr, err)
+	}
+	return nil
 }
