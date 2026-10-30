@@ -182,36 +182,36 @@ func (h *NetworkModelHandler) MigrateGost(c *gin.Context) {
 
 // NodeNetwork godoc
 // @Summary A device's network settings
-// @Description The interface the network model's automatic egresses of the node leave by (interface; source_v4 and gateway_v4, source_v6 and gateway_v6 on it; empty: the default route) and the port its automatic hop ingress listens on (hop_port; 0: 24443). A node behind NAT is reached at the NAT entry (GET /api/v4/kernel/nodes/{id}/entries) whose port map covers hop_port. 404 for an unknown node.
+// @Description The interface the network model's automatic egresses of the node leave by (interface; source_v4 and gateway_v4, source_v6 and gateway_v6 on it; empty: the default route) and the port its automatic hop ingress listens on (hop_port; 0: 24443). A node behind NAT is reached at the NAT entry (GET /api/v4/kernel/nodes/{id}/entries) whose port map covers hop_port. detected lists the interfaces the node's Agent last reported (name, addresses_v4, addresses_v6, gateway_v4, gateway_v6; empty before an Agent that reports them), detected_at when. 404 for an unknown node.
 // @Tags Kernel
 // @Produce json
 // @Security BearerAuth
 // @Param id path string true "proxy-<id> or forward-<id>"
-// @Success 200 {object} networkmodel.NodeSettings
+// @Success 200 {object} networkmodel.NodeNetworkView
 // @Router /api/v4/kernel/nodes/{id}/network [get]
 func (h *NetworkModelHandler) NodeNetwork(c *gin.Context) {
 	node, ok := parseNodeRef(c)
 	if !ok {
 		return
 	}
-	settings, err := networkmodel.New(h.db()).NodeSettings(c.Request.Context(), node.String())
+	view, err := networkmodel.New(h.db()).NodeNetwork(c.Request.Context(), node.String())
 	if err != nil {
 		h.settingsError(c, err)
 		return
 	}
-	kernelData(c, http.StatusOK, settings)
+	kernelData(c, http.StatusOK, view)
 }
 
 // SetNodeNetwork godoc
 // @Summary Set a device's network settings
-// @Description Replaces the node's network settings (see GET) and replans: the automatic lines, egresses, hop ingresses and transports of the routes through the node follow them. A source address needs the interface, a gateway its source address; 400 with violations otherwise, 404 for an unknown node. Audited (network_node_settings).
+// @Description Replaces the node's network settings (see GET) and replans: the automatic lines, egresses, hop ingresses and transports of the routes through the node follow them. A source address needs the interface, a gateway its source address; 400 with violations otherwise, 404 for an unknown node. Answers like GET. Audited (network_node_settings).
 // @Tags Kernel
 // @Accept json
 // @Produce json
 // @Security BearerAuth
 // @Param id path string true "proxy-<id> or forward-<id>"
 // @Param request body networkmodel.NodeSettings true "the settings"
-// @Success 200 {object} networkmodel.NodeSettings
+// @Success 200 {object} networkmodel.NodeNetworkView
 // @Router /api/v4/kernel/nodes/{id}/network [put]
 func (h *NetworkModelHandler) SetNodeNetwork(c *gin.Context) {
 	node, ok := parseNodeRef(c)
@@ -223,12 +223,17 @@ func (h *NetworkModelHandler) SetNodeNetwork(c *gin.Context) {
 		kernelError(c, http.StatusBadRequest, "invalid_request", err.Error())
 		return
 	}
-	settings, err := networkmodel.New(h.db()).SetNodeSettings(c.Request.Context(), node.String(), request, h.actor(c))
+	service := networkmodel.New(h.db())
+	if _, err := service.SetNodeSettings(c.Request.Context(), node.String(), request, h.actor(c)); err != nil {
+		h.settingsError(c, err)
+		return
+	}
+	view, err := service.NodeNetwork(c.Request.Context(), node.String())
 	if err != nil {
 		h.settingsError(c, err)
 		return
 	}
-	kernelData(c, http.StatusOK, settings)
+	kernelData(c, http.StatusOK, view)
 }
 
 func (h *NetworkModelHandler) settingsError(c *gin.Context, err error) {
