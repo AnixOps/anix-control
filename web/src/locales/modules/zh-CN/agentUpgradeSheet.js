@@ -19,6 +19,15 @@ export default {
       rules: '一批里失败的节点超过 {percent}%，或者 {minutes} 分钟内没有以新版本重连，这一批会自动回滚。',
       reason: '备注（可选）',
       reasonPlaceholder: '例如：升级到 v4.2.0',
+      nodes: '选择节点',
+      nodeVersion: '当前 Agent {version}',
+      mode: '升级方式',
+      modes: {
+        staged: '分批灰度',
+        manual: '手动选择',
+        stagedHelp: '按批次升级所有可升级的节点，先灰度一小批。',
+        manualHelp: '只升级勾选的节点，一次全部推送，不等批次时间。'
+      },
       submit: '开始升级',
       noneEligible: '没有可升级的节点：节点要启用，且它的 Agent 连上过 Control。',
       active: '已有一个升级在进行。结束或中止后才能开始新的。',
@@ -27,7 +36,8 @@ export default {
     },
     confirm: {
       title: '把 {n} 个节点升级到 {version}？',
-      message: '分批推送：{batches}，每批至少 {minutes} 分钟。可以随时暂停、中止或回滚。'
+      message: '分批推送：{batches}，每批至少 {minutes} 分钟。可以随时暂停、中止或回滚。',
+      manualMessage: '立即升级这些节点：{nodes}。失败或 10 分钟内没有以新版本重连会自动回滚。'
     },
     errors: {
       target: '目标版本要写成发布标签，例如 v4.2.0。',

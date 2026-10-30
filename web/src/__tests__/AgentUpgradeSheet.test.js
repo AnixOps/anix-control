@@ -121,6 +121,30 @@ describe('AgentUpgradeSheet', () => {
     await waitFor(() => expect(kernelApi.getKernelAgentUpgradePlan).toHaveBeenCalledTimes(2))
   })
 
+  it('upgrades only the ticked nodes in manual mode', async () => {
+    kernelApi.getKernelAgentUpgradePlan.mockResolvedValue(plan({
+      eligible_nodes: 2,
+      nodes: [
+        { node_ref: 'proxy-1', name: 'JP', agent_version: 'v4.1.0' },
+        { node_ref: 'forward-2', name: 'HK relay', agent_version: 'v4.1.0' }
+      ]
+    }))
+    kernelApi.startKernelAgentUpgrade.mockResolvedValue({ id: 'c2', status: 'running' })
+    renderSheet()
+    await open()
+    await userEvent.click(within(screen.getByTestId('agent-upgrade-mode')).getByText('Choose nodes'))
+    expect(screen.queryByTestId('agent-upgrade-batches')).toBeNull()
+    expect(screen.getByTestId('agent-upgrade-start').disabled).toBe(true)
+    await userEvent.click(screen.getByLabelText('HK relay (forward-2)'))
+    await userEvent.click(screen.getByTestId('agent-upgrade-start'))
+
+    const dialog = await screen.findByRole('alertdialog')
+    expect(dialog.textContent).toContain('Upgrade 1 node to v4.2.0?')
+    expect(dialog.textContent).toContain('forward-2')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Start upgrade' }))
+    await waitFor(() => expect(kernelApi.startKernelAgentUpgrade).toHaveBeenCalledWith({ target_version: 'v4.2.0', nodes: ['forward-2'] }))
+  })
+
   it('does not start when the confirmation is declined', async () => {
     kernelApi.getKernelAgentUpgradePlan.mockResolvedValue(plan({ eligible_nodes: 1 }))
     renderSheet()
