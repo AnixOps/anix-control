@@ -56,3 +56,8 @@ func TestValidateANXProtocol(t *testing.T) {
 		require.Error(t, validateANXProtocol(&model.NodeProtocol{Type: model.ProtocolANX, Settings: &s}), settings)
 	}
 }
+
+// The same vector as anix-agent core/anixcore TestAnxUserKeyMatchesControl.
+func TestANXUserKeyVector(t *testing.T) {
+	require.Equal(t, "a05385f0ca7b3e2223b65d0af4dbc51cbd50a1330d27f509ed9de142b771f20a", ANXUserKey("C9A1E7B0-5B0E-4A4B-9A54-2F3F1C1B0D11"))
+}
