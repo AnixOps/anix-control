@@ -1,6 +1,7 @@
 package validate
 
 import (
+	"fmt"
 	"regexp"
 
 	"github.com/AnixOps/anix-control/sdk/forward/model"
@@ -67,6 +68,39 @@ func checkNetwork(c *collector, r *model.Route) {
 		if t.Mux || t.ServerName != "" || t.Path != "" {
 			c.add(field+"security", CodeNotApplicable, "the network model's transport has its own settings; mux, server_name and path are empty")
 		}
+		checkNetworkMode(c, field, t)
+	}
+}
+
+// checkNetworkMode applies the rules of the transport Control links a hop
+// with: a mode only when the link names no transport, carriers,
+// multipath and FEC only on a bare ANX-Line.
+func checkNetworkMode(c *collector, field string, t model.LinkTransport) {
+	shaped := len(t.NetworkCarriers) > 0 || t.NetworkMultipath || t.NetworkFEC
+	switch {
+	case !t.NetworkMode.IsKnown():
+		c.add(field+"network_mode", CodeInvalidEnum, "unknown network transport mode %d", t.NetworkMode)
+		return
+	case t.NetworkTransportID != "" && (t.NetworkMode != model.NetworkModeUnspecified || shaped):
+		c.add(field+"network_mode", CodeNotApplicable, "a named network model transport has its own settings; network_mode, network_carriers, network_multipath and network_fec are empty")
+		return
+	case shaped && t.NetworkMode.Effective() != model.NetworkModeAnxLine:
+		c.add(field+"network_carriers", CodeNotApplicable, "carriers, multipath and FEC are for a bare ANX-Line link (NETWORK_TRANSPORT_MODE_ANX_LINE)")
+		return
+	}
+	seen := map[model.NetworkCarrier]bool{}
+	for j, carrier := range t.NetworkCarriers {
+		f := fmt.Sprintf("%snetwork_carriers[%d]", field, j)
+		switch {
+		case !carrier.IsKnown():
+			c.add(f, CodeInvalidEnum, "unknown carrier %d", carrier)
+		case seen[carrier]:
+			c.add(f, CodeDuplicate, "%s is listed twice", carrier)
+		}
+		seen[carrier] = true
+	}
+	if t.NetworkMultipath && len(t.NetworkCarriers) < 2 {
+		c.add(field+"network_multipath", CodeInvalidRelation, "multipath needs at least two carriers")
 	}
 }
 
@@ -81,5 +115,9 @@ func checkNetworkFields(c *collector, i int, h model.Hop) {
 	}
 	if h.Ingress.NetworkTransportID != "" && h.Ingress.Security != model.LinkSecurityNetwork {
 		c.add(hopField(i, "ingress.network_transport_id"), CodeNotApplicable, "only a LINK_SECURITY_NETWORK link has a network transport")
+	}
+	t := h.Ingress
+	if t.NetworkMode != model.NetworkModeUnspecified || len(t.NetworkCarriers) > 0 || t.NetworkMultipath || t.NetworkFEC {
+		c.add(hopField(i, "ingress.network_mode"), CodeNotApplicable, "only a LINK_SECURITY_NETWORK link has a network transport mode")
 	}
 }

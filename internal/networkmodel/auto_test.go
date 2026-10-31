@@ -2,6 +2,7 @@ package networkmodel
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	networkv1 "github.com/AnixOps/anix-control/sdk/api/network/v1"
@@ -182,4 +183,68 @@ func TestPublicPortFollowsThePortMap(t *testing.T) {
 	require.Equal(t, uint32(40003), publicPort(ingress, 30003))
 	require.Equal(t, uint32(24443), publicPort(ingress, 24443))
 	require.Equal(t, uint32(24443), publicPort(&Ingress{}, 24443))
+}
+
+// A route that picks the bare ANX-Line runs it trusted on its own hop
+// ingress (TCP and QUIC at AutoLinePort), next to the A2 jacket's; a
+// reversed one dials back to the dialing device.
+func TestServiceCompletesLinkModes(t *testing.T) {
+	s := newService(t)
+	seenAgents(t, s, 1, 2)
+	ctx := context.Background()
+	jacket := autoForward()
+	line := autoForward()
+	line.ID, line.Listen.Port = "01HXAUTO000000000000000001", 20023
+	line.Links = []Link{{Mode: LinkAnxLine, Carriers: []string{"c2", "c1"}, Multipath: true}}
+	reverse := autoForward()
+	reverse.ID, reverse.Listen.Port = "01HXAUTO000000000000000002", 20024
+	reverse.Links = []Link{{Mode: LinkAnxLineReverse}}
+	s.Forwards = func(*gorm.DB) ([]Forward, error) { return []Forward{jacket, line, reverse}, nil }
+	require.NoError(t, s.SetPublicKeys(ctx, "proxy-2", map[string]string{"anx_line": "anx1-japan"}))
+
+	view, err := s.Replace(ctx, &Document{}, nil, Actor{})
+	require.NoError(t, err)
+	require.Empty(t, view.Pending)
+	entry, _, err := s.DevicePlan(ctx, "proxy-1")
+	require.NoError(t, err)
+	require.NoError(t, network.Check(entry))
+	transports := map[string]*networkv1.Transport{}
+	for _, transport := range entry.GetTransports() {
+		transports[transport.GetId()] = transport
+	}
+	require.Len(t, transports, 3)
+	require.Equal(t, "l2", transports["auto-proxy-1-proxy-2"].GetAnxLine().GetEgress())
+
+	var lineID string
+	for id := range transports {
+		if strings.HasPrefix(id, "auto-proxy-1-proxy-2-line-") {
+			lineID = id
+		}
+	}
+	require.NotEmpty(t, lineID, "a shaped bare ANX-Line gets its own transport")
+	bare := transports[lineID].GetAnxLine()
+	require.Empty(t, bare.GetEgress(), "bare: l1")
+	require.Equal(t, []string{"c2", "c1"}, bare.GetCarrierOrder())
+	require.True(t, bare.GetMultipath())
+	require.Equal(t, "h.example.com:24445", bare.GetTcpAddr())
+	require.Equal(t, "h.example.com:24445", bare.GetQuicAddr())
+
+	reversed := transports["auto-proxy-1-proxy-2-rev"].GetAnxLine()
+	require.True(t, reversed.GetReverse())
+	require.Empty(t, reversed.GetTcpAddr())
+	require.Equal(t, "0.0.0.0:24444", reversed.GetReverseListen())
+
+	exit, _, err := s.DevicePlan(ctx, "proxy-2")
+	require.NoError(t, err)
+	require.NoError(t, network.Check(exit))
+	ingresses := map[string]uint32{}
+	for _, ingress := range exit.GetIngresses() {
+		ingresses[ingress.GetId()] = ingress.GetListen().GetPort()
+	}
+	require.Equal(t, map[string]uint32{"auto-proxy-2-hop": AutoHopPort, "auto-proxy-2-hop-line": AutoLinePort}, ingresses)
+	for _, transport := range exit.GetTransports() {
+		if transport.GetId() == "auto-proxy-1-proxy-2-rev" {
+			require.Equal(t, "h.example.com:24444", transport.GetAnxLine().GetReverseDial())
+		}
+	}
 }

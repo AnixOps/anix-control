@@ -244,7 +244,11 @@ func randomRoute(rng *rand.Rand) *forwardv1.Route {
 			h.NodeRefs = append(h.NodeRefs, str())
 		}
 		if maybe() {
-			h.Ingress = &forwardv1.LinkTransport{Security: forwardv1.LinkSecurity(enum()), Mux: maybe(), ServerName: str(), Path: str(), Carrier: forwardv1.AnixOpsCarrier(enum())}
+			h.Ingress = &forwardv1.LinkTransport{Security: forwardv1.LinkSecurity(enum()), Mux: maybe(), ServerName: str(), Path: str(), Carrier: forwardv1.AnixOpsCarrier(enum()),
+				NetworkTransportId: str(), NetworkMode: forwardv1.NetworkTransportMode(enum()), NetworkMultipath: maybe(), NetworkFec: maybe()}
+			for j := rng.Intn(3); j > 0; j-- {
+				h.Ingress.NetworkCarriers = append(h.Ingress.NetworkCarriers, forwardv1.NetworkCarrier(enum()))
+			}
 		}
 		r.Hops = append(r.Hops, h)
 	}

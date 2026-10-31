@@ -64,6 +64,7 @@ func networkForward(route *forwardv1.Route) (networkmodel.Forward, bool) {
 	}
 	for _, hop := range hops[1:] {
 		forward.Segments = append(forward.Segments, hop.GetIngress().GetNetworkTransportId())
+		forward.Links = append(forward.Links, networkLink(hop.GetIngress()))
 		if len(hop.GetNodeRefs()) > 0 {
 			forward.Via = append(forward.Via, hop.GetNodeRefs()[0])
 		}
@@ -74,6 +75,34 @@ func networkForward(route *forwardv1.Route) (networkmodel.Forward, bool) {
 		})
 	}
 	return forward, true
+}
+
+// networkLinkModes maps a link's network_mode to the network model's.
+var networkLinkModes = map[forwardv1.NetworkTransportMode]networkmodel.LinkMode{
+	forwardv1.NetworkTransportMode_NETWORK_TRANSPORT_MODE_ANX_LINE:         networkmodel.LinkAnxLine,
+	forwardv1.NetworkTransportMode_NETWORK_TRANSPORT_MODE_ANX_LINE_REVERSE: networkmodel.LinkAnxLineReverse,
+}
+
+// networkCarriers maps a bare ANX-Line's carriers to their ANX names.
+var networkCarriers = map[forwardv1.NetworkCarrier]string{
+	forwardv1.NetworkCarrier_NETWORK_CARRIER_TCP:  "c1",
+	forwardv1.NetworkCarrier_NETWORK_CARRIER_QUIC: "c2",
+}
+
+// networkLink answers how Control links a hop that names no transport;
+// the A2 jacket unless the link says otherwise.
+func networkLink(link *forwardv1.LinkTransport) networkmodel.Link {
+	out := networkmodel.Link{Mode: networkLinkModes[link.GetNetworkMode()]}
+	if out.Mode != networkmodel.LinkAnxLine {
+		return out
+	}
+	for _, carrier := range link.GetNetworkCarriers() {
+		if name, ok := networkCarriers[carrier]; ok {
+			out.Carriers = append(out.Carriers, name)
+		}
+	}
+	out.Multipath, out.FEC = link.GetNetworkMultipath(), link.GetNetworkFec()
+	return out
 }
 
 func networkProtocols(protocol forwardv1.L4Protocol) []string {

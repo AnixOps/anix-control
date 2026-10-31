@@ -56,6 +56,33 @@ func networkRuleCases() []ruleCase {
 			"hops[1].ingress.security", CodeLinkUnsupported},
 		{"network: proxy protocol on UDP", onNetwork(func(r *model.Route) { r.Listen.Protocol = model.L4ProtocolUDP }),
 			"policy.proxy_protocol", CodeProxyProtocolUnsupported},
+		{"network: mode with a named transport", onNetwork(func(r *model.Route) { r.Hops[1].Ingress.NetworkMode = model.NetworkModeAnxLine }),
+			"hops[1].ingress.network_mode", CodeNotApplicable},
+		{"network: unknown mode", onNetwork(func(r *model.Route) {
+			r.Hops[1].Ingress.NetworkTransportID, r.Hops[1].Ingress.NetworkMode = "", 9
+		}), "hops[1].ingress.network_mode", CodeInvalidEnum},
+		{"network: carriers on the A2 jacket", onNetwork(func(r *model.Route) {
+			r.Hops[1].Ingress.NetworkTransportID = ""
+			r.Hops[1].Ingress.NetworkCarriers = []model.NetworkCarrier{model.NetworkCarrierQUIC}
+		}), "hops[1].ingress.network_carriers", CodeNotApplicable},
+		{"network: FEC on a reversed link", onNetwork(func(r *model.Route) {
+			r.Hops[1].Ingress.NetworkTransportID, r.Hops[1].Ingress.NetworkMode = "", model.NetworkModeAnxLineReverse
+			r.Hops[1].Ingress.NetworkFEC = true
+		}), "hops[1].ingress.network_carriers", CodeNotApplicable},
+		{"network: carrier twice", onNetwork(func(r *model.Route) {
+			r.Hops[1].Ingress.NetworkTransportID, r.Hops[1].Ingress.NetworkMode = "", model.NetworkModeAnxLine
+			r.Hops[1].Ingress.NetworkCarriers = []model.NetworkCarrier{model.NetworkCarrierTCP, model.NetworkCarrierTCP}
+		}), "hops[1].ingress.network_carriers[1]", CodeDuplicate},
+		{"network: unknown carrier", onNetwork(func(r *model.Route) {
+			r.Hops[1].Ingress.NetworkTransportID, r.Hops[1].Ingress.NetworkMode = "", model.NetworkModeAnxLine
+			r.Hops[1].Ingress.NetworkCarriers = []model.NetworkCarrier{model.NetworkCarrierUnspecified}
+		}), "hops[1].ingress.network_carriers[0]", CodeInvalidEnum},
+		{"network: multipath on one carrier", onNetwork(func(r *model.Route) {
+			r.Hops[1].Ingress.NetworkTransportID, r.Hops[1].Ingress.NetworkMode = "", model.NetworkModeAnxLine
+			r.Hops[1].Ingress.NetworkCarriers, r.Hops[1].Ingress.NetworkMultipath = []model.NetworkCarrier{model.NetworkCarrierQUIC}, true
+		}), "hops[1].ingress.network_multipath", CodeInvalidRelation},
+		{"mode on a TLS link", func(r *model.Route, _ *Options) { r.Hops[2].Ingress.NetworkMode = model.NetworkModeAnxA },
+			"hops[2].ingress.network_mode", CodeNotApplicable},
 		{"egress on a gost exit", func(r *model.Route, _ *Options) { r.Hops[2].NetworkEgressID = "eg-hk" }, "hops[2].network_egress_id", CodeNotApplicable},
 		{"transport on a TLS link", func(r *model.Route, _ *Options) { r.Hops[2].Ingress.NetworkTransportID = "tr-1" },
 			"hops[2].ingress.network_transport_id", CodeNotApplicable},
@@ -91,5 +118,17 @@ func TestNetworkRoutes(t *testing.T) {
 	r.Hops[1].Ingress.NetworkTransportID, r.Hops[1].NetworkEgressID = "", ""
 	if vs := Route(&r, Options{EnableNetwork: true}); len(vs) != 0 {
 		t.Fatalf("auto transport and egress: %v", vs)
+	}
+	// Control links them as the hop says: a bare ANX-Line over QUIC and
+	// TCP at once, or one the exit dials back.
+	r.Hops[1].Ingress.NetworkMode = model.NetworkModeAnxLine
+	r.Hops[1].Ingress.NetworkCarriers = []model.NetworkCarrier{model.NetworkCarrierQUIC, model.NetworkCarrierTCP}
+	r.Hops[1].Ingress.NetworkMultipath, r.Hops[1].Ingress.NetworkFEC = true, true
+	if vs := Route(&r, Options{EnableNetwork: true}); len(vs) != 0 {
+		t.Fatalf("bare ANX-Line: %v", vs)
+	}
+	r.Hops[1].Ingress = model.LinkTransport{Security: model.LinkSecurityNetwork, NetworkMode: model.NetworkModeAnxLineReverse}
+	if vs := Route(&r, Options{EnableNetwork: true}); len(vs) != 0 {
+		t.Fatalf("reversed ANX-Line: %v", vs)
 	}
 }

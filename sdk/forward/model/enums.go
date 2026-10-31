@@ -177,3 +177,49 @@ func (p ProxyProtocol) IsKnown() bool { _, ok := forwardv1.ProxyProtocol_name[in
 
 // Enabled reports whether a header is written.
 func (p ProxyProtocol) Enabled() bool { return p == ProxyProtocolV2 || p == ProxyProtocolV1 }
+
+// NetworkTransportMode is the transport Control links two devices with
+// for a NETWORK link without a network model transport
+// (forwardv1.NetworkTransportMode). Unspecified means NetworkModeAnxA.
+type NetworkTransportMode int32
+
+const (
+	NetworkModeUnspecified    NetworkTransportMode = NetworkTransportMode(forwardv1.NetworkTransportMode_NETWORK_TRANSPORT_MODE_UNSPECIFIED)
+	NetworkModeAnxA           NetworkTransportMode = NetworkTransportMode(forwardv1.NetworkTransportMode_NETWORK_TRANSPORT_MODE_ANX_A)
+	NetworkModeAnxLine        NetworkTransportMode = NetworkTransportMode(forwardv1.NetworkTransportMode_NETWORK_TRANSPORT_MODE_ANX_LINE)
+	NetworkModeAnxLineReverse NetworkTransportMode = NetworkTransportMode(forwardv1.NetworkTransportMode_NETWORK_TRANSPORT_MODE_ANX_LINE_REVERSE)
+)
+
+func (m NetworkTransportMode) String() string { return forwardv1.NetworkTransportMode(m).String() }
+
+// IsKnown reports whether m is one of the contract's values.
+func (m NetworkTransportMode) IsKnown() bool {
+	_, ok := forwardv1.NetworkTransportMode_name[int32(m)]
+	return ok
+}
+
+// Effective answers the mode a link uses: Unspecified is AnxA.
+func (m NetworkTransportMode) Effective() NetworkTransportMode {
+	if m == NetworkModeUnspecified {
+		return NetworkModeAnxA
+	}
+	return m
+}
+
+// NetworkCarrier is a carrier of a bare ANX-Line link
+// (forwardv1.NetworkCarrier).
+type NetworkCarrier int32
+
+const (
+	NetworkCarrierUnspecified NetworkCarrier = NetworkCarrier(forwardv1.NetworkCarrier_NETWORK_CARRIER_UNSPECIFIED)
+	NetworkCarrierTCP         NetworkCarrier = NetworkCarrier(forwardv1.NetworkCarrier_NETWORK_CARRIER_TCP)
+	NetworkCarrierQUIC        NetworkCarrier = NetworkCarrier(forwardv1.NetworkCarrier_NETWORK_CARRIER_QUIC)
+)
+
+func (c NetworkCarrier) String() string { return forwardv1.NetworkCarrier(c).String() }
+
+// IsKnown reports whether c is a carrier of the contract.
+func (c NetworkCarrier) IsKnown() bool {
+	_, ok := forwardv1.NetworkCarrier_name[int32(c)]
+	return ok && c != NetworkCarrierUnspecified
+}

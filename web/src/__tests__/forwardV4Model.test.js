@@ -97,6 +97,24 @@ describe('the editor draft', () => {
     expect(route.policy.proxy_protocol).toBe('PROXY_PROTOCOL_V1')
     expect(routeToDraft(route).hops[1].network_egress_id).toBe('eg-hk')
 
+    // Without a named transport the hop says how Control links it; a named
+    // transport drops the mode, and only a bare ANX-Line keeps carriers.
+    draft.hops[1].ingress = {
+      ...draft.hops[1].ingress, network_transport_id: '', network_mode: 'NETWORK_TRANSPORT_MODE_ANX_LINE',
+      network_carriers: ['NETWORK_CARRIER_QUIC', 'NETWORK_CARRIER_TCP'], network_multipath: true, network_fec: false
+    }
+    expect(draftToRoute(draft).hops[1].ingress).toEqual({
+      security: 'LINK_SECURITY_NETWORK', network_transport_id: '', network_mode: 'NETWORK_TRANSPORT_MODE_ANX_LINE',
+      network_carriers: ['NETWORK_CARRIER_QUIC', 'NETWORK_CARRIER_TCP'], network_multipath: true
+    })
+    expect(routeToDraft(draftToRoute(draft)).hops[1].ingress.network_mode).toBe('NETWORK_TRANSPORT_MODE_ANX_LINE')
+    draft.hops[1].ingress.network_mode = 'NETWORK_TRANSPORT_MODE_ANX_LINE_REVERSE'
+    expect(draftToRoute(draft).hops[1].ingress).toEqual({
+      security: 'LINK_SECURITY_NETWORK', network_transport_id: '', network_mode: 'NETWORK_TRANSPORT_MODE_ANX_LINE_REVERSE'
+    })
+    draft.hops[1].ingress.network_transport_id = 'tr-hk'
+    expect(draftToRoute(draft).hops[1].ingress).toEqual({ security: 'LINK_SECURITY_NETWORK', network_transport_id: 'tr-hk' })
+
     setDraftEngine(draft, 0, 'ENGINE_GOST')
     expect(draft.hops.map(hop => hop.engine)).toEqual(['ENGINE_GOST', 'ENGINE_GOST'])
     expect(draft.hops[1].ingress.security).toBe('LINK_SECURITY_RAW')

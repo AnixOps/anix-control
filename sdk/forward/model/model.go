@@ -98,6 +98,14 @@ type LinkTransport struct {
 	// NetworkTransportID is the network model's transport of a NETWORK
 	// link.
 	NetworkTransportID string
+	// NetworkMode is the transport Control links the devices with when
+	// NetworkTransportID is empty; unspecified means ANX-A.
+	NetworkMode NetworkTransportMode
+	// NetworkCarriers, NetworkMultipath and NetworkFEC shape a bare
+	// ANX-Line link (NetworkModeAnxLine).
+	NetworkCarriers  []NetworkCarrier
+	NetworkMultipath bool
+	NetworkFEC       bool
 }
 
 // Target is a destination behind the last hop (forwardv1.Target).

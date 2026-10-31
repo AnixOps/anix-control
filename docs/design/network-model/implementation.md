@@ -74,6 +74,7 @@ PortForward 由 Agent 转成 anixcore 的 forward 入站（出站为 `egress:<id
   - `Engine.ENGINE_NETWORK = 4`、`LinkSecurity.LINK_SECURITY_NETWORK = 7`（链路走网络模型的某条传输，`anx_line` 或 `anx`）、`ProxyProtocol.PROXY_PROTOCOL_V1 = 3`。SDK 校验默认拒绝这三个新值，Control 用 `validate.Options.EnableNetwork` 打开。
   - `LinkTransport.network_transport_id = 6`。
   - `Hop.network_egress_id = 7`。
+  - `LinkTransport.network_mode = 7`、`network_carriers = 8`、`network_multipath = 9`、`network_fec = 10`（2026-10-31，见下文“传输方式”）。
   - 迁移完成后，gost 的取值（ENGINE_GOST，以及 TLS / WSS / QUIC / GRPC 链路）只保留编号，规划器拒绝这些取值。
 - network.v1：
   - `NetworkPlan.port_forwards`，消息为 `PortForward{id, listen, protocols, targets, oneof next}`，之后再加 policy 和 limits。
@@ -83,6 +84,7 @@ PortForward 由 Agent 转成 anixcore 的 forward 入站（出站为 `egress:<id
 
 - ENGINE_NETWORK 路由规则：每一跳都是 ENGINE_NETWORK，入口之后每跳一个设备；入口端口必须显式给出；后续跳不填 port、dial_address、mux、server_name、path，链路填 `network_transport_id`，出口填 `network_egress_id`；不支持直连模式。不查转发节点库存，因为这些节点是网络模型设备。
 - 自动补全（2026-10-30）：路由只需选设备，链路的 `network_transport_id` 和出口的 `network_egress_id` 可留空，由 Control 补齐。补出的组件只进计划、不写回文档，id 以 `auto-` 开头（文档不得使用）：没有线路的设备得到线路 `auto-<node>`；出口（及无链路路由的其他入口）没有互联网出口时得到 `auto-<node>-internet`（nat_direct，source auto）；留空的链路得到上一设备的跳出口 `auto-<from>-hop`、本设备的跳入口 `auto-<to>-hop`（监听 24443，对外地址取节点 host）和传输 `auto-<from>-<to>`（`anx`，A2 外衣，SNI www.apple.com），链路密钥与声明的传输一样生成。节点没有 host 时该链路留空、路由待定。声明的组件从不改动。`GET /api/v4/kernel/network` 的 `nodes` 列出所有已连上 Control 且未停用的 Agent 节点，路由编辑器从这里选设备。
+- 传输方式（2026-10-31）：留空的链路可在 `LinkTransport.network_mode` 选 Control 建哪种传输。不填或 `ANX_A` 即上面的 `anx`（A2 外衣，跳入口 24443）。`ANX_LINE` 为裸 `anx_line`（视为可信），本设备另有跳入口 `auto-<to>-hop-line`，监听中转端口 +2（默认 24445）的 TCP 和 QUIC，传输 `auto-<from>-<to>-line`；`network_carriers`（TCP/QUIC，空即只用 TCP）、`network_multipath`（至少两种载体）、`network_fec` 只对它有效，取值不同的路由各得一条 `auto-<from>-<to>-line-<hash>`。`ANX_LINE_REVERSE` 为反向回连的裸 `anx_line`（`auto-<from>-<to>-rev`）：本设备不开端口，回连上一设备 host 的 24444。A2 和裸链路分开端口，因为一个 anx-server 进程只服务一组监听地址和 SNI。路由编辑器在“网络传输”为自动时显示“传输方式”。
 - 节点网络设置（2026-10-30，表 `v4_kernel_node_network`，`GET/PUT /api/v4/kernel/nodes/{id}/network`，节点页「协议」标签的「网络」）：NAT 和多网卡机器在这里指定出口网卡、各族源地址和网关，以及中转端口（0 即 24443）。设了网卡和源地址的族，自动线路带上 interface/gateway，自动出口的 source 用该地址（Agent 据此做策略路由）；没设的族仍是 source auto。节点有已启用的 NAT 入口且端口映射覆盖中转端口时，自动跳入口为 `nat` 类型、公网地址取该入口的 host，上一设备拨映射后的公网端口；否则为 direct、地址取节点 host。保存设置会重新规划并记操作日志（`network_node_settings`）。
 - 检测到的网卡（2026-10-30）：Agent（rc.20 起）在网络状态的 `interfaces` 里上报本机网卡（启用、有全局单播地址，排除 lo、容器、隧道接口和链路本地地址）及其默认 IPv4/IPv6 网关，没有计划也每分钟上报。`GET/PUT .../network` 的回答带 `detected`（按族拆开、去掉前缀长度的地址）和 `detected_at`；节点页「网络」据此给出下拉选项，选网卡即填入它的第一个地址和网关，仍可切换为手动填写。
 - forward.v1 规划器只校验这类路由，不生成 NodeForwardState，也不分配端口。每次接受的规划在同一事务里重新规划网络模型：路由变成入口设备的 PortForward，链路按传输规划，到期或超配额的路由暂停后端口转发随之撤下。
