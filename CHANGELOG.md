@@ -2,6 +2,90 @@
 
 ## Unreleased
 
+## 5.0.0-rc.24 - 2026-10-31
+
+### Added
+
+- An ANX route hop whose network transport is automatic can pick its
+  transport mode in the route editor: ANX with the A2 jacket (the default,
+  hop port 24443), the bare ANX-Line for trusted lines (hop port 24445, TCP
+  and QUIC, with carrier order, multipath and FEC), or a dial-back bare
+  ANX-Line whose next device dials the previous one's port 24444 and opens
+  no port. The API takes it as `LinkTransport.network_mode`,
+  `network_carriers`, `network_multipath` and `network_fec`. Open TCP and
+  UDP 24445 on devices that accept a bare ANX-Line, and TCP 24444 on the
+  device a dial-back link starts from.
+- Upgrade campaigns offer the arm64 anx-node package (`anx-node-<version>-aarch64-linux-musl.tar.gz`)
+  when the release in `agent_install.artifact_dir/anx-node/<version>/` lists it in
+  `SHA256SUMS`. A release without it still works: arm64 nodes just get no kernel from it.
+  The private anx release workflow now builds and signs both x86_64 and aarch64.
+- 反向代理 (Reverse proxies), under 节点 → 反向代理
+  (`/admin/forward/reverse-proxies`, `GET/POST /api/v4/kernel/reverse-proxies`,
+  `PUT/DELETE /api/v4/kernel/reverse-proxies/{id}`). A reverse proxy publishes
+  HTTP(S) sites on entry nodes. Each request goes by host name
+  (`example.com`, `*.example.com`, `*`) and path prefix to a route's upstreams,
+  with balancing, health checks and a circuit breaker. The upstreams are dialed
+  from the entry, or from an exit node that Control links to over ANX-A, as it
+  does for a forward route's hops. TLS uses an automatic certificate or an
+  uploaded one, and an optional HTTP port redirects to HTTPS. Control seals the private key under
+  `module_runtime.ca_kek`, and no answer returns it.
+  - The entry nodes run it on anixcore and need an Agent and an anx-node with
+    the `reverse_proxy` feature.
+  - Automatic certificates: Control obtains them from Let's Encrypt (or the
+    directory in `ANIX_CONTROL_ACME_DIRECTORY_URL`) with a DNS-01 challenge.
+    The TXT records are written through one of the forwarding DNS providers
+    (Cloudflare, Alibaba Cloud DNS, DNSPod, Huawei Cloud DNS, webhook) in the
+    zone you name. Control renews them 30 days before expiry and retries a
+    failure after an hour, and the page shows the error. Only the
+    singleton-worker process issues them.
+  - The forwarding DNS providers also write TXT records.
+  - Migration `0022_reverse_proxies` creates `v5_reverse_proxy` and
+    `v5_reverse_proxy_acme_account` (the ACME account, its key sealed).
+- SDK: `NetworkPlan.reverse_proxies` (an HTTP(S) reverse proxy listener:
+  sites by host, routes by path prefix to balanced upstreams, optional TLS
+  certificate, next hop an egress or a route transport) and
+  `NetworkStatus.reverse_proxies`, with plan and status validation. Needs
+  a kernel with the `reverse_proxy` feature.
+
+### Changed
+
+- The panel no longer shows the commercial entry points. The public
+  configuration (`GET /api/v4/public/config`) reports the `community` edition
+  and hides the `affiliate`, `order` and `payment` packages, so the 商业 menu
+  group (orders, coupons, payment, invite commission) and the user plans and
+  orders pages are gone. The plans admin page is listed as subscription
+  templates. The routes themselves are unchanged until the commercial set
+  moves to its own repository.
+- The admin agent list, task and diagnostic routes (`/api/v2/admin/agent/*`)
+  act on the Agent Control stream; `GET /api/v2/admin/agent/monitor` answers
+  404 for every node because monitor snapshots came from the retired REST
+  channel.
+
+### Removed
+
+- The legacy Agent channels are gone: the node API key on the Agent Control
+  stream, `/api/v2/agent/*` (register, heartbeat, tasks, result, monitor,
+  WebSocket) and `/api/v2/node/*` (register, heartbeat, runtime-health,
+  WebSocket) now answer 404. Agents authenticate with enrolled client
+  certificates only; `Enroll` takes only one-time enrollment credentials.
+  UniProxy and the v2board gRPC services are unchanged.
+- `agent_control.mtls` (`off`, `optional`, `preferred`) and
+  `agent_control.legacy_sunset` are removed and ignored with a startup note;
+  the `anixops_agent_legacy_requests_total` and `anixops_agent_mtls_mode`
+  metrics are gone.
+- `GET /api/v4/kernel/agents/transports` no longer reports `mode` or `sunset`.
+- `POST /api/v4/kernel/network/migrate-gost` and the "Move gost routes to ANX" dialog on the Routes page. FR-test and the Agents hold no gost routes any more; a stored route that still has an ENGINE_GOST hop stays unplanned (flagged `gost_removed`) until it is edited onto the network model or deleted.
+
+### Fixed
+
+- The dialing end of a QUIC carrier reaches a NAT hop ingress at its mapped
+  public port, as TCP already did.
+- A route's detail page no longer shows "未上报" for a hop node that runs the
+  route on the network model but never joined the forward inventory (for
+  example an exit device of an ANX route). `GET /api/v4/forward/nodes` now
+  also lists the proxy nodes that have a network model device, with the
+  reports of their network status.
+
 ## 5.0.0-rc.23 - 2026-10-31
 
 ### Fixed
