@@ -337,7 +337,7 @@ jobs:
           set -Eeuo pipefail
           mkdir -p build_assets
           GOEXPERIMENT=jsonv2 go build -o build_assets/anix-agent \
-            -tags "anixcore sing xray hysteria2 with_quic with_grpc with_utls with_wireguard with_acme with_gvisor" -trimpath \
+            -tags "anixcore" -trimpath \
             -ldflags "-X 'github.com/AnixOps/anix-agent/v5/cmd.version=${TAG}' -s -w -buildid="
           ln -s anix-agent build_assets/V2bX
           (cd cmd/anixops-relay && go build -o ../../build_assets/anixops-relay -trimpath \
