@@ -42,11 +42,12 @@ func (f *AnixOpsFormatter) Format(nodes []*model.ParsedNode, ctx *model.Template
 	for _, node := range nodes {
 		var link string
 		var err error
-		if node.Type == "iwan" {
+		switch node.Type {
+		case "iwan":
 			link = iwanLink(node)
-		} else if node.Type == "anx" {
+		case "anx":
 			link = anxLink(node)
-		} else {
+		default:
 			link, err = f.links.link(node, ctx)
 		}
 		if err != nil || link == "" {
