@@ -356,6 +356,9 @@ func nodeSummaries(db *gorm.DB, filter NodeFilter) ([]*forwardv1.NodeSummary, er
 		}
 		out = append(out, fillSummary(summary, inventoryRows, infos, inv.reserved, states, reports))
 	}
+	if err := fillNetworkReports(db, out); err != nil {
+		return nil, err
+	}
 	return out, nil
 }
 

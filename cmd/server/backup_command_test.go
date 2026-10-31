@@ -195,10 +195,11 @@ func TestBackupCommandLocks(t *testing.T) {
 	restoring.Release()
 }
 
-func TestBackupCommandOnPostgreSQL(t *testing.T) {
+// A database driver backups do not cover is refused by every command.
+func TestBackupCommandOnAnUnsupportedDriver(t *testing.T) {
 	root := t.TempDir()
 	configPath := filepath.Join(root, "config.yaml")
-	require.NoError(t, os.WriteFile(configPath, []byte(fmt.Sprintf("data_dir: %s\ndatabase:\n  driver: postgres\n  host: 127.0.0.1\n  database: anix_control\n", root)), 0o600))
+	require.NoError(t, os.WriteFile(configPath, []byte(fmt.Sprintf("data_dir: %s\ndatabase:\n  driver: mysql\n  host: 127.0.0.1\n  database: anix_control\n", root)), 0o600))
 	f := &backupFixture{root: root}
 	for _, arguments := range [][]string{{"create"}, {"list"}, {"verify"}, {"restore", filepath.Join(root, "a.tar")}} {
 		code, _, stderr := f.run(t, append(arguments, "-config", configPath)...)

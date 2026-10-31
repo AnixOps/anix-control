@@ -212,6 +212,12 @@ The answer:
   `INCONCLUSIVE`). `HEALTH` per target from the entry's checks, which prove
   delivery end to end (`no_health` when the entry reports none: a UDP-only
   route, checks disabled, or an Agent or anixcore without target health).
+  Past the entry, `GET /routes/{id}/health` also lists each hop's own
+  links (`hop_index`, `address` = the component id, `port` 0): the
+  transport into and out of the hop and, on the last hop, the exit's egress,
+  with the `rtt_us` the hop's device measured (QUIC carriers only). A node on
+  the network model is `reported` from its `NetworkStatus`, since it sends no
+  forward.v1 report.
   No node checks run (`nodes[].node_vantage` is false with a note); Control
   dials the entry's listener (the listen address, else the device's first
   public address), and the targets only when the entry reports no health.

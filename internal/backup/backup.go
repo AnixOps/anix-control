@@ -23,8 +23,12 @@
 // transaction, so it is consistent, and in WAL mode it neither waits for
 // nor blocks the panel's single writer connection.
 //
-// Backups need SQLite. On PostgreSQL every operation answers ErrNeedsSQLite
-// and nothing is written.
+// A PostgreSQL panel's bundle holds database.pgdump instead of
+// database.sqlite: a pg_dump custom-format archive taken from one exported
+// snapshot (Postgres.dumpDatabase), verified by restoring it into a scratch
+// database and restored with pg_restore. The manifest's database_kind says
+// which. Any other database driver answers ErrNeedsSQLite and nothing is
+// written.
 package backup
 
 import (
@@ -98,7 +102,7 @@ const (
 var RowCountTables = []string{"v2_user", "v2_node", "v2_order"}
 
 // ErrNeedsSQLite answers every backup operation on PostgreSQL.
-var ErrNeedsSQLite = errors.New("backups need SQLite: this Control runs on PostgreSQL, whose data Control's backups do not cover. Back the database up with pg_dump and keep root.key with it")
+var ErrNeedsSQLite = errors.New("backups need SQLite or PostgreSQL: this Control's database driver is not covered by Control's backups. Back the database up yourself and keep root.key with it")
 
 // ErrInMemory answers a backup of an in-memory database (a test): there is
 // nothing to keep.
@@ -106,12 +110,15 @@ var ErrInMemory = errors.New("the database is in memory: there is nothing to bac
 
 // Manifest is manifest.json.
 type Manifest struct {
-	Format         string    `json:"format"`
-	ProgramVersion string    `json:"program_version"`
-	SchemaVersion  int       `json:"schema_version"`
-	CreatedAt      time.Time `json:"created_at"`
-	Type           string    `json:"type"`
-	HostName       string    `json:"host_name"`
+	Format         string `json:"format"`
+	ProgramVersion string `json:"program_version"`
+	SchemaVersion  int    `json:"schema_version"`
+	// DatabaseKind is KindSQLite or KindPostgres; empty (a bundle from
+	// before PostgreSQL backups) is SQLite.
+	DatabaseKind string    `json:"database_kind,omitempty"`
+	CreatedAt    time.Time `json:"created_at"`
+	Type         string    `json:"type"`
+	HostName     string    `json:"host_name"`
 	// Domain is the panel's domain when the configuration set one.
 	Domain string `json:"domain,omitempty"`
 	// RootKeyFingerprint is rootkey.Key.Fingerprint of root.key: never a
@@ -128,6 +135,14 @@ type Member struct {
 	Name   string `json:"name"`
 	Size   int64  `json:"size"`
 	SHA256 string `json:"sha256"`
+}
+
+// Kind is the manifest's database kind with the default applied.
+func (m *Manifest) Kind() string {
+	if m.DatabaseKind == "" {
+		return KindSQLite
+	}
+	return m.DatabaseKind
 }
 
 // member answers the manifest's record of name.

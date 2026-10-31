@@ -1753,7 +1753,7 @@ Before upgrading to 4.2, every node must run an Agent that has enrolled
   `never_enrolled` (never seen, no valid certificate);
   `summary.required_reasons` explains it and `summary.required_blockers`
   lists the nodes. Disabled and third-party nodes do not count; it is
-  computed over every node, also with `legacy_only`.
+  computed over every node.
   `anix-control agents transports --check-required` is the upgrade gate
   (exit status 3 while a node blocks, 0 when none, 2 on errors). Under
   `required`, startup logs a warning with the counts (legacy nodes, those
@@ -1794,9 +1794,8 @@ Before upgrading to 4.2, every node must run an Agent that has enrolled
   `required`'s refusals, and `anixops_agent_mtls_mode{mode}` is 1 for the
   mode in force. The names follow the repository's `anixops_` prefix
   (this section's draft said `anix_agent_legacy_requests_total`).
-- **Transport inventory.** `GET /api/v4/kernel/agents/transports` (admin;
-  `legacy_only=true` filters) and `anix-control agents transports [--json]
-  [--legacy-only]` list every proxy and forward node with the transport it
+- **Transport inventory.** `GET /api/v4/kernel/agents/transports` (admin)
+  and `anix-control agents transports [--json]` list every proxy and forward node with the transport it
   was last seen on (`mtls-stream`, `apikey-stream`, `http-legacy`,
   `websocket`, `clean-agent`, `uniproxy`, `v2board-grpc`), its agent
   version (from the stream's `Hello`, else the node row or the clean

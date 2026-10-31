@@ -508,7 +508,6 @@ SMTP 密码同样不再明文返回：`GET /api/v2/admin/notification/email/conf
 # 所有代理节点和转发节点的 Agent 连接方式与证书（管理员，v4）
 GET /api/v4/kernel/agents/transports
 GET /api/v4/kernel/agents/transports?node=proxy-7          # 只看指定节点（可重复或逗号分隔，最多 200 个）
-GET /api/v4/kernel/agents/transports?legacy_only=true      # 只看仍在旧通道上的节点
 ```
 
 应答 `{"data": {"mode", "summary", "nodes": [...]}}`。每个节点除原有字段外还有（均为新增字段，

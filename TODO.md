@@ -133,7 +133,7 @@ deliberately in a later PR.
 ## Deployment And Repository Hygiene
 
 - [ ] Remove hard-coded `/home/dev/...` defaults from
-  `config/deploy/deploy_panel.sh`, `config/deploy/ansible/nodes/`, and the
+  `config/deploy/deploy_panel.sh` and the
   agent deploy defaults in
   `web/src/views/admin/nodes/useNodeDeploy.js`.
 

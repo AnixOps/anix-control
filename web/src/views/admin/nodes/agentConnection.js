@@ -4,7 +4,7 @@
 // of one page, the node page for one node; both join the answer to the v2
 // node by its inventory name, `proxy-<id>` (Node, not ForwardNode).
 
-export const CONNECTION_TYPES = Object.freeze(['mtls_stream', 'apikey_stream', 'legacy', 'third_party', 'offline'])
+export const CONNECTION_TYPES = Object.freeze(['mtls_stream', 'third_party', 'offline'])
 export const CERTIFICATE_STATES = Object.freeze(['valid', 'revoked', 'expired', 'none'])
 
 // The inventory's name of a proxy node.
@@ -18,16 +18,12 @@ export function indexTransports(inventory) {
   return new Map(nodes.filter(node => node && node.node).map(node => [String(node.node), node]))
 }
 
-// The chip's tone. A mutual-TLS stream is the target state; an API key stream
-// is an Agent that has not enrolled yet; a legacy channel is refused once
-// agent_control.mtls is required; third-party node software is not an Agent
-// channel at all; offline is plain, because the node's status badge already
-// says so.
+// The chip's tone. A mutual-TLS stream is the only Agent channel; third-party
+// node software is not an Agent channel at all; offline is plain, because the
+// node's status badge already says so.
 export function connectionTone(type) {
   switch (type) {
     case 'mtls_stream': return 'success'
-    case 'apikey_stream': return 'info'
-    case 'legacy': return 'warning'
     default: return 'neutral'
   }
 }
