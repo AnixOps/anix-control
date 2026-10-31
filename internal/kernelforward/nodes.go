@@ -303,6 +303,16 @@ func nodeSummaries(db *gorm.DB, filter NodeFilter) ([]*forwardv1.NodeSummary, er
 			// settings can be read before they are set.
 			proxyIDs = []uint64{uint64(one.ID)}
 		}
+		if one == nil {
+			// Proxy nodes on the network model run ANX routes without an
+			// inventory row; list them too, so a route's hops all show their
+			// reports (fillNetworkReports).
+			networkIDs, err := networkProxyIDs(db)
+			if err != nil {
+				return nil, err
+			}
+			proxyIDs = append(proxyIDs, networkIDs...)
+		}
 		if len(proxyIDs) > 0 {
 			if err := db.Model(&model.Node{}).Select("id", "name", "host", "status").Where("id IN ?", proxyIDs).
 				Order("id").Find(&proxies).Error; err != nil {
@@ -358,6 +368,27 @@ func nodeSummaries(db *gorm.DB, filter NodeFilter) ([]*forwardv1.NodeSummary, er
 	}
 	if err := fillNetworkReports(db, out); err != nil {
 		return nil, err
+	}
+	return out, nil
+}
+
+// networkProxyIDs answers the IDs of the proxy nodes with a network model
+// device row.
+func networkProxyIDs(db *gorm.DB) ([]uint64, error) {
+	if !db.Migrator().HasTable(&model.NetworkDevice{}) {
+		return nil, nil
+	}
+	var refs []string
+	if err := db.Model(&model.NetworkDevice{}).Pluck("node_ref", &refs).Error; err != nil {
+		return nil, fmt.Errorf("kernel forward: load network devices: %w", err)
+	}
+	var out []uint64
+	for _, ref := range refs {
+		node, err := agentcontrol.ParseAgentNode(ref)
+		if err != nil || node.Kind != agentcontrol.NodeKindProxy {
+			continue
+		}
+		out = append(out, uint64(node.ID))
 	}
 	return out, nil
 }
