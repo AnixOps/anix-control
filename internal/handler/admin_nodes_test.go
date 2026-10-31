@@ -23,7 +23,7 @@ type AdminNodesTestSuite struct {
 
 func (s *AdminNodesTestSuite) SetupTest() {
 	s.HandlerTestSuite.SetupTest()
-	s.group = model.NodeGroup{Name: "HK", Kind: model.NodeGroupKindProxy, JoinTokenHash: "hash-hk", JoinTokenSealed: "sealed", ResetDay: 1, Rate: 1}
+	s.group = model.NodeGroup{Name: "HK", JoinTokenHash: "hash-hk", JoinTokenSealed: "sealed", ResetDay: 1, Rate: 1}
 	s.Require().NoError(s.db.Create(&s.group).Error)
 	groupID := s.group.ID
 	s.pending = model.Node{Name: "hk-02", Host: "203.0.113.6", APIKey: "key-1", APIKeyHash: "hash-1", Secret: "secret-1",

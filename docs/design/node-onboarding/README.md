@@ -53,8 +53,8 @@ Defaults accepted with them:
 
 ## The Administrator's Flow
 
-1. 节点 › **接入节点**. Pick a node group, or create one inline (name, kind,
-   default rate, protocol template).
+1. 节点 › **接入节点**. Pick a node group, or create one inline (a name; the
+   rest has defaults).
 2. Copy the command shown and run it on the machine:
 
    ```sh
@@ -88,8 +88,6 @@ deleted.
 | `max_nodes` | Optional cap on live nodes in the group |
 | `require_approval` | D4; default false |
 | `rate`, `tags`, `monthly_limit_bytes`, `reset_day`, `sort` | Copied to each new node |
-| `protocol_template` | JSON list of protocols to create on each new proxy node (see "Protocol templates") |
-| `subscription_group_ids` | Subscription groups the created protocols join |
 | `deleted`, `deleted_at` | Soft delete (see "Soft delete") |
 
 Nodes get `node_group_id`, `machine_fingerprint`, `approval` (`approved` or
@@ -218,31 +216,12 @@ Then the old certificates are revoked and a new one is issued for that node
   (it ran a script from the `dev_new` branch), the `V2bX` symlink, and the
   `Include` of remote URLs (broken today).
 
-## Protocol Templates
+## Protocol Templates (removed)
 
-A template entry describes one protocol:
-
-```json
-{
-  "name": "VLESS Reality",
-  "type": "vless",
-  "port": 443,                       // or "port_range": [20000, 40000]
-  "transport": "tcp",
-  "tls": "reality",                  // none | reality | acme | self_signed
-  "reality": {"server_name": "www.example.com", "dest": "www.example.com:443"},
-  "settings": {"flow": "xtls-rprx-vision"}
-}
-```
-
-Phase 4 supports `tls: none` and `reality`, which need no certificate on the
-node. Phase 7 adds `acme` (the node's host must be a domain; the Agent's
-existing ACME support obtains the certificate) and `self_signed`, delivered in
-the node's `config.v1` snapshot instead of the local `CertConfig`.
-
-A `port_range` gets a random port per node, distinct from the node's other
-protocols. Control cannot see which ports are busy on the machine; a bind
-failure shows in the node's runtime health and the administrator edits the
-port.
+A node group no longer carries a protocol template or subscription groups
+(migration `0019_node_groups_without_templates`, along with its `kind`).
+A node that joins is clean: it has no protocol and only runs the network model
+(ANX). Protocols are added on the node page.
 
 ## Forward Routes In Subscriptions (Phase 10, D3)
 

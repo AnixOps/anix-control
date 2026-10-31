@@ -3,7 +3,6 @@ package nodegroup
 import (
 	"context"
 	"errors"
-	"strconv"
 	"time"
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
@@ -20,10 +19,9 @@ const onlineWindow = 5 * time.Minute
 // no credential and no configuration.
 type GroupNode struct {
 	ID uint `json:"id"`
-	// Node is the node's name for the Agent APIs: proxy-<id> or
-	// forward-<id>; approve and reject take it.
+	// Node is the node's name for the Agent APIs: proxy-<id>; approve and
+	// reject take it.
 	Node string `json:"node"`
-	Kind string `json:"kind"`
 	Name string `json:"name"`
 	// Host is the address clients connect to.
 	Host string `json:"host"`
@@ -58,7 +56,7 @@ func (s *Service) Nodes(ctx context.Context, id uint) ([]GroupNode, error) {
 	for _, row := range rows {
 		node := GroupNode{
 			ID: row.ID, Node: agentcontrol.AgentNode{Kind: agentcontrol.NodeKindProxy, ID: uint32(row.ID)}.String(), // #nosec G115 -- node ids are below 2^32.
-			Kind: model.NodeGroupKindProxy, Name: row.Name, Host: row.Host, Approval: row.Approval, CreatedAt: row.CreatedAt,
+			Name: row.Name, Host: row.Host, Approval: row.Approval, CreatedAt: row.CreatedAt,
 		}
 		if row.ServerVersion != nil {
 			node.AgentVersion = *row.ServerVersion
@@ -70,57 +68,39 @@ func (s *Service) Nodes(ctx context.Context, id uint) ([]GroupNode, error) {
 		}
 		nodes = append(nodes, node)
 	}
-	// The forward nodes the group made before groups made regular nodes
-	// only, until they are converted.
-	var forwardRows []model.ForwardNode
-	if err := liveForwardNodes(db, group).Order("id DESC").Find(&forwardRows).Error; err != nil {
-		return nil, err
-	}
-	for _, row := range forwardRows {
-		node := GroupNode{
-			ID: row.ID, Node: agentcontrol.AgentNode{Kind: agentcontrol.NodeKindForward, ID: uint32(row.ID)}.String(), // #nosec G115 -- node ids are below 2^32.
-			Kind: model.NodeGroupKindForward, Name: row.Name, Host: row.Host, Approval: row.Approval, CreatedAt: row.CreatedAt,
-		}
-		if !row.LastCheck.IsZero() {
-			seen := row.LastCheck.UTC()
-			node.LastSeen = &seen
-			node.Online = row.Enabled && row.Status == model.ForwardNodeStatusOnline && now.Sub(seen) < onlineWindow
-		}
-		nodes = append(nodes, node)
-	}
 	if err := s.fillAgentVersions(ctx, nodes); err != nil {
 		return nil, err
 	}
 	return nodes, nil
 }
 
-// fillAgentVersions gives the nodes that report no version of their own
-// (forward nodes have no such column) the one their Agent said in its
-// newest stream Hello, from the agent transport inventory's table.
+// fillAgentVersions gives the nodes that report no version of their own the
+// one their Agent said in its newest stream Hello, from the agent transport
+// inventory's table.
 func (s *Service) fillAgentVersions(ctx context.Context, nodes []GroupNode) error {
-	missing := map[string][]uint{}
+	var ids []uint
 	for _, node := range nodes {
 		if node.AgentVersion == "" {
-			missing[node.Kind] = append(missing[node.Kind], node.ID)
+			ids = append(ids, node.ID)
 		}
 	}
-	versions := map[string]string{}
-	for kind, ids := range missing {
-		var rows []model.AgentTransport
-		if err := s.DB.WithContext(ctx).Where("node_kind = ? AND node_id IN ? AND agent_version <> ''", kind, ids).
-			Order("last_seen_at DESC").Find(&rows).Error; err != nil {
-			return err
-		}
-		for _, row := range rows {
-			key := kind + "-" + strconv.FormatUint(uint64(row.NodeID), 10)
-			if _, ok := versions[key]; !ok {
-				versions[key] = row.AgentVersion
-			}
+	if len(ids) == 0 {
+		return nil
+	}
+	var rows []model.AgentTransport
+	if err := s.DB.WithContext(ctx).Where("node_kind = ? AND node_id IN ? AND agent_version <> ''", agentcontrol.NodeKindProxy, ids).
+		Order("last_seen_at DESC").Find(&rows).Error; err != nil {
+		return err
+	}
+	versions := map[uint]string{}
+	for _, row := range rows {
+		if _, ok := versions[row.NodeID]; !ok {
+			versions[row.NodeID] = row.AgentVersion
 		}
 	}
 	for i := range nodes {
 		if nodes[i].AgentVersion == "" {
-			nodes[i].AgentVersion = versions[nodes[i].Node]
+			nodes[i].AgentVersion = versions[nodes[i].ID]
 		}
 	}
 	return nil

@@ -75,7 +75,7 @@ export default {
     syncReload: '同步并重载',
     logs: '查看日志',
     edit: '编辑',
-    delete: '删除',
+    delete: '删除'
   },
   detail: {
     title: '节点详情',
@@ -633,14 +633,6 @@ export default {
     quick: {
       name: '节点组名称',
       namePlaceholder: '香港',
-      preset: '协议',
-      presets: {
-        'vless-reality': 'VLESS Reality（推荐）',
-        'shadowsocks-2022': 'Shadowsocks 2022',
-        'vless-reality-shadowsocks': 'VLESS Reality + Shadowsocks 2022',
-        none: '不带协议（只运行网络模型 ANX）'
-      },
-      subscriptionGroups: '加入订阅分组',
       create: '创建节点组',
       failed: '无法创建节点组：{message}'
     }
@@ -704,7 +696,6 @@ export default {
     save: '保存更改',
     saveFailed: '无法保存：{message}',
     joining: '接入',
-    noSubscriptionGroups: '还没有订阅分组。先到“订阅分组”创建一个，节点才能出现在订阅里。',
     fields: {
       name: '名称',
       rate: '流量倍率',
@@ -714,8 +705,7 @@ export default {
       resetDay: '每月重置日',
       tokenExpiry: '令牌有效期',
       maxNodes: '节点数上限',
-      requireApproval: '新节点需要我确认',
-      subscriptionGroups: '订阅分组'
+      requireApproval: '新节点需要我确认'
     },
     placeholders: {
       name: '香港',
@@ -727,8 +717,7 @@ export default {
       monthlyLimit: '留空表示不限。',
       resetDay: '1 到 28。',
       maxNodes: '0 表示不限。',
-      requireApproval: '确认前，节点不会收到配置和用户。',
-      subscriptionGroups: '新节点的协议会加入这些订阅分组。已经接入的节点保持不变。'
+      requireApproval: '确认前，节点不会收到配置和用户。'
     },
     expiry: {
       never: '长期有效',
@@ -739,49 +728,6 @@ export default {
       keep: '保持不变（{time} 到期）',
       expired: '已过期（请重新设置）',
       expiredError: '令牌已过期，请选择新的有效期。'
-    },
-    template: {
-      title: '协议',
-      description: '每个新节点都会得到这些协议，密钥由面板为每个节点单独生成。修改只对之后接入的节点生效，已有节点保持不变。',
-      empty: '还没有协议：新节点接入后没有可用的协议。',
-      protocol: '协议 {n}',
-      name: '名称',
-      namePlaceholder: '默认用协议名',
-      type: '协议',
-      types: {
-        vless: 'VLESS',
-        vmess: 'VMess',
-        shadowsocks: 'Shadowsocks',
-        wireguard: 'WireGuard'
-      },
-      transport: '传输',
-      tls: 'TLS',
-      portMode: '端口',
-      portModes: {
-        range: '随机端口',
-        fixed: '固定端口'
-      },
-      port: '端口',
-      portFrom: '端口从',
-      portTo: '到',
-      serverName: 'Reality 伪装站点',
-      serverNameHelp: '必须是支持 TLS 1.3 的网站域名。',
-      dest: 'Reality 回源地址',
-      destHelp: '留空则用 站点:443。',
-      advanced: '高级',
-      settings: '协议设置（JSON）',
-      transportSettings: '传输设置（JSON）',
-      add: '添加协议',
-      remove: '移除',
-      fixProblems: '请先修正标出的协议设置。',
-      portErrors: {
-        port: '端口需在 1 到 65535 之间。',
-        range: '端口范围需在 1 到 65535 之间，且起点不大于终点。'
-      },
-      jsonErrors: {
-        json: '不是有效的 JSON。',
-        object: '需要是 JSON 对象。'
-      }
     }
   },
   statusText: {

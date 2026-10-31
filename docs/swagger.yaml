@@ -1441,6 +1441,35 @@ definitions:
         type: integer
     type: object
   nodegroup.GroupInput:
+    properties:
+      max_nodes:
+        description: MaxNodes caps the group's live nodes; 0 is no cap.
+        type: integer
+      monthly_limit_bytes:
+        type: integer
+      name:
+        type: string
+      rate:
+        description: Rate is the billing rate of the group's proxy nodes; 1 when absent.
+        type: number
+      require_approval:
+        type: boolean
+      reset_day:
+        description: |-
+          ResetDay is the day of the month (1-28) the nodes' monthly traffic
+          resets; 1 when absent.
+        type: integer
+      sort:
+        type: integer
+      tags:
+        items:
+          type: string
+        type: array
+      token_expires_at:
+        description: |-
+          TokenExpiresAt, when set, ends the token's use; it must be in the
+          future.
+        type: string
     type: object
   realitytarget.AutoState:
     properties:
@@ -7729,9 +7758,9 @@ paths:
       - Kernel
   /api/v4/kernel/node-groups:
     get:
-      description: The live node groups by sort and id, each with its defaults, protocol
-        template, subscription groups, token reset and expiry times, and its live
-        and pending nodes counted. Never the join token.
+      description: The live node groups by sort and id, each with its defaults, token
+        reset and expiry times, and its live and pending nodes counted. Never the
+        join token.
       produces:
       - application/json
       responses:
@@ -7750,11 +7779,9 @@ paths:
       - application/json
       description: 'A node group with a new join token (sealed under module_runtime.ca_kek,
         which must be set). Its defaults (rate, tags, monthly_limit_bytes, reset_day,
-        sort) are copied to every node the token creates; protocol_template lists
-        the protocols each new node gets (empty: the node only runs the network model,
-        ANX) (tls none, or reality for vless; port or port_range) and subscription_group_ids
-        the subscription groups they join. The answer does not carry the token: GET
-        .../command shows the install command. Audited.'
+        sort) are copied to every node the token creates; Nodes that join are clean:
+        they have no protocol. The answer does not carry the token: GET .../command
+        shows the install command. Audited.'
       parameters:
       - description: the group
         in: body
@@ -7824,7 +7851,7 @@ paths:
       consumes:
       - application/json
       description: Replaces every field of a group but its token. Nodes that joined
-        keep what they got; the defaults and the template apply to later joins. Audited.
+        keep what they got; the defaults apply to later joins. Audited.
       parameters:
       - description: node group id
         in: path
@@ -7880,9 +7907,9 @@ paths:
     get:
       description: 'The group''s live nodes (every node of the group but the rejected
         ones), newest first, for the join dialog that waits for machines: id, node
-        (proxy-<id> or forward-<id>), kind, name, host, approval (approved or pending),
-        online (enabled and checked in within five minutes, as the node list computes
-        it), last_seen, agent_version and created_at. Never a credential. Any administrator.'
+        (proxy-<id>), name, host, approval (approved or pending), online (enabled
+        and checked in within five minutes, as the node list computes it), last_seen,
+        agent_version and created_at. Never a credential. Any administrator.'
       parameters:
       - description: node group id
         in: path
@@ -7929,12 +7956,11 @@ paths:
   /api/v4/kernel/node-groups/default:
     post:
       description: 'Creates the default node group when no live node group exists,
-        and answers the first group otherwise (created tells which): a proxy group
-        named "默认" whose template is one VLESS Reality protocol on a random port from
-        20000 to 40000, attached to the default subscription group (created when the
-        panel has none), so the first node needs no input. Idempotent and safe to
-        call concurrently. 409 ca_kek_missing without module_runtime.ca_kek. Audited
-        as a node group create when it creates.'
+        and answers the first group otherwise (created tells which): a group named
+        "默认" with the default settings, so the first node needs no input; nodes that
+        join it are clean (no protocol). Idempotent and safe to call concurrently.
+        409 ca_kek_missing without module_runtime.ca_kek. Audited as a node group
+        create when it creates.'
       produces:
       - application/json
       responses:
@@ -7959,7 +7985,7 @@ paths:
         starts sending it its configuration (config.v1) and its users (users.v1).
         409 node_not_pending for any other node. Audited (node_approve).'
       parameters:
-      - description: proxy-<id> or forward-<id>
+      - description: proxy-<id>
         in: path
         name: id
         required: true
@@ -8319,7 +8345,7 @@ paths:
         its Agent certificates are revoked, which ends its stream at the next heartbeat.
         409 node_not_pending for any other node. Audited (node_reject).'
       parameters:
-      - description: proxy-<id> or forward-<id>
+      - description: proxy-<id>
         in: path
         name: id
         required: true

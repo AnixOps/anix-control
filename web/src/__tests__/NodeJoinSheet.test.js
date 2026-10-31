@@ -25,9 +25,6 @@ const kernel = vi.hoisted(() => ({
 }))
 vi.mock('@/api/kernel', async importOriginal => ({ ...(await importOriginal()), ...kernel }))
 
-const admin = vi.hoisted(() => ({ getSubscriptionGroups: vi.fn() }))
-vi.mock('@/api/admin', async importOriginal => ({ ...(await importOriginal()), ...admin }))
-
 const READY = {
   ready: true,
   checks: [
@@ -83,13 +80,12 @@ async function sheet() {
 describe('NodeJoinSheet', () => {
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
-    for (const fn of [...Object.values(kernel), ...Object.values(admin)]) fn.mockReset()
+    for (const fn of Object.values(kernel)) fn.mockReset()
     vi.spyOn(console, 'error').mockImplementation(() => {})
     kernel.getKernelInstallReadiness.mockResolvedValue(READY)
     kernel.listKernelNodeGroups.mockResolvedValue({ groups: [group()] })
     kernel.getKernelNodeGroupCommand.mockResolvedValue(command())
     kernel.getKernelNodeGroupNodes.mockResolvedValue({ nodes: [] })
-    admin.getSubscriptionGroups.mockResolvedValue({ data: [{ id: 9, name: 'default' }, { id: 10, name: 'vip' }] })
   })
 
   afterEach(() => {
@@ -303,7 +299,7 @@ describe('NodeJoinSheet', () => {
     expect((await within(confirm).findByRole('alert')).textContent).toContain('only a super administrator may reset')
   })
 
-  it('makes a new node group inline with a name, a type and a preset, in the default subscription group', async () => {
+  it('makes a new node group inline with just a name', async () => {
     kernel.createKernelNodeGroup.mockResolvedValue(group({ id: 2, name: 'HK' }))
     kernel.listKernelNodeGroups.mockResolvedValueOnce({ groups: [group()] }).mockResolvedValue({ groups: [group(), group({ id: 2, name: 'HK' })] })
     kernel.getKernelNodeGroupCommand.mockImplementation(async id => command(`anixjoin_${id}`))
@@ -320,17 +316,11 @@ describe('NodeJoinSheet', () => {
     expect(kernel.createKernelNodeGroup).not.toHaveBeenCalled()
 
     await user.type(within(form).getByRole('textbox', { name: /Node group name/ }), 'HK')
-    // The seeded default subscription group starts checked.
-    await waitFor(() => expect(within(form).getByRole('checkbox', { name: 'default' }).getAttribute('aria-checked')).toBe('true'))
-    expect(within(form).getByRole('checkbox', { name: 'vip' }).getAttribute('aria-checked')).toBe('false')
     await user.click(within(form).getByTestId('quick-group-save'))
 
     await waitFor(() => expect(kernel.createKernelNodeGroup).toHaveBeenCalledTimes(1))
     const body = kernel.createKernelNodeGroup.mock.calls[0][0]
-    expect(body).toMatchObject({ name: 'HK', subscription_group_ids: [9] })
-    expect(body.protocol_template).toHaveLength(1)
-    expect(body.protocol_template[0]).toMatchObject({ type: 'vless', tls: 'reality', transport: 'tcp', port_range: [20000, 40000] })
-    expect(body.protocol_template[0].reality.server_name).toBeTruthy()
+    expect(body).toEqual({ name: 'HK' })
     // The new group is the one shown, with its own command.
     await waitFor(() => expect(within(dialog).getByTestId('join-command-text').textContent).toContain('anixjoin_2'))
     expect(within(dialog).queryByTestId('quick-group-form')).toBeNull()

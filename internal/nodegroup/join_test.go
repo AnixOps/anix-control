@@ -1,13 +1,9 @@
 package nodegroup
 
 import (
-	"crypto/ecdh"
 	"crypto/x509"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"regexp"
-	"sort"
 	"strconv"
 	"testing"
 	"time"
@@ -15,21 +11,9 @@ import (
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	"github.com/AnixOps/anix-control/v5/internal/agentpki"
 	"github.com/AnixOps/anix-control/v5/internal/model"
-	"github.com/AnixOps/anix-control/v5/internal/service"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-// proxyTemplate is a template of every protocol kind that needs a per-node
-// secret, and both port forms.
-const proxyTemplate = `[
-	{"name": "VLESS Reality", "type": "vless", "port": 443, "tls": "reality",
-	 "reality": {"server_name": "www.example.com", "dest": "www.example.com:443"}, "settings": {"flow": "xtls-rprx-vision"}},
-	{"name": "SS 2022", "type": "shadowsocks", "port_range": [20000, 20003], "settings": {"method": "2022-blake3-aes-128-gcm"}},
-	{"name": "VMess WS", "type": "vmess", "port_range": [20000, 20003], "transport": "ws", "transport_settings": {"path": "/v"}},
-	{"name": "WireGuard", "type": "wireguard", "port": 51820,
-	 "settings": {"cidr": "10.66.0.0/24", "server_address": "10.66.0.1/24"}}
-]`
 
 func decodeDocument(t *testing.T, document *string) map[string]any {
 	t.Helper()
@@ -39,13 +23,11 @@ func decodeDocument(t *testing.T, document *string) map[string]any {
 	return decoded
 }
 
-func TestJoinCreatesAProxyNodeWithTheTemplate(t *testing.T) {
+func TestJoinCreatesACleanNode(t *testing.T) {
 	forEachDatabase(t, func(t *testing.T, f *fixture) {
 		rate := 2.0
 		group, token := f.createGroup(t, GroupInput{
 			Name: "HK", Rate: &rate, Tags: []string{"hk"}, MonthlyLimitBytes: 1 << 40, ResetDay: 9, Sort: 4,
-			ProtocolTemplate:     json.RawMessage(proxyTemplate),
-			SubscriptionGroupIDs: []uint{f.subscriptions[0].ID, f.subscriptions[1].ID},
 		})
 		print := fingerprint("a")
 		joined, err := f.join(t, JoinRequest{
@@ -84,54 +66,10 @@ func TestJoinCreatesAProxyNodeWithTheTemplate(t *testing.T) {
 		require.NotNil(t, node.ServerOS)
 		assert.Equal(t, "linux/amd64", *node.ServerOS)
 
-		// The protocols: the template's, with distinct ports and the node's
-		// own secrets, in the group's subscription groups.
-		var protocols []model.NodeProtocol
-		require.NoError(t, f.db.Preload("SubscriptionGroups").Where("node_id = ?", node.ID).Order("sort").Find(&protocols).Error)
-		require.Len(t, protocols, 4)
-		ports := map[int]bool{}
-		for _, protocol := range protocols {
-			assert.False(t, ports[protocol.Port], "port %d twice", protocol.Port)
-			ports[protocol.Port] = true
-			assert.Equal(t, 1, protocol.Enable)
-			ids := []uint{}
-			for _, subscription := range protocol.SubscriptionGroups {
-				ids = append(ids, subscription.ID)
-			}
-			sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
-			assert.Equal(t, []uint{f.subscriptions[0].ID, f.subscriptions[1].ID}, ids, protocol.Name)
-			assert.Empty(t, service.ValidateProtocolSecrets(&protocol), protocol.Name)
-		}
-		reality := protocols[0]
-		assert.Equal(t, model.ProtocolVLESS, reality.Type)
-		assert.Equal(t, 443, reality.Port)
-		assert.Equal(t, 2, reality.TLS)
-		realitySettings := decodeDocument(t, reality.RealitySettings)
-		private, err := base64.RawURLEncoding.DecodeString(realitySettings["private_key"].(string))
-		require.NoError(t, err)
-		key, err := ecdh.X25519().NewPrivateKey(private)
-		require.NoError(t, err)
-		assert.Equal(t, base64.RawURLEncoding.EncodeToString(key.PublicKey().Bytes()), realitySettings["public_key"], "the public key is the private key's")
-		assert.Regexp(t, regexp.MustCompile(`^[0-9a-f]{16}$`), realitySettings["short_id"])
-		assert.Equal(t, "www.example.com:443", realitySettings["dest"])
-		assert.Equal(t, "www.example.com", decodeDocument(t, reality.TLSSettings)["server_name"])
-		assert.Equal(t, "xtls-rprx-vision", decodeDocument(t, reality.Settings)["flow"])
-
-		shadowsocks := protocols[1]
-		assert.GreaterOrEqual(t, shadowsocks.Port, 20000)
-		assert.LessOrEqual(t, shadowsocks.Port, 20003)
-		serverKey, err := base64.StdEncoding.DecodeString(decodeDocument(t, shadowsocks.Settings)["server_key"].(string))
-		require.NoError(t, err)
-		assert.Len(t, serverKey, 16, "2022-blake3-aes-128-gcm takes a 16-byte key")
-
-		vmess := protocols[2]
-		require.NotNil(t, vmess.Transport)
-		assert.Equal(t, "ws", *vmess.Transport)
-		assert.JSONEq(t, `{"path":"/v"}`, *vmess.TransportSettings)
-
-		wireguard := decodeDocument(t, protocols[3].Settings)
-		assert.NotEmpty(t, wireguard["server_private_key"])
-		assert.NotEmpty(t, wireguard["server_public_key"])
+		// A clean node: it has no protocol.
+		var protocols int64
+		require.NoError(t, f.db.Model(&model.NodeProtocol{}).Where("node_id = ?", node.ID).Count(&protocols).Error)
+		assert.Zero(t, protocols)
 
 		// The enrollment and certificate, as Enroll records them.
 		var enrollment model.AgentEnrollment
@@ -163,10 +101,6 @@ func TestJoinCreatesAProxyNodeWithTheTemplate(t *testing.T) {
 		var secondNode model.Node
 		require.NoError(t, f.db.First(&secondNode, second.Node.ID).Error)
 		assert.Equal(t, "b.nodes.example.com", secondNode.Host, "--host wins over the detected address")
-		var secondReality model.NodeProtocol
-		require.NoError(t, f.db.Where("node_id = ? AND type = ?", second.Node.ID, "vless").First(&secondReality).Error)
-		assert.NotEqual(t, realitySettings["private_key"], decodeDocument(t, secondReality.RealitySettings)["private_key"])
-		assert.NotEqual(t, realitySettings["short_id"], decodeDocument(t, secondReality.RealitySettings)["short_id"])
 
 		view, err := f.svc.Get(t.Context(), group.ID)
 		require.NoError(t, err)
@@ -174,9 +108,9 @@ func TestJoinCreatesAProxyNodeWithTheTemplate(t *testing.T) {
 	})
 }
 
-// A group without a protocol template makes relays: regular nodes without
-// protocols.
-func TestJoinOfARelayGroupCreatesARegularNode(t *testing.T) {
+// A joined node is a regular node without protocols, whatever the group's
+// tags.
+func TestJoinOfATaggedGroupCreatesARegularNode(t *testing.T) {
 	forEachDatabase(t, func(t *testing.T, f *fixture) {
 		group, token := f.createGroup(t, GroupInput{Name: "edge", Tags: []string{"iepl"}})
 		joined, err := f.join(t, JoinRequest{Token: token, MachineFingerprint: fingerprint("f"), Hostname: "relay-1", PublicAddresses: []string{"203.0.113.9"}})
@@ -196,9 +130,6 @@ func TestJoinOfARelayGroupCreatesARegularNode(t *testing.T) {
 		var protocols int64
 		require.NoError(t, f.db.Model(&model.NodeProtocol{}).Count(&protocols).Error)
 		assert.Zero(t, protocols)
-		var forwardNodes int64
-		require.NoError(t, f.db.Model(&model.ForwardNode{}).Count(&forwardNodes).Error)
-		assert.Zero(t, forwardNodes, "no forward node is created any more")
 		assert.Equal(t, "spiffe://anixops/test/agent/"+joined.Node.String(), joined.Issued.Identity.String())
 	})
 }
@@ -309,7 +240,7 @@ func TestJoinRefusesMalformedRequests(t *testing.T) {
 
 func TestJoinRejoinRule(t *testing.T) {
 	forEachDatabase(t, func(t *testing.T, f *fixture) {
-		group, token := f.createGroup(t, GroupInput{Name: "g", MaxNodes: 1, ProtocolTemplate: json.RawMessage(`[{"type":"vmess","port":8080}]`)})
+		group, token := f.createGroup(t, GroupInput{Name: "g", MaxNodes: 1})
 		print := fingerprint("m")
 		first, err := f.join(t, JoinRequest{Token: token, MachineFingerprint: print, Hostname: "m", PublicAddresses: []string{"203.0.113.7", "2001:db8::7"}})
 		require.NoError(t, err)
@@ -338,7 +269,7 @@ func TestJoinRejoinRule(t *testing.T) {
 
 		// Each failing condition creates a node instead; the group's cap
 		// is lifted for that.
-		_, err = f.svc.Update(t.Context(), group.ID, GroupInput{Name: "g", ProtocolTemplate: json.RawMessage(`[{"type":"vmess","port":8080}]`)}, f.admin)
+		_, err = f.svc.Update(t.Context(), group.ID, GroupInput{Name: "g"}, f.admin)
 		require.NoError(t, err)
 		f.clock.Advance(10 * time.Minute)
 		createsANode := func(name string, request JoinRequest) {

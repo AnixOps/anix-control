@@ -1014,9 +1014,8 @@ template and the first detail page (plan §7.2). Page-local parts live in
   (a PUT of the group as listed with one field changed), when the token ends,
   and 接入节点 / 编辑 / 删除 (a 409 reads "组内还有节点"). The edit sheet
   (`NodeGroupSheet.vue`) holds the defaults the nodes copy, the token's
-  validity, the node cap, approval, the subscription groups and the protocol
-  template (`NodeGroupTemplateEditor.vue`); the API's validation errors name
-  the field (`protocol_template[0]: …`) and show in the sheet.
+  validity, the node cap and approval (nodes join clean, without protocols); the
+  API's validation errors name the field and show in the sheet.
 - **Approval.** The list endpoint of the console is `GET /api/v4/admin/nodes`
   (the `/api/v2` rows with `approval`, `node_group_id` and `node_group_name`;
   the `/api/v2` list keeps its shape, which the package gateway's

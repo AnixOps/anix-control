@@ -9164,7 +9164,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "The live node groups by sort and id, each with its defaults, protocol template, subscription groups, token reset and expiry times, and its live and pending nodes counted. Never the join token.",
+                "description": "The live node groups by sort and id, each with its defaults, token reset and expiry times, and its live and pending nodes counted. Never the join token.",
                 "produces": [
                     "application/json"
                 ],
@@ -9188,7 +9188,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "A node group with a new join token (sealed under module_runtime.ca_kek, which must be set). Its defaults (rate, tags, monthly_limit_bytes, reset_day, sort) are copied to every node the token creates; protocol_template lists the protocols each new node gets (empty: the node only runs the network model, ANX) (tls none, or reality for vless; port or port_range) and subscription_group_ids the subscription groups they join. The answer does not carry the token: GET .../command shows the install command. Audited.",
+                "description": "A node group with a new join token (sealed under module_runtime.ca_kek, which must be set). Its defaults (rate, tags, monthly_limit_bytes, reset_day, sort) are copied to every node the token creates; Nodes that join are clean: they have no protocol. The answer does not carry the token: GET .../command shows the install command. Audited.",
                 "consumes": [
                     "application/json"
                 ],
@@ -9228,7 +9228,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Creates the default node group when no live node group exists, and answers the first group otherwise (created tells which): a proxy group named \"默认\" whose template is one VLESS Reality protocol on a random port from 20000 to 40000, attached to the default subscription group (created when the panel has none), so the first node needs no input. Idempotent and safe to call concurrently. 409 ca_kek_missing without module_runtime.ca_kek. Audited as a node group create when it creates.",
+                "description": "Creates the default node group when no live node group exists, and answers the first group otherwise (created tells which): a group named \"默认\" with the default settings, so the first node needs no input; nodes that join it are clean (no protocol). Idempotent and safe to call concurrently. 409 ca_kek_missing without module_runtime.ca_kek. Audited as a node group create when it creates.",
                 "produces": [
                     "application/json"
                 ],
@@ -9294,7 +9294,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Replaces every field of a group but its token. Nodes that joined keep what they got; the defaults and the template apply to later joins. Audited.",
+                "description": "Replaces every field of a group but its token. Nodes that joined keep what they got; the defaults apply to later joins. Audited.",
                 "consumes": [
                     "application/json"
                 ],
@@ -9409,7 +9409,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "The group's live nodes (every node of the group but the rejected ones), newest first, for the join dialog that waits for machines: id, node (proxy-\u003cid\u003e or forward-\u003cid\u003e), kind, name, host, approval (approved or pending), online (enabled and checked in within five minutes, as the node list computes it), last_seen, agent_version and created_at. Never a credential. Any administrator.",
+                "description": "The group's live nodes (every node of the group but the rejected ones), newest first, for the join dialog that waits for machines: id, node (proxy-\u003cid\u003e), name, host, approval (approved or pending), online (enabled and checked in within five minutes, as the node list computes it), last_seen, agent_version and created_at. Never a credential. Any administrator.",
                 "produces": [
                     "application/json"
                 ],
@@ -9490,7 +9490,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "proxy-\u003cid\u003e or forward-\u003cid\u003e",
+                        "description": "proxy-\u003cid\u003e",
                         "name": "id",
                         "in": "path",
                         "required": true
@@ -9943,7 +9943,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "proxy-\u003cid\u003e or forward-\u003cid\u003e",
+                        "description": "proxy-\u003cid\u003e",
                         "name": "id",
                         "in": "path",
                         "required": true
@@ -13779,7 +13779,43 @@ const docTemplate = `{
             }
         },
         "nodegroup.GroupInput": {
-            "type": "object"
+            "type": "object",
+            "properties": {
+                "max_nodes": {
+                    "description": "MaxNodes caps the group's live nodes; 0 is no cap.",
+                    "type": "integer"
+                },
+                "monthly_limit_bytes": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "rate": {
+                    "description": "Rate is the billing rate of the group's proxy nodes; 1 when absent.",
+                    "type": "number"
+                },
+                "require_approval": {
+                    "type": "boolean"
+                },
+                "reset_day": {
+                    "description": "ResetDay is the day of the month (1-28) the nodes' monthly traffic\nresets; 1 when absent.",
+                    "type": "integer"
+                },
+                "sort": {
+                    "type": "integer"
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "token_expires_at": {
+                    "description": "TokenExpiresAt, when set, ends the token's use; it must be in the\nfuture.",
+                    "type": "string"
+                }
+            }
         },
         "realitytarget.AutoState": {
             "type": "object",

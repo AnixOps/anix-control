@@ -119,22 +119,18 @@ func TestNodeGroupsAPI(t *testing.T) {
 	env := newNodeGroupsTestEnv(t)
 
 	created := env.call(t, 7, http.MethodPost, "/node-groups", `{
-		"name": "HK", "require_approval": true, "max_nodes": 5, "rate": 1.5, "tags": ["hk"],
-		"protocol_template": [{"name": "VLESS Reality", "type": "vless", "port": 443, "tls": "reality",
-			"reality": {"server_name": "www.example.com"}, "settings": {"flow": "xtls-rprx-vision"}}]
+		"name": "HK", "require_approval": true, "max_nodes": 5, "rate": 1.5, "tags": ["hk"]
 	}`)
 	require.Equal(t, http.StatusCreated, created.Code, created.Body.String())
 	assert.NotContains(t, created.Body.String(), "anixjoin_", "only the command shows the token")
 	group := decodeData[nodegroup.GroupView](t, created)
 	assert.Equal(t, "HK", group.Name)
 	assert.True(t, group.RequireApproval)
-	require.Len(t, group.ProtocolTemplate, 1)
-	assert.Equal(t, "www.example.com:443", group.ProtocolTemplate[0].Reality.Dest)
 	id := strconv.FormatUint(uint64(group.ID), 10)
 
 	for body, code := range map[string]string{
 		`{"name": "HK"}`: "name_taken",
-		`{"name": "x", "protocol_template": [{"type": "vless", "port": 443, "tls": "acme"}]}`: "invalid_request",
+		`{"name": "x", "rate": -1}`: "invalid_request",
 		`{"name": 1}`: "invalid_request",
 	} {
 		response := env.call(t, 7, http.MethodPost, "/node-groups", body)
@@ -240,13 +236,9 @@ func TestNodeGroupsDefaultAndNodes(t *testing.T) {
 	response := env.call(t, 8, http.MethodPost, "/node-groups/default", "")
 	assert.Equal(t, http.StatusConflict, response.Code)
 	assert.Equal(t, "ca_kek_missing", errorCode(t, response))
-	var subscriptions int64
-	require.NoError(t, env.db.Model(&model.SubscriptionGroup{}).Count(&subscriptions).Error)
-	assert.Zero(t, subscriptions)
 	env.kek = base64.StdEncoding.EncodeToString(make([]byte, 32))
 
-	// Any administrator may ask: the first call creates the group and the
-	// default subscription group, the second answers the same group.
+	// Any administrator may ask: the first call creates the group, the second answers the same group.
 	created := env.call(t, 8, http.MethodPost, "/node-groups/default", "")
 	require.Equal(t, http.StatusCreated, created.Code, created.Body.String())
 	first := decodeData[struct {
@@ -255,9 +247,6 @@ func TestNodeGroupsDefaultAndNodes(t *testing.T) {
 	}](t, created)
 	assert.True(t, first.Created)
 	assert.Equal(t, nodegroup.DefaultGroupName, first.Group.Name)
-	require.Len(t, first.Group.ProtocolTemplate, 1)
-	assert.Equal(t, "reality", first.Group.ProtocolTemplate[0].TLS)
-	require.Len(t, first.Group.SubscriptionGroupIDs, 1)
 	assert.NotContains(t, created.Body.String(), "anixjoin_")
 
 	again := env.call(t, 8, http.MethodPost, "/node-groups/default", "")
