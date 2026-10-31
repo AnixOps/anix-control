@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 5.0.0-rc.22 - 2026-10-31
+
 ### Added
 
 - A reversed `anx_line` transport keeps its `carrier_order`: with `c2` / `c3`
@@ -9,6 +11,147 @@
   (the reverse port + 1, IPv4 only), which Agent #100 wires to anx-server and
   anx-node. An empty order is still `c1`. `c3` is refused with an IPv6
   `reverse_host` or `reverse_port` 65535.
+- ANX-A is a node protocol users connect to. A node protocol of type `anx`
+  (default port 8443, A2 jacket over TCP) runs on the node's anx-node kernel
+  with `server_names`, `dest` and `alpn` settings. The AnixOps Net
+  subscription format carries it as an `anx://` link with the user's key
+  (derived from the UUID), the SNI and the server public key the Agent
+  reported; other subscription formats leave ANX nodes out. The protocol
+  editor has an ANX form. A node that has not reported its server key yet has
+  no link.
+- `config/commercial-boundary.json` and `check_commercial_boundary.py` record
+  which code forms the commercial set (payment, order, coupon, invite
+  commission) and fail a change that adds a dependency on it from the
+  rest of Control. No behavior changes; see
+  `docs/architecture/commercial-boundary.md`.
+- Backups cover PostgreSQL. A PostgreSQL panel now gets the daily, pre-migration
+  and manual bundles, their verification, the retention, the alerts and the
+  `backup` commands, like a SQLite one. The database member of a bundle is a
+  `pg_dump` custom-format archive (`database.pgdump`, manifest
+  `database_kind: postgres`) taken from one exported snapshot, so the row counts
+  in the manifest are exactly the dumped state. A bundle is verified by
+  restoring it into a scratch database on the same server, so the database role
+  needs `CREATEDB`. `backup restore` restores into an empty database; with
+  `--replace` an existing one is renamed to `<name>_replaced_<UTC time>`, never
+  deleted.
+  Install `pg_dump` and `pg_restore` (the `postgresql-client` package, the
+  server's major version or newer) on the machine Control runs on. Without them
+  a PostgreSQL panel starts and migrates as before (no pre-migration bundle),
+  the backup page says what is missing and the stale-backup alert fires.
+- A route's entry node behind NAT can be given a public address by hand. The
+  route editor has a public address field per entry node (host, host:port or
+  [v6]:port), stored as the route label `entry-public/<node ref>`. Without it
+  the entry follows the node's NAT entry (public address and mapped port).
+- A subscription group edits the nodes its protocols produce: name, address,
+  port, SNI and other display fields (and an advanced JSON), per node and per
+  entry, without changing the source node. "Edit nodes" is in the group's
+  protocol list; "Reset all edits" restores the source values.
+  `GET/PUT /api/v4/admin/subscription-groups/:id/protocols/:protocol_id/nodes`
+  and `DELETE /api/v4/admin/subscription-groups/:id/node-overrides`. The
+  protocol type and the credentials stay the source's.
+- The nodes a protocol produces for each entry can be reordered in the same
+  panel (`order` in the `PUT .../nodes` body); reset restores the entries'
+  own order.
+- `GET /api/v5/settings/catalog` lists the options 系统设置 offers (key,
+  section, kind, choices, limits, the value in force); the console draws
+  the 通用 links and the 数据与保留 choices from it.
+
+### Changed
+
+- The cross-repository Agent E2E drops the nftables-only forward scenarios and the root/netns lane, because the Agent removed the nftables engine.
+- The cross-repository Agent E2E runs the Agent's VLESS node on anixcore (built
+  from the pinned `networkcore_anixops`, `NETWORKCORE_REF`) instead of the
+  sing-box core, which the Agent no longer carries. The Agent is built with
+  `-tags anixcore`; the dev release workflow drops the removed core tags.
+- The order admin routes, the dashboard's order and income figures, the
+  order-paid notification and invite-code registration moved behind small
+  extension points (`RegisterDashboardContributor`, `RegisterInviteRedeemer`)
+  so nothing outside the commercial set references it. Routes and responses
+  are unchanged.
+- Node groups no longer have a kind, a protocol template or subscription groups. A machine that joins a group is a clean node without protocols (migration `0020_node_groups_without_templates`); the group keeps its token and the defaults its nodes copy. The join dialog's quick-create form asks only for a name, and the old forward-node compatibility in groups is gone.
+- The node protocol editor is a form first, like 3x-ui: choosing a protocol,
+  TLS mode and transport shows only the fields that apply (VLESS flow,
+  Shadowsocks cipher, WebSocket/gRPC path, host and service name, TLS SNI and
+  fingerprint, Reality target, short id and keys, Hysteria2 bandwidth and
+  obfuscation, TUIC congestion control). The whole protocol as JSON is the
+  Advanced JSON tab and stays in step with the form; `custom_config` and keys
+  the form does not know are kept.
+- The node group template editor shows the same protocol and transport fields.
+- Migration `0021_drop_load_balancer` drops the unused `v2_load_balancer`
+  table (SQLite and PostgreSQL).
+- 系统设置 is sorted into sections you pick from: 通用 (subscription domains
+  and links to the mail and sign-in security settings), a new 数据与保留
+  (the access statistics switch and a preset retention list), and a new 高级
+  that holds the raw configuration key table, with a troubleshooting warning.
+  The configuration key list no longer shows the scheduler's internal
+  `scheduler.*` keys (`GET /api/v2/admin/system/configs`).
+
+### Removed
+
+- The legacy handlers of the affiliate, order and payment routes. The 43
+  routes (invite commission, orders and coupons, payment gateways, callbacks
+  and records) are `native` in `config/package-extraction.json`: the package
+  hosts, which already served them by default, answer alone and the router
+  binds the bare gateway. The old handler tests and the legacy-versus-native
+  parity packages `ordercompat` and `paymentcompat` are gone with them, and
+  the generated Swagger documents no longer list those routes.
+- The 部署编排 page (`/admin/deployments`) with its topologies, node roles and
+  operation timeline is gone from the admin panel; the old URL redirects to 节点.
+  Nodes and relays are configured on the node page and the ANX network model.
+- The node list and the node page no longer show the 旧版 (Legacy) and API key
+  stream connection types: the Agent channels are the mTLS stream, third-party
+  node software and offline. `GET /api/v4/kernel/agents/transports` drops
+  `summary.legacy`, `legacy_only`, `connection.type` values `legacy` and
+  `apikey_stream`, `status: legacy` and the `legacy` required blocker; sightings
+  of the retired channels (API key stream, REST, WebSocket, clean agent) are not
+  listed. `anix-control agents transports` loses `--legacy-only`, and the
+  startup warning only names nodes that never enrolled.
+- The load balancer feature. Nothing ever selected a node through it: the
+  system settings page 负载均衡, the `/api/v2/admin/loadbalancers*` routes
+  (and their `proxy.loadbalancer.*` package routes, `LoadBalancerService`
+  and the proxy-node `kernel.storage.adopt:v2_load_balancer`,
+  `kernel.view:kapi_forward_node_v1` and `kernel.nodeops.diagnose.v1`
+  capabilities) are gone. Forward load balancing and failover are
+  unaffected.
+- The `nftables-forward` and `nat-egress` official packages (扩展 → nftables
+  Forward and NAT Egress) are gone. Relays run on the network model (ANX), and
+  a node's egress NIC, source and gateway are set on its node page (网络), so
+  both plugins did the same work twice. On the first start of this release
+  Control disables any installation of them (the rows and releases stay for the
+  record); nothing else needs to be done. The nftables Ansible playbooks and
+  `v2b_forward_nft.sh` are removed with them; `forward_legacy_cleanup` still
+  deletes the old nftables tables from a host.
+- The forward SDK's nftables driver (`sdk/forward/driver/nftables`), its nft
+  golden scripts (`contracts/forward/v1/nft`) and the netns end-to-end suite
+  (`sdk/forward/e2e`) are deleted, together with the "Forward Netns E2E" job and
+  the nftables kernel check in Backend Tests. Nothing imports them any more: the
+  Agent retires nftables forwarding and relays run on the anixops driver.
+- The `/api/v3` topology and deployment endpoints (`/topologies*`, `/deployments*`,
+  `/observed-states`), the topology deployment executor, diagnosis and delete
+  services. Agent plugin dispatch stays off until M4. The `v3_kernel_topology_*`
+  tables are left in place; a later migration can drop them.
+- The V2bX Ansible node deploy helper (`config/deploy/ansible/nodes/`:
+  `deploy_v2bx.yml`, `deploy_from_inventory.sh`, `bootstrap_ssh_key.yml` and
+  their templates). Nodes are onboarded and upgraded by the AnixOps Agent
+  through Control; no third-party node program is deployed from this repository.
+
+### Fixed
+
+- Control's probe of an entry listener dials the node's NAT entry or the
+  route's public address at the mapped port, not the route's listen port on
+  the node's first public address; subscriptions offer the same address.
+- An ANX route no longer shows every node, the exit included, as never
+  reported, nor only its first hop. A node on the network model reports in its
+  `NetworkStatus` (network.v1), which now fills its summary, and
+  `GET /routes/{id}/health` adds each hop's own transport and exit egress with
+  the round trip its device measured. Needs an Agent that reports link round
+  trips for them to show.
+
+### Security
+
+- The web build uses `follow-redirects` 1.16.2, which fixes advisory
+  GHSA-mrwp-f3q8-3g9p (credentials following redirects). The Frontend Build
+  audit gate failed on it for every pull request.
 
 ## 5.0.0-rc.21 - 2026-10-30
 
