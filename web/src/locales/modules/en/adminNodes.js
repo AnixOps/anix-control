@@ -145,15 +145,11 @@ export default {
     footer: 'Read from the Agent transport inventory. A live connection is only known to the Control process that holds it.',
     connection: {
       mtls_stream: 'mTLS stream',
-      apikey_stream: 'API key stream',
-      legacy: 'Legacy',
       third_party: 'Third-party',
       offline: 'Offline'
     },
     connectionHint: {
       mtls_stream: 'Agent Control stream authenticated by the Agent certificate',
-      apikey_stream: 'Agent Control stream authenticated by the node API key',
-      legacy: 'Legacy REST, WebSocket or clean-agent channel; refused once agent_control.mtls is required',
       third_party: 'Only third-party node software (UniProxy or v2board gRPC) was seen, not an Agent',
       offline: 'Nothing seen in the last five minutes'
     },

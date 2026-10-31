@@ -3,7 +3,6 @@ package handler
 import (
 	"fmt"
 	"net/http"
-	"strconv"
 	"strings"
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
@@ -35,24 +34,14 @@ func NewAgentTransportsHandler(policy agenttransport.Policy) *AgentTransportsHan
 
 // List godoc
 // @Summary Agent transport inventory
-// @Description Lists every proxy and forward node with the transport its agent was last seen on (mtls-stream, apikey-stream, http-legacy, websocket, clean-agent, uniproxy, v2board-grpc), its agent version, its newest valid agent certificate, when it was last seen and its live Agent Control stream session (authentication mtls or api-key, certificate serial, expiry and SAN, negotiated capabilities). Each node also carries certificate_state (valid, revoked, expired or none), last_certificate (its newest certificate in any state: serial, issued_at, not_after, renew_after, revoked_at and revoke_reason) and connection (type mtls_stream, apikey_stream, legacy, third_party or offline, the transport and when it was last seen). legacy_only=true keeps the nodes on a legacy AnixOps Agent channel; node=proxy-7 (repeatable or comma separated, at most 200) keeps the named nodes. summary.ready_for_required (with required_reasons and required_blockers, computed over every node) is false while agent_control.mtls: required, the default from v4.2, would refuse an enabled node: a legacy one or one that never enrolled.
+// @Description Lists every proxy and forward node with the transport its agent was last seen on (mtls-stream, uniproxy, v2board-grpc), its agent version, its newest valid agent certificate, when it was last seen and its live Agent Control stream session (authentication mtls, certificate serial, expiry and SAN, negotiated capabilities). Each node also carries certificate_state (valid, revoked, expired or none), last_certificate (its newest certificate in any state: serial, issued_at, not_after, renew_after, revoked_at and revoke_reason) and connection (type mtls_stream, third_party or offline, the transport and when it was last seen). node=proxy-7 (repeatable or comma separated, at most 200) keeps the named nodes. summary.ready_for_required (with required_reasons and required_blockers, computed over every node) is false while an enabled node has never enrolled.
 // @Tags Kernel
 // @Produce json
 // @Security BearerAuth
-// @Param legacy_only query bool false "only nodes on a legacy AnixOps Agent channel"
 // @Param node query []string false "only these nodes (proxy-<id> or forward-<id>), repeatable or comma separated" collectionFormat(multi)
 // @Success 200 {object} map[string]any
 // @Router /api/v4/kernel/agents/transports [get]
 func (h *AgentTransportsHandler) List(c *gin.Context) {
-	legacyOnly := false
-	if raw := c.Query("legacy_only"); raw != "" {
-		parsed, err := strconv.ParseBool(raw)
-		if err != nil {
-			kernelError(c, http.StatusBadRequest, "invalid_request", "legacy_only must be true or false")
-			return
-		}
-		legacyOnly = parsed
-	}
 	nodes, err := parseNodeFilter(c.QueryArray("node"))
 	if err != nil {
 		kernelError(c, http.StatusBadRequest, "invalid_request", err.Error())
@@ -64,7 +53,7 @@ func (h *AgentTransportsHandler) List(c *gin.Context) {
 		return
 	}
 	inventory, err := agenttransport.Build(c.Request.Context(), db, h.policy, agenttransport.Options{
-		LegacyOnly: legacyOnly, Live: h.live(), Sessions: h.sessions, Nodes: nodes,
+		Live: h.live(), Sessions: h.sessions, Nodes: nodes,
 	})
 	if err != nil {
 		kernelDBError(c, err)

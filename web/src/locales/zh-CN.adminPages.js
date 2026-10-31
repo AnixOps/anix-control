@@ -630,10 +630,6 @@ export default {
   agentTransports: {
     transports: {
       'mtls-stream': 'mTLS 流',
-      'apikey-stream': 'API 密钥流',
-      'http-legacy': '旧版 HTTP',
-      websocket: 'WebSocket',
-      'clean-agent': 'Clean Agent',
       uniproxy: 'UniProxy',
       'v2board-grpc': 'v2board gRPC'
     }

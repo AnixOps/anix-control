@@ -29,10 +29,10 @@ describe('agent connection model', () => {
     expect(indexTransports({ nodes: 'nope' }).size).toBe(0)
   })
 
-  it('tones the five connection types, and reads an unknown or missing one as offline', () => {
-    expect(CONNECTION_TYPES).toEqual(['mtls_stream', 'apikey_stream', 'legacy', 'third_party', 'offline'])
-    expect(CONNECTION_TYPES.map(connectionTone)).toEqual(['success', 'info', 'warning', 'neutral', 'neutral'])
-    expect(connectionTypeOf({ connection: { type: 'legacy' } })).toBe('legacy')
+  it('tones the three connection types, and reads an unknown or missing one as offline', () => {
+    expect(CONNECTION_TYPES).toEqual(['mtls_stream', 'third_party', 'offline'])
+    expect(CONNECTION_TYPES.map(connectionTone)).toEqual(['success', 'neutral', 'neutral'])
+    expect(connectionTypeOf({ connection: { type: 'legacy' } })).toBe('offline')
     expect(connectionTypeOf({ connection: { type: 'carrier-pigeon' } })).toBe('offline')
     expect(connectionTypeOf({})).toBe('offline')
     expect(connectionTypeOf(null)).toBe('offline')

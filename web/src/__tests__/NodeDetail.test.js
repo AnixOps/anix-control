@@ -166,14 +166,14 @@ describe('NodeDetail', () => {
       kernelApi.getKernelAgentTransports.mockResolvedValue(entry({
         certificate_state: 'revoked',
         last_certificate: certificate({ not_after: '2026-10-08T12:00:00Z', revoked_at: '2026-10-03T12:00:00Z', revoke_reason: 'node disabled' }),
-        connection: { type: 'legacy', transport: 'http-legacy', last_seen_at: '2026-10-02T07:59:00Z' }
+        connection: { type: 'offline', last_seen_at: null }
       }))
       await renderPage()
       expect((await screen.findByTestId('node-certificate-state')).textContent).toBe('Revoked')
       expect(screen.getByTestId('node-certificate-revoked').textContent).toContain('has to enroll again')
       expect(screen.getByTestId('node-certificate-revoked-at').textContent).toContain('2026-10-03')
       expect(screen.getByTestId('node-certificate-revoke-reason').textContent).toContain('node disabled')
-      expect(screen.getByTestId('node-connection').textContent).toBe('Legacy')
+      expect(screen.getByTestId('node-connection').textContent).toBe('Offline')
     })
 
     it('says so when Control has no Agent record of the node', async () => {
