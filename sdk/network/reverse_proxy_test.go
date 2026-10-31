@@ -42,7 +42,9 @@ func TestReverseProxies(t *testing.T) {
 	require.NoError(t, Check(withReverseProxy(t)))
 	require.NoError(t, CheckReverseProxy(withReverseProxy(t).ReverseProxies[0]))
 
-	route := func(p *networkv1.NetworkPlan) *networkv1.ReverseProxyRoute { return p.ReverseProxies[0].Sites[0].Routes[0] }
+	route := func(p *networkv1.NetworkPlan) *networkv1.ReverseProxyRoute {
+		return p.ReverseProxies[0].Sites[0].Routes[0]
+	}
 	cases := []struct {
 		name      string
 		breakPlan func(p *networkv1.NetworkPlan)
