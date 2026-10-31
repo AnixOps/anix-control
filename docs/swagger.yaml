@@ -58,50 +58,6 @@ definitions:
     required:
     - message
     type: object
-  handler.CreateGatewayRequest:
-    properties:
-      config: {}
-      description:
-        type: string
-      fee_fixed:
-        type: number
-      fee_rate:
-        type: number
-      icon:
-        type: string
-      max_amount:
-        type: number
-      min_amount:
-        type: number
-      name:
-        type: string
-      sort:
-        type: integer
-      type:
-        enum:
-        - alipay
-        - wechat
-        - stripe
-        - usdt
-        - epay
-        type: string
-    required:
-    - name
-    - type
-    type: object
-  handler.CreatePaymentRequest:
-    properties:
-      amount:
-        minimum: 1
-        type: number
-      gateway_id:
-        type: integer
-      order_id:
-        type: integer
-    required:
-    - amount
-    - gateway_id
-    type: object
   handler.CreateTaskRequest:
     properties:
       action:
@@ -166,11 +122,6 @@ definitions:
         maxLength: 512
         type: string
     type: object
-  handler.ToggleRequest:
-    properties:
-      enabled:
-        type: boolean
-    type: object
   handler.UpdateBotRequest:
     properties:
       admin_ids: {}
@@ -193,34 +144,6 @@ definitions:
         type: string
       welcome_msg:
         maxLength: 1024
-        type: string
-    type: object
-  handler.UpdateGatewayRequest:
-    properties:
-      config: {}
-      description:
-        type: string
-      fee_fixed:
-        type: number
-      fee_rate:
-        type: number
-      icon:
-        type: string
-      max_amount:
-        type: number
-      min_amount:
-        type: number
-      name:
-        type: string
-      sort:
-        type: integer
-      type:
-        enum:
-        - alipay
-        - wechat
-        - stripe
-        - usdt
-        - epay
         type: string
     type: object
   handler.abortAgentUpgradeRequest:
@@ -266,6 +189,21 @@ definitions:
     required:
     - name
     - scope
+    type: object
+  handler.groupNodeOverridesRequest:
+    properties:
+      nodes:
+        additionalProperties:
+          additionalProperties: {}
+          type: object
+        type: object
+      order:
+        description: |-
+          Order lists the node keys in the order the subscription shows them;
+          keys left out follow.
+        items:
+          type: string
+        type: array
     type: object
   handler.groupProtocolLayoutRequest:
     properties:
@@ -508,77 +446,6 @@ definitions:
     required:
     - email
     - password
-    type: object
-  model.InviteConfig:
-    properties:
-      auto_generate:
-        description: 邀请码设置
-        type: boolean
-      code_count:
-        description: 每个用户邀请码数量
-        type: integer
-      code_expire_days:
-        description: 邀请码过期天数 (0=永不过期)
-        type: integer
-      commission_enabled:
-        description: 佣金设置
-        type: boolean
-      commission_fixed:
-        description: 固定佣金金额
-        type: number
-      commission_min:
-        description: 最低提现金额
-        type: number
-      commission_rate:
-        description: 佣金比例 (0.1 = 10%)
-        type: number
-      commission_type:
-        description: 1=按比例 2=固定金额
-        type: integer
-      created_at:
-        type: string
-      enabled:
-        type: boolean
-      first_order_bonus:
-        description: 首次奖励
-        type: number
-      first_traffic_bonus:
-        description: 首次流量奖励 (bytes)
-        type: integer
-      id:
-        type: integer
-      updated_at:
-        type: string
-    type: object
-  model.LoadBalancer:
-    properties:
-      check_interval:
-        description: 检查间隔(秒)
-        type: integer
-      check_timeout:
-        description: 超时时间(秒)
-        type: integer
-      created_at:
-        type: string
-      enabled:
-        type: boolean
-      group_id:
-        description: 节点组ID
-        type: integer
-      health_check:
-        type: boolean
-      id:
-        type: integer
-      name:
-        type: string
-      node_weights:
-        description: 'JSON: {node_id: weight}'
-        type: string
-      strategy:
-        description: round-robin/least-conn/latency/weight/random
-        type: string
-      updated_at:
-        type: string
     type: object
   model.LoginRequest:
     properties:
@@ -851,6 +718,7 @@ definitions:
     - anytls
     - wireguard
     - iwan
+    - anx
     type: string
     x-enum-varnames:
     - ProtocolVMess
@@ -862,6 +730,7 @@ definitions:
     - ProtocolAnyTLS
     - ProtocolWireGuard
     - ProtocolIWAN
+    - ProtocolANX
   model.RegisterRequest:
     properties:
       email:
@@ -1324,6 +1193,35 @@ definitions:
         type: integer
     type: object
   nodegroup.GroupInput:
+    properties:
+      max_nodes:
+        description: MaxNodes caps the group's live nodes; 0 is no cap.
+        type: integer
+      monthly_limit_bytes:
+        type: integer
+      name:
+        type: string
+      rate:
+        description: Rate is the billing rate of the group's proxy nodes; 1 when absent.
+        type: number
+      require_approval:
+        type: boolean
+      reset_day:
+        description: |-
+          ResetDay is the day of the month (1-28) the nodes' monthly traffic
+          resets; 1 when absent.
+        type: integer
+      sort:
+        type: integer
+      tags:
+        items:
+          type: string
+        type: array
+      token_expires_at:
+        description: |-
+          TokenExpiresAt, when set, ends the token's use; it must be in the
+          future.
+        type: string
     type: object
   realitytarget.AutoState:
     properties:
@@ -1420,7 +1318,7 @@ info:
     url: https://opensource.org/licenses/MIT
   termsOfService: https://github.com/AnixOps/anix-control
   title: AnixOps Control API
-  version: 5.0.0-rc.21
+  version: 5.0.0-rc.23
 paths:
   /admin/agent/execute:
     post:
@@ -1763,376 +1661,6 @@ paths:
       summary: Revoke an invite code
       tags:
       - admin-invite-codes
-  /admin/invite/config:
-    get:
-      consumes:
-      - application/json
-      description: 管理员获取邀请系统配置
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: 获取邀请配置
-      tags:
-      - 管理端-系统
-    put:
-      consumes:
-      - application/json
-      description: 管理员更新邀请系统配置
-      parameters:
-      - description: Invite configuration
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/model.InviteConfig'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties: true
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: 更新邀请配置
-      tags:
-      - 管理端-系统
-  /admin/invite/stats:
-    get:
-      consumes:
-      - application/json
-      description: 管理员获取邀请系统统计数据
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: 获取邀请统计
-      tags:
-      - 管理端-系统
-  /admin/invite/withdrawals:
-    get:
-      consumes:
-      - application/json
-      description: 管理员获取提现申请列表
-      parameters:
-      - description: Status filter
-        in: query
-        name: status
-        type: string
-      - default: 1
-        description: 页码
-        in: query
-        name: page
-        type: integer
-      - default: 20
-        description: 每页数量
-        in: query
-        name: page_size
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: 获取提现申请列表
-      tags:
-      - 管理端-系统
-  /admin/invite/withdrawals/{id}/process:
-    post:
-      consumes:
-      - application/json
-      description: 管理员处理提现申请，批准或拒绝
-      parameters:
-      - description: 提现记录ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      - description: 处理请求 {status, remark}
-        in: body
-        name: request
-        required: true
-        schema:
-          additionalProperties: true
-          type: object
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties: true
-            type: object
-        "404":
-          description: Not Found
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: 处理提现申请
-      tags:
-      - 管理端-系统
-  /admin/loadbalancers:
-    get:
-      consumes:
-      - application/json
-      description: 管理员获取负载均衡器列表
-      parameters:
-      - description: 分组ID
-        in: query
-        name: group_id
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: 获取负载均衡器列表
-      tags:
-      - 管理端-系统
-    post:
-      consumes:
-      - application/json
-      description: 管理员创建新的负载均衡器
-      parameters:
-      - description: 负载均衡器配置
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/model.LoadBalancer'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties: true
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: 创建负载均衡器
-      tags:
-      - 管理端-系统
-  /admin/loadbalancers/{id}:
-    delete:
-      consumes:
-      - application/json
-      description: 管理员删除指定负载均衡器
-      parameters:
-      - description: 负载均衡器ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: 删除负载均衡器
-      tags:
-      - 管理端-系统
-    get:
-      consumes:
-      - application/json
-      description: 管理员获取指定负载均衡器的详细信息
-      parameters:
-      - description: 负载均衡器ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-        "404":
-          description: Not Found
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: 获取负载均衡器详情
-      tags:
-      - 管理端-系统
-    put:
-      consumes:
-      - application/json
-      description: 管理员更新指定负载均衡器的配置
-      parameters:
-      - description: 负载均衡器ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      - description: 负载均衡器配置
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/model.LoadBalancer'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties: true
-            type: object
-        "404":
-          description: Not Found
-          schema:
-            additionalProperties: true
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: 更新负载均衡器
-      tags:
-      - 管理端-系统
-  /admin/loadbalancers/{id}/check:
-    post:
-      consumes:
-      - application/json
-      description: 管理员对指定负载均衡器执行健康检查
-      parameters:
-      - description: 负载均衡器ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: 执行健康检查
-      tags:
-      - 管理端-系统
-  /admin/loadbalancers/{id}/stats:
-    get:
-      consumes:
-      - application/json
-      description: 管理员获取指定负载均衡器的统计数据
-      parameters:
-      - description: 负载均衡器ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: 获取负载均衡统计
-      tags:
-      - 管理端-系统
   /admin/nodes:
     get:
       consumes:
@@ -3003,497 +2531,6 @@ paths:
       summary: 发送测试通知
       tags:
       - 管理端-通知
-  /admin/orders:
-    get:
-      consumes:
-      - application/json
-      description: 管理员获取订单列表，支持分页和筛选
-      parameters:
-      - default: 1
-        description: 页码
-        in: query
-        name: page
-        type: integer
-      - default: 20
-        description: 每页数量
-        in: query
-        name: page_size
-        type: integer
-      - description: 订单号
-        in: query
-        name: trade_no
-        type: string
-      - description: 用户邮箱
-        in: query
-        name: email
-        type: string
-      - description: 订单状态
-        in: query
-        name: status
-        type: integer
-      - description: 订单类型
-        in: query
-        name: type
-        type: integer
-      - description: 用户ID
-        in: query
-        name: user_id
-        type: integer
-      - description: '排序字段: id, trade_no, status, type, total_amount, created_at,
-          paid_at; 缺省为 created_at 倒序'
-        enum:
-        - id
-        - trade_no
-        - status
-        - type
-        - total_amount
-        - created_at
-        - paid_at
-        in: query
-        name: sort
-        type: string
-      - default: asc
-        description: 排序方向, 仅与 sort 同用
-        enum:
-        - asc
-        - desc
-        in: query
-        name: order
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: 获取订单列表
-      tags:
-      - 管理端-订单
-  /admin/orders/{id}:
-    get:
-      consumes:
-      - application/json
-      description: 管理员获取指定订单的详细信息
-      parameters:
-      - description: 订单ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties: true
-            type: object
-        "404":
-          description: Not Found
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: 获取订单详情
-      tags:
-      - 管理端-订单
-  /admin/orders/{id}/cancel:
-    post:
-      consumes:
-      - application/json
-      description: 管理员取消指定订单
-      parameters:
-      - description: 订单ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties: true
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: 取消订单
-      tags:
-      - 管理端-订单
-  /admin/orders/{id}/paid:
-    post:
-      consumes:
-      - application/json
-      description: 管理员手动标记订单为已支付并开通服务
-      parameters:
-      - description: 订单ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties: true
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: 标记订单已支付
-      tags:
-      - 管理端-订单
-  /admin/orders/{id}/status:
-    put:
-      consumes:
-      - application/json
-      description: 管理员更新指定订单的状态
-      parameters:
-      - description: 订单ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      - description: '状态请求 {status: int}'
-        in: body
-        name: request
-        required: true
-        schema:
-          additionalProperties: true
-          type: object
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties: true
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: 更新订单状态
-      tags:
-      - 管理端-订单
-  /admin/orders/stats:
-    get:
-      consumes:
-      - application/json
-      description: 管理员获取订单统计数据
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: 获取订单统计
-      tags:
-      - 管理端-订单
-  /admin/payment/gateways:
-    get:
-      consumes:
-      - application/json
-      description: 管理员获取所有支付网关列表
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: 获取支付网关列表
-      tags:
-      - 管理端-支付
-    post:
-      consumes:
-      - application/json
-      description: 管理员创建新的支付网关
-      parameters:
-      - description: 网关信息
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/handler.CreateGatewayRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties: true
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: 创建支付网关
-      tags:
-      - 管理端-支付
-  /admin/payment/gateways/{id}:
-    delete:
-      consumes:
-      - application/json
-      description: 管理员删除指定支付网关
-      parameters:
-      - description: 网关ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties: true
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: 删除支付网关
-      tags:
-      - 管理端-支付
-    put:
-      consumes:
-      - application/json
-      description: 管理员更新指定支付网关的信息
-      parameters:
-      - description: 网关ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      - description: 网关更新信息
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/handler.UpdateGatewayRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties: true
-            type: object
-        "404":
-          description: Not Found
-          schema:
-            additionalProperties: true
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: 更新支付网关
-      tags:
-      - 管理端-支付
-  /admin/payment/gateways/{id}/toggle:
-    post:
-      consumes:
-      - application/json
-      description: 管理员启用或禁用指定支付网关
-      parameters:
-      - description: 网关ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      - description: 状态请求
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/handler.ToggleRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties: true
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: 切换网关状态
-      tags:
-      - 管理端-支付
-  /admin/payment/records:
-    get:
-      consumes:
-      - application/json
-      description: 管理员获取支付记录列表，支持分页和状态筛选
-      parameters:
-      - default: 1
-        description: 页码
-        in: query
-        name: page
-        type: integer
-      - default: 20
-        description: 每页数量
-        in: query
-        name: page_size
-        type: integer
-      - description: 支付状态
-        in: query
-        name: status
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: 获取支付记录列表
-      tags:
-      - 管理端-支付
-  /admin/payment/stats:
-    get:
-      consumes:
-      - application/json
-      description: 管理员获取支付统计数据，支持日期范围筛选
-      parameters:
-      - description: '开始日期 (格式: 2006-01-02)'
-        in: query
-        name: start
-        type: string
-      - description: '结束日期 (格式: 2006-01-02)'
-        in: query
-        name: end
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties: true
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: 获取支付统计
-      tags:
-      - 管理端-支付
   /admin/plans:
     get:
       consumes:
@@ -4662,6 +3699,33 @@ paths:
       summary: 订阅分组成员
       tags:
       - 管理端-订阅
+  /api/v4/admin/subscription-groups/{id}/node-overrides:
+    delete:
+      description: 清除该分组所有节点的修改, 恢复为源协议的值; 名称与顺序不受影响。
+      parameters:
+      - description: 订阅分组 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 重置订阅分组的全部节点修改
+      tags:
+      - 管理端-订阅
   /api/v4/admin/subscription-groups/{id}/protocol-layout:
     get:
       description: '列出关联到该分组的全部节点协议 (v2_subscription_group_node_protocols), 按分组顺序:
@@ -4728,6 +3792,83 @@ paths:
       security:
       - BearerAuth: []
       summary: 设置订阅分组节点协议的显示名称与顺序
+      tags:
+      - 管理端-订阅
+  /api/v4/admin/subscription-groups/{id}/protocols/{protocol_id}/nodes:
+    get:
+      description: 列出该协议在分组订阅中生成的每个节点 (按入口展开), 含分组的修改 (overrides) 与源协议的原始值 (defaults)。
+      parameters:
+      - description: 订阅分组 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 节点协议 ID
+        in: path
+        name: protocol_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 订阅分组中某协议生成的节点及其修改
+      tags:
+      - 管理端-订阅
+    put:
+      consumes:
+      - application/json
+      description: 设置分组对该协议各节点的修改与顺序 (order 为节点键的显示顺序, 未列出的排在其后; 名称、地址、端口、SNI、传输等;
+        协议类型与凭据不可改)。未列出或为空的节点恢复为源协议的值, 源协议本身不变。订阅立即生效。
+      parameters:
+      - description: 订阅分组 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 节点协议 ID
+        in: path
+        name: protocol_id
+        required: true
+        type: integer
+      - description: 按节点键的修改
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.groupNodeOverridesRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 修改订阅分组中某协议生成的节点
       tags:
       - 管理端-订阅
   /api/v4/admin/traffic/destinations:
@@ -7481,9 +6622,9 @@ paths:
       - Kernel
   /api/v4/kernel/node-groups:
     get:
-      description: The live node groups by sort and id, each with its defaults, protocol
-        template, subscription groups, token reset and expiry times, and its live
-        and pending nodes counted. Never the join token.
+      description: The live node groups by sort and id, each with its defaults, token
+        reset and expiry times, and its live and pending nodes counted. Never the
+        join token.
       produces:
       - application/json
       responses:
@@ -7502,11 +6643,9 @@ paths:
       - application/json
       description: 'A node group with a new join token (sealed under module_runtime.ca_kek,
         which must be set). Its defaults (rate, tags, monthly_limit_bytes, reset_day,
-        sort) are copied to every node the token creates; protocol_template lists
-        the protocols each new node gets (empty: the node only runs the network model,
-        ANX) (tls none, or reality for vless; port or port_range) and subscription_group_ids
-        the subscription groups they join. The answer does not carry the token: GET
-        .../command shows the install command. Audited.'
+        sort) are copied to every node the token creates; Nodes that join are clean:
+        they have no protocol. The answer does not carry the token: GET .../command
+        shows the install command. Audited.'
       parameters:
       - description: the group
         in: body
@@ -7576,7 +6715,7 @@ paths:
       consumes:
       - application/json
       description: Replaces every field of a group but its token. Nodes that joined
-        keep what they got; the defaults and the template apply to later joins. Audited.
+        keep what they got; the defaults apply to later joins. Audited.
       parameters:
       - description: node group id
         in: path
@@ -7632,9 +6771,9 @@ paths:
     get:
       description: 'The group''s live nodes (every node of the group but the rejected
         ones), newest first, for the join dialog that waits for machines: id, node
-        (proxy-<id> or forward-<id>), kind, name, host, approval (approved or pending),
-        online (enabled and checked in within five minutes, as the node list computes
-        it), last_seen, agent_version and created_at. Never a credential. Any administrator.'
+        (proxy-<id>), name, host, approval (approved or pending), online (enabled
+        and checked in within five minutes, as the node list computes it), last_seen,
+        agent_version and created_at. Never a credential. Any administrator.'
       parameters:
       - description: node group id
         in: path
@@ -7681,12 +6820,11 @@ paths:
   /api/v4/kernel/node-groups/default:
     post:
       description: 'Creates the default node group when no live node group exists,
-        and answers the first group otherwise (created tells which): a proxy group
-        named "默认" whose template is one VLESS Reality protocol on a random port from
-        20000 to 40000, attached to the default subscription group (created when the
-        panel has none), so the first node needs no input. Idempotent and safe to
-        call concurrently. 409 ca_kek_missing without module_runtime.ca_kek. Audited
-        as a node group create when it creates.'
+        and answers the first group otherwise (created tells which): a group named
+        "默认" with the default settings, so the first node needs no input; nodes that
+        join it are clean (no protocol). Idempotent and safe to call concurrently.
+        409 ca_kek_missing without module_runtime.ca_kek. Audited as a node group
+        create when it creates.'
       produces:
       - application/json
       responses:
@@ -7711,7 +6849,7 @@ paths:
         starts sending it its configuration (config.v1) and its users (users.v1).
         409 node_not_pending for any other node. Audited (node_approve).'
       parameters:
-      - description: proxy-<id> or forward-<id>
+      - description: proxy-<id>
         in: path
         name: id
         required: true
@@ -8071,7 +7209,7 @@ paths:
         its Agent certificates are revoked, which ends its stream at the next heartbeat.
         409 node_not_pending for any other node. Audited (node_reject).'
       parameters:
-      - description: proxy-<id> or forward-<id>
+      - description: proxy-<id>
         in: path
         name: id
         required: true
@@ -8254,8 +7392,8 @@ paths:
         schema_version. data.summary has last_verified (the newest bundle that passed
         its verification, or null), stale (no verified bundle younger than stale_after_hours,
         36, on a database older than that), next_daily_at and directory; data.retention
-        the built-in retention. On PostgreSQL data.supported is false and data.reason
-        says why: backups need SQLite. Any administrator; no secret.'
+        the built-in retention. For a database driver backups do not cover data.supported
+        is false and data.reason says why. Any administrator; no secret.'
       produces:
       - application/json
       responses:
@@ -8278,8 +7416,9 @@ paths:
       description: Writes a manual bundle of the database, root.key and the configuration
         file into data_dir/backups and answers it (201, data.backup, verify_status
         pending); its verification follows in the background and the list shows the
-        result. 409 backups_need_sqlite on PostgreSQL, 409 backup_in_progress while
-        another backup or verification runs. Any administrator.
+        result. 409 backups_need_sqlite for a database driver backups do not cover,
+        409 backups_need_postgres_tools when a PostgreSQL panel has no pg_dump/pg_restore,
+        409 backup_in_progress while another backup or verification runs. Any administrator.
       produces:
       - application/json
       responses:
@@ -8491,6 +7630,25 @@ paths:
       summary: The certificates the panel serves itself
       tags:
       - Kernel
+  /api/v5/settings/catalog:
+    get:
+      description: 'The settings the console offers as options (internal/settingscatalog),
+        in data.items: key, section (general, data), kind (domains, switch, choice,
+        link), choices, min, max, default, value (the value in force now, for a switch
+        or a choice), link (the console route of a link) and sensitive. Any administrator.'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: The options of the system settings
+      tags:
+      - Kernel
   /internal/auth-keys:
     post:
       consumes:
@@ -8568,31 +7726,6 @@ paths:
       summary: Prometheus 指标
       tags:
       - 系统
-  /payment/callback/{type}:
-    post:
-      consumes:
-      - application/json
-      description: 接收第三方支付平台的回调通知
-      parameters:
-      - description: 支付类型 (alipay/wechat/epay等)
-        in: path
-        name: type
-        required: true
-        type: string
-      produces:
-      - text/plain
-      responses:
-        "200":
-          description: success
-          schema:
-            type: string
-        "400":
-          description: fail
-          schema:
-            type: string
-      summary: 支付回调
-      tags:
-      - 支付回调
   /register:
     post:
       consumes:
@@ -8675,151 +7808,6 @@ paths:
       security:
       - BearerAuth: []
       summary: 获取用户仪表盘
-      tags:
-      - 用户端
-  /user/invite:
-    get:
-      consumes:
-      - application/json
-      description: 用户获取自己的邀请码和佣金信息
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: 获取邀请信息
-      tags:
-      - 用户端
-  /user/invite/commissions:
-    get:
-      consumes:
-      - application/json
-      description: 用户获取自己的佣金记录列表
-      parameters:
-      - default: 1
-        description: 页码
-        in: query
-        name: page
-        type: integer
-      - default: 20
-        description: 每页数量
-        in: query
-        name: page_size
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: 获取佣金记录
-      tags:
-      - 用户端
-  /user/invite/generate:
-    post:
-      consumes:
-      - application/json
-      description: 用户生成新的邀请码
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: 生成邀请码
-      tags:
-      - 用户端
-  /user/invite/withdraw:
-    post:
-      consumes:
-      - application/json
-      description: 用户申请佣金提现
-      parameters:
-      - description: 提现请求 {amount, method, account, name}
-        in: body
-        name: request
-        required: true
-        schema:
-          additionalProperties: true
-          type: object
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: 申请提现
-      tags:
-      - 用户端
-  /user/invite/withdrawals:
-    get:
-      consumes:
-      - application/json
-      description: 用户获取自己的提现记录列表
-      parameters:
-      - default: 1
-        description: 页码
-        in: query
-        name: page
-        type: integer
-      - default: 20
-        description: 每页数量
-        in: query
-        name: page_size
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: 获取提现记录
       tags:
       - 用户端
   /user/notifications:
@@ -8914,127 +7902,6 @@ paths:
       security:
       - BearerAuth: []
       summary: 获取未读通知数量
-      tags:
-      - 用户端
-  /user/payment/channels:
-    get:
-      consumes:
-      - application/json
-      description: 用户获取可用的支付渠道列表
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: 获取支付渠道列表
-      tags:
-      - 用户端
-  /user/payment/create:
-    post:
-      consumes:
-      - application/json
-      description: 用户创建支付订单
-      parameters:
-      - description: 支付请求
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/handler.CreatePaymentRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties: true
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: 创建支付订单
-      tags:
-      - 用户端
-  /user/payment/records:
-    get:
-      consumes:
-      - application/json
-      description: 用户获取自己的支付记录列表
-      parameters:
-      - default: 1
-        description: 页码
-        in: query
-        name: page
-        type: integer
-      - default: 20
-        description: 每页数量
-        in: query
-        name: page_size
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: 获取用户支付记录
-      tags:
-      - 用户端
-  /user/payment/status/{trade_no}:
-    get:
-      consumes:
-      - application/json
-      description: 用户查询支付订单状态
-      parameters:
-      - description: 订单号
-        in: path
-        name: trade_no
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-        "404":
-          description: Not Found
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: 查询支付状态
       tags:
       - 用户端
   /user/profile:

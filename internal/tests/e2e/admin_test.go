@@ -113,7 +113,6 @@ func (s *AdminE2ETestSuite) SetupSuite() {
 		&model.OperationLog{},
 		&model.AuditLog{},
 		&model.Event{},
-		&model.LoadBalancer{},
 		&model.UserSubscriptionGroup{},
 		&model.PlanSubscriptionGroup{},
 		&model.SubscriptionGroup{},
@@ -366,17 +365,6 @@ func (s *AdminE2ETestSuite) TestCreatePlan() {
 
 	req, _ := http.NewRequest("POST", "/api/v2/admin/plans", bytes.NewReader(jsonBody))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+s.adminToken)
-
-	w := httptest.NewRecorder()
-	s.router.ServeHTTP(w, req)
-
-	assert.Equal(s.T(), http.StatusOK, w.Code)
-}
-
-// TestGetOrders 测试获取订单列表
-func (s *AdminE2ETestSuite) TestGetOrders() {
-	req, _ := http.NewRequest("GET", "/api/v2/admin/orders", nil)
 	req.Header.Set("Authorization", "Bearer "+s.adminToken)
 
 	w := httptest.NewRecorder()

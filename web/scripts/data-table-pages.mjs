@@ -21,9 +21,8 @@ export const DATA_TABLE_PAGES = [
   'src/views/admin/nodes/NodeServicesSection.vue',
   // U7: settings, subscription groups, notifications, security
   'src/views/admin/System.vue',
-  'src/views/admin/system/SettingsGeneral.vue',
+  'src/views/admin/system/SettingsAdvanced.vue',
   'src/views/admin/system/SettingsBackup.vue',
-  'src/views/admin/system/SettingsBalancer.vue',
   'src/views/admin/system/SettingsAudit.vue',
   'src/views/admin/Subscriptions.vue',
   'src/views/admin/SubscriptionGroup.vue',
@@ -34,10 +33,5 @@ export const DATA_TABLE_PAGES = [
   'src/views/admin/notifications/NotifyTemplates.vue',
   'src/views/admin/notifications/NotifyLogs.vue',
   'src/views/admin/Security.vue',
-  'src/views/admin/security/ApiTokens.vue',
-  // U8: deployments (the operation timeline is a list)
-  'src/views/admin/Deployments.vue',
-  'src/views/admin/deployments/DeploymentTopologiesPanel.vue',
-  'src/views/admin/deployments/DeploymentAssignmentsPanel.vue',
-  'src/components/admin/OperationTimeline.vue'
+  'src/views/admin/security/ApiTokens.vue'
 ]

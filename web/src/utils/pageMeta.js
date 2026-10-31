@@ -21,7 +21,6 @@ const PAGE_TITLE_KEYS = {
   '/admin/coupons': 'pageTitles.admin.coupons',
   '/admin/knowledge': 'pageTitles.admin.knowledge',
   '/admin/control': 'pageTitles.admin.control',
-  '/admin/deployments': 'pageTitles.admin.deployments',
   '/admin/access-groups': 'pageTitles.admin.accessGroups',
   '/admin/payment': 'pageTitles.admin.payment',
   '/admin/notifications': 'pageTitles.admin.notifications',

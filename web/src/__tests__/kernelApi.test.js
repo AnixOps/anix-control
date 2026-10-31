@@ -21,11 +21,6 @@ describe('kernel API', () => {
       [kernelApi.getKernelScopes, '/service-scopes'],
       [kernelApi.getKernelAccessGroups, '/access-groups'],
       [() => kernelApi.getKernelAccessGroupDetail(7), '/access-groups/7'],
-      [kernelApi.getKernelTopologies, '/topologies'],
-      [() => kernelApi.getKernelTopologyRevisions(3), '/topologies/3/revisions'],
-      [() => kernelApi.getKernelTopologyRevision(3, 7), '/topologies/3/revisions/7'],
-      [kernelApi.getKernelDeployments, '/deployments'],
-      [kernelApi.getKernelOperations, '/operations'],
       [kernelApi.getKernelExtensions, '/extensions']
     ]
 
@@ -105,50 +100,6 @@ describe('kernel API', () => {
     ]) {
       expect(kernelApi[name], name).toBeUndefined()
     }
-  })
-
-  it('manages topology revisions and deployment lifecycle through the v3 kernel', async () => {
-    const graph = { message: 'canary', vertices: [], edges: [] }
-    await kernelApi.validateKernelTopology(graph)
-    expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v3', url: '/topologies/validate', method: 'post', data: graph })
-
-    await kernelApi.diagnoseKernelTopologyDeployment(3, 7, { rolloutGroup: 'canary-a', failurePolicy: 'stop_and_rollback' })
-    expect(mockRequest).toHaveBeenLastCalledWith({
-      baseURL: '/api/v3', url: '/topologies/3/revisions/7/diagnose', method: 'post',
-      data: { rollout_group: 'canary-a', failure_policy: 'stop_and_rollback' }
-    })
-    await kernelApi.previewKernelTopologyDeployment(3, 7, { rolloutGroup: 'canary-a', failurePolicy: 'stop_and_rollback' })
-    expect(mockRequest).toHaveBeenLastCalledWith({
-      baseURL: '/api/v3', url: '/topologies/3/revisions/7/preview', method: 'post',
-      data: { rollout_group: 'canary-a', failure_policy: 'stop_and_rollback' }
-    })
-
-    await kernelApi.createKernelTopologyRevision(3, graph)
-    expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v3', url: '/topologies/3/revisions', method: 'post', data: graph })
-
-    const deployment = { topology_id: 3, revision_id: 7, rollout_group: 'canary-a', failure_policy: 'stop_and_rollback' }
-    await kernelApi.planKernelDeployment(deployment)
-    expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v3', url: '/deployments', method: 'post', data: deployment })
-
-    await kernelApi.getKernelDeploymentStatus(9)
-    expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v3', url: '/deployments/9', method: 'get' })
-    await kernelApi.applyKernelDeployment(9)
-    expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v3', url: '/deployments/9/apply', method: 'post' })
-    await kernelApi.rollbackKernelDeployment(9)
-    expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v3', url: '/deployments/9/rollback', method: 'post' })
-  })
-
-  it('creates a topology through the v3 kernel', async () => {
-    const topology = { name: 'CN dedicated', service_scope: 'forward', description: 'canary' }
-    await kernelApi.createKernelTopology(topology)
-    expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v3', url: '/topologies', method: 'post', data: topology })
-  })
-
-  it('deletes a topology through the v3 kernel and unwraps its result', async () => {
-    const result = { topology: { id: 3 }, deleted: false, deployment: { id: 9, teardown: true, state: 'applying' } }
-    mockRequest.mockResolvedValueOnce({ data: result })
-    await expect(kernelApi.deleteKernelTopology(3)).resolves.toEqual(result)
-    expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v3', url: '/topologies/3', method: 'delete' })
   })
 
   it('reads the agent transport inventory through the v4 kernel', async () => {

@@ -26,3 +26,21 @@ func TestAnixOpsFormatterWritesIWANLinksAndVia(t *testing.T) {
 	require.True(t, strings.HasPrefix(lines[2], "vmess://"))
 	require.True(t, strings.HasSuffix(lines[2], "?via=HK%20iWAN"))
 }
+
+func TestAnixOpsFormatterWritesANXLinks(t *testing.T) {
+	anx := &model.ParsedNode{ID: "a", Name: "JP ANX", Type: "anx", Server: "198.51.100.7", Port: 8443,
+		Password: strings.Repeat("ab", 32), PublicKey: "ANX1+key/text=", ServerName: "www.apple.com", ALPN: "h2,http/1.1"}
+	noKey := &model.ParsedNode{ID: "b", Name: "no key", Type: "anx", Server: "198.51.100.8", Port: 8443,
+		Password: strings.Repeat("ab", 32), ServerName: "www.apple.com"}
+	content, err := (&AnixOpsFormatter{}).Format([]*model.ParsedNode{anx, noKey}, &model.TemplateRenderContext{})
+	require.NoError(t, err)
+	decoded, err := base64.StdEncoding.DecodeString(string(content))
+	require.NoError(t, err)
+	require.Equal(t, "anx://"+strings.Repeat("ab", 32)+"@198.51.100.7:8443?alpn=h2%2Chttp%2F1.1&fp=chrome&pk=ANX1%2Bkey%2Ftext%3D&sni=www.apple.com#JP%20ANX", string(decoded))
+
+	// Other formats leave ANX out.
+	v2ray, err := (&V2RayFormatter{}).Format([]*model.ParsedNode{anx}, &model.TemplateRenderContext{})
+	require.NoError(t, err)
+	raw, _ := base64.StdEncoding.DecodeString(string(v2ray))
+	require.Empty(t, strings.TrimSpace(string(raw)))
+}

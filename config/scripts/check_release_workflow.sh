@@ -287,9 +287,9 @@ check_release_workflow() {
   reject_job_text go-quality "arduino/setup-protoc@v3" "third-party protoc setup action" || failed=1
   require_named_step_text go-quality "Install pinned protoc" "protocolbuffers/protobuf/releases/download/v29.2/protoc-29.2-linux-x86_64.zip" "pinned official protoc download" || failed=1
   require_named_step_text go-quality "Install pinned protoc" "sha256sum -c" "pinned protoc checksum verification" || failed=1
-  require_text "AGENT_REF: '5edbe78ac316f5ab44afdb7cf991c4e12226ffe3'" "pinned Agent source commit" || failed=1
+  require_text "AGENT_REF: '6ebdb33b1cbff8fd4b745fef0f0e586f36079042'" "pinned Agent source commit" || failed=1
   require_agent_checkouts_use_pin || failed=1
-  require_job_text plugin-package-release-test "govulncheck ./cmd/nftables-forward" "pinned Agent plugin vulnerability scan" || failed=1
+  require_job_text plugin-package-release-test "govulncheck ./cmd/machine-telemetry" "pinned Agent plugin vulnerability scan" || failed=1
   require_text "-exclude-dir=config/scripts/testdata" "full gosec excludes the non-compiling AST fixture directory" || failed=1
   # The required frontend job audits shipped dependencies only, strictly. The
   # development tools and their dated waivers belong to the nightly security
@@ -459,7 +459,7 @@ run_self_test() {
     "s/npm audit --omit=dev --audit-level=moderate/npm run audit:check/" \
     "s/AGENT_REF: '/AGENT_REF_X: '/" \
     '0,/ref: \${{ env.AGENT_REF }}/s//ref: 0000000000000000000000000000000000000000/' \
-    "s#govulncheck ./cmd/nftables-forward#echo ./cmd/nftables-forward#" \
+    "s#govulncheck ./cmd/machine-telemetry#echo ./cmd/machine-telemetry#" \
     "s/anix-control-linux-amd64.tar.gz/anix-control-linux.tar.gz/g" \
     "s/go-security, backend-test/backend-test/" \
     "s/--builtin-packages builtin-packages/--packages-dir builtin-packages/" \

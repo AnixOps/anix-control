@@ -31,7 +31,10 @@ env:
   # The one anix-agent commit every checkout below builds and tests: the
   # signed Agent plugins, the cross-repository E2E and the live WebUI gate.
   # Move it to the Agent release commit with every Agent tag (docs/RELEASING.md).
-  AGENT_REF: '5edbe78ac316f5ab44afdb7cf991c4e12226ffe3'   # anix-agent v5.0.0-rc.21
+  AGENT_REF: '6ebdb33b1cbff8fd4b745fef0f0e586f36079042'   # anix-agent v5.0.0-rc.23
+  # The networkcore_anixops commit whose anixcore the cross-repository E2E
+  # runs as the Agent's node kernel.
+  NETWORKCORE_REF: 'c0418ad48313045bf3c07691a8d083c6ddaf2252'
 
 jobs:
   changes:
@@ -163,12 +166,8 @@ jobs:
       - name: Validate plugin package release scripts
         run: |
           bash -n packages/machine-telemetry/tests/release_gate.sh
-          bash -n packages/nftables-forward/tests/release_gate.sh
-          bash -n packages/nat-egress/tests/release_gate.sh
           bash -n scripts/sign_plugin_release.sh
           python3 -m py_compile packages/machine-telemetry/build.py packages/machine-telemetry/verify_signature.py
-          python3 -m py_compile packages/nftables-forward/build.py packages/nftables-forward/verify_signature.py
-          python3 -m py_compile packages/nat-egress/build.py packages/nat-egress/verify_signature.py
 
       - name: Validate release build policy script syntax
         run: bash -n config/deploy/check_release_build_policy.sh
@@ -1103,25 +1102,6 @@ jobs:
             go -C identity test ./... -count=1
           fi
 
-      # nft -c and the real-kernel driver tests need CAP_NET_ADMIN: the test
-      # binary runs under sudo (H14). The nft -c checks run in a fresh
-      # network namespace and apply nothing; the TestNetns tests (the whole
-      # conformance suite, tc limits, quota usage, the probe) create a
-      # throwaway namespace per test with `ip netns add` and never touch the
-      # runner's own ruleset or qdiscs.
-      - name: Check the nftables forward driver on the kernel (nft -c, netns)
-        if: ${{ matrix.shard == 1 }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          command -v nft >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends nftables; }
-          nft --version
-          tc -V
-          uname -r
-          go -C sdk test -c -o "${RUNNER_TEMP}/nftables.test" ./forward/driver/nftables
-          cd sdk/forward/driver/nftables
-          sudo ANIXOPS_NFT_CHECK=1 ANIXOPS_NFT_E2E=1 "${RUNNER_TEMP}/nftables.test" -test.run '^(TestNFTCheck|TestNetns)' -test.v
-
       # The anixops relay (H22, experimental): the relay binary the driver
       # controls, in throwaway network namespaces (a bridge of its own, three
       # node namespaces, the runner as client and target): the three-hop route
@@ -1277,7 +1257,7 @@ jobs:
         shard: [1, 2, 3, 4]
     env:
       PACKAGES: >-
-        ./internal/packagestore ./internal/tests/integration ./internal/tests/packagecompat ./internal/tests/identitycompat ./internal/tests/knowledgecompat ./internal/tests/ticketcompat ./internal/tests/notificationcompat ./internal/tests/platformcompat ./internal/tests/plancompat ./internal/tests/ordercompat ./internal/tests/paymentcompat ./internal/tests/affiliatecompat ./internal/tests/subscriptioncompat ./internal/tests/proxynodecompat ./internal/tests/protocolruntimecompat ./internal/tests/machinetelemetrycompat ./internal/tests/wireguardcompat ./internal/nodesecrets ./internal/tests/nodesecretsplit ./internal/kernelnodeops ./internal/tests/bridgecontract ./internal/agentpki ./internal/modulepki ./internal/agentreports ./internal/tests/nodeopsagent ./internal/subscriber ./internal/kernelforward ./internal/tests/forwardv4 ./internal/agentupgrade ./internal/database/migrations
+        ./internal/packagestore ./internal/tests/integration ./internal/tests/packagecompat ./internal/tests/identitycompat ./internal/tests/knowledgecompat ./internal/tests/ticketcompat ./internal/tests/notificationcompat ./internal/tests/platformcompat ./internal/tests/plancompat ./internal/tests/affiliatecompat ./internal/tests/subscriptioncompat ./internal/tests/proxynodecompat ./internal/tests/protocolruntimecompat ./internal/tests/machinetelemetrycompat ./internal/tests/wireguardcompat ./internal/nodesecrets ./internal/tests/nodesecretsplit ./internal/kernelnodeops ./internal/tests/bridgecontract ./internal/agentpki ./internal/modulepki ./internal/agentreports ./internal/tests/nodeopsagent ./internal/subscriber ./internal/kernelforward ./internal/tests/forwardv4 ./internal/agentupgrade ./internal/database/migrations ./internal/backup
     services:
       postgres:
         image: postgres:16
@@ -1307,7 +1287,7 @@ jobs:
         run: |
           docker run --rm --network host -e PGPASSWORD=postgres postgres:16 \
             psql -h 127.0.0.1 -U postgres -d anix_package_test -v ON_ERROR_STOP=1 \
-            -c "CREATE ROLE anix_kernel LOGIN CREATEROLE PASSWORD 'kernel'" \
+            -c "CREATE ROLE anix_kernel LOGIN CREATEROLE CREATEDB PASSWORD 'kernel'" \
             -c "ALTER DATABASE anix_package_test OWNER TO anix_kernel"
 
       # The harnesses seed, migrate and empty a database for every case, and
@@ -1494,23 +1474,9 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      - name: Build and verify real package inputs
-        shell: bash
-        env:
-          GOEXPERIMENT: jsonv2
-          GOWORK: 'off'
-        run: |
-          set -Eeuo pipefail
-          mkdir -p package-build
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-            go -C V2bX_AnixOps build -trimpath \
-              -o "${GITHUB_WORKSPACE}/package-build/nftables-forward-agent" ./cmd/nftables-forward
-          chmod 0755 package-build/nftables-forward-agent
-          [[ "$(package-build/nftables-forward-agent --version)" == "nftables-forward 1.2.0" ]]
-
       # The Agent plugins ship inside the signed packages, so a vulnerable
       # dependency in them reaches every installation. govulncheck scans the
-      # three commands those binaries are built from and fails the step only for
+      # command that binary is built from and fails the step only for
       # a vulnerability their call graph reaches; a vulnerable package or
       # module they merely import is printed as information. Like go-security,
       # it reads the live advisory database.
@@ -1523,7 +1489,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
-          "$(go env GOPATH)/bin"/govulncheck ./cmd/nftables-forward ./cmd/machine-telemetry ./cmd/nat-egress
+          "$(go env GOPATH)/bin"/govulncheck ./cmd/machine-telemetry
 
       - name: Run Machine Telemetry package unit tests
         run: python3 -m unittest discover -s packages/machine-telemetry/tests -p 'test_*.py' -v
@@ -1533,28 +1499,11 @@ jobs:
       - name: Run v4 package WebUI contract
         run: node packages/shared/tests/webui_contract.mjs
 
-      - name: Run nftables Forward package unit tests
-        run: python3 -m unittest discover -s packages/nftables-forward/tests -p 'test_*.py' -v
-
-      - name: Run nftables Forward WebUI smoke test
-        run: node packages/nftables-forward/tests/webui_smoke.mjs
-
-      - name: Run NAT Egress package unit tests
-        run: python3 -m unittest discover -s packages/nat-egress/tests -p 'test_*.py' -v
-
-      - name: Run NAT Egress WebUI smoke test
-        run: node packages/nat-egress/tests/webui_smoke.mjs
-
       - name: Run reproducible unsigned and signed package contract
         run: |
           set -o pipefail
           bash packages/machine-telemetry/tests/release_gate.sh \
             | tee machine-telemetry-package-contract.txt
-          bash packages/nftables-forward/tests/release_gate.sh \
-            --agent-binary package-build/nftables-forward-agent \
-            | tee nftables-forward-package-contract.txt
-          bash packages/nat-egress/tests/release_gate.sh \
-            | tee nat-egress-package-contract.txt
 
       - name: Upload package contract report
         uses: actions/upload-artifact@v7
@@ -1562,8 +1511,6 @@ jobs:
           name: plugin-package-contract-reports
           path: |
             machine-telemetry-package-contract.txt
-            nftables-forward-package-contract.txt
-            nat-egress-package-contract.txt
 
   plugin-package-publish:
     name: Sign the Built-in Official Packages
@@ -1689,75 +1636,6 @@ jobs:
         run: |
           go test -v ./internal/handler -run TestAgentBridgeHandler -count=1
 
-  # The forward SDK's multi-namespace end-to-end suite (sdk/forward/e2e,
-  # forward-sdk.md section 13): client, entry, relay and target network
-  # namespaces joined by veth pairs, routes planned by the planner and
-  # applied by the nftables driver in each node's namespace, and real TCP
-  # and UDP traffic. It
-  # needs root, so the test binary runs under sudo on the
-  # hosted runner, which is a VM (H14); every namespace is a throwaway one and
-  # the runner's own ruleset, qdiscs and sysctls are never touched. It runs
-  # on forward changes, nightly and on manual runs, and is not a required
-  # check until it has been green for two weeks (H14). Backend Tests shard 1
-  # keeps running the nftables driver's own real-kernel conformance tests.
-  forward-netns-e2e:
-    name: Forward Netns E2E
-    runs-on: ubuntu-24.04
-    needs: [changes]
-    if: ${{ needs.changes.outputs.forward == 'true' }}
-    timeout-minutes: 20
-    env:
-      LOG_DIR: ${{ github.workspace }}/forward-e2e-logs
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v7
-
-      - name: Setup Go
-        uses: actions/setup-go@v6
-        with:
-          go-version: ${{ env.GO_VERSION }}
-          cache: true
-
-      - name: Install nftables and iproute2
-        shell: bash
-        run: |
-          set -euo pipefail
-          missing=()
-          command -v nft >/dev/null || missing+=(nftables)
-          { command -v ip && command -v tc && command -v ss; } >/dev/null || missing+=(iproute2)
-          if (( ${#missing[@]} > 0 )); then
-            sudo apt-get update -qq
-            sudo apt-get install -y -qq --no-install-recommends "${missing[@]}"
-          fi
-          nft --version
-          tc -V
-          uname -r
-
-      - name: Build the end-to-end test binary
-        run: go -C sdk test -c -o "${RUNNER_TEMP}/forward-e2e.test" ./forward/e2e
-
-      - name: Run the end-to-end suite under sudo
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p "${LOG_DIR}"
-          cd sdk/forward/e2e
-          sudo ANIXOPS_FORWARD_E2E=1 ANIXOPS_FORWARD_E2E_LOGDIR="${LOG_DIR}" \
-            "${RUNNER_TEMP}/forward-e2e.test" -test.v -test.timeout=15m 2>&1 | tee "${LOG_DIR}/go-test.log"
-
-      - name: Make the logs readable
-        if: ${{ failure() }}
-        run: sudo chmod -R a+rX "${LOG_DIR}" || true
-
-      - name: Upload the logs
-        if: ${{ failure() }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: forward-netns-e2e-logs
-          path: forward-e2e-logs/
-          retention-days: 7
-          if-no-files-found: ignore
-
   grpc-test:
     name: gRPC Core Tests
     runs-on: ubuntu-24.04
@@ -1831,12 +1709,9 @@ jobs:
   # plugin artifacts over mTLS, the systemd services report and panel,
   # agent.diagnostic, forward.v1 with link certificates,
   # then chaos: Control killed mid-stream, a partition with an Agent crash,
-  # an Agent restart, a revoked certificate, the #179 generation reset and
-  # clock-skew bounds. The main lane runs on PostgreSQL as the runner user;
-  # the forward lane runs the real nftables driver as root in a throwaway
-  # network namespace (`unshare --net`, H14) on SQLite, so the runner's own
-  # network and systemd units are never touched. Full lane and nightly; not
-  # a required check yet.
+  # an Agent restart, a revoked certificate and clock-skew bounds. The main lane runs on PostgreSQL as the runner user;
+  # the nftables engine is gone, so there is no root/netns lane. Full lane
+  # and nightly; not a required check yet.
   cross-repository-agent-chaos-e2e:
     name: Cross-Repo E2E
     runs-on: ubuntu-24.04
@@ -1871,6 +1746,15 @@ jobs:
           ref: ${{ env.AGENT_REF }}
           path: V2bX_AnixOps
 
+      # The node kernel the Agent's anixcore core runs (the Agent no longer
+      # carries sing-box or Xray): built from the pinned networkcore_anixops.
+      - name: Checkout pinned networkcore source
+        uses: actions/checkout@v7
+        with:
+          repository: AnixOps/networkcore_anixops
+          ref: ${{ env.NETWORKCORE_REF }}
+          path: networkcore_anixops
+
       - name: Setup Go
         uses: actions/setup-go@v6
         with:
@@ -1884,6 +1768,16 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: '3.x'
+
+      - name: Build anixcore
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          mkdir -p "${E2E_BIN}"
+          cargo build --locked --release -p anixcore --manifest-path networkcore_anixops/Cargo.toml
+          install -m 0755 networkcore_anixops/target/release/anixcore "${E2E_BIN}/anixcore"
 
       - name: Install nftables and iproute2
         shell: bash
@@ -1907,8 +1801,8 @@ jobs:
           set -euo pipefail
           mkdir -p "${E2E_BIN}" "${E2E_LOGS}"
           go build -o "${E2E_BIN}/anix-control" ./cmd/server
-          go -C V2bX_AnixOps build -trimpath -tags sing \
-            -ldflags "-X github.com/AnixOps/anix-agent/v5/cmd.version=5.0.0-rc.21-e2e" \
+          go -C V2bX_AnixOps build -trimpath -tags anixcore \
+            -ldflags "-X github.com/AnixOps/anix-agent/v5/cmd.version=5.0.0-rc.23-e2e" \
             -o "${E2E_BIN}/anix-agent" .
           for arch in amd64 arm64; do
             GOOS=linux GOARCH="${arch}" go -C V2bX_AnixOps build -trimpath -buildvcs=false \
@@ -1929,24 +1823,6 @@ jobs:
           ANIXOPS_AGENT_E2E_LOGDIR="${E2E_LOGS}/main" \
             "${E2E_BIN}/agente2e.test" -test.run '^TestRealAgentEndToEnd$' -test.v -test.timeout 20m 2>&1 \
             | grep -v '\[GIN\]' | tee "${E2E_LOGS}/main-go-test.log"
-
-      # Root in a throwaway network namespace (H14): the real nftables
-      # driver, the forward checks and the #179 recovery. The module cache
-      # is the runner's (read only, no network: GOPROXY=off); the build cache
-      # is root's own, so the runner's cache stays writable for setup-go.
-      - name: Run the forward lane in a network namespace (sudo)
-        shell: bash
-        run: |
-          set -euo pipefail
-          sudo env PATH="${PATH}" GOWORK=off GOTOOLCHAIN=local GOPROXY=off \
-            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="${RUNNER_TEMP}/root-gocache" HOME="${RUNNER_TEMP}" \
-            ANIXOPS_AGENT_E2E=1 ANIXOPS_AGENT_E2E_NETNS=1 \
-            ANIXOPS_AGENT_ROOT="${GITHUB_WORKSPACE}/V2bX_AnixOps" ANIXOPS_AGENT_E2E_BIN_DIR="${E2E_BIN}" \
-            ANIXOPS_AGENT_E2E_LOGDIR="${E2E_LOGS}/netns" \
-            unshare --net -- sh -c 'ip link set lo up && exec "$0" "$@"' \
-            "${E2E_BIN}/agente2e.test" \
-            -test.run '^TestRealAgentEndToEnd$/^(enroll|config_snapshot|link|forward|chaos_agent_graceful|chaos_control_db)' \
-            -test.v -test.timeout 8m 2>&1 | grep -v '\[GIN\]' | tee "${E2E_LOGS}/netns-go-test.log"
 
       - name: Make the logs readable
         if: ${{ !cancelled() }}

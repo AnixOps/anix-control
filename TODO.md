@@ -100,8 +100,6 @@ deliberately in a later PR.
   in `internal/service/notification_service.go` are never called.
 - [ ] Invite commission accrual: `CalculateCommission` and `AddCommission` in
   `internal/service/invite_service.go` are never called.
-- [ ] `LoadBalancerService.SelectNode` strategies
-  (`internal/service/loadbalancer_service.go`) are unused.
 - [ ] Backup retention: `CleanupOldBackups`
   (`internal/service/system_service.go`) is never scheduled, although
   `retention_days` is configurable from the admin system settings.
@@ -135,7 +133,7 @@ deliberately in a later PR.
 ## Deployment And Repository Hygiene
 
 - [ ] Remove hard-coded `/home/dev/...` defaults from
-  `config/deploy/deploy_panel.sh`, `config/deploy/ansible/nodes/`, and the
+  `config/deploy/deploy_panel.sh` and the
   agent deploy defaults in
   `web/src/views/admin/nodes/useNodeDeploy.js`.
 

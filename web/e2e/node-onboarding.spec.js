@@ -87,7 +87,7 @@ test.describe('the node page has one entry point', () => {
 })
 
 test.describe('node groups', () => {
-  test('lists the groups with their nodes and approval, and edits the template', async ({ page }) => {
+  test('lists the groups with their nodes and approval, and edits the defaults', async ({ page }) => {
     const requests = recordRequests(page)
     await openScreen(page, 'admin-node-groups', { clock: true })
     const panel = page.getByTestId('node-groups-panel')
@@ -98,13 +98,14 @@ test.describe('node groups', () => {
     await page.getByRole('button', { name: 'Actions for JP' }).click()
     await page.getByRole('menuitem', { name: 'Edit' }).click()
     const sheet = page.getByRole('dialog', { name: 'Edit node group' })
-    await expect(sheet.getByTestId('template-protocol-0')).toBeVisible()
-    await sheet.getByRole('textbox', { name: /Reality site/ }).fill('www.example.net')
+    await expect(sheet.getByTestId('template-editor')).toHaveCount(0)
+    await sheet.getByTestId('group-name').fill('JP 2')
     await sheet.getByTestId('save-group').click()
     await expect.poll(() => requests.to('/api/v4/kernel/node-groups/2', 'PUT')).toHaveLength(1)
     const body = JSON.parse(requests.to('/api/v4/kernel/node-groups/2', 'PUT')[0].body)
-    expect(body.protocol_template[0].reality.server_name).toBe('www.example.net')
-    expect(body.subscription_group_ids).toEqual([1])
+    expect(body.name).toBe('JP 2')
+    expect(body).not.toHaveProperty('protocol_template')
+    expect(body).not.toHaveProperty('subscription_group_ids')
   })
 
   test('the edit sheet has no serious accessibility findings', async ({ page }) => {

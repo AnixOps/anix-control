@@ -163,7 +163,7 @@ const modeOptions = computed(() => [
   { value: 'visual', label: t('admin.nodes.protocolForm.tabs.visual') },
   { value: 'json', label: t('admin.nodes.protocolForm.tabs.json') }
 ])
-const typeLabel = type => ({ wireguard: 'WireGuard', iwan: 'Panabit iWAN' }[type] || t(`networkPages.nodes.protocols.${type}`))
+const typeLabel = type => ({ wireguard: 'WireGuard', iwan: 'Panabit iWAN', anx: 'ANX' }[type] || t(`networkPages.nodes.protocols.${type}`))
 const typeOptions = computed(() => PROTOCOL_TYPES.map(type => ({ value: type, label: typeLabel(type) })))
 // TLS modes and transports follow the protocol type (protocolCapabilities):
 // Shadowsocks is TCP without TLS, Hysteria2 and TUIC UDP with TLS.

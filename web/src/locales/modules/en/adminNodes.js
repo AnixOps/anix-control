@@ -75,7 +75,7 @@ export default {
     syncReload: 'Sync and reload',
     logs: 'View logs',
     edit: 'Edit',
-    delete: 'Delete',
+    delete: 'Delete'
   },
   detail: {
     title: 'Node',
@@ -559,6 +559,8 @@ export default {
     none: 'None',
     generate: 'Generate',
     labels: {
+      server_names: 'Allowed SNI',
+      alpn: 'ALPN',
       flow: 'Flow',
       method: 'Cipher',
       server_key: 'Server key',
@@ -579,6 +581,8 @@ export default {
       public_key: 'Public key'
     },
     hints: {
+      anxServerNames: 'Comma separated; clients use the first. It must be a name the cover site really serves. ANX user keys derive from the UUID and the server public key is reported by the Agent on the node; the AnixOps Net subscription format carries the anx:// link.',
+      anxDest: 'Connections that are not ANX (probes included) are forwarded here as host:port.',
       serverKey: 'Server key of the 2022 ciphers; empty derives it from the node.',
       privateKey: 'Empty generates a key pair when saved; a stored private key shows as ********.',
       publicKey: 'The public key subscriptions hand to clients; empty derives it from the private key.'
@@ -663,14 +667,6 @@ export default {
     quick: {
       name: 'Node group name',
       namePlaceholder: 'Hong Kong',
-      preset: 'Protocols',
-      presets: {
-        'vless-reality': 'VLESS Reality (recommended)',
-        'shadowsocks-2022': 'Shadowsocks 2022',
-        'vless-reality-shadowsocks': 'VLESS Reality + Shadowsocks 2022',
-        none: 'No protocols (runs only the ANX network model)'
-      },
-      subscriptionGroups: 'Subscription groups',
       create: 'Create node group',
       failed: 'Couldn’t create the node group: {message}'
     }
@@ -734,7 +730,6 @@ export default {
     save: 'Save changes',
     saveFailed: 'Couldn’t save: {message}',
     joining: 'Joining',
-    noSubscriptionGroups: 'There are no subscription groups yet. Create one under Subscription groups so nodes can appear in subscriptions.',
     fields: {
       name: 'Name',
       rate: 'Traffic rate',
@@ -744,8 +739,7 @@ export default {
       resetDay: 'Monthly reset day',
       tokenExpiry: 'Token validity',
       maxNodes: 'Node limit',
-      requireApproval: 'New nodes need my approval',
-      subscriptionGroups: 'Subscription groups'
+      requireApproval: 'New nodes need my approval'
     },
     placeholders: {
       name: 'Hong Kong',
@@ -757,8 +751,7 @@ export default {
       monthlyLimit: 'Leave empty for no limit.',
       resetDay: '1 to 28.',
       maxNodes: '0 means no limit.',
-      requireApproval: 'Until you approve it, a node gets no configuration and no users.',
-      subscriptionGroups: 'The protocols of new nodes join these subscription groups. Nodes that already joined stay as they are.'
+      requireApproval: 'Until you approve it, a node gets no configuration and no users.'
     },
     expiry: {
       never: 'Does not expire',
@@ -769,49 +762,6 @@ export default {
       keep: 'Keep (ends {time})',
       expired: 'Expired (set a new one)',
       expiredError: 'The token has expired: choose a new validity.'
-    },
-    template: {
-      title: 'Protocols',
-      description: 'Every new node gets these protocols, with secrets Control generates for each node. A change applies to machines that join afterwards; nodes already there keep theirs.',
-      empty: 'No protocols: a node that joins would have nothing to serve.',
-      protocol: 'Protocol {n}',
-      name: 'Name',
-      namePlaceholder: 'Defaults to the protocol',
-      type: 'Protocol',
-      types: {
-        vless: 'VLESS',
-        vmess: 'VMess',
-        shadowsocks: 'Shadowsocks',
-        wireguard: 'WireGuard'
-      },
-      transport: 'Transport',
-      tls: 'TLS',
-      portMode: 'Port',
-      portModes: {
-        range: 'Random port',
-        fixed: 'Fixed port'
-      },
-      port: 'Port',
-      portFrom: 'Port from',
-      portTo: 'to',
-      serverName: 'Reality site',
-      serverNameHelp: 'A site that answers TLS 1.3.',
-      dest: 'Reality destination',
-      destHelp: 'Empty means site:443.',
-      advanced: 'Advanced',
-      settings: 'Protocol settings (JSON)',
-      transportSettings: 'Transport settings (JSON)',
-      add: 'Add protocol',
-      remove: 'Remove',
-      fixProblems: 'Fix the protocol settings marked below first.',
-      portErrors: {
-        port: 'A port from 1 to 65535.',
-        range: 'Ports from 1 to 65535, the start not above the end.'
-      },
-      jsonErrors: {
-        json: 'Not valid JSON.',
-        object: 'Must be a JSON object.'
-      }
     }
   },
   statusText: {

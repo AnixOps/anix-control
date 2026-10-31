@@ -18,18 +18,27 @@ export default {
   },
   adminSettings: {
     title: '系统设置',
-    subtitle: '订阅域名、配置项、备份、负载均衡与审计日志。',
+    subtitle: '订阅域名、数据保留、备份、审计日志与高级配置项。',
     navLabel: '设置分区',
     loading: '正在加载…',
     sections: {
       general: '通用',
+      data: '数据与保留',
       backup: '备份',
-      balancer: '负载均衡',
       audit: '审计日志',
       packages: '内置包',
+      advanced: '高级',
       about: '关于'
     },
     general: {
+      links: {
+        title: '其他常用设置',
+        description: '这些设置在各自的页面里，点击直接打开。',
+        mail: '邮件通知',
+        mailHint: 'SMTP 发信服务器与测试',
+        security: '登录安全',
+        securityHint: '管理员两步验证'
+      },
       subscription: {
         title: '订阅域名',
         description: '用户订阅链接和 managed-config 输出使用的域名。',
@@ -44,7 +53,17 @@ export default {
         loadFailed: '无法加载订阅域名',
         saveFailed: '无法保存订阅域名',
         saved: '订阅域名已保存'
-      },
+      }
+    },
+    data: {
+      title: '数据与保留',
+      description: '决定记录哪些统计，以及保留多久。',
+      footer: '关闭后立即停止记录，已保留的记录不会删除。完整的统计图表在“监控 → 目的地”。',
+      days: '{days} 天'
+    },
+    advanced: {
+      warningTitle: '仅用于排查问题',
+      warning: '日常选项都在其他分区里。这里是以键值保存的全部系统配置，改错可能让功能异常；调度器的内部记录不会显示。',
       configs: {
         title: '配置项',
         description: '以键值保存的全部系统配置；敏感值只显示为 ********。',
@@ -124,53 +143,6 @@ export default {
         description: '还原会替换数据库，所以只能在停止 Control 后在服务器上进行，不能在本页操作。Control 再次启动时会自动迁移较旧的备份。',
         commands: '在服务器上执行'
       }
-    },
-    balancer: {
-      title: '负载均衡',
-      description: '按节点组分配流量，并定期检查节点健康。',
-      create: '新建负载均衡器',
-      createTitle: '新建负载均衡器',
-      editTitle: '编辑负载均衡器',
-      name: '名称',
-      namePlaceholder: '例如 香港出口',
-      nameRequired: '请填写名称',
-      group: '节点组',
-      groupId: '节点组 ID',
-      groupIdHelp: '0 表示不绑定节点组。',
-      strategy: '策略',
-      strategies: {
-        roundRobin: '轮询',
-        leastLoad: '最少负载',
-        latency: '最低延迟',
-        weight: '加权',
-        random: '随机'
-      },
-      healthCheck: '健康检查',
-      healthCheckColumn: '健康检查',
-      checkInterval: '检查间隔',
-      seconds: '秒',
-      weights: '节点权重',
-      weightsHelp: 'JSON 对象，键是节点 ID，值是权重。只在加权策略下生效。',
-      weightsInvalid: '不是有效的 JSON',
-      state: '状态',
-      enabled: '启用',
-      disabled: '停用',
-      on: '开启',
-      off: '关闭',
-      runHealthCheck: '立即检查健康',
-      empty: '还没有负载均衡器',
-      emptyDescription: '为节点组新建一个，按策略分配流量。',
-      loadFailed: '无法加载负载均衡器',
-      saved: '已保存负载均衡器 {name}',
-      saveFailed: '保存失败：{message}',
-      saveFailedShort: '无法保存负载均衡器',
-      deleteTitle: '删除负载均衡器 {name}？',
-      deleteMessage: '该节点组将不再做负载均衡和健康检查。此操作无法撤销。',
-      deleteAction: '删除负载均衡器',
-      deleteFailed: '无法删除负载均衡器',
-      deleted: '已删除负载均衡器 {name}',
-      healthCheckDone: '{name} 健康检查已完成',
-      healthCheckFailed: '健康检查失败'
     },
     audit: {
       title: '审计日志',

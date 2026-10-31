@@ -111,7 +111,7 @@ export function useNodeJoin({ onChanged } = {}) {
       const answer = await getKernelNodeGroupNodes(id)
       if (mine !== sequence || id !== groupId.value) return
       const list = readNodeGroupNodes(answer)
-      const next = JSON.stringify(list.map(node => [node.id, node.kind, node.approval, node.online]))
+      const next = JSON.stringify(list.map(node => [node.id, node.approval, node.online]))
       const first = signature === null
       nodes.value = list
       nodesLoaded.value = true
@@ -207,8 +207,7 @@ export function useNodeJoin({ onChanged } = {}) {
     return open(groupId.value)
   }
 
-  // A group made inline: { name, kind, protocol_template,
-  // subscription_group_ids }. Selects it; the error is the caller's to show.
+  // A group made inline: { name }. Selects it; the error is the caller's to show.
   async function createGroup(input) {
     const created = await createKernelNodeGroup(input)
     await loadGroups()

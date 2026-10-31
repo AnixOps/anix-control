@@ -13,7 +13,7 @@ import (
 )
 
 // The suite pushes real user traffic through the Agent's VLESS inbound (the
-// sing-box core the Agent runs from Control's configuration) to a sink the
+// anixcore core the Agent runs from Control's configuration) to a sink the
 // test owns, so the traffic counters the Agent reports are the core's own.
 
 // trafficSink answers a request "up length, down length, up bytes" with
@@ -118,7 +118,7 @@ func vlessTransfer(proxyAddr, userUUID string, sinkPort int, up, down int64) err
 }
 
 // trafficChunk bounds one connection's transfer: the suite moves larger
-// amounts over several connections (sing-box's VLESS inbound occasionally
+// amounts over several connections (the VLESS inbound occasionally
 // holds back the last bytes of a single megabyte-sized download).
 const trafficChunk = 64 << 10
 

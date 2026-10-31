@@ -44,8 +44,7 @@ enables its own set at every start.
 **What a release binary carries.**
 
 - **The hosts.** Every official package's Control host is a library
-  (`packages/<id>/control`, the generic host `packages/shared/controlhost`
-  for `nat-egress` and `nftables-forward`), and `packages/builtin` lists them.
+  (`packages/<id>/control`), and `packages/builtin` lists them.
   Control links all of them: `anix-control package-host <id>` runs one.
 - **The slim signed packages.** `build_package.py --all --builtin` writes, for
   every package, the signed artifact without any host or Agent binary
@@ -187,8 +186,7 @@ bytes are `"frontend_sha256":""` with no `webui` key, in Control and in the
 Agent). Its release registers, stores, verifies and installs like any other,
 stores no WebUI asset, and the extension catalog (`GET /api/v3/extensions`)
 leaves it out; its `control_routes` work as before. Of the official
-packages only `forward`, `gost-mesh`, `nat-egress` and `nftables-forward`
-ship a bundle: the others are served by the core admin pages
+packages only `forward` ships a bundle: the others are served by the core admin pages
 (`packages/shared/build_package.py` builds both kinds and refuses a stray
 `webui/` directory).
 

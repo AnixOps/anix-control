@@ -772,44 +772,6 @@ export function getSystemAuditLogs(params) {
   })
 }
 
-export function getLoadBalancers(params) {
-  return request({
-    url: '/admin/loadbalancers',
-    method: 'get',
-    params
-  })
-}
-
-export function createLoadBalancer(data) {
-  return request({
-    url: '/admin/loadbalancers',
-    method: 'post',
-    data
-  })
-}
-
-export function updateLoadBalancer(id, data) {
-  return request({
-    url: `/admin/loadbalancers/${id}`,
-    method: 'put',
-    data
-  })
-}
-
-export function deleteLoadBalancer(id) {
-  return request({
-    url: `/admin/loadbalancers/${id}`,
-    method: 'delete'
-  })
-}
-
-export function runHealthCheck(id) {
-  return request({
-    url: `/admin/loadbalancers/${id}/check`,
-    method: 'post'
-  })
-}
-
 // ---------------------------------------------------------------------------
 // Kernel-owned admin routes, /api/v4/admin (docs/guide/api-reference.md):
 // administrators only, answers {data: ...}, refusals {error: {code, message}}.
@@ -902,6 +864,30 @@ export async function saveGroupProtocolLayout(groupId, protocols) {
   }))
 }
 
+// GET /api/v4/admin/subscription-groups/:id/protocols/:protocolId/nodes:
+// the nodes the protocol produces in the group (one per entry), each
+// { key, name, overrides, defaults } where defaults are the source's values.
+export async function getGroupProtocolNodes(groupId, protocolId) {
+  return dataOf(await adminV4({ url: `/admin/subscription-groups/${encodeURIComponent(groupId)}/protocols/${encodeURIComponent(protocolId)}/nodes`, method: 'get' }))
+}
+
+// PUT the same path: nodes { [key]: { field: value } } are the group's edits;
+// a key left out or empty is reset to the source. order lists the node keys
+// in the order the subscription shows them. Answers the nodes afterwards.
+export async function saveGroupProtocolNodes(groupId, protocolId, nodes, order = []) {
+  return dataOf(await adminV4({
+    url: `/admin/subscription-groups/${encodeURIComponent(groupId)}/protocols/${encodeURIComponent(protocolId)}/nodes`,
+    method: 'put',
+    data: { nodes, order }
+  }))
+}
+
+// DELETE /api/v4/admin/subscription-groups/:id/node-overrides: resets every
+// edit the group made to its nodes.
+export async function resetGroupNodeOverrides(groupId) {
+  return dataOf(await adminV4({ url: `/admin/subscription-groups/${encodeURIComponent(groupId)}/node-overrides`, method: 'delete' }))
+}
+
 // POST /api/v4/kernel/notifications/telegram/test: sends one fixed test
 // message through the configured bot and answers what Telegram said:
 // { class, ok, message, target, error_code?, reason? }, class one of ok,
@@ -967,6 +953,9 @@ export default {
   getSubscriptionGroupMembers,
   getGroupProtocolLayout,
   saveGroupProtocolLayout,
+  getGroupProtocolNodes,
+  saveGroupProtocolNodes,
+  resetGroupNodeOverrides,
   testTelegramBot,
   getKernelAlerts,
   getSubscriptionTemplates,
@@ -1034,12 +1023,7 @@ export default {
   getSubscriptionSettings,
   setSystemConfig,
   deleteSystemConfig,
-  getSystemAuditLogs,
-  getLoadBalancers,
-  createLoadBalancer,
-  updateLoadBalancer,
-  deleteLoadBalancer,
-  runHealthCheck
+  getSystemAuditLogs
 }
 
 // Each user's traffic by destination and category, GET

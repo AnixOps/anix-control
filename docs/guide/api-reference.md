@@ -667,33 +667,19 @@ POST   /api/v4/kernel/nodes/:id/reject            # 拒绝：停用节点、吊�
 
 ```json
 {
-  "name": "HK", "kind": "proxy",
+  "name": "HK",
   "max_nodes": 0, "require_approval": false,
   "rate": 1, "tags": ["hk"], "monthly_limit_bytes": 0, "reset_day": 1, "sort": 0,
-  "token_expires_at": null,
-  "subscription_group_ids": [1],
-  "protocol_template": [
-    {"name": "VLESS Reality", "type": "vless", "port": 443, "tls": "reality",
-     "reality": {"server_name": "www.example.com", "dest": "www.example.com:443"},
-     "settings": {"flow": "xtls-rprx-vision"}},
-    {"name": "SS 2022", "type": "shadowsocks", "port_range": [20000, 40000],
-     "settings": {"method": "2022-blake3-aes-128-gcm"}}
-  ]
+  "token_expires_at": null
 }
 ```
 
 - `name`：存活的组之间唯一（部分唯一索引 `WHERE deleted = 0`），重名返回 `409 name_taken`；删除后名称可重用。
-- `kind`：`proxy` 或 `forward`，创建后不能改；`forward` 组没有 `protocol_template` 和 `subscription_group_ids`。
 - `max_nodes`：组内存活节点上限，`0` 不限；`require_approval`：新节点先待审批。
 - `rate`（默认 1）、`tags`、`monthly_limit_bytes`（`0` 不限）、`reset_day`（1-28，默认 1）、`sort`：复制给组新建的
-  每个节点（转发节点只取 `tags`）。之后改组不会改已有节点。
+  每个节点。之后改组不会改已有节点。
 - `token_expires_at`：可选，必须是未来时间，之后令牌不再接入任何机器。
-- `subscription_group_ids`：必须都存在，模板中的协议加入这些订阅分组。
-- `protocol_template`：每个新代理节点获得的协议。本版本支持 `vless`（`tls` 为 `none` 或 `reality`）、`vmess`、
-  `shadowsocks`（`settings.method` 必填）、`wireguard`（`tls` 为 `none`）；`port` 与 `port_range`（`[from, to]`，
-  每个节点随机取一个不与本节点其它协议冲突的端口）二选一；`transport` 默认 `tcp`；`reality.dest` 默认
-  `<server_name>:443`。Reality 密钥对与 short ID、Shadowsocks 2022 `server_key`、WireGuard 服务端密钥由 Control
-  为每个节点单独生成，模板里写这些字段会被拒绝（`400 invalid_request`）。
+- 组不再有协议模板和订阅分组：接入的节点是干净节点，没有任何协议，协议在节点页添加。请求体里的 `kind`、`protocol_template`、`subscription_group_ids` 已被移除。
 
 应答（不含令牌）：`id`、上述字段、`token_reset_at`、`token_expires_at`、`token_expired`、
 `nodes: {"live", "pending"}`（被拒绝的节点不计入）、`created_at`、`updated_at`。

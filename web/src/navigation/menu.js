@@ -57,11 +57,9 @@ export const ADMIN_MENU = Object.freeze([
     // machine, relays included, and the forwarding pages (概览, 路由, DNS,
     // 分流 and a node's 转发设置) as its sections under /admin/forward/,
     // switched by the area's segmented control. There is no separate 转发
-    // item. 部署编排 (topologies, node roles, deployments) belongs with the
-    // nodes.
+    // item.
     items: [
-      { id: 'nodes', to: '/admin/nodes', icon: 'nodes', labelKey: 'shell.admin.items.nodes', match: ['/admin/forward/'] },
-      { id: 'deployments', to: '/admin/deployments', icon: 'deployments', labelKey: 'shell.admin.items.deployments' }
+      { id: 'nodes', to: '/admin/nodes', icon: 'nodes', labelKey: 'shell.admin.items.nodes', match: ['/admin/forward/'] }
     ]
   },
   {

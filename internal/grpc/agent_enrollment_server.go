@@ -201,9 +201,6 @@ func (s *AgentEnrollmentGRPCServer) join(ctx context.Context, request *agentv1pb
 			return nil, refuseAgent(agentcontrol.ErrorCodeJoinRejected, codes.PermissionDenied, "the join token is not usable")
 		case errors.Is(err, nodegroup.ErrInvalidJoin), errors.Is(err, kernelforward.ErrInvalidRequest):
 			return nil, status.Error(codes.InvalidArgument, err.Error())
-		case errors.Is(err, nodegroup.ErrJoinTemplate):
-			slog.Error("agent join: the group's protocol template does not build", "component", "agent-pki", "addr", peer, "error", err)
-			return nil, status.Error(codes.FailedPrecondition, err.Error())
 		}
 		return nil, agentPKIStatus(err)
 	}

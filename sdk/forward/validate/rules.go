@@ -2,6 +2,7 @@ package validate
 
 import (
 	"fmt"
+	"net"
 	"net/netip"
 	"regexp"
 	"sort"
@@ -471,6 +472,34 @@ func checkLabels(c *collector, r *model.Route) {
 			c.add(field, CodeInvalidFormat, "a value is UTF-8 text without control characters")
 		case len(v) > MaxLabelValueBytes:
 			c.add(field, CodeTooLong, "a value is at most %d bytes", MaxLabelValueBytes)
+		case strings.HasPrefix(k, EntryPublicLabelPrefix) && !validEntryPublic(v):
+			c.add(field, CodeInvalidFormat, "an entry's public address is host, host:port or [v6]:port, the port 1-65535")
 		}
 	}
+}
+
+// EntryPublicLabelPrefix starts the Route.labels key that sets the public
+// address an entry node is reached at ("entry-public/<node ref>"), for a
+// machine behind NAT.
+const EntryPublicLabelPrefix = "entry-public/"
+
+func validEntryPublic(value string) bool {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return false
+	}
+	host, portText := value, ""
+	if h, p, err := net.SplitHostPort(value); err == nil {
+		host, portText = h, p
+	} else if strings.HasPrefix(value, "[") || strings.Count(value, ":") == 1 {
+		return false
+	}
+	if host == "" || strings.ContainsAny(host, " /\\") {
+		return false
+	}
+	if portText != "" {
+		port, err := strconv.Atoi(portText)
+		return err == nil && port >= 1 && port <= 65535
+	}
+	return true
 }

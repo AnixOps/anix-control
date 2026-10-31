@@ -50,8 +50,7 @@ type suite struct {
 	sink    *trafficSink
 	netns   bool
 
-	nodeID  uint
-	routeID string
+	nodeID uint
 	// pluginReadyAt is when machine-telemetry ran on the node.
 	pluginReadyAt time.Time
 	protocolPt    int

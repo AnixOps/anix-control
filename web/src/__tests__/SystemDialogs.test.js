@@ -1,11 +1,11 @@
 // System settings dialogs and feedback (UI U4, U7): the configuration key
-// and load balancer editors are UiDialogs with inline errors, opened from
+// editor is a UiDialog with inline errors, opened from
 // the table's row menu; deletes ask in a ConfirmDialog; the subscription
 // domains are validated as you type and saved from the save bar.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor, within } from '@testing-library/vue'
 import userEvent from '@testing-library/user-event'
-import SettingsBalancer from '@/views/admin/system/SettingsBalancer.vue'
+import SettingsAdvanced from '@/views/admin/system/SettingsAdvanced.vue'
 import SettingsGeneral from '@/views/admin/system/SettingsGeneral.vue'
 import UiHost from '@/ui/UiHost.vue'
 import { toastMessages } from './helpers/feedback'
@@ -16,14 +16,10 @@ const adminApi = vi.hoisted(() => ({
   getSubscriptionSettings: vi.fn(),
   setSystemConfig: vi.fn(),
   getSystemConfigs: vi.fn(),
-  getLoadBalancers: vi.fn(),
-  createLoadBalancer: vi.fn(),
-  updateLoadBalancer: vi.fn(),
-  deleteLoadBalancer: vi.fn(),
-  runHealthCheck: vi.fn()
 }))
 
 vi.mock('@/api/admin', () => adminApi)
+vi.mock('@/api/kernel', async (importOriginal) => ({ ...(await importOriginal()), getSettingsCatalog: vi.fn().mockResolvedValue({ items: [] }) }))
 
 async function renderSection(Section, ready) {
   render({ components: { Section, UiHost }, template: '<div><Section /><UiHost /></div>' }, { global: { stubs: { 'router-link': true } } })
@@ -44,7 +40,6 @@ describe('System settings dialogs and feedback', () => {
     adminApi.getSystemConfig.mockResolvedValue({ data: { value: '' } })
     adminApi.getSubscriptionSettings.mockResolvedValue({ data: { subscribe_path: '/s', subscribe_domains: [] } })
     adminApi.getSystemConfigs.mockResolvedValue({ data: { list: [{ key: 'site.name', value: 'AnixOps', description: 'Site name' }] } })
-    adminApi.getLoadBalancers.mockResolvedValue({ data: { list: [] } })
   })
 
   afterEach(() => {
@@ -54,7 +49,7 @@ describe('System settings dialogs and feedback', () => {
   it('edits a config in a dialog: errors inline, Esc closes and returns focus', async () => {
     const user = userEvent.setup()
     adminApi.setSystemConfig.mockResolvedValueOnce({ code: -1, msg: 'read only' }).mockResolvedValueOnce({ code: 0 })
-    await renderSection(SettingsGeneral, 'site.name')
+    await renderSection(SettingsAdvanced, 'site.name')
     const opener = await rowAction(user, 'site.name', 'Edit')
     const dialog = await screen.findByRole('dialog', { name: 'Edit configuration key' })
     await user.click(within(dialog).getByRole('button', { name: 'Save' }))
@@ -71,7 +66,7 @@ describe('System settings dialogs and feedback', () => {
 
   it('asks for a key before adding a config', async () => {
     const user = userEvent.setup()
-    await renderSection(SettingsGeneral, 'site.name')
+    await renderSection(SettingsAdvanced, 'site.name')
     await user.click(screen.getByRole('button', { name: 'Add key' }))
     const dialog = await screen.findByRole('dialog', { name: 'Add configuration key' })
     await user.click(within(dialog).getByRole('button', { name: 'Save' }))
@@ -82,7 +77,7 @@ describe('System settings dialogs and feedback', () => {
   it('asks before deleting a config; Cancel keeps it', async () => {
     const user = userEvent.setup()
     adminApi.deleteSystemConfig.mockResolvedValue({ code: 0 })
-    await renderSection(SettingsGeneral, 'site.name')
+    await renderSection(SettingsAdvanced, 'site.name')
     await rowAction(user, 'site.name', 'Delete')
     let confirm = await screen.findByRole('alertdialog', { name: 'Delete site.name?' })
     await user.click(within(confirm).getByRole('button', { name: 'Cancel' }))
@@ -99,7 +94,7 @@ describe('System settings dialogs and feedback', () => {
   it('validates subscription domains as you type and saves them from the save bar', async () => {
     const user = userEvent.setup()
     adminApi.setSystemConfig.mockResolvedValue({ code: 0 })
-    await renderSection(SettingsGeneral, 'site.name')
+    await renderSection(SettingsGeneral, 'Other common settings')
     expect(screen.queryByRole('region', { name: 'Unsaved changes' })).toBeNull()
 
     const field = await screen.findByLabelText('Alternate domains')
@@ -126,7 +121,7 @@ describe('System settings dialogs and feedback', () => {
   it('discards subscription domain edits from the save bar', async () => {
     const user = userEvent.setup()
     adminApi.getSubscriptionSettings.mockResolvedValue({ data: { subscribe_path: '/s', subscribe_domains: ['a.example.com'] } })
-    await renderSection(SettingsGeneral, 'site.name')
+    await renderSection(SettingsGeneral, 'Other common settings')
     const field = await screen.findByLabelText('Alternate domains')
     await user.type(field, '\nb.example.com')
     const bar = await screen.findByRole('region', { name: 'Unsaved changes' })
@@ -134,21 +129,5 @@ describe('System settings dialogs and feedback', () => {
     await waitFor(() => expect(screen.queryByRole('region', { name: 'Unsaved changes' })).toBeNull())
     expect(field.value).toBe('a.example.com')
     expect(adminApi.setSystemConfig).not.toHaveBeenCalled()
-  })
-
-  it('validates balancer name and weights inside the dialog', async () => {
-    const user = userEvent.setup()
-    await renderSection(SettingsBalancer, 'No load balancers yet')
-    await user.click(screen.getAllByRole('button', { name: 'New load balancer' })[0])
-    const dialog = await screen.findByRole('dialog', { name: 'New load balancer' })
-    await user.click(within(dialog).getByRole('button', { name: 'Save' }))
-    expect(within(dialog).getByText('Enter a name')).toBeTruthy()
-
-    await user.type(within(dialog).getByLabelText(/Name/), 'edge')
-    await user.type(within(dialog).getByLabelText(/Node weights/), 'not json')
-    expect(within(dialog).getByText('Not valid JSON')).toBeTruthy()
-    await user.click(within(dialog).getByRole('button', { name: 'Save' }))
-    expect(within(dialog).getByRole('alert').textContent).toBe('Not valid JSON')
-    expect(adminApi.createLoadBalancer).not.toHaveBeenCalled()
   })
 })

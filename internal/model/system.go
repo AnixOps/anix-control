@@ -4,26 +4,6 @@ import (
 	"time"
 )
 
-// LoadBalancer 负载均衡器
-type LoadBalancer struct {
-	ID            uint      `gorm:"primaryKey" json:"id"`
-	Name          string    `gorm:"size:100" json:"name"`
-	GroupID       uint      `gorm:"index" json:"group_id"`                       // 节点组ID
-	Strategy      string    `gorm:"size:20;default:round-robin" json:"strategy"` // round-robin/least-conn/latency/weight/random
-	HealthCheck   bool      `gorm:"default:true" json:"health_check"`
-	CheckInterval int       `gorm:"default:60" json:"check_interval"` // 检查间隔(秒)
-	CheckTimeout  int       `gorm:"default:10" json:"check_timeout"`  // 超时时间(秒)
-	NodeWeights   string    `gorm:"type:text" json:"node_weights"`    // JSON: {node_id: weight}
-	Enabled       bool      `gorm:"default:true" json:"enabled"`
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
-}
-
-// TableName 指定表名
-func (LoadBalancer) TableName() string {
-	return "v2_load_balancer"
-}
-
 // SystemConfig 系统配置
 type SystemConfig struct {
 	ID     uint   `gorm:"primaryKey" json:"id"`

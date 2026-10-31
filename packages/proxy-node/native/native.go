@@ -5,11 +5,6 @@
 // are byte-compatible with the legacy handlers
 // (internal/tests/proxynodecompat).
 //
-//   - The load balancer list, detail, creation, update and deletion work on
-//     the kernel's v2_load_balancer table, adopted in place
-//     (kernel.storage.adopt). A load balancer's statistics read the forward
-//     nodes through kapi_forward_node_v1, and its health check is the
-//     kernel's (CheckEndpoints with record_status).
 //   - A node's runtime logs come from the adopted v2_node_log table, which
 //     the kernel's agent control writes when nodes report logs.
 //   - The node statistics, and whether a node exists, come from the kernel
@@ -75,35 +70,27 @@ type Service struct {
 
 // Route ids of the native routes of M3-2.
 const (
-	NodesRouteID             = "proxy.admin.nodes.get"
-	NodeRouteID              = "proxy.admin.nodes.id.get"
-	DeleteNodeRouteID        = "proxy.admin.nodes.id.delete"
-	RawConfigRouteID         = "proxy.admin.nodes.id.raw_config.get"
-	UpdateRawConfigRouteID   = "proxy.admin.nodes.id.raw_config.put"
-	AuthKeysRouteID          = "proxy.admin.auth_keys.get"
-	GenerateAuthKeyRouteID   = "proxy.admin.auth_keys.post"
-	DeleteAuthKeyRouteID     = "proxy.admin.auth_keys.id.delete"
-	InternalAuthKeyRouteID   = "proxy.internal.auth_keys.post"
-	LoadBalancerStatsRouteID = "proxy.loadbalancer.id.stats.get"
-	LoadBalancerCheckRouteID = "proxy.loadbalancer.id.check.post"
+	NodesRouteID           = "proxy.admin.nodes.get"
+	NodeRouteID            = "proxy.admin.nodes.id.get"
+	DeleteNodeRouteID      = "proxy.admin.nodes.id.delete"
+	RawConfigRouteID       = "proxy.admin.nodes.id.raw_config.get"
+	UpdateRawConfigRouteID = "proxy.admin.nodes.id.raw_config.put"
+	AuthKeysRouteID        = "proxy.admin.auth_keys.get"
+	GenerateAuthKeyRouteID = "proxy.admin.auth_keys.post"
+	DeleteAuthKeyRouteID   = "proxy.admin.auth_keys.id.delete"
+	InternalAuthKeyRouteID = "proxy.internal.auth_keys.post"
 )
 
 // Handlers returns the native handlers by route id. A host without
 // KernelNodeOps has none for the routes that need it.
 func (s *Service) Handlers() map[string]pluginhostsdk.NativeHandler {
 	handlers := map[string]pluginhostsdk.NativeHandler{
-		"proxy.loadbalancer.get":        s.ListLoadBalancers,
-		"proxy.loadbalancer.post":       s.CreateLoadBalancer,
-		"proxy.loadbalancer.id.get":     s.GetLoadBalancer,
-		"proxy.loadbalancer.id.put":     s.UpdateLoadBalancer,
-		"proxy.loadbalancer.id.delete":  s.DeleteLoadBalancer,
 		"proxy.admin.nodes.stats.get":   s.GetNodeStats,
 		"proxy.admin.nodes.id.logs.get": s.GetNodeLogs,
 		NodesRouteID:                    s.ListNodes,
 		NodeRouteID:                     s.GetNode,
 		RawConfigRouteID:                s.GetRawConfig,
 		AuthKeysRouteID:                 s.ListAuthKeys,
-		LoadBalancerStatsRouteID:        s.LoadBalancerStats,
 	}
 	if s.NodeOps != nil {
 		handlers[DeleteNodeRouteID] = s.DeleteNode
@@ -111,7 +98,6 @@ func (s *Service) Handlers() map[string]pluginhostsdk.NativeHandler {
 		handlers[GenerateAuthKeyRouteID] = s.GenerateAuthKey
 		handlers[DeleteAuthKeyRouteID] = s.DeleteAuthKey
 		handlers[InternalAuthKeyRouteID] = s.InternalGenerateAuthKey
-		handlers[LoadBalancerCheckRouteID] = s.RunHealthCheck
 	}
 	return handlers
 }
@@ -125,10 +111,6 @@ func (s *Service) now() time.Time {
 
 func (s *Service) panel(data any) (pluginhostsdk.NativeResponse, error) {
 	return pluginhostsdk.PanelJSON(v2compat.PanelSuccess(data, s.now()))
-}
-
-func (s *Service) panelError(message string) (pluginhostsdk.NativeResponse, error) {
-	return pluginhostsdk.PanelJSON(v2compat.PanelError(message, s.now()))
 }
 
 // jsonAnswer is the legacy handlers' c.JSON(code, body): encoding/json, as

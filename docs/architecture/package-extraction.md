@@ -47,7 +47,9 @@ v4.0.0 (published 2026-07-20) is plugin-only at the routing level only.
   ticket (8) and wireguard (1). 50 routes are `kernel-owned`: they stay in the
   kernel by design, and each row says why. The other 13 are `bridged` until a
   kernel contract lets their package serve them (section 3.2 lists what
-  unblocks them). None is `native` yet. The identity routes are
+  unblocks them). The 43 routes of affiliate (10), order (13) and payment (20)
+  are `native`: their legacy handlers are deleted (5.0.0-rc.22), the router
+  binds the bare gateway and the host answers alone. The identity routes are
   `identity-bridge`. `check_plugin_only_routes.py` enforces the map against
   the router, the identity bridge and the package hosts.
 - Request path: gin middleware -> `compatv2` gateway -> route resolution
@@ -234,7 +236,7 @@ by `check_plugin_only_routes.py` (counts in section 1).
 | Mode | Meaning | Routes |
 |---|---|---|
 | `native-flagged` | the package host has a native handler, proved by a parity test; the legacy handler stays, so every runtime mode works | 173 |
-| `native` | the legacy handler is deleted and the host answers alone | 0 |
+| `native` | the legacy handler is deleted and the host answers alone | 43 (affiliate, order, payment) |
 | `bridged` | the host only relays, until a kernel contract lets the package serve the route | 13 |
 | `kernel-owned` | the host only relays, by design: the route stays in the kernel, and the row's `reason` says why | 50 |
 
@@ -298,7 +300,8 @@ a trusted proxy (`server.trusted_proxies`), and no forwarding header is
 passed to package hosts or bridged handlers.
 
 Status (2026-10-01): every installation runs every route `legacy` unless an
-operator sets another mode; no route is `native` yet.
+operator sets another mode; no route is `native` yet. (Superseded: affiliate,
+order and payment are `native` since 5.0.0-rc.22.)
 
 ### 3.3 Typed kernel operations
 
@@ -777,14 +780,14 @@ The planned `kernel.entitlement.apply.v1` became
       `v2_system_config`. A KernelSettings namespace can carry only
       `v2_system_config` and `v2_backup_config` keys, so this needs a new
       kind of namespace with the process configuration.
-- **Proxy node (in place).** 18 of proxy-node's 31 routes run natively,
-  proved by `internal/tests/proxynodecompat`: the load balancer list,
-  detail, creation, update and deletion on the adopted `v2_load_balancer`,
-  a node's runtime logs on the adopted `v2_node_log` (the kernel's agent
-  control writes it), the node statistics, and since M3-2 the node list,
-  detail, deletion and raw configuration, the registration keys, and a load
-  balancer's statistics and health check
-  ([`node-ops-service.md`](node-ops-service.md) section 6.2).
+- **Proxy node (in place).** 11 of proxy-node's 24 routes run natively,
+  proved by `internal/tests/proxynodecompat`: a node's runtime logs on the
+  adopted `v2_node_log` (the kernel's agent control writes it), the node
+  statistics, and since M3-2 the node list, detail, deletion and raw
+  configuration, and the registration keys
+  ([`node-ops-service.md`](node-ops-service.md) section 6.2). The load
+  balancer routes were removed with the feature (migration
+  `0021_drop_load_balancer`).
   - **Node credentials stay in the kernel.** proxy-node owns the node
     domain, but a node's API key, key hash and shared secret authenticate
     it to the kernel: the node API, UniProxy, the agent WebSocket and gRPC
@@ -798,8 +801,7 @@ The planned `kernel.entitlement.apply.v1` became
   - The statistics, and whether a node exists for its logs, come from
     `kapi_node_status_v1`; a node's protocols from
     `kapi_node_protocol_public_v1` (`v2_node_protocol` is
-    protocol-runtime's); the forward nodes a load balancer looks at from
-    `kapi_forward_node_v1`.
+    protocol-runtime's).
   - **Through KernelNodeOps.** A deletion retires what the kernel holds for
     the node (`RetireNode`: its protocols with their peers, links and
     secrets, its credentials and agent certificates), then the package
@@ -811,9 +813,7 @@ The planned `kernel.entitlement.apply.v1` became
     listed through `kapi_registration_key_v1` (whether a key exists, never
     the key), issued and revoked through `IssueRegistrationKey` and
     `RevokeRegistrationKey`, a new key shown once as a sealed handle the
-    gateway expands. The load balancer check is the kernel's
-    `CheckEndpoints` with `record_status`, which the legacy route now runs
-    too.
+    gateway expands.
   - **Stay bridged** (7) or **kernel-owned** (6), with the reason in the
     host's route map:
     - node creation (bridged): it also creates the node's default protocol

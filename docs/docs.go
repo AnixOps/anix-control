@@ -551,576 +551,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/admin/invite/config": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员获取邀请系统配置",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-系统"
-                ],
-                "summary": "获取邀请配置",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            },
-            "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员更新邀请系统配置",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-系统"
-                ],
-                "summary": "更新邀请配置",
-                "parameters": [
-                    {
-                        "description": "Invite configuration",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.InviteConfig"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/invite/stats": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员获取邀请系统统计数据",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-系统"
-                ],
-                "summary": "获取邀请统计",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/invite/withdrawals": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员获取提现申请列表",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-系统"
-                ],
-                "summary": "获取提现申请列表",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Status filter",
-                        "name": "status",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "default": 1,
-                        "description": "页码",
-                        "name": "page",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "default": 20,
-                        "description": "每页数量",
-                        "name": "page_size",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/invite/withdrawals/{id}/process": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员处理提现申请，批准或拒绝",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-系统"
-                ],
-                "summary": "处理提现申请",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "提现记录ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "处理请求 {status, remark}",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/loadbalancers": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员获取负载均衡器列表",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-系统"
-                ],
-                "summary": "获取负载均衡器列表",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "分组ID",
-                        "name": "group_id",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            },
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员创建新的负载均衡器",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-系统"
-                ],
-                "summary": "创建负载均衡器",
-                "parameters": [
-                    {
-                        "description": "负载均衡器配置",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.LoadBalancer"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/loadbalancers/{id}": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员获取指定负载均衡器的详细信息",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-系统"
-                ],
-                "summary": "获取负载均衡器详情",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "负载均衡器ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            },
-            "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员更新指定负载均衡器的配置",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-系统"
-                ],
-                "summary": "更新负载均衡器",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "负载均衡器ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "负载均衡器配置",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.LoadBalancer"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员删除指定负载均衡器",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-系统"
-                ],
-                "summary": "删除负载均衡器",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "负载均衡器ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/loadbalancers/{id}/check": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员对指定负载均衡器执行健康检查",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-系统"
-                ],
-                "summary": "执行健康检查",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "负载均衡器ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/loadbalancers/{id}/stats": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员获取指定负载均衡器的统计数据",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-系统"
-                ],
-                "summary": "获取负载均衡统计",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "负载均衡器ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
         "/admin/nodes": {
             "get": {
                 "security": [
@@ -2408,750 +1838,6 @@ const docTemplate = `{
                             "type": "object",
                             "additionalProperties": true
                         }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/orders": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员获取订单列表，支持分页和筛选",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-订单"
-                ],
-                "summary": "获取订单列表",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "default": 1,
-                        "description": "页码",
-                        "name": "page",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "default": 20,
-                        "description": "每页数量",
-                        "name": "page_size",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "订单号",
-                        "name": "trade_no",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "用户邮箱",
-                        "name": "email",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "订单状态",
-                        "name": "status",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "订单类型",
-                        "name": "type",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "用户ID",
-                        "name": "user_id",
-                        "in": "query"
-                    },
-                    {
-                        "enum": [
-                            "id",
-                            "trade_no",
-                            "status",
-                            "type",
-                            "total_amount",
-                            "created_at",
-                            "paid_at"
-                        ],
-                        "type": "string",
-                        "description": "排序字段: id, trade_no, status, type, total_amount, created_at, paid_at; 缺省为 created_at 倒序",
-                        "name": "sort",
-                        "in": "query"
-                    },
-                    {
-                        "enum": [
-                            "asc",
-                            "desc"
-                        ],
-                        "type": "string",
-                        "default": "asc",
-                        "description": "排序方向, 仅与 sort 同用",
-                        "name": "order",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/orders/stats": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员获取订单统计数据",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-订单"
-                ],
-                "summary": "获取订单统计",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/orders/{id}": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员获取指定订单的详细信息",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-订单"
-                ],
-                "summary": "获取订单详情",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "订单ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/orders/{id}/cancel": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员取消指定订单",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-订单"
-                ],
-                "summary": "取消订单",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "订单ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/orders/{id}/paid": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员手动标记订单为已支付并开通服务",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-订单"
-                ],
-                "summary": "标记订单已支付",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "订单ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/orders/{id}/status": {
-            "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员更新指定订单的状态",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-订单"
-                ],
-                "summary": "更新订单状态",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "订单ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "状态请求 {status: int}",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/payment/gateways": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员获取所有支付网关列表",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-支付"
-                ],
-                "summary": "获取支付网关列表",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            },
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员创建新的支付网关",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-支付"
-                ],
-                "summary": "创建支付网关",
-                "parameters": [
-                    {
-                        "description": "网关信息",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handler.CreateGatewayRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/payment/gateways/{id}": {
-            "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员更新指定支付网关的信息",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-支付"
-                ],
-                "summary": "更新支付网关",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "网关ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "网关更新信息",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handler.UpdateGatewayRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员删除指定支付网关",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-支付"
-                ],
-                "summary": "删除支付网关",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "网关ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/payment/gateways/{id}/toggle": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员启用或禁用指定支付网关",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-支付"
-                ],
-                "summary": "切换网关状态",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "网关ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "状态请求",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handler.ToggleRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/payment/records": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员获取支付记录列表，支持分页和状态筛选",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-支付"
-                ],
-                "summary": "获取支付记录列表",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "default": 1,
-                        "description": "页码",
-                        "name": "page",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "default": 20,
-                        "description": "每页数量",
-                        "name": "page_size",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "支付状态",
-                        "name": "status",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/payment/stats": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员获取支付统计数据，支持日期范围筛选",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-支付"
-                ],
-                "summary": "获取支付统计",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "开始日期 (格式: 2006-01-02)",
-                        "name": "start",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "结束日期 (格式: 2006-01-02)",
-                        "name": "end",
-                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -4950,6 +3636,48 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v4/admin/subscription-groups/{id}/node-overrides": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "清除该分组所有节点的修改, 恢复为源协议的值; 名称与顺序不受影响。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-订阅"
+                ],
+                "summary": "重置订阅分组的全部节点修改",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "订阅分组 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/v4/admin/subscription-groups/{id}/protocol-layout": {
             "get": {
                 "security": [
@@ -5023,6 +3751,121 @@ const docTemplate = `{
                         "required": true,
                         "schema": {
                             "$ref": "#/definitions/handler.groupProtocolLayoutRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v4/admin/subscription-groups/{id}/protocols/{protocol_id}/nodes": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "列出该协议在分组订阅中生成的每个节点 (按入口展开), 含分组的修改 (overrides) 与源协议的原始值 (defaults)。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-订阅"
+                ],
+                "summary": "订阅分组中某协议生成的节点及其修改",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "订阅分组 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "节点协议 ID",
+                        "name": "protocol_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "设置分组对该协议各节点的修改与顺序 (order 为节点键的显示顺序, 未列出的排在其后; 名称、地址、端口、SNI、传输等; 协议类型与凭据不可改)。未列出或为空的节点恢复为源协议的值, 源协议本身不变。订阅立即生效。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-订阅"
+                ],
+                "summary": "修改订阅分组中某协议生成的节点",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "订阅分组 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "节点协议 ID",
+                        "name": "protocol_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "按节点键的修改",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.groupNodeOverridesRequest"
                         }
                     }
                 ],
@@ -8967,7 +7810,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "The live node groups by sort and id, each with its defaults, protocol template, subscription groups, token reset and expiry times, and its live and pending nodes counted. Never the join token.",
+                "description": "The live node groups by sort and id, each with its defaults, token reset and expiry times, and its live and pending nodes counted. Never the join token.",
                 "produces": [
                     "application/json"
                 ],
@@ -8991,7 +7834,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "A node group with a new join token (sealed under module_runtime.ca_kek, which must be set). Its defaults (rate, tags, monthly_limit_bytes, reset_day, sort) are copied to every node the token creates; protocol_template lists the protocols each new node gets (empty: the node only runs the network model, ANX) (tls none, or reality for vless; port or port_range) and subscription_group_ids the subscription groups they join. The answer does not carry the token: GET .../command shows the install command. Audited.",
+                "description": "A node group with a new join token (sealed under module_runtime.ca_kek, which must be set). Its defaults (rate, tags, monthly_limit_bytes, reset_day, sort) are copied to every node the token creates; Nodes that join are clean: they have no protocol. The answer does not carry the token: GET .../command shows the install command. Audited.",
                 "consumes": [
                     "application/json"
                 ],
@@ -9031,7 +7874,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Creates the default node group when no live node group exists, and answers the first group otherwise (created tells which): a proxy group named \"默认\" whose template is one VLESS Reality protocol on a random port from 20000 to 40000, attached to the default subscription group (created when the panel has none), so the first node needs no input. Idempotent and safe to call concurrently. 409 ca_kek_missing without module_runtime.ca_kek. Audited as a node group create when it creates.",
+                "description": "Creates the default node group when no live node group exists, and answers the first group otherwise (created tells which): a group named \"默认\" with the default settings, so the first node needs no input; nodes that join it are clean (no protocol). Idempotent and safe to call concurrently. 409 ca_kek_missing without module_runtime.ca_kek. Audited as a node group create when it creates.",
                 "produces": [
                     "application/json"
                 ],
@@ -9097,7 +7940,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Replaces every field of a group but its token. Nodes that joined keep what they got; the defaults and the template apply to later joins. Audited.",
+                "description": "Replaces every field of a group but its token. Nodes that joined keep what they got; the defaults apply to later joins. Audited.",
                 "consumes": [
                     "application/json"
                 ],
@@ -9212,7 +8055,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "The group's live nodes (every node of the group but the rejected ones), newest first, for the join dialog that waits for machines: id, node (proxy-\u003cid\u003e or forward-\u003cid\u003e), kind, name, host, approval (approved or pending), online (enabled and checked in within five minutes, as the node list computes it), last_seen, agent_version and created_at. Never a credential. Any administrator.",
+                "description": "The group's live nodes (every node of the group but the rejected ones), newest first, for the join dialog that waits for machines: id, node (proxy-\u003cid\u003e), name, host, approval (approved or pending), online (enabled and checked in within five minutes, as the node list computes it), last_seen, agent_version and created_at. Never a credential. Any administrator.",
                 "produces": [
                     "application/json"
                 ],
@@ -9293,7 +8136,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "proxy-\u003cid\u003e or forward-\u003cid\u003e",
+                        "description": "proxy-\u003cid\u003e",
                         "name": "id",
                         "in": "path",
                         "required": true
@@ -9746,7 +8589,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "proxy-\u003cid\u003e or forward-\u003cid\u003e",
+                        "description": "proxy-\u003cid\u003e",
                         "name": "id",
                         "in": "path",
                         "required": true
@@ -9972,7 +8815,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "The bundles in data_dir/backups, newest first, in data.backups: id, file, type (daily, pre-migration, manual, verify), size, sha256, created_at, verified_at, verify_status (pending, passed, failed), verify_error, program_version, schema_version. data.summary has last_verified (the newest bundle that passed its verification, or null), stale (no verified bundle younger than stale_after_hours, 36, on a database older than that), next_daily_at and directory; data.retention the built-in retention. On PostgreSQL data.supported is false and data.reason says why: backups need SQLite. Any administrator; no secret.",
+                "description": "The bundles in data_dir/backups, newest first, in data.backups: id, file, type (daily, pre-migration, manual, verify), size, sha256, created_at, verified_at, verify_status (pending, passed, failed), verify_error, program_version, schema_version. data.summary has last_verified (the newest bundle that passed its verification, or null), stale (no verified bundle younger than stale_after_hours, 36, on a database older than that), next_daily_at and directory; data.retention the built-in retention. For a database driver backups do not cover data.supported is false and data.reason says why. Any administrator; no secret.",
                 "produces": [
                     "application/json"
                 ],
@@ -10003,7 +8846,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Writes a manual bundle of the database, root.key and the configuration file into data_dir/backups and answers it (201, data.backup, verify_status pending); its verification follows in the background and the list shows the result. 409 backups_need_sqlite on PostgreSQL, 409 backup_in_progress while another backup or verification runs. Any administrator.",
+                "description": "Writes a manual bundle of the database, root.key and the configuration file into data_dir/backups and answers it (201, data.backup, verify_status pending); its verification follows in the background and the list shows the result. 409 backups_need_sqlite for a database driver backups do not cover, 409 backups_need_postgres_tools when a PostgreSQL panel has no pg_dump/pg_restore, 409 backup_in_progress while another backup or verification runs. Any administrator.",
                 "produces": [
                     "application/json"
                 ],
@@ -10269,6 +9112,32 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v5/settings/catalog": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "The settings the console offers as options (internal/settingscatalog), in data.items: key, section (general, data), kind (domains, switch, choice, link), choices, min, max, default, value (the value in force now, for a switch or a choice), link (the console route of a link) and sensitive. Any administrator.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "The options of the system settings",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/internal/auth-keys": {
             "post": {
                 "security": [
@@ -10379,44 +9248,6 @@ const docTemplate = `{
                 "responses": {
                     "200": {
                         "description": "Prometheus metrics",
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                }
-            }
-        },
-        "/payment/callback/{type}": {
-            "post": {
-                "description": "接收第三方支付平台的回调通知",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "text/plain"
-                ],
-                "tags": [
-                    "支付回调"
-                ],
-                "summary": "支付回调",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "支付类型 (alipay/wechat/epay等)",
-                        "name": "type",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "success",
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    "400": {
-                        "description": "fail",
                         "schema": {
                             "type": "string"
                         }
@@ -10536,230 +9367,6 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "Unauthorized",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/user/invite": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "用户获取自己的邀请码和佣金信息",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "用户端"
-                ],
-                "summary": "获取邀请信息",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/user/invite/commissions": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "用户获取自己的佣金记录列表",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "用户端"
-                ],
-                "summary": "获取佣金记录",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "default": 1,
-                        "description": "页码",
-                        "name": "page",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "default": 20,
-                        "description": "每页数量",
-                        "name": "page_size",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/user/invite/generate": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "用户生成新的邀请码",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "用户端"
-                ],
-                "summary": "生成邀请码",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/user/invite/withdraw": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "用户申请佣金提现",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "用户端"
-                ],
-                "summary": "申请提现",
-                "parameters": [
-                    {
-                        "description": "提现请求 {amount, method, account, name}",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/user/invite/withdrawals": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "用户获取自己的提现记录列表",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "用户端"
-                ],
-                "summary": "获取提现记录",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "default": 1,
-                        "description": "页码",
-                        "name": "page",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "default": 20,
-                        "description": "每页数量",
-                        "name": "page_size",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
@@ -10901,193 +9508,6 @@ const docTemplate = `{
                         "type": "integer",
                         "description": "通知ID",
                         "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/user/payment/channels": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "用户获取可用的支付渠道列表",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "用户端"
-                ],
-                "summary": "获取支付渠道列表",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/user/payment/create": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "用户创建支付订单",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "用户端"
-                ],
-                "summary": "创建支付订单",
-                "parameters": [
-                    {
-                        "description": "支付请求",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handler.CreatePaymentRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/user/payment/records": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "用户获取自己的支付记录列表",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "用户端"
-                ],
-                "summary": "获取用户支付记录",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "default": 1,
-                        "description": "页码",
-                        "name": "page",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "default": 20,
-                        "description": "每页数量",
-                        "name": "page_size",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/user/payment/status/{trade_no}": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "用户查询支付订单状态",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "用户端"
-                ],
-                "summary": "查询支付状态",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "订单号",
-                        "name": "trade_no",
                         "in": "path",
                         "required": true
                     }
@@ -11443,69 +9863,6 @@ const docTemplate = `{
                 }
             }
         },
-        "handler.CreateGatewayRequest": {
-            "type": "object",
-            "required": [
-                "name",
-                "type"
-            ],
-            "properties": {
-                "config": {},
-                "description": {
-                    "type": "string"
-                },
-                "fee_fixed": {
-                    "type": "number"
-                },
-                "fee_rate": {
-                    "type": "number"
-                },
-                "icon": {
-                    "type": "string"
-                },
-                "max_amount": {
-                    "type": "number"
-                },
-                "min_amount": {
-                    "type": "number"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "sort": {
-                    "type": "integer"
-                },
-                "type": {
-                    "type": "string",
-                    "enum": [
-                        "alipay",
-                        "wechat",
-                        "stripe",
-                        "usdt",
-                        "epay"
-                    ]
-                }
-            }
-        },
-        "handler.CreatePaymentRequest": {
-            "type": "object",
-            "required": [
-                "amount",
-                "gateway_id"
-            ],
-            "properties": {
-                "amount": {
-                    "type": "number",
-                    "minimum": 1
-                },
-                "gateway_id": {
-                    "type": "integer"
-                },
-                "order_id": {
-                    "type": "integer"
-                }
-            }
-        },
         "handler.CreateTaskRequest": {
             "type": "object",
             "required": [
@@ -11600,14 +9957,6 @@ const docTemplate = `{
                 }
             }
         },
-        "handler.ToggleRequest": {
-            "type": "object",
-            "properties": {
-                "enabled": {
-                    "type": "boolean"
-                }
-            }
-        },
         "handler.UpdateBotRequest": {
             "type": "object",
             "properties": {
@@ -11639,46 +9988,6 @@ const docTemplate = `{
                 "welcome_msg": {
                     "type": "string",
                     "maxLength": 1024
-                }
-            }
-        },
-        "handler.UpdateGatewayRequest": {
-            "type": "object",
-            "properties": {
-                "config": {},
-                "description": {
-                    "type": "string"
-                },
-                "fee_fixed": {
-                    "type": "number"
-                },
-                "fee_rate": {
-                    "type": "number"
-                },
-                "icon": {
-                    "type": "string"
-                },
-                "max_amount": {
-                    "type": "number"
-                },
-                "min_amount": {
-                    "type": "number"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "sort": {
-                    "type": "integer"
-                },
-                "type": {
-                    "type": "string",
-                    "enum": [
-                        "alipay",
-                        "wechat",
-                        "stripe",
-                        "usdt",
-                        "epay"
-                    ]
                 }
             }
         },
@@ -11736,6 +10045,25 @@ const docTemplate = `{
                 "scope": {
                     "description": "Scope is \"read\" or \"admin\".",
                     "type": "string"
+                }
+            }
+        },
+        "handler.groupNodeOverridesRequest": {
+            "type": "object",
+            "properties": {
+                "nodes": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "object",
+                        "additionalProperties": {}
+                    }
+                },
+                "order": {
+                    "description": "Order lists the node keys in the order the subscription shows them;\nkeys left out follow.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
         },
@@ -12070,106 +10398,6 @@ const docTemplate = `{
                 },
                 "transfer_enable": {
                     "type": "integer"
-                }
-            }
-        },
-        "model.InviteConfig": {
-            "type": "object",
-            "properties": {
-                "auto_generate": {
-                    "description": "邀请码设置",
-                    "type": "boolean"
-                },
-                "code_count": {
-                    "description": "每个用户邀请码数量",
-                    "type": "integer"
-                },
-                "code_expire_days": {
-                    "description": "邀请码过期天数 (0=永不过期)",
-                    "type": "integer"
-                },
-                "commission_enabled": {
-                    "description": "佣金设置",
-                    "type": "boolean"
-                },
-                "commission_fixed": {
-                    "description": "固定佣金金额",
-                    "type": "number"
-                },
-                "commission_min": {
-                    "description": "最低提现金额",
-                    "type": "number"
-                },
-                "commission_rate": {
-                    "description": "佣金比例 (0.1 = 10%)",
-                    "type": "number"
-                },
-                "commission_type": {
-                    "description": "1=按比例 2=固定金额",
-                    "type": "integer"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "enabled": {
-                    "type": "boolean"
-                },
-                "first_order_bonus": {
-                    "description": "首次奖励",
-                    "type": "number"
-                },
-                "first_traffic_bonus": {
-                    "description": "首次流量奖励 (bytes)",
-                    "type": "integer"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "updated_at": {
-                    "type": "string"
-                }
-            }
-        },
-        "model.LoadBalancer": {
-            "type": "object",
-            "properties": {
-                "check_interval": {
-                    "description": "检查间隔(秒)",
-                    "type": "integer"
-                },
-                "check_timeout": {
-                    "description": "超时时间(秒)",
-                    "type": "integer"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "enabled": {
-                    "type": "boolean"
-                },
-                "group_id": {
-                    "description": "节点组ID",
-                    "type": "integer"
-                },
-                "health_check": {
-                    "type": "boolean"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "node_weights": {
-                    "description": "JSON: {node_id: weight}",
-                    "type": "string"
-                },
-                "strategy": {
-                    "description": "round-robin/least-conn/latency/weight/random",
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
                 }
             }
         },
@@ -12552,7 +10780,8 @@ const docTemplate = `{
                 "tuic",
                 "anytls",
                 "wireguard",
-                "iwan"
+                "iwan",
+                "anx"
             ],
             "x-enum-varnames": [
                 "ProtocolVMess",
@@ -12563,7 +10792,8 @@ const docTemplate = `{
                 "ProtocolTUIC",
                 "ProtocolAnyTLS",
                 "ProtocolWireGuard",
-                "ProtocolIWAN"
+                "ProtocolIWAN",
+                "ProtocolANX"
             ]
         },
         "model.RegisterRequest": {
@@ -13240,7 +11470,43 @@ const docTemplate = `{
             }
         },
         "nodegroup.GroupInput": {
-            "type": "object"
+            "type": "object",
+            "properties": {
+                "max_nodes": {
+                    "description": "MaxNodes caps the group's live nodes; 0 is no cap.",
+                    "type": "integer"
+                },
+                "monthly_limit_bytes": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "rate": {
+                    "description": "Rate is the billing rate of the group's proxy nodes; 1 when absent.",
+                    "type": "number"
+                },
+                "require_approval": {
+                    "type": "boolean"
+                },
+                "reset_day": {
+                    "description": "ResetDay is the day of the month (1-28) the nodes' monthly traffic\nresets; 1 when absent.",
+                    "type": "integer"
+                },
+                "sort": {
+                    "type": "integer"
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "token_expires_at": {
+                    "description": "TokenExpiresAt, when set, ends the token's use; it must be in the\nfuture.",
+                    "type": "string"
+                }
+            }
         },
         "realitytarget.AutoState": {
             "type": "object",
@@ -13398,7 +11664,7 @@ const docTemplate = `{
 
 // SwaggerInfo holds exported Swagger Info so clients can modify it
 var SwaggerInfo = &swag.Spec{
-	Version:          "5.0.0-rc.21",
+	Version:          "5.0.0-rc.23",
 	Host:             "localhost:8080",
 	BasePath:         "/api/v2",
 	Schemes:          []string{"http", "https"},

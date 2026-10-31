@@ -84,7 +84,7 @@ duplicate it here); the docs landing page is `docs/README.md`.
     - Docker and Kubernetes smokes for the module runtime, identity and
       deployment;
     - forward, Agent and package jobs for their areas (the `forward` class
-      also covers the forward SDK, for the "Forward Netns E2E" job).
+      also covers the forward SDK).
 
     Documentation-only PRs skip the Go jobs. PRs that leave `web/` alone
     skip Frontend Checks' lint and unit tests and the mocked browser E2E
@@ -334,8 +334,7 @@ do not cite the archived flux documents (`docs/archive/`) as requirements.
   validation (`sdk/forward/model`, `sdk/forward/validate`, one rule set for
   Control, the planner and the Agent), the planner (`sdk/forward/planner`,
   golden fixtures in `contracts/forward/v1`), the drivers
-  (`sdk/forward/driver/*`, conformance suite and netns end-to-end tests in
-  `sdk/forward/e2e`), then the kernel's forwarding state
+  (`sdk/forward/driver/*`, conformance suite), then the kernel's forwarding state
   (`internal/kernelforward`, `ForwardControl`), the forward package's v4 API
   (`packages/forward/v4api`, `/api/v4/forward/*`), the operator CLI
   (`anix-control forward`) and the UI (`web/src/views/admin/forward/`).

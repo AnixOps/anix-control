@@ -3,9 +3,6 @@ package proxynodecompat
 import (
 	"context"
 	"fmt"
-	"net"
-	"net/http"
-	"net/http/httptest"
 	"strconv"
 	"testing"
 	"time"
@@ -23,14 +20,13 @@ import (
 	"gorm.io/gorm"
 )
 
-// The node, registration key and load balancer check routes run through
+// The node and registration key routes run through
 // the whole path a deployment runs (packagecompat.RunKernelRead and
 // RunKernelWrite): the kernel's gateway seals the secrets an administrator
 // types into handles and expands the ones an answer shows, the package
 // host reads v2_node, which its lease adopts once the node credential
 // split finalized it, and the kernel stores raw configuration secrets,
-// retires deleted nodes, issues and revokes registration keys and checks
-// forward nodes. Both sides start from the same rows; the answers are the
+// retires deleted nodes, issues and revokes registration keys. Both sides start from the same rows; the answers are the
 // same bytes and the rows, the kernel's secrets and credentials end the
 // same.
 
@@ -55,12 +51,12 @@ func wireGuardRawConfig(private, public string) string {
 }
 
 var adminModels = []any{
-	&model.Node{}, &model.NodeProtocol{}, &model.NodeLog{}, &model.LoadBalancer{}, &model.WireGuardPeer{}, &model.SubscriptionGroup{},
+	&model.Node{}, &model.NodeProtocol{}, &model.NodeLog{}, &model.WireGuardPeer{}, &model.SubscriptionGroup{},
 	&model.User{}, &model.AuthorizedKey{}, &model.ForwardNode{}, &model.AgentCertificate{}, &model.AgentEnrollment{},
 }
 
 func capabilities() []string {
-	return []string{service.CapabilityNodeOpsNodeConfig, service.CapabilityNodeOpsCredentials, service.CapabilityNodeOpsDiagnose}
+	return []string{service.CapabilityNodeOpsNodeConfig, service.CapabilityNodeOpsCredentials}
 }
 
 // kernelRoute is a proxy-node route on the kernel's path.
@@ -382,68 +378,5 @@ func TestAuthKeysParity(t *testing.T) {
 		{Name: "a key", Path: keyPath("1")},
 		{Name: "an unknown key", Path: keyPath("99")},
 		{Name: "not a number", Path: keyPath("x")},
-	})
-}
-
-// seedBalancers writes load balancers with health checks on and off and
-// forward nodes: one whose endpoint answers, one where nothing listens, in
-// several statuses, latencies and loads.
-func seedBalancers(listening, closed int) func(testing.TB, *gorm.DB) {
-	return func(t testing.TB, db *gorm.DB) {
-		seedFinalized(t, db)
-		require.NoError(t, db.Create(&[]model.LoadBalancer{
-			{ID: 1, Name: "edge", GroupID: 1, Strategy: "least-load", HealthCheck: true, CheckInterval: 60, CheckTimeout: 5, Enabled: true, CreatedAt: seeded, UpdatedAt: seeded},
-			{ID: 2, Name: "quiet", GroupID: 2, Strategy: "latency", HealthCheck: true, CheckInterval: 60, CheckTimeout: 5, Enabled: true, CreatedAt: seeded, UpdatedAt: seeded},
-		}).Error)
-		require.NoError(t, db.Model(&model.LoadBalancer{}).Where("id = ?", 2).UpdateColumn("health_check", false).Error)
-		require.NoError(t, db.Create(&[]model.ForwardNode{
-			{ID: 1, Name: "relay-a", Host: "127.0.0.1", Port: listening, Status: model.ForwardNodeStatusOnline, Latency: 12, Load: 0.5, Enabled: true, APIToken: "fake-forward-token-1", CreatedAt: seeded, UpdatedAt: seeded},
-			{ID: 2, Name: "relay-b", Host: "127.0.0.1", Port: closed, Status: model.ForwardNodeStatusOnline, Latency: 31, Load: 0.25, Enabled: true, APIToken: "fake-forward-token-2", CreatedAt: seeded, UpdatedAt: seeded},
-			{ID: 3, Name: "relay-c", Host: "127.0.0.1", Port: closed, Status: 0, Latency: 99, Load: 0.9, Enabled: true, CreatedAt: seeded, UpdatedAt: seeded},
-		}).Error)
-		syncTables(t, db, "v2_load_balancer", "v2_forward_node")
-	}
-}
-
-// forwardState is what a health check records on the forward nodes: their
-// status and whether they were checked; the latency a check measures and
-// the time it ran differ by run.
-func forwardState(t testing.TB, db *gorm.DB) any {
-	var nodes []struct {
-		ID      uint
-		Status  int
-		Checked bool
-	}
-	require.NoError(t, db.Model(&model.ForwardNode{}).Select("id, status, last_check IS NOT NULL AS checked").Order("id").Find(&nodes).Error)
-	return nodes
-}
-
-func TestLoadBalancerStatsAndCheckParity(t *testing.T) {
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	require.NoError(t, err)
-	server := httptest.NewUnstartedServer(http.NotFoundHandler())
-	server.Listener = listener
-	server.Start()
-	t.Cleanup(server.Close)
-	listening := listener.Addr().(*net.TCPAddr).Port
-	nothing, err := net.Listen("tcp", "127.0.0.1:0")
-	require.NoError(t, err)
-	closed := nothing.Addr().(*net.TCPAddr).Port
-	require.NoError(t, nothing.Close())
-
-	stats := func(id string) string { return "/api/v2/admin/loadbalancers/" + id + "/stats" }
-	kernelRead(t, kernelRoute("GET", "/api/v2/admin/loadbalancers/:id/stats", native.LoadBalancerStatsRouteID,
-		func(c *gin.Context) { handler.NewLoadBalancerHandler().GetLoadBalancerStats(c) }), []packagecompat.Case{
-		{Name: "every forward node", Path: stats("1"), Seed: seedBalancers(listening, closed)},
-		{Name: "an unknown load balancer", Path: stats("99"), Seed: seedBalancers(listening, closed)},
-		{Name: "not a number", Path: stats("x"), Seed: seedBalancers(listening, closed)},
-	})
-	check := func(id string) string { return "/api/v2/admin/loadbalancers/" + id + "/check" }
-	kernelWrite(t, kernelRoute("POST", "/api/v2/admin/loadbalancers/:id/check", native.LoadBalancerCheckRouteID,
-		func(c *gin.Context) { handler.NewLoadBalancerHandler().RunHealthCheck(c) }), []packagecompat.Case{
-		{Name: "every forward node checked and recorded", Path: check("1"), Seed: seedBalancers(listening, closed), Snapshot: forwardState},
-		{Name: "health checks off", Path: check("2"), Seed: seedBalancers(listening, closed), Snapshot: forwardState},
-		{Name: "an unknown load balancer", Path: check("99"), Seed: seedBalancers(listening, closed), Snapshot: forwardState},
-		{Name: "not a number", Path: check("x"), Seed: seedBalancers(listening, closed), Snapshot: forwardState},
 	})
 }

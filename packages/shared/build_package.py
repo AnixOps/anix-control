@@ -80,8 +80,6 @@ PACKAGE_SPECS = (
     PackageSpec("notification", ("control",)),
     PackageSpec("knowledge", ("control",)),
     PackageSpec("machine-telemetry", ("control", "agent")),
-    PackageSpec("nftables-forward", ("control", "agent")),
-    PackageSpec("nat-egress", ("control", "agent")),
     PackageSpec("wireguard", ("control",)),
     PackageSpec("protocol-runtime", ("control",)),
 )
@@ -372,8 +370,8 @@ def generated_compatibility_routes(package_id: str) -> bytes:
 
 
 # The standalone host binary: packages/builtin/cmd/package-host linked for
-# one package, which runs the package's own host (packages/<id>/control) or
-# the generic host (packages/shared/controlhost). Control runs the same hosts
+# one package, which runs the package's own host (packages/<id>/control).
+# Control runs the same hosts
 # as `anix-control package-host <id>`; --builtin packages carry no binary.
 STANDALONE_HOST_PACKAGE = "./packages/builtin/cmd/package-host"
 

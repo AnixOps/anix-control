@@ -44,7 +44,7 @@ func TestProxyNodeHostRelaysRoutesUntilTheyAreSwitchedToNative(t *testing.T) {
 	bridge := &bridgeStub{}
 	service, err := newProxyNodeService(bridge, "lease-1")
 	require.NoError(t, err)
-	for _, route := range []string{"proxy.loadbalancer.get", "proxy.admin.nodes.id.logs.get", "proxy.admin.nodes.get", "proxy.server.uniproxy.user.get"} {
+	for _, route := range []string{"proxy.admin.nodes.id.logs.get", "proxy.admin.nodes.get", "proxy.server.uniproxy.user.get"} {
 		response, err := service.Dispatch(context.Background(), pluginhostsdk.DispatchRequest{
 			RouteID: route, BridgeCapability: make([]byte, 32), DeadlineUnixMillis: time.Now().Add(time.Second).UnixMilli(),
 		})
@@ -69,7 +69,7 @@ func TestProxyNodeHostRelaysRoutesUntilTheyAreSwitchedToNative(t *testing.T) {
 	withoutNodeOps := (&native.Service{}).Handlers()
 	for _, route := range []string{
 		native.DeleteNodeRouteID, native.UpdateRawConfigRouteID, native.GenerateAuthKeyRouteID, native.DeleteAuthKeyRouteID,
-		native.InternalAuthKeyRouteID, native.LoadBalancerCheckRouteID,
+		native.InternalAuthKeyRouteID,
 	} {
 		require.NotContains(t, withoutNodeOps, route, "without KernelNodeOps the route stays legacy")
 	}
@@ -107,8 +107,7 @@ func TestProxyNodeHostRoutesAreThePackageRoutes(t *testing.T) {
 // (registration keys) or v2_node_protocol (protocol-runtime's): it reads
 // them through views that show no key. Of KernelNodeOps it holds the
 // families its routes use: nodeconfig (raw configuration secrets, node
-// retirement), credentials (registration keys) and diagnose (the load
-// balancer check); never agents or forward.
+// retirement) and credentials (registration keys); never agents or forward.
 func TestProxyNodeManifestGrantsNoNodeCredentials(t *testing.T) {
 	raw, err := os.ReadFile("../manifest.template.json")
 	require.NoError(t, err)
@@ -118,15 +117,12 @@ func TestProxyNodeManifestGrantsNoNodeCredentials(t *testing.T) {
 	require.NoError(t, json.Unmarshal(raw, &manifest))
 	require.Equal(t, []string{
 		"kernel.storage.v1",
-		"kernel.storage.adopt:v2_load_balancer",
 		"kernel.storage.adopt:v2_node_log",
 		"kernel.storage.adopt:v2_node",
 		"kernel.view:kapi_node_status_v1",
 		"kernel.view:kapi_node_protocol_public_v1",
 		"kernel.view:kapi_registration_key_v1",
-		"kernel.view:kapi_forward_node_v1",
 		"kernel.nodeops.nodeconfig.v1",
 		"kernel.nodeops.credentials.v1",
-		"kernel.nodeops.diagnose.v1",
 	}, manifest.Capabilities)
 }

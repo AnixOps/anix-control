@@ -10,168 +10,22 @@ import (
 	"math"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
-	"github.com/AnixOps/anix-control/v5/internal/handler"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/packagestore"
 	"github.com/AnixOps/anix-control/v5/internal/service"
 	"github.com/AnixOps/anix-control/v5/internal/tests/packagecompat"
 	"github.com/AnixOps/anix-control/v5/packages/affiliate/native"
-	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
-
-// inviteRoute is route with the invite codes and orders the invite routes
-// read.
-func inviteRoute(t *testing.T, method, pattern, routeID string, legacy func(*handler.InviteHandler, *gin.Context)) packagecompat.Route {
-	r := route(t, method, pattern, routeID, legacy)
-	r.Models = append(r.Models, &model.InviteCode{}, &model.Order{})
-	return r
-}
-
-// seedInvites adds invite codes and orders to seed:
-//   - alice (2) holds an unused code, a used one, an expired one and one
-//     that expires in 2100, so two count against her limit; bob (3) one
-//     unused code; one public code;
-//   - alice's invitees: bob paid twice, carol (4) has a completed order,
-//     which the kernel does not count as paid, and 5 a pending one; bob's
-//     invitee 6 paid once.
-func seedInvites(config bool, codeCount int) func(testing.TB, *gorm.DB) {
-	return func(t testing.TB, db *gorm.DB) {
-		seedWith(config, ptr(settingsValue))(t, db)
-		if config && codeCount != 3 {
-			require.NoError(t, db.Model(&model.InviteConfig{}).Where("id = 1").Update("code_count", codeCount).Error)
-		}
-		require.NoError(t, db.Create(&model.Plan{ID: 1, Name: "Basic", CreatedAt: seeded, UpdatedAt: seeded}).Error)
-		order := func(id, user uint, status int) model.Order {
-			return model.Order{
-				ID: id, UserID: user, PlanID: 1, Period: "month_price", TradeNo: fmt.Sprintf("trade-%d", id), TotalAmount: 1000,
-				Status: status, CreatedAt: seeded, UpdatedAt: seeded,
-			}
-		}
-		require.NoError(t, db.Create(&[]model.Order{
-			order(1, 3, 1), order(2, 3, 1), order(3, 4, 3), order(4, 5, 0), order(5, 6, 1), order(6, 2, 1),
-		}).Error)
-		used := seeded.Add(30 * time.Minute)
-		expired := seeded.Add(-time.Hour)
-		future := time.Date(2100, 1, 1, 0, 0, 0, 0, time.UTC)
-		code := func(id uint, value string, owner *uint, status int, usedBy *uint, usedAt, expiredAt *time.Time) model.InviteCode {
-			return model.InviteCode{
-				ID: id, Code: value, UserID: owner, Status: status, UsedBy: usedBy, UsedAt: usedAt, ExpiredAt: expiredAt,
-				CreatedAt: seeded.Add(time.Duration(id) * time.Minute), UpdatedAt: seeded,
-			}
-		}
-		require.NoError(t, db.Create(&[]model.InviteCode{
-			code(1, "a1b2c3d4", ptr(uint(2)), 0, nil, nil, nil),
-			code(2, "used0001", ptr(uint(2)), 1, ptr(uint(3)), &used, nil),
-			code(3, "expired1", ptr(uint(2)), 0, nil, nil, &expired),
-			code(4, "public01", nil, 0, nil, nil, nil),
-			code(5, "bobcode1", ptr(uint(3)), 0, nil, nil, nil),
-			code(6, "future01", ptr(uint(2)), 0, nil, nil, &future),
-		}).Error)
-		require.NoError(t, packagestore.EnsureKernelAPIViews(db))
-		if db.Name() == "postgres" {
-			for _, table := range []string{"v2_plan", "v2_order", "v2_invite_code"} {
-				require.NoError(t, db.Exec("SELECT setval(pg_get_serial_sequence(?, 'id'), COALESCE((SELECT MAX(id) FROM "+table+"), 0) + 1, false)", table).Error)
-			}
-		}
-	}
-}
-
-var inviteCodePattern = regexp.MustCompile(`^[0-9a-f]{8}$`)
-
-// expiryTime is a code's expiry: masked when the handler set it from its
-// clock (some days from now), else as stored.
-func expiryTime(value *time.Time) any {
-	if value == nil {
-		return nil
-	}
-	// The handlers add whole calendar days in the local zone
-	// (time.Now().AddDate), so across a daylight-saving change the expiry is
-	// a day count plus or minus an hour from now: compare with the same
-	// calendar arithmetic instead of a fixed number of hours.
-	days := math.Round(time.Until(*value).Hours() / 24)
-	if days >= 1 && !value.Equal(value.Truncate(time.Second)) {
-		expected := time.Now().AddDate(0, 0, int(days))
-		if d := value.Sub(expected); d > -10*time.Minute && d < 10*time.Minute {
-			return fmt.Sprintf("<now+%.0fd>", days)
-		}
-	}
-	return value.UTC().Format(time.RFC3339Nano)
-}
-
-// inviteState is everything generating a code can change: the codes (a
-// generated code's value checked and masked) and the invite configuration.
-func inviteState(t testing.TB, db *gorm.DB) any {
-	var codes []model.InviteCode
-	require.NoError(t, db.Order("id").Find(&codes).Error)
-	rows := make([]map[string]any, 0, len(codes))
-	for _, code := range codes {
-		value := code.Code
-		if code.ID > 6 {
-			require.Regexp(t, inviteCodePattern, value)
-			value = "<generated>"
-		}
-		rows = append(rows, map[string]any{
-			"id": code.ID, "code": value, "user_id": code.UserID, "status": code.Status, "used_by": code.UsedBy,
-			"used_at": clockTimePtr(code.UsedAt), "expired_at": expiryTime(code.ExpiredAt),
-			"created_at": clockTime(code.CreatedAt), "updated_at": clockTime(code.UpdatedAt),
-		})
-	}
-	all, ok := state(t, db).(map[string]any)
-	require.True(t, ok)
-	return map[string]any{"codes": rows, "configs": all["configs"]}
-}
-
-func TestInviteInfoParity(t *testing.T) {
-	read(t, inviteRoute(t, "GET", "/api/v2/user/invite", native.InviteInfoRouteID, (*handler.InviteHandler).GetInviteInfo),
-		[]packagecompat.Case{
-			{Name: "codes, balance and statistics", Path: "/api/v2/user/invite", Principal: alice, Seed: seedInvites(true, 3)},
-			{Name: "an inviter with one paying invitee", Path: "/api/v2/user/invite", Principal: bob, Seed: seedInvites(true, 3)},
-			{Name: "no codes and no invitees", Path: "/api/v2/user/invite", Principal: carol, Seed: seedInvites(true, 3)},
-			{Name: "the administrator", Path: "/api/v2/user/invite", Principal: admin, Seed: seedInvites(true, 3)},
-			{Name: "no orders or codes yet", Path: "/api/v2/user/invite", Principal: alice},
-			{Name: "an unknown user", Path: "/api/v2/user/invite", Principal: pluginhostsdk.Principal{ActorID: 99}, Seed: seedInvites(true, 3)},
-			{Name: "user zero", Path: "/api/v2/user/invite", Principal: pluginhostsdk.Principal{}, Seed: seedInvites(true, 3)},
-			{Name: "no data", Path: "/api/v2/user/invite", Principal: alice, Seed: empty},
-		})
-}
-
-func TestGenerateInviteCodeParity(t *testing.T) {
-	generate := inviteRoute(t, "POST", "/api/v2/user/invite/generate", native.InviteGenerateRouteID, (*handler.InviteHandler).GenerateCode)
-	generated := []string{"data.code", "data.created_at", "data.updated_at", "data.expired_at"}
-	path := "/api/v2/user/invite/generate"
-	for _, c := range []packagecompat.Case{
-		{Name: "a code that expires as configured", Path: path, Principal: alice, Mask: generated, Seed: seedInvites(true, 3)},
-		{Name: "the limit counts unused unexpired codes", Path: path, Principal: alice, Seed: seedInvites(true, 3),
-			Warmup: [][]byte{nil}},
-		{Name: "a code under a higher limit", Path: path, Principal: alice, Mask: generated, Seed: seedInvites(true, 4),
-			Warmup: [][]byte{nil}},
-		{Name: "code count zero is the default limit", Path: path, Principal: alice, Mask: generated, Seed: seedInvites(true, 0),
-			Warmup: [][]byte{nil, nil}},
-		{Name: "the default limit", Path: path, Principal: alice, Seed: seedInvites(true, 0), Warmup: [][]byte{nil, nil, nil}},
-		{Name: "no configuration creates the default", Path: path, Principal: alice, Mask: generated, Seed: seedInvites(false, 0)},
-		{Name: "other users' codes and public codes are not counted", Path: path, Principal: carol, Mask: generated,
-			Seed: seedInvites(true, 1)},
-		{Name: "a user at the limit of one", Path: path, Principal: bob, Seed: seedInvites(true, 1), Warmup: [][]byte{nil}},
-		{Name: "a user without codes", Path: path, Principal: carol, Mask: generated, Seed: seedInvites(true, 3)},
-		{Name: "an unknown user", Path: path, Principal: pluginhostsdk.Principal{ActorID: 99}, Mask: generated, Seed: seedInvites(true, 3)},
-		{Name: "a body is ignored", Path: path, Principal: carol, Mask: generated, Seed: seedInvites(true, 3), Body: []byte(`{"count":9}`)},
-	} {
-		c.Snapshot = inviteState
-		packagecompat.RunWrite(t, generate, c)
-	}
-}
 
 // The kernel and the package derive the same advisory lock for a user.
 func TestInviteCodeLockKeysAreTheKernels(t *testing.T) {

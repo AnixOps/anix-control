@@ -17,7 +17,7 @@ func TestRealAgentEndToEnd(t *testing.T) {
 	s.seedNode(t)
 	s.createUser(t, "e2e-user-1@anixops.test")
 
-	currentAgentSettings = agentSettings{GRPCHost: s.proxy.Addr(), SigningPublicKey: s.keys.SigningPublicKey, RealNftables: s.netns}
+	currentAgentSettings = agentSettings{GRPCHost: s.proxy.Addr(), SigningPublicKey: s.keys.SigningPublicKey, RealNftables: s.netns, AnixcoreBinary: s.bins.Anixcore}
 	s.agent = newAgentNode(t, filepath.Join(s.dir, "agent"), s.nodeID)
 	s.agent.proc = newProcess("agent", s.bins.Agent, s.agent.dir, filepath.Join(s.logDir, "agent.log"),
 		agentEnv(s.agent.shimDir, s.keys.ServerCAFile), "server", "-c", s.agent.configPath, "--watch=false")
@@ -32,17 +32,14 @@ func TestRealAgentEndToEnd(t *testing.T) {
 	s.run("plugin_artifacts_over_mtls", s.scenarioPluginArtifactsOverMTLS)
 	s.run("systemd_package_report_and_services_panel", s.scenarioSystemdServicesPanel)
 	s.run("link_certificate_issued", s.scenarioLinkCertificate)
-	s.run("forward_state_push_and_report", s.scenarioForwardStatePushAndReport)
 	s.run("traffic_counted_once", s.scenarioTrafficCountedOnce)
 	s.run("alive_list", s.scenarioAliveList)
 	s.run("agent_diagnostic_on_stream", s.scenarioDiagnostic)
-	s.run("forward_diagnose_node_checks", s.scenarioForwardDiagnose)
 	s.run("plugin_operation_after_stream_operations", s.scenarioPluginOperationAfterStreamOperations)
 	s.run("maintenance_events", s.scenarioMaintenanceEvents)
 	s.run("chaos_agent_graceful_restart", s.scenarioAgentGracefulRestart)
 	s.run("chaos_control_killed_mid_stream", s.scenarioControlKilledMidStream)
 	s.run("chaos_partition_spool_and_agent_crash", s.scenarioPartitionSpoolAndAgentCrash)
-	s.run("chaos_control_db_generation_reset", s.scenarioGenerationRecovery)
 	s.run("chaos_certificate_revoked", s.scenarioCertificateRevoked)
 	s.run("clock_skew_within_bounds", s.scenarioClockSkewBounds)
 	s.run("proxy_inbound_after_reloads", s.scenarioProxyInboundAfterReloads)

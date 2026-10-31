@@ -41,7 +41,7 @@ const (
 	adminEmail    = "builtin@anixops.test"
 	adminPassword = "BuiltinPackages!2026"
 	// packageCount is every official package (packages/builtin).
-	packageCount = 17
+	packageCount = 15
 )
 
 func repoRoot(t *testing.T) string {
@@ -406,7 +406,7 @@ func TestBuiltinPackagesInstallUpgradeAndSurviveAFailure(t *testing.T) {
 	require.EqualValues(t, 1, panel.count(&model.PackageMigrationRun{}, "package_id = ? AND generation = ? AND state = ?",
 		"identity-platform", 1, model.PackageMigrationStateCompleted), "identity-platform migrates on its first start")
 	output := panel.output.String()
-	require.Contains(t, output, "Built-in packages: 17 embedded, 0 failed")
+	require.Contains(t, output, "Built-in packages: 15 embedded, 0 failed")
 	// Every host is the Control binary itself, started as package-host.
 	hosts := panel.hostProcesses()
 	require.Len(t, hosts, packageCount)
@@ -466,7 +466,7 @@ func TestBuiltinPackageThatDoesNotVerifyLeavesTheOthersAndControlAvailable(t *te
 	require.EqualValues(t, 0, panel.count(&model.PluginRelease{}, "plugin_id = ?", "plan"))
 	output := panel.output.String()
 	require.Contains(t, output, "built-in package plan 9.1.0 invalid")
-	require.Contains(t, output, "Built-in packages: 17 embedded, 1 failed")
+	require.Contains(t, output, "Built-in packages: 15 embedded, 1 failed")
 	panel.stop()
 }
 

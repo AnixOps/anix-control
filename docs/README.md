@@ -20,6 +20,7 @@ Use this tree like NodeX:
 - Product version history and staged-plan status: [`architecture/release-line-status.md`](architecture/release-line-status.md)
 - Plugin kernel contract, including the official packages built into Control (installed at every start): [`architecture/plugin-kernel-contract.md`](architecture/plugin-kernel-contract.md#built-in-packages)
 - Package extraction design and current development direction: [`architecture/package-extraction.md`](architecture/package-extraction.md)
+- Commercial feature set boundary and the gate that keeps it separable: [`architecture/commercial-boundary.md`](architecture/commercial-boundary.md)
 - Order completion contract for the payment callbacks: [`architecture/order-service.md`](architecture/order-service.md)
 - Node operations contract, node credential split and Agent A2 (design, draft): [`architecture/node-ops-service.md`](architecture/node-ops-service.md)
 - Forward SDK: routes, hops, engines and drivers for v4.2 (design, decided 2026-10-26): [`architecture/forward-sdk.md`](architecture/forward-sdk.md)

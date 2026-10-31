@@ -19,18 +19,27 @@ export default {
   },
   adminSettings: {
     title: 'Settings',
-    subtitle: 'Subscription domains, configuration keys, backups, load balancing and the audit log.',
+    subtitle: 'Subscription domains, data retention, backups, the audit log and advanced configuration keys.',
     navLabel: 'Settings sections',
     loading: 'Loading…',
     sections: {
       general: 'General',
+      data: 'Data & retention',
       backup: 'Backups',
-      balancer: 'Load balancing',
       audit: 'Audit log',
       packages: 'Built-in packages',
+      advanced: 'Advanced',
       about: 'About'
     },
     general: {
+      links: {
+        title: 'Other common settings',
+        description: 'These live on their own pages. Click one to open it.',
+        mail: 'E-mail notifications',
+        mailHint: 'SMTP server and test',
+        security: 'Sign-in security',
+        securityHint: 'Administrator two-factor authentication'
+      },
       subscription: {
         title: 'Subscription domains',
         description: 'The domains used in users’ subscription links and managed-config output.',
@@ -45,7 +54,17 @@ export default {
         loadFailed: 'Couldn’t load the subscription domains',
         saveFailed: 'Couldn’t save the subscription domains',
         saved: 'Subscription domains saved'
-      },
+      }
+    },
+    data: {
+      title: 'Data & retention',
+      description: 'Choose which statistics are recorded and how long they are kept.',
+      footer: 'Turning it off stops recording at once; records already kept are not deleted. The full charts are under Monitor → Destinations.',
+      days: '{days} days'
+    },
+    advanced: {
+      warningTitle: 'For troubleshooting only',
+      warning: 'The everyday options are in the other sections. This is every system configuration key as a raw value; a wrong value can break a feature. The scheduler’s internal records are not listed.',
       configs: {
         title: 'Configuration keys',
         description: 'Every system setting stored as a key and value. Sensitive values show as ********.',
@@ -125,53 +144,6 @@ export default {
         description: 'A restore replaces the database, so it runs on the server while Control is stopped, never from this page. Control migrates an older backup when it starts again.',
         commands: 'Commands on the server'
       }
-    },
-    balancer: {
-      title: 'Load balancing',
-      description: 'Spread traffic across a node group and check node health on a schedule.',
-      create: 'New load balancer',
-      createTitle: 'New load balancer',
-      editTitle: 'Edit load balancer',
-      name: 'Name',
-      namePlaceholder: 'For example HK exit',
-      nameRequired: 'Enter a name',
-      group: 'Node group',
-      groupId: 'Node group ID',
-      groupIdHelp: '0 means no node group.',
-      strategy: 'Strategy',
-      strategies: {
-        roundRobin: 'Round robin',
-        leastLoad: 'Least load',
-        latency: 'Lowest latency',
-        weight: 'Weighted',
-        random: 'Random'
-      },
-      healthCheck: 'Health checks',
-      healthCheckColumn: 'Health checks',
-      checkInterval: 'Check every',
-      seconds: 'seconds',
-      weights: 'Node weights',
-      weightsHelp: 'A JSON object of node ID to weight. Used by the weighted strategy only.',
-      weightsInvalid: 'Not valid JSON',
-      state: 'State',
-      enabled: 'Enabled',
-      disabled: 'Disabled',
-      on: 'On',
-      off: 'Off',
-      runHealthCheck: 'Check health now',
-      empty: 'No load balancers yet',
-      emptyDescription: 'Create one for a node group to spread its traffic.',
-      loadFailed: 'Couldn’t load the load balancers',
-      saved: 'Saved {name}',
-      saveFailed: 'Couldn’t save: {message}',
-      saveFailedShort: 'Couldn’t save the load balancer',
-      deleteTitle: 'Delete load balancer {name}?',
-      deleteMessage: 'Its node group is no longer balanced or health-checked. You can’t undo this.',
-      deleteAction: 'Delete load balancer',
-      deleteFailed: 'Couldn’t delete the load balancer',
-      deleted: 'Deleted {name}',
-      healthCheckDone: 'Health check of {name} finished',
-      healthCheckFailed: 'Health check failed'
     },
     audit: {
       title: 'Audit log',

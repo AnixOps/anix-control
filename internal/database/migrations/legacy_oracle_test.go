@@ -18,6 +18,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
+	"gorm.io/plugin/soft_delete"
 )
 
 // The legacy oracle: how Control prepared its schema before the migration
@@ -59,7 +60,7 @@ func legacySchemaModels() []any {
 		&model.NotificationTemplate{}, &model.NotificationLog{},
 		&model.UserMFA{}, &model.MFALoginAttempt{},
 		&model.UserLevel{}, &model.InviteCode{}, &model.CommissionRecord{}, &model.CommissionWithdraw{}, &model.InviteConfig{},
-		&model.LoadBalancer{}, &model.SystemConfig{}, &keptBackupRecord{}, &keptBackupConfig{}, &model.OperationLog{}, &model.AuditLog{},
+		&model.SystemConfig{}, &keptBackupRecord{}, &keptBackupConfig{}, &model.OperationLog{}, &model.AuditLog{},
 	}
 }
 
@@ -185,6 +186,24 @@ type retiredShadowMismatchSample struct {
 
 func (retiredShadowMismatchSample) TableName() string { return "v4_kernel_shadow_mismatch_sample" }
 
+// retiredLoadBalancer is model.LoadBalancer as the baseline created it;
+// 0021_drop_load_balancer dropped the table and the model.
+type retiredLoadBalancer struct {
+	ID            uint   `gorm:"primaryKey"`
+	Name          string `gorm:"size:100"`
+	GroupID       uint   `gorm:"index"`
+	Strategy      string `gorm:"size:20;default:round-robin"`
+	HealthCheck   bool   `gorm:"default:true"`
+	CheckInterval int    `gorm:"default:60"`
+	CheckTimeout  int    `gorm:"default:10"`
+	NodeWeights   string `gorm:"type:text"`
+	Enabled       bool   `gorm:"default:true"`
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+}
+
+func (retiredLoadBalancer) TableName() string { return "v2_load_balancer" }
+
 // retiredKernelModels are the kernel models later migrations dropped with
 // their tables, frozen as the baseline had them: the legacy start of the
 // baseline created them, today's models do not. legacyPrepare creates them,
@@ -193,8 +212,37 @@ func (retiredShadowMismatchSample) TableName() string { return "v4_kernel_shadow
 func retiredKernelModels() []any {
 	return []any{
 		&retiredRouteModeRevision{}, &retiredShadowMismatchSample{}, // 0004_drop_route_modes
+		&retiredLoadBalancer{}, // 0021_drop_load_balancer
 	}
 }
+
+// baselineNodeGroup is model.NodeGroup as the baseline created it, with the
+// kind, the protocol template and the subscription groups that
+// 0020_node_groups_without_templates dropped with the model's fields.
+type baselineNodeGroup struct {
+	ID                   uint      `gorm:"primaryKey"`
+	Name                 string    `gorm:"size:100;not null;uniqueIndex:ux_v5_node_group_live_name,where:deleted = 0"`
+	Kind                 string    `gorm:"size:16;not null"`
+	JoinTokenHash        string    `gorm:"size:64;not null;uniqueIndex"`
+	JoinTokenSealed      string    `gorm:"type:text;not null"`
+	TokenResetAt         time.Time `gorm:"not null"`
+	TokenExpiresAt       *time.Time
+	MaxNodes             int                   `gorm:"not null;default:0"`
+	RequireApproval      bool                  `gorm:"not null;default:false"`
+	Rate                 float64               `gorm:"not null;default:1"`
+	Tags                 string                `gorm:"type:text"`
+	MonthlyLimitBytes    int64                 `gorm:"not null;default:0"`
+	ResetDay             int                   `gorm:"not null;default:1"`
+	Sort                 int                   `gorm:"not null;default:0"`
+	ProtocolTemplate     string                `gorm:"type:text"`
+	SubscriptionGroupIDs string                `gorm:"type:text"`
+	Deleted              soft_delete.DeletedAt `gorm:"column:deleted;not null;default:0;softDelete:flag,DeletedAtField:DeletedAt"`
+	DeletedAt            *time.Time
+	CreatedAt            time.Time
+	UpdatedAt            time.Time
+}
+
+func (baselineNodeGroup) TableName() string { return "v5_node_group" }
 
 // legacyPrepare is the legacy start's schema work at the baseline on db.
 // production is the env: "production" only creates missing tables of the
@@ -204,6 +252,10 @@ func legacyPrepare(t *testing.T, db *gorm.DB, production bool) {
 	t.Helper()
 	require.NoError(t, legacyPrepareErr(db, production))
 	require.NoError(t, db.AutoMigrate(retiredKernelModels()...))
+	// 0020_node_groups_without_templates dropped columns of v5_node_group:
+	// the baseline's table is built from the frozen copy.
+	require.NoError(t, db.Migrator().DropTable(&model.NodeGroup{}))
+	require.NoError(t, db.AutoMigrate(&baselineNodeGroup{}))
 	for _, added := range postBaselineIndexes {
 		require.NoError(t, db.Exec("DROP INDEX "+added.index).Error)
 	}

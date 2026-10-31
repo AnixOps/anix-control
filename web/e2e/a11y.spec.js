@@ -255,17 +255,3 @@ test('node page tabs follow the WAI-ARIA tabs keyboard pattern', async ({ page }
   await page.keyboard.press('Tab')
   await expect(tablist.locator(':focus')).toHaveCount(0)
 })
-
-// The topology workspace's text fields are labelled controls (UiTextField /
-// UiTextarea), in the create form and in the revision editor.
-test('topology workspace text fields have accessible names', async ({ page }) => {
-  await openScreen(page, 'admin-deployments')
-  await page.getByTestId('edit-topology-21').click()
-  const workspace = page.getByTestId('topology-workspace')
-  await workspace.waitFor()
-  for (const name of ['Rollout group', 'Revision message', 'Graph JSON']) {
-    await expect(workspace.getByRole('textbox', { name })).toBeVisible()
-  }
-  const findings = await axeFindings(page, { include: '[data-testid="topology-workspace"]' })
-  expect(findings.filter(item => /^(label|aria-input-field-name|aria-toggle-field-name)/.test(item)), findings.join('\n')).toEqual([])
-})

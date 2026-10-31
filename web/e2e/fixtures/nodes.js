@@ -19,32 +19,20 @@ const PLACEMENT = id => {
 }
 const ROWS = NODES.map(node => ({ ...node, ...PLACEMENT(node.id) }))
 
-const REALITY = {
-  name: 'VLESS Reality', type: 'vless', port_range: [20000, 40000], transport: 'tcp', tls: 'reality',
-  reality: { server_name: 'www.microsoft.com', dest: 'www.microsoft.com:443', fingerprint: 'chrome' }, settings: { flow: 'xtls-rprx-vision' }
-}
-const SHADOWSOCKS = {
-  name: 'Shadowsocks 2022', type: 'shadowsocks', port_range: [20000, 40000], transport: 'tcp', tls: 'none',
-  settings: { method: '2022-blake3-aes-128-gcm' }
-}
-
 const GROUPS = [
   {
     id: 1, name: 'HK', max_nodes: 20, require_approval: true, rate: 1.5, tags: ['HK', 'IEPL'],
-    monthly_limit_bytes: 2000 * 1024 ** 3, reset_day: 1, sort: 0, protocol_template: [REALITY, SHADOWSOCKS],
-    subscription_group_ids: [1], token_reset_at: iso(-20 * DAY), token_expires_at: null, token_expired: false,
+    monthly_limit_bytes: 2000 * 1024 ** 3, reset_day: 1, sort: 0, token_reset_at: iso(-20 * DAY), token_expires_at: null, token_expired: false,
     nodes: { live: 6, pending: 1 }, created_at: iso(-40 * DAY), updated_at: iso(-3 * DAY)
   },
   {
     id: 2, name: 'JP', max_nodes: 0, require_approval: false, rate: 1, tags: ['JP'],
-    monthly_limit_bytes: 0, reset_day: 1, sort: 1, protocol_template: [REALITY],
-    subscription_group_ids: [1], token_reset_at: iso(-9 * DAY), token_expires_at: iso(21 * DAY), token_expired: false,
+    monthly_limit_bytes: 0, reset_day: 1, sort: 1, token_reset_at: iso(-9 * DAY), token_expires_at: iso(21 * DAY), token_expired: false,
     nodes: { live: 5, pending: 0 }, created_at: iso(-30 * DAY), updated_at: iso(-9 * DAY)
   },
   {
     id: 3, name: 'edge-relays', max_nodes: 0, require_approval: false, rate: 1, tags: [],
-    monthly_limit_bytes: 0, reset_day: 1, sort: 2, protocol_template: [], subscription_group_ids: [],
-    token_reset_at: iso(-60 * DAY), token_expires_at: iso(-2 * DAY), token_expired: true,
+    monthly_limit_bytes: 0, reset_day: 1, sort: 2, token_reset_at: iso(-60 * DAY), token_expires_at: iso(-2 * DAY), token_expired: true,
     nodes: { live: 2, pending: 0 }, created_at: iso(-70 * DAY), updated_at: iso(-60 * DAY)
   }
 ]

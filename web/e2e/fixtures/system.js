@@ -36,10 +36,6 @@ function backupsAnswer(scenario) {
     }
   }
 }
-const BALANCERS = [
-  { id: 1, name: '香港出口', group_id: 2, group_name: 'HK', strategy: 'least-load', health_check: true, check_interval: 60, enabled: true, weights: {} },
-  { id: 2, name: '日本加权', group_id: 3, group_name: 'JP', strategy: 'weight', health_check: false, check_interval: 120, enabled: false, weights: { 4: 10, 5: 5 } }
-]
 const AUDIT = Array.from({ length: 8 }, (_, i) => ({
   id: 120 - i,
   action: ['update', 'delete', 'create', 'login'][i % 4],
@@ -54,7 +50,6 @@ const AUDIT = Array.from({ length: 8 }, (_, i) => ({
 const SECTION = {
   general: 'general', dirty: 'general', invalid: 'general', configDialog: 'general', configError: 'general',
   backup: 'backup', backupEmpty: 'backup', backupStale: 'backup', backupUnsupported: 'backup', backupStaff: 'backup',
-  balancer: 'balancer', balancerDialog: 'balancer', balancerEmpty: 'balancer',
   audit: 'audit', auditEmpty: 'audit', auditError: 'audit',
   about: 'about', aboutError: 'about',
   leave: 'general'
@@ -83,7 +78,6 @@ export default {
       if (scenario === 'backupStaff') return { __status: 403, body: { error: { code: 'super_admin_required', message: 'only a super administrator may download a backup: it holds the root key' } } }
       return { __file: { name: 'anix-control-20261002T034107Z-daily.tar', type: 'application/x-tar', body: 'manifest.json and the bundle' } }
     }
-    if (path === '/api/v2/admin/loadbalancers') return { code: 0, data: { list: scenario === 'balancerEmpty' ? [] : BALANCERS } }
     if (path === '/api/v2/admin/system/audit-logs') {
       if (scenario === 'auditError') return { code: 500, msg: '审计日志服务没有响应', data: null }
       if (scenario === 'auditEmpty') return { code: 0, data: { list: [], total: 0, page: 1, page_size: 20 } }
@@ -95,7 +89,7 @@ export default {
     }
     return undefined
   },
-  viewportOnly: ['configDialog', 'balancerDialog', 'leave'],
+  viewportOnly: ['configDialog', 'leave'],
   scenarios: {
     general: async () => {},
     phoneList: async () => {},
@@ -120,12 +114,6 @@ export default {
       await page.locator('#settings-subscription-domains').fill('sub1.example.com\ncdn.example.net')
       if (width < 834) await page.locator('[data-test="settings-back"]').click()
       else await page.locator('[data-settings-section="audit"]').click()
-    },
-    balancer: async () => {},
-    balancerEmpty: async () => {},
-    balancerDialog: async (page) => {
-      await page.getByRole('button', { name: '新建负载均衡器' }).first().click()
-      await page.getByRole('dialog').getByLabel('节点权重').fill('not json')
     },
     audit: async () => {},
     auditEmpty: async () => {},

@@ -810,7 +810,7 @@ func TestKernelBooleanFieldsPreserveExplicitFalse(t *testing.T) {
 	db := newKernelTestDB(t)
 	group := model.AccessGroup{ScopeID: "forward", Name: "disabled", Enabled: false}
 	require.NoError(t, db.Create(&group).Error)
-	assignment := model.NodeServiceAssignment{NodeID: 1, ServiceScope: "forward", PluginID: "nftables-forward", Role: "entry", Enabled: false}
+	assignment := model.NodeServiceAssignment{NodeID: 1, ServiceScope: "forward", PluginID: "machine-telemetry", Role: "entry", Enabled: false}
 	require.NoError(t, db.Create(&assignment).Error)
 
 	var storedGroup model.AccessGroup
@@ -1398,99 +1398,6 @@ func TestUpdatePluginConfigurationRunsVersionBoundSemanticValidatorInsideSave(t 
 	)
 	require.NoError(t, err)
 	require.Equal(t, int64(1), configuration.Revision)
-}
-
-func TestValidateTopologyDetectsCycleConflictAndMissingSecret(t *testing.T) {
-	nodeID := uint(1)
-	input := TopologyRevisionInput{
-		Vertices: []model.TopologyVertex{
-			{Key: "cn", Kind: "entry", NodeID: &nodeID, ConfigJSON: `{"port":443,"protocol":"tcp","mtu":500}`},
-			{Key: "exit", Kind: "exit", NodeID: &nodeID, ConfigJSON: `{"port":443,"protocol":"tcp"}`},
-		},
-		Edges: []model.TopologyEdge{
-			{SourceKey: "cn", TargetKey: "exit", Protocol: "wss", ConfigJSON: `{}`},
-			{SourceKey: "exit", TargetKey: "cn", Protocol: "tcp", ConfigJSON: `{}`},
-		},
-	}
-	issues := ValidateTopology(input)
-	codes := make(map[string]bool)
-	for _, issue := range issues {
-		codes[issue.Code] = true
-	}
-	require.True(t, codes["invalid_mtu"])
-	require.True(t, codes["port_conflict"])
-	require.True(t, codes["secret_required"])
-	require.True(t, codes["cycle"])
-}
-
-func TestValidateTopologyRejectsInlineSecretButAllowsReference(t *testing.T) {
-	inline := TopologyRevisionInput{Vertices: []model.TopologyVertex{{Key: "entry", Kind: "entry", ConfigJSON: `{"private_key":"do-not-store-me"}`}}}
-	issues := ValidateTopology(inline)
-	require.Len(t, issues, 1)
-	require.Equal(t, "inline_secret", issues[0].Code)
-	camelCase := TopologyRevisionInput{Vertices: []model.TopologyVertex{{Key: "entry", Kind: "entry", ConfigJSON: `{"apiKey":"do-not-store-me"}`}}}
-	require.Equal(t, "inline_secret", ValidateTopology(camelCase)[0].Code)
-	clientSecret := TopologyRevisionInput{Vertices: []model.TopologyVertex{{Key: "entry", Kind: "entry", ConfigJSON: `{"client_secret":"do-not-store-me"}`}}}
-	require.Equal(t, "inline_secret", ValidateTopology(clientSecret)[0].Code)
-
-	referenced := TopologyRevisionInput{Vertices: []model.TopologyVertex{{Key: "entry", Kind: "entry", ConfigJSON: `{"private_key_ref":"secret/wireguard-entry"}`}}}
-	require.Empty(t, ValidateTopology(referenced))
-}
-
-func TestValidateTopologyRejectsIncompleteNetworkContract(t *testing.T) {
-	input := TopologyRevisionInput{
-		Vertices: []model.TopologyVertex{{Key: "entry", ConfigJSON: `{"port":70000,"address_family":"ipx"}`}},
-		Edges:    []model.TopologyEdge{{SourceKey: "entry", TargetKey: "entry"}},
-	}
-	codes := make(map[string]bool)
-	for _, issue := range ValidateTopology(input) {
-		codes[issue.Code] = true
-	}
-	require.True(t, codes["vertex_kind_required"])
-	require.True(t, codes["invalid_port"])
-	require.True(t, codes["invalid_address_family"])
-	require.True(t, codes["edge_protocol_required"])
-}
-
-func TestCreateTopologyRevisionStoresImmutableSnapshot(t *testing.T) {
-	db := newKernelTestDB(t)
-	topology := model.Topology{Name: "cn-to-exit", ServiceScope: "forward"}
-	require.NoError(t, db.Create(&topology).Error)
-	input := TopologyRevisionInput{
-		Vertices: []model.TopologyVertex{{Key: "cn", Kind: "entry", ConfigJSON: `{}`}, {Key: "exit", Kind: "nat", ConfigJSON: `{}`}},
-		Edges:    []model.TopologyEdge{{SourceKey: "cn", TargetKey: "exit", Protocol: "tcp", ConfigJSON: `{}`}},
-	}
-	first, err := CreateTopologyRevision(db, topology.ID, 1, input)
-	require.NoError(t, err)
-	second, err := CreateTopologyRevision(db, topology.ID, 1, input)
-	require.NoError(t, err)
-	require.Equal(t, int64(1), first.Revision)
-	require.Equal(t, int64(2), second.Revision)
-	require.Equal(t, first.ContentHash, second.ContentHash)
-
-	var count int64
-	require.NoError(t, db.Model(&model.TopologyVertex{}).Where("revision_id = ?", first.ID).Count(&count).Error)
-	require.Equal(t, int64(2), count)
-}
-
-func TestCreateTopologyRevisionRequiresNodePluginAssignment(t *testing.T) {
-	db := newKernelTestDB(t)
-	require.NoError(t, db.AutoMigrate(&model.Node{}))
-	node := model.Node{Name: "cn-entry", Host: "127.0.0.1"}
-	require.NoError(t, db.Create(&node).Error)
-	topology := model.Topology{Name: "assigned-forward", ServiceScope: "forward"}
-	require.NoError(t, db.Create(&topology).Error)
-	input := TopologyRevisionInput{Vertices: []model.TopologyVertex{{Key: "entry", Kind: "plugin", NodeID: &node.ID, PluginID: "nftables-forward", Role: "cn_dedicated_nftables", ConfigJSON: `{}`}}}
-
-	_, err := CreateTopologyRevision(db, topology.ID, 1, input)
-	require.ErrorContains(t, err, "no enabled assignment")
-	require.NoError(t, db.Create(&model.NodeServiceAssignment{
-		NodeID: node.ID, ServiceScope: "forward", PluginID: "nftables-forward", Role: "cn_dedicated_nftables", Enabled: true,
-	}).Error)
-
-	revision, err := CreateTopologyRevision(db, topology.ID, 1, input)
-	require.NoError(t, err)
-	require.Equal(t, int64(1), revision.Revision)
 }
 
 func TestCreateKernelOperationIsPersistentAndIdempotent(t *testing.T) {

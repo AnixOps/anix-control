@@ -122,17 +122,13 @@ describe('AdminLayout.vue', () => {
     expect(current[0].classes()).toContain('is-active')
   })
 
-  it('lists 部署编排 under 网络, after the nodes, and selects it on its page', async () => {
-    const { wrapper } = await mountLayout('/admin/deployments')
+  it('has no 部署编排 item: 节点 is the only item under 网络', async () => {
+    const { wrapper } = await mountLayout('/admin/nodes')
     mounted = wrapper
     const network = wrapper.get('[data-nav-group="network"]')
-    expect(network.findAll('a[data-nav-item]').map(link => link.attributes('data-nav-item'))).toEqual(['nodes', 'deployments'])
-    const link = network.get('a[data-nav-item="deployments"]')
-    expect(link.attributes('href')).toBe('/admin/deployments')
-    expect(link.attributes('aria-current')).toBe('page')
+    expect(network.findAll('a[data-nav-item]').map(link => link.attributes('data-nav-item'))).toEqual(['nodes'])
     expect(wrapper.find('[data-nav-group="extensions"]').exists()).toBe(false)
-    expect(sidebarPaths(wrapper)).not.toContain('/admin/plugins')
-    expect(wrapper.findAll('.admin-crumbs li').map(item => item.text())).toEqual(['Network', 'Deployments'])
+    expect(sidebarPaths(wrapper)).not.toContain('/admin/deployments')
   })
 
   it('lists invite codes under 用户 and selects it on its page', async () => {

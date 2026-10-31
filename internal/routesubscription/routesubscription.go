@@ -27,7 +27,9 @@ import (
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	forwardv1 "github.com/AnixOps/anix-control/sdk/api/forward/v1"
+	"github.com/AnixOps/anix-control/v5/internal/entryaddr"
 	"github.com/AnixOps/anix-control/v5/internal/model"
+	"github.com/AnixOps/anix-control/v5/internal/nodeentry"
 	"google.golang.org/protobuf/encoding/protojson"
 	"gorm.io/gorm"
 )
@@ -278,6 +280,8 @@ type world struct {
 	protocols   []model.NodeProtocol
 	byHost      map[string]map[uint]bool
 	allocations map[string]map[string]uint32
+	// nat are the nodes' enabled entries (NAT mappings), by proxy node id.
+	nat map[uint][]model.NodeEntry
 }
 
 func loadWorld(db *gorm.DB) (*world, error) {
@@ -314,6 +318,16 @@ func loadWorld(db *gorm.DB) (*world, error) {
 			w.allocations[a.RouteID] = map[string]uint32{}
 		}
 		w.allocations[a.RouteID][a.NodeRef] = a.Port
+	}
+	if db.Migrator().HasTable(&model.NodeEntry{}) {
+		ids := make([]uint, 0, len(w.nodes))
+		for id := range w.nodes {
+			ids = append(ids, id)
+		}
+		var err error
+		if w.nat, err = nodeentry.EnabledByNode(db, ids); err != nil {
+			return nil, err
+		}
 	}
 	return w, nil
 }
@@ -420,11 +434,13 @@ func (w *world) entries(r *forwardv1.Route, routeID string) []Entry {
 			continue
 		}
 		var name, host string
+		var nat []model.NodeEntry
 		switch node.Kind {
 		case agentcontrol.NodeKindForward:
 			name, host = w.forwards[uint(node.ID)].Name, w.forwards[uint(node.ID)].Host
 		case agentcontrol.NodeKindProxy:
 			name, host = w.nodes[uint(node.ID)].Name, w.nodes[uint(node.ID)].Host
+			nat = w.nat[uint(node.ID)]
 		}
 		if listen != "" {
 			host = listen
@@ -433,6 +449,9 @@ func (w *world) entries(r *forwardv1.Route, routeID string) []Entry {
 		if allocated := w.allocations[routeID][ref]; allocated != 0 {
 			port = int(allocated)
 		}
+		// A NAT machine is reached at its public address and mapped port:
+		// the route's own override first, then the node's NAT entry.
+		host, port, _ = entryaddr.Resolve(r.GetLabels(), ref, host, port, nat)
 		if name == "" {
 			name = ref
 		}

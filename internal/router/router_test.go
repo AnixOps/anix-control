@@ -64,6 +64,28 @@ func loadV2PackageRouteCatalog(t *testing.T) []v2PackageRouteCatalogRow {
 	return routes
 }
 
+// nativeOnlyRoutes are the route ids whose extraction mode is native: the
+// package host answers alone and the router has no legacy handler for them.
+func nativeOnlyRoutes(t *testing.T) map[string]bool {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Join("..", "..", "config", "package-extraction.json"))
+	require.NoError(t, err)
+	var document struct {
+		Routes []struct {
+			RouteID string `json:"route_id"`
+			Mode    string `json:"mode"`
+		} `json:"routes"`
+	}
+	require.NoError(t, json.Unmarshal(raw, &document))
+	ids := map[string]bool{}
+	for _, route := range document.Routes {
+		if route.Mode == "native" {
+			ids[route.RouteID] = true
+		}
+	}
+	return ids
+}
+
 func (h *v2TestHost) Start(context.Context, pluginhost.ArtifactRef, uint64) error {
 	return pluginhost.ErrHostUnavailable
 }
@@ -424,6 +446,10 @@ func TestAllCataloguedV2RoutesResolveThroughTheirPackageBridge(t *testing.T) {
 				return
 			}
 			bridgedRoutes++
+			if nativeOnlyRoutes(t)[route.RouteID] {
+				// A native route has no legacy handler to resolve.
+				return
+			}
 			if route.Transport == "websocket" {
 				operation, ok := packagebridge.DefaultRouteRegistry().ResolveWebSocket(route.Owner, route.RouteID, route.RouteID)
 				require.True(t, ok)
@@ -436,7 +462,7 @@ func TestAllCataloguedV2RoutesResolveThroughTheirPackageBridge(t *testing.T) {
 		})
 	}
 	require.Equal(t, 26, identityRoutes)
-	require.Equal(t, 166, bridgedRoutes)
+	require.Equal(t, 159, bridgedRoutes)
 }
 
 // Old identity-platform and plan releases still declare the routes that
@@ -1197,7 +1223,7 @@ func TestEveryCataloguedV2RouteResolvesToItsOwnRouteID(t *testing.T) {
 	require.True(t, ok)
 	routeFiles, err := filepath.Glob(filepath.Join(filepath.Dir(sourceFile), "..", "..", "packages", "*", "compat", "v2-routes.json"))
 	require.NoError(t, err)
-	require.Len(t, routeFiles, 17)
+	require.Len(t, routeFiles, 15)
 	for _, routeFile := range routeFiles {
 		raw, err := os.ReadFile(routeFile)
 		require.NoError(t, err)

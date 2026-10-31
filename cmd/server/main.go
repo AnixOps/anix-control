@@ -44,7 +44,7 @@ import (
 )
 
 // @title AnixOps Control API
-// @version 5.0.0-rc.21
+// @version 5.0.0-rc.23
 // @description AnixOps Control 统一控制面 API 文档
 // @description 支持用户管理、节点管理、订阅系统、支付网关、流量转发等功能
 // @termsOfService https://github.com/AnixOps/anix-control
@@ -561,13 +561,11 @@ func run() int {
 }
 
 // pluginPollIntervals holds the validated poll intervals of the plugin
-// control loops. The Agent plugin dispatcher and the topology executor are
-// off until M4 (service.AgentPluginDispatchEnabled,
-// service.TopologyExecutionEnabled) and have no setting.
+// control loops. The Agent plugin dispatcher is off until M4
+// (service.AgentPluginDispatchEnabled) and has no setting.
 type pluginPollIntervals struct {
 	control  time.Duration
 	dispatch time.Duration
-	topology time.Duration
 }
 
 func parsePluginPollInterval(key, raw string) (time.Duration, error) {
@@ -583,7 +581,7 @@ func parsePluginPollInterval(key, raw string) (time.Duration, error) {
 }
 
 func parsePluginPollIntervals(cfg *config.Config) (pluginPollIntervals, error) {
-	intervals := pluginPollIntervals{dispatch: service.AgentPluginWorkerPollInterval, topology: service.AgentPluginWorkerPollInterval}
+	intervals := pluginPollIntervals{dispatch: service.AgentPluginWorkerPollInterval}
 	var err error
 	if intervals.control, err = parsePluginPollInterval("plugins.control_poll_interval", cfg.Plugins.ControlPollInterval); err != nil {
 		return intervals, err
@@ -720,19 +718,6 @@ func (rt *serverRuntime) start(cfg *config.Config, intervals pluginPollIntervals
 			})
 		})
 		log.Printf("Plugin operation dispatcher enabled (poll interval %s)", intervals.dispatch)
-	}
-	// Off until M4 (service.TopologyExecutionEnabled): the code stays.
-	if service.TopologyExecutionEnabled && service.AgentPluginDispatchEnabled {
-		executor, err := service.NewTopologyDeploymentExecutor(database.Get())
-		if err != nil {
-			return fmt.Errorf("initialize topology deployment executor: %w", err)
-		}
-		rt.workers.Go("topology deployment executor", func(ctx context.Context) {
-			executor.Run(ctx, intervals.topology, func(err error) {
-				log.Printf("Topology deployment executor error: %v", err)
-			})
-		})
-		log.Printf("Topology deployment execution enabled (poll interval %s)", intervals.topology)
 	}
 	return nil
 }

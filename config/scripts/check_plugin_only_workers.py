@@ -21,7 +21,6 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 # package writes (docs/architecture/order-service.md).
 KERNEL_WORKERS = frozenset({
     "NewOrderPaymentReconciler",
-    "NewTopologyDeploymentExecutor",
 })
 
 # Legacy domain workers still started by the kernel. Remove an entry when its
