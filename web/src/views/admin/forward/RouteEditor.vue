@@ -79,16 +79,25 @@
             </div>
             <div v-if="entryRefs.length" class="editor-mt editor-entry-public" data-testid="entry-public">
               <p class="editor-entry-public__help">{{ t('forwardV4.editor.entryPublicHelp') }}</p>
-              <UiTextField
-                v-for="ref in entryRefs"
-                :key="ref"
-                :model-value="entryPublic(ref)"
-                size="md"
-                :label="t('forwardV4.editor.entryPublic', { node: nodeName(ref) })"
-                placeholder="203.0.113.9:25001"
-                :data-testid="`entry-public-${ref}`"
-                @update:model-value="value => setEntryPublic(ref, value)"
-              />
+              <div v-for="ref in entryRefs" :key="ref" class="editor-entry-public__node">
+                <UiSelect
+                  :model-value="entryMode(ref)"
+                  size="md"
+                  :label="t('forwardV4.editor.entryPublic', { node: nodeName(ref) })"
+                  :options="entryOptions(ref)"
+                  :data-testid="`entry-public-mode-${ref}`"
+                  @update:model-value="value => pickEntry(ref, value)"
+                />
+                <UiTextField
+                  v-if="entryMode(ref) === ENTRY_MANUAL"
+                  :model-value="entryPublic(ref)"
+                  size="md"
+                  :label="t('forwardV4.editor.entryPublicManual')"
+                  placeholder="203.0.113.9:25001"
+                  :data-testid="`entry-public-${ref}`"
+                  @update:model-value="value => setEntryPublic(ref, value)"
+                />
+              </div>
             </div>
             <UiTextField
               v-if="draft.hops[0]?.node_refs.length > 1"
@@ -266,7 +275,7 @@ import {
   DIRECT_MODES, H21_DEFAULTS, NETWORK_ENGINE, PROTOCOLS, PROXY_PROTOCOLS, STRATEGIES, TARGET_POLICIES, blankHop, blankTarget, draftToRoute,
   fieldId, isNetworkDraft, linkLabel, missingRequired, routeDiff, routeToDraft, setDraftEngine, syncRoles
 } from '@/components/forward/routeModel'
-import { getNetworkModel } from '@/api/kernel'
+import { getKernelNodeNetwork, getNetworkModel } from '@/api/kernel'
 import '@/components/forward/forward.css'
 
 const props = defineProps({
@@ -477,6 +486,52 @@ async function addHop() {
 const ENTRY_PUBLIC = 'entry-public/'
 const plainLabels = computed(() => (draft.value ? draft.value.labels.filter(item => !String(item.key).startsWith(ENTRY_PUBLIC)) : []))
 const entryRefs = computed(() => [...new Set(draft.value?.hops[0]?.node_refs || [])])
+
+// An entry node's public address: automatic (the node's NAT entry or its
+// default network card), one of its detected network card addresses, or
+// typed in by hand (a NAT machine: its public IP and mapped port).
+const ENTRY_AUTO = '__auto__'
+const ENTRY_MANUAL = '__manual__'
+const detectedByRef = reactive({})
+const manualRefs = reactive({})
+
+watch(entryRefs, async refs => {
+  for (const ref of refs) {
+    if (ref in detectedByRef) continue
+    detectedByRef[ref] = []
+    try {
+      detectedByRef[ref] = (await getKernelNodeNetwork(ref))?.detected || []
+    } catch {
+      // The picker then offers only auto and manual.
+    }
+  }
+}, { immediate: true })
+
+function detectedAddresses(ref) {
+  return (detectedByRef[ref] || []).flatMap(iface => [...(iface.addresses_v4 || []), ...(iface.addresses_v6 || [])]
+    .map(address => ({ address, name: iface.name })))
+}
+
+function entryMode(ref) {
+  const value = entryPublic(ref).trim()
+  if (manualRefs[ref]) return ENTRY_MANUAL
+  if (!value) return ENTRY_AUTO
+  return detectedAddresses(ref).some(item => item.address === value) ? value : ENTRY_MANUAL
+}
+
+function entryOptions(ref) {
+  return [
+    { value: ENTRY_AUTO, label: t('forwardV4.editor.entryAuto') },
+    ...detectedAddresses(ref).map(item => ({ value: item.address, label: `${item.name} · ${item.address}` })),
+    { value: ENTRY_MANUAL, label: t('forwardV4.editor.entryManual') }
+  ]
+}
+
+function pickEntry(ref, value) {
+  manualRefs[ref] = value === ENTRY_MANUAL
+  if (value === ENTRY_AUTO) setEntryPublic(ref, '')
+  else if (value !== ENTRY_MANUAL) setEntryPublic(ref, value)
+}
 
 function nodeName(ref) {
   return nodes.value.find(node => node.node_ref === ref)?.name
@@ -756,6 +811,11 @@ function discardMine() {
 }
 
 .editor-entry-public {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.editor-entry-public__node {
   display: grid;
   gap: 0.5rem;
 }
