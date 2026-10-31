@@ -14,6 +14,11 @@ type SubscriptionGroupProtocol struct {
 	// "<node> - <protocol>". A node with entries appends " | <entry>".
 	DisplayName string `gorm:"size:128;not null;default:''" json:"display_name"`
 	Sort        int    `gorm:"not null;default:0" json:"sort"`
+	// Overrides is the group's edits of the nodes this protocol produces, as
+	// JSON: {"<suffix of the node id>": {"server": "...", "port": 443}}.
+	// The source protocol is never changed; clearing a key (or the column)
+	// resets the node to what the protocol produces.
+	Overrides string `gorm:"type:text;not null;default:''" json:"-"`
 }
 
 func (SubscriptionGroupProtocol) TableName() string { return "v5_subscription_group_protocol" }

@@ -2,6 +2,7 @@
   <UiSection :title="t('adminSubscriptionGroups.protocols.title')" :description="t('adminSubscriptionGroups.protocols.description')">
     <template #actions>
       <UiButton :icon="ArrowUpDown" :disabled="protocolsLoading || !protocols.length" data-test="edit-protocol-layout" @click="layoutOpen = true">{{ t('adminSubscriptionGroups.layout.open') }}</UiButton>
+      <UiButton :icon="RotateCcw" :disabled="protocolsLoading || !protocols.length" data-test="reset-node-overrides" @click="resetAllEdits">{{ t('adminSubscriptionGroups.nodeEdit.resetAll') }}</UiButton>
       <UiButton :icon="Link2" :loading="availableLoading" data-test="manage-protocols" @click="openManageProtocolsModal">{{ t('adminSubscriptionGroups.protocols.manage') }}</UiButton>
     </template>
     <UiDataTable
@@ -39,6 +40,7 @@
     </UiDataTable>
 
     <GroupProtocolLayoutSheet v-model:open="layoutOpen" :group="group" :protocols="protocols" @saved="onLayoutSaved" />
+    <GroupNodeEditSheet v-model:open="nodeEditOpen" :group="group" :protocol="nodeEditProtocol" />
 
     <UiDialog
       v-model:open="showManageProtocolsModal"
@@ -87,8 +89,8 @@
 // GET /admin/subscription/protocols/available.
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { ArrowUpDown, Link2, Pencil, Server, SquareArrowOutUpRight } from '@lucide/vue'
-import adminApi, { getGroupProtocolLayout } from '@/api/admin'
+import { ArrowUpDown, Link2, Pencil, RotateCcw, Server, SquareArrowOutUpRight } from '@lucide/vue'
+import adminApi, { getGroupProtocolLayout, resetGroupNodeOverrides } from '@/api/admin'
 import { useAppI18n } from '@/composables/useAppI18n'
 import UiBadge from '@/ui/UiBadge.vue'
 import UiButton from '@/ui/UiButton.vue'
@@ -96,7 +98,9 @@ import UiCheckbox from '@/ui/UiCheckbox.vue'
 import UiDataTable from '@/ui/UiDataTable.vue'
 import UiDialog from '@/ui/UiDialog.vue'
 import UiSection from '@/ui/UiSection.vue'
+import { useConfirm } from '@/ui/composables/useConfirm'
 import { useToast } from '@/ui/composables/useToast'
+import GroupNodeEditSheet from './GroupNodeEditSheet.vue'
 import GroupProtocolLayoutSheet from './GroupProtocolLayoutSheet.vue'
 import { applyProtocolLayout, defaultProtocolName } from './groupProtocolLayout'
 import { ensureSubscriptionSuccess, readSubscriptionList, subscriptionErrorText } from './subscriptionShared'
@@ -108,6 +112,7 @@ const emit = defineEmits(['changed'])
 
 const { t } = useAppI18n()
 const toast = useToast()
+const confirm = useConfirm()
 const router = useRouter()
 
 const protocols = ref([])
@@ -120,8 +125,11 @@ const showManageProtocolsModal = ref(false)
 const protocolsSaving = ref(false)
 const protocolsError = ref('')
 const layoutOpen = ref(false)
+const nodeEditOpen = ref(false)
+const nodeEditProtocol = ref(null)
 
 const columns = computed(() => [
+  { key: 'edit', label: t('adminSubscriptionGroups.nodeEdit.open'), icon: Pencil, onSelect: () => { nodeEditProtocol.value = protocol; nodeEditOpen.value = true } },
   { key: 'node', label: t('adminSubscriptionGroups.protocols.node'), primary: true, sortable: true, value: protocol => protocol.node?.name || t('adminSubscriptionGroups.protocols.nodeIdFallback', { id: protocol.node_id }) },
   { key: 'display_name', label: t('adminSubscriptionGroups.layout.displayName'), secondary: true, value: protocol => protocol.display_name || defaultProtocolName(protocol) },
   { key: 'name', label: t('adminSubscriptionGroups.protocols.name'), sortable: true, breakpoint: 'lg' },
@@ -152,6 +160,23 @@ const protocolActions = protocol => [
   { key: 'layout', label: t('adminSubscriptionGroups.layout.rename'), icon: Pencil, onSelect: () => { layoutOpen.value = true } },
   { key: 'node', label: t('adminSubscriptionGroups.protocols.goToNode'), icon: SquareArrowOutUpRight, onSelect: () => goToNode(protocol.node_id) }
 ]
+
+async function resetAllEdits() {
+  const confirmed = await confirm({
+    tone: 'danger',
+    title: t('adminSubscriptionGroups.nodeEdit.resetAll'),
+    message: t('adminSubscriptionGroups.nodeEdit.resetAllConfirm', { group: props.group.name }),
+    confirmLabel: t('adminSubscriptionGroups.nodeEdit.resetAll'),
+    onConfirm: async () => {
+      try {
+        await resetGroupNodeOverrides(props.group.id)
+      } catch (error) {
+        throw new Error(subscriptionErrorText(error) || t('adminSubscriptionGroups.nodeEdit.saveFailed'))
+      }
+    }
+  })
+  if (confirmed) toast.success(t('adminSubscriptionGroups.nodeEdit.reset'))
+}
 
 // The group's order and display names; without them (an older server)
 // the list keeps its order and default names.

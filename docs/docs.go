@@ -5141,6 +5141,48 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v4/admin/subscription-groups/{id}/node-overrides": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "清除该分组所有节点的修改, 恢复为源协议的值; 名称与顺序不受影响。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-订阅"
+                ],
+                "summary": "重置订阅分组的全部节点修改",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "订阅分组 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/v4/admin/subscription-groups/{id}/protocol-layout": {
             "get": {
                 "security": [
@@ -5214,6 +5256,121 @@ const docTemplate = `{
                         "required": true,
                         "schema": {
                             "$ref": "#/definitions/handler.groupProtocolLayoutRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v4/admin/subscription-groups/{id}/protocols/{protocol_id}/nodes": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "列出该协议在分组订阅中生成的每个节点 (按入口展开), 含分组的修改 (overrides) 与源协议的原始值 (defaults)。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-订阅"
+                ],
+                "summary": "订阅分组中某协议生成的节点及其修改",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "订阅分组 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "节点协议 ID",
+                        "name": "protocol_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "设置分组对该协议各节点的修改 (名称、地址、端口、SNI、传输等; 协议类型与凭据不可改)。未列出或为空的节点恢复为源协议的值, 源协议本身不变。订阅立即生效。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-订阅"
+                ],
+                "summary": "修改订阅分组中某协议生成的节点",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "订阅分组 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "节点协议 ID",
+                        "name": "protocol_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "按节点键的修改",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.groupNodeOverridesRequest"
                         }
                     }
                 ],
@@ -12204,6 +12361,18 @@ const docTemplate = `{
                 "scope": {
                     "description": "Scope is \"read\" or \"admin\".",
                     "type": "string"
+                }
+            }
+        },
+        "handler.groupNodeOverridesRequest": {
+            "type": "object",
+            "properties": {
+                "nodes": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "object",
+                        "additionalProperties": {}
+                    }
                 }
             }
         },

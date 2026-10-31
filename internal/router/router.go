@@ -732,6 +732,11 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		// display names (model.SubscriptionGroupProtocol).
 		v4.GET("/admin/subscription-groups/:id/protocol-layout", groupMembers.ProtocolLayout)
 		v4.PUT("/admin/subscription-groups/:id/protocol-layout", groupMembers.ReplaceProtocolLayout)
+		// Edits a group makes to the nodes a protocol produces, kept apart from
+		// the protocol so they can be reset.
+		v4.GET("/admin/subscription-groups/:id/protocols/:protocol_id/nodes", groupMembers.ProtocolNodes)
+		v4.PUT("/admin/subscription-groups/:id/protocols/:protocol_id/nodes", groupMembers.ReplaceProtocolNodes)
+		v4.DELETE("/admin/subscription-groups/:id/node-overrides", groupMembers.ResetNodeOverrides)
 		// Each user's traffic by destination and category, and its settings.
 		v4.GET("/admin/traffic/destinations", destinationStats.AdminSummary)
 		v4.GET("/admin/traffic/destinations/settings", destinationStats.GetSettings)

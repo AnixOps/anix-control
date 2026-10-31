@@ -137,6 +137,28 @@ export default {
       emptyDescription: '添加一个，它会出现在这个分组的订阅里。',
       loadFailed: '无法加载节点模板'
     },
+    nodeEdit: {
+      open: '编辑节点',
+      title: '编辑订阅节点',
+      description: '修改“{group}”订阅中该协议生成的节点。只影响这个分组的订阅，源节点不变；留空的字段沿用源值。',
+      name: '名称',
+      server: '地址 (域名或 IP)',
+      port: '端口',
+      serverName: 'SNI',
+      advanced: '高级 JSON (只填要覆盖的字段)',
+      default: '源值：{value}',
+      resetNode: '重置此节点',
+      resetAll: '重置全部修改',
+      resetAllConfirm: '清除“{group}”所有节点的修改并恢复为源值？名称与顺序不变。',
+      edited: '已修改',
+      save: '保存',
+      saved: '已保存节点修改',
+      reset: '已重置',
+      saveFailed: '无法保存节点修改',
+      badPort: '端口需在 1-65535',
+      badJson: '高级 JSON 无效',
+      empty: '该协议当前没有可编辑的节点（节点可能离线）'
+    },
     layout: {
       open: '排序与名称',
       title: '排序与显示名称',

@@ -335,6 +335,14 @@ definitions:
     - name
     - scope
     type: object
+  handler.groupNodeOverridesRequest:
+    properties:
+      nodes:
+        additionalProperties:
+          additionalProperties: {}
+          type: object
+        type: object
+    type: object
   handler.groupProtocolLayoutRequest:
     properties:
       protocols:
@@ -4903,6 +4911,33 @@ paths:
       summary: 订阅分组成员
       tags:
       - 管理端-订阅
+  /api/v4/admin/subscription-groups/{id}/node-overrides:
+    delete:
+      description: 清除该分组所有节点的修改, 恢复为源协议的值; 名称与顺序不受影响。
+      parameters:
+      - description: 订阅分组 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 重置订阅分组的全部节点修改
+      tags:
+      - 管理端-订阅
   /api/v4/admin/subscription-groups/{id}/protocol-layout:
     get:
       description: '列出关联到该分组的全部节点协议 (v2_subscription_group_node_protocols), 按分组顺序:
@@ -4969,6 +5004,83 @@ paths:
       security:
       - BearerAuth: []
       summary: 设置订阅分组节点协议的显示名称与顺序
+      tags:
+      - 管理端-订阅
+  /api/v4/admin/subscription-groups/{id}/protocols/{protocol_id}/nodes:
+    get:
+      description: 列出该协议在分组订阅中生成的每个节点 (按入口展开), 含分组的修改 (overrides) 与源协议的原始值 (defaults)。
+      parameters:
+      - description: 订阅分组 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 节点协议 ID
+        in: path
+        name: protocol_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 订阅分组中某协议生成的节点及其修改
+      tags:
+      - 管理端-订阅
+    put:
+      consumes:
+      - application/json
+      description: 设置分组对该协议各节点的修改 (名称、地址、端口、SNI、传输等; 协议类型与凭据不可改)。未列出或为空的节点恢复为源协议的值,
+        源协议本身不变。订阅立即生效。
+      parameters:
+      - description: 订阅分组 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 节点协议 ID
+        in: path
+        name: protocol_id
+        required: true
+        type: integer
+      - description: 按节点键的修改
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.groupNodeOverridesRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 修改订阅分组中某协议生成的节点
       tags:
       - 管理端-订阅
   /api/v4/admin/traffic/destinations:

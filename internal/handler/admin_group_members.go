@@ -126,3 +126,104 @@ func (h *AdminGroupMembersHandler) layoutResult(c *gin.Context, groupID uint, it
 	c.Header("Cache-Control", "no-store")
 	kernelData(c, http.StatusOK, gin.H{"group_id": groupID, "protocols": items})
 }
+
+type groupNodeOverridesRequest struct {
+	Nodes map[string]map[string]any `json:"nodes"`
+}
+
+func (h *AdminGroupMembersHandler) overridesFailed(c *gin.Context, err error) bool {
+	switch {
+	case err == nil:
+		return false
+	case errors.Is(err, service.ErrInvalidNodeOverride):
+		kernelError(c, http.StatusBadRequest, "invalid_request", err.Error())
+	case errors.Is(err, service.ErrSubscriptionGroupNotFound):
+		kernelError(c, http.StatusNotFound, "not_found", "subscription group not found")
+	default:
+		kernelDBError(c, err)
+	}
+	return true
+}
+
+// ProtocolNodes godoc
+// @Summary 订阅分组中某协议生成的节点及其修改
+// @Description 列出该协议在分组订阅中生成的每个节点 (按入口展开), 含分组的修改 (overrides) 与源协议的原始值 (defaults)。
+// @Tags 管理端-订阅
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "订阅分组 ID"
+// @Param protocol_id path int true "节点协议 ID"
+// @Success 200 {object} map[string]any
+// @Failure 404 {object} map[string]any
+// @Router /api/v4/admin/subscription-groups/{id}/protocols/{protocol_id}/nodes [get]
+func (h *AdminGroupMembersHandler) ProtocolNodes(c *gin.Context) {
+	groupID, ok := parseKernelID(c, "id")
+	if !ok {
+		return
+	}
+	protocolID, ok := parseKernelID(c, "protocol_id")
+	if !ok {
+		return
+	}
+	nodes, err := h.subscriptions.GroupProtocolNodes(groupID, protocolID)
+	if h.overridesFailed(c, err) {
+		return
+	}
+	c.Header("Cache-Control", "no-store")
+	kernelData(c, http.StatusOK, gin.H{"group_id": groupID, "protocol_id": protocolID, "nodes": nodes})
+}
+
+// ReplaceProtocolNodes godoc
+// @Summary 修改订阅分组中某协议生成的节点
+// @Description 设置分组对该协议各节点的修改 (名称、地址、端口、SNI、传输等; 协议类型与凭据不可改)。未列出或为空的节点恢复为源协议的值, 源协议本身不变。订阅立即生效。
+// @Tags 管理端-订阅
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "订阅分组 ID"
+// @Param protocol_id path int true "节点协议 ID"
+// @Param request body groupNodeOverridesRequest true "按节点键的修改"
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 404 {object} map[string]any
+// @Router /api/v4/admin/subscription-groups/{id}/protocols/{protocol_id}/nodes [put]
+func (h *AdminGroupMembersHandler) ReplaceProtocolNodes(c *gin.Context) {
+	groupID, ok := parseKernelID(c, "id")
+	if !ok {
+		return
+	}
+	protocolID, ok := parseKernelID(c, "protocol_id")
+	if !ok {
+		return
+	}
+	var request groupNodeOverridesRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		kernelError(c, http.StatusBadRequest, "invalid_request", err.Error())
+		return
+	}
+	if h.overridesFailed(c, h.subscriptions.ReplaceGroupProtocolOverrides(groupID, protocolID, request.Nodes)) {
+		return
+	}
+	h.ProtocolNodes(c)
+}
+
+// ResetNodeOverrides godoc
+// @Summary 重置订阅分组的全部节点修改
+// @Description 清除该分组所有节点的修改, 恢复为源协议的值; 名称与顺序不受影响。
+// @Tags 管理端-订阅
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "订阅分组 ID"
+// @Success 200 {object} map[string]any
+// @Failure 404 {object} map[string]any
+// @Router /api/v4/admin/subscription-groups/{id}/node-overrides [delete]
+func (h *AdminGroupMembersHandler) ResetNodeOverrides(c *gin.Context) {
+	groupID, ok := parseKernelID(c, "id")
+	if !ok {
+		return
+	}
+	if h.overridesFailed(c, h.subscriptions.ResetGroupOverrides(groupID)) {
+		return
+	}
+	kernelData(c, http.StatusOK, gin.H{"group_id": groupID, "reset": true})
+}

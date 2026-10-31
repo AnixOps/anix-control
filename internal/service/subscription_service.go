@@ -580,6 +580,12 @@ func (s *SubscriptionService) filterNodes(nodes []*model.ParsedNode, include, ex
 
 // getInternalNodes 获取内部节点 (从 Node 表)
 func (s *SubscriptionService) getInternalNodes(user *model.User, ctx *model.TemplateRenderContext, groups []*model.SubscriptionGroup) ([]*model.ParsedNode, error) {
+	return s.internalNodes(ctx, groups, true)
+}
+
+// internalNodes is getInternalNodes, with the group's edits applied when
+// overrides is true (false gives the nodes as their protocols produce them).
+func (s *SubscriptionService) internalNodes(ctx *model.TemplateRenderContext, groups []*model.SubscriptionGroup, overrides bool) ([]*model.ParsedNode, error) {
 	if len(groups) == 0 {
 		return nil, nil
 	}
@@ -663,6 +669,9 @@ func (s *SubscriptionService) getInternalNodes(user *model.User, ctx *model.Temp
 			parsedNodes := s.nodeProtocolEntries(p.Node, &p, ctx, entries[p.Node.ID], lines, name)
 			parsedNodes = append(parsedNodes, s.routeOffers(p.Node, &p, ctx, offers[p.ID], name)...)
 			for _, parsed := range parsedNodes {
+				if overrides {
+					applyNodeOverrides(parsed, p.Node.ID, p.ID, layouts[groupProtocolKey{g.ID, p.ID}].Overrides)
+				}
 				parsed.GroupID = g.ID
 				parsed.GroupName = g.Name
 				result = append(result, parsed)
