@@ -39,7 +39,6 @@ const AdminNotifications = () => import('@/views/admin/Notifications.vue')
 const AdminInvite = () => import('@/views/admin/Invite.vue')
 const AdminInviteCodes = () => import('@/views/admin/InviteCodes.vue')
 const AdminSystem = () => import('@/views/admin/System.vue')
-const AdminDeployments = () => import('@/views/admin/Deployments.vue')
 // The v4.2 forwarding area (F5b): lazy chunks, opened only with the
 // forward package's v4 API (meta.capability, checked in the guard).
 const ForwardOverview = () => import('@/views/admin/forward/Overview.vue')
@@ -347,9 +346,9 @@ const routes = [
         redirect: BUILTIN_PACKAGES_PATH
       },
       {
-        path: 'deployments',
-        component: AdminDeployments,
-        meta: WIDE
+        // 编排部署 (topologies, node roles) is gone; nodes are the one area.
+        path: 'deployments/:rest(.*)*',
+        redirect: '/admin/nodes'
       },
       {
         path: 'control',

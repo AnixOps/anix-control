@@ -48,8 +48,6 @@ config/config.yaml
 config/deploy/ssh/*
 !config/deploy/ssh/.gitignore
 config/deploy/ansible/inventory.ini
-config/deploy/ansible/nodes/inventory.ini
-config/deploy/ansible/nodes/group_vars/all.yml
 
 # Build
 dist/

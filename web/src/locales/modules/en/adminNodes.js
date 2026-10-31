@@ -145,15 +145,11 @@ export default {
     footer: 'Read from the Agent transport inventory. A live connection is only known to the Control process that holds it.',
     connection: {
       mtls_stream: 'mTLS stream',
-      apikey_stream: 'API key stream',
-      legacy: 'Legacy',
       third_party: 'Third-party',
       offline: 'Offline'
     },
     connectionHint: {
       mtls_stream: 'Agent Control stream authenticated by the Agent certificate',
-      apikey_stream: 'Agent Control stream authenticated by the node API key',
-      legacy: 'Legacy REST, WebSocket or clean-agent channel; refused once agent_control.mtls is required',
       third_party: 'Only third-party node software (UniProxy or v2board gRPC) was seen, not an Agent',
       offline: 'Nothing seen in the last five minutes'
     },
@@ -483,7 +479,8 @@ export default {
     modeLabel: 'Editor',
     jsonLabel: 'Protocol JSON',
     tabs: {
-      visual: 'Form'
+      visual: 'Form',
+      json: 'Advanced JSON'
     },
     fields: {
       type: 'Protocol',
@@ -551,6 +548,45 @@ export default {
     },
     enable: 'Run on the node',
     show: 'List in subscriptions'
+  },
+  // Protocol form fields (protocolFields.js): 3x-ui style, shown by protocol, transport and TLS.
+  protocolFields: {
+    groups: {
+      protocol: 'Protocol',
+      transport: 'Transport',
+      security: 'Security'
+    },
+    none: 'None',
+    generate: 'Generate',
+    labels: {
+      server_names: 'Allowed SNI',
+      alpn: 'ALPN',
+      flow: 'Flow',
+      method: 'Cipher',
+      server_key: 'Server key',
+      up_mbps: 'Upload (Mbps)',
+      down_mbps: 'Download (Mbps)',
+      obfs: 'Obfuscation',
+      obfs_password: 'Obfuscation password',
+      congestion_control: 'Congestion control',
+      path: 'Path',
+      host: 'Host',
+      serviceName: 'gRPC service name',
+      server_name: 'SNI (server name)',
+      fingerprint: 'uTLS fingerprint',
+      allowInsecure: 'Allow insecure certificates',
+      dest: 'Target (Dest)',
+      short_id: 'Short ID',
+      private_key: 'Private key',
+      public_key: 'Public key'
+    },
+    hints: {
+      anxServerNames: 'Comma separated; clients use the first. It must be a name the cover site really serves. ANX user keys derive from the UUID and the server public key is reported by the Agent on the node; the AnixOps Net subscription format carries the anx:// link.',
+      anxDest: 'Connections that are not ANX (probes included) are forwarded here as host:port.',
+      serverKey: 'Server key of the 2022 ciphers; empty derives it from the node.',
+      privateKey: 'Empty generates a key pair when saved; a stored private key shows as ********.',
+      publicKey: 'The public key subscriptions hand to clients; empty derives it from the private key.'
+    }
   },
   tabs: {
     label: 'Node sections',

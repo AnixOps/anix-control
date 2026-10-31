@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"net/http"
 	"strconv"
 	"strings"
@@ -364,4 +365,26 @@ func TestKernelAgentChangesQueueNothingWhileDispatchIsOff(t *testing.T) {
 	var after int64
 	require.NoError(t, fixture.db.Model(&model.KernelOperation{}).Count(&after).Error)
 	require.Equal(t, before, after, "no Agent operation is queued")
+}
+
+// enableAgentPluginDispatch turns on the Agent plugin dispatch M4 brings
+// (service.AgentPluginDispatchEnabled is false until then), for this test.
+func enableAgentPluginDispatch(t *testing.T) {
+	t.Helper()
+	previous := agentPluginDispatchEnabled
+	agentPluginDispatchEnabled = func() bool { return true }
+	t.Cleanup(func() { agentPluginDispatchEnabled = previous })
+}
+
+func requireKernelErrorCode(t *testing.T, body []byte, code string) {
+	t.Helper()
+	var response struct {
+		Error struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	require.NoError(t, json.Unmarshal(body, &response), string(body))
+	require.Equal(t, code, response.Error.Code, string(body))
+	require.NotEmpty(t, response.Error.Message)
 }

@@ -21,12 +21,16 @@ import (
 type RestoreOptions struct {
 	// Bundle is the bundle's path.
 	Bundle string
-	// Driver is the database driver; anything but SQLite is refused.
+	// Driver is the database driver; anything but SQLite and PostgreSQL is
+	// refused.
 	Driver string
+	// Postgres is the PostgreSQL connection to restore into; required with
+	// the postgres driver.
+	Postgres *Postgres
 	// DataDir receives root.key; DataDir/tmp is the scratch directory and
 	// DataDir/replaced-<UTC time> takes what --replace moves aside.
 	DataDir string
-	// DatabasePath is the SQLite database file to restore.
+	// DatabasePath is the SQLite database file to restore (SQLite only).
 	DatabasePath string
 	// ConfigPath is the configuration file Control loads. "" when it
 	// loads none: the bundle's configuration is then written to
@@ -93,15 +97,21 @@ func refused(reason string, err error) error { return &RefusedError{Reason: reas
 //     as root. It starts nothing: the next start migrates the restored
 //     database as usual, after a pre-migration backup.
 func Restore(ctx context.Context, options RestoreOptions) (*RestoreResult, error) {
+	isPostgres := false
 	switch strings.ToLower(strings.TrimSpace(options.Driver)) {
 	case "", "sqlite", "sqlite3":
+	case "postgres", "postgresql":
+		if options.Postgres == nil {
+			return nil, refused("nothing was restored", ErrNeedsSQLite)
+		}
+		isPostgres = true
 	default:
 		return nil, refused("nothing was restored", ErrNeedsSQLite)
 	}
 	if strings.TrimSpace(options.DataDir) == "" {
 		return nil, errors.New("data_dir is empty")
 	}
-	if inMemory(options.DatabasePath) {
+	if !isPostgres && inMemory(options.DatabasePath) {
 		return nil, refused("nothing was restored", errors.New("the configuration names an in-memory database"))
 	}
 	now := time.Now
@@ -124,13 +134,19 @@ func Restore(ctx context.Context, options RestoreOptions) (*RestoreResult, error
 		return nil, err
 	}
 	defer lock.Release()
-	if inUse, err := databaseInUse(databasePath); err != nil {
-		return nil, fmt.Errorf("check whether %s is in use: %w", databasePath, err)
-	} else if inUse {
-		return nil, refused("nothing was restored", fmt.Errorf("another process has the database %s open (Control or one of its package hosts is still running): stop Control first, for example with `sudo systemctl stop anix-control`", databasePath))
+	if !isPostgres {
+		if inUse, err := databaseInUse(databasePath); err != nil {
+			return nil, fmt.Errorf("check whether %s is in use: %w", databasePath, err)
+		} else if inUse {
+			return nil, refused("nothing was restored", fmt.Errorf("another process has the database %s open (Control or one of its package hosts is still running): stop Control first, for example with `sudo systemctl stop anix-control`", databasePath))
+		}
 	}
 
-	verified, err := VerifyFile(ctx, options.Bundle, VerifyOptions{ScratchDir: ScratchDir(options.DataDir), ProgramVersion: options.ProgramVersion, Keep: true})
+	verifyOptions := VerifyOptions{ScratchDir: ScratchDir(options.DataDir), ProgramVersion: options.ProgramVersion, Keep: true}
+	if isPostgres {
+		verifyOptions.Postgres = options.Postgres
+	}
+	verified, err := VerifyFile(ctx, options.Bundle, verifyOptions)
 	if err != nil {
 		var newer *migrations.RefusedError
 		if errors.As(err, &newer) {
@@ -144,6 +160,9 @@ func Restore(ctx context.Context, options RestoreOptions) (*RestoreResult, error
 	}
 	defer func() { _ = os.RemoveAll(verified.Dir) }()
 	result := &RestoreResult{Manifest: verified.Manifest}
+	if (verified.Manifest.Kind() == KindPostgres) != isPostgres {
+		return nil, refused("nothing was restored", fmt.Errorf("the bundle holds a %s database, but this Control is configured for %s", verified.Manifest.Kind(), map[bool]string{true: "PostgreSQL", false: "SQLite"}[isPostgres]))
+	}
 
 	var bundleConfig []byte
 	_, hasConfig := verified.Manifest.member(MemberConfig)
@@ -162,7 +181,7 @@ func Restore(ctx context.Context, options RestoreOptions) (*RestoreResult, error
 	// What is in the way.
 	var existing []string
 	for _, suffix := range []string{"", "-wal", "-shm", "-journal"} {
-		if exists(databasePath + suffix) {
+		if !isPostgres && exists(databasePath+suffix) {
 			existing = append(existing, databasePath+suffix)
 		}
 	}
@@ -213,11 +232,22 @@ func Restore(ctx context.Context, options RestoreOptions) (*RestoreResult, error
 		result.Written = append(result.Written, to)
 		return nil
 	}
-	if err := ensureDirLoose(filepath.Dir(databasePath)); err != nil {
-		return result, err
-	}
-	if err := install(filepath.Join(verified.Dir, MemberDatabase), databasePath, fileMode); err != nil {
-		return result, err
+	if isPostgres {
+		renamed, err := options.Postgres.installDump(ctx, filepath.Join(verified.Dir, MemberDatabasePG), options.Replace, now())
+		if renamed != "" {
+			result.Moved = append(result.Moved, "database "+options.Postgres.Database+" renamed to "+renamed)
+		}
+		if err != nil {
+			return result, err
+		}
+		result.Written = append(result.Written, "PostgreSQL database "+options.Postgres.Database)
+	} else {
+		if err := ensureDirLoose(filepath.Dir(databasePath)); err != nil {
+			return result, err
+		}
+		if err := install(filepath.Join(verified.Dir, MemberDatabase), databasePath, fileMode); err != nil {
+			return result, err
+		}
 	}
 	if err := install(filepath.Join(verified.Dir, MemberRootKey), rootKeyPath, fileMode); err != nil {
 		return result, err

@@ -89,9 +89,9 @@ func TestParsePluginPollIntervals(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parsePluginPollIntervals() error = %v", err)
 	}
-	// Agent plugin dispatch and topology execution have no setting (off
-	// until M4): their workers would poll at the built-in interval.
-	want := pluginPollIntervals{control: 2 * time.Second, dispatch: 5 * time.Second, topology: 5 * time.Second}
+	// Agent plugin dispatch has no setting (off until M4): its worker would
+	// poll at the built-in interval.
+	want := pluginPollIntervals{control: 2 * time.Second, dispatch: 5 * time.Second}
 	if intervals != want {
 		t.Fatalf("intervals = %+v, want %+v", intervals, want)
 	}

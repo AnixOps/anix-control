@@ -231,7 +231,7 @@ describe('Nodes.vue', () => {
     const inventory = {
       nodes: [
         { node: 'proxy-5', certificate_state: 'valid', last_certificate: cert({ renew_after: '2999-01-01T00:00:00Z', not_after: '2999-02-01T12:00:00Z' }), connection: { type: 'mtls_stream', transport: 'mtls-stream', last_seen_at: '2026-10-02T07:59:00Z' } },
-        { node: 'proxy-6', certificate_state: 'revoked', last_certificate: cert({ revoked_at: '2026-10-03T12:00:00Z', revoke_reason: 'node disabled' }), connection: { type: 'legacy', transport: 'http-legacy', last_seen_at: '2026-10-02T07:59:00Z' } },
+        { node: 'proxy-6', certificate_state: 'revoked', last_certificate: cert({ revoked_at: '2026-10-03T12:00:00Z', revoke_reason: 'node disabled' }), connection: { type: 'third_party', transport: 'uniproxy', last_seen_at: '2026-10-02T07:59:00Z' } },
         { node: 'proxy-7', certificate_state: 'none', last_certificate: null, connection: { type: 'offline', last_seen_at: null } }
       ]
     }
@@ -244,8 +244,8 @@ describe('Nodes.vue', () => {
       expect(kernelApi.getKernelAgentTransports).toHaveBeenCalledTimes(1)
       expect(kernelApi.getKernelAgentTransports).toHaveBeenCalledWith({ nodes: ['proxy-5', 'proxy-6', 'proxy-7'] })
       const chips = wrapper.findAll('[data-testid="node-connection"]')
-      expect(chips.map(chip => chip.attributes('data-connection'))).toEqual(['mtls_stream', 'legacy', 'offline'])
-      expect(chips.map(chip => chip.text())).toEqual(['mTLS stream', 'Legacy', 'Offline'])
+      expect(chips.map(chip => chip.attributes('data-connection'))).toEqual(['mtls_stream', 'third_party', 'offline'])
+      expect(chips.map(chip => chip.text())).toEqual(['mTLS stream', 'Third-party', 'Offline'])
       const certificates = wrapper.findAll('[data-testid="node-certificate"]')
       expect(certificates.map(cell => cell.attributes('data-certificate'))).toEqual(['valid', 'revoked', 'none'])
       expect(certificates[0].text()).toContain('Valid')

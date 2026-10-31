@@ -41,7 +41,7 @@
 
 <script setup>
 // 概览 → Agent connection: how this node's Agent reaches Control now (mTLS
-// stream, API key stream, legacy, third-party, offline) and its newest Agent
+// stream, third-party, offline) and its newest Agent
 // certificate in any state (ends, renews, revoked and why), from
 // GET /api/v4/kernel/agents/transports?node=proxy-<id>. It loads after the
 // node page and never holds it up: a failure is a row with 重试.

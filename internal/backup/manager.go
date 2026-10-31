@@ -24,11 +24,14 @@ import (
 type Manager struct {
 	// DataDir is the data directory.
 	DataDir string
-	// Driver is the database driver; anything but SQLite answers
-	// ErrNeedsSQLite.
+	// Driver is the database driver; anything but SQLite and PostgreSQL
+	// answers ErrNeedsSQLite.
 	Driver string
 	// DatabasePath is the SQLite database file.
 	DatabasePath string
+	// Postgres is the PostgreSQL connection of a PostgreSQL panel; without
+	// it a PostgreSQL panel answers ErrNeedsSQLite.
+	Postgres *Postgres
 	// ConfigPath is the configuration file Control loaded; "" for none.
 	ConfigPath string
 	// RootKey answers the content of root.key.
@@ -83,19 +86,25 @@ func (m *Manager) logf(format string, args ...any) {
 	}
 }
 
-// Supported answers ErrNeedsSQLite on PostgreSQL, and why backups cannot
-// run otherwise (no data directory, an in-memory database).
+// Supported answers ErrNeedsSQLite for a database driver backups do not
+// cover, and why backups cannot run otherwise (no data directory, an
+// in-memory database). It does not look for the PostgreSQL client tools;
+// writing and verifying a PostgreSQL bundle answer ErrPostgresTools.
 func (m *Manager) Supported() error {
 	switch strings.ToLower(strings.TrimSpace(m.Driver)) {
 	case "", "sqlite", "sqlite3":
+		if inMemory(m.DatabasePath) {
+			return ErrInMemory
+		}
+	case "postgres", "postgresql":
+		if m.Postgres == nil {
+			return ErrNeedsSQLite
+		}
 	default:
 		return ErrNeedsSQLite
 	}
 	if strings.TrimSpace(m.DataDir) == "" {
 		return errors.New("data_dir is empty: backups are kept in data_dir/backups")
-	}
-	if inMemory(m.DatabasePath) {
-		return ErrInMemory
 	}
 	return nil
 }
@@ -184,7 +193,7 @@ func (m *Manager) source() (Source, error) {
 		hostName = name
 	}
 	return Source{
-		DataDir: m.DataDir, DatabasePath: m.DatabasePath, RootKey: rootKey, Config: config,
+		DataDir: m.DataDir, DatabasePath: m.DatabasePath, Postgres: m.Postgres, RootKey: rootKey, Config: config,
 		Domain: m.Domain, ProgramVersion: m.ProgramVersion, HostName: hostName,
 	}, nil
 }
@@ -248,7 +257,7 @@ func (m *Manager) verify(ctx context.Context, name string) (*model.Backup, error
 		return nil, fmt.Errorf("%q is not the name of a backup bundle", name)
 	}
 	started := time.Now()
-	_, verifyErr := VerifyFile(ctx, filepath.Join(m.Dir(), name), VerifyOptions{ScratchDir: ScratchDir(m.DataDir), ProgramVersion: m.ProgramVersion})
+	_, verifyErr := VerifyFile(ctx, filepath.Join(m.Dir(), name), VerifyOptions{ScratchDir: ScratchDir(m.DataDir), ProgramVersion: m.ProgramVersion, Postgres: m.Postgres})
 	var failed *VerifyError
 	if verifyErr != nil && !errors.As(verifyErr, &failed) {
 		// The verification could not run (the file went away, the

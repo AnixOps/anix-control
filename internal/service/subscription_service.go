@@ -580,6 +580,12 @@ func (s *SubscriptionService) filterNodes(nodes []*model.ParsedNode, include, ex
 
 // getInternalNodes 获取内部节点 (从 Node 表)
 func (s *SubscriptionService) getInternalNodes(user *model.User, ctx *model.TemplateRenderContext, groups []*model.SubscriptionGroup) ([]*model.ParsedNode, error) {
+	return s.internalNodes(ctx, groups, true)
+}
+
+// internalNodes is getInternalNodes, with the group's edits applied when
+// overrides is true (false gives the nodes as their protocols produce them).
+func (s *SubscriptionService) internalNodes(ctx *model.TemplateRenderContext, groups []*model.SubscriptionGroup, overrides bool) ([]*model.ParsedNode, error) {
 	if len(groups) == 0 {
 		return nil, nil
 	}
@@ -634,6 +640,7 @@ func (s *SubscriptionService) getInternalNodes(user *model.User, ctx *model.Temp
 	liveness := make(map[uint]bool)
 	var result []*model.ParsedNode
 	var keys []groupProtocolKey
+	var entryKeys []string
 	for _, p := range protocols {
 		if isWireGuardExitProtocol(&p) {
 			continue
@@ -663,10 +670,15 @@ func (s *SubscriptionService) getInternalNodes(user *model.User, ctx *model.Temp
 			parsedNodes := s.nodeProtocolEntries(p.Node, &p, ctx, entries[p.Node.ID], lines, name)
 			parsedNodes = append(parsedNodes, s.routeOffers(p.Node, &p, ctx, offers[p.ID], name)...)
 			for _, parsed := range parsedNodes {
+				entryKey, _ := nodeKey(parsed.ID, p.Node.ID, p.ID)
+				if overrides {
+					applyNodeOverrides(parsed, p.Node.ID, p.ID, layouts[groupProtocolKey{g.ID, p.ID}].Overrides)
+				}
 				parsed.GroupID = g.ID
 				parsed.GroupName = g.Name
 				result = append(result, parsed)
 				keys = append(keys, groupProtocolKey{g.ID, p.ID})
+				entryKeys = append(entryKeys, entryKey)
 			}
 		}
 	}
@@ -677,13 +689,24 @@ func (s *SubscriptionService) getInternalNodes(user *model.User, ctx *model.Temp
 	for i := range order {
 		order[i] = i
 	}
+	entryOrders := make(map[groupProtocolKey][]string, len(layouts))
+	for key, layout := range layouts {
+		if layout.Overrides != "" {
+			entryOrders[key] = parseGroupOverrides(layout.Overrides).Order
+		}
+	}
 	sort.SliceStable(order, func(i, j int) bool {
 		a, b := keys[order[i]], keys[order[j]]
 		if a.group != b.group {
 			return groupPlace[a.group] < groupPlace[b.group]
 		}
 		if a.protocol == b.protocol {
-			return false
+			if !overrides {
+				return false
+			}
+			// An entry's nodes in the group's order for them.
+			entryOrder := entryOrders[a]
+			return nodePlace(entryOrder, entryKeys[order[i]]) < nodePlace(entryOrder, entryKeys[order[j]])
 		}
 		return groupProtocolLess(layouts, a.group, a.protocol, b.protocol)
 	})
@@ -1061,6 +1084,10 @@ func (s *SubscriptionService) nodeProtocolToParsedNode(node *model.Node, protoco
 	}
 	if parsed.Type == string(model.ProtocolIWAN) {
 		applyIWANUser(parsed, ctx)
+	}
+	if parsed.Type == string(model.ProtocolANX) {
+		applyANXUser(parsed, ctx)
+		parsed.PublicKey = anxServerPublicKey(s.db, node.ID)
 	}
 	// After the WireGuard step, which derives the server public key from it.
 	stripServerPrivateKeys(parsed.Settings)
