@@ -186,7 +186,7 @@ type retiredShadowMismatchSample struct {
 func (retiredShadowMismatchSample) TableName() string { return "v4_kernel_shadow_mismatch_sample" }
 
 // retiredLoadBalancer is model.LoadBalancer as the baseline created it;
-// 0019_drop_load_balancer dropped the table and the model.
+// 0020_drop_load_balancer dropped the table and the model.
 type retiredLoadBalancer struct {
 	ID            uint   `gorm:"primaryKey"`
 	Name          string `gorm:"size:100"`
@@ -211,7 +211,7 @@ func (retiredLoadBalancer) TableName() string { return "v2_load_balancer" }
 func retiredKernelModels() []any {
 	return []any{
 		&retiredRouteModeRevision{}, &retiredShadowMismatchSample{}, // 0004_drop_route_modes
-		&retiredLoadBalancer{}, // 0019_drop_load_balancer
+		&retiredLoadBalancer{}, // 0020_drop_load_balancer
 	}
 }
 

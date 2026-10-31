@@ -784,7 +784,7 @@ The planned `kernel.entitlement.apply.v1` became
   configuration, and the registration keys
   ([`node-ops-service.md`](node-ops-service.md) section 6.2). The load
   balancer routes were removed with the feature (migration
-  `0019_drop_load_balancer`).
+  `0020_drop_load_balancer`).
   - **Node credentials stay in the kernel.** proxy-node owns the node
     domain, but a node's API key, key hash and shared secret authenticate
     it to the kernel: the node API, UniProxy, the agent WebSocket and gRPC

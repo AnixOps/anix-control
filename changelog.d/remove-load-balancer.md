@@ -10,5 +10,5 @@
 
 ### Changed
 
-- Migration `0019_drop_load_balancer` drops the unused `v2_load_balancer`
+- Migration `0020_drop_load_balancer` drops the unused `v2_load_balancer`
   table (SQLite and PostgreSQL).
