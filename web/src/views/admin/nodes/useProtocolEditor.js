@@ -69,13 +69,13 @@ export const defaultAnxForm = () => ({
   alpn: 'h2,http/1.1'
 })
 
-const splitList = text => String(text || '').split(/[,\s]+/).filter(Boolean)
+const anxList = text => String(text || '').split(/[,\s]+/).filter(Boolean)
 
 export function buildAnxSettings(form) {
   return {
-    server_names: splitList(form.serverNames),
+    server_names: anxList(form.serverNames),
     dest: String(form.dest || '').trim(),
-    alpn: splitList(form.alpn)
+    alpn: anxList(form.alpn)
   }
 }
 
