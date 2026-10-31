@@ -129,9 +129,9 @@ func TestNodeGroupsAPI(t *testing.T) {
 	id := strconv.FormatUint(uint64(group.ID), 10)
 
 	for body, code := range map[string]string{
-		`{"name": "HK"}`: "name_taken",
+		`{"name": "HK"}`:            "name_taken",
 		`{"name": "x", "rate": -1}`: "invalid_request",
-		`{"name": 1}`: "invalid_request",
+		`{"name": 1}`:               "invalid_request",
 	} {
 		response := env.call(t, 7, http.MethodPost, "/node-groups", body)
 		assert.Equal(t, code, errorCode(t, response), body)
