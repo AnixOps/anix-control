@@ -18,8 +18,7 @@ Prints GitHub output lines (name=true|false):
   db       schemas, storage and migrations (the PostgreSQL jobs)
   modules  the module runtime, identity, images and deployment (Docker and
            Kubernetes smokes)
-  forward  forwarding: the v4.1 forward runtime regression and the forward
-           SDK's network namespace end-to-end suite (Forward Netns E2E)
+  forward  forwarding: the v4.1 forward runtime regression and the forward SDK
   agent    the Agent channel (gRPC and the cross-repository Agent E2E)
   packages official package sources (the package release contracts)
 """
@@ -304,10 +303,9 @@ def self_test() -> None:
     check(["internal/service/order_service.go"], {"code", "db"})
     check(["internal/pluginhost/remote.go"], {"code", "modules"})
     check(["internal/service/forward_panel_flow.go"], {"code", "db", "forward"})
-    check(["sdk/forward/driver/nftables/driver.go"], {"code", "modules", "forward"})
-    check(["sdk/forward/e2e/scenarios_test.go"], {"code", "modules", "forward"})
+    check(["sdk/forward/driver/anixops/driver.go"], {"code", "modules", "forward"})
     check(["sdk/api/forward/v1/forward.pb.go"], {"code", "modules", "forward"})
-    check(["contracts/forward/v1/nft/plan-single-hop-nftables-iepl-forward-11.nft"], {"code", "forward"})
+    check(["contracts/forward/v1/plan-negative.json"], {"code", "forward"})
     check(["internal/kernelforward/plan.go"], {"code", "db", "forward"})
     check(["internal/forwardddns/alidns.go"], {"code", "forward"})
     check(["sdk/agentcontrol/identity.go"], {"code", "modules"})
