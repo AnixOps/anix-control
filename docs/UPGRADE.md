@@ -46,9 +46,11 @@ command. Its hops are down from the conversion until the Agent connects.
 3. **The first start migrates the database.** It adopts the 4.2.x schema as
    `0001_baseline` and applies `0002_server_log_buckets` to `0005_backups`
    ([`reference/database-migrations.md`](reference/database-migrations.md#the-migrations)).
-   On SQLite it first takes a `pre-migration` backup into `data_dir/backups`;
+   It first takes a `pre-migration` backup into `data_dir/backups` (on PostgreSQL
+   this needs `pg_dump` and `pg_restore` on the Control machine; without them
+   the migration runs without a bundle, so take your own `pg_dump` first);
    when it cannot write it, nothing is migrated and Control does not start.
-   On PostgreSQL your own `pg_dump` is the backup. Going back to 4.2.x means
+   Going back to 4.2.x means
    restoring that backup with Control stopped, then starting the 4.2.x binary
    ([Backups Are Built In](#backups-are-built-in),
    [Database Migrations](#database-migrations),
