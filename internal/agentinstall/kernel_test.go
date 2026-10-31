@@ -125,3 +125,30 @@ func TestKernelPath(t *testing.T) {
 	_, err = KernelPath("", "0.1.0", SumsAssetName)
 	assert.Error(t, err)
 }
+
+func TestUpgradeKernelsOffersArm64WhenReleaseHasIt(t *testing.T) {
+	dir := t.TempDir()
+	version := "0.1.0-alpha.5"
+	release := filepath.Join(dir, "anx-node", version)
+	require.NoError(t, os.MkdirAll(release, 0o755))
+	x86 := []byte("x86 package")
+	arm := []byte("arm package")
+	x86Asset := KernelAsset(version, "x86_64")
+	armAsset := KernelAsset(version, "aarch64")
+	require.NoError(t, os.WriteFile(filepath.Join(release, x86Asset), x86, 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(release, armAsset), arm, 0o644))
+	sums := sha256Hex(arm) + "  " + armAsset + "\n" + sha256Hex(x86) + "  " + x86Asset + "\n"
+	require.NoError(t, os.WriteFile(filepath.Join(release, SumsAssetName), []byte(sums), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(release, SumsSignatureAssetName), []byte(testKernelSignature), 0o644))
+
+	kernels, err := UpgradeKernels(dir, "https://panel.example.com")
+	require.NoError(t, err)
+	require.Len(t, kernels, 2)
+	assert.Equal(t, "amd64", kernels[0].Arch)
+	assert.Equal(t, "arm64", kernels[1].Arch)
+	assert.Equal(t, armAsset, kernels[1].Asset)
+	assert.Equal(t, sha256Hex(arm), kernels[1].SHA256)
+	request := validRequestWith(t, dir)
+	request.Kernels = kernels
+	require.NoError(t, request.Validate())
+}
