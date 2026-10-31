@@ -293,10 +293,24 @@ func checkTransportKind(v *violations, field string, transport *Transport) {
 			v.add(field+".anx_line.reverse", "only bare anx_line (l1, c1) runs reversed")
 		}
 		if options.QUICPort != 0 || options.FakeTCPPort != 0 || options.Multipath {
-			v.add(field+".anx_line", "a reversed link runs on c1 only; no quic_port, faketcp_port or multipath")
+			v.add(field+".anx_line", "a reversed link has no carrier ports and no multipath; carrier_order c2 / c3 dial back on the reverse port")
 		}
 		if options.ReverseHost == "" {
 			v.add(field+".anx_line.reverse_host", "a reversed link needs the dialing device's address")
+		}
+		// c3 dials back over fake TCP to reverse_port + 1, IPv4 only (anx
+		// ANX-LINE-REVERSE §6.2).
+		for _, carrier := range options.CarrierOrder {
+			if carrier != "c3" && carrier != "faketcp" {
+				continue
+			}
+			if addr, err := netip.ParseAddr(options.ReverseHost); err == nil && addr.Is6() {
+				v.add(field+".anx_line.carrier_order", "c3 dials back over IPv4 only; reverse_host is IPv6")
+			}
+			if options.ReversePort == 65535 {
+				v.add(field+".anx_line.reverse_port", "c3 dials back to reverse_port + 1; 65535 leaves none")
+			}
+			break
 		}
 	} else if options.ReverseHost != "" || options.ReversePort != 0 {
 		v.add(field+".anx_line", "reverse_host and reverse_port need reverse")
@@ -463,7 +477,12 @@ func transportProto(transport *Transport, role networkv1.TransportRole, peer, ke
 	}
 	if options.Reverse {
 		// The accepting end dials back; no carrier addresses either way.
-		anx.Reverse, anx.CarrierOrder = true, []string{"c1"}
+		// c2 / c3 in the order dial back too, on the reverse port (UDP) and
+		// the next TCP port (anx ANX-LINE-REVERSE §6.3); none is c1 only.
+		anx.Reverse = true
+		if len(anx.CarrierOrder) == 0 {
+			anx.CarrierOrder = []string{"c1"}
+		}
 		port := options.ReversePort
 		if port == 0 {
 			port = DefaultReversePort

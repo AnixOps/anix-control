@@ -154,6 +154,14 @@ func TestPlanReverseTransport(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "[::]:30000", result.Plans["proxy-1"].GetTransports()[0].GetAnxLine().GetReverseListen())
 	require.Equal(t, "[2001:db8::7]:30000", result.Plans["proxy-2"].GetTransports()[0].GetAnxLine().GetReverseDial())
+
+	// c2 / c3 dial back too (anx ANX-LINE-REVERSE §6.3): the order reaches both ends.
+	doc.Transports[0].AnxLine = &AnxLine{Reverse: true, ReverseHost: "198.51.100.7", CarrierOrder: []string{"c2", "c3", "c1"}}
+	result, err = Plan(doc, map[string]string{"tr-jp": linkKey}, japanKey(), nil)
+	require.NoError(t, err)
+	for _, device := range []string{"proxy-1", "proxy-2"} {
+		require.Equal(t, []string{"c2", "c3", "c1"}, result.Plans[device].GetTransports()[0].GetAnxLine().GetCarrierOrder(), device)
+	}
 }
 
 func TestPlanRefuses(t *testing.T) {
@@ -184,7 +192,13 @@ func TestPlanRefuses(t *testing.T) {
 		"reverse needs a host": {func(d *Document) { d.Transports[0].AnxLine = &AnxLine{Reverse: true} }, "dialing device's address"},
 		"reverse on quic": {func(d *Document) {
 			d.Transports[0].AnxLine = &AnxLine{Reverse: true, ReverseHost: "198.51.100.7", QUICPort: 8443}
-		}, "c1 only"},
+		}, "no carrier ports"},
+		"reverse c3 over IPv6": {func(d *Document) {
+			d.Transports[0].AnxLine = &AnxLine{Reverse: true, ReverseHost: "2001:db8::7", CarrierOrder: []string{"c3", "c1"}}
+		}, "IPv4 only"},
+		"reverse c3 at the last port": {func(d *Document) {
+			d.Transports[0].AnxLine = &AnxLine{Reverse: true, ReverseHost: "198.51.100.7", ReversePort: 65535, CarrierOrder: []string{"c3"}}
+		}, "65535 leaves none"},
 		"reverse jacketed": {func(d *Document) {
 			d.Transports[0].Kind = KindAnx
 			d.Transports[0].AnxLine = &AnxLine{Reverse: true, ReverseHost: "198.51.100.7", ServerName: "www.example.org"}
