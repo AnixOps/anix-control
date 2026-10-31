@@ -3,6 +3,7 @@
 // node data helpers.
 import { describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
+import { PROTOCOL_FIELDS, fieldsFor, readField, writeField } from '@/views/admin/nodes/protocolFields'
 import { useProtocolEditor } from '@/views/admin/nodes/useProtocolEditor'
 import { buildNodePayload, displayStatus, nodeFormFrom, parentCandidatesFor } from '@/views/admin/nodes/nodeData'
 
@@ -30,6 +31,7 @@ describe('useProtocolEditor', () => {
   it('reports invalid JSON and builds WireGuard settings without a relay', async () => {
     const editor = useProtocolEditor()
     editor.startCreate()
+    editor.protocolForm.mode = 'json'
     editor.jsonEditorContent.value = 'not json'
     expect(editor.buildPayload()).toMatchObject({ error: 'invalidJson' })
 
@@ -120,6 +122,7 @@ describe('useProtocolEditor', () => {
   it('refuses a transport the protocol cannot run on when saving JSON', () => {
     const editor = useProtocolEditor()
     editor.startCreate()
+    editor.protocolForm.mode = 'json'
     editor.jsonEditorContent.value = JSON.stringify({ type: 'shadowsocks', port: 8388, tls: 0, transport: 'ws' })
     expect(editor.buildPayload()).toMatchObject({ error: 'unsupported', problem: { field: 'transport', type: 'shadowsocks', value: 'ws' } })
     editor.jsonEditorContent.value = JSON.stringify({ type: 'vmess', port: 443, tls: 2, transport: 'tcp' })
@@ -127,6 +130,59 @@ describe('useProtocolEditor', () => {
     // The tcp an old editor stored for Hysteria2 is sent as udp.
     editor.jsonEditorContent.value = JSON.stringify({ type: 'hysteria2', port: 443, tls: 1, transport: 'tcp' })
     expect(editor.buildPayload().payload).toMatchObject({ transport: 'udp', tls: 1 })
+  })
+})
+
+describe('protocol form fields', () => {
+  it('shows the fields of the protocol, TLS mode and transport', () => {
+    const names = protocol => fieldsFor(protocol).map(field => field.key)
+    expect(names({ type: 'vless', tls: 2, transport: 'tcp' })).toEqual(['flow', 'server_name', 'fingerprint', 'dest', 'short_id', 'private_key', 'public_key'])
+    expect(names({ type: 'vmess', tls: 1, transport: 'ws' })).toEqual(['path', 'host', 'server_name', 'fingerprint', 'allowInsecure'])
+    expect(names({ type: 'trojan', tls: 1, transport: 'grpc' })).toContain('serviceName')
+    expect(names({ type: 'shadowsocks', tls: 0, transport: 'tcp', settings: {} })).toEqual(['method'])
+    expect(names({ type: 'shadowsocks', tls: 0, transport: 'tcp', settings: { method: '2022-blake3-aes-128-gcm' } })).toEqual(['method', 'server_key'])
+    expect(names({ type: 'hysteria2', tls: 1, transport: 'udp' })).toEqual(['up_mbps', 'down_mbps', 'obfs', 'server_name', 'allowInsecure'])
+    expect(names({ type: 'tuic', tls: 1, transport: 'udp' })).toEqual(['congestion_control', 'server_name', 'allowInsecure'])
+  })
+
+  it('writes one key and keeps the others, removing empty values', () => {
+    const flow = PROTOCOL_FIELDS.find(field => field.key === 'flow')
+    const method = PROTOCOL_FIELDS.find(field => field.key === 'method')
+    let protocol = { settings: { flow: 'x', custom: 1 } }
+    protocol = writeField(protocol, flow, 'xtls-rprx-vision')
+    expect(protocol.settings).toEqual({ flow: 'xtls-rprx-vision', custom: 1 })
+    protocol = writeField(protocol, flow, '')
+    expect(protocol.settings).toEqual({ custom: 1 })
+    // The Shadowsocks method is written to the alias already stored.
+    expect(writeField({ settings: { cipher: 'aes-128-gcm' } }, method, 'aes-256-gcm').settings).toEqual({ cipher: 'aes-256-gcm' })
+    expect(writeField({ settings: {} }, method, 'aes-256-gcm').settings).toEqual({ method: 'aes-256-gcm' })
+    expect(readField({ settings: {} }, method)).toBe('aes-256-gcm')
+  })
+
+  it('seeds Reality and the settings of a new type, and keeps custom_config', async () => {
+    const editor = useProtocolEditor()
+    editor.startCreate()
+    editor.protocolForm.tls = 2
+    const model = editor.protocolModel.value
+    expect(model.reality_settings.dest).toBe('www.apple.com:443')
+    expect(model.reality_settings.short_id).toMatch(/^[0-9a-f]{16}$/)
+    expect(model.tls_settings).toMatchObject({ server_name: 'www.apple.com', fingerprint: 'chrome' })
+
+    editor.protocolForm.type = 'shadowsocks'
+    expect(editor.protocolForm).toMatchObject({ tls: 0, transport: 'tcp' })
+    expect(JSON.parse(editor.protocolForm.settings)).toEqual({ method: 'aes-256-gcm' })
+
+    const stored = useProtocolEditor()
+    stored.startEdit({ id: 3, type: 'vless', port: 443, tls: 0, custom_config: '{"a":1}' })
+    expect(stored.protocolForm.mode).toBe('visual')
+    expect(stored.buildPayload().payload).toMatchObject({ custom_config: '{"a":1}' })
+    // The JSON tab shows the form, then the form shows what the JSON tab changed.
+    stored.protocolForm.mode = 'json'
+    expect(JSON.parse(stored.jsonEditorContent.value)).toMatchObject({ type: 'vless', custom_config: { a: 1 } })
+    stored.jsonEditorContent.value = JSON.stringify({ type: 'trojan', port: 8443, tls: 1, transport: 'ws', settings: {}, transport_settings: { path: '/w' } })
+    stored.protocolForm.mode = 'visual'
+    expect(stored.protocolForm).toMatchObject({ type: 'trojan', port: 8443, tls: 1, transport: 'ws' })
+    expect(stored.protocolModel.value.transport_settings).toEqual({ path: '/w' })
   })
 })
 
