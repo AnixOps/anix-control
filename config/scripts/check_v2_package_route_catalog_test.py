@@ -622,19 +622,6 @@ func NamedResultShadow(r *gin.Engine, cfg *config.Config) (config resultConfig) 
                 self.assertNotEqual(0, result.returncode, name)
                 self.assertIn(expected_error, result.stdout + result.stderr, name)
 
-    def test_checker_allows_known_topology_owners_without_current_v2_rows(self) -> None:
-        valid = json.loads(VALID_FIXTURE_CATALOG.read_text(encoding="utf-8"))
-        with tempfile.TemporaryDirectory() as temporary:
-            temporary_root = Path(temporary)
-            for owner in ("nftables-forward", "nat-egress"):
-                catalog = [dict(row) for row in valid]
-                catalog[0]["owner"] = owner
-                catalog[0]["route_id"] = "nftables.fixture.route" if owner == "nftables-forward" else "nat.fixture.route"
-                catalog_path = temporary_root / f"{owner}.json"
-                catalog_path.write_text(json.dumps(catalog), encoding="utf-8")
-                result = self.run_checker(catalog_path, inventory=FIXTURE_INVENTORY)
-                self.assertEqual(0, result.returncode, result.stderr or result.stdout)
-
     def test_catalog_records_resolved_ownership_boundaries(self) -> None:
         self.assertTrue(CATALOG.is_file(), "v2 package route catalog is missing")
         catalog = json.loads(CATALOG.read_text(encoding="utf-8"))

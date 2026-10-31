@@ -99,7 +99,7 @@ services:
       - plugin-artifacts:/var/lib/anixops
       # data_dir (root.key).
       - control-data:/var/lib/anix-control
-      # Local-ansible forward runtime (forward_runtime.backend: nftables_ansible):
+      # Local-ansible forward runtime (forward_runtime.backend: iptables_ansible):
       # mount the inventory and SSH material read-only.
       # - ./ansible/inventory.ini:/app/config/deploy/ansible/inventory.ini:ro
       # - ./ansible/ssh:/home/anixops/.ssh:ro

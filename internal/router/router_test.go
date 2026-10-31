@@ -1281,7 +1281,7 @@ func TestEveryCataloguedV2RouteResolvesToItsOwnRouteID(t *testing.T) {
 	require.True(t, ok)
 	routeFiles, err := filepath.Glob(filepath.Join(filepath.Dir(sourceFile), "..", "..", "packages", "*", "compat", "v2-routes.json"))
 	require.NoError(t, err)
-	require.Len(t, routeFiles, 17)
+	require.Len(t, routeFiles, 15)
 	for _, routeFile := range routeFiles {
 		raw, err := os.ReadFile(routeFile)
 		require.NoError(t, err)

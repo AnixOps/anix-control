@@ -14,7 +14,7 @@ func TestPublicKernelOperationHidesExecutionPayload(t *testing.T) {
 	nodeID := uint(7)
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	operation := model.KernelOperation{
-		ID: "operation-safe-view", NodeID: &nodeID, PluginID: "nftables-forward", TargetVersion: "1.2.0",
+		ID: "operation-safe-view", NodeID: &nodeID, PluginID: "machine-telemetry", TargetVersion: "1.2.0",
 		Kind: "plugin.configure", Revision: 4, ConfigHash: strings.Repeat("a", 64), State: "failed",
 		SessionID: "session-must-not-leak", ConfigJSON: `{"token":"config-must-not-leak"}`,
 		ResultJSON: `{"agent_token":"result-must-not-leak"}`, LastError: "agent-error-must-not-leak",
@@ -37,7 +37,7 @@ func TestPublicKernelOperationHidesExecutionPayload(t *testing.T) {
 func TestPublicPluginInstallationHidesRawExecutorError(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	installation := model.PluginInstallation{
-		ID: 9, PluginID: "nftables-forward", Target: "agent", DesiredVersion: "1.2.0",
+		ID: 9, PluginID: "machine-telemetry", Target: "agent", DesiredVersion: "1.2.0",
 		State: "failed", Enabled: true, LifecycleGeneration: 3, ConfigRevision: 4,
 		LastError: "agent runtime token must-not-leak", CreatedAt: now, UpdatedAt: now,
 	}

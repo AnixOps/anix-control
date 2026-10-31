@@ -163,12 +163,8 @@ jobs:
       - name: Validate plugin package release scripts
         run: |
           bash -n packages/machine-telemetry/tests/release_gate.sh
-          bash -n packages/nftables-forward/tests/release_gate.sh
-          bash -n packages/nat-egress/tests/release_gate.sh
           bash -n scripts/sign_plugin_release.sh
           python3 -m py_compile packages/machine-telemetry/build.py packages/machine-telemetry/verify_signature.py
-          python3 -m py_compile packages/nftables-forward/build.py packages/nftables-forward/verify_signature.py
-          python3 -m py_compile packages/nat-egress/build.py packages/nat-egress/verify_signature.py
 
       - name: Validate release build policy script syntax
         run: bash -n config/deploy/check_release_build_policy.sh
@@ -1494,23 +1490,9 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      - name: Build and verify real package inputs
-        shell: bash
-        env:
-          GOEXPERIMENT: jsonv2
-          GOWORK: 'off'
-        run: |
-          set -Eeuo pipefail
-          mkdir -p package-build
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-            go -C V2bX_AnixOps build -trimpath \
-              -o "${GITHUB_WORKSPACE}/package-build/nftables-forward-agent" ./cmd/nftables-forward
-          chmod 0755 package-build/nftables-forward-agent
-          [[ "$(package-build/nftables-forward-agent --version)" == "nftables-forward 1.2.0" ]]
-
       # The Agent plugins ship inside the signed packages, so a vulnerable
       # dependency in them reaches every installation. govulncheck scans the
-      # three commands those binaries are built from and fails the step only for
+      # command that binary is built from and fails the step only for
       # a vulnerability their call graph reaches; a vulnerable package or
       # module they merely import is printed as information. Like go-security,
       # it reads the live advisory database.
@@ -1523,7 +1505,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
-          "$(go env GOPATH)/bin"/govulncheck ./cmd/nftables-forward ./cmd/machine-telemetry ./cmd/nat-egress
+          "$(go env GOPATH)/bin"/govulncheck ./cmd/machine-telemetry
 
       - name: Run Machine Telemetry package unit tests
         run: python3 -m unittest discover -s packages/machine-telemetry/tests -p 'test_*.py' -v
@@ -1533,28 +1515,11 @@ jobs:
       - name: Run v4 package WebUI contract
         run: node packages/shared/tests/webui_contract.mjs
 
-      - name: Run nftables Forward package unit tests
-        run: python3 -m unittest discover -s packages/nftables-forward/tests -p 'test_*.py' -v
-
-      - name: Run nftables Forward WebUI smoke test
-        run: node packages/nftables-forward/tests/webui_smoke.mjs
-
-      - name: Run NAT Egress package unit tests
-        run: python3 -m unittest discover -s packages/nat-egress/tests -p 'test_*.py' -v
-
-      - name: Run NAT Egress WebUI smoke test
-        run: node packages/nat-egress/tests/webui_smoke.mjs
-
       - name: Run reproducible unsigned and signed package contract
         run: |
           set -o pipefail
           bash packages/machine-telemetry/tests/release_gate.sh \
             | tee machine-telemetry-package-contract.txt
-          bash packages/nftables-forward/tests/release_gate.sh \
-            --agent-binary package-build/nftables-forward-agent \
-            | tee nftables-forward-package-contract.txt
-          bash packages/nat-egress/tests/release_gate.sh \
-            | tee nat-egress-package-contract.txt
 
       - name: Upload package contract report
         uses: actions/upload-artifact@v7
@@ -1562,8 +1527,6 @@ jobs:
           name: plugin-package-contract-reports
           path: |
             machine-telemetry-package-contract.txt
-            nftables-forward-package-contract.txt
-            nat-egress-package-contract.txt
 
   plugin-package-publish:
     name: Sign the Built-in Official Packages

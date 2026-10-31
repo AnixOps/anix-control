@@ -151,7 +151,7 @@ func requireNftablesForwardObservedStateAssignment(t *testing.T, environment *ag
 	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)
 	manifest := service.PluginManifest{
-		ID: "nftables-forward", Name: "nftables Forward", Version: "1.2.0", APIVersion: "v1", Publisher: "AnixOps",
+		ID: "machine-telemetry", Name: "Machine Telemetry", Version: "1.2.0", APIVersion: "v1", Publisher: "AnixOps",
 		Targets: []string{"agent"}, ArtifactSHA256: strings.Repeat("b", 64), Capabilities: []string{"kernel.observed-state"},
 	}
 	canonical, err := service.CanonicalPluginManifest(manifest)
@@ -159,7 +159,7 @@ func requireNftablesForwardObservedStateAssignment(t *testing.T, environment *ag
 	_, err = service.RegisterPluginRelease(database.GetDB(), string(canonical), base64.StdEncoding.EncodeToString(ed25519.Sign(privateKey, canonical)), publicKey)
 	require.NoError(t, err)
 	require.NoError(t, database.GetDB().Create(&model.NodeServiceAssignment{
-		NodeID: environment.node.ID, ServiceScope: "forward", PluginID: manifest.ID, Role: "cn_dedicated_nftables", DesiredVersion: manifest.Version, Enabled: true,
+		NodeID: environment.node.ID, ServiceScope: "forward", PluginID: manifest.ID, Role: "telemetry", DesiredVersion: manifest.Version, Enabled: true,
 	}).Error)
 	return manifest
 }

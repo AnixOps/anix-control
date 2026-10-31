@@ -2,8 +2,8 @@ import { test, expect } from '@playwright/test'
 
 // The real Control carries three signed built-in packages, installed by its
 // start-up bootstrap: identity-platform and machine-telemetry ship no WebUI,
-// nftables-forward ships one.
-const extensionID = 'nftables-forward'
+// forward ships one.
+const extensionID = 'forward'
 const extensionPath = `/admin/extensions/${extensionID}`
 
 async function installations(page) {
@@ -38,7 +38,7 @@ test('lists only packages with a WebUI, then loads and serves a signed WebUI thr
   await page.waitForURL(/\/admin\/dashboard$/)
 
   // The packages without a WebUI are installed and healthy, but the
-  // catalog leaves them out: only nftables-forward has an extension.
+  // catalog leaves them out: only forward has an extension.
   const installed = await installations(page)
   for (const pluginID of ['identity-platform', 'machine-telemetry', extensionID]) {
     expect(installed).toEqual(expect.arrayContaining([
@@ -60,21 +60,22 @@ test('lists only packages with a WebUI, then loads and serves a signed WebUI thr
       url: expect.stringMatching(new RegExp(`^/api/v3/extensions/${extensionID}/4\\.0\\.0/webui/`)),
     }),
   }))
-  expect(extension.menus).toEqual([expect.objectContaining({ route: extensionPath, label: 'nftables Forward' })])
+  expect(extension.menus).toEqual([expect.objectContaining({ route: extensionPath, label: 'Forward' })])
   expect(extension.routes).toEqual([expect.objectContaining({ path: extensionPath, permission: `${extensionID}.view` })])
   await expect(page.locator('a[href="/admin/extensions/machine-telemetry"]')).toHaveCount(0)
   await expect(page.locator('a[href="/admin/extensions/identity-platform"]')).toHaveCount(0)
 
-  const menu = page.locator(`a[href="${extensionPath}"]`)
-  await expect(menu).toBeVisible()
-  await menu.click()
+  // The core forwarding pages replace the forward package's own menu entry
+  // (useNavigation), so the extension route is opened directly.
+  await expect(page.locator(`a[href="${extensionPath}"]`)).toHaveCount(0)
+  await page.goto(extensionPath)
   await expect(page).toHaveURL(new RegExp(`${extensionPath}$`))
 
   const bundle = await bundleResponse
   expect(new URL(bundle.url()).pathname).toBe(extension.bundle.url)
   expect(bundle.headers()['cache-control']).toBe('private, no-store')
-  await expect(page.locator('.nftables-forward-extension h1')).toHaveText('nftables Forward')
-  expect(await bundle.text()).toContain('NftablesForwardExtension')
+  await expect(page.locator('.forward-extension h1')).toHaveText('Forward')
+  expect(await bundle.text()).toContain('ForwardPackageExtension')
 })
 
 test('shows the built-in packages of the real Control process', async ({ page }) => {

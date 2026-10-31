@@ -159,3 +159,24 @@ func TestEntryHostname(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []Entry{{NodeName: "JP.Example.com", Host: "jp.example.com", Port: 15301}}, status.Entries)
 }
+
+func TestEntriesFollowTheRouteOverrideThenTheNodeNAT(t *testing.T) {
+	w := &world{
+		nodes:       map[uint]model.Node{1: {ID: 1, Name: "lq", Host: "10.0.0.2"}},
+		forwards:    map[uint]model.ForwardNode{},
+		allocations: map[string]map[string]uint32{},
+		nat: map[uint][]model.NodeEntry{1: {{Kind: model.NodeEntryNAT, Enabled: true, Host: "198.51.100.7",
+			PortMap: `[{"from":24000,"to":24010,"external":31000}]`}}},
+	}
+	route := &forwardv1.Route{
+		Listen: &forwardv1.Listen{Port: 24005},
+		Hops:   []*forwardv1.Hop{{NodeRefs: []string{"proxy-1"}}},
+	}
+	if got := w.entries(route, "r1"); len(got) != 1 || got[0].Host != "198.51.100.7" || got[0].Port != 31005 {
+		t.Fatalf("NAT entry: %+v", got)
+	}
+	route.Labels = map[string]string{"entry-public/proxy-1": "203.0.113.9:25001"}
+	if got := w.entries(route, "r1"); len(got) != 1 || got[0].Host != "203.0.113.9" || got[0].Port != 25001 {
+		t.Fatalf("route override: %+v", got)
+	}
+}

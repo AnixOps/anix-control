@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Added
+
+- A reversed `anx_line` transport keeps its `carrier_order`: with `c2` / `c3`
+  the egress also dials back over QUIC (the reverse port, UDP) and fake TCP
+  (the reverse port + 1, IPv4 only), which Agent #100 wires to anx-server and
+  anx-node. An empty order is still `c1`. `c3` is refused with an IPv6
+  `reverse_host` or `reverse_port` 65535.
+
 ## 5.0.0-rc.21 - 2026-10-30
 
 ### Added

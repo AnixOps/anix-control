@@ -11,6 +11,8 @@ import (
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	forwardv1 "github.com/AnixOps/anix-control/sdk/api/forward/v1"
 	networkv1 "github.com/AnixOps/anix-control/sdk/api/network/v1"
+	"github.com/AnixOps/anix-control/v5/internal/entryaddr"
+	"github.com/AnixOps/anix-control/v5/internal/model"
 )
 
 // Diagnosis of an ENGINE_NETWORK route. Its devices run the network
@@ -86,7 +88,7 @@ func (d *diagnosis) diagnoseNetwork(ctx context.Context, started time.Time) (*fo
 	for _, entry := range forward.Entries {
 		entries[entry] = deviceAddresses(db, entry, devices[entry].Status)
 	}
-	d.networkControlProbes(ctx, forward.Entries, entries, !reported)
+	d.networkControlProbes(ctx, forward.Entries, entries, entryNAT(db, forward.Entries), !reported)
 	return d.answer(started, nodes), nil
 }
 
@@ -189,9 +191,9 @@ func (d *diagnosis) networkHealthSteps(ref string, device networkDevice) (report
 // networkControlProbes dials each entry's listener from Control, at the
 // route's listen address or the entry's first public address, and the
 // targets when withTargets (no entry reports health for them).
-func (d *diagnosis) networkControlProbes(ctx context.Context, entries []string, addresses map[string][]string, withTargets bool) {
+func (d *diagnosis) networkControlProbes(ctx context.Context, entries []string, addresses map[string][]string, nat map[string][]model.NodeEntry, withTargets bool) {
 	tcp, _ := routeProtocols(d.route)
-	port := d.route.GetListen().GetPort()
+	listenPort := d.route.GetListen().GetPort()
 	var dials []*forwardv1.DiagnoseStep
 	for _, entry := range entries {
 		host := d.route.GetListen().GetAddress()
@@ -201,6 +203,10 @@ func (d *diagnosis) networkControlProbes(ctx context.Context, entries []string, 
 				host = addresses[entry][0]
 			}
 		}
+		// A NAT machine is dialled at its public address and mapped port:
+		// the route's override, else the node's NAT entry, else the above.
+		host, port32, _ := entryaddr.Resolve(d.route.GetLabels(), entry, host, int(listenPort), nat[entry])
+		port := uint32(port32) // #nosec G115 -- Resolve answers 0-65535.
 		if host == "" || port == 0 {
 			continue
 		}
