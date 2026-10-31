@@ -72,7 +72,7 @@ func TestBootstrapDatabaseMigratesTheSchema(t *testing.T) {
 		// 0007_egress_routes, 0008_reality_target_probes, 0009_reality_target_auto,
 		// 0010_node_entries, 0011_subscription_group_protocols,
 		// 0012_forward_route_subscriptions).
-		require.NoError(t, db.Migrator().DropTable(migrations.MigrationTable, migrations.MetaTable, &model.ACMECacheEntry{}, &model.Backup{}, &model.DestinationStat{}, &model.EgressRoute{}, &model.RealityTargetProbe{}, &model.RealityTargetAuto{}, &model.NodeEntry{}, &model.SubscriptionGroupProtocol{}, &model.ForwardRouteSubscription{}, &model.IWANLine{}, &model.KernelForwardLatency{}, &model.KernelForwardDNSVantage{}, &model.NetworkModel{}, &model.NetworkTransportKey{}, &model.NetworkDevice{}, &model.NodeNetwork{}, &model.ReverseProxy{}, &model.ReverseProxyACMEAccount{}))
+		require.NoError(t, db.Migrator().DropTable(migrations.MigrationTable, migrations.MetaTable, &model.ACMECacheEntry{}, &model.Backup{}, &model.DestinationStat{}, &model.EgressRoute{}, &model.RealityTargetProbe{}, &model.RealityTargetAuto{}, &model.NodeEntry{}, &model.SubscriptionGroupProtocol{}, &model.ForwardRouteSubscription{}, &model.IWANLine{}, &model.KernelForwardLatency{}, &model.KernelForwardDNSVantage{}, &model.NetworkModel{}, &model.NetworkTransportKey{}, &model.NetworkDevice{}, &model.NodeNetwork{}, &model.ReverseProxy{}, &model.ReverseProxyACMEAccount{}, &model.NodeUplinks{}))
 		require.NoError(t, bootstrapDatabase(ctx, cfg))
 		meta, err = migrations.Meta(ctx, db)
 		require.NoError(t, err)

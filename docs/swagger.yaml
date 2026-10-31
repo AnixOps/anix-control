@@ -1005,6 +1005,27 @@ definitions:
         type: string
       source_v6:
         type: string
+      uplink_choices:
+        additionalProperties:
+          type: string
+        type: object
+      uplink_default:
+        type: string
+      uplink_hops:
+        description: |-
+          UplinkHops are the next devices of the device's routes as its
+          uplinks see them (uplinks.go).
+        items:
+          $ref: '#/definitions/networkmodel.UplinkHop'
+        type: array
+      uplinks:
+        description: |-
+          Uplinks are the interfaces traffic to the next device of a route may
+          leave by (uplinks.go); UplinkDefault ("auto" when empty) and
+          UplinkChoices (by next device) say which one it does.
+        items:
+          $ref: '#/definitions/networkmodel.Uplink'
+        type: array
     type: object
   networkmodel.NodeSettings:
     properties:
@@ -1020,6 +1041,20 @@ definitions:
         type: string
       source_v6:
         type: string
+      uplink_choices:
+        additionalProperties:
+          type: string
+        type: object
+      uplink_default:
+        type: string
+      uplinks:
+        description: |-
+          Uplinks are the interfaces traffic to the next device of a route may
+          leave by (uplinks.go); UplinkDefault ("auto" when empty) and
+          UplinkChoices (by next device) say which one it does.
+        items:
+          $ref: '#/definitions/networkmodel.Uplink'
+        type: array
     type: object
   networkmodel.Pairing:
     properties:
@@ -1099,6 +1134,64 @@ definitions:
         type: string
       trusted:
         type: boolean
+    type: object
+  networkmodel.Uplink:
+    properties:
+      gateway_v4:
+        type: string
+      gateway_v6:
+        type: string
+      interface:
+        type: string
+      label:
+        type: string
+      name:
+        type: string
+      source_v4:
+        type: string
+      source_v6:
+        type: string
+    type: object
+  networkmodel.UplinkHop:
+    properties:
+      active:
+        description: the uplink the transport leaves by
+        type: string
+      choice:
+        description: auto or an uplink name
+        type: string
+      family:
+        type: string
+      probes:
+        items:
+          $ref: '#/definitions/networkmodel.UplinkProbe'
+        type: array
+      reason:
+        type: string
+      since:
+        type: string
+      target:
+        type: string
+      to:
+        type: string
+      to_name:
+        type: string
+    type: object
+  networkmodel.UplinkProbe:
+    properties:
+      changed_at_unix_ms:
+        type: integer
+      detail:
+        type: string
+      egress:
+        type: string
+      rtt_ms:
+        type: integer
+      state:
+        description: up, down, unknown
+        type: string
+      uplink:
+        type: string
     type: object
   nodeentry.Input:
     properties:

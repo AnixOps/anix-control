@@ -110,6 +110,10 @@ type device struct {
 	Host    string
 	Network model.NodeNetwork
 	NAT     []natEntry
+	// Uplinks are the device's uplinks and Active auto mode's choices
+	// (uplinks.go).
+	Uplinks uplinkConfig
+	Active  map[string]activeUplink
 }
 
 // hopPort answers the port the device's hop ingress listens on.
@@ -333,13 +337,27 @@ func (a *autoCompleter) transport(from, to string, link Link) string {
 		ingress.Kind, ingress.PublicHost = network.IngressNAT, strings.Trim(entry.Host, "[]")
 		ingress.PortMap = []PortMap{{Public: PortRange{First: public, Last: public}, Local: PortRange{First: port, Last: port}}}
 	}
-	egress := AutoPrefix + from + "-hop"
-	if family == "v6" {
-		egress += "6"
+	dial := dialTarget(ingress.PublicHost, port)
+	if ingress.Kind == network.IngressNAT {
+		dial = dialTarget(ingress.PublicHost, ingress.PortMap[0].Public.First)
 	}
-	if a.add("e:" + egress) {
-		a.doc.Egresses = append(a.doc.Egresses, Egress{ID: egress, Line: a.line(from), Kind: network.EgressHop,
-			Audience: "hop", Family: family, Source: a.devices[from].source(family)})
+	egress := ""
+	if link.Mode != LinkAnxLineReverse {
+		// A reversed link is dialed by the next device: no uplink of
+		// this one to choose.
+		egress = a.uplinkEgresses(from, to, family, dial)
+	}
+	if egress == "" {
+		egress = AutoPrefix + from + "-hop"
+		if family == "v6" {
+			egress += "6"
+		}
+	}
+	if egress == AutoPrefix+from+"-hop" || egress == AutoPrefix+from+"-hop6" {
+		if a.add("e:" + egress) {
+			a.doc.Egresses = append(a.doc.Egresses, Egress{ID: egress, Line: a.line(from), Kind: network.EgressHop,
+				Audience: "hop", Family: family, Source: a.devices[from].source(family)})
+		}
 	}
 	if a.add("i:" + ingressID) {
 		ingress.ID = ingressID
@@ -514,6 +532,23 @@ func devicesFor(db *gorm.DB, forwards []Forward) (map[string]device, error) {
 		}
 		for _, row := range rows {
 			set(row.NodeRef, func(d *device) { d.Network = row })
+		}
+	}
+	if db.Migrator().HasTable(&model.NodeUplinks{}) {
+		keys := make([]string, 0, len(refs))
+		for ref := range refs {
+			keys = append(keys, ref)
+		}
+		var rows []model.NodeUplinks
+		if err := db.Where("node_ref IN ?", keys).Find(&rows).Error; err != nil {
+			return nil, err
+		}
+		for _, row := range rows {
+			config, active, err := decodeUplinks(row)
+			if err != nil {
+				return nil, err
+			}
+			set(row.NodeRef, func(d *device) { d.Uplinks, d.Active = config, active })
 		}
 	}
 	return devices, nil

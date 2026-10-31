@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"sort"
 	"sync"
 	"time"
@@ -133,8 +134,16 @@ func (s *Service) RecordStatus(ctx context.Context, node agentcontrol.AgentNode,
 		return err
 	}
 	at := observedAt.UTC()
-	return s.DB.WithContext(ctx).Model(&model.NetworkDevice{}).Where("node_ref = ?", node.String()).
-		Updates(map[string]any{"status_json": string(encoded), "status_at": &at}).Error
+	if err := s.DB.WithContext(ctx).Model(&model.NetworkDevice{}).Where("node_ref = ?", node.String()).
+		Updates(map[string]any{"status_json": string(encoded), "status_at": &at}).Error; err != nil {
+		return err
+	}
+	// Auto mode follows the uplinks' probes; a failure keeps the
+	// uplinks as they are and the status recorded.
+	if err := s.evaluateUplinks(ctx, node.String(), status); err != nil {
+		slog.Warn("network model: uplinks were not evaluated", "component", "network-model", "node", node.String(), "error", err)
+	}
+	return nil
 }
 
 // Status answers node's latest NetworkStatus, nil without one.

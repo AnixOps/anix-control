@@ -144,6 +144,7 @@ func laterModels() []any {
 		&model.NodeNetwork{},               // 0018_node_network
 		&model.ReverseProxy{},              // 0022_reverse_proxies
 		&model.ReverseProxyACMEAccount{},   // 0022_reverse_proxies
+		&model.NodeUplinks{},               // 0023_node_uplinks
 	}
 }
 

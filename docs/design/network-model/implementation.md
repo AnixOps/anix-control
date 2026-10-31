@@ -115,3 +115,13 @@ PortForward 由 Agent 转成 anixcore 的 forward 入站（出站为 `egress:<id
 5. 面板。
 6. 灰度迁移。
 7. 删除 gost。
+
+## 多网卡上联：按下一跳选出口网卡，探测延迟，自动切换
+
+需求（owner，2026-10-31）：LQ-SH（864）入口有两张网卡（CN2、联通 9929），去下一跳走哪张网卡要能自己选，要能看到每张网卡到下一跳的延迟，并且默认自动用延迟低的那张。
+
+- 配置：节点「网络」设置里加上联网卡列表 `uplinks`（`name` 小写字母和数字、`label` 显示名、`interface`、每个地址族的 `source_*` 和 `gateway_*`，最多 8 张），`uplink_default`（`auto` 或某张网卡，空为 `auto`），`uplink_choices`（按下一跳设备覆盖）。存在 `v4_kernel_node_uplinks`（迁移 0023）：`config_json` 是配置，`active_json` 是自动模式为每个下一跳选中的网卡。接口仍是 `GET/PUT /api/v4/kernel/nodes/{id}/network`，回答里多了 `uplink_hops`。
+- 规划：有上联网卡的设备，每条自动传输对每张有该地址族源地址的网卡生成一个跳出口 `auto-<from>-up-<网卡>-<to>`（IPv6 下一跳加 `-v6`），在线路 `auto-<from>-up-<网卡>` 上，源地址是该网卡的地址，带健康检查（目标为下一跳跳入口的拨号地址，10 秒一次，超时 3 秒）。传输 id 不变，只是 `from_egress` 指向选中的那张网卡。反向链路（由下一跳回拨）不选网卡。
+- 延迟：anixcore 本来就从出口的源地址探测健康目标并报告 `rtt_ms`（node-runtime network.rs），Agent 把它作为出口组件状态上报；不需要改合约、networkcore 或 anx。
+- 自动切换：每次收到设备的网络状态（约每分钟）时评估。还没有选择时直接选最快的；当前网卡 down 时立刻换到可用的最快网卡；否则只有更快的网卡快过 max(10 ms, 当前的 15%)、连续 3 次状态都如此、且当前网卡已用满 3 分钟才切换。切换写日志，重新规划。
+- Agent：对每条拨出传输，若其出口有源地址，把对端地址加一条 `ip rule to <对端 IP> table <该出口的表>`（优先级低于 `from <源地址>` 规则，探测仍按自己的源地址走），这样 anx-node 的链路本身就走选中的网卡；选中的出口变了，Agent 重建该链路，让它从新网卡重新拨。

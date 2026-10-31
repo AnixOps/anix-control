@@ -26,6 +26,9 @@ type NodeNetworkView struct {
 	NodeSettings
 	Detected   []DetectedInterface `json:"detected"`
 	DetectedAt *time.Time          `json:"detected_at"`
+	// UplinkHops are the next devices of the device's routes as its
+	// uplinks see them (uplinks.go).
+	UplinkHops []UplinkHop `json:"uplink_hops"`
 }
 
 // NodeNetwork answers node's network settings and detected interfaces.
@@ -35,6 +38,9 @@ func (s *Service) NodeNetwork(ctx context.Context, node string) (NodeNetworkView
 		return NodeNetworkView{}, err
 	}
 	view := NodeNetworkView{NodeSettings: settings, Detected: []DetectedInterface{}}
+	if view.UplinkHops, err = s.NodeUplinkHops(ctx, node); err != nil {
+		return NodeNetworkView{}, err
+	}
 	status, at, err := s.latestStatus(ctx, node)
 	if err != nil || status == nil {
 		return view, err
