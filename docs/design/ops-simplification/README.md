@@ -119,7 +119,7 @@ S3、S9、S10、S11 和维护者工具。
 19. **N19** 订单收尾自动化：标记已付和开通放进同一个事务；0 元订单自动完成；未付订单超时只取消没点过“我已付款”的那些，并退回占用的优惠券次数；点过的订单一直保留，并在需要处理列表里提醒（business-10, internal/service/order_service.go:344,397-399）。
 20. **N20** 已过期的用户也能登录续费；管理员可以给用户设新密码（business-8, internal/service/auth_service.go:117-119）。
 21. **N21** 用户流量的月度重置改由独立工作线程执行，不再依赖 flux 表是否存在（business-14, cmd/server/singleton_workers.go:73-81）。
-22. **N22** 第一次接入节点不用填任何东西：空面板第一次打开“接入节点”时，自动建一个“默认”节点组（VLESS Reality，随机端口）。Reality 密钥、short_id 和 SS2022 密钥由服务端生成，也不再偷偷创建 Default VMess。5.0 其余设计不变（admin-ui-9, fleet-9, internal/service/node_service.go:139-160）。
+22. **N22** 第一次接入节点不用填任何东西：空面板第一次打开“接入节点”时，自动建一个“默认”节点组。接入的节点是干净节点，不带任何协议（不再默认创建 VLESS Reality）；没有协议的节点不进订阅，节点页“协议”区显示“添加协议”入口。Reality 密钥、short_id 和 SS2022 密钥在添加协议时由服务端生成，也不再偷偷创建 Default VMess。5.0 其余设计不变（admin-ui-9, fleet-9, internal/service/node_service.go:139-160）。
 23. **N23** 给出接入命令前先做就绪检查：https、gRPC 证书、CA，以及安装脚本是否能从外网取到。检查不过就显示修复办法，不给一条注定失败的命令；同时提供 `anix-control doctor`（config-2, cli-api-6, internal/handler/agent_install.go:111-125）。
 24. **N24** 订阅里只放在线、运行健康、且最近一次配置成功应用的节点，恢复后自动重新放回去（internal/service/subscription_service.go:595-605; internal/grpc/agent_control_config.go:184-191）。
 25. **N25** 节点页显示配置“已生效 / 失败：原因”；同一节点端口重复时拒绝保存；每个协议有“重新生成密钥”按钮，改完自动下发（fleet-10, fleet-9, internal/grpc/agent_control_config.go:189-191, internal/service/wireguard_validation.go:24-34）。
