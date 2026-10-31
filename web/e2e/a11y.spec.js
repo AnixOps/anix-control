@@ -255,4 +255,3 @@ test('node page tabs follow the WAI-ARIA tabs keyboard pattern', async ({ page }
   await page.keyboard.press('Tab')
   await expect(tablist.locator(':focus')).toHaveCount(0)
 })
-  expect(findings.filter(item => /^(label|aria-input-field-name|aria-toggle-field-name)/.test(item)), findings.join('\n')).toEqual([])
