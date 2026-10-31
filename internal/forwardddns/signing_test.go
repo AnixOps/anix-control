@@ -90,7 +90,7 @@ func TestCheckSet(t *testing.T) {
 	require.Error(t, CheckSet(RecordSet{Zone: "example.com", Name: "hk.example.com", Type: TypeA, Values: []string{"2001:db8::1"}}, false))
 	require.Error(t, CheckSet(RecordSet{Zone: "example.com", Name: "hk.example.com", Type: TypeAAAA, Values: []string{"192.0.2.1"}}, false))
 	require.Error(t, CheckSet(RecordSet{Zone: "example.com", Name: "hk.example.com", Type: TypeA}, false))
-	require.Error(t, CheckSet(RecordSet{Zone: "example.com", Name: "hk.example.com", Type: "TXT", Values: []string{"x"}}, false))
+	require.Error(t, CheckSet(RecordSet{Zone: "example.com", Name: "hk.example.com", Type: "MX", Values: []string{"x"}}, false))
 	require.Equal(t, "@", relative("Example.com.", "example.com"))
 	require.Equal(t, "hk.edge", relative("hk.edge.example.com", "example.com"))
 }

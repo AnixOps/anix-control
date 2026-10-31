@@ -168,8 +168,8 @@ describe('navigation/menu.js: palette entries', () => {
     expect(paths).toContain('/admin/account')
     expect(paths).not.toContain('/admin/orders')
     // The flux-clone pages and their wizard were removed in v4.2 (F5d);
-    // without the forward package only 分流 (a kernel API) is left.
-    expect(paths.filter(path => path.startsWith('/admin/forward'))).toEqual(['/admin/forward/egress'])
+    // without the forward package only 分流 and 反向代理 (kernel APIs) are left.
+    expect(paths.filter(path => path.startsWith('/admin/forward'))).toEqual(['/admin/forward/egress', '/admin/forward/reverse-proxies'])
     expect(actions.map(action => action.id)).toEqual(['join-node', 'add-user', 'upgrade-nodes'])
     expect(actions.find(action => action.id === 'join-node').to).toEqual({ path: '/admin/nodes', query: { join: '1' } })
   })

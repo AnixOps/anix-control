@@ -16,7 +16,7 @@
 <script setup>
 // The node area's sections (节点 / 转发概览 / 路由 / DNS / 分流), one
 // network area since the 转发 sidebar item was folded into 节点
-// (docs/design/node-unification), with the polling line of the forwarding
+// (docs/design/node-unification), plus 反向代理, with the polling line of the forwarding
 // pages (D5: "更新于 N 秒前" and refresh). DNS holds the providers of entry
 // high availability (L2); 分流 the egress routes between proxy nodes. 概览,
 // 路由 and DNS need the forward package's v4 API, as their routes do.
@@ -36,14 +36,15 @@ defineProps({
 const emit = defineEmits(['refresh'])
 const router = useRouter()
 const { t } = useAppI18n()
-const PATHS = { nodes: '/admin/nodes', overview: '/admin/forward/overview', routes: '/admin/forward/routes', dns: '/admin/forward/dns', egress: '/admin/forward/egress' }
+const PATHS = { nodes: '/admin/nodes', overview: '/admin/forward/overview', routes: '/admin/forward/routes', dns: '/admin/forward/dns', egress: '/admin/forward/egress', 'reverse-proxies': '/admin/forward/reverse-proxies' }
 const FORWARD = new Set(['overview', 'routes', 'dns'])
 const options = computed(() => [
   { value: 'nodes', label: t('forwardV4.nav.nodes') },
   { value: 'overview', label: t('forwardV4.nav.overview') },
   { value: 'routes', label: t('forwardV4.nav.routes') },
   { value: 'dns', label: t('forwardDns.nav') },
-  { value: 'egress', label: t('egressRoutes.nav') }
+  { value: 'egress', label: t('egressRoutes.nav') },
+  { value: 'reverse-proxies', label: t('reverseProxies.nav') }
 ].filter(option => !FORWARD.has(option.value) || adminCapabilities.value.includes('forward.v4')))
 
 function go(value) {

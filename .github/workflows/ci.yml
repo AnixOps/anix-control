@@ -1951,6 +1951,10 @@ jobs:
           ANIX_CONTROL_TEST_PEBBLE_ROOTS_URL: https://127.0.0.1:15000/roots/0
         run: |
           go test -v -count=1 -run TestPebbleIssuesOverBothChallenges ./internal/panelcert/
+          # The reverse proxies' DNS-01 certificates, the TXT records written
+          # through pebble-challtestsrv's management API.
+          ANIX_CONTROL_TEST_PEBBLE_CHALLTESTSRV=http://127.0.0.1:8055 \
+            go test -v -count=1 -run TestPebbleIssuesDNS01 ./internal/reverseproxy/
           tail -n 20 "${RUNNER_TEMP}/pebble/pebble.log"
 
   frontend-checks:

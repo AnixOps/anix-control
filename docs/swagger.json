@@ -8699,6 +8699,150 @@
                 }
             }
         },
+        "/api/v4/kernel/reverse-proxies": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Every reverse proxy by name: entries and via nodes, listen_port, http_port (the plain redirect listener), sites (hosts and routes to upstreams), tls_mode, whether it has a certificate with its names and expiry, pending (why entries do not run it now) and status (what each entry last reported: state, bytes and upstream health). The private key is never answered.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "The reverse proxies",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Adds a reverse proxy: name unique; 1-8 entries and 0-4 via nodes (proxy-\u003cid\u003e); listen_port; sites with hosts (example.com, *.example.com or *) and routes (path prefix, strip_prefix, host_header client or upstream or a fixed host, headers, upstreams, balance, health); tls_mode none or manual (certificate_pem and private_key_pem, a pair covering every host; http_port then redirects to https). The private key is sealed under module_runtime.ca_kek (409 kek_required without it). Audited without the certificate; replans the devices.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Add a reverse proxy",
+                "parameters": [
+                    {
+                        "description": "the reverse proxy",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/reverseproxy.Input"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v4/kernel/reverse-proxies/{id}": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Replaces the reverse proxy's fields as Create checks them; with tls_mode manual, empty certificate_pem and private_key_pem keep the stored certificate. Audited without the certificate; replans the devices.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Change a reverse proxy",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "reverse proxy id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "the reverse proxy",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/reverseproxy.Input"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Deletes the reverse proxy; its entries stop running it. Audited; replans the devices.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Delete a reverse proxy",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "reverse proxy id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/v4/public/config": {
             "get": {
                 "description": "注册是否需要邀请码；edition 为 community，hidden_packages 为商业集合的包（affiliate、order、payment），网页据此隐藏商业入口",
@@ -11396,6 +11540,147 @@
                 },
                 "next_run_at": {
                     "type": "string"
+                }
+            }
+        },
+        "reverseproxy.Health": {
+            "type": "object",
+            "properties": {
+                "disabled": {
+                    "type": "boolean"
+                },
+                "interval_ms": {
+                    "type": "integer"
+                },
+                "timeout_ms": {
+                    "type": "integer"
+                }
+            }
+        },
+        "reverseproxy.Input": {
+            "type": "object",
+            "properties": {
+                "certificate_pem": {
+                    "type": "string"
+                },
+                "dns_provider_id": {
+                    "type": "integer"
+                },
+                "dns_zone": {
+                    "type": "string"
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "entries": {
+                    "description": "Entries are the devices that answer (proxy-\u003cid\u003e); several are\nentry HA, each running the same proxy.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "http_port": {
+                    "description": "HTTPPort, with TLS, is a plain listener that redirects to https.",
+                    "type": "integer"
+                },
+                "listen_port": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "private_key_pem": {
+                    "type": "string"
+                },
+                "sites": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/reverseproxy.Site"
+                    }
+                },
+                "tls_mode": {
+                    "description": "TLSMode is none, manual (certificate_pem and private_key_pem) or\nacme: Control obtains and renews the certificate with an ACME DNS-01\nchallenge, writing the TXT records through dns_provider_id (a\nforwarding DNS provider) in dns_zone, which holds every host.",
+                    "type": "string"
+                },
+                "via": {
+                    "description": "Via are devices the requests travel through before the last of them\ndials the upstreams; empty dials from the entry.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "reverseproxy.Route": {
+            "type": "object",
+            "properties": {
+                "balance": {
+                    "description": "Balance is round_robin (default), random, ip_hash, least_conn or\nfailover.",
+                    "type": "string"
+                },
+                "headers": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "health": {
+                    "$ref": "#/definitions/reverseproxy.Health"
+                },
+                "host": {
+                    "type": "string"
+                },
+                "host_header": {
+                    "description": "HostHeader is \"client\" (default) or \"upstream\"; Host, when set, is\nsent instead.",
+                    "type": "string"
+                },
+                "path": {
+                    "description": "Path is \"/\" or a prefix without a trailing slash.",
+                    "type": "string"
+                },
+                "strip_prefix": {
+                    "type": "boolean"
+                },
+                "upstreams": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/reverseproxy.Upstream"
+                    }
+                }
+            }
+        },
+        "reverseproxy.Site": {
+            "type": "object",
+            "properties": {
+                "hosts": {
+                    "description": "Hosts are \"example.com\", \"*.example.com\" or \"*\".",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "routes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/reverseproxy.Route"
+                    }
+                }
+            }
+        },
+        "reverseproxy.Upstream": {
+            "type": "object",
+            "properties": {
+                "host": {
+                    "type": "string"
+                },
+                "port": {
+                    "type": "integer"
+                },
+                "priority": {
+                    "type": "integer"
+                },
+                "weight": {
+                    "type": "integer"
                 }
             }
         },

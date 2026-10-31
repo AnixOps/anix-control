@@ -47,6 +47,20 @@ type Forward struct {
 	Egress string
 	// Paused routes are left out.
 	Paused bool
+	// ReverseProxy, when set, makes this an HTTP(S) reverse proxy on the
+	// same chain: each entry runs it instead of a port forward, and its
+	// routes' upstreams are dialed where Targets would be. Protocols,
+	// Targets and Policy are then unused.
+	ReverseProxy *ReverseProxySpec
+}
+
+// ReverseProxySpec is what a reverse proxy runs on its entries.
+type ReverseProxySpec struct {
+	// CertificatePEM and PrivateKeyPEM terminate TLS; both empty serve
+	// plain HTTP.
+	CertificatePEM string
+	PrivateKeyPEM  string
+	Sites          []*networkv1.ReverseProxySite
 }
 
 // planned is what Plan has put into the plans so far, for the forwards
@@ -262,6 +276,10 @@ func (p *planned) planForwards(forwards []Forward) []Pending {
 				if len(forward.Entries) > 1 {
 					reason = "entry " + entry + ": " + reason
 				}
+				if forward.ReverseProxy != nil {
+					pending = append(pending, Pending{ReverseProxy: forward.ID, Reason: reason})
+					return
+				}
 				pending = append(pending, Pending{Forward: forward.ID, Reason: reason})
 			}
 			segments, egress, reason := p.entryChain(forward, k)
@@ -270,6 +288,12 @@ func (p *planned) planForwards(forwards []Forward) []Pending {
 			}
 			if reason != "" {
 				wait(reason)
+				continue
+			}
+			if forward.ReverseProxy != nil {
+				if reason := p.planReverseProxy(forward, entry, segments, egress); reason != "" {
+					wait(reason)
+				}
 				continue
 			}
 			out := &networkv1.PortForward{
@@ -302,6 +326,36 @@ func (p *planned) planForwards(forwards []Forward) []Pending {
 		}
 	}
 	return pending
+}
+
+// planReverseProxy adds forward's reverse proxy to entry's plan over
+// segments and egress, or answers why it waits.
+func (p *planned) planReverseProxy(forward *Forward, entry string, segments []string, egress string) string {
+	spec := forward.ReverseProxy
+	out := &networkv1.ReverseProxy{
+		Id: forward.ID, Listen: &networkv1.Endpoint{Address: forward.Listen.Address, Port: forward.Listen.Port},
+		CertificatePem: spec.CertificatePEM, PrivateKeyPem: spec.PrivateKeyPEM,
+	}
+	for _, site := range spec.Sites {
+		out.Sites = append(out.Sites, proto.Clone(site).(*networkv1.ReverseProxySite))
+	}
+	if len(segments) == 0 {
+		out.Next = &networkv1.ReverseProxy_EgressId{EgressId: egress}
+	} else {
+		out.Next = &networkv1.ReverseProxy_TransportId{TransportId: segments[0]}
+	}
+	if err := network.CheckReverseProxy(out); err != nil {
+		return err.Error()
+	}
+	if other := p.take(entry, listenKey(forward.Listen.Address, forward.Listen.Port), "reverse proxy "+forward.ID); other != "" {
+		return fmt.Sprintf("listen %s:%d is taken by %s", forward.Listen.Address, forward.Listen.Port, other)
+	}
+	for j, id := range segments {
+		p.addTransport(id, continuation(segments, j, egress))
+	}
+	plan := p.plans(entry)
+	plan.ReverseProxies = append(plan.ReverseProxies, out)
+	return ""
 }
 
 // noLink says why hop j+1 has no transport: Control links a hop only to a

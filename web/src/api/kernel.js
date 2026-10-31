@@ -620,6 +620,33 @@ export async function deleteKernelEgressRoute(id) {
   return unwrap(await v4({ url: `/kernel/egress-routes/${encodeURIComponent(id)}`, method: 'delete' }))
 }
 
+// Reverse proxies: HTTP(S) sites on entry nodes, routes by path to
+// upstreams. { reverse_proxies: [{ id, name, enabled, entries, via,
+// listen_port, http_port, sites: [{ hosts, routes: [{ path, strip_prefix,
+// host_header, host, headers, upstreams: [{ host, port, weight }], balance,
+// health }] }], tls_mode, has_certificate, certificate_names,
+// certificate_not_after, pending, status: [{ node, id, state, detail,
+// up_bytes, down_bytes, upstreams }] }] }. Never the private key.
+export async function listReverseProxies() {
+  return unwrap(await v4({ url: '/kernel/reverse-proxies', method: 'get' }))
+}
+
+// input: { name, enabled, entries: ['proxy-1'], via: [], listen_port,
+// http_port, sites, tls_mode: none | manual, certificate_pem,
+// private_key_pem }. An update with both PEMs empty keeps the stored
+// certificate. Errors: 400 invalid_request, 409 kek_required.
+export async function createReverseProxy(input) {
+  return unwrap(await v4({ url: '/kernel/reverse-proxies', method: 'post', data: input }))
+}
+
+export async function updateReverseProxy(id, input) {
+  return unwrap(await v4({ url: `/kernel/reverse-proxies/${encodeURIComponent(id)}`, method: 'put', data: input }))
+}
+
+export async function deleteReverseProxy(id) {
+  return unwrap(await v4({ url: `/kernel/reverse-proxies/${encodeURIComponent(id)}`, method: 'delete' }))
+}
+
 // The device network model (/api/v4/kernel/network): { revision, document:
 // { lines, ingresses, egresses, transports, paths }, pending, devices }.
 export async function getNetworkModel() {

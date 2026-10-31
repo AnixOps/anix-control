@@ -202,6 +202,7 @@ export default {
       forwardV4Node: '节点详情',
       forwardV4Dns: 'DNS 服务商',
       forwardEgress: '域名分流',
+      reverseProxies: '反向代理',
       control: '控制内核',
       accessGroups: '访问组',
       payment: '支付',
