@@ -219,7 +219,7 @@ Then the old certificates are revoked and a new one is issued for that node
 ## Protocol Templates (removed)
 
 A node group no longer carries a protocol template or subscription groups
-(migration `0019_node_groups_without_templates`, along with its `kind`).
+(migration `0020_node_groups_without_templates`, along with its `kind`).
 A node that joins is clean: it has no protocol and only runs the network model
 (ANX). Protocols are added on the node page.
 

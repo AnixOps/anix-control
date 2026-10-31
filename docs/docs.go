@@ -5141,6 +5141,48 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v4/admin/subscription-groups/{id}/node-overrides": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "清除该分组所有节点的修改, 恢复为源协议的值; 名称与顺序不受影响。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-订阅"
+                ],
+                "summary": "重置订阅分组的全部节点修改",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "订阅分组 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/v4/admin/subscription-groups/{id}/protocol-layout": {
             "get": {
                 "security": [
@@ -5214,6 +5256,121 @@ const docTemplate = `{
                         "required": true,
                         "schema": {
                             "$ref": "#/definitions/handler.groupProtocolLayoutRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v4/admin/subscription-groups/{id}/protocols/{protocol_id}/nodes": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "列出该协议在分组订阅中生成的每个节点 (按入口展开), 含分组的修改 (overrides) 与源协议的原始值 (defaults)。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-订阅"
+                ],
+                "summary": "订阅分组中某协议生成的节点及其修改",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "订阅分组 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "节点协议 ID",
+                        "name": "protocol_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "设置分组对该协议各节点的修改与顺序 (order 为节点键的显示顺序, 未列出的排在其后; 名称、地址、端口、SNI、传输等; 协议类型与凭据不可改)。未列出或为空的节点恢复为源协议的值, 源协议本身不变。订阅立即生效。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-订阅"
+                ],
+                "summary": "修改订阅分组中某协议生成的节点",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "订阅分组 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "节点协议 ID",
+                        "name": "protocol_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "按节点键的修改",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.groupNodeOverridesRequest"
                         }
                     }
                 ],
@@ -8126,7 +8283,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Lists every proxy and forward node with the transport its agent was last seen on (mtls-stream, apikey-stream, http-legacy, websocket, clean-agent, uniproxy, v2board-grpc), its agent version, its newest valid agent certificate, when it was last seen and its live Agent Control stream session (authentication mtls or api-key, certificate serial, expiry and SAN, negotiated capabilities). Each node also carries certificate_state (valid, revoked, expired or none), last_certificate (its newest certificate in any state: serial, issued_at, not_after, renew_after, revoked_at and revoke_reason) and connection (type mtls_stream, apikey_stream, legacy, third_party or offline, the transport and when it was last seen). legacy_only=true keeps the nodes on a legacy AnixOps Agent channel; node=proxy-7 (repeatable or comma separated, at most 200) keeps the named nodes. summary.ready_for_required (with required_reasons and required_blockers, computed over every node) is false while agent_control.mtls: required, the default from v4.2, would refuse an enabled node: a legacy one or one that never enrolled.",
+                "description": "Lists every proxy and forward node with the transport its agent was last seen on (mtls-stream, uniproxy, v2board-grpc), its agent version, its newest valid agent certificate, when it was last seen and its live Agent Control stream session (authentication mtls, certificate serial, expiry and SAN, negotiated capabilities). Each node also carries certificate_state (valid, revoked, expired or none), last_certificate (its newest certificate in any state: serial, issued_at, not_after, renew_after, revoked_at and revoke_reason) and connection (type mtls_stream, third_party or offline, the transport and when it was last seen). node=proxy-7 (repeatable or comma separated, at most 200) keeps the named nodes. summary.ready_for_required (with required_reasons and required_blockers, computed over every node) is false while an enabled node has never enrolled.",
                 "produces": [
                     "application/json"
                 ],
@@ -8135,12 +8292,6 @@ const docTemplate = `{
                 ],
                 "summary": "Agent transport inventory",
                 "parameters": [
-                    {
-                        "type": "boolean",
-                        "description": "only nodes on a legacy AnixOps Agent channel",
-                        "name": "legacy_only",
-                        "in": "query"
-                    },
                     {
                         "type": "array",
                         "items": {
@@ -12204,6 +12355,25 @@ const docTemplate = `{
                 "scope": {
                     "description": "Scope is \"read\" or \"admin\".",
                     "type": "string"
+                }
+            }
+        },
+        "handler.groupNodeOverridesRequest": {
+            "type": "object",
+            "properties": {
+                "nodes": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "object",
+                        "additionalProperties": {}
+                    }
+                },
+                "order": {
+                    "description": "Order lists the node keys in the order the subscription shows them;\nkeys left out follow.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
         },

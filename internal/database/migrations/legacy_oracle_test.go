@@ -199,7 +199,7 @@ func retiredKernelModels() []any {
 
 // baselineNodeGroup is model.NodeGroup as the baseline created it, with the
 // kind, the protocol template and the subscription groups that
-// 0019_node_groups_without_templates dropped with the model's fields.
+// 0020_node_groups_without_templates dropped with the model's fields.
 type baselineNodeGroup struct {
 	ID                   uint      `gorm:"primaryKey"`
 	Name                 string    `gorm:"size:100;not null;uniqueIndex:ux_v5_node_group_live_name,where:deleted = 0"`
@@ -233,7 +233,7 @@ func legacyPrepare(t *testing.T, db *gorm.DB, production bool) {
 	t.Helper()
 	require.NoError(t, legacyPrepareErr(db, production))
 	require.NoError(t, db.AutoMigrate(retiredKernelModels()...))
-	// 0019_node_groups_without_templates dropped columns of v5_node_group:
+	// 0020_node_groups_without_templates dropped columns of v5_node_group:
 	// the baseline's table is built from the frozen copy.
 	require.NoError(t, db.Migrator().DropTable(&model.NodeGroup{}))
 	require.NoError(t, db.AutoMigrate(&baselineNodeGroup{}))
