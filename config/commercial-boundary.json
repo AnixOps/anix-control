@@ -1,0 +1,45 @@
+{
+  "format": "anixops.commercial-boundary/v1",
+  "comment": "The commercial feature set (payment, order, coupon, invite commission) that moves to the private anix-control-commercial repository. Files in commercial and wiring may reference it freely. Every other non-test Go file may reference a commercial symbol only if it is listed in allowed_dependents; the list is a ratchet: it may shrink, never grow. check_commercial_boundary.py enforces it (docs/architecture/commercial-boundary.md).",
+  "commercial": [
+    "internal/handler/order*.go",
+    "internal/handler/payment*.go",
+    "internal/handler/coupon*.go",
+    "internal/handler/admin_coupon*.go",
+    "internal/handler/invite*.go",
+    "internal/service/order*.go",
+    "internal/service/payment*.go",
+    "internal/service/invite*.go",
+    "internal/payment/**",
+    "internal/kernelorder/**",
+    "packages/payment/**",
+    "packages/order/**",
+    "packages/affiliate/**"
+  ],
+  "wiring": [
+    "internal/model/**",
+    "internal/router/**",
+    "internal/database/**",
+    "cmd/**",
+    "packages/builtin/**"
+  ],
+  "symbols": [
+    "OrderService",
+    "NewOrderService",
+    "PaymentGatewayService",
+    "NewPaymentGatewayService",
+    "InviteService",
+    "NewInviteService",
+    "OrderPaymentReconciler",
+    "NewOrderPaymentReconciler",
+    "model\\.(Order|Coupon|CouponUsage|Payment|PaymentLog|PaymentRecord|PaymentGateway|PaymentChannel|InviteCode|CommissionRecord|CommissionWithdraw|InviteConfig|UserLevel|X402Config|StripeConfig|PayPalConfig|AlipayConfig|WechatPayConfig|USDTConfig|EPayConfig)",
+    "internal/payment"
+  ],
+  "allowed_dependents": [
+    "internal/handler/admin.go",
+    "internal/kernelidentity/server.go",
+    "internal/service/auth_service.go",
+    "internal/service/notification_service.go",
+    "internal/service/stats_service.go"
+  ]
+}
