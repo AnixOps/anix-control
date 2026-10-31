@@ -238,9 +238,8 @@ sudo systemctl status anix-control --no-pager
 ## Agent access
 
 AnixOps Agents enroll (AgentEnrollment) and connect over gRPC with TLS, and
-Control signs their certificates with its built-in CA. From v4.2
-`agent_control.mtls` defaults to `required`, so this is the only way Agents
-connect. Two things are needed, and the installer sets up both:
+Control signs their certificates with its built-in CA. This is the
+only way Agents connect. Two things are needed, and the installer sets up both:
 
 1. **The CA key-encryption key** (`module_runtime.ca_kek`). A fresh install
    writes 32 random bytes (base64) to
@@ -297,10 +296,9 @@ certificate; pass `--grpc-tls-cert`/`--grpc-tls-key` to it to replace the
 certificate.
 
 Then install Agents from the node page ([`agent-onboarding.md`](agent-onboarding.md)).
-A legacy Agent configured by hand (only while `agent_control.mtls` is
-`preferred` or `optional`) uses `Transport: "http"` to preserve the legacy
-data-plane fallback, and enables both `AgentControlEnabled` and
-`PluginSupervisorEnabled` with the same official public key.
+An Agent configured by hand enables both `AgentControlEnabled` and
+`PluginSupervisorEnabled` with the same official public key, and enrolls with
+a one-time enrollment credential.
 
 ## Official Packages Are Built In
 

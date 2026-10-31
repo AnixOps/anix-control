@@ -616,7 +616,6 @@ export default {
       grpc: 'gRPC address',
       grpc_certificate: 'gRPC certificate',
       ca: 'Key that signs node certificates',
-      mtls_mode: 'Agent authentication',
       agent_release: 'Agent release',
       script_signature: 'Install script signature'
     },
@@ -626,7 +625,6 @@ export default {
       grpc: 'Set domain (it turns the gRPC listener on), or grpc.enabled. When nodes dial a different address than Control’s own, set agent_install.grpc_target. Then restart Control.',
       grpc_certificate: 'Nodes verify the gRPC certificate against their system CAs and refuse anything else. Set domain (and, behind a CDN, grpc.public_name to a DNS-only name) so Control obtains one; the banner at the top says why it is not ready yet.',
       ca: 'Set module_runtime.ca_kek (environment variable ANIX_CONTROL_MODULE_RUNTIME_CA_KEK) to a 32-byte key, for example from openssl rand -base64 32, and restart Control.',
-      mtls_mode: 'Remove agent_control.mtls (required is the default) or set it to required, and restart Control.',
       agent_release: 'Set agent_install.agent_version to a published Agent release (for example v4.2.0), or put the Agent release in agent_install.artifact_dir, and restart Control.',
       script_signature: 'Point agent_install.signature_file at this version’s agent-install.sh.sig, or leave it empty.'
     },

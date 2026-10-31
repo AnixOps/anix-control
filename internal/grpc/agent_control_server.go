@@ -9,7 +9,6 @@ import (
 	"io"
 	"log/slog"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -21,7 +20,6 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/service"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 )
@@ -1117,42 +1115,6 @@ func (s *AgentControlGRPCServer) recordHeartbeatPluginObservations(nodeID uint, 
 			slog.Warn("failed to persist agent plugin observation", "component", "agent-control", "node_id", nodeID, "plugin_id", pluginID, "accepted_observations", accepted, "error", err)
 		}
 	}
-}
-
-func authenticatedStreamNodeID(ctx context.Context) (uint32, error) {
-	if _, authed, err := authenticateNode(ctx); err != nil {
-		return 0, err
-	} else if !authed {
-		return 0, status.Error(codes.Unauthenticated, "node api key is required")
-	}
-
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
-		return 0, status.Error(codes.Unauthenticated, "missing node metadata")
-	}
-	values := md.Get("x-node-id")
-	if len(values) == 0 {
-		return 0, status.Error(codes.Unauthenticated, "missing x-node-id")
-	}
-	nodeID, err := strconv.ParseUint(values[0], 10, 32)
-	if err != nil || nodeID == 0 {
-		return 0, status.Error(codes.Unauthenticated, "invalid x-node-id")
-	}
-	keys := md.Get("x-api-key")
-	if len(keys) == 0 || strings.TrimSpace(keys[0]) == "" {
-		return 0, status.Error(codes.Unauthenticated, "node api key is required")
-	}
-	node, err := service.NewNodeService().GetNodeByAPIKey(keys[0])
-	if err != nil {
-		return 0, status.Error(codes.Unauthenticated, "authenticated node no longer exists")
-	}
-	if node.ID != uint(nodeID) {
-		return 0, status.Error(codes.Unauthenticated, "node api key does not match x-node-id")
-	}
-	if node.Status == model.NodeStatusDisabled {
-		return 0, status.Error(codes.PermissionDenied, "node is disabled")
-	}
-	return uint32(nodeID), nil
 }
 
 // serverCapabilities lists the data-plane features this Control serves to

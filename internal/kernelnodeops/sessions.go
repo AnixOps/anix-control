@@ -100,17 +100,12 @@ func (h *hostServer) ListAgentSessions(ctx context.Context, request *kernelnodeo
 	if sources.Streams != nil && transport != kernelnodeopsv1.AgentTransport_AGENT_TRANSPORT_WEBSOCKET {
 		sessions = append(sessions, sources.Streams.Sessions()...)
 	}
-	if sources.WebSockets != nil && transport != kernelnodeopsv1.AgentTransport_AGENT_TRANSPORT_CONTROL_STREAM {
-		sessions = append(sessions, sources.WebSockets.Sessions()...)
-	}
 	sortSessions(sessions)
 	now := time.Now()
 	response := &kernelnodeopsv1.ListAgentSessionsResponse{}
 	for _, session := range sessions {
 		rendered := sessionProto(session)
-		if session.Transport == agentstreams.TransportWebSocket {
-			rendered.AdminJson = AgentListEntryJSON(session, now)
-		}
+		rendered.AdminJson = AgentListEntryJSON(session, now)
 		response.Sessions = append(response.Sessions, rendered)
 	}
 	return response, nil
@@ -185,26 +180,10 @@ func (h *hostServer) GetAgentMonitor(ctx context.Context, request *kernelnodeops
 	if err := h.authorize(ctx, kernelnodeopsv1.OperationFamily_OPERATION_FAMILY_AGENTS); err != nil {
 		return nil, err
 	}
-	node, err := h.proxyNodeOf(ctx, request.GetNodeId())
-	if err != nil {
+	if _, err := h.proxyNodeOf(ctx, request.GetNodeId()); err != nil {
 		return nil, err
 	}
-	response := &kernelnodeopsv1.GetAgentMonitorResponse{}
-	agents := h.agents().WebSockets
-	if agents == nil {
-		return response, nil
-	}
-	system, receivedAt, ok := agents.Monitor(uint(node.ID))
-	if !ok {
-		return response, nil
-	}
-	encoded, err := json.Marshal(system)
-	if err != nil {
-		return nil, failure("get agent monitor", err)
-	}
-	response.Found = true
-	response.SnapshotJson = scrubBytes(encoded, nil)
-	response.ReceivedAtUnixMs = unixMillisOf(receivedAt)
-	response.MonitorJson = AgentMonitorJSON(uint(node.ID), system, receivedAt)
-	return response, nil
+	// Monitor snapshots came from the retired agent REST channel; an Agent on
+	// the Agent Control stream reports none.
+	return &kernelnodeopsv1.GetAgentMonitorResponse{}, nil
 }

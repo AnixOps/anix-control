@@ -122,24 +122,6 @@ func TestProtocolRuntimeHostRoutesAreThePackageRoutes(t *testing.T) {
 	require.Equal(t, want, got)
 }
 
-type streamStub struct{}
-
-func (streamStub) Recv() (pluginhostsdk.WebSocketFrame, error) {
-	return pluginhostsdk.WebSocketFrame{}, nil
-}
-func (streamStub) Send(pluginhostsdk.WebSocketFrame) error { return nil }
-
-// The agent WebSocket is one of the package's routes and relays to the
-// kernel; the stub bridge has no WebSocket relay, so it gets that far.
-func TestProtocolRuntimeHostRelaysTheAgentWebSocket(t *testing.T) {
-	service, err := newProtocolRuntimeService(&bridgeStub{}, "lease-1")
-	require.NoError(t, err)
-	err = service.OpenWebSocket(context.Background(), pluginhostsdk.WebSocketOpen{RouteID: "protocol.agent.ws.get", BridgeCapability: make([]byte, 32)}, streamStub{})
-	require.EqualError(t, err, "package WebSocket bridge is unavailable")
-	err = service.OpenWebSocket(context.Background(), pluginhostsdk.WebSocketOpen{RouteID: "proxy.node.ws.get", BridgeCapability: make([]byte, 32)}, streamStub{})
-	require.EqualError(t, err, `package route "proxy.node.ws.get" is unsupported`)
-}
-
 // The package adopts the diagnostic task table, and v2_node_protocol,
 // which the kernel grants only once the node credential split finalized it
 // (its secret positions then hold the placeholder). It never adopts the

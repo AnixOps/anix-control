@@ -520,9 +520,9 @@ func TestAgentControlNodeStatusRecordsTheTransport(t *testing.T) {
 	var rows []model.AgentTransport
 	require.NoError(t, database.GetDB().Find(&rows).Error)
 	require.Len(t, rows, 1)
-	assert.Equal(t, model.AgentTransportAPIKeyStream, rows[0].Transport)
+	assert.Equal(t, model.AgentTransportMTLSStream, rows[0].Transport)
 	assert.Equal(t, uint(nodeID), rows[0].NodeID)
-	assert.Equal(t, "api-key", rows[0].Identity)
+	assert.Equal(t, "spiffe://anixops/test/agent/proxy-1", rows[0].Identity)
 	assert.Equal(t, validAgentHello(nodeID).GetHello().AgentVersion, rows[0].AgentVersion)
 	require.NoError(t, stream.CloseSend())
 }

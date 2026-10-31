@@ -16,20 +16,17 @@ import (
 
 // AgentTransportsHandler serves the agent transport inventory
 // (node-ops-service.md, section 5.6): which channel each node's agent was
-// last seen on, and whether agent_control.mtls: required (the default from
-// v4.2) would refuse an enabled node.
+// last seen on, and whether an enabled node has never enrolled.
 type AgentTransportsHandler struct {
-	policy   agenttransport.Policy
 	db       func() *gorm.DB
 	live     func() *agenttransport.Recorder
 	sessions func() []agentstreams.Session
 }
 
 // NewAgentTransportsHandler reads the kernel database, this process's live
-// sightings and its live Agent Control stream sessions under policy, the
-// router's agent_control.
-func NewAgentTransportsHandler(policy agenttransport.Policy) *AgentTransportsHandler {
-	return &AgentTransportsHandler{policy: policy, db: database.Get, live: agenttransport.Default, sessions: controlgrpc.GetAgentStreams().Sessions}
+// sightings and its live Agent Control stream sessions.
+func NewAgentTransportsHandler() *AgentTransportsHandler {
+	return &AgentTransportsHandler{db: database.Get, live: agenttransport.Default, sessions: controlgrpc.GetAgentStreams().Sessions}
 }
 
 // List godoc
@@ -52,7 +49,7 @@ func (h *AgentTransportsHandler) List(c *gin.Context) {
 		kernelError(c, http.StatusServiceUnavailable, "database_unavailable", "database is not initialized")
 		return
 	}
-	inventory, err := agenttransport.Build(c.Request.Context(), db, h.policy, agenttransport.Options{
+	inventory, err := agenttransport.Build(c.Request.Context(), db, agenttransport.Options{
 		Live: h.live(), Sessions: h.sessions, Nodes: nodes,
 	})
 	if err != nil {

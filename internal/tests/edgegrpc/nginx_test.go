@@ -55,7 +55,7 @@ func TestNginxEdgeVouchesForTheNodeCertificate(t *testing.T) {
 			APIKey: key, APIKeyHash: fakeagent.APIKeyHash(key), Status: model.NodeStatusOnline}).Error)
 		control := fakeagent.StartControl(t, db)
 		node := agentcontrol.AgentNode{Kind: agentcontrol.NodeKindProxy, ID: edgeNodeID + 1}
-		certificate := control.Enroll(t, node, key)
+		certificate := control.Enroll(t, node)
 		edge := fakeagent.StartEdge(t, control)
 
 		// The public certificate of the gRPC name, held by nginx.

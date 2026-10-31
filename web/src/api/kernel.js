@@ -372,7 +372,7 @@ export async function createKernelAgentInstallToken(node, ttlSeconds) {
 // call (any administrator): { ready, checks: [{ id, ok, level, message, fix }] }.
 // `ready` is false while a check of level "error" fails; a failed "warning"
 // does not block the command. Ids: public_url, panel_certificate, grpc,
-// grpc_certificate, ca, mtls_mode, agent_release, script_signature.
+// grpc_certificate, ca, agent_release, script_signature.
 export async function getKernelInstallReadiness() {
   return unwrap(await v4({ url: '/kernel/agents/install-readiness', method: 'get' }))
 }

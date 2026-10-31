@@ -519,10 +519,9 @@ func run() int {
 	if grpcSrv != nil {
 		log.Printf("gRPC server listening on %s (%s)", grpcAddr, describeGRPCTLS(panel))
 	}
-	agenttransport.SetMode(cfg.AgentControl.MTLSOrDefault())
 	log.Print(agentTransportPolicyLog(cfg, grpcSrv))
-	// Under required, warn about the enabled nodes it refuses (legacy
-	// Agents, nodes that never enrolled). It never stops the start.
+	// Warn about the enabled nodes that never enrolled. It never stops the
+	// start.
 	logRequiredReadiness(rootCtx, cfg, database.Get(), log.Printf)
 	// KernelNodeOps dispatches node operations on the Agent Control streams
 	// of both node kinds (node-ops-service.md section 3.8) and serves the
@@ -837,8 +836,6 @@ func startGRPCServer(cfg *config.Config, panel config.PanelSettings, certs *pane
 	if certs != nil && certs.HasRole(panelcert.RoleGRPC) {
 		grpcCfg.GetCertificate = certs.GetCertificate(panelcert.RoleGRPC)
 	}
-	grpcCfg.AgentMTLS = cfg.AgentControl.MTLSOrDefault()
-	grpcCfg.AgentLegacySunset, _ = cfg.AgentControl.LegacySunsetTime() // validated by ValidateForServer
 	agentPKI, err := agentPKIForGRPC(cfg, database.Get())
 	if err != nil {
 		return nil, "", err

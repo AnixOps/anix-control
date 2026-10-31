@@ -1153,60 +1153,6 @@
   },
   {
     "method": "POST",
-    "path": "/api/v2/agent/heartbeat",
-    "owner": "protocol-runtime",
-    "route_id": "protocol.agent.heartbeat.post",
-    "envelope": "raw",
-    "middleware_group": "agent",
-    "transport": "http"
-  },
-  {
-    "method": "POST",
-    "path": "/api/v2/agent/monitor",
-    "owner": "protocol-runtime",
-    "route_id": "protocol.agent.monitor.post",
-    "envelope": "raw",
-    "middleware_group": "agent",
-    "transport": "http"
-  },
-  {
-    "method": "POST",
-    "path": "/api/v2/agent/register",
-    "owner": "protocol-runtime",
-    "route_id": "protocol.agent.register.post",
-    "envelope": "raw",
-    "middleware_group": "agent",
-    "transport": "http"
-  },
-  {
-    "method": "POST",
-    "path": "/api/v2/agent/result",
-    "owner": "protocol-runtime",
-    "route_id": "protocol.agent.result.post",
-    "envelope": "raw",
-    "middleware_group": "agent",
-    "transport": "http"
-  },
-  {
-    "method": "GET",
-    "path": "/api/v2/agent/tasks",
-    "owner": "protocol-runtime",
-    "route_id": "protocol.agent.tasks.get",
-    "envelope": "raw",
-    "middleware_group": "agent",
-    "transport": "http"
-  },
-  {
-    "method": "GET",
-    "path": "/api/v2/agent/ws",
-    "owner": "protocol-runtime",
-    "route_id": "protocol.agent.ws.get",
-    "envelope": "websocket",
-    "middleware_group": "agent",
-    "transport": "websocket"
-  },
-  {
-    "method": "POST",
     "path": "/api/v2/internal/auth-keys",
     "owner": "proxy-node",
     "route_id": "proxy.internal.auth_keys.post",
@@ -1222,42 +1168,6 @@
     "envelope": "panel",
     "middleware_group": "public",
     "transport": "http"
-  },
-  {
-    "method": "POST",
-    "path": "/api/v2/node/heartbeat",
-    "owner": "proxy-node",
-    "route_id": "proxy.node.heartbeat.post",
-    "envelope": "raw",
-    "middleware_group": "node-api",
-    "transport": "http"
-  },
-  {
-    "method": "POST",
-    "path": "/api/v2/node/register",
-    "owner": "proxy-node",
-    "route_id": "proxy.node.register.post",
-    "envelope": "raw",
-    "middleware_group": "public",
-    "transport": "http"
-  },
-  {
-    "method": "POST",
-    "path": "/api/v2/node/runtime-health",
-    "owner": "proxy-node",
-    "route_id": "proxy.node.runtime_health.post",
-    "envelope": "raw",
-    "middleware_group": "node-api",
-    "transport": "http"
-  },
-  {
-    "method": "GET",
-    "path": "/api/v2/node/ws",
-    "owner": "proxy-node",
-    "route_id": "proxy.node.ws.get",
-    "envelope": "websocket",
-    "middleware_group": "public",
-    "transport": "websocket"
   },
   {
     "method": "POST",

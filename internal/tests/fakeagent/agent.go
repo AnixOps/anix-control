@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -15,7 +14,6 @@ import (
 	agentv1pb "github.com/AnixOps/anix-control/sdk/api/agent/v1"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -77,13 +75,11 @@ type Agent struct {
 	sequence      int
 }
 
-// ConnectWithKey opens a stream for a proxy node authenticated by its API
-// key (the legacy credential).
-func ConnectWithKey(t testing.TB, conn *grpc.ClientConn, nodeID uint32, apiKey string, script Script) *Agent {
+// ConnectEnrolled enrolls node on control and opens its stream over a
+// connection that presents the new agent certificate.
+func ConnectEnrolled(t testing.TB, control *Control, node agentcontrol.AgentNode, script Script) *Agent {
 	t.Helper()
-	ctx, cancel := context.WithCancel(context.Background())
-	ctx = metadata.AppendToOutgoingContext(ctx, "x-node-id", strconv.FormatUint(uint64(nodeID), 10), "x-api-key", apiKey)
-	return connect(t, ctx, cancel, conn, agentcontrol.AgentNode{Kind: agentcontrol.NodeKindProxy, ID: nodeID}, script)
+	return ConnectWithCertificate(t, control.Dial(t, control.Enroll(t, node)), node, script)
 }
 
 // ConnectWithCertificate opens a stream for node over a connection that

@@ -48,12 +48,6 @@ type ServerConfig struct {
 	// AgentEnrollment; nil when the built-in module PKI is off. Client
 	// certificates need TLS (TLSCertFile).
 	AgentPKI *agentpki.Service
-	// AgentMTLS is agent_control.mtls: off, optional, preferred or
-	// required (the configuration default from 4.2).
-	AgentMTLS string
-	// AgentLegacySunset is agent_control.legacy_sunset, announced to legacy
-	// agents in preferred mode; zero announces none.
-	AgentLegacySunset time.Time
 	// OnJoin is told of every machine that joined a node group
 	// (AgentEnrollment.Join), after the join committed, in its own
 	// goroutine: the administrators' notification. nil tells no one.
@@ -85,7 +79,7 @@ type Server struct {
 
 // agentAuthenticator returns how agents authenticate on this listener.
 func (s *Server) agentAuthenticator() *AgentAuthenticator {
-	return &AgentAuthenticator{PKI: s.config.AgentPKI, Mode: s.config.AgentMTLS, Sunset: s.config.AgentLegacySunset}
+	return &AgentAuthenticator{PKI: s.config.AgentPKI}
 }
 
 // tlsConfig is the listener's TLS configuration: the server certificate

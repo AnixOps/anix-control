@@ -616,7 +616,6 @@ export default {
       grpc: 'gRPC 地址',
       grpc_certificate: 'gRPC 证书',
       ca: '节点证书的签发密钥',
-      mtls_mode: 'Agent 认证方式',
       agent_release: 'Agent 版本',
       script_signature: '安装脚本签名'
     },
@@ -626,7 +625,6 @@ export default {
       grpc: '设置 domain（会开启 gRPC 监听），或开启 grpc.enabled；节点连的地址不同于面板地址时，再设置 agent_install.grpc_target。然后重启面板。',
       grpc_certificate: '节点用系统自带的证书机构校验 gRPC 证书，不接受其他证书。设置 domain（面板在 CDN 后面时，再把 grpc.public_name 设为一个只解析不代理的域名），面板会自动申请；页面顶部的横幅写明了还没就绪的原因。',
       ca: '把 module_runtime.ca_kek（环境变量 ANIX_CONTROL_MODULE_RUNTIME_CA_KEK）设为 32 字节密钥，可用 openssl rand -base64 32 生成，然后重启面板。',
-      mtls_mode: '删除 agent_control.mtls（默认就是 required），或把它设为 required，然后重启面板。',
       agent_release: '把 agent_install.agent_version 设为已发布的 Agent 版本号（例如 v4.2.0），或把 Agent 发行包放进 agent_install.artifact_dir，然后重启面板。',
       script_signature: '把 agent_install.signature_file 指向本版本的 agent-install.sh.sig，或留空。'
     },

@@ -11,11 +11,15 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	agentv1pb "github.com/AnixOps/anix-control/sdk/api/agent/v1"
+	"github.com/AnixOps/anix-control/v5/internal/agentstreams"
 	controlgrpc "github.com/AnixOps/anix-control/v5/internal/grpc"
+	"github.com/AnixOps/anix-control/v5/internal/kernelnodeops"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -29,8 +33,7 @@ import (
 // every key, every static value, and the shape of every generated one.
 
 var (
-	taskIDPattern    = regexp.MustCompile(`^task-\d+$`)
-	messageIDPattern = regexp.MustCompile(`^msg-\d+$`)
+	taskIDPattern = regexp.MustCompile(`^task-\d+$`)
 )
 
 // panelData decodes a panel answer and returns its data object.
@@ -192,6 +195,11 @@ func TestCreateTaskLegacyAnswers(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	db := initTestDB()
 	require.NoError(t, db.AutoMigrate(&model.AgentDiagnosticTask{}))
+	// The agent's result is written by a goroutine after the answer; one
+	// connection keeps it from opening a second, empty in-memory database.
+	sqlDB, err := db.DB()
+	require.NoError(t, err)
+	sqlDB.SetMaxOpenConns(1)
 	node := &model.Node{Name: "diag-parity", Host: "127.0.0.1", Port: 443, APIKey: fmt.Sprintf("diag-parity-%d", time.Now().UnixNano()), Status: model.NodeStatusOnline}
 	require.NoError(t, db.Create(node).Error)
 	t.Cleanup(func() { _ = db.Delete(&model.Node{}, node.ID).Error })
@@ -211,13 +219,11 @@ func TestCreateTaskLegacyAnswers(t *testing.T) {
 	taskRowKeys := []string{"action", "created_at", "duration_ms", "id", "node_id", "params", "status", "success", "task_id", "timestamp"}
 
 	t.Run("acknowledged", func(t *testing.T) {
-		h, ackDone, cleanup := ackingAgentHandler(t, node.ID, true)
-		defer cleanup()
+		h := connectedAgentHandler(node.ID, nil)
 		recorder := post(h, "/admin/agent/tasks", map[string]any{"node_id": node.ID, "type": "diagnostic", "action": "service_status", "params": map[string]any{"service": "anix-agent"}, "timeout": 30})
 		require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
-		require.NoError(t, <-ackDone)
 		data := panelData(t, recorder)
-		assert.Equal(t, []string{"ack", "ack_received", "data", "duration_ms", "message", "message_id", "node_id", "output", "success", "task_id"}, sortedKeys(data))
+		assert.Equal(t, []string{"ack", "ack_received", "channel", "data", "duration_ms", "message", "message_id", "node_id", "output", "success", "task_id"}, sortedKeys(data))
 		assert.Equal(t, "task sent", data["message"])
 		assert.Equal(t, "task dispatched", data["output"])
 		assert.Equal(t, true, data["success"])
@@ -225,35 +231,35 @@ func TestCreateTaskLegacyAnswers(t *testing.T) {
 		assert.Equal(t, float64(0), data["duration_ms"])
 		assert.Equal(t, float64(node.ID), data["node_id"])
 		assert.Regexp(t, taskIDPattern, data["task_id"])
-		assert.Regexp(t, messageIDPattern, data["message_id"])
+		assert.Equal(t, data["task_id"], data["message_id"])
+		assert.Equal(t, "agent_control", data["channel"])
 		ack := data["ack"].(map[string]any)
-		assert.Equal(t, []string{"msg_id", "success", "timestamp"}, sortedKeys(ack))
-		assert.Equal(t, data["message_id"], ack["msg_id"])
-		assert.Equal(t, true, ack["success"])
+		assert.Equal(t, []string{"accepted", "operation_id", "revision"}, sortedKeys(ack))
+		assert.Equal(t, data["message_id"], ack["operation_id"])
+		assert.Equal(t, true, ack["accepted"])
 		row := data["data"].(map[string]any)
 		assert.Equal(t, taskRowKeys, sortedKeys(row))
 		assert.Equal(t, data["task_id"], row["task_id"])
 		assert.Equal(t, "dispatched", row["status"])
 		assert.Equal(t, "service_status", row["action"])
 		assert.JSONEq(t, `{"service":"anix-agent"}`, row["params"].(string))
+
+		// The agent's result reaches the task's row after the answer.
+		require.Eventually(t, func() bool {
+			var task model.AgentDiagnosticTask
+			return db.Where("task_id = ?", data["task_id"]).First(&task).Error == nil && task.Status == model.AgentDiagnosticTaskStatusCompleted
+		}, 3*time.Second, 10*time.Millisecond)
 	})
 
-	t.Run("legacy fallback after a missing acknowledgement", func(t *testing.T) {
-		h, received, cleanup := ackingAgentHandler(t, node.ID, false)
-		defer cleanup()
+	t.Run("refused by the agent", func(t *testing.T) {
+		h := connectedAgentHandler(node.ID, errors.New("agent nack: busy"))
 		recorder := post(h, "/admin/agent/execute", map[string]any{"node_id": node.ID, "action": "service_status", "params": map[string]any{"service": "anix-agent"}, "timeout": 5})
-		require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
-		require.NoError(t, <-received)
-		data := panelData(t, recorder)
-		assert.Equal(t, []string{"ack_received", "data", "dispatch_err", "duration_ms", "message", "message_id", "node_id", "output", "success", "task_id"}, sortedKeys(data))
-		assert.Equal(t, "task sent with legacy fallback", data["message"])
-		assert.Equal(t, "task dispatched (legacy fallback)", data["output"])
-		assert.Equal(t, false, data["ack_received"])
-		assert.Equal(t, true, data["success"])
-		assert.Equal(t, "ack timeout after 100ms", data["dispatch_err"])
-		row := data["data"].(map[string]any)
-		assert.Equal(t, taskRowKeys, sortedKeys(row))
-		assert.Equal(t, "dispatched", row["status"])
+		require.Equal(t, http.StatusInternalServerError, recorder.Code, recorder.Body.String())
+		var body map[string]any
+		require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &body))
+		assert.Equal(t, "send failed", body["error"])
+		assert.Equal(t, "agent_control", body["channel"])
+		assert.Contains(t, body["dispatch_err"], "agent nack: busy")
 	})
 
 	t.Run("node offline", func(t *testing.T) {
@@ -263,8 +269,7 @@ func TestCreateTaskLegacyAnswers(t *testing.T) {
 	})
 
 	t.Run("action outside the whitelist", func(t *testing.T) {
-		h, _, cleanup := ackingAgentHandler(t, node.ID, true)
-		defer cleanup()
+		h := connectedAgentHandler(node.ID, nil)
 		recorder := post(h, "/admin/agent/tasks", map[string]any{"node_id": node.ID, "type": "diagnostic", "action": "rm -rf /"})
 		require.Equal(t, http.StatusBadRequest, recorder.Code)
 		assert.JSONEq(t, `{"error":"action \"rm -rf /\" is not in the diagnostic whitelist"}`, recorder.Body.String())
@@ -274,57 +279,63 @@ func TestCreateTaskLegacyAnswers(t *testing.T) {
 	})
 
 	t.Run("other task types", func(t *testing.T) {
-		h, _, cleanup := ackingAgentHandler(t, node.ID, true)
-		defer cleanup()
+		h := connectedAgentHandler(node.ID, nil)
 		recorder := post(h, "/admin/agent/tasks", map[string]any{"node_id": node.ID, "type": "shell", "action": "service_status"})
 		require.Equal(t, http.StatusBadRequest, recorder.Code)
 		assert.JSONEq(t, `{"error":"task type \"shell\" is not allowed: only \"diagnostic\" tasks are sent to agents"}`, recorder.Body.String())
 	})
 }
 
-// ackingAgentHandler connects a WebSocket agent for nodeID that reads the
-// task assignment and, when ack is true, acknowledges it. The channel
-// reports what the agent read: nil when it saw a task assignment, and the
-// legacy task message after a refused acknowledgement.
-func ackingAgentHandler(t *testing.T, nodeID uint, ack bool) (*AgentHandler, <-chan error, func()) {
-	t.Helper()
-	h := NewAgentHandler()
-	h.ackTimeout = 100 * time.Millisecond
-	h.maxRetries = 0
-	serverConn, clientConn, cleanup := newTestWebSocketPair(t)
-	agentConn := &AgentConnection{NodeID: nodeID, WsConn: serverConn, LastSeen: time.Now()}
-	h.connections.Store(nodeID, agentConn)
-	done := make(chan error, 1)
+// fakeDiagnosticStreams is a node's Agent Control stream that advertises
+// agent.diagnostic and acknowledges the task, or refuses it with err. After
+// an acknowledgement it reports the operation succeeded.
+type fakeDiagnosticStreams struct {
+	node     agentcontrol.AgentNode
+	err      error
+	mu       sync.Mutex
+	handlers []agentstreams.ObservedHandler
+}
+
+func (f *fakeDiagnosticStreams) Session(node agentcontrol.AgentNode) (agentstreams.Session, bool) {
+	if node != f.node {
+		return agentstreams.Session{}, false
+	}
+	return agentstreams.Session{Node: node, Capabilities: []string{kernelnodeops.AgentDiagnosticOperation}}, true
+}
+func (f *fakeDiagnosticStreams) Sessions() []agentstreams.Session { return nil }
+func (f *fakeDiagnosticStreams) Observed(agentcontrol.AgentNode) (*agentv1pb.ObservedState, bool) {
+	return nil, false
+}
+func (f *fakeDiagnosticStreams) Dispatch(_ context.Context, node agentcontrol.AgentNode, operation *agentv1pb.DesiredOperation) (*agentv1pb.OperationAck, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	f.mu.Lock()
+	handlers := append([]agentstreams.ObservedHandler(nil), f.handlers...)
+	f.mu.Unlock()
 	go func() {
-		_ = clientConn.SetReadDeadline(time.Now().Add(3 * time.Second))
-		var outbound wsOutboundEnvelope
-		if err := clientConn.ReadJSON(&outbound); err != nil {
-			done <- err
-			return
+		for _, handler := range handlers {
+			handler(node, &agentv1pb.ObservedState{OperationId: operation.OperationId, Revision: 1, Phase: agentv1pb.ObservedPhase_OBSERVED_PHASE_SUCCEEDED})
 		}
-		if outbound.Type != "task.assign" || !outbound.RequireAck {
-			done <- fmt.Errorf("unexpected first message %q", outbound.Type)
-			return
-		}
-		if !ack {
-			var legacy wsOutboundEnvelope
-			if err := clientConn.ReadJSON(&legacy); err != nil {
-				done <- err
-				return
-			}
-			if legacy.Type != "task" || legacy.RequireAck {
-				done <- fmt.Errorf("unexpected legacy message %q", legacy.Type)
-				return
-			}
-			done <- nil
-			return
-		}
-		payload, _ := json.Marshal(wsAckPayload{MessageID: outbound.ID, Success: true, Timestamp: time.Now().Unix()})
-		raw, _ := json.Marshal(wsInboundEnvelope{ID: "ack-" + outbound.ID, Type: "ack", NodeID: nodeID, Timestamp: time.Now().Unix(), Payload: payload})
-		h.handleWebSocketMessage(agentConn, raw)
-		done <- nil
 	}()
-	return h, done, cleanup
+	return &agentv1pb.OperationAck{OperationId: operation.OperationId, Accepted: true, Revision: 1}, nil
+}
+func (f *fakeDiagnosticStreams) Cancel(context.Context, agentcontrol.AgentNode, string, uint64) error {
+	return nil
+}
+func (f *fakeDiagnosticStreams) OnObserved(handler agentstreams.ObservedHandler) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.handlers = append(f.handlers, handler)
+}
+
+// connectedAgentHandler is an AgentHandler whose node is connected on a
+// fake Agent Control stream.
+func connectedAgentHandler(nodeID uint, dispatchErr error) *AgentHandler {
+	h := NewAgentHandler()
+	streams := &fakeDiagnosticStreams{node: agentcontrol.AgentNode{Kind: agentcontrol.NodeKindProxy, ID: uint32(nodeID)}, err: dispatchErr}
+	h.streams = func() agentstreams.Streams { return streams }
+	return h
 }
 
 func sortedKeys(value map[string]any) []string {

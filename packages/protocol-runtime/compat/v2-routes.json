@@ -99,48 +99,6 @@
       "package_route": "protocol.admin.protocol_templates.get",
       "envelope": "data",
       "transport": "http"
-    },
-    {
-      "method": "POST",
-      "legacy_path": "/api/v2/agent/heartbeat",
-      "package_route": "protocol.agent.heartbeat.post",
-      "envelope": "raw",
-      "transport": "http"
-    },
-    {
-      "method": "POST",
-      "legacy_path": "/api/v2/agent/monitor",
-      "package_route": "protocol.agent.monitor.post",
-      "envelope": "raw",
-      "transport": "http"
-    },
-    {
-      "method": "POST",
-      "legacy_path": "/api/v2/agent/register",
-      "package_route": "protocol.agent.register.post",
-      "envelope": "raw",
-      "transport": "http"
-    },
-    {
-      "method": "POST",
-      "legacy_path": "/api/v2/agent/result",
-      "package_route": "protocol.agent.result.post",
-      "envelope": "raw",
-      "transport": "http"
-    },
-    {
-      "method": "GET",
-      "legacy_path": "/api/v2/agent/tasks",
-      "package_route": "protocol.agent.tasks.get",
-      "envelope": "raw",
-      "transport": "http"
-    },
-    {
-      "method": "GET",
-      "legacy_path": "/api/v2/agent/ws",
-      "package_route": "protocol.agent.ws.get",
-      "envelope": "websocket",
-      "transport": "websocket"
     }
   ]
 }

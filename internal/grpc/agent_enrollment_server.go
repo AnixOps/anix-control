@@ -13,7 +13,6 @@ import (
 	agentv1pb "github.com/AnixOps/anix-control/sdk/api/agent/v1"
 	"github.com/AnixOps/anix-control/v5/internal/agentpki"
 	"github.com/AnixOps/anix-control/v5/internal/agenttransport"
-	"github.com/AnixOps/anix-control/v5/internal/config"
 	"github.com/AnixOps/anix-control/v5/internal/database"
 	"github.com/AnixOps/anix-control/v5/internal/kernelforward"
 	"github.com/AnixOps/anix-control/v5/internal/middleware"
@@ -161,19 +160,8 @@ func (s *AgentEnrollmentGRPCServer) bootstrap(ctx context.Context, credential st
 	if credential != "" {
 		return agentpki.Bootstrap{Method: model.AgentEnrollmentMethodCredential, Node: node, Secret: credential}, nil
 	}
-	if s.auth.mode() == config.AgentMTLSRequired {
-		agenttransport.CountRefused(agentv1pb.AgentEnrollment_Enroll_FullMethodName)
-		return agentpki.Bootstrap{}, refuseAgent(agentcontrol.ErrorCodeMTLSRequired, codes.Unauthenticated, "an enrollment credential is required (agent_control.mtls: required)")
-	}
-	secret := first(agentcontrol.MetadataAPIKey)
-	if secret == "" || node == (agentcontrol.AgentNode{}) {
-		return agentpki.Bootstrap{}, refuseAgent(agentcontrol.ErrorCodeEnrollmentRejected, codes.Unauthenticated, "an enrollment credential or x-node-id and x-api-key are required")
-	}
-	method := model.AgentEnrollmentMethodNodeAPIKey
-	if node.Kind == agentcontrol.NodeKindForward {
-		method = model.AgentEnrollmentMethodForwardToken
-	}
-	return agentpki.Bootstrap{Method: method, Node: node, Secret: secret}, nil
+	agenttransport.CountRefused(agentv1pb.AgentEnrollment_Enroll_FullMethodName)
+	return agentpki.Bootstrap{}, refuseAgent(agentcontrol.ErrorCodeMTLSRequired, codes.Unauthenticated, "an enrollment credential is required (agent_control.mtls: required)")
 }
 
 // Join makes the calling machine a node of the group whose join token it

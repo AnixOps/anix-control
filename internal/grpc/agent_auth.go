@@ -13,7 +13,6 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/agentpki"
 	"github.com/AnixOps/anix-control/v5/internal/agentstreams"
 	"github.com/AnixOps/anix-control/v5/internal/agenttransport"
-	"github.com/AnixOps/anix-control/v5/internal/config"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/modulepki"
 	"google.golang.org/grpc"
@@ -29,50 +28,26 @@ import (
 // handlers.
 const agentServicePrefix = "/anix.agent.v1."
 
-// legacyAuthDeprecation is the value of the deprecation header answered to
-// a legacy node credential in agent_control.mtls: preferred.
-const legacyAuthDeprecation = "node API key authentication is deprecated; enroll with anix.agent.v1.AgentEnrollment and present the client certificate"
-
 // AgentAuthenticator authenticates AnixOps Agents on the node-facing
-// listener: by client certificate (agent PKI) or by the legacy node
-// credential, as agent_control.mtls allows. The zero value and nil accept
-// legacy credentials only and refuse client certificates, which nothing
-// could verify.
+// listener by client certificate (agent PKI): agent_control.mtls is
+// required, built in. The zero value and nil refuse every agent stream,
+// since nothing could verify a certificate.
 type AgentAuthenticator struct {
 	// PKI verifies client certificates and serves AgentEnrollment; nil when
 	// the built-in module PKI is off.
 	PKI *agentpki.Service
-	// Mode is agent_control.mtls; empty means the configuration default
-	// (required from 4.2). A nil authenticator is optional.
-	Mode string
-	// Sunset is agent_control.legacy_sunset, announced with the deprecation
-	// header; zero announces none.
-	Sunset time.Time
+
+	// identify replaces the certificate check; tests in this package set it
+	// to run Agent Control streams over a plaintext connection.
+	identify func(ctx context.Context) (agentPrincipal, bool, error)
 }
 
-func (a *AgentAuthenticator) mode() string {
-	if a == nil {
-		return config.AgentMTLSOptional
-	}
-	return config.AgentControlConfig{MTLS: a.Mode}.MTLSOrDefault()
-}
-
-// pki is the agent PKI the listener verifies certificates with: none in
-// agent_control.mtls: off, which neither requests nor accepts them.
+// pki is the agent PKI the listener verifies certificates with.
 func (a *AgentAuthenticator) pki() *agentpki.Service {
-	if a == nil || a.mode() == config.AgentMTLSOff {
+	if a == nil {
 		return nil
 	}
 	return a.PKI
-}
-
-// policy is the transition policy of the listener's mode.
-func (a *AgentAuthenticator) policy() agenttransport.Policy {
-	policy := agenttransport.Policy{Mode: a.mode()}
-	if a != nil {
-		policy.Sunset = a.Sunset
-	}
-	return policy
 }
 
 // agentPrincipal is an authenticated agent.
@@ -146,6 +121,9 @@ func peerCertificateChain(ctx context.Context) [][]byte {
 // Each refusal carries its agentcontrol error code (agent_refusals.go); a
 // failed check (Unavailable) carries none.
 func (a *AgentAuthenticator) certificatePrincipal(ctx context.Context) (agentPrincipal, bool, error) {
+	if a != nil && a.identify != nil {
+		return a.identify(ctx)
+	}
 	chain := peerCertificateChain(ctx)
 	if len(chain) == 0 {
 		return agentPrincipal{}, false, nil
@@ -177,40 +155,16 @@ func (a *AgentAuthenticator) certificatePrincipal(ctx context.Context) (agentPri
 	}, true, nil
 }
 
-// deprecationHeader is the deprecation metadata of a legacy node
-// credential in agent_control.mtls: preferred: the deprecation notice, the
-// sunset date when one is configured, and the upgrade guide.
-func (a *AgentAuthenticator) deprecationHeader() metadata.MD {
-	if a.mode() != config.AgentMTLSPreferred {
-		return nil
-	}
-	return a.deprecationMetadata()
-}
-
-func (a *AgentAuthenticator) deprecationMetadata() metadata.MD {
-	policy := a.policy()
-	md := metadata.Pairs(agentcontrol.MetadataAuthDeprecated, legacyAuthDeprecation,
-		agentcontrol.MetadataAuthDeprecationLink, agenttransport.UpgradeGuideURL)
-	if sunset := policy.SunsetHeader(); sunset != "" {
-		md.Set(agentcontrol.MetadataAuthSunset, sunset)
-	}
-	return md
-}
-
-// refuseLegacy answers a legacy node credential in agent_control.mtls:
-// required: counted, refused with the error code, and with the deprecation
-// metadata in the refusal's trailer.
-func (a *AgentAuthenticator) refuseLegacy(method string) error {
+// refuseUncertified answers an agent stream without a client certificate:
+// counted, and refused with the mTLS-required error code.
+func (a *AgentAuthenticator) refuseUncertified(method string) error {
 	agenttransport.CountRefused(method)
-	refusal := refuseAgent(agentcontrol.ErrorCodeMTLSRequired, codes.Unauthenticated,
-		"an agent client certificate is required (agent_control.mtls: required)").(*agentRefusal)
-	refusal.trailer = a.deprecationMetadata()
-	return refusal
+	return refuseAgent(agentcontrol.ErrorCodeMTLSRequired, codes.Unauthenticated,
+		"an agent client certificate is required (agent_control.mtls: required)")
 }
 
 // authenticateControlStream authenticates an AgentControlService stream:
-// a proxy or forward node by certificate, or a proxy node by its API key
-// unless agent_control.mtls is required. Disabled and deleted nodes are
+// a proxy or forward node by its certificate. Disabled and deleted nodes are
 // refused.
 func (a *AgentAuthenticator) authenticateControlStream(stream grpc.ServerStream) (agentPrincipal, error) {
 	ctx := stream.Context()
@@ -229,23 +183,7 @@ func (a *AgentAuthenticator) authenticateControlStream(stream grpc.ServerStream)
 		}
 		return principal, nil
 	}
-	method := agentv1pb.AgentControlService_ControlStream_FullMethodName
-	if a.mode() == config.AgentMTLSRequired {
-		return agentPrincipal{}, a.refuseLegacy(method)
-	}
-	nodeID, err := authenticatedStreamNodeID(ctx)
-	if err != nil {
-		return agentPrincipal{}, err
-	}
-	agenttransport.CountLegacy(method)
-	if header := a.deprecationHeader(); header != nil {
-		if err := stream.SetHeader(header); err != nil {
-			return agentPrincipal{}, err
-		}
-		// The trailer repeats it for clients that read only the status.
-		stream.SetTrailer(header)
-	}
-	return agentPrincipal{Node: agentcontrol.AgentNode{Kind: agentcontrol.NodeKindProxy, ID: nodeID}}, nil
+	return agentPrincipal{}, a.refuseUncertified(agentv1pb.AgentControlService_ControlStream_FullMethodName)
 }
 
 // authentication names how principal authenticated

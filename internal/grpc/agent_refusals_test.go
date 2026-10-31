@@ -16,7 +16,6 @@ import (
 	agentv1pb "github.com/AnixOps/anix-control/sdk/api/agent/v1"
 	pb "github.com/AnixOps/anix-control/v5/api/grpc/v2boardpb"
 	"github.com/AnixOps/anix-control/v5/internal/agentpki"
-	"github.com/AnixOps/anix-control/v5/internal/config"
 	"github.com/AnixOps/anix-control/v5/internal/database"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/service"
@@ -93,10 +92,10 @@ func openRefusedStream(t *testing.T, ctx context.Context, conn *grpc.ClientConn,
 // service and on the v2board services, names its reason in the
 // x-anix-error-code trailer.
 func TestAgentListenerCertificateRefusalCodes(t *testing.T) {
-	l := startAgentListener(t, config.AgentMTLSOptional, true)
+	l := startAgentListener(t, true)
 	ctx := testContext(t)
 	anonymous := l.dial(t, nil)
-	proxyCertificate, _, err := enrollForTest(t, nodeCredentials(ctx, l.proxyNode(), l.proxyKey), anonymous, "")
+	proxyCertificate, _, err := l.enrollWithToken(t, ctx, l.proxyNode(), anonymous)
 	require.NoError(t, err)
 	proxyConn := l.dial(t, proxyCertificate)
 
@@ -107,14 +106,9 @@ func TestAgentListenerCertificateRefusalCodes(t *testing.T) {
 	code, trailer = openRefusedStream(t, ctx, proxyConn, uint32(l.proxy.ID)+1)
 	assert.Equal(t, codes.PermissionDenied, code)
 	assert.Equal(t, []string{agentcontrol.ErrorCodeCertWrongNode}, trailer)
-	// An API key session naming another node is refused without a
-	// certificate code.
-	code, trailer = openRefusedStream(t, legacyCredentials(ctx, l.proxy.ID, l.proxyKey), anonymous, uint32(l.proxy.ID)+1)
-	assert.Equal(t, codes.PermissionDenied, code)
-	assert.Empty(t, trailer)
 
 	// A forward node's certificate on the proxy-only v2board services.
-	forwardCertificate, _, err := enrollForTest(t, nodeCredentials(ctx, l.forwardNode(), l.forwardToken), anonymous, "")
+	forwardCertificate, _, err := l.enrollWithToken(t, ctx, l.forwardNode(), anonymous)
 	require.NoError(t, err)
 	var unaryTrailer metadata.MD
 	_, err = pb.NewNodeServiceClient(l.dial(t, forwardCertificate)).GetConfig(ctx, &pb.NodeConfigRequest{NodeId: uint32(l.forward.ID)}, grpc.Trailer(&unaryTrailer))
@@ -149,18 +143,11 @@ func TestAgentListenerCertificateRefusalCodes(t *testing.T) {
 	assert.Equal(t, codes.Unauthenticated, status.Code(err))
 	assert.Equal(t, []string{agentcontrol.ErrorCodeCertInvalid}, unaryTrailer.Get(agentcontrol.MetadataErrorCode))
 
-	// An unusable bootstrap credential.
-	for name, enrollCtx := range map[string]context.Context{
-		"wrong API key": nodeCredentials(ctx, l.proxyNode(), "wrong"),
-		"no credential": ctx,
-		"bad node id":   metadata.AppendToOutgoingContext(ctx, agentcontrol.MetadataNodeID, "x", agentcontrol.MetadataAPIKey, l.proxyKey),
-		"bad node kind": metadata.AppendToOutgoingContext(ctx, agentcontrol.MetadataNodeID, "1", agentcontrol.MetadataNodeKind, "edge", agentcontrol.MetadataAPIKey, l.proxyKey),
-	} {
-		unaryTrailer = nil
-		_, err = agentv1pb.NewAgentEnrollmentClient(anonymous).Enroll(enrollCtx, &agentv1pb.EnrollAgentRequest{CsrDer: csr}, grpc.Trailer(&unaryTrailer))
-		assert.Equal(t, codes.Unauthenticated, status.Code(err), name)
-		assert.Equal(t, []string{agentcontrol.ErrorCodeEnrollmentRejected}, unaryTrailer.Get(agentcontrol.MetadataErrorCode), name)
-	}
+	// Enrolling without a credential.
+	unaryTrailer = nil
+	_, err = agentv1pb.NewAgentEnrollmentClient(anonymous).Enroll(ctx, &agentv1pb.EnrollAgentRequest{CsrDer: csr}, grpc.Trailer(&unaryTrailer))
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+	assert.Equal(t, []string{agentcontrol.ErrorCodeMTLSRequired}, unaryTrailer.Get(agentcontrol.MetadataErrorCode))
 	credential, _, err := l.pki.CreateEnrollmentToken(ctx, agentpki.TokenRequest{Node: l.proxyNode(), TTL: time.Hour})
 	require.NoError(t, err)
 	_, _, err = enrollForTest(t, ctx, anonymous, credential)
@@ -210,24 +197,24 @@ func tlsPeerContext(certificate *tls.Certificate) context.Context {
 // open stream's heartbeat; one of another cluster as such; a certificate
 // presented to a listener without the agent PKI as invalid.
 func TestAgentCertificateExpiredAndWrongClusterCodes(t *testing.T) {
-	l := startAgentListener(t, config.AgentMTLSOptional, true)
+	l := startAgentListener(t, true)
 	ctx := testContext(t)
-	certificate, issued, err := enrollForTest(t, nodeCredentials(ctx, l.proxyNode(), l.proxyKey), l.dial(t, nil), "")
+	certificate, issued, err := l.enrollWithToken(t, ctx, l.proxyNode(), l.dial(t, nil))
 	require.NoError(t, err)
 
 	later, err := agentpki.New(agentpki.Options{DB: database.Get(), Authority: l.authority, Now: func() time.Time {
 		return time.Unix(issued.GetNotAfterUnix(), 0).Add(time.Hour)
 	}})
 	require.NoError(t, err)
-	_, _, err = (&AgentAuthenticator{PKI: later, Mode: config.AgentMTLSOptional}).certificatePrincipal(tlsPeerContext(certificate))
+	_, _, err = (&AgentAuthenticator{PKI: later}).certificatePrincipal(tlsPeerContext(certificate))
 	assert.Equal(t, agentcontrol.ErrorCodeCertExpired, refusalCode(err))
 	assert.Equal(t, codes.Unauthenticated, status.Code(err))
 
-	principal, ok, err := (&AgentAuthenticator{PKI: l.pki, Mode: config.AgentMTLSOptional}).certificatePrincipal(tlsPeerContext(certificate))
+	principal, ok, err := (&AgentAuthenticator{PKI: l.pki}).certificatePrincipal(tlsPeerContext(certificate))
 	require.NoError(t, err)
 	require.True(t, ok)
 	principal.NotAfter = time.Now().Add(-time.Second)
-	err = (&AgentAuthenticator{PKI: l.pki, Mode: config.AgentMTLSOptional}).recheck(ctx, principal)
+	err = (&AgentAuthenticator{PKI: l.pki}).recheck(ctx, principal)
 	assert.Equal(t, agentcontrol.ErrorCodeCertExpired, refusalCode(err))
 
 	// The module CA signs another cluster's agent identity only in a test.
@@ -242,10 +229,10 @@ func TestAgentCertificateExpiredAndWrongClusterCodes(t *testing.T) {
 	require.NoError(t, err)
 	signed, err := l.authority.SignLeaf(ctx, database.Get(), other.URL(), time.Hour, csr)
 	require.NoError(t, err)
-	_, _, err = (&AgentAuthenticator{PKI: l.pki, Mode: config.AgentMTLSOptional}).certificatePrincipal(
+	_, _, err = (&AgentAuthenticator{PKI: l.pki}).certificatePrincipal(
 		tlsPeerContext(&tls.Certificate{Certificate: [][]byte{signed.CertificateDER}}))
 	assert.Equal(t, agentcontrol.ErrorCodeCertWrongCluster, refusalCode(err))
 
-	_, _, err = (&AgentAuthenticator{Mode: config.AgentMTLSOptional}).certificatePrincipal(tlsPeerContext(certificate))
+	_, _, err = (&AgentAuthenticator{}).certificatePrincipal(tlsPeerContext(certificate))
 	assert.Equal(t, agentcontrol.ErrorCodeCertInvalid, refusalCode(err), "no agent PKI to verify it")
 }

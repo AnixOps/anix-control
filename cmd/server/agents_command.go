@@ -60,11 +60,7 @@ func runAgentsCommand(ctx context.Context, cfg *config.Config, db *gorm.DB, argu
 	if err := flags.Parse(arguments[1:]); err != nil || flags.NArg() != 0 {
 		return agentsUsageError()
 	}
-	agentControl := config.AgentControlConfig{}
-	if cfg != nil {
-		agentControl = cfg.AgentControl
-	}
-	inventory, err := agenttransport.Build(ctx, db, agenttransport.PolicyFrom(agentControl), agenttransport.Options{})
+	inventory, err := agenttransport.Build(ctx, db, agenttransport.Options{})
 	if err != nil {
 		return err
 	}
@@ -79,26 +75,24 @@ func runAgentsCommand(ctx context.Context, cfg *config.Config, db *gorm.DB, argu
 	return printAgentTransports(stdout, inventory)
 }
 
-// checkRequiredReadiness prints the enabled nodes agent_control.mtls:
-// required would refuse and fails with errAgentsNotReady when there is one.
+// checkRequiredReadiness prints the enabled nodes that never enrolled and
+// fails with errAgentsNotReady when there is one.
 func checkRequiredReadiness(stdout io.Writer, inventory agenttransport.Inventory, asJSON bool) error {
 	summary := inventory.Summary
 	if asJSON {
 		encoder := json.NewEncoder(stdout)
 		encoder.SetIndent("", "  ")
 		if err := encoder.Encode(struct {
-			Mode             string                           `json:"mode"`
 			ReadyForRequired bool                             `json:"ready_for_required"`
 			Reasons          []string                         `json:"required_reasons"`
 			Blockers         []agenttransport.RequiredBlocker `json:"required_blockers"`
 			UpgradeGuide     string                           `json:"upgrade_guide"`
-		}{inventory.Mode, summary.ReadyForRequired, summary.RequiredReasons, summary.RequiredBlockers, inventory.UpgradeGuide}); err != nil {
+		}{summary.ReadyForRequired, summary.RequiredReasons, summary.RequiredBlockers, inventory.UpgradeGuide}); err != nil {
 			return err
 		}
 	} else {
-		_, _ = fmt.Fprintf(stdout, "agent_control.mtls: %s\n", inventory.Mode)
 		if summary.ReadyForRequired {
-			_, _ = fmt.Fprintln(stdout, "Ready for agent_control.mtls: required: it refuses no enabled node.")
+			_, _ = fmt.Fprintln(stdout, "Every enabled node has enrolled.")
 			return nil
 		}
 		writer := tabwriter.NewWriter(stdout, 0, 4, 2, ' ', 0)
@@ -113,7 +107,7 @@ func checkRequiredReadiness(stdout io.Writer, inventory agenttransport.Inventory
 		if err := writer.Flush(); err != nil {
 			return err
 		}
-		_, _ = fmt.Fprintln(stdout, "Not ready for agent_control.mtls: required:")
+		_, _ = fmt.Fprintln(stdout, "Not every enabled node has enrolled:")
 		for _, reason := range summary.RequiredReasons {
 			_, _ = fmt.Fprintf(stdout, "  - %s\n", reason)
 		}
@@ -126,7 +120,6 @@ func checkRequiredReadiness(stdout io.Writer, inventory agenttransport.Inventory
 }
 
 func printAgentTransports(stdout io.Writer, inventory agenttransport.Inventory) error {
-	_, _ = fmt.Fprintf(stdout, "agent_control.mtls: %s\n", inventory.Mode)
 	writer := tabwriter.NewWriter(stdout, 0, 4, 2, ' ', 0)
 	_, _ = fmt.Fprintln(writer, "NODE\tNAME\tSTATUS\tTRANSPORT\tVERSION\tCERTIFICATE\tLAST SEEN\tSEEN ON")
 	for _, node := range inventory.Nodes {
@@ -171,14 +164,14 @@ const requiredReadinessWarningLimit = 10
 // logRequiredReadiness warns at startup about the enabled nodes that never
 // enrolled, from the transport inventory. It never stops the start. A failure to read the inventory is logged and ignored.
 func logRequiredReadiness(ctx context.Context, cfg *config.Config, db *gorm.DB, logf func(string, ...any)) {
-	if cfg == nil || db == nil || cfg.AgentControl.MTLSOrDefault() != config.AgentMTLSRequired {
+	if cfg == nil || db == nil {
 		return
 	}
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	inventory, err := agenttransport.Build(ctx, db, agenttransport.PolicyFrom(cfg.AgentControl), agenttransport.Options{})
+	inventory, err := agenttransport.Build(ctx, db, agenttransport.Options{})
 	if err != nil {
-		logf("Agent transports: the readiness check for agent_control.mtls=required could not read the transport inventory: %v", err)
+		logf("Agent transports: the enrollment check could not read the transport inventory: %v", err)
 		return
 	}
 	if line := requiredReadinessWarning(inventory); line != "" {

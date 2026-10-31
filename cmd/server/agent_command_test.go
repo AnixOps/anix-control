@@ -89,11 +89,7 @@ func TestTakeAdminCommand(t *testing.T) {
 func TestAgentPKIForGRPC(t *testing.T) {
 	pki, err := agentPKIForGRPC(&config.Config{}, nil)
 	require.NoError(t, err)
-	require.Nil(t, pki, "the default (required since 4.2) starts without the agent PKI, and warns")
-
-	required := &config.Config{AgentControl: config.AgentControlConfig{MTLS: config.AgentMTLSRequired}}
-	_, err = agentPKIForGRPC(required, nil)
-	require.ErrorIs(t, err, agentpki.ErrDisabled)
+	require.Nil(t, pki, "without the built-in CA the kernel starts without the agent PKI, and warns")
 
 	cfg, db := moduleCommandFixture(t)
 	pki, err = agentPKIForGRPC(cfg, db)
@@ -140,19 +136,12 @@ func TestAgentPKIWithTheCAAlone(t *testing.T) {
 	stopped, running := rt.workers.Stop(5 * time.Second)
 	require.True(t, stopped, running)
 
-	// An external PKI holds no CA key: every mode but an explicit required
-	// runs without agent enrollment (the default required warns), an
-	// explicit required refuses to start.
+	// An external PKI holds no CA key: the kernel runs without agent
+	// enrollment.
 	external := &config.Config{ModuleRuntime: config.ModuleRuntimeConfig{Enabled: true, PKI: config.ModulePKIExternal}}
-	for _, mode := range []string{"", config.AgentMTLSOff, config.AgentMTLSOptional, config.AgentMTLSPreferred} {
-		external.AgentControl.MTLS = mode
-		pki, err = agentPKIForGRPC(external, db)
-		require.NoError(t, err, mode)
-		require.Nil(t, pki, mode)
-	}
-	external.AgentControl.MTLS = config.AgentMTLSRequired
-	_, err = agentPKIForGRPC(external, db)
-	require.ErrorIs(t, err, agentpki.ErrExternalPKI)
+	pki, err = agentPKIForGRPC(external, db)
+	require.NoError(t, err)
+	require.Nil(t, pki)
 	require.NoError(t, (&serverRuntime{}).startKernelCAMaintenance(&config.Config{}, db), "no CA, no maintenance")
 }
 

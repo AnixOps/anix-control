@@ -219,14 +219,3 @@ func (d DiagnosticDispatch) Sent() bool {
 type DiagnosticTransport interface {
 	DispatchDiagnostic(ctx context.Context, task DiagnosticTask) DiagnosticDispatch
 }
-
-// WebSockets is the legacy agent WebSocket, as the kernel reads it.
-type WebSockets interface {
-	// Sessions lists the connected WebSocket agents.
-	Sessions() []Session
-	// Monitor returns the last monitor snapshot a proxy node's agent posted.
-	Monitor(nodeID uint) (system map[string]any, receivedAt time.Time, ok bool)
-	// DiagnosticTransport returns the WebSocket of a connected proxy node's
-	// agent, for diagnostic tasks.
-	DiagnosticTransport(nodeID uint) (DiagnosticTransport, bool)
-}

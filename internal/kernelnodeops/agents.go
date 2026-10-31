@@ -16,16 +16,13 @@ import (
 
 // AgentSources are the live agent sessions the executors dispatch on and
 // the agent session RPCs read: the Agent Control streams of every node
-// kind, and the legacy WebSocket. Either may be nil in a kernel that does
-// not hold it.
+// kind. Streams may be nil in a kernel that does not hold them.
 type AgentSources struct {
-	Streams    agentstreams.Streams
-	WebSockets agentstreams.WebSockets
+	Streams agentstreams.Streams
 }
 
 // SourcesFunc returns the sources at the time of a call, so that a source
-// registered after the executors were (the WebSocket handler is built with
-// the router) is found when an operation runs.
+// registered after the executors were is found when an operation runs.
 type SourcesFunc func() AgentSources
 
 var (
@@ -41,16 +38,8 @@ func UseAgentStreams(streams agentstreams.Streams) {
 	defaultSources.Streams = streams
 }
 
-// UseWebSocketAgents makes agents the kernel's WebSocket agents for the
-// default sources; the router calls it with the agent handler.
-func UseWebSocketAgents(agents agentstreams.WebSockets) {
-	defaultSourcesMu.Lock()
-	defer defaultSourcesMu.Unlock()
-	defaultSources.WebSockets = agents
-}
-
-// DefaultAgentSources returns the sources registered with UseAgentStreams
-// and UseWebSocketAgents, as they are now.
+// DefaultAgentSources returns the sources registered with UseAgentStreams,
+// as they are now.
 func DefaultAgentSources() AgentSources {
 	defaultSourcesMu.RLock()
 	defer defaultSourcesMu.RUnlock()

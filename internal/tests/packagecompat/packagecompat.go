@@ -334,7 +334,7 @@ func openSQLite(t *testing.T, label string, _ []any) (*config.DatabaseConfig, *g
 func createSQLite(dir, label string) (*config.DatabaseConfig, *gorm.DB, error) {
 	path := filepath.Join(dir, label+".db")
 	cfg := &config.DatabaseConfig{Driver: "sqlite", Database: path, LogLevel: "silent"}
-	db, err := gorm.Open(sqlite.Open(path+"?_pragma=busy_timeout(5000)"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+	db, err := gorm.Open(sqlite.Open(path+"?_pragma=busy_timeout(5000)&_txlock=immediate"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	return cfg, db, err
 }
 

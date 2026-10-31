@@ -331,7 +331,6 @@ func TestInstallReadinessAnswer(t *testing.T) {
 	assert.Contains(t, byID["grpc"].fix, "grpc.enabled")
 	assert.False(t, byID["ca"].ok)
 	assert.Contains(t, byID["ca"].fix, "module_runtime.ca_kek")
-	assert.True(t, byID["mtls_mode"].ok)
 	assert.True(t, byID["agent_release"].ok)
 	assert.True(t, byID["script_signature"].ok)
 

@@ -137,7 +137,7 @@ func TestAgentControlConfigNegotiation(t *testing.T) {
 	without.heartbeat()
 	assert.Empty(t, without.untilHeartbeatAck(), "no snapshot without config.v1")
 
-	server := NewAgentControlGRPCServer(NewAgentControlManager())
+	server := newTestAgentControlServer(NewAgentControlManager())
 	config := []*agentv1pb.Capability{{Name: agentcontrol.CapabilityConfig, Version: agentcontrol.CapabilityVersionV1}}
 	assert.True(t, server.servesConfig(agentcontrol.AgentNode{Kind: agentcontrol.NodeKindForward, ID: 1}, config), "forward nodes have a desired configuration")
 	assert.False(t, server.servesConfig(agentcontrol.AgentNode{Kind: "other", ID: 1}, config))
@@ -362,7 +362,7 @@ func TestAgentStreamsPushConfig(t *testing.T) {
 	broken := &AgentControlConnection{NodeID: uint32(env.node.ID), SessionID: "broken", stream: failingControlStream{}, configNegotiated: true}
 	_, err = broken.sendConfig(newer, true, configTriggerSync)
 	require.Error(t, err)
-	server := NewAgentControlGRPCServer(env.manager)
+	server := newTestAgentControlServer(env.manager)
 	assert.Error(t, pushDesiredConfig(ctx, broken, env.agentNode(), configTriggerHello))
 	setConfigRefreshInterval(time.Millisecond)
 	stop := server.startConfigRefresh(ctx, broken, env.agentNode())
@@ -457,7 +457,7 @@ func TestAgentControlConfigStatusOutlivesItsStream(t *testing.T) {
 		NodeID: uint32(env.node.ID), SessionID: "session-ended-meanwhile",
 		Capabilities: capabilities, ServerCapabilities: capabilities,
 	}
-	server := NewAgentControlGRPCServer(NewAgentControlManager())
+	server := newTestAgentControlServer(NewAgentControlManager())
 	ended, cancel := context.WithCancel(context.Background())
 	cancel()
 	require.NoError(t, server.handleConfigStatus(ended, NewAgentControlManager(), connection, env.agentNode(),

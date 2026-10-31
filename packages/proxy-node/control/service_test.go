@@ -38,13 +38,6 @@ func (s *bridgeStub) OpenWebSocket(_ context.Context, _ []byte, operation string
 	return nil, errRelayed
 }
 
-type streamStub struct{}
-
-func (streamStub) Recv() (pluginhostsdk.WebSocketFrame, error) {
-	return pluginhostsdk.WebSocketFrame{}, errRelayed
-}
-func (streamStub) Send(pluginhostsdk.WebSocketFrame) error { return nil }
-
 // Until the kernel sets a route's mode, the host relays it to the legacy
 // handler, bridged routes always; routes outside the package are refused.
 func TestProxyNodeHostRelaysRoutesUntilTheyAreSwitchedToNative(t *testing.T) {
@@ -80,23 +73,6 @@ func TestProxyNodeHostRelaysRoutesUntilTheyAreSwitchedToNative(t *testing.T) {
 	} {
 		require.NotContains(t, withoutNodeOps, route, "without KernelNodeOps the route stays legacy")
 	}
-}
-
-// The agent WebSocket is relayed to the kernel, which holds the connection.
-func TestProxyNodeHostRelaysTheAgentWebSocket(t *testing.T) {
-	bridge := &bridgeStub{}
-	service, err := newProxyNodeService(bridge, "lease-1")
-	require.NoError(t, err)
-	err = service.OpenWebSocket(context.Background(), pluginhostsdk.WebSocketOpen{
-		RouteID: "proxy.node.ws.get", BridgeCapability: make([]byte, 32),
-	}, streamStub{})
-	require.ErrorIs(t, err, errRelayed)
-	require.Equal(t, "proxy.node.ws.get", bridge.webSocket)
-
-	err = service.OpenWebSocket(context.Background(), pluginhostsdk.WebSocketOpen{
-		RouteID: "protocol.agent.ws.get", BridgeCapability: make([]byte, 32),
-	}, streamStub{})
-	require.ErrorContains(t, err, "unsupported")
 }
 
 // The host accepts exactly the package's declared compatibility routes.

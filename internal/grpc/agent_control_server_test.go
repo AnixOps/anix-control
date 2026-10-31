@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	agentv1pb "github.com/AnixOps/anix-control/sdk/api/agent/v1"
 	"github.com/AnixOps/anix-control/v5/internal/cache"
 	"github.com/AnixOps/anix-control/v5/internal/database"
@@ -99,7 +100,7 @@ func newAgentControlTestEnvironment(t *testing.T) *agentControlTestEnvironment {
 	require.NoError(t, err)
 	manager := NewAgentControlManager()
 	server := grpc.NewServer(grpc.ChainStreamInterceptor(StreamAuthInterceptor("", "")))
-	agentv1pb.RegisterAgentControlServiceServer(server, NewAgentControlGRPCServer(manager))
+	agentv1pb.RegisterAgentControlServiceServer(server, newTestAgentControlServer(manager))
 	errCh := serveGRPCServerForTest(t, server, listener)
 
 	conn, err := grpc.NewClient(listener.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -881,21 +882,13 @@ func TestAgentControlStreamRejectsDisabledNode(t *testing.T) {
 	assert.Equal(t, codes.PermissionDenied, status.Code(err))
 }
 
-func TestAgentControlStreamRejectsMissingAndWrongNodeCredentials(t *testing.T) {
+func TestAgentControlStreamRejectsMissingNodeIdentity(t *testing.T) {
 	environment := newAgentControlTestEnvironment(t)
 	tests := []struct {
 		name string
 		ctx  context.Context
 	}{
 		{name: "missing metadata", ctx: context.Background()},
-		{name: "global token fallback is rejected", ctx: metadata.AppendToOutgoingContext(context.Background(),
-			"x-node-id", strconv.FormatUint(uint64(environment.node.ID), 10),
-			"authorization", "Bearer global-token",
-		)},
-		{name: "wrong api key", ctx: metadata.AppendToOutgoingContext(context.Background(),
-			"x-node-id", strconv.FormatUint(uint64(environment.node.ID), 10),
-			"x-api-key", "wrong-key",
-		)},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -947,4 +940,34 @@ func TestAgentControlStreamValidatesHelloIdentityAndFields(t *testing.T) {
 			assert.Equal(t, test.code, status.Code(err))
 		})
 	}
+}
+
+// metadataIdentity stands in for the client certificate on the plaintext
+// test connections: the node named by x-node-id (and x-node-kind, proxy by
+// default) is authenticated as if its certificate had been verified.
+func metadataIdentity(ctx context.Context) (agentPrincipal, bool, error) {
+	md, _ := metadata.FromIncomingContext(ctx)
+	first := func(key string) string {
+		if values := md.Get(key); len(values) > 0 {
+			return strings.TrimSpace(values[0])
+		}
+		return ""
+	}
+	id, err := strconv.ParseUint(first(agentcontrol.MetadataNodeID), 10, 32)
+	if err != nil || id == 0 {
+		return agentPrincipal{}, false, nil
+	}
+	kind := first(agentcontrol.MetadataNodeKind)
+	if kind == "" {
+		kind = agentcontrol.NodeKindProxy
+	}
+	node := agentcontrol.AgentNode{Kind: kind, ID: uint32(id)}
+	return agentPrincipal{Node: node, Certificate: true, Serial: "01", NotAfter: time.Now().Add(time.Hour),
+		SPIFFEID: "spiffe://anixops/test/agent/" + node.String()}, true, nil
+}
+
+// newTestAgentControlServer is NewAgentControlGRPCServer authenticating by
+// metadataIdentity.
+func newTestAgentControlServer(manager *AgentControlManager) *AgentControlGRPCServer {
+	return NewAgentControlGRPCServer(manager).WithAuthenticator(&AgentAuthenticator{identify: metadataIdentity})
 }

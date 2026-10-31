@@ -86,7 +86,7 @@ func TestKernelOperationBridgeCrossRepositoryAgentProcess(t *testing.T) {
 	require.NoError(t, err)
 	manager := NewAgentControlManager()
 	grpcServer := grpc.NewServer(grpc.ChainStreamInterceptor(StreamAuthInterceptor("", "")))
-	agentv1pb.RegisterAgentControlServiceServer(grpcServer, NewAgentControlGRPCServer(manager))
+	agentv1pb.RegisterAgentControlServiceServer(grpcServer, newTestAgentControlServer(manager))
 	serverErr := serveGRPCServerForTest(t, grpcServer, listener)
 	t.Cleanup(func() { stopGRPCServerForTest(t, grpcServer, serverErr) })
 

@@ -7,7 +7,6 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/config"
 	"github.com/AnixOps/anix-control/v5/internal/handler"
 	"github.com/AnixOps/anix-control/v5/internal/health"
-	"github.com/AnixOps/anix-control/v5/internal/kernelnodeops"
 	"github.com/AnixOps/anix-control/v5/internal/middleware"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/packagebridge"
@@ -43,17 +42,6 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 	r.Use(middleware.CORS())
 	r.Use(middleware.Logger())
 	r.Use(middleware.Recovery())
-
-	// agent_control.mtls on the legacy AnixOps-agent paths
-	// (node-ops-service.md, section 5.6): deprecation signals in preferred,
-	// refusal in required, counters in every mode.
-	agentControl := config.AgentControlConfig{}
-	if cfg != nil {
-		agentControl = cfg.AgentControl
-	}
-	agentPolicy := agenttransport.PolicyFrom(agentControl)
-	legacyAgentHTTP := agenttransport.LegacyHTTP(agentPolicy, model.AgentTransportHTTPLegacy)
-	legacyAgentWebSocket := agenttransport.LegacyHTTP(agentPolicy, model.AgentTransportWebSocket)
 
 	// 速率限制器 (测试模式跳过)
 	exemptPaths := []string{"/health", "/livez", "/readyz", "/metrics", "/swagger/"}
@@ -471,36 +459,11 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			paymentCallback.POST("/payment/callback/:type", v2PackageGateway.Serve)
 		}
 
-		// 节点自动注册 API (公开)
 		agentHandler := handler.NewAgentHandler()
-		// The KernelNodeOps session RPCs and the agent.diagnostic executor
-		// read this handler's WebSocket agents.
-		kernelnodeops.UseWebSocketAgents(agentHandler.WebSockets())
-
-		nodePublic := v2.Group("/node")
-		nodePublic.Use(publicLimiter.Middleware())
-		{
-			nodeHandler := handler.NewNodeHandler()
-			nodePublic.POST("/register", legacyAgentHTTP, registeredPackageRoute(v2PackageGateway.Serve, "proxy-node", "proxy.node.register.post", nodeHandler.Register))
-			nodePublic.GET("/ws", legacyAgentWebSocket, registeredPackageWebSocketRoute(v2WebSocketGateway.Serve, "proxy-node", "proxy.node.ws.get", agentHandler.AgentWebSocketUnified, agentHandler.PrepareWebSocketBridge))
-		}
-
-		// 节点通信 API (需要 API Key 认证 + 可选签名验证)
-		nodeAPI := v2.Group("/node")
-		nodeAPI.Use(userLimiter.Middleware())
-		nodeAPI.Use(legacyAgentHTTP)
-		nodeAPI.Use(middleware.NodeAPIKeyAuth())
-		nodeAPI.Use(middleware.SignatureAuth())    // 签名验证 (向后兼容，可选)
-		nodeAPI.Use(middleware.NodeSecureLogger()) // 安全审计日志
-		{
-			nodeHandler := handler.NewNodeHandler()
-			nodeAPI.POST("/heartbeat", registeredPackageRoute(v2PackageGateway.Serve, "proxy-node", "proxy.node.heartbeat.post", nodeHandler.Heartbeat))
-			nodeAPI.POST("/runtime-health", registeredPackageRoute(v2PackageGateway.Serve, "proxy-node", "proxy.node.runtime_health.post", nodeHandler.RuntimeHealth))
-		}
 
 		// UniProxy API (节点通信接口)
 		// UniProxy is shared with third-party node software (V2bX, XrayR):
-		// agent_control.mtls never applies; the inventory records it.
+		// the inventory records it.
 		uniproxy := v2.Group("/server/UniProxy")
 		uniproxy.Use(userLimiter.Middleware())
 		uniproxy.Use(agenttransport.ThirdPartyHTTP(model.AgentTransportUniProxy))
@@ -526,20 +489,6 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			uniproxyV1.GET("/alivelist", h.GetAliveList)
 			uniproxyV1.POST("/push", h.PushTraffic)
 			uniproxyV1.POST("/alive", h.PushAlive)
-		}
-
-		// Agent API (NAT 后节点主动连接). Registration checks the token in its
-		// body and the WebSocket in its preflight; the other routes require
-		// the node's credentials (RequireAgentNode) before the gateway.
-		agentPublic := v2.Group("/agent")
-		agentPublic.Use(userLimiter.Middleware())
-		{
-			agentPublic.POST("/register", legacyAgentHTTP, registeredPackageRoute(v2PackageGateway.Serve, "protocol-runtime", "protocol.agent.register.post", agentHandler.AgentRegister))
-			agentPublic.POST("/heartbeat", legacyAgentHTTP, agentHandler.RequireAgentNode, registeredPackageRoute(v2PackageGateway.Serve, "protocol-runtime", "protocol.agent.heartbeat.post", agentHandler.AgentHeartbeat))
-			agentPublic.GET("/tasks", legacyAgentHTTP, agentHandler.RequireAgentNode, registeredPackageRoute(v2PackageGateway.Serve, "protocol-runtime", "protocol.agent.tasks.get", agentHandler.AgentGetTasks))
-			agentPublic.POST("/result", legacyAgentHTTP, agentHandler.RequireAgentNode, registeredPackageRoute(v2PackageGateway.Serve, "protocol-runtime", "protocol.agent.result.post", agentHandler.AgentReportResult))
-			agentPublic.POST("/monitor", legacyAgentHTTP, agentHandler.RequireAgentNode, registeredPackageRoute(v2PackageGateway.Serve, "protocol-runtime", "protocol.agent.monitor.post", agentHandler.AgentMonitor))
-			agentPublic.GET("/ws", legacyAgentWebSocket, registeredPackageWebSocketRoute(v2WebSocketGateway.Serve, "protocol-runtime", "protocol.agent.ws.get", agentHandler.AgentWebSocketUnified, agentHandler.PrepareWebSocketBridge))
 		}
 
 		// Agent 管理接口 (管理员)
@@ -730,7 +679,7 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		// a network call (any administrator).
 		v4.GET("/kernel/agents/install-readiness", agentInstall.Readiness)
 		v4.POST("/kernel/agents/rotate-credentials", agents.RotateCredentials)
-		v4.GET("/kernel/agents/transports", handler.NewAgentTransportsHandler(agentPolicy).List)
+		v4.GET("/kernel/agents/transports", handler.NewAgentTransportsHandler().List)
 		// Node groups (5.0 node onboarding): a group's join token makes any
 		// machine that runs its install command a node of the group. The
 		// command (it shows the token) and the token reset are for super

@@ -12,7 +12,6 @@ import (
 
 	agentv1pb "github.com/AnixOps/anix-control/sdk/api/agent/v1"
 	"github.com/AnixOps/anix-control/v5/internal/agentpki"
-	"github.com/AnixOps/anix-control/v5/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
@@ -34,7 +33,7 @@ func TestAgentListenerServesTheCurrentCertificateAndStillAsksForClientCertificat
 	require.NoError(t, err)
 	var current atomic.Pointer[tls.Certificate]
 	current.Store(&first)
-	l := startAgentListenerWith(t, config.AgentMTLSRequired, true, func(cfg *ServerConfig) {
+	l := startAgentListenerWith(t, true, func(cfg *ServerConfig) {
 		cfg.TLSCertFile, cfg.TLSKeyFile = "", ""
 		cfg.GetCertificate = func(*tls.ClientHelloInfo) (*tls.Certificate, error) { return current.Load(), nil }
 	})

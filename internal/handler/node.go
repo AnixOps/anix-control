@@ -15,7 +15,6 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/nodesecrets"
 	"github.com/AnixOps/anix-control/v5/internal/service"
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 )
 
 // NodeHandler 节点处理器
@@ -32,122 +31,6 @@ func NewNodeHandler() *NodeHandler {
 		nodeLogService: service.NewNodeLogService(),
 		agentControl:   defaultNodeAgentControl(),
 	}
-}
-
-// ========== 节点自动注册 API (公开) ==========
-
-// Register godoc
-// @Summary 节点自动注册
-// @Description 节点通过授权密钥自动注册到面板
-// @Tags 节点通信
-// @Accept json
-// @Produce json
-// @Param request body model.NodeRegisterRequest true "注册请求"
-// @Success 200 {object} map[string]any
-// @Failure 400 {object} map[string]any
-// @Router /node/register [post]
-func (h *NodeHandler) Register(c *gin.Context) {
-	var req model.NodeRegisterRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "参数错误", "error": err.Error()})
-		return
-	}
-
-	// 获取客户端IP
-	clientIP := c.ClientIP()
-	if req.Host == "" {
-		req.Host = clientIP
-	}
-	if req.Port == 0 {
-		req.Port = 443
-	}
-
-	resp, err := h.nodeService.RegisterNode(&req, clientIP)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"message": "注册成功",
-		"data":    resp,
-	})
-}
-
-// Heartbeat godoc
-// @Summary 节点心跳
-// @Description 节点向面板发送心跳以保持在线状态
-// @Tags 节点通信
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param request body model.NodeHeartbeatRequest true "心跳请求"
-// @Success 200 {object} map[string]any
-// @Failure 400 {object} map[string]any
-// @Failure 401 {object} map[string]any
-// @Failure 500 {object} map[string]any
-// @Router /node/heartbeat [post]
-func (h *NodeHandler) Heartbeat(c *gin.Context) {
-	// 从中间件获取节点ID
-	nodeID, exists := c.Get("node_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"message": "未授权"})
-		return
-	}
-
-	var req model.NodeHeartbeatRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "参数错误"})
-		return
-	}
-
-	if err := h.nodeService.Heartbeat(nodeID.(uint), &req); err != nil {
-		if errors.Is(err, service.ErrNegativeTraffic) {
-			c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "心跳失败"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"message": "ok"})
-}
-
-// RuntimeHealth godoc
-// @Summary 上报节点运行时健康状态
-// @Description 节点上报 WireGuard/GOST 等托管运行时的进程健康状态，不覆盖普通心跳状态
-// @Tags 节点通信
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param request body model.NodeRuntimeHealthRequest true "运行时健康状态"
-// @Success 200 {object} map[string]any
-// @Failure 400 {object} map[string]any
-// @Failure 401 {object} map[string]any
-// @Failure 404 {object} map[string]any
-// @Failure 500 {object} map[string]any
-// @Router /node/runtime-health [post]
-func (h *NodeHandler) RuntimeHealth(c *gin.Context) {
-	nodeID, exists := c.Get("node_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"message": "未授权"})
-		return
-	}
-
-	var req model.NodeRuntimeHealthRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "参数错误"})
-		return
-	}
-	if err := h.nodeService.UpdateRuntimeHealth(nodeID.(uint), req.Healthy, req.Error); err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"message": "节点不存在"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "运行时状态更新失败"})
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"message": "ok"})
 }
 
 // ========== 管理员节点管理 ==========

@@ -34,7 +34,7 @@ func TestAgentsTransportsCommand(t *testing.T) {
 		{NodeKind: "proxy", NodeID: 1, Transport: model.AgentTransportMTLSStream, AgentVersion: "2.0.0", FirstSeenAt: now, LastSeenAt: now},
 	}).Error)
 	require.NoError(t, db.Create(&model.AgentCertificate{Serial: "0a1b", NodeKind: "proxy", NodeID: 1, Cluster: "prod", EnrollmentID: "e", IssuerKeyID: "k", NotAfter: now.Add(72 * time.Hour)}).Error)
-	cfg := &config.Config{AgentControl: config.AgentControlConfig{LegacySunset: "2027-03-31"}}
+	cfg := &config.Config{}
 	ctx := context.Background()
 	run := func(arguments ...string) (string, error) {
 		var output bytes.Buffer
@@ -49,7 +49,6 @@ func TestAgentsTransportsCommand(t *testing.T) {
 
 	output, err := run("transports")
 	require.NoError(t, err)
-	require.Contains(t, output, "agent_control.mtls: required", "the 4.2 default")
 	require.Contains(t, output, "proxy-1")
 	require.Contains(t, output, "0a1b until")
 	require.Contains(t, output, "off (disabled)")
@@ -63,7 +62,7 @@ func TestAgentsTransportsCommand(t *testing.T) {
 	require.Equal(t, 2, adminCommandExitCode(agentsUsageError()))
 	require.Contains(t, output, "proxy-2")
 	require.NotContains(t, output, "proxy-3", "a disabled node is not a blocker")
-	require.Contains(t, output, "Not ready for agent_control.mtls: required:")
+	require.Contains(t, output, "Not every enabled node has enrolled:")
 	require.Contains(t, output, "1 enabled node(s) never enrolled")
 	output, err = run("transports", "--check-required", "--json")
 	require.ErrorIs(t, err, errAgentsNotReady)
@@ -80,13 +79,7 @@ func TestAgentsTransportsCommand(t *testing.T) {
 	require.NoError(t, db.Create(&model.AgentCertificate{Serial: "0c2d", NodeKind: "proxy", NodeID: 2, Cluster: "prod", EnrollmentID: "e2", IssuerKeyID: "k", NotAfter: now.Add(72 * time.Hour)}).Error)
 	output, err = run("transports", "--check-required")
 	require.NoError(t, err, output)
-	require.Contains(t, output, "Ready for agent_control.mtls: required")
-
-	// An explicit preferred is still reported as such.
-	preferred := &config.Config{AgentControl: config.AgentControlConfig{MTLS: config.AgentMTLSPreferred}}
-	var buffer bytes.Buffer
-	require.NoError(t, runAdminCommand(ctx, preferred, db, []string{"agents", "transports"}, &buffer))
-	require.Contains(t, buffer.String(), "agent_control.mtls: preferred")
+	require.Contains(t, output, "Every enabled node has enrolled.")
 
 	// Without the table (a database the kernel never migrated) the command
 	// fails rather than reporting an empty checklist.
@@ -97,36 +90,19 @@ func TestAgentsTransportsCommand(t *testing.T) {
 }
 
 func TestAgentTransportPolicyLog(t *testing.T) {
-	for mode, expected := range map[string]string{
-		"":                        "agent_control.mtls=required (the default since v4.2): AnixOps Agent channels accept client certificates only",
-		config.AgentMTLSOff:       "neither requested nor accepted",
-		config.AgentMTLSOptional:  "verified when presented",
-		config.AgentMTLSRequired:  "accept client certificates only",
-		config.AgentMTLSPreferred: "deprecation signals",
-	} {
-		cfg := &config.Config{AgentControl: config.AgentControlConfig{MTLS: mode}}
-		line := agentTransportPolicyLog(cfg, nil)
-		require.Contains(t, line, expected, mode)
-		if mode == config.AgentMTLSOff {
-			require.Contains(t, line, "agent enrollment: off")
-		} else {
-			require.Contains(t, line, "the gRPC listener is off")
-		}
-		require.Contains(t, line, "legacy sunset: none")
-		if mode == "" || mode == config.AgentMTLSRequired {
-			require.True(t, strings.HasPrefix(line, "WARNING: "), "required without the gRPC listener warns: %s", line)
-			require.Contains(t, line, "set agent_control.mtls: preferred while nodes migrate")
-		} else {
-			require.False(t, strings.HasPrefix(line, "WARNING: "), line)
-		}
-	}
-	line := agentTransportPolicyLog(&config.Config{AgentControl: config.AgentControlConfig{LegacySunset: "2027-03-31"}}, nil)
-	require.Contains(t, line, "legacy sunset: 2027-03-31")
+	line := agentTransportPolicyLog(&config.Config{}, nil)
+	require.True(t, strings.HasPrefix(line, "WARNING: "), "without the gRPC listener no agent can connect: %s", line)
+	require.Contains(t, line, "client certificates only")
+	require.Contains(t, line, "the gRPC listener is off")
+	require.NotContains(t, line, "are ignored")
+
+	line = agentTransportPolicyLog(&config.Config{AgentControl: config.AgentControlConfig{MTLS: "preferred", LegacySunset: "2027-03-31"}}, nil)
+	require.Contains(t, line, "agent_control.mtls and agent_control.legacy_sunset are ignored: remove them.")
 }
 
 // TestRequiredReadinessStartupWarning: under required, the startup log
 // warns about the enabled nodes that never enrolled and never stops the
-// start; other modes and a ready inventory log nothing.
+// start; a ready inventory logs nothing.
 func TestRequiredReadinessStartupWarning(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	require.NoError(t, err)
@@ -150,13 +126,12 @@ func TestRequiredReadinessStartupWarning(t *testing.T) {
 	}
 
 	lines := collect(&config.Config{}, db)
-	require.Len(t, lines, 1, "the default is required")
+	require.Len(t, lines, 1)
 	line := lines[0]
 	require.True(t, strings.HasPrefix(line, "WARNING: "), line)
 	require.Contains(t, line, "3 enabled node(s) never enrolled: proxy-2, proxy-3, proxy-4")
 	require.Contains(t, line, "anix-control agents transports --check-required")
 
-	require.Empty(t, collect(&config.Config{AgentControl: config.AgentControlConfig{MTLS: config.AgentMTLSPreferred}}, db), "preferred warns nothing here")
 	require.Empty(t, collect(&config.Config{}, nil))
 
 	require.NoError(t, db.Model(&model.Node{}).Where("id IN ?", []uint{2, 3, 4}).Update("status", model.NodeStatusDisabled).Error)
