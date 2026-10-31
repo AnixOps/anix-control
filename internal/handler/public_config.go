@@ -27,8 +27,9 @@ type PublicRegistrationConfig struct {
 	RequireInvite bool `json:"require_invite"`
 }
 
-// publicConfigEdition is the edition this binary reports.
-const publicConfigEdition = "community"
+// publicConfigEdition is the edition this binary reports. The commercial build
+// sets "commercial" and clears the hidden packages from a file of its own.
+var publicConfigEdition = "community"
 
 // publicConfigHiddenPackages are the packages of the commercial set; the web
 // app hides their entry points in the community edition.
