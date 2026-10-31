@@ -9189,7 +9189,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "The bundles in data_dir/backups, newest first, in data.backups: id, file, type (daily, pre-migration, manual, verify), size, sha256, created_at, verified_at, verify_status (pending, passed, failed), verify_error, program_version, schema_version. data.summary has last_verified (the newest bundle that passed its verification, or null), stale (no verified bundle younger than stale_after_hours, 36, on a database older than that), next_daily_at and directory; data.retention the built-in retention. On PostgreSQL data.supported is false and data.reason says why: backups need SQLite. Any administrator; no secret.",
+                "description": "The bundles in data_dir/backups, newest first, in data.backups: id, file, type (daily, pre-migration, manual, verify), size, sha256, created_at, verified_at, verify_status (pending, passed, failed), verify_error, program_version, schema_version. data.summary has last_verified (the newest bundle that passed its verification, or null), stale (no verified bundle younger than stale_after_hours, 36, on a database older than that), next_daily_at and directory; data.retention the built-in retention. For a database driver backups do not cover data.supported is false and data.reason says why. Any administrator; no secret.",
                 "produces": [
                     "application/json"
                 ],
@@ -9220,7 +9220,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Writes a manual bundle of the database, root.key and the configuration file into data_dir/backups and answers it (201, data.backup, verify_status pending); its verification follows in the background and the list shows the result. 409 backups_need_sqlite on PostgreSQL, 409 backup_in_progress while another backup or verification runs. Any administrator.",
+                "description": "Writes a manual bundle of the database, root.key and the configuration file into data_dir/backups and answers it (201, data.backup, verify_status pending); its verification follows in the background and the list shows the result. 409 backups_need_sqlite for a database driver backups do not cover, 409 backups_need_postgres_tools when a PostgreSQL panel has no pg_dump/pg_restore, 409 backup_in_progress while another backup or verification runs. Any administrator.",
                 "produces": [
                     "application/json"
                 ],
