@@ -1,7 +1,6 @@
 package agente2e
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -259,15 +258,6 @@ func truncate(value string, n int) string {
 		return value
 	}
 	return value[:n] + "..."
-}
-
-func prettyJSON(raw string) string {
-	var v any
-	if json.Unmarshal([]byte(raw), &v) != nil {
-		return raw
-	}
-	out, _ := json.Marshal(v)
-	return string(out)
 }
 
 // scenarioPluginOperationAfterStreamOperations changes the

@@ -1709,12 +1709,9 @@ jobs:
   # plugin artifacts over mTLS, the systemd services report and panel,
   # agent.diagnostic, forward.v1 with link certificates,
   # then chaos: Control killed mid-stream, a partition with an Agent crash,
-  # an Agent restart, a revoked certificate, the #179 generation reset and
-  # clock-skew bounds. The main lane runs on PostgreSQL as the runner user;
-  # the forward lane runs the real nftables driver as root in a throwaway
-  # network namespace (`unshare --net`, H14) on SQLite, so the runner's own
-  # network and systemd units are never touched. Full lane and nightly; not
-  # a required check yet.
+  # an Agent restart, a revoked certificate and clock-skew bounds. The main lane runs on PostgreSQL as the runner user;
+  # the nftables engine is gone, so there is no root/netns lane. Full lane
+  # and nightly; not a required check yet.
   cross-repository-agent-chaos-e2e:
     name: Cross-Repo E2E
     runs-on: ubuntu-24.04
@@ -1826,24 +1823,6 @@ jobs:
           ANIXOPS_AGENT_E2E_LOGDIR="${E2E_LOGS}/main" \
             "${E2E_BIN}/agente2e.test" -test.run '^TestRealAgentEndToEnd$' -test.v -test.timeout 20m 2>&1 \
             | grep -v '\[GIN\]' | tee "${E2E_LOGS}/main-go-test.log"
-
-      # Root in a throwaway network namespace (H14): the real nftables
-      # driver, the forward checks and the #179 recovery. The module cache
-      # is the runner's (read only, no network: GOPROXY=off); the build cache
-      # is root's own, so the runner's cache stays writable for setup-go.
-      - name: Run the forward lane in a network namespace (sudo)
-        shell: bash
-        run: |
-          set -euo pipefail
-          sudo env PATH="${PATH}" GOWORK=off GOTOOLCHAIN=local GOPROXY=off \
-            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="${RUNNER_TEMP}/root-gocache" HOME="${RUNNER_TEMP}" \
-            ANIXOPS_AGENT_E2E=1 ANIXOPS_AGENT_E2E_NETNS=1 \
-            ANIXOPS_AGENT_ROOT="${GITHUB_WORKSPACE}/V2bX_AnixOps" ANIXOPS_AGENT_E2E_BIN_DIR="${E2E_BIN}" \
-            ANIXOPS_AGENT_E2E_LOGDIR="${E2E_LOGS}/netns" \
-            unshare --net -- sh -c 'ip link set lo up && exec "$0" "$@"' \
-            "${E2E_BIN}/agente2e.test" \
-            -test.run '^TestRealAgentEndToEnd$/^(enroll|config_snapshot|link|forward|chaos_agent_graceful|chaos_control_db)' \
-            -test.v -test.timeout 8m 2>&1 | grep -v '\[GIN\]' | tee "${E2E_LOGS}/netns-go-test.log"
 
       - name: Make the logs readable
         if: ${{ !cancelled() }}
