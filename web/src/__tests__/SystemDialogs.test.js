@@ -25,6 +25,7 @@ const adminApi = vi.hoisted(() => ({
 }))
 
 vi.mock('@/api/admin', () => adminApi)
+vi.mock('@/api/kernel', async (importOriginal) => ({ ...(await importOriginal()), getSettingsCatalog: vi.fn().mockResolvedValue({ items: [] }) }))
 
 async function renderSection(Section, ready) {
   render({ components: { Section, UiHost }, template: '<div><Section /><UiHost /></div>' }, { global: { stubs: { 'router-link': true } } })

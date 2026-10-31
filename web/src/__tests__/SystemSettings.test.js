@@ -25,6 +25,7 @@ const adminApi = vi.hoisted(() => ({
 }))
 
 const kernelApi = vi.hoisted(() => ({
+  getSettingsCatalog: vi.fn(),
   getPanelBackups: vi.fn(),
   createPanelBackup: vi.fn(),
   downloadPanelBackup: vi.fn()
@@ -66,6 +67,7 @@ describe('System settings page', () => {
     adminApi.getSubscriptionSettings.mockResolvedValue({ data: { subscribe_path: '/s', subscribe_domains: [] } })
     adminApi.getSystemConfigs.mockResolvedValue({ data: { list: [] } })
     adminApi.getSystemAuditLogs.mockResolvedValue({ data: { data: { list: [], total: 0, page: 1, page_size: 20 } } })
+    kernelApi.getSettingsCatalog.mockResolvedValue({ items: [{ key: 'traffic.destinations.retention_days', kind: 'choice', section: 'data', choices: [7, 30, 90] }] })
     kernelApi.getPanelBackups.mockResolvedValue({ supported: true, backups: [], summary: {}, retention: {} })
     adminApi.getLoadBalancers.mockResolvedValue({ data: { list: [] } })
     adminApi.getDestinationSettings.mockResolvedValue({ enabled: false, retention_days: 30 })

@@ -77,6 +77,7 @@ import {
   getSystemConfig,
   setSystemConfig
 } from '@/api/admin'
+import { getSettingsCatalog } from '@/api/kernel'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { useUnsavedChanges } from '@/composables/useUnsavedChanges'
 import SettingsSaveBar from '@/components/admin/settings/SettingsSaveBar.vue'
@@ -94,11 +95,31 @@ const { t, translateLiteral } = useAppI18n()
 const router = useRouter()
 const toast = useToast()
 
-// The everyday settings that live on their own pages.
-const settingsLinks = [
-  { to: '/admin/notifications/email', labelKey: 'adminSettings.general.links.mail', valueKey: 'adminSettings.general.links.mailHint', test: 'settings-link-mail' },
-  { to: '/admin/security/mfa', labelKey: 'adminSettings.general.links.security', valueKey: 'adminSettings.general.links.securityHint', test: 'settings-link-security' },
+// The everyday settings that live on their own pages: the catalog's links
+// (GET /api/v5/settings/catalog), with the labels of the keys the console
+// knows. Without the catalog the known links are shown.
+const LINK_LABELS = {
+  'notification.email.config': { labelKey: 'adminSettings.general.links.mail', valueKey: 'adminSettings.general.links.mailHint', test: 'settings-link-mail' },
+  'security.mfa.config': { labelKey: 'adminSettings.general.links.security', valueKey: 'adminSettings.general.links.securityHint', test: 'settings-link-security' }
+}
+const FALLBACK_LINKS = [
+  { key: 'notification.email.config', link: '/admin/notifications/email' },
+  { key: 'security.mfa.config', link: '/admin/security/mfa' }
 ]
+const catalogLinks = ref(FALLBACK_LINKS)
+const settingsLinks = computed(() => catalogLinks.value
+  .filter(item => LINK_LABELS[item.key] && item.link)
+  .map(item => ({ to: item.link, ...LINK_LABELS[item.key] })))
+
+async function loadCatalogLinks() {
+  try {
+    const catalog = await getSettingsCatalog()
+    const links = (catalog?.items || []).filter(item => item.kind === 'link' && item.section === 'general')
+    if (links.length) catalogLinks.value = links
+  } catch {
+    // The fallback links stay.
+  }
+}
 
 const subscriptionDomainsConfigKey = 'app.subscribe_domains'
 const subscriptionPath = ref('/s')
@@ -268,7 +289,10 @@ function discardSubscriptionDomains() {
 
 useUnsavedChanges(subscriptionDirty, { discard: discardSubscriptionDomains })
 
-onMounted(loadSubscriptionDomainSettings)
+onMounted(() => {
+  loadSubscriptionDomainSettings()
+  loadCatalogLinks()
+})
 
 </script>
 

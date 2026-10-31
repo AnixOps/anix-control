@@ -47,9 +47,11 @@
 // 系统设置 → 数据与保留: the access statistics switch and how long they are
 // kept, as a switch and a list of presets. The same settings (and the
 // statistics themselves) are on 监控 → 目的地;
-// GET/PUT /admin/traffic/destinations/settings.
+// GET/PUT /admin/traffic/destinations/settings, choices from
+// GET /api/v5/settings/catalog.
 import { computed, onMounted, reactive, ref } from 'vue'
 import { getDestinationSettings, updateDestinationSettings } from '@/api/admin'
+import { getSettingsCatalog } from '@/api/kernel'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { useUnsavedChanges } from '@/composables/useUnsavedChanges'
 import SettingsSaveBar from '@/components/admin/settings/SettingsSaveBar.vue'
@@ -67,7 +69,10 @@ import { systemErrorText } from './systemResponse'
 const { t } = useAppI18n()
 const toast = useToast()
 
-const RETENTION_PRESETS = [7, 30, 60, 90, 180]
+// The retention choices come from the settings catalog (Control owns the
+// limits); these are used only if the catalog cannot be read.
+const FALLBACK_RETENTION_CHOICES = [7, 30, 60, 90, 180]
+const retentionChoices = ref(FALLBACK_RETENTION_CHOICES)
 
 const loading = ref(false)
 const loaded = ref(false)
@@ -83,7 +88,7 @@ const retentionChoice = computed({
 })
 // A value the console did not offer (set through the API) stays selectable.
 const retentionOptions = computed(() => {
-  const days = new Set([...RETENTION_PRESETS, form.retention_days, saved.retention_days])
+  const days = new Set([...retentionChoices.value, form.retention_days, saved.retention_days])
   return [...days].sort((a, b) => a - b).map(day => ({
     value: String(day),
     label: t('adminSettings.data.days', { days: day })
@@ -102,7 +107,13 @@ async function load() {
   loading.value = true
   loadError.value = null
   try {
-    apply(await getDestinationSettings())
+    const [settings, catalog] = await Promise.all([
+      getDestinationSettings(),
+      getSettingsCatalog().catch(() => null)
+    ])
+    const retention = (catalog?.items || []).find(item => item.key === 'traffic.destinations.retention_days')
+    if (Array.isArray(retention?.choices) && retention.choices.length) retentionChoices.value = retention.choices
+    apply(settings)
     loaded.value = true
   } catch (err) {
     loadError.value = err

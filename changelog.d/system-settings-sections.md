@@ -6,3 +6,9 @@
   that holds the raw configuration key table, with a troubleshooting warning.
   The configuration key list no longer shows the scheduler's internal
   `scheduler.*` keys (`GET /api/v2/admin/system/configs`).
+
+### Added
+
+- `GET /api/v5/settings/catalog` lists the options 系统设置 offers (key,
+  section, kind, choices, limits, the value in force); the console draws
+  the 通用 links and the 数据与保留 choices from it.

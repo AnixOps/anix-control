@@ -6297,6 +6297,30 @@ func (s *SystemHandlerTestSuite) TestGetConfigs_HidesInternalKeys() {
 	assert.NotContains(s.T(), keys, "scheduler.forward_flow_reset.last_day")
 }
 
+func (s *SystemHandlerTestSuite) TestSettingsCatalog() {
+	handler := NewSettingsCatalogHandler()
+	s.router.GET("/api/v5/settings/catalog", handler.List)
+
+	req, _ := http.NewRequest("GET", "/api/v5/settings/catalog", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	var body struct {
+		Data struct {
+			Items []map[string]any `json:"items"`
+		} `json:"data"`
+	}
+	require.NoError(s.T(), json.Unmarshal(w.Body.Bytes(), &body))
+	byKey := map[string]map[string]any{}
+	for _, item := range body.Data.Items {
+		byKey[item["key"].(string)] = item
+	}
+	assert.Equal(s.T(), float64(30), byKey["traffic.destinations.retention_days"]["value"])
+	assert.Equal(s.T(), false, byKey["traffic.destinations.enabled"]["value"])
+	assert.Equal(s.T(), "/admin/notifications/email", byKey["notification.email.config"]["link"])
+}
+
 func (s *SystemHandlerTestSuite) TestGetSubscriptionSettings_UsesPanelEnvelope() {
 	handler := NewSystemHandler()
 	s.router.GET("/admin/system/subscription-settings", handler.GetSubscriptionSettings)
