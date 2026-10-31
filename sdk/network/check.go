@@ -158,7 +158,7 @@ func Check(plan *networkv1.NetworkPlan) error {
 	for name, n := range map[string]int{
 		"lines": len(plan.GetLines()), "ingresses": len(plan.GetIngresses()), "egresses": len(plan.GetEgresses()),
 		"transports": len(plan.GetTransports()), "paths": len(plan.GetPaths()), "forwarding": len(plan.GetForwarding()),
-		"port_forwards": len(plan.GetPortForwards()),
+		"port_forwards": len(plan.GetPortForwards()), "reverse_proxies": len(plan.GetReverseProxies()),
 	} {
 		if n > MaxComponents {
 			return invalid("more than %d %s", MaxComponents, name)
@@ -279,6 +279,14 @@ func Check(plan *networkv1.NetworkPlan) error {
 			return invalid("port_forwards[%d]: %v", i, err)
 		}
 		forwards[forward.GetId()] = forward
+	}
+
+	proxies := map[string]*networkv1.ReverseProxy{}
+	for i, proxy := range plan.GetReverseProxies() {
+		if err := checkReverseProxy(proxy, proxies, egresses, transports, listens); err != nil {
+			return invalid("reverse_proxies[%d]: %v", i, err)
+		}
+		proxies[proxy.GetId()] = proxy
 	}
 
 	// Pairing references, now that paths are known.
