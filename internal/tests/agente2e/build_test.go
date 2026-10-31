@@ -19,6 +19,7 @@ import (
 type binaries struct {
 	Control        string
 	Agent          string
+	Anixcore       string
 	TelemetryAMD64 string
 	TelemetryARM64 string
 	AgentVersion   string
@@ -27,9 +28,10 @@ type binaries struct {
 	AgentRoot      string
 }
 
-// agentBuildTags are the cores compiled into the Agent under test: sing-box
-// serves the VLESS protocol the suite's node runs (wireguard is always in).
-const agentBuildTags = "sing"
+// agentBuildTags are the cores compiled into the Agent under test: anixcore
+// drives the `anixcore` binary that serves the VLESS protocol the suite's
+// node runs (wireguard is always in).
+const agentBuildTags = "anixcore"
 
 func controlRoot(t *testing.T) string {
 	t.Helper()
@@ -81,15 +83,23 @@ func buildBinaries(t *testing.T, dir string) binaries {
 	}
 	out.Control = filepath.Join(binDir, "anix-control")
 	out.Agent = filepath.Join(binDir, "anix-agent")
+	out.Anixcore = filepath.Join(binDir, "anixcore")
 	out.TelemetryAMD64 = filepath.Join(binDir, "machine-telemetry-linux-amd64")
 	out.TelemetryARM64 = filepath.Join(binDir, "machine-telemetry-linux-arm64")
 	if prebuilt != "" {
-		for _, path := range []string{out.Control, out.Agent, out.TelemetryAMD64, out.TelemetryARM64} {
+		for _, path := range []string{out.Control, out.Agent, out.Anixcore, out.TelemetryAMD64, out.TelemetryARM64} {
 			_, err := os.Stat(path)
 			require.NoError(t, err, "ANIXOPS_AGENT_E2E_BIN_DIR lacks %s", filepath.Base(path))
 		}
 	} else {
 		require.NoError(t, os.MkdirAll(binDir, 0o755))
+		// anixcore is built from networkcore_anixops (cargo build -p
+		// anixcore), not here: point at a build of it.
+		configured := strings.TrimSpace(os.Getenv("ANIXOPS_ANIXCORE_BIN"))
+		if configured == "" {
+			t.Skip("no anixcore binary: set ANIXOPS_ANIXCORE_BIN (cargo build -p anixcore in networkcore_anixops)")
+		}
+		out.Anixcore = configured
 		goBuild(t, "go", out.ControlRoot, out.Control, buildEnv(), "./cmd/server")
 		version := "-X github.com/AnixOps/anix-agent/v5/cmd.version=" + agentE2EVersion
 		goBuild(t, agentGo(), out.AgentRoot, out.Agent, buildEnv(), "-trimpath", "-tags", agentBuildTags, "-ldflags", version, ".")
