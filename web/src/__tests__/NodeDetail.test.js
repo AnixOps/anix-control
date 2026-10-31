@@ -336,6 +336,9 @@ describe('NodeDetail', () => {
 
     await user.click(screen.getAllByRole('button', { name: 'Add protocol' })[0])
     const sheet = await screen.findByRole('dialog', { name: 'Add protocol' })
+    // The form is the default; the whole protocol as JSON is the advanced tab.
+    expect(within(sheet).getByTestId('protocol-fields')).toBeTruthy()
+    await user.click(within(sheet).getByRole('button', { name: 'Advanced JSON' }))
     const editor = within(sheet).getByRole('textbox', { name: /Protocol JSON/ })
     await user.clear(editor)
     await user.type(editor, 'not json')
