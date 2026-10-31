@@ -72,8 +72,9 @@
           @generate-keypair="createWireGuardKeypair"
         />
         <NodeIwanFields v-if="form.type === 'iwan'" :iwan="editor.iwanForm" />
+        <NodeAnxFields v-if="form.type === 'anx'" :anx="editor.anxForm" />
 
-        <details v-if="form.type !== 'wireguard' && form.type !== 'iwan'" class="node-protocol__advanced">
+        <details v-if="form.type !== 'wireguard' && form.type !== 'iwan' && form.type !== 'anx'" class="node-protocol__advanced">
           <summary>{{ t('admin.nodes.protocolForm.fields.settings') }}</summary>
           <UiTextarea v-model="form.settings" class="node-protocol__json" :aria-label="t('admin.nodes.protocolForm.fields.settings')" :rows="4" placeholder="{}" spellcheck="false" />
         </details>
@@ -145,6 +146,7 @@ import UiTextarea from '@/ui/UiTextarea.vue'
 import { useToast } from '@/ui/composables/useToast'
 import { useAppI18n } from '@/composables/useAppI18n'
 import NodeIwanFields from './NodeIwanFields.vue'
+import NodeAnxFields from './NodeAnxFields.vue'
 import NodeWireGuardFields from './NodeWireGuardFields.vue'
 import { readNodeApiError } from './nodeData'
 import { useNodeCopy } from './useNodeCopy'
@@ -173,7 +175,7 @@ const modeOptions = computed(() => [
   { value: 'json', label: 'JSON' },
   { value: 'visual', label: t('admin.nodes.protocolForm.tabs.visual') }
 ])
-const typeLabel = type => ({ wireguard: 'WireGuard', iwan: 'Panabit iWAN' }[type] || t(`networkPages.nodes.protocols.${type}`))
+const typeLabel = type => ({ wireguard: 'WireGuard', iwan: 'Panabit iWAN', anx: 'ANX' }[type] || t(`networkPages.nodes.protocols.${type}`))
 const typeOptions = computed(() => PROTOCOL_TYPES.map(type => ({ value: type, label: typeLabel(type) })))
 // TLS modes and transports follow the protocol type (protocolCapabilities):
 // Shadowsocks is TCP without TLS, Hysteria2 and TUIC UDP with TLS.

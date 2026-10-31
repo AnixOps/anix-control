@@ -532,6 +532,19 @@ export default {
         login: 'Users log in with their panel user id and the first 16 hex digits of their UUID; the iWAN format on the subscription page gives them an iwand configuration.'
       }
     },
+    anx: {
+      title: 'ANX',
+      fields: {
+        serverNames: 'Allowed SNI',
+        dest: 'Cover site',
+        alpn: 'ALPN'
+      },
+      hints: {
+        serverNames: 'Comma separated; clients use the first. It must be a name the cover site really serves.',
+        dest: 'Connections that are not ANX (probes included) are forwarded here as host:port.',
+        login: 'User keys derive from the UUID and the server public key is reported by the Agent on the node. Only AnixOps Net connects; the AnixOps Net subscription format carries the anx:// link. The node must run the anx-node kernel.'
+      }
+    },
     wireguard: {
       sections: {
         access: 'WireGuard access'

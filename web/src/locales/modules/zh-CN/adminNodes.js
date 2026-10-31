@@ -532,6 +532,19 @@ export default {
         login: '用户登录名是面板用户 id，口令是 UUID 去掉连字符后的前 16 位；用户在订阅页选择 iWAN 格式可拿到 iwand 配置。'
       }
     },
+    anx: {
+      title: 'ANX',
+      fields: {
+        serverNames: '允许的 SNI',
+        dest: '伪装目标站',
+        alpn: 'ALPN'
+      },
+      hints: {
+        serverNames: '用逗号分隔，客户端使用第一个。必须是伪装目标站真实支持的域名。',
+        dest: '非 ANX 连接（含主动探测）原样转发到这里，格式 host:port。',
+        login: '用户密钥由 UUID 派生，服务器公钥由节点上的 Agent 上报；只有 AnixOps Net 客户端能连，订阅选择 AnixOps Net 格式即可拿到 anx:// 链接。节点需运行 anx-node 内核。'
+      }
+    },
     wireguard: {
       sections: {
         access: 'WireGuard 接入'
