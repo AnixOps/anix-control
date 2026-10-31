@@ -203,7 +203,6 @@ export default {
       forwardV4Dns: 'DNS 服务商',
       forwardEgress: '域名分流',
       control: '控制内核',
-      deployments: '部署编排',
       accessGroups: '访问组',
       payment: '支付',
       notifications: '通知',

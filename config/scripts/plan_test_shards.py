@@ -42,8 +42,6 @@ WEIGHTS: dict[str, dict[str, float]] = {
         "internal/tests/builtinpackages": 40.0,
         "internal/handler": 17.0,
         "internal/tests/subscriptioncompat": 15.2,
-        "internal/tests/ordercompat": 13.5,
-        "internal/tests/paymentcompat": 13.4,
         "internal/kernelnodeops": 11.0,
         "internal/tests/affiliatecompat": 9.4,
         "internal/tests/notificationcompat": 7.9,
@@ -77,7 +75,6 @@ WEIGHTS: dict[str, dict[str, float]] = {
         "internal/tests/identitycompat": 113.2,
         "internal/tests/subscriptioncompat": 103.9,
         "internal/tests/protocolruntimecompat": 77.7,
-        "internal/tests/ordercompat": 67.8,
         "internal/subscriber": 61.6,
         "internal/tests/builtinpackages": 61.2,
         "internal/moduleruntime": 58.8,
@@ -85,7 +82,6 @@ WEIGHTS: dict[str, dict[str, float]] = {
         "internal/grpc": 55.4,
         "internal/router": 51.2,
         "internal/kernelnodeops": 46.6,
-        "internal/tests/paymentcompat": 43.9,
         "internal/tests/affiliatecompat": 40.2,
         "internal/tests/notificationcompat": 27.9,
         "internal/adminclaim": 22.9,
@@ -112,9 +108,7 @@ WEIGHTS: dict[str, dict[str, float]] = {
         "internal/tests/subscriptioncompat": 37.9,
         "internal/tests/nodeopsagent": 30.0,
         "internal/tests/integration": 28.1,
-        "internal/tests/ordercompat": 27.1,
         "internal/tests/protocolruntimecompat": 26.4,
-        "internal/tests/paymentcompat": 24.6,
         "internal/tests/affiliatecompat": 19.8,
         "internal/tests/notificationcompat": 16.4,
         "internal/nodesecrets": 10.4,
@@ -124,6 +118,8 @@ WEIGHTS: dict[str, dict[str, float]] = {
         "internal/packagestore": 4.4,
         "internal/kernelforward": 4.3,
         "internal/agentpki": 2.3,
+        # Not measured in CI yet: the PostgreSQL backup round trip.
+        "internal/backup": 8.0,
         # Not measured in CI yet: the schema migration tests on both
         # dialects (local run).
         "internal/database/migrations": 12.0,

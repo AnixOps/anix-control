@@ -627,8 +627,8 @@ whose route lands in another pull request). Empty
 groups are dropped. `activeMenuItem()` selects exactly one item per path (an
 exact `to`, then a `match` entry, then a sub-path). `Node` (节点,
 `/admin/nodes`) and `ForwardNode` (转发节点, `/admin/forward/nodes`) are
-separate items. 网络 holds 节点, 转发 and 部署编排
-(topologies, node roles and deployments); 扩展 holds only the plugin menus
+separate items. 网络 holds 节点 (the 部署编排 page, with its topologies and
+node roles, was removed); 扩展 holds only the plugin menus
 (hidden without one: 插件中心 became 系统设置 → 内置包). Only the packages with a WebUI bundle (today only forward) add a plugin menu, and the forward package's
 is left out while the core forwarding pages are there. `useAdminMenu()` / `useUserMenu()`
 (`navigation/useNavigation.js`) wire it to the stores; the sidebar,
@@ -1013,9 +1013,8 @@ template and the first detail page (plan §7.2). Page-local parts live in
   (a PUT of the group as listed with one field changed), when the token ends,
   and 接入节点 / 编辑 / 删除 (a 409 reads "组内还有节点"). The edit sheet
   (`NodeGroupSheet.vue`) holds the defaults the nodes copy, the token's
-  validity, the node cap, approval, the subscription groups and the protocol
-  template (`NodeGroupTemplateEditor.vue`); the API's validation errors name
-  the field (`protocol_template[0]: …`) and show in the sheet.
+  validity, the node cap and approval (nodes join clean, without protocols); the
+  API's validation errors name the field and show in the sheet.
 - **Approval.** The list endpoint of the console is `GET /api/v4/admin/nodes`
   (the `/api/v2` rows with `approval`, `node_group_id` and `node_group_name`;
   the `/api/v2` list keeps its shape, which the package gateway's
@@ -1323,7 +1322,6 @@ fails and retries on its own, so one failing endpoint never blanks the page.
 |---|---|---|
 | 仪表盘 | `/admin/dashboard` | 用户, 在线节点 / 总数, 今日流量, 待处理工单 cards; 24 h traffic (`/admin/traffic/hourly`); 需要处理 (offline nodes, tickets waiting for a reply, stalled traffic reports, pending orders in the commercial edition, and the kernel's alerts: see "Kernel alerts in 需要处理"); 最近操作 (audit log) |
 | 流量与监控 | `/admin/monitor/:section` | 实时节点 (default, `/admin/monitor`: the monitor WebSocket in a `UiDataTable`), `traffic` 用户流量, `latency` 节点延迟, `forward` 转发 (topology, ingress comparison, runtime jobs) |
-| 部署编排 | `/admin/deployments` | Topologies and node roles (tabs), the operation timeline, the topology workspace (dialog) and the node-role sheet |
 
 - 流量与监控's sections are segmented `UiTabs` bound to the path and listed in
   `ADMIN_PAGE_SECTIONS.monitor` (menu match, ⌘K). The time range
@@ -1338,17 +1336,6 @@ fails and retries on its own, so one failing endpoint never blanks the page.
   The user-traffic section keeps `/admin/traffic/hourly`.
 - Old URLs redirect: `/admin/traffic-hourly` → `/admin/monitor/traffic`,
   `/admin/forward/observability` → `/admin/monitor/forward` (query kept).
-- `components/admin/OperationTimeline.vue` (部署编排) is an
-  ordered timeline list with a state badge per operation; it is listed in
-  `scripts/data-table-pages.mjs` so no bare table comes back.
-- 部署编排 keeps its state and API calls in
-  `views/admin/deployments/useDeploymentCenter.js`; the panels next to it
-  only render. 删除 on a topology row asks through `useConfirm()`, the
-  workspace asks inline like 应用 and 回滚; the result is a toast. A topology
-  whose teardown deployment runs shows 删除中, and the page polls the
-  topology and deployment lists until it is deleted (success toast) or kept
-  (error toast naming the teardown's state).
-
 ### Kernel alerts in 需要处理
 
 `DashboardAlerts.vue` merges `GET /api/v4/kernel/alerts` (`getKernelAlerts()`;

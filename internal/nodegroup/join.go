@@ -138,10 +138,9 @@ func (r *joinRefusal) Unwrap() error { return ErrJoinRejected }
 //  3. Otherwise it creates a node, refusing a group at its node cap: the
 //     requested name, else the host name, made unique in the group with a
 //     -2, -3 suffix; the connect host, else the first public address; the
-//     group's defaults; pending approval when the group requires it. A
-//     proxy node gets the template's protocols with their own secrets and
-//     ports, in the group's subscription groups (a group without a
-//     template makes relays: nodes without protocols).
+//     group's defaults; pending approval when the group requires it. The
+//     node is clean: it has no protocol (the network model, ANX, is all it
+//     runs until an administrator adds one).
 //  4. It records a join_token enrollment, issues the certificate as Enroll
 //     does and writes the agent_join audit entry.
 //
@@ -381,20 +380,6 @@ func (s *Service) rejoinTarget(tx *gorm.DB, group model.NodeGroup, request JoinR
 			name: node.Name, approval: node.Approval, address: node.LastPublicAddress, lastCheck: lastCheck,
 		})
 	}
-	// A machine of a forward node the group made earlier gets that node
-	// back, as before.
-	var forwardNodes []model.ForwardNode
-	if err := liveForwardNodes(tx, group).Where("machine_fingerprint = ? AND enabled = ?", request.MachineFingerprint, true).
-		Order("id DESC").Find(&forwardNodes).Error; err != nil {
-		return nil, err
-	}
-	for _, node := range forwardNodes {
-		lastCheck := node.LastCheck
-		candidates = append(candidates, candidate{
-			node: agentcontrol.AgentNode{Kind: agentcontrol.NodeKindForward, ID: uint32(node.ID)}, // #nosec G115 -- node ids are below 2^32.
-			name: node.Name, approval: node.Approval, address: node.LastPublicAddress, lastCheck: &lastCheck,
-		})
-	}
 	for _, candidate := range candidates {
 		if candidate.address == "" || !contains(request.PublicAddresses, candidate.address) {
 			continue
@@ -481,55 +466,11 @@ func (s *Service) createNode(tx *gorm.DB, group model.NodeGroup, request JoinReq
 	if err := nodesecrets.Sync(tx, nodesecrets.TableNode, node.ID); err != nil {
 		return joinedNode{}, nil, err
 	}
-	if err := createProtocols(tx, group, node.ID); err != nil {
-		return joinedNode{}, nil, err
-	}
 	nodeID := node.ID
 	return joinedNode{
 		node: agentcontrol.AgentNode{Kind: agentcontrol.NodeKindProxy, ID: uint32(node.ID)}, // #nosec G115 -- node ids are below 2^32.
 		name: node.Name, approval: approval,
 	}, []func(){func() { service.DropNodeCache(nodeID) }}, nil
-}
-
-// createProtocols creates the group template's protocols on a new proxy
-// node, each with its own secrets and port, in the group's subscription
-// groups (those that still exist).
-func createProtocols(tx *gorm.DB, group model.NodeGroup, nodeID uint) error {
-	entries := templateOf(group)
-	if len(entries) == 0 {
-		return nil
-	}
-	var subscriptionGroups []model.SubscriptionGroup
-	if ids := subscriptionGroupsOf(group); len(ids) > 0 {
-		if err := tx.Where("id IN ?", ids).Order("id").Find(&subscriptionGroups).Error; err != nil {
-			return err
-		}
-	}
-	ports, err := assignPorts(entries)
-	if err != nil {
-		return fmt.Errorf("%w: %v", ErrJoinTemplate, err)
-	}
-	for i, entry := range entries {
-		protocol, err := buildProtocol(entry, i, nodeID, ports[i])
-		if err != nil {
-			return err
-		}
-		if err := service.ValidateNodeProtocol(&protocol); err != nil {
-			return fmt.Errorf("%w: protocol %q: %v", ErrJoinTemplate, entry.Name, err)
-		}
-		if err := tx.Omit(clause.Associations).Create(&protocol).Error; err != nil {
-			return err
-		}
-		if err := nodesecrets.Sync(tx, nodesecrets.TableNodeProtocol, protocol.ID); err != nil {
-			return err
-		}
-		if len(subscriptionGroups) > 0 {
-			if err := tx.Model(&protocol).Omit("SubscriptionGroups.*").Association("SubscriptionGroups").Append(subscriptionGroups); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
 }
 
 // nodeName is the name a join asks for: the requested name, else the host
@@ -551,14 +492,10 @@ func nodeName(request JoinRequest) string {
 // uniqueName returns base, or base-2, base-3, ... : the first name no live
 // node of the group has.
 func uniqueName(tx *gorm.DB, group model.NodeGroup, base string) (string, error) {
-	var names, forwardNames []string
+	var names []string
 	if err := liveNodes(tx, group).Pluck("name", &names).Error; err != nil {
 		return "", err
 	}
-	if err := liveForwardNodes(tx, group).Pluck("name", &forwardNames).Error; err != nil {
-		return "", err
-	}
-	names = append(names, forwardNames...)
 	taken := make(map[string]bool, len(names))
 	for _, name := range names {
 		taken[name] = true

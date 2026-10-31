@@ -18,7 +18,9 @@ export const PROTOCOL_CAPABILITIES = Object.freeze({
   hysteria2: { transports: ['udp'], tls: [1] },
   tuic: { transports: ['udp'], tls: [1] },
   wireguard: { transports: ['udp'], tls: [0] },
-  iwan: { transports: ['udp'], tls: [0] }
+  iwan: { transports: ['udp'], tls: [0] },
+  // ANX-A runs its own jacket over TCP: no stream transport, no TLS of the node's.
+  anx: { transports: ['tcp'], tls: [0] }
 })
 
 export function capabilitiesOf(type) {

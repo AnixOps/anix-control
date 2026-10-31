@@ -137,6 +137,28 @@ export default {
       emptyDescription: 'Add one and it appears in this group’s subscription.',
       loadFailed: 'Couldn’t load the node templates'
     },
+    nodeEdit: {
+      open: 'Edit nodes',
+      title: 'Edit subscription nodes',
+      description: "Edit the nodes this protocol produces in “{group}”. Only this group's subscription changes, the source node is untouched; empty fields keep the source value.",
+      name: 'Name',
+      server: 'Address (domain or IP)',
+      port: 'Port',
+      serverName: 'SNI',
+      advanced: 'Advanced JSON (only the fields to override)',
+      default: 'Source: {value}',
+      resetNode: 'Reset this node',
+      resetAll: 'Reset all edits',
+      resetAllConfirm: 'Clear every edit to the nodes of “{group}” and restore the source values? Names and order stay.',
+      edited: 'Edited',
+      save: 'Save',
+      saved: 'Node edits saved',
+      reset: 'Reset',
+      saveFailed: 'Could not save the node edits',
+      badPort: 'Port must be 1-65535',
+      badJson: 'The advanced JSON is not valid',
+      empty: 'This protocol has no editable node right now (the node may be offline)'
+    },
     layout: {
       open: 'Order & names',
       title: 'Order and display names',

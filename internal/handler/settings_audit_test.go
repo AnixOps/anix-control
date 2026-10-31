@@ -18,18 +18,15 @@ func systemAudit(t *testing.T, db *gorm.DB) []model.OperationLog {
 	return entries
 }
 
-// E-mail and invite configuration writes record the system configuration
+// E-mail configuration writes record the system configuration
 // handler's audit entry for the key they write: module system, the action,
 // the key, whether the SMTP password is set and was kept, and never a
 // secret value.
-func TestEmailAndInviteConfigWritesRecordTheSystemConfigAudit(t *testing.T) {
+func TestEmailConfigWritesRecordTheSystemConfigAudit(t *testing.T) {
 	db, _, router := setupSystemConfigSecurityTest(t)
-	require.NoError(t, db.AutoMigrate(&model.InviteConfig{}))
-	require.NoError(t, db.Exec("DELETE FROM v2_invite_config").Error)
 	seedEmailConfig(t, db, storedEmailConfigValue)
 	notifications := NewNotificationHandler()
 	router.PUT("/admin/notification/email/config", notifications.UpdateEmailConfig)
-	router.PUT("/admin/invite/config", NewInviteHandler().UpdateConfig)
 
 	recorder := performSystemConfigJSONRequest(t, router, http.MethodPut, "/admin/notification/email/config",
 		map[string]any{"host": "smtp.test", "port": 465, "password": "********", "from_address": "noreply@example.test"})
@@ -37,14 +34,11 @@ func TestEmailAndInviteConfigWritesRecordTheSystemConfigAudit(t *testing.T) {
 	recorder = performSystemConfigJSONRequest(t, router, http.MethodPut, "/admin/notification/email/config",
 		map[string]any{"host": "smtp.test", "port": 465, "password": "rotated", "from_address": "noreply@example.test"})
 	require.Equal(t, float64(0), decodeJSONMap(t, recorder)["code"], recorder.Body.String())
-	recorder = performSystemConfigJSONRequest(t, router, http.MethodPut, "/admin/invite/config", map[string]any{"code_prefix": "VIP"})
-	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
 
 	entries := systemAudit(t, db)
-	require.Len(t, entries, 3)
-	var emailRow, inviteRow model.SystemConfig
+	require.Len(t, entries, 2)
+	var emailRow model.SystemConfig
 	require.NoError(t, db.Where("key = ?", notificationEmailConfigKey).Take(&emailRow).Error)
-	require.NoError(t, db.Where("key = ?", inviteFrontendConfigKey).Take(&inviteRow).Error)
 	for _, entry := range entries {
 		require.Equal(t, "system_config", entry.TargetType)
 		require.Equal(t, uint(99), *entry.UserID)
@@ -58,9 +52,6 @@ func TestEmailAndInviteConfigWritesRecordTheSystemConfigAudit(t *testing.T) {
 		"preserve_existing":true,"masked_fields":["password"],"masked_fields_with_value":["password"]}`, entries[0].Content)
 	require.JSONEq(t, `{"key":"notification.email.config","group":"notification","type":"json","sensitive":false,"has_value":true,
 		"preserve_existing":false,"masked_fields":["password"],"masked_fields_with_value":["password"]}`, entries[1].Content)
-	require.Equal(t, "create", entries[2].Action)
-	require.Equal(t, inviteRow.ID, *entries[2].TargetID)
-	require.JSONEq(t, `{"key":"invite.frontend.config","group":"invite","type":"json","sensitive":false,"has_value":true,"preserve_existing":false}`, entries[2].Content)
 }
 
 // A legacy handler the package bridge relays to gets the actor's id only;

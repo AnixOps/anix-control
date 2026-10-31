@@ -9,7 +9,6 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/base64"
-	"encoding/json"
 	"testing"
 	"time"
 
@@ -55,7 +54,7 @@ func startJoinListener(t *testing.T) *joinListener {
 	require.NoError(t, err)
 	groups := &nodegroup.Service{DB: database.Get(), KEK: func() string { return base64.StdEncoding.EncodeToString(kek) }, PKI: l.pki}
 	group, err := groups.Create(t.Context(), nodegroup.GroupInput{
-		Name: "HK", ProtocolTemplate: json.RawMessage(`[{"type":"vmess","port":8080}]`),
+		Name: "HK",
 	}, nodegroup.Actor{Name: "test"})
 	require.NoError(t, err)
 	revealed, err := groups.RevealToken(t.Context(), group.ID, nodegroup.Actor{Name: "test"})

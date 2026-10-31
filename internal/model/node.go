@@ -111,6 +111,11 @@ const (
 	// has no encryption and no subscription link: users enter the login by
 	// hand or use the iwand configuration (subscription format "iwan").
 	ProtocolIWAN ProtocolType = "iwan"
+	// ProtocolANX is ANX-A, AnixOps' private protocol with the A2 jacket
+	// (a borrowed TLS handshake), served by anx-node on TCP. Users get an
+	// anx:// link in the AnixOps Net subscription; other clients cannot
+	// speak it.
+	ProtocolANX ProtocolType = "anx"
 )
 
 // NodeProtocol 节点协议配置
@@ -318,6 +323,15 @@ func GetProtocolTemplates() []ProtocolTemplate {
 			TLS:         0,
 			Settings:    `{"pool":"10.66.0.0/16","mtu":1400,"dns_upstream":"1.1.1.1","allow_encrypt":true,"allow_client_to_client":false,"fixed_addresses":{}}`,
 			Transport:   "udp",
+		},
+		{
+			Type:        ProtocolANX,
+			Name:        "ANX",
+			Description: "AnixOps 私有协议 ANX-A（A2 借用握手外衣，TCP），只有 AnixOps Net 客户端能连；节点需运行 anx-node 内核",
+			DefaultPort: 8443,
+			TLS:         0,
+			Settings:    `{"server_names":["www.apple.com"],"dest":"www.apple.com:443","alpn":["h2","http/1.1"]}`,
+			Transport:   "tcp",
 		},
 	}
 }

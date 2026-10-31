@@ -6,15 +6,6 @@ import (
 	"gorm.io/plugin/soft_delete"
 )
 
-// Node group kinds: which inventory a group's join token adds machines to.
-const (
-	// NodeGroupKindProxy groups proxy nodes (v2_node): they serve users.
-	NodeGroupKindProxy = "proxy"
-	// NodeGroupKindForward groups forward nodes (v2_forward_node): entry
-	// and relay machines of forward routes.
-	NodeGroupKindForward = "forward"
-)
-
 // Approval states of a node (Node.Approval, ForwardNode.Approval).
 const (
 	// NodeApprovalApproved is every node an administrator created, every
@@ -39,8 +30,7 @@ const NodeGroupLiveNameIndex = "ux_v5_node_group_live_name"
 // NodeGroup owns a join token and the defaults of the nodes the token
 // creates (docs/design/node-onboarding, "Node Groups"). Running the install
 // command with the group's anixjoin_ token on a machine makes the machine a
-// node of the group: a v2_node row for a proxy group, a v2_forward_node row
-// for a forward group.
+// clean node of the group (a v2_node row without protocols).
 //
 // Rows are never removed. Deleting a group sets Deleted to 1 and DeletedAt;
 // gorm.io/plugin/soft_delete then adds "deleted = 0" to every query, update
@@ -49,7 +39,6 @@ const NodeGroupLiveNameIndex = "ux_v5_node_group_live_name"
 type NodeGroup struct {
 	ID   uint   `gorm:"primaryKey" json:"id"`
 	Name string `gorm:"size:100;not null;uniqueIndex:ux_v5_node_group_live_name,where:deleted = 0" json:"name"`
-	Kind string `gorm:"size:16;not null" json:"kind"`
 	// JoinTokenHash is the hex SHA-256 of the join token, the only value
 	// used to find the group of a token.
 	JoinTokenHash string `gorm:"size:64;not null;uniqueIndex" json:"-"`
@@ -63,25 +52,19 @@ type NodeGroup struct {
 	MaxNodes        int  `gorm:"not null;default:0" json:"max_nodes"`
 	RequireApproval bool `gorm:"not null;default:false" json:"require_approval"`
 	// Rate, Tags, MonthlyLimitBytes, ResetDay and Sort are copied to every
-	// node the group creates (a forward node takes Tags only). Moving a node
+	// node the group creates Moving a node
 	// to another group does not apply them again.
 	Rate float64 `gorm:"not null;default:1" json:"rate"`
 	// Tags is a JSON array of strings.
 	Tags string `gorm:"type:text" json:"-"`
 	// MonthlyLimitBytes is the monthly traffic limit; 0 is none.
-	MonthlyLimitBytes int64 `gorm:"not null;default:0" json:"monthly_limit_bytes"`
-	ResetDay          int   `gorm:"not null;default:1" json:"reset_day"`
-	Sort              int   `gorm:"not null;default:0" json:"sort"`
-	// ProtocolTemplate is a JSON list of the protocols every new proxy node
-	// of the group gets (internal/nodegroup, "protocol templates").
-	ProtocolTemplate string `gorm:"type:text" json:"-"`
-	// SubscriptionGroupIDs is a JSON list of the subscription groups the
-	// template's protocols join.
-	SubscriptionGroupIDs string                `gorm:"type:text" json:"-"`
-	Deleted              soft_delete.DeletedAt `gorm:"column:deleted;not null;default:0;softDelete:flag,DeletedAtField:DeletedAt" json:"-"`
-	DeletedAt            *time.Time            `json:"deleted_at,omitempty"`
-	CreatedAt            time.Time             `json:"created_at"`
-	UpdatedAt            time.Time             `json:"updated_at"`
+	MonthlyLimitBytes int64                 `gorm:"not null;default:0" json:"monthly_limit_bytes"`
+	ResetDay          int                   `gorm:"not null;default:1" json:"reset_day"`
+	Sort              int                   `gorm:"not null;default:0" json:"sort"`
+	Deleted           soft_delete.DeletedAt `gorm:"column:deleted;not null;default:0;softDelete:flag,DeletedAtField:DeletedAt" json:"-"`
+	DeletedAt         *time.Time            `json:"deleted_at,omitempty"`
+	CreatedAt         time.Time             `json:"created_at"`
+	UpdatedAt         time.Time             `json:"updated_at"`
 }
 
 func (NodeGroup) TableName() string { return "v5_node_group" }

@@ -1273,7 +1273,7 @@ jobs:
         shard: [1, 2, 3, 4]
     env:
       PACKAGES: >-
-        ./internal/packagestore ./internal/tests/integration ./internal/tests/packagecompat ./internal/tests/identitycompat ./internal/tests/knowledgecompat ./internal/tests/ticketcompat ./internal/tests/notificationcompat ./internal/tests/platformcompat ./internal/tests/plancompat ./internal/tests/ordercompat ./internal/tests/paymentcompat ./internal/tests/affiliatecompat ./internal/tests/subscriptioncompat ./internal/tests/proxynodecompat ./internal/tests/protocolruntimecompat ./internal/tests/machinetelemetrycompat ./internal/tests/wireguardcompat ./internal/nodesecrets ./internal/tests/nodesecretsplit ./internal/kernelnodeops ./internal/tests/bridgecontract ./internal/agentpki ./internal/modulepki ./internal/agentreports ./internal/tests/nodeopsagent ./internal/subscriber ./internal/kernelforward ./internal/tests/forwardv4 ./internal/agentupgrade ./internal/database/migrations
+        ./internal/packagestore ./internal/tests/integration ./internal/tests/packagecompat ./internal/tests/identitycompat ./internal/tests/knowledgecompat ./internal/tests/ticketcompat ./internal/tests/notificationcompat ./internal/tests/platformcompat ./internal/tests/plancompat ./internal/tests/affiliatecompat ./internal/tests/subscriptioncompat ./internal/tests/proxynodecompat ./internal/tests/protocolruntimecompat ./internal/tests/machinetelemetrycompat ./internal/tests/wireguardcompat ./internal/nodesecrets ./internal/tests/nodesecretsplit ./internal/kernelnodeops ./internal/tests/bridgecontract ./internal/agentpki ./internal/modulepki ./internal/agentreports ./internal/tests/nodeopsagent ./internal/subscriber ./internal/kernelforward ./internal/tests/forwardv4 ./internal/agentupgrade ./internal/database/migrations ./internal/backup
     services:
       postgres:
         image: postgres:16
@@ -1303,7 +1303,7 @@ jobs:
         run: |
           docker run --rm --network host -e PGPASSWORD=postgres postgres:16 \
             psql -h 127.0.0.1 -U postgres -d anix_package_test -v ON_ERROR_STOP=1 \
-            -c "CREATE ROLE anix_kernel LOGIN CREATEROLE PASSWORD 'kernel'" \
+            -c "CREATE ROLE anix_kernel LOGIN CREATEROLE CREATEDB PASSWORD 'kernel'" \
             -c "ALTER DATABASE anix_package_test OWNER TO anix_kernel"
 
       # The harnesses seed, migrate and empty a database for every case, and

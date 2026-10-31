@@ -374,17 +374,6 @@ func (s *AdminE2ETestSuite) TestCreatePlan() {
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 }
 
-// TestGetOrders 测试获取订单列表
-func (s *AdminE2ETestSuite) TestGetOrders() {
-	req, _ := http.NewRequest("GET", "/api/v2/admin/orders", nil)
-	req.Header.Set("Authorization", "Bearer "+s.adminToken)
-
-	w := httptest.NewRecorder()
-	s.router.ServeHTTP(w, req)
-
-	assert.Equal(s.T(), http.StatusOK, w.Code)
-}
-
 // TestTrafficHourlyEndpoints verifies the real admin HTTP routes that feed
 // /admin/traffic-hourly, including include_zero_users and legacy rate=0 logs.
 func (s *AdminE2ETestSuite) TestTrafficHourlyEndpoints() {
