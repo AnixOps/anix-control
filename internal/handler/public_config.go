@@ -9,12 +9,12 @@ import (
 )
 
 // PublicConfig is what the web app reads before anyone signs in: whether
-// registration asks for an invite code, and the fields of the retired
-// product editions. There is one product: every official package, orders,
-// payments and affiliate included, is built into Control and installed, so
-// Edition is always "commercial" (the value with which the web app shows
-// every entry point) and HiddenPackages is always empty, until the web
-// app's edition switch is removed.
+// registration asks for an invite code, and the product edition. This binary
+// is the community edition: payment, order and affiliate (the commercial set,
+// config/commercial-boundary.json) are not offered, so Edition is
+// "community" and HiddenPackages names those packages. The web app then shows
+// no commercial menu, page or extension entry. The commercial build serves
+// "commercial" and an empty list.
 type PublicConfig struct {
 	Edition        string                   `json:"edition"`
 	HiddenPackages []string                 `json:"hidden_packages"`
@@ -27,16 +27,19 @@ type PublicRegistrationConfig struct {
 	RequireInvite bool `json:"require_invite"`
 }
 
-// publicConfigEdition is the edition value the web app shows every entry
-// point for.
-const publicConfigEdition = "commercial"
+// publicConfigEdition is the edition this binary reports.
+const publicConfigEdition = "community"
+
+// publicConfigHiddenPackages are the packages of the commercial set; the web
+// app hides their entry points in the community edition.
+var publicConfigHiddenPackages = []string{"affiliate", "order", "payment"}
 
 // NewPublicConfig returns the public configuration of cfg.
 func NewPublicConfig(cfg *config.Config) PublicConfig {
 	registration := service.ResolveRegistrationPolicy(cfg)
 	return PublicConfig{
 		Edition:        publicConfigEdition,
-		HiddenPackages: []string{},
+		HiddenPackages: append([]string(nil), publicConfigHiddenPackages...),
 		Registration:   PublicRegistrationConfig{Enabled: registration.Enabled, RequireInvite: registration.RequireInvite},
 	}
 }
@@ -44,7 +47,7 @@ func NewPublicConfig(cfg *config.Config) PublicConfig {
 // PublicConfigHandler serves GET /api/v4/public/config.
 //
 // @Summary 公开配置
-// @Description 注册是否需要邀请码；edition 固定为 commercial、hidden_packages 固定为空（版本区分已取消，全部官方包内置）
+// @Description 注册是否需要邀请码；edition 为 community，hidden_packages 为商业集合的包（affiliate、order、payment），网页据此隐藏商业入口
 // @Tags 系统
 // @Produce json
 // @Success 200 {object} map[string]interface{}

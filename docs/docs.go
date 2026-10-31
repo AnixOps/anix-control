@@ -8933,7 +8933,7 @@ const docTemplate = `{
         },
         "/api/v4/public/config": {
             "get": {
-                "description": "注册是否需要邀请码；edition 固定为 commercial、hidden_packages 固定为空（版本区分已取消，全部官方包内置）",
+                "description": "注册是否需要邀请码；edition 为 community，hidden_packages 为商业集合的包（affiliate、order、payment），网页据此隐藏商业入口",
                 "produces": [
                     "application/json"
                 ],

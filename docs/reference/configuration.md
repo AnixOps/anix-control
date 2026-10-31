@@ -567,8 +567,9 @@ Two deprecated keys, still read until M2 (P11), bear on it:
 Orders, payments and affiliate are installed like every other package, and
 a configuration that still sets the key loads (the key is ignored with a
 warning). The
-public `GET /api/v4/public/config` keeps its `edition` (`commercial`) and
-`hidden_packages` (empty) fields for the web app.
+public `GET /api/v4/public/config` reports `edition` `community` and
+`hidden_packages` `["affiliate","order","payment"]`: the web app hides the
+commercial set's menus and pages (`docs/architecture/commercial-boundary.md`).
 
 The package hosts always run, and Agent plugin dispatch and topology
 execution are off until M4; none of them has a setting (their 4.2 keys are

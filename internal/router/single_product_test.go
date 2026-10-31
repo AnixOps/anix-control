@@ -77,14 +77,14 @@ func TestUsersSubscriptionResetReachesIdentityPlatform(t *testing.T) {
 	require.Equal(t, "identity.user.subscription.reset.post", host.lastRouteID)
 }
 
-// The public configuration keeps the web app's retired edition fields at
-// the values that show every package.
-func TestPublicConfigShowsEveryPackage(t *testing.T) {
+// The public configuration reports the community edition and hides the
+// commercial packages.
+func TestPublicConfigHidesTheCommercialSet(t *testing.T) {
 	router, cfg := setupTestRouter(t)
 	defer teardownTestRouter(t)
 	response := serveV2Request(router, http.MethodGet, "/api/v4/public/config")
 	require.Equal(t, http.StatusOK, response.Code)
-	require.JSONEq(t, `{"data":{"edition":"commercial","hidden_packages":[],"registration":{"enabled":true,"require_invite":false}}}`, response.Body.String())
+	require.JSONEq(t, `{"data":{"edition":"community","hidden_packages":["affiliate","order","payment"],"registration":{"enabled":true,"require_invite":false}}}`, response.Body.String())
 
 	cfg.Auth.Registration.RequireInvite = true
 	response = serveV2Request(router, http.MethodGet, "/api/v4/public/config")
