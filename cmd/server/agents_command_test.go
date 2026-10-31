@@ -52,7 +52,7 @@ func TestAgentsTransportsCommand(t *testing.T) {
 	require.Contains(t, output, "agent_control.mtls: required", "the 4.2 default")
 	require.Contains(t, output, "proxy-1")
 	require.Contains(t, output, "0a1b until")
-		require.Contains(t, output, "off (disabled)")
+	require.Contains(t, output, "off (disabled)")
 	require.Contains(t, output, "3 node(s): 1 mtls, 0 third-party, 2 unseen.")
 
 	// The gate: proxy-2 was never seen and holds no certificate, so it never
