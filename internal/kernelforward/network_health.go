@@ -9,6 +9,7 @@ import (
 	forwardv1 "github.com/AnixOps/anix-control/sdk/api/forward/v1"
 	networkv1 "github.com/AnixOps/anix-control/sdk/api/network/v1"
 	"github.com/AnixOps/anix-control/v5/internal/model"
+	"github.com/AnixOps/anix-control/v5/internal/nodeentry"
 	"google.golang.org/protobuf/encoding/protojson"
 	"gorm.io/gorm"
 )
@@ -144,6 +145,31 @@ func deviceAddresses(db *gorm.DB, ref string, status *networkv1.NetworkStatus) [
 		for _, address := range iface.GetAddresses() {
 			add(address)
 		}
+	}
+	return out
+}
+
+// entryNAT answers the enabled node entries (NAT mappings) of the proxy
+// nodes among refs, by node ref; empty when the table or a node is missing.
+func entryNAT(db *gorm.DB, refs []string) map[string][]model.NodeEntry {
+	out := map[string][]model.NodeEntry{}
+	if !db.Migrator().HasTable(&model.NodeEntry{}) {
+		return out
+	}
+	var ids []uint
+	byID := map[uint]string{}
+	for _, ref := range refs {
+		if node, err := agentcontrol.ParseAgentNode(ref); err == nil && node.Kind == agentcontrol.NodeKindProxy {
+			ids = append(ids, uint(node.ID))
+			byID[uint(node.ID)] = ref
+		}
+	}
+	rows, err := nodeentry.EnabledByNode(db, ids)
+	if err != nil {
+		return out
+	}
+	for id, entries := range rows {
+		out[byID[id]] = entries
 	}
 	return out
 }

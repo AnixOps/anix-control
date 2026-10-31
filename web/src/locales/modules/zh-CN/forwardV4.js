@@ -345,6 +345,8 @@ export default {
       portAutoHelp: '自动：取所有入口节点共同的最小空闲端口。',
       portExplicitHelp: '须在入口节点的端口范围内，且不是保留端口。',
       protocol: '协议',
+      entryPublic: '入口 {node} 的公网地址(NAT 机器)',
+      entryPublicHelp: '留空则按节点的 NAT 入口或网卡自动选择。NAT 机器请手动填写公网 IP 和映射端口，例如 203.0.113.9:25001；不写端口则使用路由监听端口。订阅和 Control 拨测都会使用它。',
       entryHostname: '入口域名',
       entryHostnameHelp: '多个入口节点时，客户端连接这个域名。DNS 由运维自行维护：把它解析到各入口节点。',
       chain: '跳链',

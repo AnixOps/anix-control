@@ -51,11 +51,11 @@
               <UiField :label="t('forwardV4.editor.labels')" label-tag="span" :help="t('forwardV4.editor.labelsHelp')" :error="errorText('labels')" data-field="labels">
                 <template #default="{ labelId }">
                   <div class="editor-labels" role="group" :aria-labelledby="labelId">
-                    <span v-for="(item, index) in draft.labels" :key="item._key" class="editor-label">
+                    <span v-for="(item, index) in plainLabels" :key="item._key" class="editor-label">
                       <UiTextField v-model="item.key" size="sm" :aria-label="t('forwardV4.editor.labelKey', { n: index + 1 })" placeholder="key" />
                       <span aria-hidden="true">=</span>
                       <UiTextField v-model="item.value" size="sm" :aria-label="t('forwardV4.editor.labelValue', { n: index + 1 })" placeholder="value" />
-                      <UiIconButton size="sm" :icon="X" :label="t('forwardV4.editor.removeLabel', { n: index + 1 })" @click="draft.labels.splice(index, 1)" />
+                      <UiIconButton size="sm" :icon="X" :label="t('forwardV4.editor.removeLabel', { n: index + 1 })" @click="removeLabel(item)" />
                     </span>
                     <UiButton size="sm" variant="tertiary" :icon="Plus" @click="addLabel">{{ t('forwardV4.editor.addLabel') }}</UiButton>
                   </div>
@@ -76,6 +76,19 @@
                 </template>
               </UiField>
               <UiSelect :id="fieldId('listen.protocol')" v-model="draft.listen.protocol" size="md" :label="t('forwardV4.editor.protocol')" :options="protocolOptions" :error="errorText('listen.protocol')" />
+            </div>
+            <div v-if="entryRefs.length" class="editor-mt editor-entry-public" data-testid="entry-public">
+              <p class="editor-entry-public__help">{{ t('forwardV4.editor.entryPublicHelp') }}</p>
+              <UiTextField
+                v-for="ref in entryRefs"
+                :key="ref"
+                :model-value="entryPublic(ref)"
+                size="md"
+                :label="t('forwardV4.editor.entryPublic', { node: nodeName(ref) })"
+                placeholder="203.0.113.9:25001"
+                :data-testid="`entry-public-${ref}`"
+                @update:model-value="value => setEntryPublic(ref, value)"
+              />
             </div>
             <UiTextField
               v-if="draft.hops[0]?.node_refs.length > 1"
@@ -459,6 +472,39 @@ async function addHop() {
   focusField(`hops[${draft.value.hops.length - 1}].node_refs`)
 }
 
+// The public address of an entry node behind NAT is a reserved route label
+// ("entry-public/<node ref>" = host[:port]); the plain label list leaves it out.
+const ENTRY_PUBLIC = 'entry-public/'
+const plainLabels = computed(() => (draft.value ? draft.value.labels.filter(item => !String(item.key).startsWith(ENTRY_PUBLIC)) : []))
+const entryRefs = computed(() => [...new Set(draft.value?.hops[0]?.node_refs || [])])
+
+function nodeName(ref) {
+  return nodes.value.find(node => node.node_ref === ref)?.name
+    || networkNodes.value.find(node => node.node === ref)?.name || ref
+}
+
+function removeLabel(item) {
+  const index = draft.value.labels.indexOf(item)
+  if (index >= 0) draft.value.labels.splice(index, 1)
+}
+
+function entryPublic(ref) {
+  return draft.value.labels.find(item => item.key === ENTRY_PUBLIC + ref)?.value || ''
+}
+
+function setEntryPublic(ref, value) {
+  const key = ENTRY_PUBLIC + ref
+  const index = draft.value.labels.findIndex(item => item.key === key)
+  const text = String(value ?? '')
+  if (!text.trim()) {
+    if (index >= 0) draft.value.labels.splice(index, 1)
+  } else if (index >= 0) {
+    draft.value.labels[index].value = text
+  } else {
+    draft.value.labels.push({ _key: `l${Date.now()}${draft.value.labels.length}`, key, value: text })
+  }
+}
+
 function addLabel() {
   draft.value.labels.push({ _key: `l${Date.now()}${draft.value.labels.length}`, key: '', value: '' })
 }
@@ -707,6 +753,17 @@ function discardMine() {
   flex-wrap: wrap;
   gap: var(--space-2);
   align-items: center;
+}
+
+.editor-entry-public {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.editor-entry-public__help {
+  margin: 0;
+  color: var(--text-muted, inherit);
+  font-size: 0.8125rem;
 }
 
 .editor-labels {

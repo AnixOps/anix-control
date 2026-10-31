@@ -344,6 +344,8 @@ export default {
       portAutoHelp: 'Auto: the lowest port free on every entry node.',
       portExplicitHelp: 'Must be in the entry nodes’ port range and not reserved.',
       protocol: 'Protocol',
+      entryPublic: 'Public address of entry {node} (behind NAT)',
+      entryPublicHelp: "Leave empty to follow the node's NAT entry or network card. For a machine behind NAT, type its public IP and the mapped port, for example 203.0.113.9:25001; without a port the route's listen port is used. Subscriptions and Control's probe use it.",
       entryHostname: 'Entry hostname',
       entryHostnameHelp: 'With several entry nodes, clients connect to this name. Operators maintain its DNS: point it at the entry nodes.',
       chain: 'Hop chain',
