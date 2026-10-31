@@ -142,6 +142,8 @@ func laterModels() []any {
 		&model.NetworkTransportKey{},       // 0016_network_model
 		&model.NetworkDevice{},             // 0016_network_model
 		&model.NodeNetwork{},               // 0018_node_network
+		&model.ReverseProxy{},              // 0022_reverse_proxies
+		&model.ReverseProxyACMEAccount{},   // 0022_reverse_proxies
 	}
 }
 

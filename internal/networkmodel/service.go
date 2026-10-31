@@ -73,29 +73,53 @@ type Service struct {
 
 var (
 	forwardSourceMu sync.RWMutex
-	forwardSource   func(db *gorm.DB) ([]Forward, error)
+	forwardSources  = map[string]func(db *gorm.DB) ([]Forward, error){}
 )
 
 // SetForwardSource sets where every Service without Forwards gets the
 // forward routes: the kernel forward service, which owns the routes. Nil
 // has none.
 func SetForwardSource(source func(db *gorm.DB) ([]Forward, error)) {
+	RegisterForwardSource("forward", source)
+}
+
+// RegisterForwardSource adds a named source of Forwards beside the forward
+// routes, such as the reverse proxies; nil removes it. Every Service
+// without Forwards plans what all sources answer, by source name.
+func RegisterForwardSource(name string, source func(db *gorm.DB) ([]Forward, error)) {
 	forwardSourceMu.Lock()
 	defer forwardSourceMu.Unlock()
-	forwardSource = source
+	if source == nil {
+		delete(forwardSources, name)
+		return
+	}
+	forwardSources[name] = source
 }
 
 func (s *Service) forwards(db *gorm.DB) ([]Forward, error) {
-	source := s.Forwards
-	if source == nil {
-		forwardSourceMu.RLock()
-		source = forwardSource
-		forwardSourceMu.RUnlock()
+	if s.Forwards != nil {
+		return s.Forwards(db)
 	}
-	if source == nil {
-		return nil, nil
+	forwardSourceMu.RLock()
+	names := make([]string, 0, len(forwardSources))
+	for name := range forwardSources {
+		names = append(names, name)
 	}
-	return source(db)
+	sources := make([]func(db *gorm.DB) ([]Forward, error), 0, len(names))
+	sort.Strings(names)
+	for _, name := range names {
+		sources = append(sources, forwardSources[name])
+	}
+	forwardSourceMu.RUnlock()
+	var all []Forward
+	for _, source := range sources {
+		forwards, err := source(db)
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, forwards...)
+	}
+	return all, nil
 }
 
 // ReplanTx replans every device in tx, which the caller holds, after the
@@ -354,12 +378,18 @@ func (s *Service) DevicePlan(ctx context.Context, node string) (plan *networkv1.
 	return plan, true, nil
 }
 
-// Redacted answers a copy of plan without its link keys, for people.
+// Redacted answers a copy of plan without its link keys and reverse proxy
+// private keys, for people.
 func Redacted(plan *networkv1.NetworkPlan) *networkv1.NetworkPlan {
 	out := proto.Clone(plan).(*networkv1.NetworkPlan)
 	for _, transport := range out.GetTransports() {
 		if anx := transport.GetAnxLine(); anx != nil && anx.LinkKey != "" {
 			anx.LinkKey = "redacted"
+		}
+	}
+	for _, proxy := range out.GetReverseProxies() {
+		if proxy.PrivateKeyPem != "" {
+			proxy.PrivateKeyPem = "redacted"
 		}
 	}
 	return out

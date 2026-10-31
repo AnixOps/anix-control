@@ -201,6 +201,7 @@ export default {
       forwardV4Node: 'Forwarding node',
       forwardV4Dns: 'DNS providers',
       forwardEgress: 'Domain egress',
+      reverseProxies: 'Reverse proxies',
       control: 'Control Kernel',
       accessGroups: 'Access groups',
       payment: 'Payments',

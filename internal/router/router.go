@@ -784,6 +784,14 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		v4.GET("/kernel/network/devices/:id/plan", networkModel.DevicePlan)
 		v4.GET("/kernel/nodes/:id/network", networkModel.NodeNetwork)
 		v4.PUT("/kernel/nodes/:id/network", networkModel.SetNodeNetwork)
+		// Panel HTTP(S) reverse proxies: sites by host, routes by path to
+		// upstreams, run on entry nodes as NetworkPlan reverse proxies
+		// (internal/reverseproxy).
+		reverseProxies := handler.NewReverseProxiesHandler()
+		v4.GET("/kernel/reverse-proxies", reverseProxies.List)
+		v4.POST("/kernel/reverse-proxies", reverseProxies.Create)
+		v4.PUT("/kernel/reverse-proxies/:id", reverseProxies.Update)
+		v4.DELETE("/kernel/reverse-proxies/:id", reverseProxies.Delete)
 		// Panabit iWAN lines: third-party iWAN ingresses AnixOps Net logs
 		// into with a shared account to reach proxy nodes through them
 		// (node entries of kind iwan; internal/iwanline).

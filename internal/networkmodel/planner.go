@@ -26,7 +26,9 @@ type Pending struct {
 	Path string `json:"path,omitempty"`
 	// Forward is a forward route left out instead of a path.
 	Forward string `json:"forward,omitempty"`
-	Reason  string `json:"reason"`
+	// ReverseProxy is a reverse proxy left out instead of a path.
+	ReverseProxy string `json:"reverse_proxy,omitempty"`
+	Reason       string `json:"reason"`
 }
 
 // Result is the planner's answer: one plan per device that has a line,

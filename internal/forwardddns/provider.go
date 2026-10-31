@@ -45,6 +45,8 @@ const (
 	TypeA     = "A"
 	TypeAAAA  = "AAAA"
 	TypeCNAME = "CNAME"
+	// TypeTXT records carry ACME DNS-01 challenges (internal/reverseproxy).
+	TypeTXT = "TXT"
 )
 
 // ConfigEndpoint overrides a provider API's host; ConfigURL is a webhook's
@@ -67,6 +69,9 @@ const (
 
 // DefaultTimeout bounds one provider HTTP call.
 const DefaultTimeout = 15 * time.Second
+
+// maxTXT bounds a TXT value: one character-string.
+const maxTXT = 255
 
 // maxResponse bounds a provider's answer.
 const maxResponse = 1 << 20
@@ -328,9 +333,9 @@ func CheckSet(set RecordSet, allowEmpty bool) error {
 		return fmt.Errorf("record %q is not a name in zone %q", set.Name, set.Zone)
 	}
 	switch set.Type {
-	case TypeA, TypeAAAA, TypeCNAME:
+	case TypeA, TypeAAAA, TypeCNAME, TypeTXT:
 	default:
-		return fmt.Errorf("record type %q is not A, AAAA or CNAME", set.Type)
+		return fmt.Errorf("record type %q is not A, AAAA, CNAME or TXT", set.Type)
 	}
 	if len(set.Values) == 0 && !allowEmpty {
 		return errors.New("a record set needs at least one value")
@@ -362,6 +367,22 @@ func normalizeValue(rtype, value string) (string, error) {
 			return "", fmt.Errorf("%q is not a CNAME target", value)
 		}
 		return name, nil
+	case TypeTXT:
+		// One unquoted string of printable ASCII, as a provider may answer
+		// it with or without its quotes.
+		text := strings.TrimSpace(value)
+		if len(text) >= 2 && strings.HasPrefix(text, `"`) && strings.HasSuffix(text, `"`) {
+			text = text[1 : len(text)-1]
+		}
+		if text == "" || len(text) > maxTXT || strings.ContainsAny(text, `"\`) {
+			return "", fmt.Errorf("%q is not a TXT record value", value)
+		}
+		for _, c := range text {
+			if c < 0x20 || c > 0x7e {
+				return "", fmt.Errorf("%q is not a TXT record value", value)
+			}
+		}
+		return text, nil
 	}
 	return "", fmt.Errorf("record type %q is not supported", rtype)
 }

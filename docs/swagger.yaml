@@ -1290,6 +1290,113 @@ definitions:
       next_run_at:
         type: string
     type: object
+  reverseproxy.Health:
+    properties:
+      disabled:
+        type: boolean
+      interval_ms:
+        type: integer
+      timeout_ms:
+        type: integer
+    type: object
+  reverseproxy.Input:
+    properties:
+      certificate_pem:
+        type: string
+      dns_provider_id:
+        type: integer
+      dns_zone:
+        type: string
+      enabled:
+        type: boolean
+      entries:
+        description: |-
+          Entries are the devices that answer (proxy-<id>); several are
+          entry HA, each running the same proxy.
+        items:
+          type: string
+        type: array
+      http_port:
+        description: HTTPPort, with TLS, is a plain listener that redirects to https.
+        type: integer
+      listen_port:
+        type: integer
+      name:
+        type: string
+      private_key_pem:
+        type: string
+      sites:
+        items:
+          $ref: '#/definitions/reverseproxy.Site'
+        type: array
+      tls_mode:
+        description: |-
+          TLSMode is none, manual (certificate_pem and private_key_pem) or
+          acme: Control obtains and renews the certificate with an ACME DNS-01
+          challenge, writing the TXT records through dns_provider_id (a
+          forwarding DNS provider) in dns_zone, which holds every host.
+        type: string
+      via:
+        description: |-
+          Via are devices the requests travel through before the last of them
+          dials the upstreams; empty dials from the entry.
+        items:
+          type: string
+        type: array
+    type: object
+  reverseproxy.Route:
+    properties:
+      balance:
+        description: |-
+          Balance is round_robin (default), random, ip_hash, least_conn or
+          failover.
+        type: string
+      headers:
+        additionalProperties:
+          type: string
+        type: object
+      health:
+        $ref: '#/definitions/reverseproxy.Health'
+      host:
+        type: string
+      host_header:
+        description: |-
+          HostHeader is "client" (default) or "upstream"; Host, when set, is
+          sent instead.
+        type: string
+      path:
+        description: Path is "/" or a prefix without a trailing slash.
+        type: string
+      strip_prefix:
+        type: boolean
+      upstreams:
+        items:
+          $ref: '#/definitions/reverseproxy.Upstream'
+        type: array
+    type: object
+  reverseproxy.Site:
+    properties:
+      hosts:
+        description: Hosts are "example.com", "*.example.com" or "*".
+        items:
+          type: string
+        type: array
+      routes:
+        items:
+          $ref: '#/definitions/reverseproxy.Route'
+        type: array
+    type: object
+  reverseproxy.Upstream:
+    properties:
+      host:
+        type: string
+      port:
+        type: integer
+      priority:
+        type: integer
+      weight:
+        type: integer
+    type: object
   service.GroupProtocolLayoutItem:
     properties:
       display_name:
@@ -7476,6 +7583,111 @@ paths:
       security:
       - BearerAuth: []
       summary: Send a test message through the Telegram bot
+      tags:
+      - Kernel
+  /api/v4/kernel/reverse-proxies:
+    get:
+      description: 'Every reverse proxy by name: entries and via nodes, listen_port,
+        http_port (the plain redirect listener), sites (hosts and routes to upstreams),
+        tls_mode, whether it has a certificate with its names and expiry, pending
+        (why entries do not run it now) and status (what each entry last reported:
+        state, bytes and upstream health). The private key is never answered.'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: The reverse proxies
+      tags:
+      - Kernel
+    post:
+      consumes:
+      - application/json
+      description: 'Adds a reverse proxy: name unique; 1-8 entries and 0-4 via nodes
+        (proxy-<id>); listen_port; sites with hosts (example.com, *.example.com or
+        *) and routes (path prefix, strip_prefix, host_header client or upstream or
+        a fixed host, headers, upstreams, balance, health); tls_mode none or manual
+        (certificate_pem and private_key_pem, a pair covering every host; http_port
+        then redirects to https). The private key is sealed under module_runtime.ca_kek
+        (409 kek_required without it). Audited without the certificate; replans the
+        devices.'
+      parameters:
+      - description: the reverse proxy
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/reverseproxy.Input'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Add a reverse proxy
+      tags:
+      - Kernel
+  /api/v4/kernel/reverse-proxies/{id}:
+    delete:
+      description: Deletes the reverse proxy; its entries stop running it. Audited;
+        replans the devices.
+      parameters:
+      - description: reverse proxy id
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete a reverse proxy
+      tags:
+      - Kernel
+    put:
+      consumes:
+      - application/json
+      description: Replaces the reverse proxy's fields as Create checks them; with
+        tls_mode manual, empty certificate_pem and private_key_pem keep the stored
+        certificate. Audited without the certificate; replans the devices.
+      parameters:
+      - description: reverse proxy id
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: the reverse proxy
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/reverseproxy.Input'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Change a reverse proxy
       tags:
       - Kernel
   /api/v4/public/config:

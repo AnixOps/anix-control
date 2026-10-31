@@ -106,4 +106,6 @@
 //     a protocol template or subscription groups; joining nodes stay clean.
 //   - 0021_drop_load_balancer: the load balancer feature is removed; its
 //     table v2_load_balancer is dropped.
+//   - 0022_reverse_proxies: the panel HTTP(S) reverse proxies
+//     (v5_reverse_proxy).
 package migrations

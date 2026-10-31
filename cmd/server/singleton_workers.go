@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"log"
+	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -17,6 +19,7 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/kernelnodeops"
 	"github.com/AnixOps/anix-control/v5/internal/realitytarget"
 	"github.com/AnixOps/anix-control/v5/internal/retention"
+	"github.com/AnixOps/anix-control/v5/internal/reverseproxy"
 	"github.com/AnixOps/anix-control/v5/internal/service"
 )
 
@@ -68,6 +71,9 @@ func runSingletonWorkers(ctx context.Context) {
 	// Entry HA through DNS (forward-sdk.md section 7.4, L2): keeps each
 	// bound route's DNS records on its healthy entry nodes.
 	run((&kernelforward.EntryHA{Service: kernelforward.New(database.Get()), LocalSession: localAgentSession}).Run)
+	// The reverse proxies' ACME certificates (DNS-01 through their DNS
+	// providers), issued and renewed by one process.
+	run(reverseProxyIssuer().Run)
 	// Staged Agent upgrades (forward-sdk.md section 9, O4): the campaign's
 	// batches are offered on, and closed by, this process's Agent streams.
 	run((&agentupgrade.Worker{
@@ -101,4 +107,22 @@ func runSingletonWorkers(ctx context.Context) {
 	// start it verifies the pre-migration bundle of this start.
 	run(backupWorker(config.Get()).Run)
 	wg.Wait()
+}
+
+// reverseProxyIssuer is the reverse proxies' certificate issuer, at the
+// ACME directory of the panel's own certificates (ANIX_CONTROL_ACME_*).
+func reverseProxyIssuer() *reverseproxy.Issuer {
+	issuer := &reverseproxy.Issuer{
+		Service:   reverseproxy.New(database.Get()),
+		Directory: strings.TrimSpace(os.Getenv(config.ACMEDirectoryEnv)),
+	}
+	if file := strings.TrimSpace(os.Getenv(config.ACMECAFileEnv)); file != "" {
+		client, err := acmeHTTPClient(file)
+		if err != nil {
+			log.Printf("reverse proxy certificates: %v", err)
+		} else {
+			issuer.HTTPClient = client
+		}
+	}
+	return issuer
 }

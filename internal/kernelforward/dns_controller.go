@@ -833,3 +833,10 @@ func (e *EntryHA) failed(db *gorm.DB, binding model.KernelForwardDNSBinding, wha
 		"route_id", binding.RouteID, "failures", binding.Failures, "retry_in", backoff.String(), "error", binding.LastError)
 	return nil
 }
+
+// DNSProvider builds the client of stored provider id, for another
+// writer of its zones' records (the reverse proxies' ACME DNS-01
+// challenges, internal/reverseproxy).
+func (s *Service) DNSProvider(db *gorm.DB, id uint64) (forwardddns.Provider, error) {
+	return s.dnsProvider(db, id)
+}

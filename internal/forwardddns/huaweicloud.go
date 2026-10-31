@@ -185,11 +185,16 @@ func (h *huawei) recordSets(ctx context.Context, zoneID, name, rtype string) ([]
 }
 
 func huaweiValues(rtype string, values []string) []string {
-	if rtype != TypeCNAME {
+	if rtype != TypeCNAME && rtype != TypeTXT {
 		return values
 	}
 	out := make([]string, 0, len(values))
 	for _, value := range values {
+		if rtype == TypeTXT {
+			// Huawei Cloud DNS takes a TXT value quoted.
+			out = append(out, `"`+value+`"`)
+			continue
+		}
 		out = append(out, value+".")
 	}
 	return out
