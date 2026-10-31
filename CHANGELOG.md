@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 5.0.0-rc.23 - 2026-10-31
+
+### Fixed
+
+- Pins Agent rc.23: a node whose snapshot still names a retired core (xray,
+  sing) now runs on anixcore instead of stopping the Agent, which made the
+  rc.22 upgrade campaign roll back on such nodes.
+
 ### Notes
 
 - The C2 / C3 reverse dial-back of rc.22 (a reversed `anx_line` transport
