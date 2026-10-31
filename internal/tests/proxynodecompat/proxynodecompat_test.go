@@ -69,14 +69,6 @@ func read(t *testing.T, r packagecompat.Route, cases []packagecompat.Case) {
 	}
 }
 
-func write(t *testing.T, r packagecompat.Route, snapshot func(testing.TB, *gorm.DB) any, cases []packagecompat.Case) {
-	for _, c := range cases {
-		c.Principal = admin
-		c.Snapshot = snapshot
-		packagecompat.RunWrite(t, r, c)
-	}
-}
-
 // seedNodes writes nodes that checked in recently, long ago and never, in
 // every status, with traffic, and the view over them. A pending node that
 // checked in recently counts both online and pending, as in the kernel.

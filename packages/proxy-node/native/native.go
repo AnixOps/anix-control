@@ -113,10 +113,6 @@ func (s *Service) panel(data any) (pluginhostsdk.NativeResponse, error) {
 	return pluginhostsdk.PanelJSON(v2compat.PanelSuccess(data, s.now()))
 }
 
-func (s *Service) panelError(message string) (pluginhostsdk.NativeResponse, error) {
-	return pluginhostsdk.PanelJSON(v2compat.PanelError(message, s.now()))
-}
-
 // jsonAnswer is the legacy handlers' c.JSON(code, body): encoding/json, as
 // gin uses, with gin's content type.
 func jsonAnswer(code int, body any) (pluginhostsdk.NativeResponse, error) {
