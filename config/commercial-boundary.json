@@ -1,6 +1,6 @@
 {
   "format": "anixops.commercial-boundary/v1",
-  "comment": "The commercial feature set (payment, order, coupon, invite commission) that moves to the private anix-control-commercial repository. Files in commercial and wiring may reference it freely. Every other non-test Go file may reference a commercial symbol only if it is listed in allowed_dependents; the list is a ratchet: it may shrink, never grow. check_commercial_boundary.py enforces it (docs/architecture/commercial-boundary.md).",
+  "comment": "The commercial feature set (payment, order, coupon, invite commission) that moves to the private anix-control-commercial repository. Files in commercial and wiring may reference it freely. Every other non-test Go file may reference a commercial symbol only if it is listed in allowed_dependents; the list is a ratchet: it is empty now and must stay empty unless the owner approves. check_commercial_boundary.py enforces it (docs/architecture/commercial-boundary.md).",
   "commercial": [
     "internal/handler/order*.go",
     "internal/handler/payment*.go",
@@ -35,11 +35,5 @@
     "model\\.(Order|Coupon|CouponUsage|Payment|PaymentLog|PaymentRecord|PaymentGateway|PaymentChannel|InviteCode|CommissionRecord|CommissionWithdraw|InviteConfig|UserLevel|X402Config|StripeConfig|PayPalConfig|AlipayConfig|WechatPayConfig|USDTConfig|EPayConfig)",
     "internal/payment"
   ],
-  "allowed_dependents": [
-    "internal/handler/admin.go",
-    "internal/kernelidentity/server.go",
-    "internal/service/auth_service.go",
-    "internal/service/notification_service.go",
-    "internal/service/stats_service.go"
-  ]
+  "allowed_dependents": []
 }

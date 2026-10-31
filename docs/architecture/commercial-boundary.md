@@ -33,17 +33,17 @@ a commercial symbol and is not in `allowed_dependents`. The list is a ratchet:
 a dependency that disappears must be removed from it, and a new one needs the
 owner's approval.
 
-## Remaining Couplings
+## Extension Points
 
-These five files still reach into the set. Each has to go behind a neutral
-extension point before the move:
+The rest of Control no longer references the set; `allowed_dependents` is
+empty. The four couplings that existed were cut like this:
 
-| File | Coupling | Extension point |
-|---|---|---|
-| `internal/handler/admin.go` | the order admin routes use `OrderService` | the order routes register from the package, not the admin handler |
-| `internal/service/stats_service.go` | dashboard counts `model.Order` | a statistics provider the order package fills |
-| `internal/service/notification_service.go` | `NotifyOrderPaid(model.Order)` | an event the order package emits |
-| `internal/service/auth_service.go`, `internal/kernelidentity/server.go` | registration checks `model.InviteCode` | an invite-code validator the affiliate package provides |
+| Was | Now |
+|---|---|
+| `admin.go` served the order admin routes | the handlers live in `internal/handler/order_admin.go`; the router binds them as before |
+| the dashboard counted `model.Order` | `service.RegisterDashboardContributor`; `order_stats.go` fills the order and income figures |
+| `NotifyOrderPaid(model.Order)` sat in the notification service | the method moved to `order_notification.go` |
+| registration checked `model.InviteCode` in two places (`auth_service.go`, `kernelidentity`) | `service.RedeemInviteCode` calls the redeemer that `invite_registration.go` registers with `RegisterInviteRedeemer`; without one, a registration with an invite code is refused |
 
 ## Why The Legacy Handlers Stay
 

@@ -400,25 +400,6 @@ func (s *NotificationService) NotifyTicketReply(ticket *model.Ticket, replyBy st
 	return nil
 }
 
-// NotifyOrderPaid 订单支付成功通知
-func (s *NotificationService) NotifyOrderPaid(order *model.Order, user *model.User) error {
-	title := "支付成功通知"
-	content := fmt.Sprintf("您的订单 #%s 已支付成功，金额: %.2f 元。", order.TradeNo, float64(order.TotalAmount)/100)
-
-	var tgUser model.TelegramUser
-	s.db.Where("user_id = ?", user.ID).First(&tgUser)
-
-	if user.Email != "" {
-		s.sendAsync(&user.ID, "email", model.EventOrderPaid, title, content, nil)
-	}
-
-	if tgUser.ID > 0 {
-		s.sendAsync(&user.ID, "telegram", model.EventOrderPaid, title, content, nil)
-	}
-
-	return nil
-}
-
 // NotifyNodeOffline 节点离线通知 (管理员)
 func (s *NotificationService) NotifyNodeOffline(node *model.Node) error {
 	title := "节点离线告警"

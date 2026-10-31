@@ -133,22 +133,15 @@ func (h *hostServer) CreateSubscriber(ctx context.Context, request *kernelidenti
 				inviteUserID = nil
 			}
 		}
-		var invite *model.InviteCode
-		if code := strings.TrimSpace(request.GetInviteCode()); code != "" {
-			var record model.InviteCode
-			if err := tx.Where("code = ? AND status = 0", code).First(&record).Error; err != nil {
-				if errors.Is(err, gorm.ErrRecordNotFound) {
-					return inviteRefusal{"invalid or used invite code"}
-				}
-				return err
+		invite, err := service.RedeemInviteCode(tx, strings.TrimSpace(request.GetInviteCode()))
+		if err != nil {
+			if refusal, ok := service.IsInviteRefusal(err); ok {
+				return inviteRefusal{refusal.Message}
 			}
-			if record.ExpiredAt != nil && record.ExpiredAt.Before(time.Now()) {
-				return inviteRefusal{"invite code expired"}
-			}
-			invite = &record
-			if invite.UserID != nil {
-				inviteUserID = invite.UserID
-			}
+			return err
+		}
+		if invite != nil && invite.InviterID != nil {
+			inviteUserID = invite.InviterID
 		}
 		user := service.NewSubscriberUser(email, UnusableLegacyPassword)
 		user.InviteUserID = inviteUserID
@@ -175,9 +168,7 @@ func (h *hostServer) CreateSubscriber(ctx context.Context, request *kernelidenti
 			}
 		}
 		if invite != nil {
-			now := time.Now()
-			invite.Status, invite.UsedBy, invite.UsedAt = 1, &user.ID, &now
-			if err := tx.Save(invite).Error; err != nil {
+			if err := invite.Consume(tx, user.ID); err != nil {
 				return err
 			}
 		}
