@@ -50,7 +50,8 @@
               <li v-for="ref in hop.node_refs" :key="ref" class="chain__node" :data-node-ref="ref">
                 <div class="chain__node-head">
                   <UiStatusDot :tone="nodeTone(ref).tone" :label="nodeName(ref)" />
-                  <span class="fwd-mono">:{{ portOf(index, ref) || '—' }}</span>
+                  <span v-if="portOf(index, ref)" class="fwd-mono">:{{ portOf(index, ref) }}</span>
+                  <span v-else-if="nodeOf(ref)?.host" class="fwd-mono">{{ nodeOf(ref).host }}</span>
                 </div>
                 <span class="fwd-muted">{{ nodeTone(ref).text }}</span>
                 <ul class="chain__ups">
@@ -304,6 +305,7 @@ const upstreamNames = computed(() => {
 })
 function upstreamLabel(address, port) {
   const name = upstreamNames.value.get(`${address}:${num(port)}`)
+  if (!num(port)) return address
   return name ? `${name} :${num(port)}` : `${address}:${num(port)}`
 }
 

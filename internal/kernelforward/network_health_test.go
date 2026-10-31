@@ -328,3 +328,21 @@ func TestNetworkRouteSeveralEntries(t *testing.T) {
 		require.Equal(t, node.GetNodeRef() == proxy.String(), node.GetInRotation(), node.GetNodeRef())
 	}
 }
+
+// A device that runs the network model never sends a forward.v1 report: its
+// network status is its report, so its node is not "never reported".
+func TestNetworkNodeSummaryFromStatus(t *testing.T) {
+	f, db, network := networkFixture(t)
+	route := f.create("network-1", networkRoute(&forwardv1.Route{}))
+
+	node, err := f.service.GetNode(f.ctx, proxy.String())
+	require.NoError(t, err)
+	require.False(t, node.GetNode().GetReported())
+
+	networkStatus(t, f, db, network, route.GetId(), networkv1.ComponentState_COMPONENT_STATE_APPLIED)
+	node, err = f.service.GetNode(f.ctx, proxy.String())
+	require.NoError(t, err)
+	require.True(t, node.GetNode().GetReported())
+	require.True(t, node.GetNode().GetApplied())
+	require.Equal(t, f.clock.Now().UnixMilli(), node.GetNode().GetReportedAtUnixMs())
+}
