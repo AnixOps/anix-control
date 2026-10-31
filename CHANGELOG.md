@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### Notes
+
+- The C2 / C3 reverse dial-back of rc.22 (a reversed `anx_line` transport
+  whose `carrier_order` names `c2` / `c3`) needs anx-node
+  `0.1.0-alpha.4` or later on both ends: older kernels reject
+  `--reverse-quic` / `--reverse-faketcp` and `anx_line.reverse_quic` /
+  `reverse_faketcp`. Copy the release into
+  `agent_install.artifact_dir/anx-node/0.1.0-alpha.4/` and run a kernel
+  upgrade campaign before giving a reversed transport `c2` / `c3`. An empty
+  order (C1 only) works with any kernel that has reverse dial-back.
+
 ## 5.0.0-rc.22 - 2026-10-31
 
 ### Added
