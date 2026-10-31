@@ -52,22 +52,12 @@ func (s *AuthService) RegisterWithInvite(email, password, inviteCode string, cfg
 			return err
 		}
 
-		var invite *model.InviteCode
-		if inviteCode != "" {
-			var record model.InviteCode
-			if err := tx.Where("code = ? AND status = 0", inviteCode).First(&record).Error; err != nil {
-				if errors.Is(err, gorm.ErrRecordNotFound) {
-					return errors.New("invalid or used invite code")
-				}
-				return err
-			}
-			if record.ExpiredAt != nil && record.ExpiredAt.Before(time.Now()) {
-				return errors.New("invite code expired")
-			}
-			invite = &record
-			if invite.UserID != nil {
-				user.InviteUserID = invite.UserID
-			}
+		invite, err := RedeemInviteCode(tx, inviteCode)
+		if err != nil {
+			return err
+		}
+		if invite != nil && invite.InviterID != nil {
+			user.InviteUserID = invite.InviterID
 		}
 
 		if err := tx.Create(user).Error; err != nil {
@@ -75,11 +65,7 @@ func (s *AuthService) RegisterWithInvite(email, password, inviteCode string, cfg
 		}
 
 		if invite != nil {
-			now := time.Now()
-			invite.Status = 1
-			invite.UsedBy = &user.ID
-			invite.UsedAt = &now
-			if err := tx.Save(invite).Error; err != nil {
+			if err := invite.Consume(tx, user.ID); err != nil {
 				return err
 			}
 		}

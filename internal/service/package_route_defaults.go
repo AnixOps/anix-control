@@ -204,7 +204,7 @@ func ResolveEffectivePackageRouteModes(db *gorm.DB, packageID, version string) (
 		if _, resolved := modes[route]; resolved {
 			continue
 		}
-		if entry, listed := catalog[route]; listed && entry.PackageID == packageID && entry.Mode == RouteCatalogNativeFlagged {
+		if entry, listed := catalog[route]; listed && entry.PackageID == packageID && (entry.Mode == RouteCatalogNativeFlagged || entry.Mode == RouteCatalogNative) {
 			modes[route] = packagebridge.RouteModeNative
 		}
 	}

@@ -152,14 +152,13 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		}
 
 		// 支付接口
-		paymentHandler := handler.NewPaymentHandler()
-		v2.GET("/payment/methods", registeredPackageRoute(v2PackageGateway.Serve, "payment", "payment.payment.methods.get", paymentHandler.GetPaymentMethods))
-		v2.GET("/payment/status/:trade_no", registeredPackageRoute(v2PackageGateway.Serve, "payment", "payment.payment.status.trade_no.get", paymentHandler.GetPaymentStatus))
+		v2.GET("/payment/methods", v2PackageGateway.Serve)
+		v2.GET("/payment/status/:trade_no", v2PackageGateway.Serve)
 
 		// 支付回调 (无需认证)
-		v2.POST("/payment/x402/callback", registeredPackageRoute(v2PackageGateway.Serve, "payment", "payment.payment.x402.callback.post", paymentHandler.X402Callback))
-		v2.POST("/payment/stripe/webhook", registeredPackageRoute(v2PackageGateway.Serve, "payment", "payment.payment.stripe.webhook.post", paymentHandler.StripeWebhook))
-		v2.POST("/payment/paypal/webhook", registeredPackageRoute(v2PackageGateway.Serve, "payment", "payment.payment.paypal.webhook.post", paymentHandler.PayPalWebhook))
+		v2.POST("/payment/x402/callback", v2PackageGateway.Serve)
+		v2.POST("/payment/stripe/webhook", v2PackageGateway.Serve)
+		v2.POST("/payment/paypal/webhook", v2PackageGateway.Serve)
 
 		// 需要登录的接口
 		auth := v2.Group("")
@@ -191,19 +190,17 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			auth.GET("/user/plan", registeredPackageRoute(v2PackageGateway.Serve, "plan", "plan.user.plan.get", planHandler.GetPlans))
 
 			// 优惠券接口
-			couponHandler := handler.NewCouponHandler()
-			auth.POST("/user/coupon/check", registeredPackageRoute(v2PackageGateway.Serve, "order", "order.user.coupon.check.post", couponHandler.CheckCoupon))
+			auth.POST("/user/coupon/check", v2PackageGateway.Serve)
 
 			// 订单接口
-			orderHandler := handler.NewOrderHandler()
-			auth.GET("/user/order", registeredPackageRoute(v2PackageGateway.Serve, "order", "order.user.order.get", orderHandler.GetOrders))
-			auth.POST("/user/order/save", registeredPackageRoute(v2PackageGateway.Serve, "order", "order.user.order.save.post", orderHandler.SaveOrder))
-			auth.GET("/user/order/:id", registeredPackageRoute(v2PackageGateway.Serve, "order", "order.user.order.id.get", orderHandler.GetOrderDetail))
+			auth.GET("/user/order", v2PackageGateway.Serve)
+			auth.POST("/user/order/save", v2PackageGateway.Serve)
+			auth.GET("/user/order/:id", v2PackageGateway.Serve)
 
 			// 用户支付接口
-			auth.POST("/payment/x402/create", registeredPackageRoute(v2PackageGateway.Serve, "payment", "payment.payment.x402.create.post", paymentHandler.X402CreatePayment))
-			auth.GET("/payment/x402/check/:id", registeredPackageRoute(v2PackageGateway.Serve, "payment", "payment.payment.x402.check.id.get", paymentHandler.X402CheckPayment))
-			auth.POST("/payment/fiat/create", registeredPackageRoute(v2PackageGateway.Serve, "payment", "payment.payment.fiat.create.post", paymentHandler.FiatCreatePayment))
+			auth.POST("/payment/x402/create", v2PackageGateway.Serve)
+			auth.GET("/payment/x402/check/:id", v2PackageGateway.Serve)
+			auth.POST("/payment/fiat/create", v2PackageGateway.Serve)
 		}
 
 		// 管理员接口
@@ -239,12 +236,12 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			admin.POST("/users/:id/reset-subscribe", v2PackageGateway.Serve)
 
 			// 订单管理
-			admin.GET("/orders", registeredPackageRoute(v2PackageGateway.Serve, "order", "order.admin.orders.get", adminHandler.GetOrderList))
-			admin.GET("/orders/stats", registeredPackageRoute(v2PackageGateway.Serve, "order", "order.admin.orders.stats.get", adminHandler.GetOrderStats))
-			admin.GET("/orders/:id", registeredPackageRoute(v2PackageGateway.Serve, "order", "order.admin.orders.id.get", adminHandler.GetOrder))
-			admin.PUT("/orders/:id/status", registeredPackageRoute(v2PackageGateway.Serve, "order", "order.admin.orders.id.status.put", adminHandler.UpdateOrderStatus))
-			admin.POST("/orders/:id/paid", registeredPackageRoute(v2PackageGateway.Serve, "order", "order.admin.orders.id.paid.post", adminHandler.MarkOrderPaid))
-			admin.POST("/orders/:id/cancel", registeredPackageRoute(v2PackageGateway.Serve, "order", "order.admin.orders.id.cancel.post", adminHandler.CancelOrder))
+			admin.GET("/orders", v2PackageGateway.Serve)
+			admin.GET("/orders/stats", v2PackageGateway.Serve)
+			admin.GET("/orders/:id", v2PackageGateway.Serve)
+			admin.PUT("/orders/:id/status", v2PackageGateway.Serve)
+			admin.POST("/orders/:id/paid", v2PackageGateway.Serve)
+			admin.POST("/orders/:id/cancel", v2PackageGateway.Serve)
 
 			// 节点管理 (新版)
 			nodeHandler := handler.NewNodeHandler()
@@ -329,10 +326,9 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			admin.POST("/ticket/:id/close", registeredPackageRoute(v2PackageGateway.Serve, "ticket", "ticket.admin.ticket.id.close.post", ticketHandler.CloseTicket))
 
 			// 优惠券管理 (V2 Stub)
-			couponHandler := handler.NewAdminCouponHandler()
-			admin.GET("/coupon", registeredPackageRoute(v2PackageGateway.Serve, "order", "order.admin.coupon.get", couponHandler.GetCoupons))
-			admin.POST("/coupon", registeredPackageRoute(v2PackageGateway.Serve, "order", "order.admin.coupon.post", couponHandler.CreateCoupon))
-			admin.DELETE("/coupon/:id", registeredPackageRoute(v2PackageGateway.Serve, "order", "order.admin.coupon.id.delete", couponHandler.DeleteCoupon))
+			admin.GET("/coupon", v2PackageGateway.Serve)
+			admin.POST("/coupon", v2PackageGateway.Serve)
+			admin.DELETE("/coupon/:id", v2PackageGateway.Serve)
 
 			// 知识库管理 (V2 Stub)
 			knowledgeHandler := handler.NewAdminKnowledgeHandler()
@@ -342,18 +338,17 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			admin.DELETE("/knowledge/:id", registeredPackageRoute(v2PackageGateway.Serve, "knowledge", "knowledge.admin.knowledge.id.delete", knowledgeHandler.DeleteArticle))
 
 			// ========== 支付网关管理 ==========
-			paymentGatewayHandler := handler.NewPaymentGatewayHandler()
 
 			// 网关管理
-			admin.GET("/payment/gateways", registeredPackageRoute(v2PackageGateway.Serve, "payment", "payment.admin.payment.gateways.get", paymentGatewayHandler.ListGateways))
-			admin.POST("/payment/gateways", registeredPackageRoute(v2PackageGateway.Serve, "payment", "payment.admin.payment.gateways.post", paymentGatewayHandler.CreateGateway))
-			admin.PUT("/payment/gateways/:id", registeredPackageRoute(v2PackageGateway.Serve, "payment", "payment.admin.payment.gateways.id.put", paymentGatewayHandler.UpdateGateway))
-			admin.DELETE("/payment/gateways/:id", registeredPackageRoute(v2PackageGateway.Serve, "payment", "payment.admin.payment.gateways.id.delete", paymentGatewayHandler.DeleteGateway))
-			admin.POST("/payment/gateways/:id/toggle", registeredPackageRoute(v2PackageGateway.Serve, "payment", "payment.admin.payment.gateways.id.toggle.post", paymentGatewayHandler.ToggleGateway))
+			admin.GET("/payment/gateways", v2PackageGateway.Serve)
+			admin.POST("/payment/gateways", v2PackageGateway.Serve)
+			admin.PUT("/payment/gateways/:id", v2PackageGateway.Serve)
+			admin.DELETE("/payment/gateways/:id", v2PackageGateway.Serve)
+			admin.POST("/payment/gateways/:id/toggle", v2PackageGateway.Serve)
 
 			// 支付统计和记录
-			admin.GET("/payment/stats", registeredPackageRoute(v2PackageGateway.Serve, "payment", "payment.admin.payment.stats.get", paymentGatewayHandler.GetPaymentStats))
-			admin.GET("/payment/records", registeredPackageRoute(v2PackageGateway.Serve, "payment", "payment.admin.payment.records.get", paymentGatewayHandler.ListPaymentRecords))
+			admin.GET("/payment/stats", v2PackageGateway.Serve)
+			admin.GET("/payment/records", v2PackageGateway.Serve)
 
 			// ========== Telegram Bot 管理 ==========
 			telegramHandler := handler.NewTelegramHandler()
@@ -388,12 +383,11 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			admin.PUT("/notification/email/config", registeredPackageRoute(v2PackageGateway.Serve, "notification", "notification.admin.notification.email.config.put", notificationHandler.UpdateEmailConfig))
 
 			// ========== 邀请返利管理 ==========
-			affiliateHandler := handler.NewInviteHandler()
-			admin.GET("/invite/config", registeredPackageRoute(v2PackageGateway.Serve, "affiliate", "affiliate.admin.invite.config.get", affiliateHandler.GetConfig))
-			admin.PUT("/invite/config", registeredPackageRoute(v2PackageGateway.Serve, "affiliate", "affiliate.admin.invite.config.put", affiliateHandler.UpdateConfig))
-			admin.GET("/invite/stats", registeredPackageRoute(v2PackageGateway.Serve, "affiliate", "affiliate.admin.invite.stats.get", affiliateHandler.GetInviteStats))
-			admin.GET("/invite/withdrawals", registeredPackageRoute(v2PackageGateway.Serve, "affiliate", "affiliate.admin.invite.withdrawals.get", affiliateHandler.GetWithdrawals))
-			admin.POST("/invite/withdrawals/:id/process", registeredPackageRoute(v2PackageGateway.Serve, "affiliate", "affiliate.admin.invite.withdrawals.id.process.post", affiliateHandler.ProcessWithdraw))
+			admin.GET("/invite/config", v2PackageGateway.Serve)
+			admin.PUT("/invite/config", v2PackageGateway.Serve)
+			admin.GET("/invite/stats", v2PackageGateway.Serve)
+			admin.GET("/invite/withdrawals", v2PackageGateway.Serve)
+			admin.POST("/invite/withdrawals/:id/process", v2PackageGateway.Serve)
 
 			// ========== 系统配置管理 ==========
 			systemHandler := handler.NewSystemHandler()
@@ -433,11 +427,10 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			}
 
 			// 用户支付
-			paymentGatewayHandler := handler.NewPaymentGatewayHandler()
-			authUser.GET("/user/payment/channels", registeredPackageRoute(v2PackageGateway.Serve, "payment", "payment.user.payment.channels.get", paymentGatewayHandler.GetChannels))
-			authUser.POST("/user/payment/create", registeredPackageRoute(v2PackageGateway.Serve, "payment", "payment.user.payment.create.post", paymentGatewayHandler.CreatePayment))
-			authUser.GET("/user/payment/status/:trade_no", registeredPackageRoute(v2PackageGateway.Serve, "payment", "payment.user.payment.status.trade_no.get", paymentGatewayHandler.GetPaymentStatus))
-			authUser.GET("/user/payment/records", registeredPackageRoute(v2PackageGateway.Serve, "payment", "payment.user.payment.records.get", paymentGatewayHandler.GetUserRecords))
+			authUser.GET("/user/payment/channels", v2PackageGateway.Serve)
+			authUser.POST("/user/payment/create", v2PackageGateway.Serve)
+			authUser.GET("/user/payment/status/:trade_no", v2PackageGateway.Serve)
+			authUser.GET("/user/payment/records", v2PackageGateway.Serve)
 
 			// 用户 Telegram
 			telegramHandler := handler.NewTelegramHandler()
@@ -464,12 +457,11 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			authUser.POST("/user/notifications/read-all", registeredPackageRoute(v2PackageGateway.Serve, "notification", "notification.user.notifications.read_all.post", notificationHandler.MarkAllAsRead))
 
 			// 用户邀请
-			userAffiliateHandler := handler.NewInviteHandler()
-			authUser.GET("/user/invite", registeredPackageRoute(v2PackageGateway.Serve, "affiliate", "affiliate.user.invite.get", userAffiliateHandler.GetInviteInfo))
-			authUser.POST("/user/invite/generate", registeredPackageRoute(v2PackageGateway.Serve, "affiliate", "affiliate.user.invite.generate.post", userAffiliateHandler.GenerateCode))
-			authUser.GET("/user/invite/commissions", registeredPackageRoute(v2PackageGateway.Serve, "affiliate", "affiliate.user.invite.commissions.get", userAffiliateHandler.GetCommissionRecords))
-			authUser.POST("/user/invite/withdraw", registeredPackageRoute(v2PackageGateway.Serve, "affiliate", "affiliate.user.invite.withdraw.post", userAffiliateHandler.RequestWithdraw))
-			authUser.GET("/user/invite/withdrawals", registeredPackageRoute(v2PackageGateway.Serve, "affiliate", "affiliate.user.invite.withdrawals.get", userAffiliateHandler.GetWithdrawRecords))
+			authUser.GET("/user/invite", v2PackageGateway.Serve)
+			authUser.POST("/user/invite/generate", v2PackageGateway.Serve)
+			authUser.GET("/user/invite/commissions", v2PackageGateway.Serve)
+			authUser.POST("/user/invite/withdraw", v2PackageGateway.Serve)
+			authUser.GET("/user/invite/withdrawals", v2PackageGateway.Serve)
 		}
 
 		// Telegram Webhook (公开)
@@ -481,11 +473,10 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		}
 
 		// 支付回调 (公开)
-		paymentGatewayHandler := handler.NewPaymentGatewayHandler()
 		paymentCallback := v2.Group("")
 		paymentCallback.Use(publicLimiter.Middleware())
 		{
-			paymentCallback.POST("/payment/callback/:type", registeredPackageRoute(v2PackageGateway.Serve, "payment", "payment.callback", paymentGatewayHandler.PaymentCallback))
+			paymentCallback.POST("/payment/callback/:type", v2PackageGateway.Serve)
 		}
 
 		// 节点自动注册 API (公开)
