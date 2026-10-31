@@ -483,7 +483,8 @@ export default {
     modeLabel: '编辑方式',
     jsonLabel: '协议 JSON',
     tabs: {
-      visual: '表单'
+      visual: '表单',
+      json: '高级 JSON'
     },
     fields: {
       type: '协议',
@@ -551,6 +552,41 @@ export default {
     },
     enable: '在节点上运行',
     show: '在订阅中显示'
+  },
+  // 协议表单字段 (protocolFields.js): 3x-ui 风格, 按协议/传输/TLS 显示。
+  protocolFields: {
+    groups: {
+      protocol: '协议设置',
+      transport: '传输设置',
+      security: '安全设置'
+    },
+    none: '无',
+    generate: '随机生成',
+    labels: {
+      flow: '流控 (Flow)',
+      method: '加密方式',
+      server_key: '服务端密钥',
+      up_mbps: '上行带宽 (Mbps)',
+      down_mbps: '下行带宽 (Mbps)',
+      obfs: '混淆',
+      obfs_password: '混淆密码',
+      congestion_control: '拥塞控制',
+      path: '路径',
+      host: 'Host',
+      serviceName: 'gRPC 服务名',
+      server_name: 'SNI（服务器名称）',
+      fingerprint: 'uTLS 指纹',
+      allowInsecure: '允许不安全证书',
+      dest: '目标站 (Dest)',
+      short_id: 'Short ID',
+      private_key: '私钥',
+      public_key: '公钥'
+    },
+    hints: {
+      serverKey: '2022 系列加密的服务端密钥；留空则按节点自动派生。',
+      privateKey: '留空则保存时自动生成密钥对；已保存的私钥显示为 ********。',
+      publicKey: '订阅下发给客户端的公钥；留空则由私钥推出。'
+    }
   },
   tabs: {
     label: '节点分区',
