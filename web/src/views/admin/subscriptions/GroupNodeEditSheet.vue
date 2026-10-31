@@ -10,10 +10,14 @@
     <p v-if="loading" class="node-edit__note">{{ t('common.states.loading') }}</p>
     <p v-else-if="!rows.length" class="node-edit__note">{{ t('adminSubscriptionGroups.nodeEdit.empty') }}</p>
     <form v-else class="node-edit" novalidate data-test="node-edit-form" @submit.prevent="save">
-      <section v-for="row in rows" :key="row.key" class="node-edit__item" :data-test="`node-edit-${row.key || 'base'}`">
+      <section v-for="(row, index) in rows" :key="row.key" class="node-edit__item" :data-test="`node-edit-${row.key || 'base'}`">
         <header class="node-edit__head">
           <strong>{{ row.title }}</strong>
           <UiBadge v-if="isEdited(row)" tone="info" :dot="false" :label="t('adminSubscriptionGroups.nodeEdit.edited')" />
+          <span class="node-edit__moves">
+            <UiIconButton :icon="ChevronUp" size="sm" :label="t('adminSubscriptionGroups.layout.moveUp')" :disabled="index === 0" @click="move(index, index - 1)" />
+            <UiIconButton :icon="ChevronDown" size="sm" :label="t('adminSubscriptionGroups.layout.moveDown')" :disabled="index === rows.length - 1" @click="move(index, index + 1)" />
+          </span>
           <UiButton size="sm" :disabled="!isEdited(row)" @click="resetRow(row)">{{ t('adminSubscriptionGroups.nodeEdit.resetNode') }}</UiButton>
         </header>
         <UiTextField v-model="row.fields.name" size="sm" :label="t('adminSubscriptionGroups.nodeEdit.name')" :placeholder="show(row, 'name')" />
@@ -33,13 +37,15 @@
 
 <script setup>
 // 编辑节点: the group's own edits of the nodes one protocol produces (one
-// per entry). The source protocol is never changed; an empty field keeps the
+// per entry), in the order the subscription lists them (↑/↓). The source protocol is never changed; an empty field keeps the
 // source value and "重置此节点" drops the node's edits. Saves
 // PUT /api/v4/admin/subscription-groups/:id/protocols/:protocolId/nodes.
 import { ref, watch } from 'vue'
+import { ChevronDown, ChevronUp } from '@lucide/vue'
+import { moveItem } from './groupProtocolLayout'
 import { getGroupProtocolNodes, saveGroupProtocolNodes } from '@/api/admin'
 import { useAppI18n } from '@/composables/useAppI18n'
-import { UiBadge, UiButton, UiSheet, UiTextField, UiTextarea, useToast } from '@/ui'
+import { UiBadge, UiButton, UiIconButton, UiSheet, UiTextField, UiTextarea, useToast } from '@/ui'
 
 // The fields with a form input; any other edited field lives in the JSON.
 const FORM_FIELDS = ['name', 'server', 'port', 'server_name']
@@ -140,6 +146,10 @@ function isEdited(row) {
   }
 }
 
+function move(from, to) {
+  rows.value = moveItem(rows.value, from, to)
+}
+
 function resetRow(row) {
   for (const name of FORM_FIELDS) row.fields[name] = ''
   row.advanced = ''
@@ -157,7 +167,7 @@ async function save() {
   try {
     const nodes = {}
     for (const row of rows.value) nodes[row.key] = overridesOf(row)
-    await saveGroupProtocolNodes(props.group.id, props.protocol.id, nodes)
+    await saveGroupProtocolNodes(props.group.id, props.protocol.id, nodes, rows.value.map(row => row.key))
     toast.success(t('adminSubscriptionGroups.nodeEdit.saved'))
     emit('saved')
     emit('update:open', false)
@@ -191,6 +201,11 @@ async function save() {
   align-items: center;
   justify-content: space-between;
   overflow-wrap: anywhere;
+}
+
+.node-edit__moves {
+  display: inline-flex;
+  gap: var(--space-1);
 }
 
 .node-edit__note {

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -45,13 +46,35 @@ func nodeKey(id string, nodeID, protocolID uint) (string, bool) {
 	return strings.TrimPrefix(id, base), true
 }
 
-func parseOverrides(raw string) map[string]map[string]any {
-	out := map[string]map[string]any{}
-	if strings.TrimSpace(raw) == "" {
-		return out
+// groupOverrides is a protocol's stored edits in a group: the edits by node
+// key, and the node keys in the order the group lists them.
+type groupOverrides struct {
+	Nodes map[string]map[string]any `json:"nodes,omitempty"`
+	Order []string                  `json:"order,omitempty"`
+}
+
+func parseGroupOverrides(raw string) groupOverrides {
+	var out groupOverrides
+	if strings.TrimSpace(raw) != "" {
+		_ = json.Unmarshal([]byte(raw), &out)
 	}
-	_ = json.Unmarshal([]byte(raw), &out)
+	if out.Nodes == nil {
+		out.Nodes = map[string]map[string]any{}
+	}
 	return out
+}
+
+func parseOverrides(raw string) map[string]map[string]any { return parseGroupOverrides(raw).Nodes }
+
+// nodePlace is the node key's place in the group's order; unlisted keys
+// come after the listed ones.
+func nodePlace(order []string, key string) int {
+	for i, k := range order {
+		if k == key {
+			return i
+		}
+	}
+	return len(order)
 }
 
 // applyNodeOverrides edits parsed with the group's edits of its key.
@@ -148,7 +171,8 @@ func (s *SubscriptionService) GroupProtocolNodes(groupID, protocolID uint) ([]Gr
 	if err != nil {
 		return nil, err
 	}
-	edits := parseOverrides(layouts[groupProtocolKey{groupID, protocolID}].Overrides)
+	stored := parseGroupOverrides(layouts[groupProtocolKey{groupID, protocolID}].Overrides)
+	edits := stored.Nodes
 	nodes, err := s.internalNodes(&model.TemplateRenderContext{}, []*model.SubscriptionGroup{&group}, false)
 	if err != nil {
 		return nil, err
@@ -184,18 +208,28 @@ func (s *SubscriptionService) GroupProtocolNodes(groupID, protocolID uint) ([]Gr
 			result = append(result, GroupNodeOverrides{Key: key, Overrides: fields})
 		}
 	}
+	sort.SliceStable(result, func(i, j int) bool {
+		return nodePlace(stored.Order, result[i].Key) < nodePlace(stored.Order, result[j].Key)
+	})
 	return result, nil
 }
 
 // ReplaceGroupProtocolOverrides sets the group's edits of the protocol's
 // nodes; keys not listed (or listed empty) are reset to the source.
-func (s *SubscriptionService) ReplaceGroupProtocolOverrides(groupID, protocolID uint, edits map[string]map[string]any) error {
+func (s *SubscriptionService) ReplaceGroupProtocolOverrides(groupID, protocolID uint, edits map[string]map[string]any, order []string) error {
 	if err := subscriptionGroupExists(s.db, groupID); err != nil {
 		return err
 	}
 	clean, err := cleanOverrides(edits)
 	if err != nil {
 		return err
+	}
+	seenKey := map[string]bool{}
+	for _, key := range order {
+		if seenKey[key] || len(key) > 64 {
+			return fmt.Errorf("%w: node %q is listed twice or too long", ErrInvalidNodeOverride, key)
+		}
+		seenKey[key] = true
 	}
 	return s.db.Transaction(func(tx *gorm.DB) error {
 		linked, err := linkedGroupProtocols(tx, groupID)
@@ -210,8 +244,8 @@ func (s *SubscriptionService) ReplaceGroupProtocolOverrides(groupID, protocolID 
 			return fmt.Errorf("%w: protocol %d is not linked to the group", ErrInvalidNodeOverride, protocolID)
 		}
 		raw := ""
-		if len(clean) > 0 {
-			buf, err := json.Marshal(clean)
+		if len(clean) > 0 || len(order) > 0 {
+			buf, err := json.Marshal(groupOverrides{Nodes: clean, Order: order})
 			if err != nil {
 				return err
 			}

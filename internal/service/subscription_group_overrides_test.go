@@ -37,7 +37,7 @@ func TestGroupNodeOverridesEditAndReset(t *testing.T) {
 
 	require.NoError(t, svc.ReplaceGroupProtocolOverrides(group.ID, protocol.ID, map[string]map[string]any{
 		"": {"name": "HK 家宽", "server": "1.2.3.4", "port": float64(443)},
-	}))
+	}, nil))
 	got := first()
 	require.Equal(t, "HK 家宽", got.Name)
 	require.Equal(t, "1.2.3.4", got.Server)
@@ -54,11 +54,39 @@ func TestGroupNodeOverridesEditAndReset(t *testing.T) {
 	require.Equal(t, 443, first().Port, "a layout change keeps the edits")
 
 	for _, bad := range []map[string]any{{"type": "vless"}, {"uuid": "x"}, {"port": float64(0)}, {"name": " "}} {
-		require.ErrorIs(t, svc.ReplaceGroupProtocolOverrides(group.ID, protocol.ID, map[string]map[string]any{"": bad}), ErrInvalidNodeOverride)
+		require.ErrorIs(t, svc.ReplaceGroupProtocolOverrides(group.ID, protocol.ID, map[string]map[string]any{"": bad}, nil), ErrInvalidNodeOverride)
 	}
 
 	require.NoError(t, svc.ResetGroupOverrides(group.ID))
 	got = first()
 	require.Equal(t, 10000, got.Port)
 	require.Equal(t, "hk.example.com", got.Server)
+
+	// Entries of the node are ordered by the group.
+	require.NoError(t, db.Create(&[]model.NodeEntry{
+		{NodeID: node.ID, Kind: model.NodeEntryDirect, Enabled: true, Label: "A", Host: "a.example.com"},
+		{NodeID: node.ID, Kind: model.NodeEntryDirect, Enabled: true, Label: "B", Host: "b.example.com"},
+	}).Error)
+	entryNames := func() []string {
+		nodes, err := svc.getInternalNodes(nil, &model.TemplateRenderContext{UUID: "u"}, []*model.SubscriptionGroup{group})
+		require.NoError(t, err)
+		var out []string
+		for _, n := range nodes {
+			out = append(out, n.Server)
+		}
+		return out
+	}
+	require.Equal(t, []string{"a.example.com", "b.example.com"}, entryNames())
+	listedEntries, err := svc.GroupProtocolNodes(group.ID, protocol.ID)
+	require.NoError(t, err)
+	require.Len(t, listedEntries, 2)
+	require.NoError(t, svc.ReplaceGroupProtocolOverrides(group.ID, protocol.ID, nil, []string{listedEntries[1].Key, listedEntries[0].Key}))
+	require.Equal(t, []string{"b.example.com", "a.example.com"}, entryNames())
+	reordered, err := svc.GroupProtocolNodes(group.ID, protocol.ID)
+	require.NoError(t, err)
+	require.Equal(t, listedEntries[1].Key, reordered[0].Key)
+	require.ErrorIs(t, svc.ReplaceGroupProtocolOverrides(group.ID, protocol.ID, nil, []string{"x", "x"}), ErrInvalidNodeOverride)
+
+	require.NoError(t, svc.ResetGroupOverrides(group.ID))
+	require.Equal(t, []string{"a.example.com", "b.example.com"}, entryNames(), "reset restores the order too")
 }

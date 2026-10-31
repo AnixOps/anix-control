@@ -640,6 +640,7 @@ func (s *SubscriptionService) internalNodes(ctx *model.TemplateRenderContext, gr
 	liveness := make(map[uint]bool)
 	var result []*model.ParsedNode
 	var keys []groupProtocolKey
+	var entryKeys []string
 	for _, p := range protocols {
 		if isWireGuardExitProtocol(&p) {
 			continue
@@ -669,6 +670,7 @@ func (s *SubscriptionService) internalNodes(ctx *model.TemplateRenderContext, gr
 			parsedNodes := s.nodeProtocolEntries(p.Node, &p, ctx, entries[p.Node.ID], lines, name)
 			parsedNodes = append(parsedNodes, s.routeOffers(p.Node, &p, ctx, offers[p.ID], name)...)
 			for _, parsed := range parsedNodes {
+				entryKey, _ := nodeKey(parsed.ID, p.Node.ID, p.ID)
 				if overrides {
 					applyNodeOverrides(parsed, p.Node.ID, p.ID, layouts[groupProtocolKey{g.ID, p.ID}].Overrides)
 				}
@@ -676,6 +678,7 @@ func (s *SubscriptionService) internalNodes(ctx *model.TemplateRenderContext, gr
 				parsed.GroupName = g.Name
 				result = append(result, parsed)
 				keys = append(keys, groupProtocolKey{g.ID, p.ID})
+				entryKeys = append(entryKeys, entryKey)
 			}
 		}
 	}
@@ -686,13 +689,24 @@ func (s *SubscriptionService) internalNodes(ctx *model.TemplateRenderContext, gr
 	for i := range order {
 		order[i] = i
 	}
+	entryOrders := make(map[groupProtocolKey][]string, len(layouts))
+	for key, layout := range layouts {
+		if layout.Overrides != "" {
+			entryOrders[key] = parseGroupOverrides(layout.Overrides).Order
+		}
+	}
 	sort.SliceStable(order, func(i, j int) bool {
 		a, b := keys[order[i]], keys[order[j]]
 		if a.group != b.group {
 			return groupPlace[a.group] < groupPlace[b.group]
 		}
 		if a.protocol == b.protocol {
-			return false
+			if !overrides {
+				return false
+			}
+			// An entry's nodes in the group's order for them.
+			entryOrder := entryOrders[a]
+			return nodePlace(entryOrder, entryKeys[order[i]]) < nodePlace(entryOrder, entryKeys[order[j]])
 		}
 		return groupProtocolLess(layouts, a.group, a.protocol, b.protocol)
 	})

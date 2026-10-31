@@ -5338,7 +5338,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "设置分组对该协议各节点的修改 (名称、地址、端口、SNI、传输等; 协议类型与凭据不可改)。未列出或为空的节点恢复为源协议的值, 源协议本身不变。订阅立即生效。",
+                "description": "设置分组对该协议各节点的修改与顺序 (order 为节点键的显示顺序, 未列出的排在其后; 名称、地址、端口、SNI、传输等; 协议类型与凭据不可改)。未列出或为空的节点恢复为源协议的值, 源协议本身不变。订阅立即生效。",
                 "consumes": [
                     "application/json"
                 ],
@@ -12372,6 +12372,13 @@ const docTemplate = `{
                     "additionalProperties": {
                         "type": "object",
                         "additionalProperties": {}
+                    }
+                },
+                "order": {
+                    "description": "Order lists the node keys in the order the subscription shows them;\nkeys left out follow.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
                     }
                 }
             }

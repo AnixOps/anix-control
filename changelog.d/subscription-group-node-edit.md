@@ -7,3 +7,6 @@
   `GET/PUT /api/v4/admin/subscription-groups/:id/protocols/:protocol_id/nodes`
   and `DELETE /api/v4/admin/subscription-groups/:id/node-overrides`. The
   protocol type and the credentials stay the source's.
+- The nodes a protocol produces for each entry can be reordered in the same
+  panel (`order` in the `PUT .../nodes` body); reset restores the entries'
+  own order.

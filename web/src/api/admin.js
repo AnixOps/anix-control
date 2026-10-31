@@ -910,12 +910,13 @@ export async function getGroupProtocolNodes(groupId, protocolId) {
 }
 
 // PUT the same path: nodes { [key]: { field: value } } are the group's edits;
-// a key left out or empty is reset to the source. Answers the nodes afterwards.
-export async function saveGroupProtocolNodes(groupId, protocolId, nodes) {
+// a key left out or empty is reset to the source. order lists the node keys
+// in the order the subscription shows them. Answers the nodes afterwards.
+export async function saveGroupProtocolNodes(groupId, protocolId, nodes, order = []) {
   return dataOf(await adminV4({
     url: `/admin/subscription-groups/${encodeURIComponent(groupId)}/protocols/${encodeURIComponent(protocolId)}/nodes`,
     method: 'put',
-    data: { nodes }
+    data: { nodes, order }
   }))
 }
 
