@@ -16,14 +16,11 @@ import (
 	"sort"
 	"strings"
 
-	affiliate "github.com/AnixOps/anix-control/v5/packages/affiliate/control"
 	forward "github.com/AnixOps/anix-control/v5/packages/forward/control"
 	identityplatform "github.com/AnixOps/anix-control/v5/packages/identity-platform/control"
 	knowledge "github.com/AnixOps/anix-control/v5/packages/knowledge/control"
 	machinetelemetry "github.com/AnixOps/anix-control/v5/packages/machine-telemetry/control"
 	notification "github.com/AnixOps/anix-control/v5/packages/notification/control"
-	order "github.com/AnixOps/anix-control/v5/packages/order/control"
-	payment "github.com/AnixOps/anix-control/v5/packages/payment/control"
 	plan "github.com/AnixOps/anix-control/v5/packages/plan/control"
 	platform "github.com/AnixOps/anix-control/v5/packages/platform/control"
 	protocolruntime "github.com/AnixOps/anix-control/v5/packages/protocol-runtime/control"
@@ -50,14 +47,11 @@ type Host struct {
 }
 
 var hosts = []Host{
-	{ID: affiliate.PackageID, Run: affiliate.Run},
 	{ID: forward.PackageID, Run: forward.Run},
 	{ID: identityplatform.PackageID, Run: identityplatform.Run},
 	{ID: knowledge.PackageID, Run: knowledge.Run},
 	{ID: machinetelemetry.PackageID, Run: machinetelemetry.Run},
 	{ID: notification.PackageID, Run: notification.Run},
-	{ID: order.PackageID, Run: order.Run},
-	{ID: payment.PackageID, Run: payment.Run},
 	{ID: plan.PackageID, Run: plan.Run},
 	{ID: platform.PackageID, Run: platform.Run},
 	{ID: protocolruntime.PackageID, Run: protocolruntime.Run},
@@ -65,6 +59,17 @@ var hosts = []Host{
 	{ID: subscription.PackageID, Run: subscription.Run},
 	{ID: ticket.PackageID, Run: ticket.Run},
 	{ID: wireguard.PackageID, Run: wireguard.Run},
+}
+
+// Register adds the host of a package that is not part of the community set.
+// The commercial packages register theirs from a file of their own
+// (commercial.go), so a build without that file links none of them. It is
+// meant for init functions: a package id registered twice panics.
+func Register(host Host) {
+	if _, ok := Lookup(host.ID); ok {
+		panic("builtin: package host registered twice: " + host.ID)
+	}
+	hosts = append(hosts, host)
 }
 
 // Hosts returns every linked host, sorted by package id.

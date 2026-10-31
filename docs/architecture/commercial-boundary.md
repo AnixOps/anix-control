@@ -15,6 +15,15 @@ official package is built in (`docs/RELEASING.md`).
   `coupon*`, `invite*`), services (`order*`, `payment*`, `invite*`),
   `internal/payment`, `internal/kernelorder` and the packages `payment`,
   `order` and `affiliate`.
+- Four of the `commercial` files are the whole link of the set into code that
+  is not commercial, so a build without them (the community edition) links
+  none of it: `packages/builtin/commercial.go` (the three package hosts,
+  `builtin.Register`), `internal/router/router_commercial.go` (the 46
+  `/api/v2` routes, run by `SetupContributed` at the end of `Setup`),
+  `cmd/server/order_payments.go` (the payment gateways and the reconciler,
+  `registerContributedWorker`) and `internal/identitybridge/kernel_order.go`
+  (the KernelOrder provider). The v2 route inventory reads every
+  `router_*.go` next to `router.go`.
 - `wiring`: files that may reference it because they only connect it: models
   (the schema stays in the kernel), the router, migrations, `cmd/` and
   `packages/builtin`.
