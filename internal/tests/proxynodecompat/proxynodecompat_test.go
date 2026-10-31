@@ -3,8 +3,7 @@
 // the same bytes (times the handlers take from their clock masked) and,
 // where a route writes, the same resulting rows.
 //
-// The load balancer routes and the node logs read the adopted
-// v2_load_balancer and v2_node_log tables. The node statistics, and whether
+// The node logs read the adopted v2_node_log table. The node statistics, and whether
 // a node exists, come from the kernel view kapi_node_status_v1 over v2_node
 // (packagestore.EnsureKernelAPIViews), so every node case also proves the
 // view shows what the handlers count.
@@ -12,7 +11,6 @@ package proxynodecompat
 
 import (
 	"context"
-	"fmt"
 	"testing"
 	"time"
 
@@ -34,7 +32,7 @@ var seeded = time.Date(2026, 9, 1, 8, 0, 0, 0, time.UTC)
 func route(method, pattern, routeID string, legacy gin.HandlerFunc) packagecompat.Route {
 	return packagecompat.Route{
 		Method: method, Pattern: pattern, RouteID: routeID, Legacy: legacy,
-		Models: []any{&model.Node{}, &model.NodeProtocol{}, &model.NodeLog{}, &model.LoadBalancer{}},
+		Models: []any{&model.Node{}, &model.NodeProtocol{}, &model.NodeLog{}},
 		Native: func(db *gorm.DB) pluginhostsdk.NativeHandler {
 			service := &native.Service{Open: func(ctx context.Context) (*gorm.DB, error) { return db.WithContext(ctx), nil }}
 			return service.Handlers()[routeID]
@@ -42,13 +40,9 @@ func route(method, pattern, routeID string, legacy gin.HandlerFunc) packagecompa
 	}
 }
 
-// loadBalancers and nodes build the legacy handler per request: their
-// services take the kernel's database when they are built, and the harness
-// sets up a database per case.
-func loadBalancers(method func(*handler.LoadBalancerHandler, *gin.Context)) gin.HandlerFunc {
-	return func(c *gin.Context) { method(handler.NewLoadBalancerHandler(), c) }
-}
-
+// nodes builds the legacy handler per request: its service takes the
+// kernel's database when it is built, and the harness sets up a database
+// per case.
 func nodes(method func(*handler.NodeHandler, *gin.Context)) gin.HandlerFunc {
 	return func(c *gin.Context) { method(handler.NewNodeHandler(), c) }
 }
@@ -59,69 +53,13 @@ func syncSequences(t testing.TB, db *gorm.DB) {
 	if db.Name() != "postgres" {
 		return
 	}
-	for _, table := range []string{"v2_node", "v2_node_log", "v2_load_balancer"} {
+	for _, table := range []string{"v2_node", "v2_node_log"} {
 		require.NoError(t, db.Exec("SELECT setval(pg_get_serial_sequence(?, 'id'), COALESCE((SELECT MAX(id) FROM "+table+"), 0) + 1, false)", table).Error)
 	}
 }
 
 func seedViews(t testing.TB, db *gorm.DB) {
 	require.NoError(t, packagestore.EnsureKernelAPIViews(db))
-}
-
-// seedLoadBalancers writes load balancers in two groups with weights as an
-// object, as text that is not JSON, as an array and none, and both flags
-// off on one (Create would write their defaults instead).
-func seedLoadBalancers(t testing.TB, db *gorm.DB) {
-	rows := []model.LoadBalancer{
-		{ID: 1, Name: "edge-hk", GroupID: 1, Strategy: "round-robin", HealthCheck: true, CheckInterval: 60, CheckTimeout: 10, NodeWeights: `{"1":3,"2":1}`, Enabled: true},
-		{ID: 2, Name: "edge-jp", GroupID: 1, Strategy: "weight", HealthCheck: true, CheckInterval: 30, CheckTimeout: 5, NodeWeights: "not json", Enabled: true},
-		{ID: 3, Name: "edge-us", GroupID: 2, Strategy: "latency", HealthCheck: true, CheckInterval: 120, CheckTimeout: 20, NodeWeights: `[1,2]`, Enabled: true},
-		{ID: 4, Name: "edge-eu", GroupID: 3, Strategy: "random", HealthCheck: true, CheckInterval: 60, CheckTimeout: 10, Enabled: true},
-	}
-	for i := range rows {
-		rows[i].CreatedAt = seeded.Add(time.Duration(i) * time.Hour)
-		rows[i].UpdatedAt = seeded.Add(time.Duration(i)*time.Hour + time.Minute)
-	}
-	require.NoError(t, db.Create(&rows).Error)
-	require.NoError(t, db.Model(&model.LoadBalancer{}).Where("id = ?", 4).UpdateColumns(map[string]any{"health_check": false, "enabled": false}).Error)
-	syncSequences(t, db)
-}
-
-// loadBalancerRows is v2_load_balancer after a request, without the times
-// the handlers take from their clock.
-func loadBalancerRows(t testing.TB, db *gorm.DB) any {
-	var rows []struct {
-		ID            uint
-		Name          string
-		GroupID       uint
-		Strategy      string
-		HealthCheck   bool
-		CheckInterval int
-		CheckTimeout  int
-		NodeWeights   string
-		Enabled       bool
-		CreatedAt     *time.Time
-	}
-	require.NoError(t, db.Model(&model.LoadBalancer{}).Order("id").Find(&rows).Error)
-	return rows
-}
-
-// loadBalancerRowsWithoutCreation also leaves out the creation time, which a
-// created row takes from the clock.
-func loadBalancerRowsWithoutCreation(t testing.TB, db *gorm.DB) any {
-	var rows []struct {
-		ID            uint
-		Name          string
-		GroupID       uint
-		Strategy      string
-		HealthCheck   bool
-		CheckInterval int
-		CheckTimeout  int
-		NodeWeights   string
-		Enabled       bool
-	}
-	require.NoError(t, db.Model(&model.LoadBalancer{}).Order("id").Find(&rows).Error)
-	return rows
 }
 
 func read(t *testing.T, r packagecompat.Route, cases []packagecompat.Case) {
@@ -137,89 +75,6 @@ func write(t *testing.T, r packagecompat.Route, snapshot func(testing.TB, *gorm.
 		c.Snapshot = snapshot
 		packagecompat.RunWrite(t, r, c)
 	}
-}
-
-func TestLoadBalancerListRouteParity(t *testing.T) {
-	path := "/api/v2/admin/loadbalancers"
-	read(t, route("GET", path, "proxy.loadbalancer.get", loadBalancers((*handler.LoadBalancerHandler).ListLoadBalancers)), []packagecompat.Case{
-		{Name: "newest first", Path: path, Seed: seedLoadBalancers},
-		{Name: "one group", Path: path + "?group_id=1", Seed: seedLoadBalancers},
-		{Name: "a group without load balancers", Path: path + "?group_id=9", Seed: seedLoadBalancers},
-		{Name: "a negative group is every group", Path: path + "?group_id=-4", Seed: seedLoadBalancers},
-		{Name: "a group that is not a number is every group", Path: path + "?group_id=abc", Seed: seedLoadBalancers},
-		{Name: "no load balancers", Path: path},
-	})
-}
-
-func TestLoadBalancerDetailRouteParity(t *testing.T) {
-	pattern := "/api/v2/admin/loadbalancers/:id"
-	path := func(id string) string { return "/api/v2/admin/loadbalancers/" + id }
-	read(t, route("GET", pattern, "proxy.loadbalancer.id.get", loadBalancers((*handler.LoadBalancerHandler).GetLoadBalancer)), []packagecompat.Case{
-		{Name: "weights as an object", Path: path("1"), Seed: seedLoadBalancers},
-		{Name: "weights that are not JSON", Path: path("2"), Seed: seedLoadBalancers},
-		{Name: "weights as an array", Path: path("3"), Seed: seedLoadBalancers},
-		{Name: "no weights, both flags off", Path: path("4"), Seed: seedLoadBalancers},
-		{Name: "missing", Path: path("99"), Seed: seedLoadBalancers},
-		{Name: "id that is not a number", Path: path("abc"), Seed: seedLoadBalancers},
-		{Name: "id beyond 32 bits", Path: path("4294967297"), Seed: seedLoadBalancers},
-	})
-}
-
-func TestLoadBalancerCreateRouteParity(t *testing.T) {
-	path := "/api/v2/admin/loadbalancers"
-	created := []string{"data.created_at", "data.updated_at"}
-	write(t, route("POST", path, "proxy.loadbalancer.post", loadBalancers((*handler.LoadBalancerHandler).CreateLoadBalancer)), loadBalancerRowsWithoutCreation, []packagecompat.Case{
-		{Name: "full body with weights", Path: path, Seed: seedLoadBalancers, Mask: created,
-			Body: []byte(`{"name":"edge-sg","group_id":4,"strategy":"least-load","health_check":true,"check_interval":15,"check_timeout":3,"enabled":true,"weights":{"7": 2, "8":1}}`)},
-		{Name: "weights as text", Path: path, Seed: seedLoadBalancers, Mask: created,
-			Body: []byte(`{"name":"edge-sg","node_weights":"{\"7\":2}"}`)},
-		{Name: "text weights win over weights", Path: path, Seed: seedLoadBalancers, Mask: created,
-			Body: []byte(`{"name":"edge-sg","weights":{"1":1},"node_weights":"{\"2\":2}"}`)},
-		{Name: "null weights", Path: path, Seed: seedLoadBalancers, Mask: created,
-			Body: []byte(`{"name":"edge-sg","weights":null}`)},
-		{Name: "flags off are written as their defaults", Path: path, Seed: seedLoadBalancers, Mask: created,
-			Body: []byte(`{"name":"edge-sg","health_check":false,"enabled":false}`)},
-		{Name: "empty object", Path: path, Mask: created, Body: []byte(`{}`)},
-		{Name: "unknown strategy", Path: path, Seed: seedLoadBalancers, Body: []byte(`{"name":"x","strategy":"fastest"}`)},
-		{Name: "name too long", Path: path, Seed: seedLoadBalancers, Body: []byte(fmt.Sprintf(`{"name":"%0256d"}`, 0))},
-		{Name: "negative interval", Path: path, Seed: seedLoadBalancers, Body: []byte(`{"name":"x","check_interval":-5}`)},
-		{Name: "negative group", Path: path, Seed: seedLoadBalancers, Body: []byte(`{"name":"x","group_id":-1}`)},
-		{Name: "not JSON", Path: path, Seed: seedLoadBalancers, Body: []byte(`{"name":`)},
-		{Name: "no body", Path: path, Seed: seedLoadBalancers},
-	})
-}
-
-func TestLoadBalancerUpdateRouteParity(t *testing.T) {
-	pattern := "/api/v2/admin/loadbalancers/:id"
-	path := func(id string) string { return "/api/v2/admin/loadbalancers/" + id }
-	updated := []string{"data.updated_at"}
-	write(t, route("PUT", pattern, "proxy.loadbalancer.id.put", loadBalancers((*handler.LoadBalancerHandler).UpdateLoadBalancer)), loadBalancerRows, []packagecompat.Case{
-		{Name: "rename and regroup", Path: path("1"), Seed: seedLoadBalancers, Mask: updated,
-			Body: []byte(`{"name":"edge-hk2","group_id":5,"strategy":"weighted-random"}`)},
-		{Name: "turn both flags off", Path: path("1"), Seed: seedLoadBalancers, Mask: updated,
-			Body: []byte(`{"health_check":false,"enabled":false}`)},
-		{Name: "turn both flags on", Path: path("4"), Seed: seedLoadBalancers, Mask: updated,
-			Body: []byte(`{"health_check":true,"enabled":true}`)},
-		{Name: "replace weights", Path: path("2"), Seed: seedLoadBalancers, Mask: updated,
-			Body: []byte(`{"weights":{"3":9}}`)},
-		{Name: "zero values keep the stored ones", Path: path("3"), Seed: seedLoadBalancers, Mask: updated,
-			Body: []byte(`{"name":"","group_id":0,"check_interval":0,"check_timeout":0,"weights":null}`)},
-		{Name: "empty object", Path: path("3"), Seed: seedLoadBalancers, Mask: updated, Body: []byte(`{}`)},
-		{Name: "unknown strategy", Path: path("1"), Seed: seedLoadBalancers, Body: []byte(`{"strategy":"fastest"}`)},
-		{Name: "not JSON", Path: path("1"), Seed: seedLoadBalancers, Body: []byte(`[`)},
-		{Name: "missing", Path: path("99"), Seed: seedLoadBalancers, Body: []byte(`{"name":"x"}`)},
-		{Name: "id that is not a number", Path: path("x"), Seed: seedLoadBalancers, Body: []byte(`{"name":"x"}`)},
-	})
-}
-
-func TestLoadBalancerDeleteRouteParity(t *testing.T) {
-	pattern := "/api/v2/admin/loadbalancers/:id"
-	path := func(id string) string { return "/api/v2/admin/loadbalancers/" + id }
-	write(t, route("DELETE", pattern, "proxy.loadbalancer.id.delete", loadBalancers((*handler.LoadBalancerHandler).DeleteLoadBalancer)), loadBalancerRows, []packagecompat.Case{
-		{Name: "existing", Path: path("2"), Seed: seedLoadBalancers},
-		{Name: "missing succeeds", Path: path("99"), Seed: seedLoadBalancers},
-		{Name: "id that is not a number", Path: path("-1"), Seed: seedLoadBalancers},
-	})
 }
 
 // seedNodes writes nodes that checked in recently, long ago and never, in

@@ -22,7 +22,7 @@
 // /admin/system shows 通用 on wide screens and the section list on phones.
 import { computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Archive, Info, Package, Scale, ScrollText, SlidersHorizontal } from '@lucide/vue'
+import { Archive, Info, Package, ScrollText, SlidersHorizontal } from '@lucide/vue'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { NARROW_QUERY, useMediaQuery } from '@/composables/useMediaQuery'
 import { ADMIN_PAGE_SECTIONS } from '@/navigation/menu'
@@ -31,14 +31,12 @@ import UiPageHeader from '@/ui/UiPageHeader.vue'
 import SettingsAbout from './system/SettingsAbout.vue'
 import SettingsAudit from './system/SettingsAudit.vue'
 import SettingsBackup from './system/SettingsBackup.vue'
-import SettingsBalancer from './system/SettingsBalancer.vue'
 import SettingsGeneral from './system/SettingsGeneral.vue'
 import SettingsPackages from './system/SettingsPackages.vue'
 
 const SECTION_COMPONENTS = {
   general: SettingsGeneral,
   backup: SettingsBackup,
-  balancer: SettingsBalancer,
   audit: SettingsAudit,
   packages: SettingsPackages,
   about: SettingsAbout
@@ -46,7 +44,6 @@ const SECTION_COMPONENTS = {
 const SECTION_ICONS = {
   general: SlidersHorizontal,
   backup: Archive,
-  balancer: Scale,
   audit: ScrollText,
   packages: Package,
   about: Info

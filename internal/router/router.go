@@ -411,14 +411,6 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			// (`anix-control backup restore`).
 
 			// ========== 负载均衡管理 ==========
-			lbHandler := handler.NewLoadBalancerHandler()
-			admin.GET("/loadbalancers", registeredPackageRoute(v2PackageGateway.Serve, "proxy-node", "proxy.loadbalancer.get", lbHandler.ListLoadBalancers))
-			admin.POST("/loadbalancers", registeredPackageRoute(v2PackageGateway.Serve, "proxy-node", "proxy.loadbalancer.post", lbHandler.CreateLoadBalancer))
-			admin.GET("/loadbalancers/:id", registeredPackageRoute(v2PackageGateway.Serve, "proxy-node", "proxy.loadbalancer.id.get", lbHandler.GetLoadBalancer))
-			admin.PUT("/loadbalancers/:id", registeredPackageRoute(v2PackageGateway.Serve, "proxy-node", "proxy.loadbalancer.id.put", lbHandler.UpdateLoadBalancer))
-			admin.DELETE("/loadbalancers/:id", registeredPackageRoute(v2PackageGateway.Serve, "proxy-node", "proxy.loadbalancer.id.delete", lbHandler.DeleteLoadBalancer))
-			admin.GET("/loadbalancers/:id/stats", registeredPackageRoute(v2PackageGateway.Serve, "proxy-node", "proxy.loadbalancer.id.stats.get", lbHandler.GetLoadBalancerStats))
-			admin.POST("/loadbalancers/:id/check", registeredPackageRoute(v2PackageGateway.Serve, "proxy-node", "proxy.loadbalancer.id.check.post", lbHandler.RunHealthCheck))
 		}
 
 		// 用户接口 (需认证)

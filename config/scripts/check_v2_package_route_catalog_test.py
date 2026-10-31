@@ -641,7 +641,7 @@ func NamedResultShadow(r *gin.Engine, cfg *config.Config) (config resultConfig) 
         rows = {(row["method"], row["path"]): row for row in catalog}
 
         expected = {
-            ("GET", "/api/v2/admin/loadbalancers"): ("proxy-node", "proxy.loadbalancer."),
+            ("GET", "/api/v2/admin/auth-keys"): ("proxy-node", "proxy.admin.auth_keys."),
             ("GET", "/api/v2/admin/nodes/:id/protocols"): ("protocol-runtime", "protocol."),
             ("GET", "/api/v2/admin/protocol-templates"): ("protocol-runtime", "protocol."),
             ("POST", "/api/v2/node/register"): ("proxy-node", "proxy."),

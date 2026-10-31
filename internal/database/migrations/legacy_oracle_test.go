@@ -59,7 +59,7 @@ func legacySchemaModels() []any {
 		&model.NotificationTemplate{}, &model.NotificationLog{},
 		&model.UserMFA{}, &model.MFALoginAttempt{},
 		&model.UserLevel{}, &model.InviteCode{}, &model.CommissionRecord{}, &model.CommissionWithdraw{}, &model.InviteConfig{},
-		&model.LoadBalancer{}, &model.SystemConfig{}, &keptBackupRecord{}, &keptBackupConfig{}, &model.OperationLog{}, &model.AuditLog{},
+		&model.SystemConfig{}, &keptBackupRecord{}, &keptBackupConfig{}, &model.OperationLog{}, &model.AuditLog{},
 	}
 }
 
@@ -185,6 +185,24 @@ type retiredShadowMismatchSample struct {
 
 func (retiredShadowMismatchSample) TableName() string { return "v4_kernel_shadow_mismatch_sample" }
 
+// retiredLoadBalancer is model.LoadBalancer as the baseline created it;
+// 0019_drop_load_balancer dropped the table and the model.
+type retiredLoadBalancer struct {
+	ID            uint   `gorm:"primaryKey"`
+	Name          string `gorm:"size:100"`
+	GroupID       uint   `gorm:"index"`
+	Strategy      string `gorm:"size:20;default:round-robin"`
+	HealthCheck   bool   `gorm:"default:true"`
+	CheckInterval int    `gorm:"default:60"`
+	CheckTimeout  int    `gorm:"default:10"`
+	NodeWeights   string `gorm:"type:text"`
+	Enabled       bool   `gorm:"default:true"`
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+}
+
+func (retiredLoadBalancer) TableName() string { return "v2_load_balancer" }
+
 // retiredKernelModels are the kernel models later migrations dropped with
 // their tables, frozen as the baseline had them: the legacy start of the
 // baseline created them, today's models do not. legacyPrepare creates them,
@@ -193,6 +211,7 @@ func (retiredShadowMismatchSample) TableName() string { return "v4_kernel_shadow
 func retiredKernelModels() []any {
 	return []any{
 		&retiredRouteModeRevision{}, &retiredShadowMismatchSample{}, // 0004_drop_route_modes
+		&retiredLoadBalancer{}, // 0019_drop_load_balancer
 	}
 }
 

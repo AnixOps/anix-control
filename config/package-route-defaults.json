@@ -201,12 +201,7 @@
       "min_version": "4.1.0-rc.5",
       "routes": [
         "proxy.admin.nodes.id.logs.get",
-        "proxy.admin.nodes.stats.get",
-        "proxy.loadbalancer.get",
-        "proxy.loadbalancer.id.delete",
-        "proxy.loadbalancer.id.get",
-        "proxy.loadbalancer.id.put",
-        "proxy.loadbalancer.post"
+        "proxy.admin.nodes.stats.get"
       ]
     },
     {

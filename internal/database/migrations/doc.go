@@ -102,4 +102,6 @@
 //     nodes; former forward groups become proxy groups without a template.
 //   - 0018_node_network: each device's own network settings, which the
 //     network model's automatic components follow (v4_kernel_node_network).
+//   - 0019_drop_load_balancer: the load balancer feature is removed; its
+//     table v2_load_balancer is dropped.
 package migrations

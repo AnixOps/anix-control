@@ -493,7 +493,7 @@ func TestAllCataloguedV2RoutesResolveThroughTheirPackageBridge(t *testing.T) {
 		})
 	}
 	require.Equal(t, 26, identityRoutes)
-	require.Equal(t, 176, bridgedRoutes)
+	require.Equal(t, 169, bridgedRoutes)
 }
 
 // Old identity-platform and plan releases still declare the routes that

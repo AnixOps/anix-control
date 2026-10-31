@@ -28,7 +28,7 @@ type proxyNodeBridge interface {
 // lease has them they answer from the legacy handler, and a host started
 // before the finalize keeps them legacy until it restarts. The routes that
 // reach the kernel's KernelNodeOps (a node's deletion and raw
-// configuration, registration keys, the load balancer check) use the
+// configuration, registration keys) use the
 // bridge connection (local socket or module listener); a bridge without one
 // leaves them legacy. The routes in bridgedRoutes always relay to the
 // legacy handler, the agent WebSocket included.
@@ -66,13 +66,6 @@ func newProxyNodeService(bridge proxyNodeBridge, leaseID string) (*pluginhostsdk
 // proxyNodeRoutes are the package's compatibility routes with a native
 // handler.
 var proxyNodeRoutes = map[string]struct{}{
-	"proxy.loadbalancer.get":              {},
-	"proxy.loadbalancer.post":             {},
-	"proxy.loadbalancer.id.get":           {},
-	"proxy.loadbalancer.id.put":           {},
-	"proxy.loadbalancer.id.delete":        {},
-	"proxy.loadbalancer.id.stats.get":     {},
-	"proxy.loadbalancer.id.check.post":    {},
 	"proxy.admin.nodes.stats.get":         {},
 	"proxy.admin.nodes.id.logs.get":       {},
 	"proxy.admin.nodes.get":               {},

@@ -226,69 +226,6 @@
   },
   {
     "method": "GET",
-    "path": "/api/v2/admin/loadbalancers",
-    "owner": "proxy-node",
-    "route_id": "proxy.loadbalancer.get",
-    "envelope": "data",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
-    "method": "POST",
-    "path": "/api/v2/admin/loadbalancers",
-    "owner": "proxy-node",
-    "route_id": "proxy.loadbalancer.post",
-    "envelope": "data",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
-    "method": "DELETE",
-    "path": "/api/v2/admin/loadbalancers/:id",
-    "owner": "proxy-node",
-    "route_id": "proxy.loadbalancer.id.delete",
-    "envelope": "data",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
-    "method": "GET",
-    "path": "/api/v2/admin/loadbalancers/:id",
-    "owner": "proxy-node",
-    "route_id": "proxy.loadbalancer.id.get",
-    "envelope": "data",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
-    "method": "PUT",
-    "path": "/api/v2/admin/loadbalancers/:id",
-    "owner": "proxy-node",
-    "route_id": "proxy.loadbalancer.id.put",
-    "envelope": "data",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
-    "method": "POST",
-    "path": "/api/v2/admin/loadbalancers/:id/check",
-    "owner": "proxy-node",
-    "route_id": "proxy.loadbalancer.id.check.post",
-    "envelope": "data",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
-    "method": "GET",
-    "path": "/api/v2/admin/loadbalancers/:id/stats",
-    "owner": "proxy-node",
-    "route_id": "proxy.loadbalancer.id.stats.get",
-    "envelope": "data",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
-    "method": "GET",
     "path": "/api/v2/admin/mfa/config",
     "owner": "identity-platform",
     "route_id": "identity.admin.mfa.config.get",

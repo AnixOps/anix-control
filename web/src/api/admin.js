@@ -772,44 +772,6 @@ export function getSystemAuditLogs(params) {
   })
 }
 
-export function getLoadBalancers(params) {
-  return request({
-    url: '/admin/loadbalancers',
-    method: 'get',
-    params
-  })
-}
-
-export function createLoadBalancer(data) {
-  return request({
-    url: '/admin/loadbalancers',
-    method: 'post',
-    data
-  })
-}
-
-export function updateLoadBalancer(id, data) {
-  return request({
-    url: `/admin/loadbalancers/${id}`,
-    method: 'put',
-    data
-  })
-}
-
-export function deleteLoadBalancer(id) {
-  return request({
-    url: `/admin/loadbalancers/${id}`,
-    method: 'delete'
-  })
-}
-
-export function runHealthCheck(id) {
-  return request({
-    url: `/admin/loadbalancers/${id}/check`,
-    method: 'post'
-  })
-}
-
 // ---------------------------------------------------------------------------
 // Kernel-owned admin routes, /api/v4/admin (docs/guide/api-reference.md):
 // administrators only, answers {data: ...}, refusals {error: {code, message}}.
@@ -1034,12 +996,7 @@ export default {
   getSubscriptionSettings,
   setSystemConfig,
   deleteSystemConfig,
-  getSystemAuditLogs,
-  getLoadBalancers,
-  createLoadBalancer,
-  updateLoadBalancer,
-  deleteLoadBalancer,
-  runHealthCheck
+  getSystemAuditLogs
 }
 
 // Each user's traffic by destination and category, GET

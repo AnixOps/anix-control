@@ -113,7 +113,6 @@ func (s *AdminE2ETestSuite) SetupSuite() {
 		&model.OperationLog{},
 		&model.AuditLog{},
 		&model.Event{},
-		&model.LoadBalancer{},
 		&model.UserSubscriptionGroup{},
 		&model.PlanSubscriptionGroup{},
 		&model.SubscriptionGroup{},
