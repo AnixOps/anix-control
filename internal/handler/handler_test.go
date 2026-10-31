@@ -115,7 +115,6 @@ func initTestDB() *gorm.DB {
 		&model.ForwardTrafficCursor{},
 		&model.ForwardLatencyBucket{},
 		&model.OperationLog{},
-		&model.LoadBalancer{},
 		&model.UserSubscriptionGroup{},
 		&model.SubscriberRequest{},
 		&model.SubscriberChange{},

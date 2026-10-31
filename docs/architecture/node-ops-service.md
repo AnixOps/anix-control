@@ -67,7 +67,7 @@ There are five needs:
 | Need | Examples | Where it lives today |
 |---|---|---|
 | **Node pushes** | apply a forward on its node, push a node's configuration, re-apply a tunnel's forwards, push a legacy rule | the forward runtime executors (`internal/service/forward_runtime_executors.go`): NodeX over HTTP, a local Ansible job, a clean agent job (`v2_forward_runtime_job`, bridged to the AnixOps Agent's task poll by `forward_agent_bridge_*`); `AgentControlManager` (`internal/grpc/agent_control_server.go`: `node.reload`, `users.reload`, `agent.ping`); the agent WebSocket (`internal/handler/agent.go`: diagnostic tasks); the legacy pull (UniProxy, the v2board gRPC node service) |
-| **Diagnostics dialing out** | forward node and load balancer checks, forward and tunnel diagnoses, gost statistics sync | the kernel dials from Control's network, with the node's token where the node's API needs it |
+| **Diagnostics dialing out** | forward node checks, forward and tunnel diagnoses, gost statistics sync | the kernel dials from Control's network, with the node's token where the node's API needs it |
 | **Node caches** | the node cache (`nodeCacheKey`), the gost manager's address and token per node (`internal/gost/manager.go`), live agent connections and monitor snapshots | kernel memory |
 | **Credentials and secrets** | node API keys and shared secrets, forward node tokens, clean agent tokens, registration keys, Reality and WireGuard private keys, WireGuard peer keys | columns of the protected tables `v2_node`, `v2_authorized_key`, `v2_forward_node`, `v2_forward_clean_agent`, `v2_forward_runtime_job` (payloads), `v2_node_protocol`, `v2_wireguard_peer` (`internal/service/plugin_capabilities.go`) |
 | **Live connections** | the agent list, Agent Control status, task creation that waits for an acknowledgement | `AgentControlManager` and `AgentHandler` in kernel memory |
@@ -169,7 +169,7 @@ KernelSettings.
 |---|---|---|
 | `kernel.nodeops.forward.v1` | `ApplyForward`, `ApplyTunnel`, `SyncForwardBackend`, `ApplyLegacyRule` | forward |
 | `kernel.nodeops.nodeconfig.v1` | `SyncNode`, `RetireNode`, `RetireProtocol`, `PutSecretDocument`; `ValidateNodeConfig` | proxy-node, protocol-runtime, forward (`SyncNode` and `RetireNode` on forward nodes) |
-| `kernel.nodeops.diagnose.v1` | `CheckEndpoints`, `CollectNodeStats`, `DiagnoseForward`, `DiagnoseTunnel`, `RunAgentDiagnostic` | forward, proxy-node (load balancer check), protocol-runtime (agent tasks) |
+| `kernel.nodeops.diagnose.v1` | `CheckEndpoints`, `CollectNodeStats`, `DiagnoseForward`, `DiagnoseTunnel`, `RunAgentDiagnostic` | forward, protocol-runtime (agent tasks) |
 | `kernel.nodeops.agents.v1` | `AgentControlOperation`; `ListAgentSessions`, `GetAgentSession`, `GetAgentMonitor` | protocol-runtime |
 | `kernel.nodeops.credentials.v1` | `IssueCredential`, `RevokeCredential`, `IssueRegistrationKey`, `RevokeRegistrationKey`, `IssueCleanAgent` | proxy-node, forward |
 
@@ -209,7 +209,7 @@ in `Operation.kind`.
 | `node.retire` | `RetireNode` | nodeconfig | kernel | the node deletion transaction (protocols, WireGuard peers, subscription group links) |
 | `protocol.retire` | `RetireProtocol` | nodeconfig | kernel | the protocol deletion transaction (WireGuard peers, subscription group links) |
 | `secrets.put` | `PutSecretDocument` | nodeconfig | kernel | the secret-keeping part of protocol and raw configuration writes (`keepNodeProtocolSecretUpdates`, `KeepNodeRawConfig`) |
-| `diagnose.endpoints` | `CheckEndpoints` | diagnose | Control dial; agent after A2 | `ForwardNodeService.HealthCheck`, `LoadBalancerService` health check |
+| `diagnose.endpoints` | `CheckEndpoints` | diagnose | Control dial; agent after A2 | `ForwardNodeService.HealthCheck` |
 | `diagnose.node_stats` | `CollectNodeStats` | diagnose | the node's gost metrics endpoint, local Ansible | `ForwardHandler.SyncNodeStats`, the Ansible statistics |
 | `diagnose.forward` | `DiagnoseForward` | diagnose | Control dial; agent after A2 | `PanelForwardService.DiagnoseForward` (public targets only for users) |
 | `diagnose.tunnel` | `DiagnoseTunnel` | diagnose | Control dial; agent after A2 | `PanelForwardService.DiagnoseTunnel` |
@@ -2055,11 +2055,7 @@ router answers from the legacy handler.
   counters (`LOCAL_ANSIBLE`), else the node's gost metrics (`CONTROL_DIAL`).
   Nothing is recorded, as in the legacy sync.
 - **Endpoint checks.** `record_status` writes what the forward node check
-  writes. The legacy load balancer check differs. After each check it saves
-  the node's row as it was loaded before the check, which overwrites the
-  check's last check, latency and uptime. It marks the node online unless
-  the check returned an error, and an unreachable node is not an error.
-  M3-2 decides whether its native route reproduces that.
+  writes.
 - **Private targets.** Until NO-4 verifies request bindings, the kernel
   cannot tell an administrator's `DiagnoseForward` from a user's. It checks
   every forward's targets as a user's (public addresses only, the #84
@@ -2192,8 +2188,6 @@ Proxy-node adopts `v2_node` once it is finalized.
 | `POST /admin/auth-keys` | `IssueRegistrationKey` (answered as a handle) | native |
 | `DELETE /admin/auth-keys/:id` | `RevokeRegistrationKey` | native |
 | `POST /internal/auth-keys` | `IssueRegistrationKey`, under the app-token principal | native |
-| `GET /admin/loadbalancers/:id/stats` | none; `kapi_forward_node_v1` (exists) and the adopted `v2_load_balancer`. No node operation is needed; it was bridged together with the check | native |
-| `POST /admin/loadbalancers/:id/check` | `CheckEndpoints{forward nodes of the group, record_status}`: the kernel writes the status columns of forward's table (wait T) | native |
 | `POST /node/register`, `/node/heartbeat`, `/node/runtime-health` | none | **kernel-owned (decided D3)**: registration mints node credentials, and the others are authenticated by them. With A2 they become enrollment and stream reports, and 5.0 removes them |
 
 **As M3-2 built them.** 11 of the 14 routes are `native-flagged`
@@ -2214,8 +2208,8 @@ What the native routes do, and what the kernel gained:
   once it adopts `v2_node`; the registration key list once it grants
   `kapi_registration_key_v1`. Until then they answer from the legacy
   handler, SQLite included; a host started before the finalize keeps them
-  legacy until Control restarts. Issuing and revoking registration keys and
-  the load balancer routes need no finalize.
+  legacy until Control restarts. Issuing and revoking registration keys
+  needs no finalize.
 - **The raw configuration is validated with the typed secrets.** The
   `secrets.put` executor now validates a raw configuration with the
   secrets it stores (`service.ValidateWireGuardRuntimeConfig`, as the
@@ -2224,17 +2218,6 @@ What the native routes do, and what the kernel gained:
   配置无效`). It also drops the kernel's node cache, as the legacy update
   does. Null clears the configuration: the kernel stores `{}` (which drops
   its secrets), then the package writes null.
-- **The load balancer check is the forward node check (decided here).**
-  The legacy check saved, after each node's check, the row it had loaded
-  before it, with status 1 unless the check returned an error, and an
-  unreachable node is not an error: it marked unreachable nodes online and
-  overwrote the latency the check had recorded. The legacy route now runs
-  `ForwardNodeService.CheckEndpoints` with record, the function the
-  `diagnose.endpoints` executor runs with `record_status`, and the native
-  route submits `CheckEndpoints{every forward node, record_status}` (wait
-  T). Both look at every forward node, as the legacy statistics and check
-  always did, whatever the load balancer's group. A load balancer with
-  health checks off checks nothing.
 - **Registration keys.** `IssueRegistrationKey` with the expiry the route
   computes; the key is answered as a handle the gateway expands at
   `/data/key`. The internal route answers its own envelope. The list shows

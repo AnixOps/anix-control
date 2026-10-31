@@ -104,4 +104,6 @@
 //     network model's automatic components follow (v4_kernel_node_network).
 //   - 0020_node_groups_without_templates: a node group no longer has a kind,
 //     a protocol template or subscription groups; joining nodes stay clean.
+//   - 0021_drop_load_balancer: the load balancer feature is removed; its
+//     table v2_load_balancer is dropped.
 package migrations

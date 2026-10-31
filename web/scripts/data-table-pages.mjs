@@ -23,7 +23,6 @@ export const DATA_TABLE_PAGES = [
   'src/views/admin/System.vue',
   'src/views/admin/system/SettingsAdvanced.vue',
   'src/views/admin/system/SettingsBackup.vue',
-  'src/views/admin/system/SettingsBalancer.vue',
   'src/views/admin/system/SettingsAudit.vue',
   'src/views/admin/Subscriptions.vue',
   'src/views/admin/SubscriptionGroup.vue',

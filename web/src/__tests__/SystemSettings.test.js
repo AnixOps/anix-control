@@ -14,11 +14,6 @@ const adminApi = vi.hoisted(() => ({
   deleteSystemConfig: vi.fn(),
   getSystemConfigs: vi.fn(),
   getSystemAuditLogs: vi.fn(),
-  getLoadBalancers: vi.fn(),
-  createLoadBalancer: vi.fn(),
-  updateLoadBalancer: vi.fn(),
-  deleteLoadBalancer: vi.fn(),
-  runHealthCheck: vi.fn(),
   getSystemInfo: vi.fn(),
   getDestinationSettings: vi.fn(),
   updateDestinationSettings: vi.fn()
@@ -69,7 +64,6 @@ describe('System settings page', () => {
     adminApi.getSystemAuditLogs.mockResolvedValue({ data: { data: { list: [], total: 0, page: 1, page_size: 20 } } })
     kernelApi.getSettingsCatalog.mockResolvedValue({ items: [{ key: 'traffic.destinations.retention_days', kind: 'choice', section: 'data', choices: [7, 30, 90] }] })
     kernelApi.getPanelBackups.mockResolvedValue({ supported: true, backups: [], summary: {}, retention: {} })
-    adminApi.getLoadBalancers.mockResolvedValue({ data: { list: [] } })
     adminApi.getDestinationSettings.mockResolvedValue({ enabled: false, retention_days: 30 })
     adminApi.getSystemInfo.mockResolvedValue({ code: 0, data: { version: '4.1.0', build_code: '202610020001', commit: 'abc123', build_time: '2026-10-02' } })
   })
@@ -81,10 +75,10 @@ describe('System settings page', () => {
   it('lists the sections as links and shows 通用 at /admin/system', async () => {
     const { wrapper } = await mountAt('/admin/system')
     const links = wrapper.findAll('[data-settings-section]')
-    expect(links.map(link => link.attributes('data-settings-section'))).toEqual(['general', 'data', 'backup', 'balancer', 'audit', 'packages', 'advanced', 'about'])
+    expect(links.map(link => link.attributes('data-settings-section'))).toEqual(['general', 'data', 'backup', 'audit', 'packages', 'advanced', 'about'])
     expect(links.map(link => link.attributes('href'))).toEqual([
       '/admin/system/general', '/admin/system/data', '/admin/system/backup',
-      '/admin/system/balancer', '/admin/system/audit', '/admin/system/packages', '/admin/system/advanced', '/admin/system/about'
+      '/admin/system/audit', '/admin/system/packages', '/admin/system/advanced', '/admin/system/about'
     ])
     expect(wrapper.get('[aria-current="page"]').attributes('data-settings-section')).toBe('general')
     expect(wrapper.find('[data-settings-panel="general"]').exists()).toBe(true)
@@ -176,10 +170,10 @@ describe('System settings page', () => {
     expect(wrapper.find('[data-test="settings-nav"]').exists()).toBe(true)
     expect(wrapper.find('[data-settings-panel]').exists()).toBe(false)
 
-    await router.push('/admin/system/balancer')
+    await router.push('/admin/system/audit')
     await flushPromises()
     expect(wrapper.find('[data-test="settings-nav"]').exists()).toBe(false)
-    expect(wrapper.find('[data-settings-panel="balancer"]').exists()).toBe(true)
+    expect(wrapper.find('[data-settings-panel="audit"]').exists()).toBe(true)
     expect(wrapper.get('[data-test="settings-back"]').attributes('href')).toBe('/admin/system')
   })
 })

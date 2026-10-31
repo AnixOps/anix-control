@@ -1,11 +1,10 @@
 // System settings dialogs and feedback (UI U4, U7): the configuration key
-// and load balancer editors are UiDialogs with inline errors, opened from
+// editor is a UiDialog with inline errors, opened from
 // the table's row menu; deletes ask in a ConfirmDialog; the subscription
 // domains are validated as you type and saved from the save bar.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor, within } from '@testing-library/vue'
 import userEvent from '@testing-library/user-event'
-import SettingsBalancer from '@/views/admin/system/SettingsBalancer.vue'
 import SettingsAdvanced from '@/views/admin/system/SettingsAdvanced.vue'
 import SettingsGeneral from '@/views/admin/system/SettingsGeneral.vue'
 import UiHost from '@/ui/UiHost.vue'
@@ -17,11 +16,6 @@ const adminApi = vi.hoisted(() => ({
   getSubscriptionSettings: vi.fn(),
   setSystemConfig: vi.fn(),
   getSystemConfigs: vi.fn(),
-  getLoadBalancers: vi.fn(),
-  createLoadBalancer: vi.fn(),
-  updateLoadBalancer: vi.fn(),
-  deleteLoadBalancer: vi.fn(),
-  runHealthCheck: vi.fn()
 }))
 
 vi.mock('@/api/admin', () => adminApi)
@@ -46,7 +40,6 @@ describe('System settings dialogs and feedback', () => {
     adminApi.getSystemConfig.mockResolvedValue({ data: { value: '' } })
     adminApi.getSubscriptionSettings.mockResolvedValue({ data: { subscribe_path: '/s', subscribe_domains: [] } })
     adminApi.getSystemConfigs.mockResolvedValue({ data: { list: [{ key: 'site.name', value: 'AnixOps', description: 'Site name' }] } })
-    adminApi.getLoadBalancers.mockResolvedValue({ data: { list: [] } })
   })
 
   afterEach(() => {
@@ -136,21 +129,5 @@ describe('System settings dialogs and feedback', () => {
     await waitFor(() => expect(screen.queryByRole('region', { name: 'Unsaved changes' })).toBeNull())
     expect(field.value).toBe('a.example.com')
     expect(adminApi.setSystemConfig).not.toHaveBeenCalled()
-  })
-
-  it('validates balancer name and weights inside the dialog', async () => {
-    const user = userEvent.setup()
-    await renderSection(SettingsBalancer, 'No load balancers yet')
-    await user.click(screen.getAllByRole('button', { name: 'New load balancer' })[0])
-    const dialog = await screen.findByRole('dialog', { name: 'New load balancer' })
-    await user.click(within(dialog).getByRole('button', { name: 'Save' }))
-    expect(within(dialog).getByText('Enter a name')).toBeTruthy()
-
-    await user.type(within(dialog).getByLabelText(/Name/), 'edge')
-    await user.type(within(dialog).getByLabelText(/Node weights/), 'not json')
-    expect(within(dialog).getByText('Not valid JSON')).toBeTruthy()
-    await user.click(within(dialog).getByRole('button', { name: 'Save' }))
-    expect(within(dialog).getByRole('alert').textContent).toBe('Not valid JSON')
-    expect(adminApi.createLoadBalancer).not.toHaveBeenCalled()
   })
 })

@@ -12,9 +12,6 @@ import (
 	"github.com/google/uuid"
 )
 
-// maxWait is the longest wait KernelNodeOps allows.
-const maxWait = 60 * time.Second
-
 // submit records one operation and waits as asked; wait bounds the wait.
 // The request binding goes with it: the kernel resolves the request's
 // sealed handles, and mints the handles its answer shows, only for it.

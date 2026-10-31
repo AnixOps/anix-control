@@ -52,7 +52,7 @@ func TestPackageRouteDefaultsGate(t *testing.T) {
 	// 130 rehearsed, less the four backup routes removed with the backup
 	// settings (docs/reference/backups.md) and the three v3 forward routes
 	// removed with the v4.1 forwarding runtime.
-	require.Len(t, rehearsed, 123)
+	require.Len(t, rehearsed, 118)
 	want := make([]string, 0, len(rehearsed))
 	for _, row := range rehearsed {
 		require.Contains(t, []string{"read", "write"}, row[2], row[1])
@@ -67,7 +67,7 @@ func TestPackageRouteDefaultsGate(t *testing.T) {
 	sort.Strings(want)
 	sort.Strings(got)
 	assert.Equal(t, want, got, "config/package-route-defaults.json must list exactly the rehearsed routes")
-	assert.Equal(t, 123, defaults.RouteCount())
+	assert.Equal(t, 118, defaults.RouteCount())
 
 	// The packages and batches the owner signed off, at the rehearsed
 	// release.
@@ -146,13 +146,13 @@ func TestPackageReleaseAtLeast(t *testing.T) {
 func TestPackageRouteDefaultsSummary(t *testing.T) {
 	summary, err := PackageRouteDefaultsSummary()
 	require.NoError(t, err)
-	assert.Contains(t, summary, "the 123 rehearsed routes of 13 packages")
+	assert.Contains(t, summary, "the 118 rehearsed routes of 13 packages")
 	assert.Contains(t, summary, "every other route runs its legacy handler")
 	assert.NotContains(t, summary, "default_mode")
 }
 
 // TestResolveEffectivePackageRouteModesOnlyDefaultsTheSet resolves every
-// package of the extraction map at a new release: exactly the 123 rehearsed
+// package of the extraction map at a new release: exactly the 118 rehearsed
 // routes come out native; every other native-flagged route (identity's
 // among them) stays legacy.
 func TestResolveEffectivePackageRouteModesOnlyDefaultsTheSet(t *testing.T) {
@@ -176,7 +176,7 @@ func TestResolveEffectivePackageRouteModesOnlyDefaultsTheSet(t *testing.T) {
 			native++
 		}
 	}
-	assert.Equal(t, 123, native)
+	assert.Equal(t, 118, native)
 
 	// Identity group A follows the authority only.
 	modes, err := ResolveEffectivePackageRouteModes(db, IdentityPlatformPackageID, "9.9.9")

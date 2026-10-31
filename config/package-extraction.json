@@ -203,62 +203,6 @@
     },
     {
       "method": "GET",
-      "path": "/api/v2/admin/loadbalancers",
-      "package_id": "proxy-node",
-      "route_id": "proxy.loadbalancer.get",
-      "mode": "native-flagged",
-      "legacy": "router"
-    },
-    {
-      "method": "POST",
-      "path": "/api/v2/admin/loadbalancers",
-      "package_id": "proxy-node",
-      "route_id": "proxy.loadbalancer.post",
-      "mode": "native-flagged",
-      "legacy": "router"
-    },
-    {
-      "method": "DELETE",
-      "path": "/api/v2/admin/loadbalancers/:id",
-      "package_id": "proxy-node",
-      "route_id": "proxy.loadbalancer.id.delete",
-      "mode": "native-flagged",
-      "legacy": "router"
-    },
-    {
-      "method": "GET",
-      "path": "/api/v2/admin/loadbalancers/:id",
-      "package_id": "proxy-node",
-      "route_id": "proxy.loadbalancer.id.get",
-      "mode": "native-flagged",
-      "legacy": "router"
-    },
-    {
-      "method": "PUT",
-      "path": "/api/v2/admin/loadbalancers/:id",
-      "package_id": "proxy-node",
-      "route_id": "proxy.loadbalancer.id.put",
-      "mode": "native-flagged",
-      "legacy": "router"
-    },
-    {
-      "method": "POST",
-      "path": "/api/v2/admin/loadbalancers/:id/check",
-      "package_id": "proxy-node",
-      "route_id": "proxy.loadbalancer.id.check.post",
-      "mode": "native-flagged",
-      "legacy": "router"
-    },
-    {
-      "method": "GET",
-      "path": "/api/v2/admin/loadbalancers/:id/stats",
-      "package_id": "proxy-node",
-      "route_id": "proxy.loadbalancer.id.stats.get",
-      "mode": "native-flagged",
-      "legacy": "router"
-    },
-    {
-      "method": "GET",
       "path": "/api/v2/admin/mfa/config",
       "package_id": "identity-platform",
       "route_id": "identity.admin.mfa.config.get",

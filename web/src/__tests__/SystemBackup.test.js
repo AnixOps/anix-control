@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import SettingsBackup from '@/views/admin/system/SettingsBackup.vue'
-import SettingsBalancer from '@/views/admin/system/SettingsBalancer.vue'
 import SettingsGeneral from '@/views/admin/system/SettingsGeneral.vue'
 import { toastMessages } from './helpers/feedback'
 
@@ -11,11 +10,6 @@ const adminApi = vi.hoisted(() => ({
   setSystemConfig: vi.fn(),
   getSystemConfigs: vi.fn(),
   getSystemAuditLogs: vi.fn(),
-  getLoadBalancers: vi.fn(),
-  createLoadBalancer: vi.fn(),
-  updateLoadBalancer: vi.fn(),
-  deleteLoadBalancer: vi.fn(),
-  runHealthCheck: vi.fn(),
 }))
 
 const kernelApi = vi.hoisted(() => ({
@@ -66,7 +60,7 @@ function backupsAnswer({ stale = false, supported = true, backups } = {}) {
   }
 }
 
-describe('System settings: backups, subscription domains and load balancers', () => {
+describe('System settings: backups and subscription domains', () => {
   beforeEach(() => {
     vi.resetAllMocks()
     adminApi.getSystemConfig.mockResolvedValue({ data: { value: '' } })
@@ -74,11 +68,6 @@ describe('System settings: backups, subscription domains and load balancers', ()
     adminApi.setSystemConfig.mockResolvedValue({})
     adminApi.getSystemConfigs.mockResolvedValue({ data: { list: [] } })
     adminApi.getSystemAuditLogs.mockResolvedValue({ data: { data: { list: [], total: 0, page: 1, page_size: 20 } } })
-    adminApi.getLoadBalancers.mockResolvedValue({ data: { list: [] } })
-    adminApi.createLoadBalancer.mockResolvedValue({})
-    adminApi.updateLoadBalancer.mockResolvedValue({})
-    adminApi.deleteLoadBalancer.mockResolvedValue({})
-    adminApi.runHealthCheck.mockResolvedValue({})
     kernelApi.getPanelBackups.mockResolvedValue(backupsAnswer())
     kernelApi.createPanelBackup.mockResolvedValue({ backup: { id: 4, file: 'anix-control-20261013T120000Z-manual.tar', verify_status: 'pending' } })
   })
@@ -209,134 +198,6 @@ describe('System settings: backups, subscription domains and load balancers', ()
 
     expect(wrapper.vm.subscriptionPath).toBe('/x')
     expect(wrapper.vm.subscriptionDomainsText).toBe('panel.example.com')
-
-    wrapper.unmount()
-  })
-
-
-  it('loads load balancers from legacy and panel envelope payloads', async () => {
-    adminApi.getLoadBalancers
-      .mockResolvedValueOnce({
-        data: {
-          list: [
-            {
-              id: 1,
-              name: 'Legacy LB',
-              group_id: 1,
-              strategy: 'round-robin',
-              health_check: true,
-              enabled: true,
-              weights: {}
-            }
-          ]
-        }
-      })
-      .mockResolvedValueOnce({
-        code: 0,
-        msg: '操作成功',
-        data: {
-          list: [
-            {
-              id: 2,
-              name: 'Panel LB',
-              group_id: 2,
-              strategy: 'least-load',
-              health_check: false,
-              enabled: true,
-              weights: { '10': 3 }
-            }
-          ],
-          total: 1
-        },
-        ts: 1783526400000
-      })
-
-    const wrapper = mountSection(SettingsBalancer)
-    await flushPromises()
-
-    expect(wrapper.vm.balancers).toHaveLength(1)
-    expect(wrapper.vm.balancers[0].name).toBe('Legacy LB')
-
-    await wrapper.vm.fetchBalancers()
-    await flushPromises()
-
-    expect(wrapper.vm.balancers).toHaveLength(1)
-    expect(wrapper.vm.balancers[0]).toMatchObject({
-      id: 2,
-      name: 'Panel LB',
-      strategy: 'least-load'
-    })
-
-    wrapper.unmount()
-  })
-
-  it('shows a load balancer list failure as the table error state', async () => {
-    adminApi.getLoadBalancers.mockResolvedValueOnce({
-      code: -1,
-      msg: 'balancer list rejected',
-      data: null,
-      ts: 1783526400000
-    })
-
-    const wrapper = mountSection(SettingsBalancer)
-    await flushPromises()
-
-    expect(wrapper.vm.balancers).toEqual([])
-    expect(wrapper.vm.balancersError).toBe('balancer list rejected')
-    expect(wrapper.text()).toContain('balancer list rejected')
-
-    wrapper.unmount()
-  })
-
-  it('keeps load balancer modal open when enveloped save fails', async () => {
-    const wrapper = mountSection(SettingsBalancer)
-    await flushPromises()
-    adminApi.getLoadBalancers.mockClear()
-    adminApi.createLoadBalancer.mockResolvedValueOnce({
-      code: -1,
-      msg: 'balancer save rejected',
-      data: null,
-      ts: 1783526400000
-    })
-
-    wrapper.vm.openBalancerModal()
-    Object.assign(wrapper.vm.balancerForm, {
-      name: 'Rejected LB',
-      group_id: 0,
-      strategy: 'round-robin',
-      health_check: true,
-      check_interval: 60,
-      weights_json: ''
-    })
-
-    await wrapper.vm.saveBalancer()
-    await flushPromises()
-
-    expect(wrapper.vm.balancerError).toContain('balancer save rejected')
-    expect(toastMessages()).toEqual([])
-    expect(wrapper.vm.showBalancerModal).toBe(true)
-    expect(adminApi.getLoadBalancers).not.toHaveBeenCalled()
-
-    wrapper.unmount()
-  })
-
-  it('does not report health-check success when enveloped response fails', async () => {
-    const wrapper = mountSection(SettingsBalancer)
-    await flushPromises()
-    adminApi.getLoadBalancers.mockClear()
-    adminApi.runHealthCheck.mockResolvedValueOnce({
-      code: -1,
-      msg: 'health check rejected',
-      data: null,
-      ts: 1783526400000
-    })
-
-    await wrapper.vm.runHealthCheckRequest({ id: 1, name: 'Rejected LB' })
-    await flushPromises()
-
-    expect(toastMessages('error')).toEqual([expect.stringContaining('health check rejected')])
-    expect(toastMessages('success')).toEqual([])
-    expect(adminApi.getLoadBalancers).not.toHaveBeenCalled()
 
     wrapper.unmount()
   })

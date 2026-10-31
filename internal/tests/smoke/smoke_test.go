@@ -79,7 +79,7 @@ func (s *SmokeTestSuite) SetupSuite() {
 		&model.ForwardNode{}, &model.Forward{}, &model.ForwardRule{},
 		&model.ForwardTunnel{}, &model.ForwardUserTunnel{}, &model.ForwardPortBinding{}, &model.ForwardRuntimeJob{},
 		&model.ForwardTrafficCursor{},
-		&model.OperationLog{}, &model.LoadBalancer{},
+		&model.OperationLog{},
 		&model.UserSubscriptionGroup{}, &model.PlanSubscriptionGroup{},
 		&model.Event{}, &model.SubscriptionGroup{}, &model.SubscriptionTemplate{},
 		&model.ServerVMess{}, &model.ServerVLESS{}, &model.ServerTrojan{},
