@@ -1,11 +1,6 @@
 package handler
 
 import (
-	"crypto/md5" // #nosec G501 -- EPay's public callback protocol uses MD5 signatures.
-	"encoding/hex"
-	"net/url"
-	"sort"
-	"strings"
 	"testing"
 
 	"github.com/AnixOps/anix-control/v5/internal/service"
@@ -14,27 +9,6 @@ import (
 
 	_ "github.com/AnixOps/anix-control/v5/internal/payment/gateways"
 )
-
-const epayTestKey = "epay-merchant-key"
-
-// epaySigned is an EPay callback query signed with the merchant key.
-func epaySigned(params map[string]string, key string) string {
-	keys := make([]string, 0, len(params))
-	for k := range params {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	pairs := make([]string, 0, len(keys))
-	query := url.Values{}
-	for _, k := range keys {
-		pairs = append(pairs, k+"="+params[k])
-		query.Set(k, params[k])
-	}
-	sum := md5.Sum([]byte(strings.Join(pairs, "&") + key)) // #nosec G401 -- EPay's public callback protocol uses MD5 signatures.
-	query.Set("sign", hex.EncodeToString(sum[:]))
-	query.Set("sign_type", "MD5")
-	return query.Encode()
-}
 
 func TestGatewayConfigRedaction(t *testing.T) {
 	for _, key := range []string{"key", "secret_key", "webhook_secret", "client_secret", "private_key", "api_key", "api_v3_key", "sign_key", "access_token", "password"} {

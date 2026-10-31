@@ -33,12 +33,6 @@ var (
 	testDBMu sync.Mutex
 )
 
-type roundTripFunc func(*http.Request) (*http.Response, error)
-
-func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
-	return f(req)
-}
-
 // initTestDB initializes the test database once
 func initTestDB() *gorm.DB {
 	testDBMu.Lock()
@@ -3293,8 +3287,6 @@ func (s *SubscriptionAdminHandlerTestSuite) TestPreviewSubscription_UserNotFound
 func TestSubscriptionAdminHandler(t *testing.T) {
 	suite.Run(t, new(SubscriptionAdminHandlerTestSuite))
 }
-
-const x402TestSecret = "x402-test-secret"
 
 // KnowledgeHandlerTestSuite Knowledge Handler 测试套件
 type KnowledgeHandlerTestSuite struct {

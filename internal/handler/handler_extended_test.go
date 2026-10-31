@@ -15,10 +15,6 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
-func intPtr(v int64) *int64 {
-	return &v
-}
-
 func strPtr(v string) *string {
 	return &v
 }

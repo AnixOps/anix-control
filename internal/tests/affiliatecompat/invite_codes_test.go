@@ -10,7 +10,6 @@ import (
 	"math"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -27,8 +26,6 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
-
-var inviteCodePattern = regexp.MustCompile(`^[0-9a-f]{8}$`)
 
 // The kernel and the package derive the same advisory lock for a user.
 func TestInviteCodeLockKeysAreTheKernels(t *testing.T) {
