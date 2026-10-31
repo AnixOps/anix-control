@@ -58,6 +58,7 @@
 
 ### Changed
 
+- The cross-repository Agent E2E drops the nftables-only forward scenarios and the root/netns lane, because the Agent removed the nftables engine.
 - The cross-repository Agent E2E runs the Agent's VLESS node on anixcore (built
   from the pinned `networkcore_anixops`, `NETWORKCORE_REF`) instead of the
   sing-box core, which the Agent no longer carries. The Agent is built with
