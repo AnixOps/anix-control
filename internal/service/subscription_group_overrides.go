@@ -90,7 +90,8 @@ func applyNodeOverrides(parsed *model.ParsedNode, nodeID, protocolID uint, raw s
 	if len(edit) == 0 {
 		return
 	}
-	cur, err := json.Marshal(parsed)
+	view := editableOf(parsed)
+	cur, err := json.Marshal(view)
 	if err != nil {
 		return
 	}
@@ -107,10 +108,45 @@ func applyNodeOverrides(parsed *model.ParsedNode, nodeID, protocolID uint, raw s
 	if err != nil {
 		return
 	}
-	var out model.ParsedNode
+	var out nodeEditable
 	if json.Unmarshal(buf, &out) == nil {
-		*parsed = out
+		out.applyTo(parsed)
 	}
+}
+
+// nodeEditable is the part of a ParsedNode a group may edit (the keys of
+// overridableFields). It holds no credential, so editing never marshals one.
+type nodeEditable struct {
+	Name              string         `json:"name"`
+	Server            string         `json:"server"`
+	Port              int            `json:"port"`
+	ServerName        string         `json:"server_name"`
+	ALPN              string         `json:"alpn"`
+	TLSFingerprint    string         `json:"tls_fingerprint"`
+	SkipCertVerify    bool           `json:"skip_cert_verify"`
+	Flow              string         `json:"flow"`
+	Transport         string         `json:"transport"`
+	TransportSettings map[string]any `json:"transport_settings"`
+	Settings          map[string]any `json:"settings"`
+	RealityPublicKey  string         `json:"reality_public_key"`
+	RealityShortID    string         `json:"reality_short_id"`
+	RealitySpiderX    string         `json:"reality_spider_x"`
+}
+
+func editableOf(n *model.ParsedNode) nodeEditable {
+	return nodeEditable{
+		Name: n.Name, Server: n.Server, Port: n.Port, ServerName: n.ServerName, ALPN: n.ALPN,
+		TLSFingerprint: n.TLSFingerprint, SkipCertVerify: n.SkipCertVerify, Flow: n.Flow,
+		Transport: n.Transport, TransportSettings: n.TransportSettings, Settings: n.Settings,
+		RealityPublicKey: n.RealityPublicKey, RealityShortID: n.RealityShortID, RealitySpiderX: n.RealitySpiderX,
+	}
+}
+
+func (e nodeEditable) applyTo(n *model.ParsedNode) {
+	n.Name, n.Server, n.Port, n.ServerName, n.ALPN = e.Name, e.Server, e.Port, e.ServerName, e.ALPN
+	n.TLSFingerprint, n.SkipCertVerify, n.Flow = e.TLSFingerprint, e.SkipCertVerify, e.Flow
+	n.Transport, n.TransportSettings, n.Settings = e.Transport, e.TransportSettings, e.Settings
+	n.RealityPublicKey, n.RealityShortID, n.RealitySpiderX = e.RealityPublicKey, e.RealityShortID, e.RealitySpiderX
 }
 
 func cleanOverrides(edits map[string]map[string]any) (map[string]map[string]any, error) {
@@ -189,7 +225,7 @@ func (s *SubscriptionService) GroupProtocolNodes(groupID, protocolID uint) ([]Gr
 		}
 		seen[key] = true
 		defaults := map[string]any{}
-		raw, _ := json.Marshal(node)
+		raw, _ := json.Marshal(editableOf(node))
 		all := map[string]any{}
 		_ = json.Unmarshal(raw, &all)
 		for name := range overridableFields {
