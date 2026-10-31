@@ -3282,7 +3282,7 @@ section 9, "Upgrades (O4)"; protocol: `sdk/api/agent/v1/PROTOCOL.md`,
   https address nodes download from.
 - **Put the anx-node release next to it** (optional, from 5.0.0-rc.11).
   Copy an anx-node release as its workflow uploads it
-  (`anx-node-<version>-x86_64-linux-musl.tar.gz`, `SHA256SUMS`,
+  (`anx-node-<version>-x86_64-linux-musl.tar.gz`, plus `-aarch64-` for arm64 nodes, `SHA256SUMS`,
   `SHA256SUMS.sig`) into `<artifact_dir>/anx-node/<version>/`. Campaigns
   then offer the newest release with the Agent, nodes that already run the
   target included, and the updater installs it as the Agent's anixcore

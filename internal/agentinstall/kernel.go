@@ -31,6 +31,7 @@ import (
 // KernelArches maps an architecture to anx-node's release target.
 var KernelArches = map[string]string{
 	"amd64": "x86_64",
+	"arm64": "aarch64",
 }
 
 // ErrKernelRelease means the kernel release cannot be pushed to nodes.
