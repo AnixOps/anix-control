@@ -32,6 +32,9 @@ env:
   # signed Agent plugins, the cross-repository E2E and the live WebUI gate.
   # Move it to the Agent release commit with every Agent tag (docs/RELEASING.md).
   AGENT_REF: 'a6ad9fd499d11e1e1cab11fbcaca106f0a8ecd22'   # anix-agent v5.0.0-rc.22
+  # The networkcore_anixops commit whose anixcore the cross-repository E2E
+  # runs as the Agent's node kernel.
+  NETWORKCORE_REF: 'c0418ad48313045bf3c07691a8d083c6ddaf2252'
 
 jobs:
   changes:
@@ -1746,6 +1749,15 @@ jobs:
           ref: ${{ env.AGENT_REF }}
           path: V2bX_AnixOps
 
+      # The node kernel the Agent's anixcore core runs (the Agent no longer
+      # carries sing-box or Xray): built from the pinned networkcore_anixops.
+      - name: Checkout pinned networkcore source
+        uses: actions/checkout@v7
+        with:
+          repository: AnixOps/networkcore_anixops
+          ref: ${{ env.NETWORKCORE_REF }}
+          path: networkcore_anixops
+
       - name: Setup Go
         uses: actions/setup-go@v6
         with:
@@ -1759,6 +1771,16 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: '3.x'
+
+      - name: Build anixcore
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          mkdir -p "${E2E_BIN}"
+          cargo build --locked --release -p anixcore --manifest-path networkcore_anixops/Cargo.toml
+          install -m 0755 networkcore_anixops/target/release/anixcore "${E2E_BIN}/anixcore"
 
       - name: Install nftables and iproute2
         shell: bash
@@ -1782,7 +1804,7 @@ jobs:
           set -euo pipefail
           mkdir -p "${E2E_BIN}" "${E2E_LOGS}"
           go build -o "${E2E_BIN}/anix-control" ./cmd/server
-          go -C V2bX_AnixOps build -trimpath -tags sing \
+          go -C V2bX_AnixOps build -trimpath -tags anixcore \
             -ldflags "-X github.com/AnixOps/anix-agent/v5/cmd.version=5.0.0-rc.22-e2e" \
             -o "${E2E_BIN}/anix-agent" .
           for arch in amd64 arm64; do

@@ -16,7 +16,7 @@ import (
 
 // agentNode is the real Agent of the suite: a credential-only proxy node as
 // Control's installer writes it (no ApiKey, a one-time enrollment
-// credential, the stream data plane over mTLS, every core compiled in),
+// credential, the stream data plane over mTLS, the anixcore core),
 // plus the plugin supervisor (machine-telemetry) and the forward component
 // of a proxy node.
 type agentNode struct {
@@ -68,6 +68,7 @@ type agentSettings struct {
 	GRPCHost         string
 	SigningPublicKey string
 	RealNftables     bool
+	AnixcoreBinary   string
 	gostRuntimeDir   string
 }
 
@@ -75,8 +76,13 @@ func (a *agentNode) writeConfig(t *testing.T, socketBase string) {
 	t.Helper()
 	settings := currentAgentSettings
 	config := map[string]any{
-		"Log":   map[string]any{"Level": "debug", "Output": ""},
-		"Cores": []any{},
+		"Log": map[string]any{"Level": "debug", "Output": ""},
+		"Cores": []any{map[string]any{
+			"Type":                "anixcore",
+			"BinaryPath":          settings.AnixcoreBinary,
+			"RuntimeDir":          filepath.Join(a.dir, "anixcore"),
+			"AllowPrivateTargets": true,
+		}},
 		"Nodes": []any{map[string]any{
 			"ApiHost":                   "https://localhost",
 			"Transport":                 "grpc",

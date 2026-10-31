@@ -17,7 +17,7 @@ func TestRealAgentEndToEnd(t *testing.T) {
 	s.seedNode(t)
 	s.createUser(t, "e2e-user-1@anixops.test")
 
-	currentAgentSettings = agentSettings{GRPCHost: s.proxy.Addr(), SigningPublicKey: s.keys.SigningPublicKey, RealNftables: s.netns}
+	currentAgentSettings = agentSettings{GRPCHost: s.proxy.Addr(), SigningPublicKey: s.keys.SigningPublicKey, RealNftables: s.netns, AnixcoreBinary: s.bins.Anixcore}
 	s.agent = newAgentNode(t, filepath.Join(s.dir, "agent"), s.nodeID)
 	s.agent.proc = newProcess("agent", s.bins.Agent, s.agent.dir, filepath.Join(s.logDir, "agent.log"),
 		agentEnv(s.agent.shimDir, s.keys.ServerCAFile), "server", "-c", s.agent.configPath, "--watch=false")
