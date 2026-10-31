@@ -162,6 +162,9 @@ func CheckStatus(status *networkv1.NetworkStatus, deviceRef string) error {
 			}
 		}
 	}
+	if err := checkReverseProxyStatus(status.GetReverseProxies()); err != nil {
+		return err
+	}
 	for i, iface := range status.GetInterfaces() {
 		if err := checkText(iface.GetName()); err != nil {
 			return invalid("interfaces[%d]: %v", i, err)

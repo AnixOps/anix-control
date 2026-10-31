@@ -100,6 +100,8 @@ message NetworkPlan {
   // Panel forwarding routes that enter at this device (forward.v1
   // ENGINE_NETWORK; implementation.md step 5).
   repeated PortForward port_forwards = 10;
+  // Panel reverse proxies (HTTP sites) that listen on this device.
+  repeated ReverseProxy reverse_proxies = 11;
 }
 
 // PortForward relays a listen port to fixed targets, as a panel forwarding
@@ -164,6 +166,56 @@ message ForwardHealth {
 message ForwardBreaker {
   uint32 failure_threshold = 1;
   uint32 open_ms = 2;
+}
+
+// ReverseProxy serves HTTP sites on a listen port of the device: requests
+// are matched to a site by Host and to a route by path prefix, then sent
+// to one of the route's upstreams. Upstreams are dialed through the next
+// hop, so an origin can sit behind a route's transport. Needs a kernel
+// with the reverse_proxy feature.
+message ReverseProxy {
+  // The panel reverse proxy listener id.
+  string id = 1;
+  Endpoint listen = 2;
+  // PEM certificate chain and private key that cover every site's hosts;
+  // both empty serve plain HTTP.
+  string certificate_pem = 3;
+  string private_key_pem = 4;
+  repeated ReverseProxySite sites = 5;
+  oneof next {
+    // A local internet egress.
+    string egress_id = 6;
+    // The first transport; the last device dials the upstreams.
+    string transport_id = 7;
+  }
+}
+
+// ReverseProxySite is one site: the names it answers and its routes.
+message ReverseProxySite {
+  // "example.com", "*.example.com" (names under it) or "*".
+  repeated string hosts = 1;
+  repeated ReverseProxyRoute routes = 2;
+  // Answers every request with a 308 to the same URL over https; for a
+  // plain listener next to a TLS one. Routes are then unused.
+  bool redirect_https = 3;
+}
+
+// ReverseProxyRoute sends requests under a path prefix to upstreams.
+message ReverseProxyRoute {
+  // "/" or a prefix without a trailing slash, matched on path segments.
+  string path = 1;
+  // Removes path from the request path sent upstream.
+  bool strip_prefix = 2;
+  // "client" (default) or "upstream": the Host sent upstream.
+  string host_header = 3;
+  // A fixed Host; overrides host_header.
+  string host = 4;
+  // Set on every request upstream; not Host or framing headers.
+  map<string, string> headers = 5;
+  repeated ForwardTarget upstreams = 6;
+  // Balancing, health checks and circuit breaker of the upstreams;
+  // proxy_protocol, bandwidth_bps and max_conns are unused.
+  ForwardPolicy policy = 7;
 }
 
 // Line is one uplink of the device: a network interface and its carrier.
@@ -441,6 +493,19 @@ message NetworkStatus {
   repeated PublicKey public_keys = 6;
   int64 observed_at_unix_ms = 7;
   repeated PortForwardStatus port_forwards = 8;
+  repeated ReverseProxyStatus reverse_proxies = 9;
+}
+
+// ReverseProxyStatus is a reverse proxy listener's state and bytes,
+// counted as PortForwardStatus counts.
+message ReverseProxyStatus {
+  string id = 1;
+  ComponentState state = 2;
+  string detail = 3;
+  uint64 up_bytes = 4;
+  uint64 down_bytes = 5;
+  // Every route's upstreams, sites and routes in plan order.
+  repeated ForwardTargetHealth upstreams = 6;
 }
 
 // PortForwardStatus is a port forward's state and bytes. The counters grow
