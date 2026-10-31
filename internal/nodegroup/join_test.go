@@ -15,14 +15,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func decodeDocument(t *testing.T, document *string) map[string]any {
-	t.Helper()
-	require.NotNil(t, document)
-	var decoded map[string]any
-	require.NoError(t, json.Unmarshal([]byte(*document), &decoded))
-	return decoded
-}
-
 func TestJoinCreatesACleanNode(t *testing.T) {
 	forEachDatabase(t, func(t *testing.T, f *fixture) {
 		rate := 2.0

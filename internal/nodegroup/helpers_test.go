@@ -8,7 +8,6 @@ import (
 	"crypto/x509/pkix"
 	"encoding/base64"
 	"encoding/hex"
-	"encoding/json"
 	"os"
 	"strings"
 	"sync"
@@ -184,13 +183,6 @@ func (f *fixture) join(t *testing.T, request JoinRequest) (Joined, error) {
 		request.PeerAddress = "198.51.100.200"
 	}
 	return f.svc.Join(t.Context(), request)
-}
-
-func rawJSON(t *testing.T, value any) json.RawMessage {
-	t.Helper()
-	encoded, err := json.Marshal(value)
-	require.NoError(t, err)
-	return encoded
 }
 
 func (f *fixture) audits(t *testing.T, action string) []model.OperationLog {
