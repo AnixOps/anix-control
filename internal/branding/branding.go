@@ -7,7 +7,7 @@ const (
 	AgentName         = "AnixOps Agent"
 	ControlBinaryName = "anix-control"
 	AgentBinaryName   = "anix-agent"
-	DefaultVersion    = "5.0.0-rc.22"
+	DefaultVersion    = "5.0.0-rc.23"
 
 	ControlRepositoryURL = "https://github.com/AnixOps/anix-control"
 	AgentRepositoryURL   = "https://github.com/AnixOps/anix-agent"
