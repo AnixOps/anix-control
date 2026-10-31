@@ -37,10 +37,11 @@ Control runs. Control migrates the restored database at its next start.
 
 The commands read the configuration the way Control does (-config, else
 ANIX_CONTROL_CONFIG, else config/config.yaml, plus the ANIX_CONTROL_*
-variables). Backups need SQLite.
+variables). Backups cover SQLite and PostgreSQL; a PostgreSQL panel needs
+pg_dump and pg_restore (the server's major version or newer) on this machine.
 
 Exit status: 0 done; 1 the backup or its verification failed; 2 a usage or
-configuration error; 3 refused (PostgreSQL, Control running, a restore
+configuration error; 3 refused (an unsupported driver, Control running, a restore
 running, a target that is not empty, a bundle of a newer Control).`
 
 // Exit statuses of `backup` (backupCommandUsage).
@@ -157,6 +158,7 @@ func (c *backupCommand) load(configFlag string, dataDir string, withKey bool) (*
 	switch strings.ToLower(strings.TrimSpace(cfg.Database.Driver)) {
 	case "", "sqlite", "sqlite3":
 		cfg.Database.Database = resolveSQLitePath(cfg.Database.Database, path)
+	case "postgres", "postgresql":
 	default:
 		return cfg, backup.ErrNeedsSQLite
 	}
@@ -176,8 +178,10 @@ func (c *backupCommand) load(configFlag string, dataDir string, withKey bool) (*
 // open opens the existing database without migrating it, under the
 // service lock (a restore must not run meanwhile).
 func (c *backupCommand) open(cfg *config.Config) (*backup.Manager, func(), error) {
-	if _, err := os.Stat(cfg.Database.Database); err != nil {
-		return nil, nil, fmt.Errorf("%w: the database %s: %v", errBackupConfig, cfg.Database.Database, err)
+	if !isPostgresDriver(cfg.Database.Driver) {
+		if _, err := os.Stat(cfg.Database.Database); err != nil {
+			return nil, nil, fmt.Errorf("%w: the database %s: %v", errBackupConfig, cfg.Database.Database, err)
+		}
 	}
 	lock, err := backup.LockService(cfg.DataDir)
 	if err != nil {
@@ -343,8 +347,14 @@ func (c *backupCommand) restore(arguments []string) int {
 	if err != nil {
 		return c.fail(err)
 	}
+	var pg *backup.Postgres
+	if isPostgresDriver(cfg.Database.Driver) {
+		if pg, err = backup.PostgresFromConfig(&cfg.Database); err != nil {
+			return c.fail(fmt.Errorf("%w: %v", errBackupConfig, err))
+		}
+	}
 	result, err := backup.Restore(context.Background(), backup.RestoreOptions{
-		Bundle: positional[0], Driver: cfg.Database.Driver, DataDir: cfg.DataDir, DatabasePath: cfg.Database.Database,
+		Bundle: positional[0], Driver: cfg.Database.Driver, Postgres: pg, DataDir: cfg.DataDir, DatabasePath: cfg.Database.Database,
 		ConfigPath: c.configPath, Replace: *replace, ProgramVersion: version,
 	})
 	if err != nil {
@@ -359,8 +369,12 @@ func (c *backupCommand) restore(arguments []string) int {
 	if result.ConfigUnchanged {
 		c.printf("  the configuration %s already was the bundle's\n", c.configPath)
 	}
-	if result.ReplacedDir != "" {
-		c.printf("Moved aside into %s (nothing was deleted):\n", result.ReplacedDir)
+	if len(result.Moved) > 0 {
+		if result.ReplacedDir != "" {
+			c.printf("Moved aside into %s (nothing was deleted):\n", result.ReplacedDir)
+		} else {
+			c.printf("Moved aside (nothing was deleted):\n")
+		}
 		for _, path := range result.Moved {
 			c.printf("  %s\n", path)
 		}

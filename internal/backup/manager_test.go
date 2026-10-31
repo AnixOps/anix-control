@@ -169,8 +169,8 @@ func TestPruneRemovesWhatAnInterruptedBackupLeft(t *testing.T) {
 	assert.ElementsMatch(t, []string{"verify-new", "import-report.json"}, ls(t, scratch), "a recent scratch directory and other files stay")
 }
 
-// On PostgreSQL every operation answers ErrNeedsSQLite and nothing is
-// written.
+// A PostgreSQL Control without a connection for backups answers
+// ErrNeedsSQLite and nothing is written.
 func TestPostgreSQLNeedsSQLite(t *testing.T) {
 	ctx := context.Background()
 	p := newPanel(t)

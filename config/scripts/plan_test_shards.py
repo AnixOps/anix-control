@@ -124,6 +124,8 @@ WEIGHTS: dict[str, dict[str, float]] = {
         "internal/packagestore": 4.4,
         "internal/kernelforward": 4.3,
         "internal/agentpki": 2.3,
+        # Not measured in CI yet: the PostgreSQL backup round trip.
+        "internal/backup": 8.0,
         # Not measured in CI yet: the schema migration tests on both
         # dialects (local run).
         "internal/database/migrations": 12.0,
