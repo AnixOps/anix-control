@@ -47,7 +47,9 @@ v4.0.0 (published 2026-07-20) is plugin-only at the routing level only.
   ticket (8) and wireguard (1). 50 routes are `kernel-owned`: they stay in the
   kernel by design, and each row says why. The other 13 are `bridged` until a
   kernel contract lets their package serve them (section 3.2 lists what
-  unblocks them). None is `native` yet. The identity routes are
+  unblocks them). The 43 routes of affiliate (10), order (13) and payment (20)
+  are `native`: their legacy handlers are deleted (5.0.0-rc.22), the router
+  binds the bare gateway and the host answers alone. The identity routes are
   `identity-bridge`. `check_plugin_only_routes.py` enforces the map against
   the router, the identity bridge and the package hosts.
 - Request path: gin middleware -> `compatv2` gateway -> route resolution
@@ -234,7 +236,7 @@ by `check_plugin_only_routes.py` (counts in section 1).
 | Mode | Meaning | Routes |
 |---|---|---|
 | `native-flagged` | the package host has a native handler, proved by a parity test; the legacy handler stays, so every runtime mode works | 173 |
-| `native` | the legacy handler is deleted and the host answers alone | 0 |
+| `native` | the legacy handler is deleted and the host answers alone | 43 (affiliate, order, payment) |
 | `bridged` | the host only relays, until a kernel contract lets the package serve the route | 13 |
 | `kernel-owned` | the host only relays, by design: the route stays in the kernel, and the row's `reason` says why | 50 |
 
@@ -298,7 +300,8 @@ a trusted proxy (`server.trusted_proxies`), and no forwarding header is
 passed to package hosts or bridged handlers.
 
 Status (2026-10-01): every installation runs every route `legacy` unless an
-operator sets another mode; no route is `native` yet.
+operator sets another mode; no route is `native` yet. (Superseded: affiliate,
+order and payment are `native` since 5.0.0-rc.22.)
 
 ### 3.3 Typed kernel operations
 

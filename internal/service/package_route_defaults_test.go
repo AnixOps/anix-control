@@ -98,7 +98,7 @@ func TestPackageRouteDefaultsGate(t *testing.T) {
 			entry, listed := catalog[route]
 			require.True(t, listed, "%s is not in package-extraction.json", route)
 			assert.Equal(t, pkg.PackageID, entry.PackageID, route)
-			assert.Equal(t, RouteCatalogNativeFlagged, entry.Mode, "%s must be native-flagged", route)
+			assert.Contains(t, []string{RouteCatalogNativeFlagged, RouteCatalogNative}, entry.Mode, "%s must be native-flagged or native", route)
 			assert.NotEqual(t, RouteCatalogKernelOwned, entry.Mode, route)
 			assert.NotContains(t, IdentityGroupARoutes, route)
 			transport, known := transports[route]

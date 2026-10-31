@@ -45,12 +45,20 @@ empty. The four couplings that existed were cut like this:
 | `NotifyOrderPaid(model.Order)` sat in the notification service | the method moved to `order_notification.go` |
 | registration checked `model.InviteCode` in two places (`auth_service.go`, `kernelidentity`) | `service.RedeemInviteCode` calls the redeemer that `invite_registration.go` registers with `RegisterInviteRedeemer`; without one, a registration with an invite code is refused |
 
-## Why The Legacy Handlers Stay
+## The Commercial Routes Are Native
 
-Every `/api/v2` route of these packages is `native-flagged`: the package host
-has a native implementation and the kernel's legacy handler stays as the
-fallback for every route mode (`docs/architecture/package-extraction.md`). A
-route becomes `native`, and its legacy handler is deleted, only through the
-rehearsal and owner sign-off that the extraction document defines. That
-deletion therefore belongs to the extraction milestones, not to the boundary
-work, and the move to the private repository follows it.
+The 43 `/api/v2` routes of `affiliate` (10), `order` (13) and `payment` (20)
+are extraction mode `native`: their legacy handlers (`internal/handler`
+`order*`, `coupon*`, `admin_coupon*`, `payment*`, `invite.go`) are deleted,
+`router.go` binds the bare gateway, and the package host answers alone. They
+were already on the rehearsed route list
+(`config/package-route-defaults.json`) and ran natively in every install;
+the legacy handlers were only the fallback. The legacy-versus-native parity
+tests (`internal/tests/ordercompat`, `paymentcompat`, and the parity tests of
+`affiliatecompat`) went with them, since the oracle is gone; the package's own
+tests (`packages/*/native`) and the three `affiliatecompat` lock tests stay.
+
+What the kernel keeps of the set is what it still serves itself: the services
+(`OrderService`, `PaymentGatewayService`, `InviteService`) behind
+`KernelOrder`, the payment reconciler and invite-code administration, and the
+models (the schema stays in the kernel). They move with the set.
