@@ -270,6 +270,32 @@ describe('anixops engine (D12)', () => {
     expect(wrapper.emitted('update').at(-1)[0].ingress.network_transport_id).toBe('')
   })
 
+  it('picks how Control links a network hop: the A2 jacket, a bare ANX-Line or a dial-back', async () => {
+    const hop = { _key: 'k', engine: 'ENGINE_NETWORK', node_refs: ['proxy-2'], portMode: 'auto', dial_address: '', ingress: { security: 'LINK_SECURITY_NETWORK', network_transport_id: '' } }
+    const wrapper = track(mount(HopCard, {
+      props: { hop, previous: { engine: 'ENGINE_NETWORK', node_refs: ['proxy-1'] }, index: 1, total: 2, nodes: NODES, errorText: () => '' },
+      attachTo: document.body
+    }))
+    const select = label => wrapper.findAllComponents(UiSelect).find(item => item.props('label') === label)
+    expect(select('Transport mode').props('modelValue')).toBe('*')
+    expect(select('Transport mode').props('options').map(option => option.value))
+      .toEqual(['*', 'NETWORK_TRANSPORT_MODE_ANX_LINE', 'NETWORK_TRANSPORT_MODE_ANX_LINE_REVERSE'])
+    expect(select('Carriers')).toBeUndefined()
+    select('Transport mode').vm.$emit('update:modelValue', 'NETWORK_TRANSPORT_MODE_ANX_LINE')
+    expect(wrapper.emitted('update').at(-1)[0].ingress).toMatchObject({ network_mode: 'NETWORK_TRANSPORT_MODE_ANX_LINE', network_carriers: [] })
+
+    await wrapper.setProps({ hop: { ...hop, ingress: { ...hop.ingress, network_mode: 'NETWORK_TRANSPORT_MODE_ANX_LINE', network_carriers: [] } } })
+    expect(select('Carriers').props('modelValue')).toBe('tcp')
+    select('Carriers').vm.$emit('update:modelValue', 'quic-tcp')
+    expect(wrapper.emitted('update').at(-1)[0].ingress.network_carriers).toEqual(['NETWORK_CARRIER_QUIC', 'NETWORK_CARRIER_TCP'])
+    select('Transport mode').vm.$emit('update:modelValue', '*')
+    expect(wrapper.emitted('update').at(-1)[0].ingress).toMatchObject({ network_mode: '', network_carriers: [], network_multipath: false })
+
+    // A named transport has its own settings: no mode to pick.
+    await wrapper.setProps({ hop: { ...hop, ingress: { ...hop.ingress, network_transport_id: 'tr-hk' } } })
+    expect(select('Transport mode')).toBeUndefined()
+  })
+
   it('offers every Agent node to a network hop, with or without a line', () => {
     const wrapper = track(mount(HopCard, {
       props: {

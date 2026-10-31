@@ -258,6 +258,23 @@ function nextKey() {
   return `k${keySeq}`
 }
 
+// networkIngress is a network hop's link as the API takes it: a named
+// transport, or how Control links the devices (no mode: the A2 jacket;
+// carriers, multipath and FEC only on a bare ANX-Line).
+function networkIngress(ingress) {
+  const out = { security: NETWORK_SECURITY, network_transport_id: ingress?.network_transport_id || '' }
+  const mode = out.network_transport_id ? '' : (ingress?.network_mode || '')
+  if (!mode || mode === 'NETWORK_TRANSPORT_MODE_UNSPECIFIED') return out
+  out.network_mode = mode
+  if (mode === 'NETWORK_TRANSPORT_MODE_ANX_LINE') {
+    const carriers = ingress.network_carriers || []
+    if (carriers.length) out.network_carriers = [...carriers]
+    if (ingress.network_multipath && carriers.length > 1) out.network_multipath = true
+    if (ingress.network_fec) out.network_fec = true
+  }
+  return out
+}
+
 export function blankHop(index, total, engine = NETWORK_ENGINE) {
   const hop = { _key: nextKey(), role: roleOf(index, total), engine, node_refs: [], port: 0, portMode: 'auto', dial_address: '', network_egress_id: '' }
   if (index > 0) {
@@ -281,7 +298,7 @@ export function setDraftEngine(draft, index, engine) {
     item.engine = network ? NETWORK_ENGINE : engine
     if (position > 0) {
       item.ingress = network
-        ? { security: NETWORK_SECURITY, mux: false, server_name: '', path: '', network_transport_id: item.ingress?.network_transport_id || '' }
+        ? { ...(item.ingress || {}), security: NETWORK_SECURITY, mux: false, server_name: '', path: '', network_transport_id: item.ingress?.network_transport_id || '' }
         : { security: 'LINK_SECURITY_RAW', mux: false, server_name: '', path: '', network_transport_id: '' }
     }
     if (network) {
@@ -401,7 +418,7 @@ export function draftToRoute(draft) {
     if (hop.engine === NETWORK_ENGINE) {
       out.port = 0
       out.dial_address = ''
-      if (index > 0) out.ingress = { security: NETWORK_SECURITY, network_transport_id: hop.ingress?.network_transport_id || '' }
+      if (index > 0) out.ingress = networkIngress(hop.ingress)
       if (index === draft.hops.length - 1) out.network_egress_id = hop.network_egress_id || ''
       return out
     }

@@ -40,6 +40,9 @@ type Forward struct {
 	// Via are the nodes of the hops after the entry, when known: segment j
 	// must reach Via[j].
 	Via []string
+	// Links are how Control links segment j when it names no transport
+	// (Segments[j] empty); a missing one is the A2 jacket.
+	Links []Link
 	// Egress is the internet egress on the last device.
 	Egress string
 	// Paused routes are left out.

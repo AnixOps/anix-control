@@ -1,6 +1,8 @@
 package networkmodel
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"net/netip"
 	"sort"
@@ -45,6 +47,55 @@ const (
 	// AutoServerName is the jacket's server name of an auto transport.
 	AutoServerName = "www.apple.com"
 )
+
+// Link is how Control links two devices for a hop that names no
+// transport (forward.v1 LinkTransport.network_mode): the A2 jacket by
+// default, the bare ANX-Line on trusted segments, or the bare ANX-Line
+// dialed back by the next device.
+type Link struct {
+	Mode LinkMode
+	// Carriers orders a bare ANX-Line's carriers ("c1" TCP, "c2" QUIC);
+	// empty is TCP only.
+	Carriers  []string
+	Multipath bool
+	FEC       bool
+}
+
+// LinkMode is the kind of transport of a Link.
+type LinkMode string
+
+const (
+	// LinkAnxA is ANX-Line under the A2 jacket, on TCP (kind anx).
+	LinkAnxA LinkMode = ""
+	// LinkAnxLine is the bare ANX-Line (kind anx_line, trusted), its
+	// accepting end listening on TCP and QUIC at AutoLinePort.
+	LinkAnxLine LinkMode = "line"
+	// LinkAnxLineReverse is the bare ANX-Line on TCP that the accepting
+	// device dials back to the dialing device's DefaultReversePort.
+	LinkAnxLineReverse LinkMode = "reverse"
+)
+
+// AutoLinePort is where an auto bare ANX-Line hop ingress listens (TCP and
+// QUIC), apart from the A2 jacket's AutoHopPort: one anx-server serves one
+// set of listen addresses and server name.
+const AutoLinePort = AutoHopPort + 2
+
+// suffix answers the part of an auto transport's id that tells l from
+// the A2 jacket and from other shapes of the same mode: "" for the
+// jacket.
+func (l Link) suffix() string {
+	switch l.Mode {
+	case LinkAnxLine:
+		if len(l.Carriers) == 0 && !l.Multipath && !l.FEC {
+			return "-line"
+		}
+		sum := sha256.Sum256([]byte(fmt.Sprintf("%v|%t|%t", l.Carriers, l.Multipath, l.FEC)))
+		return "-line-" + hex.EncodeToString(sum[:3])
+	case LinkAnxLineReverse:
+		return "-rev"
+	}
+	return ""
+}
 
 // natEntry is a NAT node entry: the public address and port ranges a
 // device is reached at.
@@ -152,7 +203,7 @@ func complete(doc *Document, forwards []Forward, devices map[string]device) (*Do
 			if j >= len(forward.Via) || at == "" {
 				break
 			}
-			forward.Segments[j] = a.transport(at, forward.Via[j])
+			forward.Segments[j] = a.transport(at, forward.Via[j], forward.link(j))
 			auto0 = auto0 || j == 0
 			at = forward.Via[j]
 		}
@@ -162,7 +213,7 @@ func complete(doc *Document, forwards []Forward, devices map[string]device) (*Do
 			case len(forward.Segments) == 0:
 				a.internetEgress(entry)
 			case auto0 && len(forward.Via) > 0:
-				a.transport(entry, forward.Via[0])
+				a.transport(entry, forward.Via[0], forward.link(0))
 			}
 		}
 		if forward.Egress == "" && at != "" {
@@ -246,17 +297,33 @@ func (a *autoCompleter) internetEgress(node string) string {
 	return id
 }
 
-// transport answers the auto transport from one device to another, adding
-// it with its hop egress and hop ingress; "" when the next device has no
-// address to be reached at.
-func (a *autoCompleter) transport(from, to string) string {
+// link answers how Control links segment j: the forward's Link, or the
+// A2 jacket.
+func (f *Forward) link(j int) Link {
+	if j < len(f.Links) {
+		return f.Links[j]
+	}
+	return Link{}
+}
+
+// transport answers the auto transport from one device to another as
+// link says, adding it with its hop egress and hop ingress; "" when the
+// next device (or, reversed, the dialing one) has no address to be
+// reached at.
+func (a *autoCompleter) transport(from, to string, link Link) string {
 	next := a.devices[to]
 	host := strings.TrimSpace(next.Host)
 	if host == "" || from == to {
 		return ""
 	}
+	if link.Mode == LinkAnxLineReverse && strings.TrimSpace(a.devices[from].Host) == "" {
+		return ""
+	}
 	family := a.family(to)
-	port := next.hopPort()
+	port, ingressID := next.hopPort(), AutoPrefix+to+"-hop"
+	if link.Mode == LinkAnxLine {
+		port, ingressID = next.hopPort()+AutoLinePort-AutoHopPort, ingressID+"-line"
+	}
 	ingress := Ingress{Line: a.line(to), Kind: network.IngressDirect, Audience: "hop", Family: family,
 		Listen: Endpoint{Address: "0.0.0.0", Port: port}, PublicHost: strings.Trim(host, "[]")}
 	if family == "v6" {
@@ -266,7 +333,7 @@ func (a *autoCompleter) transport(from, to string) string {
 		ingress.Kind, ingress.PublicHost = network.IngressNAT, strings.Trim(entry.Host, "[]")
 		ingress.PortMap = []PortMap{{Public: PortRange{First: public, Last: public}, Local: PortRange{First: port, Last: port}}}
 	}
-	egress, ingressID := AutoPrefix+from+"-hop", AutoPrefix+to+"-hop"
+	egress := AutoPrefix + from + "-hop"
 	if family == "v6" {
 		egress += "6"
 	}
@@ -278,10 +345,21 @@ func (a *autoCompleter) transport(from, to string) string {
 		ingress.ID = ingressID
 		a.doc.Ingresses = append(a.doc.Ingresses, ingress)
 	}
-	id := AutoPrefix + from + "-" + to
+	id := AutoPrefix + from + "-" + to + link.suffix()
 	if a.add("t:" + id) {
-		a.doc.Transports = append(a.doc.Transports, Transport{ID: id, Kind: KindAnx, FromEgress: egress, ToIngress: ingressID,
-			AnxLine: &AnxLine{ServerName: AutoServerName}})
+		transport := Transport{ID: id, Kind: KindAnx, FromEgress: egress, ToIngress: ingressID,
+			AnxLine: &AnxLine{ServerName: AutoServerName}}
+		switch link.Mode {
+		case LinkAnxLine:
+			// The accepting end offers TCP and QUIC on the same port; the
+			// dialing end's carrier order picks.
+			transport.Kind, transport.Trusted = network.TransportAnxLine, true
+			transport.AnxLine = &AnxLine{CarrierOrder: link.Carriers, Multipath: link.Multipath, FEC: link.FEC, QUICPort: port}
+		case LinkAnxLineReverse:
+			transport.Kind, transport.Trusted = network.TransportAnxLine, true
+			transport.AnxLine = &AnxLine{Reverse: true, ReverseHost: strings.Trim(strings.TrimSpace(a.devices[from].Host), "[]")}
+		}
+		a.doc.Transports = append(a.doc.Transports, transport)
 	}
 	return id
 }

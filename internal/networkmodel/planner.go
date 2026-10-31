@@ -495,11 +495,18 @@ func transportProto(transport *Transport, role networkv1.TransportRole, peer, ke
 			port = publicPort(to, port)
 		}
 		anx.TcpAddr = net.JoinHostPort(host, strconv.FormatUint(uint64(port), 10))
-		if options.QUICPort != 0 {
-			anx.QuicAddr = net.JoinHostPort(host, strconv.FormatUint(uint64(options.QUICPort), 10))
-		}
-		if options.FakeTCPPort != 0 {
-			anx.FaketcpAddr = net.JoinHostPort(host, strconv.FormatUint(uint64(options.FakeTCPPort), 10))
+		for _, carrier := range []struct {
+			port uint32
+			addr *string
+		}{{options.QUICPort, &anx.QuicAddr}, {options.FakeTCPPort, &anx.FaketcpAddr}} {
+			if carrier.port == 0 {
+				continue
+			}
+			p := carrier.port
+			if role == networkv1.TransportRole_TRANSPORT_ROLE_DIAL {
+				p = publicPort(to, p)
+			}
+			*carrier.addr = net.JoinHostPort(host, strconv.FormatUint(uint64(p), 10))
 		}
 	}
 	out.Settings = &networkv1.Transport_AnxLine{AnxLine: anx}

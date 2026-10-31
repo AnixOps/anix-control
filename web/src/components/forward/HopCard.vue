@@ -102,7 +102,7 @@
           :error="errorText(`${path}.ingress.network_transport_id`)"
           :help="t('forwardV4.editor.networkTransportHelp')"
           data-testid="forward-network-transport"
-          @update:model-value="value => setIngress({ security: 'LINK_SECURITY_NETWORK', network_transport_id: value === AUTO ? '' : value })"
+          @update:model-value="value => setIngress({ security: 'LINK_SECURITY_NETWORK', network_transport_id: value === AUTO ? '' : value, ...(value === AUTO ? {} : NO_MODE) })"
         />
         <UiSelect
           v-else-if="index > 0"
@@ -116,6 +116,49 @@
           @update:model-value="value => setIngress({ security: value, mux: value === 'LINK_SECURITY_RAW' ? false : hop.ingress?.mux })"
         />
         <p v-else class="hop-card__note">{{ t('forwardV4.editor.entryNote') }}</p>
+      </div>
+
+      <div v-if="network && index > 0 && !hop.ingress?.network_transport_id" class="hop-card__row">
+        <UiSelect
+          :id="fieldId(`${path}.ingress.network_mode`)"
+          :model-value="hop.ingress?.network_mode || AUTO"
+          size="md"
+          :label="t('forwardV4.editor.networkMode')"
+          :options="modeOptions"
+          :error="errorText(`${path}.ingress.network_mode`)"
+          :help="t('forwardV4.editor.networkModeHelp')"
+          data-testid="forward-network-mode"
+          @update:model-value="setMode"
+        />
+        <UiSelect
+          v-if="hop.ingress?.network_mode === MODE_LINE"
+          :id="fieldId(`${path}.ingress.network_carriers`)"
+          :model-value="carrierChoice"
+          size="md"
+          :label="t('forwardV4.editor.networkCarriers')"
+          :options="carrierOptions"
+          :error="errorText(`${path}.ingress.network_carriers`)"
+          data-testid="forward-network-carriers"
+          @update:model-value="setCarriers"
+        />
+      </div>
+
+      <div v-if="network && index > 0 && !hop.ingress?.network_transport_id && hop.ingress?.network_mode === MODE_LINE" class="hop-card__row">
+        <UiSwitch
+          :id="fieldId(`${path}.ingress.network_multipath`)"
+          :model-value="Boolean(hop.ingress?.network_multipath)"
+          :label="t('forwardV4.editor.networkMultipath')"
+          :description="t('forwardV4.editor.networkMultipathHelp')"
+          :disabled="(hop.ingress?.network_carriers || []).length < 2"
+          @update:model-value="value => setIngress({ network_multipath: value })"
+        />
+        <UiSwitch
+          :id="fieldId(`${path}.ingress.network_fec`)"
+          :model-value="Boolean(hop.ingress?.network_fec)"
+          :label="t('forwardV4.editor.networkFec')"
+          :description="t('forwardV4.editor.networkFecHelp')"
+          @update:model-value="value => setIngress({ network_fec: value })"
+        />
       </div>
 
       <div v-if="network && last" class="hop-card__row">
@@ -372,6 +415,38 @@ const securityOptions = computed(() => Object.keys(SECURITIES)
       disabled: Boolean(description) && security.value !== key
     }
   }))
+
+// How Control links a hop that names no transport: the A2 jacket (AUTO,
+// stored as no mode), the bare ANX-Line on its carriers, or the bare
+// ANX-Line the next device dials back.
+const MODE_LINE = 'NETWORK_TRANSPORT_MODE_ANX_LINE'
+const MODE_REVERSE = 'NETWORK_TRANSPORT_MODE_ANX_LINE_REVERSE'
+const NO_MODE = { network_mode: '', network_carriers: [], network_multipath: false, network_fec: false }
+const modeOptions = computed(() => [
+  { value: AUTO, label: t('forwardV4.editor.modeJacket'), description: t('forwardV4.editor.modeJacketHelp') },
+  { value: MODE_LINE, label: t('forwardV4.editor.modeLine'), description: t('forwardV4.editor.modeLineHelp') },
+  { value: MODE_REVERSE, label: t('forwardV4.editor.modeReverse'), description: t('forwardV4.editor.modeReverseHelp') }
+])
+function setMode(value) {
+  setIngress({ ...NO_MODE, network_mode: value === AUTO ? '' : value })
+}
+// The carrier orders a bare ANX-Line offers; tcp (no carriers) is the default.
+const CARRIER_CHOICES = {
+  tcp: [],
+  quic: ['NETWORK_CARRIER_QUIC'],
+  'quic-tcp': ['NETWORK_CARRIER_QUIC', 'NETWORK_CARRIER_TCP'],
+  'tcp-quic': ['NETWORK_CARRIER_TCP', 'NETWORK_CARRIER_QUIC']
+}
+const carrierOptions = computed(() => Object.keys(CARRIER_CHOICES).map(value => ({ value, label: t(`forwardV4.editor.carriers.${value}`) })))
+const carrierChoice = computed(() => {
+  const carriers = (props.hop.ingress?.network_carriers || []).join(',')
+  if (carriers === 'NETWORK_CARRIER_TCP') return 'tcp'
+  return Object.keys(CARRIER_CHOICES).find(key => CARRIER_CHOICES[key].join(',') === carriers) || 'tcp'
+})
+function setCarriers(value) {
+  const carriers = CARRIER_CHOICES[value] || []
+  setIngress({ network_carriers: carriers, network_multipath: carriers.length > 1 && Boolean(props.hop.ingress?.network_multipath) })
+}
 
 function setIngress(patch) {
   emit('update', { ingress: { ...(props.hop.ingress || {}), ...patch } })

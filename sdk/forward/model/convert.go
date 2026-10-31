@@ -128,7 +128,22 @@ func LinkTransportFromProto(p *forwardv1.LinkTransport) LinkTransport {
 		Path:               p.GetPath(),
 		Carrier:            AnixOpsCarrier(p.GetCarrier()),
 		NetworkTransportID: p.GetNetworkTransportId(),
+		NetworkMode:        NetworkTransportMode(p.GetNetworkMode()),
+		NetworkCarriers:    networkCarriersFromProto(p.GetNetworkCarriers()),
+		NetworkMultipath:   p.GetNetworkMultipath(),
+		NetworkFEC:         p.GetNetworkFec(),
 	}
+}
+
+func networkCarriersFromProto(s []forwardv1.NetworkCarrier) []NetworkCarrier {
+	if len(s) == 0 {
+		return nil
+	}
+	out := make([]NetworkCarrier, len(s))
+	for i, v := range s {
+		out[i] = NetworkCarrier(v)
+	}
+	return out
 }
 
 // ToProto converts the link transport; an empty one converts to nil.
@@ -140,7 +155,22 @@ func (t LinkTransport) ToProto() *forwardv1.LinkTransport {
 		Path:               t.Path,
 		Carrier:            forwardv1.AnixOpsCarrier(t.Carrier),
 		NetworkTransportId: t.NetworkTransportID,
+		NetworkMode:        forwardv1.NetworkTransportMode(t.NetworkMode),
+		NetworkCarriers:    networkCarriersToProto(t.NetworkCarriers),
+		NetworkMultipath:   t.NetworkMultipath,
+		NetworkFec:         t.NetworkFEC,
 	})
+}
+
+func networkCarriersToProto(s []NetworkCarrier) []forwardv1.NetworkCarrier {
+	if len(s) == 0 {
+		return nil
+	}
+	out := make([]forwardv1.NetworkCarrier, len(s))
+	for i, v := range s {
+		out[i] = forwardv1.NetworkCarrier(v)
+	}
+	return out
 }
 
 // TargetFromProto converts a contract target.

@@ -577,6 +577,118 @@ func (TargetPolicy) EnumDescriptor() ([]byte, []int) {
 	return file_api_forward_v1_forward_proto_rawDescGZIP(), []int{8}
 }
 
+// NetworkTransportMode is the transport Control links two devices with
+// for a LINK_SECURITY_NETWORK link that names no network model transport.
+type NetworkTransportMode int32
+
+const (
+	// NETWORK_TRANSPORT_MODE_UNSPECIFIED means ANX_A.
+	NetworkTransportMode_NETWORK_TRANSPORT_MODE_UNSPECIFIED NetworkTransportMode = 0
+	// ANX_A is ANX-Line under the A2 jacket, on TCP: for any segment,
+	// cross-border ones above all.
+	NetworkTransportMode_NETWORK_TRANSPORT_MODE_ANX_A NetworkTransportMode = 1
+	// ANX_LINE is the bare ANX-Line, on the carriers of network_carriers:
+	// only for trusted segments (IX, private line, domestic).
+	NetworkTransportMode_NETWORK_TRANSPORT_MODE_ANX_LINE NetworkTransportMode = 2
+	// ANX_LINE_REVERSE is the bare ANX-Line on TCP, dialed back by the
+	// accepting device, which opens no port: for a next device behind NAT,
+	// on trusted segments only.
+	NetworkTransportMode_NETWORK_TRANSPORT_MODE_ANX_LINE_REVERSE NetworkTransportMode = 3
+)
+
+// Enum value maps for NetworkTransportMode.
+var (
+	NetworkTransportMode_name = map[int32]string{
+		0: "NETWORK_TRANSPORT_MODE_UNSPECIFIED",
+		1: "NETWORK_TRANSPORT_MODE_ANX_A",
+		2: "NETWORK_TRANSPORT_MODE_ANX_LINE",
+		3: "NETWORK_TRANSPORT_MODE_ANX_LINE_REVERSE",
+	}
+	NetworkTransportMode_value = map[string]int32{
+		"NETWORK_TRANSPORT_MODE_UNSPECIFIED":      0,
+		"NETWORK_TRANSPORT_MODE_ANX_A":            1,
+		"NETWORK_TRANSPORT_MODE_ANX_LINE":         2,
+		"NETWORK_TRANSPORT_MODE_ANX_LINE_REVERSE": 3,
+	}
+)
+
+func (x NetworkTransportMode) Enum() *NetworkTransportMode {
+	p := new(NetworkTransportMode)
+	*p = x
+	return p
+}
+
+func (x NetworkTransportMode) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (NetworkTransportMode) Descriptor() protoreflect.EnumDescriptor {
+	return file_api_forward_v1_forward_proto_enumTypes[9].Descriptor()
+}
+
+func (NetworkTransportMode) Type() protoreflect.EnumType {
+	return &file_api_forward_v1_forward_proto_enumTypes[9]
+}
+
+func (x NetworkTransportMode) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use NetworkTransportMode.Descriptor instead.
+func (NetworkTransportMode) EnumDescriptor() ([]byte, []int) {
+	return file_api_forward_v1_forward_proto_rawDescGZIP(), []int{9}
+}
+
+// NetworkCarrier is a carrier of a bare ANX-Line link.
+type NetworkCarrier int32
+
+const (
+	NetworkCarrier_NETWORK_CARRIER_UNSPECIFIED NetworkCarrier = 0
+	NetworkCarrier_NETWORK_CARRIER_TCP         NetworkCarrier = 1
+	NetworkCarrier_NETWORK_CARRIER_QUIC        NetworkCarrier = 2
+)
+
+// Enum value maps for NetworkCarrier.
+var (
+	NetworkCarrier_name = map[int32]string{
+		0: "NETWORK_CARRIER_UNSPECIFIED",
+		1: "NETWORK_CARRIER_TCP",
+		2: "NETWORK_CARRIER_QUIC",
+	}
+	NetworkCarrier_value = map[string]int32{
+		"NETWORK_CARRIER_UNSPECIFIED": 0,
+		"NETWORK_CARRIER_TCP":         1,
+		"NETWORK_CARRIER_QUIC":        2,
+	}
+)
+
+func (x NetworkCarrier) Enum() *NetworkCarrier {
+	p := new(NetworkCarrier)
+	*p = x
+	return p
+}
+
+func (x NetworkCarrier) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (NetworkCarrier) Descriptor() protoreflect.EnumDescriptor {
+	return file_api_forward_v1_forward_proto_enumTypes[10].Descriptor()
+}
+
+func (NetworkCarrier) Type() protoreflect.EnumType {
+	return &file_api_forward_v1_forward_proto_enumTypes[10]
+}
+
+func (x NetworkCarrier) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use NetworkCarrier.Descriptor instead.
+func (NetworkCarrier) EnumDescriptor() ([]byte, []int) {
+	return file_api_forward_v1_forward_proto_rawDescGZIP(), []int{10}
+}
+
 type HealthState int32
 
 const (
@@ -614,11 +726,11 @@ func (x HealthState) String() string {
 }
 
 func (HealthState) Descriptor() protoreflect.EnumDescriptor {
-	return file_api_forward_v1_forward_proto_enumTypes[9].Descriptor()
+	return file_api_forward_v1_forward_proto_enumTypes[11].Descriptor()
 }
 
 func (HealthState) Type() protoreflect.EnumType {
-	return &file_api_forward_v1_forward_proto_enumTypes[9]
+	return &file_api_forward_v1_forward_proto_enumTypes[11]
 }
 
 func (x HealthState) Number() protoreflect.EnumNumber {
@@ -627,7 +739,7 @@ func (x HealthState) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use HealthState.Descriptor instead.
 func (HealthState) EnumDescriptor() ([]byte, []int) {
-	return file_api_forward_v1_forward_proto_rawDescGZIP(), []int{9}
+	return file_api_forward_v1_forward_proto_rawDescGZIP(), []int{11}
 }
 
 type ProbeKind int32
@@ -694,11 +806,11 @@ func (x ProbeKind) String() string {
 }
 
 func (ProbeKind) Descriptor() protoreflect.EnumDescriptor {
-	return file_api_forward_v1_forward_proto_enumTypes[10].Descriptor()
+	return file_api_forward_v1_forward_proto_enumTypes[12].Descriptor()
 }
 
 func (ProbeKind) Type() protoreflect.EnumType {
-	return &file_api_forward_v1_forward_proto_enumTypes[10]
+	return &file_api_forward_v1_forward_proto_enumTypes[12]
 }
 
 func (x ProbeKind) Number() protoreflect.EnumNumber {
@@ -707,7 +819,7 @@ func (x ProbeKind) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ProbeKind.Descriptor instead.
 func (ProbeKind) EnumDescriptor() ([]byte, []int) {
-	return file_api_forward_v1_forward_proto_rawDescGZIP(), []int{10}
+	return file_api_forward_v1_forward_proto_rawDescGZIP(), []int{12}
 }
 
 // ProbeStatus is a probe's verdict (added in F3c).
@@ -756,11 +868,11 @@ func (x ProbeStatus) String() string {
 }
 
 func (ProbeStatus) Descriptor() protoreflect.EnumDescriptor {
-	return file_api_forward_v1_forward_proto_enumTypes[11].Descriptor()
+	return file_api_forward_v1_forward_proto_enumTypes[13].Descriptor()
 }
 
 func (ProbeStatus) Type() protoreflect.EnumType {
-	return &file_api_forward_v1_forward_proto_enumTypes[11]
+	return &file_api_forward_v1_forward_proto_enumTypes[13]
 }
 
 func (x ProbeStatus) Number() protoreflect.EnumNumber {
@@ -769,7 +881,7 @@ func (x ProbeStatus) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ProbeStatus.Descriptor instead.
 func (ProbeStatus) EnumDescriptor() ([]byte, []int) {
-	return file_api_forward_v1_forward_proto_rawDescGZIP(), []int{11}
+	return file_api_forward_v1_forward_proto_rawDescGZIP(), []int{13}
 }
 
 // DiagnoseVantage is where a diagnosis step ran (added in F3c).
@@ -808,11 +920,11 @@ func (x DiagnoseVantage) String() string {
 }
 
 func (DiagnoseVantage) Descriptor() protoreflect.EnumDescriptor {
-	return file_api_forward_v1_forward_proto_enumTypes[12].Descriptor()
+	return file_api_forward_v1_forward_proto_enumTypes[14].Descriptor()
 }
 
 func (DiagnoseVantage) Type() protoreflect.EnumType {
-	return &file_api_forward_v1_forward_proto_enumTypes[12]
+	return &file_api_forward_v1_forward_proto_enumTypes[14]
 }
 
 func (x DiagnoseVantage) Number() protoreflect.EnumNumber {
@@ -821,7 +933,7 @@ func (x DiagnoseVantage) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use DiagnoseVantage.Descriptor instead.
 func (DiagnoseVantage) EnumDescriptor() ([]byte, []int) {
-	return file_api_forward_v1_forward_proto_rawDescGZIP(), []int{12}
+	return file_api_forward_v1_forward_proto_rawDescGZIP(), []int{14}
 }
 
 // NodeTransport is how Control reaches a forward node.
@@ -862,11 +974,11 @@ func (x NodeTransport) String() string {
 }
 
 func (NodeTransport) Descriptor() protoreflect.EnumDescriptor {
-	return file_api_forward_v1_forward_proto_enumTypes[13].Descriptor()
+	return file_api_forward_v1_forward_proto_enumTypes[15].Descriptor()
 }
 
 func (NodeTransport) Type() protoreflect.EnumType {
-	return &file_api_forward_v1_forward_proto_enumTypes[13]
+	return &file_api_forward_v1_forward_proto_enumTypes[15]
 }
 
 func (x NodeTransport) Number() protoreflect.EnumNumber {
@@ -875,7 +987,7 @@ func (x NodeTransport) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use NodeTransport.Descriptor instead.
 func (NodeTransport) EnumDescriptor() ([]byte, []int) {
-	return file_api_forward_v1_forward_proto_rawDescGZIP(), []int{13}
+	return file_api_forward_v1_forward_proto_rawDescGZIP(), []int{15}
 }
 
 // DnsProviderKind is the DNS provider API Control calls (H21).
@@ -931,11 +1043,11 @@ func (x DnsProviderKind) String() string {
 }
 
 func (DnsProviderKind) Descriptor() protoreflect.EnumDescriptor {
-	return file_api_forward_v1_forward_proto_enumTypes[14].Descriptor()
+	return file_api_forward_v1_forward_proto_enumTypes[16].Descriptor()
 }
 
 func (DnsProviderKind) Type() protoreflect.EnumType {
-	return &file_api_forward_v1_forward_proto_enumTypes[14]
+	return &file_api_forward_v1_forward_proto_enumTypes[16]
 }
 
 func (x DnsProviderKind) Number() protoreflect.EnumNumber {
@@ -944,7 +1056,7 @@ func (x DnsProviderKind) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use DnsProviderKind.Descriptor instead.
 func (DnsProviderKind) EnumDescriptor() ([]byte, []int) {
-	return file_api_forward_v1_forward_proto_rawDescGZIP(), []int{14}
+	return file_api_forward_v1_forward_proto_rawDescGZIP(), []int{16}
 }
 
 // DnsBindingMode is how a binding keeps clients on the healthy entries.
@@ -985,11 +1097,11 @@ func (x DnsBindingMode) String() string {
 }
 
 func (DnsBindingMode) Descriptor() protoreflect.EnumDescriptor {
-	return file_api_forward_v1_forward_proto_enumTypes[15].Descriptor()
+	return file_api_forward_v1_forward_proto_enumTypes[17].Descriptor()
 }
 
 func (DnsBindingMode) Type() protoreflect.EnumType {
-	return &file_api_forward_v1_forward_proto_enumTypes[15]
+	return &file_api_forward_v1_forward_proto_enumTypes[17]
 }
 
 func (x DnsBindingMode) Number() protoreflect.EnumNumber {
@@ -998,7 +1110,7 @@ func (x DnsBindingMode) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use DnsBindingMode.Descriptor instead.
 func (DnsBindingMode) EnumDescriptor() ([]byte, []int) {
-	return file_api_forward_v1_forward_proto_rawDescGZIP(), []int{15}
+	return file_api_forward_v1_forward_proto_rawDescGZIP(), []int{17}
 }
 
 // DnsRecordType is an address record type Control publishes.
@@ -1035,11 +1147,11 @@ func (x DnsRecordType) String() string {
 }
 
 func (DnsRecordType) Descriptor() protoreflect.EnumDescriptor {
-	return file_api_forward_v1_forward_proto_enumTypes[16].Descriptor()
+	return file_api_forward_v1_forward_proto_enumTypes[18].Descriptor()
 }
 
 func (DnsRecordType) Type() protoreflect.EnumType {
-	return &file_api_forward_v1_forward_proto_enumTypes[16]
+	return &file_api_forward_v1_forward_proto_enumTypes[18]
 }
 
 func (x DnsRecordType) Number() protoreflect.EnumNumber {
@@ -1048,7 +1160,7 @@ func (x DnsRecordType) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use DnsRecordType.Descriptor instead.
 func (DnsRecordType) EnumDescriptor() ([]byte, []int) {
-	return file_api_forward_v1_forward_proto_rawDescGZIP(), []int{16}
+	return file_api_forward_v1_forward_proto_rawDescGZIP(), []int{18}
 }
 
 // Route is one forwarding route as Control stores it.
@@ -1410,8 +1522,21 @@ type LinkTransport struct {
 	// lets Control link the two devices with a transport of its own (ANX-A,
 	// id auto-<from>-<to>). Several routes may share one transport.
 	NetworkTransportId string `protobuf:"bytes,6,opt,name=network_transport_id,json=networkTransportId,proto3" json:"network_transport_id,omitempty"`
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	// network_mode is the transport Control links the two devices with when
+	// network_transport_id is empty; only for LINK_SECURITY_NETWORK.
+	// Unspecified means NETWORK_TRANSPORT_MODE_ANX_A. Added after rc.21
+	// (additions only).
+	NetworkMode NetworkTransportMode `protobuf:"varint,7,opt,name=network_mode,json=networkMode,proto3,enum=anixops.forward.v1.NetworkTransportMode" json:"network_mode,omitempty"`
+	// network_carriers orders the carriers of a NETWORK_TRANSPORT_MODE_ANX_LINE
+	// link; empty means TCP only. Refused on other modes.
+	NetworkCarriers []NetworkCarrier `protobuf:"varint,8,rep,packed,name=network_carriers,json=networkCarriers,proto3,enum=anixops.forward.v1.NetworkCarrier" json:"network_carriers,omitempty"`
+	// network_multipath runs a NETWORK_TRANSPORT_MODE_ANX_LINE link over its
+	// carriers at once; network_fec adds forward error correction. Refused
+	// on other modes.
+	NetworkMultipath bool `protobuf:"varint,9,opt,name=network_multipath,json=networkMultipath,proto3" json:"network_multipath,omitempty"`
+	NetworkFec       bool `protobuf:"varint,10,opt,name=network_fec,json=networkFec,proto3" json:"network_fec,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *LinkTransport) Reset() {
@@ -1484,6 +1609,34 @@ func (x *LinkTransport) GetNetworkTransportId() string {
 		return x.NetworkTransportId
 	}
 	return ""
+}
+
+func (x *LinkTransport) GetNetworkMode() NetworkTransportMode {
+	if x != nil {
+		return x.NetworkMode
+	}
+	return NetworkTransportMode_NETWORK_TRANSPORT_MODE_UNSPECIFIED
+}
+
+func (x *LinkTransport) GetNetworkCarriers() []NetworkCarrier {
+	if x != nil {
+		return x.NetworkCarriers
+	}
+	return nil
+}
+
+func (x *LinkTransport) GetNetworkMultipath() bool {
+	if x != nil {
+		return x.NetworkMultipath
+	}
+	return false
+}
+
+func (x *LinkTransport) GetNetworkFec() bool {
+	if x != nil {
+		return x.NetworkFec
+	}
+	return false
 }
 
 // Target is a destination behind the last hop.
@@ -8062,7 +8215,7 @@ const file_api_forward_v1_forward_proto_rawDesc = "" +
 	"\aingress\x18\x04 \x01(\v2!.anixops.forward.v1.LinkTransportR\aingress\x12\x12\n" +
 	"\x04port\x18\x05 \x01(\rR\x04port\x12!\n" +
 	"\fdial_address\x18\x06 \x01(\tR\vdialAddress\x12*\n" +
-	"\x11network_egress_id\x18\a \x01(\tR\x0fnetworkEgressId\"\x84\x02\n" +
+	"\x11network_egress_id\x18\a \x01(\tR\x0fnetworkEgressId\"\xee\x03\n" +
 	"\rLinkTransport\x12<\n" +
 	"\bsecurity\x18\x01 \x01(\x0e2 .anixops.forward.v1.LinkSecurityR\bsecurity\x12\x10\n" +
 	"\x03mux\x18\x02 \x01(\bR\x03mux\x12\x1f\n" +
@@ -8070,7 +8223,13 @@ const file_api_forward_v1_forward_proto_rawDesc = "" +
 	"serverName\x12\x12\n" +
 	"\x04path\x18\x04 \x01(\tR\x04path\x12<\n" +
 	"\acarrier\x18\x05 \x01(\x0e2\".anixops.forward.v1.AnixOpsCarrierR\acarrier\x120\n" +
-	"\x14network_transport_id\x18\x06 \x01(\tR\x12networkTransportId\"d\n" +
+	"\x14network_transport_id\x18\x06 \x01(\tR\x12networkTransportId\x12K\n" +
+	"\fnetwork_mode\x18\a \x01(\x0e2(.anixops.forward.v1.NetworkTransportModeR\vnetworkMode\x12M\n" +
+	"\x10network_carriers\x18\b \x03(\x0e2\".anixops.forward.v1.NetworkCarrierR\x0fnetworkCarriers\x12+\n" +
+	"\x11network_multipath\x18\t \x01(\bR\x10networkMultipath\x12\x1f\n" +
+	"\vnetwork_fec\x18\n" +
+	" \x01(\bR\n" +
+	"networkFec\"d\n" +
 	"\x06Target\x12\x12\n" +
 	"\x04host\x18\x01 \x01(\tR\x04host\x12\x12\n" +
 	"\x04port\x18\x02 \x01(\rR\x04port\x12\x16\n" +
@@ -8694,7 +8853,16 @@ const file_api_forward_v1_forward_proto_rawDesc = "" +
 	"\fTargetPolicy\x12\x1d\n" +
 	"\x19TARGET_POLICY_UNSPECIFIED\x10\x00\x12\x1d\n" +
 	"\x19TARGET_POLICY_PUBLIC_ONLY\x10\x01\x12\x1f\n" +
-	"\x1bTARGET_POLICY_ALLOW_PRIVATE\x10\x02*\x80\x01\n" +
+	"\x1bTARGET_POLICY_ALLOW_PRIVATE\x10\x02*\xb2\x01\n" +
+	"\x14NetworkTransportMode\x12&\n" +
+	"\"NETWORK_TRANSPORT_MODE_UNSPECIFIED\x10\x00\x12 \n" +
+	"\x1cNETWORK_TRANSPORT_MODE_ANX_A\x10\x01\x12#\n" +
+	"\x1fNETWORK_TRANSPORT_MODE_ANX_LINE\x10\x02\x12+\n" +
+	"'NETWORK_TRANSPORT_MODE_ANX_LINE_REVERSE\x10\x03*d\n" +
+	"\x0eNetworkCarrier\x12\x1f\n" +
+	"\x1bNETWORK_CARRIER_UNSPECIFIED\x10\x00\x12\x17\n" +
+	"\x13NETWORK_CARRIER_TCP\x10\x01\x12\x18\n" +
+	"\x14NETWORK_CARRIER_QUIC\x10\x02*\x80\x01\n" +
 	"\vHealthState\x12\x1c\n" +
 	"\x18HEALTH_STATE_UNSPECIFIED\x10\x00\x12\x18\n" +
 	"\x14HEALTH_STATE_HEALTHY\x10\x01\x12\x1a\n" +
@@ -8787,7 +8955,7 @@ func file_api_forward_v1_forward_proto_rawDescGZIP() []byte {
 	return file_api_forward_v1_forward_proto_rawDescData
 }
 
-var file_api_forward_v1_forward_proto_enumTypes = make([]protoimpl.EnumInfo, 17)
+var file_api_forward_v1_forward_proto_enumTypes = make([]protoimpl.EnumInfo, 19)
 var file_api_forward_v1_forward_proto_msgTypes = make([]protoimpl.MessageInfo, 102)
 var file_api_forward_v1_forward_proto_goTypes = []any{
 	(Engine)(0),                        // 0: anixops.forward.v1.Engine
@@ -8799,310 +8967,314 @@ var file_api_forward_v1_forward_proto_goTypes = []any{
 	(BalanceStrategy)(0),               // 6: anixops.forward.v1.BalanceStrategy
 	(DirectMode)(0),                    // 7: anixops.forward.v1.DirectMode
 	(TargetPolicy)(0),                  // 8: anixops.forward.v1.TargetPolicy
-	(HealthState)(0),                   // 9: anixops.forward.v1.HealthState
-	(ProbeKind)(0),                     // 10: anixops.forward.v1.ProbeKind
-	(ProbeStatus)(0),                   // 11: anixops.forward.v1.ProbeStatus
-	(DiagnoseVantage)(0),               // 12: anixops.forward.v1.DiagnoseVantage
-	(NodeTransport)(0),                 // 13: anixops.forward.v1.NodeTransport
-	(DnsProviderKind)(0),               // 14: anixops.forward.v1.DnsProviderKind
-	(DnsBindingMode)(0),                // 15: anixops.forward.v1.DnsBindingMode
-	(DnsRecordType)(0),                 // 16: anixops.forward.v1.DnsRecordType
-	(*Route)(nil),                      // 17: anixops.forward.v1.Route
-	(*Listen)(nil),                     // 18: anixops.forward.v1.Listen
-	(*Hop)(nil),                        // 19: anixops.forward.v1.Hop
-	(*LinkTransport)(nil),              // 20: anixops.forward.v1.LinkTransport
-	(*Target)(nil),                     // 21: anixops.forward.v1.Target
-	(*Policy)(nil),                     // 22: anixops.forward.v1.Policy
-	(*HealthCheck)(nil),                // 23: anixops.forward.v1.HealthCheck
-	(*CircuitBreaker)(nil),             // 24: anixops.forward.v1.CircuitBreaker
-	(*Limits)(nil),                     // 25: anixops.forward.v1.Limits
-	(*Counters)(nil),                   // 26: anixops.forward.v1.Counters
-	(*NodeInfo)(nil),                   // 27: anixops.forward.v1.NodeInfo
-	(*PortRange)(nil),                  // 28: anixops.forward.v1.PortRange
-	(*NodeForwardState)(nil),           // 29: anixops.forward.v1.NodeForwardState
-	(*VantageProbe)(nil),               // 30: anixops.forward.v1.VantageProbe
-	(*NodeHop)(nil),                    // 31: anixops.forward.v1.NodeHop
-	(*Upstream)(nil),                   // 32: anixops.forward.v1.Upstream
-	(*EngineCapabilities)(nil),         // 33: anixops.forward.v1.EngineCapabilities
-	(*GetNodeCapabilitiesRequest)(nil), // 34: anixops.forward.v1.GetNodeCapabilitiesRequest
-	(*NodeCapabilities)(nil),           // 35: anixops.forward.v1.NodeCapabilities
-	(*ApplyResult)(nil),                // 36: anixops.forward.v1.ApplyResult
-	(*HopError)(nil),                   // 37: anixops.forward.v1.HopError
-	(*ObserveRequest)(nil),             // 38: anixops.forward.v1.ObserveRequest
-	(*NodeForwardReport)(nil),          // 39: anixops.forward.v1.NodeForwardReport
-	(*VantageResult)(nil),              // 40: anixops.forward.v1.VantageResult
-	(*UpstreamHealth)(nil),             // 41: anixops.forward.v1.UpstreamHealth
-	(*ProbeRequest)(nil),               // 42: anixops.forward.v1.ProbeRequest
-	(*ProbeResult)(nil),                // 43: anixops.forward.v1.ProbeResult
-	(*Violation)(nil),                  // 44: anixops.forward.v1.Violation
-	(*CreateRouteRequest)(nil),         // 45: anixops.forward.v1.CreateRouteRequest
-	(*CreateRouteResponse)(nil),        // 46: anixops.forward.v1.CreateRouteResponse
-	(*UpdateRouteRequest)(nil),         // 47: anixops.forward.v1.UpdateRouteRequest
-	(*UpdateRouteResponse)(nil),        // 48: anixops.forward.v1.UpdateRouteResponse
-	(*DeleteRouteRequest)(nil),         // 49: anixops.forward.v1.DeleteRouteRequest
-	(*DeleteRouteResponse)(nil),        // 50: anixops.forward.v1.DeleteRouteResponse
-	(*GetRouteRequest)(nil),            // 51: anixops.forward.v1.GetRouteRequest
-	(*GetRouteResponse)(nil),           // 52: anixops.forward.v1.GetRouteResponse
-	(*ListRoutesRequest)(nil),          // 53: anixops.forward.v1.ListRoutesRequest
-	(*ListRoutesResponse)(nil),         // 54: anixops.forward.v1.ListRoutesResponse
-	(*PlanRouteRequest)(nil),           // 55: anixops.forward.v1.PlanRouteRequest
-	(*PortAllocation)(nil),             // 56: anixops.forward.v1.PortAllocation
-	(*PlanRouteResponse)(nil),          // 57: anixops.forward.v1.PlanRouteResponse
-	(*GetRouteStatsRequest)(nil),       // 58: anixops.forward.v1.GetRouteStatsRequest
-	(*GetRouteStatsResponse)(nil),      // 59: anixops.forward.v1.GetRouteStatsResponse
-	(*GetRouteHealthRequest)(nil),      // 60: anixops.forward.v1.GetRouteHealthRequest
-	(*GetRouteHealthResponse)(nil),     // 61: anixops.forward.v1.GetRouteHealthResponse
-	(*DiagnoseRouteRequest)(nil),       // 62: anixops.forward.v1.DiagnoseRouteRequest
-	(*DiagnoseStep)(nil),               // 63: anixops.forward.v1.DiagnoseStep
-	(*DiagnoseRouteResponse)(nil),      // 64: anixops.forward.v1.DiagnoseRouteResponse
-	(*DiagnoseNode)(nil),               // 65: anixops.forward.v1.DiagnoseNode
-	(*NodeSettings)(nil),               // 66: anixops.forward.v1.NodeSettings
-	(*ForwardNodeRecord)(nil),          // 67: anixops.forward.v1.ForwardNodeRecord
-	(*NodeSummary)(nil),                // 68: anixops.forward.v1.NodeSummary
-	(*ListNodesRequest)(nil),           // 69: anixops.forward.v1.ListNodesRequest
-	(*ListNodesResponse)(nil),          // 70: anixops.forward.v1.ListNodesResponse
-	(*GetNodeRequest)(nil),             // 71: anixops.forward.v1.GetNodeRequest
-	(*GetNodeResponse)(nil),            // 72: anixops.forward.v1.GetNodeResponse
-	(*SetNodeSettingsRequest)(nil),     // 73: anixops.forward.v1.SetNodeSettingsRequest
-	(*SetNodeSettingsResponse)(nil),    // 74: anixops.forward.v1.SetNodeSettingsResponse
-	(*CreateForwardNodeRequest)(nil),   // 75: anixops.forward.v1.CreateForwardNodeRequest
-	(*CreateForwardNodeResponse)(nil),  // 76: anixops.forward.v1.CreateForwardNodeResponse
-	(*UpdateForwardNodeRequest)(nil),   // 77: anixops.forward.v1.UpdateForwardNodeRequest
-	(*UpdateForwardNodeResponse)(nil),  // 78: anixops.forward.v1.UpdateForwardNodeResponse
-	(*DeleteForwardNodeRequest)(nil),   // 79: anixops.forward.v1.DeleteForwardNodeRequest
-	(*DeleteForwardNodeResponse)(nil),  // 80: anixops.forward.v1.DeleteForwardNodeResponse
-	(*GetTrafficRequest)(nil),          // 81: anixops.forward.v1.GetTrafficRequest
-	(*TrafficBucket)(nil),              // 82: anixops.forward.v1.TrafficBucket
-	(*GetTrafficResponse)(nil),         // 83: anixops.forward.v1.GetTrafficResponse
-	(*DnsProvider)(nil),                // 84: anixops.forward.v1.DnsProvider
-	(*ListDnsProvidersRequest)(nil),    // 85: anixops.forward.v1.ListDnsProvidersRequest
-	(*ListDnsProvidersResponse)(nil),   // 86: anixops.forward.v1.ListDnsProvidersResponse
-	(*GetDnsProviderRequest)(nil),      // 87: anixops.forward.v1.GetDnsProviderRequest
-	(*GetDnsProviderResponse)(nil),     // 88: anixops.forward.v1.GetDnsProviderResponse
-	(*CreateDnsProviderRequest)(nil),   // 89: anixops.forward.v1.CreateDnsProviderRequest
-	(*CreateDnsProviderResponse)(nil),  // 90: anixops.forward.v1.CreateDnsProviderResponse
-	(*UpdateDnsProviderRequest)(nil),   // 91: anixops.forward.v1.UpdateDnsProviderRequest
-	(*UpdateDnsProviderResponse)(nil),  // 92: anixops.forward.v1.UpdateDnsProviderResponse
-	(*DeleteDnsProviderRequest)(nil),   // 93: anixops.forward.v1.DeleteDnsProviderRequest
-	(*DeleteDnsProviderResponse)(nil),  // 94: anixops.forward.v1.DeleteDnsProviderResponse
-	(*DnsBinding)(nil),                 // 95: anixops.forward.v1.DnsBinding
-	(*ListDnsBindingsRequest)(nil),     // 96: anixops.forward.v1.ListDnsBindingsRequest
-	(*ListDnsBindingsResponse)(nil),    // 97: anixops.forward.v1.ListDnsBindingsResponse
-	(*CreateDnsBindingRequest)(nil),    // 98: anixops.forward.v1.CreateDnsBindingRequest
-	(*CreateDnsBindingResponse)(nil),   // 99: anixops.forward.v1.CreateDnsBindingResponse
-	(*UpdateDnsBindingRequest)(nil),    // 100: anixops.forward.v1.UpdateDnsBindingRequest
-	(*UpdateDnsBindingResponse)(nil),   // 101: anixops.forward.v1.UpdateDnsBindingResponse
-	(*DeleteDnsBindingRequest)(nil),    // 102: anixops.forward.v1.DeleteDnsBindingRequest
-	(*DeleteDnsBindingResponse)(nil),   // 103: anixops.forward.v1.DeleteDnsBindingResponse
-	(*GetRouteDnsRequest)(nil),         // 104: anixops.forward.v1.GetRouteDnsRequest
-	(*DnsRecordStatus)(nil),            // 105: anixops.forward.v1.DnsRecordStatus
-	(*DnsEntryNode)(nil),               // 106: anixops.forward.v1.DnsEntryNode
-	(*RouteDnsStatus)(nil),             // 107: anixops.forward.v1.RouteDnsStatus
-	(*GetRouteDnsResponse)(nil),        // 108: anixops.forward.v1.GetRouteDnsResponse
-	(*GetLatencyRequest)(nil),          // 109: anixops.forward.v1.GetLatencyRequest
-	(*LatencyBucket)(nil),              // 110: anixops.forward.v1.LatencyBucket
-	(*GetLatencyResponse)(nil),         // 111: anixops.forward.v1.GetLatencyResponse
-	nil,                                // 112: anixops.forward.v1.Route.LabelsEntry
-	nil,                                // 113: anixops.forward.v1.NodeInfo.LabelsEntry
-	nil,                                // 114: anixops.forward.v1.ListRoutesResponse.EnforcedEntry
-	nil,                                // 115: anixops.forward.v1.NodeSettings.LabelsEntry
-	nil,                                // 116: anixops.forward.v1.DnsProvider.ConfigEntry
-	nil,                                // 117: anixops.forward.v1.CreateDnsProviderRequest.CredentialsEntry
-	nil,                                // 118: anixops.forward.v1.UpdateDnsProviderRequest.CredentialsEntry
+	(NetworkTransportMode)(0),          // 9: anixops.forward.v1.NetworkTransportMode
+	(NetworkCarrier)(0),                // 10: anixops.forward.v1.NetworkCarrier
+	(HealthState)(0),                   // 11: anixops.forward.v1.HealthState
+	(ProbeKind)(0),                     // 12: anixops.forward.v1.ProbeKind
+	(ProbeStatus)(0),                   // 13: anixops.forward.v1.ProbeStatus
+	(DiagnoseVantage)(0),               // 14: anixops.forward.v1.DiagnoseVantage
+	(NodeTransport)(0),                 // 15: anixops.forward.v1.NodeTransport
+	(DnsProviderKind)(0),               // 16: anixops.forward.v1.DnsProviderKind
+	(DnsBindingMode)(0),                // 17: anixops.forward.v1.DnsBindingMode
+	(DnsRecordType)(0),                 // 18: anixops.forward.v1.DnsRecordType
+	(*Route)(nil),                      // 19: anixops.forward.v1.Route
+	(*Listen)(nil),                     // 20: anixops.forward.v1.Listen
+	(*Hop)(nil),                        // 21: anixops.forward.v1.Hop
+	(*LinkTransport)(nil),              // 22: anixops.forward.v1.LinkTransport
+	(*Target)(nil),                     // 23: anixops.forward.v1.Target
+	(*Policy)(nil),                     // 24: anixops.forward.v1.Policy
+	(*HealthCheck)(nil),                // 25: anixops.forward.v1.HealthCheck
+	(*CircuitBreaker)(nil),             // 26: anixops.forward.v1.CircuitBreaker
+	(*Limits)(nil),                     // 27: anixops.forward.v1.Limits
+	(*Counters)(nil),                   // 28: anixops.forward.v1.Counters
+	(*NodeInfo)(nil),                   // 29: anixops.forward.v1.NodeInfo
+	(*PortRange)(nil),                  // 30: anixops.forward.v1.PortRange
+	(*NodeForwardState)(nil),           // 31: anixops.forward.v1.NodeForwardState
+	(*VantageProbe)(nil),               // 32: anixops.forward.v1.VantageProbe
+	(*NodeHop)(nil),                    // 33: anixops.forward.v1.NodeHop
+	(*Upstream)(nil),                   // 34: anixops.forward.v1.Upstream
+	(*EngineCapabilities)(nil),         // 35: anixops.forward.v1.EngineCapabilities
+	(*GetNodeCapabilitiesRequest)(nil), // 36: anixops.forward.v1.GetNodeCapabilitiesRequest
+	(*NodeCapabilities)(nil),           // 37: anixops.forward.v1.NodeCapabilities
+	(*ApplyResult)(nil),                // 38: anixops.forward.v1.ApplyResult
+	(*HopError)(nil),                   // 39: anixops.forward.v1.HopError
+	(*ObserveRequest)(nil),             // 40: anixops.forward.v1.ObserveRequest
+	(*NodeForwardReport)(nil),          // 41: anixops.forward.v1.NodeForwardReport
+	(*VantageResult)(nil),              // 42: anixops.forward.v1.VantageResult
+	(*UpstreamHealth)(nil),             // 43: anixops.forward.v1.UpstreamHealth
+	(*ProbeRequest)(nil),               // 44: anixops.forward.v1.ProbeRequest
+	(*ProbeResult)(nil),                // 45: anixops.forward.v1.ProbeResult
+	(*Violation)(nil),                  // 46: anixops.forward.v1.Violation
+	(*CreateRouteRequest)(nil),         // 47: anixops.forward.v1.CreateRouteRequest
+	(*CreateRouteResponse)(nil),        // 48: anixops.forward.v1.CreateRouteResponse
+	(*UpdateRouteRequest)(nil),         // 49: anixops.forward.v1.UpdateRouteRequest
+	(*UpdateRouteResponse)(nil),        // 50: anixops.forward.v1.UpdateRouteResponse
+	(*DeleteRouteRequest)(nil),         // 51: anixops.forward.v1.DeleteRouteRequest
+	(*DeleteRouteResponse)(nil),        // 52: anixops.forward.v1.DeleteRouteResponse
+	(*GetRouteRequest)(nil),            // 53: anixops.forward.v1.GetRouteRequest
+	(*GetRouteResponse)(nil),           // 54: anixops.forward.v1.GetRouteResponse
+	(*ListRoutesRequest)(nil),          // 55: anixops.forward.v1.ListRoutesRequest
+	(*ListRoutesResponse)(nil),         // 56: anixops.forward.v1.ListRoutesResponse
+	(*PlanRouteRequest)(nil),           // 57: anixops.forward.v1.PlanRouteRequest
+	(*PortAllocation)(nil),             // 58: anixops.forward.v1.PortAllocation
+	(*PlanRouteResponse)(nil),          // 59: anixops.forward.v1.PlanRouteResponse
+	(*GetRouteStatsRequest)(nil),       // 60: anixops.forward.v1.GetRouteStatsRequest
+	(*GetRouteStatsResponse)(nil),      // 61: anixops.forward.v1.GetRouteStatsResponse
+	(*GetRouteHealthRequest)(nil),      // 62: anixops.forward.v1.GetRouteHealthRequest
+	(*GetRouteHealthResponse)(nil),     // 63: anixops.forward.v1.GetRouteHealthResponse
+	(*DiagnoseRouteRequest)(nil),       // 64: anixops.forward.v1.DiagnoseRouteRequest
+	(*DiagnoseStep)(nil),               // 65: anixops.forward.v1.DiagnoseStep
+	(*DiagnoseRouteResponse)(nil),      // 66: anixops.forward.v1.DiagnoseRouteResponse
+	(*DiagnoseNode)(nil),               // 67: anixops.forward.v1.DiagnoseNode
+	(*NodeSettings)(nil),               // 68: anixops.forward.v1.NodeSettings
+	(*ForwardNodeRecord)(nil),          // 69: anixops.forward.v1.ForwardNodeRecord
+	(*NodeSummary)(nil),                // 70: anixops.forward.v1.NodeSummary
+	(*ListNodesRequest)(nil),           // 71: anixops.forward.v1.ListNodesRequest
+	(*ListNodesResponse)(nil),          // 72: anixops.forward.v1.ListNodesResponse
+	(*GetNodeRequest)(nil),             // 73: anixops.forward.v1.GetNodeRequest
+	(*GetNodeResponse)(nil),            // 74: anixops.forward.v1.GetNodeResponse
+	(*SetNodeSettingsRequest)(nil),     // 75: anixops.forward.v1.SetNodeSettingsRequest
+	(*SetNodeSettingsResponse)(nil),    // 76: anixops.forward.v1.SetNodeSettingsResponse
+	(*CreateForwardNodeRequest)(nil),   // 77: anixops.forward.v1.CreateForwardNodeRequest
+	(*CreateForwardNodeResponse)(nil),  // 78: anixops.forward.v1.CreateForwardNodeResponse
+	(*UpdateForwardNodeRequest)(nil),   // 79: anixops.forward.v1.UpdateForwardNodeRequest
+	(*UpdateForwardNodeResponse)(nil),  // 80: anixops.forward.v1.UpdateForwardNodeResponse
+	(*DeleteForwardNodeRequest)(nil),   // 81: anixops.forward.v1.DeleteForwardNodeRequest
+	(*DeleteForwardNodeResponse)(nil),  // 82: anixops.forward.v1.DeleteForwardNodeResponse
+	(*GetTrafficRequest)(nil),          // 83: anixops.forward.v1.GetTrafficRequest
+	(*TrafficBucket)(nil),              // 84: anixops.forward.v1.TrafficBucket
+	(*GetTrafficResponse)(nil),         // 85: anixops.forward.v1.GetTrafficResponse
+	(*DnsProvider)(nil),                // 86: anixops.forward.v1.DnsProvider
+	(*ListDnsProvidersRequest)(nil),    // 87: anixops.forward.v1.ListDnsProvidersRequest
+	(*ListDnsProvidersResponse)(nil),   // 88: anixops.forward.v1.ListDnsProvidersResponse
+	(*GetDnsProviderRequest)(nil),      // 89: anixops.forward.v1.GetDnsProviderRequest
+	(*GetDnsProviderResponse)(nil),     // 90: anixops.forward.v1.GetDnsProviderResponse
+	(*CreateDnsProviderRequest)(nil),   // 91: anixops.forward.v1.CreateDnsProviderRequest
+	(*CreateDnsProviderResponse)(nil),  // 92: anixops.forward.v1.CreateDnsProviderResponse
+	(*UpdateDnsProviderRequest)(nil),   // 93: anixops.forward.v1.UpdateDnsProviderRequest
+	(*UpdateDnsProviderResponse)(nil),  // 94: anixops.forward.v1.UpdateDnsProviderResponse
+	(*DeleteDnsProviderRequest)(nil),   // 95: anixops.forward.v1.DeleteDnsProviderRequest
+	(*DeleteDnsProviderResponse)(nil),  // 96: anixops.forward.v1.DeleteDnsProviderResponse
+	(*DnsBinding)(nil),                 // 97: anixops.forward.v1.DnsBinding
+	(*ListDnsBindingsRequest)(nil),     // 98: anixops.forward.v1.ListDnsBindingsRequest
+	(*ListDnsBindingsResponse)(nil),    // 99: anixops.forward.v1.ListDnsBindingsResponse
+	(*CreateDnsBindingRequest)(nil),    // 100: anixops.forward.v1.CreateDnsBindingRequest
+	(*CreateDnsBindingResponse)(nil),   // 101: anixops.forward.v1.CreateDnsBindingResponse
+	(*UpdateDnsBindingRequest)(nil),    // 102: anixops.forward.v1.UpdateDnsBindingRequest
+	(*UpdateDnsBindingResponse)(nil),   // 103: anixops.forward.v1.UpdateDnsBindingResponse
+	(*DeleteDnsBindingRequest)(nil),    // 104: anixops.forward.v1.DeleteDnsBindingRequest
+	(*DeleteDnsBindingResponse)(nil),   // 105: anixops.forward.v1.DeleteDnsBindingResponse
+	(*GetRouteDnsRequest)(nil),         // 106: anixops.forward.v1.GetRouteDnsRequest
+	(*DnsRecordStatus)(nil),            // 107: anixops.forward.v1.DnsRecordStatus
+	(*DnsEntryNode)(nil),               // 108: anixops.forward.v1.DnsEntryNode
+	(*RouteDnsStatus)(nil),             // 109: anixops.forward.v1.RouteDnsStatus
+	(*GetRouteDnsResponse)(nil),        // 110: anixops.forward.v1.GetRouteDnsResponse
+	(*GetLatencyRequest)(nil),          // 111: anixops.forward.v1.GetLatencyRequest
+	(*LatencyBucket)(nil),              // 112: anixops.forward.v1.LatencyBucket
+	(*GetLatencyResponse)(nil),         // 113: anixops.forward.v1.GetLatencyResponse
+	nil,                                // 114: anixops.forward.v1.Route.LabelsEntry
+	nil,                                // 115: anixops.forward.v1.NodeInfo.LabelsEntry
+	nil,                                // 116: anixops.forward.v1.ListRoutesResponse.EnforcedEntry
+	nil,                                // 117: anixops.forward.v1.NodeSettings.LabelsEntry
+	nil,                                // 118: anixops.forward.v1.DnsProvider.ConfigEntry
+	nil,                                // 119: anixops.forward.v1.CreateDnsProviderRequest.CredentialsEntry
+	nil,                                // 120: anixops.forward.v1.UpdateDnsProviderRequest.CredentialsEntry
 }
 var file_api_forward_v1_forward_proto_depIdxs = []int32{
-	18,  // 0: anixops.forward.v1.Route.listen:type_name -> anixops.forward.v1.Listen
-	19,  // 1: anixops.forward.v1.Route.hops:type_name -> anixops.forward.v1.Hop
-	21,  // 2: anixops.forward.v1.Route.targets:type_name -> anixops.forward.v1.Target
-	22,  // 3: anixops.forward.v1.Route.policy:type_name -> anixops.forward.v1.Policy
-	25,  // 4: anixops.forward.v1.Route.limits:type_name -> anixops.forward.v1.Limits
-	112, // 5: anixops.forward.v1.Route.labels:type_name -> anixops.forward.v1.Route.LabelsEntry
+	20,  // 0: anixops.forward.v1.Route.listen:type_name -> anixops.forward.v1.Listen
+	21,  // 1: anixops.forward.v1.Route.hops:type_name -> anixops.forward.v1.Hop
+	23,  // 2: anixops.forward.v1.Route.targets:type_name -> anixops.forward.v1.Target
+	24,  // 3: anixops.forward.v1.Route.policy:type_name -> anixops.forward.v1.Policy
+	27,  // 4: anixops.forward.v1.Route.limits:type_name -> anixops.forward.v1.Limits
+	114, // 5: anixops.forward.v1.Route.labels:type_name -> anixops.forward.v1.Route.LabelsEntry
 	2,   // 6: anixops.forward.v1.Listen.protocol:type_name -> anixops.forward.v1.L4Protocol
 	1,   // 7: anixops.forward.v1.Hop.role:type_name -> anixops.forward.v1.HopRole
 	0,   // 8: anixops.forward.v1.Hop.engine:type_name -> anixops.forward.v1.Engine
-	20,  // 9: anixops.forward.v1.Hop.ingress:type_name -> anixops.forward.v1.LinkTransport
+	22,  // 9: anixops.forward.v1.Hop.ingress:type_name -> anixops.forward.v1.LinkTransport
 	3,   // 10: anixops.forward.v1.LinkTransport.security:type_name -> anixops.forward.v1.LinkSecurity
 	4,   // 11: anixops.forward.v1.LinkTransport.carrier:type_name -> anixops.forward.v1.AnixOpsCarrier
-	6,   // 12: anixops.forward.v1.Policy.next_hop:type_name -> anixops.forward.v1.BalanceStrategy
-	6,   // 13: anixops.forward.v1.Policy.target:type_name -> anixops.forward.v1.BalanceStrategy
-	23,  // 14: anixops.forward.v1.Policy.health:type_name -> anixops.forward.v1.HealthCheck
-	24,  // 15: anixops.forward.v1.Policy.circuit_breaker:type_name -> anixops.forward.v1.CircuitBreaker
-	7,   // 16: anixops.forward.v1.Policy.direct:type_name -> anixops.forward.v1.DirectMode
-	8,   // 17: anixops.forward.v1.Policy.target_policy:type_name -> anixops.forward.v1.TargetPolicy
-	5,   // 18: anixops.forward.v1.Policy.proxy_protocol:type_name -> anixops.forward.v1.ProxyProtocol
-	28,  // 19: anixops.forward.v1.NodeInfo.port_range:type_name -> anixops.forward.v1.PortRange
-	33,  // 20: anixops.forward.v1.NodeInfo.engines:type_name -> anixops.forward.v1.EngineCapabilities
-	113, // 21: anixops.forward.v1.NodeInfo.labels:type_name -> anixops.forward.v1.NodeInfo.LabelsEntry
-	31,  // 22: anixops.forward.v1.NodeForwardState.hops:type_name -> anixops.forward.v1.NodeHop
-	30,  // 23: anixops.forward.v1.NodeForwardState.vantage_probes:type_name -> anixops.forward.v1.VantageProbe
-	1,   // 24: anixops.forward.v1.NodeHop.role:type_name -> anixops.forward.v1.HopRole
-	0,   // 25: anixops.forward.v1.NodeHop.engine:type_name -> anixops.forward.v1.Engine
-	18,  // 26: anixops.forward.v1.NodeHop.listen:type_name -> anixops.forward.v1.Listen
-	20,  // 27: anixops.forward.v1.NodeHop.ingress:type_name -> anixops.forward.v1.LinkTransport
-	32,  // 28: anixops.forward.v1.NodeHop.upstreams:type_name -> anixops.forward.v1.Upstream
-	6,   // 29: anixops.forward.v1.NodeHop.balance:type_name -> anixops.forward.v1.BalanceStrategy
-	23,  // 30: anixops.forward.v1.NodeHop.health:type_name -> anixops.forward.v1.HealthCheck
-	24,  // 31: anixops.forward.v1.NodeHop.circuit_breaker:type_name -> anixops.forward.v1.CircuitBreaker
-	25,  // 32: anixops.forward.v1.NodeHop.limits:type_name -> anixops.forward.v1.Limits
-	8,   // 33: anixops.forward.v1.NodeHop.target_policy:type_name -> anixops.forward.v1.TargetPolicy
-	5,   // 34: anixops.forward.v1.NodeHop.proxy_protocol:type_name -> anixops.forward.v1.ProxyProtocol
-	20,  // 35: anixops.forward.v1.Upstream.egress:type_name -> anixops.forward.v1.LinkTransport
-	0,   // 36: anixops.forward.v1.EngineCapabilities.engine:type_name -> anixops.forward.v1.Engine
-	6,   // 37: anixops.forward.v1.EngineCapabilities.strategies:type_name -> anixops.forward.v1.BalanceStrategy
-	3,   // 38: anixops.forward.v1.EngineCapabilities.link_securities:type_name -> anixops.forward.v1.LinkSecurity
-	4,   // 39: anixops.forward.v1.EngineCapabilities.carriers:type_name -> anixops.forward.v1.AnixOpsCarrier
-	33,  // 40: anixops.forward.v1.NodeCapabilities.engines:type_name -> anixops.forward.v1.EngineCapabilities
-	37,  // 41: anixops.forward.v1.ApplyResult.errors:type_name -> anixops.forward.v1.HopError
-	0,   // 42: anixops.forward.v1.HopError.engine:type_name -> anixops.forward.v1.Engine
-	37,  // 43: anixops.forward.v1.NodeForwardReport.errors:type_name -> anixops.forward.v1.HopError
-	26,  // 44: anixops.forward.v1.NodeForwardReport.counters:type_name -> anixops.forward.v1.Counters
-	41,  // 45: anixops.forward.v1.NodeForwardReport.health:type_name -> anixops.forward.v1.UpstreamHealth
-	40,  // 46: anixops.forward.v1.NodeForwardReport.vantage:type_name -> anixops.forward.v1.VantageResult
-	9,   // 47: anixops.forward.v1.VantageResult.state:type_name -> anixops.forward.v1.HealthState
-	9,   // 48: anixops.forward.v1.UpstreamHealth.state:type_name -> anixops.forward.v1.HealthState
-	10,  // 49: anixops.forward.v1.ProbeRequest.kind:type_name -> anixops.forward.v1.ProbeKind
-	11,  // 50: anixops.forward.v1.ProbeResult.status:type_name -> anixops.forward.v1.ProbeStatus
-	17,  // 51: anixops.forward.v1.CreateRouteRequest.route:type_name -> anixops.forward.v1.Route
-	17,  // 52: anixops.forward.v1.CreateRouteResponse.route:type_name -> anixops.forward.v1.Route
-	44,  // 53: anixops.forward.v1.CreateRouteResponse.violations:type_name -> anixops.forward.v1.Violation
-	17,  // 54: anixops.forward.v1.UpdateRouteRequest.route:type_name -> anixops.forward.v1.Route
-	17,  // 55: anixops.forward.v1.UpdateRouteResponse.route:type_name -> anixops.forward.v1.Route
-	44,  // 56: anixops.forward.v1.UpdateRouteResponse.violations:type_name -> anixops.forward.v1.Violation
-	17,  // 57: anixops.forward.v1.GetRouteResponse.route:type_name -> anixops.forward.v1.Route
-	17,  // 58: anixops.forward.v1.ListRoutesResponse.routes:type_name -> anixops.forward.v1.Route
-	114, // 59: anixops.forward.v1.ListRoutesResponse.enforced:type_name -> anixops.forward.v1.ListRoutesResponse.EnforcedEntry
-	17,  // 60: anixops.forward.v1.PlanRouteRequest.route:type_name -> anixops.forward.v1.Route
-	27,  // 61: anixops.forward.v1.PlanRouteRequest.nodes:type_name -> anixops.forward.v1.NodeInfo
-	29,  // 62: anixops.forward.v1.PlanRouteResponse.states:type_name -> anixops.forward.v1.NodeForwardState
-	56,  // 63: anixops.forward.v1.PlanRouteResponse.allocations:type_name -> anixops.forward.v1.PortAllocation
-	44,  // 64: anixops.forward.v1.PlanRouteResponse.violations:type_name -> anixops.forward.v1.Violation
-	26,  // 65: anixops.forward.v1.GetRouteStatsResponse.counters:type_name -> anixops.forward.v1.Counters
-	41,  // 66: anixops.forward.v1.GetRouteHealthResponse.health:type_name -> anixops.forward.v1.UpstreamHealth
-	10,  // 67: anixops.forward.v1.DiagnoseStep.kind:type_name -> anixops.forward.v1.ProbeKind
-	43,  // 68: anixops.forward.v1.DiagnoseStep.result:type_name -> anixops.forward.v1.ProbeResult
-	12,  // 69: anixops.forward.v1.DiagnoseStep.vantage:type_name -> anixops.forward.v1.DiagnoseVantage
-	2,   // 70: anixops.forward.v1.DiagnoseStep.protocol:type_name -> anixops.forward.v1.L4Protocol
-	63,  // 71: anixops.forward.v1.DiagnoseRouteResponse.steps:type_name -> anixops.forward.v1.DiagnoseStep
-	65,  // 72: anixops.forward.v1.DiagnoseRouteResponse.nodes:type_name -> anixops.forward.v1.DiagnoseNode
-	28,  // 73: anixops.forward.v1.NodeSettings.port_range:type_name -> anixops.forward.v1.PortRange
-	115, // 74: anixops.forward.v1.NodeSettings.labels:type_name -> anixops.forward.v1.NodeSettings.LabelsEntry
-	13,  // 75: anixops.forward.v1.ForwardNodeRecord.transport:type_name -> anixops.forward.v1.NodeTransport
-	66,  // 76: anixops.forward.v1.NodeSummary.settings:type_name -> anixops.forward.v1.NodeSettings
-	27,  // 77: anixops.forward.v1.NodeSummary.info:type_name -> anixops.forward.v1.NodeInfo
-	35,  // 78: anixops.forward.v1.NodeSummary.capabilities:type_name -> anixops.forward.v1.NodeCapabilities
-	67,  // 79: anixops.forward.v1.NodeSummary.record:type_name -> anixops.forward.v1.ForwardNodeRecord
-	13,  // 80: anixops.forward.v1.ListNodesRequest.transport:type_name -> anixops.forward.v1.NodeTransport
-	68,  // 81: anixops.forward.v1.ListNodesResponse.nodes:type_name -> anixops.forward.v1.NodeSummary
-	68,  // 82: anixops.forward.v1.GetNodeResponse.node:type_name -> anixops.forward.v1.NodeSummary
-	29,  // 83: anixops.forward.v1.GetNodeResponse.state:type_name -> anixops.forward.v1.NodeForwardState
-	39,  // 84: anixops.forward.v1.GetNodeResponse.report:type_name -> anixops.forward.v1.NodeForwardReport
-	66,  // 85: anixops.forward.v1.SetNodeSettingsRequest.settings:type_name -> anixops.forward.v1.NodeSettings
-	68,  // 86: anixops.forward.v1.SetNodeSettingsResponse.node:type_name -> anixops.forward.v1.NodeSummary
-	44,  // 87: anixops.forward.v1.SetNodeSettingsResponse.violations:type_name -> anixops.forward.v1.Violation
-	67,  // 88: anixops.forward.v1.CreateForwardNodeRequest.node:type_name -> anixops.forward.v1.ForwardNodeRecord
-	66,  // 89: anixops.forward.v1.CreateForwardNodeRequest.settings:type_name -> anixops.forward.v1.NodeSettings
-	68,  // 90: anixops.forward.v1.CreateForwardNodeResponse.node:type_name -> anixops.forward.v1.NodeSummary
-	67,  // 91: anixops.forward.v1.UpdateForwardNodeRequest.node:type_name -> anixops.forward.v1.ForwardNodeRecord
-	68,  // 92: anixops.forward.v1.UpdateForwardNodeResponse.node:type_name -> anixops.forward.v1.NodeSummary
-	44,  // 93: anixops.forward.v1.UpdateForwardNodeResponse.violations:type_name -> anixops.forward.v1.Violation
-	44,  // 94: anixops.forward.v1.DeleteForwardNodeResponse.violations:type_name -> anixops.forward.v1.Violation
-	82,  // 95: anixops.forward.v1.GetTrafficResponse.buckets:type_name -> anixops.forward.v1.TrafficBucket
-	14,  // 96: anixops.forward.v1.DnsProvider.kind:type_name -> anixops.forward.v1.DnsProviderKind
-	116, // 97: anixops.forward.v1.DnsProvider.config:type_name -> anixops.forward.v1.DnsProvider.ConfigEntry
-	84,  // 98: anixops.forward.v1.ListDnsProvidersResponse.providers:type_name -> anixops.forward.v1.DnsProvider
-	84,  // 99: anixops.forward.v1.GetDnsProviderResponse.provider:type_name -> anixops.forward.v1.DnsProvider
-	84,  // 100: anixops.forward.v1.CreateDnsProviderRequest.provider:type_name -> anixops.forward.v1.DnsProvider
-	117, // 101: anixops.forward.v1.CreateDnsProviderRequest.credentials:type_name -> anixops.forward.v1.CreateDnsProviderRequest.CredentialsEntry
-	84,  // 102: anixops.forward.v1.CreateDnsProviderResponse.provider:type_name -> anixops.forward.v1.DnsProvider
-	44,  // 103: anixops.forward.v1.CreateDnsProviderResponse.violations:type_name -> anixops.forward.v1.Violation
-	84,  // 104: anixops.forward.v1.UpdateDnsProviderRequest.provider:type_name -> anixops.forward.v1.DnsProvider
-	118, // 105: anixops.forward.v1.UpdateDnsProviderRequest.credentials:type_name -> anixops.forward.v1.UpdateDnsProviderRequest.CredentialsEntry
-	84,  // 106: anixops.forward.v1.UpdateDnsProviderResponse.provider:type_name -> anixops.forward.v1.DnsProvider
-	44,  // 107: anixops.forward.v1.UpdateDnsProviderResponse.violations:type_name -> anixops.forward.v1.Violation
-	44,  // 108: anixops.forward.v1.DeleteDnsProviderResponse.violations:type_name -> anixops.forward.v1.Violation
-	15,  // 109: anixops.forward.v1.DnsBinding.mode:type_name -> anixops.forward.v1.DnsBindingMode
-	16,  // 110: anixops.forward.v1.DnsBinding.record_types:type_name -> anixops.forward.v1.DnsRecordType
-	95,  // 111: anixops.forward.v1.ListDnsBindingsResponse.bindings:type_name -> anixops.forward.v1.DnsBinding
-	95,  // 112: anixops.forward.v1.CreateDnsBindingRequest.binding:type_name -> anixops.forward.v1.DnsBinding
-	95,  // 113: anixops.forward.v1.CreateDnsBindingResponse.binding:type_name -> anixops.forward.v1.DnsBinding
-	44,  // 114: anixops.forward.v1.CreateDnsBindingResponse.violations:type_name -> anixops.forward.v1.Violation
-	95,  // 115: anixops.forward.v1.UpdateDnsBindingRequest.binding:type_name -> anixops.forward.v1.DnsBinding
-	95,  // 116: anixops.forward.v1.UpdateDnsBindingResponse.binding:type_name -> anixops.forward.v1.DnsBinding
-	44,  // 117: anixops.forward.v1.UpdateDnsBindingResponse.violations:type_name -> anixops.forward.v1.Violation
-	44,  // 118: anixops.forward.v1.DeleteDnsBindingResponse.violations:type_name -> anixops.forward.v1.Violation
-	16,  // 119: anixops.forward.v1.DnsRecordStatus.type:type_name -> anixops.forward.v1.DnsRecordType
-	95,  // 120: anixops.forward.v1.RouteDnsStatus.binding:type_name -> anixops.forward.v1.DnsBinding
-	105, // 121: anixops.forward.v1.RouteDnsStatus.records:type_name -> anixops.forward.v1.DnsRecordStatus
-	106, // 122: anixops.forward.v1.RouteDnsStatus.nodes:type_name -> anixops.forward.v1.DnsEntryNode
-	107, // 123: anixops.forward.v1.GetRouteDnsResponse.status:type_name -> anixops.forward.v1.RouteDnsStatus
-	110, // 124: anixops.forward.v1.GetLatencyResponse.buckets:type_name -> anixops.forward.v1.LatencyBucket
-	45,  // 125: anixops.forward.v1.ForwardControl.CreateRoute:input_type -> anixops.forward.v1.CreateRouteRequest
-	47,  // 126: anixops.forward.v1.ForwardControl.UpdateRoute:input_type -> anixops.forward.v1.UpdateRouteRequest
-	49,  // 127: anixops.forward.v1.ForwardControl.DeleteRoute:input_type -> anixops.forward.v1.DeleteRouteRequest
-	51,  // 128: anixops.forward.v1.ForwardControl.GetRoute:input_type -> anixops.forward.v1.GetRouteRequest
-	53,  // 129: anixops.forward.v1.ForwardControl.ListRoutes:input_type -> anixops.forward.v1.ListRoutesRequest
-	55,  // 130: anixops.forward.v1.ForwardControl.PlanRoute:input_type -> anixops.forward.v1.PlanRouteRequest
-	58,  // 131: anixops.forward.v1.ForwardControl.GetRouteStats:input_type -> anixops.forward.v1.GetRouteStatsRequest
-	60,  // 132: anixops.forward.v1.ForwardControl.GetRouteHealth:input_type -> anixops.forward.v1.GetRouteHealthRequest
-	62,  // 133: anixops.forward.v1.ForwardControl.DiagnoseRoute:input_type -> anixops.forward.v1.DiagnoseRouteRequest
-	69,  // 134: anixops.forward.v1.ForwardControl.ListNodes:input_type -> anixops.forward.v1.ListNodesRequest
-	71,  // 135: anixops.forward.v1.ForwardControl.GetNode:input_type -> anixops.forward.v1.GetNodeRequest
-	73,  // 136: anixops.forward.v1.ForwardControl.SetNodeSettings:input_type -> anixops.forward.v1.SetNodeSettingsRequest
-	75,  // 137: anixops.forward.v1.ForwardControl.CreateForwardNode:input_type -> anixops.forward.v1.CreateForwardNodeRequest
-	77,  // 138: anixops.forward.v1.ForwardControl.UpdateForwardNode:input_type -> anixops.forward.v1.UpdateForwardNodeRequest
-	79,  // 139: anixops.forward.v1.ForwardControl.DeleteForwardNode:input_type -> anixops.forward.v1.DeleteForwardNodeRequest
-	81,  // 140: anixops.forward.v1.ForwardControl.GetTraffic:input_type -> anixops.forward.v1.GetTrafficRequest
-	85,  // 141: anixops.forward.v1.ForwardControl.ListDnsProviders:input_type -> anixops.forward.v1.ListDnsProvidersRequest
-	87,  // 142: anixops.forward.v1.ForwardControl.GetDnsProvider:input_type -> anixops.forward.v1.GetDnsProviderRequest
-	89,  // 143: anixops.forward.v1.ForwardControl.CreateDnsProvider:input_type -> anixops.forward.v1.CreateDnsProviderRequest
-	91,  // 144: anixops.forward.v1.ForwardControl.UpdateDnsProvider:input_type -> anixops.forward.v1.UpdateDnsProviderRequest
-	93,  // 145: anixops.forward.v1.ForwardControl.DeleteDnsProvider:input_type -> anixops.forward.v1.DeleteDnsProviderRequest
-	96,  // 146: anixops.forward.v1.ForwardControl.ListDnsBindings:input_type -> anixops.forward.v1.ListDnsBindingsRequest
-	98,  // 147: anixops.forward.v1.ForwardControl.CreateDnsBinding:input_type -> anixops.forward.v1.CreateDnsBindingRequest
-	100, // 148: anixops.forward.v1.ForwardControl.UpdateDnsBinding:input_type -> anixops.forward.v1.UpdateDnsBindingRequest
-	102, // 149: anixops.forward.v1.ForwardControl.DeleteDnsBinding:input_type -> anixops.forward.v1.DeleteDnsBindingRequest
-	104, // 150: anixops.forward.v1.ForwardControl.GetRouteDns:input_type -> anixops.forward.v1.GetRouteDnsRequest
-	109, // 151: anixops.forward.v1.ForwardControl.GetLatency:input_type -> anixops.forward.v1.GetLatencyRequest
-	34,  // 152: anixops.forward.v1.ForwardNode.GetCapabilities:input_type -> anixops.forward.v1.GetNodeCapabilitiesRequest
-	29,  // 153: anixops.forward.v1.ForwardNode.Apply:input_type -> anixops.forward.v1.NodeForwardState
-	38,  // 154: anixops.forward.v1.ForwardNode.Observe:input_type -> anixops.forward.v1.ObserveRequest
-	42,  // 155: anixops.forward.v1.ForwardNode.Probe:input_type -> anixops.forward.v1.ProbeRequest
-	46,  // 156: anixops.forward.v1.ForwardControl.CreateRoute:output_type -> anixops.forward.v1.CreateRouteResponse
-	48,  // 157: anixops.forward.v1.ForwardControl.UpdateRoute:output_type -> anixops.forward.v1.UpdateRouteResponse
-	50,  // 158: anixops.forward.v1.ForwardControl.DeleteRoute:output_type -> anixops.forward.v1.DeleteRouteResponse
-	52,  // 159: anixops.forward.v1.ForwardControl.GetRoute:output_type -> anixops.forward.v1.GetRouteResponse
-	54,  // 160: anixops.forward.v1.ForwardControl.ListRoutes:output_type -> anixops.forward.v1.ListRoutesResponse
-	57,  // 161: anixops.forward.v1.ForwardControl.PlanRoute:output_type -> anixops.forward.v1.PlanRouteResponse
-	59,  // 162: anixops.forward.v1.ForwardControl.GetRouteStats:output_type -> anixops.forward.v1.GetRouteStatsResponse
-	61,  // 163: anixops.forward.v1.ForwardControl.GetRouteHealth:output_type -> anixops.forward.v1.GetRouteHealthResponse
-	64,  // 164: anixops.forward.v1.ForwardControl.DiagnoseRoute:output_type -> anixops.forward.v1.DiagnoseRouteResponse
-	70,  // 165: anixops.forward.v1.ForwardControl.ListNodes:output_type -> anixops.forward.v1.ListNodesResponse
-	72,  // 166: anixops.forward.v1.ForwardControl.GetNode:output_type -> anixops.forward.v1.GetNodeResponse
-	74,  // 167: anixops.forward.v1.ForwardControl.SetNodeSettings:output_type -> anixops.forward.v1.SetNodeSettingsResponse
-	76,  // 168: anixops.forward.v1.ForwardControl.CreateForwardNode:output_type -> anixops.forward.v1.CreateForwardNodeResponse
-	78,  // 169: anixops.forward.v1.ForwardControl.UpdateForwardNode:output_type -> anixops.forward.v1.UpdateForwardNodeResponse
-	80,  // 170: anixops.forward.v1.ForwardControl.DeleteForwardNode:output_type -> anixops.forward.v1.DeleteForwardNodeResponse
-	83,  // 171: anixops.forward.v1.ForwardControl.GetTraffic:output_type -> anixops.forward.v1.GetTrafficResponse
-	86,  // 172: anixops.forward.v1.ForwardControl.ListDnsProviders:output_type -> anixops.forward.v1.ListDnsProvidersResponse
-	88,  // 173: anixops.forward.v1.ForwardControl.GetDnsProvider:output_type -> anixops.forward.v1.GetDnsProviderResponse
-	90,  // 174: anixops.forward.v1.ForwardControl.CreateDnsProvider:output_type -> anixops.forward.v1.CreateDnsProviderResponse
-	92,  // 175: anixops.forward.v1.ForwardControl.UpdateDnsProvider:output_type -> anixops.forward.v1.UpdateDnsProviderResponse
-	94,  // 176: anixops.forward.v1.ForwardControl.DeleteDnsProvider:output_type -> anixops.forward.v1.DeleteDnsProviderResponse
-	97,  // 177: anixops.forward.v1.ForwardControl.ListDnsBindings:output_type -> anixops.forward.v1.ListDnsBindingsResponse
-	99,  // 178: anixops.forward.v1.ForwardControl.CreateDnsBinding:output_type -> anixops.forward.v1.CreateDnsBindingResponse
-	101, // 179: anixops.forward.v1.ForwardControl.UpdateDnsBinding:output_type -> anixops.forward.v1.UpdateDnsBindingResponse
-	103, // 180: anixops.forward.v1.ForwardControl.DeleteDnsBinding:output_type -> anixops.forward.v1.DeleteDnsBindingResponse
-	108, // 181: anixops.forward.v1.ForwardControl.GetRouteDns:output_type -> anixops.forward.v1.GetRouteDnsResponse
-	111, // 182: anixops.forward.v1.ForwardControl.GetLatency:output_type -> anixops.forward.v1.GetLatencyResponse
-	35,  // 183: anixops.forward.v1.ForwardNode.GetCapabilities:output_type -> anixops.forward.v1.NodeCapabilities
-	36,  // 184: anixops.forward.v1.ForwardNode.Apply:output_type -> anixops.forward.v1.ApplyResult
-	39,  // 185: anixops.forward.v1.ForwardNode.Observe:output_type -> anixops.forward.v1.NodeForwardReport
-	43,  // 186: anixops.forward.v1.ForwardNode.Probe:output_type -> anixops.forward.v1.ProbeResult
-	156, // [156:187] is the sub-list for method output_type
-	125, // [125:156] is the sub-list for method input_type
-	125, // [125:125] is the sub-list for extension type_name
-	125, // [125:125] is the sub-list for extension extendee
-	0,   // [0:125] is the sub-list for field type_name
+	9,   // 12: anixops.forward.v1.LinkTransport.network_mode:type_name -> anixops.forward.v1.NetworkTransportMode
+	10,  // 13: anixops.forward.v1.LinkTransport.network_carriers:type_name -> anixops.forward.v1.NetworkCarrier
+	6,   // 14: anixops.forward.v1.Policy.next_hop:type_name -> anixops.forward.v1.BalanceStrategy
+	6,   // 15: anixops.forward.v1.Policy.target:type_name -> anixops.forward.v1.BalanceStrategy
+	25,  // 16: anixops.forward.v1.Policy.health:type_name -> anixops.forward.v1.HealthCheck
+	26,  // 17: anixops.forward.v1.Policy.circuit_breaker:type_name -> anixops.forward.v1.CircuitBreaker
+	7,   // 18: anixops.forward.v1.Policy.direct:type_name -> anixops.forward.v1.DirectMode
+	8,   // 19: anixops.forward.v1.Policy.target_policy:type_name -> anixops.forward.v1.TargetPolicy
+	5,   // 20: anixops.forward.v1.Policy.proxy_protocol:type_name -> anixops.forward.v1.ProxyProtocol
+	30,  // 21: anixops.forward.v1.NodeInfo.port_range:type_name -> anixops.forward.v1.PortRange
+	35,  // 22: anixops.forward.v1.NodeInfo.engines:type_name -> anixops.forward.v1.EngineCapabilities
+	115, // 23: anixops.forward.v1.NodeInfo.labels:type_name -> anixops.forward.v1.NodeInfo.LabelsEntry
+	33,  // 24: anixops.forward.v1.NodeForwardState.hops:type_name -> anixops.forward.v1.NodeHop
+	32,  // 25: anixops.forward.v1.NodeForwardState.vantage_probes:type_name -> anixops.forward.v1.VantageProbe
+	1,   // 26: anixops.forward.v1.NodeHop.role:type_name -> anixops.forward.v1.HopRole
+	0,   // 27: anixops.forward.v1.NodeHop.engine:type_name -> anixops.forward.v1.Engine
+	20,  // 28: anixops.forward.v1.NodeHop.listen:type_name -> anixops.forward.v1.Listen
+	22,  // 29: anixops.forward.v1.NodeHop.ingress:type_name -> anixops.forward.v1.LinkTransport
+	34,  // 30: anixops.forward.v1.NodeHop.upstreams:type_name -> anixops.forward.v1.Upstream
+	6,   // 31: anixops.forward.v1.NodeHop.balance:type_name -> anixops.forward.v1.BalanceStrategy
+	25,  // 32: anixops.forward.v1.NodeHop.health:type_name -> anixops.forward.v1.HealthCheck
+	26,  // 33: anixops.forward.v1.NodeHop.circuit_breaker:type_name -> anixops.forward.v1.CircuitBreaker
+	27,  // 34: anixops.forward.v1.NodeHop.limits:type_name -> anixops.forward.v1.Limits
+	8,   // 35: anixops.forward.v1.NodeHop.target_policy:type_name -> anixops.forward.v1.TargetPolicy
+	5,   // 36: anixops.forward.v1.NodeHop.proxy_protocol:type_name -> anixops.forward.v1.ProxyProtocol
+	22,  // 37: anixops.forward.v1.Upstream.egress:type_name -> anixops.forward.v1.LinkTransport
+	0,   // 38: anixops.forward.v1.EngineCapabilities.engine:type_name -> anixops.forward.v1.Engine
+	6,   // 39: anixops.forward.v1.EngineCapabilities.strategies:type_name -> anixops.forward.v1.BalanceStrategy
+	3,   // 40: anixops.forward.v1.EngineCapabilities.link_securities:type_name -> anixops.forward.v1.LinkSecurity
+	4,   // 41: anixops.forward.v1.EngineCapabilities.carriers:type_name -> anixops.forward.v1.AnixOpsCarrier
+	35,  // 42: anixops.forward.v1.NodeCapabilities.engines:type_name -> anixops.forward.v1.EngineCapabilities
+	39,  // 43: anixops.forward.v1.ApplyResult.errors:type_name -> anixops.forward.v1.HopError
+	0,   // 44: anixops.forward.v1.HopError.engine:type_name -> anixops.forward.v1.Engine
+	39,  // 45: anixops.forward.v1.NodeForwardReport.errors:type_name -> anixops.forward.v1.HopError
+	28,  // 46: anixops.forward.v1.NodeForwardReport.counters:type_name -> anixops.forward.v1.Counters
+	43,  // 47: anixops.forward.v1.NodeForwardReport.health:type_name -> anixops.forward.v1.UpstreamHealth
+	42,  // 48: anixops.forward.v1.NodeForwardReport.vantage:type_name -> anixops.forward.v1.VantageResult
+	11,  // 49: anixops.forward.v1.VantageResult.state:type_name -> anixops.forward.v1.HealthState
+	11,  // 50: anixops.forward.v1.UpstreamHealth.state:type_name -> anixops.forward.v1.HealthState
+	12,  // 51: anixops.forward.v1.ProbeRequest.kind:type_name -> anixops.forward.v1.ProbeKind
+	13,  // 52: anixops.forward.v1.ProbeResult.status:type_name -> anixops.forward.v1.ProbeStatus
+	19,  // 53: anixops.forward.v1.CreateRouteRequest.route:type_name -> anixops.forward.v1.Route
+	19,  // 54: anixops.forward.v1.CreateRouteResponse.route:type_name -> anixops.forward.v1.Route
+	46,  // 55: anixops.forward.v1.CreateRouteResponse.violations:type_name -> anixops.forward.v1.Violation
+	19,  // 56: anixops.forward.v1.UpdateRouteRequest.route:type_name -> anixops.forward.v1.Route
+	19,  // 57: anixops.forward.v1.UpdateRouteResponse.route:type_name -> anixops.forward.v1.Route
+	46,  // 58: anixops.forward.v1.UpdateRouteResponse.violations:type_name -> anixops.forward.v1.Violation
+	19,  // 59: anixops.forward.v1.GetRouteResponse.route:type_name -> anixops.forward.v1.Route
+	19,  // 60: anixops.forward.v1.ListRoutesResponse.routes:type_name -> anixops.forward.v1.Route
+	116, // 61: anixops.forward.v1.ListRoutesResponse.enforced:type_name -> anixops.forward.v1.ListRoutesResponse.EnforcedEntry
+	19,  // 62: anixops.forward.v1.PlanRouteRequest.route:type_name -> anixops.forward.v1.Route
+	29,  // 63: anixops.forward.v1.PlanRouteRequest.nodes:type_name -> anixops.forward.v1.NodeInfo
+	31,  // 64: anixops.forward.v1.PlanRouteResponse.states:type_name -> anixops.forward.v1.NodeForwardState
+	58,  // 65: anixops.forward.v1.PlanRouteResponse.allocations:type_name -> anixops.forward.v1.PortAllocation
+	46,  // 66: anixops.forward.v1.PlanRouteResponse.violations:type_name -> anixops.forward.v1.Violation
+	28,  // 67: anixops.forward.v1.GetRouteStatsResponse.counters:type_name -> anixops.forward.v1.Counters
+	43,  // 68: anixops.forward.v1.GetRouteHealthResponse.health:type_name -> anixops.forward.v1.UpstreamHealth
+	12,  // 69: anixops.forward.v1.DiagnoseStep.kind:type_name -> anixops.forward.v1.ProbeKind
+	45,  // 70: anixops.forward.v1.DiagnoseStep.result:type_name -> anixops.forward.v1.ProbeResult
+	14,  // 71: anixops.forward.v1.DiagnoseStep.vantage:type_name -> anixops.forward.v1.DiagnoseVantage
+	2,   // 72: anixops.forward.v1.DiagnoseStep.protocol:type_name -> anixops.forward.v1.L4Protocol
+	65,  // 73: anixops.forward.v1.DiagnoseRouteResponse.steps:type_name -> anixops.forward.v1.DiagnoseStep
+	67,  // 74: anixops.forward.v1.DiagnoseRouteResponse.nodes:type_name -> anixops.forward.v1.DiagnoseNode
+	30,  // 75: anixops.forward.v1.NodeSettings.port_range:type_name -> anixops.forward.v1.PortRange
+	117, // 76: anixops.forward.v1.NodeSettings.labels:type_name -> anixops.forward.v1.NodeSettings.LabelsEntry
+	15,  // 77: anixops.forward.v1.ForwardNodeRecord.transport:type_name -> anixops.forward.v1.NodeTransport
+	68,  // 78: anixops.forward.v1.NodeSummary.settings:type_name -> anixops.forward.v1.NodeSettings
+	29,  // 79: anixops.forward.v1.NodeSummary.info:type_name -> anixops.forward.v1.NodeInfo
+	37,  // 80: anixops.forward.v1.NodeSummary.capabilities:type_name -> anixops.forward.v1.NodeCapabilities
+	69,  // 81: anixops.forward.v1.NodeSummary.record:type_name -> anixops.forward.v1.ForwardNodeRecord
+	15,  // 82: anixops.forward.v1.ListNodesRequest.transport:type_name -> anixops.forward.v1.NodeTransport
+	70,  // 83: anixops.forward.v1.ListNodesResponse.nodes:type_name -> anixops.forward.v1.NodeSummary
+	70,  // 84: anixops.forward.v1.GetNodeResponse.node:type_name -> anixops.forward.v1.NodeSummary
+	31,  // 85: anixops.forward.v1.GetNodeResponse.state:type_name -> anixops.forward.v1.NodeForwardState
+	41,  // 86: anixops.forward.v1.GetNodeResponse.report:type_name -> anixops.forward.v1.NodeForwardReport
+	68,  // 87: anixops.forward.v1.SetNodeSettingsRequest.settings:type_name -> anixops.forward.v1.NodeSettings
+	70,  // 88: anixops.forward.v1.SetNodeSettingsResponse.node:type_name -> anixops.forward.v1.NodeSummary
+	46,  // 89: anixops.forward.v1.SetNodeSettingsResponse.violations:type_name -> anixops.forward.v1.Violation
+	69,  // 90: anixops.forward.v1.CreateForwardNodeRequest.node:type_name -> anixops.forward.v1.ForwardNodeRecord
+	68,  // 91: anixops.forward.v1.CreateForwardNodeRequest.settings:type_name -> anixops.forward.v1.NodeSettings
+	70,  // 92: anixops.forward.v1.CreateForwardNodeResponse.node:type_name -> anixops.forward.v1.NodeSummary
+	69,  // 93: anixops.forward.v1.UpdateForwardNodeRequest.node:type_name -> anixops.forward.v1.ForwardNodeRecord
+	70,  // 94: anixops.forward.v1.UpdateForwardNodeResponse.node:type_name -> anixops.forward.v1.NodeSummary
+	46,  // 95: anixops.forward.v1.UpdateForwardNodeResponse.violations:type_name -> anixops.forward.v1.Violation
+	46,  // 96: anixops.forward.v1.DeleteForwardNodeResponse.violations:type_name -> anixops.forward.v1.Violation
+	84,  // 97: anixops.forward.v1.GetTrafficResponse.buckets:type_name -> anixops.forward.v1.TrafficBucket
+	16,  // 98: anixops.forward.v1.DnsProvider.kind:type_name -> anixops.forward.v1.DnsProviderKind
+	118, // 99: anixops.forward.v1.DnsProvider.config:type_name -> anixops.forward.v1.DnsProvider.ConfigEntry
+	86,  // 100: anixops.forward.v1.ListDnsProvidersResponse.providers:type_name -> anixops.forward.v1.DnsProvider
+	86,  // 101: anixops.forward.v1.GetDnsProviderResponse.provider:type_name -> anixops.forward.v1.DnsProvider
+	86,  // 102: anixops.forward.v1.CreateDnsProviderRequest.provider:type_name -> anixops.forward.v1.DnsProvider
+	119, // 103: anixops.forward.v1.CreateDnsProviderRequest.credentials:type_name -> anixops.forward.v1.CreateDnsProviderRequest.CredentialsEntry
+	86,  // 104: anixops.forward.v1.CreateDnsProviderResponse.provider:type_name -> anixops.forward.v1.DnsProvider
+	46,  // 105: anixops.forward.v1.CreateDnsProviderResponse.violations:type_name -> anixops.forward.v1.Violation
+	86,  // 106: anixops.forward.v1.UpdateDnsProviderRequest.provider:type_name -> anixops.forward.v1.DnsProvider
+	120, // 107: anixops.forward.v1.UpdateDnsProviderRequest.credentials:type_name -> anixops.forward.v1.UpdateDnsProviderRequest.CredentialsEntry
+	86,  // 108: anixops.forward.v1.UpdateDnsProviderResponse.provider:type_name -> anixops.forward.v1.DnsProvider
+	46,  // 109: anixops.forward.v1.UpdateDnsProviderResponse.violations:type_name -> anixops.forward.v1.Violation
+	46,  // 110: anixops.forward.v1.DeleteDnsProviderResponse.violations:type_name -> anixops.forward.v1.Violation
+	17,  // 111: anixops.forward.v1.DnsBinding.mode:type_name -> anixops.forward.v1.DnsBindingMode
+	18,  // 112: anixops.forward.v1.DnsBinding.record_types:type_name -> anixops.forward.v1.DnsRecordType
+	97,  // 113: anixops.forward.v1.ListDnsBindingsResponse.bindings:type_name -> anixops.forward.v1.DnsBinding
+	97,  // 114: anixops.forward.v1.CreateDnsBindingRequest.binding:type_name -> anixops.forward.v1.DnsBinding
+	97,  // 115: anixops.forward.v1.CreateDnsBindingResponse.binding:type_name -> anixops.forward.v1.DnsBinding
+	46,  // 116: anixops.forward.v1.CreateDnsBindingResponse.violations:type_name -> anixops.forward.v1.Violation
+	97,  // 117: anixops.forward.v1.UpdateDnsBindingRequest.binding:type_name -> anixops.forward.v1.DnsBinding
+	97,  // 118: anixops.forward.v1.UpdateDnsBindingResponse.binding:type_name -> anixops.forward.v1.DnsBinding
+	46,  // 119: anixops.forward.v1.UpdateDnsBindingResponse.violations:type_name -> anixops.forward.v1.Violation
+	46,  // 120: anixops.forward.v1.DeleteDnsBindingResponse.violations:type_name -> anixops.forward.v1.Violation
+	18,  // 121: anixops.forward.v1.DnsRecordStatus.type:type_name -> anixops.forward.v1.DnsRecordType
+	97,  // 122: anixops.forward.v1.RouteDnsStatus.binding:type_name -> anixops.forward.v1.DnsBinding
+	107, // 123: anixops.forward.v1.RouteDnsStatus.records:type_name -> anixops.forward.v1.DnsRecordStatus
+	108, // 124: anixops.forward.v1.RouteDnsStatus.nodes:type_name -> anixops.forward.v1.DnsEntryNode
+	109, // 125: anixops.forward.v1.GetRouteDnsResponse.status:type_name -> anixops.forward.v1.RouteDnsStatus
+	112, // 126: anixops.forward.v1.GetLatencyResponse.buckets:type_name -> anixops.forward.v1.LatencyBucket
+	47,  // 127: anixops.forward.v1.ForwardControl.CreateRoute:input_type -> anixops.forward.v1.CreateRouteRequest
+	49,  // 128: anixops.forward.v1.ForwardControl.UpdateRoute:input_type -> anixops.forward.v1.UpdateRouteRequest
+	51,  // 129: anixops.forward.v1.ForwardControl.DeleteRoute:input_type -> anixops.forward.v1.DeleteRouteRequest
+	53,  // 130: anixops.forward.v1.ForwardControl.GetRoute:input_type -> anixops.forward.v1.GetRouteRequest
+	55,  // 131: anixops.forward.v1.ForwardControl.ListRoutes:input_type -> anixops.forward.v1.ListRoutesRequest
+	57,  // 132: anixops.forward.v1.ForwardControl.PlanRoute:input_type -> anixops.forward.v1.PlanRouteRequest
+	60,  // 133: anixops.forward.v1.ForwardControl.GetRouteStats:input_type -> anixops.forward.v1.GetRouteStatsRequest
+	62,  // 134: anixops.forward.v1.ForwardControl.GetRouteHealth:input_type -> anixops.forward.v1.GetRouteHealthRequest
+	64,  // 135: anixops.forward.v1.ForwardControl.DiagnoseRoute:input_type -> anixops.forward.v1.DiagnoseRouteRequest
+	71,  // 136: anixops.forward.v1.ForwardControl.ListNodes:input_type -> anixops.forward.v1.ListNodesRequest
+	73,  // 137: anixops.forward.v1.ForwardControl.GetNode:input_type -> anixops.forward.v1.GetNodeRequest
+	75,  // 138: anixops.forward.v1.ForwardControl.SetNodeSettings:input_type -> anixops.forward.v1.SetNodeSettingsRequest
+	77,  // 139: anixops.forward.v1.ForwardControl.CreateForwardNode:input_type -> anixops.forward.v1.CreateForwardNodeRequest
+	79,  // 140: anixops.forward.v1.ForwardControl.UpdateForwardNode:input_type -> anixops.forward.v1.UpdateForwardNodeRequest
+	81,  // 141: anixops.forward.v1.ForwardControl.DeleteForwardNode:input_type -> anixops.forward.v1.DeleteForwardNodeRequest
+	83,  // 142: anixops.forward.v1.ForwardControl.GetTraffic:input_type -> anixops.forward.v1.GetTrafficRequest
+	87,  // 143: anixops.forward.v1.ForwardControl.ListDnsProviders:input_type -> anixops.forward.v1.ListDnsProvidersRequest
+	89,  // 144: anixops.forward.v1.ForwardControl.GetDnsProvider:input_type -> anixops.forward.v1.GetDnsProviderRequest
+	91,  // 145: anixops.forward.v1.ForwardControl.CreateDnsProvider:input_type -> anixops.forward.v1.CreateDnsProviderRequest
+	93,  // 146: anixops.forward.v1.ForwardControl.UpdateDnsProvider:input_type -> anixops.forward.v1.UpdateDnsProviderRequest
+	95,  // 147: anixops.forward.v1.ForwardControl.DeleteDnsProvider:input_type -> anixops.forward.v1.DeleteDnsProviderRequest
+	98,  // 148: anixops.forward.v1.ForwardControl.ListDnsBindings:input_type -> anixops.forward.v1.ListDnsBindingsRequest
+	100, // 149: anixops.forward.v1.ForwardControl.CreateDnsBinding:input_type -> anixops.forward.v1.CreateDnsBindingRequest
+	102, // 150: anixops.forward.v1.ForwardControl.UpdateDnsBinding:input_type -> anixops.forward.v1.UpdateDnsBindingRequest
+	104, // 151: anixops.forward.v1.ForwardControl.DeleteDnsBinding:input_type -> anixops.forward.v1.DeleteDnsBindingRequest
+	106, // 152: anixops.forward.v1.ForwardControl.GetRouteDns:input_type -> anixops.forward.v1.GetRouteDnsRequest
+	111, // 153: anixops.forward.v1.ForwardControl.GetLatency:input_type -> anixops.forward.v1.GetLatencyRequest
+	36,  // 154: anixops.forward.v1.ForwardNode.GetCapabilities:input_type -> anixops.forward.v1.GetNodeCapabilitiesRequest
+	31,  // 155: anixops.forward.v1.ForwardNode.Apply:input_type -> anixops.forward.v1.NodeForwardState
+	40,  // 156: anixops.forward.v1.ForwardNode.Observe:input_type -> anixops.forward.v1.ObserveRequest
+	44,  // 157: anixops.forward.v1.ForwardNode.Probe:input_type -> anixops.forward.v1.ProbeRequest
+	48,  // 158: anixops.forward.v1.ForwardControl.CreateRoute:output_type -> anixops.forward.v1.CreateRouteResponse
+	50,  // 159: anixops.forward.v1.ForwardControl.UpdateRoute:output_type -> anixops.forward.v1.UpdateRouteResponse
+	52,  // 160: anixops.forward.v1.ForwardControl.DeleteRoute:output_type -> anixops.forward.v1.DeleteRouteResponse
+	54,  // 161: anixops.forward.v1.ForwardControl.GetRoute:output_type -> anixops.forward.v1.GetRouteResponse
+	56,  // 162: anixops.forward.v1.ForwardControl.ListRoutes:output_type -> anixops.forward.v1.ListRoutesResponse
+	59,  // 163: anixops.forward.v1.ForwardControl.PlanRoute:output_type -> anixops.forward.v1.PlanRouteResponse
+	61,  // 164: anixops.forward.v1.ForwardControl.GetRouteStats:output_type -> anixops.forward.v1.GetRouteStatsResponse
+	63,  // 165: anixops.forward.v1.ForwardControl.GetRouteHealth:output_type -> anixops.forward.v1.GetRouteHealthResponse
+	66,  // 166: anixops.forward.v1.ForwardControl.DiagnoseRoute:output_type -> anixops.forward.v1.DiagnoseRouteResponse
+	72,  // 167: anixops.forward.v1.ForwardControl.ListNodes:output_type -> anixops.forward.v1.ListNodesResponse
+	74,  // 168: anixops.forward.v1.ForwardControl.GetNode:output_type -> anixops.forward.v1.GetNodeResponse
+	76,  // 169: anixops.forward.v1.ForwardControl.SetNodeSettings:output_type -> anixops.forward.v1.SetNodeSettingsResponse
+	78,  // 170: anixops.forward.v1.ForwardControl.CreateForwardNode:output_type -> anixops.forward.v1.CreateForwardNodeResponse
+	80,  // 171: anixops.forward.v1.ForwardControl.UpdateForwardNode:output_type -> anixops.forward.v1.UpdateForwardNodeResponse
+	82,  // 172: anixops.forward.v1.ForwardControl.DeleteForwardNode:output_type -> anixops.forward.v1.DeleteForwardNodeResponse
+	85,  // 173: anixops.forward.v1.ForwardControl.GetTraffic:output_type -> anixops.forward.v1.GetTrafficResponse
+	88,  // 174: anixops.forward.v1.ForwardControl.ListDnsProviders:output_type -> anixops.forward.v1.ListDnsProvidersResponse
+	90,  // 175: anixops.forward.v1.ForwardControl.GetDnsProvider:output_type -> anixops.forward.v1.GetDnsProviderResponse
+	92,  // 176: anixops.forward.v1.ForwardControl.CreateDnsProvider:output_type -> anixops.forward.v1.CreateDnsProviderResponse
+	94,  // 177: anixops.forward.v1.ForwardControl.UpdateDnsProvider:output_type -> anixops.forward.v1.UpdateDnsProviderResponse
+	96,  // 178: anixops.forward.v1.ForwardControl.DeleteDnsProvider:output_type -> anixops.forward.v1.DeleteDnsProviderResponse
+	99,  // 179: anixops.forward.v1.ForwardControl.ListDnsBindings:output_type -> anixops.forward.v1.ListDnsBindingsResponse
+	101, // 180: anixops.forward.v1.ForwardControl.CreateDnsBinding:output_type -> anixops.forward.v1.CreateDnsBindingResponse
+	103, // 181: anixops.forward.v1.ForwardControl.UpdateDnsBinding:output_type -> anixops.forward.v1.UpdateDnsBindingResponse
+	105, // 182: anixops.forward.v1.ForwardControl.DeleteDnsBinding:output_type -> anixops.forward.v1.DeleteDnsBindingResponse
+	110, // 183: anixops.forward.v1.ForwardControl.GetRouteDns:output_type -> anixops.forward.v1.GetRouteDnsResponse
+	113, // 184: anixops.forward.v1.ForwardControl.GetLatency:output_type -> anixops.forward.v1.GetLatencyResponse
+	37,  // 185: anixops.forward.v1.ForwardNode.GetCapabilities:output_type -> anixops.forward.v1.NodeCapabilities
+	38,  // 186: anixops.forward.v1.ForwardNode.Apply:output_type -> anixops.forward.v1.ApplyResult
+	41,  // 187: anixops.forward.v1.ForwardNode.Observe:output_type -> anixops.forward.v1.NodeForwardReport
+	45,  // 188: anixops.forward.v1.ForwardNode.Probe:output_type -> anixops.forward.v1.ProbeResult
+	158, // [158:189] is the sub-list for method output_type
+	127, // [127:158] is the sub-list for method input_type
+	127, // [127:127] is the sub-list for extension type_name
+	127, // [127:127] is the sub-list for extension extendee
+	0,   // [0:127] is the sub-list for field type_name
 }
 
 func init() { file_api_forward_v1_forward_proto_init() }
@@ -9115,7 +9287,7 @@ func file_api_forward_v1_forward_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_forward_v1_forward_proto_rawDesc), len(file_api_forward_v1_forward_proto_rawDesc)),
-			NumEnums:      17,
+			NumEnums:      19,
 			NumMessages:   102,
 			NumExtensions: 0,
 			NumServices:   2,

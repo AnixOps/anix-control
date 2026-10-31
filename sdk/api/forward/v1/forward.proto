@@ -440,6 +440,43 @@ message LinkTransport {
   // lets Control link the two devices with a transport of its own (ANX-A,
   // id auto-<from>-<to>). Several routes may share one transport.
   string network_transport_id = 6;
+  // network_mode is the transport Control links the two devices with when
+  // network_transport_id is empty; only for LINK_SECURITY_NETWORK.
+  // Unspecified means NETWORK_TRANSPORT_MODE_ANX_A. Added after rc.21
+  // (additions only).
+  NetworkTransportMode network_mode = 7;
+  // network_carriers orders the carriers of a NETWORK_TRANSPORT_MODE_ANX_LINE
+  // link; empty means TCP only. Refused on other modes.
+  repeated NetworkCarrier network_carriers = 8;
+  // network_multipath runs a NETWORK_TRANSPORT_MODE_ANX_LINE link over its
+  // carriers at once; network_fec adds forward error correction. Refused
+  // on other modes.
+  bool network_multipath = 9;
+  bool network_fec = 10;
+}
+
+// NetworkTransportMode is the transport Control links two devices with
+// for a LINK_SECURITY_NETWORK link that names no network model transport.
+enum NetworkTransportMode {
+  // NETWORK_TRANSPORT_MODE_UNSPECIFIED means ANX_A.
+  NETWORK_TRANSPORT_MODE_UNSPECIFIED = 0;
+  // ANX_A is ANX-Line under the A2 jacket, on TCP: for any segment,
+  // cross-border ones above all.
+  NETWORK_TRANSPORT_MODE_ANX_A = 1;
+  // ANX_LINE is the bare ANX-Line, on the carriers of network_carriers:
+  // only for trusted segments (IX, private line, domestic).
+  NETWORK_TRANSPORT_MODE_ANX_LINE = 2;
+  // ANX_LINE_REVERSE is the bare ANX-Line on TCP, dialed back by the
+  // accepting device, which opens no port: for a next device behind NAT,
+  // on trusted segments only.
+  NETWORK_TRANSPORT_MODE_ANX_LINE_REVERSE = 3;
+}
+
+// NetworkCarrier is a carrier of a bare ANX-Line link.
+enum NetworkCarrier {
+  NETWORK_CARRIER_UNSPECIFIED = 0;
+  NETWORK_CARRIER_TCP = 1;
+  NETWORK_CARRIER_QUIC = 2;
 }
 
 // Target is a destination behind the last hop.
