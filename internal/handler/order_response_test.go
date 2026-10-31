@@ -2,7 +2,6 @@ package handler
 
 import (
 	"sort"
-
 )
 
 // orderColumns are the keys of an order's own columns in an answer.
