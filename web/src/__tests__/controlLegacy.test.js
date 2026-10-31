@@ -5,10 +5,6 @@ describe('legacy Control redirects', () => {
   it.each([
     [undefined, '/admin/system/packages'],
     ['plugins', '/admin/system/packages'],
-    ['assignments', '/admin/deployments'],
-    ['scopes', '/admin/deployments'],
-    ['topologies', '/admin/deployments'],
-    ['operations', '/admin/deployments'],
     ['unknown', '/admin/system/packages'],
   ])('maps tab %s to %s', (tab, path) => {
     const query = tab === undefined ? { keep: 'yes' } : { tab, keep: 'yes' }

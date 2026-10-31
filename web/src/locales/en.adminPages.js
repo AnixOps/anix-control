@@ -524,66 +524,14 @@ export default {
     }
   },
   control: {
-    deploymentsSubtitle: 'Manage topologies, node roles, and deployments.',
-    actions: {
-      refresh: 'Refresh', refreshing: 'Refreshing...',
-      enable: 'Enable', disable: 'Disable', cancel: 'Cancel operation',
-      saving: 'Saving...', newAssignment: 'New assignment'
-    },
-    tabs: { assignments: 'Assignments', topologies: 'Topologies' },
-    table: {
-      plugin: 'Plugin', version: 'Version', state: 'State', actions: 'Actions',
-      scope: 'Scope', description: 'Description', topology: 'Topology', activeRevision: 'Active revision', deployment: 'Deployment',
-      operation: 'Operation', chain: 'Chain', revision: 'Revision', deadline: 'Deadline', target: 'Target', version: 'Version', role: 'Role', configRevision: 'Config revision', rolloutGroup: 'Rollout group'
-    },
-    states: { enabled: 'Enabled', disabled: 'Disabled' },
-    empty: { assignments: 'No assignments for this node', topologies: 'No topologies', operations: 'No operations' },
-    activity: { scoped: 'Selected activity', all: 'All activity', showAll: 'Show all activity', showScoped: 'Show selected activity', empty: 'No activity for the selected scope' },
-    topology: {
-      select: 'Topology', new: 'New topology', newTitle: 'Create topology', create: 'Create topology', name: 'Name', edit: 'Edit revision', status: 'View status', noDeployment: 'No deployment', editorTitle: 'Topology revision editor', revision: 'Revision',
-      noRevisions: 'No revisions', failurePolicy: 'Failure policy', stopAndRollback: 'Stop and rollback', message: 'Revision message', graphJSON: 'Graph JSON',
-      graphHelp: 'Use vertices and edges. Secrets must be referenced by secret_id; inline secret values are rejected.', diagnose: 'Validate / diagnose', validating: 'Validating...',
-      unsavedChanges: 'This revision has unsaved changes. Save a new immutable revision before previewing or planning.',
-      valid: 'Topology is valid', invalid: 'Topology has validation issues', invalidJSON: 'Topology JSON is invalid', saveRevision: 'Save revision', plan: 'Plan deployment',
-      apply: 'Apply deployment', rollback: 'Rollback deployment', deployment: 'Deployment', applyConfirm: 'Apply {topology} (deployment #{deployment})?', rollbackConfirm: 'Request rollback for {topology} (deployment #{deployment})?',
-      preview: 'Read-only deployment preview', previewAction: 'Preview', previewSteps: '{count} planned steps',
-      emptyHint: 'Create a topology, describe its vertices and links, and save a revision to plan a deployment.',
-      viewLabel: 'Edit as', viewJSON: 'JSON', viewGraph: 'Graph', graphLabel: 'Topology graph', graphSummary: '{nodes} vertices, {edges} links',
-      graphEmpty: 'No vertices yet', graphEmptyHint: 'Add vertices to the JSON and the topology is drawn here.', graphInvalidHint: 'Fix the JSON and the topology is drawn here.', graphFailed: 'Couldn’t draw the topology',
-      deleting: 'Deleting', deleteTitle: 'Delete topology {name}?', deleteAction: 'Delete topology', deleteConfirm: 'Delete {topology}?',
-      deleteMessage: 'It disappears from this page and its name can be used again. Its revisions, deployments and operations are kept for audit.',
-      deleteLiveMessage: 'Its active revision runs on nodes. A teardown deployment first disables and removes every plugin vertex, and the topology is deleted when the teardown succeeds; if the teardown fails, the topology is kept. Revisions, deployments and operations are kept for audit.',
-      deletingHint: 'A teardown deployment is removing this topology from its nodes. The topology is deleted when it succeeds; rolling the teardown back keeps it.',
-      teardown: 'Teardown'
-    },
     extensions: { errorsTitle: 'WebUI extension loading failed' },
-    assignments: {
-      node: 'Node', noNodes: 'No nodes available', agentPlugin: 'Agent plugin', enabled: 'Assignment enabled',
-      createTitle: 'Create node assignment', editTitle: 'Edit node assignment', deleteTitle: 'Delete {plugin} / {role} from this node?', deleteMessage: 'The node stops running this plugin role. This can’t be undone.', deleteAction: 'Delete assignment',
-      emptyHint: 'Give this node a role: pick the plugin, scope and version.', roleHelp: 'Common roles: {roles}'
-    },
-    install: { version: 'Release version' },
     config: {
       title: 'Plugin configuration', loading: 'Loading configuration...', revision: 'Configuration revision: {revision}', mode: 'Configuration editor mode', formMode: 'Form', jsonMode: 'JSON',
       selectValue: 'Select a value', addItem: 'Add item', removeItem: 'Remove item', emptyArray: 'No items', item: 'Item', invalidJSON: 'Invalid JSON',
       schemaError: '{path} does not satisfy the schema', requiredError: '{path} is required'
     },
-    messages: {
-      configSaved: 'Configuration was saved for {plugin}', cancelRequested: 'Operation cancellation was requested',
-      assignmentSaved: '{plugin} assignment was saved', assignmentStateSaved: '{plugin} assignment state was saved', assignmentDeleted: '{plugin} assignment was deleted',
-      topologyRevisionSaved: 'Topology revision {revision} was saved', topologyPlanned: 'Deployment #{id} was planned',
-      topologyApplyRequested: 'Deployment apply was requested', topologyRollbackRequested: 'Deployment rollback was requested', topologyCreated: 'Topology {name} was created',
-      topologyDeleted: 'Topology {name} was deleted', topologyTeardownStarted: 'Tearing down topology {name} (deployment #{id}); it is deleted when the teardown succeeds',
-      topologyDeleteFailed: 'Topology {name} was kept: teardown deployment #{id} ended as {state}'
-    },
-    errors: {
-      load: 'Unable to load control state', configLoad: 'Unable to load plugin configuration',
-      configSave: 'Unable to save plugin configuration', cancel: 'Unable to cancel operation', poll: 'Unable to refresh operation state',
-      nodesLoad: 'Unable to load nodes', assignmentsLoad: 'Unable to load node assignments', assignmentSave: 'Unable to save node assignment', assignmentDelete: 'Unable to delete node assignment',
-      topologyLoad: 'Unable to load topology revisions', topologyValidate: 'Unable to validate topology', topologySave: 'Unable to save topology revision', topologyPlan: 'Unable to plan topology deployment',
-      topologyPreview: 'Unable to preview topology deployment', topologyStatus: 'Unable to load deployment status', topologyApply: 'Unable to apply topology deployment', topologyRollback: 'Unable to roll back topology deployment', topologyCreate: 'Unable to create topology',
-      topologyDelete: 'Unable to delete topology'
-    }
+    messages: { configSaved: 'Configuration was saved for {plugin}' },
+    errors: { configLoad: 'Unable to load plugin configuration', configSave: 'Unable to save plugin configuration' }
   },
   accessGroups: {
     subtitle: 'Manage independent service-scope memberships, resource grants, and plugin-owned quota policies.',

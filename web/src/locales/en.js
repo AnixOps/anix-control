@@ -202,7 +202,6 @@ export default {
       forwardV4Dns: 'DNS providers',
       forwardEgress: 'Domain egress',
       control: 'Control Kernel',
-      deployments: 'Deployments',
       accessGroups: 'Access groups',
       payment: 'Payments',
       notifications: 'Notifications',

@@ -524,66 +524,14 @@ export default {
     }
   },
   control: {
-    deploymentsSubtitle: '管理拓扑、节点角色和部署。',
-    actions: {
-      refresh: '刷新', refreshing: '刷新中...',
-      enable: '启用', disable: '禁用', cancel: '取消操作',
-      saving: '保存中...', newAssignment: '新建角色'
-    },
-    tabs: { assignments: '节点角色', topologies: '拓扑' },
-    table: {
-      plugin: '插件', version: '版本', state: '状态', actions: '操作',
-      scope: '作用域', description: '说明', topology: '拓扑', activeRevision: '激活 revision', deployment: '部署',
-      operation: '操作', chain: '链', revision: 'revision', deadline: '截止时间', target: '目标', version: '版本', role: '服务角色', configRevision: '配置 revision', rolloutGroup: '灰度组'
-    },
-    states: { enabled: '已启用', disabled: '已禁用' },
-    empty: { assignments: '该节点暂无服务角色', topologies: '暂无拓扑', operations: '暂无操作' },
-    activity: { scoped: '当前范围活动', all: '全部活动', showAll: '显示全部活动', showScoped: '显示当前范围活动', empty: '当前范围暂无活动' },
-    topology: {
-      select: '拓扑', new: '新建拓扑', newTitle: '新建拓扑', create: '创建拓扑', name: '名称', edit: '编辑修订', status: '查看状态', noDeployment: '暂无部署', editorTitle: '拓扑修订编辑器', revision: '修订',
-      noRevisions: '暂无修订', failurePolicy: '失败策略', stopAndRollback: '停止并回滚', message: '修订说明', graphJSON: '拓扑图 JSON',
-      graphHelp: '使用 vertices 和 edges 描述拓扑。秘密必须通过 secret_id 引用，禁止直接写入秘密值。', diagnose: '校验 / 诊断', validating: '校验中...',
-      unsavedChanges: '当前修订存在未保存修改。请先保存新的不可变修订，再进行预览或规划。',
-      valid: '拓扑校验通过', invalid: '拓扑存在校验问题', invalidJSON: '拓扑 JSON 无效', saveRevision: '保存修订', plan: '规划部署',
-      apply: '应用部署', rollback: '回滚部署', deployment: '部署', applyConfirm: '确认应用 {topology}（部署 #{deployment}）吗？', rollbackConfirm: '确认请求回滚 {topology}（部署 #{deployment}）吗？',
-      preview: '只读部署预览', previewAction: '预览', previewSteps: '{count} 个计划步骤',
-      emptyHint: '新建一个拓扑，写入顶点与连接，保存修订后即可规划部署。',
-      viewLabel: '编辑方式', viewJSON: 'JSON', viewGraph: '图示', graphLabel: '拓扑图示', graphSummary: '{nodes} 个顶点，{edges} 条连接',
-      graphEmpty: '还没有顶点', graphEmptyHint: '在 JSON 的 vertices 中添加顶点后，这里会画出拓扑。', graphInvalidHint: '修正 JSON 后这里会画出拓扑。', graphFailed: '拓扑图示加载失败',
-      deleting: '删除中', deleteTitle: '删除拓扑 {name}？', deleteAction: '删除拓扑', deleteConfirm: '确认删除 {topology} 吗？',
-      deleteMessage: '拓扑会从本页消失，名称可以重新使用。它的修订、部署和操作记录会保留以供审计。',
-      deleteLiveMessage: '它的激活修订正在节点上运行。系统会先执行一次拆除部署，停用并移除每个插件顶点，拆除成功后才删除拓扑；拆除失败时拓扑保留。修订、部署和操作记录会保留以供审计。',
-      deletingHint: '拆除部署正在从节点上移除该拓扑，成功后拓扑会被删除；回滚拆除部署会保留拓扑。',
-      teardown: '拆除'
-    },
     extensions: { errorsTitle: 'WebUI 扩展加载失败' },
-    assignments: {
-      node: '节点', noNodes: '暂无可用节点', agentPlugin: 'Agent 插件', enabled: '启用该节点角色',
-      createTitle: '新建节点角色', editTitle: '编辑节点角色', deleteTitle: '从该节点删除 {plugin} / {role}？', deleteMessage: '该节点会停止运行这个插件角色。此操作无法撤销。', deleteAction: '删除节点角色',
-      emptyHint: '为该节点新建一个角色，指定插件、作用域与版本。', roleHelp: '常用角色：{roles}'
-    },
-    install: { version: '发行版本' },
     config: {
       title: '插件配置', loading: '正在加载配置...', revision: '配置 revision：{revision}', mode: '配置编辑模式', formMode: '表单', jsonMode: 'JSON',
       selectValue: '请选择', addItem: '添加项目', removeItem: '移除项目', emptyArray: '暂无项目', item: '项目', invalidJSON: 'JSON 无效',
       schemaError: '{path} 的值不符合 Schema', requiredError: '{path} 为必填项'
     },
-    messages: {
-      configSaved: '{plugin} 配置已保存', cancelRequested: '已请求取消操作',
-      assignmentSaved: '{plugin} 节点角色已保存', assignmentStateSaved: '{plugin} 节点角色状态已保存', assignmentDeleted: '{plugin} 节点角色已删除',
-      topologyRevisionSaved: '拓扑修订 {revision} 已保存', topologyPlanned: '部署 #{id} 已规划',
-      topologyApplyRequested: '已请求应用拓扑部署', topologyRollbackRequested: '已请求回滚拓扑部署', topologyCreated: '拓扑 {name} 已创建',
-      topologyDeleted: '拓扑 {name} 已删除', topologyTeardownStarted: '正在拆除拓扑 {name}（部署 #{id}），拆除成功后删除',
-      topologyDeleteFailed: '拓扑 {name} 未删除：拆除部署 #{id} 的结束状态为 {state}'
-    },
-    errors: {
-      load: '无法加载控制状态', configLoad: '无法加载插件配置',
-      configSave: '无法保存插件配置', cancel: '无法取消操作', poll: '无法刷新操作状态',
-      nodesLoad: '无法加载节点', assignmentsLoad: '无法加载节点角色', assignmentSave: '无法保存节点角色', assignmentDelete: '无法删除节点角色',
-      topologyLoad: '无法加载拓扑修订', topologyValidate: '无法校验拓扑', topologySave: '无法保存拓扑修订', topologyPlan: '无法规划拓扑部署',
-      topologyPreview: '无法预览拓扑部署', topologyStatus: '无法加载部署状态', topologyApply: '无法应用拓扑部署', topologyRollback: '无法回滚拓扑部署', topologyCreate: '无法创建拓扑',
-      topologyDelete: '无法删除拓扑'
-    }
+    messages: { configSaved: '{plugin} 配置已保存' },
+    errors: { configLoad: '无法加载插件配置', configSave: '无法保存插件配置' }
   },
   accessGroups: {
     subtitle: '管理独立服务作用域的成员关系、资源授权和插件私有配额策略。',

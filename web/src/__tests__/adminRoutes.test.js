@@ -62,7 +62,6 @@ describe('admin routes', () => {
       '/admin/mfa',
       '/admin/system',
       '/admin/system/packages',
-      '/admin/deployments',
       '/admin/control',
       '/admin/access-groups',
       '/admin/security',
@@ -137,7 +136,11 @@ describe('admin routes', () => {
 
     await router.push('/admin/control?tab=assignments')
 
-    expect(router.currentRoute.value.path).toBe('/admin/deployments')
+    expect(router.currentRoute.value.path).toBe('/admin/system/packages')
+
+    await router.push('/admin/deployments')
+
+    expect(router.currentRoute.value.path).toBe('/admin/nodes')
 
     await router.push('/admin/control')
 
