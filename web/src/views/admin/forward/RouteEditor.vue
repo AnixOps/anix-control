@@ -823,7 +823,7 @@ function discardMine() {
 .editor-entry-public__help {
   margin: 0;
   color: var(--text-muted, inherit);
-  font-size: 0.8125rem;
+  font-size: var(--type-caption-size);
 }
 
 .editor-labels {
