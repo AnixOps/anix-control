@@ -33,14 +33,14 @@ func TestPluginStateUpsertsKeepTheNewestObservation(t *testing.T) {
 			require.True(t, telemetry.ObservedAt.Equal(newer.Add(time.Minute)), "observed at %s", telemetry.ObservedAt)
 			require.Contains(t, telemetry.MetricsJSON, `"cpu_usage_percent":30`)
 
-			snapshot := NodePluginObservedSnapshot{PluginID: "nftables-forward", Version: "4.0.0", DesiredRevision: 2, ObservedRevision: 2, ConfigHash: "hash", Health: "healthy", ObservedAt: newer}
+			snapshot := NodePluginObservedSnapshot{PluginID: "machine-telemetry", Version: "4.0.0", DesiredRevision: 2, ObservedRevision: 2, ConfigHash: "hash", Health: "healthy", ObservedAt: newer}
 			require.NoError(t, service.persistNodePluginObservedState(7, snapshot, newer))
 			later := snapshot
 			later.ObservedAt, later.ObservedRevision, later.DesiredRevision = newer.Add(time.Minute), 3, 3
 			require.NoError(t, service.persistNodePluginObservedState(7, later, newer.Add(time.Minute)))
 			require.NoError(t, service.persistNodePluginObservedState(7, snapshot, newer.Add(2*time.Minute)))
 			var observed model.NodePluginObservedState
-			require.NoError(t, db.First(&observed, "node_id = ? AND plugin_id = ?", 7, "nftables-forward").Error)
+			require.NoError(t, db.First(&observed, "node_id = ? AND plugin_id = ?", 7, "machine-telemetry").Error)
 			require.Equal(t, int64(3), observed.ObservedRevision, "an older observation does not replace a newer one")
 		})
 	}

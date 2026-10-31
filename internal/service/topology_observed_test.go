@@ -19,7 +19,7 @@ func newObservedTopologyFixture(t *testing.T) (*model.TopologyDeployment, uint, 
 	require.NoError(t, db.Create(&topology).Error)
 	revision := model.TopologyRevision{TopologyID: topology.ID, Revision: 1, State: "published", ContentHash: "hash", CreatedBy: 1}
 	require.NoError(t, db.Create(&revision).Error)
-	vertex := model.TopologyVertex{RevisionID: revision.ID, Key: "entry", Kind: "plugin", NodeID: &node.ID, PluginID: "nftables-forward", Role: "cn_dedicated_nftables", ConfigJSON: `{}`}
+	vertex := model.TopologyVertex{RevisionID: revision.ID, Key: "entry", Kind: "plugin", NodeID: &node.ID, PluginID: "machine-telemetry", Role: "telemetry", ConfigJSON: `{}`}
 	require.NoError(t, db.Create(&vertex).Error)
 	deployment := &model.TopologyDeployment{TopologyID: topology.ID, RevisionID: revision.ID, State: "planned", FailurePolicy: "stop_and_rollback", CreatedBy: 1}
 	require.NoError(t, db.Create(deployment).Error)
@@ -87,7 +87,7 @@ func TestApplyTopologyObservedStateWaitsForEveryDeploymentNode(t *testing.T) {
 	require.NoError(t, db.Create(&secondNode).Error)
 	secondVertex := model.TopologyVertex{
 		RevisionID: deployment.RevisionID, Key: "exit", Kind: "plugin", NodeID: &secondNode.ID,
-		PluginID: "nftables-forward", Role: "cn_dedicated_nftables", ConfigJSON: `{}`,
+		PluginID: "machine-telemetry", Role: "telemetry", ConfigJSON: `{}`,
 	}
 	require.NoError(t, db.Create(&secondVertex).Error)
 	secondStep := model.TopologyDeploymentStep{

@@ -810,7 +810,7 @@ func TestKernelBooleanFieldsPreserveExplicitFalse(t *testing.T) {
 	db := newKernelTestDB(t)
 	group := model.AccessGroup{ScopeID: "forward", Name: "disabled", Enabled: false}
 	require.NoError(t, db.Create(&group).Error)
-	assignment := model.NodeServiceAssignment{NodeID: 1, ServiceScope: "forward", PluginID: "nftables-forward", Role: "entry", Enabled: false}
+	assignment := model.NodeServiceAssignment{NodeID: 1, ServiceScope: "forward", PluginID: "machine-telemetry", Role: "entry", Enabled: false}
 	require.NoError(t, db.Create(&assignment).Error)
 
 	var storedGroup model.AccessGroup

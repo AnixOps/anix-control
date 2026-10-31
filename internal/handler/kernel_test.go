@@ -703,11 +703,11 @@ func TestKernelAssignmentPreservesDisabledStateWhenEnabledIsOmitted(t *testing.T
 	handler := (&KernelHandler{db: db}).UpsertAssignment
 	path := "/nodes/" + strconv.FormatUint(uint64(node.ID), 10) + "/assignments"
 	route := "/nodes/:id/assignments"
-	body := `{"service_scope":"forward","plugin_id":"nftables-forward","role":"entry","enabled":false}`
+	body := `{"service_scope":"forward","plugin_id":"machine-telemetry","role":"entry","enabled":false}`
 	recorder := performKernelHandlerRequest(t, http.MethodPut, path, body, route, handler)
 	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
 
-	body = `{"service_scope":"forward","plugin_id":"nftables-forward","role":"entry"}`
+	body = `{"service_scope":"forward","plugin_id":"machine-telemetry","role":"entry"}`
 	recorder = performKernelHandlerRequest(t, http.MethodPut, path, body, route, handler)
 	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
 	var assignment model.NodeServiceAssignment

@@ -157,7 +157,7 @@ ingress:
   tls: []
 
 # Optional local-ansible forward runtime (forward_runtime.backend:
-# nftables_ansible): an existing Secret holding `inventory.ini` and the SSH
+# iptables_ansible): an existing Secret holding `inventory.ini` and the SSH
 # material (for example `id_ed25519`, `known_hosts`).
 ansible:
   existingSecret: ""

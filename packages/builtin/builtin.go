@@ -4,9 +4,7 @@
 // host environment of internal/pluginhost; Main is that command.
 //
 // The table names every official package of packages/shared/build_package.py
-// (PACKAGE_SPECS): the packages with a host of their own run it, nat-egress
-// and nftables-forward run the generic host (packages/shared/controlhost).
-// TestHostsMatchThePackageMatrix keeps the two lists equal.
+// (PACKAGE_SPECS). TestHostsMatchThePackageMatrix keeps the two lists equal.
 package builtin
 
 import (
@@ -30,7 +28,6 @@ import (
 	platform "github.com/AnixOps/anix-control/v5/packages/platform/control"
 	protocolruntime "github.com/AnixOps/anix-control/v5/packages/protocol-runtime/control"
 	proxynode "github.com/AnixOps/anix-control/v5/packages/proxy-node/control"
-	"github.com/AnixOps/anix-control/v5/packages/shared/controlhost"
 	subscription "github.com/AnixOps/anix-control/v5/packages/subscription/control"
 	ticket "github.com/AnixOps/anix-control/v5/packages/ticket/control"
 	wireguard "github.com/AnixOps/anix-control/v5/packages/wireguard/control"
@@ -48,16 +45,8 @@ const VersionEnvironment = "ANIX_CONTROL_HOST_PACKAGE_VERSION"
 type Host struct {
 	// ID is the package id.
 	ID string
-	// Generic reports the generic host (no native routes).
-	Generic bool
 	// Run serves the host for one release of the package.
 	Run func(ctx context.Context, version string) error
-}
-
-func generic(id string) Host {
-	return Host{ID: id, Generic: true, Run: func(ctx context.Context, version string) error {
-		return controlhost.Run(ctx, id, version)
-	}}
 }
 
 var hosts = []Host{
@@ -66,8 +55,6 @@ var hosts = []Host{
 	{ID: identityplatform.PackageID, Run: identityplatform.Run},
 	{ID: knowledge.PackageID, Run: knowledge.Run},
 	{ID: machinetelemetry.PackageID, Run: machinetelemetry.Run},
-	generic("nat-egress"),
-	generic("nftables-forward"),
 	{ID: notification.PackageID, Run: notification.Run},
 	{ID: order.PackageID, Run: order.Run},
 	{ID: payment.PackageID, Run: payment.Run},

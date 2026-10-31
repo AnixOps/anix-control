@@ -53,18 +53,13 @@ describe('plugin WebUI CSS class contract', () => {
     expect(rules, `.${name} is part of the plugin WebUI contract and must stay in src/style.css`).not.toEqual([])
   })
 
-  it('the bundled packages use those classes, so the check guards real plugins', () => {
-    const used = new Set(webuiBundles().flatMap(({ file }) => bundleClasses(file)))
-    for (const name of PLUGIN_WEBUI_CLASSES) expect(used).toContain(name)
-  })
-
   // Control styles only the contract classes. Any other class would look
   // like a Control class (page-header, stats-grid, ...) and render unstyled,
   // so a bundle adds at most one of its own, named after its package, as a
   // hook on its root element.
   it('the bundled packages use no class but the contract and their own <package>-extension', () => {
     const bundles = webuiBundles()
-    expect(bundles.map(({ packageID }) => packageID).sort()).toEqual(['forward', 'nat-egress', 'nftables-forward'])
+    expect(bundles.map(({ packageID }) => packageID).sort()).toEqual(['forward'])
     for (const { packageID, file } of bundles) {
       const foreign = bundleClasses(file).filter(name => !PLUGIN_WEBUI_CLASSES.includes(name) && name !== `${packageID}-extension`)
       expect(foreign, `${packageID} renders classes Control does not style`).toEqual([])

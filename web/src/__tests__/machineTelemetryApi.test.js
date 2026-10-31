@@ -56,7 +56,7 @@ describe('machine-telemetry services API', () => {
     expect(await nodeHasServicesTable(5)).toBe(false)
     kernel.getKernelNodeAssignments.mockResolvedValue([{ plugin_id: 'machine-telemetry', desired_version: '4.1.0', enabled: false }])
     expect(await nodeHasServicesTable(5)).toBe(false)
-    kernel.getKernelNodeAssignments.mockResolvedValue([{ plugin_id: 'nftables-forward', desired_version: '4.1.0', enabled: true }])
+    kernel.getKernelNodeAssignments.mockResolvedValue([{ plugin_id: 'forward', desired_version: '4.1.0', enabled: true }])
     kernel.getKernelPluginReleases.mockClear()
     expect(await nodeHasServicesTable(5)).toBe(false)
     expect(kernel.getKernelPluginReleases).not.toHaveBeenCalled()
