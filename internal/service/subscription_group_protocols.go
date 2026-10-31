@@ -118,6 +118,14 @@ func (s *SubscriptionService) ReplaceGroupProtocolLayout(groupID uint, items []G
 		for _, id := range linked {
 			isLinked[id] = true
 		}
+		var kept []model.SubscriptionGroupProtocol
+		if err := tx.Where("group_id = ?", groupID).Find(&kept).Error; err != nil {
+			return err
+		}
+		overrides := make(map[uint]string, len(kept))
+		for _, row := range kept {
+			overrides[row.NodeProtocolID] = row.Overrides
+		}
 		rows := make([]model.SubscriptionGroupProtocol, 0, len(items))
 		seen := make(map[uint]bool, len(items))
 		for i, item := range items {
@@ -132,7 +140,7 @@ func (s *SubscriptionService) ReplaceGroupProtocolLayout(groupID uint, items []G
 			if err != nil {
 				return err
 			}
-			rows = append(rows, model.SubscriptionGroupProtocol{GroupID: groupID, NodeProtocolID: item.ProtocolID, DisplayName: name, Sort: i})
+			rows = append(rows, model.SubscriptionGroupProtocol{GroupID: groupID, NodeProtocolID: item.ProtocolID, DisplayName: name, Sort: i, Overrides: overrides[item.ProtocolID]})
 		}
 		if err := tx.Where("group_id = ?", groupID).Delete(&model.SubscriptionGroupProtocol{}).Error; err != nil {
 			return err
