@@ -6276,6 +6276,27 @@ func (s *SystemHandlerTestSuite) TestGetConfigs_ByGroup() {
 	assert.NotContains(s.T(), resp, "list")
 }
 
+func (s *SystemHandlerTestSuite) TestGetConfigs_HidesInternalKeys() {
+	configs := service.NewSystemConfigService(database.GetDB())
+	require.NoError(s.T(), configs.Set("scheduler.forward_flow_reset.last_day", "2026-10-31", "string", "", ""))
+	require.NoError(s.T(), configs.Set("app.subscribe_domains", `["a.example.com"]`, "json", "app", ""))
+	handler := NewSystemHandler()
+	s.router.GET("/admin/system/configs", handler.GetConfigs)
+
+	req, _ := http.NewRequest("GET", "/admin/system/configs", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	data := decodePanelTestResponse(s.T(), w)["data"].(map[string]any)
+	var keys []string
+	for _, item := range data["list"].([]any) {
+		keys = append(keys, item.(map[string]any)["key"].(string))
+	}
+	assert.Contains(s.T(), keys, "app.subscribe_domains")
+	assert.NotContains(s.T(), keys, "scheduler.forward_flow_reset.last_day")
+}
+
 func (s *SystemHandlerTestSuite) TestGetSubscriptionSettings_UsesPanelEnvelope() {
 	handler := NewSystemHandler()
 	s.router.GET("/admin/system/subscription-settings", handler.GetSubscriptionSettings)

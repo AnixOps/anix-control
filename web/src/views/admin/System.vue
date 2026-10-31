@@ -15,40 +15,47 @@
 
 <script setup>
 // 系统设置 (plan §7.3, §8.2): the settings template with the sections in the
-// URL (/admin/system/:section). Each section is its own component under
+// URL (/admin/system/:section): 通用, 数据与保留, 备份, 负载均衡, 审计日志,
+// 内置包, 高级 (the raw configuration keys) and 关于. Each section is its own component under
 // views/admin/system/ that loads its own data when opened, so a section
 // change does not reload the others. Sections with a form show the
 // 保存 / 放弃 bar while it has changes and ask before leaving it.
 // /admin/system shows 通用 on wide screens and the section list on phones.
 import { computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Archive, Info, Package, Scale, ScrollText, SlidersHorizontal } from '@lucide/vue'
+import { Archive, Database, Info, Package, Scale, ScrollText, SlidersHorizontal, Wrench } from '@lucide/vue'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { NARROW_QUERY, useMediaQuery } from '@/composables/useMediaQuery'
 import { ADMIN_PAGE_SECTIONS } from '@/navigation/menu'
 import SettingsLayout from '@/components/admin/settings/SettingsLayout.vue'
 import UiPageHeader from '@/ui/UiPageHeader.vue'
 import SettingsAbout from './system/SettingsAbout.vue'
+import SettingsAdvanced from './system/SettingsAdvanced.vue'
 import SettingsAudit from './system/SettingsAudit.vue'
 import SettingsBackup from './system/SettingsBackup.vue'
 import SettingsBalancer from './system/SettingsBalancer.vue'
+import SettingsData from './system/SettingsData.vue'
 import SettingsGeneral from './system/SettingsGeneral.vue'
 import SettingsPackages from './system/SettingsPackages.vue'
 
 const SECTION_COMPONENTS = {
   general: SettingsGeneral,
+  data: SettingsData,
   backup: SettingsBackup,
   balancer: SettingsBalancer,
   audit: SettingsAudit,
   packages: SettingsPackages,
+  advanced: SettingsAdvanced,
   about: SettingsAbout
 }
 const SECTION_ICONS = {
   general: SlidersHorizontal,
+  data: Database,
   backup: Archive,
   balancer: Scale,
   audit: ScrollText,
   packages: Package,
+  advanced: Wrench,
   about: Info
 }
 

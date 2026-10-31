@@ -19,18 +19,28 @@ export default {
   },
   adminSettings: {
     title: 'Settings',
-    subtitle: 'Subscription domains, configuration keys, backups, load balancing and the audit log.',
+    subtitle: 'Subscription domains, data retention, backups, load balancing, the audit log and advanced configuration keys.',
     navLabel: 'Settings sections',
     loading: 'Loading…',
     sections: {
       general: 'General',
+      data: 'Data & retention',
       backup: 'Backups',
       balancer: 'Load balancing',
       audit: 'Audit log',
       packages: 'Built-in packages',
+      advanced: 'Advanced',
       about: 'About'
     },
     general: {
+      links: {
+        title: 'Other common settings',
+        description: 'These live on their own pages. Click one to open it.',
+        mail: 'E-mail notifications',
+        mailHint: 'SMTP server and test',
+        security: 'Sign-in security',
+        securityHint: 'Administrator two-factor authentication'
+      },
       subscription: {
         title: 'Subscription domains',
         description: 'The domains used in users’ subscription links and managed-config output.',
@@ -45,7 +55,17 @@ export default {
         loadFailed: 'Couldn’t load the subscription domains',
         saveFailed: 'Couldn’t save the subscription domains',
         saved: 'Subscription domains saved'
-      },
+      }
+    },
+    data: {
+      title: 'Data & retention',
+      description: 'Choose which statistics are recorded and how long they are kept.',
+      footer: 'Turning it off stops recording at once; records already kept are not deleted. The full charts are under Monitor → Destinations.',
+      days: '{days} days'
+    },
+    advanced: {
+      warningTitle: 'For troubleshooting only',
+      warning: 'The everyday options are in the other sections. This is every system configuration key as a raw value; a wrong value can break a feature. The scheduler’s internal records are not listed.',
       configs: {
         title: 'Configuration keys',
         description: 'Every system setting stored as a key and value. Sensitive values show as ********.',

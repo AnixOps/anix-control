@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor, within } from '@testing-library/vue'
 import userEvent from '@testing-library/user-event'
 import SettingsBalancer from '@/views/admin/system/SettingsBalancer.vue'
+import SettingsAdvanced from '@/views/admin/system/SettingsAdvanced.vue'
 import SettingsGeneral from '@/views/admin/system/SettingsGeneral.vue'
 import UiHost from '@/ui/UiHost.vue'
 import { toastMessages } from './helpers/feedback'
@@ -54,7 +55,7 @@ describe('System settings dialogs and feedback', () => {
   it('edits a config in a dialog: errors inline, Esc closes and returns focus', async () => {
     const user = userEvent.setup()
     adminApi.setSystemConfig.mockResolvedValueOnce({ code: -1, msg: 'read only' }).mockResolvedValueOnce({ code: 0 })
-    await renderSection(SettingsGeneral, 'site.name')
+    await renderSection(SettingsAdvanced, 'site.name')
     const opener = await rowAction(user, 'site.name', 'Edit')
     const dialog = await screen.findByRole('dialog', { name: 'Edit configuration key' })
     await user.click(within(dialog).getByRole('button', { name: 'Save' }))
@@ -71,7 +72,7 @@ describe('System settings dialogs and feedback', () => {
 
   it('asks for a key before adding a config', async () => {
     const user = userEvent.setup()
-    await renderSection(SettingsGeneral, 'site.name')
+    await renderSection(SettingsAdvanced, 'site.name')
     await user.click(screen.getByRole('button', { name: 'Add key' }))
     const dialog = await screen.findByRole('dialog', { name: 'Add configuration key' })
     await user.click(within(dialog).getByRole('button', { name: 'Save' }))
@@ -82,7 +83,7 @@ describe('System settings dialogs and feedback', () => {
   it('asks before deleting a config; Cancel keeps it', async () => {
     const user = userEvent.setup()
     adminApi.deleteSystemConfig.mockResolvedValue({ code: 0 })
-    await renderSection(SettingsGeneral, 'site.name')
+    await renderSection(SettingsAdvanced, 'site.name')
     await rowAction(user, 'site.name', 'Delete')
     let confirm = await screen.findByRole('alertdialog', { name: 'Delete site.name?' })
     await user.click(within(confirm).getByRole('button', { name: 'Cancel' }))
@@ -99,7 +100,7 @@ describe('System settings dialogs and feedback', () => {
   it('validates subscription domains as you type and saves them from the save bar', async () => {
     const user = userEvent.setup()
     adminApi.setSystemConfig.mockResolvedValue({ code: 0 })
-    await renderSection(SettingsGeneral, 'site.name')
+    await renderSection(SettingsGeneral, 'Other common settings')
     expect(screen.queryByRole('region', { name: 'Unsaved changes' })).toBeNull()
 
     const field = await screen.findByLabelText('Alternate domains')
@@ -126,7 +127,7 @@ describe('System settings dialogs and feedback', () => {
   it('discards subscription domain edits from the save bar', async () => {
     const user = userEvent.setup()
     adminApi.getSubscriptionSettings.mockResolvedValue({ data: { subscribe_path: '/s', subscribe_domains: ['a.example.com'] } })
-    await renderSection(SettingsGeneral, 'site.name')
+    await renderSection(SettingsGeneral, 'Other common settings')
     const field = await screen.findByLabelText('Alternate domains')
     await user.type(field, '\nb.example.com')
     const bar = await screen.findByRole('region', { name: 'Unsaved changes' })
