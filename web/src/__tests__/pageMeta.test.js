@@ -10,7 +10,6 @@ const messages = {
   'pageTitles.admin.forwardNodeX': 'NodeX Runtime',
   'pageTitles.admin.control': 'Control Kernel',
   'adminSettings.sections.packages': 'Built-in packages',
-  'pageTitles.admin.deployments': 'Deployments',
   'pageTitles.admin.accessGroups': 'Access Groups',
   'app.meta.defaultDescription': 'Default app description',
   'app.meta.loginDescription': 'Login page description',
@@ -32,7 +31,6 @@ describe('pageMeta helpers', () => {
     expect(resolveRoutePageTitle(t, '/admin/control', 'Fallback')).toBe('Control Kernel')
     expect(resolveRoutePageTitle(t, '/admin/system/packages', 'Fallback')).toBe('Built-in packages')
     expect(resolveRoutePageTitle(t, '/admin/plugins', 'Fallback')).toBe('Fallback')
-    expect(resolveRoutePageTitle(t, '/admin/deployments', 'Fallback')).toBe('Deployments')
     expect(resolveRoutePageTitle(t, '/admin/access-groups', 'Fallback')).toBe('Access Groups')
   })
 

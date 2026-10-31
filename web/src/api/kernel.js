@@ -49,21 +49,6 @@ export async function getKernelNodeAssignments(nodeID) {
   return unwrap(await v3({ url: `/nodes/${nodeID}/assignments`, method: 'get' }))
 }
 
-export async function upsertKernelNodeAssignment(nodeID, assignment) {
-  return unwrap(await v3({
-    url: `/nodes/${nodeID}/assignments`,
-    method: 'put',
-    data: assignment
-  }))
-}
-
-export async function deleteKernelNodeAssignment(nodeID, assignmentID) {
-  return unwrap(await v3({
-    url: `/nodes/${nodeID}/assignments/${assignmentID}`,
-    method: 'delete'
-  }))
-}
-
 // Restarts a built-in package's host: the only installation action (the
 // built-in packages are installed, upgraded and enabled at every start).
 export async function restartKernelInstallation(installationID, idempotencyKey) {
@@ -158,92 +143,6 @@ export async function resolveKernelAccess({ userID, scopeID, planID }) {
     params.plan_id = planID
   }
   return unwrap(await v3({ url: '/access-groups/resolve', method: 'get', params }))
-}
-
-export async function getKernelTopologies() {
-  return unwrap(await v3({ url: '/topologies', method: 'get' }))
-}
-
-export async function createKernelTopology(input) {
-  return unwrap(await v3({ url: '/topologies', method: 'post', data: input }))
-}
-
-// Deleting a topology answers { topology, deleted, deployment }: deleted is
-// true when it was deleted at once (200); otherwise (202) deployment is the
-// teardown that removes its active revision from the nodes and deletes it
-// when it succeeds.
-export async function deleteKernelTopology(topologyID) {
-  return unwrap(await v3({ url: `/topologies/${topologyID}`, method: 'delete' }))
-}
-
-export async function getKernelTopologyRevisions(topologyID) {
-  return unwrap(await v3({ url: `/topologies/${topologyID}/revisions`, method: 'get' }))
-}
-
-export async function getKernelTopologyRevision(topologyID, revisionID) {
-  return unwrap(await v3({ url: `/topologies/${topologyID}/revisions/${revisionID}`, method: 'get' }))
-}
-
-export async function validateKernelTopology(input) {
-  return unwrap(await v3({ url: '/topologies/validate', method: 'post', data: input }))
-}
-
-export async function createKernelTopologyRevision(topologyID, input) {
-  return unwrap(await v3({ url: `/topologies/${topologyID}/revisions`, method: 'post', data: input }))
-}
-
-export async function getKernelDeployments() {
-  return unwrap(await v3({ url: '/deployments', method: 'get' }))
-}
-
-export async function planKernelDeployment(input) {
-  return unwrap(await v3({ url: '/deployments', method: 'post', data: input }))
-}
-
-export async function getKernelDeploymentStatus(deploymentID) {
-  return unwrap(await v3({ url: `/deployments/${deploymentID}`, method: 'get' }))
-}
-
-export async function applyKernelDeployment(deploymentID) {
-  return unwrap(await v3({ url: `/deployments/${deploymentID}/apply`, method: 'post' }))
-}
-
-export async function rollbackKernelDeployment(deploymentID) {
-  return unwrap(await v3({ url: `/deployments/${deploymentID}/rollback`, method: 'post' }))
-}
-
-export async function previewKernelTopologyDeployment(topologyID, revisionID, options = {}) {
-  return unwrap(await v3({
-    url: `/topologies/${topologyID}/revisions/${revisionID}/preview`,
-    method: 'post',
-    data: {
-      rollout_group: options.rolloutGroup || '',
-      failure_policy: options.failurePolicy || 'stop_and_rollback'
-    }
-  }))
-}
-
-export async function diagnoseKernelTopologyDeployment(topologyID, revisionID, options = {}) {
-  return unwrap(await v3({
-    url: `/topologies/${topologyID}/revisions/${revisionID}/diagnose`,
-    method: 'post',
-    data: {
-      rollout_group: options.rolloutGroup || '',
-      failure_policy: options.failurePolicy || 'stop_and_rollback'
-    }
-  }))
-}
-
-export async function getKernelOperations() {
-  return unwrap(await v3({ url: '/operations', method: 'get' }))
-}
-
-export async function cancelKernelOperation(operationID) {
-  return operationResult(await v3({
-    url: `/operations/${operationID}/cancel`,
-    method: 'post',
-    rawResponse: true,
-  }))
 }
 
 export async function getKernelExtensions() {
