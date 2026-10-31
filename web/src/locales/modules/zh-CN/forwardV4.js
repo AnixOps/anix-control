@@ -210,7 +210,6 @@ export default {
       title: '路由',
       description: '每条路由是一条从入口到目标的跳链；节点按路由收到期望状态。',
       count: '{n} 条',
-      migrate: '把 gost 路由迁到 ANX',
       more: '更多操作',
       new: '新建路由',
       import: '导入路由 JSON',
@@ -262,17 +261,6 @@ export default {
       title: '删除路由 {name}？',
       message: '它的跳会在下一代从所有节点移除，端口保留 10 分钟。此操作无法撤销。',
       confirm: '删除'
-    },
-    migrate: {
-      title: '把 gost 路由迁到网络模型',
-      description: '所有带 gost 跳的路由改成 ANX（网络模型）路由：链路走网络传输（两端都是 iepl/iplc 用裸 ANX-Line，否则用 A2 外衣），入口端口不变。nftables 路由不动。',
-      summary: '{n} 条可以迁移；{blocked} 条留在 gost；{untouched} 条不在 gost 上。',
-      applied: '已把 {n} 条路由迁到网络模型。',
-      moving: '将迁移',
-      blocked: '留在 gost',
-      added: '新增的网络模型组件：{list}',
-      dryRun: '重新检查',
-      apply: '开始迁移'
     },
     import: {
       title: '导入路由 JSON',

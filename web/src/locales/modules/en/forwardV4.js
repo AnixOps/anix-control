@@ -209,7 +209,6 @@ export default {
       title: 'Routes',
       description: 'Each route is a chain of hops from an entry to its targets; nodes get their desired state from the routes.',
       count: '{n} routes',
-      migrate: 'Move gost routes to ANX',
       more: 'More actions',
       new: 'New route',
       import: 'Import route JSON',
@@ -261,17 +260,6 @@ export default {
       title: 'Delete route {name}?',
       message: 'Its hops leave every node in the next generation and its ports stay held for 10 minutes. This cannot be undone.',
       confirm: 'Delete'
-    },
-    migrate: {
-      title: 'Move gost routes to the network model',
-      description: 'Every route with a gost hop becomes an ANX (network model) route: links run over network transports (bare ANX-Line between iepl/iplc nodes, the A2 jacket otherwise), entry ports stay. nftables routes are not touched.',
-      summary: '{n} routes can move; {blocked} stay on gost; {untouched} are not on gost.',
-      applied: 'Moved {n} routes to the network model.',
-      moving: 'Will move',
-      blocked: 'Stay on gost',
-      added: 'Network model components added: {list}',
-      dryRun: 'Check again',
-      apply: 'Move them'
     },
     import: {
       title: 'Import route JSON',
