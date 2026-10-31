@@ -3,13 +3,8 @@ package protocolruntimecompat
 import (
 	"context"
 	"crypto/rand"
-	"encoding/json"
 	"fmt"
-	"net/http"
-	"net/http/httptest"
 	"strconv"
-	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -26,7 +21,6 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/tests/packagecompat"
 	"github.com/AnixOps/anix-control/v5/packages/protocol-runtime/native"
 	"github.com/gin-gonic/gin"
-	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )
@@ -46,7 +40,6 @@ import (
 const (
 	streamKey = "fake-stream-api-key-0123456789"
 	configKey = "fake-config-api-key-0123456789"
-	socketKey = "fake-socket-api-key-0123456789"
 	quietKey  = "fake-quiet-api-key-0123456789"
 )
 
@@ -56,12 +49,10 @@ type agentsFixture struct {
 	kernel  *packagecompat.Kernel
 	agents  *handler.AgentHandler
 	control *fakeagent.Control
-	// stream, config, socket and quiet are the nodes' ids: an agent on the
-	// stream, one that negotiated config.v1, one on the WebSocket, none.
-	stream, config, socket, quiet uint
-	server                        *httptest.Server
-	streamAgent, configAgent      *fakeagent.Agent
-	socketAgent                   *socketAgent
+	// stream, config and quiet are the nodes' ids: an agent on the
+	// stream, one that negotiated config.v1, none.
+	stream, config, quiet    uint
+	streamAgent, configAgent *fakeagent.Agent
 }
 
 // agentRoutes are the routes the fixture serves, with their legacy
@@ -116,8 +107,8 @@ func forEachAgents(t *testing.T, body func(t *testing.T, f *agentsFixture)) {
 		_, err := rand.Read(random[:])
 		require.NoError(t, err)
 		base := uint(20000) + uint(random[0])<<6 + uint(random[1])%64*4
-		f.stream, f.config, f.socket, f.quiet = base, base+1, base+2, base+3
-		for id, key := range map[uint]string{f.stream: streamKey, f.config: configKey, f.socket: socketKey, f.quiet: quietKey} {
+		f.stream, f.config, f.quiet = base, base+1, base+3
+		for id, key := range map[uint]string{f.stream: streamKey, f.config: configKey, f.quiet: quietKey} {
 			require.NoError(t, db.Create(&model.Node{ID: id, Name: "node-" + strconv.Itoa(int(id)), Host: "198.51.100.1", Port: 443,
 				APIKey: key, APIKeyHash: fakeagent.APIKeyHash(key), CreatedAt: seeded, UpdatedAt: seeded}).Error)
 		}
@@ -129,22 +120,15 @@ func forEachAgents(t *testing.T, body func(t *testing.T, f *agentsFixture)) {
 		// as the server registers them at startup.
 		previous := kernelnodeops.DefaultAgentSources()
 		kernelnodeops.UseAgentStreams(f.control.Streams)
-		kernelnodeops.UseWebSocketAgents(f.agents.WebSockets())
 		t.Cleanup(func() {
 			kernelnodeops.UseAgentStreams(previous.Streams)
-			kernelnodeops.UseWebSocketAgents(previous.WebSockets)
 		})
 		sources := func() kernelnodeops.AgentSources {
-			return kernelnodeops.AgentSources{Streams: f.control.Streams, WebSockets: f.agents.WebSockets()}
+			return kernelnodeops.AgentSources{Streams: f.control.Streams}
 		}
 		f.kernel = packagecompat.StartKernel(t, packagecompat.KernelOptions{
 			DB: db, PackageID: "protocol-runtime", Capabilities: protocolCapabilities(), Agents: sources, Routes: f.routes(),
 		})
-		engine := gin.New()
-		engine.GET("/api/v2/agent/ws", f.agents.AgentWebSocketUnified)
-		engine.POST("/api/v2/agent/monitor", f.agents.AgentMonitor)
-		f.server = httptest.NewServer(engine)
-		t.Cleanup(f.server.Close)
 		body(t, f)
 	})
 }
@@ -156,10 +140,10 @@ func (f *agentsFixture) node(id uint) agentcontrol.AgentNode {
 // connectStream connects the scripted stream agents.
 func (f *agentsFixture) connectStream(script fakeagent.Script) {
 	f.t.Helper()
-	f.streamAgent = fakeagent.ConnectWithKey(f.t, f.control.Dial(f.t, nil), uint32(f.stream), streamKey, script) // #nosec G115 -- a test id.
+	f.streamAgent = fakeagent.ConnectEnrolled(f.t, f.control, f.node(f.stream), script)
 	configScript := script
 	configScript.Capabilities = append(append([]string(nil), fakeagent.DefaultCapabilities...), agentcontrol.CapabilityConfig)
-	f.configAgent = fakeagent.ConnectWithKey(f.t, f.control.Dial(f.t, nil), uint32(f.config), configKey, configScript) // #nosec G115 -- a test id.
+	f.configAgent = fakeagent.ConnectEnrolled(f.t, f.control, f.node(f.config), configScript)
 }
 
 // compare sends c to the legacy handler, then through the gateway to the
@@ -181,76 +165,6 @@ func (f *agentsFixture) compare(t *testing.T, method, pattern string, c packagec
 	require.Equal(t, before, f.kernel.LegacyCalls(routeID), "the package host answered from the legacy handler: %s", native.Body)
 	packagecompat.RequireSame(t, c, legacy, native)
 	return native
-}
-
-// socketAgent is a legacy WebSocket agent: it authenticates by message,
-// with its system information, and acknowledges what asks for it.
-type socketAgent struct {
-	conn *websocket.Conn
-	mu   sync.Mutex
-	got  []map[string]any
-}
-
-func (f *agentsFixture) connectSocket(t *testing.T) *socketAgent {
-	t.Helper()
-	url := "ws" + strings.TrimPrefix(f.server.URL, "http") + "/api/v2/agent/ws"
-	conn, _, err := websocket.DefaultDialer.Dial(url, nil)
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = conn.Close() })
-	require.NoError(t, conn.WriteJSON(map[string]any{
-		"type": "auth", "node_id": f.socket, "token": socketKey, "version": "agent-1.2.3",
-		"system":       map[string]any{"os": "linux", "cpu_cores": 4, "api_token": "fake-reported-token", "hostname": "edge"},
-		"capabilities": []string{"diag", "monitor"},
-	}))
-	var reply map[string]any
-	require.NoError(t, conn.ReadJSON(&reply))
-	require.Equal(t, "connected", reply["message"])
-	agent := &socketAgent{conn: conn}
-	go agent.serve(f.socket)
-	f.socketAgent = agent
-	require.Eventually(t, func() bool {
-		for _, session := range f.agents.WebSockets().Sessions() {
-			if uint(session.Node.ID) == f.socket {
-				return true
-			}
-		}
-		return false
-	}, 5*time.Second, 10*time.Millisecond)
-	return agent
-}
-
-func (a *socketAgent) serve(nodeID uint) {
-	for {
-		var message map[string]any
-		if err := a.conn.ReadJSON(&message); err != nil {
-			return
-		}
-		a.mu.Lock()
-		a.got = append(a.got, message)
-		a.mu.Unlock()
-		if required, _ := message["require_ack"].(bool); required {
-			_ = a.conn.WriteJSON(map[string]any{
-				"id": "ack-" + fmt.Sprint(message["id"]), "type": "ack", "node_id": nodeID, "timestamp": time.Now().Unix(),
-				"payload": map[string]any{"msg_id": message["id"], "success": true, "timestamp": time.Now().Unix()},
-			})
-		}
-	}
-}
-
-// postMonitor posts a monitor snapshot as the WebSocket node's agent.
-func (f *agentsFixture) postMonitor(t *testing.T, system map[string]any) {
-	t.Helper()
-	body, err := json.Marshal(map[string]any{"node_id": f.socket, "system": system})
-	require.NoError(t, err)
-	request, err := http.NewRequestWithContext(context.Background(), http.MethodPost, f.server.URL+"/api/v2/agent/monitor", strings.NewReader(string(body)))
-	require.NoError(t, err)
-	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("X-Node-ID", strconv.Itoa(int(f.socket)))
-	request.Header.Set("X-API-Key", socketKey)
-	response, err := http.DefaultClient.Do(request)
-	require.NoError(t, err)
-	_ = response.Body.Close()
-	require.Equal(t, http.StatusOK, response.StatusCode)
 }
 
 func id(value uint) string { return strconv.Itoa(int(value)) }
@@ -325,18 +239,16 @@ func TestAgentControlParity(t *testing.T) {
 func TestAgentListAndMonitorParity(t *testing.T) {
 	forEachAgents(t, func(t *testing.T, f *agentsFixture) {
 		monitor := "/api/v2/admin/agent/monitor"
-		f.compare(t, "GET", "/api/v2/admin/agent/list", packagecompat.Case{Name: "no WebSocket agent", Path: "/api/v2/admin/agent/list"})
-		f.connectSocket(t)
+		f.compare(t, "GET", "/api/v2/admin/agent/list", packagecompat.Case{Name: "no agent", Path: "/api/v2/admin/agent/list"})
 		f.connectStream(fakeagent.Script{})
-		// The system information an agent reported is scrubbed.
-		answer := f.compare(t, "GET", "/api/v2/admin/agent/list", packagecompat.Case{Name: "one WebSocket agent", Path: "/api/v2/admin/agent/list"})
-		require.NotContains(t, string(answer.Body), "fake-reported-token")
-		require.Contains(t, string(answer.Body), `"version":"agent-1.2.3"`)
+		// The agents' hello traffic moves their last_seen; both sides must
+		// read the settled value.
+		time.Sleep(500 * time.Millisecond)
+		answer := f.compare(t, "GET", "/api/v2/admin/agent/list", packagecompat.Case{Name: "one stream agent", Path: "/api/v2/admin/agent/list"})
+		require.NotContains(t, string(answer.Body), streamKey)
 
-		f.compare(t, "GET", monitor, packagecompat.Case{Name: "no snapshot yet", Path: monitor + "?node_id=" + id(f.socket)})
-		f.postMonitor(t, map[string]any{"cpu": 12.5, "mem": map[string]any{"used": 1024, "password": "fake-reported-password"}})
-		answer = f.compare(t, "GET", monitor, packagecompat.Case{Name: "the last snapshot", Path: monitor + "?node_id=" + id(f.socket)})
-		require.NotContains(t, string(answer.Body), "fake-reported-password")
+		// Monitor snapshots came from the retired REST channel.
+		f.compare(t, "GET", monitor, packagecompat.Case{Name: "no snapshot", Path: monitor + "?node_id=" + id(f.stream)})
 		f.compare(t, "GET", monitor, packagecompat.Case{Name: "an unknown node", Path: monitor + "?node_id=99"})
 		f.compare(t, "GET", monitor, packagecompat.Case{Name: "node zero", Path: monitor + "?node_id=0"})
 		f.compare(t, "GET", monitor, packagecompat.Case{Name: "no node", Path: monitor})
@@ -349,7 +261,6 @@ func TestAgentTasksParity(t *testing.T) {
 		tasks, execute := "/api/v2/admin/agent/tasks", "/api/v2/admin/agent/execute"
 		sent := []string{"data.task_id", "data.message_id", "data.data.id", "data.data.task_id", "data.data.created_at", "data.data.timestamp"}
 		onStream := append(append([]string(nil), sent...), "data.ack.operation_id", "data.ack.revision", "data.ack.accepted_at_unix_ms")
-		onSocket := append(append([]string(nil), sent...), "data.ack.msg_id", "data.ack.timestamp")
 		body := func(node uint, action, params string) []byte {
 			return []byte(fmt.Sprintf(`{"node_id":%d,"type":"diagnostic","action":%q,"params":%s,"timeout":20}`, node, action, params))
 		}
@@ -366,10 +277,5 @@ func TestAgentTasksParity(t *testing.T) {
 			Body: []byte(fmt.Sprintf(`{"node_id":%d,"action":"log_tail","params":{"service":"anix-agent","lines":5000}}`, f.stream)), Mask: onStream})
 		f.compare(t, "POST", tasks, packagecompat.Case{Name: "an action off the whitelist", Path: tasks, Body: body(f.stream, "rm -rf /", `{}`)})
 		f.compare(t, "POST", tasks, packagecompat.Case{Name: "parameters the whitelist refuses", Path: tasks, Body: body(f.stream, "service_status", `{"service":"sshd"}`)})
-
-		f.connectSocket(t)
-		f.compare(t, "POST", tasks, packagecompat.Case{Name: "on the WebSocket", Path: tasks, Body: body(f.socket, "service_status", `{"service":"anix-agent"}`), Mask: onSocket})
-		f.compare(t, "POST", execute, packagecompat.Case{Name: "execute on the WebSocket", Path: execute,
-			Body: []byte(fmt.Sprintf(`{"node_id":%d,"action":"service_restart","params":{"service":"anix-agent"}}`, f.socket)), Mask: onSocket})
 	})
 }

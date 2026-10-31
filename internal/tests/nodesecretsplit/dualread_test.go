@@ -114,8 +114,6 @@ func (f *fleet) readerResults(t *testing.T, db *gorm.DB, round int) map[string]b
 	router.GET("/node", middleware.NodeAPIKeyAuth(), ok)
 	router.GET("/package", middleware.NodeAPIKeyHeaderAuth(), ok)
 	router.POST("/signed", middleware.NodeAPIKeyAuth(), middleware.SignatureAuth(), ok)
-	agents := handler.NewAgentHandler()
-	router.GET("/agent", agents.RequireAgentNode, ok)
 	router.GET("/credentials/:id", handler.NewNodeHandler().GetNodeCredentials)
 	router.GET("/config", middleware.NodeAuth(), handler.NewUniProxyHandler().GetConfig)
 	serve := func(method, path string, nodeID uint, key string, body string, header map[string]string) *httptest.ResponseRecorder {
@@ -147,7 +145,7 @@ func (f *fleet) readerResults(t *testing.T, db *gorm.DB, round int) map[string]b
 		{"registered", f.registered.NodeID, f.registered.APIKey},
 	}
 	for _, proxy := range proxies {
-		for _, path := range []string{"/uniproxy", "/node", "/package", "/agent"} {
+		for _, path := range []string{"/uniproxy", "/node", "/package"} {
 			results[proxy.name+" "+path] = authenticated(serve(http.MethodGet, path, proxy.id, proxy.key, "", nil), proxy.id)
 		}
 	}
@@ -197,9 +195,6 @@ func (f *fleet) readerResults(t *testing.T, db *gorm.DB, round int) map[string]b
 	// Registration with the registration key.
 	_, err := service.NewNodeService().RegisterNode(&model.NodeRegisterRequest{AuthKey: f.registrationKey, Name: fmt.Sprintf("again-%d", round), Port: 443}, "192.0.2.51")
 	results["registration"] = err == nil
-
-	// The forward node's agent.
-	results["forward agent"] = serve(http.MethodGet, "/agent", f.forward.ID, "fake-fleet-forward-token", "", nil).Code == http.StatusOK
 
 	// The WireGuard peer in a subscription and in the node's user list.
 	peer, err := service.NewSubscriptionService().GetOrCreateWireGuardPeer(f.wireGuard.ID, f.user.ID, "10.66.0.0/24")
@@ -307,7 +302,6 @@ func TestEveryReaderInEachPhase(t *testing.T) {
 		for _, counted := range [][2]string{
 			{nodesecrets.TableNode, nodesecrets.KindNodeSharedSecret}, {nodesecrets.TableNode, "raw_config"},
 			{nodesecrets.TableAuthorizedKey, nodesecrets.KindRegistrationKey},
-			{nodesecrets.TableForwardNode, nodesecrets.KindForwardNodeToken},
 			{nodesecrets.TableNodeProtocol, "reality_settings"}, {nodesecrets.TableWireGuardPeer, "private_key"},
 		} {
 			require.NotZero(t, nodesecrets.FallbackCount(counted[0], counted[1], nodesecrets.FallbackMissing), "%v", counted)

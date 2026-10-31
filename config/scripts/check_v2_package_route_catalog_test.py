@@ -586,8 +586,6 @@ func NamedResultShadow(r *gin.Engine, cfg *config.Config) (config resultConfig) 
         self.assertEqual(
             {
                 ("GET", "/api/v2/admin/ws/monitor"),
-                ("GET", "/api/v2/node/ws"),
-                ("GET", "/api/v2/agent/ws"),
             },
             websocket_routes,
         )
@@ -644,7 +642,6 @@ func NamedResultShadow(r *gin.Engine, cfg *config.Config) (config resultConfig) 
             ("GET", "/api/v2/admin/loadbalancers"): ("proxy-node", "proxy.loadbalancer."),
             ("GET", "/api/v2/admin/nodes/:id/protocols"): ("protocol-runtime", "protocol."),
             ("GET", "/api/v2/admin/protocol-templates"): ("protocol-runtime", "protocol."),
-            ("POST", "/api/v2/node/register"): ("proxy-node", "proxy."),
             ("GET", "/api/v2/server/UniProxy/config"): ("proxy-node", "proxy."),
             ("POST", "/api/v2/user/reset"): ("forward", "forward.user."),
             ("POST", "/api/v2/admin/wireguard/keypair"): ("wireguard", "wireguard."),
@@ -664,7 +661,6 @@ func NamedResultShadow(r *gin.Engine, cfg *config.Config) (config resultConfig) 
             ("POST", "/api/v2/payment/callback/:type"): "raw",
             ("POST", "/api/v2/payment/stripe/webhook"): "raw",
             ("GET", "/api/v2/server/UniProxy/config"): "raw",
-            ("POST", "/api/v2/agent/heartbeat"): "raw",
             ("GET", "/api/v2/admin/ws/monitor"): "websocket",
         }
         for key, envelope in expected.items():

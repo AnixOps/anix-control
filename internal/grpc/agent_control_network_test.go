@@ -48,7 +48,7 @@ func networkMember(t *testing.T, snapshot *agentv1pb.ConfigSnapshot) (*networkv1
 // The HelloAck lists network.v1 only with config.v1 and valid capabilities;
 // a forward node is offered package-reports.v1 with it.
 func TestAgentControlNetworkNegotiation(t *testing.T) {
-	server := NewAgentControlGRPCServer(NewAgentControlManager())
+	server := newTestAgentControlServer(NewAgentControlManager())
 	forwardNode := agentcontrol.AgentNode{Kind: agentcontrol.NodeKindForward, ID: 1}
 	proxyNode := agentcontrol.AgentNode{Kind: agentcontrol.NodeKindProxy, ID: 1}
 	listed := func(node agentcontrol.AgentNode, agent []*agentv1pb.Capability, name string) bool {

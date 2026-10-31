@@ -3,17 +3,13 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
-	"net/http/httptest"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/AnixOps/anix-control/v5/internal/agenttransport"
-	"github.com/AnixOps/anix-control/v5/internal/config"
 	"github.com/AnixOps/anix-control/v5/internal/model"
-	"github.com/gin-gonic/gin"
-	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )
@@ -28,9 +24,8 @@ func TestAgentTransportsHandlerListsTheInventory(t *testing.T) {
 	}).Error)
 	live := agenttransport.NewRecorder(nil)
 	handler := &AgentTransportsHandler{
-		policy: agenttransport.PolicyFrom(config.AgentControlConfig{}),
-		db:     func() *gorm.DB { return db },
-		live:   func() *agenttransport.Recorder { return live },
+		db:   func() *gorm.DB { return db },
+		live: func() *agenttransport.Recorder { return live },
 	}
 	route := "/api/v4/kernel/agents/transports"
 
@@ -40,7 +35,6 @@ func TestAgentTransportsHandlerListsTheInventory(t *testing.T) {
 		Data agenttransport.Inventory `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &body))
-	require.Equal(t, config.AgentMTLSRequired, body.Data.Mode, "the 4.2 default")
 	summary := body.Data.Summary
 	require.Equal(t, [3]int{2, 1, 1}, [3]int{summary.Total, summary.MTLS, summary.Unseen}, "a retired websocket row is not a sighting")
 	require.False(t, summary.ReadyForRequired)
@@ -59,49 +53,7 @@ func TestAgentTransportsHandlerListsTheInventory(t *testing.T) {
 	recorder = performKernelHandlerRequest(t, http.MethodGet, route, "", route, handler.List)
 	require.Equal(t, http.StatusInternalServerError, recorder.Code, "the tables are missing")
 
-	require.NotNil(t, NewAgentTransportsHandler(agenttransport.Policy{Mode: config.AgentMTLSOptional}))
-}
-
-// TestAgentWebSocketCarriesDeprecationAndIsRecorded: the legacy path
-// middleware's signals reach the WebSocket handshake answer, and the
-// session is recorded in the transport inventory.
-func TestAgentWebSocketCarriesDeprecationAndIsRecorded(t *testing.T) {
-	db := newKernelHandlerTestDB(t, &model.Node{}, &model.ForwardNode{}, &model.AgentTransport{})
-	sqlDB, err := db.DB()
-	require.NoError(t, err)
-	sqlDB.SetMaxOpenConns(1)
-	t.Cleanup(agenttransport.SetDefault(agenttransport.NewRecorder(func() *gorm.DB { return db })))
-	forward := model.ForwardNode{ID: 7701, Name: "ws-relay", Host: "198.51.100.77", Port: 22, APIToken: "ws-relay-token", Enabled: true}
-	require.NoError(t, db.Create(&forward).Error)
-
-	h := NewAgentHandler()
-	h.db = db
-	h.wsUpgrader.CheckOrigin = func(*http.Request) bool { return true }
-	router := gin.New()
-	router.GET("/api/v2/agent/ws",
-		agenttransport.LegacyHTTP(agenttransport.Policy{Mode: config.AgentMTLSPreferred}, model.AgentTransportWebSocket),
-		h.AgentWebSocketUnified)
-	server := httptest.NewServer(router)
-	t.Cleanup(server.Close)
-
-	header := http.Header{}
-	header.Set("X-Node-ID", "7701")
-	header.Set("X-API-Key", "ws-relay-token")
-	conn, response, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(server.URL, "http")+"/api/v2/agent/ws", header)
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = conn.Close() })
-	require.Equal(t, "true", response.Header.Get("Deprecation"))
-	require.Contains(t, response.Header.Get("Link"), agenttransport.UpgradeGuideURL)
-	require.NoError(t, conn.WriteJSON(map[string]any{"type": "heartbeat", "node_id": 7701}))
-
-	require.Eventually(t, func() bool {
-		var rows []model.AgentTransport
-		db.Where("node_kind = ? AND node_id = ? AND transport = ?", "forward", 7701, model.AgentTransportWebSocket).Find(&rows)
-		return len(rows) == 1
-	}, 2*time.Second, 20*time.Millisecond)
-
-	require.Nil(t, legacyAgentUpgradeHeader(http.Header{}), "nothing to carry without signals")
-	recordWebSocketSighting(t.Context(), nil)
+	require.NotNil(t, NewAgentTransportsHandler())
 }
 
 // TestAgentTransportsHandlerShowsCertificatesAndConnections: the inventory
@@ -121,9 +73,8 @@ func TestAgentTransportsHandlerShowsCertificatesAndConnections(t *testing.T) {
 		{NodeKind: "proxy", NodeID: 2, Transport: model.AgentTransportWebSocket, FirstSeenAt: now, LastSeenAt: now.Add(-time.Minute)},
 	}).Error)
 	handler := &AgentTransportsHandler{
-		policy: agenttransport.PolicyFrom(config.AgentControlConfig{}),
-		db:     func() *gorm.DB { return db },
-		live:   func() *agenttransport.Recorder { return agenttransport.NewRecorder(nil) },
+		db:   func() *gorm.DB { return db },
+		live: func() *agenttransport.Recorder { return agenttransport.NewRecorder(nil) },
 	}
 	route := "/api/v4/kernel/agents/transports"
 	type answer struct {

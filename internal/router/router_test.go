@@ -293,7 +293,6 @@ func setupV2PackageRouter(t *testing.T) (*gin.Engine, *config.Config, *v2TestHos
 		App: config.AppConfig{APIToken: "test-api-token", SubscribePath: "s", TrafficLogEnable: true},
 		// The v2 package fixtures drive the legacy agent paths with node API
 		// keys, which the 4.2 default (required) refuses.
-		AgentControl: config.AgentControlConfig{MTLS: config.AgentMTLSPreferred},
 	}
 	host := testHost(t)
 	publicKey, privateKey := seedV2KnowledgePackage(t, cfg)
@@ -368,60 +367,6 @@ func TestV2TaskEightRepresentativeRoutesUsePackageHosts(t *testing.T) {
 	}
 }
 
-// The agent HTTP routes authenticate the node in the kernel before the
-// gateway: without its credentials the package host is never called, and
-// with them it gets the verified node and never the credentials.
-func TestV2AgentHTTPRoutesRequireTheNodesCredentials(t *testing.T) {
-	router, _, host := setupV2PackageRouter(t)
-	require.NoError(t, database.GetDB().AutoMigrate(&model.Node{}, &model.ForwardNode{}))
-	node := model.Node{Name: "edge", Host: "edge.example.test", APIKey: "edge-api-key", APIKeyHash: sha256Hex("edge-api-key")}
-	require.NoError(t, database.GetDB().Create(&node).Error)
-	nodeID := strconv.FormatUint(uint64(node.ID), 10)
-
-	for _, test := range []struct {
-		name    string
-		path    string
-		headers map[string]string
-	}{
-		{name: "no credentials", path: "/api/v2/agent/tasks"},
-		{name: "a node id alone", path: "/api/v2/agent/tasks?node_id=" + nodeID},
-		{name: "a wrong key", path: "/api/v2/agent/tasks", headers: map[string]string{"X-Node-ID": nodeID, "X-API-Key": "wrong"}},
-		{name: "an unknown node", path: "/api/v2/agent/tasks", headers: map[string]string{"X-Node-ID": "999", "X-API-Key": "edge-api-key"}},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			host.lastRouteID = ""
-			request := httptest.NewRequest(http.MethodGet, test.path, nil)
-			for name, value := range test.headers {
-				request.Header.Set(name, value)
-			}
-			recorder := httptest.NewRecorder()
-			router.ServeHTTP(recorder, request)
-			require.Equal(t, http.StatusUnauthorized, recorder.Code, recorder.Body.String())
-			require.Empty(t, host.lastRouteID, "the package host was called")
-		})
-	}
-
-	request := httptest.NewRequest(http.MethodGet, "/api/v2/agent/tasks?node_id="+nodeID+"&api_key=edge-api-key&limit=5", nil)
-	recorder := httptest.NewRecorder()
-	router.ServeHTTP(recorder, request)
-	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
-	require.Equal(t, "protocol.agent.tasks.get", host.lastRouteID)
-	require.Equal(t, node.ID, host.lastMetadata.NodeID)
-	require.True(t, host.lastMetadata.TrustedAgentWebSocketAuth)
-	require.False(t, host.lastMetadata.TrustedAgentWebSocketForwardNode)
-	require.Equal(t, map[string][]string{"limit": {"5"}}, host.lastMetadata.Query, "credentials reached the package host")
-
-	host.lastRouteID = ""
-	request = httptest.NewRequest(http.MethodPost, "/api/v2/agent/heartbeat", strings.NewReader(`{"node_id":`+nodeID+`}`))
-	request.Header.Set("X-Node-ID", nodeID)
-	request.Header.Set("X-API-Key", "edge-api-key")
-	recorder = httptest.NewRecorder()
-	router.ServeHTTP(recorder, request)
-	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
-	require.Equal(t, "protocol.agent.heartbeat.post", host.lastRouteID)
-	require.NotContains(t, host.lastMetadata.Headers, "X-Api-Key")
-}
-
 func TestV2WebSocketRoutesRegisterExactPackageBridgeOperations(t *testing.T) {
 	_, _, _ = setupV2PackageRouter(t)
 	for _, test := range []struct {
@@ -429,8 +374,6 @@ func TestV2WebSocketRoutesRegisterExactPackageBridgeOperations(t *testing.T) {
 		routeID   string
 	}{
 		{packageID: "machine-telemetry", routeID: "telemetry.admin.ws.monitor.get"},
-		{packageID: "proxy-node", routeID: "proxy.node.ws.get"},
-		{packageID: "protocol-runtime", routeID: "protocol.agent.ws.get"},
 	} {
 		t.Run(test.routeID, func(t *testing.T) {
 			operation, ok := packagebridge.DefaultRouteRegistry().ResolveWebSocket(test.packageID, test.routeID, test.routeID)
@@ -493,7 +436,7 @@ func TestAllCataloguedV2RoutesResolveThroughTheirPackageBridge(t *testing.T) {
 		})
 	}
 	require.Equal(t, 26, identityRoutes)
-	require.Equal(t, 176, bridgedRoutes)
+	require.Equal(t, 166, bridgedRoutes)
 }
 
 // Old identity-platform and plan releases still declare the routes that
@@ -919,7 +862,7 @@ func TestSetup_LoginEndpoint(t *testing.T) {
 	assert.NotEqual(t, http.StatusNotFound, w.Code)
 }
 
-func TestSetup_NodeRegisterEndpoint(t *testing.T) {
+func TestSetup_NodeRegisterEndpointIsRemoved(t *testing.T) {
 	r, _ := setupTestRouter(t)
 	defer teardownTestRouter(t)
 
@@ -928,8 +871,8 @@ func TestSetup_NodeRegisterEndpoint(t *testing.T) {
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
-	// Should return 400 due to missing body, not 404
-	assert.NotEqual(t, http.StatusNotFound, w.Code)
+	// The legacy node registration route was removed.
+	assert.Equal(t, http.StatusNotFound, w.Code)
 }
 
 func TestSetup_SubscribeEndpoint(t *testing.T) {
@@ -1069,11 +1012,11 @@ func TestSetup_PaymentEndpoints(t *testing.T) {
 	})
 }
 
-func TestSetup_AgentEndpoints(t *testing.T) {
+func TestSetup_LegacyAgentEndpointsAreRemoved(t *testing.T) {
 	r, _ := setupTestRouter(t)
 	defer teardownTestRouter(t)
 
-	// Agent public endpoints
+	// The legacy agent REST endpoints were removed with the legacy channels.
 	endpoints := []struct {
 		method string
 		path   string
@@ -1089,8 +1032,7 @@ func TestSetup_AgentEndpoints(t *testing.T) {
 			w := httptest.NewRecorder()
 			r.ServeHTTP(w, req)
 
-			// Should not return 404
-			assert.NotEqual(t, http.StatusNotFound, w.Code)
+			assert.Equal(t, http.StatusNotFound, w.Code)
 		})
 	}
 }

@@ -3,7 +3,6 @@ package config
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -191,17 +190,4 @@ func TestPanelACMENeedsNoConfiguredKey(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, cfg.ValidateForServer())
 	require.True(t, cfg.Panel().NeedsACME())
-}
-
-func TestRequiredPrerequisitesFollowThePanelCertificate(t *testing.T) {
-	cfg, err := loadPanelYAML(t, "domain: panel.example.com\nmodule_runtime:\n  ca_kek: "+strings.Repeat("A", 43)+"=\n")
-	require.NoError(t, err)
-	// domain turns gRPC on and gives it the panel's certificate.
-	require.NoError(t, cfg.RequiredPrerequisitesError())
-
-	cfg, err = loadPanelYAML(t, "grpc:\n  enabled: true\nmodule_runtime:\n  ca_kek: "+strings.Repeat("A", 43)+"=\n")
-	require.NoError(t, err)
-	err = cfg.RequiredPrerequisitesError()
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "needs TLS on the gRPC listener")
 }

@@ -104,13 +104,6 @@ var proxyNodeRoutes = map[string]struct{}{
 //     package nor ValidateNodeConfig can compute it.
 //   - Node credentials (kernel-owned, D4): the answer is the stored API key
 //     and secret, and no contract call reveals a stored secret.
-//   - Node registration, heartbeat and runtime health (kernel-owned, D3): a
-//     registration mints node credentials; the others are authenticated by
-//     the node's API key in the kernel and write v2_node, the heartbeat
-//     also adding traffic up the node's parent chain. A2 replaces them with
-//     enrollment and stream reports, and 5.0 removes them (D8).
-//   - The agent WebSocket (kernel-owned) is a live connection the kernel
-//     holds and pushes to.
 //   - UniProxy (bridged): node-authenticated; the user list carries every
 //     eligible subscriber's UUID, a traffic push records subscriber
 //     traffic, and the online list lives in the kernel's in-memory cache.
@@ -121,10 +114,6 @@ var bridgedRoutes = map[string]struct{}{
 	"proxy.admin.nodes.id.put":               {},
 	"proxy.admin.nodes.validate_config.post": {},
 	"proxy.admin.nodes.id.credentials.get":   {},
-	"proxy.node.register.post":               {},
-	"proxy.node.heartbeat.post":              {},
-	"proxy.node.runtime_health.post":         {},
-	"proxy.node.ws.get":                      {},
 	"proxy.server.uniproxy.config.get":       {},
 	"proxy.server.uniproxy.user.get":         {},
 	"proxy.server.uniproxy.alivelist.get":    {},

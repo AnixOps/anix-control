@@ -783,51 +783,36 @@ for the current state (`running`, `restarting`, `failed`, `exited`,
 
 ## Agent Client Certificates
 
-AnixOps Agents authenticate on their channels (the gRPC listener and the
-legacy agent HTTP and WebSocket paths) with enrolled client certificates:
-the mode is `required`, built in. The 4.2 keys `agent_control.mtls` and
-`agent_control.legacy_sunset` are ignored (the other modes go with the
-legacy transports in M5); the table keeps what each mode did:
+AnixOps Agents authenticate on the gRPC listener with enrolled client
+certificates only. The legacy agent channels (the API-key stream, the
+`/api/v2/agent/*` and `/api/v2/node/*` REST and WebSocket paths and the
+`off`, `optional` and `preferred` modes) are removed; the 4.2 keys
+`agent_control.mtls` and `agent_control.legacy_sunset` are ignored and can be
+deleted from the configuration.
 
-| Mode | Agents without a client certificate |
-|------|------|
-| `off` | authenticate with their node API key; certificates are neither requested nor accepted and `Enroll` is unavailable (a rollback switch) |
-| `optional` | authenticate with their node API key, silently |
-| `preferred` (the 4.1 default) | still authenticate, and get deprecation signals: `Deprecation: true`, `Link` to the upgrade guide and, with `legacy_sunset`, `Sunset` on the legacy HTTP paths; `x-anix-auth-deprecated` (with `x-anix-auth-deprecation-link`, `x-anix-auth-sunset`) on the control stream |
-| `required` (default from 4.2, also when empty) | are refused on the AnixOps Agent channels: HTTP 403 with `"code": "agent_mtls_required"`, gRPC `Unauthenticated` with the trailer `x-anix-error-code: agent_mtls_required`; `Enroll` takes only one-time enrollment credentials |
-
-- **Scope.** The AnixOps Agent channels are the control stream's API key
-  authentication, `/api/v2/agent/*`, `/api/v2/node/*`,
-  `/api/v2/forward/agent/rules` and the clean agent endpoints
-  (`/api/v2/forward-agent/register|heartbeat|report`). UniProxy
+- A call without a valid client certificate is refused: gRPC
+  `Unauthenticated` with the trailer `x-anix-error-code: agent_mtls_required`;
+  `Enroll` takes only one-time enrollment credentials. UniProxy
   (`/api/v1|v2/server/UniProxy/*`) and the v2board gRPC services, which
-  third-party node software (XrayR, V2bX) uses, are never signalled or
-  refused.
+  third-party node software (XrayR, V2bX) uses, are not affected.
 - Agents get certificates from `anix.agent.v1.AgentEnrollment`, signed by the
   built-in CA, whose key the [root key](#the-root-key) seals; every server
   has it (with the deprecated `module_runtime.pki: external` the kernel holds
   no CA key and Agents cannot enroll).
-- `required` needs the gRPC listener with TLS (`domain`, or the deprecated
-  `grpc.enabled` with `grpc.tls_cert_file` and `grpc.tls_key_file`) for
-  agents to enroll and connect. Without it Control starts and logs a
-  `WARNING: Agent transports: ...` line that no Agent can connect; legacy
-  Agents are refused either way.
-- Under `required`, startup also warns (`WARNING: Agent transports:
-  agent_control.mtls=required refuses N enabled node(s) ...`) when the
-  transport inventory still has enabled nodes on a legacy channel (counting
-  those seen within the last 7 days) or nodes that never enrolled. It never
-  stops the start.
-- Before switching to `required` or upgrading to v4.2, run `anix-control
-  agents transports --check-required` (exit status 3 while an enabled node
-  would be refused: `legacy` or `never_enrolled`; 0 when none;
-  `summary.ready_for_required` in `GET /api/v4/kernel/agents/transports`),
-  or read the node list's connection and certificate columns. Every node it
-  lists must first run
-  an enrolled agent, or be disabled
-  ([UPGRADE](../UPGRADE.md#agent-transports-v42-requires-enrolled-agents)). `/metrics` has
-  `anixops_agent_legacy_requests_total{path}`,
-  `anixops_agent_legacy_refused_total{path}` and
-  `anixops_agent_mtls_mode{mode}`.
+- The gRPC listener needs TLS (`domain`, or the deprecated `grpc.enabled`
+  with `grpc.tls_cert_file` and `grpc.tls_key_file`) for agents to enroll and
+  connect. Without it Control starts and logs a `WARNING: Agent transports:
+  ...` line that no Agent can connect.
+- Startup also warns (`WARNING: Agent transports: N enabled node(s) never
+  enrolled ...`) when the transport inventory has enabled nodes that never
+  enrolled. It never stops the start.
+- `anix-control agents transports --check-required` lists them (exit status
+  3 while an enabled node has never enrolled; `summary.ready_for_required` in
+  `GET /api/v4/kernel/agents/transports`), as do the node list's connection
+  and certificate columns. Every node it lists must first run an enrolled
+  agent, or be disabled
+  ([UPGRADE](../UPGRADE.md#agent-transports-v42-requires-enrolled-agents)).
+  `/metrics` has `anixops_agent_legacy_refused_total{path}`.
 - Enrollment credentials: `anix-control agent token create -node proxy-12`
   or `POST /api/v4/kernel/agents/enrollment-tokens`. Details in
   [`../architecture/module-runtime.md`](../architecture/module-runtime.md#agent-pki)

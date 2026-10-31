@@ -25,7 +25,6 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/agentpki"
 	"github.com/AnixOps/anix-control/v5/internal/agenttransport"
 	"github.com/AnixOps/anix-control/v5/internal/cache"
-	"github.com/AnixOps/anix-control/v5/internal/config"
 	"github.com/AnixOps/anix-control/v5/internal/database"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/modulepki"
@@ -53,14 +52,14 @@ type agentListener struct {
 	forwardToken string
 }
 
-func startAgentListener(t *testing.T, mode string, withPKI bool) *agentListener {
+func startAgentListener(t *testing.T, withPKI bool) *agentListener {
 	t.Helper()
-	return startAgentListenerWith(t, mode, withPKI, nil)
+	return startAgentListenerWith(t, withPKI, nil)
 }
 
 // startAgentListenerWith is startAgentListener with configure applied to
 // the server configuration before the listener starts.
-func startAgentListenerWith(t *testing.T, mode string, withPKI bool, configure func(*ServerConfig)) *agentListener {
+func startAgentListenerWith(t *testing.T, withPKI bool, configure func(*ServerConfig)) *agentListener {
 	t.Helper()
 	cache.InitMemory()
 	requireInMemoryDatabase(t)
@@ -86,7 +85,7 @@ func startAgentListenerWith(t *testing.T, mode string, withPKI bool, configure f
 	require.NoError(t, db.Create(&l.forward).Error)
 
 	cfg := DefaultServerConfig()
-	cfg.Host, cfg.Port, cfg.AgentMTLS = "127.0.0.1", 0, mode
+	cfg.Host, cfg.Port = "127.0.0.1", 0
 	cfg.TLSCertFile, cfg.TLSKeyFile, l.serverRoots = writeServerCertificate(t)
 	if withPKI {
 		kek := make([]byte, 32)
@@ -209,38 +208,13 @@ func testContext(t *testing.T) context.Context {
 	return ctx
 }
 
-func TestAgentListenerLegacyAgentWithoutCertificateInOptionalMode(t *testing.T) {
-	l := startAgentListener(t, config.AgentMTLSOptional, true)
-	conn := l.dial(t, nil)
-	ctx := testContext(t)
-
-	var header metadata.MD
-	stream, err := agentv1pb.NewAgentControlServiceClient(conn).ControlStream(legacyCredentials(ctx, l.proxy.ID, l.proxyKey))
-	require.NoError(t, err)
-	require.NoError(t, stream.Send(validAgentHello(uint32(l.proxy.ID))))
-	message, err := stream.Recv()
-	require.NoError(t, err)
-	require.NotNil(t, message.GetHelloAck())
-	header, err = stream.Header()
-	require.NoError(t, err)
-	assert.Empty(t, header.Get(agentcontrol.MetadataAuthDeprecated), "optional mode sends no deprecation header")
-
-	// The v2board services keep the legacy credential too.
-	_, err = pb.NewNodeServiceClient(conn).GetConfig(legacyCredentials(ctx, l.proxy.ID, l.proxyKey), &pb.NodeConfigRequest{NodeId: uint32(l.proxy.ID)})
-	assert.NotContains(t, []codes.Code{codes.Unauthenticated, codes.PermissionDenied}, status.Code(err))
-
-	// A wrong key is still refused.
-	_, _, err = openStream(t, legacyCredentials(ctx, l.proxy.ID, "wrong"), conn, uint32(l.proxy.ID))
-	assert.Equal(t, codes.Unauthenticated, status.Code(err))
-}
-
 func TestAgentListenerEnrollsWithEachBootstrapAndStreamsByCertificate(t *testing.T) {
-	l := startAgentListener(t, config.AgentMTLSOptional, true)
+	l := startAgentListener(t, true)
 	anonymous := l.dial(t, nil)
 	ctx := testContext(t)
 
 	// 1. An agent in the field: its proxy node's API key.
-	proxyCertificate, issued, err := enrollForTest(t, nodeCredentials(ctx, l.proxyNode(), l.proxyKey), anonymous, "")
+	proxyCertificate, issued, err := l.enrollWithToken(t, ctx, l.proxyNode(), anonymous)
 	require.NoError(t, err)
 	assert.Equal(t, "spiffe://anixops/test/agent/"+l.proxyNode().String(), issued.GetSpiffeId())
 	assert.Equal(t, l.proxyNode().String(), issued.GetNode())
@@ -273,7 +247,7 @@ func TestAgentListenerEnrollsWithEachBootstrapAndStreamsByCertificate(t *testing
 
 	// 2. A forward node: its token, with x-node-kind forward. It streams in
 	// its own manager: forward and proxy ids overlap.
-	forwardCertificate, issued, err := enrollForTest(t, nodeCredentials(ctx, l.forwardNode(), l.forwardToken), anonymous, "")
+	forwardCertificate, issued, err := l.enrollWithToken(t, ctx, l.forwardNode(), anonymous)
 	require.NoError(t, err)
 	assert.Equal(t, "spiffe://anixops/test/agent/"+l.forwardNode().String(), issued.GetSpiffeId())
 	forwardConn := l.dial(t, forwardCertificate)
@@ -304,7 +278,7 @@ func TestAgentListenerEnrollsWithEachBootstrapAndStreamsByCertificate(t *testing
 	registered, err := pb.NewNodeServiceClient(anonymous).Register(ctx, &pb.NodeRegisterRequest{AuthKey: authKey, Name: "registered", Host: "127.0.0.1", Port: 443})
 	require.NoError(t, err)
 	registeredNode := agentcontrol.AgentNode{Kind: agentcontrol.NodeKindProxy, ID: registered.GetNodeId()}
-	registeredCertificate, issued, err := enrollForTest(t, nodeCredentials(ctx, registeredNode, registered.GetApiKey()), anonymous, "")
+	registeredCertificate, issued, err := l.enrollWithToken(t, ctx, registeredNode, anonymous)
 	require.NoError(t, err)
 	assert.Equal(t, registeredNode.String(), issued.GetNode())
 	_, helloAck, err = openStream(t, ctx, l.dial(t, registeredCertificate), registered.GetNodeId())
@@ -328,10 +302,10 @@ func TestAgentListenerEnrollsWithEachBootstrapAndStreamsByCertificate(t *testing
 }
 
 func TestAgentListenerBindsEnvelopesAndRequestsToTheCertificate(t *testing.T) {
-	l := startAgentListener(t, config.AgentMTLSOptional, true)
+	l := startAgentListener(t, true)
 	ctx := testContext(t)
 	anonymous := l.dial(t, nil)
-	proxyCertificate, _, err := enrollForTest(t, nodeCredentials(ctx, l.proxyNode(), l.proxyKey), anonymous, "")
+	proxyCertificate, _, err := l.enrollWithToken(t, ctx, l.proxyNode(), anonymous)
 	require.NoError(t, err)
 	conn := l.dial(t, proxyCertificate)
 
@@ -361,80 +335,20 @@ func TestAgentListenerBindsEnvelopesAndRequestsToTheCertificate(t *testing.T) {
 	assert.NotContains(t, []codes.Code{codes.Unauthenticated, codes.PermissionDenied}, status.Code(err))
 
 	// A forward node's certificate is for the Agent services only.
-	forwardCertificate, _, err := enrollForTest(t, nodeCredentials(ctx, l.forwardNode(), l.forwardToken), anonymous, "")
+	forwardCertificate, _, err := l.enrollWithToken(t, ctx, l.forwardNode(), anonymous)
 	require.NoError(t, err)
 	_, err = pb.NewNodeServiceClient(l.dial(t, forwardCertificate)).GetConfig(ctx, &pb.NodeConfigRequest{NodeId: uint32(l.forward.ID)})
 	assert.Equal(t, codes.PermissionDenied, status.Code(err))
 }
 
-func TestAgentListenerModes(t *testing.T) {
-	t.Run("preferred", func(t *testing.T) {
-		l := startAgentListener(t, config.AgentMTLSPreferred, true)
-		ctx := testContext(t)
-		anonymous := l.dial(t, nil)
-		stream, err := agentv1pb.NewAgentControlServiceClient(anonymous).ControlStream(legacyCredentials(ctx, l.proxy.ID, l.proxyKey))
-		require.NoError(t, err)
-		require.NoError(t, stream.Send(validAgentHello(uint32(l.proxy.ID))))
-		_, err = stream.Recv()
-		require.NoError(t, err, "legacy credentials still work")
-		header, err := stream.Header()
-		require.NoError(t, err)
-		assert.NotEmpty(t, header.Get(agentcontrol.MetadataAuthDeprecated))
-
-		certificate, _, err := enrollForTest(t, nodeCredentials(ctx, l.proxyNode(), l.proxyKey), anonymous, "")
-		require.NoError(t, err, "agents in the field still enroll with their key")
-		stream, err = agentv1pb.NewAgentControlServiceClient(l.dial(t, certificate)).ControlStream(ctx)
-		require.NoError(t, err)
-		require.NoError(t, stream.Send(validAgentHello(uint32(l.proxy.ID))))
-		_, err = stream.Recv()
-		require.NoError(t, err)
-		header, err = stream.Header()
-		require.NoError(t, err)
-		assert.Empty(t, header.Get(agentcontrol.MetadataAuthDeprecated))
-	})
-
-	t.Run("required", func(t *testing.T) {
-		l := startAgentListener(t, config.AgentMTLSRequired, true)
-		ctx := testContext(t)
-		anonymous := l.dial(t, nil)
-		_, _, err := openStream(t, legacyCredentials(ctx, l.proxy.ID, l.proxyKey), anonymous, uint32(l.proxy.ID))
-		assert.Equal(t, codes.Unauthenticated, status.Code(err), "legacy credentials no longer open the stream")
-		_, _, err = enrollForTest(t, nodeCredentials(ctx, l.proxyNode(), l.proxyKey), anonymous, "")
-		assert.Equal(t, codes.Unauthenticated, status.Code(err), "API keys no longer enroll")
-
-		credential, _, err := l.pki.CreateEnrollmentToken(ctx, agentpki.TokenRequest{Node: l.proxyNode(), TTL: time.Hour})
-		require.NoError(t, err)
-		certificate, _, err := enrollForTest(t, ctx, anonymous, credential)
-		require.NoError(t, err)
-		_, helloAck, err := openStream(t, ctx, l.dial(t, certificate), uint32(l.proxy.ID))
-		require.NoError(t, err)
-		assert.NotEmpty(t, helloAck.SessionId)
-
-		// Third-party node software keeps the v2board services.
-		_, err = pb.NewNodeServiceClient(anonymous).GetConfig(legacyCredentials(ctx, l.proxy.ID, l.proxyKey), &pb.NodeConfigRequest{NodeId: uint32(l.proxy.ID)})
-		assert.NotContains(t, []codes.Code{codes.Unauthenticated, codes.PermissionDenied}, status.Code(err))
-	})
-
-	t.Run("without the agent PKI", func(t *testing.T) {
-		l := startAgentListener(t, config.AgentMTLSOptional, false)
-		ctx := testContext(t)
-		anonymous := l.dial(t, nil)
-		_, _, err := enrollForTest(t, nodeCredentials(ctx, l.proxyNode(), l.proxyKey), anonymous, "")
-		assert.Equal(t, codes.FailedPrecondition, status.Code(err))
-		_, helloAck, err := openStream(t, legacyCredentials(ctx, l.proxy.ID, l.proxyKey), anonymous, uint32(l.proxy.ID))
-		require.NoError(t, err)
-		assert.NotEmpty(t, helloAck.SessionId)
-	})
-}
-
 func TestAgentListenerRefusesRevokedAndForeignCertificates(t *testing.T) {
-	l := startAgentListener(t, config.AgentMTLSOptional, true)
+	l := startAgentListener(t, true)
 	ctx := testContext(t)
 	anonymous := l.dial(t, nil)
 
 	// Replacing a forward node's token revokes its certificates: an open
 	// stream ends at its next heartbeat and new streams are refused.
-	forwardCertificate, _, err := enrollForTest(t, nodeCredentials(ctx, l.forwardNode(), l.forwardToken), anonymous, "")
+	forwardCertificate, _, err := l.enrollWithToken(t, ctx, l.forwardNode(), anonymous)
 	require.NoError(t, err)
 	forwardConn := l.dial(t, forwardCertificate)
 	stream, helloAck, err := openStream(t, ctx, forwardConn, uint32(l.forward.ID))
@@ -451,11 +365,9 @@ func TestAgentListenerRefusesRevokedAndForeignCertificates(t *testing.T) {
 	assert.Equal(t, codes.Unauthenticated, status.Code(err))
 	_, _, err = openStream(t, ctx, forwardConn, uint32(l.forward.ID))
 	assert.Equal(t, codes.Unauthenticated, status.Code(err))
-	_, _, err = enrollForTest(t, nodeCredentials(ctx, l.forwardNode(), l.forwardToken), anonymous, "")
-	assert.Equal(t, codes.Unauthenticated, status.Code(err), "the old token no longer enrolls")
 
 	// Disabling a proxy node revokes its certificates.
-	proxyCertificate, _, err := enrollForTest(t, nodeCredentials(ctx, l.proxyNode(), l.proxyKey), anonymous, "")
+	proxyCertificate, _, err := l.enrollWithToken(t, ctx, l.proxyNode(), anonymous)
 	require.NoError(t, err)
 	proxyConn := l.dial(t, proxyCertificate)
 	_, _, err = openStream(t, ctx, proxyConn, uint32(l.proxy.ID))
@@ -516,4 +428,13 @@ func resetGlobalAgentManagers() {
 		clear(m.observed)
 		m.mu.Unlock()
 	}
+}
+
+// enrollWithToken enrolls node with a fresh one-time enrollment credential
+// over conn, as the installer does.
+func (l *agentListener) enrollWithToken(t *testing.T, ctx context.Context, node agentcontrol.AgentNode, conn *grpc.ClientConn) (*tls.Certificate, *agentv1pb.AgentCertificate, error) {
+	t.Helper()
+	credential, _, err := l.pki.CreateEnrollmentToken(ctx, agentpki.TokenRequest{Node: node, TTL: time.Hour})
+	require.NoError(t, err)
+	return enrollForTest(t, ctx, conn, credential)
 }

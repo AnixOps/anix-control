@@ -28,7 +28,6 @@ import (
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	agentv1pb "github.com/AnixOps/anix-control/sdk/api/agent/v1"
 	"github.com/AnixOps/anix-control/v5/internal/agentpki"
-	"github.com/AnixOps/anix-control/v5/internal/config"
 	grpcserver "github.com/AnixOps/anix-control/v5/internal/grpc"
 	"github.com/AnixOps/anix-control/v5/internal/modulepki"
 	"github.com/stretchr/testify/require"
@@ -40,9 +39,8 @@ import (
 )
 
 // Control is the real node-facing listener (internal/grpc.Server) with
-// TLS and the agent PKI, in agent_control.mtls optional mode: agents
-// authenticate with a node API key or forward token, or enroll and stream
-// by certificate. It reads the kernel's global database (database.Get),
+// TLS and the agent PKI: agents enroll with a one-time credential and
+// stream by certificate. It reads the kernel's global database (database.Get),
 // which the caller initializes.
 type Control struct {
 	Server  *grpcserver.Server
@@ -66,7 +64,7 @@ func StartControl(t testing.TB, db *gorm.DB) *Control {
 	require.NoError(t, err)
 
 	cfg := grpcserver.DefaultServerConfig()
-	cfg.Host, cfg.Port, cfg.AgentMTLS, cfg.AgentPKI = "127.0.0.1", 0, config.AgentMTLSOptional, pki
+	cfg.Host, cfg.Port, cfg.AgentPKI = "127.0.0.1", 0, pki
 	var roots *x509.CertPool
 	cfg.TLSCertFile, cfg.TLSKeyFile, roots = writeServerCertificate(t)
 	server := grpcserver.NewServer(cfg)
@@ -117,10 +115,12 @@ func (c *Control) Dial(t testing.TB, certificate *tls.Certificate) *grpc.ClientC
 	return conn
 }
 
-// Enroll obtains node's agent certificate with its node credential: the
-// API key of a proxy node, or the token of a forward node.
-func (c *Control) Enroll(t testing.TB, node agentcontrol.AgentNode, secret string) *tls.Certificate {
+// Enroll obtains node's agent certificate with a one-time enrollment
+// credential, as the node's Agent does at its first start.
+func (c *Control) Enroll(t testing.TB, node agentcontrol.AgentNode) *tls.Certificate {
 	t.Helper()
+	credential, _, err := c.PKI.CreateEnrollmentToken(context.Background(), agentpki.TokenRequest{Node: node, Actor: "fakeagent"})
+	require.NoError(t, err)
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
 	csr, err := x509.CreateCertificateRequest(rand.Reader, &x509.CertificateRequest{Subject: pkix.Name{CommonName: node.String()}}, key)
@@ -128,9 +128,9 @@ func (c *Control) Enroll(t testing.TB, node agentcontrol.AgentNode, secret strin
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	ctx = metadata.AppendToOutgoingContext(ctx, agentcontrol.MetadataNodeID, strconv.FormatUint(uint64(node.ID), 10),
-		agentcontrol.MetadataAPIKey, secret, agentcontrol.MetadataNodeKind, node.Kind)
+		agentcontrol.MetadataNodeKind, node.Kind)
 	response, err := agentv1pb.NewAgentEnrollmentClient(c.Dial(t, nil)).Enroll(ctx, &agentv1pb.EnrollAgentRequest{
-		CsrDer: csr, AgentVersion: "fake-agent", InstanceId: "fake-" + node.String(),
+		CsrDer: csr, AgentVersion: "fake-agent", InstanceId: "fake-" + node.String(), EnrollmentCredential: credential,
 	})
 	require.NoError(t, err)
 	return &tls.Certificate{Certificate: [][]byte{response.GetCertificate().GetCertificateDer()}, PrivateKey: key}
@@ -142,7 +142,7 @@ func (c *Control) Enroll(t testing.TB, node agentcontrol.AgentNode, secret strin
 func StartEdge(t testing.TB, control *Control) *Control {
 	t.Helper()
 	cfg := grpcserver.DefaultServerConfig()
-	cfg.Host, cfg.Port, cfg.AgentMTLS, cfg.AgentPKI = "127.0.0.1", 0, config.AgentMTLSOptional, control.PKI
+	cfg.Host, cfg.Port, cfg.AgentPKI = "127.0.0.1", 0, control.PKI
 	cfg.EdgeProxies = []string{"127.0.0.1/32"}
 	server := grpcserver.NewServer(cfg)
 	require.NoError(t, server.Start())

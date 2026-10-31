@@ -202,7 +202,7 @@ func (h *AgentInstallHandler) CreateInstallToken(c *gin.Context) {
 
 // Readiness godoc
 // @Summary Check that an install command can work
-// @Description Checks, without any network call, what a node needs from this Control before an install command is worth copying: the address nodes use (https://<domain>, agent_install.public_url, or the address this request came in on) is https; the panel certificate Control serves itself (tls.mode acme, files) is valid and publicly trusted; the gRPC target resolves from the settings and the listener is on; the gRPC certificate is valid, publicly trusted and covers the target (Agents verify it against their system CAs); module_runtime.ca_kek is usable (join tokens are sealed with it and node certificates signed by the CA it protects); agent_control.mtls is not off; the Agent release of the pinned version is served by this Control or has a source; the install script's release signature verifies when one is configured. ready is false when a check of level error fails; a failed warning does not block the command. Each check is {id, ok, level, message, fix}. Any administrator.
+// @Description Checks, without any network call, what a node needs from this Control before an install command is worth copying: the address nodes use (https://<domain>, agent_install.public_url, or the address this request came in on) is https; the panel certificate Control serves itself (tls.mode acme, files) is valid and publicly trusted; the gRPC target resolves from the settings and the listener is on; the gRPC certificate is valid, publicly trusted and covers the target (Agents verify it against their system CAs); module_runtime.ca_kek is usable (join tokens are sealed with it and node certificates signed by the CA it protects); the Agent release of the pinned version is served by this Control or has a source; the install script's release signature verifies when one is configured. ready is false when a check of level error fails; a failed warning does not block the command. Each check is {id, ok, level, message, fix}. Any administrator.
 // @Tags Kernel
 // @Produce json
 // @Security BearerAuth
@@ -219,7 +219,6 @@ func (h *AgentInstallHandler) Readiness(c *gin.Context) {
 		PublicURL: panel.PublicURL, RequestOrigin: requestorigin.Resolve(c.Request).BaseURL(),
 		GRPCTarget: panel.GRPCTarget, GRPCEnabled: panel.GRPCEnabled, GRPCPort: panel.GRPCPort,
 		BuiltinPKI: cfg.ModuleRuntime.PKIOrDefault() == config.ModulePKIBuiltin, CAKEK: strings.TrimSpace(cfg.ModuleRuntime.CAKEK) != "",
-		MTLSMode:      cfg.AgentControl.MTLSOrDefault(),
 		SignatureFile: cfg.AgentInstall.SignatureFile, OfficialPublicKey: cfg.Plugins.OfficialPublicKey,
 		AgentVersion: cfg.AgentInstall.AgentVersion, PinnedAgentVersion: AgentRelease, ReleaseVersion: ReleaseVersion,
 		ArtifactDir: cfg.AgentInstall.ArtifactDir, CNMirrorURL: cfg.AgentInstall.CNMirrorURL,

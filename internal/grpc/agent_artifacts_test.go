@@ -19,7 +19,6 @@ import (
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	agentv1pb "github.com/AnixOps/anix-control/sdk/api/agent/v1"
 	"github.com/AnixOps/anix-control/v5/internal/agentpki"
-	"github.com/AnixOps/anix-control/v5/internal/config"
 	"github.com/AnixOps/anix-control/v5/internal/database"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/service"
@@ -181,7 +180,7 @@ func TestAgentArtifactsServesAssignedReleasesByCertificate(t *testing.T) {
 	previous := artifactChunkSize
 	artifactChunkSize = 1000
 	t.Cleanup(func() { artifactChunkSize = previous })
-	l := startAgentListener(t, config.AgentMTLSRequired, true)
+	l := startAgentListener(t, true)
 	db := database.Get()
 	ctx := testContext(t)
 	seeded := seedArtifactRelease(t, db, newReleaseSigner(t), l.proxy.ID, "artifact-telemetry", 2500)
@@ -213,7 +212,7 @@ func TestAgentArtifactsServesAssignedReleasesByCertificate(t *testing.T) {
 // assigned or not enabled, a wrong or malformed address, a release that no
 // longer verifies, and a node at its download limit.
 func TestAgentArtifactsRefusals(t *testing.T) {
-	l := startAgentListener(t, config.AgentMTLSOptional, true)
+	l := startAgentListener(t, true)
 	db := database.Get()
 	ctx := testContext(t)
 	signer := newReleaseSigner(t)
@@ -354,10 +353,9 @@ func TestAgentArtifactsOfferAndLimit(t *testing.T) {
 	assert.Equal(t, agentcontrol.ErrorCodePluginReleaseNotFound, refusalCode(pluginReleaseStatus(proxy, gorm.ErrRecordNotFound)))
 }
 
-// HelloAck lists artifacts.v1 for an enrolled agent that lists it, and not
-// for one that authenticated with the node API key.
+// HelloAck lists artifacts.v1 for an enrolled agent that lists it.
 func TestAgentArtifactsOfferedOnCertificateSessions(t *testing.T) {
-	l := startAgentListener(t, config.AgentMTLSOptional, true)
+	l := startAgentListener(t, true)
 	ctx := testContext(t)
 	open := func(conn *grpc.ClientConn, ctx context.Context) *agentv1pb.HelloAck {
 		stream, err := agentv1pb.NewAgentControlServiceClient(conn).ControlStream(ctx)
@@ -373,6 +371,4 @@ func TestAgentArtifactsOfferedOnCertificateSessions(t *testing.T) {
 	}
 	conn, _ := enrollNode(t, ctx, l, l.proxyNode())
 	assert.True(t, agentcontrol.HasCapabilityVersion(open(conn, ctx).GetServerCapabilities(), agentcontrol.CapabilityArtifacts, agentcontrol.CapabilityVersionV1))
-	legacy := open(l.dial(t, nil), legacyCredentials(ctx, l.proxy.ID, l.proxyKey))
-	assert.False(t, agentcontrol.HasCapability(legacy.GetServerCapabilities(), agentcontrol.CapabilityArtifacts))
 }

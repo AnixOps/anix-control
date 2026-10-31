@@ -43,7 +43,7 @@ func TestEdgeProxyVouchesForTheNodeCertificate(t *testing.T) {
 		node := agentcontrol.AgentNode{Kind: agentcontrol.NodeKindProxy, ID: edgeNodeID}
 		// The node enrolls over the TLS listener, as its Agent does at its
 		// first start; the certificate then travels through the edge.
-		certificate := control.Enroll(t, node, edgeNodeKey)
+		certificate := control.Enroll(t, node)
 		edge := fakeagent.StartEdge(t, control)
 
 		t.Run("the proxy's certificate opens the stream", func(t *testing.T) {

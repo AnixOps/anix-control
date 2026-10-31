@@ -82,7 +82,7 @@ func forwardMember(t *testing.T, snapshot *agentv1pb.ConfigSnapshot) (*forwardv1
 // for proxy and forward nodes; a forward node is offered package-reports.v1
 // with it, and asked for a 60-second heartbeat.
 func TestAgentControlForwardNegotiation(t *testing.T) {
-	server := NewAgentControlGRPCServer(NewAgentControlManager())
+	server := newTestAgentControlServer(NewAgentControlManager())
 	forwardNode := agentcontrol.AgentNode{Kind: agentcontrol.NodeKindForward, ID: 1}
 	proxyNode := agentcontrol.AgentNode{Kind: agentcontrol.NodeKindProxy, ID: 1}
 	listed := func(node agentcontrol.AgentNode, agent []*agentv1pb.Capability, name string) bool {

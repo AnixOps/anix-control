@@ -78,13 +78,13 @@ func TestAgentControlServerAdvertisesTheDataPlane(t *testing.T) {
 	assert.Contains(t, snapshot.ServerCapabilities, "config.v1")
 	// The session shows how it authenticated and what it negotiated.
 	assert.Equal(t, []string{"config.v1", "users.v1", "reports.v1"}, snapshot.NegotiatedCapabilities)
-	assert.Equal(t, agentstreams.AuthenticationAPIKey, snapshot.Authentication)
-	assert.Equal(t, model.AgentTransportAPIKeyStream, snapshot.Transport)
-	assert.Equal(t, agentstreams.IdentityAPIKey, snapshot.Identity)
-	assert.Nil(t, snapshot.Certificate)
+	assert.Equal(t, agentstreams.AuthenticationMTLS, snapshot.Authentication)
+	assert.Equal(t, model.AgentTransportMTLSStream, snapshot.Transport)
+	assert.Equal(t, "spiffe://anixops/test/agent/proxy-1", snapshot.Identity)
+	require.NotNil(t, snapshot.Certificate)
 	session, ok := NewAgentStreams(environment.manager, nil).Session(agentcontrol.AgentNode{Kind: agentcontrol.NodeKindProxy, ID: uint32(environment.node.ID)})
 	require.True(t, ok)
-	assert.Equal(t, agentstreams.AuthenticationAPIKey, session.Authentication)
+	assert.Equal(t, agentstreams.AuthenticationMTLS, session.Authentication)
 	assert.Equal(t, snapshot.NegotiatedCapabilities, session.NegotiatedCapabilities)
 
 	// The Hello's cursor (1234) is ahead of the empty change log, so the

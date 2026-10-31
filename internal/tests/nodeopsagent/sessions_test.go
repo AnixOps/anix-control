@@ -2,7 +2,6 @@ package nodeopsagent
 
 import (
 	"context"
-	"strings"
 	"testing"
 	"time"
 
@@ -25,15 +24,13 @@ func TestAgentSessionRPCs(t *testing.T) {
 	forEachBackend(t, func(t *testing.T, f *fixture) {
 		proxyAgent := f.proxyAgent(fakeagent.Script{AgentVersion: "2.0.0-proxy"})
 		forwardAgent := f.forwardAgent(fakeagent.Script{AgentVersion: "2.0.0-forward"})
-		f.websockets.connect(f.proxy.ID, acknowledged)
-		f.websockets.monitor(f.proxy.ID, map[string]any{"cpu": 12.5, "token": "monitor-secret-0123456789"})
 		client := f.client()
 		ctx := context.Background()
 
 		all, err := client.ListAgentSessions(ctx, &kernelnodeopsv1.ListAgentSessionsRequest{})
 		require.NoError(t, err)
-		require.Len(t, all.GetSessions(), 3)
-		forward, proxyStream, proxyWS := all.GetSessions()[0], all.GetSessions()[1], all.GetSessions()[2]
+		require.Len(t, all.GetSessions(), 2)
+		forward, proxyStream := all.GetSessions()[0], all.GetSessions()[1]
 		assert.Equal(t, kernelnodeopsv1.NodeKind_NODE_KIND_FORWARD, forward.GetNode().GetKind())
 		assert.Equal(t, uint64(f.forward.ID), forward.GetNode().GetId())
 		assert.Equal(t, kernelnodeopsv1.AgentTransport_AGENT_TRANSPORT_CONTROL_STREAM, forward.GetTransport())
@@ -46,18 +43,14 @@ func TestAgentSessionRPCs(t *testing.T) {
 		assert.Equal(t, kernelnodeopsv1.NodeKind_NODE_KIND_PROXY, proxyStream.GetNode().GetKind())
 		assert.Equal(t, kernelnodeopsv1.AgentTransport_AGENT_TRANSPORT_CONTROL_STREAM, proxyStream.GetTransport())
 		assert.Equal(t, proxyAgent.SessionID(), proxyStream.GetSessionId())
-		assert.Equal(t, "api-key", proxyStream.GetIdentity())
-		assert.Equal(t, kernelnodeopsv1.AgentTransport_AGENT_TRANSPORT_WEBSOCKET, proxyWS.GetTransport())
-		assert.Equal(t, "ws-agent", proxyWS.GetAgentVersion())
-		assert.Contains(t, string(proxyWS.GetSystemJson()), `"os":"linux"`)
-		assert.Contains(t, string(proxyWS.GetSystemJson()), `"password":"`+service.NodeSecretPlaceholder+`"`, "what an agent reports is scrubbed")
+		assert.Equal(t, "spiffe://anixops/test/agent/"+f.proxyNode().String(), proxyStream.GetIdentity())
 
 		streams, err := client.ListAgentSessions(ctx, &kernelnodeopsv1.ListAgentSessionsRequest{Transport: kernelnodeopsv1.AgentTransport_AGENT_TRANSPORT_CONTROL_STREAM})
 		require.NoError(t, err)
 		assert.Len(t, streams.GetSessions(), 2)
 		sockets, err := client.ListAgentSessions(ctx, &kernelnodeopsv1.ListAgentSessionsRequest{Transport: kernelnodeopsv1.AgentTransport_AGENT_TRANSPORT_WEBSOCKET})
 		require.NoError(t, err)
-		assert.Len(t, sockets.GetSessions(), 1)
+		assert.Empty(t, sockets.GetSessions(), "the WebSocket transport was retired")
 
 		// GetAgentSession: the proxy node's stream, with the last observed
 		// state once the agent reported one.
@@ -83,14 +76,10 @@ func TestAgentSessionRPCs(t *testing.T) {
 
 		monitor, err := client.GetAgentMonitor(ctx, &kernelnodeopsv1.GetAgentMonitorRequest{NodeId: uint64(f.proxy.ID)})
 		require.NoError(t, err)
-		assert.True(t, monitor.GetFound())
-		assert.NotZero(t, monitor.GetReceivedAtUnixMs())
-		assert.Contains(t, string(monitor.GetSnapshotJson()), `"cpu":12.5`)
-		assert.NotContains(t, string(monitor.GetSnapshotJson()), "monitor-secret")
+		assert.False(t, monitor.GetFound(), "monitor snapshots came from the retired REST channel")
 
 		// Disconnected: not connected once Control noticed the stream end.
 		proxyAgent.Disconnect()
-		f.websockets.disconnect(f.proxy.ID)
 		deadline := time.Now().Add(awaitTimeout)
 		for {
 			session, err = client.GetAgentSession(ctx, &kernelnodeopsv1.GetAgentSessionRequest{NodeId: uint64(f.proxy.ID)})
@@ -130,8 +119,6 @@ func TestAnswersCarryNoSecret(t *testing.T) {
 	forEachBackend(t, func(t *testing.T, f *fixture) {
 		f.proxyAgent(fakeagent.Script{})
 		f.forwardAgent(fakeagent.Script{})
-		f.websockets.connect(f.proxy.ID, acknowledged)
-		f.websockets.monitor(f.proxy.ID, map[string]any{"api_key": proxyKey, "token": forwardToken, "private_key": realityKey})
 		client := f.client()
 		ctx := context.Background()
 		var answers []proto.Message
@@ -160,6 +147,5 @@ func TestAnswersCarryNoSecret(t *testing.T) {
 				assert.NotContains(t, text, secret, "%T carries a credential", answer)
 			}
 		}
-		assert.True(t, strings.Contains(string(monitor.GetSnapshotJson()), service.NodeSecretPlaceholder))
 	})
 }

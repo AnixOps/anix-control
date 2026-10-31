@@ -225,11 +225,6 @@ func (x agentDiagnosticExecutor) Execute(ctx context.Context, run *Run) Outcome 
 			transport, channel = stream, kernelnodeopsv1.Channel_CHANNEL_AGENT_CONTROL
 		}
 	}
-	if transport == nil && sources.WebSockets != nil {
-		if ws, ok := sources.WebSockets.DiagnosticTransport(uint(node.ID)); ok {
-			transport, channel = ws, kernelnodeopsv1.Channel_CHANNEL_AGENT_WEBSOCKET
-		}
-	}
 	if transport == nil {
 		return Failed(kernelnodeopsv1.ErrorCode_ERROR_CODE_NODE_OFFLINE, "node offline", true)
 	}

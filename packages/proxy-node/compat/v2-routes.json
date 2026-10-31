@@ -158,34 +158,6 @@
     },
     {
       "method": "POST",
-      "legacy_path": "/api/v2/node/heartbeat",
-      "package_route": "proxy.node.heartbeat.post",
-      "envelope": "raw",
-      "transport": "http"
-    },
-    {
-      "method": "POST",
-      "legacy_path": "/api/v2/node/register",
-      "package_route": "proxy.node.register.post",
-      "envelope": "raw",
-      "transport": "http"
-    },
-    {
-      "method": "POST",
-      "legacy_path": "/api/v2/node/runtime-health",
-      "package_route": "proxy.node.runtime_health.post",
-      "envelope": "raw",
-      "transport": "http"
-    },
-    {
-      "method": "GET",
-      "legacy_path": "/api/v2/node/ws",
-      "package_route": "proxy.node.ws.get",
-      "envelope": "websocket",
-      "transport": "websocket"
-    },
-    {
-      "method": "POST",
       "legacy_path": "/api/v2/server/UniProxy/alive",
       "package_route": "proxy.server.uniproxy.alive.post",
       "envelope": "raw",

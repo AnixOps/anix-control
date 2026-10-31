@@ -200,9 +200,9 @@ func (s *Service) DispatchAgentControlOperation(ctx context.Context, request plu
 }
 
 // ListAgents is GET /api/v2/admin/agent/list: the agents connected on the
-// legacy WebSocket, as the kernel renders them.
+// Agent Control stream, as the kernel renders them.
 func (s *Service) ListAgents(ctx context.Context, _ pluginhostsdk.NativeRequest) (pluginhostsdk.NativeResponse, error) {
-	sessions, err := s.NodeOps.ListAgentSessions(ctx, &kernelnodeopsv1.ListAgentSessionsRequest{Transport: kernelnodeopsv1.AgentTransport_AGENT_TRANSPORT_WEBSOCKET})
+	sessions, err := s.NodeOps.ListAgentSessions(ctx, &kernelnodeopsv1.ListAgentSessionsRequest{Transport: kernelnodeopsv1.AgentTransport_AGENT_TRANSPORT_CONTROL_STREAM})
 	if err != nil {
 		return pluginhostsdk.NativeResponse{}, pluginhostsdk.ErrNativeUnavailable
 	}

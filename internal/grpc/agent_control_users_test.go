@@ -158,7 +158,7 @@ func newAgentUsersEnvironment(t *testing.T, initDatabase func(t *testing.T)) *ag
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 	server := grpc.NewServer(grpc.ChainStreamInterceptor(StreamAuthInterceptor("", "")))
-	agentv1pb.RegisterAgentControlServiceServer(server, NewAgentControlGRPCServer(NewAgentControlManager()))
+	agentv1pb.RegisterAgentControlServiceServer(server, newTestAgentControlServer(NewAgentControlManager()))
 	errCh := serveGRPCServerForTest(t, server, listener)
 	conn, err := grpc.NewClient(listener.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)

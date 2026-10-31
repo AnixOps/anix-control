@@ -17,7 +17,6 @@ import (
 	agentv1pb "github.com/AnixOps/anix-control/sdk/api/agent/v1"
 	"github.com/AnixOps/anix-control/v5/internal/agentpki"
 	"github.com/AnixOps/anix-control/v5/internal/agentstreams"
-	"github.com/AnixOps/anix-control/v5/internal/config"
 	"github.com/AnixOps/anix-control/v5/internal/database"
 	"github.com/AnixOps/anix-control/v5/internal/kernelnodeops"
 	"github.com/AnixOps/anix-control/v5/internal/middleware"
@@ -45,7 +44,7 @@ type joinListener struct {
 func startJoinListener(t *testing.T) *joinListener {
 	t.Helper()
 	joined := make(chan nodegroup.Joined, 8)
-	l := startAgentListenerWith(t, config.AgentMTLSRequired, true, func(cfg *ServerConfig) {
+	l := startAgentListenerWith(t, true, func(cfg *ServerConfig) {
 		cfg.OnJoin = func(j nodegroup.Joined) { joined <- j }
 	})
 	requireAutoMigrate(t, append(model.KernelModels(), &model.SubscriptionGroup{}, &model.NodeProtocol{})...)

@@ -82,23 +82,6 @@ func TestProxyNodeHostRelaysRoutesUntilTheyAreSwitchedToNative(t *testing.T) {
 	}
 }
 
-// The agent WebSocket is relayed to the kernel, which holds the connection.
-func TestProxyNodeHostRelaysTheAgentWebSocket(t *testing.T) {
-	bridge := &bridgeStub{}
-	service, err := newProxyNodeService(bridge, "lease-1")
-	require.NoError(t, err)
-	err = service.OpenWebSocket(context.Background(), pluginhostsdk.WebSocketOpen{
-		RouteID: "proxy.node.ws.get", BridgeCapability: make([]byte, 32),
-	}, streamStub{})
-	require.ErrorIs(t, err, errRelayed)
-	require.Equal(t, "proxy.node.ws.get", bridge.webSocket)
-
-	err = service.OpenWebSocket(context.Background(), pluginhostsdk.WebSocketOpen{
-		RouteID: "protocol.agent.ws.get", BridgeCapability: make([]byte, 32),
-	}, streamStub{})
-	require.ErrorContains(t, err, "unsupported")
-}
-
 // The host accepts exactly the package's declared compatibility routes.
 func TestProxyNodeHostRoutesAreThePackageRoutes(t *testing.T) {
 	raw, err := os.ReadFile("../compat/v2-routes.json")

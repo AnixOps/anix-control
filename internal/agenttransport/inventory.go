@@ -13,6 +13,10 @@ import (
 	"gorm.io/gorm"
 )
 
+// UpgradeGuideURL is where the inventory points an operator at enrolling
+// agents: the UPGRADE section that walks a node to an enrolled Agent.
+const UpgradeGuideURL = "https://github.com/AnixOps/anix-control/blob/main/docs/UPGRADE.md#agent-transports-preparing-for-v42"
+
 // Node statuses of the inventory: how the node's agent reaches Control on
 // the AnixOps Agent channels.
 const (
@@ -218,10 +222,6 @@ func requiredReasons(summary Summary) []string {
 
 // Inventory is the transport inventory.
 type Inventory struct {
-	// Mode is the agent_control.mtls this process enforces.
-	Mode string `json:"mode"`
-	// Sunset is agent_control.legacy_sunset, nil when unset.
-	Sunset      *time.Time       `json:"sunset"`
 	GeneratedAt time.Time        `json:"generated_at"`
 	Summary     Summary          `json:"summary"`
 	Nodes       []NodeTransports `json:"nodes"`
@@ -263,18 +263,14 @@ type Options struct {
 
 // Build reads the transport inventory: every proxy and forward node with
 // its transports, newest sighting, agent version and certificate.
-func Build(ctx context.Context, db *gorm.DB, policy Policy, options Options) (Inventory, error) {
+func Build(ctx context.Context, db *gorm.DB, options Options) (Inventory, error) {
 	now := options.Now
 	if now.IsZero() {
 		now = time.Now()
 	}
 	now = now.UTC()
-	inventory := Inventory{Mode: policy.Mode, GeneratedAt: now, UpgradeGuide: UpgradeGuideURL, Nodes: []NodeTransports{},
+	inventory := Inventory{GeneratedAt: now, UpgradeGuide: UpgradeGuideURL, Nodes: []NodeTransports{},
 		Summary: Summary{RequiredReasons: []string{}, RequiredBlockers: []RequiredBlocker{}}}
-	if !policy.Sunset.IsZero() {
-		sunset := policy.Sunset
-		inventory.Sunset = &sunset
-	}
 	db = db.WithContext(ctx)
 
 	var proxies []inventoryProxyNode

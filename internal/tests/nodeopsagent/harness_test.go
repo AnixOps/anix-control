@@ -11,18 +11,15 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"errors"
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	kernelnodeopsv1 "github.com/AnixOps/anix-control/sdk/api/kernelnodeops/v1"
-	"github.com/AnixOps/anix-control/v5/internal/agentstreams"
 	"github.com/AnixOps/anix-control/v5/internal/cache"
 	"github.com/AnixOps/anix-control/v5/internal/config"
 	"github.com/AnixOps/anix-control/v5/internal/database"
@@ -58,17 +55,16 @@ const (
 // a NodeOps engine serving the NO-6 kinds, and two nodes of the same id:
 // proxy node and forward node (their ids overlap by design).
 type fixture struct {
-	t          *testing.T
-	db         *gorm.DB
-	control    *fakeagent.Control
-	engine     *kernelnodeops.Engine
-	registry   *kernelnodeops.Registry
-	websockets *fakeWebSockets
-	proxy      model.Node
-	forward    model.ForwardNode
-	protocol   model.NodeProtocol
-	timeout    time.Duration
-	started    bool
+	t        *testing.T
+	db       *gorm.DB
+	control  *fakeagent.Control
+	engine   *kernelnodeops.Engine
+	registry *kernelnodeops.Registry
+	proxy    model.Node
+	forward  model.ForwardNode
+	protocol model.NodeProtocol
+	timeout  time.Duration
+	started  bool
 }
 
 // forEachBackend runs body on SQLite and, with ANIX_TEST_POSTGRES_DSN, on
@@ -120,7 +116,7 @@ func newFixture(t *testing.T, cfg *config.DatabaseConfig) *fixture {
 	))
 	require.NoError(t, service.MigrateKernelModelsForTest(db))
 
-	f := &fixture{t: t, db: db, websockets: newFakeWebSockets(), timeout: 20 * time.Second}
+	f := &fixture{t: t, db: db, timeout: 20 * time.Second}
 	// The Agent Control managers are the process's: a node id of its own
 	// keeps this fixture's revisions and retained operations apart from
 	// the other tests' nodes. The ids are counted, not drawn at random:
@@ -140,7 +136,7 @@ func newFixture(t *testing.T, cfg *config.DatabaseConfig) *fixture {
 	f.control = fakeagent.StartControl(t, db)
 	f.registry = kernelnodeops.NewRegistry()
 	require.NoError(t, kernelnodeops.RegisterNodeOperationExecutors(f.registry, func() kernelnodeops.AgentSources {
-		return kernelnodeops.AgentSources{Streams: f.control.Streams, WebSockets: f.websockets}
+		return kernelnodeops.AgentSources{Streams: f.control.Streams}
 	}))
 	return f
 }
@@ -173,17 +169,18 @@ func (f *fixture) forwardNode() agentcontrol.AgentNode {
 	return agentcontrol.AgentNode{Kind: agentcontrol.NodeKindForward, ID: uint32(f.forward.ID)} // #nosec G115 -- a test id.
 }
 
-// proxyAgent connects a scripted agent for the proxy node by API key.
+// proxyAgent enrolls the proxy node and connects a scripted agent for it by
+// certificate.
 func (f *fixture) proxyAgent(script fakeagent.Script) *fakeagent.Agent {
 	f.t.Helper()
-	return fakeagent.ConnectWithKey(f.t, f.control.Dial(f.t, nil), f.proxyNode().ID, proxyKey, script)
+	return fakeagent.ConnectEnrolled(f.t, f.control, f.proxyNode(), script)
 }
 
-// forwardAgent enrolls the forward node with its token and connects its
-// agent by certificate.
+// forwardAgent enrolls the forward node and connects its agent by
+// certificate.
 func (f *fixture) forwardAgent(script fakeagent.Script) *fakeagent.Agent {
 	f.t.Helper()
-	certificate := f.control.Enroll(f.t, f.forwardNode(), forwardToken)
+	certificate := f.control.Enroll(f.t, f.forwardNode())
 	return fakeagent.ConnectWithCertificate(f.t, f.control.Dial(f.t, certificate), f.forwardNode(), script)
 }
 
@@ -218,7 +215,7 @@ func (f *fixture) client() kernelnodeopsv1.KernelNodeOpsServer {
 func (f *fixture) clientWithout(authorizer kernelnodeops.Authorizer) kernelnodeopsv1.KernelNodeOpsServer {
 	f.t.Helper()
 	f.start()
-	sources := &kernelnodeops.AgentSources{Streams: f.control.Streams, WebSockets: f.websockets}
+	sources := &kernelnodeops.AgentSources{Streams: f.control.Streams}
 	return (&kernelnodeops.Server{Engine: f.engine, Authorizer: authorizer, Agents: sources}).For(protocolHost2)
 }
 
@@ -289,104 +286,4 @@ func (f *fixture) desired(node agentcontrol.AgentNode) (model.KernelNodeDesiredC
 	row, found, err := kernelnodeops.LoadDesiredConfig(context.Background(), f.db, node)
 	require.NoError(f.t, err)
 	return row, found
-}
-
-// fakeWebSockets is an in-memory agentstreams.WebSockets: the legacy
-// WebSocket agents, with a scripted diagnostic transport per node.
-type fakeWebSockets struct {
-	mu         sync.Mutex
-	sessions   []agentstreams.Session
-	monitors   map[uint]fakeMonitor
-	transports map[uint]*fakeTransport
-}
-
-type fakeMonitor struct {
-	system     map[string]any
-	receivedAt time.Time
-}
-
-// fakeTransport answers a dispatch per its script and records the tasks.
-type fakeTransport struct {
-	mu       sync.Mutex
-	tasks    []agentstreams.DiagnosticTask
-	dispatch func(task agentstreams.DiagnosticTask) agentstreams.DiagnosticDispatch
-}
-
-func newFakeWebSockets() *fakeWebSockets {
-	return &fakeWebSockets{monitors: map[uint]fakeMonitor{}, transports: map[uint]*fakeTransport{}}
-}
-
-func (w *fakeWebSockets) Sessions() []agentstreams.Session {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	return append([]agentstreams.Session(nil), w.sessions...)
-}
-
-func (w *fakeWebSockets) Monitor(nodeID uint) (map[string]any, time.Time, bool) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	monitor, ok := w.monitors[nodeID]
-	return monitor.system, monitor.receivedAt, ok
-}
-
-func (w *fakeWebSockets) DiagnosticTransport(nodeID uint) (agentstreams.DiagnosticTransport, bool) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	transport, ok := w.transports[nodeID]
-	return transport, ok
-}
-
-func (w *fakeWebSockets) connect(nodeID uint, dispatch func(task agentstreams.DiagnosticTask) agentstreams.DiagnosticDispatch) *fakeTransport {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	transport := &fakeTransport{dispatch: dispatch}
-	w.transports[nodeID] = transport
-	w.sessions = append(w.sessions, agentstreams.Session{
-		Node: agentcontrol.AgentNode{Kind: agentcontrol.NodeKindProxy, ID: uint32(nodeID)}, Transport: agentstreams.TransportWebSocket, // #nosec G115 -- a test id.
-		AgentVersion: "ws-agent", Capabilities: []string{"diagnostic"}, LastSeen: time.Now(),
-		System: map[string]any{"os": "linux", "password": "ws-secret-value-0123456789"}, Identity: agentstreams.IdentityAPIKey,
-	})
-	return transport
-}
-
-func (w *fakeWebSockets) disconnect(nodeID uint) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	delete(w.transports, nodeID)
-	w.sessions = nil
-}
-
-func (w *fakeWebSockets) monitor(nodeID uint, system map[string]any) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	w.monitors[nodeID] = fakeMonitor{system: system, receivedAt: time.Now()}
-}
-
-func (f *fakeTransport) DispatchDiagnostic(_ context.Context, task agentstreams.DiagnosticTask) agentstreams.DiagnosticDispatch {
-	f.mu.Lock()
-	f.tasks = append(f.tasks, task)
-	f.mu.Unlock()
-	return f.dispatch(task)
-}
-
-func (f *fakeTransport) received() []agentstreams.DiagnosticTask {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return append([]agentstreams.DiagnosticTask(nil), f.tasks...)
-}
-
-// acknowledged is a WebSocket dispatch the agent acknowledged.
-func acknowledged(task agentstreams.DiagnosticTask) agentstreams.DiagnosticDispatch {
-	return agentstreams.DiagnosticDispatch{MessageID: "msg-" + task.ID, AckReceived: true, Ack: agentstreams.Ack{Accepted: true, AcceptedAt: time.Now()}}
-}
-
-// fallenBack is a WebSocket dispatch whose acknowledgement timed out and
-// that went out in the legacy task message.
-func fallenBack(task agentstreams.DiagnosticTask) agentstreams.DiagnosticDispatch {
-	return agentstreams.DiagnosticDispatch{MessageID: "msg-" + task.ID, DispatchError: errors.New("ack timeout after 3s"), LegacyFallback: true}
-}
-
-// undeliverable is a WebSocket dispatch that failed on both paths.
-func undeliverable(task agentstreams.DiagnosticTask) agentstreams.DiagnosticDispatch {
-	return agentstreams.DiagnosticDispatch{MessageID: "msg-" + task.ID, DispatchError: errors.New("ack timeout after 3s"), FallbackError: errors.New("websocket: close sent")}
 }

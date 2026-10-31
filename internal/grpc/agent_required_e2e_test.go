@@ -13,7 +13,6 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/agentpki"
 	"github.com/AnixOps/anix-control/v5/internal/agentstreams"
 	"github.com/AnixOps/anix-control/v5/internal/agenttransport"
-	"github.com/AnixOps/anix-control/v5/internal/config"
 	"github.com/AnixOps/anix-control/v5/internal/database"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/nodesecrets"
@@ -124,7 +123,7 @@ func TestAgentStreamUnderRequiredNeedsNoLegacyPath(t *testing.T) {
 	t.Cleanup(func() {
 		aliveListInterval, aliveListRefresh, sharedAliveCounts = previousInterval, previousRefresh, previousShared
 	})
-	l := startAgentListener(t, config.AgentMTLSRequired, true)
+	l := startAgentListener(t, true)
 	db := database.Get()
 	requireAutoMigrate(t, append(append(append(model.KernelNodeOperationModels(), &model.EgressRoute{}), model.KernelForwardModels()...), model.NetworkModels()...)...)
 	requireAutoMigrate(t, &model.Plan{}, &model.User{}, &model.SubscriberChange{}, &model.SubscriberRequest{}, &model.WireGuardPeer{},
@@ -333,7 +332,7 @@ func TestAgentStreamUnderRequiredNeedsNoLegacyPath(t *testing.T) {
 	// No legacy channel was served or refused, and the inventory has the
 	// node on the mTLS stream only, ready for required.
 	assert.Equal(t, legacyBefore, legacyCounters())
-	inventory, err := agenttransport.Build(ctx, db, agenttransport.Policy{Mode: config.AgentMTLSRequired}, agenttransport.Options{
+	inventory, err := agenttransport.Build(ctx, db, agenttransport.Options{
 		Live: agenttransport.Default(), Sessions: GetAgentStreams().Sessions,
 	})
 	require.NoError(t, err)

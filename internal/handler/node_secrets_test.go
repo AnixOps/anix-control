@@ -314,7 +314,7 @@ func (s *NodeSecretsTestSuite) TestNodesStillReceiveRealSecrets() {
 }
 
 // GET /admin/auth-keys showed every registration key; a key is now shown
-// once, when it is generated, and still registers a node.
+// once, when it is generated.
 func (s *NodeSecretsTestSuite) TestRegistrationKeysAreShownOnce() {
 	handler := NewNodeHandler()
 	generated := s.ok(s.serve("POST", "/auth-keys", "/auth-keys", `{"name":"tokyo"}`, handler.GenerateAuthKey))
@@ -329,10 +329,6 @@ func (s *NodeSecretsTestSuite) TestRegistrationKeysAreShownOnce() {
 	s.Require().Len(keys, 1)
 	s.Equal(service.NodeSecretPlaceholder, keys[0].(map[string]any)["key"])
 	s.Equal("tokyo", keys[0].(map[string]any)["name"])
-
-	registered := s.serve("POST", "/node/register", "/node/register", `{"auth_key":"`+key+`","name":"auto"}`, handler.Register)
-	s.Equal(http.StatusOK, registered.Code, registered.Body.String())
-	s.Contains(registered.Body.String(), `"api_key"`)
 }
 
 // Proxy node credentials stay out of the node answers; the per-node reveal

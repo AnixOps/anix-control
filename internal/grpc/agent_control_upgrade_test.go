@@ -21,7 +21,7 @@ func upgradeCapabilities() []*agentv1pb.Capability {
 // upgrade.v1 is offered to proxy and forward nodes whose Hello lists it at
 // v1, and to no other.
 func TestAgentControlUpgradeCapabilityOffer(t *testing.T) {
-	server := NewAgentControlGRPCServer(NewAgentControlManager())
+	server := newTestAgentControlServer(NewAgentControlManager())
 	for _, node := range []agentcontrol.AgentNode{{Kind: agentcontrol.NodeKindProxy, ID: 1}, {Kind: agentcontrol.NodeKindForward, ID: 1}} {
 		assert.True(t, agentcontrol.HasCapabilityVersion(server.serverCapabilities(node, upgradeCapabilities()), agentcontrol.CapabilityUpgrade, agentcontrol.CapabilityVersionV1), node.String())
 		assert.False(t, agentcontrol.HasCapability(server.serverCapabilities(node, reportCapabilities()), agentcontrol.CapabilityUpgrade), "only an agent that lists it")

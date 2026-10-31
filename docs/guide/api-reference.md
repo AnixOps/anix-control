@@ -712,7 +712,7 @@ POST   /api/v4/kernel/nodes/:id/reject            # 拒绝：停用节点、吊�
 `GET /api/v4/kernel/agents/install-readiness`：不发起任何网络调用，检查接入命令能否工作。检查项 `id`：
 `public_url`（`agent_install.public_url`，未设置时用请求的来源，须为 https 且不是回环地址）、`grpc`（gRPC 目标可由
 设置得出、监听已开启并配置了 TLS 证书和密钥）、`ca`（内置 CA 且 `module_runtime.ca_kek` 可用：令牌用它封存）、
-`mtls_mode`（`agent_control.mtls` 不为 `off`）、`agent_release`（固定的 Agent 版本是发行版本号；`artifact_dir`
+`agent_release`（固定的 Agent 版本是发行版本号；`artifact_dir`
 放着它、或有国内镜像、或来自 GitHub 发布）、`script_signature`（配置了 `signature_file` 时它须验签通过）。每项
 为 `{"id", "ok", "level", "message", "fix"}`：`level` 是失败时的后果，`error` 会使 `ready` 为 `false`，`warning`
 不会（命令仍可用）。`message` 和 `fix` 是英文原文，控制台按 `id` 显示本地化的修复办法。

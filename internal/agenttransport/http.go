@@ -6,47 +6,12 @@ import (
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	"github.com/AnixOps/anix-control/v5/internal/agentstreams"
 	"github.com/AnixOps/anix-control/v5/internal/agentws"
-	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/gin-gonic/gin"
 )
 
-// LegacyHTTP guards a legacy AnixOps-agent HTTP or WebSocket path
-// (/api/v2/agent/*, /api/v2/node/*, /api/v2/forward/agent/rules, the clean
-// agent endpoints). It goes before the path's authentication:
-//   - required refuses the request with 403 and the code
-//     agent_mtls_required, with the deprecation headers;
-//   - preferred serves it with the deprecation headers;
-//   - optional and off serve it silently.
-//
-// Every request it serves counts in anixops_agent_legacy_requests_total,
-// in every mode, so an operator can watch the legacy traffic drain before
-// switching to required. After the handler, an HTTP request the kernel
-// authenticated (node_id in the context) is recorded in the transport
-// inventory; WebSocket sessions are recorded by their handler, since this
-// middleware returns only when the session ends.
-func LegacyHTTP(policy Policy, transport string) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		path := c.FullPath()
-		if policy.RefusesLegacy() {
-			CountRefused(path)
-			policy.SetDeprecationHeaders(c.Writer.Header())
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"code": agentcontrol.ErrorCodeMTLSRequired, "error": RefusalMessage})
-			return
-		}
-		CountLegacy(path)
-		if policy.Signals() {
-			policy.SetDeprecationHeaders(c.Writer.Header())
-		}
-		c.Next()
-		if transport != model.AgentTransportWebSocket {
-			recordAuthenticated(c, transport)
-		}
-	}
-}
-
 // ThirdPartyHTTP records the nodes a third-party node protocol (UniProxy)
-// authenticated in the transport inventory. It never signals or refuses:
-// agent_control.mtls does not apply to these protocols.
+// authenticated in the transport inventory. It never refuses: agent
+// certificates do not apply to these protocols.
 func ThirdPartyHTTP(transport string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Next()

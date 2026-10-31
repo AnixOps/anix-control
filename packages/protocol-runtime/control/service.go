@@ -35,8 +35,8 @@ type protocolRuntimeBridge interface {
 //     (local socket or module listener). A bridge without one leaves the
 //     routes that need it legacy.
 //
-// The routes in bridgedRoutes always relay to the legacy handler, the agent
-// WebSocket included.
+// The routes in bridgedRoutes always relay to the legacy handler; there are
+// none since the legacy agent channels were removed.
 func newProtocolRuntimeService(bridge protocolRuntimeBridge, leaseID string) (*pluginhostsdk.Router, error) {
 	storage := packagestoresdk.SharedOpener(bridge)
 	service := &native.Service{
@@ -88,18 +88,7 @@ var protocolRuntimeRoutes = map[string]struct{}{
 }
 
 // bridgedRoutes are the package's compatibility routes without a native
-// handler; they always relay to the kernel's legacy handler. All are
-// kernel-owned: the agent routes (registration, heartbeat, task poll,
-// result, monitor and the WebSocket) authenticate node credentials
-// (v2_node, v2_forward_node) in the kernel, mark nodes online in those
-// tables, keep connections and reports in the kernel's memory, and hand out
-// and complete the forward package's bridge tasks and runtime jobs.
-// WebSocket routes always relay to the kernel.
-var bridgedRoutes = map[string]struct{}{
-	"protocol.agent.register.post":  {},
-	"protocol.agent.heartbeat.post": {},
-	"protocol.agent.tasks.get":      {},
-	"protocol.agent.result.post":    {},
-	"protocol.agent.monitor.post":   {},
-	"protocol.agent.ws.get":         {},
-}
+// handler; they always relay to the kernel's legacy handler. None remain:
+// the agent REST and WebSocket routes were removed with the legacy agent
+// channels.
+var bridgedRoutes = map[string]struct{}{}

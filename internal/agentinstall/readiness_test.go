@@ -24,7 +24,7 @@ func readyInput() ReadinessInput {
 	return ReadinessInput{
 		PublicURL: "https://panel.example.com", GRPCEnabled: true, GRPCPort: 50051,
 		PanelCertificate: trustedCertificate("panel.example.com"), GRPCCertificate: trustedCertificate("panel.example.com"),
-		BuiltinPKI: true, CAKEK: true, MTLSMode: "required",
+		BuiltinPKI: true, CAKEK: true,
 		AgentVersion: "v4.2.0", ReleaseVersion: "4.2.1",
 	}
 }
@@ -51,7 +51,7 @@ func TestReadinessOfAConfiguredControl(t *testing.T) {
 		assert.Empty(t, check.Fix, check.ID)
 		assert.NotEmpty(t, check.Message, check.ID)
 	}
-	assert.Equal(t, []string{CheckPublicURL, CheckPanelCertificate, CheckGRPC, CheckGRPCCertificate, CheckCA, CheckMTLSMode, CheckAgentRelease, CheckScriptSignature}, ids)
+	assert.Equal(t, []string{CheckPublicURL, CheckPanelCertificate, CheckGRPC, CheckGRPCCertificate, CheckCA, CheckAgentRelease, CheckScriptSignature}, ids)
 	assert.Contains(t, checkOf(t, readiness, CheckGRPC).Message, "panel.example.com:50051")
 }
 
@@ -116,7 +116,7 @@ func TestReadinessGRPC(t *testing.T) {
 	}
 }
 
-func TestReadinessCAAndMTLSMode(t *testing.T) {
+func TestReadinessCA(t *testing.T) {
 	in := readyInput()
 	in.CAKEK = false
 	readiness := CheckReadiness(in)
@@ -135,18 +135,6 @@ func TestReadinessCAAndMTLSMode(t *testing.T) {
 	in = readyInput()
 	in.BuiltinPKI = false
 	assert.Contains(t, checkOf(t, CheckReadiness(in), CheckCA).Message, "external")
-
-	for mode, ok := range map[string]bool{"": true, "required": true, "preferred": true, "optional": true, "off": false} {
-		in = readyInput()
-		in.MTLSMode = mode
-		readiness = CheckReadiness(in)
-		check := checkOf(t, readiness, CheckMTLSMode)
-		assert.Equal(t, ok, check.OK, mode)
-		assert.Equal(t, ok, readiness.Ready, mode)
-		if !ok {
-			assert.Contains(t, check.Fix, "required")
-		}
-	}
 }
 
 func TestReadinessAgentRelease(t *testing.T) {

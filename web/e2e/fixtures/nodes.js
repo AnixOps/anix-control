@@ -75,7 +75,6 @@ const READY = {
     { id: 'public_url', ok: true, level: 'error', message: 'Nodes reach Control at https://panel.example.com.', fix: '' },
     { id: 'grpc', ok: true, level: 'error', message: 'Nodes dial the gRPC listener at panel.example.com:50051 over TLS.', fix: '' },
     { id: 'ca', ok: true, level: 'error', message: 'The built-in agent CA is on; join tokens are sealed with module_runtime.ca_kek.', fix: '' },
-    { id: 'mtls_mode', ok: true, level: 'error', message: 'agent_control.mtls is required: nodes join and connect with their certificate.', fix: '' },
     { id: 'agent_release', ok: true, level: 'error', message: 'Agent v4.2.0 is downloaded from GitHub releases.', fix: '' },
     { id: 'script_signature', ok: true, level: 'warning', message: 'The install script\'s release signature verifies; it is served at /install.sh.sig.', fix: '' }
   ]

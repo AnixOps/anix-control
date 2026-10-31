@@ -237,16 +237,12 @@ func (rt *serverRuntime) startAgentPKIMaintenance() {
 
 // agentPKIForGRPC returns the agent PKI the gRPC listener verifies client
 // certificates with: nil when the built-in CA is off (or the PKI is
-// external), which every agent_control.mtls but an explicit required allows
-// (the default required starts and warns, agentTransportPolicyLog). It needs
-// the CA only, not the module runtime or its listener.
+// external); Control then starts and warns (agentTransportPolicyLog). It
+// needs the CA only, not the module runtime or its listener.
 func agentPKIForGRPC(cfg *config.Config, db *gorm.DB) (*agentpki.Service, error) {
 	pki, err := agentpki.FromConfig(cfg, db)
 	switch {
 	case errors.Is(err, agentpki.ErrDisabled):
-		if mode := cfg.AgentControl.MTLSOrDefault(); mode == config.AgentMTLSRequired && cfg.AgentControl.MTLSExplicit() {
-			return nil, fmt.Errorf("agent_control.mtls %q: %w", mode, err)
-		}
 		if errors.Is(err, agentpki.ErrExternalPKI) {
 			log.Printf("Agent enrollment is off: %v", err)
 		}
@@ -260,30 +256,11 @@ func agentPKIForGRPC(cfg *config.Config, db *gorm.DB) (*agentpki.Service, error)
 	return pki, nil
 }
 
-// agentTransportPolicyLog describes the effective agent_control policy at
-// startup: the mode, what it means for legacy agents, the sunset and
-// whether agents can enroll at all.
+// agentTransportPolicyLog describes at startup how agents connect: with an
+// enrolled client certificate only, and whether they can enroll at all.
 func agentTransportPolicyLog(cfg *config.Config, grpcSrv *grpcserver.Server) string {
-	mode := cfg.AgentControl.MTLSOrDefault()
-	var effect string
-	switch mode {
-	case config.AgentMTLSOff:
-		effect = "client certificates are neither requested nor accepted; legacy API-key agents are served silently"
-	case config.AgentMTLSOptional:
-		effect = "client certificates are verified when presented; legacy API-key agents are served silently"
-	case config.AgentMTLSPreferred:
-		effect = "legacy API-key agents are served with deprecation signals (Deprecation/Sunset/Link headers, x-anix-auth-deprecated)"
-	case config.AgentMTLSRequired:
-		effect = "AnixOps Agent channels accept client certificates only; legacy agent paths answer 403 agent_mtls_required (UniProxy and v2board gRPC stay open)"
-	}
-	sunset := "none"
-	if value := strings.TrimSpace(cfg.AgentControl.LegacySunset); value != "" {
-		sunset = value
-	}
 	enrollment := "available"
 	switch {
-	case mode == config.AgentMTLSOff:
-		enrollment = "off"
 	case grpcSrv == nil:
 		enrollment = "unavailable: the gRPC listener is off (grpc.enabled)"
 	case grpcSrv.AgentPKI() == nil:
@@ -291,18 +268,12 @@ func agentTransportPolicyLog(cfg *config.Config, grpcSrv *grpcserver.Server) str
 	case !grpcSrv.TLSEnabled():
 		enrollment = "unavailable for client certificates: no TLS on the gRPC listener (set domain, or grpc.tls_cert_file)"
 	}
-	if mode == config.AgentMTLSRequired && enrollment != "available" {
-		origin := "set"
-		if !cfg.AgentControl.MTLSExplicit() {
-			origin = "the default since v4.2"
-		}
-		return fmt.Sprintf("WARNING: Agent transports: agent_control.mtls=required (%s): %s; legacy sunset: %s; agent enrollment: %s. No AnixOps Agent can connect: give the kernel domain (or grpc.enabled with grpc.tls_cert_file/tls_key_file) and module_runtime.ca_kek, or set agent_control.mtls: preferred while nodes migrate (docs/UPGRADE.md, \"Agent Transports: v4.2 Requires Enrolled Agents\").",
-			origin, effect, sunset, enrollment)
+	ignored := ""
+	if cfg != nil && (strings.TrimSpace(cfg.AgentControl.MTLS) != "" || strings.TrimSpace(cfg.AgentControl.LegacySunset) != "") {
+		ignored = " agent_control.mtls and agent_control.legacy_sunset are ignored: remove them."
 	}
-	next := "Check `anix-control agents transports --check-required` before setting required (the default from v4.2)."
-	if mode == config.AgentMTLSRequired {
-		next = "`anix-control agents transports --check-required` lists the nodes it refuses."
+	if enrollment != "available" {
+		return fmt.Sprintf("WARNING: Agent transports: AnixOps Agents connect with client certificates only; agent enrollment: %s. No AnixOps Agent can connect: give the kernel domain (or grpc.enabled with grpc.tls_cert_file/tls_key_file) and module_runtime.ca_kek.%s", enrollment, ignored)
 	}
-	return fmt.Sprintf("Agent transports: agent_control.mtls=%s: %s; legacy sunset: %s; agent enrollment: %s. %s",
-		mode, effect, sunset, enrollment, next)
+	return fmt.Sprintf("Agent transports: AnixOps Agents connect with client certificates only (UniProxy and v2board gRPC stay open); agent enrollment: %s. `anix-control agents transports --check-required` lists the nodes that never enrolled.%s", enrollment, ignored)
 }

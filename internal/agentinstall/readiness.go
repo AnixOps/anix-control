@@ -17,7 +17,6 @@ const (
 	CheckGRPC             = "grpc"
 	CheckGRPCCertificate  = "grpc_certificate"
 	CheckCA               = "ca"
-	CheckMTLSMode         = "mtls_mode"
 	CheckAgentRelease     = "agent_release"
 	CheckScriptSignature  = "script_signature"
 )
@@ -90,9 +89,6 @@ type ReadinessInput struct {
 	BuiltinPKI   bool
 	CAKEK        bool
 	CAKEKProblem string
-	// MTLSMode is agent_control.mtls, resolved (off, optional, preferred or
-	// required).
-	MTLSMode string
 	// SignatureFile is agent_install.signature_file and OfficialPublicKey
 	// plugins.official_public_key.
 	SignatureFile     string
@@ -147,7 +143,6 @@ func CheckReadiness(in ReadinessInput) Readiness {
 		checkGRPC(in),
 		checkGRPCCertificate(in),
 		checkCA(in),
-		checkMTLSMode(in),
 		checkAgentRelease(in),
 		checkScriptSignature(in),
 	}
@@ -274,22 +269,6 @@ func checkCA(in ReadinessInput) ReadinessCheck {
 		check.OK = true
 		check.Message = "The built-in agent CA is on; join tokens are sealed with module_runtime.ca_kek."
 	}
-	return check
-}
-
-func checkMTLSMode(in ReadinessInput) ReadinessCheck {
-	check := ReadinessCheck{ID: CheckMTLSMode, Level: LevelError}
-	mode := strings.ToLower(strings.TrimSpace(in.MTLSMode))
-	if mode == "" {
-		mode = "required"
-	}
-	if mode == "off" {
-		check.Message = "agent_control.mtls is off: agent enrollment is unavailable, so a node cannot join."
-		check.Fix = "Remove agent_control.mtls (required is the default) or set it to required, then restart Control."
-		return check
-	}
-	check.OK = true
-	check.Message = "agent_control.mtls is " + mode + ": nodes join and connect with their certificate."
 	return check
 }
 

@@ -1091,60 +1091,6 @@
     },
     {
       "method": "POST",
-      "path": "/api/v2/agent/heartbeat",
-      "package_id": "protocol-runtime",
-      "route_id": "protocol.agent.heartbeat.post",
-      "mode": "kernel-owned",
-      "legacy": "router",
-      "reason": "agent channel: node credentials checked in the kernel; marks the agent seen in its in-memory registry"
-    },
-    {
-      "method": "POST",
-      "path": "/api/v2/agent/monitor",
-      "package_id": "protocol-runtime",
-      "route_id": "protocol.agent.monitor.post",
-      "mode": "kernel-owned",
-      "legacy": "router",
-      "reason": "agent channel: stores the authenticated node's monitoring snapshot in the kernel's memory"
-    },
-    {
-      "method": "POST",
-      "path": "/api/v2/agent/register",
-      "package_id": "protocol-runtime",
-      "route_id": "protocol.agent.register.post",
-      "mode": "kernel-owned",
-      "legacy": "router",
-      "reason": "agent channel: checks the node's token and records the connection in the kernel's agent registry"
-    },
-    {
-      "method": "POST",
-      "path": "/api/v2/agent/result",
-      "package_id": "protocol-runtime",
-      "route_id": "protocol.agent.result.post",
-      "mode": "kernel-owned",
-      "legacy": "router",
-      "reason": "agent channel: the authenticated node completes its tasks and runtime jobs in the kernel"
-    },
-    {
-      "method": "GET",
-      "path": "/api/v2/agent/tasks",
-      "package_id": "protocol-runtime",
-      "route_id": "protocol.agent.tasks.get",
-      "mode": "kernel-owned",
-      "legacy": "router",
-      "reason": "agent channel: hands the authenticated node its diagnostic tasks, bridge tasks and runtime jobs"
-    },
-    {
-      "method": "GET",
-      "path": "/api/v2/agent/ws",
-      "package_id": "protocol-runtime",
-      "route_id": "protocol.agent.ws.get",
-      "mode": "kernel-owned",
-      "legacy": "router",
-      "reason": "agent WebSocket: a connection the kernel authenticates, holds and pushes to; WebSockets always relay"
-    },
-    {
-      "method": "POST",
       "path": "/api/v2/internal/auth-keys",
       "package_id": "proxy-node",
       "route_id": "proxy.internal.auth_keys.post",
@@ -1158,42 +1104,6 @@
       "route_id": "identity.auth.login",
       "mode": "native-flagged",
       "legacy": "identity-bridge"
-    },
-    {
-      "method": "POST",
-      "path": "/api/v2/node/heartbeat",
-      "package_id": "proxy-node",
-      "route_id": "proxy.node.heartbeat.post",
-      "mode": "kernel-owned",
-      "legacy": "router",
-      "reason": "node channel: authenticated by the node's API key in the kernel, writes v2_node and parent traffic; removed in 5.0 (D3/D8)"
-    },
-    {
-      "method": "POST",
-      "path": "/api/v2/node/register",
-      "package_id": "proxy-node",
-      "route_id": "proxy.node.register.post",
-      "mode": "kernel-owned",
-      "legacy": "router",
-      "reason": "node channel: a registration key mints the node's credentials in the kernel; replaced by A2 enrollment, removed in 5.0 (D3/D8)"
-    },
-    {
-      "method": "POST",
-      "path": "/api/v2/node/runtime-health",
-      "package_id": "proxy-node",
-      "route_id": "proxy.node.runtime_health.post",
-      "mode": "kernel-owned",
-      "legacy": "router",
-      "reason": "node channel: authenticated by the node's API key in the kernel, writes the node's runtime health; removed in 5.0 (D3/D8)"
-    },
-    {
-      "method": "GET",
-      "path": "/api/v2/node/ws",
-      "package_id": "proxy-node",
-      "route_id": "proxy.node.ws.get",
-      "mode": "kernel-owned",
-      "legacy": "router",
-      "reason": "node agent WebSocket: a connection the kernel authenticates, holds and pushes to; WebSockets always relay"
     },
     {
       "method": "POST",

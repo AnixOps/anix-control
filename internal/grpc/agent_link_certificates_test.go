@@ -14,7 +14,6 @@ import (
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	agentv1pb "github.com/AnixOps/anix-control/sdk/api/agent/v1"
 	"github.com/AnixOps/anix-control/v5/internal/agentpki"
-	"github.com/AnixOps/anix-control/v5/internal/config"
 	"github.com/AnixOps/anix-control/v5/internal/database"
 	"github.com/AnixOps/anix-control/v5/internal/kernelforward"
 	"github.com/AnixOps/anix-control/v5/internal/model"
@@ -34,12 +33,12 @@ type linkListener struct {
 	link *agentpki.LinkAuthority
 }
 
-func startLinkListener(t *testing.T, mode string, withLink bool) *linkListener {
+func startLinkListener(t *testing.T, withLink bool) *linkListener {
 	t.Helper()
 	out := &linkListener{}
 	var authority *modulepki.Authority
 	var pki *agentpki.Service
-	l := startAgentListenerWith(t, mode, false, func(cfg *ServerConfig) {
+	l := startAgentListenerWith(t, false, func(cfg *ServerConfig) {
 		requireAutoMigrate(t, append(append(model.KernelForwardModels(), &model.ForwardLinkCA{}, &model.ForwardLinkCertificate{}), model.NetworkModels()...)...)
 		db := database.Get()
 		kek := make([]byte, 32)
@@ -80,11 +79,7 @@ func negotiateForward(t *testing.T, node agentcontrol.AgentNode, negotiated bool
 // certificate; it returns the connection and the Agent's key.
 func (l *linkListener) enrolledConn(t *testing.T, ctx context.Context, node agentcontrol.AgentNode) (*grpc.ClientConn, *tls.Certificate) {
 	t.Helper()
-	secret := l.proxyKey
-	if node.Kind == agentcontrol.NodeKindForward {
-		secret = l.forwardToken
-	}
-	certificate, _, err := enrollForTest(t, nodeCredentials(ctx, node, secret), l.dial(t, nil), "")
+	certificate, _, err := l.enrollWithToken(t, ctx, node, l.dial(t, nil))
 	require.NoError(t, err)
 	return l.dial(t, certificate), certificate
 }
@@ -110,7 +105,7 @@ func requireRefusal(t *testing.T, err error, trailer metadata.MD, want codes.Cod
 }
 
 func TestAgentLinkCertificateIssuance(t *testing.T) {
-	l := startLinkListener(t, config.AgentMTLSOptional, true)
+	l := startLinkListener(t, true)
 	ctx := testContext(t)
 	node := l.forwardNode()
 	conn, agentCertificate := l.enrolledConn(t, ctx, node)
@@ -185,7 +180,7 @@ func TestAgentLinkCertificateIssuance(t *testing.T) {
 }
 
 func TestAgentLinkCertificateAuthorization(t *testing.T) {
-	l := startLinkListener(t, config.AgentMTLSOptional, true)
+	l := startLinkListener(t, true)
 	ctx := testContext(t)
 	anonymous := agentv1pb.NewAgentEnrollmentClient(l.dial(t, nil))
 
@@ -245,7 +240,7 @@ func TestAgentLinkCertificateAuthorization(t *testing.T) {
 
 func TestAgentLinkCertificateUnavailable(t *testing.T) {
 	t.Run("without the link CA", func(t *testing.T) {
-		l := startLinkListener(t, config.AgentMTLSOptional, false)
+		l := startLinkListener(t, false)
 		ctx := testContext(t)
 		conn, _ := l.enrolledConn(t, ctx, l.forwardNode())
 		client := agentv1pb.NewAgentEnrollmentClient(conn)
@@ -257,7 +252,7 @@ func TestAgentLinkCertificateUnavailable(t *testing.T) {
 		requireRefusal(t, err, trailer, codes.FailedPrecondition, agentcontrol.ErrorCodeLinkUnavailable)
 	})
 	t.Run("before the link CA exists", func(t *testing.T) {
-		l := startLinkListener(t, config.AgentMTLSOptional, true)
+		l := startLinkListener(t, true)
 		ctx := testContext(t)
 		node := l.forwardNode()
 		conn, _ := l.enrolledConn(t, ctx, node)
@@ -269,13 +264,6 @@ func TestAgentLinkCertificateUnavailable(t *testing.T) {
 		requireRefusal(t, err, trailer, codes.FailedPrecondition, agentcontrol.ErrorCodeLinkUnavailable)
 		trailer = nil
 		_, err = client.GetLinkTrustBundle(ctx, &agentv1pb.GetLinkTrustBundleRequest{}, grpc.Trailer(&trailer))
-		requireRefusal(t, err, trailer, codes.FailedPrecondition, agentcontrol.ErrorCodeLinkUnavailable)
-	})
-	t.Run("agent_control.mtls off", func(t *testing.T) {
-		l := startLinkListener(t, config.AgentMTLSOff, true)
-		ctx := testContext(t)
-		var trailer metadata.MD
-		_, err := agentv1pb.NewAgentEnrollmentClient(l.dial(t, nil)).IssueLinkCertificate(ctx, linkRequest(t, nil), grpc.Trailer(&trailer))
 		requireRefusal(t, err, trailer, codes.FailedPrecondition, agentcontrol.ErrorCodeLinkUnavailable)
 	})
 }
@@ -302,7 +290,7 @@ func TestLinkPKIStatus(t *testing.T) {
 // certificate as soon as a HelloAck lists forward.v1; a later Hello without
 // it withdraws the right.
 func TestAgentLinkCertificateAfterHelloAck(t *testing.T) {
-	l := startLinkListener(t, config.AgentMTLSOptional, true)
+	l := startLinkListener(t, true)
 	requireAutoMigrate(t, &model.KernelNodeDesiredConfig{}, &model.KernelNodeConfigStatus{})
 	ctx := testContext(t)
 	node := l.forwardNode()

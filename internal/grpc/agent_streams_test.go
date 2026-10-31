@@ -11,7 +11,6 @@ import (
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	agentv1pb "github.com/AnixOps/anix-control/sdk/api/agent/v1"
 	"github.com/AnixOps/anix-control/v5/internal/agentstreams"
-	"github.com/AnixOps/anix-control/v5/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
@@ -131,7 +130,7 @@ func (c *streamClient) observe(desired *agentv1pb.DesiredOperation, phase agentv
 }
 
 func TestAgentStreamsDispatchToEachNodeKind(t *testing.T) {
-	l := startAgentListener(t, config.AgentMTLSOptional, true)
+	l := startAgentListener(t, true)
 	ctx := testContext(t)
 	streams := GetAgentStreams()
 	proxy, forward := l.proxyNode(), l.forwardNode()
@@ -147,8 +146,9 @@ func TestAgentStreamsDispatchToEachNodeKind(t *testing.T) {
 	require.ErrorIs(t, err, agentstreams.ErrNotConnected)
 	assert.Equal(t, fmt.Sprintf("agent node %d is not connected", proxy.ID), err.Error(), "the manager's text is kept")
 
-	proxyClient := openStreamClient(t, legacyCredentials(ctx, l.proxy.ID, l.proxyKey), l.dial(t, nil), proxy, true, "agent.ping", "operation.cancel")
-	certificate, _, err := enrollForTest(t, nodeCredentials(ctx, forward, l.forwardToken), l.dial(t, nil), "")
+	proxyConn, _ := enrollNode(t, ctx, l, proxy)
+	proxyClient := openStreamClient(t, ctx, proxyConn, proxy, true, "agent.ping", "operation.cancel")
+	certificate, _, err := l.enrollWithToken(t, ctx, forward, l.dial(t, nil))
 	require.NoError(t, err)
 	forwardClient := openStreamClient(t, ctx, l.dial(t, certificate), forward, true, "agent.ping", "node.reload", "operation.cancel")
 
@@ -162,7 +162,7 @@ func TestAgentStreamsDispatchToEachNodeKind(t *testing.T) {
 		return proxyOK && forwardOK
 	}, 5*time.Second, 5*time.Millisecond)
 	assert.Equal(t, proxyClient.sessionID, proxySession.SessionID)
-	assert.Equal(t, agentstreams.IdentityAPIKey, proxySession.Identity)
+	assert.Equal(t, "spiffe://anixops/test/agent/"+proxy.String(), proxySession.Identity)
 	assert.Equal(t, agentstreams.TransportControlStream, proxySession.Transport)
 	assert.Equal(t, "streams-test", proxySession.AgentVersion)
 	assert.ElementsMatch(t, []string{"agent.ping", "operation.cancel"}, proxySession.Capabilities)
@@ -231,12 +231,13 @@ func TestAgentStreamsDispatchToEachNodeKind(t *testing.T) {
 }
 
 func TestAgentStreamsReplacedSessionClosesThePendingDispatch(t *testing.T) {
-	l := startAgentListener(t, config.AgentMTLSOptional, false)
+	l := startAgentListener(t, true)
 	ctx := testContext(t)
 	streams := GetAgentStreams()
 	proxy := l.proxyNode()
 
-	silent := openStreamClient(t, legacyCredentials(ctx, l.proxy.ID, l.proxyKey), l.dial(t, nil), proxy, false, "agent.ping")
+	silentConn, _ := enrollNode(t, ctx, l, proxy)
+	silent := openStreamClient(t, ctx, silentConn, proxy, false, "agent.ping")
 	result := make(chan error, 1)
 	go func() {
 		_, err := streams.Dispatch(ctx, proxy, &agentv1pb.DesiredOperation{OperationId: "pending", Kind: "agent.ping"})
@@ -246,7 +247,8 @@ func TestAgentStreamsReplacedSessionClosesThePendingDispatch(t *testing.T) {
 
 	// A newer session for the same node replaces the first: the pending
 	// dispatch ends without an acknowledgement.
-	replacement := openStreamClient(t, legacyCredentials(ctx, l.proxy.ID, l.proxyKey), l.dial(t, nil), proxy, true, "agent.ping")
+	replacementConn, _ := enrollNode(t, ctx, l, proxy)
+	replacement := openStreamClient(t, ctx, replacementConn, proxy, true, "agent.ping")
 	select {
 	case err := <-result:
 		require.ErrorIs(t, err, agentstreams.ErrSessionClosed)

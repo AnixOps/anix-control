@@ -51,74 +51,6 @@ definitions:
       source_node_id:
         type: integer
     type: object
-  handler.AgentHeartbeatRequest:
-    properties:
-      node_id:
-        type: integer
-      resources:
-        additionalProperties: {}
-        type: object
-      status:
-        maxLength: 32
-        type: string
-    required:
-    - node_id
-    type: object
-  handler.AgentMonitorRequest:
-    properties:
-      node_id:
-        type: integer
-      system:
-        additionalProperties: {}
-        type: object
-    required:
-    - node_id
-    type: object
-  handler.AgentRegisterRequest:
-    properties:
-      capabilities:
-        items:
-          type: string
-        type: array
-      node_id:
-        type: integer
-      system:
-        additionalProperties: {}
-        type: object
-      token:
-        minLength: 1
-        type: string
-      version:
-        maxLength: 64
-        type: string
-    required:
-    - node_id
-    - token
-    type: object
-  handler.AgentTaskResult:
-    properties:
-      action:
-        type: string
-      data: {}
-      duration_ms:
-        type: integer
-      error:
-        type: string
-      node_id:
-        type: integer
-      output:
-        type: string
-      success:
-        type: boolean
-      task_id:
-        type: string
-      timestamp:
-        type: string
-      type:
-        type: string
-    required:
-    - task_id
-    type: object
   handler.BroadcastRequest:
     properties:
       message:
@@ -768,25 +700,6 @@ definitions:
         description: 运行时间(秒)
         type: integer
     type: object
-  model.NodeHeartbeatRequest:
-    properties:
-      cpu_usage:
-        type: number
-      disk_usage:
-        type: number
-      download:
-        description: 本次下载流量增量
-        type: integer
-      memory_usage:
-        type: number
-      online_users:
-        type: integer
-      upload:
-        description: 本次上传流量增量
-        type: integer
-      uptime:
-        type: integer
-    type: object
   model.NodeProtocol:
     properties:
       alpn:
@@ -855,36 +768,6 @@ definitions:
         description: 协议类型
       updated_at:
         type: string
-    type: object
-  model.NodeRegisterRequest:
-    properties:
-      auth_key:
-        description: 授权密钥
-        type: string
-      host:
-        description: 节点地址
-        type: string
-      name:
-        description: 节点名称
-        type: string
-      port:
-        description: API端口
-        type: integer
-      server_os:
-        description: 操作系统
-        type: string
-      server_version:
-        description: 节点版本
-        type: string
-    required:
-    - auth_key
-    type: object
-  model.NodeRuntimeHealthRequest:
-    properties:
-      error:
-        type: string
-      healthy:
-        type: boolean
     type: object
   model.NodeStatus:
     enum:
@@ -1582,7 +1465,9 @@ paths:
       - 管理端 Agent
   /admin/agent/monitor:
     get:
-      description: Query monitor data by node_id
+      description: Monitor snapshots came from the retired agent REST channel; Agents
+        on the Agent Control stream report no snapshot, so this answers 404 for every
+        node.
       parameters:
       - description: Node ID
         in: query
@@ -1592,11 +1477,6 @@ paths:
       produces:
       - application/json
       responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
         "404":
           description: Not Found
           schema:
@@ -4616,127 +4496,6 @@ paths:
       summary: WebSocket 实时监控
       tags:
       - 管理端-WebSocket
-  /api/v2/agent/heartbeat:
-    post:
-      consumes:
-      - application/json
-      description: Agent 定期发送心跳
-      parameters:
-      - description: 心跳信息
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/handler.AgentHeartbeatRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-      summary: Agent 心跳
-      tags:
-      - Agent
-  /api/v2/agent/monitor:
-    post:
-      consumes:
-      - application/json
-      description: Agent 上报系统监控数据
-      parameters:
-      - description: 监控数据
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/handler.AgentMonitorRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-      summary: 上报监控数据
-      tags:
-      - Agent
-  /api/v2/agent/register:
-    post:
-      consumes:
-      - application/json
-      description: Agent 启动时注册到面板
-      parameters:
-      - description: 注册信息
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/handler.AgentRegisterRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-      summary: Agent 注册
-      tags:
-      - Agent
-  /api/v2/agent/result:
-    post:
-      consumes:
-      - application/json
-      description: Agent 上报任务执行结果
-      parameters:
-      - description: 任务结果
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/handler.AgentTaskResult'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-      summary: 上报任务结果
-      tags:
-      - Agent
-  /api/v2/agent/tasks:
-    get:
-      description: Agent 轮询获取待执行的任务
-      parameters:
-      - description: 节点 ID
-        in: query
-        name: node_id
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-      summary: 获取待执行任务
-      tags:
-      - Agent
-  /api/v2/agent/ws:
-    get:
-      description: Agent 建立 WebSocket 长连接
-      responses:
-        "101":
-          description: Switching Protocols
-      summary: WebSocket 连接
-      tags:
-      - Agent
   /api/v4/admin/invite-codes/bulk:
     post:
       consumes:
@@ -6867,11 +6626,11 @@ paths:
         and the listener is on; the gRPC certificate is valid, publicly trusted and
         covers the target (Agents verify it against their system CAs); module_runtime.ca_kek
         is usable (join tokens are sealed with it and node certificates signed by
-        the CA it protects); agent_control.mtls is not off; the Agent release of the
-        pinned version is served by this Control or has a source; the install script''s
-        release signature verifies when one is configured. ready is false when a check
-        of level error fails; a failed warning does not block the command. Each check
-        is {id, ok, level, message, fix}. Any administrator.'
+        the CA it protects); the Agent release of the pinned version is served by
+        this Control or has a source; the install script''s release signature verifies
+        when one is configured. ready is false when a check of level error fails;
+        a failed warning does not block the command. Each check is {id, ok, level,
+        message, fix}. Any administrator.'
       produces:
       - application/json
       responses:
@@ -8809,119 +8568,6 @@ paths:
       summary: Prometheus 指标
       tags:
       - 系统
-  /node/heartbeat:
-    post:
-      consumes:
-      - application/json
-      description: 节点向面板发送心跳以保持在线状态
-      parameters:
-      - description: 心跳请求
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/model.NodeHeartbeatRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties: true
-            type: object
-        "401":
-          description: Unauthorized
-          schema:
-            additionalProperties: true
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: 节点心跳
-      tags:
-      - 节点通信
-  /node/register:
-    post:
-      consumes:
-      - application/json
-      description: 节点通过授权密钥自动注册到面板
-      parameters:
-      - description: 注册请求
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/model.NodeRegisterRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties: true
-            type: object
-      summary: 节点自动注册
-      tags:
-      - 节点通信
-  /node/runtime-health:
-    post:
-      consumes:
-      - application/json
-      description: 节点上报 WireGuard/GOST 等托管运行时的进程健康状态，不覆盖普通心跳状态
-      parameters:
-      - description: 运行时健康状态
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/model.NodeRuntimeHealthRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties: true
-            type: object
-        "401":
-          description: Unauthorized
-          schema:
-            additionalProperties: true
-            type: object
-        "404":
-          description: Not Found
-          schema:
-            additionalProperties: true
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: 上报节点运行时健康状态
-      tags:
-      - 节点通信
   /payment/callback/{type}:
     post:
       consumes:

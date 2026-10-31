@@ -80,7 +80,7 @@ func TestAgentControlAliveListOnTheStream(t *testing.T) {
 	set := stubAliveCounts(t, 20*time.Millisecond, 0)
 	set(map[uint64]int{9: 2, 7: 1, 8: 0}, nil)
 	environment := newAgentControlTestEnvironment(t)
-	server := NewAgentControlGRPCServer(NewAgentControlManager())
+	server := newTestAgentControlServer(NewAgentControlManager())
 	proxy := agentcontrol.AgentNode{Kind: agentcontrol.NodeKindProxy, ID: 1}
 	assert.True(t, agentcontrol.HasCapabilityVersion(server.serverCapabilities(proxy, aliveCapabilities()), agentcontrol.CapabilityAlive, agentcontrol.CapabilityVersionV1))
 	assert.False(t, agentcontrol.HasCapabilityVersion(server.serverCapabilities(agentcontrol.AgentNode{Kind: agentcontrol.NodeKindForward, ID: 1}, aliveCapabilities()),

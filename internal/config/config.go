@@ -234,36 +234,15 @@ type AgentInstallConfig struct {
 	SignatureFile string `yaml:"signature_file"`
 }
 
-// AgentControlConfig configures how AnixOps Agents authenticate on the
-// node-facing gRPC listener (grpc.*) and on the legacy AnixOps-agent HTTP
-// and WebSocket paths (node-ops-service.md, section 5.6).
+// AgentControlConfig holds the retired agent_control keys. AnixOps Agents
+// authenticate with enrolled client certificates only (the former
+// agent_control.mtls: required), and the legacy agent transports are gone, so
+// neither key has an effect; they stay in the struct so that an older
+// configuration file still loads.
 type AgentControlConfig struct {
-	// MTLS selects the client certificate mode of the AnixOps Agent
-	// channels:
-	//   - "off": client certificates are neither requested nor accepted and
-	//     AgentEnrollment is unavailable; every agent uses its legacy node
-	//     credential, without deprecation signals (a rollback switch);
-	//   - "optional": a client certificate is verified when given, otherwise
-	//     the legacy node credential authenticates, silently;
-	//   - "preferred" (the 4.1 default): as optional, but legacy
-	//     authentication is answered with deprecation signals (the
-	//     x-anix-auth-deprecated stream header, and Deprecation, Sunset and
-	//     Link on the legacy HTTP agent paths);
-	//   - "required" (the default from 4.2, owner decision H5): the AnixOps
-	//     Agent channels accept certificates only; the legacy agent paths
-	//     and API key authentication on the stream are refused. Third-party
-	//     node protocols (UniProxy, the v2board gRPC services) are not
-	//     affected.
-	// Empty means the default, required. Certificates come from
-	// AgentEnrollment and need the built-in CA (module_runtime.ca_kek with
-	// pki builtin; module_runtime.enabled is not needed) and
-	// grpc.tls_cert_file. An explicit required refuses to start without
-	// them; the default starts and warns (MTLSExplicit).
+	// MTLS is ignored: the mode is always required.
 	MTLS string `yaml:"mtls"`
-	// LegacySunset is the date after which the legacy agent transports may
-	// stop answering, as YYYY-MM-DD or RFC 3339. When set, the deprecation
-	// signals carry it (the HTTP Sunset header, x-anix-auth-sunset on the
-	// stream). Empty sends no Sunset: the 4.2 release date is not fixed.
+	// LegacySunset is ignored: there are no legacy agent transports.
 	LegacySunset string `yaml:"legacy_sunset"`
 }
 
@@ -302,54 +281,6 @@ func (a AgentInstallConfig) Validate() error {
 // agentReleaseTagPattern matches the release tags the Agent is published
 // with.
 var agentReleaseTagPattern = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)(\.[0-9]+(\.dev\.[0-9]+)?)?)?$`)
-
-// Agent listener client certificate modes (agent_control.mtls).
-const (
-	AgentMTLSOff       = "off"
-	AgentMTLSOptional  = "optional"
-	AgentMTLSPreferred = "preferred"
-	AgentMTLSRequired  = "required"
-	// AgentMTLSDefault is the mode when agent_control.mtls is empty:
-	// required from 4.2 (owner decision H5; preferred in 4.1).
-	AgentMTLSDefault = AgentMTLSRequired
-)
-
-// AgentMTLSModes lists the agent_control.mtls modes, weakest first.
-var AgentMTLSModes = []string{AgentMTLSOff, AgentMTLSOptional, AgentMTLSPreferred, AgentMTLSRequired}
-
-// MTLSOrDefault returns the configured mode, AgentMTLSDefault (required)
-// when empty.
-func (a AgentControlConfig) MTLSOrDefault() string {
-	if mode := strings.ToLower(strings.TrimSpace(a.MTLS)); mode != "" {
-		return mode
-	}
-	return AgentMTLSDefault
-}
-
-// MTLSExplicit tells whether agent_control.mtls is set, rather than left to
-// the default. An explicit required refuses to start without what
-// enrollment needs; the default required starts and warns instead
-// (RequiredPrerequisitesError), so a kernel without gRPC TLS or the CA
-// keeps starting after the 4.2 upgrade, with its legacy agents refused.
-func (a AgentControlConfig) MTLSExplicit() bool {
-	return strings.TrimSpace(a.MTLS) != ""
-}
-
-// LegacySunsetTime parses LegacySunset: the zero time when it is empty.
-func (a AgentControlConfig) LegacySunsetTime() (time.Time, error) {
-	value := strings.TrimSpace(a.LegacySunset)
-	if value == "" {
-		return time.Time{}, nil
-	}
-	if day, err := time.Parse(time.DateOnly, value); err == nil {
-		return day.UTC(), nil
-	}
-	parsed, err := time.Parse(time.RFC3339, value)
-	if err != nil {
-		return time.Time{}, fmt.Errorf("invalid agent_control.legacy_sunset %q: want YYYY-MM-DD or RFC 3339", a.LegacySunset)
-	}
-	return parsed.UTC(), nil
-}
 
 // IdentityConfig configures the identity module when Control runs it as a
 // local package host.
@@ -707,60 +638,8 @@ func (c *Config) ValidateForServer() error {
 	if err := c.ModuleRuntime.validate(); err != nil {
 		return err
 	}
-	if err := c.validateAgentControl(); err != nil {
-		return err
-	}
 	if placeholderJWTSecrets[strings.TrimSpace(c.JWT.Secret)] {
 		return fmt.Errorf("jwt.secret still has the template value: remove it, and the root key derives the secret")
-	}
-	return nil
-}
-
-// validateAgentControl checks agent_control. Only required needs what
-// verifies client certificates up front: TLS on the gRPC listener and the
-// built-in CA that signs agent certificates (module_runtime.ca_kek with pki
-// builtin; the module listener need not run), and the gRPC listener itself,
-// the only way an enrolled agent connects once the legacy paths are refused.
-// An explicit required refuses to start without them. The default required
-// (agent_control.mtls empty, from 4.2) starts anyway: legacy agents are
-// refused as configured, and the startup log warns that no agent can
-// enroll until they are set (RequiredPrerequisitesError). preferred and
-// optional start without them (agents then cannot enroll yet).
-func (c *Config) validateAgentControl() error {
-	if _, err := c.AgentControl.LegacySunsetTime(); err != nil {
-		return err
-	}
-	mode := c.AgentControl.MTLSOrDefault()
-	switch mode {
-	case AgentMTLSOff, AgentMTLSOptional, AgentMTLSPreferred:
-		return nil
-	case AgentMTLSRequired:
-	default:
-		return fmt.Errorf("agent_control.mtls must be %q, %q, %q or %q", AgentMTLSOff, AgentMTLSOptional, AgentMTLSPreferred, AgentMTLSRequired)
-	}
-	if !c.AgentControl.MTLSExplicit() {
-		return nil
-	}
-	return c.RequiredPrerequisitesError()
-}
-
-// RequiredPrerequisitesError names what agent_control.mtls: required lacks
-// to let agents enroll and connect: the gRPC listener, its TLS and the
-// built-in CA. Nil when nothing is missing.
-func (c *Config) RequiredPrerequisitesError() error {
-	mode := AgentMTLSRequired
-	panel := c.Panel()
-	if !panel.GRPCEnabled {
-		return fmt.Errorf("agent_control.mtls %q needs the gRPC listener (domain, or grpc.enabled): it refuses the legacy agent paths, so enrolled agents can only connect there", mode)
-	}
-	if !panel.GRPCTLS() {
-		return fmt.Errorf("agent_control.mtls %q needs TLS on the gRPC listener: set domain (Control then obtains its certificate), or grpc.tls_cert_file and grpc.tls_key_file", mode)
-	}
-	if c.ModuleRuntime.PKIOrDefault() != ModulePKIBuiltin {
-		return fmt.Errorf("agent_control.mtls %q needs the built-in CA: with module_runtime.pki %q the kernel holds no CA key to issue agent certificates", mode, c.ModuleRuntime.PKIOrDefault())
-	}
-	if strings.TrimSpace(c.ModuleRuntime.CAKEK) == "" {
-		return fmt.Errorf("agent_control.mtls %q needs the built-in CA, which signs agent certificates with the root key: start Control so that it creates root.key in data_dir (%s)", mode, c.DataDir)
 	}
 	return nil
 }

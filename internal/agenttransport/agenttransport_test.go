@@ -14,8 +14,6 @@ import (
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	"github.com/AnixOps/anix-control/v5/internal/agentstreams"
-	"github.com/AnixOps/anix-control/v5/internal/agentws"
-	"github.com/AnixOps/anix-control/v5/internal/config"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/modulepki"
 	"github.com/gin-gonic/gin"
@@ -100,53 +98,17 @@ func loadRow(t *testing.T, db *gorm.DB, node agentcontrol.AgentNode, transport s
 	return rows[0], true
 }
 
-func TestPolicy(t *testing.T) {
-	for mode, expected := range map[string][2]bool{
-		config.AgentMTLSOff: {false, false}, config.AgentMTLSOptional: {false, false},
-		config.AgentMTLSPreferred: {true, false}, config.AgentMTLSRequired: {true, true},
-	} {
-		policy := PolicyFrom(config.AgentControlConfig{MTLS: mode})
-		require.Equal(t, mode, policy.Mode)
-		require.Equal(t, expected[0], policy.Signals(), mode)
-		require.Equal(t, expected[1], policy.RefusesLegacy(), mode)
-	}
-	require.Equal(t, config.AgentMTLSRequired, PolicyFrom(config.AgentControlConfig{}).Mode, "the 4.2 default")
-	require.True(t, PolicyFrom(config.AgentControlConfig{}).RefusesLegacy())
-	require.False(t, PolicyFrom(config.AgentControlConfig{MTLS: "preferred"}).RefusesLegacy(), "preferred stays selectable")
-
-	header := http.Header{}
-	PolicyFrom(config.AgentControlConfig{}).SetDeprecationHeaders(header)
-	require.Equal(t, "true", header.Get("Deprecation"))
-	require.Empty(t, header.Get("Sunset"), "no sunset unless configured")
-	require.Equal(t, "<"+UpgradeGuideURL+`>; rel="deprecation"; type="text/html"`, header.Get("Link"))
-
-	header = http.Header{}
-	policy := PolicyFrom(config.AgentControlConfig{LegacySunset: "2027-03-31"})
-	policy.SetDeprecationHeaders(header)
-	require.Equal(t, "Wed, 31 Mar 2027 00:00:00 GMT", header.Get("Sunset"))
-	require.Contains(t, header.Get("Link"), `rel="deprecation sunset"`)
-	require.True(t, PolicyFrom(config.AgentControlConfig{LegacySunset: "never"}).Sunset.IsZero(), "an invalid date is ignored")
-}
-
 func TestMetrics(t *testing.T) {
-	before := LegacyRequests("/test/metrics")
-	CountLegacy("/test/metrics")
-	CountLegacy("/test/metrics")
 	CountRefused("/test/metrics")
-	CountLegacy("")
-	require.Equal(t, before+2, LegacyRequests("/test/metrics"))
+	CountRefused("")
 	require.Positive(t, RefusedRequests("/test/metrics"))
-	require.Positive(t, LegacyRequests(otherPath))
+	require.Positive(t, RefusedRequests(otherPath))
 
-	SetMode(config.AgentMTLSPreferred)
 	var body strings.Builder
 	WritePrometheus(&body)
 	text := body.String()
-	require.Contains(t, text, "# TYPE anixops_agent_legacy_requests_total counter")
-	require.Contains(t, text, `anixops_agent_legacy_requests_total{path="/test/metrics"}`)
+	require.Contains(t, text, "# TYPE anixops_agent_legacy_refused_total counter")
 	require.Contains(t, text, `anixops_agent_legacy_refused_total{path="/test/metrics"}`)
-	require.Contains(t, text, `anixops_agent_mtls_mode{mode="preferred"} 1`)
-	require.Contains(t, text, `anixops_agent_mtls_mode{mode="required"} 0`)
 
 	// The path label is bounded.
 	vec := newCounterVec()
@@ -292,12 +254,9 @@ func TestInventory(t *testing.T) {
 	db := openSQLite(t)
 	now := time.Date(2026, 10, 2, 12, 0, 0, 0, time.UTC)
 	seedInventory(t, db, now)
-	policy := PolicyFrom(config.AgentControlConfig{LegacySunset: "2027-03-31"})
 
-	inventory, err := Build(context.Background(), db, policy, Options{Now: now})
+	inventory, err := Build(context.Background(), db, Options{Now: now})
 	require.NoError(t, err)
-	require.Equal(t, config.AgentMTLSRequired, inventory.Mode, "the 4.2 default")
-	require.NotNil(t, inventory.Sunset)
 	require.Equal(t, UpgradeGuideURL, inventory.UpgradeGuide)
 	counts := inventory.Summary
 	counts.ReadyForRequired, counts.RequiredReasons, counts.RequiredBlockers = false, nil, nil
@@ -341,14 +300,12 @@ func TestInventory(t *testing.T) {
 	live := newTestRecorder(nil, &clock{now: now})
 	live.Seen(context.Background(), Sighting{Node: agentcontrol.AgentNode{Kind: "proxy", ID: 2}, Transport: model.AgentTransportMTLSStream, AgentVersion: "2.0.0"})
 	live.Seen(context.Background(), Sighting{Node: agentcontrol.AgentNode{Kind: "proxy", ID: 3}, Transport: model.AgentTransportUniProxy})
-	inventory, err = Build(context.Background(), db, policy, Options{Now: now, Live: live})
+	inventory, err = Build(context.Background(), db, Options{Now: now, Live: live})
 	require.NoError(t, err)
 	require.Equal(t, StatusMTLS, inventoryByNode(inventory)["proxy-2"].Status)
 
-	// Without a sunset none is reported.
-	inventory, err = Build(context.Background(), db, Policy{Mode: config.AgentMTLSRequired}, Options{})
+	inventory, err = Build(context.Background(), db, Options{})
 	require.NoError(t, err)
-	require.Nil(t, inventory.Sunset)
 	for _, node := range inventory.Nodes {
 		require.Nil(t, node.Session, "no sessions are read without a provider")
 	}
@@ -357,7 +314,7 @@ func TestInventory(t *testing.T) {
 	// how it authenticated and what it negotiated; WebSocket sessions are
 	// not shown.
 	notAfter := now.Add(48 * time.Hour)
-	inventory, err = Build(context.Background(), db, policy, Options{Now: now, Sessions: func() []agentstreams.Session {
+	inventory, err = Build(context.Background(), db, Options{Now: now, Sessions: func() []agentstreams.Session {
 		return []agentstreams.Session{
 			{
 				Node: agentcontrol.AgentNode{Kind: "proxy", ID: 1}, Transport: agentstreams.TransportControlStream, SessionID: "session-1",
@@ -399,7 +356,7 @@ func TestRequiredReadiness(t *testing.T) {
 	db := openSQLite(t)
 	now := time.Date(2026, 10, 2, 12, 0, 0, 0, time.UTC)
 
-	inventory, err := Build(context.Background(), db, Policy{Mode: config.AgentMTLSRequired}, Options{Now: now})
+	inventory, err := Build(context.Background(), db, Options{Now: now})
 	require.NoError(t, err)
 	require.True(t, inventory.Summary.ReadyForRequired, "no node, nothing to refuse")
 	require.Empty(t, inventory.Summary.RequiredReasons)
@@ -425,7 +382,7 @@ func TestRequiredReadiness(t *testing.T) {
 		{NodeKind: "proxy", NodeID: 5, Transport: model.AgentTransportUniProxy, FirstSeenAt: days(30), LastSeenAt: days(0)},
 	}).Error)
 
-	inventory, err = Build(context.Background(), db, Policy{Mode: config.AgentMTLSRequired}, Options{Now: now})
+	inventory, err = Build(context.Background(), db, Options{Now: now})
 	require.NoError(t, err)
 	summary := inventory.Summary
 	require.False(t, summary.ReadyForRequired)
@@ -445,7 +402,7 @@ func TestRequiredReadiness(t *testing.T) {
 	// Disabling the nodes clears the blockers.
 	require.NoError(t, db.Model(&model.Node{}).Where("id IN ?", []uint{2, 7}).Update("status", model.NodeStatusDisabled).Error)
 	require.NoError(t, db.Model(&model.ForwardNode{}).Where("id = ?", 1).Update("enabled", false).Error)
-	inventory, err = Build(context.Background(), db, Policy{Mode: config.AgentMTLSPreferred}, Options{Now: now})
+	inventory, err = Build(context.Background(), db, Options{Now: now})
 	require.NoError(t, err)
 	require.True(t, inventory.Summary.ReadyForRequired, "%+v", inventory.Summary)
 	require.Empty(t, inventory.Summary.RequiredReasons)
@@ -482,112 +439,45 @@ func TestPostgresAgentTransportInventory(t *testing.T) {
 	require.True(t, row.FirstSeenAt.Before(now), "the upsert keeps first_seen_at")
 	c.now = now.Add(PersistInterval)
 	r.Seen(ctx, Sighting{Node: agentcontrol.AgentNode{Kind: "proxy", ID: 2}, Transport: model.AgentTransportMTLSStream, AgentVersion: "2.0.0"})
-	inventory, err := Build(ctx, db, Policy{Mode: config.AgentMTLSRequired}, Options{Now: c.now})
+	inventory, err := Build(ctx, db, Options{Now: c.now})
 	require.NoError(t, err)
 	require.Equal(t, 2, inventory.Summary.MTLS, "the retired websocket row is ignored, the mTLS sighting counts")
 	require.Equal(t, 2, inventory.Summary.Unseen)
 }
 
-func TestLegacyHTTPModes(t *testing.T) {
+func TestThirdPartyHTTPRecordsTheAuthenticatedNode(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	db := openSQLite(t)
 	restore := SetDefault(newTestRecorder(db, &clock{now: time.Now().UTC()}))
 	defer restore()
 
-	authenticate := func(forward bool) gin.HandlerFunc {
-		return func(c *gin.Context) {
-			if c.GetHeader("X-API-Key") != "key" {
-				c.AbortWithStatus(http.StatusUnauthorized)
-				return
-			}
-			c.Set("node_id", uint(11))
-			c.Set(agentws.ForwardNodeContextKey, forward)
-			c.Next()
+	authenticate := func(c *gin.Context) {
+		if c.GetHeader("X-API-Key") != "key" {
+			c.AbortWithStatus(http.StatusUnauthorized)
+			return
 		}
+		c.Set("node_id", uint(11))
+		c.Next()
 	}
-	serve := func(c *gin.Context) { c.Status(http.StatusNoContent) }
-
-	for _, mode := range config.AgentMTLSModes {
-		t.Run(mode, func(t *testing.T) {
-			policy := PolicyFrom(config.AgentControlConfig{MTLS: mode})
-			router := gin.New()
-			path := "/api/v2/agent/heartbeat-" + mode
-			router.POST(path, LegacyHTTP(policy, model.AgentTransportHTTPLegacy), authenticate(false), serve)
-			router.GET("/api/v2/server/UniProxy/config-"+mode, ThirdPartyHTTP(model.AgentTransportUniProxy), authenticate(false), serve)
-			router.POST("/api/v2/forward/agent/rules-"+mode, LegacyHTTP(policy, model.AgentTransportHTTPLegacy), authenticate(true), serve)
-
-			request := func(method, target string) *httptest.ResponseRecorder {
-				recorder := httptest.NewRecorder()
-				req := httptest.NewRequest(method, target, nil)
-				req.Header.Set("X-API-Key", "key")
-				router.ServeHTTP(recorder, req)
-				return recorder
-			}
-			before, refusedBefore := LegacyRequests(path), RefusedRequests(path)
-			answer := request(http.MethodPost, path)
-			switch mode {
-			case config.AgentMTLSRequired:
-				require.Equal(t, http.StatusForbidden, answer.Code)
-				require.Contains(t, answer.Body.String(), `"code":"agent_mtls_required"`)
-				require.Equal(t, "true", answer.Header().Get("Deprecation"), "the refusal says why")
-				require.Equal(t, refusedBefore+1, RefusedRequests(path))
-				require.Equal(t, before, LegacyRequests(path))
-				_, ok := loadRow(t, db, agentcontrol.AgentNode{Kind: "proxy", ID: 11}, model.AgentTransportHTTPLegacy)
-				require.False(t, ok, "a refused request is not a sighting")
-			case config.AgentMTLSPreferred:
-				require.Equal(t, http.StatusNoContent, answer.Code)
-				require.Equal(t, "true", answer.Header().Get("Deprecation"))
-				require.Contains(t, answer.Header().Get("Link"), UpgradeGuideURL)
-				require.Equal(t, before+1, LegacyRequests(path))
-			default:
-				require.Equal(t, http.StatusNoContent, answer.Code)
-				require.Empty(t, answer.Header().Get("Deprecation"), "optional and off are silent")
-				require.Empty(t, answer.Header().Get("Link"))
-				require.Equal(t, before+1, LegacyRequests(path), "counted in every mode")
-			}
-			if mode != config.AgentMTLSRequired {
-				row, ok := loadRow(t, db, agentcontrol.AgentNode{Kind: "proxy", ID: 11}, model.AgentTransportHTTPLegacy)
-				require.True(t, ok)
-				require.Equal(t, "api-key", row.Identity)
-				answer = request(http.MethodPost, "/api/v2/forward/agent/rules-"+mode)
-				require.Equal(t, http.StatusNoContent, answer.Code)
-				_, ok = loadRow(t, db, agentcontrol.AgentNode{Kind: "forward", ID: 11}, model.AgentTransportHTTPLegacy)
-				require.True(t, ok, "the forward flag picks the node kind")
-				require.NoError(t, db.Where("1 = 1").Delete(&model.AgentTransport{}).Error)
-				SetDefault(newTestRecorder(db, &clock{now: time.Now().UTC()}))
-			}
-
-			// UniProxy is never signalled or refused, whatever the mode.
-			answer = request(http.MethodGet, "/api/v2/server/UniProxy/config-"+mode)
-			require.Equal(t, http.StatusNoContent, answer.Code)
-			require.Empty(t, answer.Header().Get("Deprecation"))
-			_, ok := loadRow(t, db, agentcontrol.AgentNode{Kind: "proxy", ID: 11}, model.AgentTransportUniProxy)
-			require.True(t, ok)
-		})
-	}
-
-	// An unauthenticated request is served (and answered by its handler)
-	// but not recorded.
 	router := gin.New()
-	router.GET("/ws", LegacyHTTP(Policy{Mode: config.AgentMTLSPreferred}, model.AgentTransportWebSocket), authenticate(false), serve)
-	router.GET("/plain", LegacyHTTP(Policy{Mode: config.AgentMTLSPreferred}, model.AgentTransportHTTPLegacy), func(c *gin.Context) {
-		c.Set("node_id", "not-a-number")
-		c.Status(http.StatusOK)
-	})
-	recorder := httptest.NewRecorder()
-	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/ws", nil))
-	require.Equal(t, http.StatusUnauthorized, recorder.Code)
-	require.Equal(t, "true", recorder.Header().Get("Deprecation"))
-	recorder = httptest.NewRecorder()
-	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/plain", nil))
-	require.Equal(t, http.StatusOK, recorder.Code)
-	// WebSocket sessions are recorded by their handler, not here.
-	recorder = httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/ws", nil)
-	req.Header.Set("X-API-Key", "key")
-	router.ServeHTTP(recorder, req)
-	_, ok := loadRow(t, db, agentcontrol.AgentNode{Kind: "proxy", ID: 11}, model.AgentTransportWebSocket)
-	require.False(t, ok)
+	router.GET("/api/v2/server/UniProxy/config", ThirdPartyHTTP(model.AgentTransportUniProxy), authenticate, func(c *gin.Context) { c.Status(http.StatusNoContent) })
+	request := func(key string) *httptest.ResponseRecorder {
+		recorder := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/api/v2/server/UniProxy/config", nil)
+		req.Header.Set("X-API-Key", key)
+		router.ServeHTTP(recorder, req)
+		return recorder
+	}
+
+	require.Equal(t, http.StatusUnauthorized, request("wrong").Code)
+	_, ok := loadRow(t, db, agentcontrol.AgentNode{Kind: "proxy", ID: 11}, model.AgentTransportUniProxy)
+	require.False(t, ok, "a refused request is not a sighting")
+
+	answer := request("key")
+	require.Equal(t, http.StatusNoContent, answer.Code)
+	require.Empty(t, answer.Header().Get("Deprecation"), "UniProxy is never signalled")
+	_, ok = loadRow(t, db, agentcontrol.AgentNode{Kind: "proxy", ID: 11}, model.AgentTransportUniProxy)
+	require.True(t, ok)
 }
 
 func TestContextNodeID(t *testing.T) {
@@ -644,7 +534,7 @@ func TestInventoryCertificateStateAndRenewal(t *testing.T) {
 			seedCertificates(t, db, now)
 			require.NoError(t, db.Create(&model.Node{ID: 5, Name: "disabled-after-expiry", APIKey: "k5", Status: model.NodeStatusDisabled}).Error)
 
-			inventory, err := Build(context.Background(), db, Policy{Mode: config.AgentMTLSRequired}, Options{Now: now})
+			inventory, err := Build(context.Background(), db, Options{Now: now})
 			require.NoError(t, err)
 			byNode := inventoryByNode(inventory)
 
@@ -705,11 +595,10 @@ func TestInventoryNodeFilter(t *testing.T) {
 	db := openSQLite(t)
 	now := time.Date(2026, 10, 2, 12, 0, 0, 0, time.UTC)
 	seedInventory(t, db, now)
-	policy := PolicyFrom(config.AgentControlConfig{})
-	all, err := Build(context.Background(), db, policy, Options{Now: now})
+	all, err := Build(context.Background(), db, Options{Now: now})
 	require.NoError(t, err)
 
-	one, err := Build(context.Background(), db, policy, Options{Now: now, Nodes: []agentcontrol.AgentNode{{Kind: "proxy", ID: 2}}})
+	one, err := Build(context.Background(), db, Options{Now: now, Nodes: []agentcontrol.AgentNode{{Kind: "proxy", ID: 2}}})
 	require.NoError(t, err)
 	require.Len(t, one.Nodes, 1)
 	require.Equal(t, "proxy-2", one.Nodes[0].Node)
@@ -719,7 +608,7 @@ func TestInventoryNodeFilter(t *testing.T) {
 	require.Equal(t, all.Summary.ReadyForRequired, one.Summary.ReadyForRequired)
 	require.Equal(t, all.Summary.RequiredReasons, one.Summary.RequiredReasons)
 
-	several, err := Build(context.Background(), db, policy, Options{Now: now, Nodes: []agentcontrol.AgentNode{
+	several, err := Build(context.Background(), db, Options{Now: now, Nodes: []agentcontrol.AgentNode{
 		{Kind: "forward", ID: 1}, {Kind: "proxy", ID: 1}, {Kind: "proxy", ID: 77},
 	}})
 	require.NoError(t, err)
@@ -781,11 +670,10 @@ func TestInventoryConnection(t *testing.T) {
 	db := openSQLite(t)
 	now := time.Date(2026, 10, 2, 12, 0, 0, 0, time.UTC)
 	seedInventory(t, db, now)
-	policy := PolicyFrom(config.AgentControlConfig{})
 
 	// The CLI reads no sessions: node 1's stream sighting (five minutes old,
 	// inside the window) decides, over its newer UniProxy pulls.
-	inventory, err := Build(context.Background(), db, policy, Options{Now: now})
+	inventory, err := Build(context.Background(), db, Options{Now: now})
 	require.NoError(t, err)
 	byNode := inventoryByNode(inventory)
 	require.Equal(t, ConnectionMTLSStream, byNode["proxy-1"].Connection.Type)
@@ -796,14 +684,14 @@ func TestInventoryConnection(t *testing.T) {
 
 	// The API reads this process's sessions: with none, proxy-1's closed
 	// stream is no connection (it still pulls UniProxy).
-	inventory, err = Build(context.Background(), db, policy, Options{Now: now, Sessions: func() []agentstreams.Session { return nil }})
+	inventory, err = Build(context.Background(), db, Options{Now: now, Sessions: func() []agentstreams.Session { return nil }})
 	require.NoError(t, err)
 	byNode = inventoryByNode(inventory)
 	require.Equal(t, ConnectionThirdParty, byNode["proxy-1"].Connection.Type)
 	require.Equal(t, ConnectionOffline, byNode["proxy-4"].Connection.Type)
 
 	// An mTLS session.
-	inventory, err = Build(context.Background(), db, policy, Options{Now: now, Sessions: func() []agentstreams.Session {
+	inventory, err = Build(context.Background(), db, Options{Now: now, Sessions: func() []agentstreams.Session {
 		return []agentstreams.Session{{
 			Node: agentcontrol.AgentNode{Kind: "proxy", ID: 1}, Transport: agentstreams.TransportControlStream,
 			Identity: "spiffe://anixops/prod/agent/proxy-1", Authentication: agentstreams.AuthenticationMTLS, LastSeen: now,
