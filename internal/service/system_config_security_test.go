@@ -66,3 +66,13 @@ func TestEmailConfigPasswordIsMaskedInsideTheValue(t *testing.T) {
 	require.False(t, ok)
 	require.Equal(t, `{"password":"********"}`, other)
 }
+
+// The scheduler's last-run days are program state: the administrator's list
+// leaves them out, the settings stay listed.
+func TestInternalSystemConfigKeys(t *testing.T) {
+	require.True(t, IsInternalSystemConfigKey("scheduler.forward_flow_reset.last_day"))
+	require.True(t, IsInternalSystemConfigKey(" Scheduler.node_monthly_reset.last_day "))
+	require.False(t, IsInternalSystemConfigKey("app.subscribe_domains"))
+	require.False(t, IsInternalSystemConfigKey("traffic.destinations.enabled"))
+	require.False(t, IsInternalSystemConfigKey(""))
+}

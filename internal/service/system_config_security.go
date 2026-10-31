@@ -26,6 +26,23 @@ var sensitiveSystemConfigMarkers = []string{
 	"client_secret",
 }
 
+// internalSystemConfigPrefixes are keys the program keeps for itself (the
+// scheduler's last-run days): rows of the table, but not settings. The
+// administrator's list leaves them out; a read or write by key still works.
+var internalSystemConfigPrefixes = []string{"scheduler."}
+
+// IsInternalSystemConfigKey reports whether key is program state rather than a
+// setting an administrator can usefully change.
+func IsInternalSystemConfigKey(key string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(key))
+	for _, prefix := range internalSystemConfigPrefixes {
+		if strings.HasPrefix(normalized, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
 func IsSensitiveSystemConfigKey(key string) bool {
 	normalized := strings.ToLower(strings.TrimSpace(key))
 	if normalized == "" {

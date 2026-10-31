@@ -9303,6 +9303,32 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v5/settings/catalog": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "The settings the console offers as options (internal/settingscatalog), in data.items: key, section (general, data), kind (domains, switch, choice, link), choices, min, max, default, value (the value in force now, for a switch or a choice), link (the console route of a link) and sensitive. Any administrator.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "The options of the system settings",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/internal/auth-keys": {
             "post": {
                 "security": [

@@ -18,17 +18,27 @@ export default {
   },
   adminSettings: {
     title: '系统设置',
-    subtitle: '订阅域名、配置项、备份与审计日志。',
+    subtitle: '订阅域名、数据保留、备份、审计日志与高级配置项。',
     navLabel: '设置分区',
     loading: '正在加载…',
     sections: {
       general: '通用',
+      data: '数据与保留',
       backup: '备份',
       audit: '审计日志',
       packages: '内置包',
+      advanced: '高级',
       about: '关于'
     },
     general: {
+      links: {
+        title: '其他常用设置',
+        description: '这些设置在各自的页面里，点击直接打开。',
+        mail: '邮件通知',
+        mailHint: 'SMTP 发信服务器与测试',
+        security: '登录安全',
+        securityHint: '管理员两步验证'
+      },
       subscription: {
         title: '订阅域名',
         description: '用户订阅链接和 managed-config 输出使用的域名。',
@@ -43,7 +53,17 @@ export default {
         loadFailed: '无法加载订阅域名',
         saveFailed: '无法保存订阅域名',
         saved: '订阅域名已保存'
-      },
+      }
+    },
+    data: {
+      title: '数据与保留',
+      description: '决定记录哪些统计，以及保留多久。',
+      footer: '关闭后立即停止记录，已保留的记录不会删除。完整的统计图表在“监控 → 目的地”。',
+      days: '{days} 天'
+    },
+    advanced: {
+      warningTitle: '仅用于排查问题',
+      warning: '日常选项都在其他分区里。这里是以键值保存的全部系统配置，改错可能让功能异常；调度器的内部记录不会显示。',
       configs: {
         title: '配置项',
         description: '以键值保存的全部系统配置；敏感值只显示为 ********。',

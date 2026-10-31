@@ -854,6 +854,7 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		panelStatus := handler.NewPanelStatusHandler()
 		v5.GET("/panel/status", panelStatus.Status)
 		v5.POST("/panel/certificates/retry", panelStatus.RetryCertificates)
+		v5.GET("/settings/catalog", handler.NewSettingsCatalogHandler().List)
 		backups := handler.NewBackupsHandler()
 		v5.GET("/backups", backups.List)
 		v5.POST("/backups", backups.Create)

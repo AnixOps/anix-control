@@ -21,7 +21,7 @@ export const DATA_TABLE_PAGES = [
   'src/views/admin/nodes/NodeServicesSection.vue',
   // U7: settings, subscription groups, notifications, security
   'src/views/admin/System.vue',
-  'src/views/admin/system/SettingsGeneral.vue',
+  'src/views/admin/system/SettingsAdvanced.vue',
   'src/views/admin/system/SettingsBackup.vue',
   'src/views/admin/system/SettingsAudit.vue',
   'src/views/admin/Subscriptions.vue',
