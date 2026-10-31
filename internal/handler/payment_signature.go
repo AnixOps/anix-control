@@ -1,24 +1,15 @@
 package handler
 
 import (
-	"bytes"
-	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"log"
-	"net/http"
-	"net/url"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/AnixOps/anix-control/v5/internal/model"
 )
 
 // 验签相关错误
@@ -131,121 +122,4 @@ func computeHMACSHA256(message, secret string) string {
 	return hex.EncodeToString(mac.Sum(nil))
 }
 
-// paypalSignatureHeaders 聚合 PayPal 回调用于验签的传输头。
-type paypalSignatureHeaders struct {
-	AuthAlgo         string
-	CertURL          string
-	TransmissionID   string
-	TransmissionSig  string
-	TransmissionTime string
-}
-
 // paypalHTTPClient 用于 PayPal API 调用，带超时防止回调阻塞。
-var paypalHTTPClient = &http.Client{Timeout: 10 * time.Second}
-
-func paypalAPIBase(sandbox bool) string {
-	if sandbox {
-		return "https://api-m.sandbox.paypal.com"
-	}
-	return "https://api-m.paypal.com"
-}
-
-// verifyPayPalSignatureRemote 调用 PayPal verify-webhook-signature API 校验回调。
-func verifyPayPalSignatureRemote(ctx context.Context, cfg *model.PayPalConfig, h paypalSignatureHeaders, body []byte) error {
-	token, err := paypalAccessToken(ctx, cfg)
-	if err != nil {
-		return fmt.Errorf("paypal token: %w", err)
-	}
-
-	// webhook_event 必须为原始 JSON 对象，故用 RawMessage 保留原文。
-	reqBody := map[string]any{
-		"auth_algo":         h.AuthAlgo,
-		"cert_url":          h.CertURL,
-		"transmission_id":   h.TransmissionID,
-		"transmission_sig":  h.TransmissionSig,
-		"transmission_time": h.TransmissionTime,
-		"webhook_id":        cfg.WebhookID,
-		"webhook_event":     json.RawMessage(body),
-	}
-	payload, err := json.Marshal(reqBody)
-	if err != nil {
-		return err
-	}
-
-	base := paypalAPIBase(cfg.SandboxMode)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		base+"/v1/notifications/verify-webhook-signature", bytes.NewReader(payload))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
-
-	resp, err := paypalHTTPClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer closePayPalResponseBody(resp)
-
-	respBody, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("paypal verify status %d: %s", resp.StatusCode, string(respBody))
-	}
-
-	var result struct {
-		VerificationStatus string `json:"verification_status"`
-	}
-	if err := json.Unmarshal(respBody, &result); err != nil {
-		return err
-	}
-	if result.VerificationStatus != "SUCCESS" {
-		return errSignatureMismatch
-	}
-	return nil
-}
-
-// paypalAccessToken 用 client_credentials 换取 PayPal OAuth2 访问令牌。
-func paypalAccessToken(ctx context.Context, cfg *model.PayPalConfig) (string, error) {
-	form := url.Values{}
-	form.Set("grant_type", "client_credentials")
-
-	base := paypalAPIBase(cfg.SandboxMode)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		base+"/v1/oauth2/token", strings.NewReader(form.Encode()))
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.SetBasicAuth(cfg.ClientID, cfg.ClientSecret)
-
-	resp, err := paypalHTTPClient.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer closePayPalResponseBody(resp)
-
-	respBody, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("paypal oauth status %d: %s", resp.StatusCode, string(respBody))
-	}
-
-	var tokenResp struct {
-		AccessToken string `json:"access_token"`
-	}
-	if err := json.Unmarshal(respBody, &tokenResp); err != nil {
-		return "", err
-	}
-	if tokenResp.AccessToken == "" {
-		return "", errors.New("empty paypal access token")
-	}
-	return tokenResp.AccessToken, nil
-}
-
-func closePayPalResponseBody(resp *http.Response) {
-	if resp == nil || resp.Body == nil {
-		return
-	}
-	if err := resp.Body.Close(); err != nil {
-		log.Printf("PayPal response body close failed: %v", err)
-	}
-}

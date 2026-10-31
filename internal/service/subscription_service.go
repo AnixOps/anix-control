@@ -1085,6 +1085,10 @@ func (s *SubscriptionService) nodeProtocolToParsedNode(node *model.Node, protoco
 	if parsed.Type == string(model.ProtocolIWAN) {
 		applyIWANUser(parsed, ctx)
 	}
+	if parsed.Type == string(model.ProtocolANX) {
+		applyANXUser(parsed, ctx)
+		parsed.PublicKey = anxServerPublicKey(s.db, node.ID)
+	}
 	// After the WireGuard step, which derives the server public key from it.
 	stripServerPrivateKeys(parsed.Settings)
 

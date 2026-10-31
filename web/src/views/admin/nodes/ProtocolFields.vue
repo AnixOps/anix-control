@@ -31,6 +31,16 @@
             :data-testid="`protocol-field-${field.key}`"
             @update:model-value="value => update(field, value)"
           />
+          <UiTextField
+            v-else-if="field.kind === 'list'"
+            :model-value="listText(field)"
+            size="md"
+            :label="labelOf(field)"
+            :help="helpOf(field)"
+            :placeholder="field.placeholder || ''"
+            :data-testid="`protocol-field-${field.key}`"
+            @update:model-value="value => update(field, splitList(value))"
+          />
           <UiPasswordField
             v-else-if="field.kind === 'password'"
             :model-value="String(readField(modelValue, field))"
@@ -113,6 +123,8 @@ const selectValue = (field) => {
   const value = readField(props.modelValue, field)
   return value === '' ? NONE : value
 }
+const splitList = text => String(text || '').split(/[,\s]+/).filter(Boolean)
+const listText = field => [].concat(readField(props.modelValue, field)).join(',')
 const optionsOf = field => field.options.map(value => ({
   value: value === '' ? NONE : value,
   label: value === '' ? t(`${K}.none`) : value

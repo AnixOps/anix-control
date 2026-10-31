@@ -32,9 +32,21 @@ const (
 
 // StatsService 统计服务 (带缓存)
 type StatsService struct {
-	db           *gorm.DB
-	userService  *UserService
-	orderService *OrderService
+	db          *gorm.DB
+	userService *UserService
+}
+
+// DashboardContributor fills a part of the dashboard statistics.
+// todayStart and monthStart are the local day and month boundaries the
+// dashboard uses.
+type DashboardContributor func(db *gorm.DB, stats *DashboardStats, todayStart, monthStart time.Time) error
+
+var dashboardContributors []DashboardContributor
+
+// RegisterDashboardContributor adds a contributor. Call it from an init
+// function: the list is not guarded.
+func RegisterDashboardContributor(contribute DashboardContributor) {
+	dashboardContributors = append(dashboardContributors, contribute)
 }
 
 // DashboardStats 仪表盘统计数据
@@ -99,9 +111,8 @@ func ResetStatsServiceForTest() {
 func NewStatsService() *StatsService {
 	if statsServiceInstance == nil {
 		statsServiceInstance = &StatsService{
-			db:           database.GetDB(),
-			userService:  NewUserService(),
-			orderService: NewOrderService(),
+			db:          database.GetDB(),
+			userService: NewUserService(),
 		}
 	}
 	return statsServiceInstance
@@ -275,33 +286,12 @@ func (s *StatsService) fetchDashboardFromDB() (*DashboardStats, error) {
 		return nil, err
 	}
 
-	// 订单统计
-	if err := checkQuery("count total orders", s.db.Model(&model.Order{}).Count(&stats.TotalOrders)); err != nil {
-		return nil, err
-	}
-	if err := checkQuery("count pending orders", s.db.Model(&model.Order{}).Where("status = 0").Count(&stats.PendingOrders)); err != nil {
-		return nil, err
-	}
-	if err := checkQuery("count paid orders", s.db.Model(&model.Order{}).Where("status IN (1, 3)").Count(&stats.PaidOrders)); err != nil {
-		return nil, err
-	}
-	if err := checkQuery("sum total revenue", s.db.Model(&model.Order{}).
-		Where("status IN (1, 3)").
-		Select("COALESCE(SUM(total_amount), 0)").
-		Scan(&stats.TotalRevenue)); err != nil {
-		return nil, err
-	}
-	if err := checkQuery("sum monthly income", s.db.Model(&model.Order{}).
-		Where("status IN (1, 3) AND paid_at >= ?", monthStart.Unix()).
-		Select("COALESCE(SUM(total_amount), 0)").
-		Scan(&stats.MonthlyIncome)); err != nil {
-		return nil, err
-	}
-	if err := checkQuery("sum today income", s.db.Model(&model.Order{}).
-		Where("status IN (1, 3) AND paid_at >= ?", todayStart.Unix()).
-		Select("COALESCE(SUM(total_amount), 0)").
-		Scan(&stats.TodayIncome)); err != nil {
-		return nil, err
+	// Contributed statistics: the order and income figures come from the
+	// order feature (RegisterDashboardContributor).
+	for _, contribute := range dashboardContributors {
+		if err := contribute(s.db, stats, todayStart, monthStart); err != nil {
+			return nil, err
+		}
 	}
 
 	// 节点统计

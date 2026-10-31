@@ -96,7 +96,7 @@ func (h *NodeGroupsHandler) groupError(c *gin.Context, err error) {
 
 // List godoc
 // @Summary List node groups
-// @Description The live node groups by sort and id, each with its defaults, protocol template, subscription groups, token reset and expiry times, and its live and pending nodes counted. Never the join token.
+// @Description The live node groups by sort and id, each with its defaults, token reset and expiry times, and its live and pending nodes counted. Never the join token.
 // @Tags Kernel
 // @Produce json
 // @Security BearerAuth
@@ -135,7 +135,7 @@ func (h *NodeGroupsHandler) Get(c *gin.Context) {
 
 // EnsureDefault godoc
 // @Summary Make sure the panel has a node group
-// @Description Creates the default node group when no live node group exists, and answers the first group otherwise (created tells which): a proxy group named "默认" whose template is one VLESS Reality protocol on a random port from 20000 to 40000, attached to the default subscription group (created when the panel has none), so the first node needs no input. Idempotent and safe to call concurrently. 409 ca_kek_missing without module_runtime.ca_kek. Audited as a node group create when it creates.
+// @Description Creates the default node group when no live node group exists, and answers the first group otherwise (created tells which): a group named "默认" with the default settings, so the first node needs no input; nodes that join it are clean (no protocol). Idempotent and safe to call concurrently. 409 ca_kek_missing without module_runtime.ca_kek. Audited as a node group create when it creates.
 // @Tags Kernel
 // @Produce json
 // @Security BearerAuth
@@ -157,7 +157,7 @@ func (h *NodeGroupsHandler) EnsureDefault(c *gin.Context) {
 
 // Nodes godoc
 // @Summary List a node group's nodes
-// @Description The group's live nodes (every node of the group but the rejected ones), newest first, for the join dialog that waits for machines: id, node (proxy-<id> or forward-<id>), kind, name, host, approval (approved or pending), online (enabled and checked in within five minutes, as the node list computes it), last_seen, agent_version and created_at. Never a credential. Any administrator.
+// @Description The group's live nodes (every node of the group but the rejected ones), newest first, for the join dialog that waits for machines: id, node (proxy-<id>), name, host, approval (approved or pending), online (enabled and checked in within five minutes, as the node list computes it), last_seen, agent_version and created_at. Never a credential. Any administrator.
 // @Tags Kernel
 // @Produce json
 // @Security BearerAuth
@@ -180,7 +180,7 @@ func (h *NodeGroupsHandler) Nodes(c *gin.Context) {
 
 // Create godoc
 // @Summary Create a node group
-// @Description A node group with a new join token (sealed under module_runtime.ca_kek, which must be set). Its defaults (rate, tags, monthly_limit_bytes, reset_day, sort) are copied to every node the token creates; protocol_template lists the protocols each new node gets (empty: the node only runs the network model, ANX) (tls none, or reality for vless; port or port_range) and subscription_group_ids the subscription groups they join. The answer does not carry the token: GET .../command shows the install command. Audited.
+// @Description A node group with a new join token (sealed under module_runtime.ca_kek, which must be set). Its defaults (rate, tags, monthly_limit_bytes, reset_day, sort) are copied to every node the token creates; Nodes that join are clean: they have no protocol. The answer does not carry the token: GET .../command shows the install command. Audited.
 // @Tags Kernel
 // @Accept json
 // @Produce json
@@ -204,7 +204,7 @@ func (h *NodeGroupsHandler) Create(c *gin.Context) {
 
 // Update godoc
 // @Summary Update a node group
-// @Description Replaces every field of a group but its token. Nodes that joined keep what they got; the defaults and the template apply to later joins. Audited.
+// @Description Replaces every field of a group but its token. Nodes that joined keep what they got; the defaults apply to later joins. Audited.
 // @Tags Kernel
 // @Accept json
 // @Produce json
@@ -317,7 +317,8 @@ func (h *NodeGroupsHandler) ResetToken(c *gin.Context) {
 	kernelData(c, http.StatusOK, group)
 }
 
-// parseNodeRef reads the node of the path, proxy-<id> or forward-<id>. The
+// parseNodeRef reads the node of the path, proxy-<id> (or forward-<id> for
+// an Ansible-managed forward host). The
 // router names the segment :id, as /kernel/nodes/:id/traffic does.
 func parseNodeRef(c *gin.Context) (agentcontrol.AgentNode, bool) {
 	node, err := agentcontrol.ParseAgentNode(c.Param("id"))
@@ -334,7 +335,7 @@ func parseNodeRef(c *gin.Context) (agentcontrol.AgentNode, bool) {
 // @Tags Kernel
 // @Produce json
 // @Security BearerAuth
-// @Param id path string true "proxy-<id> or forward-<id>"
+// @Param id path string true "proxy-<id>"
 // @Success 200 {object} map[string]any
 // @Router /api/v4/kernel/nodes/{id}/approve [post]
 func (h *NodeGroupsHandler) ApproveNode(c *gin.Context) {
@@ -356,7 +357,7 @@ func (h *NodeGroupsHandler) ApproveNode(c *gin.Context) {
 // @Tags Kernel
 // @Produce json
 // @Security BearerAuth
-// @Param id path string true "proxy-<id> or forward-<id>"
+// @Param id path string true "proxy-<id>"
 // @Success 200 {object} map[string]any
 // @Router /api/v4/kernel/nodes/{id}/reject [post]
 func (h *NodeGroupsHandler) RejectNode(c *gin.Context) {

@@ -133,10 +133,8 @@ hand):
 switch, when the token ends and the row actions **接入节点** (the dialog for
 that group), **编辑** and **删除** (refused while the group has nodes). The
 edit sheet holds the defaults the nodes copy (rate, tags, monthly limit and
-reset day, sort), the token's validity, the node cap, approval, the
-subscription groups and the protocol template: each protocol's type, name,
-transport, TLS (none, or Reality for VLESS), fixed port or a range, and the
-Reality site. A changed template applies to machines that join afterwards.
+reset day, sort), the token's validity, the node cap and approval. A node
+that joins is clean, without protocols; they are added on the node page.
 
 ### Using The API
 
@@ -148,16 +146,8 @@ The console uses the same routes
    ```sh
    curl -fsS -X POST https://panel.example.com/api/v4/kernel/node-groups \
      -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' -d '{
-       "name": "HK", "kind": "proxy", "rate": 1, "tags": ["hk"],
-       "require_approval": false, "max_nodes": 0,
-       "subscription_group_ids": [1],
-       "protocol_template": [
-         {"name": "VLESS Reality", "type": "vless", "port": 443, "tls": "reality",
-          "reality": {"server_name": "www.example.com", "dest": "www.example.com:443"},
-          "settings": {"flow": "xtls-rprx-vision"}},
-         {"name": "SS 2022", "type": "shadowsocks", "port_range": [20000, 40000],
-          "settings": {"method": "2022-blake3-aes-128-gcm"}}
-       ]}'
+       "name": "HK", "rate": 1, "tags": ["hk"],
+       "require_approval": false, "max_nodes": 0}'
    ```
 
 2. Show its command (super administrators; every read is in the operation
@@ -203,31 +193,14 @@ What Control does with a join, in one transaction:
 2. A machine that lost its local state (a reinstall, `uninstall --purge`)
    [rejoins](#rejoining) its earlier node when the rule holds.
 3. Otherwise it creates the node: the name and host above, the group's
-   rate, tags, monthly traffic limit and reset day and sort, and, in a
-   proxy group, the template's protocols with their own secrets and ports,
-   in the group's subscription groups.
+   rate, tags, monthly traffic limit and reset day and sort. The node has no
+   protocol.
 4. It issues the node's certificate (enrollment method `join_token`) and
    writes `agent_join` to the operation log; after the commit every
    administrator gets a notification (in-app, e-mail when configured,
    Telegram when bound): `节点已接入：hk-01 (proxy-12)`, or `节点待审批：...`.
 
-**Protocol templates.** Each entry of `protocol_template` is one protocol
-every new node of the group gets. Control generates each node's secrets:
-the Reality key pair and short ID, the Shadowsocks 2022 server key, the
-WireGuard server key pair; a template that sets one is refused.
-
-| Field | Meaning |
-|---|---|
-| `name` | the protocol's name (default: its type) |
-| `type` | `vless`, `vmess`, `shadowsocks` or `wireguard` in this release |
-| `port` or `port_range` | a fixed port, or `[from, to]`: a random port per node, distinct from the node's other protocols. Control cannot see which ports are busy on the machine; a port in use shows in the node's runtime health, and you edit it |
-| `transport` | `tcp` (default), `ws`, `grpc`, `h2`, `httpupgrade` for VLESS and VMess; Reality runs on `tcp`, `grpc` and `h2` |
-| `tls` | `none` (default) or `reality` (VLESS). `acme` and `self_signed` need certificates on the node and come in a later release |
-| `reality` | `server_name`, `dest` (default `<server_name>:443`), `fingerprint` (default `chrome`) |
-| `settings`, `transport_settings` | JSON objects copied to the protocol (for example `flow`, a Shadowsocks `method`, a WebSocket `path`) |
-
-Changing a group's template applies to later joins; nodes that joined keep
-their protocols.
+**Clean nodes.** A node group has no protocol template: a node that joins has no protocol and only runs the network model (ANX). Protocols are added on the node page.
 
 **The token.** The command can be shown again at any time (owner decision
 D8): Control keeps the token's SHA-256 and a copy sealed with AES-256-GCM
@@ -751,7 +724,7 @@ split or an identity cutover left unfinished) with what clears each.
 
 - The console's pages for node groups (接入节点, the 节点组 tab, the list of
   pending nodes): use the API above until they ship.
-- Protocol templates with `tls` `acme` or `self_signed`, and the types that
+- The protocol types that
   need a certificate on the node (Trojan, Hysteria2, TUIC, AnyTLS).
 - Deleting a rejected node: rejecting disables it and revokes its
   certificates; the node row stays until node deletion becomes a soft
