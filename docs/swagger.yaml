@@ -1453,7 +1453,7 @@ info:
     url: https://opensource.org/licenses/MIT
   termsOfService: https://github.com/AnixOps/anix-control
   title: AnixOps Control API
-  version: 5.0.0-rc.24
+  version: 5.0.0-rc.25
 paths:
   /admin/agent/execute:
     post:
