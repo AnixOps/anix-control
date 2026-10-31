@@ -91,6 +91,13 @@
           />
         </template>
       </div>
+      <ProtocolFields
+        v-if="protocol.type !== 'wireguard'"
+        :model-value="fieldModel(protocol)"
+        :sections="['settings', 'transport_settings']"
+        :data-testid="`template-fields-${index}`"
+        @update:model-value="value => patch(index, fieldChanges(value))"
+      />
       <details class="template-card__advanced">
         <summary>{{ t('admin.nodes.groupForm.template.advanced') }}</summary>
         <UiTextarea
@@ -140,6 +147,7 @@ import UiSegmentedControl from '@/ui/UiSegmentedControl.vue'
 import UiSelect from '@/ui/UiSelect.vue'
 import UiTextarea from '@/ui/UiTextarea.vue'
 import UiTextField from '@/ui/UiTextField.vue'
+import ProtocolFields from './ProtocolFields.vue'
 import { useAppI18n } from '@/composables/useAppI18n'
 import {
   REALITY_TRANSPORTS, TEMPLATE_TRANSPORTS, TEMPLATE_TYPES, adaptProtocol, blankProtocol, protocolProblems
@@ -181,6 +189,30 @@ function portError(protocol) {
 
 function jsonError(problem) {
   return problem ? t(`admin.nodes.groupForm.template.jsonErrors.${problem}`) : ''
+}
+
+// ProtocolFields edits the parsed settings and transport settings of a
+// template protocol; the JSON under 高级 stays the same text.
+function parseObject(text) {
+  try {
+    const value = JSON.parse(text || '{}')
+    return value && typeof value === 'object' && !Array.isArray(value) ? value : {}
+  } catch {
+    return {}
+  }
+}
+function fieldModel(protocol) {
+  return {
+    type: protocol.type,
+    tls: protocol.tls === 'reality' ? 2 : 0,
+    transport: protocol.transport,
+    settings: parseObject(protocol.settingsText),
+    transport_settings: parseObject(protocol.transportSettingsText)
+  }
+}
+const textOf = value => (Object.keys(value || {}).length ? JSON.stringify(value) : '')
+function fieldChanges(value) {
+  return { settingsText: textOf(value.settings), transportSettingsText: textOf(value.transport_settings) }
 }
 
 // `adapt` re-reads the pieces that depend on each other (the transports of a
