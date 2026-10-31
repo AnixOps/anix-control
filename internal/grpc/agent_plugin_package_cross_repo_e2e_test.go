@@ -152,7 +152,7 @@ func TestAgentPluginPackageCrossRepositoryE2E(t *testing.T) {
 	// to one second, keeping this release gate deterministic without changing
 	// the production heartbeat contract.
 	agentv1pb.RegisterAgentControlServiceServer(grpcServer, &crossRepositoryFastHeartbeatServer{
-		delegate: controlgrpc.NewAgentControlGRPCServer(manager),
+		delegate: controlgrpc.NewMetadataAuthControlServer(manager),
 	})
 	serverErr := serveCrossRepositoryGRPCServer(grpcServer, listener)
 	t.Cleanup(func() { stopCrossRepositoryGRPCServer(t, grpcServer, serverErr) })
