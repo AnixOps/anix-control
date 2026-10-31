@@ -345,4 +345,19 @@ func TestNetworkNodeSummaryFromStatus(t *testing.T) {
 	require.True(t, node.GetNode().GetReported())
 	require.True(t, node.GetNode().GetApplied())
 	require.Equal(t, f.clock.Now().UnixMilli(), node.GetNode().GetReportedAtUnixMs())
+
+	// The node list has it too, though it never joined the forward
+	// inventory: a route detail shows its hops' reports from that list.
+	nodes, err := f.service.ListNodes(f.ctx, NodeFilter{})
+	require.NoError(t, err)
+	var listed *forwardv1.NodeSummary
+	for _, summary := range nodes {
+		if summary.GetNodeRef() == proxy.String() {
+			listed = summary
+		}
+	}
+	require.NotNil(t, listed, "proxy-21 is on the network model")
+	require.True(t, listed.GetReported())
+	require.True(t, listed.GetApplied())
+	require.False(t, listed.GetInInventory())
 }
