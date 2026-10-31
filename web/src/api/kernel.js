@@ -49,21 +49,6 @@ export async function getKernelNodeAssignments(nodeID) {
   return unwrap(await v3({ url: `/nodes/${nodeID}/assignments`, method: 'get' }))
 }
 
-export async function upsertKernelNodeAssignment(nodeID, assignment) {
-  return unwrap(await v3({
-    url: `/nodes/${nodeID}/assignments`,
-    method: 'put',
-    data: assignment
-  }))
-}
-
-export async function deleteKernelNodeAssignment(nodeID, assignmentID) {
-  return unwrap(await v3({
-    url: `/nodes/${nodeID}/assignments/${assignmentID}`,
-    method: 'delete'
-  }))
-}
-
 // Restarts a built-in package's host: the only installation action (the
 // built-in packages are installed, upgraded and enabled at every start).
 export async function restartKernelInstallation(installationID, idempotencyKey) {
@@ -160,92 +145,6 @@ export async function resolveKernelAccess({ userID, scopeID, planID }) {
   return unwrap(await v3({ url: '/access-groups/resolve', method: 'get', params }))
 }
 
-export async function getKernelTopologies() {
-  return unwrap(await v3({ url: '/topologies', method: 'get' }))
-}
-
-export async function createKernelTopology(input) {
-  return unwrap(await v3({ url: '/topologies', method: 'post', data: input }))
-}
-
-// Deleting a topology answers { topology, deleted, deployment }: deleted is
-// true when it was deleted at once (200); otherwise (202) deployment is the
-// teardown that removes its active revision from the nodes and deletes it
-// when it succeeds.
-export async function deleteKernelTopology(topologyID) {
-  return unwrap(await v3({ url: `/topologies/${topologyID}`, method: 'delete' }))
-}
-
-export async function getKernelTopologyRevisions(topologyID) {
-  return unwrap(await v3({ url: `/topologies/${topologyID}/revisions`, method: 'get' }))
-}
-
-export async function getKernelTopologyRevision(topologyID, revisionID) {
-  return unwrap(await v3({ url: `/topologies/${topologyID}/revisions/${revisionID}`, method: 'get' }))
-}
-
-export async function validateKernelTopology(input) {
-  return unwrap(await v3({ url: '/topologies/validate', method: 'post', data: input }))
-}
-
-export async function createKernelTopologyRevision(topologyID, input) {
-  return unwrap(await v3({ url: `/topologies/${topologyID}/revisions`, method: 'post', data: input }))
-}
-
-export async function getKernelDeployments() {
-  return unwrap(await v3({ url: '/deployments', method: 'get' }))
-}
-
-export async function planKernelDeployment(input) {
-  return unwrap(await v3({ url: '/deployments', method: 'post', data: input }))
-}
-
-export async function getKernelDeploymentStatus(deploymentID) {
-  return unwrap(await v3({ url: `/deployments/${deploymentID}`, method: 'get' }))
-}
-
-export async function applyKernelDeployment(deploymentID) {
-  return unwrap(await v3({ url: `/deployments/${deploymentID}/apply`, method: 'post' }))
-}
-
-export async function rollbackKernelDeployment(deploymentID) {
-  return unwrap(await v3({ url: `/deployments/${deploymentID}/rollback`, method: 'post' }))
-}
-
-export async function previewKernelTopologyDeployment(topologyID, revisionID, options = {}) {
-  return unwrap(await v3({
-    url: `/topologies/${topologyID}/revisions/${revisionID}/preview`,
-    method: 'post',
-    data: {
-      rollout_group: options.rolloutGroup || '',
-      failure_policy: options.failurePolicy || 'stop_and_rollback'
-    }
-  }))
-}
-
-export async function diagnoseKernelTopologyDeployment(topologyID, revisionID, options = {}) {
-  return unwrap(await v3({
-    url: `/topologies/${topologyID}/revisions/${revisionID}/diagnose`,
-    method: 'post',
-    data: {
-      rollout_group: options.rolloutGroup || '',
-      failure_policy: options.failurePolicy || 'stop_and_rollback'
-    }
-  }))
-}
-
-export async function getKernelOperations() {
-  return unwrap(await v3({ url: '/operations', method: 'get' }))
-}
-
-export async function cancelKernelOperation(operationID) {
-  return operationResult(await v3({
-    url: `/operations/${operationID}/cancel`,
-    method: 'post',
-    rawResponse: true,
-  }))
-}
-
 export async function getKernelExtensions() {
   return unwrap(await v3({ url: '/extensions', method: 'get' }))
 }
@@ -253,15 +152,12 @@ export async function getKernelExtensions() {
 // The agent transport inventory (A2-6), /api/v4: each node's last agent
 // transport, agent version, certificate (state, last_certificate with
 // not_after / renew_after / revoked_at / revoke_reason) and connection type.
-// The argument is legacyOnly (a boolean: the nodes agent_control.mtls:
-// required would refuse) or { legacyOnly, nodes }, where nodes are
-// "proxy-<id>" / "forward-<id>" names (at most 200, one comma separated
-// `node` value) and the answer keeps those nodes only.
-export async function getKernelAgentTransports(options = false) {
-  const { legacyOnly = false, nodes = [] } = typeof options === 'object' && options !== null ? options : { legacyOnly: Boolean(options) }
+// The argument is { nodes }, where nodes are "proxy-<id>" / "forward-<id>"
+// names (at most 200, one comma separated `node` value) and the answer keeps
+// those nodes only.
+export async function getKernelAgentTransports({ nodes = [] } = {}) {
   const config = { url: '/kernel/agents/transports', method: 'get' }
   const params = {}
-  if (legacyOnly) params.legacy_only = true
   const names = [...new Set((Array.isArray(nodes) ? nodes : []).map(String).filter(Boolean))]
   if (names.length) params.node = names.join(',')
   if (Object.keys(params).length) config.params = params
@@ -485,14 +381,13 @@ export async function getKernelInstallReadiness() {
 // that runs its install command a node of the group.
 //
 // The list answers { groups: [...] }: each group with its defaults,
-// protocol_template, subscription_group_ids, token_reset_at,
-// token_expires_at, token_expired and nodes { live, pending }. Never a token.
+// token_reset_at, token_expires_at, token_expired and nodes { live, pending }. Never a token.
 export async function listKernelNodeGroups() {
   return unwrap(await v4({ url: '/kernel/node-groups', method: 'get' }))
 }
 
 // The first group of a panel needs no input: this creates the default group
-// (一个 VLESS Reality 协议，随机端口，加入默认订阅分组) when none exists and
+// (默认设置，接入的节点保持干净，没有协议) when none exists and
 // answers the first group otherwise: { group, created }. 409 ca_kek_missing
 // without module_runtime.ca_kek.
 export async function ensureKernelDefaultNodeGroup() {
@@ -500,9 +395,9 @@ export async function ensureKernelDefaultNodeGroup() {
 }
 
 // input: { name, max_nodes, require_approval,
-// rate, tags, monthly_limit_bytes, reset_day, sort, protocol_template,
-// subscription_group_ids, token_expires_at }. Errors: 400 invalid_request
-// (the message names the field, e.g. "protocol_template[0]: ..."), 409
+// rate, tags, monthly_limit_bytes, reset_day, sort,
+// token_expires_at }. Errors: 400 invalid_request
+// (the message names the field), 409
 // name_taken, 409 ca_kek_missing.
 export async function createKernelNodeGroup(input) {
   return unwrap(await v4({ url: '/kernel/node-groups', method: 'post', data: input }))

@@ -16,6 +16,7 @@ import (
 //
 //   - a Panabit iWAN node is an iwan://user:password@host:port?mtu=&encrypt=#name
 //     link;
+//   - an ANX-A node is an anx:// link (anxLink); other formats skip ANX;
 //   - a node reached through an iWAN line carries via=<line name> in its
 //     link's query (after the base64 body of a vmess:// link).
 //
@@ -41,9 +42,12 @@ func (f *AnixOpsFormatter) Format(nodes []*model.ParsedNode, ctx *model.Template
 	for _, node := range nodes {
 		var link string
 		var err error
-		if node.Type == "iwan" {
+		switch node.Type {
+		case "iwan":
 			link = iwanLink(node)
-		} else {
+		case "anx":
+			link = anxLink(node)
+		default:
 			link, err = f.links.link(node, ctx)
 		}
 		if err != nil || link == "" {
@@ -74,6 +78,27 @@ func iwanLink(node *model.ParsedNode) string {
 		host = "[" + host + "]"
 	}
 	return fmt.Sprintf("iwan://%s@%s:%d?%s#%s", login, host, node.Port, query.Encode(), url.PathEscape(node.Name))
+}
+
+// anxLink is an ANX-A node as an anx:// link:
+// anx://<user key>@host:port?sni=&pk=<server public key>&alpn=&fp=chrome#name.
+// A node whose server has not reported its public key has no link yet.
+func anxLink(node *model.ParsedNode) string {
+	if node.Server == "" || node.Port <= 0 || node.Password == "" || node.PublicKey == "" || node.ServerName == "" {
+		return ""
+	}
+	query := url.Values{}
+	query.Set("sni", node.ServerName)
+	query.Set("pk", node.PublicKey)
+	if node.ALPN != "" {
+		query.Set("alpn", node.ALPN)
+	}
+	query.Set("fp", "chrome")
+	host := node.Server
+	if strings.Contains(host, ":") {
+		host = "[" + host + "]"
+	}
+	return fmt.Sprintf("anx://%s@%s:%d?%s#%s", node.Password, host, node.Port, query.Encode(), url.PathEscape(node.Name))
 }
 
 // withVia adds via=<name> to a link's query, before its fragment.

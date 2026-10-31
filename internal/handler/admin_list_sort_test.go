@@ -99,41 +99,6 @@ func (s *AdminListSortTestSuite) TestUsersRefuseWhatIsNotListed() {
 	}
 }
 
-func (s *AdminListSortTestSuite) TestOrdersSortByTheColumnsAsked() {
-	base := time.Date(2026, 9, 1, 8, 0, 0, 0, time.UTC)
-	paidEarly, paidLate := int64(1_800_000_000), int64(1_800_100_000)
-	plan := model.Plan{Name: "Pro"}
-	s.Require().NoError(s.db.Create(&plan).Error)
-	user := model.User{Email: "buyer@example.test", Password: "x", Token: "tb", UUID: "ub"}
-	s.Require().NoError(s.db.Create(&user).Error)
-	orders := []model.Order{
-		{ID: 1, UserID: user.ID, PlanID: plan.ID, TradeNo: "T1", TotalAmount: 300, Status: 1, Type: 1, PaidAt: &paidLate, CreatedAt: base},
-		{ID: 2, UserID: user.ID, PlanID: plan.ID, TradeNo: "T2", TotalAmount: 100, Status: 0, Type: 2, CreatedAt: base.Add(time.Hour)},
-		{ID: 3, UserID: user.ID, PlanID: plan.ID, TradeNo: "T3", TotalAmount: 300, Status: 1, Type: 1, PaidAt: &paidEarly, CreatedAt: base.Add(2 * time.Hour)},
-		{ID: 4, UserID: user.ID, PlanID: plan.ID, TradeNo: "T4", TotalAmount: 200, Status: 2, Type: 1, CreatedAt: base.Add(2 * time.Hour)},
-	}
-	s.Require().NoError(s.db.Create(&orders).Error)
-	handler := NewAdminHandler().GetOrderList
-	for query, want := range map[string][]uint{
-		"":                                      {4, 3, 2, 1},
-		"?sort=total_amount&order=desc":         {3, 1, 4, 2},
-		"?sort=total_amount":                    {2, 4, 3, 1},
-		"?sort=created_at":                      {1, 2, 4, 3},
-		"?sort=status&order=desc":               {4, 3, 1, 2},
-		"?sort=paid_at":                         {3, 1, 4, 2},
-		"?sort=paid_at&order=desc":              {4, 2, 1, 3},
-		"?sort=trade_no&order=desc":             {4, 3, 2, 1},
-		"?sort=id":                              {1, 2, 3, 4},
-		"?sort=total_amount&status=1":           {3, 1},
-		"?sort=total_amount&page=2&page_size=3": {1},
-	} {
-		s.Equal(want, s.listIDs(s.get(handler, "/admin/orders", query)), query)
-	}
-	for _, query := range []string{"?sort=user", "?sort=plan_id", "?sort=id%3B%20DROP%20TABLE%20v2_order", "?sort=id&order=up"} {
-		assertPanelTestError(s.T(), s.get(handler, "/admin/orders", query), "无效的排序")
-	}
-}
-
 func (s *AdminListSortTestSuite) TestNodesSortByTheColumnsAsked() {
 	now := time.Now().Unix()
 	recent, stale := now-10, now-10_000

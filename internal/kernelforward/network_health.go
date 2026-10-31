@@ -9,6 +9,7 @@ import (
 	forwardv1 "github.com/AnixOps/anix-control/sdk/api/forward/v1"
 	networkv1 "github.com/AnixOps/anix-control/sdk/api/network/v1"
 	"github.com/AnixOps/anix-control/v5/internal/model"
+	"github.com/AnixOps/anix-control/v5/internal/networkmodel"
 	"github.com/AnixOps/anix-control/v5/internal/nodeentry"
 	"google.golang.org/protobuf/encoding/protojson"
 	"gorm.io/gorm"
@@ -106,7 +107,64 @@ func networkRouteHealth(db *gorm.DB, route *forwardv1.Route) ([]*forwardv1.Upstr
 			out = append(out, networkHealth(entry, status)...)
 		}
 	}
-	return out, nil
+	return append(out, networkHopHealth(db, route, forward)...), nil
+}
+
+var componentHealthStates = map[networkv1.ComponentState]forwardv1.HealthState{
+	networkv1.ComponentState_COMPONENT_STATE_APPLIED:  forwardv1.HealthState_HEALTH_STATE_HEALTHY,
+	networkv1.ComponentState_COMPONENT_STATE_DEGRADED: forwardv1.HealthState_HEALTH_STATE_UNHEALTHY,
+}
+
+// networkHopHealth answers the health of each hop's own links: only the
+// entries check targets, so a relay's or the exit's health is what its
+// device reports of the route's transports (the link into the hop and the
+// one out of it) and, on the last hop, of the exit egress, with the
+// round trip the device measured. Address is the component id and Port 0.
+func networkHopHealth(db *gorm.DB, route *forwardv1.Route, forward networkmodel.Forward) []*forwardv1.UpstreamHealth {
+	var refs []string
+	for _, hop := range route.GetHops() {
+		refs = append(refs, hop.GetNodeRefs()...)
+	}
+	devices, err := loadNetworkDevices(db, refs)
+	if err != nil {
+		return nil
+	}
+	var out []*forwardv1.UpstreamHealth
+	last := len(route.GetHops()) - 1
+	for index, hop := range route.GetHops() {
+		wanted := map[string]bool{}
+		if index > 0 && index-1 < len(forward.Segments) {
+			wanted[forward.Segments[index-1]] = true
+		}
+		if index < len(forward.Segments) {
+			wanted[forward.Segments[index]] = true
+		}
+		if index == last && forward.Egress != "" {
+			wanted[forward.Egress] = true
+		}
+		delete(wanted, "")
+		for _, ref := range hop.GetNodeRefs() {
+			device := devices[ref]
+			if device.Status == nil {
+				continue
+			}
+			for _, component := range device.Status.GetComponents() {
+				if !wanted[component.GetId()] {
+					continue
+				}
+				state := componentHealthStates[component.GetState()]
+				if state == forwardv1.HealthState_HEALTH_STATE_UNSPECIFIED {
+					state = forwardv1.HealthState_HEALTH_STATE_UNHEALTHY
+				}
+				out = append(out, &forwardv1.UpstreamHealth{
+					RouteId: route.GetId(), HopIndex: uint32(index), Address: component.GetId(), // #nosec G115 -- bounded by MaxHops.
+					State: state, RttUs: component.GetRttMs() * 1000, NodeRef: ref,
+					CheckedAtUnixMs: device.StatusAt.UnixMilli(),
+				})
+			}
+		}
+	}
+	return out
 }
 
 // deviceAddresses answers a device's public addresses, in their canonical
@@ -172,4 +230,45 @@ func entryNAT(db *gorm.DB, refs []string) map[string][]model.NodeEntry {
 		out[byID[id]] = entries
 	}
 	return out
+}
+
+// fillNetworkReports answers the nodes that run the network model with its
+// report: their NetworkStatus stands in for the forward.v1 report an ANX
+// device never sends. A forward.v1 report that is newer wins.
+func fillNetworkReports(db *gorm.DB, summaries []*forwardv1.NodeSummary) error {
+	refs := make([]string, 0, len(summaries))
+	for _, summary := range summaries {
+		refs = append(refs, summary.GetNodeRef())
+	}
+	devices, err := loadNetworkDevices(db, refs)
+	if err != nil {
+		return err
+	}
+	for _, summary := range summaries {
+		device, ok := devices[summary.GetNodeRef()]
+		if !ok || device.Status == nil || device.StatusAt.IsZero() {
+			continue
+		}
+		at := device.StatusAt.UnixMilli()
+		if summary.GetReported() && summary.GetReportedAtUnixMs() >= at {
+			continue
+		}
+		status := device.Status
+		failed := 0
+		for _, component := range status.GetComponents() {
+			switch component.GetState() {
+			case networkv1.ComponentState_COMPONENT_STATE_APPLIED, networkv1.ComponentState_COMPONENT_STATE_DEGRADED:
+			default:
+				failed++
+			}
+		}
+		summary.Reported, summary.ReportedAtUnixMs = true, at
+		summary.ReportedGeneration, summary.ReportedStateHash = status.GetGeneration(), status.GetPlanHash()
+		summary.Applied = failed == 0 && status.GetGeneration() >= device.Generation
+		summary.HopErrors = nonNegative32(failed)
+		if summary.GetDesiredGeneration() == 0 {
+			summary.DesiredGeneration = device.Generation
+		}
+	}
+	return nil
 }

@@ -26,7 +26,7 @@ import (
 var (
 	// ErrNotFound: no live node group with that id.
 	ErrNotFound = errors.New("node group not found")
-	// ErrInvalid: a group or template field is invalid; the error says
+	// ErrInvalid: a group field is invalid; the error says
 	// which.
 	ErrInvalid = errors.New("invalid node group")
 	// ErrNameTaken: a live node group has the name.
@@ -42,9 +42,6 @@ var (
 	ErrJoinRejected = errors.New("join rejected")
 	// ErrInvalidJoin: a join request field is malformed.
 	ErrInvalidJoin = errors.New("invalid join request")
-	// ErrJoinTemplate: the group's protocol template no longer builds a
-	// valid protocol (a subscription group or a setting changed meanwhile).
-	ErrJoinTemplate = errors.New("the node group's protocol template is invalid")
 	// ErrNodeNotFound: no node with that name.
 	ErrNodeNotFound = errors.New("node not found")
 	// ErrNotPending: the node is not pending approval.
@@ -69,7 +66,6 @@ const (
 	AuditActionNodeApprove        = "node_approve"
 	AuditActionNodeReject         = "node_reject"
 	auditTargetProxyNode          = "proxy_node"
-	auditTargetForwardNode        = "forward_node"
 	auditJoinRejectedActorUnknown = "agent:unknown"
 )
 

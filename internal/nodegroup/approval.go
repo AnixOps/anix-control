@@ -43,15 +43,6 @@ func pendingNode(tx *gorm.DB, node agentcontrol.AgentNode) (string, error) {
 			return "", ErrNodeNotFound
 		}
 		name, approval = rows[0].Name, rows[0].Approval
-	case agentcontrol.NodeKindForward:
-		var rows []model.ForwardNode
-		if err := locked.Select("id", "name", "approval").Where("id = ?", node.ID).Limit(1).Find(&rows).Error; err != nil {
-			return "", err
-		}
-		if len(rows) == 0 {
-			return "", ErrNodeNotFound
-		}
-		name, approval = rows[0].Name, rows[0].Approval
 	default:
 		return "", ErrNodeNotFound
 	}
@@ -63,7 +54,7 @@ func pendingNode(tx *gorm.DB, node agentcontrol.AgentNode) (string, error) {
 
 func nodeTable(node agentcontrol.AgentNode) (any, string) {
 	if node.Kind == agentcontrol.NodeKindForward {
-		return &model.ForwardNode{}, auditTargetForwardNode
+		return &model.ForwardNode{}, "forward_node"
 	}
 	return &model.Node{}, auditTargetProxyNode
 }
@@ -98,8 +89,7 @@ func (s *Service) Approve(ctx context.Context, node agentcontrol.AgentNode, acto
 	return decision, nil
 }
 
-// Reject rejects a pending node: the node is disabled (a proxy node's
-// status, a forward node's enabled flag), marked rejected, so it no longer
+// Reject rejects a pending node: the node is disabled (its status), marked rejected, so it no longer
 // counts toward its group, and its certificates, enrollments and link
 // certificates are revoked; its open stream ends at the next heartbeat.
 // The node row stays: deleting it is the node soft delete of the next
@@ -116,9 +106,6 @@ func (s *Service) Reject(ctx context.Context, node agentcontrol.AgentNode, actor
 		}
 		table, target := nodeTable(node)
 		updates := map[string]any{"approval": model.NodeApprovalRejected, "status": model.NodeStatusDisabled}
-		if node.Kind == agentcontrol.NodeKindForward {
-			updates = map[string]any{"approval": model.NodeApprovalRejected, "enabled": false, "status": model.ForwardNodeStatusOffline}
-		}
 		if err := tx.Model(table).Where("id = ?", node.ID).Updates(updates).Error; err != nil {
 			return err
 		}

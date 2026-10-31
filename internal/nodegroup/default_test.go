@@ -1,8 +1,6 @@
 package nodegroup
 
 import (
-	"encoding/json"
-	"strconv"
 	"testing"
 	"time"
 
@@ -11,43 +9,18 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The default template is a template ParseTemplate accepts, so the first
-// group of a panel can never be one a join refuses.
-func TestDefaultTemplateIsValid(t *testing.T) {
-	encoded, err := json.Marshal(DefaultTemplate())
-	require.NoError(t, err)
-	entries, err := ParseTemplate(encoded)
-	require.NoError(t, err)
-	require.Len(t, entries, 1)
-	entry := entries[0]
-	assert.Equal(t, "vless", entry.Type)
-	assert.Equal(t, TemplateTLSReality, entry.TLS)
-	assert.Equal(t, []int{DefaultPortRangeFrom, DefaultPortRangeTo}, entry.PortRange)
-	require.NotNil(t, entry.Reality)
-	assert.Equal(t, DefaultRealityServerName, entry.Reality.ServerName)
-	assert.Equal(t, DefaultRealityServerName+":443", entry.Reality.Dest)
-}
-
 func TestEnsureDefaultCreatesTheFirstGroup(t *testing.T) {
 	forEachDatabase(t, func(t *testing.T, f *fixture) {
 		ctx := t.Context()
-		// A fresh panel seeds a subscription group named "default"; the
-		// fixture's Standard and Premium are renamed away from the names
-		// the default group looks for.
-		require.NoError(t, f.db.Model(&model.SubscriptionGroup{}).Where("id = ?", f.subscriptions[0].ID).Update("name", "default").Error)
 
 		view, created, err := f.svc.EnsureDefault(ctx, f.admin)
 		require.NoError(t, err)
 		assert.True(t, created)
 		assert.Equal(t, DefaultGroupName, view.Name)
 		assert.False(t, view.RequireApproval)
-		assert.Equal(t, []uint{f.subscriptions[0].ID}, view.SubscriptionGroupIDs, "the panel's seeded default subscription group")
-		require.Len(t, view.ProtocolTemplate, 1)
-		assert.Equal(t, DefaultRealityServerName, view.ProtocolTemplate[0].Reality.ServerName)
 		assert.Len(t, f.audits(t, AuditActionCreate), 1)
 
-		// A machine that joins gets one Reality protocol on a port of the
-		// range, in the subscription group.
+		// A machine that joins is a clean node: no protocol.
 		revealed, err := f.svc.RevealToken(ctx, view.ID, f.admin)
 		require.NoError(t, err)
 		joined, err := f.join(t, JoinRequest{
@@ -55,15 +28,9 @@ func TestEnsureDefaultCreatesTheFirstGroup(t *testing.T) {
 			PublicAddresses: []string{"203.0.113.5"},
 		})
 		require.NoError(t, err)
-		var protocols []model.NodeProtocol
-		require.NoError(t, f.db.Preload("SubscriptionGroups").Where("node_id = ?", joined.Node.ID).Find(&protocols).Error)
-		require.Len(t, protocols, 1)
-		assert.Equal(t, model.ProtocolVLESS, protocols[0].Type)
-		assert.Equal(t, 2, protocols[0].TLS)
-		assert.GreaterOrEqual(t, protocols[0].Port, DefaultPortRangeFrom)
-		assert.LessOrEqual(t, protocols[0].Port, DefaultPortRangeTo)
-		require.Len(t, protocols[0].SubscriptionGroups, 1)
-		assert.Equal(t, f.subscriptions[0].ID, protocols[0].SubscriptionGroups[0].ID)
+		var protocols int64
+		require.NoError(t, f.db.Model(&model.NodeProtocol{}).Where("node_id = ?", joined.Node.ID).Count(&protocols).Error)
+		assert.Zero(t, protocols)
 
 		// Called again it creates nothing and answers the same group.
 		again, created, err := f.svc.EnsureDefault(ctx, f.admin)
@@ -74,34 +41,6 @@ func TestEnsureDefaultCreatesTheFirstGroup(t *testing.T) {
 		var count int64
 		require.NoError(t, f.db.Model(&model.NodeGroup{}).Count(&count).Error)
 		assert.EqualValues(t, 1, count)
-	})
-}
-
-func TestEnsureDefaultCreatesTheSubscriptionGroupWhenThereIsNone(t *testing.T) {
-	forEachDatabase(t, func(t *testing.T, f *fixture) {
-		ctx := t.Context()
-		// Other subscription groups exist, but none is the default one: a
-		// "vip" group must not receive the first node.
-		require.NoError(t, f.db.Model(&model.SubscriptionGroup{}).Where("id = ?", f.subscriptions[0].ID).Update("name", "vip").Error)
-
-		view, created, err := f.svc.EnsureDefault(ctx, f.admin)
-		require.NoError(t, err)
-		assert.True(t, created)
-		require.Len(t, view.SubscriptionGroupIDs, 1)
-		var group model.SubscriptionGroup
-		require.NoError(t, f.db.First(&group, view.SubscriptionGroupIDs[0]).Error)
-		assert.Equal(t, DefaultSubscriptionGroupName, group.Name)
-		assert.Equal(t, 1, group.Enable)
-		assert.NotEqual(t, f.subscriptions[0].ID, group.ID)
-		assert.NotEqual(t, f.subscriptions[1].ID, group.ID)
-
-		// The preferred name wins over the seeded one.
-		require.NoError(t, f.svc.Delete(ctx, view.ID, f.admin))
-		require.NoError(t, f.db.Model(&model.SubscriptionGroup{}).Where("id = ?", f.subscriptions[1].ID).Update("name", "default").Error)
-		again, created, err := f.svc.EnsureDefault(ctx, f.admin)
-		require.NoError(t, err)
-		assert.True(t, created, "a deleted group's name and the panel's emptiness make a new default")
-		assert.Equal(t, []uint{group.ID}, again.SubscriptionGroupIDs)
 	})
 }
 
@@ -128,11 +67,9 @@ func TestEnsureDefaultNeedsTheKeyEncryptionKey(t *testing.T) {
 		_, created, err := f.svc.EnsureDefault(t.Context(), f.admin)
 		assert.ErrorIs(t, err, ErrNoKEK)
 		assert.False(t, created)
-		var groups, subscriptions int64
+		var groups int64
 		require.NoError(t, f.db.Model(&model.NodeGroup{}).Count(&groups).Error)
-		require.NoError(t, f.db.Model(&model.SubscriptionGroup{}).Where("name = ?", DefaultSubscriptionGroupName).Count(&subscriptions).Error)
-		assert.Zero(t, groups)
-		assert.Zero(t, subscriptions, "nothing is created when the group cannot be")
+		assert.Zero(t, groups, "nothing is created when the group cannot be")
 	})
 }
 
@@ -174,7 +111,6 @@ func TestNodesOfAGroup(t *testing.T) {
 		online := nodes[1]
 		assert.EqualValues(t, first.Node.ID, online.ID)
 		assert.Equal(t, first.Node.String(), online.Node)
-		assert.Equal(t, "proxy", online.Kind)
 		assert.Equal(t, "203.0.113.5", online.Host)
 		assert.Equal(t, model.NodeApprovalApproved, online.Approval)
 		assert.True(t, online.Online)
@@ -199,50 +135,35 @@ func TestNodesOfAGroup(t *testing.T) {
 	})
 }
 
-// A group lists the forward nodes it made before groups made regular
-// nodes only, beside its regular nodes, until they are converted.
-func TestNodesOfAGroupWithALegacyForwardNode(t *testing.T) {
+// A node that reported no version of its own shows the one its Agent said in
+// its newest stream.
+func TestNodesOfAGroupFillTheAgentVersion(t *testing.T) {
 	forEachDatabase(t, func(t *testing.T, f *fixture) {
 		ctx := t.Context()
 		group, token := f.createGroup(t, GroupInput{Name: "edge"})
 		joined, err := f.join(t, JoinRequest{Token: token, MachineFingerprint: fingerprint("p"), RequestedName: "edge-02",
-			PublicAddresses: []string{"203.0.113.8"}, AgentVersion: "v5.0.0"})
+			PublicAddresses: []string{"203.0.113.8"}})
 		require.NoError(t, err)
-		groupID := group.ID
-		legacy := model.ForwardNode{Name: "edge-01", Type: "exit", Host: "203.0.113.9", Port: 7000, Enabled: true,
-			NodeGroupID: &groupID, Approval: model.NodeApprovalApproved}
-		require.NoError(t, f.db.Create(&legacy).Error)
+		require.NoError(t, f.db.Model(&model.Node{}).Where("id = ?", joined.Node.ID).Update("server_version", nil).Error)
 
 		nodes, err := f.svc.Nodes(ctx, group.ID)
 		require.NoError(t, err)
-		require.Len(t, nodes, 2)
+		require.Len(t, nodes, 1)
 		assert.Equal(t, joined.Node.String(), nodes[0].Node)
-		assert.Equal(t, "proxy", nodes[0].Kind)
-		assert.Equal(t, "forward", nodes[1].Kind)
-		assert.Equal(t, "forward-"+strconv.FormatUint(uint64(legacy.ID), 10), nodes[1].Node)
-		assert.False(t, nodes[1].Online, "it has not connected")
-		view, err := f.svc.Get(ctx, group.ID)
-		require.NoError(t, err)
-		assert.Equal(t, NodeCounts{Live: 2}, view.Nodes)
+		assert.Empty(t, nodes[0].AgentVersion)
 
-		// Online once its Agent checked in; the version is the one of the
-		// Agent's newest stream.
 		now := f.clock.Now()
-		require.NoError(t, f.db.Model(&model.ForwardNode{}).Where("id = ?", legacy.ID).
-			Updates(map[string]any{"status": model.ForwardNodeStatusOnline, "last_check": now.Add(-30 * time.Second)}).Error)
 		require.NoError(t, f.db.Create(&model.AgentTransport{
-			NodeKind: "forward", NodeID: legacy.ID, Transport: model.AgentTransportMTLSStream, AgentVersion: "v5.0.2",
+			NodeKind: "proxy", NodeID: uint(joined.Node.ID), Transport: model.AgentTransportMTLSStream, AgentVersion: "v5.0.2",
 			FirstSeenAt: now, LastSeenAt: now,
 		}).Error)
 		nodes, err = f.svc.Nodes(ctx, group.ID)
 		require.NoError(t, err)
-		assert.True(t, nodes[1].Online)
-		assert.Equal(t, "v5.0.2", nodes[1].AgentVersion)
-		assert.Equal(t, "v5.0.0", nodes[0].AgentVersion, "a regular node reports its own")
+		assert.Equal(t, "v5.0.2", nodes[0].AgentVersion)
 
-		// Names stay unique across both kinds.
-		again, err := f.join(t, JoinRequest{Token: token, RequestedName: "edge-01", PublicAddresses: []string{"203.0.113.7"}})
+		// Names stay unique in the group.
+		again, err := f.join(t, JoinRequest{Token: token, RequestedName: "edge-02", PublicAddresses: []string{"203.0.113.7"}})
 		require.NoError(t, err)
-		assert.Equal(t, "edge-01-2", again.NodeName)
+		assert.Equal(t, "edge-02-2", again.NodeName)
 	})
 }

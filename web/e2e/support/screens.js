@@ -8,7 +8,6 @@ import apiTokens from '../fixtures/apiTokens.js'
 import claim from '../fixtures/claim.js'
 import coupons from '../fixtures/coupons.js'
 import dashboard from '../fixtures/dashboard.js'
-import deployments from '../fixtures/deployments.js'
 import forwardV4 from '../fixtures/forwardV4.js'
 import inviteCodes from '../fixtures/inviteCodes.js'
 import monitor from '../fixtures/monitor.js'
@@ -127,7 +126,6 @@ export const SCREENS = {
   'admin-telegram-test-limited': { fixture: notifications, scenario: 'telegramTestLimited' },
   'admin-monitor': { fixture: monitor, scenario: 'live' },
   'admin-monitor-node-traffic': { fixture: monitor, scenario: 'traffic' },
-  'admin-deployments': { fixture: deployments, scenario: 'topologies' }
 }
 
 const COMMON = {

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"math"
-	"sort"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -18,9 +17,11 @@ import (
 // Group field limits.
 const (
 	maxGroupName = 100
-	maxTags      = 16
-	maxTagRunes  = 32
-	maxRate      = 1000
+	// maxNodeNameRunes caps the name of a node a join creates.
+	maxNodeNameRunes = 64
+	maxTags          = 16
+	maxTagRunes      = 32
+	maxRate          = 1000
 	// maxTagsJSON is the width of v2_node.tags, which the group's tags are
 	// copied to.
 	maxTagsJSON = 255
@@ -41,12 +42,6 @@ type GroupInput struct {
 	// resets; 1 when absent.
 	ResetDay int `json:"reset_day"`
 	Sort     int `json:"sort"`
-	// ProtocolTemplate is the JSON list of template.go; empty for a node
-	// that only runs the network model (ANX).
-	ProtocolTemplate json.RawMessage `json:"protocol_template"`
-	// SubscriptionGroupIDs are the subscription groups the template's
-	// protocols join.
-	SubscriptionGroupIDs []uint `json:"subscription_group_ids"`
 	// TokenExpiresAt, when set, ends the token's use; it must be in the
 	// future.
 	TokenExpiresAt *time.Time `json:"token_expires_at"`
@@ -55,19 +50,17 @@ type GroupInput struct {
 // GroupView is a node group as the administrator API shows it: never the
 // token.
 type GroupView struct {
-	ID                   uint            `json:"id"`
-	Name                 string          `json:"name"`
-	MaxNodes             int             `json:"max_nodes"`
-	RequireApproval      bool            `json:"require_approval"`
-	Rate                 float64         `json:"rate"`
-	Tags                 []string        `json:"tags"`
-	MonthlyLimitBytes    int64           `json:"monthly_limit_bytes"`
-	ResetDay             int             `json:"reset_day"`
-	Sort                 int             `json:"sort"`
-	ProtocolTemplate     []TemplateEntry `json:"protocol_template"`
-	SubscriptionGroupIDs []uint          `json:"subscription_group_ids"`
-	TokenResetAt         time.Time       `json:"token_reset_at"`
-	TokenExpiresAt       *time.Time      `json:"token_expires_at"`
+	ID                uint       `json:"id"`
+	Name              string     `json:"name"`
+	MaxNodes          int        `json:"max_nodes"`
+	RequireApproval   bool       `json:"require_approval"`
+	Rate              float64    `json:"rate"`
+	Tags              []string   `json:"tags"`
+	MonthlyLimitBytes int64      `json:"monthly_limit_bytes"`
+	ResetDay          int        `json:"reset_day"`
+	Sort              int        `json:"sort"`
+	TokenResetAt      time.Time  `json:"token_reset_at"`
+	TokenExpiresAt    *time.Time `json:"token_expires_at"`
 	// TokenExpired is true once TokenExpiresAt has passed.
 	TokenExpired bool       `json:"token_expired"`
 	Nodes        NodeCounts `json:"nodes"`
@@ -84,16 +77,16 @@ type NodeCounts struct {
 
 // checked is a validated GroupInput in its stored form.
 type checked struct {
-	name, tags, template, subscriptionGroups string
-	maxNodes, resetDay, sort                 int
-	requireApproval                          bool
-	rate                                     float64
-	monthlyLimit                             int64
-	expiresAt                                *time.Time
+	name, tags               string
+	maxNodes, resetDay, sort int
+	requireApproval          bool
+	rate                     float64
+	monthlyLimit             int64
+	expiresAt                *time.Time
 }
 
-// check validates input against tx (the subscription groups must exist).
-func (s *Service) check(tx *gorm.DB, input GroupInput) (checked, error) {
+// check validates input.
+func (s *Service) check(input GroupInput) (checked, error) {
 	var out checked
 	out.name = strings.TrimSpace(input.Name)
 	if out.name == "" || utf8.RuneCountInString(out.name) > maxGroupName || hasControl(out.name) {
@@ -133,29 +126,6 @@ func (s *Service) check(tx *gorm.DB, input GroupInput) (checked, error) {
 		}
 		out.expiresAt = &expires
 	}
-	entries, err := ParseTemplate(input.ProtocolTemplate)
-	if err != nil {
-		return out, err
-	}
-	ids := uniqueIDs(input.SubscriptionGroupIDs)
-	if len(ids) > 0 {
-		var found int64
-		if err := tx.Model(&model.SubscriptionGroup{}).Where("id IN ?", ids).Count(&found).Error; err != nil {
-			return out, err
-		}
-		if found != int64(len(ids)) {
-			return out, invalid("subscription_group_ids names a subscription group that does not exist")
-		}
-	}
-	template, err := json.Marshal(entries)
-	if err != nil {
-		return out, err
-	}
-	subscriptionGroups, err := json.Marshal(ids)
-	if err != nil {
-		return out, err
-	}
-	out.template, out.subscriptionGroups = string(template), string(subscriptionGroups)
 	return out, nil
 }
 
@@ -188,19 +158,6 @@ func checkTags(tags []string) (string, error) {
 	return string(encoded), nil
 }
 
-func uniqueIDs(ids []uint) []uint {
-	out := make([]uint, 0, len(ids))
-	seen := map[uint]bool{}
-	for _, id := range ids {
-		if id != 0 && !seen[id] {
-			seen[id] = true
-			out = append(out, id)
-		}
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
-	return out
-}
-
 // nameTaken tells whether a live group other than id has name.
 func nameTaken(tx *gorm.DB, name string, id uint) (bool, error) {
 	var count int64
@@ -223,7 +180,7 @@ func (s *Service) Create(ctx context.Context, input GroupInput, actor Actor) (Gr
 	}
 	var group model.NodeGroup
 	err = s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		fields, err := s.check(tx, input)
+		fields, err := s.check(input)
 		if err != nil {
 			return err
 		}
@@ -238,7 +195,7 @@ func (s *Service) Create(ctx context.Context, input GroupInput, actor Actor) (Gr
 		}
 		now := s.now()
 		group = model.NodeGroup{
-			Name: fields.name, Kind: model.NodeGroupKindProxy, JoinTokenHash: hash, JoinTokenSealed: sealed, TokenResetAt: now,
+			Name: fields.name, JoinTokenHash: hash, JoinTokenSealed: sealed, TokenResetAt: now,
 			CreatedAt: now, UpdatedAt: now,
 		}
 		fields.apply(&group)
@@ -258,18 +215,18 @@ func (s *Service) Create(ctx context.Context, input GroupInput, actor Actor) (Gr
 func (c checked) apply(group *model.NodeGroup) {
 	group.Name, group.MaxNodes, group.RequireApproval, group.Rate = c.name, c.maxNodes, c.requireApproval, c.rate
 	group.Tags, group.MonthlyLimitBytes, group.ResetDay, group.Sort = c.tags, c.monthlyLimit, c.resetDay, c.sort
-	group.ProtocolTemplate, group.SubscriptionGroupIDs, group.TokenExpiresAt = c.template, c.subscriptionGroups, c.expiresAt
+	group.TokenExpiresAt = c.expiresAt
 }
 
 // Update replaces a group's fields but its token. Nodes that
-// joined keep what they got: a changed template applies to later joins.
+// joined keep what they got: changed defaults apply to later joins.
 func (s *Service) Update(ctx context.Context, id uint, input GroupInput, actor Actor) (GroupView, error) {
 	err := s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		group, err := lockGroup(tx, id)
 		if err != nil {
 			return err
 		}
-		fields, err := s.check(tx, input)
+		fields, err := s.check(input)
 		if err != nil {
 			return err
 		}
@@ -282,7 +239,7 @@ func (s *Service) Update(ctx context.Context, id uint, input GroupInput, actor A
 		group.UpdatedAt = s.now()
 		if err := tx.Model(&model.NodeGroup{}).Where("id = ?", id).Select(
 			"name", "max_nodes", "require_approval", "rate", "tags", "monthly_limit_bytes", "reset_day", "sort",
-			"protocol_template", "subscription_group_ids", "token_expires_at", "updated_at",
+			"token_expires_at", "updated_at",
 		).Updates(&group).Error; err != nil {
 			return err
 		}
@@ -429,7 +386,6 @@ func (s *Service) view(group model.NodeGroup, counts NodeCounts) GroupView {
 	view := GroupView{
 		ID: group.ID, Name: group.Name, MaxNodes: group.MaxNodes, RequireApproval: group.RequireApproval,
 		Rate: group.Rate, Tags: []string{}, MonthlyLimitBytes: group.MonthlyLimitBytes, ResetDay: group.ResetDay, Sort: group.Sort,
-		ProtocolTemplate: templateOf(group), SubscriptionGroupIDs: subscriptionGroupsOf(group),
 		TokenResetAt: group.TokenResetAt, TokenExpiresAt: group.TokenExpiresAt, Nodes: counts,
 		CreatedAt: group.CreatedAt, UpdatedAt: group.UpdatedAt,
 	}
@@ -438,24 +394,6 @@ func (s *Service) view(group model.NodeGroup, counts NodeCounts) GroupView {
 	}
 	view.TokenExpired = group.TokenExpiresAt != nil && !group.TokenExpiresAt.After(s.now())
 	return view
-}
-
-// templateOf decodes a group's stored template (checked when it was
-// stored).
-func templateOf(group model.NodeGroup) []TemplateEntry {
-	entries := []TemplateEntry{}
-	if group.ProtocolTemplate != "" {
-		_ = json.Unmarshal([]byte(group.ProtocolTemplate), &entries)
-	}
-	return entries
-}
-
-func subscriptionGroupsOf(group model.NodeGroup) []uint {
-	ids := []uint{}
-	if group.SubscriptionGroupIDs != "" {
-		_ = json.Unmarshal([]byte(group.SubscriptionGroupIDs), &ids)
-	}
-	return ids
 }
 
 // lockGroup loads a live group for update.
@@ -476,23 +414,31 @@ func liveNodes(tx *gorm.DB, group model.NodeGroup) *gorm.DB {
 	return tx.Model(&model.Node{}).Where("node_group_id = ? AND approval <> ?", group.ID, model.NodeApprovalRejected)
 }
 
-// liveForwardNodes is the same query of the group's forward nodes: those a
-// forward group made before groups made regular nodes only.
-func liveForwardNodes(tx *gorm.DB, group model.NodeGroup) *gorm.DB {
-	return tx.Model(&model.ForwardNode{}).Where("node_group_id = ? AND approval <> ?", group.ID, model.NodeApprovalRejected)
-}
-
 func countNodes(tx *gorm.DB, group model.NodeGroup) (NodeCounts, error) {
 	var counts NodeCounts
-	for _, query := range []func(*gorm.DB, model.NodeGroup) *gorm.DB{liveNodes, liveForwardNodes} {
-		var live, pending int64
-		if err := query(tx, group).Count(&live).Error; err != nil {
-			return NodeCounts{}, err
-		}
-		if err := query(tx, group).Where("approval = ?", model.NodeApprovalPending).Count(&pending).Error; err != nil {
-			return NodeCounts{}, err
-		}
-		counts.Live, counts.Pending = counts.Live+live, counts.Pending+pending
+	if err := liveNodes(tx, group).Count(&counts.Live).Error; err != nil {
+		return NodeCounts{}, err
+	}
+	if err := liveNodes(tx, group).Where("approval = ?", model.NodeApprovalPending).Count(&counts.Pending).Error; err != nil {
+		return NodeCounts{}, err
 	}
 	return counts, nil
+}
+
+func contains(values []string, value string) bool {
+	for _, candidate := range values {
+		if candidate == value {
+			return true
+		}
+	}
+	return false
+}
+
+func hasControl(value string) bool {
+	for _, r := range value {
+		if r < 0x20 || r == 0x7f {
+			return true
+		}
+	}
+	return false
 }

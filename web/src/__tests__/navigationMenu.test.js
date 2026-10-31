@@ -42,8 +42,7 @@ describe('navigation/menu.js: buildAdminMenu', () => {
     // 转发 (the forwarding area) needs the forward package's v4 API; the
     // flux-clone 转发 and 转发节点 were removed in v4.2 (F5d).
     expect(network.map(item => [item.id, item.to])).toEqual([
-      ['nodes', '/admin/nodes'],
-      ['deployments', '/admin/deployments']
+      ['nodes', '/admin/nodes']
     ])
     expect(ids(groups)).not.toContain('plugins')
   })
@@ -265,8 +264,7 @@ describe('forwarding area capability', () => {
     const withV4 = buildAdminMenu({ t, editionAllows: () => true, hasCapability: name => name === 'forward.v4' })
     for (const groups of [without, withV4]) {
       expect(network(groups).map(item => [item.id, item.label])).toEqual([
-        ['nodes', 'shell.admin.items.nodes'],
-        ['deployments', 'shell.admin.items.deployments']
+        ['nodes', 'shell.admin.items.nodes']
       ])
     }
     for (const path of ['/admin/forward/overview', '/admin/forward/routes/01J/edit', '/admin/forward/egress', '/admin/forward/inventory/forward-41']) {

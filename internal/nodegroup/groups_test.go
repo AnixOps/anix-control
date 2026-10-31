@@ -19,7 +19,6 @@ func TestGroupCRUDWithAPartialUniqueName(t *testing.T) {
 		created, err := f.svc.Create(ctx, GroupInput{
 			Name: " HK ", MaxNodes: 10, RequireApproval: true, Rate: &rate, Tags: []string{"hk", "iepl", "hk"},
 			MonthlyLimitBytes: 1 << 40, ResetDay: 15, Sort: 3,
-			SubscriptionGroupIDs: []uint{f.subscriptions[1].ID, f.subscriptions[0].ID, f.subscriptions[1].ID},
 		}, f.admin)
 		require.NoError(t, err)
 		assert.Equal(t, "HK", created.Name)
@@ -29,8 +28,6 @@ func TestGroupCRUDWithAPartialUniqueName(t *testing.T) {
 		assert.Equal(t, []string{"hk", "iepl"}, created.Tags)
 		assert.Equal(t, int64(1<<40), created.MonthlyLimitBytes)
 		assert.Equal(t, 15, created.ResetDay)
-		assert.Equal(t, []uint{f.subscriptions[0].ID, f.subscriptions[1].ID}, created.SubscriptionGroupIDs)
-		assert.Empty(t, created.ProtocolTemplate)
 		assert.Equal(t, f.clock.Now(), created.TokenResetAt.UTC())
 		assert.Nil(t, created.TokenExpiresAt)
 
@@ -46,7 +43,6 @@ func TestGroupCRUDWithAPartialUniqueName(t *testing.T) {
 		assert.Equal(t, 1.0, forward.Rate)
 		assert.Equal(t, 1, forward.ResetDay)
 		assert.Equal(t, []string{}, forward.Tags)
-		assert.Equal(t, []uint{}, forward.SubscriptionGroupIDs)
 
 		// Names are unique among live groups.
 		_, err = f.svc.Create(ctx, GroupInput{Name: "HK"}, f.admin)
@@ -65,7 +61,6 @@ func TestGroupCRUDWithAPartialUniqueName(t *testing.T) {
 		assert.Equal(t, "HK 2", updated.Name)
 		assert.False(t, updated.RequireApproval)
 		assert.Equal(t, 1.0, updated.Rate)
-		assert.Empty(t, updated.SubscriptionGroupIDs)
 		_, err = f.svc.Update(ctx, 4242, GroupInput{Name: "x"}, f.admin)
 		assert.ErrorIs(t, err, ErrNotFound)
 
@@ -85,7 +80,7 @@ func TestGroupCRUDWithAPartialUniqueName(t *testing.T) {
 
 		// The database enforces it too: a second live row with the name is
 		// refused, a deleted one is not.
-		duplicate := model.NodeGroup{Name: "HK 2", Kind: "proxy", JoinTokenHash: strings.Repeat("e", 64), JoinTokenSealed: "x", TokenResetAt: time.Now()}
+		duplicate := model.NodeGroup{Name: "HK 2", JoinTokenHash: strings.Repeat("e", 64), JoinTokenSealed: "x", TokenResetAt: time.Now()}
 		assert.Error(t, f.db.Create(&duplicate).Error, "the partial unique index refuses a second live name")
 
 		listed, err = f.svc.List(ctx)
@@ -120,10 +115,6 @@ func TestGroupValidation(t *testing.T) {
 		"empty tag":          {Name: "g", Tags: []string{" "}},
 		"too many tags":      {Name: "g", Tags: strings.Split("a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q", ",")},
 		"expired token":      {Name: "g", TokenExpiresAt: &past},
-		"missing subscription group": {
-			Name: "g", SubscriptionGroupIDs: []uint{4242},
-		},
-		"bad template": {Name: "g", ProtocolTemplate: rawJSON(t, []map[string]any{{"type": "hysteria2", "port": 443}})},
 	}
 	for name, input := range cases {
 		_, err := f.svc.Create(ctx, input, f.admin)

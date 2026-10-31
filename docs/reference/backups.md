@@ -8,9 +8,10 @@ scratch directory, and alerts when a bundle would not restore or when no
 verified bundle is recent. Restoring is a command on the server, run while
 Control is stopped; the console never restores.
 
-Backups need **SQLite**. On PostgreSQL every backup command, the API and the
-backup page say "backups need SQLite" and nothing is written: back the
-database up with `pg_dump` and keep `root.key` with it.
+Backups work on **SQLite** and on **PostgreSQL**. On PostgreSQL the database
+member of a bundle is a `pg_dump` archive and the machine Control runs on needs
+the PostgreSQL client tools (see [PostgreSQL](#postgresql)). Any other
+database driver answers "backups need SQLite or PostgreSQL" and writes nothing.
 
 Design: N32 and N33 in
 [`../design/single-binary/README.md`](../design/single-binary/README.md)
@@ -37,7 +38,8 @@ plain tar is readable with any tool) with these members, in this order:
 | Member | Content |
 |---|---|
 | `manifest.json` | What the bundle is (below) |
-| `database.sqlite` | A consistent snapshot of the SQLite database |
+| `database.sqlite` | A consistent snapshot of the SQLite database (a SQLite panel) |
+| `database.pgdump` | A `pg_dump` custom-format archive of the PostgreSQL database (a PostgreSQL panel) instead of `database.sqlite` |
 | `root.key` | The root key file of the data directory |
 | `config.yaml` | The configuration file Control loaded; absent when it loaded none |
 
@@ -47,6 +49,7 @@ plain tar is readable with any tool) with these members, in this order:
 |---|---|
 | `format` | `anixops.backup/v1` |
 | `program_version` | The Control version that wrote the bundle |
+| `database_kind` | `sqlite` or `postgres`; absent in bundles written before PostgreSQL backups, which are SQLite |
 | `schema_version` | The newest migration recorded in the snapshot (`0` for a database from before the migration runner, such as a 4.2.x one) |
 | `created_at` | When the snapshot was taken (UTC) |
 | `type` | `daily`, `pre-migration`, `manual` or `verify` |
@@ -86,6 +89,39 @@ that never replaces an existing bundle); any failure leaves neither a partial
 bundle nor the snapshot. A backup is refused when the file system has less
 than three times the database's size free.
 
+## PostgreSQL
+
+Control runs `pg_dump --format=custom --no-owner --no-acl` against the
+database it is configured with (`database.host`, `port`, `username`,
+`password`, `sslmode`, or the same taken from `database.dsn`); the password
+goes to the tool in `PGPASSWORD`, never on a command line.
+
+- **One consistent state.** Control opens a `REPEATABLE READ` transaction on a
+  connection of its own, exports its snapshot (`pg_export_snapshot()`) and
+  passes it to `pg_dump --snapshot`. The row counts in the manifest are read in
+  that same transaction, so they match the dump exactly while the panel keeps
+  writing.
+- **Client tools.** `pg_dump` and `pg_restore` must be on `PATH`, in the
+  server's major version or newer (`pg_dump` refuses an older client). Install
+  `postgresql-client`. When they are missing, creating or verifying a bundle
+  answers "PostgreSQL backups need the PostgreSQL client tools"; the
+  pre-migration backup is skipped with a log line instead of stopping the
+  start, and the `backup_stale` alert fires when no verified bundle remains.
+- **Verification** restores the dump into a scratch database
+  (`anix_verify_<random>`) next to the panel's, runs the same checks as for
+  SQLite (migrations, `root.key` pairs with the sealed data, row counts) and
+  drops it again. The database role therefore needs `CREATEDB`.
+- **Restore** (`anix-control backup restore <bundle>`, Control stopped) creates
+  the configured database when it does not exist, or uses an empty one, and
+  runs `pg_restore` into it as the configured role (objects are owned by that
+  role). A database that has tables is refused; with `--replace` it is first
+  renamed to `<name>_replaced_<UTC time>` (nothing is deleted, and
+  everything connected to it, Control included, must be stopped). The command
+  also needs the role to connect to the `postgres` maintenance database and to
+  create databases.
+- **Disk.** A backup is refused when the data directory has less than three
+  times the database's size free.
+
 ## When Control Backs Up
 
 | Type | When |
@@ -108,7 +144,9 @@ Control verifies a bundle by restoring it the way a restore would, into
    format `anixops.backup/v1`, listing `database.sqlite` and `root.key`.
 2. Every member the manifest lists is there with its size and SHA-256, and
    no other.
-3. The snapshot opens and `PRAGMA integrity_check` answers `ok`.
+3. The snapshot opens and `PRAGMA integrity_check` answers `ok` (a PostgreSQL
+   bundle: the dump restores into a scratch database, see
+   [PostgreSQL](#postgresql)).
 4. Its migration records match the manifest's `schema_version`, and this
    Control may open it: a database a newer Control migrated fails with the
    start's own message.
@@ -179,7 +217,7 @@ nothing.
 | `0` | Done |
 | `1` | The backup could not be written, or a verification found a problem |
 | `2` | A usage or configuration error |
-| `3` | Refused: PostgreSQL; Control is running (restore); a restore is running (the others); the target is not empty without `--replace`; the bundle's database was migrated by a newer Control |
+| `3` | Refused: a database driver backups do not cover; Control is running (restore); a restore is running (the others); the target is not empty without `--replace`; the bundle's database was migrated by a newer Control |
 
 ## Restore
 
