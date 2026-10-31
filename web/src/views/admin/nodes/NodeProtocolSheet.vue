@@ -72,24 +72,11 @@
           @generate-keypair="createWireGuardKeypair"
         />
         <NodeIwanFields v-if="form.type === 'iwan'" :iwan="editor.iwanForm" />
-        <NodeAnxFields v-if="form.type === 'anx'" :anx="editor.anxForm" />
 
-        <details v-if="form.type !== 'wireguard' && form.type !== 'iwan' && form.type !== 'anx'" class="node-protocol__advanced">
-          <summary>{{ t('admin.nodes.protocolForm.fields.settings') }}</summary>
-          <UiTextarea v-model="form.settings" class="node-protocol__json" :aria-label="t('admin.nodes.protocolForm.fields.settings')" :rows="4" placeholder="{}" spellcheck="false" />
-        </details>
-        <details v-if="form.tls > 0" class="node-protocol__advanced">
-          <summary>{{ t('admin.nodes.protocolForm.fields.tlsSettings') }}</summary>
-          <UiTextarea v-model="form.tls_settings" class="node-protocol__json" :aria-label="t('admin.nodes.protocolForm.fields.tlsSettings')" :rows="4" placeholder="{}" spellcheck="false" />
-        </details>
-        <details v-if="form.tls === 2" class="node-protocol__advanced">
-          <summary>{{ t('admin.nodes.protocolForm.fields.realitySettings') }}</summary>
-          <UiTextarea v-model="form.reality_settings" class="node-protocol__json" :aria-label="t('admin.nodes.protocolForm.fields.realitySettings')" :rows="4" placeholder="{}" spellcheck="false" />
-        </details>
-        <details v-if="form.transport !== 'tcp' && !hasFixedTransport(form.type)" class="node-protocol__advanced">
-          <summary>{{ t('admin.nodes.protocolForm.fields.transportSettings') }}</summary>
-          <UiTextarea v-model="form.transport_settings" class="node-protocol__json" :aria-label="t('admin.nodes.protocolForm.fields.transportSettings')" :rows="4" placeholder="{}" spellcheck="false" />
-        </details>
+        <ProtocolFields
+          v-if="form.type !== 'wireguard' && form.type !== 'iwan'"
+          v-model="editor.protocolModel.value"
+        />
       </div>
     </section>
     <p v-if="formError" class="form-error" role="alert" data-testid="protocol-form-error">{{ formError }}</p>
@@ -126,8 +113,9 @@
 </template>
 
 <script setup>
-// Add or edit one protocol of a node. JSON first (the whole protocol as one
-// object), with a visual form for the common fields and WireGuard.
+// Add or edit one protocol of a node. A form first (ProtocolFields shows the
+// fields of the chosen type, TLS mode and transport, like 3x-ui), with the
+// whole protocol as JSON on the advanced tab.
 // Saves with POST /admin/nodes/:id/protocols or PUT …/protocols/:protocol_id
 // (useProtocolEditor builds the same body as before the redesign).
 import { computed, ref, watch } from 'vue'
@@ -146,11 +134,11 @@ import UiTextarea from '@/ui/UiTextarea.vue'
 import { useToast } from '@/ui/composables/useToast'
 import { useAppI18n } from '@/composables/useAppI18n'
 import NodeIwanFields from './NodeIwanFields.vue'
-import NodeAnxFields from './NodeAnxFields.vue'
 import NodeWireGuardFields from './NodeWireGuardFields.vue'
+import ProtocolFields from './ProtocolFields.vue'
 import { readNodeApiError } from './nodeData'
 import { useNodeCopy } from './useNodeCopy'
-import { capabilitiesOf, hasFixedTransport, transportsFor } from './protocolCapabilities'
+import { capabilitiesOf, transportsFor } from './protocolCapabilities'
 import { JSON_PLACEHOLDER, PROTOCOL_TYPES, useProtocolEditor } from './useProtocolEditor'
 
 const props = defineProps({
@@ -172,8 +160,8 @@ const saving = ref(false)
 const formError = ref('')
 
 const modeOptions = computed(() => [
-  { value: 'json', label: 'JSON' },
-  { value: 'visual', label: t('admin.nodes.protocolForm.tabs.visual') }
+  { value: 'visual', label: t('admin.nodes.protocolForm.tabs.visual') },
+  { value: 'json', label: t('admin.nodes.protocolForm.tabs.json') }
 ])
 const typeLabel = type => ({ wireguard: 'WireGuard', iwan: 'Panabit iWAN', anx: 'ANX' }[type] || t(`networkPages.nodes.protocols.${type}`))
 const typeOptions = computed(() => PROTOCOL_TYPES.map(type => ({ value: type, label: typeLabel(type) })))

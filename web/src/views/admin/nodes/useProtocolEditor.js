@@ -5,6 +5,7 @@
 // the server keeps the stored value.
 import { computed, reactive, ref, watch } from 'vue'
 import { adaptTransport, capabilitiesOf, hasFixedTransport, transportProblem } from './protocolCapabilities'
+import { PROTOCOL_SECTIONS, defaultRealityFor, defaultSettingsFor } from './protocolFields'
 
 export const PROTOCOL_TYPES = ['vmess', 'vless', 'trojan', 'shadowsocks', 'hysteria2', 'tuic', 'wireguard', 'iwan', 'anx']
 
@@ -61,34 +62,6 @@ export function iwanFormFromSettings(settings = {}) {
   }
 }
 
-// ANX-A (anx-node's anx inbound). The server names and ALPN are edited as
-// comma separated lists.
-export const defaultAnxForm = () => ({
-  serverNames: 'www.apple.com',
-  dest: 'www.apple.com:443',
-  alpn: 'h2,http/1.1'
-})
-
-const anxList = text => String(text || '').split(/[,\s]+/).filter(Boolean)
-
-export function buildAnxSettings(form) {
-  return {
-    server_names: anxList(form.serverNames),
-    dest: String(form.dest || '').trim(),
-    alpn: anxList(form.alpn)
-  }
-}
-
-export function anxFormFromSettings(settings = {}) {
-  const defaults = defaultAnxForm()
-  const list = value => (Array.isArray(value) && value.length ? value.join(',') : null)
-  return {
-    serverNames: list(settings.server_names) || defaults.serverNames,
-    dest: settings.dest || defaults.dest,
-    alpn: list(settings.alpn) || defaults.alpn
-  }
-}
-
 export const defaultWireGuardForm = () => ({
   cidr: '10.66.0.0/24',
   serverAddress: '10.66.0.1/24',
@@ -100,7 +73,7 @@ export const defaultWireGuardForm = () => ({
 })
 
 const defaultProtocolForm = () => ({
-  mode: 'json', // json | visual
+  mode: 'visual', // visual (form) | json (advanced)
   type: 'vless',
   port: 443,
   enable: 1,
@@ -229,19 +202,43 @@ export function useProtocolEditor() {
   const protocolForm = reactive(defaultProtocolForm())
   const wireGuardForm = reactive(defaultWireGuardForm())
   const iwanForm = reactive(defaultIwanForm())
-  const anxForm = reactive(defaultAnxForm())
   const jsonEditorContent = ref('')
   const jsonParseError = ref('')
   const jsonValid = computed(() => jsonParseError.value === '')
   const editing = ref(false)
   const selectedTemplate = ref('')
+  // custom_config has no form field: it rides along from the stored protocol
+  // or the JSON tab.
+  let customConfig = null
+  // Loading a protocol or template sets type, TLS and transport in one go;
+  // the watchers below only react to the user's own changes.
+  let hydrating = false
+  const hydrate = (fn) => {
+    hydrating = true
+    try { fn() } finally { hydrating = false }
+  }
+
+  // The protocol with its section objects parsed, for ProtocolFields
+  // (v-model). Writing stores the sections back as JSON text.
+  const protocolModel = computed({
+    get: () => ({
+      type: protocolForm.type,
+      tls: protocolForm.tls,
+      transport: protocolForm.transport,
+      ...Object.fromEntries(PROTOCOL_SECTIONS.map(section => [section, parseObject(protocolForm[section])]))
+    }),
+    set: (value) => {
+      for (const section of PROTOCOL_SECTIONS) {
+        const text = JSON.stringify(value[section] || {})
+        if (text !== JSON.stringify(parseObject(protocolForm[section]))) protocolForm[section] = text
+      }
+    }
+  })
 
   const resetWireGuardForm = () => Object.assign(wireGuardForm, defaultWireGuardForm())
   const hydrateWireGuardForm = (settings) => Object.assign(wireGuardForm, wireGuardFormFromSettings(settings))
   const resetIwanForm = () => Object.assign(iwanForm, defaultIwanForm())
   const hydrateIwanForm = (settings) => Object.assign(iwanForm, iwanFormFromSettings(settings))
-  const resetAnxForm = () => Object.assign(anxForm, defaultAnxForm())
-  const hydrateAnxForm = (settings) => Object.assign(anxForm, anxFormFromSettings(settings))
 
   function visualToJson() {
     const obj = {
@@ -272,25 +269,21 @@ export function useProtocolEditor() {
       obj.reality_settings = {}
       return obj
     }
-    if (protocolForm.type === 'anx') {
-      obj.port = protocolForm.port || 8443
-      obj.tls = 0
-      obj.transport = 'tcp'
-      obj.settings = buildAnxSettings(anxForm)
-      obj.tls_settings = {}
-      obj.transport_settings = {}
-      obj.reality_settings = {}
-      return obj
-    }
     adaptTransport(obj)
     obj.settings = parseObject(protocolForm.settings)
     obj.tls_settings = parseObject(protocolForm.tls_settings)
     obj.transport_settings = parseObject(protocolForm.transport_settings)
     obj.reality_settings = parseObject(protocolForm.reality_settings)
+    if (customConfig) obj.custom_config = customConfig
     return obj
   }
 
   function jsonToVisual(json) {
+    hydrate(() => applyJsonToForm(json))
+  }
+
+  function applyJsonToForm(json) {
+    customConfig = json.custom_config || null
     protocolForm.type = json.type || 'vless'
     protocolForm.port = json.port || 443
     protocolForm.tls = json.tls ?? 0
@@ -316,13 +309,6 @@ export function useProtocolEditor() {
       }
       hydrateIwanForm(settings)
     }
-    if (protocolForm.type === 'anx') {
-      let settings = json.settings || {}
-      if (typeof settings === 'string') {
-        try { settings = JSON.parse(settings) } catch { settings = {} }
-      }
-      hydrateAnxForm(settings)
-    }
   }
 
   function setJson(json) {
@@ -330,10 +316,12 @@ export function useProtocolEditor() {
     jsonParseError.value = ''
   }
 
-  // Switching to JSON (when adding) writes the visual form into the editor;
-  // switching to the visual form reads the editor (kept as is when invalid).
+  // Switching to JSON writes the form into the editor; switching to the form
+  // reads the editor (kept as is when invalid). Sync, so a caller that sets
+  // the mode and then the editor text is not overwritten later.
   watch(() => protocolForm.mode, (mode) => {
-    if (mode === 'json' && !editing.value) {
+    if (hydrating) return
+    if (mode === 'json') {
       setJson(visualToJson())
     }
     if (mode === 'visual') {
@@ -343,9 +331,10 @@ export function useProtocolEditor() {
         // keep the visual values when the JSON is invalid
       }
     }
-  })
+  }, { flush: 'sync' })
 
   watch(() => protocolForm.type, (newType, oldType) => {
+    if (hydrating) return
     if (newType === 'wireguard' && oldType !== 'wireguard') {
       protocolForm.port = protocolForm.port === 443 ? 51820 : protocolForm.port
       protocolForm.tls = 0
@@ -358,28 +347,40 @@ export function useProtocolEditor() {
       protocolForm.transport = 'udp'
       resetIwanForm()
     }
-    if (newType === 'anx' && oldType !== 'anx') {
-      protocolForm.port = protocolForm.port === 443 ? 8443 : protocolForm.port
-      protocolForm.tls = 0
-      protocolForm.transport = 'tcp'
-      resetAnxForm()
-    }
     // Shadowsocks has no WebSocket, Hysteria2 no TCP: a new type keeps the
     // transport and TLS only when it takes them.
     adaptTransport(protocolForm)
-  })
+    // The settings belong to the type: a new type starts with its own.
+    protocolForm.settings = JSON.stringify(defaultSettingsFor(newType))
+    seedReality()
+  }, { flush: 'sync' })
+
+  // Reality needs a target, a short id and a fingerprint before it can run.
+  function seedReality() {
+    if (Number(protocolForm.tls) !== 2) return
+    const seeded = defaultRealityFor(protocolModel.value)
+    protocolModel.value = seeded
+  }
 
   watch(() => protocolForm.tls, () => {
-    if (protocolForm.mode === 'visual') adaptTransport(protocolForm)
-  })
+    if (hydrating) return
+    adaptTransport(protocolForm)
+    seedReality()
+  }, { flush: 'sync' })
+
+  // The transport settings (path, host, service name) belong to the transport.
+  watch(() => protocolForm.transport, () => {
+    if (hydrating) return
+    protocolForm.transport_settings = '{}'
+  }, { flush: 'sync' })
 
   function startCreate() {
     editing.value = false
     selectedTemplate.value = ''
     resetWireGuardForm()
     resetIwanForm()
-    resetAnxForm()
-    Object.assign(protocolForm, defaultProtocolForm())
+    customConfig = null
+    hydrate(() => Object.assign(protocolForm, defaultProtocolForm()))
     setJson(newProtocolJson())
   }
 
@@ -389,7 +390,7 @@ export function useProtocolEditor() {
     const json = protocolToJson(protocol)
     jsonToVisual(json)
     setJson(json)
-    protocolForm.mode = 'json'
+    hydrate(() => { protocolForm.mode = 'visual' })
   }
 
   function applyTemplate(tpl) {
@@ -397,10 +398,8 @@ export function useProtocolEditor() {
     const json = templateToJson(tpl)
     if (json.type === 'wireguard') hydrateWireGuardForm(json.settings)
     if (json.type === 'iwan') hydrateIwanForm(json.settings)
-    if (json.type === 'anx') hydrateAnxForm(json.settings)
     setJson(json)
     jsonToVisual(json)
-    protocolForm.mode = 'json'
   }
 
   // The template picker loads a template into the JSON editor only.
@@ -463,8 +462,10 @@ export function useProtocolEditor() {
       return { error: 'required' }
     }
     const json = visualToJson()
+    const custom = json.custom_config ? { custom_config: typeof json.custom_config === 'string' ? json.custom_config : JSON.stringify(json.custom_config) } : {}
     return {
       payload: {
+        ...custom,
         type: json.type,
         port: json.port,
         enable: json.enable,
@@ -481,9 +482,9 @@ export function useProtocolEditor() {
 
   return {
     protocolForm,
+    protocolModel,
     wireGuardForm,
     iwanForm,
-    anxForm,
     jsonEditorContent,
     jsonParseError,
     jsonValid,

@@ -483,7 +483,8 @@ export default {
     modeLabel: 'Editor',
     jsonLabel: 'Protocol JSON',
     tabs: {
-      visual: 'Form'
+      visual: 'Form',
+      json: 'Advanced JSON'
     },
     fields: {
       type: 'Protocol',
@@ -532,19 +533,6 @@ export default {
         login: 'Users log in with their panel user id and the first 16 hex digits of their UUID; the iWAN format on the subscription page gives them an iwand configuration.'
       }
     },
-    anx: {
-      title: 'ANX',
-      fields: {
-        serverNames: 'Allowed SNI',
-        dest: 'Cover site',
-        alpn: 'ALPN'
-      },
-      hints: {
-        serverNames: 'Comma separated; clients use the first. It must be a name the cover site really serves.',
-        dest: 'Connections that are not ANX (probes included) are forwarded here as host:port.',
-        login: 'User keys derive from the UUID and the server public key is reported by the Agent on the node. Only AnixOps Net connects; the AnixOps Net subscription format carries the anx:// link. The node must run the anx-node kernel.'
-      }
-    },
     wireguard: {
       sections: {
         access: 'WireGuard access'
@@ -564,6 +552,45 @@ export default {
     },
     enable: 'Run on the node',
     show: 'List in subscriptions'
+  },
+  // Protocol form fields (protocolFields.js): 3x-ui style, shown by protocol, transport and TLS.
+  protocolFields: {
+    groups: {
+      protocol: 'Protocol',
+      transport: 'Transport',
+      security: 'Security'
+    },
+    none: 'None',
+    generate: 'Generate',
+    labels: {
+      server_names: 'Allowed SNI',
+      alpn: 'ALPN',
+      flow: 'Flow',
+      method: 'Cipher',
+      server_key: 'Server key',
+      up_mbps: 'Upload (Mbps)',
+      down_mbps: 'Download (Mbps)',
+      obfs: 'Obfuscation',
+      obfs_password: 'Obfuscation password',
+      congestion_control: 'Congestion control',
+      path: 'Path',
+      host: 'Host',
+      serviceName: 'gRPC service name',
+      server_name: 'SNI (server name)',
+      fingerprint: 'uTLS fingerprint',
+      allowInsecure: 'Allow insecure certificates',
+      dest: 'Target (Dest)',
+      short_id: 'Short ID',
+      private_key: 'Private key',
+      public_key: 'Public key'
+    },
+    hints: {
+      anxServerNames: 'Comma separated; clients use the first. It must be a name the cover site really serves. ANX user keys derive from the UUID and the server public key is reported by the Agent on the node; the AnixOps Net subscription format carries the anx:// link.',
+      anxDest: 'Connections that are not ANX (probes included) are forwarded here as host:port.',
+      serverKey: 'Server key of the 2022 ciphers; empty derives it from the node.',
+      privateKey: 'Empty generates a key pair when saved; a stored private key shows as ********.',
+      publicKey: 'The public key subscriptions hand to clients; empty derives it from the private key.'
+    }
   },
   tabs: {
     label: 'Node sections',
