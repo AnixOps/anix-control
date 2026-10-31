@@ -21,7 +21,7 @@ import (
 func TestAgentTransportsHandlerListsTheInventory(t *testing.T) {
 	db := newKernelHandlerTestDB(t, &model.Node{}, &model.ForwardNode{}, &model.ForwardCleanAgent{}, &model.AgentTransport{}, &model.AgentCertificate{})
 	now := time.Now().UTC()
-	require.NoError(t, db.Create(&[]model.Node{{ID: 1, Name: "enrolled", APIKey: "a"}, {ID: 2, Name: "legacy", APIKey: "b"}}).Error)
+	require.NoError(t, db.Create(&[]model.Node{{ID: 1, Name: "enrolled", APIKey: "a"}, {ID: 2, Name: "silent", APIKey: "b"}}).Error)
 	require.NoError(t, db.Create(&[]model.AgentTransport{
 		{NodeKind: "proxy", NodeID: 1, Transport: model.AgentTransportMTLSStream, AgentVersion: "2.0.0", FirstSeenAt: now, LastSeenAt: now},
 		{NodeKind: "proxy", NodeID: 2, Transport: model.AgentTransportWebSocket, FirstSeenAt: now, LastSeenAt: now},
@@ -42,24 +42,13 @@ func TestAgentTransportsHandlerListsTheInventory(t *testing.T) {
 	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &body))
 	require.Equal(t, config.AgentMTLSRequired, body.Data.Mode, "the 4.2 default")
 	summary := body.Data.Summary
-	require.Equal(t, [3]int{2, 1, 1}, [3]int{summary.Total, summary.MTLS, summary.Legacy})
+	require.Equal(t, [3]int{2, 1, 1}, [3]int{summary.Total, summary.MTLS, summary.Unseen}, "a retired websocket row is not a sighting")
 	require.False(t, summary.ReadyForRequired)
 	require.Len(t, summary.RequiredReasons, 1)
-	require.Contains(t, summary.RequiredReasons[0], "1 enabled node(s) still on a legacy AnixOps Agent channel (1 seen within the last 7 days)")
+	require.Contains(t, summary.RequiredReasons[0], "1 enabled node(s) never enrolled")
 	require.Len(t, summary.RequiredBlockers, 1)
 	require.Equal(t, "proxy-2", summary.RequiredBlockers[0].Node)
 	require.Contains(t, recorder.Body.String(), `"ready_for_required":false`)
-
-	recorder = performKernelHandlerRequest(t, http.MethodGet, route+"?legacy_only=true", "", route, handler.List)
-	require.Equal(t, http.StatusOK, recorder.Code)
-	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &body))
-	require.Len(t, body.Data.Nodes, 1)
-	require.Equal(t, "proxy-2", body.Data.Nodes[0].Node)
-	require.Equal(t, model.AgentTransportWebSocket, body.Data.Nodes[0].Transport)
-
-	recorder = performKernelHandlerRequest(t, http.MethodGet, route+"?legacy_only=maybe", "", route, handler.List)
-	require.Equal(t, http.StatusBadRequest, recorder.Code)
-	require.Contains(t, recorder.Body.String(), "invalid_request")
 
 	handler.db = func() *gorm.DB { return nil }
 	recorder = performKernelHandlerRequest(t, http.MethodGet, route, "", route, handler.List)
@@ -175,8 +164,7 @@ func TestAgentTransportsHandlerShowsCertificatesAndConnections(t *testing.T) {
 	require.Equal(t, "ended", last["serial"])
 	require.Equal(t, "node_disabled", last["revoke_reason"])
 	require.NotNil(t, last["revoked_at"])
-	require.Equal(t, "legacy", revoked["connection"].(map[string]any)["type"])
-	require.Equal(t, "websocket", revoked["connection"].(map[string]any)["transport"])
+	require.Equal(t, "offline", revoked["connection"].(map[string]any)["type"], "a retired channel is no connection")
 
 	silent := all["proxy-3"]
 	require.Equal(t, "none", silent["certificate_state"])

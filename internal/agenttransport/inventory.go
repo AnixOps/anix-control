@@ -19,10 +19,6 @@ const (
 	// StatusMTLS: the node's latest AnixOps Agent channel was the mTLS
 	// stream. Ready for agent_control.mtls: required.
 	StatusMTLS = "mtls"
-	// StatusLegacy: the latest was a legacy channel (API key on the stream,
-	// the legacy HTTP paths, the WebSocket, a clean agent). required would
-	// refuse it: upgrade and enroll the agent first.
-	StatusLegacy = "legacy"
 	// StatusThirdParty: the node was only seen on UniProxy or the v2board
 	// gRPC services, which required leaves open (third-party node software,
 	// or an old agent on those protocols only).
@@ -34,7 +30,6 @@ const (
 // TransportSeen is one transport a node was seen on.
 type TransportSeen struct {
 	Transport    string    `json:"transport"`
-	Legacy       bool      `json:"legacy"`
 	ThirdParty   bool      `json:"third_party"`
 	AgentVersion string    `json:"agent_version,omitempty"`
 	Identity     string    `json:"identity,omitempty"`
@@ -80,12 +75,6 @@ const (
 	// ConnectionMTLSStream: an Agent Control stream authenticated by the
 	// agent client certificate.
 	ConnectionMTLSStream = "mtls_stream"
-	// ConnectionAPIKeyStream: an Agent Control stream authenticated by the
-	// node API key or forward token.
-	ConnectionAPIKeyStream = "apikey_stream"
-	// ConnectionLegacy: a legacy AnixOps Agent channel, the REST paths, the
-	// WebSocket or a clean agent.
-	ConnectionLegacy = "legacy"
 	// ConnectionThirdParty: only third-party node software (UniProxy or the
 	// v2board gRPC services) was seen lately.
 	ConnectionThirdParty = "third_party"
@@ -100,12 +89,11 @@ const ConnectionWindow = 5 * time.Minute
 
 // Connection is how a node's agent reaches Control right now.
 type Connection struct {
-	// Type is ConnectionMTLSStream, ConnectionAPIKeyStream,
-	// ConnectionLegacy, ConnectionThirdParty or ConnectionOffline.
+	// Type is ConnectionMTLSStream, ConnectionThirdParty or
+	// ConnectionOffline.
 	Type string `json:"type"`
 	// Transport is the transport the type was read from (mtls-stream,
-	// apikey-stream, http-legacy, websocket, clean-agent, uniproxy,
-	// v2board-grpc), empty when offline.
+	// uniproxy, v2board-grpc), empty when offline.
 	Transport string `json:"transport,omitempty"`
 	// LastSeenAt is when that transport was last seen; nil when offline.
 	LastSeenAt *time.Time `json:"last_seen_at"`
@@ -119,7 +107,7 @@ type NodeTransports struct {
 	ID      uint   `json:"id"`
 	Name    string `json:"name"`
 	Enabled bool   `json:"enabled"`
-	// Status is StatusMTLS, StatusLegacy, StatusThirdParty or StatusUnseen.
+	// Status is StatusMTLS, StatusThirdParty or StatusUnseen.
 	Status string `json:"status"`
 	// Transport is the transport of the latest sighting, empty if unseen.
 	Transport    string     `json:"transport"`
@@ -167,18 +155,15 @@ type LiveSession struct {
 	AgentMetricsAt *time.Time         `json:"agent_metrics_at"`
 }
 
-// Summary counts the inventory's nodes by status, and tells whether
-// agent_control.mtls: required would refuse any enabled node.
+// Summary counts the inventory's nodes by status, and tells whether any
+// enabled node has not enrolled.
 type Summary struct {
 	Total      int `json:"total"`
 	MTLS       int `json:"mtls"`
-	Legacy     int `json:"legacy"`
 	ThirdParty int `json:"third_party"`
 	Unseen     int `json:"unseen"`
-	// ReadyForRequired is true when required refuses no enabled node:
-	// none is on a legacy AnixOps Agent channel and none is unseen without
-	// an agent certificate. It is computed over every node, also with
-	// legacy_only.
+	// ReadyForRequired is true when no enabled node is unseen without an
+	// agent certificate. It is computed over every node.
 	ReadyForRequired bool `json:"ready_for_required"`
 	// RequiredReasons explains a false ReadyForRequired, empty otherwise.
 	RequiredReasons []string `json:"required_reasons"`
@@ -188,18 +173,10 @@ type Summary struct {
 
 // Why agent_control.mtls: required would refuse a node (RequiredBlocker).
 const (
-	// BlockerLegacy: the node's newest AnixOps Agent channel is legacy.
-	BlockerLegacy = "legacy"
 	// BlockerNeverEnrolled: the node was never seen and holds no valid
 	// agent certificate, so its agent never enrolled.
 	BlockerNeverEnrolled = "never_enrolled"
 )
-
-// RecentLegacyWindow is how far back a legacy sighting counts as recent:
-// the agent was still in use shortly before the upgrade. Under required
-// a refused request records no sighting, so legacy nodes age out of this
-// window after the switch.
-const RecentLegacyWindow = 7 * 24 * time.Hour
 
 // RequiredBlocker is an enabled node agent_control.mtls: required would
 // refuse.
@@ -207,52 +184,21 @@ type RequiredBlocker struct {
 	Node   string `json:"node"`
 	Name   string `json:"name"`
 	Reason string `json:"reason"`
-	// Transport and LastSeenAt are the newest legacy sighting; empty and
-	// nil for never_enrolled.
+	// Transport and LastSeenAt are empty and nil for never_enrolled.
 	Transport  string     `json:"transport,omitempty"`
 	LastSeenAt *time.Time `json:"last_seen_at"`
-	// Recent: a legacy node seen within RecentLegacyWindow.
-	Recent bool `json:"recent"`
-}
-
-// RequiredBlockerCounts counts blockers: legacy nodes, those seen within
-// RecentLegacyWindow, and nodes that never enrolled.
-func (s Summary) RequiredBlockerCounts() (legacy, recentLegacy, neverEnrolled int) {
-	for _, blocker := range s.RequiredBlockers {
-		switch blocker.Reason {
-		case BlockerLegacy:
-			legacy++
-			if blocker.Recent {
-				recentLegacy++
-			}
-		case BlockerNeverEnrolled:
-			neverEnrolled++
-		}
-	}
-	return legacy, recentLegacy, neverEnrolled
 }
 
 // requiredBlocker tells whether required would refuse node, and why. Only
 // enabled nodes count: a disabled node's agent is refused in every mode.
 // Third-party nodes are not refused (UniProxy and v2board gRPC stay open);
 // an unseen node with a valid certificate has enrolled.
-func requiredBlocker(node NodeTransports, now time.Time) (RequiredBlocker, bool) {
+func requiredBlocker(node NodeTransports) (RequiredBlocker, bool) {
 	if !node.Enabled {
 		return RequiredBlocker{}, false
 	}
 	blocker := RequiredBlocker{Node: node.Node, Name: node.Name}
 	switch {
-	case node.Status == StatusLegacy:
-		blocker.Reason = BlockerLegacy
-		// The newest legacy sighting, not a later third-party one.
-		for _, transport := range node.Transports {
-			if transport.Legacy {
-				lastSeen := transport.LastSeenAt
-				blocker.Transport, blocker.LastSeenAt = transport.Transport, &lastSeen
-				blocker.Recent = now.Sub(lastSeen) <= RecentLegacyWindow
-				break
-			}
-		}
 	case node.Status == StatusUnseen && node.Certificate == nil:
 		blocker.Reason = BlockerNeverEnrolled
 	default:
@@ -263,13 +209,9 @@ func requiredBlocker(node NodeTransports, now time.Time) (RequiredBlocker, bool)
 
 // requiredReasons explains the blockers.
 func requiredReasons(summary Summary) []string {
-	legacy, recent, never := summary.RequiredBlockerCounts()
 	reasons := []string{}
-	if legacy > 0 {
-		reasons = append(reasons, fmt.Sprintf("%d enabled node(s) still on a legacy AnixOps Agent channel (%d seen within the last %d days): upgrade their Agents and let them enroll", legacy, recent, int(RecentLegacyWindow/(24*time.Hour))))
-	}
-	if never > 0 {
-		reasons = append(reasons, fmt.Sprintf("%d enabled node(s) never enrolled (no agent certificate, never seen): install or enroll their Agents, or disable the nodes", never))
+	if len(summary.RequiredBlockers) > 0 {
+		reasons = append(reasons, fmt.Sprintf("%d enabled node(s) never enrolled (no agent certificate, never seen): install or enroll their Agents, or disable the nodes", len(summary.RequiredBlockers)))
 	}
 	return reasons
 }
@@ -304,8 +246,6 @@ type inventoryForwardNode struct {
 
 // Options select what Build returns.
 type Options struct {
-	// LegacyOnly keeps the nodes in StatusLegacy only.
-	LegacyOnly bool
 	// Live overlays sightings of this process not yet written (the API);
 	// the CLI, another process, reads the table only.
 	Live *Recorder
@@ -316,9 +256,8 @@ type Options struct {
 	// (the CLI, another process).
 	Sessions func() []agentstreams.Session
 	// Nodes keeps the listed nodes only (the detail page asks for one);
-	// empty keeps every node. Like LegacyOnly it narrows the list and its
-	// counts, not the readiness fields of the summary, which cover every
-	// node.
+	// empty keeps every node. It narrows the list and its counts, not the
+	// readiness fields of the summary, which cover every node.
 	Nodes []agentcontrol.AgentNode
 }
 
@@ -357,34 +296,22 @@ func Build(ctx context.Context, db *gorm.DB, policy Policy, options Options) (In
 	if err := db.Order("not_after DESC, created_at DESC").Find(&certificates).Error; err != nil {
 		return Inventory{}, err
 	}
-	var cleanAgents []model.ForwardCleanAgent
-	if err := db.Select("id, node_id, version, last_seen, created_at").
-		Where("revoked_at IS NULL AND node_id IS NOT NULL AND last_seen IS NOT NULL").Find(&cleanAgents).Error; err != nil {
-		return Inventory{}, err
-	}
-
 	type nodeKey struct {
 		kind string
 		id   uint
 	}
 	seen := map[nodeKey][]TransportSeen{}
 	for _, row := range rows {
+		// Rows of retired channels (API key stream, REST, WebSocket) may
+		// remain from before they were refused: they are not shown.
+		if model.AgentTransportLegacy(row.Transport) {
+			continue
+		}
 		key := nodeKey{row.NodeKind, row.NodeID}
 		seen[key] = append(seen[key], TransportSeen{
-			Transport: row.Transport, Legacy: model.AgentTransportLegacy(row.Transport),
+			Transport:  row.Transport,
 			ThirdParty: model.AgentTransportThirdParty(row.Transport), AgentVersion: row.AgentVersion,
 			Identity: row.Identity, FirstSeenAt: row.FirstSeenAt.UTC(), LastSeenAt: row.LastSeenAt.UTC(),
-		})
-	}
-	for _, agent := range cleanAgents {
-		key := nodeKey{agentcontrol.NodeKindForward, *agent.NodeID}
-		first := agent.CreatedAt
-		if first.IsZero() {
-			first = *agent.LastSeen
-		}
-		seen[key] = append(seen[key], TransportSeen{
-			Transport: model.AgentTransportCleanAgent, Legacy: true, AgentVersion: agent.Version,
-			FirstSeenAt: first.UTC(), LastSeenAt: agent.LastSeen.UTC(),
 		})
 	}
 	// The records come newest expiry first: the first valid one of a node is
@@ -435,11 +362,8 @@ func Build(ctx context.Context, db *gorm.DB, policy Policy, options Options) (In
 		classify(&node, fallbackVersion)
 		node.CertificateState = certificateState(node.Certificate, node.LastCertificate)
 		node.Connection = connectionOf(node, now, options.Sessions != nil)
-		if blocker, ok := requiredBlocker(node, now); ok {
+		if blocker, ok := requiredBlocker(node); ok {
 			inventory.Summary.RequiredBlockers = append(inventory.Summary.RequiredBlockers, blocker)
-		}
-		if options.LegacyOnly && node.Status != StatusLegacy {
-			return
 		}
 		if len(wanted) > 0 && !wanted[key] {
 			return
@@ -461,8 +385,6 @@ func Build(ctx context.Context, db *gorm.DB, policy Policy, options Options) (In
 		switch node.Status {
 		case StatusMTLS:
 			inventory.Summary.MTLS++
-		case StatusLegacy:
-			inventory.Summary.Legacy++
 		case StatusThirdParty:
 			inventory.Summary.ThirdParty++
 		default:
@@ -509,12 +431,11 @@ func certificateState(valid, latest *Certificate) string {
 
 // connectionOf tells how node's agent is connected at now.
 //   - A live Agent Control stream session of this process decides: mTLS or
-//     API key by how it authenticated.
-//   - Otherwise the newest transport seen within ConnectionWindow does: a
-//     stream transport counts only when no session provider was read (the
-//     CLI), since with one the stream is not connected; a legacy channel is
-//     legacy, UniProxy and v2board gRPC (only when no AnixOps Agent channel
-//     was seen lately) third_party.
+//     mTLS.
+//   - Otherwise the newest transport seen within ConnectionWindow does: the
+//     mTLS stream counts only when no session provider was read (the CLI),
+//     since with one the stream is not connected; UniProxy and v2board gRPC
+//     (only when no AnixOps Agent channel was seen lately) are third_party.
 //   - Else the node is offline.
 //
 // Sessions are in memory of the process that holds the stream, as the
@@ -522,13 +443,10 @@ func certificateState(valid, latest *Certificate) string {
 // stream today (one replica, container-deployment.md).
 func connectionOf(node NodeTransports, now time.Time, sessionsRead bool) Connection {
 	if session := node.Session; session != nil {
-		connection := Connection{Type: ConnectionAPIKeyStream, Transport: model.AgentTransportAPIKeyStream}
 		if session.Authentication == agentstreams.AuthenticationMTLS {
-			connection = Connection{Type: ConnectionMTLSStream, Transport: model.AgentTransportMTLSStream}
+			lastSeen := session.LastSeenAt
+			return Connection{Type: ConnectionMTLSStream, Transport: model.AgentTransportMTLSStream, LastSeenAt: &lastSeen}
 		}
-		lastSeen := session.LastSeenAt
-		connection.LastSeenAt = &lastSeen
-		return connection
 	}
 	var thirdParty *TransportSeen
 	for i := range node.Transports {
@@ -547,12 +465,6 @@ func connectionOf(node NodeTransports, now time.Time, sessionsRead bool) Connect
 			if !sessionsRead {
 				return Connection{Type: ConnectionMTLSStream, Transport: seen.Transport, LastSeenAt: &lastSeen}
 			}
-		case seen.Transport == model.AgentTransportAPIKeyStream:
-			if !sessionsRead {
-				return Connection{Type: ConnectionAPIKeyStream, Transport: seen.Transport, LastSeenAt: &lastSeen}
-			}
-		default:
-			return Connection{Type: ConnectionLegacy, Transport: seen.Transport, LastSeenAt: &lastSeen}
 		}
 	}
 	if thirdParty != nil {
@@ -582,15 +494,11 @@ func classify(node *NodeTransports, fallbackVersion string) {
 		if transport.ThirdParty {
 			continue
 		}
-		if transport.Transport == model.AgentTransportMTLSStream {
-			node.Status = StatusMTLS
-		} else {
-			node.Status = StatusLegacy
-		}
+		node.Status = StatusMTLS
 		break
 	}
 	// The stream reports the agent's version in Hello; other transports
-	// fall back to what the node row or a clean agent recorded.
+	// fall back to what the node row recorded.
 	for _, transport := range node.Transports {
 		if transport.AgentVersion != "" {
 			node.AgentVersion = transport.AgentVersion
