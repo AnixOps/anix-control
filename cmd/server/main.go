@@ -33,7 +33,6 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/lease"
 	"github.com/AnixOps/anix-control/v5/internal/logging"
 	"github.com/AnixOps/anix-control/v5/internal/panelcert"
-	_ "github.com/AnixOps/anix-control/v5/internal/payment/gateways" // register payment gateway plugins
 	"github.com/AnixOps/anix-control/v5/internal/plugincontrol"
 	"github.com/AnixOps/anix-control/v5/internal/pluginhost"
 	"github.com/AnixOps/anix-control/v5/internal/requestorigin"
@@ -616,7 +615,7 @@ func (rt *serverRuntime) start(cfg *config.Config, intervals pluginPollIntervals
 		return err
 	}
 	rt.startSubscriberChangePruner()
-	rt.startOrderPaymentReconciler()
+	rt.startContributedWorkers()
 	rt.startAgentPKIMaintenance()
 	if err := rt.startKernelCAMaintenance(cfg, database.Get()); err != nil {
 		return err

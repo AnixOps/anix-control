@@ -21,7 +21,6 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/kernelforward"
 	"github.com/AnixOps/anix-control/v5/internal/kernelidentity"
 	"github.com/AnixOps/anix-control/v5/internal/kernelnodeops"
-	"github.com/AnixOps/anix-control/v5/internal/kernelorder"
 	"github.com/AnixOps/anix-control/v5/internal/kernelsettings"
 	"github.com/AnixOps/anix-control/v5/internal/kernelsubscriber"
 	"github.com/AnixOps/anix-control/v5/internal/kerneltelemetry"
@@ -134,9 +133,16 @@ func NewKernelOrder(cfg *config.Config) (packagebridge.KernelOrderProvider, erro
 	return kernelOrder(operations), nil
 }
 
+// kernelOrderProvider builds the KernelOrder provider. Only a build with
+// the order package links one (kernel_order.go); without it the contract is
+// not served.
+var kernelOrderProvider func(service.PackageHostOperations) packagebridge.KernelOrderProvider
+
 func kernelOrder(operations service.PackageHostOperations) packagebridge.KernelOrderProvider {
-	server := &kernelorder.Server{DB: operations.DB, Authorizer: operations}
-	return server.For
+	if kernelOrderProvider == nil {
+		return nil
+	}
+	return kernelOrderProvider(operations)
 }
 
 // NewKernelSettings returns the KernelSettings provider for the module

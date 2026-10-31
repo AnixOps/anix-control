@@ -11,6 +11,7 @@ import (
 	"go/token"
 	"os"
 	"path"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -208,32 +209,51 @@ func fail(err error) {
 
 func inventory(routerPath string) ([]route, error) {
 	fset := token.NewFileSet()
-	file, err := parser.ParseFile(fset, routerPath, nil, parser.ParseComments|parser.AllErrors)
-	if err != nil {
-		return nil, fmt.Errorf("parse %s: %w", routerPath, err)
-	}
+	collector := collector{fset: fset}
 
-	collector := collector{fset: fset, configPackageAliases: configPackageAliases(file)}
-	for _, declaration := range file.Decls {
-		if err := collector.validateTopLevelDeclaration(declaration); err != nil {
-			return nil, err
-		}
+	// The router file and the router_*.go files next to it: a file of its
+	// own holds the routes of a package that a build may leave out (the
+	// commercial routes), and the inventory lists them with the rest.
+	paths := []string{routerPath}
+	siblings, err := filepath.Glob(filepath.Join(filepath.Dir(routerPath), "router_*.go"))
+	if err != nil {
+		return nil, fmt.Errorf("list router files: %w", err)
 	}
-	for _, declaration := range file.Decls {
-		function, ok := declaration.(*ast.FuncDecl)
-		if !ok || function.Body == nil {
+	sort.Strings(siblings)
+	for _, sibling := range siblings {
+		if strings.HasSuffix(sibling, "_test.go") || filepath.Clean(sibling) == filepath.Clean(routerPath) {
 			continue
 		}
+		paths = append(paths, sibling)
+	}
 
-		env := newScope(nil)
-		if !seedEngineParameters(function, env) {
-			if err := collector.rejectUnresolvedGinSelectors(function.Body, env); err != nil {
+	for _, sourcePath := range paths {
+		file, err := parser.ParseFile(fset, sourcePath, nil, parser.ParseComments|parser.AllErrors)
+		if err != nil {
+			return nil, fmt.Errorf("parse %s: %w", sourcePath, err)
+		}
+		collector.configPackageAliases = configPackageAliases(file)
+		for _, declaration := range file.Decls {
+			if err := collector.validateTopLevelDeclaration(declaration); err != nil {
 				return nil, err
 			}
-			continue
 		}
-		if err := collector.processBlock(function.Body, env); err != nil {
-			return nil, err
+		for _, declaration := range file.Decls {
+			function, ok := declaration.(*ast.FuncDecl)
+			if !ok || function.Body == nil {
+				continue
+			}
+
+			env := newScope(nil)
+			if !seedEngineParameters(function, env) {
+				if err := collector.rejectUnresolvedGinSelectors(function.Body, env); err != nil {
+					return nil, err
+				}
+				continue
+			}
+			if err := collector.processBlock(function.Body, env); err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -606,6 +626,11 @@ func (c *collector) validateValueExpression(expression ast.Expr, env *scope) err
 }
 
 func (c *collector) processExpression(expression ast.Expr, env *scope) error {
+	if isContributorSetupCall(expression) {
+		// SetupContributed(r, cfg) hands the engine to the route
+		// contributors, whose files the inventory reads itself.
+		return nil
+	}
 	call, ok := unwrapParens(expression).(*ast.CallExpr)
 	if !ok {
 		return c.rejectTrackedGinGroupEscape(expression, env)
@@ -1218,4 +1243,15 @@ func classifyMiddleware(middleware []string) (string, error) {
 	default:
 		return "", fmt.Errorf("unrecognized /api/v2 middleware stack %q", middleware)
 	}
+}
+
+// isContributorSetupCall reports whether the expression is the call that runs
+// the route contributors: SetupContributed(<engine>, <config>).
+func isContributorSetupCall(expression ast.Expr) bool {
+	call, ok := unwrapParens(expression).(*ast.CallExpr)
+	if !ok {
+		return false
+	}
+	name, ok := call.Fun.(*ast.Ident)
+	return ok && name.Name == "SetupContributed" && len(call.Args) == 2
 }

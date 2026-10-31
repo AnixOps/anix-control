@@ -14,7 +14,11 @@
     "internal/kernelorder/**",
     "packages/payment/**",
     "packages/order/**",
-    "packages/affiliate/**"
+    "packages/affiliate/**",
+    "packages/builtin/commercial.go",
+    "internal/router/router_commercial.go",
+    "internal/identitybridge/kernel_order.go",
+    "cmd/server/order_payments.go"
   ],
   "wiring": [
     "internal/model/**",

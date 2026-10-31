@@ -140,13 +140,8 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		}
 
 		// 支付接口
-		v2.GET("/payment/methods", v2PackageGateway.Serve)
-		v2.GET("/payment/status/:trade_no", v2PackageGateway.Serve)
 
 		// 支付回调 (无需认证)
-		v2.POST("/payment/x402/callback", v2PackageGateway.Serve)
-		v2.POST("/payment/stripe/webhook", v2PackageGateway.Serve)
-		v2.POST("/payment/paypal/webhook", v2PackageGateway.Serve)
 
 		// 需要登录的接口
 		auth := v2.Group("")
@@ -178,17 +173,10 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			auth.GET("/user/plan", registeredPackageRoute(v2PackageGateway.Serve, "plan", "plan.user.plan.get", planHandler.GetPlans))
 
 			// 优惠券接口
-			auth.POST("/user/coupon/check", v2PackageGateway.Serve)
 
 			// 订单接口
-			auth.GET("/user/order", v2PackageGateway.Serve)
-			auth.POST("/user/order/save", v2PackageGateway.Serve)
-			auth.GET("/user/order/:id", v2PackageGateway.Serve)
 
 			// 用户支付接口
-			auth.POST("/payment/x402/create", v2PackageGateway.Serve)
-			auth.GET("/payment/x402/check/:id", v2PackageGateway.Serve)
-			auth.POST("/payment/fiat/create", v2PackageGateway.Serve)
 		}
 
 		// 管理员接口
@@ -224,12 +212,6 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			admin.POST("/users/:id/reset-subscribe", v2PackageGateway.Serve)
 
 			// 订单管理
-			admin.GET("/orders", v2PackageGateway.Serve)
-			admin.GET("/orders/stats", v2PackageGateway.Serve)
-			admin.GET("/orders/:id", v2PackageGateway.Serve)
-			admin.PUT("/orders/:id/status", v2PackageGateway.Serve)
-			admin.POST("/orders/:id/paid", v2PackageGateway.Serve)
-			admin.POST("/orders/:id/cancel", v2PackageGateway.Serve)
 
 			// 节点管理 (新版)
 			nodeHandler := handler.NewNodeHandler()
@@ -314,9 +296,6 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			admin.POST("/ticket/:id/close", registeredPackageRoute(v2PackageGateway.Serve, "ticket", "ticket.admin.ticket.id.close.post", ticketHandler.CloseTicket))
 
 			// 优惠券管理 (V2 Stub)
-			admin.GET("/coupon", v2PackageGateway.Serve)
-			admin.POST("/coupon", v2PackageGateway.Serve)
-			admin.DELETE("/coupon/:id", v2PackageGateway.Serve)
 
 			// 知识库管理 (V2 Stub)
 			knowledgeHandler := handler.NewAdminKnowledgeHandler()
@@ -328,15 +307,8 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			// ========== 支付网关管理 ==========
 
 			// 网关管理
-			admin.GET("/payment/gateways", v2PackageGateway.Serve)
-			admin.POST("/payment/gateways", v2PackageGateway.Serve)
-			admin.PUT("/payment/gateways/:id", v2PackageGateway.Serve)
-			admin.DELETE("/payment/gateways/:id", v2PackageGateway.Serve)
-			admin.POST("/payment/gateways/:id/toggle", v2PackageGateway.Serve)
 
 			// 支付统计和记录
-			admin.GET("/payment/stats", v2PackageGateway.Serve)
-			admin.GET("/payment/records", v2PackageGateway.Serve)
 
 			// ========== Telegram Bot 管理 ==========
 			telegramHandler := handler.NewTelegramHandler()
@@ -355,9 +327,6 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			admin.PUT("/mfa/config", v2PackageGateway.Serve)
 
 			// ========== 邀请码管理（注册控制，所有版本） ==========
-			admin.GET("/invite/codes", v2PackageGateway.Serve)
-			admin.POST("/invite/codes", v2PackageGateway.Serve)
-			admin.DELETE("/invite/codes/:id", v2PackageGateway.Serve)
 
 			// ========== 通知管理 ==========
 			notificationHandler := handler.NewNotificationHandler()
@@ -371,11 +340,6 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			admin.PUT("/notification/email/config", registeredPackageRoute(v2PackageGateway.Serve, "notification", "notification.admin.notification.email.config.put", notificationHandler.UpdateEmailConfig))
 
 			// ========== 邀请返利管理 ==========
-			admin.GET("/invite/config", v2PackageGateway.Serve)
-			admin.PUT("/invite/config", v2PackageGateway.Serve)
-			admin.GET("/invite/stats", v2PackageGateway.Serve)
-			admin.GET("/invite/withdrawals", v2PackageGateway.Serve)
-			admin.POST("/invite/withdrawals/:id/process", v2PackageGateway.Serve)
 
 			// ========== 系统配置管理 ==========
 			systemHandler := handler.NewSystemHandler()
@@ -407,10 +371,6 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			}
 
 			// 用户支付
-			authUser.GET("/user/payment/channels", v2PackageGateway.Serve)
-			authUser.POST("/user/payment/create", v2PackageGateway.Serve)
-			authUser.GET("/user/payment/status/:trade_no", v2PackageGateway.Serve)
-			authUser.GET("/user/payment/records", v2PackageGateway.Serve)
 
 			// 用户 Telegram
 			telegramHandler := handler.NewTelegramHandler()
@@ -437,11 +397,6 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			authUser.POST("/user/notifications/read-all", registeredPackageRoute(v2PackageGateway.Serve, "notification", "notification.user.notifications.read_all.post", notificationHandler.MarkAllAsRead))
 
 			// 用户邀请
-			authUser.GET("/user/invite", v2PackageGateway.Serve)
-			authUser.POST("/user/invite/generate", v2PackageGateway.Serve)
-			authUser.GET("/user/invite/commissions", v2PackageGateway.Serve)
-			authUser.POST("/user/invite/withdraw", v2PackageGateway.Serve)
-			authUser.GET("/user/invite/withdrawals", v2PackageGateway.Serve)
 		}
 
 		// Telegram Webhook (公开)
@@ -450,13 +405,6 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		tgWebhook.Use(publicLimiter.Middleware())
 		{
 			tgWebhook.POST("/telegram/webhook", registeredPackageRoute(v2PackageGateway.Serve, "notification", "notification.telegram.webhook.post", telegramHandler.TelegramWebhook))
-		}
-
-		// 支付回调 (公开)
-		paymentCallback := v2.Group("")
-		paymentCallback.Use(publicLimiter.Middleware())
-		{
-			paymentCallback.POST("/payment/callback/:type", v2PackageGateway.Serve)
 		}
 
 		agentHandler := handler.NewAgentHandler()
@@ -816,4 +764,7 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		v5.POST("/backups", backups.Create)
 		v5.GET("/backups/:id/download", backups.Download)
 	}
+
+	// Routes of the packages outside the community set (router_commercial.go).
+	SetupContributed(r, cfg)
 }

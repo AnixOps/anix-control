@@ -5,9 +5,18 @@ import (
 	"log"
 	"time"
 
+	// Registers the payment gateway plugins.
+	_ "github.com/AnixOps/anix-control/v5/internal/payment/gateways"
+
 	"github.com/AnixOps/anix-control/v5/internal/database"
 	"github.com/AnixOps/anix-control/v5/internal/service"
 )
+
+// This file is the commercial link into the server: the payment gateways and
+// the reconciler start only in a build that has it.
+func init() {
+	registerContributedWorker((*serverRuntime).startOrderPaymentReconciler)
+}
 
 // orderPaymentReconcile is how often the kernel completes the orders that
 // paid payments left pending.
