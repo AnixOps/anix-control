@@ -207,6 +207,9 @@ func (h *SystemHandler) GetConfigs(c *gin.Context) {
 
 	list := make([]gin.H, 0, len(configs))
 	for i := range configs {
+		if service.IsInternalSystemConfigKey(configs[i].Key) {
+			continue
+		}
 		list = append(list, systemConfigResponse(&configs[i]))
 	}
 

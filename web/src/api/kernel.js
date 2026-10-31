@@ -551,6 +551,13 @@ export async function getPanelStatus() {
   return unwrap(await v5({ url: '/panel/status', method: 'get' }))
 }
 
+// The options of 系统设置 (GET /api/v5/settings/catalog, any administrator):
+// { items: [{ key, section (general|data), kind (domains|switch|choice|link),
+// choices, min, max, default, value, link, sensitive }] }.
+export async function getSettingsCatalog() {
+  return unwrap(await v5({ url: '/settings/catalog', method: 'get' }))
+}
+
 // Asks Control to request the failing certificates again now, within its
 // limit of three requests per name and hour. Answers { retry: { retrying,
 // waiting, healthy }, certificate }.

@@ -8120,6 +8120,25 @@ paths:
       summary: The certificates the panel serves itself
       tags:
       - Kernel
+  /api/v5/settings/catalog:
+    get:
+      description: 'The settings the console offers as options (internal/settingscatalog),
+        in data.items: key, section (general, data), kind (domains, switch, choice,
+        link), choices, min, max, default, value (the value in force now, for a switch
+        or a choice), link (the console route of a link) and sensitive. Any administrator.'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: The options of the system settings
+      tags:
+      - Kernel
   /internal/auth-keys:
     post:
       consumes:
