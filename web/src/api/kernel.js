@@ -403,6 +403,25 @@ export async function replaceKernelNodeEntries(node, entries) {
   }))
 }
 
+// A node's network settings, `node` is "proxy-<id>" or "forward-<id>": {
+// interface, source_v4, gateway_v4, source_v6, gateway_v6, hop_port }. The
+// network model's automatic egresses of the node leave by the interface
+// (empty: the default route); its automatic hop ingress listens on hop_port
+// (0: 24443), reached through a NAT entry whose port map covers it.
+export async function getKernelNodeNetwork(node) {
+  return unwrap(await v4({ url: `/kernel/nodes/${encodeURIComponent(node)}/network`, method: 'get' }))
+}
+
+// Replaces the node's network settings and replans the routes through it.
+// Refusals: invalid_request (400) with violations, not_found (404).
+export async function setKernelNodeNetwork(node, settings) {
+  return unwrap(await v4({
+    url: `/kernel/nodes/${encodeURIComponent(node)}/network`,
+    method: 'put',
+    data: settings
+  }))
+}
+
 // Panabit iWAN lines: { lines: [{ id, name, host, port, username, mtu,
 // encrypt, entries }] }, never a password. An iwan node entry reaches its
 // node through a line (iwan_line_id).
@@ -480,7 +499,7 @@ export async function ensureKernelDefaultNodeGroup() {
   return unwrap(await v4({ url: '/kernel/node-groups/default', method: 'post' }))
 }
 
-// input: { name, kind: 'proxy' | 'forward', max_nodes, require_approval,
+// input: { name, max_nodes, require_approval,
 // rate, tags, monthly_limit_bytes, reset_day, sort, protocol_template,
 // subscription_group_ids, token_expires_at }. Errors: 400 invalid_request
 // (the message names the field, e.g. "protocol_template[0]: ..."), 409
@@ -489,7 +508,7 @@ export async function createKernelNodeGroup(input) {
   return unwrap(await v4({ url: '/kernel/node-groups', method: 'post', data: input }))
 }
 
-// Replaces every field of the group but its kind and its token.
+// Replaces every field of the group but its token.
 export async function updateKernelNodeGroup(id, input) {
   return unwrap(await v4({ url: `/kernel/node-groups/${encodeURIComponent(id)}`, method: 'put', data: input }))
 }
@@ -703,13 +722,6 @@ export async function deleteKernelEgressRoute(id) {
 // { lines, ingresses, egresses, transports, paths }, pending, devices }.
 export async function getNetworkModel() {
   return unwrap(await v4({ url: '/kernel/network', method: 'get' }))
-}
-
-// convertForwardNode turns forward-<id> into a regular node without
-// protocols (docs/design/node-unification); with dryRun it only answers.
-// The answer: { from, to, dry_run, routes }.
-export async function convertForwardNode(ref, dryRun) {
-  return unwrap(await v4({ url: `/kernel/nodes/${encodeURIComponent(ref)}/convert`, method: 'post', data: { dry_run: Boolean(dryRun) } }))
 }
 
 // migrateGostRoutes moves the gost forward routes onto the network model;

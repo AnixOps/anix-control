@@ -38,7 +38,10 @@ type startAgentUpgradeRequest struct {
 	TargetVersion string               `json:"target_version"`
 	Batches       []agentupgrade.Batch `json:"batches"`
 	Exclude       agentupgrade.Exclude `json:"exclude"`
-	Reason        string               `json:"reason"`
+	// Nodes, when set, upgrade exactly these nodes at once (manual
+	// upgrade); batches and exclude must then be empty.
+	Nodes  []string `json:"nodes"`
+	Reason string   `json:"reason"`
 }
 
 type abortAgentUpgradeRequest struct {
@@ -96,12 +99,12 @@ func (h *AgentUpgradesHandler) settings(c *gin.Context) (cfg *config.Config, set
 
 // Start godoc
 // @Summary Start a staged Agent upgrade
-// @Description Pushes an Agent release to every enabled node whose Agent was seen on the Agent Control stream, in batches (default 5%, 25%, 100% of the nodes, at least 30 minutes each; canaries first by node name hash), as the agent.upgrade operation to Agents that negotiated upgrade.v1. A batch rolls back when more than 5% of its offered nodes fail or do not reconnect with the target version within 10 minutes (H19). The release must be in agent_install.artifact_dir with its .sig files and SHA256SUMS(.sig), verified with plugins.official_public_key. Super administrators only; one campaign at a time.
+// @Description Pushes an Agent release to every enabled node whose Agent was seen on the Agent Control stream, in batches (default 5%, 25%, 100% of the nodes, at least 30 minutes each; canaries first by node name hash), as the agent.upgrade operation to Agents that negotiated upgrade.v1. With nodes (proxy-<id>, forward-<id>, each eligible) it is a manual upgrade instead: exactly those nodes in one batch with no minimum duration; batches and exclude must be empty. A batch rolls back when more than 5% of its offered nodes fail or do not reconnect with the target version within 10 minutes (H19). The release must be in agent_install.artifact_dir with its .sig files and SHA256SUMS(.sig), verified with plugins.official_public_key. Super administrators only; one campaign at a time.
 // @Tags Kernel
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param request body startAgentUpgradeRequest true "target_version (default this Control's Agent release), batches, exclude {nodes, tags}, reason"
+// @Param request body startAgentUpgradeRequest true "target_version (default this Control's Agent release), batches, exclude {nodes, tags}, nodes (manual upgrade), reason"
 // @Success 201 {object} map[string]any
 // @Router /api/v4/kernel/agents/upgrades [post]
 func (h *AgentUpgradesHandler) Start(c *gin.Context) {
@@ -136,7 +139,7 @@ func (h *AgentUpgradesHandler) Start(c *gin.Context) {
 	}
 	campaign, err := h.service().Start(c.Request.Context(), agentupgrade.StartRequest{
 		TargetVersion: target, ControlVersion: ReleaseVersion, Artifacts: artifacts, Batches: request.Batches,
-		Exclude: request.Exclude, Reason: request.Reason, Actor: h.actor(c),
+		Exclude: request.Exclude, Nodes: request.Nodes, Reason: request.Reason, Actor: h.actor(c),
 	})
 	if err != nil {
 		h.campaignError(c, err)
@@ -152,7 +155,7 @@ func (h *AgentUpgradesHandler) Start(c *gin.Context) {
 
 // Plan godoc
 // @Summary What an Agent upgrade would do now
-// @Description The Agent release a campaign pushes by default (agent_install.agent_version, else the Agent release this Control was built with, else its own release), this Control's release, how many nodes a campaign would include now (enabled nodes whose Agent was seen on the Agent Control stream), the default batches with the rules of H19 (first batch at most 5%, each batch at least 30 minutes, a batch rolls back above 5% failures or after 10 minutes without a reconnect), the active campaign if there is one, and whether the caller may start one (can_start: super administrators). When the https address nodes reach Control is not configured, configured is false with unconfigured_reason and target_version empty. Administrators read it; Start verifies the release files.
+// @Description The Agent release a campaign pushes by default (agent_install.agent_version, else the Agent release this Control was built with, else its own release), this Control's release, how many nodes a campaign would include now (enabled nodes whose Agent was seen on the Agent Control stream) and which (nodes: node_ref, name, agent_version, for a manual upgrade), the default batches with the rules of H19 (first batch at most 5%, each batch at least 30 minutes, a batch rolls back above 5% failures or after 10 minutes without a reconnect), the active campaign if there is one, and whether the caller may start one (can_start: super administrators). When the https address nodes reach Control is not configured, configured is false with unconfigured_reason and target_version empty. Administrators read it; Start verifies the release files.
 // @Tags Kernel
 // @Produce json
 // @Security BearerAuth
@@ -182,6 +185,12 @@ func (h *AgentUpgradesHandler) Plan(c *gin.Context) {
 		return
 	}
 	plan["eligible_nodes"] = len(nodes)
+	described, err := agentupgrade.Describe(c.Request.Context(), db, nodes)
+	if err != nil {
+		kernelDBError(c, err)
+		return
+	}
+	plan["nodes"] = described
 	var active []string
 	if err := db.WithContext(c.Request.Context()).Model(&model.AgentUpgradeCampaign{}).Where("active_slot IS NOT NULL").Limit(1).Pluck("id", &active).Error; err != nil {
 		kernelDBError(c, err)

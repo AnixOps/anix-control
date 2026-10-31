@@ -5,15 +5,6 @@
 
 export const BYTES_PER_GB = 1024 * 1024 * 1024
 
-export const NODE_GROUP_KINDS = Object.freeze(['proxy', 'forward'])
-
-// Every node a group makes is a regular node (docs/design/node-unification):
-// the API stores every group as proxy, and a group without protocols makes
-// relays. The console still shows such a group as a relay ("forward") group.
-export function groupKind(group) {
-  return Array.isArray(group?.protocol_template) && group.protocol_template.length > 0 ? 'proxy' : 'forward'
-}
-
 // The protocol types a template may name, and each one's transports and TLS
 // modes (internal/nodegroup/template.go): Reality is VLESS only and runs on
 // tcp, grpc and h2.
@@ -79,7 +70,9 @@ export const PROTOCOL_PRESETS = Object.freeze({
   'vless-reality-shadowsocks': () => [
     { ...blankProtocol('vless'), name: 'VLESS Reality' },
     { ...blankProtocol('shadowsocks'), name: 'Shadowsocks 2022' }
-  ]
+  ],
+  // A node without protocols: it only runs the network model (ANX).
+  none: () => []
 })
 export const PRESET_KEYS = Object.freeze(Object.keys(PROTOCOL_PRESETS))
 export const DEFAULT_PRESET = 'vless-reality'
@@ -186,7 +179,6 @@ export function groupFormFrom(group, { now = Date.now() } = {}) {
   if (!group) {
     return {
       name: '',
-      kind: 'proxy',
       rate: 1,
       tagsText: '',
       monthlyLimitGb: null,
@@ -206,7 +198,6 @@ export function groupFormFrom(group, { now = Date.now() } = {}) {
   if (hasExpiry) expiry = group.token_expired || expires <= now ? 'expired' : 'keep'
   return {
     name: group.name || '',
-    kind: groupKind(group),
     rate: Number(group.rate) || 1,
     tagsText: Array.isArray(group.tags) ? group.tags.join(', ') : '',
     monthlyLimitGb: group.monthly_limit_bytes ? group.monthly_limit_bytes / BYTES_PER_GB : null,
@@ -235,14 +226,11 @@ export function expiryFor(form, now = Date.now()) {
   return days ? new Date(now + days * 86_400_000).toISOString() : null
 }
 
-// The body of POST/PUT /kernel/node-groups. A relay ("forward") group has
-// no template and no subscription groups: its nodes are regular nodes
-// without protocols.
+// The body of POST/PUT /kernel/node-groups. Every group makes the same
+// kind of node; one without protocols only runs the network model.
 export function buildGroupInput(form, { now = Date.now() } = {}) {
-  const proxy = form.kind === 'proxy'
   const input = {
     name: String(form.name || '').trim(),
-    kind: form.kind,
     max_nodes: Number(form.maxNodes) || 0,
     require_approval: Boolean(form.requireApproval),
     rate: Number(form.rate),
@@ -251,8 +239,8 @@ export function buildGroupInput(form, { now = Date.now() } = {}) {
     reset_day: Number(form.resetDay) || 1,
     sort: Number(form.sort) || 0,
     token_expires_at: expiryFor(form, now),
-    protocol_template: proxy ? form.protocols.map(entryFromProtocol) : [],
-    subscription_group_ids: proxy ? [...form.subscriptionGroupIds] : []
+    protocol_template: form.protocols.map(entryFromProtocol),
+    subscription_group_ids: [...form.subscriptionGroupIds]
   }
   return input
 }
@@ -262,7 +250,6 @@ export function buildGroupInput(form, { now = Date.now() } = {}) {
 export function inputFromGroup(group, overrides = {}) {
   return {
     name: group.name,
-    kind: group.kind,
     max_nodes: group.max_nodes || 0,
     require_approval: Boolean(group.require_approval),
     rate: group.rate,
@@ -277,16 +264,14 @@ export function inputFromGroup(group, overrides = {}) {
   }
 }
 
-// The body of the inline "new group" form of the join dialog: a name, a kind
-// and (for a proxy group) one of the presets.
-export function buildQuickGroupInput({ name, kind, preset, subscriptionGroupIds = [] }) {
-  const proxy = kind === 'proxy'
-  const protocols = proxy ? (PROTOCOL_PRESETS[preset] || PROTOCOL_PRESETS[DEFAULT_PRESET])() : []
+// The body of the inline "new group" form of the join dialog: a name and
+// one of the presets.
+export function buildQuickGroupInput({ name, preset, subscriptionGroupIds = [] }) {
+  const protocols = (PROTOCOL_PRESETS[preset] || PROTOCOL_PRESETS[DEFAULT_PRESET])()
   return {
     name: String(name || '').trim(),
-    kind,
     protocol_template: protocols.map(entryFromProtocol),
-    subscription_group_ids: proxy ? [...subscriptionGroupIds] : []
+    subscription_group_ids: protocols.length ? [...subscriptionGroupIds] : []
   }
 }
 

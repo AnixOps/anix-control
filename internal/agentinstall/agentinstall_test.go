@@ -290,3 +290,21 @@ func TestVerifySignatureAcceptsOpenSSLSignatures(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, VerifySignature(Script, []byte(base64.StdEncoding.EncodeToString(raw)+"\n"), public))
 }
+
+func TestDevBuildTags(t *testing.T) {
+	for _, tag := range []string{"v5.0.0-rc.15.dev.42", "v5.0.1-alpha.0.dev.3"} {
+		assert.True(t, ReleaseTagPattern.MatchString(tag), tag)
+		assert.True(t, IsDevBuild(tag), tag)
+		assert.Equal(t, ControlReleaseBase, GitHubAgentBase(tag), tag)
+	}
+	for _, tag := range []string{"v5.0.0-rc.15", "v5.0.0"} {
+		assert.False(t, IsDevBuild(tag), tag)
+		assert.Equal(t, AgentReleaseBase, GitHubAgentBase(tag), tag)
+	}
+	for _, tag := range []string{"v5.0.0.dev.1", "v5.0.0-rc.dev.1", "v5.0.0-rc.15.dev", "v5.0.0-rc.15-dev.1"} {
+		assert.False(t, ReleaseTagPattern.MatchString(tag), tag)
+		assert.False(t, IsDevBuild(tag), tag)
+	}
+	metadata := Settings{AgentVersion: "v5.0.0-rc.15.dev.42"}.Metadata()
+	assert.Equal(t, ControlReleaseBase, metadata.Sources[MirrorGitHub])
+}

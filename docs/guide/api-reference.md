@@ -623,12 +623,14 @@ GET  /api/v4/kernel/agents/upgrade-plan
 
 应答 `{"data": {"target_version", "control_version", "configured", "unconfigured_reason", "eligible_nodes",
 "batches": [{"percent", "min_duration_seconds"}], "min_batch_seconds", "first_batch_max_percent",
-"failure_threshold_percent", "reconnect_timeout_seconds", "active_campaign_id", "can_start"}}`：默认推送的
+"failure_threshold_percent", "reconnect_timeout_seconds", "active_campaign_id", "can_start",
+"nodes": [{"node_ref", "name", "agent_version"}]}}`：默认推送的
 Agent 版本（`agent_install.agent_version`，否则 Control 自己的版本）、会纳入的节点数（已启用且 Agent 在控制流上
 出现过）、H19 的默认批次和下限、正在进行的升级和调用者能不能开始（超级管理员）。没有配置 https 地址时
 `configured` 为 `false`，`target_version` 为空。开始、暂停、继续和中止仍是
 `POST /api/v4/kernel/agents/upgrades` 及其子路径（超级管理员）；管理端从 ⌘K 的「升级节点」打开面板，
-开始前的确认框写明会升级多少个节点。
+开始前的确认框写明会升级多少个节点。开始请求带 `"nodes": ["proxy-1", "forward-2"]` 时是手动升级：只升级这些节点（每个都要在 `nodes` 列表里），
+一批全部推送，没有 30 分钟下限，失败阈值和回滚照旧；此时不能再带 `batches` 或 `exclude`。
 
 ### 节点组与接入令牌
 

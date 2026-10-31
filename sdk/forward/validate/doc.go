@@ -40,7 +40,8 @@
 //     Options.EnableNetwork (else CodeEngineNotEnabled); network_egress_id
 //     and network_transport_id only on such hops and links
 //     (CodeNotApplicable). An ENGINE_NETWORK route runs it on every hop
-//     (CodeInvalidRelation), one node per hop, an explicit listen port, no
+//     (CodeInvalidRelation), one node per hop after the entry (several
+//     entry nodes are entry HA), an explicit listen port, no
 //     direct mode, no hop port, dial_address, mux, server_name or path;
 //     each link names its network model transport and the exit its
 //     internet egress. PROXY protocol v1 needs an ENGINE_NETWORK exit,

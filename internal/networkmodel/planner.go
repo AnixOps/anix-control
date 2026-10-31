@@ -3,6 +3,7 @@ package networkmodel
 import (
 	"fmt"
 	"net"
+	"net/netip"
 	"regexp"
 	"sort"
 	"strconv"
@@ -287,6 +288,19 @@ func checkTransportKind(v *violations, field string, transport *Transport) {
 	if options == nil {
 		options = &AnxLine{}
 	}
+	if options.Reverse {
+		if transport.Kind != network.TransportAnxLine {
+			v.add(field+".anx_line.reverse", "only bare anx_line (l1, c1) runs reversed")
+		}
+		if options.QUICPort != 0 || options.FakeTCPPort != 0 || options.Multipath {
+			v.add(field+".anx_line", "a reversed link runs on c1 only; no quic_port, faketcp_port or multipath")
+		}
+		if options.ReverseHost == "" {
+			v.add(field+".anx_line.reverse_host", "a reversed link needs the dialing device's address")
+		}
+	} else if options.ReverseHost != "" || options.ReversePort != 0 {
+		v.add(field+".anx_line", "reverse_host and reverse_port need reverse")
+	}
 	switch transport.Kind {
 	case network.TransportAnxLine:
 		if !transport.Trusted {
@@ -447,6 +461,27 @@ func transportProto(transport *Transport, role networkv1.TransportRole, peer, ke
 	if transport.Kind == KindAnx {
 		anx.Egress = "l2"
 	}
+	if options.Reverse {
+		// The accepting end dials back; no carrier addresses either way.
+		anx.Reverse, anx.CarrierOrder = true, []string{"c1"}
+		port := options.ReversePort
+		if port == 0 {
+			port = DefaultReversePort
+		}
+		p := strconv.FormatUint(uint64(port), 10)
+		if role == networkv1.TransportRole_TRANSPORT_ROLE_DIAL {
+			anx.ServerPublic = accepter.PublicKeys[network.TransportAnxLine]
+			listen := "0.0.0.0"
+			if addr, err := netip.ParseAddr(options.ReverseHost); err == nil && addr.Is6() {
+				listen = "::"
+			}
+			anx.ReverseListen = net.JoinHostPort(listen, p)
+		} else {
+			anx.ReverseDial = net.JoinHostPort(options.ReverseHost, p)
+		}
+		out.Settings = &networkv1.Transport_AnxLine{AnxLine: anx}
+		return out
+	}
 	if to != nil {
 		host := to.Listen.Address
 		if role == networkv1.TransportRole_TRANSPORT_ROLE_DIAL {
@@ -456,6 +491,9 @@ func transportProto(transport *Transport, role networkv1.TransportRole, peer, ke
 			anx.ServerPublic = accepter.PublicKeys[network.TransportAnxLine]
 		}
 		port := to.Listen.Port
+		if role == networkv1.TransportRole_TRANSPORT_ROLE_DIAL {
+			port = publicPort(to, port)
+		}
 		anx.TcpAddr = net.JoinHostPort(host, strconv.FormatUint(uint64(port), 10))
 		if options.QUICPort != 0 {
 			anx.QuicAddr = net.JoinHostPort(host, strconv.FormatUint(uint64(options.QUICPort), 10))
@@ -466,4 +504,15 @@ func transportProto(transport *Transport, role networkv1.TransportRole, peer, ke
 	}
 	out.Settings = &networkv1.Transport_AnxLine{AnxLine: anx}
 	return out
+}
+
+// publicPort answers the port a dialer reaches ingress's local port at: the
+// public port a NAT ingress maps it to, or the port itself.
+func publicPort(ingress *Ingress, port uint32) uint32 {
+	for _, m := range ingress.PortMap {
+		if port >= m.Local.First && port <= m.Local.Last {
+			return m.Public.First + (port - m.Local.First)
+		}
+	}
+	return port
 }

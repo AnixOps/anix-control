@@ -1285,7 +1285,11 @@ type Hop struct {
 	// node_refs are the nodes that serve this hop. Several nodes on ENTRY
 	// are entry HA (each runs the same listener); several on RELAY or EXIT
 	// are the previous hop's upstreams, balanced by Policy.next_hop (the
-	// exit-level failover).
+	// exit-level failover). An ENGINE_NETWORK hop is one device, except the
+	// entry: its first device starts on hop 1's network_transport_id (or
+	// leaves by network_egress_id on a single-hop route), and each other
+	// device on a transport of its own into the same ingress (or by an
+	// internet egress of its own), chosen by the network model.
 	NodeRefs []string `protobuf:"bytes,3,rep,name=node_refs,json=nodeRefs,proto3" json:"node_refs,omitempty"`
 	// ingress is how the previous hop reaches this one. Ignored on ENTRY,
 	// whose ingress is Route.listen.
@@ -1298,8 +1302,9 @@ type Hop struct {
 	// a single node in node_refs.
 	DialAddress string `protobuf:"bytes,6,opt,name=dial_address,json=dialAddress,proto3" json:"dial_address,omitempty"`
 	// network_egress_id is the network model's internet egress on the hop's
-	// device that dials the targets; only on an ENGINE_NETWORK EXIT hop,
-	// required there. Routes over one transport share its egress.
+	// device that dials the targets; only on an ENGINE_NETWORK EXIT hop.
+	// Empty there lets Control pick the device's first internet egress (or
+	// add one). Routes over one transport share its egress.
 	NetworkEgressId string `protobuf:"bytes,7,opt,name=network_egress_id,json=networkEgressId,proto3" json:"network_egress_id,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
@@ -1400,9 +1405,10 @@ type LinkTransport struct {
 	// refused on other links. Unspecified means ANIXOPS_CARRIER_AUTO.
 	Carrier AnixOpsCarrier `protobuf:"varint,5,opt,name=carrier,proto3,enum=anixops.forward.v1.AnixOpsCarrier" json:"carrier,omitempty"`
 	// network_transport_id is the network model's transport the link runs
-	// over; only for LINK_SECURITY_NETWORK, required there. Its
-	// dialing end is on the previous hop's device, its accepting end on this
-	// hop's. Several routes may share one transport.
+	// over; only for LINK_SECURITY_NETWORK. Its dialing end is on the
+	// previous hop's device, its accepting end on this hop's. Empty there
+	// lets Control link the two devices with a transport of its own (ANX-A,
+	// id auto-<from>-<to>). Several routes may share one transport.
 	NetworkTransportId string `protobuf:"bytes,6,opt,name=network_transport_id,json=networkTransportId,proto3" json:"network_transport_id,omitempty"`
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
@@ -3284,8 +3290,11 @@ type UpstreamHealth struct {
 	// rtt_us is the last connect round trip; 0 when it failed.
 	RttUs           uint32 `protobuf:"varint,8,opt,name=rtt_us,json=rttUs,proto3" json:"rtt_us,omitempty"`
 	CheckedAtUnixMs int64  `protobuf:"varint,9,opt,name=checked_at_unix_ms,json=checkedAtUnixMs,proto3" json:"checked_at_unix_ms,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// node_ref is the node that checked; set in GetRouteHealth answers only
+	// (a report's are its node's).
+	NodeRef       string `protobuf:"bytes,10,opt,name=node_ref,json=nodeRef,proto3" json:"node_ref,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *UpstreamHealth) Reset() {
@@ -3379,6 +3388,13 @@ func (x *UpstreamHealth) GetCheckedAtUnixMs() int64 {
 		return x.CheckedAtUnixMs
 	}
 	return 0
+}
+
+func (x *UpstreamHealth) GetNodeRef() string {
+	if x != nil {
+		return x.NodeRef
+	}
+	return ""
 }
 
 type ProbeRequest struct {
@@ -8222,7 +8238,7 @@ const file_api_forward_v1_forward_proto_rawDesc = "" +
 	"\x05state\x18\x06 \x01(\x0e2\x1f.anixops.forward.v1.HealthStateR\x05state\x121\n" +
 	"\x14consecutive_failures\x18\a \x01(\rR\x13consecutiveFailures\x12\x15\n" +
 	"\x06rtt_us\x18\b \x01(\rR\x05rttUs\x12+\n" +
-	"\x12checked_at_unix_ms\x18\t \x01(\x03R\x0fcheckedAtUnixMs\"\xe0\x02\n" +
+	"\x12checked_at_unix_ms\x18\t \x01(\x03R\x0fcheckedAtUnixMs\"\xfb\x02\n" +
 	"\x0eUpstreamHealth\x12\x19\n" +
 	"\broute_id\x18\x01 \x01(\tR\arouteId\x12\x1b\n" +
 	"\thop_index\x18\x02 \x01(\rR\bhopIndex\x12\x18\n" +
@@ -8232,7 +8248,9 @@ const file_api_forward_v1_forward_proto_rawDesc = "" +
 	"\x14consecutive_failures\x18\x06 \x01(\rR\x13consecutiveFailures\x12:\n" +
 	"\x1acircuit_open_until_unix_ms\x18\a \x01(\x03R\x16circuitOpenUntilUnixMs\x12\x15\n" +
 	"\x06rtt_us\x18\b \x01(\rR\x05rttUs\x12+\n" +
-	"\x12checked_at_unix_ms\x18\t \x01(\x03R\x0fcheckedAtUnixMs\"\xb3\x01\n" +
+	"\x12checked_at_unix_ms\x18\t \x01(\x03R\x0fcheckedAtUnixMs\x12\x19\n" +
+	"\bnode_ref\x18\n" +
+	" \x01(\tR\anodeRef\"\xb3\x01\n" +
 	"\fProbeRequest\x12\x19\n" +
 	"\bprobe_id\x18\x01 \x01(\tR\aprobeId\x12\x19\n" +
 	"\broute_id\x18\x02 \x01(\tR\arouteId\x12\x1b\n" +

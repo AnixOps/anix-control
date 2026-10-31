@@ -96,7 +96,9 @@ func kindKey(component networkv1.Component, kind string, version uint32) string 
 // CheckStatus bounds a status for the stream's device deviceRef: device_ref
 // is deviceRef; plan_hash empty or lowercase hex SHA-256; at most
 // MaxComponents components, interfaces and keys; known enums, component ids
-// and kind names; addresses that parse; text within MaxTextBytes.
+// and kind names; addresses that parse; text within MaxTextBytes; at most
+// MaxForwardTargets target healths per port forward, each with a host and a
+// port.
 func CheckStatus(status *networkv1.NetworkStatus, deviceRef string) error {
 	if status == nil {
 		return invalid("status is required")
@@ -142,6 +144,23 @@ func CheckStatus(status *networkv1.NetworkStatus, deviceRef string) error {
 		if err := checkText(forward.GetDetail()); err != nil {
 			return invalid("port_forwards[%d]: %v", i, err)
 		}
+		if len(forward.GetTargets()) > MaxForwardTargets {
+			return invalid("port_forwards[%d]: more than %d targets", i, MaxForwardTargets)
+		}
+		for j, target := range forward.GetTargets() {
+			if target.GetHost() == "" || target.GetPort() == 0 || target.GetPort() > MaxPort {
+				return invalid("port_forwards[%d]: targets[%d]: host and a port from 1 to %d are required", i, j, MaxPort)
+			}
+			if err := checkText(target.GetHost()); err != nil {
+				return invalid("port_forwards[%d]: targets[%d]: %v", i, j, err)
+			}
+			if networkv1.TargetHealthState_name[int32(target.GetState())] == "" {
+				return invalid("port_forwards[%d]: targets[%d]: unknown state", i, j)
+			}
+			if target.GetCheckedAtUnixMs() < 0 || target.GetCircuitOpenUntilUnixMs() < 0 {
+				return invalid("port_forwards[%d]: targets[%d]: negative time", i, j)
+			}
+		}
 	}
 	for i, iface := range status.GetInterfaces() {
 		if err := checkText(iface.GetName()); err != nil {
@@ -165,7 +184,7 @@ func CheckStatus(status *networkv1.NetworkStatus, deviceRef string) error {
 		if !kindPattern.MatchString(key.GetKind()) || key.GetKey() == "" {
 			return invalid("public_keys[%d]: needs a kind and a key", i)
 		}
-		if err := checkText(key.GetKey()); err != nil {
+		if err := checkKey(key.GetKey()); err != nil {
 			return invalid("public_keys[%d]: %v", i, err)
 		}
 	}

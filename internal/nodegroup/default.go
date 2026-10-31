@@ -69,7 +69,7 @@ func DefaultGroupInput(subscriptionGroupIDs []uint) (GroupInput, error) {
 		return GroupInput{}, err
 	}
 	return GroupInput{
-		Name: DefaultGroupName, Kind: model.NodeGroupKindProxy, ProtocolTemplate: template,
+		Name: DefaultGroupName, ProtocolTemplate: template,
 		SubscriptionGroupIDs: subscriptionGroupIDs,
 	}, nil
 }

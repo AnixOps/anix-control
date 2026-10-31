@@ -115,8 +115,8 @@
                     :nodes="nodes"
                     :violations="violations"
                     :error-text="errorText"
-                    :enable-anix-ops="enableAnixOps"
                     :network-model="networkModel"
+                    :network-nodes="networkNodes"
                     @update="patch => updateHop(index, patch)"
                     @add-node="ref => hop.node_refs.push(ref)"
                     @remove-node="ref => hop.node_refs.splice(hop.node_refs.indexOf(ref), 1)"
@@ -248,7 +248,6 @@ import { DNS_HINT_ID, bindingBlockers, bindingChanged, bindingDraft, bindingErro
 import HopCard from '@/components/forward/HopCard.vue'
 import PreviewPanel from '@/components/forward/PreviewPanel.vue'
 import { forwardErrorMessage, violationText } from '@/components/forward/messages'
-import { useForwardFlags } from '@/components/forward/useForwardFlags'
 import { useRoutePreview } from '@/components/forward/useRoutePreview'
 import {
   DIRECT_MODES, H21_DEFAULTS, NETWORK_ENGINE, PROTOCOLS, PROXY_PROTOCOLS, STRATEGIES, TARGET_POLICIES, blankHop, blankTarget, draftToRoute,
@@ -266,13 +265,14 @@ const router = useRouter()
 const currentRoute = useRoute()
 const { t, te } = useAppI18n()
 const toast = useToast()
-const { enableAnixOps } = useForwardFlags()
 
 const editing = computed(() => Boolean(props.id))
 const draft = ref(null)
 const nodes = ref([])
-// The network model's document, for ENGINE_NETWORK routes.
+// The network model's document, for ENGINE_NETWORK routes, and the Agent
+// nodes they may use.
 const networkModel = ref(null)
+const networkNodes = ref([])
 const enforced = ref('')
 const loadError = ref(null)
 const saving = ref(false)
@@ -308,6 +308,7 @@ async function load() {
     ])
     nodes.value = nodeAnswer.nodes
     networkModel.value = network?.document || null
+    networkNodes.value = network?.nodes || []
     storedBinding.value = bindings?.find(item => item.route_id === props.id) || null
     dnsReady.value = Array.isArray(bindings)
     let route = routeAnswer?.route || null
@@ -449,7 +450,9 @@ function removeHop(index) {
 }
 
 async function addHop() {
-  const engine = isNetworkDraft(draft.value) ? NETWORK_ENGINE : undefined
+  // A new hop runs on the network model, unless the route is still on an
+  // older engine.
+  const engine = isNetworkDraft(draft.value) || !draft.value.hops.length ? NETWORK_ENGINE : draft.value.hops[0].engine
   draft.value.hops.push(blankHop(draft.value.hops.length, draft.value.hops.length + 1, engine))
   syncRoles(draft.value.hops)
   await nextTick()
@@ -470,7 +473,7 @@ const strategyOptions = computed(() => STRATEGIES.map(value => ({ value, label: 
 const directOptions = computed(() => DIRECT_MODES.map(value => ({ value, label: t(`forwardV4.direct.${value}`), description: t(`forwardV4.directHint.${value}`) })))
 const proxyProtocolOptions = computed(() => PROXY_PROTOCOLS.map(value => ({ value, label: t(`forwardV4.proxyProtocol.${value}`) })))
 const targetPolicyOptions = computed(() => TARGET_POLICIES.map(value => ({ value, label: t(`forwardV4.targetPolicy.${value}`), description: t(`forwardV4.targetPolicyHint.${value}`) })))
-const chainDescription = computed(() => (enableAnixOps.value ? t('forwardV4.editor.chainDescriptionAnixOps') : t('forwardV4.editor.chainDescription')))
+const chainDescription = computed(() => t('forwardV4.editor.chainDescription'))
 
 // D11: LEAST_CONN on nftables is approximate until the Agent reports
 // conntrack counts. The hop that balances is the one before the choice.

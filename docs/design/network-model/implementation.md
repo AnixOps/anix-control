@@ -24,6 +24,8 @@
 - 每台设备的计划哈希变化即 generation + 1；曾有计划、现在没有的设备下发空计划。
 - 已定：accept 端在自己的计划里拿到监听地址：`AnxLineSettings` 的 `tcp_addr` / `quic_addr` / `faketcp_addr` 在 accept 端是本端监听地址（hop ingress 的 listen 地址，端口按载体取传输的 `listen.port` / `quic_port` / `faketcp_port`），dial 端仍是对端地址；`server_public` 只给 dial 端，`Check` 拒绝 accept 端带它。
 
+- 反向回连（2026-10-30，anx `docs/ANX-LINE-REVERSE-v0.1-draft.md`）：传输的 `anx_line.reverse = true` 时 accept 端（出口）不开端口，主动连 dial 端的反向监听（`reverse_host:reverse_port`，端口默认 24444）。计划里两端都不带载体地址：dial 端带 `reverse_listen`（`0.0.0.0:<port>`，`reverse_host` 是 IPv6 时 `[::]:<port>`）与 `server_public`，accept 端带 `reverse_dial`；`carrier_order` 固定 `c1`。只允许裸 `anx_line`（l1），不能同时配 `quic_port` / `faketcp_port` / `multipath`；`Check` 按角色检查这两个字段。Agent 侧：dial 端写 anx-node 的 `anx_line.reverse_listen` 与链路 `reverse`，accept 端不为该传输监听，改用 anx-server 的 `SetReverseDials`。
+
 ## Agent Control 下发与状态（第 2b 步）
 
 - 协商：Hello 列出 `network.v1` 且带合法 `device_capabilities`（`device_ref` 等于本会话节点），并且本会话协商了 config.v1，HelloAck 才列 `network.v1`；forward 节点同时获得 package-reports.v1。
@@ -79,10 +81,15 @@ PortForward 由 Agent 转成 anixcore 的 forward 入站（出站为 `egress:<id
 
 **Control 的规划（已实现）**
 
-- ENGINE_NETWORK 路由规则：每一跳都是 ENGINE_NETWORK，每跳一个设备；入口端口必须显式给出；后续跳不填 port、dial_address、mux、server_name、path，链路填 `network_transport_id`，出口填 `network_egress_id`；不支持直连模式。不查转发节点库存，因为这些节点是网络模型设备。
+- ENGINE_NETWORK 路由规则：每一跳都是 ENGINE_NETWORK，入口之后每跳一个设备；入口端口必须显式给出；后续跳不填 port、dial_address、mux、server_name、path，链路填 `network_transport_id`，出口填 `network_egress_id`；不支持直连模式。不查转发节点库存，因为这些节点是网络模型设备。
+- 自动补全（2026-10-30）：路由只需选设备，链路的 `network_transport_id` 和出口的 `network_egress_id` 可留空，由 Control 补齐。补出的组件只进计划、不写回文档，id 以 `auto-` 开头（文档不得使用）：没有线路的设备得到线路 `auto-<node>`；出口（及无链路路由的其他入口）没有互联网出口时得到 `auto-<node>-internet`（nat_direct，source auto）；留空的链路得到上一设备的跳出口 `auto-<from>-hop`、本设备的跳入口 `auto-<to>-hop`（监听 24443，对外地址取节点 host）和传输 `auto-<from>-<to>`（`anx`，A2 外衣，SNI www.apple.com），链路密钥与声明的传输一样生成。节点没有 host 时该链路留空、路由待定。声明的组件从不改动。`GET /api/v4/kernel/network` 的 `nodes` 列出所有已连上 Control 且未停用的 Agent 节点，路由编辑器从这里选设备。
+- 节点网络设置（2026-10-30，表 `v4_kernel_node_network`，`GET/PUT /api/v4/kernel/nodes/{id}/network`，节点页「协议」标签的「网络」）：NAT 和多网卡机器在这里指定出口网卡、各族源地址和网关，以及中转端口（0 即 24443）。设了网卡和源地址的族，自动线路带上 interface/gateway，自动出口的 source 用该地址（Agent 据此做策略路由）；没设的族仍是 source auto。节点有已启用的 NAT 入口且端口映射覆盖中转端口时，自动跳入口为 `nat` 类型、公网地址取该入口的 host，上一设备拨映射后的公网端口；否则为 direct、地址取节点 host。保存设置会重新规划并记操作日志（`network_node_settings`）。
+- 检测到的网卡（2026-10-30）：Agent（rc.20 起）在网络状态的 `interfaces` 里上报本机网卡（启用、有全局单播地址，排除 lo、容器、隧道接口和链路本地地址）及其默认 IPv4/IPv6 网关，没有计划也每分钟上报。`GET/PUT .../network` 的回答带 `detected`（按族拆开、去掉前缀长度的地址）和 `detected_at`；节点页「网络」据此给出下拉选项，选网卡即填入它的第一个地址和网关，仍可切换为手动填写。
 - forward.v1 规划器只校验这类路由，不生成 NodeForwardState，也不分配端口。每次接受的规划在同一事务里重新规划网络模型：路由变成入口设备的 PortForward，链路按传输规划，到期或超配额的路由暂停后端口转发随之撤下。
 - 入口没写监听地址时用 `::`。目标策略取 `policy.target`，限速和最大连接数取 `limits`，健康检查、熔断、PROXY 头照搬。
 - NetworkStatus 的 port_forwards 计入路由的第 0 跳计数：字节比上次小就是内核重启，开新的计数周期（`network-<毫秒>`）；比已存计数旧的状态忽略；达到配额触发重新规划。
+- 目标健康：`PortForwardStatus.targets`（`ForwardTargetHealth`：状态、连续失败、熔断截止、最近一次检查的往返和时间）由 Agent 从 anixcore 的 `GET /v1/inbounds/{tag}/targets` 取得。入口的检查经整条路径拨到目标，所以记作第 0 跳、入口设备的上游健康：`GET /routes/{id}/health`、延迟历史、诊断和 DNS 入口切换都读它，不再依赖 forward.v1 报告。
+- 多入口（入口高可用）：入口跳可以有多个设备，路由需要 `listen.entry_hostname`。每个入口设备各有一份 PortForward。第一个设备走第 1 跳指定的 `network_transport_id`（单跳路由走出口跳的 `network_egress_id`）。其余设备由规划器选：从该设备出发、到达同一个入站的传输（按 id 取第一条启用、有链路密钥、且不往别处续接的），之后沿用路由余下的传输；单跳路由则选该设备上启用的互联网出口（同 kind 优先，再按 id）。选不到的入口单独挂起，原因里写明是哪个入口，其他入口照常运行。健康、延迟、诊断和 DNS 入口切换对每个入口设备分别判断。
 
 **迁移**
 

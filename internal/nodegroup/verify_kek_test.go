@@ -17,7 +17,7 @@ func TestVerifyKEKOpensAJoinToken(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, checked, "no group, no token")
 
-	f.createGroup(t, GroupInput{Name: "HK", Kind: "proxy"})
+	f.createGroup(t, GroupInput{Name: "HK"})
 	checked, err = VerifyKEK(f.db, kek)
 	require.NoError(t, err)
 	assert.True(t, checked)

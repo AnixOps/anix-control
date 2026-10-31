@@ -730,7 +730,7 @@ read_metadata() {
       *) ;;
     esac
   done <"${file}"
-  [[ "${META_VERSION}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)(\.[0-9]+)?)?$ ]] || die "Control's install metadata names no Agent release"
+  [[ "${META_VERSION}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)(\.[0-9]+(\.dev\.[0-9]+)?)?)?$ ]] || die "Control's install metadata names no Agent release"
   [[ -n "${META_GRPC}" ]] || die "Control's install metadata names no gRPC target (agent_install.grpc_target)"
   [[ "${META_GRPC}" =~ ^[][A-Za-z0-9.:-]+:[0-9]{1,5}$ ]] || die "Control's gRPC target ${META_GRPC} is not host:port"
   ASSET="${META_ASSET[${ARCH}]:-}"
@@ -1311,9 +1311,11 @@ LimitNOFILE=1048576
 RuntimeDirectory=anixops-agent
 RuntimeDirectoryMode=0750
 
-# Privileges (H13): nftables and tc over netlink, low ports; nothing else.
-AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
-CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
+# Privileges (H13): nftables and tc over netlink, low ports, and raw
+# sockets for ANX-Line's fake-TCP carrier (c3, anx-node and anx-server);
+# nothing else.
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_NET_RAW
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_NET_RAW
 NoNewPrivileges=yes
 
 # Sandbox (forward-sdk.md, section 14).

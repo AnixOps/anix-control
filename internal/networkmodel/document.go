@@ -127,6 +127,12 @@ type Egress struct {
 // accepting end's hop ingress at its public host (or listen address): the
 // ingress port carries c1 (TCP); QUICPort and FakeTCPPort offer c2 and c3
 // on the same host.
+//
+// Reverse turns the dial around (anx docs ANX-LINE-REVERSE): the accepting
+// device opens no port and dials ReverseHost:ReversePort, a reverse
+// listener on the dialing device, which runs the link over those
+// connections. The accepting device then needs no hop ingress port; only
+// bare anx_line (l1, c1) runs reversed.
 type AnxLine struct {
 	CarrierOrder []string `json:"carrier_order,omitempty"`
 	Multipath    bool     `json:"multipath,omitempty"`
@@ -135,7 +141,16 @@ type AnxLine struct {
 	ServerName   string   `json:"server_name,omitempty"`
 	QUICPort     uint32   `json:"quic_port,omitempty"`
 	FakeTCPPort  uint32   `json:"faketcp_port,omitempty"`
+	Reverse      bool     `json:"reverse,omitempty"`
+	// ReverseHost is the dialing device's address the accepting device
+	// reaches; ReversePort its reverse listener port (0 = 24444).
+	ReverseHost string `json:"reverse_host,omitempty"`
+	ReversePort uint32 `json:"reverse_port,omitempty"`
 }
+
+// DefaultReversePort is the dialing device's reverse listener port when
+// AnxLine.ReversePort is 0.
+const DefaultReversePort = 24444
 
 // Transport is a segment between two devices, from one device's hop
 // egress to another's hop ingress.

@@ -52,5 +52,29 @@ type NetworkDevice struct {
 
 func (NetworkDevice) TableName() string { return "v4_kernel_network_device" }
 
-// NetworkModels are the network model's tables.
-func NetworkModels() []any { return []any{&NetworkModel{}, &NetworkTransportKey{}, &NetworkDevice{}} }
+// NetworkModels are the network model's tables, with AgentTransport, which
+// it reads for the devices a route may use (also in the kernel models).
+func NetworkModels() []any {
+	return []any{&NetworkModel{}, &NetworkTransportKey{}, &NetworkDevice{}, &NodeNetwork{}, &AgentTransport{}}
+}
+
+// NodeNetwork is a device's own network settings, which the components
+// Control adds to the network model for its routes follow
+// (internal/networkmodel auto.go): the interface its egresses leave by,
+// with that interface's source address and gateway per family, and the
+// port its hop ingress listens on. A device without a row, or with empty
+// fields, leaves by the default route and listens on the default hop port.
+// A NAT node entry that maps the hop port makes the hop ingress a NAT
+// ingress reached at the entry's address.
+type NodeNetwork struct {
+	NodeRef   string    `gorm:"primaryKey;size:32" json:"node_ref"`
+	Interface string    `gorm:"size:32;not null;default:''" json:"interface"`
+	SourceV4  string    `gorm:"size:64;not null;default:''" json:"source_v4"`
+	GatewayV4 string    `gorm:"size:64;not null;default:''" json:"gateway_v4"`
+	SourceV6  string    `gorm:"size:64;not null;default:''" json:"source_v6"`
+	GatewayV6 string    `gorm:"size:64;not null;default:''" json:"gateway_v6"`
+	HopPort   uint32    `gorm:"not null;default:0" json:"hop_port"`
+	UpdatedAt time.Time `gorm:"not null" json:"updated_at"`
+}
+
+func (NodeNetwork) TableName() string { return "v4_kernel_node_network" }

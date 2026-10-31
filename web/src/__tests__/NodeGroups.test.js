@@ -39,7 +39,7 @@ const Harness = {
 }
 
 const hk = (extra = {}) => ({
-  id: 3, name: 'HK', kind: 'proxy', max_nodes: 5, require_approval: false, rate: 1.5, tags: ['hk', 'iepl'],
+  id: 3, name: 'HK', max_nodes: 5, require_approval: false, rate: 1.5, tags: ['hk', 'iepl'],
   monthly_limit_bytes: 2 * 1024 ** 3, reset_day: 5, sort: 2,
   protocol_template: [{
     name: 'VLESS Reality', type: 'vless', port_range: [20000, 40000], transport: 'tcp', tls: 'reality',
@@ -49,7 +49,7 @@ const hk = (extra = {}) => ({
   nodes: { live: 4, pending: 1 }, ...extra
 })
 const edge = () => ({
-  id: 4, name: 'edge', kind: 'forward', max_nodes: 0, require_approval: true, rate: 1, tags: [], monthly_limit_bytes: 0,
+  id: 4, name: 'edge', max_nodes: 0, require_approval: true, rate: 1, tags: [], monthly_limit_bytes: 0,
   reset_day: 1, sort: 0, protocol_template: [], subscription_group_ids: [], token_expires_at: '2999-01-02T12:00:00Z',
   token_expired: false, nodes: { live: 0, pending: 0 }
 })
@@ -93,12 +93,10 @@ describe('node groups', () => {
     const rows = within(panel).getAllByRole('row').slice(1)
     expect(rows).toHaveLength(2)
     expect(rows[0].textContent).toContain('HK')
-    expect(rows[0].textContent).toContain('Regular')
     expect(rows[0].textContent).toContain('4')
     expect(rows[0].textContent).toContain('1 awaiting')
     expect(rows[0].textContent).toContain('Does not expire')
     expect(rows[1].textContent).toContain('edge')
-    expect(rows[1].textContent).toContain('Relay')
     expect(rows[1].textContent).toContain('Ends 2999-01-02')
     expect(within(rows[0]).getByRole('switch').getAttribute('aria-checked')).toBe('false')
     expect(within(rows[1]).getByRole('switch').getAttribute('aria-checked')).toBe('true')
@@ -136,7 +134,7 @@ describe('node groups', () => {
     const [id, body] = kernel.updateKernelNodeGroup.mock.calls[0]
     expect(id).toBe(3)
     expect(body).toEqual({
-      name: 'HK', kind: 'proxy', max_nodes: 5, require_approval: true, rate: 1.5, tags: ['hk', 'iepl'],
+      name: 'HK', max_nodes: 5, require_approval: true, rate: 1.5, tags: ['hk', 'iepl'],
       monthly_limit_bytes: 2 * 1024 ** 3, reset_day: 5, sort: 2, token_expires_at: null,
       protocol_template: hk().protocol_template, subscription_group_ids: [9]
     })
@@ -188,7 +186,7 @@ describe('node groups', () => {
     await waitFor(() => expect(kernel.createKernelNodeGroup).toHaveBeenCalledTimes(1))
     const body = kernel.createKernelNodeGroup.mock.calls[0][0]
     expect(body).toMatchObject({
-      name: 'JP', kind: 'proxy', max_nodes: 0, require_approval: false, rate: 1, tags: [], monthly_limit_bytes: 0, reset_day: 1,
+      name: 'JP', max_nodes: 0, require_approval: false, rate: 1, tags: [], monthly_limit_bytes: 0, reset_day: 1,
       sort: 0, token_expires_at: null, subscription_group_ids: [9]
     })
     expect(body.protocol_template).toEqual([{
@@ -228,7 +226,7 @@ describe('node groups', () => {
     const [id, body] = kernel.updateKernelNodeGroup.mock.calls[0]
     expect(id).toBe(3)
     expect(body).toMatchObject({
-      name: 'HK 2', kind: 'proxy', require_approval: true, subscription_group_ids: [9, 10], max_nodes: 5, tags: ['hk', 'iepl'],
+      name: 'HK 2', require_approval: true, subscription_group_ids: [9, 10], max_nodes: 5, tags: ['hk', 'iepl'],
       monthly_limit_bytes: 2 * 1024 ** 3, reset_day: 5, token_expires_at: null
     })
     expect(body.protocol_template).toHaveLength(2)

@@ -633,16 +633,12 @@ export default {
     quick: {
       name: '节点组名称',
       namePlaceholder: '香港',
-      kind: '节点类型',
-      kindHelp: {
-        proxy: '常规节点：为用户提供订阅里的协议。',
-        forward: '中转：同样是常规节点，只是不带协议，用作转发线路的入口或中继（ANX 中转）。'
-      },
       preset: '协议',
       presets: {
         'vless-reality': 'VLESS Reality（推荐）',
         'shadowsocks-2022': 'Shadowsocks 2022',
-        'vless-reality-shadowsocks': 'VLESS Reality + Shadowsocks 2022'
+        'vless-reality-shadowsocks': 'VLESS Reality + Shadowsocks 2022',
+        none: '不带协议（只运行网络模型 ANX）'
       },
       subscriptionGroups: '加入订阅分组',
       create: '创建节点组',
@@ -668,10 +664,6 @@ export default {
   groups: {
     summary: '节点组决定新节点的默认设置、协议和接入令牌。',
     add: '新建节点组',
-    kinds: {
-      proxy: '常规',
-      forward: '中转'
-    },
     table: {
       label: '节点组',
       name: '名称',
@@ -715,7 +707,6 @@ export default {
     noSubscriptionGroups: '还没有订阅分组。先到“订阅分组”创建一个，节点才能出现在订阅里。',
     fields: {
       name: '名称',
-      kind: '类型',
       rate: '流量倍率',
       sort: '排序',
       tags: '标签',

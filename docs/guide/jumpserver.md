@@ -44,7 +44,9 @@ Actions → JumpServer → Run workflow, then choose the action:
 - `run`: runs `command` (default `uptime`) as `runas` (default `root`) on the
   hosts named in `hosts` (comma-separated names or addresses; empty means
   every active host) through the job center, waits for it and prints the
-  summary. The run fails when any host fails. With `show_output` it then
+  summary. The run fails when any host fails, except a host without Python,
+  where Ansible cannot run the command at all: the run warns and goes on
+  (scripts gate on a file of the host they are for). With `show_output` it then
   prints the job's Ansible log, which JumpServer serves only over its task
   log websocket. Ansible would treat `{{ }}` in the command as a template
   (for example `docker ps --format '{{.Names}}'`), so `jms.py` wraps such a
@@ -61,6 +63,11 @@ Actions → JumpServer → Run workflow, then choose the action:
   printed, and `@@NEW_REALITY_PUBLIC_KEY@@` in the same body becomes it) and
   `@@NEW_SS2022_KEY_16@@` / `@@NEW_SS2022_KEY_32@@` a new Shadowsocks 2022 key
   of that many bytes, so keys never pass through the inputs.
+  `@@DETECTED:<node>:<interface>:<field>@@` becomes what the node's Agent
+  detected on that interface (`address_v4`, `address_v6`: its first address
+  without the prefix length; `gateway_v4`, `gateway_v6`), masked, so a
+  node's network settings can be set without typing addresses, for example
+  `{"interface":"eth0","source_v4":"@@DETECTED:proxy-62:eth0:address_v4@@","gateway_v4":"@@DETECTED:proxy-62:eth0:gateway_v4@@"}`.
 - `install-agent`: asks Control for a one-hour install token for `node`
   (`proxy-<id>`) and runs Control's install command on the single host named in
   `hosts`, under `systemd-run` so it outlives the job's 60-second limit. The

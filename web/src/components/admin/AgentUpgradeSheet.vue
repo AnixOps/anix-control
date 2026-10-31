@@ -22,6 +22,14 @@
             {{ t('agentUpgradeSheet.start.superOnly') }}
           </p>
 
+          <UiSegmentedControl
+            v-model="form.mode"
+            :aria-label="t('agentUpgradeSheet.start.mode')"
+            :options="modeOptions"
+            data-testid="agent-upgrade-mode"
+          />
+          <p class="upgrade-sheet__rules">{{ t(`agentUpgradeSheet.start.modes.${form.mode}Help`) }}</p>
+
           <UiTextField
             v-model.trim="form.target"
             size="md"
@@ -34,6 +42,7 @@
           />
 
           <UiTextField
+            v-if="form.mode === 'staged'"
             v-model="form.batches"
             size="md"
             :label="t('agentUpgradeSheet.start.batches')"
@@ -45,7 +54,21 @@
             data-testid="agent-upgrade-batches"
           />
 
-          <dl class="upgrade-sheet__facts">
+          <fieldset v-if="form.mode === 'manual'" class="upgrade-sheet__nodes" data-testid="agent-upgrade-nodes">
+            <legend>{{ t('agentUpgradeSheet.start.nodes') }}</legend>
+            <UiCheckbox
+              v-for="node in planNodes"
+              :key="node.node_ref"
+              :model-value="form.nodes.includes(node.node_ref)"
+              :label="node.name ? `${node.name} (${node.node_ref})` : node.node_ref"
+              :description="node.agent_version ? t('agentUpgradeSheet.start.nodeVersion', { version: node.agent_version }) : ''"
+              :disabled="disabled"
+              :data-testid="`agent-upgrade-node-${node.node_ref}`"
+              @update:model-value="toggleNode(node.node_ref, $event)"
+            />
+          </fieldset>
+
+          <dl v-if="form.mode === 'staged'" class="upgrade-sheet__facts">
             <div>
               <dt>{{ t('agentUpgradeSheet.start.minimum') }}</dt>
               <dd data-testid="agent-upgrade-minimum">{{ t('agentUpgradeSheet.start.minimumValue', { minutes: minutes(plan.min_batch_seconds) }) }}</dd>
@@ -55,7 +78,7 @@
               <dd data-testid="agent-upgrade-eligible">{{ t('agentUpgradeSheet.start.eligibleValue', { n: plan.eligible_nodes }, plan.eligible_nodes) }}</dd>
             </div>
           </dl>
-          <p class="upgrade-sheet__rules">
+          <p v-if="form.mode === 'staged'" class="upgrade-sheet__rules">
             {{ t('agentUpgradeSheet.start.rules', { percent: plan.failure_threshold_percent, minutes: minutes(plan.reconnect_timeout_seconds) }) }}
           </p>
 
@@ -100,7 +123,8 @@
 // for a confirmation that names how many nodes are included, then calls
 // POST /api/v4/kernel/agents/upgrades (super administrators). Opened with
 // openAgentUpgrade() (composables/useAgentUpgradeSheet.js); the admin
-// shell mounts it once.
+// shell mounts it once. The manual mode upgrades the nodes ticked from the
+// plan's list at once, in one batch with no minimum (POST with nodes).
 import { computed, reactive, ref, watch } from 'vue'
 import { Rocket } from '@lucide/vue'
 import { getKernelAgentUpgradePlan, startKernelAgentUpgrade } from '@/api/kernel'
@@ -108,8 +132,10 @@ import { useAppI18n } from '@/composables/useAppI18n'
 import { useAgentUpgradeSheet } from '@/composables/useAgentUpgradeSheet'
 import AgentUpgradeCampaign from '@/components/admin/AgentUpgradeCampaign.vue'
 import UiButton from '@/ui/UiButton.vue'
+import UiCheckbox from '@/ui/UiCheckbox.vue'
 import UiErrorState from '@/ui/UiErrorState.vue'
 import UiSection from '@/ui/UiSection.vue'
+import UiSegmentedControl from '@/ui/UiSegmentedControl.vue'
 import UiSheet from '@/ui/UiSheet.vue'
 import UiSkeleton from '@/ui/UiSkeleton.vue'
 import UiTextField from '@/ui/UiTextField.vue'
@@ -130,7 +156,14 @@ const loadError = ref(null)
 const starting = ref(false)
 const startError = ref('')
 const campaign = ref(null)
-const form = reactive({ target: '', batches: '', reason: '' })
+const form = reactive({ mode: 'staged', target: '', batches: '', reason: '', nodes: [] })
+
+const modeOptions = computed(() => ['staged', 'manual'].map(value => ({ value, label: t(`agentUpgradeSheet.start.modes.${value}`) })))
+const planNodes = computed(() => (Array.isArray(plan.value?.nodes) ? plan.value.nodes : []))
+
+function toggleNode(ref, checked) {
+  form.nodes = checked ? [...new Set([...form.nodes, ref])] : form.nodes.filter(node => node !== ref)
+}
 
 const disabled = computed(() => !plan.value || !plan.value.configured || Boolean(plan.value.active_campaign_id) || !plan.value.can_start || starting.value)
 
@@ -146,7 +179,7 @@ const batches = computed(() => parseBatches(form.batches))
 const targetError = computed(() => (form.target && !RELEASE_TAG.test(form.target) ? t('agentUpgradeSheet.errors.target') : ''))
 const batchesError = computed(() => {
   const values = batches.value
-  if (!plan.value) return ''
+  if (!plan.value || form.mode !== 'staged') return ''
   if (!values) return t('agentUpgradeSheet.errors.batchesFormat')
   if (values.length > MAX_BATCHES) return t('agentUpgradeSheet.errors.batchesCount', { max: MAX_BATCHES })
   if (values.some((value, index) => value <= (values[index - 1] || 0) || value > 100)) return t('agentUpgradeSheet.errors.batchesOrder')
@@ -155,7 +188,7 @@ const batchesError = computed(() => {
   return ''
 })
 const canSubmit = computed(() => Boolean(plan.value) && !disabled.value && Boolean(form.target) && !targetError.value && !batchesError.value &&
-  plan.value.eligible_nodes > 0)
+  plan.value.eligible_nodes > 0 && (form.mode === 'staged' || form.nodes.length > 0))
 
 function minutes(seconds) {
   return Math.round(Number(seconds || 0) / 60)
@@ -176,6 +209,9 @@ async function loadPlan() {
   try {
     const answer = await getKernelAgentUpgradePlan()
     plan.value = answer
+    // Nodes that left the list cannot be upgraded any more.
+    const present = new Set((Array.isArray(answer?.nodes) ? answer.nodes : []).map(node => node.node_ref))
+    form.nodes = form.nodes.filter(node => present.has(node))
     if (!form.target) form.target = answer?.target_version || ''
     if (!form.batches) form.batches = (Array.isArray(answer?.batches) ? answer.batches : []).map(batch => batch.percent).join(', ')
   } catch (cause) {
@@ -188,29 +224,33 @@ async function loadPlan() {
 async function start() {
   if (!canSubmit.value || starting.value) return
   startError.value = ''
+  const manual = form.mode === 'manual'
   const percents = batches.value
   const target = form.target
-  const count = plan.value.eligible_nodes
+  const nodes = [...form.nodes]
+  const count = manual ? nodes.length : plan.value.eligible_nodes
   const confirmed = await confirm({
     title: t('agentUpgradeSheet.confirm.title', { n: count, version: target }, count),
-    message: t('agentUpgradeSheet.confirm.message', {
-      batches: percents.map(percent => `${percent}%`).join(' → '),
-      minutes: minutes(plan.value.min_batch_seconds)
-    }),
+    message: manual
+      ? t('agentUpgradeSheet.confirm.manualMessage', { nodes: nodes.join(', ') })
+      : t('agentUpgradeSheet.confirm.message', {
+        batches: percents.map(percent => `${percent}%`).join(' → '),
+        minutes: minutes(plan.value.min_batch_seconds)
+      }),
     confirmLabel: t('agentUpgradeSheet.start.submit'),
     tone: 'danger'
   })
   if (!confirmed) return
   starting.value = true
   try {
-    const input = {
-      target_version: target,
-      batches: percents.map(percent => ({ percent, min_duration_seconds: plan.value.min_batch_seconds })),
-    }
+    const input = manual
+      ? { target_version: target, nodes }
+      : { target_version: target, batches: percents.map(percent => ({ percent, min_duration_seconds: plan.value.min_batch_seconds })) }
     if (form.reason) input.reason = form.reason
     await startKernelAgentUpgrade(input)
     toast.success(t('agentUpgradeSheet.started', { version: target }))
     form.reason = ''
+    form.nodes = []
     await Promise.all([loadPlan(), campaign.value?.load?.()])
   } catch (cause) {
     startError.value = errorText(cause)
@@ -245,6 +285,23 @@ defineExpose({ loadPlan, plan, form })
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
+}
+
+.upgrade-sheet__nodes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.upgrade-sheet__nodes legend {
+  margin-bottom: var(--space-2);
+  padding: 0;
+  color: var(--label-2);
+  font-size: var(--type-caption-size);
 }
 
 .upgrade-sheet__facts {

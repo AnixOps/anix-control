@@ -48,6 +48,23 @@ const (
 	MetadataFormat = "1"
 )
 
+// IsDevBuild reports whether a release tag names a dev build: the Agent and
+// Control built together from main after the release before ".dev."
+// (docs/RELEASING.md, "Dev builds"), published as a pre-release of this
+// repository only.
+func IsDevBuild(tag string) bool {
+	return ReleaseTagPattern.MatchString(tag) && strings.Contains(tag, ".dev.")
+}
+
+// GitHubAgentBase is where GitHub serves the assets of Agent release tag:
+// a dev build's are in the Control pre-release of the same tag.
+func GitHubAgentBase(tag string) string {
+	if IsDevBuild(tag) {
+		return ControlReleaseBase
+	}
+	return AgentReleaseBase
+}
+
 // Mirrors the install command can name (--mirror).
 const (
 	MirrorControl = "control"
@@ -65,8 +82,9 @@ var Assets = map[string]string{
 }
 
 var (
-	// ReleaseTagPattern matches release tags (Control's and the Agent's).
-	ReleaseTagPattern = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)(\.[0-9]+)?)?$`)
+	// ReleaseTagPattern matches release tags (Control's and the Agent's),
+	// dev builds (v5.0.0-rc.15.dev.42, IsDevBuild) included.
+	ReleaseTagPattern = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)(\.[0-9]+(\.dev\.[0-9]+)?)?)?$`)
 	assetPattern      = regexp.MustCompile(`^anix-agent-linux-[a-z0-9-]+\.zip(\.dgst|\.sig)?$`)
 	sha256Pattern     = regexp.MustCompile(`^[0-9a-f]{64}$`)
 	dgstLinePattern   = regexp.MustCompile(`^SHA(?:2-)?256(?:\([^)]*\))?=\s*([0-9a-fA-F]{64})\s*$`)
@@ -147,14 +165,11 @@ type CommandInput struct {
 	// apart by the prefix.
 	Token  string
 	Mirror string
-	// Forward adds --forward: the node relays (forwarding on a regular
-	// node, docs/design/node-unification).
-	Forward bool
 }
 
 // RenderCommand returns the one-line install command:
 //
-//	curl -fsSL <script> | sudo bash -s -- -u <url> -t <token> [--mirror m] [--forward]
+//	curl -fsSL <script> | sudo bash -s -- -u <url> -t <token> [--mirror m]
 //
 // The "--" ends bash's own options, so every later word reaches the script.
 // curl gets -g (no URL globbing) when the URL has an IPv6 literal.
@@ -169,9 +184,6 @@ func RenderCommand(input CommandInput) string {
 	}
 	if input.Mirror != "" && input.Mirror != MirrorControl {
 		words = append(words, "--mirror", ShellQuote(input.Mirror))
-	}
-	if input.Forward {
-		words = append(words, "--forward")
 	}
 	return strings.Join(words, " ")
 }
@@ -206,12 +218,9 @@ func (s Settings) ScriptURL(mirror string) string {
 const UninstallCommand = "sudo anix-agent uninstall"
 
 // Commands renders the command for every mirror. The token is validated by
-// the caller.
-func (s Settings) Commands(token string) []Command { return s.CommandsFor(token, false) }
-
-// CommandsFor renders the command for every mirror, with --forward for a
-// node that relays.
-func (s Settings) CommandsFor(token string, forward bool) []Command {
+// the caller. Relaying runs on the network model, so no command carries
+// --forward.
+func (s Settings) Commands(token string) []Command {
 	metadata := s.Metadata()
 	commands := make([]Command, 0, len(Mirrors))
 	for _, mirror := range Mirrors {
@@ -231,7 +240,7 @@ func (s Settings) CommandsFor(token string, forward bool) []Command {
 			command.Note = "the script and the Agent come from GitHub releases; the token still enrolls with this Control"
 		}
 		command.Command = RenderCommand(CommandInput{
-			ControlURL: s.ControlURL, ScriptURL: s.ScriptURL(mirror), Token: token, Mirror: mirror, Forward: forward,
+			ControlURL: s.ControlURL, ScriptURL: s.ScriptURL(mirror), Token: token, Mirror: mirror,
 		})
 		commands = append(commands, command)
 	}
@@ -254,7 +263,7 @@ type Metadata struct {
 func (s Settings) Metadata() Metadata {
 	metadata := Metadata{
 		AgentVersion: s.AgentVersion, GRPCTarget: s.GRPCTarget,
-		Sources: map[string]string{MirrorGitHub: AgentReleaseBase}, SHA256: map[string]string{},
+		Sources: map[string]string{MirrorGitHub: GitHubAgentBase(s.AgentVersion)}, SHA256: map[string]string{},
 	}
 	if mirror := strings.TrimRight(strings.TrimSpace(s.CNMirrorURL), "/"); mirror != "" {
 		metadata.Sources[MirrorCN] = mirror

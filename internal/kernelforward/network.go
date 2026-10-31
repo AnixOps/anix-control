@@ -17,7 +17,7 @@ import (
 
 // ENGINE_NETWORK routes (network-model implementation.md step 5) are
 // validated here but planned on the network model: the entry becomes a
-// port forward of its device's NetworkPlan, each link a network model
+// port forward of each entry device's NetworkPlan, each link a network model
 // transport, the exit an internet egress. The network model asks this
 // service for them; every accepted plan replans the network model in the
 // same transaction, so a route and its port forward change together.
@@ -55,7 +55,7 @@ func networkForward(route *forwardv1.Route) (networkmodel.Forward, bool) {
 	}
 	forward := networkmodel.Forward{
 		ID:        route.GetId(),
-		Entry:     hops[0].GetNodeRefs()[0],
+		Entries:   append([]string(nil), hops[0].GetNodeRefs()...),
 		Listen:    networkmodel.Endpoint{Address: address, Port: route.GetListen().GetPort()},
 		Protocols: networkProtocols(route.GetListen().GetProtocol()),
 		Policy:    networkPolicy(route),
@@ -126,10 +126,11 @@ func networkPolicy(route *forwardv1.Route) *networkv1.ForwardPolicy {
 const networkEpochPrefix = "network-"
 
 // RecordNetworkCounters meters the port forwards of node's NetworkStatus
-// as the entry hops of their ENGINE_NETWORK routes. A port forward's bytes
-// grow from the start of the device's kernel, so a lower value than the
-// stored one starts a new counter epoch, named after when it was seen; a
-// status older than the stored counter is skipped. Growth that reaches a
+// as the entry hops of their ENGINE_NETWORK routes, and folds their target
+// health checks into the latency history (latency.go). A port forward's
+// bytes grow from the start of the device's kernel, so a lower value than
+// the stored one starts a new counter epoch, named after when it was seen;
+// a status older than the stored counter is skipped. Growth that reaches a
 // route's quota replans, as a forward.v1 report does.
 func (s *Service) RecordNetworkCounters(ctx context.Context, node agentcontrol.AgentNode, forwards []*networkv1.PortForwardStatus, observedAt time.Time) (ReportResult, error) {
 	db, err := s.db(ctx)
@@ -153,6 +154,9 @@ func (s *Service) RecordNetworkCounters(ctx context.Context, node agentcontrol.A
 			}
 			if known == 0 {
 				continue
+			}
+			if err := foldLatency(tx, ref, networkHealth(ref, forward), s.now()); err != nil {
+				return err
 			}
 			var rows []model.KernelForwardCounter
 			if err := tx.Where("route_id = ? AND hop_index = ? AND node_ref = ? AND counter_epoch LIKE ?", forward.GetId(), 0, ref, networkEpochPrefix+"%").

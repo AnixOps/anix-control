@@ -12,8 +12,8 @@ const STRATEGY = {
 export default {
   forwardV4: {
     nav: {
-      label: 'Forwarding',
-      overview: 'Overview',
+      label: 'Nodes and forwarding',
+      overview: 'Forwarding',
       routes: 'Routes',
       nodes: 'Nodes'
     },
@@ -291,12 +291,13 @@ export default {
       nodeEnabled: 'Enabled {name}',
       nodeDisabled: 'Disabled {name}',
       nodeDeleted: 'Deleted node {name}',
-      nodeConverted: '{name} is regular node {to} now: reinstall its Agent',
-      nodeCreated: 'Added node {name}',
       settingsSaved: 'Forwarding settings saved; every route was replanned.',
       settingsSavedWarnings: 'Forwarding settings saved; {n} routes cannot plan for now and the nodes keep their generation.'
     },
     editor: {
+      networkAuto: 'Automatic',
+      networkTransportAuto: 'Control links the two devices over ANX (A2 jacket) on port 24443',
+      networkEgressAuto: 'The device\'s own internet egress, added when it has none',
       networkTransport: 'Network transport',
       networkTransportPlaceholder: 'Pick a transport',
       networkTransportHelp: 'The network model transport from the previous hop\'s device to this one.',
@@ -347,7 +348,6 @@ export default {
       entryHostnameHelp: 'With several entry nodes, clients connect to this name. Operators maintain its DNS: point it at the entry nodes.',
       chain: 'Hop chain',
       chainDescription: 'Hop 1 is the entry, the last hop the exit, the others relays. With one hop the entry dials the targets. Alt+↑ / Alt+↓ inside a card reorders it.',
-      chainDescriptionAnixOps: 'Hop 1 is the entry, the last hop the exit, the others relays. The anixops (experimental) engine is on in Control. Alt+↑ / Alt+↓ inside a card reorders it.',
       hopTitle: 'Hop {n} · {role}',
       roleHint: 'Role follows position',
       moveUp: 'Move hop {n} up',
@@ -366,7 +366,7 @@ export default {
       removeNode: 'Remove {name}',
       addNode: 'Add a node to hop {n}',
       addNodePlaceholder: 'Add node…',
-      noNodes: 'No nodes available',
+      noNodes: 'No Agent nodes yet: a node appears once its Agent connects',
       nodeUnusable: 'Disabled or not in the inventory',
       portRange: 'ports {first}–{last}',
       engine: 'Engine',
@@ -583,61 +583,20 @@ export default {
       }
     },
     nodes: {
-      title: 'Nodes',
-      description: 'The forwarding inventory: forward nodes and the proxy nodes that joined it. Roles belong to hops; one node can be one route’s entry and another’s exit.',
-      add: 'Add Ansible host',
-      loadFailed: 'Could not load nodes',
-      emptyTitle: 'The inventory is empty',
-      emptyDescription: 'Add a forward node, or add a proxy node to the inventory from its page.',
-      kindFilter: 'Kind',
-      flagFilter: 'Needs attention',
-      forward: 'Forward node',
-      proxy: 'Proxy node',
-      lagging: 'Behind',
-      withErrors: 'Hop errors',
       agent: 'Agent · mTLS',
       ansible: 'Ansible (no Agent)',
-      agentHelp: 'The node runs the AnixOps Agent, connected to Control over mTLS.',
-      ansibleHelp: 'A host without an Agent; Control applies its state with Ansible.',
-      columns: {
-        node: 'Node',
-        status: 'Status',
-        kind: 'Kind and channel',
-        agent: 'Agent',
-        engines: 'Engines',
-        hops: 'Hops',
-        generation: 'Generation (applied / desired)',
-        errors: 'Hop errors'
-      },
       lag: '{n} behind',
       converged: 'Converged',
       neverReported: 'Not reported',
       reportedAt: 'reported {when}',
       hopErrors: '{n} hop errors',
-      note: 'Generation = the state generation the node applied / the one Control wants. It updates with each report; this page refreshes every 15 seconds.',
-      settings: 'Forwarding settings',
-      install: 'Install or reinstall Agent',
       enable: 'Enable',
       disable: 'Disable…',
-      disableInUse: 'Disable (used by routes)',
       delete: 'Delete node…',
-      deleteInUse: 'Delete (used by routes)',
       disableTitle: 'Disable {name}?',
       disableMessage: 'A disabled node leaves the inventory and gets no desired state.',
       deleteTitle: 'Delete node {name}?',
-      deleteMessage: 'Also removes its inventory entry and revokes its Agent certificates. This cannot be undone.',
-      createTitle: 'Add Ansible host',
-      convert: 'Make a regular node…',
-      convertSuperOnly: 'Make a regular node (super administrators only)',
-      convertTitle: 'Make {name} a regular node?',
-      convertMessage: 'This creates regular node {to} (no protocols, not in subscriptions), moves the hops and ports of {n} route(s) to it, then deletes this forward node and revokes its certificates. Reinstall the Agent on the machine with the new node’s install command; its hops are down until then.',
-      convertRun: 'Convert',
-      createDescription: 'Only hosts without an Agent, applied with Ansible, are added here. Add a machine that runs the Agent on the nodes page as a regular node, or join a node group: a regular node without protocols is a relay.',
-      name: 'Name',
-      host: 'Host address',
-      transport: 'Channel',
-      region: 'Region (optional)',
-      createRun: 'Add'
+      deleteMessage: 'Also removes its inventory entry and revokes its Agent certificates. This cannot be undone.'
     },
     nodeDetail: {
       loadFailed: 'Could not load the node',
@@ -670,6 +629,7 @@ export default {
       noEngines: 'The node has not reported its engines yet',
       links: 'Links: {list}',
       strategies: 'Balancing: {list}',
+      anxManaged: 'Managed by the network model',
       capBandwidth: 'Rate limit',
       capQuota: 'Quota',
       capConns: 'Connections',
@@ -725,15 +685,6 @@ export default {
         l4_mismatch: 'The route does not forward the transport the protocol runs on (Shadowsocks needs TCP), so subscriptions leave it out until the route\'s protocol is changed.',
         no_entry: 'No entry node has an address and a port yet, so subscriptions leave the route out.'
       }
-    },
-    join: {
-      action: 'Use for forwarding…',
-      settings: 'Forwarding settings',
-      title: 'Add {name} to the forwarding inventory?',
-      message: 'Routes can then use the node as an entry, relay or exit in their hops (default ports 30000–39999). It stays a proxy node and no subscription changes: to have users connect through a forwarder, add the forwarder\'s address and port as an entry on the landing node.',
-      noAgent: 'This node has no Agent (a legacy node): it cannot run a hop until you install the Agent with the install command on its page.',
-      confirm: 'Add',
-      done: '{name} joined the forwarding inventory'
     }
   }
 }

@@ -193,7 +193,7 @@ func (h *AgentInstallHandler) CreateInstallToken(c *gin.Context) {
 	c.Header("Cache-Control", "no-store")
 	kernelData(c, http.StatusCreated, installTokenResponse{
 		Enrollment: row, Credential: credential, Node: node.String(), ExpiresAt: expires,
-		AgentVersion: settings.AgentVersion, Commands: settings.CommandsFor(credential, relays(db, node)),
+		AgentVersion: settings.AgentVersion, Commands: settings.Commands(credential),
 		Script: installScriptInfo{
 			URL: settings.ControlURL + "/install.sh", SignatureURL: settings.ControlURL + "/install.sh.sig", Signed: signatureErr == nil,
 		},
@@ -221,7 +221,7 @@ func (h *AgentInstallHandler) Readiness(c *gin.Context) {
 		BuiltinPKI: cfg.ModuleRuntime.PKIOrDefault() == config.ModulePKIBuiltin, CAKEK: strings.TrimSpace(cfg.ModuleRuntime.CAKEK) != "",
 		MTLSMode:      cfg.AgentControl.MTLSOrDefault(),
 		SignatureFile: cfg.AgentInstall.SignatureFile, OfficialPublicKey: cfg.Plugins.OfficialPublicKey,
-		AgentVersion: cfg.AgentInstall.AgentVersion, ReleaseVersion: ReleaseVersion,
+		AgentVersion: cfg.AgentInstall.AgentVersion, PinnedAgentVersion: AgentRelease, ReleaseVersion: ReleaseVersion,
 		ArtifactDir: cfg.AgentInstall.ArtifactDir, CNMirrorURL: cfg.AgentInstall.CNMirrorURL,
 	}
 	if input.CAKEK {
@@ -349,25 +349,4 @@ func (h *AgentInstallHandler) settings(c *gin.Context, cfg *config.Config) (agen
 		AgentVersion: install.AgentVersion, PinnedAgentVersion: AgentRelease, ReleaseVersion: ReleaseVersion,
 		ArtifactDir: install.ArtifactDir, CNMirrorURL: install.CNMirrorURL,
 	})
-}
-
-// relays tells whether node's install command turns forwarding on: a
-// forward node, or a regular node without protocols or in the forwarding
-// inventory (a relay, docs/design/node-unification). A failed read leaves
-// it off.
-func relays(db *gorm.DB, node agentcontrol.AgentNode) bool {
-	if node.Kind == agentcontrol.NodeKindForward {
-		return true
-	}
-	var protocols, inventory int64
-	if err := db.Model(&model.NodeProtocol{}).Where("node_id = ?", node.ID).Count(&protocols).Error; err != nil {
-		return false
-	}
-	if protocols == 0 {
-		return true
-	}
-	if err := db.Model(&model.KernelForwardNode{}).Where("node_ref = ?", node.String()).Count(&inventory).Error; err != nil {
-		return false
-	}
-	return inventory > 0
 }

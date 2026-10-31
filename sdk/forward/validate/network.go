@@ -12,8 +12,13 @@ var networkIDPattern = regexp.MustCompile(`^[0-9A-Za-z_-]{1,64}$`)
 
 // checkNetwork applies the rules of an ENGINE_NETWORK route (network-model
 // implementation.md step 5): every hop is on the network model, on one
-// device; each link is a network model transport, which decides where its
-// hop listens; the exit names the internet egress that dials the targets.
+// device, except the entry, whose several devices are entry HA (each runs
+// the port forward over a transport of its own into hop 1, or by an
+// internet egress of its own, chosen by the network model); each link is
+// a network model transport, which decides where its hop listens, or
+// left to Control, which links the two devices with a transport of its
+// own; the exit may name the internet egress that dials the targets, or
+// leave it to Control (the exit device's first).
 // The entry listens on an explicit port, since the network model allocates
 // none.
 func checkNetwork(c *collector, r *model.Route) {
@@ -30,12 +35,12 @@ func checkNetwork(c *collector, r *model.Route) {
 			c.add(hopField(i, "engine"), CodeInvalidRelation, "a route runs ENGINE_NETWORK on every hop or on none")
 			continue
 		}
-		if len(h.NodeRefs) > 1 {
-			c.add(hopField(i, "node_refs"), CodeRequiresSingleNode, "an ENGINE_NETWORK hop is one device")
+		if i > 0 && len(h.NodeRefs) > 1 {
+			c.add(hopField(i, "node_refs"), CodeRequiresSingleNode, "an ENGINE_NETWORK hop after the entry is one device")
 		}
 		switch {
 		case i == last && h.NetworkEgressID == "":
-			c.add(hopField(i, "network_egress_id"), CodeRequired, "the exit names the internet egress that dials the targets")
+			// Control picks the exit device's internet egress.
 		case i == last && !networkIDPattern.MatchString(h.NetworkEgressID):
 			c.add(hopField(i, "network_egress_id"), CodeInvalidFormat, "must be a network model component id")
 		case i < last && h.NetworkEgressID != "":
@@ -52,8 +57,10 @@ func checkNetwork(c *collector, r *model.Route) {
 		}
 		t, field := h.Ingress, hopField(i, "ingress.")
 		switch {
+		case t.NetworkTransportID == "" && len(h.NodeRefs) == 0:
+			c.add(hopField(i, "node_refs"), CodeRequired, "a LINK_SECURITY_NETWORK link names its device or its network model transport")
 		case t.NetworkTransportID == "":
-			c.add(field+"network_transport_id", CodeRequired, "a LINK_SECURITY_NETWORK link names its network model transport")
+			// Control links the previous device to this one.
 		case !networkIDPattern.MatchString(t.NetworkTransportID):
 			c.add(field+"network_transport_id", CodeInvalidFormat, "must be a network model component id")
 		}

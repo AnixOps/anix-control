@@ -138,7 +138,7 @@ type UpgradeState struct {
 }
 
 var (
-	upgradeVersionPattern = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)(\.[0-9]+)?)?$`)
+	upgradeVersionPattern = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)(\.[0-9]+(\.dev\.[0-9]+)?)?)?$`)
 	upgradeArchPattern    = regexp.MustCompile(`^[a-z0-9]{1,16}$`)
 	upgradeAssetPattern   = regexp.MustCompile(`^anix-agent-linux-[a-z0-9-]+\.zip$`)
 	upgradeSHA256Pattern  = regexp.MustCompile(`^[0-9a-f]{64}$`)

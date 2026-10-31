@@ -212,6 +212,11 @@ func TestAgentUpgradePlan(t *testing.T) {
 	assert.Equal(t, "v4.2.0", plan["control_version"])
 	assert.Equal(t, true, plan["configured"])
 	assert.EqualValues(t, 3, plan["eligible_nodes"])
+	listed := plan["nodes"].([]any)
+	require.Len(t, listed, 3)
+	for _, node := range listed {
+		assert.Regexp(t, `^(proxy|forward)-\d+$`, node.(map[string]any)["node_ref"])
+	}
 	assert.Equal(t, false, plan["can_start"], "staff read the plan, a super administrator starts")
 	assert.Equal(t, "", plan["active_campaign_id"])
 	assert.EqualValues(t, 1800, plan["min_batch_seconds"])
@@ -242,4 +247,20 @@ func TestAgentUpgradePlan(t *testing.T) {
 	assert.Equal(t, false, plan["configured"])
 	assert.Equal(t, "", plan["target_version"])
 	assert.Contains(t, plan["unconfigured_reason"], "https")
+}
+
+// A manual upgrade names its nodes and runs them in one batch.
+func TestAgentUpgradeManualStart(t *testing.T) {
+	env := newUpgradeTestEnv(t)
+	code, answer := env.do(t, http.MethodGet, "/upgrade-plan", "", "")
+	require.Equal(t, http.StatusOK, code, answer)
+	ref := answer["data"].(map[string]any)["nodes"].([]any)[0].(map[string]any)["node_ref"].(string)
+
+	code, answer = env.do(t, http.MethodPost, "/upgrades", `{"nodes":["`+ref+`"],"batches":[{"percent":100,"min_duration_seconds":1800}]}`, "")
+	require.Equal(t, http.StatusBadRequest, code, answer)
+	code, answer = env.do(t, http.MethodPost, "/upgrades", `{"nodes":["`+ref+`"]}`, "")
+	require.Equal(t, http.StatusCreated, code, answer)
+	view := answer["data"].(map[string]any)
+	assert.EqualValues(t, 1, view["total"])
+	assert.Len(t, view["batches"].([]any), 1)
 }

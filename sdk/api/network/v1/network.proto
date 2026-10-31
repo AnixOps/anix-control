@@ -349,6 +349,17 @@ message AnxLineSettings {
   repeated string carrier_order = 9;
   bool multipath = 10;
   bool fec = 11;
+  // Reverse dial-back: the accepting end opens no port and dials the
+  // dialing end instead, which then runs the link over that connection
+  // (contracts/anx BOUNDARY.md: --reverse-listen, Link.reverse,
+  // SetReverseDials). The carrier addresses are empty, egress is l1 (c1).
+  bool reverse = 12;
+  // reverse, role dial: the address this end listens on for the accepting
+  // end's dial-backs (anx-node anx_line.reverse_listen).
+  string reverse_listen = 13;
+  // reverse, role accept: host:port of the dialing end's reverse listener,
+  // the address this end dials (a ReverseDial of SetReverseDials).
+  string reverse_dial = 14;
 }
 
 // Path starts at a user ingress of this device and names where the
@@ -442,4 +453,34 @@ message PortForwardStatus {
   // Client to target, and back.
   uint64 up_bytes = 4;
   uint64 down_bytes = 5;
+  // The targets' health as the device's checks see it, in the plan's
+  // order. The checks dial through the forward's path, so a relayed
+  // forward's are end to end from the entry. Empty from a kernel without
+  // target health.
+  repeated ForwardTargetHealth targets = 6;
+}
+
+enum TargetHealthState {
+  // No check or connection tried the target yet.
+  TARGET_HEALTH_STATE_UNKNOWN = 0;
+  TARGET_HEALTH_STATE_HEALTHY = 1;
+  // Failures in a row, below the circuit breaker's threshold.
+  TARGET_HEALTH_STATE_UNHEALTHY = 2;
+  // The breaker is open: connections skip the target until
+  // circuit_open_until_unix_ms.
+  TARGET_HEALTH_STATE_CIRCUIT_OPEN = 3;
+}
+
+// ForwardTargetHealth is one port forward target's health.
+message ForwardTargetHealth {
+  string host = 1;
+  uint32 port = 2;
+  TargetHealthState state = 3;
+  uint32 consecutive_failures = 4;
+  int64 circuit_open_until_unix_ms = 5;
+  // The last active check's connect round trip; 0 when it failed or none
+  // ran.
+  uint32 rtt_us = 6;
+  // When the last active check ran; 0 when none did.
+  int64 checked_at_unix_ms = 7;
 }

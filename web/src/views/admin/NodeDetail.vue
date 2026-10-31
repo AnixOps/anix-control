@@ -11,7 +11,6 @@
         <UiBadge :status="statusName(status)" :label="t(`admin.nodes.statusText.${statusName(status)}`)" data-testid="node-status" />
       </template>
       <template v-if="node" #actions>
-        <ForwardInventoryAction v-if="hasForwardV4" :node-ref="`proxy-${node.id}`" :name="node.name" />
         <UiButton :icon="Pencil" data-testid="edit-node" @click="openEdit">{{ t('admin.nodes.actions.edit') }}</UiButton>
         <UiButton
           variant="primary"
@@ -55,6 +54,7 @@
         <div class="node-page__stack">
           <NodeProtocolsSection :node="node" @changed="list => { protocolCount = list.length }" />
           <NodeEntriesSection :node="node" />
+          <NodeNetworkSection :node-ref="`proxy-${node.id}`" />
         </div>
       </template>
       <template #credentials>
@@ -106,7 +106,6 @@ import UiSkeleton from '@/ui/UiSkeleton.vue'
 import UiTabs from '@/ui/UiTabs.vue'
 import { useDelayedLoading } from '@/ui/composables/useDelayedLoading'
 import { useAppI18n } from '@/composables/useAppI18n'
-import { adminCapabilities, FORWARD_V4_CAPABILITY } from '@/extensions/runtime'
 import NodeCredentialsSection from './nodes/NodeCredentialsSection.vue'
 import NodeDangerSection from './nodes/NodeDangerSection.vue'
 import NodeDeploySection from './nodes/NodeDeploySection.vue'
@@ -126,6 +125,7 @@ const NodeDiagnosticsSection = defineAsyncComponent(() => import('./nodes/NodeDi
 const NodeRealityTargetsSection = defineAsyncComponent(() => import('./nodes/NodeRealityTargetsSection.vue'))
 // 入口 (several lines, native IPv6, provider NAT ports) under 协议.
 const NodeEntriesSection = defineAsyncComponent(() => import('./nodes/NodeEntriesSection.vue'))
+const NodeNetworkSection = defineAsyncComponent(() => import('./nodes/NodeNetworkSection.vue'))
 // 流量 draws a chart: its code (and ECharts) load when the section opens.
 const NodeTrafficSection = defineAsyncComponent(() => import('./nodes/NodeTrafficSection.vue'))
 
@@ -144,9 +144,6 @@ const candidates = ref([])
 const showSkeleton = useDelayedLoading(computed(() => loading.value && !node.value))
 
 const nodeId = computed(() => String(route.params.id || ''))
-// 加入转发清单… (F5b D15), with the forward package's v4 API only.
-const hasForwardV4 = computed(() => adminCapabilities.value.includes(FORWARD_V4_CAPABILITY))
-const ForwardInventoryAction = defineAsyncComponent(() => import('@/components/forward/ForwardInventoryAction.vue'))
 const backTo = computed(() => ({ path: '/admin/nodes', query: listQuery() }))
 const status = computed(() => (node.value ? displayStatus(node.value) : 0))
 const headerTitle = computed(() => node.value?.name || (notFound.value || error.value ? t('admin.nodes.detail.title') : t('admin.nodes.detail.loading')))

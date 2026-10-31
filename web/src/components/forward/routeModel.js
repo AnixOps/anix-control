@@ -12,8 +12,9 @@ export const ENGINES = Object.freeze({
   ENGINE_NETWORK: { short: 'net', label: 'ANX' }
 })
 
-// Engines the editor offers; anixops only with the experimental flag (D12).
-export const BASE_ENGINES = Object.freeze(['ENGINE_NFTABLES', 'ENGINE_NETWORK'])
+// Engines the editor offers: only the network model (ANX). Routes left on
+// nftables or the removed gost and anixops engines still show theirs.
+export const BASE_ENGINES = Object.freeze(['ENGINE_NETWORK'])
 
 // An ENGINE_NETWORK route runs on the network model (anx-node): every hop
 // is a network device, each link a network model transport, the exit an
@@ -257,7 +258,7 @@ function nextKey() {
   return `k${keySeq}`
 }
 
-export function blankHop(index, total, engine = 'ENGINE_NFTABLES') {
+export function blankHop(index, total, engine = NETWORK_ENGINE) {
   const hop = { _key: nextKey(), role: roleOf(index, total), engine, node_refs: [], port: 0, portMode: 'auto', dial_address: '', network_egress_id: '' }
   if (index > 0) {
     hop.ingress = engine === NETWORK_ENGINE
@@ -326,7 +327,7 @@ export function fromLocalInput(text) {
 export function routeToDraft(route = null) {
   const source = route ? JSON.parse(JSON.stringify(route)) : null
   const hops = (source?.hops?.length ? source.hops : [{}]).map((hop, index, list) => ({
-    ...blankHop(index, list.length, hop.engine || 'ENGINE_NFTABLES'),
+    ...blankHop(index, list.length, hop.engine || (source ? 'ENGINE_NFTABLES' : NETWORK_ENGINE)),
     ...hop,
     _key: nextKey(),
     role: roleOf(index, list.length),
@@ -471,8 +472,6 @@ export function missingRequired(draft) {
   const network = isNetworkDraft(draft)
   draft.hops.forEach((hop, index) => {
     if (!hop.node_refs.length) out.push(`hops[${index}].node_refs`)
-    if (network && index > 0 && !hop.ingress?.network_transport_id) out.push(`hops[${index}].ingress.network_transport_id`)
-    if (network && index === draft.hops.length - 1 && !hop.network_egress_id) out.push(`hops[${index}].network_egress_id`)
   })
   if (network && (draft.listen.portMode !== 'explicit' || !num(draft.listen.port))) out.push('listen.port')
   if (!draft.targets.length) out.push('targets')

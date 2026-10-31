@@ -2,6 +2,215 @@
 
 ## Unreleased
 
+## 5.0.0-rc.21 - 2026-10-30
+
+### Added
+
+- The JumpServer workflow's `control` action fills
+  `@@DETECTED:<node>:<interface>:<field>@@` in `api_body` with an address or
+  gateway the node's Agent detected, masked, so a node's network settings can
+  be set from the public workflow without typing addresses.
+
+### Fixed
+
+- A node with anx-server reports its network status again. The anx-server
+  hybrid key (X25519 and ML-KEM-768) is about 2.5 KB of text, past the
+  1 KB text cap, so the Agent refused to build the status and Control never
+  got the key: every ANX route into that node stayed pending. Public keys and
+  `anx_line.server_public` now take up to 8 KB.
+
+## 5.0.0-rc.20 - 2026-10-30
+
+### Added
+
+- The node page's 网络 settings offer the interfaces the node's Agent
+  detected: pick the egress interface, and its source addresses and
+  gateways fill in, instead of typing them (手动填写 still types them).
+  `GET`/`PUT /api/v4/kernel/nodes/{id}/network` answer `detected`
+  (`name`, `addresses_v4`, `addresses_v6`, `gateway_v4`, `gateway_v6`) and
+  `detected_at`, from the interfaces in the Agent's network status (Agent
+  5.0.0-rc.20 or later).
+
+### Changed
+
+- Nodes install Agent v5.0.0-rc.20, which reports the host's interfaces,
+  addresses and default gateways for the node page's network settings.
+
+## 5.0.0-rc.19 - 2026-10-30
+
+### Added
+
+- ANX-Line reverse dial-back in the network model: a transport's
+  `anx_line.reverse` (with `reverse_host`, `reverse_port`, default 24444)
+  has the accepting device open no port and dial the dialing device's
+  reverse listener instead. Plans carry `reverse`, `reverse_listen` (dialing
+  end) and `reverse_dial` (accepting end) and no carrier addresses; only
+  bare `anx_line` (l1, c1) runs reversed.
+
+### Changed
+
+- Nodes install Agent v5.0.0-rc.19. A node whose network plan routes over
+  ANX (Control's automatic routes) no longer refuses the plan after the
+  upgrade with `this Agent does not run COMPONENT_EGRESS hop v1`: anixcore
+  with anx-node lists the hop egress. Because of that refusal, the rc.18
+  Agent upgrade rolled back. The Agent also runs ANX-Line reverse dial-back.
+
+## 5.0.0-rc.18 - 2026-10-30
+
+### Added
+
+- Node network settings for NAT and multi-homed machines. The node page's
+  协议 tab has a 网络 section (`GET`/`PUT /api/v4/kernel/nodes/{id}/network`,
+  audited as `network_node_settings`) for the egress interface, the IPv4/IPv6
+  source address and gateway, and the hop port. The automatic line, egresses
+  and hop ingress of the routes through the node follow these settings
+  instead of the default route. When a NAT entry's port map covers the hop
+  port, the hop ingress is of kind `nat` at the entry's host, and the
+  previous device dials the mapped public port.
+
+### Changed
+
+- Nodes install Agent v5.0.0-rc.18. The anixcore core now takes panel proxy
+  nodes. Before, it refused their tags, and every node fell back to xray or
+  sing-box.
+
+## 5.0.0-rc.17 - 2026-10-30
+
+### Added
+
+- Manual Agent upgrade: **升级节点** has a 手动选择 mode that upgrades only
+  the ticked nodes, at once in a single batch without the 30 minute
+  minimum (a failed node is still rolled back). The upgrade plan lists the
+  eligible nodes with their name and current Agent version, and
+  `POST /api/v4/kernel/agents/upgrades` takes `"nodes"` for it.
+- ANX routes can have several entry devices for entry HA (with
+  `listen.entry_hostname`). Each entry device runs the route's port
+  forward: the first on the transport the route names, the others on a
+  transport of their own into the same ingress (or, on a single-hop route,
+  an internet egress of their own), chosen by the network model. An entry
+  without one waits on its own while the others run. Health, latency,
+  diagnosis and the DNS binding judge every entry device, so DNS fails
+  over between them.
+- ANX routes get health, latency history, diagnosis and DNS entry failover.
+  The entry's anixcore checks each target through the whole route and the
+  Agent reports the result in the port forward's status
+  (`PortForwardStatus.targets`). Control serves it as the route's health
+  (`GET /routes/{id}/health`, now with `node_ref` on each item), folds it
+  into the latency history, diagnoses the route from the network model
+  (device plan, port forward, transports, egress, target health, a dial of
+  the entry), and lets the DNS binding judge the entry device by the same
+  facts. The route page reads its health table from the route's health.
+
+### Changed
+
+- Pins Agent v5.0.0-rc.17: port forwards report their targets' health,
+  and an Agent with anx-node installed starts again (the anixcore runtime
+  directory moved below the unit's `RuntimeDirectory`; the rc.16 upgrade
+  was reverted for it).
+
+- ANX routes no longer need a hand-written network model: the route editor
+  lists every node whose Agent is connected, and a hop's transport and the
+  exit's egress default to 自动. Control then adds what the route needs to
+  the plans (a line on the device, an internet egress, and an ANX link on
+  port 24443 with its link key), under `auto-` ids the model document
+  cannot use. `GET /api/v4/kernel/network` returns these devices as
+  `nodes`.
+- Install commands no longer carry `--forward`, and new route hops run only
+  on the network model (ANX): the route editor has no engine picker for them.
+  A route still on nftables keeps showing its engine. The script still
+  accepts `--forward` from older commands.
+- The node page's engine card no longer lists gost (removed) and anixops
+  (never enabled), which an Agent still reports as unavailable. It lists ANX,
+  the network model's anx-node, instead. The route editor no longer offers
+  the anixops engine; a hop already on gost or anixops still shows it.
+
+### Removed
+
+- `POST /api/v4/kernel/nodes/forward-<id>/convert` is gone, with the rest of
+  the proxy/forward split: there is nothing left to convert to. Node groups
+  no longer take or show a `kind`; every group makes regular nodes, and one
+  without protocols makes nodes that only run the network model (ANX).
+- Nodes no longer come in two kinds. The node page drops the role column, the
+  "Forward hosts" tab, the unconverted-node banner and the convert-to-forward
+  buttons; node groups drop the regular/relay choice. A group with no
+  protocols ("None" preset) gives nodes that only run the network model (ANX).
+  `/admin/forward/inventory` now opens the node page.
+
+### Fixed
+
+- The JumpServer `run` action (and the dev build deploy that uses it) no
+  longer fails because one host in the fleet has no Python: Ansible cannot
+  run the command there, so the run warns and goes on.
+
+## 5.0.0-rc.16 - 2026-10-30
+
+### Changed
+
+- Pins Agent v5.0.0-rc.16: kernel upgrades install anx-server (ANX-Line's
+  accepting end) next to anx-node, the cross-border l2 jacket falls back to
+  the site it wears (`--dest`), the forwarding sysctl drop-in raises the
+  socket buffers to 8 MiB, and the Agent accepts dev build versions.
+
+### Added
+
+- Dev builds, an internal test channel (`docs/RELEASING.md`, "Dev builds"):
+  after every green `main`, `.github/workflows/dev-release.yml` publishes a
+  pre-release such as `v5.0.0-rc.15.dev.42` holding Control and the Agent at
+  the same version, signed with the official key. A manual run with `deploy`
+  installs it on the production Control after a database dump. Release tags,
+  `install.sh`, `agent_install.agent_version`, the Agent installer and Agent
+  upgrade requests accept these versions, and the node page's github mirror
+  downloads a dev Agent from the Control pre-release.
+- Feature flags for unfinished work (`internal/features`): a feature in the
+  dev stage runs in dev builds only. `GET /api/v4/kernel/features` lists the
+  build's channel and the gated features.
+
+### Fixed
+
+- The Agent unit the install script writes adds `CAP_NET_RAW` to its ambient
+  and bounding capabilities: ANX-Line's fake-TCP carrier (c3), which anx-node
+  and the Agent's anx-server run, needs raw sockets and failed without it.
+  Re-run the install script on a node to rewrite its unit.
+
+## 5.0.0-rc.15 - 2026-10-29
+
+### Changed
+
+- Control and the Agent release together again: this release pins Agent
+  v5.0.0-rc.15 (unchanged from Agent rc.13, which treats an empty VMess/VLESS
+  network as tcp). From here on every Control release ships an Agent release
+  with the same number.
+
+### Fixed
+
+- The install readiness check (节点 → Agent 版本) checks the Agent release
+  this Control was built with. Before, a Control-only release such as
+  5.0.0-rc.14 looked for an Agent of its own number in
+  `agent_install.artifact_dir` and warned to set `agent_install.agent_version`,
+  although install commands and upgrade campaigns already used the pinned
+  Agent release.
+
+## 5.0.0-rc.14 - 2026-10-29
+
+### Changed
+
+- The sidebar has no 转发 item any more. 节点 is the one network area: the
+  node page, 转发概览, 路由, DNS and 分流 share one segmented control at the
+  top of each page, and the command palette finds the forwarding pages as
+  sections of 节点. Links and bookmarks to `/admin/forward/...` keep working.
+
+## 5.0.0-rc.13 - 2026-10-29
+
+### Changed
+
+- The console has one node page. 节点 (`/admin/nodes`) lists every machine
+  with a 角色 column: 落地 for a node with protocols, 中转 for one without
+  protocols or carrying forward-route hops, with its hop count and hop
+  errors. The forwarding area loses its 节点 section: `/admin/forward/inventory`
+  opens the node page's new 转发主机 tab, which holds Ansible hosts and
+  forward nodes not yet converted (with 转为常规节点). A node's 转发设置 is in
+  its row menu.
+
 ## 5.0.0-rc.12 - 2026-10-29
 
 ### Added

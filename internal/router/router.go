@@ -709,6 +709,7 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		v4.POST("/kernel/modules/ca/rotate", modules.RotateCA)
 		v4.GET("/kernel/modules/trust-bundle", modules.TrustBundle)
 		v4.GET("/kernel/identity", handler.IdentityStatus)
+		v4.GET("/kernel/features", handler.ListFeatures)
 		v4.POST("/kernel/identity/import", handler.StartIdentityImport)
 		v4.POST("/kernel/identity/cutover", handler.StartIdentityCutover)
 		v4.POST("/kernel/identity/rollback", handler.StartIdentityRollback)
@@ -800,7 +801,6 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		// internal/nodeentry).
 		// One machine is one node: a forward node becomes a regular node
 		// without protocols (docs/design/node-unification).
-		v4.POST("/kernel/nodes/:id/convert", handler.NewNodeConvertHandler().Convert)
 		nodeEntries := handler.NewNodeEntriesHandler()
 		v4.GET("/kernel/nodes/:id/entries", nodeEntries.List)
 		v4.PUT("/kernel/nodes/:id/entries", nodeEntries.Replace)
@@ -814,6 +814,8 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		v4.POST("/kernel/network/transports/:id/rotate-key", networkModel.RotateLinkKey)
 		v4.GET("/kernel/network/devices/:id/plan", networkModel.DevicePlan)
 		v4.POST("/kernel/network/migrate-gost", networkModel.MigrateGost)
+		v4.GET("/kernel/nodes/:id/network", networkModel.NodeNetwork)
+		v4.PUT("/kernel/nodes/:id/network", networkModel.SetNodeNetwork)
 		// Panabit iWAN lines: third-party iWAN ingresses AnixOps Net logs
 		// into with a shared account to reach proxy nodes through them
 		// (node entries of kind iwan; internal/iwanline).

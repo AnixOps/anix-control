@@ -84,4 +84,27 @@ describe('forwarding node page: diagnostics', () => {
     })
     expect(wrapper.get('[data-testid="diagnostics-output"]').text()).toContain('listening on 0.0.0.0:31000')
   })
+
+  it('lists nftables and ANX, not the retired gost and anixops engines', async () => {
+    const engines = [
+      { engine: 'ENGINE_NFTABLES', available: true, link_securities: ['LINK_SECURITY_RAW'] },
+      { engine: 'ENGINE_GOST', available: false, unavailable_reason: 'removed: gost routes run on the network model' },
+      { engine: 'ENGINE_ANIXOPS', available: false, unavailable_reason: 'experimental: not enabled in the Agent configuration' }
+    ]
+    api.getNode.mockResolvedValue({ ...view, node: { ...view.node, capabilities: { engines } } })
+    api.listRoutes.mockResolvedValue({ routes: [], canDelete: true, truncated: false })
+    kernelApi.getKernelNodeDiagnostics.mockResolvedValue({ node: 'forward-41', connected: false, actions: [], tasks: [] })
+    const wrapper = mount(NodeDetail, {
+      attachTo: document.body,
+      props: { nodeRef: 'forward-41' },
+      global: { stubs: { RouterLink: { template: '<a><slot /></a>' } } }
+    })
+    mounted.push(wrapper)
+    await flushPromises()
+
+    const rows = wrapper.findAll('[data-testid="node-engine"]')
+    expect(rows.map(row => row.attributes('data-engine'))).toEqual(['ENGINE_NFTABLES', 'ENGINE_NETWORK'])
+    expect(rows[1].text()).toContain('Managed by the network model')
+    expect(wrapper.text()).not.toContain('removed: gost routes')
+  })
 })

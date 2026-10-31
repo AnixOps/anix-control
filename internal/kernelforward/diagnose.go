@@ -46,6 +46,9 @@ import (
 //
 // Everything runs within one time budget; a probe the budget leaves no time
 // for is SKIPPED with code "deadline".
+//
+// An ENGINE_NETWORK route is diagnosed on the network model instead
+// (network_diagnose.go).
 
 // Diagnosis bounds.
 const (
@@ -322,13 +325,9 @@ func (s *Service) diagnose(ctx context.Context, routeID string) (*forwardv1.Diag
 	}
 
 	// Stage 1: Control's records.
-	if route.GetPaused() {
-		d.add(&forwardv1.DiagnoseStep{Kind: forwardv1.ProbeKind_PROBE_KIND_CONFIG, Vantage: vantageControl,
-			Result: result(statusFailed, CodeRoutePaused, "the route is paused: its nodes drop its traffic")})
-	}
-	if reason := enforced[routeID]; reason != "" {
-		d.add(&forwardv1.DiagnoseStep{Kind: forwardv1.ProbeKind_PROBE_KIND_CONFIG, Vantage: vantageControl,
-			Result: result(statusFailed, CodeRouteEnforced, "Control pauses the route: "+reason)})
+	d.routeSteps(enforced[routeID])
+	if _, ok := networkForward(route); ok {
+		return d.diagnoseNetwork(ctx, started)
 	}
 	for index, hop := range route.GetHops() {
 		for _, ref := range uniqueRefs(hop.GetNodeRefs()) {
@@ -355,14 +354,31 @@ func (s *Service) diagnose(ctx context.Context, routeID string) (*forwardv1.Diag
 	d.nodeProbes(ctx)
 	d.controlProbes(ctx)
 
-	answer := &forwardv1.DiagnoseRouteResponse{Ok: true, Steps: d.steps, RouteId: routeID, Nodes: nodes,
-		StartedAtUnixMs: started.UnixMilli(), FinishedAtUnixMs: s.now().UnixMilli()}
+	return d.answer(started, nodes), nil
+}
+
+// routeSteps adds the steps of a paused or enforced route.
+func (d *diagnosis) routeSteps(enforced string) {
+	if d.route.GetPaused() {
+		d.add(&forwardv1.DiagnoseStep{Kind: forwardv1.ProbeKind_PROBE_KIND_CONFIG, Vantage: vantageControl,
+			Result: result(statusFailed, CodeRoutePaused, "the route is paused: its nodes drop its traffic")})
+	}
+	if enforced != "" {
+		d.add(&forwardv1.DiagnoseStep{Kind: forwardv1.ProbeKind_PROBE_KIND_CONFIG, Vantage: vantageControl,
+			Result: result(statusFailed, CodeRouteEnforced, "Control pauses the route: "+enforced)})
+	}
+}
+
+// answer closes the diagnosis: ok unless a step failed.
+func (d *diagnosis) answer(started time.Time, nodes []*forwardv1.DiagnoseNode) *forwardv1.DiagnoseRouteResponse {
+	answer := &forwardv1.DiagnoseRouteResponse{Ok: true, Steps: d.steps, RouteId: d.route.GetId(), Nodes: nodes,
+		StartedAtUnixMs: started.UnixMilli(), FinishedAtUnixMs: d.s.now().UnixMilli()}
 	for _, step := range d.steps {
 		if step.GetResult().GetStatus() == statusFailed {
 			answer.Ok = false
 		}
 	}
-	return answer, nil
+	return answer
 }
 
 // routeNodes lists the route's nodes in hop order, once each.
@@ -498,22 +514,31 @@ func (d *diagnosis) healthSteps(index uint32, ref string) {
 			step.Result = result(statusInconclusive, CodeNoHealth, "active health checks are disabled on this hop")
 		case health == nil:
 			step.Result = result(statusInconclusive, CodeNoHealth, "the node's latest report has no health for this upstream")
-		case health.GetState() == forwardv1.HealthState_HEALTH_STATE_HEALTHY:
-			step.Result = result(statusOK, CodeHealthy, "healthy")
-		case health.GetState() == forwardv1.HealthState_HEALTH_STATE_CIRCUIT_OPEN:
-			step.Result = result(statusFailed, CodeCircuitOpen, fmt.Sprintf("circuit breaker open after %d failures in a row, until %s",
-				health.GetConsecutiveFailures(), time.UnixMilli(health.GetCircuitOpenUntilUnixMs()).UTC().Format(time.RFC3339)))
-		case health.GetState() == forwardv1.HealthState_HEALTH_STATE_UNHEALTHY:
-			step.Result = result(statusFailed, CodeUnhealthy, fmt.Sprintf("unhealthy: %d failures in a row", health.GetConsecutiveFailures()))
 		default:
-			step.Result = result(statusInconclusive, CodeNoHealth, "health state not reported")
-		}
-		if health != nil {
-			step.Result.RttUs = health.GetRttUs()
-			step.Result.ObservedAtUnixMs = health.GetCheckedAtUnixMs()
+			step.Result = healthResult(health, "healthy")
 		}
 		d.add(step)
 	}
+}
+
+// healthResult is the verdict of an upstream's reported health; healthy
+// is the message when it is.
+func healthResult(health *forwardv1.UpstreamHealth, healthy string) *forwardv1.ProbeResult {
+	var out *forwardv1.ProbeResult
+	switch health.GetState() {
+	case forwardv1.HealthState_HEALTH_STATE_HEALTHY:
+		out = result(statusOK, CodeHealthy, healthy)
+	case forwardv1.HealthState_HEALTH_STATE_CIRCUIT_OPEN:
+		out = result(statusFailed, CodeCircuitOpen, fmt.Sprintf("circuit breaker open after %d failures in a row, until %s",
+			health.GetConsecutiveFailures(), time.UnixMilli(health.GetCircuitOpenUntilUnixMs()).UTC().Format(time.RFC3339)))
+	case forwardv1.HealthState_HEALTH_STATE_UNHEALTHY:
+		out = result(statusFailed, CodeUnhealthy, fmt.Sprintf("unhealthy: %d failures in a row", health.GetConsecutiveFailures()))
+	default:
+		out = result(statusInconclusive, CodeNoHealth, "health state not reported")
+	}
+	out.RttUs = health.GetRttUs()
+	out.ObservedAtUnixMs = health.GetCheckedAtUnixMs()
+	return out
 }
 
 func hostPort(host string, port uint32) string {

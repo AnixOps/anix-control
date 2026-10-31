@@ -35,22 +35,19 @@ the Agent is a regular node; forward routes and the network model name it
   group without a template, carries `--forward`: the installer writes
   `Forward.Enable` with `NodeKind: proxy` and the node id, so the Agent
   forwards on its proxy stream.
-- **Existing forward nodes are converted.**
-  `POST /api/v4/kernel/nodes/forward-<id>/convert` (super administrators,
-  `dry_run` first) creates the regular node (name, host, group, tags,
-  machine fingerprint, approval; `show` 0; fresh credentials), copies the
-  inventory row with its last reported engines, renames every route hop,
-  port allocation and DNS node row, deletes the forward node (revoking its
-  certificates) and replans, all in one transaction under the plan lock.
-  Routes keep their ports. A refused plan, an Ansible host, or a network
-  model that names the node refuses the conversion. The machine then
-  reinstalls the Agent with the new node's install command; its hops are
-  down until it connects. The forward Nodes page offers this as
-  "Make a regular node".
+- **No conversion.** An Agent forward node is not converted (the convert
+  endpoint is gone): delete it and install the Agent again with a node
+  group's command.
+
+## One node page
+
+The console shows one node list (`/admin/nodes`) with one kind of node: no
+role column, no 转发主机 tab, no convert action. `/admin/forward/inventory`
+opens the node page. Relaying runs on the network model (ANX).
 
 ## Not yet
 
 - Merging the tables (`v2_forward_node` remains for Ansible hosts and
-  unconverted nodes).
+  Agent forward nodes from before rc.11).
 - `v2_node.parent_id` relay children, which become network-model paths.
 - Agents stop sending a node kind once no Agent forward node is left.

@@ -205,7 +205,7 @@ install_base_tools() {
 }
 
 validate_version() {
-  [[ "${VERSION}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)(\.[0-9]+)?)?$ ]] || \
+  [[ "${VERSION}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)(\.[0-9]+(\.dev\.[0-9]+)?)?)?$ ]] || \
     die "Invalid release tag: ${VERSION}"
 }
 
@@ -763,16 +763,20 @@ configure_agent_artifact_dir() {
 # per request, so no restart is needed. A failure is a warning: nodes then
 # download from GitHub.
 sync_agent_release() {
-  local tag dir stage name zip listed digest missing
+  local tag dir stage name zip listed digest missing base
   local files=(SHA256SUMS SHA256SUMS.sig)
   local zips=(anix-agent-linux-64.zip anix-agent-linux-arm64-v8a.zip)
   [[ -n "${AGENT_ARTIFACT_DIR}" ]] || return 0
   tag="$(curl -fsS --max-time 10 "${HEALTH_URL%/*}/install/agent.env" 2>/dev/null | awk '$1 == "agent_version" {print $2; exit}')" || tag=""
-  if [[ ! "${tag}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)(\.[0-9]+)?)?$ ]]; then
+  if [[ ! "${tag}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)(\.[0-9]+(\.dev\.[0-9]+)?)?)?$ ]]; then
     warn "Control names no Agent release in ${HEALTH_URL%/*}/install/agent.env; the Agent release was not put in ${AGENT_ARTIFACT_DIR}"
     return 0
   fi
   for zip in "${zips[@]}"; do files+=("${zip}" "${zip}.dgst" "${zip}.sig"); done
+  # A dev build's Agent is published with the Control pre-release of the
+  # same tag (docs/RELEASING.md, "Dev builds").
+  base="${AGENT_RELEASE_BASE}"
+  [[ "${tag}" == *.dev.* ]] && base="${RELEASE_BASE}"
   dir="${AGENT_ARTIFACT_DIR}/${tag}"
   missing=0
   for name in "${files[@]}"; do
@@ -787,7 +791,7 @@ sync_agent_release() {
   info "Downloading Agent ${tag} into ${dir} so nodes install it from Control"
   for name in "${files[@]}"; do
     if ! curl -fsSL --retry 3 --retry-delay 2 --connect-timeout 15 --max-time 900 \
-      "${AGENT_RELEASE_BASE}/${tag}/${name}" -o "${stage}/${name}"; then
+      "${base}/${tag}/${name}" -o "${stage}/${name}"; then
       find "${stage}" -depth -delete
       warn "Could not download ${name} of Agent ${tag}; nodes download it from GitHub. Retry: sudo bash install.sh update --version ${VERSION}"
       return 0

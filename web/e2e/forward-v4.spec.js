@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
 import { openScreen } from './support/screens.js'
 import { expectToast } from './support/toasts.js'
-import { chooseNode } from './fixtures/forwardV4.js'
+import { chooseNode, chooseOption } from './fixtures/forwardV4.js'
 
 // The v4.2 forwarding pages (F5b) against the mocked /api/v4/forward
 // (e2e/fixtures/forwardV4.js): create → preview → save → detail →
@@ -23,8 +23,13 @@ test('creates a route: preview, save, detail and diagnosis', async ({ page }) =>
   const writes = recordWrites(page)
   await openScreen(page, 'admin-forward-editor-blank', { clock: true })
 
+  // A new route runs on the network model (ANX): a device, a fixed entry
+  // port and the internet egress that dials the targets.
   await page.getByLabel('Name').first().fill('e2e-edge')
+  await page.getByRole('group', { name: 'Port mode' }).first().getByText('Fixed').click()
+  await page.getByLabel('Entry port').fill('30443')
   await chooseNode(page, 0, 'hk-edge-01')
+  await chooseOption(page, page.getByRole('combobox', { name: 'Internet egress' }), 'eg-hk')
   await page.getByLabel('Target 1 host').fill('origin.example.com')
   await page.getByLabel('Target 1 port').fill('443')
   await page.getByLabel('Target 1 port').blur()
@@ -39,8 +44,8 @@ test('creates a route: preview, save, detail and diagnosis', async ({ page }) =>
   // Only contract fields, enum names, unset fields left out.
   expect(planned).toEqual({
     name: 'e2e-edge',
-    listen: { protocol: 'L4_PROTOCOL_TCP' },
-    hops: [{ role: 'HOP_ROLE_ENTRY', engine: 'ENGINE_NFTABLES', node_refs: ['forward-41'] }],
+    listen: { port: 30443, protocol: 'L4_PROTOCOL_TCP' },
+    hops: [{ role: 'HOP_ROLE_ENTRY', engine: 'ENGINE_NETWORK', node_refs: ['forward-41'], network_egress_id: 'eg-hk' }],
     targets: [{ host: 'origin.example.com', port: 443 }],
     policy: { next_hop: 'BALANCE_STRATEGY_ROUND_ROBIN', target: 'BALANCE_STRATEGY_ROUND_ROBIN', direct: 'DIRECT_MODE_OFF', target_policy: 'TARGET_POLICY_PUBLIC_ONLY' }
   })
@@ -68,12 +73,11 @@ test('creates a route: preview, save, detail and diagnosis', async ({ page }) =>
 test('maps the preview violations to their fields', async ({ page }) => {
   await openScreen(page, 'admin-forward-editor', { clock: true })
   const summary = page.getByTestId('forward-violations')
-  await expect(summary.getByText('3 problems to fix before saving')).toBeVisible()
+  // The private target under the public-only policy.
+  await expect(summary.getByText('1 problems to fix before saving')).toBeVisible()
   await expect(page.getByTestId('forward-save')).toBeDisabled()
   await summary.locator('[data-violation-field="targets[0].host"]').click()
   await expect(page.getByLabel('Target 1 host')).toBeFocused()
-  // The exit node that does not run nftables.
-  await expect(summary.locator('[data-violation-field="hops[1].engine"]')).toBeVisible()
 })
 
 test('saves a node’s forwarding settings', async ({ page }) => {
@@ -99,5 +103,5 @@ test('the forwarding area needs the forward package’s v4 API', async ({ page }
   await openScreen(page, 'admin-forward-no-capability', { clock: true })
   // Without the capability the area leads to 系统设置 → 内置包.
   await expect(page).toHaveURL(/\/admin\/system\/packages$/)
-  await expect(page.locator('#admin-sidebar a[href="/admin/forward/overview"]')).toHaveCount(0)
+  await expect(page.locator('#admin-sidebar a[href^="/admin/forward"]')).toHaveCount(0)
 })

@@ -1,5 +1,6 @@
 <template>
   <div class="list-page nodes-page">
+    <ForwardAreaNav area="nodes" />
     <UiPageHeader :title="t('admin.nodes.title')" :description="t('admin.nodes.subtitle')">
       <template #actions>
         <UiButton :icon="Rocket" data-testid="upgrade-nodes" @click="openAgentUpgrade">{{ t('shell.palette.actions.upgradeNodes') }}</UiButton>
@@ -165,8 +166,8 @@
 // inventory call after the list has loaded (it never holds the list up), and
 // so does their systemd services summary (服务状态, the machine-telemetry
 // package's; a dash without the package, its host or its permission). 节点组
-// lists the node groups behind the join command. Node (proxy service) is not
-// ForwardNode.
+// lists the node groups behind the join command. There is one kind of node:
+// relaying is the network model's (ANX), not a kind of node.
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Check, FileText, Layers, Pencil, RefreshCcw, Rocket, Server, SquareArrowOutUpRight, Terminal, Trash2, X } from '@lucide/vue'
@@ -187,6 +188,7 @@ import { openAgentUpgrade } from '@/composables/useAgentUpgradeSheet'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { useRouteIntent } from '@/composables/useRouteIntent'
 import { SORT_ORDERS, createListSort } from '@/utils/listSort'
+import ForwardAreaNav from '@/components/forward/ForwardAreaNav.vue'
 import NodeCertificateCell from './nodes/NodeCertificateCell.vue'
 import NodeConnectionBadge from './nodes/NodeConnectionBadge.vue'
 import NodeFormSheet from './nodes/NodeFormSheet.vue'
@@ -252,14 +254,18 @@ const groupFormOpen = ref(false)
 const editingGroup = ref(null)
 
 // ?tab=groups; 节点 is the default and leaves the query clean.
+const TABS = ['groups']
 function setTab(value) {
   const query = { ...route.query }
-  if (value === 'groups') query.tab = 'groups'
+  if (TABS.includes(value)) query.tab = value
   else delete query.tab
   return router.replace({ path: route.path, query })
 }
 const tab = computed({
-  get: () => (route?.query?.tab === 'groups' ? 'groups' : 'nodes'),
+  get: () => {
+    const value = route?.query?.tab
+    return value === 'groups' ? 'groups' : 'nodes'
+  },
   set: (value) => { void setTab(value) }
 })
 const tabItems = computed(() => [
@@ -268,12 +274,8 @@ const tabItems = computed(() => [
 ])
 
 const overQuotaNodes = computed(() => nodes.value.filter(isOverQuota))
-// Machines waiting for approval in any group, forward groups included; the
-// proxy ones are in this list, the forward ones in their group's dialog.
+// Machines waiting for approval in any group.
 const pendingApprovals = computed(() => groupsState.pendingTotal.value)
-const pendingProxyApprovals = computed(() => groupsState.groups.value
-  .filter(group => group.kind === 'proxy')
-  .reduce((sum, group) => sum + Number(group.nodes?.pending || 0), 0))
 
 // The API's `status` filter (the stored status), and 待确认.
 const statusChips = computed(() => [...['online', 'offline', 'disabled', 'pending'].map(value => ({
@@ -448,14 +450,9 @@ function clearFilters() {
   else searchNow()
 }
 
-// The banner's 查看: the proxy nodes waiting for approval, filtered on the
-// nodes tab; when only forward nodes wait, the groups tab, where each group
-// has its count and 接入节点 lists them with 批准 and 拒绝.
+// The banner's 查看: the nodes waiting for approval, filtered on the nodes
+// tab.
 async function showAwaiting() {
-  if (pendingProxyApprovals.value === 0) {
-    if (tab.value !== 'groups') await setTab('groups')
-    return
-  }
   if (tab.value !== 'nodes') await setTab('nodes')
   statusFilter.value = AWAITING
 }

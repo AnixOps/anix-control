@@ -164,6 +164,15 @@ func TestReadinessAgentRelease(t *testing.T) {
 	assert.Contains(t, check.Message, "v4.2.1")
 	assert.Contains(t, check.Message, "cannot check")
 
+	// Not configured but pinned by the build (a Control-only release ships
+	// no Agent of its own number): the build's Agent release.
+	in.PinnedAgentVersion = "v4.1.9"
+	check = checkOf(t, CheckReadiness(in), CheckAgentRelease)
+	assert.True(t, check.OK)
+	assert.Contains(t, check.Message, "v4.1.9")
+	assert.NotContains(t, check.Message, "v4.2.1")
+	in.PinnedAgentVersion = ""
+
 	// A development build knows no release: an error.
 	in.ReleaseVersion = "dev"
 	readiness := CheckReadiness(in)

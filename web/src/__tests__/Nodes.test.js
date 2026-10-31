@@ -77,6 +77,23 @@ describe('Nodes.vue', () => {
     telemetryApi.getNodesServicesSummary.mockResolvedValue([])
   })
 
+  it('shows one kind of node: no role column, no forward hosts tab, even when asked for', async () => {
+    kernelApi.getKernelAdminNodes.mockResolvedValue({
+      list: [
+        { id: 1, name: 'hk-exit', host: 'hk.example', protocols: [{ id: 1 }] },
+        { id: 2, name: 'sh-plain', host: 'sh.example', protocols: [] }
+      ],
+      total: 2
+    })
+
+    const { wrapper } = await mountNodes('/admin/nodes?tab=hosts')
+
+    expect(wrapper.find('[data-testid="node-role"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="unconverted-banner"]').exists()).toBe(false)
+    expect(wrapper.findAll('[role="tab"]').map(item => item.text()).join(' ')).not.toContain('Forward hosts')
+    expect(wrapper.text()).toContain('sh-plain')
+  })
+
   it('has 升级节点 next to 接入节点 in the header, and it opens the shell\'s upgrade sheet', async () => {
     closeAgentUpgrade()
     const { wrapper } = await mountNodes()
@@ -383,12 +400,12 @@ describe('Nodes.vue', () => {
       { id: 6, name: 'hk-02', host: 'hk2.example', status: 0, approval: 'pending', node_group_id: 3, node_group_name: 'HK' }
     ]
     const group = (nodes = { live: 2, pending: 1 }) => ({
-      id: 3, name: 'HK', kind: 'proxy', nodes, require_approval: true, token_expires_at: null, token_expired: false
+      id: 3, name: 'HK', nodes, require_approval: true, token_expires_at: null, token_expired: false
     })
 
     it('shows a banner with the count of every group and a 待确认 badge on the row', async () => {
       kernelApi.getKernelAdminNodes.mockResolvedValue({ list: rows, total: 2 })
-      kernelApi.listKernelNodeGroups.mockResolvedValue({ groups: [group(), { ...group({ live: 1, pending: 2 }), id: 4, name: 'edge', kind: 'forward' }] })
+      kernelApi.listKernelNodeGroups.mockResolvedValue({ groups: [group(), { ...group({ live: 1, pending: 2 }), id: 4, name: 'edge' }] })
       const { wrapper } = await mountNodes()
 
       expect(wrapper.find('[data-testid="approval-banner"]').text()).toContain('3 machine(s) wait for your approval')
@@ -419,19 +436,6 @@ describe('Nodes.vue', () => {
       const { router: reloaded } = await mountNodes('/admin/nodes?status=awaiting&q=hk')
       expect(kernelApi.getKernelAdminNodes).toHaveBeenLastCalledWith({ page: 1, page_size: 20, search: 'hk', approval: 'pending' })
       expect(reloaded.currentRoute.value.query).toEqual({ q: 'hk', status: 'awaiting' })
-    })
-
-    it('sends the banner to the groups when only forward nodes wait', async () => {
-      kernelApi.getKernelAdminNodes.mockResolvedValue({ list: rows.slice(0, 1), total: 1 })
-      kernelApi.listKernelNodeGroups.mockResolvedValue({
-        groups: [group({ live: 2, pending: 0 }), { ...group({ live: 1, pending: 2 }), id: 4, name: 'edge', kind: 'forward' }]
-      })
-      const { wrapper, router } = await mountNodes()
-      expect(wrapper.find('[data-testid="approval-banner"]').text()).toContain('2 machine(s)')
-      await wrapper.find('[data-testid="approval-banner-view"]').trigger('click')
-      await flushPromises()
-      expect(router.currentRoute.value.query).toEqual({ tab: 'groups' })
-      expect(wrapper.find('[data-testid="node-groups-panel"]').exists()).toBe(true)
     })
 
     it('approves a row from its menu and reloads the list and the groups', async () => {
@@ -472,7 +476,7 @@ describe('Nodes.vue', () => {
   describe('the node group tab', () => {
     it('is the second tab and keeps its place in the URL', async () => {
       kernelApi.listKernelNodeGroups.mockResolvedValue({
-        groups: [{ id: 3, name: 'HK', kind: 'proxy', nodes: { live: 2, pending: 0 }, require_approval: false, token_expires_at: null, token_expired: false }]
+        groups: [{ id: 3, name: 'HK', nodes: { live: 2, pending: 0 }, require_approval: false, token_expires_at: null, token_expired: false }]
       })
       const { wrapper, router } = await mountNodes('/admin/nodes?tab=groups')
       expect(wrapper.find('[data-testid="node-groups-panel"]').text()).toContain('HK')

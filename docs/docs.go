@@ -8170,7 +8170,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "The Agent release a campaign pushes by default (agent_install.agent_version, else the Agent release this Control was built with, else its own release), this Control's release, how many nodes a campaign would include now (enabled nodes whose Agent was seen on the Agent Control stream), the default batches with the rules of H19 (first batch at most 5%, each batch at least 30 minutes, a batch rolls back above 5% failures or after 10 minutes without a reconnect), the active campaign if there is one, and whether the caller may start one (can_start: super administrators). When the https address nodes reach Control is not configured, configured is false with unconfigured_reason and target_version empty. Administrators read it; Start verifies the release files.",
+                "description": "The Agent release a campaign pushes by default (agent_install.agent_version, else the Agent release this Control was built with, else its own release), this Control's release, how many nodes a campaign would include now (enabled nodes whose Agent was seen on the Agent Control stream) and which (nodes: node_ref, name, agent_version, for a manual upgrade), the default batches with the rules of H19 (first batch at most 5%, each batch at least 30 minutes, a batch rolls back above 5% failures or after 10 minutes without a reconnect), the active campaign if there is one, and whether the caller may start one (can_start: super administrators). When the https address nodes reach Control is not configured, configured is false with unconfigured_reason and target_version empty. Administrators read it; Start verifies the release files.",
                 "produces": [
                     "application/json"
                 ],
@@ -8228,7 +8228,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Pushes an Agent release to every enabled node whose Agent was seen on the Agent Control stream, in batches (default 5%, 25%, 100% of the nodes, at least 30 minutes each; canaries first by node name hash), as the agent.upgrade operation to Agents that negotiated upgrade.v1. A batch rolls back when more than 5% of its offered nodes fail or do not reconnect with the target version within 10 minutes (H19). The release must be in agent_install.artifact_dir with its .sig files and SHA256SUMS(.sig), verified with plugins.official_public_key. Super administrators only; one campaign at a time.",
+                "description": "Pushes an Agent release to every enabled node whose Agent was seen on the Agent Control stream, in batches (default 5%, 25%, 100% of the nodes, at least 30 minutes each; canaries first by node name hash), as the agent.upgrade operation to Agents that negotiated upgrade.v1. With nodes (proxy-\u003cid\u003e, forward-\u003cid\u003e, each eligible) it is a manual upgrade instead: exactly those nodes in one batch with no minimum duration; batches and exclude must be empty. A batch rolls back when more than 5% of its offered nodes fail or do not reconnect with the target version within 10 minutes (H19). The release must be in agent_install.artifact_dir with its .sig files and SHA256SUMS(.sig), verified with plugins.official_public_key. Super administrators only; one campaign at a time.",
                 "consumes": [
                     "application/json"
                 ],
@@ -8241,7 +8241,7 @@ const docTemplate = `{
                 "summary": "Start a staged Agent upgrade",
                 "parameters": [
                     {
-                        "description": "target_version (default this Control's Agent release), batches, exclude {nodes, tags}, reason",
+                        "description": "target_version (default this Control's Agent release), batches, exclude {nodes, tags}, nodes (manual upgrade), reason",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -8734,6 +8734,32 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v4/kernel/features": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "The running build's channel (dev for a dev build built from main, stable for a release) and the features gated on it (internal/features): a feature in the dev stage runs in dev builds only. The admin UI hides what is off.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "List the gated features",
+                "responses": {
+                    "200": {
+                        "description": "data.channel, data.version and data.features [{name, description, stage, enabled}]",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/v4/kernel/forward-routes/{id}/subscription": {
             "get": {
                 "security": [
@@ -8965,7 +8991,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "The network model document (lines on nodes; user and hop ingresses and internet and hop egresses on lines; ANX-Line transports from a hop egress to another device's hop ingress; paths from a user ingress through transports to an internet egress) with its revision, the paths not planned yet and why (pending: a transport's accepting device has not reported its ANX-Line server key), and each device's plan generation and hash, whether its Agent negotiated network.v1, and which public keys it reported.",
+                "description": "The network model document (lines on nodes; user and hop ingresses and internet and hop egresses on lines; ANX-Line transports from a hop egress to another device's hop ingress; paths from a user ingress through transports to an internet egress) with its revision, the paths not planned yet and why (pending: a transport's accepting device has not reported its ANX-Line server key), and each device's plan generation and hash, whether its Agent negotiated network.v1, and which public keys it reported, and the devices a route may use (nodes: every enabled node whose Agent connected, by node reference and name).",
                 "produces": [
                     "application/json"
                 ],
@@ -9162,7 +9188,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "A node group of kind proxy or forward with a new join token (sealed under module_runtime.ca_kek, which must be set). Its defaults (rate, tags, monthly_limit_bytes, reset_day, sort) are copied to every node the token creates; a proxy group's protocol_template lists the protocols each new node gets (tls none, or reality for vless; port or port_range) and subscription_group_ids the subscription groups they join. The answer does not carry the token: GET .../command shows the install command. Audited.",
+                "description": "A node group with a new join token (sealed under module_runtime.ca_kek, which must be set). Its defaults (rate, tags, monthly_limit_bytes, reset_day, sort) are copied to every node the token creates; protocol_template lists the protocols each new node gets (empty: the node only runs the network model, ANX) (tls none, or reality for vless; port or port_range) and subscription_group_ids the subscription groups they join. The answer does not carry the token: GET .../command shows the install command. Audited.",
                 "consumes": [
                     "application/json"
                 ],
@@ -9268,7 +9294,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Replaces every field of a group but its kind (which cannot change) and its token. Nodes that joined keep what they got; the defaults and the template apply to later joins. Audited.",
+                "description": "Replaces every field of a group but its token. Nodes that joined keep what they got; the defaults and the template apply to later joins. Audited.",
                 "consumes": [
                     "application/json"
                 ],
@@ -9481,51 +9507,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/v4/kernel/nodes/{id}/convert": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "One machine is one node: a relay is a regular (proxy) node without user protocols, which runs the network model and ANX relays. This creates that node from forward-\u003cid\u003e (name, host, group, tags, approval; hidden from subscribers; no protocols), copies its forwarding settings and last reported engines, moves every route hop, port allocation and DNS node row to it (routes keep their ports) and deletes the forward node, which revokes its Agent's certificates. Every route's plan must accept the change (409 plan_refused otherwise). 409 not_convertible for an Ansible machine or a forward node the network model names. With dry_run nothing changes and to names the node it would be. Then reinstall the Agent on the machine with the new node's install command; its hops are down until it connects. Super administrators only. Audited (module forward, node_convert).",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Kernel"
-                ],
-                "summary": "Turn a forward node into a regular node",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "forward-\u003cid\u003e",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "dry_run",
-                        "name": "request",
-                        "in": "body",
-                        "schema": {
-                            "$ref": "#/definitions/handler.nodeConvertRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/kernelforward.Conversion"
-                        }
-                    }
-                }
-            }
-        },
         "/api/v4/kernel/nodes/{id}/diagnostics": {
             "get": {
                 "security": [
@@ -9687,6 +9668,84 @@ const docTemplate = `{
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v4/kernel/nodes/{id}/network": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "The interface the network model's automatic egresses of the node leave by (interface; source_v4 and gateway_v4, source_v6 and gateway_v6 on it; empty: the default route) and the port its automatic hop ingress listens on (hop_port; 0: 24443). A node behind NAT is reached at the NAT entry (GET /api/v4/kernel/nodes/{id}/entries) whose port map covers hop_port. detected lists the interfaces the node's Agent last reported (name, addresses_v4, addresses_v6, gateway_v4, gateway_v6; empty before an Agent that reports them), detected_at when. 404 for an unknown node.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "A device's network settings",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "proxy-\u003cid\u003e or forward-\u003cid\u003e",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/networkmodel.NodeNetworkView"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Replaces the node's network settings (see GET) and replans: the automatic lines, egresses, hop ingresses and transports of the routes through the node follow them. A source address needs the interface, a gateway its source address; 400 with violations otherwise, 404 for an unknown node. Answers like GET. Audited (network_node_settings).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Set a device's network settings",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "proxy-\u003cid\u003e or forward-\u003cid\u003e",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "the settings",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/networkmodel.NodeSettings"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/networkmodel.NodeNetworkView"
                         }
                     }
                 }
@@ -12180,14 +12239,6 @@ const docTemplate = `{
                 }
             }
         },
-        "handler.nodeConvertRequest": {
-            "type": "object",
-            "properties": {
-                "dry_run": {
-                    "type": "boolean"
-                }
-            }
-        },
         "handler.nodeDiagnosticRequest": {
             "type": "object",
             "properties": {
@@ -12309,6 +12360,13 @@ const docTemplate = `{
                 "exclude": {
                     "$ref": "#/definitions/agentupgrade.Exclude"
                 },
+                "nodes": {
+                    "description": "Nodes, when set, upgrade exactly these nodes at once (manual\nupgrade); batches and exclude must then be empty.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
                 "reason": {
                     "type": "string"
                 },
@@ -12381,27 +12439,6 @@ const docTemplate = `{
                     "items": {
                         "type": "string"
                     }
-                }
-            }
-        },
-        "kernelforward.Conversion": {
-            "type": "object",
-            "properties": {
-                "dry_run": {
-                    "type": "boolean"
-                },
-                "from": {
-                    "type": "string"
-                },
-                "routes": {
-                    "description": "Routes are the ids of the routes whose hops moved.",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "to": {
-                    "type": "string"
                 }
             }
         },
@@ -13277,7 +13314,43 @@ const docTemplate = `{
                 "quic_port": {
                     "type": "integer"
                 },
+                "reverse": {
+                    "type": "boolean"
+                },
+                "reverse_host": {
+                    "description": "ReverseHost is the dialing device's address the accepting device\nreaches; ReversePort its reverse listener port (0 = 24444).",
+                    "type": "string"
+                },
+                "reverse_port": {
+                    "type": "integer"
+                },
                 "server_name": {
+                    "type": "string"
+                }
+            }
+        },
+        "networkmodel.DetectedInterface": {
+            "type": "object",
+            "properties": {
+                "addresses_v4": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "addresses_v6": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "gateway_v4": {
+                    "type": "string"
+                },
+                "gateway_v6": {
+                    "type": "string"
+                },
+                "name": {
                     "type": "string"
                 }
             }
@@ -13484,6 +13557,61 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "node": {
+                    "type": "string"
+                }
+            }
+        },
+        "networkmodel.NodeNetworkView": {
+            "type": "object",
+            "properties": {
+                "detected": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/networkmodel.DetectedInterface"
+                    }
+                },
+                "detected_at": {
+                    "type": "string"
+                },
+                "gateway_v4": {
+                    "type": "string"
+                },
+                "gateway_v6": {
+                    "type": "string"
+                },
+                "hop_port": {
+                    "type": "integer"
+                },
+                "interface": {
+                    "type": "string"
+                },
+                "source_v4": {
+                    "type": "string"
+                },
+                "source_v6": {
+                    "type": "string"
+                }
+            }
+        },
+        "networkmodel.NodeSettings": {
+            "type": "object",
+            "properties": {
+                "gateway_v4": {
+                    "type": "string"
+                },
+                "gateway_v6": {
+                    "type": "string"
+                },
+                "hop_port": {
+                    "type": "integer"
+                },
+                "interface": {
+                    "type": "string"
+                },
+                "source_v4": {
+                    "type": "string"
+                },
+                "source_v6": {
                     "type": "string"
                 }
             }
@@ -13809,7 +13937,7 @@ const docTemplate = `{
 
 // SwaggerInfo holds exported Swagger Info so clients can modify it
 var SwaggerInfo = &swag.Spec{
-	Version:          "5.0.0-rc.12",
+	Version:          "5.0.0-rc.21",
 	Host:             "localhost:8080",
 	BasePath:         "/api/v2",
 	Schemes:          []string{"http", "https"},

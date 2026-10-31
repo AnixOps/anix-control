@@ -82,6 +82,7 @@
 
       <div class="hop-card__row">
         <UiSelect
+          v-if="engineOptions.length > 1"
           :id="fieldId(`${path}.engine`)"
           :model-value="hop.engine"
           size="md"
@@ -93,7 +94,7 @@
         <UiSelect
           v-if="network && index > 0"
           :id="fieldId(`${path}.ingress.network_transport_id`)"
-          :model-value="hop.ingress?.network_transport_id || ''"
+          :model-value="hop.ingress?.network_transport_id || AUTO"
           size="md"
           :label="t('forwardV4.editor.networkTransport')"
           :options="transportOptions"
@@ -101,7 +102,7 @@
           :error="errorText(`${path}.ingress.network_transport_id`)"
           :help="t('forwardV4.editor.networkTransportHelp')"
           data-testid="forward-network-transport"
-          @update:model-value="value => setIngress({ security: 'LINK_SECURITY_NETWORK', network_transport_id: value })"
+          @update:model-value="value => setIngress({ security: 'LINK_SECURITY_NETWORK', network_transport_id: value === AUTO ? '' : value })"
         />
         <UiSelect
           v-else-if="index > 0"
@@ -120,7 +121,7 @@
       <div v-if="network && last" class="hop-card__row">
         <UiSelect
           :id="fieldId(`${path}.network_egress_id`)"
-          :model-value="hop.network_egress_id || ''"
+          :model-value="hop.network_egress_id || AUTO"
           size="md"
           :label="t('forwardV4.editor.networkEgress')"
           :options="egressOptions"
@@ -128,7 +129,7 @@
           :error="errorText(`${path}.network_egress_id`)"
           :help="t('forwardV4.editor.networkEgressHelp')"
           data-testid="forward-network-egress"
-          @update:model-value="value => emit('update', { network_egress_id: value })"
+          @update:model-value="value => emit('update', { network_egress_id: value === AUTO ? '' : value })"
         />
       </div>
 
@@ -229,10 +230,11 @@ const props = defineProps({
   nodes: { type: Array, default: () => [] },
   violations: { type: Array, default: () => [] },
   errorText: { type: Function, required: true },
-  enableAnixOps: { type: Boolean, default: false },
   // The network model's document, for ENGINE_NETWORK hops; null when not
   // loaded.
-  networkModel: { type: Object, default: null }
+  networkModel: { type: Object, default: null },
+  // The Agent nodes a network hop may use ({ node, name }).
+  networkNodes: { type: Array, default: () => [] }
 })
 const emit = defineEmits(['update', 'add-node', 'remove-node', 'move', 'remove'])
 const { t } = useAppI18n()
@@ -244,16 +246,22 @@ const last = computed(() => props.index === props.total - 1)
 const security = computed(() => securityOf(props.hop))
 const network = computed(() => props.hop.engine === NETWORK_ENGINE)
 
-// The network model's devices: the nodes its lines are on.
+// The network model's lines by id, and the devices a network hop may use:
+// every Agent node, and the nodes the model's lines are on.
 const lineNodes = computed(() => new Map((props.networkModel?.lines || []).map(line => [line.id, line.node])))
-const networkNodes = computed(() => [...new Set(lineNodes.value.values())].sort())
+const agentNames = computed(() => new Map(props.networkNodes.map(node => [node.node, node.name])))
+const networkNodes = computed(() => [...new Set([...agentNames.value.keys(), ...lineNodes.value.values()])].sort())
 function egressNode(id) {
   return lineNodes.value.get((props.networkModel?.egresses || []).find(egress => egress.id === id)?.line)
 }
 function ingressNode(id) {
   return lineNodes.value.get((props.networkModel?.ingresses || []).find(ingress => ingress.id === id)?.line)
 }
-const transportOptions = computed(() => (props.networkModel?.transports || [])
+// AUTO (stored as "") is 自动: Control links the devices with a transport of its own, and
+// the exit leaves by its own internet egress.
+// A select item cannot have the empty value, and "*" is no valid id.
+const AUTO = '*'
+const transportOptions = computed(() => [{ value: AUTO, label: t('forwardV4.editor.networkAuto'), description: t('forwardV4.editor.networkTransportAuto') }, ...(props.networkModel?.transports || [])
   .filter(transport => transport.kind === 'anx_line' || transport.kind === 'anx')
   .map(transport => {
     const from = egressNode(transport.from_egress) || '?'
@@ -268,11 +276,11 @@ const transportOptions = computed(() => (props.networkModel?.transports || [])
       description: fits ? kind : t('forwardV4.editor.transportElsewhere', { from, to }),
       disabled: !fits && props.hop.ingress?.network_transport_id !== transport.id
     }
-  }))
-const egressOptions = computed(() => (props.networkModel?.egresses || [])
+  })])
+const egressOptions = computed(() => [{ value: AUTO, label: t('forwardV4.editor.networkAuto'), description: t('forwardV4.editor.networkEgressAuto') }, ...(props.networkModel?.egresses || [])
   .filter(egress => egress.audience === 'internet' && !egress.disabled)
   .filter(egress => !props.hop.node_refs[0] || lineNodes.value.get(egress.line) === props.hop.node_refs[0])
-  .map(egress => ({ value: egress.id, label: egress.id, description: `${egress.kind} · ${egress.family} · ${egress.source}` })))
+  .map(egress => ({ value: egress.id, label: egress.id, description: `${egress.kind} · ${egress.family} · ${egress.source}` }))])
 const hasError = computed(() => underField(props.violations, path.value))
 const linkError = computed(() => props.violations.some(item => item.field === `${path.value}.ingress.security` && item.code === 'link_unsupported'))
 const previousLabel = computed(() => (props.previous
@@ -287,7 +295,7 @@ defineExpose({ focusTool: name => (tools[name]?.$el || tools[name])?.focus?.() }
 
 const byRef = computed(() => new Map(props.nodes.map(node => [node.node_ref, node])))
 function nodeName(ref) {
-  return byRef.value.get(ref)?.name || ref
+  return byRef.value.get(ref)?.name || agentNames.value.get(ref) || ref
 }
 function enginesOf(ref) {
   return byRef.value.get(ref)?.info?.engines || byRef.value.get(ref)?.capabilities?.engines || []
@@ -305,9 +313,12 @@ function addNode(value) {
 }
 
 const nodeOptions = computed(() => (network.value ? networkNodeOptions.value : forwardNodeOptions.value))
+// A network hop is one device, except the entry: its other devices are
+// entry HA, each on a transport (or egress) of its own that the network
+// model chooses.
 const networkNodeOptions = computed(() => networkNodes.value
   .filter(ref => !props.hop.node_refs.includes(ref))
-  .map(ref => ({ value: ref, label: nodeName(ref), description: ref, disabled: props.hop.node_refs.length > 0 })))
+  .map(ref => ({ value: ref, label: nodeName(ref), description: ref, disabled: props.index > 0 && props.hop.node_refs.length > 0 })))
 const forwardNodeOptions = computed(() => props.nodes
   .filter(node => !props.hop.node_refs.includes(node.node_ref))
   .map(node => {
@@ -326,8 +337,10 @@ const forwardNodeOptions = computed(() => props.nodes
 
 const engineOptions = computed(() => {
   const engines = [...BASE_ENGINES]
-  if (props.enableAnixOps || props.hop.engine === 'ENGINE_ANIXOPS') engines.push('ENGINE_ANIXOPS')
-  // A route left on the removed gost engine still shows it.
+  // Routes left on nftables and the removed gost and anixops engines still
+  // show them.
+  if (props.hop.engine === 'ENGINE_NFTABLES') engines.push('ENGINE_NFTABLES')
+  if (props.hop.engine === 'ENGINE_ANIXOPS') engines.push('ENGINE_ANIXOPS')
   if (props.hop.engine === 'ENGINE_GOST') engines.push('ENGINE_GOST')
   return engines.map(engine => {
     const missing = props.hop.node_refs.filter(ref => !caps(ref, engine)?.available)
@@ -345,7 +358,7 @@ const engineOptions = computed(() => {
 })
 
 const securityOptions = computed(() => Object.keys(SECURITIES)
-  .filter(key => key !== 'LINK_SECURITY_ANIXOPS' || props.enableAnixOps || security.value === key)
+  .filter(key => key !== 'LINK_SECURITY_ANIXOPS' || security.value === key)
   .map(key => {
     const originates = props.previous?.node_refs.every(ref => caps(ref, props.previous.engine)?.link_securities?.includes(key)) ?? true
     const terminates = props.hop.node_refs.every(ref => caps(ref, props.hop.engine)?.link_securities?.includes(key))

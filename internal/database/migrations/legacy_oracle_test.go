@@ -140,6 +140,7 @@ func laterModels() []any {
 		&model.NetworkModel{},              // 0016_network_model
 		&model.NetworkTransportKey{},       // 0016_network_model
 		&model.NetworkDevice{},             // 0016_network_model
+		&model.NodeNetwork{},               // 0018_node_network
 	}
 }
 

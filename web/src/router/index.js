@@ -46,7 +46,6 @@ const ForwardOverview = () => import('@/views/admin/forward/Overview.vue')
 const ForwardRoutes = () => import('@/views/admin/forward/Routes.vue')
 const ForwardRouteEditor = () => import('@/views/admin/forward/RouteEditor.vue')
 const ForwardRouteDetail = () => import('@/views/admin/forward/RouteDetail.vue')
-const ForwardNodes = () => import('@/views/admin/forward/Nodes.vue')
 const ForwardNodeView = () => import('@/views/admin/forward/NodeDetail.vue')
 const ForwardDnsProviders = () => import('@/views/admin/forward/DnsProviders.vue')
 const ForwardEgressRoutes = () => import('@/views/admin/forward/EgressRoutes.vue')
@@ -227,8 +226,8 @@ const routes = [
         path: 'knowledge',
         component: AdminKnowledge
       },
-      // The forwarding area (F5b, docs/design/forward-ui): 概览, 路由 and
-      // 节点. /admin/forward opens 概览; the flux-clone pages were removed in
+      // The forwarding area (F5b, docs/design/forward-ui): 概览, 路由, DNS
+      // and 分流; its nodes are on the node page. /admin/forward opens 概览; the flux-clone pages were removed in
       // v4.2 (F5d), and their paths open 概览 too.
       {
         path: 'forward',
@@ -262,9 +261,10 @@ const routes = [
         meta: forwardMeta('pageTitles.admin.forwardV4RouteEdit')
       },
       {
+        // The forwarding area's node list joined the node page: there is
+        // one kind of node.
         path: 'forward/inventory',
-        component: ForwardNodes,
-        meta: forwardMeta('pageTitles.admin.forwardV4Nodes')
+        redirect: '/admin/nodes'
       },
       {
         path: 'forward/inventory/:nodeRef',
