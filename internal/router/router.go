@@ -645,28 +645,9 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		v3.PUT("/nodes/:id/assignments", kernel.UpsertAssignment)
 		v3.DELETE("/nodes/:id/assignments/:assignment_id", kernel.DeleteAssignment)
 
-		v3.GET("/topologies", kernel.ListTopologies)
-		v3.POST("/topologies", kernel.CreateTopology)
-		v3.POST("/topologies/validate", kernel.ValidateTopology)
-		v3.DELETE("/topologies/:id", kernel.DeleteTopology)
-		v3.GET("/topologies/:id/revisions", kernel.ListTopologyRevisions)
-		v3.POST("/topologies/:id/revisions", kernel.CreateTopologyRevision)
-		v3.GET("/topologies/:id/revisions/:revision_id", kernel.GetTopologyRevision)
-		v3.POST("/topologies/:id/revisions/:revision_id/preview", kernel.PreviewTopologyDeployment)
-		v3.POST("/topologies/:id/revisions/:revision_id/diagnose", kernel.DiagnoseTopologyDeployment)
-		v3.GET("/topologies/:id/revisions/:revision_id/preview", kernel.PreviewTopologyDeployment)
-		v3.GET("/topologies/:id/revisions/:revision_id/diagnose", kernel.DiagnoseTopologyDeployment)
-		v3.GET("/deployments", kernel.ListDeployments)
-		v3.POST("/deployments/preview", kernel.PreviewDeployment)
-		v3.POST("/deployments/diagnose", kernel.PreviewDeployment)
-		v3.POST("/deployments", kernel.PlanDeployment)
-		v3.GET("/deployments/:id", kernel.GetDeploymentStatus)
-		v3.POST("/deployments/:id/apply", kernel.ApplyDeployment)
-		v3.POST("/deployments/:id/rollback", kernel.RollbackDeployment)
 		v3.GET("/operations", kernel.ListOperations)
 		v3.POST("/operations", kernel.CreateOperation)
 		v3.POST("/operations/:id/cancel", kernel.CancelOperation)
-		v3.GET("/observed-states", kernel.ListObservedStates)
 	}
 
 	// API v4 exposes the package route gateway and module and agent PKI
