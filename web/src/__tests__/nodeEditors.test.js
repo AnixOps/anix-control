@@ -3,7 +3,7 @@
 // node data helpers.
 import { describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
-import { PROTOCOL_FIELDS, fieldsFor, readField, writeField } from '@/views/admin/nodes/protocolFields'
+import { PROTOCOL_FIELDS, defaultSettingsFor, fieldsFor, readField, writeField } from '@/views/admin/nodes/protocolFields'
 import { useProtocolEditor } from '@/views/admin/nodes/useProtocolEditor'
 import { buildNodePayload, displayStatus, nodeFormFrom, parentCandidatesFor } from '@/views/admin/nodes/nodeData'
 
@@ -183,6 +183,27 @@ describe('protocol form fields', () => {
     stored.protocolForm.mode = 'visual'
     expect(stored.protocolForm).toMatchObject({ type: 'trojan', port: 8443, tls: 1, transport: 'ws' })
     expect(stored.protocolModel.value.transport_settings).toEqual({ path: '/w' })
+  })
+})
+
+describe('ANX protocol fields', () => {
+  const anx = { type: 'anx', tls: 0, transport: 'tcp', settings: {}, tls_settings: {}, reality_settings: {}, transport_settings: {} }
+
+  it('shows the cover site, names and ALPN, and starts from their defaults', () => {
+    expect(fieldsFor(anx).map(field => field.key)).toEqual(['server_names', 'dest', 'alpn'])
+    expect(defaultSettingsFor('anx')).toEqual({
+      server_names: ['www.apple.com'],
+      dest: 'www.apple.com:443',
+      alpn: ['h2', 'http/1.1']
+    })
+  })
+
+  it('edits lists as arrays and drops an emptied list', () => {
+    const names = PROTOCOL_FIELDS.find(field => field.key === 'server_names')
+    const edited = writeField(anx, names, ['a.example.com', 'b.example.com'])
+    expect(edited.settings.server_names).toEqual(['a.example.com', 'b.example.com'])
+    expect(readField(edited, names)).toEqual(['a.example.com', 'b.example.com'])
+    expect(writeField(edited, names, []).settings).toEqual({})
   })
 })
 

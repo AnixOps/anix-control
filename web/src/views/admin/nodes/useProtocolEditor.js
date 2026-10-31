@@ -7,7 +7,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { adaptTransport, capabilitiesOf, hasFixedTransport, transportProblem } from './protocolCapabilities'
 import { PROTOCOL_SECTIONS, defaultRealityFor, defaultSettingsFor } from './protocolFields'
 
-export const PROTOCOL_TYPES = ['vmess', 'vless', 'trojan', 'shadowsocks', 'hysteria2', 'tuic', 'wireguard', 'iwan']
+export const PROTOCOL_TYPES = ['vmess', 'vless', 'trojan', 'shadowsocks', 'hysteria2', 'tuic', 'wireguard', 'iwan', 'anx']
 
 export const JSON_PLACEHOLDER = `{
   "type": "vless",

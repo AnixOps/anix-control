@@ -559,6 +559,8 @@ export default {
     none: '无',
     generate: '随机生成',
     labels: {
+      server_names: '允许的 SNI',
+      alpn: 'ALPN',
       flow: '流控 (Flow)',
       method: '加密方式',
       server_key: '服务端密钥',
@@ -579,6 +581,8 @@ export default {
       public_key: '公钥'
     },
     hints: {
+      anxServerNames: '用逗号分隔，客户端使用第一个；必须是伪装目标站真实支持的域名。ANX 用户密钥由 UUID 派生，服务器公钥由节点上的 Agent 上报，订阅选择 AnixOps Net 格式即可拿到 anx:// 链接。',
+      anxDest: '非 ANX 连接（含主动探测）原样转发到这里，格式 host:port。',
       serverKey: '2022 系列加密的服务端密钥；留空则按节点自动派生。',
       privateKey: '留空则保存时自动生成密钥对；已保存的私钥显示为 ********。',
       publicKey: '订阅下发给客户端的公钥；留空则由私钥推出。'

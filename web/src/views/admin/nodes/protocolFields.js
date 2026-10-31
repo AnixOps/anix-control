@@ -7,7 +7,8 @@
 //   section  one of PROTOCOL_SECTIONS (a JSON object column of the protocol)
 //   key      the JSON key; `keys` lists aliases, read in order, written to the
 //            first one present (else the last)
-//   kind     text | password | number | select | switch
+//   kind     text | password | number | select | switch | list (an array of
+//            strings, edited as comma separated text)
 //   options  select: the values ('' means unset); labels come from i18n
 //   show     (protocol) => whether the field applies
 // The same registry serves the node protocol sheet, the node group template
@@ -35,6 +36,9 @@ export const FINGERPRINTS = Object.freeze(['chrome', 'firefox', 'safari', 'ios',
 export const HYSTERIA_OBFS = Object.freeze(['', 'salamander'])
 export const TUIC_CONGESTION = Object.freeze(['bbr', 'cubic', 'new_reno'])
 export const VLESS_FLOWS = Object.freeze(['', 'xtls-rprx-vision'])
+// ANX-A (anx-node's anx inbound, A2 jacket): the cover site and the names and ALPN it answers with.
+export const ANX_COVER = 'www.apple.com'
+export const ANX_ALPN = Object.freeze(['h2', 'http/1.1'])
 
 // Reality targets that work from most regions; the target probe
 // (NodeRealityTargetsSection) replaces this with a measured one.
@@ -67,6 +71,15 @@ export const PROTOCOL_FIELDS = Object.freeze([
     show: p => p.type === 'hysteria2' && Boolean(readField(p, { section: 'settings', key: 'obfs' }))
   },
   { section: 'settings', key: 'congestion_control', kind: 'select', options: TUIC_CONGESTION, default: 'bbr', show: p => p.type === 'tuic' },
+  {
+    section: 'settings', key: 'server_names', kind: 'list', default: [ANX_COVER], hintKey: 'anxServerNames',
+    placeholder: ANX_COVER, show: p => p.type === 'anx'
+  },
+  {
+    section: 'settings', key: 'dest', kind: 'text', default: `${ANX_COVER}:443`, hintKey: 'anxDest',
+    placeholder: `${ANX_COVER}:443`, show: p => p.type === 'anx'
+  },
+  { section: 'settings', key: 'alpn', kind: 'list', default: [...ANX_ALPN], placeholder: 'h2,http/1.1', show: p => p.type === 'anx' },
 
   // transport -------------------------------------------------------------
   { section: 'transport_settings', key: 'path', kind: 'text', placeholder: '/', show: takesTransportPath },
@@ -106,7 +119,7 @@ export function readField(protocol, field) {
   for (const key of keys) {
     if (section && section[key] !== undefined && section[key] !== null) return section[key]
   }
-  return field.default ?? (field.kind === 'switch' ? false : (field.kind === 'number' ? null : ''))
+  return field.default ?? (field.kind === 'switch' ? false : (field.kind === 'number' ? null : (field.kind === 'list' ? [] : '')))
 }
 
 // A copy of protocol with field set to value. An empty value removes the key
@@ -114,7 +127,7 @@ export function readField(protocol, field) {
 export function writeField(protocol, field, value) {
   const section = { ...(protocol[field.section] || {}) }
   const key = storedKey(section, field)
-  const empty = value === '' || value === null || value === undefined || value === false || (field.kind === 'number' && Number.isNaN(value))
+  const empty = value === '' || value === null || value === undefined || value === false || (field.kind === 'number' && Number.isNaN(value)) || (Array.isArray(value) && value.length === 0)
   // A removed field must not fall back to an alias that is still stored.
   if (empty) keysOf(field).forEach(alias => { delete section[alias] })
   else {

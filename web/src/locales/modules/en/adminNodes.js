@@ -559,6 +559,8 @@ export default {
     none: 'None',
     generate: 'Generate',
     labels: {
+      server_names: 'Allowed SNI',
+      alpn: 'ALPN',
       flow: 'Flow',
       method: 'Cipher',
       server_key: 'Server key',
@@ -579,6 +581,8 @@ export default {
       public_key: 'Public key'
     },
     hints: {
+      anxServerNames: 'Comma separated; clients use the first. It must be a name the cover site really serves. ANX user keys derive from the UUID and the server public key is reported by the Agent on the node; the AnixOps Net subscription format carries the anx:// link.',
+      anxDest: 'Connections that are not ANX (probes included) are forwarded here as host:port.',
       serverKey: 'Server key of the 2022 ciphers; empty derives it from the node.',
       privateKey: 'Empty generates a key pair when saved; a stored private key shows as ********.',
       publicKey: 'The public key subscriptions hand to clients; empty derives it from the private key.'

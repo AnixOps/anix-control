@@ -123,6 +123,8 @@ func BuildNodeProtocolConfig(node *model.Node, protocol *model.NodeProtocol) map
 		}
 	case "iwan":
 		buildIWANConfig(config, protocolConfig)
+	case "anx":
+		buildANXConfig(config, protocolConfig)
 	case "shadowsocks":
 		cipherStr := "aes-256-gcm"
 		if c, ok := protocolConfig["cipher"].(string); ok && c != "" {
