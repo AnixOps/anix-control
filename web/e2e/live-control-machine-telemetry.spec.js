@@ -65,9 +65,10 @@ test('lists only packages with a WebUI, then loads and serves a signed WebUI thr
   await expect(page.locator('a[href="/admin/extensions/machine-telemetry"]')).toHaveCount(0)
   await expect(page.locator('a[href="/admin/extensions/identity-platform"]')).toHaveCount(0)
 
-  const menu = page.locator(`a[href="${extensionPath}"]`)
-  await expect(menu).toBeVisible()
-  await menu.click()
+  // The core forwarding pages replace the forward package's own menu entry
+  // (useNavigation), so the extension route is opened directly.
+  await expect(page.locator(`a[href="${extensionPath}"]`)).toHaveCount(0)
+  await page.goto(extensionPath)
   await expect(page).toHaveURL(new RegExp(`${extensionPath}$`))
 
   const bundle = await bundleResponse
