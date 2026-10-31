@@ -381,14 +381,13 @@ export async function getKernelInstallReadiness() {
 // that runs its install command a node of the group.
 //
 // The list answers { groups: [...] }: each group with its defaults,
-// protocol_template, subscription_group_ids, token_reset_at,
-// token_expires_at, token_expired and nodes { live, pending }. Never a token.
+// token_reset_at, token_expires_at, token_expired and nodes { live, pending }. Never a token.
 export async function listKernelNodeGroups() {
   return unwrap(await v4({ url: '/kernel/node-groups', method: 'get' }))
 }
 
 // The first group of a panel needs no input: this creates the default group
-// (一个 VLESS Reality 协议，随机端口，加入默认订阅分组) when none exists and
+// (默认设置，接入的节点保持干净，没有协议) when none exists and
 // answers the first group otherwise: { group, created }. 409 ca_kek_missing
 // without module_runtime.ca_kek.
 export async function ensureKernelDefaultNodeGroup() {
@@ -396,9 +395,9 @@ export async function ensureKernelDefaultNodeGroup() {
 }
 
 // input: { name, max_nodes, require_approval,
-// rate, tags, monthly_limit_bytes, reset_day, sort, protocol_template,
-// subscription_group_ids, token_expires_at }. Errors: 400 invalid_request
-// (the message names the field, e.g. "protocol_template[0]: ..."), 409
+// rate, tags, monthly_limit_bytes, reset_day, sort,
+// token_expires_at }. Errors: 400 invalid_request
+// (the message names the field), 409
 // name_taken, 409 ca_kek_missing.
 export async function createKernelNodeGroup(input) {
   return unwrap(await v4({ url: '/kernel/node-groups', method: 'post', data: input }))

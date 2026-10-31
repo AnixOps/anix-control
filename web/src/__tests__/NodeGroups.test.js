@@ -41,16 +41,12 @@ const Harness = {
 const hk = (extra = {}) => ({
   id: 3, name: 'HK', max_nodes: 5, require_approval: false, rate: 1.5, tags: ['hk', 'iepl'],
   monthly_limit_bytes: 2 * 1024 ** 3, reset_day: 5, sort: 2,
-  protocol_template: [{
-    name: 'VLESS Reality', type: 'vless', port_range: [20000, 40000], transport: 'tcp', tls: 'reality',
-    reality: { server_name: 'www.example.com', dest: 'www.example.com:443' }, settings: { flow: 'xtls-rprx-vision' }
-  }],
-  subscription_group_ids: [9], token_reset_at: '2026-10-12T00:00:00Z', token_expires_at: null, token_expired: false,
+  token_reset_at: '2026-10-12T00:00:00Z', token_expires_at: null, token_expired: false,
   nodes: { live: 4, pending: 1 }, ...extra
 })
 const edge = () => ({
   id: 4, name: 'edge', max_nodes: 0, require_approval: true, rate: 1, tags: [], monthly_limit_bytes: 0,
-  reset_day: 1, sort: 0, protocol_template: [], subscription_group_ids: [], token_expires_at: '2999-01-02T12:00:00Z',
+  reset_day: 1, sort: 0, token_expires_at: '2999-01-02T12:00:00Z',
   token_expired: false, nodes: { live: 0, pending: 0 }
 })
 
@@ -135,8 +131,7 @@ describe('node groups', () => {
     expect(id).toBe(3)
     expect(body).toEqual({
       name: 'HK', max_nodes: 5, require_approval: true, rate: 1.5, tags: ['hk', 'iepl'],
-      monthly_limit_bytes: 2 * 1024 ** 3, reset_day: 5, sort: 2, token_expires_at: null,
-      protocol_template: hk().protocol_template, subscription_group_ids: [9]
+      monthly_limit_bytes: 2 * 1024 ** 3, reset_day: 5, sort: 2, token_expires_at: null
     })
     await waitFor(() => expect(toastMessages('success')).toEqual(['New nodes of “HK” now need your approval.']))
     expect(kernel.listKernelNodeGroups.mock.calls.length).toBeGreaterThan(callsBefore)
@@ -167,36 +162,32 @@ describe('node groups', () => {
     expect(expiry - Date.now()).toBeLessThan(31 * 86_400_000)
   })
 
-  it('creates a group with the preset template, in the default subscription group', async () => {
+  it('creates a group with its defaults and no protocols', async () => {
     const user = userEvent.setup()
     kernel.createKernelNodeGroup.mockResolvedValue(hk({ id: 5, name: 'JP' }))
     await renderGroups()
     await user.click(screen.getByTestId('add-node-group'))
     const sheet = await screen.findByRole('dialog', { name: 'New node group' })
 
-    // A Reality protocol on a random port is there to start from.
-    expect(within(sheet).getByTestId('template-protocol-0')).toBeTruthy()
+    // No protocol editor and no subscription groups: nodes join clean.
+    expect(within(sheet).queryByTestId('template-editor')).toBeNull()
+    expect(within(sheet).queryByRole('checkbox', { name: 'default' })).toBeNull()
     await user.click(within(sheet).getByTestId('save-group'))
     expect(within(sheet).getByText('Required')).toBeTruthy()
     expect(kernel.createKernelNodeGroup).not.toHaveBeenCalled()
 
     await user.type(within(sheet).getByTestId('group-name'), 'JP')
-    await waitFor(() => expect(within(sheet).getByRole('checkbox', { name: 'default' }).getAttribute('aria-checked')).toBe('true'))
     await user.click(within(sheet).getByTestId('save-group'))
     await waitFor(() => expect(kernel.createKernelNodeGroup).toHaveBeenCalledTimes(1))
     const body = kernel.createKernelNodeGroup.mock.calls[0][0]
-    expect(body).toMatchObject({
+    expect(body).toEqual({
       name: 'JP', max_nodes: 0, require_approval: false, rate: 1, tags: [], monthly_limit_bytes: 0, reset_day: 1,
-      sort: 0, token_expires_at: null, subscription_group_ids: [9]
+      sort: 0, token_expires_at: null
     })
-    expect(body.protocol_template).toEqual([{
-      name: 'VLESS Reality', type: 'vless', transport: 'tcp', tls: 'reality', port_range: [20000, 40000],
-      reality: { server_name: 'www.microsoft.com' }, settings: { flow: 'xtls-rprx-vision' }
-    }])
     await waitFor(() => expect(toastMessages('success')).toEqual(['Node group JP created']))
   })
 
-  it('edits the defaults and the template of a group', async () => {
+  it('edits the defaults of a group', async () => {
     const user = userEvent.setup()
     kernel.updateKernelNodeGroup.mockResolvedValue(hk())
     await renderGroups()
@@ -207,46 +198,35 @@ describe('node groups', () => {
     expect(within(sheet).getByTestId('group-name').value).toBe('HK')
     expect(within(sheet).getByRole('textbox', { name: /Tags/ }).value).toBe('hk, iepl')
     expect(within(sheet).getByTestId('group-max-nodes').value).toBe('5')
-    expect(within(sheet).getByRole('textbox', { name: /Reality site/ }).value).toBe('www.example.com')
-    expect(within(sheet).getByRole('checkbox', { name: 'default' }).getAttribute('aria-checked')).toBe('true')
-    expect(within(sheet).getByRole('checkbox', { name: 'vip' }).getAttribute('aria-checked')).toBe('false')
 
     const name = within(sheet).getByTestId('group-name')
     await user.clear(name)
     await user.type(name, 'HK 2')
     await user.click(within(sheet).getByTestId('group-require-approval'))
-    await user.click(within(sheet).getByRole('checkbox', { name: 'vip' }))
-    const site = within(sheet).getByRole('textbox', { name: /Reality site/ })
-    await user.clear(site)
-    await user.type(site, 'www.example.net')
-    await user.click(within(sheet).getByTestId('template-add'))
     await user.click(within(sheet).getByTestId('save-group'))
 
     await waitFor(() => expect(kernel.updateKernelNodeGroup).toHaveBeenCalledTimes(1))
     const [id, body] = kernel.updateKernelNodeGroup.mock.calls[0]
     expect(id).toBe(3)
     expect(body).toMatchObject({
-      name: 'HK 2', require_approval: true, subscription_group_ids: [9, 10], max_nodes: 5, tags: ['hk', 'iepl'],
+      name: 'HK 2', require_approval: true, max_nodes: 5, tags: ['hk', 'iepl'],
       monthly_limit_bytes: 2 * 1024 ** 3, reset_day: 5, token_expires_at: null
     })
-    expect(body.protocol_template).toHaveLength(2)
-    expect(body.protocol_template[0].reality).toEqual({ server_name: 'www.example.net', dest: 'www.example.com:443' })
-    // The second protocol is the one added: Shadowsocks 2022 on a random port.
-    expect(body.protocol_template[1]).toMatchObject({ type: 'shadowsocks', transport: 'tcp', tls: 'none', port_range: [20000, 40000], settings: { method: '2022-blake3-aes-128-gcm' } })
+    expect(body).not.toHaveProperty('protocol_template')
     await waitFor(() => expect(toastMessages('success')).toEqual(['Node group HK 2 saved']))
   })
 
   it('shows the API’s validation error in the sheet and keeps it open', async () => {
     const user = userEvent.setup()
     kernel.updateKernelNodeGroup.mockRejectedValue({
-      response: { status: 400, data: { error: { code: 'invalid_request', message: 'invalid node group: protocol_template[0]: reality.server_name must be a host name' } } }
+      response: { status: 400, data: { error: { code: 'invalid_request', message: 'invalid node group: rate must be above 0' } } }
     })
     await renderGroups()
     await rowAction(user, 'HK', 'Edit')
     const sheet = await screen.findByRole('dialog', { name: 'Edit node group' })
     await user.click(within(sheet).getByTestId('save-group'))
     const error = await within(sheet).findByTestId('group-form-error')
-    expect(error.textContent).toContain('protocol_template[0]: reality.server_name must be a host name')
+    expect(error.textContent).toContain('rate must be above 0')
     expect(screen.getByRole('dialog', { name: 'Edit node group' })).toBeTruthy()
     expect(toastMessages('success')).toEqual([])
   })
@@ -260,35 +240,6 @@ describe('node groups', () => {
     await user.type(within(sheet).getByTestId('group-name'), 'HK')
     await user.click(within(sheet).getByTestId('save-group'))
     expect(await within(sheet).findByText('A node group with this name exists.')).toBeTruthy()
-  })
-
-  it('stops a template that is not valid JSON or a port before it is sent', async () => {
-    const user = userEvent.setup()
-    await renderGroups()
-    await rowAction(user, 'HK', 'Edit')
-    const sheet = await screen.findByRole('dialog', { name: 'Edit node group' })
-    await user.click(within(sheet).getByText('Advanced'))
-    const settings = within(sheet).getByRole('textbox', { name: 'Protocol settings (JSON)' })
-    await user.clear(settings)
-    await user.type(settings, 'not json')
-    await user.click(within(sheet).getByTestId('save-group'))
-    expect(await within(sheet).findByText('Not valid JSON.')).toBeTruthy()
-    expect(within(sheet).getByTestId('group-form-error').textContent).toContain('Fix the protocol settings')
-    expect(kernel.updateKernelNodeGroup).not.toHaveBeenCalled()
-  })
-
-  it('does not offer Reality for a protocol that cannot use it', async () => {
-    const user = userEvent.setup()
-    await renderGroups()
-    await user.click(screen.getByTestId('add-node-group'))
-    const sheet = await screen.findByRole('dialog', { name: 'New node group' })
-    const protocol = within(sheet).getByTestId('template-protocol-0')
-    await user.click(within(protocol).getByRole('combobox', { name: 'Protocol' }))
-    await user.click(await screen.findByRole('option', { name: 'VMess' }))
-    await waitFor(() => expect(within(protocol).queryByRole('textbox', { name: /Reality site/ })).toBeNull())
-    await user.click(within(protocol).getByRole('combobox', { name: 'TLS' }))
-    expect(await screen.findByRole('option', { name: 'No TLS' })).toBeTruthy()
-    expect(screen.queryByRole('option', { name: /Reality/ })).toBeNull()
   })
 
   it('deletes a group after a confirmation, and says why a group with nodes stays', async () => {
