@@ -279,6 +279,30 @@ func quoteIdent(name string) string {
 	return `"` + strings.ReplaceAll(name, `"`, `""`) + `"`
 }
 
+// openAdmin opens a connection for CREATE and DROP DATABASE: to the
+// "postgres" maintenance database when that is reachable (the panel's own
+// database may not exist yet, as in a restore into a new machine), else to
+// the panel's.
+func (p *Postgres) openAdmin(ctx context.Context) (*sql.DB, error) {
+	for _, name := range []string{"postgres", p.Database} {
+		db, err := p.open(name)
+		if err != nil {
+			return nil, err
+		}
+		pingCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+		err = db.PingContext(pingCtx)
+		cancel()
+		if err == nil {
+			return db, nil
+		}
+		_ = db.Close()
+		if name == p.Database {
+			return nil, err
+		}
+	}
+	return nil, errors.New("no database to connect to")
+}
+
 // scratchDatabase creates an empty database next to the panel's for a
 // verification and answers its name and the function that drops it.
 func (p *Postgres) scratchDatabase(ctx context.Context) (string, func(), error) {
@@ -287,7 +311,7 @@ func (p *Postgres) scratchDatabase(ctx context.Context) (string, func(), error) 
 		return "", nil, err
 	}
 	name := "anix_verify_" + hex.EncodeToString(suffix)
-	admin, err := p.open(p.Database)
+	admin, err := p.openAdmin(ctx)
 	if err != nil {
 		return "", nil, err
 	}
@@ -298,7 +322,7 @@ func (p *Postgres) scratchDatabase(ctx context.Context) (string, func(), error) 
 	drop := func() {
 		cleanup, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
-		db, err := p.open(p.Database)
+		db, err := p.openAdmin(cleanup)
 		if err != nil {
 			return
 		}
@@ -337,7 +361,7 @@ func (p *Postgres) openGorm(database string) (*gorm.DB, func(), error) {
 // replace is set (nothing is deleted) and refused otherwise. It answers
 // the name an existing database was renamed to, or "".
 func (p *Postgres) installDump(ctx context.Context, dump string, replace bool, now time.Time) (renamedTo string, err error) {
-	admin, err := p.open("postgres")
+	admin, err := p.openAdmin(ctx)
 	if err != nil {
 		return "", err
 	}
