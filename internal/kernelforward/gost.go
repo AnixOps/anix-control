@@ -7,10 +7,19 @@ import (
 	"github.com/AnixOps/anix-control/sdk/forward/validate"
 )
 
-// gostRemoved refuses the ENGINE_GOST hops of route. gost was removed: the
-// network model carries what it did (MigrateGostRoutes moves the routes
-// left on it), so Control neither stores a new gost hop nor plans a stored
-// one (EnforcedGostRemoved).
+// onGost reports whether a hop of route still runs on the removed gost.
+func onGost(route *forwardv1.Route) bool {
+	for _, hop := range route.GetHops() {
+		if hop.GetEngine() == forwardv1.Engine_ENGINE_GOST {
+			return true
+		}
+	}
+	return false
+}
+
+// gostRemoved refuses the ENGINE_GOST hops of route. gost was removed and
+// the network model carries what it did, so Control neither stores a new
+// gost hop nor plans a stored one (EnforcedGostRemoved).
 func gostRemoved(route *forwardv1.Route) validate.Violations {
 	var out validate.Violations
 	for i, hop := range route.GetHops() {

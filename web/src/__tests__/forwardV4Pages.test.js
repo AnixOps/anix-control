@@ -29,8 +29,7 @@ const route = vi.hoisted(() => ({ query: {}, hash: '', params: {}, path: '/' }))
 vi.mock('@/api/forwardV4', async importOriginal => ({ ...(await importOriginal()), ...api }))
 vi.mock('@/api/kernel', async importOriginal => ({
   ...(await importOriginal()),
-  getNetworkModel: vi.fn(async () => null),
-  migrateGostRoutes: vi.fn(async () => ({ dry_run: true, applied: false, routes: [], blocked: [], added: [], untouched: 0 }))
+  getNetworkModel: vi.fn(async () => null)
 }))
 vi.mock('vue-router', async importOriginal => ({
   ...(await importOriginal()),

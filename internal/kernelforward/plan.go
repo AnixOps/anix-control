@@ -186,7 +186,7 @@ func (s *Service) replanTx(tx *gorm.DB, routes []storedRoute, now time.Time) (Pl
 	effective := make([]*forwardv1.Route, 0, len(routes))
 	enforced := make(map[string]string, len(routes))
 	// A route left on gost is not planned, but holds its ports until it is
-	// migrated (its clients keep the entry port) or deleted.
+	// moved onto the network model (its clients keep the entry port) or deleted.
 	held := map[string]bool{}
 	for _, stored := range routes {
 		if onGost(stored.route) {
