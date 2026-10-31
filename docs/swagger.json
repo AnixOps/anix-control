@@ -11293,6 +11293,29 @@
                 },
                 "source_v6": {
                     "type": "string"
+                },
+                "uplink_choices": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "uplink_default": {
+                    "type": "string"
+                },
+                "uplink_hops": {
+                    "description": "UplinkHops are the next devices of the device's routes as its\nuplinks see them (uplinks.go).",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/networkmodel.UplinkHop"
+                    }
+                },
+                "uplinks": {
+                    "description": "Uplinks are the interfaces traffic to the next device of a route may\nleave by (uplinks.go); UplinkDefault (\"auto\" when empty) and\nUplinkChoices (by next device) say which one it does.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/networkmodel.Uplink"
+                    }
                 }
             }
         },
@@ -11316,6 +11339,22 @@
                 },
                 "source_v6": {
                     "type": "string"
+                },
+                "uplink_choices": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "uplink_default": {
+                    "type": "string"
+                },
+                "uplinks": {
+                    "description": "Uplinks are the interfaces traffic to the next device of a route may\nleave by (uplinks.go); UplinkDefault (\"auto\" when empty) and\nUplinkChoices (by next device) say which one it does.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/networkmodel.Uplink"
+                    }
                 }
             }
         },
@@ -11437,6 +11476,93 @@
                 },
                 "trusted": {
                     "type": "boolean"
+                }
+            }
+        },
+        "networkmodel.Uplink": {
+            "type": "object",
+            "properties": {
+                "gateway_v4": {
+                    "type": "string"
+                },
+                "gateway_v6": {
+                    "type": "string"
+                },
+                "interface": {
+                    "type": "string"
+                },
+                "label": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "source_v4": {
+                    "type": "string"
+                },
+                "source_v6": {
+                    "type": "string"
+                }
+            }
+        },
+        "networkmodel.UplinkHop": {
+            "type": "object",
+            "properties": {
+                "active": {
+                    "description": "the uplink the transport leaves by",
+                    "type": "string"
+                },
+                "choice": {
+                    "description": "auto or an uplink name",
+                    "type": "string"
+                },
+                "family": {
+                    "type": "string"
+                },
+                "probes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/networkmodel.UplinkProbe"
+                    }
+                },
+                "reason": {
+                    "type": "string"
+                },
+                "since": {
+                    "type": "string"
+                },
+                "target": {
+                    "type": "string"
+                },
+                "to": {
+                    "type": "string"
+                },
+                "to_name": {
+                    "type": "string"
+                }
+            }
+        },
+        "networkmodel.UplinkProbe": {
+            "type": "object",
+            "properties": {
+                "changed_at_unix_ms": {
+                    "type": "integer"
+                },
+                "detail": {
+                    "type": "string"
+                },
+                "egress": {
+                    "type": "string"
+                },
+                "rtt_ms": {
+                    "type": "integer"
+                },
+                "state": {
+                    "description": "up, down, unknown",
+                    "type": "string"
+                },
+                "uplink": {
+                    "type": "string"
                 }
             }
         },

@@ -55,7 +55,7 @@ func (NetworkDevice) TableName() string { return "v4_kernel_network_device" }
 // NetworkModels are the network model's tables, with AgentTransport, which
 // it reads for the devices a route may use (also in the kernel models).
 func NetworkModels() []any {
-	return []any{&NetworkModel{}, &NetworkTransportKey{}, &NetworkDevice{}, &NodeNetwork{}, &AgentTransport{}}
+	return []any{&NetworkModel{}, &NetworkTransportKey{}, &NetworkDevice{}, &NodeNetwork{}, &NodeUplinks{}, &AgentTransport{}}
 }
 
 // NodeNetwork is a device's own network settings, which the components
@@ -78,3 +78,18 @@ type NodeNetwork struct {
 }
 
 func (NodeNetwork) TableName() string { return "v4_kernel_node_network" }
+
+// NodeUplinks is a device's uplinks (internal/networkmodel uplinks.go):
+// the interfaces, each with its source address and gateway per family, its
+// traffic to the next device of a route may leave by, and which one each
+// next device gets ("auto": the one with the lowest latency). ConfigJSON
+// is what the administrator set; ActiveJSON is the uplink Control chose
+// for each next device in auto mode, with the time it chose it.
+type NodeUplinks struct {
+	NodeRef    string    `gorm:"primaryKey;size:32" json:"node_ref"`
+	ConfigJSON string    `gorm:"type:text;not null;default:''" json:"-"`
+	ActiveJSON string    `gorm:"type:text;not null;default:''" json:"-"`
+	UpdatedAt  time.Time `gorm:"not null" json:"updated_at"`
+}
+
+func (NodeUplinks) TableName() string { return "v4_kernel_node_uplinks" }

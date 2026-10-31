@@ -56,6 +56,7 @@
         :error="fieldError('hop_port')"
         data-testid="node-network-hop-port"
       />
+      <NodeUplinksEditor v-model="uplinks" :hops="hops" :detected="detected" :field-error="fieldError" />
       <p v-if="saveError" class="node-network__error" role="alert">{{ saveError }}</p>
       <p v-if="saved" class="node-network__hint" role="status">{{ t('nodeNetwork.saved') }}</p>
       <div>
@@ -74,6 +75,8 @@
 // The interfaces the node's Agent reported (detected) are offered as
 // choices: picking one fills its first address and its gateways; 手动填写
 // switches to free text, which is all there is before the Agent reports.
+// 上联网卡 (NodeUplinksEditor) lists the NICs of a dual-NIC node and which
+// one each next node of its routes gets, with each NIC's latency to it.
 // GET/PUT /api/v4/kernel/nodes/:id/network
 import { computed, onMounted, reactive, ref } from 'vue'
 import { getKernelNodeNetwork, setKernelNodeNetwork } from '@/api/kernel'
@@ -85,6 +88,7 @@ import UiSection from '@/ui/UiSection.vue'
 import UiSelect from '@/ui/UiSelect.vue'
 import UiSkeleton from '@/ui/UiSkeleton.vue'
 import UiTextField from '@/ui/UiTextField.vue'
+import NodeUplinksEditor from './NodeUplinksEditor.vue'
 
 const props = defineProps({
   nodeRef: { type: String, required: true }
@@ -101,6 +105,8 @@ const violations = ref([])
 const detected = ref([])
 const detectedAt = ref('')
 const manual = ref(false)
+const uplinks = ref({ uplinks: [], uplink_default: '', uplink_choices: {} })
+const hops = ref([])
 
 // NONE stands for an empty field in a select, which cannot hold ''.
 const NONE = '__none__'
@@ -155,6 +161,12 @@ function fill(view) {
   form.hop_port = view?.hop_port || null
   detected.value = Array.isArray(view?.detected) ? view.detected : []
   detectedAt.value = view?.detected_at || ''
+  uplinks.value = {
+    uplinks: Array.isArray(view?.uplinks) ? view.uplinks.map(u => ({ label: '', source_v4: '', gateway_v4: '', source_v6: '', gateway_v6: '', ...u })) : [],
+    uplink_default: view?.uplink_default || '',
+    uplink_choices: view?.uplink_choices || {}
+  }
+  hops.value = Array.isArray(view?.uplink_hops) ? view.uplink_hops : []
 }
 
 function fieldError(field) {
@@ -181,7 +193,7 @@ async function save() {
   violations.value = []
   try {
     const settings = Object.fromEntries(FIELDS.map(key => [key, form[key]]))
-    fill(await setKernelNodeNetwork(props.nodeRef, { ...settings, hop_port: form.hop_port || 0 }))
+    fill(await setKernelNodeNetwork(props.nodeRef, { ...settings, hop_port: form.hop_port || 0, ...uplinks.value }))
     saved.value = true
   } catch (e) {
     const error = e?.response?.data?.error

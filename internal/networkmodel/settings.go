@@ -31,6 +31,12 @@ type NodeSettings struct {
 	SourceV6  string `json:"source_v6"`
 	GatewayV6 string `json:"gateway_v6"`
 	HopPort   uint32 `json:"hop_port"`
+	// Uplinks are the interfaces traffic to the next device of a route may
+	// leave by (uplinks.go); UplinkDefault ("auto" when empty) and
+	// UplinkChoices (by next device) say which one it does.
+	Uplinks       []Uplink          `json:"uplinks"`
+	UplinkDefault string            `json:"uplink_default"`
+	UplinkChoices map[string]string `json:"uplink_choices"`
 }
 
 // NodeSettings answers node's network settings; zero when it has none.
@@ -38,15 +44,22 @@ func (s *Service) NodeSettings(ctx context.Context, node string) (NodeSettings, 
 	if _, err := s.requireNode(s.DB.WithContext(ctx), node); err != nil {
 		return NodeSettings{}, err
 	}
+	var settings NodeSettings
 	var row model.NodeNetwork
 	err := s.DB.WithContext(ctx).Where("node_ref = ?", node).Take(&row).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return NodeSettings{}, nil
+	switch {
+	case errors.Is(err, gorm.ErrRecordNotFound):
+	case err != nil:
+		return NodeSettings{}, err
+	default:
+		settings = settingsOf(row)
 	}
+	config, _, err := loadUplinks(s.DB.WithContext(ctx), node)
 	if err != nil {
 		return NodeSettings{}, err
 	}
-	return settingsOf(row), nil
+	settings.Uplinks, settings.UplinkDefault, settings.UplinkChoices = config.Uplinks, config.Default, config.Choices
+	return settings, nil
 }
 
 // SetNodeSettings stores node's network settings, audited, and replans:
@@ -71,12 +84,16 @@ func (s *Service) SetNodeSettings(ctx context.Context, node string, settings Nod
 		if err := tx.Save(&row).Error; err != nil {
 			return err
 		}
+		if err := saveUplinkConfig(tx, ref, settings.uplinkConfig(), s.now()); err != nil {
+			return err
+		}
 		if changed, err = s.replan(tx, doc); err != nil {
 			return err
 		}
 		return writeAudit(tx, actor, AuditActionNodeSettings, map[string]any{
 			"node": ref, "interface": row.Interface, "source_v4": row.SourceV4, "gateway_v4": row.GatewayV4,
 			"source_v6": row.SourceV6, "gateway_v6": row.GatewayV6, "hop_port": row.HopPort,
+			"uplinks": settings.Uplinks, "uplink_default": settings.UplinkDefault, "uplink_choices": settings.UplinkChoices,
 		})
 	})
 	if err != nil {
@@ -122,26 +139,11 @@ func checkSettings(in NodeSettings) (NodeSettings, error) {
 	if in.Interface != "" && !interfacePattern.MatchString(in.Interface) {
 		v.add("interface", "an interface name of 1-15 letters, digits, '.', '_', '@' or '-'")
 	}
-	address := func(field string, value *string, v6 bool) {
-		*value = strings.TrimSpace(*value)
-		if *value == "" {
-			return
-		}
-		ip, err := netip.ParseAddr(*value)
-		if err != nil || ip.Unmap().Is6() != v6 || ip.Zone() != "" {
-			family := "IPv4"
-			if v6 {
-				family = "IPv6"
-			}
-			v.add(field, "an %s address", family)
-			return
-		}
-		*value = ip.Unmap().String()
-	}
-	address("source_v4", &in.SourceV4, false)
-	address("gateway_v4", &in.GatewayV4, false)
-	address("source_v6", &in.SourceV6, true)
-	address("gateway_v6", &in.GatewayV6, true)
+	checkAddress(&v, "source_v4", &in.SourceV4, false)
+	checkAddress(&v, "gateway_v4", &in.GatewayV4, false)
+	checkAddress(&v, "source_v6", &in.SourceV6, true)
+	checkAddress(&v, "gateway_v6", &in.GatewayV6, true)
+	in = checkUplinks(&v, in)
 	if in.Interface == "" && (in.SourceV4 != "" || in.SourceV6 != "") {
 		v.add("interface", "a source address leaves by an interface: name it")
 	}
@@ -155,4 +157,23 @@ func checkSettings(in NodeSettings) (NodeSettings, error) {
 		v.add("hop_port", "a port of 1-65535, or 0 for %d", AutoHopPort)
 	}
 	return in, v.err()
+}
+
+// checkAddress trims *value, an address of the family (v6 or v4) when
+// set, or adds a violation.
+func checkAddress(v *violations, field string, value *string, v6 bool) {
+	*value = strings.TrimSpace(*value)
+	if *value == "" {
+		return
+	}
+	ip, err := netip.ParseAddr(*value)
+	if err != nil || ip.Unmap().Is6() != v6 || ip.Zone() != "" {
+		family := "IPv4"
+		if v6 {
+			family = "IPv6"
+		}
+		v.add(field, "an %s address", family)
+		return
+	}
+	*value = ip.Unmap().String()
 }

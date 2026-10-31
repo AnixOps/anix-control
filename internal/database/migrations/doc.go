@@ -108,4 +108,6 @@
 //     table v2_load_balancer is dropped.
 //   - 0022_reverse_proxies: the panel HTTP(S) reverse proxies
 //     (v5_reverse_proxy).
+//   - 0023_node_uplinks: each device's uplinks and the uplink each next
+//     device of its routes gets (v4_kernel_node_uplinks).
 package migrations
