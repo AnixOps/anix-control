@@ -38,13 +38,6 @@ func (s *bridgeStub) OpenWebSocket(_ context.Context, _ []byte, operation string
 	return nil, errRelayed
 }
 
-type streamStub struct{}
-
-func (streamStub) Recv() (pluginhostsdk.WebSocketFrame, error) {
-	return pluginhostsdk.WebSocketFrame{}, errRelayed
-}
-func (streamStub) Send(pluginhostsdk.WebSocketFrame) error { return nil }
-
 // Until the kernel sets a route's mode, the host relays it to the legacy
 // handler, bridged routes always; routes outside the package are refused.
 func TestProxyNodeHostRelaysRoutesUntilTheyAreSwitchedToNative(t *testing.T) {

@@ -33,8 +33,7 @@ import (
 // every key, every static value, and the shape of every generated one.
 
 var (
-	taskIDPattern    = regexp.MustCompile(`^task-\d+$`)
-	messageIDPattern = regexp.MustCompile(`^msg-\d+$`)
+	taskIDPattern = regexp.MustCompile(`^task-\d+$`)
 )
 
 // panelData decodes a panel answer and returns its data object.
