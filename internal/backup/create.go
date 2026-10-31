@@ -24,6 +24,9 @@ type Source struct {
 	DataDir string
 	// DatabasePath is the SQLite database file.
 	DatabasePath string
+	// Postgres, when set, backs up the PostgreSQL database instead of
+	// DatabasePath.
+	Postgres *Postgres
 	// RootKey is the content of root.key.
 	RootKey []byte
 	// Config is the configuration file Control loaded; nil when it loaded
@@ -85,7 +88,10 @@ func Write(ctx context.Context, source Source, t string, now time.Time) (*Bundle
 			return nil, fmt.Errorf("prepare %s: %w", d, err)
 		}
 	}
-	if err := checkFreeSpace(dir, source.DatabasePath); err != nil {
+	kind, memberName := KindSQLite, MemberDatabase
+	if source.Postgres != nil {
+		kind, memberName = KindPostgres, MemberDatabasePG
+	} else if err := checkFreeSpace(dir, source.DatabasePath); err != nil {
 		return nil, err
 	}
 
@@ -94,24 +100,34 @@ func Write(ctx context.Context, source Source, t string, now time.Time) (*Bundle
 		return nil, fmt.Errorf("prepare the snapshot directory: %w", err)
 	}
 	defer func() { _ = os.RemoveAll(work) }()
-	snapshot := filepath.Join(work, MemberDatabase)
-	if err := Snapshot(ctx, source.DatabasePath, snapshot); err != nil {
-		return nil, err
+	snapshot := filepath.Join(work, memberName)
+	var facts snapshotFacts
+	if source.Postgres != nil {
+		facts, err = source.Postgres.dumpDatabase(ctx, snapshot, dir)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		if err := Snapshot(ctx, source.DatabasePath, snapshot); err != nil {
+			return nil, err
+		}
 	}
 	if err := fail("snapshot"); err != nil {
 		return nil, err
 	}
-	facts, err := readSnapshotFacts(ctx, snapshot)
-	if err != nil {
-		return nil, fmt.Errorf("read the snapshot: %w", err)
+	if source.Postgres == nil {
+		facts, err = readSnapshotFacts(ctx, snapshot)
+		if err != nil {
+			return nil, fmt.Errorf("read the snapshot: %w", err)
+		}
 	}
 
 	manifest := Manifest{
-		Format: ManifestFormat, ProgramVersion: source.ProgramVersion, SchemaVersion: facts.SchemaVersion,
+		Format: ManifestFormat, ProgramVersion: source.ProgramVersion, SchemaVersion: facts.SchemaVersion, DatabaseKind: kind,
 		CreatedAt: now.UTC().Truncate(time.Second), Type: t, HostName: source.HostName, Domain: source.Domain,
 		RootKeyFingerprint: key.Key.Fingerprint(), RowCounts: facts.RowCounts,
 	}
-	databaseMember, err := fileMember(MemberDatabase, snapshot)
+	databaseMember, err := fileMember(memberName, snapshot)
 	if err != nil {
 		return nil, err
 	}
@@ -168,7 +184,7 @@ func Write(ctx context.Context, source Source, t string, now time.Time) (*Bundle
 	if err != nil {
 		return nil, err
 	}
-	err = add(MemberDatabase, databaseMember.Size, snapshotFile, databaseMember.SHA256)
+	err = add(memberName, databaseMember.Size, snapshotFile, databaseMember.SHA256)
 	_ = snapshotFile.Close()
 	if err != nil {
 		return nil, err
@@ -275,6 +291,11 @@ func checkFreeSpace(dir, databasePath string) error {
 			size += info.Size()
 		}
 	}
+	return checkFreeSpaceFor(dir, size)
+}
+
+// checkFreeSpaceFor is checkFreeSpace for a database of size bytes.
+func checkFreeSpaceFor(dir string, size int64) error {
 	free, ok := freeBytes(dir)
 	if !ok || size == 0 {
 		return nil

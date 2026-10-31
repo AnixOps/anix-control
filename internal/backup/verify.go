@@ -84,6 +84,10 @@ type VerifyOptions struct {
 	// ProgramVersion is this Control's version: the snapshot must be one
 	// it may open (migrations.Check).
 	ProgramVersion string
+	// Postgres is how a PostgreSQL bundle is verified: its dump is restored
+	// into a scratch database on this server. Nil verifies SQLite bundles
+	// only.
+	Postgres *Postgres
 	// Keep leaves the extracted members in Verified.Dir for the caller
 	// (a restore), who removes them.
 	Keep bool
@@ -129,7 +133,17 @@ func VerifyFile(ctx context.Context, path string, options VerifyOptions) (*Verif
 	if err != nil {
 		return nil, err
 	}
-	if err := checkSnapshot(ctx, filepath.Join(work, MemberDatabase), manifest, contents[MemberRootKey], options.ProgramVersion); err != nil {
+	if manifest.Kind() == KindPostgres {
+		if options.Postgres == nil {
+			return nil, ErrPostgresBundle
+		}
+		if err := options.Postgres.CheckTools(); err != nil {
+			return nil, err
+		}
+		if err := checkPostgresDump(ctx, options.Postgres, filepath.Join(work, MemberDatabasePG), manifest, contents[MemberRootKey], options.ProgramVersion); err != nil {
+			return nil, err
+		}
+	} else if err := checkSnapshot(ctx, filepath.Join(work, MemberDatabase), manifest, contents[MemberRootKey], options.ProgramVersion); err != nil {
 		return nil, err
 	}
 	verified := &Verified{Manifest: *manifest}
@@ -244,10 +258,13 @@ func readManifest(reader io.Reader, size int64) (*Manifest, error) {
 	if !ValidType(manifest.Type) {
 		return nil, problem(ProblemManifest, "%s has the unknown type %q", MemberManifest, manifest.Type)
 	}
-	required := map[string]bool{MemberDatabase: true, MemberRootKey: true}
+	if kind := manifest.Kind(); kind != KindSQLite && kind != KindPostgres {
+		return nil, problem(ProblemManifest, "%s has the unknown database kind %q", MemberManifest, manifest.DatabaseKind)
+	}
+	required := map[string]bool{DatabaseMemberName(manifest.Kind()): true, MemberRootKey: true}
 	for _, member := range manifest.Members {
 		switch member.Name {
-		case MemberDatabase, MemberRootKey, MemberConfig:
+		case DatabaseMemberName(manifest.Kind()), MemberRootKey, MemberConfig:
 		default:
 			return nil, problem(ProblemManifest, "%s lists the unknown member %q", MemberManifest, member.Name)
 		}
@@ -273,7 +290,33 @@ func checkSnapshot(ctx context.Context, path string, manifest *Manifest, rootKey
 	if err := integrityCheck(ctx, db); err != nil {
 		return err
 	}
+	return checkDatabase(ctx, db, manifest, rootKeyFile, programVersion)
+}
 
+// checkPostgresDump restores the dump into a scratch database and runs the
+// database checks of a verification on it; the scratch database is dropped
+// afterwards.
+func checkPostgresDump(ctx context.Context, pg *Postgres, dump string, manifest *Manifest, rootKeyFile []byte, programVersion string) error {
+	name, drop, err := pg.scratchDatabase(ctx)
+	if err != nil {
+		return err
+	}
+	defer drop()
+	if err := pg.restoreInto(ctx, name, dump); err != nil {
+		return problem(ProblemIntegrity, "the dump does not restore: %v", err)
+	}
+	db, closeDB, err := pg.openGorm(name)
+	if err != nil {
+		return problem(ProblemIntegrity, "the restored dump does not open: %v", err)
+	}
+	defer closeDB()
+	return checkDatabase(ctx, db, manifest, rootKeyFile, programVersion)
+}
+
+// checkDatabase is what a verification checks in a restored database
+// (SQLite snapshot or PostgreSQL scratch database): migrations, the root
+// key and the row counts.
+func checkDatabase(ctx context.Context, db *gorm.DB, manifest *Manifest, rootKeyFile []byte, programVersion string) error {
 	status, err := migrations.Check(ctx, db, programVersion)
 	if err != nil {
 		return &VerifyError{Kind: ProblemMigrations, Err: err}

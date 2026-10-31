@@ -39,10 +39,28 @@ func setupBackups(cfg *config.Config, configPath string, lock bool) func() {
 // newBackupManager is the backup manager of a configuration: data_dir, the
 // SQLite database, the configuration file Control loaded and its root key.
 func newBackupManager(cfg *config.Config, configPath string, db func() *gorm.DB) *backup.Manager {
-	return &backup.Manager{
+	manager := &backup.Manager{
 		DataDir: cfg.DataDir, Driver: cfg.Database.Driver, DatabasePath: cfg.Database.Database, ConfigPath: configPath,
 		RootKey: backupRootKey(cfg), Domain: cfg.PanelDomain(), ProgramVersion: version, DB: db, Logf: log.Printf,
 	}
+	if isPostgresDriver(cfg.Database.Driver) {
+		pg, err := backup.PostgresFromConfig(&cfg.Database)
+		if err != nil {
+			log.Printf("Backups: the PostgreSQL connection cannot be used for backups: %v", err)
+		} else {
+			manager.Postgres = pg
+		}
+	}
+	return manager
+}
+
+// isPostgresDriver reports whether a database driver name is PostgreSQL.
+func isPostgresDriver(driver string) bool {
+	switch strings.ToLower(strings.TrimSpace(driver)) {
+	case "postgres", "postgresql":
+		return true
+	}
+	return false
 }
 
 // backupRootKey answers the content of root.key for a bundle. Without the
@@ -80,8 +98,8 @@ func backupRootKey(cfg *config.Config) func() ([]byte, error) {
 // preMigrationBackup is the migration runner's BeforeMigrate hook: before a
 // pending migration runs on a database that is not empty, it takes a
 // pre-migration bundle. When that fails, nothing is migrated and the start
-// stops with the reason. A new database, PostgreSQL and an in-memory
-// database go on without one.
+// stops with the reason. A new database and an in-memory database go on
+// without one, and so does a PostgreSQL panel without the client tools.
 func preMigrationBackup(logf func(string, ...any)) func(context.Context, migrations.Pending) error {
 	return func(ctx context.Context, pending migrations.Pending) error {
 		if pending.Empty {
@@ -101,6 +119,12 @@ func preMigrationBackup(logf func(string, ...any)) func(context.Context, migrati
 			return fmt.Errorf("no pre-migration backup can be taken, so nothing was migrated: %w", err)
 		}
 		bundle, _, err := manager.CreateWait(ctx, backup.TypePreMigration)
+		if errors.Is(err, backup.ErrPostgresTools) {
+			// A PostgreSQL panel that never had the client tools must not
+			// stop starting because of that; the daily backup alerts.
+			logf("Database schema: no pre-migration backup before %s: %v", steps, err)
+			return nil
+		}
 		if err != nil {
 			return fmt.Errorf("the backup taken before migrating the database failed, so nothing was migrated: %w. Fix the cause (free space or permissions in %s) and start again", err, manager.Dir())
 		}
