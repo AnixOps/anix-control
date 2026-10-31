@@ -37,7 +37,7 @@ vi.mock('@/api/kernel', () => kernelApi)
 vi.mock('@/api/admin', () => adminApi)
 
 const node = { id: 11, name: 'Shanghai entry', host: '10.0.0.11' }
-const plugin = { id: 'nftables-forward', name: 'nftables Forward', publisher: 'AnixOps' }
+const plugin = { id: 'machine-telemetry', name: 'Machine Telemetry', publisher: 'AnixOps' }
 const release = {
   id: 3,
   plugin_id: plugin.id,
@@ -216,9 +216,9 @@ describe('Deployments', () => {
     expect(kernelApi.getKernelPluginReleases).toHaveBeenCalledTimes(1)
     expect(kernelApi.getKernelInstallations).toHaveBeenCalledTimes(1)
     expect(selectField(wrapper, 'assignment-node').props('modelValue')).toBe(11)
-    expect(selectField(wrapper, 'assignment-plugin').props('modelValue')).toBe('nftables-forward')
+    expect(selectField(wrapper, 'assignment-plugin').props('modelValue')).toBe('machine-telemetry')
     expect(selectField(wrapper, 'assignment-scope').props('modelValue')).toBe('forward')
-    expect(drawer.get('#assignment-role').element.value).toBe('cn_dedicated_nftables')
+    expect(drawer.get('#assignment-role').element.value).toBe('telemetry')
     expect(selectField(wrapper, 'assignment-version').props('modelValue')).toBe('1.0.0')
     expect(drawer.get('#assignment-config-revision').element.value).toBe('6')
     wrapper.unmount()
@@ -241,7 +241,7 @@ describe('Deployments', () => {
   it('keeps the current target rows when an older assignment request resolves late', async () => {
     const firstAssignments = deferred()
     const secondNode = { id: 22, name: 'Tokyo entry', host: '10.0.0.22' }
-    const firstAssignment = { id: 7, node_id: 11, service_scope: 'forward', plugin_id: 'nftables-forward', role: 'cn_dedicated_nftables', enabled: true }
+    const firstAssignment = { id: 7, node_id: 11, service_scope: 'forward', plugin_id: 'machine-telemetry', role: 'telemetry', enabled: true }
     const secondAssignment = { id: 8, node_id: 22, service_scope: 'forward', plugin_id: 'nat-egress', role: 'egress', enabled: true }
     adminApi.getNodes.mockResolvedValue({ code: 0, data: { list: [node, secondNode] } })
     kernelApi.getKernelNodeAssignments.mockImplementation(nodeID => {
@@ -258,7 +258,7 @@ describe('Deployments', () => {
     firstAssignments.resolve([firstAssignment])
     await flushPromises()
     expect(wrapper.get('[data-testid="deployment-target-panel"]').text()).toContain('nat-egress')
-    expect(wrapper.get('[data-testid="deployment-target-panel"]').text()).not.toContain('nftables-forward')
+    expect(wrapper.get('[data-testid="deployment-target-panel"]').text()).not.toContain('machine-telemetry')
     wrapper.unmount()
   })
 
@@ -275,8 +275,8 @@ describe('Deployments', () => {
 
     expect(kernelApi.upsertKernelNodeAssignment).toHaveBeenCalledWith(11, {
       service_scope: 'forward',
-      plugin_id: 'nftables-forward',
-      role: 'cn_dedicated_nftables',
+      plugin_id: 'machine-telemetry',
+      role: 'telemetry',
       desired_version: '1.0.0',
       desired_config_revision: 6,
       enabled: true,
@@ -302,8 +302,8 @@ describe('Deployments', () => {
       id: 8,
       node_id: 22,
       service_scope: 'forward',
-      plugin_id: 'nftables-forward',
-      role: 'cn_dedicated_nftables',
+      plugin_id: 'machine-telemetry',
+      role: 'telemetry',
       desired_version: '1.0.0',
       desired_config_revision: 6,
       rollout_group: 'tokyo-canary',
@@ -321,7 +321,7 @@ describe('Deployments', () => {
     await drawer.get('[data-testid="save-assignment"]').trigger('click')
     await flushPromises()
 
-    expect(kernelApi.upsertKernelNodeAssignment).toHaveBeenCalledWith(22, expect.objectContaining({ plugin_id: 'nftables-forward' }))
+    expect(kernelApi.upsertKernelNodeAssignment).toHaveBeenCalledWith(22, expect.objectContaining({ plugin_id: 'machine-telemetry' }))
     expect(selectField(wrapper, 'assignment-node-filter').props('modelValue')).toBe(22)
     expect(kernelApi.getKernelNodeAssignments.mock.calls.filter(([nodeID]) => nodeID === 22)).toHaveLength(1)
     expect(kernelApi.getKernelOperations).toHaveBeenCalledTimes(2)
@@ -340,8 +340,8 @@ describe('Deployments', () => {
       id: 8,
       node_id: 22,
       service_scope: 'forward',
-      plugin_id: 'nftables-forward',
-      role: 'cn_dedicated_nftables',
+      plugin_id: 'machine-telemetry',
+      role: 'telemetry',
       desired_version: '1.0.0',
       desired_config_revision: 6,
       enabled: true,
@@ -464,8 +464,8 @@ describe('Deployments', () => {
       id: 7,
       node_id: 11,
       service_scope: 'forward',
-      plugin_id: 'nftables-forward',
-      role: 'cn_dedicated_nftables',
+      plugin_id: 'machine-telemetry',
+      role: 'telemetry',
       desired_version: '1.0.0',
       desired_config_revision: 6,
       rollout_group: '',
@@ -502,8 +502,8 @@ describe('Deployments', () => {
       id: 7,
       node_id: 11,
       service_scope: 'forward',
-      plugin_id: 'nftables-forward',
-      role: 'cn_dedicated_nftables',
+      plugin_id: 'machine-telemetry',
+      role: 'telemetry',
       desired_version: '1.0.0',
       desired_config_revision: 6,
       rollout_group: 'canary-a',
@@ -528,8 +528,8 @@ describe('Deployments', () => {
     await flushPromises()
     expect(kernelApi.upsertKernelNodeAssignment).toHaveBeenLastCalledWith(11, expect.objectContaining({
       service_scope: 'forward',
-      plugin_id: 'nftables-forward',
-      role: 'cn_dedicated_nftables',
+      plugin_id: 'machine-telemetry',
+      role: 'telemetry',
       desired_config_revision: 8,
       rollout_group: 'canary-b',
       enabled: false,
@@ -539,8 +539,8 @@ describe('Deployments', () => {
     await flushPromises()
     expect(kernelApi.upsertKernelNodeAssignment).toHaveBeenLastCalledWith(11, expect.objectContaining({
       service_scope: 'forward',
-      plugin_id: 'nftables-forward',
-      role: 'cn_dedicated_nftables',
+      plugin_id: 'machine-telemetry',
+      role: 'telemetry',
       desired_version: '1.0.0',
       desired_config_revision: 6,
       rollout_group: 'canary-a',
@@ -558,8 +558,8 @@ describe('Deployments', () => {
       id: 7,
       node_id: 11,
       service_scope: 'forward',
-      plugin_id: 'nftables-forward',
-      role: 'cn_dedicated_nftables',
+      plugin_id: 'machine-telemetry',
+      role: 'telemetry',
       desired_version: '1.0.0',
       desired_config_revision: 6,
       rollout_group: 'canary-a',
@@ -575,7 +575,7 @@ describe('Deployments', () => {
     await wrapper.get('[data-testid="delete-assignment-7"]').trigger('click')
     await flushPromises()
     expect(confirms.calls).toHaveLength(1)
-    expect(confirms.last()).toMatchObject({ tone: 'danger', title: 'Delete nftables-forward / cn_dedicated_nftables from this node?', confirmLabel: 'Delete assignment' })
+    expect(confirms.last()).toMatchObject({ tone: 'danger', title: 'Delete machine-telemetry / telemetry from this node?', confirmLabel: 'Delete assignment' })
     expect(kernelApi.deleteKernelNodeAssignment).not.toHaveBeenCalled()
 
     await wrapper.get('[data-testid="delete-assignment-7"]').trigger('click')
@@ -629,7 +629,7 @@ describe('Deployments', () => {
     kernelApi.getKernelTopologyRevisions.mockResolvedValue([{ id: 10, topology_id: 3, revision: 1, message: 'initial' }])
     kernelApi.getKernelTopologyRevision.mockImplementation(async (_topologyID, revisionID) => ({
       revision: { id: revisionID, message: revisionID === 11 ? 'canary' : 'initial' },
-      vertices: [{ key: 'entry', kind: 'plugin', node_id: 11, plugin_id: 'nftables-forward', role: 'cn_dedicated_nftables', config: '{}' }],
+      vertices: [{ key: 'entry', kind: 'plugin', node_id: 11, plugin_id: 'machine-telemetry', role: 'telemetry', config: '{}' }],
       edges: [],
     }))
     kernelApi.createKernelTopologyRevision.mockResolvedValue({ id: 11, topology_id: 3, revision: 2, message: 'canary' })

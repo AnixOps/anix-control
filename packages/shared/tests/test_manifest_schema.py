@@ -64,7 +64,7 @@ def generate_rsa_signer(root: Path) -> Path:
 def agent_binary_arguments(
     root: Path,
     platforms: tuple[str, ...] = ("linux/amd64",),
-    package_ids: tuple[str, ...] = ("machine-telemetry", "nftables-forward", "nat-egress"),
+    package_ids: tuple[str, ...] = ("machine-telemetry",),
 ) -> list[str]:
     arguments: list[str] = []
     for package_id in package_ids:
@@ -265,8 +265,6 @@ func main() {
                 ("notification", ("control",)),
                 ("knowledge", ("control",)),
                 ("machine-telemetry", ("control", "agent")),
-                ("nftables-forward", ("control", "agent")),
-                ("nat-egress", ("control", "agent")),
                 ("wireguard", ("control",)),
                 ("protocol-runtime", ("control",)),
             ],
@@ -400,7 +398,7 @@ func main() {
             spec.package_id for spec in BUILD_PACKAGE_MODULE.PACKAGE_SPECS if BUILD_PACKAGE_MODULE.declares_webui(spec.package_id)
         ]
         # The WebUI bundle is optional; only these packages ship one.
-        self.assertEqual(["forward", "nftables-forward", "nat-egress"], with_webui)
+        self.assertEqual(["forward"], with_webui)
         for package_id in with_webui:
             with self.subTest(package_id=package_id):
                 bundle = BUILD_PACKAGE_MODULE.source_webui(package_id, "4.0.0")
@@ -645,8 +643,6 @@ func main() {
             "protocol-runtime",
             "wireguard",
             "forward",
-            "nftables-forward",
-            "nat-egress",
         ):
             declaration = json.loads((REPO_ROOT / "packages" / package_id / "compat" / "v2-routes.json").read_text(encoding="utf-8"))
             migrations = json.loads((REPO_ROOT / "packages" / package_id / "migrations" / "index.json").read_text(encoding="utf-8"))
@@ -667,7 +663,7 @@ func main() {
         # Orders, payments and affiliate are official packages like the
         # others: there is no edition that leaves them out.
         ids = {spec.package_id for spec in BUILD_PACKAGE_MODULE.PACKAGE_SPECS}
-        self.assertEqual(17, len(ids))
+        self.assertEqual(15, len(ids))
         self.assertTrue({"affiliate", "order", "payment", "plan"} <= ids)
         self.assertFalse(hasattr(BUILD_PACKAGE_MODULE, "edition_package_specs"))
 
@@ -696,8 +692,8 @@ func main() {
             artifacts = sorted(output.glob("*.anxp"))
             sboms = sorted(output.glob("*.sbom.spdx.json"))
             # --all builds every official package.
-            self.assertEqual(17, len(artifacts))
-            self.assertEqual(17, len(sboms))
+            self.assertEqual(15, len(artifacts))
+            self.assertEqual(15, len(sboms))
             for package_id in ("identity-platform", "plan", "affiliate", "order", "payment"):
                 self.assertIn(output / f"{package_id}-4.0.0.anxp", artifacts)
 
@@ -715,7 +711,7 @@ func main() {
                 self.assertRegex(manifest["route_contract_digest"], r"^[0-9a-f]{64}$")
                 self.assertEqual(hashlib.sha256(artifact_path.read_bytes()).hexdigest(), manifest["artifact_sha256"])
                 package_id = manifest["id"]
-                if package_id in {"forward", "nftables-forward", "nat-egress"}:
+                if package_id == "forward":
                     self.assertRegex(manifest["frontend_sha256"], r"^[0-9a-f]{64}$")
                     self.assertEqual(manifest["frontend_sha256"], manifest["webui"]["bundle"]["sha256"])
                 else:

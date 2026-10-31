@@ -1548,47 +1548,7 @@ func topologyRuntimeObservation(tx *gorm.DB, step model.TopologyDeploymentStep, 
 	if err := json.Unmarshal([]byte(observed.CountersJSON), &counters); err != nil {
 		return nil, fmt.Errorf("runtime observation for topology step %q counters are invalid", step.VertexKey)
 	}
-	if step.PluginID == "nftables-forward" {
-		if err := topologyNftablesCountersMatch(effectiveConfigJSON, counters); err != nil {
-			return nil, fmt.Errorf("runtime observation for topology step %q: %w", step.VertexKey, err)
-		}
-	}
 	return &topologyPromotionRuntimeState{RulesetSHA256: strings.ToLower(observed.RulesetSHA256), ObservedAt: observed.ObservedAt, RuleCounters: counters}, nil
-}
-
-func topologyNftablesCountersMatch(configJSON string, counters []NodePluginRuleCounter) error {
-	var config struct {
-		Rules []struct {
-			ID string `json:"id"`
-		} `json:"rules"`
-	}
-	if err := json.Unmarshal([]byte(configJSON), &config); err != nil || len(config.Rules) == 0 {
-		return errors.New("nftables rule configuration is invalid")
-	}
-	expected := make(map[string]struct{}, len(config.Rules))
-	for _, rule := range config.Rules {
-		if !safePluginSegment(rule.ID) {
-			return errors.New("nftables rule id is invalid")
-		}
-		if _, duplicate := expected[rule.ID]; duplicate {
-			return errors.New("nftables rule id is duplicated")
-		}
-		expected[rule.ID] = struct{}{}
-	}
-	if len(counters) != len(expected) {
-		return errors.New("nftables counter set does not match configured rules")
-	}
-	seen := make(map[string]struct{}, len(counters))
-	for _, counter := range counters {
-		if _, ok := expected[counter.RuleID]; !ok {
-			return errors.New("nftables counter has an unknown rule")
-		}
-		if _, duplicate := seen[counter.RuleID]; duplicate {
-			return errors.New("nftables counter is duplicated")
-		}
-		seen[counter.RuleID] = struct{}{}
-	}
-	return nil
 }
 
 func topologyAllStepsState(steps []model.TopologyDeploymentStep, state string) bool {

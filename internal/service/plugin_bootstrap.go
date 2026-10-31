@@ -141,7 +141,7 @@ func BootstrapBuiltinPackages(db *gorm.DB, encodedPublicKey string, set *builtin
 // enabled installation left behind by an older Control names capabilities
 // this binary no longer knows, and installation validation reads every
 // enabled installation: one such row fails every built-in package.
-var retiredBuiltinPackages = []string{"gost-mesh"}
+var retiredBuiltinPackages = []string{"gost-mesh", "nftables-forward", "nat-egress"}
 
 // retireBuiltinPackages disables the installations of retired packages,
 // once, with an audit entry; their rows and releases stay for the record.

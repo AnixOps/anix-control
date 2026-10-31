@@ -1,13 +1,9 @@
 package service
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"net/netip"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -228,14 +224,6 @@ func PreviewTopologyDeployment(db *gorm.DB, input TopologyDeploymentPreviewInput
 	runtimeIssues := validateTopologyRuntimeConstraints(vertices, edges)
 	for _, issue := range runtimeIssues {
 		appendIssue(issue.Code, issue.Path, issue.Message)
-	}
-	for index, vertex := range vertices {
-		if vertex.PluginID != "nftables-forward" {
-			continue
-		}
-		for _, issue := range validateNftablesForwardTopologyConfig(vertex.ConfigJSON, fmt.Sprintf("vertices[%d].config", index)) {
-			appendIssue(issue.Code, issue.Path, issue.Message)
-		}
 	}
 	if len(runtimeIssues) == 0 {
 		preview.Checks = append(preview.Checks, TopologyDeploymentDiagnosticCheck{Name: "runtime_constraints", Status: "passed", Message: "ports, address families, MTU and secret references are valid"})
@@ -610,177 +598,4 @@ func topologySecureProtocol(protocol string) bool {
 	default:
 		return false
 	}
-}
-
-// validateNftablesForwardTopologyConfig mirrors the Agent runtime's
-// ParseConfig/Config.Validate contract. The Control manifest schema is
-// intentionally generic, so this package-specific gate prevents a topology
-// from reaching the Agent only to fail during configure.
-func validateNftablesForwardTopologyConfig(raw string, basePath string) []TopologyValidationIssue {
-	issues := make([]TopologyValidationIssue, 0)
-	add := func(code, path, message string) {
-		issues = append(issues, TopologyValidationIssue{code, path, message})
-	}
-	type rawRule struct {
-		ID            string `json:"id"`
-		Protocol      string `json:"protocol"`
-		ListenAddress string `json:"listen_address"`
-		ListenPort    int    `json:"listen_port"`
-		TargetAddress string `json:"target_address"`
-		TargetPort    int    `json:"target_port"`
-		Comment       string `json:"comment"`
-	}
-	type rawConfig struct {
-		Apply          *bool           `json:"apply"`
-		NftBinary      string          `json:"nft_binary"`
-		PlanPath       string          `json:"plan_path"`
-		Family         string          `json:"family"`
-		Table          string          `json:"table"`
-		Chain          string          `json:"chain"`
-		Priority       *int            `json:"priority"`
-		RollbackOnExit *bool           `json:"rollback_on_exit"`
-		Rules          json.RawMessage `json:"rules"`
-	}
-	decoder := json.NewDecoder(bytes.NewReader([]byte(strings.TrimSpace(raw))))
-	decoder.DisallowUnknownFields()
-	var config *rawConfig
-	if err := decoder.Decode(&config); err != nil {
-		add("nftables_config_invalid", basePath, "nftables-forward config must be one JSON object: "+err.Error())
-		return issues
-	}
-	if config == nil {
-		add("nftables_config_invalid", basePath, "nftables-forward config must be a JSON object")
-		return issues
-	}
-	var trailing any
-	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
-		add("nftables_config_invalid", basePath, "nftables-forward config must contain exactly one JSON object")
-	}
-
-	apply := config.Apply != nil && *config.Apply
-	rollbackOnExit := config.RollbackOnExit == nil || *config.RollbackOnExit
-	if !rollbackOnExit {
-		add("nftables_rollback_required", basePath+".rollback_on_exit", "rollback_on_exit must remain enabled for the crash-safe lifecycle")
-	}
-	family := strings.TrimSpace(config.Family)
-	if family == "" {
-		family = "inet"
-	}
-	if family != "inet" && family != "ip" && family != "ip6" {
-		add("nftables_family_invalid", basePath+".family", "family must be inet, ip, or ip6")
-	}
-	table := strings.TrimSpace(config.Table)
-	if table == "" {
-		table = "anixops_forward"
-	}
-	if !safeNftablesForwardIdentifier(table) {
-		add("nftables_table_invalid", basePath+".table", "table must be a safe nftables identifier")
-	}
-	chain := strings.TrimSpace(config.Chain)
-	if chain == "" {
-		chain = "prerouting"
-	}
-	if !safeNftablesForwardIdentifier(chain) {
-		add("nftables_chain_invalid", basePath+".chain", "chain must be a safe nftables identifier")
-	}
-	priority := -100
-	if config.Priority != nil {
-		priority = *config.Priority
-	}
-	if priority < -500 || priority > 500 {
-		add("nftables_priority_invalid", basePath+".priority", "priority must be between -500 and 500")
-	}
-	if strings.ContainsAny(config.NftBinary, "\x00\r\n") {
-		add("nftables_binary_invalid", basePath+".nft_binary", "nft_binary must not contain control characters")
-	}
-	planPath := strings.TrimSpace(config.PlanPath)
-	if planPath != "" && (!filepath.IsAbs(planPath) || filepath.Clean(planPath) != planPath) {
-		add("nftables_plan_path_invalid", basePath+".plan_path", "plan_path must be absolute and canonical")
-	}
-	if len(config.Rules) == 0 || string(bytes.TrimSpace(config.Rules)) == "null" {
-		add("nftables_rules_required", basePath+".rules", "rules must be declared")
-		if apply {
-			add("nftables_apply_requires_rules", basePath+".rules", "apply=true requires at least one forwarding rule")
-		}
-		return issues
-	}
-	var rules []rawRule
-	ruleDecoder := json.NewDecoder(bytes.NewReader(config.Rules))
-	ruleDecoder.DisallowUnknownFields()
-	if err := ruleDecoder.Decode(&rules); err != nil {
-		add("nftables_rules_invalid", basePath+".rules", "unable to decode forwarding rules: "+err.Error())
-		return issues
-	}
-	if len(rules) > 1024 {
-		add("nftables_rules_limit", basePath+".rules", "forwarding rules exceed 1024 entries")
-	}
-	if apply && len(rules) == 0 {
-		add("nftables_apply_requires_rules", basePath+".rules", "apply=true requires at least one forwarding rule")
-	}
-	seenIDs := make(map[string]struct{}, len(rules))
-	for index, rule := range rules {
-		path := fmt.Sprintf("%s.rules[%d]", basePath, index)
-		id := strings.TrimSpace(rule.ID)
-		if !safeNftablesForwardRuleID(id) {
-			add("nftables_rule_id_invalid", path+".id", "rule id is invalid")
-		} else if _, exists := seenIDs[id]; exists {
-			add("nftables_rule_id_duplicate", path+".id", fmt.Sprintf("rule %q is duplicated", id))
-		} else {
-			seenIDs[id] = struct{}{}
-		}
-		protocol := strings.ToLower(strings.TrimSpace(rule.Protocol))
-		if protocol != "tcp" && protocol != "udp" {
-			add("nftables_rule_protocol_invalid", path+".protocol", "protocol must be tcp or udp")
-		}
-		if rule.ListenPort < 1 || rule.ListenPort > 65535 {
-			add("nftables_rule_port_invalid", path+".listen_port", "listen_port must be between 1 and 65535")
-		}
-		if rule.TargetPort < 1 || rule.TargetPort > 65535 {
-			add("nftables_rule_port_invalid", path+".target_port", "target_port must be between 1 and 65535")
-		}
-		listen, listenErr := netip.ParseAddr(strings.TrimSpace(rule.ListenAddress))
-		target, targetErr := netip.ParseAddr(strings.TrimSpace(rule.TargetAddress))
-		if listenErr != nil || listen.IsUnspecified() || listen.IsMulticast() {
-			add("nftables_rule_address_invalid", path+".listen_address", "listen_address must be a unicast IP address")
-		}
-		if targetErr != nil || target.IsUnspecified() || target.IsMulticast() {
-			add("nftables_rule_address_invalid", path+".target_address", "target_address must be a unicast IP address")
-		}
-		if listenErr == nil && targetErr == nil && listen.Is4() != target.Is4() {
-			add("nftables_rule_address_family_mismatch", path, "listen_address and target_address must use the same IP family")
-		}
-		if (family == "ip" && listenErr == nil && !listen.Is4()) || (family == "ip6" && listenErr == nil && listen.Is4()) {
-			add("nftables_family_rule_mismatch", path+".listen_address", "rule address family does not match nftables family")
-		}
-		if rule.Comment != "" && (len(rule.Comment) > 96 || strings.ContainsAny(rule.Comment, "\x00\r\n\"\\")) {
-			add("nftables_rule_comment_invalid", path+".comment", "comment is invalid")
-		}
-	}
-	return issues
-}
-
-func safeNftablesForwardIdentifier(value string) bool {
-	if value == "" || len(value) > 63 {
-		return false
-	}
-	for index, char := range value {
-		if (char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') || char == '_' || (index > 0 && char >= '0' && char <= '9') {
-			continue
-		}
-		return false
-	}
-	return true
-}
-
-func safeNftablesForwardRuleID(value string) bool {
-	if value == "" || len(value) > 80 {
-		return false
-	}
-	for index, char := range value {
-		if (char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') || (char >= '0' && char <= '9') || char == '-' || char == '_' || (index > 0 && char == '.') {
-			continue
-		}
-		return false
-	}
-	return true
 }

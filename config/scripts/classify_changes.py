@@ -116,8 +116,6 @@ CLASS_PATTERNS: dict[str, tuple[str, ...]] = {
         "internal/service/forward*",
         "internal/handler/forward*",
         "packages/forward/*",
-        "packages/nftables-forward/*",
-        "packages/nat-egress/*",
         # The forward SDK (v4.2): model, planner, drivers and contract.
         "sdk/forward/*",
         "sdk/api/forward/*",

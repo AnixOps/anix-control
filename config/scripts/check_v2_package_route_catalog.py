@@ -30,8 +30,6 @@ ALLOWED_OWNERS = frozenset(
         "protocol-runtime",
         "wireguard",
         "forward",
-        "nftables-forward",
-        "nat-egress",
     }
 )
 OWNER_ROUTE_PREFIXES = {
@@ -50,8 +48,6 @@ OWNER_ROUTE_PREFIXES = {
     "protocol-runtime": ("protocol.",),
     "wireguard": ("wireguard.",),
     "forward": ("forward.",),
-    "nftables-forward": ("nftables.",),
-    "nat-egress": ("nat.",),
 }
 ALLOWED_ENVELOPES = frozenset({"data", "empty", "panel", "raw", "websocket"})
 ALLOWED_MIDDLEWARE_GROUPS = frozenset({"public", "user", "admin", "agent", "node-api", "internal"})

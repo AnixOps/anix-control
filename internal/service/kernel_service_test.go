@@ -810,7 +810,7 @@ func TestKernelBooleanFieldsPreserveExplicitFalse(t *testing.T) {
 	db := newKernelTestDB(t)
 	group := model.AccessGroup{ScopeID: "forward", Name: "disabled", Enabled: false}
 	require.NoError(t, db.Create(&group).Error)
-	assignment := model.NodeServiceAssignment{NodeID: 1, ServiceScope: "forward", PluginID: "nftables-forward", Role: "entry", Enabled: false}
+	assignment := model.NodeServiceAssignment{NodeID: 1, ServiceScope: "forward", PluginID: "machine-telemetry", Role: "entry", Enabled: false}
 	require.NoError(t, db.Create(&assignment).Error)
 
 	var storedGroup model.AccessGroup
@@ -1480,12 +1480,12 @@ func TestCreateTopologyRevisionRequiresNodePluginAssignment(t *testing.T) {
 	require.NoError(t, db.Create(&node).Error)
 	topology := model.Topology{Name: "assigned-forward", ServiceScope: "forward"}
 	require.NoError(t, db.Create(&topology).Error)
-	input := TopologyRevisionInput{Vertices: []model.TopologyVertex{{Key: "entry", Kind: "plugin", NodeID: &node.ID, PluginID: "nftables-forward", Role: "cn_dedicated_nftables", ConfigJSON: `{}`}}}
+	input := TopologyRevisionInput{Vertices: []model.TopologyVertex{{Key: "entry", Kind: "plugin", NodeID: &node.ID, PluginID: "machine-telemetry", Role: "telemetry", ConfigJSON: `{}`}}}
 
 	_, err := CreateTopologyRevision(db, topology.ID, 1, input)
 	require.ErrorContains(t, err, "no enabled assignment")
 	require.NoError(t, db.Create(&model.NodeServiceAssignment{
-		NodeID: node.ID, ServiceScope: "forward", PluginID: "nftables-forward", Role: "cn_dedicated_nftables", Enabled: true,
+		NodeID: node.ID, ServiceScope: "forward", PluginID: "machine-telemetry", Role: "telemetry", Enabled: true,
 	}).Error)
 
 	revision, err := CreateTopologyRevision(db, topology.ID, 1, input)

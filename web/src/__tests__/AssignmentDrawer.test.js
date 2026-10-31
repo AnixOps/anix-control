@@ -6,16 +6,16 @@ import AssignmentDrawer from '@/components/admin/AssignmentDrawer.vue'
 import UiSelect from '@/ui/UiSelect.vue'
 
 const nodes = [{ id: 11, name: 'Shanghai entry', host: '10.0.0.11' }]
-const plugins = [{ id: 'nftables-forward', name: 'nftables Forward' }]
+const plugins = [{ id: 'machine-telemetry', name: 'Machine Telemetry' }]
 const releases = [{
   id: 3,
-  plugin_id: 'nftables-forward',
+  plugin_id: 'machine-telemetry',
   version: '1.0.0',
   manifest: JSON.stringify({ targets: ['agent'] }),
 }]
 const installations = [{
   id: 5,
-  plugin_id: 'nftables-forward',
+  plugin_id: 'machine-telemetry',
   target: 'agent',
   desired_version: '1.0.0',
   config_revision: 6,
@@ -50,9 +50,9 @@ describe('AssignmentDrawer', () => {
     await nextTick()
 
     expect(selectValue(wrapper, 'assignment-node')).toBe(11)
-    expect(selectValue(wrapper, 'assignment-plugin')).toBe('nftables-forward')
+    expect(selectValue(wrapper, 'assignment-plugin')).toBe('machine-telemetry')
     expect(selectValue(wrapper, 'assignment-scope')).toBe('forward')
-    expect(inBody('#assignment-role').element.value).toBe('cn_dedicated_nftables')
+    expect(inBody('#assignment-role').element.value).toBe('telemetry')
     expect(selectValue(wrapper, 'assignment-version')).toBe('1.0.0')
     // The labels name the controls (top labels, plan D5).
     expect(inBody('label[for="assignment-rollout-group"]').exists()).toBe(true)
@@ -66,8 +66,8 @@ describe('AssignmentDrawer', () => {
         id: 7,
         node_id: 11,
         service_scope: 'forward',
-        plugin_id: 'nftables-forward',
-        role: 'cn_dedicated_nftables',
+        plugin_id: 'machine-telemetry',
+        role: 'telemetry',
         desired_version: '1.0.0',
         desired_config_revision: 6,
         rollout_group: 'canary-a',
@@ -96,8 +96,8 @@ describe('AssignmentDrawer', () => {
         nodeID: 11,
         payload: {
           service_scope: 'forward',
-          plugin_id: 'nftables-forward',
-          role: 'cn_dedicated_nftables',
+          plugin_id: 'machine-telemetry',
+          role: 'telemetry',
           desired_version: '1.0.0',
           desired_config_revision: 8,
           enabled: true,

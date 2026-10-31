@@ -18,8 +18,8 @@ const adminPassword = 'LiveControlWebUI!2026'
 const goBinary = process.env.ANIXOPS_GO_BIN || 'go'
 // The packages the gate builds into Control: identity-platform (login),
 // machine-telemetry, which ships no WebUI (its data shows in the node
-// pages), and nftables-forward, which ships one.
-const builtinPackages = ['identity-platform', 'machine-telemetry', 'nftables-forward']
+// pages), and forward, which ships one.
+const builtinPackages = ['identity-platform', 'machine-telemetry', 'forward']
 
 function trimOutput(output, maximum = 12_000) {
   return output.length <= maximum ? output : output.slice(-maximum)

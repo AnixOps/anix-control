@@ -33,7 +33,7 @@ func newNodePluginObservedStateFixture(t *testing.T, capabilities []string) node
 	_, privateKey, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)
 	manifest := PluginManifest{
-		ID: "nftables-forward", Name: "nftables Forward", Version: "1.2.0", APIVersion: "v1", Publisher: "AnixOps",
+		ID: "machine-telemetry", Name: "Machine Telemetry", Version: "1.2.0", APIVersion: "v1", Publisher: "AnixOps",
 		Targets: []string{"agent"}, ArtifactSHA256: strings.Repeat("a", 64), Capabilities: capabilities,
 	}
 	canonical, err := CanonicalPluginManifest(manifest)
@@ -42,7 +42,7 @@ func newNodePluginObservedStateFixture(t *testing.T, capabilities []string) node
 	_, err = RegisterPluginRelease(db, string(canonical), signature, privateKey.Public().(ed25519.PublicKey))
 	require.NoError(t, err)
 	require.NoError(t, db.Create(&model.NodeServiceAssignment{
-		NodeID: node.ID, ServiceScope: "forward", PluginID: manifest.ID, Role: "cn_dedicated_nftables",
+		NodeID: node.ID, ServiceScope: "forward", PluginID: manifest.ID, Role: "telemetry",
 		DesiredVersion: manifest.Version, Enabled: true,
 	}).Error)
 	return nodePluginObservedStateFixture{db: db, service: &NodeService{db: db}, node: node, plugin: manifest.ID, version: manifest.Version}

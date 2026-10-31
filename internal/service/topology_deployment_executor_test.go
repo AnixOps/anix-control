@@ -71,7 +71,7 @@ func newObservedTopologyDeploymentFixture(t *testing.T) observedTopologyDeployme
 	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)
 	manifest := PluginManifest{
-		ID: "nftables-forward", Name: "nftables Forward", Version: "1.2.0", APIVersion: "v1", Publisher: "AnixOps",
+		ID: "machine-telemetry", Name: "Machine Telemetry", Version: "1.2.0", APIVersion: "v1", Publisher: "AnixOps",
 		Targets: []string{"agent"}, ArtifactSHA256: strings.Repeat("a", 64), Capabilities: []string{"kernel.observed-state"},
 	}
 	canonical, err := CanonicalPluginManifest(manifest)
@@ -85,10 +85,10 @@ func newObservedTopologyDeploymentFixture(t *testing.T) observedTopologyDeployme
 	revision := model.TopologyRevision{TopologyID: topology.ID, Revision: 1, State: "draft", ContentHash: strings.Repeat("b", 64), CreatedBy: 1}
 	require.NoError(t, db.Create(&revision).Error)
 	require.NoError(t, db.Create(&model.NodeServiceAssignment{
-		NodeID: node.ID, ServiceScope: "forward", PluginID: manifest.ID, Role: "cn_dedicated_nftables", DesiredVersion: manifest.Version, Enabled: true,
+		NodeID: node.ID, ServiceScope: "forward", PluginID: manifest.ID, Role: "telemetry", DesiredVersion: manifest.Version, Enabled: true,
 	}).Error)
 	require.NoError(t, db.Create(&model.TopologyVertex{
-		RevisionID: revision.ID, Key: "nft-entry", Kind: "plugin", NodeID: &node.ID, PluginID: manifest.ID, Role: "cn_dedicated_nftables",
+		RevisionID: revision.ID, Key: "nft-entry", Kind: "plugin", NodeID: &node.ID, PluginID: manifest.ID, Role: "telemetry",
 		ConfigJSON: `{"rules":[{"id":"tcp-443","protocol":"tcp","listen_address":"198.51.100.10","listen_port":443,"target_address":"203.0.113.10","target_port":8443}]}`,
 	}).Error)
 	return observedTopologyDeploymentFixture{db: db, topology: topology, revision: revision, node: node}
@@ -656,7 +656,7 @@ func TestTopologyRollbackRuntimeEvidenceUsesPreviousNftablesRules(t *testing.T) 
 	newConfig := `{"rules":[{"id":"new-tcp-443","protocol":"tcp","listen_address":"198.51.100.10","listen_port":443,"target_address":"203.0.113.10","target_port":8443}]}`
 	step := model.TopologyDeploymentStep{
 		DeploymentID: deployment.ID, VertexID: 1, VertexKey: "nft-entry", NodeID: fixture.node.ID,
-		PluginID: "nftables-forward", Role: "cn_dedicated_nftables", TargetVersion: "1.2.0",
+		PluginID: "machine-telemetry", Role: "telemetry", TargetVersion: "1.2.0",
 		ApplyOrder: 1, ApplyAction: topologyApplyActionConfigureEnable, ConfigJSON: newConfig,
 		RollbackMode: topologyRollbackModeRestore, RollbackConfigJSON: oldConfig,
 		State:                        topologyStepStateRolledBack,
@@ -724,7 +724,7 @@ func TestTopologyObservedStateCapabilityCannotBeRemovedFromStoredManifest(t *tes
 	require.Len(t, steps, 1)
 
 	var release model.PluginRelease
-	require.NoError(t, fixture.db.First(&release, "plugin_id = ? AND version = ?", "nftables-forward", "1.2.0").Error)
+	require.NoError(t, fixture.db.First(&release, "plugin_id = ? AND version = ?", "machine-telemetry", "1.2.0").Error)
 	manifest, err := DecodePluginReleaseManifest(release)
 	require.NoError(t, err)
 	manifest.Capabilities = nil

@@ -108,8 +108,6 @@ import { releaseTargets } from '@/utils/kernelPluginRelease'
 
 const OFFICIAL_PLUGIN_ROLES = Object.freeze({
   'machine-telemetry': ['telemetry'],
-  'nftables-forward': ['cn_dedicated_nftables', 'entry'],
-  'nat-egress': ['nat_egress', 'overseas_exit'],
 })
 
 const props = defineProps({

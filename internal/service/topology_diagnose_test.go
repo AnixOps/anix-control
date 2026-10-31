@@ -195,17 +195,3 @@ func TestTopologyDeploymentStatusIncludesSafeOperationTimeline(t *testing.T) {
 	require.Contains(t, payload, `"last_error":"deployment failed"`)
 	require.Contains(t, payload, `"last_error":"plugin configuration failed"`)
 }
-
-func TestNftablesForwardPreviewGateMatchesAgentRuntimeContract(t *testing.T) {
-	valid := `{"apply":true,"rollback_on_exit":true,"family":"ip","table":"anixops_forward","chain":"prerouting","priority":-90,"plan_path":"/run/anixops/forward.nft","rules":[{"id":"tcp_443","protocol":"tcp","listen_address":"198.51.100.10","listen_port":443,"target_address":"203.0.113.10","target_port":8443}]}`
-	require.Empty(t, validateNftablesForwardTopologyConfig(valid, "vertices[0].config"))
-	invalid := `{"apply":true,"rollback_on_exit":false,"family":"ip","table":"bad-name","chain":"bad-chain","priority":900,"plan_path":"relative.nft","rules":[{"id":"bad:id","protocol":"icmp","listen_address":"0.0.0.0","listen_port":0,"target_address":"2001:db8::10","target_port":70000},{"id":"dup","protocol":"udp","listen_address":"198.51.100.11","listen_port":53,"target_address":"203.0.113.11","target_port":53},{"id":"dup","protocol":"udp","listen_address":"198.51.100.12","listen_port":54,"target_address":"203.0.113.12","target_port":54}]}`
-	issues := validateNftablesForwardTopologyConfig(invalid, "vertices[0].config")
-	codes := make(map[string]bool)
-	for _, issue := range issues {
-		codes[issue.Code] = true
-	}
-	for _, code := range []string{"nftables_rollback_required", "nftables_table_invalid", "nftables_chain_invalid", "nftables_priority_invalid", "nftables_plan_path_invalid", "nftables_rule_id_invalid", "nftables_rule_id_duplicate", "nftables_rule_protocol_invalid", "nftables_rule_port_invalid", "nftables_rule_address_invalid", "nftables_rule_address_family_mismatch"} {
-		require.True(t, codes[code], "missing nftables gate issue %s: %#v", code, issues)
-	}
-}

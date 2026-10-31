@@ -1,10 +1,10 @@
 import { test, expect } from '@playwright/test'
 
 const node = { id: 11, name: 'Shanghai entry', host: '10.0.0.11', status: 1 }
-const plugin = { id: 'nftables-forward', name: 'nftables Forward', publisher: 'AnixOps' }
+const plugin = { id: 'machine-telemetry', name: 'Machine Telemetry', publisher: 'AnixOps' }
 const topology = { id: 21, name: 'Shanghai mesh', service_scope: 'forward', active_revision_id: 5 }
 const deployment = { id: 31, topology_id: topology.id, revision_id: 5, state: 'planned' }
-const manifest = JSON.stringify({ id: 'nftables-forward', version: '1.0.0', targets: ['agent'] })
+const manifest = JSON.stringify({ id: 'machine-telemetry', version: '1.0.0', targets: ['agent'] })
 
 async function seedAdmin(page) {
   await page.addInitScript(() => {

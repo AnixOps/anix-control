@@ -14,8 +14,7 @@ import (
 
 // TestHostsMatchThePackageMatrix keeps the linked hosts equal to the
 // official packages: every packages/<id> with a manifest template has a
-// host, a package with a control/ directory runs its own host and the others
-// the generic one.
+// host that runs from its own control/ directory.
 func TestHostsMatchThePackageMatrix(t *testing.T) {
 	manifests, err := filepath.Glob(filepath.Join("..", "*", "manifest.template.json"))
 	require.NoError(t, err)
@@ -24,11 +23,11 @@ func TestHostsMatchThePackageMatrix(t *testing.T) {
 		packages = append(packages, filepath.Base(filepath.Dir(manifest)))
 	}
 	sort.Strings(packages)
-	require.Len(t, packages, 17)
+	require.Len(t, packages, 15)
 	require.Equal(t, packages, IDs())
 	for _, host := range Hosts() {
 		_, err := os.Stat(filepath.Join("..", host.ID, "control", "main.go"))
-		require.Equal(t, !host.Generic, err == nil, "%s: own host %t", host.ID, err == nil)
+		require.NoError(t, err, "%s: own host", host.ID)
 	}
 }
 
