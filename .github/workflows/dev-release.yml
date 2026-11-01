@@ -503,7 +503,9 @@ jobs:
       # host that has the tool (fr-test-upgrade recipe): the database dump,
       # the upgrade (in its own systemd unit: it restarts Control), and the
       # wait for its result. install.sh restores the previous release when
-      # the new one fails its health check.
+      # the new one fails its health check. Only the Control whose service
+      # runs takes a dev build: a cold standby (installed, stopped) is left
+      # alone, so it is never started by a dev install.
       - name: Dump the database, upgrade, check
         env:
           JMS_URL: ${{ vars.JMS_URL }}
@@ -518,6 +520,7 @@ jobs:
           run() { python scripts/jumpserver/jms.py run --cmd "echo $(base64 -w0 "$1") | base64 -d | bash" --timeout "$2" --show-output; }
 
           cat >dump.sh <<'EOF'
+          systemctl is-active --quiet anix-control || exit 0
           [ -d /root/pg-backups ] && command -v pg_dump >/dev/null || exit 0
           set -e
           f=/root/pg-backups/anix_control_v2board-pre-dev-$(date -u +%Y%m%d%H%M%S).dump
@@ -527,6 +530,7 @@ jobs:
           EOF
           cat >upgrade.sh <<EOF
           [ -x /opt/anixops/control/bin/anix-control ] || exit 0
+          systemctl is-active --quiet anix-control || { rm -f /root/dev-upgrade.log; echo "standby: not upgraded"; exit 0; }
           set -e
           ts=\$(date -u +%Y%m%d%H%M%S)
           cp -a /opt/anixops/control/config/config.yaml /opt/anixops/control/config/config.yaml.bak-pre-dev-\$ts
@@ -538,6 +542,7 @@ jobs:
           EOF
           cat >check.sh <<'EOF'
           [ -x /opt/anixops/control/bin/anix-control ] || exit 0
+          [ -f /root/dev-upgrade.log ] || { echo "no dev upgrade on this host"; exit 0; }
           for i in $(seq 1 150); do grep -q '^exit=' /root/dev-upgrade.log 2>/dev/null && break; sleep 5; done
           tail -n 20 /root/dev-upgrade.log
           journalctl -u anix-control --since '15 min ago' --no-pager | grep -m1 "Built-in packages" || true

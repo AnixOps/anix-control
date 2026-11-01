@@ -18,6 +18,17 @@ definitions:
           type: string
         type: array
     type: object
+  destinationstats.RuleInput:
+    properties:
+      category:
+        type: string
+      kind:
+        type: string
+      note:
+        type: string
+      value:
+        type: string
+    type: object
   destinationstats.Settings:
     properties:
       enabled:
@@ -26,6 +37,19 @@ definitions:
       retention_days:
         description: RetentionDays is how long a row is kept.
         type: integer
+    type: object
+  destinationstats.SourceInput:
+    properties:
+      category:
+        type: string
+      enabled:
+        type: boolean
+      name:
+        type: string
+      refresh_hours:
+        type: integer
+      url:
+        type: string
     type: object
   egressroute.Input:
     properties:
@@ -1438,6 +1462,54 @@ definitions:
         type: string
       username:
         type: string
+    type: object
+  trafficqos.Cap:
+    properties:
+      domains:
+        description: Domains each also match their subdomains.
+        items:
+          type: string
+        type: array
+      limit_mbps:
+        description: LimitMbps is each user's cap, Mbit/s; 0 gives the priority alone.
+        type: integer
+      name:
+        type: string
+      priority:
+        description: Priority is the destinations' priority; empty is low.
+        type: string
+    type: object
+  trafficqos.Settings:
+    properties:
+      caps:
+        items:
+          $ref: '#/definitions/trafficqos.Cap'
+        type: array
+      default_egress_mbps:
+        description: |-
+          DefaultEgressMbps is a node's download capacity unless NodeEgressMbps
+          names it; 0 schedules within the users' speed limits only.
+        type: integer
+      enabled:
+        type: boolean
+      min_share_percent:
+        description: |-
+          MinSharePercent is the least share of a capacity a lower class keeps
+          (1 to 90).
+        type: integer
+      node_egress_mbps:
+        additionalProperties:
+          type: integer
+        description: NodeEgressMbps is the capacity of single nodes, by node id.
+        type: object
+      priorities:
+        additionalProperties:
+          type: string
+        description: |-
+          Priorities maps a category to high or low; a category left out is
+          normal. web and unknown take no priority: they are what no rule
+          names.
+        type: object
     type: object
 host: localhost:8080
 info:
@@ -4006,6 +4078,241 @@ paths:
       summary: 修改订阅分组中某协议生成的节点
       tags:
       - 管理端-订阅
+  /api/v4/admin/traffic/categories:
+    get:
+      description: '访问统计判定流量类型的规则: categories 为类型 (video、music、messaging、social、gaming、ai、download、web、unknown);
+        builtin 为内置规则 (按类型的 domains、networks、protocols); rules 为管理员规则 (kind 为 domain、network
+        或 protocol), 优先于远程规则源与内置规则, 指向 web 可把域名移出内置类型; sources 为远程规则源 (按 refresh_hours
+        定时拉取, entry_count 为最近一次成功拉取的条目数, fetch_error 为最近一次失败原因)。'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 流量分类规则
+      tags:
+      - 管理端-流量
+  /api/v4/admin/traffic/categories/classify:
+    get:
+      description: '按当前规则 (管理员规则、远程规则源与内置规则) 判定一个目标的类型: domain 为域名、地址或网段, protocol
+        为嗅探到的协议 (可省略)。'
+      parameters:
+      - description: 域名、地址或网段
+        in: query
+        name: domain
+        type: string
+      - description: 嗅探到的协议
+        in: query
+        name: protocol
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 判定流量类型
+      tags:
+      - 管理端-流量
+  /api/v4/admin/traffic/categories/rules:
+    post:
+      consumes:
+      - application/json
+      description: '添加管理员规则: kind 为 domain (域名, 含子域名)、network (地址或 CIDR) 或 protocol
+        (嗅探协议, 如 bittorrent); category 为 unknown 以外的类型; 同一 kind 与 value 只能有一条 (409
+        duplicate)。立即生效, 历史统计也按新规则判定。记入操作日志。'
+      parameters:
+      - description: 规则
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/destinationstats.RuleInput'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 添加流量分类规则
+      tags:
+      - 管理端-流量
+  /api/v4/admin/traffic/categories/rules/{id}:
+    delete:
+      description: 删除管理员规则; 该目标回到远程规则源或内置规则的类型。记入操作日志。
+      parameters:
+      - description: 规则 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 删除流量分类规则
+      tags:
+      - 管理端-流量
+    put:
+      consumes:
+      - application/json
+      description: 按添加时的检查替换规则的字段。记入操作日志。
+      parameters:
+      - description: 规则 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 规则
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/destinationstats.RuleInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 修改流量分类规则
+      tags:
+      - 管理端-流量
+  /api/v4/admin/traffic/categories/sources:
+    post:
+      consumes:
+      - application/json
+      description: '添加远程规则源: name 唯一; url 为 http(s) 地址, 内容可为纯域名/地址/CIDR 列表、v2fly domain-list-community
+        (domain:、full:)、Clash 规则 (DOMAIN-SUFFIX、DOMAIN、IP-CIDR) 或 Clash rule-provider
+        (payload); 列表中的域名与网段都归入 category; refresh_hours 为 1 到 168 (默认 24); enabled
+        默认 true。新规则源在下一次检查 (每 10 分钟) 时拉取, 或立即调用 refresh。记入操作日志。'
+      parameters:
+      - description: 规则源
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/destinationstats.SourceInput'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 添加远程规则源
+      tags:
+      - 管理端-流量
+  /api/v4/admin/traffic/categories/sources/{id}:
+    delete:
+      description: 删除规则源与它拉取的列表。记入操作日志。
+      parameters:
+      - description: 规则源 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 删除远程规则源
+      tags:
+      - 管理端-流量
+    put:
+      consumes:
+      - application/json
+      description: 按添加时的检查替换规则源的设置; 改了 url 的规则源在下一次检查时重新拉取。记入操作日志。
+      parameters:
+      - description: 规则源 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 规则源
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/destinationstats.SourceInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 修改远程规则源
+      tags:
+      - 管理端-流量
+  /api/v4/admin/traffic/categories/sources/{id}/refresh:
+    post:
+      description: 立即拉取规则源的列表 (最长 1 分钟, 最大 16 MiB, 最多 200000 条); 失败时保留上一次的列表并在 fetch_error
+        中给出原因。
+      parameters:
+      - description: 规则源 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 立即拉取远程规则源
+      tags:
+      - 管理端-流量
   /api/v4/admin/traffic/destinations:
     get:
       description: 最近 hours 小时 (默认 24, 最多 4320) 各目标域名与流量类型 (视频、音乐、通讯、社交、游戏、AI、下载、网站、未知)
@@ -4090,6 +4397,54 @@ paths:
       security:
       - BearerAuth: []
       summary: 修改访问统计设置
+      tags:
+      - 管理端-流量
+  /api/v4/admin/traffic/qos:
+    get:
+      description: 'QoS 设置: enabled; priorities 为类型到 high 或 low 的映射 (其余为 normal, web
+        与 unknown 不可设置); min_share_percent 为低优先级至少保留的容量比例 (1 到 90); default_egress_mbps
+        为节点下载容量 (0 时只在用户限速内调度), node_egress_mbps 按节点 ID 覆盖; caps 为按域名的每用户限速 (name、priority、limit_mbps、domains)。未保存时为默认值:
+        开启, 下载类低优先级, Steam 下载每用户 5 Mbit/s。设置随节点配置下发 (约每分钟), 需要支持 qos 的 anixcore。'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 流量优先级与按类别限速
+      tags:
+      - 管理端-流量
+    put:
+      consumes:
+      - application/json
+      description: 替换 QoS 设置 (字段同 GET)。各节点在下一次配置刷新 (约每分钟) 时生效, 已建立的连接保持原类别。记入操作日志。
+      parameters:
+      - description: 设置
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/trafficqos.Settings'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 修改流量优先级与按类别限速
       tags:
       - 管理端-流量
   /api/v4/admin/users/activity:

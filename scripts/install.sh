@@ -205,7 +205,7 @@ install_base_tools() {
 }
 
 validate_version() {
-  [[ "${VERSION}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)(\.[0-9]+(\.dev\.[0-9]+)?)?)?$ ]] || \
+  [[ "${VERSION}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)(\.[0-9]+(\.(dev|hf)\.[0-9]+)?)?)?$ ]] || \
     die "Invalid release tag: ${VERSION}"
 }
 
@@ -768,15 +768,15 @@ sync_agent_release() {
   local zips=(anix-agent-linux-64.zip anix-agent-linux-arm64-v8a.zip)
   [[ -n "${AGENT_ARTIFACT_DIR}" ]] || return 0
   tag="$(curl -fsS --max-time 10 "${HEALTH_URL%/*}/install/agent.env" 2>/dev/null | awk '$1 == "agent_version" {print $2; exit}')" || tag=""
-  if [[ ! "${tag}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)(\.[0-9]+(\.dev\.[0-9]+)?)?)?$ ]]; then
+  if [[ ! "${tag}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)(\.[0-9]+(\.(dev|hf)\.[0-9]+)?)?)?$ ]]; then
     warn "Control names no Agent release in ${HEALTH_URL%/*}/install/agent.env; the Agent release was not put in ${AGENT_ARTIFACT_DIR}"
     return 0
   fi
   for zip in "${zips[@]}"; do files+=("${zip}" "${zip}.dgst" "${zip}.sig"); done
-  # A dev build's Agent is published with the Control pre-release of the
-  # same tag (docs/RELEASING.md, "Dev builds").
+  # A dev build's or a hotfix's Agent is published with the Control release
+  # of the same tag (docs/RELEASING.md, "Dev builds" and "Hotfixes").
   base="${AGENT_RELEASE_BASE}"
-  [[ "${tag}" == *.dev.* ]] && base="${RELEASE_BASE}"
+  [[ "${tag}" == *.dev.* || "${tag}" == *.hf.* ]] && base="${RELEASE_BASE}"
   dir="${AGENT_ARTIFACT_DIR}/${tag}"
   missing=0
   for name in "${files[@]}"; do

@@ -75,30 +75,6 @@
     },
     {
       "method": "GET",
-      "path": "/api/v2/admin/coupon",
-      "package_id": "order",
-      "route_id": "order.admin.coupon.get",
-      "mode": "native",
-      "legacy": "none"
-    },
-    {
-      "method": "POST",
-      "path": "/api/v2/admin/coupon",
-      "package_id": "order",
-      "route_id": "order.admin.coupon.post",
-      "mode": "native",
-      "legacy": "none"
-    },
-    {
-      "method": "DELETE",
-      "path": "/api/v2/admin/coupon/:id",
-      "package_id": "order",
-      "route_id": "order.admin.coupon.id.delete",
-      "mode": "native",
-      "legacy": "none"
-    },
-    {
-      "method": "GET",
       "path": "/api/v2/admin/dashboard",
       "package_id": "machine-telemetry",
       "route_id": "telemetry.admin.dashboard.get",
@@ -128,46 +104,6 @@
       "route_id": "identity.admin.invite.codes.id.delete",
       "mode": "bridged",
       "legacy": "identity-bridge"
-    },
-    {
-      "method": "GET",
-      "path": "/api/v2/admin/invite/config",
-      "package_id": "affiliate",
-      "route_id": "affiliate.admin.invite.config.get",
-      "mode": "native",
-      "legacy": "none"
-    },
-    {
-      "method": "PUT",
-      "path": "/api/v2/admin/invite/config",
-      "package_id": "affiliate",
-      "route_id": "affiliate.admin.invite.config.put",
-      "mode": "native",
-      "legacy": "none"
-    },
-    {
-      "method": "GET",
-      "path": "/api/v2/admin/invite/stats",
-      "package_id": "affiliate",
-      "route_id": "affiliate.admin.invite.stats.get",
-      "mode": "native",
-      "legacy": "none"
-    },
-    {
-      "method": "GET",
-      "path": "/api/v2/admin/invite/withdrawals",
-      "package_id": "affiliate",
-      "route_id": "affiliate.admin.invite.withdrawals.get",
-      "mode": "native",
-      "legacy": "none"
-    },
-    {
-      "method": "POST",
-      "path": "/api/v2/admin/invite/withdrawals/:id/process",
-      "package_id": "affiliate",
-      "route_id": "affiliate.admin.invite.withdrawals.id.process.post",
-      "mode": "native",
-      "legacy": "none"
     },
     {
       "method": "GET",
@@ -426,110 +362,6 @@
       "route_id": "notification.admin.notification.test.post",
       "mode": "native-flagged",
       "legacy": "router"
-    },
-    {
-      "method": "GET",
-      "path": "/api/v2/admin/orders",
-      "package_id": "order",
-      "route_id": "order.admin.orders.get",
-      "mode": "native",
-      "legacy": "none"
-    },
-    {
-      "method": "GET",
-      "path": "/api/v2/admin/orders/:id",
-      "package_id": "order",
-      "route_id": "order.admin.orders.id.get",
-      "mode": "native",
-      "legacy": "none"
-    },
-    {
-      "method": "POST",
-      "path": "/api/v2/admin/orders/:id/cancel",
-      "package_id": "order",
-      "route_id": "order.admin.orders.id.cancel.post",
-      "mode": "native",
-      "legacy": "none"
-    },
-    {
-      "method": "POST",
-      "path": "/api/v2/admin/orders/:id/paid",
-      "package_id": "order",
-      "route_id": "order.admin.orders.id.paid.post",
-      "mode": "native",
-      "legacy": "none"
-    },
-    {
-      "method": "PUT",
-      "path": "/api/v2/admin/orders/:id/status",
-      "package_id": "order",
-      "route_id": "order.admin.orders.id.status.put",
-      "mode": "native",
-      "legacy": "none"
-    },
-    {
-      "method": "GET",
-      "path": "/api/v2/admin/orders/stats",
-      "package_id": "order",
-      "route_id": "order.admin.orders.stats.get",
-      "mode": "native",
-      "legacy": "none"
-    },
-    {
-      "method": "GET",
-      "path": "/api/v2/admin/payment/gateways",
-      "package_id": "payment",
-      "route_id": "payment.admin.payment.gateways.get",
-      "mode": "native",
-      "legacy": "none"
-    },
-    {
-      "method": "POST",
-      "path": "/api/v2/admin/payment/gateways",
-      "package_id": "payment",
-      "route_id": "payment.admin.payment.gateways.post",
-      "mode": "native",
-      "legacy": "none"
-    },
-    {
-      "method": "DELETE",
-      "path": "/api/v2/admin/payment/gateways/:id",
-      "package_id": "payment",
-      "route_id": "payment.admin.payment.gateways.id.delete",
-      "mode": "native",
-      "legacy": "none"
-    },
-    {
-      "method": "PUT",
-      "path": "/api/v2/admin/payment/gateways/:id",
-      "package_id": "payment",
-      "route_id": "payment.admin.payment.gateways.id.put",
-      "mode": "native",
-      "legacy": "none"
-    },
-    {
-      "method": "POST",
-      "path": "/api/v2/admin/payment/gateways/:id/toggle",
-      "package_id": "payment",
-      "route_id": "payment.admin.payment.gateways.id.toggle.post",
-      "mode": "native",
-      "legacy": "none"
-    },
-    {
-      "method": "GET",
-      "path": "/api/v2/admin/payment/records",
-      "package_id": "payment",
-      "route_id": "payment.admin.payment.records.get",
-      "mode": "native",
-      "legacy": "none"
-    },
-    {
-      "method": "GET",
-      "path": "/api/v2/admin/payment/stats",
-      "package_id": "payment",
-      "route_id": "payment.admin.payment.stats.get",
-      "mode": "native",
-      "legacy": "none"
     },
     {
       "method": "GET",
@@ -1051,78 +883,6 @@
     },
     {
       "method": "POST",
-      "path": "/api/v2/payment/callback/:type",
-      "package_id": "payment",
-      "route_id": "payment.callback",
-      "mode": "native",
-      "legacy": "none"
-    },
-    {
-      "method": "POST",
-      "path": "/api/v2/payment/fiat/create",
-      "package_id": "payment",
-      "route_id": "payment.payment.fiat.create.post",
-      "mode": "native",
-      "legacy": "none"
-    },
-    {
-      "method": "GET",
-      "path": "/api/v2/payment/methods",
-      "package_id": "payment",
-      "route_id": "payment.payment.methods.get",
-      "mode": "native",
-      "legacy": "none"
-    },
-    {
-      "method": "POST",
-      "path": "/api/v2/payment/paypal/webhook",
-      "package_id": "payment",
-      "route_id": "payment.payment.paypal.webhook.post",
-      "mode": "native",
-      "legacy": "none"
-    },
-    {
-      "method": "GET",
-      "path": "/api/v2/payment/status/:trade_no",
-      "package_id": "payment",
-      "route_id": "payment.payment.status.trade_no.get",
-      "mode": "native",
-      "legacy": "none"
-    },
-    {
-      "method": "POST",
-      "path": "/api/v2/payment/stripe/webhook",
-      "package_id": "payment",
-      "route_id": "payment.payment.stripe.webhook.post",
-      "mode": "native",
-      "legacy": "none"
-    },
-    {
-      "method": "POST",
-      "path": "/api/v2/payment/x402/callback",
-      "package_id": "payment",
-      "route_id": "payment.payment.x402.callback.post",
-      "mode": "native",
-      "legacy": "none"
-    },
-    {
-      "method": "GET",
-      "path": "/api/v2/payment/x402/check/:id",
-      "package_id": "payment",
-      "route_id": "payment.payment.x402.check.id.get",
-      "mode": "native",
-      "legacy": "none"
-    },
-    {
-      "method": "POST",
-      "path": "/api/v2/payment/x402/create",
-      "package_id": "payment",
-      "route_id": "payment.payment.x402.create.post",
-      "mode": "native",
-      "legacy": "none"
-    },
-    {
-      "method": "POST",
       "path": "/api/v2/register",
       "package_id": "identity-platform",
       "route_id": "identity.auth.register",
@@ -1178,60 +938,12 @@
       "legacy": "router"
     },
     {
-      "method": "POST",
-      "path": "/api/v2/user/coupon/check",
-      "package_id": "order",
-      "route_id": "order.user.coupon.check.post",
-      "mode": "native",
-      "legacy": "none"
-    },
-    {
       "method": "GET",
       "path": "/api/v2/user/dashboard",
       "package_id": "identity-platform",
       "route_id": "identity.user.dashboard.get",
       "mode": "native-flagged",
       "legacy": "identity-bridge"
-    },
-    {
-      "method": "GET",
-      "path": "/api/v2/user/invite",
-      "package_id": "affiliate",
-      "route_id": "affiliate.user.invite.get",
-      "mode": "native",
-      "legacy": "none"
-    },
-    {
-      "method": "GET",
-      "path": "/api/v2/user/invite/commissions",
-      "package_id": "affiliate",
-      "route_id": "affiliate.user.invite.commissions.get",
-      "mode": "native",
-      "legacy": "none"
-    },
-    {
-      "method": "POST",
-      "path": "/api/v2/user/invite/generate",
-      "package_id": "affiliate",
-      "route_id": "affiliate.user.invite.generate.post",
-      "mode": "native",
-      "legacy": "none"
-    },
-    {
-      "method": "POST",
-      "path": "/api/v2/user/invite/withdraw",
-      "package_id": "affiliate",
-      "route_id": "affiliate.user.invite.withdraw.post",
-      "mode": "native",
-      "legacy": "none"
-    },
-    {
-      "method": "GET",
-      "path": "/api/v2/user/invite/withdrawals",
-      "package_id": "affiliate",
-      "route_id": "affiliate.user.invite.withdrawals.get",
-      "mode": "native",
-      "legacy": "none"
     },
     {
       "method": "GET",
@@ -1328,62 +1040,6 @@
       "route_id": "notification.user.notifications.unread_count.get",
       "mode": "native-flagged",
       "legacy": "router"
-    },
-    {
-      "method": "GET",
-      "path": "/api/v2/user/order",
-      "package_id": "order",
-      "route_id": "order.user.order.get",
-      "mode": "native",
-      "legacy": "none"
-    },
-    {
-      "method": "GET",
-      "path": "/api/v2/user/order/:id",
-      "package_id": "order",
-      "route_id": "order.user.order.id.get",
-      "mode": "native",
-      "legacy": "none"
-    },
-    {
-      "method": "POST",
-      "path": "/api/v2/user/order/save",
-      "package_id": "order",
-      "route_id": "order.user.order.save.post",
-      "mode": "native",
-      "legacy": "none"
-    },
-    {
-      "method": "GET",
-      "path": "/api/v2/user/payment/channels",
-      "package_id": "payment",
-      "route_id": "payment.user.payment.channels.get",
-      "mode": "native",
-      "legacy": "none"
-    },
-    {
-      "method": "POST",
-      "path": "/api/v2/user/payment/create",
-      "package_id": "payment",
-      "route_id": "payment.user.payment.create.post",
-      "mode": "native",
-      "legacy": "none"
-    },
-    {
-      "method": "GET",
-      "path": "/api/v2/user/payment/records",
-      "package_id": "payment",
-      "route_id": "payment.user.payment.records.get",
-      "mode": "native",
-      "legacy": "none"
-    },
-    {
-      "method": "GET",
-      "path": "/api/v2/user/payment/status/:trade_no",
-      "package_id": "payment",
-      "route_id": "payment.user.payment.status.trade_no.get",
-      "mode": "native",
-      "legacy": "none"
     },
     {
       "method": "GET",

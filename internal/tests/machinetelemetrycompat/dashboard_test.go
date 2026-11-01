@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"net"
+	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -280,7 +282,13 @@ func TestSeededDashboardCountsEveryField(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(response.Body, &answer))
 	require.Len(t, answer.Data, 17)
+	orders := orderFiguresPresent(t)
 	for field, value := range answer.Data {
+		if !orders && dashboardOrderFields[field] {
+			// The order figures come from the commercial order set.
+			require.Zero(t, value, field)
+			continue
+		}
 		require.NotZero(t, value, field)
 	}
 	counts := map[string]float64{
@@ -289,6 +297,25 @@ func TestSeededDashboardCountsEveryField(t *testing.T) {
 		"total_nodes": 7, "active_nodes": 4, "online_users": 3, "total_traffic_used": 4357, "today_traffic": 1200,
 	}
 	for field, count := range counts {
+		if !orders && dashboardOrderFields[field] {
+			continue
+		}
 		require.Equal(t, count, answer.Data[field], field)
 	}
+}
+
+// dashboardOrderFields are the dashboard figures the order set contributes.
+var dashboardOrderFields = map[string]bool{
+	"total_orders": true, "pending_orders": true, "paid_orders": true,
+	"total_revenue": true, "monthly_income": true, "today_income": true,
+}
+
+// orderFiguresPresent reports whether this tree has the order figures
+// (internal/service/order_stats.go belongs to the commercial set).
+func orderFiguresPresent(t *testing.T) bool {
+	t.Helper()
+	_, source, _, ok := runtime.Caller(0)
+	require.True(t, ok)
+	_, err := os.Stat(filepath.Join(filepath.Dir(source), "..", "..", "service", "order_stats.go"))
+	return err == nil
 }

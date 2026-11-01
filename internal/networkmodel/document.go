@@ -131,8 +131,11 @@ type Egress struct {
 // Reverse turns the dial around (anx docs ANX-LINE-REVERSE): the accepting
 // device opens no port and dials ReverseHost:ReversePort, a reverse
 // listener on the dialing device, which runs the link over those
-// connections. The accepting device then needs no hop ingress port; only
-// bare anx_line (l1, c1) runs reversed.
+// connections. The accepting device then needs no hop ingress port. Bare
+// anx_line runs reversed on l1; kind anx (the A2 jacket) on c1, the
+// accepting device dialing back as the jacket's client (anx
+// ANX-LINE-REVERSE §6.4): pick a reverse_port off 80 / 443 on a domestic
+// cloud, whose filing checks drop unfiled server names there.
 type AnxLine struct {
 	CarrierOrder []string `json:"carrier_order,omitempty"`
 	Multipath    bool     `json:"multipath,omitempty"`

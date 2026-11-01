@@ -1,18 +1,21 @@
 # Commercial Boundary
 
 Payment, order, coupon and invite commission are the commercial feature set.
-They are planned to move to the private `anix-control-commercial` repository
-(AGPL-3.0 public repository with a CLA, community edition unlimited; ships
-after 5.0.0). This page records where the set ends today and how the gate keeps
-it separable. It changes no behavior: Control is still one product and every
-official package is built in (`docs/RELEASING.md`).
+Their source lives in the private `anix-control-commercial` repository
+(AGPL-3.0 public repository with a CLA, community edition unlimited). The
+public repository holds only the seams below, so it builds, tests and runs as
+the community edition on its own. The commercial build checks out this
+repository at a pinned commit, overlays the private files on it and builds the
+same way. Invite codes (registration gating) stay in the community edition;
+only commission, withdrawal and the affiliate package are commercial.
 
 ## The Set
 
 `config/commercial-boundary.json` is the source of truth:
 
-- `commercial`: the files that form the set. Handlers (`order*`, `payment*`,
-  `coupon*`, `invite*`), services (`order*`, `payment*`, `invite*`),
+- `commercial`: the files that form the set, which exist only in the
+  commercial build. Handlers (`order*`, `payment*`, `coupon*`), services
+  (`order*`, `payment*`, `invite_commission*`),
   `internal/payment`, `internal/kernelorder` and the packages `payment`,
   `order` and `affiliate`.
 - Four of the `commercial` files are the whole link of the set into code that

@@ -19,6 +19,7 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/networkmodel"
 	"github.com/AnixOps/anix-control/v5/internal/nodesecrets"
 	"github.com/AnixOps/anix-control/v5/internal/service"
+	"github.com/AnixOps/anix-control/v5/internal/trafficqos"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -157,6 +158,15 @@ func buildProxyDesiredConfig(db *gorm.DB, id uint) (map[string]any, error) {
 	}
 	if egress != nil {
 		document["egress"] = egress
+	}
+	// The traffic priorities and per-user class caps (internal/trafficqos),
+	// only when they are on and name a class.
+	qos, err := trafficqos.NodeMember(db, id)
+	if err != nil {
+		return nil, err
+	}
+	if qos != nil {
+		document["qos"] = qos
 	}
 	return document, nil
 }

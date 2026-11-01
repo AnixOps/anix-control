@@ -164,6 +164,43 @@ func TestPlanReverseTransport(t *testing.T) {
 	}
 }
 
+// A reversed jacketed link (anx ANX-LINE-REVERSE §6.4): the accepting
+// device (proxy-2, overseas) opens no port and dials back to proxy-1's A2
+// listener as the jacket's client, authenticating to proxy-1's key.
+func TestPlanReverseJacketedTransport(t *testing.T) {
+	doc := twoHops()
+	doc.Transports[0] = Transport{ID: "tr-jp", Kind: KindAnx, FromEgress: "eg-ix", ToIngress: "in-hop",
+		AnxLine: &AnxLine{Reverse: true, ReverseHost: "198.51.100.7", ReversePort: 8443, ServerName: "www.example.org"}}
+
+	// proxy-2 dials back to proxy-1's key: it waits until proxy-1 reports one.
+	result, err := Plan(doc, map[string]string{"tr-jp": linkKey}, japanKey(), nil)
+	require.NoError(t, err)
+	require.Equal(t, []Pending{{Path: "pa-jp", Reason: "proxy-1 has not reported its ANX-Line server key"}}, result.Pending)
+
+	devices := japanKey()
+	devices["proxy-1"] = Device{PublicKeys: map[string]string{"anx_line": "anx1-ix"}}
+	result, err = Plan(doc, map[string]string{"tr-jp": linkKey}, devices, nil)
+	require.NoError(t, err)
+	require.Empty(t, result.Pending)
+
+	dial := result.Plans["proxy-1"].GetTransports()[0].GetAnxLine()
+	require.True(t, dial.GetReverse())
+	require.Equal(t, "l2", dial.GetEgress())
+	require.Equal(t, "www.example.org", dial.GetServerName())
+	require.Equal(t, "0.0.0.0:8443", dial.GetReverseListen())
+	require.Equal(t, "anx1-japan", dial.GetServerPublic())
+	require.Equal(t, []string{"c1"}, dial.GetCarrierOrder())
+	require.Empty(t, dial.GetTcpAddr())
+
+	accept := result.Plans["proxy-2"].GetTransports()[0].GetAnxLine()
+	require.True(t, accept.GetReverse())
+	require.Equal(t, "l2", accept.GetEgress())
+	require.Equal(t, "www.example.org", accept.GetServerName())
+	require.Equal(t, "198.51.100.7:8443", accept.GetReverseDial())
+	require.Equal(t, "anx1-ix", accept.GetServerPublic())
+	require.Empty(t, accept.GetTcpAddr())
+}
+
 func TestPlanRefuses(t *testing.T) {
 	cases := map[string]struct {
 		edit func(d *Document)
@@ -199,10 +236,14 @@ func TestPlanRefuses(t *testing.T) {
 		"reverse c3 at the last port": {func(d *Document) {
 			d.Transports[0].AnxLine = &AnxLine{Reverse: true, ReverseHost: "198.51.100.7", ReversePort: 65535, CarrierOrder: []string{"c3"}}
 		}, "65535 leaves none"},
-		"reverse jacketed": {func(d *Document) {
+		"reverse jacketed on quic": {func(d *Document) {
 			d.Transports[0].Kind = KindAnx
-			d.Transports[0].AnxLine = &AnxLine{Reverse: true, ReverseHost: "198.51.100.7", ServerName: "www.example.org"}
-		}, "only bare anx_line"},
+			d.Transports[0].AnxLine = &AnxLine{Reverse: true, ReverseHost: "198.51.100.7", ServerName: "www.example.org", CarrierOrder: []string{"c2", "c1"}}
+		}, "c1 (TCP) only"},
+		"reverse jacketed needs a name": {func(d *Document) {
+			d.Transports[0].Kind = KindAnx
+			d.Transports[0].AnxLine = &AnxLine{Reverse: true, ReverseHost: "198.51.100.7"}
+		}, "server name"},
 		"reverse host alone": {func(d *Document) {
 			d.Transports[0].AnxLine = &AnxLine{ReverseHost: "198.51.100.7"}
 		}, "need reverse"},

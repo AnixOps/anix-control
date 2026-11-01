@@ -1060,3 +1060,56 @@ export async function getDestinationSettings() {
 export async function updateDestinationSettings(settings) {
   return dataOf(await adminV4({ url: '/admin/traffic/destinations/settings', method: 'put', data: settings }))
 }
+
+// The traffic category rules (GET /api/v4/admin/traffic/categories):
+// { categories, builtin, rules, sources }. Rules are { kind (domain,
+// network, protocol), value, category, note }; sources are { name, url,
+// category, enabled, refresh_hours, entry_count, fetched_at, fetch_error }.
+export async function getTrafficCategories() {
+  return dataOf(await adminV4({ url: '/admin/traffic/categories', method: 'get' }))
+}
+
+export async function classifyTrafficDestination(domain, protocol = '') {
+  return dataOf(await adminV4({ url: '/admin/traffic/categories/classify', method: 'get', params: { domain, protocol } }))
+}
+
+export async function createTrafficCategoryRule(rule) {
+  return dataOf(await adminV4({ url: '/admin/traffic/categories/rules', method: 'post', data: rule }))
+}
+
+export async function updateTrafficCategoryRule(id, rule) {
+  return dataOf(await adminV4({ url: `/admin/traffic/categories/rules/${id}`, method: 'put', data: rule }))
+}
+
+export async function deleteTrafficCategoryRule(id) {
+  return dataOf(await adminV4({ url: `/admin/traffic/categories/rules/${id}`, method: 'delete' }))
+}
+
+export async function createTrafficCategorySource(source) {
+  return dataOf(await adminV4({ url: '/admin/traffic/categories/sources', method: 'post', data: source }))
+}
+
+export async function updateTrafficCategorySource(id, source) {
+  return dataOf(await adminV4({ url: `/admin/traffic/categories/sources/${id}`, method: 'put', data: source }))
+}
+
+export async function deleteTrafficCategorySource(id) {
+  return dataOf(await adminV4({ url: `/admin/traffic/categories/sources/${id}`, method: 'delete' }))
+}
+
+export async function refreshTrafficCategorySource(id) {
+  return dataOf(await adminV4({ url: `/admin/traffic/categories/sources/${id}/refresh`, method: 'post' }))
+}
+
+// The traffic priorities and per-user class caps the proxy nodes get
+// (GET and PUT /api/v4/admin/traffic/qos): { enabled, priorities
+// ({ category: 'high' | 'low' }), min_share_percent, default_egress_mbps,
+// node_egress_mbps ({ node id: Mbit/s }), caps ([{ name, priority,
+// limit_mbps, domains }]) }.
+export async function getTrafficQos() {
+  return dataOf(await adminV4({ url: '/admin/traffic/qos', method: 'get' }))
+}
+
+export async function updateTrafficQos(settings) {
+  return dataOf(await adminV4({ url: '/admin/traffic/qos', method: 'put', data: settings }))
+}
