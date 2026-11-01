@@ -70,10 +70,9 @@ var (
 	protectedTables        = map[string]bool{
 		"v2_system_config": true, "v2_audit_log": true, "v2_operation_log": true,
 		// Node credentials: v2_node holds each node's API key, key hash and
-		// secret, which the kernel's node authentication checks, and
-		// v2_authorized_key the registration keys that mint them. A
-		// package that could read or write them could act as any node.
-		"v2_node": true, "v2_authorized_key": true,
+		// secret, which the kernel's node authentication checks. A package
+		// that could read or write them could act as any node.
+		"v2_node": true,
 		// Node runtime secrets: v2_node_protocol holds each protocol's
 		// Reality private key, WireGuard server private key and custom
 		// configuration, and the kernel builds every node's configuration

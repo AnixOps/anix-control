@@ -151,14 +151,3 @@ func KeepNodeRawConfig(incoming string, stored *string) string {
 	}
 	return KeepNodeSecretsJSON(incoming, previous)
 }
-
-// MaskAuthorizedKeys masks registration keys for an administrator's
-// answer. A key is shown once, in the answer that generates it; a node
-// registers with it by its hash.
-func MaskAuthorizedKeys(keys []model.AuthorizedKey) {
-	for i := range keys {
-		if keys[i].Key != "" {
-			keys[i].Key = NodeSecretPlaceholder
-		}
-	}
-}

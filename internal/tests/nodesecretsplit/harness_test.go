@@ -81,7 +81,7 @@ func initKernelDatabase(t *testing.T, name string, cfg *config.DatabaseConfig) b
 	db := database.Get()
 	require.NoError(t, db.AutoMigrate(
 		&model.User{}, &model.Plan{}, &model.SubscriptionGroup{},
-		&model.Node{}, &model.NodeProtocol{}, &model.WireGuardPeer{}, &model.AuthorizedKey{},
+		&model.Node{}, &model.NodeProtocol{}, &model.WireGuardPeer{},
 		&model.ForwardNode{}, &model.ForwardCleanAgent{}, &model.ForwardRuntimeJob{}, &model.ForwardRule{},
 		// Phase changes are audited in the operation log.
 		&model.OperationLog{},

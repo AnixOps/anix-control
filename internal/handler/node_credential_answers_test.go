@@ -19,7 +19,7 @@ import (
 
 // NodeCredentialAnswersTestSuite pins the bytes the legacy credential and
 // secret routes answer: node creation and deletion, raw configurations and
-// their validation, protocols, registration keys and clean agents. The
+// their validation, protocols and clean agents. The
 // KernelNodeOps credential, secret and retirement executors (NO-5) share
 // these routes' implementation; the answers stay what they were before the
 // routes moved onto it. Only the values that change from one call to the
@@ -279,34 +279,6 @@ func (s *NodeCredentialAnswersTestSuite) TestProtocols() {
 	s.pin("delete protocol again", code, body)
 	code, body = s.serve(http.MethodDelete, "/admin/nodes/protocols/:protocol_id", "/admin/nodes/protocols/x", "", h.DeleteProtocol)
 	s.pin("delete protocol, bad id", code, body)
-}
-
-func (s *NodeCredentialAnswersTestSuite) TestRegistrationKeys() {
-	h := NewNodeHandler()
-	code, body := s.serve(http.MethodPost, "/admin/auth-keys", "/admin/auth-keys", `{"name":"bootstrap","expire_days":7}`, h.GenerateAuthKey)
-	s.pin("generate auth key", code, body)
-	var key model.AuthorizedKey
-	s.Require().NoError(s.db.First(&key, 1).Error)
-	s.Len(key.Key, 64)
-	s.Equal(hashString(key.Key), key.KeyHash)
-	s.Require().NotNil(key.ExpireAt)
-	s.Equal(int64(1), s.count(&model.NodeCredential{}, "subject_kind = ? AND subject_id = ?", nodesecrets.SubjectRegistrationKey, key.ID))
-
-	code, body = s.serve(http.MethodPost, "/admin/auth-keys", "/admin/auth-keys", `{"name":"forever"}`, h.GenerateAuthKey)
-	s.pin("generate auth key without expiry", code, body)
-	code, body = s.serve(http.MethodPost, "/admin/auth-keys", "/admin/auth-keys", `{"expire_days":-1}`, h.GenerateAuthKey)
-	s.pin("generate auth key, bad body", code, body)
-
-	s.Equal(int64(2), s.count(&model.AuthorizedKey{}, "1 = 1"))
-
-	code, body = s.serve(http.MethodDelete, "/admin/auth-keys/:id", "/admin/auth-keys/1", "", h.DeleteAuthKey)
-	s.pin("delete auth key", code, body)
-	s.Equal(int64(0), s.count(&model.AuthorizedKey{}, "id = ?", 1))
-	s.Equal(int64(0), s.count(&model.NodeCredential{}, "subject_kind = ? AND subject_id = ?", nodesecrets.SubjectRegistrationKey, 1))
-	code, body = s.serve(http.MethodDelete, "/admin/auth-keys/:id", "/admin/auth-keys/1", "", h.DeleteAuthKey)
-	s.pin("delete auth key again", code, body)
-	code, body = s.serve(http.MethodDelete, "/admin/auth-keys/:id", "/admin/auth-keys/x", "", h.DeleteAuthKey)
-	s.pin("delete auth key, bad id", code, body)
 }
 
 func (s *NodeCredentialAnswersTestSuite) count(value any, query string, args ...any) int64 {

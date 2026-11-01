@@ -70,7 +70,7 @@ func (s *SmokeTestSuite) SetupSuite() {
 		&model.User{}, &model.Node{}, &model.NodeProtocol{},
 		&model.Plan{}, &model.Order{}, &model.Coupon{},
 		&model.CouponUsage{}, &model.Ticket{}, &model.TicketMessage{},
-		&model.Knowledge{}, &model.AuthorizedKey{}, &model.UserMFA{},
+		&model.Knowledge{}, &model.UserMFA{},
 		&model.InviteCode{}, &model.CommissionRecord{}, &model.CommissionWithdraw{},
 		&model.InviteConfig{}, &model.NotificationTemplate{}, &model.NotificationLog{},
 		&model.TelegramBot{}, &model.TelegramUser{}, &model.TelegramChat{},

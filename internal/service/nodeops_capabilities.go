@@ -17,7 +17,7 @@ const (
 	// reads.
 	CapabilityNodeOpsAgents = "kernel.nodeops.agents.v1"
 	// CapabilityNodeOpsCredentials: IssueCredential, RevokeCredential,
-	// IssueRegistrationKey, RevokeRegistrationKey, IssueCleanAgent.
+	// IssueCleanAgent.
 	CapabilityNodeOpsCredentials = "kernel.nodeops.credentials.v1" // #nosec G101 -- a capability name, not a credential.
 )
 

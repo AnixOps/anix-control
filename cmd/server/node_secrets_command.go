@@ -27,8 +27,8 @@ const nodeSecretsCommandUsage = `usage:
   anix-control node-secrets unsplit -confirm [-adopted-ok] [-by <name>] [-batch 500] <table|all>
   anix-control node-secrets validate
 
-Tables: v2_node, v2_authorized_key, v2_forward_node, v2_forward_clean_agent,
-v2_node_protocol, v2_wireguard_peer (default: all).
+Tables: v2_node, v2_forward_node, v2_forward_clean_agent, v2_node_protocol,
+v2_wireguard_peer (default: all).
 
 status prints each table's phase, backfill progress and last verify, and
 the forward nodes that hold a token but no API port (id and name): their

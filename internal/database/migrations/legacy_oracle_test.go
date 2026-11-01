@@ -44,7 +44,7 @@ func legacySchemaModels() []any {
 	return []any{
 		&model.User{}, &model.Plan{}, &model.Order{}, &model.Payment{}, &model.PaymentLog{},
 		&model.ServerVMess{}, &model.ServerVLESS{}, &model.ServerTrojan{}, &model.ServerShadowsocks{},
-		&model.Node{}, &model.NodeProtocol{}, &model.WireGuardPeer{}, &model.AuthorizedKey{},
+		&model.Node{}, &model.NodeProtocol{}, &model.WireGuardPeer{},
 		&model.TrafficLog{}, &model.OnlineLog{}, &model.StatUser{}, &model.StatServer{}, &model.NodeLog{},
 		&model.SubscriptionGroup{}, &model.SubscriptionTemplate{}, &model.UserSubscriptionGroup{}, &model.PlanSubscriptionGroup{},
 		&model.Event{},
@@ -209,6 +209,21 @@ type retiredLoadBalancer struct {
 
 func (retiredLoadBalancer) TableName() string { return "v2_load_balancer" }
 
+// retiredAuthorizedKey is model.AuthorizedKey as the baseline created it;
+// 0025_drop_registration_keys dropped the table and the model.
+type retiredAuthorizedKey struct {
+	ID        uint   `gorm:"primaryKey"`
+	Name      string `gorm:"size:100"`
+	Key       string `gorm:"size:64;uniqueIndex"`
+	KeyHash   string `gorm:"size:64"`
+	Used      int    `gorm:"default:0"`
+	ExpireAt  *int64
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+func (retiredAuthorizedKey) TableName() string { return "v2_authorized_key" }
+
 // retiredKernelModels are the kernel models later migrations dropped with
 // their tables, frozen as the baseline had them: the legacy start of the
 // baseline created them, today's models do not. legacyPrepare creates them,
@@ -217,7 +232,8 @@ func (retiredLoadBalancer) TableName() string { return "v2_load_balancer" }
 func retiredKernelModels() []any {
 	return []any{
 		&retiredRouteModeRevision{}, &retiredShadowMismatchSample{}, // 0004_drop_route_modes
-		&retiredLoadBalancer{}, // 0021_drop_load_balancer
+		&retiredLoadBalancer{},  // 0021_drop_load_balancer
+		&retiredAuthorizedKey{}, // 0025_drop_registration_keys
 	}
 }
 

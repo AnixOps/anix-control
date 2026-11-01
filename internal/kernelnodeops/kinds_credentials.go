@@ -25,7 +25,6 @@ const (
 	RevealAPIKey     = "api_key"
 	RevealSecret     = "secret"
 	RevealAPIToken   = "api_token"
-	RevealKey        = "key"
 	RevealToken      = "token"
 	RevealCredential = "credential"
 )
@@ -43,8 +42,7 @@ const (
 const AgentEnrollmentActor = "kernelnodeops"
 
 // Credentials executes the credentials family (node-ops-service.md section
-// 3.3, NO-5): IssueCredential, RevokeCredential, IssueRegistrationKey,
-// and RevokeRegistrationKey. Each runs the function of
+// 3.3, NO-5): IssueCredential and RevokeCredential. Each runs the function of
 // internal/service the legacy route runs, in one transaction with every
 // nodesecrets.Sync and every agent certificate revocation, so native and
 // legacy write identical rows.
@@ -71,8 +69,6 @@ func (c *Credentials) Register(registry *Registry) error {
 	}{
 		{KindCredentialIssue, prepared{prepare: c.prepareIssue, execute: c.issue}},
 		{KindCredentialRevoke, ExecutorFunc(c.revoke)},
-		{KindRegKeyIssue, prepared{prepare: requireBinding, execute: c.issueRegistrationKey}},
-		{KindRegKeyRevoke, ExecutorFunc(c.revokeRegistrationKey)},
 	} {
 		if err := registry.Register(served.kind, served.executor); err != nil {
 			return err
@@ -102,13 +98,6 @@ func (p prepared) Execute(ctx context.Context, run *Run) Outcome { return p.exec
 // errNoBinding refuses an issue outside an administrator's request: the
 // secret it generates would be shown to nobody.
 var errNoBinding = status.Error(codes.PermissionDenied, "issuing a credential needs the request binding of the administrator's request its value is answered to")
-
-func requireBinding(_ context.Context, submission *Submission) error {
-	if submission.Request == nil {
-		return errNoBinding
-	}
-	return nil
-}
 
 // outcomeError carries an outcome out of a transaction, which it rolls
 // back.
@@ -457,65 +446,4 @@ func (c *Credentials) revoke(ctx context.Context, run *Run) Outcome {
 		return outcome
 	}
 	return Succeeded(&kernelnodeopsv1.OperationResult{Result: &kernelnodeopsv1.OperationResult_Credential{Credential: result}})
-}
-
-// issueRegistrationKey executes IssueRegistrationKey, as the registration
-// key routes do, and reveals the key.
-func (c *Credentials) issueRegistrationKey(ctx context.Context, run *Run) Outcome {
-	op := run.Operation.GetIssueRegistrationKey()
-	if outcome, ok := begin(ctx, run, kernelnodeopsv1.Channel_CHANNEL_KERNEL); !ok {
-		return outcome
-	}
-	result := &kernelnodeopsv1.RegistrationKeyResult{Name: op.GetName(), ExpiresAtUnix: op.GetExpiresAtUnix()}
-	outcome, ok := transact(ctx, run, "issuing the registration key", func(tx *gorm.DB) error {
-		var expireAt *int64
-		if op.GetExpiresAtUnix() > 0 {
-			value := op.GetExpiresAtUnix()
-			expireAt = &value
-		}
-		row, key, err := service.IssueRegistrationKeyTx(tx, op.GetName(), expireAt)
-		if err != nil {
-			return err
-		}
-		run.UseSecret(key)
-		handle, err := revealHandle(run, RevealKey, key)
-		if err != nil {
-			return err
-		}
-		result.KeyId = uint64(row.ID)
-		result.Reveal = []*kernelnodeopsv1.SecretHandle{handle}
-		return nil
-	})
-	if !ok {
-		return outcome
-	}
-	return Succeeded(&kernelnodeopsv1.OperationResult{Result: &kernelnodeopsv1.OperationResult_RegistrationKey{RegistrationKey: result}})
-}
-
-// revokeRegistrationKey executes RevokeRegistrationKey, as the key deletion
-// route does. A key gone since the submission is nothing to do.
-func (c *Credentials) revokeRegistrationKey(ctx context.Context, run *Run) Outcome {
-	id := nodeID(run.Operation.GetRevokeRegistrationKey().GetKeyId())
-	if outcome, ok := begin(ctx, run, kernelnodeopsv1.Channel_CHANNEL_KERNEL); !ok {
-		return outcome
-	}
-	result := &kernelnodeopsv1.RegistrationKeyResult{KeyId: uint64(id)}
-	outcome, ok := transact(ctx, run, "revoking the registration key", func(tx *gorm.DB) error {
-		var rows []model.AuthorizedKey
-		if err := tx.Select("id", "name", "expire_at").Where("id = ?", id).Limit(1).Find(&rows).Error; err != nil {
-			return err
-		}
-		if len(rows) > 0 {
-			result.Name = rows[0].Name
-			if rows[0].ExpireAt != nil {
-				result.ExpiresAtUnix = *rows[0].ExpireAt
-			}
-		}
-		_, err := service.RevokeRegistrationKeyTx(tx, id)
-		return err
-	})
-	if !ok {
-		return outcome
-	}
-	return Succeeded(&kernelnodeopsv1.OperationResult{Result: &kernelnodeopsv1.OperationResult_RegistrationKey{RegistrationKey: result}})
 }

@@ -257,28 +257,13 @@ var splitViews = []KernelAPIView{
 		Finalized: []string{"v2_node_protocol"},
 	},
 	{
-		// Which credentials a node, forward node, clean agent or
-		// registration key holds, and their state: "has a token" since the
+		// Which credentials a node, forward node or clean agent holds, and their state: "has a token" since the
 		// legacy columns hold tombstones. No value and no hash.
 		Name:   "kapi_node_credential_status_v1",
 		Source: "v4_kernel_node_credential",
 		Query: "SELECT " + quotedColumns("subject_kind", "subject_id", "kind", "version", "status", "rotated_at") +
 			", (value <> '') AS has_value FROM v4_kernel_node_credential",
-		FinalizedAny: []string{"v2_node", "v2_forward_node", "v2_authorized_key", "v2_forward_clean_agent"},
-	},
-	{
-		// A registration key without the key: whether it holds one comes
-		// from its credential.
-		Name:   "kapi_registration_key_v1",
-		Source: "v2_authorized_key",
-		Query: "SELECT k.id, k.name, k.used, k.expire_at, k.created_at, k.updated_at, " +
-			"EXISTS (SELECT 1 FROM v4_kernel_node_credential c WHERE c.subject_kind = 'registration_key' " +
-			"AND c.subject_id = k.id AND c.kind = 'registration_key' AND c.status = 'active' AND c.value <> '') AS has_key " +
-			"FROM v2_authorized_key k",
-		// No row is filtered; the subquery's WHERE makes it a barrier
-		// view on PostgreSQL, which costs nothing here.
-		RowFilter: true,
-		Finalized: []string{"v2_authorized_key"},
+		FinalizedAny: []string{"v2_node", "v2_forward_node", "v2_forward_clean_agent"},
 	},
 	{
 		// A clean agent, without its token.

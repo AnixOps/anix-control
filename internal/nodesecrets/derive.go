@@ -96,10 +96,6 @@ var specs = map[string]tableSpec{
 		table: TableNode, subjectKind: SubjectProxy, kinds: []string{KindNodeAPIKey, KindNodeSharedSecret},
 		scope: ScopeNodeRawConfig, derive: deriveNodes,
 	},
-	TableAuthorizedKey: {
-		table: TableAuthorizedKey, subjectKind: SubjectRegistrationKey, kinds: []string{KindRegistrationKey},
-		derive: deriveAuthorizedKeys,
-	},
 	TableForwardNode: {
 		table: TableForwardNode, subjectKind: SubjectForward, kinds: []string{KindForwardNodeToken},
 		derive: deriveForwardNodes,
@@ -166,33 +162,6 @@ func deriveNodes(tx *gorm.DB, ids []uint64, lock bool) (*derivation, error) {
 			})
 		}
 		d.addPositions(id, "raw_config", row.RawConfig)
-	}
-	return d, nil
-}
-
-func deriveAuthorizedKeys(tx *gorm.DB, ids []uint64, lock bool) (*derivation, error) {
-	var rows []model.AuthorizedKey
-	if err := legacyRows(tx, &model.AuthorizedKey{}, []string{"id", "key", "key_hash", "expire_at"}, ids, lock, &rows); err != nil {
-		return nil, err
-	}
-	d := newDerivation()
-	for _, row := range rows {
-		id := uint64(row.ID)
-		switch {
-		case IsTombstone(row.Key):
-			d.keptCredentials[credentialKey{SubjectID: id, Kind: KindRegistrationKey}] = true
-		case row.Key != "" || row.KeyHash != "":
-			keyHash := row.KeyHash
-			if keyHash == "" {
-				keyHash = hashSecret(row.Key)
-			}
-			entry := credentialEntry{SubjectID: id, Kind: KindRegistrationKey, KeyHash: keyHash, Value: row.Key, Status: StatusActive}
-			if row.ExpireAt != nil {
-				expires := time.Unix(*row.ExpireAt, 0).UTC()
-				entry.ExpiresAt = &expires
-			}
-			d.credentials = append(d.credentials, entry)
-		}
 	}
 	return d, nil
 }

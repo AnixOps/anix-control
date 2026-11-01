@@ -85,7 +85,6 @@ func (s *AdminE2ETestSuite) SetupSuite() {
 		&model.Ticket{},
 		&model.TicketMessage{},
 		&model.Knowledge{},
-		&model.AuthorizedKey{},
 		&model.UserMFA{},
 		&model.MFALoginAttempt{},
 		&model.InviteCode{},

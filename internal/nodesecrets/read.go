@@ -318,8 +318,6 @@ func NodeSharedSecret(db *gorm.DB, node *model.Node) string {
 	return credentialValue(db, TableNode, SubjectProxy, KindNodeSharedSecret, uint64(node.ID), node.Secret)
 }
 
-// --- Registration keys (v2_authorized_key) ---
-
 // --- Forward nodes (v2_forward_node) ---
 
 // ForwardNodeTokenMatches reports whether token is the API token of the

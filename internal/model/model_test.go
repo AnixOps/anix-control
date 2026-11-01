@@ -73,10 +73,6 @@ func TestNodeGroupTableName(t *testing.T) {
 	assert.Equal(t, "v5_node_group", NodeGroup{}.TableName())
 }
 
-func TestAuthorizedKeyTableName(t *testing.T) {
-	assert.Equal(t, "v2_authorized_key", AuthorizedKey{}.TableName())
-}
-
 func TestGetProtocolTemplates(t *testing.T) {
 	templates := GetProtocolTemplates()
 	assert.NotEmpty(t, templates)

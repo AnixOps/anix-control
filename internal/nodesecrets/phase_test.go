@@ -73,7 +73,7 @@ func TestPhaseGateRefusesWithoutACleanRecentVerify(t *testing.T) {
 		require.NotNil(t, changes[0].VerifiedAt)
 		require.Len(t, changes[0].Digest, 64)
 		require.Equal(t, PhaseDualRead, ReadPhase(db, TableNode), "this process reads the change at once")
-		require.Equal(t, PhaseDualWrite, ReadPhase(db, TableAuthorizedKey))
+		require.Equal(t, PhaseDualWrite, ReadPhase(db, TableCleanAgent))
 
 		// The same phase again changes nothing and audits nothing.
 		changes, err = SetPhase(ctx, db, PhaseOptions{Tables: []string{TableNode}, Phase: PhaseDualRead})
@@ -82,7 +82,7 @@ func TestPhaseGateRefusesWithoutACleanRecentVerify(t *testing.T) {
 		require.Len(t, audits(t, db), 1)
 
 		// A verification older than VerifyMaxAge no longer opens it.
-		changes, err = SetPhase(ctx, db, PhaseOptions{Tables: []string{TableAuthorizedKey}, Phase: PhaseDualRead,
+		changes, err = SetPhase(ctx, db, PhaseOptions{Tables: []string{TableCleanAgent}, Phase: PhaseDualRead,
 			Now: time.Now().Add(VerifyMaxAge + time.Minute)})
 		require.ErrorIs(t, err, ErrPhaseRefused)
 		require.Contains(t, changes[0].Refused, "older than")
@@ -96,7 +96,7 @@ func TestPhaseGateRefusesWithoutACleanRecentVerify(t *testing.T) {
 		require.Contains(t, changes[0].Refused, "mismatches")
 
 		// "all" moves every table or none: the forward nodes refuse, so the
-		// registration keys stay in dual_write.
+		// clean agents stay in dual_write.
 		changes, err = SetPhase(ctx, db, dualRead)
 		require.ErrorIs(t, err, ErrPhaseRefused)
 		for _, change := range changes {

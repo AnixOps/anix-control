@@ -48,7 +48,7 @@ func (f *fleet) secretsOf(t *testing.T, db *gorm.DB) []string {
 	require.NoError(t, db.First(&wireGuard, f.wireGuard.ID).Error)
 	values := []string{
 		f.created.APIKey, f.created.Secret, f.rawNode.APIKey, f.rawNode.Secret,
-		"fake-plain-key", f.registrationKey, f.rawPrivate, f.realityPrivate, "fake-fleet-forward-token",
+		"fake-plain-key", f.rawPrivate, f.realityPrivate, "fake-fleet-forward-token",
 		f.peer.PrivateKey, f.peer.PresharedKey,
 	}
 	for _, position := range nodesecrets.SecretPositions(*wireGuard.Settings) {
@@ -107,8 +107,6 @@ func TestFinalizeThroughTheKernel(t *testing.T) {
 		requireAll(t, f.readerResults(t, db, 2), false)
 		var count int64
 		require.NoError(t, db.Model(&model.Node{}).Where("api_key_hash IN ?", []string{sha256Hex(f.created.APIKey), sha256Hex("fake-plain-key")}).Count(&count).Error)
-		require.Zero(t, count)
-		require.NoError(t, db.Model(&model.AuthorizedKey{}).Where("key_hash = ?", sha256Hex(f.registrationKey)).Count(&count).Error)
 		require.Zero(t, count)
 		setStoredPhase(t, db, nodesecrets.PhaseFinalized)
 		requireAll(t, f.readerResults(t, db, 3), true)
@@ -233,7 +231,7 @@ func TestUnsplitThroughTheKernel(t *testing.T) {
 // splitViews are the views of section 4.6 that wait for finalize.
 var splitViews = []string{
 	"kapi_node_public_v1", "kapi_node_protocol_public_v1", "kapi_node_credential_status_v1",
-	"kapi_registration_key_v1", "kapi_forward_clean_agent_v1", "kapi_wireguard_peer_v1",
+	"kapi_forward_clean_agent_v1", "kapi_wireguard_peer_v1",
 }
 
 // movedColumns are the columns no view may show.
@@ -325,9 +323,6 @@ func TestSplitViewsAndAdoptionWaitForFinalize(t *testing.T) {
 		require.NoError(t, db.Table("kapi_node_credential_status_v1").Where("subject_kind = ?", "forward").Find(&status).Error)
 		require.Equal(t, 1, len(status))
 		require.True(t, status[0].HasValue, "a forward node's token shows as present")
-		var registration []struct{ HasKey bool }
-		require.NoError(t, db.Table("kapi_registration_key_v1").Find(&registration).Error)
-		require.True(t, registration[0].HasKey)
 
 		_, err = nodesecrets.Unsplit(ctx, db, nodesecrets.UnsplitOptions{Confirm: true, DropViews: packagestore.DropFinalizedViews})
 		require.NoError(t, err)

@@ -96,9 +96,4 @@ func TestRedactNodeMasksProtocolsAndRawConfig(t *testing.T) {
 	require.NotContains(t, *node.Protocols[0].RealitySettings, "reality-private")
 	require.Contains(t, *node.Protocols[0].RealitySettings, "reality-public")
 	require.Nil(t, node.Protocols[0].Settings)
-
-	keys := []model.AuthorizedKey{{Key: "registration-key"}, {}}
-	MaskAuthorizedKeys(keys)
-	require.Equal(t, NodeSecretPlaceholder, keys[0].Key)
-	require.Equal(t, "", keys[1].Key)
 }

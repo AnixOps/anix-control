@@ -242,11 +242,6 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			admin.GET("/protocol-templates", registeredPackageRoute(v2PackageGateway.Serve, "protocol-runtime", "protocol.admin.protocol_templates.get", nodeHandler.GetProtocolTemplates))
 			admin.POST("/wireguard/keypair", registeredPackageRoute(v2PackageGateway.Serve, "wireguard", "wireguard.admin.wireguard.keypair.post", nodeHandler.GenerateWireGuardKeypair))
 
-			// 授权密钥管理
-			admin.GET("/auth-keys", registeredPackageRoute(v2PackageGateway.Serve, "proxy-node", "proxy.admin.auth_keys.get", nodeHandler.GetAuthKeys))
-			admin.POST("/auth-keys", registeredPackageRoute(v2PackageGateway.Serve, "proxy-node", "proxy.admin.auth_keys.post", nodeHandler.GenerateAuthKey))
-			admin.DELETE("/auth-keys/:id", registeredPackageRoute(v2PackageGateway.Serve, "proxy-node", "proxy.admin.auth_keys.id.delete", nodeHandler.DeleteAuthKey))
-
 			// 订阅分组和模板管理
 			subAdmin := handler.NewSubscriptionAdminHandler()
 

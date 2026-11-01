@@ -71,7 +71,6 @@ func (s *ServiceTestSuite) SetupSuite() {
 			&model.SubscriptionGroupProtocol{},
 			&model.ForwardRouteSubscription{},
 			&model.IWANLine{},
-			&model.AuthorizedKey{},
 			&model.Event{},
 			&model.UserSubscriptionGroup{},
 			&model.SubscriberRequest{},
@@ -476,25 +475,6 @@ func (s *NodeServiceTestSuite) TestGetNodes() {
 	assert.NoError(s.T(), err)
 	assert.Equal(s.T(), int64(3), result.Total)
 	assert.Len(s.T(), result.List, 3)
-}
-
-func (s *NodeServiceTestSuite) TestGenerateAuthKey() {
-	key, rawKey, err := s.svc.GenerateAuthKey("Test Key", 7)
-
-	assert.NoError(s.T(), err)
-	assert.NotNil(s.T(), key)
-	assert.NotEmpty(s.T(), rawKey)
-	assert.Equal(s.T(), "Test Key", key.Name)
-	assert.NotNil(s.T(), key.ExpireAt)
-}
-
-func (s *NodeServiceTestSuite) TestGenerateAuthKey_NoExpiry() {
-	key, rawKey, err := s.svc.GenerateAuthKey("No Expiry Key", 0)
-
-	assert.NoError(s.T(), err)
-	assert.NotNil(s.T(), key)
-	assert.NotEmpty(s.T(), rawKey)
-	assert.Nil(s.T(), key.ExpireAt)
 }
 
 func (s *NodeServiceTestSuite) TestProtocolCRUD() {
@@ -2783,31 +2763,6 @@ func (s *NodeServiceTestSuite) TestUpdateLastCheckAt() {
 
 	found, _ := s.svc.GetNode(node.ID)
 	assert.NotNil(s.T(), found.LastCheckAt)
-}
-
-func (s *NodeServiceTestSuite) TestGetAuthKeys() {
-	// 创建多个授权密钥
-	_, _, err := s.svc.GenerateAuthKey("Key 1", 0)
-	assert.NoError(s.T(), err)
-	_, _, err = s.svc.GenerateAuthKey("Key 2", 0)
-	assert.NoError(s.T(), err)
-
-	keys, err := s.svc.GetAuthKeys()
-	assert.NoError(s.T(), err)
-	assert.GreaterOrEqual(s.T(), len(keys), 2)
-}
-
-func (s *NodeServiceTestSuite) TestDeleteAuthKey() {
-	key, _, _ := s.svc.GenerateAuthKey("Delete Key", 0)
-
-	err := s.svc.DeleteAuthKey(key.ID)
-	assert.NoError(s.T(), err)
-
-	// 验证已删除 - keys should not contain this key
-	keys, _ := s.svc.GetAuthKeys()
-	for _, k := range keys {
-		assert.NotEqual(s.T(), key.ID, k.ID)
-	}
 }
 
 func (s *NodeServiceTestSuite) TestGetNodeStats() {

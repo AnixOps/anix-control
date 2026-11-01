@@ -35,7 +35,6 @@ const testSecretFields = `{"format":"anixops.node-secret-fields/v1","routes":[
  {"route_id":"proxy.admin.nodes.id.raw_config.put","target":{"kind":"proxy","path_param":"id"},"request":[{"pointer":"/raw_config","kind":"document"}]},
  {"route_id":"forward.admin.forward.nodes.id.put","target":{"kind":"forward","path_param":"id"},"request":[{"pointer":"/api_token","kind":"value"}]},
  {"route_id":"forward.admin.forward.nodes.post","target":{"kind":"forward","new":true},"request":[{"pointer":"/api_token","kind":"value"}],"answer":[{"pointer":"/data/api_token","name":"api_token"}]},
- {"route_id":"proxy.admin.auth_keys.post","target":{"kind":"registration_key","new":true},"answer":[{"pointer":"/data/key","name":"key"}]},
  {"route_id":"forward.admin.forward.agents.post","target":{"kind":"clean_agent","new":true},"answer":[{"pointer":"/data/token","name":"token"}]},
  {"route_id":"protocol.admin.nodes.id.protocols.protocol_id.put","target":{"kind":"protocol","path_param":"protocol_id"},"request":[{"pointer":"/settings","kind":"document"},{"pointer":"/reality_settings","kind":"document"}]},
  {"route_id":"test.agents.enroll","target":{"kind":"proxy","path_param":"id"},"answer":[{"pointer":"/data/credential","name":"credential"}]}
@@ -312,7 +311,6 @@ func cleanAgentIssue(name string, forwardNode uint64) *kernelnodeopsv1.Operation
 func TestTheKernelServesTheCredentialSecretAndRetirementKinds(t *testing.T) {
 	served := map[string]kernelnodeopsv1.OperationFamily{
 		KindCredentialIssue: kernelnodeopsv1.OperationFamily_OPERATION_FAMILY_CREDENTIALS, KindCredentialRevoke: kernelnodeopsv1.OperationFamily_OPERATION_FAMILY_CREDENTIALS,
-		KindRegKeyIssue: kernelnodeopsv1.OperationFamily_OPERATION_FAMILY_CREDENTIALS, KindRegKeyRevoke: kernelnodeopsv1.OperationFamily_OPERATION_FAMILY_CREDENTIALS,
 		KindNodeRetire: kernelnodeopsv1.OperationFamily_OPERATION_FAMILY_NODE_CONFIG, KindProtocolRetire: kernelnodeopsv1.OperationFamily_OPERATION_FAMILY_NODE_CONFIG,
 		KindSecretsPut: kernelnodeopsv1.OperationFamily_OPERATION_FAMILY_NODE_CONFIG,
 	}
@@ -325,7 +323,7 @@ func TestTheKernelServesTheCredentialSecretAndRetirementKinds(t *testing.T) {
 			return e, ok
 		}()
 		switch kindName {
-		case KindCredentialIssue, KindRegKeyIssue, KindCleanAgentIssue, KindSecretsPut:
+		case KindCredentialIssue, KindCleanAgentIssue, KindSecretsPut:
 			require.True(t, isPreparer, "%s acts in the submitting call", kindName)
 		default:
 			require.False(t, isPreparer, kindName)
@@ -544,57 +542,19 @@ func TestIssueAgentEnrollmentCredential(t *testing.T) {
 	})
 }
 
-// Registration keys: issued as the auth key routes issue them, shown once,
-// revoked with their split row.
-func TestRegistrationKeys(t *testing.T) {
+// Registration keys went with node registration: IssueRegistrationKey and
+// RevokeRegistrationKey have no executor.
+func TestRegistrationKeysWereRemoved(t *testing.T) {
 	forEachDatabase(t, func(t *testing.T, db *gorm.DB) {
 		h := newCredentialHarness(t, db)
 		client := h.client(proxyHost, allFamilies())
-		_, err := client.SubmitOperation(context.Background(), &kernelnodeopsv1.SubmitOperationRequest{RequestId: "regkey.issue:unbound", Operation: regKeyIssue("bootstrap", 0)})
-		require.Equal(t, codes.PermissionDenied, status.Code(err), "a key is issued in an administrator's request")
+		for requestID, operation := range map[string]*kernelnodeopsv1.OperationSpec{
+			"regkey.issue:1": regKeyIssue("bootstrap", 0), "regkey.revoke:1": regKeyRevoke(1),
+		} {
+			_, err := client.SubmitOperation(context.Background(), &kernelnodeopsv1.SubmitOperationRequest{RequestId: requestID, Operation: operation})
+			require.Equal(t, codes.Unimplemented, status.Code(err), requestID)
+		}
 		require.Empty(t, h.rows(t))
-
-		created := h.bindings.open(proxyHost, "proxy.admin.auth_keys.post", nil, `{"name":"bootstrap"}`)
-		expires := time.Now().Add(24 * time.Hour).Unix()
-		operation, applied := submitBound(t, client, "regkey.issue:1", regKeyIssue("bootstrap", expires), created)
-		require.True(t, applied)
-		require.Equal(t, kernelnodeopsv1.OperationState_OPERATION_STATE_SUCCEEDED, operation.GetState(), operation.GetError())
-		result := operation.GetResult().GetRegistrationKey()
-		require.Equal(t, "bootstrap", result.GetName())
-		require.Equal(t, expires, result.GetExpiresAtUnix())
-		shown := h.bindings.shown(created, result.GetReveal())
-		var key model.AuthorizedKey
-		require.NoError(t, db.First(&key, result.GetKeyId()).Error)
-		require.Len(t, key.Key, 64)
-		require.Equal(t, key.Key, shown["key"])
-		require.Equal(t, sha256Hex(key.Key), key.KeyHash)
-		require.NotNil(t, key.ExpireAt)
-		require.Equal(t, expires, *key.ExpireAt)
-		row, ok := credentialRow(t, db, nodesecrets.SubjectRegistrationKey, uint64(key.ID), nodesecrets.KindRegistrationKey)
-		require.True(t, ok)
-		require.Equal(t, key.Key, row.Value)
-		requireNoSecret(t, db, operation, key.Key)
-
-		again, applied := submitBound(t, client, "regkey.issue:1", regKeyIssue("bootstrap", expires), created)
-		require.False(t, applied, "a repeat issues no second key")
-		require.Equal(t, operation.GetOperationId(), again.GetOperationId())
-		var keys int64
-		require.NoError(t, db.Model(&model.AuthorizedKey{}).Count(&keys).Error)
-		require.EqualValues(t, 2, keys, "the seeded key and the issued one")
-
-		// Revocation needs no binding; a key gone since is nothing to do.
-		operation, _ = submitBound(t, client, "regkey.revoke:"+strconv.FormatUint(result.GetKeyId(), 10), regKeyRevoke(result.GetKeyId()), nil)
-		require.Equal(t, kernelnodeopsv1.OperationState_OPERATION_STATE_SUCCEEDED, operation.GetState(), operation.GetError())
-		require.Equal(t, "bootstrap", operation.GetResult().GetRegistrationKey().GetName())
-		require.NoError(t, db.Model(&model.AuthorizedKey{}).Where("id = ?", result.GetKeyId()).Count(&keys).Error)
-		require.Zero(t, keys)
-		_, ok = credentialRow(t, db, nodesecrets.SubjectRegistrationKey, result.GetKeyId(), nodesecrets.KindRegistrationKey)
-		require.False(t, ok, "the split row went with it")
-		_, err = client.SubmitOperation(context.Background(), &kernelnodeopsv1.SubmitOperationRequest{RequestId: "regkey.revoke:9", Operation: regKeyRevoke(9)})
-		require.Equal(t, codes.NotFound, status.Code(err), "an unknown key")
-		operation, applied = submitBound(t, client, "regkey.revoke:"+strconv.FormatUint(result.GetKeyId(), 10), regKeyRevoke(result.GetKeyId()), nil)
-		require.False(t, applied)
-		require.Equal(t, kernelnodeopsv1.OperationState_OPERATION_STATE_SUCCEEDED, operation.GetState())
 	})
 }
 
@@ -670,16 +630,6 @@ func TestIssuedCredentialsAgreeInBothPhases(t *testing.T) {
 			require.True(t, ok)
 			require.Equal(t, forwardNode.APIToken, token.Value, phase)
 			require.True(t, nodesecrets.ForwardNodeTokenMatches(db, &forwardNode, "typed"+suffix))
-
-			keyRequest := h.bindings.open(proxyHost, "proxy.admin.auth_keys.post", nil, `{}`)
-			operation, _ = submitBound(t, proxy, "regkey.issue"+suffix, regKeyIssue("key"+suffix, 0), keyRequest)
-			require.Equal(t, kernelnodeopsv1.OperationState_OPERATION_STATE_SUCCEEDED, operation.GetState(), operation.GetError())
-			var authKey model.AuthorizedKey
-			require.NoError(t, db.First(&authKey, operation.GetResult().GetRegistrationKey().GetKeyId()).Error)
-			regKey, ok := credentialRow(t, db, nodesecrets.SubjectRegistrationKey, uint64(authKey.ID), nodesecrets.KindRegistrationKey)
-			require.True(t, ok)
-			require.Equal(t, authKey.Key, regKey.Value, phase)
-			require.Equal(t, authKey.KeyHash, regKey.KeyHash, phase)
 
 			// The seeded rows were never dual-written; the backfill copies
 			// them and leaves the executors' rows as they are.

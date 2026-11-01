@@ -15,8 +15,8 @@ import (
 )
 
 // NodeSecretsTestSuite holds the regression tests for node secrets in the
-// administrator's answers: protocol settings, raw configurations,
-// registration keys and forward node tokens read as the placeholder, a
+// administrator's answers: protocol settings, raw configurations and
+// forward node tokens read as the placeholder, a
 // write that sends the placeholder back keeps the stored secret, and nodes
 // still receive the real values.
 type NodeSecretsTestSuite struct {
@@ -313,24 +313,6 @@ func (s *NodeSecretsTestSuite) TestNodesStillReceiveRealSecrets() {
 	s.Contains(vless, customSecret)
 	s.NotContains(vless, service.NodeSecretPlaceholder)
 	s.Contains(runtime("wireguard"), s.wgPrivate)
-}
-
-// GET /admin/auth-keys showed every registration key; a key is now shown
-// once, when it is generated.
-func (s *NodeSecretsTestSuite) TestRegistrationKeysAreShownOnce() {
-	handler := NewNodeHandler()
-	generated := s.ok(s.serve("POST", "/auth-keys", "/auth-keys", `{"name":"tokyo"}`, handler.GenerateAuthKey))
-	key := generated["data"].(map[string]any)["key"].(string)
-	s.Require().NotEmpty(key)
-	s.NotEqual(service.NodeSecretPlaceholder, key)
-
-	w := s.serve("GET", "/auth-keys", "/auth-keys", "", handler.GetAuthKeys)
-	s.Require().Equal(http.StatusOK, w.Code, w.Body.String())
-	s.NotContains(w.Body.String(), key)
-	keys := s.ok(w)["data"].([]any)
-	s.Require().Len(keys, 1)
-	s.Equal(service.NodeSecretPlaceholder, keys[0].(map[string]any)["key"])
-	s.Equal("tokyo", keys[0].(map[string]any)["name"])
 }
 
 // Proxy node credentials stay out of the node answers; the per-node reveal

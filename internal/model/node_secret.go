@@ -5,8 +5,7 @@ import "time"
 // NodeCredential is one credential of a node-facing subject, moved out of
 // the legacy tables by the node credential split
 // (docs/architecture/node-ops-service.md, section 4): a proxy node's API key
-// and shared secret (v2_node), a registration key (v2_authorized_key), a
-// forward node's token (v2_forward_node) and a clean agent's token
+// and shared secret (v2_node), a forward node's token (v2_forward_node) and a clean agent's token
 // (v2_forward_clean_agent).
 //
 // Only internal/nodesecrets writes it. A subject keeps one current row per

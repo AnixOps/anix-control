@@ -102,15 +102,6 @@ func TestEveryWriterDualWrites(t *testing.T) {
 		require.Equal(t, 2, secretVersion(t, db, nodesecrets.ScopeNodeProtocol, protocol.ID, "reality_settings", "/private_key"))
 		requireVerified(t, db)
 
-		// Registration keys: creation, deletion.
-		authKey, rawKey, err := nodes.GenerateAuthKey("split-key", 30)
-		require.NoError(t, err)
-		registration := current(t, db, nodesecrets.SubjectRegistrationKey, authKey.ID, nodesecrets.KindRegistrationKey)
-		require.Equal(t, rawKey, registration.Value)
-		require.NotNil(t, registration.ExpiresAt)
-		require.NoError(t, nodes.DeleteAuthKey(authKey.ID))
-		require.Zero(t, credentials(t, db, nodesecrets.SubjectRegistrationKey, authKey.ID))
-
 		// Forward nodes: creation, a new token and address, an Ansible
 		// machine's empty token, deletion.
 		forwards := service.NewForwardNodeService(db)
@@ -214,9 +205,6 @@ func TestDualWriteIsTransactional(t *testing.T) {
 		}
 		require.Error(t, nodes.CreateNode(&model.Node{Name: "failed", Host: "203.0.113.21", Port: 443}))
 		require.Zero(t, count(&model.Node{}, "name = ?", "failed"))
-		_, _, err := nodes.GenerateAuthKey("failed", 0)
-		require.Error(t, err)
-		require.Zero(t, count(&model.AuthorizedKey{}, "name = ?", "failed"))
 		require.Error(t, service.NewForwardNodeService(db).Create(&model.ForwardNode{Name: "failed", Type: "relay", Host: "198.51.100.20", Port: 443, APIToken: "fake-failed-token"}))
 		require.Zero(t, count(&model.ForwardNode{}, "name = ?", "failed"))
 		require.Error(t, nodes.CreateProtocol(&model.NodeProtocol{NodeID: node.ID, Name: "failed", Type: model.ProtocolTrojan, Port: 9443, Settings: ptr(`{"password":"fake-failed"}`)}))

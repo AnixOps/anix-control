@@ -747,26 +747,6 @@ node group」）：不可用的令牌一律返回 `PermissionDenied` 和错误�
 `GET /install/ip`（与其它 `/install` 路由一样限流）取得本机地址：应答为纯文本 IP，按 `server.trusted_proxies`
 取 gin `ClientIP`。
 
-### 授权密钥管理
-
-```http
-# 获取密钥列表（key 显示为 ********）
-GET /api/v2/admin/auth-keys
-
-# 生成密钥
-POST /api/v2/admin/auth-keys
-{
-  "name": "Tokyo Node",
-  "expires_at": "2025-12-31T23:59:59Z"
-}
-
-# 删除密钥
-DELETE /api/v2/admin/auth-keys/:id
-```
-
-授权密钥只在 `POST /api/v2/admin/auth-keys` 的应答中返回一次，请当场复制；
-列表中的 `key` 显示为 `********`，节点注册按密钥哈希校验，不受影响。
-
 ### 转发（v4.2）
 
 转发接口是 forward 软件包的 `/api/v4/forward/*`，见

@@ -17,12 +17,10 @@ import (
 // fake.
 type fixture struct {
 	nodes      []model.Node
-	keys       []model.AuthorizedKey
 	forwards   []model.ForwardNode
 	agents     []model.ForwardCleanAgent
 	protocols  []model.NodeProtocol
 	peers      []model.WireGuardPeer
-	expireAt   int64
 	revokedAt  time.Time
 	rawConfig  string
 	reality    string
@@ -33,7 +31,6 @@ type fixture struct {
 func seedLegacy(t *testing.T, db *gorm.DB) *fixture {
 	t.Helper()
 	f := &fixture{
-		expireAt:   time.Date(2027, 1, 2, 3, 4, 5, 0, time.UTC).Unix(),
 		revokedAt:  time.Date(2026, 9, 30, 8, 0, 0, 0, time.UTC),
 		rawConfig:  `{"server_port":51820,"wireguard":{"private_key":"fake-raw-private","public_key":"fake-raw-public"}}`,
 		reality:    `{"private_key":"fake-reality-private","short_id":"6ba85179","dest":"www.example.test:443"}`,
@@ -49,13 +46,6 @@ func seedLegacy(t *testing.T, db *gorm.DB) *fixture {
 	}
 	for i := range f.nodes {
 		require.NoError(t, db.Create(&f.nodes[i]).Error)
-	}
-	f.keys = []model.AuthorizedKey{
-		{Name: "k1", Key: "fake-registration-1", KeyHash: hashSecret("fake-registration-1"), ExpireAt: &f.expireAt},
-		{Name: "k2", Key: "fake-registration-2", KeyHash: hashSecret("fake-registration-2")},
-	}
-	for i := range f.keys {
-		require.NoError(t, db.Create(&f.keys[i]).Error)
 	}
 	f.forwards = []model.ForwardNode{
 		{Name: "f1", Host: "198.51.100.7", Port: 443, APIPort: 9000, APIToken: "fake-forward-token-1"},
@@ -107,9 +97,6 @@ func (f *fixture) ids() map[string][]uint {
 	ids := map[string][]uint{}
 	for _, row := range f.nodes {
 		ids[TableNode] = append(ids[TableNode], row.ID)
-	}
-	for _, row := range f.keys {
-		ids[TableAuthorizedKey] = append(ids[TableAuthorizedKey], row.ID)
 	}
 	for _, row := range f.forwards {
 		ids[TableForwardNode] = append(ids[TableForwardNode], row.ID)
@@ -189,12 +176,6 @@ func TestSyncDerivesEveryTable(t *testing.T) {
 		var count int64
 		require.NoError(t, db.Model(&model.NodeCredential{}).Where("subject_kind = ? AND subject_id IN ?", SubjectProxy, []uint{f.nodes[1].ID, f.nodes[2].ID}).Count(&count).Error)
 		require.EqualValues(t, 1, count, "n2 has a key and no secret, n3 nothing")
-
-		registration := credential(t, db, SubjectRegistrationKey, f.keys[0].ID, KindRegistrationKey)
-		require.Equal(t, "fake-registration-1", registration.Value)
-		require.NotNil(t, registration.ExpiresAt)
-		require.Equal(t, f.expireAt, registration.ExpiresAt.Unix())
-		require.Nil(t, credential(t, db, SubjectRegistrationKey, f.keys[1].ID, KindRegistrationKey).ExpiresAt)
 
 		token := credential(t, db, SubjectForward, f.forwards[0].ID, KindForwardNodeToken)
 		require.Equal(t, "fake-forward-token-1", token.Value)
@@ -302,7 +283,7 @@ func TestBackfillThenVerifyIsIdempotent(t *testing.T) {
 			require.False(t, result.Match && result.LegacySecrets > 0)
 			missing += result.Missing
 		}
-		require.EqualValues(t, 15, missing)
+		require.EqualValues(t, 13, missing)
 		report, err := json.Marshal(results)
 		require.NoError(t, err)
 		require.NotContains(t, string(report), "fake-")
@@ -315,7 +296,7 @@ func TestBackfillThenVerifyIsIdempotent(t *testing.T) {
 			require.False(t, result.Resumed)
 			changed += result.Changed
 		}
-		require.EqualValues(t, 15, changed)
+		require.EqualValues(t, 13, changed)
 
 		verified := requireVerified(t, db)
 		var splits []model.NodeSecretSplit
@@ -409,8 +390,6 @@ func TestVerifyDetectsMismatch(t *testing.T) {
 		require.NoError(t, db.Model(&model.ForwardNode{}).Where("id = ?", f.forwards[0].ID).Update("api_token", "fake-forward-token-x").Error)
 		require.NoError(t, db.Model(&model.ProtocolSecret{}).Where("scope = ? AND owner_id = ?", ScopeWireGuardPeer, f.peers[1].ID).
 			Where("column_name = ?", "private_key").Update("value", "fake-peer-private-x").Error)
-		require.NoError(t, db.Model(&model.NodeCredential{}).Where("subject_kind = ? AND subject_id = ?", SubjectRegistrationKey, f.keys[1].ID).
-			Update("status", StatusRevoked).Error)
 
 		results, err := Verify(ctx, db, VerifyOptions{})
 		require.ErrorIs(t, err, ErrMismatch)
@@ -425,7 +404,6 @@ func TestVerifyDetectsMismatch(t *testing.T) {
 		require.Equal(t, []Mismatch{{Problem: "different", Secret: "forward " + uintString(f.forwards[0].ID) + " forward_node_token"}}, forward.Samples)
 		require.EqualValues(t, 1, byTable[TableWireGuardPeer].Different)
 		require.Equal(t, "wireguard_peer "+uintString(f.peers[1].ID)+" private_key ", byTable[TableWireGuardPeer].Samples[0].Secret)
-		require.EqualValues(t, 1, byTable[TableAuthorizedKey].Different, "the status is part of the digest")
 		require.True(t, byTable[TableNode].Match)
 		report, err := json.Marshal(results)
 		require.NoError(t, err)
@@ -456,14 +434,10 @@ func TestTombstonesAgainstUniqueIndexes(t *testing.T) {
 		for _, row := range f.nodes {
 			require.NoError(t, db.Model(&model.Node{}).Where("id = ?", row.ID).Updates(map[string]any{"api_key": Tombstone(uint64(row.ID)), "api_key_hash": ""}).Error)
 		}
-		for _, row := range f.keys {
-			require.NoError(t, db.Model(&model.AuthorizedKey{}).Where("id = ?", row.ID).Updates(map[string]any{"key": Tombstone(uint64(row.ID)), "key_hash": ""}).Error)
-		}
 		for _, row := range f.agents {
 			require.NoError(t, db.Model(&model.ForwardCleanAgent{}).Where("id = ?", row.ID).Update("token", Tombstone(uint64(row.ID))).Error)
 		}
 		// An empty value would collide on the second row.
-		require.Error(t, db.Model(&model.AuthorizedKey{}).Where("id IN ?", []uint{f.keys[0].ID, f.keys[1].ID}).Update("key", "").Error)
 		require.Error(t, db.Model(&model.ForwardCleanAgent{}).Where("id IN ?", []uint{f.agents[0].ID, f.agents[1].ID}).Update("token", "").Error)
 		require.NoError(t, db.Model(&model.Node{}).Where("id = ?", f.nodes[2].ID).Update("api_key", "").Error, "one empty key fits")
 		require.Error(t, db.Model(&model.Node{}).Where("id = ?", f.nodes[1].ID).Update("api_key", "").Error)
@@ -478,7 +452,7 @@ func TestTombstonesAgainstUniqueIndexes(t *testing.T) {
 		}
 		// In P1 a tombstone is unexpected: verify reports the secrets the
 		// legacy columns no longer hold.
-		results, err := Verify(ctx, db, VerifyOptions{Tables: []string{TableAuthorizedKey, TableCleanAgent}})
+		results, err := Verify(ctx, db, VerifyOptions{Tables: []string{TableCleanAgent}})
 		require.ErrorIs(t, err, ErrMismatch)
 		for _, result := range results {
 			require.EqualValues(t, 2, result.Extra, result.Table)

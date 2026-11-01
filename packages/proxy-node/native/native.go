@@ -20,9 +20,6 @@
 //     by the kernel (PutSecretDocument), its typed secrets as sealed handles
 //     the package never resolves. Until the lease grants them, these routes
 //     answer from the legacy handler.
-//   - Registration keys are the kernel's: listed through
-//     kapi_registration_key_v1 (never a key), issued and revoked through
-//     KernelNodeOps, a new key answered as a sealed handle.
 //
 // The package never reads a node's credentials, and never reads or writes
 // v2_node_protocol, which is protocol-runtime's. The other routes stay in
@@ -75,9 +72,6 @@ const (
 	DeleteNodeRouteID      = "proxy.admin.nodes.id.delete"
 	RawConfigRouteID       = "proxy.admin.nodes.id.raw_config.get"
 	UpdateRawConfigRouteID = "proxy.admin.nodes.id.raw_config.put"
-	AuthKeysRouteID        = "proxy.admin.auth_keys.get"
-	GenerateAuthKeyRouteID = "proxy.admin.auth_keys.post"
-	DeleteAuthKeyRouteID   = "proxy.admin.auth_keys.id.delete"
 )
 
 // Handlers returns the native handlers by route id. A host without
@@ -89,13 +83,10 @@ func (s *Service) Handlers() map[string]pluginhostsdk.NativeHandler {
 		NodesRouteID:                    s.ListNodes,
 		NodeRouteID:                     s.GetNode,
 		RawConfigRouteID:                s.GetRawConfig,
-		AuthKeysRouteID:                 s.ListAuthKeys,
 	}
 	if s.NodeOps != nil {
 		handlers[DeleteNodeRouteID] = s.DeleteNode
 		handlers[UpdateRawConfigRouteID] = s.UpdateRawConfig
-		handlers[GenerateAuthKeyRouteID] = s.GenerateAuthKey
-		handlers[DeleteAuthKeyRouteID] = s.DeleteAuthKey
 	}
 	return handlers
 }

@@ -29,17 +29,16 @@ import (
 // secret of, written by the kernel's own writers (and one row written
 // before P1). Every secret is fake.
 type fleet struct {
-	plain           model.Node // written before P1: no hash
-	created         model.Node // CreateNode: a Reality protocol
-	registrationKey string
-	rawNode         model.Node // a raw configuration with a private key
-	rawPrivate      string
-	reality         model.NodeProtocol
-	realityPrivate  string
-	forward         model.ForwardNode
-	wireGuard       model.NodeProtocol
-	user            model.User
-	peer            model.WireGuardPeer
+	plain          model.Node // written before P1: no hash
+	created        model.Node // CreateNode: a Reality protocol
+	rawNode        model.Node // a raw configuration with a private key
+	rawPrivate     string
+	reality        model.NodeProtocol
+	realityPrivate string
+	forward        model.ForwardNode
+	wireGuard      model.NodeProtocol
+	user           model.User
+	peer           model.WireGuardPeer
 }
 
 func base64Key(t *testing.T, encoding *base64.Encoding) string {
@@ -66,9 +65,6 @@ func newFleet(t *testing.T, db *gorm.DB) *fleet {
 	require.NoError(t, nodes.CreateProtocol(&f.reality))
 
 	var err error
-	_, f.registrationKey, err = nodes.GenerateAuthKey("fleet", 0)
-	require.NoError(t, err)
-
 	f.rawNode = model.Node{Name: "raw", Host: "203.0.113.52", Port: 443}
 	require.NoError(t, nodes.CreateNode(&f.rawNode))
 	f.rawPrivate = base64Key(t, base64.RawURLEncoding)
@@ -181,7 +177,7 @@ func requireAll(t *testing.T, results map[string]bool, want bool) {
 func totalFallbacks() uint64 {
 	var total uint64
 	for _, table := range nodesecrets.Tables() {
-		for _, kind := range []string{nodesecrets.KindNodeAPIKey, nodesecrets.KindNodeSharedSecret, nodesecrets.KindRegistrationKey,
+		for _, kind := range []string{nodesecrets.KindNodeAPIKey, nodesecrets.KindNodeSharedSecret,
 			nodesecrets.KindForwardNodeToken, nodesecrets.KindCleanAgentToken, "raw_config", "settings", "tls_settings",
 			"transport_settings", "reality_settings", "custom_config", "private_key", "preshared_key"} {
 			total += nodesecrets.FallbackCount(table, kind, "")
@@ -212,8 +208,6 @@ func olderBinaryAuthenticates(t *testing.T, db *gorm.DB, f *fleet) {
 	var byHash model.Node
 	require.NoError(t, db.Where("api_key_hash = ?", sha256Hex(f.created.APIKey)).First(&byHash).Error)
 	require.Equal(t, f.created.ID, byHash.ID)
-	var key model.AuthorizedKey
-	require.NoError(t, db.Where("key_hash = ?", sha256Hex(f.registrationKey)).First(&key).Error)
 	var forward model.ForwardNode
 	require.NoError(t, db.First(&forward, f.forward.ID).Error)
 	require.Equal(t, "fake-fleet-forward-token", forward.APIToken)
@@ -256,7 +250,7 @@ func TestEveryReaderInEachPhase(t *testing.T) {
 		// Rows missing from the new tables: the readers fall back to the
 		// legacy columns, and count it.
 		require.NoError(t, db.Where("subject_kind = ? AND subject_id = ?", nodesecrets.SubjectProxy, f.created.ID).Delete(&model.NodeCredential{}).Error)
-		require.NoError(t, db.Where("subject_kind IN ?", []string{nodesecrets.SubjectForward, nodesecrets.SubjectCleanAgent, nodesecrets.SubjectRegistrationKey}).
+		require.NoError(t, db.Where("subject_kind IN ?", []string{nodesecrets.SubjectForward, nodesecrets.SubjectCleanAgent}).
 			Delete(&model.NodeCredential{}).Error)
 		require.NoError(t, db.Where("owner_id IN ? AND scope = ?", []uint{f.reality.ID, f.wireGuard.ID}, nodesecrets.ScopeNodeProtocol).Delete(&model.ProtocolSecret{}).Error)
 		require.NoError(t, db.Where("scope IN ?", []string{nodesecrets.ScopeWireGuardPeer, nodesecrets.ScopeNodeRawConfig}).Delete(&model.ProtocolSecret{}).Error)
@@ -290,12 +284,6 @@ func (f *fleet) moveLegacySecrets(t *testing.T, db *gorm.DB) {
 	}
 	require.NoError(t, db.Model(&model.Node{}).Where("id = ?", f.rawNode.ID).
 		UpdateColumn("raw_config", service.RedactNodeSecretsJSON(`{"node_type":"vless","type":"vless","server_port":443,"tls":2,"tls_settings":{"private_key":"`+f.rawPrivate+`","short_id":"01"}}`)).Error)
-	var keys []model.AuthorizedKey
-	require.NoError(t, db.Find(&keys).Error)
-	for _, key := range keys {
-		require.NoError(t, db.Model(&model.AuthorizedKey{}).Where("id = ?", key.ID).
-			UpdateColumns(map[string]any{"key": nodesecrets.Tombstone(uint64(key.ID)), "key_hash": ""}).Error)
-	}
 	require.NoError(t, db.Model(&model.ForwardNode{}).Where("id = ?", f.forward.ID).UpdateColumn("api_token", "").Error)
 	var protocols []model.NodeProtocol
 	require.NoError(t, db.Where("id IN ?", []uint{f.reality.ID, f.wireGuard.ID}).Find(&protocols).Error)

@@ -120,17 +120,3 @@ type NodeProtocol struct {
 
 // TableName is the kernel view.
 func (NodeProtocol) TableName() string { return "kapi_node_protocol_public_v1" }
-
-// AuthorizedKey is a row of kapi_registration_key_v1 answered as the
-// kernel's model.AuthorizedKey: the key itself is the kernel's, so the
-// answer shows the placeholder where the key exists, as the kernel's
-// masked answer does.
-type AuthorizedKey struct {
-	ID        uint      `json:"id"`
-	Name      string    `json:"name"`
-	Key       string    `json:"key"`
-	Used      int       `json:"used"`
-	ExpireAt  *int64    `json:"expire_at"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-}
