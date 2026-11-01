@@ -124,11 +124,13 @@
         :empty-title="t('adminNotify.telegram.users.empty')"
         :empty-description="t('adminNotify.telegram.users.emptyDescription')"
         state-heading-tag="h3"
+        :row-actions="userActions"
         @retry="fetchUsers"
         @clear-filters="userSearch = ''"
       >
         <template #toolbar>
           <UiSearchField v-model="userSearch" class="list-page__search" :shortcut="false" :label="t('adminNotify.telegram.users.search')" />
+          <UiButton size="sm" :icon="Link" data-test="telegram-bind-open" @click="openBindDialog">{{ t('adminNotify.telegram.users.bind') }}</UiButton>
         </template>
         <template #cell-notify_enabled="{ row }">
           <UiSwitch
@@ -147,6 +149,46 @@
         </UiGroupedListRow>
       </UiGroupedList>
     </UiSection>
+
+    <UiDialog
+      :open="bindDialog.open"
+      size="sm"
+      :title="t('adminNotify.telegram.users.bindTitle')"
+      :description="t('adminNotify.telegram.users.bindDescription')"
+      :dismissible="!bindDialog.busy"
+      data-test="telegram-bind-dialog"
+      @update:open="value => { if (!value) bindDialog.open = false }"
+    >
+      <form id="telegram-bind-form" class="form-grid" novalidate @submit.prevent="submitBind">
+        <UiTextField
+          id="telegram-bind-user"
+          v-model.trim="bindDialog.user"
+          class="form-grid__full"
+          size="md"
+          required
+          :label="t('adminNotify.telegram.users.bindUser')"
+          :help="t('adminNotify.telegram.users.bindUserHelp')"
+          data-test="telegram-bind-user"
+        />
+        <UiTextField
+          id="telegram-bind-telegram-id"
+          v-model.trim="bindDialog.telegramId"
+          class="form-grid__full"
+          size="md"
+          inputmode="numeric"
+          required
+          :label="t('adminNotify.telegram.users.telegramId')"
+          :help="t('adminNotify.telegram.users.bindTelegramIdHelp')"
+          placeholder="123456789"
+          data-test="telegram-bind-telegram-id"
+        />
+        <p v-if="bindDialog.error" class="form-error form-grid__full" role="alert">{{ bindDialog.error }}</p>
+      </form>
+      <template #footer="{ close }">
+        <UiButton :disabled="bindDialog.busy" @click="close">{{ t('common.actions.cancel') }}</UiButton>
+        <UiButton variant="primary" type="submit" form="telegram-bind-form" :loading="bindDialog.busy" data-test="telegram-bind-submit">{{ t('adminNotify.telegram.users.bindConfirm') }}</UiButton>
+      </template>
+    </UiDialog>
 
     <SettingsSaveBar
       :visible="botDirty"
@@ -169,14 +211,16 @@
 // message button (TelegramTestPanel) calls the kernel route
 // POST /api/v4/kernel/notifications/telegram/test.
 import { computed, onMounted, ref, watch } from 'vue'
-import { Send, Users } from '@lucide/vue'
+import { Link, Send, Unlink, Users } from '@lucide/vue'
 import {
+  bindTelegramUser,
   broadcastTelegram,
   deleteTelegramWebhook,
   getTelegramBot,
   getTelegramUsers,
   sendTelegramNotification,
   setTelegramWebhook,
+  unbindTelegramUser,
   updateTelegramBot,
   updateTelegramUserNotify
 } from '@/api/admin'
@@ -186,6 +230,7 @@ import SettingsSaveBar from '@/components/admin/settings/SettingsSaveBar.vue'
 import UiButton from '@/ui/UiButton.vue'
 import UiCopyField from '@/ui/UiCopyField.vue'
 import UiDataTable from '@/ui/UiDataTable.vue'
+import UiDialog from '@/ui/UiDialog.vue'
 import UiErrorState from '@/ui/UiErrorState.vue'
 import UiGroupedList from '@/ui/UiGroupedList.vue'
 import UiGroupedListRow from '@/ui/UiGroupedListRow.vue'
@@ -357,6 +402,64 @@ const fetchUsers = async () => {
     usersLoading.value = false
   }
 }
+
+// Manual binding (POST /api/v4/admin/telegram/bindings) and unbinding
+// (DELETE /api/v4/admin/telegram/bindings/:user_id).
+const bindDialog = ref({ open: false, busy: false, user: '', telegramId: '', error: '' })
+
+function openBindDialog() {
+  bindDialog.value = { open: true, busy: false, user: '', telegramId: '', error: '' }
+}
+
+function v4ErrorText(error) {
+  return error?.response?.data?.error?.message || notifyErrorText(error) || error?.message || ''
+}
+
+const submitBind = async () => {
+  const form = bindDialog.value
+  if (form.busy) return
+  if (!form.user || !/^\d+$/.test(form.telegramId)) {
+    form.error = t('adminNotify.telegram.users.bindInvalid')
+    return
+  }
+  form.error = ''
+  form.busy = true
+  try {
+    const byId = /^\d+$/.test(form.user)
+    await bindTelegramUser({ userId: byId ? form.user : undefined, email: byId ? undefined : form.user, telegramId: form.telegramId })
+    form.open = false
+    toast.success(t('adminNotify.telegram.users.bindDone'))
+    await fetchUsers()
+  } catch (error) {
+    form.error = t('adminNotify.telegram.users.bindFailed', { message: v4ErrorText(error) })
+  } finally {
+    form.busy = false
+  }
+}
+
+const unbindUser = async (user) => {
+  const done = await confirm({
+    title: t('adminNotify.telegram.users.unbindTitle'),
+    message: t('adminNotify.telegram.users.unbindMessage', { name: user.user_email || user.telegram_id }),
+    confirmLabel: t('adminNotify.telegram.users.unbind'),
+    tone: 'danger',
+    onConfirm: async () => {
+      try {
+        await unbindTelegramUser(user.user_id)
+      } catch (error) {
+        throw new Error(t('adminNotify.telegram.users.bindFailed', { message: v4ErrorText(error) }))
+      }
+    }
+  })
+  if (done) {
+    toast.success(t('adminNotify.telegram.users.unbound'))
+    await fetchUsers()
+  }
+}
+
+const userActions = user => [
+  { key: 'unbind', label: t('adminNotify.telegram.users.unbind'), icon: Unlink, danger: true, onSelect: () => unbindUser(user) }
+]
 
 const toggleUserNotify = async (user) => {
   try {

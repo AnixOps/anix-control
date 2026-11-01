@@ -602,6 +602,12 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 	userV4 := r.Group("/api/v4/user")
 	userV4.Use(userLimiter.Middleware(), middleware.JWTAuth())
 	userV4.GET("/traffic/destinations", destinationStats.UserSummary)
+	// The signed-in member's Telegram binding: status, a one-time bind link
+	// to the bot, and unbind.
+	telegramBindings := handler.NewTelegramBindingHandler()
+	userV4.GET("/telegram", telegramBindings.UserStatus)
+	userV4.POST("/telegram/bind-link", telegramBindings.UserBindLink)
+	userV4.DELETE("/telegram", telegramBindings.UserUnbind)
 
 	v4 := r.Group("/api/v4")
 	v4.Use(adminLimiter.Middleware())
@@ -672,6 +678,9 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		// configured bot, answered as a result class (never the token).
 		notifications := handler.NewKernelNotificationsHandler()
 		v4.POST("/kernel/notifications/telegram/test", notifications.TelegramTest)
+		// An administrator binds a member to a Telegram account by hand.
+		v4.POST("/admin/telegram/bindings", telegramBindings.AdminBind)
+		v4.DELETE("/admin/telegram/bindings/:user_id", telegramBindings.AdminUnbind)
 		agents := handler.NewAgentPKIHandler()
 		v4.POST("/kernel/agents/enrollment-tokens", agents.CreateEnrollmentToken)
 		v4.POST("/kernel/agents/install-tokens", agentInstall.CreateInstallToken)

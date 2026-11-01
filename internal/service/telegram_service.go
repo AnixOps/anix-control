@@ -11,10 +11,12 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/AnixOps/anix-control/v5/internal/config"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"gorm.io/gorm"
 )
@@ -161,15 +163,20 @@ func (s *TelegramBotService) handleCommand(update *TelegramUpdate) error {
 	if len(parts) == 0 {
 		return nil
 	}
-	command := parts[0]
+	// In groups Telegram sends "/cmd@BotName"; the command is the part
+	// before the @.
+	command := strings.ToLower(strings.SplitN(parts[0], "@", 2)[0])
 
 	switch command {
 	case "/start":
+		if len(parts) > 1 && strings.HasPrefix(parts[1], telegramBindCodePrefix) {
+			return s.handleStartBind(chatID, userID, update.Message.From, update.Message.Chat.Type, parts[1])
+		}
 		return s.handleStart(chatID, userID, update.Message.From)
 	case "/help":
 		return s.handleHelp(chatID)
 	case "/bind":
-		return s.handleBind(chatID, userID, update.Message.From)
+		return s.handleBind(chatID, userID, update.Message.From, update.Message.Chat.Type, parts[1:])
 	case "/unbind":
 		return s.handleUnbind(chatID, userID)
 	case "/info":
@@ -203,7 +210,7 @@ func (s *TelegramBotService) handleStart(chatID int64, userID int64, from *Teleg
 可用命令:
 /start - 开始使用
 /help - 帮助信息
-/bind <邮箱> - 绑定账户
+/bind <订阅链接> - 绑定账户
 /unbind - 解绑账户
 /info - 查看账户信息
 /sub - 获取订阅链接
@@ -213,10 +220,23 @@ func (s *TelegramBotService) handleStart(chatID int64, userID int64, from *Teleg
 	if result.Error == nil {
 		welcomeMsg += "\n\n✅ 您已绑定账户"
 	} else {
-		welcomeMsg += "\n\n⚠️ 您尚未绑定账户，请使用 /bind <邮箱> 绑定"
+		welcomeMsg += "\n\n⚠️ 您尚未绑定账户，请私聊发送 /bind <订阅链接> 绑定"
 	}
 
 	return s.SendMessage(chatID, welcomeMsg)
+}
+
+// handleStartBind binds the account of a panel bind link: the member opened
+// https://t.me/<bot>?start=<code>, and Telegram sent "/start <code>".
+func (s *TelegramBotService) handleStartBind(chatID int64, userID int64, from *TelegramUser, chatType string, code string) error {
+	if chatType != "" && chatType != "private" {
+		return s.SendMessage(chatID, "❌ 请私聊机器人完成绑定")
+	}
+	user, err := s.BindUserByCode(userID, code, from, time.Now())
+	if err != nil {
+		return s.SendMessage(chatID, "❌ "+err.Error())
+	}
+	return s.SendMessage(chatID, fmt.Sprintf("✅ 绑定成功: `%s`\n\n现在可以使用 /info 和 /sub", markdownCode(user.Email)))
 }
 
 // handleHelp 处理 /help 命令
@@ -225,8 +245,8 @@ func (s *TelegramBotService) handleHelp(chatID int64) error {
 
 /start - 开始使用Bot
 /help - 显示此帮助信息
-/bind <邮箱> - 绑定您的账户
-  示例: /bind user@example.com
+/bind <订阅链接> - 绑定您的账户
+  也可以在面板「账户」页点「绑定 Telegram」
 /unbind - 解除账户绑定
 /info - 查看账户信息
   - 套餐信息
@@ -243,16 +263,89 @@ func (s *TelegramBotService) handleHelp(chatID int64) error {
 	return s.SendMessage(chatID, helpText)
 }
 
-// handleBind 处理 /bind 命令
-func (s *TelegramBotService) handleBind(chatID int64, userID int64, from *TelegramUser) error {
+// handleBind 处理 /bind 命令: /bind <订阅链接或订阅令牌>.
+//
+// The subscription token is the proof of ownership: an e-mail address alone
+// is not, since anyone who knows a member's address could bind the account
+// and then read its subscription link with /sub.
+func (s *TelegramBotService) handleBind(chatID int64, userID int64, from *TelegramUser, chatType string, args []string) error {
 	// 检查是否已绑定
 	var existingUser model.TelegramUser
 	if err := s.db.Where("telegram_id = ?", userID).First(&existingUser).Error; err == nil {
 		return s.SendMessage(chatID, "❌ 您已绑定账户，如需更换请先 /unbind")
 	}
 
-	// 需要用户提供邮箱
-	return s.SendMessage(chatID, "请输入您的注册邮箱:\n格式: /bind your@email.com")
+	bot, err := s.GetBot()
+	if err != nil {
+		return err
+	}
+	if !bot.AllowBind {
+		return s.SendMessage(chatID, "❌ 管理员已关闭账户绑定")
+	}
+	if chatType != "" && chatType != "private" {
+		return s.SendMessage(chatID, "❌ 为保护您的订阅令牌，请私聊机器人发送 /bind")
+	}
+
+	if len(args) == 0 {
+		return s.SendMessage(chatID, telegramBindUsage)
+	}
+	token := SubscribeTokenFromBindArg(args[0])
+	if token == "" {
+		return s.SendMessage(chatID, telegramBindUsage)
+	}
+
+	user, err := s.BindUserByToken(userID, token, from)
+	if err != nil {
+		return s.SendMessage(chatID, "❌ "+err.Error())
+	}
+	return s.SendMessage(chatID, fmt.Sprintf("✅ 绑定成功: `%s`\n\n现在可以使用 /info 和 /sub", markdownCode(user.Email)))
+}
+
+const telegramBindUsage = "请发送您的订阅链接或订阅令牌来绑定账户（在面板的订阅页面复制）:\n格式: /bind 订阅链接\n\n⚠️ 订阅令牌等同于密码，请只在私聊中发送"
+
+// SubscribeTokenFromBindArg is the subscription token in a /bind argument:
+// the argument itself, or, for a subscription link, its token query
+// parameter or else its last path segment. It is "" when nothing usable is
+// there.
+func SubscribeTokenFromBindArg(arg string) string {
+	arg = strings.TrimSpace(arg)
+	if arg == "" {
+		return ""
+	}
+	if strings.Contains(arg, "://") {
+		parsed, err := url.Parse(arg)
+		if err != nil {
+			return ""
+		}
+		if token := strings.TrimSpace(parsed.Query().Get("token")); token != "" {
+			arg = token
+		} else {
+			segments := strings.Split(strings.Trim(parsed.Path, "/"), "/")
+			arg = segments[len(segments)-1]
+		}
+	}
+	if arg == "" || len(arg) > 64 || strings.ContainsAny(arg, "/?#@ ") {
+		return ""
+	}
+	return arg
+}
+
+// markdownCode makes text safe inside a Markdown (legacy) code span.
+func markdownCode(text string) string {
+	return strings.NewReplacer("`", "'", "\\", "/").Replace(text)
+}
+
+// BindUserByToken binds the Telegram account to the member whose
+// subscription token is token.
+func (s *TelegramBotService) BindUserByToken(telegramID int64, token string, from *TelegramUser) (*model.User, error) {
+	var user model.User
+	if err := s.db.Where("token = ?", token).First(&user).Error; err != nil {
+		return nil, fmt.Errorf("订阅令牌无效，请从面板重新复制订阅链接")
+	}
+	if err := s.bind(telegramID, &user, from); err != nil {
+		return nil, err
+	}
+	return &user, nil
 }
 
 // BindUser 绑定用户
@@ -262,11 +355,18 @@ func (s *TelegramBotService) BindUser(telegramID int64, email string, from *Tele
 	if err := s.db.Where("email = ?", email).First(&user).Error; err != nil {
 		return fmt.Errorf("未找到该邮箱对应的账户")
 	}
+	return s.bind(telegramID, &user, from)
+}
 
+// bind records the binding of a Telegram account to user.
+func (s *TelegramBotService) bind(telegramID int64, user *model.User, from *TelegramUser) error {
 	// 检查是否已被其他Telegram绑定
 	var existingBind model.TelegramUser
 	if err := s.db.Where("user_id = ?", user.ID).First(&existingBind).Error; err == nil {
-		return fmt.Errorf("该账户已被其他Telegram绑定")
+		return ErrTelegramUserAlreadyBound
+	}
+	if err := s.db.Where("telegram_id = ?", telegramID).First(&existingBind).Error; err == nil {
+		return ErrTelegramIDAlreadyBound
 	}
 
 	// 创建绑定
@@ -343,9 +443,30 @@ func (s *TelegramBotService) handleSub(chatID int64, userID int64) error {
 
 	// 获取用户token
 	user := tgUser.User
-	subURL := fmt.Sprintf("https://your-domain.com/s/%s", user.Token)
+	subURL := s.subscribeURL(user.Token)
+	if subURL == "" {
+		return s.SendMessage(chatID, "❌ 面板未配置订阅域名，请在网页端复制订阅链接")
+	}
 
 	return s.SendMessage(chatID, fmt.Sprintf("🔗 您的订阅链接:\n\n`%s`\n\n⚠️ 请勿泄露给他人", subURL))
+}
+
+// subscribeURL is the member's subscription link: the first configured
+// subscription domain (app.subscribe_domains), else the panel's domain, and
+// the subscription path. It is "" when neither domain is set.
+func (s *TelegramBotService) subscribeURL(token string) string {
+	cfg := config.Get()
+	settings := GetSubscriptionSettings(NewSystemConfigService(s.db), cfg)
+	host := ""
+	if len(settings.SubscribeDomains) > 0 {
+		host = settings.SubscribeDomains[0]
+	} else if cfg != nil {
+		host = normalizeSubscriptionHost(cfg.Domain)
+	}
+	if host == "" || token == "" {
+		return ""
+	}
+	return fmt.Sprintf("https://%s%s/%s", host, settings.SubscribePath, token)
 }
 
 // handleTicket 处理 /ticket 命令

@@ -13,7 +13,9 @@ const adminApi = vi.hoisted(() => ({
   sendTelegramNotification: vi.fn(),
   setTelegramWebhook: vi.fn(),
   updateTelegramBot: vi.fn(),
-  updateTelegramUserNotify: vi.fn()
+  updateTelegramUserNotify: vi.fn(),
+  bindTelegramUser: vi.fn(),
+  unbindTelegramUser: vi.fn()
 }))
 
 vi.mock('@/api/admin', () => adminApi)
@@ -281,6 +283,32 @@ describe('Notifications → Telegram channel', () => {
     expect(toast.message).toContain('offline')
     expect(toast.duration).toBe(0)
 
+    wrapper.unmount()
+  })
+
+  it('links a user by e-mail or ID by hand and refuses a non-numeric Telegram ID', async () => {
+    adminApi.bindTelegramUser.mockResolvedValue({ id: 2, user_id: 8, telegram_id: 3001 })
+    const wrapper = mount(Telegram, { attachTo: document.body })
+    await flushPromises()
+
+    wrapper.vm.openBindDialog()
+    Object.assign(wrapper.vm.bindDialog, { user: 'member@example.com', telegramId: '@member' })
+    await wrapper.vm.submitBind()
+    expect(adminApi.bindTelegramUser).not.toHaveBeenCalled()
+    expect(wrapper.vm.bindDialog.error).toBe('Enter a user and a numeric Telegram ID')
+
+    wrapper.vm.bindDialog.telegramId = '3001'
+    await wrapper.vm.submitBind()
+    expect(adminApi.bindTelegramUser).toHaveBeenCalledWith({ userId: undefined, email: 'member@example.com', telegramId: '3001' })
+    expect(wrapper.vm.bindDialog.open).toBe(false)
+    expect(adminApi.getTelegramUsers).toHaveBeenCalledTimes(2)
+
+    wrapper.vm.openBindDialog()
+    Object.assign(wrapper.vm.bindDialog, { user: '8', telegramId: '3001' })
+    adminApi.bindTelegramUser.mockRejectedValueOnce({ response: { data: { error: { code: 'telegram_already_bound', message: 'bound elsewhere' } } } })
+    await wrapper.vm.submitBind()
+    expect(adminApi.bindTelegramUser).toHaveBeenLastCalledWith({ userId: '8', email: undefined, telegramId: '3001' })
+    expect(wrapper.vm.bindDialog.error).toBe('Failed: bound elsewhere')
     wrapper.unmount()
   })
 })
