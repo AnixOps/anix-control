@@ -67,6 +67,19 @@ func buildANXConfig(config, settings map[string]any) {
 	if n := intSetting(settings, "max_streams", 0); n > 0 && n <= anxMaxStreamsLimit {
 		config["max_streams"] = n
 	}
+	// The wg jacket (WireGuard-shaped UDP, for users dialing a domestic
+	// entry): anx-node opens this UDP port beside the A2 TCP port.
+	if n := ANXWGPort(settings); n > 0 {
+		config["wg_listen_port"] = n
+	}
+}
+
+// ANXWGPort is the UDP port of an ANX node's wg jacket, 0 when it is off.
+func ANXWGPort(settings map[string]any) int {
+	if n := intSetting(settings, "wg_listen_port", 0); n > 0 && n <= 65535 {
+		return n
+	}
+	return 0
 }
 
 // anxBoolSetting is a boolean ANX setting; anything but true is false.
@@ -168,6 +181,12 @@ func ValidateANXSettings(settings map[string]any) error {
 		n, isNumber := value.(float64)
 		if !isNumber || n != float64(int64(n)) || n < 1 || n > anxMaxStreamsLimit {
 			return fmt.Errorf("ANX max_streams must be a whole number from 1 to %d", anxMaxStreamsLimit)
+		}
+	}
+	if value, ok := settings["wg_listen_port"]; ok && value != nil {
+		n, isNumber := value.(float64)
+		if !isNumber || n != float64(int64(n)) || n < 1 || n > 65535 {
+			return errors.New("ANX wg_listen_port must be a port number from 1 to 65535")
 		}
 	}
 	if value, ok := settings["dest"]; ok && value != nil {

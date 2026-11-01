@@ -92,6 +92,12 @@ export const PROTOCOL_FIELDS = Object.freeze([
     section: 'settings', key: 'max_streams', kind: 'number', min: 1, max: ANX_MAX_STREAMS_LIMIT, hintKey: 'anxMaxStreams',
     placeholder: String(ANX_MAX_STREAMS), show: p => p.type === 'anx'
   },
+  // wg jacket (anx spec §5.1): a WireGuard-shaped UDP port beside the A2 TCP
+  // port, for users dialing a domestic entry; empty = off.
+  {
+    section: 'settings', key: 'wg_listen_port', kind: 'number', min: 1, max: 65535, hintKey: 'anxWgListenPort',
+    placeholder: '', show: p => p.type === 'anx'
+  },
 
   // transport -------------------------------------------------------------
   { section: 'transport_settings', key: 'path', kind: 'text', placeholder: '/', show: takesTransportPath },

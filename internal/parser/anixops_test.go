@@ -47,6 +47,15 @@ func TestAnixOpsFormatterWritesANXLinks(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "anx://"+strings.Repeat("cd", 32)+"@203.0.113.9:8443?fp=chrome&pk=ANX1key#SH%20ANX", string(decoded))
 
+	// The wg jacket adds wg_port; clients try it first, then fall back to A2.
+	wg := &model.ParsedNode{ID: "d", Name: "SH W1", Type: "anx", Server: "203.0.113.9", Port: 8443,
+		Password: strings.Repeat("cd", 32), PublicKey: "ANX1key", Settings: map[string]any{"allow_no_sni": true, "wg_listen_port": float64(51820)}}
+	content, err = (&AnixOpsFormatter{}).Format([]*model.ParsedNode{wg}, &model.TemplateRenderContext{})
+	require.NoError(t, err)
+	decoded, err = base64.StdEncoding.DecodeString(string(content))
+	require.NoError(t, err)
+	require.Equal(t, "anx://"+strings.Repeat("cd", 32)+"@203.0.113.9:8443?fp=chrome&pk=ANX1key&wg_port=51820#SH%20W1", string(decoded))
+
 	// Other formats leave ANX out.
 	v2ray, err := (&V2RayFormatter{}).Format([]*model.ParsedNode{anx}, &model.TemplateRenderContext{})
 	require.NoError(t, err)
