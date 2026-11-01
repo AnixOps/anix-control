@@ -33,6 +33,11 @@ defaults:
   run:
     working-directory: control-center
 
+# GITHUB_TOKEN is read-only by default; jobs that publish declare their own
+# permissions.
+permissions:
+  contents: read
+
 env:
   GO_VERSION: '1.26'
   NODE_VERSION: '20'

@@ -15,6 +15,11 @@ on:
     - cron: '17 19 * * *'
   workflow_dispatch:
 
+# GITHUB_TOKEN is read-only by default; jobs that publish declare their own
+# permissions.
+permissions:
+  contents: read
+
 # Superseded pull-request runs are cancelled. Every other run (main and
 # release branch pushes, the nightly, manual runs) gets its own group, because
 # GitHub drops a run that is pending behind a running run of the same group when
