@@ -34,8 +34,6 @@ func transportEnum(transport agentstreams.Transport) kernelnodeopsv1.AgentTransp
 	switch transport {
 	case agentstreams.TransportControlStream:
 		return kernelnodeopsv1.AgentTransport_AGENT_TRANSPORT_CONTROL_STREAM
-	case agentstreams.TransportWebSocket:
-		return kernelnodeopsv1.AgentTransport_AGENT_TRANSPORT_WEBSOCKET
 	}
 	return kernelnodeopsv1.AgentTransport_AGENT_TRANSPORT_UNSPECIFIED
 }

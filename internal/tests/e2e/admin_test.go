@@ -120,7 +120,6 @@ func (s *AdminE2ETestSuite) SetupSuite() {
 		&model.ServerVLESS{},
 		&model.ServerTrojan{},
 		&model.ServerShadowsocks{},
-		&model.ServerHysteria{},
 		&model.ServerTUIC{},
 		&model.ServerAnyTLS{},
 		&model.TrafficLog{},

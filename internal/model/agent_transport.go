@@ -2,23 +2,9 @@ package model
 
 import "time"
 
-// Transports an AnixOps Agent was seen on,
-// recorded in AgentTransport (node-ops-service.md, section 5.6).
-const (
-	// AgentTransportMTLSStream is the Agent Control stream authenticated by
-	// a client certificate: the target transport.
-	AgentTransportMTLSStream = "mtls-stream"
-	// AgentTransportHTTPLegacy is the legacy AnixOps-agent REST paths:
-	// /api/v2/agent/*, /api/v2/node/*, /api/v2/forward/agent/rules and the
-	// clean agent endpoints.
-	AgentTransportHTTPLegacy = "http-legacy"
-	// AgentTransportWebSocket is the agent and node WebSocket.
-	AgentTransportWebSocket = "websocket"
-	// AgentTransportCleanAgent is a forward clean agent
-	// (/api/v2/forward-agent/*); the inventory reads it from
-	// v2_forward_clean_agent, it is never recorded here.
-	AgentTransportCleanAgent = "clean-agent"
-)
+// AgentTransportMTLSStream is the Agent Control stream authenticated by a
+// client certificate, the only transport an Agent connects on.
+const AgentTransportMTLSStream = "mtls-stream"
 
 // AgentTransport records when a node was last seen on one transport. The
 // kernel keeps the live value in memory and writes a row at most about once

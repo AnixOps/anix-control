@@ -116,4 +116,7 @@
 //   - 0025_drop_registration_keys: node registration is removed; the
 //     registration keys (v2_authorized_key, kapi_registration_key_v1) and
 //     their moved credentials are dropped.
+//   - 0026_drop_server_hysteria: Hysteria v1 is removed; the Xboard-era
+//     v2_server_hysteria table a database imported from Xboard may hold is
+//     dropped.
 package migrations

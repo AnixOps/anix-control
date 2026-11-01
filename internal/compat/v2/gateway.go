@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/AnixOps/anix-control/v5/internal/agentws"
 	"github.com/AnixOps/anix-control/v5/internal/pluginhost"
 	"github.com/AnixOps/anix-control/v5/internal/requestorigin"
 	"github.com/AnixOps/anix-control/v5/internal/sealedsecrets"
@@ -271,15 +270,9 @@ func requestMetadata(c *gin.Context) pluginhost.RequestMetadata {
 	if userAgent := c.Request.UserAgent(); validPackageUserAgent(userAgent) {
 		metadata.UserAgent = userAgent
 	}
-	metadata.NodeID = nodeID(c)
-	metadata.TrustedAgentWebSocketAuth = contextBool(c, agentws.TrustedContextKey)
-	metadata.TrustedAgentWebSocketForwardNode = contextBool(c, agentws.ForwardNodeContextKey)
 	if query := c.Request.URL.Query(); len(query) > 0 {
 		metadata.Query = make(map[string][]string, len(query))
 		for key, values := range query {
-			if metadata.TrustedAgentWebSocketAuth && agentWebSocketCredentialQueryKey(key) {
-				continue
-			}
 			metadata.Query[key] = append([]string(nil), values...)
 		}
 	}
@@ -293,23 +286,6 @@ func requestMetadata(c *gin.Context) pluginhost.RequestMetadata {
 		}
 	}
 	return metadata
-}
-
-func contextBool(c *gin.Context, key string) bool {
-	if c == nil {
-		return false
-	}
-	value, ok := c.Get(key)
-	return ok && value == true
-}
-
-func agentWebSocketCredentialQueryKey(key string) bool {
-	switch strings.ToLower(key) {
-	case "node_id", "api_key", "token":
-		return true
-	default:
-		return false
-	}
 }
 
 func packageRequestHeaders(source http.Header) map[string][]string {
@@ -427,31 +403,6 @@ func actorID(c *gin.Context) uint {
 func actorIsAdmin(c *gin.Context) bool {
 	value, ok := c.Get("is_admin")
 	return ok && value == true
-}
-
-func nodeID(c *gin.Context) uint {
-	if c == nil {
-		return 0
-	}
-	value, ok := c.Get("node_id")
-	if !ok {
-		return 0
-	}
-	switch id := value.(type) {
-	case uint:
-		return id
-	case uint32:
-		return uint(id)
-	case int:
-		if id > 0 {
-			return uint(id)
-		}
-	case float64:
-		if id > 0 {
-			return uint(id)
-		}
-	}
-	return 0
 }
 
 func writeResolutionError(c *gin.Context, err error) string {

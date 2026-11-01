@@ -52,17 +52,6 @@ func TestServerShadowsocks_GetPort(t *testing.T) {
 	assert.Equal(t, 9388, server.GetServerPort())
 }
 
-func TestServerHysteria_GetPort(t *testing.T) {
-	server := &ServerHysteria{
-		BaseServer: BaseServer{
-			Port:       443,
-			ServerPort: 8443,
-		},
-	}
-	assert.Equal(t, 443, server.GetPort())
-	assert.Equal(t, 8443, server.GetServerPort())
-}
-
 func TestServerTUIC_GetPort(t *testing.T) {
 	server := &ServerTUIC{
 		BaseServer: BaseServer{

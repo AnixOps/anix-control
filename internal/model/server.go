@@ -13,7 +13,6 @@ const (
 	ServerTypeVLESS       ServerType = "vless"
 	ServerTypeTrojan      ServerType = "trojan"
 	ServerTypeShadowsocks ServerType = "shadowsocks"
-	ServerTypeHysteria    ServerType = "hysteria"
 	ServerTypeHysteria2   ServerType = "hysteria2"
 	ServerTypeTUIC        ServerType = "tuic"
 	ServerTypeAnyTLS      ServerType = "anytls"
@@ -90,22 +89,6 @@ type ServerShadowsocks struct {
 
 func (ServerShadowsocks) TableName() string {
 	return "v2_server_shadowsocks"
-}
-
-// ServerHysteria Hysteria服务器
-type ServerHysteria struct {
-	BaseServer
-	Version               int     `gorm:"default:2" json:"version"` // 1 or 2
-	UpMbps                int     `json:"up_mbps"`
-	DownMbps              int     `json:"down_mbps"`
-	Obfs                  string  `gorm:"size:50" json:"obfs"`
-	ObfsPassword          *string `gorm:"size:255" json:"obfs_password"`
-	ServerName            *string `gorm:"size:255" json:"server_name"`
-	IgnoreClientBandwidth int     `gorm:"default:0" json:"ignore_client_bandwidth"`
-}
-
-func (ServerHysteria) TableName() string {
-	return "v2_server_hysteria"
 }
 
 // ServerTUIC TUIC服务器
@@ -202,12 +185,6 @@ func (s *ServerShadowsocks) GetType() ServerType { return ServerTypeShadowsocks 
 func (s *ServerShadowsocks) GetHost() string     { return s.Host }
 func (s *ServerShadowsocks) GetPort() int        { return s.Port }
 func (s *ServerShadowsocks) GetServerPort() int  { return s.ServerPort }
-
-func (s *ServerHysteria) GetID() uint         { return s.ID }
-func (s *ServerHysteria) GetType() ServerType { return ServerTypeHysteria }
-func (s *ServerHysteria) GetHost() string     { return s.Host }
-func (s *ServerHysteria) GetPort() int        { return s.Port }
-func (s *ServerHysteria) GetServerPort() int  { return s.ServerPort }
 
 func (s *ServerTUIC) GetID() uint         { return s.ID }
 func (s *ServerTUIC) GetType() ServerType { return ServerTypeTUIC }

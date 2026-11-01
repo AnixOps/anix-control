@@ -46,17 +46,14 @@ type DispatchRequest struct {
 // A kernel that predates them leaves both empty; a handler that needs them
 // then returns ErrNativeUnavailable.
 type RequestMetadata struct {
-	Path                             string              `json:"path,omitempty"`
-	Query                            map[string][]string `json:"query,omitempty"`
-	Headers                          map[string][]string `json:"headers,omitempty"`
-	PathParams                       map[string]string   `json:"path_params,omitempty"`
-	ClientIP                         string              `json:"client_ip,omitempty"`
-	UserAgent                        string              `json:"user_agent,omitempty"`
-	NodeID                           uint                `json:"node_id,omitempty"`
-	TrustedAgentWebSocketAuth        bool                `json:"trusted_agent_websocket_auth,omitempty"`
-	TrustedAgentWebSocketForwardNode bool                `json:"trusted_agent_websocket_forward_node,omitempty"`
-	Scheme                           string              `json:"-"`
-	Host                             string              `json:"-"`
+	Path       string              `json:"path,omitempty"`
+	Query      map[string][]string `json:"query,omitempty"`
+	Headers    map[string][]string `json:"headers,omitempty"`
+	PathParams map[string]string   `json:"path_params,omitempty"`
+	ClientIP   string              `json:"client_ip,omitempty"`
+	UserAgent  string              `json:"user_agent,omitempty"`
+	Scheme     string              `json:"-"`
+	Host       string              `json:"-"`
 }
 
 type DispatchResponse struct {

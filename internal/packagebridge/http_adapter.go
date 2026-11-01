@@ -16,24 +16,20 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/AnixOps/anix-control/v5/internal/agentws"
 	"github.com/AnixOps/anix-control/v5/internal/panicrecovery"
 	"github.com/AnixOps/anix-control/v5/internal/requestorigin"
 	"github.com/gin-gonic/gin"
 )
 
 type httpRequestMetadata struct {
-	Path                             string              `json:"path,omitempty"`
-	Query                            map[string][]string `json:"query,omitempty"`
-	Headers                          map[string][]string `json:"headers,omitempty"`
-	PathParams                       map[string]string   `json:"path_params,omitempty"`
-	ClientIP                         string              `json:"client_ip,omitempty"`
-	UserAgent                        string              `json:"user_agent,omitempty"`
-	NodeID                           uint                `json:"node_id,omitempty"`
-	TrustedAgentWebSocketAuth        bool                `json:"trusted_agent_websocket_auth,omitempty"`
-	TrustedAgentWebSocketForwardNode bool                `json:"trusted_agent_websocket_forward_node,omitempty"`
-	Host                             string              `json:"host,omitempty"`
-	TLS                              bool                `json:"tls,omitempty"`
+	Path       string              `json:"path,omitempty"`
+	Query      map[string][]string `json:"query,omitempty"`
+	Headers    map[string][]string `json:"headers,omitempty"`
+	PathParams map[string]string   `json:"path_params,omitempty"`
+	ClientIP   string              `json:"client_ip,omitempty"`
+	UserAgent  string              `json:"user_agent,omitempty"`
+	Host       string              `json:"host,omitempty"`
+	TLS        bool                `json:"tls,omitempty"`
 }
 
 type bridgePrincipal struct {
@@ -73,15 +69,6 @@ func NewHTTPAdapter(handler gin.HandlerFunc) OperationHandler {
 		ginContext.Set("request_id", call.Request.RequestID)
 		ginContext.Set("user_id", principal.ActorID)
 		ginContext.Set("is_admin", principal.Admin)
-		if metadata.NodeID != 0 {
-			ginContext.Set("node_id", metadata.NodeID)
-		}
-		// The agent's node identity the kernel verified before the gateway
-		// (the agent HTTP routes' RequireAgentNode, as for agent sockets).
-		if metadata.TrustedAgentWebSocketAuth {
-			ginContext.Set(agentws.TrustedContextKey, true)
-			ginContext.Set(agentws.ForwardNodeContextKey, metadata.TrustedAgentWebSocketForwardNode)
-		}
 		for key, value := range metadata.PathParams {
 			ginContext.Params = append(ginContext.Params, gin.Param{Key: key, Value: value})
 		}
@@ -148,12 +135,6 @@ func decodeHTTPMetadata(raw []byte) (httpRequestMetadata, error) {
 	}
 	if !validBridgeUserAgent(metadata.UserAgent) {
 		return httpRequestMetadata{}, errors.New("bridge user agent is invalid")
-	}
-	if metadata.TrustedAgentWebSocketAuth && metadata.NodeID == 0 {
-		return httpRequestMetadata{}, errors.New("bridge trusted agent identity is invalid")
-	}
-	if metadata.TrustedAgentWebSocketForwardNode && !metadata.TrustedAgentWebSocketAuth {
-		return httpRequestMetadata{}, errors.New("bridge trusted agent identity is invalid")
 	}
 	if len(metadata.Query) > 64 || len(metadata.Headers) > 64 || len(metadata.PathParams) > 32 {
 		return httpRequestMetadata{}, errors.New("bridge request metadata is too large")

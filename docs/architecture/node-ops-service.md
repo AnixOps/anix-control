@@ -1790,8 +1790,8 @@ Before upgrading to 4.2, every node must run an Agent that has enrolled
   (this section's draft said `anix_agent_legacy_requests_total`).
 - **Transport inventory.** `GET /api/v4/kernel/agents/transports` (admin)
   and `anix-control agents transports [--json]` list every proxy and forward node with the transport it
-  was last seen on (`mtls-stream`, `apikey-stream`, `http-legacy`,
-  `websocket`, `clean-agent`, `uniproxy`, `v2board-grpc`), its agent
+  was last seen on (`mtls-stream`; rows the removed channels left behind
+  keep their old names, such as `apikey-stream` or `websocket`), its agent
   version (from the stream's `Hello`, else the node row or the clean
   agent), its newest valid certificate (serial, expiry) and when it was last
   seen. A node's status follows its newest AnixOps Agent channel: `mtls`,

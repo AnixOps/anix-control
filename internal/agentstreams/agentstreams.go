@@ -22,8 +22,6 @@ type Transport string
 const (
 	// TransportControlStream is the Agent Control gRPC stream.
 	TransportControlStream Transport = "control-stream"
-	// TransportWebSocket is the legacy agent WebSocket.
-	TransportWebSocket Transport = "websocket"
 )
 
 // AuthenticationMTLS is how a stream session authenticated: an agent

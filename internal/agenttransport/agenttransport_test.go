@@ -174,19 +174,19 @@ func TestRecorderThrottlesWrites(t *testing.T) {
 	require.Equal(t, "abc", row.CertSerial)
 	require.Len(t, row.AgentVersion, 64)
 	require.NotNil(t, row.CertNotAfter)
-	r.Seen(ctx, Sighting{Node: agentcontrol.AgentNode{Kind: "edge", ID: 1}, Transport: model.AgentTransportWebSocket})
-	r.Seen(ctx, Sighting{Node: agentcontrol.AgentNode{Kind: agentcontrol.NodeKindProxy}, Transport: model.AgentTransportWebSocket})
+	r.Seen(ctx, Sighting{Node: agentcontrol.AgentNode{Kind: "edge", ID: 1}, Transport: legacyWebSocket})
+	r.Seen(ctx, Sighting{Node: agentcontrol.AgentNode{Kind: agentcontrol.NodeKindProxy}, Transport: legacyWebSocket})
 	r.Seen(ctx, Sighting{Node: proxy7})
 	require.Len(t, r.Snapshot(), 2)
 
 	// A nil recorder, and one without a database, record nothing and fail
 	// nothing.
 	var none *Recorder
-	none.Seen(ctx, Sighting{Node: proxy7, Transport: model.AgentTransportWebSocket})
+	none.Seen(ctx, Sighting{Node: proxy7, Transport: legacyWebSocket})
 	require.Nil(t, none.Snapshot())
 	require.NoError(t, none.Flush(ctx))
-	NewRecorder(nil).Seen(ctx, Sighting{Node: proxy7, Transport: model.AgentTransportWebSocket})
-	NewRecorder(func() *gorm.DB { return nil }).Seen(ctx, Sighting{Node: proxy7, Transport: model.AgentTransportWebSocket})
+	NewRecorder(nil).Seen(ctx, Sighting{Node: proxy7, Transport: legacyWebSocket})
+	NewRecorder(func() *gorm.DB { return nil }).Seen(ctx, Sighting{Node: proxy7, Transport: legacyWebSocket})
 }
 
 func TestRecorderRetriesAFailedWrite(t *testing.T) {
@@ -195,11 +195,11 @@ func TestRecorderRetriesAFailedWrite(t *testing.T) {
 	c := &clock{now: time.Now().UTC()}
 	r := newTestRecorder(db, c)
 	ctx := context.Background()
-	r.Seen(ctx, Sighting{Node: proxy7, Transport: model.AgentTransportWebSocket})
+	r.Seen(ctx, Sighting{Node: proxy7, Transport: legacyWebSocket})
 	require.Error(t, r.Flush(ctx), "the table is missing: the sighting stays pending")
 	migrate(t, db)
 	require.NoError(t, r.Flush(ctx))
-	_, ok := loadRow(t, db, proxy7, model.AgentTransportWebSocket)
+	_, ok := loadRow(t, db, proxy7, legacyWebSocket)
 	require.True(t, ok)
 }
 
@@ -238,13 +238,13 @@ func seedInventory(t *testing.T, db *gorm.DB, now time.Time) {
 		{NodeKind: "proxy", NodeID: 1, Transport: model.AgentTransportMTLSStream, AgentVersion: "2.0.0", FirstSeenAt: at(200), LastSeenAt: at(5)},
 		{NodeKind: "proxy", NodeID: 1, Transport: "uniproxy", FirstSeenAt: at(600), LastSeenAt: at(1)},
 		// Node 2 is a legacy agent: WebSocket and REST.
-		{NodeKind: "proxy", NodeID: 2, Transport: model.AgentTransportWebSocket, FirstSeenAt: at(600), LastSeenAt: at(3)},
-		{NodeKind: "proxy", NodeID: 2, Transport: model.AgentTransportHTTPLegacy, FirstSeenAt: at(600), LastSeenAt: at(2)},
+		{NodeKind: "proxy", NodeID: 2, Transport: legacyWebSocket, FirstSeenAt: at(600), LastSeenAt: at(3)},
+		{NodeKind: "proxy", NodeID: 2, Transport: legacyHTTP, FirstSeenAt: at(600), LastSeenAt: at(2)},
 		// Node 3 was third-party software on UniProxy and v2board gRPC only.
 		{NodeKind: "proxy", NodeID: 3, Transport: "uniproxy", FirstSeenAt: at(600), LastSeenAt: at(1)},
 		{NodeKind: "proxy", NodeID: 3, Transport: "v2board-grpc", FirstSeenAt: at(600), LastSeenAt: at(1)},
 		// A deleted node's row is not listed.
-		{NodeKind: "proxy", NodeID: 99, Transport: model.AgentTransportWebSocket, FirstSeenAt: at(600), LastSeenAt: at(1)},
+		{NodeKind: "proxy", NodeID: 99, Transport: legacyWebSocket, FirstSeenAt: at(600), LastSeenAt: at(1)},
 	}).Error)
 }
 
@@ -320,7 +320,7 @@ func TestInventory(t *testing.T) {
 				Authentication: agentstreams.AuthenticationMTLS, NegotiatedCapabilities: []string{"config.v1", "reports.v1"},
 				Certificate: &agentstreams.SessionCertificate{Serial: "new", NotAfter: notAfter, SPIFFEID: "spiffe://anixops/prod/agent/proxy-1"},
 			},
-			{Node: agentcontrol.AgentNode{Kind: "proxy", ID: 2}, Transport: agentstreams.TransportWebSocket},
+			{Node: agentcontrol.AgentNode{Kind: "proxy", ID: 2}, Transport: agentstreams.Transport("websocket")},
 			{
 				Node: agentcontrol.AgentNode{Kind: "forward", ID: 1}, Transport: agentstreams.TransportControlStream, SessionID: "session-f",
 				Identity: "spiffe://anixops/prod/agent/forward-1", Authentication: agentstreams.AuthenticationMTLS,
@@ -375,7 +375,7 @@ func TestRequiredReadiness(t *testing.T) {
 	require.NoError(t, db.Create(&[]model.AgentTransport{
 		{NodeKind: "proxy", NodeID: 1, Transport: model.AgentTransportMTLSStream, FirstSeenAt: days(3), LastSeenAt: days(0)},
 		{NodeKind: "proxy", NodeID: 2, Transport: legacyAPIKeyStream, FirstSeenAt: days(30), LastSeenAt: days(1)},
-		{NodeKind: "proxy", NodeID: 4, Transport: model.AgentTransportWebSocket, FirstSeenAt: days(30), LastSeenAt: days(1)},
+		{NodeKind: "proxy", NodeID: 4, Transport: legacyWebSocket, FirstSeenAt: days(30), LastSeenAt: days(1)},
 		{NodeKind: "proxy", NodeID: 5, Transport: "uniproxy", FirstSeenAt: days(30), LastSeenAt: days(0)},
 	}).Error)
 
@@ -428,8 +428,8 @@ func TestPostgresAgentTransportInventory(t *testing.T) {
 	c := &clock{now: now}
 	r := newTestRecorder(db, c)
 	ctx := context.Background()
-	r.Seen(ctx, Sighting{Node: agentcontrol.AgentNode{Kind: "proxy", ID: 2}, Transport: model.AgentTransportWebSocket, AgentVersion: "1.1.1"})
-	row, ok := loadRow(t, db, agentcontrol.AgentNode{Kind: "proxy", ID: 2}, model.AgentTransportWebSocket)
+	r.Seen(ctx, Sighting{Node: agentcontrol.AgentNode{Kind: "proxy", ID: 2}, Transport: legacyWebSocket, AgentVersion: "1.1.1"})
+	row, ok := loadRow(t, db, agentcontrol.AgentNode{Kind: "proxy", ID: 2}, legacyWebSocket)
 	require.True(t, ok)
 	require.Equal(t, "1.1.1", row.AgentVersion)
 	require.True(t, row.LastSeenAt.Equal(now))
@@ -648,3 +648,10 @@ func TestInventoryConnection(t *testing.T) {
 // legacyAPIKeyStream is the transport the removed API-key stream recorded;
 // older databases may still hold its rows.
 const legacyAPIKeyStream = "apikey-stream"
+
+// legacyWebSocket and legacyHTTP are transports removed Agent channels
+// recorded; older databases may still hold their rows.
+const (
+	legacyWebSocket = "websocket"
+	legacyHTTP      = "http-legacy"
+)
