@@ -168,7 +168,7 @@ func TestForwardCommandRoutesNodesAndStats(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, output, `"node_ref": "forward-11"`)
 
-	output, err = run("stats", "--route", created.GetId(), "--since", "2026-10-01T00:00:00Z")
+	output, err = run("stats", "--route", created.GetId(), "--since", time.Now().UTC().AddDate(0, 0, -7).Format(time.RFC3339))
 	require.NoError(t, err)
 	assert.Contains(t, output, "UP_BYTES")
 	output, err = run("stats", "--json")

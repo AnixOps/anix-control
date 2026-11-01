@@ -561,7 +561,7 @@ func checkAnxLine(transport *networkv1.Transport, anx *networkv1.AnxLineSettings
 		// The accepting end gets the addresses it listens on. A reversed
 		// l2 link's accepting end dials back under the A2 jacket and gets
 		// the dialing end's key, the jacket server it authenticates to.
-		if anx.GetServerPublic() != "" && !(anx.GetReverse() && anx.GetEgress() == "l2") {
+		if anx.GetServerPublic() != "" && (!anx.GetReverse() || anx.GetEgress() != "l2") {
 			return fmt.Errorf("anx_line server_public is for the dialing end")
 		}
 	default:
