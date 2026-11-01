@@ -38,6 +38,15 @@ func TestAnixOpsFormatterWritesANXLinks(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "anx://"+strings.Repeat("ab", 32)+"@198.51.100.7:8443?alpn=h2%2Chttp%2F1.1&fp=chrome&pk=ANX1%2Bkey%2Ftext%3D&sni=www.apple.com#JP%20ANX", string(decoded))
 
+	// The A2 no-SNI mode leaves sni out of the link.
+	noSNI := &model.ParsedNode{ID: "c", Name: "SH ANX", Type: "anx", Server: "203.0.113.9", Port: 8443,
+		Password: strings.Repeat("cd", 32), PublicKey: "ANX1key", Settings: map[string]any{"allow_no_sni": true}}
+	content, err = (&AnixOpsFormatter{}).Format([]*model.ParsedNode{noSNI}, &model.TemplateRenderContext{})
+	require.NoError(t, err)
+	decoded, err = base64.StdEncoding.DecodeString(string(content))
+	require.NoError(t, err)
+	require.Equal(t, "anx://"+strings.Repeat("cd", 32)+"@203.0.113.9:8443?fp=chrome&pk=ANX1key#SH%20ANX", string(decoded))
+
 	// Other formats leave ANX out.
 	v2ray, err := (&V2RayFormatter{}).Format([]*model.ParsedNode{anx}, &model.TemplateRenderContext{})
 	require.NoError(t, err)

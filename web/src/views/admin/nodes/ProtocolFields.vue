@@ -20,6 +20,8 @@
             :min="field.min"
             :max="field.max"
             :label="labelOf(field)"
+            :help="helpOf(field)"
+            :placeholder="field.placeholder || ''"
             :data-testid="`protocol-field-${field.key}`"
             @update:model-value="value => update(field, value)"
           />
@@ -28,6 +30,7 @@
             :model-value="Boolean(readField(modelValue, field))"
             class="form-grid__full"
             :label="labelOf(field)"
+            :description="helpOf(field)"
             :data-testid="`protocol-field-${field.key}`"
             @update:model-value="value => update(field, value)"
           />

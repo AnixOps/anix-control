@@ -82,13 +82,18 @@ func iwanLink(node *model.ParsedNode) string {
 
 // anxLink is an ANX-A node as an anx:// link:
 // anx://<user key>@host:port?sni=&pk=<server public key>&alpn=&fp=chrome#name.
-// A node whose server has not reported its public key has no link yet.
+// A node whose server has not reported its public key has no link yet. A
+// node in the A2 no-SNI mode (settings allow_no_sni) has no sni: the client
+// then sends a ClientHello without SNI.
 func anxLink(node *model.ParsedNode) string {
-	if node.Server == "" || node.Port <= 0 || node.Password == "" || node.PublicKey == "" || node.ServerName == "" {
+	noSNI, _ := node.Settings["allow_no_sni"].(bool)
+	if node.Server == "" || node.Port <= 0 || node.Password == "" || node.PublicKey == "" || (node.ServerName == "" && !noSNI) {
 		return ""
 	}
 	query := url.Values{}
-	query.Set("sni", node.ServerName)
+	if node.ServerName != "" {
+		query.Set("sni", node.ServerName)
+	}
 	query.Set("pk", node.PublicKey)
 	if node.ALPN != "" {
 		query.Set("alpn", node.ALPN)

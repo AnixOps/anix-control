@@ -39,6 +39,9 @@ export const VLESS_FLOWS = Object.freeze(['', 'xtls-rprx-vision'])
 // ANX-A (anx-node's anx inbound, A2 jacket): the cover site and the names and ALPN it answers with.
 export const ANX_COVER = 'www.apple.com'
 export const ANX_ALPN = Object.freeze(['h2', 'http/1.1'])
+// Streams one ANX session may open: anx-node's default and its u16 limit.
+export const ANX_MAX_STREAMS = 256
+export const ANX_MAX_STREAMS_LIMIT = 65535
 
 // Reality targets that work from most regions; the target probe
 // (NodeRealityTargetsSection) replaces this with a measured one.
@@ -80,6 +83,15 @@ export const PROTOCOL_FIELDS = Object.freeze([
     placeholder: `${ANX_COVER}:443`, show: p => p.type === 'anx'
   },
   { section: 'settings', key: 'alpn', kind: 'list', default: [...ANX_ALPN], placeholder: 'h2,http/1.1', show: p => p.type === 'anx' },
+  // A2 no-SNI mode (anx spec §4): also accept ClientHellos without SNI, and
+  // subscriptions leave the SNI out (clients dial the IP).
+  { section: 'settings', key: 'allow_no_sni', kind: 'switch', hintKey: 'anxAllowNoSni', show: p => p.type === 'anx' },
+  // Shaping (anx spec §6): VisionLike by default; plain only to debug.
+  { section: 'settings', key: 'shape_plain', kind: 'switch', hintKey: 'anxShapePlain', show: p => p.type === 'anx' },
+  {
+    section: 'settings', key: 'max_streams', kind: 'number', min: 1, max: ANX_MAX_STREAMS_LIMIT, hintKey: 'anxMaxStreams',
+    placeholder: String(ANX_MAX_STREAMS), show: p => p.type === 'anx'
+  },
 
   // transport -------------------------------------------------------------
   { section: 'transport_settings', key: 'path', kind: 'text', placeholder: '/', show: takesTransportPath },

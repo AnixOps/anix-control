@@ -79,7 +79,7 @@ const columns = computed(() => [
   { key: 'type', label: t('admin.nodes.protocols.columns.type'), primary: true, sortable: true },
   { key: 'port', label: t('admin.nodes.protocols.columns.port'), numeric: true, sortable: true, secondary: true },
   { key: 'transport', label: t('admin.nodes.protocols.columns.transport'), value: row => String(row.transport || 'tcp').toUpperCase() },
-  { key: 'tls', label: t('admin.nodes.protocols.columns.tls'), value: row => (TLS_KEYS[row.tls] ? t(`admin.nodes.tlsModes.${TLS_KEYS[row.tls]}`) : '—'), breakpoint: 'md' },
+  { key: 'tls', label: t('admin.nodes.protocols.columns.tls'), value: row => (row.type === 'anx' ? t('admin.nodes.tlsModes.anxA2') : (TLS_KEYS[row.tls] ? t(`admin.nodes.tlsModes.${TLS_KEYS[row.tls]}`) : '—')), breakpoint: 'md' },
   { key: 'enable', label: t('admin.nodes.protocols.columns.status'), sortValue: row => (row.enable ? 1 : 0), sortable: true },
   { key: 'show', label: t('admin.nodes.protocols.columns.show'), value: row => (row.show === 0 ? t('admin.nodes.protocols.hidden') : t('admin.nodes.protocols.listed')), breakpoint: 'lg' }
 ])
