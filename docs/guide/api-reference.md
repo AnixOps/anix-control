@@ -159,6 +159,26 @@ the body.
 | `用户不存在` | the account no longer exists |
 | `重置订阅失败: …` | Control could not reset the token |
 
+### 我的 Telegram 绑定
+
+```http
+GET    /api/v4/user/telegram
+POST   /api/v4/user/telegram/bind-link
+DELETE /api/v4/user/telegram
+```
+
+`GET` answers `{"data": {"bound", "bot_configured", "allow_bind",
+"telegram_id"?, "username"?, "first_name"?, "bound_at"?}}`. `bind-link`
+answers a one-time link to the bot, valid 10 minutes:
+`{"data": {"url": "https://t.me/<bot>?start=b_…", "command": "/start b_…",
+"bot_username", "expires_at"}}` (`url` is empty when Control could not read
+the bot's username; the user then sends `command`). Opening it sends
+`/start <code>` from the user's Telegram account in a private chat and the bot
+binds that account. The code is signed with a key derived from the bot token;
+changing the token voids every link. Errors are `{"error": {"code",
+"message"}}`: 409 `bot_not_configured` or `user_already_bound`, 403
+`bind_disabled` (the bot's 允许绑定 is off); `DELETE` answers 404 `not_bound`.
+
 ### 我的访问统计
 
 ```http
@@ -367,6 +387,20 @@ subscription links are deliberately not bulk actions.
   `not_found`, `conflict` or `forbidden_self`). A reset sends one
   `Idempotency-Key` per click and the same key again for a failed request and
   for "Retry".
+
+### Telegram 手动绑定
+
+```http
+POST   /api/v4/admin/telegram/bindings
+{"email": "user@example.com", "telegram_id": "123456789"}
+DELETE /api/v4/admin/telegram/bindings/{user_id}
+```
+
+Binds a user (`user_id`, or `email` matched case-insensitively) to a numeric
+Telegram user ID, whatever the bot's 允许绑定 switch says; answers 201 with
+the binding. 404 `user_not_found`, 409 `user_already_bound` or
+`telegram_already_bound`, 400 `invalid_telegram_id`. `DELETE` removes a
+user's binding (404 `not_bound`). Both are audited.
 
 ### 访问统计（按目标域名与流量类型）
 

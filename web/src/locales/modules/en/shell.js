@@ -214,6 +214,35 @@ export default {
           failed: 'That didn’t work: {message}'
         }
       },
+      telegram: {
+        title: 'Telegram',
+        description: 'Once linked, the Telegram bot shows your account and subscription and sends expiry and traffic reminders.',
+        status: 'Status',
+        bound: 'Linked',
+        notBound: 'Not linked',
+        account: 'Telegram account',
+        bind: 'Link Telegram',
+        unbind: 'Unlink',
+        bindDisabled: 'The administrator turned self-service linking off. Ask an administrator to link your account.',
+        loadFailed: 'Could not load the Telegram link',
+        retry: 'Retry',
+        unbindTitle: 'Unlink Telegram?',
+        unbindMessage: 'You will stop getting Telegram reminders and the bot can no longer show your account.',
+        unbound: 'Telegram unlinked',
+        bindDone: 'Telegram linked',
+        failed: 'Failed: {message}',
+        dialog: {
+          title: 'Link Telegram',
+          description: 'Scan the code with your phone or open Telegram, then press Start in the bot. The link works for 10 minutes and links only your own account.',
+          preparing: 'Preparing the link…',
+          qrLabel: 'Telegram link QR code',
+          open: 'Open Telegram',
+          manual: 'Or send this command to the bot in a private chat',
+          waiting: 'Waiting for you to press Start in Telegram…',
+          expires: 'Valid until {time}',
+          done: 'Done'
+        }
+      },
       language: {
         title: 'Language',
         label: 'Display language'

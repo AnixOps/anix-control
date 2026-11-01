@@ -901,6 +901,21 @@ export async function testTelegramBot(chatId) {
   return dataOf(await adminV4({ url: '/kernel/notifications/telegram/test', method: 'post', data, sensitive: true }))
 }
 
+// POST /api/v4/admin/telegram/bindings: links a user (user_id or email) to
+// a Telegram user ID by hand. Refusals are thrown (404 user_not_found, 409
+// user_already_bound / telegram_already_bound).
+export async function bindTelegramUser({ userId, email, telegramId }) {
+  const data = { telegram_id: String(telegramId).trim() }
+  if (userId) data.user_id = Number(userId)
+  else data.email = String(email || '').trim()
+  return dataOf(await adminV4({ url: '/admin/telegram/bindings', method: 'post', data }))
+}
+
+// DELETE /api/v4/admin/telegram/bindings/:user_id: unlinks a user's Telegram.
+export async function unbindTelegramUser(userId) {
+  return dataOf(await adminV4({ url: `/admin/telegram/bindings/${encodeURIComponent(userId)}`, method: 'delete' }))
+}
+
 // GET /api/v4/kernel/alerts: the kernel's alerts (certificates that were not
 // renewed, CAs close to their end, phased processes that stalled). Answers
 // { alerts: [...], summary: { active, critical, warning } }; the summary

@@ -14,7 +14,10 @@ const api = vi.hoisted(() => ({
   setupTotp: vi.fn(),
   enableTotp: vi.fn(),
   disableMfa: vi.fn(),
-  regenerateBackupCodes: vi.fn()
+  regenerateBackupCodes: vi.fn(),
+  getMyTelegram: vi.fn(),
+  createMyTelegramBindLink: vi.fn(),
+  unbindMyTelegram: vi.fn()
 }))
 
 vi.mock('@/api/user', () => ({
@@ -43,6 +46,7 @@ describe('Account.vue', () => {
     useUserStore().login('token', { id: 7, email: 'lin@example.test', is_admin: false })
     for (const fn of Object.values(api)) fn.mockReset()
     api.getMfaStatus.mockResolvedValue(ok({ enabled: false, has_backup_codes: false, remaining_codes: 0, last_used: null }))
+    api.getMyTelegram.mockResolvedValue({ bound: false, bot_configured: false, allow_bind: false })
   })
 
   afterEach(() => {
@@ -166,5 +170,53 @@ describe('Account.vue', () => {
     await renderPage()
     await user.click(await screen.findByRole('button', { name: 'Try again' }))
     expect(api.getMfaStatus).toHaveBeenCalledTimes(2)
+  })
+
+  describe('Telegram', () => {
+    it('is hidden while no bot is configured', async () => {
+      await renderPage()
+      await waitFor(() => expect(api.getMyTelegram).toHaveBeenCalled())
+      expect(screen.queryByRole('list', { name: 'Telegram' })).toBeNull()
+    })
+
+    it('opens a one-time link to the bot and closes once the bot bound the account', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true })
+      try {
+        api.getMyTelegram.mockResolvedValue({ bound: false, bot_configured: true, allow_bind: true })
+        api.createMyTelegramBindLink.mockResolvedValue({
+          url: 'https://t.me/anix_bot?start=b_code',
+          command: '/start b_code',
+          bot_username: 'anix_bot',
+          expires_at: '2026-11-01T01:00:00Z'
+        })
+        const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+        await renderPage()
+        const section = await screen.findByRole('list', { name: 'Telegram' })
+        expect(section.textContent).toContain('Not linked')
+        await user.click(within(section).getByRole('button', { name: 'Link Telegram' }))
+        const open = await screen.findByRole('link', { name: 'Open Telegram' })
+        expect(open.getAttribute('href')).toBe('https://t.me/anix_bot?start=b_code')
+
+        api.getMyTelegram.mockResolvedValue({ bound: true, bot_configured: true, allow_bind: true, username: 'lin', telegram_id: 99 })
+        await vi.advanceTimersByTimeAsync(3100)
+        await waitFor(() => expect(screen.queryByRole('link', { name: 'Open Telegram' })).toBeNull())
+        expect(screen.getByRole('list', { name: 'Telegram' }).textContent).toContain('@lin')
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('unlinks after confirmation', async () => {
+      api.getMyTelegram.mockResolvedValue({ bound: true, bot_configured: true, allow_bind: true, telegram_id: 99 })
+      api.unbindMyTelegram.mockResolvedValue({ bound: false })
+      const user = userEvent.setup()
+      await renderPage()
+      const section = await screen.findByRole('list', { name: 'Telegram' })
+      await user.click(within(section).getByRole('button', { name: 'Unlink' }))
+      const dialog = await screen.findByRole('alertdialog')
+      api.getMyTelegram.mockResolvedValue({ bound: false, bot_configured: true, allow_bind: true })
+      await user.click(within(dialog).getByRole('button', { name: 'Unlink' }))
+      await waitFor(() => expect(api.unbindMyTelegram).toHaveBeenCalled())
+    })
   })
 })

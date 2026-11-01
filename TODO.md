@@ -105,7 +105,8 @@ deliberately in a later PR.
   `retention_days` is configurable from the admin system settings.
 - [ ] `MetricsHandler.RecordRequest` (`internal/handler/metrics.go`) is never
   called, so the `/metrics` request counters stay at 0.
-- [ ] `TelegramBotService.BindUser` and `Broadcast`
+- [ ] `TelegramBotService.BindUser` (by e-mail; the bot's `/bind` uses
+  `BindUserByToken`) and `Broadcast`
   (`internal/service/telegram_service.go`) have no callers;
   `SendNotification` is reached only through the unwired notification paths
   above.

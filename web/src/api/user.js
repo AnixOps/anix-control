@@ -154,3 +154,24 @@ export async function getMyTrafficDestinations({ hours = 24, limit = 100 } = {})
   const body = await request({ url: '/user/traffic/destinations', method: 'get', params: { hours, limit }, baseURL: '/api/v4' })
   return body && typeof body === 'object' && 'data' in body ? body.data : body
 }
+
+function v4Data(body) {
+  return body && typeof body === 'object' && 'data' in body ? body.data : body
+}
+
+// The signed-in user's Telegram binding, GET /api/v4/user/telegram:
+// { bound, bot_configured, allow_bind, telegram_id?, username?, bound_at? }.
+export async function getMyTelegram() {
+  return v4Data(await request({ url: '/user/telegram', method: 'get', baseURL: '/api/v4' }))
+}
+
+// POST /api/v4/user/telegram/bind-link: a one-time t.me link to the bot,
+// valid for 10 minutes: { url, command, bot_username, expires_at }.
+export async function createMyTelegramBindLink() {
+  return v4Data(await request({ url: '/user/telegram/bind-link', method: 'post', baseURL: '/api/v4', sensitive: true }))
+}
+
+// DELETE /api/v4/user/telegram: unlinks the signed-in user's Telegram.
+export async function unbindMyTelegram() {
+  return v4Data(await request({ url: '/user/telegram', method: 'delete', baseURL: '/api/v4' }))
+}

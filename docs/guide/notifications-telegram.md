@@ -7,11 +7,31 @@ through the bot and tells you what Telegram answered
 
 ## Before You Start
 
+- The bot only answers through its webhook: set it once in the admin console
+  (Telegram → Set webhook) after the bot is created, the token changes or the
+  panel domain changes.
+
 - The bot exists (@BotFather) and its token is saved in the bot settings.
 - Your own administrator account is bound to Telegram (open the bot, press
-  Start, then bind the account), or the target chat's id is in the bot's
+  Start, then send `/bind <your subscription link>` in the private chat, or
+  use **Link Telegram** on the Account page), or the target chat's id is in the bot's
   `admin_ids`. The test sends only to your bound chat or to one of the bot's
   `admin_ids`.
+
+## Link Users To Telegram
+
+There are three ways, all ending in one row of 已绑定用户:
+
+- **The user, from the panel**: Account → Telegram → **Link Telegram** shows a
+  QR code and an **Open Telegram** button for a one-time link (10 minutes).
+  Pressing Start in the bot links the Telegram account that pressed it; the
+  page notices within a few seconds. Needs the bot's 允许绑定 on.
+- **The user, in the bot**: `/bind <subscription link or token>` in a private
+  chat. Needs 允许绑定 on.
+- **An administrator**: Notifications → Telegram → 已绑定用户 → **Link
+  manually**, with the user's e-mail or ID and their numeric Telegram ID
+  (users get it from `@userinfobot`). Works with 允许绑定 off. Each row's menu
+  has **Unlink**; users can also unlink on the Account page or with `/unbind`.
 
 ## Run The Test From The Console
 
@@ -21,7 +41,7 @@ for `ok`, amber for a chat or bot you can fix (`chat_not_found`, `bot_blocked`,
 `rate_limited`, `not_configured`), red for `invalid_token`, `network_error` (with
 the reason) and `unknown`, each with the server's sentence and what to do. If your
 administrator account has no linked Telegram account the console says so and how
-to link it (send `/bind` to the bot). After five tests in a minute the button
+to link it (send `/bind <your subscription link>` to the bot). After five tests in a minute the button
 waits for the time the server asks for. The test uses the **saved** bot settings:
 save changes first. The page never shows or logs the token.
 
