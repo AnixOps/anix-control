@@ -116,7 +116,7 @@ func (p *planned) addTransport(id, next string) {
 	dialer.Transports = append(dialer.Transports, transportProto(transport, networkv1.TransportRole_TRANSPORT_ROLE_DIAL,
 		p.nodeOf(to.Line), p.keys[id], to, p.devices[p.nodeOf(to.Line)]))
 	accepter.Transports = append(accepter.Transports, transportProto(transport, networkv1.TransportRole_TRANSPORT_ROLE_ACCEPT,
-		p.nodeOf(from.Line), p.keys[id], to, Device{}))
+		p.nodeOf(from.Line), p.keys[id], to, p.devices[p.nodeOf(from.Line)]))
 	forwarding := &networkv1.Forwarding{FromTransportId: id}
 	if kind, target := next[:2], next[2:]; kind == "t:" {
 		forwarding.Next = &networkv1.Forwarding_TransportId{TransportId: target}

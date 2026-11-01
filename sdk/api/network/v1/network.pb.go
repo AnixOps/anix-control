@@ -2346,7 +2346,9 @@ type AnxLineSettings struct {
 	LinkId string                 `protobuf:"bytes,1,opt,name=link_id,json=linkId,proto3" json:"link_id,omitempty"`
 	// 32 bytes as 64 lower-case hex digits.
 	LinkKey string `protobuf:"bytes,2,opt,name=link_key,json=linkKey,proto3" json:"link_key,omitempty"`
-	// role dial: the accepting end's public key (anx-server keygen).
+	// role dial: the accepting end's public key (anx-server keygen). reverse
+	// l2, role accept: the dialing end's public key, the A2 jacket server it
+	// dials back to.
 	ServerPublic string `protobuf:"bytes,3,opt,name=server_public,json=serverPublic,proto3" json:"server_public,omitempty"`
 	// Per carrier, host:port; empty = carrier not offered. role dial: the
 	// peer's address; role accept: the address this end listens on (the hop
@@ -2367,7 +2369,8 @@ type AnxLineSettings struct {
 	// Reverse dial-back: the accepting end opens no port and dials the
 	// dialing end instead, which then runs the link over that connection
 	// (contracts/anx BOUNDARY.md: --reverse-listen, Link.reverse,
-	// SetReverseDials). The carrier addresses are empty, egress is l1 (c1).
+	// SetReverseDials). The carrier addresses are empty; egress l1, or l2 on
+	// c1 with the accepting end as the A2 jacket's client.
 	Reverse bool `protobuf:"varint,12,opt,name=reverse,proto3" json:"reverse,omitempty"`
 	// reverse, role dial: the address this end listens on for the accepting
 	// end's dial-backs (anx-node anx_line.reverse_listen).

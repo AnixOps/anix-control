@@ -181,7 +181,7 @@ func Plan(doc *Document, keys map[string]string, devices map[string]Device, forw
 		if !chained {
 			continue
 		}
-		if reason := pendingReason(path, transports, ingresses, lines, devices, keys); reason != "" {
+		if reason := pendingReason(path, transports, ingresses, egresses, lines, devices, keys); reason != "" {
 			result.Pending = append(result.Pending, Pending{Path: path.ID, Reason: reason})
 			continue
 		}
@@ -268,8 +268,8 @@ func Plan(doc *Document, keys map[string]string, devices map[string]Device, forw
 }
 
 // pendingReason answers why a path cannot be planned yet, or "".
-func pendingReason(path *Path, transports map[string]*Transport, ingresses map[string]*Ingress, lines map[string]*Line,
-	devices map[string]Device, keys map[string]string,
+func pendingReason(path *Path, transports map[string]*Transport, ingresses map[string]*Ingress, egresses map[string]*Egress,
+	lines map[string]*Line, devices map[string]Device, keys map[string]string,
 ) string {
 	for _, id := range path.Segments {
 		if keys[id] == "" {
@@ -278,6 +278,14 @@ func pendingReason(path *Path, transports map[string]*Transport, ingresses map[s
 		accepter := lines[ingresses[transports[id].ToIngress].Line].Node
 		if devices[accepter].PublicKeys[network.TransportAnxLine] == "" {
 			return fmt.Sprintf("%s has not reported its ANX-Line server key", accepter)
+		}
+		// A reversed jacketed link dials back to the dialing device's A2
+		// listener, which authenticates with that device's key.
+		if transport := transports[id]; transport.Kind == KindAnx && transport.AnxLine != nil && transport.AnxLine.Reverse {
+			dialer := lines[egresses[transport.FromEgress].Line].Node
+			if devices[dialer].PublicKeys[network.TransportAnxLine] == "" {
+				return fmt.Sprintf("%s has not reported its ANX-Line server key", dialer)
+			}
 		}
 	}
 	return ""
@@ -291,8 +299,11 @@ func checkTransportKind(v *violations, field string, transport *Transport) {
 		options = &AnxLine{}
 	}
 	if options.Reverse {
-		if transport.Kind != network.TransportAnxLine {
-			v.add(field+".anx_line.reverse", "only bare anx_line (l1, c1) runs reversed")
+		// kind anx runs reversed too (anx ANX-LINE-REVERSE §6.4): the
+		// accepting device dials back as the A2 jacket's client, on c1
+		// (the kind's own checks below).
+		if transport.Kind != network.TransportAnxLine && transport.Kind != KindAnx {
+			v.add(field+".anx_line.reverse", "only anx_line and anx run reversed")
 		}
 		if options.QUICPort != 0 || options.FakeTCPPort != 0 || options.Multipath {
 			v.add(field+".anx_line", "a reversed link has no carrier ports and no multipath; carrier_order c2 / c3 dial back on the reverse port")
@@ -458,7 +469,10 @@ func ingressProto(ingress *Ingress, peers []string, finals map[string]bool, path
 // accepting device's server key and its hop ingress's addresses (the public
 // host when there is one); the accepting end gets the addresses it listens
 // on: the hop ingress's listen address with the port of each carrier.
-func transportProto(transport *Transport, role networkv1.TransportRole, peer, key string, to *Ingress, accepter Device) *networkv1.Transport {
+// peerDevice is the other end's device: the accepting device for the
+// dialing end, the dialing device for the accepting end (whose key a
+// reversed jacketed link's accepting end dials back to).
+func transportProto(transport *Transport, role networkv1.TransportRole, peer, key string, to *Ingress, peerDevice Device) *networkv1.Transport {
 	out := &networkv1.Transport{
 		Id: transport.ID, Kind: network.TransportAnxLine, KindVersion: version(transport.KindVersion), Role: role,
 		PeerDeviceRef: peer, Mtu: transport.MTU,
@@ -491,7 +505,7 @@ func transportProto(transport *Transport, role networkv1.TransportRole, peer, ke
 		}
 		p := strconv.FormatUint(uint64(port), 10)
 		if role == networkv1.TransportRole_TRANSPORT_ROLE_DIAL {
-			anx.ServerPublic = accepter.PublicKeys[network.TransportAnxLine]
+			anx.ServerPublic = peerDevice.PublicKeys[network.TransportAnxLine]
 			listen := "0.0.0.0"
 			if addr, err := netip.ParseAddr(options.ReverseHost); err == nil && addr.Is6() {
 				listen = "::"
@@ -499,6 +513,12 @@ func transportProto(transport *Transport, role networkv1.TransportRole, peer, ke
 			anx.ReverseListen = net.JoinHostPort(listen, p)
 		} else {
 			anx.ReverseDial = net.JoinHostPort(options.ReverseHost, p)
+			if anx.Egress == "l2" {
+				// l2 dials back as the A2 jacket's client (anx
+				// ANX-LINE-REVERSE §6.4): its short auth is to the dialing
+				// device's key, the jacket server's.
+				anx.ServerPublic = peerDevice.PublicKeys[network.TransportAnxLine]
+			}
 		}
 		out.Settings = &networkv1.Transport_AnxLine{AnxLine: anx}
 		return out
@@ -509,7 +529,7 @@ func transportProto(transport *Transport, role networkv1.TransportRole, peer, ke
 			if to.PublicHost != "" {
 				host = to.PublicHost
 			}
-			anx.ServerPublic = accepter.PublicKeys[network.TransportAnxLine]
+			anx.ServerPublic = peerDevice.PublicKeys[network.TransportAnxLine]
 		}
 		port := to.Listen.Port
 		if role == networkv1.TransportRole_TRANSPORT_ROLE_DIAL {

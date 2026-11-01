@@ -383,7 +383,9 @@ message AnxLineSettings {
   string link_id = 1;
   // 32 bytes as 64 lower-case hex digits.
   string link_key = 2;
-  // role dial: the accepting end's public key (anx-server keygen).
+  // role dial: the accepting end's public key (anx-server keygen). reverse
+  // l2, role accept: the dialing end's public key, the A2 jacket server it
+  // dials back to.
   string server_public = 3;
   // Per carrier, host:port; empty = carrier not offered. role dial: the
   // peer's address; role accept: the address this end listens on (the hop
@@ -404,7 +406,8 @@ message AnxLineSettings {
   // Reverse dial-back: the accepting end opens no port and dials the
   // dialing end instead, which then runs the link over that connection
   // (contracts/anx BOUNDARY.md: --reverse-listen, Link.reverse,
-  // SetReverseDials). The carrier addresses are empty, egress is l1 (c1).
+  // SetReverseDials). The carrier addresses are empty; egress l1, or l2 on
+  // c1 with the accepting end as the A2 jacket's client.
   bool reverse = 12;
   // reverse, role dial: the address this end listens on for the accepting
   // end's dial-backs (anx-node anx_line.reverse_listen).
