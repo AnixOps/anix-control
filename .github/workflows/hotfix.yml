@@ -514,7 +514,7 @@ jobs:
           (( ${#existing[@]} == 0 )) || go test -count=1 -tags anixcore "${existing[@]}"
 
       # As anix-agent's release.yml build job, at the hotfix version.
-      - name: Build the Agent and the anixops relay
+      - name: Build the Agent
         env:
           TAG: ${{ needs.plan.outputs.tag }}
           GOOS: linux
@@ -528,12 +528,7 @@ jobs:
             -tags "anixcore" -trimpath \
             -ldflags "-X 'github.com/AnixOps/anix-agent/v5/cmd.version=${TAG}' -s -w -buildid="
           ln -s anix-agent build_assets/V2bX
-          (cd cmd/anixops-relay && go build -o ../../build_assets/anixops-relay -trimpath \
-            -ldflags "-X 'github.com/AnixOps/anix-control/sdk/forward/driver/anixops/relayd.Version=${TAG}' -s -w -buildid=" .)
           cp README.md LICENSE example/*.json build_assets/
-          for name in geoip geosite; do
-            curl -fsSL --retry 3 "https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/${name}.dat" -o "build_assets/${name}.dat"
-          done
 
       - name: Package
         shell: bash
