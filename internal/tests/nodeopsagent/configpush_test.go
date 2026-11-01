@@ -357,8 +357,8 @@ func reencode(t *testing.T, value any) []byte {
 
 // The snapshot carries the node's runtime configurations: runtime holds
 // the configuration for no node type, for each type the node serves and for
-// each protocol, byte for byte as JSON, and legacy_pull the same for older
-// Agents. Both with protocols only and with a raw configuration (which
+// each protocol, byte for byte as JSON (legacy_pull, its old name, is
+// gone). Both with protocols only and with a raw configuration (which
 // replaces the protocols). A walk of every secret-named key of the snapshot
 // finds no value that one of those configurations does not hold, and the
 // node's credentials never appear.
@@ -372,7 +372,7 @@ func TestConfigSnapshotCarriesTheRuntimeConfiguration(t *testing.T) {
 			require.NoError(t, json.Unmarshal(snapshot.GetConfigJson(), &document))
 			pull, ok := document["runtime"].(map[string]any)
 			require.True(t, ok, "the snapshot carries the runtime configuration")
-			assert.Equal(t, pull, document["legacy_pull"], "legacy_pull is runtime under its old name")
+			assert.NotContains(t, document, "legacy_pull")
 			var answers []string
 			code, body := runtimeAnswer(t, f.db, f.proxy.ID, "")
 			require.Equal(t, http.StatusOK, code, string(body))
