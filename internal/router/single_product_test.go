@@ -40,8 +40,6 @@ func TestOrderPaymentAndAffiliateRoutesReachTheirPackages(t *testing.T) {
 		routeID string
 	}{
 		{path: "/api/v2/user/plan", routeID: "plan.user.plan.get"},
-		{path: "/api/v2/user/order", routeID: "order.user.order.get"},
-		{path: "/api/v2/payment/methods", routeID: "payment.payment.methods.get"},
 	} {
 		t.Run(test.routeID, func(t *testing.T) {
 			router, cfg, host := setupV2PackageRouter(t)
@@ -80,6 +78,9 @@ func TestUsersSubscriptionResetReachesIdentityPlatform(t *testing.T) {
 // The public configuration reports the community edition and hides the
 // commercial packages.
 func TestPublicConfigHidesTheCommercialSet(t *testing.T) {
+	if commercialPackagesPresent(t) {
+		t.Skip("the commercial build reports the commercial edition (TestPublicConfigReportsTheCommercialEdition)")
+	}
 	router, cfg := setupTestRouter(t)
 	defer teardownTestRouter(t)
 	response := serveV2Request(router, http.MethodGet, "/api/v4/public/config")

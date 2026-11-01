@@ -352,8 +352,6 @@ func TestV2TaskSevenRepresentativeRoutesUsePackageHosts(t *testing.T) {
 		path    string
 		routeID string
 	}{
-		{path: "/api/v2/user/order", routeID: "order.user.order.get"},
-		{path: "/api/v2/payment/methods", routeID: "payment.payment.methods.get"},
 		{path: "/api/v2/user/subscription", routeID: "subscription.user.subscription.get"},
 	} {
 		t.Run(test.routeID, func(t *testing.T) {
@@ -462,7 +460,7 @@ func TestAllCataloguedV2RoutesResolveThroughTheirPackageBridge(t *testing.T) {
 		})
 	}
 	require.Equal(t, 26, identityRoutes)
-	require.Equal(t, 159, bridgedRoutes)
+	require.Equal(t, len(loadV2PackageRouteCatalog(t)), identityRoutes+bridgedRoutes)
 }
 
 // Old identity-platform and plan releases still declare the routes that
@@ -480,6 +478,11 @@ func TestMovedV2RoutesKeepTheirOldIdentityRouteIDs(t *testing.T) {
 	require.Len(t, moved, 16)
 	for _, route := range moved {
 		entry, ok := catalog[route.Method+" "+route.LegacyPath]
+		if !ok && commercialPackageIDs[route.ToPackage] {
+			// The route moved to a commercial package, which this build does
+			// not carry (router_commercial_test.go checks it there).
+			continue
+		}
 		require.True(t, ok, route.LegacyPath)
 		require.Equal(t, route.ToPackage, entry.Owner)
 		require.Equal(t, route.ToRoute, entry.RouteID)
@@ -953,7 +956,6 @@ func TestSetup_AdminEndpoints_RequireAuth(t *testing.T) {
 		{"GET", "/api/v2/admin/dashboard"},
 		{"GET", "/api/v2/admin/users"},
 		{"GET", "/api/v2/admin/nodes"},
-		{"GET", "/api/v2/admin/orders"},
 		{"GET", "/api/v2/admin/plans"},
 		{"GET", "/api/v2/admin/agent/monitor"},
 		{"GET", "/api/v2/admin/agent/tasks/task-1"},
@@ -984,7 +986,6 @@ func TestSetup_UserEndpoints_RequireAuth(t *testing.T) {
 		{"GET", "/api/v2/user/dashboard"},
 		{"GET", "/api/v2/user/subscription"},
 		{"GET", "/api/v2/user/plan"},
-		{"GET", "/api/v2/user/order"},
 	}
 
 	for _, ep := range endpoints {
@@ -1023,19 +1024,6 @@ func TestSetup_UniProxyEndpoints(t *testing.T) {
 			assert.Equal(t, http.StatusUnauthorized, w.Code)
 		})
 	}
-}
-
-func TestSetup_PaymentEndpoints(t *testing.T) {
-	r, _ := setupTestRouter(t)
-	defer teardownTestRouter(t)
-
-	// Public payment endpoints
-	t.Run("payment methods", func(t *testing.T) {
-		req, _ := http.NewRequest("GET", "/api/v2/payment/methods", nil)
-		w := httptest.NewRecorder()
-		r.ServeHTTP(w, req)
-		assert.NotEqual(t, http.StatusNotFound, w.Code)
-	})
 }
 
 func TestSetup_LegacyAgentEndpointsAreRemoved(t *testing.T) {
@@ -1122,31 +1110,6 @@ func TestSetup_CustomSubscribePath(t *testing.T) {
 	assert.NotEqual(t, http.StatusNotFound, w.Code)
 }
 
-func TestSetup_AdminPaymentGatewayEndpoints(t *testing.T) {
-	r, _ := setupTestRouter(t)
-	defer teardownTestRouter(t)
-
-	endpoints := []struct {
-		method string
-		path   string
-	}{
-		{"GET", "/api/v2/admin/payment/gateways"},
-		{"GET", "/api/v2/admin/payment/stats"},
-		{"GET", "/api/v2/admin/payment/records"},
-	}
-
-	for _, ep := range endpoints {
-		t.Run(ep.path, func(t *testing.T) {
-			req, _ := http.NewRequest(ep.method, ep.path, nil)
-			w := httptest.NewRecorder()
-			r.ServeHTTP(w, req)
-
-			// Should return 401 Unauthorized (needs auth)
-			assert.Equal(t, http.StatusUnauthorized, w.Code)
-		})
-	}
-}
-
 func TestSetup_AdminTelegramEndpoints(t *testing.T) {
 	r, _ := setupTestRouter(t)
 	defer teardownTestRouter(t)
@@ -1223,7 +1186,7 @@ func TestEveryCataloguedV2RouteResolvesToItsOwnRouteID(t *testing.T) {
 	require.True(t, ok)
 	routeFiles, err := filepath.Glob(filepath.Join(filepath.Dir(sourceFile), "..", "..", "packages", "*", "compat", "v2-routes.json"))
 	require.NoError(t, err)
-	require.Len(t, routeFiles, 15)
+	require.GreaterOrEqual(t, len(routeFiles), 12)
 	for _, routeFile := range routeFiles {
 		raw, err := os.ReadFile(routeFile)
 		require.NoError(t, err)
@@ -1251,3 +1214,7 @@ func sha256Hex(value string) string {
 	sum := sha256.Sum256([]byte(value))
 	return hex.EncodeToString(sum[:])
 }
+
+// commercialPackageIDs are the packages of the commercial set
+// (config/commercial-boundary.json).
+var commercialPackageIDs = map[string]bool{"affiliate": true, "order": true, "payment": true}

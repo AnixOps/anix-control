@@ -149,6 +149,10 @@ func installTaskSevenE2EPackages(t testing.TB, publicKey ed25519.PublicKey, priv
 		{id: "payment", name: "Payment"},
 		{id: "subscription", name: "Subscription"},
 	} {
+		if !packageFixtureExists(t, packageSpec.id, "compat", "v2-routes.json") {
+			// A community checkout carries no order or payment package.
+			continue
+		}
 		routes := packageFixtureFile(t, packageSpec.id, "compat", "v2-routes.json")
 		migrations, err := json.Marshal(map[string]any{
 			"format": "anixops.migrations/v1", "package_id": packageSpec.id, "version": identityE2EVersion, "migrations": []any{},
@@ -228,6 +232,15 @@ func installE2ESignedPackage(t testing.TB, packageID, name string, routes, migra
 func identityPackageFixtureFile(t testing.TB, relativePath ...string) []byte {
 	t.Helper()
 	return packageFixtureFile(t, identityE2EPackageID, relativePath...)
+}
+
+func packageFixtureExists(t testing.TB, packageID string, relativePath ...string) bool {
+	t.Helper()
+	_, source, _, ok := runtime.Caller(0)
+	require.True(t, ok)
+	parts := append([]string{filepath.Dir(source), "..", "..", "..", "packages", packageID}, relativePath...)
+	_, err := os.Stat(filepath.Join(parts...))
+	return err == nil
 }
 
 func packageFixtureFile(t testing.TB, packageID string, relativePath ...string) []byte {

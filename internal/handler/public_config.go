@@ -40,7 +40,7 @@ func NewPublicConfig(cfg *config.Config) PublicConfig {
 	registration := service.ResolveRegistrationPolicy(cfg)
 	return PublicConfig{
 		Edition:        publicConfigEdition,
-		HiddenPackages: append([]string(nil), publicConfigHiddenPackages...),
+		HiddenPackages: append([]string{}, publicConfigHiddenPackages...),
 		Registration:   PublicRegistrationConfig{Enabled: registration.Enabled, RequireInvite: registration.RequireInvite},
 	}
 }

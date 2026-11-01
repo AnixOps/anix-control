@@ -82,33 +82,6 @@
   },
   {
     "method": "GET",
-    "path": "/api/v2/admin/coupon",
-    "owner": "order",
-    "route_id": "order.admin.coupon.get",
-    "envelope": "data",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
-    "method": "POST",
-    "path": "/api/v2/admin/coupon",
-    "owner": "order",
-    "route_id": "order.admin.coupon.post",
-    "envelope": "data",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
-    "method": "DELETE",
-    "path": "/api/v2/admin/coupon/:id",
-    "owner": "order",
-    "route_id": "order.admin.coupon.id.delete",
-    "envelope": "data",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
-    "method": "GET",
     "path": "/api/v2/admin/dashboard",
     "owner": "machine-telemetry",
     "route_id": "telemetry.admin.dashboard.get",
@@ -139,51 +112,6 @@
     "path": "/api/v2/admin/invite/codes/:id",
     "owner": "identity-platform",
     "route_id": "identity.admin.invite.codes.id.delete",
-    "envelope": "panel",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
-    "method": "GET",
-    "path": "/api/v2/admin/invite/config",
-    "owner": "affiliate",
-    "route_id": "affiliate.admin.invite.config.get",
-    "envelope": "panel",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
-    "method": "PUT",
-    "path": "/api/v2/admin/invite/config",
-    "owner": "affiliate",
-    "route_id": "affiliate.admin.invite.config.put",
-    "envelope": "panel",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
-    "method": "GET",
-    "path": "/api/v2/admin/invite/stats",
-    "owner": "affiliate",
-    "route_id": "affiliate.admin.invite.stats.get",
-    "envelope": "panel",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
-    "method": "GET",
-    "path": "/api/v2/admin/invite/withdrawals",
-    "owner": "affiliate",
-    "route_id": "affiliate.admin.invite.withdrawals.get",
-    "envelope": "panel",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
-    "method": "POST",
-    "path": "/api/v2/admin/invite/withdrawals/:id/process",
-    "owner": "affiliate",
-    "route_id": "affiliate.admin.invite.withdrawals.id.process.post",
     "envelope": "panel",
     "middleware_group": "admin",
     "transport": "http"
@@ -472,123 +400,6 @@
     "path": "/api/v2/admin/notification/test",
     "owner": "notification",
     "route_id": "notification.admin.notification.test.post",
-    "envelope": "data",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
-    "method": "GET",
-    "path": "/api/v2/admin/orders",
-    "owner": "order",
-    "route_id": "order.admin.orders.get",
-    "envelope": "data",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
-    "method": "GET",
-    "path": "/api/v2/admin/orders/:id",
-    "owner": "order",
-    "route_id": "order.admin.orders.id.get",
-    "envelope": "data",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
-    "method": "POST",
-    "path": "/api/v2/admin/orders/:id/cancel",
-    "owner": "order",
-    "route_id": "order.admin.orders.id.cancel.post",
-    "envelope": "data",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
-    "method": "POST",
-    "path": "/api/v2/admin/orders/:id/paid",
-    "owner": "order",
-    "route_id": "order.admin.orders.id.paid.post",
-    "envelope": "data",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
-    "method": "PUT",
-    "path": "/api/v2/admin/orders/:id/status",
-    "owner": "order",
-    "route_id": "order.admin.orders.id.status.put",
-    "envelope": "data",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
-    "method": "GET",
-    "path": "/api/v2/admin/orders/stats",
-    "owner": "order",
-    "route_id": "order.admin.orders.stats.get",
-    "envelope": "data",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
-    "method": "GET",
-    "path": "/api/v2/admin/payment/gateways",
-    "owner": "payment",
-    "route_id": "payment.admin.payment.gateways.get",
-    "envelope": "data",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
-    "method": "POST",
-    "path": "/api/v2/admin/payment/gateways",
-    "owner": "payment",
-    "route_id": "payment.admin.payment.gateways.post",
-    "envelope": "data",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
-    "method": "DELETE",
-    "path": "/api/v2/admin/payment/gateways/:id",
-    "owner": "payment",
-    "route_id": "payment.admin.payment.gateways.id.delete",
-    "envelope": "data",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
-    "method": "PUT",
-    "path": "/api/v2/admin/payment/gateways/:id",
-    "owner": "payment",
-    "route_id": "payment.admin.payment.gateways.id.put",
-    "envelope": "data",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
-    "method": "POST",
-    "path": "/api/v2/admin/payment/gateways/:id/toggle",
-    "owner": "payment",
-    "route_id": "payment.admin.payment.gateways.id.toggle.post",
-    "envelope": "data",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
-    "method": "GET",
-    "path": "/api/v2/admin/payment/records",
-    "owner": "payment",
-    "route_id": "payment.admin.payment.records.get",
-    "envelope": "data",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
-    "method": "GET",
-    "path": "/api/v2/admin/payment/stats",
-    "owner": "payment",
-    "route_id": "payment.admin.payment.stats.get",
     "envelope": "data",
     "middleware_group": "admin",
     "transport": "http"
@@ -1171,87 +982,6 @@
   },
   {
     "method": "POST",
-    "path": "/api/v2/payment/callback/:type",
-    "owner": "payment",
-    "route_id": "payment.callback",
-    "envelope": "raw",
-    "middleware_group": "public",
-    "transport": "http"
-  },
-  {
-    "method": "POST",
-    "path": "/api/v2/payment/fiat/create",
-    "owner": "payment",
-    "route_id": "payment.payment.fiat.create.post",
-    "envelope": "data",
-    "middleware_group": "user",
-    "transport": "http"
-  },
-  {
-    "method": "GET",
-    "path": "/api/v2/payment/methods",
-    "owner": "payment",
-    "route_id": "payment.payment.methods.get",
-    "envelope": "data",
-    "middleware_group": "public",
-    "transport": "http"
-  },
-  {
-    "method": "POST",
-    "path": "/api/v2/payment/paypal/webhook",
-    "owner": "payment",
-    "route_id": "payment.payment.paypal.webhook.post",
-    "envelope": "raw",
-    "middleware_group": "public",
-    "transport": "http"
-  },
-  {
-    "method": "GET",
-    "path": "/api/v2/payment/status/:trade_no",
-    "owner": "payment",
-    "route_id": "payment.payment.status.trade_no.get",
-    "envelope": "data",
-    "middleware_group": "public",
-    "transport": "http"
-  },
-  {
-    "method": "POST",
-    "path": "/api/v2/payment/stripe/webhook",
-    "owner": "payment",
-    "route_id": "payment.payment.stripe.webhook.post",
-    "envelope": "raw",
-    "middleware_group": "public",
-    "transport": "http"
-  },
-  {
-    "method": "POST",
-    "path": "/api/v2/payment/x402/callback",
-    "owner": "payment",
-    "route_id": "payment.payment.x402.callback.post",
-    "envelope": "raw",
-    "middleware_group": "public",
-    "transport": "http"
-  },
-  {
-    "method": "GET",
-    "path": "/api/v2/payment/x402/check/:id",
-    "owner": "payment",
-    "route_id": "payment.payment.x402.check.id.get",
-    "envelope": "data",
-    "middleware_group": "user",
-    "transport": "http"
-  },
-  {
-    "method": "POST",
-    "path": "/api/v2/payment/x402/create",
-    "owner": "payment",
-    "route_id": "payment.payment.x402.create.post",
-    "envelope": "data",
-    "middleware_group": "user",
-    "transport": "http"
-  },
-  {
-    "method": "POST",
     "path": "/api/v2/register",
     "owner": "identity-platform",
     "route_id": "identity.auth.register",
@@ -1314,64 +1044,10 @@
     "transport": "http"
   },
   {
-    "method": "POST",
-    "path": "/api/v2/user/coupon/check",
-    "owner": "order",
-    "route_id": "order.user.coupon.check.post",
-    "envelope": "data",
-    "middleware_group": "user",
-    "transport": "http"
-  },
-  {
     "method": "GET",
     "path": "/api/v2/user/dashboard",
     "owner": "identity-platform",
     "route_id": "identity.user.dashboard.get",
-    "envelope": "panel",
-    "middleware_group": "user",
-    "transport": "http"
-  },
-  {
-    "method": "GET",
-    "path": "/api/v2/user/invite",
-    "owner": "affiliate",
-    "route_id": "affiliate.user.invite.get",
-    "envelope": "panel",
-    "middleware_group": "user",
-    "transport": "http"
-  },
-  {
-    "method": "GET",
-    "path": "/api/v2/user/invite/commissions",
-    "owner": "affiliate",
-    "route_id": "affiliate.user.invite.commissions.get",
-    "envelope": "panel",
-    "middleware_group": "user",
-    "transport": "http"
-  },
-  {
-    "method": "POST",
-    "path": "/api/v2/user/invite/generate",
-    "owner": "affiliate",
-    "route_id": "affiliate.user.invite.generate.post",
-    "envelope": "panel",
-    "middleware_group": "user",
-    "transport": "http"
-  },
-  {
-    "method": "POST",
-    "path": "/api/v2/user/invite/withdraw",
-    "owner": "affiliate",
-    "route_id": "affiliate.user.invite.withdraw.post",
-    "envelope": "panel",
-    "middleware_group": "user",
-    "transport": "http"
-  },
-  {
-    "method": "GET",
-    "path": "/api/v2/user/invite/withdrawals",
-    "owner": "affiliate",
-    "route_id": "affiliate.user.invite.withdrawals.get",
     "envelope": "panel",
     "middleware_group": "user",
     "transport": "http"
@@ -1480,69 +1156,6 @@
     "path": "/api/v2/user/notifications/unread-count",
     "owner": "notification",
     "route_id": "notification.user.notifications.unread_count.get",
-    "envelope": "data",
-    "middleware_group": "user",
-    "transport": "http"
-  },
-  {
-    "method": "GET",
-    "path": "/api/v2/user/order",
-    "owner": "order",
-    "route_id": "order.user.order.get",
-    "envelope": "data",
-    "middleware_group": "user",
-    "transport": "http"
-  },
-  {
-    "method": "GET",
-    "path": "/api/v2/user/order/:id",
-    "owner": "order",
-    "route_id": "order.user.order.id.get",
-    "envelope": "data",
-    "middleware_group": "user",
-    "transport": "http"
-  },
-  {
-    "method": "POST",
-    "path": "/api/v2/user/order/save",
-    "owner": "order",
-    "route_id": "order.user.order.save.post",
-    "envelope": "data",
-    "middleware_group": "user",
-    "transport": "http"
-  },
-  {
-    "method": "GET",
-    "path": "/api/v2/user/payment/channels",
-    "owner": "payment",
-    "route_id": "payment.user.payment.channels.get",
-    "envelope": "data",
-    "middleware_group": "user",
-    "transport": "http"
-  },
-  {
-    "method": "POST",
-    "path": "/api/v2/user/payment/create",
-    "owner": "payment",
-    "route_id": "payment.user.payment.create.post",
-    "envelope": "data",
-    "middleware_group": "user",
-    "transport": "http"
-  },
-  {
-    "method": "GET",
-    "path": "/api/v2/user/payment/records",
-    "owner": "payment",
-    "route_id": "payment.user.payment.records.get",
-    "envelope": "data",
-    "middleware_group": "user",
-    "transport": "http"
-  },
-  {
-    "method": "GET",
-    "path": "/api/v2/user/payment/status/:trade_no",
-    "owner": "payment",
-    "route_id": "payment.user.payment.status.trade_no.get",
     "envelope": "data",
     "middleware_group": "user",
     "transport": "http"

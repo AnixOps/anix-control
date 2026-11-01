@@ -66,7 +66,7 @@ class PackageSpec:
     runtimes: tuple[str, ...] = ()
 
 
-PACKAGE_SPECS = (
+_ALL_PACKAGE_SPECS = (
     PackageSpec("identity-platform", ("control",)),
     PackageSpec("platform", ("control",)),
     PackageSpec("affiliate", ("control",)),
@@ -82,6 +82,19 @@ PACKAGE_SPECS = (
     PackageSpec("machine-telemetry", ("control", "agent")),
     PackageSpec("wireguard", ("control",)),
     PackageSpec("protocol-runtime", ("control",)),
+)
+
+# The commercial packages (config/commercial-boundary.json) live in the
+# private anix-control-commercial repository and are overlaid onto this tree
+# for the commercial build. A community checkout has no directory for them, so
+# a package is specified only when its manifest template is present.
+COMMERCIAL_PACKAGE_IDS = frozenset({"affiliate", "order", "payment"})
+
+PACKAGE_SPECS = tuple(
+    spec
+    for spec in _ALL_PACKAGE_SPECS
+    if spec.package_id not in COMMERCIAL_PACKAGE_IDS
+    or (PACKAGES_ROOT / spec.package_id / "manifest.template.json").is_file()
 )
 
 MANIFEST_FIELDS = (

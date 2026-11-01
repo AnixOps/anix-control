@@ -21,7 +21,7 @@ from generate_release_manifest import builtin_package_entries  # noqa: E402
 from verify_release_artifacts import VerificationError, verify_checksums_signature  # noqa: E402
 
 VERSION = "5.0.0-rc.1"
-PACKAGES = ("identity-platform", "order")
+PACKAGES = ("identity-platform", "ticket")
 ED25519_SPKI_PREFIX = bytes.fromhex("302a300506032b6570032100")
 
 

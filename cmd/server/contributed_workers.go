@@ -5,6 +5,7 @@ package main
 // left out of a build.
 var contributedWorkers []func(rt *serverRuntime)
 
+//nolint:unused // called by files only the commercial build adds (order_payments.go)
 func registerContributedWorker(start func(rt *serverRuntime)) {
 	contributedWorkers = append(contributedWorkers, start)
 }
