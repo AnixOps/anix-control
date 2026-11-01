@@ -13,9 +13,25 @@ through the bot and tells you what Telegram answered
 
 - The bot exists (@BotFather) and its token is saved in the bot settings.
 - Your own administrator account is bound to Telegram (open the bot, press
-  Start, then send `/bind <your subscription link>` in the private chat), or the target chat's id is in the bot's
+  Start, then send `/bind <your subscription link>` in the private chat, or
+  use **Link Telegram** on the Account page), or the target chat's id is in the bot's
   `admin_ids`. The test sends only to your bound chat or to one of the bot's
   `admin_ids`.
+
+## Link Users To Telegram
+
+There are three ways, all ending in one row of 已绑定用户:
+
+- **The user, from the panel**: Account → Telegram → **Link Telegram** shows a
+  QR code and an **Open Telegram** button for a one-time link (10 minutes).
+  Pressing Start in the bot links the Telegram account that pressed it; the
+  page notices within a few seconds. Needs the bot's 允许绑定 on.
+- **The user, in the bot**: `/bind <subscription link or token>` in a private
+  chat. Needs 允许绑定 on.
+- **An administrator**: Notifications → Telegram → 已绑定用户 → **Link
+  manually**, with the user's e-mail or ID and their numeric Telegram ID
+  (users get it from `@userinfobot`). Works with 允许绑定 off. Each row's menu
+  has **Unlink**; users can also unlink on the Account page or with `/unbind`.
 
 ## Run The Test From The Console
 

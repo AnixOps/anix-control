@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/stretchr/testify/assert"
@@ -100,4 +102,88 @@ func TestHandleBindHonoursAllowBind(t *testing.T) {
 	require.NoError(t, svc.HandleUpdate(bindUpdate("private", "/bind tok-member")))
 	require.Len(t, *sent, 1)
 	assert.Contains(t, (*sent)[0], "关闭")
+}
+
+func TestTelegramBindCodeRoundTrip(t *testing.T) {
+	now := time.Unix(1_800_000_000, 0)
+	code := telegramBindCode("tok", 42, now.Add(TelegramBindCodeTTL))
+	assert.LessOrEqual(t, len(code), 64, "Telegram start parameters are at most 64 characters")
+	assert.Regexp(t, `^[A-Za-z0-9_-]+$`, code)
+
+	userID, ok := verifyTelegramBindCode("tok", code, now)
+	require.True(t, ok)
+	assert.Equal(t, uint(42), userID)
+
+	_, ok = verifyTelegramBindCode("tok", code, now.Add(TelegramBindCodeTTL))
+	assert.False(t, ok, "expired")
+	_, ok = verifyTelegramBindCode("other-token", code, now)
+	assert.False(t, ok, "another bot token")
+	tampered := code[:len(code)-2] + "AA"
+	_, ok = verifyTelegramBindCode("tok", tampered, now)
+	assert.False(t, ok, "tampered")
+	_, ok = verifyTelegramBindCode("tok", "b_short", now)
+	assert.False(t, ok)
+}
+
+func TestStartWithBindCodeBindsTheSender(t *testing.T) {
+	db := setupTelegramTestDB(t)
+	require.NoError(t, db.Create(&model.TelegramBot{Token: "t", Name: "b"}).Error)
+	user := &model.User{Email: "member@example.com", Token: "tok-member", UUID: "u-1"}
+	require.NoError(t, db.Create(user).Error)
+	svc := NewTelegramBotService(db)
+	sent := captureSends(svc)
+
+	code := telegramBindCode("t", user.ID, time.Now().Add(time.Minute))
+	require.NoError(t, svc.HandleUpdate(bindUpdate("group", "/start "+code)))
+	require.NoError(t, svc.HandleUpdate(bindUpdate("private", "/start "+code)))
+
+	var binding model.TelegramUser
+	require.NoError(t, db.Where("telegram_id = ?", 4242).First(&binding).Error)
+	assert.Equal(t, user.ID, binding.UserID)
+	require.Len(t, *sent, 2)
+	assert.Contains(t, (*sent)[0], "私聊")
+	assert.Contains(t, (*sent)[1], "绑定成功")
+
+	// The same Telegram account cannot bind a second member.
+	other := &model.User{Email: "other@example.com", Token: "tok-other", UUID: "u-2"}
+	require.NoError(t, db.Create(other).Error)
+	require.NoError(t, db.Where("telegram_id = ?", 4242).Delete(&model.TelegramUser{}).Error)
+	require.NoError(t, db.Create(&model.TelegramUser{UserID: user.ID, TelegramID: 4242}).Error)
+	_, err := svc.AdminBind(other.ID, 4242)
+	assert.ErrorIs(t, err, ErrTelegramIDAlreadyBound)
+	_, err = svc.AdminBind(user.ID, 777)
+	assert.ErrorIs(t, err, ErrTelegramUserAlreadyBound)
+}
+
+func TestBindLinkAndUnbind(t *testing.T) {
+	db := setupTelegramTestDB(t)
+	require.NoError(t, db.Create(&model.TelegramBot{Token: "t", Name: "b"}).Error)
+	user := &model.User{Email: "member@example.com", Token: "tok-member", UUID: "u-1"}
+	require.NoError(t, db.Create(user).Error)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/bott/getMe", r.URL.Path)
+		_, _ = w.Write([]byte(`{"ok":true,"result":{"username":"anix_bot"}}`))
+	}))
+	defer server.Close()
+	svc := NewTelegramBotService(db)
+	svc.apiBase = server.URL
+
+	now := time.Now()
+	link, err := svc.BindLink(user.ID, now)
+	require.NoError(t, err)
+	assert.Equal(t, "anix_bot", link.BotUsername)
+	assert.True(t, strings.HasPrefix(link.URL, "https://t.me/anix_bot?start=b_"))
+	code := strings.TrimPrefix(link.Command, "/start ")
+	bound, err := svc.BindUserByCode(99, code, &TelegramUser{ID: 99}, now)
+	require.NoError(t, err)
+	assert.Equal(t, user.ID, bound.ID)
+
+	_, err = svc.BindLink(user.ID, now)
+	assert.ErrorIs(t, err, ErrTelegramUserAlreadyBound)
+	require.NoError(t, svc.UnbindUser(user.ID))
+	assert.ErrorIs(t, svc.UnbindUser(user.ID), ErrTelegramNotBound)
+
+	require.NoError(t, db.Model(&model.TelegramBot{}).Where("1 = 1").Update("allow_bind", false).Error)
+	_, err = svc.BindLink(user.ID, now)
+	assert.ErrorIs(t, err, ErrTelegramBindDisabled)
 }

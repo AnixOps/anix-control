@@ -214,6 +214,35 @@ export default {
           failed: '操作没有完成：{message}'
         }
       },
+      telegram: {
+        title: 'Telegram',
+        description: '绑定后可在 Telegram 机器人里查看账户、获取订阅，并接收到期和流量提醒。',
+        status: '状态',
+        bound: '已绑定',
+        notBound: '未绑定',
+        account: 'Telegram 账号',
+        bind: '绑定 Telegram',
+        unbind: '解除绑定',
+        bindDisabled: '管理员已关闭自助绑定，请联系管理员绑定。',
+        loadFailed: '无法读取 Telegram 绑定',
+        retry: '重试',
+        unbindTitle: '解除 Telegram 绑定？',
+        unbindMessage: '解除后将不再收到 Telegram 提醒，机器人也无法再查看你的账户。',
+        unbound: '已解除 Telegram 绑定',
+        bindDone: 'Telegram 已绑定',
+        failed: '操作失败：{message}',
+        dialog: {
+          title: '绑定 Telegram',
+          description: '用手机扫码，或点击按钮打开 Telegram，在机器人里点「开始」即可完成绑定。链接 10 分钟内有效，只能绑定你自己的账户。',
+          preparing: '正在生成绑定链接…',
+          qrLabel: 'Telegram 绑定二维码',
+          open: '打开 Telegram',
+          manual: '也可以私聊机器人发送这条命令',
+          waiting: '等待你在 Telegram 里点「开始」…',
+          expires: '有效期至 {time}',
+          done: '完成'
+        }
+      },
       language: {
         title: '语言',
         label: '界面语言'

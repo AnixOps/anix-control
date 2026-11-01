@@ -9,6 +9,35 @@
     </UiGroupedList>
 
     <UiGroupedList
+      v-if="tg.state !== 'hidden'"
+      :title="t('shell.accountPage.telegram.title')"
+      :footer="tg.state === 'ready' && !tg.bound && !tg.allowBind ? t('shell.accountPage.telegram.bindDisabled') : t('shell.accountPage.telegram.description')"
+      heading-tag="h2"
+      data-account-section="telegram"
+    >
+      <UiGroupedListRow v-if="tg.state === 'loading'" :label="t('shell.accountPage.telegram.status')">
+        <UiSkeleton v-if="showTgSkeleton" variant="text" :lines="1" class="account-page__skeleton" />
+      </UiGroupedListRow>
+      <UiGroupedListRow v-else-if="tg.state === 'failed'" :label="t('shell.accountPage.telegram.loadFailed')">
+        <UiButton size="sm" @click="loadTelegram">{{ t('shell.accountPage.telegram.retry') }}</UiButton>
+      </UiGroupedListRow>
+      <template v-else>
+        <UiGroupedListRow :label="t('shell.accountPage.telegram.status')">
+          <template #value>
+            <UiBadge
+              :tone="tg.bound ? 'success' : 'neutral'"
+              :label="tg.bound ? t('shell.accountPage.telegram.bound') : t('shell.accountPage.telegram.notBound')"
+              data-telegram-status
+            />
+          </template>
+          <UiButton v-if="!tg.bound && tg.allowBind" variant="primary" size="sm" data-telegram-bind @click="startTelegramBind">{{ t('shell.accountPage.telegram.bind') }}</UiButton>
+          <UiButton v-else-if="tg.bound" variant="danger-soft" size="sm" data-telegram-unbind @click="unbindTelegram">{{ t('shell.accountPage.telegram.unbind') }}</UiButton>
+        </UiGroupedListRow>
+        <UiGroupedListRow v-if="tg.bound" :label="t('shell.accountPage.telegram.account')" :value="tg.account" />
+      </template>
+    </UiGroupedList>
+
+    <UiGroupedList
       :title="t('shell.accountPage.mfa.title')"
       :footer="t('shell.accountPage.mfa.description')"
       heading-tag="h2"
@@ -66,6 +95,30 @@
         />
       </UiGroupedListRow>
     </UiGroupedList>
+
+    <!-- Link Telegram: a one-time t.me link (QR code and button). -->
+    <UiDialog
+      v-model:open="tgLink.open"
+      :title="t('shell.accountPage.telegram.dialog.title')"
+      :description="t('shell.accountPage.telegram.dialog.description')"
+      data-telegram-dialog
+      @update:open="open => { if (!open) stopTelegramWatch() }"
+    >
+      <p v-if="tgLink.preparing" class="account-page__muted">{{ t('shell.accountPage.telegram.dialog.preparing') }}</p>
+      <p v-else-if="tgLink.error" class="account-page__error" role="alert">{{ tgLink.error }}</p>
+      <div v-else class="account-page__scan">
+        <UiQrCode v-if="tgLink.url" :value="tgLink.url" :label="t('shell.accountPage.telegram.dialog.qrLabel')" :size="152" data-telegram-qr />
+        <div class="account-page__manual">
+          <UiButton v-if="tgLink.url" variant="primary" :href="tgLink.url" target="_blank" rel="noopener" data-telegram-open>{{ t('shell.accountPage.telegram.dialog.open') }}</UiButton>
+          <UiCopyField :value="tgLink.command" :label="t('shell.accountPage.telegram.dialog.manual')" size="md" stacked />
+          <p class="account-page__muted">{{ t('shell.accountPage.telegram.dialog.waiting') }}</p>
+          <p v-if="tgLink.expiresAt" class="account-page__muted">{{ t('shell.accountPage.telegram.dialog.expires', { time: format.dateTime(tgLink.expiresAt) }) }}</p>
+        </div>
+      </div>
+      <template #footer="{ close }">
+        <UiButton variant="primary" @click="close">{{ t('shell.accountPage.telegram.dialog.done') }}</UiButton>
+      </template>
+    </UiDialog>
 
     <!-- Turn on: scan the QR code (or type the key), then the first code. -->
     <UiDialog
@@ -177,9 +230,9 @@
 // the otpauth:// key as a QR code (and as text) and takes the first code in
 // UiOtpField (U5). Password change and signed-in devices have no endpoint
 // yet, so they are not here.
-import { computed, nextTick, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { Check, Copy, Download, Monitor, Moon, Sun } from '@lucide/vue'
-import { disableMfa, enableTotp, getMfaStatus, regenerateBackupCodes, setupTotp } from '@/api/user'
+import { createMyTelegramBindLink, disableMfa, enableTotp, getMfaStatus, getMyTelegram, regenerateBackupCodes, setupTotp, unbindMyTelegram } from '@/api/user'
 import { useUserStore } from '@/stores/user'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { useTheme } from '@/composables/useTheme'
@@ -364,7 +417,93 @@ async function regenerate() {
   }
 }
 
-onMounted(loadMfa)
+// --- Telegram ------------------------------------------------------------
+// GET/DELETE /api/v4/user/telegram and POST /api/v4/user/telegram/bind-link.
+// The section is hidden while no bot is configured.
+const tg = reactive({ state: 'loading', bound: false, allowBind: false, account: '' })
+const showTgSkeleton = useDelayedLoading(computed(() => tg.state === 'loading'))
+
+function v4MessageOf(error) {
+  return error?.response?.data?.error?.message || messageOf(error)
+}
+
+async function loadTelegram({ quiet = false } = {}) {
+  if (!quiet) tg.state = 'loading'
+  try {
+    const data = (await getMyTelegram()) || {}
+    if (!data.bot_configured && !data.bound) {
+      tg.state = 'hidden'
+      return
+    }
+    tg.bound = data.bound === true
+    tg.allowBind = data.allow_bind === true
+    tg.account = data.username ? `@${data.username}` : (data.first_name || (data.telegram_id ? String(data.telegram_id) : '—'))
+    tg.state = 'ready'
+  } catch {
+    if (!quiet) tg.state = 'failed'
+  }
+}
+
+const tgLink = reactive({ open: false, preparing: false, url: '', command: '', expiresAt: null, error: '' })
+let tgWatch = null
+
+function stopTelegramWatch() {
+  if (tgWatch) clearInterval(tgWatch)
+  tgWatch = null
+}
+
+async function startTelegramBind() {
+  Object.assign(tgLink, { open: true, preparing: true, url: '', command: '', expiresAt: null, error: '' })
+  try {
+    const data = (await createMyTelegramBindLink()) || {}
+    // Only a t.me link may become a link (the value comes from the API).
+    const url = String(data.url || '')
+    tgLink.url = url.startsWith('https://t.me/') ? url : ''
+    tgLink.command = String(data.command || '')
+    tgLink.expiresAt = data.expires_at || null
+    // The bot binds when the user presses Start: watch for it.
+    stopTelegramWatch()
+    tgWatch = setInterval(async () => {
+      await loadTelegram({ quiet: true })
+      if (tg.bound) {
+        stopTelegramWatch()
+        tgLink.open = false
+        toast.success(t('shell.accountPage.telegram.bindDone'))
+      }
+    }, 3000)
+  } catch (error) {
+    tgLink.error = t('shell.accountPage.telegram.failed', { message: v4MessageOf(error) })
+  } finally {
+    tgLink.preparing = false
+  }
+}
+
+async function unbindTelegram() {
+  const done = await confirm({
+    title: t('shell.accountPage.telegram.unbindTitle'),
+    message: t('shell.accountPage.telegram.unbindMessage'),
+    confirmLabel: t('shell.accountPage.telegram.unbind'),
+    tone: 'danger',
+    onConfirm: async () => {
+      try {
+        await unbindMyTelegram()
+      } catch (error) {
+        throw new Error(t('shell.accountPage.telegram.failed', { message: v4MessageOf(error) }))
+      }
+    }
+  })
+  if (done) {
+    toast.success(t('shell.accountPage.telegram.unbound'))
+    await loadTelegram()
+  }
+}
+
+onBeforeUnmount(stopTelegramWatch)
+
+onMounted(() => {
+  loadMfa()
+  loadTelegram()
+})
 </script>
 
 <style scoped>

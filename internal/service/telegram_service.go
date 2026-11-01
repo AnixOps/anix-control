@@ -169,6 +169,9 @@ func (s *TelegramBotService) handleCommand(update *TelegramUpdate) error {
 
 	switch command {
 	case "/start":
+		if len(parts) > 1 && strings.HasPrefix(parts[1], telegramBindCodePrefix) {
+			return s.handleStartBind(chatID, userID, update.Message.From, update.Message.Chat.Type, parts[1])
+		}
 		return s.handleStart(chatID, userID, update.Message.From)
 	case "/help":
 		return s.handleHelp(chatID)
@@ -223,6 +226,19 @@ func (s *TelegramBotService) handleStart(chatID int64, userID int64, from *Teleg
 	return s.SendMessage(chatID, welcomeMsg)
 }
 
+// handleStartBind binds the account of a panel bind link: the member opened
+// https://t.me/<bot>?start=<code>, and Telegram sent "/start <code>".
+func (s *TelegramBotService) handleStartBind(chatID int64, userID int64, from *TelegramUser, chatType string, code string) error {
+	if chatType != "" && chatType != "private" {
+		return s.SendMessage(chatID, "❌ 请私聊机器人完成绑定")
+	}
+	user, err := s.BindUserByCode(userID, code, from, time.Now())
+	if err != nil {
+		return s.SendMessage(chatID, "❌ "+err.Error())
+	}
+	return s.SendMessage(chatID, fmt.Sprintf("✅ 绑定成功: `%s`\n\n现在可以使用 /info 和 /sub", markdownCode(user.Email)))
+}
+
 // handleHelp 处理 /help 命令
 func (s *TelegramBotService) handleHelp(chatID int64) error {
 	helpText := `📖 命令帮助
@@ -230,7 +246,7 @@ func (s *TelegramBotService) handleHelp(chatID int64) error {
 /start - 开始使用Bot
 /help - 显示此帮助信息
 /bind <订阅链接> - 绑定您的账户
-  在面板订阅页复制链接后私聊发送
+  也可以在面板「账户」页点「绑定 Telegram」
 /unbind - 解除账户绑定
 /info - 查看账户信息
   - 套餐信息
@@ -347,7 +363,10 @@ func (s *TelegramBotService) bind(telegramID int64, user *model.User, from *Tele
 	// 检查是否已被其他Telegram绑定
 	var existingBind model.TelegramUser
 	if err := s.db.Where("user_id = ?", user.ID).First(&existingBind).Error; err == nil {
-		return fmt.Errorf("该账户已被其他Telegram绑定")
+		return ErrTelegramUserAlreadyBound
+	}
+	if err := s.db.Where("telegram_id = ?", telegramID).First(&existingBind).Error; err == nil {
+		return ErrTelegramIDAlreadyBound
 	}
 
 	// 创建绑定
