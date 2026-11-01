@@ -8,7 +8,7 @@ import userEvent from '@testing-library/user-event'
 import AgentUpgradeSheet from '@/components/admin/AgentUpgradeSheet.vue'
 import UiHost from '@/ui/UiHost.vue'
 import { setLocale } from '@/i18n'
-import { closeAgentUpgrade, openAgentUpgrade } from '@/composables/useAgentUpgradeSheet'
+import { closeAgentUpgrade, openAgentUpgrade, openKernelUpgrade } from '@/composables/useAgentUpgradeSheet'
 import { toastMessages } from './helpers/feedback'
 
 const kernelApi = vi.hoisted(() => ({
@@ -143,6 +143,44 @@ describe('AgentUpgradeSheet', () => {
     expect(dialog.textContent).toContain('forward-2')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Start upgrade' }))
     await waitFor(() => expect(kernelApi.startKernelAgentUpgrade).toHaveBeenCalledWith({ target_version: 'v4.2.0', nodes: ['forward-2'] }))
+  })
+
+  it('upgrades only the kernel of the nodes a page opened it for', async () => {
+    kernelApi.getKernelAgentUpgradePlan.mockResolvedValue(plan({
+      eligible_nodes: 2,
+      kernel_version: '0.1.0-alpha.13',
+      nodes: [
+        { node_ref: 'proxy-1', name: 'JP', agent_version: 'v4.1.0', kernel_version: '0.1.0-alpha.9' },
+        { node_ref: 'proxy-2', name: 'HK', agent_version: 'v4.1.0', kernel_version: '' }
+      ]
+    }))
+    kernelApi.startKernelAgentUpgrade.mockResolvedValue({ id: 'c3', status: 'running' })
+    renderSheet()
+    openKernelUpgrade('proxy-1')
+    await screen.findByTestId('agent-upgrade-form')
+    expect(await screen.findByTestId('agent-upgrade-kernel')).toBeTruthy()
+    expect(screen.getByTestId('agent-upgrade-kernel').textContent).toContain('anx-node 0.1.0-alpha.13')
+    expect(screen.queryByTestId('agent-upgrade-target')).toBeNull()
+    expect(screen.getByTestId('agent-upgrade-nodes').textContent).toContain('kernel anx-node 0.1.0-alpha.9')
+    expect(screen.getByTestId('agent-upgrade-nodes').textContent).toContain('kernel not reported')
+    await userEvent.click(screen.getByTestId('agent-upgrade-start'))
+
+    const dialog = await screen.findByRole('alertdialog')
+    expect(dialog.textContent).toContain('Upgrade the kernel of 1 node to anx-node 0.1.0-alpha.13?')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Upgrade kernel' }))
+    await waitFor(() => expect(kernelApi.startKernelAgentUpgrade).toHaveBeenCalledWith({ nodes: ['proxy-1'], kernel_only: true }))
+    await waitFor(() => expect(toastMessages('success')).toContain('Kernel upgrade to anx-node 0.1.0-alpha.13 started'))
+  })
+
+  it('cannot upgrade the kernel when Control holds none', async () => {
+    kernelApi.getKernelAgentUpgradePlan.mockResolvedValue(plan({
+      eligible_nodes: 1, kernel_version: '', nodes: [{ node_ref: 'proxy-1', name: 'JP', agent_version: 'v4.1.0' }]
+    }))
+    renderSheet()
+    openKernelUpgrade(['proxy-1'])
+    await screen.findByTestId('agent-upgrade-form')
+    expect((await screen.findByTestId('agent-upgrade-kernel')).textContent).toContain('no anx-node release')
+    expect(screen.getByTestId('agent-upgrade-start').disabled).toBe(true)
   })
 
   it('does not start when the confirmation is declined', async () => {

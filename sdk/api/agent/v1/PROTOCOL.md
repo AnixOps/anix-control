@@ -835,6 +835,14 @@ it uses `DesiredOperation`, `OperationAck`, `ObservedState` and the next
   | `artifacts` | for an upgrade, one per architecture (`amd64`, `arm64`): `arch`, `asset` (the release zip's name), `url` (https, Control's control mirror `/install/agent/<tag>/<asset>`), `sha256` (lowercase hex), `size` (bytes, at most 256 MiB), `signature` (base64 Ed25519 over the zip's exact bytes: the release's `.sig`). A rollback carries none. |
   | `kernels` | optional, at most one per architecture: the kernel the Agent runs as its anixcore core, installed with the upgrade. `name` (`anx-node`), `version` (without `v`, `0.1.0-alpha.2`), `arch`, `asset` (`anx-node-<version>-<target>-linux-musl.tar.gz`), `url` (https, Control's `/install/kernel/anx-node/<version>/<asset>`), `sha256`, `size` (at most 64 MiB), `sums` (the release's `SHA256SUMS`, which lists `asset` with `sha256`) and `sums_signature` (its `SHA256SUMS.sig`: `ssh-keygen -Y sign`, namespace `anx-release`). The Agent verifies the signature with the kernel release key it embeds, never a key Control sends. Control offers the newest release in `<artifact_dir>/anx-node/`; with kernels it also offers the upgrade to nodes that already run `target_version`, whose Agent installs a kernel it does not have yet (else answers `current`). An Agent that predates the field ignores it. A rollback carries none. |
 
+  An Agent names the kernel it has installed in its `Hello`: the label
+  `kernel.anx-node` is the installed release's version (without `v`,
+  `agentcontrol.LabelKernelVersion`), left out when no kernel is installed.
+  Control shows it and does not require it; an older Agent sends no such
+  label. A kernel-only upgrade is an `upgrade` whose `target_version` is the
+  release the node already runs, with `kernels`: the Agent installs the
+  kernel and keeps its binary, and Control does not roll such a node back.
+
   `deadline_unix_ms` is the offer plus 9 minutes: past it the Agent reports
   `operation deadline exceeded` and does not start.
 - **What the Agent does for `upgrade`**, in order:

@@ -114,6 +114,12 @@
             <template #cell-agentVersion="{ row }">
               <span v-if="agentVersionOf(row)" data-testid="node-agent-version">{{ agentVersionOf(row) }}</span>
               <span v-else class="node-muted">—</span>
+              <span
+                v-if="kernelVersionOf(row)"
+                class="node-kernel-version"
+                :title="t('admin.nodes.table.kernelVersion')"
+                data-testid="node-kernel-version"
+              >anx-node {{ kernelVersionOf(row) }}</span>
             </template>
             <template #cell-serviceStatus="{ row }">
               <NodeServiceStatusCell :entry="serviceEntries.get(Number(row.id))" :status="serviceStatus" />
@@ -170,7 +176,7 @@
 // relaying is the network model's (ANX), not a kind of node.
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Check, FileText, Layers, Pencil, RefreshCcw, Rocket, Server, SquareArrowOutUpRight, Terminal, Trash2, X } from '@lucide/vue'
+import { Check, Cpu, FileText, Layers, Pencil, RefreshCcw, Rocket, Server, SquareArrowOutUpRight, Terminal, Trash2, X } from '@lucide/vue'
 import { getNodeStats } from '@/api/admin'
 import { approveKernelNode, getKernelAdminNodes, rejectKernelNode } from '@/api/kernel'
 import UiBadge from '@/ui/UiBadge.vue'
@@ -184,7 +190,7 @@ import UiUsageBar from '@/ui/UiUsageBar.vue'
 import { useConfirm } from '@/ui/composables/useConfirm'
 import { useFormat } from '@/ui/composables/useFormat'
 import { useToast } from '@/ui/composables/useToast'
-import { openAgentUpgrade } from '@/composables/useAgentUpgradeSheet'
+import { openAgentUpgrade, openKernelUpgrade } from '@/composables/useAgentUpgradeSheet'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { useRouteIntent } from '@/composables/useRouteIntent'
 import { SORT_ORDERS, createListSort } from '@/utils/listSort'
@@ -302,6 +308,8 @@ const loadText = (node) => {
 const entryOf = node => transportEntries.value.get(nodeRef(node.id))
 const lastSeenOf = node => entryOf(node)?.last_seen_at || entryOf(node)?.connection?.last_seen_at || node.last_check_at || null
 const agentVersionOf = node => entryOf(node)?.agent_version || node.server_version || ''
+// The anx-node release the node's live session reported.
+const kernelVersionOf = node => entryOf(node)?.kernel_version || ''
 
 // 版本 and 负载 start hidden, as does 连接 (the Agent's channel): a node that
 // joined has a certificate and one channel, so 证书, Agent 版本 and 最后在线
@@ -336,6 +344,7 @@ const nodeActions = node => [
   { key: 'protocols', label: t('admin.nodes.actions.manageProtocols'), icon: Layers, onSelect: () => openDetail(node, 'protocols') },
   { key: 'logs', label: t('admin.nodes.actions.logs'), icon: FileText, onSelect: () => openDetail(node, 'logs') },
   { key: 'sync', label: t('admin.nodes.actions.syncReload'), icon: RefreshCcw, disabled: syncingNodeIds.has(node.id), onSelect: () => syncNode(node) },
+  { key: 'upgradeKernel', label: t('admin.nodes.actions.upgradeKernel'), icon: Cpu, onSelect: () => openKernelUpgrade(nodeRef(node.id)) },
   { key: 'edit', label: t('admin.nodes.actions.edit'), icon: Pencil, onSelect: () => openEdit(node) },
   { key: 'delete', label: t('admin.nodes.actions.delete'), icon: Trash2, danger: true, separatorBefore: true, onSelect: () => deleteFromList(node) }
 ]
@@ -575,5 +584,11 @@ defineExpose({ nodes, stats, pagination, loadNodes, loadStats, changeSort, group
 
 .node-muted {
   color: var(--label-2);
+}
+
+.node-kernel-version {
+  display: block;
+  color: var(--label-2);
+  font-size: var(--type-caption-size);
 }
 </style>

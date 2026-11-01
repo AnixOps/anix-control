@@ -7,6 +7,7 @@ export default {
     loading: 'Loading upgrade details…',
     loadFailed: 'Could not load upgrade details',
     started: 'Upgrade to {version} started',
+    kernelStarted: 'Kernel upgrade to anx-node {version} started',
     start: {
       title: 'Start an upgrade',
       target: 'Target version',
@@ -22,12 +23,19 @@ export default {
       reasonPlaceholder: 'For example: upgrade to v4.2.0',
       nodes: 'Nodes',
       nodeVersion: 'Agent {version} now',
+      nodeKernel: 'kernel anx-node {version}',
+      nodeKernelUnknown: 'kernel not reported',
+      kernelTarget: 'Installs anx-node {version}, the newest kernel Control holds. The Agent keeps its release and restarts once.',
+      kernelMissing: 'Control holds no anx-node release: copy one into agent_install.artifact_dir first.',
+      kernelSubmit: 'Upgrade kernel',
       mode: 'Upgrade mode',
       modes: {
         staged: 'Staged',
         manual: 'Choose nodes',
+        kernel: 'Kernel only',
         stagedHelp: 'Upgrades every eligible node in batches, a small canary batch first.',
-        manualHelp: 'Upgrades only the ticked nodes, all at once, without batch minimums.'
+        manualHelp: 'Upgrades only the ticked nodes, all at once, without batch minimums.',
+        kernelHelp: 'Upgrades only the anx-node kernel of the ticked nodes; their Agent version stays. The ticked nodes must run the same Agent version.'
       },
       submit: 'Start upgrade',
       noneEligible: 'No node can be upgraded: a node must be enabled and its Agent seen by Control.',
@@ -38,6 +46,8 @@ export default {
     confirm: {
       title: 'Upgrade {n} node to {version}? | Upgrade {n} nodes to {version}?',
       message: 'Pushed in batches: {batches}, at least {minutes} minutes each. You can pause, abort or roll back at any time.',
+      kernelTitle: 'Upgrade the kernel of {n} node to anx-node {version}? | Upgrade the kernel of {n} nodes to anx-node {version}?',
+      kernelMessage: 'Installs the kernel on these nodes now: {nodes}. Each Agent restarts once; a node that fails or does not reconnect within 10 minutes counts as failed.',
       manualMessage: 'Upgrades these nodes now: {nodes}. A node that fails or does not reconnect with the new version within 10 minutes is rolled back.'
     },
     errors: {
@@ -51,6 +61,8 @@ export default {
       agent_release_unverified: 'The files of this Agent release did not pass verification: {message}',
       agent_upgrade_active: 'An upgrade is running. Let it end, or abort it, before starting another.',
       agent_upgrade_no_nodes: 'No node can be upgraded.',
+      kernel_release_missing: 'Control holds no anx-node release to install.',
+      kernel_release_unverified: 'The anx-node release files are incomplete: {message}',
       agent_install_unconfigured: 'An upgrade cannot start now: {message}',
       invalid_request: 'The upgrade settings are not valid: {message}',
       unknown: 'The upgrade did not start.'

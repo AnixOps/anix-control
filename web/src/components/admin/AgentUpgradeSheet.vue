@@ -30,7 +30,12 @@
           />
           <p class="upgrade-sheet__rules">{{ t(`agentUpgradeSheet.start.modes.${form.mode}Help`) }}</p>
 
+          <p v-if="form.mode === 'kernel'" class="upgrade-sheet__notice" :class="{ 'is-warning': !plan.kernel_version }" role="status" data-testid="agent-upgrade-kernel">
+            {{ plan.kernel_version ? t('agentUpgradeSheet.start.kernelTarget', { version: plan.kernel_version }) : t('agentUpgradeSheet.start.kernelMissing') }}
+          </p>
+
           <UiTextField
+            v-if="form.mode !== 'kernel'"
             v-model.trim="form.target"
             size="md"
             :label="t('agentUpgradeSheet.start.target')"
@@ -54,14 +59,14 @@
             data-testid="agent-upgrade-batches"
           />
 
-          <fieldset v-if="form.mode === 'manual'" class="upgrade-sheet__nodes" data-testid="agent-upgrade-nodes">
+          <fieldset v-if="form.mode !== 'staged'" class="upgrade-sheet__nodes" data-testid="agent-upgrade-nodes">
             <legend>{{ t('agentUpgradeSheet.start.nodes') }}</legend>
             <UiCheckbox
               v-for="node in planNodes"
               :key="node.node_ref"
               :model-value="form.nodes.includes(node.node_ref)"
               :label="node.name ? `${node.name} (${node.node_ref})` : node.node_ref"
-              :description="node.agent_version ? t('agentUpgradeSheet.start.nodeVersion', { version: node.agent_version }) : ''"
+              :description="nodeDescription(node)"
               :disabled="disabled"
               :data-testid="`agent-upgrade-node-${node.node_ref}`"
               @update:model-value="toggleNode(node.node_ref, $event)"
@@ -102,7 +107,7 @@
               :loading="starting"
               :disabled="!canSubmit"
               data-testid="agent-upgrade-start"
-            >{{ t('agentUpgradeSheet.start.submit') }}</UiButton>
+            >{{ form.mode === 'kernel' ? t('agentUpgradeSheet.start.kernelSubmit') : t('agentUpgradeSheet.start.submit') }}</UiButton>
             <span v-if="plan.configured && !plan.active_campaign_id && plan.can_start && plan.eligible_nodes === 0" class="upgrade-sheet__hint" data-testid="agent-upgrade-none">
               {{ t('agentUpgradeSheet.start.noneEligible') }}
             </span>
@@ -124,7 +129,11 @@
 // POST /api/v4/kernel/agents/upgrades (super administrators). Opened with
 // openAgentUpgrade() (composables/useAgentUpgradeSheet.js); the admin
 // shell mounts it once. The manual mode upgrades the nodes ticked from the
-// plan's list at once, in one batch with no minimum (POST with nodes).
+// plan's list at once, in one batch with no minimum (POST with nodes). The
+// kernel mode upgrades only the anx-node kernel of the ticked nodes (POST
+// with nodes and kernel_only): their Agent keeps its release, the kernel
+// is the newest one Control holds (the plan's kernel_version). The node
+// list and the node page open it with openKernelUpgrade(ref).
 import { computed, reactive, ref, watch } from 'vue'
 import { Rocket } from '@lucide/vue'
 import { getKernelAgentUpgradePlan, startKernelAgentUpgrade } from '@/api/kernel'
@@ -148,7 +157,7 @@ const MAX_BATCHES = 10
 const { t, te } = useAppI18n()
 const confirm = useConfirm()
 const toast = useToast()
-const { open } = useAgentUpgradeSheet()
+const { open, preset } = useAgentUpgradeSheet()
 
 const plan = ref(null)
 const loading = ref(false)
@@ -158,8 +167,19 @@ const startError = ref('')
 const campaign = ref(null)
 const form = reactive({ mode: 'staged', target: '', batches: '', reason: '', nodes: [] })
 
-const modeOptions = computed(() => ['staged', 'manual'].map(value => ({ value, label: t(`agentUpgradeSheet.start.modes.${value}`) })))
+const modeOptions = computed(() => ['staged', 'manual', 'kernel'].map(value => ({ value, label: t(`agentUpgradeSheet.start.modes.${value}`) })))
 const planNodes = computed(() => (Array.isArray(plan.value?.nodes) ? plan.value.nodes : []))
+
+function nodeDescription(node) {
+  const parts = []
+  if (node.agent_version) parts.push(t('agentUpgradeSheet.start.nodeVersion', { version: node.agent_version }))
+  if (form.mode === 'kernel' || node.kernel_version) {
+    parts.push(node.kernel_version
+      ? t('agentUpgradeSheet.start.nodeKernel', { version: node.kernel_version })
+      : t('agentUpgradeSheet.start.nodeKernelUnknown'))
+  }
+  return parts.join(' · ')
+}
 
 function toggleNode(ref, checked) {
   form.nodes = checked ? [...new Set([...form.nodes, ref])] : form.nodes.filter(node => node !== ref)
@@ -187,8 +207,11 @@ const batchesError = computed(() => {
   if (values[values.length - 1] !== 100) return t('agentUpgradeSheet.errors.batchesLast')
   return ''
 })
-const canSubmit = computed(() => Boolean(plan.value) && !disabled.value && Boolean(form.target) && !targetError.value && !batchesError.value &&
-  plan.value.eligible_nodes > 0 && (form.mode === 'staged' || form.nodes.length > 0))
+const canSubmit = computed(() => {
+  if (!plan.value || disabled.value || plan.value.eligible_nodes <= 0) return false
+  if (form.mode === 'kernel') return Boolean(plan.value.kernel_version) && form.nodes.length > 0
+  return Boolean(form.target) && !targetError.value && !batchesError.value && (form.mode === 'staged' || form.nodes.length > 0)
+})
 
 function minutes(seconds) {
   return Math.round(Number(seconds || 0) / 60)
@@ -224,31 +247,41 @@ async function loadPlan() {
 async function start() {
   if (!canSubmit.value || starting.value) return
   startError.value = ''
+  const kernelOnly = form.mode === 'kernel'
   const manual = form.mode === 'manual'
   const percents = batches.value
   const target = form.target
+  const kernel = plan.value.kernel_version
   const nodes = [...form.nodes]
-  const count = manual ? nodes.length : plan.value.eligible_nodes
-  const confirmed = await confirm({
-    title: t('agentUpgradeSheet.confirm.title', { n: count, version: target }, count),
-    message: manual
-      ? t('agentUpgradeSheet.confirm.manualMessage', { nodes: nodes.join(', ') })
-      : t('agentUpgradeSheet.confirm.message', {
-        batches: percents.map(percent => `${percent}%`).join(' → '),
-        minutes: minutes(plan.value.min_batch_seconds)
-      }),
-    confirmLabel: t('agentUpgradeSheet.start.submit'),
-    tone: 'danger'
-  })
+  const count = manual || kernelOnly ? nodes.length : plan.value.eligible_nodes
+  const confirmed = await confirm(kernelOnly
+    ? {
+        title: t('agentUpgradeSheet.confirm.kernelTitle', { n: count, version: kernel }, count),
+        message: t('agentUpgradeSheet.confirm.kernelMessage', { nodes: nodes.join(', ') }),
+        confirmLabel: t('agentUpgradeSheet.start.kernelSubmit'),
+        tone: 'danger'
+      }
+    : {
+        title: t('agentUpgradeSheet.confirm.title', { n: count, version: target }, count),
+        message: manual
+          ? t('agentUpgradeSheet.confirm.manualMessage', { nodes: nodes.join(', ') })
+          : t('agentUpgradeSheet.confirm.message', {
+            batches: percents.map(percent => `${percent}%`).join(' → '),
+            minutes: minutes(plan.value.min_batch_seconds)
+          }),
+        confirmLabel: t('agentUpgradeSheet.start.submit'),
+        tone: 'danger'
+      })
   if (!confirmed) return
   starting.value = true
   try {
-    const input = manual
-      ? { target_version: target, nodes }
-      : { target_version: target, batches: percents.map(percent => ({ percent, min_duration_seconds: plan.value.min_batch_seconds })) }
+    let input
+    if (kernelOnly) input = { nodes, kernel_only: true }
+    else if (manual) input = { target_version: target, nodes }
+    else input = { target_version: target, batches: percents.map(percent => ({ percent, min_duration_seconds: plan.value.min_batch_seconds })) }
     if (form.reason) input.reason = form.reason
     await startKernelAgentUpgrade(input)
-    toast.success(t('agentUpgradeSheet.started', { version: target }))
+    toast.success(kernelOnly ? t('agentUpgradeSheet.kernelStarted', { version: kernel }) : t('agentUpgradeSheet.started', { version: target }))
     form.reason = ''
     form.nodes = []
     await Promise.all([loadPlan(), campaign.value?.load?.()])
@@ -266,6 +299,13 @@ async function start() {
 watch(open, (value) => {
   if (!value) return
   startError.value = ''
+  // A page that opened the sheet for some nodes (openKernelUpgrade)
+  // picks the mode and ticks them.
+  if (preset.value) {
+    form.mode = preset.value.mode
+    form.nodes = [...preset.value.nodes]
+    preset.value = null
+  }
   loadPlan()
   campaign.value?.load?.()
 }, { immediate: true })

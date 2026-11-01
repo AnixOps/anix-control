@@ -43,10 +43,13 @@ type Session struct {
 	Transport    Transport
 	SessionID    string
 	AgentVersion string
-	InstanceID   string
-	Capabilities []string
-	ConnectedAt  time.Time
-	LastSeen     time.Time
+	// KernelVersion is the anx-node release a stream session's Hello
+	// named (agentcontrol.LabelKernelVersion), "" when it named none.
+	KernelVersion string
+	InstanceID    string
+	Capabilities  []string
+	ConnectedAt   time.Time
+	LastSeen      time.Time
 	// DesiredRevision and ObservedRevision are the stream's operation
 	// revisions; zero on the WebSocket.
 	DesiredRevision  uint64

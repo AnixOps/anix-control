@@ -628,3 +628,59 @@ func TestManualUpgrade(t *testing.T) {
 		assert.Equal(t, "v4.1.0", node.AgentVersion)
 	}
 }
+
+// A kernel-only upgrade targets the release its nodes run now, and only
+// one release.
+func TestKernelOnlyTarget(t *testing.T) {
+	db := openSQLite(t)
+	f := newFixture(t, db)
+	ctx := context.Background()
+	f.addProxy(1, "")
+	f.addProxy(2, "")
+	target, err := KernelOnlyTarget(ctx, db, []string{"proxy-1", " proxy-2"})
+	require.NoError(t, err)
+	assert.Equal(t, "v4.1.0", target)
+
+	require.NoError(t, db.Model(&model.AgentTransport{}).Where("node_id = ?", 2).Update("agent_version", "4.0.0").Error)
+	_, err = KernelOnlyTarget(ctx, db, []string{"proxy-1", "proxy-2"})
+	require.ErrorIs(t, err, ErrInvalid)
+	assert.Contains(t, err.Error(), "different Agent releases")
+
+	_, err = KernelOnlyTarget(ctx, db, []string{"proxy-9"})
+	require.ErrorIs(t, err, ErrInvalid, "a node that never reported a release")
+	_, err = KernelOnlyTarget(ctx, db, nil)
+	require.ErrorIs(t, err, ErrInvalid)
+	_, err = KernelOnlyTarget(ctx, db, []string{"node-1"})
+	require.ErrorIs(t, err, ErrInvalid)
+}
+
+// A failed kernel-only upgrade rolls its batch back without telling a
+// node that already ran the target to reinstate a release.
+func TestKernelOnlyRollbackLeavesTheAgent(t *testing.T) {
+	f := newFixture(t, openSQLite(t))
+	ok, failing := f.addProxy(1, ""), f.addProxy(2, "")
+	f.streams.connect(ok, "v4.1.0", start, "upgrade.v1")
+	f.streams.connect(failing, "v4.1.0", start, "upgrade.v1")
+	kernel := agentcontrol.UpgradeKernel{
+		Name: agentcontrol.KernelAnxNode, Version: "0.1.0-alpha.2", Arch: "amd64", Asset: "anx-node-0.1.0-alpha.2-x86_64-linux-musl.tar.gz",
+		URL:    "https://control.example/install/kernel/anx-node/0.1.0-alpha.2/anx-node-0.1.0-alpha.2-x86_64-linux-musl.tar.gz",
+		SHA256: strings.Repeat("b", 64), Size: 10, Sums: strings.Repeat("b", 64) + "  anx-node-0.1.0-alpha.2-x86_64-linux-musl.tar.gz\n",
+		SumsSignature: "-----BEGIN SSH SIGNATURE-----\nU1NIU0lH\n-----END SSH SIGNATURE-----\n",
+	}
+	f.worker.Kernels = func() ([]agentcontrol.UpgradeKernel, error) { return []agentcontrol.UpgradeKernel{kernel}, nil }
+	campaign := f.start(StartRequest{TargetVersion: "v4.1.0", Nodes: []string{"proxy-1", "proxy-2"}})
+	f.tick()
+	require.Len(t, f.streams.operations(), 2)
+	f.upgrade(ok, "v4.1.0")
+	f.tick()
+	require.Equal(t, model.AgentUpgradeNodeSucceeded, f.nodeState(campaign.ID, ok).State)
+	f.worker.HandleObserved(failing, &agentv1pb.ObservedState{
+		OperationId: f.lastOperation(failing).operation.GetOperationId(), Phase: agentv1pb.ObservedPhase_OBSERVED_PHASE_FAILED,
+		StateJson: []byte(`{"error_code":"upgrade_signature_invalid"}`),
+	})
+	for range 3 {
+		f.tick()
+	}
+	assert.Len(t, f.streams.operations(), 2, "no rollback was sent")
+	assert.Equal(t, model.AgentUpgradeRolledBack, f.campaign(campaign.ID).Status)
+}
