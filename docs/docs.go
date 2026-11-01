@@ -3894,6 +3894,361 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v4/admin/traffic/categories": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "访问统计判定流量类型的规则: categories 为类型 (video、music、messaging、social、gaming、ai、download、web、unknown); builtin 为内置规则 (按类型的 domains、networks、protocols); rules 为管理员规则 (kind 为 domain、network 或 protocol), 优先于远程规则源与内置规则, 指向 web 可把域名移出内置类型; sources 为远程规则源 (按 refresh_hours 定时拉取, entry_count 为最近一次成功拉取的条目数, fetch_error 为最近一次失败原因)。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-流量"
+                ],
+                "summary": "流量分类规则",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v4/admin/traffic/categories/classify": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "按当前规则 (管理员规则、远程规则源与内置规则) 判定一个目标的类型: domain 为域名、地址或网段, protocol 为嗅探到的协议 (可省略)。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-流量"
+                ],
+                "summary": "判定流量类型",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "域名、地址或网段",
+                        "name": "domain",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "嗅探到的协议",
+                        "name": "protocol",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v4/admin/traffic/categories/rules": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "添加管理员规则: kind 为 domain (域名, 含子域名)、network (地址或 CIDR) 或 protocol (嗅探协议, 如 bittorrent); category 为 unknown 以外的类型; 同一 kind 与 value 只能有一条 (409 duplicate)。立即生效, 历史统计也按新规则判定。记入操作日志。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-流量"
+                ],
+                "summary": "添加流量分类规则",
+                "parameters": [
+                    {
+                        "description": "规则",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/destinationstats.RuleInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v4/admin/traffic/categories/rules/{id}": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "按添加时的检查替换规则的字段。记入操作日志。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-流量"
+                ],
+                "summary": "修改流量分类规则",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "规则 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "规则",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/destinationstats.RuleInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "删除管理员规则; 该目标回到远程规则源或内置规则的类型。记入操作日志。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-流量"
+                ],
+                "summary": "删除流量分类规则",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "规则 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v4/admin/traffic/categories/sources": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "添加远程规则源: name 唯一; url 为 http(s) 地址, 内容可为纯域名/地址/CIDR 列表、v2fly domain-list-community (domain:、full:)、Clash 规则 (DOMAIN-SUFFIX、DOMAIN、IP-CIDR) 或 Clash rule-provider (payload); 列表中的域名与网段都归入 category; refresh_hours 为 1 到 168 (默认 24); enabled 默认 true。新规则源在下一次检查 (每 10 分钟) 时拉取, 或立即调用 refresh。记入操作日志。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-流量"
+                ],
+                "summary": "添加远程规则源",
+                "parameters": [
+                    {
+                        "description": "规则源",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/destinationstats.SourceInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v4/admin/traffic/categories/sources/{id}": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "按添加时的检查替换规则源的设置; 改了 url 的规则源在下一次检查时重新拉取。记入操作日志。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-流量"
+                ],
+                "summary": "修改远程规则源",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "规则源 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "规则源",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/destinationstats.SourceInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "删除规则源与它拉取的列表。记入操作日志。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-流量"
+                ],
+                "summary": "删除远程规则源",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "规则源 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v4/admin/traffic/categories/sources/{id}/refresh": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "立即拉取规则源的列表 (最长 1 分钟, 最大 16 MiB, 最多 200000 条); 失败时保留上一次的列表并在 fetch_error 中给出原因。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-流量"
+                ],
+                "summary": "立即拉取远程规则源",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "规则源 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/v4/admin/traffic/destinations": {
             "get": {
                 "security": [
@@ -9911,6 +10266,23 @@ const docTemplate = `{
                 }
             }
         },
+        "destinationstats.RuleInput": {
+            "type": "object",
+            "properties": {
+                "category": {
+                    "type": "string"
+                },
+                "kind": {
+                    "type": "string"
+                },
+                "note": {
+                    "type": "string"
+                },
+                "value": {
+                    "type": "string"
+                }
+            }
+        },
         "destinationstats.Settings": {
             "type": "object",
             "properties": {
@@ -9921,6 +10293,26 @@ const docTemplate = `{
                 "retention_days": {
                     "description": "RetentionDays is how long a row is kept.",
                     "type": "integer"
+                }
+            }
+        },
+        "destinationstats.SourceInput": {
+            "type": "object",
+            "properties": {
+                "category": {
+                    "type": "string"
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "refresh_hours": {
+                    "type": "integer"
+                },
+                "url": {
+                    "type": "string"
                 }
             }
         },

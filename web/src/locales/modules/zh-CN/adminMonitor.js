@@ -6,7 +6,8 @@ export default {
     sections: {
       live: '实时节点',
       traffic: '用户流量',
-      destinations: '访问统计'
+      destinations: '访问统计',
+      categories: '流量分类'
     },
     range: {
       label: '时间范围',
@@ -32,6 +33,87 @@ export default {
         loadFailed: '设置加载失败'
       },
       off: '访问统计已关闭，不再记录新数据；仍显示已保留的记录。'
+    },
+    categories: {
+      test: {
+        title: '测试分类',
+        description: '按当前规则判定一个域名、地址或网段属于哪一类。',
+        domain: '域名、地址或网段',
+        protocol: '协议（可选）',
+        run: '判定',
+        result: '{target} 属于“{category}”',
+        failed: '判定失败'
+      },
+      rules: {
+        title: '自定义规则',
+        description: '自定义规则优先于远程规则源和内置规则，立即生效，历史统计也按新规则重新归类。把域名指向“网站”可以把它移出内置类型。',
+        label: '自定义分类规则',
+        add: '添加规则',
+        edit: '编辑规则',
+        emptyTitle: '还没有自定义规则',
+        emptyDescription: '目前按内置规则和远程规则源分类。',
+        loadFailed: '规则加载失败',
+        kind: '类型',
+        value: '值',
+        category: '归入',
+        note: '备注',
+        kinds: { domain: '域名', network: '网段', protocol: '协议' },
+        valueHelp: {
+          domain: '如 example.com，同时匹配它的子域名。',
+          network: '如 203.0.113.0/24 或单个地址。',
+          protocol: '节点嗅探到的协议，如 bittorrent。'
+        },
+        saved: '规则已保存',
+        saveFailed: '保存规则失败',
+        deleteTitle: '删除规则 {value}？',
+        deleteMessage: '删除后该目标回到远程规则源或内置规则的类型。',
+        deleteConfirm: '删除规则',
+        deleted: '规则已删除',
+        deleteFailed: '删除规则失败'
+      },
+      sources: {
+        title: '远程规则源',
+        description: '定时从网址拉取域名和网段列表，整份列表归入一个类型。支持纯域名/地址列表、v2fly domain-list-community（domain:、full:）、Clash 规则（DOMAIN-SUFFIX、IP-CIDR）和 Clash rule-provider。拉取失败时保留上一次的列表。',
+        label: '远程规则源',
+        add: '添加规则源',
+        edit: '编辑规则源',
+        emptyTitle: '还没有远程规则源',
+        emptyDescription: '例如 https://raw.githubusercontent.com/v2fly/domain-list-community/master/data/netflix 归入“视频”。',
+        name: '名称',
+        url: '网址',
+        category: '归入',
+        enabled: '启用',
+        refreshHours: '更新间隔',
+        refreshUnit: '小时',
+        refreshHelp: '1 到 168 小时。',
+        entries: '条目',
+        fetchedAt: '上次拉取',
+        never: '尚未拉取',
+        status: '状态',
+        ok: '正常',
+        failed: '失败',
+        disabled: '已停用',
+        refresh: '立即拉取',
+        refreshed: '已拉取 {count} 条',
+        refreshFailed: '拉取失败：{error}',
+        saved: '规则源已保存，将在 10 分钟内拉取',
+        saveFailed: '保存规则源失败',
+        deleteTitle: '删除规则源 {name}？',
+        deleteMessage: '它拉取的列表一起删除，相关目标回到其他规则的类型。',
+        deleteConfirm: '删除规则源',
+        deleted: '规则源已删除',
+        deleteFailed: '删除规则源失败'
+      },
+      builtin: {
+        title: '内置规则',
+        description: '内置在 Control 中的规则，随版本更新；自定义规则和远程规则源可以覆盖它们。',
+        counts: '{domains} 个域名 · {networks} 个网段 · {protocols} 个协议',
+        show: '查看',
+        hide: '收起'
+      },
+      cancel: '取消',
+      save: '保存',
+      loadFailed: '分类规则加载失败'
     },
     refresh: '刷新',
     live: {

@@ -602,6 +602,18 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		v4.GET("/admin/traffic/destinations", destinationStats.AdminSummary)
 		v4.GET("/admin/traffic/destinations/settings", destinationStats.GetSettings)
 		v4.PUT("/admin/traffic/destinations/settings", destinationStats.PutSettings)
+		// The rules the categories are judged by: the built-in ones, the
+		// administrator's own and the remote lists.
+		trafficCategories := handler.NewTrafficCategoriesHandler()
+		v4.GET("/admin/traffic/categories", trafficCategories.List)
+		v4.GET("/admin/traffic/categories/classify", trafficCategories.Classify)
+		v4.POST("/admin/traffic/categories/rules", trafficCategories.CreateRule)
+		v4.PUT("/admin/traffic/categories/rules/:id", trafficCategories.UpdateRule)
+		v4.DELETE("/admin/traffic/categories/rules/:id", trafficCategories.DeleteRule)
+		v4.POST("/admin/traffic/categories/sources", trafficCategories.CreateSource)
+		v4.PUT("/admin/traffic/categories/sources/:id", trafficCategories.UpdateSource)
+		v4.DELETE("/admin/traffic/categories/sources/:id", trafficCategories.DeleteSource)
+		v4.POST("/admin/traffic/categories/sources/:id/refresh", trafficCategories.RefreshSource)
 		bulk := handler.NewAdminBulkHandler(handler.GatewayBulkRunner(v2PackageGateway.Serve))
 		v4.POST("/admin/users/bulk", bulk.Users)
 		v4.POST("/admin/invite-codes/bulk", bulk.InviteCodes)
