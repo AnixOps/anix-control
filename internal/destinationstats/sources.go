@@ -363,7 +363,7 @@ func fetchEntries(ctx context.Context, fetch Fetcher, rawURL string) (SourceEntr
 	if err != nil {
 		return SourceEntries{}, err
 	}
-	defer body.Close()
+	defer func() { _ = body.Close() }()
 	limited := &io.LimitedReader{R: body, N: MaxSourceBytes + 1}
 	entries, _, err := ParseSourceList(limited)
 	if err != nil {
