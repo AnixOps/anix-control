@@ -113,9 +113,17 @@ func ValidateANXSettings(settings map[string]any) error {
 		if !isList || len(list) == 0 {
 			return fmt.Errorf("ANX %s must be a non-empty list of strings", key)
 		}
+		// A server name is a host, so it may not contain '/'. An ALPN entry
+		// is an RFC 7301 protocol ID such as "http/1.1", where '/' is
+		// normal; only whitespace and ',' (the subscription separator) are
+		// refused, and the ID is at most 255 bytes.
+		forbidden := " \t,/"
+		if key == "alpn" {
+			forbidden = " \t,"
+		}
 		for _, item := range list {
 			text, isString := item.(string)
-			if !isString || strings.TrimSpace(text) == "" || strings.ContainsAny(text, " \t,/") {
+			if !isString || strings.TrimSpace(text) == "" || strings.ContainsAny(text, forbidden) || len(text) > 255 {
 				return fmt.Errorf("ANX %s has an invalid entry %v", key, item)
 			}
 		}
