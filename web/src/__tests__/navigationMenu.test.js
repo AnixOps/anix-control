@@ -226,7 +226,7 @@ describe('navigation/menu.js: palette entries', () => {
     }
     expect(matchesQuery(pages.find(page => page.id === 'monitor-traffic'), 'monitor traffic')).toBe(true)
     // 节点延迟 and 转发 went with the flux observability API (F5d).
-    expect(ADMIN_PAGE_SECTIONS.monitor.map(section => section.id)).toEqual(['monitor-live', 'monitor-traffic', 'monitor-destinations'])
+    expect(ADMIN_PAGE_SECTIONS.monitor.map(section => section.id)).toEqual(['monitor-live', 'monitor-traffic', 'monitor-destinations', 'monitor-categories'])
   })
 
   it('matches every query word against label, context and route words', () => {

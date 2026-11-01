@@ -14,6 +14,7 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/agentupgrade"
 	"github.com/AnixOps/anix-control/v5/internal/config"
 	"github.com/AnixOps/anix-control/v5/internal/database"
+	"github.com/AnixOps/anix-control/v5/internal/destinationstats"
 	grpcserver "github.com/AnixOps/anix-control/v5/internal/grpc"
 	"github.com/AnixOps/anix-control/v5/internal/kernelforward"
 	"github.com/AnixOps/anix-control/v5/internal/kernelnodeops"
@@ -102,6 +103,9 @@ func runSingletonWorkers(ctx context.Context) {
 	// Retention of the traffic, node and audit logs: deletes expired rows
 	// in batches every hour and compacts the SQLite file (internal/retention).
 	run(retention.NewWorker(database.Get()).Run)
+	// The remote traffic category lists (internal/destinationstats): each
+	// enabled source fetched again after its refresh_hours.
+	run((&destinationstats.SourceWorker{Service: &destinationstats.Service{DB: database.Get()}}).Run)
 	// Backups (internal/backup): the daily bundle at the panel's time
 	// between 03:00 and 05:00, its verification and the retention; at its
 	// start it verifies the pre-migration bundle of this start.

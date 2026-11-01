@@ -16,7 +16,8 @@ export const ADMIN_PAGE_SECTIONS = Object.freeze({
   monitor: [
     { id: 'monitor-live', to: '/admin/monitor/live', labelKey: 'adminMonitor.sections.live' },
     { id: 'monitor-traffic', to: '/admin/monitor/traffic', labelKey: 'adminMonitor.sections.traffic' },
-    { id: 'monitor-destinations', to: '/admin/monitor/destinations', labelKey: 'adminMonitor.sections.destinations' }
+    { id: 'monitor-destinations', to: '/admin/monitor/destinations', labelKey: 'adminMonitor.sections.destinations' },
+    { id: 'monitor-categories', to: '/admin/monitor/categories', labelKey: 'adminMonitor.sections.categories' }
   ],
   settings: [
     { id: 'settings-general', to: '/admin/system/general', labelKey: 'adminSettings.sections.general' },

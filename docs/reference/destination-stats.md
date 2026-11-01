@@ -26,22 +26,82 @@ WireGuard nodes route packets, not connections: they report nothing.
 
 ## Categories
 
-A destination's category is judged when it is read, from the rules in
-`internal/destinationstats/categories.go`, so a rule change applies to the
-history too:
+A destination's category is judged when it is read, so a rule change applies
+to the history too. The rules come in three layers; a later layer's rule for
+the same domain, network or protocol replaces an earlier one's:
 
-1. A sniffed protocol that decides alone: `bittorrent` is a download.
-2. A domain the rule lists name (or a subdomain of one): the lists start
-   from v2fly's `domain-list-community` categories, narrowed to the domains
-   that serve one kind of traffic.
-3. An address network inside a listed network (Telegram's, whose clients
-   connect without a domain): messaging.
+1. **Built-in rules** (`internal/destinationstats/categories.go`, updated with
+   each release): lists that start from v2fly's `domain-list-community`
+   categories, narrowed to the domains that serve one kind of traffic,
+   Telegram's networks and the `bittorrent` protocol.
+2. **Remote sources** (`v5_traffic_category_source`): lists fetched from a URL
+   every `refresh_hours` (1 to 168, default 24), the whole list in one
+   category. A list may be plain domains, addresses and CIDRs, v2fly
+   `domain-list-community` (`domain:`, `full:`; `keyword:`, `regexp:` and
+   `include:` are skipped), Clash classical rules (`DOMAIN-SUFFIX`, `DOMAIN`,
+   `IP-CIDR`, `IP-CIDR6`) or a Clash rule provider (`payload:`). At most
+   16 MiB and 200000 entries; a failed or empty fetch keeps the previous list
+   and records `fetch_error`. The singleton worker checks every 10 minutes.
+3. **Custom rules** (`v5_traffic_category_rule`): an administrator's domain
+   (with its subdomains), network (an address or CIDR) or sniffed protocol,
+   in any category but unknown. A rule to `web` takes a destination out of a
+   built-in or remote category.
+
+A destination is judged in this order:
+
+1. A sniffed protocol with a rule decides alone (`bittorrent` is a download).
+2. The longest rule domain the domain ends with.
+3. The most specific network rule containing an address network.
 4. Any other domain: websites. Any other address, and "other": unknown.
+
+Control rebuilds its classifier when a rule or a source changed, checked at
+most every 15 seconds, so another Control process follows within that time.
 
 The categories are estimates. A domain shared by several services
 (`google.com`, `apple.com`, `qq.com`, CDNs such as `cloudfront.net`) counts as
 websites, and large downloads over a general CDN do too. ECH hides the real
 domain behind the provider's public one.
+
+### Rules API (administrators, audited as `traffic_category`)
+
+| Route | |
+|---|---|
+| `GET /api/v4/admin/traffic/categories` | `categories`, `builtin` (by category: `domains`, `networks`, `protocols`), `rules`, `sources` |
+| `GET /api/v4/admin/traffic/categories/classify?domain=&protocol=` | The category the current rules give a destination |
+| `POST /api/v4/admin/traffic/categories/rules`, `PUT`/`DELETE .../rules/{id}` | `{kind: domain\|network\|protocol, value, category, note}`; 409 `duplicate` for a second rule of the same kind and value |
+| `POST /api/v4/admin/traffic/categories/sources`, `PUT`/`DELETE .../sources/{id}` | `{name, url, category, enabled, refresh_hours}` |
+| `POST /api/v4/admin/traffic/categories/sources/{id}/refresh` | Fetch now (up to a minute) |
+
+The console edits them at 流量与监控 → 流量分类.
+
+## QoS: priorities and per-user caps
+
+The categories also steer the proxy nodes' traffic (`internal/trafficqos`,
+console 流量与监控 → 流量分类 → QoS, `GET`/`PUT /api/v4/admin/traffic/qos`,
+audited as `traffic_qos`). The settings are one JSON document in
+`v2_system_config` (`traffic.qos`); without it the defaults apply: on,
+downloads at low priority, Steam downloads (`trafficqos.SteamDownloadDomains`)
+capped at 5 Mbit/s per user.
+
+| Field | |
+|---|---|
+| `enabled` | Off, the nodes neither prioritize nor cap |
+| `priorities` | Category → `high` or `low`; the rest is normal. `web` and `unknown` take none |
+| `default_egress_mbps`, `node_egress_mbps` | A node's download capacity (by node id), for node-wide scheduling; 0 schedules within the users' speed limits only |
+| `min_share_percent` | The least share of a busy capacity a lower class keeps (1–90, default 10) |
+| `caps` | `{name, priority, limit_mbps, domains}`: each user's connections to the domains (and subdomains) together at most `limit_mbps` |
+
+Each proxy node's desired configuration carries the member `qos` (refreshed
+every minute): the caps first, then one class per prioritized category with
+its domains, networks and protocols from the current category rules (the
+capped domains left out, so the cap wins), at most 50000 entries. The Agent
+sends it to anixcore as `PUT /v1/qos` (feature `qos`). There, only the
+download direction is scheduled: lower classes use what the higher ones
+leave of the node's capacity and of each speed-limited user's limit, and
+back off within a few 100 ms windows when higher traffic needs it. A
+connection is classed by its target name or address, or by its first bytes
+(TLS SNI, HTTP Host, BitTorrent); Mux.Cool sessions and UDP are not
+scheduled.
 
 ## Settings
 
