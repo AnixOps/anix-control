@@ -37,12 +37,14 @@ func TestBuildNodeProtocolConfig_ANX(t *testing.T) {
 	require.NotContains(t, empty, "allow_no_sni")
 	require.NotContains(t, empty, "shape_plain")
 	require.NotContains(t, empty, "max_streams")
+	require.NotContains(t, empty, "wg_listen_port")
 
-	a2 := `{"allow_no_sni":true,"shape_plain":true,"max_streams":512}`
+	a2 := `{"allow_no_sni":true,"shape_plain":true,"max_streams":512,"wg_listen_port":51820}`
 	full := BuildNodeProtocolConfig(node, &model.NodeProtocol{ID: 5, NodeID: 1, Type: model.ProtocolANX, Port: 8445, Settings: &a2})
 	require.Equal(t, true, full["allow_no_sni"])
 	require.Equal(t, true, full["shape_plain"])
 	require.Equal(t, 512, full["max_streams"])
+	require.Equal(t, 51820, full["wg_listen_port"])
 	extra := StringifyConfigMap(full)
 	require.Equal(t, "true", extra["allow_no_sni"])
 	require.Equal(t, "512", extra["max_streams"])
@@ -62,7 +64,7 @@ func TestApplyANXUser(t *testing.T) {
 
 func TestValidateANXProtocol(t *testing.T) {
 	valid := []string{``, `{}`, `{"server_names":["www.apple.com"],"dest":"www.apple.com:443","alpn":["h2"]}`,
-		`{"alpn":["h2","http/1.1"]}`, `{"allow_no_sni":true,"shape_plain":false,"max_streams":1024}`, `{"max_streams":65535}`}
+		`{"alpn":["h2","http/1.1"]}`, `{"allow_no_sni":true,"shape_plain":false,"max_streams":1024}`, `{"max_streams":65535}`, `{"wg_listen_port":51820}`}
 	for _, settings := range valid {
 		s := settings
 		require.NoError(t, validateANXProtocol(&model.NodeProtocol{Type: model.ProtocolANX, Settings: &s}), settings)
@@ -70,7 +72,8 @@ func TestValidateANXProtocol(t *testing.T) {
 	invalid := []string{`[]`, `{"server_names":[]}`, `{"server_names":["a b"]}`, `{"server_names":"x"}`,
 		`{"dest":"www.apple.com"}`, `{"dest":"www.apple.com:0"}`, `{"dest":5}`, `{"alpn":[1]}`,
 		`{"alpn":["h2,http/1.1"]}`, `{"alpn":["http 1.1"]}`, `{"server_names":["a/b"]}`,
-		`{"allow_no_sni":"yes"}`, `{"shape_plain":1}`, `{"max_streams":0}`, `{"max_streams":65536}`, `{"max_streams":1.5}`, `{"max_streams":"256"}`}
+		`{"allow_no_sni":"yes"}`, `{"shape_plain":1}`, `{"max_streams":0}`, `{"max_streams":65536}`, `{"max_streams":1.5}`, `{"max_streams":"256"}`,
+		`{"wg_listen_port":0}`, `{"wg_listen_port":65536}`, `{"wg_listen_port":"51820"}`}
 	for _, settings := range invalid {
 		s := settings
 		require.Error(t, validateANXProtocol(&model.NodeProtocol{Type: model.ProtocolANX, Settings: &s}), settings)

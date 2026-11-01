@@ -84,7 +84,9 @@ func iwanLink(node *model.ParsedNode) string {
 // anx://<user key>@host:port?sni=&pk=<server public key>&alpn=&fp=chrome#name.
 // A node whose server has not reported its public key has no link yet. A
 // node in the A2 no-SNI mode (settings allow_no_sni) has no sni: the client
-// then sends a ClientHello without SNI.
+// then sends a ClientHello without SNI. A node with the wg jacket on
+// (settings wg_listen_port) adds wg_port, and clients try that UDP port first
+// and fall back to A2 (jacket auto, the client default).
 func anxLink(node *model.ParsedNode) string {
 	noSNI, _ := node.Settings["allow_no_sni"].(bool)
 	if node.Server == "" || node.Port <= 0 || node.Password == "" || node.PublicKey == "" || (node.ServerName == "" && !noSNI) {
@@ -99,11 +101,37 @@ func anxLink(node *model.ParsedNode) string {
 		query.Set("alpn", node.ALPN)
 	}
 	query.Set("fp", "chrome")
+	if port := anxWGPort(node.Settings["wg_listen_port"]); port > 0 {
+		query.Set("wg_port", strconv.Itoa(port))
+	}
 	host := node.Server
 	if strings.Contains(host, ":") {
 		host = "[" + host + "]"
 	}
 	return fmt.Sprintf("anx://%s@%s:%d?%s#%s", node.Password, host, node.Port, query.Encode(), url.PathEscape(node.Name))
+}
+
+// anxWGPort reads the wg jacket port from node settings (a JSON number, or
+// an int when set in code); 0 when absent or out of range.
+func anxWGPort(value any) int {
+	var n int
+	switch v := value.(type) {
+	case float64:
+		if v != float64(int(v)) {
+			return 0
+		}
+		n = int(v)
+	case int:
+		n = v
+	case int64:
+		n = int(v)
+	default:
+		return 0
+	}
+	if n < 1 || n > 65535 {
+		return 0
+	}
+	return n
 }
 
 // withVia adds via=<name> to a link's query, before its fragment.

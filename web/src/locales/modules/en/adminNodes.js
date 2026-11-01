@@ -581,7 +581,8 @@ export default {
       public_key: 'Public key',
       allow_no_sni: 'No-SNI mode',
       shape_plain: 'Turn off traffic shaping',
-      max_streams: 'Max streams per session'
+      max_streams: 'Max streams per session',
+      wg_listen_port: 'WireGuard-shaped UDP port (wg jacket)'
     },
     hints: {
       anxServerNames: 'Comma separated; clients use the first. It must be a name the cover site really serves. ANX user keys derive from the UUID and the server public key is reported by the Agent on the node; the AnixOps Net subscription format carries the anx:// link.',
@@ -589,6 +590,7 @@ export default {
       anxAllowNoSni: 'Also accept connections without SNI (clients dial the IP; for domestic entries that block unregistered SNIs). Subscriptions then carry no SNI. Needs an anx-node newer than alpha.7.',
       anxShapePlain: 'VisionLike shaping is on by default (it hides the TLS-in-TLS pattern); turn it off only to debug interop.',
       anxMaxStreams: 'Streams one ANX session may open at once; empty means 256.',
+      anxWgListenPort: 'Also serve the wg jacket (looks like WireGuard UDP) on this UDP port, for users dialing a domestic entry; it backs up no-SNI A2. Subscriptions add wg_port and clients try it first. Open the UDP port in the firewall. Empty = off. Needs an anx-node with the wg jacket.',
       serverKey: 'Server key of the 2022 ciphers; empty derives it from the node.',
       privateKey: 'Empty generates a key pair when saved; a stored private key shows as ********.',
       publicKey: 'The public key subscriptions hand to clients; empty derives it from the private key.'
