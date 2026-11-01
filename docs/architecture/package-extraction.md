@@ -325,8 +325,8 @@ The planned `kernel.entitlement.apply.v1` became
 
 - **Protected tables.** No manifest may adopt a table that holds credentials
   or kernel state (`service.protectedTables`): `v2_system_config`,
-  `v2_audit_log`, `v2_operation_log`; the node credentials `v2_node` and
-  `v2_authorized_key`; the node secrets `v2_node_protocol` and
+  `v2_audit_log`, `v2_operation_log`; the node credentials `v2_node`; the
+  node secrets `v2_node_protocol` and
   `v2_wireguard_peer`; the forward credentials `v2_forward_node`,
   `v2_forward_clean_agent` and `v2_forward_runtime_job`; the node
   credential split's `v4_kernel_node_credential`,
@@ -334,8 +334,7 @@ The planned `kernel.entitlement.apply.v1` became
   well as covered by their prefix; and every `v2_user*`, `v3_kernel_*`,
   `v4_kernel_*`, `identity_*`, `kapi_*` and `pg_*` table.
 - **Node credential split, phase P1 (dual-write).** The node credentials
-  and protocol secrets of `v2_node`, `v2_authorized_key`,
-  `v2_forward_node`, `v2_forward_clean_agent`, `v2_node_protocol` and
+  and protocol secrets of `v2_node`, `v2_forward_node`, `v2_forward_clean_agent`, `v2_node_protocol` and
   `v2_wireguard_peer` are also kept in `v4_kernel_node_credential` and
   `v4_kernel_protocol_secret`, in clear like the legacy columns.
   `internal/nodesecrets` is their one writer: every kernel writer of a
@@ -780,14 +779,14 @@ The planned `kernel.entitlement.apply.v1` became
       `v2_system_config`. A KernelSettings namespace can carry only
       `v2_system_config` and `v2_backup_config` keys, so this needs a new
       kind of namespace with the process configuration.
-- **Proxy node (in place).** 11 of proxy-node's 24 routes run natively,
+- **Proxy node (in place).** 7 of proxy-node's 11 routes run natively,
   proved by `internal/tests/proxynodecompat`: a node's runtime logs on the
   adopted `v2_node_log` (the kernel's agent control writes it), the node
   statistics, and since M3-2 the node list, detail, deletion and raw
-  configuration, and the registration keys
-  ([`node-ops-service.md`](node-ops-service.md) section 6.2). The load
-  balancer routes were removed with the feature (migration
-  `0021_drop_load_balancer`).
+  configuration ([`node-ops-service.md`](node-ops-service.md) section
+  6.2). The load balancer and registration key routes were removed with
+  their features (migrations `0021_drop_load_balancer` and
+  `0025_drop_registration_keys`).
   - **Node credentials stay in the kernel.** proxy-node owns the node
     domain, but a node's API key, key hash and shared secret authenticate
     it to the kernel: the node API, UniProxy, the agent WebSocket and gRPC
@@ -809,11 +808,6 @@ The planned `kernel.entitlement.apply.v1` became
     (`PutSecretDocument`): typed secrets reach the package only as sealed
     handles, a placeholder keeps the stored secret, the kernel validates the
     configuration with the secrets it holds and drops its node cache.
-    Registration keys stay the kernel's (`v2_authorized_key` is protected):
-    listed through `kapi_registration_key_v1` (whether a key exists, never
-    the key), issued and revoked through `IssueRegistrationKey` and
-    `RevokeRegistrationKey`, a new key shown once as a sealed handle the
-    gateway expands.
   - **Stay bridged** (7) or **kernel-owned** (6), with the reason in the
     host's route map:
     - node creation (bridged): it also creates the node's default protocol

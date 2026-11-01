@@ -2,8 +2,8 @@
 // (docs/architecture/node-ops-service.md, section 4).
 //
 // The split moves node credentials and protocol secrets out of the legacy
-// tables (v2_node, v2_authorized_key, v2_forward_node,
-// v2_forward_clean_agent, v2_node_protocol, v2_wireguard_peer) into the
+// tables (v2_node, v2_forward_node, v2_forward_clean_agent,
+// v2_node_protocol, v2_wireguard_peer) into the
 // protected kernel tables v4_kernel_node_credential and
 // v4_kernel_protocol_secret. Existing tables are never altered.
 //
@@ -35,7 +35,6 @@ import (
 // The legacy tables the split moves secrets out of.
 const (
 	TableNode          = "v2_node"
-	TableAuthorizedKey = "v2_authorized_key"
 	TableForwardNode   = "v2_forward_node"
 	TableCleanAgent    = "v2_forward_clean_agent"
 	TableNodeProtocol  = "v2_node_protocol"
@@ -44,7 +43,7 @@ const (
 
 // Tables lists the split tables in backfill order.
 func Tables() []string {
-	return []string{TableNode, TableAuthorizedKey, TableForwardNode, TableCleanAgent, TableNodeProtocol, TableWireGuardPeer}
+	return []string{TableNode, TableForwardNode, TableCleanAgent, TableNodeProtocol, TableWireGuardPeer}
 }
 
 // The phases of a table (section 4.3).
@@ -60,7 +59,6 @@ const (
 	SubjectProxy           = "proxy"
 	SubjectForward         = "forward"
 	SubjectCleanAgent      = "clean_agent"
-	SubjectRegistrationKey = "registration_key"
 	SubjectAgentEnrollment = "agent_enrollment"
 )
 
@@ -68,7 +66,6 @@ const (
 const (
 	KindNodeAPIKey       = "node_api_key"       // #nosec G101 -- this names a credential kind, not a hardcoded credential.
 	KindNodeSharedSecret = "node_shared_secret" // #nosec G101 -- this names a credential kind, not a hardcoded credential.
-	KindRegistrationKey  = "registration_key"
 	KindForwardNodeToken = "forward_node_token"
 	KindCleanAgentToken  = "clean_agent_token"
 )
@@ -100,8 +97,7 @@ const (
 const tombstonePrefix = "!moved:"
 
 // Tombstone is the value of a legacy unique credential column once its
-// secret has moved (v2_node.api_key, v2_authorized_key.key,
-// v2_forward_clean_agent.token): unique per row, non-empty, and never a
+// secret has moved (v2_node.api_key, v2_forward_clean_agent.token): unique per row, non-empty, and never a
 // credential.
 func Tombstone(id uint64) string {
 	return tombstonePrefix + strconv.FormatUint(id, 10)

@@ -780,40 +780,6 @@ func (s *NodeService) SyncProtocolToNode(nodeID uint) error {
 	return nil
 }
 
-// ========== 授权密钥管理 ==========
-
-// GenerateAuthKey 生成授权密钥, as IssueRegistrationKey does.
-func (s *NodeService) GenerateAuthKey(name string, expireDays int) (*model.AuthorizedKey, string, error) {
-	var (
-		authKey *model.AuthorizedKey
-		key     string
-	)
-	if err := s.db.Transaction(func(tx *gorm.DB) (err error) {
-		authKey, key, err = IssueRegistrationKeyTx(tx, name, registrationKeyExpiry(expireDays, time.Now()))
-		return err
-	}); err != nil {
-		return nil, "", err
-	}
-	return authKey, key, nil
-}
-
-// GetAuthKeys 获取授权密钥列表
-func (s *NodeService) GetAuthKeys() ([]model.AuthorizedKey, error) {
-	var keys []model.AuthorizedKey
-	if err := s.db.Order("created_at DESC").Find(&keys).Error; err != nil {
-		return nil, err
-	}
-	return keys, nil
-}
-
-// DeleteAuthKey 删除授权密钥, as RevokeRegistrationKey does.
-func (s *NodeService) DeleteAuthKey(id uint) error {
-	return s.db.Transaction(func(tx *gorm.DB) error {
-		_, err := RevokeRegistrationKeyTx(tx, id)
-		return err
-	})
-}
-
 // ========== 统计 ==========
 
 // GetNodeStats 获取节点统计

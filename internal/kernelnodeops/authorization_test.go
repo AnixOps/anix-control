@@ -65,7 +65,7 @@ func TestEachFamilyNeedsItsCapability(t *testing.T) {
 			kernelnodeopsv1.OperationFamily_OPERATION_FAMILY_FORWARD, kernelnodeopsv1.OperationFamily_OPERATION_FAMILY_CREDENTIALS,
 		}, capabilities.GetGrantedFamilies())
 		require.Equal(t, KnownKinds(), capabilities.GetKinds())
-		require.Len(t, capabilities.GetTables(), 7)
+		require.Len(t, capabilities.GetTables(), 6)
 		for _, table := range capabilities.GetTables() {
 			require.Equal(t, kernelnodeopsv1.SecretSplitPhase_SECRET_SPLIT_PHASE_LEGACY, table.GetPhase(), table.GetTable())
 		}

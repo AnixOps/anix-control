@@ -55,33 +55,6 @@
   },
   {
     "method": "GET",
-    "path": "/api/v2/admin/auth-keys",
-    "owner": "proxy-node",
-    "route_id": "proxy.admin.auth_keys.get",
-    "envelope": "data",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
-    "method": "POST",
-    "path": "/api/v2/admin/auth-keys",
-    "owner": "proxy-node",
-    "route_id": "proxy.admin.auth_keys.post",
-    "envelope": "data",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
-    "method": "DELETE",
-    "path": "/api/v2/admin/auth-keys/:id",
-    "owner": "proxy-node",
-    "route_id": "proxy.admin.auth_keys.id.delete",
-    "envelope": "data",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
-    "method": "GET",
     "path": "/api/v2/admin/dashboard",
     "owner": "machine-telemetry",
     "route_id": "telemetry.admin.dashboard.get",

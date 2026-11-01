@@ -15,12 +15,12 @@ import (
 // is finalized its legacy secret columns hold no secret:
 //
 //   - a credential column (v2_node.api_key and .secret,
-//     v2_authorized_key.key, v2_forward_node.api_token,
+//     v2_forward_node.api_token,
 //     v2_forward_clean_agent.token, v2_wireguard_peer.private_key and
 //     .preshared_key) holds the tombstone "!moved:<row id>": unique per row,
 //     non-empty, and never a credential;
-//   - a key hash column (v2_node.api_key_hash, v2_authorized_key.key_hash)
-//     holds "": nothing reads it after P3;
+//   - a key hash column (v2_node.api_key_hash) holds "": nothing reads it
+//     after P3;
 //   - a JSON column (v2_node.raw_config, the five settings columns of
 //     v2_node_protocol) holds its redacted document, Redact of the
 //     original, with the placeholder at every secret position.
@@ -68,10 +68,6 @@ var legacyColumns = map[string][]legacyColumn{
 		{name: "api_key_hash", kind: columnHash},
 		{name: "secret", kind: columnTombstone},
 		{name: "raw_config", kind: columnDocument},
-	},
-	TableAuthorizedKey: {
-		{name: "key", kind: columnTombstone, unique: true},
-		{name: "key_hash", kind: columnHash},
 	},
 	TableForwardNode: {
 		{name: "api_token", kind: columnTombstone},

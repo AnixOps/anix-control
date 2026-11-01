@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	"github.com/AnixOps/anix-control/v5/internal/agentpki"
@@ -143,36 +142,6 @@ func IssueForwardNodeTokenTx(tx *gorm.DB, nodeID uint, token string) (bool, erro
 		return false, nil
 	}
 	return true, revokeNodeAgents(tx, agentcontrol.NodeKindForward, nodeID, agentpki.RevokeReasonCredentialsReplaced)
-}
-
-// IssueRegistrationKeyTx creates a node registration key and returns its
-// row and the key, which is shown once. expireAt ends the key; nil never.
-func IssueRegistrationKeyTx(tx *gorm.DB, name string, expireAt *int64) (*model.AuthorizedKey, string, error) {
-	key, err := generateSecureToken(32)
-	if err != nil {
-		return nil, "", err
-	}
-	authKey := &model.AuthorizedKey{Name: name, Key: key, KeyHash: hashString(key), Used: 0, ExpireAt: expireAt}
-	if err := tx.Create(authKey).Error; err != nil {
-		return nil, "", err
-	}
-	if err := nodesecrets.Sync(tx, nodesecrets.TableAuthorizedKey, authKey.ID); err != nil {
-		return nil, "", err
-	}
-	return authKey, key, nil
-}
-
-// RevokeRegistrationKeyTx deletes a registration key with its split rows.
-// It reports whether a key was deleted; a key already gone is no error.
-func RevokeRegistrationKeyTx(tx *gorm.DB, id uint) (bool, error) {
-	result := tx.Delete(&model.AuthorizedKey{}, id)
-	if result.Error != nil {
-		return false, result.Error
-	}
-	if err := nodesecrets.Sync(tx, nodesecrets.TableAuthorizedKey, id); err != nil {
-		return false, err
-	}
-	return result.RowsAffected > 0, nil
 }
 
 // RetireCounts is what a retirement removed.
@@ -490,14 +459,4 @@ func ValidateRawNodeConfig(raw any) (*RawNodeConfigValidation, error) {
 		warnings = append(warnings, "缺少 server_port 字段")
 	}
 	return &RawNodeConfigValidation{Config: config, Normalized: normalized, Warnings: warnings}, nil
-}
-
-// registrationKeyExpiry is the expiry of a key issued for expireDays days;
-// nil for never.
-func registrationKeyExpiry(expireDays int, now time.Time) *int64 {
-	if expireDays <= 0 {
-		return nil
-	}
-	expireAt := now.Add(time.Duration(expireDays) * 24 * time.Hour).Unix()
-	return &expireAt
 }

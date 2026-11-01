@@ -51,30 +51,6 @@
     },
     {
       "method": "GET",
-      "path": "/api/v2/admin/auth-keys",
-      "package_id": "proxy-node",
-      "route_id": "proxy.admin.auth_keys.get",
-      "mode": "native-flagged",
-      "legacy": "router"
-    },
-    {
-      "method": "POST",
-      "path": "/api/v2/admin/auth-keys",
-      "package_id": "proxy-node",
-      "route_id": "proxy.admin.auth_keys.post",
-      "mode": "native-flagged",
-      "legacy": "router"
-    },
-    {
-      "method": "DELETE",
-      "path": "/api/v2/admin/auth-keys/:id",
-      "package_id": "proxy-node",
-      "route_id": "proxy.admin.auth_keys.id.delete",
-      "mode": "native-flagged",
-      "legacy": "router"
-    },
-    {
-      "method": "GET",
       "path": "/api/v2/admin/dashboard",
       "package_id": "machine-telemetry",
       "route_id": "telemetry.admin.dashboard.get",

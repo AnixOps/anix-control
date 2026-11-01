@@ -25,8 +25,9 @@ import (
 // with its operation and answered in Operation.kind. The flux forwarding
 // kinds (forward.*, diagnose.node_stats, diagnose.forward, diagnose.tunnel,
 // diagnose.forward_backend and cleanagent.issue) stay in the contract but
-// lost their executors with the flux runtime and gost: this kernel answers
-// UNIMPLEMENTED to them.
+// lost their executors with the flux runtime and gost, and the registration
+// key kinds (regkey.issue, regkey.revoke) theirs with node registration:
+// this kernel answers UNIMPLEMENTED to them.
 const (
 	KindForwardApply       = "forward.apply"
 	KindForwardTunnel      = "forward.tunnel"
@@ -936,12 +937,8 @@ func init() {
 		check: func(spec *kernelnodeopsv1.OperationSpec) error {
 			return checkID(spec.GetRevokeRegistrationKey().GetKeyId(), "key_id")
 		},
-		resolve: func(db *gorm.DB, spec *kernelnodeopsv1.OperationSpec) (resolution, error) {
-			id := spec.GetRevokeRegistrationKey().GetKeyId()
-			if err := exists(db, "v2_authorized_key", id, "registration key"); err != nil {
-				return resolution{}, err
-			}
-			return resolution{resource: fmt.Sprintf("regkey:%d", id)}, nil
+		resolve: func(_ *gorm.DB, spec *kernelnodeopsv1.OperationSpec) (resolution, error) {
+			return resolution{resource: fmt.Sprintf("regkey:%d", spec.GetRevokeRegistrationKey().GetKeyId())}, nil
 		},
 	})
 	register(&kind{

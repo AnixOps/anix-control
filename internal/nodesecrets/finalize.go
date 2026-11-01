@@ -471,10 +471,9 @@ func restoreTable(ctx context.Context, db *gorm.DB, spec tableSpec, result *Tabl
 // credentialColumns names the credential kind each tombstone column of a
 // credential table holds, and the hash column that goes with it.
 var credentialColumns = map[string]map[string]struct{ kind, hash string }{
-	TableNode:          {"api_key": {KindNodeAPIKey, "api_key_hash"}, "secret": {KindNodeSharedSecret, ""}},
-	TableAuthorizedKey: {"key": {KindRegistrationKey, "key_hash"}},
-	TableForwardNode:   {"api_token": {KindForwardNodeToken, ""}},
-	TableCleanAgent:    {"token": {KindCleanAgentToken, ""}},
+	TableNode:        {"api_key": {KindNodeAPIKey, "api_key_hash"}, "secret": {KindNodeSharedSecret, ""}},
+	TableForwardNode: {"api_token": {KindForwardNodeToken, ""}},
+	TableCleanAgent:  {"token": {KindCleanAgentToken, ""}},
 }
 
 // restoreRows writes the new tables' secrets back into the given legacy

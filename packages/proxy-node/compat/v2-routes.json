@@ -4,27 +4,6 @@
   "routes": [
     {
       "method": "GET",
-      "legacy_path": "/api/v2/admin/auth-keys",
-      "package_route": "proxy.admin.auth_keys.get",
-      "envelope": "data",
-      "transport": "http"
-    },
-    {
-      "method": "POST",
-      "legacy_path": "/api/v2/admin/auth-keys",
-      "package_route": "proxy.admin.auth_keys.post",
-      "envelope": "data",
-      "transport": "http"
-    },
-    {
-      "method": "DELETE",
-      "legacy_path": "/api/v2/admin/auth-keys/:id",
-      "package_route": "proxy.admin.auth_keys.id.delete",
-      "envelope": "data",
-      "transport": "http"
-    },
-    {
-      "method": "GET",
       "legacy_path": "/api/v2/admin/nodes",
       "package_route": "proxy.admin.nodes.get",
       "envelope": "data",

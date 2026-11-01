@@ -67,12 +67,6 @@ func (f *fixture) requireFinalizedColumns(t *testing.T, db *gorm.DB) {
 	require.Contains(t, *nodes[0].RawConfig, Placeholder)
 	require.Contains(t, *nodes[0].RawConfig, "fake-raw-public", "the public key stays")
 
-	var keys []model.AuthorizedKey
-	require.NoError(t, db.Order("id").Find(&keys).Error)
-	for _, key := range keys {
-		require.Equal(t, Tombstone(uint64(key.ID)), key.Key)
-		require.Empty(t, key.KeyHash)
-	}
 	var forwards []model.ForwardNode
 	require.NoError(t, db.Order("id").Find(&forwards).Error)
 	require.Equal(t, Tombstone(uint64(forwards[0].ID)), forwards[0].APIToken)
@@ -186,7 +180,6 @@ func TestFinalizeWritesTombstonesAndReadsOnlyTheNewTables(t *testing.T) {
 		require.Equal(t, want.NodeByKey, got.NodeByKey)
 		require.Equal(t, want.NodeKeys, got.NodeKeys)
 		require.Equal(t, want.NodeSecrets, got.NodeSecrets)
-		require.Equal(t, want.RegistrationKeys, got.RegistrationKeys)
 		require.True(t, got.ForwardMatches)
 		require.Equal(t, want.ForwardToken, got.ForwardToken)
 		require.Equal(t, want.CleanByToken, got.CleanByToken)
@@ -341,7 +334,6 @@ func TestFinalizeResumesAfterAnInterruption(t *testing.T) {
 		// Meanwhile every reader still finds every secret.
 		got := f.read(t, db)
 		require.Equal(t, want.NodeByKey, got.NodeByKey)
-		require.Equal(t, want.RegistrationKeys, got.RegistrationKeys)
 		require.Equal(t, want.CleanByToken, got.CleanByToken)
 		require.Equal(t, want.PeerPrivate, got.PeerPrivate)
 		// A writer of a finalized table writes tombstones, not secrets.
@@ -440,7 +432,6 @@ func TestOlderBinaryFailsClosedAfterFinalize(t *testing.T) {
 		got := f.read(t, db)
 		require.Equal(t, []bool{false, false}, got.NodeKeyMatches)
 		require.Equal(t, []uint{0, 0}, got.NodeByKey)
-		require.Equal(t, []uint{0, 0}, got.RegistrationKeys)
 		require.False(t, got.ForwardMatches)
 		require.Equal(t, []uint{0, 0}, got.CleanByToken)
 		require.Equal(t, []uint{0, 0}, got.CleanWithToken)

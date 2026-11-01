@@ -14,11 +14,10 @@ const FieldsFormat = "anixops.node-secret-fields/v1"
 
 // Target kinds: what a route's sealed secrets may be stored for.
 const (
-	TargetProxy           = "proxy"
-	TargetForward         = "forward"
-	TargetProtocol        = "protocol"
-	TargetCleanAgent      = "clean_agent"
-	TargetRegistrationKey = "registration_key"
+	TargetProxy      = "proxy"
+	TargetForward    = "forward"
+	TargetProtocol   = "protocol"
+	TargetCleanAgent = "clean_agent"
 	// TargetNone is a route whose secrets are never stored (validation):
 	// its handles never resolve.
 	TargetNone = "none"
@@ -140,7 +139,7 @@ func (s routeStatement) route() (*Route, error) {
 	}
 	route := &Route{ID: s.RouteID, Target: TargetRule{Kind: s.Target.Kind, PathParam: s.Target.PathParam, New: s.Target.New}}
 	switch s.Target.Kind {
-	case TargetProxy, TargetForward, TargetProtocol, TargetCleanAgent, TargetRegistrationKey:
+	case TargetProxy, TargetForward, TargetProtocol, TargetCleanAgent:
 		if (s.Target.PathParam == "") == !s.Target.New {
 			return nil, errors.New("the target names a path parameter or is new, not both")
 		}

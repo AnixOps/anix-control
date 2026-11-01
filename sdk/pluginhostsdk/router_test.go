@@ -303,7 +303,7 @@ func TestNilRouterIsUnavailable(t *testing.T) {
 func TestRouterBindsNativeRunsButNeverShadowRuns(t *testing.T) {
 	handle := v2compat.SealedHandlePrefix + "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
 	bridge := &routerBridgeFake{response: packagebridgesdk.Response{StatusCode: 200, Body: []byte(`{"code":0,"data":{"key":"real-key"},"msg":"ok","ts":1}`)}}
-	bridge.setConfig(map[string]string{"proxy.admin.auth_keys.post": RouteModeNative, "proxy.admin.auth_keys.get": RouteModeShadow}, nil)
+	bridge.setConfig(map[string]string{"proxy.admin.nodes.id.raw_config.put": RouteModeNative, "proxy.admin.nodes.get": RouteModeShadow}, nil)
 	var mu sync.Mutex
 	bindings := map[string][]byte{}
 	record := func(_ context.Context, request NativeRequest) (NativeResponse, error) {
@@ -312,26 +312,26 @@ func TestRouterBindsNativeRunsButNeverShadowRuns(t *testing.T) {
 		bindings[request.RouteID] = request.Binding
 		return NativeResponse{Body: []byte(`{"code":0,"data":{"key":"` + handle + `"},"msg":"ok","ts":2}`)}, nil
 	}
-	router := newTestRouter(t, bridge, map[string]NativeHandler{"proxy.admin.auth_keys.post": record, "proxy.admin.auth_keys.get": record})
+	router := newTestRouter(t, bridge, map[string]NativeHandler{"proxy.admin.nodes.id.raw_config.put": record, "proxy.admin.nodes.get": record})
 	router.Refresh(context.Background())
 	capability := make([]byte, 32)
 	capability[0] = 7
 
-	_, err := router.Dispatch(context.Background(), DispatchRequest{RouteID: "proxy.admin.auth_keys.post", Method: "POST", BridgeCapability: capability})
+	_, err := router.Dispatch(context.Background(), DispatchRequest{RouteID: "proxy.admin.nodes.id.raw_config.put", Method: "PUT", BridgeCapability: capability})
 	require.NoError(t, err)
 	mu.Lock()
-	assert.Equal(t, capability, bindings["proxy.admin.auth_keys.post"], "a native run is bound to its request")
+	assert.Equal(t, capability, bindings["proxy.admin.nodes.id.raw_config.put"], "a native run is bound to its request")
 	mu.Unlock()
 
-	_, err = router.Dispatch(context.Background(), DispatchRequest{RouteID: "proxy.admin.auth_keys.get", Method: "GET", BridgeCapability: capability})
+	_, err = router.Dispatch(context.Background(), DispatchRequest{RouteID: "proxy.admin.nodes.get", Method: "GET", BridgeCapability: capability})
 	require.NoError(t, err)
-	require.Eventually(t, func() bool { return healthDetails(t, router).Routes["proxy.admin.auth_keys.get"].Shadow == 1 }, time.Second, 5*time.Millisecond)
+	require.Eventually(t, func() bool { return healthDetails(t, router).Routes["proxy.admin.nodes.get"].Shadow == 1 }, time.Second, 5*time.Millisecond)
 	mu.Lock()
-	binding, ran := bindings["proxy.admin.auth_keys.get"]
+	binding, ran := bindings["proxy.admin.nodes.get"]
 	mu.Unlock()
 	assert.True(t, ran)
 	assert.Nil(t, binding, "a shadow run is never bound")
-	assert.Zero(t, healthDetails(t, router).Routes["proxy.admin.auth_keys.get"].ShadowMismatch, "answers that differ only in handles match")
+	assert.Zero(t, healthDetails(t, router).Routes["proxy.admin.nodes.get"].ShadowMismatch, "answers that differ only in handles match")
 }
 
 func TestRouterReportsSanitizedShadowSamples(t *testing.T) {

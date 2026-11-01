@@ -68,7 +68,7 @@ func TestProxyNodeHostRelaysRoutesUntilTheyAreSwitchedToNative(t *testing.T) {
 	}
 	withoutNodeOps := (&native.Service{}).Handlers()
 	for _, route := range []string{
-		native.DeleteNodeRouteID, native.UpdateRawConfigRouteID, native.GenerateAuthKeyRouteID, native.DeleteAuthKeyRouteID,
+		native.DeleteNodeRouteID, native.UpdateRawConfigRouteID,
 	} {
 		require.NotContains(t, withoutNodeOps, route, "without KernelNodeOps the route stays legacy")
 	}
@@ -102,11 +102,11 @@ func TestProxyNodeHostRoutesAreThePackageRoutes(t *testing.T) {
 // The package adopts v2_node only as the kernel grants it, once the node
 // credential split finalized it: its API key, key hash and shared secret
 // then hold tombstones, and the credentials live in the kernel's protected
-// split tables, which no grant reaches. It never adopts v2_authorized_key
-// (registration keys) or v2_node_protocol (protocol-runtime's): it reads
-// them through views that show no key. Of KernelNodeOps it holds the
-// families its routes use: nodeconfig (raw configuration secrets, node
-// retirement) and credentials (registration keys); never agents or forward.
+// split tables, which no grant reaches. It never adopts v2_node_protocol
+// (protocol-runtime's): it reads it through a view that shows no secret. Of
+// KernelNodeOps it holds the one family its routes use: nodeconfig (raw
+// configuration secrets, node retirement); never credentials, agents or
+// forward.
 func TestProxyNodeManifestGrantsNoNodeCredentials(t *testing.T) {
 	raw, err := os.ReadFile("../manifest.template.json")
 	require.NoError(t, err)
@@ -120,8 +120,6 @@ func TestProxyNodeManifestGrantsNoNodeCredentials(t *testing.T) {
 		"kernel.storage.adopt:v2_node",
 		"kernel.view:kapi_node_status_v1",
 		"kernel.view:kapi_node_protocol_public_v1",
-		"kernel.view:kapi_registration_key_v1",
 		"kernel.nodeops.nodeconfig.v1",
-		"kernel.nodeops.credentials.v1",
 	}, manifest.Capabilities)
 }

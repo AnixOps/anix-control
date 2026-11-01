@@ -19,7 +19,7 @@ import (
 func TestNodeSecretsCommand(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "kernel.db")), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&model.Node{}, &model.NodeProtocol{}, &model.WireGuardPeer{}, &model.AuthorizedKey{},
+	require.NoError(t, db.AutoMigrate(&model.Node{}, &model.NodeProtocol{}, &model.WireGuardPeer{},
 		&model.ForwardNode{}, &model.ForwardCleanAgent{}, &model.OperationLog{}))
 	require.NoError(t, nodesecrets.MigrateForTest(db))
 	require.NoError(t, db.Create(&model.Node{Name: "n", Host: "203.0.113.40", APIKey: "fake-cli-key", Secret: "fake-cli-secret"}).Error)
@@ -76,7 +76,7 @@ func TestNodeSecretsCommand(t *testing.T) {
 	// Verified: the readers move to dual_read, and back, each change
 	// audited with who made it.
 	output.Reset()
-	require.NoError(t, runNodeSecretsCommand(ctx, db, []string{"phase", "-by", "ops", "v2_node,v2_authorized_key", "dual_read"}, &output))
+	require.NoError(t, runNodeSecretsCommand(ctx, db, []string{"phase", "-by", "ops", "v2_node,v2_forward_node", "dual_read"}, &output))
 	var changes []nodesecrets.PhaseChange
 	require.NoError(t, json.Unmarshal(output.Bytes(), &changes))
 	require.Len(t, changes, 2)
@@ -122,7 +122,7 @@ func TestNodeSecretsCommand(t *testing.T) {
 func TestNodeSecretsFinalizeAndUnsplitCommands(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "kernel.db")+"?_txlock=immediate"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&model.Node{}, &model.NodeProtocol{}, &model.WireGuardPeer{}, &model.AuthorizedKey{},
+	require.NoError(t, db.AutoMigrate(&model.Node{}, &model.NodeProtocol{}, &model.WireGuardPeer{},
 		&model.ForwardNode{}, &model.ForwardCleanAgent{}, &model.OperationLog{}))
 	require.NoError(t, nodesecrets.MigrateForTest(db))
 	node := model.Node{Name: "n", Host: "203.0.113.40", APIKey: "fake-cli-key", Secret: "fake-cli-secret"}

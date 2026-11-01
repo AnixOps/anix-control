@@ -171,7 +171,7 @@ KernelSettings.
 | `kernel.nodeops.nodeconfig.v1` | `SyncNode`, `RetireNode`, `RetireProtocol`, `PutSecretDocument`; `ValidateNodeConfig` | proxy-node, protocol-runtime, forward (`SyncNode` and `RetireNode` on forward nodes) |
 | `kernel.nodeops.diagnose.v1` | `CheckEndpoints`, `CollectNodeStats`, `DiagnoseForward`, `DiagnoseTunnel`, `RunAgentDiagnostic` | forward, protocol-runtime (agent tasks) |
 | `kernel.nodeops.agents.v1` | `AgentControlOperation`; `ListAgentSessions`, `GetAgentSession`, `GetAgentMonitor` | protocol-runtime |
-| `kernel.nodeops.credentials.v1` | `IssueCredential`, `RevokeCredential`, `IssueRegistrationKey`, `RevokeRegistrationKey`, `IssueCleanAgent` | proxy-node, forward |
+| `kernel.nodeops.credentials.v1` | `IssueCredential`, `RevokeCredential`, `IssueRegistrationKey`, `RevokeRegistrationKey`, `IssueCleanAgent` | forward |
 
 - `GetOperation`, `ListOperations`, `WatchOperations` and `CancelOperation`
   need any one of the five, and answer only operations the caller owns
@@ -217,7 +217,7 @@ in `Operation.kind`.
 | `agent.operation` | `AgentControlOperation` | agents | Agent Control | `NodeHandler.DispatchAgentControlOperation` (`agent.ping`, `node.reload`, `users.reload`) |
 | `credential.issue` | `IssueCredential` | credentials | kernel | node creation, forward node token handling, rotation |
 | `credential.revoke` | `RevokeCredential` | credentials | kernel | clean agent revocation |
-| `regkey.issue`, `regkey.revoke` | `IssueRegistrationKey`, `RevokeRegistrationKey` | credentials | kernel | `GenerateAuthKey`, `InternalGenerateAuthKey`, `DeleteAuthKey` |
+| `regkey.issue`, `regkey.revoke` | `IssueRegistrationKey`, `RevokeRegistrationKey` | credentials | kernel | none: removed with node registration (migration 0025); the kernel answers `UNIMPLEMENTED` |
 | `cleanagent.issue` | `IssueCleanAgent` | credentials | kernel | `ForwardCleanAgentService.CreateToken` |
 
 **Agent upgrades are not a KernelNodeOps kind.** The Agent Control
@@ -412,7 +412,6 @@ A package learns everything it needs and never a secret.
      | `PUT /admin/nodes/:id/protocols/:protocol_id` | the five protocol columns (documents) | | protocol `:protocol_id` |
      | `POST /admin/forward/nodes` | `/api_token` (value) | `/data/api_token` | new forward node |
      | `PUT /admin/forward/nodes/:id` | `/api_token` (value) | | forward node `:id` |
-     | `POST /admin/auth-keys`, `POST /internal/auth-keys` | | `/data/key` | new registration key |
      | `POST /admin/forward/agents` | | `/data/token` | new clean agent |
      | `POST /admin/forward/test-connection` | `/api_token` (value) | | `dial`: no resource (NO-7) |
 
@@ -1062,7 +1061,6 @@ native, and none will: M3-4 and M3-5 are cancelled (section 7).
 | `v2_node` | `api_key`, `api_key_hash` | the node's API key, and its SHA-256 used for lookups | `v4_kernel_node_credential` (kind `node_api_key`) |
 | `v2_node` | `secret` | the node's shared signing secret | `v4_kernel_node_credential` (`node_shared_secret`) |
 | `v2_node` | secrets inside `raw_config` | WireGuard and other private keys of the raw configuration | `v4_kernel_protocol_secret` (scope `node_raw_config`) |
-| `v2_authorized_key` | `key`, `key_hash` | registration keys, which mint node credentials | `v4_kernel_node_credential` (`registration_key`) |
 | `v2_forward_node` | `api_token` | the forward node's token: its agent, and the relay's gost API | `v4_kernel_node_credential` (`forward_node_token`, with the pinned `endpoint`) |
 | `v2_forward_clean_agent` | `token` | the clean agent's token | `v4_kernel_node_credential` (`clean_agent_token`) |
 | `v2_forward_runtime_job` | tokens inside `payload` | node tokens copied into clean agent job payloads | none: resolved when the job runs; old payloads scrubbed |
@@ -1331,8 +1329,6 @@ second row. Tombstones are unique and non-empty, and can never authenticate.
 | `v2_node.api_key` (unique) | `!moved:<node id>` | the kernel looks up `v4_kernel_node_credential.key_hash`; `!` never occurs in generated keys |
 | `v2_node.api_key_hash` | `""` | no SHA-256 is empty; nothing reads it after P3 |
 | `v2_node.secret` | `!moved:<node id>` | a tombstone signs nothing (`Unusable`) |
-| `v2_authorized_key.key` (unique) | `!moved:<key id>` | |
-| `v2_authorized_key.key_hash` | `""` | |
 | `v2_forward_node.api_token` | `!moved:<node id>` | "has a token" comes from the credential row (`ForwardNodeTokenPresent`, `kapi_node_credential_status_v1`) |
 | `v2_forward_clean_agent.token` (unique, not null) | `!moved:<agent id>` | |
 | `v2_wireguard_peer.private_key`, `.preshared_key` | `!moved:<peer id>` | the renderer reads peer keys from `v4_kernel_protocol_secret` |
@@ -1386,7 +1382,6 @@ Two more rules:
 These tables stay kernel-owned and protected. The kernel writes them, and
 packages read them through views or change them through operations:
 
-- `v2_authorized_key`;
 - `v2_forward_clean_agent`: the kernel-owned registration, heartbeat and
   report routes write it;
 - `v2_forward_runtime_job`: the kernel's executors claim and complete
@@ -1407,7 +1402,6 @@ table is finalized; unsplit drops the others again):
 | `kapi_node_public_v1` | `v2_node` | every column but `api_key`, `api_key_hash`, `secret`; `raw_config` only once finalized |
 | `kapi_node_protocol_public_v1` | `v2_node_protocol` | every column; created only once finalized |
 | `kapi_node_credential_status_v1` | `v4_kernel_node_credential` | `subject_kind`, `subject_id`, `kind`, `version`, `status`, `rotated_at`, `has_value`; no value or hash |
-| `kapi_registration_key_v1` | `v2_authorized_key` + credential status | `id`, `name`, `used`, `expire_at`, `created_at`, `updated_at`, `has_key` |
 | `kapi_forward_clean_agent_v1` | `v2_forward_clean_agent` | every column but `token` |
 | `kapi_forward_runtime_job_v1` | `v2_forward_runtime_job` | every column; created only once its payloads are scrubbed |
 | `kapi_wireguard_peer_v1` | `v2_wireguard_peer` | `id`, `node_protocol_id`, `user_id`, `peer_ip`, `public_key`, times |
@@ -2184,10 +2178,6 @@ Proxy-node adopts `v2_node` once it is finalized.
 | `GET /admin/nodes/:id/raw-config` | none; the stored, redacted `raw_config` | native |
 | `PUT /admin/nodes/:id/raw-config` | `ValidateNodeConfig{RAW_CONFIG}`; `PutSecretDocument{NODE_RAW_CONFIG}` (handles from the request); store `redacted_json`; `SyncNode` | native |
 | `POST /admin/nodes/validate-config` | `ValidateNodeConfig` | native |
-| `GET /admin/auth-keys` | none; `kapi_registration_key_v1` (masked, as since #92) | native |
-| `POST /admin/auth-keys` | `IssueRegistrationKey` (answered as a handle) | native |
-| `DELETE /admin/auth-keys/:id` | `RevokeRegistrationKey` | native |
-| `POST /internal/auth-keys` | `IssueRegistrationKey`, under the app-token principal | native |
 | `POST /node/register`, `/node/heartbeat`, `/node/runtime-health` | none | **kernel-owned (decided D3)**: registration mints node credentials, and the others are authenticated by them. With A2 they become enrollment and stream reports, and 5.0 removes them |
 
 **As M3-2 built them.** 11 of the 14 routes are `native-flagged`
@@ -2205,11 +2195,9 @@ What the native routes do, and what the kernel gained:
 - **The node routes wait for the finalize.** The list and detail answer
   natively once the lease adopts `v2_node` and grants
   `kapi_node_protocol_public_v1`; the deletion and the raw configuration
-  once it adopts `v2_node`; the registration key list once it grants
-  `kapi_registration_key_v1`. Until then they answer from the legacy
+  once it adopts `v2_node`. Until then they answer from the legacy
   handler, SQLite included; a host started before the finalize keeps them
-  legacy until Control restarts. Issuing and revoking registration keys
-  needs no finalize.
+  legacy until Control restarts.
 - **The raw configuration is validated with the typed secrets.** The
   `secrets.put` executor now validates a raw configuration with the
   secrets it stores (`service.ValidateWireGuardRuntimeConfig`, as the
@@ -2218,11 +2206,6 @@ What the native routes do, and what the kernel gained:
   配置无效`). It also drops the kernel's node cache, as the legacy update
   does. Null clears the configuration: the kernel stores `{}` (which drops
   its secrets), then the package writes null.
-- **Registration keys.** `IssueRegistrationKey` with the expiry the route
-  computes; the key is answered as a handle the gateway expands at
-  `/data/key`. The internal route answers its own envelope. The list shows
-  the placeholder where `has_key` is set. A revocation of a key that does
-  not exist succeeds, as the legacy deletion does.
 - **Two legacy fixes on the way.** The legacy raw configuration update
   (route and service) took the stored document from the legacy column,
   which holds placeholders in a finalized table, so a WireGuard

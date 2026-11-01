@@ -18,10 +18,10 @@ import (
 )
 
 // seedRetirement gives node 2 a protocol with a secret, a subscription
-// group link and a WireGuard peer, dual-written, and a registration key.
+// group link and a WireGuard peer, dual-written.
 func seedRetirement(t *testing.T, db *gorm.DB) {
 	t.Helper()
-	require.NoError(t, db.AutoMigrate(&model.NodeProtocol{}, &model.SubscriptionGroup{}, &model.WireGuardPeer{}, &model.AuthorizedKey{},
+	require.NoError(t, db.AutoMigrate(&model.NodeProtocol{}, &model.SubscriptionGroup{}, &model.WireGuardPeer{},
 		&model.AgentEnrollment{}, &model.AgentCertificate{}, &model.NodeCredential{}, &model.ProtocolSecret{}, &model.NodeSecretSplit{}))
 	require.NoError(t, nodesecrets.MigrateForTest(db))
 	reality := `{"dest":"www.example.test:443","private_key":"reality-private-7"}`
@@ -30,22 +30,18 @@ func seedRetirement(t *testing.T, db *gorm.DB) {
 	require.NoError(t, db.Create(group).Error)
 	require.NoError(t, db.Exec("INSERT INTO v2_subscription_group_node_protocols (subscription_group_id, node_protocol_id) VALUES (?, ?)", group.ID, 7).Error)
 	require.NoError(t, db.Create(&model.WireGuardPeer{NodeProtocolID: 7, UserID: 1, PeerIP: "10.9.0.2", PrivateKey: "peer-private-7", PublicKey: "pub"}).Error)
-	require.NoError(t, db.Create(&model.AuthorizedKey{ID: 60, Name: "bootstrap", Key: "registration-key-60", KeyHash: "h"}).Error)
 	require.NoError(t, db.Transaction(func(tx *gorm.DB) error {
 		if err := nodesecrets.Sync(tx, nodesecrets.TableNodeProtocol, 7); err != nil {
 			return err
 		}
-		if err := nodesecrets.Sync(tx, nodesecrets.TableWireGuardPeer, 1); err != nil {
-			return err
-		}
-		return nodesecrets.Sync(tx, nodesecrets.TableAuthorizedKey, 60)
+		return nodesecrets.Sync(tx, nodesecrets.TableWireGuardPeer, 1)
 	}))
 }
 
 // A package reaches the NO-5 kinds through its bridge: GetCapabilities
 // lists them, ValidateNodeConfig answers the validators, a RetireProtocol
-// submitted with wait TERMINAL answers its typed counts, and a
-// RevokeRegistrationKey removes the key, on SQLite and PostgreSQL.
+// submitted with wait TERMINAL answers its typed counts, and the retired
+// registration key kinds are UNIMPLEMENTED, on SQLite and PostgreSQL.
 func TestKernelNodeOpsCredentialRoundTrip(t *testing.T) {
 	nodeOpsDatabases(t, func(t *testing.T, db *gorm.DB) {
 		seedRetirement(t, db)
@@ -72,7 +68,7 @@ func TestKernelNodeOpsCredentialRoundTrip(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, []string{
 			kernelnodeops.KindCredentialIssue, kernelnodeops.KindCredentialRevoke, kernelnodeops.KindNodeRetire,
-			kernelnodeops.KindProtocolRetire, kernelnodeops.KindRegKeyIssue, kernelnodeops.KindRegKeyRevoke, kernelnodeops.KindSecretsPut,
+			kernelnodeops.KindProtocolRetire, kernelnodeops.KindSecretsPut,
 		}, capabilities.GetKinds())
 
 		validated, err := client.ValidateNodeConfig(background, &kernelnodeopsv1.ValidateNodeConfigRequest{
@@ -108,26 +104,13 @@ func TestKernelNodeOpsCredentialRoundTrip(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, operation.GetOperationId(), read.GetOperation().GetOperationId())
 
-		revoked, err := client.SubmitOperation(background, &kernelnodeopsv1.SubmitOperationRequest{
-			RequestId: "regkey.revoke:60", Wait: kernelnodeopsv1.WaitMode_WAIT_MODE_TERMINAL, WaitTimeoutMs: 20000,
+		_, err = client.SubmitOperation(background, &kernelnodeopsv1.SubmitOperationRequest{
+			RequestId: "regkey.revoke:60",
 			Operation: &kernelnodeopsv1.OperationSpec{Operation: &kernelnodeopsv1.OperationSpec_RevokeRegistrationKey{RevokeRegistrationKey: &kernelnodeopsv1.RevokeRegistrationKey{KeyId: 60}}},
 		})
-		require.NoError(t, err)
-		require.Equal(t, kernelnodeopsv1.OperationState_OPERATION_STATE_SUCCEEDED, revoked.GetOperation().GetState(), revoked.GetOperation().GetError())
-		require.Equal(t, "bootstrap", revoked.GetOperation().GetResult().GetRegistrationKey().GetName())
-		var keys int64
-		require.NoError(t, db.Model(&model.AuthorizedKey{}).Where("id = ?", 60).Count(&keys).Error)
-		require.Zero(t, keys)
-
-		// Issuing needs the administrator's request: a package without a
-		// binding is refused and nothing is recorded.
-		_, err = client.SubmitOperation(background, &kernelnodeopsv1.SubmitOperationRequest{
-			RequestId: "regkey.issue:unbound",
-			Operation: &kernelnodeopsv1.OperationSpec{Operation: &kernelnodeopsv1.OperationSpec_IssueRegistrationKey{IssueRegistrationKey: &kernelnodeopsv1.IssueRegistrationKey{Name: "x"}}},
-		})
-		require.Equal(t, codes.PermissionDenied, status.Code(err))
+		require.Equal(t, codes.Unimplemented, status.Code(err))
 		list, err := client.ListOperations(background, &kernelnodeopsv1.ListOperationsRequest{})
 		require.NoError(t, err)
-		require.Len(t, list.GetOperations(), 2)
+		require.Len(t, list.GetOperations(), 1)
 	})
 }

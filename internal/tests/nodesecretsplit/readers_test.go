@@ -24,7 +24,6 @@ func legacyColumns(t *testing.T, db *gorm.DB) map[string][]map[string]any {
 	t.Helper()
 	columns := map[string][]string{
 		"v2_node":                {"id", "api_key", "api_key_hash", "secret", "raw_config"},
-		"v2_authorized_key":      {"id", "key", "key_hash", "expire_at", "used"},
 		"v2_forward_node":        {"id", "host", "api_port", "api_token"},
 		"v2_forward_clean_agent": {"id", "token", "status"},
 		"v2_node_protocol":       {"id", "settings", "tls_settings", "transport_settings", "reality_settings", "custom_config"},
@@ -46,7 +45,7 @@ func sha256Hex(value string) string {
 
 // TestOlderReadersAuthenticateEveryNode: P1 never changes a legacy column,
 // so the readers an older binary runs (UniProxy, the node API, package
-// downloads, the gRPC node service, registration, clean agents) still
+// downloads, the gRPC node service, clean agents) still
 // authenticate every node after the backfill and the verification, whether
 // the node was written before P1 or by a P1 writer.
 func TestOlderReadersAuthenticateEveryNode(t *testing.T) {

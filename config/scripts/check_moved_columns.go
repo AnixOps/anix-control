@@ -13,16 +13,14 @@
 // (type-checked):
 //
 //   - reading a moved field of a model row: model.Node's APIKey, APIKeyHash
-//     and Secret; model.AuthorizedKey's Key and KeyHash;
-//     model.ForwardNode's APIToken; model.ForwardCleanAgent's Token;
+//     and Secret; model.ForwardNode's APIToken; model.ForwardCleanAgent's Token;
 //     model.WireGuardPeer's PrivateKey and PresharedKey. Writing one (the
 //     left side of an assignment, a composite literal) is the writers' part
 //     and is allowed: they call nodesecrets.Sync in the same transaction;
 //   - naming a moved column in the SQL of a gorm call (Where, Select, Pluck,
-//     Order, Raw and the like): api_key, api_key_hash, api_token, key_hash,
-//     private_key and preshared_key anywhere; secret, key and token where
-//     the call's chain reads v2_node, v2_authorized_key or
-//     v2_forward_clean_agent.
+//     Order, Raw and the like): api_key, api_key_hash, api_token,
+//     private_key and preshared_key anywhere; secret and token where the
+//     call's chain reads v2_node or v2_forward_clean_agent.
 //
 // Allowed: internal/nodesecrets itself, internal/model (the definitions),
 // cmd/migrate and cmd/sqlite2postgres (they copy whole rows between
@@ -71,8 +69,6 @@ var allowed = map[string]string{
 		"nodesecrets.ForwardNodeToken",
 	"internal/service/node_credential_ops.go IssueForwardNodeTokenTx": "selects api_token only to hand the row to " +
 		"nodesecrets.ForwardNodeToken",
-	"internal/service/node_secrets.go MaskAuthorizedKeys": "masks the column for an answer: any value, a tombstone " +
-		"too, is shown as the placeholder",
 	"internal/service/wireguard_peer.go applyWireGuardPeer": "the peer comes from GetOrCreateWireGuardPeer, which " +
 		"resolves its keys through nodesecrets.ResolveWireGuardPeers or generated them",
 	"internal/service/wireguard_peer.go BuildWireGuardRuntimeUserExtras": "the peer comes from " +
@@ -86,22 +82,21 @@ var exemptPrefixes = []string{"internal/nodesecrets", "internal/model", "cmd/mig
 // movedFields are the moved fields by model type, with their columns.
 var movedFields = map[string]map[string]string{
 	"Node":              {"APIKey": "api_key", "APIKeyHash": "api_key_hash", "Secret": "secret"},
-	"AuthorizedKey":     {"Key": "key", "KeyHash": "key_hash"},
 	"ForwardNode":       {"APIToken": "api_token"},
 	"ForwardCleanAgent": {"Token": "token"},
 	"WireGuardPeer":     {"PrivateKey": "private_key", "PresharedKey": "preshared_key"},
 }
 
 var modelTables = map[string]string{
-	"Node": "v2_node", "AuthorizedKey": "v2_authorized_key", "ForwardNode": "v2_forward_node",
+	"Node": "v2_node", "ForwardNode": "v2_forward_node",
 	"ForwardCleanAgent": "v2_forward_clean_agent", "WireGuardPeer": "v2_wireguard_peer",
 }
 
 // distinctiveColumns are refused in any gorm SQL; genericColumns only where
 // the chain reads their table.
 var (
-	distinctiveColumns = []string{"api_key", "api_key_hash", "api_token", "key_hash", "private_key", "preshared_key"}
-	genericColumns     = map[string]string{"secret": "v2_node", "key": "v2_authorized_key", "token": "v2_forward_clean_agent"}
+	distinctiveColumns = []string{"api_key", "api_key_hash", "api_token", "private_key", "preshared_key"}
+	genericColumns     = map[string]string{"secret": "v2_node", "token": "v2_forward_clean_agent"}
 )
 
 // sqlMethods are the gorm methods whose string arguments are SQL that

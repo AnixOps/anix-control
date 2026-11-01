@@ -60,7 +60,7 @@ func startAgentListenerWith(t *testing.T, withPKI bool, configure func(*ServerCo
 	t.Helper()
 	cache.InitMemory()
 	requireInMemoryDatabase(t)
-	requireAutoMigrate(t, &model.Node{}, &model.NodeProtocol{}, &model.AuthorizedKey{}, &model.ForwardNode{},
+	requireAutoMigrate(t, &model.Node{}, &model.NodeProtocol{}, &model.ForwardNode{},
 		&model.ServiceCA{}, &model.AgentEnrollment{}, &model.AgentCertificate{}, &model.OperationLog{},
 		&model.NodeServiceAssignment{}, &model.PluginTelemetryState{}, &model.NodePluginObservedState{}, &model.AgentTransport{},
 		&model.NodeOperationRevision{})

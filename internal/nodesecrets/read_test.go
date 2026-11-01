@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"log/slog"
 	"strings"
 	"testing"
@@ -44,10 +43,6 @@ func (f *fixture) moveLegacySecrets(t *testing.T, db *gorm.DB) {
 	}
 	raw := `{"server_port":51820,"wireguard":{"private_key":"********","public_key":"fake-raw-public"}}`
 	require.NoError(t, db.Model(&model.Node{}).Where("id = ?", f.nodes[0].ID).UpdateColumn("raw_config", raw).Error)
-	for _, row := range f.keys {
-		require.NoError(t, db.Model(&model.AuthorizedKey{}).Where("id = ?", row.ID).
-			UpdateColumns(map[string]any{"key": Tombstone(uint64(row.ID)), "key_hash": ""}).Error)
-	}
 	require.NoError(t, db.Model(&model.ForwardNode{}).Where("id = ?", f.forwards[0].ID).UpdateColumn("api_token", "").Error)
 	for _, row := range f.agents {
 		require.NoError(t, db.Model(&model.ForwardCleanAgent{}).Where("id = ?", row.ID).UpdateColumn("token", Tombstone(uint64(row.ID))).Error)
@@ -67,7 +62,6 @@ type readings struct {
 	NodeByKey          []uint
 	NodeKeys           []string
 	NodeSecrets        []string
-	RegistrationKeys   []uint
 	ForwardMatches     bool
 	ForwardToken       string
 	CleanByToken       []uint
@@ -97,18 +91,6 @@ func (f *fixture) read(t *testing.T, db *gorm.DB) readings {
 		}
 		r.NodeKeys = append(r.NodeKeys, NodeAPIKey(db, &nodes[i]))
 		r.NodeSecrets = append(r.NodeSecrets, NodeSharedSecret(db, &nodes[i]))
-	}
-	for _, key := range []string{"fake-registration-1", "fake-registration-2"} {
-		var id uint
-		require.NoError(t, db.Transaction(func(tx *gorm.DB) error {
-			if authKey, err := LockRegistrationKey(tx, key); err == nil {
-				id = authKey.ID
-			} else if !errors.Is(err, gorm.ErrRecordNotFound) {
-				return err
-			}
-			return nil
-		}))
-		r.RegistrationKeys = append(r.RegistrationKeys, id)
 	}
 	var forward model.ForwardNode
 	require.NoError(t, db.First(&forward, f.forwards[0].ID).Error)
@@ -161,7 +143,7 @@ func (f *fixture) read(t *testing.T, db *gorm.DB) readings {
 func fallbacksTotal() uint64 {
 	var total uint64
 	for _, table := range Tables() {
-		for _, kind := range []string{KindNodeAPIKey, KindNodeSharedSecret, KindRegistrationKey, KindForwardNodeToken, KindCleanAgentToken,
+		for _, kind := range []string{KindNodeAPIKey, KindNodeSharedSecret, KindForwardNodeToken, KindCleanAgentToken,
 			"raw_config", "settings", "tls_settings", "transport_settings", "reality_settings", "custom_config", "private_key", "preshared_key"} {
 			total += FallbackCount(table, kind, "")
 		}
@@ -192,7 +174,6 @@ func TestReadersFollowThePhase(t *testing.T) {
 		require.Equal(t, []uint{f.nodes[0].ID, f.nodes[1].ID}, legacy.NodeByKey, "node 2 has no hash: matched by its key")
 		require.Equal(t, []string{"fake-node-key-1", "fake-node-key-2"}, legacy.NodeKeys)
 		require.Equal(t, []string{"fake-node-secret-1", ""}, legacy.NodeSecrets)
-		require.Equal(t, []uint{f.keys[0].ID, f.keys[1].ID}, legacy.RegistrationKeys)
 		require.True(t, legacy.ForwardMatches)
 		require.Equal(t, "fake-forward-token-1", legacy.ForwardToken)
 		require.Equal(t, []uint{f.agents[0].ID, f.agents[1].ID}, legacy.CleanByToken, "a revoked agent is found; the caller refuses it")
@@ -221,7 +202,6 @@ func TestReadersFollowThePhase(t *testing.T) {
 		require.Equal(t, legacy.NodeByKey, moved.NodeByKey)
 		require.Equal(t, legacy.NodeKeys, moved.NodeKeys)
 		require.Equal(t, legacy.NodeSecrets, moved.NodeSecrets)
-		require.Equal(t, legacy.RegistrationKeys, moved.RegistrationKeys)
 		require.True(t, moved.ForwardMatches)
 		require.Equal(t, legacy.ForwardToken, moved.ForwardToken)
 		require.Equal(t, legacy.CleanByToken, moved.CleanByToken)
@@ -240,7 +220,6 @@ func TestReadersFollowThePhase(t *testing.T) {
 		require.Equal(t, before, fallbacksTotal())
 		require.Equal(t, []bool{false, false}, back.NodeKeyMatches)
 		require.Equal(t, []uint{0, 0}, back.NodeByKey)
-		require.Equal(t, []uint{0, 0}, back.RegistrationKeys)
 		require.False(t, back.ForwardMatches)
 		require.Empty(t, back.ForwardToken)
 		require.Equal(t, []uint{0, 0}, back.CleanByToken)
@@ -267,10 +246,10 @@ func TestDualReadFallsBackAndCounts(t *testing.T) {
 		slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
 		t.Cleanup(func() { slog.SetDefault(previous) })
 
-		// Missing rows: every credential of node 1, the forward token, the
-		// registration keys, clean agent 1, the Reality key and peer 1.
+		// Missing rows: every credential of node 1, the forward token, clean
+		// agent 1, the Reality key and peer 1.
 		require.NoError(t, db.Where("subject_kind = ? AND subject_id = ?", SubjectProxy, f.nodes[0].ID).Delete(&model.NodeCredential{}).Error)
-		require.NoError(t, db.Where("subject_kind IN ?", []string{SubjectForward, SubjectRegistrationKey}).Delete(&model.NodeCredential{}).Error)
+		require.NoError(t, db.Where("subject_kind = ?", SubjectForward).Delete(&model.NodeCredential{}).Error)
 		require.NoError(t, db.Where("subject_kind = ? AND subject_id = ?", SubjectCleanAgent, f.agents[0].ID).Delete(&model.NodeCredential{}).Error)
 		require.NoError(t, db.Where("scope = ? AND column_name = ?", ScopeNodeProtocol, "reality_settings").Delete(&model.ProtocolSecret{}).Error)
 		require.NoError(t, db.Where("scope = ? AND owner_id = ?", ScopeWireGuardPeer, f.peers[0].ID).Delete(&model.ProtocolSecret{}).Error)
@@ -287,7 +266,6 @@ func TestDualReadFallsBackAndCounts(t *testing.T) {
 		keys := [][3]string{
 			{TableNode, KindNodeAPIKey, FallbackMissing}, {TableNode, KindNodeAPIKey, FallbackMismatch},
 			{TableNode, KindNodeSharedSecret, FallbackMissing}, {TableNode, "raw_config", FallbackMismatch},
-			{TableAuthorizedKey, KindRegistrationKey, FallbackMissing},
 			{TableForwardNode, KindForwardNodeToken, FallbackMissing},
 			{TableCleanAgent, KindCleanAgentToken, FallbackMissing}, {TableCleanAgent, KindCleanAgentToken, FallbackMismatch},
 			{TableNodeProtocol, "reality_settings", FallbackMissing}, {TableNodeProtocol, "custom_config", FallbackMismatch},
@@ -360,15 +338,6 @@ func TestTombstonesAndThePlaceholderNeverAuthenticate(t *testing.T) {
 					require.False(t, NodeAPIKeyMatches(db, &node, presented), "%s node %d %q", phase, node.ID, presented)
 					_, err := NodeByAPIKey(db, presented, true)
 					require.ErrorIs(t, err, gorm.ErrRecordNotFound, "%s node %d %q", phase, node.ID, presented)
-				}
-			}
-			for _, key := range f.keys {
-				for _, presented := range []string{Tombstone(uint64(key.ID)), Placeholder} {
-					err := db.Transaction(func(tx *gorm.DB) error {
-						_, err := LockRegistrationKey(tx, presented)
-						return err
-					})
-					require.ErrorIs(t, err, gorm.ErrRecordNotFound, "%s key %d", phase, key.ID)
 				}
 			}
 			var forwards []model.ForwardNode

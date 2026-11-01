@@ -23,13 +23,11 @@ type proxyNodeBridge interface {
 // newProxyNodeService returns the proxy-node host's router. The routes in
 // proxyNodeRoutes have a native handler; such a route serves natively once
 // the kernel sets its mode, and falls back to the legacy handler otherwise.
-// The node routes on v2_node and the registration key list need grants the
-// kernel gives only once the node credential split is finalized: until the
+// The node routes on v2_node need grants the kernel gives only once the node credential split is finalized: until the
 // lease has them they answer from the legacy handler, and a host started
 // before the finalize keeps them legacy until it restarts. The routes that
 // reach the kernel's KernelNodeOps (a node's deletion and raw
-// configuration, registration keys) use the
-// bridge connection (local socket or module listener); a bridge without one
+// configuration) use the bridge connection (local socket or module listener); a bridge without one
 // leaves them legacy. The routes in bridgedRoutes always relay to the
 // legacy handler, the agent WebSocket included.
 func newProxyNodeService(bridge proxyNodeBridge, leaseID string) (*pluginhostsdk.Router, error) {
@@ -73,9 +71,6 @@ var proxyNodeRoutes = map[string]struct{}{
 	"proxy.admin.nodes.id.delete":         {},
 	"proxy.admin.nodes.id.raw_config.get": {},
 	"proxy.admin.nodes.id.raw_config.put": {},
-	"proxy.admin.auth_keys.get":           {},
-	"proxy.admin.auth_keys.post":          {},
-	"proxy.admin.auth_keys.id.delete":     {},
 }
 
 // bridgedRoutes are the package's compatibility routes without a native

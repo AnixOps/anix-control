@@ -111,7 +111,7 @@ func newFixture(t *testing.T, cfg *config.DatabaseConfig) *fixture {
 	})
 	db := database.Get()
 	require.NoError(t, db.AutoMigrate(
-		&model.Node{}, &model.NodeProtocol{}, &model.AuthorizedKey{}, &model.ForwardNode{}, &model.ForwardRule{}, &model.ForwardTunnel{},
+		&model.Node{}, &model.NodeProtocol{}, &model.ForwardNode{}, &model.ForwardRule{}, &model.ForwardTunnel{},
 		&model.AgentDiagnosticTask{}, &model.OperationLog{},
 	))
 	require.NoError(t, service.MigrateKernelModelsForTest(db))

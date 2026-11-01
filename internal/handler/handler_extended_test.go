@@ -2577,17 +2577,6 @@ func (s *NodeExtendedTestSuite) TestGetNodeStats() {
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 }
 
-func (s *NodeExtendedTestSuite) TestGetAuthKeys() {
-	handler := NewNodeHandler()
-	s.router.GET("/admin/nodes/auth-keys", handler.GetAuthKeys)
-
-	req, _ := http.NewRequest("GET", "/admin/nodes/auth-keys", nil)
-	w := httptest.NewRecorder()
-	s.router.ServeHTTP(w, req)
-
-	assert.Equal(s.T(), http.StatusOK, w.Code)
-}
-
 func (s *NodeExtendedTestSuite) TestGetProtocolTemplates() {
 	handler := NewNodeHandler()
 	s.router.GET("/admin/nodes/protocol-templates", handler.GetProtocolTemplates)

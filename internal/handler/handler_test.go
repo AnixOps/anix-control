@@ -87,7 +87,6 @@ func initTestDB() *gorm.DB {
 		&model.Ticket{},
 		&model.TicketMessage{},
 		&model.Knowledge{},
-		&model.AuthorizedKey{},
 		&model.UserMFA{},
 		&model.MFALoginAttempt{},
 		&model.InviteCode{},
@@ -1447,46 +1446,6 @@ func (s *NodeHandlerTestSuite) TestCreateProtocol_Success() {
 	assert.Equal(s.T(), float64(0), resp["code"])
 	data := resp["data"].(map[string]any)
 	assert.Equal(s.T(), "vless", data["type"])
-	assert.NotContains(s.T(), resp, "error")
-}
-
-func (s *NodeHandlerTestSuite) TestGenerateAuthKey_Success() {
-	handler := NewNodeHandler()
-	s.router.POST("/auth-keys", handler.GenerateAuthKey)
-
-	body := map[string]any{
-		"name":        "Test Key",
-		"expire_days": 7,
-	}
-	jsonBody, _ := json.Marshal(body)
-
-	req, _ := http.NewRequest("POST", "/auth-keys", bytes.NewReader(jsonBody))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	s.router.ServeHTTP(w, req)
-
-	assert.Equal(s.T(), http.StatusOK, w.Code)
-	resp := decodePanelTestResponse(s.T(), w)
-	assert.Equal(s.T(), float64(0), resp["code"])
-	data := resp["data"].(map[string]any)
-	assert.Equal(s.T(), "Test Key", data["name"])
-	assert.NotEmpty(s.T(), data["key"])
-	assert.NotContains(s.T(), resp, "error")
-}
-
-func (s *NodeHandlerTestSuite) TestGetAuthKeys_Success() {
-	handler := NewNodeHandler()
-	s.router.GET("/auth-keys", handler.GetAuthKeys)
-
-	req, _ := http.NewRequest("GET", "/auth-keys", nil)
-	w := httptest.NewRecorder()
-	s.router.ServeHTTP(w, req)
-
-	assert.Equal(s.T(), http.StatusOK, w.Code)
-	resp := decodePanelTestResponse(s.T(), w)
-	assert.Equal(s.T(), float64(0), resp["code"])
-	_, ok := resp["data"].([]any)
-	assert.True(s.T(), ok)
 	assert.NotContains(s.T(), resp, "error")
 }
 
@@ -5265,56 +5224,6 @@ func (s *ProtocolHandlerTestSuite) TestSyncProtocol_InvalidID() {
 
 func TestProtocolHandler(t *testing.T) {
 	suite.Run(t, new(ProtocolHandlerTestSuite))
-}
-
-// ========== Auth Key Delete Tests ==========
-
-type AuthKeyDeleteTestSuite struct {
-	HandlerTestSuite
-	testAuthKey *model.AuthorizedKey
-}
-
-func (s *AuthKeyDeleteTestSuite) SetupTest() {
-	s.HandlerTestSuite.SetupTest()
-
-	s.testAuthKey = &model.AuthorizedKey{
-		Name:    "Delete Test Key",
-		KeyHash: "delete-test-key-hash",
-	}
-	s.db.Create(s.testAuthKey)
-
-	s.router = gin.New()
-}
-
-func (s *AuthKeyDeleteTestSuite) TestDeleteAuthKey_Success() {
-	handler := NewNodeHandler()
-	s.router.DELETE("/auth-keys/:id", handler.DeleteAuthKey)
-
-	req, _ := http.NewRequest("DELETE", "/auth-keys/"+strconv.FormatUint(uint64(s.testAuthKey.ID), 10), nil)
-	w := httptest.NewRecorder()
-	s.router.ServeHTTP(w, req)
-
-	assert.Equal(s.T(), http.StatusOK, w.Code)
-	resp := decodePanelTestResponse(s.T(), w)
-	assert.Equal(s.T(), float64(0), resp["code"])
-	data := resp["data"].(map[string]any)
-	assert.Equal(s.T(), "删除成功", data["message"])
-	assert.NotContains(s.T(), resp, "error")
-}
-
-func (s *AuthKeyDeleteTestSuite) TestDeleteAuthKey_InvalidID() {
-	handler := NewNodeHandler()
-	s.router.DELETE("/auth-keys/:id", handler.DeleteAuthKey)
-
-	req, _ := http.NewRequest("DELETE", "/auth-keys/invalid", nil)
-	w := httptest.NewRecorder()
-	s.router.ServeHTTP(w, req)
-
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
-}
-
-func TestAuthKeyDelete(t *testing.T) {
-	suite.Run(t, new(AuthKeyDeleteTestSuite))
 }
 
 // ========== Forward Node Tests ==========

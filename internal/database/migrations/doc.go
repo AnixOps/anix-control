@@ -113,4 +113,7 @@
 //   - 0024_traffic_categories: the administrator's traffic category rules
 //     and the remote category lists (v5_traffic_category_rule,
 //     v5_traffic_category_source).
+//   - 0025_drop_registration_keys: node registration is removed; the
+//     registration keys (v2_authorized_key, kapi_registration_key_v1) and
+//     their moved credentials are dropped.
 package migrations

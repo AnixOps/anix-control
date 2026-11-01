@@ -130,33 +130,9 @@ Agent 只通过 `anix.agent.v1` mTLS gRPC 控制流与 Control 通信；UniProxy
 | tls_settings | json | TLS 配置 |
 | transport_settings | json | 传输层配置 |
 
-### v2_authorized_key (授权密钥表)
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| id | uint | 主键 |
-| key_hash | string | 密钥哈希 |
-| name | string | 备注名称 |
-| used | int | 是否已使用 |
-| used_by_node_id | uint | 使用该密钥的节点 |
-| expires_at | time | 过期时间 |
-
 ---
 
 ## 管理操作
-
-### 生成授权密钥
-
-```bash
-POST /api/v2/admin/auth-keys
-{
-  "name": "Tokyo Node Key",
-  "expires_at": "2025-12-31T23:59:59Z"
-}
-```
-
-应答中的 `key` 只返回这一次，请当场复制（节点页「授权密钥」弹窗中的「生成密钥」同理）。
-`GET /api/v2/admin/auth-keys` 中的 `key` 显示为 `********`。
 
 ### 查看节点列表
 
@@ -251,12 +227,10 @@ PUT /api/v4/kernel/nodes/proxy-60/entries
 **检查**: `anix-control agents transports` 中该节点是否为 `mtls`；不是则 Agent 没有用证书连上控制流，
 查看 Agent 日志中的 `agent_cert_*` 拒绝码。
 
-### 节点注册失败
+### 节点接入失败
 
-**常见原因**:
-1. 授权密钥已使用或过期
-2. 网络连接问题
-3. API 路径错误（应使用 `/api/v2`）
+**检查**: 操作日志中的 `agent_join_rejected` 记录了原因，常见的是节点组令牌已重置或过期、
+节点组已满，或者 Agent 连不上控制流地址。
 
 ### 协议配置不生效
 

@@ -20,15 +20,14 @@ import (
 	"gorm.io/gorm"
 )
 
-// The node and registration key routes run through
-// the whole path a deployment runs (packagecompat.RunKernelRead and
-// RunKernelWrite): the kernel's gateway seals the secrets an administrator
-// types into handles and expands the ones an answer shows, the package
-// host reads v2_node, which its lease adopts once the node credential
-// split finalized it, and the kernel stores raw configuration secrets,
-// retires deleted nodes, issues and revokes registration keys. Both sides start from the same rows; the answers are the
-// same bytes and the rows, the kernel's secrets and credentials end the
-// same.
+// The node routes run through the whole path a deployment runs
+// (packagecompat.RunKernelRead and RunKernelWrite): the kernel's gateway
+// seals the secrets an administrator types into handles and expands the
+// ones an answer shows, the package host reads v2_node, which its lease
+// adopts once the node credential split finalized it, and the kernel stores
+// raw configuration secrets and retires deleted nodes. Both sides start
+// from the same rows; the answers are the same bytes and the rows, the
+// kernel's secrets and credentials end the same.
 
 // now is the clock the seeds' report times are relative to, one value for
 // the run, so both sides store the same.
@@ -52,11 +51,11 @@ func wireGuardRawConfig(private, public string) string {
 
 var adminModels = []any{
 	&model.Node{}, &model.NodeProtocol{}, &model.NodeLog{}, &model.WireGuardPeer{}, &model.SubscriptionGroup{},
-	&model.User{}, &model.AuthorizedKey{}, &model.ForwardNode{}, &model.AgentCertificate{}, &model.AgentEnrollment{},
+	&model.User{}, &model.ForwardNode{}, &model.AgentCertificate{}, &model.AgentEnrollment{},
 }
 
 func capabilities() []string {
-	return []string{service.CapabilityNodeOpsNodeConfig, service.CapabilityNodeOpsCredentials}
+	return []string{service.CapabilityNodeOpsNodeConfig}
 }
 
 // kernelRoute is a proxy-node route on the kernel's path.
@@ -82,7 +81,7 @@ func nodeHandler(method func(*handler.NodeHandler, *gin.Context)) gin.HandlerFun
 // seedFleet writes nodes 1 to 6: online, offline, pending, disabled, in
 // two groups, with raw configurations (a WireGuard one with its keys, one
 // that is not JSON), protocols with secrets, a WireGuard protocol with its
-// users' peers and group links, agent certificates, and registration keys.
+// users' peers and group links, and agent certificates.
 func seedFleet(t testing.TB, db *gorm.DB) {
 	recent, old := now-30, now-7200
 	group := func(id uint) *uint { return &id }
@@ -120,12 +119,7 @@ func seedFleet(t testing.TB, db *gorm.DB) {
 		PublicKey: "peer-pub", PresharedKey: "fake-psk", CreatedAt: seeded, UpdatedAt: seeded}).Error)
 	require.NoError(t, db.Create(&model.SubscriptionGroup{ID: 1, Name: "default", Enable: 1, CreatedAt: seeded, UpdatedAt: seeded}).Error)
 	require.NoError(t, db.Exec("INSERT INTO v2_subscription_group_node_protocols (subscription_group_id, node_protocol_id) VALUES (1, 1), (1, 2), (1, 3)").Error)
-	expires := now + 86400
-	require.NoError(t, db.Create(&[]model.AuthorizedKey{
-		{ID: 1, Name: "ansible", Key: "fake-registration-key-1", KeyHash: "kh1", Used: 2, CreatedAt: seeded, UpdatedAt: seeded},
-		{ID: 2, Name: "expiring", Key: "fake-registration-key-2", KeyHash: "kh2", ExpireAt: &expires, CreatedAt: seeded.Add(time.Hour), UpdatedAt: seeded.Add(time.Hour)},
-	}).Error)
-	syncTables(t, db, "v2_node", "v2_node_protocol", "v2_wireguard_peer", "v2_subscription_group", "v2_user", "v2_authorized_key")
+	syncTables(t, db, "v2_node", "v2_node_protocol", "v2_wireguard_peer", "v2_subscription_group", "v2_user")
 }
 
 func wireGuardSettings(private, public string) string {
@@ -136,14 +130,12 @@ func wireGuardSettings(private, public string) string {
 // seedFinalized is seedFleet with every table the routes read finalized.
 func seedFinalized(t testing.TB, db *gorm.DB) {
 	seedFleet(t, db)
-	packagecompat.FinalizeNodeSplit(t, db, nodesecrets.TableNode, nodesecrets.TableNodeProtocol, nodesecrets.TableWireGuardPeer,
-		nodesecrets.TableAuthorizedKey)
+	packagecompat.FinalizeNodeSplit(t, db, nodesecrets.TableNode, nodesecrets.TableNodeProtocol, nodesecrets.TableWireGuardPeer)
 }
 
 // fleetState is what the routes can change: the nodes as stored, the
 // kernel's secrets and credentials for them, the protocols, peers and
-// links that go with a node, the registration keys and the agent
-// certificates. Times the handlers take from their clock read as
+// links that go with a node and the agent certificates. Times the handlers take from their clock read as
 // "<clock>".
 func fleetState(t testing.TB, db *gorm.DB) any {
 	var nodes []model.Node
@@ -168,26 +160,10 @@ func fleetState(t testing.TB, db *gorm.DB) any {
 	}
 	require.NoError(t, db.Model(&model.NodeCredential{}).Select("subject_kind, kind, status, subject_id, value <> '' AS has_value").
 		Order("subject_kind, subject_id, kind, status").Find(&credentials).Error)
-	var keys []struct {
-		ID       uint
-		Name     string
-		Used     int
-		HasKey   bool
-		ExpireAt *int64
-	}
-	require.NoError(t, db.Model(&model.AuthorizedKey{}).Select("id, name, used, key <> '' AS has_key, expire_at").Order("id").Find(&keys).Error)
-	for i := range keys {
-		// A key issued by the request ends a duration after the clock the
-		// request read; only the seeded end is compared.
-		if keys[i].ExpireAt != nil && *keys[i].ExpireAt != now+86400 {
-			clocked := int64(-1)
-			keys[i].ExpireAt = &clocked
-		}
-	}
 	var peers, links int64
 	require.NoError(t, db.Model(&model.WireGuardPeer{}).Count(&peers).Error)
 	require.NoError(t, db.Table("v2_subscription_group_node_protocols").Count(&links).Error)
-	return map[string]any{"nodes": nodeRows, "protocols": protocols, "secrets": secrets, "credentials": credentials, "keys": keys, "peers": peers, "links": links}
+	return map[string]any{"nodes": nodeRows, "protocols": protocols, "secrets": secrets, "credentials": credentials, "peers": peers, "links": links}
 }
 
 func clock(value time.Time) string {
@@ -333,39 +309,5 @@ func TestRawConfigUpdateParity(t *testing.T) {
 		{Name: "not JSON", Path: path("2"), Body: []byte(`{"raw_config":`), Fallback: true},
 		{Name: "before finalize the kernel answers", Path: path("6"), Seed: seedFleet, Fallback: true,
 			Body: body(wireGuardRawConfig(wireGuard.otherPrivate, wireGuard.otherPublic))},
-	})
-}
-
-func TestAuthKeysParity(t *testing.T) {
-	path := "/api/v2/admin/auth-keys"
-	kernelRead(t, kernelRoute("GET", path, native.AuthKeysRouteID, nodeHandler((*handler.NodeHandler).GetAuthKeys)), []packagecompat.Case{
-		{Name: "newest first, keys masked", Path: path},
-		{Name: "none", Path: path, Seed: func(t testing.TB, db *gorm.DB) {
-			packagecompat.FinalizeNodeSplit(t, db, nodesecrets.TableAuthorizedKey)
-		}},
-		{Name: "before finalize the kernel answers", Path: path, Seed: seedFleet, Fallback: true},
-	})
-	issued := []string{"data.key"}
-	kernelWrite(t, kernelRoute("POST", path, native.GenerateAuthKeyRouteID, nodeHandler((*handler.NodeHandler).GenerateAuthKey)), []packagecompat.Case{
-		{Name: "a key without an end", Path: path, Body: []byte(`{"name":"rollout"}`), Mask: issued},
-		{Name: "a key for 30 days", Path: path, Body: []byte(`{"name":"short","expire_days":30}`), Mask: append(issued, "data.expire_at")},
-		{Name: "no name", Path: path, Body: []byte(`{"expire_days":3}`)},
-		{Name: "a negative duration", Path: path, Body: []byte(`{"name":"x","expire_days":-1}`)},
-		{Name: "a name too long", Path: path, Body: []byte(fmt.Sprintf(`{"name":"%0256d"}`, 0))},
-		// A body that is not JSON is served by the legacy handler: the
-		// gateway cannot seal what it cannot read.
-		{Name: "not JSON", Path: path, Body: []byte(`{"name":`), Fallback: true},
-		{Name: "issued before finalize too", Path: path, Body: []byte(`{"name":"early"}`), Mask: issued, Seed: seedFleet,
-			Snapshot: func(t testing.TB, db *gorm.DB) any {
-				var count int64
-				require.NoError(t, db.Model(&model.AuthorizedKey{}).Count(&count).Error)
-				return count
-			}},
-	})
-	keyPath := func(id string) string { return "/api/v2/admin/auth-keys/" + id }
-	kernelWrite(t, kernelRoute("DELETE", "/api/v2/admin/auth-keys/:id", native.DeleteAuthKeyRouteID, nodeHandler((*handler.NodeHandler).DeleteAuthKey)), []packagecompat.Case{
-		{Name: "a key", Path: keyPath("1")},
-		{Name: "an unknown key", Path: keyPath("99")},
-		{Name: "not a number", Path: keyPath("x")},
 	})
 }

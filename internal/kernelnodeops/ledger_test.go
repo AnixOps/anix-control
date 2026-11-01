@@ -117,7 +117,6 @@ func TestMissingTargetsRecordNothing(t *testing.T) {
 			"endpoint":         checkEndpoints(nodeRef(forwardKind, 10), nodeRef(forwardKind, 99)),
 			"agent node":       agentOperation(99, "agent.ping"),
 			"protocol":         {Operation: &kernelnodeopsv1.OperationSpec_RetireProtocol{RetireProtocol: &kernelnodeopsv1.RetireProtocol{ProtocolId: 99}}},
-			"registration":     {Operation: &kernelnodeopsv1.OperationSpec_RevokeRegistrationKey{RevokeRegistrationKey: &kernelnodeopsv1.RevokeRegistrationKey{KeyId: 99}}},
 			"clean agent":      {Operation: &kernelnodeopsv1.OperationSpec_RevokeCredential{RevokeCredential: &kernelnodeopsv1.RevokeCredential{Subject: nodeRef(kernelnodeopsv1.NodeKind_NODE_KIND_CLEAN_AGENT, 99)}}},
 			"legacy rule":      {Operation: &kernelnodeopsv1.OperationSpec_ApplyLegacyRule{ApplyLegacyRule: &kernelnodeopsv1.ApplyLegacyRule{RuleId: 99, Action: forwardAction}}},
 			"clean agent node": {Operation: &kernelnodeopsv1.OperationSpec_IssueCleanAgent{IssueCleanAgent: &kernelnodeopsv1.IssueCleanAgent{Name: "n", ForwardNodeId: 99}}},

@@ -215,7 +215,7 @@ func exerciseNodeOps(t *testing.T, kernel *nodeOpsKernel, connection grpc.Client
 	require.NoError(t, err)
 	require.Equal(t, []kernelnodeopsv1.OperationFamily{kernelnodeopsv1.OperationFamily_OPERATION_FAMILY_NODE_CONFIG}, capabilities.GetGrantedFamilies())
 	require.Equal(t, []string{kernelnodeops.KindNodeSync}, capabilities.GetKinds())
-	require.Len(t, capabilities.GetTables(), 7)
+	require.Len(t, capabilities.GetTables(), 6)
 
 	watchCtx, stopWatch := context.WithCancel(ctx)
 	defer stopWatch()
