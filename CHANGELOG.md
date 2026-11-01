@@ -9,6 +9,11 @@
   credential (`anixagt_...`) or a node-group join token. Enrolled Agents
   keep their certificate and renew with it; a node without one needs an
   enrollment credential from the panel.
+- Agent sessions and the transport inventory no longer have an API-key
+  case: every Agent Control session is `mtls` with the agent's SPIFFE ID,
+  and the inventory records only `mtls-stream`. Old `apikey-stream` rows no
+  longer count as a stream connection (upgrade campaigns, node groups,
+  network model).
 - `GET /api/v3/agent/plugin-releases/*` (the node API key plugin download)
   is gone and answers 404. Agents download plugin releases over
   `AgentArtifacts` with their client certificate.

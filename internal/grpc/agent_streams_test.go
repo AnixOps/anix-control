@@ -303,7 +303,7 @@ func TestAgentStreamsSendFailuresAndUnknownKinds(t *testing.T) {
 
 	session, ok := streams.Session(node)
 	require.True(t, ok)
-	assert.Equal(t, agentstreams.IdentityAPIKey, session.Identity, "a connection without an identity is an API key session")
+	assert.Empty(t, session.Identity)
 	assert.Equal(t, []string{"agent.ping", "operation.cancel"}, session.Capabilities)
 
 	// A send that fails is the manager's error, unclassified.

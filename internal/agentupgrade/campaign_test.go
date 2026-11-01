@@ -53,9 +53,9 @@ func TestCandidatesAreDeterministicAndExcluded(t *testing.T) {
 	// Seen only on the retired UniProxy: not an AnixOps Agent on the stream.
 	require.NoError(t, db.Create(&model.Node{ID: 9, Name: "third-party", APIKey: "key-9", Status: model.NodeStatusOnline}).Error)
 	f.seen(agentcontrol.NodeKindProxy, 9, "uniproxy")
-	// The API-key stream counts.
+	// Seen only on the removed API-key stream: not counted.
 	require.NoError(t, db.Create(&model.Node{ID: 10, Name: "apikey", APIKey: "key-10", Status: model.NodeStatusOnline}).Error)
-	f.seen(agentcontrol.NodeKindProxy, 10, model.AgentTransportAPIKeyStream)
+	f.seen(agentcontrol.NodeKindProxy, 10, "apikey-stream")
 
 	nodes, err := Candidates(context.Background(), db, Exclude{})
 	require.NoError(t, err)
@@ -66,7 +66,7 @@ func TestCandidatesAreDeterministicAndExcluded(t *testing.T) {
 			assert.Less(t, OrderKey(nodes[index-1]), OrderKey(node), "canary order is the name hash")
 		}
 	}
-	assert.ElementsMatch(t, []string{"proxy-1", "proxy-2", "proxy-3", "proxy-10", "forward-1", "forward-2"}, names)
+	assert.ElementsMatch(t, []string{"proxy-1", "proxy-2", "proxy-3", "forward-1", "forward-2"}, names)
 	again, err := Candidates(context.Background(), db, Exclude{})
 	require.NoError(t, err)
 	assert.Equal(t, nodes, again)
@@ -78,7 +78,7 @@ func TestCandidatesAreDeterministicAndExcluded(t *testing.T) {
 	for _, node := range excluded {
 		names = append(names, node.String())
 	}
-	assert.ElementsMatch(t, []string{"proxy-10", "forward-1", "forward-2"}, names)
+	assert.ElementsMatch(t, []string{"forward-1", "forward-2"}, names)
 }
 
 func TestStartRefuses(t *testing.T) {

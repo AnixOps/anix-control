@@ -418,7 +418,7 @@ type AgentNode struct {
 // agentNodes answers the devices a route may use, by node reference.
 func agentNodes(db *gorm.DB) ([]AgentNode, error) {
 	var seen []model.AgentTransport
-	if err := db.Where("transport IN ?", []string{model.AgentTransportMTLSStream, model.AgentTransportAPIKeyStream}).
+	if err := db.Where("transport = ?", model.AgentTransportMTLSStream).
 		Find(&seen).Error; err != nil {
 		return nil, err
 	}

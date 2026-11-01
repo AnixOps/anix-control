@@ -26,20 +26,9 @@ const (
 	TransportWebSocket Transport = "websocket"
 )
 
-// Identity values of a session authenticated without a certificate.
-const (
-	// IdentityAPIKey is a stream authenticated by the node's API key or
-	// forward token; a certificate's identity is its SPIFFE ID.
-	IdentityAPIKey = "api-key"
-)
-
-// How a session authenticated.
-const (
-	// AuthenticationMTLS: an agent client certificate.
-	AuthenticationMTLS = "mtls"
-	// AuthenticationAPIKey: the node's API key or forward token.
-	AuthenticationAPIKey = "api-key"
-)
+// AuthenticationMTLS is how a stream session authenticated: an agent
+// client certificate.
+const AuthenticationMTLS = "mtls"
 
 // SessionCertificate describes the client certificate of an mTLS session:
 // its serial, expiry and URI SAN (the agent's SPIFFE ID). None of it is
@@ -66,11 +55,9 @@ type Session struct {
 	ObservedRevision uint64
 	// System is what a WebSocket agent reported about its host.
 	System map[string]any
-	// Identity is the session's authenticated identity: the agent's SPIFFE
-	// ID, or IdentityAPIKey.
+	// Identity is the agent's SPIFFE ID.
 	Identity string
-	// Authentication is AuthenticationMTLS or AuthenticationAPIKey; empty
-	// on the WebSocket, which authenticates by API key only.
+	// Authentication is AuthenticationMTLS; empty on the WebSocket.
 	Authentication string
 	// Certificate is the client certificate of an mTLS stream session.
 	Certificate *SessionCertificate

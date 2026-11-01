@@ -108,7 +108,7 @@ func (c *AgentControlConnection) session(kind string) agentstreams.Session {
 		Node: agentcontrol.AgentNode{Kind: kind, ID: c.NodeID}, Transport: agentstreams.TransportControlStream,
 		SessionID: c.SessionID, AgentVersion: c.AgentVersion, InstanceID: c.InstanceID, Capabilities: capabilities,
 		ConnectedAt: c.ConnectedAt, LastSeen: c.LastSeen, DesiredRevision: c.DesiredRev, ObservedRevision: c.ObservedRev,
-		Identity: c.identity(), Authentication: c.principal.authentication(), Certificate: c.principal.certificate(),
+		Identity: c.Identity, Authentication: agentstreams.AuthenticationMTLS, Certificate: c.principal.certificate(),
 		NegotiatedCapabilities: c.negotiatedCapabilities(), AgentMetrics: agentMetrics, AgentMetricsAt: agentMetricsAt,
 	}
 }

@@ -390,7 +390,7 @@ func (s *Service) rejoinTarget(tx *gorm.DB, group model.NodeGroup, request JoinR
 		var seen int64
 		if err := tx.Model(&model.AgentTransport{}).
 			Where("node_kind = ? AND node_id = ? AND transport IN ? AND last_seen_at > ?", candidate.node.Kind, candidate.node.ID,
-				[]string{model.AgentTransportMTLSStream, model.AgentTransportAPIKeyStream}, cutoff).
+				[]string{model.AgentTransportMTLSStream}, cutoff).
 			Count(&seen).Error; err != nil {
 			return nil, err
 		}

@@ -962,7 +962,7 @@ func metadataIdentity(ctx context.Context) (agentPrincipal, bool, error) {
 		kind = agentcontrol.NodeKindProxy
 	}
 	node := agentcontrol.AgentNode{Kind: kind, ID: uint32(id)}
-	return agentPrincipal{Node: node, Certificate: true, Serial: "01", NotAfter: time.Now().Add(time.Hour),
+	return agentPrincipal{Node: node, Serial: "01", NotAfter: time.Now().Add(time.Hour),
 		SPIFFEID: "spiffe://anixops/test/agent/" + node.String()}, true, nil
 }
 
