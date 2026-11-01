@@ -289,9 +289,9 @@ func (s *NodeSecretsTestSuite) TestRawConfigKeepsMaskedSecrets() {
 	s.Equal("rotated-raw-key", settingsOf(node.RawConfig)["tls_settings"].(map[string]any)["private_key"])
 }
 
-// Nodes read their configuration through UniProxy, which builds it from the
-// stored rows: it still carries the real secrets after an administrator
-// saved the masked form back.
+// Nodes get their runtime configuration built from the stored rows: it
+// still carries the real secrets after an administrator saved the masked
+// form back.
 func (s *NodeSecretsTestSuite) TestNodesStillReceiveRealSecrets() {
 	handler := NewNodeHandler()
 	path := fmt.Sprintf("/nodes/%d/protocols/%d", s.node.ID, s.reality.ID)
@@ -300,17 +300,19 @@ func (s *NodeSecretsTestSuite) TestNodesStillReceiveRealSecrets() {
 	s.ok(s.serve("PUT", "/nodes/:id/protocols/:protocol_id", path, string(body), handler.UpdateProtocol))
 	s.Require().NoError(s.db.Model(&model.Node{}).Where("id = ?", s.node.ID).Update("raw_config", nil).Error)
 
-	uniProxy := NewUniProxyHandler()
-	w := s.serve("GET", "/config", fmt.Sprintf("/config?node_id=%d&node_type=vless", s.node.ID), "", uniProxy.GetConfig)
-	s.Require().Equal(http.StatusOK, w.Code, w.Body.String())
-	s.Contains(w.Body.String(), realityPrivateKey)
-	s.Contains(w.Body.String(), tlsPrivateKeyPEM)
-	s.Contains(w.Body.String(), customSecret)
-	s.NotContains(w.Body.String(), service.NodeSecretPlaceholder)
-
-	w = s.serve("GET", "/config", fmt.Sprintf("/config?node_id=%d&node_type=wireguard", s.node.ID), "", uniProxy.GetConfig)
-	s.Require().Equal(http.StatusOK, w.Code, w.Body.String())
-	s.Contains(w.Body.String(), s.wgPrivate)
+	runtime := func(nodeType string) string {
+		config, err := service.BuildNodeRuntimeConfig(s.db, s.node.ID, nodeType)
+		s.Require().NoError(err)
+		encoded, err := json.Marshal(config)
+		s.Require().NoError(err)
+		return string(encoded)
+	}
+	vless := runtime("vless")
+	s.Contains(vless, realityPrivateKey)
+	s.Contains(vless, tlsPrivateKeyPEM)
+	s.Contains(vless, customSecret)
+	s.NotContains(vless, service.NodeSecretPlaceholder)
+	s.Contains(runtime("wireguard"), s.wgPrivate)
 }
 
 // GET /admin/auth-keys showed every registration key; a key is now shown

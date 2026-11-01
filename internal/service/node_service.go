@@ -612,7 +612,7 @@ func accumulateTrafficTx(db *gorm.DB, nodeID uint, upload, download int64, inclu
 	return nil
 }
 
-// UpdateLastCheckAt 更新节点最后检查时间 (用于 UniProxy 接口)
+// UpdateLastCheckAt 更新节点最后检查时间 (Agent 心跳)
 func (s *NodeService) UpdateLastCheckAt(nodeID uint) error {
 	now := time.Now().Unix()
 	return s.db.Model(&model.Node{}).Where("id = ?", nodeID).Updates(map[string]any{
@@ -716,8 +716,8 @@ func (s *NodeService) NodeCredentials(node *model.Node) (apiKey, secret string) 
 }
 
 // PrepareNodeRawConfig reads the secrets of node's raw configuration through
-// the node credential split, in place, before UniProxy builds the node's
-// configuration from it, and reports a secret that fails validation
+// the node credential split, in place, before the node's runtime
+// configuration is built from it, and reports a secret that fails validation
 // (report-only, D7).
 func (s *NodeService) PrepareNodeRawConfig(node *model.Node) {
 	nodesecrets.ResolveNodeRawConfig(s.db, node)

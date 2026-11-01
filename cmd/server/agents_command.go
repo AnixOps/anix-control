@@ -24,11 +24,8 @@ transports lists every proxy and forward node with the transport its agent
 was last seen on, the agent version, its newest valid agent certificate and
 when it was last seen:
   mtls-stream    the Agent Control stream with a client certificate
-  uniproxy       UniProxy, shared with third-party node software
-  v2board-grpc   the v2board gRPC services, likewise
 
-A node's status is decided by its newest AnixOps Agent channel: mtls,
-third-party (UniProxy or v2board gRPC only) or unseen.
+A node's status is mtls (seen on the stream) or unseen.
 
 --check-required lists every enabled node that never enrolled (never seen
 and no valid agent certificate) and exits with status 3 when there is one,
@@ -146,8 +143,8 @@ func printAgentTransports(stdout io.Writer, inventory agenttransport.Inventory) 
 		return err
 	}
 	summary := inventory.Summary
-	_, _ = fmt.Fprintf(stdout, "%d node(s): %d mtls, %d third-party, %d unseen.\n",
-		summary.Total, summary.MTLS, summary.ThirdParty, summary.Unseen)
+	_, _ = fmt.Fprintf(stdout, "%d node(s): %d mtls, %d unseen.\n",
+		summary.Total, summary.MTLS, summary.Unseen)
 	return nil
 }
 

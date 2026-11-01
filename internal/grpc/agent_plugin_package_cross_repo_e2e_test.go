@@ -146,7 +146,7 @@ func TestAgentPluginPackageCrossRepositoryE2E(t *testing.T) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 	manager := controlgrpc.NewAgentControlManager()
-	grpcServer := googlegrpc.NewServer(googlegrpc.ChainStreamInterceptor(controlgrpc.StreamAuthInterceptor("", "")))
+	grpcServer := googlegrpc.NewServer()
 	// The production server advertises a conservative 20-second heartbeat. The
 	// process fixture uses this test-only stream wrapper to reduce the interval
 	// to one second, keeping this release gate deterministic without changing

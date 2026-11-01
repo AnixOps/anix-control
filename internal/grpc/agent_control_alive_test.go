@@ -193,7 +193,7 @@ func TestSendAliveListPages(t *testing.T) {
 }
 
 // The alive list counts what UpdateOnlineStatus stores, per user across
-// nodes: the source of UniProxy alivelist and of alive.v1.
+// nodes: the source of alive.v1.
 func TestUserAliveCountsFromTheOnlineSets(t *testing.T) {
 	cache.InitMemory()
 	servers := service.NewServerService()
@@ -202,9 +202,6 @@ func TestUserAliveCountsFromTheOnlineSets(t *testing.T) {
 	counts, err := service.UserAliveCounts()
 	require.NoError(t, err)
 	assert.Equal(t, map[uint64]int{7: 3, 8: 1}, counts)
-	legacy, err := servers.GetAllUsersOnlineCount()
-	require.NoError(t, err)
-	assert.Equal(t, map[string]int{"7": 3, "8": 1}, legacy, "UniProxy alivelist answers the same counts")
 }
 
 // recordingControlStream is a server stream that records what is sent, or

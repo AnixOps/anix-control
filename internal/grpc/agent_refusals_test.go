@@ -14,7 +14,6 @@ import (
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	agentv1pb "github.com/AnixOps/anix-control/sdk/api/agent/v1"
-	pb "github.com/AnixOps/anix-control/v5/api/grpc/v2boardpb"
 	"github.com/AnixOps/anix-control/v5/internal/agentpki"
 	"github.com/AnixOps/anix-control/v5/internal/database"
 	"github.com/AnixOps/anix-control/v5/internal/model"
@@ -107,19 +106,6 @@ func TestAgentListenerCertificateRefusalCodes(t *testing.T) {
 	assert.Equal(t, codes.PermissionDenied, code)
 	assert.Equal(t, []string{agentcontrol.ErrorCodeCertWrongNode}, trailer)
 
-	// A forward node's certificate on the proxy-only v2board services.
-	forwardCertificate, _, err := l.enrollWithToken(t, ctx, l.forwardNode(), anonymous)
-	require.NoError(t, err)
-	var unaryTrailer metadata.MD
-	_, err = pb.NewNodeServiceClient(l.dial(t, forwardCertificate)).GetConfig(ctx, &pb.NodeConfigRequest{NodeId: uint32(l.forward.ID)}, grpc.Trailer(&unaryTrailer))
-	assert.Equal(t, codes.PermissionDenied, status.Code(err))
-	assert.Equal(t, []string{agentcontrol.ErrorCodeCertWrongNode}, unaryTrailer.Get(agentcontrol.MetadataErrorCode))
-	statusStream, err := pb.NewNodeServiceClient(l.dial(t, forwardCertificate)).StatusStream(ctx)
-	require.NoError(t, err)
-	_, err = statusStream.Recv()
-	assert.Equal(t, codes.PermissionDenied, status.Code(err))
-	assert.Equal(t, []string{agentcontrol.ErrorCodeCertWrongNode}, statusStream.Trailer().Get(agentcontrol.MetadataErrorCode))
-
 	// A certificate that is no agent's: the kernel's own.
 	source, err := l.authority.KernelTLS(ctx, time.Minute)
 	require.NoError(t, err)
@@ -134,7 +120,7 @@ func TestAgentListenerCertificateRefusalCodes(t *testing.T) {
 	require.NoError(t, err)
 	csr, err := x509.CreateCertificateRequest(rand.Reader, &x509.CertificateRequest{}, key)
 	require.NoError(t, err)
-	unaryTrailer = nil
+	var unaryTrailer metadata.MD
 	_, err = agentv1pb.NewAgentEnrollmentClient(anonymous).Renew(ctx, &agentv1pb.RenewAgentCertificateRequest{CsrDer: csr}, grpc.Trailer(&unaryTrailer))
 	assert.Equal(t, codes.Unauthenticated, status.Code(err))
 	assert.Equal(t, []string{agentcontrol.ErrorCodeCertInvalid}, unaryTrailer.Get(agentcontrol.MetadataErrorCode))
@@ -176,10 +162,6 @@ func TestAgentListenerCertificateRefusalCodes(t *testing.T) {
 	assert.Equal(t, []string{agentcontrol.ErrorCodeCertRevoked}, unaryTrailer.Get(agentcontrol.MetadataErrorCode))
 	unaryTrailer = nil
 	_, err = agentv1pb.NewAgentEnrollmentClient(proxyConn).GetTrustBundle(ctx, &agentv1pb.GetAgentTrustBundleRequest{}, grpc.Trailer(&unaryTrailer))
-	assert.Equal(t, codes.Unauthenticated, status.Code(err))
-	assert.Equal(t, []string{agentcontrol.ErrorCodeCertRevoked}, unaryTrailer.Get(agentcontrol.MetadataErrorCode))
-	unaryTrailer = nil
-	_, err = pb.NewNodeServiceClient(proxyConn).GetConfig(ctx, &pb.NodeConfigRequest{NodeId: uint32(l.proxy.ID)}, grpc.Trailer(&unaryTrailer))
 	assert.Equal(t, codes.Unauthenticated, status.Code(err))
 	assert.Equal(t, []string{agentcontrol.ErrorCodeCertRevoked}, unaryTrailer.Get(agentcontrol.MetadataErrorCode))
 }

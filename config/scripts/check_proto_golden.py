@@ -13,6 +13,9 @@ that changes its proto (the draft golden policy). anixops.network.v1 (the
 device network model, docs/design/network-model) is one until Control
 serves network.v1. anixops.forward.v1 left the draft policy when F3a served
 it (docs/architecture/forward-sdk.md section 15).
+
+A package in RETIRED_PACKAGES is gone from every contract: Control no longer
+serves it, so its lines leave the golden file with it.
 """
 from __future__ import annotations
 
@@ -27,6 +30,10 @@ GOLDEN = "contracts/proto/descriptors.golden"
 # Protobuf packages whose golden lines may still change. Never add a package
 # that a released Control, Agent or package serves or calls.
 DRAFT_PACKAGES: frozenset[str] = frozenset({"anixops.network.v1"})
+
+# Protobuf packages removed with what served them: their lines may go.
+# v2board: the third-party node services (V2bX, XrayR), removed in 5.0.
+RETIRED_PACKAGES: frozenset[str] = frozenset({"v2board"})
 
 
 def golden_lines(text: str) -> set[str]:
@@ -52,10 +59,12 @@ def in_draft(line: str, drafts: frozenset[str]) -> bool:
     return any(name.startswith(package + ".") for package in drafts)
 
 
-def removed(base: str, head: str, drafts: frozenset[str] = DRAFT_PACKAGES) -> list[str]:
-    """Return the base lines that head lost, outside the draft packages."""
+def removed(base: str, head: str, drafts: frozenset[str] = DRAFT_PACKAGES,
+            retired: frozenset[str] = RETIRED_PACKAGES) -> list[str]:
+    """Return the base lines that head lost, outside the draft and retired packages."""
     head_lines = golden_lines(head)
-    return sorted(line for line in golden_lines(base) - head_lines if not in_draft(line, drafts))
+    return sorted(line for line in golden_lines(base) - head_lines
+                  if not in_draft(line, drafts) and not in_draft(line, retired))
 
 
 def read_revision(revision: str) -> str | None:

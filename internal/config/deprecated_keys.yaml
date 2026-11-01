@@ -487,9 +487,9 @@ keys:
   # grpc: the node listener runs with domain; the rest is read until the
   # installer and the container files are replaced.
   - key: grpc.api_token
-    status: read
+    status: ignored
     removed_in: M5 (N9)
-    reason: the legacy administrator token of the v2board gRPC services, removed with them
+    reason: the legacy administrator token of the v2board gRPC services, which are removed; the key does nothing, so remove it
     secret: true
   - key: grpc.enabled
     status: read

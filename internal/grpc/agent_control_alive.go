@@ -14,8 +14,8 @@ import (
 )
 
 // The alive list on the Agent Control stream (alive.v1; PROTOCOL.md,
-// "Alive list"). UniProxy alivelist answers every user's online device
-// count across all nodes, and agents enforce NodeUser.device_limit against
+// "Alive list"): every user's online device count across all nodes, which
+// agents enforce NodeUser.device_limit against
 // it; an agent on users.v1 alone saw only its own node's connections. When
 // an agent's Hello lists alive.v1, the HelloAck advertises it back (proxy
 // nodes, which serve users) and Control sends the same counts as an

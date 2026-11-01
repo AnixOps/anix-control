@@ -11,7 +11,7 @@ import (
 func TestLogSecretStrengthWarnsOncePerWeakSecretAndNeverEchoesIt(t *testing.T) {
 	cfg := &config.Config{}
 	cfg.JWT.Secret = "tooshortsecret"
-	cfg.GRPC.APIToken = strings.Repeat("k", 48)
+	cfg.App.APIToken = strings.Repeat("k", 48)
 	var lines []string
 	logSecretStrength(func(format string, args ...any) { lines = append(lines, fmt.Sprintf(format, args...)) }, cfg)
 	if len(lines) != 2 {

@@ -39,6 +39,12 @@ class ProtoGoldenTest(unittest.TestCase):
         other = BASE.replace("field anix.agent.v1.Hello.protocol = 1 optional string\n", "")
         self.assertEqual(1, len(gate.removed(BASE, other, frozenset({"anixops.forward.v1"}))))
 
+    def test_a_retired_package_may_drop_its_lines(self) -> None:
+        base = BASE + "rpc v2board.NodeService.GetConfig(v2board.NodeConfigRequest) returns (v2board.NodeConfigResponse)\n"
+        self.assertEqual([], gate.removed(base, BASE))
+        self.assertEqual(1, len(gate.removed(base, BASE, retired=frozenset())))
+        self.assertEqual(frozenset({"v2board"}), gate.RETIRED_PACKAGES)
+
     def test_forward_is_frozen(self) -> None:
         self.assertNotIn("anixops.forward.v1", gate.DRAFT_PACKAGES)
         # Only the network model is a draft, until Control serves network.v1.

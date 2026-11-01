@@ -29,9 +29,10 @@ describe('agent connection model', () => {
     expect(indexTransports({ nodes: 'nope' }).size).toBe(0)
   })
 
-  it('tones the three connection types, and reads an unknown or missing one as offline', () => {
-    expect(CONNECTION_TYPES).toEqual(['mtls_stream', 'third_party', 'offline'])
-    expect(CONNECTION_TYPES.map(connectionTone)).toEqual(['success', 'neutral', 'neutral'])
+  it('tones the two connection types, and reads an unknown or missing one as offline', () => {
+    expect(CONNECTION_TYPES).toEqual(['mtls_stream', 'offline'])
+    expect(CONNECTION_TYPES.map(connectionTone)).toEqual(['success', 'neutral'])
+    expect(connectionTypeOf({ connection: { type: 'third_party' } })).toBe('offline')
     expect(connectionTypeOf({ connection: { type: 'legacy' } })).toBe('offline')
     expect(connectionTypeOf({ connection: { type: 'carrier-pigeon' } })).toBe('offline')
     expect(connectionTypeOf({})).toBe('offline')
@@ -130,9 +131,9 @@ describe('connection chip and certificate cell', () => {
   })
 
   it('shows the chip with its words and a hint, a dash while loading and "Unavailable" when it failed', async () => {
-    const chip = mount(NodeConnectionBadge, { props: { entry: { connection: { type: 'third_party' } }, status: 'ready' } })
-    expect(chip.text()).toBe('Third-party')
-    expect(chip.get('[data-testid="node-connection"]').attributes('title')).toContain('UniProxy or v2board gRPC')
+    const chip = mount(NodeConnectionBadge, { props: { entry: { connection: { type: 'offline' } }, status: 'ready' } })
+    expect(chip.text()).toBe('Offline')
+    expect(chip.get('[data-testid="node-connection"]').attributes('title')).toContain('Nothing seen in the last five minutes')
     const loading = mount(NodeConnectionBadge, { props: { status: 'loading' } })
     expect(loading.get('[aria-hidden="true"]').text()).toBe('—')
     expect(loading.get('.visually-hidden').text()).toBe('Loading the Agent connection…')

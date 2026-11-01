@@ -438,21 +438,10 @@ func (s *ServerService) GetUserOnlineCount(userID uint) (int64, error) {
 	return total, nil
 }
 
-// GetAllUsersOnlineCount 获取所有用户的在线IP数量
-func (s *ServerService) GetAllUsersOnlineCount() (map[string]int, error) {
-	counts, err := UserAliveCounts()
-	result := make(map[string]int, len(counts))
-	for userID, count := range counts {
-		result[strconv.FormatUint(userID, 10)] = count
-	}
-	return result, err
-}
-
 // UserAliveCounts counts each user's online IPs across all nodes: the sets
 // UpdateOnlineStatus keeps per node and user (online:<type>:<node>:<user>),
 // added up per user. Users without any are left out. It is the source of
-// UniProxy alivelist and of the Agent Control stream's AliveList
-// (alive.v1).
+// the Agent Control stream's AliveList (alive.v1).
 func UserAliveCounts() (map[uint64]int, error) {
 	result := make(map[uint64]int)
 	// "online:*" and not "online:*:*:*": the memory cache matches a
@@ -696,73 +685,4 @@ func decodeConfigJSON(field string, raw string, target any) error {
 		return fmt.Errorf("invalid %s JSON: %w", field, err)
 	}
 	return nil
-}
-
-// ParseTrafficData 解析流量数据
-func ParseTrafficData(data map[string]any) (map[uint][2]int64, error) {
-	result := make(map[uint][2]int64)
-	for k, v := range data {
-		userID, err := strconv.ParseUint(k, 10, 32)
-		if err != nil {
-			continue
-		}
-
-		traffic, ok := v.([]any)
-		if !ok || len(traffic) < 2 {
-			continue
-		}
-
-		upload, uploadOK := toInt64(traffic[0])
-		download, downloadOK := toInt64(traffic[1])
-		if !uploadOK || !downloadOK {
-			continue
-		}
-		if err := ValidateTrafficDelta(upload, download); err != nil {
-			return nil, err
-		}
-
-		result[uint(userID)] = [2]int64{upload, download}
-	}
-	return result, nil
-}
-
-// ParseOnlineData 解析在线数据
-func ParseOnlineData(data map[string]any) (map[uint][]string, error) {
-	result := make(map[uint][]string)
-	for k, v := range data {
-		userID, err := strconv.ParseUint(k, 10, 32)
-		if err != nil {
-			continue
-		}
-
-		ipsRaw, ok := v.([]any)
-		if !ok {
-			continue
-		}
-
-		ips := make([]string, 0, len(ipsRaw))
-		for _, ip := range ipsRaw {
-			if ipStr, ok := ip.(string); ok {
-				ips = append(ips, ipStr)
-			}
-		}
-
-		result[uint(userID)] = ips
-	}
-	return result, nil
-}
-
-func toInt64(v any) (int64, bool) {
-	switch val := v.(type) {
-	case float64:
-		return int64(val), true
-	case int64:
-		return val, true
-	case int:
-		return int64(val), true
-	case json.Number:
-		i, err := val.Int64()
-		return i, err == nil
-	}
-	return 0, false
 }

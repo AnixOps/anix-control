@@ -97,19 +97,9 @@ var proxyNodeRoutes = map[string]struct{}{
 //     package nor ValidateNodeConfig can compute it.
 //   - Node credentials (kernel-owned, D4): the answer is the stored API key
 //     and secret, and no contract call reveals a stored secret.
-//   - UniProxy (bridged): node-authenticated; the user list carries every
-//     eligible subscriber's UUID, a traffic push records subscriber
-//     traffic, and the online list lives in the kernel's in-memory cache.
-//     Whether UniProxy stays in the kernel is an open decision
-//     (package-extraction.md section 3.2).
 var bridgedRoutes = map[string]struct{}{
 	"proxy.admin.nodes.post":                 {},
 	"proxy.admin.nodes.id.put":               {},
 	"proxy.admin.nodes.validate_config.post": {},
 	"proxy.admin.nodes.id.credentials.get":   {},
-	"proxy.server.uniproxy.config.get":       {},
-	"proxy.server.uniproxy.user.get":         {},
-	"proxy.server.uniproxy.alivelist.get":    {},
-	"proxy.server.uniproxy.push.post":        {},
-	"proxy.server.uniproxy.alive.post":       {},
 }

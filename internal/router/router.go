@@ -3,12 +3,10 @@ package router
 import (
 	"time"
 
-	"github.com/AnixOps/anix-control/v5/internal/agenttransport"
 	"github.com/AnixOps/anix-control/v5/internal/config"
 	"github.com/AnixOps/anix-control/v5/internal/handler"
 	"github.com/AnixOps/anix-control/v5/internal/health"
 	"github.com/AnixOps/anix-control/v5/internal/middleware"
-	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/packagebridge"
 	"github.com/gin-gonic/gin"
 	swaggerFiles "github.com/swaggo/files"
@@ -108,7 +106,6 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 	// 路径可通过配置 app.subscribe_path 自定义，默认为 "s"
 	subscribeHandler := handler.NewSubscribeHandler(cfg)
 	r.GET("/"+subscribePath+"/:token", subscribeHandler.GetSubscription)
-	r.GET("/api/v1/client/subscribe", subscribeHandler.GetLegacySubscription)
 
 	// One-command node onboarding (forward-sdk.md, section 9): the signed
 	// install script, its signature, the release metadata it reads and the
@@ -413,36 +410,6 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		}
 
 		agentHandler := handler.NewAgentHandler()
-
-		// UniProxy API (节点通信接口)
-		// UniProxy is shared with third-party node software (V2bX, XrayR):
-		// the inventory records it.
-		uniproxy := v2.Group("/server/UniProxy")
-		uniproxy.Use(userLimiter.Middleware())
-		uniproxy.Use(agenttransport.ThirdPartyHTTP(model.AgentTransportUniProxy))
-		uniproxy.Use(middleware.NodeAuth())
-		{
-			h := handler.NewUniProxyHandler()
-			uniproxy.GET("/config", registeredPackageRoute(v2PackageGateway.Serve, "proxy-node", "proxy.server.uniproxy.config.get", h.GetConfig))
-			uniproxy.GET("/user", registeredPackageRoute(v2PackageGateway.Serve, "proxy-node", "proxy.server.uniproxy.user.get", h.GetUsers))
-			uniproxy.GET("/alivelist", registeredPackageRoute(v2PackageGateway.Serve, "proxy-node", "proxy.server.uniproxy.alivelist.get", h.GetAliveList))
-			uniproxy.POST("/push", registeredPackageRoute(v2PackageGateway.Serve, "proxy-node", "proxy.server.uniproxy.push.post", h.PushTraffic))
-			uniproxy.POST("/alive", registeredPackageRoute(v2PackageGateway.Serve, "proxy-node", "proxy.server.uniproxy.alive.post", h.PushAlive))
-		}
-
-		// UniProxy API v1 (兼容旧版 V2bX)
-		uniproxyV1 := r.Group("/api/v1/server/UniProxy")
-		uniproxyV1.Use(userLimiter.Middleware())
-		uniproxyV1.Use(agenttransport.ThirdPartyHTTP(model.AgentTransportUniProxy))
-		uniproxyV1.Use(middleware.NodeAuth())
-		{
-			h := handler.NewUniProxyHandler()
-			uniproxyV1.GET("/config", h.GetConfig)
-			uniproxyV1.GET("/user", h.GetUsers)
-			uniproxyV1.GET("/alivelist", h.GetAliveList)
-			uniproxyV1.POST("/push", h.PushTraffic)
-			uniproxyV1.POST("/alive", h.PushAlive)
-		}
 
 		// Agent 管理接口 (管理员)
 		agentAdmin := v2.Group("/admin/agent")

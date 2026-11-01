@@ -77,7 +77,7 @@ var (
 		// Node runtime secrets: v2_node_protocol holds each protocol's
 		// Reality private key, WireGuard server private key and custom
 		// configuration, and the kernel builds every node's configuration
-		// (UniProxy, the gRPC node service) and every subscription from its
+		// and every subscription from its
 		// rows without validating them again: its protocol validator runs on
 		// its own writes only. v2_wireguard_peer holds every user's
 		// WireGuard private and preshared keys. A package that could read

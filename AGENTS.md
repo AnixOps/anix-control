@@ -41,12 +41,11 @@ file short and enforceable; put explanations in `docs/`.
   (`config/scripts/check_v2_package_route_catalog.py`,
   `config/scripts/check_plugin_only_routes.py`). The extraction design and
   milestones are in `docs/architecture/package-extraction.md`.
-- Outside the package gate, kernel handlers serve `/api/v1/server/UniProxy/*`,
-  `/{subscribe_path}/:token` (default `/s/:token`), `/api/v1/client/subscribe`,
-  and `/flow/upload` directly. Do not change their response shapes without
+- Outside the package gate, kernel handlers serve `/{subscribe_path}/:token`
+  (default `/s/:token`) directly. Do not change its response shape without
   compatibility tests.
 - The node runtime is `anix-agent` (separate repository `AnixOps/anix-agent`).
-  Control talks to agents over gRPC. The Agent contract (`anix.agent.v1`) is
+  Control talks to agents only over the mTLS gRPC control stream. The Agent contract (`anix.agent.v1`) is
   owned here, in `sdk/api/agent/v1`, `sdk/agentcontrol` and `sdk/plugincontrol`.
   Agents in the field run it, so changes must be additive
   (`internal/tests/protocompat`). Control imports no anix-agent module:
@@ -162,7 +161,6 @@ make test-grpc        # internal/grpc with coverage
 make test-e2e         # internal/tests/e2e
 make lint             # golangci-lint (Go Lint Gate)
 make swagger          # regenerate docs/docs.go, docs/swagger.{json,yaml}
-make grpc-gen         # regenerate api/grpc/v2boardpb (pinned protoc, see tools.go)
 make help             # list all targets
 ```
 
@@ -198,7 +196,7 @@ golden line by hand (`check_proto_golden.py`, in the Documentation Sync
 Check job, compares with the base revision).
 
 The route gate, the release-script unit tests, and the generated-code drift
-checks for `api/grpc` and every `sdk/api/*` contract all run in the
+checks for every `sdk/api/*` contract all run in the
 required "Go Quality Gates" job on every PR.
 
 ## Documentation Sync Gate

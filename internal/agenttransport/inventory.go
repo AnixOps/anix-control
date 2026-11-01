@@ -23,10 +23,6 @@ const (
 	// StatusMTLS: the node's latest AnixOps Agent channel was the mTLS
 	// stream. Ready for agent_control.mtls: required.
 	StatusMTLS = "mtls"
-	// StatusThirdParty: the node was only seen on UniProxy or the v2board
-	// gRPC services, which required leaves open (third-party node software,
-	// or an old agent on those protocols only).
-	StatusThirdParty = "third-party"
 	// StatusUnseen: no sighting since this inventory exists.
 	StatusUnseen = "unseen"
 )
@@ -34,7 +30,6 @@ const (
 // TransportSeen is one transport a node was seen on.
 type TransportSeen struct {
 	Transport    string    `json:"transport"`
-	ThirdParty   bool      `json:"third_party"`
 	AgentVersion string    `json:"agent_version,omitempty"`
 	Identity     string    `json:"identity,omitempty"`
 	FirstSeenAt  time.Time `json:"first_seen_at"`
@@ -79,9 +74,6 @@ const (
 	// ConnectionMTLSStream: an Agent Control stream authenticated by the
 	// agent client certificate.
 	ConnectionMTLSStream = "mtls_stream"
-	// ConnectionThirdParty: only third-party node software (UniProxy or the
-	// v2board gRPC services) was seen lately.
-	ConnectionThirdParty = "third_party"
 	// ConnectionOffline: nothing was seen within ConnectionWindow.
 	ConnectionOffline = "offline"
 )
@@ -93,11 +85,10 @@ const ConnectionWindow = 5 * time.Minute
 
 // Connection is how a node's agent reaches Control right now.
 type Connection struct {
-	// Type is ConnectionMTLSStream, ConnectionThirdParty or
-	// ConnectionOffline.
+	// Type is ConnectionMTLSStream or ConnectionOffline.
 	Type string `json:"type"`
-	// Transport is the transport the type was read from (mtls-stream,
-	// uniproxy, v2board-grpc), empty when offline.
+	// Transport is the transport the type was read from (mtls-stream),
+	// empty when offline.
 	Transport string `json:"transport,omitempty"`
 	// LastSeenAt is when that transport was last seen; nil when offline.
 	LastSeenAt *time.Time `json:"last_seen_at"`
@@ -111,7 +102,7 @@ type NodeTransports struct {
 	ID      uint   `json:"id"`
 	Name    string `json:"name"`
 	Enabled bool   `json:"enabled"`
-	// Status is StatusMTLS, StatusThirdParty or StatusUnseen.
+	// Status is StatusMTLS or StatusUnseen.
 	Status string `json:"status"`
 	// Transport is the transport of the latest sighting, empty if unseen.
 	Transport    string     `json:"transport"`
@@ -162,10 +153,9 @@ type LiveSession struct {
 // Summary counts the inventory's nodes by status, and tells whether any
 // enabled node has not enrolled.
 type Summary struct {
-	Total      int `json:"total"`
-	MTLS       int `json:"mtls"`
-	ThirdParty int `json:"third_party"`
-	Unseen     int `json:"unseen"`
+	Total  int `json:"total"`
+	MTLS   int `json:"mtls"`
+	Unseen int `json:"unseen"`
 	// ReadyForRequired is true when no enabled node is unseen without an
 	// agent certificate. It is computed over every node.
 	ReadyForRequired bool `json:"ready_for_required"`
@@ -195,8 +185,7 @@ type RequiredBlocker struct {
 
 // requiredBlocker tells whether required would refuse node, and why. Only
 // enabled nodes count: a disabled node's agent is refused in every mode.
-// Third-party nodes are not refused (UniProxy and v2board gRPC stay open);
-// an unseen node with a valid certificate has enrolled.
+// An unseen node with a valid certificate has enrolled.
 func requiredBlocker(node NodeTransports) (RequiredBlocker, bool) {
 	if !node.Enabled {
 		return RequiredBlocker{}, false
@@ -298,15 +287,14 @@ func Build(ctx context.Context, db *gorm.DB, options Options) (Inventory, error)
 	}
 	seen := map[nodeKey][]TransportSeen{}
 	for _, row := range rows {
-		// Rows of retired channels (API key stream, REST, WebSocket) may
-		// remain from before they were refused: they are not shown.
-		if model.AgentTransportLegacy(row.Transport) {
+		// Rows of channels removed earlier may remain in the table: they
+		// are not shown.
+		if row.Transport != model.AgentTransportMTLSStream {
 			continue
 		}
 		key := nodeKey{row.NodeKind, row.NodeID}
 		seen[key] = append(seen[key], TransportSeen{
-			Transport:  row.Transport,
-			ThirdParty: model.AgentTransportThirdParty(row.Transport), AgentVersion: row.AgentVersion,
+			Transport: row.Transport, AgentVersion: row.AgentVersion,
 			Identity: row.Identity, FirstSeenAt: row.FirstSeenAt.UTC(), LastSeenAt: row.LastSeenAt.UTC(),
 		})
 	}
@@ -381,8 +369,6 @@ func Build(ctx context.Context, db *gorm.DB, options Options) (Inventory, error)
 		switch node.Status {
 		case StatusMTLS:
 			inventory.Summary.MTLS++
-		case StatusThirdParty:
-			inventory.Summary.ThirdParty++
 		default:
 			inventory.Summary.Unseen++
 		}
@@ -430,8 +416,7 @@ func certificateState(valid, latest *Certificate) string {
 //     mTLS.
 //   - Otherwise the newest transport seen within ConnectionWindow does: the
 //     mTLS stream counts only when no session provider was read (the CLI),
-//     since with one the stream is not connected; UniProxy and v2board gRPC
-//     (only when no AnixOps Agent channel was seen lately) are third_party.
+//     since with one the stream is not connected.
 //   - Else the node is offline.
 //
 // Sessions are in memory of the process that holds the stream, as the
@@ -444,28 +429,15 @@ func connectionOf(node NodeTransports, now time.Time, sessionsRead bool) Connect
 			return Connection{Type: ConnectionMTLSStream, Transport: model.AgentTransportMTLSStream, LastSeenAt: &lastSeen}
 		}
 	}
-	var thirdParty *TransportSeen
-	for i := range node.Transports {
-		seen := node.Transports[i]
+	for _, seen := range node.Transports {
 		if now.Sub(seen.LastSeenAt) > ConnectionWindow {
 			// Newest first: the rest is older.
 			break
 		}
-		lastSeen := seen.LastSeenAt
-		switch {
-		case seen.ThirdParty:
-			if thirdParty == nil {
-				thirdParty = &node.Transports[i]
-			}
-		case seen.Transport == model.AgentTransportMTLSStream:
-			if !sessionsRead {
-				return Connection{Type: ConnectionMTLSStream, Transport: seen.Transport, LastSeenAt: &lastSeen}
-			}
+		if seen.Transport == model.AgentTransportMTLSStream && !sessionsRead {
+			lastSeen := seen.LastSeenAt
+			return Connection{Type: ConnectionMTLSStream, Transport: seen.Transport, LastSeenAt: &lastSeen}
 		}
-	}
-	if thirdParty != nil {
-		lastSeen := thirdParty.LastSeenAt
-		return Connection{Type: ConnectionThirdParty, Transport: thirdParty.Transport, LastSeenAt: &lastSeen}
 	}
 	return Connection{Type: ConnectionOffline}
 }
@@ -482,16 +454,7 @@ func classify(node *NodeTransports, fallbackVersion string) {
 		node.Transport = latest.Transport
 		lastSeen := latest.LastSeenAt
 		node.LastSeenAt = &lastSeen
-		node.Status = StatusThirdParty
-	}
-	// The newest AnixOps Agent channel decides; third-party protocols do
-	// not, since required leaves them open.
-	for _, transport := range node.Transports {
-		if transport.ThirdParty {
-			continue
-		}
 		node.Status = StatusMTLS
-		break
 	}
 	// The stream reports the agent's version in Hello; other transports
 	// fall back to what the node row recorded.

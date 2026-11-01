@@ -40,7 +40,7 @@ Operational notes:
 
 - Back up the panel database before applying the migration.
 - Keep `private_key` and `preshared_key` treated as secrets in exports and logs.
-- UniProxy HTTP and gRPC user-list responses expose only the runtime fields
+- The Agent Control user list (`users.v1`) exposes only the runtime fields
   AnixOps Agent needs for entry termination: `wireguard_peer_ip`,
   `wireguard_public_key`, and `wireguard_preshared_key`. The user private key
   remains subscription-only.

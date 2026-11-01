@@ -133,23 +133,6 @@ func (h *SubscribeHandler) GetSubscription(c *gin.Context) {
 	c.String(http.StatusOK, resp.Content)
 }
 
-// GetLegacySubscription keeps compatibility with the historical
-// /api/v1/client/subscribe?token=TOKEN entrypoint.
-func (h *SubscribeHandler) GetLegacySubscription(c *gin.Context) {
-	if !h.servesSubscriptionsHere(c) {
-		c.String(http.StatusNotFound, "404 page not found")
-		return
-	}
-	token := strings.TrimSpace(c.Query("token"))
-	if token == "" {
-		c.String(http.StatusBadRequest, "invalid token")
-		return
-	}
-
-	c.Params = append(c.Params, gin.Param{Key: "token", Value: token})
-	h.GetSubscription(c)
-}
-
 // buildSubscribeURL is the subscription link handed back in client configs.
 // The host is a configured subscription domain (app.subscribe_domains) when
 // there is one; otherwise, as the scheme, it comes from the request, where

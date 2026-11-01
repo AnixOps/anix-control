@@ -11,9 +11,8 @@ import (
 // configuration, a forward node's API token, a registration key. Sending it
 // back in a write keeps the stored secret, as for system configuration and
 // payment gateway secrets. Nodes and agents read their configuration through
-// their own authenticated paths (UniProxy, the gRPC node service, agent
-// control), which build it from the stored rows and never see the
-// placeholder.
+// the Agent Control stream, which builds it from the stored rows, and never
+// see the placeholder.
 const NodeSecretPlaceholder = SensitiveSystemConfigPlaceholder
 
 // nodeProtocolSecretColumns are the JSON columns of v2_node_protocol that can

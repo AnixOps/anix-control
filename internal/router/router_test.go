@@ -925,25 +925,6 @@ func TestSetup_SubscribeEndpoint(t *testing.T) {
 	assert.NotEqual(t, http.StatusNotFound, w.Code)
 }
 
-func TestSetup_LegacySubscribeEndpoint(t *testing.T) {
-	r, _ := setupTestRouter(t)
-	defer teardownTestRouter(t)
-
-	user := &model.User{
-		Email:          "legacy-subscribe@example.com",
-		Token:          "legacy-test-token",
-		UUID:           "legacy-test-uuid",
-		TransferEnable: 1073741824,
-	}
-	database.GetDB().Create(user)
-
-	req, _ := http.NewRequest("GET", "/api/v1/client/subscribe?token=legacy-test-token", nil)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	assert.NotEqual(t, http.StatusNotFound, w.Code)
-}
-
 func TestSetup_AdminEndpoints_RequireAuth(t *testing.T) {
 	r, _ := setupTestRouter(t)
 	defer teardownTestRouter(t)
@@ -986,32 +967,6 @@ func TestSetup_UserEndpoints_RequireAuth(t *testing.T) {
 		{"GET", "/api/v2/user/dashboard"},
 		{"GET", "/api/v2/user/subscription"},
 		{"GET", "/api/v2/user/plan"},
-	}
-
-	for _, ep := range endpoints {
-		t.Run(ep.path, func(t *testing.T) {
-			req, _ := http.NewRequest(ep.method, ep.path, nil)
-			w := httptest.NewRecorder()
-			r.ServeHTTP(w, req)
-
-			// Should return 401 Unauthorized
-			assert.Equal(t, http.StatusUnauthorized, w.Code)
-		})
-	}
-}
-
-func TestSetup_UniProxyEndpoints(t *testing.T) {
-	r, _ := setupTestRouter(t)
-	defer teardownTestRouter(t)
-
-	// Test UniProxy endpoints without auth
-	endpoints := []struct {
-		method string
-		path   string
-	}{
-		{"GET", "/api/v2/server/UniProxy/config"},
-		{"GET", "/api/v2/server/UniProxy/user"},
-		{"POST", "/api/v2/server/UniProxy/push"},
 	}
 
 	for _, ep := range endpoints {

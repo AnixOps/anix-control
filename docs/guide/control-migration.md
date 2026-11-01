@@ -46,11 +46,7 @@ sudo bash scripts/install.sh rollback
 
 在面板迁移验收后，对排空节点逐个切换到新 Agent。
 
-`scripts/install-agent.sh migrate` 目前不能使用：它从 `AnixOps/anix-agent` 的发布页下载
-`anix-agent-linux-amd64.tar.gz`（arm64 为 `anix-agent-linux-arm64.tar.gz`）和
-`SHA256SUMS.txt`，而该仓库的所有发布都没有这些资产，第一次 `curl -fL` 就得到 404。
-发布实际提供的是 `anix-agent-linux-64.zip`、`anix-agent-linux-arm64-v8a.zip` 和各自的
-`.dgst`（`v4.2.0-rc.1` 起另有 `.sig`、`SHA256SUMS` 和 `SHA256SUMS.sig`）。请改用：
+用以下方式切换：
 
 - 节点详情页“部署”里的“换到新机器”（4.2 中叫“复制安装命令”，需要 4.2 Control，见
   [Agent 接入指南](agent-onboarding.md)）；

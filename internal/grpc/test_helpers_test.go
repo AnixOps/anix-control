@@ -1,7 +1,6 @@
 package grpc
 
 import (
-	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -13,10 +12,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 )
-
-type grpcCloseSender interface {
-	CloseSend() error
-}
 
 func requireInMemoryDatabase(t testing.TB) {
 	t.Helper()
@@ -49,12 +44,6 @@ func requireClientConnClosed(t testing.TB, conn *grpc.ClientConn) {
 	require.NoError(t, conn.Close())
 }
 
-func requireCloseSend(t testing.TB, stream grpcCloseSender) {
-	t.Helper()
-
-	require.NoError(t, stream.CloseSend())
-}
-
 func serveGRPCServerForTest(t testing.TB, server *grpc.Server, lis net.Listener) <-chan error {
 	t.Helper()
 
@@ -80,48 +69,8 @@ func stopGRPCServerForTest(t testing.TB, server *grpc.Server, errCh <-chan error
 	}
 }
 
-// connectionForTest returns a registered node connection for assertions.
-func (m *NodeConnectionManager) connectionForTest(nodeID uint32) (*NodeConnection, bool) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	conn, ok := m.connections[nodeID]
-	return conn, ok
-}
-
-// activeNodesForTest returns the IDs of all registered node connections.
-func (m *NodeConnectionManager) activeNodesForTest() []uint32 {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	nodes := make([]uint32, 0, len(m.connections))
-	for id := range m.connections {
-		nodes = append(nodes, id)
-	}
-	return nodes
-}
-
-// configVersionForTest returns the last config version recorded for a node.
-func (m *NodeConnectionManager) configVersionForTest(nodeID uint32) int64 {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	return m.configVer[nodeID]
-}
-
 // apiKeyHashForTest mirrors the stored node API key hash (hex SHA-256).
 func apiKeyHashForTest(apiKey string) string {
 	sum := sha256.Sum256([]byte(apiKey))
 	return hex.EncodeToString(sum[:])
-}
-
-// adminCallerServerOptionsForTest authenticates every call as an
-// administrator (as the global grpc.api_token does), for tests of the
-// handlers behind the authentication interceptors.
-func adminCallerServerOptionsForTest() []grpc.ServerOption {
-	return []grpc.ServerOption{
-		grpc.ChainUnaryInterceptor(func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
-			return handler(withAdminCaller(ctx), req)
-		}),
-		grpc.ChainStreamInterceptor(func(srv any, ss grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-			return handler(srv, &streamWithContext{ServerStream: ss, ctx: withAdminCaller(ss.Context())})
-		}),
-	}
 }

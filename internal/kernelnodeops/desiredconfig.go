@@ -27,8 +27,9 @@ import (
 // DesiredConfigFormat names the desired configuration document's schema
 // (node-ops-service.md section 5.5): a proxy node's protocols as the
 // kernel's builder renders them for the node, with its raw configuration
-// and the UniProxy answers (legacy_pull); a forward node's legacy rules and
-// tunnels.
+// and its runtime configurations (runtime; legacy_pull is the same member
+// under its old name, for Agents released before runtime); a forward
+// node's legacy rules and tunnels.
 const DesiredConfigFormat = "anixops.nodeconfig/v1"
 
 // ForwardConfigFormat is the format of a node whose Agent negotiated
@@ -102,9 +103,8 @@ func newDesiredConfig(node agentcontrol.AgentNode, format string, document map[s
 }
 
 // buildProxyDesiredConfig renders a proxy node: its enabled protocols
-// through the kernel's builder (service.BuildNodeProtocolConfig, the one
-// source UniProxy and the gRPC node service share) and its raw
-// configuration.
+// through the kernel's builder (service.BuildNodeProtocolConfig) and its
+// raw configuration.
 func buildProxyDesiredConfig(db *gorm.DB, id uint) (map[string]any, error) {
 	var nodes []model.Node
 	if err := db.Where("id = ?", id).Limit(1).Find(&nodes).Error; err != nil {
@@ -149,7 +149,11 @@ func buildProxyDesiredConfig(db *gorm.DB, id uint) (map[string]any, error) {
 		})
 	}
 	document["protocols"] = rendered
-	document["legacy_pull"] = buildLegacyPull(db, id, rendered)
+	runtime := buildRuntime(db, id, rendered)
+	document["runtime"] = runtime
+	// legacy_pull is read by Agents released before runtime; it goes once
+	// every Agent reads runtime.
+	document["legacy_pull"] = runtime
 	// The node's egress routes (internal/egressroute), only when it takes
 	// part in one: the documents of the other nodes keep their hash.
 	egress, err := egressroute.NodeMember(db, id)
@@ -171,17 +175,15 @@ func buildProxyDesiredConfig(db *gorm.DB, id uint) (map[string]any, error) {
 	return document, nil
 }
 
-// buildLegacyPull renders what the node's legacy pull answers
-// (service.BuildUniProxyNodeConfig, the UniProxy configuration): "default"
-// for a pull that names no node type, and "types" for each node type the
-// node serves (its enabled protocols' and the default's), by normalized
-// type. A pull that would fail leaves its entry out. The Agent Control
-// stream's snapshot thus carries exactly what UniProxy gives the node,
-// and no secret beyond it.
-func buildLegacyPull(db *gorm.DB, id uint, protocols []map[string]any) map[string]any {
+// buildRuntime renders the node's runtime configurations
+// (service.BuildNodeRuntimeConfig): "default" for no node type, and "types"
+// for each node type the node serves (its enabled protocols' and the
+// default's), by normalized type. A configuration that would fail leaves
+// its entry out.
+func buildRuntime(db *gorm.DB, id uint, protocols []map[string]any) map[string]any {
 	pull := map[string]any{}
 	candidates := make([]string, 0, len(protocols)+1)
-	if answer, err := service.BuildUniProxyNodeConfig(db, id, ""); err == nil {
+	if answer, err := service.BuildNodeRuntimeConfig(db, id, ""); err == nil {
 		pull["default"] = answer
 		if nodeType, ok := answer["node_type"].(string); ok {
 			candidates = append(candidates, nodeType)
@@ -198,22 +200,22 @@ func buildLegacyPull(db *gorm.DB, id uint, protocols []map[string]any) map[strin
 		if _, done := types[nodeType]; done || nodeType == "" {
 			continue
 		}
-		if answer, err := service.BuildUniProxyNodeConfig(db, id, nodeType); err == nil {
+		if answer, err := service.BuildNodeRuntimeConfig(db, id, nodeType); err == nil {
 			types[nodeType] = answer
 		}
 	}
 	pull["types"] = types
-	// "protocols": the answer for each enabled protocol, by protocol id
-	// (UniProxy's protocol_id), so an Agent runs every protocol of the
-	// node, also two of one type. Left out with a raw configuration, which
-	// the node runs instead of its protocols.
+	// "protocols": the configuration of each enabled protocol, by protocol
+	// id, so an Agent runs every protocol of the node, also two of one type.
+	// Left out with a raw configuration, which the node runs instead of its
+	// protocols.
 	answers := map[string]any{}
 	for _, protocol := range protocols {
 		protocolID, ok := protocol["id"].(uint)
 		if !ok {
 			continue
 		}
-		if answer, err := service.BuildUniProxyProtocolConfig(db, id, protocolID); err == nil {
+		if answer, err := service.BuildNodeRuntimeProtocolConfig(db, id, protocolID); err == nil {
 			answers[strconv.FormatUint(uint64(protocolID), 10)] = answer
 		}
 	}

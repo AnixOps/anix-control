@@ -28,7 +28,6 @@ func TestBuildNodeProtocolConfig_ANX(t *testing.T) {
 	require.Equal(t, []string{"a.example.com", "b.example.com"}, config["server_names"])
 	require.Equal(t, "a.example.com:443", config["dest"])
 	require.Equal(t, []string{"h2", "http/1.1"}, config["alpn"])
-	require.Equal(t, `["a.example.com","b.example.com"]`, StringifyConfigMap(config)["server_names"])
 
 	empty := BuildNodeProtocolConfig(node, &model.NodeProtocol{ID: 4, NodeID: 1, Type: model.ProtocolANX, Port: 8444})
 	require.Equal(t, []string{"www.apple.com"}, empty["server_names"])
@@ -45,9 +44,6 @@ func TestBuildNodeProtocolConfig_ANX(t *testing.T) {
 	require.Equal(t, true, full["shape_plain"])
 	require.Equal(t, 512, full["max_streams"])
 	require.Equal(t, 51820, full["wg_listen_port"])
-	extra := StringifyConfigMap(full)
-	require.Equal(t, "true", extra["allow_no_sni"])
-	require.Equal(t, "512", extra["max_streams"])
 }
 
 func TestApplyANXUser(t *testing.T) {

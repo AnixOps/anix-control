@@ -319,7 +319,7 @@ func (d *userDeltaSender) delta(groupID *uint, changes []model.SubscriberChange)
 // WireGuard peer fields in extra_json when the node's protocol is WireGuard.
 // A WireGuard exit protocol serves no users, as in the legacy pulls.
 func (d *userDeltaSender) nodeUsers(users []*model.User) ([]*agentv1pb.NodeUser, error) {
-	extras, exit, err := wireGuardUserExtras(d.nodeService, uint(d.node.ID), "", users)
+	extras, exit, err := wireGuardUserExtras(d.nodeService, uint(d.node.ID), users)
 	if err != nil {
 		return nil, err
 	}
@@ -559,4 +559,37 @@ func WriteAgentUsersPrometheus(body *strings.Builder) {
 	body.WriteString("# HELP anixops_agent_users_cursor_lag Changes of the subscriber change log the slowest Agent session has not received.\n")
 	body.WriteString("# TYPE anixops_agent_users_cursor_lag gauge\n")
 	body.WriteString("anixops_agent_users_cursor_lag " + strconv.FormatUint(lag, 10) + "\n")
+}
+
+// wireGuardUserExtras builds the per-user WireGuard peer fields a node's user
+// deltas carry when the node's first enabled protocol is WireGuard. The
+// second result is true for an exit protocol, which serves no users.
+func wireGuardUserExtras(nodeService *service.NodeService, nodeID uint, users []*model.User) (map[uint]map[string]string, bool, error) {
+	if nodeID == 0 || len(users) == 0 {
+		return nil, false, nil
+	}
+	protocols, err := nodeService.GetProtocols(nodeID)
+	if err != nil {
+		return nil, false, err
+	}
+	protocol := firstEnabledProtocol(protocols)
+	if protocol == nil || protocol.Type != model.ProtocolWireGuard {
+		return nil, false, nil
+	}
+	if service.IsWireGuardExitProtocol(protocol) {
+		return nil, true, nil
+	}
+	extras, err := service.NewSubscriptionService().BuildWireGuardRuntimeUserExtras(protocol, users)
+	return extras, false, err
+}
+
+// firstEnabledProtocol is the first enabled protocol of a node, nil when
+// none is.
+func firstEnabledProtocol(protocols []model.NodeProtocol) *model.NodeProtocol {
+	for i := range protocols {
+		if protocols[i].Enable == 1 {
+			return &protocols[i]
+		}
+	}
+	return nil
 }

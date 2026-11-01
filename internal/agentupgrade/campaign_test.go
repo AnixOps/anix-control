@@ -50,9 +50,9 @@ func TestCandidatesAreDeterministicAndExcluded(t *testing.T) {
 	f.addForward(2, "")
 	disabled := f.addForward(3, "")
 	require.NoError(t, db.Model(&model.ForwardNode{}).Where("id = ?", disabled.ID).Update("enabled", false).Error)
-	// Seen only on UniProxy: not an AnixOps Agent on the stream.
+	// Seen only on the retired UniProxy: not an AnixOps Agent on the stream.
 	require.NoError(t, db.Create(&model.Node{ID: 9, Name: "third-party", APIKey: "key-9", Status: model.NodeStatusOnline}).Error)
-	f.seen(agentcontrol.NodeKindProxy, 9, model.AgentTransportUniProxy)
+	f.seen(agentcontrol.NodeKindProxy, 9, "uniproxy")
 	// The API-key stream counts.
 	require.NoError(t, db.Create(&model.Node{ID: 10, Name: "apikey", APIKey: "key-10", Status: model.NodeStatusOnline}).Error)
 	f.seen(agentcontrol.NodeKindProxy, 10, model.AgentTransportAPIKeyStream)

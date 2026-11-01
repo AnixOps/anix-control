@@ -8,7 +8,6 @@ import (
 	"time"
 
 	agentv1pb "github.com/AnixOps/anix-control/sdk/api/agent/v1"
-	pb "github.com/AnixOps/anix-control/v5/api/grpc/v2boardpb"
 	"github.com/AnixOps/anix-control/v5/internal/agentpki"
 	"github.com/AnixOps/anix-control/v5/internal/nodegroup"
 	"github.com/AnixOps/anix-control/v5/internal/panicrecovery"
@@ -24,10 +23,6 @@ type ServerConfig struct {
 	Host string
 	// 监听端口
 	Port int
-	// API Token (可选，用于认证)
-	APIToken string
-	// JWT Secret (可选，用于 JWT 认证)
-	JWTSecret string
 	// GetCertificate serves the listener's certificate per handshake: the
 	// panel certificates (internal/panelcert), so that a renewed or
 	// reloaded certificate reaches new connections without a restart. It
@@ -85,10 +80,8 @@ func (s *Server) agentAuthenticator() *AgentAuthenticator {
 // tlsConfig is the listener's TLS configuration: the server certificate
 // per handshake (getCertificate), and with the agent PKI a request for a
 // client certificate that is never required in the handshake: agents
-// enroll without one, and legacy agents have none. The Agent services and
-// the interceptors verify a presented certificate against the agent trust
-// bundle, which changes with CA rotation. In agent_control.mtls: off no
-// client certificate is requested.
+// enroll without one. The Agent services verify a presented certificate
+// against the agent trust bundle, which changes with CA rotation.
 func (s *Server) tlsConfig(getCertificate func(*tls.ClientHelloInfo) (*tls.Certificate, error)) *tls.Config {
 	config := &tls.Config{GetCertificate: getCertificate, MinVersion: tls.VersionTLS12}
 	if s.agentAuthenticator().pki() != nil {
@@ -184,11 +177,6 @@ func (s *Server) Start() error {
 	s.grpcServer = grpc.NewServer(opts...)
 
 	// 注册服务
-	pb.RegisterNodeServiceServer(s.grpcServer, NewNodeGRPCServer())
-	RegisterNodeLogServiceServer(s.grpcServer, NewNodeLogGRPCServer())
-	pb.RegisterUserServiceServer(s.grpcServer, NewUserGRPCServer())
-	pb.RegisterTrafficServiceServer(s.grpcServer, NewTrafficGRPCServer())
-	pb.RegisterHealthServiceServer(s.grpcServer, NewHealthGRPCServer())
 	agents := s.agentAuthenticator()
 	// Proxy node operations take their revisions from the durable per-node
 	// cursor that plugin operations use; forward nodes keep the in-memory
@@ -252,12 +240,6 @@ func (s *Server) interceptorChains() ([]grpc.UnaryServerInterceptor, []grpc.Stre
 		StreamLoggingInterceptor(),
 	}
 
-	// 认证拦截器始终启用: 每个节点自带的 x-api-key/x-node-id 必须校验通过,
-	// 不能因为没配置全局 api_token/JWT 就完全跳过认证 (那样任何人接上
-	// gRPC 端口都能冒充任意 node_id 上报数据)。api_token/JWT 仅用于给
-	// 没有节点 key 的旧版调用方或管理端做兼容回退。
-	agents := s.agentAuthenticator()
-	interceptors = append(interceptors, AuthInterceptorWithAgents(s.config.APIToken, s.config.JWTSecret, agents))
-	streamInterceptors = append(streamInterceptors, StreamAuthInterceptorWithAgents(s.config.APIToken, s.config.JWTSecret, agents))
+	// The Agent services authenticate in their handlers (agent_auth.go).
 	return interceptors, streamInterceptors
 }

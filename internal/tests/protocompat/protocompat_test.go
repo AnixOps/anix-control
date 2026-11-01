@@ -29,7 +29,6 @@ import (
 	_ "github.com/AnixOps/anix-control/sdk/api/network/v1"
 	_ "github.com/AnixOps/anix-control/sdk/api/packagebridge/v1"
 	_ "github.com/AnixOps/anix-control/sdk/api/pluginhost/v1"
-	_ "github.com/AnixOps/anix-control/v5/api/grpc/v2boardpb"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/reflect/protoregistry"
@@ -52,7 +51,6 @@ var contractPackages = []string{
 	"anixops.modulepki.v1",
 	"anixops.network.v1",
 	"anixops.packagebridge.v1",
-	"v2board",
 }
 
 func goldenPath(t *testing.T) string {

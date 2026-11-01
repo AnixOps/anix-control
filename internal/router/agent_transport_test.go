@@ -14,8 +14,8 @@ import (
 )
 
 // TestLegacyAgentPathsAreGone: the retired AnixOps-agent REST and WebSocket
-// paths no longer exist, whatever credentials they carry, while UniProxy,
-// which third-party node software shares, stays open.
+// paths, UniProxy and the old subscription path no longer exist, whatever
+// credentials they carry.
 func TestLegacyAgentPathsAreGone(t *testing.T) {
 	router, _, host := setupV2PackageRouter(t)
 	require.NoError(t, database.GetDB().AutoMigrate(&model.Node{}, &model.ForwardNode{}, &model.AgentTransport{}))
@@ -44,6 +44,11 @@ func TestLegacyAgentPathsAreGone(t *testing.T) {
 		{http.MethodPost, "/api/v2/node/runtime-health"},
 		{http.MethodPost, "/api/v2/node/register"},
 		{http.MethodGet, "/api/v2/node/ws"},
+		{http.MethodGet, "/api/v2/server/UniProxy/config"},
+		{http.MethodGet, "/api/v2/server/UniProxy/user"},
+		{http.MethodPost, "/api/v2/server/UniProxy/push"},
+		{http.MethodGet, "/api/v1/server/UniProxy/config"},
+		{http.MethodGet, "/api/v1/client/subscribe"},
 	} {
 		host.lastRouteID = ""
 		answer := send(test.method, test.path)
@@ -51,9 +56,7 @@ func TestLegacyAgentPathsAreGone(t *testing.T) {
 		require.Empty(t, answer.Header().Get("Deprecation"), test.path)
 		require.Empty(t, host.lastRouteID, "%s reached the package host", test.path)
 	}
-	for _, path := range []string{"/api/v2/server/UniProxy/config", "/api/v1/server/UniProxy/config", "/api/v2/forward-agent/install.sh"} {
-		answer := send(http.MethodGet, path+"?node_id="+nodeID+"&token=edge-api-key")
-		require.NotEqual(t, http.StatusForbidden, answer.Code, path)
-		require.Empty(t, answer.Header().Get("Deprecation"), path)
-	}
+	answer := send(http.MethodGet, "/api/v2/forward-agent/install.sh?node_id="+nodeID+"&token=edge-api-key")
+	require.NotEqual(t, http.StatusForbidden, answer.Code)
+	require.Empty(t, answer.Header().Get("Deprecation"))
 }

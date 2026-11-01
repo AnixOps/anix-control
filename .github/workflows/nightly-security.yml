@@ -73,7 +73,7 @@ jobs:
         shell: bash
         run: |
           mapfile -t production_packages < <(
-            go list -f '{{.Dir}}' ./cmd/server ./api/grpc/v2boardpb ./internal/... \
+            go list -f '{{.Dir}}' ./cmd/server ./internal/... \
               | sed "s#^${PWD}#.#" \
               | grep -Ev '^\./internal/tests(/|$)' \
               | sort
