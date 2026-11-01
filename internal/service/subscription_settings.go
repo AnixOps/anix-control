@@ -11,9 +11,20 @@ import (
 
 const SystemConfigKeySubscribeDomains = "app.subscribe_domains"
 
+// SystemConfigKeySubscribeDomainsOnly, when on, has the subscription paths
+// answer only on the configured subscription domains: a request for a
+// subscription on any other host (the panel's own domain, say) is a 404.
+// It keeps the panel domain out of what clients fetch from the mainland, so
+// a blocked subscription domain never takes the panel with it. It has no
+// effect while no subscription domain is configured.
+const SystemConfigKeySubscribeDomainsOnly = "app.subscribe_domains_only"
+
 type SubscriptionSettings struct {
 	SubscribePath    string   `json:"subscribe_path"`
 	SubscribeDomains []string `json:"subscribe_domains"`
+	// DomainsOnly is app.subscribe_domains_only, in force only while
+	// SubscribeDomains is not empty.
+	DomainsOnly bool `json:"subscribe_domains_only"`
 }
 
 func normalizeSubscriptionHost(raw string) string {
@@ -104,5 +115,19 @@ func GetSubscriptionSettings(configService *SystemConfigService, cfg *config.Con
 	}
 
 	settings.SubscribeDomains = parseSubscriptionDomains(raw)
+	if len(settings.SubscribeDomains) > 0 {
+		if only, err := configService.Get(SystemConfigKeySubscribeDomainsOnly); err == nil {
+			settings.DomainsOnly = parseConfigSwitch(only)
+		}
+	}
 	return settings
+}
+
+// parseConfigSwitch reads a switch stored as text ("true", "1", "on").
+func parseConfigSwitch(raw string) bool {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "true", "1", "on", "yes":
+		return true
+	}
+	return false
 }

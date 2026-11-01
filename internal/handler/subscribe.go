@@ -44,6 +44,10 @@ func NewSubscribeHandler(cfg *config.Config) *SubscribeHandler {
 //   - exclude: 排除节点名关键词 (正则)
 //   - groups: 指定分组 ID (逗号分隔)
 func (h *SubscribeHandler) GetSubscription(c *gin.Context) {
+	if !h.servesSubscriptionsHere(c) {
+		c.String(http.StatusNotFound, "404 page not found")
+		return
+	}
 	token := c.Param("token")
 	if token == "" {
 		c.String(http.StatusBadRequest, "invalid token")
@@ -132,6 +136,10 @@ func (h *SubscribeHandler) GetSubscription(c *gin.Context) {
 // GetLegacySubscription keeps compatibility with the historical
 // /api/v1/client/subscribe?token=TOKEN entrypoint.
 func (h *SubscribeHandler) GetLegacySubscription(c *gin.Context) {
+	if !h.servesSubscriptionsHere(c) {
+		c.String(http.StatusNotFound, "404 page not found")
+		return
+	}
 	token := strings.TrimSpace(c.Query("token"))
 	if token == "" {
 		c.String(http.StatusBadRequest, "invalid token")
@@ -166,6 +174,25 @@ func (h *SubscribeHandler) buildSubscribeDomain(c *gin.Context) string {
 
 	// IPv6 host without port can appear as [::1]
 	return strings.Trim(host, "[]")
+}
+
+// servesSubscriptionsHere reports whether this request's host may answer a
+// subscription. With app.subscribe_domains_only on, only the configured
+// subscription domains do; every other host (the panel's domain, a bare IP)
+// answers 404 as if the path did not exist, so it never shows up in what
+// clients fetch.
+func (h *SubscribeHandler) servesSubscriptionsHere(c *gin.Context) bool {
+	settings := service.GetSubscriptionSettings(h.configService, h.cfg)
+	if !settings.DomainsOnly || len(settings.SubscribeDomains) == 0 {
+		return true
+	}
+	host := normalizeSubscriptionRequestHost(requestorigin.Resolve(c.Request).Host)
+	for _, configured := range settings.SubscribeDomains {
+		if normalizeSubscriptionRequestHost(configured) == host {
+			return true
+		}
+	}
+	return false
 }
 
 func (h *SubscribeHandler) resolveSubscribeHost(requestHost string) string {

@@ -64,7 +64,9 @@ func Items(db *gorm.DB) ([]Item, error) {
 		Default: destinationstats.DefaultRetentionDays,
 	}
 	enabled := Item{Key: destinationstats.EnabledKey, Section: SectionData, Kind: KindSwitch, Default: false}
+	domainsOnly := Item{Key: service.SystemConfigKeySubscribeDomainsOnly, Section: SectionGeneral, Kind: KindSwitch, Default: false}
 	if db != nil {
+		domainsOnly.Value = service.GetSubscriptionSettings(service.NewSystemConfigService(db), nil).DomainsOnly
 		settings, err := destinationstats.LoadSettings(db)
 		if err != nil {
 			return nil, err
@@ -74,6 +76,7 @@ func Items(db *gorm.DB) ([]Item, error) {
 	}
 	items := []Item{
 		{Key: service.SystemConfigKeySubscribeDomains, Section: SectionGeneral, Kind: KindDomains},
+		domainsOnly,
 		{Key: "notification.email.config", Section: SectionGeneral, Kind: KindLink, Link: "/admin/notifications/email"},
 		{Key: "security.mfa.config", Section: SectionGeneral, Kind: KindLink, Link: "/admin/security/mfa"},
 		enabled,
