@@ -3,6 +3,7 @@ package middleware
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"github.com/AnixOps/anix-control/v5/internal/adminapitoken"
 	"github.com/AnixOps/anix-control/v5/internal/authn"
 	"github.com/AnixOps/anix-control/v5/internal/logging"
@@ -172,8 +173,10 @@ func JWTAuth() gin.HandlerFunc {
 		}
 		authHeader := c.GetHeader("Authorization")
 
-		// WebSocket 握手无法自定义 header, 允许从 query 参数 token 回退获取
-		if authHeader == "" {
+		// WebSocket 握手无法自定义 header, 只有 WebSocket 升级请求才允许
+		// 从 query 参数 token 回退获取。普通请求不接受 URL 里的 JWT：URL 会
+		// 进访问日志、浏览器历史和 Referer，凭据不该出现在那里。
+		if authHeader == "" && isWebSocketUpgrade(c.Request) {
 			if queryToken := c.Query("token"); queryToken != "" {
 				authHeader = queryToken
 			}
@@ -364,7 +367,43 @@ func Logger() gin.HandlerFunc {
 	if logging.JSON() {
 		return logging.AccessLog()
 	}
-	return gin.Logger()
+	// gin.Logger() 默认把完整查询串写进日志；节点 api_key/token、
+	// WebSocket 的 JWT 和订阅 token 都可能在查询串里，所以文本日志只记路径，
+	// 与 JSON 访问日志一致。
+	return gin.LoggerWithFormatter(textAccessLogFormatter)
+}
+
+// textAccessLogFormatter 与 gin 的默认文本格式相同，但不带查询串。
+func textAccessLogFormatter(param gin.LogFormatterParams) string {
+	path := param.Path
+	if i := strings.IndexByte(path, '?'); i >= 0 {
+		path = path[:i]
+	}
+	if param.Latency > time.Minute {
+		param.Latency = param.Latency.Truncate(time.Second)
+	}
+	return fmt.Sprintf("[GIN] %v | %3d | %13v | %15s | %-7s %#v\n%s",
+		param.TimeStamp.Format("2006/01/02 - 15:04:05"),
+		param.StatusCode,
+		param.Latency,
+		param.ClientIP,
+		param.Method,
+		path,
+		param.ErrorMessage,
+	)
+}
+
+// isWebSocketUpgrade 判断请求是不是 WebSocket 握手（RFC 6455 §4.1）。
+func isWebSocketUpgrade(r *http.Request) bool {
+	if !strings.EqualFold(strings.TrimSpace(r.Header.Get("Upgrade")), "websocket") {
+		return false
+	}
+	for _, part := range strings.Split(r.Header.Get("Connection"), ",") {
+		if strings.EqualFold(strings.TrimSpace(part), "upgrade") {
+			return true
+		}
+	}
+	return false
 }
 
 // Recovery 恢复中间件

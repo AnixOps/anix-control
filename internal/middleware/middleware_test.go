@@ -550,6 +550,41 @@ func TestJWTAuth_ValidToken(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 }
 
+// A JWT in the query string is accepted only on a WebSocket handshake, which
+// cannot carry an Authorization header; on any other request it is refused,
+// the way V2Board-style panels leaked or forged credentials through the URL.
+func TestJWTAuth_QueryTokenOnlyOnWebSocketUpgrade(t *testing.T) {
+	secret := "test-secret-key"
+	token, err := utils.GenerateToken(1, "test@example.com", false, secret, 3600)
+	assert.NoError(t, err)
+	config.Set(&config.Config{JWT: config.JWTConfig{Secret: secret}})
+
+	router := gin.New()
+	router.Use(JWTAuth())
+	router.GET("/test", func(c *gin.Context) { c.Status(http.StatusOK) })
+
+	plain := httptest.NewRequest("GET", "/test?token="+token, nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, plain)
+	assert.Equal(t, http.StatusUnauthorized, w.Code, "plain request with ?token=")
+
+	upgrade := httptest.NewRequest("GET", "/test?token="+token, nil)
+	upgrade.Header.Set("Upgrade", "websocket")
+	upgrade.Header.Set("Connection", "keep-alive, Upgrade")
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, upgrade)
+	assert.Equal(t, http.StatusOK, w.Code, "WebSocket handshake with ?token=")
+}
+
+func TestTextAccessLogOmitsQuery(t *testing.T) {
+	line := textAccessLogFormatter(gin.LogFormatterParams{
+		Path: "/api/v1/server/UniProxy/config?node_id=1&token=node-secret", Method: "GET", StatusCode: 200,
+	})
+	assert.Contains(t, line, "/api/v1/server/UniProxy/config")
+	assert.NotContains(t, line, "node-secret")
+	assert.NotContains(t, line, "?")
+}
+
 func TestJWTAuth_BearerPrefix(t *testing.T) {
 	secret := "test-secret-key"
 	token, err := utils.GenerateToken(1, "test@example.com", true, secret, 3600)
