@@ -140,12 +140,6 @@ func (b *bindings) open(host packagebridge.HostIdentity, routeID string, params 
 	return r
 }
 
-// handle returns the handle sealed at a top-level field of the body.
-func (r *request) handle(field string) string {
-	value, _ := r.sealed[field].(string)
-	return value
-}
-
 // binding is the RequestBinding a package passes.
 func (r *request) binding() *kernelnodeopsv1.RequestBinding {
 	return &kernelnodeopsv1.RequestBinding{BridgeCapability: r.capability}

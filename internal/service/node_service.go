@@ -1,9 +1,6 @@
 package service
 
 import (
-	"crypto/rand"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -795,26 +792,6 @@ func (s *NodeService) GetNodeStats() (map[string]any, error) {
 		"up":      totalUpload,
 		"down":    totalDownload,
 	}, nil
-}
-
-// ========== 初始化 ==========
-
-// ========== 辅助函数 ==========
-
-// generateSecureToken 生成安全随机 token
-func generateSecureToken(length int) (string, error) {
-	bytes := make([]byte, length)
-	if _, err := rand.Read(bytes); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(bytes), nil
-}
-
-// hashString 对字符串进行 SHA256 哈希
-func hashString(s string) string {
-	h := sha256.New()
-	h.Write([]byte(s))
-	return hex.EncodeToString(h.Sum(nil))
 }
 
 // ========== 参数结构 ==========

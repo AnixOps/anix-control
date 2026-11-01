@@ -4,7 +4,6 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/sha256"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/hex"
@@ -147,11 +146,6 @@ func newFixture(t *testing.T, db *gorm.DB) *fixture {
 	f.forward = model.ForwardNode{ID: f.proxy.ID, Name: "forward", Host: "198.51.100.20", Port: 8443, Enabled: true}
 	require.NoError(t, db.Create(&f.forward).Error)
 	return f
-}
-
-func sha256Hex(value string) string {
-	digest := sha256.Sum256([]byte(value))
-	return hex.EncodeToString(digest[:])
 }
 
 // newCSR returns a throwaway key and a CSR whose subject and SANs claim

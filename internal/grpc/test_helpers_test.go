@@ -1,8 +1,6 @@
 package grpc
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"net"
 	"testing"
@@ -67,10 +65,4 @@ func stopGRPCServerForTest(t testing.TB, server *grpc.Server, errCh <-chan error
 	if err != nil && !errors.Is(err, grpc.ErrServerStopped) {
 		require.NoError(t, err)
 	}
-}
-
-// apiKeyHashForTest mirrors the stored node API key hash (hex SHA-256).
-func apiKeyHashForTest(apiKey string) string {
-	sum := sha256.Sum256([]byte(apiKey))
-	return hex.EncodeToString(sum[:])
 }

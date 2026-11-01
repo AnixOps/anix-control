@@ -5,7 +5,6 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/sha256"
 	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
@@ -116,11 +115,6 @@ func newRotationFixture(t *testing.T, db *gorm.DB) *rotationFixture {
 		f.users[name] = user.ID
 	}
 	return f
-}
-
-func hashForTest(value string) string {
-	digest := sha256.Sum256([]byte(value))
-	return hex.EncodeToString(digest[:])
 }
 
 func (f *rotationFixture) router(actor string) *gin.Engine {
