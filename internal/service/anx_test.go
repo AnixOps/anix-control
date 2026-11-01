@@ -33,6 +33,19 @@ func TestBuildNodeProtocolConfig_ANX(t *testing.T) {
 	empty := BuildNodeProtocolConfig(node, &model.NodeProtocol{ID: 4, NodeID: 1, Type: model.ProtocolANX, Port: 8444})
 	require.Equal(t, []string{"www.apple.com"}, empty["server_names"])
 	require.Equal(t, "www.apple.com:443", empty["dest"])
+	// The other A2 options stay out until set, for anx-nodes that do not know them.
+	require.NotContains(t, empty, "allow_no_sni")
+	require.NotContains(t, empty, "shape_plain")
+	require.NotContains(t, empty, "max_streams")
+
+	a2 := `{"allow_no_sni":true,"shape_plain":true,"max_streams":512}`
+	full := BuildNodeProtocolConfig(node, &model.NodeProtocol{ID: 5, NodeID: 1, Type: model.ProtocolANX, Port: 8445, Settings: &a2})
+	require.Equal(t, true, full["allow_no_sni"])
+	require.Equal(t, true, full["shape_plain"])
+	require.Equal(t, 512, full["max_streams"])
+	extra := StringifyConfigMap(full)
+	require.Equal(t, "true", extra["allow_no_sni"])
+	require.Equal(t, "512", extra["max_streams"])
 }
 
 func TestApplyANXUser(t *testing.T) {
@@ -41,18 +54,23 @@ func TestApplyANXUser(t *testing.T) {
 	require.Equal(t, ANXUserKey("c9a1e7b0-5b0e-4a4b-9a54-2f3f1c1b0d11"), parsed.Password)
 	require.Equal(t, "x.example.com", parsed.ServerName)
 	require.Equal(t, "h2", parsed.ALPN)
+
+	noSNI := &model.ParsedNode{Type: "anx", Settings: map[string]any{"server_names": []any{"x.example.com"}, "allow_no_sni": true}}
+	applyANXUser(noSNI, &model.TemplateRenderContext{UUID: "c9a1e7b0-5b0e-4a4b-9a54-2f3f1c1b0d11"})
+	require.Empty(t, noSNI.ServerName)
 }
 
 func TestValidateANXProtocol(t *testing.T) {
 	valid := []string{``, `{}`, `{"server_names":["www.apple.com"],"dest":"www.apple.com:443","alpn":["h2"]}`,
-		`{"alpn":["h2","http/1.1"]}`}
+		`{"alpn":["h2","http/1.1"]}`, `{"allow_no_sni":true,"shape_plain":false,"max_streams":1024}`, `{"max_streams":65535}`}
 	for _, settings := range valid {
 		s := settings
 		require.NoError(t, validateANXProtocol(&model.NodeProtocol{Type: model.ProtocolANX, Settings: &s}), settings)
 	}
 	invalid := []string{`[]`, `{"server_names":[]}`, `{"server_names":["a b"]}`, `{"server_names":"x"}`,
 		`{"dest":"www.apple.com"}`, `{"dest":"www.apple.com:0"}`, `{"dest":5}`, `{"alpn":[1]}`,
-		`{"alpn":["h2,http/1.1"]}`, `{"alpn":["http 1.1"]}`, `{"server_names":["a/b"]}`}
+		`{"alpn":["h2,http/1.1"]}`, `{"alpn":["http 1.1"]}`, `{"server_names":["a/b"]}`,
+		`{"allow_no_sni":"yes"}`, `{"shape_plain":1}`, `{"max_streams":0}`, `{"max_streams":65536}`, `{"max_streams":1.5}`, `{"max_streams":"256"}`}
 	for _, settings := range invalid {
 		s := settings
 		require.Error(t, validateANXProtocol(&model.NodeProtocol{Type: model.ProtocolANX, Settings: &s}), settings)

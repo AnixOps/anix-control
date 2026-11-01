@@ -189,8 +189,8 @@ describe('protocol form fields', () => {
 describe('ANX protocol fields', () => {
   const anx = { type: 'anx', tls: 0, transport: 'tcp', settings: {}, tls_settings: {}, reality_settings: {}, transport_settings: {} }
 
-  it('shows the cover site, names and ALPN, and starts from their defaults', () => {
-    expect(fieldsFor(anx).map(field => field.key)).toEqual(['server_names', 'dest', 'alpn'])
+  it('shows every A2 option and starts from the defaults', () => {
+    expect(fieldsFor(anx).map(field => field.key)).toEqual(['server_names', 'dest', 'alpn', 'allow_no_sni', 'shape_plain', 'max_streams'])
     expect(defaultSettingsFor('anx')).toEqual({
       server_names: ['www.apple.com'],
       dest: 'www.apple.com:443',
@@ -204,6 +204,13 @@ describe('ANX protocol fields', () => {
     expect(edited.settings.server_names).toEqual(['a.example.com', 'b.example.com'])
     expect(readField(edited, names)).toEqual(['a.example.com', 'b.example.com'])
     expect(writeField(edited, names, []).settings).toEqual({})
+  })
+
+  it('stores the A2 switches only when on', () => {
+    const noSni = PROTOCOL_FIELDS.find(field => field.key === 'allow_no_sni')
+    const on = writeField(anx, noSni, true)
+    expect(on.settings).toEqual({ allow_no_sni: true })
+    expect(writeField(on, noSni, false).settings).toEqual({})
   })
 })
 

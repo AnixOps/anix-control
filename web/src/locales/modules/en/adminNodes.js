@@ -578,11 +578,17 @@ export default {
       dest: 'Target (Dest)',
       short_id: 'Short ID',
       private_key: 'Private key',
-      public_key: 'Public key'
+      public_key: 'Public key',
+      allow_no_sni: 'No-SNI mode',
+      shape_plain: 'Turn off traffic shaping',
+      max_streams: 'Max streams per session'
     },
     hints: {
       anxServerNames: 'Comma separated; clients use the first. It must be a name the cover site really serves. ANX user keys derive from the UUID and the server public key is reported by the Agent on the node; the AnixOps Net subscription format carries the anx:// link.',
       anxDest: 'Connections that are not ANX (probes included) are forwarded here as host:port.',
+      anxAllowNoSni: 'Also accept connections without SNI (clients dial the IP; for domestic entries that block unregistered SNIs). Subscriptions then carry no SNI. Needs an anx-node newer than alpha.7.',
+      anxShapePlain: 'VisionLike shaping is on by default (it hides the TLS-in-TLS pattern); turn it off only to debug interop.',
+      anxMaxStreams: 'Streams one ANX session may open at once; empty means 256.',
       serverKey: 'Server key of the 2022 ciphers; empty derives it from the node.',
       privateKey: 'Empty generates a key pair when saved; a stored private key shows as ********.',
       publicKey: 'The public key subscriptions hand to clients; empty derives it from the private key.'
@@ -772,6 +778,7 @@ export default {
     unknown: 'Unknown'
   },
   tlsModes: {
+    anxA2: 'A2 borrowed handshake (REALITY-style)',
     none: 'No TLS',
     standard: 'Standard TLS',
     reality: 'Reality (recommended)'

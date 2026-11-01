@@ -169,8 +169,10 @@ const typeOptions = computed(() => PROTOCOL_TYPES.map(type => ({ value: type, la
 // Shadowsocks is TCP without TLS, Hysteria2 and TUIC UDP with TLS.
 const TLS_MODE_KEYS = ['none', 'standard', 'reality']
 const TRANSPORT_KEYS = ['tcp', 'ws', 'grpc', 'quic', 'h2', 'httpupgrade', 'udp']
+// ANX brings its own security, the A2 jacket, instead of the node's TLS.
+const tlsLabel = (type, value) => t(`admin.nodes.tlsModes.${type === 'anx' ? 'anxA2' : (TLS_MODE_KEYS[value] || 'none')}`)
 const tlsOptions = computed(() => capabilitiesOf(form.type).tls
-  .map(value => ({ value, label: t(`admin.nodes.tlsModes.${TLS_MODE_KEYS[value]}`) })))
+  .map(value => ({ value, label: tlsLabel(form.type, value) })))
 const transportOptions = computed(() => transportsFor(form.type, form.tls, form.transport)
   .map(value => ({ value, label: t(`admin.nodes.transports.${value}`) })))
 const enabled = computed({ get: () => Boolean(form.enable), set: value => { form.enable = value ? 1 : 0 } })
