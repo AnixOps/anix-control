@@ -7,6 +7,7 @@ import (
 
 	"github.com/AnixOps/anix-control/v5/internal/database"
 	"github.com/AnixOps/anix-control/v5/internal/destinationstats"
+	"github.com/AnixOps/anix-control/v5/internal/trafficqos"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -318,4 +319,62 @@ func (h *TrafficCategoriesHandler) RefreshSource(c *gin.Context) {
 		return
 	}
 	kernelData(c, http.StatusOK, gin.H{"source": source})
+}
+
+// GetQoS godoc
+// @Summary 流量优先级与按类别限速
+// @Description QoS 设置: enabled; priorities 为类型到 high 或 low 的映射 (其余为 normal, web 与 unknown 不可设置); min_share_percent 为低优先级至少保留的容量比例 (1 到 90); default_egress_mbps 为节点下载容量 (0 时只在用户限速内调度), node_egress_mbps 按节点 ID 覆盖; caps 为按域名的每用户限速 (name、priority、limit_mbps、domains)。未保存时为默认值: 开启, 下载类低优先级, Steam 下载每用户 5 Mbit/s。设置随节点配置下发 (约每分钟), 需要支持 qos 的 anixcore。
+// @Tags 管理端-流量
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} map[string]any
+// @Router /api/v4/admin/traffic/qos [get]
+func (h *TrafficCategoriesHandler) GetQoS(c *gin.Context) {
+	db := h.db()
+	if db == nil {
+		kernelError(c, http.StatusServiceUnavailable, "database_unavailable", "database is not initialized")
+		return
+	}
+	settings, err := trafficqos.Load(db.WithContext(c.Request.Context()))
+	if err != nil {
+		kernelDBError(c, err)
+		return
+	}
+	c.Header("Cache-Control", "no-store")
+	kernelData(c, http.StatusOK, settings)
+}
+
+// PutQoS godoc
+// @Summary 修改流量优先级与按类别限速
+// @Description 替换 QoS 设置 (字段同 GET)。各节点在下一次配置刷新 (约每分钟) 时生效, 已建立的连接保持原类别。记入操作日志。
+// @Tags 管理端-流量
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body trafficqos.Settings true "设置"
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Router /api/v4/admin/traffic/qos [put]
+func (h *TrafficCategoriesHandler) PutQoS(c *gin.Context) {
+	var input trafficqos.Settings
+	if err := c.ShouldBindJSON(&input); err != nil {
+		kernelError(c, http.StatusBadRequest, "invalid_request", err.Error())
+		return
+	}
+	db := h.db()
+	if db == nil {
+		kernelError(c, http.StatusServiceUnavailable, "database_unavailable", "database is not initialized")
+		return
+	}
+	actor := trafficqos.Actor{UserID: kernelActorID(c), Name: c.GetString("email"), IP: c.ClientIP()}
+	settings, err := trafficqos.Save(db.WithContext(c.Request.Context()), input, actor)
+	if err != nil {
+		if errors.Is(err, trafficqos.ErrInvalid) {
+			kernelError(c, http.StatusBadRequest, "invalid_request", err.Error())
+			return
+		}
+		kernelDBError(c, err)
+		return
+	}
+	kernelData(c, http.StatusOK, settings)
 }

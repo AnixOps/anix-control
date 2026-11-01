@@ -614,6 +614,10 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		v4.PUT("/admin/traffic/categories/sources/:id", trafficCategories.UpdateSource)
 		v4.DELETE("/admin/traffic/categories/sources/:id", trafficCategories.DeleteSource)
 		v4.POST("/admin/traffic/categories/sources/:id/refresh", trafficCategories.RefreshSource)
+		// The traffic priorities and per-user class caps the proxy nodes get
+		// in their configuration (internal/trafficqos).
+		v4.GET("/admin/traffic/qos", trafficCategories.GetQoS)
+		v4.PUT("/admin/traffic/qos", trafficCategories.PutQoS)
 		bulk := handler.NewAdminBulkHandler(handler.GatewayBulkRunner(v2PackageGateway.Serve))
 		v4.POST("/admin/users/bulk", bulk.Users)
 		v4.POST("/admin/invite-codes/bulk", bulk.InviteCodes)

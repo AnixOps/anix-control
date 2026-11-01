@@ -1085,3 +1085,16 @@ export async function deleteTrafficCategorySource(id) {
 export async function refreshTrafficCategorySource(id) {
   return dataOf(await adminV4({ url: `/admin/traffic/categories/sources/${id}/refresh`, method: 'post' }))
 }
+
+// The traffic priorities and per-user class caps the proxy nodes get
+// (GET and PUT /api/v4/admin/traffic/qos): { enabled, priorities
+// ({ category: 'high' | 'low' }), min_share_percent, default_egress_mbps,
+// node_egress_mbps ({ node id: Mbit/s }), caps ([{ name, priority,
+// limit_mbps, domains }]) }.
+export async function getTrafficQos() {
+  return dataOf(await adminV4({ url: '/admin/traffic/qos', method: 'get' }))
+}
+
+export async function updateTrafficQos(settings) {
+  return dataOf(await adminV4({ url: '/admin/traffic/qos', method: 'put', data: settings }))
+}

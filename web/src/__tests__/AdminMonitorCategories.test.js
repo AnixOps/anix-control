@@ -17,11 +17,14 @@ const adminApi = vi.hoisted(() => ({
   createTrafficCategorySource: vi.fn(),
   updateTrafficCategorySource: vi.fn(),
   deleteTrafficCategorySource: vi.fn(),
-  refreshTrafficCategorySource: vi.fn()
+  refreshTrafficCategorySource: vi.fn(),
+  getTrafficQos: vi.fn(),
+  updateTrafficQos: vi.fn()
 }))
 
 vi.mock('@/api/admin', () => adminApi)
-vi.mock('@/api/kernel', () => ({ getKernelNodeTraffic: vi.fn() }))
+const kernelApi = vi.hoisted(() => ({ getKernelNodeTraffic: vi.fn(), getKernelAdminNodes: vi.fn() }))
+vi.mock('@/api/kernel', () => kernelApi)
 vi.mock('@/ui/internal/echarts.js', () => ({ init: vi.fn(() => ({ setOption: vi.fn(), setTheme: vi.fn(), resize: vi.fn(), dispose: vi.fn() })), registerTheme: vi.fn() }))
 
 const ANSWER = {
@@ -29,6 +32,15 @@ const ANSWER = {
   builtin: [{ category: 'video', domains: ['youtube.com'], networks: [], protocols: [] }],
   rules: [{ id: 1, kind: 'domain', value: 'music.youtube.com', category: 'music', note: '' }],
   sources: [{ id: 2, name: 'netflix', url: 'https://example.test/netflix', category: 'video', enabled: true, refresh_hours: 24, entry_count: 12, fetched_at: '2026-11-01T00:00:00Z', fetch_error: '' }]
+}
+
+const QOS = {
+  enabled: true,
+  priorities: { download: 'low' },
+  min_share_percent: 10,
+  default_egress_mbps: 0,
+  node_egress_mbps: {},
+  caps: [{ name: 'Steam 下载', priority: 'low', limit_mbps: 5, domains: ['steamcontent.com', 'steamserver.net'] }]
 }
 
 async function mountSection(path = '/admin/monitor/categories') {
@@ -44,6 +56,8 @@ beforeEach(() => {
   vi.resetAllMocks()
   vi.spyOn(console, 'error').mockImplementation(() => {})
   adminApi.getTrafficCategories.mockResolvedValue(ANSWER)
+  adminApi.getTrafficQos.mockResolvedValue(QOS)
+  kernelApi.getKernelAdminNodes.mockResolvedValue({ total: 1, list: [{ id: 57, name: 'DE-57' }] })
 })
 
 afterEach(() => {
@@ -84,5 +98,23 @@ describe('流量与监控 · 流量分类', () => {
     await flushPromises()
     expect(adminApi.createTrafficCategoryRule).toHaveBeenCalledWith({ kind: 'domain', value: 'example.com', category: 'video', note: '' })
     expect(adminApi.getTrafficCategories).toHaveBeenCalledTimes(2)
+  })
+
+  it('shows the QoS settings and saves them with the Steam cap', async () => {
+    adminApi.updateTrafficQos.mockImplementation(async body => body)
+    const { wrapper } = await mountSection()
+    const card = wrapper.get('[data-qos-settings]')
+    expect(card.text()).toContain('DE-57')
+    expect(card.findAll('[data-qos-cap]')).toHaveLength(1)
+    await card.get('form').trigger('submit')
+    await flushPromises()
+    expect(adminApi.updateTrafficQos).toHaveBeenCalledWith({
+      enabled: true,
+      priorities: { download: 'low' },
+      min_share_percent: 10,
+      default_egress_mbps: 0,
+      node_egress_mbps: {},
+      caps: [{ name: 'Steam 下载', priority: 'low', limit_mbps: 5, domains: ['steamcontent.com', 'steamserver.net'] }]
+    })
   })
 })

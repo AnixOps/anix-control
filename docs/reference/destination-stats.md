@@ -74,6 +74,35 @@ domain behind the provider's public one.
 
 The console edits them at 流量与监控 → 流量分类.
 
+## QoS: priorities and per-user caps
+
+The categories also steer the proxy nodes' traffic (`internal/trafficqos`,
+console 流量与监控 → 流量分类 → QoS, `GET`/`PUT /api/v4/admin/traffic/qos`,
+audited as `traffic_qos`). The settings are one JSON document in
+`v2_system_config` (`traffic.qos`); without it the defaults apply: on,
+downloads at low priority, Steam downloads (`trafficqos.SteamDownloadDomains`)
+capped at 5 Mbit/s per user.
+
+| Field | |
+|---|---|
+| `enabled` | Off, the nodes neither prioritize nor cap |
+| `priorities` | Category → `high` or `low`; the rest is normal. `web` and `unknown` take none |
+| `default_egress_mbps`, `node_egress_mbps` | A node's download capacity (by node id), for node-wide scheduling; 0 schedules within the users' speed limits only |
+| `min_share_percent` | The least share of a busy capacity a lower class keeps (1–90, default 10) |
+| `caps` | `{name, priority, limit_mbps, domains}`: each user's connections to the domains (and subdomains) together at most `limit_mbps` |
+
+Each proxy node's desired configuration carries the member `qos` (refreshed
+every minute): the caps first, then one class per prioritized category with
+its domains, networks and protocols from the current category rules (the
+capped domains left out, so the cap wins), at most 50000 entries. The Agent
+sends it to anixcore as `PUT /v1/qos` (feature `qos`). There, only the
+download direction is scheduled: lower classes use what the higher ones
+leave of the node's capacity and of each speed-limited user's limit, and
+back off within a few 100 ms windows when higher traffic needs it. A
+connection is classed by its target name or address, or by its first bytes
+(TLS SNI, HTTP Host, BitTorrent); Mux.Cool sessions and UDP are not
+scheduled.
+
 ## Settings
 
 | Setting | Key (`v2_system_config`) | Default | |

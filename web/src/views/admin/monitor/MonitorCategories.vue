@@ -1,5 +1,7 @@
 <template>
   <div class="monitor-section" data-monitor-categories>
+    <QosSettingsCard />
+
     <UiCard :title="t('adminMonitor.categories.test.title')" :description="t('adminMonitor.categories.test.description')" as="section" data-category-test>
       <form class="category-test" @submit.prevent="runTest">
         <UiTextField v-model="test.domain" class="category-test__domain" :label="t('adminMonitor.categories.test.domain')" placeholder="youtube.com" size="md" data-category-test-domain />
@@ -114,6 +116,7 @@
 // remote sources (lists fetched from a URL on a schedule, one category per
 // list) and the built-in rules, with a test of where a destination falls
 // (GET .../classify). Every change applies to the recorded history at once.
+// On top, the QoS settings the categories steer (QosSettingsCard).
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { Globe, Pencil, Plus, RefreshCw, Tags, Trash2 } from '@lucide/vue'
 import {
@@ -141,6 +144,7 @@ import UiTextField from '@/ui/UiTextField.vue'
 import { useConfirm } from '@/ui/composables/useConfirm'
 import { useFormat } from '@/ui/composables/useFormat'
 import { useToast } from '@/ui/composables/useToast'
+import QosSettingsCard from './QosSettingsCard.vue'
 import { errorText } from './trafficData'
 
 const RULE_CATEGORIES = ['video', 'music', 'messaging', 'social', 'gaming', 'ai', 'download', 'web']

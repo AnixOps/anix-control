@@ -4379,6 +4379,77 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v4/admin/traffic/qos": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "QoS 设置: enabled; priorities 为类型到 high 或 low 的映射 (其余为 normal, web 与 unknown 不可设置); min_share_percent 为低优先级至少保留的容量比例 (1 到 90); default_egress_mbps 为节点下载容量 (0 时只在用户限速内调度), node_egress_mbps 按节点 ID 覆盖; caps 为按域名的每用户限速 (name、priority、limit_mbps、domains)。未保存时为默认值: 开启, 下载类低优先级, Steam 下载每用户 5 Mbit/s。设置随节点配置下发 (约每分钟), 需要支持 qos 的 anixcore。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-流量"
+                ],
+                "summary": "流量优先级与按类别限速",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "替换 QoS 设置 (字段同 GET)。各节点在下一次配置刷新 (约每分钟) 时生效, 已建立的连接保持原类别。记入操作日志。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-流量"
+                ],
+                "summary": "修改流量优先级与按类别限速",
+                "parameters": [
+                    {
+                        "description": "设置",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/trafficqos.Settings"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/v4/admin/users/activity": {
             "get": {
                 "security": [
@@ -12303,6 +12374,65 @@ const docTemplate = `{
                 },
                 "username": {
                     "type": "string"
+                }
+            }
+        },
+        "trafficqos.Cap": {
+            "type": "object",
+            "properties": {
+                "domains": {
+                    "description": "Domains each also match their subdomains.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "limit_mbps": {
+                    "description": "LimitMbps is each user's cap, Mbit/s; 0 gives the priority alone.",
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "priority": {
+                    "description": "Priority is the destinations' priority; empty is low.",
+                    "type": "string"
+                }
+            }
+        },
+        "trafficqos.Settings": {
+            "type": "object",
+            "properties": {
+                "caps": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/trafficqos.Cap"
+                    }
+                },
+                "default_egress_mbps": {
+                    "description": "DefaultEgressMbps is a node's download capacity unless NodeEgressMbps\nnames it; 0 schedules within the users' speed limits only.",
+                    "type": "integer"
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "min_share_percent": {
+                    "description": "MinSharePercent is the least share of a capacity a lower class keeps\n(1 to 90).",
+                    "type": "integer"
+                },
+                "node_egress_mbps": {
+                    "description": "NodeEgressMbps is the capacity of single nodes, by node id.",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "integer"
+                    }
+                },
+                "priorities": {
+                    "description": "Priorities maps a category to high or low; a category left out is\nnormal. web and unknown take no priority: they are what no rule\nnames.",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
                 }
             }
         }
