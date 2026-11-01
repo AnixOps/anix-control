@@ -188,7 +188,6 @@ test.describe('rotate Agent credentials', () => {
     // Asking again starts from a clean form.
     await page.getByTestId('rotate-credentials').click()
     await expect(page.getByRole('textbox', { name: 'Reason' })).toHaveValue('')
-    await expect(page.getByRole('checkbox', { name: 'Also replace the node’s API key' })).not.toBeChecked()
   })
 
   test('Esc closes the result and clears the credential too', async ({ page }) => {

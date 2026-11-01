@@ -209,7 +209,7 @@ test.describe('creating a token', () => {
     expect(requests.to(TOKENS, 'POST')).toHaveLength(0)
     await expect(form.getByRole('radio', { name: 'Read' })).toBeChecked()
     await expect(form).toContainText('GET and HEAD requests on the administrator APIs')
-    await expect(form).toContainText('can’t read a node’s API key or the Telegram bot token')
+    await expect(form).toContainText('can’t read the Telegram bot token')
     await expect(form).toContainText('It still can’t manage API tokens')
     await expect(form.getByRole('combobox', { name: 'Expires' })).toContainText('90 days (recommended)')
     await expect(form.getByRole('textbox', { name: /^Name/ })).toBeFocused()
