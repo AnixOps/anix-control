@@ -308,3 +308,19 @@ func TestDevBuildTags(t *testing.T) {
 	metadata := Settings{AgentVersion: "v5.0.0-rc.15.dev.42"}.Metadata()
 	assert.Equal(t, ControlReleaseBase, metadata.Sources[MirrorGitHub])
 }
+
+func TestHotfixTags(t *testing.T) {
+	for _, tag := range []string{"v5.0.0-rc.25.hf.1", "v5.1.0-beta.2.hf.12"} {
+		assert.True(t, ReleaseTagPattern.MatchString(tag), tag)
+		assert.True(t, IsHotfix(tag), tag)
+		assert.False(t, IsDevBuild(tag), tag)
+		assert.Equal(t, ControlReleaseBase, GitHubAgentBase(tag), tag)
+	}
+	for _, tag := range []string{"v5.0.0-rc.25", "v5.0.0-rc.25.dev.3"} {
+		assert.False(t, IsHotfix(tag), tag)
+	}
+	for _, tag := range []string{"v5.0.0.hf.1", "v5.0.0-rc.hf.1", "v5.0.0-rc.25.hf", "v5.0.0-rc.25.hf.1.dev.2"} {
+		assert.False(t, ReleaseTagPattern.MatchString(tag), tag)
+		assert.False(t, IsHotfix(tag), tag)
+	}
+}

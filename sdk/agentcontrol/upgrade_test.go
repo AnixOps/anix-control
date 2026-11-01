@@ -41,6 +41,14 @@ func TestParseUpgradeRequest(t *testing.T) {
 	if err := rollback.Validate(); err != nil {
 		t.Fatalf("rollback refused: %v", err)
 	}
+	// Dev builds and hotfixes are release tags too.
+	for _, tag := range []string{"v5.0.0-rc.25.dev.3", "v5.0.0-rc.25.hf.1"} {
+		hotfix := validUpgradeRequest()
+		hotfix.TargetVersion, hotfix.PreviousVersion = tag, "v5.0.0-rc.25"
+		if err := hotfix.Validate(); err != nil {
+			t.Fatalf("%s refused: %v", tag, err)
+		}
+	}
 }
 
 func TestParseUpgradeRequestRefuses(t *testing.T) {
