@@ -886,6 +886,7 @@ func (s *SubscriptionService) addressEntries(node *model.Node, protocol *model.N
 		parsed.Name = fmt.Sprintf("%s | %s", parsed.Name, entry.Label)
 		parsed.Server = entry.Host
 		parsed.Port = port
+		rebaseANXJacket(parsed, func(jacket int) (int, bool) { return nodeentry.Port(entry, jacket) })
 		result = append(result, parsed)
 	}
 	return result
@@ -907,9 +908,30 @@ func (s *SubscriptionService) routeOffers(node *model.Node, protocol *model.Node
 		parsed.Name = fmt.Sprintf("%s | %s", parsed.Name, offer.Label)
 		parsed.Server = offer.Host
 		parsed.Port = offer.Port
+		rebaseANXJacket(parsed, func(jacket int) (int, bool) { return offer.Port, jacket == protocol.Port })
 		result = append(result, parsed)
 	}
 	return result
+}
+
+// rebaseANXJacket moves an ANX node's wg jacket port (settings
+// wg_listen_port, the link's wg_port) to where an entry or a route offers it.
+// at maps the node's jacket port to the port subscribers dial; when the entry
+// or route does not carry that port the jacket is dropped, so clients go
+// straight to A2 instead of trying a UDP port nothing listens on.
+func rebaseANXJacket(parsed *model.ParsedNode, at func(jacket int) (int, bool)) {
+	if parsed.Type != string(model.ProtocolANX) {
+		return
+	}
+	jacket := ANXWGPort(parsed.Settings)
+	if jacket == 0 {
+		return
+	}
+	if port, ok := at(jacket); ok && port > 0 && port <= 65535 {
+		parsed.Settings["wg_listen_port"] = port
+		return
+	}
+	delete(parsed.Settings, "wg_listen_port")
 }
 
 // maxRelayDepth bounds the walk up a relay chain; validateParentID keeps the
