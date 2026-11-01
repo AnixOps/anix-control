@@ -17,6 +17,18 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 BUILDER = REPO_ROOT / "packages" / "shared" / "build_package.py"
+
+
+COMMERCIAL_IDS = ("affiliate", "order", "payment")
+
+
+def commercial_present(package_id: str) -> bool:
+    """Commercial packages exist only in the commercial build (overlay)."""
+    return (REPO_ROOT / "packages" / package_id / "manifest.template.json").exists()
+
+
+def present_commercial() -> tuple:
+    return tuple(i for i in COMMERCIAL_IDS if commercial_present(i))
 BUILD_PACKAGE_SPEC = importlib.util.spec_from_file_location("shared_build_package", BUILDER)
 if BUILD_PACKAGE_SPEC is None or BUILD_PACKAGE_SPEC.loader is None:
     raise RuntimeError("cannot load shared package builder")
@@ -252,21 +264,25 @@ func main() {
     def test_v4_package_matrix_declares_agent_targets_only_for_real_agent_commands(self) -> None:
         self.assertEqual(
             [
-                ("identity-platform", ("control",)),
-                ("platform", ("control",)),
-                ("affiliate", ("control",)),
-                ("subscription", ("control",)),
-                ("proxy-node", ("control",)),
-                ("plan", ("control",)),
-                ("order", ("control",)),
-                ("payment", ("control",)),
-                ("forward", ("control",)),
-                ("ticket", ("control",)),
-                ("notification", ("control",)),
-                ("knowledge", ("control",)),
-                ("machine-telemetry", ("control", "agent")),
-                ("wireguard", ("control",)),
-                ("protocol-runtime", ("control",)),
+                entry
+                for entry in [
+                    ("identity-platform", ("control",)),
+                    ("platform", ("control",)),
+                    ("affiliate", ("control",)),
+                    ("subscription", ("control",)),
+                    ("proxy-node", ("control",)),
+                    ("plan", ("control",)),
+                    ("order", ("control",)),
+                    ("payment", ("control",)),
+                    ("forward", ("control",)),
+                    ("ticket", ("control",)),
+                    ("notification", ("control",)),
+                    ("knowledge", ("control",)),
+                    ("machine-telemetry", ("control", "agent")),
+                    ("wireguard", ("control",)),
+                    ("protocol-runtime", ("control",)),
+                ]
+                if entry[0] not in COMMERCIAL_IDS or commercial_present(entry[0])
             ],
             [(spec.package_id, spec.targets) for spec in BUILD_PACKAGE_MODULE.PACKAGE_SPECS],
         )
@@ -598,7 +614,7 @@ func main() {
             root = Path(temporary)
             signing_key, official_root = generate_ed25519_signer(root, "official")
             output = root / "packages"
-            common = [sys.executable, str(BUILDER), "--package", "order", "--version", "4.0.0", "--out", str(output)]
+            common = [sys.executable, str(BUILDER), "--package", "ticket", "--version", "4.0.0", "--out", str(output)]
             built = run_command(
                 common
                 + ["--formal-release", "--signing-key", str(signing_key), "--official-public-key", str(official_root)]
@@ -608,10 +624,10 @@ func main() {
             verified = run_command(common + ["--verify-release", "--official-public-key", str(official_root)])
             self.assertEqual(0, verified.returncode, verified.stderr.decode("utf-8", errors="replace"))
 
-            manifest = json.loads((output / "order-4.0.0.manifest.json").read_text(encoding="utf-8"))
+            manifest = json.loads((output / "ticket-4.0.0.manifest.json").read_text(encoding="utf-8"))
             self.assertNotIn("webui", manifest)
             self.assertEqual("", manifest["frontend_sha256"])
-            with tarfile.open(output / "order-4.0.0.anxp", mode="r:") as archive:
+            with tarfile.open(output / "ticket-4.0.0.anxp", mode="r:") as archive:
                 self.assertFalse([name for name in archive.getnames() if name.startswith("webui/")])
 
     def test_identity_platform_routes_match_the_v2_ownership_catalog(self) -> None:
@@ -635,8 +651,7 @@ func main() {
             "ticket",
             "plan",
             "notification",
-            "order",
-            "payment",
+            *[i for i in ("order", "payment") if commercial_present(i)],
             "subscription",
             "machine-telemetry",
             "proxy-node",
@@ -663,8 +678,8 @@ func main() {
         # Orders, payments and affiliate are official packages like the
         # others: there is no edition that leaves them out.
         ids = {spec.package_id for spec in BUILD_PACKAGE_MODULE.PACKAGE_SPECS}
-        self.assertEqual(15, len(ids))
-        self.assertTrue({"affiliate", "order", "payment", "plan"} <= ids)
+        self.assertEqual(12 + len(present_commercial()), len(ids))
+        self.assertTrue(set(present_commercial()) | {"plan"} <= ids)
         self.assertFalse(hasattr(BUILD_PACKAGE_MODULE, "edition_package_specs"))
 
     def test_all_v4_packages_materialize_signed_v2_artifacts(self) -> None:
@@ -692,9 +707,10 @@ func main() {
             artifacts = sorted(output.glob("*.anxp"))
             sboms = sorted(output.glob("*.sbom.spdx.json"))
             # --all builds every official package.
-            self.assertEqual(15, len(artifacts))
-            self.assertEqual(15, len(sboms))
-            for package_id in ("identity-platform", "plan", "affiliate", "order", "payment"):
+            expected_count = 12 + len(present_commercial())
+            self.assertEqual(expected_count, len(artifacts))
+            self.assertEqual(expected_count, len(sboms))
+            for package_id in ("identity-platform", "plan", *present_commercial()):
                 self.assertIn(output / f"{package_id}-4.0.0.anxp", artifacts)
 
             for artifact_path in artifacts:

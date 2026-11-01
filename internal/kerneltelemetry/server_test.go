@@ -2,6 +2,9 @@ package kerneltelemetry
 
 import (
 	"context"
+	"os"
+	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -82,8 +85,10 @@ func TestDashboardAnswersTheKernelsCachedSnapshot(t *testing.T) {
 	require.NoError(t, err)
 	require.EqualValues(t, 2, first.GetTotalUsers())
 	require.EqualValues(t, 1, first.GetBannedUsers())
-	require.EqualValues(t, 1, first.GetPaidOrders())
-	require.EqualValues(t, 990, first.GetTotalRevenue())
+	if orderFiguresPresent(t) {
+		require.EqualValues(t, 1, first.GetPaidOrders())
+		require.EqualValues(t, 990, first.GetTotalRevenue())
+	}
 	require.EqualValues(t, 1, first.GetTotalNodes())
 	require.EqualValues(t, 3, first.GetOnlineUsers(), "the alive set leaves the kernel as a count")
 	require.EqualValues(t, 12, first.GetTotalTrafficUsed())
@@ -124,4 +129,14 @@ func TestDashboardAnswersTheKernelsError(t *testing.T) {
 	require.Equal(t, "count trojan nodes: SQL logic error: no such table: v2_server_trojan (1)", status.Convert(err).Message())
 	_, err = cache.Get(service.CacheKeyDashboardStats)
 	require.ErrorIs(t, err, cache.ErrKeyNotFound)
+}
+
+// orderFiguresPresent reports whether this tree has the order figures
+// (internal/service/order_stats.go belongs to the commercial set).
+func orderFiguresPresent(t *testing.T) bool {
+	t.Helper()
+	_, source, _, ok := runtime.Caller(0)
+	require.True(t, ok)
+	_, err := os.Stat(filepath.Join(filepath.Dir(source), "..", "service", "order_stats.go"))
+	return err == nil
 }

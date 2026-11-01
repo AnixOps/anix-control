@@ -35,7 +35,13 @@ func TestFrontendAPIEndpoints_AreRegistered(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, endpoints)
 
+	commercial := commercialPackagesPresent(t)
 	for _, ep := range endpoints {
+		if !commercial && isCommercialEndpoint(ep.Path) {
+			// The pages for these endpoints are still in the web app; the
+			// commercial build serves the routes (anix-control-commercial).
+			continue
+		}
 		fullPath := "/api/v2" + ep.Path
 		if !strings.HasPrefix(ep.Path, "/") {
 			fullPath = "/api/v2/" + ep.Path
@@ -127,4 +133,33 @@ func loadFrontendAPIEndpoints(relPaths []string) ([]frontendAPIEndpoint, error) 
 	})
 
 	return endpoints, nil
+}
+
+// commercialPackagesPresent reports whether this tree has the commercial
+// packages (the commercial build overlays them).
+func commercialPackagesPresent(t *testing.T) bool {
+	t.Helper()
+	_, currentFile, _, ok := runtime.Caller(0)
+	require.True(t, ok)
+	_, err := os.Stat(filepath.Join(filepath.Dir(currentFile), "..", "..", "packages", "payment", "manifest.template.json"))
+	return err == nil
+}
+
+// commercialEndpointPrefixes are the API paths the commercial packages serve:
+// payment, orders, coupons and invite commission (admin invite codes are not
+// among them).
+var commercialEndpointPrefixes = []string{
+	"/admin/orders", "/user/order", "/admin/coupon", "/user/coupon",
+	"/admin/payment", "/payment", "/user/payment",
+	"/admin/invite/config", "/admin/invite/stats", "/admin/invite/withdrawals",
+	"/user/invite",
+}
+
+func isCommercialEndpoint(path string) bool {
+	for _, prefix := range commercialEndpointPrefixes {
+		if path == prefix || strings.HasPrefix(path, prefix+"/") || strings.HasPrefix(path, prefix+"?") {
+			return true
+		}
+	}
+	return false
 }

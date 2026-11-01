@@ -199,6 +199,11 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			admin.GET("/traffic/user-ranking", registeredPackageRoute(v2PackageGateway.Serve, "machine-telemetry", "telemetry.admin.traffic.user_ranking.get", adminHandler.GetUserTrafficRanking))
 			admin.GET("/system/info", registeredPackageRoute(v2PackageGateway.Serve, "machine-telemetry", "telemetry.admin.system.info.get", adminHandler.GetSystemInfo))
 
+			// 邀请码管理 (注册邀请码，社区版保留)
+			admin.GET("/invite/codes", v2PackageGateway.Serve)
+			admin.POST("/invite/codes", v2PackageGateway.Serve)
+			admin.DELETE("/invite/codes/:id", v2PackageGateway.Serve)
+
 			// 用户管理
 			admin.POST("/users", v2PackageGateway.Serve)
 			admin.GET("/users", v2PackageGateway.Serve)

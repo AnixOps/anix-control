@@ -40,8 +40,6 @@ func TestOrderPaymentAndAffiliateRoutesReachTheirPackages(t *testing.T) {
 		routeID string
 	}{
 		{path: "/api/v2/user/plan", routeID: "plan.user.plan.get"},
-		{path: "/api/v2/user/order", routeID: "order.user.order.get"},
-		{path: "/api/v2/payment/methods", routeID: "payment.payment.methods.get"},
 	} {
 		t.Run(test.routeID, func(t *testing.T) {
 			router, cfg, host := setupV2PackageRouter(t)

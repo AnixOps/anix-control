@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -50,9 +51,11 @@ func TestPackageRouteDefaultsGate(t *testing.T) {
 	var rehearsed [][3]string
 	require.NoError(t, json.Unmarshal(raw, &rehearsed))
 	// 130 rehearsed, less the four backup routes removed with the backup
-	// settings (docs/reference/backups.md) and the three v3 forward routes
-	// removed with the v4.1 forwarding runtime.
-	require.Len(t, rehearsed, 118)
+	// settings (docs/reference/backups.md), the three v3 forward routes
+	// removed with the v4.1 forwarding runtime and the 43 routes of the
+	// commercial packages, which the commercial build adds back (it merges
+	// them into this file and into the list). The two lists agree below.
+	require.Len(t, rehearsed, defaults.RouteCount())
 	want := make([]string, 0, len(rehearsed))
 	for _, row := range rehearsed {
 		require.Contains(t, []string{"read", "write"}, row[2], row[1])
@@ -67,11 +70,13 @@ func TestPackageRouteDefaultsGate(t *testing.T) {
 	sort.Strings(want)
 	sort.Strings(got)
 	assert.Equal(t, want, got, "config/package-route-defaults.json must list exactly the rehearsed routes")
-	assert.Equal(t, 118, defaults.RouteCount())
+	assert.Equal(t, len(rehearsed), defaults.RouteCount())
 
 	// The packages and batches the owner signed off, at the rehearsed
 	// release.
-	require.Len(t, defaults.Packages, 13)
+	// Ten packages in a community build; the commercial build adds order,
+	// payment and affiliate.
+	require.GreaterOrEqual(t, len(defaults.Packages), 10)
 	for _, pkg := range defaults.Packages {
 		require.GreaterOrEqual(t, pkg.Batch, 1, pkg.PackageID)
 		require.LessOrEqual(t, pkg.Batch, len(rehearsedPackages), pkg.PackageID)
@@ -146,13 +151,15 @@ func TestPackageReleaseAtLeast(t *testing.T) {
 func TestPackageRouteDefaultsSummary(t *testing.T) {
 	summary, err := PackageRouteDefaultsSummary()
 	require.NoError(t, err)
-	assert.Contains(t, summary, "the 118 rehearsed routes of 13 packages")
+	defaults, err := LoadPackageRouteDefaults()
+	require.NoError(t, err)
+	assert.Contains(t, summary, fmt.Sprintf("the %d rehearsed routes of %d packages", defaults.RouteCount(), len(defaults.Packages)))
 	assert.Contains(t, summary, "every other route runs its legacy handler")
 	assert.NotContains(t, summary, "default_mode")
 }
 
 // TestResolveEffectivePackageRouteModesOnlyDefaultsTheSet resolves every
-// package of the extraction map at a new release: exactly the 118 rehearsed
+// package of the extraction map at a new release: exactly the rehearsed
 // routes come out native; every other native-flagged route (identity's
 // among them) stays legacy.
 func TestResolveEffectivePackageRouteModesOnlyDefaultsTheSet(t *testing.T) {
@@ -176,7 +183,7 @@ func TestResolveEffectivePackageRouteModesOnlyDefaultsTheSet(t *testing.T) {
 			native++
 		}
 	}
-	assert.Equal(t, 118, native)
+	assert.Equal(t, defaults.RouteCount(), native)
 
 	// Identity group A follows the authority only.
 	modes, err := ResolveEffectivePackageRouteModes(db, IdentityPlatformPackageID, "9.9.9")
