@@ -145,7 +145,7 @@ jobs:
           picks="$(git log --reverse --format=%B "${RELEASE}..HEAD" | sed -n 's/^(cherry picked from commit \([0-9a-f]\{40\}\))$/\1/p' | tr '\n' ' ' | sed 's/ $//')"
           changed="$(git diff --name-only "${RELEASE}" HEAD)"
           # Packages of the root module the hotfix touches, tested below.
-          packages="$(grep -E '\.go$' <<<"${changed}" | grep -Ev '^(sdk|identity|control-center)/' | xargs -r -n1 dirname | sort -u | sed 's|^|./|' | tr '\n' ' ' | sed 's/ $//' || true)"
+          packages="$(grep -E '\.go$' <<<"${changed}" | grep -Ev '^(sdk|identity)/' | xargs -r -n1 dirname | sort -u | sed 's|^|./|' | tr '\n' ' ' | sed 's/ $//' || true)"
           {
             echo "branch=${branch}"
             echo "control_sha=$(git rev-parse HEAD)"

@@ -58,9 +58,6 @@ important parts, in request order:
   over gRPC: the `anix.agent.v1` control stream for signed package lifecycle
   work, plus the legacy `v2board` panel-node services and UniProxy HTTP for
   compatibility.
-- **Control Center** (`control-center/`): a separate Go module, web, Flutter,
-  and Cloudflare Workers app that manages plugins through `/api/v2/login` and
-  `/api/v3`.
 
 ## Startup Paths
 

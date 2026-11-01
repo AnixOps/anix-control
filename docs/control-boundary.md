@@ -22,7 +22,6 @@ It does not own the private execution plane.
 
 Boundary:
 - `anix-control`: public control plane, plugin kernel, persistence, and admin UI
-- `control-center/` (in this repository): Control Center clients (CLI/TUI, Vue web, Flutter) and their Cloudflare Workers API; a separate Go module that talks to Control over its public `/api/v2` and `/api/v3` APIs
 - `anix-agent` (separate repository `AnixOps/anix-agent`): proxy-node, forwarding, and package runtime on nodes; Control talks to it over gRPC using the Agent contract it owns in `github.com/AnixOps/anix-control/sdk` (`sdk/api/agent/v1`) and imports no anix-agent module; `github.com/AnixOps/anix-agent/sdk` is frozen at v1.1.0
 - `NodeX` and legacy clean-agent paths: compatibility runtimes being consolidated into AnixOps Agent
 
@@ -121,7 +120,7 @@ guide and contract are archived in [`archive/`](archive/README.md).
 
 The root should stay NodeX-like:
 - short README
-- source directories (including the self-contained `control-center/` app)
+- source directories
 - deploy/config entrypoints
 - no ad-hoc sample YAML or scratch logs
 

@@ -106,11 +106,6 @@ config/docker/nginx/ssl/
 /migrate
 v2board.bak.*
 
-# control-center/ keeps its own .gitignore. Re-include source directories that
-# the root binary (v2board) and logs/ patterns above would otherwise hide.
-!/control-center/internal/plugins/v2board/
-!/control-center/mobile/lib/features/logs/
-
 # Build output of `go build` in the repository root or in a package's host
 # directory. packages/<id>/control/ itself is source (the hosts are libraries
 # Control links), so only the binary a build leaves inside it is ignored.

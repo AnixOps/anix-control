@@ -317,7 +317,7 @@ def self_test() -> None:
     check(["packages/identity-platform/native/auth.go"], {"code", "db", "modules", "packages"})
     check([workflow], everything)
     check([".github/actions/setup/action.yml"], everything)
-    check([".github/workflows/control-center.yml"], {"code"})
+    check([".github/workflows/sdk-sync.yml"], {"code"})
     check([".github/BRANCH_PROTECTION.md"], set())
     check(["go.sum"], everything)
     check(["internal/handler/ticket.go"], everything, event="push")

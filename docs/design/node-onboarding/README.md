@@ -314,6 +314,6 @@ owner runs the command on a real VPS against the production panel.
 ## Not In Scope
 
 Users, plans, subscriptions, payments, tickets, the forward route engine
-itself, and the separate `control-center/workers` application. One machine
+itself. One machine
 serving as both a proxy node and a forward node needs two installs today and
 stays that way.
