@@ -150,7 +150,7 @@ test.describe('nodes', () => {
     await expect(row('jp-tokyo-01').getByTestId('node-connection')).toHaveText('Offline')
     await expect(row('sg-01').getByTestId('node-connection')).toHaveText('Offline')
     await expect(row('us-lax-01').getByTestId('node-certificate')).toContainText('Expired')
-    await expect(row('de-fra-01').getByTestId('node-connection')).toHaveText('Third-party')
+    await expect(row('de-fra-01').getByTestId('node-connection')).toHaveText('Offline')
     await expect(row('kr-sel-01').getByTestId('node-certificate')).toContainText('Revoked')
     await expect(row('au-syd-01').getByTestId('node-connection')).toHaveText('Offline')
   })
