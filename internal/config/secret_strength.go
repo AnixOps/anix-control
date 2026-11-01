@@ -6,7 +6,7 @@ import (
 )
 
 // MinSharedSecretBytes is the length below which a shared secret (jwt.secret,
-// app.api_token, grpc.api_token) is reported as weak at startup. A shorter one
+// app.api_token) is reported as weak at startup. A shorter one
 // still works: refusing to start would break every installation that has one.
 const MinSharedSecretBytes = 32
 
@@ -23,7 +23,6 @@ func (c *Config) SecretStrengthWarnings() []string {
 	secrets := []struct{ setting, env, value string }{
 		{"jwt.secret", EnvPrefix + "JWT_SECRET", c.JWT.Secret},
 		{"app.api_token", EnvPrefix + "APP_API_TOKEN", c.App.APIToken},
-		{"grpc.api_token", EnvPrefix + "GRPC_API_TOKEN", c.GRPC.APIToken},
 	}
 	var warnings []string
 	for _, s := range secrets {

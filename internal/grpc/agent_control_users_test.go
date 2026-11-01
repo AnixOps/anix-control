@@ -14,7 +14,6 @@ import (
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	agentv1pb "github.com/AnixOps/anix-control/sdk/api/agent/v1"
-	pb "github.com/AnixOps/anix-control/v5/api/grpc/v2boardpb"
 	"github.com/AnixOps/anix-control/v5/internal/cache"
 	"github.com/AnixOps/anix-control/v5/internal/config"
 	"github.com/AnixOps/anix-control/v5/internal/database"
@@ -157,7 +156,7 @@ func newAgentUsersEnvironment(t *testing.T, initDatabase func(t *testing.T)) *ag
 
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
-	server := grpc.NewServer(grpc.ChainStreamInterceptor(StreamAuthInterceptor("", "")))
+	server := grpc.NewServer()
 	agentv1pb.RegisterAgentControlServiceServer(server, newTestAgentControlServer(NewAgentControlManager()))
 	errCh := serveGRPCServerForTest(t, server, listener)
 	conn, err := grpc.NewClient(listener.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -205,14 +204,17 @@ func (e *agentUsersEnvironment) seedUsers(t *testing.T, served int) {
 	require.NoError(t, subscriber.RecordChangesTx(e.db, ids, false, time.Now()))
 }
 
-// legacyUserIDs is the set the v2board GetUsers RPC gives the node.
-func (e *agentUsersEnvironment) legacyUserIDs(t *testing.T) []uint64 {
+// activeUserIDs is the set of users the node serves
+// (service.ActiveUsersForNodeQuery), in id order.
+func (e *agentUsersEnvironment) activeUserIDs(t *testing.T) []uint64 {
 	t.Helper()
-	response, err := NewUserGRPCServer().GetUsers(withNodeCaller(context.Background(), e.nodeID()), &pb.UserListRequest{NodeId: e.nodeID()})
+	node, err := service.NewNodeService().GetNode(uint(e.nodeID()))
 	require.NoError(t, err)
-	ids := make([]uint64, 0, len(response.Users))
-	for _, user := range response.Users {
-		ids = append(ids, uint64(user.Id))
+	var users []model.User
+	require.NoError(t, service.ActiveUsersForNodeQuery(database.GetDB(), node.GroupID, time.Now()).Order("id").Find(&users).Error)
+	ids := make([]uint64, 0, len(users))
+	for _, user := range users {
+		ids = append(ids, uint64(user.ID))
 	}
 	return ids
 }
@@ -321,8 +323,8 @@ func TestAgentControlUsersResyncAndResume(t *testing.T) {
 	forEachUsersDatabase(t, func(t *testing.T, environment *agentUsersEnvironment) {
 		environment.seedUsers(t, 5)
 		latest := environment.cursor(t)
-		legacy := environment.legacyUserIDs(t)
-		require.Equal(t, []uint64{1, 2, 3, 4, 5}, legacy)
+		active := environment.activeUserIDs(t)
+		require.Equal(t, []uint64{1, 2, 3, 4, 5}, active)
 
 		for _, test := range []struct {
 			name   string
@@ -340,7 +342,7 @@ func TestAgentControlUsersResyncAndResume(t *testing.T) {
 					assert.Equal(t, latest, page.Cursor, "page %d", i)
 					assert.Empty(t, page.RemovedUserIds)
 				}
-				assert.Equal(t, legacy, upsertIDs(pages), "the deltas and the legacy pull give the node the same users")
+				assert.Equal(t, active, upsertIDs(pages), "the deltas give the node the users it serves")
 				for _, user := range pages[0].Upserts {
 					assert.Equal(t, "uuid-"+strconv.FormatUint(user.UserId, 10), user.Uuid)
 					assert.Equal(t, int64(100), user.SpeedLimitMbps)
@@ -364,7 +366,7 @@ func TestAgentControlUsersResyncAndResume(t *testing.T) {
 			pages := recvPages(t, stream)
 			require.Len(t, pages, 3)
 			assert.True(t, pages[0].Full)
-			assert.Equal(t, legacy, upsertIDs(pages))
+			assert.Equal(t, active, upsertIDs(pages))
 		})
 		t.Run("known cursor", func(t *testing.T) {
 			stream, helloAck, cancel := environment.openUsersSession(t, usersCapabilities(), changes[2].ID)
@@ -415,7 +417,7 @@ func TestAgentControlUsersFollowTheChangeLog(t *testing.T) {
 		assert.Equal(t, environment.cursor(t), delta.Cursor)
 		assert.Equal(t, []uint64{9}, upsertIDs([]*agentv1pb.UserDelta{delta}))
 		assert.Equal(t, []uint64{2}, delta.RemovedUserIds)
-		assert.Equal(t, []uint64{1, 3, 9}, environment.legacyUserIDs(t))
+		assert.Equal(t, []uint64{1, 3, 9}, environment.activeUserIDs(t))
 
 		// Five changes at once, in batches of 3: a user changed twice is
 		// sent once per batch.
@@ -452,7 +454,7 @@ func TestAgentControlUsersFollowANodeGroupChange(t *testing.T) {
 		assert.Equal(t, []uint64{104}, upsertIDs([]*agentv1pb.UserDelta{second}))
 		assert.Empty(t, second.RemovedUserIds)
 		assert.Equal(t, environment.cursor(t), second.Cursor)
-		assert.Equal(t, []uint64{104}, environment.legacyUserIDs(t))
+		assert.Equal(t, []uint64{104}, environment.activeUserIDs(t))
 
 		// Saving the same group records nothing.
 		cursor := environment.cursor(t)

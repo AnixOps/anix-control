@@ -1,5 +1,5 @@
 .PHONY: build build-packages run claim-link clean test test-unit test-e2e test-coverage test-coverage-html test-frontend
-.PHONY: pre-deploy deploy docker-build docker-run lint vet fmt bench grpc-gen swagger
+.PHONY: pre-deploy deploy docker-build docker-run lint vet fmt bench swagger
 .PHONY: test-quick test-clean test-summary test-grpc test-cmd test-all test-coverage-all
 
 # 版本信息
@@ -248,15 +248,6 @@ docker-stop:
 	docker stop anix-control || true
 	docker rm anix-control || true
 
-# ==========================================
-# gRPC 相关
-# ==========================================
-
-# 生成 gRPC 代码
-grpc-gen:
-	@echo "Generating gRPC code..."
-	bash api/grpc/gen.sh
-
 # 生成 Swagger 文档
 swagger:
 	@echo "Generating Swagger docs..."
@@ -320,5 +311,4 @@ help:
 	@echo "  make lint           - 代码检查"
 	@echo "  make vet            - go vet"
 	@echo "  make swagger        - 生成 Swagger 文档"
-	@echo "  make grpc-gen       - 生成 gRPC 代码"
 	@echo "  make clean          - 清理编译产物"

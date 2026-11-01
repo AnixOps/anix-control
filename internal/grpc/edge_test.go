@@ -106,16 +106,6 @@ func TestEdgeAddressNeedsAValidAddress(t *testing.T) {
 	assert.Equal(t, "", remoteHost(edgeContext(edgeForwardedForHeader, "not-an-ip")))
 }
 
-// GetPeerAddr (the v4 node registration's address) follows the same rule: the
-// node's address through the edge, "unknown" without one, and host:port on
-// a direct connection.
-func TestGetPeerAddrFollowsTheEdge(t *testing.T) {
-	assert.Equal(t, "203.0.113.7", GetPeerAddr(edgeContext(edgeForwardedForHeader, "203.0.113.7")))
-	assert.Equal(t, "unknown", GetPeerAddr(edgeContext()))
-	assert.Equal(t, "198.51.100.9:40000", GetPeerAddr(directContext("198.51.100.9", edgeForwardedForHeader, "203.0.113.7")),
-		"a header on a direct connection is not the address")
-}
-
 // The listener admits its proxies and nobody else: a stranger's connection
 // is closed before the gRPC layer sees it.
 func TestEdgeListenerAdmitsOnlyItsProxies(t *testing.T) {

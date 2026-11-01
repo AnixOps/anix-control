@@ -113,7 +113,7 @@ func legacyCounters() string {
 // one-time credential and negotiates every data-plane capability on the
 // mTLS stream needs no legacy HTTP or WebSocket path: configuration, users,
 // heartbeats, runtime health and system status, traffic, logs, maintenance
-// events, the alive list (UniProxy alivelist) and diagnostic tasks all flow
+// events, the alive list and diagnostic tasks all flow
 // on the stream, plugin releases download from AgentArtifacts by the
 // certificate, with the side effects of the legacy paths, and no legacy
 // channel is served or refused.
@@ -182,14 +182,14 @@ func TestAgentStreamUnderRequiredNeedsNoLegacyPath(t *testing.T) {
 		"Control offers exactly what the Agent listed and serves")
 	agent := newStreamAgent(t, stream, nodeID, helloAck.SessionId)
 
-	// Configuration (UniProxy config, the WebSocket's config_update).
+	// Configuration (config.v1).
 	snapshot := agent.await("config").GetConfig()
 	require.NotZero(t, snapshot.GetConfigRevision())
 	agent.send("config-status", 0, &agentv1pb.AgentToControl{Payload: &agentv1pb.AgentToControl_ConfigStatus{ConfigStatus: &agentv1pb.ConfigStatus{
 		ConfigRevision: snapshot.GetConfigRevision(), ConfigHash: snapshot.GetConfigHash(), Applied: true,
 	}}})
 
-	// Users (UniProxy user, the WebSocket's user_update and user_ban).
+	// Users (users.v1).
 	delta := agent.await("users").GetUsers()
 	require.True(t, delta.GetFull())
 	require.True(t, delta.GetLastPage())
@@ -211,13 +211,13 @@ func TestAgentStreamUnderRequiredNeedsNoLegacyPath(t *testing.T) {
 		RuntimeHealthy: false, RuntimeError: "wg0 is down", ObservedAtUnixMs: time.Now().UnixMilli(),
 	}}})
 
-	// Traffic and online IPs (UniProxy push and alive), then logs.
+	// Traffic and online IPs (reports.v1), then logs.
 	agent.send("traffic", 0, &agentv1pb.AgentToControl{Payload: &agentv1pb.AgentToControl_Traffic{Traffic: &agentv1pb.TrafficReport{
 		BatchId: "node:proxy-1:boot:1", Users: []*agentv1pb.UserTraffic{{UserId: 7, UploadBytes: 100, DownloadBytes: 200}},
 		Online: []*agentv1pb.OnlineUser{{UserId: 7, Ips: []string{"203.0.113.7"}}}, WindowEndUnixMs: time.Now().UnixMilli(),
 	}}})
 	assert.True(t, agent.await("report_ack").GetReportAck().GetApplied())
-	// The alive list (UniProxy alivelist) counts the online IP the report
+	// The alive list counts the online IP the report
 	// carried, from the same source.
 	for {
 		alive := agent.await("alive_list").GetAliveList()

@@ -215,20 +215,6 @@ enum anixops.network.v1.TransportRole.TRANSPORT_ROLE_ACCEPT = 2
 enum anixops.network.v1.TransportRole.TRANSPORT_ROLE_DIAL = 1
 enum anixops.network.v1.TransportRole.TRANSPORT_ROLE_LOCAL = 3
 enum anixops.network.v1.TransportRole.TRANSPORT_ROLE_UNSPECIFIED = 0
-enum v2board.ConfigChangeNotification.ChangeType.NODE_CONFIG = 1
-enum v2board.ConfigChangeNotification.ChangeType.PROTOCOL_CONFIG = 3
-enum v2board.ConfigChangeNotification.ChangeType.UNKNOWN = 0
-enum v2board.ConfigChangeNotification.ChangeType.USER_LIST = 2
-enum v2board.HealthCheckResponse.ServingStatus.NOT_SERVING = 2
-enum v2board.HealthCheckResponse.ServingStatus.SERVING = 1
-enum v2board.HealthCheckResponse.ServingStatus.UNKNOWN = 0
-enum v2board.UserChangeNotification.ChangeType.BANNED = 5
-enum v2board.UserChangeNotification.ChangeType.CREATED = 1
-enum v2board.UserChangeNotification.ChangeType.DELETED = 3
-enum v2board.UserChangeNotification.ChangeType.TRAFFIC_RESET = 4
-enum v2board.UserChangeNotification.ChangeType.UNBANNED = 6
-enum v2board.UserChangeNotification.ChangeType.UNKNOWN = 0
-enum v2board.UserChangeNotification.ChangeType.UPDATED = 2
 field anix.agent.v1.AgentCertificate.certificate_der = 1 optional bytes
 field anix.agent.v1.AgentCertificate.node = 4 optional string
 field anix.agent.v1.AgentCertificate.not_after_unix = 6 optional int64
@@ -1731,115 +1717,6 @@ field anixops.packagebridge.v1.WebSocketFrame.data = 2 optional bytes oneof valu
 field anixops.packagebridge.v1.WebSocketFrame.open = 1 optional anixops.packagebridge.v1.WebSocketOpen oneof value
 field anixops.packagebridge.v1.WebSocketOpen.capability = 1 optional bytes
 field anixops.packagebridge.v1.WebSocketOpen.operation = 2 optional string
-field v2board.BaseConfig.pull_interval = 2 optional int32
-field v2board.BaseConfig.push_interval = 1 optional int32
-field v2board.ConfigChangeNotification.node_id = 2 optional uint32
-field v2board.ConfigChangeNotification.payload = 4 optional bytes
-field v2board.ConfigChangeNotification.timestamp = 3 optional int64
-field v2board.ConfigChangeNotification.type = 1 optional v2board.ConfigChangeNotification.ChangeType
-field v2board.ConfigSyncRequest.last_sync_time = 2 optional int64
-field v2board.ConfigSyncRequest.node_id = 1 optional uint32
-field v2board.ConfigSyncResponse.config = 2 optional v2board.NodeConfigResponse
-field v2board.ConfigSyncResponse.has_changes = 1 optional bool
-field v2board.ConfigSyncResponse.sync_time = 4 optional int64
-field v2board.ConfigSyncResponse.users = 3 repeated v2board.UserInfo
-field v2board.HealthCheckRequest.node_id = 1 optional uint32
-field v2board.HealthCheckRequest.version = 2 optional string
-field v2board.HealthCheckResponse.server_version = 2 optional string
-field v2board.HealthCheckResponse.status = 1 optional v2board.HealthCheckResponse.ServingStatus
-field v2board.HealthCheckResponse.timestamp = 3 optional int64
-field v2board.NodeConfigRequest.node_id = 1 optional uint32
-field v2board.NodeConfigResponse.ExtraEntry.key = 1 optional string
-field v2board.NodeConfigResponse.ExtraEntry.value = 2 optional string
-field v2board.NodeConfigResponse.NetworkSettingsEntry.key = 1 optional string
-field v2board.NodeConfigResponse.NetworkSettingsEntry.value = 2 optional string
-field v2board.NodeConfigResponse.TlsSettingsEntry.key = 1 optional string
-field v2board.NodeConfigResponse.TlsSettingsEntry.value = 2 optional string
-field v2board.NodeConfigResponse.base_config = 13 optional v2board.BaseConfig
-field v2board.NodeConfigResponse.cipher = 10 optional string
-field v2board.NodeConfigResponse.extra = 16 repeated map<string,string>
-field v2board.NodeConfigResponse.flow = 11 optional string
-field v2board.NodeConfigResponse.host = 3 optional string
-field v2board.NodeConfigResponse.network = 8 optional string
-field v2board.NodeConfigResponse.network_settings = 9 repeated map<string,string>
-field v2board.NodeConfigResponse.node_type = 1 optional string
-field v2board.NodeConfigResponse.routes = 14 repeated v2board.Route
-field v2board.NodeConfigResponse.send_through = 15 optional string
-field v2board.NodeConfigResponse.server_key = 12 optional string
-field v2board.NodeConfigResponse.server_name = 5 optional string
-field v2board.NodeConfigResponse.server_port = 4 optional int32
-field v2board.NodeConfigResponse.tls = 6 optional int32
-field v2board.NodeConfigResponse.tls_settings = 7 repeated map<string,string>
-field v2board.NodeConfigResponse.type = 2 optional string
-field v2board.NodeLogBatchRequest.logs = 2 repeated v2board.NodeLogEntry
-field v2board.NodeLogBatchRequest.node_id = 1 optional uint32
-field v2board.NodeLogEntry.fields_json = 5 optional string
-field v2board.NodeLogEntry.level = 1 optional string
-field v2board.NodeLogEntry.message = 3 optional string
-field v2board.NodeLogEntry.source = 2 optional string
-field v2board.NodeLogEntry.timestamp = 4 optional int64
-field v2board.NodeLogEntry.trace_id = 6 optional string
-field v2board.NodeRegisterRequest.auth_key = 1 optional string
-field v2board.NodeRegisterRequest.host = 3 optional string
-field v2board.NodeRegisterRequest.name = 2 optional string
-field v2board.NodeRegisterRequest.port = 4 optional int32
-field v2board.NodeRegisterRequest.server_os = 6 optional string
-field v2board.NodeRegisterRequest.server_version = 5 optional string
-field v2board.NodeRegisterRequest.supported_protocols = 7 repeated string
-field v2board.NodeRegisterResponse.api_key = 2 optional string
-field v2board.NodeRegisterResponse.message = 4 optional string
-field v2board.NodeRegisterResponse.node_id = 1 optional uint32
-field v2board.NodeRegisterResponse.secret = 3 optional string
-field v2board.NodeStatusRequest.cpu_usage = 2 optional double
-field v2board.NodeStatusRequest.disk_usage = 4 optional double
-field v2board.NodeStatusRequest.download = 8 optional int64
-field v2board.NodeStatusRequest.memory_usage = 3 optional double
-field v2board.NodeStatusRequest.node_id = 1 optional uint32
-field v2board.NodeStatusRequest.online_users = 6 optional int32
-field v2board.NodeStatusRequest.upload = 7 optional int64
-field v2board.NodeStatusRequest.uptime = 5 optional int64
-field v2board.OnlineData.ips = 1 repeated string
-field v2board.OnlineData.timestamp = 2 optional int64
-field v2board.OnlineReportRequest.OnlineEntry.key = 1 optional uint32
-field v2board.OnlineReportRequest.OnlineEntry.value = 2 optional v2board.OnlineData
-field v2board.OnlineReportRequest.node_id = 1 optional uint32
-field v2board.OnlineReportRequest.online = 2 repeated map<uint32,v2board.OnlineData>
-field v2board.Route.action = 2 optional string
-field v2board.Route.match = 1 optional string
-field v2board.StatusResponse.code = 3 optional int32
-field v2board.StatusResponse.message = 2 optional string
-field v2board.StatusResponse.success = 1 optional bool
-field v2board.TrafficData.download = 2 optional int64
-field v2board.TrafficData.upload = 1 optional int64
-field v2board.TrafficReportRequest.TrafficsEntry.key = 1 optional uint32
-field v2board.TrafficReportRequest.TrafficsEntry.value = 2 optional v2board.TrafficData
-field v2board.TrafficReportRequest.node_id = 1 optional uint32
-field v2board.TrafficReportRequest.traffics = 2 repeated map<uint32,v2board.TrafficData>
-field v2board.TrafficReportResponse.BalancesEntry.key = 1 optional uint32
-field v2board.TrafficReportResponse.BalancesEntry.value = 2 optional int64
-field v2board.TrafficReportResponse.balances = 3 repeated map<uint32,int64>
-field v2board.TrafficReportResponse.message = 2 optional string
-field v2board.TrafficReportResponse.success = 1 optional bool
-field v2board.UserChangeNotification.timestamp = 3 optional int64
-field v2board.UserChangeNotification.type = 1 optional v2board.UserChangeNotification.ChangeType
-field v2board.UserChangeNotification.user = 2 optional v2board.UserInfo
-field v2board.UserInfo.ExtraEntry.key = 1 optional string
-field v2board.UserInfo.ExtraEntry.value = 2 optional string
-field v2board.UserInfo.device_limit = 4 optional int32
-field v2board.UserInfo.expired_at = 5 optional int64
-field v2board.UserInfo.extra = 9 repeated map<string,string>
-field v2board.UserInfo.id = 1 optional uint32
-field v2board.UserInfo.speed_limit = 3 optional int64
-field v2board.UserInfo.transfer_enable = 6 optional int64
-field v2board.UserInfo.used_download = 8 optional int64
-field v2board.UserInfo.used_upload = 7 optional int64
-field v2board.UserInfo.uuid = 2 optional string
-field v2board.UserListRequest.node_id = 1 optional uint32
-field v2board.UserListRequest.page = 2 optional int32
-field v2board.UserListRequest.page_size = 3 optional int32
-field v2board.UserListResponse.total = 2 optional int64
-field v2board.UserListResponse.updated_at = 3 optional int64
-field v2board.UserListResponse.users = 1 repeated v2board.UserInfo
 rpc anix.agent.v1.AgentArtifacts.DownloadPluginArtifact(anix.agent.v1.DownloadPluginArtifactRequest) returns (stream anix.agent.v1.PluginArtifactChunk)
 rpc anix.agent.v1.AgentArtifacts.GetPluginManifest(anix.agent.v1.GetPluginManifestRequest) returns (anix.agent.v1.GetPluginManifestResponse)
 rpc anix.agent.v1.AgentControlService.ControlStream(stream anix.agent.v1.AgentToControl) returns (stream anix.agent.v1.ControlToAgent)
@@ -1936,19 +1813,3 @@ rpc anixops.packagebridge.v1.KernelPackageBridge.Heartbeat(anixops.packagebridge
 rpc anixops.packagebridge.v1.KernelPackageBridge.Invoke(anixops.packagebridge.v1.InvokeRequest) returns (anixops.packagebridge.v1.InvokeResponse)
 rpc anixops.packagebridge.v1.KernelPackageBridge.LeaseStorage(anixops.packagebridge.v1.LeaseStorageRequest) returns (anixops.packagebridge.v1.LeaseStorageResponse)
 rpc anixops.packagebridge.v1.KernelPackageBridge.OpenWebSocket(stream anixops.packagebridge.v1.WebSocketFrame) returns (stream anixops.packagebridge.v1.WebSocketFrame)
-rpc v2board.ConfigSyncService.ConfigChanges(stream v2board.ConfigChangeNotification) returns (stream v2board.StatusResponse)
-rpc v2board.ConfigSyncService.FullSync(v2board.ConfigSyncRequest) returns (v2board.ConfigSyncResponse)
-rpc v2board.ConfigSyncService.SyncConfig(v2board.ConfigSyncRequest) returns (v2board.ConfigSyncResponse)
-rpc v2board.HealthService.Check(v2board.HealthCheckRequest) returns (v2board.HealthCheckResponse)
-rpc v2board.HealthService.Watch(stream v2board.HealthCheckRequest) returns (stream v2board.HealthCheckResponse)
-rpc v2board.NodeLogService.ReportLogs(v2board.NodeLogBatchRequest) returns (v2board.StatusResponse)
-rpc v2board.NodeService.GetConfig(v2board.NodeConfigRequest) returns (v2board.NodeConfigResponse)
-rpc v2board.NodeService.Register(v2board.NodeRegisterRequest) returns (v2board.NodeRegisterResponse)
-rpc v2board.NodeService.ReportStatus(v2board.NodeStatusRequest) returns (v2board.StatusResponse)
-rpc v2board.NodeService.StatusStream(stream v2board.NodeStatusRequest) returns (stream v2board.NodeConfigResponse)
-rpc v2board.TrafficService.OnlineStream(stream v2board.OnlineReportRequest) returns (stream v2board.StatusResponse)
-rpc v2board.TrafficService.ReportOnline(v2board.OnlineReportRequest) returns (v2board.StatusResponse)
-rpc v2board.TrafficService.ReportTraffic(v2board.TrafficReportRequest) returns (v2board.TrafficReportResponse)
-rpc v2board.TrafficService.TrafficStream(stream v2board.TrafficReportRequest) returns (stream v2board.TrafficReportResponse)
-rpc v2board.UserService.GetUsers(v2board.UserListRequest) returns (v2board.UserListResponse)
-rpc v2board.UserService.UserChanges(stream v2board.UserChangeNotification) returns (stream v2board.StatusResponse)

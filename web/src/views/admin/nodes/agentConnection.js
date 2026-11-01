@@ -4,7 +4,7 @@
 // of one page, the node page for one node; both join the answer to the v2
 // node by its inventory name, `proxy-<id>` (Node, not ForwardNode).
 
-export const CONNECTION_TYPES = Object.freeze(['mtls_stream', 'third_party', 'offline'])
+export const CONNECTION_TYPES = Object.freeze(['mtls_stream', 'offline'])
 export const CERTIFICATE_STATES = Object.freeze(['valid', 'revoked', 'expired', 'none'])
 
 // The inventory's name of a proxy node.
@@ -18,9 +18,8 @@ export function indexTransports(inventory) {
   return new Map(nodes.filter(node => node && node.node).map(node => [String(node.node), node]))
 }
 
-// The chip's tone. A mutual-TLS stream is the only Agent channel; third-party
-// node software is not an Agent channel at all; offline is plain, because the
-// node's status badge already says so.
+// The chip's tone. A mutual-TLS stream is the only Agent channel; offline is
+// plain, because the node's status badge already says so.
 export function connectionTone(type) {
   switch (type) {
     case 'mtls_stream': return 'success'

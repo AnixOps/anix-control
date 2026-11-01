@@ -14,7 +14,7 @@ It owns:
   内置包, and nothing imports, upgrades or switches route modes. Agent plugin
   dispatch and topology execution are off until M4
 - user, plan, order, ticket, knowledge, and subscription data
-- public proxy-node inventory and UniProxy-compatible APIs
+- public proxy-node inventory
 - the forwarding control plane: the v4.2 forwarding area (`/admin/forward/*`)
   on the forward package's `/api/v4/forward/*` API
 

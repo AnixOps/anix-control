@@ -15,7 +15,7 @@
 </template>
 
 <script setup>
-// The connection-type chip of a node: mTLS stream, third-party or offline. Until the inventory answers (or when it has no row
+// The connection-type chip of a node: mTLS stream or offline. Until the inventory answers (or when it has no row
 // for the node) the cell is a dash; when the request failed it says so.
 import { computed } from 'vue'
 import UiBadge from '@/ui/UiBadge.vue'

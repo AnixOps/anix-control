@@ -25,15 +25,13 @@ import (
 // Reports on the Agent Control stream (A2-5; PROTOCOL.md, "Reports"). When
 // an agent's Hello lists reports.v1, the HelloAck advertises it back and the
 // stream accepts TrafficReport, LogBatch and NodeStatus for the stream's
-// node. Each report goes where the legacy path of the same node puts it:
+// node. Each report goes:
 //
-//   - traffic through RecordNodeTrafficReport's transaction, as ReportTraffic
-//     and the UniProxy push, so a byte is counted once whichever path
-//     carried it;
-//   - online IPs into the alive set ReportOnline feeds;
-//   - logs into v2_node_log, as NodeLogService.ReportLogs;
-//   - status into the node's heartbeat and runtime-health columns, as
-//     ReportStatus.
+//   - traffic through RecordNodeTrafficReport's transaction, so a byte is
+//     counted once;
+//   - online IPs into the node's alive set;
+//   - logs into v2_node_log;
+//   - status into the node's heartbeat and runtime-health columns.
 //
 // A TrafficReport or LogBatch is applied at most once per node and batch
 // id (internal/agentreports) and answered with a ReportAck:
@@ -356,4 +354,39 @@ func (s *AgentControlGRPCServer) applyNodeStatus(node agentcontrol.AgentNode, re
 		s.liveness.written(node)
 	}
 	return err
+}
+
+func normalizeLoggedAt(raw int64) *time.Time {
+	if raw <= 0 {
+		return nil
+	}
+
+	var t time.Time
+	if raw > 1_000_000_000_000 {
+		t = time.UnixMilli(raw)
+	} else {
+		t = time.Unix(raw, 0)
+	}
+	return &t
+}
+
+// nodeLogRuntimeHealth reads the runtime health a WireGuard log entry's
+// fields carry: the last entry with runtime_healthy wins.
+func nodeLogRuntimeHealth(inputs []service.NodeLogInput) (healthy *bool, runtimeError string) {
+	for _, input := range inputs {
+		if !strings.EqualFold(strings.TrimSpace(input.Source), "wireguard") || strings.TrimSpace(input.FieldsJSON) == "" {
+			continue
+		}
+		var fields struct {
+			RuntimeHealthy *bool  `json:"runtime_healthy"`
+			RuntimeError   string `json:"runtime_error"`
+		}
+		if err := json.Unmarshal([]byte(input.FieldsJSON), &fields); err != nil || fields.RuntimeHealthy == nil {
+			continue
+		}
+		value := *fields.RuntimeHealthy
+		healthy = &value
+		runtimeError = fields.RuntimeError
+	}
+	return healthy, runtimeError
 }

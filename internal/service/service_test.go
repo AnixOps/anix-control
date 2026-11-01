@@ -622,127 +622,6 @@ func (s *UserServiceTestSuite) TestGetByID() {
 	assert.Equal(s.T(), user.Email, found.Email)
 }
 
-func (s *UserServiceTestSuite) TestGetByUUID() {
-	user := &model.User{
-		Email:          "uuiduser@example.com",
-		Password:       "hash",
-		Token:          "token456",
-		UUID:           "uuid456",
-		TransferEnable: 10737418240,
-	}
-	database.Get().Create(user)
-
-	found, err := s.svc.GetByUUID("uuid456")
-	assert.NoError(s.T(), err)
-	assert.Equal(s.T(), user.Email, found.Email)
-}
-
-func (s *UserServiceTestSuite) TestGetByToken() {
-	user := &model.User{
-		Email:          "tokenuser@example.com",
-		Password:       "hash",
-		Token:          "token789",
-		UUID:           "uuid789",
-		TransferEnable: 10737418240,
-	}
-	database.Get().Create(user)
-
-	found, err := s.svc.GetByToken("token789")
-	assert.NoError(s.T(), err)
-	assert.Equal(s.T(), user.Email, found.Email)
-}
-
-func (s *UserServiceTestSuite) TestUpdateTraffic() {
-	user := &model.User{
-		Email:          "traffic@example.com",
-		Password:       "hash",
-		Token:          "token-traffic",
-		UUID:           "uuid-traffic",
-		TransferEnable: 10737418240,
-		U:              0,
-		D:              0,
-	}
-	database.Get().Create(user)
-
-	// 更新流量
-	err := s.svc.UpdateTraffic(user.ID, 1024, 2048)
-	assert.NoError(s.T(), err)
-
-	// 验证
-	found, _ := s.svc.GetByID(user.ID)
-	assert.Equal(s.T(), int64(1024), found.U)
-	assert.Equal(s.T(), int64(2048), found.D)
-}
-
-func (s *UserServiceTestSuite) TestUpdateTrafficRejectsNegativeTraffic() {
-	user := &model.User{
-		Email:          "traffic-negative@example.com",
-		Password:       "hash",
-		Token:          "token-traffic-negative",
-		UUID:           "uuid-traffic-negative",
-		TransferEnable: 10737418240,
-		U:              100,
-		D:              200,
-	}
-	assert.NoError(s.T(), database.Get().Create(user).Error)
-
-	err := s.svc.UpdateTraffic(user.ID, -1, 20)
-	assert.ErrorIs(s.T(), err, ErrNegativeTraffic)
-
-	found, _ := s.svc.GetByID(user.ID)
-	assert.Equal(s.T(), int64(100), found.U)
-	assert.Equal(s.T(), int64(200), found.D)
-}
-
-func (s *UserServiceTestSuite) TestBatchUpdateTraffic() {
-	// 创建多个用户
-	users := []*model.User{
-		{Email: "batch1@example.com", Password: "hash", Token: "batch1", UUID: "batch1", TransferEnable: 10737418240},
-		{Email: "batch2@example.com", Password: "hash", Token: "batch2", UUID: "batch2", TransferEnable: 10737418240},
-	}
-	for _, u := range users {
-		database.Get().Create(u)
-	}
-
-	// 批量更新流量
-	traffics := map[uint][2]int64{
-		users[0].ID: {1024, 2048},
-		users[1].ID: {2048, 4096},
-	}
-	err := s.svc.BatchUpdateTraffic(traffics)
-	assert.NoError(s.T(), err)
-
-	// 验证
-	found1, _ := s.svc.GetByID(users[0].ID)
-	assert.Equal(s.T(), int64(1024), found1.U)
-
-	found2, _ := s.svc.GetByID(users[1].ID)
-	assert.Equal(s.T(), int64(2048), found2.U)
-}
-
-func (s *UserServiceTestSuite) TestBatchUpdateTrafficRejectsNegativeTrafficAtomically() {
-	users := []*model.User{
-		{Email: "batch-negative-1@example.com", Password: "hash", Token: "batch-negative-1", UUID: "batch-negative-1", TransferEnable: 10737418240, U: 10, D: 20},
-		{Email: "batch-negative-2@example.com", Password: "hash", Token: "batch-negative-2", UUID: "batch-negative-2", TransferEnable: 10737418240, U: 30, D: 40},
-	}
-	for _, u := range users {
-		assert.NoError(s.T(), database.Get().Create(u).Error)
-	}
-
-	err := s.svc.BatchUpdateTraffic(map[uint][2]int64{
-		users[0].ID: {100, 200},
-		users[1].ID: {-1, 300},
-	})
-	assert.ErrorIs(s.T(), err, ErrNegativeTraffic)
-
-	found1, _ := s.svc.GetByID(users[0].ID)
-	found2, _ := s.svc.GetByID(users[1].ID)
-	assert.Equal(s.T(), int64(10), found1.U)
-	assert.Equal(s.T(), int64(20), found1.D)
-	assert.Equal(s.T(), int64(30), found2.U)
-	assert.Equal(s.T(), int64(40), found2.D)
-}
-
 func (s *UserServiceTestSuite) TestBanUnban() {
 	user := &model.User{
 		Email:          "ban@example.com",
@@ -3392,26 +3271,6 @@ func (s *UserServiceTestSuite) TestGetStats_DBError() {
 	assert.Nil(s.T(), stats)
 }
 
-func (s *UserServiceTestSuite) TestGetByEmail() {
-	user := &model.User{
-		Email:          "emailtest@example.com",
-		Password:       "hash",
-		Token:          "email-token",
-		UUID:           "email-uuid",
-		TransferEnable: 10737418240,
-	}
-	database.Get().Create(user)
-
-	found, err := s.svc.GetByEmail("emailtest@example.com")
-	assert.NoError(s.T(), err)
-	assert.Equal(s.T(), user.ID, found.ID)
-}
-
-func (s *UserServiceTestSuite) TestGetByEmail_NotFound() {
-	_, err := s.svc.GetByEmail("nonexistent@example.com")
-	assert.Error(s.T(), err)
-}
-
 // Additional SystemConfigService Tests
 func (s *SystemConfigServiceTestSuite) TestGetByGroup() {
 	assert.NoError(s.T(), s.svc.Set("group_key1", "value1", "string", "testgroup", ""))
@@ -3483,83 +3342,6 @@ func (s *NotificationServiceTestSuite) TestBroadcast() {
 // Additional UserService Tests for 0% coverage functions
 // =====================================================
 
-func (s *UserServiceTestSuite) SkipTestGetActiveUsersByGroupID() {
-	// Create a plan and user with group
-	plan := &model.Plan{
-		Name:           "Active Test Plan",
-		TransferEnable: 1073741824,
-	}
-	database.Get().Create(plan)
-
-	groupID := uint(1)
-	user := &model.User{
-		Email:          "activegroup@test.com",
-		Password:       "hashed",
-		Token:          "token-active-group",
-		UUID:           "uuid-active-group",
-		TransferEnable: 1073741824,
-		PlanID:         &plan.ID,
-		GroupID:        &groupID,
-	}
-	database.Get().Create(user)
-
-	users, err := s.svc.GetActiveUsersByGroupID(groupID)
-	assert.NoError(s.T(), err)
-	assert.GreaterOrEqual(s.T(), len(users), 1)
-}
-
-func (s *UserServiceTestSuite) SkipTestGetActiveUsers() {
-	// Skipped: GetActiveUsers uses MySQL UNIX_TIMESTAMP() which doesn't work in SQLite
-	// Create active user
-	plan := &model.Plan{
-		Name:           "Active Plan",
-		TransferEnable: 1073741824,
-	}
-	database.Get().Create(plan)
-
-	expiredAt := time.Now().Add(24 * time.Hour).Unix()
-	user := &model.User{
-		Email:          "active@test.com",
-		Password:       "hashed",
-		Token:          "token-active",
-		UUID:           "uuid-active",
-		TransferEnable: 1073741824,
-		PlanID:         &plan.ID,
-		ExpiredAt:      &expiredAt,
-	}
-	database.Get().Create(user)
-
-	users, err := s.svc.GetActiveUsers()
-	assert.NoError(s.T(), err)
-	assert.GreaterOrEqual(s.T(), len(users), 1)
-}
-
-func (s *UserServiceTestSuite) TestGetActiveUsersForNode() {
-	// Create user with group
-	groupID := uint(1)
-	plan := &model.Plan{
-		Name:           "Node Active Plan",
-		TransferEnable: 1073741824,
-	}
-	database.Get().Create(plan)
-
-	user := &model.User{
-		Email:          "nodeactive@test.com",
-		Password:       "hashed",
-		Token:          "token-node-active",
-		UUID:           "uuid-node-active",
-		TransferEnable: 1073741824,
-		PlanID:         &plan.ID,
-		GroupID:        &groupID,
-	}
-	database.Get().Create(user)
-
-	users, err := s.svc.GetActiveUsersForNode(&groupID)
-	assert.NoError(s.T(), err)
-	// May be empty if no node_group mapping, but function should run
-	_ = users
-}
-
 func (s *UserServiceTestSuite) TestGetList() {
 	// Create multiple users
 	for i := 1; i <= 3; i++ {
@@ -3577,17 +3359,6 @@ func (s *UserServiceTestSuite) TestGetList() {
 	assert.NoError(s.T(), err)
 	assert.GreaterOrEqual(s.T(), result.Total, int64(3))
 	assert.GreaterOrEqual(s.T(), len(result.List), 3)
-}
-
-func (s *UserServiceTestSuite) TestCreate() {
-	user := &model.User{
-		Email:          "newuser@test.com",
-		Password:       "hashed",
-		TransferEnable: 1073741824,
-	}
-	err := s.svc.Create(user)
-	assert.NoError(s.T(), err)
-	assert.NotZero(s.T(), user.ID)
 }
 
 func (s *UserServiceTestSuite) TestUpdate_NotFound() {
@@ -4022,14 +3793,6 @@ func (s *ServerServiceTestSuite) TestGetUserOnlineCount() {
 	_ = count
 }
 
-func (s *ServerServiceTestSuite) TestGetAllUsersOnlineCount() {
-	// Note: This test requires cache.Keys to support multi-wildcard patterns
-	result, err := s.svc.GetAllUsersOnlineCount()
-	assert.NoError(s.T(), err)
-	// Result may be empty due to pattern matching limitations
-	_ = result
-}
-
 func (s *ServerServiceTestSuite) TestBuildNodeConfig_VMess() {
 	tlsSettings := `{"server_name":"config.example.com"}`
 	networkSettings := `{"path":"/ws"}`
@@ -4145,32 +3908,6 @@ func (s *ServerServiceTestSuite) TestBuildNodeConfig_WithRoutes() {
 	assert.Equal(s.T(), "geoip:cn", routes[0]["match"])
 }
 
-func (s *ServerServiceTestSuite) TestParseTrafficData() {
-	data := map[string]any{
-		"1": []any{float64(1024), float64(2048)},
-		"2": []any{float64(2048), float64(4096)},
-	}
-
-	result, err := ParseTrafficData(data)
-	assert.NoError(s.T(), err)
-	assert.Len(s.T(), result, 2)
-	assert.Equal(s.T(), int64(1024), result[1][0])
-	assert.Equal(s.T(), int64(2048), result[1][1])
-}
-
-func (s *ServerServiceTestSuite) TestParseOnlineData() {
-	data := map[string]any{
-		"1": []any{"192.168.1.100", "192.168.1.101"},
-		"2": []any{"192.168.1.102"},
-	}
-
-	result, err := ParseOnlineData(data)
-	assert.NoError(s.T(), err)
-	assert.Len(s.T(), result, 2)
-	assert.Len(s.T(), result[1], 2)
-	assert.Equal(s.T(), "192.168.1.100", result[1][0])
-}
-
 func TestServerService(t *testing.T) {
 	suite.Run(t, new(ServerServiceTestSuite))
 }
@@ -4251,49 +3988,6 @@ func TestTelegramBotService(t *testing.T) {
 // =====================================================
 // Additional UserService Tests
 // =====================================================
-
-func (s *UserServiceTestSuite) TestGetActiveUsersByGroupID() {
-	// Create plan and group
-	plan := &model.Plan{
-		Name:           "Active Users Plan",
-		TransferEnable: 1073741824,
-	}
-	planSvc := NewPlanService()
-	require.NoError(s.T(), planSvc.Create(plan))
-	groupID := uint(1)
-	user := &model.User{
-		Email:          "activegroup@test.com",
-		Password:       "hashed",
-		Token:          "token-active-group",
-		UUID:           "uuid-active-group",
-		TransferEnable: 1073741824,
-		PlanID:         &plan.ID,
-		GroupID:        &groupID,
-		Banned:         0,
-	}
-	assert.NoError(s.T(), s.svc.Create(user))
-	// GetActiveUsersByGroupID runs without error
-	users, err := s.svc.GetActiveUsersByGroupID(groupID)
-	_ = users
-	_ = err
-}
-
-func (s *UserServiceTestSuite) TestGetActiveUsers() {
-	// Create active user
-	user := &model.User{
-		Email:          "active@test.com",
-		Password:       "hashed",
-		Token:          "token-active",
-		UUID:           "uuid-active",
-		TransferEnable: 10737418240,
-		Banned:         0,
-	}
-	assert.NoError(s.T(), s.svc.Create(user))
-	// GetActiveUsers runs without error
-	users, err := s.svc.GetActiveUsers()
-	_ = users
-	_ = err
-}
 
 // =====================================================
 // Additional ServerService Tests

@@ -75,6 +75,14 @@ definitions:
       source_node_id:
         type: integer
     type: object
+  handler.AdminBindRequest:
+    properties:
+      email:
+        type: string
+      telegram_id: {}
+      user_id:
+        type: integer
+    type: object
   handler.BroadcastRequest:
     properties:
       message:
@@ -4078,6 +4086,72 @@ paths:
       summary: 修改订阅分组中某协议生成的节点
       tags:
       - 管理端-订阅
+  /api/v4/admin/telegram/bindings:
+    post:
+      consumes:
+      - application/json
+      description: 管理员把用户 (user_id 或 email) 绑定到一个 Telegram 用户 ID。不受机器人「允许绑定」开关限制。
+      parameters:
+      - description: 绑定
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.AdminBindRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 手动绑定 Telegram
+      tags:
+      - 管理端-通知
+  /api/v4/admin/telegram/bindings/{user_id}:
+    delete:
+      parameters:
+      - description: 用户 ID
+        in: path
+        name: user_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 解除用户的 Telegram 绑定
+      tags:
+      - 管理端-通知
   /api/v4/admin/traffic/categories:
     get:
       description: '访问统计判定流量类型的规则: categories 为类型 (video、music、messaging、social、gaming、ai、download、web、unknown);
@@ -6333,17 +6407,16 @@ paths:
   /api/v4/kernel/agents/transports:
     get:
       description: 'Lists every proxy and forward node with the transport its agent
-        was last seen on (mtls-stream, uniproxy, v2board-grpc), its agent version,
-        its newest valid agent certificate, when it was last seen and its live Agent
-        Control stream session (authentication mtls, certificate serial, expiry and
-        SAN, negotiated capabilities). Each node also carries certificate_state (valid,
-        revoked, expired or none), last_certificate (its newest certificate in any
-        state: serial, issued_at, not_after, renew_after, revoked_at and revoke_reason)
-        and connection (type mtls_stream, third_party or offline, the transport and
-        when it was last seen). node=proxy-7 (repeatable or comma separated, at most
-        200) keeps the named nodes. summary.ready_for_required (with required_reasons
-        and required_blockers, computed over every node) is false while an enabled
-        node has never enrolled.'
+        was last seen on (mtls-stream), its agent version, its newest valid agent
+        certificate, when it was last seen and its live Agent Control stream session
+        (authentication mtls, certificate serial, expiry and SAN, negotiated capabilities).
+        Each node also carries certificate_state (valid, revoked, expired or none),
+        last_certificate (its newest certificate in any state: serial, issued_at,
+        not_after, renew_after, revoked_at and revoke_reason) and connection (type
+        mtls_stream or offline, the transport and when it was last seen). node=proxy-7
+        (repeatable or comma separated, at most 200) keeps the named nodes. summary.ready_for_required
+        (with required_reasons and required_blockers, computed over every node) is
+        false while an enabled node has never enrolled.'
       parameters:
       - collectionFormat: multi
         description: only these nodes (proxy-<id> or forward-<id>), repeatable or
@@ -7911,6 +7984,68 @@ paths:
       summary: 公开配置
       tags:
       - 系统
+  /api/v4/user/telegram:
+    delete:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 解除我的 Telegram 绑定
+      tags:
+      - 用户-通知
+    get:
+      description: 是否已绑定、绑定的 Telegram 账号，以及机器人是否可用于绑定。
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 我的 Telegram 绑定
+      tags:
+      - 用户-通知
+  /api/v4/user/telegram/bind-link:
+    post:
+      description: 一次性绑定链接 (t.me 深链接)，10 分钟内有效。打开后机器人收到 /start <绑定码> 并绑定发送者的 Telegram
+        账号。
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties: true
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取 Telegram 绑定链接
+      tags:
+      - 用户-通知
   /api/v4/user/traffic/destinations:
     get:
       description: 当前用户最近 hours 小时 (默认 24, 最多 4320) 各目标域名与流量类型的上下行字节与连接数, 字段同 GET

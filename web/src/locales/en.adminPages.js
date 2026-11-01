@@ -579,9 +579,7 @@ export default {
   // listed every node's channel is gone).
   agentTransports: {
     transports: {
-      'mtls-stream': 'mTLS stream',
-      uniproxy: 'UniProxy',
-      'v2board-grpc': 'v2board gRPC'
+      'mtls-stream': 'mTLS stream'
     }
   }
 }

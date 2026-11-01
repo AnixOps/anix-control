@@ -46,109 +46,16 @@ func (s *UserService) GetByID(id uint) (*model.User, error) {
 	return &user, nil
 }
 
-// GetByUUID 根据UUID获取用户
-func (s *UserService) GetByUUID(uuid string) (*model.User, error) {
-	var user model.User
-	err := s.db.Preload("Plan").Where("uuid = ?", uuid).First(&user).Error
-	if err != nil {
-		return nil, err
-	}
-	return &user, nil
-}
-
-// GetByToken 根据Token获取用户
-func (s *UserService) GetByToken(token string) (*model.User, error) {
-	var user model.User
-	err := s.db.Preload("Plan").Where("token = ?", token).First(&user).Error
-	if err != nil {
-		return nil, err
-	}
-	return &user, nil
-}
-
-// GetByEmail 根据Email获取用户
-func (s *UserService) GetByEmail(email string) (*model.User, error) {
-	var user model.User
-	err := s.db.Preload("Plan").Where("email = ?", email).First(&user).Error
-	if err != nil {
-		return nil, err
-	}
-	return &user, nil
-}
-
-// GetActiveUsersByGroupID 获取指定分组的有效用户
-func (s *UserService) GetActiveUsersByGroupID(groupID uint) ([]model.User, error) {
-	var users []model.User
-	now := time.Now().Unix()
-	err := s.db.Preload("Plan").
-		Where("group_id = ?", groupID).
-		Where("banned = 0").
-		Where("(expired_at IS NULL OR expired_at > ?)", now).
-		Where("(u + d) < transfer_enable").
-		Find(&users).Error
-	return users, err
-}
-
-// GetActiveUsers 获取所有有效用户
-func (s *UserService) GetActiveUsers() ([]model.User, error) {
-	var users []model.User
-	now := time.Now().Unix()
-	err := s.db.Preload("Plan").
-		Where("banned = 0").
-		Where("(expired_at IS NULL OR expired_at > ?)", now).
-		Where("(u + d) < transfer_enable").
-		Find(&users).Error
-	return users, err
-}
-
 // ActiveUsersForNodeQuery restricts a v2_user query to the users a node
 // serves: the active subscribers (subscriber.Active) of the node's plan
-// group, or every active subscriber when groupID is nil. The legacy user
-// pulls (UniProxy user, v2board GetUsers) and the Agent Control user deltas
-// read the same query, so a node gets the same set on either transport.
+// group, or every active subscriber when groupID is nil. The Agent Control
+// user deltas read it.
 func ActiveUsersForNodeQuery(db *gorm.DB, groupID *uint, now time.Time) *gorm.DB {
 	query := subscriber.Active(db, now)
 	if groupID != nil {
 		query = query.Where("group_id = ?", *groupID)
 	}
 	return query
-}
-
-// GetActiveUsersForNode 获取节点可用的有效用户
-// groupID 为 nil 时返回所有有效用户，否则返回指定分组的用户
-func (s *UserService) GetActiveUsersForNode(groupID *uint) ([]*model.User, error) {
-	var users []*model.User
-	err := ActiveUsersForNodeQuery(s.db.Preload("Plan"), groupID, time.Now()).Find(&users).Error
-	return users, err
-}
-
-// UpdateTraffic 更新用户流量
-func (s *UserService) UpdateTraffic(userID uint, upload, download int64) error {
-	if err := ValidateTrafficDelta(upload, download); err != nil {
-		return err
-	}
-	return s.db.Transaction(func(tx *gorm.DB) error {
-		_, err := subscriber.RecordTrafficTx(tx, "", []subscriber.TrafficEntry{{UserID: userID, Upload: upload, Download: download}}, time.Now())
-		return err
-	})
-}
-
-// BatchUpdateTraffic 批量更新用户流量
-func (s *UserService) BatchUpdateTraffic(traffics map[uint][2]int64) error {
-	for _, traffic := range traffics {
-		if err := ValidateTrafficDelta(traffic[0], traffic[1]); err != nil {
-			return err
-		}
-	}
-
-	entries := make([]subscriber.TrafficEntry, 0, len(traffics))
-	for userID, traffic := range traffics {
-		entries = append(entries, subscriber.TrafficEntry{UserID: userID, Upload: traffic[0], Download: traffic[1]})
-	}
-	return s.db.Transaction(func(tx *gorm.DB) error {
-		_, err := subscriber.RecordTrafficTx(tx, "", entries, time.Now())
-		return err
-	})
 }
 
 // UserListParams 用户列表查询参数
@@ -313,16 +220,6 @@ func (s *UserService) nameListedPlans(users []UserListItem) error {
 		}
 	}
 	return nil
-}
-
-// Create 创建用户
-func (s *UserService) Create(user *model.User) error {
-	return s.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Create(user).Error; err != nil {
-			return err
-		}
-		return subscriber.RecordChangesTx(tx, []uint{user.ID}, false, time.Now())
-	})
 }
 
 // revokingUserFields are the user columns whose change ends the user's

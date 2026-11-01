@@ -30,16 +30,15 @@ truth for implemented, partial, planned, compatibility, and deferred features.
 - Agent-first status: nodes run `anix-agent` on the `anix.agent.v1`
   bidirectional gRPC control stream; Agent plugin dispatch and topology
   execution are off until the Agent release carries the Agent plugins (M4).
-  Legacy data-plane protocols remain available for controlled compatibility
-  and rollback.
+  The stream is the only node channel: UniProxy, the `v2board` gRPC services
+  and the node WebSocket are gone.
 
 Do not infer production completeness from a route or UI existing. Check
 [`docs/features.md`](docs/features.md), [`TODO.md`](TODO.md), and
 [`docs/audit/test-gap.md`](docs/audit/test-gap.md) before marking a feature
 complete.
 
-Control keeps REST/UniProxy, the legacy panel-node gRPC services, and existing
-WebSocket paths available as compatibility surfaces. The official packages,
+The official packages,
 `identity-platform` included, are built into the release binary: at every
 start Control verifies each one against the pinned official root, installs or
 upgrades it to the binary's version, enables it and runs its package host
@@ -142,8 +141,6 @@ as well.
 ```bash
 go test ./...
 go test -race ./...
-bash api/grpc/gen.sh
-git diff --exit-code -- api/grpc/v2boardpb
 bash config/deploy/clean_local_build_artifacts.sh --dry-run
 ```
 
@@ -208,18 +205,11 @@ rollback expectations.
 
 Some routes intentionally keep legacy or external protocol behavior:
 
-- `/api/v1/client/subscribe?token=`
 - `/{subscribe_path}/:token`
-- `/api/v1/server/UniProxy/*`
-- `/api/v2/server/UniProxy/*`
-- `/api/v2/node/register`
-- `/api/v2/node/heartbeat`
 - Telegram webhooks
 - payment callbacks/webhooks
-- forwarding agent and internal traffic upload endpoints
 
-The `v2_*` database tables, `v2board` protobuf wire namespace, and historical
-SQLite path are intentionally retained during the migration. The Go module has
+The `v2_*` database tables and historical SQLite path are intentionally retained during the migration. The Go module has
 moved to `github.com/AnixOps/anix-control/v5`.
 
 Do not change these response shapes without checking

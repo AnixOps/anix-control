@@ -106,41 +106,6 @@
       "package_route": "proxy.internal.auth_keys.post",
       "envelope": "raw",
       "transport": "http"
-    },
-    {
-      "method": "POST",
-      "legacy_path": "/api/v2/server/UniProxy/alive",
-      "package_route": "proxy.server.uniproxy.alive.post",
-      "envelope": "raw",
-      "transport": "http"
-    },
-    {
-      "method": "GET",
-      "legacy_path": "/api/v2/server/UniProxy/alivelist",
-      "package_route": "proxy.server.uniproxy.alivelist.get",
-      "envelope": "raw",
-      "transport": "http"
-    },
-    {
-      "method": "GET",
-      "legacy_path": "/api/v2/server/UniProxy/config",
-      "package_route": "proxy.server.uniproxy.config.get",
-      "envelope": "raw",
-      "transport": "http"
-    },
-    {
-      "method": "POST",
-      "legacy_path": "/api/v2/server/UniProxy/push",
-      "package_route": "proxy.server.uniproxy.push.post",
-      "envelope": "raw",
-      "transport": "http"
-    },
-    {
-      "method": "GET",
-      "legacy_path": "/api/v2/server/UniProxy/user",
-      "package_route": "proxy.server.uniproxy.user.get",
-      "envelope": "raw",
-      "transport": "http"
     }
   ]
 }

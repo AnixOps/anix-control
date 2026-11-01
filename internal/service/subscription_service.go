@@ -1122,7 +1122,7 @@ func ss2022KeyLen(cipher string) int {
 // DeriveSS2022ServerKey 复刻老 XBoard `Helper::getServerKey($timestamp, $len)`:
 // base64(substr(md5(unix秒的十进制字符串), 0, len))。md5 输出取 hex 字符串的前
 // len 个字符(不是字节), 再 base64。节点端 V2bX 用相同的 server_key, 两边必须一致。
-// 导出供 handler 层 (UniProxy 节点拉配置) 复用, 保证订阅端和节点端算出的值一致。
+// 导出供节点运行配置复用, 保证订阅端和节点端算出的值一致。
 func DeriveSS2022ServerKey(createdAt time.Time, cipher string) string {
 	keyLen := ss2022KeyLen(cipher)
 	sum := md5.Sum([]byte(strconv.FormatInt(createdAt.Unix(), 10))) // #nosec G401 -- legacy XBoard/V2bX SS2022 server_key compatibility requires MD5.

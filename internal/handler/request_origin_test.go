@@ -69,7 +69,6 @@ func (s *SubscribeHandlerTestSuite) TestSubscriptionDomainsOnly() {
 	require.NoError(s.T(), configs.Set(service.SystemConfigKeySubscribeDomains, `["sub.example.org"]`, "json", "app", ""))
 	h := NewSubscribeHandler(s.cfg)
 	s.router.GET("/s/:token", h.GetSubscription)
-	s.router.GET("/api/v1/client/subscribe", h.GetLegacySubscription)
 
 	get := func(host, target string) int {
 		request := httptest.NewRequest(http.MethodGet, target, nil)
@@ -79,16 +78,14 @@ func (s *SubscribeHandlerTestSuite) TestSubscriptionDomainsOnly() {
 		return recorder.Code
 	}
 	link := "/s/" + s.testUser.Token + "?type=json"
-	legacy := "/api/v1/client/subscribe?token=" + s.testUser.Token + "&type=json"
 
 	// Off (the default): every host answers.
 	assert.Equal(s.T(), http.StatusOK, get("panel.example.test", link))
 
 	require.NoError(s.T(), configs.Set(service.SystemConfigKeySubscribeDomainsOnly, "true", "boolean", "app", ""))
 	assert.Equal(s.T(), http.StatusNotFound, get("panel.example.test", link))
-	assert.Equal(s.T(), http.StatusNotFound, get("panel.example.test", legacy))
 	assert.Equal(s.T(), http.StatusOK, get("sub.example.org", link))
-	assert.Equal(s.T(), http.StatusOK, get("SUB.example.org:443", legacy))
+	assert.Equal(s.T(), http.StatusOK, get("SUB.example.org:443", link))
 
 	// Without a subscription domain the switch does nothing.
 	require.NoError(s.T(), configs.Set(service.SystemConfigKeySubscribeDomains, "", "string", "app", ""))

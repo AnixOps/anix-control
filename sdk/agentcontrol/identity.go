@@ -43,7 +43,7 @@ const (
 // Error codes of a refused agent client certificate, in the
 // MetadataErrorCode trailer of an Unauthenticated (or, for
 // ErrorCodeCertWrongNode on an envelope, PermissionDenied) answer of
-// ControlStream, Renew, GetTrustBundle and the v2board services. An Agent
+// ControlStream, Renew and GetTrustBundle. An Agent
 // that gets one discards the certificate and enrolls again, except for
 // ErrorCodeCertWrongNode, which names its own configuration error. A
 // transient failure (Unavailable) carries no code: retry it.

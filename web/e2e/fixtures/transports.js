@@ -29,7 +29,7 @@ const BY_ID = {
   103: { state: 'none', cert: null, connection: { type: 'offline', transport: '', last_seen_at: null } },
   104: { state: 'none', cert: null, connection: { type: 'offline', transport: '', last_seen_at: null } },
   105: { state: 'expired', cert: certificate({ serial: '105a1', issued: -12 * DAY, notAfter: -3 * DAY, renewAfter: -7 * DAY }), connection: { type: 'offline', transport: '', last_seen_at: null } },
-  106: { state: 'none', cert: null, connection: { type: 'third_party', transport: 'uniproxy', last_seen_at: iso(-120_000) } },
+  106: { state: 'none', cert: null, connection: { type: 'offline', transport: '', last_seen_at: null } },
   107: { state: 'revoked', cert: certificate({ serial: '107a1', issued: -6 * DAY, notAfter: DAY, renewAfter: -2 * DAY, revokedAt: -2 * DAY, reason: 'node disabled' }), connection: { type: 'offline', transport: '', last_seen_at: null } },
   108: mtls(108),
   109: mtls(109),
@@ -46,7 +46,7 @@ function nodeRow(id, entry) {
     id,
     name: `node-${id}`,
     enabled: id !== 107,
-    status: entry.connection.type === 'mtls_stream' ? 'mtls' : entry.connection.type === 'third_party' ? 'third-party' : 'unseen',
+    status: entry.connection.type === 'mtls_stream' ? 'mtls' : 'unseen',
     transport: entry.connection.transport,
     agent_version: 'v1.4.2',
     last_seen_at: entry.connection.last_seen_at,
@@ -68,7 +68,7 @@ export function transportsAnswer(query = {}) {
   return {
     data: {
       mode: 'preferred',
-      summary: { total: nodes.length, mtls: 0, third_party: 0, unseen: 0, ready_for_required: false, required_reasons: [], required_blockers: [] },
+      summary: { total: nodes.length, mtls: 0, unseen: 0, ready_for_required: false, required_reasons: [], required_blockers: [] },
       nodes
     }
   }

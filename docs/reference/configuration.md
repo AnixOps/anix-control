@@ -286,7 +286,7 @@ stands). The list is `internal/config/deprecated_keys.yaml`.
 | `frontend.enable` | `ANIX_CONTROL_FRONTEND_ENABLE` | still read | M2 (P11) | serves the web app from frontend.path until the web app is built into the binary |
 | `frontend.path` | `ANIX_CONTROL_FRONTEND_PATH` | still read | M2 (P11) | the web app's directory until the web app is built into the binary |
 | `frontend.port` | `ANIX_CONTROL_FRONTEND_PORT` | still read | M2 (P11) | a second plain listener of tls.mode external while listen is unset; config rewrite does not carry it, point the reverse proxy at listen; use `listen` |
-| `grpc.api_token` | `ANIX_CONTROL_GRPC_API_TOKEN` | still read | M5 (N9) | the legacy administrator token of the v2board gRPC services, removed with them |
+| `grpc.api_token` | `ANIX_CONTROL_GRPC_API_TOKEN` | ignored | M5 (N9) | the legacy administrator token of the v2board gRPC services, which are removed; the key does nothing, so remove it |
 | `grpc.enabled` | `ANIX_CONTROL_GRPC_ENABLED` | still read | M2 (P11) | turns the gRPC listener on without domain; with domain it always runs |
 | `grpc.host` | `ANIX_CONTROL_GRPC_HOST` | still read | M2 (P11) | the gRPC listener's address, until it listens on every address |
 | `grpc.tls_cert_file` | `ANIX_CONTROL_GRPC_TLS_CERT_FILE` | still read | M2 (P11) | the gRPC listener's own certificate; config rewrite turns it into tls.cert_file with tls.mode external; use `tls.cert_file` |
@@ -793,9 +793,8 @@ deleted from the configuration.
 
 - A call without a valid client certificate is refused: gRPC
   `Unauthenticated` with the trailer `x-anix-error-code: agent_mtls_required`;
-  `Enroll` takes only one-time enrollment credentials. UniProxy
-  (`/api/v1|v2/server/UniProxy/*`) and the v2board gRPC services, which
-  third-party node software (XrayR, V2bX) uses, are not affected.
+  `Enroll` takes only one-time enrollment credentials. The stream is the
+  only node channel: UniProxy and the `v2board` gRPC services were removed.
 - Agents get certificates from `anix.agent.v1.AgentEnrollment`, signed by the
   built-in CA, whose key the [root key](#the-root-key) seals; every server
   has it (with the deprecated `module_runtime.pki: external` the kernel holds

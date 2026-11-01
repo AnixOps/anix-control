@@ -3894,6 +3894,108 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v4/admin/telegram/bindings": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理员把用户 (user_id 或 email) 绑定到一个 Telegram 用户 ID。不受机器人「允许绑定」开关限制。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-通知"
+                ],
+                "summary": "手动绑定 Telegram",
+                "parameters": [
+                    {
+                        "description": "绑定",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.AdminBindRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v4/admin/telegram/bindings/{user_id}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-通知"
+                ],
+                "summary": "解除用户的 Telegram 绑定",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "用户 ID",
+                        "name": "user_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/v4/admin/traffic/categories": {
             "get": {
                 "security": [
@@ -7204,7 +7306,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Lists every proxy and forward node with the transport its agent was last seen on (mtls-stream, uniproxy, v2board-grpc), its agent version, its newest valid agent certificate, when it was last seen and its live Agent Control stream session (authentication mtls, certificate serial, expiry and SAN, negotiated capabilities). Each node also carries certificate_state (valid, revoked, expired or none), last_certificate (its newest certificate in any state: serial, issued_at, not_after, renew_after, revoked_at and revoke_reason) and connection (type mtls_stream, third_party or offline, the transport and when it was last seen). node=proxy-7 (repeatable or comma separated, at most 200) keeps the named nodes. summary.ready_for_required (with required_reasons and required_blockers, computed over every node) is false while an enabled node has never enrolled.",
+                "description": "Lists every proxy and forward node with the transport its agent was last seen on (mtls-stream), its agent version, its newest valid agent certificate, when it was last seen and its live Agent Control stream session (authentication mtls, certificate serial, expiry and SAN, negotiated capabilities). Each node also carries certificate_state (valid, revoked, expired or none), last_certificate (its newest certificate in any state: serial, issued_at, not_after, renew_after, revoked_at and revoke_reason) and connection (type mtls_stream or offline, the transport and when it was last seen). node=proxy-7 (repeatable or comma separated, at most 200) keeps the named nodes. summary.ready_for_required (with required_reasons and required_blockers, computed over every node) is false while an enabled node has never enrolled.",
                 "produces": [
                     "application/json"
                 ],
@@ -9292,6 +9394,102 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v4/user/telegram": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "是否已绑定、绑定的 Telegram 账号，以及机器人是否可用于绑定。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "用户-通知"
+                ],
+                "summary": "我的 Telegram 绑定",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "用户-通知"
+                ],
+                "summary": "解除我的 Telegram 绑定",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v4/user/telegram/bind-link": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "一次性绑定链接 (t.me 深链接)，10 分钟内有效。打开后机器人收到 /start \u003c绑定码\u003e 并绑定发送者的 Telegram 账号。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "用户-通知"
+                ],
+                "summary": "获取 Telegram 绑定链接",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/v4/user/traffic/destinations": {
             "get": {
                 "security": [
@@ -10416,6 +10614,18 @@ const docTemplate = `{
                     "type": "boolean"
                 },
                 "source_node_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "handler.AdminBindRequest": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "telegram_id": {},
+                "user_id": {
                     "type": "integer"
                 }
             }

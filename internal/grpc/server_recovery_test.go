@@ -28,7 +28,7 @@ func (panickingHealthServer) Watch(*healthpb.HealthCheckRequest, healthpb.Health
 }
 
 func TestNodeServerInterceptorChainsRecoverHandlerPanics(t *testing.T) {
-	unary, stream := NewServer(&ServerConfig{APIToken: "test"}).interceptorChains()
+	unary, stream := NewServer(&ServerConfig{}).interceptorChains()
 	listener := bufconn.Listen(1 << 20)
 	server := grpc.NewServer(grpc.ChainUnaryInterceptor(unary...), grpc.ChainStreamInterceptor(stream...))
 	healthpb.RegisterHealthServer(server, panickingHealthServer{})

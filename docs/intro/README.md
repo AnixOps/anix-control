@@ -9,7 +9,7 @@ Use this section first when you need to understand what `anix-control` owns and 
 - browser/admin UI
 - panel API
 - user, plan, order, knowledge, ticket, and subscription data
-- public proxy-node inventory and UniProxy-compatible APIs
+- public proxy-node inventory
 - the forwarding control plane (`/admin/forward/*` on the forward package's `/api/v4/forward/*`; the flux-compatible pages were removed in v4.2)
 
 It is not the private execution plane.
@@ -39,9 +39,8 @@ important parts, in request order:
   handlers and services. The legacy business domains have not moved out of
   the kernel yet (see
   [`../architecture/release-line-status.md`](../architecture/release-line-status.md)).
-- **Routes outside the package gate**: `/api/v1/server/UniProxy/*`,
-  `/{subscribe_path}/:token` (default `/s/:token`), `/api/v1/client/subscribe`,
-  and `/flow/upload` are still served directly by kernel handlers.
+- **Routes outside the package gate**: `/{subscribe_path}/:token` (default
+  `/s/:token`) is still served directly by a kernel handler.
 - **`/api/v3` kernel API**: plugin catalog, releases and artifacts,
   installations and revisioned configuration, lifecycle operations,
   node assignments, topologies, deployments, access groups, resource grants,
@@ -55,9 +54,7 @@ important parts, in request order:
 - **Nodes**: the node runtime is `anix-agent` (separate repository
   `AnixOps/anix-agent`). Control imports no anix-agent module; it owns the
   Agent contract in its SDK module (`sdk/api/agent/v1`) and talks to agents
-  over gRPC: the `anix.agent.v1` control stream for signed package lifecycle
-  work, plus the legacy `v2board` panel-node services and UniProxy HTTP for
-  compatibility.
+  only over the mTLS `anix.agent.v1` gRPC control stream.
 
 ## Startup Paths
 

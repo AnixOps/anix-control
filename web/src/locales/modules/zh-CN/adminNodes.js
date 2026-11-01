@@ -145,12 +145,10 @@ export default {
     footer: '数据来自 Agent 连接清单。实时连接只有持有该连接的 Control 进程才知道。',
     connection: {
       mtls_stream: 'mTLS 流',
-      third_party: '第三方',
       offline: '离线'
     },
     connectionHint: {
       mtls_stream: '用 Agent 证书认证的 Agent Control 流',
-      third_party: '只看到第三方节点软件（UniProxy 或 v2board gRPC），不是 Agent',
       offline: '最近五分钟内没有任何连接'
     },
     certificate: {
