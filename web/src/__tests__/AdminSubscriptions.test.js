@@ -11,6 +11,7 @@ import { answerConfirms, toastMessages } from './helpers/feedback'
 import UiHost from '@/ui/UiHost.vue'
 import Subscriptions from '@/views/admin/Subscriptions.vue'
 import SubscriptionGroup from '@/views/admin/SubscriptionGroup.vue'
+import GroupNodeEditSheet from '@/views/admin/subscriptions/GroupNodeEditSheet.vue'
 import GroupOutput from '@/views/admin/subscriptions/GroupOutput.vue'
 import GroupProtocols from '@/views/admin/subscriptions/GroupProtocols.vue'
 import GroupTemplates from '@/views/admin/subscriptions/GroupTemplates.vue'
@@ -36,13 +37,17 @@ const getSubscriptionStatsMock = vi.hoisted(() => vi.fn())
 const getMembersMock = vi.hoisted(() => vi.fn())
 const getLayoutMock = vi.hoisted(() => vi.fn())
 const saveLayoutMock = vi.hoisted(() => vi.fn())
+const getProtocolNodesMock = vi.hoisted(() => vi.fn())
 
 vi.mock('@/api/admin', () => ({
   default: adminApiMock,
   getSubscriptionStats: (...args) => getSubscriptionStatsMock(...args),
   getSubscriptionGroupMembers: (...args) => getMembersMock(...args),
   getGroupProtocolLayout: (...args) => getLayoutMock(...args),
-  saveGroupProtocolLayout: (...args) => saveLayoutMock(...args)
+  saveGroupProtocolLayout: (...args) => saveLayoutMock(...args),
+  getGroupProtocolNodes: (...args) => getProtocolNodesMock(...args),
+  saveGroupProtocolNodes: vi.fn(),
+  resetGroupNodeOverrides: vi.fn()
 }))
 
 enableAutoUnmount(afterEach)
@@ -379,6 +384,33 @@ describe('Admin subscription groups', () => {
       expect(wrapper.vm.protocols.map(row => [row.id, row.display_name])).toEqual([[3, '日本 01'], [1, ''], [2, '']])
       expect(wrapper.text()).toContain('日本 01')
       expect(wrapper.text()).toContain('HK - ss')
+    })
+
+    // Two NAT entries on the same protocol port are two subscription nodes;
+    // each row's 编辑节点 lists both so they can be named apart.
+    it('edits every entry node of a protocol from its row actions', async () => {
+      const row = { id: 9, node_id: 50, node: { name: 'KFC JP' }, name: 'ss', type: 'shadowsocks', port: 11111 }
+      adminApiMock.getSubscriptionProtocols.mockResolvedValueOnce({ data: [row] })
+      getProtocolNodesMock.mockResolvedValueOnce({ nodes: [
+        { key: '-e1', name: 'KFC JP - ss | 上海-日本', overrides: {}, defaults: { port: 31111 } },
+        { key: '-e2', name: 'KFC JP - ss | nnb-上海-日本', overrides: {}, defaults: { port: 15300 } }
+      ] })
+      const wrapper = mountSection(GroupProtocols)
+      await flushPromises()
+
+      expect(wrapper.vm.columns.map(column => column.key)).not.toContain('edit')
+      const actions = wrapper.vm.protocolActions(wrapper.vm.protocols[0])
+      expect(actions.map(action => action.key)).toEqual(['edit', 'layout', 'node'])
+      actions[0].onSelect()
+      await flushPromises()
+
+      expect(getProtocolNodesMock).toHaveBeenCalledWith(1, 9)
+      const sheet = wrapper.findComponent(GroupNodeEditSheet)
+      expect(sheet.props('open')).toBe(true)
+      expect(sheet.vm.rows.map(item => [item.key, item.title])).toEqual([
+        ['-e1', 'KFC JP - ss | 上海-日本'],
+        ['-e2', 'KFC JP - ss | nnb-上海-日本']
+      ])
     })
 
     it('keeps the server order when the layout cannot be read', async () => {

@@ -129,7 +129,6 @@ const nodeEditOpen = ref(false)
 const nodeEditProtocol = ref(null)
 
 const columns = computed(() => [
-  { key: 'edit', label: t('adminSubscriptionGroups.nodeEdit.open'), icon: Pencil, onSelect: () => { nodeEditProtocol.value = protocol; nodeEditOpen.value = true } },
   { key: 'node', label: t('adminSubscriptionGroups.protocols.node'), primary: true, sortable: true, value: protocol => protocol.node?.name || t('adminSubscriptionGroups.protocols.nodeIdFallback', { id: protocol.node_id }) },
   { key: 'display_name', label: t('adminSubscriptionGroups.layout.displayName'), secondary: true, value: protocol => protocol.display_name || defaultProtocolName(protocol) },
   { key: 'name', label: t('adminSubscriptionGroups.protocols.name'), sortable: true, breakpoint: 'lg' },
@@ -156,7 +155,10 @@ function toggleAllAvailable() {
   selectedProtocolIds.value = allSelected.value ? [] : availableProtocols.value.map(protocol => protocol.id)
 }
 
+// 编辑节点 edits each node the protocol gives in this group: one per node
+// entry (internal/nodeentry), so entries on the same port are named apart.
 const protocolActions = protocol => [
+  { key: 'edit', label: t('adminSubscriptionGroups.nodeEdit.open'), icon: Pencil, onSelect: () => { nodeEditProtocol.value = protocol; nodeEditOpen.value = true } },
   { key: 'layout', label: t('adminSubscriptionGroups.layout.rename'), icon: Pencil, onSelect: () => { layoutOpen.value = true } },
   { key: 'node', label: t('adminSubscriptionGroups.protocols.goToNode'), icon: SquareArrowOutUpRight, onSelect: () => goToNode(protocol.node_id) }
 ]
