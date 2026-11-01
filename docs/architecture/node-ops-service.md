@@ -2505,8 +2505,7 @@ it up to A2-3.
   - **Opt-in.** `ANIXOPS_AGENT_E2E=1` and an anix-agent checkout
     (`ANIXOPS_AGENT_ROOT`; `ANIXOPS_AGENT_GO` for its toolchain).
     `ANIXOPS_AGENT_E2E_POSTGRES_DSN` runs Control on a throwaway PostgreSQL
-    database (SQLite otherwise). `ANIXOPS_GOST_BIN` gives the gost forward
-    driver the pinned gost. `ANIXOPS_AGENT_E2E_LOGDIR` keeps the logs and
+    database (SQLite otherwise). `ANIXOPS_AGENT_E2E_LOGDIR` keeps the logs and
     `summary-*.json` (pass, fail or skip per scenario, with evidence).
     `ANIXOPS_AGENT_E2E_NETNS=1` is the privileged lane: run as root under
     `unshare --net`, which the test checks, with the real nftables driver.
@@ -2520,10 +2519,8 @@ it up to A2-3.
     API key, a one-time `anixagt_` credential, every compiled-in core. It
     runs the plugin supervisor and the forward component of a proxy node.
     Its GRPCHost is a TCP proxy owned by the test, which is how the suite
-    partitions it. `systemctl`, `journalctl`, `ss` and `gost` on its PATH
-    are stand-ins: the Agent never touches the host's units, and with
-    `ANIXOPS_GOST_BIN` the stand-in runs the real gost as a detached
-    process.
+    partitions it. `systemctl`, `journalctl` and `ss` on its PATH
+    are stand-ins: the Agent never touches the host's units.
   - **Scenarios** (`TestRealAgentEndToEnd`, in order):
     - enrollment with the one-time credential, which the Agent then
       deletes;
