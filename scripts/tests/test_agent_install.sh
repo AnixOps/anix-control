@@ -161,6 +161,11 @@ run_installer() {
       [[ " ${FAKE_MISSING:-} " != *" $1 "* ]] || return 1
       command -v "$1" >/dev/null 2>&1
     }
+    # The anx release signature verifies unless FAKE_SSHSIG=bad.
+    ssh-keygen() {
+      printf 'ssh-keygen %s\n' "$*" >>"${STATE}/log"
+      [[ "${FAKE_SSHSIG:-ok}" == "ok" ]]
+    }
     pkaction() { printf 'pkaction version %s\n' "${FAKE_POLKIT:-122}"; }
     # The package manager installs nftables unless FAKE_PKG_FAIL: nft is
     # then no longer missing.
@@ -295,6 +300,7 @@ run_installer() {
         */v4.2.0/anix-agent-linux-64.zip) source="${FAKE_ZIP:-${RELEASE_ZIP}}" ;;
         "${GITHUB}/v4.2.0/anix-agent-linux-64.zip.dgst") source="${RELEASE_DGST}" ;;
         */v4.2.0/anix-agent-linux-64.zip.sig) source="${FAKE_SIG:-}" ;;
+        "${CONTROL}/install/kernel/anx-node/"*) source="${STATE}/kernel/${url##*/}" ;;
       esac
       [[ -n "${source}" && -f "${source}" ]] || return 22
       cp "${source}" "${out}"
@@ -973,5 +979,55 @@ expect_status 0 "purge with a foreign anixops_fwd"
 grep -qx 'inet anixops_fwd' "${STATE}/nft-tables" || fail "--purge deleted a table without the ownership comment"
 expect_out "it has no 'anixops-forward-driver v1' comment"
 ok "uninstall --purge removes only what the Agent owns"
+
+# build_kernel makes Control's copy of a fake anx-node release in
+# STATE/kernel: the package (anx-node and anx-server), SHA256SUMS and its
+# signature.
+build_kernel() {
+  local version="$1" dist="anx-node-$1-x86_64-linux-musl" dir="${STATE}/kernel"
+  mkdir -p "${dir}/${dist}"
+  printf '#!/usr/bin/env bash\nprintf "anx-node %s\\n"\n' "${version}" >"${dir}/${dist}/anx-node"
+  printf '#!/usr/bin/env bash\nexit 0\n' >"${dir}/${dist}/anx-server"
+  chmod 0755 "${dir}/${dist}/anx-node" "${dir}/${dist}/anx-server"
+  tar -czf "${dir}/${dist}.tar.gz" -C "${dir}" "${dist}/anx-node" "${dist}/anx-server"
+  (cd "${dir}" && sha256sum "${dist}.tar.gz" "${dist}/anx-node" "${dist}/anx-server") >"${dir}/SHA256SUMS"
+  printf -- '-----BEGIN SSH SIGNATURE-----\nU1NIU0lH\n-----END SSH SIGNATURE-----\n' >"${dir}/SHA256SUMS.sig"
+}
+
+# 30. anx-node: a fresh install takes the kernel Control holds, verified,
+# and records it as the Agent's updater does; a host with a kernel keeps
+# it; a bad signature or no kernel on Control leaves the Agent installed
+# without one.
+new_root kernel
+metadata "kernel anx-node 0.1.0-alpha.9"
+build_kernel 0.1.0-alpha.9
+run_installer -u "${CONTROL}" -t "${TOKEN_A}"
+expect_status 0 "install with a kernel"
+lib="${ROOT_DIR}/usr/lib/anixops-agent"
+[[ -x "${lib}/anx-node" && -x "${lib}/anx-server" ]] || fail "anx-node or anx-server was not installed"
+grep -q '"version": "0.1.0-alpha.9"' "${lib}/anx-node.json" || fail "anx-node.json: $(cat "${lib}/anx-node.json")"
+grep -q "\"sha256\": \"$(sha256sum "${lib}/anx-node" | awk '{print $1}')\"" "${lib}/anx-node.json" || fail "anx-node.json has the wrong SHA-256"
+grep -q '"server": true' "${lib}/anx-node.json" || fail "anx-node.json does not record anx-server"
+python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "${lib}/anx-node.json" || fail "anx-node.json is not JSON"
+grep -q 'ssh-keygen -Y verify .* -n anx-release ' "${STATE}/log" || fail "the kernel signature was not checked"
+expect_out "kernel:      installed anx-node 0.1.0-alpha.9"
+metadata "kernel anx-node 0.1.0-alpha.10"
+run_installer -u "${CONTROL}" -t "${TOKEN_A}"
+expect_status 0 "reinstall with a kernel"
+expect_out "kernel:      kept the installed anx-node (0.1.0-alpha.9)"
+new_root kernel-bad
+metadata "kernel anx-node 0.1.0-alpha.9"
+build_kernel 0.1.0-alpha.9
+FAKE_SSHSIG=bad run_installer -u "${CONTROL}" -t "${TOKEN_A}"
+expect_status 0 "install with a bad kernel signature"
+[[ ! -e "${ROOT_DIR}/usr/lib/anixops-agent/anx-node" && -x "${ROOT_DIR}/usr/lib/anixops-agent/anix-agent" ]] ||
+  fail "a kernel that does not verify was installed, or the Agent was not"
+expect_out "kernel:      not installed (signature check failed)"
+new_root kernel-none
+metadata
+run_installer -u "${CONTROL}" -t "${TOKEN_A}"
+expect_status 0 "install without a kernel on Control"
+expect_out "kernel:      not installed (Control holds no anx-node release)"
+ok "the installer installs the anx-node Control holds"
 
 printf 'agent installer: %d checks passed\n' "${PASS}"

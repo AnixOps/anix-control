@@ -69,6 +69,17 @@ func validRequestWith(t *testing.T, dir string) agentcontrol.UpgradeRequest {
 	}
 }
 
+func TestKernelReleaseHeld(t *testing.T) {
+	dir := t.TempDir()
+	assert.Empty(t, KernelReleaseHeld(dir))
+	assert.Empty(t, KernelReleaseHeld(""))
+	writeKernelRelease(t, dir, "0.1.0-alpha.9")
+	assert.Equal(t, "0.1.0-alpha.9", KernelReleaseHeld(dir))
+	// Without its signature the release cannot be verified by an installer.
+	require.NoError(t, os.Remove(filepath.Join(dir, "anx-node", "0.1.0-alpha.9", SumsSignatureAssetName)))
+	assert.Empty(t, KernelReleaseHeld(dir))
+}
+
 func TestUpgradeKernelsRefuses(t *testing.T) {
 	refuse := func(t *testing.T, dir, version, control string) {
 		t.Helper()
