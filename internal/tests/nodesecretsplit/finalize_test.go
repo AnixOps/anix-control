@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/AnixOps/anix-control/v5/internal/middleware"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/nodesecrets"
 	"github.com/AnixOps/anix-control/v5/internal/packagestore"
@@ -92,7 +91,7 @@ func TestFinalizeThroughTheKernel(t *testing.T) {
 		// A tombstone presented as a key authenticates nothing.
 		gin.SetMode(gin.TestMode)
 		router := gin.New()
-		router.GET("/package", middleware.NodeAPIKeyHeaderAuth(), func(c *gin.Context) { c.Status(http.StatusOK) })
+		router.GET("/package", nodeKeyAuth(), func(c *gin.Context) { c.Status(http.StatusOK) })
 		for _, id := range []uint{f.plain.ID, f.created.ID} {
 			req := httptest.NewRequest(http.MethodGet, "/package", nil)
 			req.Header.Set("X-API-Key", nodesecrets.Tombstone(uint64(id)))

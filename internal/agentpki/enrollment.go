@@ -14,7 +14,6 @@ import (
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/modulepki"
-	"github.com/AnixOps/anix-control/v5/internal/nodesecrets"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -111,16 +110,12 @@ func (s *Service) CreateEnrollmentTokenTx(tx *gorm.DB, request TokenRequest) (st
 	return credential, row, nil
 }
 
-// Bootstrap is the credential an agent enrolls with.
+// Bootstrap is the one-time enrollment credential an agent enrolls with.
 type Bootstrap struct {
-	// Method is one of model.AgentEnrollmentMethod*.
-	Method string
-	// Node is the node the agent claims: required with a node API key or a
-	// forward token; with an enrollment credential it must match the
-	// credential's node when set.
+	// Node is the node the agent claims; when set it must be the
+	// credential's node.
 	Node agentcontrol.AgentNode
-	// Secret is the API key, the forward token or the enrollment
-	// credential. It is never stored or logged.
+	// Secret is the enrollment credential. It is never stored or logged.
 	Secret string
 }
 
@@ -152,44 +147,19 @@ func (s *Service) Enroll(ctx context.Context, request EnrollRequest) (Issued, er
 	var issued Issued
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		now := s.now().UTC()
-		var (
-			node       agentcontrol.AgentNode
-			enrollment model.AgentEnrollment
-		)
-		switch bootstrap.Method {
-		case model.AgentEnrollmentMethodCredential:
-			consumed, err := s.consumeCredential(tx, bootstrap, now)
-			if err != nil {
-				return err
-			}
-			enrollment, node = consumed, agentcontrol.AgentNode{Kind: consumed.NodeKind, ID: uint32(consumed.NodeID)} // #nosec G115 -- node ids are stored from uint32 values.
-		case model.AgentEnrollmentMethodNodeAPIKey, model.AgentEnrollmentMethodForwardToken:
-			if err := lockEnabledNode(tx, bootstrap.Node); err != nil {
-				return ErrEnrollmentRejected
-			}
-			if err := authenticateNodeCredential(tx, bootstrap); err != nil {
-				return err
-			}
-			node = bootstrap.Node
-			enrollment = model.AgentEnrollment{
-				ID: uuid.NewString(), NodeKind: node.Kind, NodeID: uint(node.ID), Cluster: s.cluster,
-				Method: bootstrap.Method, UsedAt: &now, CreatedAt: now,
-			}
-		default:
-			return ErrEnrollmentRejected
+		enrollment, err := s.consumeCredential(tx, bootstrap, now)
+		if err != nil {
+			return err
 		}
+		node := agentcontrol.AgentNode{Kind: enrollment.NodeKind, ID: uint32(enrollment.NodeID)} // #nosec G115 -- node ids are stored from uint32 values.
 		if err := lockEnabledNode(tx, node); err != nil {
 			return ErrEnrollmentRejected
 		}
 		enrollment.AgentVersion = truncate(request.AgentVersion, 64)
 		enrollment.InstanceID = truncate(request.InstanceID, 128)
-		if enrollment.Method == model.AgentEnrollmentMethodCredential {
-			if err := tx.Model(&model.AgentEnrollment{}).Where("id = ?", enrollment.ID).Updates(map[string]any{
-				"agent_version": enrollment.AgentVersion, "instance_id": enrollment.InstanceID,
-			}).Error; err != nil {
-				return err
-			}
-		} else if err := tx.Create(&enrollment).Error; err != nil {
+		if err := tx.Model(&model.AgentEnrollment{}).Where("id = ?", enrollment.ID).Updates(map[string]any{
+			"agent_version": enrollment.AgentVersion, "instance_id": enrollment.InstanceID,
+		}).Error; err != nil {
 			return err
 		}
 		signed, err := s.issue(ctx, tx, node, enrollment.ID, request.CSRDER)
@@ -246,42 +216,6 @@ func (s *Service) consumeCredential(tx *gorm.DB, bootstrap Bootstrap, now time.T
 	}
 	row.UsedAt = &now
 	return row, nil
-}
-
-// authenticateNodeCredential checks a proxy node's API key or a forward
-// node's token against the node the agent claims, as the legacy transports
-// do. Both are read through the node credential split, which applies the
-// table's phase and never matches a tombstone or the placeholder.
-func authenticateNodeCredential(tx *gorm.DB, bootstrap Bootstrap) error {
-	node := bootstrap.Node
-	switch {
-	case bootstrap.Method == model.AgentEnrollmentMethodNodeAPIKey && node.Kind == agentcontrol.NodeKindProxy && node.ID > 0:
-		row, err := nodesecrets.NodeByAPIKey(tx, bootstrap.Secret, false)
-		if err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return ErrEnrollmentRejected
-			}
-			return err
-		}
-		if row.ID != uint(node.ID) {
-			return ErrEnrollmentRejected
-		}
-		return nil
-	case bootstrap.Method == model.AgentEnrollmentMethodForwardToken && node.Kind == agentcontrol.NodeKindForward && node.ID > 0:
-		var row model.ForwardNode
-		if err := tx.Select("id", "api_token").Where("id = ?", node.ID).First(&row).Error; err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return ErrEnrollmentRejected
-			}
-			return err
-		}
-		if !nodesecrets.ForwardNodeTokenMatches(tx, &row, bootstrap.Secret) {
-			return ErrEnrollmentRejected
-		}
-		return nil
-	default:
-		return ErrEnrollmentRejected
-	}
 }
 
 // lockEnabledNode is requireEnabledNode that also locks the node's row until

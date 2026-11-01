@@ -4,16 +4,12 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
-	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
-	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -25,7 +21,6 @@ import (
 	"testing"
 	"time"
 
-	agentv1pb "github.com/AnixOps/anix-control/sdk/api/agent/v1"
 	agentplugin "github.com/AnixOps/anix-control/sdk/plugincontrol"
 	"github.com/AnixOps/anix-control/v5/internal/cache"
 	"github.com/AnixOps/anix-control/v5/internal/config"
@@ -33,7 +28,6 @@ import (
 	controlgrpc "github.com/AnixOps/anix-control/v5/internal/grpc"
 	"github.com/AnixOps/anix-control/v5/internal/handler"
 	"github.com/AnixOps/anix-control/v5/internal/identitybridge"
-	"github.com/AnixOps/anix-control/v5/internal/middleware"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/plugincontrol"
 	"github.com/AnixOps/anix-control/v5/internal/pluginhost"
@@ -123,12 +117,7 @@ func TestAgentPluginPackageCrossRepositoryE2E(t *testing.T) {
 		LifecycleGeneration: 1,
 	}).Error)
 
-	const (
-		nodeAPIKey      = "cross-repository-package-node-key"
-		wrongNodeAPIKey = "cross-repository-wrong-node-key"
-	)
-	node := createCrossRepositoryPluginNode(t, db, "cross-repository-package-node", nodeAPIKey)
-	createCrossRepositoryPluginNode(t, db, "cross-repository-wrong-node", wrongNodeAPIKey)
+	node := createCrossRepositoryPluginNode(t, db, "cross-repository-package-node")
 	installation, assignment, configJSON := createCrossRepositoryPluginAssignment(t, db, node, manifest)
 	chain, err := service.QueueAgentAssignmentLifecycle(db, assignment, time.Now())
 	require.NoError(t, err)
@@ -139,23 +128,9 @@ func TestAgentPluginPackageCrossRepositoryE2E(t *testing.T) {
 	require.Equal(t, chain.Update.ID, chain.Enable.DependsOnOperationID)
 
 	httpServer := newCrossRepositoryPluginHTTPServer(t, db, cfg, publicKey, manifest)
-	installConfig, err := service.BuildAgentPluginInstallConfig(db, node.ID, manifest.ID, manifest.Version)
-	require.NoError(t, err)
-	assertCrossRepositoryWrongNodeRejected(t, httpServer.URL, wrongNodeAPIKey, installConfig)
 
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	require.NoError(t, err)
 	manager := controlgrpc.NewAgentControlManager()
-	grpcServer := googlegrpc.NewServer()
-	// The production server advertises a conservative 20-second heartbeat. The
-	// process fixture uses this test-only stream wrapper to reduce the interval
-	// to one second, keeping this release gate deterministic without changing
-	// the production heartbeat contract.
-	agentv1pb.RegisterAgentControlServiceServer(grpcServer, &crossRepositoryFastHeartbeatServer{
-		delegate: controlgrpc.NewMetadataAuthControlServer(manager),
-	})
-	serverErr := serveCrossRepositoryGRPCServer(grpcServer, listener)
-	t.Cleanup(func() { stopCrossRepositoryGRPCServer(t, grpcServer, serverErr) })
+	listener := controlgrpc.StartCrossRepositoryAgentListener(t, db, manager)
 
 	bridge, err := controlgrpc.NewKernelOperationBridge(db, manager)
 	require.NoError(t, err)
@@ -168,12 +143,11 @@ func TestAgentPluginPackageCrossRepositoryE2E(t *testing.T) {
 	resultFile := filepath.Join(fixtureRoot, "result.json")
 	pluginRoot := filepath.Join(fixtureRoot, "plugins")
 	var fixtureOutput crossRepositorySynchronizedBuffer
-	fixture := exec.Command(fixtureBinary,
-		"--target", listener.Addr().String(), "--node-id", fmt.Sprint(node.ID), "--api-key", nodeAPIKey,
+	fixture := exec.Command(fixtureBinary, append(listener.FixtureFlags(t, node.ID),
 		"--ready-file", readyFile, "--result-file", resultFile, "--timeout", "2m",
 		"--plugin-root", pluginRoot, "--plugin-socket-dir", socketDir,
-		"--plugin-public-key", base64.StdEncoding.EncodeToString(publicKey), "--plugin-base-url", httpServer.URL,
-	)
+		"--plugin-public-key", base64.StdEncoding.EncodeToString(publicKey),
+	)...)
 	fixture.Stdout = &fixtureOutput
 	fixture.Stderr = &fixtureOutput
 	require.NoError(t, fixture.Start())
@@ -233,26 +207,6 @@ func TestAgentPluginPackageCrossRepositoryE2E(t *testing.T) {
 	var persistedInstallation model.PluginInstallation
 	require.NoError(t, db.First(&persistedInstallation, installation.ID).Error)
 	require.Equal(t, manifest.Version, persistedInstallation.DesiredVersion)
-}
-
-type crossRepositoryFastHeartbeatServer struct {
-	agentv1pb.UnimplementedAgentControlServiceServer
-	delegate *controlgrpc.AgentControlGRPCServer
-}
-
-func (s *crossRepositoryFastHeartbeatServer) ControlStream(stream agentv1pb.AgentControlService_ControlStreamServer) error {
-	return s.delegate.ControlStream(&crossRepositoryFastHeartbeatStream{AgentControlService_ControlStreamServer: stream})
-}
-
-type crossRepositoryFastHeartbeatStream struct {
-	agentv1pb.AgentControlService_ControlStreamServer
-}
-
-func (s *crossRepositoryFastHeartbeatStream) Send(message *agentv1pb.ControlToAgent) error {
-	if helloAck := message.GetHelloAck(); helloAck != nil {
-		helloAck.HeartbeatIntervalSeconds = 1
-	}
-	return s.AgentControlService_ControlStreamServer.Send(message)
 }
 
 func buildCrossRepositoryAgentPluginBinary(t *testing.T, agentRoot, commandName, goos, goarch string) string {
@@ -371,13 +325,9 @@ func crossRepositoryBuildEnvironmentValue(environment []string, key string) stri
 	return value
 }
 
-func createCrossRepositoryPluginNode(t *testing.T, db *gorm.DB, name, apiKey string) model.Node {
+func createCrossRepositoryPluginNode(t *testing.T, db *gorm.DB, name string) model.Node {
 	t.Helper()
-	digest := sha256.Sum256([]byte(apiKey))
-	node := model.Node{
-		Name: name, Host: "127.0.0.1", APIKey: apiKey,
-		APIKeyHash: hex.EncodeToString(digest[:]), Status: model.NodeStatusOnline,
-	}
+	node := model.Node{Name: name, Host: "127.0.0.1", Status: model.NodeStatusOnline}
 	require.NoError(t, db.Create(&node).Error)
 	return node
 }
@@ -435,11 +385,7 @@ func newCrossRepositoryPluginHTTPServer(t *testing.T, db *gorm.DB, cfg *config.C
 
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	packages := router.Group("/api/v3/agent/plugin-releases")
-	packages.Use(middleware.NodeAPIKeyHeaderAuth())
 	kernel := handler.NewKernelHandler()
-	packages.GET("/:plugin_id/:version/artifact", kernel.ServeAgentPluginArtifact)
-	packages.GET("/:plugin_id/:version/manifest", kernel.ServeAgentPluginManifest)
 	router.GET("/api/v3/plugins/:plugin_id/*route", func(c *gin.Context) {
 		c.Set("user_id", uint(1))
 		c.Set("is_admin", true)
@@ -465,23 +411,6 @@ func getCrossRepositoryMachineTelemetryStatus(t *testing.T, origin string) plugi
 	require.NoError(t, json.Unmarshal(body, &payload))
 	require.Equal(t, plugincontrol.MachineTelemetryPluginID, payload.Data.PluginID)
 	return payload.Data
-}
-
-func assertCrossRepositoryWrongNodeRejected(t *testing.T, origin, apiKey, installConfig string) {
-	t.Helper()
-	var payload service.AgentPluginInstallConfig
-	require.NoError(t, json.Unmarshal([]byte(installConfig), &payload))
-	request, err := http.NewRequest(http.MethodGet, origin+payload.Artifact.URL, nil)
-	require.NoError(t, err)
-	request.Header.Set("X-API-Key", apiKey)
-	response, err := http.DefaultClient.Do(request)
-	require.NoError(t, err)
-	defer func() {
-		require.NoError(t, response.Body.Close())
-	}()
-	_, err = io.Copy(io.Discard, response.Body)
-	require.NoError(t, err)
-	require.Equal(t, http.StatusForbidden, response.StatusCode)
 }
 
 func waitForCrossRepositoryOperationChain(t *testing.T, db *gorm.DB, bridge *controlgrpc.KernelOperationBridge, resultFile string, output interface{ String() string }, operations ...*model.KernelOperation) {
@@ -694,21 +623,6 @@ func buildCrossRepositoryAgentFixtureBinary(t *testing.T, agentRoot string) stri
 	output, err := command.CombinedOutput()
 	require.NoError(t, err, string(output))
 	return binaryPath
-}
-
-func serveCrossRepositoryGRPCServer(server *googlegrpc.Server, listener net.Listener) <-chan error {
-	result := make(chan error, 1)
-	go func() { result <- server.Serve(listener) }()
-	return result
-}
-
-func stopCrossRepositoryGRPCServer(t *testing.T, server *googlegrpc.Server, result <-chan error) {
-	t.Helper()
-	server.GracefulStop()
-	err := <-result
-	if err != nil && !errors.Is(err, googlegrpc.ErrServerStopped) {
-		require.NoError(t, err)
-	}
 }
 
 func waitForCrossRepositoryFile(t *testing.T, path string, timeout time.Duration, output interface{ String() string }) {

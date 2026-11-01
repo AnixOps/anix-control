@@ -43,6 +43,8 @@ func TestSetup_RemovedPluginCenterRoutesAnswerNotFound(t *testing.T) {
 	for _, probe := range []struct{ method, path string }{
 		{http.MethodPost, "/api/v3/plugin-releases"},
 		{http.MethodPost, "/api/v3/plugin-releases/1/artifact"},
+		{http.MethodGet, "/api/v3/agent/plugin-releases/telemetry/1.0.0/artifact"},
+		{http.MethodGet, "/api/v3/agent/plugin-releases/telemetry/1.0.0/manifest"},
 		{http.MethodPut, "/api/v3/plugin-installations"},
 		{http.MethodGet, "/api/v4/kernel/route-modes"},
 		{http.MethodPost, "/api/v4/kernel/route-modes"},

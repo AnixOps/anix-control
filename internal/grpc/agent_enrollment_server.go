@@ -16,7 +16,6 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/database"
 	"github.com/AnixOps/anix-control/v5/internal/kernelforward"
 	"github.com/AnixOps/anix-control/v5/internal/middleware"
-	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/modulepki"
 	"github.com/AnixOps/anix-control/v5/internal/nodegroup"
 	"google.golang.org/grpc"
@@ -99,9 +98,8 @@ func answer[T any](ctx context.Context, response T, err error) (T, error) {
 	return response, err
 }
 
-// Enroll issues a node's first certificate for a bootstrap credential: a
-// one-time enrollment credential, or the node credential in metadata
-// (refused when agent_control.mtls is required).
+// Enroll issues a node's first certificate for its one-time enrollment
+// credential.
 func (s *AgentEnrollmentGRPCServer) Enroll(ctx context.Context, request *agentv1pb.EnrollAgentRequest) (*agentv1pb.EnrollAgentResponse, error) {
 	response, err := s.enroll(ctx, request)
 	return answer(ctx, response, err)
@@ -122,11 +120,11 @@ func (s *AgentEnrollmentGRPCServer) enroll(ctx context.Context, request *agentv1
 	})
 	if err != nil {
 		if errors.Is(err, agentpki.ErrEnrollmentRejected) {
-			slog.Warn("agent enrollment rejected", "component", "agent-pki", "method", bootstrap.Method, "addr", remoteHost(ctx))
+			slog.Warn("agent enrollment rejected", "component", "agent-pki", "addr", remoteHost(ctx))
 		}
 		return nil, agentPKIStatus(err)
 	}
-	slog.Info("agent enrolled", "component", "agent-pki", "node", issued.Identity.Node.String(), "method", bootstrap.Method,
+	slog.Info("agent enrolled", "component", "agent-pki", "node", issued.Identity.Node.String(),
 		"serial", issued.Serial, "not_after", issued.NotAfter)
 	return &agentv1pb.EnrollAgentResponse{Certificate: agentCertificateMessage(issued)}, nil
 }
@@ -158,10 +156,10 @@ func (s *AgentEnrollmentGRPCServer) bootstrap(ctx context.Context, credential st
 		}
 	}
 	if credential != "" {
-		return agentpki.Bootstrap{Method: model.AgentEnrollmentMethodCredential, Node: node, Secret: credential}, nil
+		return agentpki.Bootstrap{Node: node, Secret: credential}, nil
 	}
 	agenttransport.CountRefused(agentv1pb.AgentEnrollment_Enroll_FullMethodName)
-	return agentpki.Bootstrap{}, refuseAgent(agentcontrol.ErrorCodeMTLSRequired, codes.Unauthenticated, "an enrollment credential is required (agent_control.mtls: required)")
+	return agentpki.Bootstrap{}, refuseAgent(agentcontrol.ErrorCodeMTLSRequired, codes.Unauthenticated, "an enrollment credential is required")
 }
 
 // Join makes the calling machine a node of the group whose join token it

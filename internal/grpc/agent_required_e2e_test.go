@@ -238,8 +238,7 @@ func TestAgentStreamUnderRequiredNeedsNoLegacyPath(t *testing.T) {
 	require.Len(t, maintenance.GetEvents(), 1)
 	assert.True(t, maintenance.GetEvents()[0].GetPersisted())
 
-	// A plugin release (GET /api/v3/agent/plugin-releases/..., by node API
-	// key) downloads from AgentArtifacts by the certificate.
+	// A plugin release downloads from AgentArtifacts by the certificate.
 	release := seedArtifactRelease(t, db, newReleaseSigner(t), l.proxy.ID, "required-telemetry", 4096)
 	artifacts := agentv1pb.NewAgentArtifactsClient(l.dial(t, certificate))
 	manifest, err := artifacts.GetPluginManifest(ctx, &agentv1pb.GetPluginManifestRequest{Manifest: release.manifestAddress()})

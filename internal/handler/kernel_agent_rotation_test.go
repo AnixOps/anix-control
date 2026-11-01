@@ -181,16 +181,18 @@ func (f *rotationFixture) enrollCertificate(t *testing.T, bootstrap agentpki.Boo
 	return issued, leaf
 }
 
-func (f *rotationFixture) proxyBootstrap(secret string) agentpki.Bootstrap {
-	return agentpki.Bootstrap{
-		Method: model.AgentEnrollmentMethodNodeAPIKey, Secret: secret,
-		Node: agentcontrol.AgentNode{Kind: agentcontrol.NodeKindProxy, ID: uint32(f.proxy.ID)},
-	}
+// proxyBootstrap is a fresh one-time enrollment credential of the proxy node.
+func (f *rotationFixture) proxyBootstrap(t *testing.T) agentpki.Bootstrap {
+	t.Helper()
+	node := agentcontrol.AgentNode{Kind: agentcontrol.NodeKindProxy, ID: uint32(f.proxy.ID)}
+	credential, _, err := f.pki.CreateEnrollmentToken(t.Context(), agentpki.TokenRequest{Node: node, TTL: time.Hour, CreatedBy: 1, Actor: "root@example.com"})
+	require.NoError(t, err)
+	return agentpki.Bootstrap{Node: node, Secret: credential}
 }
 
 func TestRotateCredentialsNeedsASuperAdministrator(t *testing.T) {
 	forEachRotationDatabase(t, func(t *testing.T, f *rotationFixture) {
-		issued, _ := f.enrollCertificate(t, f.proxyBootstrap(f.apiKey))
+		issued, _ := f.enrollCertificate(t, f.proxyBootstrap(t))
 		body := `{"node":"` + f.proxyName() + `"}`
 		for actor, code := range map[string]int{"staff": http.StatusForbidden, "banned": http.StatusForbidden, "user": http.StatusForbidden, "nobody": http.StatusForbidden} {
 			response := serveModuleRequest(f.router(actor), http.MethodPost, "/rotate-credentials", body)
@@ -218,7 +220,7 @@ func TestRotateCredentialsEndToEnd(t *testing.T) {
 		slog.SetDefault(slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug})))
 		t.Cleanup(func() { slog.SetDefault(previous) })
 
-		issued, leaf := f.enrollCertificate(t, f.proxyBootstrap(f.apiKey))
+		issued, leaf := f.enrollCertificate(t, f.proxyBootstrap(t))
 		router := f.router("super")
 		response := serveModuleRequest(router, http.MethodPost, "/rotate-credentials",
 			`{"node":"`+f.proxyName()+`","ttl_seconds":1800,"reason":"  laptop stolen  "}`)
@@ -247,7 +249,7 @@ func TestRotateCredentialsEndToEnd(t *testing.T) {
 		require.NoError(t, err)
 		_, err = f.pki.Renew(t.Context(), leaf, csr)
 		require.ErrorIs(t, err, agentpki.ErrCertificateRevoked)
-		fresh, _ := f.enrollCertificate(t, agentpki.Bootstrap{Method: model.AgentEnrollmentMethodCredential, Secret: answer.Data.Credential})
+		fresh, _ := f.enrollCertificate(t, agentpki.Bootstrap{Secret: answer.Data.Credential})
 		_, _, err = f.pki.VerifyPeer(t.Context(), [][]byte{fresh.CertificateDER})
 		require.NoError(t, err)
 		_, err = nodesecrets.NodeByAPIKey(f.db, f.apiKey, true)
@@ -279,7 +281,7 @@ func TestRotateCredentialsReplacesTheAPIKeyOnRequest(t *testing.T) {
 		slog.SetDefault(slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug})))
 		t.Cleanup(func() { slog.SetDefault(previous) })
 
-		issued, _ := f.enrollCertificate(t, f.proxyBootstrap(f.apiKey))
+		issued, _ := f.enrollCertificate(t, f.proxyBootstrap(t))
 		response := serveModuleRequest(f.router("super"), http.MethodPost, "/rotate-credentials",
 			`{"node":"`+f.proxyName()+`","rotate_api_key":true}`)
 		require.Equal(t, http.StatusCreated, response.Code, response.Body.String())
@@ -289,8 +291,6 @@ func TestRotateCredentialsReplacesTheAPIKeyOnRequest(t *testing.T) {
 
 		_, err := nodesecrets.NodeByAPIKey(f.db, f.apiKey, true)
 		require.Error(t, err, "the old API key stops working")
-		_, err = f.pki.Enroll(t.Context(), agentpki.EnrollRequest{Bootstrap: f.proxyBootstrap(f.apiKey), CSRDER: []byte("x")})
-		require.ErrorIs(t, err, agentpki.ErrEnrollmentRejected)
 		_, _, err = f.pki.VerifyPeer(t.Context(), [][]byte{issued.CertificateDER})
 		require.ErrorIs(t, err, agentpki.ErrCertificateRevoked)
 
@@ -314,7 +314,7 @@ func TestRotateCredentialsReplacesTheAPIKeyOnRequest(t *testing.T) {
 		assert.NotContains(t, logs.String(), newKey)
 		assert.Contains(t, all[len(all)-1].Content, `"api_key_rotated":true`)
 
-		fresh, _ := f.enrollCertificate(t, agentpki.Bootstrap{Method: model.AgentEnrollmentMethodCredential, Secret: answer.Data.Credential})
+		fresh, _ := f.enrollCertificate(t, agentpki.Bootstrap{Secret: answer.Data.Credential})
 		_, _, err = f.pki.VerifyPeer(t.Context(), [][]byte{fresh.CertificateDER})
 		require.NoError(t, err)
 	})
@@ -373,10 +373,10 @@ func TestRotateCredentialsDisabledAndOfflineNodes(t *testing.T) {
 		assert.NotEqual(t, first.Data.Credential, second.Data.Credential)
 		assert.EqualValues(t, 1, second.Data.Revoked.Enrollments)
 		_, err := f.pki.Enroll(t.Context(), agentpki.EnrollRequest{
-			Bootstrap: agentpki.Bootstrap{Method: model.AgentEnrollmentMethodCredential, Secret: first.Data.Credential}, CSRDER: []byte("x"),
+			Bootstrap: agentpki.Bootstrap{Secret: first.Data.Credential}, CSRDER: []byte("x"),
 		})
 		require.ErrorIs(t, err, agentpki.ErrEnrollmentRejected)
-		f.enrollCertificate(t, agentpki.Bootstrap{Method: model.AgentEnrollmentMethodCredential, Secret: second.Data.Credential})
+		f.enrollCertificate(t, agentpki.Bootstrap{Secret: second.Data.Credential})
 
 		// A disabled node is refused with its own code, and nothing changes.
 		require.NoError(t, f.db.Model(&model.Node{}).Where("id = ?", f.proxy.ID).Update("status", model.NodeStatusDisabled).Error)

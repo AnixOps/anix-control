@@ -18,7 +18,6 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/config"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/modulepki"
-	"github.com/AnixOps/anix-control/v5/internal/nodesecrets"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -90,17 +89,11 @@ func TestEnrollWithEachBootstrap(t *testing.T) {
 			node      agentcontrol.AgentNode
 			method    string
 		}{
-			{name: "proxy node API key", node: f.proxyNode(), method: model.AgentEnrollmentMethodNodeAPIKey, bootstrap: func() agentpki.Bootstrap {
-				return agentpki.Bootstrap{Method: model.AgentEnrollmentMethodNodeAPIKey, Node: f.proxyNode(), Secret: f.proxyKey}
-			}},
-			{name: "forward node token", node: f.forwardNode(), method: model.AgentEnrollmentMethodForwardToken, bootstrap: func() agentpki.Bootstrap {
-				return agentpki.Bootstrap{Method: model.AgentEnrollmentMethodForwardToken, Node: f.forwardNode(), Secret: f.forwardToken}
-			}},
 			{name: "enrollment credential for a proxy node", node: f.proxyNode(), method: model.AgentEnrollmentMethodCredential, bootstrap: func() agentpki.Bootstrap {
-				return agentpki.Bootstrap{Method: model.AgentEnrollmentMethodCredential, Secret: f.token(t, f.proxyNode(), time.Hour)}
+				return agentpki.Bootstrap{Secret: f.token(t, f.proxyNode(), time.Hour)}
 			}},
 			{name: "enrollment credential for a forward node", node: f.forwardNode(), method: model.AgentEnrollmentMethodCredential, bootstrap: func() agentpki.Bootstrap {
-				return agentpki.Bootstrap{Method: model.AgentEnrollmentMethodCredential, Node: f.forwardNode(), Secret: f.token(t, f.forwardNode(), time.Hour)}
+				return agentpki.Bootstrap{Node: f.forwardNode(), Secret: f.token(t, f.forwardNode(), time.Hour)}
 			}},
 		}
 		for _, test := range cases {
@@ -127,33 +120,28 @@ func TestEnrollBindsKindAndID(t *testing.T) {
 		otherNode := agentcontrol.AgentNode{Kind: agentcontrol.NodeKindProxy, ID: uint32(other.ID)}
 		credential := f.token(t, f.proxyNode(), time.Hour)
 		rejected := map[string]agentpki.Bootstrap{
-			"proxy key claiming another node":       {Method: model.AgentEnrollmentMethodNodeAPIKey, Node: otherNode, Secret: f.proxyKey},
-			"proxy key claiming the forward node":   {Method: model.AgentEnrollmentMethodNodeAPIKey, Node: f.forwardNode(), Secret: f.proxyKey},
-			"forward token claiming the proxy node": {Method: model.AgentEnrollmentMethodForwardToken, Node: f.proxyNode(), Secret: f.forwardToken},
-			"proxy key as a forward token":          {Method: model.AgentEnrollmentMethodForwardToken, Node: f.forwardNode(), Secret: f.proxyKey},
-			"wrong proxy key":                       {Method: model.AgentEnrollmentMethodNodeAPIKey, Node: f.proxyNode(), Secret: "wrong"},
-			"empty secret":                          {Method: model.AgentEnrollmentMethodNodeAPIKey, Node: f.proxyNode()},
-			"credential claiming another node":      {Method: model.AgentEnrollmentMethodCredential, Node: otherNode, Secret: credential},
-			"credential claiming the other kind":    {Method: model.AgentEnrollmentMethodCredential, Node: f.forwardNode(), Secret: credential},
-			"unknown credential":                    {Method: model.AgentEnrollmentMethodCredential, Secret: agentcontrol.EnrollmentCredentialPrefix + "unknown"},
-			"credential without its prefix":         {Method: model.AgentEnrollmentMethodCredential, Secret: strings.TrimPrefix(credential, agentcontrol.EnrollmentCredentialPrefix)},
-			"unknown method":                        {Method: "registration_key", Node: f.proxyNode(), Secret: f.proxyKey},
+			"empty secret":                       {Node: f.proxyNode()},
+			"credential claiming another node":   {Node: otherNode, Secret: credential},
+			"credential claiming the other kind": {Node: f.forwardNode(), Secret: credential},
+			"unknown credential":                 {Secret: agentcontrol.EnrollmentCredentialPrefix + "unknown"},
+			"credential without its prefix":      {Secret: strings.TrimPrefix(credential, agentcontrol.EnrollmentCredentialPrefix)},
 		}
 		for name, bootstrap := range rejected {
 			_, err := f.enroll(t, bootstrap)
 			assert.ErrorIs(t, err, agentpki.ErrEnrollmentRejected, name)
 		}
 		// The rejected claims did not consume the credential.
-		issued, err := f.enroll(t, agentpki.Bootstrap{Method: model.AgentEnrollmentMethodCredential, Node: f.proxyNode(), Secret: credential})
+		issued, err := f.enroll(t, agentpki.Bootstrap{Node: f.proxyNode(), Secret: credential})
 		require.NoError(t, err)
 		requireNodeCertificate(t, f, issued, f.proxyNode())
 
-		// A disabled node cannot enroll, with any bootstrap.
+		// A disabled node cannot enroll, even with a credential issued before.
+		proxyCredential, forwardCredential := f.token(t, f.proxyNode(), time.Hour), f.token(t, f.forwardNode(), time.Hour)
 		require.NoError(t, f.db.Model(&model.Node{}).Where("id = ?", f.proxy.ID).Update("status", model.NodeStatusDisabled).Error)
-		_, err = f.enroll(t, agentpki.Bootstrap{Method: model.AgentEnrollmentMethodNodeAPIKey, Node: f.proxyNode(), Secret: f.proxyKey})
+		_, err = f.enroll(t, agentpki.Bootstrap{Node: f.proxyNode(), Secret: proxyCredential})
 		assert.ErrorIs(t, err, agentpki.ErrEnrollmentRejected)
 		require.NoError(t, f.db.Model(&model.ForwardNode{}).Where("id = ?", f.forward.ID).Update("enabled", false).Error)
-		_, err = f.enroll(t, agentpki.Bootstrap{Method: model.AgentEnrollmentMethodForwardToken, Node: f.forwardNode(), Secret: f.forwardToken})
+		_, err = f.enroll(t, agentpki.Bootstrap{Node: f.forwardNode(), Secret: forwardCredential})
 		assert.ErrorIs(t, err, agentpki.ErrEnrollmentRejected)
 		_, _, err = f.pki.CreateEnrollmentToken(t.Context(), agentpki.TokenRequest{Node: f.forwardNode()})
 		assert.ErrorIs(t, err, agentpki.ErrInvalidNode)
@@ -166,11 +154,11 @@ func TestEnrollRejectsBadCSR(t *testing.T) {
 	forEachDatabase(t, func(t *testing.T, f *fixture) {
 		credential := f.token(t, f.proxyNode(), time.Hour)
 		_, err := f.pki.Enroll(t.Context(), agentpki.EnrollRequest{
-			Bootstrap: agentpki.Bootstrap{Method: model.AgentEnrollmentMethodCredential, Secret: credential}, CSRDER: []byte("not a csr"),
+			Bootstrap: agentpki.Bootstrap{Secret: credential}, CSRDER: []byte("not a csr"),
 		})
 		require.ErrorIs(t, err, modulepki.ErrInvalidRequest)
 		// A failed issuance leaves the credential unused.
-		_, err = f.enroll(t, agentpki.Bootstrap{Method: model.AgentEnrollmentMethodCredential, Secret: credential})
+		_, err = f.enroll(t, agentpki.Bootstrap{Secret: credential})
 		require.NoError(t, err)
 	})
 }
@@ -178,7 +166,7 @@ func TestEnrollRejectsBadCSR(t *testing.T) {
 func TestEnrollmentCredentialIsOneTime(t *testing.T) {
 	forEachDatabase(t, func(t *testing.T, f *fixture) {
 		credential := f.token(t, f.proxyNode(), time.Hour)
-		bootstrap := agentpki.Bootstrap{Method: model.AgentEnrollmentMethodCredential, Secret: credential}
+		bootstrap := agentpki.Bootstrap{Secret: credential}
 		_, err := f.enroll(t, bootstrap)
 		require.NoError(t, err)
 		_, err = f.enroll(t, bootstrap)
@@ -186,7 +174,7 @@ func TestEnrollmentCredentialIsOneTime(t *testing.T) {
 
 		// Concurrent use: exactly one enrollment wins.
 		credential = f.token(t, f.forwardNode(), time.Hour)
-		bootstrap = agentpki.Bootstrap{Method: model.AgentEnrollmentMethodCredential, Secret: credential}
+		bootstrap = agentpki.Bootstrap{Secret: credential}
 		const racers = 8
 		csrs := make([][]byte, racers)
 		for i := range csrs {
@@ -230,7 +218,7 @@ func TestExpiredEnrollmentCredentialIsRefused(t *testing.T) {
 	forEachDatabase(t, func(t *testing.T, f *fixture) {
 		credential := f.token(t, f.proxyNode(), time.Hour)
 		f.clock.Advance(time.Hour)
-		_, err := f.enroll(t, agentpki.Bootstrap{Method: model.AgentEnrollmentMethodCredential, Secret: credential})
+		_, err := f.enroll(t, agentpki.Bootstrap{Secret: credential})
 		require.ErrorIs(t, err, agentpki.ErrEnrollmentRejected)
 
 		for _, ttl := range []time.Duration{-time.Second, agentpki.MaxEnrollmentCredentialTTL + time.Second} {
@@ -248,7 +236,7 @@ func TestExpiredEnrollmentCredentialIsRefused(t *testing.T) {
 
 func TestRenewAtTwoThirdsOfTheLifetime(t *testing.T) {
 	forEachDatabase(t, func(t *testing.T, f *fixture) {
-		issued, err := f.enroll(t, agentpki.Bootstrap{Method: model.AgentEnrollmentMethodNodeAPIKey, Node: f.proxyNode(), Secret: f.proxyKey})
+		issued, err := f.enroll(t, agentpki.Bootstrap{Node: f.proxyNode(), Secret: f.token(t, f.proxyNode(), time.Hour)})
 		require.NoError(t, err)
 		lifetime := agentpki.DefaultCertificateLifetime
 		assert.Equal(t, 7*24*time.Hour, lifetime)
@@ -286,7 +274,7 @@ func TestRenewAtTwoThirdsOfTheLifetime(t *testing.T) {
 
 func TestRevokedSerialsAreRefusedWithinTheCacheWindow(t *testing.T) {
 	forEachDatabase(t, func(t *testing.T, f *fixture) {
-		issued, err := f.enroll(t, agentpki.Bootstrap{Method: model.AgentEnrollmentMethodForwardToken, Node: f.forwardNode(), Secret: f.forwardToken})
+		issued, err := f.enroll(t, agentpki.Bootstrap{Node: f.forwardNode(), Secret: f.token(t, f.forwardNode(), time.Hour)})
 		require.NoError(t, err)
 		_, _, err = f.pki.VerifyPeer(t.Context(), [][]byte{issued.CertificateDER})
 		require.NoError(t, err)
@@ -302,7 +290,7 @@ func TestRevokedSerialsAreRefusedWithinTheCacheWindow(t *testing.T) {
 		require.ErrorIs(t, err, agentpki.ErrCertificateRevoked)
 
 		// Revoked in this process: refused at once.
-		second, err := f.enroll(t, agentpki.Bootstrap{Method: model.AgentEnrollmentMethodForwardToken, Node: f.forwardNode(), Secret: f.forwardToken})
+		second, err := f.enroll(t, agentpki.Bootstrap{Node: f.forwardNode(), Secret: f.token(t, f.forwardNode(), time.Hour)})
 		require.NoError(t, err)
 		_, _, err = f.pki.VerifyPeer(t.Context(), [][]byte{second.CertificateDER})
 		require.NoError(t, err)
@@ -312,13 +300,13 @@ func TestRevokedSerialsAreRefusedWithinTheCacheWindow(t *testing.T) {
 		require.ErrorIs(t, err, agentpki.ErrCertificateRevoked)
 		// Revoking the node also voids its unused enrollment credentials,
 		// and leaves the proxy node of the same id alone.
-		_, err = f.enroll(t, agentpki.Bootstrap{Method: model.AgentEnrollmentMethodCredential, Secret: credential})
+		_, err = f.enroll(t, agentpki.Bootstrap{Secret: credential})
 		require.ErrorIs(t, err, agentpki.ErrEnrollmentRejected)
 		var record model.AgentCertificate
 		require.NoError(t, f.db.First(&record, "serial = ?", second.Serial).Error)
 		assert.Equal(t, agentpki.RevokeReasonCredentialsReplaced, record.RevokeReason)
 
-		proxy, err := f.enroll(t, agentpki.Bootstrap{Method: model.AgentEnrollmentMethodNodeAPIKey, Node: f.proxyNode(), Secret: f.proxyKey})
+		proxy, err := f.enroll(t, agentpki.Bootstrap{Node: f.proxyNode(), Secret: f.token(t, f.proxyNode(), time.Hour)})
 		require.NoError(t, err)
 		_, _, err = f.pki.VerifyPeer(t.Context(), [][]byte{proxy.CertificateDER})
 		require.NoError(t, err)
@@ -383,14 +371,15 @@ func TestVerifyPeerRefusesForeignCertificates(t *testing.T) {
 func TestAgentPKIAuditsTokensAndEnrollmentsWithoutSecrets(t *testing.T) {
 	forEachDatabase(t, func(t *testing.T, f *fixture) {
 		credential := f.token(t, f.proxyNode(), time.Hour)
-		issued, err := f.enroll(t, agentpki.Bootstrap{Method: model.AgentEnrollmentMethodCredential, Secret: credential})
+		issued, err := f.enroll(t, agentpki.Bootstrap{Secret: credential})
 		require.NoError(t, err)
-		_, err = f.enroll(t, agentpki.Bootstrap{Method: model.AgentEnrollmentMethodForwardToken, Node: f.forwardNode(), Secret: f.forwardToken})
+		forwardCredential := f.token(t, f.forwardNode(), time.Hour)
+		_, err = f.enroll(t, agentpki.Bootstrap{Node: f.forwardNode(), Secret: forwardCredential})
 		require.NoError(t, err)
 
 		var entries []model.OperationLog
 		require.NoError(t, f.db.Order("id").Find(&entries).Error)
-		require.Len(t, entries, 3)
+		require.Len(t, entries, 4)
 		assert.Equal(t, agentpki.AuditActionTokenIssue, entries[0].Action)
 		assert.Equal(t, "admin@example.com", entries[0].Username)
 		require.NotNil(t, entries[0].UserID)
@@ -399,10 +388,12 @@ func TestAgentPKIAuditsTokensAndEnrollmentsWithoutSecrets(t *testing.T) {
 		assert.Equal(t, "agent:"+f.proxyNode().String(), entries[1].Username)
 		assert.Contains(t, entries[1].Content, issued.Serial)
 		assert.Contains(t, entries[1].Content, model.AgentEnrollmentMethodCredential)
-		assert.Equal(t, "forward_node", entries[2].TargetType)
+		assert.Equal(t, agentpki.AuditActionTokenIssue, entries[2].Action)
+		assert.Equal(t, agentpki.AuditActionEnroll, entries[3].Action)
+		assert.Equal(t, "forward_node", entries[3].TargetType)
 		for _, entry := range entries {
 			assert.Equal(t, "agent_pki", entry.Module)
-			for _, secret := range []string{credential, f.proxyKey, f.forwardToken} {
+			for _, secret := range []string{credential, forwardCredential} {
 				assert.NotContains(t, entry.Content, secret)
 			}
 		}
@@ -411,7 +402,7 @@ func TestAgentPKIAuditsTokensAndEnrollmentsWithoutSecrets(t *testing.T) {
 
 func TestPruneDropsExpiredRecords(t *testing.T) {
 	forEachDatabase(t, func(t *testing.T, f *fixture) {
-		_, err := f.enroll(t, agentpki.Bootstrap{Method: model.AgentEnrollmentMethodNodeAPIKey, Node: f.proxyNode(), Secret: f.proxyKey})
+		_, err := f.enroll(t, agentpki.Bootstrap{Node: f.proxyNode(), Secret: f.token(t, f.proxyNode(), time.Hour)})
 		require.NoError(t, err)
 		f.token(t, f.proxyNode(), time.Hour)
 		require.NoError(t, f.pki.Prune(t.Context(), f.clock.Now()))
@@ -462,73 +453,6 @@ func TestFromConfigUsesTheCAAlone(t *testing.T) {
 	_, err = agentpki.FromConfig(&config.Config{}, db)
 	require.ErrorIs(t, err, agentpki.ErrDisabled)
 	require.NotErrorIs(t, err, agentpki.ErrExternalPKI)
-}
-
-// TestEnrollReadsNodeCredentialsByPhase: the enrollment bootstrap reads node
-// keys and forward tokens through the node credential split. In dual_read
-// a key whose legacy column holds a tombstone but whose new row is valid
-// enrolls; a valid legacy column without a new row falls back and counts
-// the metric. In dual_write only the legacy columns count.
-func TestEnrollReadsNodeCredentialsByPhase(t *testing.T) {
-	forEachDatabase(t, func(t *testing.T, f *fixture) {
-		ctx := t.Context()
-		// The fixture has the node tables only.
-		tables := []string{nodesecrets.TableNode, nodesecrets.TableForwardNode}
-		require.NoError(t, nodesecrets.MigrateForTest(f.db))
-		_, err := nodesecrets.Backfill(ctx, f.db, nodesecrets.BackfillOptions{Tables: tables})
-		require.NoError(t, err)
-		_, err = nodesecrets.Verify(ctx, f.db, nodesecrets.VerifyOptions{Tables: tables})
-		require.NoError(t, err)
-		proxyBootstrap := agentpki.Bootstrap{Method: model.AgentEnrollmentMethodNodeAPIKey, Node: f.proxyNode(), Secret: f.proxyKey}
-		forwardBootstrap := agentpki.Bootstrap{Method: model.AgentEnrollmentMethodForwardToken, Node: f.forwardNode(), Secret: f.forwardToken}
-		setPhase := func(phase string) {
-			_, err := nodesecrets.SetPhase(ctx, f.db, nodesecrets.PhaseOptions{Tables: tables, Phase: phase, Actor: "test"})
-			require.NoError(t, err)
-		}
-
-		// Only the new tables hold the secrets, as after P3.
-		require.NoError(t, f.db.Model(&model.Node{}).Where("id = ?", f.proxy.ID).
-			UpdateColumns(map[string]any{"api_key": nodesecrets.Tombstone(uint64(f.proxy.ID)), "api_key_hash": ""}).Error)
-		require.NoError(t, f.db.Model(&model.ForwardNode{}).Where("id = ?", f.forward.ID).UpdateColumn("api_token", "").Error)
-		keyFallbacks := nodesecrets.FallbackCount(nodesecrets.TableNode, nodesecrets.KindNodeAPIKey, "")
-		tokenFallbacks := nodesecrets.FallbackCount(nodesecrets.TableForwardNode, nodesecrets.KindForwardNodeToken, "")
-
-		setPhase(nodesecrets.PhaseDualRead)
-		issued, err := f.enroll(t, proxyBootstrap)
-		require.NoError(t, err)
-		requireNodeCertificate(t, f, issued, f.proxyNode())
-		issued, err = f.enroll(t, forwardBootstrap)
-		require.NoError(t, err)
-		requireNodeCertificate(t, f, issued, f.forwardNode())
-		require.Equal(t, keyFallbacks, nodesecrets.FallbackCount(nodesecrets.TableNode, nodesecrets.KindNodeAPIKey, ""))
-		require.Equal(t, tokenFallbacks, nodesecrets.FallbackCount(nodesecrets.TableForwardNode, nodesecrets.KindForwardNodeToken, ""))
-		// The tombstone itself never enrolls.
-		_, err = f.enroll(t, agentpki.Bootstrap{Method: model.AgentEnrollmentMethodNodeAPIKey, Node: f.proxyNode(), Secret: nodesecrets.Tombstone(uint64(f.proxy.ID))})
-		require.ErrorIs(t, err, agentpki.ErrEnrollmentRejected)
-
-		// In dual_write the legacy columns are the only ones read.
-		setPhase(nodesecrets.PhaseDualWrite)
-		_, err = f.enroll(t, proxyBootstrap)
-		require.ErrorIs(t, err, agentpki.ErrEnrollmentRejected)
-		_, err = f.enroll(t, forwardBootstrap)
-		require.ErrorIs(t, err, agentpki.ErrEnrollmentRejected)
-
-		// The reverse: valid legacy columns and no new row fall back, and
-		// count it.
-		require.NoError(t, f.db.Model(&model.Node{}).Where("id = ?", f.proxy.ID).
-			UpdateColumns(map[string]any{"api_key": f.proxyKey, "api_key_hash": sha256Hex(f.proxyKey)}).Error)
-		require.NoError(t, f.db.Model(&model.ForwardNode{}).Where("id = ?", f.forward.ID).UpdateColumn("api_token", f.forwardToken).Error)
-		require.NoError(t, f.db.Where("subject_kind IN ?", []string{nodesecrets.SubjectProxy, nodesecrets.SubjectForward}).Delete(&model.NodeCredential{}).Error)
-		setPhase(nodesecrets.PhaseDualRead)
-		issued, err = f.enroll(t, proxyBootstrap)
-		require.NoError(t, err)
-		requireNodeCertificate(t, f, issued, f.proxyNode())
-		issued, err = f.enroll(t, forwardBootstrap)
-		require.NoError(t, err)
-		requireNodeCertificate(t, f, issued, f.forwardNode())
-		require.Equal(t, keyFallbacks+1, nodesecrets.FallbackCount(nodesecrets.TableNode, nodesecrets.KindNodeAPIKey, nodesecrets.FallbackMissing))
-		require.Equal(t, tokenFallbacks+1, nodesecrets.FallbackCount(nodesecrets.TableForwardNode, nodesecrets.KindForwardNodeToken, nodesecrets.FallbackMissing))
-	})
 }
 
 // requireRecordedRenewAfter: the certificate's record (issued_at, not_after)
