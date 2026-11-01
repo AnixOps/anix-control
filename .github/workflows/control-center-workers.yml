@@ -17,6 +17,11 @@ on:
       - '.github/workflows/control-center-workers.yml'
   workflow_dispatch:
 
+# GITHUB_TOKEN is read-only by default; jobs that publish declare their own
+# permissions.
+permissions:
+  contents: read
+
 jobs:
   test:
     name: Control Center Workers
