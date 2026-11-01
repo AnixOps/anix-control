@@ -306,8 +306,8 @@ value that is not a positive id or more than 200). It answers `{"data":
 ```
 
 `last_online_at` is a Unix time in seconds: the last time a node reported
-the user's traffic or listed one of their connections (UniProxy, gRPC and
-Agent Control alike), accurate to a minute, or `null` for a user never seen
+the user's traffic or listed one of their connections on the Agent Control
+stream, accurate to a minute, or `null` for a user never seen
 since Control began recording it (`docs/reference/traffic-stats-operations.md`,
 "User Last Online"). The user list and detail above keep their v2 shape, which
 the identity package's native handlers must answer byte for byte; ask this
@@ -514,7 +514,7 @@ GET /api/v4/kernel/nodes/:id/traffic?granularity=day                  # 最近 3
 （Reality/TLS `private_key`、WireGuard `server_private_key`、`server_key`、
 `password`、`obfs-password`、`psk`、`token` 等）以及节点 `raw_config` 中的密钥都显示为
 `********`；公钥和 Reality `short_id` 照常显示。更新时原样提交 `********` 即保留已存的值，
-提交新值则替换。节点自身仍通过 UniProxy / gRPC 拿到真实配置。
+提交新值则替换。节点自身仍通过 Agent 控制流拿到真实配置。
 
 `GET /api/v2/admin/nodes/:id/credentials` 返回单个节点的 `api_key` / `secret`
 （部署助手和 Ansible 使用），每次读取都记入审计日志（action `reveal`）。
