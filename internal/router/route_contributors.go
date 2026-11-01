@@ -16,6 +16,7 @@ var routeContributors []func(r *gin.Engine, cfg *config.Config)
 
 // registerRouteContributor adds a contributor; it is meant for init
 // functions of files that a build may leave out.
+//nolint:unused // called by files only the commercial build adds (router_commercial.go)
 func registerRouteContributor(fn func(r *gin.Engine, cfg *config.Config)) {
 	routeContributors = append(routeContributors, fn)
 }
