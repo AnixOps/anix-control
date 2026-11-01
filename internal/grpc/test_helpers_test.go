@@ -13,10 +13,6 @@ import (
 	"google.golang.org/grpc"
 )
 
-type grpcCloseSender interface {
-	CloseSend() error
-}
-
 func requireInMemoryDatabase(t testing.TB) {
 	t.Helper()
 
@@ -46,12 +42,6 @@ func requireClientConnClosed(t testing.TB, conn *grpc.ClientConn) {
 	t.Helper()
 
 	require.NoError(t, conn.Close())
-}
-
-func requireCloseSend(t testing.TB, stream grpcCloseSender) {
-	t.Helper()
-
-	require.NoError(t, stream.CloseSend())
 }
 
 func serveGRPCServerForTest(t testing.TB, server *grpc.Server, lis net.Listener) <-chan error {
