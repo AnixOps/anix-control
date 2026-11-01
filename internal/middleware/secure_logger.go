@@ -31,13 +31,6 @@ func NodeSecureLogger() gin.HandlerFunc {
 			SetRaw("node_id", nodeID).
 			SetIP("node_ip", c.ClientIP())
 
-		// 检查是否有签名
-		if sig := c.GetHeader(SignatureHeader); sig != "" {
-			logEntry.SetRaw("signed", true)
-		} else {
-			logEntry.SetRaw("signed", false)
-		}
-
 		log.Printf("[NODE] %s", logEntry.String())
 	}
 }

@@ -91,8 +91,6 @@ var pinnedCredentialAnswers = map[string]string{
 	"generate auth key":                             `200 {"code":0,"data":{"expire_at":1,"id":1,"key":"<hex64>","name":"bootstrap"},"msg":"操作成功","ts":0}`,
 	"generate auth key without expiry":              `200 {"code":0,"data":{"expire_at":null,"id":2,"key":"<hex64>","name":"forever"},"msg":"操作成功","ts":0}`,
 	"generate auth key, bad body":                   `400 {"message":"参数错误"}`,
-	"internal generate auth key":                    `200 {"data":{"expire_at":1,"id":3,"key":"<hex64>","name":"ansible"},"message":"生成成功"}`,
-	"internal generate auth key without a name":     `400 {"message":"参数错误"}`,
 	"delete auth key":                               `200 {"code":0,"data":{"message":"删除成功"},"msg":"操作成功","ts":0}`,
 	"delete auth key again":                         `200 {"code":0,"data":{"message":"删除成功"},"msg":"操作成功","ts":0}`,
 	"delete auth key, bad id":                       `400 {"message":"无效的ID"}`,
@@ -299,11 +297,7 @@ func (s *NodeCredentialAnswersTestSuite) TestRegistrationKeys() {
 	code, body = s.serve(http.MethodPost, "/admin/auth-keys", "/admin/auth-keys", `{"expire_days":-1}`, h.GenerateAuthKey)
 	s.pin("generate auth key, bad body", code, body)
 
-	code, body = s.serve(http.MethodPost, "/internal/auth-keys", "/internal/auth-keys", `{"name":"ansible","node_name":"relay-1","expire_days":1}`, h.InternalGenerateAuthKey)
-	s.pin("internal generate auth key", code, body)
-	code, body = s.serve(http.MethodPost, "/internal/auth-keys", "/internal/auth-keys", `{}`, h.InternalGenerateAuthKey)
-	s.pin("internal generate auth key without a name", code, body)
-	s.Equal(int64(3), s.count(&model.AuthorizedKey{}, "1 = 1"), "the internal route needs a name too")
+	s.Equal(int64(2), s.count(&model.AuthorizedKey{}, "1 = 1"))
 
 	code, body = s.serve(http.MethodDelete, "/admin/auth-keys/:id", "/admin/auth-keys/1", "", h.DeleteAuthKey)
 	s.pin("delete auth key", code, body)

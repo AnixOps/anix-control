@@ -98,9 +98,9 @@ keys:
 
   # app
   - key: app.api_token
-    status: read
+    status: ignored
     removed_in: M5 (N9)
-    reason: the legacy shared token of /flow/upload and the internal v2 routes, removed with them; administrators use admin API tokens
+    reason: the legacy shared token of /flow/upload and the internal v2 routes, which are removed; the key does nothing, so remove it (administrators use admin API tokens)
     secret: true
   - key: app.edition
     status: ignored

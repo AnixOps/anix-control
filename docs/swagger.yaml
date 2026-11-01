@@ -8342,42 +8342,6 @@ paths:
       summary: The options of the system settings
       tags:
       - Kernel
-  /internal/auth-keys:
-    post:
-      consumes:
-      - application/json
-      description: 使用API Token认证生成节点自动注册的授权密钥（供Ansible等自动化工具使用）
-      parameters:
-      - description: 密钥请求 {name, expire_days, node_name}
-        in: body
-        name: request
-        required: true
-        schema:
-          additionalProperties: true
-          type: object
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties: true
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - ApiTokenAuth: []
-      summary: 内部生成授权密钥
-      tags:
-      - 内部API
   /login:
     post:
       consumes:

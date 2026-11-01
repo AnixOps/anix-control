@@ -445,7 +445,7 @@ database:
 旧配置里显式设置的 `jwt.secret` 会被接管，记录在 `root.key` 中，此后即使配置文件不再设置也继续使用，
 直到轮换；模板值（`your-jwt-secret-key-change-in-production` 等）不会被接管。
 
-> 弱密钥提示：`jwt.secret`、`app.api_token` 只要已设置但短于 32 字节、只由少数几个字符组成或仍是模板值，启动时会记录一条 `WARNING`（只写设置名和轮换方法，不含密钥内容）。它不会阻止启动，已有的较短密钥继续可用；用 `openssl rand -hex 32` 生成新值，在下次重启时通过 `ANIX_CONTROL_JWT_SECRET`（或 `..._FILE`）换上。换 `jwt.secret` 会让所有人重新登录。
+> 弱密钥提示：`jwt.secret` 只要已设置但短于 32 字节、只由少数几个字符组成或仍是模板值，启动时会记录一条 `WARNING`（只写设置名和轮换方法，不含密钥内容）。它不会阻止启动，已有的较短密钥继续可用；用 `openssl rand -hex 32` 生成新值，在下次重启时通过 `ANIX_CONTROL_JWT_SECRET`（或 `..._FILE`）换上。换 `jwt.secret` 会让所有人重新登录。
 
 ---
 

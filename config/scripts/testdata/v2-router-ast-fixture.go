@@ -35,15 +35,15 @@ func Setup(r *gin.Engine) {
 
 func ParentGroupUse(r *gin.Engine) {
 	api := r.Group("/api")
-	api.Use(middleware.NodeAuth())
+	api.Use(middleware.AdminAuth())
 	v2 := api.Group("/v2")
-	v2.GET("/inherited-node-auth", inheritedHandler.Get)
+	v2.GET("/inherited-admin-auth", inheritedHandler.Get)
 }
 
 func ParentGroupInlineMiddleware(r *gin.Engine) {
-	api := r.Group("/api", middleware.NodeAuth())
+	api := r.Group("/api", middleware.AdminAuth())
 	v2 := api.Group("/v2")
-	v2.GET("/inherited-inline-node-auth", inheritedHandler.Inline)
+	v2.GET("/inherited-inline-admin-auth", inheritedHandler.Inline)
 }
 
 func ChainedRoutes(r *gin.Engine) {

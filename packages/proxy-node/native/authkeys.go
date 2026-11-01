@@ -126,38 +126,6 @@ func (s *Service) GenerateAuthKey(ctx context.Context, request pluginhostsdk.Nat
 	return s.panel(answer)
 }
 
-// InternalGenerateAuthKey is POST /api/v2/internal/auth-keys, for
-// automation authenticated by an API token: its answer is not the panel
-// envelope.
-func (s *Service) InternalGenerateAuthKey(ctx context.Context, request pluginhostsdk.NativeRequest) (pluginhostsdk.NativeResponse, error) {
-	var req struct {
-		Name       string `json:"name" binding:"min=1,max=255"`
-		ExpireDays int    `json:"expire_days" binding:"gte=0"`
-		NodeName   string `json:"node_name" binding:"omitempty,max=255"`
-	}
-	if err := binding.JSON.BindBody(request.Body, &req); err != nil {
-		return message(http.StatusBadRequest, "参数错误")
-	}
-	if s.NodeOps == nil || len(request.Binding) == 0 {
-		return pluginhostsdk.NativeResponse{}, pluginhostsdk.ErrNativeUnavailable
-	}
-	if req.Name == "" {
-		if req.NodeName != "" {
-			req.Name = "Ansible-" + req.NodeName
-		} else {
-			req.Name = "Ansible-Auto-Generated"
-		}
-	}
-	answer, ok, err := s.issueRegistrationKey(ctx, request, req.Name, req.ExpireDays)
-	if err != nil {
-		return pluginhostsdk.NativeResponse{}, pluginhostsdk.ErrNativeUnavailable
-	}
-	if !ok {
-		return message(http.StatusInternalServerError, "生成失败")
-	}
-	return jsonAnswer(http.StatusOK, map[string]any{"message": "生成成功", "data": answer})
-}
-
 // DeleteAuthKey is DELETE /api/v2/admin/auth-keys/:id: the kernel revokes
 // the key (RevokeRegistrationKey); a key that does not exist is nothing to
 // do.

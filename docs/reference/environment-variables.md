@@ -21,7 +21,6 @@ Variables that are not configuration keys:
 | Variable | Purpose |
 |----------|---------|
 | `ANIX_CONTROL_CONFIG` | config file to load instead of the built-in defaults |
-| `NODE_DEFAULT_AUTH_KEY` | seeds a default node authorized key at startup |
 | `TZ` | process time zone; traffic resets follow it (image default `Asia/Shanghai`) |
 | `ANIX_CONTROL_ACME_DIRECTORY_URL` | another ACME directory than the public CA's, for tests and a staging validation ([testing ACME](configuration.md#testing-acme)) |
 | `ANIX_CONTROL_ACME_CA_FILE` | extra PEM roots for that directory's own https (a test CA) |

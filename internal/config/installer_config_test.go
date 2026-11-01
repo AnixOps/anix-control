@@ -54,7 +54,6 @@ func TestInstallerFreshConfigPassesServerValidation(t *testing.T) {
 	assert.Equal(t, TLSModeExternal, loaded.TLSModeOrDefault())
 	assert.Equal(t, []string{DefaultListenAddress}, loaded.Panel().PlainAddresses, "the install's health check reaches 127.0.0.1:8080")
 	assert.Empty(t, loaded.JWT.Secret, "the root key derives the JWT secret")
-	assert.Empty(t, loaded.App.APIToken)
 	assert.Empty(t, loaded.ModuleRuntime.CAKEK, "the CA key is a file the unit passes, not a config key")
 	assert.Empty(t, report.Deprecated, "the installer writes no deprecated key")
 	require.NoError(t, loaded.ValidateForServer(), "the generated config must pass the server checks")

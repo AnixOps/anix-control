@@ -80,12 +80,11 @@ func bootstrapDatabase(ctx context.Context, cfg *config.Config) error {
 		}
 	}
 
-	// The default subscription group, plan and authorization key. No
+	// The default subscription group and plan. No
 	// administrator is created: the first one claims the panel with a
 	// one-time link (anix-control admin claim-link).
 	service.InitSubscriptionDefaults()
 	service.InitDefaultPlan()
-	service.InitDefaultAuthKeyFromEnv()
 
 	return nil
 }

@@ -867,14 +867,6 @@
     },
     {
       "method": "POST",
-      "path": "/api/v2/internal/auth-keys",
-      "package_id": "proxy-node",
-      "route_id": "proxy.internal.auth_keys.post",
-      "mode": "native-flagged",
-      "legacy": "router"
-    },
-    {
-      "method": "POST",
       "path": "/api/v2/login",
       "package_id": "identity-platform",
       "route_id": "identity.auth.login",

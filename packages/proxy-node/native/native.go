@@ -78,7 +78,6 @@ const (
 	AuthKeysRouteID        = "proxy.admin.auth_keys.get"
 	GenerateAuthKeyRouteID = "proxy.admin.auth_keys.post"
 	DeleteAuthKeyRouteID   = "proxy.admin.auth_keys.id.delete"
-	InternalAuthKeyRouteID = "proxy.internal.auth_keys.post"
 )
 
 // Handlers returns the native handlers by route id. A host without
@@ -97,7 +96,6 @@ func (s *Service) Handlers() map[string]pluginhostsdk.NativeHandler {
 		handlers[UpdateRawConfigRouteID] = s.UpdateRawConfig
 		handlers[GenerateAuthKeyRouteID] = s.GenerateAuthKey
 		handlers[DeleteAuthKeyRouteID] = s.DeleteAuthKey
-		handlers[InternalAuthKeyRouteID] = s.InternalGenerateAuthKey
 	}
 	return handlers
 }

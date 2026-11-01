@@ -46,7 +46,7 @@ func TestBulkActionsRunTheSingleItemRoutesThroughThePackageGateway(t *testing.T)
 		Env:      "test",
 		Database: config.DatabaseConfig{Driver: "sqlite", Database: ":memory:"},
 		JWT:      config.JWTConfig{Secret: "bulk-e2e-test-secret", Expire: 3600},
-		App:      config.AppConfig{APIToken: "bulk-e2e-api-token", SubscribePath: "s"},
+		App:      config.AppConfig{SubscribePath: "s"},
 	}
 	config.Set(cfg)
 	require.NoError(t, database.Init(&cfg.Database))

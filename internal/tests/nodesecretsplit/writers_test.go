@@ -102,34 +102,14 @@ func TestEveryWriterDualWrites(t *testing.T) {
 		require.Equal(t, 2, secretVersion(t, db, nodesecrets.ScopeNodeProtocol, protocol.ID, "reality_settings", "/private_key"))
 		requireVerified(t, db)
 
-		// Registration keys: creation, use (registration), deletion.
+		// Registration keys: creation, deletion.
 		authKey, rawKey, err := nodes.GenerateAuthKey("split-key", 30)
 		require.NoError(t, err)
 		registration := current(t, db, nodesecrets.SubjectRegistrationKey, authKey.ID, nodesecrets.KindRegistrationKey)
 		require.Equal(t, rawKey, registration.Value)
 		require.NotNil(t, registration.ExpiresAt)
-		registered, err := nodes.RegisterNode(&model.NodeRegisterRequest{AuthKey: rawKey, Name: "registered", Port: 443}, "192.0.2.10")
-		require.NoError(t, err)
-		require.Equal(t, registered.APIKey, current(t, db, nodesecrets.SubjectProxy, registered.NodeID, nodesecrets.KindNodeAPIKey).Value)
-		require.Equal(t, registered.Secret, current(t, db, nodesecrets.SubjectProxy, registered.NodeID, nodesecrets.KindNodeSharedSecret).Value)
-		requireVerified(t, db)
 		require.NoError(t, nodes.DeleteAuthKey(authKey.ID))
 		require.Zero(t, credentials(t, db, nodesecrets.SubjectRegistrationKey, authKey.ID))
-
-		// The registration key from the environment replaces its
-		// predecessor.
-		t.Setenv("NODE_DEFAULT_AUTH_KEY", "fake-env-key-1")
-		service.InitDefaultAuthKeyFromEnv()
-		var envKey model.AuthorizedKey
-		require.NoError(t, db.Where("name = ?", "Default (from env)").First(&envKey).Error)
-		require.Equal(t, "fake-env-key-1", current(t, db, nodesecrets.SubjectRegistrationKey, envKey.ID, nodesecrets.KindRegistrationKey).Value)
-		t.Setenv("NODE_DEFAULT_AUTH_KEY", "fake-env-key-2")
-		service.InitDefaultAuthKeyFromEnv()
-		require.Zero(t, credentials(t, db, nodesecrets.SubjectRegistrationKey, envKey.ID))
-		var replacement model.AuthorizedKey
-		require.NoError(t, db.Where("name = ?", "Default (from env)").First(&replacement).Error)
-		require.Equal(t, "fake-env-key-2", current(t, db, nodesecrets.SubjectRegistrationKey, replacement.ID, nodesecrets.KindRegistrationKey).Value)
-		requireVerified(t, db)
 
 		// Forward nodes: creation, a new token and address, an Ansible
 		// machine's empty token, deletion.
@@ -224,8 +204,6 @@ func TestDualWriteIsTransactional(t *testing.T) {
 		require.NoError(t, nodes.CreateNode(node))
 		protocol := &model.NodeProtocol{NodeID: node.ID, Name: "plain", Type: model.ProtocolVMess, Port: 443}
 		require.NoError(t, nodes.CreateProtocol(protocol))
-		authKey, rawKey, err := nodes.GenerateAuthKey("before", 0)
-		require.NoError(t, err)
 		failSplitWrites(t, b)
 
 		count := func(value any, query string, args ...any) int64 {
@@ -236,11 +214,7 @@ func TestDualWriteIsTransactional(t *testing.T) {
 		}
 		require.Error(t, nodes.CreateNode(&model.Node{Name: "failed", Host: "203.0.113.21", Port: 443}))
 		require.Zero(t, count(&model.Node{}, "name = ?", "failed"))
-		_, err = nodes.RegisterNode(&model.NodeRegisterRequest{AuthKey: rawKey, Name: "registered"}, "192.0.2.11")
-		require.Error(t, err)
-		require.Zero(t, count(&model.Node{}, "name = ?", "registered"))
-		require.Zero(t, count(&model.AuthorizedKey{}, "id = ? AND used > 0", authKey.ID), "the key is not counted as used")
-		_, _, err = nodes.GenerateAuthKey("failed", 0)
+		_, _, err := nodes.GenerateAuthKey("failed", 0)
 		require.Error(t, err)
 		require.Zero(t, count(&model.AuthorizedKey{}, "name = ?", "failed"))
 		require.Error(t, service.NewForwardNodeService(db).Create(&model.ForwardNode{Name: "failed", Type: "relay", Host: "198.51.100.20", Port: 443, APIToken: "fake-failed-token"}))

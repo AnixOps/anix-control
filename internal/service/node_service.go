@@ -8,8 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"net"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -408,161 +406,6 @@ func (s *NodeService) DeleteNode(id uint) error {
 
 // ========== 节点自动注册 ==========
 
-// RegisterNode 节点自动注册
-func (s *NodeService) RegisterNode(req *model.NodeRegisterRequest, clientIP string) (*model.NodeRegisterResponse, error) {
-	// 1. 生成节点凭证 (the registration key is looked up in the transaction
-	// below)
-	apiKey, err := generateSecureToken(32)
-	if err != nil {
-		return nil, errors.New("生成API密钥失败")
-	}
-	secret, err := generateSecureToken(32)
-	if err != nil {
-		return nil, errors.New("生成共享密钥失败")
-	}
-
-	// 3. 创建节点 + 默认协议 + 标记授权密钥 (事务 + 悲观锁防并发)
-	nodeName := req.Name
-	if nodeName == "" {
-		nodeName = "Node-" + clientIP
-	}
-
-	// Fall back to the client IP when the node did not advertise a host. This
-	// matters for gRPC registration (the HTTP handler also fills this in, but
-	// the gRPC path goes straight to the service), and keeps the node probeable.
-	// clientIP may be "ip:port" (gRPC peer addr) — strip the port to a bare host.
-	nodeHost := req.Host
-	if nodeHost == "" && clientIP != "" && clientIP != "unknown" {
-		if host, _, splitErr := net.SplitHostPort(clientIP); splitErr == nil && host != "" {
-			nodeHost = host
-		} else {
-			nodeHost = clientIP
-		}
-	}
-
-	node := &model.Node{
-		Name:          nodeName,
-		Host:          nodeHost,
-		Port:          req.Port,
-		APIKey:        apiKey,
-		APIKeyHash:    hashString(apiKey),
-		Secret:        secret,
-		Status:        model.NodeStatusOnline,
-		ServerIP:      &clientIP,
-		ServerVersion: &req.ServerVersion,
-		ServerOS:      &req.ServerOS,
-		AutoRegister:  1,
-	}
-
-	now := time.Now().Unix()
-	node.LastCheckAt = &now
-
-	defaultPort := req.Port
-	if defaultPort == 0 {
-		defaultPort = 443
-	}
-	defaultTransport := "tcp"
-	protocol := &model.NodeProtocol{
-		Name:      "Default VMess",
-		Type:      model.ProtocolVMess,
-		Port:      defaultPort,
-		Enable:    1,
-		Sort:      0,
-		TLS:       0,
-		Transport: &defaultTransport,
-	}
-
-	if err := s.db.Transaction(func(tx *gorm.DB) error {
-		// 在事务内用 SELECT FOR UPDATE 锁定授权密钥，防止并发注册. The key is
-		// found through the node credential split.
-		authKey, err := nodesecrets.LockRegistrationKey(tx, req.AuthKey)
-		if err != nil {
-			return errors.New("授权密钥无效")
-		}
-
-		// 检查是否过期
-		if authKey.ExpireAt != nil && *authKey.ExpireAt < time.Now().Unix() {
-			return errors.New("授权密钥已过期")
-		}
-
-		// 创建节点
-		if err := tx.Create(node).Error; err != nil {
-			return errors.New("创建节点失败")
-		}
-
-		// 创建默认协议
-		protocol.NodeID = node.ID
-		if err := tx.Create(protocol).Error; err != nil {
-			return errors.New("创建默认协议失败")
-		}
-
-		// 计数器 +1，记录有多少节点用此密钥注册
-		if err := tx.Model(authKey).Update("used", authKey.Used+1).Error; err != nil {
-			return errors.New("更新密钥使用计数失败")
-		}
-
-		// The node's credentials, its protocol and the key it used, in
-		// the split tables too.
-		for _, write := range []struct {
-			table string
-			id    uint
-		}{{nodesecrets.TableNode, node.ID}, {nodesecrets.TableNodeProtocol, protocol.ID}, {nodesecrets.TableAuthorizedKey, authKey.ID}} {
-			if err := nodesecrets.Sync(tx, write.table, write.id); err != nil {
-				log.Printf("[node] register: saving the split credentials failed: %v", err)
-				return errors.New("保存节点凭据失败")
-			}
-		}
-		return nil
-	}); err != nil {
-		return nil, err
-	}
-
-	return &model.NodeRegisterResponse{
-		NodeID:  node.ID,
-		APIKey:  apiKey,
-		Secret:  secret,
-		Message: "节点注册成功",
-	}, nil
-}
-
-// Heartbeat 节点心跳
-func (s *NodeService) Heartbeat(nodeID uint, req *model.NodeHeartbeatRequest) error {
-	if err := ValidateTrafficDelta(req.Upload, req.Download); err != nil {
-		return err
-	}
-
-	now := time.Now().Unix()
-
-	updates := map[string]any{
-		"cpu_usage":     req.CPUUsage,
-		"memory_usage":  req.MemoryUsage,
-		"disk_usage":    req.DiskUsage,
-		"uptime":        req.Uptime,
-		"online_users":  req.OnlineUsers,
-		"last_check_at": now,
-		"status":        NodeHeartbeatStatus(),
-	}
-
-	result := s.db.Model(&model.Node{}).Where("id = ?", nodeID).Updates(updates)
-	if result.Error != nil {
-		return result.Error
-	}
-	if result.RowsAffected == 0 {
-		return gorm.ErrRecordNotFound
-	}
-
-	// 累加流量: 沿 ParentID 链条逐级累加(转发子节点的流量同时记到每一级上级/落地节点)。
-	// 心跳/在线状态已落库在前面, 这里失败只向调用方返回错误用于记录日志,
-	// 不能反过来让流量累加失败连带把节点判定为离线。
-	if req.Upload > 0 || req.Download > 0 {
-		if err := s.accumulateTraffic(nodeID, req.Upload, req.Download, true); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
 // AccumulateTrafficOnly 仅把流量累加到节点自身及其父节点链，不更新心跳指标。
 func (s *NodeService) AccumulateTrafficOnly(nodeID uint, upload, download int64) error {
 	if err := ValidateTrafficDelta(upload, download); err != nil {
@@ -698,14 +541,6 @@ func (s *NodeService) UpdateRuntimeHealth(nodeID uint, healthy bool, message str
 		return gorm.ErrRecordNotFound
 	}
 	return nil
-}
-
-// GetNodeByAPIKey 通过API Key获取节点 by its stored hash, for the gRPC node
-// listener and the Agent Control stream. The lookup goes through the node
-// credential split, which applies the table's phase and never matches a
-// tombstone or the placeholder.
-func (s *NodeService) GetNodeByAPIKey(apiKey string) (*model.Node, error) {
-	return nodesecrets.NodeByAPIKey(s.db, apiKey, false)
 }
 
 // NodeCredentials answers node's API key and shared secret, where the
@@ -1010,73 +845,6 @@ func (s *NodeService) GetNodeStats() (map[string]any, error) {
 }
 
 // ========== 初始化 ==========
-
-// InitDefaultAuthKeyFromEnv 从环境变量初始化默认授权密钥
-// 环境变量: NODE_DEFAULT_AUTH_KEY
-// 如果设置了该环境变量：
-//   - 如果密钥内容已存在 → 跳过
-//   - 如果存在同名默认密钥但内容不同 → 删除旧的，创建新的
-//   - 如果不存在 → 创建
-//
-// Note: 改变 AuthKey 只会影响新节点注册，已注册节点使用 APIKey 通信，不受影响
-func InitDefaultAuthKeyFromEnv() {
-	defaultKey := os.Getenv("NODE_DEFAULT_AUTH_KEY")
-	if defaultKey == "" {
-		return // 环境变量未设置，跳过
-	}
-
-	db := database.Get()
-	keyHash := hashString(defaultKey)
-
-	// 1. 检查密钥内容是否已经存在（相同哈希就是相同密钥）. Read through the
-	// node credential split: a finalized table's key_hash column is empty.
-	exists, err := nodesecrets.RegistrationKeyExists(db, defaultKey)
-	if err != nil {
-		log.Printf("Failed to look up the default auth key: %v", err)
-		return
-	}
-	if exists {
-		log.Printf("Default auth key from environment already exists (hash: %s), skipping", keyHash[:12])
-		return
-	}
-
-	// 2. 如果存在同名"Default (from env)"，删除旧的（环境变量已改变，需要更新）
-	// 3. 创建新的授权密钥. The old keys go and the new one is created, with
-	// their split copies, in one transaction.
-	authKey := &model.AuthorizedKey{
-		Name:    "Default (from env)",
-		Key:     defaultKey,
-		KeyHash: keyHash,
-		Used:    0,
-	}
-	if err := db.Transaction(func(tx *gorm.DB) error {
-		var existingIDs []uint
-		if err := tx.Model(&model.AuthorizedKey{}).
-			Where("name = ?", "Default (from env)").
-			Pluck("id", &existingIDs).Error; err != nil {
-			return err
-		}
-		if len(existingIDs) > 0 {
-			log.Printf("Removing old default auth key (name matches, content changed)...")
-			if err := tx.Delete(&model.AuthorizedKey{}, existingIDs).Error; err != nil {
-				return err
-			}
-			if err := nodesecrets.Sync(tx, nodesecrets.TableAuthorizedKey, existingIDs...); err != nil {
-				return err
-			}
-		}
-		log.Println("Creating default auth key from environment...")
-		if err := tx.Create(authKey).Error; err != nil {
-			return err
-		}
-		return nodesecrets.Sync(tx, nodesecrets.TableAuthorizedKey, authKey.ID)
-	}); err != nil {
-		log.Printf("Failed to create default auth key: %v", err)
-		return
-	}
-
-	log.Printf("Default auth key created/updated successfully (name: %s, hash: %s)", authKey.Name, keyHash[:12])
-}
 
 // ========== 辅助函数 ==========
 

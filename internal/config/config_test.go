@@ -190,7 +190,6 @@ func TestShippedTemplateIsTheDomainLine(t *testing.T) {
 	assert.Equal(t, TLSModeACME, loaded.TLSModeOrDefault())
 	assert.Equal(t, officialPublicKey, loaded.Plugins.OfficialPublicKey)
 	assert.Empty(t, loaded.JWT.Secret)
-	assert.Empty(t, loaded.App.APIToken)
 	assert.Empty(t, loaded.ModuleRuntime.CAKEK)
 
 	data, err := os.ReadFile(path)
@@ -399,7 +398,6 @@ func TestAppConfig(t *testing.T) {
 		App: AppConfig{
 			Name:             "TestApp",
 			Version:          "1.0.0",
-			APIToken:         "api-token-123",
 			TrafficLogEnable: true,
 			SubscribePath:    "s",
 		},
@@ -409,7 +407,6 @@ func TestAppConfig(t *testing.T) {
 	got := Get()
 	assert.Equal(t, "TestApp", got.App.Name)
 	assert.Equal(t, "1.0.0", got.App.Version)
-	assert.Equal(t, "api-token-123", got.App.APIToken)
 	assert.True(t, got.App.TrafficLogEnable)
 	assert.Equal(t, "s", got.App.SubscribePath)
 }

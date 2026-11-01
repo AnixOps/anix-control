@@ -50,7 +50,7 @@ OWNER_ROUTE_PREFIXES = {
     "forward": ("forward.",),
 }
 ALLOWED_ENVELOPES = frozenset({"data", "empty", "panel", "raw", "websocket"})
-ALLOWED_MIDDLEWARE_GROUPS = frozenset({"public", "user", "admin", "agent", "node-api", "internal"})
+ALLOWED_MIDDLEWARE_GROUPS = frozenset({"public", "user", "admin", "agent"})
 ALLOWED_TRANSPORTS = frozenset({"http", "websocket"})
 CATALOG_FIELDS = frozenset({"method", "path", "owner", "route_id", "envelope", "middleware_group", "transport"})
 INVENTORY_FIELDS = frozenset({"method", "path", "handler", "middleware_group", "transport"})

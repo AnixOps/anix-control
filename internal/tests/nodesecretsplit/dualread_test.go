@@ -4,11 +4,8 @@ import (
 	"bytes"
 	"context"
 	"crypto/ecdh"
-	"crypto/hmac"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -17,7 +14,6 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/AnixOps/anix-control/v5/internal/handler"
 	"github.com/AnixOps/anix-control/v5/internal/middleware"
@@ -35,7 +31,6 @@ import (
 type fleet struct {
 	plain           model.Node // written before P1: no hash
 	created         model.Node // CreateNode: a Reality protocol
-	registered      model.NodeRegisterResponse
 	registrationKey string
 	rawNode         model.Node // a raw configuration with a private key
 	rawPrivate      string
@@ -73,9 +68,6 @@ func newFleet(t *testing.T, db *gorm.DB) *fleet {
 	var err error
 	_, f.registrationKey, err = nodes.GenerateAuthKey("fleet", 0)
 	require.NoError(t, err)
-	registered, err := nodes.RegisterNode(&model.NodeRegisterRequest{AuthKey: f.registrationKey, Name: "registered", Port: 443}, "192.0.2.50")
-	require.NoError(t, err)
-	f.registered = *registered
 
 	f.rawNode = model.Node{Name: "raw", Host: "203.0.113.52", Port: 443}
 	require.NoError(t, nodes.CreateNode(&f.rawNode))
@@ -110,10 +102,7 @@ func (f *fleet) readerResults(t *testing.T, db *gorm.DB, round int) map[string]b
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	ok := func(c *gin.Context) { c.String(http.StatusOK, "%d", c.GetUint("node_id")) }
-	router.GET("/uniproxy", middleware.NodeAuth(), ok)
-	router.GET("/node", middleware.NodeAPIKeyAuth(), ok)
 	router.GET("/package", middleware.NodeAPIKeyHeaderAuth(), ok)
-	router.POST("/signed", middleware.NodeAPIKeyAuth(), middleware.SignatureAuth(), ok)
 	router.GET("/credentials/:id", handler.NewNodeHandler().GetNodeCredentials)
 	serve := func(method, path string, nodeID uint, key string, body string, header map[string]string) *httptest.ResponseRecorder {
 		separator := "?"
@@ -141,28 +130,10 @@ func (f *fleet) readerResults(t *testing.T, db *gorm.DB, round int) map[string]b
 	}{
 		{"plain", f.plain.ID, "fake-plain-key"},
 		{"created", f.created.ID, f.created.APIKey},
-		{"registered", f.registered.NodeID, f.registered.APIKey},
 	}
 	for _, proxy := range proxies {
-		for _, path := range []string{"/uniproxy", "/node", "/package"} {
-			results[proxy.name+" "+path] = authenticated(serve(http.MethodGet, path, proxy.id, proxy.key, "", nil), proxy.id)
-		}
+		results[proxy.name+" /package"] = authenticated(serve(http.MethodGet, "/package", proxy.id, proxy.key, "", nil), proxy.id)
 	}
-	// The gRPC listener and the Agent Control stream look nodes up by their
-	// key's hash.
-	for _, proxy := range proxies[1:] {
-		found, err := service.NewNodeService().GetNodeByAPIKey(proxy.key)
-		results[proxy.name+" grpc"] = err == nil && found.ID == proxy.id
-	}
-
-	// The request signature with the node's shared secret.
-	timestamp := strconv.FormatInt(time.Now().Unix(), 10)
-	body := `{"round":` + strconv.Itoa(round) + `}`
-	mac := hmac.New(sha256.New, []byte(f.created.Secret))
-	mac.Write([]byte(timestamp + http.MethodPost + "/signed" + body))
-	signature := hex.EncodeToString(mac.Sum(nil))
-	results["created signature"] = authenticated(serve(http.MethodPost, "/signed", f.created.ID, f.created.APIKey, body,
-		map[string]string{middleware.SignatureHeader: signature, middleware.TimestampHeader: timestamp}), f.created.ID)
 
 	// The administrators' credentials route shows the stored key and secret.
 	rec := serve(http.MethodGet, "/credentials/"+strconv.FormatUint(uint64(f.created.ID), 10), 0, "", "", nil)
@@ -188,10 +159,6 @@ func (f *fleet) readerResults(t *testing.T, db *gorm.DB, round int) map[string]b
 	}
 	results["created config"] = configKey(f.created.ID) == f.realityPrivate
 	results["raw config"] = configKey(f.rawNode.ID) == f.rawPrivate
-
-	// Registration with the registration key.
-	_, err := service.NewNodeService().RegisterNode(&model.NodeRegisterRequest{AuthKey: f.registrationKey, Name: fmt.Sprintf("again-%d", round), Port: 443}, "192.0.2.51")
-	results["registration"] = err == nil
 
 	// The WireGuard peer in a subscription and in the node's user list.
 	peer, err := service.NewSubscriptionService().GetOrCreateWireGuardPeer(f.wireGuard.ID, f.user.ID, "10.66.0.0/24")
@@ -236,7 +203,7 @@ func olderBinaryAuthenticates(t *testing.T, db *gorm.DB, f *fleet) {
 	for _, proxy := range []struct {
 		id  uint
 		key string
-	}{{f.plain.ID, "fake-plain-key"}, {f.created.ID, f.created.APIKey}, {f.registered.NodeID, f.registered.APIKey}} {
+	}{{f.plain.ID, "fake-plain-key"}, {f.created.ID, f.created.APIKey}} {
 		var node model.Node
 		require.NoError(t, db.First(&node, proxy.id).Error)
 		require.True(t, node.APIKeyHash == sha256Hex(proxy.key) || (node.APIKeyHash == "" && node.APIKey == proxy.key), "node %d", proxy.id)
@@ -298,7 +265,6 @@ func TestEveryReaderInEachPhase(t *testing.T) {
 		require.Greater(t, nodesecrets.FallbackCount(nodesecrets.TableNode, nodesecrets.KindNodeAPIKey, nodesecrets.FallbackMissing), apiKeys)
 		for _, counted := range [][2]string{
 			{nodesecrets.TableNode, nodesecrets.KindNodeSharedSecret}, {nodesecrets.TableNode, "raw_config"},
-			{nodesecrets.TableAuthorizedKey, nodesecrets.KindRegistrationKey},
 			{nodesecrets.TableNodeProtocol, "reality_settings"}, {nodesecrets.TableWireGuardPeer, "private_key"},
 		} {
 			require.NotZero(t, nodesecrets.FallbackCount(counted[0], counted[1], nodesecrets.FallbackMissing), "%v", counted)
@@ -318,7 +284,7 @@ func TestEveryReaderInEachPhase(t *testing.T) {
 // (section 4.4), bypassing the writers.
 func (f *fleet) moveLegacySecrets(t *testing.T, db *gorm.DB) {
 	t.Helper()
-	for _, id := range []uint{f.plain.ID, f.created.ID, f.registered.NodeID} {
+	for _, id := range []uint{f.plain.ID, f.created.ID} {
 		require.NoError(t, db.Model(&model.Node{}).Where("id = ?", id).
 			UpdateColumns(map[string]any{"api_key": nodesecrets.Tombstone(uint64(id)), "api_key_hash": "", "secret": ""}).Error)
 	}

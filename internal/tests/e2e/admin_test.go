@@ -58,7 +58,6 @@ func (s *AdminE2ETestSuite) SetupSuite() {
 		App: config.AppConfig{
 			Name:          "V2Board Admin E2E Test",
 			Version:       "test",
-			APIToken:      "test-api-token",
 			SubscribePath: "s",
 		},
 	}

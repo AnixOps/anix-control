@@ -362,17 +362,6 @@ func TestAuthKeysParity(t *testing.T) {
 				return count
 			}},
 	})
-	internal := "/api/v2/internal/auth-keys"
-	automation := pluginhostsdk.Principal{ActorID: 0, Admin: false}
-	kernelWrite(t, kernelRoute("POST", internal, native.InternalAuthKeyRouteID, nodeHandler((*handler.NodeHandler).InternalGenerateAuthKey)), []packagecompat.Case{
-		// The name's min=1 refuses a request without one, so the kernel's
-		// default names never apply.
-		{Name: "a node name without a name", Path: internal, Body: []byte(`{"node_name":"hk-3","expire_days":1}`), Principal: automation},
-		{Name: "automation for a day", Path: internal, Body: []byte(`{"name":"rollout","node_name":"hk-3","expire_days":1}`), Principal: automation,
-			Mask: []string{"data.key", "data.expire_at"}},
-		{Name: "automation with a name", Path: internal, Body: []byte(`{"name":"ci"}`), Principal: automation, Mask: []string{"data.key"}},
-		{Name: "a node name too long", Path: internal, Body: []byte(fmt.Sprintf(`{"node_name":"%0256d"}`, 0)), Principal: automation},
-	})
 	keyPath := func(id string) string { return "/api/v2/admin/auth-keys/" + id }
 	kernelWrite(t, kernelRoute("DELETE", "/api/v2/admin/auth-keys/:id", native.DeleteAuthKeyRouteID, nodeHandler((*handler.NodeHandler).DeleteAuthKey)), []packagecompat.Case{
 		{Name: "a key", Path: keyPath("1")},
