@@ -26,7 +26,7 @@ var gormConfig = &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)}
 
 func migrate(t *testing.T, db *gorm.DB) *gorm.DB {
 	t.Helper()
-	require.NoError(t, db.AutoMigrate(&model.DestinationStat{}, &model.SystemConfig{}, &model.AgentReportBatch{}))
+	require.NoError(t, db.AutoMigrate(&model.DestinationStat{}, &model.SystemConfig{}, &model.AgentReportBatch{}, &model.TrafficCategoryRule{}, &model.TrafficCategorySource{}, &model.OperationLog{}))
 	return db
 }
 

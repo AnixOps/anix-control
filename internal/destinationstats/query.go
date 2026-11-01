@@ -89,8 +89,8 @@ type summaryRow struct {
 	Connections int64
 }
 
-// Summarize answers a query. Categories are judged now, so a rule change
-// applies to the history too.
+// Summarize answers a query. Categories are judged now by the current
+// rules (CurrentClassifier), so a rule change applies to the history too.
 func Summarize(db *gorm.DB, query Query) (Summary, error) {
 	limit := query.Limit
 	if limit <= 0 {
@@ -116,6 +116,10 @@ func Summarize(db *gorm.DB, query Query) (Summary, error) {
 	if err := scope.Group("domain, protocol").Scan(&rows).Error; err != nil {
 		return summary, err
 	}
+	classifier, err := CurrentClassifier(db)
+	if err != nil {
+		return summary, err
+	}
 
 	categories := map[string]*CategoryTotal{}
 	type domainParts struct {
@@ -126,7 +130,7 @@ func Summarize(db *gorm.DB, query Query) (Summary, error) {
 	domains := map[string]*domainParts{}
 	for _, row := range rows {
 		totals := Totals{Upload: row.Upload, Download: row.Download, Connections: row.Connections}
-		category := Classify(row.Domain, row.Protocol)
+		category := classifier.Classify(row.Domain, row.Protocol)
 		summary.add(totals)
 		if categories[category] == nil {
 			categories[category] = &CategoryTotal{Category: category}

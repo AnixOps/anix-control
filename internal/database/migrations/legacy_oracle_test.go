@@ -145,6 +145,8 @@ func laterModels() []any {
 		&model.ReverseProxy{},              // 0022_reverse_proxies
 		&model.ReverseProxyACMEAccount{},   // 0022_reverse_proxies
 		&model.NodeUplinks{},               // 0023_node_uplinks
+		&model.TrafficCategoryRule{},       // 0024_traffic_categories
+		&model.TrafficCategorySource{},     // 0024_traffic_categories
 	}
 }
 

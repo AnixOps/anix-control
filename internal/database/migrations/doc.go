@@ -110,4 +110,7 @@
 //     (v5_reverse_proxy).
 //   - 0023_node_uplinks: each device's uplinks and the uplink each next
 //     device of its routes gets (v4_kernel_node_uplinks).
+//   - 0024_traffic_categories: the administrator's traffic category rules
+//     and the remote category lists (v5_traffic_category_rule,
+//     v5_traffic_category_source).
 package migrations

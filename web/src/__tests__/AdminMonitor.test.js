@@ -93,7 +93,7 @@ describe('流量与监控 page', () => {
 
     expect(wrapper.get('h1').text()).toBe('Traffic & Monitoring')
     const tabs = wrapper.findAll('[role="tab"]')
-    expect(tabs.map(tab => tab.text())).toEqual(['Live nodes', 'User traffic', 'Sites'])
+    expect(tabs.map(tab => tab.text())).toEqual(['Live nodes', 'User traffic', 'Sites', 'Categories'])
     expect(tabs[0].attributes('aria-selected')).toBe('true')
     expect(wrapper.find('[data-monitor-live]').exists()).toBe(true)
     expect(FakeSocket.instances).toHaveLength(1)
