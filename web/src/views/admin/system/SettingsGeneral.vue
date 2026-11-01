@@ -29,6 +29,17 @@
             />
           </UiGroupedListRow>
         </UiGroupedList>
+        <UiGroupedList :footer="t('adminSettings.general.subscription.domainsOnlyHelp')">
+          <UiGroupedListRow stacked>
+            <UiSwitch
+              v-model="subscriptionDomainsOnly"
+              :label="t('adminSettings.general.subscription.domainsOnly')"
+              :description="t('adminSettings.general.subscription.domainsOnlyHint')"
+              :disabled="normalizedSubscriptionDomains.length === 0"
+              data-test="subscription-domains-only"
+            />
+          </UiGroupedListRow>
+        </UiGroupedList>
         <UiGroupedList :title="t('adminSettings.general.subscription.preview')">
           <UiGroupedListRow v-if="normalizedSubscriptionDomains.length === 0" :label="t('adminSettings.general.subscription.previewEmpty')" />
           <UiGroupedListRow v-for="domain in normalizedSubscriptionDomains" v-else :key="domain">
@@ -86,6 +97,7 @@ import UiGroupedList from '@/ui/UiGroupedList.vue'
 import UiGroupedListRow from '@/ui/UiGroupedListRow.vue'
 import UiSection from '@/ui/UiSection.vue'
 import UiSkeleton from '@/ui/UiSkeleton.vue'
+import UiSwitch from '@/ui/UiSwitch.vue'
 import UiTextarea from '@/ui/UiTextarea.vue'
 import { useDelayedLoading } from '@/ui/composables/useDelayedLoading'
 import { useToast } from '@/ui/composables/useToast'
@@ -122,6 +134,11 @@ async function loadCatalogLinks() {
 }
 
 const subscriptionDomainsConfigKey = 'app.subscribe_domains'
+// On: subscriptions answer only on the domains above (the panel's own domain
+// answers 404), so a blocked subscription domain never takes the panel along.
+const subscriptionDomainsOnlyConfigKey = 'app.subscribe_domains_only'
+const subscriptionDomainsOnly = ref(false)
+const savedSubscriptionDomainsOnly = ref(false)
 const subscriptionPath = ref('/s')
 const subscriptionCurrentHost = ref(typeof window !== 'undefined' ? window.location.host : '')
 const subscriptionDomainsText = ref('')
@@ -177,7 +194,10 @@ const subscriptionDomainFieldError = computed(() => (
     ? t('adminSettings.general.subscription.invalidDomains', { domains: invalidSubscriptionDomains.value.join(', ') })
     : ''
 ))
-const subscriptionDirty = computed(() => subscriptionDomainsText.value !== savedSubscriptionDomainsText.value)
+const subscriptionDirty = computed(() => (
+  subscriptionDomainsText.value !== savedSubscriptionDomainsText.value ||
+  subscriptionDomainsOnly.value !== savedSubscriptionDomainsOnly.value
+))
 const subscriptionPreviewProtocol = computed(() => {
   if (typeof window === 'undefined') return 'https:'
   return window.location.protocol || 'https:'
@@ -203,10 +223,14 @@ const loadSubscriptionDomainSettings = async () => {
   subscriptionLoadError.value = null
   subscriptionDomainError.value = ''
   try {
-    const [settingsRes, rawConfigRes] = await Promise.allSettled([
+    const [settingsRes, rawConfigRes, onlyRes] = await Promise.allSettled([
       getSubscriptionSettings(),
-      getSystemConfig(subscriptionDomainsConfigKey)
+      getSystemConfig(subscriptionDomainsConfigKey),
+      getSystemConfig(subscriptionDomainsOnlyConfigKey)
     ])
+    const onlyValue = onlyRes.status === 'fulfilled' ? String(onlyRes.value?.data?.value ?? '').trim().toLowerCase() : ''
+    subscriptionDomainsOnly.value = ['true', '1', 'on', 'yes'].includes(onlyValue)
+    savedSubscriptionDomainsOnly.value = subscriptionDomainsOnly.value
 
     if (settingsRes.status === 'fulfilled') {
       const payload = readSubscriptionSettings(settingsRes.value)
@@ -273,6 +297,17 @@ const saveSubscriptionDomainSettings = async () => {
         failed
       )
     }
+    if (subscriptionDomainsOnly.value !== savedSubscriptionDomainsOnly.value) {
+      await ensureSystemMutation(
+        setSystemConfig(subscriptionDomainsOnlyConfigKey, {
+          value: subscriptionDomainsOnly.value ? 'true' : 'false',
+          type: 'boolean',
+          group: 'app',
+          description: 'Serve subscriptions only on the subscription domains'
+        }),
+        failed
+      )
+    }
     await loadSubscriptionDomainSettings()
     toast.success(t('adminSettings.general.subscription.saved'))
   } catch (err) {
@@ -284,6 +319,7 @@ const saveSubscriptionDomainSettings = async () => {
 
 function discardSubscriptionDomains() {
   subscriptionDomainsText.value = savedSubscriptionDomainsText.value
+  subscriptionDomainsOnly.value = savedSubscriptionDomainsOnly.value
   subscriptionDomainError.value = ''
 }
 

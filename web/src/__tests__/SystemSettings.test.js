@@ -155,6 +155,21 @@ describe('System settings page', () => {
     expect(router.currentRoute.value.path).toBe('/admin/users')
   })
 
+  it('saves the subscription-domains-only switch', async () => {
+    adminApi.getSystemConfig.mockImplementation(async key => ({
+      data: { value: key === 'app.subscribe_domains' ? '["sub.example.org"]' : '' }
+    }))
+    adminApi.setSystemConfig.mockResolvedValue({ code: 0 })
+    const { wrapper } = await mountAt('/admin/system/general')
+    const toggle = wrapper.get('[data-test="subscription-domains-only"]')
+    expect(toggle.attributes('aria-checked')).toBe('false')
+    await toggle.trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-test="settings-save"]').trigger('click')
+    await flushPromises()
+    expect(adminApi.setSystemConfig).toHaveBeenCalledWith('app.subscribe_domains_only', expect.objectContaining({ value: 'true', type: 'boolean' }))
+  })
+
   it('does not ask when nothing changed', async () => {
     const confirms = answerConfirms(false)
     const { router } = await mountAt('/admin/system/backup')
