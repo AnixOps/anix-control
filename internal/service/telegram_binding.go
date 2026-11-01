@@ -38,7 +38,7 @@ const telegramBindCodePrefix = "b_"
 // Errors of the binding operations. Their messages are shown to members and
 // administrators as they are.
 var (
-	ErrTelegramBotNotConfigured = errors.New("Telegram 机器人尚未配置")
+	ErrTelegramBotNotConfigured = errors.New("尚未配置 Telegram 机器人")
 	ErrTelegramBindDisabled     = errors.New("管理员已关闭账户绑定")
 	ErrTelegramBindCodeInvalid  = errors.New("绑定链接无效或已过期，请在面板重新获取")
 	ErrTelegramUserNotFound     = errors.New("用户不存在")
@@ -138,7 +138,7 @@ func (s *TelegramBotService) BotUsername() string {
 		// The error carries the URL and so the token: never log it.
 		return ""
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	var answer struct {
 		OK     bool `json:"ok"`
 		Result struct {
@@ -150,7 +150,7 @@ func (s *TelegramBotService) BotUsername() string {
 	}
 	username := strings.TrimSpace(answer.Result.Username)
 	for _, r := range username {
-		if !(r == '_' || r >= '0' && r <= '9' || r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z') {
+		if !telegramUsernameRune(r) {
 			return ""
 		}
 	}
@@ -184,7 +184,7 @@ func (s *TelegramBotService) BindUserByCode(telegramID int64, code string, from 
 // The administrator's AllowBind switch does not apply.
 func (s *TelegramBotService) AdminBind(userID uint, telegramID int64) (*model.TelegramUser, error) {
 	if telegramID == 0 {
-		return nil, errors.New("Telegram ID 无效")
+		return nil, errors.New("无效的 Telegram ID")
 	}
 	var user model.User
 	if err := s.db.First(&user, userID).Error; err != nil {
@@ -219,4 +219,8 @@ func (s *TelegramBotService) userBound(userID uint) bool {
 	var count int64
 	s.db.Model(&model.TelegramUser{}).Where("user_id = ?", userID).Count(&count)
 	return count > 0
+}
+
+func telegramUsernameRune(r rune) bool {
+	return r == '_' || (r >= '0' && r <= '9') || (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z')
 }
