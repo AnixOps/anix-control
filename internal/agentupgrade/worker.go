@@ -437,6 +437,11 @@ func (w *Worker) rollBack(ctx context.Context, campaign *model.AgentUpgradeCampa
 		session, connected := streams.Session(agentNode)
 		upgraded := connected && agentcontrol.SameAgentVersion(session.AgentVersion, campaign.TargetVersion)
 		switch {
+		case node.RollbackSentAt == nil && upgraded && agentcontrol.SameAgentVersion(node.FromVersion, campaign.TargetVersion):
+			// The node already ran the target (a kernel-only upgrade):
+			// its Agent binary did not change, so there is nothing to
+			// reinstate.
+			continue
 		case node.RollbackSentAt == nil && upgraded:
 			previous := releaseTag(node.FromVersion)
 			if previous == "" {

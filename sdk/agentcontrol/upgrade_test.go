@@ -139,3 +139,14 @@ func TestSameAgentVersion(t *testing.T) {
 		t.Fatal("different or empty releases matched")
 	}
 }
+
+func TestHelloKernelVersion(t *testing.T) {
+	for labels, want := range map[string]string{"0.1.0-alpha.13": "0.1.0-alpha.13", " 0.2.0 ": "0.2.0", "v0.1.0": "", "latest": "", "": ""} {
+		if got := HelloKernelVersion(map[string]string{LabelKernelVersion: labels}); got != want {
+			t.Errorf("HelloKernelVersion(%q) = %q, want %q", labels, got, want)
+		}
+	}
+	if HelloKernelVersion(nil) != "" {
+		t.Error("no labels named a kernel")
+	}
+}

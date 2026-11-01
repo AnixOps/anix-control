@@ -369,6 +369,9 @@ type EligibleNode struct {
 	Name    string `json:"name"`
 	// AgentVersion is the version its Agent last reported on the stream.
 	AgentVersion string `json:"agent_version"`
+	// KernelVersion is the anx-node release its live session reported, ""
+	// when unknown; the handler fills it in.
+	KernelVersion string `json:"kernel_version"`
 }
 
 // Describe answers the eligible nodes with their names and Agent versions,
@@ -657,4 +660,40 @@ func truncate(value string, limit int) string {
 		return value[:limit]
 	}
 	return value
+}
+
+// KernelOnlyTarget answers the Agent release a kernel-only upgrade of
+// nodes targets: the release they all run now, as their Agents last
+// reported it on the stream. An Agent that already runs the target stages
+// only the kernel the upgrade carries (the newest anx-node release Control
+// holds) and keeps its own binary. The nodes must name one release, since
+// a campaign has one target.
+func KernelOnlyTarget(ctx context.Context, db *gorm.DB, nodes []string) (string, error) {
+	if len(nodes) == 0 {
+		return "", fmt.Errorf("%w: a kernel-only upgrade names its nodes", ErrInvalid)
+	}
+	parsed := make([]agentcontrol.AgentNode, 0, len(nodes))
+	for _, name := range nodes {
+		node, err := agentcontrol.ParseAgentNode(strings.TrimSpace(name))
+		if err != nil {
+			return "", fmt.Errorf("%w: node %q: %v", ErrInvalid, name, err)
+		}
+		parsed = append(parsed, node)
+	}
+	described, err := Describe(ctx, db, parsed)
+	if err != nil {
+		return "", err
+	}
+	target := ""
+	for _, node := range described {
+		version := releaseTag(node.AgentVersion)
+		if version == "" {
+			return "", fmt.Errorf("%w: the Agent version of %s is unknown: it has not reported a release on the stream", ErrInvalid, node.NodeRef)
+		}
+		if target != "" && version != target {
+			return "", fmt.Errorf("%w: the nodes run different Agent releases (%s, %s): upgrade the kernel of each release's nodes separately", ErrInvalid, target, version)
+		}
+		target = version
+	}
+	return target, nil
 }

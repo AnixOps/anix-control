@@ -153,6 +153,21 @@ describe('NodeDetail', () => {
       expect(within(group).queryByTestId('node-certificate-overdue')).toBeNull()
     })
 
+    it('shows the kernel the live session reported, with 升级内核', async () => {
+      kernelApi.getKernelAgentTransports.mockResolvedValue(entry({ kernel_version: '0.1.0-alpha.9', session: { session_id: 's1' } }))
+      await renderPage()
+      const group = await screen.findByTestId('node-agent')
+      await waitFor(() => expect(within(group).getByTestId('node-kernel-version').textContent).toBe('anx-node 0.1.0-alpha.9'))
+      expect(within(group).getByTestId('node-upgrade-kernel').textContent).toContain('Upgrade kernel')
+    })
+
+    it('says an online Agent did not report its kernel', async () => {
+      kernelApi.getKernelAgentTransports.mockResolvedValue(entry({ session: { session_id: 's1' } }))
+      await renderPage()
+      const group = await screen.findByTestId('node-agent')
+      await waitFor(() => expect(within(group).getByTestId('node-kernel-version').textContent).toBe('Not reported'))
+    })
+
     it('says the Agent did not renew in time when a valid certificate is past renew_after', async () => {
       kernelApi.getKernelAgentTransports.mockResolvedValue(entry({ last_certificate: certificate({ renew_after: '2000-01-01T00:00:00Z' }) }))
       await renderPage()

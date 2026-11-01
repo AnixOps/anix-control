@@ -37,6 +37,9 @@ export default {
     parent: '上级节点',
     protocols: '协议数',
     agentVersion: 'Agent 版本',
+    kernelVersion: '内核版本',
+    kernelUnknown: '未上报',
+    kernelUnknownHint: '节点在线时由 Agent 上报 anx-node 版本；旧版 Agent 不上报，升级 Agent 后显示。',
     load: '负载',
     loadValue: 'CPU {cpu} · 内存 {memory}',
     traffic: '累计流量',
@@ -73,6 +76,7 @@ export default {
     open: '打开节点',
     manageProtocols: '管理协议',
     syncReload: '同步并重载',
+    upgradeKernel: '升级内核',
     logs: '查看日志',
     edit: '编辑',
     delete: '删除'

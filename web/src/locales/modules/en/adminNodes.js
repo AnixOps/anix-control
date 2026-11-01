@@ -37,6 +37,9 @@ export default {
     parent: 'Parent node',
     protocols: 'Protocols',
     agentVersion: 'Agent version',
+    kernelVersion: 'Kernel version',
+    kernelUnknown: 'Not reported',
+    kernelUnknownHint: 'An online Agent reports its anx-node version; older Agents do not, until they are upgraded.',
     load: 'Load',
     loadValue: 'CPU {cpu} · Mem {memory}',
     traffic: 'Total traffic',
@@ -73,6 +76,7 @@ export default {
     open: 'Open node',
     manageProtocols: 'Manage protocols',
     syncReload: 'Sync and reload',
+    upgradeKernel: 'Upgrade kernel',
     logs: 'View logs',
     edit: 'Edit',
     delete: 'Delete'

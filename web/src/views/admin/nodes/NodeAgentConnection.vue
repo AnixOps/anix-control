@@ -17,6 +17,18 @@
           <template #value><NodeConnectionBadge :entry="entry" status="ready" /></template>
         </UiGroupedListRow>
         <UiGroupedListRow :label="t('admin.nodes.agent.transport')" :value="transportLabel" />
+        <UiGroupedListRow
+          :label="t('admin.nodes.table.kernelVersion')"
+          :description="kernelVersion || !entry.session ? '' : t('admin.nodes.table.kernelUnknownHint')"
+          data-testid="node-kernel-row"
+        >
+          <template #value>
+            <span class="node-agent__kernel">
+              <span data-testid="node-kernel-version">{{ kernelVersion ? `anx-node ${kernelVersion}` : (entry.session ? t('admin.nodes.table.kernelUnknown') : '—') }}</span>
+              <UiButton size="sm" :icon="Cpu" data-testid="node-upgrade-kernel" @click="openKernelUpgrade(nodeRef(nodeId))">{{ t('admin.nodes.actions.upgradeKernel') }}</UiButton>
+            </span>
+          </template>
+        </UiGroupedListRow>
         <UiGroupedListRow :label="t('admin.nodes.agent.lastSeen')">
           <template #value>
             <time v-if="lastSeen" :datetime="lastSeen" :title="format.dateTime(lastSeen)">{{ format.relativeTime(lastSeen) }}</time>
@@ -44,9 +56,11 @@
 // stream or offline) and its newest Agent
 // certificate in any state (ends, renews, revoked and why), from
 // GET /api/v4/kernel/agents/transports?node=proxy-<id>. It loads after the
-// node page and never holds it up: a failure is a row with 重试.
+// node page and never holds it up: a failure is a row with 重试. It also
+// shows the node's anx-node kernel with 升级内核.
 import { computed, onMounted, watch } from 'vue'
-import { RotateCw } from '@lucide/vue'
+import { Cpu, RotateCw } from '@lucide/vue'
+import { openKernelUpgrade } from '@/composables/useAgentUpgradeSheet'
 import UiBadge from '@/ui/UiBadge.vue'
 import UiButton from '@/ui/UiButton.vue'
 import UiGroupedList from '@/ui/UiGroupedList.vue'
@@ -73,6 +87,9 @@ const transportLabel = computed(() => {
   if (!name) return '—'
   return te(`agentTransports.transports.${name}`) ? t(`agentTransports.transports.${name}`) : name
 })
+// The anx-node release the node's live session reported (its Agent's
+// Hello); 升级内核 opens 升级节点 in its kernel mode for this node.
+const kernelVersion = computed(() => entry.value?.kernel_version || '')
 const footer = computed(() => (entry.value ? t('admin.nodes.agent.footer') : ''))
 
 function load() {
@@ -86,6 +103,14 @@ defineExpose({ load })
 </script>
 
 <style scoped>
+.node-agent__kernel {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  justify-content: flex-end;
+}
+
 .node-agent {
   display: flex;
   flex-direction: column;

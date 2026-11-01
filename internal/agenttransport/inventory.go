@@ -105,9 +105,13 @@ type NodeTransports struct {
 	// Status is StatusMTLS or StatusUnseen.
 	Status string `json:"status"`
 	// Transport is the transport of the latest sighting, empty if unseen.
-	Transport    string     `json:"transport"`
-	AgentVersion string     `json:"agent_version,omitempty"`
-	LastSeenAt   *time.Time `json:"last_seen_at"`
+	Transport    string `json:"transport"`
+	AgentVersion string `json:"agent_version,omitempty"`
+	// KernelVersion is the anx-node release the node's live session
+	// reported, "" without a live session or when the Agent reports none
+	// (no kernel installed, or an Agent that predates the report).
+	KernelVersion string     `json:"kernel_version,omitempty"`
+	LastSeenAt    *time.Time `json:"last_seen_at"`
 	// Certificate is the newest valid certificate, nil when there is none:
 	// nil also means never enrolled to the readiness check.
 	Certificate *Certificate `json:"certificate"`
@@ -138,8 +142,10 @@ type LiveSession struct {
 	// expiry and URI SAN.
 	Certificate  *agentstreams.SessionCertificate `json:"certificate"`
 	AgentVersion string                           `json:"agent_version,omitempty"`
-	ConnectedAt  time.Time                        `json:"connected_at"`
-	LastSeenAt   time.Time                        `json:"last_seen_at"`
+	// KernelVersion is the anx-node release the session's Hello named.
+	KernelVersion string    `json:"kernel_version,omitempty"`
+	ConnectedAt   time.Time `json:"connected_at"`
+	LastSeenAt    time.Time `json:"last_seen_at"`
 	// NegotiatedCapabilities are the data-plane capabilities in use on the
 	// session (name.version, such as config.v1).
 	NegotiatedCapabilities []string `json:"negotiated_capabilities"`
@@ -322,7 +328,7 @@ func Build(ctx context.Context, db *gorm.DB, options Options) (Inventory, error)
 			negotiated := append([]string{}, session.NegotiatedCapabilities...)
 			liveSessions[nodeKey{session.Node.Kind, uint(session.Node.ID)}] = &LiveSession{
 				SessionID: session.SessionID, Authentication: session.Authentication, Identity: session.Identity,
-				Certificate: session.Certificate, AgentVersion: session.AgentVersion, ConnectedAt: session.ConnectedAt.UTC(),
+				Certificate: session.Certificate, AgentVersion: session.AgentVersion, KernelVersion: session.KernelVersion, ConnectedAt: session.ConnectedAt.UTC(),
 				LastSeenAt: session.LastSeen.UTC(), NegotiatedCapabilities: negotiated,
 				AgentMetrics: session.AgentMetrics, AgentMetricsAt: session.AgentMetricsAt,
 			}
@@ -342,6 +348,9 @@ func Build(ctx context.Context, db *gorm.DB, options Options) (Inventory, error)
 		}
 		if node.Transports == nil {
 			node.Transports = []TransportSeen{}
+		}
+		if node.Session != nil {
+			node.KernelVersion = node.Session.KernelVersion
 		}
 		classify(&node, fallbackVersion)
 		node.CertificateState = certificateState(node.Certificate, node.LastCertificate)

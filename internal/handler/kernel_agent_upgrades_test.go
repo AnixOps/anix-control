@@ -264,3 +264,50 @@ func TestAgentUpgradeManualStart(t *testing.T) {
 	assert.EqualValues(t, 1, view["total"])
 	assert.Len(t, view["batches"].([]any), 1)
 }
+
+// writeKernelRelease puts a fake anx-node release in dir/anx-node/<version>/.
+func writeKernelRelease(t *testing.T, dir, version string) {
+	t.Helper()
+	release := filepath.Join(dir, "anx-node", version)
+	require.NoError(t, os.MkdirAll(release, 0o750))
+	asset := agentinstall.KernelAsset(version, "x86_64")
+	data := []byte("fake anx-node " + version)
+	require.NoError(t, os.WriteFile(filepath.Join(release, asset), data, 0o600))
+	sum := sha256.Sum256(data)
+	require.NoError(t, os.WriteFile(filepath.Join(release, agentinstall.SumsAssetName), []byte(hex.EncodeToString(sum[:])+"  "+asset+"\n"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(release, agentinstall.SumsSignatureAssetName), []byte("-----BEGIN SSH SIGNATURE-----\nU1NIU0lH\n-----END SSH SIGNATURE-----\n"), 0o600))
+}
+
+// A kernel-only upgrade keeps the nodes' Agent release and needs a kernel.
+func TestAgentUpgradeKernelOnly(t *testing.T) {
+	env := newUpgradeTestEnv(t)
+	require.NoError(t, env.db.Model(&model.AgentTransport{}).Where("1 = 1").Update("agent_version", "v4.2.0").Error)
+
+	code, answer := env.do(t, http.MethodGet, "/upgrade-plan", "", "")
+	require.Equal(t, http.StatusOK, code, answer)
+	assert.Equal(t, "", answer["data"].(map[string]any)["kernel_version"])
+	code, answer = env.do(t, http.MethodPost, "/upgrades", `{"nodes":["proxy-1"],"kernel_only":true}`, "")
+	require.Equal(t, http.StatusConflict, code, answer)
+	assert.Equal(t, "kernel_release_missing", answer["error"].(map[string]any)["code"])
+
+	writeKernelRelease(t, env.cfg.AgentInstall.ArtifactDir, "0.1.0-alpha.13")
+	code, answer = env.do(t, http.MethodGet, "/upgrade-plan", "", "")
+	require.Equal(t, http.StatusOK, code, answer)
+	assert.Equal(t, "0.1.0-alpha.13", answer["data"].(map[string]any)["kernel_version"])
+
+	code, answer = env.do(t, http.MethodPost, "/upgrades", `{"nodes":["proxy-1"],"kernel_only":true,"target_version":"v4.2.0"}`, "")
+	require.Equal(t, http.StatusBadRequest, code, answer)
+	require.NoError(t, env.db.Model(&model.AgentTransport{}).Where("node_id = ?", 2).Update("agent_version", "v4.1.0").Error)
+	code, answer = env.do(t, http.MethodPost, "/upgrades", `{"nodes":["proxy-1","proxy-2"],"kernel_only":true}`, "")
+	require.Equal(t, http.StatusBadRequest, code, answer)
+	code, answer = env.do(t, http.MethodPost, "/upgrades", `{"nodes":["proxy-2"],"kernel_only":true}`, "")
+	require.Equal(t, http.StatusConflict, code, answer)
+	assert.Contains(t, answer["error"].(map[string]any)["message"], "v4.1.0")
+
+	code, answer = env.do(t, http.MethodPost, "/upgrades", `{"nodes":["proxy-1","proxy-3"],"kernel_only":true}`, "")
+	require.Equal(t, http.StatusCreated, code, answer)
+	view := answer["data"].(map[string]any)
+	assert.Equal(t, "v4.2.0", view["target_version"])
+	assert.EqualValues(t, 2, view["total"])
+	assert.Equal(t, "kernel upgrade: anx-node 0.1.0-alpha.13", view["reason"])
+}

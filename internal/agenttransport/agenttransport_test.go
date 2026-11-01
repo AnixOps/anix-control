@@ -636,10 +636,16 @@ func TestInventoryConnection(t *testing.T) {
 		return []agentstreams.Session{{
 			Node: agentcontrol.AgentNode{Kind: "proxy", ID: 1}, Transport: agentstreams.TransportControlStream,
 			Identity: "spiffe://anixops/prod/agent/proxy-1", Authentication: agentstreams.AuthenticationMTLS, LastSeen: now,
+			KernelVersion: "0.1.0-alpha.13",
 		}}
 	}})
 	require.NoError(t, err)
-	require.Equal(t, ConnectionMTLSStream, inventoryByNode(inventory)["proxy-1"].Connection.Type)
+	byNode = inventoryByNode(inventory)
+	require.Equal(t, ConnectionMTLSStream, byNode["proxy-1"].Connection.Type)
+	// The kernel the live session reported; a node without one has none.
+	require.Equal(t, "0.1.0-alpha.13", byNode["proxy-1"].KernelVersion)
+	require.Equal(t, "0.1.0-alpha.13", byNode["proxy-1"].Session.KernelVersion)
+	require.Equal(t, "", byNode["proxy-4"].KernelVersion)
 }
 
 // legacyAPIKeyStream is the transport the removed API-key stream recorded;

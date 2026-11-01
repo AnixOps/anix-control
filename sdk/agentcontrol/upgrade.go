@@ -39,6 +39,10 @@ const (
 	// kernel with ANX (the private anx release), which the Agent runs as
 	// its anixcore core.
 	KernelAnxNode = "anx-node"
+	// LabelKernelVersion is the Hello label in which an Agent names the
+	// anx-node release it has installed (KernelVersionPattern); an Agent
+	// without a kernel, or one that predates the label, leaves it out.
+	LabelKernelVersion = "kernel.anx-node"
 	// MaxUpgradeKernelBytes bounds a kernel package's size.
 	MaxUpgradeKernelBytes = 64 << 20
 	// maxKernelManifestBytes bounds UpgradeKernel.Sums and SumsSignature.
@@ -301,4 +305,14 @@ func (r UpgradeRequest) Artifact(arch string) (UpgradeArtifact, bool) {
 		}
 	}
 	return UpgradeArtifact{}, false
+}
+
+// HelloKernelVersion returns the anx-node release a Hello's labels name
+// (LabelKernelVersion), "" when they name none or a malformed one.
+func HelloKernelVersion(labels map[string]string) string {
+	version := strings.TrimSpace(labels[LabelKernelVersion])
+	if !KernelVersionPattern.MatchString(version) {
+		return ""
+	}
+	return version
 }

@@ -49,12 +49,15 @@ type AgentControlConnection struct {
 	NodeID       uint32
 	SessionID    string
 	AgentVersion string
-	InstanceID   string
-	Capabilities []*agentv1pb.Capability
-	ConnectedAt  time.Time
-	LastSeen     time.Time
-	DesiredRev   uint64
-	ObservedRev  uint64
+	// KernelVersion is the anx-node release the Hello's labels name
+	// (agentcontrol.LabelKernelVersion), "" when the Agent named none.
+	KernelVersion string
+	InstanceID    string
+	Capabilities  []*agentv1pb.Capability
+	ConnectedAt   time.Time
+	LastSeen      time.Time
+	DesiredRev    uint64
+	ObservedRev   uint64
 	// ServerCapabilities is what the HelloAck advertised to this agent
 	// (serverCapabilities); Diagnostics is whether it advertised diag.v1,
 	// for NO-8's vantage selection.
@@ -107,15 +110,17 @@ func (c *AgentControlConnection) touch(observedRevision uint64) {
 
 // AgentControlSnapshot is a read-only view used by control-plane services.
 type AgentControlSnapshot struct {
-	NodeID       uint32    `json:"node_id"`
-	SessionID    string    `json:"session_id"`
-	AgentVersion string    `json:"agent_version"`
-	InstanceID   string    `json:"instance_id"`
-	Capabilities []string  `json:"capabilities"`
-	ConnectedAt  time.Time `json:"connected_at"`
-	LastSeen     time.Time `json:"last_seen"`
-	DesiredRev   uint64    `json:"desired_revision"`
-	ObservedRev  uint64    `json:"observed_revision"`
+	NodeID       uint32 `json:"node_id"`
+	SessionID    string `json:"session_id"`
+	AgentVersion string `json:"agent_version"`
+	// KernelVersion is the anx-node release the Agent named in its Hello.
+	KernelVersion string    `json:"kernel_version,omitempty"`
+	InstanceID    string    `json:"instance_id"`
+	Capabilities  []string  `json:"capabilities"`
+	ConnectedAt   time.Time `json:"connected_at"`
+	LastSeen      time.Time `json:"last_seen"`
+	DesiredRev    uint64    `json:"desired_revision"`
+	ObservedRev   uint64    `json:"observed_revision"`
 	// ServerCapabilities are the data-plane features the HelloAck advertised
 	// to the agent (config.v1, users.v1, reports.v1); one is in use only when
 	// Capabilities lists it too. Diagnostics is whether the agent advertised
@@ -250,6 +255,7 @@ func (m *AgentControlManager) Connection(nodeID uint32) (AgentControlSnapshot, b
 		NodeID:                 connection.NodeID,
 		SessionID:              connection.SessionID,
 		AgentVersion:           connection.AgentVersion,
+		KernelVersion:          connection.KernelVersion,
 		InstanceID:             connection.InstanceID,
 		Capabilities:           capabilities,
 		ConnectedAt:            connection.ConnectedAt,
@@ -846,18 +852,19 @@ func (s *AgentControlGRPCServer) controlStream(stream agentv1pb.AgentControlServ
 	now := time.Now()
 	desiredRevision := manager.reconcileDesiredRevision(nodeID, first.Revision)
 	connection := &AgentControlConnection{
-		NodeID:       nodeID,
-		SessionID:    newAgentControlID("session"),
-		AgentVersion: hello.AgentVersion,
-		InstanceID:   hello.InstanceId,
-		Capabilities: cloneCapabilities(hello.Capabilities),
-		ConnectedAt:  now,
-		LastSeen:     now,
-		DesiredRev:   desiredRevision,
-		ObservedRev:  first.Revision,
-		Identity:     principal.SPIFFEID,
-		principal:    principal,
-		stream:       stream,
+		NodeID:        nodeID,
+		SessionID:     newAgentControlID("session"),
+		AgentVersion:  hello.AgentVersion,
+		KernelVersion: agentcontrol.HelloKernelVersion(hello.GetLabels()),
+		InstanceID:    hello.InstanceId,
+		Capabilities:  cloneCapabilities(hello.Capabilities),
+		ConnectedAt:   now,
+		LastSeen:      now,
+		DesiredRev:    desiredRevision,
+		ObservedRev:   first.Revision,
+		Identity:      principal.SPIFFEID,
+		principal:     principal,
+		stream:        stream,
 	}
 	connection.ServerCapabilities = s.sessionCapabilities(principal, hello.Capabilities)
 	connection.Diagnostics = agentcontrol.HasCapabilityVersion(hello.Capabilities, agentcontrol.CapabilityDiag, agentcontrol.CapabilityVersionV1)

@@ -7151,7 +7151,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "The Agent release a campaign pushes by default (agent_install.agent_version, else the Agent release this Control was built with, else its own release), this Control's release, how many nodes a campaign would include now (enabled nodes whose Agent was seen on the Agent Control stream) and which (nodes: node_ref, name, agent_version, for a manual upgrade), the default batches with the rules of H19 (first batch at most 5%, each batch at least 30 minutes, a batch rolls back above 5% failures or after 10 minutes without a reconnect), the active campaign if there is one, and whether the caller may start one (can_start: super administrators). When the https address nodes reach Control is not configured, configured is false with unconfigured_reason and target_version empty. Administrators read it; Start verifies the release files.",
+                "description": "The Agent release a campaign pushes by default (agent_install.agent_version, else the Agent release this Control was built with, else its own release), this Control's release, how many nodes a campaign would include now (enabled nodes whose Agent was seen on the Agent Control stream) and which (nodes: node_ref, name, agent_version, kernel_version reported by a live session, for a manual upgrade), the default batches with the rules of H19 (first batch at most 5%, each batch at least 30 minutes, a batch rolls back above 5% failures or after 10 minutes without a reconnect), the newest anx-node release agent_install.artifact_dir holds (kernel_version, which every campaign installs; empty for none), the active campaign if there is one, and whether the caller may start one (can_start: super administrators). When the https address nodes reach Control is not configured, configured is false with unconfigured_reason and target_version empty. Administrators read it; Start verifies the release files.",
                 "produces": [
                     "application/json"
                 ],
@@ -7209,7 +7209,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Pushes an Agent release to every enabled node whose Agent was seen on the Agent Control stream, in batches (default 5%, 25%, 100% of the nodes, at least 30 minutes each; canaries first by node name hash), as the agent.upgrade operation to Agents that negotiated upgrade.v1. With nodes (proxy-\u003cid\u003e, forward-\u003cid\u003e, each eligible) it is a manual upgrade instead: exactly those nodes in one batch with no minimum duration; batches and exclude must be empty. A batch rolls back when more than 5% of its offered nodes fail or do not reconnect with the target version within 10 minutes (H19). The release must be in agent_install.artifact_dir with its .sig files and SHA256SUMS(.sig), verified with plugins.official_public_key. Super administrators only; one campaign at a time.",
+                "description": "Pushes an Agent release to every enabled node whose Agent was seen on the Agent Control stream, in batches (default 5%, 25%, 100% of the nodes, at least 30 minutes each; canaries first by node name hash), as the agent.upgrade operation to Agents that negotiated upgrade.v1. With nodes (proxy-\u003cid\u003e, forward-\u003cid\u003e, each eligible) it is a manual upgrade instead: exactly those nodes in one batch with no minimum duration; batches and exclude must be empty. With kernel_only (and nodes, no target_version) only the anx-node kernel is upgraded: the target is the Agent release those nodes run now, so each Agent keeps its binary and installs the newest anx-node release in agent_install.artifact_dir. A batch rolls back when more than 5% of its offered nodes fail or do not reconnect with the target version within 10 minutes (H19). The release must be in agent_install.artifact_dir with its .sig files and SHA256SUMS(.sig), verified with plugins.official_public_key. Super administrators only; one campaign at a time.",
                 "consumes": [
                     "application/json"
                 ],
@@ -7222,7 +7222,7 @@ const docTemplate = `{
                 "summary": "Start a staged Agent upgrade",
                 "parameters": [
                     {
-                        "description": "target_version (default this Control's Agent release), batches, exclude {nodes, tags}, nodes (manual upgrade), reason",
+                        "description": "target_version (default this Control's Agent release), batches, exclude {nodes, tags}, nodes (manual upgrade), kernel_only, reason",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -10736,6 +10736,10 @@ const docTemplate = `{
                 },
                 "exclude": {
                     "$ref": "#/definitions/agentupgrade.Exclude"
+                },
+                "kernel_only": {
+                    "description": "KernelOnly upgrades only the anx-node kernel of Nodes: the target is\nthe Agent release they run now (they must run one), so each Agent\nkeeps its binary and installs the newest kernel Control holds.\nTargetVersion must then be empty.",
+                    "type": "boolean"
                 },
                 "nodes": {
                     "description": "Nodes, when set, upgrade exactly these nodes at once (manual\nupgrade); batches and exclude must then be empty.",

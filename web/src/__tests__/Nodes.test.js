@@ -253,6 +253,13 @@ describe('Nodes.vue', () => {
       expect(certificates[2].text()).toBe('No certificate')
     })
 
+    it('shows the kernel a node reported under its Agent version', async () => {
+      kernelApi.getKernelAdminNodes.mockResolvedValue({ list: [nodes[0]], total: 1 })
+      kernelApi.getKernelAgentTransports.mockResolvedValue({ nodes: [{ ...inventory.nodes[0], agent_version: 'v5.0.0-rc.28', kernel_version: '0.1.0-alpha.9' }] })
+      const { wrapper } = await mountNodes()
+      expect(wrapper.find('[data-testid="node-kernel-version"]').text()).toBe('anx-node 0.1.0-alpha.9')
+    })
+
     it('flags a valid certificate whose Agent did not renew in time', async () => {
       kernelApi.getKernelAdminNodes.mockResolvedValue({ list: [nodes[0]], total: 1 })
       kernelApi.getKernelAgentTransports.mockResolvedValue({ nodes: [{ node: 'proxy-5', certificate_state: 'valid', last_certificate: cert({ renew_after: '2000-01-01T00:00:00Z', not_after: '2999-02-01T12:00:00Z' }), connection: { type: 'apikey_stream' } }] })
