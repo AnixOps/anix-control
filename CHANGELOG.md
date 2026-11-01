@@ -2,6 +2,146 @@
 
 ## Unreleased
 
+## 5.0.0-rc.26 - 2026-11-01
+
+### Added
+
+- The ANX protocol form offers every option of the A2 jacket: 无 SNI 模式
+  (`allow_no_sni`: the node also accepts connections without SNI, and
+  subscriptions leave `sni` out of the `anx://` link so clients dial the
+  IP; needs an anx-node newer than alpha.7), turning traffic shaping off
+  (`shape_plain`) and max streams per session (`max_streams`, 1 to 65535,
+  default 256). Security shows as the A2 borrowed handshake instead of
+  "no TLS". Control sends the new options to the Agent only when set, so
+  nodes on an older anx-node keep working; needs the matching Agent.
+- The network model runs kind `anx` (the A2 jacket) reversed as well
+  (`anx_line.reverse`, anx ANX-LINE-REVERSE §6.4): the overseas accepting
+  device opens no port and dials back to the dialing device's
+  `reverse_host:reverse_port` as the jacket's client, on c1. Its plan
+  carries the dialing device's `server_public`, and the path waits until
+  that device has reported its ANX-Line server key.
+- The ANX protocol form takes a WireGuard-shaped UDP port (`wg_listen_port`,
+  the anx wg jacket) for users dialing a domestic entry; it backs up the
+  no-SNI A2 mode. Control sends it to the Agent only when set, and the
+  AnixOps Net subscription adds `wg_port` to the `anx://` link so clients
+  try that port first and fall back to A2. The UDP port has to be open in
+  the node's firewall. Needs an anx-node with the wg jacket and the matching
+  Agent.
+- Hotfixes: `.github/workflows/hotfix.yml` ships a fix merged to `main` as
+  `<release>.hf.<n>` (`v5.0.0-rc.25.hf.1`) without a whole release. It picks
+  the named commits onto `hotfix/<release>`, tests only what they touch,
+  builds and signs Control (and the Agent when Agent commits are named), and
+  with `deploy` installs it on the running Control after a database dump,
+  restoring the previous release when the health check fails; a cold standby
+  gets the files only. Release tags with `.hf.<n>` are accepted wherever dev
+  tags are (`agentinstall.IsHotfix`, `install.sh`, the Agent upgrade
+  payload), and a hotfix Agent is served from the Control release of the
+  same tag (docs/RELEASING.md, "Hotfixes").
+- 系统设置 → 通用 → 订阅域名 has a switch "只在订阅域名上提供订阅"
+  (`app.subscribe_domains_only`, off by default). On, the subscription paths
+  (`/s/<token>` and `/api/v1/client/subscribe`) answer only on the
+  configured subscription domains; the panel's own domain and any other host
+  answer 404. It keeps the panel domain out of what clients fetch, so a
+  blocked subscription domain can be swapped without touching the panel. It
+  does nothing while no subscription domain is configured.
+- Telegram binding without the bot's commands: users link Telegram on the
+  Account page (a QR code / button for a one-time t.me link to the bot, 10
+  minutes) and unlink there; administrators link a user to a Telegram ID by
+  hand and unlink from Notifications → Telegram → 已绑定用户.
+  `GET/DELETE /api/v4/user/telegram`, `POST /api/v4/user/telegram/bind-link`,
+  `POST /api/v4/admin/telegram/bindings`,
+  `DELETE /api/v4/admin/telegram/bindings/{user_id}`.
+- Dynamic traffic categories: 访问统计 now judges the categories by the
+  built-in rules, remote sources (domain and network lists fetched from a
+  URL on a schedule, in plain, v2fly domain-list-community or Clash format)
+  and the administrator's own rules (domain, network or protocol), each
+  layer overriding the one before, without a release. Edited at 流量与监控 →
+  流量分类 (with a test of where a destination falls) and through
+  `/api/v4/admin/traffic/categories`; changes apply to the recorded history
+  at once (migration 0024, docs/reference/destination-stats.md).
+- QoS for the proxy nodes (流量与监控 → 流量分类 → QoS,
+  `/api/v4/admin/traffic/qos`): a priority for each traffic category
+  (downloads low by default), the nodes' download capacity and per-user caps
+  by domain (Steam downloads at 5 Mbit/s per user by default). The settings
+  reach the nodes as the member `qos` of their configuration; anixcore with
+  the `qos` feature lets lower classes yield when a link or a user's limit
+  is full and enforces the caps.
+
+### Changed
+
+- Payment, order, coupon and invite commission (the `payment`, `order` and
+  `affiliate` packages, `internal/payment`, `internal/kernelorder` and their
+  handlers, services and `/api/v2` routes) moved to the private
+  `anix-control-commercial` repository. This repository is now the community
+  edition: it builds and tests without them, the public config reports
+  `edition: community`, and the commercial build overlays them back. Invite
+  codes stay in the community edition. The route catalogs and package list
+  describe the community set (12 packages).
+- The commercial set links into Control through files of its own: the package
+  host table (`builtin.Register`), the `/api/v2` payment, order, coupon and
+  invite routes (`router_commercial.go`), the payment gateways and order
+  reconciler, and the KernelOrder provider. Behaviour is unchanged; a build
+  without those files is the community edition. The v2 route inventory reads
+  every `router_*.go` next to `router.go`.
+
+### Removed
+
+- The Agent end-to-end suite (`internal/tests/agente2e`) no longer sets up
+  gost: the `gost` shim, the gost-aware `systemctl` stand-in, the
+  `Forward.Gost` configuration and `ANIXOPS_GOST_BIN` are gone, since the
+  Agent no longer runs gost.
+- `scripts/upgrade_legacy_panel_v2.5.0.sh`, the one-off upgrade helper for
+  the old native v2board layout on pl-1, and its `docs/UPGRADE.md` section.
+  Production runs the installer layout on OVH-PL.
+- The dev release and hotfix workflows no longer build the Agent's
+  `anixops-relay` (the experimental anixops forwarding engine is removed
+  from the Agent; routes run on the network model) or download
+  `geoip.dat`/`geosite.dat` into the Agent package (only the removed Xray
+  and sing-box cores read them).
+- The Control Center (`control-center/`: Go CLI/TUI, Vue web, Flutter client
+  and its Cloudflare Workers API) and its `control-center`,
+  `control-center-release` and `control-center-workers` workflows. It kept
+  its own users and nodes apart from Control, several of its pages were
+  mocks, and Control's admin UI already covers its plugin lifecycle page.
+  The Cloudflare Worker (`api.anixops.com`) and its D1 database are not
+  touched by this change and are retired by hand.
+
+### Fixed
+
+- An ANX node protocol with the default ALPN `h2,http/1.1` saves again.
+  The settings check refused `/` in every list entry, which rejected the
+  RFC 7301 ID `http/1.1`; ALPN entries now refuse only whitespace and `,`
+  (at most 255 bytes), and server names still refuse `/`.
+- The dev build deploy no longer installs on a cold standby Control (a
+  stopped service): only the running Control takes a dev build.
+- The hotfix deploy dumps the database of the running Control before it
+  upgrades it, also on a host managed by AnixOps-ansible (its backup script,
+  into `/var/backups/anixops/pg`), and refuses to upgrade when it cannot
+  dump; it used to skip the dump silently on a host without
+  `/root/pg-backups`.
+- The hotfix deploy's database dump runs outside `/root`: the AnixOps-ansible
+  backup script runs as `postgres`, whose `find` failed to return to `/root`
+  and stopped the deploy before the upgrade.
+- Telegram bot: `/bind` ignored its argument, so no member could bind. It now
+  binds with the member's subscription link or token, in a private chat only,
+  and respects the bot's "allow bind" switch (an e-mail alone is not accepted:
+  it does not prove ownership). `/sub` answers the real subscription link
+  (first subscription domain, else the panel domain) instead of
+  `your-domain.com`.
+
+### Security
+
+- CI: the `ci`, `control-center` and `control-center-workers` workflows run
+  with a read-only `GITHUB_TOKEN` by default; the jobs that publish images or
+  releases keep their own explicit permissions.
+- Control Center web: follow-redirects 1.16.1 → 1.16.2
+  (GHSA-mrwp-f3q8-3g9p, high: credentials could follow redirects).
+- A login token (JWT) in the URL (`?token=`) is accepted only on a WebSocket
+  handshake (the live monitor), not on ordinary API requests, and the text
+  access log no longer writes query strings, so node `api_key`/`token`,
+  subscription tokens and WebSocket JWTs stay out of the logs (the JSON
+  access log already logged the path only).
+
 ## 5.0.0-rc.25 - 2026-10-31
 
 ### Added
