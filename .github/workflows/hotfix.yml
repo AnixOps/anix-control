@@ -138,7 +138,9 @@ jobs:
             if grep -q '^\.github/workflows/' <<<"$(git diff --name-only "${before}" HEAD)"; then
               echo "::error::a picked commit changes .github/workflows: that cannot go out as a hotfix"; exit 1
             fi
-            git push origin "HEAD:refs/heads/${branch}"
+            git push origin "HEAD:refs/heads/${branch}" || {
+              echo "::error::could not push ${branch}. The workflow token cannot create it when .github/workflows changed since ${RELEASE}: push it once by hand (git push origin ${RELEASE}^{commit}:refs/heads/${branch}) and run again"; exit 1
+            }
           fi
           picks="$(git log --reverse --format=%B "${RELEASE}..HEAD" | sed -n 's/^(cherry picked from commit \([0-9a-f]\{40\}\))$/\1/p' | tr '\n' ' ' | sed 's/ $//')"
           changed="$(git diff --name-only "${RELEASE}" HEAD)"
@@ -716,14 +718,29 @@ jobs:
           echo "Installing ${TAG}"
           run() { python scripts/jumpserver/jms.py run --cmd "echo $(base64 -w0 "$1") | base64 -d | bash" --timeout "$2" --show-output; }
 
+          # The primary must leave a dump, or nothing is installed: a host
+          # managed by AnixOps-ansible control-host runs its own backup
+          # script (every database into /var/backups/anixops/pg); a host
+          # with a local database and no such script dumps it into
+          # /root/pg-backups.
           cat >dump.sh <<'EOF'
           systemctl is-active --quiet anix-control || exit 0
-          [ -d /root/pg-backups ] && command -v pg_dump >/dev/null || exit 0
           set -e
-          f=/root/pg-backups/anix_control_v2board-pre-hotfix-$(date -u +%Y%m%d%H%M%S).dump
-          sudo -u postgres pg_dump -Fc anix_control_v2board > "$f"
-          ls -t /root/pg-backups/anix_control_v2board-pre-hotfix-*.dump | tail -n +6 | xargs -r rm -f
-          ls -l "$f" | awk '{print $5, $9}'
+          if [ -x /usr/local/sbin/anixops-pg-backup ]; then
+            sudo -u postgres /usr/local/sbin/anixops-pg-backup
+            ls -lt /var/backups/anixops/pg/*.dump | head -n 5
+            exit 0
+          fi
+          if command -v pg_dump >/dev/null && sudo -u postgres psql -Atc "SELECT 1 FROM pg_database WHERE datname = 'anix_control_v2board'" 2>/dev/null | grep -qx 1; then
+            mkdir -p /root/pg-backups
+            f=/root/pg-backups/anix_control_v2board-pre-hotfix-$(date -u +%Y%m%d%H%M%S).dump
+            sudo -u postgres pg_dump -Fc anix_control_v2board > "$f"
+            ls -t /root/pg-backups/anix_control_v2board-pre-hotfix-*.dump | tail -n +6 | xargs -r rm -f
+            ls -l "$f" | awk '{print $5, $9}'
+            exit 0
+          fi
+          echo "the running Control has no local database to dump: refusing to upgrade it" >&2
+          exit 1
           EOF
           cat >upgrade.sh <<EOF
           [ -x /opt/anixops/control/bin/anix-control ] || exit 0
