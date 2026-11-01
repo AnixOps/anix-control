@@ -44,13 +44,15 @@ func TestApplyANXUser(t *testing.T) {
 }
 
 func TestValidateANXProtocol(t *testing.T) {
-	valid := []string{``, `{}`, `{"server_names":["www.apple.com"],"dest":"www.apple.com:443","alpn":["h2"]}`}
+	valid := []string{``, `{}`, `{"server_names":["www.apple.com"],"dest":"www.apple.com:443","alpn":["h2"]}`,
+		`{"alpn":["h2","http/1.1"]}`}
 	for _, settings := range valid {
 		s := settings
 		require.NoError(t, validateANXProtocol(&model.NodeProtocol{Type: model.ProtocolANX, Settings: &s}), settings)
 	}
 	invalid := []string{`[]`, `{"server_names":[]}`, `{"server_names":["a b"]}`, `{"server_names":"x"}`,
-		`{"dest":"www.apple.com"}`, `{"dest":"www.apple.com:0"}`, `{"dest":5}`, `{"alpn":[1]}`}
+		`{"dest":"www.apple.com"}`, `{"dest":"www.apple.com:0"}`, `{"dest":5}`, `{"alpn":[1]}`,
+		`{"alpn":["h2,http/1.1"]}`, `{"alpn":["http 1.1"]}`, `{"server_names":["a/b"]}`}
 	for _, settings := range invalid {
 		s := settings
 		require.Error(t, validateANXProtocol(&model.NodeProtocol{Type: model.ProtocolANX, Settings: &s}), settings)
