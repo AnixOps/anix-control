@@ -295,7 +295,9 @@ A hotfix ships a small fix to production without a whole release.
   patches independently.
 - **What is built.** The fix is merged to `main` first. The workflow
   cherry-picks the named `main` commits (`control_commits`, oldest first)
-  onto `hotfix/<release>`, created from the release tag the first time;
+  onto `hotfix/<release>`, created from the release tag the first time
+  (the workflow token cannot create it when `.github/workflows` changed since
+  the release: then push the branch from the tag once by hand and rerun);
   commits the branch already carries are skipped, and a commit that does not
   apply or changes `.github/workflows` stops the run. It vets and tests only
   the Go packages (and the SDK, the frontend) the branch changed since the
@@ -308,7 +310,9 @@ A hotfix ships a small fix to production without a whole release.
   knows `.hf.` tags (after `v5.0.0-rc.25`) and Agents that parse them.
 - **Installing.** `deploy` runs through JumpServer with `install.sh` from
   the `main` commit of the run: the Control whose service runs (the
-  production primary) gets a database dump (five `pre-hotfix` dumps kept)
+  production primary) gets a database dump first (its AnixOps-ansible backup
+  script when it has one, else five `pre-hotfix` dumps in `/root/pg-backups`;
+  without a dump nothing is installed)
   and `install.sh update`, which restores the previous release when the new
   one fails its health check; a cold standby (installed, stopped) gets the
   files with `--skip-start` and stays stopped and disabled. Without
