@@ -330,10 +330,9 @@ func TestAgentArtifactsRefusals(t *testing.T) {
 func TestAgentArtifactsOfferAndLimit(t *testing.T) {
 	listed := []*agentv1pb.Capability{{Name: agentcontrol.CapabilityArtifacts, Version: agentcontrol.CapabilityVersionV1}}
 	proxy := agentcontrol.AgentNode{Kind: agentcontrol.NodeKindProxy, ID: 1}
-	assert.True(t, servesArtifacts(agentPrincipal{Node: proxy, Certificate: true}, listed))
-	assert.False(t, servesArtifacts(agentPrincipal{Node: proxy}, listed), "not to a node API key")
-	assert.False(t, servesArtifacts(agentPrincipal{Node: agentcontrol.AgentNode{Kind: agentcontrol.NodeKindForward, ID: 1}, Certificate: true}, listed))
-	assert.False(t, servesArtifacts(agentPrincipal{Node: proxy, Certificate: true}, nil), "only when listed")
+	assert.True(t, servesArtifacts(agentPrincipal{Node: proxy}, listed))
+	assert.False(t, servesArtifacts(agentPrincipal{Node: agentcontrol.AgentNode{Kind: agentcontrol.NodeKindForward, ID: 1}}, listed))
+	assert.False(t, servesArtifacts(agentPrincipal{Node: proxy}, nil), "only when listed")
 
 	server := NewAgentArtifactsGRPCServer(nil)
 	assert.True(t, server.acquire(1))

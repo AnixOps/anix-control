@@ -148,16 +148,11 @@ gRPC listener (`grpc.*`, port 50051), not on the module listener.
   link certificates. `anix-control agent link-ca list|bundle|rotate`
   administers it (`forward-sdk.md` section 6.2).
 - **Bootstrap** (`AgentEnrollment.Enroll`, without a client certificate):
-  1. *Agents in the field* use the credential they have: metadata
-     `x-node-id` and `x-api-key` (a proxy node's API key), with
-     `x-node-kind: forward` for a forward node's token.
-  2. *New nodes* use a one-time enrollment credential (`anixagt_...`) bound
+  1. *New nodes* use a one-time enrollment credential (`anixagt_...`) bound
      to a node, at most 7 days (default 24 h), stored hashed in
-     `v4_kernel_agent_enrollment`, in `enrollment_credential`.
-  3. *Registration keys* keep minting node API keys
-     (`/api/v2/node/register`, `NodeService.Register`); the agent then
-     enrolls with that key, as in 1.
-  4. *Node groups* (5.0): `AgentEnrollment.Join` takes a group's join
+     `v4_kernel_agent_enrollment`, in `enrollment_credential`. Node API keys
+     and forward tokens no longer enroll.
+  2. *Node groups* (5.0): `AgentEnrollment.Join` takes a group's join
      token (`anixjoin_...`), creates a node of the group or rejoins the
      machine's earlier node, and issues its certificate, enrollment method
      `join_token` (`internal/nodegroup`; `sdk/api/agent/v1/PROTOCOL.md`,

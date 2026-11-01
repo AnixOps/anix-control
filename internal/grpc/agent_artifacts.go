@@ -56,7 +56,7 @@ func NewAgentArtifactsGRPCServer(auth *AgentAuthenticator) *AgentArtifactsGRPCSe
 // the agent lists it and the session authenticated a proxy node by client
 // certificate, as AgentArtifacts requires.
 func servesArtifacts(principal agentPrincipal, agent []*agentv1pb.Capability) bool {
-	return principal.Certificate && principal.Node.Kind == agentcontrol.NodeKindProxy &&
+	return principal.Node.Kind == agentcontrol.NodeKindProxy &&
 		agentcontrol.HasCapabilityVersion(agent, agentcontrol.CapabilityArtifacts, agentcontrol.CapabilityVersionV1)
 }
 

@@ -222,11 +222,11 @@ type candidate struct {
 
 // Candidates lists the nodes a campaign includes: enabled proxy and
 // forward nodes whose Agent was seen on the Agent Control stream
-// (v4_kernel_agent_transport, mtls-stream or apikey-stream), minus the
+// (v4_kernel_agent_transport, mtls-stream), minus the
 // excluded nodes and tags, in canary order.
 func Candidates(ctx context.Context, db *gorm.DB, exclude Exclude) ([]agentcontrol.AgentNode, error) {
 	var seen []model.AgentTransport
-	if err := db.WithContext(ctx).Where("transport IN ?", []string{model.AgentTransportMTLSStream, model.AgentTransportAPIKeyStream}).
+	if err := db.WithContext(ctx).Where("transport = ?", model.AgentTransportMTLSStream).
 		Find(&seen).Error; err != nil {
 		return nil, err
 	}
@@ -375,7 +375,7 @@ type EligibleNode struct {
 // in the order given.
 func Describe(ctx context.Context, db *gorm.DB, nodes []agentcontrol.AgentNode) ([]EligibleNode, error) {
 	var seen []model.AgentTransport
-	if err := db.WithContext(ctx).Where("transport IN ?", []string{model.AgentTransportMTLSStream, model.AgentTransportAPIKeyStream}).
+	if err := db.WithContext(ctx).Where("transport = ?", model.AgentTransportMTLSStream).
 		Order("last_seen_at").Find(&seen).Error; err != nil {
 		return nil, err
 	}

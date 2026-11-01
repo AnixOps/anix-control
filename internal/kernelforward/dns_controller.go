@@ -547,7 +547,7 @@ func (e *EntryHA) load(db *gorm.DB) (*evaluation, error) {
 		pass.desired[state.NodeRef] = state.Generation
 	}
 	var seen []model.AgentTransport
-	if err := db.Where("transport IN ?", []string{model.AgentTransportMTLSStream, model.AgentTransportAPIKeyStream}).Find(&seen).Error; err != nil {
+	if err := db.Where("transport = ?", model.AgentTransportMTLSStream).Find(&seen).Error; err != nil {
 		// A database without the transport table relies on reports.
 		slog.Debug("kernel forward: agent transports could not be read", "component", "kernel-forward", "error", err)
 	}

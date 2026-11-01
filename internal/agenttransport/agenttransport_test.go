@@ -123,16 +123,16 @@ func TestRecorderThrottlesWrites(t *testing.T) {
 	r := newTestRecorder(db, c)
 	ctx := context.Background()
 
-	r.Seen(ctx, Sighting{Node: proxy7, Transport: model.AgentTransportAPIKeyStream, AgentVersion: "1.1.0", Identity: "api-key"})
-	row, ok := loadRow(t, db, proxy7, model.AgentTransportAPIKeyStream)
+	r.Seen(ctx, Sighting{Node: proxy7, Transport: legacyAPIKeyStream, AgentVersion: "1.1.0", Identity: "api-key"})
+	row, ok := loadRow(t, db, proxy7, legacyAPIKeyStream)
 	require.True(t, ok, "the first sighting is written at once")
 	require.Equal(t, "1.1.0", row.AgentVersion)
 	first := row.LastSeenAt
 
 	// Within the interval: memory only.
 	c.now = c.now.Add(30 * time.Second)
-	r.Seen(ctx, Sighting{Node: proxy7, Transport: model.AgentTransportAPIKeyStream})
-	row, _ = loadRow(t, db, proxy7, model.AgentTransportAPIKeyStream)
+	r.Seen(ctx, Sighting{Node: proxy7, Transport: legacyAPIKeyStream})
+	row, _ = loadRow(t, db, proxy7, legacyAPIKeyStream)
 	require.True(t, row.LastSeenAt.Equal(first), "throttled")
 	snapshot := r.Snapshot()
 	require.Len(t, snapshot, 1)
@@ -141,27 +141,27 @@ func TestRecorderThrottlesWrites(t *testing.T) {
 
 	// A new version is written at once.
 	c.now = c.now.Add(time.Second)
-	r.Seen(ctx, Sighting{Node: proxy7, Transport: model.AgentTransportAPIKeyStream, AgentVersion: "1.2.0"})
-	row, _ = loadRow(t, db, proxy7, model.AgentTransportAPIKeyStream)
+	r.Seen(ctx, Sighting{Node: proxy7, Transport: legacyAPIKeyStream, AgentVersion: "1.2.0"})
+	row, _ = loadRow(t, db, proxy7, legacyAPIKeyStream)
 	require.Equal(t, "1.2.0", row.AgentVersion)
 	require.True(t, row.LastSeenAt.Equal(c.now))
 	require.True(t, row.FirstSeenAt.Equal(first), "first seen stays")
 
 	// After the interval the next sighting is written.
 	c.now = c.now.Add(10 * time.Second)
-	r.Seen(ctx, Sighting{Node: proxy7, Transport: model.AgentTransportAPIKeyStream})
-	row, _ = loadRow(t, db, proxy7, model.AgentTransportAPIKeyStream)
+	r.Seen(ctx, Sighting{Node: proxy7, Transport: legacyAPIKeyStream})
+	row, _ = loadRow(t, db, proxy7, legacyAPIKeyStream)
 	require.False(t, row.LastSeenAt.Equal(c.now), "still throttled")
 	c.now = c.now.Add(PersistInterval)
-	r.Seen(ctx, Sighting{Node: proxy7, Transport: model.AgentTransportAPIKeyStream})
-	row, _ = loadRow(t, db, proxy7, model.AgentTransportAPIKeyStream)
+	r.Seen(ctx, Sighting{Node: proxy7, Transport: legacyAPIKeyStream})
+	row, _ = loadRow(t, db, proxy7, legacyAPIKeyStream)
 	require.True(t, row.LastSeenAt.Equal(c.now))
 
 	// Flush writes what is pending.
 	c.now = c.now.Add(5 * time.Second)
-	r.Seen(ctx, Sighting{Node: proxy7, Transport: model.AgentTransportAPIKeyStream})
+	r.Seen(ctx, Sighting{Node: proxy7, Transport: legacyAPIKeyStream})
 	require.NoError(t, r.Flush(ctx))
-	row, _ = loadRow(t, db, proxy7, model.AgentTransportAPIKeyStream)
+	row, _ = loadRow(t, db, proxy7, legacyAPIKeyStream)
 	require.True(t, row.LastSeenAt.Equal(c.now))
 	require.NoError(t, r.Flush(ctx), "nothing pending")
 
@@ -234,7 +234,7 @@ func seedInventory(t *testing.T, db *gorm.DB, now time.Time) {
 	at := func(minutes int) time.Time { return now.Add(time.Duration(-minutes) * time.Minute) }
 	require.NoError(t, db.Create(&[]model.AgentTransport{
 		// Node 1 moved to the mTLS stream; it used to pull UniProxy.
-		{NodeKind: "proxy", NodeID: 1, Transport: model.AgentTransportAPIKeyStream, AgentVersion: "1.1.0", FirstSeenAt: at(600), LastSeenAt: at(300)},
+		{NodeKind: "proxy", NodeID: 1, Transport: legacyAPIKeyStream, AgentVersion: "1.1.0", FirstSeenAt: at(600), LastSeenAt: at(300)},
 		{NodeKind: "proxy", NodeID: 1, Transport: model.AgentTransportMTLSStream, AgentVersion: "2.0.0", FirstSeenAt: at(200), LastSeenAt: at(5)},
 		{NodeKind: "proxy", NodeID: 1, Transport: "uniproxy", FirstSeenAt: at(600), LastSeenAt: at(1)},
 		// Node 2 is a legacy agent: WebSocket and REST.
@@ -320,10 +320,10 @@ func TestInventory(t *testing.T) {
 				Authentication: agentstreams.AuthenticationMTLS, NegotiatedCapabilities: []string{"config.v1", "reports.v1"},
 				Certificate: &agentstreams.SessionCertificate{Serial: "new", NotAfter: notAfter, SPIFFEID: "spiffe://anixops/prod/agent/proxy-1"},
 			},
-			{Node: agentcontrol.AgentNode{Kind: "proxy", ID: 2}, Transport: agentstreams.TransportWebSocket, Identity: agentstreams.IdentityAPIKey},
+			{Node: agentcontrol.AgentNode{Kind: "proxy", ID: 2}, Transport: agentstreams.TransportWebSocket},
 			{
 				Node: agentcontrol.AgentNode{Kind: "forward", ID: 1}, Transport: agentstreams.TransportControlStream, SessionID: "session-f",
-				Identity: agentstreams.IdentityAPIKey, Authentication: agentstreams.AuthenticationAPIKey,
+				Identity: "spiffe://anixops/prod/agent/forward-1", Authentication: agentstreams.AuthenticationMTLS,
 			},
 		}
 	}})
@@ -341,8 +341,7 @@ func TestInventory(t *testing.T) {
 	require.Nil(t, byNode["proxy-2"].Session, "a WebSocket session is not a stream session")
 	forward := byNode["forward-1"].Session
 	require.NotNil(t, forward, "forward and proxy nodes of one id are told apart")
-	require.Equal(t, agentstreams.AuthenticationAPIKey, forward.Authentication)
-	require.Nil(t, forward.Certificate)
+	require.Equal(t, "spiffe://anixops/prod/agent/forward-1", forward.Identity)
 	require.NotNil(t, forward.NegotiatedCapabilities)
 }
 
@@ -375,7 +374,7 @@ func TestRequiredReadiness(t *testing.T) {
 	days := func(n int) time.Time { return now.Add(time.Duration(-n) * 24 * time.Hour) }
 	require.NoError(t, db.Create(&[]model.AgentTransport{
 		{NodeKind: "proxy", NodeID: 1, Transport: model.AgentTransportMTLSStream, FirstSeenAt: days(3), LastSeenAt: days(0)},
-		{NodeKind: "proxy", NodeID: 2, Transport: model.AgentTransportAPIKeyStream, FirstSeenAt: days(30), LastSeenAt: days(1)},
+		{NodeKind: "proxy", NodeID: 2, Transport: legacyAPIKeyStream, FirstSeenAt: days(30), LastSeenAt: days(1)},
 		{NodeKind: "proxy", NodeID: 4, Transport: model.AgentTransportWebSocket, FirstSeenAt: days(30), LastSeenAt: days(1)},
 		{NodeKind: "proxy", NodeID: 5, Transport: "uniproxy", FirstSeenAt: days(30), LastSeenAt: days(0)},
 	}).Error)
@@ -587,7 +586,6 @@ func TestConnectionOf(t *testing.T) {
 		transport    string
 	}{
 		{name: "an mTLS stream session", node: NodeTransports{Session: live(agentstreams.AuthenticationMTLS)}, sessionsRead: true, want: ConnectionMTLSStream, transport: model.AgentTransportMTLSStream},
-		{name: "an API key stream session is no connection", node: NodeTransports{Session: live(agentstreams.AuthenticationAPIKey)}, sessionsRead: true, want: ConnectionOffline},
 		{name: "a session without an authentication is no connection", node: NodeTransports{Session: live("")}, sessionsRead: true, want: ConnectionOffline},
 		{name: "the session beats a newer stream sighting", node: NodeTransports{Session: live(agentstreams.AuthenticationMTLS), Transports: []TransportSeen{seen(model.AgentTransportMTLSStream, time.Second)}}, sessionsRead: true, want: ConnectionMTLSStream, transport: model.AgentTransportMTLSStream},
 		{name: "a stale sighting is offline", node: NodeTransports{Transports: []TransportSeen{seen(model.AgentTransportMTLSStream, ConnectionWindow+time.Second)}}, want: ConnectionOffline},
@@ -646,3 +644,7 @@ func TestInventoryConnection(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, ConnectionMTLSStream, inventoryByNode(inventory)["proxy-1"].Connection.Type)
 }
+
+// legacyAPIKeyStream is the transport the removed API-key stream recorded;
+// older databases may still hold its rows.
+const legacyAPIKeyStream = "apikey-stream"

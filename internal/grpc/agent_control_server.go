@@ -60,8 +60,7 @@ type AgentControlConnection struct {
 	// for NO-8's vantage selection.
 	ServerCapabilities []*agentv1pb.Capability
 	Diagnostics        bool
-	// Identity is the authenticated identity: the agent's SPIFFE ID, or
-	// agentstreams.IdentityAPIKey for a node key or forward token.
+	// Identity is the agent's SPIFFE ID.
 	Identity string
 	// principal is how the session authenticated, with its certificate;
 	// set before the session is registered.
@@ -127,14 +126,13 @@ type AgentControlSnapshot struct {
 	// session, listed by both the Hello and the HelloAck (name.version).
 	NegotiatedCapabilities []string `json:"negotiated_capabilities"`
 	// Authentication is how the session authenticated: "mtls" (an agent
-	// client certificate) or "api-key" (the node API key or forward token).
-	// Transport is the transport inventory's name for it (mtls-stream,
-	// apikey-stream) and Identity the SPIFFE ID or "api-key".
+	// client certificate). Transport is the transport inventory's name for
+	// it (mtls-stream) and Identity the SPIFFE ID.
 	Authentication string `json:"authentication"`
 	Transport      string `json:"transport"`
 	Identity       string `json:"identity"`
-	// Certificate is the client certificate of an mtls session (serial,
-	// expiry, URI SAN); nil for api-key.
+	// Certificate is the session's client certificate (serial, expiry, URI
+	// SAN).
 	Certificate *agentstreams.SessionCertificate `json:"certificate"`
 	// AgentMetrics are the Agent's own health metrics from its latest
 	// heartbeat that carried any (agent_control_*, agent_identity_*,
@@ -261,9 +259,9 @@ func (m *AgentControlManager) Connection(nodeID uint32) (AgentControlSnapshot, b
 		ServerCapabilities:     capabilityVersions(connection.ServerCapabilities),
 		Diagnostics:            connection.Diagnostics,
 		NegotiatedCapabilities: connection.negotiatedCapabilities(),
-		Authentication:         connection.principal.authentication(),
-		Transport:              connection.principal.transport(),
-		Identity:               connection.identity(),
+		Authentication:         agentstreams.AuthenticationMTLS,
+		Transport:              model.AgentTransportMTLSStream,
+		Identity:               connection.Identity,
 		Certificate:            connection.principal.certificate(),
 		AgentMetrics:           agentMetrics,
 		AgentMetricsAt:         agentMetricsAt,
@@ -274,14 +272,6 @@ func (m *AgentControlManager) Connection(nodeID uint32) (AgentControlSnapshot, b
 // session, as name.version.
 func (c *AgentControlConnection) negotiatedCapabilities() []string {
 	return agentcontrol.NegotiatedCapabilities(c.Capabilities, c.ServerCapabilities)
-}
-
-// identity is the session's authenticated identity, api-key when unset.
-func (c *AgentControlConnection) identity() string {
-	if c.Identity == "" {
-		return agentstreams.IdentityAPIKey
-	}
-	return c.Identity
 }
 
 func (m *AgentControlManager) ObservedState(nodeID uint32) (*agentv1pb.ObservedState, bool) {
@@ -800,13 +790,10 @@ func (s *AgentControlGRPCServer) ControlStream(stream agentv1pb.AgentControlServ
 	return err
 }
 
-// wrongNode refuses an envelope whose node_id is not the stream's node,
-// with agent_cert_wrong_node when a certificate named the node.
-func wrongNode(principal agentPrincipal, message string) error {
-	if principal.Certificate {
-		return refuseAgent(agentcontrol.ErrorCodeCertWrongNode, codes.PermissionDenied, message)
-	}
-	return status.Error(codes.PermissionDenied, message)
+// wrongNode refuses an envelope whose node_id is not the stream's node
+// (agent_cert_wrong_node: the certificate named another node).
+func wrongNode(_ agentPrincipal, message string) error {
+	return refuseAgent(agentcontrol.ErrorCodeCertWrongNode, codes.PermissionDenied, message)
 }
 
 func (s *AgentControlGRPCServer) controlStream(stream agentv1pb.AgentControlService_ControlStreamServer) error {
@@ -868,7 +855,7 @@ func (s *AgentControlGRPCServer) controlStream(stream agentv1pb.AgentControlServ
 		LastSeen:     now,
 		DesiredRev:   desiredRevision,
 		ObservedRev:  first.Revision,
-		Identity:     principal.identity(),
+		Identity:     principal.SPIFFEID,
 		principal:    principal,
 		stream:       stream,
 	}

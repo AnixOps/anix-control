@@ -131,7 +131,7 @@ type NodeTransports struct {
 // authenticated and what it negotiated. It carries no credential.
 type LiveSession struct {
 	SessionID string `json:"session_id"`
-	// Authentication is mtls or api-key; Identity the SPIFFE ID or api-key.
+	// Authentication is mtls; Identity the SPIFFE ID.
 	Authentication string `json:"authentication"`
 	Identity       string `json:"identity"`
 	// Certificate is the client certificate of an mtls session: serial,

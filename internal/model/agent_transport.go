@@ -8,9 +8,6 @@ const (
 	// AgentTransportMTLSStream is the Agent Control stream authenticated by
 	// a client certificate: the target transport.
 	AgentTransportMTLSStream = "mtls-stream"
-	// AgentTransportAPIKeyStream is the Agent Control stream authenticated
-	// by the legacy node API key.
-	AgentTransportAPIKeyStream = "apikey-stream"
 	// AgentTransportHTTPLegacy is the legacy AnixOps-agent REST paths:
 	// /api/v2/agent/*, /api/v2/node/*, /api/v2/forward/agent/rules and the
 	// clean agent endpoints.
@@ -34,8 +31,8 @@ type AgentTransport struct {
 	// AgentVersion is what the agent reported on this transport (the
 	// stream's Hello), empty where the transport carries none.
 	AgentVersion string `gorm:"size:64;not null;default:''" json:"agent_version"`
-	// Identity is the SPIFFE ID of a certificate-authenticated agent, or
-	// "api-key"; CertSerial and CertNotAfter describe the certificate.
+	// Identity is the agent's SPIFFE ID; CertSerial and CertNotAfter
+	// describe its certificate.
 	Identity     string     `gorm:"size:255;not null;default:''" json:"identity"`
 	CertSerial   string     `gorm:"size:40;not null;default:''" json:"cert_serial,omitempty"`
 	CertNotAfter *time.Time `json:"cert_not_after,omitempty"`

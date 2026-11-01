@@ -67,7 +67,7 @@ func TestAgentListenerRefusesUncertifiedStreams(t *testing.T) {
 		assert.Contains(t, status.Convert(err).Message(), agentcontrol.ErrorCodeMTLSRequired)
 		assert.Equal(t, []string{agentcontrol.ErrorCodeMTLSRequired}, stream.Trailer().Get(agentcontrol.MetadataErrorCode))
 		assert.Equal(t, refused+1, agenttransport.RefusedRequests(controlStreamMethod))
-		_, ok := transportRow(t, agentcontrol.NodeKindProxy, l.proxy.ID, model.AgentTransportAPIKeyStream)
+		_, ok := transportRow(t, agentcontrol.NodeKindProxy, l.proxy.ID, model.AgentTransportMTLSStream)
 		assert.False(t, ok, "a refused stream is not a sighting")
 
 		// Enrolling with the API key is refused with the same code.
@@ -98,14 +98,11 @@ func TestAgentListenerRefusesUncertifiedStreams(t *testing.T) {
 // TestAgentAuthenticatorDefaults: a stream authenticated by certificate is
 // recorded as mtls-stream.
 func TestAgentAuthenticatorDefaults(t *testing.T) {
-	certificate := agentPrincipal{Node: agentcontrol.AgentNode{Kind: agentcontrol.NodeKindForward, ID: 3}, Certificate: true,
+	certificate := agentPrincipal{Node: agentcontrol.AgentNode{Kind: agentcontrol.NodeKindForward, ID: 3},
 		Serial: "01", NotAfter: time.Now().Add(time.Hour), SPIFFEID: "spiffe://anixops/test/agent/forward-3"}
 	sighting := certificate.sighting("2.0.0")
 	assert.Equal(t, model.AgentTransportMTLSStream, sighting.Transport)
 	assert.Equal(t, "01", sighting.CertSerial)
 	assert.NotNil(t, sighting.CertNotAfter)
-	legacy := agentPrincipal{Node: agentcontrol.AgentNode{Kind: agentcontrol.NodeKindProxy, ID: 3}}.sighting("1.0.0")
-	assert.Equal(t, model.AgentTransportAPIKeyStream, legacy.Transport)
-	assert.Equal(t, "api-key", legacy.Identity)
-	assert.Nil(t, legacy.CertNotAfter)
+	assert.Equal(t, certificate.SPIFFEID, sighting.Identity)
 }

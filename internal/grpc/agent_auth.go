@@ -45,32 +45,20 @@ func (a *AgentAuthenticator) pki() *agentpki.Service {
 	return a.PKI
 }
 
-// agentPrincipal is an authenticated agent.
+// agentPrincipal is an agent authenticated by its client certificate,
+// which Serial, NotAfter and SPIFFEID describe.
 type agentPrincipal struct {
-	Node agentcontrol.AgentNode
-	// Certificate is true when a client certificate authenticated the call;
-	// Serial, NotAfter and SPIFFEID describe it.
-	Certificate bool
-	Serial      string
-	NotAfter    time.Time
-	SPIFFEID    string
+	Node     agentcontrol.AgentNode
+	Serial   string
+	NotAfter time.Time
+	SPIFFEID string
 }
 
-// identity names how the agent authenticated: its SPIFFE ID, or the node
-// key (agentstreams.IdentityAPIKey). Never the credential itself.
-func (p agentPrincipal) identity() string {
-	if p.Certificate && p.SPIFFEID != "" {
-		return p.SPIFFEID
-	}
-	return agentstreams.IdentityAPIKey
-}
-
-// recheck tells whether a long-lived stream authenticated by certificate
-// may go on: the certificate must not have expired or been revoked since
+// recheck tells whether a long-lived stream may go on: the certificate must not have expired or been revoked since
 // (revocation answers are cached for at most 30 s).
 func (a *AgentAuthenticator) recheck(ctx context.Context, principal agentPrincipal) error {
 	pki := a.pki()
-	if !principal.Certificate || pki == nil {
+	if pki == nil {
 		return nil
 	}
 	if !time.Now().Before(principal.NotAfter) {
@@ -145,7 +133,7 @@ func (a *AgentAuthenticator) certificatePrincipal(ctx context.Context) (agentPri
 		}
 	}
 	return agentPrincipal{
-		Node: identity.Node, Certificate: true, Serial: modulepki.SerialString(leaf.SerialNumber), NotAfter: leaf.NotAfter,
+		Node: identity.Node, Serial: modulepki.SerialString(leaf.SerialNumber), NotAfter: leaf.NotAfter,
 		SPIFFEID: identity.String(),
 	}, true, nil
 }
@@ -181,42 +169,18 @@ func (a *AgentAuthenticator) authenticateControlStream(stream grpc.ServerStream)
 	return agentPrincipal{}, a.refuseUncertified(agentv1pb.AgentControlService_ControlStream_FullMethodName)
 }
 
-// authentication names how principal authenticated
-// (agentstreams.Authentication*).
-func (p agentPrincipal) authentication() string {
-	if p.Certificate {
-		return agentstreams.AuthenticationMTLS
-	}
-	return agentstreams.AuthenticationAPIKey
-}
-
-// certificate describes principal's client certificate, nil without one.
+// certificate describes principal's client certificate.
 func (p agentPrincipal) certificate() *agentstreams.SessionCertificate {
-	if !p.Certificate {
-		return nil
-	}
 	return &agentstreams.SessionCertificate{Serial: p.Serial, NotAfter: p.NotAfter, SPIFFEID: p.SPIFFEID}
-}
-
-// transport names how principal reached the stream, for the transport
-// inventory.
-func (p agentPrincipal) transport() string {
-	if p.Certificate {
-		return model.AgentTransportMTLSStream
-	}
-	return model.AgentTransportAPIKeyStream
 }
 
 // sighting is the inventory record of principal on the stream.
 func (p agentPrincipal) sighting(agentVersion string) agenttransport.Sighting {
-	sighting := agenttransport.Sighting{
-		Node: p.Node, Transport: p.transport(), AgentVersion: agentVersion, Identity: p.identity(),
+	notAfter := p.NotAfter
+	return agenttransport.Sighting{
+		Node: p.Node, Transport: model.AgentTransportMTLSStream, AgentVersion: agentVersion, Identity: p.SPIFFEID,
+		CertSerial: p.Serial, CertNotAfter: &notAfter,
 	}
-	if p.Certificate {
-		notAfter := p.NotAfter
-		sighting.CertSerial, sighting.CertNotAfter = p.Serial, &notAfter
-	}
-	return sighting
 }
 
 // remoteHost returns the client's address without the port. Through an

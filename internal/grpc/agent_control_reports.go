@@ -171,9 +171,8 @@ func (s *AgentControlGRPCServer) handleReport(manager *AgentControlManager, conn
 		if err := s.applyNodeStatus(node, payload.Status); err != nil {
 			slog.Warn("failed to record agent node status", "component", "agent-control", "node", node.String(), "error", err)
 		}
-		// As the legacy heartbeat and runtime-health requests are, the
-		// status is a sighting of the session's transport (mtls-stream or
-		// apikey-stream); the recorder writes at most once a minute.
+		// The status is a sighting of the session's transport
+		// (mtls-stream); the recorder writes at most once a minute.
 		agenttransport.Seen(connection.stream.Context(), connection.principal.sighting(connection.AgentVersion))
 		return nil
 	default:
