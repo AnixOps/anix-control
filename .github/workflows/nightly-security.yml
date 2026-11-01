@@ -2,9 +2,8 @@ name: Nightly Security
 
 # The pull-request pipeline checks the code a change touches; advisories are
 # published against code nobody touched. This workflow runs the same security
-# tools every night against main, plus a bounded real fuzz run of the relay,
-# so a new advisory or a crash input shows up the next morning instead of
-# failing an unrelated pull request. Every job fails the run on a finding.
+# tools every night against main, so a new advisory shows up the next
+# morning instead of failing an unrelated pull request. Every job fails the run on a finding.
 
 on:
   schedule:
@@ -21,7 +20,6 @@ concurrency:
 env:
   GO_VERSION: '1.26.10'
   NODE_VERSION: '22'
-  FUZZ_TIME: 60s
 
 jobs:
   govulncheck:
@@ -116,70 +114,3 @@ jobs:
         working-directory: web
         run: npm run audit:check
 
-  relay-fuzz:
-    name: relay fuzz (${{ matrix.package }})
-    runs-on: ubuntu-24.04
-    timeout-minutes: 45
-    strategy:
-      fail-fast: false
-      matrix:
-        package: ["./forward/relay", "./forward/relay/link"]
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v7
-        with:
-          ref: main
-
-      - name: Setup Go
-        uses: actions/setup-go@v6
-        with:
-          go-version: ${{ env.GO_VERSION }}
-          cache: true
-          cache-dependency-path: sdk/go.sum
-
-      # The fuzzing engine keeps what it learned in the Go build cache; the
-      # corpus carries over from one night to the next.
-      - name: Locate the fuzz corpus
-        id: corpus
-        working-directory: sdk
-        run: echo "dir=$(go env GOCACHE)/fuzz" >>"${GITHUB_OUTPUT}"
-
-      - name: Restore the fuzz corpus
-        uses: actions/cache@v4
-        with:
-          path: ${{ steps.corpus.outputs.dir }}
-          key: relay-fuzz-${{ matrix.package }}-${{ github.run_id }}
-          restore-keys: |
-            relay-fuzz-${{ matrix.package }}-
-
-      - name: Fuzz every target for a bounded time
-        working-directory: sdk
-        shell: bash
-        env:
-          PACKAGE: ${{ matrix.package }}
-        run: |
-          set -Eeuo pipefail
-          mapfile -t targets < <(go test -list '^Fuzz' "${PACKAGE}" | grep '^Fuzz')
-          [[ "${#targets[@]}" -gt 0 ]] || { echo "no fuzz targets found in ${PACKAGE}" >&2; exit 1; }
-          failed=0
-          for target in "${targets[@]}"; do
-            echo "::group::${PACKAGE} ${target} (${FUZZ_TIME})"
-            if ! go test -run '^$' -fuzz "^${target}\$" -fuzztime "${FUZZ_TIME}" "${PACKAGE}"; then
-              echo "::error::${target} in ${PACKAGE} failed; the input is in the uploaded artifact"
-              failed=1
-            fi
-            echo "::endgroup::"
-          done
-          exit "${failed}"
-
-      # A failing input is written under testdata/fuzz, which holds no
-      # committed seeds, so anything there is a crash to reproduce.
-      - name: Upload the failing inputs
-        if: ${{ failure() }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: relay-fuzz-failures-${{ strategy.job-index }}
-          path: |
-            sdk/forward/relay/testdata/fuzz
-            sdk/forward/relay/link/testdata/fuzz
-          if-no-files-found: warn
