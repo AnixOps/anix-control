@@ -55,6 +55,7 @@
           <NodeProtocolsSection :node="node" @changed="list => { protocolCount = list.length }" />
           <NodeEntriesSection :node="node" />
           <NodeNetworkSection :node-ref="`proxy-${node.id}`" />
+          <NodeForwardPortsSection :node-ref="`proxy-${node.id}`" />
         </div>
       </template>
       <template #credentials>
@@ -126,6 +127,8 @@ const NodeRealityTargetsSection = defineAsyncComponent(() => import('./nodes/Nod
 // 入口 (several lines, native IPv6, provider NAT ports) under 协议.
 const NodeEntriesSection = defineAsyncComponent(() => import('./nodes/NodeEntriesSection.vue'))
 const NodeNetworkSection = defineAsyncComponent(() => import('./nodes/NodeNetworkSection.vue'))
+// 转发端口: the port range the forward planner allocates from on the node.
+const NodeForwardPortsSection = defineAsyncComponent(() => import('./nodes/NodeForwardPortsSection.vue'))
 // 流量 draws a chart: its code (and ECharts) load when the section opens.
 const NodeTrafficSection = defineAsyncComponent(() => import('./nodes/NodeTrafficSection.vue'))
 
