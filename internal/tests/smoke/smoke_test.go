@@ -82,7 +82,7 @@ func (s *SmokeTestSuite) SetupSuite() {
 		&model.UserSubscriptionGroup{}, &model.PlanSubscriptionGroup{},
 		&model.Event{}, &model.SubscriptionGroup{}, &model.SubscriptionTemplate{},
 		&model.ServerVMess{}, &model.ServerVLESS{}, &model.ServerTrojan{},
-		&model.ServerShadowsocks{}, &model.ServerHysteria{}, &model.ServerTUIC{},
+		&model.ServerShadowsocks{}, &model.ServerTUIC{},
 		&model.ServerAnyTLS{}, &model.TrafficLog{}, &model.OnlineLog{},
 		&model.StatServer{}, &model.StatUser{},
 	))

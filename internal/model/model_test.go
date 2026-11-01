@@ -437,7 +437,6 @@ func TestServerTypeConstants(t *testing.T) {
 	assert.Equal(t, ServerType("vless"), ServerTypeVLESS)
 	assert.Equal(t, ServerType("trojan"), ServerTypeTrojan)
 	assert.Equal(t, ServerType("shadowsocks"), ServerTypeShadowsocks)
-	assert.Equal(t, ServerType("hysteria"), ServerTypeHysteria)
 	assert.Equal(t, ServerType("hysteria2"), ServerTypeHysteria2)
 	assert.Equal(t, ServerType("tuic"), ServerTypeTUIC)
 	assert.Equal(t, ServerType("anytls"), ServerTypeAnyTLS)
@@ -457,10 +456,6 @@ func TestServerTrojan_TableName(t *testing.T) {
 
 func TestServerShadowsocks_TableName(t *testing.T) {
 	assert.Equal(t, "v2_server_shadowsocks", ServerShadowsocks{}.TableName())
-}
-
-func TestServerHysteria_TableName(t *testing.T) {
-	assert.Equal(t, "v2_server_hysteria", ServerHysteria{}.TableName())
 }
 
 func TestServerTUIC_TableName(t *testing.T) {
@@ -612,23 +607,6 @@ func TestServerShadowsocks_Interface(t *testing.T) {
 	assert.Equal(t, uint(4), server.GetID())
 	assert.Equal(t, ServerTypeShadowsocks, server.GetType())
 	assert.Equal(t, "ss.example.com", server.GetHost())
-}
-
-func TestServerHysteria_Interface(t *testing.T) {
-	server := &ServerHysteria{
-		BaseServer: BaseServer{
-			ID:         5,
-			Host:       "hy.example.com",
-			Port:       443,
-			ServerPort: 8443,
-		},
-		Version: 2,
-		UpMbps:  100,
-	}
-
-	assert.Equal(t, uint(5), server.GetID())
-	assert.Equal(t, ServerTypeHysteria, server.GetType())
-	assert.Equal(t, "hy.example.com", server.GetHost())
 }
 
 func TestServerTUIC_Interface(t *testing.T) {

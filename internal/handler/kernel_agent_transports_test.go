@@ -20,7 +20,7 @@ func TestAgentTransportsHandlerListsTheInventory(t *testing.T) {
 	require.NoError(t, db.Create(&[]model.Node{{ID: 1, Name: "enrolled", APIKey: "a"}, {ID: 2, Name: "silent", APIKey: "b"}}).Error)
 	require.NoError(t, db.Create(&[]model.AgentTransport{
 		{NodeKind: "proxy", NodeID: 1, Transport: model.AgentTransportMTLSStream, AgentVersion: "2.0.0", FirstSeenAt: now, LastSeenAt: now},
-		{NodeKind: "proxy", NodeID: 2, Transport: model.AgentTransportWebSocket, FirstSeenAt: now, LastSeenAt: now},
+		{NodeKind: "proxy", NodeID: 2, Transport: "websocket", FirstSeenAt: now, LastSeenAt: now},
 	}).Error)
 	live := agenttransport.NewRecorder(nil)
 	handler := &AgentTransportsHandler{
@@ -70,7 +70,7 @@ func TestAgentTransportsHandlerShowsCertificatesAndConnections(t *testing.T) {
 	}).Error)
 	require.NoError(t, db.Create(&[]model.AgentTransport{
 		{NodeKind: "proxy", NodeID: 1, Transport: model.AgentTransportMTLSStream, AgentVersion: "2.0.0", FirstSeenAt: now, LastSeenAt: now},
-		{NodeKind: "proxy", NodeID: 2, Transport: model.AgentTransportWebSocket, FirstSeenAt: now, LastSeenAt: now.Add(-time.Minute)},
+		{NodeKind: "proxy", NodeID: 2, Transport: "websocket", FirstSeenAt: now, LastSeenAt: now.Add(-time.Minute)},
 	}).Error)
 	handler := &AgentTransportsHandler{
 		db:   func() *gorm.DB { return db },

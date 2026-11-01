@@ -13,7 +13,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/AnixOps/anix-control/v5/internal/agentws"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 )
@@ -54,13 +53,6 @@ func NewWebSocketAdapter(handler gin.HandlerFunc) WebSocketOperationHandler {
 		ginContext.Set("request_id", call.Request.RequestID)
 		ginContext.Set("user_id", principal.ActorID)
 		ginContext.Set("is_admin", principal.Admin)
-		if metadata.NodeID != 0 {
-			ginContext.Set("node_id", metadata.NodeID)
-		}
-		if metadata.TrustedAgentWebSocketAuth {
-			ginContext.Set(agentws.TrustedContextKey, true)
-			ginContext.Set(agentws.ForwardNodeContextKey, metadata.TrustedAgentWebSocketForwardNode)
-		}
 		for key, value := range metadata.PathParams {
 			ginContext.Params = append(ginContext.Params, gin.Param{Key: key, Value: value})
 		}

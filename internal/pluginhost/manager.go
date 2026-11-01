@@ -57,15 +57,12 @@ type DispatchInput struct {
 // package route identifier. Query values remain multi-valued because v2
 // clients may repeat a key.
 type RequestMetadata struct {
-	Path                             string              `json:"path,omitempty"`
-	Query                            map[string][]string `json:"query,omitempty"`
-	Headers                          map[string][]string `json:"headers,omitempty"`
-	PathParams                       map[string]string   `json:"path_params,omitempty"`
-	ClientIP                         string              `json:"client_ip,omitempty"`
-	UserAgent                        string              `json:"user_agent,omitempty"`
-	NodeID                           uint                `json:"node_id,omitempty"`
-	TrustedAgentWebSocketAuth        bool                `json:"trusted_agent_websocket_auth,omitempty"`
-	TrustedAgentWebSocketForwardNode bool                `json:"trusted_agent_websocket_forward_node,omitempty"`
+	Path       string              `json:"path,omitempty"`
+	Query      map[string][]string `json:"query,omitempty"`
+	Headers    map[string][]string `json:"headers,omitempty"`
+	PathParams map[string]string   `json:"path_params,omitempty"`
+	ClientIP   string              `json:"client_ip,omitempty"`
+	UserAgent  string              `json:"user_agent,omitempty"`
 	// Host and TLS describe the original request address as
 	// internal/requestorigin resolves it: the Host header and whether the
 	// connection was TLS, or X-Forwarded-Host/Proto when the peer is a

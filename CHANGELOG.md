@@ -17,6 +17,18 @@
 - `GET /api/v3/agent/plugin-releases/*` (the node API key plugin download)
   is gone and answers 404. Agents download plugin releases over
   `AgentArtifacts` with their client certificate.
+- Hysteria v1: the `hysteria` server type, its `v2_server_hysteria` model
+  and the per-type server readers that only tests used. Migration
+  `0026_drop_server_hysteria` drops the Xboard-era `v2_server_hysteria`
+  table (it holds Hysteria v1 and v2 rows a Xboard import brought along;
+  nothing reads them). It cannot be undone: back up the database before
+  this release runs its migrations.
+- The v2 gateway no longer forwards an agent node identity to packages:
+  the `node_id` and `trusted_agent_websocket_*` request metadata and the
+  `internal/agentws` context keys, which nothing set since the agent
+  WebSocket was removed. The `websocket` Agent transport and the
+  `http-legacy`, `websocket` and `clean-agent` transport names are gone
+  too. Package WebSocket routes (`/api/v2/admin/ws/monitor`) are unchanged.
 
 ## 5.0.0-rc.28 - 2026-11-01
 

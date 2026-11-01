@@ -2,7 +2,6 @@ package v2
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -69,31 +68,6 @@ func TestGatewayUsesPackageDataEnvelopeAndPropagatesRequestIdentity(t *testing.T
 	require.Equal(t, []string{"stable", "v4"}, dispatcher.input.Metadata.Query["tag"])
 	require.Equal(t, "198.51.100.42", dispatcher.input.Metadata.ClientIP)
 	require.Equal(t, "AnixOps-Test/1.0", dispatcher.input.Metadata.UserAgent)
-}
-
-func TestRequestMetadataRemovesAgentWebSocketCredentialsAfterKernelPreflight(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	router := gin.New()
-	var metadata pluginhost.RequestMetadata
-	router.GET("/api/v2/agent/ws", func(c *gin.Context) {
-		c.Set("anixops.agent_ws.trusted", true)
-		c.Set("anixops.agent_ws.forward_node", true)
-		c.Set("node_id", uint(17))
-		metadata = requestMetadata(c)
-		c.Status(http.StatusNoContent)
-	})
-
-	recorder := httptest.NewRecorder()
-	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/v2/agent/ws?node_id=17&api_key=secret-token&token=second-secret&tag=stable", nil))
-
-	require.Equal(t, http.StatusNoContent, recorder.Code)
-	require.Equal(t, []string{"stable"}, metadata.Query["tag"])
-	require.NotContains(t, metadata.Query, "node_id")
-	require.NotContains(t, metadata.Query, "api_key")
-	require.NotContains(t, metadata.Query, "token")
-	encoded, err := json.Marshal(metadata)
-	require.NoError(t, err)
-	require.JSONEq(t, `{"path":"/api/v2/agent/ws","query":{"tag":["stable"]},"client_ip":"192.0.2.1","node_id":17,"trusted_agent_websocket_auth":true,"trusted_agent_websocket_forward_node":true}`, string(encoded))
 }
 
 func TestRequestMetadataCarriesTheOriginalRequestAddress(t *testing.T) {
