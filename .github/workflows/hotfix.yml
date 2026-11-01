@@ -1,0 +1,758 @@
+name: Hotfix
+
+# Hotfixes (docs/RELEASING.md, "Hotfixes"): a small fix shipped without a
+# whole release. A hotfix is a release plus ".hf.<n>" (v5.0.0-rc.25.hf.1):
+# newer than that release and its dev builds, older than the next release
+# (SemVer orders "hf" after "dev"), so the next release replaces it.
+#
+# The fix is merged to main first, as always. This workflow then
+# cherry-picks the named main commits onto the release's hotfix branch
+# (hotfix/<release>, created from the release tag), so nothing else that
+# main gained since the release goes out with it. It tests only the
+# packages the hotfix touches, builds Control (linux amd64 and arm64) and
+# the frontend, signs them with the official key and publishes a
+# pre-release of this repository.
+#
+# Control and the Agent share the release they are built on; the ".hf.<n>"
+# suffix does not count (user decision 2026-11-01). A Control-only hotfix
+# keeps the Agent the hotfix branch pins (the release's, or the Agent of an
+# earlier hotfix of the same release), so no node moves. With agent_commits
+# the Agent is built too, from the Agent release tag plus those commits
+# (and the ones earlier hotfixes picked, read from their notes), at the
+# hotfix version, and published in the same pre-release; nodes then move
+# with an ordinary upgrade campaign.
+#
+# deploy installs the hotfix through JumpServer: on the Control whose
+# service runs (the production primary) after a database dump, with
+# install.sh restoring the previous release when the new one fails its
+# health check; on a cold standby (Control installed, service stopped) it
+# installs the files only and leaves the service stopped and disabled.
+on:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: 'The release to fix, for example v5.0.0-rc.25'
+        required: true
+        type: string
+      control_commits:
+        description: 'anix-control main commits to pick, oldest first, space separated (empty: none)'
+        required: false
+        type: string
+        default: ''
+      agent_commits:
+        description: 'anix-agent main commits to pick, oldest first, space separated (empty: the Agent does not change)'
+        required: false
+        type: string
+        default: ''
+      deploy:
+        description: 'Install the hotfix on the production Control (database dump first) and the cold standby'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hotfix
+  cancel-in-progress: false
+
+env:
+  GO_VERSION: '1.26.10'
+  NODE_VERSION: '22'
+  AGENT_REPOSITORY: AnixOps/anix-agent
+
+jobs:
+  plan:
+    name: Pick the fix onto the hotfix branch
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+      branch: ${{ steps.pick.outputs.branch }}
+      control_sha: ${{ steps.pick.outputs.control_sha }}
+      control_picks: ${{ steps.pick.outputs.control_picks }}
+      go_packages: ${{ steps.pick.outputs.go_packages }}
+      sdk_changed: ${{ steps.pick.outputs.sdk_changed }}
+      web_changed: ${{ steps.pick.outputs.web_changed }}
+      agent_tag: ${{ steps.agent.outputs.agent_tag }}
+      agent_base: ${{ steps.agent.outputs.agent_base }}
+      agent_picks: ${{ steps.agent.outputs.agent_picks }}
+      build_agent: ${{ steps.agent.outputs.build_agent }}
+    steps:
+      - name: Check the inputs
+        env:
+          RELEASE: ${{ inputs.release }}
+          CONTROL_COMMITS: ${{ inputs.control_commits }}
+          AGENT_COMMITS: ${{ inputs.agent_commits }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          [[ "${GITHUB_REF}" == refs/heads/main ]] || { echo "::error::run this workflow from main"; exit 1; }
+          # Hotfixes follow pre-releases only: after a stable vX.Y.Z the fix
+          # is vX.Y.(Z+1), an ordinary release.
+          [[ "${RELEASE}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-(alpha|beta|rc)\.[0-9]+$ ]] || { echo "::error::not a pre-release tag: ${RELEASE}"; exit 1; }
+          for sha in ${CONTROL_COMMITS} ${AGENT_COMMITS}; do
+            [[ "${sha}" =~ ^[0-9a-f]{7,40}$ ]] || { echo "::error::not a commit: ${sha}"; exit 1; }
+          done
+          [[ -n "${CONTROL_COMMITS// /}${AGENT_COMMITS// /}" ]] || { echo "::error::name at least one commit to pick"; exit 1; }
+
+      - name: Checkout Control
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # Each picked commit must be on main: a hotfix ships merged, reviewed
+      # code only. Commits the branch already carries (git cherry-pick -x
+      # records them) are skipped, so a later hotfix can name them again.
+      - name: Pick the commits
+        id: pick
+        env:
+          RELEASE: ${{ inputs.release }}
+          CONTROL_COMMITS: ${{ inputs.control_commits }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rev-parse -q --verify "refs/tags/${RELEASE}^{commit}" >/dev/null || { echo "::error::no tag ${RELEASE}"; exit 1; }
+          branch="hotfix/${RELEASE}"
+          if git ls-remote --exit-code --heads origin "${branch}" >/dev/null; then
+            git checkout -B "${branch}" "origin/${branch}"
+          else
+            git checkout -B "${branch}" "${RELEASE}"
+          fi
+          before="$(git rev-parse HEAD)"
+          for short in ${CONTROL_COMMITS}; do
+            sha="$(git rev-parse --verify "${short}^{commit}")"
+            git merge-base --is-ancestor "${sha}" origin/main || { echo "::error::${sha} is not on main"; exit 1; }
+            if grep -qF "(cherry picked from commit ${sha})" <<<"$(git log --format=%B "${RELEASE}..HEAD")"; then
+              echo "${sha} is already on ${branch}"
+              continue
+            fi
+            git cherry-pick -x "${sha}" || { git cherry-pick --abort || true; echo "::error::${sha} does not apply to ${branch}: fix it on main for the next release instead"; exit 1; }
+          done
+          if [[ "$(git rev-parse HEAD)" != "${before}" ]]; then
+            # The workflow token cannot push workflow files.
+            if grep -q '^\.github/workflows/' <<<"$(git diff --name-only "${before}" HEAD)"; then
+              echo "::error::a picked commit changes .github/workflows: that cannot go out as a hotfix"; exit 1
+            fi
+            git push origin "HEAD:refs/heads/${branch}"
+          fi
+          picks="$(git log --reverse --format=%B "${RELEASE}..HEAD" | sed -n 's/^(cherry picked from commit \([0-9a-f]\{40\}\))$/\1/p' | tr '\n' ' ' | sed 's/ $//')"
+          changed="$(git diff --name-only "${RELEASE}" HEAD)"
+          # Packages of the root module the hotfix touches, tested below.
+          packages="$(grep -E '\.go$' <<<"${changed}" | grep -Ev '^(sdk|identity|control-center)/' | xargs -r -n1 dirname | sort -u | sed 's|^|./|' | tr '\n' ' ' | sed 's/ $//' || true)"
+          {
+            echo "branch=${branch}"
+            echo "control_sha=$(git rev-parse HEAD)"
+            echo "control_picks=${picks}"
+            echo "go_packages=${packages}"
+            echo "sdk_changed=$(grep -q '^sdk/' <<<"${changed}" && echo true || echo false)"
+            echo "web_changed=$(grep -q '^web/' <<<"${changed}" && echo true || echo false)"
+          } >>"$GITHUB_OUTPUT"
+          {
+            echo "### Hotfix branch \`${branch}\`"
+            echo
+            echo "- Head: \`$(git rev-parse HEAD)\`"
+            echo "- Picked: ${picks:-none}"
+            echo
+            echo '```'
+            echo "${changed}"
+            echo '```'
+          } >>"$GITHUB_STEP_SUMMARY"
+
+      # The next free ".hf.<n>" of the release.
+      - name: Choose the version
+        id: version
+        env:
+          RELEASE: ${{ inputs.release }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          last="$(git ls-remote --tags origin "refs/tags/${RELEASE}.hf.*" | sed -n "s|.*refs/tags/${RELEASE//./\\.}\.hf\.\([0-9]*\)$|\1|p" | sort -n | tail -n1)"
+          tag="${RELEASE}.hf.$(( ${last:-0} + 1 ))"
+          echo "tag=${tag}" >>"$GITHUB_OUTPUT"
+          echo "- Version: \`${tag}\`" >>"$GITHUB_STEP_SUMMARY"
+
+      # The Agent this hotfix pins. The newest earlier hotfix of the release
+      # names its Agent and the Agent commits it picked in its notes.
+      - name: Choose the Agent
+        id: agent
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE: ${{ inputs.release }}
+          TAG: ${{ steps.version.outputs.tag }}
+          AGENT_COMMITS: ${{ inputs.agent_commits }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          api() { curl -fsS --retry 3 -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" "${GITHUB_API_URL}$1"; }
+          agent_base="$(git show "${RELEASE}:config/AGENT_RELEASE" | tr -d '[:space:]')"
+          [[ "${agent_base}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)\.[0-9]+)?$ ]] || { echo "::error::${RELEASE} pins no Agent release"; exit 1; }
+          notes="$(api "/repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
+            | jq -r --arg prefix "${RELEASE}.hf." '[.[] | select(.tag_name | startswith($prefix))] | sort_by(.created_at) | last | .body // empty')"
+          previous_tag="$(sed -n 's/^Agent: \(v[^ ]*\)$/\1/p' <<<"${notes}" | head -n1)"
+          previous_picks="$(sed -n 's/^Agent commits: \(.*\)$/\1/p' <<<"${notes}" | head -n1)"
+          [[ "${previous_picks}" == none ]] && previous_picks=""
+          if [[ -n "${AGENT_COMMITS// /}" ]]; then
+            # Control must know ".hf." Agent tags (agentinstall.IsHotfix) to
+            # serve and pin one.
+            git grep -q 'func IsHotfix' HEAD -- internal/agentinstall/agentinstall.go || {
+              echo "::error::${RELEASE} cannot pin a hotfix Agent: it predates .hf. tags (only Control-only hotfixes)"; exit 1
+            }
+            agent_tag="${TAG}"
+            build_agent=true
+            picks="${previous_picks}"
+            for sha in ${AGENT_COMMITS}; do
+              full="$(api "/repos/${AGENT_REPOSITORY}/commits/${sha}" | jq -r .sha)"
+              [[ "${full}" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::no Agent commit ${sha}"; exit 1; }
+              status="$(api "/repos/${AGENT_REPOSITORY}/compare/${full}...main" | jq -r .status)"
+              [[ "${status}" == ahead || "${status}" == identical ]] || { echo "::error::Agent commit ${full} is not on main"; exit 1; }
+              [[ " ${picks} " == *" ${full} "* ]] || picks="${picks:+${picks} }${full}"
+            done
+          else
+            agent_tag="${previous_tag:-${agent_base}}"
+            build_agent=false
+            picks="${previous_picks}"
+          fi
+          {
+            echo "agent_tag=${agent_tag}"
+            echo "agent_base=${agent_base}"
+            echo "agent_picks=${picks}"
+            echo "build_agent=${build_agent}"
+          } >>"$GITHUB_OUTPUT"
+          echo "- Agent: \`${agent_tag}\` (built: ${build_agent}; from ${agent_base} plus ${picks:-nothing})" >>"$GITHUB_STEP_SUMMARY"
+
+  test:
+    name: Test what the hotfix touches
+    runs-on: ubuntu-24.04
+    needs: plan
+    steps:
+      - name: Checkout the hotfix branch
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.plan.outputs.control_sha }}
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Vet and test the touched Go packages
+        env:
+          PACKAGES: ${{ needs.plan.outputs.go_packages }}
+          SDK_CHANGED: ${{ needs.plan.outputs.sdk_changed }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          go build ./cmd/server
+          # A package the hotfix deleted is not there to test.
+          existing=()
+          for dir in ${PACKAGES}; do
+            compgen -G "${dir}/*.go" >/dev/null && existing+=("${dir}")
+          done
+          PACKAGES="${existing[*]}"
+          if [[ -n "${PACKAGES}" ]]; then
+            # shellcheck disable=SC2086
+            go vet ${PACKAGES}
+            # shellcheck disable=SC2086
+            go test -count=1 ${PACKAGES}
+          fi
+          if [[ "${SDK_CHANGED}" == true ]]; then
+            go -C sdk vet ./...
+            go -C sdk test -count=1 ./...
+          fi
+
+      - name: Setup Node.js
+        if: ${{ needs.plan.outputs.web_changed == 'true' }}
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Test the frontend
+        if: ${{ needs.plan.outputs.web_changed == 'true' }}
+        working-directory: web
+        run: |
+          npm ci
+          npx vitest run
+
+  packages:
+    name: Sign the built-in packages
+    runs-on: ubuntu-24.04
+    needs: plan
+    steps:
+      - name: Checkout the hotfix branch
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.plan.outputs.control_sha }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.x'
+
+      # As dev-release.yml, at the hotfix version.
+      - name: Build and sign the built-in package set
+        env:
+          ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY: ${{ secrets.ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY }}
+          ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY: ${{ secrets.ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY }}
+          TAG: ${{ needs.plan.outputs.tag }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          [[ -n "${ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY}" && -n "${ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY}" ]] || {
+            echo "the official signing key and root are required" >&2; exit 1
+          }
+          key_file="$(mktemp)"
+          root_file="$(mktemp)"
+          trap 'rm -f "${key_file}" "${root_file}"' EXIT
+          printf '%s\n' "${ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY}" >"${key_file}"
+          chmod 0600 "${key_file}"
+          printf '%s\n' "${ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY}" >"${root_file}"
+          configured_root="$(sed -n 's/^[[:space:]]*official_public_key:[[:space:]]*"\([^"]*\)".*/\1/p' internal/config/defaults.yaml)"
+          [[ -n "${configured_root}" && "${configured_root}" == "${ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY}" ]] || {
+            echo "internal/config/defaults.yaml does not declare the protected official package root" >&2; exit 1
+          }
+          unset ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY
+          mkdir -p builtin-packages release-assets
+          python3 packages/shared/build_package.py --all --builtin --version "${TAG#v}" --out builtin-packages \
+            --formal-release --signing-key "${key_file}" --official-public-key "${root_file}"
+          python3 packages/shared/build_package.py --all --builtin --version "${TAG#v}" --out builtin-packages \
+            --verify-release --official-public-key "${root_file}"
+          cp "${root_file}" release-assets/official-public-key.raw
+          install -m 0644 internal/agentinstall/install.sh release-assets/agent-install.sh
+          signature_bin="$(mktemp)"
+          official_der="$(mktemp)"
+          openssl pkeyutl -sign -inkey "${key_file}" -rawin -in release-assets/agent-install.sh -out "${signature_bin}"
+          printf '%s\n' "$(base64 -w0 "${signature_bin}")" >release-assets/agent-install.sh.sig
+          { printf '\x30\x2a\x30\x05\x06\x03\x2b\x65\x70\x03\x21\x00'; base64 -d "${root_file}"; } >"${official_der}"
+          openssl pkeyutl -verify -pubin -keyform DER -inkey "${official_der}" -rawin \
+            -in release-assets/agent-install.sh -sigfile "${signature_bin}"
+          rm -f "${signature_bin}" "${official_der}"
+
+      - name: Upload the built-in package set
+        uses: actions/upload-artifact@v7
+        with:
+          name: hotfix-builtin-packages
+          path: builtin-packages/
+
+      - name: Upload the signed assets
+        uses: actions/upload-artifact@v7
+        with:
+          name: hotfix-signed-assets
+          path: release-assets/
+
+  control:
+    name: Build Control (${{ matrix.goarch }})
+    runs-on: ubuntu-24.04
+    needs: [plan, packages]
+    strategy:
+      fail-fast: true
+      matrix:
+        goarch: [amd64, arm64]
+    steps:
+      - name: Checkout the hotfix branch
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.plan.outputs.control_sha }}
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Download the built-in package set
+        uses: actions/download-artifact@v8
+        with:
+          name: hotfix-builtin-packages
+          path: internal/builtinpkg/dist/
+
+      - name: Verify the built-in package set
+        env:
+          TAG: ${{ needs.plan.outputs.tag }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          root_file="$(mktemp)"
+          trap 'rm -f "${root_file}"' EXIT
+          sed -n 's/^[[:space:]]*official_public_key:[[:space:]]*"\([^"]*\)".*/\1/p' internal/config/defaults.yaml >"${root_file}"
+          python3 packages/shared/build_package.py --all --builtin --version "${TAG#v}" --out internal/builtinpkg/dist \
+            --verify-release --official-public-key "${root_file}"
+
+      # agentRelease is the Agent the hotfix pins: the release's unless
+      # this or an earlier hotfix of the release built one.
+      - name: Build Control
+        env:
+          TAG: ${{ needs.plan.outputs.tag }}
+          AGENT_TAG: ${{ needs.plan.outputs.agent_tag }}
+          COMMIT: ${{ needs.plan.outputs.control_sha }}
+          GOARCH: ${{ matrix.goarch }}
+          BUILD_CODE: ${{ github.run_number }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          name="anix-control-linux-${GOARCH}"
+          CGO_ENABLED=0 GOOS=linux go build -trimpath \
+            -ldflags="-s -w -X main.version=${TAG#v} -X main.agentRelease=${AGENT_TAG} -X main.buildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ) -X main.buildCode=${BUILD_CODE} -X main.commit=${COMMIT::12}" \
+            -o "${name}" ./cmd/server
+          mkdir -p dist
+          tar -czf "dist/${name}.tar.gz" "${name}"
+
+      - name: Upload the binary
+        uses: actions/upload-artifact@v7
+        with:
+          name: hotfix-control-${{ matrix.goarch }}
+          path: dist/*
+
+  frontend:
+    name: Build the frontend
+    runs-on: ubuntu-24.04
+    needs: plan
+    steps:
+      - name: Checkout the hotfix branch
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.plan.outputs.control_sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Build
+        working-directory: web
+        run: |
+          npm ci
+          npm run build
+
+      - name: Archive
+        run: |
+          mkdir -p dist
+          tar -czf dist/anix-control-frontend.tar.gz -C web/public .
+
+      - name: Upload the frontend
+        uses: actions/upload-artifact@v7
+        with:
+          name: hotfix-frontend
+          path: dist/*
+
+  agent:
+    name: Build the Agent (${{ matrix.asset_name }})
+    runs-on: ubuntu-24.04
+    needs: plan
+    if: ${{ needs.plan.outputs.build_agent == 'true' }}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - goarch: amd64
+            asset_name: linux-64
+          - goarch: arm64
+            asset_name: linux-arm64-v8a
+    steps:
+      - name: Checkout the Agent
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ env.AGENT_REPOSITORY }}
+          ref: main
+          fetch-depth: 0
+
+      # The Agent release plus the picked commits, in this workspace only:
+      # the workflow token cannot push to anix-agent, so the notes record
+      # the picks for the next hotfix of the release.
+      - name: Pick the Agent commits
+        id: pick
+        env:
+          AGENT_BASE: ${{ needs.plan.outputs.agent_base }}
+          PICKS: ${{ needs.plan.outputs.agent_picks }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git checkout -B hotfix "refs/tags/${AGENT_BASE}"
+          for sha in ${PICKS}; do
+            git cherry-pick -x "${sha}" || { git cherry-pick --abort || true; echo "::error::Agent commit ${sha} does not apply to ${AGENT_BASE}"; exit 1; }
+          done
+          echo "packages=$(git diff --name-only "${AGENT_BASE}" HEAD | grep -E '\.go$' | xargs -r -n1 dirname | sort -u | sed 's|^|./|' | tr '\n' ' ' | sed 's/ $//' || true)" >>"$GITHUB_OUTPUT"
+
+      - name: Read the Agent's Go toolchain
+        id: go
+        run: echo "version=$(sed -n 's/^toolchain go//p' go.mod)" >>"$GITHUB_OUTPUT"
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ steps.go.outputs.version }}
+          cache: true
+
+      - name: Enforce the Agent's release build policy
+        run: bash scripts/check_release_build_policy.sh
+
+      - name: Test the touched Agent packages
+        if: ${{ matrix.goarch == 'amd64' && steps.pick.outputs.packages != '' }}
+        env:
+          PACKAGES: ${{ steps.pick.outputs.packages }}
+          GOEXPERIMENT: jsonv2
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          existing=()
+          for dir in ${PACKAGES}; do
+            compgen -G "${dir}/*.go" >/dev/null && existing+=("${dir}")
+          done
+          (( ${#existing[@]} == 0 )) || go test -count=1 -tags anixcore "${existing[@]}"
+
+      # As anix-agent's release.yml build job, at the hotfix version.
+      - name: Build the Agent and the anixops relay
+        env:
+          TAG: ${{ needs.plan.outputs.tag }}
+          GOOS: linux
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p build_assets
+          GOEXPERIMENT=jsonv2 go build -o build_assets/anix-agent \
+            -tags "anixcore" -trimpath \
+            -ldflags "-X 'github.com/AnixOps/anix-agent/v5/cmd.version=${TAG}' -s -w -buildid="
+          ln -s anix-agent build_assets/V2bX
+          (cd cmd/anixops-relay && go build -o ../../build_assets/anixops-relay -trimpath \
+            -ldflags "-X 'github.com/AnixOps/anix-control/sdk/forward/driver/anixops/relayd.Version=${TAG}' -s -w -buildid=" .)
+          cp README.md LICENSE example/*.json build_assets/
+          for name in geoip geosite; do
+            curl -fsSL --retry 3 "https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/${name}.dat" -o "build_assets/${name}.dat"
+          done
+
+      - name: Package
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          pushd build_assets
+          touch -mt "$(date +%Y01010000)" ./*
+          touch -h -mt "$(date +%Y01010000)" V2bX
+          zip -9yr "../anix-agent-${{ matrix.asset_name }}.zip" .
+          popd
+          file="anix-agent-${{ matrix.asset_name }}.zip"
+          for method in md5 sha1 sha256 sha512; do
+            openssl dgst "-${method}" "${file}" | sed 's/([^)]*)//g' >>"${file}.dgst"
+          done
+          python3 scripts/check_release_assets.py zip --zip "${file}"
+          mkdir -p dist
+          mv "${file}" "${file}.dgst" dist/
+
+      - name: Upload the package
+        uses: actions/upload-artifact@v7
+        with:
+          name: hotfix-agent-${{ matrix.asset_name }}
+          path: dist/*
+
+  publish:
+    name: Publish the hotfix
+    runs-on: ubuntu-24.04
+    needs: [plan, test, packages, control, frontend, agent]
+    if: >-
+      ${{ !cancelled() && needs.plan.result == 'success' && needs.test.result == 'success' && needs.packages.result == 'success'
+      && needs.control.result == 'success' && needs.frontend.result == 'success'
+      && (needs.agent.result == 'success' || (needs.agent.result == 'skipped' && needs.plan.outputs.build_agent != 'true')) }}
+    permissions:
+      contents: write
+    steps:
+      - name: Download the signed assets
+        uses: actions/download-artifact@v8
+        with:
+          name: hotfix-signed-assets
+          path: release
+
+      - name: Download Control
+        uses: actions/download-artifact@v8
+        with:
+          pattern: hotfix-control-*
+          path: release
+          merge-multiple: true
+
+      - name: Download the frontend
+        uses: actions/download-artifact@v8
+        with:
+          name: hotfix-frontend
+          path: release
+
+      - name: Download the Agent
+        if: ${{ needs.plan.outputs.build_agent == 'true' }}
+        uses: actions/download-artifact@v8
+        with:
+          pattern: hotfix-agent-*
+          path: release
+          merge-multiple: true
+
+      # As dev-release.yml: the Agent's assets (when built) as anix-agent's
+      # release.yml signs them, then SHA256SUMS.txt over every asset, signed.
+      - name: Write the checksums and sign them
+        working-directory: release
+        env:
+          ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY: ${{ secrets.ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY }}
+          BUILD_AGENT: ${{ needs.plan.outputs.build_agent }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          [[ -n "${ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY}" ]] || { echo "the official signing key is required" >&2; exit 1; }
+          key_file="$(mktemp)"
+          official_der="$(mktemp)"
+          signature_bin="$(mktemp)"
+          trap 'rm -f "${key_file}" "${official_der}" "${signature_bin}"' EXIT
+          printf '%s\n' "${ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY}" >"${key_file}"
+          chmod 0600 "${key_file}"
+          unset ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY
+          { printf '\x30\x2a\x30\x05\x06\x03\x2b\x65\x70\x03\x21\x00'; base64 -d official-public-key.raw; } >"${official_der}"
+          sign() {
+            openssl pkeyutl -sign -inkey "${key_file}" -rawin -in "$1" -out "${signature_bin}"
+            printf '%s\n' "$(base64 -w0 "${signature_bin}")" >"$1.sig"
+            openssl pkeyutl -verify -pubin -keyform DER -inkey "${official_der}" -rawin -in "$1" -sigfile "${signature_bin}"
+          }
+          required=(anix-control-linux-amd64.tar.gz anix-control-linux-arm64.tar.gz anix-control-frontend.tar.gz
+            agent-install.sh agent-install.sh.sig official-public-key.raw SHA256SUMS.txt.sig)
+          if [[ "${BUILD_AGENT}" == true ]]; then
+            packages=(anix-agent-linux-64.zip anix-agent-linux-arm64-v8a.zip)
+            sha256sum "${packages[@]}" >SHA256SUMS
+            for file in "${packages[@]}" SHA256SUMS; do sign "${file}"; done
+            required+=(SHA256SUMS.sig anix-agent-linux-64.zip.sig anix-agent-linux-64.zip.dgst
+              anix-agent-linux-arm64-v8a.zip.sig anix-agent-linux-arm64-v8a.zip.dgst)
+          fi
+          sha256sum -- * >SHA256SUMS.txt
+          sign SHA256SUMS.txt
+          for name in "${required[@]}"; do
+            [[ -s "${name}" ]] || { echo "missing ${name}" >&2; exit 1; }
+          done
+
+      # The "Agent:" and "Agent commits:" lines are read back by the next
+      # hotfix of the release (plan, "Choose the Agent").
+      - name: Write the notes
+        env:
+          TAG: ${{ needs.plan.outputs.tag }}
+          RELEASE: ${{ inputs.release }}
+          BRANCH: ${{ needs.plan.outputs.branch }}
+          CONTROL_SHA: ${{ needs.plan.outputs.control_sha }}
+          CONTROL_PICKS: ${{ needs.plan.outputs.control_picks }}
+          AGENT_TAG: ${{ needs.plan.outputs.agent_tag }}
+          AGENT_PICKS: ${{ needs.plan.outputs.agent_picks }}
+          BUILD_AGENT: ${{ needs.plan.outputs.build_agent }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if [[ "${BUILD_AGENT}" == true ]]; then
+            agent_note="The Agent ${AGENT_TAG} is in this release; move the nodes with an Agent upgrade campaign to ${AGENT_TAG}."
+          else
+            agent_note="The Agent does not change: this Control installs Agent ${AGENT_TAG}, and no node needs to move."
+          fi
+          cat >notes.md <<EOF
+          Hotfix of ${RELEASE}: ${RELEASE} plus the fixes below, picked from main onto ${BRANCH}.
+          Install it with \`install.sh update --version ${TAG}\`. The next release replaces it.
+          ${agent_note}
+
+          Hotfix of: ${RELEASE}
+          Control commit: ${CONTROL_SHA}
+          Control commits: ${CONTROL_PICKS:-none}
+          Agent: ${AGENT_TAG}
+          Agent commits: ${AGENT_PICKS:-none}
+          Build: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+          EOF
+          sed -i 's/^          //' notes.md
+
+      - name: Create the pre-release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ needs.plan.outputs.tag }}
+          target_commitish: ${{ needs.plan.outputs.control_sha }}
+          name: Hotfix ${{ needs.plan.outputs.tag }}
+          body_path: notes.md
+          files: release/*
+          prerelease: true
+          make_latest: false
+
+  deploy:
+    name: Install the hotfix on the production Control
+    runs-on: ubuntu-24.04
+    needs: [plan, publish]
+    if: ${{ !cancelled() && inputs.deploy && needs.publish.result == 'success' }}
+    environment: production
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install client dependencies
+        run: python -m pip install --disable-pip-version-check requests==2.32.3 websocket-client==1.8.0
+
+      # install.sh comes from the main commit this run started from, not from
+      # the hotfix tag: the release a hotfix fixes may predate ".hf." tags.
+      # As dev-release.yml's deploy, on every active JumpServer host, each
+      # script gated on what the host runs: the primary (anix-control
+      # active) gets the database dump and the upgrade with its health check
+      # and automatic restore; a cold standby (installed, stopped) gets the
+      # files only and stays stopped and disabled. The upgrade runs in its
+      # own systemd unit (it restarts Control); check.sh waits for it.
+      - name: Dump the database, upgrade, check
+        env:
+          JMS_URL: ${{ vars.JMS_URL }}
+          JMS_KEY_ID: ${{ secrets.JMS_KEY_ID }}
+          JMS_SECRET: ${{ secrets.JMS_SECRET }}
+          TAG: ${{ needs.plan.outputs.tag }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          [[ "${TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-(alpha|beta|rc)\.[0-9]+\.hf\.[0-9]+$ ]] || { echo "not a hotfix: ${TAG}"; exit 1; }
+          echo "Installing ${TAG}"
+          run() { python scripts/jumpserver/jms.py run --cmd "echo $(base64 -w0 "$1") | base64 -d | bash" --timeout "$2" --show-output; }
+
+          cat >dump.sh <<'EOF'
+          systemctl is-active --quiet anix-control || exit 0
+          [ -d /root/pg-backups ] && command -v pg_dump >/dev/null || exit 0
+          set -e
+          f=/root/pg-backups/anix_control_v2board-pre-hotfix-$(date -u +%Y%m%d%H%M%S).dump
+          sudo -u postgres pg_dump -Fc anix_control_v2board > "$f"
+          ls -t /root/pg-backups/anix_control_v2board-pre-hotfix-*.dump | tail -n +6 | xargs -r rm -f
+          ls -l "$f" | awk '{print $5, $9}'
+          EOF
+          cat >upgrade.sh <<EOF
+          [ -x /opt/anixops/control/bin/anix-control ] || exit 0
+          set -e
+          if systemctl is-active --quiet anix-control; then role=primary; args=""; else role=standby; args="--skip-start"; fi
+          enabled=\$(systemctl is-enabled anix-control 2>/dev/null || true)
+          ts=\$(date -u +%Y%m%d%H%M%S)
+          cp -a /opt/anixops/control/config/config.yaml /opt/anixops/control/config/config.yaml.bak-pre-hotfix-\$ts
+          ls -t /opt/anixops/control/config/config.yaml.bak-pre-hotfix-* | tail -n +6 | xargs -r rm -f
+          curl -fsSL --retry 3 -o /root/install-hotfix.sh https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${GITHUB_SHA}/scripts/install.sh
+          rm -f /root/hotfix-upgrade.log
+          # install.sh enables the unit; a standby that was disabled stays disabled.
+          after=true
+          [ "\$role" = standby ] && [ "\$enabled" != enabled ] && after="systemctl disable anix-control"
+          systemd-run --unit anix-hotfix-upgrade-\$ts --collect bash -c "bash /root/install-hotfix.sh update --version ${TAG} \$args > /root/hotfix-upgrade.log 2>&1; s=\\\$?; \$after; echo exit=\\\$s >> /root/hotfix-upgrade.log"
+          echo "\$role: upgrade to ${TAG} started"
+          EOF
+          cat >check.sh <<'EOF'
+          [ -x /opt/anixops/control/bin/anix-control ] || exit 0
+          for i in $(seq 1 150); do grep -q '^exit=' /root/hotfix-upgrade.log 2>/dev/null && break; sleep 5; done
+          tail -n 20 /root/hotfix-upgrade.log
+          if systemctl is-active --quiet anix-control; then
+            journalctl -u anix-control --since '15 min ago' --no-pager | grep -m1 "Built-in packages" || true
+          else
+            echo "standby: anix-control $(systemctl is-enabled anix-control 2>/dev/null || true), not started"
+          fi
+          grep -qx 'exit=0' /root/hotfix-upgrade.log
+          EOF
+          run dump.sh 600
+          run upgrade.sh 120
+          run check.sh 840
+          echo "### Installed ${TAG} on the production Control" >>"$GITHUB_STEP_SUMMARY"

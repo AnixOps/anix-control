@@ -56,10 +56,18 @@ func IsDevBuild(tag string) bool {
 	return ReleaseTagPattern.MatchString(tag) && strings.Contains(tag, ".dev.")
 }
 
+// IsHotfix reports whether a release tag names a hotfix: a release plus
+// ".hf.N" (v5.0.0-rc.25.hf.1, docs/RELEASING.md, "Hotfixes"), cut from the
+// release's hotfix branch. An Agent built for a hotfix is published in the
+// Control release of the same tag.
+func IsHotfix(tag string) bool {
+	return ReleaseTagPattern.MatchString(tag) && strings.Contains(tag, ".hf.")
+}
+
 // GitHubAgentBase is where GitHub serves the assets of Agent release tag:
-// a dev build's are in the Control pre-release of the same tag.
+// a dev build's and a hotfix's are in the Control release of the same tag.
 func GitHubAgentBase(tag string) string {
-	if IsDevBuild(tag) {
+	if IsDevBuild(tag) || IsHotfix(tag) {
 		return ControlReleaseBase
 	}
 	return AgentReleaseBase
@@ -83,8 +91,9 @@ var Assets = map[string]string{
 
 var (
 	// ReleaseTagPattern matches release tags (Control's and the Agent's),
-	// dev builds (v5.0.0-rc.15.dev.42, IsDevBuild) included.
-	ReleaseTagPattern = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)(\.[0-9]+(\.dev\.[0-9]+)?)?)?$`)
+	// dev builds (v5.0.0-rc.15.dev.42, IsDevBuild) and hotfixes
+	// (v5.0.0-rc.25.hf.1, IsHotfix) included.
+	ReleaseTagPattern = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)(\.[0-9]+(\.(dev|hf)\.[0-9]+)?)?)?$`)
 	assetPattern      = regexp.MustCompile(`^anix-agent-linux-[a-z0-9-]+\.zip(\.dgst|\.sig)?$`)
 	sha256Pattern     = regexp.MustCompile(`^[0-9a-f]{64}$`)
 	dgstLinePattern   = regexp.MustCompile(`^SHA(?:2-)?256(?:\([^)]*\))?=\s*([0-9a-fA-F]{64})\s*$`)

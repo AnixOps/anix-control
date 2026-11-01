@@ -261,7 +261,8 @@ and on a manual run.
   manual run with `deploy` does this on the production Control through
   JumpServer, after a database dump (the five newest `pre-dev` dumps and
   configuration backups are kept); `install.sh` restores the previous
-  release when the new one fails its health check. Move test nodes with an
+  release when the new one fails its health check. Only the Control whose
+  service runs takes it: a cold standby is left as it is. Move test nodes with an
   ordinary Agent upgrade campaign to the dev tag.
 - **Older Agents.** An Agent before the release that taught it `.dev.N`
   versions (after `v5.0.0-rc.15`) cannot take a dev build: upgrade it to that
@@ -275,6 +276,48 @@ and on a manual run.
 
 Dev builds are not releases: `ci.yml`'s tag gate does not take their tags,
 no container image is published, and `CHANGELOG.md` does not list them.
+
+## Hotfixes
+
+A hotfix ships a small fix to production without a whole release.
+`.github/workflows/hotfix.yml` (manual, from `main`) does it.
+
+- **Version.** The release plus `.hf.<n>`: `v5.0.0-rc.25.hf.1`, then
+  `.hf.2`. SemVer orders it after the release and its dev builds and before
+  the next release, which replaces it. Hotfixes follow pre-releases only;
+  after a stable `vX.Y.Z` a fix is `vX.Y.(Z+1)`, an ordinary release.
+- **Versions of Control and the Agent.** Before 5.0.0 they share the
+  release a hotfix is built on, and `.hf.<n>` does not count (user decision
+  2026-11-01). A Control-only hotfix pins the Agent of its release (or of an
+  earlier hotfix of the same release that built one), so the node page and
+  upgrade campaigns keep offering that Agent and no node moves. After 5.0.0
+  Control and the Agent share major and minor versions and number their
+  patches independently.
+- **What is built.** The fix is merged to `main` first. The workflow
+  cherry-picks the named `main` commits (`control_commits`, oldest first)
+  onto `hotfix/<release>`, created from the release tag the first time;
+  commits the branch already carries are skipped, and a commit that does not
+  apply or changes `.github/workflows` stops the run. It vets and tests only
+  the Go packages (and the SDK, the frontend) the branch changed since the
+  release, builds Control for linux amd64 and arm64 and the frontend, signs
+  them like a dev build and publishes a pre-release, never marked latest.
+  With `agent_commits` the Agent is built too, from its release tag plus
+  those `anix-agent` `main` commits and the ones earlier hotfixes of the
+  release picked (their notes list them), at the hotfix version, and
+  published in the same pre-release. An Agent hotfix needs a release that
+  knows `.hf.` tags (after `v5.0.0-rc.25`) and Agents that parse them.
+- **Installing.** `deploy` runs through JumpServer with `install.sh` from
+  the `main` commit of the run: the Control whose service runs (the
+  production primary) gets a database dump (five `pre-hotfix` dumps kept)
+  and `install.sh update`, which restores the previous release when the new
+  one fails its health check; a cold standby (installed, stopped) gets the
+  files with `--skip-start` and stays stopped and disabled. Without
+  `deploy`, run `install.sh update --version <hotfix tag>` yourself. An
+  Agent hotfix then goes to the nodes with an ordinary upgrade campaign.
+
+Hotfixes are not releases either: `ci.yml`'s tag gate does not take their
+tags, no container image is published, and the fix reaches `CHANGELOG.md`
+with the next release, which carries it from `main`.
 
 ## Runner Image
 
