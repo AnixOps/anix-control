@@ -17,6 +17,7 @@ import nodeDiagnostics from './modules/en/nodeDiagnostics'
 import realityTargets from './modules/en/realityTargets'
 import nodeEntries from './modules/en/nodeEntries'
 import nodeNetwork from './modules/en/nodeNetwork'
+import nodeForwardPorts from './modules/en/nodeForwardPorts'
 import agentUpgradeSheet from './modules/en/agentUpgradeSheet'
 
 export default {
@@ -30,6 +31,7 @@ export default {
   ...realityTargets,
   ...nodeEntries,
   ...nodeNetwork,
+  ...nodeForwardPorts,
   ...agentUpgradeSheet,
   ...networkPages,
   ...miscPages,
