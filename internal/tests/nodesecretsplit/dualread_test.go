@@ -6,20 +6,13 @@ import (
 	"crypto/ecdh"
 	"crypto/rand"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"log/slog"
-	"net/http"
-	"net/http/httptest"
-	"strconv"
-	"strings"
 	"testing"
 
-	"github.com/AnixOps/anix-control/v5/internal/handler"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/nodesecrets"
 	"github.com/AnixOps/anix-control/v5/internal/service"
-	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )
@@ -34,7 +27,6 @@ type fleet struct {
 	rawPrivate     string
 	reality        model.NodeProtocol
 	realityPrivate string
-	forward        model.ForwardNode
 	wireGuard      model.NodeProtocol
 	user           model.User
 	peer           model.WireGuardPeer
@@ -53,7 +45,7 @@ func newFleet(t *testing.T, db *gorm.DB) *fleet {
 	f := &fleet{}
 	nodes := service.NewNodeService()
 
-	f.plain = model.Node{Name: "plain", Host: "203.0.113.50", Port: 443, APIKey: "fake-plain-key"}
+	f.plain = model.Node{Name: "plain", Host: "203.0.113.50", Port: 443}
 	require.NoError(t, db.Create(&f.plain).Error)
 
 	f.created = model.Node{Name: "created", Host: "203.0.113.51", Port: 443}
@@ -70,11 +62,6 @@ func newFleet(t *testing.T, db *gorm.DB) *fleet {
 	raw := `{"node_type":"vless","type":"vless","server_port":443,"tls":2,"tls_settings":{"private_key":"` + f.rawPrivate + `","short_id":"01"}}`
 	require.NoError(t, nodes.UpdateNode(f.rawNode.ID, map[string]any{"raw_config": raw}))
 
-	// The agent channels resolve a node id against the forward nodes first,
-	// so the forward node's id stays clear of the proxy nodes'.
-	f.forward = model.ForwardNode{ID: 900, Name: "relay", Type: "relay", Host: "198.51.100.50", Port: 443, APIPort: 9000, APIToken: "fake-fleet-forward-token", Enabled: true}
-	require.NoError(t, service.NewForwardNodeService(db).Create(&f.forward))
-
 	private, err := ecdh.X25519().GenerateKey(rand.Reader)
 	require.NoError(t, err)
 	// Disabled, so it needs no relay; its peers are kept all the same.
@@ -90,57 +77,10 @@ func newFleet(t *testing.T, db *gorm.DB) *fleet {
 }
 
 // readerResults runs every kernel reader of a moved column once and
-// reports, per reader, whether it authenticated the subject or answered
-// its real secret.
+// reports, per reader, whether it answered its real secret.
 func (f *fleet) readerResults(t *testing.T, db *gorm.DB, round int) map[string]bool {
 	t.Helper()
-	gin.SetMode(gin.TestMode)
-	router := gin.New()
-	ok := func(c *gin.Context) { c.String(http.StatusOK, "%d", c.GetUint("node_id")) }
-	router.GET("/package", nodeKeyAuth(), ok)
-	router.GET("/credentials/:id", handler.NewNodeHandler().GetNodeCredentials)
-	serve := func(method, path string, nodeID uint, key string, body string, header map[string]string) *httptest.ResponseRecorder {
-		separator := "?"
-		if strings.Contains(path, "?") {
-			separator = "&"
-		}
-		req := httptest.NewRequest(method, path+separator+"node_id="+strconv.FormatUint(uint64(nodeID), 10), strings.NewReader(body))
-		req.Header.Set("X-API-Key", key)
-		for name, value := range header {
-			req.Header.Set(name, value)
-		}
-		rec := httptest.NewRecorder()
-		router.ServeHTTP(rec, req)
-		return rec
-	}
-	authenticated := func(rec *httptest.ResponseRecorder, nodeID uint) bool {
-		return rec.Code == http.StatusOK && rec.Body.String() == strconv.FormatUint(uint64(nodeID), 10)
-	}
-
 	results := map[string]bool{}
-	proxies := []struct {
-		name string
-		id   uint
-		key  string
-	}{
-		{"plain", f.plain.ID, "fake-plain-key"},
-		{"created", f.created.ID, f.created.APIKey},
-	}
-	for _, proxy := range proxies {
-		results[proxy.name+" /package"] = authenticated(serve(http.MethodGet, "/package", proxy.id, proxy.key, "", nil), proxy.id)
-	}
-
-	// The administrators' credentials route shows the stored key and secret.
-	rec := serve(http.MethodGet, "/credentials/"+strconv.FormatUint(uint64(f.created.ID), 10), 0, "", "", nil)
-	var credentials struct {
-		Data struct {
-			APIKey string `json:"api_key"`
-			Secret string `json:"secret"`
-		} `json:"data"`
-	}
-	results["created credentials"] = rec.Code == http.StatusOK && json.Unmarshal(rec.Body.Bytes(), &credentials) == nil &&
-		credentials.Data.APIKey == f.created.APIKey && credentials.Data.Secret == f.created.Secret
-
 	// The node configuration: the Reality private key of a protocol, and
 	// the private key of a raw configuration.
 	configKey := func(nodeID uint) string {
@@ -176,9 +116,7 @@ func requireAll(t *testing.T, results map[string]bool, want bool) {
 func totalFallbacks() uint64 {
 	var total uint64
 	for _, table := range nodesecrets.Tables() {
-		for _, kind := range []string{nodesecrets.KindNodeAPIKey, nodesecrets.KindNodeSharedSecret,
-			nodesecrets.KindForwardNodeToken, nodesecrets.KindCleanAgentToken, "raw_config", "settings", "tls_settings",
-			"transport_settings", "reality_settings", "custom_config", "private_key", "preshared_key"} {
+		for _, kind := range []string{"raw_config", "settings", "tls_settings", "transport_settings", "reality_settings", "custom_config", "private_key", "preshared_key"} {
 			total += nodesecrets.FallbackCount(table, kind, "")
 		}
 	}
@@ -191,25 +129,10 @@ func setPhase(t *testing.T, db *gorm.DB, phase string) {
 	require.NoError(t, err, "%+v", changes)
 }
 
-// olderBinaryAuthenticates is the release before NO-3 authenticating a
-// node: it reads only the legacy columns.
+// olderBinaryAuthenticates is the release before NO-3 reading a node's
+// secrets: it reads only the legacy columns.
 func olderBinaryAuthenticates(t *testing.T, db *gorm.DB, f *fleet) {
 	t.Helper()
-	for _, proxy := range []struct {
-		id  uint
-		key string
-	}{{f.plain.ID, "fake-plain-key"}, {f.created.ID, f.created.APIKey}} {
-		var node model.Node
-		require.NoError(t, db.First(&node, proxy.id).Error)
-		require.True(t, node.APIKeyHash == sha256Hex(proxy.key) || (node.APIKeyHash == "" && node.APIKey == proxy.key), "node %d", proxy.id)
-		require.Equal(t, proxy.key, node.APIKey)
-	}
-	var byHash model.Node
-	require.NoError(t, db.Where("api_key_hash = ?", sha256Hex(f.created.APIKey)).First(&byHash).Error)
-	require.Equal(t, f.created.ID, byHash.ID)
-	var forward model.ForwardNode
-	require.NoError(t, db.First(&forward, f.forward.ID).Error)
-	require.Equal(t, "fake-fleet-forward-token", forward.APIToken)
 	var protocol model.NodeProtocol
 	require.NoError(t, db.First(&protocol, f.reality.ID).Error)
 	require.Contains(t, *protocol.RealitySettings, f.realityPrivate)
@@ -248,16 +171,11 @@ func TestEveryReaderInEachPhase(t *testing.T) {
 
 		// Rows missing from the new tables: the readers fall back to the
 		// legacy columns, and count it.
-		require.NoError(t, db.Where("subject_kind = ? AND subject_id = ?", nodesecrets.SubjectProxy, f.created.ID).Delete(&model.NodeCredential{}).Error)
-		require.NoError(t, db.Where("subject_kind IN ?", []string{nodesecrets.SubjectForward, nodesecrets.SubjectCleanAgent}).
-			Delete(&model.NodeCredential{}).Error)
 		require.NoError(t, db.Where("owner_id IN ? AND scope = ?", []uint{f.reality.ID, f.wireGuard.ID}, nodesecrets.ScopeNodeProtocol).Delete(&model.ProtocolSecret{}).Error)
 		require.NoError(t, db.Where("scope IN ?", []string{nodesecrets.ScopeWireGuardPeer, nodesecrets.ScopeNodeRawConfig}).Delete(&model.ProtocolSecret{}).Error)
-		apiKeys := nodesecrets.FallbackCount(nodesecrets.TableNode, nodesecrets.KindNodeAPIKey, nodesecrets.FallbackMissing)
 		requireAll(t, f.readerResults(t, db, 3), true)
-		require.Greater(t, nodesecrets.FallbackCount(nodesecrets.TableNode, nodesecrets.KindNodeAPIKey, nodesecrets.FallbackMissing), apiKeys)
 		for _, counted := range [][2]string{
-			{nodesecrets.TableNode, nodesecrets.KindNodeSharedSecret}, {nodesecrets.TableNode, "raw_config"},
+			{nodesecrets.TableNode, "raw_config"},
 			{nodesecrets.TableNodeProtocol, "reality_settings"}, {nodesecrets.TableWireGuardPeer, "private_key"},
 		} {
 			require.NotZero(t, nodesecrets.FallbackCount(counted[0], counted[1], nodesecrets.FallbackMissing), "%v", counted)
@@ -277,13 +195,8 @@ func TestEveryReaderInEachPhase(t *testing.T) {
 // (section 4.4), bypassing the writers.
 func (f *fleet) moveLegacySecrets(t *testing.T, db *gorm.DB) {
 	t.Helper()
-	for _, id := range []uint{f.plain.ID, f.created.ID} {
-		require.NoError(t, db.Model(&model.Node{}).Where("id = ?", id).
-			UpdateColumns(map[string]any{"api_key": nodesecrets.Tombstone(uint64(id)), "api_key_hash": "", "secret": ""}).Error)
-	}
 	require.NoError(t, db.Model(&model.Node{}).Where("id = ?", f.rawNode.ID).
 		UpdateColumn("raw_config", service.RedactNodeSecretsJSON(`{"node_type":"vless","type":"vless","server_port":443,"tls":2,"tls_settings":{"private_key":"`+f.rawPrivate+`","short_id":"01"}}`)).Error)
-	require.NoError(t, db.Model(&model.ForwardNode{}).Where("id = ?", f.forward.ID).UpdateColumn("api_token", "").Error)
 	var protocols []model.NodeProtocol
 	require.NoError(t, db.Where("id IN ?", []uint{f.reality.ID, f.wireGuard.ID}).Find(&protocols).Error)
 	for _, protocol := range protocols {

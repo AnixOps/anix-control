@@ -320,7 +320,7 @@ func TestKernelOperationBridgeFailsInvalidNodeIDBeforeDispatch(t *testing.T) {
 
 func TestKernelOperationBridgeRecordsCancellationDeliveryFailure(t *testing.T) {
 	db := newKernelOperationBridgeDB(t)
-	node := model.Node{Name: "cancel-error-node", Host: "127.0.0.12", APIKey: "cancel-error-key"}
+	node := model.Node{Name: "cancel-error-node", Host: "127.0.0.12"}
 	require.NoError(t, db.Create(&node).Error)
 	seedAgentPluginRelease(t, db, "wireguard")
 	deadline := time.Now().Add(time.Minute)
@@ -492,7 +492,7 @@ func TestKernelOperationBridgeLeavesPendingWorkUntilAgentConnects(t *testing.T) 
 
 func TestKernelOperationBridgeReplaysRunningOperationAfterControlRestart(t *testing.T) {
 	db := newKernelOperationBridgeDB(t)
-	node := model.Node{Name: "restart-node", Host: "127.0.0.3", APIKey: "restart-node-key"}
+	node := model.Node{Name: "restart-node", Host: "127.0.0.3"}
 	require.NoError(t, db.Create(&node).Error)
 	seedAgentPluginRelease(t, db, "wireguard")
 	deadline := time.Now().Add(time.Minute)
@@ -532,7 +532,7 @@ func TestKernelOperationBridgeReplaysRunningOperationAfterControlRestart(t *test
 
 func TestKernelOperationBridgeDeliversCancellationAndKeepsTerminalStateMonotonic(t *testing.T) {
 	db := newKernelOperationBridgeDB(t)
-	node := model.Node{Name: "cancel-node", Host: "127.0.0.4", APIKey: "cancel-node-key"}
+	node := model.Node{Name: "cancel-node", Host: "127.0.0.4"}
 	require.NoError(t, db.Create(&node).Error)
 	seedAgentPluginRelease(t, db, "wireguard")
 	deadline := time.Now().Add(time.Minute)

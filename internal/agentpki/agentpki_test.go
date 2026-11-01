@@ -115,7 +115,7 @@ func TestEnrollWithEachBootstrap(t *testing.T) {
 
 func TestEnrollBindsKindAndID(t *testing.T) {
 	forEachDatabase(t, func(t *testing.T, f *fixture) {
-		other := model.Node{Name: "other", APIKeyHash: sha256Hex("other-key"), Status: model.NodeStatusOnline}
+		other := model.Node{Name: "other", Status: model.NodeStatusOnline}
 		require.NoError(t, f.db.Create(&other).Error)
 		otherNode := agentcontrol.AgentNode{Kind: agentcontrol.NodeKindProxy, ID: uint32(other.ID)}
 		credential := f.token(t, f.proxyNode(), time.Hour)

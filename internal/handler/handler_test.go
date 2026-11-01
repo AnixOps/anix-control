@@ -1098,8 +1098,6 @@ func (s *NodeHandlerTestSuite) SetupTest() {
 		Name:        "Handler Test Node",
 		Host:        "192.168.1.100",
 		Port:        443,
-		APIKey:      "handler-test-api-key",
-		Secret:      "handler-test-secret",
 		Status:      model.NodeStatusOnline,
 		Rate:        1.0,
 		TrafficRate: 1.0,
@@ -1176,25 +1174,6 @@ func (s *NodeHandlerTestSuite) TestGetNode_Success() {
 	assert.NotContains(s.T(), resp, "error")
 }
 
-func (s *NodeHandlerTestSuite) TestGetNodeCredentials_Success() {
-	handler := NewNodeHandler()
-	s.router.GET("/nodes/:id/credentials", handler.GetNodeCredentials)
-
-	req, _ := http.NewRequest("GET", "/nodes/"+strconv.FormatUint(uint64(s.testNode.ID), 10)+"/credentials", nil)
-	w := httptest.NewRecorder()
-	s.router.ServeHTTP(w, req)
-
-	assert.Equal(s.T(), http.StatusOK, w.Code)
-	resp := decodePanelTestResponse(s.T(), w)
-	assert.Equal(s.T(), float64(0), resp["code"])
-	data := resp["data"].(map[string]any)
-	assert.Equal(s.T(), float64(s.testNode.ID), data["node_id"])
-	assert.Equal(s.T(), s.testNode.Name, data["name"])
-	assert.NotEmpty(s.T(), data["api_key"])
-	assert.NotEmpty(s.T(), data["secret"])
-	assert.NotContains(s.T(), resp, "error")
-}
-
 func (s *NodeHandlerTestSuite) TestGetNode_NotFound() {
 	handler := NewNodeHandler()
 	s.router.GET("/nodes/:id", handler.GetNode)
@@ -1240,8 +1219,7 @@ func (s *NodeHandlerTestSuite) TestCreateNode_Success() {
 	assert.Equal(s.T(), float64(0), resp["code"])
 	data := resp["data"].(map[string]any)
 	assert.NotZero(s.T(), data["node_id"])
-	assert.NotEmpty(s.T(), data["api_key"])
-	assert.NotEmpty(s.T(), data["secret"])
+	assert.NotContains(s.T(), data, "api_key")
 	assert.NotContains(s.T(), resp, "error")
 }
 

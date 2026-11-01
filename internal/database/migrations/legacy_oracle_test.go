@@ -53,7 +53,7 @@ func legacySchemaModels() []any {
 		&model.Knowledge{},
 		&model.ForwardNode{}, &model.ForwardRule{}, &model.ForwardRoute{}, &model.ForwardLog{}, &model.ForwardStats{},
 		&model.ForwardTunnel{}, &model.ForwardUserTunnel{}, &model.Forward{}, &model.ForwardPortBinding{}, &model.SpeedLimit{},
-		&model.ForwardRuntimeJob{}, &model.ForwardTrafficCursor{}, &model.ForwardCleanAgent{}, &model.ForwardAgentBridgeTask{},
+		&model.ForwardRuntimeJob{}, &model.ForwardTrafficCursor{}, &model.ForwardAgentBridgeTask{},
 		&model.ForwardLatencyBucket{},
 		&model.PaymentGateway{}, &model.PaymentRecord{},
 		&model.TelegramBot{}, &model.TelegramUser{}, &model.TelegramChat{}, &model.TelegramCommand{}, &model.TelegramNotification{},
@@ -232,10 +232,77 @@ func (retiredAuthorizedKey) TableName() string { return "v2_authorized_key" }
 func retiredKernelModels() []any {
 	return []any{
 		&retiredRouteModeRevision{}, &retiredShadowMismatchSample{}, // 0004_drop_route_modes
-		&retiredLoadBalancer{},  // 0021_drop_load_balancer
-		&retiredAuthorizedKey{}, // 0025_drop_registration_keys
+		&retiredLoadBalancer{},                         // 0021_drop_load_balancer
+		&retiredAuthorizedKey{},                        // 0025_drop_registration_keys
+		&retiredCleanAgent{}, &retiredNodeCredential{}, // 0027_drop_node_credentials
 	}
 }
+
+// retiredCleanAgent is model.ForwardCleanAgent as the baseline created it;
+// 0027_drop_node_credentials dropped the table and the model.
+type retiredCleanAgent struct {
+	ID           uint       `gorm:"primaryKey"`
+	NodeID       *uint      `gorm:"index"`
+	Name         string     `gorm:"size:100;not null"`
+	Token        string     `gorm:"size:160;not null;uniqueIndex"`
+	Version      string     `gorm:"size:50"`
+	Hostname     string     `gorm:"size:255"`
+	OS           string     `gorm:"size:50"`
+	Arch         string     `gorm:"size:50"`
+	Kernel       string     `gorm:"size:120"`
+	PublicIP     string     `gorm:"size:64"`
+	PrivateIP    string     `gorm:"size:64"`
+	Capabilities string     `gorm:"type:text"`
+	Status       int        `gorm:"default:0;index"`
+	LastSeen     *time.Time `gorm:"index"`
+	LastError    string     `gorm:"type:text"`
+	RevokedAt    *time.Time
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+}
+
+func (retiredCleanAgent) TableName() string { return "v2_forward_clean_agent" }
+
+// retiredNodeCredential is model.NodeCredential as the baseline created it;
+// 0027_drop_node_credentials dropped the table and the model.
+type retiredNodeCredential struct {
+	ID          uint64 `gorm:"primaryKey;autoIncrement"`
+	SubjectKind string `gorm:"size:32;not null;uniqueIndex:idx_v4_kernel_node_credential_subject,priority:1"`
+	SubjectID   uint64 `gorm:"not null;uniqueIndex:idx_v4_kernel_node_credential_subject,priority:2"`
+	Kind        string `gorm:"size:32;not null;uniqueIndex:idx_v4_kernel_node_credential_subject,priority:3;index:idx_v4_kernel_node_credential_lookup,priority:1"`
+	Version     int    `gorm:"not null;default:1;uniqueIndex:idx_v4_kernel_node_credential_subject,priority:4"`
+	KeyHash     string `gorm:"size:64;not null;default:'';index:idx_v4_kernel_node_credential_lookup,priority:2"`
+	Value       string `gorm:"type:text;not null;default:''"`
+	Sealed      bool   `gorm:"not null;default:false"`
+	KEKID       string `gorm:"column:kek_id;size:64;not null;default:''"`
+	Endpoint    string `gorm:"size:300;not null;default:''"`
+	Status      string `gorm:"size:16;not null;default:'active';index"`
+	ExpiresAt   *time.Time
+	Source      string    `gorm:"size:16;not null;default:''"`
+	CreatedAt   time.Time `gorm:"not null"`
+	RotatedAt   *time.Time
+	RevokedAt   *time.Time
+}
+
+func (retiredNodeCredential) TableName() string { return "v4_kernel_node_credential" }
+
+// baselineNodeCredentials are the v2_node columns that
+// 0027_drop_node_credentials dropped with model.Node's fields.
+type baselineNodeCredentials struct {
+	APIKey     string `gorm:"size:64;uniqueIndex"`
+	APIKeyHash string `gorm:"size:64"`
+	Secret     string `gorm:"size:255"`
+}
+
+func (baselineNodeCredentials) TableName() string { return "v2_node" }
+
+// baselineForwardNodeToken is the v2_forward_node column that
+// 0027_drop_node_credentials dropped with model.ForwardNode's field.
+type baselineForwardNodeToken struct {
+	APIToken string `gorm:"size:100"`
+}
+
+func (baselineForwardNodeToken) TableName() string { return "v2_forward_node" }
 
 // baselineNodeGroup is model.NodeGroup as the baseline created it, with the
 // kind, the protocol template and the subscription groups that
@@ -277,6 +344,9 @@ func legacyPrepare(t *testing.T, db *gorm.DB, production bool) {
 	// the baseline's table is built from the frozen copy.
 	require.NoError(t, db.Migrator().DropTable(&model.NodeGroup{}))
 	require.NoError(t, db.AutoMigrate(&baselineNodeGroup{}))
+	// 0027_drop_node_credentials dropped columns of v2_node and
+	// v2_forward_node: the baseline's tables had them.
+	require.NoError(t, db.AutoMigrate(&baselineNodeCredentials{}, &baselineForwardNodeToken{}))
 	for _, added := range postBaselineIndexes {
 		require.NoError(t, db.Exec("DROP INDEX "+added.index).Error)
 	}
@@ -347,7 +417,7 @@ func legacyPrepareErr(db *gorm.DB, production bool) error {
 		}
 	}
 	// nodesecrets.EnsureSchema (its state rows are EnsureStateRows now)
-	if err := db.AutoMigrate(&model.NodeCredential{}, &model.ProtocolSecret{}, &model.NodeSecretSplit{}); err != nil {
+	if err := db.AutoMigrate(&model.ProtocolSecret{}, &model.NodeSecretSplit{}); err != nil {
 		return err
 	}
 	// lease.EnsureSchema

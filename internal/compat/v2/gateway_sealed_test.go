@@ -51,7 +51,10 @@ type sealedGateway struct {
 func newSealedGateway(t *testing.T, route Route, dispatcher Dispatcher) *sealedGateway {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
-	table, err := sealedsecrets.ParseTable(configtables.NodeSecretFields)
+	list := strings.TrimRight(string(configtables.NodeSecretFields), " \n")
+	end := strings.LastIndex(list, "]")
+	require.Positive(t, end)
+	table, err := sealedsecrets.ParseTable([]byte(strings.TrimRight(list[:end], " \n") + answeringRoute))
 	require.NoError(t, err)
 	store := sealedsecrets.NewStore(nil)
 	metrics := NewGatewayMetrics()
@@ -76,6 +79,14 @@ func bindingOf(input pluginhost.DispatchInput) sealedsecrets.Binding {
 	return sealedsecrets.Binding{Key: input.SealedRequest, PackageID: input.PackageID, Generation: input.Generation, RequestID: input.RequestID, RouteID: input.RouteID}
 }
 
+// answeringRoute is a field list row the tests add to the embedded list: a
+// proxy node creation whose answer shows a generated credential (no listed
+// route answers one today).
+const answeringRoute = `,
+    {"route_id": "fixture.proxy.nodes.post", "target": {"kind": "proxy", "new": true}, "request": [{"pointer": "/raw_config", "kind": "document"}], "answer": [{"pointer": "/data/credential", "name": "credential"}]}
+  ]
+}`
+
 var createNodeRoute = Route{
 	Method: http.MethodPost, LegacyPath: "/api/v2/admin/nodes", PackageID: "proxy-node", Version: "4.1.0",
 	Generation: 5, PackageRoute: "proxy.admin.nodes.post", Envelope: EnvelopePanel,
@@ -88,19 +99,19 @@ var createNodeRoute = Route{
 func TestGatewaySealsRequestsAndExpandsTheirAnswers(t *testing.T) {
 	var minted []string
 	host := &sealingHost{}
-	gateway := newSealedGateway(t, createNodeRoute, host)
+	route := createNodeRoute
+	route.PackageRoute = "fixture.proxy.nodes.post"
+	gateway := newSealedGateway(t, route, host)
 	host.answer = func(input pluginhost.DispatchInput) pluginhost.DispatchOutput {
-		key, _, err := gateway.store.Mint(bindingOf(input), "api_key", "generated-key")
+		credential, _, err := gateway.store.Mint(bindingOf(input), "credential", "generated-credential")
 		require.NoError(t, err)
-		secret, _, err := gateway.store.Mint(bindingOf(input), "secret", "generated-secret")
-		require.NoError(t, err)
-		minted = append(minted, key, secret)
-		return pluginhost.DispatchOutput{StatusCode: http.StatusOK, Body: []byte(`{"code":0,"data":{"api_key":"` + key + `","node_id":3,"secret":"` + secret + `"},"msg":"ok","ts":1}`)}
+		minted = append(minted, credential)
+		return pluginhost.DispatchOutput{StatusCode: http.StatusOK, Body: []byte(`{"code":0,"data":{"credential":"` + credential + `","node_id":3},"msg":"ok","ts":1}`)}
 	}
 	body := `{"name":"edge","raw_config":{"private_key":"typed-private-key","public_key":"pub"}}`
 	recorder := gateway.do(http.MethodPost, "/api/v2/admin/nodes", body)
 	require.Equal(t, http.StatusOK, recorder.Code)
-	assert.Equal(t, `{"code":0,"data":{"api_key":"generated-key","node_id":3,"secret":"generated-secret"},"msg":"ok","ts":1}`, recorder.Body.String())
+	assert.Equal(t, `{"code":0,"data":{"credential":"generated-credential","node_id":3},"msg":"ok","ts":1}`, recorder.Body.String())
 	assert.NotContains(t, recorder.Body.String(), sealedsecrets.Prefix, "a handle never reaches a client")
 
 	require.Len(t, host.inputs, 1)
@@ -114,8 +125,8 @@ func TestGatewaySealsRequestsAndExpandsTheirAnswers(t *testing.T) {
 		assert.False(t, gateway.store.Live(handle))
 	}
 	rendered := renderGatewayMetrics(t, gateway.metrics)
-	assert.Contains(t, rendered, `anixops_v2_gateway_sealed_secrets_total{package="proxy-node",route="proxy.admin.nodes.post",stage="request",result="sealed",reason="none"} 1`)
-	assert.Contains(t, rendered, `anixops_v2_gateway_sealed_secrets_total{package="proxy-node",route="proxy.admin.nodes.post",stage="answer",result="expanded",reason="none"} 1`)
+	assert.Contains(t, rendered, `anixops_v2_gateway_sealed_secrets_total{package="proxy-node",route="fixture.proxy.nodes.post",stage="request",result="sealed",reason="none"} 1`)
+	assert.Contains(t, rendered, `anixops_v2_gateway_sealed_secrets_total{package="proxy-node",route="fixture.proxy.nodes.post",stage="answer",result="expanded",reason="none"} 1`)
 	assert.NotContains(t, rendered, sealedsecrets.Prefix, "handles never become label values")
 	assert.NotContains(t, rendered, "typed-private-key")
 }
@@ -190,7 +201,7 @@ func TestGatewayRefusesAnswersWithHandlesItCannotShow(t *testing.T) {
 		// The package echoes the handle it was sent for the typed key.
 		start := strings.Index(string(input.Body), sealedsecrets.Prefix)
 		handle := string(input.Body)[start : start+len(sealedsecrets.Prefix)+43]
-		return pluginhost.DispatchOutput{StatusCode: http.StatusOK, Body: []byte(`{"code":0,"data":{"api_key":"` + handle + `"},"msg":"ok","ts":1}`)}
+		return pluginhost.DispatchOutput{StatusCode: http.StatusOK, Body: []byte(`{"code":0,"data":{"credential":"` + handle + `"},"msg":"ok","ts":1}`)}
 	}
 	recorder := gateway.do(http.MethodPost, "/api/v2/admin/nodes", `{"raw_config":{"private_key":"typed-private-key"}}`)
 	require.Equal(t, http.StatusBadGateway, recorder.Code)

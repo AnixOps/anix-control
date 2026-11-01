@@ -12,7 +12,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// The credential, secret and retirement functions the KernelNodeOps
+// The secret and retirement functions the KernelNodeOps
 // executors and the legacy routes share (node-ops-service.md section 3.3,
 // NO-5). Each takes the transaction of its caller: the legacy service
 // methods run them in the transaction they ran before, with every
@@ -22,131 +22,8 @@ import (
 //
 // No function here logs, answers or returns a secret in an error.
 
-// ProxyNodeCredentials are a proxy node's API key and shared secret, as
-// generated or typed; an empty one is not issued.
-type ProxyNodeCredentials struct {
-	APIKey string
-	Secret string
-}
-
-// GenerateProxyNodeCredentials generates the credentials of a proxy node:
-// 32 random bytes, hex encoded, each.
-func GenerateProxyNodeCredentials(apiKey, secret bool) (ProxyNodeCredentials, error) {
-	var credentials ProxyNodeCredentials
-	var err error
-	if apiKey {
-		if credentials.APIKey, err = generateSecureToken(32); err != nil {
-			return ProxyNodeCredentials{}, err
-		}
-	}
-	if secret {
-		if credentials.Secret, err = generateSecureToken(32); err != nil {
-			return ProxyNodeCredentials{}, err
-		}
-	}
-	return credentials, nil
-}
-
-// Apply sets the credentials on a node row about to be written: the key,
-// its hash and the secret.
-func (c ProxyNodeCredentials) Apply(node *model.Node) {
-	if c.APIKey != "" {
-		node.APIKey = c.APIKey
-		node.APIKeyHash = hashString(c.APIKey)
-	}
-	if c.Secret != "" {
-		node.Secret = c.Secret
-	}
-}
-
-// IssueProxyNodeCredentialsTx writes a proxy node's credentials to its row
-// and the split tables. With replaced, the node's agent certificates and
-// enrollments are revoked (credentials_replaced): an agent enrolled with the
-// old key must enroll again.
-func IssueProxyNodeCredentialsTx(tx *gorm.DB, nodeID uint, credentials ProxyNodeCredentials, replaced bool) error {
-	updates := map[string]any{}
-	if credentials.APIKey != "" {
-		updates["api_key"] = credentials.APIKey
-		updates["api_key_hash"] = hashString(credentials.APIKey)
-	}
-	if credentials.Secret != "" {
-		updates["secret"] = credentials.Secret
-	}
-	if len(updates) == 0 {
-		return errors.New("no credential to issue")
-	}
-	result := tx.Model(&model.Node{}).Where("id = ?", nodeID).Updates(updates)
-	if result.Error != nil {
-		return result.Error
-	}
-	if result.RowsAffected == 0 {
-		return gorm.ErrRecordNotFound
-	}
-	if err := nodesecrets.Sync(tx, nodesecrets.TableNode, nodeID); err != nil {
-		return err
-	}
-	if !replaced {
-		return nil
-	}
-	return revokeNodeAgents(tx, agentcontrol.NodeKindProxy, nodeID, agentpki.RevokeReasonCredentialsReplaced)
-}
-
-// ProxyNodeHasCredentials reports whether a proxy node holds an API key and
-// a shared secret, read through the credential split.
-func ProxyNodeHasCredentials(db *gorm.DB, nodeID uint) (apiKey, secret bool, err error) {
-	var node model.Node
-	if err := db.Select("id", "api_key", "api_key_hash", "secret").Where("id = ?", nodeID).First(&node).Error; err != nil {
-		return false, false, err
-	}
-	return !nodesecrets.Unusable(nodesecrets.NodeAPIKey(db, &node)), !nodesecrets.Unusable(nodesecrets.NodeSharedSecret(db, &node)), nil
-}
-
-// GenerateForwardNodeToken generates a forward node's API token, as the
-// forward node creation does: 16 random bytes, hex encoded.
-func GenerateForwardNodeToken() (string, error) {
-	return NewForwardNodeService(nil).GenerateAPIToken()
-}
-
-// ForwardNodeHasToken reports whether a forward node holds a token, read
-// through the credential split.
-func ForwardNodeHasToken(db *gorm.DB, nodeID uint) (bool, error) {
-	var node model.ForwardNode
-	if err := db.Select("id", "api_token").Where("id = ?", nodeID).First(&node).Error; err != nil {
-		return false, err
-	}
-	return !nodesecrets.Unusable(nodesecrets.ForwardNodeToken(db, &node)), nil
-}
-
-// IssueForwardNodeTokenTx writes a forward node's token to its row and the
-// split tables, which pin it to the node's management endpoint
-// (nodesecrets). A token that replaces another revokes the node's agent
-// certificates (credentials_replaced), as the forward node update does. It
-// reports whether a token was replaced.
-func IssueForwardNodeTokenTx(tx *gorm.DB, nodeID uint, token string) (bool, error) {
-	if token == "" {
-		return false, errors.New("a token is required")
-	}
-	var stored model.ForwardNode
-	if err := tx.Select("id", "api_token").Where("id = ?", nodeID).First(&stored).Error; err != nil {
-		return false, err
-	}
-	current := nodesecrets.ForwardNodeToken(tx, &stored)
-	replaced := !nodesecrets.Unusable(current) && current != token
-	if err := tx.Model(&model.ForwardNode{}).Where("id = ?", nodeID).Update("api_token", token).Error; err != nil {
-		return false, err
-	}
-	if err := nodesecrets.Sync(tx, nodesecrets.TableForwardNode, nodeID); err != nil {
-		return false, err
-	}
-	if !replaced {
-		return false, nil
-	}
-	return true, revokeNodeAgents(tx, agentcontrol.NodeKindForward, nodeID, agentpki.RevokeReasonCredentialsReplaced)
-}
-
 // RetireCounts is what a retirement removed.
 type RetireCounts struct {
-	CredentialsRevoked       int64
 	SecretsDeleted           int64
 	WireGuardPeersDeleted    int64
 	ProtocolsDeleted         int64
@@ -154,7 +31,6 @@ type RetireCounts struct {
 }
 
 func (c *RetireCounts) add(other RetireCounts) {
-	c.CredentialsRevoked += other.CredentialsRevoked
 	c.SecretsDeleted += other.SecretsDeleted
 	c.WireGuardPeersDeleted += other.WireGuardPeersDeleted
 	c.ProtocolsDeleted += other.ProtocolsDeleted
@@ -191,8 +67,7 @@ func RetireProtocolTx(tx *gorm.DB, protocolIDs ...uint) (RetireCounts, error) {
 
 // RetireProxyNodeTx removes what the kernel holds for a proxy node being
 // deleted: its protocols, with their peers, links and secrets
-// (RetireProtocolTx), its credentials and raw configuration secrets in the
-// split tables, and its agent certificates and enrollments (node_deleted).
+// (RetireProtocolTx), its raw configuration secrets in the split table, and its agent certificates and enrollments (node_deleted).
 // The node row is the caller's.
 func RetireProxyNodeTx(tx *gorm.DB, nodeID uint) (RetireCounts, error) {
 	var counts RetireCounts
@@ -219,22 +94,15 @@ func RetireProxyNodeTx(tx *gorm.DB, nodeID uint) (RetireCounts, error) {
 	if err != nil {
 		return counts, err
 	}
-	counts.CredentialsRevoked += retired.Credentials
 	counts.SecretsDeleted += retired.Secrets
 	return counts, revokeNodeAgents(tx, agentcontrol.NodeKindProxy, nodeID, agentpki.RevokeReasonNodeDeleted)
 }
 
 // RetireForwardNodeTx removes what the kernel holds for a forward node
-// being deleted: its token in the split table and its agent certificates
-// and enrollments (node_deleted). The node row is the caller's.
+// being deleted: its agent certificates and enrollments (node_deleted). The
+// node row is the caller's.
 func RetireForwardNodeTx(tx *gorm.DB, nodeID uint) (RetireCounts, error) {
-	var counts RetireCounts
-	retired, err := nodesecrets.Retire(tx, nodesecrets.TableForwardNode, nodeID)
-	if err != nil {
-		return counts, err
-	}
-	counts.CredentialsRevoked = retired.Credentials
-	return counts, revokeNodeAgents(tx, agentcontrol.NodeKindForward, nodeID, agentpki.RevokeReasonNodeDeleted)
+	return RetireCounts{}, revokeNodeAgents(tx, agentcontrol.NodeKindForward, nodeID, agentpki.RevokeReasonNodeDeleted)
 }
 
 // deleteWireGuardPeersCounted is deleteWireGuardPeers reporting how many

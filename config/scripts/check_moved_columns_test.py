@@ -27,9 +27,7 @@ FAKE_GORM = {
 
 MODEL = (
     "package model\n\n"
-    "type Node struct {\n\tID uint\n\tName string\n\tAPIKey string\n\tAPIKeyHash string\n\tSecret string\n}\n\n"
-    "type ForwardNode struct {\n\tID uint\n\tAPIToken string\n}\n\n"
-    "type ForwardCleanAgent struct {\n\tID uint\n\tToken string\n}\n\n"
+    "type WireGuardPeer struct {\n\tID uint\n\tPublicKey string\n\tPrivateKey string\n\tPresharedKey string\n}\n\n"
     "type User struct {\n\tID uint\n\tToken string\n}\n"
 )
 
@@ -57,18 +55,18 @@ class MovedColumnsGateTest(unittest.TestCase):
             "internal/service/service.go": (
                 "package service\n\n"
                 f"import (\n\t\"gorm.io/gorm\"\n\n\t\"{MODULE}/internal/model\"\n)\n\n"
-                "var _ = gorm.DB{}\nvar _ = model.Node{}\n\n" + body
+                "var _ = gorm.DB{}\nvar _ = model.WireGuardPeer{}\n\n" + body
             )
         }
 
     def test_passes_writes_and_unrelated_reads(self) -> None:
         result = self.run_gate(self.service(
-            "func Write(db *gorm.DB, node *model.Node, user *model.User) string {\n"
-            "\tnode.APIKey = \"generated\"\n"
-            "\t_ = model.ForwardNode{APIToken: \"typed\"}\n"
-            "\tdb.Model(&model.Node{}).Where(\"id = ?\", node.ID).Update(\"api_key\", node.Name)\n"
+            "func Write(db *gorm.DB, peer *model.WireGuardPeer, user *model.User) string {\n"
+            "\tpeer.PrivateKey = \"generated\"\n"
+            "\t_ = model.WireGuardPeer{PresharedKey: \"typed\"}\n"
+            "\tdb.Model(&model.WireGuardPeer{}).Where(\"id = ?\", peer.ID).Update(\"private_key\", peer.PublicKey)\n"
             "\tdb.Model(&model.User{}).Where(\"token = ?\", \"x\").First(user)\n"
-            "\treturn node.Name + user.Token\n"
+            "\treturn peer.PublicKey + user.Token\n"
             "}\n"
         ))
         self.assertEqual(0, result.returncode, result.stderr)
@@ -76,31 +74,31 @@ class MovedColumnsGateTest(unittest.TestCase):
 
     def test_refuses_a_planted_field_read(self) -> None:
         result = self.run_gate(self.service(
-            "func Authenticate(node *model.Node, presented string) bool {\n"
-            "\treturn node.APIKey == presented\n"
+            "func Leak(peer *model.WireGuardPeer) string {\n"
+            "\treturn peer.PrivateKey\n"
             "}\n"
         ))
         self.assertNotEqual(0, result.returncode)
-        self.assertIn("reads v2_node.api_key (model.Node.APIKey)", result.stderr)
+        self.assertIn("reads v2_wireguard_peer.private_key (model.WireGuardPeer.PrivateKey)", result.stderr)
 
     def test_refuses_a_moved_column_in_sql(self) -> None:
         result = self.run_gate(self.service(
-            "func Inventory(db *gorm.DB) *gorm.DB {\n"
-            "\treturn db.Model(&model.ForwardNode{}).Where(\"api_port = 0 AND api_token = ''\")\n"
+            "func Peers(db *gorm.DB) *gorm.DB {\n"
+            "\treturn db.Model(&model.WireGuardPeer{}).Where(\"preshared_key = ''\")\n"
             "}\n\n"
-            "func Agent(db *gorm.DB, agent *model.ForwardCleanAgent) {\n"
-            "\tdb.Where(\"token = ?\", \"t\").First(agent)\n"
+            "func Peer(db *gorm.DB, peer *model.WireGuardPeer) {\n"
+            "\tdb.Select(\"private_key\").First(peer)\n"
             "}\n"
         ))
         self.assertNotEqual(0, result.returncode)
-        self.assertIn("names the moved column api_token in the SQL of Where", result.stderr)
-        self.assertIn("names the moved column token in the SQL of Where", result.stderr)
+        self.assertIn("names the moved column preshared_key in the SQL of Where", result.stderr)
+        self.assertIn("names the moved column private_key in the SQL of Select", result.stderr)
 
     def test_allows_internal_nodesecrets(self) -> None:
         result = self.run_gate({
             "internal/nodesecrets/read.go": (
                 f"package nodesecrets\n\nimport \"{MODULE}/internal/model\"\n\n"
-                "func Matches(node *model.Node, presented string) bool { return node.APIKey == presented }\n"
+                "func Key(peer *model.WireGuardPeer) string { return peer.PrivateKey }\n"
             )
         })
         self.assertEqual(0, result.returncode, result.stderr)

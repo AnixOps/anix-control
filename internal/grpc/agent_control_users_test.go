@@ -3,7 +3,6 @@ package grpc
 import (
 	"context"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/hex"
 	"net"
 	"os"
@@ -149,9 +148,8 @@ func newAgentUsersEnvironment(t *testing.T, initDatabase func(t *testing.T)) *ag
 	t.Cleanup(func() { agentUserFeed.setPoll(userDeltaPoll) })
 
 	apiKey := "agent-users-test-key"
-	hash := sha256.Sum256([]byte(apiKey))
 	groupID := uint(7)
-	node := model.Node{Name: "agent-users-node", Host: "127.0.0.1", APIKeyHash: hex.EncodeToString(hash[:]), Status: model.NodeStatusOnline, GroupID: &groupID}
+	node := model.Node{Name: "agent-users-node", Host: "127.0.0.1", Status: model.NodeStatusOnline, GroupID: &groupID}
 	require.NoError(t, db.Create(&node).Error)
 
 	listener, err := net.Listen("tcp", "127.0.0.1:0")

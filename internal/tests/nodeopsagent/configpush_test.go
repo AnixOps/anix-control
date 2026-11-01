@@ -117,7 +117,6 @@ func TestConfigPushNegotiation(t *testing.T) {
 		assert.True(t, hasCapability(forward.HelloAck.GetServerCapabilities(), agentcontrol.CapabilityConfig))
 		require.Len(t, forward.Snapshots(), 1)
 		assert.Contains(t, string(forward.Snapshots()[0].GetConfigJson()), `"legacy_rules"`)
-		assert.NotContains(t, string(forward.Snapshots()[0].GetConfigJson()), forwardToken)
 		forwardSync := terminal(t, client, "node.sync:forward-config", syncSpec(f.forwardNode(), true))
 		require.Equal(t, kernelnodeopsv1.OperationState_OPERATION_STATE_SUCCEEDED, forwardSync.GetState(), forwardSync.GetError())
 		assert.Equal(t, forward.SessionID(), forwardSync.GetResult().GetNodeSync().GetAck().GetSessionId())
@@ -422,11 +421,6 @@ func TestConfigSnapshotCarriesTheRuntimeConfiguration(t *testing.T) {
 				}
 				assert.True(t, found, "secret %q of the snapshot is not in a runtime or protocol configuration", key)
 			})
-			for _, credential := range []string{proxyKey, forwardToken, f.proxy.Secret} {
-				if credential != "" {
-					assert.NotContains(t, string(snapshot.GetConfigJson()), credential)
-				}
-			}
 		}
 		check(agent.Snapshots()[0], []string{"vless"}, []uint{f.protocol.ID})
 		assert.Contains(t, string(agent.Snapshots()[0].GetConfigJson()), realityKey, "the protocol's key")

@@ -165,13 +165,6 @@ export function getNodeLogs(id, params) {
   })
 }
 
-export function getNodeCredentials(id) {
-  return request({
-    url: `/admin/nodes/${id}/credentials`,
-    method: 'get'
-  })
-}
-
 export function updateNode(id, data) {
   return request({
     url: `/admin/nodes/${id}`,
@@ -952,7 +945,6 @@ export default {
   getNode,
   getNodeStats,
   getNodeLogs,
-  getNodeCredentials,
   updateNode,
   deleteNode,
   syncNodeProtocol,

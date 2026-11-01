@@ -85,23 +85,21 @@ func openPostgres(t *testing.T) *gorm.DB {
 }
 
 // The seeded nodes: proxy nodes 1 and 2 (protocol 5 on node 1), forward
-// nodes 10, 11 and 12, clean agent 20 on forward node 10, tunnel 30 from 10
+// nodes 10, 11 and 12, tunnel 30 from 10
 // to 11 with forwards 40 and 41, tunnel 31 on 12 with no forward, legacy
 // rule 50 from 10 to 12.
 func seed(t *testing.T, db *gorm.DB) {
 	t.Helper()
 	require.NoError(t, db.AutoMigrate(append(model.KernelNodeOperationModels(),
-		&model.Node{}, &model.NodeProtocol{}, &model.ForwardNode{}, &model.ForwardCleanAgent{},
+		&model.Node{}, &model.NodeProtocol{}, &model.ForwardNode{},
 		&model.ForwardTunnel{}, &model.Forward{}, &model.ForwardRule{}, &model.EgressRoute{})...))
 	exit := uint(11)
-	agentNode := uint(10)
-	require.NoError(t, db.Create(&[]model.Node{{ID: 1, Name: "proxy-1", APIKey: "node-key-1"}, {ID: 2, Name: "proxy-2", APIKey: "node-key-2"}}).Error)
+	require.NoError(t, db.Create(&[]model.Node{{ID: 1, Name: "proxy-1"}, {ID: 2, Name: "proxy-2"}}).Error)
 	require.NoError(t, db.Create(&model.NodeProtocol{ID: 5, NodeID: 1, Name: "vless", Type: model.ProtocolVLESS, Port: 443}).Error)
 	require.NoError(t, db.Create(&[]model.ForwardNode{
 		{ID: 10, Name: "relay", Host: "198.51.100.10", Port: 22}, {ID: 11, Name: "exit", Host: "198.51.100.11", Port: 22},
 		{ID: 12, Name: "spare", Host: "198.51.100.12", Port: 22},
 	}).Error)
-	require.NoError(t, db.Create(&model.ForwardCleanAgent{ID: 20, NodeID: &agentNode, Name: "agent", Token: "clean-agent-token"}).Error)
 	require.NoError(t, db.Create(&[]model.ForwardTunnel{
 		{ID: 30, Name: "tunnel", InNodeID: 10, OutNodeID: &exit}, {ID: 31, Name: "empty", InNodeID: 12},
 	}).Error)

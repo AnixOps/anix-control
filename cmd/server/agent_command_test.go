@@ -29,7 +29,7 @@ import (
 func TestAgentCommandCreatesEnrollmentCredentials(t *testing.T) {
 	cfg, db := moduleCommandFixture(t)
 	require.NoError(t, db.AutoMigrate(&model.AgentEnrollment{}, &model.AgentCertificate{}, &model.Node{}, &model.ForwardNode{}, &model.OperationLog{}))
-	node := model.Node{Name: "proxy-12", APIKeyHash: strings.Repeat("b", 64), Status: model.NodeStatusOnline}
+	node := model.Node{Name: "proxy-12", Status: model.NodeStatusOnline}
 	require.NoError(t, db.Create(&node).Error)
 	nodeName := "proxy-" + strconv.FormatUint(uint64(node.ID), 10)
 	ctx := context.Background()
@@ -123,7 +123,7 @@ func TestAgentPKIWithTheCAAlone(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, pki)
 	require.Equal(t, "edge", pki.Cluster())
-	node := model.Node{Name: "proxy", APIKeyHash: strings.Repeat("e", 64), Status: model.NodeStatusOnline}
+	node := model.Node{Name: "proxy", Status: model.NodeStatusOnline}
 	require.NoError(t, db.Create(&node).Error)
 	var output bytes.Buffer
 	require.NoError(t, runAgentCommand(ctx, cfg, db, []string{"token", "create", "-node", "proxy-" + strconv.FormatUint(uint64(node.ID), 10)}, &output))

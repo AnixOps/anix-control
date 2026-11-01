@@ -122,18 +122,12 @@ func (s *NodeService) GetNode(id uint) (*model.Node, error) {
 // administrator's body was bound to. GORM saves the associations of a model
 // it creates: a node body's "protocols" moved other nodes' protocols to the
 // new node, and the nodes and subscription groups nested in them were
-// created, those nodes without an API key. A body's id chose the new row's
+// created. A body's id chose the new row's
 // id. Protocols have their own routes and are never saved from a node body.
 func (s *NodeService) CreateNode(node *model.Node) error {
 	node.ID = 0
 	node.Protocols = nil
 
-	// 生成 API Key 和 Secret, as IssueCredential generates them.
-	credentials, err := GenerateProxyNodeCredentials(true, true)
-	if err != nil {
-		return err
-	}
-	credentials.Apply(node)
 	node.Status = model.NodeStatusPending
 
 	// 创建节点 + 默认协议 (事务)
@@ -168,12 +162,12 @@ func (s *NodeService) CreateNode(node *model.Node) error {
 	})
 }
 
-// UpdateNode 更新节点. The node's id and credentials are never updated, and
+// UpdateNode 更新节点. The node's id is never updated, and
 // a new parent is checked whatever spelling names it (see columnUpdates). A
 // raw configuration secret sent as NodeSecretPlaceholder keeps its stored
 // value.
 func (s *NodeService) UpdateNode(id uint, updates map[string]any) error {
-	updates, err := columnUpdates(s.db, &model.Node{}, updates, "id", "api_key", "api_key_hash", "secret")
+	updates, err := columnUpdates(s.db, &model.Node{}, updates, "id")
 	if err != nil {
 		return err
 	}
@@ -292,8 +286,8 @@ func parentIDUpdate(raw any) (*uint, error) {
 // model's column names and leaves out the refused columns and every
 // association.
 //
-// GORM resolves a key by column or by field name ("api_key", "APIKey"), and
-// SQLite matches column names in any case ("API_KEY"), so refusing only the
+// GORM resolves a key by column or by field name ("parent_id", "ParentID"),
+// and SQLite matches column names in any case ("PARENT_ID"), so refusing only the
 // column names let other spellings through. Keys are resolved here the same
 // way, ignoring case and underscores, so a refused column is refused in
 // every spelling and a checked one (a node's parent, a protocol's type) is
@@ -389,8 +383,8 @@ func (s *NodeService) validateParentID(nodeID uint, parentID *uint) error {
 
 // DeleteNode 删除节点
 //
-// The kernel's part, the protocols with their peers, links and secrets,
-// the credentials and the agent certificates, is RetireProxyNodeTx, which
+// The kernel's part, the protocols with their peers, links and secrets
+// and the agent certificates, is RetireProxyNodeTx, which
 // RetireNode runs too; the node row goes with it in the same transaction.
 func (s *NodeService) DeleteNode(id uint) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
@@ -541,13 +535,6 @@ func (s *NodeService) UpdateRuntimeHealth(nodeID uint, healthy bool, message str
 		return gorm.ErrRecordNotFound
 	}
 	return nil
-}
-
-// NodeCredentials answers node's API key and shared secret, where the
-// kernel shows them to an administrator, read through the node credential
-// split.
-func (s *NodeService) NodeCredentials(node *model.Node) (apiKey, secret string) {
-	return nodesecrets.NodeAPIKey(s.db, node), nodesecrets.NodeSharedSecret(s.db, node)
 }
 
 // PrepareNodeRawConfig reads the secrets of node's raw configuration through

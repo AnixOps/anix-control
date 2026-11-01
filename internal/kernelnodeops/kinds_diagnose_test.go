@@ -349,17 +349,16 @@ func stringsOf(message protoreflect.Message) []string {
 	return values
 }
 
-// No diagnosis result, error or ledger row carries a node's token or a
-// value at a secret key, even when what a node answered echoes one: the walk reads every string of every operation.
+// No diagnosis result, error or ledger row carries a value at a secret key,
+// even when what a node answered echoes one: the walk reads every string of
+// every operation.
 func TestDiagnosisResultsCarryNoSecrets(t *testing.T) {
 	forEachDatabase(t, func(t *testing.T, db *gorm.DB) {
-		require.NoError(t, db.Model(&model.ForwardNode{}).Where("id = ?", 11).Updates(map[string]any{"api_port": 18080, "api_token": "exit-SECRET-token-11"}).Error)
-		require.NoError(t, db.Model(&model.ForwardNode{}).Where("id = ?", 12).Updates(map[string]any{"api_port": 18080, "api_token": "relay-SECRET-token-12"}).Error)
-		// What a node answers echoes the tokens of the nodes the operation
-		// concerns, and values at secret keys.
+		require.NoError(t, db.Model(&model.ForwardNode{}).Where("id IN ?", []uint{11, 12}).Update("api_port", 18080).Error)
+		// What a node answers echoes values at secret keys.
 		const leaks = "; api_key=key-SECRET-9 {\"private_key\":\"pk-SECRET\"}"
 		network := newFakeNetwork(map[string]string{
-			"198.51.100.11:22": "refused by exit-SECRET-token-11 and relay-SECRET-token-12" + leaks,
+			"198.51.100.11:22": "refused" + leaks,
 		})
 		h := diagnosisHarness(t, db, network, nil)
 		h.start(t)
@@ -376,7 +375,7 @@ func TestDiagnosisResultsCarryNoSecrets(t *testing.T) {
 		}
 		require.Contains(t, operations[0].GetResult().GetEndpointCheck().GetChecks()[0].GetError(), "********")
 
-		secrets := []string{"relay-SECRET-token-12", "exit-SECRET-token-11", "key-SECRET-9", "pk-SECRET"}
+		secrets := []string{"key-SECRET-9", "pk-SECRET"}
 		for _, operation := range operations {
 			for _, text := range stringsOf(operation.ProtoReflect()) {
 				for _, secret := range secrets {

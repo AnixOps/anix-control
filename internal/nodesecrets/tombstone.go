@@ -1,7 +1,6 @@
 package nodesecrets
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -14,13 +13,9 @@ import (
 // This file writes the tombstones of phase P3 (section 4.4). Once a table
 // is finalized its legacy secret columns hold no secret:
 //
-//   - a credential column (v2_node.api_key and .secret,
-//     v2_forward_node.api_token,
-//     v2_forward_clean_agent.token, v2_wireguard_peer.private_key and
-//     .preshared_key) holds the tombstone "!moved:<row id>": unique per row,
-//     non-empty, and never a credential;
-//   - a key hash column (v2_node.api_key_hash) holds "": nothing reads it
-//     after P3;
+//   - a key column (v2_wireguard_peer.private_key and .preshared_key) holds
+//     the tombstone "!moved:<row id>": unique per row, non-empty, and never
+//     a key;
 //   - a JSON column (v2_node.raw_config, the five settings columns of
 //     v2_node_protocol) holds its redacted document, Redact of the
 //     original, with the placeholder at every secret position.
@@ -30,8 +25,7 @@ import (
 // scopeLegacyOriginal is the scope of v4_kernel_protocol_secret that keeps
 // what finalize cannot derive back from the new tables, so unsplit writes
 // the legacy columns back byte for byte: a JSON column's original document
-// (its formatting and key order), and the empty key hash of a row written
-// without one. The column is "<table>.<column>", the owner the row's id. It
+// (its formatting and key order). The column is "<table>.<column>", the owner the row's id. It
 // is never read as a secret position: readers, writers and verify select
 // the other scopes only, and the rows go with their legacy row.
 const scopeLegacyOriginal = "legacy_original"
@@ -40,40 +34,22 @@ func originalColumn(table, column string) string {
 	return table + "." + column
 }
 
-// ErrTombstoneCollision is returned when a tombstone would collide, on a
-// unique legacy column, with a value another row already holds: a row that
-// holds "!moved:<id>" of another row. Nothing of the batch is written. Its
-// text names tables, columns and row ids, never a value.
-var ErrTombstoneCollision = errors.New("nodesecrets: a tombstone collides with another row's value on a unique column")
-
 // legacyColumn is one secret column of a legacy table.
 type legacyColumn struct {
 	name string
-	// kind: tombstone (a credential column), hash (a key hash column) or
-	// document (a JSON column).
-	kind   string
-	unique bool
+	// kind: tombstone (a key column) or document (a JSON column).
+	kind string
 }
 
 const (
 	columnTombstone = "tombstone"
-	columnHash      = "hash"
 	columnDocument  = "document"
 )
 
 // legacyColumns lists the secret columns of each split table.
 var legacyColumns = map[string][]legacyColumn{
 	TableNode: {
-		{name: "api_key", kind: columnTombstone, unique: true},
-		{name: "api_key_hash", kind: columnHash},
-		{name: "secret", kind: columnTombstone},
 		{name: "raw_config", kind: columnDocument},
-	},
-	TableForwardNode: {
-		{name: "api_token", kind: columnTombstone},
-	},
-	TableCleanAgent: {
-		{name: "token", kind: columnTombstone, unique: true},
 	},
 	TableNodeProtocol: {
 		{name: "settings", kind: columnDocument},
@@ -212,34 +188,7 @@ func tombstoneRows(tx *gorm.DB, spec tableSpec, ids []uint64, lock bool, now tim
 				if value == "" || IsTombstone(value) {
 					continue
 				}
-				tombstone := Tombstone(row.id)
-				if column.unique {
-					if err := checkTombstoneCollision(tx, spec.table, column.name, row.id, tombstone); err != nil {
-						return changed, err
-					}
-				}
-				updates[column.name] = tombstone
-			case columnHash:
-				if value != "" {
-					updates[column.name] = ""
-					// A hash the row holds is the credential's: the
-					// marker of an empty one no longer applies.
-					if _, marked := originals[secretOwner{owner: row.id, column: column.name}]; marked {
-						if err := dropOriginals(tx, spec.table, []uint64{row.id}, column.name); err != nil {
-							return changed, err
-						}
-					}
-					continue
-				}
-				// A row without a hash, whose key moves now: unsplit writes
-				// the empty hash back, not the credential's.
-				if credential, ok := hashOwner(spec.table, column.name); ok {
-					if key := row.values[credential]; key != "" && !IsTombstone(key) {
-						if err := keepOriginal(tx, spec.table, row.id, column.name, "", now); err != nil {
-							return changed, err
-						}
-					}
-				}
+				updates[column.name] = Tombstone(row.id)
 			case columnDocument:
 				key := secretOwner{owner: row.id, column: column.name}
 				if hasLiteralSecret(value) {
@@ -278,31 +227,6 @@ func hasLiteralSecret(document string) bool {
 		}
 	}
 	return false
-}
-
-// checkTombstoneCollision fails with ErrTombstoneCollision when another row
-// of table already holds tombstone in column.
-func checkTombstoneCollision(tx *gorm.DB, table, column string, id uint64, tombstone string) error {
-	var others []uint64
-	if err := tx.Session(&gorm.Session{NewDB: true}).Table(table).
-		Where(tx.Statement.Quote(column)+" = ? AND id <> ?", tombstone, id).Limit(5).Pluck("id", &others).Error; err != nil {
-		return err
-	}
-	if len(others) > 0 {
-		return fmt.Errorf("%w: %s.%s of row %d is taken by row %v; give that row its own value, then run finalize again",
-			ErrTombstoneCollision, table, column, id, others)
-	}
-	return nil
-}
-
-// hashOwner answers the credential column a key hash column hashes.
-func hashOwner(table, column string) (string, bool) {
-	for credential, spec := range credentialColumns[table] {
-		if spec.hash == column {
-			return credential, true
-		}
-	}
-	return "", false
 }
 
 // originalValues loads the kept originals of the given rows of table, by

@@ -103,9 +103,9 @@ func (s *AdminListSortTestSuite) TestNodesSortByTheColumnsAsked() {
 	now := time.Now().Unix()
 	recent, stale := now-10, now-10_000
 	nodes := []model.Node{
-		{ID: 1, Name: "beta", Host: "b.example.test", APIKey: "k1", Sort: 2, LastCheckAt: &recent, CPUUsage: 30, OnlineUsers: 5},
-		{ID: 2, Name: "alpha", Host: "c.example.test", APIKey: "k2", Sort: 1, LastCheckAt: &stale, CPUUsage: 90, OnlineUsers: 1},
-		{ID: 3, Name: "gamma", Host: "a.example.test", APIKey: "k3", Sort: 2, CPUUsage: 10, OnlineUsers: 9},
+		{ID: 1, Name: "beta", Host: "b.example.test", Sort: 2, LastCheckAt: &recent, CPUUsage: 30, OnlineUsers: 5},
+		{ID: 2, Name: "alpha", Host: "c.example.test", Sort: 1, LastCheckAt: &stale, CPUUsage: 90, OnlineUsers: 1},
+		{ID: 3, Name: "gamma", Host: "a.example.test", Sort: 2, CPUUsage: 10, OnlineUsers: 9},
 	}
 	s.Require().NoError(s.db.Create(&nodes).Error)
 	handler := NewNodeHandler().GetNodes

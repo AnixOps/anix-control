@@ -32,17 +32,20 @@ func (c *clock) advance(d time.Duration) {
 }
 
 // fixtureRoutes are field list rows the tests add to the embedded list: a
-// value field of a forward node, by path parameter and new. The routes that
-// listed it (/api/v2/admin/forward/nodes*) were removed in v4.2 (F5d), and
-// the sealer keeps the target kind.
+// value field of a forward node, by path parameter and new (the routes that
+// listed it, /api/v2/admin/forward/nodes*, were removed in v4.2, and the
+// sealer keeps the target kind), and a proxy node creation whose answer
+// shows two generated secrets (no listed route answers one today).
 const (
-	fixtureNodeUpdate = "fixture.forward.nodes.id.put"
-	fixtureNodeCreate = "fixture.forward.nodes.post"
+	fixtureNodeUpdate  = "fixture.forward.nodes.id.put"
+	fixtureNodeCreate  = "fixture.forward.nodes.post"
+	fixtureProxyCreate = "fixture.proxy.nodes.post"
 )
 
 const fixtureRoutes = `,
     {"route_id": "` + fixtureNodeUpdate + `", "target": {"kind": "forward", "path_param": "id"}, "request": [{"pointer": "/api_token", "kind": "value"}]},
-    {"route_id": "` + fixtureNodeCreate + `", "target": {"kind": "forward", "new": true}, "request": [{"pointer": "/api_token", "kind": "value"}], "answer": [{"pointer": "/data/api_token", "name": "api_token"}]}
+    {"route_id": "` + fixtureNodeCreate + `", "target": {"kind": "forward", "new": true}, "request": [{"pointer": "/api_token", "kind": "value"}], "answer": [{"pointer": "/data/api_token", "name": "api_token"}]},
+    {"route_id": "` + fixtureProxyCreate + `", "target": {"kind": "proxy", "new": true}, "request": [{"pointer": "/raw_config", "kind": "document"}], "answer": [{"pointer": "/data/credential", "name": "credential"}, {"pointer": "/data/recovery", "name": "recovery"}]}
   ]
 }`
 
@@ -218,18 +221,18 @@ func TestHandlesExpireWithTheirRequest(t *testing.T) {
 // and a minted handle never resolves as a request secret.
 func TestMintIsBoundToTheRoutesAnswer(t *testing.T) {
 	f := newFixture(t)
-	_, binding := f.seal("proxy.admin.nodes.post", "req-1", `{"name":"edge"}`, nil)
-	handle, expires, err := f.store.Mint(binding, "api_key", "generated")
+	_, binding := f.seal(fixtureProxyCreate, "req-1", `{"name":"edge"}`, nil)
+	handle, expires, err := f.store.Mint(binding, "credential", "generated")
 	require.NoError(t, err)
 	require.True(t, IsHandle(handle))
 	assert.Equal(t, f.clock.Now().Add(time.Minute), expires)
 	_, _, err = f.store.Mint(binding, "token", "generated")
 	require.Error(t, err, "the route shows no token")
-	_, _, err = f.store.Mint(binding, "api_key", "")
+	_, _, err = f.store.Mint(binding, "credential", "")
 	require.Error(t, err)
-	_, _, err = f.store.Mint(Binding{Key: binding.Key, PackageID: "pkg", Generation: 3, RequestID: "other", RouteID: binding.RouteID}, "api_key", "x")
+	_, _, err = f.store.Mint(Binding{Key: binding.Key, PackageID: "pkg", Generation: 3, RequestID: "other", RouteID: binding.RouteID}, "credential", "x")
 	require.Error(t, err)
-	for _, field := range []string{"", "/data/api_key", "api_key"} {
+	for _, field := range []string{"", "/data/credential", "credential"} {
 		_, err = f.store.Resolve(binding, Use{Handle: handle, Target: Target{Kind: TargetProxy, ID: 9}, Field: field})
 		require.Error(t, err, "an answer handle is not a request secret")
 	}

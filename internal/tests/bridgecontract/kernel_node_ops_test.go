@@ -120,7 +120,7 @@ func openSQLiteForTest(t *testing.T, name string, pragmas ...string) *gorm.DB {
 func seedNodeOps(t *testing.T, db *gorm.DB) {
 	t.Helper()
 	require.NoError(t, db.AutoMigrate(append(append(model.KernelNodeOperationModels(), &model.EgressRoute{}), &model.Node{})...))
-	require.NoError(t, db.Create(&[]model.Node{{ID: 1, Name: "edge-1", APIKey: "key-1"}, {ID: 2, Name: "edge-2", APIKey: "key-2"}}).Error)
+	require.NoError(t, db.Create(&[]model.Node{{ID: 1, Name: "edge-1"}, {ID: 2, Name: "edge-2"}}).Error)
 }
 
 // nodeOpsGrants authorizes hosts by package: the families each holds.
@@ -215,7 +215,7 @@ func exerciseNodeOps(t *testing.T, kernel *nodeOpsKernel, connection grpc.Client
 	require.NoError(t, err)
 	require.Equal(t, []kernelnodeopsv1.OperationFamily{kernelnodeopsv1.OperationFamily_OPERATION_FAMILY_NODE_CONFIG}, capabilities.GetGrantedFamilies())
 	require.Equal(t, []string{kernelnodeops.KindNodeSync}, capabilities.GetKinds())
-	require.Len(t, capabilities.GetTables(), 6)
+	require.Len(t, capabilities.GetTables(), 4)
 
 	watchCtx, stopWatch := context.WithCancel(ctx)
 	defer stopWatch()

@@ -9,7 +9,6 @@ import (
 
 	kernelnodeopsv1 "github.com/AnixOps/anix-control/sdk/api/kernelnodeops/v1"
 	"github.com/AnixOps/anix-control/v5/internal/model"
-	"github.com/AnixOps/anix-control/v5/internal/nodesecrets"
 	"github.com/AnixOps/anix-control/v5/internal/service"
 )
 
@@ -140,9 +139,6 @@ func (d *Diagnosis) checkEndpoints(ctx context.Context, run *Run) Outcome {
 	for _, check := range checks {
 		ref := forwardNode(check.NodeID)
 		item := &kernelnodeopsv1.EndpointCheck{Node: ref, Vantage: d.vantage(op.GetVantage(), []*kernelnodeopsv1.NodeRef{ref})}
-		if check.Node != nil {
-			run.UseSecret(nodesecrets.ForwardNodeToken(run.engine.DB, check.Node))
-		}
 		switch {
 		case check.Node == nil:
 			item.Error = fmt.Sprintf("forward node %d not found", check.NodeID)

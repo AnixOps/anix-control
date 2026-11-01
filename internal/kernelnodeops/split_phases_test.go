@@ -42,11 +42,11 @@ func TestSplitPhasesFrom(t *testing.T) {
 			require.NoError(t, db.Model(&model.NodeSecretSplit{}).Where("table_name = ?", table).Updates(values).Error)
 		}
 		update("v2_node", map[string]any{"phase": nodesecrets.PhaseDualRead})
-		update("v2_forward_node", map[string]any{"phase": nodesecrets.PhaseFinalized})
+		update("v2_wireguard_peer", map[string]any{"phase": nodesecrets.PhaseFinalized})
 		update("v2_node_protocol", map[string]any{"phase": nodesecrets.PhaseFinalized, "finalized_at": time.Now().UTC()})
 		phases = answer()
 		require.Equal(t, kernelnodeopsv1.SecretSplitPhase_SECRET_SPLIT_PHASE_DUAL_READ, phases["v2_node"])
-		require.Equal(t, kernelnodeopsv1.SecretSplitPhase_SECRET_SPLIT_PHASE_DUAL_READ, phases["v2_forward_node"], "still being finalized")
+		require.Equal(t, kernelnodeopsv1.SecretSplitPhase_SECRET_SPLIT_PHASE_DUAL_READ, phases["v2_wireguard_peer"], "still being finalized")
 		require.Equal(t, kernelnodeopsv1.SecretSplitPhase_SECRET_SPLIT_PHASE_FINALIZED, phases["v2_node_protocol"])
 	})
 }

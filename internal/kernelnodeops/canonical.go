@@ -22,10 +22,6 @@ import (
 func canonical(spec *kernelnodeopsv1.OperationSpec) *kernelnodeopsv1.OperationSpec {
 	copied := proto.Clone(spec).(*kernelnodeopsv1.OperationSpec)
 	switch op := copied.GetOperation().(type) {
-	case *kernelnodeopsv1.OperationSpec_IssueCredential:
-		if value := op.IssueCredential.GetValue(); value != nil && strings.HasPrefix(value.GetHandle(), SealedPrefix) {
-			value.Handle = SealedPrefix
-		}
 	case *kernelnodeopsv1.OperationSpec_PutSecretDocument:
 		op.PutSecretDocument.DocumentJson = canonicalDocument(op.PutSecretDocument.GetDocumentJson())
 	case *kernelnodeopsv1.OperationSpec_TestForwardBackend:

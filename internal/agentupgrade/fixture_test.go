@@ -204,7 +204,7 @@ func newFixture(t *testing.T, db *gorm.DB) *fixture {
 // addProxy creates an enabled proxy node seen on the mTLS stream.
 func (f *fixture) addProxy(id uint, tags string) agentcontrol.AgentNode {
 	f.t.Helper()
-	node := model.Node{ID: id, Name: fmt.Sprintf("proxy-%d", id), APIKey: fmt.Sprintf("key-%d", id), Status: model.NodeStatusOnline}
+	node := model.Node{ID: id, Name: fmt.Sprintf("proxy-%d", id), Status: model.NodeStatusOnline}
 	if tags != "" {
 		node.Tags = &tags
 	}

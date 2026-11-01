@@ -109,7 +109,6 @@ func TestManifestCapabilityGrammar(t *testing.T) {
 		"adopt kernel table":         {CapabilityStorage, "kernel.storage.adopt:v4_kernel_lease"},
 		"adopt identity table":       {CapabilityStorage, "kernel.storage.adopt:identity_platform_projection"},
 		"adopt system config":        {CapabilityStorage, "kernel.storage.adopt:v2_system_config"},
-		"adopt clean agent tokens":   {CapabilityStorage, "kernel.storage.adopt:v2_forward_clean_agent"},
 		"adopt forward runtime jobs": {CapabilityStorage, "kernel.storage.adopt:v2_forward_runtime_job"},
 		"adopt a view":               {CapabilityStorage, "kernel.storage.adopt:kapi_user_directory_v1"},
 		"bad table name":             {CapabilityStorage, "kernel.storage.adopt:V2-Knowledge"},

@@ -232,9 +232,8 @@ var nodeKindNames = map[kernelnodeopsv1.NodeKind]string{
 
 // nodeTables are the tables each node kind lives in.
 var nodeTables = map[kernelnodeopsv1.NodeKind]string{
-	kernelnodeopsv1.NodeKind_NODE_KIND_PROXY:       "v2_node",
-	kernelnodeopsv1.NodeKind_NODE_KIND_FORWARD:     "v2_forward_node",
-	kernelnodeopsv1.NodeKind_NODE_KIND_CLEAN_AGENT: "v2_forward_clean_agent",
+	kernelnodeopsv1.NodeKind_NODE_KIND_PROXY:   "v2_node",
+	kernelnodeopsv1.NodeKind_NODE_KIND_FORWARD: "v2_forward_node",
 }
 
 func nodeKindByName(name string) kernelnodeopsv1.NodeKind {
@@ -447,36 +446,22 @@ var protocolSecretColumns = map[string]bool{
 	"settings": true, "tls_settings": true, "transport_settings": true, "reality_settings": true, "custom_config": true,
 }
 
-// credentialKinds are the credentials each node kind holds; UNSPECIFIED
-// names all of them.
-var credentialKinds = map[kernelnodeopsv1.NodeKind][]kernelnodeopsv1.CredentialKind{
-	kernelnodeopsv1.NodeKind_NODE_KIND_PROXY: {
-		kernelnodeopsv1.CredentialKind_CREDENTIAL_KIND_NODE_API_KEY, kernelnodeopsv1.CredentialKind_CREDENTIAL_KIND_NODE_SHARED_SECRET,
-		kernelnodeopsv1.CredentialKind_CREDENTIAL_KIND_AGENT_ENROLLMENT,
-	},
-	kernelnodeopsv1.NodeKind_NODE_KIND_FORWARD: {
-		kernelnodeopsv1.CredentialKind_CREDENTIAL_KIND_FORWARD_NODE_TOKEN, kernelnodeopsv1.CredentialKind_CREDENTIAL_KIND_AGENT_ENROLLMENT,
-	},
-	kernelnodeopsv1.NodeKind_NODE_KIND_CLEAN_AGENT: {kernelnodeopsv1.CredentialKind_CREDENTIAL_KIND_CLEAN_AGENT_TOKEN},
-}
-
+// checkCredential checks a credential operation's subject and kind: a
+// proxy or forward node holds one credential, its agent enrollment, which
+// UNSPECIFIED names too.
 func checkCredential(subject *kernelnodeopsv1.NodeRef, credential kernelnodeopsv1.CredentialKind, kindName string) error {
 	if err := checkNode(subject, "subject", kindName, kernelnodeopsv1.NodeKind_NODE_KIND_PROXY,
-		kernelnodeopsv1.NodeKind_NODE_KIND_FORWARD, kernelnodeopsv1.NodeKind_NODE_KIND_CLEAN_AGENT); err != nil {
+		kernelnodeopsv1.NodeKind_NODE_KIND_FORWARD); err != nil {
 		return err
 	}
-	if credential == kernelnodeopsv1.CredentialKind_CREDENTIAL_KIND_UNSPECIFIED {
+	switch credential {
+	case kernelnodeopsv1.CredentialKind_CREDENTIAL_KIND_UNSPECIFIED, kernelnodeopsv1.CredentialKind_CREDENTIAL_KIND_AGENT_ENROLLMENT:
 		return nil
 	}
 	if _, known := kernelnodeopsv1.CredentialKind_name[int32(credential)]; !known {
 		return invalid("kind is an unknown credential kind")
 	}
-	for _, held := range credentialKinds[subject.GetKind()] {
-		if held == credential {
-			return nil
-		}
-	}
-	return invalid("a %s node holds no %s", nodeKindNames[subject.GetKind()], credential)
+	return invalid("a %s node holds no %s: node API keys, shared secrets and tokens are removed; its credential is AGENT_ENROLLMENT", nodeKindNames[subject.GetKind()], credential)
 }
 
 func checkHandle(handle, field string) error {
@@ -891,16 +876,13 @@ func init() {
 			if err := checkCredential(op.GetSubject(), op.GetKind(), KindCredentialIssue); err != nil {
 				return err
 			}
-			if op.GetValue() == nil {
-				return nil
+			if op.GetKind() != kernelnodeopsv1.CredentialKind_CREDENTIAL_KIND_AGENT_ENROLLMENT {
+				return invalid("name the credential kind: AGENT_ENROLLMENT")
 			}
-			if op.GetKind() == kernelnodeopsv1.CredentialKind_CREDENTIAL_KIND_UNSPECIFIED && op.GetSubject().GetKind() == proxy {
-				return invalid("one value cannot be every credential of a proxy node; name the credential kind")
-			}
-			if op.GetKind() == kernelnodeopsv1.CredentialKind_CREDENTIAL_KIND_AGENT_ENROLLMENT {
+			if op.GetValue() != nil {
 				return invalid("agent enrollment credentials are generated, never sent")
 			}
-			return checkHandle(op.GetValue().GetHandle(), "value.handle")
+			return nil
 		},
 		resolve: func(db *gorm.DB, spec *kernelnodeopsv1.OperationSpec) (resolution, error) {
 			subject := spec.GetIssueCredential().GetSubject()

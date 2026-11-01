@@ -39,13 +39,6 @@
     },
     {
       "method": "GET",
-      "legacy_path": "/api/v2/admin/nodes/:id/credentials",
-      "package_route": "proxy.admin.nodes.id.credentials.get",
-      "envelope": "data",
-      "transport": "http"
-    },
-    {
-      "method": "GET",
       "legacy_path": "/api/v2/admin/nodes/:id/logs",
       "package_route": "proxy.admin.nodes.id.logs.get",
       "envelope": "data",

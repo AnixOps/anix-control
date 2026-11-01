@@ -212,17 +212,16 @@ func tokenRequestDenied(c *gin.Context, scope string) string {
 }
 
 // secretReadRoutes are the administrator reads that still answer a secret in
-// clear (the other secrets are masked in every answer): a proxy node's API
-// key and shared secret, and the Telegram bot's token. A read scope token
-// may not make them. A new route of this kind is added here.
+// clear (the other secrets are masked in every answer): the Telegram bot's
+// token. A read scope token may not make them. A new route of this kind is
+// added here.
 var secretReadRoutes = map[string]bool{
-	"/api/v2/admin/nodes/:id/credentials": true,
-	"/api/v2/admin/telegram/bot":          true,
+	"/api/v2/admin/telegram/bot": true,
 }
 
 // revealsSecret reports whether a read answers a secret in clear: a route
 // of secretReadRoutes (matched on the route, so a URL spelled differently
-// is the same route), or a read the audit log records as "reveal".
+// is the same route), or a read the audit log records (auditedRead).
 func revealsSecret(c *gin.Context) bool {
 	return secretReadRoutes[c.FullPath()] || auditedRead(c.Request.Method, c.Request.URL.Path)
 }

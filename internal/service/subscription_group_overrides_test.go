@@ -21,7 +21,7 @@ func TestGroupNodeOverridesEditAndReset(t *testing.T) {
 	now := time.Now().Unix()
 	group := &model.SubscriptionGroup{Name: "g", Enable: 1}
 	require.NoError(t, db.Create(group).Error)
-	node := &model.Node{Name: "HK", APIKey: "k", Host: "hk.example.com", Show: 1, Status: model.NodeStatusOnline, LastCheckAt: &now}
+	node := &model.Node{Name: "HK", Host: "hk.example.com", Show: 1, Status: model.NodeStatusOnline, LastCheckAt: &now}
 	require.NoError(t, db.Create(node).Error)
 	protocol := model.NodeProtocol{NodeID: node.ID, Name: "ss", Type: model.ProtocolShadowsocks, Port: 10000, Enable: 1, Show: 1}
 	require.NoError(t, db.Create(&protocol).Error)

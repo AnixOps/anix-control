@@ -516,9 +516,6 @@ GET /api/v4/kernel/nodes/:id/traffic?granularity=day                  # 最近 3
 `********`；公钥和 Reality `short_id` 照常显示。更新时原样提交 `********` 即保留已存的值，
 提交新值则替换。节点自身仍通过 Agent 控制流拿到真实配置。
 
-`GET /api/v2/admin/nodes/:id/credentials` 返回单个节点的 `api_key` / `secret`
-（部署助手和 Ansible 使用），每次读取都记入审计日志（action `reveal`）。
-
 SMTP 密码同样不再明文返回：`GET /api/v2/admin/notification/email/config` 的
 `password`，以及系统配置列表、单项读取和更新应答中 `notification.email.config`
 值里的 `password` 字段，已设置时显示为 `********`（未设置为空）。更新时提交
@@ -572,18 +569,16 @@ GET /api/v3/plugins/machine-telemetry/nodes/12/services
 ```http
 # 吊销节点 Agent 持有的证书、注册记录和转发链路证书，并签发一个一次性注册凭据（仅超级管理员）
 POST /api/v4/kernel/agents/rotate-credentials
-{"node": "proxy-12", "rotate_api_key": false, "ttl_seconds": 3600, "reason": "硬盘被盗"}
+{"node": "proxy-12", "ttl_seconds": 3600, "reason": "硬盘被盗"}
 ```
 
 字段、错误码、审计与运维步骤见
 [`../reference/node-credential-rotation.md`](../reference/node-credential-rotation.md) 和
 [Agent 安装](agent-onboarding.md#rotating-a-nodes-credentials)。应答 `201`、`Cache-Control: no-store`，
-`credential`（`anixagt_…`）只在这一次应答里出现；`rotate_api_key` 只适用于代理节点（转发节点返回 400），
-停用的节点返回 `409 node_disabled`，非超级管理员返回 `403 super_admin_required`。
+`credential`（`anixagt_…`）只在这一次应答里出现；停用的节点返回 `409 node_disabled`，非超级管理员返回 `403 super_admin_required`。
 
 管理端在节点页「凭据」分区（以及转发节点页的 Agent 卡片）提供「轮换凭据…」：先弹出危险确认，说明会吊销什么、
-让你填写原因（按 UTF-8 字节计，最多 200 字节，服务端也按字节计）、选择凭据有效期，并（仅代理节点）可勾选
-「同时更换节点的 API 密钥」；成功后在结果对话框里显示一次凭据（默认遮罩，可复制）、有效期倒计时、吊销了多少
+让你填写原因（按 UTF-8 字节计，最多 200 字节，服务端也按字节计）、选择凭据有效期；成功后在结果对话框里显示一次凭据（默认遮罩，可复制）、有效期倒计时、吊销了多少
 证书与注册记录，以及指南链接。凭据只保存在这个对话框的状态里，关闭对话框或离开页面即清除，不会写入浏览器存储、
 URL 或日志。控制台不知道当前管理员是不是超级管理员，所以对所有管理员显示这个按钮，收到 403 时在确认框里说明原因。
 不显示安装命令：把凭据交给机器后按 [Agent 安装](agent-onboarding.md#rotating-a-nodes-credentials)

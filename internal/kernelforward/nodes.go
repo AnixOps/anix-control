@@ -516,11 +516,8 @@ func checkRecord(record *forwardv1.ForwardNodeRecord) error {
 }
 
 // applyRecord copies a record's editable fields onto a node row. An
-// Ansible machine is a relay tagged so, without an API port or credential
-// (as the v2 handlers keep it). A new Agent node gets a credential for the
-// v2 paths that still read one until F5d (as the v2 create does); an
-// update never changes an Agent node's credential, since a changed one
-// revokes the node's Agent certificates.
+// Ansible machine is a relay tagged so, without an API port (as the v2
+// handlers keep it).
 func applyRecord(node *model.ForwardNode, record *forwardv1.ForwardNodeRecord, create bool) error {
 	node.Name, node.Host = strings.TrimSpace(record.GetName()), strings.TrimSpace(record.GetHost())
 	node.Type = record.GetRole()
@@ -534,15 +531,7 @@ func applyRecord(node *model.ForwardNode, record *forwardv1.ForwardNodeRecord, c
 	ansible := record.GetTransport() == forwardv1.NodeTransport_NODE_TRANSPORT_ANSIBLE
 	node.Tags = withTag(node.Tags, ansibleTag, ansible)
 	if ansible {
-		node.Type, node.APIPort, node.APIToken = model.ForwardNodeTypeRelay, 0, ""
-		return nil
-	}
-	if create {
-		token, err := service.NewForwardNodeService(nil).GenerateAPIToken()
-		if err != nil {
-			return err
-		}
-		node.APIToken = token
+		node.Type, node.APIPort = model.ForwardNodeTypeRelay, 0
 	}
 	return nil
 }

@@ -66,10 +66,6 @@ describe('admin api mapping', () => {
         expected: { url: '/admin/nodes/5/logs', method: 'get', params: { page: 1 } },
       },
       {
-        call: () => adminApi.getNodeCredentials(5),
-        expected: { url: '/admin/nodes/5/credentials', method: 'get' },
-      },
-      {
         call: () => adminApi.getNodeProtocols(5),
         expected: { url: '/admin/nodes/5/protocols', method: 'get' },
       },

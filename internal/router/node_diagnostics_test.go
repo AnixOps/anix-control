@@ -20,7 +20,7 @@ func TestSetup_V4NodeDiagnosticsRequireAdmin(t *testing.T) {
 	defer teardownTestRouter(t)
 	require.NoError(t, database.GetDB().AutoMigrate(&model.Node{}, &model.ForwardNode{}, &model.AgentDiagnosticTask{}, &model.OperationLog{},
 		&model.AgentTransport{}, &model.AgentUpgradeCampaign{}))
-	require.NoError(t, database.GetDB().Create(&model.Node{ID: 5, Name: "diag", APIKey: "diag-key"}).Error)
+	require.NoError(t, database.GetDB().Create(&model.Node{ID: 5, Name: "diag"}).Error)
 
 	serve := func(method, path, body, token string) *httptest.ResponseRecorder {
 		request := httptest.NewRequest(method, path, strings.NewReader(body))

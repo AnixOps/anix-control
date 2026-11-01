@@ -38,7 +38,6 @@ function readRotation(answer, fallbackTtl) {
     node: String(answer?.node || ''),
     credential: String(answer?.credential || ''),
     expiresAt: Number.isFinite(expires) ? expires : Date.now() + fallbackTtl * 1000,
-    apiKeyRotated: Boolean(answer?.api_key_rotated),
     revoked: {
       certificates: Number(answer?.revoked?.certificates || 0),
       enrollments: Number(answer?.revoked?.enrollments || 0),
@@ -53,7 +52,7 @@ export function useCredentialRotation(node, { t, te, onRotated } = {}) {
   const nodeName = () => (typeof node === 'function' ? node() : node)
 
   const stage = ref('idle') // 'idle' | 'confirm' | 'result'
-  const form = reactive({ reason: '', ttlSeconds: DEFAULT_ROTATE_TTL, rotateApiKey: false })
+  const form = reactive({ reason: '', ttlSeconds: DEFAULT_ROTATE_TTL })
   const busy = ref(false)
   const error = ref('')
   const result = shallowRef(null)
@@ -68,7 +67,6 @@ export function useCredentialRotation(node, { t, te, onRotated } = {}) {
   function resetForm() {
     form.reason = ''
     form.ttlSeconds = DEFAULT_ROTATE_TTL
-    form.rotateApiKey = false
   }
 
   function clearSecret() {
@@ -121,7 +119,6 @@ export function useCredentialRotation(node, { t, te, onRotated } = {}) {
     try {
       const answer = await rotateKernelAgentCredentials({
         node: nodeName(),
-        rotateApiKey: kind.value === 'proxy' && form.rotateApiKey,
         ttlSeconds: form.ttlSeconds,
         reason: form.reason
       })
@@ -131,7 +128,7 @@ export function useCredentialRotation(node, { t, te, onRotated } = {}) {
       result.value = rotation
       resetForm()
       stage.value = 'result'
-      onRotated?.({ node: rotation.node, apiKeyRotated: rotation.apiKeyRotated })
+      onRotated?.({ node: rotation.node })
       return true
     } catch (cause) {
       if (mine !== attempt) return false

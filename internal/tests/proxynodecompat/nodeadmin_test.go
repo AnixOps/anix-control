@@ -97,7 +97,6 @@ func seedFleet(t testing.TB, db *gorm.DB) {
 		{ID: 6, Name: "bare", Host: "bare.example.test", Port: 443, Status: model.NodeStatusOffline},
 	}
 	for i := range nodes {
-		nodes[i].APIKey, nodes[i].APIKeyHash, nodes[i].Secret = fmt.Sprintf("fake-key-%d", i+1), fmt.Sprintf("hash-%d", i+1), fmt.Sprintf("fake-secret-%d", i+1)
 		nodes[i].CreatedAt, nodes[i].UpdatedAt = seeded, seeded.Add(time.Minute)
 	}
 	require.NoError(t, db.Create(&nodes).Error)
@@ -144,7 +143,7 @@ func fleetState(t testing.TB, db *gorm.DB) any {
 	for _, node := range nodes {
 		created, updated := node.CreatedAt, node.UpdatedAt
 		node.CreatedAt, node.UpdatedAt = time.Time{}, time.Time{}
-		nodeRows = append(nodeRows, map[string]any{"row": node, "api_key": node.APIKey, "secret": node.Secret, "created_at": clock(created), "updated_at": clock(updated)})
+		nodeRows = append(nodeRows, map[string]any{"row": node, "created_at": clock(created), "updated_at": clock(updated)})
 	}
 	var protocols []struct{ ID, NodeID uint }
 	require.NoError(t, db.Model(&model.NodeProtocol{}).Order("id").Find(&protocols).Error)
@@ -153,17 +152,10 @@ func fleetState(t testing.TB, db *gorm.DB) any {
 		OwnerID                               uint
 	}
 	require.NoError(t, db.Model(&model.ProtocolSecret{}).Where("scope <> ?", "legacy_original").Order("scope, owner_id, column_name, json_pointer").Find(&secrets).Error)
-	var credentials []struct {
-		SubjectKind, Kind, Status string
-		SubjectID                 uint
-		HasValue                  bool
-	}
-	require.NoError(t, db.Model(&model.NodeCredential{}).Select("subject_kind, kind, status, subject_id, value <> '' AS has_value").
-		Order("subject_kind, subject_id, kind, status").Find(&credentials).Error)
 	var peers, links int64
 	require.NoError(t, db.Model(&model.WireGuardPeer{}).Count(&peers).Error)
 	require.NoError(t, db.Table("v2_subscription_group_node_protocols").Count(&links).Error)
-	return map[string]any{"nodes": nodeRows, "protocols": protocols, "secrets": secrets, "credentials": credentials, "peers": peers, "links": links}
+	return map[string]any{"nodes": nodeRows, "protocols": protocols, "secrets": secrets, "peers": peers, "links": links}
 }
 
 func clock(value time.Time) string {

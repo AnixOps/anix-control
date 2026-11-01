@@ -137,9 +137,9 @@ func TestMachineTelemetryExecutorReturnsBoundedHeartbeatMetrics(t *testing.T) {
 	recent := now.Add(-time.Minute).Unix()
 	stale := now.Add(-10 * time.Minute).Unix()
 	nodes := []model.Node{
-		{Name: "online", Host: "10.0.0.1", APIKey: "key-online", Status: model.NodeStatusOnline, LastCheckAt: &recent, RuntimeHealthy: true, CPUUsage: 12.5, MemoryUsage: 42, DiskUsage: 17},
-		{Name: "offline", Host: "10.0.0.2", APIKey: "key-offline", Status: model.NodeStatusOnline, LastCheckAt: &stale, RuntimeHealthy: true},
-		{Name: "disabled", Host: "10.0.0.3", APIKey: "key-disabled", Status: model.NodeStatusDisabled, LastCheckAt: &recent, RuntimeHealthy: true},
+		{Name: "online", Host: "10.0.0.1", Status: model.NodeStatusOnline, LastCheckAt: &recent, RuntimeHealthy: true, CPUUsage: 12.5, MemoryUsage: 42, DiskUsage: 17},
+		{Name: "offline", Host: "10.0.0.2", Status: model.NodeStatusOnline, LastCheckAt: &stale, RuntimeHealthy: true},
+		{Name: "disabled", Host: "10.0.0.3", Status: model.NodeStatusDisabled, LastCheckAt: &recent, RuntimeHealthy: true},
 	}
 	for index := range nodes {
 		require.NoError(t, db.Create(&nodes[index]).Error)

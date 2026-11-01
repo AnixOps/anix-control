@@ -24,7 +24,7 @@ it); no existing table is changed.
 
 | Scope | Allows | Never allows |
 |---|---|---|
-| `read` | `GET` and `HEAD` on the administrator APIs | any other method; the reads that still answer a secret in clear (today `GET /api/v2/admin/nodes/:id/credentials` and `GET /api/v2/admin/telegram/bot`; every other secret is masked in administrator answers); managing tokens |
+| `read` | `GET` and `HEAD` on the administrator APIs | any other method; the reads that still answer a secret in clear (today `GET /api/v2/admin/telegram/bot`; every other secret is masked in administrator answers); managing tokens |
 | `admin` | what the owner may do on the administrator APIs, including the super-administrator actions when the owner is one (the handlers read the owner's rights from the database) | managing tokens |
 
 Scopes are a column, so areas (for example `read:forward`) can be added

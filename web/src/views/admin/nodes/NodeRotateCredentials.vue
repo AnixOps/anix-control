@@ -53,18 +53,6 @@
           autocomplete="off"
           data-testid="rotate-reason"
         />
-        <template v-if="rotation.kind.value === 'proxy'">
-          <UiCheckbox
-            v-model="rotation.form.rotateApiKey"
-            :label="t('admin.nodes.rotate.confirm.rotateKey')"
-            :description="t('admin.nodes.rotate.confirm.rotateKeyHelp')"
-            :disabled="rotation.busy.value"
-            data-testid="rotate-api-key"
-          />
-          <NodeNotice v-if="rotation.form.rotateApiKey" tone="danger" data-testid="rotate-api-key-notice">
-            {{ t('admin.nodes.rotate.confirm.rotateKeyNotice') }}
-          </NodeNotice>
-        </template>
       </div>
     </UiConfirmDialog>
 
@@ -113,9 +101,6 @@
             </div>
           </dl>
         </div>
-        <p class="node-rotate__text" data-testid="rotate-api-key-result">
-          {{ result.apiKeyRotated ? t('admin.nodes.rotate.result.apiKeyReplaced') : t('admin.nodes.rotate.result.apiKeyKept') }}
-        </p>
         <p class="node-rotate__text">
           {{ t('admin.nodes.rotate.result.next') }}
           <a class="node-rotate__link" :href="GUIDE_URL" target="_blank" rel="noopener noreferrer" data-testid="rotate-guide">{{ t('admin.nodes.rotate.result.guide') }}</a>
@@ -145,7 +130,6 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { KeyRound } from '@lucide/vue'
 import UiButton from '@/ui/UiButton.vue'
-import UiCheckbox from '@/ui/UiCheckbox.vue'
 import UiConfirmDialog from '@/ui/UiConfirmDialog.vue'
 import UiCopyField from '@/ui/UiCopyField.vue'
 import UiDialog from '@/ui/UiDialog.vue'

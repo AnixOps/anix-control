@@ -11,6 +11,24 @@ Use this together with:
 - [`features.md`](features.md)
 - [`reference/sqlite-to-postgres-migration.md`](reference/sqlite-to-postgres-migration.md)
 
+## Upgrading To The Release After 5.0.0-rc.28: Node API Keys Are Gone
+
+Agents authenticate with their mTLS certificate only, so the node API key,
+the node shared secret, forward node API tokens and the clean agent table
+are removed. Migration 0027 drops `v2_node.api_key`, `api_key_hash` and
+`secret`, `v2_forward_node.api_token`, the tables `v2_forward_clean_agent`
+and `v4_kernel_node_credential`, and the views
+`kapi_node_credential_status_v1` and `kapi_forward_clean_agent_v1`. It
+cannot be undone: **back up the database before you upgrade.**
+
+- `GET /api/v2/admin/nodes/:id/credentials` is gone, and so is
+  `rotate_api_key` of `POST /api/v4/kernel/agents/rotate-credentials`.
+- `IssueCredential` of `KernelNodeOps` issues Agent enrollment credentials
+  only (`AGENT_ENROLLMENT`).
+- `node-secrets` (backfill, verify, finalize, unsplit) covers the protocol
+  secrets only: `v2_node.raw_config`, `v2_node_protocol` and
+  `v2_wireguard_peer`.
+
 ## Upgrading To 5.0.0-rc.11: Forward Nodes Become Regular Nodes
 
 One machine is one node (`docs/design/node-unification`). The upgrade

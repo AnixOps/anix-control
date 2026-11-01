@@ -51,11 +51,10 @@ const (
 // package lost every family or its generation was fenced.
 var watchReauthorize = 30 * time.Second
 
-// splitTables are the tables of the node credential split (section 4.1),
-// as GetCapabilities answers them.
+// splitTables are the tables of the node secret split (section 4.1), as
+// GetCapabilities answers them.
 var splitTables = []string{
-	"v2_node", "v2_forward_node", "v2_forward_clean_agent",
-	"v2_forward_runtime_job", "v2_node_protocol", "v2_wireguard_peer",
+	"v2_node", "v2_forward_runtime_job", "v2_node_protocol", "v2_wireguard_peer",
 }
 
 // Authorizer admits a calling host to a capability.

@@ -20,9 +20,6 @@ type Node struct {
 	Name         string     `gorm:"size:255" json:"name"`           // 节点名称
 	Host         string     `gorm:"size:255" json:"host"`           // 服务器地址 (IP或域名)
 	Port         int        `gorm:"default:443" json:"port"`        // API通信端口
-	APIKey       string     `gorm:"size:64;uniqueIndex" json:"-"`   // 节点API密钥 (用于身份验证)
-	APIKeyHash   string     `gorm:"size:64" json:"-"`               // 密钥哈希 (用于快速查找)
-	Secret       string     `gorm:"size:255" json:"-"`              // 共享密钥 (用于加密通信)
 	Status       NodeStatus `gorm:"default:0" json:"status"`        // 节点状态
 	Tags         *string    `gorm:"size:255" json:"tags"`           // 标签 (JSON array)
 	GroupID      *uint      `gorm:"index" json:"group_id"`          // 节点分组

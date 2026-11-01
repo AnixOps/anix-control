@@ -85,7 +85,6 @@ func (s *ServiceTestSuite) SetupSuite() {
 			&model.ForwardPortBinding{},
 			&model.ForwardRuntimeJob{},
 			&model.ForwardTrafficCursor{},
-			&model.ForwardCleanAgent{},
 			&model.ForwardLatencyBucket{},
 			&model.SpeedLimit{},
 			&model.UserMFA{},
@@ -360,8 +359,6 @@ func (s *NodeServiceTestSuite) TestCreateNode() {
 	err := s.svc.CreateNode(node)
 	assert.NoError(s.T(), err)
 	assert.NotZero(s.T(), node.ID)
-	assert.NotEmpty(s.T(), node.APIKey)
-	assert.NotEmpty(s.T(), node.Secret)
 	assert.Equal(s.T(), model.NodeStatusPending, node.Status)
 }
 
@@ -526,7 +523,7 @@ func (s *NodeServiceTestSuite) TestProtocolCRUD() {
 // linkedProtocol creates a node with a protocol linked to a subscription
 // group.
 func (s *NodeServiceTestSuite) linkedProtocol(name string) (*model.Node, *model.NodeProtocol, *model.SubscriptionGroup) {
-	node := &model.Node{Name: name, Host: name + ".example.test", APIKey: name + "-key"}
+	node := &model.Node{Name: name, Host: name + ".example.test"}
 	s.Require().NoError(database.GetDB().Create(node).Error)
 	protocol := &model.NodeProtocol{NodeID: node.ID, Name: name + "-vless", Type: model.ProtocolVLESS, Port: 443}
 	s.Require().NoError(database.GetDB().Create(protocol).Error)
@@ -1544,13 +1541,6 @@ func (s *ForwardNodeServiceTestSuite) TestGetByType() {
 	assert.Equal(s.T(), "Relay Node", nodes[0].Name)
 }
 
-func (s *ForwardNodeServiceTestSuite) TestGenerateAPIToken() {
-	token, err := s.svc.GenerateAPIToken()
-	assert.NoError(s.T(), err)
-	assert.NotEmpty(s.T(), token)
-	assert.Len(s.T(), token, 32) // hex encoding of 16 bytes
-}
-
 // Skip: HealthCheck tests timeout and cause instability
 // func (s *ForwardNodeServiceTestSuite) TestHealthCheck() { ... }
 // func (s *ForwardNodeServiceTestSuite) TestHealthCheckAll() { ... }
@@ -1788,7 +1778,7 @@ func (s *SubscriptionServiceTestSuite) TestDeleteGroup() {
 // Deleting a group removes its node protocol links: PostgreSQL refused to
 // delete a linked group, and SQLite kept orphan links.
 func (s *SubscriptionServiceTestSuite) TestDeleteGroupRemovesProtocolLinks() {
-	node := &model.Node{Name: "edge", Host: "edge.example.test", APIKey: "group-delete-key"}
+	node := &model.Node{Name: "edge", Host: "edge.example.test"}
 	s.Require().NoError(database.GetDB().Create(node).Error)
 	protocol := &model.NodeProtocol{NodeID: node.ID, Name: "vless", Type: model.ProtocolVLESS, Port: 443}
 	s.Require().NoError(database.GetDB().Create(protocol).Error)
@@ -3777,7 +3767,7 @@ func (s *SubscriptionServiceTestSuite) TestInternalNodesLeaveOutNodesAwaitingApp
 	for i, approval := range []string{model.NodeApprovalApproved, model.NodeApprovalPending, model.NodeApprovalRejected, ""} {
 		node := &model.Node{
 			Name: fmt.Sprintf("approval-%d", i), Host: fmt.Sprintf("approval-%d.example.com", i), Port: 443, Rate: 1, Show: 1,
-			Status: model.NodeStatusOnline, LastCheckAt: &now, Approval: approval, APIKey: fmt.Sprintf("approval-key-%d", i),
+			Status: model.NodeStatusOnline, LastCheckAt: &now, Approval: approval,
 		}
 		s.Require().NoError(database.Get().Create(node).Error)
 		protocol := &model.NodeProtocol{NodeID: node.ID, Name: "VMess", Type: model.ProtocolVMess, Port: 8080, Enable: 1, Show: 1}
@@ -3826,23 +3816,6 @@ func (s *NodeServiceTestSuite) TestSyncProtocolToNode() {
 
 // =====================================================
 // =====================================================
-
-// =====================================================
-// ForwardNodeService randBytes Test
-// =====================================================
-
-func (s *ForwardNodeServiceTestSuite) TestRandBytes() {
-	// randBytes is used internally by GenerateAPIToken
-	token1, err := s.svc.GenerateAPIToken()
-	assert.NoError(s.T(), err)
-	token2, err := s.svc.GenerateAPIToken()
-	assert.NoError(s.T(), err)
-
-	assert.NotEmpty(s.T(), token1)
-	assert.NotEmpty(s.T(), token2)
-	assert.NotEqual(s.T(), token1, token2) // Should be different
-	assert.Len(s.T(), token1, 32)          // 16 bytes hex encoded
-}
 
 // =====================================================
 // ForwardRuleService Comprehensive Tests

@@ -48,8 +48,8 @@ func (s *NodeSecretsTestSuite) SetupTest() {
 	s.Require().NoError(err)
 
 	s.rawConfig = `{"type":"vless","node_type":"vless","server_port":443,"tls_settings":{"private_key":"` + rawConfigSecret + `","server_name":"raw.example.test"}}`
-	s.node = &model.Node{Name: "edge", Host: "edge.example.test", Port: 443, APIKey: "node-api-key", APIKeyHash: hashString("node-api-key"),
-		Secret: "node-shared-secret", RawConfig: &s.rawConfig}
+	s.node = &model.Node{Name: "edge", Host: "edge.example.test", Port: 443,
+		RawConfig: &s.rawConfig}
 	s.Require().NoError(s.db.Create(s.node).Error)
 
 	settings := `{"flow":"xtls-rprx-vision","obfs":"salamander","obfs-password":"` + hysteriaPassword + `"}`
@@ -317,46 +317,6 @@ func (s *NodeSecretsTestSuite) TestNodesStillReceiveRealSecrets() {
 
 // Proxy node credentials stay out of the node answers; the per-node reveal
 // route answers them, and the audit log records each read of it.
-func (s *NodeSecretsTestSuite) TestNodeCredentialsOnlyThroughTheReveal() {
-	handler := NewNodeHandler()
-	nodePath := fmt.Sprintf("/nodes/%d", s.node.ID)
-	for name, w := range map[string]*httptest.ResponseRecorder{
-		"node list":   s.serve("GET", "/nodes", "/nodes", "", handler.GetNodes),
-		"node detail": s.serve("GET", "/nodes/:id", nodePath, "", handler.GetNode),
-	} {
-		s.Require().Equal(http.StatusOK, w.Code, w.Body.String())
-		s.NotContains(w.Body.String(), "node-api-key", name)
-		s.NotContains(w.Body.String(), "node-shared-secret", name)
-	}
-	revealed := s.ok(s.serve("GET", "/nodes/:id/credentials", nodePath+"/credentials", "", handler.GetNodeCredentials))
-	s.Equal("node-api-key", revealed["data"].(map[string]any)["api_key"])
-	s.Equal("node-shared-secret", revealed["data"].(map[string]any)["secret"])
-}
-
 func TestNodeSecrets(t *testing.T) {
 	suite.Run(t, new(NodeSecretsTestSuite))
-}
-
-// ForwardNodeTokenTestSuite holds the regression tests for forward node API
-// tokens in the administrator's answers.
-type ForwardNodeTokenTestSuite struct {
-	HandlerTestSuite
-	relay *model.ForwardNode
-	exit  *model.ForwardNode
-	rule  *model.ForwardRule
-}
-
-func (s *ForwardNodeTokenTestSuite) SetupTest() {
-	s.HandlerTestSuite.SetupTest()
-	s.relay = &model.ForwardNode{Name: "relay", Type: model.ForwardNodeTypeRelay, Host: "198.51.100.10", Port: 443, APIPort: 18080, APIToken: "relay-secret-token", Enabled: true}
-	s.exit = &model.ForwardNode{Name: "exit", Type: model.ForwardNodeTypeExit, Host: "198.51.100.20", Port: 443, APIPort: 18081, APIToken: "exit-secret-token", Enabled: true}
-	s.Require().NoError(s.db.Create(s.relay).Error)
-	s.Require().NoError(s.db.Create(s.exit).Error)
-	s.rule = &model.ForwardRule{Name: "rule", Enabled: true, RelayNodeID: s.relay.ID, ExitNodeID: s.exit.ID,
-		ListenPort: 20001, Protocol: "tcp", TargetHost: "203.0.113.5", TargetPort: 8443}
-	s.Require().NoError(s.db.Create(s.rule).Error)
-}
-
-func TestForwardNodeTokens(t *testing.T) {
-	suite.Run(t, new(ForwardNodeTokenTestSuite))
 }

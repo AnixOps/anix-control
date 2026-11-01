@@ -133,7 +133,6 @@ func newTokenEnv(t *testing.T, db *gorm.DB) *tokenEnv {
 	}
 	admin := router.Group("/api/v2/admin")
 	admin.Use(adminAPIToken(cache, failures), JWTAuth(), AdminAuth())
-	admin.GET("/nodes/:id/credentials", whoami)
 	admin.GET("/telegram/bot", whoami)
 	v4 := router.Group("/api/v4")
 	v4.Use(adminAPIToken(cache, failures), JWTAuth(), AdminAuth())
@@ -253,11 +252,11 @@ func TestAdminAPITokenReadScope(t *testing.T) {
 			}
 		}
 		// A read that answers a secret in clear is not a read for this scope.
-		for _, path := range []string{"/api/v2/admin/nodes/3/credentials", "/api/v2/admin/telegram/bot"} {
+		for _, path := range []string{"/api/v2/admin/telegram/bot"} {
 			response := env.do(http.MethodGet, path, bearer, "")
 			assert.Equal(t, http.StatusForbidden, response.Code, path)
 			assert.Equal(t, http.StatusOK, env.do(http.MethodGet, path, "Bearer "+adminToken(t, env), "").Code, path+
-				": the admin scope may read it, as its owner may (the credentials read is audited as reveal)")
+				": the admin scope may read it, as its owner may")
 		}
 
 		reasons := map[string]bool{}

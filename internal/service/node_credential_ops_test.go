@@ -38,7 +38,7 @@ func TestRetireProxyNodeTxRollsBackWithItsCaller(t *testing.T) {
 	db := credentialOpsDB(t)
 	raw := `{"tls_settings":{"private_key":"raw-private"}}`
 	reality := `{"private_key":"reality-private"}`
-	require.NoError(t, db.Create(&model.Node{ID: 1, Name: "edge", APIKey: "key-1", APIKeyHash: hashString("key-1"), Secret: "secret-1", RawConfig: &raw}).Error)
+	require.NoError(t, db.Create(&model.Node{ID: 1, Name: "edge", RawConfig: &raw}).Error)
 	require.NoError(t, db.Create(&model.NodeProtocol{ID: 5, NodeID: 1, Name: "reality", Type: model.ProtocolVLESS, Port: 443, RealitySettings: &reality}).Error)
 	group := &model.SubscriptionGroup{Name: "group", Enable: 1}
 	require.NoError(t, db.Create(group).Error)
@@ -58,23 +58,23 @@ func TestRetireProxyNodeTxRollsBackWithItsCaller(t *testing.T) {
 		require.NoError(t, db.Table("v2_subscription_group_node_protocols").Count(&links).Error)
 		return []int64{
 			countRows(t, db, &model.NodeProtocol{}, "node_id = ?", 1), countRows(t, db, &model.WireGuardPeer{}, "1 = 1"), links,
-			countRows(t, db, &model.ProtocolSecret{}, "1 = 1"), countRows(t, db, &model.NodeCredential{}, "1 = 1"),
+			countRows(t, db, &model.ProtocolSecret{}, "1 = 1"),
 		}
 	}
-	require.Equal(t, []int64{1, 1, 1, 3, 2}, before())
+	require.Equal(t, []int64{1, 1, 1, 3}, before())
 
 	boom := errors.New("the caller fails after the cascade")
 	err := db.Transaction(func(tx *gorm.DB) error {
 		counts, err := RetireProxyNodeTx(tx, 1)
 		require.NoError(t, err)
-		require.Equal(t, RetireCounts{CredentialsRevoked: 2, SecretsDeleted: 2, WireGuardPeersDeleted: 1, ProtocolsDeleted: 1, SubscriptionLinksDeleted: 1}, counts)
+		require.Equal(t, RetireCounts{SecretsDeleted: 2, WireGuardPeersDeleted: 1, ProtocolsDeleted: 1, SubscriptionLinksDeleted: 1}, counts)
 		return boom
 	})
 	require.ErrorIs(t, err, boom)
-	require.Equal(t, []int64{1, 1, 1, 3, 2}, before(), "everything is back")
+	require.Equal(t, []int64{1, 1, 1, 3}, before(), "everything is back")
 
 	require.NoError(t, NewNodeServiceWithDB(db).DeleteNode(1))
-	require.Equal(t, []int64{0, 0, 0, 0, 0}, before())
+	require.Equal(t, []int64{0, 0, 0, 0}, before())
 	require.Zero(t, countRows(t, db, &model.Node{}, "id = ?", 1))
 }
 

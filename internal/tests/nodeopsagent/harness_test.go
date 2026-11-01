@@ -39,12 +39,9 @@ const postgresDSNEnvironment = "ANIX_TEST_POSTGRES_DSN"
 // nodeIDs counts the node ids the fixtures took in this process.
 var nodeIDs atomic.Uint32
 
-// Fake credentials: a proxy node's API key, a forward node's token, and a
-// Reality private key in the proxy node's protocol. No answer may carry
-// them.
+// A fake Reality private key in the proxy node's protocol. No answer may
+// carry it.
 const (
-	proxyKey       = "fake-proxy-api-key-0123456789"
-	forwardToken   = "fake-forward-token-0123456789"
 	realityKey     = "fake-reality-private-key-0123456789"
 	awaitTimeout   = 10 * time.Second
 	settleInterval = 20 * time.Millisecond
@@ -123,13 +120,13 @@ func newFixture(t *testing.T, cfg *config.DatabaseConfig) *fixture {
 	// two fixtures that drew the same one (about 2% of the runs, 52
 	// fixtures over 65536 ids) saw each other's observed operations.
 	nodeID := uint(1000) + uint(nodeIDs.Add(1))
-	f.proxy = model.Node{ID: nodeID, Name: "proxy", Host: "198.51.100.1", Port: 443, APIKey: proxyKey, APIKeyHash: fakeagent.APIKeyHash(proxyKey), Status: model.NodeStatusOnline}
+	f.proxy = model.Node{ID: nodeID, Name: "proxy", Host: "198.51.100.1", Port: 443, Status: model.NodeStatusOnline}
 	require.NoError(t, db.Create(&f.proxy).Error)
 	settings, reality := `{"flow":"xtls-rprx-vision"}`, `{"private_key":"`+realityKey+`","short_id":"abcd"}`
 	host := protocolHost
 	f.protocol = model.NodeProtocol{NodeID: f.proxy.ID, Name: "vless", Type: model.ProtocolVLESS, Port: 443, Enable: 1, TLS: 2, Host: &host, Settings: &settings, RealitySettings: &reality}
 	require.NoError(t, db.Create(&f.protocol).Error)
-	f.forward = model.ForwardNode{ID: f.proxy.ID, Name: "relay", Host: "198.51.100.2", Port: 22, APIPort: 8443, APIToken: forwardToken, Enabled: true}
+	f.forward = model.ForwardNode{ID: f.proxy.ID, Name: "relay", Host: "198.51.100.2", Port: 22, APIPort: 8443, Enabled: true}
 	require.NoError(t, db.Create(&f.forward).Error)
 	require.NoError(t, db.Create(&model.ForwardRule{Name: "rule", RelayNodeID: f.forward.ID, ListenPort: 2000, Protocol: "tcp", ExitNodeID: f.forward.ID, TargetHost: "203.0.113.3", TargetPort: 80, Enabled: true}).Error)
 

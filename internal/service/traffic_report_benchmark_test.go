@@ -51,7 +51,7 @@ func newTrafficReportFixture(b *testing.B, nodes, active, users int) *trafficRep
 	}
 	nodeRows := make([]model.Node, nodes)
 	for i := range nodeRows {
-		nodeRows[i] = model.Node{Name: fmt.Sprintf("node-%d", i+1), Host: "node.example.test", APIKey: fmt.Sprintf("bench-key-%d", i+1)}
+		nodeRows[i] = model.Node{Name: fmt.Sprintf("node-%d", i+1), Host: "node.example.test"}
 	}
 	if err := db.CreateInBatches(&nodeRows, 100).Error; err != nil {
 		b.Fatal(err)

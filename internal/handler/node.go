@@ -127,45 +127,6 @@ func (h *NodeHandler) GetNode(c *gin.Context) {
 	panelSuccess(c, node)
 }
 
-// GetNodeCredentials godoc
-// @Summary 获取节点凭证
-// @Description 管理员获取指定节点的 api_key / secret, 用于 AnixOps Agent 对接配置。
-// @Description Node.APIKey/Secret 在普通序列化里是隐藏字段 (json:"-"), 此接口显式返回,
-// @Description 仅限管理员, 供 Ansible 等部署工具自动拉取节点凭证。
-// @Description 每次读取都写入管理员审计日志 (action "reveal")。
-// @Tags 管理端-节点
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param id path int true "节点ID"
-// @Success 200 {object} map[string]any
-// @Failure 400 {object} map[string]any
-// @Failure 404 {object} map[string]any
-// @Router /admin/nodes/{id}/credentials [get]
-func (h *NodeHandler) GetNodeCredentials(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "无效的节点ID"})
-		return
-	}
-
-	node, err := h.nodeService.GetNode(uint(id))
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"message": "节点不存在"})
-		return
-	}
-	apiKey, secret := h.nodeService.NodeCredentials(node)
-
-	panelSuccess(c, gin.H{
-		"node_id": node.ID,
-		"name":    node.Name,
-		"host":    node.Host,
-		"port":    node.Port,
-		"api_key": apiKey,
-		"secret":  secret,
-	})
-}
-
 // CreateNode godoc
 // @Summary 创建节点
 // @Description 管理员手动创建节点
@@ -190,11 +151,7 @@ func (h *NodeHandler) CreateNode(c *gin.Context) {
 		return
 	}
 
-	panelSuccess(c, gin.H{
-		"node_id": node.ID,
-		"api_key": node.APIKey,
-		"secret":  node.Secret,
-	})
+	panelSuccess(c, gin.H{"node_id": node.ID})
 }
 
 // UpdateNode godoc

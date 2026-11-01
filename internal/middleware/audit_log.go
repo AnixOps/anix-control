@@ -286,12 +286,6 @@ func persistAuditLog(db *gorm.DB, userID *uint, email, method, path, module, act
 	_ = db.Create(&entry)
 }
 
-// revealPath matches the administrator reads that answer a secret in
-// clear, one item at a time: a proxy node's API key and shared secret
-// (GET /api/v2/admin/nodes/:id/credentials). Every other answer masks node
-// secrets, so these reads are recorded like writes, as "reveal".
-var revealPath = regexp.MustCompile(`^/api/v2/admin/nodes/[^/]+/credentials/?$`)
-
 // backupDownloadPath matches the download of a backup bundle, which holds
 // the root key: a credential-class read, recorded as "download".
 var backupDownloadPath = regexp.MustCompile(`^/api/v5/backups/[^/]+/download/?$`)
@@ -338,9 +332,9 @@ func auditExempt(method, path string) bool {
 }
 
 // auditedRead reports whether a read is recorded in the audit log: one
-// that reveals a secret.
+// that reveals a secret, the download of a backup bundle.
 func auditedRead(method, path string) bool {
-	return method == http.MethodGet && (revealPath.MatchString(path) || backupDownloadPath.MatchString(path))
+	return method == http.MethodGet && backupDownloadPath.MatchString(path)
 }
 
 // extractModuleAndAction derives a human-readable module and action from the URL path and HTTP method.
@@ -422,11 +416,8 @@ func extractModuleAndAction(path, method string) (module, action string) {
 		action = "delete"
 	default:
 		action = strings.ToLower(method)
-		switch {
-		case method == http.MethodGet && backupDownloadPath.MatchString(path):
+		if auditedRead(method, path) {
 			action = "download"
-		case auditedRead(method, path):
-			action = "reveal"
 		}
 	}
 

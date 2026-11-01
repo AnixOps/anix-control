@@ -62,10 +62,8 @@ type TableVerify struct {
 var ErrMismatch = errors.New("nodesecrets: the old and new forms of the node secrets differ")
 
 // Verify compares every secret of the legacy tables with the new tables
-// (section 4.3). Each form is reduced to one entry per secret: the subject
-// or owner, the kind or position, and a SHA-256 over the hash of the value
-// and the credential's metadata (key hash, endpoint, status, expiry and
-// revocation). A table's digest is the SHA-256 of its sorted entries. Both
+// (section 4.3). Each form is reduced to one entry per secret: the owner,
+// the position, and a SHA-256 over the hash of the value. A table's digest is the SHA-256 of its sorted entries. Both
 // forms are read in one transaction (a repeatable-read snapshot on
 // PostgreSQL), so concurrent writers cannot make it report a difference.
 //
@@ -215,17 +213,10 @@ func legacyEntries(tx *gorm.DB, spec tableSpec, finalized bool) (map[string]stri
 		if err != nil {
 			return nil, 0, err
 		}
-		for _, entry := range derived.credentials {
-			entries[credentialEntryKey(spec.subjectKind, entry.SubjectID, entry.Kind)] = credentialFingerprint(
-				entry.KeyHash, entry.Value, entry.Endpoint, entry.Status, entry.ExpiresAt, entry.RevokedAt)
-		}
 		for _, entry := range derived.secrets {
 			entries[secretEntryKey(spec.scope, entry.OwnerID, entry.Column, entry.Pointer)] = secretFingerprint(entry.Value)
 		}
 		if finalized {
-			for key := range derived.keptCredentials {
-				entries[credentialEntryKey(spec.subjectKind, key.SubjectID, key.Kind)] = movedFingerprint
-			}
 			for key := range derived.keptSecrets {
 				entries[secretEntryKey(spec.scope, key.OwnerID, key.Column, key.Pointer)] = movedFingerprint
 			}
@@ -235,30 +226,9 @@ func legacyEntries(tx *gorm.DB, spec tableSpec, finalized bool) (map[string]stri
 	}
 }
 
-// newEntries reads the current rows the new tables hold for spec's table.
-// Retired versions are history, not secrets: they hold no value.
+// newEntries reads the rows the new tables hold for spec's table.
 func newEntries(tx *gorm.DB, spec tableSpec) (map[string]string, error) {
 	entries := make(map[string]string)
-	if spec.subjectKind != "" {
-		var batch []model.NodeCredential
-		err := tx.Where("subject_kind = ? AND kind IN ? AND status <> ?", spec.subjectKind, spec.kinds, StatusRetired).
-			FindInBatches(&batch, DefaultBatchSize, func(*gorm.DB, int) error {
-				for _, row := range batch {
-					key := credentialEntryKey(row.SubjectKind, row.SubjectID, row.Kind)
-					if _, duplicate := entries[key]; duplicate {
-						// Two current versions of one credential: never equal
-						// to the single legacy value.
-						entries[key] = "duplicate"
-						continue
-					}
-					entries[key] = credentialFingerprint(row.KeyHash, row.Value, row.Endpoint, row.Status, row.ExpiresAt, row.RevokedAt)
-				}
-				return nil
-			}).Error
-		if err != nil {
-			return nil, err
-		}
-	}
 	if spec.scope != "" {
 		var batch []model.ProtocolSecret
 		err := tx.Where("scope = ?", spec.scope).FindInBatches(&batch, DefaultBatchSize, func(*gorm.DB, int) error {
@@ -274,16 +244,8 @@ func newEntries(tx *gorm.DB, spec tableSpec) (map[string]string, error) {
 	return entries, nil
 }
 
-func credentialEntryKey(subjectKind string, subjectID uint64, kind string) string {
-	return subjectKind + " " + strconv.FormatUint(subjectID, 10) + " " + kind
-}
-
 func secretEntryKey(scope string, ownerID uint64, column, pointer string) string {
 	return scope + " " + strconv.FormatUint(ownerID, 10) + " " + column + " " + pointer
-}
-
-func credentialFingerprint(keyHash, value, endpoint, status string, expiresAt, revokedAt *time.Time) string {
-	return fingerprint(keyHash, hashSecret(value), endpoint, status, unixOrEmpty(expiresAt), unixOrEmpty(revokedAt))
 }
 
 func secretFingerprint(value string) string {
@@ -293,13 +255,6 @@ func secretFingerprint(value string) string {
 func fingerprint(fields ...string) string {
 	sum := sha256.Sum256([]byte(strings.Join(fields, "\x00")))
 	return hex.EncodeToString(sum[:])
-}
-
-func unixOrEmpty(value *time.Time) string {
-	if value == nil {
-		return ""
-	}
-	return strconv.FormatInt(value.Unix(), 10)
 }
 
 // digest is the SHA-256 of the sorted entries.

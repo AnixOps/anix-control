@@ -11,7 +11,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"strconv"
 	"testing"
 	"time"
 
@@ -57,7 +56,7 @@ func TestAgentUpgradeCommand(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, db.AutoMigrate(append(model.AgentUpgradeModels(), &model.Node{}, &model.ForwardNode{}, &model.AgentTransport{}, &model.OperationLog{})...))
 	for id := uint(1); id <= 3; id++ {
-		require.NoError(t, db.Create(&model.Node{ID: id, Name: "proxy", APIKey: "key-" + strconv.Itoa(int(id)), Status: model.NodeStatusOnline}).Error)
+		require.NoError(t, db.Create(&model.Node{ID: id, Name: "proxy", Status: model.NodeStatusOnline}).Error)
 		now := time.Now()
 		require.NoError(t, db.Create(&model.AgentTransport{NodeKind: "proxy", NodeID: id, Transport: model.AgentTransportMTLSStream, FirstSeenAt: now, LastSeenAt: now}).Error)
 	}

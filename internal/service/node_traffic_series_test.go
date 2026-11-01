@@ -67,7 +67,7 @@ func forEachNodeTrafficDatabase(t *testing.T, body func(t *testing.T, db *gorm.D
 func TestGetNodeTrafficHourly(t *testing.T) {
 	forEachNodeTrafficDatabase(t, func(t *testing.T, db *gorm.DB) {
 		svc := &StatsService{db: db}
-		require.NoError(t, db.Create(&[]model.Node{{ID: 7, Name: "seven", APIKey: "k7"}, {ID: 8, Name: "eight", APIKey: "k8"}}).Error)
+		require.NoError(t, db.Create(&[]model.Node{{ID: 7, Name: "seven"}, {ID: 8, Name: "eight"}}).Error)
 		current := time.Now().UTC().Truncate(time.Hour).Unix()
 		const gib = int64(1 << 30)
 		require.NoError(t, db.Create(&[]model.TrafficLog{
@@ -137,7 +137,7 @@ func TestGetNodeTrafficHourly(t *testing.T) {
 func TestGetNodeTrafficClampsHugeSums(t *testing.T) {
 	forEachNodeTrafficDatabase(t, func(t *testing.T, db *gorm.DB) {
 		svc := &StatsService{db: db}
-		require.NoError(t, db.Create(&model.Node{ID: 7, Name: "seven", APIKey: "k7"}).Error)
+		require.NoError(t, db.Create(&model.Node{ID: 7, Name: "seven"}).Error)
 		current := time.Now().UTC().Truncate(time.Hour).Unix()
 		const maxInt64 = int64(1<<63 - 1)
 		require.NoError(t, db.Create(&[]model.TrafficLog{
@@ -155,7 +155,7 @@ func TestGetNodeTrafficClampsHugeSums(t *testing.T) {
 func TestGetNodeTrafficDaily(t *testing.T) {
 	forEachNodeTrafficDatabase(t, func(t *testing.T, db *gorm.DB) {
 		svc := &StatsService{db: db}
-		require.NoError(t, db.Create(&[]model.Node{{ID: 7, Name: "seven", APIKey: "k7"}, {ID: 8, Name: "eight", APIKey: "k8"}}).Error)
+		require.NoError(t, db.Create(&[]model.Node{{ID: 7, Name: "seven"}, {ID: 8, Name: "eight"}}).Error)
 		now := time.Now()
 		today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
 		day := func(back int) int64 { return today.AddDate(0, 0, -back).Unix() }

@@ -1,9 +1,6 @@
 package main
 
 import (
-	"crypto/rand"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 
@@ -84,11 +81,6 @@ func buildShadowsocksNode(r row) (*model.Node, *model.NodeProtocol, []uint, erro
 		return nil, nil, nil, fmt.Errorf("v2_server_shadowsocks id=%d: %w", id, err)
 	}
 
-	apiKey, secret, err := generateNodeCredentials()
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("v2_server_shadowsocks id=%d: %w", id, err)
-	}
-
 	settings, err := json.Marshal(map[string]any{"cipher": str(r, "cipher")})
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("v2_server_shadowsocks id=%d: %w", id, err)
@@ -96,19 +88,16 @@ func buildShadowsocksNode(r row) (*model.Node, *model.NodeProtocol, []uint, erro
 	settingsStr := string(settings)
 
 	node := &model.Node{
-		ID:         id,
-		Name:       str(r, "name"),
-		Host:       str(r, "host"),
-		Port:       port,
-		APIKey:     apiKey,
-		APIKeyHash: hashToken(apiKey),
-		Secret:     secret,
-		Status:     model.NodeStatusOnline,
-		Rate:       rate,
-		Sort:       intOrZero(r, "sort"),
-		Show:       show,
-		CreatedAt:  createdAt,
-		UpdatedAt:  updatedAt,
+		ID:        id,
+		Name:      str(r, "name"),
+		Host:      str(r, "host"),
+		Port:      port,
+		Status:    model.NodeStatusOnline,
+		Rate:      rate,
+		Sort:      intOrZero(r, "sort"),
+		Show:      show,
+		CreatedAt: createdAt,
+		UpdatedAt: updatedAt,
 	}
 	protocol := &model.NodeProtocol{
 		NodeID:    id,
@@ -155,11 +144,6 @@ func buildVlessNode(r row) (*model.Node, *model.NodeProtocol, []uint, error) {
 		return nil, nil, nil, fmt.Errorf("v2_server_vless id=%d: %w", id, err)
 	}
 	groupIDs, err := parseJSONIntArray(r, "group_id")
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("v2_server_vless id=%d: %w", id, err)
-	}
-
-	apiKey, secret, err := generateNodeCredentials()
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("v2_server_vless id=%d: %w", id, err)
 	}
@@ -222,19 +206,16 @@ func buildVlessNode(r row) (*model.Node, *model.NodeProtocol, []uint, error) {
 	settingsStr := string(settings)
 
 	node := &model.Node{
-		ID:         id,
-		Name:       str(r, "name"),
-		Host:       str(r, "host"),
-		Port:       port,
-		APIKey:     apiKey,
-		APIKeyHash: hashToken(apiKey),
-		Secret:     secret,
-		Status:     model.NodeStatusOnline,
-		Rate:       rate,
-		Sort:       intOrZero(r, "sort"),
-		Show:       show,
-		CreatedAt:  createdAt,
-		UpdatedAt:  updatedAt,
+		ID:        id,
+		Name:      str(r, "name"),
+		Host:      str(r, "host"),
+		Port:      port,
+		Status:    model.NodeStatusOnline,
+		Rate:      rate,
+		Sort:      intOrZero(r, "sort"),
+		Show:      show,
+		CreatedAt: createdAt,
+		UpdatedAt: updatedAt,
 	}
 	protocol := &model.NodeProtocol{
 		NodeID:          id,
@@ -264,33 +245,4 @@ func intOrZero(r row, col string) int {
 
 func strPtrLit(s string) *string {
 	return &s
-}
-
-// generateNodeCredentials mirrors NodeService.CreateNode's key generation
-// (internal/service/node_service.go) so migrated nodes carry the same
-// APIKey/APIKeyHash/Secret shape as nodes created through the admin API.
-func generateNodeCredentials() (apiKey, secret string, err error) {
-	apiKey, err = generateSecureToken(32)
-	if err != nil {
-		return "", "", err
-	}
-	secret, err = generateSecureToken(32)
-	if err != nil {
-		return "", "", err
-	}
-	return apiKey, secret, nil
-}
-
-func generateSecureToken(length int) (string, error) {
-	bytes := make([]byte, length)
-	if _, err := rand.Read(bytes); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(bytes), nil
-}
-
-func hashToken(s string) string {
-	h := sha256.New()
-	h.Write([]byte(s))
-	return hex.EncodeToString(h.Sum(nil))
 }

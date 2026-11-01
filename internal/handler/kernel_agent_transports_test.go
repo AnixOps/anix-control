@@ -15,9 +15,9 @@ import (
 )
 
 func TestAgentTransportsHandlerListsTheInventory(t *testing.T) {
-	db := newKernelHandlerTestDB(t, &model.Node{}, &model.ForwardNode{}, &model.ForwardCleanAgent{}, &model.AgentTransport{}, &model.AgentCertificate{})
+	db := newKernelHandlerTestDB(t, &model.Node{}, &model.ForwardNode{}, &model.AgentTransport{}, &model.AgentCertificate{})
 	now := time.Now().UTC()
-	require.NoError(t, db.Create(&[]model.Node{{ID: 1, Name: "enrolled", APIKey: "a"}, {ID: 2, Name: "silent", APIKey: "b"}}).Error)
+	require.NoError(t, db.Create(&[]model.Node{{ID: 1, Name: "enrolled"}, {ID: 2, Name: "silent"}}).Error)
 	require.NoError(t, db.Create(&[]model.AgentTransport{
 		{NodeKind: "proxy", NodeID: 1, Transport: model.AgentTransportMTLSStream, AgentVersion: "2.0.0", FirstSeenAt: now, LastSeenAt: now},
 		{NodeKind: "proxy", NodeID: 2, Transport: "websocket", FirstSeenAt: now, LastSeenAt: now},
@@ -60,9 +60,9 @@ func TestAgentTransportsHandlerListsTheInventory(t *testing.T) {
 // answer carries each node's certificate state, certificate times and
 // connection type, and node=... narrows it to the named nodes.
 func TestAgentTransportsHandlerShowsCertificatesAndConnections(t *testing.T) {
-	db := newKernelHandlerTestDB(t, &model.Node{}, &model.ForwardNode{}, &model.ForwardCleanAgent{}, &model.AgentTransport{}, &model.AgentCertificate{})
+	db := newKernelHandlerTestDB(t, &model.Node{}, &model.ForwardNode{}, &model.AgentTransport{}, &model.AgentCertificate{})
 	now := time.Now().UTC().Truncate(time.Second)
-	require.NoError(t, db.Create(&[]model.Node{{ID: 1, Name: "enrolled", APIKey: "a"}, {ID: 2, Name: "revoked", APIKey: "b"}, {ID: 3, Name: "silent", APIKey: "c"}}).Error)
+	require.NoError(t, db.Create(&[]model.Node{{ID: 1, Name: "enrolled"}, {ID: 2, Name: "revoked"}, {ID: 3, Name: "silent"}}).Error)
 	revokedAt := now.Add(-time.Hour)
 	require.NoError(t, db.Create(&[]model.AgentCertificate{
 		{Serial: "live", NodeKind: "proxy", NodeID: 1, Cluster: "prod", EnrollmentID: "e", IssuerKeyID: "k", CreatedAt: now.Add(-24 * time.Hour), NotAfter: now.Add(6 * 24 * time.Hour)},

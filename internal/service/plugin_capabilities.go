@@ -84,13 +84,12 @@ var (
 		// v2_node_protocol could push unvalidated configuration to every
 		// node.
 		"v2_node_protocol": true, "v2_wireguard_peer": true,
-		// The node credential split (node-ops-service.md, section 4): the
-		// credentials and protocol secrets moved out of the tables above,
-		// in clear, and the split's state. The v4_kernel_ prefix protects
-		// them already; they are named so that no future exception to the
-		// prefix (a finalized table becoming adoptable) can reach them.
-		"v4_kernel_node_credential": true, "v4_kernel_protocol_secret": true,
-		"v4_kernel_node_secret_split": true,
+		// The node secret split (node-ops-service.md, section 4): the
+		// protocol secrets moved out of the tables above, in clear, and the
+		// split's state. The v4_kernel_ prefix protects them already; they
+		// are named so that no future exception to the prefix (a finalized
+		// table becoming adoptable) can reach them.
+		"v4_kernel_protocol_secret": true, "v4_kernel_node_secret_split": true,
 		// The KernelNodeOps ledger (node-ops-service.md section 3.4): who
 		// asked for which node operation, and its outcome. The v4_kernel_
 		// prefix protects them too; they are listed so that the rule holds
@@ -274,16 +273,13 @@ func validateManifestCapabilities(capabilities []string) error {
 	return nil
 }
 
-// forwardCredentialTables hold the credentials the kernel's forward agent
-// authentication checks, or copies of them; a package that could read or
-// write them could act as any forward node or clean agent:
-//   - v2_forward_node holds each forward node's API token, which
-//     authenticates the node's agent (WebSocket, gRPC and REST);
-//   - v2_forward_clean_agent holds each clean agent's token;
-//   - v2_forward_runtime_job holds clean agent jobs, whose payloads carry
-//     the node's API token.
+// forwardCredentialTables are the forward tables no package may adopt:
+//   - v2_forward_node is the forward node inventory and the Agent identity
+//     (forward-<id>) the kernel's agent PKI issues certificates for;
+//   - v2_forward_runtime_job holds the legacy runtime's jobs, whose
+//     payloads carried the node's API token.
 var forwardCredentialTables = map[string]bool{
-	"v2_forward_node": true, "v2_forward_clean_agent": true, "v2_forward_runtime_job": true,
+	"v2_forward_node": true, "v2_forward_runtime_job": true,
 }
 
 // finalizedAdoptableTables are the protected tables a package may declare

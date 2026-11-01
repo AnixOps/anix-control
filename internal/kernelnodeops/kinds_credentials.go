@@ -9,51 +9,28 @@ import (
 	kernelnodeopsv1 "github.com/AnixOps/anix-control/sdk/api/kernelnodeops/v1"
 	"github.com/AnixOps/anix-control/v5/internal/agentpki"
 	"github.com/AnixOps/anix-control/v5/internal/config"
-	"github.com/AnixOps/anix-control/v5/internal/model"
-	"github.com/AnixOps/anix-control/v5/internal/nodesecrets"
-	"github.com/AnixOps/anix-control/v5/internal/sealedsecrets"
-	"github.com/AnixOps/anix-control/v5/internal/service"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"gorm.io/gorm"
 )
 
-// The names a credential operation reveals a generated secret under
-// (SecretHandle.field): the answer fields config/node-secret-fields.json
-// lists for the routes that show them.
-const (
-	RevealAPIKey     = "api_key"
-	RevealSecret     = "secret"
-	RevealAPIToken   = "api_token"
-	RevealToken      = "token"
-	RevealCredential = "credential"
-)
-
-// The request fields a typed credential is sealed from, as the field list
-// spells them.
-const (
-	fieldForwardToken = "/api_token"
-	fieldAPIKey       = "/api_key"
-	fieldSecret       = "/secret"
-)
+// RevealCredential is the name an issued enrollment credential is revealed
+// under (SecretHandle.field).
+const RevealCredential = "credential"
 
 // AgentEnrollmentActor names the kernel's KernelNodeOps in the audit
 // entry of an enrollment credential a package had issued.
 const AgentEnrollmentActor = "kernelnodeops"
 
 // Credentials executes the credentials family (node-ops-service.md section
-// 3.3, NO-5): IssueCredential and RevokeCredential. Each runs the function of
-// internal/service the legacy route runs, in one transaction with every
-// nodesecrets.Sync and every agent certificate revocation, so native and
-// legacy write identical rows.
+// 3.3, NO-5): IssueCredential and RevokeCredential of a node's agent
+// enrollment, the only credential a node has. Each runs in one transaction
+// with its agent certificate revocations.
 //
-// Secrets in, secrets out. A typed secret arrives as a sealed handle: the
-// Preparer resolves it for the bound request (Submission.Unseal) and keeps
-// it for the executor in memory. A generated secret is minted as a handle
-// (Run.Reveal) inside the transaction that stores it: when the answer
-// cannot show it, nothing is stored. A credential is issued only in an
-// administrator's request (the binding), never outside one, and results
-// never carry a value in clear.
+// An issued credential is minted as a handle (Run.Reveal) inside the
+// transaction that stores it: when the answer cannot show it, nothing is
+// stored. A credential is issued only in an administrator's request (the
+// binding), never outside one, and results never carry a value in clear.
 type Credentials struct {
 	// PKI returns the agent PKI that issues enrollment credentials, on the
 	// operation's transaction; nil uses the kernel's configuration
@@ -139,102 +116,12 @@ func revealHandle(run *Run, name, value string) (*kernelnodeopsv1.SecretHandle, 
 	return handle, nil
 }
 
-// typedCredential is what prepareIssue keeps for the executor.
-type typedCredential struct {
-	value string
-}
-
-// credentialField is the request field a credential of kind is sealed
-// from, for a subject of the given node kind.
-func credentialField(subject kernelnodeopsv1.NodeKind, kind kernelnodeopsv1.CredentialKind) string {
-	switch {
-	case subject == kernelnodeopsv1.NodeKind_NODE_KIND_FORWARD:
-		return fieldForwardToken
-	case kind == kernelnodeopsv1.CredentialKind_CREDENTIAL_KIND_NODE_SHARED_SECRET:
-		return fieldSecret
-	default:
-		return fieldAPIKey
-	}
-}
-
-// prepareIssue needs the administrator's request, resolves a typed
-// credential's handle for the subject, and refuses to replace a credential
-// the operation did not ask to replace (FAILED_PRECONDITION).
+// prepareIssue needs the administrator's request.
 func (c *Credentials) prepareIssue(_ context.Context, submission *Submission) error {
 	if submission.Request == nil {
 		return errNoBinding
 	}
-	op := submission.Operation.GetIssueCredential()
-	if op.GetKind() != kernelnodeopsv1.CredentialKind_CREDENTIAL_KIND_AGENT_ENROLLMENT && !op.GetReplace() {
-		exists, err := c.credentialExists(submission, op.GetSubject(), op.GetKind())
-		if err != nil {
-			return err
-		}
-		if exists {
-			return status.Error(codes.FailedPrecondition, "the node already holds this credential: set replace to rotate it")
-		}
-	}
-	if op.GetValue() == nil {
-		return nil
-	}
-	secrets, err := submission.Unseal(sealedsecrets.Use{
-		Handle: op.GetValue().GetHandle(), Target: NodeTarget(op.GetSubject()),
-		Field: credentialField(op.GetSubject().GetKind(), op.GetKind()),
-	})
-	if err != nil {
-		return err
-	}
-	if secrets[0].JSON || secrets[0].Value == "" {
-		return status.Error(codes.InvalidArgument, "a credential is one non-empty string")
-	}
-	submission.Retain(typedCredential{value: secrets[0].Value})
-	op.Value.Handle = SealedPrefix
 	return nil
-}
-
-// credentialExists reports whether the subject holds the credential, in
-// the submitting call.
-func (c *Credentials) credentialExists(submission *Submission, subject *kernelnodeopsv1.NodeRef, kind kernelnodeopsv1.CredentialKind) (bool, error) {
-	db := submission.db
-	if db == nil {
-		return false, nil
-	}
-	id := nodeID(subject.GetId())
-	switch subject.GetKind() {
-	case kernelnodeopsv1.NodeKind_NODE_KIND_PROXY:
-		apiKey, secret, err := service.ProxyNodeHasCredentials(db, id)
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return false, nil
-		}
-		if err != nil {
-			return false, err
-		}
-		switch kind {
-		case kernelnodeopsv1.CredentialKind_CREDENTIAL_KIND_NODE_API_KEY:
-			return apiKey, nil
-		case kernelnodeopsv1.CredentialKind_CREDENTIAL_KIND_NODE_SHARED_SECRET:
-			return secret, nil
-		}
-		return apiKey || secret, nil
-	case kernelnodeopsv1.NodeKind_NODE_KIND_FORWARD:
-		has, err := service.ForwardNodeHasToken(db, id)
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return false, nil
-		}
-		return has, err
-	}
-	return false, nil
-}
-
-// currentCredential answers the new-table row of a subject's credential:
-// its id and version for the result.
-func currentCredential(tx *gorm.DB, subjectKind string, subjectID uint, kind string) (uint64, uint32) {
-	var rows []model.NodeCredential
-	if err := tx.Where("subject_kind = ? AND subject_id = ? AND kind = ? AND status <> ?", subjectKind, uint64(subjectID), kind, nodesecrets.StatusRetired).
-		Order("version DESC").Limit(1).Find(&rows).Error; err != nil || len(rows) == 0 {
-		return 0, 0
-	}
-	return rows[0].ID, uint32(max(rows[0].Version, 0)) // #nosec G115 -- versions count from 1.
 }
 
 // issue executes IssueCredential.
@@ -244,125 +131,8 @@ func (c *Credentials) issue(ctx context.Context, run *Run) Outcome {
 		return outcome
 	}
 	subject := op.GetSubject()
-	id := nodeID(subject.GetId())
 	result := &kernelnodeopsv1.CredentialResult{Subject: nodeRef(subject.GetKind(), subject.GetId()), Kind: op.GetKind()}
-	var typed *typedCredential
-	if op.GetValue() != nil {
-		kept, ok := run.Prepared().(typedCredential)
-		if !ok {
-			return Failed(kernelnodeopsv1.ErrorCode_ERROR_CODE_SECRET_HANDLE_INVALID,
-				"the typed credential is no longer held: its request ended or the kernel restarted since the submission; nothing was issued", false)
-		}
-		typed = &kept
-		run.UseSecret(kept.value)
-	}
-	if op.GetKind() == kernelnodeopsv1.CredentialKind_CREDENTIAL_KIND_AGENT_ENROLLMENT {
-		return c.issueEnrollment(ctx, run, result)
-	}
-	switch subject.GetKind() {
-	case kernelnodeopsv1.NodeKind_NODE_KIND_PROXY:
-		return c.issueProxy(ctx, run, id, typed, result)
-	case kernelnodeopsv1.NodeKind_NODE_KIND_FORWARD:
-		return c.issueForward(ctx, run, id, typed, result)
-	}
-	return Failed(kernelnodeopsv1.ErrorCode_ERROR_CODE_VALIDATION_FAILED, "the clean agent was removed with the v4.1 forwarding runtime", false)
-}
-
-func (c *Credentials) issueProxy(ctx context.Context, run *Run, id uint, typed *typedCredential, result *kernelnodeopsv1.CredentialResult) Outcome {
-	kind := result.GetKind()
-	wantKey := kind != kernelnodeopsv1.CredentialKind_CREDENTIAL_KIND_NODE_SHARED_SECRET
-	wantSecret := kind != kernelnodeopsv1.CredentialKind_CREDENTIAL_KIND_NODE_API_KEY
-	outcome, ok := transact(ctx, run, "issuing the node's credentials", func(tx *gorm.DB) error {
-		hasKey, hasSecret, err := service.ProxyNodeHasCredentials(tx, id)
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return fail(kernelnodeopsv1.ErrorCode_ERROR_CODE_TARGET_GONE, fmt.Sprintf("proxy node %d not found", id), false)
-		}
-		if err != nil {
-			return err
-		}
-		replacing := (wantKey && hasKey) || (wantSecret && hasSecret)
-		if replacing && !run.Operation.GetIssueCredential().GetReplace() {
-			return fail(kernelnodeopsv1.ErrorCode_ERROR_CODE_VALIDATION_FAILED, "the node already holds this credential: set replace to rotate it", false)
-		}
-		var credentials service.ProxyNodeCredentials
-		var reveals []*kernelnodeopsv1.SecretHandle
-		if typed != nil {
-			if wantKey {
-				credentials.APIKey = typed.value
-			} else {
-				credentials.Secret = typed.value
-			}
-		} else {
-			if credentials, err = service.GenerateProxyNodeCredentials(wantKey, wantSecret); err != nil {
-				return err
-			}
-			run.UseSecret(credentials.APIKey, credentials.Secret)
-			for _, generated := range []struct{ name, value string }{{RevealAPIKey, credentials.APIKey}, {RevealSecret, credentials.Secret}} {
-				if generated.value == "" {
-					continue
-				}
-				handle, err := revealHandle(run, generated.name, generated.value)
-				if err != nil {
-					return err
-				}
-				reveals = append(reveals, handle)
-			}
-		}
-		if err := service.IssueProxyNodeCredentialsTx(tx, id, credentials, replacing); err != nil {
-			return err
-		}
-		resultKind := nodesecrets.KindNodeAPIKey
-		if !wantKey {
-			resultKind = nodesecrets.KindNodeSharedSecret
-		}
-		result.CredentialId, result.Version = currentCredential(tx, nodesecrets.SubjectProxy, id, resultKind)
-		result.Reveal = reveals
-		return nil
-	})
-	if !ok {
-		return outcome
-	}
-	return Succeeded(&kernelnodeopsv1.OperationResult{Result: &kernelnodeopsv1.OperationResult_Credential{Credential: result}})
-}
-
-func (c *Credentials) issueForward(ctx context.Context, run *Run, id uint, typed *typedCredential, result *kernelnodeopsv1.CredentialResult) Outcome {
-	outcome, ok := transact(ctx, run, "issuing the forward node's token", func(tx *gorm.DB) error {
-		has, err := service.ForwardNodeHasToken(tx, id)
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return fail(kernelnodeopsv1.ErrorCode_ERROR_CODE_TARGET_GONE, fmt.Sprintf("forward node %d not found", id), false)
-		}
-		if err != nil {
-			return err
-		}
-		if has && !run.Operation.GetIssueCredential().GetReplace() {
-			return fail(kernelnodeopsv1.ErrorCode_ERROR_CODE_VALIDATION_FAILED, "the node already holds a token: set replace to rotate it", false)
-		}
-		var token string
-		var reveals []*kernelnodeopsv1.SecretHandle
-		if typed != nil {
-			token = typed.value
-		} else {
-			if token, err = service.GenerateForwardNodeToken(); err != nil {
-				return err
-			}
-			run.UseSecret(token)
-			handle, err := revealHandle(run, RevealAPIToken, token)
-			if err != nil {
-				return err
-			}
-			reveals = append(reveals, handle)
-		}
-		if _, err := service.IssueForwardNodeTokenTx(tx, id, token); err != nil {
-			return err
-		}
-		result.CredentialId, result.Version = currentCredential(tx, nodesecrets.SubjectForward, id, nodesecrets.KindForwardNodeToken)
-		result.Reveal = reveals
-		return nil
-	})
-	if !ok {
-		return outcome
-	}
-	return Succeeded(&kernelnodeopsv1.OperationResult{Result: &kernelnodeopsv1.OperationResult_Credential{Credential: result}})
+	return c.issueEnrollment(ctx, run, result)
 }
 
 // agentNode is the agent PKI's name of a node.
@@ -420,11 +190,7 @@ func (c *Credentials) issueEnrollment(ctx context.Context, run *Run, result *ker
 }
 
 // revoke executes RevokeCredential: a node's agent enrollments and
-// certificates. A proxy
-// node's key and secret and a forward node's token are never revoked in
-// place: no kernel route does, and a node without them cannot be told from
-// one never issued. They are rotated (IssueCredential with replace) or
-// retired with the node.
+// certificates.
 func (c *Credentials) revoke(ctx context.Context, run *Run) Outcome {
 	op := run.Operation.GetRevokeCredential()
 	subject := op.GetSubject()
@@ -433,14 +199,7 @@ func (c *Credentials) revoke(ctx context.Context, run *Run) Outcome {
 		return outcome
 	}
 	outcome, ok := transact(ctx, run, "revoking the credential", func(tx *gorm.DB) error {
-		switch {
-		case subject.GetKind() == kernelnodeopsv1.NodeKind_NODE_KIND_CLEAN_AGENT:
-			return fail(kernelnodeopsv1.ErrorCode_ERROR_CODE_VALIDATION_FAILED, "the clean agent was removed with the v4.1 forwarding runtime", false)
-		case op.GetKind() == kernelnodeopsv1.CredentialKind_CREDENTIAL_KIND_AGENT_ENROLLMENT:
-			return agentpki.RevokeNode(ctx, tx, agentNode(subject), agentpki.RevokeReasonCredentialsRevoked)
-		}
-		return fail(kernelnodeopsv1.ErrorCode_ERROR_CODE_VALIDATION_FAILED,
-			"a node's key, secret or token is not revoked in place: rotate it with IssueCredential (replace) or retire the node; its agent enrollments are revoked with kind AGENT_ENROLLMENT", false)
+		return agentpki.RevokeNode(ctx, tx, agentNode(subject), agentpki.RevokeReasonCredentialsRevoked)
 	})
 	if !ok {
 		return outcome

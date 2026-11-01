@@ -27,7 +27,7 @@ var subscriptionWritesSeeded = time.Date(2026, 9, 1, 8, 0, 0, 0, time.UTC)
 
 func (s *SubscriptionAdminWritesTestSuite) SetupTest() {
 	s.HandlerTestSuite.SetupTest()
-	s.node = &model.Node{Name: "edge", Host: "edge.example.test", APIKey: "node-key", APIKeyHash: "node-key-hash"}
+	s.node = &model.Node{Name: "edge", Host: "edge.example.test"}
 	s.Require().NoError(s.db.Create(s.node).Error)
 	s.protocol = &model.NodeProtocol{NodeID: s.node.ID, Name: "vless", Type: model.ProtocolVLESS, Port: 443}
 	s.Require().NoError(s.db.Create(s.protocol).Error)

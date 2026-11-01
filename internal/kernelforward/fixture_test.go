@@ -148,7 +148,7 @@ func newFixture(t *testing.T, db *gorm.DB) *fixture {
 		{ID: 13, Name: "off", Type: "exit", Host: "192.0.2.13", Port: 7000, Enabled: true},
 	}).Error)
 	require.NoError(t, db.Model(&model.ForwardNode{}).Where("id = ?", 13).Update("enabled", false).Error)
-	require.NoError(t, db.Create(&model.Node{ID: 21, Name: "proxy", Host: "proxy.example.com", Port: 443, APIKey: "proxy-key", Status: model.NodeStatusOnline}).Error)
+	require.NoError(t, db.Create(&model.Node{ID: 21, Name: "proxy", Host: "proxy.example.com", Port: 443, Status: model.NodeStatusOnline}).Error)
 	require.NoError(t, db.Create(&model.NodeProtocol{NodeID: 21, Name: "vless", Type: "vless", Port: 30443}).Error)
 	f.hello(entry, nftCaps())
 	f.hello(exit, nftCaps())

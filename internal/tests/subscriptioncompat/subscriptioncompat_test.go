@@ -173,9 +173,9 @@ func seed(t testing.TB, db *gorm.DB) {
 		{ID: 5, UserID: 5, GroupID: 3, CreatedAt: seeded},
 	}).Error)
 	require.NoError(t, db.Create(&[]model.Node{
-		{ID: 1, Name: "edge-1", Host: "edge-1.example.test", APIKey: "k1", Secret: "s1", LastCheckAt: ptr(now - 60), CreatedAt: seeded, UpdatedAt: seeded},
-		{ID: 2, Name: "edge-2", Host: "edge-2.example.test", APIKey: "k2", Secret: "s2", LastCheckAt: ptr(now - 3600), CreatedAt: seeded, UpdatedAt: seeded},
-		{ID: 3, Name: "edge-3", Host: "edge-3.example.test", APIKey: "k3", Secret: "s3", CreatedAt: seeded, UpdatedAt: seeded},
+		{ID: 1, Name: "edge-1", Host: "edge-1.example.test", LastCheckAt: ptr(now - 60), CreatedAt: seeded, UpdatedAt: seeded},
+		{ID: 2, Name: "edge-2", Host: "edge-2.example.test", LastCheckAt: ptr(now - 3600), CreatedAt: seeded, UpdatedAt: seeded},
+		{ID: 3, Name: "edge-3", Host: "edge-3.example.test", CreatedAt: seeded, UpdatedAt: seeded},
 	}).Error)
 	protocol := func(id, node uint) model.NodeProtocol {
 		return model.NodeProtocol{

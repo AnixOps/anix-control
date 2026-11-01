@@ -20,7 +20,7 @@ func TestLegacyAgentPathsAreGone(t *testing.T) {
 	router, _, host := setupV2PackageRouter(t)
 	require.NoError(t, database.GetDB().AutoMigrate(&model.Node{}, &model.ForwardNode{}, &model.AgentTransport{}))
 	t.Cleanup(agenttransport.SetDefault(agenttransport.NewRecorder(database.Get)))
-	node := model.Node{Name: "edge", Host: "edge.example.test", APIKey: "edge-api-key", APIKeyHash: sha256Hex("edge-api-key")}
+	node := model.Node{Name: "edge", Host: "edge.example.test"}
 	require.NoError(t, database.GetDB().Create(&node).Error)
 	nodeID := strconv.FormatUint(uint64(node.ID), 10)
 

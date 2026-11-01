@@ -1104,10 +1104,9 @@ template and the first detail page (plan §7.2). Page-local parts live in
   disabled with its reason when the plan says `can_start: false`, a campaign
   is active, nothing is configured or no node is eligible). The campaign card
   (`AgentUpgradeCampaign.vue`: pause, resume, abort, roll back) is below it.
-- **Secrets.** 凭据 calls `GET /admin/nodes/:id/credentials` only on 读取 API
-  密钥 (the server audits every read) and shows the API key in a masked
-  `UiCopyField`; the shared secret is never shown. Protocol secrets stay
-  `********` and are sent back as such.
+- **Secrets.** A node has no API key or shared secret: 凭据 shows the node's
+  ids, 轮换凭据… and the protocol secrets, which stay `********` and are sent
+  back as such.
 - **Deployment.** 部署 has three cards: 换到新机器 (`AgentInstallSheet`: a
   single-use `anixagt_` command for this node), the uninstall command and the
   certificate's state with what it means for the next step. There is no

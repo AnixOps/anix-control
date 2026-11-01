@@ -27,7 +27,7 @@ func TestSubscriptionFollowsTheGroupProtocolLayout(t *testing.T) {
 	require.NoError(t, db.Create(other).Error)
 	var protocols []model.NodeProtocol
 	for _, name := range []string{"HK", "US", "JP"} {
-		node := &model.Node{Name: "BGP " + name, APIKey: "key-" + name, Host: strings.ToLower(name) + ".example.com", Show: 1, Status: model.NodeStatusOnline, LastCheckAt: &now}
+		node := &model.Node{Name: "BGP " + name, Host: strings.ToLower(name) + ".example.com", Show: 1, Status: model.NodeStatusOnline, LastCheckAt: &now}
 		require.NoError(t, db.Create(node).Error)
 		protocol := model.NodeProtocol{NodeID: node.ID, Name: "ss", Type: model.ProtocolShadowsocks, Port: 10000, Enable: 1, Show: 1}
 		require.NoError(t, db.Create(&protocol).Error)

@@ -17,11 +17,8 @@ import (
 // fake.
 type fixture struct {
 	nodes      []model.Node
-	forwards   []model.ForwardNode
-	agents     []model.ForwardCleanAgent
 	protocols  []model.NodeProtocol
 	peers      []model.WireGuardPeer
-	revokedAt  time.Time
 	rawConfig  string
 	reality    string
 	notJSON    string
@@ -31,36 +28,18 @@ type fixture struct {
 func seedLegacy(t *testing.T, db *gorm.DB) *fixture {
 	t.Helper()
 	f := &fixture{
-		revokedAt:  time.Date(2026, 9, 30, 8, 0, 0, 0, time.UTC),
 		rawConfig:  `{"server_port":51820,"wireguard":{"private_key":"fake-raw-private","public_key":"fake-raw-public"}}`,
 		reality:    `{"private_key":"fake-reality-private","short_id":"6ba85179","dest":"www.example.test:443"}`,
 		notJSON:    "fake-custom-config",
 		plainProto: `{"flow":"xtls-rprx-vision"}`,
 	}
 	f.nodes = []model.Node{
-		{Name: "n1", Host: "203.0.113.1", APIKey: "fake-node-key-1", APIKeyHash: hashSecret("fake-node-key-1"), Secret: "fake-node-secret-1", RawConfig: &f.rawConfig},
-		// An old row without a hash: the readers match the key itself.
-		{Name: "n2", Host: "203.0.113.2", APIKey: "fake-node-key-2"},
-		// A keyless node has no credential.
+		{Name: "n1", Host: "203.0.113.1", RawConfig: &f.rawConfig},
+		{Name: "n2", Host: "203.0.113.2"},
 		{Name: "n3", Host: "203.0.113.3"},
 	}
 	for i := range f.nodes {
 		require.NoError(t, db.Create(&f.nodes[i]).Error)
-	}
-	f.forwards = []model.ForwardNode{
-		{Name: "f1", Host: "198.51.100.7", Port: 443, APIPort: 9000, APIToken: "fake-forward-token-1"},
-		// An Ansible machine has no token.
-		{Name: "f2", Host: "198.51.100.8", Port: 443},
-	}
-	for i := range f.forwards {
-		require.NoError(t, db.Create(&f.forwards[i]).Error)
-	}
-	f.agents = []model.ForwardCleanAgent{
-		{Name: "c1", Token: "fake-clean-token-1"},
-		{Name: "c2", Token: "fake-clean-token-2", Status: model.ForwardCleanAgentStatusRevoked, RevokedAt: &f.revokedAt},
-	}
-	for i := range f.agents {
-		require.NoError(t, db.Create(&f.agents[i]).Error)
 	}
 	f.protocols = []model.NodeProtocol{
 		{NodeID: f.nodes[0].ID, Name: "reality", Type: model.ProtocolVLESS, Port: 443, TLS: 2, Settings: &f.plainProto, RealitySettings: &f.reality},
@@ -98,12 +77,6 @@ func (f *fixture) ids() map[string][]uint {
 	for _, row := range f.nodes {
 		ids[TableNode] = append(ids[TableNode], row.ID)
 	}
-	for _, row := range f.forwards {
-		ids[TableForwardNode] = append(ids[TableForwardNode], row.ID)
-	}
-	for _, row := range f.agents {
-		ids[TableCleanAgent] = append(ids[TableCleanAgent], row.ID)
-	}
 	for _, row := range f.protocols {
 		ids[TableNodeProtocol] = append(ids[TableNodeProtocol], row.ID)
 	}
@@ -111,14 +84,6 @@ func (f *fixture) ids() map[string][]uint {
 		ids[TableWireGuardPeer] = append(ids[TableWireGuardPeer], row.ID)
 	}
 	return ids
-}
-
-func credential(t *testing.T, db *gorm.DB, subjectKind string, subjectID uint, kind string) model.NodeCredential {
-	t.Helper()
-	var rows []model.NodeCredential
-	require.NoError(t, db.Where("subject_kind = ? AND subject_id = ? AND kind = ? AND status <> ?", subjectKind, subjectID, kind, StatusRetired).Find(&rows).Error)
-	require.Len(t, rows, 1, "%s %d %s", subjectKind, subjectID, kind)
-	return rows[0]
 }
 
 func secrets(t *testing.T, db *gorm.DB, scope string, ownerID uint) map[string]string {
@@ -145,14 +110,12 @@ func requireVerified(t *testing.T, db *gorm.DB) []TableVerify {
 }
 
 type snapshot struct {
-	Credentials []model.NodeCredential
-	Secrets     []model.ProtocolSecret
+	Secrets []model.ProtocolSecret
 }
 
 func takeSnapshot(t *testing.T, db *gorm.DB) snapshot {
 	t.Helper()
 	var s snapshot
-	require.NoError(t, db.Order("id").Find(&s.Credentials).Error)
 	require.NoError(t, db.Order("id").Find(&s.Secrets).Error)
 	return s
 }
@@ -162,34 +125,7 @@ func TestSyncDerivesEveryTable(t *testing.T) {
 		f := seedLegacy(t, db)
 		f.syncAll(t, db)
 
-		key := credential(t, db, SubjectProxy, f.nodes[0].ID, KindNodeAPIKey)
-		require.Equal(t, "fake-node-key-1", key.Value)
-		require.Equal(t, hashSecret("fake-node-key-1"), key.KeyHash)
-		require.Equal(t, StatusActive, key.Status)
-		require.Equal(t, SourceDualWrite, key.Source)
-		require.Equal(t, 1, key.Version)
-		require.False(t, key.Sealed)
-		require.Empty(t, key.KEKID)
-		require.Equal(t, "fake-node-secret-1", credential(t, db, SubjectProxy, f.nodes[0].ID, KindNodeSharedSecret).Value)
-		// No stored hash: the hash of the key.
-		require.Equal(t, hashSecret("fake-node-key-2"), credential(t, db, SubjectProxy, f.nodes[1].ID, KindNodeAPIKey).KeyHash)
-		var count int64
-		require.NoError(t, db.Model(&model.NodeCredential{}).Where("subject_kind = ? AND subject_id IN ?", SubjectProxy, []uint{f.nodes[1].ID, f.nodes[2].ID}).Count(&count).Error)
-		require.EqualValues(t, 1, count, "n2 has a key and no secret, n3 nothing")
-
-		token := credential(t, db, SubjectForward, f.forwards[0].ID, KindForwardNodeToken)
-		require.Equal(t, "fake-forward-token-1", token.Value)
-		require.Equal(t, "198.51.100.7:9000", token.Endpoint)
-		require.NoError(t, db.Model(&model.NodeCredential{}).Where("subject_kind = ? AND subject_id = ?", SubjectForward, f.forwards[1].ID).Count(&count).Error)
-		require.Zero(t, count, "a forward node without a token")
-
-		require.Equal(t, StatusActive, credential(t, db, SubjectCleanAgent, f.agents[0].ID, KindCleanAgentToken).Status)
-		revoked := credential(t, db, SubjectCleanAgent, f.agents[1].ID, KindCleanAgentToken)
-		require.Equal(t, StatusRevoked, revoked.Status)
-		require.Equal(t, "fake-clean-token-2", revoked.Value)
-		require.NotNil(t, revoked.RevokedAt)
-		require.Equal(t, f.revokedAt.Unix(), revoked.RevokedAt.Unix())
-
+		require.Empty(t, secrets(t, db, ScopeNodeRawConfig, f.nodes[1].ID), "a node without a raw configuration")
 		require.Equal(t, map[string]string{"raw_config /wireguard/private_key": `"fake-raw-private"`}, secrets(t, db, ScopeNodeRawConfig, f.nodes[0].ID))
 		require.Equal(t, map[string]string{"reality_settings /private_key": `"fake-reality-private"`}, secrets(t, db, ScopeNodeProtocol, f.protocols[0].ID))
 		require.Equal(t, map[string]string{"custom_config ": "fake-custom-config"}, secrets(t, db, ScopeNodeProtocol, f.protocols[1].ID))
@@ -210,38 +146,6 @@ func TestSyncRotatesChangesAndRemoves(t *testing.T) {
 			require.NoError(t, db.Transaction(func(tx *gorm.DB) error { return Sync(tx, table, id) }))
 		}
 
-		// A new key retires the old version and keeps no copy of it.
-		require.NoError(t, db.Model(&model.Node{}).Where("id = ?", node.ID).Updates(map[string]any{
-			"api_key": "fake-node-key-1b", "api_key_hash": hashSecret("fake-node-key-1b"),
-		}).Error)
-		sync(TableNode, node.ID)
-		var versions []model.NodeCredential
-		require.NoError(t, db.Where("subject_kind = ? AND subject_id = ? AND kind = ?", SubjectProxy, node.ID, KindNodeAPIKey).Order("version").Find(&versions).Error)
-		require.Len(t, versions, 2)
-		require.Equal(t, StatusRetired, versions[0].Status)
-		require.Empty(t, versions[0].Value)
-		require.Empty(t, versions[0].KeyHash)
-		require.NotNil(t, versions[0].RotatedAt)
-		require.Equal(t, 2, versions[1].Version)
-		require.Equal(t, "fake-node-key-1b", versions[1].Value)
-		require.NotNil(t, versions[1].RotatedAt)
-		requireVerified(t, db)
-
-		// Revoking keeps the version; moving a forward node moves its pin.
-		now := time.Now()
-		require.NoError(t, db.Model(&model.ForwardCleanAgent{}).Where("id = ?", f.agents[0].ID).Updates(map[string]any{
-			"status": model.ForwardCleanAgentStatusRevoked, "revoked_at": &now,
-		}).Error)
-		sync(TableCleanAgent, f.agents[0].ID)
-		agent := credential(t, db, SubjectCleanAgent, f.agents[0].ID, KindCleanAgentToken)
-		require.Equal(t, StatusRevoked, agent.Status)
-		require.Equal(t, 1, agent.Version)
-		require.NoError(t, db.Model(&model.ForwardNode{}).Where("id = ?", f.forwards[0].ID).Updates(map[string]any{"host": "198.51.100.9", "api_port": 9443}).Error)
-		sync(TableForwardNode, f.forwards[0].ID)
-		token := credential(t, db, SubjectForward, f.forwards[0].ID, KindForwardNodeToken)
-		require.Equal(t, "198.51.100.9:9443", token.Endpoint)
-		require.Equal(t, 1, token.Version)
-
 		// A changed secret position counts a version; a removed one goes.
 		changed := `{"private_key":"fake-reality-private-b","short_id":"6ba85179"}`
 		require.NoError(t, db.Model(&model.NodeProtocol{}).Where("id = ?", f.protocols[0].ID).Update("reality_settings", changed).Error)
@@ -258,9 +162,6 @@ func TestSyncRotatesChangesAndRemoves(t *testing.T) {
 		// A deleted row takes every row of it, retired versions included.
 		require.NoError(t, db.Delete(&model.Node{}, node.ID).Error)
 		sync(TableNode, node.ID)
-		var count int64
-		require.NoError(t, db.Model(&model.NodeCredential{}).Where("subject_kind = ? AND subject_id = ?", SubjectProxy, node.ID).Count(&count).Error)
-		require.Zero(t, count)
 		require.Empty(t, secrets(t, db, ScopeNodeRawConfig, node.ID))
 		require.NoError(t, db.Delete(&model.WireGuardPeer{}, f.peers[0].ID).Error)
 		sync(TableWireGuardPeer, f.peers[0].ID)
@@ -283,7 +184,7 @@ func TestBackfillThenVerifyIsIdempotent(t *testing.T) {
 			require.False(t, result.Match && result.LegacySecrets > 0)
 			missing += result.Missing
 		}
-		require.EqualValues(t, 13, missing)
+		require.EqualValues(t, 7, missing)
 		report, err := json.Marshal(results)
 		require.NoError(t, err)
 		require.NotContains(t, string(report), "fake-")
@@ -296,7 +197,7 @@ func TestBackfillThenVerifyIsIdempotent(t *testing.T) {
 			require.False(t, result.Resumed)
 			changed += result.Changed
 		}
-		require.EqualValues(t, 13, changed)
+		require.EqualValues(t, 7, changed)
 
 		verified := requireVerified(t, db)
 		var splits []model.NodeSecretSplit
@@ -313,10 +214,6 @@ func TestBackfillThenVerifyIsIdempotent(t *testing.T) {
 			require.Equal(t, digests[split.Table], split.Digest)
 			require.Zero(t, split.Mismatches)
 		}
-		var sources []string
-		require.NoError(t, db.Model(&model.NodeCredential{}).Distinct().Pluck("source", &sources).Error)
-		require.Equal(t, []string{SourceBackfill}, sources)
-
 		// A second backfill changes nothing, not even a timestamp.
 		before := takeSnapshot(t, db)
 		again, err := Backfill(ctx, db, BackfillOptions{})
@@ -337,10 +234,10 @@ func TestBackfillResumesAndPrunes(t *testing.T) {
 		require.NoError(t, db.Model(&model.NodeSecretSplit{}).Where("table_name = ?", TableNode).Updates(map[string]any{
 			"backfill_cursor": f.nodes[0].ID, "backfilled_rows": 1, "backfilled_at": nil,
 		}).Error)
-		// A credential of a node that no longer exists.
-		require.NoError(t, db.Create(&model.NodeCredential{
-			SubjectKind: SubjectProxy, SubjectID: 999, Kind: KindNodeAPIKey, Version: 1, KeyHash: hashSecret("fake-orphan"),
-			Value: "fake-orphan", Status: StatusActive, Source: SourceDualWrite, CreatedAt: time.Now(),
+		// A secret of a node that no longer exists.
+		require.NoError(t, db.Create(&model.ProtocolSecret{
+			Scope: ScopeNodeRawConfig, OwnerID: 999, ColumnName: "raw_config", JSONPointer: "/wireguard/private_key", Version: 1,
+			Value: `"fake-orphan"`, UpdatedAt: time.Now(),
 		}).Error)
 
 		results, err := Backfill(ctx, db, BackfillOptions{Tables: []string{TableNode}, BatchSize: 1})
@@ -352,14 +249,14 @@ func TestBackfillResumesAndPrunes(t *testing.T) {
 		// The resumed pass skipped the first node: verify says so.
 		verified, err := Verify(ctx, db, VerifyOptions{Tables: []string{TableNode}})
 		require.ErrorIs(t, err, ErrMismatch)
-		require.EqualValues(t, 3, verified[0].Missing, "the first node's key, secret and raw configuration")
+		require.EqualValues(t, 1, verified[0].Missing, "the first node's raw configuration")
 		require.Zero(t, verified[0].Extra)
 
 		// The pass completed, so the next one starts over and copies it.
 		results, err = Backfill(ctx, db, BackfillOptions{Tables: []string{TableNode}})
 		require.NoError(t, err)
 		require.False(t, results[0].Resumed)
-		require.EqualValues(t, 3, results[0].Changed)
+		require.EqualValues(t, 1, results[0].Changed)
 		verified, err = Verify(ctx, db, VerifyOptions{Tables: []string{TableNode}})
 		require.NoError(t, err)
 		require.True(t, verified[0].Match)
@@ -383,11 +280,12 @@ func TestVerifyDetectsMismatch(t *testing.T) {
 		require.NoError(t, err)
 		requireVerified(t, db)
 		var before model.NodeSecretSplit
-		require.NoError(t, db.First(&before, "table_name = ?", TableForwardNode).Error)
+		require.NoError(t, db.First(&before, "table_name = ?", TableNode).Error)
 
 		// A legacy write that skipped the writer, and a new row changed
 		// behind its back.
-		require.NoError(t, db.Model(&model.ForwardNode{}).Where("id = ?", f.forwards[0].ID).Update("api_token", "fake-forward-token-x").Error)
+		drifted := `{"server_port":51820,"wireguard":{"private_key":"fake-raw-private-x","public_key":"fake-raw-public"}}`
+		require.NoError(t, db.Model(&model.Node{}).Where("id = ?", f.nodes[0].ID).Update("raw_config", drifted).Error)
 		require.NoError(t, db.Model(&model.ProtocolSecret{}).Where("scope = ? AND owner_id = ?", ScopeWireGuardPeer, f.peers[1].ID).
 			Where("column_name = ?", "private_key").Update("value", "fake-peer-private-x").Error)
 
@@ -397,20 +295,20 @@ func TestVerifyDetectsMismatch(t *testing.T) {
 		for _, result := range results {
 			byTable[result.Table] = result
 		}
-		forward := byTable[TableForwardNode]
-		require.False(t, forward.Match)
-		require.NotEqual(t, forward.LegacyDigest, forward.NewDigest)
-		require.EqualValues(t, 1, forward.Different)
-		require.Equal(t, []Mismatch{{Problem: "different", Secret: "forward " + uintString(f.forwards[0].ID) + " forward_node_token"}}, forward.Samples)
+		node := byTable[TableNode]
+		require.False(t, node.Match)
+		require.NotEqual(t, node.LegacyDigest, node.NewDigest)
+		require.EqualValues(t, 1, node.Different)
+		require.Equal(t, []Mismatch{{Problem: "different", Secret: "node_raw_config " + uintString(f.nodes[0].ID) + " raw_config /wireguard/private_key"}}, node.Samples)
 		require.EqualValues(t, 1, byTable[TableWireGuardPeer].Different)
 		require.Equal(t, "wireguard_peer "+uintString(f.peers[1].ID)+" private_key ", byTable[TableWireGuardPeer].Samples[0].Secret)
-		require.True(t, byTable[TableNode].Match)
+		require.True(t, byTable[TableNodeProtocol].Match)
 		report, err := json.Marshal(results)
 		require.NoError(t, err)
 		require.NotContains(t, string(report), "fake-")
 
 		var after model.NodeSecretSplit
-		require.NoError(t, db.First(&after, "table_name = ?", TableForwardNode).Error)
+		require.NoError(t, db.First(&after, "table_name = ?", TableNode).Error)
 		require.EqualValues(t, 1, after.Mismatches)
 		require.NotNil(t, after.CheckedAt)
 		require.Equal(t, before.Digest, after.Digest, "a mismatch keeps the last verified digest")
@@ -420,55 +318,6 @@ func TestVerifyDetectsMismatch(t *testing.T) {
 		_, err = Backfill(ctx, db, BackfillOptions{})
 		require.NoError(t, err)
 		requireVerified(t, db)
-	})
-}
-
-func TestTombstonesAgainstUniqueIndexes(t *testing.T) {
-	forEachDatabase(t, func(t *testing.T, db *gorm.DB) {
-		ctx := context.Background()
-		f := seedLegacy(t, db)
-		f.syncAll(t, db)
-		before := takeSnapshot(t, db)
-
-		// Every unique credential column takes a tombstone per row.
-		for _, row := range f.nodes {
-			require.NoError(t, db.Model(&model.Node{}).Where("id = ?", row.ID).Updates(map[string]any{"api_key": Tombstone(uint64(row.ID)), "api_key_hash": ""}).Error)
-		}
-		for _, row := range f.agents {
-			require.NoError(t, db.Model(&model.ForwardCleanAgent{}).Where("id = ?", row.ID).Update("token", Tombstone(uint64(row.ID))).Error)
-		}
-		// An empty value would collide on the second row.
-		require.Error(t, db.Model(&model.ForwardCleanAgent{}).Where("id IN ?", []uint{f.agents[0].ID, f.agents[1].ID}).Update("token", "").Error)
-		require.NoError(t, db.Model(&model.Node{}).Where("id = ?", f.nodes[2].ID).Update("api_key", "").Error, "one empty key fits")
-		require.Error(t, db.Model(&model.Node{}).Where("id = ?", f.nodes[1].ID).Update("api_key", "").Error)
-
-		// A tombstone is never copied, and never removes the secret it
-		// stands for.
-		f.syncAll(t, db)
-		after := takeSnapshot(t, db)
-		require.Equal(t, before.Credentials, after.Credentials)
-		for _, row := range after.Credentials {
-			require.False(t, IsTombstone(row.Value))
-		}
-		// In P1 a tombstone is unexpected: verify reports the secrets the
-		// legacy columns no longer hold.
-		results, err := Verify(ctx, db, VerifyOptions{Tables: []string{TableCleanAgent}})
-		require.ErrorIs(t, err, ErrMismatch)
-		for _, result := range results {
-			require.EqualValues(t, 2, result.Extra, result.Table)
-		}
-
-		// The new tables' own unique indexes: one row per version and per
-		// position.
-		duplicate := after.Credentials[0]
-		duplicate.ID = 0
-		require.Error(t, db.Create(&duplicate).Error)
-		duplicate.Version++
-		duplicate.Status = StatusRetired
-		require.NoError(t, db.Create(&duplicate).Error)
-		position := after.Secrets[0]
-		position.ID = 0
-		require.Error(t, db.Create(&position).Error)
 	})
 }
 

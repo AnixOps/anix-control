@@ -453,13 +453,6 @@ func (s *Service) createNode(tx *gorm.DB, group model.NodeGroup, request JoinReq
 		system := strings.Trim(request.OS+"/"+request.Arch, "/")
 		node.ServerOS = &system
 	}
-	// The node's API key and shared secret, as every proxy node has them
-	// until node credentials are removed; nobody is shown them.
-	credentials, err := service.GenerateProxyNodeCredentials(true, true)
-	if err != nil {
-		return joinedNode{}, nil, err
-	}
-	credentials.Apply(&node)
 	if err := tx.Omit(clause.Associations).Create(&node).Error; err != nil {
 		return joinedNode{}, nil, err
 	}

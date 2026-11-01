@@ -37,7 +37,7 @@ func openSQLite(t *testing.T) *gorm.DB {
 func migrate(t *testing.T, db *gorm.DB) {
 	t.Helper()
 	require.NoError(t, db.AutoMigrate(&model.AgentTransport{}, &model.AgentCertificate{}, &model.Node{},
-		&model.ForwardNode{}, &model.ForwardCleanAgent{}))
+		&model.ForwardNode{}))
 }
 
 // openPostgres opens a throwaway schema of ANIX_TEST_POSTGRES_DSN.
@@ -217,15 +217,12 @@ func seedInventory(t *testing.T, db *gorm.DB, now time.Time) {
 	t.Helper()
 	version := "1.1.0-node"
 	require.NoError(t, db.Create(&[]model.Node{
-		{ID: 1, Name: "enrolled", APIKey: "k1", Status: model.NodeStatusOnline},
-		{ID: 2, Name: "legacy", APIKey: "k2", Status: model.NodeStatusOnline, ServerVersion: &version},
-		{ID: 3, Name: "v2bx", APIKey: "k3", Status: model.NodeStatusOnline},
-		{ID: 4, Name: "never", APIKey: "k4", Status: model.NodeStatusDisabled},
+		{ID: 1, Name: "enrolled", Status: model.NodeStatusOnline},
+		{ID: 2, Name: "legacy", Status: model.NodeStatusOnline, ServerVersion: &version},
+		{ID: 3, Name: "v2bx", Status: model.NodeStatusOnline},
+		{ID: 4, Name: "never", Status: model.NodeStatusDisabled},
 	}).Error)
 	require.NoError(t, db.Create(&[]model.ForwardNode{{ID: 1, Name: "relay", Host: "198.51.100.1", Port: 22, Enabled: true}}).Error)
-	forwardNode := uint(1)
-	seen := now.Add(-2 * time.Minute)
-	require.NoError(t, db.Create(&model.ForwardCleanAgent{ID: 9, NodeID: &forwardNode, Name: "clean", Token: "t", Version: "0.9", LastSeen: &seen}).Error)
 	require.NoError(t, db.Create(&[]model.AgentCertificate{
 		{Serial: "old", NodeKind: "proxy", NodeID: 1, Cluster: "prod", EnrollmentID: "e", IssuerKeyID: "k", NotAfter: now.Add(time.Hour)},
 		{Serial: "new", NodeKind: "proxy", NodeID: 1, Cluster: "prod", EnrollmentID: "e", IssuerKeyID: "k", NotAfter: now.Add(48 * time.Hour)},
@@ -291,7 +288,7 @@ func TestInventory(t *testing.T) {
 	require.Nil(t, never.LastSeenAt)
 	require.NotNil(t, never.Transports)
 
-	require.Equal(t, StatusUnseen, byNode["forward-1"].Status, "a clean agent is a retired channel")
+	require.Equal(t, StatusUnseen, byNode["forward-1"].Status)
 	_, listed := byNode["proxy-99"]
 	require.False(t, listed)
 
@@ -361,13 +358,13 @@ func TestRequiredReadiness(t *testing.T) {
 	require.NotNil(t, inventory.Summary.RequiredBlockers)
 
 	require.NoError(t, db.Create(&[]model.Node{
-		{ID: 1, Name: "mtls", APIKey: "k1", Status: model.NodeStatusOnline},
-		{ID: 2, Name: "retired-channel", APIKey: "k2", Status: model.NodeStatusOnline},
-		{ID: 4, Name: "disabled-retired", APIKey: "k4", Status: model.NodeStatusDisabled},
-		{ID: 5, Name: "v2bx", APIKey: "k5", Status: model.NodeStatusOnline},
-		{ID: 6, Name: "enrolled-unseen", APIKey: "k6", Status: model.NodeStatusOnline},
-		{ID: 7, Name: "never", APIKey: "k7", Status: model.NodeStatusOnline},
-		{ID: 8, Name: "disabled-never", APIKey: "k8", Status: model.NodeStatusDisabled},
+		{ID: 1, Name: "mtls", Status: model.NodeStatusOnline},
+		{ID: 2, Name: "retired-channel", Status: model.NodeStatusOnline},
+		{ID: 4, Name: "disabled-retired", Status: model.NodeStatusDisabled},
+		{ID: 5, Name: "v2bx", Status: model.NodeStatusOnline},
+		{ID: 6, Name: "enrolled-unseen", Status: model.NodeStatusOnline},
+		{ID: 7, Name: "never", Status: model.NodeStatusOnline},
+		{ID: 8, Name: "disabled-never", Status: model.NodeStatusDisabled},
 	}).Error)
 	require.NoError(t, db.Create(&[]model.ForwardNode{{ID: 1, Name: "relay-never", Host: "198.51.100.1", Port: 22, Enabled: true}}).Error)
 	require.NoError(t, db.Create(&model.AgentCertificate{Serial: "c6", NodeKind: "proxy", NodeID: 6, Cluster: "prod", EnrollmentID: "e", IssuerKeyID: "k", NotAfter: now.Add(time.Hour)}).Error)
@@ -482,7 +479,7 @@ func TestInventoryCertificateStateAndRenewal(t *testing.T) {
 			seedInventory(t, db, now)
 			require.NoError(t, db.Where("1 = 1").Delete(&model.AgentCertificate{}).Error)
 			seedCertificates(t, db, now)
-			require.NoError(t, db.Create(&model.Node{ID: 5, Name: "disabled-after-expiry", APIKey: "k5", Status: model.NodeStatusDisabled}).Error)
+			require.NoError(t, db.Create(&model.Node{ID: 5, Name: "disabled-after-expiry", Status: model.NodeStatusDisabled}).Error)
 
 			inventory, err := Build(context.Background(), db, Options{Now: now})
 			require.NoError(t, err)

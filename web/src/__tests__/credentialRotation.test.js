@@ -23,7 +23,6 @@ function answer(extra = {}) {
   return {
     node: 'proxy-5',
     revoked: { certificates: 1, enrollments: 2, link_certificates: 0 },
-    api_key_rotated: false,
     enrollment: { id: 'e1', method: 'enrollment_credential' },
     expires_at: new Date(NOW + 3600 * 1000).toISOString(),
     credential: CREDENTIAL,
@@ -75,29 +74,20 @@ describe('useCredentialRotation', () => {
     return scope.run(() => useCredentialRotation(node, { t, te, onRotated }))
   }
 
-  it('sends what the form says, and only asks to replace the API key for a proxy node', async () => {
+  it('sends what the form says', async () => {
     const rotation = setup()
     rotation.open()
     expect(rotation.stage.value).toBe('confirm')
     rotation.form.reason = '  disk stolen '
     rotation.form.ttlSeconds = 86400
-    rotation.form.rotateApiKey = true
     await rotation.submit()
-    expect(kernelApi.rotateKernelAgentCredentials).toHaveBeenCalledWith({ node: 'proxy-5', rotateApiKey: true, ttlSeconds: 86400, reason: '  disk stolen ' })
+    expect(kernelApi.rotateKernelAgentCredentials).toHaveBeenCalledWith({ node: 'proxy-5', ttlSeconds: 86400, reason: '  disk stolen ' })
     expect(rotation.stage.value).toBe('result')
     expect(rotation.result.value).toMatchObject({
-      node: 'proxy-5', credential: CREDENTIAL, expiresAt: NOW + 3600 * 1000, apiKeyRotated: false, revoked: { certificates: 1, enrollments: 2, linkCertificates: 0 }
+      node: 'proxy-5', credential: CREDENTIAL, expiresAt: NOW + 3600 * 1000, revoked: { certificates: 1, enrollments: 2, linkCertificates: 0 }
     })
     // The form is back to its defaults, the secret is not in it.
-    expect(rotation.form).toEqual({ reason: '', ttlSeconds: 3600, rotateApiKey: false })
-  })
-
-  it('never asks a forward node to replace its API key, even if the flag is set', async () => {
-    const rotation = setup('forward-3')
-    rotation.open()
-    rotation.form.rotateApiKey = true
-    await rotation.submit()
-    expect(kernelApi.rotateKernelAgentCredentials.mock.calls[0][0].rotateApiKey).toBe(false)
+    expect(rotation.form).toEqual({ reason: '', ttlSeconds: 3600 })
   })
 
   it('refuses a reason of more than 200 bytes without a request, and takes exactly 200', async () => {
@@ -147,11 +137,11 @@ describe('useCredentialRotation', () => {
 
   it('tells the page that a rotation happened, never the secret', async () => {
     const onRotated = vi.fn()
-    kernelApi.rotateKernelAgentCredentials.mockResolvedValue(answer({ api_key_rotated: true }))
+    kernelApi.rotateKernelAgentCredentials.mockResolvedValue(answer())
     const rotation = setup('proxy-5', onRotated)
     rotation.open()
     await rotation.submit()
-    expect(onRotated).toHaveBeenCalledWith({ node: 'proxy-5', apiKeyRotated: true })
+    expect(onRotated).toHaveBeenCalledWith({ node: 'proxy-5' })
     expect(JSON.stringify(onRotated.mock.calls)).not.toContain(CREDENTIAL)
   })
 
@@ -265,7 +255,6 @@ describe('NodeRotateCredentials', () => {
     expect(within(dialog).getByText(/shown once/)).toBeTruthy()
     expect(within(dialog).getByRole('combobox', { name: 'Credential lifetime' }).textContent).toContain('1 hour')
     expect(within(dialog).getByRole('textbox', { name: 'Reason' }).value).toBe('')
-    expect(within(dialog).getByRole('checkbox', { name: 'Also replace the node’s API key' }).getAttribute('aria-checked')).toBe('false')
     // The danger button says what it does; Cancel has the focus.
     expect(within(dialog).getByRole('button', { name: 'Rotate credentials' })).toBeTruthy()
     expect(document.activeElement).toBe(within(dialog).getByRole('button', { name: 'Cancel' }))
@@ -281,12 +270,11 @@ describe('NodeRotateCredentials', () => {
     await user.click(within(confirm).getByRole('button', { name: 'Rotate credentials' }))
 
     const result = await screen.findByRole('dialog', { name: 'New credential for hk-01' })
-    expect(kernelApi.rotateKernelAgentCredentials).toHaveBeenCalledWith({ node: 'proxy-5', rotateApiKey: false, ttlSeconds: 3600, reason: '' })
+    expect(kernelApi.rotateKernelAgentCredentials).toHaveBeenCalledWith({ node: 'proxy-5', ttlSeconds: 3600, reason: '' })
     const field = within(result).getByLabelText('One-time credential')
     expect(field.value).toBe(CREDENTIAL)
     expect(field.type).toBe('password')
     expect(within(result).getByTestId('rotate-warning').textContent).toContain('Treat it like a password')
-    expect(within(result).getByTestId('rotate-api-key-result').textContent).toContain('old key still works')
     expect(within(result).getByTestId('rotate-revoked').textContent).toMatch(/Agent certificates\s*1.*Enrollments\s*2.*Forward link certificates\s*0/)
     const guide = within(result).getByRole('link', { name: /Rotating a node’s credentials/ })
     expect(guide.getAttribute('href')).toContain('docs/guide/agent-onboarding.md#rotating-a-nodes-credentials')
@@ -297,7 +285,7 @@ describe('NodeRotateCredentials', () => {
 
     await user.click(within(result).getByRole('button', { name: 'Copy credential' }))
     expect(writeText).toHaveBeenCalledWith(CREDENTIAL)
-    expect(emitted().rotated).toEqual([[{ node: 'proxy-5', apiKeyRotated: false }]])
+    expect(emitted().rotated).toEqual([[{ node: 'proxy-5' }]])
     expect(leaked()).toBe(false)
   })
 
@@ -318,23 +306,17 @@ describe('NodeRotateCredentials', () => {
     delete document.execCommand
   })
 
-  it('sends the reason, the lifetime and the API key choice, and warns that the old key stops', async () => {
+  it('sends the reason and the lifetime', async () => {
     const user = startUser()
-    kernelApi.rotateKernelAgentCredentials.mockResolvedValue(answer({ api_key_rotated: true }))
     renderRotate()
     const confirm = await openConfirm(user)
     await user.type(within(confirm).getByRole('textbox', { name: 'Reason' }), 'disk of the host was stolen')
     await user.click(within(confirm).getByRole('combobox', { name: 'Credential lifetime' }))
     await user.click(await screen.findByRole('option', { name: '24 hours' }))
-    const box = within(confirm).getByRole('checkbox', { name: 'Also replace the node’s API key' })
-    expect(within(confirm).queryByTestId('rotate-api-key-notice')).toBeNull()
-    await user.click(box)
-    expect(within(confirm).getByTestId('rotate-api-key-notice').textContent).toContain('old API key stops working as soon as you confirm')
 
     await user.click(within(confirm).getByRole('button', { name: 'Rotate credentials' }))
-    const result = await screen.findByRole('dialog', { name: 'New credential for hk-01' })
-    expect(kernelApi.rotateKernelAgentCredentials).toHaveBeenCalledWith({ node: 'proxy-5', rotateApiKey: true, ttlSeconds: 86400, reason: 'disk of the host was stolen' })
-    expect(within(result).getByTestId('rotate-api-key-result').textContent).toContain('API key was replaced')
+    await screen.findByRole('dialog', { name: 'New credential for hk-01' })
+    expect(kernelApi.rotateKernelAgentCredentials).toHaveBeenCalledWith({ node: 'proxy-5', ttlSeconds: 86400, reason: 'disk of the host was stolen' })
   })
 
   it('counts the reason in bytes and does not send one that is too long', async () => {
@@ -351,7 +333,7 @@ describe('NodeRotateCredentials', () => {
     expect(screen.getByRole('alertdialog')).toBeTruthy()
   })
 
-  it('has no API key option for a forward node', async () => {
+  it('rotates a forward node the same way', async () => {
     const user = startUser()
     renderRotate({ node: 'forward-3', nodeLabel: 'relay-hk' })
     await user.click(screen.getByRole('button', { name: 'Rotate credentials…' }))
@@ -359,7 +341,7 @@ describe('NodeRotateCredentials', () => {
     expect(within(confirm).queryByRole('checkbox')).toBeNull()
     await user.click(within(confirm).getByRole('button', { name: 'Rotate credentials' }))
     await screen.findByRole('dialog', { name: 'New credential for relay-hk' })
-    expect(kernelApi.rotateKernelAgentCredentials).toHaveBeenCalledWith({ node: 'forward-3', rotateApiKey: false, ttlSeconds: 3600, reason: '' })
+    expect(kernelApi.rotateKernelAgentCredentials).toHaveBeenCalledWith({ node: 'forward-3', ttlSeconds: 3600, reason: '' })
   })
 
   it('counts down to the expiry once a second and says so when it has passed', async () => {

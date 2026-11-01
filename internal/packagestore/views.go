@@ -28,16 +28,12 @@ type KernelAPIView struct {
 	// package's query cannot see the rows the filter hides before the
 	// filter applies.
 	RowFilter bool
-	// Finalized names the node credential split tables
+	// Finalized names the node secret split tables
 	// (node-ops-service.md section 4.6) that must all be finalized before
 	// the view is created, because it shows a column that held secrets
 	// until then or the credential-free remainder of a split table. Unsplit
 	// drops the view again (DropFinalizedViews).
 	Finalized []string
-	// FinalizedAny names split tables of which one must be finalized
-	// before the view is created; the view shows no secret in any phase,
-	// so unsplit leaves it.
-	FinalizedAny []string
 }
 
 // InviteSettingsKey is the system configuration key holding the affiliate
@@ -257,24 +253,6 @@ var splitViews = []KernelAPIView{
 		Finalized: []string{"v2_node_protocol"},
 	},
 	{
-		// Which credentials a node, forward node or clean agent holds, and their state: "has a token" since the
-		// legacy columns hold tombstones. No value and no hash.
-		Name:   "kapi_node_credential_status_v1",
-		Source: "v4_kernel_node_credential",
-		Query: "SELECT " + quotedColumns("subject_kind", "subject_id", "kind", "version", "status", "rotated_at") +
-			", (value <> '') AS has_value FROM v4_kernel_node_credential",
-		FinalizedAny: []string{"v2_node", "v2_forward_node", "v2_forward_clean_agent"},
-	},
-	{
-		// A clean agent, without its token.
-		Name:   "kapi_forward_clean_agent_v1",
-		Source: "v2_forward_clean_agent",
-		Query: "SELECT " + quotedColumns("id", "node_id", "name", "version", "hostname", "os", "arch", "kernel", "public_ip",
-			"private_ip", "capabilities", "status", "last_seen", "last_error", "revoked_at", "created_at", "updated_at") +
-			" FROM v2_forward_clean_agent",
-		Finalized: []string{"v2_forward_clean_agent"},
-	},
-	{
 		// A user's WireGuard peer, without its private and preshared keys.
 		Name:   "kapi_wireguard_peer_v1",
 		Source: "v2_wireguard_peer",
@@ -301,7 +279,7 @@ func FinalizedViewAvailable(db *gorm.DB, view string) (bool, error) {
 		if candidate.Name != view {
 			continue
 		}
-		if len(candidate.Finalized) == 0 && len(candidate.FinalizedAny) == 0 {
+		if len(candidate.Finalized) == 0 {
 			return true, nil
 		}
 		finalized, err := nodesecrets.FinalizedTables(db)
@@ -323,15 +301,7 @@ func splitViewReady(view KernelAPIView, finalized []string) bool {
 			return false
 		}
 	}
-	if len(view.FinalizedAny) == 0 {
-		return true
-	}
-	for _, table := range view.FinalizedAny {
-		if done[table] {
-			return true
-		}
-	}
-	return false
+	return true
 }
 
 // DropFinalizedViews drops the views that may exist only while table is
@@ -372,7 +342,7 @@ var ForwardRuntimeSettingKeys = []string{
 // schema, and a lease that grants the view then fails as for any missing
 // view.
 //
-// A view of the split's remainder (Finalized, FinalizedAny) is created only
+// A view of the split's remainder (Finalized) is created only
 // once its source is finalized; until then it is left out.
 func EnsureKernelAPIViews(db *gorm.DB) error {
 	if db == nil {

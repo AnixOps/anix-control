@@ -217,7 +217,6 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			admin.GET("/nodes/:id/logs", registeredPackageRoute(v2PackageGateway.Serve, "proxy-node", "proxy.admin.nodes.id.logs.get", nodeHandler.GetNodeLogs))
 			admin.POST("/nodes", registeredPackageRoute(v2PackageGateway.Serve, "proxy-node", "proxy.admin.nodes.post", nodeHandler.CreateNode))
 			admin.GET("/nodes/:id", registeredPackageRoute(v2PackageGateway.Serve, "proxy-node", "proxy.admin.nodes.id.get", nodeHandler.GetNode))
-			admin.GET("/nodes/:id/credentials", registeredPackageRoute(v2PackageGateway.Serve, "proxy-node", "proxy.admin.nodes.id.credentials.get", nodeHandler.GetNodeCredentials))
 			admin.PUT("/nodes/:id", registeredPackageRoute(v2PackageGateway.Serve, "proxy-node", "proxy.admin.nodes.id.put", nodeHandler.UpdateNode))
 			admin.DELETE("/nodes/:id", registeredPackageRoute(v2PackageGateway.Serve, "proxy-node", "proxy.admin.nodes.id.delete", nodeHandler.DeleteNode))
 			admin.POST("/nodes/:id/sync", registeredPackageRoute(v2PackageGateway.Serve, "protocol-runtime", "protocol.admin.nodes.id.sync.post", nodeHandler.SyncProtocol))

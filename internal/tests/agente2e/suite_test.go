@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/v5/internal/model"
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )
 
@@ -235,7 +234,7 @@ func (s *suite) seedNode(t *testing.T) {
 	db := s.control.db
 	node := model.Node{
 		Name: "agent-e2e-proxy", Host: "127.0.0.1", Port: 443, Status: model.NodeStatusOnline,
-		APIKey: "unused-" + uuid.NewString()[:16], Rate: 1, TrafficRate: 1,
+		Rate: 1, TrafficRate: 1,
 	}
 	require.NoError(t, db.Create(&node).Error)
 	s.nodeID = node.ID

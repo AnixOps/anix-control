@@ -392,15 +392,14 @@ expire. One call, for super administrators only
 ```sh
 curl -fsS -X POST https://panel.example.com/api/v4/kernel/agents/rotate-credentials \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' \
-  -d '{"node":"proxy-12","rotate_api_key":true,"reason":"disk of the host was stolen"}'
+  -d '{"node":"proxy-12","reason":"disk of the host was stolen"}'
 ```
 
 Control, in one transaction:
 
 1. revokes every Agent certificate, enrollment (an unused enrollment token
    included) and forward link certificate of the node;
-2. with `rotate_api_key` on a proxy node, replaces the node's API key;
-3. issues a fresh single-use enrollment credential (`anixagt_...`), valid
+2. issues a fresh single-use enrollment credential (`anixagt_...`), valid
    for one hour unless `ttl_seconds` says otherwise (at most 7 days), and
    shows it in the answer, once.
 
@@ -418,27 +417,10 @@ curl -fsSL https://panel.example.com/install.sh | sudo bash -s -- \
   -u https://panel.example.com -t anixagt_... --reset
 ```
 
-**The node's API key.** The Agent holds a certificate, not the key, but the
-node's configuration may still hold it, and an Agent configured with it
-(the way Agents were installed before the credential-only configuration)
-enrolls again by itself with it after its certificate is revoked. That is
-the recovery of a healthy node, and also why a rotation without
-`rotate_api_key` does not lock out whoever holds the key: the old key keeps
-working, so it can still enroll an Agent. If the key may be exposed, set
-`rotate_api_key`. It is opt-in because replacing the key breaks every
-process that still polls Control with it until it is given the new one, and
-an Agent that holds only the old key can then enroll only with the new
-credential (the install command with `--reset` needs the anix-agent release
-named in [Before You Start](#before-you-start)). Read the new key with the
-audited `GET /api/v2/admin/nodes/<id>/credentials` (action `reveal`); the
-rotation answer never carries it. `rotate_api_key` is not accepted for a
-forward node: its token belongs to the frozen legacy forward runtime.
-
 **In the console.** The same action is *Rotate credentials…* in the node
 page's Credentials section (and on a forwarding node's page, for a node with
 an Agent). It asks first, says what is revoked, takes the reason, how long the
-credential lives and, for a proxy node, whether to replace the API key too,
-then shows the new credential once, masked and with a copy button, together
+credential lives, then shows the new credential once, masked and with a copy button, together
 with when it expires. Closing the dialog clears it. The console does not know
 whether you are a super administrator: a refusal appears in the dialog. It
 shows no install command; give the credential to the machine with the

@@ -65,7 +65,7 @@ func TestEachFamilyNeedsItsCapability(t *testing.T) {
 			kernelnodeopsv1.OperationFamily_OPERATION_FAMILY_FORWARD, kernelnodeopsv1.OperationFamily_OPERATION_FAMILY_CREDENTIALS,
 		}, capabilities.GetGrantedFamilies())
 		require.Equal(t, KnownKinds(), capabilities.GetKinds())
-		require.Len(t, capabilities.GetTables(), 6)
+		require.Len(t, capabilities.GetTables(), 4)
 		for _, table := range capabilities.GetTables() {
 			require.Equal(t, kernelnodeopsv1.SecretSplitPhase_SECRET_SPLIT_PHASE_LEGACY, table.GetPhase(), table.GetTable())
 		}
@@ -122,14 +122,15 @@ func TestKindsTakeOnlyTheirNodeKinds(t *testing.T) {
 		client := h.client(forwardHost, allFamilies())
 		cleanAgent := kernelnodeopsv1.NodeKind_NODE_KIND_CLEAN_AGENT
 		for name, spec := range map[string]*kernelnodeopsv1.OperationSpec{
-			"sync a clean agent":         syncNode(cleanAgent, 20, false),
-			"retire a clean agent":       retireNode(cleanAgent, 20),
-			"check a proxy endpoint":     checkEndpoints(nodeRef(forwardKind, 10), nodeRef(proxyKind, 1)),
-			"proxy node statistics":      {Operation: &kernelnodeopsv1.OperationSpec_CollectNodeStats{CollectNodeStats: &kernelnodeopsv1.CollectNodeStats{Node: nodeRef(proxyKind, 1)}}},
-			"clean agent statistics":     {Operation: &kernelnodeopsv1.OperationSpec_CollectNodeStats{CollectNodeStats: &kernelnodeopsv1.CollectNodeStats{Node: nodeRef(cleanAgent, 20)}}},
-			"check a clean agent":        checkEndpoints(nodeRef(cleanAgent, 20)),
-			"a credential for no node":   issueCredential(nil, kernelnodeopsv1.CredentialKind_CREDENTIAL_KIND_NODE_API_KEY, ""),
-			"an unknown kind of subject": issueCredential(nodeRef(7, 1), kernelnodeopsv1.CredentialKind_CREDENTIAL_KIND_NODE_API_KEY, ""),
+			"sync a clean agent":          syncNode(cleanAgent, 20, false),
+			"retire a clean agent":        retireNode(cleanAgent, 20),
+			"check a proxy endpoint":      checkEndpoints(nodeRef(forwardKind, 10), nodeRef(proxyKind, 1)),
+			"proxy node statistics":       {Operation: &kernelnodeopsv1.OperationSpec_CollectNodeStats{CollectNodeStats: &kernelnodeopsv1.CollectNodeStats{Node: nodeRef(proxyKind, 1)}}},
+			"clean agent statistics":      {Operation: &kernelnodeopsv1.OperationSpec_CollectNodeStats{CollectNodeStats: &kernelnodeopsv1.CollectNodeStats{Node: nodeRef(cleanAgent, 20)}}},
+			"check a clean agent":         checkEndpoints(nodeRef(cleanAgent, 20)),
+			"a credential for no node":    issueCredential(nil, kernelnodeopsv1.CredentialKind_CREDENTIAL_KIND_NODE_API_KEY, ""),
+			"an unknown kind of subject":  issueCredential(nodeRef(7, 1), kernelnodeopsv1.CredentialKind_CREDENTIAL_KIND_NODE_API_KEY, ""),
+			"enrollment of a clean agent": issueCredential(nodeRef(cleanAgent, 20), kernelnodeopsv1.CredentialKind_CREDENTIAL_KIND_AGENT_ENROLLMENT, ""),
 		} {
 			_, err := client.SubmitOperation(context.Background(), &kernelnodeopsv1.SubmitOperationRequest{RequestId: "kind:" + name, Operation: spec})
 			require.Contains(t, []codes.Code{codes.PermissionDenied, codes.InvalidArgument}, status.Code(err), name)
@@ -141,7 +142,6 @@ func TestKindsTakeOnlyTheirNodeKinds(t *testing.T) {
 		for name, spec := range map[string]*kernelnodeopsv1.OperationSpec{
 			"api key of a forward node":     issueCredential(nodeRef(forwardKind, 10), kernelnodeopsv1.CredentialKind_CREDENTIAL_KIND_NODE_API_KEY, ""),
 			"forward token of a proxy node": issueCredential(nodeRef(proxyKind, 1), kernelnodeopsv1.CredentialKind_CREDENTIAL_KIND_FORWARD_NODE_TOKEN, ""),
-			"enrollment of a clean agent":   issueCredential(nodeRef(cleanAgent, 20), kernelnodeopsv1.CredentialKind_CREDENTIAL_KIND_AGENT_ENROLLMENT, ""),
 		} {
 			_, err := client.SubmitOperation(context.Background(), &kernelnodeopsv1.SubmitOperationRequest{RequestId: "credential:" + name, Operation: spec})
 			require.Equal(t, codes.InvalidArgument, status.Code(err), name)
@@ -150,7 +150,7 @@ func TestKindsTakeOnlyTheirNodeKinds(t *testing.T) {
 		// What each kind takes is accepted.
 		submit(t, client, "ok:sync forward", syncNode(forwardKind, 10, false))
 		submit(t, client, "ok:retire proxy", retireNode(proxyKind, 2))
-		submit(t, client, "ok:revoke clean agent", sampleOperation(KindCredentialRevoke))
+		submit(t, client, "ok:revoke proxy", sampleOperation(KindCredentialRevoke))
 		submit(t, client, "ok:enroll forward", issueCredential(nodeRef(forwardKind, 11), kernelnodeopsv1.CredentialKind_CREDENTIAL_KIND_AGENT_ENROLLMENT, ""))
 	})
 }

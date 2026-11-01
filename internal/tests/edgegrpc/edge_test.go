@@ -37,7 +37,7 @@ func TestEdgeProxyVouchesForTheNodeCertificate(t *testing.T) {
 		cache.InitMemory()
 		require.NoError(t, service.MigrateKernelModelsForTest(db))
 		require.NoError(t, db.Create(&model.Node{ID: edgeNodeID, Name: "edge-node", Host: "198.51.100.1", Port: 443,
-			APIKey: edgeNodeKey, APIKeyHash: fakeagent.APIKeyHash(edgeNodeKey), Status: model.NodeStatusOnline}).Error)
+			Status: model.NodeStatusOnline}).Error)
 
 		control := fakeagent.StartControl(t, db)
 		node := agentcontrol.AgentNode{Kind: agentcontrol.NodeKindProxy, ID: edgeNodeID}

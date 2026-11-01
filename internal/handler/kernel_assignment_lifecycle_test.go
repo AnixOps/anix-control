@@ -43,7 +43,7 @@ func newKernelAgentAssignmentFixture(t *testing.T, pluginID string) *kernelAgent
 	enableAgentPluginDispatch(t)
 
 	registerKernelAgentRelease(t, db, privateKey, publicKey, pluginID, "1.0.0")
-	node := model.Node{Name: pluginID + "-node", Host: "127.0.0.1", APIKey: pluginID + "-key", Status: model.NodeStatusOnline}
+	node := model.Node{Name: pluginID + "-node", Host: "127.0.0.1", Status: model.NodeStatusOnline}
 	require.NoError(t, db.Create(&node).Error)
 	installation := model.PluginInstallation{
 		PluginID: pluginID, Target: "agent", DesiredVersion: "1.0.0", State: "healthy", Enabled: true,

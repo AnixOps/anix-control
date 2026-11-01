@@ -40,16 +40,13 @@ var DropTables = []string{
 	"v2_forward_stats",
 }
 
-// KeptTables are archived for reference but not dropped:
-//   - v2_forward_node is the node inventory and the Agent identity
-//     (forward-<id>), which v4.2 keeps (section 10);
-//   - v2_forward_clean_agent is a table of the node credential split
-//     (nodesecrets) and the source of kapi_forward_clean_agent_v1; it goes
-//     with the clean agent's code, not with the flux data.
+// KeptTables are archived for reference but not dropped: v2_forward_node
+// is the node inventory and the Agent identity (forward-<id>), which v4.2
+// keeps (section 10).
 //
 // v2_forward_latency_bucket is neither: its probes also cover proxy nodes
 // (LatencyTargetTypeNode), so it is not flux data.
-var KeptTables = []string{"v2_forward_node", "v2_forward_clean_agent"}
+var KeptTables = []string{"v2_forward_node"}
 
 // ConfirmPhrase is what `forward legacy drop --confirm` must be given,
 // exactly.

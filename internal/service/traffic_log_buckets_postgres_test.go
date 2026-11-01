@@ -54,7 +54,7 @@ func postgresTrafficDB(t *testing.T) *gorm.DB {
 	require.NoError(t, db.AutoMigrate(&model.Node{}, &model.User{}, &model.TrafficLog{}, &model.StatServer{},
 		&model.SubscriberRequest{}, &model.SubscriberChange{}))
 	for _, id := range []uint{7, 8} {
-		require.NoError(t, db.Create(&model.Node{ID: id, Name: fmt.Sprintf("node%d", id), Host: "node.example.com", APIKey: fmt.Sprintf("key%d", id)}).Error)
+		require.NoError(t, db.Create(&model.Node{ID: id, Name: fmt.Sprintf("node%d", id), Host: "node.example.com"}).Error)
 	}
 	for _, id := range []uint{1, 2, 3} {
 		require.NoError(t, db.Create(&model.User{ID: id, Email: fmt.Sprintf("pg%d@example.test", id), Token: fmt.Sprintf("tok%d", id), UUID: fmt.Sprintf("uuid%d", id)}).Error)

@@ -2,14 +2,10 @@ package service
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
-	"errors"
 	"time"
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	"github.com/AnixOps/anix-control/v5/internal/model"
-	"github.com/AnixOps/anix-control/v5/internal/nodesecrets"
 	"gorm.io/gorm"
 )
 
@@ -23,19 +19,12 @@ func NewForwardNodeService(db *gorm.DB) *ForwardNodeService {
 	return &ForwardNodeService{db: db}
 }
 
-// Create 创建节点. The node's token is written to the split tables in the
-// same transaction (nodesecrets.Sync), as by Update and Delete.
+// Create 创建节点
 func (s *ForwardNodeService) Create(node *model.ForwardNode) error {
-	return s.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Create(node).Error; err != nil {
-			return err
-		}
-		return nodesecrets.Sync(tx, nodesecrets.TableForwardNode, node.ID)
-	})
+	return s.db.Create(node).Error
 }
 
-// Update 更新节点. A changed token or a disabled node revokes the node's
-// agent certificates.
+// Update 更新节点. A disabled node's agent certificates are revoked.
 func (s *ForwardNodeService) Update(node *model.ForwardNode) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
 		reason, err := forwardNodeAgentRevocation(tx, node)
@@ -43,9 +32,6 @@ func (s *ForwardNodeService) Update(node *model.ForwardNode) error {
 			return err
 		}
 		if err := tx.Save(node).Error; err != nil {
-			return err
-		}
-		if err := nodesecrets.Sync(tx, nodesecrets.TableForwardNode, node.ID); err != nil {
 			return err
 		}
 		if reason == "" {
@@ -56,17 +42,14 @@ func (s *ForwardNodeService) Update(node *model.ForwardNode) error {
 }
 
 // Delete 删除节点 and revoke its agent certificates. The kernel's part, the
-// token's split row and the certificates, is RetireForwardNodeTx, which
-// RetireNode runs too; the node row goes with it in the same transaction.
+// certificates, is RetireForwardNodeTx, which RetireNode runs too; the node
+// row goes with it in the same transaction.
 func (s *ForwardNodeService) Delete(id uint) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
 		if _, err := RetireForwardNodeTx(tx, id); err != nil {
 			return err
 		}
-		if err := tx.Delete(&model.ForwardNode{}, id).Error; err != nil {
-			return err
-		}
-		return nodesecrets.Sync(tx, nodesecrets.TableForwardNode, id)
+		return tx.Delete(&model.ForwardNode{}, id).Error
 	})
 }
 
@@ -100,25 +83,4 @@ type HealthCheckResult struct {
 	Latency   int64     `json:"latency"`
 	CheckTime time.Time `json:"check_time"`
 	Error     string    `json:"error,omitempty"`
-}
-
-// randBytes 生成随机字节
-func randBytes(n int) ([]byte, error) {
-	if n <= 0 {
-		return nil, errors.New("random byte length must be positive")
-	}
-	b := make([]byte, n)
-	if _, err := rand.Read(b); err != nil {
-		return nil, err
-	}
-	return b, nil
-}
-
-// GenerateAPIToken 生成API Token
-func (s *ForwardNodeService) GenerateAPIToken() (string, error) {
-	b, err := randBytes(16)
-	if err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(b), nil
 }

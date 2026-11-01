@@ -86,9 +86,7 @@ type TableFinalize struct {
 //     Sync writes tombstones into the legacy columns it writes.
 //   - Then the legacy rows are rewritten in batches by id, one transaction
 //     each, which locks its rows, brings the new tables in line with them
-//     (as backfill does) and writes the tombstones: unique per row, so no
-//     unique index is violated; a value that would collide is refused
-//     (ErrTombstoneCollision) and the batch rolled back.
+//     (as backfill does) and writes the tombstones.
 //   - finalized_at is recorded once a pass finds nothing left to rewrite.
 //     An interrupted finalize (finalized, finalized_at empty) is resumed by
 //     running it again, without a new verification.
@@ -238,7 +236,7 @@ func tombstonePass(ctx context.Context, db *gorm.DB, spec tableSpec, batchSize i
 			now := time.Now().UTC()
 			// The new tables first hold what the rows hold, as a backfill
 			// would make them; only then do the rows lose it.
-			if _, err := syncRows(tx, spec, ids, SourceBackfill, true, now); err != nil {
+			if _, err := syncRows(tx, spec, ids, true, now); err != nil {
 				return err
 			}
 			changed, err := tombstoneRows(tx, spec, ids, true, now)
@@ -321,9 +319,8 @@ type TableUnsplit struct {
 //   - The phase moves to dual_read first, and DropViews removes the views
 //     that exist only while the table is finalized, in that transaction;
 //     the writers then write secrets, not tombstones, again.
-//   - The legacy rows are restored in batches by id: a credential column
-//     takes the new table's value and a key hash column its hash; a JSON
-//     column takes back its original document, byte for byte, where the
+//   - The legacy rows are restored in batches by id: a key column takes
+//     the new table's value; a JSON column takes back its original document, byte for byte, where the
 //     column is still the redacted form of it, or else the redacted
 //     document with the new table's values at its placeholders.
 //   - Each table is verified afterwards; a mismatch is ErrMismatch, with
@@ -468,32 +465,12 @@ func restoreTable(ctx context.Context, db *gorm.DB, spec tableSpec, result *Tabl
 	}
 }
 
-// credentialColumns names the credential kind each tombstone column of a
-// credential table holds, and the hash column that goes with it.
-var credentialColumns = map[string]map[string]struct{ kind, hash string }{
-	TableNode:        {"api_key": {KindNodeAPIKey, "api_key_hash"}, "secret": {KindNodeSharedSecret, ""}},
-	TableForwardNode: {"api_token": {KindForwardNodeToken, ""}},
-	TableCleanAgent:  {"token": {KindCleanAgentToken, ""}},
-}
-
 // restoreRows writes the new tables' secrets back into the given legacy
 // rows. It answers the rows changed and the positions left unresolved.
 func restoreRows(tx *gorm.DB, spec tableSpec, ids []uint64) (int64, int64, error) {
 	rows, err := loadLegacyRows(tx, spec, ids, true)
 	if err != nil {
 		return 0, 0, err
-	}
-	credentials := map[credentialKey]model.NodeCredential{}
-	if spec.subjectKind != "" {
-		var current []model.NodeCredential
-		if err := tx.Session(&gorm.Session{NewDB: true}).
-			Where("subject_kind = ? AND subject_id IN ? AND kind IN ? AND status <> ?", spec.subjectKind, ids, spec.kinds, StatusRetired).
-			Order("version").Find(&current).Error; err != nil {
-			return 0, 0, err
-		}
-		for _, row := range current {
-			credentials[credentialKey{SubjectID: row.SubjectID, Kind: row.Kind}] = row
-		}
 	}
 	var secrets map[secretOwner]map[string]string
 	if spec.scope != "" {
@@ -519,25 +496,8 @@ func restoreRows(tx *gorm.DB, spec tableSpec, ids []uint64) (int64, int64, error
 				if !IsTombstone(value) {
 					continue
 				}
-				secret, hash, ok := "", "", false
-				if credential, isCredential := credentialColumns[spec.table][column.name]; isCredential {
-					current, found := credentials[credentialKey{SubjectID: row.id, Kind: credential.kind}]
-					if found && current.Value != "" {
-						secret, ok = current.Value, true
-						if credential.hash != "" && row.values[credential.hash] == "" {
-							// The row's own empty hash where it had none.
-							hash = current.KeyHash
-							if original, marked := originals[secretOwner{owner: row.id, column: credential.hash}]; marked {
-								hash = original
-							}
-							updates[credential.hash] = hash
-						}
-					}
-				} else {
-					secret, ok = secrets[secretOwner{owner: row.id, column: column.name}][""]
-					ok = ok && secret != ""
-				}
-				if !ok {
+				secret, ok := secrets[secretOwner{owner: row.id, column: column.name}][""]
+				if !ok || secret == "" {
 					unresolved++
 					continue
 				}
@@ -706,7 +666,7 @@ func AdoptionAllowed(db *gorm.DB, table string) error {
 		return nil
 	}
 	if !db.Migrator().HasTable(&model.NodeSecretSplit{}) {
-		return fmt.Errorf("%s holds node credentials and is not finalized", table)
+		return fmt.Errorf("%s holds node secrets and is not finalized", table)
 	}
 	var row model.NodeSecretSplit
 	if err := newSession(db).Where("table_name = ?", table).Limit(1).Find(&row).Error; err != nil {
@@ -720,7 +680,7 @@ func AdoptionAllowed(db *gorm.DB, table string) error {
 		if phase == PhaseFinalized {
 			phase = "finalizing"
 		}
-		return fmt.Errorf("%s holds node credentials until it is finalized (phase %s)", table, phase)
+		return fmt.Errorf("%s holds node secrets until it is finalized (phase %s)", table, phase)
 	}
 	return nil
 }

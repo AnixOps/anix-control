@@ -12,15 +12,12 @@
 // What it refuses, in the non-test Go code of ./internal/... and ./cmd/...
 // (type-checked):
 //
-//   - reading a moved field of a model row: model.Node's APIKey, APIKeyHash
-//     and Secret; model.ForwardNode's APIToken; model.ForwardCleanAgent's Token;
-//     model.WireGuardPeer's PrivateKey and PresharedKey. Writing one (the
+//   - reading a moved field of a model row: model.WireGuardPeer's
+//     PrivateKey and PresharedKey. Writing one (the
 //     left side of an assignment, a composite literal) is the writers' part
 //     and is allowed: they call nodesecrets.Sync in the same transaction;
 //   - naming a moved column in the SQL of a gorm call (Where, Select, Pluck,
-//     Order, Raw and the like): api_key, api_key_hash, api_token,
-//     private_key and preshared_key anywhere; secret and token where the
-//     call's chain reads v2_node or v2_forward_clean_agent.
+//     Order, Raw and the like): private_key and preshared_key.
 //
 // Allowed: internal/nodesecrets itself, internal/model (the definitions),
 // cmd/migrate and cmd/sqlite2postgres (they copy whole rows between
@@ -57,16 +54,6 @@ import (
 // the reason each is safe. A function literal counts as its enclosing
 // function.
 var allowed = map[string]string{
-	"internal/handler/node.go CreateNode": "answers the key and secret the writer just generated, from memory, " +
-		"once (as the legacy route always did)",
-	"internal/service/agent_pki_hooks.go forwardNodeAgentRevocation": "selects api_token only to hand the row to " +
-		"nodesecrets.ForwardNodeToken; compares the incoming row's value with it, a tombstone counting as unchanged",
-	"internal/service/node_credential_ops.go ProxyNodeHasCredentials": "selects the columns only to hand the row to " +
-		"nodesecrets.NodeAPIKey and NodeSharedSecret",
-	"internal/service/node_credential_ops.go ForwardNodeHasToken": "selects api_token only to hand the row to " +
-		"nodesecrets.ForwardNodeToken",
-	"internal/service/node_credential_ops.go IssueForwardNodeTokenTx": "selects api_token only to hand the row to " +
-		"nodesecrets.ForwardNodeToken",
 	"internal/service/wireguard_peer.go applyWireGuardPeer": "the peer comes from GetOrCreateWireGuardPeer, which " +
 		"resolves its keys through nodesecrets.ResolveWireGuardPeers or generated them",
 	"internal/service/wireguard_peer.go BuildWireGuardRuntimeUserExtras": "the peer comes from " +
@@ -79,35 +66,19 @@ var exemptPrefixes = []string{"internal/nodesecrets", "internal/model", "cmd/mig
 
 // movedFields are the moved fields by model type, with their columns.
 var movedFields = map[string]map[string]string{
-	"Node":              {"APIKey": "api_key", "APIKeyHash": "api_key_hash", "Secret": "secret"},
-	"ForwardNode":       {"APIToken": "api_token"},
-	"ForwardCleanAgent": {"Token": "token"},
-	"WireGuardPeer":     {"PrivateKey": "private_key", "PresharedKey": "preshared_key"},
+	"WireGuardPeer": {"PrivateKey": "private_key", "PresharedKey": "preshared_key"},
 }
 
-var modelTables = map[string]string{
-	"Node": "v2_node", "ForwardNode": "v2_forward_node",
-	"ForwardCleanAgent": "v2_forward_clean_agent", "WireGuardPeer": "v2_wireguard_peer",
-}
+var modelTables = map[string]string{"WireGuardPeer": "v2_wireguard_peer"}
 
-// distinctiveColumns are refused in any gorm SQL; genericColumns only where
-// the chain reads their table.
-var (
-	distinctiveColumns = []string{"api_key", "api_key_hash", "api_token", "private_key", "preshared_key"}
-	genericColumns     = map[string]string{"secret": "v2_node", "token": "v2_forward_clean_agent"}
-)
+// movedColumns are refused in any gorm SQL.
+var movedColumns = []string{"private_key", "preshared_key"}
 
 // sqlMethods are the gorm methods whose string arguments are SQL that
 // reads.
 var sqlMethods = map[string]bool{
 	"Where": true, "Or": true, "Not": true, "Select": true, "Pluck": true, "Order": true, "Group": true,
 	"Having": true, "Joins": true, "Raw": true, "Distinct": true,
-}
-
-// chainModelMethods take a destination or model whose type names the table.
-var chainModelMethods = map[string]bool{
-	"Model": true, "First": true, "Find": true, "Take": true, "Last": true, "Scan": true, "FirstOrCreate": true,
-	"FirstOrInit": true, "Delete": true, "FindInBatches": true,
 }
 
 // used records the allowed entries a read matched; an entry that matches
@@ -254,17 +225,7 @@ func checkFile(pkg *packages.Package, file *ast.File, rel, modelPath string) []f
 		if fn, ok := decl.(*ast.FuncDecl); ok {
 			function = fn.Name.Name
 		}
-		parents := map[ast.Node]ast.Node{}
-		var stack []ast.Node
 		ast.Inspect(decl, func(node ast.Node) bool {
-			if node == nil {
-				stack = stack[:len(stack)-1]
-				return true
-			}
-			if len(stack) > 0 {
-				parents[node] = stack[len(stack)-1]
-			}
-			stack = append(stack, node)
 			switch typed := node.(type) {
 			case *ast.SelectorExpr:
 				if written[typed] {
@@ -284,7 +245,7 @@ func checkFile(pkg *packages.Package, file *ast.File, rel, modelPath string) []f
 					if !ok {
 						continue
 					}
-					for _, column := range sqlColumns(text, chainTables(info, typed, parents, modelPath)) {
+					for _, column := range sqlColumns(text) {
 						report(function, arg.Pos(), fmt.Sprintf("names the moved column %s in the SQL of %s outside internal/nodesecrets", column, method))
 					}
 				}
@@ -364,60 +325,11 @@ func constantString(info *types.Info, expr ast.Expr) (string, bool) {
 	return constant.StringVal(value.Value), true
 }
 
-// chainTables answers the tables a gorm call chain reads: the types given
-// to Model, First, Find and the like, and Table names, along the whole
-// chain the call is part of.
-func chainTables(info *types.Info, call *ast.CallExpr, parents map[ast.Node]ast.Node, modelPath string) map[string]bool {
-	// Climb to the outermost call of the chain.
-	top := ast.Expr(call)
-	for {
-		sel, ok := parents[top].(*ast.SelectorExpr)
-		if !ok || sel.X != top {
-			break
-		}
-		outer, ok := parents[sel].(*ast.CallExpr)
-		if !ok || outer.Fun != sel {
-			break
-		}
-		top = outer
-	}
-	tables := map[string]bool{}
-	for expr := top; ; {
-		outer, ok := expr.(*ast.CallExpr)
-		if !ok {
-			break
-		}
-		sel, ok := outer.Fun.(*ast.SelectorExpr)
-		if !ok {
-			break
-		}
-		switch {
-		case sel.Sel.Name == "Table" && len(outer.Args) > 0:
-			if name, ok := constantString(info, outer.Args[0]); ok {
-				tables[strings.Fields(name + " ")[0]] = true
-			}
-		case chainModelMethods[sel.Sel.Name] && len(outer.Args) > 0:
-			if t := info.TypeOf(outer.Args[0]); t != nil {
-				if name, ok := modelType(t, modelPath); ok {
-					tables[modelTables[name]] = true
-				}
-			}
-		}
-		expr = sel.X
-	}
-	return tables
-}
-
 // sqlColumns answers the moved columns text names as SQL identifiers.
-func sqlColumns(text string, tables map[string]bool) []string {
+func sqlColumns(text string) []string {
 	var found []string
-	for _, column := range distinctiveColumns {
+	for _, column := range movedColumns {
 		if columnPattern(column).MatchString(text) {
-			found = append(found, column)
-		}
-	}
-	for column, table := range genericColumns {
-		if tables[table] && columnPattern(column).MatchString(text) {
 			found = append(found, column)
 		}
 	}

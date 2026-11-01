@@ -208,15 +208,6 @@
   },
   {
     "method": "GET",
-    "path": "/api/v2/admin/nodes/:id/credentials",
-    "owner": "proxy-node",
-    "route_id": "proxy.admin.nodes.id.credentials.get",
-    "envelope": "data",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
-    "method": "GET",
     "path": "/api/v2/admin/nodes/:id/logs",
     "owner": "proxy-node",
     "route_id": "proxy.admin.nodes.id.logs.get",

@@ -73,7 +73,7 @@ func TestPhaseGateRefusesWithoutACleanRecentVerify(t *testing.T) {
 		require.NotNil(t, changes[0].VerifiedAt)
 		require.Len(t, changes[0].Digest, 64)
 		require.Equal(t, PhaseDualRead, ReadPhase(db, TableNode), "this process reads the change at once")
-		require.Equal(t, PhaseDualWrite, ReadPhase(db, TableCleanAgent))
+		require.Equal(t, PhaseDualWrite, ReadPhase(db, TableNodeProtocol))
 
 		// The same phase again changes nothing and audits nothing.
 		changes, err = SetPhase(ctx, db, PhaseOptions{Tables: []string{TableNode}, Phase: PhaseDualRead})
@@ -82,26 +82,26 @@ func TestPhaseGateRefusesWithoutACleanRecentVerify(t *testing.T) {
 		require.Len(t, audits(t, db), 1)
 
 		// A verification older than VerifyMaxAge no longer opens it.
-		changes, err = SetPhase(ctx, db, PhaseOptions{Tables: []string{TableCleanAgent}, Phase: PhaseDualRead,
+		changes, err = SetPhase(ctx, db, PhaseOptions{Tables: []string{TableNodeProtocol}, Phase: PhaseDualRead,
 			Now: time.Now().Add(VerifyMaxAge + time.Minute)})
 		require.ErrorIs(t, err, ErrPhaseRefused)
 		require.Contains(t, changes[0].Refused, "older than")
 
 		// A failing verification after a clean one closes it again.
-		require.NoError(t, db.Where("subject_kind = ? AND subject_id = ?", SubjectForward, f.forwards[0].ID).Delete(&model.NodeCredential{}).Error)
-		_, err = Verify(ctx, db, VerifyOptions{Tables: []string{TableForwardNode}})
+		require.NoError(t, db.Where("scope = ? AND owner_id = ?", ScopeWireGuardPeer, f.peers[0].ID).Delete(&model.ProtocolSecret{}).Error)
+		_, err = Verify(ctx, db, VerifyOptions{Tables: []string{TableWireGuardPeer}})
 		require.ErrorIs(t, err, ErrMismatch)
-		changes, err = SetPhase(ctx, db, PhaseOptions{Tables: []string{TableForwardNode}, Phase: PhaseDualRead})
+		changes, err = SetPhase(ctx, db, PhaseOptions{Tables: []string{TableWireGuardPeer}, Phase: PhaseDualRead})
 		require.ErrorIs(t, err, ErrPhaseRefused)
 		require.Contains(t, changes[0].Refused, "mismatches")
 
-		// "all" moves every table or none: the forward nodes refuse, so the
-		// clean agents stay in dual_write.
+		// "all" moves every table or none: the WireGuard peers refuse, so
+		// the protocols stay in dual_write.
 		changes, err = SetPhase(ctx, db, dualRead)
 		require.ErrorIs(t, err, ErrPhaseRefused)
 		for _, change := range changes {
 			require.False(t, change.Changed, change.Table)
-			if change.Table == TableForwardNode {
+			if change.Table == TableWireGuardPeer {
 				require.NotEmpty(t, change.Refused)
 			} else {
 				require.Empty(t, change.Refused, change.Table)
@@ -113,7 +113,7 @@ func TestPhaseGateRefusesWithoutACleanRecentVerify(t *testing.T) {
 		require.Len(t, audits(t, db), 1)
 
 		// Backfilled and verified again, every table moves.
-		_, err = Backfill(ctx, db, BackfillOptions{Tables: []string{TableForwardNode}})
+		_, err = Backfill(ctx, db, BackfillOptions{Tables: []string{TableWireGuardPeer}})
 		require.NoError(t, err)
 		requireVerified(t, db)
 		changes, err = SetPhase(ctx, db, dualRead)
@@ -153,7 +153,7 @@ func TestPhaseRollbackAndRefusedPhases(t *testing.T) {
 		require.NoError(t, err)
 
 		// The way back needs no verification, even a failing one.
-		require.NoError(t, db.Where("subject_kind = ?", SubjectProxy).Delete(&model.NodeCredential{}).Error)
+		require.NoError(t, db.Where("scope = ?", ScopeNodeRawConfig).Delete(&model.ProtocolSecret{}).Error)
 		_, err = Verify(ctx, db, VerifyOptions{Tables: []string{TableNode}})
 		require.ErrorIs(t, err, ErrMismatch)
 		changes, err := SetPhase(ctx, db, PhaseOptions{Tables: []string{TableNode}, Phase: PhaseDualWrite})
@@ -169,9 +169,10 @@ func TestPhaseRollbackAndRefusedPhases(t *testing.T) {
 
 		// Rolled back, the readers read the legacy columns again.
 		node := f.nodes[0]
-		before := FallbackCount(TableNode, KindNodeAPIKey, "")
-		require.True(t, NodeAPIKeyMatches(db, &node, "fake-node-key-1"))
-		require.Equal(t, before, FallbackCount(TableNode, KindNodeAPIKey, ""), "dual_write never reads the new table")
+		before := FallbackCount(TableNode, "raw_config", "")
+		ResolveNodeRawConfig(db, &node)
+		require.Equal(t, f.rawConfig, *node.RawConfig)
+		require.Equal(t, before, FallbackCount(TableNode, "raw_config", ""), "dual_write never reads the new table")
 
 		// Only dual_read and dual_write can be asked for, and a table in
 		// another phase is not moved.

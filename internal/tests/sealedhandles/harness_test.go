@@ -35,7 +35,7 @@ import (
 	"gorm.io/gorm/logger"
 )
 
-const proxyNodeID, forwardNodeID = 3, 7
+const proxyNodeID, secretNodeID = 3, 7
 
 // extractionRoute is a row of config/package-extraction.json.
 type extractionRoute struct {
@@ -45,12 +45,14 @@ type extractionRoute struct {
 	RouteID string `json:"route_id"`
 }
 
-// The tests' forward node token update: PUT /api/v2/admin/forward/nodes/:id
-// was removed with the flux routes in v4.2 (F5d), and the tests keep it as
-// a fixture route of the forward package, with its node secret field, to
-// walk a typed value through IssueCredential.
+// The tests' fixture routes of the proxy-node package: a node secret update
+// (PUT /api/v2/admin/fixture/nodes/:id/secret), whose node secret field
+// walks a typed value through PutSecretDocument, and an enrollment
+// (POST /api/v2/admin/fixture/nodes/:id/enroll), whose answer shows a
+// generated credential.
 const fixtureSecretFields = `,
-    {"route_id": "` + updateForwardNode + `", "target": {"kind": "forward", "path_param": "id"}, "request": [{"pointer": "/api_token", "kind": "value"}]}
+    {"route_id": "` + updateNodeSecret + `", "target": {"kind": "proxy", "path_param": "id"}, "request": [{"pointer": "/api_token", "kind": "value"}]},
+    {"route_id": "` + enrollNode + `", "target": {"kind": "proxy", "path_param": "id"}, "answer": [{"pointer": "/data/credential", "name": "credential"}]}
   ]
 }`
 
@@ -77,7 +79,8 @@ func extraction(t *testing.T) map[string]extractionRoute {
 	for _, row := range document.Routes {
 		rows[row.RouteID] = row
 	}
-	rows[updateForwardNode] = extractionRoute{Method: http.MethodPut, Path: "/api/v2/admin/forward/nodes/:id", Package: "forward", RouteID: updateForwardNode}
+	rows[updateNodeSecret] = extractionRoute{Method: http.MethodPut, Path: "/api/v2/admin/fixture/nodes/:id/secret", Package: "proxy-node", RouteID: updateNodeSecret}
+	rows[enrollNode] = extractionRoute{Method: http.MethodPost, Path: "/api/v2/admin/fixture/nodes/:id/enroll", Package: "proxy-node", RouteID: enrollNode}
 	return rows
 }
 
@@ -111,7 +114,7 @@ func (hostOperations) LeaseStorage(context.Context, packagebridge.HostIdentity) 
 type grants struct{}
 
 func (grants) AuthorizeCapability(_ context.Context, _ packagebridge.HostIdentity, capability string) error {
-	if capability == service.CapabilityNodeOpsCredentials {
+	if capability == service.CapabilityNodeOpsCredentials || capability == service.CapabilityNodeOpsNodeConfig {
 		return nil
 	}
 	return service.ErrCapabilityNotAuthorized
@@ -160,9 +163,9 @@ func newHarnessWith(t *testing.T, register func(h *harness, registry *kernelnode
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = sqlDB.Close() })
 	require.NoError(t, db.AutoMigrate(append(append(model.KernelNodeOperationModels(), &model.EgressRoute{}), &model.Node{}, &model.ForwardNode{})...))
-	require.NoError(t, db.Create(&model.Node{ID: proxyNodeID, Name: "edge", APIKey: "stored-key"}).Error)
-	require.NoError(t, db.Create(&model.ForwardNode{ID: forwardNodeID, Name: "relay", Host: "relay.example", Port: 443}).Error)
-	require.NoError(t, db.Create(&model.ForwardNode{ID: forwardNodeID + 1, Name: "other", Host: "other.example", Port: 443}).Error)
+	require.NoError(t, db.Create(&model.Node{ID: proxyNodeID, Name: "edge"}).Error)
+	require.NoError(t, db.Create(&model.Node{ID: secretNodeID, Name: "relay"}).Error)
+	require.NoError(t, db.Create(&model.Node{ID: secretNodeID + 1, Name: "other"}).Error)
 
 	h := &harness{
 		t: t, db: db, store: sealedsecrets.NewStore(nil), hosts: map[string]*host{}, native: map[string]pluginhostsdk.NativeHandler{},
@@ -171,6 +174,7 @@ func newHarnessWith(t *testing.T, register func(h *harness, registry *kernelnode
 	}
 	registry := kernelnodeops.NewRegistry()
 	if register == nil {
+		require.NoError(t, registry.Register(kernelnodeops.KindSecretsPut, secretExecutor{h: h}))
 		require.NoError(t, registry.Register(kernelnodeops.KindCredentialIssue, credentialExecutor{h: h}))
 	} else {
 		register(h, registry)
@@ -390,41 +394,46 @@ func patternMatches(pattern, path string) bool {
 	return true
 }
 
-// credentialExecutor stands for NO-5's credential.issue: its Preparer
-// resolves the token an administrator typed (sealed from /api_token) for
-// the operation's subject, and its executor reveals the credentials it
-// generates.
-type credentialExecutor struct{ h *harness }
+// secretExecutor stands for secrets.put: its Preparer resolves the token an
+// administrator typed (sealed from /api_token), which the package put in the
+// document as {"token": handle}, for the operation's node.
+type secretExecutor struct{ h *harness }
 
-func (e credentialExecutor) Prepare(_ context.Context, submission *kernelnodeops.Submission) error {
-	op := submission.Operation.GetIssueCredential()
-	if op.GetValue() == nil {
-		return nil
+func (e secretExecutor) Prepare(_ context.Context, submission *kernelnodeops.Submission) error {
+	op := submission.Operation.GetPutSecretDocument()
+	var document struct {
+		Token string `json:"token"`
 	}
-	secrets, err := submission.Unseal(sealedsecrets.Use{
-		Handle: op.GetValue().GetHandle(), Target: kernelnodeops.NodeTarget(op.GetSubject()), Field: "/api_token",
-	})
+	if err := json.Unmarshal(op.GetDocumentJson(), &document); err != nil {
+		return err
+	}
+	node := &kernelnodeopsv1.NodeRef{Kind: kernelnodeopsv1.NodeKind_NODE_KIND_PROXY, Id: op.GetOwnerId()}
+	secrets, err := submission.Unseal(sealedsecrets.Use{Handle: document.Token, Target: kernelnodeops.NodeTarget(node), Field: "/api_token"})
 	if err != nil {
 		return err
 	}
 	e.h.mu.Lock()
-	e.h.resolved[fmt.Sprintf("forward-%d", op.GetSubject().GetId())] = secrets[0].Value
+	e.h.resolved[fmt.Sprintf("proxy-%d", op.GetOwnerId())] = secrets[0].Value
 	e.h.mu.Unlock()
 	return nil
 }
 
-func (e credentialExecutor) Execute(_ context.Context, run *kernelnodeops.Run) kernelnodeops.Outcome {
+func (secretExecutor) Execute(context.Context, *kernelnodeops.Run) kernelnodeops.Outcome {
+	return kernelnodeops.Succeeded(&kernelnodeopsv1.OperationResult{Result: &kernelnodeopsv1.OperationResult_SecretDocument{SecretDocument: &kernelnodeopsv1.SecretDocumentResult{Stored: 1}}})
+}
+
+// credentialExecutor stands for credential.issue: it reveals the Agent
+// enrollment credential it generates.
+type credentialExecutor struct{ h *harness }
+
+func (credentialExecutor) Execute(_ context.Context, run *kernelnodeops.Run) kernelnodeops.Outcome {
 	op := run.Operation.GetIssueCredential()
 	result := &kernelnodeopsv1.CredentialResult{Subject: op.GetSubject(), Kind: op.GetKind(), Version: 1}
-	if op.GetValue() == nil {
-		for _, name := range []string{"api_key", "secret"} {
-			handle, err := run.Reveal(name, fmt.Sprintf("generated-%s-%d", name, op.GetSubject().GetId()))
-			if err != nil {
-				return kernelnodeops.Failed(kernelnodeopsv1.ErrorCode_ERROR_CODE_INTERNAL, "the credential cannot be shown", false)
-			}
-			result.Reveal = append(result.Reveal, handle)
-		}
+	handle, err := run.Reveal("credential", fmt.Sprintf("generated-credential-%d", op.GetSubject().GetId()))
+	if err != nil {
+		return kernelnodeops.Failed(kernelnodeopsv1.ErrorCode_ERROR_CODE_INTERNAL, "the credential cannot be shown", false)
 	}
+	result.Reveal = append(result.Reveal, handle)
 	return kernelnodeops.Succeeded(&kernelnodeopsv1.OperationResult{Result: &kernelnodeopsv1.OperationResult_Credential{Credential: result}})
 }
 

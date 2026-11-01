@@ -76,9 +76,12 @@ func TestSealedHandlesDoNotChangeTheDigest(t *testing.T) {
 		h.serve(KindCredentialIssue, newScript(succeed))
 		h.serve(KindSecretsPut, newScript(succeed))
 		proxy := h.client(proxyHost, allFamilies())
-		credential := nodeRef(forwardKind, 10)
-		first := submit(t, proxy, "credential.issue:forward-10:token:d", issueCredential(credential, kernelnodeopsv1.CredentialKind_CREDENTIAL_KIND_FORWARD_NODE_TOKEN, SealedPrefix+"aaaa"))
-		repeat := submit(t, proxy, "credential.issue:forward-10:token:d", issueCredential(credential, kernelnodeopsv1.CredentialKind_CREDENTIAL_KIND_FORWARD_NODE_TOKEN, SealedPrefix+"bbbb"))
+		credential := nodeRef(proxyKind, 1)
+		raw := func(handle string) *kernelnodeopsv1.OperationSpec {
+			return putSecretDocument(kernelnodeopsv1.SecretScope_SECRET_SCOPE_NODE_RAW_CONFIG, credential.GetId(), "raw_config", `{"token":"`+handle+`"}`)
+		}
+		first := submit(t, proxy, "secrets.put:1:raw:d", raw(SealedPrefix+"aaaa"))
+		repeat := submit(t, proxy, "secrets.put:1:raw:d", raw(SealedPrefix+"bbbb"))
 		require.True(t, first.GetApplied())
 		require.False(t, repeat.GetApplied())
 		require.Equal(t, first.GetOperation().GetOperationId(), repeat.GetOperation().GetOperationId())
@@ -117,7 +120,7 @@ func TestMissingTargetsRecordNothing(t *testing.T) {
 			"endpoint":         checkEndpoints(nodeRef(forwardKind, 10), nodeRef(forwardKind, 99)),
 			"agent node":       agentOperation(99, "agent.ping"),
 			"protocol":         {Operation: &kernelnodeopsv1.OperationSpec_RetireProtocol{RetireProtocol: &kernelnodeopsv1.RetireProtocol{ProtocolId: 99}}},
-			"clean agent":      {Operation: &kernelnodeopsv1.OperationSpec_RevokeCredential{RevokeCredential: &kernelnodeopsv1.RevokeCredential{Subject: nodeRef(kernelnodeopsv1.NodeKind_NODE_KIND_CLEAN_AGENT, 99)}}},
+			"credential":       {Operation: &kernelnodeopsv1.OperationSpec_RevokeCredential{RevokeCredential: &kernelnodeopsv1.RevokeCredential{Subject: nodeRef(proxyKind, 99)}}},
 			"legacy rule":      {Operation: &kernelnodeopsv1.OperationSpec_ApplyLegacyRule{ApplyLegacyRule: &kernelnodeopsv1.ApplyLegacyRule{RuleId: 99, Action: forwardAction}}},
 			"clean agent node": {Operation: &kernelnodeopsv1.OperationSpec_IssueCleanAgent{IssueCleanAgent: &kernelnodeopsv1.IssueCleanAgent{Name: "n", ForwardNodeId: 99}}},
 		} {
@@ -182,8 +185,8 @@ func sampleOperation(kindName string) *kernelnodeopsv1.OperationSpec {
 		}}},
 		KindAgentDiagnostic:  {Operation: &kernelnodeopsv1.OperationSpec_RunAgentDiagnostic{RunAgentDiagnostic: &kernelnodeopsv1.RunAgentDiagnostic{NodeId: 1, Action: "ping", ParamsJson: []byte(`{"host":"1.1.1.1"}`)}}},
 		KindAgentOperation:   agentOperation(1, "node.reload"),
-		KindCredentialIssue:  issueCredential(nodeRef(proxyKind, 1), kernelnodeopsv1.CredentialKind_CREDENTIAL_KIND_UNSPECIFIED, ""),
-		KindCredentialRevoke: {Operation: &kernelnodeopsv1.OperationSpec_RevokeCredential{RevokeCredential: &kernelnodeopsv1.RevokeCredential{Subject: nodeRef(kernelnodeopsv1.NodeKind_NODE_KIND_CLEAN_AGENT, 20)}}},
+		KindCredentialIssue:  issueCredential(nodeRef(proxyKind, 1), kernelnodeopsv1.CredentialKind_CREDENTIAL_KIND_AGENT_ENROLLMENT, ""),
+		KindCredentialRevoke: {Operation: &kernelnodeopsv1.OperationSpec_RevokeCredential{RevokeCredential: &kernelnodeopsv1.RevokeCredential{Subject: nodeRef(proxyKind, 1)}}},
 		KindRegKeyIssue:      {Operation: &kernelnodeopsv1.OperationSpec_IssueRegistrationKey{IssueRegistrationKey: &kernelnodeopsv1.IssueRegistrationKey{Name: "edge"}}},
 		KindRegKeyRevoke:     {Operation: &kernelnodeopsv1.OperationSpec_RevokeRegistrationKey{RevokeRegistrationKey: &kernelnodeopsv1.RevokeRegistrationKey{KeyId: 60}}},
 		KindCleanAgentIssue:  {Operation: &kernelnodeopsv1.OperationSpec_IssueCleanAgent{IssueCleanAgent: &kernelnodeopsv1.IssueCleanAgent{Name: "agent", ForwardNodeId: 10}}},
@@ -256,7 +259,6 @@ func TestMalformedSubmissionsAreRefused(t *testing.T) {
 			"document not JSON":  putSecretDocument(kernelnodeopsv1.SecretScope_SECRET_SCOPE_NODE_RAW_CONFIG, 1, "raw_config", `private_key=x`),
 			"secret in clear":    putSecretDocument(kernelnodeopsv1.SecretScope_SECRET_SCOPE_NODE_PROTOCOL, 5, "settings", `{"users":[{"password":"hunter2"}]}`),
 			"array secret":       putSecretDocument(kernelnodeopsv1.SecretScope_SECRET_SCOPE_NODE_PROTOCOL, 5, "settings", `{"psk":["k1"]}`),
-			"credential handle":  issueCredential(nodeRef(forwardKind, 10), kernelnodeopsv1.CredentialKind_CREDENTIAL_KIND_FORWARD_NODE_TOKEN, "plain-token"),
 			"credential kind":    issueCredential(nodeRef(forwardKind, 10), kernelnodeopsv1.CredentialKind_CREDENTIAL_KIND_NODE_API_KEY, ""),
 			"one value for all":  issueCredential(nodeRef(proxyKind, 1), kernelnodeopsv1.CredentialKind_CREDENTIAL_KIND_UNSPECIFIED, SealedPrefix+"x"),
 			"enrollment value":   issueCredential(nodeRef(proxyKind, 1), kernelnodeopsv1.CredentialKind_CREDENTIAL_KIND_AGENT_ENROLLMENT, SealedPrefix+"x"),

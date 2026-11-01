@@ -1054,6 +1054,14 @@ native, and none will: M3-4 and M3-5 are cancelled (section 7).
 
 ## 4. Node credential split
 
+> **Removed (after 5.0.0-rc.28).** Agents authenticate with their mTLS
+> certificate only, so the credential half of this split is gone: node API
+> keys, shared secrets, forward node tokens, clean agents and
+> `v4_kernel_node_credential` (migration `0027_drop_node_credentials`). What
+> remains is the protocol secret half: `v2_node.raw_config`,
+> `v2_node_protocol` and `v2_wireguard_peer` in `v4_kernel_protocol_secret`.
+> The text below is the original design and still names the removed parts.
+
 ### 4.1 What moves
 
 | Table | Column(s) | What it is | New home |

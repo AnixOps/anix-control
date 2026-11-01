@@ -23,8 +23,7 @@ type ForwardNode struct {
 	Type        string `gorm:"size:20;not null;default:'exit'" json:"type"` // relay/exit
 	Host        string `gorm:"size:255;not null" json:"host"`
 	Port        int    `gorm:"not null" json:"port"`
-	APIPort     int    `json:"api_port"` // 管理API端口
-	APIToken    string `gorm:"size:100" json:"api_token"`
+	APIPort     int    `json:"api_port"`     // 管理API端口
 	MetricsPort int    `json:"metrics_port"` // Prometheus /metrics 端口，0 表示未配置
 
 	// 节点信息

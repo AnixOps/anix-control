@@ -7,7 +7,6 @@ import (
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	"github.com/AnixOps/anix-control/v5/internal/agentpki"
 	"github.com/AnixOps/anix-control/v5/internal/model"
-	"github.com/AnixOps/anix-control/v5/internal/nodesecrets"
 	"gorm.io/gorm"
 )
 
@@ -35,30 +34,12 @@ func revokeProxyNodeAgentsIfDisabled(tx *gorm.DB, nodeID uint, updates map[strin
 }
 
 // forwardNodeAgentRevocation returns why saving node revokes its agent
-// certificates: its token changed, or it is disabled. It reads the stored
-// row, so call it before saving.
-func forwardNodeAgentRevocation(tx *gorm.DB, node *model.ForwardNode) (string, error) {
-	if node == nil || node.ID == 0 {
+// certificates: it is disabled.
+func forwardNodeAgentRevocation(_ *gorm.DB, node *model.ForwardNode) (string, error) {
+	if node == nil || node.ID == 0 || node.Enabled {
 		return "", nil
 	}
-	var stored model.ForwardNode
-	if err := tx.Select("id", "api_token").Where("id = ?", node.ID).First(&stored).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return "", nil
-		}
-		return "", err
-	}
-	// The stored token is read through the node credential split, so a
-	// change is seen whichever form holds it. A tombstone in the row being
-	// saved (a finalized table's, loaded and saved back) keeps the token.
-	switch {
-	case !nodesecrets.IsTombstone(node.APIToken) && nodesecrets.ForwardNodeToken(tx, &stored) != node.APIToken:
-		return agentpki.RevokeReasonCredentialsReplaced, nil
-	case !node.Enabled:
-		return agentpki.RevokeReasonNodeDisabled, nil
-	default:
-		return "", nil
-	}
+	return agentpki.RevokeReasonNodeDisabled, nil
 }
 
 // revokeNodeAgents revokes every agent certificate and enrollment of a node.

@@ -14,7 +14,7 @@ import (
 
 func TestNodeTrafficHandlerAnswersSeries(t *testing.T) {
 	db := newKernelHandlerTestDB(t, &model.Node{}, &model.TrafficLog{}, &model.StatServer{})
-	require.NoError(t, db.Create(&model.Node{ID: 7, Name: "seven", APIKey: "k7"}).Error)
+	require.NoError(t, db.Create(&model.Node{ID: 7, Name: "seven"}).Error)
 	current := time.Now().UTC().Truncate(time.Hour).Unix()
 	today := time.Date(time.Now().Year(), time.Now().Month(), time.Now().Day(), 0, 0, 0, 0, time.Local)
 	require.NoError(t, db.Create(&[]model.TrafficLog{
