@@ -1634,7 +1634,7 @@ advertised them.
     agent within a minute, as they reach the legacy pull; they do not
     rebuild it themselves.
   - **What the document carries (A2-3).** A proxy node's document also
-    holds `legacy_pull`: the UniProxy answer for no node type
+    holds `runtime` (named `legacy_pull` until 5.0.0-rc.28): the answer for no node type
     (`default`) and for each type the node serves (`types`), from
     `service.BuildUniProxyNodeConfig`, which the UniProxy handler calls
     too, and for each enabled protocol by id (`protocols`, from

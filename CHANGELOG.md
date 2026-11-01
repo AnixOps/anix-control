@@ -4,6 +4,12 @@
 
 ### Removed
 
+- The node configuration snapshot no longer carries `legacy_pull`, the old
+  name of `runtime` that rc.28 still sent for rc.27 Agents. Every node's
+  configuration hash changes once, so each Agent receives one new revision
+  after the upgrade; Agents older than rc.28 no longer find a runtime
+  configuration and must be upgraded first.
+
 - Agent enrollment no longer accepts a proxy node's API key or a forward
   node's token: `AgentEnrollment.Enroll` takes only a one-time enrollment
   credential (`anixagt_...`) or a node-group join token. Enrolled Agents

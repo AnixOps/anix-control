@@ -27,9 +27,8 @@ import (
 // DesiredConfigFormat names the desired configuration document's schema
 // (node-ops-service.md section 5.5): a proxy node's protocols as the
 // kernel's builder renders them for the node, with its raw configuration
-// and its runtime configurations (runtime; legacy_pull is the same member
-// under its old name, for Agents released before runtime); a forward
-// node's legacy rules and tunnels.
+// and its runtime configurations (runtime); a forward node's legacy rules
+// and tunnels.
 const DesiredConfigFormat = "anixops.nodeconfig/v1"
 
 // ForwardConfigFormat is the format of a node whose Agent negotiated
@@ -151,9 +150,6 @@ func buildProxyDesiredConfig(db *gorm.DB, id uint) (map[string]any, error) {
 	document["protocols"] = rendered
 	runtime := buildRuntime(db, id, rendered)
 	document["runtime"] = runtime
-	// legacy_pull is read by Agents released before runtime; it goes once
-	// every Agent reads runtime.
-	document["legacy_pull"] = runtime
 	// The node's egress routes (internal/egressroute), only when it takes
 	// part in one: the documents of the other nodes keep their hash.
 	egress, err := egressroute.NodeMember(db, id)
