@@ -72,5 +72,3 @@ packages/**/dist/
 release-packages/
 .tmp/
 
-# Control Center app (separate module, built by control-center*.yml workflows)
-control-center/

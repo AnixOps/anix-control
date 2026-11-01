@@ -344,8 +344,7 @@ Bump the pin in a pull request of its own, never inside a release pull request:
    version (16), so take it from the PostgreSQL apt repository rather than
    switching to the unversioned `postgresql-client`, which is 18 on 26.04.
    Also watch the jobs that depend on the kernel and on distribution packages
-   (the network namespace, `nft` and `tc` jobs, and the `apt-get` line of the
-   Control Center release build).
+   (the network namespace, `nft` and `tc` jobs).
 3. Merge the bump before cutting the tag that needs it. A tag run uses the
    workflow files of the tagged commit.
 
@@ -358,8 +357,7 @@ because advisories are published against code nobody touched: they would
 otherwise fail an unrelated pull request, or be found on release day. A
 failed job fails the run, and the failing job names the finding:
 
-- **govulncheck** over every Go module (root, `sdk`, `identity`,
-  `control-center`), at the version `ci.yml` pins.
+- **govulncheck** over every Go module (root, `sdk`, `identity`), at the version `ci.yml` pins.
 - **gosec**: the production gate exactly as `ci.yml` runs it, plus the `sdk`
   and `identity` gates.
 - **npm audit** of `web/` through `npm run audit:check`: shipped and

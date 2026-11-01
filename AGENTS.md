@@ -53,7 +53,6 @@ file short and enforceable; put explanations in `docs/`.
   `github.com/AnixOps/anix-agent/sdk` is frozen at v1.1.0
   (`config/scripts/check_agent_sdk_dependency.sh`).
   Cross-repository golden fixtures live in `contracts/`.
-- `control-center/` is a separate app; see the Control Center section.
 - Status sources: `docs/features.md` (feature register), `TODO.md` (open work),
   `CHANGELOG.md` (history) and `changelog.d/` (the entries of the next
   release). A route or UI existing is not proof a feature is complete.
@@ -306,8 +305,7 @@ A release tag `vX.Y.Z[-alpha|-beta|-rc.N]` must match every surface checked by
   `test_install_fresh_main.sh` and `internal/config/installer_config_test.go`),
   the unit names the data
   directory, and `update` never rewrites an existing config
-  (`anix-control config rewrite` does, on request). Containers stay the primary deployment. Control Center tags
-  (`control-center-v*`) are never marked latest. Operator docs:
+  (`anix-control config rewrite` does, on request). Containers stay the primary deployment. Operator docs:
   `docs/DEPLOYMENT.md`, `docs/UPGRADE.md`, `docs/guide/release-installation.md`.
 
 ## Forwarding (v4.2)
@@ -431,23 +429,16 @@ do not cite the archived flux documents (`docs/archive/`) as requirements.
   check both compose files and those docs in the same PR.
 - Keep the root NodeX-like: one short `README.md`, one docs landing page, the
   layout only in `docs/reference/repository-layout.md`, docs layered as
-  `docs/intro/`, `docs/reference/`, `docs/guide/`. `control-center/` is the one
-  self-contained app directory at the root. Deployment assets live in
+  `docs/intro/`, `docs/reference/`, `docs/guide/`. Deployment assets live in
   `config/deploy/`; no top-level `deploy/`.
 - Never commit logs, scratch output, sample YAML at the root, personal paths,
   personal domains or hostnames, or tokens. Agent-local state
   (`.claude/settings.local.json`, `.claude/projects/`, `.superpowers/`) and
   agent plans/specs stay out of the repository.
 
-## Control Center (`control-center/`)
+## Removed Control Center
 
-- `control-center/` holds the Control Center, imported on 2026-09-29 from the archived `AnixOps/Anixops-control-center` repository. `control-center/workers/` holds its Cloudflare Workers API, imported from the archived `AnixOps/Anixops-control-center-worker` repository. Do not reopen or push to the archived repositories.
-- It is a separate Go module (`github.com/AnixOps/anix-control/control-center`, Go 1.26). Run its checks from inside the directory: `cd control-center && go test ./...`; `cd control-center/web && npm test -- --run && npm run build`; `cd control-center/mobile && flutter test`; `cd control-center/workers && npm run typecheck && npm test`.
-- Its CI lives in `.github/workflows/control-center.yml` and `control-center-workers.yml` (path-filtered to `control-center/**`), and its releases in `control-center-release.yml`. Release tags are `control-center-v*`. Never let a Center release become the repository's latest release: the Releases page and the image's `latest` tag follow it, and the latest release must be a Control release.
-- Keep `-exclude-dir=control-center` on gosec, `--exclude control-center` on swag (CI and the Makefile `swagger` target), and `control-center/` in `.dockerignore`.
-- The Workers API deploys through Cloudflare Workers Builds (root `control-center/workers`, branch `main`). A merge to `main` that touches `control-center/workers/**` deploys `api.anixops.com`.
-- `control-center/workers/migrations/` is applied to a production D1 database. Only append new migrations; never edit or delete existing ones.
-- The Center's plugin page talks to Control through `/api/v2/login` and `/api/v3`. Its other pages use the Workers `/api/v1` session. Do not add a second Control API contract for it.
+- The Control Center (`control-center/`, its Cloudflare Workers API and the `control-center*.yml` workflows) was removed on 2026-11-01. Control's own admin UI is the only management frontend. Do not bring it back, and do not reopen or push to the archived `AnixOps/Anixops-control-center` and `AnixOps/Anixops-control-center-worker` repositories.
 
 ## Credentials And Privileged Operations
 

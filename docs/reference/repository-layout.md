@@ -31,11 +31,10 @@ It should not become a dumping ground for:
 | `packages/` | signed plugin package sources: one directory per official package (`identity-platform`, `platform`, `affiliate`, `subscription`, `plan`, `order`, `payment`, `ticket`, `knowledge`, `notification`, `proxy-node`, `forward`, `machine-telemetry`, `gost-mesh`, `wireguard`, `protocol-runtime`; each `control/` is a host library Control links) plus `shared/` (package builder, manifest schema, generic control host) and `builtin/` (the table of every linked host, run as `anix-control package-host <id>`; `builtin/cmd/package-host` is the standalone build) |
 | `contracts/` | cross-repository golden fixtures shared with `anix-agent`: `plugin/v1` manifests and `agent/v1` operation envelopes |
 | `web/` | Vue 3 + Vite admin/user frontend: `src/`, Vitest tests in `src/__tests__/`, Playwright specs in `e2e/`, helper scripts in `scripts/`; `src/design/` is the vendored AnixOps Design release ([frontend-design.md](frontend-design.md)) |
-| `control-center/` | Control Center app imported from the archived `Anixops-control-center` repository: its own Go module (`github.com/AnixOps/anix-control/control-center`), Vue web, Flutter client, Helm/deploy/monitoring assets, and the Cloudflare Workers API under `control-center/workers/`; built by `.github/workflows/control-center*.yml` |
 | `config/` | the configuration template (`config.yaml.example`, the `domain` line), the `/api/v2` package route catalog (`v2-package-route-catalog.json`), `deploy/`, `docker/`, and `scripts/` (see below) |
 | `scripts/` | operator-facing scripts: release installer `install.sh`, `install-agent.sh`, `manage.sh`, SQLite/PostgreSQL migration and restore rehearsal, plugin release signing, WireGuard helpers and legacy panel upgrade |
 | `docs/` | documentation tree (see below) plus generated Swagger output (`docs.go`, `swagger.json`, `swagger.yaml`) |
-| `.github/` | CI (`workflows/ci.yml`), SDK sync, Control Center workflows, `CODEOWNERS`, and the branch ruleset description in `BRANCH_PROTECTION.md` |
+| `.github/` | CI (`workflows/ci.yml`), SDK sync, `CODEOWNERS`, and the branch ruleset description in `BRANCH_PROTECTION.md` |
 | `install.sh` / `panel_install.sh` | forwarders that fetch the systemd release installer `scripts/install.sh` at the tag named by `--version` (container deployment is the primary path) |
 | `Dockerfile`, `docker-compose.yml`, `docker-compose.prod.yml` | container image (`source` and CI-only `release` targets), development stack, and production Compose deployment with an external PostgreSQL |
 | `Dockerfile` / `docker-compose.yml` / `docker-compose.prod.yml` | container build and startup |
@@ -92,7 +91,7 @@ playbooks into `/app/config/deploy/ansible`. Do not reintroduce a top-level
 | `docs/audit/` | security, concurrency, performance, test-gap, and repository audit registers |
 | `docs/forwarding/` | forwarding module design, API, security, and compatibility |
 | `docs/forward-clean-room/` | clean-room forward agent spec and provenance |
-| `docs/*.md` | feature register (`features.md`), deployment, upgrade, RC roadmap/evidence, Control Center merge record, brand migration, manual intervention |
+| `docs/*.md` | feature register (`features.md`), deployment, upgrade, RC roadmap/evidence, brand migration, manual intervention |
 
 ## Generated Artifacts
 

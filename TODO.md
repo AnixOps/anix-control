@@ -178,6 +178,3 @@ Singleton workers are already lease-guarded; the Helm chart refuses
 Recorded so they are not lost; schedule after the package-extraction
 milestones in `docs/architecture/package-extraction.md`.
 
-- [ ] Control Center convergence: the Worker/D1 users and nodes and Control's
-  users and nodes are two separate systems, several Center pages are still
-  mocks, and Center's own Go server is an unwired shell.
