@@ -48,10 +48,6 @@ Deliberately not required:
 - `Go Security Scans`: `govulncheck` reads a vulnerability database that
   changes daily, so a new advisory could block unrelated PRs. It still runs on
   every push and PR and must be triaged when it fails.
-- Control Center checks (`.github/workflows/control-center.yml`,
-  `control-center-workers.yml`): they are path-filtered to `control-center/**`
-  and do not run on every PR, so requiring them would leave unrelated PRs
-  pending forever.
 - The remaining `ci.yml` jobs (race detector, integration-style gates, package
   release contracts, Docker smoke, and so on) run on every PR and should be
   green before merge, but are not merge-blocking.
@@ -65,8 +61,7 @@ the same PR.
   only": they may merge a PR whose checks are pending or failing, but they
   cannot push directly to `main`.
 - Nobody pushes directly to `main` or a release branch, including release
-  preparation. Release tags (`v*`, and `control-center-v*` for the Control
-  Center) are created on commits that already landed through a PR, on
+  preparation. Release tags (`v*`) are created on commits that already landed through a PR, on
   `main` or on a release branch.
 
 ## Release Branches (`release/**`)

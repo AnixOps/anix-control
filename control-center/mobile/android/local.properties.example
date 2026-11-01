@@ -1,3 +1,0 @@
-sdk.dir=YOUR_ANDROID_SDK_PATH
-flutter.sdk=YOUR_FLUTTER_SDK_PATH
-flutter.buildMode=release

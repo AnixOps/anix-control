@@ -600,7 +600,7 @@ jobs:
       - name: Run full repository gosec gate and report
         run: |
           mkdir -p security-reports
-          gosec -exclude-generated -exclude-dir=config/scripts/testdata -exclude-dir=control-center -fmt=json -out=security-reports/gosec.json ./...
+          gosec -exclude-generated -exclude-dir=config/scripts/testdata -fmt=json -out=security-reports/gosec.json ./...
           (cd sdk && gosec -exclude-generated -nosec-require-rules -nosec-require-justification -quiet ./...)
           (cd identity && gosec -exclude-generated -nosec-require-rules -nosec-require-justification -quiet ./...)
 
@@ -1132,7 +1132,7 @@ jobs:
         run: |
           go mod verify
           go install github.com/swaggo/swag/cmd/swag@v1.16.6
-          $(go env GOPATH)/bin/swag init -g cmd/server/main.go -o docs --parseInternal --exclude control-center,packages
+          $(go env GOPATH)/bin/swag init -g cmd/server/main.go -o docs --parseInternal --exclude packages
           go vet ./docs
 
       - name: Upload the shard coverage profile
@@ -2197,7 +2197,7 @@ jobs:
       - name: Generate Swagger docs
         run: |
           go install github.com/swaggo/swag/cmd/swag@v1.16.6
-          $(go env GOPATH)/bin/swag init -g cmd/server/main.go -o docs --parseInternal --exclude control-center,packages
+          $(go env GOPATH)/bin/swag init -g cmd/server/main.go -o docs --parseInternal --exclude packages
 
       - name: Build binary
         run: |

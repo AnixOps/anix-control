@@ -31,7 +31,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        module: [".", "sdk", "identity", "control-center"]
+        module: [".", "sdk", "identity"]
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
