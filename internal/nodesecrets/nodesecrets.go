@@ -1,11 +1,9 @@
 // Package nodesecrets is the one writer of the node credential split
 // (docs/architecture/node-ops-service.md, section 4).
 //
-// The split moves node credentials and protocol secrets out of the legacy
-// tables (v2_node, v2_forward_node, v2_forward_clean_agent,
-// v2_node_protocol, v2_wireguard_peer) into the
-// protected kernel tables v4_kernel_node_credential and
-// v4_kernel_protocol_secret. Existing tables are never altered.
+// The split moves protocol secrets out of the legacy tables (v2_node's raw
+// configuration, v2_node_protocol, v2_wireguard_peer) into the protected
+// kernel table v4_kernel_protocol_secret. Existing tables are never altered.
 //
 // Phase P1 (dual_write): every kernel writer of a moved column calls Sync in
 // the transaction of its legacy write, and Sync derives the new rows from the
@@ -35,15 +33,13 @@ import (
 // The legacy tables the split moves secrets out of.
 const (
 	TableNode          = "v2_node"
-	TableForwardNode   = "v2_forward_node"
-	TableCleanAgent    = "v2_forward_clean_agent"
 	TableNodeProtocol  = "v2_node_protocol"
 	TableWireGuardPeer = "v2_wireguard_peer"
 )
 
 // Tables lists the split tables in backfill order.
 func Tables() []string {
-	return []string{TableNode, TableForwardNode, TableCleanAgent, TableNodeProtocol, TableWireGuardPeer}
+	return []string{TableNode, TableNodeProtocol, TableWireGuardPeer}
 }
 
 // The phases of a table (section 4.3).
@@ -52,36 +48,6 @@ const (
 	PhaseDualWrite = "dual_write"
 	PhaseDualRead  = "dual_read"
 	PhaseFinalized = "finalized"
-)
-
-// Subject kinds of v4_kernel_node_credential.
-const (
-	SubjectProxy           = "proxy"
-	SubjectForward         = "forward"
-	SubjectCleanAgent      = "clean_agent"
-	SubjectAgentEnrollment = "agent_enrollment"
-)
-
-// Credential kinds.
-const (
-	KindNodeAPIKey       = "node_api_key"       // #nosec G101 -- this names a credential kind, not a hardcoded credential.
-	KindNodeSharedSecret = "node_shared_secret" // #nosec G101 -- this names a credential kind, not a hardcoded credential.
-	KindForwardNodeToken = "forward_node_token"
-	KindCleanAgentToken  = "clean_agent_token"
-)
-
-// Credential statuses.
-const (
-	StatusActive  = "active"
-	StatusRetired = "retired"
-	StatusRevoked = "revoked"
-)
-
-// Sources: who wrote a credential's current version.
-const (
-	SourceBackfill  = "backfill"
-	SourceDualWrite = "dual_write"
-	SourceIssued    = "issued"
 )
 
 // Scopes of v4_kernel_protocol_secret.
@@ -96,9 +62,9 @@ const (
 // contain "!".
 const tombstonePrefix = "!moved:"
 
-// Tombstone is the value of a legacy unique credential column once its
-// secret has moved (v2_node.api_key, v2_forward_clean_agent.token): unique per row, non-empty, and never a
-// credential.
+// Tombstone is the value of a legacy key column once its secret has moved
+// (v2_wireguard_peer.private_key and .preshared_key): unique per row,
+// non-empty, and never a key.
 func Tombstone(id uint64) string {
 	return tombstonePrefix + strconv.FormatUint(id, 10)
 }
@@ -129,7 +95,7 @@ func EnsureStateRows(db *gorm.DB) error {
 // state rows, on a test's or a tool's own database; Control's are created
 // by internal/database/migrations.
 func MigrateForTest(db *gorm.DB) error {
-	if err := db.AutoMigrate(&model.NodeCredential{}, &model.ProtocolSecret{}, &model.NodeSecretSplit{}); err != nil {
+	if err := db.AutoMigrate(&model.ProtocolSecret{}, &model.NodeSecretSplit{}); err != nil {
 		return err
 	}
 	return EnsureStateRows(db)
@@ -139,7 +105,7 @@ func MigrateForTest(db *gorm.DB) error {
 // startup, before any writer runs; a database without them (a tool's or a
 // test's that never created the kernel schema) has nothing to dual-write.
 func installed(tx *gorm.DB) bool {
-	return tx.Migrator().HasTable(&model.NodeCredential{}) && tx.Migrator().HasTable(&model.ProtocolSecret{})
+	return tx.Migrator().HasTable(&model.ProtocolSecret{})
 }
 
 // hashSecret is the SHA-256 (hex) of a secret, as the legacy key hash

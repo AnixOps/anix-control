@@ -26,11 +26,11 @@ func (s *AdminNodesTestSuite) SetupTest() {
 	s.group = model.NodeGroup{Name: "HK", JoinTokenHash: "hash-hk", JoinTokenSealed: "sealed", ResetDay: 1, Rate: 1}
 	s.Require().NoError(s.db.Create(&s.group).Error)
 	groupID := s.group.ID
-	s.pending = model.Node{Name: "hk-02", Host: "203.0.113.6", APIKey: "key-1", APIKeyHash: "hash-1", Secret: "secret-1",
+	s.pending = model.Node{Name: "hk-02", Host: "203.0.113.6",
 		NodeGroupID: &groupID, Approval: model.NodeApprovalPending, Sort: 2}
-	s.approved = model.Node{Name: "hk-01", Host: "203.0.113.5", APIKey: "key-2", APIKeyHash: "hash-2", Secret: "secret-2",
+	s.approved = model.Node{Name: "hk-01", Host: "203.0.113.5",
 		NodeGroupID: &groupID, Approval: model.NodeApprovalApproved, Sort: 1}
-	s.manual = model.Node{Name: "hand-made", Host: "198.51.100.9", APIKey: "key-3", APIKeyHash: "hash-3", Secret: "secret-3", Approval: model.NodeApprovalApproved, Sort: 3}
+	s.manual = model.Node{Name: "hand-made", Host: "198.51.100.9", Approval: model.NodeApprovalApproved, Sort: 3}
 	for _, node := range []*model.Node{&s.pending, &s.approved, &s.manual} {
 		s.Require().NoError(s.db.Create(node).Error)
 	}

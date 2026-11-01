@@ -54,7 +54,6 @@ func TestJoinCreatesACleanNode(t *testing.T) {
 		assert.Equal(t, model.NodeApprovalApproved, node.Approval)
 		assert.Equal(t, "203.0.113.5", node.LastPublicAddress)
 		assert.Equal(t, model.NodeStatusPending, node.Status, "online once its Agent connects")
-		assert.NotEmpty(t, node.APIKeyHash, "every proxy node has a credential until they are removed")
 		require.NotNil(t, node.ServerOS)
 		assert.Equal(t, "linux/amd64", *node.ServerOS)
 

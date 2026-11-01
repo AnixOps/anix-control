@@ -7,13 +7,12 @@ import (
 
 // Retired counts what Retire removed.
 type Retired struct {
-	Credentials int64
-	Secrets     int64
+	Secrets int64
 }
 
 // Retire removes the new-table rows of legacy rows that are about to be
-// deleted by their owner: every credential version of the table's subject
-// kind and every secret of its scope, for the given ids. It is the kernel's
+// deleted by their owner: every secret of the table's scope, for the given
+// ids. It is the kernel's
 // part of a retirement (node-ops-service.md section 3.3, RetireNode and
 // RetireProtocol): the package deletes the legacy row afterwards, and Sync
 // on a deleted row removes nothing more. Deleting the legacy row first and
@@ -40,20 +39,11 @@ func Retire(tx *gorm.DB, table string, ids ...uint) (Retired, error) {
 	if len(subjects) == 0 {
 		return retired, nil
 	}
-	if spec.subjectKind != "" {
-		result := tx.Where("subject_kind = ? AND subject_id IN ?", spec.subjectKind, subjects).Delete(&model.NodeCredential{})
-		if result.Error != nil {
-			return retired, result.Error
-		}
-		retired.Credentials = result.RowsAffected
+	result := tx.Where("scope = ? AND owner_id IN ?", spec.scope, subjects).Delete(&model.ProtocolSecret{})
+	if result.Error != nil {
+		return retired, result.Error
 	}
-	if spec.scope != "" {
-		result := tx.Where("scope = ? AND owner_id IN ?", spec.scope, subjects).Delete(&model.ProtocolSecret{})
-		if result.Error != nil {
-			return retired, result.Error
-		}
-		retired.Secrets = result.RowsAffected
-	}
+	retired.Secrets = result.RowsAffected
 	if err := dropOriginals(tx, spec.table, subjects, ""); err != nil {
 		return retired, err
 	}

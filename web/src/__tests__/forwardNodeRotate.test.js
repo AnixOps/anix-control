@@ -65,7 +65,7 @@ describe('forwarding node page: rotate credentials', () => {
 
   it('rotates a forwarding node\'s credentials by its node ref, with no API key option', async () => {
     kernelApi.rotateKernelAgentCredentials.mockResolvedValue({
-      node: 'forward-41', revoked: { certificates: 1, enrollments: 1, link_certificates: 1 }, api_key_rotated: false,
+      node: 'forward-41', revoked: { certificates: 1, enrollments: 1, link_certificates: 1 },
       expires_at: new Date(Date.now() + 3_600_000).toISOString(), credential: CREDENTIAL
     })
     const wrapper = await mountPage()
@@ -74,11 +74,10 @@ describe('forwarding node page: rotate credentials', () => {
     await section.get('[data-testid="rotate-credentials"]').trigger('click')
     await flushPromises()
     expect(inBody('[role="alertdialog"]').text()).toContain('Rotate the credentials of hk-edge-01?')
-    expect(document.body.querySelector('[data-testid="rotate-api-key"]')).toBeNull()
 
     await inBody('[data-confirm-ok]').trigger('click')
     await flushPromises()
-    expect(kernelApi.rotateKernelAgentCredentials).toHaveBeenCalledWith({ node: 'forward-41', rotateApiKey: false, ttlSeconds: 3600, reason: '' })
+    expect(kernelApi.rotateKernelAgentCredentials).toHaveBeenCalledWith({ node: 'forward-41', ttlSeconds: 3600, reason: '' })
     expect(document.body.querySelector('[data-testid="rotate-credential"] input, input[value^="anixagt_"]').value).toBe(CREDENTIAL)
     // The page behind carries nothing of it.
     expect(wrapper.html()).not.toContain(CREDENTIAL)

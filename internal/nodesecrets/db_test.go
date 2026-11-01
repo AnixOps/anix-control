@@ -22,7 +22,7 @@ const postgresDSNEnvironment = "ANIX_TEST_POSTGRES_DSN"
 // legacyModels are the tables the split reads.
 var legacyModels = []any{
 	&model.Node{}, &model.NodeProtocol{}, &model.WireGuardPeer{},
-	&model.ForwardNode{}, &model.ForwardCleanAgent{},
+	&model.ForwardNode{},
 }
 
 // forEachDatabase runs body on SQLite and, when ANIX_TEST_POSTGRES_DSN is

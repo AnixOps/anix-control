@@ -119,4 +119,9 @@
 //   - 0026_drop_server_hysteria: Hysteria v1 is removed; the Xboard-era
 //     v2_server_hysteria table a database imported from Xboard may hold is
 //     dropped.
+//   - 0027_drop_node_credentials: nodes authenticate with mTLS only; the
+//     node API keys, shared secrets and forward node tokens (columns of
+//     v2_node and v2_forward_node), the clean agents
+//     (v2_forward_clean_agent), the moved credentials
+//     (v4_kernel_node_credential) and their kernel API views are dropped.
 package migrations

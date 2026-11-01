@@ -200,7 +200,7 @@ func TestCreateTaskLegacyAnswers(t *testing.T) {
 	sqlDB, err := db.DB()
 	require.NoError(t, err)
 	sqlDB.SetMaxOpenConns(1)
-	node := &model.Node{Name: "diag-parity", Host: "127.0.0.1", Port: 443, APIKey: fmt.Sprintf("diag-parity-%d", time.Now().UnixNano()), Status: model.NodeStatusOnline}
+	node := &model.Node{Name: "diag-parity", Host: "127.0.0.1", Port: 443, Status: model.NodeStatusOnline}
 	require.NoError(t, db.Create(node).Error)
 	t.Cleanup(func() { _ = db.Delete(&model.Node{}, node.ID).Error })
 

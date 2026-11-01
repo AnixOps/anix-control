@@ -100,7 +100,7 @@ func backfillTable(ctx context.Context, db *gorm.DB, spec tableSpec, batchSize i
 				return nil
 			}
 			now := time.Now().UTC()
-			changes, err := syncRows(tx, spec, ids, SourceBackfill, true, now)
+			changes, err := syncRows(tx, spec, ids, true, now)
 			if err != nil {
 				return err
 			}
@@ -165,27 +165,14 @@ func Prune(tx *gorm.DB, tables ...string) (int64, error) {
 // no longer exists: rows a writer before P1 never removed, or rows copied
 // into a database whose legacy rows were then replaced.
 func pruneOrphans(tx *gorm.DB, spec tableSpec) (int64, error) {
-	var pruned int64
-	if spec.subjectKind != "" {
-		legacy := tx.Session(&gorm.Session{NewDB: true}).Table(spec.table).Select("1").
-			Where(spec.table + ".id = v4_kernel_node_credential.subject_id")
-		result := tx.Where("subject_kind = ? AND kind IN ?", spec.subjectKind, spec.kinds).
-			Where("NOT EXISTS (?)", legacy).Delete(&model.NodeCredential{})
-		if result.Error != nil {
-			return pruned, result.Error
-		}
-		pruned += result.RowsAffected
-	}
-	if spec.scope != "" {
-		legacy := tx.Session(&gorm.Session{NewDB: true}).Table(spec.table).Select("1").
-			Where(spec.table + ".id = v4_kernel_protocol_secret.owner_id")
-		result := tx.Where("scope = ?", spec.scope).Where("NOT EXISTS (?)", legacy).Delete(&model.ProtocolSecret{})
-		if result.Error != nil {
-			return pruned, result.Error
-		}
-		pruned += result.RowsAffected
-	}
 	legacy := tx.Session(&gorm.Session{NewDB: true}).Table(spec.table).Select("1").
+		Where(spec.table + ".id = v4_kernel_protocol_secret.owner_id")
+	result := tx.Where("scope = ?", spec.scope).Where("NOT EXISTS (?)", legacy).Delete(&model.ProtocolSecret{})
+	if result.Error != nil {
+		return 0, result.Error
+	}
+	pruned := result.RowsAffected
+	legacy = tx.Session(&gorm.Session{NewDB: true}).Table(spec.table).Select("1").
 		Where(spec.table + ".id = v4_kernel_protocol_secret.owner_id")
 	if err := tx.Where("scope = ? AND column_name LIKE ?", scopeLegacyOriginal, spec.table+".%").
 		Where("NOT EXISTS (?)", legacy).Delete(&model.ProtocolSecret{}).Error; err != nil {

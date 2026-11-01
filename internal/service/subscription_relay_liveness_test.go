@@ -31,9 +31,6 @@ func TestRelayNodeServesWhileItsLandingNodeIsOnline(t *testing.T) {
 		{ID: 7, Name: "relay to a missing node", ParentID: uintPtr(99)},
 		{ID: 8, Name: "standalone, never seen"},
 	}
-	for i := range nodes {
-		nodes[i].APIKey = nodes[i].Name
-	}
 	require.NoError(t, db.Create(&nodes).Error)
 
 	liveness := make(map[uint]bool)

@@ -88,9 +88,9 @@ func wireGuardSettings(private, public string) string {
 // subscription groups linked to them. Times are fixed.
 func seedNodes(t testing.TB, db *gorm.DB) {
 	require.NoError(t, db.Create(&[]model.Node{
-		{ID: 1, Name: "edge-1", Host: "edge-1.example.test", APIKey: "fake-key-1", Secret: "fake-secret-1", CreatedAt: seeded, UpdatedAt: seeded},
-		{ID: 2, Name: "edge-2", Host: "edge-2.example.test", APIKey: "fake-key-2", Secret: "fake-secret-2", CreatedAt: seeded, UpdatedAt: seeded},
-		{ID: 3, Name: "edge-3", Host: "edge-3.example.test", APIKey: "fake-key-3", Secret: "fake-secret-3", CreatedAt: seeded, UpdatedAt: seeded},
+		{ID: 1, Name: "edge-1", Host: "edge-1.example.test", CreatedAt: seeded, UpdatedAt: seeded},
+		{ID: 2, Name: "edge-2", Host: "edge-2.example.test", CreatedAt: seeded, UpdatedAt: seeded},
+		{ID: 3, Name: "edge-3", Host: "edge-3.example.test", CreatedAt: seeded, UpdatedAt: seeded},
 	}).Error)
 	require.NoError(t, db.Create(&[]model.User{
 		{ID: 1, Email: "admin@example.test", Token: "token-1", UUID: "uuid-1", CreatedAt: seeded, UpdatedAt: seeded},

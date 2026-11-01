@@ -62,26 +62,24 @@ func (s *AgentHandlerTestSuite) SetupTest() {
 
 	// 创建测试节点
 	s.testNode = &model.ForwardNode{
-		Name:     "Test Relay Node",
-		Type:     model.ForwardNodeTypeRelay,
-		Host:     "192.168.1.100",
-		Port:     443,
-		APIPort:  18080,
-		APIToken: "test-api-token-123",
-		Status:   model.ForwardNodeStatusOffline,
-		Enabled:  true,
+		Name:    "Test Relay Node",
+		Type:    model.ForwardNodeTypeRelay,
+		Host:    "192.168.1.100",
+		Port:    443,
+		APIPort: 18080,
+		Status:  model.ForwardNodeStatusOffline,
+		Enabled: true,
 	}
 	s.db.Create(s.testNode)
 
 	s.testNode2 = &model.ForwardNode{
-		Name:     "Test Exit Node",
-		Type:     model.ForwardNodeTypeExit,
-		Host:     "192.168.1.200",
-		Port:     443,
-		APIPort:  18080,
-		APIToken: "test-api-token-456",
-		Status:   model.ForwardNodeStatusOffline,
-		Enabled:  true,
+		Name:    "Test Exit Node",
+		Type:    model.ForwardNodeTypeExit,
+		Host:    "192.168.1.200",
+		Port:    443,
+		APIPort: 18080,
+		Status:  model.ForwardNodeStatusOffline,
+		Enabled: true,
 	}
 	s.db.Create(s.testNode2)
 

@@ -2,42 +2,6 @@ package model
 
 import "time"
 
-// NodeCredential is one credential of a node-facing subject, moved out of
-// the legacy tables by the node credential split
-// (docs/architecture/node-ops-service.md, section 4): a proxy node's API key
-// and shared secret (v2_node), a forward node's token (v2_forward_node) and a clean agent's token
-// (v2_forward_clean_agent).
-//
-// Only internal/nodesecrets writes it. A subject keeps one current row per
-// kind (status active or revoked); replacing its value retires that row,
-// whose value is cleared, and adds the next version.
-type NodeCredential struct {
-	ID          uint64 `gorm:"primaryKey;autoIncrement" json:"id"`
-	SubjectKind string `gorm:"size:32;not null;uniqueIndex:idx_v4_kernel_node_credential_subject,priority:1" json:"subject_kind"`
-	SubjectID   uint64 `gorm:"not null;uniqueIndex:idx_v4_kernel_node_credential_subject,priority:2" json:"subject_id"`
-	Kind        string `gorm:"size:32;not null;uniqueIndex:idx_v4_kernel_node_credential_subject,priority:3;index:idx_v4_kernel_node_credential_lookup,priority:1" json:"kind"`
-	Version     int    `gorm:"not null;default:1;uniqueIndex:idx_v4_kernel_node_credential_subject,priority:4" json:"version"`
-	// KeyHash is the SHA-256 (hex) the kernel looks a credential up by.
-	KeyHash string `gorm:"size:64;not null;default:'';index:idx_v4_kernel_node_credential_lookup,priority:2" json:"-"`
-	// Value is the secret, where the kernel has to present it. It is
-	// stored in clear, as in the legacy columns (decision D5), unless Sealed.
-	Value  string `gorm:"type:text;not null;default:''" json:"-"`
-	Sealed bool   `gorm:"not null;default:false" json:"sealed"`
-	KEKID  string `gorm:"column:kek_id;size:64;not null;default:''" json:"kek_id"`
-	// Endpoint is the host:port a forward node token is pinned to.
-	Endpoint  string     `gorm:"size:300;not null;default:''" json:"endpoint"`
-	Status    string     `gorm:"size:16;not null;default:'active';index" json:"status"`
-	ExpiresAt *time.Time `json:"expires_at"`
-	// Source says who wrote the current version: backfill, dual_write or
-	// issued.
-	Source    string     `gorm:"size:16;not null;default:''" json:"source"`
-	CreatedAt time.Time  `gorm:"not null" json:"created_at"`
-	RotatedAt *time.Time `json:"rotated_at"`
-	RevokedAt *time.Time `json:"revoked_at"`
-}
-
-func (NodeCredential) TableName() string { return "v4_kernel_node_credential" }
-
 // ProtocolSecret is one secret of a node protocol's settings, a node's raw
 // configuration or a WireGuard peer, moved out of the legacy tables by the
 // node credential split.

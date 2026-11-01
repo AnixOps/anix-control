@@ -18,7 +18,7 @@ func autoFixture(t *testing.T) (*gorm.DB, *AutoWorker, *time.Time, fakeProber) {
 	if err := db.AutoMigrate(&model.RealityTargetAuto{}, &model.OperationLog{}); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Create(&model.Node{ID: 57, Name: "DE", APIKey: "k57", LastPublicAddress: "82.139.194.175"}).Error; err != nil {
+	if err := db.Create(&model.Node{ID: 57, Name: "DE", LastPublicAddress: "82.139.194.175"}).Error; err != nil {
 		t.Fatal(err)
 	}
 	protocol := model.NodeProtocol{ID: 41, NodeID: 57, Name: "DE Reality", TLS: 2,

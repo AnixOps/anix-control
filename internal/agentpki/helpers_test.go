@@ -4,7 +4,6 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/sha256"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/hex"
@@ -56,15 +55,13 @@ func (c *clock) Advance(d time.Duration) {
 // fixture is an agent PKI over a fresh database with one proxy node and one
 // forward node of the same id, so kind confusion would show.
 type fixture struct {
-	db           *gorm.DB
-	clock        *clock
-	authority    *modulepki.Authority
-	link         *agentpki.LinkAuthority
-	pki          *agentpki.Service
-	proxy        model.Node
-	proxyKey     string
-	forward      model.ForwardNode
-	forwardToken string
+	db        *gorm.DB
+	clock     *clock
+	authority *modulepki.Authority
+	link      *agentpki.LinkAuthority
+	pki       *agentpki.Service
+	proxy     model.Node
+	forward   model.ForwardNode
 }
 
 // forEachDatabase runs body on SQLite and, when ANIX_TEST_POSTGRES_DSN is
@@ -143,25 +140,12 @@ func newFixture(t *testing.T, db *gorm.DB) *fixture {
 	pki, err := agentpki.New(agentpki.Options{DB: db, Authority: authority, Now: now.Now, Link: link})
 	require.NoError(t, err)
 
-	f := &fixture{db: db, clock: now, authority: authority, link: link, pki: pki, proxyKey: randomSecret(t), forwardToken: randomSecret(t)}
-	f.proxy = model.Node{Name: "proxy", Host: "198.51.100.10", APIKey: f.proxyKey, APIKeyHash: sha256Hex(f.proxyKey), Status: model.NodeStatusOnline}
+	f := &fixture{db: db, clock: now, authority: authority, link: link, pki: pki}
+	f.proxy = model.Node{Name: "proxy", Host: "198.51.100.10", Status: model.NodeStatusOnline}
 	require.NoError(t, db.Create(&f.proxy).Error)
-	f.forward = model.ForwardNode{ID: f.proxy.ID, Name: "forward", Host: "198.51.100.20", Port: 8443, APIToken: f.forwardToken, Enabled: true}
+	f.forward = model.ForwardNode{ID: f.proxy.ID, Name: "forward", Host: "198.51.100.20", Port: 8443, Enabled: true}
 	require.NoError(t, db.Create(&f.forward).Error)
 	return f
-}
-
-func randomSecret(t *testing.T) string {
-	t.Helper()
-	raw := make([]byte, 24)
-	_, err := rand.Read(raw)
-	require.NoError(t, err)
-	return hex.EncodeToString(raw)
-}
-
-func sha256Hex(value string) string {
-	digest := sha256.Sum256([]byte(value))
-	return hex.EncodeToString(digest[:])
 }
 
 // newCSR returns a throwaway key and a CSR whose subject and SANs claim

@@ -22,9 +22,9 @@ func newService(t *testing.T) *Service {
 	t.Cleanup(func() { _ = sqlDB.Close() })
 	require.NoError(t, db.AutoMigrate(&model.Node{}, &model.NodeProtocol{}, &model.EgressRoute{}, &model.OperationLog{}))
 	require.NoError(t, db.Create(&[]model.Node{
-		{ID: 29, Name: "hk", Host: "hk.example.com", APIKey: "k29"},
-		{ID: 50, Name: "jp", Host: "jp.example.com", APIKey: "k50"},
-		{ID: 57, Name: "de", APIKey: "k57"},
+		{ID: 29, Name: "hk", Host: "hk.example.com"},
+		{ID: 50, Name: "jp", Host: "jp.example.com"},
+		{ID: 57, Name: "de"},
 	}).Error)
 	require.NoError(t, db.Create(&model.NodeProtocol{ID: 1, NodeID: 50, Name: "vless", Type: model.ProtocolVLESS, Port: 443, Enable: 1}).Error)
 	return New(db)

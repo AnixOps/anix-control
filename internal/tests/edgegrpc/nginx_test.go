@@ -50,9 +50,8 @@ func TestNginxEdgeVouchesForTheNodeCertificate(t *testing.T) {
 	packagecompat.ForEachKernelDatabase(t, models, func(t *testing.T, db *gorm.DB) {
 		cache.InitMemory()
 		require.NoError(t, service.MigrateKernelModelsForTest(db))
-		key := "edge-nginx-api-key"
 		require.NoError(t, db.Create(&model.Node{ID: edgeNodeID + 1, Name: "edge-nginx", Host: "198.51.100.1", Port: 443,
-			APIKey: key, APIKeyHash: fakeagent.APIKeyHash(key), Status: model.NodeStatusOnline}).Error)
+			Status: model.NodeStatusOnline}).Error)
 		control := fakeagent.StartControl(t, db)
 		node := agentcontrol.AgentNode{Kind: agentcontrol.NodeKindProxy, ID: edgeNodeID + 1}
 		certificate := control.Enroll(t, node)

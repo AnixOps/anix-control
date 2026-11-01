@@ -17,7 +17,7 @@ func TestSetup_V4NodeTrafficRequiresAdmin(t *testing.T) {
 	r, cfg := setupTestRouter(t)
 	defer teardownTestRouter(t)
 	require.NoError(t, database.GetDB().AutoMigrate(&model.Node{}, &model.TrafficLog{}, &model.StatServer{}))
-	require.NoError(t, database.GetDB().Create(&model.Node{ID: 5, Name: "traffic", APIKey: "traffic-key"}).Error)
+	require.NoError(t, database.GetDB().Create(&model.Node{ID: 5, Name: "traffic"}).Error)
 
 	serve := func(path, token string) *httptest.ResponseRecorder {
 		request := httptest.NewRequest(http.MethodGet, path, nil)

@@ -84,7 +84,7 @@ export default {
       scope: 'Scope',
       scopeHelp: 'Prefer Read, a short expiry and one token per automation.',
       scopeText: {
-        read: 'Read only: GET and HEAD requests on the administrator APIs. It can list and inspect but never change anything, and it can’t read a node’s API key or the Telegram bot token, the two reads that still answer a secret in clear.',
+        read: 'Read only: GET and HEAD requests on the administrator APIs. It can list and inspect but never change anything, and it can’t read the Telegram bot token, the one read that still answers a secret in clear.',
         admin: 'Everything you may do on the administrator APIs, changes included (and super administrator actions if you are one). It still can’t manage API tokens: that needs your signed-in session.'
       },
       expiry: 'Expires',

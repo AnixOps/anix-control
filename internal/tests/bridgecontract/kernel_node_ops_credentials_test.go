@@ -22,7 +22,7 @@ import (
 func seedRetirement(t *testing.T, db *gorm.DB) {
 	t.Helper()
 	require.NoError(t, db.AutoMigrate(&model.NodeProtocol{}, &model.SubscriptionGroup{}, &model.WireGuardPeer{},
-		&model.AgentEnrollment{}, &model.AgentCertificate{}, &model.NodeCredential{}, &model.ProtocolSecret{}, &model.NodeSecretSplit{}))
+		&model.AgentEnrollment{}, &model.AgentCertificate{}, &model.ProtocolSecret{}, &model.NodeSecretSplit{}))
 	require.NoError(t, nodesecrets.MigrateForTest(db))
 	reality := `{"dest":"www.example.test:443","private_key":"reality-private-7"}`
 	require.NoError(t, db.Create(&model.NodeProtocol{ID: 7, NodeID: 2, Name: "reality", Type: model.ProtocolVLESS, Port: 443, RealitySettings: &reality}).Error)

@@ -148,13 +148,13 @@ describe('kernel API', () => {
     expect(mockRequest).toHaveBeenLastCalledWith({
       baseURL: '/api/v4', url: '/kernel/agents/rotate-credentials', method: 'post', data: { node: 'proxy-12' }, timeout: 30_000
     })
-    await kernelApi.rotateKernelAgentCredentials({ node: 'proxy-12', rotateApiKey: true, ttlSeconds: 86400, reason: '  disk of the host was stolen  ' })
+    await kernelApi.rotateKernelAgentCredentials({ node: 'proxy-12', ttlSeconds: 86400, reason: '  disk of the host was stolen  ' })
     expect(mockRequest).toHaveBeenLastCalledWith({
       baseURL: '/api/v4', url: '/kernel/agents/rotate-credentials', method: 'post',
-      data: { node: 'proxy-12', rotate_api_key: true, ttl_seconds: 86400, reason: 'disk of the host was stolen' }, timeout: 30_000
+      data: { node: 'proxy-12', ttl_seconds: 86400, reason: 'disk of the host was stolen' }, timeout: 30_000
     })
-    // A blank reason and a false flag are not sent.
-    await kernelApi.rotateKernelAgentCredentials({ node: 'forward-3', rotateApiKey: false, reason: '   ' })
+    // A blank reason is not sent.
+    await kernelApi.rotateKernelAgentCredentials({ node: 'forward-3', reason: '   ' })
     expect(mockRequest.mock.lastCall[0].data).toEqual({ node: 'forward-3' })
   })
 

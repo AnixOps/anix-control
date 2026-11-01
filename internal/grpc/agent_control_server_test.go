@@ -76,12 +76,10 @@ func newAgentControlTestEnvironment(t *testing.T) *agentControlTestEnvironment {
 	requireAutoMigrate(t, append(model.KernelForwardModels(), model.NetworkModels()...)...)
 
 	apiKey := "agent-control-test-key"
-	hash := sha256.Sum256([]byte(apiKey))
 	node := model.Node{
-		Name:       "agent-control-test-node",
-		Host:       "127.0.0.1",
-		APIKeyHash: hex.EncodeToString(hash[:]),
-		Status:     model.NodeStatusOnline,
+		Name:   "agent-control-test-node",
+		Host:   "127.0.0.1",
+		Status: model.NodeStatusOnline,
 	}
 	require.NoError(t, database.GetDB().Create(&node).Error)
 	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)

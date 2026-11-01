@@ -2,26 +2,11 @@ package nodesecrets
 
 import (
 	"fmt"
-	"net"
-	"strconv"
-	"time"
 
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
-
-// credentialEntry is a credential as the legacy columns of one row hold it.
-type credentialEntry struct {
-	SubjectID uint64
-	Kind      string
-	KeyHash   string
-	Value     string
-	Endpoint  string
-	Status    string
-	ExpiresAt *time.Time
-	RevokedAt *time.Time
-}
 
 // secretEntry is a protocol secret as a legacy column holds it.
 type secretEntry struct {
@@ -29,11 +14,6 @@ type secretEntry struct {
 	Column  string
 	Pointer string
 	Value   string
-}
-
-type credentialKey struct {
-	SubjectID uint64
-	Kind      string
 }
 
 type secretKey struct {
@@ -46,14 +26,12 @@ type secretKey struct {
 // positions whose legacy value is a tombstone or the placeholder: their
 // secret lives in the new table only, and the writer leaves it there.
 type derivation struct {
-	credentials     []credentialEntry
-	secrets         []secretEntry
-	keptCredentials map[credentialKey]bool
-	keptSecrets     map[secretKey]bool
+	secrets     []secretEntry
+	keptSecrets map[secretKey]bool
 }
 
 func newDerivation() *derivation {
-	return &derivation{keptCredentials: map[credentialKey]bool{}, keptSecrets: map[secretKey]bool{}}
+	return &derivation{keptSecrets: map[secretKey]bool{}}
 }
 
 func (d *derivation) addPositions(ownerID uint64, column string, document *string) {
@@ -83,33 +61,15 @@ func (d *derivation) addPeerKey(ownerID uint64, column, value string) {
 // its rows are derived.
 type tableSpec struct {
 	table string
-	// subjectKind and kinds select the table's credentials; scope its
-	// protocol secrets. A table has either or both.
-	subjectKind string
-	kinds       []string
-	scope       string
-	derive      func(tx *gorm.DB, ids []uint64, lock bool) (*derivation, error)
+	// scope selects the table's protocol secrets.
+	scope  string
+	derive func(tx *gorm.DB, ids []uint64, lock bool) (*derivation, error)
 }
 
 var specs = map[string]tableSpec{
-	TableNode: {
-		table: TableNode, subjectKind: SubjectProxy, kinds: []string{KindNodeAPIKey, KindNodeSharedSecret},
-		scope: ScopeNodeRawConfig, derive: deriveNodes,
-	},
-	TableForwardNode: {
-		table: TableForwardNode, subjectKind: SubjectForward, kinds: []string{KindForwardNodeToken},
-		derive: deriveForwardNodes,
-	},
-	TableCleanAgent: {
-		table: TableCleanAgent, subjectKind: SubjectCleanAgent, kinds: []string{KindCleanAgentToken},
-		derive: deriveCleanAgents,
-	},
-	TableNodeProtocol: {
-		table: TableNodeProtocol, scope: ScopeNodeProtocol, derive: deriveNodeProtocols,
-	},
-	TableWireGuardPeer: {
-		table: TableWireGuardPeer, scope: ScopeWireGuardPeer, derive: deriveWireGuardPeers,
-	},
+	TableNode:          {table: TableNode, scope: ScopeNodeRawConfig, derive: deriveNodes},
+	TableNodeProtocol:  {table: TableNodeProtocol, scope: ScopeNodeProtocol, derive: deriveNodeProtocols},
+	TableWireGuardPeer: {table: TableWireGuardPeer, scope: ScopeWireGuardPeer, derive: deriveWireGuardPeers},
 }
 
 func lookupSpec(table string) (tableSpec, error) {
@@ -133,91 +93,12 @@ func legacyRows(tx *gorm.DB, value any, columns []string, ids []uint64, lock boo
 
 func deriveNodes(tx *gorm.DB, ids []uint64, lock bool) (*derivation, error) {
 	var rows []model.Node
-	if err := legacyRows(tx, &model.Node{}, []string{"id", "api_key", "api_key_hash", "secret", "raw_config"}, ids, lock, &rows); err != nil {
+	if err := legacyRows(tx, &model.Node{}, []string{"id", "raw_config"}, ids, lock, &rows); err != nil {
 		return nil, err
 	}
 	d := newDerivation()
 	for _, row := range rows {
-		id := uint64(row.ID)
-		switch {
-		case IsTombstone(row.APIKey):
-			d.keptCredentials[credentialKey{SubjectID: id, Kind: KindNodeAPIKey}] = true
-		case row.APIKey != "" || row.APIKeyHash != "":
-			// The legacy readers match the stored hash, or the key itself
-			// when no hash is stored.
-			keyHash := row.APIKeyHash
-			if keyHash == "" {
-				keyHash = hashSecret(row.APIKey)
-			}
-			d.credentials = append(d.credentials, credentialEntry{
-				SubjectID: id, Kind: KindNodeAPIKey, KeyHash: keyHash, Value: row.APIKey, Status: StatusActive,
-			})
-		}
-		switch {
-		case IsTombstone(row.Secret):
-			d.keptCredentials[credentialKey{SubjectID: id, Kind: KindNodeSharedSecret}] = true
-		case row.Secret != "":
-			d.credentials = append(d.credentials, credentialEntry{
-				SubjectID: id, Kind: KindNodeSharedSecret, KeyHash: hashSecret(row.Secret), Value: row.Secret, Status: StatusActive,
-			})
-		}
-		d.addPositions(id, "raw_config", row.RawConfig)
-	}
-	return d, nil
-}
-
-func deriveForwardNodes(tx *gorm.DB, ids []uint64, lock bool) (*derivation, error) {
-	var rows []model.ForwardNode
-	if err := legacyRows(tx, &model.ForwardNode{}, []string{"id", "host", "api_port", "api_token"}, ids, lock, &rows); err != nil {
-		return nil, err
-	}
-	d := newDerivation()
-	for _, row := range rows {
-		id := uint64(row.ID)
-		switch {
-		case IsTombstone(row.APIToken):
-			d.keptCredentials[credentialKey{SubjectID: id, Kind: KindForwardNodeToken}] = true
-		case row.APIToken != "":
-			d.credentials = append(d.credentials, credentialEntry{
-				SubjectID: id, Kind: KindForwardNodeToken, KeyHash: hashSecret(row.APIToken), Value: row.APIToken,
-				Endpoint: forwardNodeEndpoint(row.Host, row.APIPort), Status: StatusActive,
-			})
-		}
-	}
-	return d, nil
-}
-
-// forwardNodeEndpoint is the address a forward node's token is presented
-// to: the node's management API. A node without an API port is unpinned.
-func forwardNodeEndpoint(host string, apiPort int) string {
-	if host == "" || apiPort <= 0 {
-		return ""
-	}
-	return net.JoinHostPort(host, strconv.Itoa(apiPort))
-}
-
-func deriveCleanAgents(tx *gorm.DB, ids []uint64, lock bool) (*derivation, error) {
-	var rows []model.ForwardCleanAgent
-	if err := legacyRows(tx, &model.ForwardCleanAgent{}, []string{"id", "token", "status", "revoked_at"}, ids, lock, &rows); err != nil {
-		return nil, err
-	}
-	d := newDerivation()
-	for _, row := range rows {
-		id := uint64(row.ID)
-		switch {
-		case IsTombstone(row.Token):
-			d.keptCredentials[credentialKey{SubjectID: id, Kind: KindCleanAgentToken}] = true
-		case row.Token != "":
-			entry := credentialEntry{
-				SubjectID: id, Kind: KindCleanAgentToken, KeyHash: hashSecret(row.Token), Value: row.Token, Status: StatusActive,
-			}
-			// The legacy check: a revoked status or a revocation time.
-			if row.Status == model.ForwardCleanAgentStatusRevoked || row.RevokedAt != nil {
-				entry.Status = StatusRevoked
-				entry.RevokedAt = row.RevokedAt
-			}
-			d.credentials = append(d.credentials, entry)
-		}
+		d.addPositions(uint64(row.ID), "raw_config", row.RawConfig)
 	}
 	return d, nil
 }

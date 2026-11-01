@@ -67,7 +67,7 @@ func newUpgradeTestEnv(t *testing.T) *upgradeTestEnv {
 		require.NoError(t, db.Create(&user).Error)
 	}
 	for id := uint(1); id <= 3; id++ {
-		require.NoError(t, db.Create(&model.Node{ID: id, Name: "proxy", APIKey: "key-" + strconv.Itoa(int(id)), Status: model.NodeStatusOnline}).Error)
+		require.NoError(t, db.Create(&model.Node{ID: id, Name: "proxy", Status: model.NodeStatusOnline}).Error)
 		now := time.Now()
 		require.NoError(t, db.Create(&model.AgentTransport{NodeKind: "proxy", NodeID: id, Transport: model.AgentTransportMTLSStream, FirstSeenAt: now, LastSeenAt: now}).Error)
 	}

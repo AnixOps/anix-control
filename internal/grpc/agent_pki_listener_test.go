@@ -76,9 +76,9 @@ func startAgentListenerWith(t *testing.T, withPKI bool, configure func(*ServerCo
 	t.Cleanup(agenttransport.SetDefault(agenttransport.NewRecorder(database.Get)))
 
 	l := &agentListener{proxyKey: "agent-pki-proxy-key", forwardToken: "agent-pki-forward-token"}
-	l.proxy = model.Node{Name: "proxy", Host: "127.0.0.1", APIKeyHash: apiKeyHashForTest(l.proxyKey), Status: model.NodeStatusOnline}
+	l.proxy = model.Node{Name: "proxy", Host: "127.0.0.1", Status: model.NodeStatusOnline}
 	require.NoError(t, db.Create(&l.proxy).Error)
-	l.forward = model.ForwardNode{ID: l.proxy.ID, Name: "forward", Host: "127.0.0.1", Port: 8443, APIToken: l.forwardToken, Enabled: true}
+	l.forward = model.ForwardNode{ID: l.proxy.ID, Name: "forward", Host: "127.0.0.1", Port: 8443, Enabled: true}
 	require.NoError(t, db.Create(&l.forward).Error)
 
 	cfg := DefaultServerConfig()
@@ -316,7 +316,7 @@ func TestAgentListenerRefusesRevokedAndForeignCertificates(t *testing.T) {
 	ctx := testContext(t)
 	anonymous := l.dial(t, nil)
 
-	// Replacing a forward node's token revokes its certificates: an open
+	// Disabling a forward node revokes its certificates: an open
 	// stream ends at its next heartbeat and new streams are refused.
 	forwardCertificate, _, err := l.enrollWithToken(t, ctx, l.forwardNode(), anonymous)
 	require.NoError(t, err)
@@ -325,7 +325,7 @@ func TestAgentListenerRefusesRevokedAndForeignCertificates(t *testing.T) {
 	require.NoError(t, err)
 	forward, err := service.NewForwardNodeService(database.Get()).GetByID(l.forward.ID)
 	require.NoError(t, err)
-	forward.APIToken = "replaced-forward-token"
+	forward.Enabled = false
 	require.NoError(t, service.NewForwardNodeService(database.Get()).Update(forward))
 	require.NoError(t, stream.Send(&agentv1pb.AgentToControl{
 		RequestId: "heartbeat", NodeId: uint32(l.forward.ID), SentAtUnixMs: time.Now().UnixMilli(),

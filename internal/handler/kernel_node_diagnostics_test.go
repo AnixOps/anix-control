@@ -139,7 +139,7 @@ func newDiagnosticsEnv(t *testing.T) *diagnosticsEnv {
 		user.UUID = "uuid-" + strconv.FormatUint(uint64(user.ID), 10)
 		require.NoError(t, db.Create(&user).Error)
 	}
-	require.NoError(t, db.Create(&model.Node{ID: 5, Name: "hk-01", APIKey: "key-5", Status: model.NodeStatusOnline}).Error)
+	require.NoError(t, db.Create(&model.Node{ID: 5, Name: "hk-01", Status: model.NodeStatusOnline}).Error)
 	require.NoError(t, db.Create(&model.ForwardNode{ID: 5, Name: "relay", Host: "192.0.2.1", Port: 22, Enabled: true}).Error)
 
 	env := &diagnosticsEnv{db: db, streams: newDiagnosticStreams()}

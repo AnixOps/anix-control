@@ -3,7 +3,6 @@ package kernelalerts
 import (
 	"context"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"os"
@@ -158,15 +157,14 @@ func addAgentCert(t *testing.T, db *gorm.DB, serial, kind string, nodeID uint, l
 
 func addProxyNode(t *testing.T, db *gorm.DB, name string, status model.NodeStatus) model.Node {
 	t.Helper()
-	sum := sha256.Sum256([]byte(name))
-	node := model.Node{Name: name, Host: "198.51.100.10", APIKey: "key-" + name, APIKeyHash: hex.EncodeToString(sum[:]), Status: status}
+	node := model.Node{Name: name, Host: "198.51.100.10", Status: status}
 	require.NoError(t, db.Create(&node).Error)
 	return node
 }
 
 func addForwardNode(t *testing.T, db *gorm.DB, name string, enabled bool) model.ForwardNode {
 	t.Helper()
-	node := model.ForwardNode{Name: name, Host: "198.51.100.20", Port: 8443, APIToken: "t-" + name, Enabled: true}
+	node := model.ForwardNode{Name: name, Host: "198.51.100.20", Port: 8443, Enabled: true}
 	require.NoError(t, db.Create(&node).Error)
 	if !enabled {
 		require.NoError(t, db.Model(&node).Update("enabled", false).Error)

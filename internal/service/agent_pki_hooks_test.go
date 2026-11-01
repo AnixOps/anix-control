@@ -1,7 +1,6 @@
 package service
 
 import (
-	"strings"
 	"testing"
 	"time"
 
@@ -58,7 +57,7 @@ func agentCertificateRevocation(t *testing.T, db *gorm.DB, serial string) string
 func TestProxyNodeChangesRevokeAgentCertificates(t *testing.T) {
 	db := agentPKIHookDB(t)
 	nodes := &NodeService{db: db}
-	node := model.Node{Name: "proxy", APIKeyHash: strings.Repeat("c", 64), Status: model.NodeStatusOnline}
+	node := model.Node{Name: "proxy", Status: model.NodeStatusOnline}
 	require.NoError(t, db.Create(&node).Error)
 	seedAgentCertificate(t, db, agentcontrol.NodeKindProxy, node.ID, "proxy-cert")
 	// A forward node with the same id is another node.
@@ -85,17 +84,13 @@ func TestProxyNodeChangesRevokeAgentCertificates(t *testing.T) {
 func TestForwardNodeChangesRevokeAgentCertificates(t *testing.T) {
 	db := agentPKIHookDB(t)
 	forwards := NewForwardNodeService(db)
-	node := &model.ForwardNode{Name: "forward", Host: "198.51.100.30", Port: 8443, APIToken: "forward-token", Enabled: true}
+	node := &model.ForwardNode{Name: "forward", Host: "198.51.100.30", Port: 8443, Enabled: true}
 	require.NoError(t, forwards.Create(node))
 	seedAgentCertificate(t, db, agentcontrol.NodeKindForward, node.ID, "forward-cert")
 
 	node.Name = "renamed"
 	require.NoError(t, forwards.Update(node))
 	assert.Empty(t, agentCertificateRevocation(t, db, "forward-cert"), "an unrelated change keeps the certificates")
-
-	node.APIToken = "replaced-token"
-	require.NoError(t, forwards.Update(node))
-	assert.Equal(t, agentpki.RevokeReasonCredentialsReplaced, agentCertificateRevocation(t, db, "forward-cert"))
 
 	seedAgentCertificate(t, db, agentcontrol.NodeKindForward, node.ID, "forward-cert-2")
 	node.Enabled = false
@@ -112,15 +107,15 @@ func TestNodeWritersWorkWithoutAgentPKITables(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	require.NoError(t, err)
 	require.NoError(t, db.AutoMigrate(&model.Node{}, &model.NodeProtocol{}, &model.ForwardNode{}))
-	node := model.Node{Name: "proxy", APIKeyHash: strings.Repeat("d", 64)}
+	node := model.Node{Name: "proxy"}
 	require.NoError(t, db.Create(&node).Error)
 	nodes := &NodeService{db: db}
 	require.NoError(t, nodes.UpdateNode(node.ID, map[string]any{"status": float64(model.NodeStatusDisabled)}))
 	require.NoError(t, nodes.DeleteNode(node.ID))
 	forwards := NewForwardNodeService(db)
-	forward := &model.ForwardNode{Name: "forward", Host: "198.51.100.31", Port: 1, APIToken: "a", Enabled: true}
+	forward := &model.ForwardNode{Name: "forward", Host: "198.51.100.31", Port: 1, Enabled: true}
 	require.NoError(t, forwards.Create(forward))
-	forward.APIToken = "b"
+	forward.Name = "renamed"
 	require.NoError(t, forwards.Update(forward))
 	require.NoError(t, forwards.Delete(forward.ID))
 }
@@ -132,7 +127,7 @@ func TestRetireNodeRevokesLinkCertificates(t *testing.T) {
 	db := agentPKIHookDB(t)
 	require.NoError(t, db.AutoMigrate(&model.ForwardLinkCertificate{}))
 	forwards := NewForwardNodeService(db)
-	node := &model.ForwardNode{Name: "forward", Host: "198.51.100.32", Port: 8443, APIToken: "forward-token", Enabled: true}
+	node := &model.ForwardNode{Name: "forward", Host: "198.51.100.32", Port: 8443, Enabled: true}
 	require.NoError(t, forwards.Create(node))
 	seedAgentCertificate(t, db, agentcontrol.NodeKindForward, node.ID, "forward-cert")
 	for _, link := range []model.ForwardLinkCertificate{

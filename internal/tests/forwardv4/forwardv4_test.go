@@ -345,13 +345,8 @@ func runForwardV4API(t *testing.T, db *gorm.DB) {
 	assert.Equal(t, http.StatusNotFound, e.call("GET", "/nodes/forward-12", "", "").status)
 
 	// No answer carries a node credential.
-	var token string
-	require.NoError(t, db.Model(&model.ForwardNode{}).Where("id = ?", 11).Pluck("api_token", &token).Error)
 	for _, raw := range []string{nodes.raw, view.raw, machine.raw, e.call("GET", "/nodes", "", "").raw} {
 		assert.NotContains(t, raw, "api_token")
-		if token != "" {
-			assert.NotContains(t, raw, token)
-		}
 	}
 }
 

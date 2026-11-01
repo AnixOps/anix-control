@@ -187,15 +187,6 @@
     },
     {
       "method": "GET",
-      "path": "/api/v2/admin/nodes/:id/credentials",
-      "package_id": "proxy-node",
-      "route_id": "proxy.admin.nodes.id.credentials.get",
-      "mode": "kernel-owned",
-      "legacy": "router",
-      "reason": "answers the node's stored API key and secret, and no contract call reveals a stored secret (node-ops-service.md 3.7, D4)"
-    },
-    {
-      "method": "GET",
       "path": "/api/v2/admin/nodes/:id/logs",
       "package_id": "proxy-node",
       "route_id": "proxy.admin.nodes.id.logs.get",

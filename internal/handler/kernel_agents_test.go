@@ -35,7 +35,7 @@ func agentPKITestService(t *testing.T) (*agentpki.Service, *gorm.DB, model.Node)
 	require.NoError(t, authority.Ensure(t.Context()))
 	pki, err := agentpki.New(agentpki.Options{DB: db, Authority: authority})
 	require.NoError(t, err)
-	node := model.Node{Name: "proxy", APIKeyHash: strings.Repeat("a", 64), Status: model.NodeStatusOnline}
+	node := model.Node{Name: "proxy", Status: model.NodeStatusOnline}
 	require.NoError(t, db.Create(&node).Error)
 	return pki, db, node
 }

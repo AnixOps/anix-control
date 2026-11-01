@@ -51,7 +51,7 @@ func newAgentPluginInstallFixture(t *testing.T) agentPluginInstallFixture {
 	require.NoError(t, err)
 	_, err = StorePluginArtifact(db, release.ID, artifact)
 	require.NoError(t, err)
-	node := model.Node{Name: "agent-package-node", Host: "127.0.0.1", APIKey: "agent-package-key", Status: model.NodeStatusOnline}
+	node := model.Node{Name: "agent-package-node", Host: "127.0.0.1", Status: model.NodeStatusOnline}
 	require.NoError(t, db.Create(&node).Error)
 	installation := model.PluginInstallation{
 		PluginID: manifest.ID, Target: "agent", DesiredVersion: manifest.Version, State: "pending", Enabled: true, LifecycleGeneration: 1,

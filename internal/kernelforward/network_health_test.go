@@ -248,7 +248,7 @@ func TestNetworkRouteSeveralEntries(t *testing.T) {
 	resetDiagnosesForTest()
 	f, db, network := networkFixture(t)
 	second := agentcontrol.AgentNode{Kind: agentcontrol.NodeKindProxy, ID: 22}
-	require.NoError(t, db.Create(&model.Node{ID: 22, Name: "proxy-2", Host: "proxy2.example.com", Port: 443, APIKey: "proxy2-key", Status: model.NodeStatusOnline}).Error)
+	require.NoError(t, db.Create(&model.Node{ID: 22, Name: "proxy-2", Host: "proxy2.example.com", Port: 443, Status: model.NodeStatusOnline}).Error)
 	view, err := network.Get(f.ctx)
 	require.NoError(t, err)
 	doc := view.Document

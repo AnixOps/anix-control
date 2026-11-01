@@ -29,22 +29,22 @@ func TestUnverifiableBindingsAreRefused(t *testing.T) {
 	forEachDatabase(t, func(t *testing.T, db *gorm.DB) {
 		h := newHarness(t, db)
 		prepared := 0
-		h.serve(KindCredentialIssue, preparing{prepare: func(_ context.Context, submission *Submission) error {
+		h.serve(KindSecretsPut, preparing{prepare: func(_ context.Context, submission *Submission) error {
 			prepared++
 			_, err := submission.Unseal(sealedsecrets.Use{Handle: liveHandle, Target: NodeTarget(nodeRef(forwardKind, 10)), Field: "/api_token"})
 			return err
 		}})
 		client := h.client(forwardHost, allFamilies())
-		spec := issueCredential(nodeRef(forwardKind, 10), kernelnodeopsv1.CredentialKind_CREDENTIAL_KIND_FORWARD_NODE_TOKEN, liveHandle)
+		spec := putSecretDocument(kernelnodeopsv1.SecretScope_SECRET_SCOPE_NODE_RAW_CONFIG, 1, "raw_config", `{"token":"`+liveHandle+`"}`)
 		_, err := client.SubmitOperation(context.Background(), &kernelnodeopsv1.SubmitOperationRequest{
-			RequestId: "credential.issue:forward-10:token:a", Operation: spec,
+			RequestId: "secrets.put:1:raw:a", Operation: spec,
 			Request: &kernelnodeopsv1.RequestBinding{BridgeCapability: make([]byte, 32)},
 		})
 		require.Equal(t, codes.PermissionDenied, status.Code(err))
 		assert.Zero(t, prepared, "refused before Prepare")
 		assert.NotContains(t, err.Error(), liveHandle)
 
-		_, err = client.SubmitOperation(context.Background(), &kernelnodeopsv1.SubmitOperationRequest{RequestId: "credential.issue:forward-10:token:b", Operation: spec})
+		_, err = client.SubmitOperation(context.Background(), &kernelnodeopsv1.SubmitOperationRequest{RequestId: "secrets.put:1:raw:b", Operation: spec})
 		require.Equal(t, codes.PermissionDenied, status.Code(err), "without a binding a handle resolves nothing")
 		assert.Equal(t, 1, prepared)
 		assert.Empty(t, h.rows(t), "nothing was recorded")

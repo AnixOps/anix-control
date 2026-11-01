@@ -62,7 +62,7 @@ var pinnedCredentialAnswers = map[string]string{
 	"revoke clean agent again":                      `200 {"code":0,"data":true,"msg":"操作成功","ts":0}`,
 	"revoke clean agent that does not exist":        `200 {"code":-1,"data":null,"msg":"agent not found","ts":0}`,
 	"revoke clean agent, bad id":                    `200 {"code":-1,"data":null,"msg":"invalid agent id","ts":0}`,
-	"create node":                                   `200 {"code":0,"data":{"api_key":"<hex64>","node_id":1,"secret":"<hex64>"},"msg":"操作成功","ts":0}`,
+	"create node":                                   `200 {"code":0,"data":{"node_id":1},"msg":"操作成功","ts":0}`,
 	"create node, bad body":                         `400 {"error":"unexpected EOF","message":"参数错误"}`,
 	"put raw config":                                `200 {"code":0,"data":{"message":"配置更新成功"},"msg":"操作成功","ts":0}`,
 	"put raw config with the placeholder":           `200 {"code":0,"data":{"message":"配置更新成功"},"msg":"操作成功","ts":0}`,
@@ -98,7 +98,7 @@ var pinnedCredentialAnswers = map[string]string{
 
 func (s *NodeCredentialAnswersTestSuite) SetupTest() {
 	s.HandlerTestSuite.SetupTest()
-	s.Require().NoError(s.db.AutoMigrate(&model.ForwardCleanAgent{}, &model.WireGuardPeer{}))
+	s.Require().NoError(s.db.AutoMigrate(&model.WireGuardPeer{}))
 	s.Require().NoError(nodesecrets.MigrateForTest(s.db))
 }
 
@@ -146,12 +146,8 @@ func (s *NodeCredentialAnswersTestSuite) TestNodesAndRawConfigs() {
 	s.pin("create node", code, body)
 	var node model.Node
 	s.Require().NoError(s.db.First(&node, 1).Error)
-	s.Len(node.APIKey, 64)
-	s.Equal(hashString(node.APIKey), node.APIKeyHash)
-	s.Len(node.Secret, 64)
 	s.Equal(model.NodeStatusPending, node.Status)
 	s.Equal(int64(1), s.count(&model.NodeProtocol{}, "node_id = ?", node.ID), "the default protocol")
-	s.Equal(int64(2), s.count(&model.NodeCredential{}, "subject_kind = ? AND subject_id = ?", nodesecrets.SubjectProxy, node.ID), "dual-written")
 
 	code, body = s.serve(http.MethodPost, "/admin/nodes", "/admin/nodes", `{"name":`, h.CreateNode)
 	s.pin("create node, bad body", code, body)
@@ -210,7 +206,6 @@ func (s *NodeCredentialAnswersTestSuite) TestNodesAndRawConfigs() {
 	s.Equal(int64(0), s.count(&model.Node{}, "id = ?", 1))
 	s.Equal(int64(0), s.count(&model.NodeProtocol{}, "node_id = ?", 1))
 	s.Equal(int64(0), s.count(&model.WireGuardPeer{}, "node_protocol_id = ?", protocol.ID))
-	s.Equal(int64(0), s.count(&model.NodeCredential{}, "subject_kind = ? AND subject_id = ?", nodesecrets.SubjectProxy, 1))
 	s.Equal(int64(0), s.count(&model.ProtocolSecret{}, "scope = ? AND owner_id = ?", nodesecrets.ScopeNodeRawConfig, 1))
 	var links int64
 	s.Require().NoError(s.db.Table("v2_subscription_group_node_protocols").Where("node_protocol_id = ?", protocol.ID).Count(&links).Error)
@@ -223,7 +218,7 @@ func (s *NodeCredentialAnswersTestSuite) TestNodesAndRawConfigs() {
 
 func (s *NodeCredentialAnswersTestSuite) TestProtocols() {
 	h := NewNodeHandler()
-	node := &model.Node{Name: "edge", Host: "edge.example.test", Port: 443, APIKey: "node-api-key", APIKeyHash: hashString("node-api-key"), Secret: "node-shared-secret"}
+	node := &model.Node{Name: "edge", Host: "edge.example.test", Port: 443}
 	s.Require().NoError(s.db.Create(node).Error)
 
 	reality := `{"dest":"www.example.test:443","private_key":"` + pinRealitySecret + `","public_key":"reality-public","short_id":"6ba85179"}`

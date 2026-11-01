@@ -23,24 +23,6 @@ func requireVerified(t *testing.T, db *gorm.DB) {
 	}
 }
 
-// current is the current version of a subject's credential.
-func current(t *testing.T, db *gorm.DB, subjectKind string, subjectID uint, kind string) model.NodeCredential {
-	t.Helper()
-	var rows []model.NodeCredential
-	require.NoError(t, db.Where("subject_kind = ? AND subject_id = ? AND kind = ? AND status <> ?",
-		subjectKind, subjectID, kind, nodesecrets.StatusRetired).Find(&rows).Error)
-	require.Len(t, rows, 1, "%s %d %s", subjectKind, subjectID, kind)
-	return rows[0]
-}
-
-// credentials counts every row of a subject, retired versions included.
-func credentials(t *testing.T, db *gorm.DB, subjectKind string, subjectID uint) int64 {
-	t.Helper()
-	var count int64
-	require.NoError(t, db.Model(&model.NodeCredential{}).Where("subject_kind = ? AND subject_id = ?", subjectKind, subjectID).Count(&count).Error)
-	return count
-}
-
 // positions answers an owner's protocol secrets by column and pointer.
 func positions(t *testing.T, db *gorm.DB, scope string, ownerID uint) map[string]string {
 	t.Helper()
@@ -67,24 +49,17 @@ func TestEveryWriterDualWrites(t *testing.T) {
 		db := b.db
 		nodes := service.NewNodeService()
 
-		// Node creation: the generated key and secret, and the default
-		// protocol (which holds no secret).
+		// Node creation: the default protocol holds no secret.
 		node := &model.Node{Name: "split-node", Host: "203.0.113.10", Port: 443}
 		require.NoError(t, nodes.CreateNode(node))
-		key := current(t, db, nodesecrets.SubjectProxy, node.ID, nodesecrets.KindNodeAPIKey)
-		require.Equal(t, node.APIKey, key.Value)
-		require.Equal(t, node.APIKeyHash, key.KeyHash)
-		require.Equal(t, nodesecrets.SourceDualWrite, key.Source)
-		require.Equal(t, node.Secret, current(t, db, nodesecrets.SubjectProxy, node.ID, nodesecrets.KindNodeSharedSecret).Value)
 		requireVerified(t, db)
 
 		// Node update: the raw configuration's secret; the placeholder
-		// keeps it; a refused credential column changes nothing.
+		// keeps it.
 		require.NoError(t, nodes.UpdateNode(node.ID, map[string]any{"raw_config": `{"server_port":51820,"wireguard":{"private_key":"fake-raw-private"}}`}))
 		require.Equal(t, map[string]string{"raw_config /wireguard/private_key": `"fake-raw-private"`}, positions(t, db, nodesecrets.ScopeNodeRawConfig, node.ID))
-		require.NoError(t, nodes.UpdateNode(node.ID, map[string]any{"raw_config": `{"server_port":51821,"wireguard":{"private_key":"********"}}`, "name": "renamed", "api_key": "fake-refused"}))
+		require.NoError(t, nodes.UpdateNode(node.ID, map[string]any{"raw_config": `{"server_port":51821,"wireguard":{"private_key":"********"}}`, "name": "renamed"}))
 		require.Equal(t, 1, secretVersion(t, db, nodesecrets.ScopeNodeRawConfig, node.ID, "raw_config", "/wireguard/private_key"))
-		require.Equal(t, 1, current(t, db, nodesecrets.SubjectProxy, node.ID, nodesecrets.KindNodeAPIKey).Version)
 		require.NoError(t, nodes.UpdateNode(node.ID, map[string]any{"raw_config": `{"server_port":51821,"wireguard":{"private_key":"fake-raw-private-b"}}`}))
 		require.Equal(t, 2, secretVersion(t, db, nodesecrets.ScopeNodeRawConfig, node.ID, "raw_config", "/wireguard/private_key"))
 		requireVerified(t, db)
@@ -100,31 +75,6 @@ func TestEveryWriterDualWrites(t *testing.T) {
 		require.NoError(t, nodes.UpdateProtocol(protocol.ID, map[string]any{"reality_settings": `{"private_key":"********","short_id":"6ba85179"}`, "custom_config": "fake-custom"}))
 		require.Equal(t, map[string]string{"reality_settings /private_key": `"fake-reality-private-b"`, "custom_config ": "fake-custom"}, positions(t, db, nodesecrets.ScopeNodeProtocol, protocol.ID))
 		require.Equal(t, 2, secretVersion(t, db, nodesecrets.ScopeNodeProtocol, protocol.ID, "reality_settings", "/private_key"))
-		requireVerified(t, db)
-
-		// Forward nodes: creation, a new token and address, an Ansible
-		// machine's empty token, deletion.
-		forwards := service.NewForwardNodeService(db)
-		forward := &model.ForwardNode{Name: "relay", Type: "relay", Host: "198.51.100.7", Port: 443, APIPort: 9000, APIToken: "fake-forward-token-1", Enabled: true}
-		require.NoError(t, forwards.Create(forward))
-		token := current(t, db, nodesecrets.SubjectForward, forward.ID, nodesecrets.KindForwardNodeToken)
-		require.Equal(t, "fake-forward-token-1", token.Value)
-		require.Equal(t, "198.51.100.7:9000", token.Endpoint)
-		forward.APIToken = "fake-forward-token-2"
-		forward.Host = "198.51.100.8"
-		require.NoError(t, forwards.Update(forward))
-		token = current(t, db, nodesecrets.SubjectForward, forward.ID, nodesecrets.KindForwardNodeToken)
-		require.Equal(t, 2, token.Version)
-		require.Equal(t, "198.51.100.8:9000", token.Endpoint)
-		requireVerified(t, db)
-
-		ansible := &model.ForwardNode{Name: "machine", Type: "exit", Host: "198.51.100.9", Port: 22, APIToken: "fake-forward-token-3", Enabled: true}
-		require.NoError(t, forwards.Create(ansible))
-		ansible.APIToken = ""
-		require.NoError(t, forwards.Update(ansible))
-		require.Zero(t, credentials(t, db, nodesecrets.SubjectForward, ansible.ID))
-		require.NoError(t, forwards.Delete(forward.ID))
-		require.Zero(t, credentials(t, db, nodesecrets.SubjectForward, forward.ID))
 		requireVerified(t, db)
 
 		// WireGuard peers: the subscription renderer creates them, a
@@ -155,7 +105,7 @@ func TestEveryWriterDualWrites(t *testing.T) {
 		requireVerified(t, db)
 
 		// Protocol deletion takes its secrets and its peers'; node deletion
-		// takes the node's credentials, raw configuration and protocols.
+		// takes the node's raw configuration and protocols.
 		require.NoError(t, nodes.DeleteProtocol(protocol.ID))
 		require.Empty(t, positions(t, db, nodesecrets.ScopeNodeProtocol, protocol.ID))
 		require.Empty(t, positions(t, db, nodesecrets.ScopeWireGuardPeer, peerIDs[1]))
@@ -163,7 +113,6 @@ func TestEveryWriterDualWrites(t *testing.T) {
 		require.NoError(t, nodes.CreateProtocol(second))
 		require.NotEmpty(t, positions(t, db, nodesecrets.ScopeNodeProtocol, second.ID))
 		require.NoError(t, nodes.DeleteNode(node.ID))
-		require.Zero(t, credentials(t, db, nodesecrets.SubjectProxy, node.ID))
 		require.Empty(t, positions(t, db, nodesecrets.ScopeNodeRawConfig, node.ID))
 		require.Empty(t, positions(t, db, nodesecrets.ScopeNodeProtocol, second.ID))
 		requireVerified(t, db)
@@ -174,7 +123,7 @@ func TestEveryWriterDualWrites(t *testing.T) {
 // disk or a lost connection would.
 func failSplitWrites(t *testing.T, b backend) {
 	t.Helper()
-	for _, table := range []string{"v4_kernel_node_credential", "v4_kernel_protocol_secret"} {
+	for _, table := range []string{"v4_kernel_protocol_secret"} {
 		switch b.name {
 		case "sqlite":
 			require.NoError(t, b.db.Exec(`CREATE TRIGGER fail_`+table+` BEFORE INSERT ON `+table+` BEGIN SELECT RAISE(ABORT, 'injected failure'); END`).Error)
@@ -203,10 +152,6 @@ func TestDualWriteIsTransactional(t *testing.T) {
 			require.NoError(t, db.Model(value).Where(query, args...).Count(&n).Error)
 			return n
 		}
-		require.Error(t, nodes.CreateNode(&model.Node{Name: "failed", Host: "203.0.113.21", Port: 443}))
-		require.Zero(t, count(&model.Node{}, "name = ?", "failed"))
-		require.Error(t, service.NewForwardNodeService(db).Create(&model.ForwardNode{Name: "failed", Type: "relay", Host: "198.51.100.20", Port: 443, APIToken: "fake-failed-token"}))
-		require.Zero(t, count(&model.ForwardNode{}, "name = ?", "failed"))
 		require.Error(t, nodes.CreateProtocol(&model.NodeProtocol{NodeID: node.ID, Name: "failed", Type: model.ProtocolTrojan, Port: 9443, Settings: ptr(`{"password":"fake-failed"}`)}))
 		require.Zero(t, count(&model.NodeProtocol{}, "name = ?", "failed"))
 		require.Error(t, nodes.UpdateProtocol(protocol.ID, map[string]any{"settings": `{"password":"fake-failed"}`}))

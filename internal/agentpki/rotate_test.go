@@ -3,7 +3,6 @@ package agentpki_test
 import (
 	"crypto/x509"
 	"crypto/x509/pkix"
-	"errors"
 	"net/url"
 	"sync"
 	"testing"
@@ -12,11 +11,8 @@ import (
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	"github.com/AnixOps/anix-control/v5/internal/agentpki"
 	"github.com/AnixOps/anix-control/v5/internal/model"
-	"github.com/AnixOps/anix-control/v5/internal/nodesecrets"
-	"github.com/AnixOps/anix-control/v5/internal/service"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gorm.io/gorm"
 )
 
 func (f *fixture) rotate(t *testing.T, node agentcontrol.AgentNode, mutate func(*agentpki.RotateRequest)) (agentpki.Rotation, error) {
@@ -56,7 +52,6 @@ func TestRotateCredentialsRevokesAndReissues(t *testing.T) {
 		rotation, err := f.rotate(t, proxy, nil)
 		require.NoError(t, err)
 		assert.Equal(t, agentpki.ActiveCredentials{Certificates: 1, Enrollments: 2, LinkCertificates: 1}, rotation.Revoked)
-		assert.False(t, rotation.APIKeyRotated)
 		require.NotEmpty(t, rotation.Credential)
 		assert.Contains(t, rotation.Credential, agentcontrol.EnrollmentCredentialPrefix)
 		require.NotNil(t, rotation.Enrollment.CredentialHash)
@@ -189,78 +184,6 @@ func countRevokedEnrollments(t *testing.T, f *fixture, node agentcontrol.AgentNo
 	return count
 }
 
-// TestRotateCredentialsReplacesTheNodeKey: with ReplaceNodeKey the proxy
-// node's old API key stops authenticating, the new one is stored and
-// hashed, in the legacy columns and through the credential split, and a
-// failing replacement rolls the whole rotation back.
-func TestRotateCredentialsReplacesTheNodeKey(t *testing.T) {
-	for _, phase := range []string{"legacy", nodesecrets.PhaseDualWrite, nodesecrets.PhaseDualRead} {
-		t.Run("phase "+phase, func(t *testing.T) {
-			forEachDatabase(t, func(t *testing.T, f *fixture) {
-				if phase != "legacy" {
-					require.NoError(t, nodesecrets.MigrateForTest(f.db))
-					tables := []string{nodesecrets.TableNode}
-					_, err := nodesecrets.Backfill(t.Context(), f.db, nodesecrets.BackfillOptions{Tables: tables})
-					require.NoError(t, err)
-					_, err = nodesecrets.Verify(t.Context(), f.db, nodesecrets.VerifyOptions{Tables: tables})
-					require.NoError(t, err)
-					_, err = nodesecrets.SetPhase(t.Context(), f.db, nodesecrets.PhaseOptions{Tables: tables, Phase: phase, Actor: "test"})
-					require.NoError(t, err)
-				}
-				var oldKey string
-				{
-					var row model.Node
-					require.NoError(t, f.db.First(&row, f.proxy.ID).Error)
-					oldKey = nodesecrets.NodeAPIKey(f.db, &row)
-				}
-				_, err := nodesecrets.NodeByAPIKey(f.db, oldKey, true)
-				require.NoError(t, err, "the old key works before the rotation")
-				issued, err := f.enroll(t, agentpki.Bootstrap{Node: f.proxyNode(), Secret: f.token(t, f.proxyNode(), time.Hour)})
-				require.NoError(t, err)
-
-				// A failing replacement leaves everything as it was.
-				_, err = f.rotate(t, f.proxyNode(), func(r *agentpki.RotateRequest) {
-					r.ReplaceNodeKey = func(*gorm.DB) error { return errors.New("replacement failed") }
-				})
-				require.EqualError(t, err, "replacement failed")
-				_, _, err = f.pki.VerifyPeer(t.Context(), [][]byte{issued.CertificateDER})
-				require.NoError(t, err, "a failed rotation revokes nothing")
-
-				rotation, err := f.rotate(t, f.proxyNode(), func(r *agentpki.RotateRequest) {
-					r.ReplaceNodeKey = func(tx *gorm.DB) error {
-						credentials, err := service.GenerateProxyNodeCredentials(true, false)
-						if err != nil {
-							return err
-						}
-						return service.IssueProxyNodeCredentialsTx(tx, f.proxy.ID, credentials, false)
-					}
-				})
-				require.NoError(t, err)
-				assert.True(t, rotation.APIKeyRotated)
-				assert.Equal(t, int64(1), rotation.Revoked.Certificates)
-
-				_, err = nodesecrets.NodeByAPIKey(f.db, oldKey, true)
-				require.Error(t, err, "the old key no longer authenticates")
-				_, _, err = f.pki.VerifyPeer(t.Context(), [][]byte{issued.CertificateDER})
-				require.ErrorIs(t, err, agentpki.ErrCertificateRevoked)
-
-				var row model.Node
-				require.NoError(t, f.db.First(&row, f.proxy.ID).Error)
-				newKey := nodesecrets.NodeAPIKey(f.db, &row)
-				require.NotEqual(t, oldKey, newKey)
-				require.False(t, nodesecrets.Unusable(newKey))
-				found, err := nodesecrets.NodeByAPIKey(f.db, newKey, true)
-				require.NoError(t, err)
-				assert.Equal(t, f.proxy.ID, found.ID)
-
-				fresh, err := f.enrollWith(t, rotation.Credential)
-				require.NoError(t, err)
-				requireNodeCertificate(t, f, fresh, f.proxyNode())
-			})
-		})
-	}
-}
-
 // TestRotateCredentialsAuditsWithoutSecrets: the rotation writes its own
 // entry besides the enrollment tokens', with the counts and the reason and
 // no credential.
@@ -286,10 +209,10 @@ func TestRotateCredentialsAuditsWithoutSecrets(t *testing.T) {
 		assert.Equal(t, uint(7), *rotate.UserID)
 		assert.Contains(t, rotate.Content, `"reason":"key left on a build host"`)
 		assert.Contains(t, rotate.Content, `"revoked_certificates":1`)
-		assert.Contains(t, rotate.Content, `"api_key_rotated":false`)
+		assert.NotContains(t, rotate.Content, "api_key")
 		assert.Contains(t, rotate.Content, rotation.Enrollment.ID)
 		for _, entry := range entries {
-			for _, secret := range []string{rotation.Credential, f.proxyKey, f.forwardToken, *rotation.Enrollment.CredentialHash} {
+			for _, secret := range []string{rotation.Credential, *rotation.Enrollment.CredentialHash} {
 				assert.NotContains(t, entry.Content, secret)
 				assert.NotContains(t, entry.Username, secret)
 			}

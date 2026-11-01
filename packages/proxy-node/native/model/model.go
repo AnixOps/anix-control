@@ -3,10 +3,7 @@
 // same name, so the answers are the same bytes.
 //
 // Node is the kernel's v2_node, which the package adopts once the node
-// credential split finalized it. It leaves out the node's API key, key
-// hash and shared secret: their columns hold tombstones then, and the
-// credentials are the kernel's (v4_kernel_node_credential); the kernel
-// model never answers them either (json:"-"). Its raw configuration holds
+// secret split finalized it. Its raw configuration holds
 // the placeholder at every secret position. NodeProtocol reads a node's
 // protocols through the kernel view kapi_node_protocol_public_v1: the
 // protocols are protocol-runtime's.

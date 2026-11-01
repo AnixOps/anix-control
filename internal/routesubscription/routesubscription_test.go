@@ -25,7 +25,7 @@ func newDB(t *testing.T) *gorm.DB {
 	require.NoError(t, db.AutoMigrate(&model.Node{}, &model.NodeProtocol{}, &model.ForwardNode{}, &model.KernelForwardRoute{},
 		&model.KernelForwardAllocation{}, &model.ForwardRouteSubscription{}, &model.OperationLog{}))
 	// KFC JP: Shadowsocks on 11111; the Shanghai forwarder newnb-1488.
-	require.NoError(t, db.Create(&model.Node{ID: 50, Name: "KFC JP", Host: "104.251.233.29", APIKey: "k50"}).Error)
+	require.NoError(t, db.Create(&model.Node{ID: 50, Name: "KFC JP", Host: "104.251.233.29"}).Error)
 	require.NoError(t, db.Create(&[]model.NodeProtocol{
 		{ID: 501, NodeID: 50, Name: "SS", Type: model.ProtocolShadowsocks, Port: 11111, Enable: 1},
 		{ID: 502, NodeID: 50, Name: "WG", Type: model.ProtocolWireGuard, Port: 443, Enable: 1},

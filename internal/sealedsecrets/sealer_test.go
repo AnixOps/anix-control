@@ -246,13 +246,13 @@ func TestSubstitutionFailsClosed(t *testing.T) {
 	assert.Empty(t, sealed.Key)
 }
 
-// expandFixture mints handles for one request of proxy.admin.nodes.post.
+// expandFixture mints handles for one request of the fixture proxy node creation.
 func expandFixture(t *testing.T) (*fixture, Sealed, Binding, string, string) {
 	f := newFixture(t)
-	sealed, binding := f.seal("proxy.admin.nodes.post", "req-1", `{"name":"edge","raw_config":{"private_key":"typed"}}`, nil)
-	key, _, err := f.store.Mint(binding, "api_key", "generated-key")
+	sealed, binding := f.seal(fixtureProxyCreate, "req-1", `{"name":"edge","raw_config":{"private_key":"typed"}}`, nil)
+	key, _, err := f.store.Mint(binding, "credential", "generated-credential")
 	require.NoError(t, err)
-	secret, _, err := f.store.Mint(binding, "secret", "generated-secret")
+	secret, _, err := f.store.Mint(binding, "recovery", "generated-recovery")
 	require.NoError(t, err)
 	return f, sealed, binding, key, secret
 }
@@ -261,43 +261,43 @@ func expandFixture(t *testing.T) (*fixture, Sealed, Binding, string, string) {
 // handle was minted for, once.
 func TestExpansionHappensOnlyInTheBoundAnswer(t *testing.T) {
 	f, sealed, _, key, secret := expandFixture(t)
-	answer := `{"code":0,"data":{"node_id":7,"api_key":"` + key + `","secret":"` + secret + `"},"msg":"ok"}`
-	expanded, count, err := f.sealer.ExpandAnswer(sealed.Key, "proxy.admin.nodes.post", []byte(answer), nil)
+	answer := `{"code":0,"data":{"node_id":7,"credential":"` + key + `","recovery":"` + secret + `"},"msg":"ok"}`
+	expanded, count, err := f.sealer.ExpandAnswer(sealed.Key, fixtureProxyCreate, []byte(answer), nil)
 	require.NoError(t, err)
 	assert.Equal(t, 2, count)
-	assert.Equal(t, `{"code":0,"data":{"node_id":7,"api_key":"generated-key","secret":"generated-secret"},"msg":"ok"}`, string(expanded))
-	_, _, err = f.sealer.ExpandAnswer(sealed.Key, "proxy.admin.nodes.post", []byte(answer), nil)
+	assert.Equal(t, `{"code":0,"data":{"node_id":7,"credential":"generated-credential","recovery":"generated-recovery"},"msg":"ok"}`, string(expanded))
+	_, _, err = f.sealer.ExpandAnswer(sealed.Key, fixtureProxyCreate, []byte(answer), nil)
 	require.ErrorIs(t, err, ErrAnswerHandle, "a handle expands once")
 
 	f, sealed, binding, key, secret := expandFixture(t)
-	other, _ := f.seal("proxy.admin.nodes.post", "req-2", `{}`, nil)
+	other, _ := f.seal(fixtureProxyCreate, "req-2", `{}`, nil)
 	inbound := handles(sealed.Body)[0]
 	refusals := map[string]struct {
 		key, route, body string
 		headers          []Header
 	}{
-		"in another request's answer":         {other.Key, "proxy.admin.nodes.post", `{"data":{"api_key":"` + key + `"}}`, nil},
-		"under another name":                  {sealed.Key, "proxy.admin.nodes.post", `{"data":{"api_key":"` + secret + `"}}`, nil},
-		"at an unlisted position":             {sealed.Key, "proxy.admin.nodes.post", `{"data":{"note":"` + key + `"}}`, nil},
-		"inside a longer text":                {sealed.Key, "proxy.admin.nodes.post", `{"data":{"note":"key ` + key + ` here"}}`, nil},
-		"as a member name":                    {sealed.Key, "proxy.admin.nodes.post", `{"data":{"` + key + `":1}}`, nil},
-		"a request's own handle echoed":       {sealed.Key, "proxy.admin.nodes.post", `{"data":{"api_key":"` + inbound + `"}}`, nil},
-		"a request's handle elsewhere":        {sealed.Key, "proxy.admin.nodes.post", `{"data":{"raw_config":{"private_key":"` + inbound + `"}}}`, nil},
-		"an unknown handle at a listed field": {sealed.Key, "proxy.admin.nodes.post", `{"data":{"api_key":"` + Prefix + strings.Repeat("B", 43) + `"}}`, nil},
+		"in another request's answer":         {other.Key, fixtureProxyCreate, `{"data":{"credential":"` + key + `"}}`, nil},
+		"under another name":                  {sealed.Key, fixtureProxyCreate, `{"data":{"credential":"` + secret + `"}}`, nil},
+		"at an unlisted position":             {sealed.Key, fixtureProxyCreate, `{"data":{"note":"` + key + `"}}`, nil},
+		"inside a longer text":                {sealed.Key, fixtureProxyCreate, `{"data":{"note":"key ` + key + ` here"}}`, nil},
+		"as a member name":                    {sealed.Key, fixtureProxyCreate, `{"data":{"` + key + `":1}}`, nil},
+		"a request's own handle echoed":       {sealed.Key, fixtureProxyCreate, `{"data":{"credential":"` + inbound + `"}}`, nil},
+		"a request's handle elsewhere":        {sealed.Key, fixtureProxyCreate, `{"data":{"raw_config":{"private_key":"` + inbound + `"}}}`, nil},
+		"an unknown handle at a listed field": {sealed.Key, fixtureProxyCreate, `{"data":{"credential":"` + Prefix + strings.Repeat("B", 43) + `"}}`, nil},
 		"in an unlisted route's answer":       {"", "knowledge.article.list", `{"data":"` + key + `"}`, nil},
-		"in a header":                         {sealed.Key, "proxy.admin.nodes.post", `{}`, []Header{{Name: "X-Key", Value: key}}},
-		"in a body that is not JSON":          {sealed.Key, "proxy.admin.nodes.post", `key=` + key, nil},
-		"written with escapes":                {sealed.Key, "proxy.admin.nodes.post", `{"data":{"note":"` + `\u0061` + key[1:] + `"}}`, nil},
-		"at a listed field without a request": {"", "proxy.admin.nodes.post", `{"data":{"api_key":"` + key + `"}}`, nil},
+		"in a header":                         {sealed.Key, fixtureProxyCreate, `{}`, []Header{{Name: "X-Key", Value: key}}},
+		"in a body that is not JSON":          {sealed.Key, fixtureProxyCreate, `key=` + key, nil},
+		"written with escapes":                {sealed.Key, fixtureProxyCreate, `{"data":{"note":"` + `\u0061` + key[1:] + `"}}`, nil},
+		"at a listed field without a request": {"", fixtureProxyCreate, `{"data":{"credential":"` + key + `"}}`, nil},
 	}
 	for name, refusal := range refusals {
 		_, _, err := f.sealer.ExpandAnswer(refusal.key, refusal.route, []byte(refusal.body), refusal.headers)
 		require.ErrorIs(t, err, ErrAnswerHandle, name)
 		assert.NotContains(t, err.Error(), "anix-sealed", name)
 	}
-	expanded, _, err = f.sealer.ExpandAnswer(sealed.Key, "proxy.admin.nodes.post", []byte(`{"data":{"api_key":"`+key+`"}}`), nil)
+	expanded, _, err = f.sealer.ExpandAnswer(sealed.Key, fixtureProxyCreate, []byte(`{"data":{"credential":"`+key+`"}}`), nil)
 	require.NoError(t, err, "no refusal used the handle")
-	assert.Equal(t, `{"data":{"api_key":"generated-key"}}`, string(expanded))
+	assert.Equal(t, `{"data":{"credential":"generated-credential"}}`, string(expanded))
 	_ = binding
 
 	// A string with the shape of a handle that is none is data.
@@ -317,7 +317,7 @@ func TestExpansionHappensOnlyInTheBoundAnswer(t *testing.T) {
 func TestAnswerHandlesDieWithTheirRequest(t *testing.T) {
 	f, sealed, _, key, _ := expandFixture(t)
 	f.clock.advance(time.Minute)
-	_, _, err := f.sealer.ExpandAnswer(sealed.Key, "proxy.admin.nodes.post", []byte(`{"data":{"api_key":"`+key+`"}}`), nil)
+	_, _, err := f.sealer.ExpandAnswer(sealed.Key, fixtureProxyCreate, []byte(`{"data":{"credential":"`+key+`"}}`), nil)
 	require.ErrorIs(t, err, ErrAnswerHandle)
 	f.sealer.Release(sealed.Key)
 	assert.False(t, f.store.Live(key))

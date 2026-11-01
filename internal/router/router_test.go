@@ -1163,11 +1163,6 @@ func TestEveryCataloguedV2RouteResolvesToItsOwnRouteID(t *testing.T) {
 	}
 }
 
-func sha256Hex(value string) string {
-	sum := sha256.Sum256([]byte(value))
-	return hex.EncodeToString(sum[:])
-}
-
 // commercialPackageIDs are the packages of the commercial set
 // (config/commercial-boundary.json).
 var commercialPackageIDs = map[string]bool{"affiliate": true, "order": true, "payment": true}

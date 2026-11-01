@@ -52,13 +52,10 @@ func createAgentControlHandlerTestNode(t *testing.T) *model.Node {
 	db := initTestDB()
 	now := time.Now().UnixNano()
 	node := &model.Node{
-		Name:       fmt.Sprintf("Agent Control Node %d", now),
-		Host:       "127.0.0.1",
-		Port:       443,
-		APIKey:     fmt.Sprintf("agent-control-key-%d", now),
-		APIKeyHash: fmt.Sprintf("agent-control-hash-%d", now),
-		Secret:     fmt.Sprintf("agent-control-secret-%d", now),
-		Status:     model.NodeStatusOnline,
+		Name:   fmt.Sprintf("Agent Control Node %d", now),
+		Host:   "127.0.0.1",
+		Port:   443,
+		Status: model.NodeStatusOnline,
 	}
 	require.NoError(t, db.Create(node).Error)
 	t.Cleanup(func() {

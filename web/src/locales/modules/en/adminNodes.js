@@ -293,10 +293,7 @@ export default {
       reasonHelp: 'Optional, recorded in the audit log. {count} / {max} bytes.',
       reasonTooLong: 'The reason is too long: {count} of {max} bytes.',
       reasonPlaceholder: 'For example: the host’s disk was stolen',
-      ttl: 'Credential lifetime',
-      rotateKey: 'Also replace the node’s API key',
-      rotateKeyHelp: 'Without this the old API key keeps working, so whoever holds it can still enroll an Agent by itself. Replacing it breaks every process that still polls Control with the old key until it gets the new one (read it under Credentials).',
-      rotateKeyNotice: 'The old API key stops working as soon as you confirm. Read the new key under Credentials afterwards.'
+      ttl: 'Credential lifetime'
     },
     result: {
       title: 'New credential for {name}',
@@ -312,8 +309,6 @@ export default {
       certificates: 'Agent certificates',
       enrollments: 'Enrollments',
       linkCertificates: 'Forward link certificates',
-      apiKeyReplaced: 'The node’s API key was replaced. Read the new key under Credentials.',
-      apiKeyKept: 'The node’s API key was not changed: the old key still works.',
       next: 'Give this credential to the machine and enroll the Agent again. The guide has the steps for a node that already has an identity.',
       guide: 'Rotating a node’s credentials (guide)',
       done: 'Done'
@@ -328,16 +323,8 @@ export default {
   },
   credentials: {
     title: 'Credentials',
-    description: `The ${AGENT_NAME} signs in to the control plane with this node’s API key.`,
+    description: `The ${AGENT_NAME} signs in to the control plane with its mTLS certificate; the node has no API key.`,
     nodeId: 'Node ID',
-    apiKey: 'API key',
-    apiKeyHidden: 'Hidden. Reading it is recorded in the audit log.',
-    apiKeyShown: 'Shown below, masked.',
-    apiKeyHelp: 'Masked; reveal or copy it. It is read again when you come back to this section.',
-    reveal: 'Read API key',
-    noKey: 'The server returned no key',
-    revealFailed: 'Couldn’t read the API key: {message}',
-    auditFooter: 'Every read of a node’s credentials is recorded as a reveal in the audit log. The shared secret is never shown here.',
     protocolSecrets: 'Protocol secrets',
     protocolSecretsRow: 'Open protocols',
     protocolSecretsFooter: 'Private keys and passwords in protocol settings show as ********; keep ******** to keep a stored value.'

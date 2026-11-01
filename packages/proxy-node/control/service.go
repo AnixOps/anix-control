@@ -89,11 +89,8 @@ var proxyNodeRoutes = map[string]struct{}{
 //     length of the configuration with its secrets, which the gateway
 //     seals into handles that never resolve for this route, so neither the
 //     package nor ValidateNodeConfig can compute it.
-//   - Node credentials (kernel-owned, D4): the answer is the stored API key
-//     and secret, and no contract call reveals a stored secret.
 var bridgedRoutes = map[string]struct{}{
 	"proxy.admin.nodes.post":                 {},
 	"proxy.admin.nodes.id.put":               {},
 	"proxy.admin.nodes.validate_config.post": {},
-	"proxy.admin.nodes.id.credentials.get":   {},
 }

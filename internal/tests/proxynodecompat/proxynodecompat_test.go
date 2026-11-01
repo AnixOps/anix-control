@@ -77,11 +77,11 @@ func seedNodes(t testing.TB, db *gorm.DB) {
 	now := time.Now().Unix()
 	recent, old := now-60, now-3600
 	rows := []model.Node{
-		{ID: 1, Name: "online", Host: "a.example.test", APIKey: "k1", APIKeyHash: "h1", Secret: "s1", Status: model.NodeStatusOnline, LastCheckAt: &recent, TotalUpload: 1 << 40, TotalDownload: 3 << 40},
-		{ID: 2, Name: "stale", Host: "b.example.test", APIKey: "k2", APIKeyHash: "h2", Secret: "s2", Status: model.NodeStatusOnline, LastCheckAt: &old, TotalUpload: 500, TotalDownload: 700},
-		{ID: 3, Name: "pending", Host: "c.example.test", APIKey: "k3", APIKeyHash: "h3", Secret: "s3", Status: model.NodeStatusPending},
-		{ID: 4, Name: "pending-online", Host: "d.example.test", APIKey: "k4", APIKeyHash: "h4", Secret: "s4", Status: model.NodeStatusPending, LastCheckAt: &recent, TotalUpload: 1},
-		{ID: 5, Name: "disabled", Host: "e.example.test", APIKey: "k5", APIKeyHash: "h5", Secret: "s5", Status: model.NodeStatusDisabled, LastCheckAt: &old},
+		{ID: 1, Name: "online", Host: "a.example.test", Status: model.NodeStatusOnline, LastCheckAt: &recent, TotalUpload: 1 << 40, TotalDownload: 3 << 40},
+		{ID: 2, Name: "stale", Host: "b.example.test", Status: model.NodeStatusOnline, LastCheckAt: &old, TotalUpload: 500, TotalDownload: 700},
+		{ID: 3, Name: "pending", Host: "c.example.test", Status: model.NodeStatusPending},
+		{ID: 4, Name: "pending-online", Host: "d.example.test", Status: model.NodeStatusPending, LastCheckAt: &recent, TotalUpload: 1},
+		{ID: 5, Name: "disabled", Host: "e.example.test", Status: model.NodeStatusDisabled, LastCheckAt: &old},
 	}
 	require.NoError(t, db.Create(&rows).Error)
 	syncSequences(t, db)

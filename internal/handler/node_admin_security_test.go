@@ -24,8 +24,8 @@ type NodeAdminWritesTestSuite struct {
 
 func (s *NodeAdminWritesTestSuite) SetupTest() {
 	s.HandlerTestSuite.SetupTest()
-	s.nodeA = &model.Node{Name: "edge-a", Host: "a.example.test", APIKey: "key-a", APIKeyHash: hashString("key-a"), Secret: "secret-a"}
-	s.nodeB = &model.Node{Name: "edge-b", Host: "b.example.test", APIKey: "key-b", APIKeyHash: hashString("key-b"), Secret: "secret-b"}
+	s.nodeA = &model.Node{Name: "edge-a", Host: "a.example.test"}
+	s.nodeB = &model.Node{Name: "edge-b", Host: "b.example.test"}
 	s.Require().NoError(s.db.Create(s.nodeA).Error)
 	s.Require().NoError(s.db.Create(s.nodeB).Error)
 	s.protocolA = &model.NodeProtocol{NodeID: s.nodeA.ID, Name: "vless-a", Type: model.ProtocolVLESS, Port: 443}
@@ -61,28 +61,17 @@ func (s *NodeAdminWritesTestSuite) node(id uint) model.Node {
 	return node
 }
 
-// requireEveryNodeHasAKey checks that no node without an API key exists.
-func (s *NodeAdminWritesTestSuite) requireEveryNodeHasAKey() {
-	var keyless int64
-	s.Require().NoError(s.db.Model(&model.Node{}).Where("COALESCE(api_key, '') = '' OR COALESCE(api_key_hash, '') = ''").Count(&keyless).Error)
-	s.Zero(keyless, "a node without an API key was created")
-}
-
-// requireSeededCredentials checks that the seeded nodes kept their ids and
-// credentials.
-func (s *NodeAdminWritesTestSuite) requireSeededCredentials() {
+// requireSeededIDs checks that the seeded nodes kept their ids.
+func (s *NodeAdminWritesTestSuite) requireSeededIDs() {
 	for _, seeded := range []*model.Node{s.nodeA, s.nodeB} {
-		stored := s.node(seeded.ID)
-		s.Equal(seeded.APIKey, stored.APIKey, "node %d api_key", seeded.ID)
-		s.Equal(seeded.APIKeyHash, stored.APIKeyHash, "node %d api_key_hash", seeded.ID)
-		s.Equal(seeded.Secret, stored.Secret, "node %d secret", seeded.ID)
+		s.node(seeded.ID)
 	}
 }
 
 // A node body's protocols, the nodes and subscription groups nested in them,
-// and its id are not saved: a protocol of another node is not moved, no node
-// without an API key and no group is created, and the new node gets only
-// its default protocol.
+// and its id are not saved: a protocol of another node is not moved, no
+// nested node and no group is created, and the new node gets only its
+// default protocol.
 func (s *NodeAdminWritesTestSuite) TestCreateNodeSavesNoNestedAssociations() {
 	handler := NewNodeHandler()
 	body := fmt.Sprintf(`{"id":77,"name":"edge-c","host":"c.example.test","protocols":[{"id":%d},`+
@@ -92,10 +81,8 @@ func (s *NodeAdminWritesTestSuite) TestCreateNodeSavesNoNestedAssociations() {
 	data := resp["data"].(map[string]any)
 	created := uint(data["node_id"].(float64))
 	s.NotEqual(uint(77), created, "the body chose the node's id")
-	s.NotEmpty(data["api_key"])
 
 	s.EqualValues(3, s.count("v2_node"), "a nested node was created")
-	s.requireEveryNodeHasAKey()
 	s.EqualValues(0, s.count("v2_subscription_group"), "a nested subscription group was created")
 	s.EqualValues(0, s.count("v2_subscription_group_node_protocols"), "a nested protocol was linked")
 	var protocolA model.NodeProtocol
@@ -106,24 +93,19 @@ func (s *NodeAdminWritesTestSuite) TestCreateNodeSavesNoNestedAssociations() {
 	s.Equal([]string{"Default VMess"}, names)
 }
 
-// The update refused id, api_key, api_key_hash and secret, but GORM also
-// resolves field names (ID, APIKey) and SQLite column names in any case
-// (API_KEY), which renumbered a node or replaced its credentials.
-func (s *NodeAdminWritesTestSuite) TestUpdateNodeKeepsItsIDAndCredentials() {
+// The update refused id, but GORM also resolves field names (ID) and
+// SQLite column names in any case (Id), which renumbered a node.
+func (s *NodeAdminWritesTestSuite) TestUpdateNodeKeepsItsID() {
 	handler := NewNodeHandler()
 	for _, body := range []string{
-		`{"name":"renamed","APIKey":"chosen","APIKeyHash":"chosen-hash","Secret":"chosen-secret"}`,
-		`{"name":"renamed","Api_Key":"","API_KEY_HASH":"","SECRET":""}`,
-		`{"name":"renamed","apikey":"x","ApiKeyHash":"y","secreT":"z"}`,
 		`{"name":"renamed","ID":99}`,
 		`{"name":"renamed","Id":98}`,
 	} {
 		s.ok(s.serve("PUT", "/nodes/:id", fmt.Sprintf("/nodes/%d", s.nodeA.ID), body, handler.UpdateNode))
 		s.Equal("renamed", s.node(s.nodeA.ID).Name, body)
-		s.requireSeededCredentials()
+		s.requireSeededIDs()
 		s.EqualValues(2, s.count("v2_node"), body)
 	}
-	s.requireEveryNodeHasAKey()
 }
 
 // The parent check ran only for the key "parent_id" with a number; other
@@ -167,7 +149,6 @@ func (s *NodeAdminWritesTestSuite) TestCreateProtocolKeepsTheRouteNode() {
 	s.Require().NoError(s.db.First(&stored, uint(data["id"].(float64))).Error)
 	s.Equal(s.nodeB.ID, stored.NodeID)
 	s.EqualValues(2, s.count("v2_node"), "a nested node was created")
-	s.requireEveryNodeHasAKey()
 	s.EqualValues(0, s.count("v2_subscription_group"), "a nested subscription group was created")
 	s.EqualValues(0, s.count("v2_subscription_group_node_protocols"), "a nested protocol was linked")
 }

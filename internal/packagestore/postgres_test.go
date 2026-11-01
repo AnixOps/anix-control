@@ -573,7 +573,7 @@ func TestPostgresSubscriptionGrants(t *testing.T) {
 	user := model.User{Email: "subscriber-" + suffix + "@example.test", Token: "subscriber-" + suffix, UUID: "subscriber-" + suffix}
 	plan := model.Plan{Name: "plan-" + suffix}
 	group := model.SubscriptionGroup{Name: "group-" + suffix, Enable: 1}
-	node := model.Node{Name: "node-" + suffix, APIKey: "key-" + suffix, Secret: "secret-" + suffix}
+	node := model.Node{Name: "node-" + suffix}
 	require.NoError(t, kernel.Create(&user).Error)
 	require.NoError(t, kernel.Create(&plan).Error)
 	require.NoError(t, kernel.Create(&group).Error)
@@ -654,8 +654,8 @@ func TestPostgresNodeStatusViewHidesNodeCredentials(t *testing.T) {
 	packageID := "pkgtest-" + suffix
 	t.Cleanup(func() { dropPackageStorage(t, kernel, packageID) })
 	checked := int64(1_790_000_000)
-	node := model.Node{Name: "node-" + suffix, Host: "node.example.test", APIKey: "key-" + suffix, APIKeyHash: "hash-" + suffix,
-		Secret: "secret-" + suffix, Status: model.NodeStatusOnline, LastCheckAt: &checked, TotalUpload: 7, TotalDownload: 9}
+	node := model.Node{Name: "node-" + suffix, Host: "node.example.test",
+		Status: model.NodeStatusOnline, LastCheckAt: &checked, TotalUpload: 7, TotalDownload: 9}
 	require.NoError(t, kernel.Create(&node).Error)
 	t.Cleanup(func() { _ = kernel.Delete(&model.Node{}, node.ID).Error })
 
@@ -698,8 +698,7 @@ func TestPostgresForwardViewsHideTokensAndOtherKeys(t *testing.T) {
 	suffix := randomSuffix(t)
 	packageID := "pkgtest-" + suffix
 	t.Cleanup(func() { dropPackageStorage(t, kernel, packageID) })
-	token := "node-secret-" + suffix
-	node := model.ForwardNode{Name: "relay-" + suffix, Type: "relay", Host: "198.51.100.1", Port: 443, APIToken: token}
+	node := model.ForwardNode{Name: "relay-" + suffix, Type: "relay", Host: "198.51.100.1", Port: 443}
 	require.NoError(t, kernel.Create(&node).Error)
 	t.Cleanup(func() { _ = kernel.Delete(&model.ForwardNode{}, node.ID).Error })
 	secretKey := "forward.runtime.nodex.token." + suffix

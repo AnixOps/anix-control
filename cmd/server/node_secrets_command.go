@@ -27,16 +27,12 @@ const nodeSecretsCommandUsage = `usage:
   anix-control node-secrets unsplit -confirm [-adopted-ok] [-by <name>] [-batch 500] <table|all>
   anix-control node-secrets validate
 
-Tables: v2_node, v2_forward_node, v2_forward_clean_agent, v2_node_protocol,
-v2_wireguard_peer (default: all).
+Tables: v2_node, v2_node_protocol, v2_wireguard_peer (default: all).
 
-status prints each table's phase, backfill progress and last verify, and
-the forward nodes that hold a token but no API port (id and name): their
-token is pinned to no endpoint, so gost changes and legacy rules on them
-fail until an administrator sets the port.
+status prints each table's phase, backfill progress and last verify.
 
-backfill copies the node credentials and protocol secrets of the legacy
-tables into v4_kernel_node_credential and v4_kernel_protocol_secret. It is
+backfill copies the protocol secrets of the legacy tables into
+v4_kernel_protocol_secret. It is
 idempotent and resumes an interrupted pass. verify compares the digests of
 both forms and exits 3 when they differ.
 
@@ -47,8 +43,8 @@ needs the table's latest verify to have matched within the last hour; with
 made it (default: $USER). Running Control processes follow within 5 seconds.
 
 finalize (phase P3) writes tombstones over a table's legacy secret
-columns: "!moved:<id>" in each credential column, "" in each key hash
-column, and the redacted document in each JSON column. The secrets stay in
+columns: "!moved:<id>" in each key column and the redacted document in
+each JSON column. The secrets stay in
 the new tables, which become the only ones read. It needs -confirm, phase
 dual_read and a verify that matched within the last hour; it runs in
 batches, and an interrupted finalize is resumed by running it again. Run it
@@ -111,13 +107,7 @@ func runNodeSecretsCommand(ctx context.Context, db *gorm.DB, arguments []string,
 		if err != nil {
 			return err
 		}
-		unpinned, err := nodesecrets.ForwardNodesWithoutAPIPort(ctx, db)
-		if err != nil {
-			return err
-		}
-		return encoder.Encode(nodeSecretsStatus{
-			Tables: rows, ForwardNodesWithoutAPIPort: nodeSecretsUnpinned{Count: len(unpinned), Nodes: unpinned},
-		})
+		return encoder.Encode(nodeSecretsStatus{Tables: rows})
 	case "backfill":
 		flags := flag.NewFlagSet("node-secrets backfill", flag.ContinueOnError)
 		flags.SetOutput(io.Discard)
@@ -243,17 +233,9 @@ func runNodeSecretsCommand(ctx context.Context, db *gorm.DB, arguments []string,
 	return nodeSecretsUsageError()
 }
 
-// nodeSecretsStatus is what status prints: the split tables' state, and
-// the forward nodes whose token is pinned to no endpoint because they have
-// no API port (docs/UPGRADE.md), by id and name only.
+// nodeSecretsStatus is what status prints: the split tables' state.
 type nodeSecretsStatus struct {
-	Tables                     []model.NodeSecretSplit `json:"tables"`
-	ForwardNodesWithoutAPIPort nodeSecretsUnpinned     `json:"forward_nodes_without_api_port"`
-}
-
-type nodeSecretsUnpinned struct {
-	Count int                               `json:"count"`
-	Nodes []nodesecrets.UnpinnedForwardNode `json:"nodes"`
+	Tables []model.NodeSecretSplit `json:"tables"`
 }
 
 func splitTables(value string) []string {

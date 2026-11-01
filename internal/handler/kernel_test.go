@@ -454,7 +454,7 @@ func TestKernelMachineTelemetryPluginRouteFailsClosedWithoutHost(t *testing.T) {
 	require.NoError(t, err)
 	now := time.Now().Unix()
 	require.NoError(t, db.Create(&model.Node{
-		Name: "telemetry-node", Host: "10.10.0.1", APIKey: "telemetry-node-key", Status: model.NodeStatusOnline, LastCheckAt: &now,
+		Name: "telemetry-node", Host: "10.10.0.1", Status: model.NodeStatusOnline, LastCheckAt: &now,
 		RuntimeHealthy: true, CPUUsage: 23.5, MemoryUsage: 50, DiskUsage: 70,
 	}).Error)
 

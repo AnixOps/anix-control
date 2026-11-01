@@ -25,10 +25,10 @@ func TestAgentsTransportsCommand(t *testing.T) {
 	require.NoError(t, err)
 	sqlDB.SetMaxOpenConns(1)
 	t.Cleanup(func() { _ = sqlDB.Close() })
-	require.NoError(t, db.AutoMigrate(&model.Node{}, &model.ForwardNode{}, &model.ForwardCleanAgent{}, &model.AgentTransport{}, &model.AgentCertificate{}))
+	require.NoError(t, db.AutoMigrate(&model.Node{}, &model.ForwardNode{}, &model.AgentTransport{}, &model.AgentCertificate{}))
 	now := time.Now().UTC()
 	require.NoError(t, db.Create(&[]model.Node{
-		{ID: 1, Name: "enrolled", APIKey: "a"}, {ID: 2, Name: "silent", APIKey: "b"}, {ID: 3, Name: "off", APIKey: "c", Status: model.NodeStatusDisabled},
+		{ID: 1, Name: "enrolled"}, {ID: 2, Name: "silent"}, {ID: 3, Name: "off", Status: model.NodeStatusDisabled},
 	}).Error)
 	require.NoError(t, db.Create(&[]model.AgentTransport{
 		{NodeKind: "proxy", NodeID: 1, Transport: model.AgentTransportMTLSStream, AgentVersion: "2.0.0", FirstSeenAt: now, LastSeenAt: now},
@@ -110,10 +110,10 @@ func TestRequiredReadinessStartupWarning(t *testing.T) {
 	require.NoError(t, err)
 	sqlDB.SetMaxOpenConns(1)
 	t.Cleanup(func() { _ = sqlDB.Close() })
-	require.NoError(t, db.AutoMigrate(&model.Node{}, &model.ForwardNode{}, &model.ForwardCleanAgent{}, &model.AgentTransport{}, &model.AgentCertificate{}))
+	require.NoError(t, db.AutoMigrate(&model.Node{}, &model.ForwardNode{}, &model.AgentTransport{}, &model.AgentCertificate{}))
 	now := time.Now().UTC()
 	require.NoError(t, db.Create(&[]model.Node{
-		{ID: 1, Name: "enrolled", APIKey: "a"}, {ID: 2, Name: "never-a", APIKey: "b"}, {ID: 3, Name: "never-b", APIKey: "c"}, {ID: 4, Name: "new", APIKey: "d"},
+		{ID: 1, Name: "enrolled"}, {ID: 2, Name: "never-a"}, {ID: 3, Name: "never-b"}, {ID: 4, Name: "new"},
 	}).Error)
 	require.NoError(t, db.Create(&[]model.AgentTransport{
 		{NodeKind: "proxy", NodeID: 1, Transport: model.AgentTransportMTLSStream, FirstSeenAt: now, LastSeenAt: now},

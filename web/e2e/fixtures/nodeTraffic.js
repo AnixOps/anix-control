@@ -64,7 +64,6 @@ export function rotateAnswer(body = {}, now = FIXED_NOW_MS) {
     data: {
       node: body.node,
       revoked: { certificates: 1, enrollments: 2, link_certificates: String(body.node).startsWith('forward-') ? 1 : 0 },
-      api_key_rotated: Boolean(body.rotate_api_key),
       enrollment: { id: 'enr-e2e', node_kind: String(body.node).split('-')[0], method: 'enrollment_credential', expires_at: new Date(now + ttl * 1000).toISOString() },
       expires_at: new Date(now + ttl * 1000).toISOString(),
       credential: FIXTURE_CREDENTIAL

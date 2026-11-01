@@ -149,15 +149,13 @@ test.describe('rotate Agent credentials', () => {
     await confirm.getByRole('combobox', { name: 'Credential lifetime' }).click()
     await page.getByRole('option', { name: '24 hours' }).click()
     await expect(confirm.getByRole('combobox', { name: 'Credential lifetime' })).toContainText('24 hours')
-    await confirm.getByRole('checkbox', { name: 'Also replace the node’s API key' }).click()
-    await expect(confirm.getByTestId('rotate-api-key-notice')).toBeVisible()
     await confirm.getByRole('button', { name: 'Rotate credentials' }).click()
 
     const result = page.getByRole('dialog', { name: 'New credential for tw-01' })
     await expect(result).toBeVisible()
     const posts = requests.to('/api/v4/kernel/agents/rotate-credentials', 'POST')
     expect(posts).toHaveLength(1)
-    expect(JSON.parse(posts[0].body)).toEqual({ node: 'proxy-108', rotate_api_key: true, ttl_seconds: 86400, reason: 'disk of the host was stolen' })
+    expect(JSON.parse(posts[0].body)).toEqual({ node: 'proxy-108', ttl_seconds: 86400, reason: 'disk of the host was stolen' })
 
     // The credential, masked; copied on request; a warning and the expiry.
     const field = result.getByLabel('One-time credential')
@@ -165,7 +163,6 @@ test.describe('rotate Agent credentials', () => {
     await expect(field).toHaveAttribute('type', 'password')
     await expect(result.getByTestId('rotate-warning')).toContainText('Treat it like a password')
     await expect(result.getByTestId('rotate-expiry')).toContainText('Valid until')
-    await expect(result.getByTestId('rotate-api-key-result')).toContainText('API key was replaced')
     await result.getByRole('button', { name: 'Copy credential' }).click()
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(FIXTURE_CREDENTIAL)
     // No made-up command: the guide link is the next step.
@@ -191,7 +188,6 @@ test.describe('rotate Agent credentials', () => {
     // Asking again starts from a clean form.
     await page.getByTestId('rotate-credentials').click()
     await expect(page.getByRole('textbox', { name: 'Reason' })).toHaveValue('')
-    await expect(page.getByRole('checkbox', { name: 'Also replace the node’s API key' })).not.toBeChecked()
   })
 
   test('Esc closes the result and clears the credential too', async ({ page }) => {

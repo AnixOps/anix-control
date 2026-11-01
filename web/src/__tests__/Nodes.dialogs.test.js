@@ -13,7 +13,6 @@ const api = vi.hoisted(() => ({
   getNodeStats: vi.fn(),
   updateNode: vi.fn(),
   deleteNode: vi.fn(),
-  getNodeCredentials: vi.fn(),
   syncNodeProtocol: vi.fn()
 }))
 
@@ -68,7 +67,6 @@ describe('Nodes dialogs and feedback', () => {
     kernel.getKernelAgentTransports.mockResolvedValue({ nodes: [] })
     kernel.listKernelNodeGroups.mockResolvedValue({ groups: [] })
     api.getNodeStats.mockResolvedValue({ data: { total: 1, online: 1, offline: 0, pending: 0 } })
-    api.getNodeCredentials.mockResolvedValue({ data: { api_key: '' } })
   })
 
   afterEach(() => {

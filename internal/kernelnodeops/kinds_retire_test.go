@@ -50,14 +50,13 @@ func seedCascade(t *testing.T, db *gorm.DB) {
 		{Serial: "cert-proxy-1", NodeKind: "proxy", NodeID: 1, Cluster: "test", EnrollmentID: "e", IssuerKeyID: "k", NotAfter: time.Now().Add(time.Hour)},
 		{Serial: "cert-forward-10", NodeKind: "forward", NodeID: 10, Cluster: "test", EnrollmentID: "e", IssuerKeyID: "k", NotAfter: time.Now().Add(time.Hour)},
 	}).Error)
-	require.NoError(t, db.Model(&model.ForwardNode{}).Where("id = ?", 10).Update("api_token", "forward-token-10").Error)
 	require.NoError(t, db.Transaction(func(tx *gorm.DB) error {
 		for _, write := range []struct {
 			table string
 			ids   []uint
 		}{
 			{nodesecrets.TableNode, []uint{1}}, {nodesecrets.TableNodeProtocol, []uint{5, 6}},
-			{nodesecrets.TableWireGuardPeer, []uint{1, 2}}, {nodesecrets.TableForwardNode, []uint{10}},
+			{nodesecrets.TableWireGuardPeer, []uint{1, 2}},
 		} {
 			if err := nodesecrets.Sync(tx, write.table, write.ids...); err != nil {
 				return err
@@ -106,18 +105,16 @@ func TestRetireNode(t *testing.T) {
 		require.EqualValues(t, 2, retired.GetWireguardPeersDeleted())
 		require.EqualValues(t, 2, retired.GetSubscriptionLinksDeleted())
 		require.EqualValues(t, 3, retired.GetSecretsDeleted(), "the protocols' secrets and the raw configuration's; the peers' keys went with the peers")
-		require.EqualValues(t, 1, retired.GetCredentialsRevoked(), "the node's API key row")
 		require.EqualValues(t, 1, count(t, db, &model.Node{}, "id = ?", 1), "the node row is the package's")
 		require.Zero(t, count(t, db, &model.NodeProtocol{}, "node_id = ?", 1))
 		require.Zero(t, count(t, db, &model.WireGuardPeer{}, "node_protocol_id IN ?", []uint{5, 6}))
 		require.Zero(t, countTable(t, db, linksTable, "node_protocol_id IN ?", []uint{5, 6}))
 		require.Zero(t, count(t, db, &model.ProtocolSecret{}, "1 = 1"))
-		require.Zero(t, count(t, db, &model.NodeCredential{}, "subject_kind = ? AND subject_id = ?", nodesecrets.SubjectProxy, 1))
 		var certificate model.AgentCertificate
 		require.NoError(t, db.First(&certificate, "serial = ?", "cert-proxy-1").Error)
 		require.NotNil(t, certificate.RevokedAt)
 		require.Equal(t, agentpki.RevokeReasonNodeDeleted, certificate.RevokeReason)
-		requireNoSecret(t, db, operation, "reality-private-5", "ss-password-6", "raw-private-1", "peer-private-5", "peer-private-6", "node-key-1")
+		requireNoSecret(t, db, operation, "reality-private-5", "ss-password-6", "raw-private-1", "peer-private-5", "peer-private-6")
 
 		// A repeat is the first operation; a new retirement of what is
 		// gone succeeds with nothing counted.
@@ -133,13 +130,10 @@ func TestRetireNode(t *testing.T) {
 		forward := h.client(forwardHost, allFamilies())
 		operation, _ = submitBound(t, forward, "node.retire:forward-10", retireNodeSpec(forwardKind, 10), nil)
 		require.Equal(t, kernelnodeopsv1.OperationState_OPERATION_STATE_SUCCEEDED, operation.GetState(), operation.GetError())
-		require.EqualValues(t, 1, operation.GetResult().GetRetire().GetCredentialsRevoked())
-		require.Zero(t, count(t, db, &model.NodeCredential{}, "subject_kind = ? AND subject_id = ?", nodesecrets.SubjectForward, 10))
 		require.EqualValues(t, 1, count(t, db, &model.ForwardNode{}, "id = ?", 10))
 		var forwardCertificate model.AgentCertificate
 		require.NoError(t, db.First(&forwardCertificate, "serial = ?", "cert-forward-10").Error)
 		require.NotNil(t, forwardCertificate.RevokedAt)
-		requireNoSecret(t, db, operation, "forward-token-10")
 	})
 }
 
@@ -199,7 +193,6 @@ func TestRetirementCascadesRollBackAsOne(t *testing.T) {
 		require.EqualValues(t, 2, count(t, db, &model.WireGuardPeer{}, "node_protocol_id IN ?", []uint{5, 6}))
 		require.EqualValues(t, 2, countTable(t, db, linksTable, "node_protocol_id IN ?", []uint{5, 6}))
 		require.EqualValues(t, 5, count(t, db, &model.ProtocolSecret{}, "1 = 1"))
-		require.EqualValues(t, 1, count(t, db, &model.NodeCredential{}, "subject_kind = ? AND subject_id = ?", nodesecrets.SubjectProxy, 1))
 		var certificate model.AgentCertificate
 		require.NoError(t, db.First(&certificate, "serial = ?", "cert-proxy-1").Error)
 		require.Nil(t, certificate.RevokedAt)

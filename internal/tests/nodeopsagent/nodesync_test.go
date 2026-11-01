@@ -113,7 +113,6 @@ func TestSyncNodeOnTheLegacyTransports(t *testing.T) {
 		assert.Equal(t, uint64(1), row.Revision)
 		assert.NotEqual(t, result.GetConfigHash(), row.ConfigHash)
 		assert.Contains(t, row.ConfigJSON, `"legacy_rules"`)
-		assert.NotContains(t, row.ConfigJSON, forwardToken, "a forward node's configuration never carries its token")
 	})
 }
 

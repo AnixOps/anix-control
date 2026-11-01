@@ -20,30 +20,21 @@ func TestNodeSecretsCommand(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "kernel.db")), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	require.NoError(t, err)
 	require.NoError(t, db.AutoMigrate(&model.Node{}, &model.NodeProtocol{}, &model.WireGuardPeer{},
-		&model.ForwardNode{}, &model.ForwardCleanAgent{}, &model.OperationLog{}))
+		&model.ForwardNode{}, &model.OperationLog{}))
 	require.NoError(t, nodesecrets.MigrateForTest(db))
-	require.NoError(t, db.Create(&model.Node{Name: "n", Host: "203.0.113.40", APIKey: "fake-cli-key", Secret: "fake-cli-secret"}).Error)
-	require.NoError(t, db.Create(&[]model.ForwardNode{
-		{ID: 3, Name: "no-port", Host: "203.0.113.41", Port: 443, APIToken: "fake-cli-relay-token"},
-		{ID: 4, Name: "pinned", Host: "203.0.113.42", Port: 443, APIPort: 18080, APIToken: "fake-cli-relay-token-2"},
-	}).Error)
+	raw := `{"server_port":51820,"wireguard":{"private_key":"fake-cli-private"}}`
+	require.NoError(t, db.Create(&model.Node{Name: "n", Host: "203.0.113.40", RawConfig: &raw}).Error)
 	ctx := context.Background()
 
 	var output bytes.Buffer
 	require.NoError(t, runNodeSecretsCommand(ctx, db, []string{"status"}, &output))
 	var status struct {
-		Tables   []model.NodeSecretSplit `json:"tables"`
-		Unpinned struct {
-			Count int                               `json:"count"`
-			Nodes []nodesecrets.UnpinnedForwardNode `json:"nodes"`
-		} `json:"forward_nodes_without_api_port"`
+		Tables []model.NodeSecretSplit `json:"tables"`
 	}
 	require.NoError(t, json.Unmarshal(output.Bytes(), &status))
 	require.Len(t, status.Tables, len(nodesecrets.Tables()))
 	require.Equal(t, nodesecrets.PhaseDualWrite, status.Tables[0].Phase)
-	require.Equal(t, 1, status.Unpinned.Count)
-	require.Equal(t, []nodesecrets.UnpinnedForwardNode{{ID: 3, Name: "no-port"}}, status.Unpinned.Nodes)
-	require.NotContains(t, output.String(), "fake-cli-relay-token", "status prints no token")
+	require.NotContains(t, output.String(), "fake-", "status prints no secret")
 
 	// Before any verification the readers may not move to dual_read.
 	output.Reset()
@@ -53,7 +44,7 @@ func TestNodeSecretsCommand(t *testing.T) {
 	// Before the backfill the forms differ: exit 3, with the report.
 	output.Reset()
 	require.ErrorIs(t, runNodeSecretsCommand(ctx, db, []string{"verify", "-table", "v2_node"}, &output), errNodeSecretsMismatch)
-	require.Contains(t, output.String(), `"missing": 2`)
+	require.Contains(t, output.String(), `"missing": 1`)
 	require.NotContains(t, output.String(), "fake-")
 
 	output.Reset()
@@ -61,7 +52,7 @@ func TestNodeSecretsCommand(t *testing.T) {
 	var backfilled []nodesecrets.TableBackfill
 	require.NoError(t, json.Unmarshal(output.Bytes(), &backfilled))
 	require.Len(t, backfilled, len(nodesecrets.Tables()))
-	require.EqualValues(t, 2, backfilled[0].Changed)
+	require.EqualValues(t, 1, backfilled[0].Changed)
 	require.NotContains(t, output.String(), "fake-")
 
 	output.Reset()
@@ -76,7 +67,7 @@ func TestNodeSecretsCommand(t *testing.T) {
 	// Verified: the readers move to dual_read, and back, each change
 	// audited with who made it.
 	output.Reset()
-	require.NoError(t, runNodeSecretsCommand(ctx, db, []string{"phase", "-by", "ops", "v2_node,v2_forward_node", "dual_read"}, &output))
+	require.NoError(t, runNodeSecretsCommand(ctx, db, []string{"phase", "-by", "ops", "v2_node,v2_node_protocol", "dual_read"}, &output))
 	var changes []nodesecrets.PhaseChange
 	require.NoError(t, json.Unmarshal(output.Bytes(), &changes))
 	require.Len(t, changes, 2)
@@ -123,9 +114,10 @@ func TestNodeSecretsFinalizeAndUnsplitCommands(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "kernel.db")+"?_txlock=immediate"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	require.NoError(t, err)
 	require.NoError(t, db.AutoMigrate(&model.Node{}, &model.NodeProtocol{}, &model.WireGuardPeer{},
-		&model.ForwardNode{}, &model.ForwardCleanAgent{}, &model.OperationLog{}))
+		&model.ForwardNode{}, &model.OperationLog{}))
 	require.NoError(t, nodesecrets.MigrateForTest(db))
-	node := model.Node{Name: "n", Host: "203.0.113.40", APIKey: "fake-cli-key", Secret: "fake-cli-secret"}
+	raw := `{"server_port":51820,"wireguard":{"private_key":"fake-cli-private"}}`
+	node := model.Node{Name: "n", Host: "203.0.113.40", RawConfig: &raw}
 	require.NoError(t, db.Create(&node).Error)
 	ctx := context.Background()
 	var output bytes.Buffer
@@ -155,10 +147,9 @@ func TestNodeSecretsFinalizeAndUnsplitCommands(t *testing.T) {
 	require.NotNil(t, finalized[0].FinalizedAt)
 	require.NotContains(t, output.String(), "fake-")
 	require.True(t, viewExists("kapi_node_public_v1"))
-	require.True(t, viewExists("kapi_node_credential_status_v1"))
 	var stored model.Node
 	require.NoError(t, db.First(&stored, node.ID).Error)
-	require.Equal(t, nodesecrets.Tombstone(uint64(node.ID)), stored.APIKey)
+	require.NotContains(t, *stored.RawConfig, "fake-cli-private")
 
 	require.Error(t, run("unsplit", "v2_node"))
 	require.NoError(t, run("unsplit", "-confirm", "v2_node"))
@@ -168,6 +159,5 @@ func TestNodeSecretsFinalizeAndUnsplitCommands(t *testing.T) {
 	require.NotContains(t, output.String(), "fake-")
 	require.False(t, viewExists("kapi_node_public_v1"))
 	require.NoError(t, db.First(&stored, node.ID).Error)
-	require.Equal(t, "fake-cli-key", stored.APIKey)
-	require.Equal(t, "fake-cli-secret", stored.Secret)
+	require.Equal(t, raw, *stored.RawConfig)
 }

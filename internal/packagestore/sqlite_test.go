@@ -264,23 +264,21 @@ func TestNodeStatusViewShowsNoCredentials(t *testing.T) {
 }
 
 // kapi_forward_node_v1 shows every column a forward node had when the view
-// was published but its API token, which authenticates the node's agent. A
-// published view is immutable: the node group columns added in 5.0 are not
-// in v1.
-func TestForwardNodeViewShowsNoToken(t *testing.T) {
+// was published. A published view is immutable: the node group columns
+// added in 5.0 are not in v1.
+func TestForwardNodeViewKeepsItsPublishedColumns(t *testing.T) {
 	db, _ := openSQLiteKernel(t)
 	exists, err := viewExists(db, "kapi_forward_node_v1")
 	require.NoError(t, err)
 	require.False(t, exists, "no view without v2_forward_node")
 	require.NoError(t, db.AutoMigrate(&model.ForwardNode{}))
 	require.NoError(t, EnsureKernelAPIViews(db))
-	require.NoError(t, db.Create(&model.ForwardNode{Name: "relay", Type: "relay", Host: "198.51.100.1", Port: 443, APIToken: "node-secret"}).Error)
+	require.NoError(t, db.Create(&model.ForwardNode{Name: "relay", Type: "relay", Host: "198.51.100.1", Port: 443}).Error)
 
 	var tableColumns, viewColumns []string
 	require.NoError(t, db.Raw("SELECT name FROM pragma_table_info('v2_forward_node') ORDER BY cid").Scan(&tableColumns).Error)
 	require.NoError(t, db.Raw("SELECT name FROM pragma_table_info('kapi_forward_node_v1') ORDER BY cid").Scan(&viewColumns).Error)
-	require.Contains(t, tableColumns, "api_token")
-	later := map[string]bool{"api_token": true, "node_group_id": true, "machine_fingerprint": true, "approval": true, "last_public_address": true}
+	later := map[string]bool{"node_group_id": true, "machine_fingerprint": true, "approval": true, "last_public_address": true}
 	var published []string
 	for _, column := range tableColumns {
 		if !later[column] {

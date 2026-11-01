@@ -293,10 +293,7 @@ export default {
       reasonHelp: '可选，记入审计日志。{count} / {max} 字节（一个汉字占 3 字节）。',
       reasonTooLong: '原因太长：{count} / {max} 字节。',
       reasonPlaceholder: '例如：主机的硬盘被盗',
-      ttl: '凭据有效期',
-      rotateKey: '同时更换节点的 API 密钥',
-      rotateKeyHelp: '不勾选时旧 API 密钥仍然有效，持有它的人仍可自行注册 Agent。更换后，所有仍用旧密钥轮询控制面的进程都会失效，直到换上新密钥（在“凭据”里读取）。',
-      rotateKeyNotice: '确认后旧 API 密钥立即失效。之后请在“凭据”里读取新密钥。'
+      ttl: '凭据有效期'
     },
     result: {
       title: '{name} 的新凭据',
@@ -312,8 +309,6 @@ export default {
       certificates: 'Agent 证书',
       enrollments: '注册记录',
       linkCertificates: '转发链路证书',
-      apiKeyReplaced: '节点的 API 密钥已更换。请在“凭据”里读取新密钥。',
-      apiKeyKept: '节点的 API 密钥没有更改：旧密钥仍然有效。',
       next: '把这个凭据交给机器，让 Agent 重新注册。指南里有已有身份的节点重新注册的步骤。',
       guide: '轮换节点凭据（指南）',
       done: '完成'
@@ -328,16 +323,8 @@ export default {
   },
   credentials: {
     title: '凭据',
-    description: `${AGENT_NAME} 用这个节点的 API 密钥登录控制面。`,
+    description: `${AGENT_NAME} 用 mTLS 证书登录控制面，节点没有 API 密钥。`,
     nodeId: '节点 ID',
-    apiKey: 'API 密钥',
-    apiKeyHidden: '已隐藏。读取会记入审计日志。',
-    apiKeyShown: '已在下方显示（遮罩）。',
-    apiKeyHelp: '已遮罩，可显示或复制。回到本分区时需要重新读取。',
-    reveal: '读取 API 密钥',
-    noKey: '服务器没有返回密钥',
-    revealFailed: '无法读取 API 密钥：{message}',
-    auditFooter: '每次读取节点凭据都会以“显示”记入审计日志。共享密钥不在这里显示。',
     protocolSecrets: '协议密钥',
     protocolSecretsRow: '打开协议',
     protocolSecretsFooter: '协议设置里的私钥和密码显示为 ********；保留 ******** 即沿用已保存的值。'

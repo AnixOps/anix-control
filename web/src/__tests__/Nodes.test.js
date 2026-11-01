@@ -17,7 +17,6 @@ const adminApi = vi.hoisted(() => ({
   updateNode: vi.fn(),
   deleteNode: vi.fn(),
   syncNodeProtocol: vi.fn(),
-  getNodeCredentials: vi.fn(),
   getNodeProtocols: vi.fn(),
   createNodeProtocol: vi.fn(),
   updateNodeProtocol: vi.fn(),
@@ -71,7 +70,6 @@ describe('Nodes.vue', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
     kernelApi.getKernelAdminNodes.mockResolvedValue({ list: [], total: 0 })
     adminApi.getNodeStats.mockResolvedValue({ data: { total: 0, online: 0, offline: 0, pending: 0 } })
-    adminApi.getNodeCredentials.mockResolvedValue({ data: { api_key: '' } })
     kernelApi.getKernelAgentTransports.mockResolvedValue({ nodes: [] })
     kernelApi.listKernelNodeGroups.mockResolvedValue({ groups: [] })
     telemetryApi.getNodesServicesSummary.mockResolvedValue([])

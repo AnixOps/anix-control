@@ -37,12 +37,6 @@ import (
 // task ids). The WebSocket fallback of a diagnostic task that its
 // acknowledgement does not reach is covered by internal/handler's tests.
 
-const (
-	streamKey = "fake-stream-api-key-0123456789"
-	configKey = "fake-config-api-key-0123456789"
-	quietKey  = "fake-quiet-api-key-0123456789"
-)
-
 type agentsFixture struct {
 	t       *testing.T
 	db      *gorm.DB
@@ -108,9 +102,9 @@ func forEachAgents(t *testing.T, body func(t *testing.T, f *agentsFixture)) {
 		require.NoError(t, err)
 		base := uint(20000) + uint(random[0])<<6 + uint(random[1])%64*4
 		f.stream, f.config, f.quiet = base, base+1, base+3
-		for id, key := range map[uint]string{f.stream: streamKey, f.config: configKey, f.quiet: quietKey} {
+		for _, id := range []uint{f.stream, f.config, f.quiet} {
 			require.NoError(t, db.Create(&model.Node{ID: id, Name: "node-" + strconv.Itoa(int(id)), Host: "198.51.100.1", Port: 443,
-				APIKey: key, APIKeyHash: fakeagent.APIKeyHash(key), CreatedAt: seeded, UpdatedAt: seeded}).Error)
+				CreatedAt: seeded, UpdatedAt: seeded}).Error)
 		}
 		settings := `{"flow":"xtls-rprx-vision"}`
 		require.NoError(t, db.Create(&model.NodeProtocol{NodeID: f.config, Name: "vless", Type: model.ProtocolVLESS, Port: 443, Settings: &settings}).Error)
@@ -244,8 +238,7 @@ func TestAgentListAndMonitorParity(t *testing.T) {
 		// The agents' hello traffic moves their last_seen; both sides must
 		// read the settled value.
 		time.Sleep(500 * time.Millisecond)
-		answer := f.compare(t, "GET", "/api/v2/admin/agent/list", packagecompat.Case{Name: "one stream agent", Path: "/api/v2/admin/agent/list"})
-		require.NotContains(t, string(answer.Body), streamKey)
+		f.compare(t, "GET", "/api/v2/admin/agent/list", packagecompat.Case{Name: "one stream agent", Path: "/api/v2/admin/agent/list"})
 
 		// Monitor snapshots came from the retired REST channel.
 		f.compare(t, "GET", monitor, packagecompat.Case{Name: "no snapshot", Path: monitor + "?node_id=" + id(f.stream)})

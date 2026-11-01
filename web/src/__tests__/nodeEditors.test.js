@@ -8,7 +8,6 @@ import { useProtocolEditor } from '@/views/admin/nodes/useProtocolEditor'
 import { buildNodePayload, displayStatus, nodeFormFrom, parentCandidatesFor } from '@/views/admin/nodes/nodeData'
 
 vi.mock('@/api/admin', () => ({
-  getNodeCredentials: vi.fn()
 }))
 
 describe('useProtocolEditor', () => {

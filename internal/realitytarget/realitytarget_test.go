@@ -108,10 +108,10 @@ func text(s string) *string { return &s }
 
 func TestRunAndReport(t *testing.T) {
 	db := testDB(t)
-	if err := db.Create(&model.Node{ID: 57, Name: "DE", APIKey: "k57", Host: "de.example.net", LastPublicAddress: "82.139.194.175"}).Error; err != nil {
+	if err := db.Create(&model.Node{ID: 57, Name: "DE", Host: "de.example.net", LastPublicAddress: "82.139.194.175"}).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Create(&model.Node{ID: 29, Name: "HK", APIKey: "k29", Host: "203.0.113.9"}).Error; err != nil {
+	if err := db.Create(&model.Node{ID: 29, Name: "HK", Host: "203.0.113.9"}).Error; err != nil {
 		t.Fatal(err)
 	}
 	protocols := []model.NodeProtocol{

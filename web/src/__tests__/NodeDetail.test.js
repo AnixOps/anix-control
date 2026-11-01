@@ -16,7 +16,6 @@ const api = vi.hoisted(() => ({
   updateNode: vi.fn(),
   deleteNode: vi.fn(),
   syncNodeProtocol: vi.fn(),
-  getNodeCredentials: vi.fn(),
   getNodeProtocols: vi.fn(),
   createNodeProtocol: vi.fn(),
   updateNodeProtocol: vi.fn(),
@@ -246,7 +245,7 @@ describe('NodeDetail', () => {
     it('is in Credentials, calls the route for this proxy node and shows the credential once', async () => {
       const user = userEvent.setup()
       kernelApi.rotateKernelAgentCredentials.mockResolvedValue({
-        node: 'proxy-5', revoked: { certificates: 1, enrollments: 0, link_certificates: 0 }, api_key_rotated: false,
+        node: 'proxy-5', revoked: { certificates: 1, enrollments: 0, link_certificates: 0 },
         expires_at: new Date(Date.now() + 3_600_000).toISOString(), credential: 'anixagt_NodePageCredentialNeverRealAbCd0123456789'
       })
       await renderPage('/admin/nodes/5?section=credentials')
@@ -256,7 +255,7 @@ describe('NodeDetail', () => {
       const confirm = await screen.findByRole('alertdialog', { name: 'Rotate the credentials of hk-01?' })
       await user.click(within(confirm).getByRole('button', { name: 'Rotate credentials' }))
       const result = await screen.findByRole('dialog', { name: 'New credential for hk-01' })
-      expect(kernelApi.rotateKernelAgentCredentials).toHaveBeenCalledWith({ node: 'proxy-5', rotateApiKey: false, ttlSeconds: 3600, reason: '' })
+      expect(kernelApi.rotateKernelAgentCredentials).toHaveBeenCalledWith({ node: 'proxy-5', ttlSeconds: 3600, reason: '' })
       await user.click(within(result).getByRole('button', { name: 'Done' }))
       await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
       expect(document.body.innerHTML).not.toContain('anixagt_NodePageCredential')
@@ -359,20 +358,6 @@ describe('NodeDetail', () => {
     await user.click(within(sheet).getByRole('button', { name: 'Add protocol' }))
     await waitFor(() => expect(api.createNodeProtocol).toHaveBeenCalledWith(5, expect.objectContaining({ type: 'trojan', port: 9443, tls: 1, transport: 'tcp' })))
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Add protocol' })).toBeNull())
-  })
-
-  it('reads the API key only when asked, and shows it masked', async () => {
-    const user = userEvent.setup()
-    api.getNodeCredentials.mockResolvedValue({ code: 0, data: { api_key: 'node-api-key', secret: 'never-shown' } })
-    await renderPage('/admin/nodes/5?section=credentials')
-    const reveal = await screen.findByRole('button', { name: 'Read API key' })
-    expect(api.getNodeCredentials).not.toHaveBeenCalled()
-    await user.click(reveal)
-    const field = await screen.findByLabelText('API key', { selector: 'input' })
-    expect(field.type).toBe('password')
-    expect(field.value).toBe('node-api-key')
-    expect(document.body.textContent).not.toContain('never-shown')
-    expect(api.getNodeCredentials).toHaveBeenCalledTimes(1)
   })
 
   it('offers a new machine, the uninstall command and the certificate in Deployment, and no registration key or Ansible', async () => {

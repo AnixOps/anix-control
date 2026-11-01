@@ -35,7 +35,7 @@ func TestAdminListing(t *testing.T) {
 		})
 		require.NoError(t, err)
 		submit(t, forward, "forward.apply:40:audit", applyForward(40, forwardAction))
-		submit(t, forward, "credential.issue:audit", issueCredential(nodeRef(forwardKind, 10), kernelnodeopsv1.CredentialKind_CREDENTIAL_KIND_FORWARD_NODE_TOKEN, SealedPrefix+"secret-handle"))
+		submit(t, forward, "credential.issue:audit", issueCredential(nodeRef(forwardKind, 10), kernelnodeopsv1.CredentialKind_CREDENTIAL_KIND_AGENT_ENROLLMENT, ""))
 		_, err = h.engine.end(context.Background(), sync.GetOperation().GetOperationId(), activeStates, ending{
 			state: stateFailed, err: &kernelnodeopsv1.OperationError{Code: kernelnodeopsv1.ErrorCode_ERROR_CODE_NODE_OFFLINE, Message: "offline", Retryable: true},
 		})

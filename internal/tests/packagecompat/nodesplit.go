@@ -16,13 +16,13 @@ import (
 	"gorm.io/gorm"
 )
 
-// NodeSplitModels are the node credential split's tables, and the
+// NodeSplitModels are the node secret split's tables, and the
 // operation log its phase changes are audited in. A route on a table or
 // view of the split's remainder (docs/architecture/node-ops-service.md
 // section 4.6) lists them in Route.Models, so the shared databases keep
 // them between cases.
 func NodeSplitModels() []any {
-	return []any{&model.NodeCredential{}, &model.ProtocolSecret{}, &model.NodeSecretSplit{}, &model.OperationLog{}}
+	return []any{&model.ProtocolSecret{}, &model.NodeSecretSplit{}, &model.OperationLog{}}
 }
 
 // FinalizeNodeSplit takes tables (all split tables when none are named)

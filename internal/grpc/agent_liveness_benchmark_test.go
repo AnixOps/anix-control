@@ -47,7 +47,7 @@ func BenchmarkAgentHeartbeatTouchSQLite(b *testing.B) {
 				}
 				rows := make([]model.Node, nodes)
 				for i := range rows {
-					rows[i] = model.Node{Name: fmt.Sprintf("node-%d", i+1), Host: "node.example.test", APIKey: fmt.Sprintf("hb-key-%d", i+1)}
+					rows[i] = model.Node{Name: fmt.Sprintf("node-%d", i+1), Host: "node.example.test"}
 				}
 				if err := db.CreateInBatches(&rows, 100).Error; err != nil {
 					b.Fatal(err)

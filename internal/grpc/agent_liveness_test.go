@@ -80,7 +80,7 @@ func TestTouchNodeWritesTheNodeOncePerInterval(t *testing.T) {
 	t.Cleanup(func() { requireDatabaseClosed(t) })
 	requireAutoMigrate(t, &model.Node{}, &model.ForwardNode{})
 	db := database.GetDB()
-	require.NoError(t, db.Create(&model.Node{ID: 7, Name: "proxy", Host: "127.0.0.1", APIKey: "k7", Status: model.NodeStatusOffline}).Error)
+	require.NoError(t, db.Create(&model.Node{ID: 7, Name: "proxy", Host: "127.0.0.1", Status: model.NodeStatusOffline}).Error)
 	require.NoError(t, db.Create(&model.ForwardNode{ID: 7, Name: "forward", Host: "127.0.0.2"}).Error)
 
 	clock := &fakeClock{now: time.Unix(1_800_000_000, 0)}

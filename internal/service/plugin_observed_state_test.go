@@ -28,7 +28,7 @@ func newNodePluginObservedStateFixture(t *testing.T, capabilities []string) node
 	require.NoError(t, err)
 	require.NoError(t, MigrateKernelModelsForTest(db))
 	require.NoError(t, db.AutoMigrate(&model.Node{}))
-	node := model.Node{Name: "observed-state-node", Host: "127.0.0.1", APIKey: "observed-state-key"}
+	node := model.Node{Name: "observed-state-node", Host: "127.0.0.1"}
 	require.NoError(t, db.Create(&node).Error)
 	_, privateKey, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)

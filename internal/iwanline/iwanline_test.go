@@ -22,7 +22,7 @@ func newService(t *testing.T) *Service {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = sqlDB.Close() })
 	require.NoError(t, db.AutoMigrate(&model.Node{}, &model.NodeProtocol{}, &model.NodeEntry{}, &model.IWANLine{}, &model.OperationLog{}))
-	require.NoError(t, db.Create(&model.Node{ID: 70, Name: "us land", Host: "198.51.100.20", APIKey: "k70"}).Error)
+	require.NoError(t, db.Create(&model.Node{ID: 70, Name: "us land", Host: "198.51.100.20"}).Error)
 	return New(db)
 }
 

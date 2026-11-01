@@ -474,7 +474,6 @@ func (s *NodeRawConfigTestSuite) SetupTest() {
 		Name:      "Raw Config Node",
 		Host:      "127.0.0.1",
 		Port:      443,
-		APIKey:    "test-key",
 		Status:    1,
 		RawConfig: strPtr(`{"log_level":"value"}`),
 	}
@@ -2463,7 +2462,6 @@ func (s *NodeExtendedTestSuite) SetupTest() {
 		Name:   "Extended Test Node",
 		Host:   "127.0.0.1",
 		Port:   443,
-		APIKey: "test-api-key",
 		Status: 1,
 	}
 	s.db.Create(s.testNode)

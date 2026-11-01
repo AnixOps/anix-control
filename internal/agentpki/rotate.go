@@ -40,11 +40,6 @@ type RotateRequest struct {
 	// Reason is recorded in the audit entry (at most MaxRotationReasonLength
 	// bytes, checked by the caller).
 	Reason string
-	// ReplaceNodeKey, when set, runs first in the rotation's transaction and
-	// replaces the node's own credential (a proxy node's API key). It must
-	// not revoke Agent credentials itself: the rotation does that, once, with
-	// its own reason. Its failure rolls the whole rotation back.
-	ReplaceNodeKey func(tx *gorm.DB) error
 }
 
 // Rotation is what RotateCredentials did.
@@ -54,13 +49,11 @@ type Rotation struct {
 	Credential string
 	Enrollment model.AgentEnrollment
 	// Revoked counts the Agent credentials the rotation revoked.
-	Revoked       ActiveCredentials
-	APIKeyRotated bool
+	Revoked ActiveCredentials
 }
 
 // RotateCredentials rotates a node's Agent credentials in one transaction:
-// it optionally replaces the node's API key (req.ReplaceNodeKey), revokes
-// every Agent certificate, enrollment (unused enrollment credentials
+// it revokes every Agent certificate, enrollment (unused enrollment credentials
 // included) and forward link certificate of the node (RevokeNode, reason
 // credentials_rotated), and then issues a fresh one-time enrollment
 // credential, the same code path as the enrollment token administration
@@ -87,11 +80,6 @@ func (s *Service) RotateCredentials(ctx context.Context, req RotateRequest) (Rot
 		if err != nil {
 			return err
 		}
-		if req.ReplaceNodeKey != nil {
-			if err := req.ReplaceNodeKey(tx); err != nil {
-				return err
-			}
-		}
 		if err := RevokeNode(ctx, tx, req.Node, RevokeReasonCredentialsRotated); err != nil {
 			return err
 		}
@@ -107,7 +95,7 @@ func (s *Service) RotateCredentials(ctx context.Context, req RotateRequest) (Rot
 			userID = &createdBy
 		}
 		content := map[string]any{
-			"node": req.Node.String(), "enrollment_id": enrollment.ID, "api_key_rotated": req.ReplaceNodeKey != nil,
+			"node": req.Node.String(), "enrollment_id": enrollment.ID,
 			"revoked_certificates": revoked.Certificates, "revoked_enrollments": revoked.Enrollments,
 			"revoked_link_certificates": revoked.LinkCertificates, "reason": strings.TrimSpace(req.Reason),
 		}
@@ -116,7 +104,7 @@ func (s *Service) RotateCredentials(ctx context.Context, req RotateRequest) (Rot
 		}); err != nil {
 			return err
 		}
-		rotation = Rotation{Credential: credential, Enrollment: enrollment, Revoked: revoked, APIKeyRotated: req.ReplaceNodeKey != nil}
+		rotation = Rotation{Credential: credential, Enrollment: enrollment, Revoked: revoked}
 		return nil
 	})
 	if err != nil {

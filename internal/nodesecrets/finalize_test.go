@@ -55,27 +55,10 @@ func (f *fixture) requireFinalizedColumns(t *testing.T, db *gorm.DB) {
 	t.Helper()
 	var nodes []model.Node
 	require.NoError(t, db.Order("id").Find(&nodes).Error)
-	require.Equal(t, Tombstone(uint64(nodes[0].ID)), nodes[0].APIKey)
-	require.Equal(t, Tombstone(uint64(nodes[1].ID)), nodes[1].APIKey)
-	require.Empty(t, nodes[2].APIKey, "a node without a key keeps none")
-	for _, node := range nodes {
-		require.Empty(t, node.APIKeyHash)
-	}
-	require.Equal(t, Tombstone(uint64(nodes[0].ID)), nodes[0].Secret)
-	require.Empty(t, nodes[1].Secret)
 	require.Equal(t, Redact(f.rawConfig), *nodes[0].RawConfig)
 	require.Contains(t, *nodes[0].RawConfig, Placeholder)
 	require.Contains(t, *nodes[0].RawConfig, "fake-raw-public", "the public key stays")
 
-	var forwards []model.ForwardNode
-	require.NoError(t, db.Order("id").Find(&forwards).Error)
-	require.Equal(t, Tombstone(uint64(forwards[0].ID)), forwards[0].APIToken)
-	require.Empty(t, forwards[1].APIToken, "an Ansible machine keeps no token")
-	var agents []model.ForwardCleanAgent
-	require.NoError(t, db.Order("id").Find(&agents).Error)
-	for _, agent := range agents {
-		require.Equal(t, Tombstone(uint64(agent.ID)), agent.Token)
-	}
 	var protocols []model.NodeProtocol
 	require.NoError(t, db.Order("id").Find(&protocols).Error)
 	require.Equal(t, Redact(f.reality), *protocols[0].RealitySettings)
@@ -124,12 +107,12 @@ func TestFinalizeRefusals(t *testing.T) {
 		// Without a recent verification.
 		refused(FinalizeOptions{Confirm: true, Now: time.Now().Add(2 * VerifyMaxAge)}, "older than")
 		// After a verification that found a mismatch.
-		require.NoError(t, db.Model(&model.ForwardCleanAgent{}).Where("token = ?", "fake-clean-token-1").
-			UpdateColumn("token", "fake-clean-token-drifted").Error)
-		_, err = Verify(ctx, db, VerifyOptions{Tables: []string{TableCleanAgent}})
+		require.NoError(t, db.Model(&model.WireGuardPeer{}).Where("private_key = ?", "fake-peer-private-1").
+			UpdateColumn("private_key", "fake-peer-private-drifted").Error)
+		_, err = Verify(ctx, db, VerifyOptions{Tables: []string{TableWireGuardPeer}})
 		require.ErrorIs(t, err, ErrMismatch)
 		before = allLegacyRows(t, db)
-		refused(FinalizeOptions{Confirm: true, Tables: []string{TableCleanAgent}}, "found mismatches")
+		refused(FinalizeOptions{Confirm: true, Tables: []string{TableWireGuardPeer}}, "found mismatches")
 		// One refused table refuses all of them.
 		refused(FinalizeOptions{Confirm: true}, "found mismatches")
 		for _, entry := range audits(t, db) {
@@ -164,7 +147,6 @@ func TestFinalizeWritesTombstonesAndReadsOnlyTheNewTables(t *testing.T) {
 		f.requireFinalizedColumns(t, db)
 		// The new tables are unchanged, but for the kept originals.
 		newAfter := takeSnapshot(t, db)
-		require.Equal(t, newBefore.Credentials, newAfter.Credentials)
 		var positions []model.ProtocolSecret
 		for _, row := range newAfter.Secrets {
 			if row.Scope != scopeLegacyOriginal {
@@ -176,40 +158,15 @@ func TestFinalizeWritesTombstonesAndReadsOnlyTheNewTables(t *testing.T) {
 		// Every reader answers as before, from the new tables only.
 		got := f.read(t, db)
 		require.Equal(t, before, fallbacksTotal(), "a finalized reader never falls back")
-		require.Equal(t, want.NodeKeyMatches, got.NodeKeyMatches)
-		require.Equal(t, want.NodeByKey, got.NodeByKey)
-		require.Equal(t, want.NodeKeys, got.NodeKeys)
-		require.Equal(t, want.NodeSecrets, got.NodeSecrets)
-		require.True(t, got.ForwardMatches)
-		require.Equal(t, want.ForwardToken, got.ForwardToken)
-		require.Equal(t, want.CleanByToken, got.CleanByToken)
-		require.Equal(t, want.CleanWithToken, got.CleanWithToken)
 		equalJSON(t, f.reality, got.Reality)
 		require.Equal(t, f.notJSON, got.Custom)
 		equalJSON(t, f.rawConfig, got.RawConfig)
 		require.Equal(t, want.PeerPrivate, got.PeerPrivate)
 		require.Equal(t, want.PeerPreshared, got.PeerPreshared)
 
-		// No tombstone authenticates.
+		// A literal secret a finalized JSON column holds anyway is ignored.
 		var nodes []model.Node
 		require.NoError(t, db.Order("id").Find(&nodes).Error)
-		for _, node := range nodes {
-			require.False(t, NodeAPIKeyMatches(db, &node, node.APIKey))
-			_, err := NodeByAPIKey(db, Tombstone(uint64(node.ID)), true)
-			require.ErrorIs(t, err, gorm.ErrRecordNotFound)
-		}
-		_, err := CleanAgentByToken(db, Tombstone(uint64(f.agents[0].ID)))
-		require.ErrorIs(t, err, gorm.ErrRecordNotFound)
-
-		// A secret only the legacy column holds is never read: no fallback.
-		require.NoError(t, db.Model(&model.Node{}).Where("id = ?", nodes[2].ID).
-			UpdateColumns(map[string]any{"api_key": "fake-legacy-only", "api_key_hash": hashSecret("fake-legacy-only"), "secret": "fake-legacy-secret"}).Error)
-		require.NoError(t, db.First(&nodes[2], nodes[2].ID).Error)
-		_, err = NodeByAPIKey(db, "fake-legacy-only", true)
-		require.ErrorIs(t, err, gorm.ErrRecordNotFound)
-		require.False(t, NodeAPIKeyMatches(db, &nodes[2], "fake-legacy-only"))
-		require.Empty(t, NodeSharedSecret(db, &nodes[2]))
-		// A literal secret a finalized JSON column holds anyway is ignored.
 		literal := `{"private_key":"fake-planted","short_id":"01"}`
 		protocol := model.NodeProtocol{NodeID: nodes[1].ID, Name: "planted", Type: model.ProtocolVLESS, Port: 9443, RealitySettings: &literal}
 		require.NoError(t, db.Create(&protocol).Error)
@@ -218,8 +175,6 @@ func TestFinalizeWritesTombstonesAndReadsOnlyTheNewTables(t *testing.T) {
 		require.Contains(t, *protocol.RealitySettings, Placeholder)
 		require.Equal(t, before, fallbacksTotal())
 		require.NoError(t, db.Delete(&protocol).Error)
-		require.NoError(t, db.Model(&model.Node{}).Where("id = ?", nodes[2].ID).
-			UpdateColumns(map[string]any{"api_key": "", "api_key_hash": "", "secret": ""}).Error)
 
 		// verify compares by presence once finalized.
 		requireVerified(t, db)
@@ -230,7 +185,7 @@ func TestFinalizeWritesTombstonesAndReadsOnlyTheNewTables(t *testing.T) {
 			require.Zero(t, result.Passes)
 		}
 		// The phase command never leaves finalized.
-		_, err = SetPhase(ctx, db, PhaseOptions{Phase: PhaseDualWrite})
+		_, err := SetPhase(ctx, db, PhaseOptions{Phase: PhaseDualWrite})
 		require.ErrorIs(t, err, ErrPhaseRefused)
 		var actions []string
 		for _, entry := range audits(t, db) {
@@ -239,66 +194,6 @@ func TestFinalizeWritesTombstonesAndReadsOnlyTheNewTables(t *testing.T) {
 		}
 		require.Contains(t, actions, "finalize_started")
 		require.Contains(t, actions, "finalized")
-	})
-}
-
-// TestFinalizeRespectsUniqueIndexes: a tombstone that would collide with a
-// value another row holds is refused, the batch rolled back; the finalize
-// resumes once the row is fixed.
-func TestFinalizeRespectsUniqueIndexes(t *testing.T) {
-	forEachDatabase(t, func(t *testing.T, db *gorm.DB) {
-		ctx := context.Background()
-		f := seedLegacy(t, db)
-		// The keyless node holds the tombstone of the first node, as an
-		// import or a package could have written it.
-		taken := Tombstone(uint64(f.nodes[0].ID))
-		require.NoError(t, db.Model(&model.Node{}).Where("id = ?", f.nodes[2].ID).UpdateColumn("api_key", taken).Error)
-		// So does a clean agent's token of another agent's id.
-		agent := model.ForwardCleanAgent{Name: "c3", Token: Tombstone(uint64(f.agents[0].ID))}
-		require.NoError(t, db.Create(&agent).Error)
-		toDualRead(t, db)
-
-		results, err := Finalize(ctx, db, FinalizeOptions{Confirm: true, Tables: []string{TableNode}, BatchSize: 10})
-		require.ErrorIs(t, err, ErrTombstoneCollision)
-		require.Contains(t, err.Error(), "v2_node.api_key")
-		require.NotContains(t, err.Error(), "fake-")
-		require.Nil(t, results[0].FinalizedAt)
-		var first model.Node
-		require.NoError(t, db.First(&first, f.nodes[0].ID).Error)
-		require.Equal(t, "fake-node-key-1", first.APIKey, "the batch rolled back")
-		require.Equal(t, "fake-node-secret-1", first.Secret)
-		state := splitState(t, db, TableNode)
-		require.Equal(t, PhaseFinalized, state.Phase)
-		require.Nil(t, state.FinalizedAt, "an interrupted finalize")
-		// The readers already read only the new tables.
-		require.True(t, NodeAPIKeyMatches(db, &first, "fake-node-key-1"))
-
-		_, err = Finalize(ctx, db, FinalizeOptions{Confirm: true, Tables: []string{TableCleanAgent}})
-		require.ErrorIs(t, err, ErrTombstoneCollision)
-
-		// Fixed: the rows get values of their own; the finalize resumes,
-		// without a new verification, and every tombstone is unique.
-		require.NoError(t, db.Model(&model.Node{}).Where("id = ?", f.nodes[2].ID).UpdateColumn("api_key", "").Error)
-		require.NoError(t, db.Model(&model.ForwardCleanAgent{}).Where("id = ?", agent.ID).UpdateColumn("token", "fake-clean-token-3").Error)
-		require.NoError(t, db.Transaction(func(tx *gorm.DB) error { return Sync(tx, TableCleanAgent, agent.ID) }))
-		results, err = Finalize(ctx, db, FinalizeOptions{Confirm: true, Tables: []string{TableNode, TableCleanAgent},
-			Now: time.Now().Add(3 * VerifyMaxAge)})
-		require.NoError(t, err)
-		for _, result := range results {
-			require.True(t, result.Resumed, result.Table)
-			require.NotNil(t, result.FinalizedAt)
-		}
-		var agents []model.ForwardCleanAgent
-		require.NoError(t, db.Order("id").Find(&agents).Error)
-		seen := map[string]bool{}
-		for _, row := range agents {
-			require.Equal(t, Tombstone(uint64(row.ID)), row.Token)
-			require.False(t, seen[row.Token])
-			seen[row.Token] = true
-		}
-		found, err := CleanAgentByToken(db, "fake-clean-token-3")
-		require.NoError(t, err)
-		require.Equal(t, agent.ID, found.ID)
 	})
 }
 
@@ -324,8 +219,10 @@ func TestFinalizeResumesAfterAnInterruption(t *testing.T) {
 		require.ErrorIs(t, err, stop)
 		var nodes []model.Node
 		require.NoError(t, db.Order("id").Find(&nodes).Error)
-		require.True(t, IsTombstone(nodes[0].APIKey), "the first batch committed")
-		require.Equal(t, "fake-node-key-2", nodes[1].APIKey, "the second did not run")
+		require.Contains(t, *nodes[0].RawConfig, Placeholder, "the first batch committed")
+		var protocol model.NodeProtocol
+		require.NoError(t, db.First(&protocol, f.protocols[0].ID).Error)
+		require.Equal(t, f.reality, *protocol.RealitySettings, "the next table did not run")
 		for _, table := range Tables() {
 			state := splitState(t, db, table)
 			require.Equal(t, PhaseFinalized, state.Phase, table)
@@ -333,18 +230,18 @@ func TestFinalizeResumesAfterAnInterruption(t *testing.T) {
 		}
 		// Meanwhile every reader still finds every secret.
 		got := f.read(t, db)
-		require.Equal(t, want.NodeByKey, got.NodeByKey)
-		require.Equal(t, want.CleanByToken, got.CleanByToken)
 		require.Equal(t, want.PeerPrivate, got.PeerPrivate)
-		// A writer of a finalized table writes tombstones, not secrets.
+		equalJSON(t, f.reality, got.Reality)
+		// A writer of a finalized table writes redacted documents, not
+		// secrets.
 		require.NoError(t, db.Transaction(func(tx *gorm.DB) error {
-			if err := tx.Model(&model.Node{}).Where("id = ?", nodes[1].ID).Update("name", "n2-renamed").Error; err != nil {
+			if err := tx.Model(&model.Node{}).Where("id = ?", nodes[0].ID).Update("name", "n1-renamed").Error; err != nil {
 				return err
 			}
-			return Sync(tx, TableNode, nodes[1].ID)
+			return Sync(tx, TableNode, nodes[0].ID)
 		}))
-		require.NoError(t, db.First(&nodes[1], nodes[1].ID).Error)
-		require.Equal(t, Tombstone(uint64(nodes[1].ID)), nodes[1].APIKey)
+		require.NoError(t, db.First(&nodes[0], nodes[0].ID).Error)
+		require.NotContains(t, *nodes[0].RawConfig, "fake-raw-private")
 
 		results, err := Finalize(ctx, db, FinalizeOptions{Confirm: true, BatchSize: 1})
 		require.NoError(t, err)
@@ -374,18 +271,8 @@ func TestWritersOfAFinalizedTable(t *testing.T) {
 				return Sync(tx, table, id)
 			}))
 		}
-		// A rotated key: the new version, and a tombstone in the column.
 		node := f.nodes[0]
-		write(TableNode, node.ID, &model.Node{}, map[string]any{"api_key": "fake-node-key-rotated", "api_key_hash": hashSecret("fake-node-key-rotated")})
 		require.NoError(t, db.First(&node, node.ID).Error)
-		require.Equal(t, Tombstone(uint64(node.ID)), node.APIKey)
-		require.Empty(t, node.APIKeyHash)
-		require.Equal(t, "fake-node-key-rotated", credential(t, db, SubjectProxy, node.ID, KindNodeAPIKey).Value)
-		found, err := NodeByAPIKey(db, "fake-node-key-rotated", false)
-		require.NoError(t, err)
-		require.Equal(t, node.ID, found.ID)
-		_, err = NodeByAPIKey(db, "fake-node-key-1", false)
-		require.ErrorIs(t, err, gorm.ErrRecordNotFound)
 		// A row loaded and saved back as it is keeps every secret.
 		require.NoError(t, db.Transaction(func(tx *gorm.DB) error {
 			if err := tx.Save(&node).Error; err != nil {
@@ -393,13 +280,7 @@ func TestWritersOfAFinalizedTable(t *testing.T) {
 			}
 			return Sync(tx, TableNode, node.ID)
 		}))
-		require.Equal(t, "fake-node-secret-1", credential(t, db, SubjectProxy, node.ID, KindNodeSharedSecret).Value)
 		equalJSON(t, f.rawConfig, func() string { n := node; ResolveNodeRawConfig(db, &n); return *n.RawConfig }())
-		// A cleared forward token is gone.
-		write(TableForwardNode, f.forwards[0].ID, &model.ForwardNode{}, map[string]any{"api_token": ""})
-		var forward model.ForwardNode
-		require.NoError(t, db.First(&forward, f.forwards[0].ID).Error)
-		require.Empty(t, ForwardNodeToken(db, &forward))
 		// A protocol written with a new literal secret: redacted in the
 		// column, the value in the new table.
 		reality := `{"short_id":"02","private_key":"fake-reality-rotated"}`
@@ -430,28 +311,11 @@ func TestOlderBinaryFailsClosedAfterFinalize(t *testing.T) {
 		require.NoError(t, db.Model(&model.NodeSecretSplit{}).Where("1 = 1").Update("phase", PhaseDualWrite).Error)
 		ForgetPhases(db)
 		got := f.read(t, db)
-		require.Equal(t, []bool{false, false}, got.NodeKeyMatches)
-		require.Equal(t, []uint{0, 0}, got.NodeByKey)
-		require.False(t, got.ForwardMatches)
-		require.Equal(t, []uint{0, 0}, got.CleanByToken)
-		require.Equal(t, []uint{0, 0}, got.CleanWithToken)
-		for _, value := range append(append(got.NodeKeys, got.NodeSecrets...), got.ForwardToken) {
-			require.True(t, Unusable(value), "%q", value)
-		}
 		for _, value := range append(got.PeerPrivate, got.PeerPreshared...) {
 			require.True(t, IsTombstone(value))
 		}
 		require.NotContains(t, got.Reality, "fake-reality-private")
 		require.NotContains(t, got.RawConfig, "fake-raw-private")
-		var nodes []model.Node
-		require.NoError(t, db.Order("id").Find(&nodes).Error)
-		for _, node := range nodes[:2] {
-			require.False(t, NodeAPIKeyMatches(db, &node, node.APIKey))
-			_, err := NodeByAPIKey(db, node.APIKey, true)
-			require.ErrorIs(t, err, gorm.ErrRecordNotFound)
-		}
-		_, err := CleanAgentByToken(db, Tombstone(uint64(f.agents[0].ID)))
-		require.ErrorIs(t, err, gorm.ErrRecordNotFound)
 	})
 }
 

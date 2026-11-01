@@ -279,7 +279,7 @@ func newService(t *testing.T) *Service {
 	require.NoError(t, db.AutoMigrate(&model.Node{}, &model.ForwardNode{}, &model.OperationLog{},
 		&model.NetworkModel{}, &model.NetworkTransportKey{}, &model.NetworkDevice{}, &model.NodeNetwork{}, &model.NodeUplinks{}, &model.AgentTransport{}))
 	for _, id := range []uint{1, 2} {
-		require.NoError(t, db.Create(&model.Node{ID: id, Name: "n", Host: "h.example.com", APIKey: "k" + string(rune('0'+id))}).Error)
+		require.NoError(t, db.Create(&model.Node{ID: id, Name: "n", Host: "h.example.com"}).Error)
 	}
 	now := time.Date(2026, 10, 28, 8, 0, 0, 0, time.UTC)
 	return &Service{DB: db, KEK: func() string { return testKEK }, Now: func() time.Time { return now }}

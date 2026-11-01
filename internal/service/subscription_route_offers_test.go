@@ -27,7 +27,7 @@ func TestSubscriptionOffersPublishedForwardRoutes(t *testing.T) {
 	now := time.Now().Unix()
 	group := &model.SubscriptionGroup{Name: "ok", Enable: 1}
 	require.NoError(t, db.Create(group).Error)
-	node := &model.Node{Name: "KFC JP", APIKey: "k", Host: "104.251.233.29", Show: 1, Status: model.NodeStatusOnline, LastCheckAt: &now}
+	node := &model.Node{Name: "KFC JP", Host: "104.251.233.29", Show: 1, Status: model.NodeStatusOnline, LastCheckAt: &now}
 	require.NoError(t, db.Create(node).Error)
 	protocol := model.NodeProtocol{NodeID: node.ID, Name: "ss", Type: model.ProtocolShadowsocks, Port: 11111, Enable: 1, Show: 1}
 	require.NoError(t, db.Create(&protocol).Error)

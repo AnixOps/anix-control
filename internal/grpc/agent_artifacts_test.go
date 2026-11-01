@@ -217,7 +217,7 @@ func TestAgentArtifactsRefusals(t *testing.T) {
 	ctx := testContext(t)
 	signer := newReleaseSigner(t)
 	seeded := seedArtifactRelease(t, db, signer, l.proxy.ID, "artifact-telemetry", 64)
-	other := model.Node{Name: "other", Host: "127.0.0.2", APIKey: "other-key-placeholder", APIKeyHash: apiKeyHashForTest("other-key"), Status: model.NodeStatusOnline}
+	other := model.Node{Name: "other", Host: "127.0.0.2", Status: model.NodeStatusOnline}
 	require.NoError(t, db.Create(&other).Error)
 	unassigned := seedArtifactRelease(t, db, signer, other.ID, "other-telemetry", 64)
 

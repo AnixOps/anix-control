@@ -455,18 +455,15 @@ export async function getKernelAdminNodes(params = {}) {
 
 // Rotate a node's Agent credentials (administrators with the super
 // administrator right only). Revokes every Agent certificate, enrollment and
-// forward link certificate of the node, optionally replaces a proxy node's API
-// key (`rotateApiKey`; a forward node answers 400) and issues a fresh
-// single-use `anixagt_` credential, valid for `ttlSeconds` (60 to 604800,
-// default 3600). `reason` (at most 200 characters) goes to the audit entry.
-// The answer carries the credential once ({ node, revoked, api_key_rotated,
-// enrollment, expires_at, credential }) with Cache-Control: no-store: the
+// forward link certificate of the node and issues a fresh single-use
+// `anixagt_` credential, valid for `ttlSeconds` (60 to 604800, default 3600). `reason` (at most 200 characters) goes to the audit entry.
+// The answer carries the credential once ({ node, revoked, enrollment,
+// expires_at, credential }) with Cache-Control: no-store: the
 // caller keeps it only as long as it shows it and never writes it anywhere.
 // Refusals: 400 invalid_request, 403 super_admin_required, 404 node_not_found,
 // 409 node_disabled / agent_pki_disabled.
-export async function rotateKernelAgentCredentials({ node, rotateApiKey = false, ttlSeconds, reason = '' }) {
+export async function rotateKernelAgentCredentials({ node, ttlSeconds, reason = '' }) {
   const data = { node }
-  if (rotateApiKey) data.rotate_api_key = true
   if (ttlSeconds) data.ttl_seconds = ttlSeconds
   const why = String(reason ?? '').trim()
   if (why) data.reason = why

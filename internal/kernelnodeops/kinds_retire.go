@@ -44,7 +44,7 @@ func init() {
 
 func retireResult(counts service.RetireCounts) *kernelnodeopsv1.OperationResult {
 	return &kernelnodeopsv1.OperationResult{Result: &kernelnodeopsv1.OperationResult_Retire{Retire: &kernelnodeopsv1.RetireResult{
-		CredentialsRevoked: counter32(counts.CredentialsRevoked), SecretsDeleted: counter32(counts.SecretsDeleted),
+		SecretsDeleted:        counter32(counts.SecretsDeleted),
 		WireguardPeersDeleted: counter32(counts.WireGuardPeersDeleted), ProtocolsDeleted: counter32(counts.ProtocolsDeleted),
 		SubscriptionLinksDeleted: counter32(counts.SubscriptionLinksDeleted),
 	}}}

@@ -82,11 +82,29 @@ func initKernelDatabase(t *testing.T, name string, cfg *config.DatabaseConfig) b
 	require.NoError(t, db.AutoMigrate(
 		&model.User{}, &model.Plan{}, &model.SubscriptionGroup{},
 		&model.Node{}, &model.NodeProtocol{}, &model.WireGuardPeer{},
-		&model.ForwardNode{}, &model.ForwardCleanAgent{}, &model.ForwardRuntimeJob{}, &model.ForwardRule{},
+		&model.ForwardNode{}, &model.ForwardRuntimeJob{}, &model.ForwardRule{},
 		// Phase changes are audited in the operation log.
 		&model.OperationLog{},
 	))
 	require.NoError(t, service.MigrateKernelModelsForTest(db))
 	require.NoError(t, nodesecrets.MigrateForTest(db))
 	return backend{name: name, db: db}
+}
+
+// legacyColumns reads every moved column, the state an older binary reads
+// the secrets from.
+func legacyColumns(t *testing.T, db *gorm.DB) map[string][]map[string]any {
+	t.Helper()
+	columns := map[string][]string{
+		"v2_node":           {"id", "raw_config"},
+		"v2_node_protocol":  {"id", "settings", "tls_settings", "transport_settings", "reality_settings", "custom_config"},
+		"v2_wireguard_peer": {"id", "private_key", "public_key", "preshared_key"},
+	}
+	out := map[string][]map[string]any{}
+	for table, selected := range columns {
+		var rows []map[string]any
+		require.NoError(t, db.Table(table).Select(selected).Order("id").Find(&rows).Error)
+		out[table] = rows
+	}
+	return out
 }

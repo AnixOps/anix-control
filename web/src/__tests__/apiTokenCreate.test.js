@@ -424,7 +424,7 @@ describe('ApiTokenCreate', () => {
     const read = within(form).getByRole('radio', { name: 'Read' })
     expect(read.getAttribute('aria-checked')).toBe('true')
     expect(form.textContent).toMatch(/GET and HEAD requests/)
-    expect(form.textContent).toMatch(/can’t read a node’s API key or the Telegram bot token/)
+    expect(form.textContent).toMatch(/can’t read the Telegram bot token/)
     expect(form.textContent).toMatch(/Everything you may do on the administrator APIs/)
     expect(form.textContent).toMatch(/can’t manage API tokens/)
     // 90 days is the choice, and the recommendation.

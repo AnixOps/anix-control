@@ -5,7 +5,6 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/sha256"
 	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
@@ -21,7 +20,6 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/agentpki"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/modulepki"
-	"github.com/AnixOps/anix-control/v5/internal/nodesecrets"
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
@@ -40,7 +38,6 @@ type rotationFixture struct {
 	pki     *agentpki.Service
 	proxy   model.Node
 	forward model.ForwardNode
-	apiKey  string
 	users   map[string]uint
 }
 
@@ -100,14 +97,10 @@ func newRotationFixture(t *testing.T, db *gorm.DB) *rotationFixture {
 	pki, err := agentpki.New(agentpki.Options{DB: db, Authority: authority})
 	require.NoError(t, err)
 
-	raw := make([]byte, 24)
-	_, err = rand.Read(raw)
-	require.NoError(t, err)
-	apiKey := hex.EncodeToString(raw)
-	f := &rotationFixture{db: db, pki: pki, apiKey: apiKey, users: map[string]uint{}}
-	f.proxy = model.Node{Name: "proxy", APIKey: apiKey, APIKeyHash: hashForTest(apiKey), Status: model.NodeStatusOnline}
+	f := &rotationFixture{db: db, pki: pki, users: map[string]uint{}}
+	f.proxy = model.Node{Name: "proxy", Status: model.NodeStatusOnline}
 	require.NoError(t, db.Create(&f.proxy).Error)
-	f.forward = model.ForwardNode{ID: f.proxy.ID, Name: "forward", Host: "198.51.100.20", Port: 8443, APIToken: "forward-token-" + apiKey, Enabled: true}
+	f.forward = model.ForwardNode{ID: f.proxy.ID, Name: "forward", Host: "198.51.100.20", Port: 8443, Enabled: true}
 	require.NoError(t, db.Create(&f.forward).Error)
 	for name, user := range map[string]model.User{
 		"super":  {IsAdmin: 1},
@@ -122,11 +115,6 @@ func newRotationFixture(t *testing.T, db *gorm.DB) *rotationFixture {
 		f.users[name] = user.ID
 	}
 	return f
-}
-
-func hashForTest(value string) string {
-	digest := sha256.Sum256([]byte(value))
-	return hex.EncodeToString(digest[:])
 }
 
 func (f *rotationFixture) router(actor string) *gin.Engine {
@@ -159,10 +147,9 @@ type rotationAnswer struct {
 			Enrollments      int64 `json:"enrollments"`
 			LinkCertificates int64 `json:"link_certificates"`
 		} `json:"revoked"`
-		APIKeyRotated bool           `json:"api_key_rotated"`
-		Enrollment    map[string]any `json:"enrollment"`
-		ExpiresAt     time.Time      `json:"expires_at"`
-		Credential    string         `json:"credential"`
+		Enrollment map[string]any `json:"enrollment"`
+		ExpiresAt  time.Time      `json:"expires_at"`
+		Credential string         `json:"credential"`
 	} `json:"data"`
 }
 
@@ -233,14 +220,13 @@ func TestRotateCredentialsEndToEnd(t *testing.T) {
 		assert.EqualValues(t, 1, answer.Data.Revoked.Certificates)
 		assert.EqualValues(t, 1, answer.Data.Revoked.Enrollments)
 		assert.Zero(t, answer.Data.Revoked.LinkCertificates)
-		assert.False(t, answer.Data.APIKeyRotated)
 		assert.WithinDuration(t, time.Now().Add(30*time.Minute), answer.Data.ExpiresAt, time.Minute)
 		assert.NotContains(t, answer.Data.Enrollment, "credential_hash")
 		assert.EqualValues(t, f.users["super"], answer.Data.Enrollment["created_by"])
 		assert.NotContains(t, response.Body.String(), "api_key\"")
 
 		// The old identity is revoked on every path; the new credential
-		// enrolls and the old API key still works (not rotated).
+		// enrolls.
 		_, _, err := f.pki.VerifyPeer(t.Context(), [][]byte{issued.CertificateDER})
 		require.ErrorIs(t, err, agentpki.ErrCertificateRevoked)
 		key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -252,8 +238,6 @@ func TestRotateCredentialsEndToEnd(t *testing.T) {
 		fresh, _ := f.enrollCertificate(t, agentpki.Bootstrap{Secret: answer.Data.Credential})
 		_, _, err = f.pki.VerifyPeer(t.Context(), [][]byte{fresh.CertificateDER})
 		require.NoError(t, err)
-		_, err = nodesecrets.NodeByAPIKey(f.db, f.apiKey, true)
-		require.NoError(t, err, "the API key is not rotated unless asked")
 
 		// Audit entries and logs carry the reason and no secret.
 		var entries []model.OperationLog
@@ -264,59 +248,9 @@ func TestRotateCredentialsEndToEnd(t *testing.T) {
 		var all []model.OperationLog
 		require.NoError(t, f.db.Find(&all).Error)
 		for _, entry := range all {
-			for _, secret := range []string{answer.Data.Credential, f.apiKey} {
-				assert.NotContains(t, entry.Content, secret)
-			}
+			assert.NotContains(t, entry.Content, answer.Data.Credential)
 		}
-		for _, secret := range []string{answer.Data.Credential, f.apiKey} {
-			assert.NotContains(t, logs.String(), secret)
-		}
-	})
-}
-
-func TestRotateCredentialsReplacesTheAPIKeyOnRequest(t *testing.T) {
-	forEachRotationDatabase(t, func(t *testing.T, f *rotationFixture) {
-		var logs bytes.Buffer
-		previous := slog.Default()
-		slog.SetDefault(slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug})))
-		t.Cleanup(func() { slog.SetDefault(previous) })
-
-		issued, _ := f.enrollCertificate(t, f.proxyBootstrap(t))
-		response := serveModuleRequest(f.router("super"), http.MethodPost, "/rotate-credentials",
-			`{"node":"`+f.proxyName()+`","rotate_api_key":true}`)
-		require.Equal(t, http.StatusCreated, response.Code, response.Body.String())
-		var answer rotationAnswer
-		require.NoError(t, json.Unmarshal(response.Body.Bytes(), &answer))
-		assert.True(t, answer.Data.APIKeyRotated)
-
-		_, err := nodesecrets.NodeByAPIKey(f.db, f.apiKey, true)
-		require.Error(t, err, "the old API key stops working")
-		_, _, err = f.pki.VerifyPeer(t.Context(), [][]byte{issued.CertificateDER})
-		require.ErrorIs(t, err, agentpki.ErrCertificateRevoked)
-
-		var node model.Node
-		require.NoError(t, f.db.First(&node, f.proxy.ID).Error)
-		newKey := nodesecrets.NodeAPIKey(f.db, &node)
-		require.False(t, nodesecrets.Unusable(newKey))
-		require.NotEqual(t, f.apiKey, newKey)
-		found, err := nodesecrets.NodeByAPIKey(f.db, newKey, true)
-		require.NoError(t, err)
-		assert.Equal(t, f.proxy.ID, found.ID)
-		// The new key is read through the audited credentials route, never
-		// from this answer, the audit log or the logs.
-		assert.NotContains(t, response.Body.String(), newKey)
-		var all []model.OperationLog
-		require.NoError(t, f.db.Order("id").Find(&all).Error)
-		for _, entry := range all {
-			assert.NotContains(t, entry.Content, newKey)
-			assert.NotContains(t, entry.Content, f.apiKey)
-		}
-		assert.NotContains(t, logs.String(), newKey)
-		assert.Contains(t, all[len(all)-1].Content, `"api_key_rotated":true`)
-
-		fresh, _ := f.enrollCertificate(t, agentpki.Bootstrap{Secret: answer.Data.Credential})
-		_, _, err = f.pki.VerifyPeer(t.Context(), [][]byte{fresh.CertificateDER})
-		require.NoError(t, err)
+		assert.NotContains(t, logs.String(), answer.Data.Credential)
 	})
 }
 
@@ -340,7 +274,6 @@ func TestRotateCredentialsValidation(t *testing.T) {
 			{"ttl negative", `{"node":"` + f.proxyName() + `","ttl_seconds":-5}`, http.StatusBadRequest, "ttl_seconds"},
 			{"ttl text", `{"node":"` + f.proxyName() + `","ttl_seconds":"x"}`, http.StatusBadRequest, "invalid_request"},
 			{"reason too long", `{"node":"` + f.proxyName() + `","reason":"` + long + `"}`, http.StatusBadRequest, "reason"},
-			{"forward token rotation", `{"node":"` + f.forwardName() + `","rotate_api_key":true}`, http.StatusBadRequest, "rotate_api_key applies to proxy nodes only"},
 			{"forward", `{"node":"` + f.forwardName() + `"}`, http.StatusCreated, "credential"},
 			{"longest ttl", `{"node":"` + f.proxyName() + `","ttl_seconds":604800}`, http.StatusCreated, "credential"},
 		}
@@ -349,10 +282,6 @@ func TestRotateCredentialsValidation(t *testing.T) {
 			assert.Equal(t, tc.code, response.Code, tc.name+": "+response.Body.String())
 			assert.Contains(t, response.Body.String(), tc.want, tc.name)
 		}
-		// The forward node's token was not touched by the refused request.
-		var forward model.ForwardNode
-		require.NoError(t, f.db.First(&forward, f.forward.ID).Error)
-		assert.True(t, strings.HasPrefix(forward.APIToken, "forward-token-"))
 	})
 }
 

@@ -39,7 +39,7 @@ func maintenanceEventForTest(nodeID uint, eventID, status, severity string) agen
 // node that does not exist refused.
 func recordMaintenanceOnce(t *testing.T, db *gorm.DB) {
 	t.Helper()
-	node := model.Node{Name: "maintenance", Host: "198.51.100.30", APIKeyHash: "hash-maintenance", Status: model.NodeStatusOnline}
+	node := model.Node{Name: "maintenance", Host: "198.51.100.30", Status: model.NodeStatusOnline}
 	require.NoError(t, db.Create(&node).Error)
 	logs := &NodeLogService{db: db}
 

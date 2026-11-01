@@ -29,6 +29,21 @@
   WebSocket was removed. The `websocket` Agent transport and the
   `http-legacy`, `websocket` and `clean-agent` transport names are gone
   too. Package WebSocket routes (`/api/v2/admin/ws/monitor`) are unchanged.
+- Node API keys, node shared secrets, forward node API tokens and clean
+  agents: nothing authenticated with them since Agents moved to mTLS.
+  `GET /api/v2/admin/nodes/:id/credentials`, `rotate_api_key` of
+  `POST /api/v4/kernel/agents/rotate-credentials` (and `api_key_rotated` in
+  its answer and audit entry), the API key part of the node page's 凭据
+  section, and every credential kind of `IssueCredential` but
+  `AGENT_ENROLLMENT` are gone. The credential half of the node secret split
+  goes with them: `node-secrets` now covers the protocol secrets only
+  (`v2_node.raw_config`, `v2_node_protocol`, `v2_wireguard_peer`).
+  Migration `0027_drop_node_credentials` drops `v2_node.api_key`,
+  `api_key_hash` and `secret`, `v2_forward_node.api_token`, the tables
+  `v2_forward_clean_agent` and `v4_kernel_node_credential`, and the views
+  `kapi_node_credential_status_v1` and `kapi_forward_clean_agent_v1`. It
+  cannot be undone: back up the database before this release runs its
+  migrations.
 
 ## 5.0.0-rc.28 - 2026-11-01
 

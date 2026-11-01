@@ -83,7 +83,7 @@ func TestApplyTopologyObservedStateRejectsUnknownNodeAndInvalidHealth(t *testing
 
 func TestApplyTopologyObservedStateWaitsForEveryDeploymentNode(t *testing.T) {
 	deployment, firstNodeID, db := newObservedTopologyFixture(t)
-	secondNode := model.Node{Name: "observed-node-two", Host: "127.0.0.2", APIKey: "observed-node-two-key"}
+	secondNode := model.Node{Name: "observed-node-two", Host: "127.0.0.2"}
 	require.NoError(t, db.Create(&secondNode).Error)
 	secondVertex := model.TopologyVertex{
 		RevisionID: deployment.RevisionID, Key: "exit", Kind: "plugin", NodeID: &secondNode.ID,

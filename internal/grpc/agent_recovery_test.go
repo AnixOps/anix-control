@@ -62,7 +62,7 @@ func (s *terminalReplayStream) Recv() (*agentv1pb.AgentToControl, error) {
 
 func TestKernelOperationBridgeReplaysSameRevisionThroughManagerAndAgentTerminal(t *testing.T) {
 	db := newKernelOperationBridgeDB(t)
-	node := model.Node{Name: "manager-agent-replay-node", Host: "127.0.0.20", APIKey: "manager-agent-replay-key"}
+	node := model.Node{Name: "manager-agent-replay-node", Host: "127.0.0.20"}
 	require.NoError(t, db.Create(&node).Error)
 	seedAgentPluginRelease(t, db, "wireguard")
 	deadline := time.Now().Add(time.Minute)

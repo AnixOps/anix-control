@@ -28,7 +28,7 @@ func targetStep(t *testing.T, answer *forwardv1.DiagnoseRouteResponse) *forwardv
 func TestDiagnoseTargetProtocol(t *testing.T) {
 	resetDiagnosesForTest()
 	f := newFixture(t, openSQLite(t))
-	require.NoError(t, f.db.Create(&model.Node{ID: 50, Name: "KFC JP", Host: "198.51.100.10", Port: 443, APIKey: "kfc-key"}).Error)
+	require.NoError(t, f.db.Create(&model.Node{ID: 50, Name: "KFC JP", Host: "198.51.100.10", Port: 443}).Error)
 	require.NoError(t, f.db.Create(&[]model.NodeProtocol{
 		{ID: 501, NodeID: 50, Name: "ss", Type: model.ProtocolShadowsocks, Port: 11111, Enable: 1},
 		{ID: 502, NodeID: 50, Name: "ss2022", Type: model.ProtocolShadowsocks, Port: 11112, Enable: 1},
