@@ -54,7 +54,6 @@ func (s *SmokeTestSuite) SetupSuite() {
 		App: config.AppConfig{
 			Name:          "V2Board Smoke Test",
 			Version:       "test",
-			APIToken:      "smoke-api-token",
 			SubscribePath: "s",
 		},
 	}

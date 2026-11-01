@@ -23,16 +23,6 @@ const (
 	AgentTransportCleanAgent = "clean-agent"
 )
 
-// AgentTransportLegacy tells whether transport is a legacy AnixOps Agent
-// channel, one agent_control.mtls: required refuses.
-func AgentTransportLegacy(transport string) bool {
-	switch transport {
-	case AgentTransportAPIKeyStream, AgentTransportHTTPLegacy, AgentTransportWebSocket, AgentTransportCleanAgent:
-		return true
-	}
-	return false
-}
-
 // AgentTransport records when a node was last seen on one transport. The
 // kernel keeps the live value in memory and writes a row at most about once
 // a minute per node and transport (internal/agenttransport), so the table

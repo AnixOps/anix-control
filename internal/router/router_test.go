@@ -312,7 +312,7 @@ func setupV2PackageRouter(t *testing.T) (*gin.Engine, *config.Config, *v2TestHos
 	cfg := &config.Config{
 		Env: "test",
 		JWT: config.JWTConfig{Secret: "test-jwt-secret", Expire: 86400},
-		App: config.AppConfig{APIToken: "test-api-token", SubscribePath: "s", TrafficLogEnable: true},
+		App: config.AppConfig{SubscribePath: "s", TrafficLogEnable: true},
 		// The v2 package fixtures drive the legacy agent paths with node API
 		// keys, which the 4.2 default (required) refuses.
 	}
@@ -521,7 +521,6 @@ func setupTestRouter(t *testing.T) (*gin.Engine, *config.Config) {
 			Expire: 86400,
 		},
 		App: config.AppConfig{
-			APIToken:         "test-api-token",
 			SubscribePath:    "s",
 			TrafficLogEnable: true,
 		},
@@ -1049,7 +1048,6 @@ func TestSetup_CustomSubscribePath(t *testing.T) {
 			Expire: 86400,
 		},
 		App: config.AppConfig{
-			APIToken:      "test-api-token",
 			SubscribePath: "custom-sub",
 		},
 	}

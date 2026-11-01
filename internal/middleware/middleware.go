@@ -1,124 +1,30 @@
 package middleware
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
-	"github.com/AnixOps/anix-control/v5/internal/adminapitoken"
-	"github.com/AnixOps/anix-control/v5/internal/authn"
-	"github.com/AnixOps/anix-control/v5/internal/logging"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/AnixOps/anix-control/v5/internal/adminapitoken"
+	"github.com/AnixOps/anix-control/v5/internal/authn"
+	"github.com/AnixOps/anix-control/v5/internal/logging"
+
 	"github.com/AnixOps/anix-control/v5/internal/config"
 	"github.com/AnixOps/anix-control/v5/internal/database"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/nodesecrets"
-	"github.com/AnixOps/anix-control/v5/internal/service"
 	"github.com/gin-gonic/gin"
 )
 
-// NodeAuth enforces node-scoped auth via required `node_id + X-API-Key`.
-func NodeAuth() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		apiKey := c.GetHeader("X-API-Key")
-		if apiKey == "" {
-			apiKey = c.Query("api_key")
-		}
-		if apiKey == "" {
-			apiKey = c.Query("token")
-		}
-		if apiKey == "" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"error": "missing api key",
-			})
-			return
-		}
-
-		nodeIDStr := c.Query("node_id")
-		if nodeIDStr == "" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"error": "missing node_id",
-			})
-			return
-		}
-
-		nodeID, err := strconv.ParseUint(nodeIDStr, 10, 32)
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
-				"error": "invalid node_id",
-			})
-			return
-		}
-
-		var node model.Node
-		db := database.GetDB()
-		if err := db.First(&node, uint(nodeID)).Error; err != nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"error": "invalid node",
-			})
-			return
-		}
-
-		// The key is checked through the node credential split, which
-		// applies the table's phase and never accepts a tombstone.
-		if !nodesecrets.NodeAPIKeyMatches(db, &node, apiKey) {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"error": "invalid api key",
-			})
-			return
-		}
-
-		// A node an administrator disabled gets no configuration and no
-		// users, as on the /node API and the gRPC listener. Its polling is
-		// refused before the heartbeat, so it is not recorded as seen either.
-		if node.Status == model.NodeStatusDisabled {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-				"error": "node disabled",
-			})
-			return
-		}
-
-		c.Set("node_id", node.ID)
-		c.Set("node", &node)
-
-		// 刷新节点心跳: 所有 UniProxy 轮询请求 (config/user/push/alive) 都经过本中间件,
-		// 在此统一更新 last_check_at, 避免节点带 node_type 时心跳不更新导致误判离线。
-		// 心跳不会把管理员禁用的节点改回在线 (禁用节点已在上面被拒绝)。
-		db.Model(&model.Node{}).Where("id = ?", node.ID).Updates(map[string]any{
-			"last_check_at": time.Now().Unix(),
-			"status":        service.NodeHeartbeatStatus(),
-		})
-
-		c.Next()
-	}
-}
-
-// NodeAPIKeyAuth 节点 API Key 认证中间件 (新版)
-func NodeAPIKeyAuth() gin.HandlerFunc {
-	return nodeAPIKeyAuth(true)
-}
-
-// NodeAPIKeyHeaderAuth is the package-download authentication boundary. API
-// keys in URLs leak through logs, browser history and proxy caches, so this
-// variant accepts only X-API-Key while preserving legacy query fallback on
-// the older node APIs.
+// NodeAPIKeyHeaderAuth authenticates a node by its X-API-Key header, for the
+// plugin release downloads of Agents that did not negotiate artifacts.v1.
+// Keys in URLs leak through logs, browser history and proxy caches, so the
+// header is the only place it reads.
 func NodeAPIKeyHeaderAuth() gin.HandlerFunc {
-	return nodeAPIKeyAuth(false)
-}
-
-func nodeAPIKeyAuth(allowQuery bool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// 从 Header 或 Query 获取 API Key
 		apiKey := c.GetHeader("X-API-Key")
-		if allowQuery && apiKey == "" {
-			apiKey = c.Query("api_key")
-		}
-		if allowQuery && apiKey == "" {
-			apiKey = c.Query("token")
-		}
 		if apiKey == "" {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 				"message": "缺少 API Key",
@@ -151,13 +57,6 @@ func nodeAPIKeyAuth(allowQuery bool) gin.HandlerFunc {
 
 		c.Next()
 	}
-}
-
-// sha256Hash 计算 SHA256 哈希
-func sha256Hash(s string) string {
-	h := sha256.New()
-	h.Write([]byte(s))
-	return hex.EncodeToString(h.Sum(nil))
 }
 
 // JWTAuth JWT 认证中间件
@@ -226,44 +125,6 @@ func AdminAuth() gin.HandlerFunc {
 		if !exists || isAdmin != true {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
 				"message": "权限不足",
-			})
-			return
-		}
-
-		c.Next()
-	}
-}
-
-// CORS 跨域中间件
-func AppTokenAuth() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		cfg := config.Get()
-		expected := ""
-		if cfg != nil {
-			expected = strings.TrimSpace(cfg.App.APIToken)
-		}
-		if expected == "" {
-			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{
-				"message": "internal api token is not configured",
-			})
-			return
-		}
-
-		token := strings.TrimSpace(c.Query("secret"))
-		if token == "" {
-			token = strings.TrimSpace(c.GetHeader("X-API-Key"))
-		}
-		if token == "" {
-			authHeader := strings.TrimSpace(c.GetHeader("Authorization"))
-			if strings.HasPrefix(strings.ToLower(authHeader), "bearer ") {
-				token = strings.TrimSpace(authHeader[7:])
-			} else {
-				token = authHeader
-			}
-		}
-		if token == "" || token != expected {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"message": "invalid internal api token",
 			})
 			return
 		}

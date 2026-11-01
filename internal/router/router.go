@@ -425,19 +425,10 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			agentAdmin.POST("/execute", registeredPackageRoute(v2PackageGateway.Serve, "protocol-runtime", "protocol.admin.agent.execute.post", agentHandler.ExecuteCommand))
 			agentAdmin.GET("/monitor", registeredPackageRoute(v2PackageGateway.Serve, "protocol-runtime", "protocol.admin.agent.monitor.get", agentHandler.GetMonitor))
 		}
-
-		internalAPI := v2.Group("/internal")
-		internalAPI.Use(adminLimiter.Middleware())
-		internalAPI.Use(middleware.AppTokenAuth())
-		{
-			// 内部 AuthKey 生成（用于 Ansible 自动化）
-			nodeHandlerForInternal := handler.NewNodeHandler()
-			internalAPI.POST("/auth-keys", registeredPackageRoute(v2PackageGateway.Serve, "proxy-node", "proxy.internal.auth_keys.post", nodeHandlerForInternal.InternalGenerateAuthKey))
-		}
 	}
 
 	// Node-facing v3 package downloads are deliberately outside the admin v3
-	// group. The URL is same-origin, while NodeAPIKeyAuth supplies the only
+	// group. The URL is same-origin, while NodeAPIKeyHeaderAuth supplies the only
 	// trusted node identity used for assignment authorization.
 	agentPackages := r.Group("/api/v3/agent/plugin-releases")
 	agentPackages.Use(middleware.NodeAPIKeyHeaderAuth())

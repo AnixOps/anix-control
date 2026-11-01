@@ -91,7 +91,6 @@ func TestTheFieldListCoversTheDesignedRoutes(t *testing.T) {
 	}
 	assert.Equal(t, map[string]string{"/data/api_key": "api_key", "/data/secret": "secret"}, answer("proxy.admin.nodes.post"))
 	assert.Equal(t, map[string]string{"/data/key": "key"}, answer("proxy.admin.auth_keys.post"))
-	assert.Equal(t, map[string]string{"/data/key": "key"}, answer("proxy.internal.auth_keys.post"))
 	validate, _ := table.Route("proxy.admin.nodes.validate_config.post")
 	assert.Equal(t, TargetNone, validate.Target.Kind, "a validation stores nothing")
 }

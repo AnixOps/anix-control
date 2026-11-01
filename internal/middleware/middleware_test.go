@@ -1,15 +1,10 @@
 package middleware
 
 import (
-	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"strconv"
-	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -41,9 +36,12 @@ func setupTestDB(t *testing.T) func() {
 	}
 }
 
-func TestNodeAuth_MissingAPIKey(t *testing.T) {
+func TestNodeAPIKeyHeaderAuth_MissingAPIKey(t *testing.T) {
+	cleanup := setupTestDB(t)
+	defer cleanup()
+
 	router := gin.New()
-	router.Use(NodeAuth())
+	router.Use(NodeAPIKeyHeaderAuth())
 	router.GET("/test", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"message": "ok"})
 	})
@@ -56,323 +54,13 @@ func TestNodeAuth_MissingAPIKey(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }
 
-func TestNodeAuth_ValidAPIKey(t *testing.T) {
-	cleanup := setupTestDB(t)
-	defer cleanup()
-
-	nodeAPIKey := "test-node-api-key"
-	node := &model.Node{
-		Name:       "Node Auth Token",
-		Host:       "127.0.0.1",
-		Port:       443,
-		APIKeyHash: sha256Hash(nodeAPIKey),
-		Status:     model.NodeStatusOnline,
-	}
-	require.NoError(t, database.GetDB().Create(node).Error)
-
-	router := gin.New()
-	router.Use(NodeAuth())
-	router.GET("/test", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"message": "ok"})
-	})
-
-	req := httptest.NewRequest("GET", "/test?node_id="+strconv.Itoa(int(node.ID)), nil)
-	req.Header.Set("X-API-Key", nodeAPIKey)
-	w := httptest.NewRecorder()
-
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusOK, w.Code)
-}
-
-func TestNodeAuth_LegacyTokenQuery(t *testing.T) {
-	cleanup := setupTestDB(t)
-	defer cleanup()
-
-	nodeAPIKey := "legacy-token-query-key"
-	node := &model.Node{
-		Name:       "Legacy Token Node",
-		Host:       "127.0.0.1",
-		Port:       443,
-		APIKeyHash: sha256Hash(nodeAPIKey),
-		Status:     model.NodeStatusOnline,
-	}
-	require.NoError(t, database.GetDB().Create(node).Error)
-
-	router := gin.New()
-	router.Use(NodeAuth())
-	router.GET("/test", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"message": "ok"})
-	})
-
-	req := httptest.NewRequest("GET", "/test?node_id="+strconv.Itoa(int(node.ID))+"&token="+nodeAPIKey, nil)
-	w := httptest.NewRecorder()
-
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusOK, w.Code)
-}
-
-// TestNodeAuth_UpdatesHeartbeat 验证认证通过后会刷新 last_check_at,
-// 修复节点带 node_type 轮询时心跳不更新导致面板误判离线的问题
-func TestNodeAuth_UpdatesHeartbeat(t *testing.T) {
-	cleanup := setupTestDB(t)
-	defer cleanup()
-
-	nodeAPIKey := "heartbeat-node-key"
-	stale := time.Now().Unix() - 9999 // 远早于在线阈值
-	node := &model.Node{
-		Name:        "Heartbeat Node",
-		Host:        "127.0.0.1",
-		Port:        443,
-		APIKeyHash:  sha256Hash(nodeAPIKey),
-		Status:      model.NodeStatusOnline,
-		LastCheckAt: &stale,
-	}
-	require.NoError(t, database.GetDB().Create(node).Error)
-
-	router := gin.New()
-	router.Use(NodeAuth())
-	router.GET("/test", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"message": "ok"})
-	})
-
-	// 模拟节点带 node_type 的轮询请求
-	req := httptest.NewRequest("GET", "/test?node_id="+strconv.Itoa(int(node.ID))+"&node_type=vmess", nil)
-	req.Header.Set("X-API-Key", nodeAPIKey)
-	w := httptest.NewRecorder()
-
-	before := time.Now().Unix()
-	router.ServeHTTP(w, req)
-	assert.Equal(t, http.StatusOK, w.Code)
-
-	// last_check_at 应被刷新到当前时间附近
-	var updated model.Node
-	require.NoError(t, database.GetDB().First(&updated, node.ID).Error)
-	require.NotNil(t, updated.LastCheckAt)
-	assert.GreaterOrEqual(t, *updated.LastCheckAt, before)
-	assert.Equal(t, model.NodeStatusOnline, updated.Status)
-	assert.True(t, updated.IsOnline(), "节点应被判定为在线")
-}
-
-// TestNodeAuth_RefusesDisabledNode: a disabled node's UniProxy polling is
-// refused with 403 before the heartbeat, so the node stays disabled and is
-// not recorded as seen, as on the /node API and the gRPC listener.
-func TestNodeAuth_RefusesDisabledNode(t *testing.T) {
-	cleanup := setupTestDB(t)
-	defer cleanup()
-
-	nodeAPIKey := "disabled-heartbeat-node-key"
-	stale := time.Now().Unix() - 9999
-	node := &model.Node{
-		Name:        "Disabled Heartbeat Node",
-		Host:        "127.0.0.1",
-		Port:        443,
-		APIKeyHash:  sha256Hash(nodeAPIKey),
-		Status:      model.NodeStatusDisabled,
-		LastCheckAt: &stale,
-	}
-	require.NoError(t, database.GetDB().Create(node).Error)
-
-	reached := false
-	router := gin.New()
-	router.Use(NodeAuth())
-	router.GET("/test", func(c *gin.Context) {
-		reached = true
-		c.JSON(http.StatusOK, gin.H{"message": "ok"})
-	})
-
-	req := httptest.NewRequest("GET", "/test?node_id="+strconv.Itoa(int(node.ID)), nil)
-	req.Header.Set("X-API-Key", nodeAPIKey)
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusForbidden, w.Code)
-	assert.JSONEq(t, `{"error":"node disabled"}`, w.Body.String())
-	assert.False(t, reached, "a disabled node must not reach the UniProxy handler")
-
-	var updated model.Node
-	require.NoError(t, database.GetDB().First(&updated, node.ID).Error)
-	require.NotNil(t, updated.LastCheckAt)
-	assert.Equal(t, stale, *updated.LastCheckAt)
-	assert.Equal(t, model.NodeStatusDisabled, updated.Status)
-}
-
-func TestNodeAuth_InvalidAPIKey(t *testing.T) {
-	cleanup := setupTestDB(t)
-	defer cleanup()
-
-	node := &model.Node{
-		Name:       "Node Invalid Token",
-		Host:       "127.0.0.1",
-		Port:       443,
-		APIKeyHash: sha256Hash("correct-token"),
-		Status:     model.NodeStatusOnline,
-	}
-	require.NoError(t, database.GetDB().Create(node).Error)
-
-	router := gin.New()
-	router.Use(NodeAuth())
-	router.GET("/test", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"message": "ok"})
-	})
-
-	req := httptest.NewRequest("GET", "/test?node_id="+strconv.Itoa(int(node.ID)), nil)
-	req.Header.Set("X-API-Key", "wrong-api-key")
-	w := httptest.NewRecorder()
-
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusUnauthorized, w.Code)
-}
-
-func TestNodeAuth_NoConfig(t *testing.T) {
-	cleanup := setupTestDB(t)
-	defer cleanup()
-
-	config.Set(nil)
-
-	nodeAPIKey := "no-config-node-api-key"
-	node := &model.Node{
-		Name:       "Node No Config",
-		Host:       "127.0.0.1",
-		Port:       443,
-		APIKeyHash: sha256Hash(nodeAPIKey),
-		Status:     model.NodeStatusOnline,
-	}
-	require.NoError(t, database.GetDB().Create(node).Error)
-
-	router := gin.New()
-	router.Use(NodeAuth())
-	router.GET("/test", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"message": "ok"})
-	})
-
-	req := httptest.NewRequest("GET", "/test?node_id="+strconv.Itoa(int(node.ID)), nil)
-	req.Header.Set("X-API-Key", nodeAPIKey)
-	w := httptest.NewRecorder()
-
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusOK, w.Code)
-}
-func TestNodeAuth_GlobalTokenHeaderOnlyRejected(t *testing.T) {
-	config.Set(&config.Config{
-		App: config.AppConfig{
-			APIToken: "global-api-token",
-		},
-	})
-
-	router := gin.New()
-	router.Use(NodeAuth())
-	router.GET("/test", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"message": "ok"})
-	})
-
-	req := httptest.NewRequest("GET", "/test", nil)
-	req.Header.Set("X-API-Key", "global-api-token")
-	w := httptest.NewRecorder()
-
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusUnauthorized, w.Code)
-}
-func TestNodeAuth_NodeScopedAPIKey_WithGlobalTokenSet(t *testing.T) {
-	cleanup := setupTestDB(t)
-	defer cleanup()
-
-	config.Set(&config.Config{
-		App: config.AppConfig{
-			APIToken: "global-api-token",
-		},
-	})
-
-	nodeAPIKey := "node-api-key-001"
-	node := &model.Node{
-		Name:       "Node Scoped Auth",
-		Host:       "127.0.0.1",
-		Port:       443,
-		APIKeyHash: sha256Hash(nodeAPIKey),
-		Status:     model.NodeStatusOnline,
-	}
-	require.NoError(t, database.GetDB().Create(node).Error)
-
-	router := gin.New()
-	router.Use(NodeAuth())
-	router.GET("/test", func(c *gin.Context) {
-		nodeID, _ := c.Get("node_id")
-		c.JSON(http.StatusOK, gin.H{"node_id": nodeID})
-	})
-
-	req := httptest.NewRequest("GET", "/test?node_id="+strconv.Itoa(int(node.ID)), nil)
-	req.Header.Set("X-API-Key", nodeAPIKey)
-	w := httptest.NewRecorder()
-
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusOK, w.Code)
-}
-
-func TestNodeAuth_NodeScopedPlainAPIKeyFallback(t *testing.T) {
-	cleanup := setupTestDB(t)
-	defer cleanup()
-
-	config.Set(&config.Config{
-		App: config.AppConfig{
-			APIToken: "global-api-token",
-		},
-	})
-
-	nodeAPIKey := "legacy-plain-api-key"
-	node := &model.Node{
-		Name:   "Legacy Plain APIKey",
-		Host:   "127.0.0.1",
-		Port:   443,
-		APIKey: nodeAPIKey,
-		Status: model.NodeStatusOnline,
-	}
-	require.NoError(t, database.GetDB().Create(node).Error)
-
-	router := gin.New()
-	router.Use(NodeAuth())
-	router.GET("/test", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"message": "ok"})
-	})
-
-	req := httptest.NewRequest("GET", "/test?node_id="+strconv.Itoa(int(node.ID)), nil)
-	req.Header.Set("X-API-Key", nodeAPIKey)
-	w := httptest.NewRecorder()
-
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusOK, w.Code)
-}
-
-func TestNodeAPIKeyAuth_MissingAPIKey(t *testing.T) {
-	cleanup := setupTestDB(t)
-	defer cleanup()
-
-	router := gin.New()
-	router.Use(NodeAPIKeyAuth())
-	router.GET("/test", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"message": "ok"})
-	})
-
-	req := httptest.NewRequest("GET", "/test", nil)
-	w := httptest.NewRecorder()
-
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusUnauthorized, w.Code)
-}
-
-func TestNodeAPIKeyAuth_ValidKey(t *testing.T) {
+func TestNodeAPIKeyHeaderAuth_ValidKey(t *testing.T) {
 	cleanup := setupTestDB(t)
 	defer cleanup()
 
 	// 创建测试节点
 	apiKey := "test-api-key-123"
-	keyHash := sha256Hash(apiKey)
+	keyHash := keyHash(apiKey)
 	node := &model.Node{
 		Name:       "Test Node",
 		Host:       "127.0.0.1",
@@ -383,7 +71,7 @@ func TestNodeAPIKeyAuth_ValidKey(t *testing.T) {
 	database.GetDB().Create(node)
 
 	router := gin.New()
-	router.Use(NodeAPIKeyAuth())
+	router.Use(NodeAPIKeyHeaderAuth())
 	router.GET("/test", func(c *gin.Context) {
 		nodeID, _ := c.Get("node_id")
 		c.JSON(http.StatusOK, gin.H{"node_id": nodeID})
@@ -398,12 +86,12 @@ func TestNodeAPIKeyAuth_ValidKey(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 }
 
-func TestNodeAPIKeyAuth_DisabledNode(t *testing.T) {
+func TestNodeAPIKeyHeaderAuth_DisabledNode(t *testing.T) {
 	cleanup := setupTestDB(t)
 	defer cleanup()
 
 	apiKey := "test-api-key-disabled"
-	keyHash := sha256Hash(apiKey)
+	keyHash := keyHash(apiKey)
 	node := &model.Node{
 		Name:       "Disabled Node",
 		Host:       "127.0.0.1",
@@ -414,7 +102,7 @@ func TestNodeAPIKeyAuth_DisabledNode(t *testing.T) {
 	database.GetDB().Create(node)
 
 	router := gin.New()
-	router.Use(NodeAPIKeyAuth())
+	router.Use(NodeAPIKeyHeaderAuth())
 	router.GET("/test", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"message": "ok"})
 	})
@@ -428,12 +116,12 @@ func TestNodeAPIKeyAuth_DisabledNode(t *testing.T) {
 	assert.Equal(t, http.StatusForbidden, w.Code)
 }
 
-func TestNodeAPIKeyAuth_QueryParam(t *testing.T) {
+func TestNodeAPIKeyHeaderAuth_IgnoresTheQuery(t *testing.T) {
 	cleanup := setupTestDB(t)
 	defer cleanup()
 
 	apiKey := "test-api-key-query"
-	keyHash := sha256Hash(apiKey)
+	keyHash := keyHash(apiKey)
 	node := &model.Node{
 		Name:       "Test Node",
 		Host:       "127.0.0.1",
@@ -444,20 +132,22 @@ func TestNodeAPIKeyAuth_QueryParam(t *testing.T) {
 	database.GetDB().Create(node)
 
 	router := gin.New()
-	router.Use(NodeAPIKeyAuth())
+	router.Use(NodeAPIKeyHeaderAuth())
 	router.GET("/test", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"message": "ok"})
 	})
 
-	req := httptest.NewRequest("GET", "/test?api_key="+apiKey, nil)
-	w := httptest.NewRecorder()
+	for _, query := range []string{"?api_key=", "?token="} {
+		req := httptest.NewRequest("GET", "/test"+query+apiKey, nil)
+		w := httptest.NewRecorder()
 
-	router.ServeHTTP(w, req)
+		router.ServeHTTP(w, req)
 
-	assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, http.StatusUnauthorized, w.Code, "a key in the URL is not read")
+	}
 }
 
-func TestNodeAPIKeyAuth_PlainAPIKeyFallback(t *testing.T) {
+func TestNodeAPIKeyHeaderAuth_PlainAPIKeyFallback(t *testing.T) {
 	cleanup := setupTestDB(t)
 	defer cleanup()
 
@@ -472,7 +162,7 @@ func TestNodeAPIKeyAuth_PlainAPIKeyFallback(t *testing.T) {
 	require.NoError(t, database.GetDB().Create(node).Error)
 
 	router := gin.New()
-	router.Use(NodeAPIKeyAuth())
+	router.Use(NodeAPIKeyHeaderAuth())
 	router.GET("/test", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"message": "ok"})
 	})
@@ -805,224 +495,6 @@ func TestCORS_WildcardOriginNoCredentials(t *testing.T) {
 	assert.Equal(t, "", w.Header().Get("Access-Control-Allow-Credentials"))
 }
 
-func TestSha256Hash(t *testing.T) {
-	tests := []struct {
-		input    string
-		expected string
-	}{
-		{"test", "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"},
-		{"", "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
-		{"hello world", "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.input, func(t *testing.T) {
-			result := sha256Hash(tt.input)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
-func TestSignatureAuth_NoSignature(t *testing.T) {
-	router := gin.New()
-	router.Use(SignatureAuth())
-	router.GET("/test", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"message": "ok"})
-	})
-
-	req := httptest.NewRequest("GET", "/test", nil)
-	w := httptest.NewRecorder()
-
-	router.ServeHTTP(w, req)
-
-	// 没有签名头应该跳过验证（向后兼容）
-	assert.Equal(t, http.StatusOK, w.Code)
-}
-
-func TestSignatureAuth_MissingTimestamp(t *testing.T) {
-	router := gin.New()
-	router.Use(SignatureAuth())
-	router.GET("/test", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"message": "ok"})
-	})
-
-	req := httptest.NewRequest("GET", "/test", nil)
-	req.Header.Set(SignatureHeader, "some-signature")
-	w := httptest.NewRecorder()
-
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-}
-
-func TestSignatureAuth_InvalidTimestamp(t *testing.T) {
-	router := gin.New()
-	router.Use(SignatureAuth())
-	router.GET("/test", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"message": "ok"})
-	})
-
-	req := httptest.NewRequest("GET", "/test", nil)
-	req.Header.Set(SignatureHeader, "some-signature")
-	req.Header.Set(TimestampHeader, "invalid-timestamp")
-	w := httptest.NewRecorder()
-
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-}
-
-func TestSignatureAuth_ExpiredRequest(t *testing.T) {
-	router := gin.New()
-	router.Use(SignatureAuth())
-	router.GET("/test", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"message": "ok"})
-	})
-
-	// 使用过期的时间戳 (6分钟前，超过 MaxTimeDiff)
-	expiredTimestamp := time.Now().Add(-6 * time.Minute).Unix()
-	req := httptest.NewRequest("GET", "/test", nil)
-	req.Header.Set(SignatureHeader, "some-signature")
-	req.Header.Set(TimestampHeader, strconv.FormatInt(expiredTimestamp, 10))
-	w := httptest.NewRecorder()
-
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-}
-
-func TestSignatureAuth_MissingNode(t *testing.T) {
-	router := gin.New()
-	router.Use(SignatureAuth())
-	router.GET("/test", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"message": "ok"})
-	})
-
-	req := httptest.NewRequest("GET", "/test", nil)
-	req.Header.Set(SignatureHeader, "some-signature")
-	req.Header.Set(TimestampHeader, strconv.FormatInt(time.Now().Unix(), 10))
-	w := httptest.NewRecorder()
-
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusUnauthorized, w.Code)
-}
-
-func TestSignatureAuth_ValidSignature(t *testing.T) {
-	cleanup := setupTestDB(t)
-	defer cleanup()
-
-	secret := "test-secret"
-	apiKey := "test-api-key"
-	keyHash := sha256Hash(apiKey)
-	node := &model.Node{
-		Name:       "Test Node",
-		Host:       "127.0.0.1",
-		Port:       443,
-		APIKeyHash: keyHash,
-		Secret:     secret,
-		Status:     model.NodeStatusOnline,
-	}
-	database.GetDB().Create(node)
-
-	router := gin.New()
-	router.Use(NodeAPIKeyAuth())
-	router.Use(SignatureAuth())
-	router.GET("/test", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"message": "ok"})
-	})
-
-	timestamp := strconv.FormatInt(time.Now().Unix(), 10)
-	method := "GET"
-	path := "/test"
-	body := ""
-	signData := timestamp + method + path + body
-
-	// 计算 HMAC-SHA256
-	mac := hmac.New(sha256.New, []byte(secret))
-	mac.Write([]byte(signData))
-	signature := hex.EncodeToString(mac.Sum(nil))
-
-	req := httptest.NewRequest("GET", "/test", nil)
-	req.Header.Set("X-API-Key", apiKey)
-	req.Header.Set(SignatureHeader, signature)
-	req.Header.Set(TimestampHeader, timestamp)
-	w := httptest.NewRecorder()
-
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusOK, w.Code)
-}
-
-func TestCalculateHMAC(t *testing.T) {
-	secret := "test-secret"
-	data := "test-data"
-
-	result := calculateHMAC(data, secret)
-	assert.NotEmpty(t, result)
-	assert.Len(t, result, 64) // SHA256 produces 64 hex characters
-
-	// Verify the result is deterministic
-	result2 := calculateHMAC(data, secret)
-	assert.Equal(t, result, result2)
-}
-
-func TestNonceCache(t *testing.T) {
-	// Clear the nonce cache
-	nonceCache = make(map[string]int64)
-
-	nonce := "test-nonce-123"
-
-	// Initially not used
-	assert.False(t, isNonceUsed(nonce))
-
-	// Mark as used
-	markNonceUsed(nonce)
-	assert.True(t, isNonceUsed(nonce))
-
-	// Clear cache
-	nonceCache = make(map[string]int64)
-	assert.False(t, isNonceUsed(nonce))
-}
-
-func TestNonceExpiration(t *testing.T) {
-	nonceCache = make(map[string]int64)
-
-	nonce := "expiring-nonce"
-	// Set expired nonce
-	nonceCache[nonce] = time.Now().Add(-10 * time.Second).Unix()
-
-	// Expired nonce should be considered not used
-	assert.False(t, isNonceUsed(nonce))
-	_, exists := nonceCache[nonce]
-	assert.False(t, exists) // Should be deleted
-}
-
-func TestClaimNonceAdmitsOneOfManyConcurrentRequests(t *testing.T) {
-	nonceMu.Lock()
-	nonceCache = make(map[string]int64)
-	nonceMu.Unlock()
-
-	const requests = 32
-	var (
-		wg       sync.WaitGroup
-		admitted atomic.Int32
-	)
-	for i := 0; i < requests; i++ {
-		wg.Add(1)
-		go func(i int) {
-			defer wg.Done()
-			if claimNonce("replayed-nonce") {
-				admitted.Add(1)
-			}
-			claimNonce(fmt.Sprintf("distinct-nonce-%d", i))
-		}(i)
-	}
-	wg.Wait()
-	assert.EqualValues(t, 1, admitted.Load())
-	assert.True(t, isNonceUsed("distinct-nonce-7"))
-}
-
 func TestNodeSecureLogger(t *testing.T) {
 	router := gin.New()
 	router.Use(NodeSecureLogger())
@@ -1032,22 +504,6 @@ func TestNodeSecureLogger(t *testing.T) {
 	})
 
 	req := httptest.NewRequest("GET", "/test", nil)
-	w := httptest.NewRecorder()
-
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusOK, w.Code)
-}
-
-func TestNodeSecureLogger_WithSignature(t *testing.T) {
-	router := gin.New()
-	router.Use(NodeSecureLogger())
-	router.GET("/test", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"message": "ok"})
-	})
-
-	req := httptest.NewRequest("GET", "/test", nil)
-	req.Header.Set(SignatureHeader, "test-signature")
 	w := httptest.NewRecorder()
 
 	router.ServeHTTP(w, req)
@@ -1106,4 +562,9 @@ func TestJWTAuth_RejectsRevokedToken(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+func keyHash(key string) string {
+	sum := sha256.Sum256([]byte(key))
+	return hex.EncodeToString(sum[:])
 }

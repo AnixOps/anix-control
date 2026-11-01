@@ -209,7 +209,7 @@ stands). The list is `internal/config/deprecated_keys.yaml`.
 | `alerts.leaf_expiry_days` | `ANIX_CONTROL_ALERTS_LEAF_EXPIRY_DAYS` | ignored | M2 (P8) | a built-in value (14 days) |
 | `alerts.phase_stuck_after` | `ANIX_CONTROL_ALERTS_PHASE_STUCK_AFTER` | ignored | M2 (P8) | a built-in value (72h) |
 | `alerts.renotify_interval` | `ANIX_CONTROL_ALERTS_RENOTIFY_INTERVAL` | ignored | M2 (P8) | a built-in value (24h) |
-| `app.api_token` | `ANIX_CONTROL_APP_API_TOKEN` | still read | M5 (N9) | the legacy shared token of /flow/upload and the internal v2 routes, removed with them; administrators use admin API tokens |
+| `app.api_token` | `ANIX_CONTROL_APP_API_TOKEN` | ignored | M5 (N9) | the legacy shared token of /flow/upload and the internal v2 routes, which are removed; the key does nothing, so remove it (administrators use admin API tokens) |
 | `app.edition` | `ANIX_CONTROL_APP_EDITION` | ignored | M2 (P6) | there are no editions; orders, payments and affiliate are built in |
 | `app.name` | `ANIX_CONTROL_APP_NAME` | ignored | M2 (P8) | nothing reads it |
 | `app.subscribe_path` | `ANIX_CONTROL_APP_SUBSCRIBE_PATH` | still read | M5 | renamed; config rewrite moves it to subscribe_path; use `subscribe_path` |

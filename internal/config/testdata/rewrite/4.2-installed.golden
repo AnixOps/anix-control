@@ -35,7 +35,7 @@ Dropped:
   admin.email: the first administrator claims the panel with a one-time link (anix-control admin claim-link); existing administrators are not affected
   admin.password: no administrator password is configured any more; the first administrator claims the panel with a one-time link (anix-control admin claim-link) and existing administrators keep theirs, so remove it
   agent_install.cn_mirror_url: still read until M4 (N30), not written: the mainland download mirror of Agent releases, until Control serves the releases itself
-  app.api_token: still read until M5 (N9), not written: the legacy shared token of /flow/upload and the internal v2 routes, removed with them; administrators use admin API tokens
+  app.api_token: the legacy shared token of /flow/upload and the internal v2 routes, which are removed; the key does nothing, so remove it (administrators use admin API tokens)
   env: Control always runs as production (its only effect was requiring jwt.secret, which is now derived); start a development instance with -debug
   frontend.enable: still read until M2 (P11), not written: serves the web app from frontend.path until the web app is built into the binary
   frontend.path: still read until M2 (P11), not written: the web app's directory until the web app is built into the binary

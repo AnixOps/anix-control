@@ -99,13 +99,6 @@
       "package_route": "proxy.admin.nodes.validate_config.post",
       "envelope": "data",
       "transport": "http"
-    },
-    {
-      "method": "POST",
-      "legacy_path": "/api/v2/internal/auth-keys",
-      "package_route": "proxy.internal.auth_keys.post",
-      "envelope": "raw",
-      "transport": "http"
     }
   ]
 }

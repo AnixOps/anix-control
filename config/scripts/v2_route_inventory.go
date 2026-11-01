@@ -1226,10 +1226,6 @@ func classifyMiddleware(middleware []string) (string, error) {
 	}
 
 	switch {
-	case contains("middleware.AppTokenAuth"):
-		return "internal", nil
-	case contains("middleware.NodeAPIKeyAuth"), contains("middleware.NodeAuth"):
-		return "node-api", nil
 	case contains("middleware.AdminAuth"):
 		return "admin", nil
 	case contains("middleware.JWTAuth"):

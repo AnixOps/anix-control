@@ -2680,166 +2680,6 @@ func ptrString(s string) *string {
 	return &s
 }
 
-// Additional NodeService Tests
-func (s *NodeServiceTestSuite) TestRegisterNode() {
-	// 创建授权密钥
-	key, rawKey, _ := s.svc.GenerateAuthKey("Register Test", 0)
-
-	// 注册节点
-	resp, err := s.svc.RegisterNode(&model.NodeRegisterRequest{
-		AuthKey: rawKey,
-		Name:    "Registered Node",
-		Host:    "192.168.1.50",
-		Port:    443,
-	}, "127.0.0.1")
-
-	assert.NoError(s.T(), err)
-	assert.NotNil(s.T(), resp)
-	assert.NotZero(s.T(), resp.NodeID)
-	assert.NotEmpty(s.T(), resp.APIKey)
-	assert.NotEmpty(s.T(), resp.Secret)
-
-	// 验证授权密钥已被使用
-	keys, _ := s.svc.GetAuthKeys()
-	for _, k := range keys {
-		if k.ID == key.ID {
-			assert.Equal(s.T(), 1, k.Used)
-		}
-	}
-}
-
-func (s *NodeServiceTestSuite) TestRegisterNode_InvalidKey() {
-	_, err := s.svc.RegisterNode(&model.NodeRegisterRequest{
-		AuthKey: "invalid-key",
-		Name:    "Test",
-		Host:    "192.168.1.50",
-		Port:    443,
-	}, "127.0.0.1")
-
-	assert.Error(s.T(), err)
-}
-
-func (s *NodeServiceTestSuite) TestHeartbeat() {
-	node := &model.Node{
-		Name:   "Heartbeat Test",
-		Host:   "192.168.1.60",
-		Port:   443,
-		Rate:   1.0,
-		Show:   1,
-		Status: model.NodeStatusOnline,
-	}
-	assert.NoError(s.T(), s.svc.CreateNode(node))
-	err := s.svc.Heartbeat(node.ID, &model.NodeHeartbeatRequest{
-		CPUUsage:    50.0,
-		MemoryUsage: 60.0,
-		DiskUsage:   70.0,
-		Uptime:      3600,
-		OnlineUsers: 10,
-		Upload:      100,
-		Download:    200,
-	})
-	assert.NoError(s.T(), err)
-
-	found, _ := s.svc.GetNode(node.ID)
-	assert.NotNil(s.T(), found.LastCheckAt)
-}
-
-func (s *NodeServiceTestSuite) TestHeartbeat_NodeNotFound() {
-	err := s.svc.Heartbeat(99999, &model.NodeHeartbeatRequest{})
-	assert.Error(s.T(), err)
-}
-
-// A heartbeat records the node's liveness but never re-enables a node an
-// administrator disabled; a pending or offline node becomes online.
-func (s *NodeServiceTestSuite) TestHeartbeatKeepsDisabledNodesDisabled() {
-	db := database.Get()
-	for from, want := range map[model.NodeStatus]model.NodeStatus{
-		model.NodeStatusDisabled: model.NodeStatusDisabled,
-		model.NodeStatusPending:  model.NodeStatusOnline,
-		model.NodeStatusOffline:  model.NodeStatusOnline,
-		model.NodeStatusOnline:   model.NodeStatusOnline,
-	} {
-		node := &model.Node{Name: fmt.Sprintf("Heartbeat Status %d", from), Host: "192.168.1.61", Port: 443, Rate: 1.0, Show: 1}
-		s.Require().NoError(s.svc.CreateNode(node))
-		reset := func() {
-			s.Require().NoError(db.Model(&model.Node{}).Where("id = ?", node.ID).
-				Updates(map[string]any{"status": from, "last_check_at": nil}).Error)
-		}
-		for name, heartbeat := range map[string]func() error{
-			"Heartbeat":         func() error { return s.svc.Heartbeat(node.ID, &model.NodeHeartbeatRequest{CPUUsage: 1}) },
-			"UpdateLastCheckAt": func() error { return s.svc.UpdateLastCheckAt(node.ID) },
-		} {
-			reset()
-			s.Require().NoError(heartbeat(), name)
-			found, err := s.svc.GetNode(node.ID)
-			s.Require().NoError(err)
-			s.Equal(want, found.Status, "%s from status %d", name, from)
-			s.NotNil(found.LastCheckAt, name)
-		}
-	}
-
-	// The administrator's node list shows a disabled node with a recent
-	// heartbeat as disabled, not online.
-	list, err := s.svc.GetNodes(NodeListParams{Page: 1, PageSize: 100})
-	s.Require().NoError(err)
-	var listed int
-	for _, node := range list.List {
-		if node.Name == fmt.Sprintf("Heartbeat Status %d", model.NodeStatusDisabled) {
-			listed++
-			s.True(node.IsOnline())
-			s.Equal(model.NodeStatusDisabled, node.Status)
-		}
-	}
-	s.Equal(1, listed)
-}
-
-func (s *NodeServiceTestSuite) TestHeartbeatRejectsNegativeTraffic() {
-	node := &model.Node{Name: "Heartbeat Negative", Host: "192.168.1.69", Port: 443, Rate: 1.0, Show: 1}
-	assert.NoError(s.T(), s.svc.CreateNode(node))
-
-	err := s.svc.Heartbeat(node.ID, &model.NodeHeartbeatRequest{Upload: -1, Download: 200})
-	assert.ErrorIs(s.T(), err, ErrNegativeTraffic)
-
-	found, _ := s.svc.GetNode(node.ID)
-	assert.Nil(s.T(), found.LastCheckAt)
-	assert.Equal(s.T(), int64(0), found.TotalUpload)
-	assert.Equal(s.T(), int64(0), found.TotalDownload)
-}
-
-func (s *NodeServiceTestSuite) TestHeartbeat_AccumulatesUpParentChain() {
-	root := &model.Node{Name: "Root", Host: "192.168.1.70", Port: 443, Rate: 1.0, Show: 1}
-	assert.NoError(s.T(), s.svc.CreateNode(root))
-
-	mid := &model.Node{Name: "Mid", Host: "192.168.1.71", Port: 443, Rate: 1.0, Show: 1, ParentID: &root.ID}
-	assert.NoError(s.T(), s.svc.CreateNode(mid))
-
-	leaf := &model.Node{Name: "Leaf", Host: "192.168.1.72", Port: 443, Rate: 1.0, Show: 1, ParentID: &mid.ID}
-	assert.NoError(s.T(), s.svc.CreateNode(leaf))
-
-	err := s.svc.Heartbeat(leaf.ID, &model.NodeHeartbeatRequest{Upload: 100, Download: 200})
-	assert.NoError(s.T(), err)
-
-	foundLeaf, _ := s.svc.GetNode(leaf.ID)
-	assert.Equal(s.T(), int64(100), foundLeaf.TotalUpload)
-	assert.Equal(s.T(), int64(200), foundLeaf.TotalDownload)
-	assert.Equal(s.T(), int64(100), foundLeaf.MonthlyUpload)
-	assert.Equal(s.T(), int64(200), foundLeaf.MonthlyDownload)
-
-	foundMid, _ := s.svc.GetNode(mid.ID)
-	assert.Equal(s.T(), int64(100), foundMid.TotalUpload)
-	assert.Equal(s.T(), int64(200), foundMid.TotalDownload)
-
-	foundRoot, _ := s.svc.GetNode(root.ID)
-	assert.Equal(s.T(), int64(100), foundRoot.TotalUpload)
-	assert.Equal(s.T(), int64(200), foundRoot.TotalDownload)
-
-	// second heartbeat should add on top, not overwrite
-	assert.NoError(s.T(), s.svc.Heartbeat(leaf.ID, &model.NodeHeartbeatRequest{Upload: 50, Download: 60}))
-	foundRoot2, _ := s.svc.GetNode(root.ID)
-	assert.Equal(s.T(), int64(150), foundRoot2.TotalUpload)
-	assert.Equal(s.T(), int64(260), foundRoot2.TotalDownload)
-}
-
 func (s *NodeServiceTestSuite) TestAccumulateTrafficOnly_AccumulatesUpParentChain() {
 	root := &model.Node{Name: "RootTrafficOnly", Host: "192.168.1.80", Port: 443, Rate: 1.0, Show: 1}
 	assert.NoError(s.T(), s.svc.CreateNode(root))
@@ -2898,7 +2738,8 @@ func (s *NodeServiceTestSuite) TestUpdateNode_RejectsCyclicParent() {
 func (s *NodeServiceTestSuite) TestNodeMonthlyResetWorker_ResetsOnMatchingDay() {
 	node := &model.Node{Name: "MonthlyReset", Host: "192.168.1.76", Port: 443, Rate: 1.0, Show: 1, MonthlyResetDay: 15}
 	assert.NoError(s.T(), s.svc.CreateNode(node))
-	assert.NoError(s.T(), s.svc.Heartbeat(node.ID, &model.NodeHeartbeatRequest{Upload: 100, Download: 200}))
+	assert.NoError(s.T(), database.GetDB().Model(&model.Node{}).Where("id = ?", node.ID).Updates(map[string]any{
+		"monthly_upload": 100, "monthly_download": 200, "total_upload": 100, "total_download": 200}).Error)
 
 	found, _ := s.svc.GetNode(node.ID)
 	assert.Equal(s.T(), int64(100), found.MonthlyUpload)
@@ -2917,7 +2758,8 @@ func (s *NodeServiceTestSuite) TestNodeMonthlyResetWorker_ResetsOnMatchingDay() 
 func (s *NodeServiceTestSuite) TestNodeMonthlyResetWorker_LeavesOtherDaysAlone() {
 	node := &model.Node{Name: "MonthlyResetSkip", Host: "192.168.1.77", Port: 443, Rate: 1.0, Show: 1, MonthlyResetDay: 15}
 	assert.NoError(s.T(), s.svc.CreateNode(node))
-	assert.NoError(s.T(), s.svc.Heartbeat(node.ID, &model.NodeHeartbeatRequest{Upload: 100, Download: 200}))
+	assert.NoError(s.T(), database.GetDB().Model(&model.Node{}).Where("id = ?", node.ID).Updates(map[string]any{
+		"monthly_upload": 100, "monthly_download": 200, "total_upload": 100, "total_download": 200}).Error)
 
 	worker := NewNodeMonthlyResetWorker(database.Get())
 	assert.NoError(s.T(), worker.RunOnce(time.Date(2026, 7, 16, 0, 0, 0, 0, time.Local)))
@@ -2941,25 +2783,6 @@ func (s *NodeServiceTestSuite) TestUpdateLastCheckAt() {
 
 	found, _ := s.svc.GetNode(node.ID)
 	assert.NotNil(s.T(), found.LastCheckAt)
-}
-
-func (s *NodeServiceTestSuite) TestGetNodeByAPIKey() {
-	node := &model.Node{
-		Name: "APIKey Test",
-		Host: "192.168.1.62",
-		Port: 443,
-		Rate: 1.0,
-		Show: 1,
-	}
-	assert.NoError(s.T(), s.svc.CreateNode(node))
-	found, err := s.svc.GetNodeByAPIKey(node.APIKey)
-	assert.NoError(s.T(), err)
-	assert.Equal(s.T(), node.Name, found.Name)
-}
-
-func (s *NodeServiceTestSuite) TestGetNodeByAPIKey_NotFound() {
-	_, err := s.svc.GetNodeByAPIKey("invalid-api-key")
-	assert.Error(s.T(), err)
 }
 
 func (s *NodeServiceTestSuite) TestGetAuthKeys() {

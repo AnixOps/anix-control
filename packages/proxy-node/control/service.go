@@ -76,7 +76,6 @@ var proxyNodeRoutes = map[string]struct{}{
 	"proxy.admin.auth_keys.get":           {},
 	"proxy.admin.auth_keys.post":          {},
 	"proxy.admin.auth_keys.id.delete":     {},
-	"proxy.internal.auth_keys.post":       {},
 }
 
 // bridgedRoutes are the package's compatibility routes without a native

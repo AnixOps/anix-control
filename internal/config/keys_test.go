@@ -85,8 +85,8 @@ func TestDeprecatedListIsComplete(t *testing.T) {
 			ignored++
 		}
 	}
-	assert.Equal(t, 55, read, "keys still read")
-	assert.Equal(t, 94, ignored, "keys ignored")
+	assert.Equal(t, 54, read, "keys still read")
+	assert.Equal(t, 95, ignored, "keys ignored")
 	// The P7 switches are ignored whatever order the pull requests land in.
 	for _, path := range []string{"plugins.control_execution_enabled", "plugins.dispatch_enabled", "plugins.topology_execution_enabled", "package_routes.default_mode"} {
 		key, ok := LookupKey(path)

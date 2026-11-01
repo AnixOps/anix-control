@@ -964,15 +964,6 @@
   },
   {
     "method": "POST",
-    "path": "/api/v2/internal/auth-keys",
-    "owner": "proxy-node",
-    "route_id": "proxy.internal.auth_keys.post",
-    "envelope": "raw",
-    "middleware_group": "internal",
-    "transport": "http"
-  },
-  {
-    "method": "POST",
     "path": "/api/v2/login",
     "owner": "identity-platform",
     "route_id": "identity.auth.login",

@@ -11,14 +11,13 @@ import (
 func TestLogSecretStrengthWarnsOncePerWeakSecretAndNeverEchoesIt(t *testing.T) {
 	cfg := &config.Config{}
 	cfg.JWT.Secret = "tooshortsecret"
-	cfg.App.APIToken = strings.Repeat("k", 48)
 	var lines []string
 	logSecretStrength(func(format string, args ...any) { lines = append(lines, fmt.Sprintf(format, args...)) }, cfg)
-	if len(lines) != 2 {
+	if len(lines) != 1 {
 		t.Fatalf("lines %v, want one per weak secret", lines)
 	}
 	for _, line := range lines {
-		if !strings.HasPrefix(line, "WARNING: ") || strings.Contains(line, "tooshortsecret") || strings.Contains(line, strings.Repeat("k", 48)) {
+		if !strings.HasPrefix(line, "WARNING: ") || strings.Contains(line, "tooshortsecret") {
 			t.Errorf("unexpected line: %s", line)
 		}
 	}

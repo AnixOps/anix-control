@@ -69,7 +69,6 @@ func TestProxyNodeHostRelaysRoutesUntilTheyAreSwitchedToNative(t *testing.T) {
 	withoutNodeOps := (&native.Service{}).Handlers()
 	for _, route := range []string{
 		native.DeleteNodeRouteID, native.UpdateRawConfigRouteID, native.GenerateAuthKeyRouteID, native.DeleteAuthKeyRouteID,
-		native.InternalAuthKeyRouteID,
 	} {
 		require.NotContains(t, withoutNodeOps, route, "without KernelNodeOps the route stays legacy")
 	}

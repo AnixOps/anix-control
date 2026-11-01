@@ -564,7 +564,6 @@ type JWTConfig struct {
 type AppConfig struct {
 	Name             string `yaml:"name"`
 	Version          string `yaml:"version"`
-	APIToken         string `yaml:"api_token"`
 	TrafficLogEnable bool   `yaml:"traffic_log_enable"`
 	SubscribePath    string `yaml:"subscribe_path"`
 	// app.edition is gone: every official package, orders, payments and

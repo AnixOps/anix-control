@@ -30,7 +30,7 @@ Dropped:
   alerts.leaf_expiry_days: a built-in value (14 days)
   alerts.phase_stuck_after: a built-in value (72h)
   alerts.renotify_interval: a built-in value (24h)
-  app.api_token: still read until M5 (N9), not written: the legacy shared token of /flow/upload and the internal v2 routes, removed with them; administrators use admin API tokens
+  app.api_token: the legacy shared token of /flow/upload and the internal v2 routes, which are removed; the key does nothing, so remove it (administrators use admin API tokens)
   app.edition: there are no editions; orders, payments and affiliate are built in
   app.name: nothing reads it
   app.subscribe_path: the default (s)

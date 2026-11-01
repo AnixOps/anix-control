@@ -9865,61 +9865,6 @@
                 }
             }
         },
-        "/internal/auth-keys": {
-            "post": {
-                "security": [
-                    {
-                        "ApiTokenAuth": []
-                    }
-                ],
-                "description": "使用API Token认证生成节点自动注册的授权密钥（供Ansible等自动化工具使用）",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "内部API"
-                ],
-                "summary": "内部生成授权密钥",
-                "parameters": [
-                    {
-                        "description": "密钥请求 {name, expire_days, node_name}",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
         "/login": {
             "post": {
                 "description": "用户登录获取 JWT Token",

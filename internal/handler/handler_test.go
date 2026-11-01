@@ -60,9 +60,6 @@ func initTestDB() *gorm.DB {
 			Secret: "test-jwt-secret-for-handler",
 			Expire: 86400,
 		},
-		App: config.AppConfig{
-			APIToken: "test-api-token",
-		},
 	}
 
 	// Reset database state to ensure clean initialization

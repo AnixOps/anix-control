@@ -197,42 +197,6 @@ func (AuthorizedKey) TableName() string {
 	return "v2_authorized_key"
 }
 
-// NodeRegisterRequest 节点注册请求
-type NodeRegisterRequest struct {
-	AuthKey       string `json:"auth_key" binding:"required"` // 授权密钥
-	Name          string `json:"name"`                        // 节点名称
-	Host          string `json:"host"`                        // 节点地址
-	Port          int    `json:"port"`                        // API端口
-	ServerVersion string `json:"server_version"`              // 节点版本
-	ServerOS      string `json:"server_os"`                   // 操作系统
-}
-
-// NodeRegisterResponse 节点注册响应
-type NodeRegisterResponse struct {
-	NodeID  uint   `json:"node_id"`
-	APIKey  string `json:"api_key"` // 返回给节点的API密钥
-	Secret  string `json:"secret"`  // 共享密钥
-	Message string `json:"message"`
-}
-
-// NodeHeartbeatRequest 节点心跳请求
-type NodeHeartbeatRequest struct {
-	CPUUsage    float64 `json:"cpu_usage"`
-	MemoryUsage float64 `json:"memory_usage"`
-	DiskUsage   float64 `json:"disk_usage"`
-	Uptime      int64   `json:"uptime"`
-	OnlineUsers int     `json:"online_users"`
-	Upload      int64   `json:"upload"`   // 本次上传流量增量
-	Download    int64   `json:"download"` // 本次下载流量增量
-}
-
-// NodeRuntimeHealthRequest reports process-level runtime health separately
-// from the regular system heartbeat metrics.
-type NodeRuntimeHealthRequest struct {
-	Healthy bool   `json:"healthy"`
-	Error   string `json:"error"`
-}
-
 // ProtocolTemplate 协议模板 (快速添加)
 type ProtocolTemplate struct {
 	Type        ProtocolType `json:"type"`

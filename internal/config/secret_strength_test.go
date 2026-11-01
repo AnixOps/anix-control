@@ -34,12 +34,11 @@ func TestSecretStrengthWarningsBoundary(t *testing.T) {
 func TestSecretStrengthWarningsNameTheSettingAndNeverTheValue(t *testing.T) {
 	c := &Config{}
 	c.JWT.Secret = "hunter2hunter2"
-	c.App.APIToken = "short-token"
 	warnings := c.SecretStrengthWarnings()
-	if len(warnings) != 2 {
+	if len(warnings) != 1 {
 		t.Fatalf("warnings %v, want one per weak secret", warnings)
 	}
-	for i, setting := range []string{"jwt.secret", "app.api_token"} {
+	for i, setting := range []string{"jwt.secret"} {
 		if !strings.HasPrefix(warnings[i], setting+" is weak") {
 			t.Errorf("warning %d does not start with %q: %s", i, setting, warnings[i])
 		}

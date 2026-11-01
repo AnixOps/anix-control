@@ -64,15 +64,11 @@ func TestOlderReadersAuthenticateEveryNode(t *testing.T) {
 		// Written by the P1 writers.
 		created := &model.Node{Name: "created", Host: "203.0.113.32", Port: 443}
 		require.NoError(t, nodes.CreateNode(created))
-		_, registrationKey, err := nodes.GenerateAuthKey("readers", 0)
-		require.NoError(t, err)
-		registered, err := nodes.RegisterNode(&model.NodeRegisterRequest{AuthKey: registrationKey, Name: "registered", Port: 443}, "192.0.2.30")
-		require.NoError(t, err)
 		forward := &model.ForwardNode{Name: "relay", Type: "relay", Host: "198.51.100.30", Port: 443, APIPort: 9000, APIToken: "fake-forward-token", Enabled: true}
 		require.NoError(t, service.NewForwardNodeService(db).Create(forward))
 
 		columns := legacyColumns(t, db)
-		_, err = nodesecrets.Backfill(ctx, db, nodesecrets.BackfillOptions{})
+		_, err := nodesecrets.Backfill(ctx, db, nodesecrets.BackfillOptions{})
 		require.NoError(t, err)
 		requireVerified(t, db)
 		require.Equal(t, columns, legacyColumns(t, db), "the split never changes a legacy column")
@@ -80,8 +76,6 @@ func TestOlderReadersAuthenticateEveryNode(t *testing.T) {
 		gin.SetMode(gin.TestMode)
 		router := gin.New()
 		ok := func(c *gin.Context) { c.String(http.StatusOK, "%d", c.GetUint("node_id")) }
-		router.GET("/uniproxy", middleware.NodeAuth(), ok)
-		router.GET("/node", middleware.NodeAPIKeyAuth(), ok)
 		router.GET("/package", middleware.NodeAPIKeyHeaderAuth(), ok)
 		request := func(path string, nodeID uint, key string) *httptest.ResponseRecorder {
 			t.Helper()
@@ -93,34 +87,21 @@ func TestOlderReadersAuthenticateEveryNode(t *testing.T) {
 		}
 
 		proxies := []struct {
-			id     uint
-			key    string
-			hashed bool
+			id  uint
+			key string
 		}{
-			{before[0].ID, "fake-legacy-key", true},
-			{before[1].ID, "fake-unhashed-key", false},
-			{created.ID, created.APIKey, true},
-			{registered.NodeID, registered.APIKey, true},
+			{before[0].ID, "fake-legacy-key"},
+			{before[1].ID, "fake-unhashed-key"},
+			{created.ID, created.APIKey},
 		}
 		for _, proxy := range proxies {
-			for _, path := range []string{"/uniproxy", "/node", "/package"} {
-				rec := request(path, proxy.id, proxy.key)
-				require.Equal(t, http.StatusOK, rec.Code, "%s node %d: %s", path, proxy.id, rec.Body.String())
-				require.Equal(t, strconv.FormatUint(uint64(proxy.id), 10), rec.Body.String())
-				require.Equal(t, http.StatusUnauthorized, request(path, proxy.id, "fake-wrong-key").Code)
-			}
-			// The gRPC node service looks keys up by their stored hash.
-			if proxy.hashed {
-				found, err := nodes.GetNodeByAPIKey(proxy.key)
-				require.NoError(t, err)
-				require.Equal(t, proxy.id, found.ID)
-			}
+			rec := request("/package", proxy.id, proxy.key)
+			require.Equal(t, http.StatusOK, rec.Code, "node %d: %s", proxy.id, rec.Body.String())
+			require.Equal(t, strconv.FormatUint(uint64(proxy.id), 10), rec.Body.String())
+			require.Equal(t, http.StatusUnauthorized, request("/package", proxy.id, "fake-wrong-key").Code)
 		}
 
-		// The registration key still registers, and the forward node's
-		// token is where its agent reads it.
-		_, err = nodes.RegisterNode(&model.NodeRegisterRequest{AuthKey: registrationKey, Name: "again", Port: 443}, "192.0.2.31")
-		require.NoError(t, err)
+		// The forward node's token is where its agent reads it.
 		var stored model.ForwardNode
 		require.NoError(t, db.First(&stored, forward.ID).Error)
 		require.Equal(t, "fake-forward-token", stored.APIToken)

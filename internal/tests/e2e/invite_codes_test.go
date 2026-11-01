@@ -32,7 +32,7 @@ func TestAdminInviteCodesAdmitRegistration(t *testing.T) {
 				Env:      "test",
 				Database: config.DatabaseConfig{Driver: "sqlite", Database: ":memory:"},
 				JWT:      config.JWTConfig{Secret: "invite-codes-e2e-secret", Expire: 3600},
-				App:      config.AppConfig{APIToken: "invite-codes-e2e-api-token", SubscribePath: "s"},
+				App:      config.AppConfig{SubscribePath: "s"},
 			}
 			cfg.Auth.Registration.RequireInvite = true
 			config.Set(cfg)

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -48,7 +47,7 @@ func (f *fleet) secretsOf(t *testing.T, db *gorm.DB) []string {
 	var wireGuard model.NodeProtocol
 	require.NoError(t, db.First(&wireGuard, f.wireGuard.ID).Error)
 	values := []string{
-		f.created.APIKey, f.created.Secret, f.registered.APIKey, f.registered.Secret, f.rawNode.APIKey, f.rawNode.Secret,
+		f.created.APIKey, f.created.Secret, f.rawNode.APIKey, f.rawNode.Secret,
 		"fake-plain-key", f.registrationKey, f.rawPrivate, f.realityPrivate, "fake-fleet-forward-token",
 		f.peer.PrivateKey, f.peer.PresharedKey,
 	}
@@ -93,9 +92,9 @@ func TestFinalizeThroughTheKernel(t *testing.T) {
 		// A tombstone presented as a key authenticates nothing.
 		gin.SetMode(gin.TestMode)
 		router := gin.New()
-		router.GET("/node", middleware.NodeAPIKeyAuth(), func(c *gin.Context) { c.Status(http.StatusOK) })
-		for _, id := range []uint{f.plain.ID, f.created.ID, f.registered.NodeID} {
-			req := httptest.NewRequest(http.MethodGet, "/node?node_id="+strconv.FormatUint(uint64(id), 10), nil)
+		router.GET("/package", middleware.NodeAPIKeyHeaderAuth(), func(c *gin.Context) { c.Status(http.StatusOK) })
+		for _, id := range []uint{f.plain.ID, f.created.ID} {
+			req := httptest.NewRequest(http.MethodGet, "/package", nil)
 			req.Header.Set("X-API-Key", nodesecrets.Tombstone(uint64(id)))
 			rec := httptest.NewRecorder()
 			router.ServeHTTP(rec, req)
@@ -123,7 +122,7 @@ func TestFinalizeThroughTheKernel(t *testing.T) {
 		require.NoError(t, db.First(&stored, added.ID).Error)
 		require.Equal(t, nodesecrets.Tombstone(uint64(added.ID)), stored.APIKey)
 		require.Equal(t, nodesecrets.Tombstone(uint64(added.ID)), stored.Secret)
-		found, err := nodes.GetNodeByAPIKey(added.APIKey)
+		found, err := nodesecrets.NodeByAPIKey(db, added.APIKey, true)
 		require.NoError(t, err)
 		require.Equal(t, added.ID, found.ID)
 
@@ -144,13 +143,6 @@ func TestFinalizeThroughTheKernel(t *testing.T) {
 		require.Equal(t, "fake-fleet-forward-token", nodesecrets.ForwardNodeToken(db, forward))
 		requireAll(t, f.readerResults(t, db, 4), true)
 
-		// The default registration key from the environment is found
-		// through the split: created once.
-		t.Setenv("NODE_DEFAULT_AUTH_KEY", "fake-default-auth-key")
-		service.InitDefaultAuthKeyFromEnv()
-		service.InitDefaultAuthKeyFromEnv()
-		require.NoError(t, db.Model(&model.AuthorizedKey{}).Where("name = ?", "Default (from env)").Count(&count).Error)
-		require.EqualValues(t, 1, count)
 		requireVerified(t, db)
 	})
 }
