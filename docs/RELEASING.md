@@ -365,11 +365,6 @@ failed job fails the run, and the failing job names the finding:
   their expiry dates apply here and only here. When a waiver expires, an
   advisory is new or an entry is no longer reported, this job fails the run;
   renew it with the owner's approval or fix the dependency.
-- **relay fuzz**: every fuzz target of `sdk/forward/relay` and
-  `sdk/forward/relay/link` for 60 seconds each. The corpus the engine learns
-  is cached from night to night, and a failing input is uploaded as the
-  `relay-fuzz-failures-*` artifact: copy it to `testdata/fuzz/<Target>/` of
-  its package to reproduce it with a plain `go test`.
 
 The pull-request pipeline keeps its own `govulncheck` and `gosec` jobs; this
 workflow does not replace them. Its required "Frontend Build" check (the audit runs in "Frontend Checks") audits only

@@ -1,5 +1,10 @@
 # AnixOps relay protocol: secure transport between nodes
 
+> **Status (2026-11): removed.** The prototype (`sdk/forward/relay`,
+> `sdk/forward/driver/anixops`, the Agent's `anixops-relay`) was deleted;
+> forwarding runs on the network model (ANX). This document is kept as the
+> design record that `sdk/forward/validate` still cites.
+
 Status: DESIGN APPROVED (H22, owner decision of 2026-10-04; open
 questions P1–P10 decided, section 9.3). Scope set by the owner on
 2026-10-04: this document covers only the secure transport between

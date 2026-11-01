@@ -12,3 +12,10 @@
   from the Agent; routes run on the network model) or download
   `geoip.dat`/`geosite.dat` into the Agent package (only the removed Xray
   and sing-box cores read them).
+- The experimental AnixOps relay prototype in the SDK:
+  `sdk/forward/relay` (with `relay/link`), `sdk/forward/driver/anixops`
+  (with `relayd`/`relayctl`), its contract fixtures
+  `contracts/forward/v1/anixops/`, the network-namespace CI step and the
+  nightly relay fuzz job. Production has no relay routes; the Agent drops
+  the relay in the same release. `docs/architecture/anixops-protocol.md`
+  stays as the design record.

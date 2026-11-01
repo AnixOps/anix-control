@@ -303,7 +303,7 @@ def self_test() -> None:
     check(["internal/service/order_service.go"], {"code", "db"})
     check(["internal/pluginhost/remote.go"], {"code", "modules"})
     check(["internal/service/forward_panel_flow.go"], {"code", "db", "forward"})
-    check(["sdk/forward/driver/anixops/driver.go"], {"code", "modules", "forward"})
+    check(["sdk/forward/driver/driver.go"], {"code", "modules", "forward"})
     check(["sdk/api/forward/v1/forward.pb.go"], {"code", "modules", "forward"})
     check(["contracts/forward/v1/plan-negative.json"], {"code", "forward"})
     check(["internal/kernelforward/plan.go"], {"code", "db", "forward"})
