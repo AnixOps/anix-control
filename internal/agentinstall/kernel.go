@@ -85,6 +85,26 @@ func LatestKernelVersion(artifactDir string) string {
 	return latest
 }
 
+// KernelReleaseHeld is the newest anx-node release in artifactDir
+// (LatestKernelVersion) when its SHA256SUMS and SHA256SUMS.sig are there,
+// so an installer can fetch and verify it; "" otherwise.
+func KernelReleaseHeld(artifactDir string) string {
+	version := LatestKernelVersion(artifactDir)
+	if version == "" {
+		return ""
+	}
+	for _, name := range []string{SumsAssetName, SumsSignatureAssetName} {
+		path, err := KernelPath(artifactDir, version, name)
+		if err != nil {
+			return ""
+		}
+		if info, err := os.Stat(path); err != nil || !info.Mode().IsRegular() {
+			return ""
+		}
+	}
+	return version
+}
+
 // UpgradeKernels checks the newest anx-node release in artifactDir
 // (LatestKernelVersion) for an upgrade campaign and returns what
 // agent.upgrade carries for every architecture the release has a package

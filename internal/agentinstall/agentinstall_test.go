@@ -202,7 +202,20 @@ func TestMetadataAndEnv(t *testing.T) {
 		"sha256 anix-agent-linux-64.zip "+digestA+"\n"+
 		"sha256 anix-agent-linux-arm64-v8a.zip "+strings.ToLower(digestB)+"\n", env)
 
+	// A kernel release Control can serve is offered to the installer.
+	writeKernelRelease(t, dir, "0.1.0-alpha.9")
+	metadata = settings.Metadata()
+	assert.Equal(t, "0.1.0-alpha.9", metadata.KernelVersion)
+	env, err = metadata.Env()
+	require.NoError(t, err)
+	assert.Contains(t, env, "\nkernel anx-node 0.1.0-alpha.9\n")
+	// Not over plain http: nodes download it from Control over https.
+	plain := settings
+	plain.ControlURL = "http://ctl.example.com"
+	assert.Empty(t, plain.Metadata().KernelVersion)
+
 	for name, broken := range map[string]Metadata{
+		"kernel":  {AgentVersion: "v4.2.0", Sources: map[string]string{}, KernelVersion: "latest"},
 		"version": {AgentVersion: "latest", Sources: map[string]string{}},
 		"source":  {AgentVersion: "v4.2.0", Sources: map[string]string{MirrorCN: "ftp://x"}},
 		"unsafe":  {AgentVersion: "v4.2.0", GRPCTarget: "a b:1", Sources: map[string]string{}},

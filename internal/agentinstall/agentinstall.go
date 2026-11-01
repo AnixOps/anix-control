@@ -28,6 +28,8 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 )
 
 // Script is the install script, byte for byte the release asset.
@@ -265,6 +267,11 @@ type Metadata struct {
 	Sources map[string]string
 	// SHA256 maps an asset to its digest, when Control holds the release.
 	SHA256 map[string]string
+	// KernelVersion is the anx-node release Control serves at
+	// /install/kernel/anx-node/<version>/ (KernelReleaseHeld), "" for none.
+	// The installer installs it on a host without a kernel: without one
+	// the Agent has no core for the node's protocols.
+	KernelVersion string
 }
 
 // Metadata resolves the release metadata: the control source and digests
@@ -280,6 +287,9 @@ func (s Settings) Metadata() Metadata {
 	if digests := s.localDigests(); len(digests) == len(Assets) {
 		metadata.Sources[MirrorControl] = s.ControlURL + "/install/agent"
 		metadata.SHA256 = digests
+	}
+	if strings.HasPrefix(s.ControlURL, "https://") {
+		metadata.KernelVersion = KernelReleaseHeld(s.ArtifactDir)
 	}
 	return metadata
 }
@@ -376,6 +386,14 @@ func (m Metadata) Env() (string, error) {
 			return "", fmt.Errorf("source %q of mirror %s is not an http(s) URL", source, mirror)
 		}
 		if err := line("source", mirror, source); err != nil {
+			return "", err
+		}
+	}
+	if m.KernelVersion != "" {
+		if !agentcontrol.KernelVersionPattern.MatchString(m.KernelVersion) {
+			return "", fmt.Errorf("kernel version %q is not an anx-node release", m.KernelVersion)
+		}
+		if err := line("kernel", agentcontrol.KernelAnxNode, m.KernelVersion); err != nil {
 			return "", err
 		}
 	}

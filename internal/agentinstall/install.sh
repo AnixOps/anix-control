@@ -51,6 +51,11 @@ set -Eeuo pipefail
 # The official AnixOps release key (plugins.official_public_key): base64 of
 # the raw Ed25519 public key. It verifies Agent release signatures.
 readonly OFFICIAL_PUBLIC_KEY="jW26nr2tbthASoeq6RmIpx8Ah+uhPNIv9V1ewRVb1VE="
+# The anx release key: SHA256SUMS.sig of an anx-node release is
+# `ssh-keygen -Y sign` by it in namespace anx-release. The Agent checks
+# kernels it is pushed with the same key (anix-agent upgrade.KernelReleaseKey).
+readonly KERNEL_RELEASE_KEY="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIH9RCOAuDwKyWAXIp0szDWKN5t98NKsCK4isHLR05yLT"
+readonly KERNEL_NAMESPACE="anx-release"
 
 # ROOT prefixes every path the script writes; tests set it to a temporary
 # directory. Paths written into configuration and units never carry it.
@@ -144,6 +149,9 @@ META_GRPC=""
 declare -A META_ASSET=()
 declare -A META_SOURCE=()
 declare -A META_SHA256=()
+# META_KERNEL is the anx-node release Control holds (agent.env "kernel").
+META_KERNEL=""
+KERNEL_STATE=""
 
 ARCH=""
 ASSET=""
@@ -727,6 +735,7 @@ read_metadata() {
       asset) [[ "${a}" =~ ^(amd64|arm64)$ && "${b}" =~ ^anix-agent-linux-[a-z0-9-]+\.zip$ ]] && META_ASSET["${a}"]="${b}" ;;
       source) [[ "${a}" =~ ^(control|cn|github)$ && "${b}" =~ ^https://[^[:space:]\'\"]+$ ]] && META_SOURCE["${a}"]="${b%/}" ;;
       sha256) [[ "${a}" =~ ^anix-agent-linux-[a-z0-9-]+\.zip$ && "${b}" =~ ^[0-9a-f]{64}$ ]] && META_SHA256["${a}"]="${b}" ;;
+      kernel) [[ "${a}" == "anx-node" && "${b}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)\.[0-9]+)?$ ]] && META_KERNEL="${b}" ;;
       *) ;;
     esac
   done <"${file}"
@@ -970,6 +979,126 @@ install_files() {
   migrate_root_install
   install -d -m 0700 "$(path "${PKI_DIR}")" "$(path "${STREAM_DIR}")" "$(path "${UPGRADE_DIR}")"
   chown "${AGENT_USER}:${AGENT_USER}" "$(path "${STATE_DIR}")" "$(path "${PKI_DIR}")" "$(path "${STREAM_DIR}")" "$(path "${UPGRADE_DIR}")"
+}
+
+# kernel_target maps ARCH to anx-node's release target.
+kernel_target() {
+  case "${ARCH}" in
+    amd64) printf 'x86_64' ;;
+    arm64) printf 'aarch64' ;;
+    *) return 1 ;;
+  esac
+}
+
+# kernel_sum prints the SHA-256 SHA256SUMS ($1) lists for name $2.
+kernel_sum() {
+  awk -v name="$2" '$2 == name || $2 == "*" name {print tolower($1); exit}' "$1"
+}
+
+# install_kernel installs anx-node (and anx-server, when the package has
+# it), the kernel the Agent runs as its anixcore core, from Control's copy
+# of the anx release. Without it the Agent has no core for the node's
+# protocols and every configuration fails ("the node type is not
+# support"). A host that already has a kernel keeps it: Agent upgrade
+# campaigns replace it. The trust is the release's SSH signature over
+# SHA256SUMS (KERNEL_RELEASE_KEY), as for a pushed kernel; nothing that
+# does not verify is installed. Any failure leaves the Agent installed and
+# says how to get the kernel later.
+install_kernel() {
+  local lib record target asset base dir sums sig package digest dist members member binary server_ok=false version_line
+  lib="$(path "${LIB_DIR}")"
+  record="${lib}/anx-node.json"
+  if [[ -f "${record}" && -f "${lib}/anx-node" ]]; then
+    KERNEL_STATE="kept the installed anx-node ($(sed -nE 's/.*"version"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p' "${record}" | head -n 1))"
+    return 0
+  fi
+  if [[ -n "${OFFLINE}" ]]; then
+    KERNEL_STATE="not installed (offline bundle)"
+    note "anx-node is not installed from an offline bundle: push it with an Agent upgrade campaign once the node is connected"
+    return 0
+  fi
+  if [[ -z "${META_KERNEL}" ]]; then
+    KERNEL_STATE="not installed (Control holds no anx-node release)"
+    note "Control offers no anx-node release (agent_install.artifact_dir/anx-node): the node cannot serve proxy protocols until an Agent upgrade campaign installs it"
+    return 0
+  fi
+  if ! target="$(kernel_target)"; then
+    KERNEL_STATE="not installed (no anx-node build for ${ARCH})"
+    note "anx-node has no build for ${ARCH}"
+    return 0
+  fi
+  if ! have ssh-keygen; then
+    KERNEL_STATE="not installed (ssh-keygen missing)"
+    note "ssh-keygen (openssh-client) is needed to verify anx-node: install it and re-run the installer, or push anx-node with an Agent upgrade campaign"
+    return 0
+  fi
+  asset="anx-node-${META_KERNEL}-${target}-linux-musl.tar.gz"
+  base="${CONTROL_URL}/install/kernel/anx-node/${META_KERNEL}"
+  dir="${TMP_DIR}/kernel"
+  sums="${dir}/SHA256SUMS"
+  sig="${dir}/SHA256SUMS.sig"
+  package="${dir}/${asset}"
+  mkdir -p "${dir}/unpacked"
+  info "Downloading anx-node ${META_KERNEL} (${target}) from ${CONTROL_URL}"
+  if ! fetch "${base}/SHA256SUMS" "${sums}" || ! fetch "${base}/SHA256SUMS.sig" "${sig}" || ! fetch "${base}/${asset}" "${package}"; then
+    KERNEL_STATE="not installed (download failed)"
+    note "cannot download anx-node ${META_KERNEL} from ${base}: re-run the installer or push it with an Agent upgrade campaign"
+    return 0
+  fi
+  printf '%s %s\n' "${KERNEL_NAMESPACE}" "${KERNEL_RELEASE_KEY}" >"${dir}/allowed_signers"
+  if ! ssh-keygen -Y verify -f "${dir}/allowed_signers" -I "${KERNEL_NAMESPACE}" -n "${KERNEL_NAMESPACE}" -s "${sig}" <"${sums}" >/dev/null 2>&1; then
+    KERNEL_STATE="not installed (signature check failed)"
+    note "the signature of anx-node ${META_KERNEL}'s SHA256SUMS does not verify (or this ssh-keygen cannot check it, OpenSSH 8.1+ is needed): anx-node was not installed"
+    return 0
+  fi
+  digest="$(sha256sum "${package}" | awk '{print $1}')"
+  if [[ "$(kernel_sum "${sums}" "${asset}")" != "${digest}" ]]; then
+    KERNEL_STATE="not installed (checksum mismatch)"
+    note "the SHA-256 of ${asset} is not the one SHA256SUMS lists: anx-node was not installed"
+    return 0
+  fi
+  dist="${asset%.tar.gz}"
+  members="$(tar -tzf "${package}" 2>/dev/null || true)"
+  for member in anx-node anx-server; do
+    if ! grep -qxF "${dist}/${member}" <<<"${members}"; then
+      [[ "${member}" == anx-server ]] && continue
+      KERNEL_STATE="not installed (the package holds no anx-node)"
+      note "${asset} holds no ${dist}/anx-node: anx-node was not installed"
+      return 0
+    fi
+    tar -xzf "${package}" -C "${dir}/unpacked" --no-same-owner --no-same-permissions "${dist}/${member}" || {
+      KERNEL_STATE="not installed (cannot unpack)"
+      note "cannot unpack ${dist}/${member} from ${asset}"
+      return 0
+    }
+    binary="${dir}/unpacked/${dist}/${member}"
+    if [[ ! -f "${binary}" || -L "${binary}" || "$(kernel_sum "${sums}" "${dist}/${member}")" != "$(sha256sum "${binary}" | awk '{print $1}')" ]]; then
+      KERNEL_STATE="not installed (checksum mismatch)"
+      note "SHA256SUMS does not list ${dist}/${member} with its SHA-256: anx-node was not installed"
+      return 0
+    fi
+    [[ "${member}" == anx-server ]] && server_ok=true
+  done
+  chmod 0755 "${dir}/unpacked/${dist}/anx-node"
+  version_line="$("${dir}/unpacked/${dist}/anx-node" version 2>/dev/null | head -n 1 || true)"
+  if [[ "${version_line%% *}" != "anx-node" ]]; then
+    KERNEL_STATE="not installed (anx-node does not run here)"
+    note "anx-node ${META_KERNEL} does not run on this host (anx-node version: ${version_line:-no answer}): it was not installed"
+    return 0
+  fi
+  install -d -m 0755 "${lib}"
+  install -m 0755 "${dir}/unpacked/${dist}/anx-node" "${lib}/anx-node.new"
+  mv -f "${lib}/anx-node.new" "${lib}/anx-node"
+  if [[ "${server_ok}" == true ]]; then
+    install -m 0755 "${dir}/unpacked/${dist}/anx-server" "${lib}/anx-server.new"
+    mv -f "${lib}/anx-server.new" "${lib}/anx-server"
+  fi
+  printf '{\n  "version": "%s",\n  "sha256": "%s",\n  "installed_at_unix_ms": %s,\n  "server": %s\n}\n' \
+    "${META_KERNEL}" "$(sha256sum "${lib}/anx-node" | awk '{print $1}')" "$(($(date +%s) * 1000))" "${server_ok}" >"${record}.new"
+  chmod 0644 "${record}.new"
+  mv -f "${record}.new" "${record}"
+  KERNEL_STATE="installed anx-node ${META_KERNEL}"
+  info "Installed anx-node ${META_KERNEL} (signature and SHA-256 verified)"
 }
 
 # render_config writes NODE's configuration. A regular node that relays
@@ -1463,6 +1592,7 @@ print_summary() {
   printf '  join:        %s\n' "${JOIN_STATE}"
   printf '  config:      %s\n' "${CONFIG_STATE}"
   printf '  forwarding:  %s\n' "${FORWARDING_STATE}"
+  printf '  kernel:      %s\n' "${KERNEL_STATE:-not checked}"
   if [[ -n "${MIGRATION_STATE}" ]]; then
     printf '  migration:   %s\n' "${MIGRATION_STATE}"
   fi
@@ -1682,6 +1812,7 @@ main() {
   ensure_users
   stop_running_agent
   install_files
+  install_kernel
   cleanup_legacy
   install_units
   join_control
