@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"strings"
 	"time"
 
@@ -55,14 +56,16 @@ func telegramBindKey(botToken string) []byte {
 
 // telegramBindCode is the bind code of userID that expires at expires.
 func telegramBindCode(botToken string, userID uint, expires time.Time) string {
-	payload := make([]byte, 8)
-	binary.BigEndian.PutUint32(payload[0:4], uint32(userID))
-	binary.BigEndian.PutUint32(payload[4:8], uint32(expires.Unix()))
+	payload := binary.AppendUvarint(nil, uint64(userID))
+	payload = binary.AppendVarint(payload, expires.Unix())
 	mac := hmac.New(sha256.New, telegramBindKey(botToken))
 	mac.Write(payload)
-	signed := append(payload, mac.Sum(nil)[:16]...)
+	signed := append(payload, mac.Sum(nil)[:telegramBindMACSize]...)
 	return telegramBindCodePrefix + base64.RawURLEncoding.EncodeToString(signed)
 }
+
+// telegramBindMACSize is the length of a bind code's truncated HMAC.
+const telegramBindMACSize = 16
 
 // verifyTelegramBindCode is the member ID of a valid, unexpired code.
 func verifyTelegramBindCode(botToken, code string, now time.Time) (uint, bool) {
@@ -70,20 +73,24 @@ func verifyTelegramBindCode(botToken, code string, now time.Time) (uint, bool) {
 		return 0, false
 	}
 	raw, err := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(code, telegramBindCodePrefix))
-	if err != nil || len(raw) != 24 {
+	if err != nil || len(raw) <= telegramBindMACSize {
 		return 0, false
 	}
+	payload, sum := raw[:len(raw)-telegramBindMACSize], raw[len(raw)-telegramBindMACSize:]
 	mac := hmac.New(sha256.New, telegramBindKey(botToken))
-	mac.Write(raw[:8])
-	if !hmac.Equal(mac.Sum(nil)[:16], raw[8:]) {
+	mac.Write(payload)
+	if !hmac.Equal(mac.Sum(nil)[:telegramBindMACSize], sum) {
 		return 0, false
 	}
-	userID := uint(binary.BigEndian.Uint32(raw[0:4]))
-	expires := time.Unix(int64(binary.BigEndian.Uint32(raw[4:8])), 0)
-	if userID == 0 || !now.Before(expires) {
+	id, n := binary.Uvarint(payload)
+	if n <= 0 || id == 0 || id > math.MaxUint32 {
 		return 0, false
 	}
-	return userID, true
+	unix, m := binary.Varint(payload[n:])
+	if m <= 0 || n+m != len(payload) || !now.Before(time.Unix(unix, 0)) {
+		return 0, false
+	}
+	return uint(id), true
 }
 
 // TelegramBindLink is what a member opens to bind their Telegram account.
