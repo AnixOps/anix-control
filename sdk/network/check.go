@@ -139,7 +139,8 @@ func RoutingRange(caps *networkv1.DeviceCapabilities) (first, last uint32) {
 //     are present exactly for kind anx_line, with link_id equal to the
 //     transport id, a 64-hex link key, and for the dialing end the server
 //     key and at least one carrier address (a reverse link has none: its
-//     dialing end has reverse_listen, its accepting end reverse_dial);
+//     dialing end has reverse_listen, its accepting end reverse_dial and,
+//     on l2, the dialing end's server key);
 //   - a path starts at a user ingress and goes to an internet egress or a
 //     dialing transport; forwarding leaves an accepting transport the same
 //     way, each transport at most once.
@@ -557,8 +558,10 @@ func checkAnxLine(transport *networkv1.Transport, anx *networkv1.AnxLineSettings
 			return fmt.Errorf("anx_line server_public is required on the dialing end")
 		}
 	case networkv1.TransportRole_TRANSPORT_ROLE_ACCEPT:
-		// The accepting end gets the addresses it listens on.
-		if anx.GetServerPublic() != "" {
+		// The accepting end gets the addresses it listens on. A reversed
+		// l2 link's accepting end dials back under the A2 jacket and gets
+		// the dialing end's key, the jacket server it authenticates to.
+		if anx.GetServerPublic() != "" && !(anx.GetReverse() && anx.GetEgress() == "l2") {
 			return fmt.Errorf("anx_line server_public is for the dialing end")
 		}
 	default:
@@ -843,11 +846,20 @@ func knownFamily(f networkv1.Family) bool {
 
 // checkAnxLineReverse checks a reversed link: the accepting end dials the
 // dialing end's reverse listener, so neither end has carrier addresses;
-// the dialing end has reverse_listen, the accepting end reverse_dial. Only
-// l1 runs reversed.
+// the dialing end has reverse_listen, the accepting end reverse_dial. l2
+// runs reversed on c1 only (anx ANX-LINE-REVERSE §6.4): the accepting end
+// dials back as the A2 jacket's client, so it also needs the dialing end's
+// server_public, and both ends the jacket's server_name.
 func checkAnxLineReverse(transport *networkv1.Transport, anx *networkv1.AnxLineSettings) error {
 	if anx.GetEgress() == "l2" {
-		return fmt.Errorf("anx_line reverse runs on l1 only")
+		for _, carrier := range anx.GetCarrierOrder() {
+			if carrier != "c1" && carrier != "tcp" {
+				return fmt.Errorf("anx_line l2 reverse runs on c1 only")
+			}
+		}
+		if transport.GetRole() == networkv1.TransportRole_TRANSPORT_ROLE_ACCEPT && anx.GetServerPublic() == "" {
+			return fmt.Errorf("anx_line l2 reverse: the accepting end needs the dialing end's server_public")
+		}
 	}
 	if anx.GetQuicAddr() != "" || anx.GetFaketcpAddr() != "" || anx.GetTcpAddr() != "" {
 		return fmt.Errorf("anx_line reverse takes no carrier address")
