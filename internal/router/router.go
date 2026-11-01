@@ -55,15 +55,10 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		middleware.WithExemptPaths(exemptPaths),
 		middleware.WithTTL(5*time.Minute),
 	)
-	agentPackageLimiter := middleware.NewRateLimiter(0.5, 8,
-		middleware.WithTTL(5*time.Minute),
-		middleware.WithTestModeBypass(false),
-	)
 	// 启动定期清理过期桶
 	adminLimiter.StartCleanup(1 * time.Minute)
 	userLimiter.StartCleanup(1 * time.Minute)
 	publicLimiter.StartCleanup(1 * time.Minute)
-	agentPackageLimiter.StartCleanup(1 * time.Minute)
 
 	// Admin API tokens ("Authorization: Bearer anixadm_...", docs/reference/
 	// admin-api-tokens.md) authenticate the administrator APIs in front of
@@ -420,19 +415,6 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			agentAdmin.POST("/execute", registeredPackageRoute(v2PackageGateway.Serve, "protocol-runtime", "protocol.admin.agent.execute.post", agentHandler.ExecuteCommand))
 			agentAdmin.GET("/monitor", registeredPackageRoute(v2PackageGateway.Serve, "protocol-runtime", "protocol.admin.agent.monitor.get", agentHandler.GetMonitor))
 		}
-	}
-
-	// Node-facing v3 package downloads are deliberately outside the admin v3
-	// group. The URL is same-origin, while NodeAPIKeyHeaderAuth supplies the only
-	// trusted node identity used for assignment authorization.
-	agentPackages := r.Group("/api/v3/agent/plugin-releases")
-	agentPackages.Use(middleware.NodeAPIKeyHeaderAuth())
-	agentPackages.Use(agentPackageLimiter.MiddlewareForContextKey("node_id"))
-	agentPackages.Use(middleware.NodeSecureLogger())
-	{
-		kernel := handler.NewKernelHandler()
-		agentPackages.GET("/:plugin_id/:version/artifact", kernel.ServeAgentPluginArtifact)
-		agentPackages.GET("/:plugin_id/:version/manifest", kernel.ServeAgentPluginManifest)
 	}
 
 	// API v3 is the control-kernel surface. Legacy business APIs remain under

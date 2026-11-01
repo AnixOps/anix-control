@@ -177,7 +177,7 @@ func TestInstallTokenIssuesSingleUseNodeBoundToken(t *testing.T) {
 		csr, err := x509.CreateCertificateRequest(rand.Reader, &x509.CertificateRequest{Subject: pkix.Name{CommonName: nodeName}}, key)
 		require.NoError(t, err)
 		_, err = env.pki.Enroll(t.Context(), agentpki.EnrollRequest{
-			Bootstrap: agentpki.Bootstrap{Method: model.AgentEnrollmentMethodCredential, Secret: data.Credential},
+			Bootstrap: agentpki.Bootstrap{Secret: data.Credential},
 			CSRDER:    csr, AgentVersion: "v4.2.0", InstanceID: "test",
 		})
 		return err

@@ -12,52 +12,8 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/logging"
 
 	"github.com/AnixOps/anix-control/v5/internal/config"
-	"github.com/AnixOps/anix-control/v5/internal/database"
-	"github.com/AnixOps/anix-control/v5/internal/model"
-	"github.com/AnixOps/anix-control/v5/internal/nodesecrets"
 	"github.com/gin-gonic/gin"
 )
-
-// NodeAPIKeyHeaderAuth authenticates a node by its X-API-Key header, for the
-// plugin release downloads of Agents that did not negotiate artifacts.v1.
-// Keys in URLs leak through logs, browser history and proxy caches, so the
-// header is the only place it reads.
-func NodeAPIKeyHeaderAuth() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		apiKey := c.GetHeader("X-API-Key")
-		if apiKey == "" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"message": "缺少 API Key",
-			})
-			return
-		}
-
-		// The node is looked up by its key's hash, or, for an old row without
-		// a hash, by the key itself, through the node credential split.
-		found, err := nodesecrets.NodeByAPIKey(database.GetDB(), apiKey, true)
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"message": "API Key 无效",
-			})
-			return
-		}
-		node := *found
-
-		// 检查节点状态
-		if node.Status == model.NodeStatusDisabled {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-				"message": "节点已被禁用",
-			})
-			return
-		}
-
-		// 将节点信息存入上下文
-		c.Set("node_id", node.ID)
-		c.Set("node", &node)
-
-		c.Next()
-	}
-}
 
 // JWTAuth JWT 认证中间件
 func JWTAuth() gin.HandlerFunc {

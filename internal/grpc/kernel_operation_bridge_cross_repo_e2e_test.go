@@ -2,11 +2,7 @@ package grpc
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
-	"fmt"
-	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	agentv1pb "github.com/AnixOps/anix-control/sdk/api/agent/v1"
 	"github.com/AnixOps/anix-control/v5/internal/cache"
 	"github.com/AnixOps/anix-control/v5/internal/config"
 	"github.com/AnixOps/anix-control/v5/internal/database"
@@ -24,7 +19,6 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/service"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
 )
 
 // TestKernelOperationBridgeCrossRepositoryAgentProcess is an opt-in release
@@ -56,17 +50,9 @@ func TestKernelOperationBridgeCrossRepositoryAgentProcess(t *testing.T) {
 	require.NoError(t, service.MigrateKernelModelsForTest(db))
 	t.Cleanup(func() { requireDatabaseClosed(t) })
 
-	const apiKey = "cross-repository-agent-key"
-	nodeID := uint32(0)
-	hash := sha256.Sum256([]byte(apiKey))
-	node := model.Node{
-		Name:       "cross-repository-agent",
-		Host:       "127.0.0.1",
-		APIKeyHash: hex.EncodeToString(hash[:]),
-		Status:     model.NodeStatusOnline,
-	}
+	node := model.Node{Name: "cross-repository-agent", Host: "127.0.0.1", Status: model.NodeStatusOnline}
 	require.NoError(t, db.Create(&node).Error)
-	nodeID = uint32(node.ID)
+	nodeID := uint32(node.ID)
 
 	pluginID := "machine-telemetry"
 	artifactDigest := strings.Repeat("a", 64)
@@ -82,23 +68,17 @@ func TestKernelOperationBridgeCrossRepositoryAgentProcess(t *testing.T) {
 	}
 	require.NoError(t, db.Create(&release).Error)
 
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	require.NoError(t, err)
 	manager := NewAgentControlManager()
-	grpcServer := grpc.NewServer()
-	agentv1pb.RegisterAgentControlServiceServer(grpcServer, newTestAgentControlServer(manager))
-	serverErr := serveGRPCServerForTest(t, grpcServer, listener)
-	t.Cleanup(func() { stopGRPCServerForTest(t, grpcServer, serverErr) })
+	listener := StartCrossRepositoryAgentListener(t, db, manager)
 
 	fixtureBinary := buildCrossRepositoryAgentFixture(t, agentRoot)
 	fixtureDir := t.TempDir()
 	readyFile := filepath.Join(fixtureDir, "ready.json")
 	resultFile := filepath.Join(fixtureDir, "result.json")
 	var fixtureOutput synchronizedCrossRepoBuffer
-	fixture := exec.Command(fixtureBinary,
-		"--target", listener.Addr().String(), "--node-id", fmt.Sprint(nodeID), "--api-key", apiKey,
+	fixture := exec.Command(fixtureBinary, append(listener.FixtureFlags(t, node.ID),
 		"--ready-file", readyFile, "--result-file", resultFile, "--timeout", "45s",
-	)
+	)...)
 	fixture.Stdout = &fixtureOutput
 	fixture.Stderr = &fixtureOutput
 	require.NoError(t, fixture.Start())

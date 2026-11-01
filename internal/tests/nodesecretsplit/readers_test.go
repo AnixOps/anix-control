@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/AnixOps/anix-control/v5/internal/middleware"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/nodesecrets"
 	"github.com/AnixOps/anix-control/v5/internal/service"
@@ -75,7 +74,7 @@ func TestOlderReadersAuthenticateEveryNode(t *testing.T) {
 		gin.SetMode(gin.TestMode)
 		router := gin.New()
 		ok := func(c *gin.Context) { c.String(http.StatusOK, "%d", c.GetUint("node_id")) }
-		router.GET("/package", middleware.NodeAPIKeyHeaderAuth(), ok)
+		router.GET("/package", nodeKeyAuth(), ok)
 		request := func(path string, nodeID uint, key string) *httptest.ResponseRecorder {
 			t.Helper()
 			req := httptest.NewRequest(http.MethodGet, path+"?node_id="+strconv.FormatUint(uint64(nodeID), 10), nil)

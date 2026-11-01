@@ -32,7 +32,7 @@ func (f *fixture) rotate(t *testing.T, node agentcontrol.AgentNode, mutate func(
 
 func (f *fixture) enrollWith(t *testing.T, credential string) (agentpki.Issued, error) {
 	t.Helper()
-	return f.enroll(t, agentpki.Bootstrap{Method: model.AgentEnrollmentMethodCredential, Secret: credential})
+	return f.enroll(t, agentpki.Bootstrap{Secret: credential})
 }
 
 // TestRotateCredentialsRevokesAndReissues: the node's Agent certificate,
@@ -42,7 +42,7 @@ func (f *fixture) enrollWith(t *testing.T, credential string) (agentpki.Issued, 
 func TestRotateCredentialsRevokesAndReissues(t *testing.T) {
 	forEachDatabase(t, func(t *testing.T, f *fixture) {
 		proxy, forward := f.proxyNode(), f.forwardNode()
-		issued, err := f.enroll(t, agentpki.Bootstrap{Method: model.AgentEnrollmentMethodNodeAPIKey, Node: proxy, Secret: f.proxyKey})
+		issued, err := f.enroll(t, agentpki.Bootstrap{Node: proxy, Secret: f.token(t, proxy, time.Hour)})
 		require.NoError(t, err)
 		peer := leafOf(t, issued)
 		f.negotiate(t, proxy, true)
@@ -50,7 +50,7 @@ func TestRotateCredentialsRevokesAndReissues(t *testing.T) {
 		link, err := f.pki.IssueLinkCertificate(t.Context(), peer, csr, "198.51.100.10")
 		require.NoError(t, err)
 		unused := f.token(t, proxy, time.Hour)
-		forwardIssued, err := f.enroll(t, agentpki.Bootstrap{Method: model.AgentEnrollmentMethodForwardToken, Node: forward, Secret: f.forwardToken})
+		forwardIssued, err := f.enroll(t, agentpki.Bootstrap{Node: forward, Secret: f.token(t, forward, time.Hour)})
 		require.NoError(t, err)
 
 		rotation, err := f.rotate(t, proxy, nil)
@@ -129,7 +129,7 @@ func TestRotateCredentialsIsRepeatable(t *testing.T) {
 // TestRotateCredentialsRefusesMissingAndDisabledNodes changes nothing.
 func TestRotateCredentialsRefusesMissingAndDisabledNodes(t *testing.T) {
 	forEachDatabase(t, func(t *testing.T, f *fixture) {
-		issued, err := f.enroll(t, agentpki.Bootstrap{Method: model.AgentEnrollmentMethodNodeAPIKey, Node: f.proxyNode(), Secret: f.proxyKey})
+		issued, err := f.enroll(t, agentpki.Bootstrap{Node: f.proxyNode(), Secret: f.token(t, f.proxyNode(), time.Hour)})
 		require.NoError(t, err)
 
 		_, err = f.rotate(t, agentcontrol.AgentNode{Kind: agentcontrol.NodeKindProxy, ID: uint32(f.proxy.ID) + 100}, nil)
@@ -164,7 +164,7 @@ func TestRotateCredentialsRefusesMissingAndDisabledNodes(t *testing.T) {
 func TestRotateCredentialsForwardNode(t *testing.T) {
 	forEachDatabase(t, func(t *testing.T, f *fixture) {
 		node := f.forwardNode()
-		issued, err := f.enroll(t, agentpki.Bootstrap{Method: model.AgentEnrollmentMethodForwardToken, Node: node, Secret: f.forwardToken})
+		issued, err := f.enroll(t, agentpki.Bootstrap{Node: node, Secret: f.token(t, node, time.Hour)})
 		require.NoError(t, err)
 		rotation, err := f.rotate(t, node, nil)
 		require.NoError(t, err)
@@ -175,7 +175,7 @@ func TestRotateCredentialsForwardNode(t *testing.T) {
 		require.NoError(t, err)
 		requireNodeCertificate(t, f, fresh, node)
 		// The forward token still enrolls: it was not rotated.
-		_, err = f.enroll(t, agentpki.Bootstrap{Method: model.AgentEnrollmentMethodForwardToken, Node: node, Secret: f.forwardToken})
+		_, err = f.enroll(t, agentpki.Bootstrap{Node: node, Secret: f.token(t, node, time.Hour)})
 		require.NoError(t, err)
 		// The proxy node of the same id is untouched.
 		assert.Zero(t, countRevokedEnrollments(t, f, f.proxyNode()))
@@ -190,10 +190,9 @@ func countRevokedEnrollments(t *testing.T, f *fixture, node agentcontrol.AgentNo
 }
 
 // TestRotateCredentialsReplacesTheNodeKey: with ReplaceNodeKey the proxy
-// node's old API key stops authenticating (here and as an enrollment
-// bootstrap), the new one is stored and hashed, in the legacy columns and
-// through the credential split, and a failing replacement rolls the whole
-// rotation back.
+// node's old API key stops authenticating, the new one is stored and
+// hashed, in the legacy columns and through the credential split, and a
+// failing replacement rolls the whole rotation back.
 func TestRotateCredentialsReplacesTheNodeKey(t *testing.T) {
 	for _, phase := range []string{"legacy", nodesecrets.PhaseDualWrite, nodesecrets.PhaseDualRead} {
 		t.Run("phase "+phase, func(t *testing.T) {
@@ -216,7 +215,7 @@ func TestRotateCredentialsReplacesTheNodeKey(t *testing.T) {
 				}
 				_, err := nodesecrets.NodeByAPIKey(f.db, oldKey, true)
 				require.NoError(t, err, "the old key works before the rotation")
-				issued, err := f.enroll(t, agentpki.Bootstrap{Method: model.AgentEnrollmentMethodNodeAPIKey, Node: f.proxyNode(), Secret: oldKey})
+				issued, err := f.enroll(t, agentpki.Bootstrap{Node: f.proxyNode(), Secret: f.token(t, f.proxyNode(), time.Hour)})
 				require.NoError(t, err)
 
 				// A failing replacement leaves everything as it was.
@@ -242,8 +241,6 @@ func TestRotateCredentialsReplacesTheNodeKey(t *testing.T) {
 
 				_, err = nodesecrets.NodeByAPIKey(f.db, oldKey, true)
 				require.Error(t, err, "the old key no longer authenticates")
-				_, err = f.enroll(t, agentpki.Bootstrap{Method: model.AgentEnrollmentMethodNodeAPIKey, Node: f.proxyNode(), Secret: oldKey})
-				require.ErrorIs(t, err, agentpki.ErrEnrollmentRejected)
 				_, _, err = f.pki.VerifyPeer(t.Context(), [][]byte{issued.CertificateDER})
 				require.ErrorIs(t, err, agentpki.ErrCertificateRevoked)
 
@@ -265,20 +262,21 @@ func TestRotateCredentialsReplacesTheNodeKey(t *testing.T) {
 }
 
 // TestRotateCredentialsAuditsWithoutSecrets: the rotation writes its own
-// entry besides the enrollment token's, with the counts and the reason and
+// entry besides the enrollment tokens', with the counts and the reason and
 // no credential.
 func TestRotateCredentialsAuditsWithoutSecrets(t *testing.T) {
 	forEachDatabase(t, func(t *testing.T, f *fixture) {
-		_, err := f.enroll(t, agentpki.Bootstrap{Method: model.AgentEnrollmentMethodNodeAPIKey, Node: f.proxyNode(), Secret: f.proxyKey})
+		_, err := f.enroll(t, agentpki.Bootstrap{Node: f.proxyNode(), Secret: f.token(t, f.proxyNode(), time.Hour)})
 		require.NoError(t, err)
 		rotation, err := f.rotate(t, f.proxyNode(), nil)
 		require.NoError(t, err)
 
 		var entries []model.OperationLog
 		require.NoError(t, f.db.Where("action IN ?", []string{agentpki.AuditActionCredentialsRotate, agentpki.AuditActionTokenIssue}).Order("id").Find(&entries).Error)
-		require.Len(t, entries, 2)
+		require.Len(t, entries, 3, "the bootstrap's token, the rotation's token and the rotation")
 		assert.Equal(t, agentpki.AuditActionTokenIssue, entries[0].Action)
-		rotate := entries[1]
+		assert.Equal(t, agentpki.AuditActionTokenIssue, entries[1].Action)
+		rotate := entries[2]
 		assert.Equal(t, agentpki.AuditActionCredentialsRotate, rotate.Action)
 		assert.Equal(t, "agent_pki", rotate.Module)
 		assert.Equal(t, "proxy_node", rotate.TargetType)

@@ -1,8 +1,6 @@
 package middleware
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -34,146 +32,6 @@ func setupTestDB(t *testing.T) func() {
 	return func() {
 		require.NoError(t, database.Close())
 	}
-}
-
-func TestNodeAPIKeyHeaderAuth_MissingAPIKey(t *testing.T) {
-	cleanup := setupTestDB(t)
-	defer cleanup()
-
-	router := gin.New()
-	router.Use(NodeAPIKeyHeaderAuth())
-	router.GET("/test", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"message": "ok"})
-	})
-
-	req := httptest.NewRequest("GET", "/test", nil)
-	w := httptest.NewRecorder()
-
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusUnauthorized, w.Code)
-}
-
-func TestNodeAPIKeyHeaderAuth_ValidKey(t *testing.T) {
-	cleanup := setupTestDB(t)
-	defer cleanup()
-
-	// 创建测试节点
-	apiKey := "test-api-key-123"
-	keyHash := keyHash(apiKey)
-	node := &model.Node{
-		Name:       "Test Node",
-		Host:       "127.0.0.1",
-		Port:       443,
-		APIKeyHash: keyHash,
-		Status:     model.NodeStatusOnline,
-	}
-	database.GetDB().Create(node)
-
-	router := gin.New()
-	router.Use(NodeAPIKeyHeaderAuth())
-	router.GET("/test", func(c *gin.Context) {
-		nodeID, _ := c.Get("node_id")
-		c.JSON(http.StatusOK, gin.H{"node_id": nodeID})
-	})
-
-	req := httptest.NewRequest("GET", "/test", nil)
-	req.Header.Set("X-API-Key", apiKey)
-	w := httptest.NewRecorder()
-
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusOK, w.Code)
-}
-
-func TestNodeAPIKeyHeaderAuth_DisabledNode(t *testing.T) {
-	cleanup := setupTestDB(t)
-	defer cleanup()
-
-	apiKey := "test-api-key-disabled"
-	keyHash := keyHash(apiKey)
-	node := &model.Node{
-		Name:       "Disabled Node",
-		Host:       "127.0.0.1",
-		Port:       443,
-		APIKeyHash: keyHash,
-		Status:     model.NodeStatusDisabled,
-	}
-	database.GetDB().Create(node)
-
-	router := gin.New()
-	router.Use(NodeAPIKeyHeaderAuth())
-	router.GET("/test", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"message": "ok"})
-	})
-
-	req := httptest.NewRequest("GET", "/test", nil)
-	req.Header.Set("X-API-Key", apiKey)
-	w := httptest.NewRecorder()
-
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusForbidden, w.Code)
-}
-
-func TestNodeAPIKeyHeaderAuth_IgnoresTheQuery(t *testing.T) {
-	cleanup := setupTestDB(t)
-	defer cleanup()
-
-	apiKey := "test-api-key-query"
-	keyHash := keyHash(apiKey)
-	node := &model.Node{
-		Name:       "Test Node",
-		Host:       "127.0.0.1",
-		Port:       443,
-		APIKeyHash: keyHash,
-		Status:     model.NodeStatusOnline,
-	}
-	database.GetDB().Create(node)
-
-	router := gin.New()
-	router.Use(NodeAPIKeyHeaderAuth())
-	router.GET("/test", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"message": "ok"})
-	})
-
-	for _, query := range []string{"?api_key=", "?token="} {
-		req := httptest.NewRequest("GET", "/test"+query+apiKey, nil)
-		w := httptest.NewRecorder()
-
-		router.ServeHTTP(w, req)
-
-		assert.Equal(t, http.StatusUnauthorized, w.Code, "a key in the URL is not read")
-	}
-}
-
-func TestNodeAPIKeyHeaderAuth_PlainAPIKeyFallback(t *testing.T) {
-	cleanup := setupTestDB(t)
-	defer cleanup()
-
-	apiKey := "legacy-api-key-without-hash"
-	node := &model.Node{
-		Name:   "Legacy Node",
-		Host:   "127.0.0.1",
-		Port:   443,
-		APIKey: apiKey,
-		Status: model.NodeStatusOnline,
-	}
-	require.NoError(t, database.GetDB().Create(node).Error)
-
-	router := gin.New()
-	router.Use(NodeAPIKeyHeaderAuth())
-	router.GET("/test", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"message": "ok"})
-	})
-
-	req := httptest.NewRequest("GET", "/test", nil)
-	req.Header.Set("X-API-Key", apiKey)
-	w := httptest.NewRecorder()
-
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusOK, w.Code)
 }
 
 func TestJWTAuth_MissingHeader(t *testing.T) {
@@ -562,9 +420,4 @@ func TestJWTAuth_RejectsRevokedToken(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
-}
-
-func keyHash(key string) string {
-	sum := sha256.Sum256([]byte(key))
-	return hex.EncodeToString(sum[:])
 }

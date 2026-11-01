@@ -101,7 +101,7 @@ func TestIssuanceInFlightDuringRevocationLeavesNothingLive(t *testing.T) {
 		_, csr := newCSR(t)
 		raceRevocation(t, f, (model.AgentCertificate{}).TableName(), node, func() error {
 			_, err := f.pki.Enroll(t.Context(), agentpki.EnrollRequest{
-				Bootstrap: agentpki.Bootstrap{Method: model.AgentEnrollmentMethodNodeAPIKey, Node: node, Secret: f.proxyKey}, CSRDER: csr,
+				Bootstrap: agentpki.Bootstrap{Node: node, Secret: f.token(t, node, time.Hour)}, CSRDER: csr,
 			})
 			return err
 		})

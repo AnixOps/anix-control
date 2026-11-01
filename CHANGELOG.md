@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### Removed
+
+- Agent enrollment no longer accepts a proxy node's API key or a forward
+  node's token: `AgentEnrollment.Enroll` takes only a one-time enrollment
+  credential (`anixagt_...`) or a node-group join token. Enrolled Agents
+  keep their certificate and renew with it; a node without one needs an
+  enrollment credential from the panel.
+- `GET /api/v3/agent/plugin-releases/*` (the node API key plugin download)
+  is gone and answers 404. Agents download plugin releases over
+  `AgentArtifacts` with their client certificate.
+
 ## 5.0.0-rc.28 - 2026-11-01
 
 ### Changed

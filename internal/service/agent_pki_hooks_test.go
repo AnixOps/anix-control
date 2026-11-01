@@ -36,7 +36,7 @@ func seedAgentCertificate(t *testing.T, db *gorm.DB, kind string, nodeID uint, s
 	t.Helper()
 	enrollment := model.AgentEnrollment{
 		ID: serial + "-enrollment", NodeKind: kind, NodeID: nodeID, Cluster: "default",
-		Method: model.AgentEnrollmentMethodNodeAPIKey, CreatedAt: time.Now(),
+		Method: model.AgentEnrollmentMethodCredential, CreatedAt: time.Now(),
 	}
 	require.NoError(t, db.Create(&enrollment).Error)
 	require.NoError(t, db.Create(&model.AgentCertificate{

@@ -59,8 +59,6 @@ import (
 var allowed = map[string]string{
 	"internal/handler/node.go CreateNode": "answers the key and secret the writer just generated, from memory, " +
 		"once (as the legacy route always did)",
-	"internal/agentpki/enrollment.go authenticateNodeCredential": "selects api_token only to hand the row to " +
-		"nodesecrets.ForwardNodeTokenMatches, which applies the phase",
 	"internal/service/agent_pki_hooks.go forwardNodeAgentRevocation": "selects api_token only to hand the row to " +
 		"nodesecrets.ForwardNodeToken; compares the incoming row's value with it, a tombstone counting as unchanged",
 	"internal/service/node_credential_ops.go ProxyNodeHasCredentials": "selects the columns only to hand the row to " +

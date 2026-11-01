@@ -16,7 +16,6 @@ import (
 	"testing"
 
 	"github.com/AnixOps/anix-control/v5/internal/handler"
-	"github.com/AnixOps/anix-control/v5/internal/middleware"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/nodesecrets"
 	"github.com/AnixOps/anix-control/v5/internal/service"
@@ -98,7 +97,7 @@ func (f *fleet) readerResults(t *testing.T, db *gorm.DB, round int) map[string]b
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	ok := func(c *gin.Context) { c.String(http.StatusOK, "%d", c.GetUint("node_id")) }
-	router.GET("/package", middleware.NodeAPIKeyHeaderAuth(), ok)
+	router.GET("/package", nodeKeyAuth(), ok)
 	router.GET("/credentials/:id", handler.NewNodeHandler().GetNodeCredentials)
 	serve := func(method, path string, nodeID uint, key string, body string, header map[string]string) *httptest.ResponseRecorder {
 		separator := "?"

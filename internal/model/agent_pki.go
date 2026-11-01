@@ -3,15 +3,12 @@ package model
 import "time"
 
 // Agent enrollment methods: how the agent proved which node it runs on.
+// Enrollments recorded before 5.0 may also name node_api_key or
+// forward_token; their certificates keep renewing.
 const (
 	// AgentEnrollmentMethodCredential is a one-time anixagt_ credential
 	// bound to a node.
 	AgentEnrollmentMethodCredential = "enrollment_credential"
-	// AgentEnrollmentMethodNodeAPIKey is a proxy node's API key (agents in
-	// the field, and nodes minted by registration keys).
-	AgentEnrollmentMethodNodeAPIKey = "node_api_key" // #nosec G101 -- names an enrollment method, not a credential.
-	// AgentEnrollmentMethodForwardToken is a forward node's token.
-	AgentEnrollmentMethodForwardToken = "forward_token"
 	// AgentEnrollmentMethodJoinToken is a node group's anixjoin_ join token
 	// (AgentEnrollment.Join): the machine became, or rejoined, a node of the
 	// group. The token is the group's, so the enrollment keeps no hash.
@@ -20,7 +17,7 @@ const (
 
 // AgentEnrollment is one way into the agent PKI for a node: a one-time
 // enrollment credential an administrator issued (only its SHA-256 is kept),
-// or an enrollment the agent made with its node credential. Every agent
+// or a node group's join. Every agent
 // certificate points at the enrollment it descends from; revoking the
 // enrollment stops its renewals.
 type AgentEnrollment struct {

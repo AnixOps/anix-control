@@ -34,9 +34,9 @@ func (f *fixture) negotiate(t *testing.T, node agentcontrol.AgentNode, negotiate
 func (f *fixture) agentCertificate(t *testing.T, node agentcontrol.AgentNode) (*x509.Certificate, *ecdsa.PrivateKey) {
 	t.Helper()
 	key, csr := newCSR(t)
-	bootstrap := agentpki.Bootstrap{Method: model.AgentEnrollmentMethodForwardToken, Node: node, Secret: f.forwardToken}
+	bootstrap := agentpki.Bootstrap{Node: node, Secret: f.token(t, node, time.Hour)}
 	if node.Kind == agentcontrol.NodeKindProxy {
-		bootstrap = agentpki.Bootstrap{Method: model.AgentEnrollmentMethodNodeAPIKey, Node: node, Secret: f.proxyKey}
+		bootstrap = agentpki.Bootstrap{Node: node, Secret: f.token(t, node, time.Hour)}
 	}
 	issued, err := f.pki.Enroll(t.Context(), agentpki.EnrollRequest{Bootstrap: bootstrap, CSRDER: csr})
 	require.NoError(t, err)
