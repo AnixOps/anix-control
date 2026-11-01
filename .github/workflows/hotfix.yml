@@ -726,6 +726,8 @@ jobs:
           cat >dump.sh <<'EOF'
           systemctl is-active --quiet anix-control || exit 0
           set -e
+          # JumpServer runs this in /root, which postgres cannot enter.
+          cd /
           if [ -x /usr/local/sbin/anixops-pg-backup ]; then
             sudo -u postgres /usr/local/sbin/anixops-pg-backup
             ls -lt /var/backups/anixops/pg/*.dump | head -n 5
