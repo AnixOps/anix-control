@@ -2,7 +2,7 @@ package model
 
 import "time"
 
-// Transports an AnixOps Agent (or third-party node software) was seen on,
+// Transports an AnixOps Agent was seen on,
 // recorded in AgentTransport (node-ops-service.md, section 5.6).
 const (
 	// AgentTransportMTLSStream is the Agent Control stream authenticated by
@@ -17,12 +17,6 @@ const (
 	AgentTransportHTTPLegacy = "http-legacy"
 	// AgentTransportWebSocket is the agent and node WebSocket.
 	AgentTransportWebSocket = "websocket"
-	// AgentTransportUniProxy is the UniProxy REST API, which third-party
-	// node software (V2bX, XrayR) uses too.
-	AgentTransportUniProxy = "uniproxy"
-	// AgentTransportV2boardGRPC is the v2board gRPC services, which
-	// third-party node software uses too.
-	AgentTransportV2boardGRPC = "v2board-grpc"
 	// AgentTransportCleanAgent is a forward clean agent
 	// (/api/v2/forward-agent/*); the inventory reads it from
 	// v2_forward_clean_agent, it is never recorded here.
@@ -37,12 +31,6 @@ func AgentTransportLegacy(transport string) bool {
 		return true
 	}
 	return false
-}
-
-// AgentTransportThirdParty tells whether transport is a node protocol that
-// third-party node software shares, which agent_control.mtls never refuses.
-func AgentTransportThirdParty(transport string) bool {
-	return transport == AgentTransportUniProxy || transport == AgentTransportV2boardGRPC
 }
 
 // AgentTransport records when a node was last seen on one transport. The

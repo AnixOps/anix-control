@@ -3,7 +3,6 @@ package service
 import (
 	"encoding/json"
 	"log"
-	"strconv"
 	"strings"
 	"time"
 
@@ -14,9 +13,8 @@ import (
 
 // BuildNodeProtocolConfig 从 Node + NodeProtocol 构建下发给节点的完整协议配置。
 //
-// 这是节点拉配置的**唯一真源**: HTTP UniProxy handler 和 gRPC 两个配置构建函数
-// 都调它, 避免"改了一处忘了另一处"(SS2022 server_key 之前就是只在订阅端修了,
-// gRPC 节点拿不到)。输出字段名与老 UniProxy JSON 保持一致:
+// 这是节点配置的**唯一真源**: 节点运行配置 (BuildNodeRuntimeConfig) 和
+// Agent Control 下发的配置快照都调它。输出字段名:
 //
 //	node_type, type, host, server_port, server_name, tls, network,
 //	cipher, server_key, flow, tls_settings, network_settings,
@@ -230,48 +228,5 @@ func isWireGuardRuntimeConfigKey(key string) bool {
 		return true
 	default:
 		return false
-	}
-}
-
-// StringifyConfigMap 把 map[string]any 转成 map[string]string (proto 的
-// map<string,string> 字段需要)。数字按整数/浮点合理格式化, 避免 443 变 "443.000000"。
-func StringifyConfigMap(m map[string]any) map[string]string {
-	if len(m) == 0 {
-		return nil
-	}
-	out := make(map[string]string, len(m))
-	for k, v := range m {
-		out[k] = stringifyValue(v)
-	}
-	return out
-}
-
-func stringifyValue(v any) string {
-	switch t := v.(type) {
-	case nil:
-		return ""
-	case string:
-		return t
-	case bool:
-		return strconv.FormatBool(t)
-	case int:
-		return strconv.Itoa(t)
-	case int64:
-		return strconv.FormatInt(t, 10)
-	case float64:
-		// JSON 数字统一解成 float64; 整数值不带小数点。
-		if t == float64(int64(t)) {
-			return strconv.FormatInt(int64(t), 10)
-		}
-		return strconv.FormatFloat(t, 'f', -1, 64)
-	case json.Number:
-		return t.String()
-	default:
-		// map/slice 等复杂值序列化成 JSON 字符串。
-		b, err := json.Marshal(v)
-		if err != nil {
-			return ""
-		}
-		return string(b)
 	}
 }

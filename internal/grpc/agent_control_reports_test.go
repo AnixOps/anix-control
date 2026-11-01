@@ -12,7 +12,6 @@ import (
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	agentv1pb "github.com/AnixOps/anix-control/sdk/api/agent/v1"
-	pb "github.com/AnixOps/anix-control/v5/api/grpc/v2boardpb"
 	"github.com/AnixOps/anix-control/v5/internal/agenttransport"
 	"github.com/AnixOps/anix-control/v5/internal/cache"
 	"github.com/AnixOps/anix-control/v5/internal/database"
@@ -176,15 +175,12 @@ func TestAgentControlReportsNotOfferedToForwardNodes(t *testing.T) {
 	assert.False(t, reportsV1(agentcontrol.AgentNode{Kind: agentcontrol.NodeKindProxy, ID: 1}, validAgentHello(1).GetHello().Capabilities), "not listed by the agent")
 }
 
-// A traffic batch is counted once, through the legacy ledger: the stream
-// node and a legacy ReportTraffic node end with the same rows for the same
-// input, a replay is acknowledged without counting again, and the online
-// IPs reach the set ReportOnline feeds.
-func TestAgentControlTrafficReportAppliedOnceWithLegacyParity(t *testing.T) {
+// A traffic batch is counted once in the traffic ledger, a replay is
+// acknowledged without counting again, and the online IPs reach the online
+// set.
+func TestAgentControlTrafficReportAppliedOnce(t *testing.T) {
 	environment := newReportsTestEnvironment(t)
 	nodeID := uint32(environment.node.ID)
-	legacy := model.Node{Name: "legacy-node", Host: "127.0.0.2", APIKey: "legacy-key", Status: model.NodeStatusOnline}
-	require.NoError(t, database.GetDB().Create(&legacy).Error)
 
 	stream, helloAck := openReportsSession(t, environment, reportCapabilities())
 	report := &agentv1pb.TrafficReport{
@@ -198,19 +194,9 @@ func TestAgentControlTrafficReportAppliedOnceWithLegacyParity(t *testing.T) {
 	assert.True(t, ack.Applied)
 	assert.Empty(t, ack.Error)
 
-	// The legacy path, with the same input for subscriber 8 on the other
-	// node.
-	_, err := NewTrafficGRPCServer().ReportTraffic(withNodeCaller(context.Background(), uint32(legacy.ID)), &pb.TrafficReportRequest{
-		NodeId: uint32(legacy.ID), Traffics: map[uint32]*pb.TrafficData{8: {Upload: 1024, Download: 2048}},
-	})
-	require.NoError(t, err)
-
 	upload, download := userCounters(t, 7)
 	assert.Equal(t, int64(1024), upload)
 	assert.Equal(t, int64(2048), download)
-	legacyUpload, legacyDownload := userCounters(t, 8)
-	assert.Equal(t, upload, legacyUpload)
-	assert.Equal(t, download, legacyDownload)
 
 	type trafficRow struct {
 		UserID     uint
@@ -227,14 +213,11 @@ func TestAgentControlTrafficReportAppliedOnceWithLegacyParity(t *testing.T) {
 		}
 		return out
 	}
-	assert.Equal(t, rows(legacy.ID, 8), rows(environment.node.ID, 7))
 	assert.Equal(t, []trafficRow{{ServerType: "node", U: 1024, D: 2048, Rate: 1}}, rows(environment.node.ID, 7))
 
-	var streamNode, legacyNode model.Node
+	var streamNode model.Node
 	require.NoError(t, database.GetDB().First(&streamNode, environment.node.ID).Error)
-	require.NoError(t, database.GetDB().First(&legacyNode, legacy.ID).Error)
 	assert.Equal(t, [2]int64{1024, 2048}, [2]int64{streamNode.TotalUpload, streamNode.TotalDownload})
-	assert.Equal(t, [2]int64{legacyNode.TotalUpload, legacyNode.TotalDownload}, [2]int64{streamNode.TotalUpload, streamNode.TotalDownload})
 	assert.Equal(t, 2, streamNode.OnlineUsers)
 
 	type statRow struct {
@@ -252,18 +235,12 @@ func TestAgentControlTrafficReportAppliedOnceWithLegacyParity(t *testing.T) {
 		return out
 	}
 	require.Len(t, stats(environment.node.ID), 2)
-	assert.Equal(t, stats(legacy.ID), stats(environment.node.ID))
+	for _, stat := range stats(environment.node.ID) {
+		assert.Equal(t, [2]int64{1024, 2048}, [2]int64{stat.U, stat.D}, stat.RecordType)
+	}
 
-	// Online IPs are in the set ReportOnline feeds: the same keys, for the
-	// legacy node's report of subscriber 8.
-	_, err = NewTrafficGRPCServer().ReportOnline(withNodeCaller(context.Background(), uint32(legacy.ID)), &pb.OnlineReportRequest{
-		NodeId: uint32(legacy.ID), Online: map[uint32]*pb.OnlineData{8: {Ips: []string{"192.0.2.8"}}},
-	})
-	require.NoError(t, err)
+	// Online IPs are in the online set, one key per subscriber.
 	onlineKey := func(nodeID uint, userID uint) string { return fmt.Sprintf("online:%s:%d:%d", "", nodeID, userID) }
-	legacyKeys, err := cache.Keys(fmt.Sprintf("online:%s:%d:*", "", legacy.ID))
-	require.NoError(t, err)
-	assert.Equal(t, []string{onlineKey(legacy.ID, 8)}, legacyKeys)
 	streamKeys, err := cache.Keys(fmt.Sprintf("online:%s:%d:*", "", environment.node.ID))
 	require.NoError(t, err)
 	sort.Strings(streamKeys)

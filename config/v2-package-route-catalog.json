@@ -991,51 +991,6 @@
   },
   {
     "method": "POST",
-    "path": "/api/v2/server/UniProxy/alive",
-    "owner": "proxy-node",
-    "route_id": "proxy.server.uniproxy.alive.post",
-    "envelope": "raw",
-    "middleware_group": "node-api",
-    "transport": "http"
-  },
-  {
-    "method": "GET",
-    "path": "/api/v2/server/UniProxy/alivelist",
-    "owner": "proxy-node",
-    "route_id": "proxy.server.uniproxy.alivelist.get",
-    "envelope": "raw",
-    "middleware_group": "node-api",
-    "transport": "http"
-  },
-  {
-    "method": "GET",
-    "path": "/api/v2/server/UniProxy/config",
-    "owner": "proxy-node",
-    "route_id": "proxy.server.uniproxy.config.get",
-    "envelope": "raw",
-    "middleware_group": "node-api",
-    "transport": "http"
-  },
-  {
-    "method": "POST",
-    "path": "/api/v2/server/UniProxy/push",
-    "owner": "proxy-node",
-    "route_id": "proxy.server.uniproxy.push.post",
-    "envelope": "raw",
-    "middleware_group": "node-api",
-    "transport": "http"
-  },
-  {
-    "method": "GET",
-    "path": "/api/v2/server/UniProxy/user",
-    "owner": "proxy-node",
-    "route_id": "proxy.server.uniproxy.user.get",
-    "envelope": "raw",
-    "middleware_group": "node-api",
-    "transport": "http"
-  },
-  {
-    "method": "POST",
     "path": "/api/v2/telegram/webhook",
     "owner": "notification",
     "route_id": "notification.telegram.webhook.post",

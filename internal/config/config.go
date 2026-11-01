@@ -410,7 +410,6 @@ type GRPCConfig struct {
 	// only and takes each node's client certificate from the proxy's
 	// X-Anix-Client-Cert header. Empty: the listener is TLS.
 	EdgeProxies []string `yaml:"edge_proxies"`
-	APIToken    string   `yaml:"api_token"`
 	// TLSCertFile and TLSKeyFile are a certificate of the gRPC listener's own
 	// (PEM files, reloaded when they change). Empty: the certificate Control
 	// manages for the gRPC name.

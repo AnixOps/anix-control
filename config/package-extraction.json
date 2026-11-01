@@ -891,46 +891,6 @@
     },
     {
       "method": "POST",
-      "path": "/api/v2/server/UniProxy/alive",
-      "package_id": "proxy-node",
-      "route_id": "proxy.server.uniproxy.alive.post",
-      "mode": "bridged",
-      "legacy": "router"
-    },
-    {
-      "method": "GET",
-      "path": "/api/v2/server/UniProxy/alivelist",
-      "package_id": "proxy-node",
-      "route_id": "proxy.server.uniproxy.alivelist.get",
-      "mode": "bridged",
-      "legacy": "router"
-    },
-    {
-      "method": "GET",
-      "path": "/api/v2/server/UniProxy/config",
-      "package_id": "proxy-node",
-      "route_id": "proxy.server.uniproxy.config.get",
-      "mode": "bridged",
-      "legacy": "router"
-    },
-    {
-      "method": "POST",
-      "path": "/api/v2/server/UniProxy/push",
-      "package_id": "proxy-node",
-      "route_id": "proxy.server.uniproxy.push.post",
-      "mode": "bridged",
-      "legacy": "router"
-    },
-    {
-      "method": "GET",
-      "path": "/api/v2/server/UniProxy/user",
-      "package_id": "proxy-node",
-      "route_id": "proxy.server.uniproxy.user.get",
-      "mode": "bridged",
-      "legacy": "router"
-    },
-    {
-      "method": "POST",
       "path": "/api/v2/telegram/webhook",
       "package_id": "notification",
       "route_id": "notification.telegram.webhook.post",

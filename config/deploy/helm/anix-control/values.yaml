@@ -42,7 +42,7 @@ secrets:
   # listed in `files` below.
   existingSecret: ""
   # Secret key -> the configuration variable it feeds (the _FILE suffix is
-  # added by the chart). Add keys such as grpc_api_token here.
+  # added by the chart). Add more keys here.
   files:
     jwt_secret: ANIX_CONTROL_JWT_SECRET
     db_password: ANIX_CONTROL_DATABASE_PASSWORD

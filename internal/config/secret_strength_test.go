@@ -35,12 +35,11 @@ func TestSecretStrengthWarningsNameTheSettingAndNeverTheValue(t *testing.T) {
 	c := &Config{}
 	c.JWT.Secret = "hunter2hunter2"
 	c.App.APIToken = "short-token"
-	c.GRPC.APIToken = strings.Repeat("x", 64)
 	warnings := c.SecretStrengthWarnings()
-	if len(warnings) != 3 {
+	if len(warnings) != 2 {
 		t.Fatalf("warnings %v, want one per weak secret", warnings)
 	}
-	for i, setting := range []string{"jwt.secret", "app.api_token", "grpc.api_token"} {
+	for i, setting := range []string{"jwt.secret", "app.api_token"} {
 		if !strings.HasPrefix(warnings[i], setting+" is weak") {
 			t.Errorf("warning %d does not start with %q: %s", i, setting, warnings[i])
 		}
@@ -49,7 +48,7 @@ func TestSecretStrengthWarningsNameTheSettingAndNeverTheValue(t *testing.T) {
 		}
 	}
 	for _, w := range warnings {
-		for _, secret := range []string{"hunter2hunter2", "short-token", strings.Repeat("x", 64)} {
+		for _, secret := range []string{"hunter2hunter2", "short-token"} {
 			if strings.Contains(w, secret) {
 				t.Fatalf("a warning contains the secret value: %s", w)
 			}

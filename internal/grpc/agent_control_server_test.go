@@ -99,7 +99,7 @@ func newAgentControlTestEnvironment(t *testing.T) *agentControlTestEnvironment {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 	manager := NewAgentControlManager()
-	server := grpc.NewServer(grpc.ChainStreamInterceptor(StreamAuthInterceptor("", "")))
+	server := grpc.NewServer()
 	agentv1pb.RegisterAgentControlServiceServer(server, newTestAgentControlServer(manager))
 	errCh := serveGRPCServerForTest(t, server, listener)
 

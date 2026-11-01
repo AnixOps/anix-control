@@ -65,14 +65,12 @@ PostgreSQL), not the systemd installer.
   network module runtime and the identity module are in place (storage
   leases, route modes, ledger-run migrations, the extraction map and gates,
   `internal/tests/packagecompat`, `docs/architecture/module-runtime.md`,
-  `docs/architecture/identity-service.md`). Next: the kernel contracts the 13
+  `docs/architecture/identity-service.md`). Next: the kernel contracts the 8
   bridged routes wait for, then each extracted domain's workers and table
   ownership.
-- [ ] Known gap: routes outside the `/api/v2` package gate are still served
-  directly by kernel handlers: `/api/v1/server/UniProxy/*`,
-  `/{subscribe_path}/:token` (default `/s/:token`), `/api/v1/client/subscribe`,
-  and `/flow/upload`. Decide per route whether to package-gate it or keep it as
-  a documented compatibility surface.
+- [ ] Known gap: `/{subscribe_path}/:token` (default `/s/:token`) is still
+  served directly by a kernel handler, outside the `/api/v2` package gate.
+  Decide whether to package-gate it.
 
 ## P0: Audit Deliverables
 
@@ -156,7 +154,7 @@ Singleton workers are already lease-guarded; the Helm chart refuses
   forward admin actions to the owning replica.
 - [ ] Record the dispatching replica on node operations; `recoverOnce` must only
   recover operations of replicas whose heartbeat expired.
-- [ ] Share online-user state (UniProxy alive lists, device limits), login and
+- [ ] Share online-user state (alive lists, device limits), login and
   registration rate limits, and per-IP limiters across replicas.
   identity-platform's login, registration and subscription-reset counters are
   already in its shared `throttle` table; the kernel's legacy handlers and its

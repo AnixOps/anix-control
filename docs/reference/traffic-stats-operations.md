@@ -63,9 +63,9 @@ start.
 
 `v4_kernel_user_activity` (one row per user: `user_id`, `last_online_at` as a
 Unix time in seconds) holds when each user was last seen online. A user is
-seen when a node reports their traffic or lists one of their connections:
-a UniProxy `push` or `alive`, the gRPC node reports and the Agent Control
-traffic report (`reports.v1`), which also carries the online list. Traffic
+seen when a node reports their traffic or lists one of their connections in
+the Agent Control traffic report (`reports.v1`), which also carries the
+online list. Traffic
 that passes through a forwarding route is not counted.
 
 Why a table of its own: Control kept no durable value for it. `v2_user` has
@@ -130,9 +130,9 @@ reports already fill both tables it reads.
 - `since` and `until` are Unix milliseconds; the window is rounded out to
   whole buckets and a longer one is `400 invalid_request`, not clamped.
   Buckets without traffic are zeros, so the series draws as it is.
-- The node id is the key of both tables for every server type: agent and
-  legacy node reports write `server_type` `node`, UniProxy the protocol name;
-  the series sums them. Rows imported from a v2board database that keyed
+- The node id is the key of both tables for every server type: Agent
+  reports write `server_type` `node`; older rows written by the removed
+  UniProxy carry the protocol name, and the series sums them. Rows imported from a v2board database that keyed
   `server_id` by the per-type server tables, not by node id, can alias an
   unrelated node in old windows.
 - **Hourly history ends where the raw log does.** After a purge (below) the

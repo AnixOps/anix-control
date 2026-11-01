@@ -23,11 +23,6 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// agentServicePrefix starts the full method names of the Agent services
-// (AgentControlService, AgentEnrollment), which authenticate in their
-// handlers.
-const agentServicePrefix = "/anix.agent.v1."
-
 // AgentAuthenticator authenticates AnixOps Agents on the node-facing
 // listener by client certificate (agent PKI): agent_control.mtls is
 // required, built in. The zero value and nil refuse every agent stream,

@@ -191,7 +191,6 @@ func TestShippedTemplateIsTheDomainLine(t *testing.T) {
 	assert.Equal(t, officialPublicKey, loaded.Plugins.OfficialPublicKey)
 	assert.Empty(t, loaded.JWT.Secret)
 	assert.Empty(t, loaded.App.APIToken)
-	assert.Empty(t, loaded.GRPC.APIToken)
 	assert.Empty(t, loaded.ModuleRuntime.CAKEK)
 
 	data, err := os.ReadFile(path)

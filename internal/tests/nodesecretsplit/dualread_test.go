@@ -115,7 +115,6 @@ func (f *fleet) readerResults(t *testing.T, db *gorm.DB, round int) map[string]b
 	router.GET("/package", middleware.NodeAPIKeyHeaderAuth(), ok)
 	router.POST("/signed", middleware.NodeAPIKeyAuth(), middleware.SignatureAuth(), ok)
 	router.GET("/credentials/:id", handler.NewNodeHandler().GetNodeCredentials)
-	router.GET("/config", middleware.NodeAuth(), handler.NewUniProxyHandler().GetConfig)
 	serve := func(method, path string, nodeID uint, key string, body string, header map[string]string) *httptest.ResponseRecorder {
 		separator := "?"
 		if strings.Contains(path, "?") {
@@ -178,19 +177,17 @@ func (f *fleet) readerResults(t *testing.T, db *gorm.DB, round int) map[string]b
 
 	// The node configuration: the Reality private key of a protocol, and
 	// the private key of a raw configuration.
-	configKey := func(nodeID uint, key string) string {
-		rec := serve(http.MethodGet, "/config?node_type=vless", nodeID, key, "", nil)
-		var config struct {
-			TLSSettings map[string]any `json:"tls_settings"`
-		}
-		if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &config) != nil {
+	configKey := func(nodeID uint) string {
+		config, err := service.BuildNodeRuntimeConfig(db, nodeID, "vless")
+		if err != nil {
 			return ""
 		}
-		value, _ := config.TLSSettings["private_key"].(string)
+		settings, _ := config["tls_settings"].(map[string]any)
+		value, _ := settings["private_key"].(string)
 		return value
 	}
-	results["created config"] = configKey(f.created.ID, f.created.APIKey) == f.realityPrivate
-	results["raw config"] = configKey(f.rawNode.ID, f.rawNode.APIKey) == f.rawPrivate
+	results["created config"] = configKey(f.created.ID) == f.realityPrivate
+	results["raw config"] = configKey(f.rawNode.ID) == f.rawPrivate
 
 	// Registration with the registration key.
 	_, err := service.NewNodeService().RegisterNode(&model.NodeRegisterRequest{AuthKey: f.registrationKey, Name: fmt.Sprintf("again-%d", round), Port: 443}, "192.0.2.51")

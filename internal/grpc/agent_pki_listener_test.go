@@ -5,11 +5,9 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
-	"encoding/hex"
 	"encoding/pem"
 	"math/big"
 	"net"
@@ -21,7 +19,6 @@ import (
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	agentv1pb "github.com/AnixOps/anix-control/sdk/api/agent/v1"
-	pb "github.com/AnixOps/anix-control/v5/api/grpc/v2boardpb"
 	"github.com/AnixOps/anix-control/v5/internal/agentpki"
 	"github.com/AnixOps/anix-control/v5/internal/agenttransport"
 	"github.com/AnixOps/anix-control/v5/internal/cache"
@@ -271,20 +268,6 @@ func TestAgentListenerEnrollsWithEachBootstrapAndStreamsByCertificate(t *testing
 	_, _, err = enrollForTest(t, ctx, anonymous, credential)
 	assert.Equal(t, codes.Unauthenticated, status.Code(err), "a credential enrolls once")
 
-	// 4. A registration key mints a node credential, which then enrolls.
-	authKey := "agent-pki-registration-key"
-	digest := sha256.Sum256([]byte(authKey))
-	require.NoError(t, database.Get().Create(&model.AuthorizedKey{Name: "fleet", Key: authKey, KeyHash: hex.EncodeToString(digest[:])}).Error)
-	registered, err := pb.NewNodeServiceClient(anonymous).Register(ctx, &pb.NodeRegisterRequest{AuthKey: authKey, Name: "registered", Host: "127.0.0.1", Port: 443})
-	require.NoError(t, err)
-	registeredNode := agentcontrol.AgentNode{Kind: agentcontrol.NodeKindProxy, ID: registered.GetNodeId()}
-	registeredCertificate, issued, err := l.enrollWithToken(t, ctx, registeredNode, anonymous)
-	require.NoError(t, err)
-	assert.Equal(t, registeredNode.String(), issued.GetNode())
-	_, helloAck, err = openStream(t, ctx, l.dial(t, registeredCertificate), registered.GetNodeId())
-	require.NoError(t, err)
-	assert.NotEmpty(t, helloAck.SessionId)
-
 	// Wrong bootstraps are refused alike.
 	for name, enrollCtx := range map[string]context.Context{
 		"no credential":            ctx,
@@ -298,7 +281,7 @@ func TestAgentListenerEnrollsWithEachBootstrapAndStreamsByCertificate(t *testing
 
 	var enrollments []model.OperationLog
 	require.NoError(t, database.Get().Where("action = ?", agentpki.AuditActionEnroll).Find(&enrollments).Error)
-	assert.Len(t, enrollments, 4)
+	assert.Len(t, enrollments, 3)
 }
 
 func TestAgentListenerBindsEnvelopesAndRequestsToTheCertificate(t *testing.T) {
@@ -326,19 +309,6 @@ func TestAgentListenerBindsEnvelopesAndRequestsToTheCertificate(t *testing.T) {
 	// Metadata naming another node than the certificate.
 	_, _, err = openStream(t, legacyCredentials(ctx, l.proxy.ID+1, l.proxyKey), conn, uint32(l.proxy.ID))
 	assert.Equal(t, codes.Unauthenticated, status.Code(err))
-
-	// v2board requests must name the certificate's node.
-	nodes := pb.NewNodeServiceClient(conn)
-	_, err = nodes.GetConfig(ctx, &pb.NodeConfigRequest{NodeId: uint32(l.proxy.ID) + 1})
-	assert.Equal(t, codes.PermissionDenied, status.Code(err))
-	_, err = nodes.GetConfig(ctx, &pb.NodeConfigRequest{NodeId: uint32(l.proxy.ID)})
-	assert.NotContains(t, []codes.Code{codes.Unauthenticated, codes.PermissionDenied}, status.Code(err))
-
-	// A forward node's certificate is for the Agent services only.
-	forwardCertificate, _, err := l.enrollWithToken(t, ctx, l.forwardNode(), anonymous)
-	require.NoError(t, err)
-	_, err = pb.NewNodeServiceClient(l.dial(t, forwardCertificate)).GetConfig(ctx, &pb.NodeConfigRequest{NodeId: uint32(l.forward.ID)})
-	assert.Equal(t, codes.PermissionDenied, status.Code(err))
 }
 
 func TestAgentListenerRefusesRevokedAndForeignCertificates(t *testing.T) {
@@ -374,8 +344,6 @@ func TestAgentListenerRefusesRevokedAndForeignCertificates(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, service.NewNodeService().UpdateNode(l.proxy.ID, map[string]any{"status": model.NodeStatusDisabled}))
 	_, _, err = openStream(t, ctx, proxyConn, uint32(l.proxy.ID))
-	assert.Equal(t, codes.Unauthenticated, status.Code(err))
-	_, err = pb.NewNodeServiceClient(proxyConn).GetConfig(ctx, &pb.NodeConfigRequest{NodeId: uint32(l.proxy.ID)})
 	assert.Equal(t, codes.Unauthenticated, status.Code(err))
 
 	// The kernel's own certificate chains to the same CA but is no agent.

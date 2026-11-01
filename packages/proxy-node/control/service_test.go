@@ -44,7 +44,7 @@ func TestProxyNodeHostRelaysRoutesUntilTheyAreSwitchedToNative(t *testing.T) {
 	bridge := &bridgeStub{}
 	service, err := newProxyNodeService(bridge, "lease-1")
 	require.NoError(t, err)
-	for _, route := range []string{"proxy.admin.nodes.id.logs.get", "proxy.admin.nodes.get", "proxy.server.uniproxy.user.get"} {
+	for _, route := range []string{"proxy.admin.nodes.id.logs.get", "proxy.admin.nodes.get", "proxy.admin.nodes.post"} {
 		response, err := service.Dispatch(context.Background(), pluginhostsdk.DispatchRequest{
 			RouteID: route, BridgeCapability: make([]byte, 32), DeadlineUnixMillis: time.Now().Add(time.Second).UnixMilli(),
 		})

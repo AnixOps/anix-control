@@ -275,5 +275,5 @@ func agentTransportPolicyLog(cfg *config.Config, grpcSrv *grpcserver.Server) str
 	if enrollment != "available" {
 		return fmt.Sprintf("WARNING: Agent transports: AnixOps Agents connect with client certificates only; agent enrollment: %s. No AnixOps Agent can connect: give the kernel domain (or grpc.enabled with grpc.tls_cert_file/tls_key_file) and module_runtime.ca_kek.%s", enrollment, ignored)
 	}
-	return fmt.Sprintf("Agent transports: AnixOps Agents connect with client certificates only (UniProxy and v2board gRPC stay open); agent enrollment: %s. `anix-control agents transports --check-required` lists the nodes that never enrolled.%s", enrollment, ignored)
+	return fmt.Sprintf("Agent transports: AnixOps Agents connect with client certificates only; agent enrollment: %s. `anix-control agents transports --check-required` lists the nodes that never enrolled.%s", enrollment, ignored)
 }

@@ -6,7 +6,6 @@ import (
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	agentv1pb "github.com/AnixOps/anix-control/sdk/api/agent/v1"
-	pb "github.com/AnixOps/anix-control/v5/api/grpc/v2boardpb"
 	"github.com/AnixOps/anix-control/v5/internal/agentpki"
 	"github.com/AnixOps/anix-control/v5/internal/agenttransport"
 	"github.com/AnixOps/anix-control/v5/internal/database"
@@ -80,16 +79,8 @@ func TestAgentListenerRefusesUncertifiedStreams(t *testing.T) {
 		assert.Equal(t, []string{agentcontrol.ErrorCodeMTLSRequired}, trailer.Get(agentcontrol.MetadataErrorCode))
 		assert.Equal(t, enrollRefused+1, agenttransport.RefusedRequests(agentv1pb.AgentEnrollment_Enroll_FullMethodName))
 
-		// UniProxy's gRPC sibling, the v2board services, stay open to the
-		// legacy credential (third-party node software) and are recorded.
-		_, err = pb.NewNodeServiceClient(anonymous).GetConfig(legacyCredentials(ctx, l.proxy.ID, l.proxyKey), &pb.NodeConfigRequest{NodeId: uint32(l.proxy.ID)})
-		assert.NotContains(t, []codes.Code{codes.Unauthenticated, codes.PermissionDenied}, status.Code(err))
-		row, ok := transportRow(t, agentcontrol.NodeKindProxy, l.proxy.ID, model.AgentTransportV2boardGRPC)
-		require.True(t, ok)
-		assert.Equal(t, "api-key", row.Identity)
-
-		// A certificate opens the stream; its v2board calls are recorded
-		// with the certificate's identity.
+		// A certificate opens the stream, recorded with the certificate's
+		// identity.
 		credential, _, err := l.pki.CreateEnrollmentToken(ctx, agentpki.TokenRequest{Node: l.proxyNode(), TTL: time.Hour})
 		require.NoError(t, err)
 		certificate, issued, err := enrollForTest(t, ctx, anonymous, credential)
@@ -98,12 +89,9 @@ func TestAgentListenerRefusesUncertifiedStreams(t *testing.T) {
 		_, helloAck, err := openStream(t, ctx, conn, uint32(l.proxy.ID))
 		require.NoError(t, err)
 		assert.NotEmpty(t, helloAck.SessionId)
-		_, ok = transportRow(t, agentcontrol.NodeKindProxy, l.proxy.ID, model.AgentTransportMTLSStream)
-		assert.True(t, ok)
-		_, err = pb.NewNodeServiceClient(conn).GetConfig(ctx, &pb.NodeConfigRequest{NodeId: uint32(l.proxy.ID)})
-		assert.NotContains(t, []codes.Code{codes.Unauthenticated, codes.PermissionDenied}, status.Code(err))
-		row, _ = transportRow(t, agentcontrol.NodeKindProxy, l.proxy.ID, model.AgentTransportV2boardGRPC)
-		assert.Equal(t, issued.GetSpiffeId(), row.Identity, "a new identity is written at once, past the throttle")
+		row, ok := transportRow(t, agentcontrol.NodeKindProxy, l.proxy.ID, model.AgentTransportMTLSStream)
+		require.True(t, ok)
+		assert.Equal(t, issued.GetSpiffeId(), row.Identity)
 	})
 }
 

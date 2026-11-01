@@ -4,8 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,7 +14,6 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/agentstreams"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/modulepki"
-	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/postgres"
@@ -210,8 +207,8 @@ func TestDefaultRecorder(t *testing.T) {
 	db := openSQLite(t)
 	restore := SetDefault(newTestRecorder(db, &clock{now: time.Now().UTC()}))
 	defer restore()
-	Seen(context.Background(), Sighting{Node: proxy7, Transport: model.AgentTransportUniProxy})
-	_, ok := loadRow(t, db, proxy7, model.AgentTransportUniProxy)
+	Seen(context.Background(), Sighting{Node: proxy7, Transport: model.AgentTransportMTLSStream})
+	_, ok := loadRow(t, db, proxy7, model.AgentTransportMTLSStream)
 	require.True(t, ok)
 	require.Len(t, Default().Snapshot(), 1)
 }
@@ -236,15 +233,16 @@ func seedInventory(t *testing.T, db *gorm.DB, now time.Time) {
 	}).Error)
 	at := func(minutes int) time.Time { return now.Add(time.Duration(-minutes) * time.Minute) }
 	require.NoError(t, db.Create(&[]model.AgentTransport{
-		// Node 1 moved to the mTLS stream; it still pulls UniProxy.
+		// Node 1 moved to the mTLS stream; it used to pull UniProxy.
 		{NodeKind: "proxy", NodeID: 1, Transport: model.AgentTransportAPIKeyStream, AgentVersion: "1.1.0", FirstSeenAt: at(600), LastSeenAt: at(300)},
 		{NodeKind: "proxy", NodeID: 1, Transport: model.AgentTransportMTLSStream, AgentVersion: "2.0.0", FirstSeenAt: at(200), LastSeenAt: at(5)},
-		{NodeKind: "proxy", NodeID: 1, Transport: model.AgentTransportUniProxy, FirstSeenAt: at(600), LastSeenAt: at(1)},
+		{NodeKind: "proxy", NodeID: 1, Transport: "uniproxy", FirstSeenAt: at(600), LastSeenAt: at(1)},
 		// Node 2 is a legacy agent: WebSocket and REST.
 		{NodeKind: "proxy", NodeID: 2, Transport: model.AgentTransportWebSocket, FirstSeenAt: at(600), LastSeenAt: at(3)},
 		{NodeKind: "proxy", NodeID: 2, Transport: model.AgentTransportHTTPLegacy, FirstSeenAt: at(600), LastSeenAt: at(2)},
-		// Node 3 is third-party software on UniProxy only.
-		{NodeKind: "proxy", NodeID: 3, Transport: model.AgentTransportUniProxy, FirstSeenAt: at(600), LastSeenAt: at(1)},
+		// Node 3 was third-party software on UniProxy and v2board gRPC only.
+		{NodeKind: "proxy", NodeID: 3, Transport: "uniproxy", FirstSeenAt: at(600), LastSeenAt: at(1)},
+		{NodeKind: "proxy", NodeID: 3, Transport: "v2board-grpc", FirstSeenAt: at(600), LastSeenAt: at(1)},
 		// A deleted node's row is not listed.
 		{NodeKind: "proxy", NodeID: 99, Transport: model.AgentTransportWebSocket, FirstSeenAt: at(600), LastSeenAt: at(1)},
 	}).Error)
@@ -260,24 +258,25 @@ func TestInventory(t *testing.T) {
 	require.Equal(t, UpgradeGuideURL, inventory.UpgradeGuide)
 	counts := inventory.Summary
 	counts.ReadyForRequired, counts.RequiredReasons, counts.RequiredBlockers = false, nil, nil
-	require.Equal(t, Summary{Total: 5, MTLS: 1, ThirdParty: 1, Unseen: 3}, counts, "retired channels are not shown")
+	require.Equal(t, Summary{Total: 5, MTLS: 1, Unseen: 4}, counts, "retired channels are not shown")
 	require.False(t, inventory.Summary.ReadyForRequired)
-	require.Len(t, inventory.Summary.RequiredBlockers, 2, "the disabled unseen node does not count")
+	require.Len(t, inventory.Summary.RequiredBlockers, 3, "the disabled unseen node does not count")
 	require.Equal(t, "proxy-2", inventory.Summary.RequiredBlockers[0].Node)
 	require.Equal(t, BlockerNeverEnrolled, inventory.Summary.RequiredBlockers[0].Reason)
-	require.Equal(t, "forward-1", inventory.Summary.RequiredBlockers[1].Node)
+	require.Equal(t, "proxy-3", inventory.Summary.RequiredBlockers[1].Node, "UniProxy software never enrolled")
+	require.Equal(t, "forward-1", inventory.Summary.RequiredBlockers[2].Node)
 	byNode := map[string]NodeTransports{}
 	for _, node := range inventory.Nodes {
 		byNode[node.Node] = node
 	}
 	enrolled := byNode["proxy-1"]
-	require.Equal(t, StatusMTLS, enrolled.Status, "third-party protocols do not decide")
-	require.Equal(t, model.AgentTransportUniProxy, enrolled.Transport, "the latest sighting")
+	require.Equal(t, StatusMTLS, enrolled.Status)
+	require.Equal(t, model.AgentTransportMTLSStream, enrolled.Transport, "the latest sighting of a channel that is not retired")
 	require.Equal(t, "2.0.0", enrolled.AgentVersion)
 	require.NotNil(t, enrolled.Certificate)
 	require.Equal(t, "new", enrolled.Certificate.Serial)
 	require.Equal(t, "spiffe://anixops/prod/agent/proxy-1", enrolled.Certificate.SPIFFEID)
-	require.Len(t, enrolled.Transports, 2, "the retired API key stream row is not listed")
+	require.Len(t, enrolled.Transports, 1, "the retired API key stream and UniProxy rows are not listed")
 
 	retired := byNode["proxy-2"]
 	require.Equal(t, StatusUnseen, retired.Status, "only retired channels were seen")
@@ -285,7 +284,7 @@ func TestInventory(t *testing.T) {
 	require.Equal(t, "1.1.0-node", retired.AgentVersion, "the node row's version")
 	require.Nil(t, retired.Certificate, "a revoked certificate is no identity")
 
-	require.Equal(t, StatusThirdParty, byNode["proxy-3"].Status)
+	require.Equal(t, StatusUnseen, byNode["proxy-3"].Status, "UniProxy and v2board gRPC are retired")
 	never := byNode["proxy-4"]
 	require.Equal(t, StatusUnseen, never.Status)
 	require.False(t, never.Enabled)
@@ -299,7 +298,6 @@ func TestInventory(t *testing.T) {
 	// The live overlay: node 2 enrolled a second ago, not written yet.
 	live := newTestRecorder(nil, &clock{now: now})
 	live.Seen(context.Background(), Sighting{Node: agentcontrol.AgentNode{Kind: "proxy", ID: 2}, Transport: model.AgentTransportMTLSStream, AgentVersion: "2.0.0"})
-	live.Seen(context.Background(), Sighting{Node: agentcontrol.AgentNode{Kind: "proxy", ID: 3}, Transport: model.AgentTransportUniProxy})
 	inventory, err = Build(context.Background(), db, Options{Now: now, Live: live})
 	require.NoError(t, err)
 	require.Equal(t, StatusMTLS, inventoryByNode(inventory)["proxy-2"].Status)
@@ -379,7 +377,7 @@ func TestRequiredReadiness(t *testing.T) {
 		{NodeKind: "proxy", NodeID: 1, Transport: model.AgentTransportMTLSStream, FirstSeenAt: days(3), LastSeenAt: days(0)},
 		{NodeKind: "proxy", NodeID: 2, Transport: model.AgentTransportAPIKeyStream, FirstSeenAt: days(30), LastSeenAt: days(1)},
 		{NodeKind: "proxy", NodeID: 4, Transport: model.AgentTransportWebSocket, FirstSeenAt: days(30), LastSeenAt: days(1)},
-		{NodeKind: "proxy", NodeID: 5, Transport: model.AgentTransportUniProxy, FirstSeenAt: days(30), LastSeenAt: days(0)},
+		{NodeKind: "proxy", NodeID: 5, Transport: "uniproxy", FirstSeenAt: days(30), LastSeenAt: days(0)},
 	}).Error)
 
 	inventory, err = Build(context.Background(), db, Options{Now: now})
@@ -390,17 +388,17 @@ func TestRequiredReadiness(t *testing.T) {
 	for _, blocker := range summary.RequiredBlockers {
 		blockers[blocker.Node] = blocker
 	}
-	require.Len(t, blockers, 3, "%+v", summary.RequiredBlockers)
-	for _, node := range []string{"proxy-2", "proxy-7", "forward-1"} {
+	require.Len(t, blockers, 4, "%+v", summary.RequiredBlockers)
+	for _, node := range []string{"proxy-2", "proxy-5", "proxy-7", "forward-1"} {
 		require.Equal(t, BlockerNeverEnrolled, blockers[node].Reason, node)
 		require.Nil(t, blockers[node].LastSeenAt, node)
 	}
 	require.Equal(t, []string{
-		"3 enabled node(s) never enrolled (no agent certificate, never seen): install or enroll their Agents, or disable the nodes",
+		"4 enabled node(s) never enrolled (no agent certificate, never seen): install or enroll their Agents, or disable the nodes",
 	}, summary.RequiredReasons)
 
 	// Disabling the nodes clears the blockers.
-	require.NoError(t, db.Model(&model.Node{}).Where("id IN ?", []uint{2, 7}).Update("status", model.NodeStatusDisabled).Error)
+	require.NoError(t, db.Model(&model.Node{}).Where("id IN ?", []uint{2, 5, 7}).Update("status", model.NodeStatusDisabled).Error)
 	require.NoError(t, db.Model(&model.ForwardNode{}).Where("id = ?", 1).Update("enabled", false).Error)
 	inventory, err = Build(context.Background(), db, Options{Now: now})
 	require.NoError(t, err)
@@ -443,53 +441,6 @@ func TestPostgresAgentTransportInventory(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 2, inventory.Summary.MTLS, "the retired websocket row is ignored, the mTLS sighting counts")
 	require.Equal(t, 2, inventory.Summary.Unseen)
-}
-
-func TestThirdPartyHTTPRecordsTheAuthenticatedNode(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	db := openSQLite(t)
-	restore := SetDefault(newTestRecorder(db, &clock{now: time.Now().UTC()}))
-	defer restore()
-
-	authenticate := func(c *gin.Context) {
-		if c.GetHeader("X-API-Key") != "key" {
-			c.AbortWithStatus(http.StatusUnauthorized)
-			return
-		}
-		c.Set("node_id", uint(11))
-		c.Next()
-	}
-	router := gin.New()
-	router.GET("/api/v2/server/UniProxy/config", ThirdPartyHTTP(model.AgentTransportUniProxy), authenticate, func(c *gin.Context) { c.Status(http.StatusNoContent) })
-	request := func(key string) *httptest.ResponseRecorder {
-		recorder := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, "/api/v2/server/UniProxy/config", nil)
-		req.Header.Set("X-API-Key", key)
-		router.ServeHTTP(recorder, req)
-		return recorder
-	}
-
-	require.Equal(t, http.StatusUnauthorized, request("wrong").Code)
-	_, ok := loadRow(t, db, agentcontrol.AgentNode{Kind: "proxy", ID: 11}, model.AgentTransportUniProxy)
-	require.False(t, ok, "a refused request is not a sighting")
-
-	answer := request("key")
-	require.Equal(t, http.StatusNoContent, answer.Code)
-	require.Empty(t, answer.Header().Get("Deprecation"), "UniProxy is never signalled")
-	_, ok = loadRow(t, db, agentcontrol.AgentNode{Kind: "proxy", ID: 11}, model.AgentTransportUniProxy)
-	require.True(t, ok)
-}
-
-func TestContextNodeID(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	c, _ := gin.CreateTestContext(httptest.NewRecorder())
-	require.Zero(t, contextNodeID(c))
-	for _, value := range []any{uint(5), uint32(5), uint64(5), 5} {
-		c.Set("node_id", value)
-		require.Equal(t, uint32(5), contextNodeID(c))
-	}
-	c.Set("node_id", -1)
-	require.Zero(t, contextNodeID(c))
 }
 
 // seedCertificates records the agent certificates of the inventory's nodes:
@@ -603,7 +554,7 @@ func TestInventoryNodeFilter(t *testing.T) {
 	require.Len(t, one.Nodes, 1)
 	require.Equal(t, "proxy-2", one.Nodes[0].Node)
 	require.Equal(t, Summary{Total: 1, Unseen: 1}, Summary{Total: one.Summary.Total, MTLS: one.Summary.MTLS,
-		ThirdParty: one.Summary.ThirdParty, Unseen: one.Summary.Unseen}, "the counts follow the list")
+		Unseen: one.Summary.Unseen}, "the counts follow the list")
 	require.Equal(t, all.Summary.RequiredBlockers, one.Summary.RequiredBlockers, "readiness covers every node, also for one")
 	require.Equal(t, all.Summary.ReadyForRequired, one.Summary.ReadyForRequired)
 	require.Equal(t, all.Summary.RequiredReasons, one.Summary.RequiredReasons)
@@ -623,10 +574,7 @@ func TestConnectionOf(t *testing.T) {
 	now := time.Date(2026, 10, 2, 12, 0, 0, 0, time.UTC)
 	ago := func(d time.Duration) time.Time { return now.Add(-d) }
 	seen := func(transport string, d time.Duration) TransportSeen {
-		return TransportSeen{
-			Transport:  transport,
-			ThirdParty: model.AgentTransportThirdParty(transport), LastSeenAt: ago(d),
-		}
+		return TransportSeen{Transport: transport, LastSeenAt: ago(d)}
 	}
 	live := func(authentication string) *LiveSession {
 		return &LiveSession{Authentication: authentication, LastSeenAt: ago(10 * time.Second)}
@@ -641,14 +589,12 @@ func TestConnectionOf(t *testing.T) {
 		{name: "an mTLS stream session", node: NodeTransports{Session: live(agentstreams.AuthenticationMTLS)}, sessionsRead: true, want: ConnectionMTLSStream, transport: model.AgentTransportMTLSStream},
 		{name: "an API key stream session is no connection", node: NodeTransports{Session: live(agentstreams.AuthenticationAPIKey)}, sessionsRead: true, want: ConnectionOffline},
 		{name: "a session without an authentication is no connection", node: NodeTransports{Session: live("")}, sessionsRead: true, want: ConnectionOffline},
-		{name: "the session beats a newer UniProxy sighting", node: NodeTransports{Session: live(agentstreams.AuthenticationMTLS), Transports: []TransportSeen{seen(model.AgentTransportUniProxy, time.Second)}}, sessionsRead: true, want: ConnectionMTLSStream, transport: model.AgentTransportMTLSStream},
-		{name: "a stale sighting is offline", node: NodeTransports{Transports: []TransportSeen{seen(model.AgentTransportUniProxy, ConnectionWindow+time.Second)}}, sessionsRead: true, want: ConnectionOffline},
+		{name: "the session beats a newer stream sighting", node: NodeTransports{Session: live(agentstreams.AuthenticationMTLS), Transports: []TransportSeen{seen(model.AgentTransportMTLSStream, time.Second)}}, sessionsRead: true, want: ConnectionMTLSStream, transport: model.AgentTransportMTLSStream},
+		{name: "a stale sighting is offline", node: NodeTransports{Transports: []TransportSeen{seen(model.AgentTransportMTLSStream, ConnectionWindow+time.Second)}}, want: ConnectionOffline},
 		{name: "never seen", node: NodeTransports{}, sessionsRead: true, want: ConnectionOffline},
 		{name: "a closed stream is not connected when sessions were read", node: NodeTransports{Transports: []TransportSeen{seen(model.AgentTransportMTLSStream, time.Minute)}}, sessionsRead: true, want: ConnectionOffline},
 		{name: "a stream sighting counts without sessions (the CLI)", node: NodeTransports{Transports: []TransportSeen{seen(model.AgentTransportMTLSStream, time.Minute)}}, want: ConnectionMTLSStream, transport: model.AgentTransportMTLSStream},
-		{name: "UniProxy only is third party", node: NodeTransports{Transports: []TransportSeen{seen(model.AgentTransportUniProxy, time.Minute)}}, sessionsRead: true, want: ConnectionThirdParty, transport: model.AgentTransportUniProxy},
-		{name: "the window is inclusive", node: NodeTransports{Transports: []TransportSeen{seen(model.AgentTransportUniProxy, ConnectionWindow)}}, sessionsRead: true, want: ConnectionThirdParty, transport: model.AgentTransportUniProxy},
-		{name: "a stale UniProxy sighting is offline", node: NodeTransports{Transports: []TransportSeen{seen(model.AgentTransportV2boardGRPC, time.Hour)}}, sessionsRead: true, want: ConnectionOffline},
+		{name: "the window is inclusive", node: NodeTransports{Transports: []TransportSeen{seen(model.AgentTransportMTLSStream, ConnectionWindow)}}, want: ConnectionMTLSStream, transport: model.AgentTransportMTLSStream},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -672,22 +618,22 @@ func TestInventoryConnection(t *testing.T) {
 	seedInventory(t, db, now)
 
 	// The CLI reads no sessions: node 1's stream sighting (five minutes old,
-	// inside the window) decides, over its newer UniProxy pulls.
+	// inside the window) decides.
 	inventory, err := Build(context.Background(), db, Options{Now: now})
 	require.NoError(t, err)
 	byNode := inventoryByNode(inventory)
 	require.Equal(t, ConnectionMTLSStream, byNode["proxy-1"].Connection.Type)
 	require.Equal(t, ConnectionOffline, byNode["proxy-2"].Connection.Type, "retired channels are not connections")
-	require.Equal(t, ConnectionThirdParty, byNode["proxy-3"].Connection.Type)
+	require.Equal(t, ConnectionOffline, byNode["proxy-3"].Connection.Type, "UniProxy is retired")
 	require.Equal(t, ConnectionOffline, byNode["proxy-4"].Connection.Type)
 	require.Equal(t, ConnectionOffline, byNode["forward-1"].Connection.Type)
 
 	// The API reads this process's sessions: with none, proxy-1's closed
-	// stream is no connection (it still pulls UniProxy).
+	// stream is no connection.
 	inventory, err = Build(context.Background(), db, Options{Now: now, Sessions: func() []agentstreams.Session { return nil }})
 	require.NoError(t, err)
 	byNode = inventoryByNode(inventory)
-	require.Equal(t, ConnectionThirdParty, byNode["proxy-1"].Connection.Type)
+	require.Equal(t, ConnectionOffline, byNode["proxy-1"].Connection.Type)
 	require.Equal(t, ConnectionOffline, byNode["proxy-4"].Connection.Type)
 
 	// An mTLS session.

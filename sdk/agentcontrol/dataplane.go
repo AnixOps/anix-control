@@ -38,7 +38,7 @@ const (
 	// MaintenanceAck (maintenance.go; PROTOCOL.md, "Maintenance events").
 	CapabilityMaintenance = "maintenance"
 	// CapabilityAlive: Control sends AliveList, every user's online device
-	// count across all nodes (UniProxy alivelist), so the Agent enforces
+	// count across all nodes, so the Agent enforces
 	// device limits against every node's connections.
 	CapabilityAlive = "alive"
 	// CapabilityArtifacts: Control serves the AgentArtifacts service

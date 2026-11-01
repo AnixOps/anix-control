@@ -258,8 +258,7 @@ func legacyNodeKeyMatches(node *model.Node, apiKey string) bool {
 }
 
 // NodeAPIKeyMatches reports whether apiKey is the API key of node, a row of
-// v2_node the caller loaded by id: UniProxy's node authentication and the
-// agent channels. An unusable key never matches.
+// v2_node the caller loaded by id: the node API key authentication. An unusable key never matches.
 func NodeAPIKeyMatches(db *gorm.DB, node *model.Node, apiKey string) bool {
 	if node == nil || Unusable(apiKey) {
 		return false

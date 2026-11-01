@@ -113,7 +113,7 @@ func NodeTrafficBucketBounds(granularity string, since, until, now time.Time) (t
 //
 // Hourly buckets sum the node's rows of v2_server_log, (u * rate) up and
 // (d * rate) down, over every server type the node reported under (agent
-// and legacy reports write "node", UniProxy the protocol name; the node id
+// reports write "node", older UniProxy rows the protocol name; the node id
 // is the same). It reads the rows of one node in the window through
 // idx_v2_server_log_server_id and idx_v2_server_log_log_at: cheaper than the
 // global GetHourlyTraffic, which scans the window of every node, and bounded

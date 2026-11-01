@@ -49,7 +49,7 @@ func ValidateNodeProtocol(protocol *model.NodeProtocol) error {
 
 // ValidateWireGuardRuntimeConfig validates a raw node config after it has been
 // decoded from JSON. Raw configs bypass NodeProtocol persistence, so they need
-// the same runtime guard before UniProxy returns them to a node.
+// the same runtime guard before a node is sent them.
 func ValidateWireGuardRuntimeConfig(config map[string]any) error {
 	if config == nil {
 		return nil

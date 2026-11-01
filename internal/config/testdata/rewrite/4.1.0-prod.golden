@@ -86,7 +86,7 @@ Dropped:
   frontend.enable: still read until M2 (P11), not written: serves the web app from frontend.path until the web app is built into the binary
   frontend.path: still read until M2 (P11), not written: the web app's directory until the web app is built into the binary
   frontend.port: still read until M2 (P11), not written: a second plain listener of tls.mode external while listen is unset; config rewrite does not carry it, point the reverse proxy at listen
-  grpc.api_token: still read until M5 (N9), not written: the legacy administrator token of the v2board gRPC services, removed with them
+  grpc.api_token: the legacy administrator token of the v2board gRPC services, which are removed; the key does nothing, so remove it
   grpc.enabled: still read until M2 (P11), not written: turns the gRPC listener on without domain; with domain it always runs
   grpc.host: still read until M2 (P11), not written: the gRPC listener's address, until it listens on every address
   grpc.port: the default (50051)
