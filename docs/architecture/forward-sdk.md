@@ -1,6 +1,6 @@
 # Forward SDK: routes, hops, engines and drivers
 
-Note: the nftables driver, its goldens (`contracts/forward/v1/nft`) and the netns end-to-end suite (`sdk/forward/e2e`) described below were removed in 5.0; relays run on the anixops driver. The sections are kept as design history.
+Note: every engine driver (nftables, gost, the anixops relay), the driver framework itself (`sdk/forward/driver`, its fake and conformance suite), `sdk/forward/leastconn`, the nftables goldens (`contracts/forward/v1/nft`) and the netns end-to-end suite (`sdk/forward/e2e`) described below were removed in 5.0. Routes run on the network model; the Agent's forward component keeps the state, the vantage probes, the diagnostics and `forward.report`. The driver sections are kept as design history.
 
 Status: DESIGN APPROVED (gates H11–H14 decided by the owner on 2026-10-02).
 F1b and F1c are implemented: the domain model (`sdk/forward/model`), the
