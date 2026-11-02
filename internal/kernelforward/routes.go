@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -148,8 +149,8 @@ func (s *Service) CreateRoute(ctx context.Context, requestID string, route *forw
 		candidateID = newULID(now)
 		candidate.Id, candidate.Revision = candidateID, 1
 		candidate.CreatedAtUnixMs, candidate.UpdatedAtUnixMs = now.UnixMilli(), now.UnixMilli()
-		violations := validate.Proto(candidate, validate.Options{OnCreate: true, Now: now, EnableAnixOps: s.anixOpsEnabled(), EnableNetwork: true})
-		if violations = append(violations, gostRemoved(candidate)...); len(violations) > 0 {
+		violations := validate.Proto(candidate, validate.Options{OnCreate: true, Now: now})
+		if len(violations) > 0 {
 			return "", false, refused(routeViolations(candidate.GetId(), violations), candidate.GetId())
 		}
 		encoded, err := encodeRoute(candidate)
@@ -212,7 +213,7 @@ func (s *Service) UpdateRoute(ctx context.Context, requestID string, route *forw
 		if rows[0].Revision != expectedRevision {
 			return "", false, ErrRevisionMismatch
 		}
-		if violations := gostRemoved(route); len(violations) > 0 {
+		if violations := validate.Proto(route, validate.Options{Now: now}); len(violations) > 0 {
 			return "", false, refused(routeViolations(route.GetId(), violations), route.GetId())
 		}
 		candidate := proto.Clone(route).(*forwardv1.Route)
@@ -236,9 +237,8 @@ func (s *Service) UpdateRoute(ctx context.Context, requestID string, route *forw
 	return response.GetRoute(), nil
 }
 
-// DeleteRoute removes a route, as ForwardControl.DeleteRoute: its hops
-// leave every node's state in the next generation, and its ports and marks
-// stay held for ReleaseGrace.
+// DeleteRoute removes a route, as ForwardControl.DeleteRoute; the next plan
+// drops it from the network model.
 func (s *Service) DeleteRoute(ctx context.Context, requestID, routeID string) error {
 	requestID, err := checkRequestID(requestID)
 	if err != nil {
@@ -258,10 +258,6 @@ func (s *Service) DeleteRoute(ctx context.Context, requestID, routeID string) er
 		}
 		if result.RowsAffected == 0 {
 			return "", false, ErrNotFound
-		}
-		if err := tx.Model(&model.KernelForwardAllocation{}).Where("route_id = ? AND released_at IS NULL", routeID).
-			Updates(map[string]any{"released_at": now, "updated_at": now}).Error; err != nil {
-			return "", false, fmt.Errorf("kernel forward: release allocations: %w", err)
 		}
 		return routeID, false, record(tx, requestID, methodDelete, routeID, hash, &forwardv1.DeleteRouteResponse{}, now)
 	})
@@ -317,42 +313,46 @@ func (s *Service) ListRoutes(ctx context.Context, opts ListOptions) ([]*forwardv
 	if size > maxPageSize {
 		size = maxPageSize
 	}
-	query := db.Order("id").Limit(size + 1)
+	query := db.Order("id")
+	if opts.NodeRef == "" {
+		query = query.Limit(size + 1)
+	}
 	if opts.Owner != "" {
 		query = query.Where("owner = ?", opts.Owner)
 	}
 	if opts.PageToken != "" {
 		query = query.Where("id > ?", opts.PageToken)
 	}
-	if opts.NodeRef != "" {
-		query = query.Where("id IN (?)", db.Model(&model.KernelForwardAllocation{}).Select("route_id").
-			Where("node_ref = ? AND released_at IS NULL", opts.NodeRef))
-	}
 	var rows []model.KernelForwardRoute
 	if err := query.Find(&rows).Error; err != nil {
 		return nil, "", err
 	}
-	next := ""
-	if len(rows) > size {
-		rows = rows[:size]
-		next = rows[size-1].ID
-	}
-	routes := make([]*forwardv1.Route, 0, len(rows))
+	routes := make([]*forwardv1.Route, 0, min(len(rows), size+1))
 	for _, row := range rows {
 		route, err := decodeRoute(row)
 		if err != nil {
 			return nil, "", err
 		}
+		if opts.NodeRef != "" && !usesNode(route, opts.NodeRef) {
+			continue
+		}
 		routes = append(routes, route)
+		if len(routes) > size {
+			break
+		}
+	}
+	next := ""
+	if len(routes) > size {
+		routes = routes[:size]
+		next = routes[size-1].GetId()
 	}
 	return routes, next, nil
 }
 
-// PlanRoute runs the planner for one route without storing anything, as
-// ForwardControl.PlanRoute: request nodes replace the inventory's of the
-// same reference, the route keeps its own allocations when it has an id,
-// and every other allocation (deleted routes in their grace period too) is
-// taken.
+// PlanRoute checks one route against the inventory without storing
+// anything, as ForwardControl.PlanRoute: request nodes replace the
+// inventory's of the same reference. Routes run on the network model, so
+// the answer holds only violations.
 func (s *Service) PlanRoute(ctx context.Context, request *forwardv1.PlanRouteRequest) (*forwardv1.PlanRouteResponse, error) {
 	if request.GetRoute() == nil {
 		return nil, fmt.Errorf("%w: route is required", ErrInvalidRequest)
@@ -361,35 +361,21 @@ func (s *Service) PlanRoute(ctx context.Context, request *forwardv1.PlanRouteReq
 	if err != nil {
 		return nil, err
 	}
-	now := s.now()
 	inv, err := loadInventory(db)
 	if err != nil {
 		return nil, err
 	}
-	var rows []model.KernelForwardAllocation
-	if err := db.Where("released_at IS NULL OR released_at >= ?", now.Add(-ReleaseGrace)).Find(&rows).Error; err != nil {
-		return nil, err
-	}
-	own, taken := planner.Allocations{}, planner.Allocations{}
-	routeID := request.GetRoute().GetId()
-	for _, row := range rows {
-		key := planner.Key{RouteID: row.RouteID, HopIndex: row.HopIndex, NodeRef: row.NodeRef}
-		slot := planner.Slot{Port: row.Port, Mark: row.Mark}
-		if routeID != "" && row.RouteID == routeID && row.ReleasedAt == nil {
-			own[key] = slot
-		} else {
-			taken[key] = slot
+	return planner.PlanRoute(request, inv.nodes, planner.Options{
+		ReservedPorts: inv.reserved, Now: s.now(), OnCreate: request.GetRoute().GetId() == "",
+	}), nil
+}
+
+// usesNode reports whether a hop of route runs on ref.
+func usesNode(route *forwardv1.Route, ref string) bool {
+	for _, hop := range route.GetHops() {
+		if slices.Contains(hop.GetNodeRefs(), ref) {
+			return true
 		}
 	}
-	response, err := planner.PlanRoute(request, inv.nodes, own, planner.Options{
-		Cluster: s.cluster(), ReservedPorts: inv.reserved, Taken: taken, Now: now, OnCreate: routeID == "",
-		EnableAnixOps: s.anixOpsEnabled(), EnableNetwork: true,
-	})
-	if err != nil {
-		if errors.Is(err, planner.ErrNoCluster) {
-			return nil, fmt.Errorf("%w: %v", ErrInvalidRequest, err)
-		}
-		return nil, err
-	}
-	return response, nil
+	return false
 }

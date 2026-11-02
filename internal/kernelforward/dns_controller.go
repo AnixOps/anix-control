@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
-	forwardv1 "github.com/AnixOps/anix-control/sdk/api/forward/v1"
 	networkv1 "github.com/AnixOps/anix-control/sdk/api/network/v1"
 	"github.com/AnixOps/anix-control/v5/internal/forwardddns"
 	"github.com/AnixOps/anix-control/v5/internal/model"
@@ -28,21 +27,15 @@ import (
 // nodes and keeps the binding's records on the addresses of the nodes in
 // rotation:
 //
-//   - A node is healthy when it is in the inventory with a public address
-//     of a published family, its latest forward report arrived within
-//     DNSReportStaleAfter, its Agent is online (a session in this process,
-//     or a stream seen within DNSPresenceStaleAfter by any process), the
-//     report has no hop error on the route's entry hop, and not every
-//     upstream of the entry hop is down. A node still converging (its
-//     report behind its desired generation, or not applied) is neither
-//     healthy nor unhealthy: its streaks do not move.
-//   - Each entry device of an ENGINE_NETWORK route is judged on the network
-//     model instead (evaluateNetworkEntry): a public address (its node's or
-//     an interface's), its network status received within
-//     DNSReportStaleAfter, its Agent online, the route's port forward
-//     applied, and not every target down by the entry's checks, which dial
-//     through the whole route. A device behind its plan generation is
-//     converging.
+//   - Each entry device of the route is judged on the network model
+//     (evaluateNetworkEntry): healthy with a public address (its node's or
+//     an interface's) of a published family, its network status received
+//     within DNSReportStaleAfter, its Agent online (a session in this
+//     process, or a stream seen within DNSPresenceStaleAfter by any
+//     process), the route's port forward applied, and not every target
+//     down by the entry's checks, which dial through the whole route. A
+//     device behind its plan generation is converging: neither healthy nor
+//     unhealthy, its streaks do not move.
 //   - Hysteresis: a node leaves rotation after DNSRemoveAfter unhealthy
 //     evaluations in a row and joins after DNSAddAfter healthy ones; before
 //     the binding's first publication a healthy node joins at once.
@@ -76,7 +69,6 @@ const (
 	dnsAuditTargetBinding  = "forward_dns_binding"
 	dnsReasonHealthy       = "healthy"
 	dnsReasonConverging    = "converging"
-	dnsReasonNoInventory   = "not_in_inventory"
 	dnsReasonNoAddress     = "no_address"
 	dnsReasonNeverReported = "never_reported"
 	dnsReasonReportStale   = "report_stale"
@@ -195,53 +187,9 @@ const (
 
 // entryFacts are what one evaluation knows of an entry node.
 type entryFacts struct {
-	InInventory bool
 	// Addresses are its public addresses of the published families.
 	Addresses []string
-	// Report is its latest report; ReceivedAt when it arrived.
-	Report     *forwardv1.NodeForwardReport
-	ReceivedAt time.Time
-	// Desired is its desired generation.
-	Desired uint64
-	Online  bool
-}
-
-// evaluateEntry judges an entry node of routeID at now.
-func evaluateEntry(routeID string, facts entryFacts, now time.Time) (verdict, string) {
-	switch {
-	case !facts.InInventory:
-		return verdictBad, dnsReasonNoInventory
-	case len(facts.Addresses) == 0:
-		return verdictBad, dnsReasonNoAddress
-	case facts.Report == nil:
-		return verdictBad, dnsReasonNeverReported
-	case now.Sub(facts.ReceivedAt) > DNSReportStaleAfter:
-		return verdictBad, dnsReasonReportStale
-	case !facts.Online:
-		return verdictBad, dnsReasonOffline
-	}
-	for _, hopErr := range facts.Report.GetErrors() {
-		if hopErr.GetRouteId() == routeID && hopErr.GetHopIndex() == 0 {
-			return verdictBad, dnsReasonHopError
-		}
-	}
-	upstreams, down := 0, 0
-	for _, health := range facts.Report.GetHealth() {
-		if health.GetRouteId() != routeID || health.GetHopIndex() != 0 {
-			continue
-		}
-		upstreams++
-		if state := health.GetState(); state == forwardv1.HealthState_HEALTH_STATE_UNHEALTHY || state == forwardv1.HealthState_HEALTH_STATE_CIRCUIT_OPEN {
-			down++
-		}
-	}
-	if upstreams > 0 && down == upstreams {
-		return verdictBad, dnsReasonUpstreamsDown
-	}
-	if facts.Report.GetGeneration() < facts.Desired || !facts.Report.GetApplied() {
-		return verdictNeutral, dnsReasonConverging
-	}
-	return verdictGood, dnsReasonHealthy
+	Online    bool
 }
 
 // evaluateNetworkEntry judges the entry device of the ENGINE_NETWORK route
@@ -452,11 +400,9 @@ func auditDNS(tx *gorm.DB, action string, binding model.KernelForwardDNSBinding,
 
 // evaluation is what one pass reads once for every binding.
 type evaluation struct {
-	now       time.Time
-	inventory map[string][]string
-	reports   map[string]model.KernelForwardNodeReport
-	desired   map[string]uint64
-	lastSeen  map[string]time.Time
+	now      time.Time
+	reports  map[string]model.KernelForwardNodeReport
+	lastSeen map[string]time.Time
 	// vantage are the bindings' selectors and the fresh vantage results by
 	// binding and address (L4, vantage.go).
 	selectors map[uint64]string
@@ -516,16 +462,9 @@ func (e *EntryHA) Evaluate(ctx context.Context) error {
 
 func (e *EntryHA) load(db *gorm.DB) (*evaluation, error) {
 	pass := &evaluation{
-		now: e.Service.now(), inventory: map[string][]string{}, reports: map[string]model.KernelForwardNodeReport{},
-		desired: map[string]uint64{}, lastSeen: map[string]time.Time{},
+		now: e.Service.now(), reports: map[string]model.KernelForwardNodeReport{}, lastSeen: map[string]time.Time{},
 	}
-	inv, err := loadInventory(db)
-	if err != nil {
-		return nil, err
-	}
-	for _, info := range inv.nodes {
-		pass.inventory[info.GetNodeRef()] = info.GetAddresses()
-	}
+	var err error
 	var reports []model.KernelForwardNodeReport
 	if err := db.Find(&reports).Error; err != nil {
 		return nil, fmt.Errorf("kernel forward: load reports: %w", err)
@@ -538,13 +477,6 @@ func (e *EntryHA) load(db *gorm.DB) (*evaluation, error) {
 	}
 	if len(pass.selectors) > 0 {
 		pass.vantage = vantageResults(decodeReports(pass.reports), pass.now)
-	}
-	var states []model.KernelForwardNodeState
-	if err := db.Select("node_ref", "generation").Find(&states).Error; err != nil {
-		return nil, fmt.Errorf("kernel forward: load states: %w", err)
-	}
-	for _, state := range states {
-		pass.desired[state.NodeRef] = state.Generation
 	}
 	var seen []model.AgentTransport
 	if err := db.Where("transport = ?", model.AgentTransportMTLSStream).Find(&seen).Error; err != nil {
@@ -569,20 +501,6 @@ func (e *EntryHA) online(pass *evaluation, ref string) bool {
 	}
 	seen, ok := pass.lastSeen[ref]
 	return ok && pass.now.Sub(seen) <= DNSPresenceStaleAfter
-}
-
-func (e *EntryHA) facts(pass *evaluation, ref string, types []string) entryFacts {
-	addresses, inInventory := pass.inventory[ref]
-	facts := entryFacts{InInventory: inInventory, Addresses: publicAddresses(addresses, types), Desired: pass.desired[ref], Online: e.online(pass, ref)}
-	if row, ok := pass.reports[ref]; ok {
-		report := &forwardv1.NodeForwardReport{}
-		if err := jsonRead.Unmarshal([]byte(row.ReportJSON), report); err == nil {
-			// The row's columns are authoritative for the generation.
-			report.Generation, report.Applied = row.Generation, row.Applied
-			facts.Report, facts.ReceivedAt = report, row.ReceivedAt
-		}
-	}
-	return facts
 }
 
 // saveState writes the controller's columns of a binding, leaving the
@@ -644,7 +562,6 @@ func (e *EntryHA) evaluateBinding(ctx context.Context, db *gorm.DB, pass *evalua
 		entry = hops[0].GetNodeRefs()
 	}
 	types := bindingTypes(binding)
-	_, network := networkForward(route)
 
 	// Health and hysteresis.
 	var stored []model.KernelForwardDNSNode
@@ -663,20 +580,12 @@ func (e *EntryHA) evaluateBinding(ctx context.Context, db *gorm.DB, pass *evalua
 		if !ok {
 			node = model.KernelForwardDNSNode{BindingID: binding.ID, NodeRef: ref}
 		}
-		var facts entryFacts
-		var v verdict
-		var reason string
-		if network {
-			device, err := pass.device(db, ref)
-			if err != nil {
-				return err
-			}
-			facts = entryFacts{Addresses: publicAddresses(deviceAddresses(db, ref, device.Status), types), Online: e.online(pass, ref)}
-			v, reason = evaluateNetworkEntry(binding.RouteID, device, facts, now)
-		} else {
-			facts = e.facts(pass, ref, types)
-			v, reason = evaluateEntry(binding.RouteID, facts, now)
+		device, err := pass.device(db, ref)
+		if err != nil {
+			return err
 		}
+		facts := entryFacts{Addresses: publicAddresses(deviceAddresses(db, ref, device.Status), types), Online: e.online(pass, ref)}
+		v, reason := evaluateNetworkEntry(binding.RouteID, device, facts, now)
 		if pass.selectors[binding.ID] != "" {
 			kept, down, _ := unreachable(pass.vantage[binding.ID], facts.Addresses)
 			facts.Addresses = kept

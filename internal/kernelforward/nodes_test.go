@@ -146,9 +146,6 @@ func runNodeRegistry(t *testing.T, db *gorm.DB) {
 	require.NoError(t, err)
 	assert.Empty(t, updated.GetViolations())
 	assert.Equal(t, []string{"192.0.2.112"}, updated.GetNode().GetInfo().GetAddresses())
-	entryState := f.state(entry)
-	require.Len(t, entryState.GetHops(), 1)
-	assert.Equal(t, "192.0.2.112", entryState.GetHops()[0].GetUpstreams()[0].GetAddress())
 
 	// GetNode answers the desired state and the latest report.
 	_, err = f.service.RecordReport(ctx, exit, &forwardv1.NodeForwardReport{
@@ -159,7 +156,7 @@ func runNodeRegistry(t *testing.T, db *gorm.DB) {
 	detail, err := f.service.GetNode(ctx, "forward-12")
 	require.NoError(t, err)
 	assert.Equal(t, detail.GetState().GetGeneration(), detail.GetNode().GetDesiredGeneration())
-	assert.Equal(t, uint32(1), detail.GetNode().GetDesiredHops())
+	assert.Zero(t, detail.GetNode().GetDesiredHops(), "routes run on the network model")
 	assert.True(t, detail.GetNode().GetReported())
 	assert.True(t, detail.GetNode().GetApplied())
 	assert.Equal(t, detail.GetNode().GetDesiredGeneration(), detail.GetNode().GetReportedGeneration())

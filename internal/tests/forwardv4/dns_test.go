@@ -51,7 +51,7 @@ func runForwardV4DNS(t *testing.T, db *gorm.DB) {
 	require.NotContains(t, updated.raw, secret)
 
 	// A route with an entry name, bound in CNAME mode.
-	routeBody := strings.Replace(route("31000", "LINK_SECURITY_RAW"), `"protocol":"L4_PROTOCOL_TCP"`, `"protocol":"L4_PROTOCOL_TCP","entry_hostname":"hk.example.com"`, 1)
+	routeBody := strings.Replace(route("31000", "LINK_SECURITY_NETWORK"), `"protocol":"L4_PROTOCOL_TCP"`, `"protocol":"L4_PROTOCOL_TCP","entry_hostname":"hk.example.com"`, 1)
 	createdRoute := e.call("POST", "/routes", routeBody, "")
 	require.Equal(t, http.StatusCreated, createdRoute.status, createdRoute.raw)
 	routeID := createdRoute.data()["route"].(map[string]any)["id"].(string)

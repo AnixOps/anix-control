@@ -33,7 +33,6 @@ func checkNetwork(c *collector, r *model.Route) {
 	last := len(r.Hops) - 1
 	for i, h := range r.Hops {
 		if h.Engine != model.EngineNetwork {
-			c.add(hopField(i, "engine"), CodeInvalidRelation, "a route runs ENGINE_NETWORK on every hop or on none")
 			continue
 		}
 		if i > 0 && len(h.NodeRefs) > 1 {
@@ -101,23 +100,5 @@ func checkNetworkMode(c *collector, field string, t model.LinkTransport) {
 	}
 	if t.NetworkMultipath && len(t.NetworkCarriers) < 2 {
 		c.add(field+"network_multipath", CodeInvalidRelation, "multipath needs at least two carriers")
-	}
-}
-
-// checkNetworkFields refuses the network model's fields outside an
-// ENGINE_NETWORK route.
-func checkNetworkFields(c *collector, i int, h model.Hop) {
-	if h.Engine == model.EngineNetwork {
-		return
-	}
-	if h.NetworkEgressID != "" {
-		c.add(hopField(i, "network_egress_id"), CodeNotApplicable, "only an ENGINE_NETWORK exit has an egress")
-	}
-	if h.Ingress.NetworkTransportID != "" && h.Ingress.Security != model.LinkSecurityNetwork {
-		c.add(hopField(i, "ingress.network_transport_id"), CodeNotApplicable, "only a LINK_SECURITY_NETWORK link has a network transport")
-	}
-	t := h.Ingress
-	if t.NetworkMode != model.NetworkModeUnspecified || len(t.NetworkCarriers) > 0 || t.NetworkMultipath || t.NetworkFEC {
-		c.add(hopField(i, "ingress.network_mode"), CodeNotApplicable, "only a LINK_SECURITY_NETWORK link has a network transport mode")
 	}
 }

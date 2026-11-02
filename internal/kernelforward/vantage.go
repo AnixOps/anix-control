@@ -109,8 +109,8 @@ func saveVantage(tx *gorm.DB, bindingID uint64, selector string, now time.Time) 
 
 // addVantageProbes adds to states the vantage probes of every unpaused
 // binding with a selector: for each published address of each entry node
-// of its route (on the entry hop's planned listen port, for routes with a
-// TCP listener), one probe on every inventory node whose labels match,
+// of its route (on the route's listen port, for routes with a TCP
+// listener), one probe on every inventory node whose labels match,
 // other than the route's entry nodes. routes are the effective routes of
 // the plan.
 func addVantageProbes(tx *gorm.DB, states map[string]*forwardv1.NodeForwardState, nodes []*forwardv1.NodeInfo, routes []*forwardv1.Route) error {
@@ -152,12 +152,12 @@ func addVantageProbes(tx *gorm.DB, states map[string]*forwardv1.NodeForwardState
 		for _, ref := range entries {
 			isEntry[ref] = true
 		}
+		port := route.GetListen().GetPort()
+		if port == 0 {
+			continue
+		}
 		var targets []*forwardv1.VantageProbe
 		for _, ref := range entries {
-			port := entryPort(states[ref], route.GetId())
-			if port == 0 {
-				continue
-			}
 			for _, address := range publicAddresses(addresses[ref], bindingTypes(binding)) {
 				targets = append(targets, &forwardv1.VantageProbe{
 					BindingId: binding.ID, RouteId: route.GetId(), NodeRef: ref, Address: address, Port: port,
@@ -198,17 +198,6 @@ func addVantageProbes(tx *gorm.DB, states map[string]*forwardv1.NodeForwardState
 		state.VantageProbes = list
 	}
 	return nil
-}
-
-// entryPort answers the listen port of routeID's entry hop in a node's
-// planned state, 0 when the node does not run it.
-func entryPort(state *forwardv1.NodeForwardState, routeID string) uint32 {
-	for _, hop := range state.GetHops() {
-		if hop.GetRouteId() == routeID && hop.GetHopIndex() == 0 {
-			return hop.GetListen().GetPort()
-		}
-	}
-	return 0
 }
 
 // vantageView is what the vantage nodes' fresh reports say of one address.

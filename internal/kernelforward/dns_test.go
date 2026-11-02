@@ -10,6 +10,7 @@ import (
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	forwardv1 "github.com/AnixOps/anix-control/sdk/api/forward/v1"
+	networkv1 "github.com/AnixOps/anix-control/sdk/api/network/v1"
 	"github.com/AnixOps/anix-control/v5/internal/forwardddns"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/service"
@@ -90,6 +91,7 @@ func newDNSFixture(t *testing.T, db *gorm.DB) *dnsFixture {
 	kek := testKEK
 	d := &dnsFixture{fixture: f, dns: &fakeDNS{sets: map[string][]string{}}, online: map[string]bool{"forward-11": true, "forward-14": true}, seenKEK: &kek}
 	f.service.DNSKEK = func() string { return *d.seenKEK }
+	f.service.NetworkKEK = func() string { return testKEK }
 	f.service.NewDNSProvider = func(kind string, _, credentials map[string]string) (forwardddns.Provider, error) {
 		if kind != forwardddns.KindCloudflare || credentials[forwardddns.CredentialAPIToken] != cfSecret {
 			return nil, errors.New("unexpected provider")
@@ -122,21 +124,16 @@ func (d *dnsFixture) bind(providerID uint64, types ...forwardv1.DnsRecordType) *
 	return binding
 }
 
-// report stores a fresh, applied report of node at its desired generation.
+// report stores a fresh network status of node at its plan generation,
+// with the route's port forward applied, or down on a hop error.
 func (d *dnsFixture) report(node agentcontrol.AgentNode, hopErr bool) {
 	d.t.Helper()
-	state := d.state(node)
-	report := &forwardv1.NodeForwardReport{NodeRef: node.String(), Generation: state.GetGeneration(), StateHash: state.GetStateHash(), Applied: true}
+	state := networkv1.ComponentState_COMPONENT_STATE_APPLIED
 	if hopErr {
-		report.Errors = []*forwardv1.HopError{{RouteId: d.route.GetId(), HopIndex: 0, Message: "listen: address in use"}}
+		state = networkv1.ComponentState_COMPONENT_STATE_DOWN
 	}
-	encoded, err := jsonWrite.Marshal(report)
-	require.NoError(d.t, err)
-	now := d.clock.Now()
-	require.NoError(d.t, d.db.Save(&model.KernelForwardNodeReport{
-		NodeRef: node.String(), Generation: report.Generation, StateHash: report.StateHash, Applied: true,
-		HopErrors: len(report.Errors), ReportJSON: string(encoded), ObservedAt: now, ReceivedAt: now,
-	}).Error)
+	address := map[string]string{"forward-11": "192.0.2.11/24", "forward-14": "192.0.2.14/24"}[node.String()]
+	deviceStatus(d.t, d.fixture, d.db, d.service.network(d.db), node, address, d.route.GetId(), state)
 }
 
 // tick advances 10 s, refreshes the reports of the healthy nodes and
@@ -487,63 +484,6 @@ func TestEntryHAPresenceFromAgentTransports(t *testing.T) {
 	d.tick(entry, entry2)
 	require.Equal(t, []string{"set hk.example.com A 192.0.2.11"}, d.dns.take())
 	require.Equal(t, dnsReasonOffline, d.status().GetNodes()[1].GetReason())
-}
-
-func TestEvaluateEntry(t *testing.T) {
-	now := start
-	report := func(mutate func(*forwardv1.NodeForwardReport)) *forwardv1.NodeForwardReport {
-		r := &forwardv1.NodeForwardReport{Generation: 4, Applied: true}
-		if mutate != nil {
-			mutate(r)
-		}
-		return r
-	}
-	good := entryFacts{InInventory: true, Addresses: []string{"192.0.2.1"}, Report: report(nil), ReceivedAt: now, Desired: 4, Online: true}
-	cases := []struct {
-		name   string
-		facts  func(entryFacts) entryFacts
-		want   verdict
-		reason string
-	}{
-		{"healthy", func(f entryFacts) entryFacts { return f }, verdictGood, dnsReasonHealthy},
-		{"not in inventory", func(f entryFacts) entryFacts { f.InInventory = false; return f }, verdictBad, dnsReasonNoInventory},
-		{"no address", func(f entryFacts) entryFacts { f.Addresses = nil; return f }, verdictBad, dnsReasonNoAddress},
-		{"never reported", func(f entryFacts) entryFacts { f.Report = nil; return f }, verdictBad, dnsReasonNeverReported},
-		{"stale", func(f entryFacts) entryFacts { f.ReceivedAt = now.Add(-DNSReportStaleAfter - time.Second); return f }, verdictBad, dnsReasonReportStale},
-		{"offline", func(f entryFacts) entryFacts { f.Online = false; return f }, verdictBad, dnsReasonOffline},
-		{"hop error elsewhere", func(f entryFacts) entryFacts {
-			f.Report = report(func(r *forwardv1.NodeForwardReport) {
-				r.Errors = []*forwardv1.HopError{{RouteId: "r", HopIndex: 1}, {RouteId: "other", HopIndex: 0}}
-			})
-			return f
-		}, verdictGood, dnsReasonHealthy},
-		{"hop error", func(f entryFacts) entryFacts {
-			f.Report = report(func(r *forwardv1.NodeForwardReport) { r.Errors = []*forwardv1.HopError{{RouteId: "r"}} })
-			return f
-		}, verdictBad, dnsReasonHopError},
-		{"some upstreams down", func(f entryFacts) entryFacts {
-			f.Report = report(func(r *forwardv1.NodeForwardReport) {
-				r.Health = []*forwardv1.UpstreamHealth{{RouteId: "r", State: forwardv1.HealthState_HEALTH_STATE_CIRCUIT_OPEN}, {RouteId: "r", State: forwardv1.HealthState_HEALTH_STATE_HEALTHY}}
-			})
-			return f
-		}, verdictGood, dnsReasonHealthy},
-		{"every upstream down", func(f entryFacts) entryFacts {
-			f.Report = report(func(r *forwardv1.NodeForwardReport) {
-				r.Health = []*forwardv1.UpstreamHealth{{RouteId: "r", State: forwardv1.HealthState_HEALTH_STATE_CIRCUIT_OPEN}, {RouteId: "r", State: forwardv1.HealthState_HEALTH_STATE_UNHEALTHY}}
-			})
-			return f
-		}, verdictBad, dnsReasonUpstreamsDown},
-		{"converging", func(f entryFacts) entryFacts { f.Desired = 5; return f }, verdictNeutral, dnsReasonConverging},
-		{"not applied", func(f entryFacts) entryFacts {
-			f.Report = report(func(r *forwardv1.NodeForwardReport) { r.Applied = false })
-			return f
-		}, verdictNeutral, dnsReasonConverging},
-	}
-	for _, c := range cases {
-		v, reason := evaluateEntry("r", c.facts(good), now)
-		require.Equal(t, c.want, v, c.name)
-		require.Equal(t, c.reason, reason, c.name)
-	}
 }
 
 func TestPublicAddressesAndTokenBuckets(t *testing.T) {

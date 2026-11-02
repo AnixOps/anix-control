@@ -30,7 +30,6 @@ func networkRoute() model.Route {
 func onNetwork(edit func(r *model.Route)) func(r *model.Route, o *Options) {
 	return func(r *model.Route, o *Options) {
 		*r = networkRoute()
-		o.EnableNetwork = true
 		edit(r)
 	}
 }
@@ -39,7 +38,6 @@ func networkRuleCases() []ruleCase {
 	return []ruleCase{
 		{"network: listen port allocated", onNetwork(func(r *model.Route) { r.Listen.Port = 0 }), "listen.port", CodeRequired},
 		{"network: direct", onNetwork(func(r *model.Route) { r.Policy.Direct = model.DirectPreferred }), "policy.direct", CodeNotApplicable},
-		{"network: mixed engines", onNetwork(func(r *model.Route) { r.Hops[0].Engine = model.EngineNFTables }), "hops[0].engine", CodeInvalidRelation},
 		{"network: several nodes", onNetwork(func(r *model.Route) { r.Hops[1].NodeRefs = []string{"proxy-41", "proxy-42"} }),
 			"hops[1].node_refs", CodeRequiresSingleNode},
 		{"network: bad egress", onNetwork(func(r *model.Route) { r.Hops[1].NetworkEgressID = "eg hk" }), "hops[1].network_egress_id", CodeInvalidFormat},
@@ -52,8 +50,6 @@ func networkRuleCases() []ruleCase {
 		{"network: bad transport", onNetwork(func(r *model.Route) { r.Hops[1].Ingress.NetworkTransportID = "tr/1" }),
 			"hops[1].ingress.network_transport_id", CodeInvalidFormat},
 		{"network: mux", onNetwork(func(r *model.Route) { r.Hops[1].Ingress.Mux = true }), "hops[1].ingress.security", CodeNotApplicable},
-		{"network: raw link", onNetwork(func(r *model.Route) { r.Hops[1].Ingress.Security = model.LinkSecurityRaw }),
-			"hops[1].ingress.security", CodeLinkUnsupported},
 		{"network: proxy protocol on UDP", onNetwork(func(r *model.Route) { r.Listen.Protocol = model.L4ProtocolUDP }),
 			"policy.proxy_protocol", CodeProxyProtocolUnsupported},
 		{"network: mode with a named transport", onNetwork(func(r *model.Route) { r.Hops[1].Ingress.NetworkMode = model.NetworkModeAnxLine }),
@@ -81,42 +77,34 @@ func networkRuleCases() []ruleCase {
 			r.Hops[1].Ingress.NetworkTransportID, r.Hops[1].Ingress.NetworkMode = "", model.NetworkModeAnxLine
 			r.Hops[1].Ingress.NetworkCarriers, r.Hops[1].Ingress.NetworkMultipath = []model.NetworkCarrier{model.NetworkCarrierQUIC}, true
 		}), "hops[1].ingress.network_multipath", CodeInvalidRelation},
-		{"mode on a TLS link", func(r *model.Route, _ *Options) { r.Hops[2].Ingress.NetworkMode = model.NetworkModeAnxA },
-			"hops[2].ingress.network_mode", CodeNotApplicable},
-		{"egress on a gost exit", func(r *model.Route, _ *Options) { r.Hops[2].NetworkEgressID = "eg-hk" }, "hops[2].network_egress_id", CodeNotApplicable},
-		{"transport on a TLS link", func(r *model.Route, _ *Options) { r.Hops[2].Ingress.NetworkTransportID = "tr-1" },
-			"hops[2].ingress.network_transport_id", CodeNotApplicable},
 	}
 }
 
 func TestNetworkRoutes(t *testing.T) {
 	r := networkRoute()
-	if vs := Route(&r, Options{EnableNetwork: true, Nodes: testNodes()}); len(vs) != 0 {
+	if vs := Route(&r, Options{Nodes: testNodes()}); len(vs) != 0 {
 		t.Fatalf("network route: %v", vs)
 	}
 	// A single hop dials the targets by its own egress.
 	r.Hops = []model.Hop{{Role: model.HopRoleEntry, Engine: model.EngineNetwork, NodeRefs: []string{"proxy-21"}, NetworkEgressID: "eg-sh"}}
-	if vs := Route(&r, Options{EnableNetwork: true}); len(vs) != 0 {
+	if vs := Route(&r, Options{}); len(vs) != 0 {
 		t.Fatalf("single hop: %v", vs)
-	}
-	if vs := Route(&r, Options{}); !vs.Has("hops[0].engine", CodeEngineNotEnabled) {
-		t.Fatalf("not enabled: %v", vs)
 	}
 	// Several entry devices are entry HA, with the DNS name clients use.
 	r = networkRoute()
 	r.Hops[0].NodeRefs = []string{"proxy-21", "proxy-22"}
-	if vs := Route(&r, Options{EnableNetwork: true}); !vs.Has("listen.entry_hostname", CodeRequired) || len(vs) != 1 {
+	if vs := Route(&r, Options{}); !vs.Has("listen.entry_hostname", CodeRequired) || len(vs) != 1 {
 		t.Fatalf("several entries without a name: %v", vs)
 	}
 	r.Listen.EntryHostname = "sh.example.net"
-	if vs := Route(&r, Options{EnableNetwork: true}); len(vs) != 0 {
+	if vs := Route(&r, Options{}); len(vs) != 0 {
 		t.Fatalf("several entries: %v", vs)
 	}
 	// Without a transport or an egress, Control links the devices and
 	// picks the exit's egress.
 	r = networkRoute()
 	r.Hops[1].Ingress.NetworkTransportID, r.Hops[1].NetworkEgressID = "", ""
-	if vs := Route(&r, Options{EnableNetwork: true}); len(vs) != 0 {
+	if vs := Route(&r, Options{}); len(vs) != 0 {
 		t.Fatalf("auto transport and egress: %v", vs)
 	}
 	// Control links them as the hop says: a bare ANX-Line over QUIC and
@@ -124,11 +112,11 @@ func TestNetworkRoutes(t *testing.T) {
 	r.Hops[1].Ingress.NetworkMode = model.NetworkModeAnxLine
 	r.Hops[1].Ingress.NetworkCarriers = []model.NetworkCarrier{model.NetworkCarrierQUIC, model.NetworkCarrierTCP}
 	r.Hops[1].Ingress.NetworkMultipath, r.Hops[1].Ingress.NetworkFEC = true, true
-	if vs := Route(&r, Options{EnableNetwork: true}); len(vs) != 0 {
+	if vs := Route(&r, Options{}); len(vs) != 0 {
 		t.Fatalf("bare ANX-Line: %v", vs)
 	}
 	r.Hops[1].Ingress = model.LinkTransport{Security: model.LinkSecurityNetwork, NetworkMode: model.NetworkModeAnxLineReverse}
-	if vs := Route(&r, Options{EnableNetwork: true}); len(vs) != 0 {
+	if vs := Route(&r, Options{}); len(vs) != 0 {
 		t.Fatalf("reversed ANX-Line: %v", vs)
 	}
 }

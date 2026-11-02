@@ -132,15 +132,6 @@ func isAlnum(b byte) bool {
 	return b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z' || b >= '0' && b <= '9'
 }
 
-// isHostOrAddress reports whether s is an IP address without a zone or a
-// DNS host name that is not a numeric IPv4 form.
-func isHostOrAddress(s string) bool {
-	if addr, err := netip.ParseAddr(s); err == nil {
-		return addr.Zone() == ""
-	}
-	return isHostname(s) && !isNumericHostName(strings.TrimSuffix(s, "."))
-}
-
 // checkTargetHost answers the code and message for a target host the
 // policy refuses, or "" when it is allowed. Host names are checked by
 // syntax only; the node re-checks every address they resolve to.
