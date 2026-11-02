@@ -86,32 +86,32 @@
       "path": "/api/v2/admin/knowledge",
       "package_id": "knowledge",
       "route_id": "knowledge.admin.knowledge.get",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "POST",
       "path": "/api/v2/admin/knowledge",
       "package_id": "knowledge",
       "route_id": "knowledge.admin.knowledge.post",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "DELETE",
       "path": "/api/v2/admin/knowledge/:id",
       "package_id": "knowledge",
       "route_id": "knowledge.admin.knowledge.id.delete",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "PUT",
       "path": "/api/v2/admin/knowledge/:id",
       "package_id": "knowledge",
       "route_id": "knowledge.admin.knowledge.id.put",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "GET",
@@ -700,24 +700,24 @@
       "path": "/api/v2/admin/ticket",
       "package_id": "ticket",
       "route_id": "ticket.admin.ticket.get",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "POST",
       "path": "/api/v2/admin/ticket/:id/close",
       "package_id": "ticket",
       "route_id": "ticket.admin.ticket.id.close.post",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "POST",
       "path": "/api/v2/admin/ticket/reply",
       "package_id": "ticket",
       "route_id": "ticket.admin.ticket.reply.post",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "GET",
@@ -869,16 +869,16 @@
       "path": "/api/v2/user/knowledge",
       "package_id": "knowledge",
       "route_id": "knowledge.article.list",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "GET",
       "path": "/api/v2/user/knowledge/:id",
       "package_id": "knowledge",
       "route_id": "knowledge.user.knowledge.id.get",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "POST",
@@ -1030,40 +1030,40 @@
       "path": "/api/v2/user/ticket",
       "package_id": "ticket",
       "route_id": "ticket.user.ticket.get",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "POST",
       "path": "/api/v2/user/ticket",
       "package_id": "ticket",
       "route_id": "ticket.user.ticket.post",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "GET",
       "path": "/api/v2/user/ticket/:id",
       "package_id": "ticket",
       "route_id": "ticket.user.ticket.id.get",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "POST",
       "path": "/api/v2/user/ticket/:id/close",
       "package_id": "ticket",
       "route_id": "ticket.user.ticket.id.close.post",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "POST",
       "path": "/api/v2/user/ticket/:id/reply",
       "package_id": "ticket",
       "route_id": "ticket.user.ticket.id.reply.post",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     }
   ]
 }
