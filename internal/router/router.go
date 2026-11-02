@@ -147,18 +147,16 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			// 用户订阅接口
 			auth.GET("/user/subscription", registeredPackageRoute(v2PackageGateway.Serve, "subscription", "subscription.user.subscription.get", userHandler.GetSubscription))
 
-			// 知识库接口
-			knowledgeHandler := handler.NewKnowledgeHandler()
-			auth.GET("/user/knowledge", registeredPackageRoute(v2PackageGateway.Serve, "knowledge", "knowledge.article.list", knowledgeHandler.GetArticles))
-			auth.GET("/user/knowledge/:id", registeredPackageRoute(v2PackageGateway.Serve, "knowledge", "knowledge.user.knowledge.id.get", knowledgeHandler.GetArticle))
+			// 知识库接口（knowledge 包原生实现，内核无 legacy handler）
+			auth.GET("/user/knowledge", v2PackageGateway.Serve)
+			auth.GET("/user/knowledge/:id", v2PackageGateway.Serve)
 
-			// 工单接口
-			ticketHandler := handler.NewTicketHandler()
-			auth.GET("/user/ticket", registeredPackageRoute(v2PackageGateway.Serve, "ticket", "ticket.user.ticket.get", ticketHandler.GetTickets))
-			auth.POST("/user/ticket", registeredPackageRoute(v2PackageGateway.Serve, "ticket", "ticket.user.ticket.post", ticketHandler.CreateTicket))
-			auth.GET("/user/ticket/:id", registeredPackageRoute(v2PackageGateway.Serve, "ticket", "ticket.user.ticket.id.get", ticketHandler.GetTicket))
-			auth.POST("/user/ticket/:id/reply", registeredPackageRoute(v2PackageGateway.Serve, "ticket", "ticket.user.ticket.id.reply.post", ticketHandler.ReplyTicket))
-			auth.POST("/user/ticket/:id/close", registeredPackageRoute(v2PackageGateway.Serve, "ticket", "ticket.user.ticket.id.close.post", ticketHandler.CloseTicket))
+			// 工单接口（ticket 包原生实现，内核无 legacy handler）
+			auth.GET("/user/ticket", v2PackageGateway.Serve)
+			auth.POST("/user/ticket", v2PackageGateway.Serve)
+			auth.GET("/user/ticket/:id", v2PackageGateway.Serve)
+			auth.POST("/user/ticket/:id/reply", v2PackageGateway.Serve)
+			auth.POST("/user/ticket/:id/close", v2PackageGateway.Serve)
 
 			// 套餐接口
 			planHandler := handler.NewUserPlanHandler()
@@ -280,20 +278,18 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			admin.DELETE("/plans/:id", registeredPackageRoute(v2PackageGateway.Serve, "plan", "plan.admin.plans.id.delete", adminHandler.DeletePlan))
 			admin.POST("/plans/:id/assign", registeredPackageRoute(v2PackageGateway.Serve, "plan", "plan.admin.plans.id.assign.post", adminHandler.AssignPlanToUser))
 
-			// 工单管理 (V2 Stub)
-			ticketHandler := handler.NewAdminTicketHandler()
-			admin.GET("/ticket", registeredPackageRoute(v2PackageGateway.Serve, "ticket", "ticket.admin.ticket.get", ticketHandler.GetTickets))
-			admin.POST("/ticket/reply", registeredPackageRoute(v2PackageGateway.Serve, "ticket", "ticket.admin.ticket.reply.post", ticketHandler.ReplyTicket))
-			admin.POST("/ticket/:id/close", registeredPackageRoute(v2PackageGateway.Serve, "ticket", "ticket.admin.ticket.id.close.post", ticketHandler.CloseTicket))
+			// 工单管理（ticket 包原生实现）
+			admin.GET("/ticket", v2PackageGateway.Serve)
+			admin.POST("/ticket/reply", v2PackageGateway.Serve)
+			admin.POST("/ticket/:id/close", v2PackageGateway.Serve)
 
 			// 优惠券管理 (V2 Stub)
 
-			// 知识库管理 (V2 Stub)
-			knowledgeHandler := handler.NewAdminKnowledgeHandler()
-			admin.GET("/knowledge", registeredPackageRoute(v2PackageGateway.Serve, "knowledge", "knowledge.admin.knowledge.get", knowledgeHandler.GetArticles))
-			admin.POST("/knowledge", registeredPackageRoute(v2PackageGateway.Serve, "knowledge", "knowledge.admin.knowledge.post", knowledgeHandler.CreateArticle))
-			admin.PUT("/knowledge/:id", registeredPackageRoute(v2PackageGateway.Serve, "knowledge", "knowledge.admin.knowledge.id.put", knowledgeHandler.UpdateArticle))
-			admin.DELETE("/knowledge/:id", registeredPackageRoute(v2PackageGateway.Serve, "knowledge", "knowledge.admin.knowledge.id.delete", knowledgeHandler.DeleteArticle))
+			// 知识库管理（knowledge 包原生实现）
+			admin.GET("/knowledge", v2PackageGateway.Serve)
+			admin.POST("/knowledge", v2PackageGateway.Serve)
+			admin.PUT("/knowledge/:id", v2PackageGateway.Serve)
+			admin.DELETE("/knowledge/:id", v2PackageGateway.Serve)
 
 			// ========== 支付网关管理 ==========
 

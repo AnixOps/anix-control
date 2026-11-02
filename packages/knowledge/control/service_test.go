@@ -26,18 +26,21 @@ func (s *bridgeStub) Invoke(_ context.Context, _ []byte, operation string, _ []b
 	return packagebridgesdk.Response{StatusCode: 200, Body: []byte(`{"code":0,"msg":"操作成功","ts":1,"data":null}`)}, nil
 }
 
-// Until the kernel sets a route's mode, the host relays it to the legacy
-// handler; routes outside the package are refused.
-func TestKnowledgeHostRelaysRoutesUntilTheyAreSwitchedToNative(t *testing.T) {
+// Every route runs natively from the start and never reaches the kernel's
+// legacy path; routes outside the package are refused.
+func TestKnowledgeHostServesEveryRouteNatively(t *testing.T) {
 	bridge := &bridgeStub{}
 	service, err := newKnowledgeService(bridge, "lease-1")
 	require.NoError(t, err)
-	response, err := service.Dispatch(context.Background(), pluginhostsdk.DispatchRequest{
+	for route := range knowledgeRoutes {
+		configured, effective := service.Mode(route)
+		require.Equal(t, pluginhostsdk.RouteModeNative, configured, route)
+		require.Equal(t, pluginhostsdk.RouteModeNative, effective, route)
+	}
+	_, _ = service.Dispatch(context.Background(), pluginhostsdk.DispatchRequest{
 		RouteID: "knowledge.article.list", BridgeCapability: make([]byte, 32), DeadlineUnixMillis: time.Now().Add(time.Second).UnixMilli(),
 	})
-	require.NoError(t, err)
-	require.EqualValues(t, 200, response.StatusCode)
-	require.Equal(t, "knowledge.article.list", bridge.operation)
+	require.Empty(t, bridge.operation, "no route is relayed to a legacy handler")
 
 	_, err = service.Dispatch(context.Background(), pluginhostsdk.DispatchRequest{
 		RouteID: "ticket.list", BridgeCapability: make([]byte, 32), DeadlineUnixMillis: time.Now().Add(time.Second).UnixMilli(),

@@ -17,9 +17,9 @@ type knowledgeBridge interface {
 }
 
 // newKnowledgeService returns the knowledge host's router. Every route has a
-// native handler on the adopted v2_knowledge table; a route serves natively
-// once the kernel sets its mode, and falls back to the legacy handler
-// otherwise.
+// native handler on the adopted v2_knowledge table
+// and serves natively from the start: the kernel keeps no legacy handler for
+// them.
 func newKnowledgeService(bridge knowledgeBridge, leaseID string) (*pluginhostsdk.Router, error) {
 	storage := packagestoresdk.SharedOpener(bridge)
 	service := &native.Service{Open: func(ctx context.Context) (*gorm.DB, error) {
@@ -35,7 +35,7 @@ func newKnowledgeService(bridge knowledgeBridge, leaseID string) (*pluginhostsdk
 			_, allowed := knowledgeRoutes[routeID]
 			return allowed
 		},
-		Native: service.Handlers(),
+		Native: service.Handlers(), NativeOnly: true,
 	})
 }
 

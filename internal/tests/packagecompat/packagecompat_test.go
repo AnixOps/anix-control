@@ -10,15 +10,68 @@ import (
 
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
 	"github.com/AnixOps/anix-control/sdk/v2compat"
-	"github.com/AnixOps/anix-control/v5/internal/handler"
+	"github.com/AnixOps/anix-control/v5/internal/database"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )
 
-// The knowledge routes serve as the harness's own fixture: these native
-// implementations follow the legacy handlers, including their quirks.
+// The knowledge routes serve as the harness's own fixture: the legacy
+// handlers below are copies of the kernel's former ones (the knowledge
+// package now runs natively only), and the native implementations follow
+// them, including their quirks.
+
+func legacyKnowledgeList(c *gin.Context) {
+	var articles []model.Knowledge
+	if err := database.GetDB().Where("show = ?", 1).Order("sort ASC, created_at DESC").Find(&articles).Error; err != nil {
+		c.JSON(http.StatusOK, v2compat.PanelError("获取知识库失败", time.Now()))
+		return
+	}
+	var result []gin.H
+	for _, a := range articles {
+		result = append(result, gin.H{"id": a.ID, "category": a.Category, "title": a.Title, "body": a.Body, "updated_at": a.UpdatedAt.Unix()})
+	}
+	c.JSON(http.StatusOK, v2compat.PanelSuccess(result, time.Now()))
+}
+
+func legacyKnowledgeDetail(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusOK, v2compat.PanelError("无效的文章ID", time.Now()))
+		return
+	}
+	var article model.Knowledge
+	if err := database.GetDB().Where("id = ? AND show = ?", id, 1).First(&article).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusOK, v2compat.PanelError("文章不存在", time.Now()))
+			return
+		}
+		c.JSON(http.StatusOK, v2compat.PanelError("获取知识库失败", time.Now()))
+		return
+	}
+	c.JSON(http.StatusOK, v2compat.PanelSuccess(gin.H{
+		"id": article.ID, "category": article.Category, "title": article.Title, "body": article.Body, "updated_at": article.UpdatedAt.Unix(),
+	}, time.Now()))
+}
+
+func legacyKnowledgeDelete(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusOK, v2compat.PanelError("无效的文章ID", time.Now()))
+		return
+	}
+	var article model.Knowledge
+	if err := database.GetDB().First(&article, id).Error; err != nil {
+		c.JSON(http.StatusOK, v2compat.PanelError("文章不存在", time.Now()))
+		return
+	}
+	if err := database.GetDB().Delete(&article).Error; err != nil {
+		c.JSON(http.StatusOK, v2compat.PanelError("删除失败", time.Now()))
+		return
+	}
+	c.JSON(http.StatusOK, v2compat.PanelSuccess(gin.H{"message": "删除成功"}, time.Now()))
+}
 
 type knowledgeItem struct {
 	ID        uint   `json:"id"`
@@ -103,14 +156,14 @@ var member = pluginhostsdk.Principal{ActorID: 7}
 func TestRunReadComparesKnowledgeRoutes(t *testing.T) {
 	list := Route{
 		Method: http.MethodGet, Pattern: "/api/v2/user/knowledge", RouteID: "knowledge.article.list",
-		Legacy: handler.NewKnowledgeHandler().GetArticles, Native: nativeKnowledgeList, Models: []any{&model.Knowledge{}},
+		Legacy: legacyKnowledgeList, Native: nativeKnowledgeList, Models: []any{&model.Knowledge{}},
 	}
 	RunRead(t, list, Case{Name: "visible articles", Path: "/api/v2/user/knowledge", Principal: member, Seed: seedKnowledge})
 	RunRead(t, list, Case{Name: "empty list is null", Path: "/api/v2/user/knowledge", Principal: member})
 
 	detail := Route{
 		Method: http.MethodGet, Pattern: "/api/v2/user/knowledge/:id", RouteID: "knowledge.user.knowledge.id.get",
-		Legacy: handler.NewKnowledgeHandler().GetArticle, Native: nativeKnowledgeDetail, Models: []any{&model.Knowledge{}},
+		Legacy: legacyKnowledgeDetail, Native: nativeKnowledgeDetail, Models: []any{&model.Knowledge{}},
 	}
 	for name, path := range map[string]string{
 		"visible": "/api/v2/user/knowledge/1", "hidden": "/api/v2/user/knowledge/3",
@@ -123,7 +176,7 @@ func TestRunReadComparesKnowledgeRoutes(t *testing.T) {
 func TestRunWriteComparesDatabaseState(t *testing.T) {
 	remove := Route{
 		Method: http.MethodDelete, Pattern: "/api/v2/admin/knowledge/:id", RouteID: "knowledge.admin.knowledge.id.delete",
-		Legacy: handler.NewAdminKnowledgeHandler().DeleteArticle, Native: nativeKnowledgeDelete, Models: []any{&model.Knowledge{}},
+		Legacy: legacyKnowledgeDelete, Native: nativeKnowledgeDelete, Models: []any{&model.Knowledge{}},
 	}
 	admin := pluginhostsdk.Principal{ActorID: 1, Admin: true}
 	RunWrite(t, remove, Case{Name: "delete", Path: "/api/v2/admin/knowledge/2", Principal: admin, Seed: seedKnowledge, Snapshot: knowledgeIDs})
