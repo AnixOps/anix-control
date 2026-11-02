@@ -255,7 +255,9 @@ func TestRouterBindsNativeRuns(t *testing.T) {
 func TestRouterNativeOnlyNeverReachesLegacy(t *testing.T) {
 	bridge := &routerBridgeFake{configErr: packagebridgesdk.ErrSessionOperationUnsupported}
 	bridge.response = packagebridgesdk.Response{StatusCode: 200, Body: []byte(legacyBody)}
-	unavailable := func(context.Context, NativeRequest) (NativeResponse, error) { return NativeResponse{}, ErrNativeUnavailable }
+	unavailable := func(context.Context, NativeRequest) (NativeResponse, error) {
+		return NativeResponse{}, ErrNativeUnavailable
+	}
 	router, err := NewRouter(RouterConfig{PackageID: "knowledge", LeaseID: "lease-1", Bridge: bridge, NativeOnly: true,
 		Native: map[string]NativeHandler{"knowledge.article.list": matchingNative, "knowledge.admin.knowledge.post": unavailable}})
 	require.NoError(t, err)
