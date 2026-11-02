@@ -114,9 +114,9 @@ func SortedStates(states map[string]*forwardv1.NodeForwardState) []*forwardv1.No
 func validateRoutes(routes []model.Route, inventory []model.NodeInfo, opts Options) []RouteViolation {
 	vopts := validate.Options{Nodes: inventory, ReservedPorts: opts.ReservedPorts, OnCreate: opts.OnCreate, Now: opts.Now}
 	var out []RouteViolation
-	for i := range routes {
-		for _, v := range validate.Route(&routes[i], vopts) {
-			out = append(out, RouteViolation{RouteID: routes[i].ID, Violation: v})
+	for _, route := range routes {
+		for _, v := range validate.Route(&route, vopts) {
+			out = append(out, RouteViolation{RouteID: route.ID, Violation: v})
 		}
 	}
 	return out
