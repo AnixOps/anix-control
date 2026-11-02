@@ -104,8 +104,9 @@ func TestModuleBinaryRunsAsANetworkModule(t *testing.T) {
 	require.NoError(t, fixture.supervisor.Start(ctx, writeArtifactRef(t), 5), "the module enrolls, binds and reports healthy")
 	response, err := dispatchList(ctx, fixture.supervisor, 5)
 	require.NoError(t, err)
+	// The knowledge package serves every route natively: the answer comes
+	// from the module, not from a legacy handler across the bridge.
 	require.EqualValues(t, 200, response.StatusCode)
-	<-fixture.calls
 	require.Eventually(t, first.ready, 5*time.Second, 50*time.Millisecond, "/readyz reports the bound module")
 	for _, name := range []string{"key.pem", "cert.pem", "bundle.pem"} {
 		info, err := os.Stat(filepath.Join(certDir, name))
@@ -131,7 +132,6 @@ func TestModuleBinaryRunsAsANetworkModule(t *testing.T) {
 		if err != nil {
 			return false
 		}
-		<-fixture.calls
 		return response.StatusCode == 200
 	}, 10*time.Second, 100*time.Millisecond, fmt.Sprintf("dispatch reaches the restarted module at %s", listen))
 }
