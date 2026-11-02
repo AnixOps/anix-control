@@ -10,57 +10,31 @@ import (
 	"github.com/AnixOps/anix-control/sdk/forward/model"
 )
 
-var allStrategies = []model.BalanceStrategy{
-	model.BalanceRoundRobin, model.BalanceRandom, model.BalanceIPHash, model.BalanceLeastConn, model.BalanceFailover,
-}
-
-func nftNode(ref string, addrs ...string) model.NodeInfo {
-	return model.NodeInfo{
-		NodeRef: ref, Addresses: addrs, PortRange: model.PortRange{First: 40000, Last: 49999},
-		Engines: []model.EngineCapabilities{{
-			Engine: model.EngineNFTables, Available: true, UDP: true, Strategies: allStrategies,
-			LinkSecurities: []model.LinkSecurity{model.LinkSecurityRaw}, BandwidthLimit: true, Quota: true, MaxConns: true,
-		}},
-	}
-}
-
-func gostNode(ref string, addrs ...string) model.NodeInfo {
-	return model.NodeInfo{
-		NodeRef: ref, Addresses: addrs, PortRange: model.PortRange{First: 20000, Last: 20999},
-		Engines: []model.EngineCapabilities{{
-			Engine: model.EngineGost, Available: true, IPv6: true, UDP: true, Strategies: allStrategies,
-			LinkSecurities: []model.LinkSecurity{
-				model.LinkSecurityRaw, model.LinkSecurityTLS, model.LinkSecurityWSS, model.LinkSecurityQUIC, model.LinkSecurityGRPC,
-			},
-			BandwidthLimit: true, MaxConns: true,
-		}},
-	}
-}
-
 func testNodes() []model.NodeInfo {
 	return []model.NodeInfo{
-		nftNode("forward-21", "192.0.2.21"),
-		gostNode("forward-31", "198.51.100.31"),
-		gostNode("forward-41", "203.0.113.41"),
-		gostNode("forward-42", "203.0.113.42"),
+		{NodeRef: "proxy-21", Addresses: []string{"192.0.2.21"}, PortRange: model.PortRange{First: 40000, Last: 49999}},
+		{NodeRef: "proxy-31", Addresses: []string{"198.51.100.31"}},
+		{NodeRef: "proxy-41", Addresses: []string{"203.0.113.41"}},
 	}
 }
 
-// validRoute is the fixture plan-nft-entry-gost-relay-exit-failover's
-// route: nftables entry, gost relay, two gost exits over TLS.
+// validRoute is a user's three-hop route on the network model: an entry
+// device, a relay over a named transport, and the exit, which dials the
+// targets by the internet egress eg-hk.
 func validRoute() model.Route {
 	return model.Route{
-		ID: "01JF1B000000000000000000B1", Owner: "user:1042", Name: "sh-to-jp",
+		ID: "01JF1B000000000000000000B1", Owner: "user:1042", Name: "sh-to-hk",
 		Listen: model.Listen{Port: 40001, Protocol: model.L4ProtocolTCP, EntryHostname: "r1042.fwd.example.com"},
 		Hops: []model.Hop{
-			{Role: model.HopRoleEntry, Engine: model.EngineNFTables, NodeRefs: []string{"forward-21"}},
+			{Role: model.HopRoleEntry, Engine: model.EngineNetwork, NodeRefs: []string{"proxy-21"}},
 			{
-				Role: model.HopRoleRelay, Engine: model.EngineGost, NodeRefs: []string{"forward-31"},
-				Ingress: model.LinkTransport{Security: model.LinkSecurityRaw}, DialAddress: "172.16.5.31",
+				Role: model.HopRoleRelay, Engine: model.EngineNetwork, NodeRefs: []string{"proxy-31"},
+				Ingress: model.LinkTransport{Security: model.LinkSecurityNetwork, NetworkTransportID: "tr-sh-gz"},
 			},
 			{
-				Role: model.HopRoleExit, Engine: model.EngineGost, NodeRefs: []string{"forward-41", "forward-42"},
-				Ingress: model.LinkTransport{Security: model.LinkSecurityTLS, Mux: true},
+				Role: model.HopRoleExit, Engine: model.EngineNetwork, NodeRefs: []string{"proxy-41"},
+				Ingress:         model.LinkTransport{Security: model.LinkSecurityNetwork},
+				NetworkEgressID: "eg-hk",
 			},
 		},
 		Targets: []model.Target{{Host: "198.51.100.7", Port: 8443}, {Host: "origin.example.net", Port: 8443, Priority: 10}},
@@ -89,21 +63,13 @@ func TestValidRoutes(t *testing.T) {
 	}
 	single := model.Route{
 		Owner:   "admin",
-		Listen:  model.Listen{Protocol: model.L4ProtocolTCPUDP},
-		Hops:    []model.Hop{{Role: model.HopRoleEntry, Engine: model.EngineNFTables, NodeRefs: []string{"forward-21"}}},
+		Listen:  model.Listen{Port: 40002, Protocol: model.L4ProtocolTCPUDP},
+		Hops:    []model.Hop{{Role: model.HopRoleEntry, Engine: model.EngineNetwork, NodeRefs: []string{"proxy-21"}, NetworkEgressID: "eg-sh"}},
 		Targets: []model.Target{{Host: "10.88.0.20", Port: 443}, {Host: "2001:db8::20", Port: 443}},
-		Policy:  model.Policy{TargetPolicy: model.TargetPolicyAllowPrivate, Direct: model.DirectForced},
+		Policy:  model.Policy{TargetPolicy: model.TargetPolicyAllowPrivate},
 	}
 	if vs := Route(&single, Options{}); len(vs) != 0 {
 		t.Errorf("single hop: %v", vs)
-	}
-	// One node may serve two hops: an nftables entry handing over to a
-	// gost relay on the same host.
-	hairpin := validRoute()
-	hairpin.Hops[1].NodeRefs = []string{"forward-21"}
-	hairpin.Hops[1].DialAddress = ""
-	if vs := Route(&hairpin, Options{}); len(vs) != 0 {
-		t.Errorf("hairpin: %v", vs)
 	}
 }
 
@@ -115,7 +81,7 @@ type ruleCase struct {
 }
 
 func ruleCases() []ruleCase {
-	return append(append(baseRuleCases(), anixopsRuleCases()...), networkRuleCases()...)
+	return append(baseRuleCases(), networkRuleCases()...)
 }
 
 func baseRuleCases() []ruleCase {
@@ -142,7 +108,7 @@ func baseRuleCases() []ruleCase {
 		{"bad entry hostname", func(r *model.Route, _ *Options) { r.Listen.EntryHostname = "-x.example" }, "listen.entry_hostname", CodeInvalidFormat},
 		{"entry HA without hostname", func(r *model.Route, _ *Options) {
 			r.Listen.EntryHostname = ""
-			r.Hops[0].NodeRefs = []string{"forward-21", "forward-22"}
+			r.Hops[0].NodeRefs = []string{"proxy-21", "proxy-22"}
 		}, "listen.entry_hostname", CodeRequired},
 
 		// Hops.
@@ -151,7 +117,7 @@ func baseRuleCases() []ruleCase {
 			relay := r.Hops[1]
 			r.Hops = append([]model.Hop{r.Hops[0]}, r.Hops[1:]...)
 			for len(r.Hops) <= MaxHops {
-				relay.NodeRefs = []string{"forward-" + string(rune('5'+len(r.Hops)))}
+				relay.NodeRefs = []string{"proxy-" + string(rune('5'+len(r.Hops)))}
 				r.Hops = append(r.Hops[:1], append([]model.Hop{relay}, r.Hops[1:]...)...)
 			}
 		}, "hops", CodeTooMany},
@@ -166,54 +132,23 @@ func baseRuleCases() []ruleCase {
 		{"unknown role", func(r *model.Route, _ *Options) { r.Hops[1].Role = 8 }, "hops[1].role", CodeInvalidEnum},
 		{"no engine", func(r *model.Route, _ *Options) { r.Hops[0].Engine = 0 }, "hops[0].engine", CodeRequired},
 		{"unknown engine", func(r *model.Route, _ *Options) { r.Hops[0].Engine = 9 }, "hops[0].engine", CodeInvalidEnum},
+		{"nftables engine", func(r *model.Route, _ *Options) { r.Hops[0].Engine = model.EngineNFTables }, "hops[0].engine", CodeEngineNotEnabled},
+		{"gost engine", func(r *model.Route, _ *Options) { r.Hops[2].Engine = model.EngineGost }, "hops[2].engine", CodeEngineNotEnabled},
 		{"anixops engine", func(r *model.Route, _ *Options) { r.Hops[2].Engine = model.EngineAnixOps }, "hops[2].engine", CodeEngineNotEnabled},
-		{"network engine", func(r *model.Route, _ *Options) { r.Hops[2].Engine = model.EngineNetwork }, "hops[2].engine", CodeEngineNotEnabled},
 		{"no nodes", func(r *model.Route, _ *Options) { r.Hops[1].NodeRefs = nil }, "hops[1].node_refs", CodeRequired},
 		{"too many nodes", func(r *model.Route, _ *Options) {
-			r.Hops[2].NodeRefs = nil
+			r.Hops[0].NodeRefs = nil
 			for i := 0; i <= MaxNodesPerHop; i++ {
-				r.Hops[2].NodeRefs = append(r.Hops[2].NodeRefs, "forward-"+string(rune('a'+i)))
+				r.Hops[0].NodeRefs = append(r.Hops[0].NodeRefs, "proxy-"+string(rune('a'+i)))
 			}
-		}, "hops[2].node_refs", CodeTooMany},
+		}, "hops[0].node_refs", CodeTooMany},
 		{"bad node ref", func(r *model.Route, _ *Options) { r.Hops[1].NodeRefs = []string{"node-31"} }, "hops[1].node_refs[0]", CodeInvalidFormat},
 		{"zero node id", func(r *model.Route, _ *Options) { r.Hops[1].NodeRefs = []string{"forward-0"} }, "hops[1].node_refs[0]", CodeInvalidFormat},
-		{"node twice in a hop", func(r *model.Route, _ *Options) { r.Hops[2].NodeRefs = []string{"forward-41", "forward-41"} }, "hops[2].node_refs[1]", CodeDuplicate},
-		{"hop port", func(r *model.Route, _ *Options) { r.Hops[1].Port = 65536 }, "hops[1].port", CodeOutOfRange},
-		{"dial_address with several nodes", func(r *model.Route, _ *Options) { r.Hops[2].DialAddress = "203.0.113.41" }, "hops[2].dial_address", CodeRequiresSingleNode},
-		{"bad dial_address", func(r *model.Route, _ *Options) { r.Hops[1].DialAddress = "172.16.5.31:20000" }, "hops[1].dial_address", CodeInvalidFormat},
+		{"node twice in a hop", func(r *model.Route, _ *Options) { r.Hops[0].NodeRefs = []string{"proxy-21", "proxy-21"} }, "hops[0].node_refs[1]", CodeDuplicate},
 		{"no ingress security", func(r *model.Route, _ *Options) { r.Hops[1].Ingress.Security = 0 }, "hops[1].ingress.security", CodeRequired},
 		{"unknown ingress security", func(r *model.Route, _ *Options) { r.Hops[1].Ingress.Security = 40 }, "hops[1].ingress.security", CodeInvalidEnum},
-		{"anixops link", func(r *model.Route, _ *Options) { r.Hops[2].Ingress.Security = model.LinkSecurityAnixOps }, "hops[2].ingress.security", CodeEngineNotEnabled},
-		{"network link", func(r *model.Route, _ *Options) { r.Hops[2].Ingress.Security = model.LinkSecurityNetwork }, "hops[2].ingress.security", CodeEngineNotEnabled},
-		{"server name on raw", func(r *model.Route, _ *Options) { r.Hops[1].Ingress.ServerName = "x.example" }, "hops[1].ingress.server_name", CodeNotApplicable},
-		{"bad server name", func(r *model.Route, _ *Options) { r.Hops[2].Ingress.ServerName = "a b" }, "hops[2].ingress.server_name", CodeInvalidFormat},
-		{"path on tls", func(r *model.Route, _ *Options) { r.Hops[2].Ingress.Path = "/ws" }, "hops[2].ingress.path", CodeNotApplicable},
-		{"bad wss path", func(r *model.Route, _ *Options) {
-			r.Hops[2].Ingress.Security = model.LinkSecurityWSS
-			r.Hops[2].Ingress.Path = "ws"
-		}, "hops[2].ingress.path", CodeInvalidFormat},
-		{"bad grpc service", func(r *model.Route, _ *Options) {
-			r.Hops[2].Ingress.Security = model.LinkSecurityGRPC
-			r.Hops[2].Ingress.Path = "/svc"
-		}, "hops[2].ingress.path", CodeInvalidFormat},
-		{"long path", func(r *model.Route, _ *Options) {
-			r.Hops[2].Ingress.Security = model.LinkSecurityWSS
-			r.Hops[2].Ingress.Path = "/" + strings.Repeat("p", MaxPathBytes)
-		}, "hops[2].ingress.path", CodeTooLong},
-
-		// Links (section 4.2).
-		{"nftables cannot dial TLS", func(r *model.Route, _ *Options) {
-			r.Hops = []model.Hop{r.Hops[0], r.Hops[2]}
-		}, "hops[1].ingress.security", CodeLinkUnsupported},
-		{"nftables cannot terminate TLS", func(r *model.Route, _ *Options) {
-			r.Hops[2].Engine = model.EngineNFTables
-			r.Hops[2].Ingress.Mux = false
-		}, "hops[2].ingress.security", CodeLinkUnsupported},
-		{"gost cannot carry anixops", func(r *model.Route, o *Options) {
-			o.EnableAnixOps = true
-			r.Hops[2].Ingress.Security = model.LinkSecurityAnixOps
-		}, "hops[2].ingress.security", CodeLinkUnsupported},
-		{"nftables cannot mux", func(r *model.Route, _ *Options) { r.Hops[1].Ingress.Mux = true }, "hops[1].ingress.mux", CodeLinkUnsupported},
+		{"raw link", func(r *model.Route, _ *Options) { r.Hops[2].Ingress.Security = model.LinkSecurityRaw }, "hops[2].ingress.security", CodeLinkUnsupported},
+		{"anixops link", func(r *model.Route, _ *Options) { r.Hops[2].Ingress.Security = model.LinkSecurityAnixOps }, "hops[2].ingress.security", CodeLinkUnsupported},
 
 		// Targets and the target policy (section 14).
 		{"no targets", func(r *model.Route, _ *Options) { r.Targets = nil }, "targets", CodeRequired},
@@ -263,6 +198,10 @@ func baseRuleCases() []ruleCase {
 		{"unknown target strategy", func(r *model.Route, _ *Options) { r.Policy.Target = -1 }, "policy.target", CodeInvalidEnum},
 		{"unknown direct", func(r *model.Route, _ *Options) { r.Policy.Direct = 4 }, "policy.direct", CodeInvalidEnum},
 		{"forced direct with later hops", func(r *model.Route, _ *Options) { r.Policy.Direct = model.DirectForced }, "policy.direct", CodeUnusedHops},
+		{"proxy protocol on UDP", func(r *model.Route, _ *Options) {
+			r.Policy.ProxyProtocol, r.Listen.Protocol = model.ProxyProtocolV2, model.L4ProtocolUDP
+		}, "policy.proxy_protocol", CodeProxyProtocolUnsupported},
+		{"unknown proxy protocol", func(r *model.Route, _ *Options) { r.Policy.ProxyProtocol = 9 }, "policy.proxy_protocol", CodeInvalidEnum},
 		{"interval too short", func(r *model.Route, _ *Options) { r.Policy.Health.Interval = time.Millisecond }, "policy.health.interval_ms", CodeOutOfRange},
 		{"interval too long", func(r *model.Route, _ *Options) { r.Policy.Health.Interval = 2 * time.Hour }, "policy.health.interval_ms", CodeOutOfRange},
 		{"timeout too long", func(r *model.Route, _ *Options) { r.Policy.Health.Timeout = 2 * time.Minute }, "policy.health.timeout_ms", CodeOutOfRange},
@@ -289,79 +228,8 @@ func baseRuleCases() []ruleCase {
 		{"control in label value", func(r *model.Route, _ *Options) { r.Labels["k"] = "a\x00" }, `labels["k"]`, CodeInvalidFormat},
 
 		// Ports.
-		{"reserved listen port", func(r *model.Route, o *Options) { o.ReservedPorts = map[string][]uint32{"forward-21": {22, 40001}} }, "listen.port", CodePortReserved},
-		{"reserved hop port", func(r *model.Route, o *Options) {
-			r.Hops[2].Port = 20022
-			o.ReservedPorts = map[string][]uint32{"forward-42": {20022}}
-		}, "hops[2].port", CodePortReserved},
-
-		// Inventory.
-		{"unknown node", func(r *model.Route, o *Options) { withNodes(o); r.Hops[1].NodeRefs = []string{"forward-99"} }, "hops[1].node_refs[0]", CodeUnknownNode},
-		{"engine not advertised", func(r *model.Route, o *Options) {
-			withNodes(o)
-			o.EnableAnixOps = true
-			r.Hops = r.Hops[:1]
-			r.Hops[0].Engine = model.EngineAnixOps
-			r.Policy.NextHop = 0
-		}, "hops[0].engine", CodeEngineNotAdvertised},
-		{"engine unavailable", func(r *model.Route, o *Options) {
-			withNodes(o)
-			o.Nodes[0].Engines[0].Available = false
-			o.Nodes[0].Engines[0].UnavailableReason = "nft missing"
-		}, "hops[0].engine", CodeEngineUnavailable},
-		{"node cannot terminate", func(r *model.Route, o *Options) {
-			withNodes(o)
-			o.Nodes[3].Engines[0].LinkSecurities = []model.LinkSecurity{model.LinkSecurityRaw}
-		}, "hops[2].ingress.security", CodeCapabilityMissing},
-		{"node cannot dial", func(r *model.Route, o *Options) {
-			withNodes(o)
-			o.Nodes[1].Engines[0].LinkSecurities = []model.LinkSecurity{model.LinkSecurityRaw}
-		}, "hops[2].ingress.security", CodeCapabilityMissing},
-		{"next_hop not offered", func(r *model.Route, o *Options) {
-			withNodes(o)
-			o.Nodes[1].Engines[0].Strategies = []model.BalanceStrategy{model.BalanceRoundRobin}
-		}, "policy.next_hop", CodeCapabilityMissing},
-		{"default next_hop not offered", func(r *model.Route, o *Options) {
-			withNodes(o)
-			r.Policy.NextHop = 0
-			o.Nodes[0].Engines[0].Strategies = []model.BalanceStrategy{model.BalanceFailover}
-		}, "policy.next_hop", CodeCapabilityMissing},
-		{"target strategy not offered", func(r *model.Route, o *Options) {
-			withNodes(o)
-			r.Policy.Target = model.BalanceLeastConn
-			o.Nodes[2].Engines[0].Strategies = []model.BalanceStrategy{model.BalanceFailover}
-		}, "policy.target", CodeCapabilityMissing},
-		{"preferred direct needs target strategy on entry", func(r *model.Route, o *Options) {
-			withNodes(o)
-			r.Policy.Direct = model.DirectPreferred
-			r.Policy.Target = model.BalanceIPHash
-			o.Nodes[0].Engines[0].Strategies = []model.BalanceStrategy{model.BalanceFailover}
-		}, "policy.target", CodeCapabilityMissing},
-		{"no UDP", func(r *model.Route, o *Options) {
-			withNodes(o)
-			r.Listen.Protocol = model.L4ProtocolUDP
-			o.Nodes[1].Engines[0].UDP = false
-		}, "listen.protocol", CodeCapabilityMissing},
-		{"no IPv6 for target", func(r *model.Route, o *Options) {
-			withNodes(o)
-			r.Targets[0].Host = "2001:db8::7"
-			o.Nodes[3].Engines[0].IPv6 = false
-		}, "targets[0].host", CodeCapabilityMissing},
-		{"no IPv6 for listen", func(r *model.Route, o *Options) { withNodes(o); r.Listen.Address = "2001:db8::21" }, "listen.address", CodeCapabilityMissing},
-		{"no bandwidth limit", func(r *model.Route, o *Options) { withNodes(o); o.Nodes[0].Engines[0].BandwidthLimit = false }, "limits.bandwidth_bps", CodeCapabilityMissing},
-		{"no quota on gost entry", func(r *model.Route, o *Options) {
-			withNodes(o)
-			r.Hops[0].Engine = model.EngineGost
-			r.Hops[0].NodeRefs = []string{"forward-31"}
-			r.Hops[1].NodeRefs = []string{"forward-21"}
-			r.Hops[1].Engine = model.EngineNFTables
-			r.Hops[2].Ingress = model.LinkTransport{Security: model.LinkSecurityRaw}
-			r.Hops[1].DialAddress = ""
-			r.Limits.QuotaBytes = 1 << 30
-		}, "limits.quota_bytes", CodeCapabilityMissing},
-		{"no connection limit", func(r *model.Route, o *Options) { withNodes(o); o.Nodes[0].Engines[0].MaxConns = false }, "limits.max_conns", CodeCapabilityMissing},
-		{"listen port outside range", func(r *model.Route, o *Options) { withNodes(o); r.Listen.Port = 30001 }, "listen.port", CodePortOutOfRange},
-		{"hop port outside range", func(r *model.Route, o *Options) { withNodes(o); r.Hops[2].Port = 21000 }, "hops[2].port", CodePortOutOfRange},
+		{"reserved listen port", func(r *model.Route, o *Options) { o.ReservedPorts = map[string][]uint32{"proxy-21": {22, 40001}} }, "listen.port", CodePortReserved},
+		{"listen port outside range", func(r *model.Route, o *Options) { o.Nodes = testNodes(); r.Listen.Port = 30001 }, "listen.port", CodePortOutOfRange},
 	}
 }
 
@@ -369,8 +237,6 @@ func adminPrivate(r *model.Route) {
 	r.Owner = "admin"
 	r.Policy.TargetPolicy = model.TargetPolicyAllowPrivate
 }
-
-func withNodes(o *Options) { o.Nodes = testNodes() }
 
 func TestRules(t *testing.T) {
 	seen := map[string]bool{}
@@ -411,8 +277,7 @@ func TestEveryCodeIsTested(t *testing.T) {
 		CodeRequired, CodeInvalidFormat, CodeInvalidEnum, CodeOutOfRange, CodeTooMany, CodeTooLong, CodeTooLarge,
 		CodeDuplicate, CodeInvalidRole, CodeEngineNotEnabled, CodeLinkUnsupported, CodeNotApplicable,
 		CodeRequiresSingleNode, CodeForbidden, CodeTargetNotAllowed, CodeInvalidRelation, CodeUnusedHops, CodeExpired,
-		CodeUnknownNode, CodeEngineNotAdvertised, CodeEngineUnavailable, CodeCapabilityMissing, CodePortOutOfRange,
-		CodePortReserved, CodeCarrierUnsupported, CodePlainUntrusted, CodeServerNameUnsupported, CodeProxyProtocolUnsupported,
+		CodePortOutOfRange, CodePortReserved, CodeProxyProtocolUnsupported,
 	} {
 		if !tested[code] {
 			t.Errorf("no case for %s", code)
@@ -434,39 +299,22 @@ func TestNilRoute(t *testing.T) {
 	}
 }
 
-func TestLinkMessageMatchesFixture(t *testing.T) {
+func TestRemovedEngineMessage(t *testing.T) {
 	r := validRoute()
-	r.Hops = []model.Hop{r.Hops[0], r.Hops[2]}
-	r.Hops[1].Ingress.Mux = false
+	r.Hops[0].Engine = model.EngineNFTables
 	vs := Route(&r, Options{})
-	if len(vs) != 1 || vs[0].Message != "hop 0 runs ENGINE_NFTABLES, which only dials LINK_SECURITY_RAW" {
+	if len(vs) != 1 || vs[0].Message != "ENGINE_NFTABLES was removed: routes run on the network model (ENGINE_NETWORK)" {
 		t.Fatalf("got %v", vs)
 	}
-	if got := vs.ToProto(); len(got) != 1 || got[0].GetField() != "hops[1].ingress.security" ||
-		got[0].GetCode() != "link_unsupported" || got[0].GetMessage() != vs[0].Message {
+	if got := vs.ToProto(); len(got) != 1 || got[0].GetField() != "hops[0].engine" ||
+		got[0].GetCode() != "engine_not_enabled" || got[0].GetMessage() != vs[0].Message {
 		t.Fatalf("proto violations: %v", got)
 	}
-	if !strings.Contains(vs.Error(), "hops[1].ingress.security") || vs.Err() == nil {
+	if !strings.Contains(vs.Error(), "hops[0].engine") || vs.Err() == nil {
 		t.Fatalf("error text: %v", vs)
 	}
 	if (Violations{}).Err() != nil {
 		t.Fatal("no violations is no error")
-	}
-}
-
-func TestEngineLinks(t *testing.T) {
-	if !CanCarry(model.EngineGost, model.LinkSecurityQUIC) || CanCarry(model.EngineNFTables, model.LinkSecurityTLS) ||
-		!CanCarry(model.EngineAnixOps, model.LinkSecurityAnixOps) || CanCarry(model.EngineAnixOps, model.LinkSecurityRaw) ||
-		CanCarry(model.EngineUnspecified, model.LinkSecurityRaw) {
-		t.Fatal("link table")
-	}
-	links := EngineLinks(model.EngineNFTables)
-	links[0] = model.LinkSecurityTLS
-	if !CanCarry(model.EngineNFTables, model.LinkSecurityRaw) {
-		t.Fatal("EngineLinks must answer a copy")
-	}
-	if CanMux(model.EngineNFTables) || !CanMux(model.EngineGost) {
-		t.Fatal("mux table")
 	}
 }
 
@@ -526,17 +374,15 @@ func TestCheckTargetAddress(t *testing.T) {
 func TestPlanRequestMergesNodes(t *testing.T) {
 	r := validRoute()
 	req := &forwardv1.PlanRouteRequest{Route: r.ToProto()}
-	for _, n := range testNodes()[:2] {
-		req.Nodes = append(req.Nodes, n.ToProto())
-	}
-	// forward-21 from the request replaces the inventory's version, which
-	// lacks UDP; forward-41 and -42 come from the inventory.
+	// proxy-21 from the request replaces the inventory's, whose range does
+	// not hold the listen port.
+	req.Nodes = append(req.Nodes, testNodes()[0].ToProto())
 	inventory := testNodes()
-	inventory[0].Engines[0].BandwidthLimit = false
+	inventory[0].PortRange = model.PortRange{First: 20000, Last: 20999}
 	if vs := PlanRequest(req, Options{Nodes: inventory}); len(vs) != 0 {
 		t.Fatalf("%v", vs)
 	}
-	if vs := PlanRequest(req, Options{Nodes: inventory[2:3]}); !vs.Has("hops[2].node_refs[1]", CodeUnknownNode) {
-		t.Fatalf("forward-42 is in neither: %v", vs)
+	if vs := PlanRequest(&forwardv1.PlanRouteRequest{Route: r.ToProto()}, Options{Nodes: inventory}); !vs.Has("listen.port", CodePortOutOfRange) {
+		t.Fatalf("the inventory's range: %v", vs)
 	}
 }

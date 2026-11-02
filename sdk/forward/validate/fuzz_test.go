@@ -34,8 +34,8 @@ func FuzzValidateRoute(f *testing.F) {
 		}
 		for _, opts := range []Options{
 			{},
-			{Nodes: testNodes(), EnableAnixOps: true, OnCreate: true, Now: time.UnixMilli(1790000000000),
-				ReservedPorts: map[string][]uint32{"forward-21": {22}}},
+			{Nodes: testNodes(), OnCreate: true, Now: time.UnixMilli(1790000000000),
+				ReservedPorts: map[string][]uint32{"proxy-21": {22}}},
 		} {
 			for _, v := range Proto(route, opts) {
 				if v.Code == "" || v.Message == "" {

@@ -111,8 +111,8 @@ func TestForwardCommandRoutesNodesAndStats(t *testing.T) {
 	}
 	routeFile := filepath.Join(dir, "route.json")
 	require.NoError(t, os.WriteFile(routeFile, []byte(`{"name":"hk-jp","listen":{"port":31000,"protocol":"L4_PROTOCOL_TCP"},
-	 "hops":[{"role":"HOP_ROLE_ENTRY","engine":"ENGINE_NFTABLES","node_refs":["forward-11"]},
-	         {"role":"HOP_ROLE_EXIT","engine":"ENGINE_NFTABLES","node_refs":["forward-12"],"ingress":{"security":"LINK_SECURITY_RAW"}}],
+	 "hops":[{"role":"HOP_ROLE_ENTRY","engine":"ENGINE_NETWORK","node_refs":["forward-11"]},
+	         {"role":"HOP_ROLE_EXIT","engine":"ENGINE_NETWORK","node_refs":["forward-12"],"ingress":{"security":"LINK_SECURITY_NETWORK"}}],
 	 "targets":[{"host":"198.51.100.10","port":443}]}`), 0o600))
 
 	for _, arguments := range [][]string{{"routes"}, {"routes", "create"}, {"routes", "get"}, {"routes", "bogus", "x"}, {"nodes", "set"},
@@ -129,8 +129,10 @@ func TestForwardCommandRoutesNodesAndStats(t *testing.T) {
 	again, err := run("routes", "create", "-f", routeFile, "--request-id", "cli-1")
 	require.NoError(t, err)
 	assert.Equal(t, output, again, "the request id makes a retry apply once")
-	_, err = run("routes", "create", "-f", routeFile)
-	require.ErrorContains(t, err, "port_in_use", "a refusal prints the violations' codes")
+	reservedFile := filepath.Join(dir, "reserved.json")
+	require.NoError(t, os.WriteFile(reservedFile, bytes.Replace(mustRead(t, routeFile), []byte(`"port":31000`), []byte(`"port":7000`), 1), 0o600))
+	_, err = run("routes", "create", "-f", reservedFile)
+	require.ErrorContains(t, err, "port_out_of_range", "a refusal prints the violations' codes")
 
 	output, err = run("routes", "list")
 	require.NoError(t, err)
@@ -212,9 +214,9 @@ func TestForwardCommandDiagnose(t *testing.T) {
 	}
 	route := &forwardv1.Route{Owner: "admin", Name: "diag", Listen: &forwardv1.Listen{Port: 31010, Protocol: forwardv1.L4Protocol_L4_PROTOCOL_TCP},
 		Hops: []*forwardv1.Hop{
-			{Role: forwardv1.HopRole_HOP_ROLE_ENTRY, Engine: forwardv1.Engine_ENGINE_NFTABLES, NodeRefs: []string{"forward-11"}},
-			{Role: forwardv1.HopRole_HOP_ROLE_EXIT, Engine: forwardv1.Engine_ENGINE_NFTABLES, NodeRefs: []string{"forward-12"},
-				Ingress: &forwardv1.LinkTransport{Security: forwardv1.LinkSecurity_LINK_SECURITY_RAW}},
+			{Role: forwardv1.HopRole_HOP_ROLE_ENTRY, Engine: forwardv1.Engine_ENGINE_NETWORK, NodeRefs: []string{"forward-11"}},
+			{Role: forwardv1.HopRole_HOP_ROLE_EXIT, Engine: forwardv1.Engine_ENGINE_NETWORK, NodeRefs: []string{"forward-12"},
+				Ingress: &forwardv1.LinkTransport{Security: forwardv1.LinkSecurity_LINK_SECURITY_NETWORK}},
 		},
 		Targets: []*forwardv1.Target{{Host: "198.51.100.10", Port: 443}},
 	}
@@ -224,14 +226,12 @@ func TestForwardCommandDiagnose(t *testing.T) {
 	_, err = run("routes", "diagnose")
 	require.ErrorContains(t, err, "invalid forward command")
 	output, err := run("routes", "diagnose", created.GetId(), "--timeout", "3000")
-	require.ErrorIs(t, err, errDiagnosisFailed, "never reported: the config steps fail")
+	require.ErrorIs(t, err, errDiagnosisFailed, "not on the network model: the config steps fail")
 	assert.Contains(t, output, "HOP  NODE")
-	assert.Contains(t, output, "never_reported")
-	assert.Contains(t, output, "node_vantage_unavailable")
-	assert.Contains(t, output, "POST /api/v4/forward/routes/{id}/diagnose")
+	assert.Contains(t, output, "not_on_network_model")
 	assert.Contains(t, output, "route "+created.GetId()+": FAILED")
 	dialMu.Lock()
-	assert.ElementsMatch(t, []string{"192.0.2.11:31010", "198.51.100.10:443"}, dialled)
+	assert.ElementsMatch(t, []string{"198.51.100.10:443"}, dialled, "no entry device runs the route: only the target is dialled")
 	dialMu.Unlock()
 
 	output, err = run("routes", "diagnose", created.GetId(), "--json")
@@ -246,4 +246,11 @@ func TestForwardCommandDiagnose(t *testing.T) {
 	var actions []string
 	require.NoError(t, db.Model(&model.OperationLog{}).Where("username = ?", "system/cli").Order("id").Pluck("action", &actions).Error)
 	assert.Equal(t, []string{"forward.route_diagnose", "forward.route_diagnose"}, actions)
+}
+
+func mustRead(t *testing.T, path string) []byte {
+	t.Helper()
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	return raw
 }

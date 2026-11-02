@@ -15,10 +15,9 @@ import (
 	"gorm.io/gorm"
 )
 
-// The planner behind the kernel's tables: a route's lifecycle moves only
-// the generations of the nodes it changes, allocations stick, a deleted
-// route's port is held for the grace period, and every change reaches the
-// state listeners after it committed.
+// The planner behind the kernel's tables: routes run on the network
+// model, so a route's lifecycle leaves the nodes' NodeForwardState empty
+// and unchanged, and re-planning identical input bumps nothing.
 func TestPlanLifecycle(t *testing.T)         { runPlanLifecycle(t, openSQLite(t)) }
 func TestPostgresPlanLifecycle(t *testing.T) { runPlanLifecycle(t, openPostgres(t)) }
 
@@ -34,39 +33,18 @@ func runPlanLifecycle(t *testing.T, db *gorm.DB) {
 	require.Len(t, route.GetId(), 26)
 	assert.EqualValues(t, 1, route.GetRevision())
 	assert.Equal(t, start.UnixMilli(), route.GetCreatedAtUnixMs())
-	assert.ElementsMatch(t, []string{"forward-11", "forward-12"}, listener.take())
-
-	entryState, exitState := f.state(entry), f.state(exit)
-	assert.EqualValues(t, 2, entryState.GetGeneration())
-	assert.EqualValues(t, 2, exitState.GetGeneration())
-	require.Len(t, entryState.GetHops(), 1)
-	require.Len(t, exitState.GetHops(), 1)
-	entryHop, exitHop := entryState.GetHops()[0], exitState.GetHops()[0]
-	assert.EqualValues(t, DefaultPortFirst, entryHop.GetListen().GetPort(), "the lowest free port of the default range")
-	assert.EqualValues(t, DefaultPortFirst, exitHop.GetListen().GetPort())
-	require.Len(t, entryHop.GetUpstreams(), 1)
-	assert.Equal(t, "192.0.2.12", entryHop.GetUpstreams()[0].GetAddress())
-	assert.Equal(t, []string{"192.0.2.11"}, exitHop.GetIngressSources())
-	assert.NotZero(t, entryHop.GetMark())
-	assert.Len(t, entryState.GetStateHash(), 64)
-
-	allocations := f.allocations()
-	require.Len(t, allocations, 2)
-	for _, allocation := range allocations {
-		assert.Equal(t, route.GetId(), allocation.RouteID)
-		assert.EqualValues(t, DefaultPortFirst, allocation.Port)
-		assert.NotZero(t, allocation.Mark)
-		assert.Nil(t, allocation.ReleasedAt)
-	}
+	assert.Empty(t, listener.take(), "a route on the network model changes no NodeForwardState")
+	assert.EqualValues(t, 1, f.state(entry).GetGeneration())
+	assert.Empty(t, f.state(exit).GetHops())
+	assert.Len(t, f.state(entry).GetStateHash(), 64)
 
 	// The configuration member carries the stamped state.
 	negotiated, member, err := NodeConfigMember(db, entry)
 	require.NoError(t, err)
 	require.True(t, negotiated)
-	assert.Equal(t, "2", member["generation"])
+	assert.Equal(t, "1", member["generation"])
 	assert.Equal(t, "forward-11", member["node_ref"])
 
-	// A target change touches the exit only; the ports stick.
 	f.clock.Advance(time.Minute)
 	changed := proto.Clone(route).(*forwardv1.Route)
 	changed.Targets = append(changed.Targets, &forwardv1.Target{Host: "198.51.100.11", Port: 443})
@@ -75,11 +53,6 @@ func runPlanLifecycle(t *testing.T, db *gorm.DB) {
 	assert.EqualValues(t, 2, updated.GetRevision())
 	assert.Equal(t, route.GetCreatedAtUnixMs(), updated.GetCreatedAtUnixMs())
 	assert.Equal(t, f.clock.Now().UnixMilli(), updated.GetUpdatedAtUnixMs())
-	assert.Equal(t, []string{"forward-12"}, listener.take())
-	assert.EqualValues(t, 2, f.state(entry).GetGeneration())
-	assert.EqualValues(t, 3, f.state(exit).GetGeneration())
-	assert.Len(t, f.state(exit).GetHops()[0].GetUpstreams(), 2)
-	assert.Equal(t, allocations, withoutTimes(f.allocations(), allocations))
 
 	// Re-planning identical input bumps nothing.
 	outcome, err := f.service.Replan(f.ctx, "test")
@@ -88,49 +61,15 @@ func runPlanLifecycle(t *testing.T, db *gorm.DB) {
 	assert.Empty(t, outcome.Changed)
 	assert.Empty(t, listener.take())
 
-	// Delete: both nodes get an empty state, the ports are held.
 	require.NoError(t, f.service.DeleteRoute(f.ctx, "delete-1", route.GetId()))
-	assert.ElementsMatch(t, []string{"forward-11", "forward-12"}, listener.take())
-	assert.Empty(t, f.state(entry).GetHops())
-	assert.EqualValues(t, 3, f.state(entry).GetGeneration())
-	for _, allocation := range f.allocations() {
-		require.NotNil(t, allocation.ReleasedAt)
-	}
 	_, err = f.service.GetRoute(f.ctx, route.GetId())
 	require.ErrorIs(t, err, ErrNotFound)
-
-	// Within the grace period the port is taken...
-	_, err = f.service.CreateRoute(f.ctx, "create-2", twoHop(DefaultPortFirst))
-	var refusal *RefusedError
-	require.ErrorAs(t, err, &refusal)
-	assert.True(t, refusal.Precondition)
-	assert.Equal(t, validate.CodePortInUse, refusal.Violations[0].Code)
-	assert.Empty(t, refusal.Violations[0].RouteID, "the new route has no id yet")
-	// ...and an allocated port moves past it.
-	other := f.create("create-3", twoHop(0))
-	assert.EqualValues(t, DefaultPortFirst+1, f.state(entry).GetHops()[0].GetListen().GetPort())
-	// After the grace period the port is free again.
-	f.clock.Advance(ReleaseGrace + time.Second)
-	again := f.create("create-4", twoHop(DefaultPortFirst))
-	assert.NotEqual(t, other.GetId(), again.GetId())
-	var held int64
-	require.NoError(t, db.Model(&model.KernelForwardAllocation{}).Where("released_at IS NOT NULL").Count(&held).Error)
-	assert.Zero(t, held, "the next plan dropped allocations past their grace period")
+	// The port is free again at once: no allocation is held.
+	f.create("create-2", twoHop(0))
 	status, err := f.service.PlanStatus(f.ctx)
 	require.NoError(t, err)
 	assert.False(t, status.Refused)
 	assert.Positive(t, status.Revision)
-}
-
-// withoutTimes answers rows with the update times of want, for comparing
-// allocations across plans.
-func withoutTimes(rows, want []model.KernelForwardAllocation) []model.KernelForwardAllocation {
-	for i := range rows {
-		if i < len(want) {
-			rows[i].UpdatedAt = want[i].UpdatedAt
-		}
-	}
-	return rows
 }
 
 // Route writes: validation, the request ledger, revisions and the
@@ -199,15 +138,11 @@ func runRouteWrites(t *testing.T, db *gorm.DB) {
 	_, err = f.service.CreateRoute(f.ctx, "expired", expired)
 	require.ErrorAs(t, err, &refusal)
 	assert.Equal(t, validate.CodeExpired, refusal.Violations[0].Code)
-	// A node the inventory does not have, or a disabled one, is a
-	// precondition.
-	for _, ref := range []string{"forward-99", "forward-13"} {
-		unknown := twoHop(0)
-		unknown.Hops[1].NodeRefs = []string{ref}
-		_, err = f.service.CreateRoute(f.ctx, "unknown-"+ref, unknown)
-		require.ErrorAs(t, err, &refusal, ref)
-		assert.True(t, refusal.Precondition, ref)
-	}
+	// A port the entry node reserves is a precondition.
+	reserved := twoHop(7000)
+	_, err = f.service.CreateRoute(f.ctx, "reserved", reserved)
+	require.ErrorAs(t, err, &refusal)
+	assert.True(t, refusal.Precondition)
 	// A refused request is not recorded: a fixed retry applies.
 	fixed := f.create("bad", twoHop(0))
 	assert.NotEmpty(t, fixed.GetId())
@@ -232,7 +167,7 @@ func runRouteWrites(t *testing.T, db *gorm.DB) {
 	assert.EqualValues(t, 2, got.GetRevision())
 	// An update that breaks the plan is refused and changes nothing.
 	broken := proto.Clone(got).(*forwardv1.Route)
-	broken.Hops[0].NodeRefs = []string{"forward-99"}
+	broken.Listen.Port = 7000
 	_, err = f.service.UpdateRoute(f.ctx, "u-broken", broken, 2)
 	require.ErrorAs(t, err, &refusal)
 	assert.Equal(t, route.GetId(), refusal.Violations[0].RouteID)
@@ -268,14 +203,16 @@ func runInventoryReplan(t *testing.T, db *gorm.DB) {
 	require.NoError(t, err)
 	assert.False(t, replanned)
 
-	outcome := f.hello(exit, nftCaps(forwardv1.Engine_ENGINE_GOST))
+	// A port range that leaves out the route's port refuses the plan.
+	outcome, err := f.service.SetNodeSettings(f.ctx, entry, NodeSettings{PortFirst: 31000, PortLast: 31010})
+	require.NoError(t, err)
 	assert.True(t, outcome.Refused)
-	assert.Equal(t, validate.CodeEngineNotAdvertised, outcome.Violations[0].Code)
+	assert.Equal(t, validate.CodePortOutOfRange, outcome.Violations[0].Code)
 	assert.True(t, proto.Equal(before, f.state(exit)), "a refused plan keeps every state")
 	status, err := f.service.PlanStatus(f.ctx)
 	require.NoError(t, err)
 	assert.True(t, status.Refused)
-	assert.Equal(t, "hello", status.Reason)
+	assert.Equal(t, "node_settings", status.Reason)
 	require.NotEmpty(t, status.Violations)
 	assert.Equal(t, route.GetId(), status.Violations[0].GetRouteId())
 
@@ -291,7 +228,8 @@ func runInventoryReplan(t *testing.T, db *gorm.DB) {
 	assert.True(t, routeIDs[route.GetId()], "the stored route is named: %v", routeIDs)
 	assert.True(t, routeIDs[""], "the new route's own violations name no route: %v", routeIDs)
 
-	outcome = f.hello(exit, nftCaps(forwardv1.Engine_ENGINE_NFTABLES, forwardv1.Engine_ENGINE_GOST))
+	outcome, err = f.service.SetNodeSettings(f.ctx, entry, NodeSettings{})
+	require.NoError(t, err)
 	assert.False(t, outcome.Refused)
 	status, err = f.service.PlanStatus(f.ctx)
 	require.NoError(t, err)
@@ -321,7 +259,7 @@ func runInventoryReplan(t *testing.T, db *gorm.DB) {
 	assert.False(t, negotiated)
 }
 
-// Node settings join the inventory and steer allocation; a proxy node
+// Node settings join the inventory and bound the entry's listen port; a proxy node
 // with a DNS host has no address until one is set.
 func TestNodeSettings(t *testing.T)         { runNodeSettings(t, openSQLite(t)) }
 func TestPostgresNodeSettings(t *testing.T) { runNodeSettings(t, openPostgres(t)) }
@@ -345,8 +283,15 @@ func runNodeSettings(t *testing.T, db *gorm.DB) {
 
 	_, err = f.service.SetNodeSettings(f.ctx, exit, NodeSettings{PortFirst: 40000, PortLast: 40010, ReservedPorts: []uint32{40000}, Labels: map[string]string{"link": "iepl"}})
 	require.NoError(t, err)
-	f.create("create-1", twoHop(0))
-	assert.EqualValues(t, 40001, f.state(exit).GetHops()[0].GetListen().GetPort())
+	// The entry's listen port sits in the entry node's range, off its
+	// reserved ports.
+	_, err = f.service.SetNodeSettings(f.ctx, entry, NodeSettings{PortFirst: 40000, PortLast: 40010, ReservedPorts: []uint32{40000}})
+	require.NoError(t, err)
+	f.create("create-1", twoHop(40001))
+	_, err = f.service.CreateRoute(f.ctx, "create-2", twoHop(40000))
+	var refusal *RefusedError
+	require.ErrorAs(t, err, &refusal)
+	assert.Equal(t, validate.CodePortReserved, refusal.Violations[0].Code)
 
 	// The proxy node joins with settings only; its DNS host is no address,
 	// but its reported server IP is.
@@ -386,12 +331,10 @@ func runPlanRouteAndList(t *testing.T, db *gorm.DB) {
 	preview, err := f.service.PlanRoute(f.ctx, &forwardv1.PlanRouteRequest{Route: twoHop(0)})
 	require.NoError(t, err)
 	require.Empty(t, preview.GetViolations())
-	require.Len(t, preview.GetStates(), 2)
-	assert.EqualValues(t, DefaultPortFirst+1, preview.GetStates()[0].GetHops()[0].GetListen().GetPort(), "the stored route's port is taken")
-	// The stored route keeps its own ports in a preview of itself.
+	require.Empty(t, preview.GetStates(), "routes on the network model have no node states")
 	self, err := f.service.PlanRoute(f.ctx, &forwardv1.PlanRouteRequest{Route: stored})
 	require.NoError(t, err)
-	assert.EqualValues(t, DefaultPortFirst, self.GetStates()[0].GetHops()[0].GetListen().GetPort())
+	require.Empty(t, self.GetViolations())
 	var count int64
 	require.NoError(t, db.Model(&model.KernelForwardRoute{}).Count(&count).Error)
 	assert.EqualValues(t, 1, count)
@@ -462,7 +405,6 @@ func TestServiceWithoutDatabase(t *testing.T) {
 	_, err = (&Service{}).Replan(t.Context(), "x")
 	require.Error(t, err)
 	require.Error(t, (&Service{}).Maintain(t.Context()))
-	assert.Equal(t, "default", (&Service{}).cluster())
 	assert.False(t, New(nil).now().IsZero())
 	assert.Equal(t, "forward route refused", (&RefusedError{}).Error())
 	assert.False(t, errors.Is(ErrNotFound, ErrInvalidRequest))

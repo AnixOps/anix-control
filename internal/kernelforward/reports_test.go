@@ -129,6 +129,11 @@ func runReportsAndConvergence(t *testing.T, db *gorm.DB) {
 	f := newFixture(t, db)
 	route := f.create("create-1", twoHop(0))
 	id := route.GetId()
+	// Both nodes are moved to generation 2, which they have not run yet.
+	for _, ref := range []string{"forward-11", "forward-12"} {
+		_, err := f.service.ResetNode(f.ctx, ref)
+		require.NoError(t, err)
+	}
 	nodes, err := NodeConvergence(f.ctx, db)
 	require.NoError(t, err)
 	require.Len(t, nodes, 2)
@@ -158,8 +163,7 @@ func runReportsAndConvergence(t *testing.T, db *gorm.DB) {
 
 	health, err := f.service.RouteHealth(f.ctx, id)
 	require.NoError(t, err)
-	require.Len(t, health, 1)
-	assert.EqualValues(t, 900, health[0].GetRttUs())
+	assert.Empty(t, health, "a route's health comes from the network model, not forward reports")
 	_, err = f.service.RouteHealth(f.ctx, "01JF1A000000000000000000ZZ")
 	require.ErrorIs(t, err, ErrNotFound)
 
@@ -200,9 +204,9 @@ func runReportsAndConvergence(t *testing.T, db *gorm.DB) {
 }
 
 // Control is authoritative for quota and expiry: a route whose entry
-// traffic reaches its quota, or whose expiry passed, is paused in the
-// nodes' states without changing the stored route; raising the quota
-// lifts it.
+// traffic reaches its quota, or whose expiry passed, is enforced (left out
+// of the network model's plan) without changing the stored route; raising
+// the quota lifts it.
 func TestEnforcement(t *testing.T)         { runEnforcement(t, openSQLite(t)) }
 func TestPostgresEnforcement(t *testing.T) { runEnforcement(t, openPostgres(t)) }
 
@@ -212,15 +216,11 @@ func runEnforcement(t *testing.T, db *gorm.DB) {
 	limited.Limits = &forwardv1.Limits{QuotaBytes: 1000}
 	route := f.create("create-1", limited)
 	id := route.GetId()
-	listener := listen(t)
 	at := start.Add(time.Minute)
-	result := f.report(entry, at, 2, counter(id, 0, "e1", 400, 500), counter(id, 1, "e1", 900, 900))
+	result := f.report(entry, at, 1, counter(id, 0, "e1", 400, 500), counter(id, 1, "e1", 900, 900))
 	assert.False(t, result.Replanned, "900 of 1000 bytes on the entry; the exit's do not count")
-	result = f.report(entry, at.Add(time.Minute), 2, counter(id, 0, "e1", 500, 500))
+	result = f.report(entry, at.Add(time.Minute), 1, counter(id, 0, "e1", 500, 500))
 	assert.True(t, result.Replanned)
-	assert.ElementsMatch(t, []string{"forward-11", "forward-12"}, listener.take())
-	assert.True(t, f.state(entry).GetHops()[0].GetPaused())
-	assert.True(t, f.state(exit).GetHops()[0].GetPaused())
 	var row model.KernelForwardRoute
 	require.NoError(t, db.First(&row, "id = ?", id).Error)
 	assert.Equal(t, EnforcedQuota, row.Enforced)
@@ -228,13 +228,12 @@ func runEnforcement(t *testing.T, db *gorm.DB) {
 	require.NoError(t, err)
 	assert.False(t, stored.GetPaused(), "the stored route is unchanged")
 	// More traffic on a paused route replans nothing.
-	assert.False(t, f.report(entry, at.Add(2*time.Minute), 2, counter(id, 0, "e1", 600, 600)).Replanned)
+	assert.False(t, f.report(entry, at.Add(2*time.Minute), 1, counter(id, 0, "e1", 600, 600)).Replanned)
 
 	raised := proto.Clone(stored).(*forwardv1.Route)
 	raised.Limits.QuotaBytes = 5000
 	_, err = f.service.UpdateRoute(f.ctx, "raise", raised, stored.GetRevision())
 	require.NoError(t, err)
-	assert.False(t, f.state(entry).GetHops()[0].GetPaused())
 	require.NoError(t, db.First(&row, "id = ?", id).Error)
 	assert.Empty(t, row.Enforced)
 
@@ -244,15 +243,11 @@ func runEnforcement(t *testing.T, db *gorm.DB) {
 	expiring.Limits.ExpiresAtUnixMs = start.Add(2 * time.Hour).UnixMilli()
 	_, err = f.service.UpdateRoute(f.ctx, "expiring", expiring, 2)
 	require.NoError(t, err)
-	listener.take()
 	require.NoError(t, f.service.Maintain(f.ctx))
-	assert.Empty(t, listener.take(), "not expired yet")
+	require.NoError(t, db.First(&row, "id = ?", id).Error)
+	assert.Empty(t, row.Enforced, "not expired yet")
 	f.clock.Advance(3 * time.Hour)
 	require.NoError(t, f.service.Maintain(f.ctx))
-	assert.ElementsMatch(t, []string{"forward-11", "forward-12"}, listener.take())
-	assert.True(t, f.state(entry).GetHops()[0].GetPaused())
 	require.NoError(t, db.First(&row, "id = ?", id).Error)
 	assert.Equal(t, EnforcedExpired, row.Enforced)
-	require.NoError(t, f.service.Maintain(f.ctx))
-	assert.Empty(t, listener.take(), "an expired route is replanned once")
 }

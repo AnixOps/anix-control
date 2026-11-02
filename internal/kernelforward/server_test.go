@@ -156,8 +156,7 @@ func TestForwardControlServer(t *testing.T) {
 	require.True(t, ok)
 	require.NotEmpty(t, answer.GetViolations())
 	assert.Equal(t, "targets", answer.GetViolations()[0].GetField())
-	unknown := twoHop(0)
-	unknown.Hops[1].NodeRefs = []string{"forward-99"}
+	unknown := twoHop(7000) // reserved on forward-11
 	_, err = server.CreateRoute(ctx, &forwardv1.CreateRouteRequest{RequestId: "c3", Route: unknown})
 	assert.Equal(t, codes.FailedPrecondition, status.Code(err))
 	_, err = server.CreateRoute(ctx, &forwardv1.CreateRouteRequest{RequestId: "c1", Route: unknown})
@@ -171,7 +170,7 @@ func TestForwardControlServer(t *testing.T) {
 	assert.Equal(t, codes.Aborted, status.Code(err))
 	broken := twoHop(0)
 	broken.Id = id
-	broken.Hops[0].NodeRefs = []string{"forward-99"}
+	broken.Listen.Port = 7000
 	_, err = server.UpdateRoute(ctx, &forwardv1.UpdateRouteRequest{RequestId: "u2", Route: broken, ExpectedRevision: 1})
 	st = status.Convert(err)
 	assert.Equal(t, codes.FailedPrecondition, st.Code())
@@ -191,7 +190,7 @@ func TestForwardControlServer(t *testing.T) {
 	assert.Len(t, list.GetRoutes(), 1)
 	plan, err := server.PlanRoute(ctx, &forwardv1.PlanRouteRequest{Route: twoHop(0)})
 	require.NoError(t, err)
-	assert.Len(t, plan.GetAllocations(), 2)
+	assert.Empty(t, plan.GetViolations())
 	_, err = server.PlanRoute(ctx, &forwardv1.PlanRouteRequest{})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 
@@ -221,13 +220,15 @@ func TestForwardControlServer(t *testing.T) {
 
 	// A delete the other routes' plan refuses names them.
 	other := f.create("c4", twoHop(0))
-	f.hello(exit, nftCaps(forwardv1.Engine_ENGINE_GOST))
+	_, err = f.service.SetNodeSettings(ctx, entry, NodeSettings{ReservedPorts: []uint32{DefaultPortFirst}})
+	require.NoError(t, err)
 	_, err = server.DeleteRoute(ctx, &forwardv1.DeleteRouteRequest{RequestId: "d1", RouteId: id})
 	st = status.Convert(err)
 	assert.Equal(t, codes.FailedPrecondition, st.Code())
 	require.Len(t, st.Details(), 1)
 	assert.Equal(t, other.GetId(), st.Details()[0].(*forwardv1.PlanRouteResponse).GetViolations()[0].GetRouteId())
-	f.hello(exit, nftCaps())
+	_, err = f.service.SetNodeSettings(ctx, entry, NodeSettings{})
+	require.NoError(t, err)
 	_, err = server.DeleteRoute(ctx, &forwardv1.DeleteRouteRequest{RequestId: "d1", RouteId: id})
 	require.NoError(t, err)
 	_, err = server.DeleteRoute(ctx, &forwardv1.DeleteRouteRequest{RequestId: "d2", RouteId: id})

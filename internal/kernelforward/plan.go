@@ -168,14 +168,10 @@ func (s *Service) PlanStatus(ctx context.Context) (PlanStatus, error) {
 }
 
 // replanTx plans routes in tx, which holds the plan lock. A refused plan
-// writes nothing. An accepted one writes the allocations, the generations
-// and states that moved, and the routes' enforcement.
+// writes nothing. An accepted one writes the generations and states that
+// moved, the routes' enforcement and the network model's plan.
 func (s *Service) replanTx(tx *gorm.DB, routes []storedRoute, now time.Time) (PlanOutcome, error) {
 	inv, err := loadInventory(tx)
-	if err != nil {
-		return PlanOutcome{}, err
-	}
-	previous, taken, err := loadAllocations(tx, now)
 	if err != nil {
 		return PlanOutcome{}, err
 	}
@@ -185,13 +181,11 @@ func (s *Service) replanTx(tx *gorm.DB, routes []storedRoute, now time.Time) (Pl
 	}
 	effective := make([]*forwardv1.Route, 0, len(routes))
 	enforced := make(map[string]string, len(routes))
-	// A route left on gost is not planned, but holds its ports until it is
-	// moved onto the network model (its clients keep the entry port) or deleted.
-	held := map[string]bool{}
+	// A route left on a removed engine is not planned until it is moved
+	// onto the network model or deleted.
 	for _, stored := range routes {
-		if onGost(stored.route) {
+		if onRemovedEngine(stored.route) {
 			enforced[stored.route.GetId()] = EnforcedGostRemoved
-			held[stored.route.GetId()] = true
 			continue
 		}
 		reason := enforcement(stored.route, used[stored.route.GetId()], now)
@@ -203,20 +197,8 @@ func (s *Service) replanTx(tx *gorm.DB, routes []storedRoute, now time.Time) (Pl
 		}
 		effective = append(effective, route)
 	}
-	for key, slot := range previous {
-		if held[key.RouteID] {
-			taken[key] = slot
-			delete(previous, key)
-		}
-	}
-	result, err := planner.Plan(effective, inv.nodes, previous, planner.Options{
-		Cluster: s.cluster(), ReservedPorts: inv.reserved, Taken: taken, Now: now, EnableAnixOps: s.anixOpsEnabled(),
-		EnableNetwork: true,
-	})
-	if err != nil {
-		return PlanOutcome{}, fmt.Errorf("kernel forward: plan: %w", err)
-	}
-	outcome := PlanOutcome{Warnings: result.Warnings}
+	result := planner.Plan(effective, inv.nodes, planner.Options{ReservedPorts: inv.reserved, Now: now})
+	var outcome PlanOutcome
 	if len(result.Violations) > 0 {
 		outcome.Refused, outcome.Violations = true, result.Violations
 		return outcome, nil
@@ -229,9 +211,6 @@ func (s *Service) replanTx(tx *gorm.DB, routes []storedRoute, now time.Time) (Pl
 		return PlanOutcome{}, err
 	}
 	outcome.Changed = changed
-	if err := writeAllocations(tx, result.Allocations, held, now); err != nil {
-		return PlanOutcome{}, err
-	}
 	for _, stored := range routes {
 		if reason := enforced[stored.route.GetId()]; reason != stored.row.Enforced {
 			if err := tx.Model(&model.KernelForwardRoute{}).Where("id = ?", stored.row.ID).Update("enforced", reason).Error; err != nil {
@@ -282,69 +261,6 @@ func entryUsage(tx *gorm.DB) (map[string]uint64, error) {
 		}
 	}
 	return out, nil
-}
-
-// loadAllocations answers the active allocations (the planner's previous
-// ones) and those of deleted routes still in their grace period (taken).
-// Allocations whose grace period ended are deleted.
-func loadAllocations(tx *gorm.DB, now time.Time) (previous, taken planner.Allocations, err error) {
-	if err := tx.Where("released_at IS NOT NULL AND released_at < ?", now.Add(-ReleaseGrace)).Delete(&model.KernelForwardAllocation{}).Error; err != nil {
-		return nil, nil, fmt.Errorf("kernel forward: release allocations: %w", err)
-	}
-	var rows []model.KernelForwardAllocation
-	if err := tx.Order("route_id, hop_index, node_ref").Find(&rows).Error; err != nil {
-		return nil, nil, fmt.Errorf("kernel forward: load allocations: %w", err)
-	}
-	previous, taken = planner.Allocations{}, planner.Allocations{}
-	for _, row := range rows {
-		key := planner.Key{RouteID: row.RouteID, HopIndex: row.HopIndex, NodeRef: row.NodeRef}
-		slot := planner.Slot{Port: row.Port, Mark: row.Mark}
-		if row.ReleasedAt != nil {
-			taken[key] = slot
-		} else {
-			previous[key] = slot
-		}
-	}
-	return previous, taken, nil
-}
-
-// writeAllocations makes the active allocations exactly allocations, but
-// for the held routes', which stay as they are.
-func writeAllocations(tx *gorm.DB, allocations planner.Allocations, held map[string]bool, now time.Time) error {
-	var rows []model.KernelForwardAllocation
-	if err := tx.Where("released_at IS NULL").Find(&rows).Error; err != nil {
-		return fmt.Errorf("kernel forward: load allocations: %w", err)
-	}
-	for _, row := range rows {
-		if held[row.RouteID] {
-			continue
-		}
-		key := planner.Key{RouteID: row.RouteID, HopIndex: row.HopIndex, NodeRef: row.NodeRef}
-		slot, kept := allocations[key]
-		if kept && slot.Port == row.Port && slot.Mark == row.Mark {
-			delete(allocations, key)
-			continue
-		}
-		if !kept {
-			if err := tx.Where("route_id = ? AND hop_index = ? AND node_ref = ?", row.RouteID, row.HopIndex, row.NodeRef).
-				Delete(&model.KernelForwardAllocation{}).Error; err != nil {
-				return fmt.Errorf("kernel forward: drop allocation: %w", err)
-			}
-		}
-	}
-	for _, allocation := range allocations.Sorted() {
-		row := model.KernelForwardAllocation{
-			RouteID: allocation.RouteID, HopIndex: allocation.HopIndex, NodeRef: allocation.NodeRef,
-			Port: allocation.Port, Mark: allocation.Mark, UpdatedAt: now,
-		}
-		if err := tx.Clauses(clause.OnConflict{
-			Columns:   []clause.Column{{Name: "route_id"}, {Name: "hop_index"}, {Name: "node_ref"}},
-			DoUpdates: clause.Assignments(map[string]any{"port": row.Port, "mark": row.Mark, "released_at": nil, "updated_at": now}),
-		}).Create(&row).Error; err != nil {
-			return fmt.Errorf("kernel forward: store allocation: %w", err)
-		}
-	}
-	return nil
 }
 
 // writeStates stamps states from the stored generations (or the reported

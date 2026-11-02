@@ -11,22 +11,12 @@ import (
 // Options are what validation knows beyond the route itself. The zero
 // Options run every rule that needs only the route.
 type Options struct {
-	// Nodes is the node inventory (Control's, or PlanRouteRequest.nodes).
-	// When it is empty the inventory rules are skipped, not passed: node
-	// existence, advertised engines and their capabilities, port ranges.
+	// Nodes is the node inventory (Control's, or PlanRouteRequest.nodes):
+	// an explicit port outside a node's range is refused.
 	Nodes []model.NodeInfo
 	// ReservedPorts are the ports each node keeps for itself (SSH, the
 	// Agent's ports, a per-node list), by node reference.
 	ReservedPorts map[string][]uint32
-	// EnableAnixOps allows ENGINE_ANIXOPS and LINK_SECURITY_ANIXOPS. It
-	// stays false until the AnixOps protocol ships (v4.3); even then a node
-	// must advertise the engine.
-	EnableAnixOps bool
-	// EnableNetwork allows ENGINE_NETWORK and LINK_SECURITY_NETWORK routes,
-	// which Control plans on its network model (network.v1) instead of
-	// into NodeForwardState; their nodes are network devices, outside the
-	// node inventory.
-	EnableNetwork bool
 	// OnCreate with a non-zero Now requires limits.expires_at_unix_ms, when
 	// set, to be after Now. An update may keep an expiry that has passed.
 	OnCreate bool
@@ -48,21 +38,15 @@ func Route(r *model.Route, opts Options) Violations {
 	}
 	checkMeta(c, r)
 	checkListen(c, r)
-	checkHops(c, r, opts)
-	checkLinks(c, r)
+	checkHops(c, r)
 	checkTargets(c, r)
 	checkPolicy(c, r)
 	checkProxyProtocol(c, r)
-	checkPlainOwner(c, r, opts)
 	checkLimits(c, r, opts)
 	checkLabels(c, r)
 	checkPorts(c, r, opts)
 	if r.IsNetwork() {
 		checkNetwork(c, r)
-		return c.out
-	}
-	if len(opts.Nodes) > 0 {
-		checkInventory(c, r, opts)
 	}
 	return c.out
 }

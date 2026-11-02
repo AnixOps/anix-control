@@ -55,8 +55,8 @@ func TestForwardCommandDNS(t *testing.T) {
 	assert.NotContains(t, output, secret)
 
 	routeFile := write("route.json", `{"name":"hk-jp","listen":{"port":31000,"protocol":"L4_PROTOCOL_TCP","entry_hostname":"hk.example.com"},
-	 "hops":[{"role":"HOP_ROLE_ENTRY","engine":"ENGINE_NFTABLES","node_refs":["forward-11"]},
-	         {"role":"HOP_ROLE_EXIT","engine":"ENGINE_NFTABLES","node_refs":["forward-12"],"ingress":{"security":"LINK_SECURITY_RAW"}}],
+	 "hops":[{"role":"HOP_ROLE_ENTRY","engine":"ENGINE_NETWORK","node_refs":["forward-11"]},
+	         {"role":"HOP_ROLE_EXIT","engine":"ENGINE_NETWORK","node_refs":["forward-12"],"ingress":{"security":"LINK_SECURITY_NETWORK"}}],
 	 "targets":[{"host":"198.51.100.10","port":443}]}`)
 	var routeOut bytes.Buffer
 	require.NoError(t, runAdminCommand(ctx, nil, db, []string{"forward", "routes", "create", "-f", routeFile}, &routeOut))

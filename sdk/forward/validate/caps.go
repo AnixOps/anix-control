@@ -2,8 +2,6 @@ package validate
 
 import (
 	"time"
-
-	"github.com/AnixOps/anix-control/sdk/forward/model"
 )
 
 // Caps and bounds. The design fixes only the port range (1..65535); the
@@ -48,56 +46,3 @@ const (
 	MinBreakerOpen    = time.Second
 	MaxBreakerOpen    = time.Hour
 )
-
-// engineLinks are the link securities each engine can originate and
-// terminate (forward-sdk.md section 4.2).
-var engineLinks = map[model.Engine][]model.LinkSecurity{
-	model.EngineNFTables: {model.LinkSecurityRaw},
-	model.EngineGost: {
-		model.LinkSecurityRaw, model.LinkSecurityTLS, model.LinkSecurityWSS,
-		model.LinkSecurityQUIC, model.LinkSecurityGRPC,
-	},
-	model.EngineAnixOps: {model.LinkSecurityAnixOps},
-	model.EngineNetwork: {model.LinkSecurityNetwork},
-}
-
-// EngineLinks answers the link securities engine e can originate and
-// terminate; none for an unknown engine.
-func EngineLinks(e model.Engine) []model.LinkSecurity {
-	return append([]model.LinkSecurity(nil), engineLinks[e]...)
-}
-
-// CanCarry reports whether engine e can originate and terminate a link with
-// security s.
-func CanCarry(e model.Engine, s model.LinkSecurity) bool {
-	for _, l := range engineLinks[e] {
-		if l == s {
-			return true
-		}
-	}
-	return false
-}
-
-// CanMux reports whether engine e can multiplex a link: gost (mtls, mwss
-// and friends) and the AnixOps protocol; nftables cannot.
-func CanMux(e model.Engine) bool {
-	return e == model.EngineGost || e == model.EngineAnixOps
-}
-
-// CanProxyProtocol reports whether engine e can write a PROXY protocol
-// header toward targets: the AnixOps engine and the network model's kernel
-// (the gost engine may adopt it later; anixops-protocol.md section 6.5).
-func CanProxyProtocol(e model.Engine) bool {
-	return e == model.EngineAnixOps || e == model.EngineNetwork
-}
-
-// TrustedLinkLabel is the node label that marks a trusted private line
-// (forward-sdk.md section 4.3); its values below allow the PLAIN carrier.
-const TrustedLinkLabel = "link"
-
-// IsTrustedLink reports whether a node's labels mark it as on an IEPL or
-// IPLC private line.
-func IsTrustedLink(labels map[string]string) bool {
-	v := labels[TrustedLinkLabel]
-	return v == "iepl" || v == "iplc"
-}

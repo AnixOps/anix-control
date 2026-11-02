@@ -11,7 +11,6 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	gproto "google.golang.org/protobuf/proto"
 	"gorm.io/gorm"
 )
 
@@ -65,17 +64,16 @@ func (f *fixture) reportHolding(node agentcontrol.AgentNode, observed time.Time,
 
 // After a Control database reset the Agents hold higher generations than
 // Control stamps: the first report ahead moves the node's generation past
-// it, keeping its hops, and pushes the node; later plans stamp above it.
+// it, keeping its state, and pushes the node; later plans keep it.
 func TestGenerationRecovery(t *testing.T)         { runGenerationRecovery(t, openSQLite(t)) }
 func TestPostgresGenerationRecovery(t *testing.T) { runGenerationRecovery(t, openPostgres(t)) }
 
 func runGenerationRecovery(t *testing.T, db *gorm.DB) {
 	f := newFixture(t, db)
-	route := f.create("create-1", twoHop(0))
+	f.create("create-1", twoHop(0))
 	listener := listen(t)
 	before := f.storedState(entry)
 	hops := f.state(entry).GetHops()
-	require.NotEmpty(t, hops)
 	baseReport, basePlan := recoveries[RecoveryReport].Load(), recoveries[RecoveryPlan].Load()
 
 	// Behind and converged reports change nothing.
@@ -117,14 +115,11 @@ func runGenerationRecovery(t *testing.T, db *gorm.DB) {
 	assert.EqualValues(t, 18, f.storedState(exit).Generation)
 	listener.take()
 
-	// The next plan that changes the hops stamps above the recovered
-	// generations.
-	updated := gproto.Clone(route).(*forwardv1.Route)
-	updated.Listen.Port = 30443
-	_, err := f.service.UpdateRoute(f.ctx, "update-1", updated, route.GetRevision())
+	// The next plan keeps the recovered generations.
+	_, err := f.service.Replan(f.ctx, "test")
 	require.NoError(t, err)
-	assert.EqualValues(t, 42, f.storedState(entry).Generation)
-	assert.EqualValues(t, 18, f.storedState(exit).Generation, "the exit hop did not change")
+	assert.EqualValues(t, 41, f.storedState(entry).Generation)
+	assert.EqualValues(t, 18, f.storedState(exit).Generation)
 	assert.Equal(t, basePlan, recoveries[RecoveryPlan].Load(), "nothing was ahead at plan time")
 
 	var body strings.Builder
@@ -158,7 +153,7 @@ func runGenerationRecoveryWithoutState(t *testing.T, db *gorm.DB) {
 	basePlan := recoveries[RecoveryPlan].Load()
 	f.create("create-1", twoHop(0))
 	assert.EqualValues(t, 26, f.storedState(entry).Generation)
-	assert.EqualValues(t, 2, f.storedState(exit).Generation, "a node without a report stamps as before")
+	assert.EqualValues(t, 1, f.storedState(exit).Generation, "a node without a report keeps its generation")
 	assert.Equal(t, basePlan+1, recoveries[RecoveryPlan].Load())
 }
 

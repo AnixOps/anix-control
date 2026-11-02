@@ -60,7 +60,7 @@ func newForwardKernel(t *testing.T, db *gorm.DB, grants *forwardGrants) *kernelf
 		{ID: 11, Name: "entry", Host: "192.0.2.11", Port: 7000, Enabled: true},
 		{ID: 12, Name: "exit", Host: "192.0.2.12", Port: 7000, Enabled: true},
 	}).Error)
-	forward := &kernelforward.Service{DB: db, Cluster: func() string { return "prod" },
+	forward := &kernelforward.Service{DB: db,
 		Probes: service.DiagnosisProbes{Dial: func(context.Context, string, string, time.Duration) (net.Conn, error) {
 			return nil, errors.New("connection refused (test)")
 		}}}
@@ -79,11 +79,11 @@ func newForwardKernel(t *testing.T, db *gorm.DB, grants *forwardGrants) *kernelf
 func forwardRoute() *forwardv1.Route {
 	return &forwardv1.Route{
 		Owner:  "admin",
-		Listen: &forwardv1.Listen{Protocol: forwardv1.L4Protocol_L4_PROTOCOL_TCP},
+		Listen: &forwardv1.Listen{Port: 30443, Protocol: forwardv1.L4Protocol_L4_PROTOCOL_TCP},
 		Hops: []*forwardv1.Hop{
-			{Role: forwardv1.HopRole_HOP_ROLE_ENTRY, Engine: forwardv1.Engine_ENGINE_NFTABLES, NodeRefs: []string{"forward-11"}},
-			{Role: forwardv1.HopRole_HOP_ROLE_EXIT, Engine: forwardv1.Engine_ENGINE_NFTABLES, NodeRefs: []string{"forward-12"},
-				Ingress: &forwardv1.LinkTransport{Security: forwardv1.LinkSecurity_LINK_SECURITY_RAW}},
+			{Role: forwardv1.HopRole_HOP_ROLE_ENTRY, Engine: forwardv1.Engine_ENGINE_NETWORK, NodeRefs: []string{"forward-11"}},
+			{Role: forwardv1.HopRole_HOP_ROLE_EXIT, Engine: forwardv1.Engine_ENGINE_NETWORK, NodeRefs: []string{"forward-12"},
+				Ingress: &forwardv1.LinkTransport{Security: forwardv1.LinkSecurity_LINK_SECURITY_NETWORK}},
 		},
 		Targets: []*forwardv1.Target{{Host: "198.51.100.10", Port: 443}},
 	}
@@ -107,7 +107,7 @@ func exerciseForward(t *testing.T, connection grpc.ClientConnInterface) {
 	require.Len(t, list.GetRoutes(), 1)
 	plan, err := client.PlanRoute(ctx, &forwardv1.PlanRouteRequest{Route: forwardRoute()})
 	require.NoError(t, err)
-	require.Len(t, plan.GetStates(), 2)
+	require.Empty(t, plan.GetViolations())
 	_, err = client.GetRouteStats(ctx, &forwardv1.GetRouteStatsRequest{RouteId: id})
 	require.NoError(t, err)
 	_, err = client.GetRouteHealth(ctx, &forwardv1.GetRouteHealthRequest{RouteId: id})

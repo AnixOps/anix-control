@@ -122,7 +122,7 @@ type env struct {
 func newEnv(t *testing.T, db *gorm.DB) *env {
 	t.Helper()
 	e := &env{t: t, db: db, now: time.Date(2026, 10, 4, 12, 0, 0, 0, time.UTC)}
-	e.kernel = &kernelforward.Service{DB: db, Cluster: func() string { return "test" }, Now: func() time.Time { return e.now },
+	e.kernel = &kernelforward.Service{DB: db, Now: func() time.Time { return e.now },
 		Checks: probingNodes{}, Probes: service.DiagnosisProbes{Dial: func(context.Context, string, string, time.Duration) (net.Conn, error) {
 			return nil, errors.New("connection refused (test)")
 		}}}
@@ -191,8 +191,8 @@ func (e *env) call(method, path, body, key string) answer {
 }
 
 const twoHop = `{"name":"hk-jp","listen":{"port":%PORT%,"protocol":"L4_PROTOCOL_TCP"},
- "hops":[{"role":"HOP_ROLE_ENTRY","engine":"ENGINE_NFTABLES","node_refs":["forward-11"]},
-         {"role":"HOP_ROLE_EXIT","engine":"ENGINE_NFTABLES","node_refs":["forward-12"],"ingress":{"security":"%SEC%"}}],
+ "hops":[{"role":"HOP_ROLE_ENTRY","engine":"ENGINE_NETWORK","node_refs":["forward-11"]},
+         {"role":"HOP_ROLE_EXIT","engine":"ENGINE_NETWORK","node_refs":["forward-12"],"ingress":{"security":"%SEC%"}}],
  "targets":[{"host":"198.51.100.10","port":443}]}`
 
 func route(port, security string) string {
@@ -211,16 +211,16 @@ func runForwardV4API(t *testing.T, db *gorm.DB) {
 
 	// Create, with the Idempotency-Key as the request id: a retry answers
 	// the same route.
-	created := e.call("POST", "/routes", route("31000", "LINK_SECURITY_RAW"), "create-1")
+	created := e.call("POST", "/routes", route("31000", "LINK_SECURITY_NETWORK"), "create-1")
 	require.Equal(t, http.StatusCreated, created.status, created.raw)
 	stored := created.data()["route"].(map[string]any)
 	id := stored["id"].(string)
 	assert.Equal(t, "admin", stored["owner"])
 	assert.Equal(t, "1", stored["revision"])
-	retried := e.call("POST", "/routes", route("31000", "LINK_SECURITY_RAW"), "create-1")
+	retried := e.call("POST", "/routes", route("31000", "LINK_SECURITY_NETWORK"), "create-1")
 	require.Equal(t, http.StatusCreated, retried.status, retried.raw)
 	assert.Equal(t, id, retried.data()["route"].(map[string]any)["id"])
-	conflict := e.call("POST", "/routes", route("31001", "LINK_SECURITY_RAW"), "create-1")
+	conflict := e.call("POST", "/routes", route("31001", "LINK_SECURITY_NETWORK"), "create-1")
 	assert.Equal(t, http.StatusConflict, conflict.status)
 	assert.Equal(t, "idempotency_conflict", conflict.errorCode())
 
@@ -229,43 +229,31 @@ func runForwardV4API(t *testing.T, db *gorm.DB) {
 	assert.Equal(t, http.StatusBadRequest, invalid.status, invalid.raw)
 	assert.Equal(t, "invalid_route", invalid.errorCode())
 	assert.Contains(t, invalid.violationCodes(), "link_unsupported")
-	taken := e.call("POST", "/routes", route("31000", "LINK_SECURITY_RAW"), "")
-	assert.Equal(t, http.StatusConflict, taken.status, taken.raw)
-	assert.Equal(t, "refused", taken.errorCode())
-	assert.Contains(t, taken.violationCodes(), "port_in_use")
-	// The diagnosis: the nodes have not reported, their checks pass.
+	reserved := e.call("POST", "/routes", route("7000", "LINK_SECURITY_NETWORK"), "")
+	assert.Equal(t, http.StatusConflict, reserved.status, reserved.raw)
+	assert.Equal(t, "refused", reserved.errorCode())
+	assert.Contains(t, reserved.violationCodes(), "port_out_of_range")
+	// The diagnosis: the nodes are not on the network model.
 	diagnosis := e.call("POST", "/routes/"+id+"/diagnose", `{"timeout_ms":3000}`, "")
 	require.Equal(t, http.StatusOK, diagnosis.status, diagnosis.raw)
 	assert.Equal(t, id, diagnosis.data()["route_id"])
-	assert.Nil(t, diagnosis.data()["ok"], "never reported: the config steps fail")
+	assert.Nil(t, diagnosis.data()["ok"], "not on the network model: the config steps fail")
 	assert.Nil(t, diagnosis.data()["cached"])
-	var nodeSteps int
-	for _, raw := range diagnosis.data()["steps"].([]any) {
-		step := raw.(map[string]any)
-		if step["vantage"] == "DIAGNOSE_VANTAGE_NODE" {
-			nodeSteps++
-			assert.Equal(t, "PROBE_STATUS_OK", step["result"].(map[string]any)["status"], step)
-		}
-	}
-	assert.Equal(t, 6, nodeSteps, "listen, port conflict and connect on each node")
 	again := e.call("POST", "/routes/"+id+"/diagnose", "", "")
 	require.Equal(t, http.StatusOK, again.status, again.raw)
 	assert.Equal(t, true, again.data()["cached"])
 	missing := e.call("POST", "/routes/01JF1A000000000000000000ZZ/diagnose", "", "")
 	assert.Equal(t, http.StatusNotFound, missing.status)
 
-	preview := e.call("POST", "/routes/preview", `{"route":`+route("31005", "LINK_SECURITY_RAW")+`}`, "")
+	preview := e.call("POST", "/routes/preview", `{"route":`+route("31005", "LINK_SECURITY_NETWORK")+`}`, "")
 	require.Equal(t, http.StatusOK, preview.status, preview.raw)
-	assert.Len(t, preview.data()["states"], 2)
+	assert.Empty(t, preview.data()["violations"])
+	assert.Empty(t, preview.data()["states"], "routes on the network model have no node states")
 
-	// Pause and resume move the revision and the nodes' state.
+	// Pause and resume move the revision.
 	paused := e.call("POST", "/routes/"+id+"/pause", "", "pause-1")
 	require.Equal(t, http.StatusOK, paused.status, paused.raw)
 	assert.Equal(t, true, paused.data()["route"].(map[string]any)["paused"])
-	state, _, err := e.kernel.State(context.Background(), "forward-11")
-	require.NoError(t, err)
-	require.Len(t, state.GetHops(), 1)
-	assert.True(t, state.GetHops()[0].GetPaused())
 	resumed := e.call("POST", "/routes/"+id+"/resume", "", "")
 	require.Equal(t, http.StatusOK, resumed.status, resumed.raw)
 	assert.Equal(t, "3", resumed.data()["route"].(map[string]any)["revision"])
@@ -322,7 +310,7 @@ func runForwardV4API(t *testing.T, db *gorm.DB) {
 	assert.Len(t, topology.data()["nodes"], 3)
 	health := e.call("GET", "/routes/"+id+"/health", "", "")
 	require.Equal(t, http.StatusOK, health.status, health.raw)
-	assert.Len(t, health.data()["health"], 1)
+	assert.Empty(t, health.data()["health"], "a route's health comes from the network model")
 
 	// The registry: an Ansible machine, then deletes.
 	machine := e.call("POST", "/ansible-machines", `{"node":{"name":"sg","host":"192.0.2.31","port":22}}`, "m-1")

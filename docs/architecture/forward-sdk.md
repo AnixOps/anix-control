@@ -2,6 +2,8 @@
 
 Note: the nftables driver, its goldens (`contracts/forward/v1/nft`) and the netns end-to-end suite (`sdk/forward/e2e`) described below were removed in 5.0; relays run on the anixops driver. The sections are kept as design history.
 
+Note (5.0): every route runs on the network model (`ENGINE_NETWORK`, `LINK_SECURITY_NETWORK`). Validation refuses the other engines and link securities, and the planner only validates: the port and mark allocation, the hop wiring (sections 5.1 to 5.3) and the planner goldens in `contracts/forward/v1` were removed, so `NodeForwardState` carries vantage probes but no hops. Route diagnosis, entry HA and route health read the network model. The sections below are kept as design history.
+
 Status: DESIGN APPROVED (gates H11–H14 decided by the owner on 2026-10-02).
 F1b and F1c are implemented: the domain model (`sdk/forward/model`), the
 shared validation (`sdk/forward/validate`) and the planner

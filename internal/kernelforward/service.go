@@ -29,7 +29,6 @@ import (
 	forwardv1 "github.com/AnixOps/anix-control/sdk/api/forward/v1"
 	"github.com/AnixOps/anix-control/sdk/forward/planner"
 	"github.com/AnixOps/anix-control/sdk/forward/validate"
-	"github.com/AnixOps/anix-control/v5/internal/config"
 	"github.com/AnixOps/anix-control/v5/internal/forwardddns"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/networkmodel"
@@ -40,10 +39,6 @@ import (
 )
 
 const (
-	// ReleaseGrace is how long a deleted route's ports and marks stay held
-	// (forward-sdk.md section 5.2), so a late packet never reaches a new
-	// route.
-	ReleaseGrace = 10 * time.Minute
 	// RequestRetention is how long a write's request id is remembered.
 	RequestRetention = 7 * 24 * time.Hour
 	// MaxRequestID bounds a request id.
@@ -56,8 +51,10 @@ const (
 const (
 	EnforcedQuota   = "quota"
 	EnforcedExpired = "expired"
-	// EnforcedGostRemoved: a route still on the removed gost engine, which
-	// is left out of the plan until it is migrated or deleted.
+	// EnforcedGostRemoved: a stored route with a hop on a removed engine
+	// (gost, nftables, the anixops relay), which is left out of the plan
+	// until it is moved onto the network model or deleted. The value keeps
+	// its first engine's name for the web console.
 	EnforcedGostRemoved = "gost_removed"
 )
 
@@ -136,13 +133,6 @@ func refused(violations []planner.RouteViolation, routeID string) *RefusedError 
 // row.
 type Service struct {
 	DB *gorm.DB
-	// Cluster names the Agent identities the planner pins on encrypted
-	// links (planner.Options.Cluster); the module runtime's cluster
-	// (module_runtime.cluster, "default") when nil.
-	Cluster func() string
-	// AnixOps answers whether routes may use the experimental AnixOps engine
-	// (forward.anixops_experimental); the configuration's value when nil.
-	AnixOps func() bool
 	// NetworkKEK answers the network model's key-encryption key
 	// (module_runtime.ca_kek); the configuration's value when nil.
 	NetworkKEK func() string
@@ -174,33 +164,11 @@ func (s *Service) now() time.Time {
 	return time.Now().UTC()
 }
 
-func (s *Service) cluster() string {
-	if s.Cluster != nil {
-		return s.Cluster()
-	}
-	if cfg := config.Get(); cfg != nil {
-		return cfg.ModuleRuntime.ClusterOrDefault()
-	}
-	return "default"
-}
-
-// anixOpsEnabled reports the forward.anixops_experimental switch: it sets the
-// planner's and the validation's EnableAnixOps.
 // network answers the network model on db.
 func (s *Service) network(db *gorm.DB) *networkmodel.Service {
 	network := networkmodel.New(db)
 	network.KEK, network.Now = s.NetworkKEK, s.Now
 	return network
-}
-
-func (s *Service) anixOpsEnabled() bool {
-	if s.AnixOps != nil {
-		return s.AnixOps()
-	}
-	if cfg := config.Get(); cfg != nil {
-		return cfg.Forward.AnixOpsExperimental
-	}
-	return false
 }
 
 func (s *Service) db(ctx context.Context) (*gorm.DB, error) {

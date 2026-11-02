@@ -147,22 +147,17 @@ func TestAgentControlForwardConfigPush(t *testing.T) {
 	assert.Contains(t, connection.ServerCapabilities, "forward.v1")
 
 	before := snapshotsSent(configTriggerForward)
-	forward := &kernelforward.Service{DB: database.GetDB(), Cluster: func() string { return "test" }}
-	route, err := forward.CreateRoute(context.Background(), "create-1", &forwardv1.Route{
-		Owner:   "admin",
-		Listen:  &forwardv1.Listen{Protocol: forwardv1.L4Protocol_L4_PROTOCOL_TCP},
-		Hops:    []*forwardv1.Hop{{Role: forwardv1.HopRole_HOP_ROLE_ENTRY, Engine: forwardv1.Engine_ENGINE_NFTABLES, NodeRefs: []string{node.String()}}},
-		Targets: []*forwardv1.Target{{Host: "198.51.100.10", Port: 443}},
-	})
+	forward := &kernelforward.Service{DB: database.GetDB()}
+	// Moving the node's generation (forward reset-node) pushes it.
+	_, err := forward.ResetNode(context.Background(), node.String())
 	require.NoError(t, err)
 	pushed := session.next().GetConfig()
-	require.NotNil(t, pushed, "the plan pushed the node's configuration")
+	require.NotNil(t, pushed, "the new generation pushed the node's configuration")
 	assert.Equal(t, snapshot.GetConfigRevision()+1, pushed.GetConfigRevision())
 	state, found = forwardMember(t, pushed)
 	require.True(t, found)
 	assert.EqualValues(t, 2, state.GetGeneration())
-	require.Len(t, state.GetHops(), 1)
-	assert.Equal(t, route.GetId(), state.GetHops()[0].GetRouteId())
+	assert.Empty(t, state.GetHops(), "routes run on the network model")
 	assert.Equal(t, before+1, snapshotsSent(configTriggerForward))
 	// The agent answers as for any snapshot.
 	session.status(&agentv1pb.ConfigStatus{ConfigRevision: pushed.GetConfigRevision(), ConfigHash: pushed.GetConfigHash(), Applied: true})
@@ -197,15 +192,14 @@ func TestAgentControlForwardReports(t *testing.T) {
 	nodeID := uint32(node.ID)
 	session := openConfigSession(t, env, 0, forwardHello(t)...)
 	session.next() // the Hello's snapshot
-	forward := &kernelforward.Service{DB: database.GetDB(), Cluster: func() string { return "test" }}
+	forward := &kernelforward.Service{DB: database.GetDB()}
 	route, err := forward.CreateRoute(context.Background(), "create-1", &forwardv1.Route{
 		Owner:   "admin",
-		Listen:  &forwardv1.Listen{Protocol: forwardv1.L4Protocol_L4_PROTOCOL_TCP},
-		Hops:    []*forwardv1.Hop{{Role: forwardv1.HopRole_HOP_ROLE_ENTRY, Engine: forwardv1.Engine_ENGINE_NFTABLES, NodeRefs: []string{node.String()}}},
+		Listen:  &forwardv1.Listen{Port: 30443, Protocol: forwardv1.L4Protocol_L4_PROTOCOL_TCP},
+		Hops:    []*forwardv1.Hop{{Role: forwardv1.HopRole_HOP_ROLE_ENTRY, Engine: forwardv1.Engine_ENGINE_NETWORK, NodeRefs: []string{node.String()}}},
 		Targets: []*forwardv1.Target{{Host: "198.51.100.10", Port: 443}},
 	})
 	require.NoError(t, err)
-	session.next() // the plan's snapshot
 	id := route.GetId()
 	now := time.Now()
 

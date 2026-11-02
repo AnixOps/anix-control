@@ -26,9 +26,6 @@ var (
 	// labelKeyPattern is a label key: letters, digits, '.', '_', '-' and
 	// '/', starting and ending with a letter or digit.
 	labelKeyPattern = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9._/-]*[A-Za-z0-9])?$`)
-	// grpcServicePattern is a gRPC service name, optionally with its
-	// package ("anixops.Tunnel").
-	grpcServicePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_.]*$`)
 )
 
 func checkMeta(c *collector, r *model.Route) {
@@ -103,7 +100,7 @@ func expectedRole(i, n int) model.HopRole {
 	return model.HopRoleRelay
 }
 
-func checkHops(c *collector, r *model.Route, opts Options) {
+func checkHops(c *collector, r *model.Route) {
 	n := len(r.Hops)
 	switch {
 	case n == 0:
@@ -115,23 +112,11 @@ func checkHops(c *collector, r *model.Route, opts Options) {
 	for i := range r.Hops {
 		h := &r.Hops[i]
 		checkHopRole(c, i, n, h.Role)
-		checkHopEngine(c, i, h.Engine, opts)
+		checkHopEngine(c, i, h.Engine)
 		checkHopNodes(c, i, h.NodeRefs)
-		checkNetworkFields(c, i, *h)
-		if i == 0 {
-			// Ingress, port and dial_address are ignored on the entry.
-			continue
+		if i > 0 {
+			checkIngress(c, i, h.Ingress)
 		}
-		checkPort(c, hopField(i, "port"), h.Port)
-		if h.DialAddress != "" {
-			if len(h.NodeRefs) != 1 {
-				c.add(hopField(i, "dial_address"), CodeRequiresSingleNode, "dial_address needs exactly one node in node_refs")
-			}
-			if !isHostOrAddress(h.DialAddress) {
-				c.add(hopField(i, "dial_address"), CodeInvalidFormat, "must be an IP address or a DNS name")
-			}
-		}
-		checkIngress(c, i, *h, opts)
 	}
 }
 
@@ -149,22 +134,20 @@ func checkHopRole(c *collector, i, n int, role model.HopRole) {
 	}
 }
 
-func checkHopEngine(c *collector, i int, engine model.Engine, opts Options) {
+// checkHopEngine: every hop runs on the network model. The engines with a
+// driver of their own (nftables, gost, the anixops relay) were removed.
+func checkHopEngine(c *collector, i int, engine model.Engine) {
 	switch {
 	case engine == model.EngineUnspecified:
-		c.add(hopField(i, "engine"), CodeRequired, "must be ENGINE_NFTABLES or ENGINE_GOST")
+		c.add(hopField(i, "engine"), CodeRequired, "must be ENGINE_NETWORK")
 	case !engine.IsKnown():
 		c.add(hopField(i, "engine"), CodeInvalidEnum, "unknown engine %d", int32(engine))
-	case engine == model.EngineAnixOps && !opts.EnableAnixOps:
-		c.add(hopField(i, "engine"), CodeEngineNotEnabled, "ENGINE_ANIXOPS is not enabled before v4.3")
-	case engine == model.EngineNetwork && !opts.EnableNetwork:
-		c.add(hopField(i, "engine"), CodeEngineNotEnabled, "ENGINE_NETWORK routes are not enabled")
+	case engine != model.EngineNetwork:
+		c.add(hopField(i, "engine"), CodeEngineNotEnabled, "%s was removed: routes run on the network model (ENGINE_NETWORK)", engine)
 	}
 }
 
-// checkHopNodes checks a hop's node references. One node may serve several
-// hops of a route (an nftables entry handing over to a gost relay on the
-// same host); the planner keys its hops by (route, hop, node).
+// checkHopNodes checks a hop's node references.
 func checkHopNodes(c *collector, i int, refs []string) {
 	switch {
 	case len(refs) == 0:
@@ -186,67 +169,16 @@ func checkHopNodes(c *collector, i int, refs []string) {
 	}
 }
 
-func checkIngress(c *collector, i int, h model.Hop, opts Options) {
-	t := h.Ingress
-	field := hopField(i, "ingress.")
+// checkIngress: hop i is reached over a network model link.
+func checkIngress(c *collector, i int, t model.LinkTransport) {
+	field := hopField(i, "ingress.security")
 	switch {
 	case t.Security == model.LinkSecurityUnspecified:
-		c.add(field+"security", CodeRequired, "the link from hop %d needs a security", i-1)
+		c.add(field, CodeRequired, "the link from hop %d needs a security", i-1)
 	case !t.Security.IsKnown():
-		c.add(field+"security", CodeInvalidEnum, "unknown link security %d", int32(t.Security))
-	case t.Security == model.LinkSecurityAnixOps && !opts.EnableAnixOps:
-		c.add(field+"security", CodeEngineNotEnabled, "LINK_SECURITY_ANIXOPS is not enabled before v4.3")
-	case t.Security == model.LinkSecurityNetwork && !opts.EnableNetwork:
-		c.add(field+"security", CodeEngineNotEnabled, "LINK_SECURITY_NETWORK routes are not enabled")
-	}
-	if t.ServerName != "" {
-		switch {
-		case t.Security == model.LinkSecurityRaw:
-			c.add(field+"server_name", CodeNotApplicable, "a RAW link has no server name")
-		case !isHostname(t.ServerName):
-			c.add(field+"server_name", CodeInvalidFormat, "must be a DNS name")
-		}
-	}
-	if t.Path != "" {
-		checkLinkPath(c, field+"path", t)
-	}
-	checkCarrier(c, i, h, opts)
-}
-
-// checkCarrier applies the carrier rules of anixops-protocol.md section
-// 6.5. The carrier is meaningful on ANIXOPS links only; the rules for such
-// links run when they are enabled, since they are refused before.
-func checkCarrier(c *collector, i int, h model.Hop, opts Options) {
-	t := h.Ingress
-	field := hopField(i, "ingress.")
-	switch {
-	case !t.Carrier.IsKnown():
-		c.add(field+"carrier", CodeInvalidEnum, "unknown carrier %d", int32(t.Carrier))
-	case t.Carrier != model.CarrierUnspecified && t.Security != model.LinkSecurityAnixOps:
-		c.add(field+"carrier", CodeNotApplicable, "only a LINK_SECURITY_ANIXOPS link has a carrier")
-	}
-	if t.Security != model.LinkSecurityAnixOps || !opts.EnableAnixOps {
-		return
-	}
-	// The link certificate carries only the node's identity name.
-	if t.ServerName != "" && isHostname(t.ServerName) &&
-		(len(h.NodeRefs) != 1 || !strings.EqualFold(t.ServerName, h.NodeRefs[0])) {
-		c.add(field+"server_name", CodeServerNameUnsupported,
-			"must be empty or the node's identity name (a hop with one node)")
-	}
-}
-
-// checkPlainOwner refuses the PLAIN carrier on a user's route (the node
-// labels are checked with the inventory).
-func checkPlainOwner(c *collector, r *model.Route, opts Options) {
-	if !opts.EnableAnixOps || r.IsAdmin() {
-		return
-	}
-	for i := 1; i < len(r.Hops); i++ {
-		t := r.Hops[i].Ingress
-		if t.Security == model.LinkSecurityAnixOps && t.Carrier == model.CarrierPlain {
-			c.add(hopField(i, "ingress.carrier"), CodePlainUntrusted, "the PLAIN carrier is for an administrator's route only")
-		}
+		c.add(field, CodeInvalidEnum, "unknown link security %d", int32(t.Security))
+	case t.Security != model.LinkSecurityNetwork:
+		c.add(field, CodeLinkUnsupported, "%s was removed: hops are linked by the network model (LINK_SECURITY_NETWORK)", t.Security)
 	}
 }
 
@@ -264,77 +196,12 @@ func checkProxyProtocol(c *collector, r *model.Route) {
 	}
 	last := len(r.Hops) - 1
 	switch {
-	case knownEngine(r.Hops[last].Engine) && !CanProxyProtocol(r.Hops[last].Engine):
-		c.add("policy.proxy_protocol", CodeProxyProtocolUnsupported,
-			"hop %d runs %s, which cannot write a PROXY protocol header", last, r.Hops[last].Engine)
-	case p == model.ProxyProtocolV1 && r.Hops[last].Engine != model.EngineNetwork:
-		c.add("policy.proxy_protocol", CodeProxyProtocolUnsupported, "PROXY protocol v1 is written by an ENGINE_NETWORK exit only")
 	case r.Listen.Protocol == model.L4ProtocolUDP:
 		c.add("policy.proxy_protocol", CodeProxyProtocolUnsupported, "the header is written on TCP connections; this route is UDP only")
 	case last > 0 && r.Policy.Direct == model.DirectPreferred:
 		c.add("policy.proxy_protocol", CodeInvalidRelation,
 			"DIRECT_MODE_PREFERRED lets the entry dial the targets without the header; use DIRECT_MODE_OFF")
 	}
-}
-
-func checkLinkPath(c *collector, field string, t model.LinkTransport) {
-	switch {
-	case len(t.Path) > MaxPathBytes:
-		c.add(field, CodeTooLong, "must be at most %d bytes", MaxPathBytes)
-	case t.Security == model.LinkSecurityWSS:
-		if !strings.HasPrefix(t.Path, "/") || strings.IndexFunc(t.Path, func(r rune) bool { return r <= ' ' || r >= 0x7f }) >= 0 {
-			c.add(field, CodeInvalidFormat, "a WebSocket path starts with / and has no spaces or control characters")
-		}
-	case t.Security == model.LinkSecurityGRPC:
-		if !grpcServicePattern.MatchString(t.Path) {
-			c.add(field, CodeInvalidFormat, "must be a gRPC service name")
-		}
-	default:
-		c.add(field, CodeNotApplicable, "only WSS and GRPC links have a path")
-	}
-}
-
-// checkLinks applies the link rule: hop i originates and hop i+1
-// terminates hops[i+1].ingress (forward-sdk.md section 4.2).
-func checkLinks(c *collector, r *model.Route) {
-	for i := 1; i < len(r.Hops); i++ {
-		dialer, listener := r.Hops[i-1], r.Hops[i]
-		sec := listener.Ingress.Security
-		if sec != model.LinkSecurityUnspecified && sec.IsKnown() {
-			switch {
-			case knownEngine(dialer.Engine) && !CanCarry(dialer.Engine, sec):
-				c.add(hopField(i, "ingress.security"), CodeLinkUnsupported,
-					"hop %d runs %s, which only dials %s", i-1, dialer.Engine, linkList(dialer.Engine))
-			case knownEngine(listener.Engine) && !CanCarry(listener.Engine, sec):
-				c.add(hopField(i, "ingress.security"), CodeLinkUnsupported,
-					"hop %d runs %s, which only terminates %s", i, listener.Engine, linkList(listener.Engine))
-			}
-		}
-		if listener.Ingress.Mux {
-			for _, h := range []struct {
-				index  int
-				engine model.Engine
-			}{{i - 1, dialer.Engine}, {i, listener.Engine}} {
-				if knownEngine(h.engine) && !CanMux(h.engine) {
-					c.add(hopField(i, "ingress.mux"), CodeLinkUnsupported, "hop %d runs %s, which cannot multiplex", h.index, h.engine)
-					break
-				}
-			}
-		}
-	}
-}
-
-func knownEngine(e model.Engine) bool {
-	return e != model.EngineUnspecified && e.IsKnown()
-}
-
-func linkList(e model.Engine) string {
-	links := engineLinks[e]
-	names := make([]string, len(links))
-	for i, l := range links {
-		names[i] = l.String()
-	}
-	return strings.Join(names, ", ")
 }
 
 // effectiveTargetPolicy answers the policy targets are checked under, after

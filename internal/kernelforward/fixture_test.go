@@ -141,7 +141,7 @@ func openBare(t *testing.T) *gorm.DB {
 func newFixture(t *testing.T, db *gorm.DB) *fixture {
 	t.Helper()
 	f := &fixture{t: t, db: db, clock: &clock{now: start}, ctx: context.Background()}
-	f.service = &Service{DB: db, Cluster: func() string { return "test" }, Now: f.clock.Now, Probes: noDials()}
+	f.service = &Service{DB: db, Now: f.clock.Now, Probes: noDials()}
 	require.NoError(t, db.Create(&[]model.ForwardNode{
 		{ID: 11, Name: "entry", Type: "relay", Host: "192.0.2.11", Port: 7000, APIPort: 7001, Enabled: true},
 		{ID: 12, Name: "exit", Type: "exit", Host: "192.0.2.12", Port: 7000, Enabled: true},
@@ -182,16 +182,19 @@ func (f *fixture) hello(node agentcontrol.AgentNode, caps *forwardv1.NodeCapabil
 	return outcome
 }
 
-// twoHop is an nftables route from forward-11 to forward-12 and on to
-// 198.51.100.10:443.
+// twoHop is a route on the network model from forward-11 to forward-12
+// and on to 198.51.100.10:443; port 0 listens on DefaultPortFirst.
 func twoHop(port uint32) *forwardv1.Route {
+	if port == 0 {
+		port = DefaultPortFirst
+	}
 	return &forwardv1.Route{
 		Owner: "admin", Name: "hk-jp",
 		Listen: &forwardv1.Listen{Port: port, Protocol: forwardv1.L4Protocol_L4_PROTOCOL_TCP},
 		Hops: []*forwardv1.Hop{
-			{Role: forwardv1.HopRole_HOP_ROLE_ENTRY, Engine: forwardv1.Engine_ENGINE_NFTABLES, NodeRefs: []string{"forward-11"}},
-			{Role: forwardv1.HopRole_HOP_ROLE_EXIT, Engine: forwardv1.Engine_ENGINE_NFTABLES, NodeRefs: []string{"forward-12"},
-				Ingress: &forwardv1.LinkTransport{Security: forwardv1.LinkSecurity_LINK_SECURITY_RAW}},
+			{Role: forwardv1.HopRole_HOP_ROLE_ENTRY, Engine: forwardv1.Engine_ENGINE_NETWORK, NodeRefs: []string{"forward-11"}},
+			{Role: forwardv1.HopRole_HOP_ROLE_EXIT, Engine: forwardv1.Engine_ENGINE_NETWORK, NodeRefs: []string{"forward-12"},
+				Ingress: &forwardv1.LinkTransport{Security: forwardv1.LinkSecurity_LINK_SECURITY_NETWORK}},
 		},
 		Targets: []*forwardv1.Target{{Host: "198.51.100.10", Port: 443}},
 	}
