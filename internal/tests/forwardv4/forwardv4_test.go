@@ -381,7 +381,3 @@ type probingNodes struct{}
 func (probingNodes) Vantage(agentcontrol.AgentNode) kernelforward.NodeVantage {
 	return kernelforward.NodeVantage{Connected: true, Capable: true}
 }
-
-func (probingNodes) Check(_ context.Context, _ agentcontrol.AgentNode, action string, _ map[string]any) (*kernelforward.CheckResult, error) {
-	return &kernelforward.CheckResult{Check: action, Status: kernelforward.CheckOK, Message: "ok"}, nil
-}

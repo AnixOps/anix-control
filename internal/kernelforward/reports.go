@@ -317,11 +317,10 @@ func (s *Service) Traffic(ctx context.Context, routeID string, since, until time
 	return rows, err
 }
 
-// RouteHealth answers the health of every upstream of a route's hops from
-// its nodes' latest reports (ForwardControl.GetRouteHealth), each with the
-// node that checked it; an ENGINE_NETWORK route's from its entry device's
-// latest network status (network_health.go). ErrNotFound for an unknown
-// route.
+// RouteHealth answers the health of a route (ForwardControl.GetRouteHealth)
+// from its entry devices' latest network status (network_health.go), each
+// with the node that checked it; none for a route left on a removed
+// engine, which is not planned. ErrNotFound for an unknown route.
 func (s *Service) RouteHealth(ctx context.Context, routeID string) ([]*forwardv1.UpstreamHealth, error) {
 	route, err := s.GetRoute(ctx, routeID)
 	if err != nil {
@@ -331,35 +330,10 @@ func (s *Service) RouteHealth(ctx context.Context, routeID string) ([]*forwardv1
 	if err != nil {
 		return nil, err
 	}
-	if _, ok := networkForward(route); ok {
-		return networkRouteHealth(db, route)
-	}
-	var refs []string
-	if err := db.Model(&model.KernelForwardAllocation{}).Distinct("node_ref").
-		Where("route_id = ? AND released_at IS NULL", routeID).Order("node_ref").Pluck("node_ref", &refs).Error; err != nil {
-		return nil, err
-	}
-	if len(refs) == 0 {
+	if _, ok := networkForward(route); !ok {
 		return nil, nil
 	}
-	var rows []model.KernelForwardNodeReport
-	if err := db.Where("node_ref IN ?", refs).Order("node_ref").Find(&rows).Error; err != nil {
-		return nil, err
-	}
-	var out []*forwardv1.UpstreamHealth
-	for _, row := range rows {
-		report := &forwardv1.NodeForwardReport{}
-		if err := jsonRead.Unmarshal([]byte(row.ReportJSON), report); err != nil {
-			return nil, fmt.Errorf("kernel forward: report of %s: %w", row.NodeRef, err)
-		}
-		for _, health := range report.GetHealth() {
-			if health.GetRouteId() == routeID {
-				health.NodeRef = row.NodeRef
-				out = append(out, health)
-			}
-		}
-	}
-	return out, nil
+	return networkRouteHealth(db, route)
 }
 
 // Convergence is one node's desired and reported generation.

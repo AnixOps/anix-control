@@ -275,17 +275,16 @@ func Offers(db *gorm.DB) (map[uint][]Offer, error) {
 // world is what matching a route needs: the proxy nodes, their protocols,
 // the forward nodes and the entry ports the planner allocated.
 type world struct {
-	nodes       map[uint]model.Node
-	forwards    map[uint]model.ForwardNode
-	protocols   []model.NodeProtocol
-	byHost      map[string]map[uint]bool
-	allocations map[string]map[string]uint32
+	nodes     map[uint]model.Node
+	forwards  map[uint]model.ForwardNode
+	protocols []model.NodeProtocol
+	byHost    map[string]map[uint]bool
 	// nat are the nodes' enabled entries (NAT mappings), by proxy node id.
 	nat map[uint][]model.NodeEntry
 }
 
 func loadWorld(db *gorm.DB) (*world, error) {
-	w := &world{nodes: map[uint]model.Node{}, forwards: map[uint]model.ForwardNode{}, byHost: map[string]map[uint]bool{}, allocations: map[string]map[string]uint32{}}
+	w := &world{nodes: map[uint]model.Node{}, forwards: map[uint]model.ForwardNode{}, byHost: map[string]map[uint]bool{}}
 	var nodes []model.Node
 	if err := db.Select("id", "name", "host").Find(&nodes).Error; err != nil {
 		return nil, err
@@ -308,16 +307,6 @@ func loadWorld(db *gorm.DB) (*world, error) {
 		if protocol.Host != nil {
 			w.addHost(*protocol.Host, protocol.NodeID)
 		}
-	}
-	var allocations []model.KernelForwardAllocation
-	if err := db.Where("hop_index = ? AND released_at IS NULL", 0).Find(&allocations).Error; err != nil {
-		return nil, err
-	}
-	for _, a := range allocations {
-		if w.allocations[a.RouteID] == nil {
-			w.allocations[a.RouteID] = map[string]uint32{}
-		}
-		w.allocations[a.RouteID][a.NodeRef] = a.Port
 	}
 	if db.Migrator().HasTable(&model.NodeEntry{}) {
 		ids := make([]uint, 0, len(w.nodes))
@@ -399,8 +388,7 @@ func (w *world) match(r *forwardv1.Route) *Protocol {
 // entries lists the addresses subscribers dial: the route's entry hostname
 // (entry HA, one name over every entry node) when it has one, else each
 // entry node, at the route's listen address when it names one or the node's
-// host, on the port the planner allocated on the node or the route's listen
-// port.
+// host, on the route's listen port.
 func (w *world) entries(r *forwardv1.Route, routeID string) []Entry {
 	entries := []Entry{}
 	hops := r.GetHops()
@@ -408,13 +396,7 @@ func (w *world) entries(r *forwardv1.Route, routeID string) []Entry {
 		return entries
 	}
 	if hostname := strings.TrimSuffix(strings.TrimSpace(r.GetListen().GetEntryHostname()), "."); hostname != "" {
-		port := int(r.GetListen().GetPort())
-		for _, ref := range hops[0].GetNodeRefs() {
-			if allocated := w.allocations[routeID][ref]; port == 0 && allocated != 0 {
-				port = int(allocated)
-			}
-		}
-		if port != 0 {
+		if port := int(r.GetListen().GetPort()); port != 0 {
 			entries = append(entries, Entry{NodeName: hostname, Host: strings.ToLower(hostname), Port: port})
 		}
 		return entries
@@ -446,9 +428,6 @@ func (w *world) entries(r *forwardv1.Route, routeID string) []Entry {
 			host = listen
 		}
 		port := int(r.GetListen().GetPort())
-		if allocated := w.allocations[routeID][ref]; allocated != 0 {
-			port = int(allocated)
-		}
 		// A NAT machine is reached at its public address and mapped port:
 		// the route's own override first, then the node's NAT entry.
 		host, port, _ = entryaddr.Resolve(r.GetLabels(), ref, host, port, nat)

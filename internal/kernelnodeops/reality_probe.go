@@ -95,7 +95,7 @@ func (p RealityProbes) Probe(ctx context.Context, node agentcontrol.AgentNode, s
 		return nil, fmt.Errorf("encode reality probe: %w", err)
 	}
 	desired := &agentv1pb.DesiredOperation{OperationId: id, Kind: AgentDiagnosticOperation, PayloadJson: payload, DeadlineUnixMs: deadline.UnixMilli()}
-	dispatch := dispatchOnStream(ctx, streams, node, desired, min(forwardCheckAckTimeout, time.Until(deadline)))
+	dispatch := dispatchOnStream(ctx, streams, node, desired, min(realityProbeAckTimeout, time.Until(deadline)))
 	if dispatch.Err != nil {
 		if errors.Is(dispatch.Err, agentstreams.ErrNotConnected) || errors.Is(dispatch.Err, agentstreams.ErrCapabilityMissing) ||
 			errors.Is(dispatch.Err, agentstreams.ErrSessionClosed) {
@@ -157,3 +157,6 @@ func newRealityProbeID() string {
 	_, _ = rand.Read(raw[:])
 	return "rprobe-" + hex.EncodeToString(raw[:])
 }
+
+// realityProbeAckTimeout bounds the wait for the Agent's acknowledgement.
+const realityProbeAckTimeout = 5 * time.Second
