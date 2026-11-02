@@ -329,8 +329,7 @@ do not cite the archived flux documents (`docs/archive/`) as requirements.
   the contract (`sdk/api/forward/v1`, `anixops.forward.v1`), the model and
   validation (`sdk/forward/model`, `sdk/forward/validate`, one rule set for
   Control, the planner and the Agent), the planner (`sdk/forward/planner`,
-  golden fixtures in `contracts/forward/v1`), the drivers
-  (`sdk/forward/driver/*`, conformance suite), then the kernel's forwarding state
+  golden fixtures in `contracts/forward/v1`), then the kernel's forwarding state
   (`internal/kernelforward`, `ForwardControl`), the forward package's v4 API
   (`packages/forward/v4api`, `/api/v4/forward/*`), the operator CLI
   (`anix-control forward`) and the UI (`web/src/views/admin/forward/`).
