@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+## 5.0.0-rc.29 - 2026-11-02
+
+### Added
+
+- The panel shows each node's anx-node kernel and can upgrade only the
+  kernel. An Agent names the anx-node release it has installed in its
+  Hello (label `kernel.anx-node`, Agents from the next release on); the
+  transport inventory (`GET /api/v4/kernel/agents/transports`) answers it
+  as `kernel_version` per node and per live session, and the upgrade plan
+  answers the newest release Control holds (`kernel_version`) and each
+  node's. The node list shows it under the Agent version, the node page in
+  Agent connection with 升级内核, and the node menu has 升级内核 too.
+- 升级节点 has a third mode, 只升级内核 (`POST /api/v4/kernel/agents/upgrades`
+  with `nodes` and `kernel_only`): the target is the Agent release the
+  ticked nodes run now, so each Agent keeps its binary and installs the
+  newest anx-node release in `agent_install.artifact_dir`, then restarts
+  once. The nodes must run one Agent release, and that release must still
+  be in the artifact directory.
+- The node page's 协议 tab has a 转发端口 section: the port range the forward
+  planner allocates listen ports from on the node, and its reserved ports.
+  It shows the range in force (the node's own, else the built-in
+  30000–39999) and saving keeps it as the node's own and replans the routes
+  through the node. Before, the range was only editable on the forwarding
+  area's node page, which the node page no longer links to.
+
 ### Removed
 
 - The node configuration snapshot no longer carries `legacy_pull`, the old
@@ -50,6 +75,43 @@
   `kapi_node_credential_status_v1` and `kapi_forward_clean_agent_v1`. It
   cannot be undone: back up the database before this release runs its
   migrations.
+- Node registration keys: `GET`, `POST /api/v2/admin/auth-keys` and
+  `DELETE /api/v2/admin/auth-keys/:id` are gone and answer 404. Nothing used
+  a key since node registration was removed. Migration 0025 drops
+  `v2_authorized_key`, the `kapi_registration_key_v1` view and the keys'
+  moved credentials. The KernelNodeOps kinds `regkey.issue` and
+  `regkey.revoke` stay in the contract and answer `UNIMPLEMENTED`; the
+  proxy-node package no longer holds `kernel.nodeops.credentials.v1`.
+
+### Fixed
+
+- A freshly installed Agent now gets anx-node. The Agent installer only
+  installed the Agent, and anx-node came only with an upgrade campaign, so a
+  new node had no core for its protocols: every configuration failed with
+  "the node type is not support" and the node showed as never reported.
+  `/install/agent.env` now names the anx-node release Control holds in
+  `agent_install.artifact_dir` (`kernel anx-node <version>`), and the
+  installer downloads it from Control, checks the release's SSH signature
+  (`ssh-keygen -Y verify`, the anx release key) and the SHA-256s, and
+  installs `anx-node`, `anx-server` and `anx-node.json` exactly as the
+  Agent's updater does. A host that already has a kernel keeps it; any
+  failure leaves the Agent installed and says how to get the kernel later.
+- ANX links offered through a node entry or a published forward route now
+  carry the jacket port subscribers can reach. The link kept the exit node's
+  own `wg_port`, so a client dialed that UDP port at the entry's address,
+  where nothing listens, and fell back to A2; behind an entry that only lets
+  the UDP jacket through, the node never connected. A NAT entry now maps the
+  jacket port through its port ranges, a route that forwards the jacket port
+  offers it at the route's port, and an entry or route that does not carry the
+  jacket leaves `wg_port` out of the link.
+- Subscription groups: each protocol row's actions offer 编辑节点 again.
+  It edits the nodes the protocol gives in the group one by one (one per
+  node entry), so NAT entries that map the same port can get their own
+  names. The action had slipped out of the row menu, leaving only the
+  protocol-wide rename.
+- A batch that rolls back no longer tells a node that already ran the
+  target before the campaign (a kernel-only upgrade) to reinstate a
+  previous Agent release.
 
 ## 5.0.0-rc.28 - 2026-11-01
 
