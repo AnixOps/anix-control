@@ -2,8 +2,6 @@ package pluginhostsdk
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,26 +14,17 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/sdk/packagebridgesdk"
-	"github.com/AnixOps/anix-control/sdk/shadowsample"
 	"github.com/AnixOps/anix-control/sdk/v2compat"
 )
 
 // Route modes, as configured in the installation's "routes" document.
 const (
 	RouteModeLegacy = "legacy"
-	RouteModeShadow = "shadow"
 	RouteModeNative = "native"
 )
 
 const (
 	defaultConfigPollInterval = 5 * time.Second
-	defaultShadowTimeout      = 5 * time.Second
-	defaultShadowConcurrency  = 4
-	// maxShadowSamples bounds the shadow mismatch samples a router keeps
-	// for its Health details, and shadowSampleMaxAge how long it reports
-	// one: long enough for several kernel health polls to collect it.
-	maxShadowSamples   = 32
-	shadowSampleMaxAge = 10 * time.Minute
 )
 
 // IndexMigrationPrefix starts the id of a migration run that applies a
@@ -62,8 +51,6 @@ type NativeRequest struct {
 	// Binding is the request binding a KernelNodeOps call passes as
 	// RequestBinding.bridge_capability: the kernel resolves the request's
 	// sealed handles, and mints the handles its answer shows, only for it.
-	// It is nil in a shadow run, which must not act, and whose handles are
-	// never resolved.
 	Binding []byte
 }
 
@@ -88,15 +75,15 @@ func PanelJSON(panel v2compat.Panel) (NativeResponse, error) {
 	return NativeResponse{StatusCode: http.StatusOK, Body: body, Headers: []Header{{Name: "Content-Type", Value: "application/json; charset=utf-8"}}}, nil
 }
 
-// ErrNativeRoutePanicked reports a recovered panic in a native route. A panic
-// in a background shadow run would otherwise terminate the host process.
+// ErrNativeRoutePanicked reports a recovered panic in a native route, which
+// would otherwise terminate the host process.
 var ErrNativeRoutePanicked = errors.New("native route panicked")
 
 // ErrNativeUnavailable is what a native handler returns when it cannot
 // answer this request as the legacy handler would, for example because the
 // kernel did not send request metadata the handler needs (an older kernel
 // sends no request scheme and host). The router then answers from the
-// legacy handler in native mode, and skips the comparison in shadow mode.
+// legacy handler.
 var ErrNativeUnavailable = errors.New("native route cannot serve this request")
 
 // RouterBridge is the part of the package bridge client the router uses.
@@ -128,25 +115,17 @@ type RouterConfig struct {
 	// packages that declare kernel.storage.v1. It needs no bridge capability;
 	// packagestoresdk.IndexMigrator implements it.
 	IndexMigration func(ctx context.Context, request MigrationRequest) (MigrationResponse, error)
-	// Compare decides whether a shadow run matched; nil compares the status
-	// code and v2compat-normalized bodies.
-	Compare func(legacy, native NativeResponse) bool
-
-	PollInterval      time.Duration
-	ShadowTimeout     time.Duration
-	ShadowConcurrency int
-	Logf              func(format string, args ...any)
-	Now               func() time.Time
+	PollInterval   time.Duration
+	Logf           func(format string, args ...any)
+	Now            func() time.Time
 }
 
 // Router is a Package that applies per-route modes. Legacy routes pass through
 // the package bridge to the kernel's legacy handler; native routes are
-// answered by the package; shadow routes (GET only) answer from legacy and
-// compare a background native run.
+// answered by the package.
 type Router struct {
 	config   RouterConfig
 	draining atomic.Bool
-	shadow   chan struct{}
 
 	mu            sync.RWMutex
 	modes         map[string]string
@@ -155,18 +134,11 @@ type Router struct {
 	configHash    string
 	configChecked time.Time
 	routeStats    map[string]*routeStatistics
-	// samples are the latest sanitized shadow mismatches, oldest first.
-	samples []shadowsample.Sample
 }
 
 type routeStatistics struct {
-	Native         uint64 `json:"native_total"`
-	NativeErrors   uint64 `json:"native_errors"`
-	Shadow         uint64 `json:"shadow_total"`
-	ShadowMismatch uint64 `json:"shadow_mismatch"`
-	ShadowErrors   uint64 `json:"shadow_errors"`
-	ShadowSkipped  uint64 `json:"shadow_skipped"`
-	LastMismatch   int64  `json:"last_mismatch_unix,omitempty"`
+	Native       uint64 `json:"native_total"`
+	NativeErrors uint64 `json:"native_errors"`
 }
 
 var (
@@ -184,15 +156,6 @@ func NewRouter(config RouterConfig) (*Router, error) {
 	if config.PollInterval <= 0 {
 		config.PollInterval = defaultConfigPollInterval
 	}
-	if config.ShadowTimeout <= 0 {
-		config.ShadowTimeout = defaultShadowTimeout
-	}
-	if config.ShadowConcurrency <= 0 {
-		config.ShadowConcurrency = defaultShadowConcurrency
-	}
-	if config.Compare == nil {
-		config.Compare = defaultShadowCompare
-	}
 	if config.Logf == nil {
 		config.Logf = func(string, ...any) {}
 	}
@@ -200,8 +163,8 @@ func NewRouter(config RouterConfig) (*Router, error) {
 		config.Now = time.Now
 	}
 	return &Router{
-		config: config, shadow: make(chan struct{}, config.ShadowConcurrency),
-		modes: map[string]string{}, configStatus: "pending", routeStats: map[string]*routeStatistics{},
+		config: config,
+		modes:  map[string]string{}, configStatus: "pending", routeStats: map[string]*routeStatistics{},
 	}, nil
 }
 
@@ -290,15 +253,6 @@ func (r *Router) Dispatch(ctx context.Context, request DispatchRequest) (Dispatc
 			return DispatchResponse{}, err
 		}
 		return DispatchResponse{StatusCode: response.StatusCode, ResponseBody: response.Body, Headers: response.Headers}, nil
-	case RouteModeShadow:
-		legacy, err := r.invokeLegacy(ctx, request)
-		if err != nil {
-			return DispatchResponse{}, err
-		}
-		if request.Method == http.MethodGet {
-			r.startShadow(request, legacy)
-		}
-		return legacy, nil
 	default:
 		return r.invokeLegacy(ctx, request)
 	}
@@ -320,8 +274,7 @@ func (r *Router) invokeLegacy(ctx context.Context, request DispatchRequest) (Dis
 }
 
 // runNative runs the route's native implementation. binding is the request
-// binding the handler may pass to the kernel: the bridge capability in
-// native mode, nil in a shadow run.
+// binding the handler may pass to the kernel: the bridge capability.
 func (r *Router) runNative(ctx context.Context, request DispatchRequest, binding []byte) (response NativeResponse, err error) {
 	handler := r.config.Native[request.RouteID]
 	if handler == nil {
@@ -346,75 +299,6 @@ func (r *Router) runNative(ctx context.Context, request DispatchRequest, binding
 		response.StatusCode = http.StatusOK
 	}
 	return response, err
-}
-
-// startShadow runs the native implementation in the background without
-// delaying the legacy answer. When all shadow slots are busy the run is
-// skipped and counted.
-func (r *Router) startShadow(request DispatchRequest, legacy DispatchResponse) {
-	select {
-	case r.shadow <- struct{}{}:
-	default:
-		r.count(request.RouteID, func(stats *routeStatistics) { stats.ShadowSkipped++ })
-		return
-	}
-	request.RequestBody = append([]byte(nil), request.RequestBody...)
-	// The shadow run gets no request binding: the legacy answer stands, so
-	// the kernel must not act or resolve a sealed handle for it.
-	request.BridgeCapability = nil
-	go func() {
-		defer func() { <-r.shadow }()
-		ctx, cancel := context.WithTimeout(context.Background(), r.config.ShadowTimeout)
-		defer cancel()
-		native, err := r.runNative(ctx, request, nil)
-		if errors.Is(err, ErrNativeUnavailable) {
-			r.count(request.RouteID, func(stats *routeStatistics) { stats.ShadowSkipped++ })
-			return
-		}
-		matched := err == nil && r.config.Compare(NativeResponse{StatusCode: legacy.StatusCode, Body: legacy.ResponseBody, Headers: legacy.Headers}, native)
-		now := r.config.Now().Unix()
-		r.count(request.RouteID, func(stats *routeStatistics) {
-			stats.Shadow++
-			switch {
-			case err != nil:
-				stats.ShadowErrors++
-			case !matched:
-				stats.ShadowMismatch++
-				stats.LastMismatch = now
-			}
-		})
-		if err == nil && !matched {
-			r.config.Logf("package %s: shadow mismatch on route %s", r.config.PackageID, request.RouteID)
-			r.recordSample(request, legacy, native, now)
-		}
-	}()
-}
-
-// recordSample keeps a sanitized description of a shadow mismatch for the
-// Health details, from which the kernel stores it. The request body is
-// never kept; the diff holds only sanitized values (package shadowsample).
-func (r *Router) recordSample(request DispatchRequest, legacy DispatchResponse, native NativeResponse, observedAt int64) {
-	var id [16]byte
-	if _, err := rand.Read(id[:]); err != nil {
-		return
-	}
-	diff, truncated := shadowsample.Diff(legacy.ResponseBody, native.Body)
-	sample := shadowsample.Sanitize(shadowsample.Sample{
-		ID: hex.EncodeToString(id[:]), RouteID: request.RouteID, Method: request.Method,
-		Path:         shadowsample.SanitizePath(request.Metadata.Path, request.Metadata.PathParams, request.Metadata.Query),
-		LegacyStatus: legacy.StatusCode, NativeStatus: native.StatusCode,
-		Diff: diff, DiffTruncated: truncated, RequestID: request.RequestID, ObservedAt: observedAt,
-	})
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.samples = append(r.samples, sample)
-	if len(r.samples) > maxShadowSamples {
-		r.samples = append([]shadowsample.Sample(nil), r.samples[len(r.samples)-maxShadowSamples:]...)
-	}
-}
-
-func defaultShadowCompare(legacy, native NativeResponse) bool {
-	return legacy.StatusCode == native.StatusCode && v2compat.EqualForCompare(legacy.Body, native.Body)
 }
 
 func (r *Router) count(routeID string, update func(*routeStatistics)) {
@@ -495,10 +379,6 @@ type routerHealthDetails struct {
 	Bridge string                       `json:"bridge"`
 	Config routerConfigDetails          `json:"config"`
 	Routes map[string]routeHealthDetail `json:"routes,omitempty"`
-	// ShadowSamples are the latest sanitized shadow mismatches, at most
-	// maxShadowSamples, none older than shadowSampleMaxAge. A kernel that
-	// does not read them ignores the field.
-	ShadowSamples []shadowsample.Sample `json:"shadow_samples,omitempty"`
 }
 
 type routerConfigDetails struct {
@@ -545,12 +425,6 @@ func (r *Router) healthDetails() routerHealthDetails {
 	stats := make(map[string]routeStatistics, len(r.routeStats))
 	for id, entry := range r.routeStats {
 		stats[id] = *entry
-	}
-	oldest := r.config.Now().Add(-shadowSampleMaxAge).Unix()
-	for _, sample := range r.samples {
-		if sample.ObservedAt >= oldest {
-			details.ShadowSamples = append(details.ShadowSamples, sample)
-		}
 	}
 	r.mu.RUnlock()
 	if len(ids) == 0 {

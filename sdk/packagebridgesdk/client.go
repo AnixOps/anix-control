@@ -265,7 +265,7 @@ func bridgeError(err error) error {
 type PackageConfig struct {
 	Revision   int64
 	ConfigHash string
-	// RouteModes maps route ids to "shadow" or "native"; absent routes run in
+	// RouteModes maps route ids to "native"; absent routes run in
 	// legacy mode.
 	RouteModes map[string]string
 }

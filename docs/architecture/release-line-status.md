@@ -7,8 +7,8 @@ boundary. The current release is the one named by the `- Current release:` line
 of [`README.md`](../../README.md); the CHANGELOG sections list what each release
 changed, and releases follow [`RELEASING.md`](../RELEASING.md). The `4.0.x` RC
 roadmap and its evidence snapshot,
-[`ROADMAP-4.0.x-RC.md`](../ROADMAP-4.0.x-RC.md) and
-[`RC-EVIDENCE-4.0.x.md`](../RC-EVIDENCE-4.0.x.md), are historical records.
+[`ROADMAP-4.0.x-RC.md`](../archive/ROADMAP-4.0.x-RC.md) and
+[`RC-EVIDENCE-4.0.x.md`](../archive/RC-EVIDENCE-4.0.x.md), are historical records.
 
 ## Version Decision
 

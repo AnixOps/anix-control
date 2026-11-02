@@ -15,25 +15,20 @@ type packageHostHealthDetails struct {
 		Status string `json:"status"`
 	} `json:"config"`
 	Routes map[string]struct {
-		Mode           string `json:"mode"`
-		Effective      string `json:"effective"`
-		Native         uint64 `json:"native_total"`
-		NativeErrors   uint64 `json:"native_errors"`
-		Shadow         uint64 `json:"shadow_total"`
-		ShadowMismatch uint64 `json:"shadow_mismatch"`
-		ShadowErrors   uint64 `json:"shadow_errors"`
-		ShadowSkipped  uint64 `json:"shadow_skipped"`
-		LastMismatch   int64  `json:"last_mismatch_unix"`
+		Mode         string `json:"mode"`
+		Effective    string `json:"effective"`
+		Native       uint64 `json:"native_total"`
+		NativeErrors uint64 `json:"native_errors"`
 	} `json:"routes"`
 }
 
-// writePackageRouteMetrics exports the route modes and native/shadow counters
+// writePackageRouteMetrics exports the route modes and native counters
 // that package hosts report in their Health details. Counters restart with the
 // host process, which Prometheus treats as a counter reset.
 func writePackageRouteMetrics(body *strings.Builder, stats []pluginhost.HostStats) {
 	type routeSample struct {
-		pkg, route, mode, effective                                   string
-		native, nativeErrors, shadow, mismatch, shadowErrors, skipped uint64
+		pkg, route, mode, effective string
+		native, nativeErrors        uint64
 	}
 	var routes []routeSample
 	configStatus := map[string]string{}
@@ -51,8 +46,7 @@ func writePackageRouteMetrics(body *strings.Builder, stats []pluginhost.HostStat
 		for route, detail := range details.Routes {
 			routes = append(routes, routeSample{
 				pkg: entry.PackageID, route: route, mode: detail.Mode, effective: detail.Effective,
-				native: detail.Native, nativeErrors: detail.NativeErrors, shadow: detail.Shadow,
-				mismatch: detail.ShadowMismatch, shadowErrors: detail.ShadowErrors, skipped: detail.ShadowSkipped,
+				native: detail.Native, nativeErrors: detail.NativeErrors,
 			})
 		}
 	}
@@ -89,10 +83,6 @@ func writePackageRouteMetrics(body *strings.Builder, stats []pluginhost.HostStat
 	}{
 		{"anixops_package_native_requests_total", "Requests answered by a package-native route.", func(s routeSample) uint64 { return s.native }},
 		{"anixops_package_native_errors_total", "Package-native route requests that failed.", func(s routeSample) uint64 { return s.nativeErrors }},
-		{"anixops_package_shadow_requests_total", "Completed shadow comparisons of package-native routes.", func(s routeSample) uint64 { return s.shadow }},
-		{"anixops_package_shadow_mismatches_total", "Shadow comparisons whose native answer differed from legacy.", func(s routeSample) uint64 { return s.mismatch }},
-		{"anixops_package_shadow_errors_total", "Shadow runs whose native implementation failed.", func(s routeSample) uint64 { return s.shadowErrors }},
-		{"anixops_package_shadow_skipped_total", "Shadow runs skipped because all shadow slots were busy.", func(s routeSample) uint64 { return s.skipped }},
 	}
 	for _, counter := range counters {
 		body.WriteString("# HELP " + counter.name + " " + counter.help + "\n")

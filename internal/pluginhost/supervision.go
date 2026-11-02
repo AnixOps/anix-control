@@ -84,7 +84,7 @@ const healthPollTimeout = 5 * time.Second
 
 // PollHealth calls Health on every running host each interval until ctx ends
 // and records the returned details document in the host's stats, so metrics
-// and diagnostics can read route modes and shadow counters. A failed call
+// and diagnostics can read route modes and native counters. A failed call
 // leaves the previous details in place.
 func (m *Supervisor) PollHealth(ctx context.Context, interval time.Duration) {
 	if m == nil || interval <= 0 {

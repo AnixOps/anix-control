@@ -633,7 +633,7 @@ func (rt *serverRuntime) start(cfg *config.Config, intervals pluginPollIntervals
 		if err := rt.startModuleRuntime(cfg, hosts); err != nil {
 			return err
 		}
-		// Read route modes and shadow counters from package hosts for metrics.
+		// Read route modes and native counters from package hosts for metrics.
 		rt.workers.Go("plugin host health poller", func(ctx context.Context) {
 			hosts.PollHealth(ctx, pluginHostHealthPollInterval)
 		})

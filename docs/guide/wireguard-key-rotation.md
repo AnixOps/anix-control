@@ -14,22 +14,22 @@ Back up the panel database before a production rotation. Preview the affected
 rows first:
 
 ```bash
-go run ./cmd/wgrotate -config /etc/v2board/config.yaml
+go run ./cmd/wgrotate -config /opt/anixops/control/config/config.yaml
 ```
 
 Stop the panel to prevent concurrent subscription allocation, then run the
 destructive operation with the explicit confirmation phrase:
 
 ```bash
-systemctl stop v2board.service
+systemctl stop anix-control.service
 go run ./cmd/wgrotate \
-  -config /etc/v2board/config.yaml \
+  -config /opt/anixops/control/config/config.yaml \
   -dry-run=false \
   -confirm ROTATE-ALL-WIREGUARD-PEERS
-systemctl start v2board.service
+systemctl start anix-control.service
 ```
 
-After the panel restarts, restart every affected WireGuard entry V2bX service
+After the panel restarts, restart every affected WireGuard entry Agent (`anix-agent`)
 to force a full peer rebuild; an incremental user sync may not detect a change
 that modifies only peer credentials. Verify that each entry node has the same
 peer public-key set as the panel database. Do not print private or preshared

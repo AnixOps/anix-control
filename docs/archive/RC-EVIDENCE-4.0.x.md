@@ -20,7 +20,7 @@ PR #7 (`57c62541`: `go_dev` CI green, Go toolchain 1.26.8) and PR #8
 (`8dfc7b70`: dead code and legacy V2bX/Xray test tooling removed) merged after
 this snapshot, so the Go rows must be re-run on the evidence commit. PRs #11
 to #19 (plugin platform hardening, M0/M1 in
-[`architecture/package-extraction.md`](architecture/package-extraction.md))
+[`architecture/package-extraction.md`](../architecture/package-extraction.md))
 merged on 2026-09-29; see the production-copy rehearsal below.
 
 ## Passing Locally
@@ -114,7 +114,7 @@ reached over its Unix socket.
 | Host supervision | `SIGKILL` of the `identity-platform` host process | Passed; watchdog restarted it after 1 s, the next admin request returned 200 |
 | Network isolation | `ss -tanp` at the end of the run; blocked-egress log lines | Passed; no non-loopback sockets; only the forward latency prober attempted egress |
 
-Summary and defects found: [`architecture/release-line-status.md`](architecture/release-line-status.md#production-baseline-and-upgrade-rehearsal).
+Summary and defects found: [`architecture/release-line-status.md`](../architecture/release-line-status.md#production-baseline-and-upgrade-rehearsal).
 The harness and its output stay on the operator machine, because they contain
 production data. This is local evidence, not a staging canary or production
 approval.

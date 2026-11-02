@@ -4,8 +4,8 @@ Date: 2026-09-28
 
 > Historical record. The release-stage, rehearsal, evidence and approval gates
 > it cites were retired after `v4.0.0`; releases now follow
-> [`RELEASING.md`](RELEASING.md). The handoff checklist below is not an open
-> work list: open work is in [`../TODO.md`](../TODO.md).
+> [`RELEASING.md`](../RELEASING.md). The handoff checklist below is not an open
+> work list: open work is in [`../TODO.md`](../../TODO.md).
 
 ## Goal
 
@@ -268,7 +268,7 @@ steps in order before calling the RC an official final build:
 The evidence commit and external approval remain explicit review decisions.
 Longer-term development after the RC (moving business domains into packages)
 is planned in
-[`architecture/package-extraction.md`](architecture/package-extraction.md).
+[`architecture/package-extraction.md`](../architecture/package-extraction.md).
 
 ## Completion Evidence
 
