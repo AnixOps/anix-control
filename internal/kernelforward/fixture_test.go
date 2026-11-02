@@ -215,13 +215,6 @@ func (f *fixture) state(node agentcontrol.AgentNode) *forwardv1.NodeForwardState
 	return state
 }
 
-func (f *fixture) allocations() []model.KernelForwardAllocation {
-	f.t.Helper()
-	var rows []model.KernelForwardAllocation
-	require.NoError(f.t, f.db.Order("route_id, hop_index, node_ref").Find(&rows).Error)
-	return rows
-}
-
 // recordedListener collects the nodes every committed plan changed.
 type recordedListener struct {
 	mu    sync.Mutex

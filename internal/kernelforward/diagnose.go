@@ -11,7 +11,6 @@ import (
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	forwardv1 "github.com/AnixOps/anix-control/sdk/api/forward/v1"
-	"github.com/AnixOps/anix-control/sdk/forward/model"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -41,14 +40,6 @@ const (
 	diagnoseProbeConcurrency = 8
 	// diagnoseProbeTimeout bounds a dial from Control.
 	diagnoseProbeTimeout = 3 * time.Second
-	// diagnoseCheckTimeout and diagnoseUDPTimeout are the timeout_ms a
-	// forward check names for the Agent: each dial (the Agent dials a hop's
-	// upstreams at once), or the wait for a UDP reply.
-	diagnoseCheckTimeout = 2 * time.Second
-	diagnoseUDPTimeout   = 1500 * time.Millisecond
-	// diagnoseCheckGrace is how much longer than a forward check's own
-	// timeout Control waits for the Agent's answer.
-	diagnoseCheckGrace = 2 * time.Second
 )
 
 // ErrDiagnoseBusy refuses a diagnosis while MaxConcurrentDiagnoses run
@@ -335,15 +326,6 @@ func routeNodes(route *forwardv1.Route) []string {
 	return refs
 }
 
-func hopError(report *forwardv1.NodeForwardReport, routeID string, index uint32) string {
-	for _, hopErr := range report.GetErrors() {
-		if hopErr.GetRouteId() == routeID && hopErr.GetHopIndex() == index {
-			return hopErr.GetMessage()
-		}
-	}
-	return ""
-}
-
 // healthResult is the verdict of an upstream's reported health; healthy
 // is the message when it is.
 func healthResult(health *forwardv1.UpstreamHealth, healthy string) *forwardv1.ProbeResult {
@@ -377,15 +359,6 @@ func routeProtocols(route *forwardv1.Route) (tcp, udp bool) {
 		return true, true
 	}
 	return true, false
-}
-
-// effectiveTargetPolicy is the most a probe may dial among the targets:
-// ALLOW_PRIVATE only on an administrator's route that asks for it.
-func effectiveTargetPolicy(route *forwardv1.Route) model.TargetPolicy {
-	if route.GetOwner() == "admin" && route.GetPolicy().GetTargetPolicy() == forwardv1.TargetPolicy_TARGET_POLICY_ALLOW_PRIVATE {
-		return model.TargetPolicyAllowPrivate
-	}
-	return model.TargetPolicyPublicOnly
 }
 
 // controlDial connects from Control to a public address.
