@@ -381,4 +381,3 @@ type probingNodes struct{}
 func (probingNodes) Vantage(agentcontrol.AgentNode) kernelforward.NodeVantage {
 	return kernelforward.NodeVantage{Connected: true, Capable: true}
 }
-
