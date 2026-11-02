@@ -21,7 +21,7 @@ func TestSubscriptionOffersPublishedForwardRoutes(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
 	require.NoError(t, db.AutoMigrate(&model.Node{}, &model.NodeProtocol{}, &model.SubscriptionGroup{}, &model.NodeEntry{}, &model.SubscriptionGroupProtocol{},
-		&model.ForwardNode{}, &model.KernelForwardRoute{}, &model.KernelForwardAllocation{}, &model.ForwardRouteSubscription{}, &model.OperationLog{}))
+		&model.ForwardNode{}, &model.KernelForwardRoute{}, &model.ForwardRouteSubscription{}, &model.OperationLog{}))
 	svc := &SubscriptionService{db: db}
 
 	now := time.Now().Unix()

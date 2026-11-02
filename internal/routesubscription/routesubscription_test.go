@@ -23,7 +23,7 @@ func newDB(t *testing.T) *gorm.DB {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = sqlDB.Close() })
 	require.NoError(t, db.AutoMigrate(&model.Node{}, &model.NodeProtocol{}, &model.ForwardNode{}, &model.KernelForwardRoute{},
-		&model.KernelForwardAllocation{}, &model.ForwardRouteSubscription{}, &model.OperationLog{}))
+		&model.ForwardRouteSubscription{}, &model.OperationLog{}))
 	// KFC JP: Shadowsocks on 11111; the Shanghai forwarder newnb-1488.
 	require.NoError(t, db.Create(&model.Node{ID: 50, Name: "KFC JP", Host: "104.251.233.29"}).Error)
 	require.NoError(t, db.Create(&[]model.NodeProtocol{
@@ -67,7 +67,6 @@ func TestPublishOffersTheProtocolAtTheEntry(t *testing.T) {
 	require.ErrorIs(t, err, ErrInvalid)
 
 	storeRoute(t, db, kfcRoute(11111), "")
-	require.NoError(t, db.Create(&model.KernelForwardAllocation{RouteID: "r1", HopIndex: 0, NodeRef: "forward-1", Port: 15301, Mark: 1, UpdatedAt: time.Now()}).Error)
 	status, err = s.Set(ctx, "r1", true, " 上海 9929 ", Actor{UserID: 1, Name: "admin"})
 	require.NoError(t, err)
 	require.True(t, status.Published)
@@ -162,9 +161,8 @@ func TestEntryHostname(t *testing.T) {
 
 func TestEntriesFollowTheRouteOverrideThenTheNodeNAT(t *testing.T) {
 	w := &world{
-		nodes:       map[uint]model.Node{1: {ID: 1, Name: "lq", Host: "10.0.0.2"}},
-		forwards:    map[uint]model.ForwardNode{},
-		allocations: map[string]map[string]uint32{},
+		nodes:    map[uint]model.Node{1: {ID: 1, Name: "lq", Host: "10.0.0.2"}},
+		forwards: map[uint]model.ForwardNode{},
 		nat: map[uint][]model.NodeEntry{1: {{Kind: model.NodeEntryNAT, Enabled: true, Host: "198.51.100.7",
 			PortMap: `[{"from":24000,"to":24010,"external":31000}]`}}},
 	}

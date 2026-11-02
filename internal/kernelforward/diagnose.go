@@ -71,16 +71,8 @@ const (
 	CodeControlUDP             = "control_udp_not_probed"
 )
 
-// Forward check statuses, as the Agent answers them (CheckResult.Status,
-// CheckItem.Status).
-const (
-	CheckOK           = "ok"
-	CheckFailed       = "failed"
-	CheckInconclusive = "inconclusive"
-	CheckSkipped      = "skipped"
-)
-
-// NodeVantage is whether a node can run the forward checks.
+// NodeVantage is whether a node's Agent is connected and runs the forward
+// checks of agent.diagnostic.
 type NodeVantage struct {
 	// Connected: the node's Agent holds an Agent Control session.
 	Connected bool
@@ -90,51 +82,11 @@ type NodeVantage struct {
 	Note string
 }
 
-// CheckResult is the structured answer of one forward check: the "result"
-// member of the agent.diagnostic state (sdk/api/agent/v1/PROTOCOL.md,
-// "Forward diagnostic checks").
-type CheckResult struct {
-	Check      string      `json:"check"`
-	RouteID    string      `json:"route_id"`
-	HopIndex   uint32      `json:"hop_index"`
-	Generation uint64      `json:"generation"`
-	Status     string      `json:"status"`
-	Code       string      `json:"code"`
-	Message    string      `json:"message"`
-	Items      []CheckItem `json:"items"`
-	// OperationID is the agent.diagnostic operation that carried the
-	// check; set by the NodeChecker.
-	OperationID string `json:"-"`
-}
-
-// CheckItem is one listener, port claim or upstream a check looked at.
-type CheckItem struct {
-	// Target is "host:port"; Protocol "tcp" or "udp".
-	Target   string `json:"target"`
-	Protocol string `json:"protocol"`
-	Status   string `json:"status"`
-	Code     string `json:"code"`
-	Message  string `json:"message"`
-	RTTMicro uint32 `json:"rtt_us"`
-}
-
-// NodeChecker runs the forward checks of the agent.diagnostic operation on
-// a node's Agent (kernelnodeops.ForwardChecks serves it on the Agent
-// Control streams).
+// NodeChecker answers whether a node's Agent is connected
+// (kernelnodeops.ForwardChecks serves it on the Agent Control streams).
 type NodeChecker interface {
-	// Vantage answers whether node can run the checks.
 	Vantage(node agentcontrol.AgentNode) NodeVantage
-	// Check runs one check (service.ForwardDiagnosticChecks) with params
-	// and waits for the Agent's answer until ctx ends. An error means the
-	// check gave no answer: ErrCheckUnavailable when the node cannot run
-	// it, context.DeadlineExceeded when the Agent did not answer in time,
-	// anything else when the Agent failed it.
-	Check(ctx context.Context, node agentcontrol.AgentNode, action string, params map[string]any) (*CheckResult, error)
 }
-
-// ErrCheckUnavailable: the node's Agent is not connected or does not run
-// the forward checks.
-var ErrCheckUnavailable = errors.New("the node's Agent cannot run forward checks")
 
 // DiagnoseRoute diagnoses a stored route within timeout (0 for
 // DefaultDiagnoseTimeout, at most MaxDiagnoseTimeout, and never past ctx's
