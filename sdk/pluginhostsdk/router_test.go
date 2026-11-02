@@ -248,3 +248,31 @@ func TestRouterBindsNativeRuns(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, capability, binding, "a native run is bound to its request")
 }
+
+// A native-only router serves its native routes before the first poll and
+// whatever the kernel's modes say, and never calls the legacy handler,
+// which the kernel no longer has for such a package.
+func TestRouterNativeOnlyNeverReachesLegacy(t *testing.T) {
+	bridge := &routerBridgeFake{configErr: packagebridgesdk.ErrSessionOperationUnsupported}
+	bridge.response = packagebridgesdk.Response{StatusCode: 200, Body: []byte(legacyBody)}
+	unavailable := func(context.Context, NativeRequest) (NativeResponse, error) {
+		return NativeResponse{}, ErrNativeUnavailable
+	}
+	router, err := NewRouter(RouterConfig{PackageID: "knowledge", LeaseID: "lease-1", Bridge: bridge, NativeOnly: true,
+		Native: map[string]NativeHandler{"knowledge.article.list": matchingNative, "knowledge.admin.knowledge.post": unavailable}})
+	require.NoError(t, err)
+
+	response, err := dispatch(t, router, "knowledge.article.list", "GET")
+	require.NoError(t, err)
+	assert.Contains(t, string(response.ResponseBody), `"data":[{"id":1}]`)
+	router.Refresh(context.Background())
+	_, err = dispatch(t, router, "knowledge.article.list", "GET")
+	require.NoError(t, err)
+
+	_, err = dispatch(t, router, "knowledge.admin.knowledge.post", "POST")
+	require.ErrorIs(t, err, ErrNativeUnavailable)
+	assert.Empty(t, bridge.invocations(), "a native-only router has no legacy path")
+	configured, effective := router.Mode("knowledge.article.list")
+	assert.Equal(t, RouteModeNative, configured)
+	assert.Equal(t, RouteModeNative, effective)
+}

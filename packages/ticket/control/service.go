@@ -17,9 +17,9 @@ type ticketBridge interface {
 }
 
 // newTicketService returns the ticket host's router. Every route has a
-// native handler on the adopted v2_ticket and v2_ticket_message tables; a
-// route serves natively once the kernel sets its mode, and falls back to the
-// legacy handler otherwise.
+// native handler on the adopted v2_ticket and v2_ticket_message tables and
+// serves natively from the start: the kernel keeps no legacy handler for
+// them.
 func newTicketService(bridge ticketBridge, leaseID string) (*pluginhostsdk.Router, error) {
 	storage := packagestoresdk.SharedOpener(bridge)
 	service := &native.Service{Open: func(ctx context.Context) (*gorm.DB, error) {
@@ -35,7 +35,7 @@ func newTicketService(bridge ticketBridge, leaseID string) (*pluginhostsdk.Route
 			_, allowed := ticketRoutes[routeID]
 			return allowed
 		},
-		Native: service.Handlers(),
+		Native: service.Handlers(), NativeOnly: true,
 	})
 }
 
