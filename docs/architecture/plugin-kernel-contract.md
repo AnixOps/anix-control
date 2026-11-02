@@ -339,12 +339,11 @@ plugin process. A configuration document is package-level intent, not an
 implicit command to every node. Node assignment expansion and per-node
 `plugin.configure` operations remain an explicit dispatcher step.
 
-A host runs each of its v2 compatibility routes in one of three modes:
+A host runs each of its v2 compatibility routes in one of two modes:
 
 | Mode | Meaning |
 |------|---------|
 | `legacy` (default) | the host passes the request through the bridge to the legacy handler |
-| `shadow` | GET only: the legacy result is returned, the host runs its native implementation in the background and counts mismatches (the SDK router supports it; the kernel no longer hands it out) |
 | `native` | the host answers with its native implementation |
 
 Nothing stores or switches a route's mode (single-binary design, section
@@ -386,21 +385,15 @@ route in `legacy` mode.
 `sdk/pluginhostsdk.Router` implements this for package hosts. It polls
 `GetPackageConfig` every 5 s and keeps the last successful modes when a poll
 fails. A route without a native handler stays `legacy` and is reported as
-`mode_unsupported`. In `shadow` mode the legacy response is returned first and
-the native handler runs in the background with a timeout and a concurrency
-limit; status codes and bodies are compared after
-`sdk/v2compat.NormalizeForCompare` drops the envelope `ts`. WebSocket routes
+`mode_unsupported`. (A `shadow` comparison mode existed for the 4.1 rehearsal
+and was removed in 5.0.) WebSocket routes
 always relay through the bridge. The router reports its configuration status
 and per-route counters in `HealthResponse.details_json`. The kernel's
 supervisor calls `Health` on every running host every 30 s, keeps the last
 details document, and `/metrics` exports it as `anixops_package_config_status`,
-`anixops_package_route_mode` and the `anixops_package_native_*` and
-`anixops_package_shadow_*` counters.
+`anixops_package_route_mode` and the `anixops_package_native_*` counters.
 
-The details document may also carry `shadow_samples` (the router's latest
-shadow mismatches, sanitized by `sdk/shadowsample`); the kernel no longer
-collects them: the sample collector and `v4_kernel_shadow_mismatch_sample`
-went with the route-mode administration. The generic Control host runs on the
+The generic Control host runs on the
 router with no native routes; the native routes of the package hosts are
 listed in `package-extraction.md` and `identity-service.md`.
 

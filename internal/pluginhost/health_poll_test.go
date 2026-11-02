@@ -52,7 +52,7 @@ func (*healthPollHostClient) Close() error { return nil }
 
 func TestPollHealthRecordsDetailsAndKeepsThemOnFailure(t *testing.T) {
 	client := &healthPollHostClient{}
-	details := `{"routes":{"knowledge.article.list":{"mode":"shadow"}}}`
+	details := `{"routes":{"knowledge.article.list":{"mode":"native"}}}`
 	client.set(HostHealth{Healthy: true, LeaseID: "lease-3", DetailsJSON: details}, nil)
 	host := &hostProcess{packageID: "knowledge", version: "4.0.1", generation: 3, client: client, leaseID: "lease-3"}
 	manager := &Supervisor{hosts: map[string]*hostProcess{hostKey(host.packageID, host.version): host}}

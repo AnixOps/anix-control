@@ -12,7 +12,6 @@ import (
 // Route modes a package host applies per v2 route.
 const (
 	RouteModeLegacy = "legacy"
-	RouteModeShadow = "shadow"
 	RouteModeNative = "native"
 )
 
@@ -31,7 +30,7 @@ var ErrStorageUnavailable = errors.New("package storage is unavailable")
 type PackageConfig struct {
 	Revision   int64
 	ConfigHash string
-	// RouteModes maps route ids to RouteModeShadow or RouteModeNative; routes
+	// RouteModes maps route ids to RouteModeNative; routes
 	// that are absent run in legacy mode.
 	RouteModes map[string]string
 }

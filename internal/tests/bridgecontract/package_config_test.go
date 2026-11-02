@@ -46,13 +46,13 @@ func dialSessionWithOperations(t *testing.T, operations packagebridge.HostOperat
 
 func TestGetPackageConfigIsAuthorizedByTheSessionIdentity(t *testing.T) {
 	operations := &recordingHostOperations{config: packagebridge.PackageConfig{
-		Revision: 3, ConfigHash: "abc", RouteModes: map[string]string{"knowledge.article.list": "shadow"},
+		Revision: 3, ConfigHash: "abc", RouteModes: map[string]string{"knowledge.article.list": "native"},
 	}}
 	client := dialSessionWithOperations(t, operations)
 
 	config, err := client.GetPackageConfig(context.Background())
 	require.NoError(t, err)
-	require.Equal(t, packagebridgesdk.PackageConfig{Revision: 3, ConfigHash: "abc", RouteModes: map[string]string{"knowledge.article.list": "shadow"}}, config)
+	require.Equal(t, packagebridgesdk.PackageConfig{Revision: 3, ConfigHash: "abc", RouteModes: map[string]string{"knowledge.article.list": "native"}}, config)
 	require.Equal(t, []packagebridge.HostIdentity{{PackageID: "knowledge", Version: "4.0.1", Generation: 7}}, operations.seen,
 		"the kernel sees the identity bound at session creation, not anything the host sent")
 }

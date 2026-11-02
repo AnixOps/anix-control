@@ -69,7 +69,7 @@ func (o PackageHostOperations) PackageConfig(ctx context.Context, host packagebr
 	}
 	active := make(map[string]string, len(modes))
 	for route, mode := range modes {
-		if mode == packagebridge.RouteModeShadow || mode == packagebridge.RouteModeNative {
+		if mode == packagebridge.RouteModeNative {
 			active[route] = mode
 		}
 	}

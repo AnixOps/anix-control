@@ -17,7 +17,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 // updateNodeSecret and enrollNode are fixture routes (harness_test.go,
@@ -282,42 +281,6 @@ func TestUnsealableRequestsFallBackToLegacy(t *testing.T) {
 	var rendered strings.Builder
 	require.NoError(t, h.metrics.WritePrometheus(&rendered))
 	assert.Contains(t, rendered.String(), `route="proxy.fixture.nodes.id.secret.put",stage="request",result="legacy_fallback",reason="value_not_string"} 1`)
-}
-
-// A shadow run is never bound: the router gives it no binding, and the
-// capability of its request was consumed by the legacy answer, so even a
-// package that kept it resolves nothing.
-func TestShadowRunsAreNeverBound(t *testing.T) {
-	h := newHarness(t)
-	type attempt struct {
-		binding []byte
-		code    codes.Code
-	}
-	attempts := make(chan attempt, 2)
-	h.route("proxy.admin.nodes.id.get", func(ctx context.Context, request pluginhostsdk.NativeRequest) (pluginhostsdk.NativeResponse, error) {
-		h.mu.Lock()
-		kept := append([]byte(nil), h.lastMinted...)
-		h.mu.Unlock()
-		for _, binding := range [][]byte{request.Binding, kept} {
-			_, err := h.nodeOps("proxy-node").SubmitOperation(ctx, &kernelnodeopsv1.SubmitOperationRequest{
-				RequestId: h.requestID("secrets.put:proxy-3:shadow"),
-				Operation: secretDocument(proxyNodeID, sealedsecrets.Prefix+strings.Repeat("A", 43)),
-				Request:   &kernelnodeopsv1.RequestBinding{BridgeCapability: binding},
-			})
-			attempts <- attempt{binding: binding, code: status.Code(err)}
-		}
-		return panel(map[string]any{"legacy": true})
-	})
-	h.start(map[string]string{"proxy.admin.nodes.id.get": pluginhostsdk.RouteModeShadow})
-
-	recorder := h.do(http.MethodGet, "/api/v2/admin/nodes/3", "")
-	require.Equal(t, http.StatusOK, recorder.Code)
-	first, second := <-attempts, <-attempts
-	assert.Nil(t, first.binding, "the router binds no shadow run")
-	assert.Equal(t, codes.PermissionDenied, first.code, "and a handle resolves only with a binding")
-	assert.NotEmpty(t, second.binding)
-	assert.Equal(t, codes.PermissionDenied, second.code, "the legacy answer consumed the capability")
-	assert.Empty(t, h.resolved)
 }
 
 // The walk: through the gateway, the bridge and the router, no value under
