@@ -133,7 +133,7 @@ func (s *suite) scenarioAgentGracefulRestart(t *testing.T) string {
 	if held.Generation > 0 {
 		eventually(t, 30*time.Second, func() (bool, string) {
 			out := s.agent.proc.OutputSince(mark)
-			return strings.Contains(out, fmt.Sprintf("generation=%d", held.Generation)) && strings.Contains(out, "Applied the forwarding state"), "the forwarding state is not reapplied yet"
+			return strings.Contains(out, fmt.Sprintf("generation=%d", held.Generation)) && strings.Contains(out, "Took the forwarding state"), "the forwarding state is not reapplied yet"
 		}, s.agent.proc)
 	}
 	time.Sleep(5 * time.Second)
