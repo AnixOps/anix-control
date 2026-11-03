@@ -102,8 +102,9 @@ the runner it is adopted, once, in one transaction:
    topology name index older schemas carry. Before it creates the partial
    unique index on active flux runtime jobs it marks duplicate active jobs of
    a forward failed, keeping the running or newest one. Once
-   `anix-control forward legacy drop` removed the flux tables, it does not
-   create them again.
+   `anix-control forward legacy drop` (4.2) removed the flux tables, it does
+   not create them again; `0028_drop_flux_tables` then drops them on every
+   database.
 3. **Check.** Every baseline table, column and index must now be present, or
    the runner refuses and lists what is missing; the transaction rolls back,
    so nothing changed.

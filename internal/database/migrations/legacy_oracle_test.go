@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/v5/internal/database/migrations"
-	"github.com/AnixOps/anix-control/v5/internal/forwardlegacy"
 	"github.com/AnixOps/anix-control/v5/internal/lease"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/stretchr/testify/require"
@@ -30,6 +29,85 @@ import (
 //
 // legacyModelsPrepare builds the schema from today's models, which later
 // migrations change, plus the tables later migrations create (laterModels).
+// legacyFluxPrepare is the legacy start's schema work on the flux
+// forwarding tables, which 0028_drop_flux_tables dropped: the v4.2
+// upgrade's own tables (forwardlegacy.EnsureSchema), the flux models of
+// migrateSchema and the Ensure* steps of the flux runtime.
+func legacyFluxPrepare(db *gorm.DB) error {
+	migrator := db.Migrator()
+	for _, value := range []any{&retiredForwardLegacyArchive{}, &retiredForwardLegacyNode{}, &retiredForwardLegacyDrop{}} {
+		if !migrator.HasTable(value) {
+			if err := migrator.CreateTable(value); err != nil {
+				return err
+			}
+		}
+	}
+	if err := db.AutoMigrate(
+		&model.ForwardRule{}, &model.ForwardRoute{}, &model.ForwardLog{}, &model.ForwardStats{},
+		&model.ForwardTunnel{}, &model.ForwardUserTunnel{}, &model.Forward{}, &model.ForwardPortBinding{}, &model.SpeedLimit{},
+		&model.ForwardTrafficCursor{}, &model.ForwardAgentBridgeTask{}, &model.ForwardRuntimeJob{},
+	); err != nil {
+		return err
+	}
+	if !migrator.HasIndex(&model.ForwardRuntimeJob{}, "idx_forward_runtime_job_active_forward") {
+		return db.Exec(fmt.Sprintf(
+			"CREATE UNIQUE INDEX IF NOT EXISTS idx_forward_runtime_job_active_forward ON %s (forward_id) WHERE forward_id IS NOT NULL AND status IN (%d, %d)",
+			model.ForwardRuntimeJob{}.TableName(), model.ForwardRuntimeJobStatusPending, model.ForwardRuntimeJobStatusRunning,
+		)).Error
+	}
+	return nil
+}
+
+// retiredForwardLegacyArchive, retiredForwardLegacyNode and
+// retiredForwardLegacyDrop are the v4.2 upgrade's models
+// (model.ForwardLegacy*) as the baseline created them;
+// 0028_drop_flux_tables dropped the tables and the models.
+type retiredForwardLegacyArchive struct {
+	ID        uint   `gorm:"primaryKey"`
+	Path      string `gorm:"size:1024;not null"`
+	SHA256    string `gorm:"size:64;not null"`
+	SizeBytes int64
+	Schema    string    `gorm:"size:64;not null"`
+	Trigger   string    `gorm:"size:16;not null"`
+	Actor     string    `gorm:"size:255"`
+	RowCounts string    `gorm:"type:text"`
+	CreatedAt time.Time `gorm:"index"`
+}
+
+func (retiredForwardLegacyArchive) TableName() string { return "v4_forward_legacy_archive" }
+
+type retiredForwardLegacyNode struct {
+	ID            uint   `gorm:"primaryKey"`
+	NodeID        uint   `gorm:"not null;uniqueIndex"`
+	NodeRef       string `gorm:"size:64;not null"`
+	NodeName      string `gorm:"size:255"`
+	State         string `gorm:"size:16;not null;index"`
+	Checks        string `gorm:"type:text"`
+	Detail        string `gorm:"type:text"`
+	CheckedAt     *time.Time
+	AbandonedAt   *time.Time
+	AbandonedBy   string `gorm:"size:255"`
+	AbandonReason string `gorm:"type:text"`
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+}
+
+func (retiredForwardLegacyNode) TableName() string { return "v4_forward_legacy_node" }
+
+type retiredForwardLegacyDrop struct {
+	ID             uint `gorm:"primaryKey"`
+	ArchiveID      uint
+	ArchivePath    string `gorm:"size:1024"`
+	ArchiveSHA256  string `gorm:"size:64"`
+	Backup         string `gorm:"type:text"`
+	Dropped        string `gorm:"type:text"`
+	AlreadyMissing string `gorm:"type:text"`
+	Actor          string `gorm:"size:255"`
+	CreatedAt      time.Time
+}
+
+func (retiredForwardLegacyDrop) TableName() string { return "v4_forward_legacy_drop" }
+
 // legacyPrepare is the legacy start as it was at the baseline: the same,
 // less what later migrations added to the models (postBaselineIndexes),
 // without the later tables, plus the tables later migrations dropped with
@@ -51,9 +129,7 @@ func legacySchemaModels() []any {
 		&model.Ticket{}, &model.TicketMessage{},
 		&model.Coupon{}, &model.CouponUsage{},
 		&model.Knowledge{},
-		&model.ForwardNode{}, &model.ForwardRule{}, &model.ForwardRoute{}, &model.ForwardLog{}, &model.ForwardStats{},
-		&model.ForwardTunnel{}, &model.ForwardUserTunnel{}, &model.Forward{}, &model.ForwardPortBinding{}, &model.SpeedLimit{},
-		&model.ForwardRuntimeJob{}, &model.ForwardTrafficCursor{}, &model.ForwardAgentBridgeTask{},
+		&model.ForwardNode{},
 		&model.ForwardLatencyBucket{},
 		&model.PaymentGateway{}, &model.PaymentRecord{},
 		&model.TelegramBot{}, &model.TelegramUser{}, &model.TelegramChat{}, &model.TelegramCommand{}, &model.TelegramNotification{},
@@ -339,6 +415,7 @@ func (baselineNodeGroup) TableName() string { return "v5_node_group" }
 func legacyPrepare(t *testing.T, db *gorm.DB, production bool) {
 	t.Helper()
 	require.NoError(t, legacyPrepareErr(db, production))
+	require.NoError(t, legacyFluxPrepare(db))
 	require.NoError(t, db.AutoMigrate(retiredKernelModels()...))
 	// 0020_node_groups_without_templates dropped columns of v5_node_group:
 	// the baseline's table is built from the frozen copy.
@@ -364,16 +441,8 @@ func legacyModelsPrepare(t *testing.T, db *gorm.DB, production bool) {
 
 func legacyPrepareErr(db *gorm.DB, production bool) error {
 	migrator := db.Migrator()
-	// forwardlegacy.EnsureSchema
-	for _, value := range model.ForwardLegacyModels() {
-		if !migrator.HasTable(value) {
-			if err := migrator.CreateTable(value); err != nil {
-				return err
-			}
-		}
-	}
-	// migrateSchema
-	models := forwardlegacy.KeepModels(db, legacySchemaModels())
+	// migrateSchema (less the flux tables: legacyFluxPrepare)
+	models := legacySchemaModels()
 	if production {
 		var missing []any
 		for _, value := range models {
@@ -433,30 +502,6 @@ func legacyPrepareErr(db *gorm.DB, production bool) error {
 	// EnsureStatsSchema
 	for _, value := range []any{&model.TrafficLog{}, &model.OnlineLog{}, &model.StatUser{}, &model.StatServer{}} {
 		if err := db.AutoMigrate(value); err != nil {
-			return err
-		}
-	}
-	if !forwardlegacy.Dropped(db) {
-		// EnsureForwardBridgeSchema
-		if !migrator.HasTable(&model.ForwardAgentBridgeTask{}) {
-			if err := db.AutoMigrate(&model.ForwardAgentBridgeTask{}); err != nil {
-				return err
-			}
-		}
-		// EnsureForwardRuntimeJobSchema (its duplicate repair is adoption's)
-		if err := db.AutoMigrate(&model.ForwardRuntimeJob{}); err != nil {
-			return err
-		}
-		if !migrator.HasIndex(&model.ForwardRuntimeJob{}, "idx_forward_runtime_job_active_forward") {
-			if err := db.Exec(fmt.Sprintf(
-				"CREATE UNIQUE INDEX IF NOT EXISTS idx_forward_runtime_job_active_forward ON %s (forward_id) WHERE forward_id IS NOT NULL AND status IN (%d, %d)",
-				model.ForwardRuntimeJob{}.TableName(), model.ForwardRuntimeJobStatusPending, model.ForwardRuntimeJobStatusRunning,
-			)).Error; err != nil {
-				return err
-			}
-		}
-		// EnsureForwardPortBindingSchema (its backfill runs at every start)
-		if err := db.AutoMigrate(&model.ForwardPortBinding{}); err != nil {
 			return err
 		}
 	}

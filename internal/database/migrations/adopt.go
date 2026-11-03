@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/AnixOps/anix-control/v5/internal/forwardlegacy"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
@@ -121,8 +120,8 @@ func adopt(ctx context.Context, tx *gorm.DB, baseline Step, options Options) (*A
 	}
 	adoption := &Adoption{}
 	skip := map[string]bool{}
-	if forwardlegacy.Dropped(tx) {
-		for _, table := range forwardlegacy.DropTables {
+	if fluxDropped(tx) {
+		for _, table := range fluxTables {
 			skip[table] = true
 			adoption.SkippedTables = append(adoption.SkippedTables, table)
 		}
@@ -472,4 +471,37 @@ func quoteFor(dialect string) func(string) string {
 		return func(name string) string { return `"` + strings.ReplaceAll(name, `"`, `""`) + `"` }
 	}
 	return func(name string) string { return "`" + strings.ReplaceAll(name, "`", "``") + "`" }
+}
+
+// fluxTables are the flux forwarding tables `forward legacy drop` (4.2)
+// removed, dependents first. 0028_drop_flux_tables drops them on every
+// database; adoption only needs them to recognize a database the drop
+// already left without them.
+var fluxTables = []string{
+	"v2_forward_port_binding",
+	"v2_forward_traffic_cursor",
+	"v2_forward_agent_bridge_task",
+	"v2_forward_runtime_job",
+	"v2_forward_user_tunnel",
+	"v2_speed_limit",
+	"v2_forward",
+	"v2_forward_tunnel",
+	"v2_forward_rule",
+	"v2_forward_route",
+	"v2_forward_log",
+	"v2_forward_stats",
+}
+
+// fluxDropped reports whether `forward legacy drop` recorded the drop of
+// the flux tables (v4_forward_legacy_drop has a row). An error reading the
+// record answers false: adoption then expects the tables, as before.
+func fluxDropped(tx *gorm.DB) bool {
+	if !tx.Migrator().HasTable("v4_forward_legacy_drop") {
+		return false
+	}
+	var count int64
+	if err := tx.Table("v4_forward_legacy_drop").Count(&count).Error; err != nil {
+		return false
+	}
+	return count > 0
 }
