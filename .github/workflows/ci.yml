@@ -36,7 +36,7 @@ env:
   # The one anix-agent commit every checkout below builds and tests: the
   # signed Agent plugins, the cross-repository E2E and the live WebUI gate.
   # Move it to the Agent release commit with every Agent tag (docs/RELEASING.md).
-  AGENT_REF: '21d82e4a10fd4a4593c90841063e82a64e8b7176'   # anix-agent v5.0.0-rc.29
+  AGENT_REF: '19ceb49924aca432772e26e99550408747c8c28d'   # anix-agent v5.0.0
   # The networkcore_anixops commit whose anixcore the cross-repository E2E
   # runs as the Agent's node kernel.
   NETWORKCORE_REF: 'c0418ad48313045bf3c07691a8d083c6ddaf2252'
@@ -1786,7 +1786,7 @@ jobs:
           mkdir -p "${E2E_BIN}" "${E2E_LOGS}"
           go build -o "${E2E_BIN}/anix-control" ./cmd/server
           go -C V2bX_AnixOps build -trimpath -tags anixcore \
-            -ldflags "-X github.com/AnixOps/anix-agent/v5/cmd.version=5.0.0-rc.29-e2e" \
+            -ldflags "-X github.com/AnixOps/anix-agent/v5/cmd.version=5.0.0-e2e" \
             -o "${E2E_BIN}/anix-agent" .
           for arch in amd64 arm64; do
             GOOS=linux GOARCH="${arch}" go -C V2bX_AnixOps build -trimpath -buildvcs=false \

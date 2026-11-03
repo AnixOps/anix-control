@@ -2,6 +2,70 @@
 
 ## Unreleased
 
+## 5.0.0 - 2026-11-03
+
+The 5.0 release. It ships with anix-agent v5.0.0 and anx-node
+0.1.0-alpha.15 (destination statistics for TCP, UDP/QUIC and Mux, BBR on
+inbound listeners). There are no database migrations since 5.0.0-rc.29.
+From here on Control and the Agent share the major and minor version and
+number their patches independently; a fix to 5.0.0 is 5.0.1, not a hotfix.
+
+### Changed
+
+- The 4.0.x RC roadmap and evidence snapshot moved to `docs/archive/`.
+
+### Removed
+
+- The last readers of the forward planner's allocations: route
+  subscriptions offer an entry on the route's listen port, and route
+  health comes from the network model only (a route left on a removed
+  engine has none). The `v4_kernel_forward_allocation` table stays in the
+  schema but nothing reads or writes it.
+- The kernel's forward check client (`NodeChecker.Check`,
+  `kernelnodeops.ForwardChecks.Check`): route diagnosis on the network
+  model never runs the Agent's hop checks. Diagnosis still shows whether
+  each node's Agent is connected. The administrator's node diagnostics keep
+  the forward actions of `agent.diagnostic`.
+- Forwarding routes run on the network model only. Control's validation
+  refuses a hop on any other engine (`engine_not_enabled`) or a link on any
+  other security (`link_unsupported`), and the planner only validates: the
+  port and mark allocation, the hop wiring of `NodeForwardState` and the
+  planner goldens (`contracts/forward/v1`) are gone, so a node's forward
+  state carries vantage probes and no hops. `PlanRoute` answers violations
+  only. A stored route still on a removed engine stays unplanned (flagged
+  `gost_removed`) until it is edited onto the network model or deleted; its
+  diagnosis is the enforcement step alone.
+- The entry HA controller judges every entry on the network model (the
+  device's status and the route's port forward); the hop-report rules and
+  the `not_in_inventory` reason are gone. Route diagnosis runs the network
+  model's steps; the hop-based steps and the Agent forward checks it
+  called are no longer used.
+- `forward.anixops_experimental` no longer reaches the kernel: the
+  `kernelforward.Service` `AnixOps` and `Cluster` hooks were removed.
+- The kernel's legacy handlers for the knowledge and ticket routes (14 v2
+  routes) and their native-vs-legacy compatibility tests. The knowledge and
+  ticket package hosts now run every route natively from the start
+  (`pluginhostsdk.RouterConfig.NativeOnly`), so the routes no longer depend
+  on the host's first route-mode poll. First batch of the legacy-handler
+  removal; the other packages keep theirs for now.
+- `sdk/forward/driver` (the engine driver interface, its fake driver and
+  conformance suite) and `sdk/forward/leastconn`. Every engine driver was
+  already gone and the Agent no longer imports either package (Agent #131):
+  routes run on the network model.
+- Package hosts no longer support the `shadow` route mode, and
+  `sdk/shadowsample` is gone. Route modes come only from
+  `config/package-route-defaults.json`, which lists native routes; nothing
+  ever selected `shadow` after the 4.1 rehearsal. The
+  `anixops_package_shadow_*` metrics are no longer exported.
+- `cmd/wgrotate` no longer falls back to `/etc/v2board/config.yaml`; it reads
+  `/opt/anixops/control/config/config.yaml` unless `-config` is given.
+
+### Fixed
+
+- Entry HA vantage probes use the route's listen port. They read the entry
+  hop's port from the node's planned state, which network routes never had,
+  so no vantage probe was ever planned for them.
+
 ## 5.0.0-rc.29 - 2026-11-02
 
 ### Added
