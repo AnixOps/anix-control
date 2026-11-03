@@ -4,7 +4,7 @@
 
 ## 5.0.0 - 2026-11-03
 
-The 5.0 release. It ships with anix-agent v5.0.0 and anx-node
+The 5.0 release. It ships with anix-agent v5.0.0 (5af4e72) and anx-node
 0.1.0-alpha.15 (destination statistics for TCP, UDP/QUIC and Mux, BBR on
 inbound listeners). There are no database migrations since 5.0.0-rc.29.
 From here on Control and the Agent share the major and minor version and
