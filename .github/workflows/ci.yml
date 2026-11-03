@@ -36,7 +36,7 @@ env:
   # The one anix-agent commit every checkout below builds and tests: the
   # signed Agent plugins, the cross-repository E2E and the live WebUI gate.
   # Move it to the Agent release commit with every Agent tag (docs/RELEASING.md).
-  AGENT_REF: '19ceb49924aca432772e26e99550408747c8c28d'   # anix-agent v5.0.0
+  AGENT_REF: '5af4e729c9de5a04e16c6c057679139f77130096'   # anix-agent v5.0.0
   # The networkcore_anixops commit whose anixcore the cross-repository E2E
   # runs as the Agent's node kernel.
   NETWORKCORE_REF: 'c0418ad48313045bf3c07691a8d083c6ddaf2252'
