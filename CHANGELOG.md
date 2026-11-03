@@ -10,6 +10,13 @@ inbound listeners). There are no database migrations since 5.0.0-rc.29.
 From here on Control and the Agent share the major and minor version and
 number their patches independently; a fix to 5.0.0 is 5.0.1, not a hotfix.
 
+### Fixed
+
+- The cross-repository E2E graceful-restart scenario looks for the Agent's
+  "Took the forwarding state" line: anix-agent 5.0.0 (#131, forward driver
+  framework removed) no longer logs "Applied the forwarding state", so the
+  v5.0.0 tag build failed although the Agent reapplied generation 1.
+
 ### Changed
 
 - The 4.0.x RC roadmap and evidence snapshot moved to `docs/archive/`.

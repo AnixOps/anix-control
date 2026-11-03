@@ -89,6 +89,12 @@ publishes everything. Nothing is built locally.
    accepts a dispatch on a release tag as it does a push. Agent releases have
    the same workflow in anix-agent (`release.yml` on the tag).
 
+   When a tag's build failed before it published a release (nothing was
+   installed from it), fix `main` and run the workflow again with
+   `-f replace_unreleased=true`: it checks that the tag has no GitHub release,
+   deletes the tag and tags the new commit. A tag with a release never moves;
+   ship the fix as the next patch instead.
+
 5. Watch the tag run to its end: the release jobs wait for every gate. When a
    job fails on a flake (a runner, network or registry error, not a test that
    fails again), use "Re-run failed jobs" on the run page: the jobs that
