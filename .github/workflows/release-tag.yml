@@ -17,6 +17,11 @@ on:
         description: The full commit sha on main to tag
         required: true
         type: string
+      replace_unreleased:
+        description: Move the tag if it exists but no GitHub release was published for it (its build failed)
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -43,13 +48,22 @@ jobs:
         env:
           TAG: ${{ inputs.tag }}
           COMMIT: ${{ inputs.commit }}
+          REPLACE: ${{ inputs.replace_unreleased }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -Eeuo pipefail
           [[ "${TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)(\.[0-9]+)?)?$ ]] || { echo "not a release tag: ${TAG}"; exit 1; }
           [[ "${COMMIT}" =~ ^[0-9a-f]{40}$ ]] || { echo "not a full commit sha: ${COMMIT}"; exit 1; }
           git merge-base --is-ancestor "${COMMIT}" origin/main || { echo "${COMMIT} is not on main"; exit 1; }
           if git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null; then
-            echo "${TAG} already exists"; exit 1
+            [[ "${REPLACE}" == "true" ]] || { echo "${TAG} already exists"; exit 1; }
+            # Only a tag whose build never published a release may move:
+            # nothing was installed from it.
+            status="$(curl -sS -o /dev/null -w '%{http_code}' -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}")"
+            [[ "${status}" == "404" ]] || { echo "${TAG} has a release (HTTP ${status}); it cannot move"; exit 1; }
+            echo "${TAG} exists without a release; deleting it before tagging ${COMMIT}"
+            git push origin ":refs/tags/${TAG}"
           fi
           git checkout --detach "${COMMIT}"
           python3 config/scripts/check_release_version.py --tag "${TAG}"
