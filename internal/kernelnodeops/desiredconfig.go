@@ -233,7 +233,7 @@ func buildForwardDesiredConfig(db *gorm.DB, id uint) (map[string]any, error) {
 		return nil, ErrNodeGone
 	}
 	node := nodes[0]
-	// Once the v4.2 upgrade dropped the flux tables (forwardlegacy), a
+	// Once 0028_drop_flux_tables (or the v4.2 upgrade) dropped the flux tables, a
 	// forward node has no legacy rules or tunnels left.
 	var rules []model.ForwardRule
 	if db.Migrator().HasTable(&model.ForwardRule{}) {

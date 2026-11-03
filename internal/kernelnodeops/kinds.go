@@ -379,6 +379,10 @@ func tunnelTargets(db *gorm.DB, tunnelID uint64) ([]*kernelnodeopsv1.NodeRef, er
 		InNodeID  uint64
 		OutNodeID *uint64
 	}
+	if !db.Migrator().HasTable("v2_forward_tunnel") {
+		// 0028_drop_flux_tables dropped the flux tunnels.
+		return nil, status.Errorf(codes.NotFound, "tunnel %d not found", tunnelID)
+	}
 	if err := db.Table("v2_forward_tunnel").Select("in_node_id, out_node_id").Where("id = ?", tunnelID).Limit(1).Find(&tunnels).Error; err != nil {
 		return nil, err
 	}
@@ -402,6 +406,10 @@ func forwardNodes(entry uint64, exit *uint64) []*kernelnodeopsv1.NodeRef {
 // forwardTargets finds a panel forward and its tunnel's nodes.
 func forwardTargets(db *gorm.DB, forwardID uint64) ([]*kernelnodeopsv1.NodeRef, error) {
 	var forwards []struct{ TunnelID uint64 }
+	if !db.Migrator().HasTable("v2_forward") {
+		// 0028_drop_flux_tables dropped the flux forwards.
+		return nil, status.Errorf(codes.NotFound, "forward %d not found", forwardID)
+	}
 	if err := db.Table("v2_forward").Select("tunnel_id").Where("id = ?", forwardID).Limit(1).Find(&forwards).Error; err != nil {
 		return nil, err
 	}
@@ -647,6 +655,10 @@ func init() {
 			var rules []struct {
 				RelayNodeID uint64
 				ExitNodeID  uint64
+			}
+			if !db.Migrator().HasTable("v2_forward_rule") {
+				// 0028_drop_flux_tables dropped the legacy rules.
+				return resolution{}, status.Errorf(codes.NotFound, "legacy rule %d not found", id)
 			}
 			if err := db.Table("v2_forward_rule").Select("relay_node_id, exit_node_id").Where("id = ?", id).Limit(1).Find(&rules).Error; err != nil {
 				return resolution{}, err

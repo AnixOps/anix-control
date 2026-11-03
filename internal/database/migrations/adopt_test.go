@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/v5/internal/database/migrations"
-	"github.com/AnixOps/anix-control/v5/internal/forwardlegacy"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -107,17 +106,15 @@ func TestAdoptionCompletesADatabaseAnOlderReleaseLeft(t *testing.T) {
 		assert.Empty(t, adoption.Differences)
 		requireSameSchema(t, want, inspect(t, db), "fresh (-) and adopted older release (+)")
 
-		// Existing nodes are approved (the column default), one active
-		// job per forward is left, and the others failed.
+		// Existing nodes are approved (the column default). The duplicate
+		// active flux jobs were failed (SupersededJobs) before
+		// 0028_drop_flux_tables dropped their table.
 		var proxy, relay string
 		require.NoError(t, db.Raw("SELECT approval FROM v2_node WHERE name = 'proxy'").Scan(&proxy).Error)
 		require.NoError(t, db.Raw("SELECT approval FROM v2_forward_node WHERE name = 'relay'").Scan(&relay).Error)
 		assert.Equal(t, model.NodeApprovalApproved, proxy)
 		assert.Equal(t, model.NodeApprovalApproved, relay)
-		var active []model.ForwardRuntimeJob
-		require.NoError(t, db.Where("forward_id = 42 AND status IN ?", []int{0, 1}).Find(&active).Error)
-		require.Len(t, active, 1)
-		assert.Equal(t, model.ForwardRuntimeJobStatusRunning, active[0].Status)
+		assert.False(t, db.Migrator().HasTable("v2_forward_runtime_job"))
 
 		meta, err := migrations.Meta(ctx, db)
 		require.NoError(t, err)
@@ -137,8 +134,9 @@ func TestAdoptionKeepsTheFluxTablesDropped(t *testing.T) {
 		ctx := context.Background()
 		db := open(t)
 		legacyPrepare(t, db, true)
-		require.NoError(t, db.Create(&model.ForwardLegacyDrop{ArchivePath: "/var/lib/archive.json", Actor: "test", CreatedAt: time.Now()}).Error)
-		for _, table := range forwardlegacy.DropTables {
+		require.NoError(t, db.Exec("INSERT INTO v4_forward_legacy_drop (archive_path, actor, created_at) VALUES (?, ?, ?)",
+			"/var/lib/archive.json", "test", time.Now()).Error)
+		for _, table := range fluxTables {
 			require.NoError(t, db.Migrator().DropTable(table))
 		}
 		// An older release's start also lacked a column of a kept table.
@@ -147,11 +145,11 @@ func TestAdoptionKeepsTheFluxTablesDropped(t *testing.T) {
 		result, err := migrations.Migrate(ctx, db, migrateOptions())
 		require.NoError(t, err)
 		require.NotNil(t, result.Adoption)
-		assert.ElementsMatch(t, forwardlegacy.DropTables, result.Adoption.SkippedTables)
+		assert.ElementsMatch(t, fluxTables, result.Adoption.SkippedTables)
 		assert.Empty(t, result.Adoption.CreatedTables)
 		assert.Equal(t, []string{"v2_forward_node.node_group_id"}, result.Adoption.AddedColumns)
 		assert.Empty(t, result.Adoption.Differences)
-		for _, table := range forwardlegacy.DropTables {
+		for _, table := range fluxTables {
 			assert.False(t, db.Migrator().HasTable(table), table)
 		}
 		assert.True(t, db.Migrator().HasTable("v2_forward_node"))
@@ -254,4 +252,11 @@ func TestAdoptionRefusesAColumnItCannotAdd(t *testing.T) {
 	requireRefused(t, err, "adopting the existing database failed at", "ALTER TABLE `v4_kernel_alert` ADD COLUMN `kind` text NOT NULL",
 		"Cannot add a NOT NULL column", "Nothing was changed")
 	assert.False(t, db.Migrator().HasTable(migrations.MigrationTable))
+}
+
+// fluxTables are the flux tables `forward legacy drop` removed.
+var fluxTables = []string{
+	"v2_forward_port_binding", "v2_forward_traffic_cursor", "v2_forward_agent_bridge_task", "v2_forward_runtime_job",
+	"v2_forward_user_tunnel", "v2_speed_limit", "v2_forward", "v2_forward_tunnel",
+	"v2_forward_rule", "v2_forward_route", "v2_forward_log", "v2_forward_stats",
 }

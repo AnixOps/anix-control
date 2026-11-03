@@ -124,4 +124,8 @@
 //     v2_node and v2_forward_node), the clean agents
 //     (v2_forward_clean_agent), the moved credentials
 //     (v4_kernel_node_credential) and their kernel API views are dropped.
+//   - 0028_drop_flux_tables: the 4.1 flux forwarding tables (forwards,
+//     tunnels, grants, speed limits, port bindings, runtime jobs, traffic
+//     cursors, bridge tasks, legacy rules, smart routes, log and stats) and
+//     the v4.2 upgrade's archive, node check and drop records are dropped.
 package migrations
