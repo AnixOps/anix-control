@@ -650,8 +650,9 @@ if openssl pkeyutl -help 2>&1 | grep -q -- '-rawin'; then
   metadata
   FAKE_CONTROL_DOWN=1 FAKE_IP=down ANIX_INSTALL_PUBLIC_KEY="${public}" run_installer -u "${CONTROL}" -t "${TOKEN_A}" --offline "${BUNDLE}"
   expect_status 0 "offline install without Control's https"
-  expect_out "cannot reach https://ctl.example.com over https"
-  ! grep -q '^agent join .*--address' "${STATE}/log" || fail "addresses passed although Control's https did not answer"
+  expect_out "Control's https address is not contacted"
+  ! grep -q '^agent join .*--address' "${STATE}/log" || fail "an offline install passed addresses"
+  ! grep -q "^curl ${CONTROL}/" "${STATE}/log" || fail "an offline install made https requests: $(grep "^curl ${CONTROL}/" "${STATE}/log")"
   new_root offline-nogrpc
   metadata
   FAKE_GRPC_RC=7 ANIX_INSTALL_PUBLIC_KEY="${public}" run_installer -u "${CONTROL}" -t "${TOKEN_A}" --offline "${BUNDLE}"

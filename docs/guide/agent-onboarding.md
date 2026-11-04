@@ -462,7 +462,7 @@ interfaces unless `--no-accept-ra` is given.
 | IPv6 SLAAC (forward nodes) | | an interface with a default route from router advertisements has `accept_ra` other than 2: with forwarding on the kernel ignores router advertisements and the route expires. Only with `--no-accept-ra`: otherwise the drop-in sets it |
 | Ports | | with `--port-range FROM-TO` (the node's forward port range in Control), a listener in that range (`ss`). The Agent itself listens on no port; without the flag the check is skipped |
 | Disk | less than 200 MiB free for `/usr/lib/anixops-agent` or the download directory | |
-| Control over https | online: `/install/agent.env` cannot be read with a verified certificate (stops before preflight) | offline: Control's https address is unreachable |
+| Control over https | online: `/install/agent.env` cannot be read with a verified certificate (stops before preflight) | |
 | gRPC target | it does not resolve, refuses or times out, its certificate does not verify against the system CAs (the Agent checks it the same way), or the TLS handshake fails | `curl` has no HTTP/2 and the handshake failed, or the result is inconclusive |
 | Clock | more than 5 minutes off Control's `Date` header (certificates stop verifying) | more than 30 seconds off, or no `Date` header |
 
@@ -475,7 +475,9 @@ polkit (Ubuntu 24.04, Debian 12) to forward with gost.
 
 A node that cannot download from Control's mirrors or GitHub installs from
 an offline bundle. The node still needs to reach Control's gRPC target to
-join; only the downloads move to the bundle.
+join; only the downloads move to the bundle. With `--offline` the script
+makes no https request to Control at all (no metadata, no address
+detection, no Control check): the node only opens the gRPC connection.
 
 1. Put the Agent release in `agent_install.artifact_dir` on Control
    (`<dir>/<tag>/`): the zips and their `.sig` files, `SHA256SUMS` and

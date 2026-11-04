@@ -662,16 +662,13 @@ check_disk() {
   done
 }
 
-# check_control checks Control's https address (online it was read already)
-# and the gRPC target the Agent enrolls at, both with TLS verification.
+# check_control checks Control's https address (online it was read already;
+# offline it is not contacted) and the gRPC target the Agent enrolls at, both with TLS verification.
 check_control() {
   local args=(-sS -g -o /dev/null --connect-timeout 10 -m 20) rc=0 http2=0 host="${META_GRPC%:*}"
   if [[ -n "${OFFLINE}" ]]; then
-    if fetch "${CONTROL_URL}/install/agent.env" /dev/null "${TMP_DIR}/control.headers" 2>/dev/null; then
-      pf_ok "Control ${CONTROL_URL} reachable over https"
-    else
-      pf_warn "cannot reach ${CONTROL_URL} over https: clock skew is not checked; the Agent enrolls over gRPC, checked next"
-    fi
+    # Offline makes no https request: the host talks to Control over gRPC only.
+    pf_ok "offline bundle: Control's https address is not contacted; the Agent enrolls over gRPC, checked next"
   else
     pf_ok "Control ${CONTROL_URL} reachable over https (certificate verified)"
   fi
@@ -1235,6 +1232,9 @@ load_existing_node() {
 detect_addresses() {
   local family address
   PUBLIC_ADDRESSES=()
+  # Offline makes no https request: Control names the node after the address
+  # its gRPC listener sees, or --host.
+  [[ -z "${OFFLINE}" ]] || return 0
   for family in 4 6; do
     address="$(curl -fsS -g "-${family}" --proto '=https' --connect-timeout 5 -m 10 "${CONTROL_URL}/install/ip" 2>/dev/null | tr -d '[:space:]')" || address=""
     if [[ "${address}" =~ ^[0-9A-Fa-f:.]{2,45}$ ]]; then

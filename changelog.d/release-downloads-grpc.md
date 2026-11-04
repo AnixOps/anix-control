@@ -11,3 +11,9 @@
   are all called NAME (the kernel `core` and `core-server`), the unit runs
   the binary without arguments, and the files it writes carry no comments
   or links naming AnixOps. The Agent derives the same layout from its path.
+
+### Changed
+
+- `install.sh --offline` makes no https request to Control: it no longer
+  reads `/install/agent.env` or `/install/ip` nor checks Control's https
+  address; the node only opens the gRPC connection.
