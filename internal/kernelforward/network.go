@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"slices"
 	"time"
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
@@ -43,38 +44,88 @@ func networkForwards(db *gorm.DB) ([]networkmodel.Forward, error) {
 }
 
 // networkForward answers route as a network model forward, or false when
-// it is not an ENGINE_NETWORK route. The route was validated.
+// its first hop is on neither the network model nor the kernel. The route
+// was validated: its kernel hops (ENGINE_NFTABLES) come first, and the
+// network hops after them start where the last kernel hop forwards to.
 func networkForward(route *forwardv1.Route) (networkmodel.Forward, bool) {
 	hops := route.GetHops()
-	if len(hops) == 0 || hops[0].GetEngine() != forwardv1.Engine_ENGINE_NETWORK || len(hops[0].GetNodeRefs()) == 0 {
+	if len(hops) == 0 || len(hops[0].GetNodeRefs()) == 0 {
+		return networkmodel.Forward{}, false
+	}
+	if engine := hops[0].GetEngine(); engine != forwardv1.Engine_ENGINE_NETWORK && engine != forwardv1.Engine_ENGINE_NFTABLES {
 		return networkmodel.Forward{}, false
 	}
 	address := route.GetListen().GetAddress()
 	if address == "" {
 		address = "::"
 	}
+	listen := networkmodel.Endpoint{Address: address, Port: route.GetListen().GetPort()}
 	forward := networkmodel.Forward{
 		ID:        route.GetId(),
-		Entries:   append([]string(nil), hops[0].GetNodeRefs()...),
-		Listen:    networkmodel.Endpoint{Address: address, Port: route.GetListen().GetPort()},
 		Protocols: networkProtocols(route.GetListen().GetProtocol()),
 		Policy:    networkPolicy(route),
-		Egress:    hops[len(hops)-1].GetNetworkEgressId(),
 		Paused:    route.GetPaused(),
-	}
-	for _, hop := range hops[1:] {
-		forward.Segments = append(forward.Segments, hop.GetIngress().GetNetworkTransportId())
-		forward.Links = append(forward.Links, networkLink(hop.GetIngress()))
-		if len(hop.GetNodeRefs()) > 0 {
-			forward.Via = append(forward.Via, hop.GetNodeRefs()[0])
-		}
 	}
 	for _, target := range route.GetTargets() {
 		forward.Targets = append(forward.Targets, &networkv1.ForwardTarget{
 			Host: target.GetHost(), Port: target.GetPort(), Weight: target.GetWeight(), Priority: target.GetPriority(),
 		})
 	}
+	// hopListen answers where hop i listens: the route's listen on the
+	// entry, else the hop's port (the route's listen port when 0).
+	hopListen := func(i int) networkmodel.Endpoint {
+		switch {
+		case i == 0:
+			return listen
+		case hops[i].GetPort() == 0:
+			return networkmodel.Endpoint{Address: "::", Port: listen.Port}
+		}
+		return networkmodel.Endpoint{Address: "::", Port: hops[i].GetPort()}
+	}
+	k := 0
+	for k < len(hops) && hops[k].GetEngine() == forwardv1.Engine_ENGINE_NFTABLES {
+		forward.Kernel = append(forward.Kernel, networkmodel.KernelHop{
+			Nodes: append([]string(nil), hops[k].GetNodeRefs()...), Listen: hopListen(k),
+			DialAddress: hops[k].GetDialAddress(), Policy: kernelPolicy(route, k == len(hops)-1),
+		})
+		k++
+	}
+	if k == len(hops) {
+		return forward, true
+	}
+	forward.Entries = append([]string(nil), hops[k].GetNodeRefs()...)
+	forward.Listen = hopListen(k)
+	if k > 0 {
+		forward.EntryDial = hops[k].GetDialAddress()
+	}
+	forward.Egress = hops[len(hops)-1].GetNetworkEgressId()
+	for _, hop := range hops[k+1:] {
+		forward.Segments = append(forward.Segments, hop.GetIngress().GetNetworkTransportId())
+		forward.Links = append(forward.Links, networkLink(hop.GetIngress()))
+		if len(hop.GetNodeRefs()) > 0 {
+			forward.Via = append(forward.Via, hop.GetNodeRefs()[0])
+		}
+	}
 	return forward, true
+}
+
+// kernelPolicy answers how a kernel hop balances and checks where it
+// forwards: the next hop's nodes by policy.next_hop, the targets on the
+// last hop by policy.target.
+func kernelPolicy(route *forwardv1.Route, last bool) *networkv1.ForwardPolicy {
+	policy := route.GetPolicy()
+	balance := policy.GetNextHop()
+	if last {
+		balance = policy.GetTarget()
+	}
+	out := &networkv1.ForwardPolicy{Balance: networkBalances[balance]}
+	if health := policy.GetHealth(); health != nil {
+		out.Health = &networkv1.ForwardHealth{IntervalMs: health.GetIntervalMs(), TimeoutMs: health.GetTimeoutMs(), Disabled: health.GetDisabled()}
+	}
+	if proto.Equal(out, &networkv1.ForwardPolicy{}) {
+		return nil
+	}
+	return out
 }
 
 // networkLinkModes maps a link's network_mode to the network model's.
@@ -177,15 +228,25 @@ func (s *Service) RecordNetworkCounters(ctx context.Context, node agentcontrol.A
 	err = db.Transaction(func(tx *gorm.DB) error {
 		entryGrew := map[string]bool{}
 		for _, forward := range forwards {
-			var known int64
-			if err := tx.Model(&model.KernelForwardRoute{}).Where("id = ?", forward.GetId()).Count(&known).Error; err != nil {
+			var stored []model.KernelForwardRoute
+			if err := tx.Where("id = ?", forward.GetId()).Limit(1).Find(&stored).Error; err != nil {
 				return err
 			}
-			if known == 0 {
+			if len(stored) == 0 {
 				continue
 			}
 			if err := foldLatency(tx, ref, networkHealth(ref, forward), s.now()); err != nil {
 				return err
+			}
+			// Only the devices clients connect to meter the route: the
+			// later kernel hops and the network entry behind them carry the
+			// same bytes again.
+			route, err := decodeRoute(stored[0])
+			if err != nil {
+				return err
+			}
+			if hops := route.GetHops(); len(hops) == 0 || !slices.Contains(hops[0].GetNodeRefs(), ref) {
+				continue
 			}
 			var rows []model.KernelForwardCounter
 			if err := tx.Where("route_id = ? AND hop_index = ? AND node_ref = ? AND counter_epoch LIKE ?", forward.GetId(), 0, ref, networkEpochPrefix+"%").

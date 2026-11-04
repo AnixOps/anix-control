@@ -68,7 +68,7 @@ describe('the editor draft', () => {
     expect(missingRequired(draft)).toEqual([])
   })
 
-  it('puts every hop on the network model or none', () => {
+  it('puts the hops on the network model, after kernel hops', () => {
     const draft = routeToDraft({
       name: 'sh-hk',
       listen: { port: 0, protocol: 'L4_PROTOCOL_TCP' },
@@ -115,10 +115,27 @@ describe('the editor draft', () => {
     draft.hops[1].ingress.network_transport_id = 'tr-hk'
     expect(draftToRoute(draft).hops[1].ingress).toEqual({ security: 'LINK_SECURITY_NETWORK', network_transport_id: 'tr-hk' })
 
-    setDraftEngine(draft, 0, 'ENGINE_GOST')
-    expect(draft.hops.map(hop => hop.engine)).toEqual(['ENGINE_GOST', 'ENGINE_GOST'])
+    // A kernel entry: the next hop is reached RAW at its port and dial
+    // address, and may have several nodes.
+    setDraftEngine(draft, 0, 'ENGINE_NFTABLES')
+    expect(draft.hops.map(hop => hop.engine)).toEqual(['ENGINE_NFTABLES', 'ENGINE_NETWORK'])
     expect(draft.hops[1].ingress.security).toBe('LINK_SECURITY_RAW')
+    draft.hops[1].portMode = 'explicit'
+    draft.hops[1].port = 30001
+    draft.hops[1].node_refs.push('proxy-3')
+    expect(draftToRoute(draft).hops[1]).toEqual({
+      role: 'HOP_ROLE_EXIT', engine: 'ENGINE_NETWORK', node_refs: ['proxy-2', 'proxy-3'], port: 30001, dial_address: '',
+      ingress: { security: 'LINK_SECURITY_RAW', mux: false, server_name: '', path: '', network_transport_id: '' }, network_egress_id: 'eg-hk'
+    })
+    // A kernel exit makes every hop before it kernel; ANX again makes the
+    // hops after it ANX.
+    setDraftEngine(draft, 1, 'ENGINE_NFTABLES')
+    expect(draft.hops.map(hop => hop.engine)).toEqual(['ENGINE_NFTABLES', 'ENGINE_NFTABLES'])
     expect(draft.hops[1].network_egress_id).toBe('')
+    setDraftEngine(draft, 0, 'ENGINE_NETWORK')
+    expect(draft.hops.map(hop => hop.engine)).toEqual(['ENGINE_NETWORK', 'ENGINE_NETWORK'])
+    expect(draft.hops[1].ingress.security).toBe('LINK_SECURITY_NETWORK')
+    expect(draft.hops[1].node_refs).toEqual(['proxy-2'])
   })
 
   it('maps violation fields to DOM ids and hop prefixes', () => {

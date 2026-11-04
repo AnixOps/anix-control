@@ -112,10 +112,10 @@ func checkHops(c *collector, r *model.Route) {
 	for i := range r.Hops {
 		h := &r.Hops[i]
 		checkHopRole(c, i, n, h.Role)
-		checkHopEngine(c, i, h.Engine)
+		checkHopEngine(c, i, h.Engine, i > 0 && r.Hops[i-1].Engine != model.EngineNFTables)
 		checkHopNodes(c, i, h.NodeRefs)
 		if i > 0 {
-			checkIngress(c, i, h.Ingress)
+			checkIngress(c, i, h.Ingress, r.Hops[i-1].Engine == model.EngineNFTables)
 		}
 	}
 }
@@ -134,15 +134,18 @@ func checkHopRole(c *collector, i, n int, role model.HopRole) {
 	}
 }
 
-// checkHopEngine: every hop runs on the network model. The engines with a
-// driver of their own (nftables, gost, the anixops relay) were removed.
-func checkHopEngine(c *collector, i int, engine model.Engine) {
+// checkHopEngine: a hop runs on the network model, or in the kernel
+// (ENGINE_NFTABLES) when every hop before it does too: the kernel hops are
+// the route's first ones. gost and the anixops relay were removed.
+func checkHopEngine(c *collector, i int, engine model.Engine, afterNetwork bool) {
 	switch {
 	case engine == model.EngineUnspecified:
-		c.add(hopField(i, "engine"), CodeRequired, "must be ENGINE_NETWORK")
+		c.add(hopField(i, "engine"), CodeRequired, "must be ENGINE_NETWORK or ENGINE_NFTABLES")
 	case !engine.IsKnown():
 		c.add(hopField(i, "engine"), CodeInvalidEnum, "unknown engine %d", int32(engine))
-	case engine != model.EngineNetwork:
+	case engine == model.EngineNFTables && afterNetwork:
+		c.add(hopField(i, "engine"), CodeInvalidRelation, "kernel hops come first: hop %d follows an ENGINE_NETWORK hop", i)
+	case engine != model.EngineNetwork && engine != model.EngineNFTables:
 		c.add(hopField(i, "engine"), CodeEngineNotEnabled, "%s was removed: routes run on the network model (ENGINE_NETWORK)", engine)
 	}
 }
@@ -169,10 +172,14 @@ func checkHopNodes(c *collector, i int, refs []string) {
 	}
 }
 
-// checkIngress: hop i is reached over a network model link.
-func checkIngress(c *collector, i int, t model.LinkTransport) {
+// checkIngress: hop i is reached over a network model link, or as the
+// client sent it (LINK_SECURITY_RAW) from a kernel hop.
+func checkIngress(c *collector, i int, t model.LinkTransport, fromKernel bool) {
 	field := hopField(i, "ingress.security")
 	switch {
+	case fromKernel && t.Security != model.LinkSecurityRaw:
+		c.add(field, CodeLinkUnsupported, "hop %d forwards in the kernel: the link is LINK_SECURITY_RAW", i-1)
+	case fromKernel:
 	case t.Security == model.LinkSecurityUnspecified:
 		c.add(field, CodeRequired, "the link from hop %d needs a security", i-1)
 	case !t.Security.IsKnown():
@@ -198,6 +205,8 @@ func checkProxyProtocol(c *collector, r *model.Route) {
 	switch {
 	case r.Listen.Protocol == model.L4ProtocolUDP:
 		c.add("policy.proxy_protocol", CodeProxyProtocolUnsupported, "the header is written on TCP connections; this route is UDP only")
+	case r.Hops[last].Engine == model.EngineNFTables:
+		c.add("policy.proxy_protocol", CodeProxyProtocolUnsupported, "the last hop forwards in the kernel, which writes no header")
 	case last > 0 && r.Policy.Direct == model.DirectPreferred:
 		c.add("policy.proxy_protocol", CodeInvalidRelation,
 			"DIRECT_MODE_PREFERRED lets the entry dial the targets without the header; use DIRECT_MODE_OFF")

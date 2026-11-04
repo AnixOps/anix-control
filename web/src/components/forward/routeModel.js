@@ -5,16 +5,19 @@
 // as strings, unset fields left out, so a missing hop_index is 0).
 
 export const ENGINES = Object.freeze({
-  ENGINE_NFTABLES: { short: 'nft', label: 'nftables' },
+  ENGINE_NFTABLES: { short: 'kernel', label: 'Kernel' },
   // gost was removed; routes left on it still show it.
   ENGINE_GOST: { short: 'gost', label: 'gost' },
   ENGINE_ANIXOPS: { short: 'anixops', label: 'anixops' },
   ENGINE_NETWORK: { short: 'net', label: 'ANX' }
 })
 
-// Engines the editor offers: only the network model (ANX). Routes left on
-// nftables or the removed gost and anixops engines still show theirs.
-export const BASE_ENGINES = Object.freeze(['ENGINE_NETWORK'])
+// Engines the editor offers: the network model (ANX) and kernel forwarding
+// (nftables DNAT) on the first hops. Routes left on the removed gost and
+// anixops engines still show theirs.
+export const BASE_ENGINES = Object.freeze(['ENGINE_NETWORK', 'ENGINE_NFTABLES'])
+export const KERNEL_ENGINE = 'ENGINE_NFTABLES'
+const RAW_LINK = { security: 'LINK_SECURITY_RAW', mux: false, server_name: '', path: '', network_transport_id: '' }
 
 // An ENGINE_NETWORK route runs on the network model (anx-node): every hop
 // is a network device, each link a network model transport, the exit an
@@ -25,7 +28,7 @@ export const NETWORK_SECURITY = 'LINK_SECURITY_NETWORK'
 export const PROXY_PROTOCOLS = Object.freeze(['PROXY_PROTOCOL_OFF', 'PROXY_PROTOCOL_V1', 'PROXY_PROTOCOL_V2'])
 
 export function isNetworkDraft(draft) {
-  return Boolean(draft?.hops?.some(hop => hop.engine === NETWORK_ENGINE))
+  return Boolean(draft?.hops?.some(hop => hop.engine === NETWORK_ENGINE || hop.engine === KERNEL_ENGINE))
 }
 
 export const SECURITIES = Object.freeze({
@@ -287,33 +290,29 @@ export function blankHop(index, total, engine = NETWORK_ENGINE) {
 
 // setDraftEngine puts every hop of draft on engine when it enters or leaves
 // the network model (all hops or none); the links follow.
+// setDraftEngine sets a hop's engine. Kernel hops come first, so a kernel
+// hop makes the hops before it kernel and an ANX hop the hops after it ANX.
+// A link out of a kernel hop is RAW and the hop it reaches may have a port,
+// a dial address and several nodes; every other link is ANX.
 export function setDraftEngine(draft, index, engine) {
-  const hop = draft.hops[index]
-  const network = engine === NETWORK_ENGINE
-  if (!network && hop.engine !== NETWORK_ENGINE) {
-    hop.engine = engine
-    return
-  }
   draft.hops.forEach((item, position) => {
-    item.engine = network ? NETWORK_ENGINE : engine
-    if (position > 0) {
-      item.ingress = network
-        ? { ...(item.ingress || {}), security: NETWORK_SECURITY, mux: false, server_name: '', path: '', network_transport_id: item.ingress?.network_transport_id || '' }
-        : { security: 'LINK_SECURITY_RAW', mux: false, server_name: '', path: '', network_transport_id: '' }
-    }
-    if (network) {
+    if (engine === KERNEL_ENGINE ? position <= index : position >= index) item.engine = engine
+    else if (item.engine !== KERNEL_ENGINE) item.engine = NETWORK_ENGINE
+  })
+  draft.hops.forEach((item, position) => {
+    const fromKernel = position > 0 && draft.hops[position - 1].engine === KERNEL_ENGINE
+    if (fromKernel) item.ingress = { ...RAW_LINK }
+    else if (position > 0) {
+      item.ingress = { ...(item.ingress || {}), ...RAW_LINK, security: NETWORK_SECURITY, network_transport_id: item.ingress?.network_transport_id || '' }
       item.node_refs = item.node_refs.slice(0, 1)
       item.port = 0
       item.portMode = 'auto'
       item.dial_address = ''
-    } else {
-      item.network_egress_id = ''
     }
+    if (item.engine === KERNEL_ENGINE) item.network_egress_id = ''
   })
-  if (network) {
-    draft.policy.direct = 'DIRECT_MODE_OFF'
-    draft.listen.portMode = 'explicit'
-  }
+  draft.policy.direct = 'DIRECT_MODE_OFF'
+  draft.listen.portMode = 'explicit'
 }
 
 export function blankTarget() {
@@ -416,9 +415,12 @@ export function draftToRoute(draft) {
       dial_address: index > 0 ? (hop.dial_address || '').trim() : ''
     }
     if (hop.engine === NETWORK_ENGINE) {
-      out.port = 0
-      out.dial_address = ''
-      if (index > 0) out.ingress = networkIngress(hop.ingress)
+      if (index > 0 && draft.hops[index - 1].engine === KERNEL_ENGINE) out.ingress = { ...RAW_LINK }
+      else {
+        out.port = 0
+        out.dial_address = ''
+        if (index > 0) out.ingress = networkIngress(hop.ingress)
+      }
       if (index === draft.hops.length - 1) out.network_egress_id = hop.network_egress_id || ''
       return out
     }

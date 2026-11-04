@@ -223,12 +223,13 @@ describe('anixops engine (D12)', () => {
     expect(engineOptions({}).map(option => option.value)).toEqual(['ENGINE_NETWORK', 'ENGINE_NFTABLES'])
   })
 
-  it('has no engine picker on an ANX hop: ANX is the only engine', () => {
+  it('offers ANX and kernel forwarding on an ANX hop', () => {
     const wrapper = track(mount(HopCard, {
       props: { hop: { _key: 'k', engine: 'ENGINE_NETWORK', node_refs: [], portMode: 'auto', dial_address: '', ingress: { security: 'LINK_SECURITY_NETWORK', network_transport_id: '' } }, index: 1, total: 2, nodes: NODES, errorText: () => '' },
       attachTo: document.body
     }))
-    expect(wrapper.findAllComponents(UiSelect).find(select => select.props('label') === 'Engine')).toBeUndefined()
+    const options = wrapper.findAllComponents(UiSelect).find(select => select.props('label') === 'Engine').props('options')
+    expect(options.map(option => option.value)).toEqual(['ENGINE_NETWORK', 'ENGINE_NFTABLES'])
   })
 
   it('offers the removed gost engine only to a hop still on it', () => {
@@ -237,7 +238,7 @@ describe('anixops engine (D12)', () => {
       attachTo: document.body
     }))
     const options = wrapper.findAllComponents(UiSelect).find(select => select.props('label') === 'Engine').props('options')
-    expect(options.map(option => option.value)).toEqual(['ENGINE_NETWORK', 'ENGINE_GOST'])
+    expect(options.map(option => option.value)).toEqual(['ENGINE_NETWORK', 'ENGINE_NFTABLES', 'ENGINE_GOST'])
   })
 
   it('picks a network hop\'s transport and egress from the network model', () => {

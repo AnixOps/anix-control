@@ -45,7 +45,7 @@ func Route(r *model.Route, opts Options) Violations {
 	checkLimits(c, r, opts)
 	checkLabels(c, r)
 	checkPorts(c, r, opts)
-	if r.IsNetwork() {
+	if r.IsNetwork() || r.IsKernel() {
 		checkNetwork(c, r)
 	}
 	return c.out

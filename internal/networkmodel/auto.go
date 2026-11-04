@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
+	networkv1 "github.com/AnixOps/anix-control/sdk/api/network/v1"
 	"github.com/AnixOps/anix-control/sdk/network"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/nodeentry"
@@ -192,6 +193,7 @@ func complete(doc *Document, forwards []Forward, devices map[string]device) (*Do
 	}
 	filled := make([]Forward, len(forwards))
 	for i, forward := range forwards {
+		forward.Kernel = a.kernelTargets(forward)
 		forward.Segments = append([]string(nil), forward.Segments...)
 		at := ""
 		if len(forward.Entries) > 0 {
@@ -226,6 +228,37 @@ func complete(doc *Document, forwards []Forward, devices map[string]device) (*Do
 		filled[i] = forward
 	}
 	return out, filled
+}
+
+// kernelTargets answers forward's kernel hops with where each forwards to:
+// the next kernel hop's nodes, then the entries, at the host of each node
+// or the hop's dial address; the targets after the last hop.
+func (a *autoCompleter) kernelTargets(forward Forward) []KernelHop {
+	hops := append([]KernelHop(nil), forward.Kernel...)
+	dial := func(nodes []string, address string, port uint32) []*networkv1.ForwardTarget {
+		var out []*networkv1.ForwardTarget
+		for _, node := range nodes {
+			host := address
+			if host == "" {
+				host = strings.Trim(strings.TrimSpace(a.devices[node].Host), "[]")
+			}
+			if host != "" {
+				out = append(out, &networkv1.ForwardTarget{Host: host, Port: port})
+			}
+		}
+		return out
+	}
+	for j := range hops {
+		switch {
+		case j+1 < len(hops):
+			hops[j].targets = dial(hops[j+1].Nodes, hops[j+1].DialAddress, hops[j+1].Listen.Port)
+		case len(forward.Entries) > 0:
+			hops[j].targets = dial(forward.Entries, forward.EntryDial, forward.Listen.Port)
+		default:
+			hops[j].targets = forward.Targets
+		}
+	}
+	return hops
 }
 
 // reaches answers the device transport id leads to, or at when it is not
@@ -467,7 +500,11 @@ func devicesFor(db *gorm.DB, forwards []Forward) (map[string]device, error) {
 	var proxies, others []uint
 	refs := map[string]bool{}
 	for _, forward := range forwards {
-		for _, ref := range append(append([]string(nil), forward.Entries...), forward.Via...) {
+		nodes := append(append([]string(nil), forward.Entries...), forward.Via...)
+		for _, hop := range forward.Kernel {
+			nodes = append(nodes, hop.Nodes...)
+		}
+		for _, ref := range nodes {
 			node, err := agentcontrol.ParseAgentNode(ref)
 			if err != nil || node.ID == 0 || refs[ref] {
 				continue

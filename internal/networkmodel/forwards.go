@@ -28,7 +28,14 @@ import (
 type Forward struct {
 	// ID is the forward.v1 route id.
 	ID string
-	// Entries are the entry hop's nodes (proxy-<id> or forward-<id>).
+	// Kernel are the route's first hops when the kernel forwards them
+	// (forward.v1 ENGINE_NFTABLES): each to the next one's nodes, the last
+	// to Entries at Listen (dialed at EntryDial when set) or, on a route
+	// without network hops (no Entries), to Targets.
+	Kernel    []KernelHop
+	EntryDial string
+	// Entries are the entry hop's nodes (proxy-<id> or forward-<id>): the
+	// first network hop's.
 	Entries   []string
 	Listen    Endpoint
 	Protocols []string
@@ -52,6 +59,40 @@ type Forward struct {
 	// routes' upstreams are dialed where Targets would be. Protocols,
 	// Targets and Policy are then unused.
 	ReverseProxy *ReverseProxySpec
+}
+
+// UserEntries answers the nodes clients connect to: the first kernel
+// hop's, else the entries.
+func (f Forward) UserEntries() []string {
+	if len(f.Kernel) > 0 {
+		return f.Kernel[0].Nodes
+	}
+	return f.Entries
+}
+
+// Checkers answers the nodes that check where they forward and report it
+// as the route's port forward: every kernel hop's, then the entries.
+func (f Forward) Checkers() []string {
+	var out []string
+	for _, hop := range f.Kernel {
+		out = append(out, hop.Nodes...)
+	}
+	return append(out, f.Entries...)
+}
+
+// KernelHop is a hop the kernel forwards: each node rewrites connections
+// to Listen towards the next hop.
+type KernelHop struct {
+	Nodes  []string
+	Listen Endpoint
+	// DialAddress, when set, is where the previous hop reaches this one's
+	// (single) node instead of the node's host.
+	DialAddress string
+	// Policy balances over the next hop's nodes or the targets and checks
+	// them.
+	Policy *networkv1.ForwardPolicy
+	// targets are where the nodes forward to, filled by complete.
+	targets []*networkv1.ForwardTarget
 }
 
 // ReverseProxySpec is what a reverse proxy runs on its entries.
@@ -271,6 +312,7 @@ func (p *planned) planForwards(forwards []Forward) []Pending {
 			pending = append(pending, Pending{Forward: forward.ID, Reason: "the route id is not a component id"})
 			continue
 		}
+		pending = append(pending, p.planKernel(forward)...)
 		for k, entry := range forward.Entries {
 			wait := func(reason string) {
 				if len(forward.Entries) > 1 {
@@ -323,6 +365,36 @@ func (p *planned) planForwards(forwards []Forward) []Pending {
 			}
 			plan := p.plans(entry)
 			plan.PortForwards = append(plan.PortForwards, out)
+		}
+	}
+	return pending
+}
+
+// planKernel adds forward's kernel hops to their nodes' plans, answering
+// the ones that wait.
+func (p *planned) planKernel(forward *Forward) []Pending {
+	var pending []Pending
+	for j, hop := range forward.Kernel {
+		for _, node := range hop.Nodes {
+			out := &networkv1.KernelForward{
+				Id: forward.ID, Listen: &networkv1.Endpoint{Address: hop.Listen.Address, Port: hop.Listen.Port},
+				Protocols: forward.Protocols, Policy: hop.Policy,
+			}
+			for _, target := range hop.targets {
+				out.Targets = append(out.Targets, proto.Clone(target).(*networkv1.ForwardTarget))
+			}
+			reason := ""
+			if err := network.CheckKernelForward(out); err != nil {
+				reason = err.Error()
+			} else if other := p.take(node, listenKey(hop.Listen.Address, hop.Listen.Port), "kernel forward "+forward.ID); other != "" {
+				reason = fmt.Sprintf("listen %s:%d is taken by %s", hop.Listen.Address, hop.Listen.Port, other)
+			}
+			if reason != "" {
+				pending = append(pending, Pending{Forward: forward.ID, Reason: fmt.Sprintf("kernel hop %d on %s: %s", j, node, reason)})
+				continue
+			}
+			plan := p.plans(node)
+			plan.KernelForwards = append(plan.KernelForwards, out)
 		}
 	}
 	return pending

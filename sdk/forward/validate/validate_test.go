@@ -61,6 +61,18 @@ func TestValidRoutes(t *testing.T) {
 	if err := Route(&r, Options{}).Err(); err != nil {
 		t.Fatal(err)
 	}
+	kernel := validRoute()
+	kernel.Hops[0].Engine, kernel.Hops[0].NodeRefs = model.EngineNFTables, []string{"proxy-21", "proxy-22"}
+	kernel.Hops[1] = model.Hop{Role: model.HopRoleRelay, Engine: model.EngineNFTables, NodeRefs: []string{"proxy-31", "proxy-32"},
+		Ingress: model.LinkTransport{Security: model.LinkSecurityRaw}, Port: 40100}
+	kernel.Hops[2].Ingress, kernel.Hops[2].DialAddress = model.LinkTransport{Security: model.LinkSecurityRaw}, "10.0.0.41"
+	if vs := Route(&kernel, Options{}); len(vs) != 0 {
+		t.Errorf("kernel chain into a network exit: %v", vs)
+	}
+	kernel.Hops[2].Engine, kernel.Hops[2].NetworkEgressID = model.EngineNFTables, ""
+	if vs := Route(&kernel, Options{}); len(vs) != 0 {
+		t.Errorf("all-kernel route: %v", vs)
+	}
 	single := model.Route{
 		Owner:   "admin",
 		Listen:  model.Listen{Port: 40002, Protocol: model.L4ProtocolTCPUDP},
@@ -132,7 +144,20 @@ func baseRuleCases() []ruleCase {
 		{"unknown role", func(r *model.Route, _ *Options) { r.Hops[1].Role = 8 }, "hops[1].role", CodeInvalidEnum},
 		{"no engine", func(r *model.Route, _ *Options) { r.Hops[0].Engine = 0 }, "hops[0].engine", CodeRequired},
 		{"unknown engine", func(r *model.Route, _ *Options) { r.Hops[0].Engine = 9 }, "hops[0].engine", CodeInvalidEnum},
-		{"nftables engine", func(r *model.Route, _ *Options) { r.Hops[0].Engine = model.EngineNFTables }, "hops[0].engine", CodeEngineNotEnabled},
+		{"kernel hop after a network hop", func(r *model.Route, _ *Options) {
+			r.Hops[2].Engine = model.EngineNFTables
+			r.Hops[2].NetworkEgressID = ""
+		}, "hops[2].engine", CodeInvalidRelation},
+		{"kernel link not raw", func(r *model.Route, _ *Options) { r.Hops[0].Engine = model.EngineNFTables }, "hops[1].ingress.security", CodeLinkUnsupported},
+		{"kernel hop egress", func(r *model.Route, _ *Options) {
+			for i := range r.Hops {
+				r.Hops[i].Engine = model.EngineNFTables
+				if i > 0 {
+					r.Hops[i].Ingress = model.LinkTransport{Security: model.LinkSecurityRaw}
+				}
+			}
+			r.Hops[2].NetworkEgressID = "egress-1"
+		}, "hops[2].network_egress_id", CodeNotApplicable},
 		{"gost engine", func(r *model.Route, _ *Options) { r.Hops[2].Engine = model.EngineGost }, "hops[2].engine", CodeEngineNotEnabled},
 		{"anixops engine", func(r *model.Route, _ *Options) { r.Hops[2].Engine = model.EngineAnixOps }, "hops[2].engine", CodeEngineNotEnabled},
 		{"no nodes", func(r *model.Route, _ *Options) { r.Hops[1].NodeRefs = nil }, "hops[1].node_refs", CodeRequired},
@@ -301,9 +326,9 @@ func TestNilRoute(t *testing.T) {
 
 func TestRemovedEngineMessage(t *testing.T) {
 	r := validRoute()
-	r.Hops[0].Engine = model.EngineNFTables
+	r.Hops[0].Engine = model.EngineGost
 	vs := Route(&r, Options{})
-	if len(vs) != 1 || vs[0].Message != "ENGINE_NFTABLES was removed: routes run on the network model (ENGINE_NETWORK)" {
+	if len(vs) != 1 || vs[0].Message != "ENGINE_GOST was removed: routes run on the network model (ENGINE_NETWORK)" {
 		t.Fatalf("got %v", vs)
 	}
 	if got := vs.ToProto(); len(got) != 1 || got[0].GetField() != "hops[0].engine" ||

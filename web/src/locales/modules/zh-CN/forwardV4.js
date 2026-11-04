@@ -33,7 +33,8 @@ export default {
       HOP_ROLE_UNSPECIFIED: '跳'
     },
     engine: {
-      ENGINE_NFTABLES: '内核 DNAT，几乎不占 CPU；只有 RAW 链路',
+      ENGINE_NFTABLES: '节点上 nftables DNAT，端口上没有进程；只能用在前几跳，出去的链路是 RAW',
+      kernelLabel: '内核转发',
       ENGINE_GOST: '已移除：请把路由迁到 ANX',
       ENGINE_NETWORK: '网络模型（anx-node）：可信线路走 ANX-Line，跨境走 A2 外衣',
       ENGINE_ANIXOPS: 'AnixOps 中继协议（实验）',
@@ -383,6 +384,7 @@ export default {
       ingressHelp: '上一跳到本跳的链路：上一跳发起，本跳终止。',
       cannotOriginate: '{engine} 不能发起',
       cannotTerminate: '{engine} 不能终止',
+      kernelNote: '上一跳在内核转发：流量按客户端原样到达本跳的端口（自动时用路由的端口）。',
       entryNote: '入口监听的地址和端口在“入口监听”里设置；限额只作用于入口。',
       previousEngine: '第 {n} 跳的 {engine}',
       linkFix: '{prev} 无法发起 {link}。可以：',

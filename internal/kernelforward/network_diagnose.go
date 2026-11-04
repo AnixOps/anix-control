@@ -69,7 +69,7 @@ func (d *diagnosis) diagnoseNetwork(ctx context.Context, started time.Time) (*fo
 		}
 	}
 	reported := false
-	for _, entry := range forward.Entries {
+	for _, entry := range forward.Checkers() {
 		reported = d.networkHealthSteps(entry, devices[entry]) || reported
 	}
 	d.targetSteps(ctx)
@@ -84,11 +84,12 @@ func (d *diagnosis) diagnoseNetwork(ctx context.Context, started time.Time) (*fo
 		nodes = append(nodes, node)
 	}
 
-	entries := make(map[string][]string, len(forward.Entries))
-	for _, entry := range forward.Entries {
+	users := forward.UserEntries()
+	entries := make(map[string][]string, len(users))
+	for _, entry := range users {
 		entries[entry] = deviceAddresses(db, entry, devices[entry].Status)
 	}
-	d.networkControlProbes(ctx, forward.Entries, entries, entryNAT(db, forward.Entries), !reported)
+	d.networkControlProbes(ctx, users, entries, entryNAT(db, users), !reported)
 	return d.answer(started, nodes), nil
 }
 

@@ -155,3 +155,38 @@ func TestNetworkCountersMeterTheEntry(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, plan.GetPortForwards(), "over its quota")
 }
+
+// Kernel hops come first: each is a kernel hop of the forward, and the
+// network hops after them start where the last one forwards to.
+func TestNetworkForwardKernelHops(t *testing.T) {
+	raw := &forwardv1.LinkTransport{Security: forwardv1.LinkSecurity_LINK_SECURITY_RAW}
+	route := &forwardv1.Route{
+		Id:     "01JF1T00000000000000000009",
+		Listen: &forwardv1.Listen{Port: 20022, Protocol: forwardv1.L4Protocol_L4_PROTOCOL_TCP_UDP},
+		Hops: []*forwardv1.Hop{
+			{Role: forwardv1.HopRole_HOP_ROLE_ENTRY, Engine: forwardv1.Engine_ENGINE_NFTABLES, NodeRefs: []string{"proxy-1", "proxy-2"}},
+			{Role: forwardv1.HopRole_HOP_ROLE_RELAY, Engine: forwardv1.Engine_ENGINE_NFTABLES, NodeRefs: []string{"proxy-3"}, Ingress: raw, Port: 30000},
+			{Role: forwardv1.HopRole_HOP_ROLE_EXIT, Engine: forwardv1.Engine_ENGINE_NETWORK, NodeRefs: []string{"proxy-4"}, Ingress: raw, DialAddress: "10.0.0.4"},
+		},
+		Targets: []*forwardv1.Target{{Host: "198.51.100.10", Port: 22}},
+		Policy:  &forwardv1.Policy{NextHop: forwardv1.BalanceStrategy_BALANCE_STRATEGY_IP_HASH},
+	}
+	forward, ok := networkForward(route)
+	require.True(t, ok)
+	require.Len(t, forward.Kernel, 2)
+	require.Equal(t, []string{"proxy-1", "proxy-2"}, forward.UserEntries())
+	require.Equal(t, uint32(20022), forward.Kernel[0].Listen.Port)
+	require.Equal(t, "ip_hash", forward.Kernel[0].Policy.GetBalance())
+	require.Equal(t, uint32(30000), forward.Kernel[1].Listen.Port)
+	require.Equal(t, []string{"proxy-4"}, forward.Entries)
+	require.Equal(t, "10.0.0.4", forward.EntryDial)
+	require.Equal(t, uint32(20022), forward.Listen.Port)
+	require.Empty(t, forward.Segments)
+	require.Equal(t, []string{"proxy-1", "proxy-2", "proxy-3", "proxy-4"}, forward.Checkers())
+
+	route.Hops[2].Engine = forwardv1.Engine_ENGINE_NFTABLES
+	forward, ok = networkForward(route)
+	require.True(t, ok)
+	require.Len(t, forward.Kernel, 3)
+	require.Empty(t, forward.Entries)
+}

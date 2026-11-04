@@ -575,6 +575,9 @@ type NetworkPlan struct {
 	PortForwards []*PortForward `protobuf:"bytes,10,rep,name=port_forwards,json=portForwards,proto3" json:"port_forwards,omitempty"`
 	// Panel reverse proxies (HTTP sites) that listen on this device.
 	ReverseProxies []*ReverseProxy `protobuf:"bytes,11,rep,name=reverse_proxies,json=reverseProxies,proto3" json:"reverse_proxies,omitempty"`
+	// Hops of panel forwarding routes that this device forwards in the
+	// kernel (forward.v1 ENGINE_NFTABLES). Added after v5.0.0.
+	KernelForwards []*KernelForward `protobuf:"bytes,12,rep,name=kernel_forwards,json=kernelForwards,proto3" json:"kernel_forwards,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -686,6 +689,102 @@ func (x *NetworkPlan) GetReverseProxies() []*ReverseProxy {
 	return nil
 }
 
+func (x *NetworkPlan) GetKernelForwards() []*KernelForward {
+	if x != nil {
+		return x.KernelForwards
+	}
+	return nil
+}
+
+// KernelForward is a hop the kernel forwards: the device rewrites
+// connections to the listen port towards the targets (nftables DNAT and
+// masquerade), with no process on the port and no change to what the
+// client sent. The targets are the next hop's devices, or the route's
+// targets on the last hop. The Agent reports it as a PortForwardStatus of
+// the same id.
+type KernelForward struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The forward.v1 route id.
+	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	// An unspecified address ("::" or "0.0.0.0") is every address of the
+	// device, of both families.
+	Listen *Endpoint `protobuf:"bytes,2,opt,name=listen,proto3" json:"listen,omitempty"`
+	// "tcp", "udp" or both.
+	Protocols []string `protobuf:"bytes,3,rep,name=protocols,proto3" json:"protocols,omitempty"`
+	// An IP address or a DNS name the Agent resolves; balanced by policy.
+	Targets []*ForwardTarget `protobuf:"bytes,4,rep,name=targets,proto3" json:"targets,omitempty"`
+	// Balancing and health checks; limits, the circuit breaker and the PROXY
+	// header do not apply.
+	Policy        *ForwardPolicy `protobuf:"bytes,5,opt,name=policy,proto3" json:"policy,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *KernelForward) Reset() {
+	*x = KernelForward{}
+	mi := &file_api_network_v1_network_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *KernelForward) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*KernelForward) ProtoMessage() {}
+
+func (x *KernelForward) ProtoReflect() protoreflect.Message {
+	mi := &file_api_network_v1_network_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use KernelForward.ProtoReflect.Descriptor instead.
+func (*KernelForward) Descriptor() ([]byte, []int) {
+	return file_api_network_v1_network_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *KernelForward) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *KernelForward) GetListen() *Endpoint {
+	if x != nil {
+		return x.Listen
+	}
+	return nil
+}
+
+func (x *KernelForward) GetProtocols() []string {
+	if x != nil {
+		return x.Protocols
+	}
+	return nil
+}
+
+func (x *KernelForward) GetTargets() []*ForwardTarget {
+	if x != nil {
+		return x.Targets
+	}
+	return nil
+}
+
+func (x *KernelForward) GetPolicy() *ForwardPolicy {
+	if x != nil {
+		return x.Policy
+	}
+	return nil
+}
+
 // PortForward relays a listen port to fixed targets, as a panel forwarding
 // route does: the entry of a forward.v1 route whose hops are ENGINE_NETWORK.
 type PortForward struct {
@@ -712,7 +811,7 @@ type PortForward struct {
 
 func (x *PortForward) Reset() {
 	*x = PortForward{}
-	mi := &file_api_network_v1_network_proto_msgTypes[3]
+	mi := &file_api_network_v1_network_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -724,7 +823,7 @@ func (x *PortForward) String() string {
 func (*PortForward) ProtoMessage() {}
 
 func (x *PortForward) ProtoReflect() protoreflect.Message {
-	mi := &file_api_network_v1_network_proto_msgTypes[3]
+	mi := &file_api_network_v1_network_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -737,7 +836,7 @@ func (x *PortForward) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PortForward.ProtoReflect.Descriptor instead.
 func (*PortForward) Descriptor() ([]byte, []int) {
-	return file_api_network_v1_network_proto_rawDescGZIP(), []int{3}
+	return file_api_network_v1_network_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *PortForward) GetId() string {
@@ -834,7 +933,7 @@ type ForwardTarget struct {
 
 func (x *ForwardTarget) Reset() {
 	*x = ForwardTarget{}
-	mi := &file_api_network_v1_network_proto_msgTypes[4]
+	mi := &file_api_network_v1_network_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -846,7 +945,7 @@ func (x *ForwardTarget) String() string {
 func (*ForwardTarget) ProtoMessage() {}
 
 func (x *ForwardTarget) ProtoReflect() protoreflect.Message {
-	mi := &file_api_network_v1_network_proto_msgTypes[4]
+	mi := &file_api_network_v1_network_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -859,7 +958,7 @@ func (x *ForwardTarget) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ForwardTarget.ProtoReflect.Descriptor instead.
 func (*ForwardTarget) Descriptor() ([]byte, []int) {
-	return file_api_network_v1_network_proto_rawDescGZIP(), []int{4}
+	return file_api_network_v1_network_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *ForwardTarget) GetHost() string {
@@ -911,7 +1010,7 @@ type ForwardPolicy struct {
 
 func (x *ForwardPolicy) Reset() {
 	*x = ForwardPolicy{}
-	mi := &file_api_network_v1_network_proto_msgTypes[5]
+	mi := &file_api_network_v1_network_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -923,7 +1022,7 @@ func (x *ForwardPolicy) String() string {
 func (*ForwardPolicy) ProtoMessage() {}
 
 func (x *ForwardPolicy) ProtoReflect() protoreflect.Message {
-	mi := &file_api_network_v1_network_proto_msgTypes[5]
+	mi := &file_api_network_v1_network_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -936,7 +1035,7 @@ func (x *ForwardPolicy) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ForwardPolicy.ProtoReflect.Descriptor instead.
 func (*ForwardPolicy) Descriptor() ([]byte, []int) {
-	return file_api_network_v1_network_proto_rawDescGZIP(), []int{5}
+	return file_api_network_v1_network_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *ForwardPolicy) GetBalance() string {
@@ -994,7 +1093,7 @@ type ForwardHealth struct {
 
 func (x *ForwardHealth) Reset() {
 	*x = ForwardHealth{}
-	mi := &file_api_network_v1_network_proto_msgTypes[6]
+	mi := &file_api_network_v1_network_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1006,7 +1105,7 @@ func (x *ForwardHealth) String() string {
 func (*ForwardHealth) ProtoMessage() {}
 
 func (x *ForwardHealth) ProtoReflect() protoreflect.Message {
-	mi := &file_api_network_v1_network_proto_msgTypes[6]
+	mi := &file_api_network_v1_network_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1019,7 +1118,7 @@ func (x *ForwardHealth) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ForwardHealth.ProtoReflect.Descriptor instead.
 func (*ForwardHealth) Descriptor() ([]byte, []int) {
-	return file_api_network_v1_network_proto_rawDescGZIP(), []int{6}
+	return file_api_network_v1_network_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *ForwardHealth) GetIntervalMs() uint32 {
@@ -1055,7 +1154,7 @@ type ForwardBreaker struct {
 
 func (x *ForwardBreaker) Reset() {
 	*x = ForwardBreaker{}
-	mi := &file_api_network_v1_network_proto_msgTypes[7]
+	mi := &file_api_network_v1_network_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1067,7 +1166,7 @@ func (x *ForwardBreaker) String() string {
 func (*ForwardBreaker) ProtoMessage() {}
 
 func (x *ForwardBreaker) ProtoReflect() protoreflect.Message {
-	mi := &file_api_network_v1_network_proto_msgTypes[7]
+	mi := &file_api_network_v1_network_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1080,7 +1179,7 @@ func (x *ForwardBreaker) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ForwardBreaker.ProtoReflect.Descriptor instead.
 func (*ForwardBreaker) Descriptor() ([]byte, []int) {
-	return file_api_network_v1_network_proto_rawDescGZIP(), []int{7}
+	return file_api_network_v1_network_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *ForwardBreaker) GetFailureThreshold() uint32 {
@@ -1123,7 +1222,7 @@ type ReverseProxy struct {
 
 func (x *ReverseProxy) Reset() {
 	*x = ReverseProxy{}
-	mi := &file_api_network_v1_network_proto_msgTypes[8]
+	mi := &file_api_network_v1_network_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1135,7 +1234,7 @@ func (x *ReverseProxy) String() string {
 func (*ReverseProxy) ProtoMessage() {}
 
 func (x *ReverseProxy) ProtoReflect() protoreflect.Message {
-	mi := &file_api_network_v1_network_proto_msgTypes[8]
+	mi := &file_api_network_v1_network_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1148,7 +1247,7 @@ func (x *ReverseProxy) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReverseProxy.ProtoReflect.Descriptor instead.
 func (*ReverseProxy) Descriptor() ([]byte, []int) {
-	return file_api_network_v1_network_proto_rawDescGZIP(), []int{8}
+	return file_api_network_v1_network_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *ReverseProxy) GetId() string {
@@ -1244,7 +1343,7 @@ type ReverseProxySite struct {
 
 func (x *ReverseProxySite) Reset() {
 	*x = ReverseProxySite{}
-	mi := &file_api_network_v1_network_proto_msgTypes[9]
+	mi := &file_api_network_v1_network_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1256,7 +1355,7 @@ func (x *ReverseProxySite) String() string {
 func (*ReverseProxySite) ProtoMessage() {}
 
 func (x *ReverseProxySite) ProtoReflect() protoreflect.Message {
-	mi := &file_api_network_v1_network_proto_msgTypes[9]
+	mi := &file_api_network_v1_network_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1269,7 +1368,7 @@ func (x *ReverseProxySite) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReverseProxySite.ProtoReflect.Descriptor instead.
 func (*ReverseProxySite) Descriptor() ([]byte, []int) {
-	return file_api_network_v1_network_proto_rawDescGZIP(), []int{9}
+	return file_api_network_v1_network_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *ReverseProxySite) GetHosts() []string {
@@ -1316,7 +1415,7 @@ type ReverseProxyRoute struct {
 
 func (x *ReverseProxyRoute) Reset() {
 	*x = ReverseProxyRoute{}
-	mi := &file_api_network_v1_network_proto_msgTypes[10]
+	mi := &file_api_network_v1_network_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1328,7 +1427,7 @@ func (x *ReverseProxyRoute) String() string {
 func (*ReverseProxyRoute) ProtoMessage() {}
 
 func (x *ReverseProxyRoute) ProtoReflect() protoreflect.Message {
-	mi := &file_api_network_v1_network_proto_msgTypes[10]
+	mi := &file_api_network_v1_network_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1341,7 +1440,7 @@ func (x *ReverseProxyRoute) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReverseProxyRoute.ProtoReflect.Descriptor instead.
 func (*ReverseProxyRoute) Descriptor() ([]byte, []int) {
-	return file_api_network_v1_network_proto_rawDescGZIP(), []int{10}
+	return file_api_network_v1_network_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *ReverseProxyRoute) GetPath() string {
@@ -1411,7 +1510,7 @@ type Line struct {
 
 func (x *Line) Reset() {
 	*x = Line{}
-	mi := &file_api_network_v1_network_proto_msgTypes[11]
+	mi := &file_api_network_v1_network_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1423,7 +1522,7 @@ func (x *Line) String() string {
 func (*Line) ProtoMessage() {}
 
 func (x *Line) ProtoReflect() protoreflect.Message {
-	mi := &file_api_network_v1_network_proto_msgTypes[11]
+	mi := &file_api_network_v1_network_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1436,7 +1535,7 @@ func (x *Line) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Line.ProtoReflect.Descriptor instead.
 func (*Line) Descriptor() ([]byte, []int) {
-	return file_api_network_v1_network_proto_rawDescGZIP(), []int{11}
+	return file_api_network_v1_network_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *Line) GetId() string {
@@ -1498,7 +1597,7 @@ type Endpoint struct {
 
 func (x *Endpoint) Reset() {
 	*x = Endpoint{}
-	mi := &file_api_network_v1_network_proto_msgTypes[12]
+	mi := &file_api_network_v1_network_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1510,7 +1609,7 @@ func (x *Endpoint) String() string {
 func (*Endpoint) ProtoMessage() {}
 
 func (x *Endpoint) ProtoReflect() protoreflect.Message {
-	mi := &file_api_network_v1_network_proto_msgTypes[12]
+	mi := &file_api_network_v1_network_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1523,7 +1622,7 @@ func (x *Endpoint) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Endpoint.ProtoReflect.Descriptor instead.
 func (*Endpoint) Descriptor() ([]byte, []int) {
-	return file_api_network_v1_network_proto_rawDescGZIP(), []int{12}
+	return file_api_network_v1_network_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *Endpoint) GetAddress() string {
@@ -1551,7 +1650,7 @@ type PortRange struct {
 
 func (x *PortRange) Reset() {
 	*x = PortRange{}
-	mi := &file_api_network_v1_network_proto_msgTypes[13]
+	mi := &file_api_network_v1_network_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1563,7 +1662,7 @@ func (x *PortRange) String() string {
 func (*PortRange) ProtoMessage() {}
 
 func (x *PortRange) ProtoReflect() protoreflect.Message {
-	mi := &file_api_network_v1_network_proto_msgTypes[13]
+	mi := &file_api_network_v1_network_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1576,7 +1675,7 @@ func (x *PortRange) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PortRange.ProtoReflect.Descriptor instead.
 func (*PortRange) Descriptor() ([]byte, []int) {
-	return file_api_network_v1_network_proto_rawDescGZIP(), []int{13}
+	return file_api_network_v1_network_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *PortRange) GetFirst() uint32 {
@@ -1605,7 +1704,7 @@ type PortMap struct {
 
 func (x *PortMap) Reset() {
 	*x = PortMap{}
-	mi := &file_api_network_v1_network_proto_msgTypes[14]
+	mi := &file_api_network_v1_network_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1617,7 +1716,7 @@ func (x *PortMap) String() string {
 func (*PortMap) ProtoMessage() {}
 
 func (x *PortMap) ProtoReflect() protoreflect.Message {
-	mi := &file_api_network_v1_network_proto_msgTypes[14]
+	mi := &file_api_network_v1_network_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1630,7 +1729,7 @@ func (x *PortMap) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PortMap.ProtoReflect.Descriptor instead.
 func (*PortMap) Descriptor() ([]byte, []int) {
-	return file_api_network_v1_network_proto_rawDescGZIP(), []int{14}
+	return file_api_network_v1_network_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *PortMap) GetPublic() *PortRange {
@@ -1659,7 +1758,7 @@ type PairingRule struct {
 
 func (x *PairingRule) Reset() {
 	*x = PairingRule{}
-	mi := &file_api_network_v1_network_proto_msgTypes[15]
+	mi := &file_api_network_v1_network_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1671,7 +1770,7 @@ func (x *PairingRule) String() string {
 func (*PairingRule) ProtoMessage() {}
 
 func (x *PairingRule) ProtoReflect() protoreflect.Message {
-	mi := &file_api_network_v1_network_proto_msgTypes[15]
+	mi := &file_api_network_v1_network_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1684,7 +1783,7 @@ func (x *PairingRule) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PairingRule.ProtoReflect.Descriptor instead.
 func (*PairingRule) Descriptor() ([]byte, []int) {
-	return file_api_network_v1_network_proto_rawDescGZIP(), []int{15}
+	return file_api_network_v1_network_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *PairingRule) GetMatch() string {
@@ -1717,7 +1816,7 @@ type Pairing struct {
 
 func (x *Pairing) Reset() {
 	*x = Pairing{}
-	mi := &file_api_network_v1_network_proto_msgTypes[16]
+	mi := &file_api_network_v1_network_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1729,7 +1828,7 @@ func (x *Pairing) String() string {
 func (*Pairing) ProtoMessage() {}
 
 func (x *Pairing) ProtoReflect() protoreflect.Message {
-	mi := &file_api_network_v1_network_proto_msgTypes[16]
+	mi := &file_api_network_v1_network_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1742,7 +1841,7 @@ func (x *Pairing) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Pairing.ProtoReflect.Descriptor instead.
 func (*Pairing) Descriptor() ([]byte, []int) {
-	return file_api_network_v1_network_proto_rawDescGZIP(), []int{16}
+	return file_api_network_v1_network_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *Pairing) GetMode() PairingMode {
@@ -1808,7 +1907,7 @@ type Ingress struct {
 
 func (x *Ingress) Reset() {
 	*x = Ingress{}
-	mi := &file_api_network_v1_network_proto_msgTypes[17]
+	mi := &file_api_network_v1_network_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1820,7 +1919,7 @@ func (x *Ingress) String() string {
 func (*Ingress) ProtoMessage() {}
 
 func (x *Ingress) ProtoReflect() protoreflect.Message {
-	mi := &file_api_network_v1_network_proto_msgTypes[17]
+	mi := &file_api_network_v1_network_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1833,7 +1932,7 @@ func (x *Ingress) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Ingress.ProtoReflect.Descriptor instead.
 func (*Ingress) Descriptor() ([]byte, []int) {
-	return file_api_network_v1_network_proto_rawDescGZIP(), []int{17}
+	return file_api_network_v1_network_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *Ingress) GetId() string {
@@ -1931,7 +2030,7 @@ type Routing struct {
 
 func (x *Routing) Reset() {
 	*x = Routing{}
-	mi := &file_api_network_v1_network_proto_msgTypes[18]
+	mi := &file_api_network_v1_network_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1943,7 +2042,7 @@ func (x *Routing) String() string {
 func (*Routing) ProtoMessage() {}
 
 func (x *Routing) ProtoReflect() protoreflect.Message {
-	mi := &file_api_network_v1_network_proto_msgTypes[18]
+	mi := &file_api_network_v1_network_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1956,7 +2055,7 @@ func (x *Routing) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Routing.ProtoReflect.Descriptor instead.
 func (*Routing) Descriptor() ([]byte, []int) {
-	return file_api_network_v1_network_proto_rawDescGZIP(), []int{18}
+	return file_api_network_v1_network_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *Routing) GetTable() uint32 {
@@ -1987,7 +2086,7 @@ type HealthCheck struct {
 
 func (x *HealthCheck) Reset() {
 	*x = HealthCheck{}
-	mi := &file_api_network_v1_network_proto_msgTypes[19]
+	mi := &file_api_network_v1_network_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1999,7 +2098,7 @@ func (x *HealthCheck) String() string {
 func (*HealthCheck) ProtoMessage() {}
 
 func (x *HealthCheck) ProtoReflect() protoreflect.Message {
-	mi := &file_api_network_v1_network_proto_msgTypes[19]
+	mi := &file_api_network_v1_network_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2012,7 +2111,7 @@ func (x *HealthCheck) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HealthCheck.ProtoReflect.Descriptor instead.
 func (*HealthCheck) Descriptor() ([]byte, []int) {
-	return file_api_network_v1_network_proto_rawDescGZIP(), []int{19}
+	return file_api_network_v1_network_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *HealthCheck) GetTargets() []string {
@@ -2078,7 +2177,7 @@ type Egress struct {
 
 func (x *Egress) Reset() {
 	*x = Egress{}
-	mi := &file_api_network_v1_network_proto_msgTypes[20]
+	mi := &file_api_network_v1_network_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2090,7 +2189,7 @@ func (x *Egress) String() string {
 func (*Egress) ProtoMessage() {}
 
 func (x *Egress) ProtoReflect() protoreflect.Message {
-	mi := &file_api_network_v1_network_proto_msgTypes[20]
+	mi := &file_api_network_v1_network_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2103,7 +2202,7 @@ func (x *Egress) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Egress.ProtoReflect.Descriptor instead.
 func (*Egress) Descriptor() ([]byte, []int) {
-	return file_api_network_v1_network_proto_rawDescGZIP(), []int{20}
+	return file_api_network_v1_network_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *Egress) GetId() string {
@@ -2226,7 +2325,7 @@ type Transport struct {
 
 func (x *Transport) Reset() {
 	*x = Transport{}
-	mi := &file_api_network_v1_network_proto_msgTypes[21]
+	mi := &file_api_network_v1_network_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2238,7 +2337,7 @@ func (x *Transport) String() string {
 func (*Transport) ProtoMessage() {}
 
 func (x *Transport) ProtoReflect() protoreflect.Message {
-	mi := &file_api_network_v1_network_proto_msgTypes[21]
+	mi := &file_api_network_v1_network_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2251,7 +2350,7 @@ func (x *Transport) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Transport.ProtoReflect.Descriptor instead.
 func (*Transport) Descriptor() ([]byte, []int) {
-	return file_api_network_v1_network_proto_rawDescGZIP(), []int{21}
+	return file_api_network_v1_network_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *Transport) GetId() string {
@@ -2384,7 +2483,7 @@ type AnxLineSettings struct {
 
 func (x *AnxLineSettings) Reset() {
 	*x = AnxLineSettings{}
-	mi := &file_api_network_v1_network_proto_msgTypes[22]
+	mi := &file_api_network_v1_network_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2396,7 +2495,7 @@ func (x *AnxLineSettings) String() string {
 func (*AnxLineSettings) ProtoMessage() {}
 
 func (x *AnxLineSettings) ProtoReflect() protoreflect.Message {
-	mi := &file_api_network_v1_network_proto_msgTypes[22]
+	mi := &file_api_network_v1_network_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2409,7 +2508,7 @@ func (x *AnxLineSettings) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AnxLineSettings.ProtoReflect.Descriptor instead.
 func (*AnxLineSettings) Descriptor() ([]byte, []int) {
-	return file_api_network_v1_network_proto_rawDescGZIP(), []int{22}
+	return file_api_network_v1_network_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *AnxLineSettings) GetLinkId() string {
@@ -2534,7 +2633,7 @@ type Path struct {
 
 func (x *Path) Reset() {
 	*x = Path{}
-	mi := &file_api_network_v1_network_proto_msgTypes[23]
+	mi := &file_api_network_v1_network_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2546,7 +2645,7 @@ func (x *Path) String() string {
 func (*Path) ProtoMessage() {}
 
 func (x *Path) ProtoReflect() protoreflect.Message {
-	mi := &file_api_network_v1_network_proto_msgTypes[23]
+	mi := &file_api_network_v1_network_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2559,7 +2658,7 @@ func (x *Path) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Path.ProtoReflect.Descriptor instead.
 func (*Path) Descriptor() ([]byte, []int) {
-	return file_api_network_v1_network_proto_rawDescGZIP(), []int{23}
+	return file_api_network_v1_network_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *Path) GetId() string {
@@ -2647,7 +2746,7 @@ type Forwarding struct {
 
 func (x *Forwarding) Reset() {
 	*x = Forwarding{}
-	mi := &file_api_network_v1_network_proto_msgTypes[24]
+	mi := &file_api_network_v1_network_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2659,7 +2758,7 @@ func (x *Forwarding) String() string {
 func (*Forwarding) ProtoMessage() {}
 
 func (x *Forwarding) ProtoReflect() protoreflect.Message {
-	mi := &file_api_network_v1_network_proto_msgTypes[24]
+	mi := &file_api_network_v1_network_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2672,7 +2771,7 @@ func (x *Forwarding) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Forwarding.ProtoReflect.Descriptor instead.
 func (*Forwarding) Descriptor() ([]byte, []int) {
-	return file_api_network_v1_network_proto_rawDescGZIP(), []int{24}
+	return file_api_network_v1_network_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *Forwarding) GetFromTransportId() string {
@@ -2743,7 +2842,7 @@ type ComponentStatus struct {
 
 func (x *ComponentStatus) Reset() {
 	*x = ComponentStatus{}
-	mi := &file_api_network_v1_network_proto_msgTypes[25]
+	mi := &file_api_network_v1_network_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2755,7 +2854,7 @@ func (x *ComponentStatus) String() string {
 func (*ComponentStatus) ProtoMessage() {}
 
 func (x *ComponentStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_api_network_v1_network_proto_msgTypes[25]
+	mi := &file_api_network_v1_network_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2768,7 +2867,7 @@ func (x *ComponentStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ComponentStatus.ProtoReflect.Descriptor instead.
 func (*ComponentStatus) Descriptor() ([]byte, []int) {
-	return file_api_network_v1_network_proto_rawDescGZIP(), []int{25}
+	return file_api_network_v1_network_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *ComponentStatus) GetComponent() Component {
@@ -2848,7 +2947,7 @@ type InterfaceFact struct {
 
 func (x *InterfaceFact) Reset() {
 	*x = InterfaceFact{}
-	mi := &file_api_network_v1_network_proto_msgTypes[26]
+	mi := &file_api_network_v1_network_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2860,7 +2959,7 @@ func (x *InterfaceFact) String() string {
 func (*InterfaceFact) ProtoMessage() {}
 
 func (x *InterfaceFact) ProtoReflect() protoreflect.Message {
-	mi := &file_api_network_v1_network_proto_msgTypes[26]
+	mi := &file_api_network_v1_network_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2873,7 +2972,7 @@ func (x *InterfaceFact) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InterfaceFact.ProtoReflect.Descriptor instead.
 func (*InterfaceFact) Descriptor() ([]byte, []int) {
-	return file_api_network_v1_network_proto_rawDescGZIP(), []int{26}
+	return file_api_network_v1_network_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *InterfaceFact) GetName() string {
@@ -2916,7 +3015,7 @@ type PublicKey struct {
 
 func (x *PublicKey) Reset() {
 	*x = PublicKey{}
-	mi := &file_api_network_v1_network_proto_msgTypes[27]
+	mi := &file_api_network_v1_network_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2928,7 +3027,7 @@ func (x *PublicKey) String() string {
 func (*PublicKey) ProtoMessage() {}
 
 func (x *PublicKey) ProtoReflect() protoreflect.Message {
-	mi := &file_api_network_v1_network_proto_msgTypes[27]
+	mi := &file_api_network_v1_network_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2941,7 +3040,7 @@ func (x *PublicKey) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PublicKey.ProtoReflect.Descriptor instead.
 func (*PublicKey) Descriptor() ([]byte, []int) {
-	return file_api_network_v1_network_proto_rawDescGZIP(), []int{27}
+	return file_api_network_v1_network_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *PublicKey) GetKind() string {
@@ -2977,7 +3076,7 @@ type NetworkStatus struct {
 
 func (x *NetworkStatus) Reset() {
 	*x = NetworkStatus{}
-	mi := &file_api_network_v1_network_proto_msgTypes[28]
+	mi := &file_api_network_v1_network_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2989,7 +3088,7 @@ func (x *NetworkStatus) String() string {
 func (*NetworkStatus) ProtoMessage() {}
 
 func (x *NetworkStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_api_network_v1_network_proto_msgTypes[28]
+	mi := &file_api_network_v1_network_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3002,7 +3101,7 @@ func (x *NetworkStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NetworkStatus.ProtoReflect.Descriptor instead.
 func (*NetworkStatus) Descriptor() ([]byte, []int) {
-	return file_api_network_v1_network_proto_rawDescGZIP(), []int{28}
+	return file_api_network_v1_network_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *NetworkStatus) GetDeviceRef() string {
@@ -3085,7 +3184,7 @@ type ReverseProxyStatus struct {
 
 func (x *ReverseProxyStatus) Reset() {
 	*x = ReverseProxyStatus{}
-	mi := &file_api_network_v1_network_proto_msgTypes[29]
+	mi := &file_api_network_v1_network_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3097,7 +3196,7 @@ func (x *ReverseProxyStatus) String() string {
 func (*ReverseProxyStatus) ProtoMessage() {}
 
 func (x *ReverseProxyStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_api_network_v1_network_proto_msgTypes[29]
+	mi := &file_api_network_v1_network_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3110,7 +3209,7 @@ func (x *ReverseProxyStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReverseProxyStatus.ProtoReflect.Descriptor instead.
 func (*ReverseProxyStatus) Descriptor() ([]byte, []int) {
-	return file_api_network_v1_network_proto_rawDescGZIP(), []int{29}
+	return file_api_network_v1_network_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *ReverseProxyStatus) GetId() string {
@@ -3177,7 +3276,7 @@ type PortForwardStatus struct {
 
 func (x *PortForwardStatus) Reset() {
 	*x = PortForwardStatus{}
-	mi := &file_api_network_v1_network_proto_msgTypes[30]
+	mi := &file_api_network_v1_network_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3189,7 +3288,7 @@ func (x *PortForwardStatus) String() string {
 func (*PortForwardStatus) ProtoMessage() {}
 
 func (x *PortForwardStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_api_network_v1_network_proto_msgTypes[30]
+	mi := &file_api_network_v1_network_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3202,7 +3301,7 @@ func (x *PortForwardStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PortForwardStatus.ProtoReflect.Descriptor instead.
 func (*PortForwardStatus) Descriptor() ([]byte, []int) {
-	return file_api_network_v1_network_proto_rawDescGZIP(), []int{30}
+	return file_api_network_v1_network_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *PortForwardStatus) GetId() string {
@@ -3266,7 +3365,7 @@ type ForwardTargetHealth struct {
 
 func (x *ForwardTargetHealth) Reset() {
 	*x = ForwardTargetHealth{}
-	mi := &file_api_network_v1_network_proto_msgTypes[31]
+	mi := &file_api_network_v1_network_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3278,7 +3377,7 @@ func (x *ForwardTargetHealth) String() string {
 func (*ForwardTargetHealth) ProtoMessage() {}
 
 func (x *ForwardTargetHealth) ProtoReflect() protoreflect.Message {
-	mi := &file_api_network_v1_network_proto_msgTypes[31]
+	mi := &file_api_network_v1_network_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3291,7 +3390,7 @@ func (x *ForwardTargetHealth) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ForwardTargetHealth.ProtoReflect.Descriptor instead.
 func (*ForwardTargetHealth) Descriptor() ([]byte, []int) {
-	return file_api_network_v1_network_proto_rawDescGZIP(), []int{31}
+	return file_api_network_v1_network_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *ForwardTargetHealth) GetHost() string {
@@ -3358,7 +3457,7 @@ const file_api_network_v1_network_proto_rawDesc = "" +
 	"device_ref\x18\x01 \x01(\tR\tdeviceRef\x125\n" +
 	"\x05kinds\x18\x02 \x03(\v2\x1f.anixops.network.v1.KindSupportR\x05kinds\x12#\n" +
 	"\rrouting_first\x18\x03 \x01(\rR\froutingFirst\x12!\n" +
-	"\frouting_last\x18\x04 \x01(\rR\vroutingLast\"\xc3\x04\n" +
+	"\frouting_last\x18\x04 \x01(\rR\vroutingLast\"\x8f\x05\n" +
 	"\vNetworkPlan\x12\x1d\n" +
 	"\n" +
 	"device_ref\x18\x01 \x01(\tR\tdeviceRef\x12\x1e\n" +
@@ -3378,7 +3477,14 @@ const file_api_network_v1_network_proto_rawDesc = "" +
 	"forwarding\x12D\n" +
 	"\rport_forwards\x18\n" +
 	" \x03(\v2\x1f.anixops.network.v1.PortForwardR\fportForwards\x12I\n" +
-	"\x0freverse_proxies\x18\v \x03(\v2 .anixops.network.v1.ReverseProxyR\x0ereverseProxies\"\xb5\x02\n" +
+	"\x0freverse_proxies\x18\v \x03(\v2 .anixops.network.v1.ReverseProxyR\x0ereverseProxies\x12J\n" +
+	"\x0fkernel_forwards\x18\f \x03(\v2!.anixops.network.v1.KernelForwardR\x0ekernelForwards\"\xeb\x01\n" +
+	"\rKernelForward\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x124\n" +
+	"\x06listen\x18\x02 \x01(\v2\x1c.anixops.network.v1.EndpointR\x06listen\x12\x1c\n" +
+	"\tprotocols\x18\x03 \x03(\tR\tprotocols\x12;\n" +
+	"\atargets\x18\x04 \x03(\v2!.anixops.network.v1.ForwardTargetR\atargets\x129\n" +
+	"\x06policy\x18\x05 \x01(\v2!.anixops.network.v1.ForwardPolicyR\x06policy\"\xb5\x02\n" +
 	"\vPortForward\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x124\n" +
 	"\x06listen\x18\x02 \x01(\v2\x1c.anixops.network.v1.EndpointR\x06listen\x12\x1c\n" +
@@ -3665,7 +3771,7 @@ func file_api_network_v1_network_proto_rawDescGZIP() []byte {
 }
 
 var file_api_network_v1_network_proto_enumTypes = make([]protoimpl.EnumInfo, 7)
-var file_api_network_v1_network_proto_msgTypes = make([]protoimpl.MessageInfo, 33)
+var file_api_network_v1_network_proto_msgTypes = make([]protoimpl.MessageInfo, 34)
 var file_api_network_v1_network_proto_goTypes = []any{
 	(Component)(0),              // 0: anixops.network.v1.Component
 	(Family)(0),                 // 1: anixops.network.v1.Family
@@ -3677,92 +3783,97 @@ var file_api_network_v1_network_proto_goTypes = []any{
 	(*KindSupport)(nil),         // 7: anixops.network.v1.KindSupport
 	(*DeviceCapabilities)(nil),  // 8: anixops.network.v1.DeviceCapabilities
 	(*NetworkPlan)(nil),         // 9: anixops.network.v1.NetworkPlan
-	(*PortForward)(nil),         // 10: anixops.network.v1.PortForward
-	(*ForwardTarget)(nil),       // 11: anixops.network.v1.ForwardTarget
-	(*ForwardPolicy)(nil),       // 12: anixops.network.v1.ForwardPolicy
-	(*ForwardHealth)(nil),       // 13: anixops.network.v1.ForwardHealth
-	(*ForwardBreaker)(nil),      // 14: anixops.network.v1.ForwardBreaker
-	(*ReverseProxy)(nil),        // 15: anixops.network.v1.ReverseProxy
-	(*ReverseProxySite)(nil),    // 16: anixops.network.v1.ReverseProxySite
-	(*ReverseProxyRoute)(nil),   // 17: anixops.network.v1.ReverseProxyRoute
-	(*Line)(nil),                // 18: anixops.network.v1.Line
-	(*Endpoint)(nil),            // 19: anixops.network.v1.Endpoint
-	(*PortRange)(nil),           // 20: anixops.network.v1.PortRange
-	(*PortMap)(nil),             // 21: anixops.network.v1.PortMap
-	(*PairingRule)(nil),         // 22: anixops.network.v1.PairingRule
-	(*Pairing)(nil),             // 23: anixops.network.v1.Pairing
-	(*Ingress)(nil),             // 24: anixops.network.v1.Ingress
-	(*Routing)(nil),             // 25: anixops.network.v1.Routing
-	(*HealthCheck)(nil),         // 26: anixops.network.v1.HealthCheck
-	(*Egress)(nil),              // 27: anixops.network.v1.Egress
-	(*Transport)(nil),           // 28: anixops.network.v1.Transport
-	(*AnxLineSettings)(nil),     // 29: anixops.network.v1.AnxLineSettings
-	(*Path)(nil),                // 30: anixops.network.v1.Path
-	(*Forwarding)(nil),          // 31: anixops.network.v1.Forwarding
-	(*ComponentStatus)(nil),     // 32: anixops.network.v1.ComponentStatus
-	(*InterfaceFact)(nil),       // 33: anixops.network.v1.InterfaceFact
-	(*PublicKey)(nil),           // 34: anixops.network.v1.PublicKey
-	(*NetworkStatus)(nil),       // 35: anixops.network.v1.NetworkStatus
-	(*ReverseProxyStatus)(nil),  // 36: anixops.network.v1.ReverseProxyStatus
-	(*PortForwardStatus)(nil),   // 37: anixops.network.v1.PortForwardStatus
-	(*ForwardTargetHealth)(nil), // 38: anixops.network.v1.ForwardTargetHealth
-	nil,                         // 39: anixops.network.v1.ReverseProxyRoute.HeadersEntry
+	(*KernelForward)(nil),       // 10: anixops.network.v1.KernelForward
+	(*PortForward)(nil),         // 11: anixops.network.v1.PortForward
+	(*ForwardTarget)(nil),       // 12: anixops.network.v1.ForwardTarget
+	(*ForwardPolicy)(nil),       // 13: anixops.network.v1.ForwardPolicy
+	(*ForwardHealth)(nil),       // 14: anixops.network.v1.ForwardHealth
+	(*ForwardBreaker)(nil),      // 15: anixops.network.v1.ForwardBreaker
+	(*ReverseProxy)(nil),        // 16: anixops.network.v1.ReverseProxy
+	(*ReverseProxySite)(nil),    // 17: anixops.network.v1.ReverseProxySite
+	(*ReverseProxyRoute)(nil),   // 18: anixops.network.v1.ReverseProxyRoute
+	(*Line)(nil),                // 19: anixops.network.v1.Line
+	(*Endpoint)(nil),            // 20: anixops.network.v1.Endpoint
+	(*PortRange)(nil),           // 21: anixops.network.v1.PortRange
+	(*PortMap)(nil),             // 22: anixops.network.v1.PortMap
+	(*PairingRule)(nil),         // 23: anixops.network.v1.PairingRule
+	(*Pairing)(nil),             // 24: anixops.network.v1.Pairing
+	(*Ingress)(nil),             // 25: anixops.network.v1.Ingress
+	(*Routing)(nil),             // 26: anixops.network.v1.Routing
+	(*HealthCheck)(nil),         // 27: anixops.network.v1.HealthCheck
+	(*Egress)(nil),              // 28: anixops.network.v1.Egress
+	(*Transport)(nil),           // 29: anixops.network.v1.Transport
+	(*AnxLineSettings)(nil),     // 30: anixops.network.v1.AnxLineSettings
+	(*Path)(nil),                // 31: anixops.network.v1.Path
+	(*Forwarding)(nil),          // 32: anixops.network.v1.Forwarding
+	(*ComponentStatus)(nil),     // 33: anixops.network.v1.ComponentStatus
+	(*InterfaceFact)(nil),       // 34: anixops.network.v1.InterfaceFact
+	(*PublicKey)(nil),           // 35: anixops.network.v1.PublicKey
+	(*NetworkStatus)(nil),       // 36: anixops.network.v1.NetworkStatus
+	(*ReverseProxyStatus)(nil),  // 37: anixops.network.v1.ReverseProxyStatus
+	(*PortForwardStatus)(nil),   // 38: anixops.network.v1.PortForwardStatus
+	(*ForwardTargetHealth)(nil), // 39: anixops.network.v1.ForwardTargetHealth
+	nil,                         // 40: anixops.network.v1.ReverseProxyRoute.HeadersEntry
 }
 var file_api_network_v1_network_proto_depIdxs = []int32{
 	0,  // 0: anixops.network.v1.KindSupport.component:type_name -> anixops.network.v1.Component
 	7,  // 1: anixops.network.v1.DeviceCapabilities.kinds:type_name -> anixops.network.v1.KindSupport
-	18, // 2: anixops.network.v1.NetworkPlan.lines:type_name -> anixops.network.v1.Line
-	24, // 3: anixops.network.v1.NetworkPlan.ingresses:type_name -> anixops.network.v1.Ingress
-	27, // 4: anixops.network.v1.NetworkPlan.egresses:type_name -> anixops.network.v1.Egress
-	28, // 5: anixops.network.v1.NetworkPlan.transports:type_name -> anixops.network.v1.Transport
-	30, // 6: anixops.network.v1.NetworkPlan.paths:type_name -> anixops.network.v1.Path
-	31, // 7: anixops.network.v1.NetworkPlan.forwarding:type_name -> anixops.network.v1.Forwarding
-	10, // 8: anixops.network.v1.NetworkPlan.port_forwards:type_name -> anixops.network.v1.PortForward
-	15, // 9: anixops.network.v1.NetworkPlan.reverse_proxies:type_name -> anixops.network.v1.ReverseProxy
-	19, // 10: anixops.network.v1.PortForward.listen:type_name -> anixops.network.v1.Endpoint
-	11, // 11: anixops.network.v1.PortForward.targets:type_name -> anixops.network.v1.ForwardTarget
-	12, // 12: anixops.network.v1.PortForward.policy:type_name -> anixops.network.v1.ForwardPolicy
-	13, // 13: anixops.network.v1.ForwardPolicy.health:type_name -> anixops.network.v1.ForwardHealth
-	14, // 14: anixops.network.v1.ForwardPolicy.circuit_breaker:type_name -> anixops.network.v1.ForwardBreaker
-	19, // 15: anixops.network.v1.ReverseProxy.listen:type_name -> anixops.network.v1.Endpoint
-	16, // 16: anixops.network.v1.ReverseProxy.sites:type_name -> anixops.network.v1.ReverseProxySite
-	17, // 17: anixops.network.v1.ReverseProxySite.routes:type_name -> anixops.network.v1.ReverseProxyRoute
-	39, // 18: anixops.network.v1.ReverseProxyRoute.headers:type_name -> anixops.network.v1.ReverseProxyRoute.HeadersEntry
-	11, // 19: anixops.network.v1.ReverseProxyRoute.upstreams:type_name -> anixops.network.v1.ForwardTarget
-	12, // 20: anixops.network.v1.ReverseProxyRoute.policy:type_name -> anixops.network.v1.ForwardPolicy
-	1,  // 21: anixops.network.v1.Line.families:type_name -> anixops.network.v1.Family
-	20, // 22: anixops.network.v1.PortMap.public:type_name -> anixops.network.v1.PortRange
-	20, // 23: anixops.network.v1.PortMap.local:type_name -> anixops.network.v1.PortRange
-	3,  // 24: anixops.network.v1.Pairing.mode:type_name -> anixops.network.v1.PairingMode
-	22, // 25: anixops.network.v1.Pairing.rules:type_name -> anixops.network.v1.PairingRule
-	2,  // 26: anixops.network.v1.Ingress.audience:type_name -> anixops.network.v1.Audience
-	1,  // 27: anixops.network.v1.Ingress.family:type_name -> anixops.network.v1.Family
-	19, // 28: anixops.network.v1.Ingress.listen:type_name -> anixops.network.v1.Endpoint
-	21, // 29: anixops.network.v1.Ingress.port_map:type_name -> anixops.network.v1.PortMap
-	23, // 30: anixops.network.v1.Ingress.pairing:type_name -> anixops.network.v1.Pairing
-	2,  // 31: anixops.network.v1.Egress.audience:type_name -> anixops.network.v1.Audience
-	1,  // 32: anixops.network.v1.Egress.family:type_name -> anixops.network.v1.Family
-	25, // 33: anixops.network.v1.Egress.routing:type_name -> anixops.network.v1.Routing
-	26, // 34: anixops.network.v1.Egress.health:type_name -> anixops.network.v1.HealthCheck
-	4,  // 35: anixops.network.v1.Transport.role:type_name -> anixops.network.v1.TransportRole
-	29, // 36: anixops.network.v1.Transport.anx_line:type_name -> anixops.network.v1.AnxLineSettings
-	0,  // 37: anixops.network.v1.ComponentStatus.component:type_name -> anixops.network.v1.Component
-	5,  // 38: anixops.network.v1.ComponentStatus.state:type_name -> anixops.network.v1.ComponentState
-	32, // 39: anixops.network.v1.NetworkStatus.components:type_name -> anixops.network.v1.ComponentStatus
-	33, // 40: anixops.network.v1.NetworkStatus.interfaces:type_name -> anixops.network.v1.InterfaceFact
-	34, // 41: anixops.network.v1.NetworkStatus.public_keys:type_name -> anixops.network.v1.PublicKey
-	37, // 42: anixops.network.v1.NetworkStatus.port_forwards:type_name -> anixops.network.v1.PortForwardStatus
-	36, // 43: anixops.network.v1.NetworkStatus.reverse_proxies:type_name -> anixops.network.v1.ReverseProxyStatus
-	5,  // 44: anixops.network.v1.ReverseProxyStatus.state:type_name -> anixops.network.v1.ComponentState
-	38, // 45: anixops.network.v1.ReverseProxyStatus.upstreams:type_name -> anixops.network.v1.ForwardTargetHealth
-	5,  // 46: anixops.network.v1.PortForwardStatus.state:type_name -> anixops.network.v1.ComponentState
-	38, // 47: anixops.network.v1.PortForwardStatus.targets:type_name -> anixops.network.v1.ForwardTargetHealth
-	6,  // 48: anixops.network.v1.ForwardTargetHealth.state:type_name -> anixops.network.v1.TargetHealthState
-	49, // [49:49] is the sub-list for method output_type
-	49, // [49:49] is the sub-list for method input_type
-	49, // [49:49] is the sub-list for extension type_name
-	49, // [49:49] is the sub-list for extension extendee
-	0,  // [0:49] is the sub-list for field type_name
+	19, // 2: anixops.network.v1.NetworkPlan.lines:type_name -> anixops.network.v1.Line
+	25, // 3: anixops.network.v1.NetworkPlan.ingresses:type_name -> anixops.network.v1.Ingress
+	28, // 4: anixops.network.v1.NetworkPlan.egresses:type_name -> anixops.network.v1.Egress
+	29, // 5: anixops.network.v1.NetworkPlan.transports:type_name -> anixops.network.v1.Transport
+	31, // 6: anixops.network.v1.NetworkPlan.paths:type_name -> anixops.network.v1.Path
+	32, // 7: anixops.network.v1.NetworkPlan.forwarding:type_name -> anixops.network.v1.Forwarding
+	11, // 8: anixops.network.v1.NetworkPlan.port_forwards:type_name -> anixops.network.v1.PortForward
+	16, // 9: anixops.network.v1.NetworkPlan.reverse_proxies:type_name -> anixops.network.v1.ReverseProxy
+	10, // 10: anixops.network.v1.NetworkPlan.kernel_forwards:type_name -> anixops.network.v1.KernelForward
+	20, // 11: anixops.network.v1.KernelForward.listen:type_name -> anixops.network.v1.Endpoint
+	12, // 12: anixops.network.v1.KernelForward.targets:type_name -> anixops.network.v1.ForwardTarget
+	13, // 13: anixops.network.v1.KernelForward.policy:type_name -> anixops.network.v1.ForwardPolicy
+	20, // 14: anixops.network.v1.PortForward.listen:type_name -> anixops.network.v1.Endpoint
+	12, // 15: anixops.network.v1.PortForward.targets:type_name -> anixops.network.v1.ForwardTarget
+	13, // 16: anixops.network.v1.PortForward.policy:type_name -> anixops.network.v1.ForwardPolicy
+	14, // 17: anixops.network.v1.ForwardPolicy.health:type_name -> anixops.network.v1.ForwardHealth
+	15, // 18: anixops.network.v1.ForwardPolicy.circuit_breaker:type_name -> anixops.network.v1.ForwardBreaker
+	20, // 19: anixops.network.v1.ReverseProxy.listen:type_name -> anixops.network.v1.Endpoint
+	17, // 20: anixops.network.v1.ReverseProxy.sites:type_name -> anixops.network.v1.ReverseProxySite
+	18, // 21: anixops.network.v1.ReverseProxySite.routes:type_name -> anixops.network.v1.ReverseProxyRoute
+	40, // 22: anixops.network.v1.ReverseProxyRoute.headers:type_name -> anixops.network.v1.ReverseProxyRoute.HeadersEntry
+	12, // 23: anixops.network.v1.ReverseProxyRoute.upstreams:type_name -> anixops.network.v1.ForwardTarget
+	13, // 24: anixops.network.v1.ReverseProxyRoute.policy:type_name -> anixops.network.v1.ForwardPolicy
+	1,  // 25: anixops.network.v1.Line.families:type_name -> anixops.network.v1.Family
+	21, // 26: anixops.network.v1.PortMap.public:type_name -> anixops.network.v1.PortRange
+	21, // 27: anixops.network.v1.PortMap.local:type_name -> anixops.network.v1.PortRange
+	3,  // 28: anixops.network.v1.Pairing.mode:type_name -> anixops.network.v1.PairingMode
+	23, // 29: anixops.network.v1.Pairing.rules:type_name -> anixops.network.v1.PairingRule
+	2,  // 30: anixops.network.v1.Ingress.audience:type_name -> anixops.network.v1.Audience
+	1,  // 31: anixops.network.v1.Ingress.family:type_name -> anixops.network.v1.Family
+	20, // 32: anixops.network.v1.Ingress.listen:type_name -> anixops.network.v1.Endpoint
+	22, // 33: anixops.network.v1.Ingress.port_map:type_name -> anixops.network.v1.PortMap
+	24, // 34: anixops.network.v1.Ingress.pairing:type_name -> anixops.network.v1.Pairing
+	2,  // 35: anixops.network.v1.Egress.audience:type_name -> anixops.network.v1.Audience
+	1,  // 36: anixops.network.v1.Egress.family:type_name -> anixops.network.v1.Family
+	26, // 37: anixops.network.v1.Egress.routing:type_name -> anixops.network.v1.Routing
+	27, // 38: anixops.network.v1.Egress.health:type_name -> anixops.network.v1.HealthCheck
+	4,  // 39: anixops.network.v1.Transport.role:type_name -> anixops.network.v1.TransportRole
+	30, // 40: anixops.network.v1.Transport.anx_line:type_name -> anixops.network.v1.AnxLineSettings
+	0,  // 41: anixops.network.v1.ComponentStatus.component:type_name -> anixops.network.v1.Component
+	5,  // 42: anixops.network.v1.ComponentStatus.state:type_name -> anixops.network.v1.ComponentState
+	33, // 43: anixops.network.v1.NetworkStatus.components:type_name -> anixops.network.v1.ComponentStatus
+	34, // 44: anixops.network.v1.NetworkStatus.interfaces:type_name -> anixops.network.v1.InterfaceFact
+	35, // 45: anixops.network.v1.NetworkStatus.public_keys:type_name -> anixops.network.v1.PublicKey
+	38, // 46: anixops.network.v1.NetworkStatus.port_forwards:type_name -> anixops.network.v1.PortForwardStatus
+	37, // 47: anixops.network.v1.NetworkStatus.reverse_proxies:type_name -> anixops.network.v1.ReverseProxyStatus
+	5,  // 48: anixops.network.v1.ReverseProxyStatus.state:type_name -> anixops.network.v1.ComponentState
+	39, // 49: anixops.network.v1.ReverseProxyStatus.upstreams:type_name -> anixops.network.v1.ForwardTargetHealth
+	5,  // 50: anixops.network.v1.PortForwardStatus.state:type_name -> anixops.network.v1.ComponentState
+	39, // 51: anixops.network.v1.PortForwardStatus.targets:type_name -> anixops.network.v1.ForwardTargetHealth
+	6,  // 52: anixops.network.v1.ForwardTargetHealth.state:type_name -> anixops.network.v1.TargetHealthState
+	53, // [53:53] is the sub-list for method output_type
+	53, // [53:53] is the sub-list for method input_type
+	53, // [53:53] is the sub-list for extension type_name
+	53, // [53:53] is the sub-list for extension extendee
+	0,  // [0:53] is the sub-list for field type_name
 }
 
 func init() { file_api_network_v1_network_proto_init() }
@@ -3770,22 +3881,22 @@ func file_api_network_v1_network_proto_init() {
 	if File_api_network_v1_network_proto != nil {
 		return
 	}
-	file_api_network_v1_network_proto_msgTypes[3].OneofWrappers = []any{
+	file_api_network_v1_network_proto_msgTypes[4].OneofWrappers = []any{
 		(*PortForward_EgressId)(nil),
 		(*PortForward_TransportId)(nil),
 	}
-	file_api_network_v1_network_proto_msgTypes[8].OneofWrappers = []any{
+	file_api_network_v1_network_proto_msgTypes[9].OneofWrappers = []any{
 		(*ReverseProxy_EgressId)(nil),
 		(*ReverseProxy_TransportId)(nil),
 	}
-	file_api_network_v1_network_proto_msgTypes[21].OneofWrappers = []any{
+	file_api_network_v1_network_proto_msgTypes[22].OneofWrappers = []any{
 		(*Transport_AnxLine)(nil),
 	}
-	file_api_network_v1_network_proto_msgTypes[23].OneofWrappers = []any{
+	file_api_network_v1_network_proto_msgTypes[24].OneofWrappers = []any{
 		(*Path_EgressId)(nil),
 		(*Path_TransportId)(nil),
 	}
-	file_api_network_v1_network_proto_msgTypes[24].OneofWrappers = []any{
+	file_api_network_v1_network_proto_msgTypes[25].OneofWrappers = []any{
 		(*Forwarding_EgressId)(nil),
 		(*Forwarding_TransportId)(nil),
 	}
@@ -3795,7 +3906,7 @@ func file_api_network_v1_network_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_network_v1_network_proto_rawDesc), len(file_api_network_v1_network_proto_rawDesc)),
 			NumEnums:      7,
-			NumMessages:   33,
+			NumMessages:   34,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

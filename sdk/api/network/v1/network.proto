@@ -102,6 +102,30 @@ message NetworkPlan {
   repeated PortForward port_forwards = 10;
   // Panel reverse proxies (HTTP sites) that listen on this device.
   repeated ReverseProxy reverse_proxies = 11;
+  // Hops of panel forwarding routes that this device forwards in the
+  // kernel (forward.v1 ENGINE_NFTABLES). Added after v5.0.0.
+  repeated KernelForward kernel_forwards = 12;
+}
+
+// KernelForward is a hop the kernel forwards: the device rewrites
+// connections to the listen port towards the targets (nftables DNAT and
+// masquerade), with no process on the port and no change to what the
+// client sent. The targets are the next hop's devices, or the route's
+// targets on the last hop. The Agent reports it as a PortForwardStatus of
+// the same id.
+message KernelForward {
+  // The forward.v1 route id.
+  string id = 1;
+  // An unspecified address ("::" or "0.0.0.0") is every address of the
+  // device, of both families.
+  Endpoint listen = 2;
+  // "tcp", "udp" or both.
+  repeated string protocols = 3;
+  // An IP address or a DNS name the Agent resolves; balanced by policy.
+  repeated ForwardTarget targets = 4;
+  // Balancing and health checks; limits, the circuit breaker and the PROXY
+  // header do not apply.
+  ForwardPolicy policy = 5;
 }
 
 // PortForward relays a listen port to fixed targets, as a panel forwarding

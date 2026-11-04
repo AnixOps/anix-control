@@ -63,7 +63,7 @@ func TestPlanAnswersAnEmptyStatePerNode(t *testing.T) {
 
 func TestPlanRefusesInvalidInput(t *testing.T) {
 	removed := networkRoute(routeID(2), 40002)
-	removed.Hops[0].Engine = forwardv1.Engine_ENGINE_NFTABLES
+	removed.Hops[0].Engine = forwardv1.Engine_ENGINE_GOST
 	reserved := networkRoute(routeID(3), 40022)
 	routes := []*forwardv1.Route{networkRoute(routeID(1), 40001), networkRoute(routeID(1), 40001), removed, reserved, networkRoute("", 40004)}
 	res := Plan(routes, testNodes(), Options{ReservedPorts: map[string][]uint32{"proxy-21": {40022}}})
