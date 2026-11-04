@@ -243,8 +243,12 @@ A release tag `vX.Y.Z[-alpha|-beta|-rc.N]` must match every surface checked by
 - `CHANGELOG.md` (first `## X.Y.Z - YYYY-MM-DD` heading)
 - `README.md` (the `- Current release:` line)
 - `config/AGENT_RELEASE` (the anix-agent release tag nodes install, not
-  derived from the Control version; only its `vX.Y.Z[-rc.N]` format is
-  checked; `prepare_release.py --agent-tag` sets it)
+  derived from the Control version: its `vX.Y.Z[-rc.N]` format and, from
+  5.0.0 on, Control's major.minor are checked, patches are independent;
+  `prepare_release.py --agent-tag` sets it). Agent compatibility is the
+  protocol revision (`docs/reference/agent-versioning.md`): raise
+  `agentcontrol.ProtocolRevisionCurrent` with a contract change an Agent
+  relies on.
 
 ## Release Policy
 

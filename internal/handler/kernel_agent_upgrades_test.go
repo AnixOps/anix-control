@@ -19,6 +19,7 @@ import (
 
 	"github.com/AnixOps/anix-control/v5/internal/agentinstall"
 	"github.com/AnixOps/anix-control/v5/internal/config"
+	controlgrpc "github.com/AnixOps/anix-control/v5/internal/grpc"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
@@ -131,7 +132,16 @@ func TestAgentUpgradesAPI(t *testing.T) {
 	assert.Equal(t, http.StatusForbidden, code)
 	assert.Equal(t, "super_admin_required", answer["error"].(map[string]any)["code"])
 
+	code, answer = env.do(t, http.MethodPost, "/upgrades", `{"target_version":"v4.2.9"}`, "")
+	assert.Equal(t, http.StatusConflict, code, answer)
+	assert.Equal(t, "agent_release_unverified", answer["error"].(map[string]any)["code"])
+
+	// An Agent on another major.minor than Control is refused unless the
+	// campaign says it is deliberate.
 	code, answer = env.do(t, http.MethodPost, "/upgrades", `{"target_version":"v4.1.9"}`, "")
+	assert.Equal(t, http.StatusConflict, code, answer)
+	assert.Equal(t, "agent_version_line_mismatch", answer["error"].(map[string]any)["code"])
+	code, answer = env.do(t, http.MethodPost, "/upgrades", `{"target_version":"v4.1.9","allow_version_line_mismatch":true}`, "")
 	assert.Equal(t, http.StatusConflict, code, answer)
 	assert.Equal(t, "agent_release_unverified", answer["error"].(map[string]any)["code"])
 
@@ -210,6 +220,11 @@ func TestAgentUpgradePlan(t *testing.T) {
 	plan := answer["data"].(map[string]any)
 	assert.Equal(t, "v4.2.0", plan["target_version"])
 	assert.Equal(t, "v4.2.0", plan["control_version"])
+	assert.Equal(t, false, plan["target_version_line_mismatch"])
+	control := plan["control"].(map[string]any)
+	assert.Equal(t, "4.2", control["version_line"])
+	assert.EqualValues(t, controlgrpc.MinAgentProtocolRevision, control["protocol_revision_min"])
+	assert.EqualValues(t, controlgrpc.AgentProtocolRevision, control["protocol_revision_max"])
 	assert.Equal(t, true, plan["configured"])
 	assert.EqualValues(t, 3, plan["eligible_nodes"])
 	listed := plan["nodes"].([]any)

@@ -89,15 +89,19 @@ func TestStartRefuses(t *testing.T) {
 	assert.ErrorIs(t, err, ErrNoNodes)
 	f.addProxy(1, "")
 	for name, request := range map[string]StartRequest{
-		"not a tag":          {TargetVersion: "4.2.0", Artifacts: testArtifacts()},
-		"newer than Control": {TargetVersion: "v4.3.0", ControlVersion: "v4.2.0", Artifacts: testArtifacts()},
-		"no artifacts":       {TargetVersion: "v4.2.0"},
-		"bad batches":        {TargetVersion: "v4.2.0", Artifacts: testArtifacts(), Batches: []Batch{{Percent: 100, MinDurationSeconds: 60}}},
-		"bad exclusion":      {TargetVersion: "v4.2.0", Artifacts: testArtifacts(), Exclude: Exclude{Nodes: []string{"node-1"}}},
+		"not a tag":               {TargetVersion: "4.2.0", Artifacts: testArtifacts()},
+		"newer line than Control": {TargetVersion: "v4.3.0", ControlVersion: "v4.2.5", Artifacts: testArtifacts()},
+		"no artifacts":            {TargetVersion: "v4.2.0"},
+		"bad batches":             {TargetVersion: "v4.2.0", Artifacts: testArtifacts(), Batches: []Batch{{Percent: 100, MinDurationSeconds: 60}}},
+		"bad exclusion":           {TargetVersion: "v4.2.0", Artifacts: testArtifacts(), Exclude: Exclude{Nodes: []string{"node-1"}}},
 	} {
 		_, err := f.service.Start(ctx, request)
 		assert.ErrorIs(t, err, ErrInvalid, name)
 	}
+	// Patch numbers are independent: an Agent patch newer than Control's
+	// starts (the error is about the nodes, not the version).
+	_, err = f.service.Start(ctx, StartRequest{TargetVersion: "v4.2.9", ControlVersion: "v4.2.0", Artifacts: testArtifacts(), Exclude: Exclude{Nodes: []string{"proxy-1"}}})
+	assert.ErrorIs(t, err, ErrNoNodes)
 	campaign := f.start(StartRequest{Actor: Actor{UserID: 7, Name: "root@example.com", IP: "198.51.100.1"}})
 	_, err = f.service.Start(ctx, StartRequest{TargetVersion: "v4.2.0", Artifacts: testArtifacts()})
 	assert.ErrorIs(t, err, ErrActiveCampaign)

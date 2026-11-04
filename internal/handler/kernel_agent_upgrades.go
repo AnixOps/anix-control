@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	"github.com/AnixOps/anix-control/v5/internal/agentinstall"
 	"github.com/AnixOps/anix-control/v5/internal/agentstreams"
 	"github.com/AnixOps/anix-control/v5/internal/agentupgrade"
@@ -51,8 +52,12 @@ type startAgentUpgradeRequest struct {
 	// the Agent release they run now (they must run one), so each Agent
 	// keeps its binary and installs the newest kernel Control holds.
 	// TargetVersion must then be empty.
-	KernelOnly bool   `json:"kernel_only"`
-	Reason     string `json:"reason"`
+	KernelOnly bool `json:"kernel_only"`
+	// AllowVersionLineMismatch starts a campaign whose target is on another
+	// major.minor than this Control (a rollback across version lines);
+	// without it such a target is refused (agent_version_line_mismatch).
+	AllowVersionLineMismatch bool   `json:"allow_version_line_mismatch"`
+	Reason                   string `json:"reason"`
 }
 
 type abortAgentUpgradeRequest struct {
@@ -110,12 +115,12 @@ func (h *AgentUpgradesHandler) settings(c *gin.Context) (cfg *config.Config, set
 
 // Start godoc
 // @Summary Start a staged Agent upgrade
-// @Description Pushes an Agent release to every enabled node whose Agent was seen on the Agent Control stream, in batches (default 5%, 25%, 100% of the nodes, at least 30 minutes each; canaries first by node name hash), as the agent.upgrade operation to Agents that negotiated upgrade.v1. With nodes (proxy-<id>, forward-<id>, each eligible) it is a manual upgrade instead: exactly those nodes in one batch with no minimum duration; batches and exclude must be empty. With kernel_only (and nodes, no target_version) only the anx-node kernel is upgraded: the target is the Agent release those nodes run now, so each Agent keeps its binary and installs the newest anx-node release in agent_install.artifact_dir. A batch rolls back when more than 5% of its offered nodes fail or do not reconnect with the target version within 10 minutes (H19). The release must be in agent_install.artifact_dir with its .sig files and SHA256SUMS(.sig), verified with plugins.official_public_key. Super administrators only; one campaign at a time.
+// @Description Pushes an Agent release to every enabled node whose Agent was seen on the Agent Control stream, in batches (default 5%, 25%, 100% of the nodes, at least 30 minutes each; canaries first by node name hash), as the agent.upgrade operation to Agents that negotiated upgrade.v1. With nodes (proxy-<id>, forward-<id>, each eligible) it is a manual upgrade instead: exactly those nodes in one batch with no minimum duration; batches and exclude must be empty. With kernel_only (and nodes, no target_version) only the anx-node kernel is upgraded: the target is the Agent release those nodes run now, so each Agent keeps its binary and installs the newest anx-node release in agent_install.artifact_dir. A target_version on another major.minor than this Control is refused (agent_version_line_mismatch, docs/reference/agent-versioning.md) unless allow_version_line_mismatch is set. A batch rolls back when more than 5% of its offered nodes fail or do not reconnect with the target version within 10 minutes (H19). The release must be in agent_install.artifact_dir with its .sig files and SHA256SUMS(.sig), verified with plugins.official_public_key. Super administrators only; one campaign at a time.
 // @Tags Kernel
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param request body startAgentUpgradeRequest true "target_version (default this Control's Agent release), batches, exclude {nodes, tags}, nodes (manual upgrade), kernel_only, reason"
+// @Param request body startAgentUpgradeRequest true "target_version (default this Control's Agent release), batches, exclude {nodes, tags}, nodes (manual upgrade), kernel_only, allow_version_line_mismatch, reason"
 // @Success 201 {object} map[string]any
 // @Router /api/v4/kernel/agents/upgrades [post]
 func (h *AgentUpgradesHandler) Start(c *gin.Context) {
@@ -147,6 +152,15 @@ func (h *AgentUpgradesHandler) Start(c *gin.Context) {
 	}
 	if target == "" {
 		target = settings.AgentVersion
+	}
+	// Since 5.0.0 an Agent shares Control's major.minor
+	// (docs/reference/agent-versioning.md). A kernel-only upgrade keeps the
+	// nodes' own release, so only a chosen target is checked.
+	if !request.KernelOnly && !request.AllowVersionLineMismatch {
+		if err := versionLineMismatch(target, ReleaseVersion); err != nil {
+			kernelError(c, http.StatusConflict, "agent_version_line_mismatch", err.Error())
+			return
+		}
 	}
 	artifacts, err := agentinstall.UpgradeArtifacts(install.ArtifactDir, target, cfg.Plugins.OfficialPublicKey, settings.ControlURL)
 	if err != nil {
@@ -191,7 +205,7 @@ func (h *AgentUpgradesHandler) Start(c *gin.Context) {
 
 // Plan godoc
 // @Summary What an Agent upgrade would do now
-// @Description The Agent release a campaign pushes by default (agent_install.agent_version, else the Agent release this Control was built with, else its own release), this Control's release, how many nodes a campaign would include now (enabled nodes whose Agent was seen on the Agent Control stream) and which (nodes: node_ref, name, agent_version, kernel_version reported by a live session, for a manual upgrade), the default batches with the rules of H19 (first batch at most 5%, each batch at least 30 minutes, a batch rolls back above 5% failures or after 10 minutes without a reconnect), the newest anx-node release agent_install.artifact_dir holds (kernel_version, which every campaign installs; empty for none), the active campaign if there is one, and whether the caller may start one (can_start: super administrators). When the https address nodes reach Control is not configured, configured is false with unconfigured_reason and target_version empty. Administrators read it; Start verifies the release files.
+// @Description The Agent release a campaign pushes by default (agent_install.agent_version, else the Agent release this Control was built with, else its own release), this Control's release, how many nodes a campaign would include now (enabled nodes whose Agent was seen on the Agent Control stream) and which (nodes: node_ref, name, agent_version, kernel_version reported by a live session, for a manual upgrade), the default batches with the rules of H19 (first batch at most 5%, each batch at least 30 minutes, a batch rolls back above 5% failures or after 10 minutes without a reconnect), the newest anx-node release agent_install.artifact_dir holds (kernel_version, which every campaign installs; empty for none), the active campaign if there is one, and whether the caller may start one (can_start: super administrators). control names this Control's version line and the protocol revisions it serves, target_version_line_mismatch says the default target is on another major.minor, and each node with a live session carries its compatibility (status compatible, warning or incompatible, with problems). When the https address nodes reach Control is not configured, configured is false with unconfigured_reason and target_version empty. Administrators read it; Start verifies the release files.
 // @Tags Kernel
 // @Produce json
 // @Security BearerAuth
@@ -215,6 +229,11 @@ func (h *AgentUpgradesHandler) Plan(c *gin.Context) {
 	} else {
 		plan["target_version"] = settings.AgentVersion
 	}
+	// control names this Control's version line and the protocol revisions
+	// it serves; target_version_line_mismatch is true when the default
+	// target is on another major.minor (Start would refuse it).
+	plan["control"] = ControlVersions()
+	plan["target_version_line_mismatch"] = versionLineMismatch(plan["target_version"].(string), ReleaseVersion) != nil
 	// kernel_version is the anx-node release a campaign installs (the
 	// newest one agent_install.artifact_dir holds), "" for none; a
 	// kernel-only upgrade needs it.
@@ -234,12 +253,23 @@ func (h *AgentUpgradesHandler) Plan(c *gin.Context) {
 		return
 	}
 	if h.sessions != nil {
-		kernels := map[string]string{}
+		sessions := map[string]agentstreams.Session{}
 		for _, session := range h.sessions() {
-			kernels[session.Node.String()] = session.KernelVersion
+			sessions[session.Node.String()] = session
 		}
+		control := ControlVersions()
 		for index := range described {
-			described[index].KernelVersion = kernels[described[index].NodeRef]
+			session, ok := sessions[described[index].NodeRef]
+			if !ok {
+				continue
+			}
+			described[index].KernelVersion = session.KernelVersion
+			compatibility := agentcontrol.CheckCompatibility(agentcontrol.CompatibilityInput{
+				ControlVersion: control.Version, MinRevision: control.ProtocolRevisionMin, MaxRevision: control.ProtocolRevisionMax,
+				AgentVersion: session.AgentVersion, AgentRevision: session.ProtocolRevision,
+				KernelVersion: session.KernelVersion, KernelMinVersion: session.KernelMinVersion,
+			})
+			described[index].Compatibility = &compatibility
 		}
 	}
 	plan["nodes"] = described
@@ -401,4 +431,16 @@ func (h *AgentUpgradesHandler) campaignError(c *gin.Context, err error) {
 	default:
 		kernelDBError(c, err)
 	}
+}
+
+// versionLineMismatch explains why an Agent release target is not on the
+// major.minor of Control release control, nil when it is or when either is
+// not a release version (a development build).
+func versionLineMismatch(target, control string) error {
+	targetLine, okTarget := agentcontrol.VersionLine(target)
+	controlLine, okControl := agentcontrol.VersionLine(control)
+	if !okTarget || !okControl || targetLine == controlLine {
+		return nil
+	}
+	return fmt.Errorf("the Agent release %s is on version line %s, but this Control is on %s: pick a %s Agent release, or set allow_version_line_mismatch for a deliberate rollback", target, targetLine, controlLine, controlLine)
 }

@@ -25,7 +25,14 @@ import (
 )
 
 const (
-	AgentProtocolVersion                 = agentcontrol.ProtocolV1
+	AgentProtocolVersion = agentcontrol.ProtocolV1
+	// MinAgentProtocolRevision and AgentProtocolRevision are the protocol
+	// revisions this Control serves (agentcontrol.CheckCompatibility,
+	// docs/reference/agent-versioning.md). An Agent below the minimum still
+	// connects, so an upgrade campaign can reach it, but its node is shown
+	// as incompatible.
+	MinAgentProtocolRevision             = agentcontrol.ProtocolRevisionBaseline
+	AgentProtocolRevision                = agentcontrol.ProtocolRevisionCurrent
 	defaultAgentHeartbeatIntervalSeconds = uint32(20)
 )
 
@@ -52,12 +59,19 @@ type AgentControlConnection struct {
 	// KernelVersion is the anx-node release the Hello's labels name
 	// (agentcontrol.LabelKernelVersion), "" when the Agent named none.
 	KernelVersion string
-	InstanceID    string
-	Capabilities  []*agentv1pb.Capability
-	ConnectedAt   time.Time
-	LastSeen      time.Time
-	DesiredRev    uint64
-	ObservedRev   uint64
+	// ProtocolRevision is the protocol revision the Hello's labels name
+	// (agentcontrol.HelloProtocolRevision), the baseline for an Agent that
+	// names none.
+	ProtocolRevision uint32
+	// KernelMinVersion is the oldest anx-node release the Agent says it
+	// works with (agentcontrol.LabelKernelMinVersion), "" for none.
+	KernelMinVersion string
+	InstanceID       string
+	Capabilities     []*agentv1pb.Capability
+	ConnectedAt      time.Time
+	LastSeen         time.Time
+	DesiredRev       uint64
+	ObservedRev      uint64
 	// ServerCapabilities is what the HelloAck advertised to this agent
 	// (serverCapabilities); Diagnostics is whether it advertised diag.v1,
 	// for NO-8's vantage selection.
@@ -114,13 +128,17 @@ type AgentControlSnapshot struct {
 	SessionID    string `json:"session_id"`
 	AgentVersion string `json:"agent_version"`
 	// KernelVersion is the anx-node release the Agent named in its Hello.
-	KernelVersion string    `json:"kernel_version,omitempty"`
-	InstanceID    string    `json:"instance_id"`
-	Capabilities  []string  `json:"capabilities"`
-	ConnectedAt   time.Time `json:"connected_at"`
-	LastSeen      time.Time `json:"last_seen"`
-	DesiredRev    uint64    `json:"desired_revision"`
-	ObservedRev   uint64    `json:"observed_revision"`
+	KernelVersion string `json:"kernel_version,omitempty"`
+	// ProtocolRevision is the Agent's protocol revision and
+	// KernelMinVersion the oldest anx-node release it works with.
+	ProtocolRevision uint32    `json:"protocol_revision"`
+	KernelMinVersion string    `json:"kernel_min_version,omitempty"`
+	InstanceID       string    `json:"instance_id"`
+	Capabilities     []string  `json:"capabilities"`
+	ConnectedAt      time.Time `json:"connected_at"`
+	LastSeen         time.Time `json:"last_seen"`
+	DesiredRev       uint64    `json:"desired_revision"`
+	ObservedRev      uint64    `json:"observed_revision"`
 	// ServerCapabilities are the data-plane features the HelloAck advertised
 	// to the agent (config.v1, users.v1, reports.v1); one is in use only when
 	// Capabilities lists it too. Diagnostics is whether the agent advertised
@@ -256,6 +274,8 @@ func (m *AgentControlManager) Connection(nodeID uint32) (AgentControlSnapshot, b
 		SessionID:              connection.SessionID,
 		AgentVersion:           connection.AgentVersion,
 		KernelVersion:          connection.KernelVersion,
+		ProtocolRevision:       connection.ProtocolRevision,
+		KernelMinVersion:       connection.KernelMinVersion,
 		InstanceID:             connection.InstanceID,
 		Capabilities:           capabilities,
 		ConnectedAt:            connection.ConnectedAt,
@@ -852,21 +872,36 @@ func (s *AgentControlGRPCServer) controlStream(stream agentv1pb.AgentControlServ
 	now := time.Now()
 	desiredRevision := manager.reconcileDesiredRevision(nodeID, first.Revision)
 	connection := &AgentControlConnection{
-		NodeID:        nodeID,
-		SessionID:     newAgentControlID("session"),
-		AgentVersion:  hello.AgentVersion,
-		KernelVersion: agentcontrol.HelloKernelVersion(hello.GetLabels()),
-		InstanceID:    hello.InstanceId,
-		Capabilities:  cloneCapabilities(hello.Capabilities),
-		ConnectedAt:   now,
-		LastSeen:      now,
-		DesiredRev:    desiredRevision,
-		ObservedRev:   first.Revision,
-		Identity:      principal.SPIFFEID,
-		principal:     principal,
-		stream:        stream,
+		NodeID:           nodeID,
+		SessionID:        newAgentControlID("session"),
+		AgentVersion:     hello.AgentVersion,
+		KernelVersion:    agentcontrol.HelloKernelVersion(hello.GetLabels()),
+		ProtocolRevision: agentcontrol.HelloProtocolRevision(hello.GetLabels()),
+		KernelMinVersion: agentcontrol.HelloKernelMinVersion(hello.GetLabels()),
+		InstanceID:       hello.InstanceId,
+		Capabilities:     cloneCapabilities(hello.Capabilities),
+		ConnectedAt:      now,
+		LastSeen:         now,
+		DesiredRev:       desiredRevision,
+		ObservedRev:      first.Revision,
+		Identity:         principal.SPIFFEID,
+		principal:        principal,
+		stream:           stream,
 	}
 	connection.ServerCapabilities = s.sessionCapabilities(principal, hello.Capabilities)
+	// An Agent outside the protocol revisions this Control serves still
+	// connects (an upgrade campaign reaches it on this stream); the node
+	// inventory shows the judgement, and the log says so once per session.
+	if compatibility := agentcontrol.CheckCompatibility(agentcontrol.CompatibilityInput{
+		MinRevision: MinAgentProtocolRevision, MaxRevision: AgentProtocolRevision,
+		AgentVersion: hello.AgentVersion, AgentRevision: connection.ProtocolRevision,
+		KernelVersion: connection.KernelVersion, KernelMinVersion: connection.KernelMinVersion,
+	}); compatibility.Status != agentcontrol.CompatibilityOK {
+		for _, problem := range compatibility.Problems {
+			slog.Warn("agent version compatibility", "component", "agent-control", "node", agentNode.String(),
+				"agent_version", hello.AgentVersion, "code", problem.Code, "severity", problem.Severity, "problem", problem.Message)
+		}
+	}
 	connection.Diagnostics = agentcontrol.HasCapabilityVersion(hello.Capabilities, agentcontrol.CapabilityDiag, agentcontrol.CapabilityVersionV1)
 	connection.configNegotiated = agentcontrol.Negotiated(hello.Capabilities, connection.ServerCapabilities, agentcontrol.CapabilityConfig)
 	if connection.configNegotiated {

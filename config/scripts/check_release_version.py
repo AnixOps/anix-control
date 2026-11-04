@@ -19,6 +19,28 @@ TAG_PATTERN = re.compile(r"^v(?P<version>[0-9]+\.[0-9]+\.[0-9]+(?:-(?:alpha|beta
 # repository cannot be checked offline: only its format is.
 AGENT_RELEASE_FILE = "config/AGENT_RELEASE"
 AGENT_TAG_PATTERN = re.compile(r"^v[0-9]+\.[0-9]+\.[0-9]+(?:-rc\.[0-9]+)?$")
+# Since 5.0.0 Control and the Agent share major.minor (the version line) and
+# number their patches independently (docs/reference/agent-versioning.md):
+# a Control release must pin an Agent of its own line.
+VERSION_LINE_SINCE = (5, 0)
+
+
+def version_line(version: str) -> tuple[int, int]:
+    major, minor = version.lstrip("v").split(".")[:2]
+    return int(major), int(minor)
+
+
+def check_agent_version_line(control_version: str, agent_tag: str) -> None:
+    control_line = version_line(control_version)
+    if control_line < VERSION_LINE_SINCE:
+        return
+    agent_line = version_line(agent_tag)
+    if agent_line != control_line:
+        raise ValueError(
+            f"{AGENT_RELEASE_FILE}: Agent {agent_tag} is on version line {agent_line[0]}.{agent_line[1]}, "
+            f"but Control {control_version} is on {control_line[0]}.{control_line[1]}: "
+            "pin an Agent release of the same major.minor (docs/reference/agent-versioning.md)"
+        )
 
 
 def validate_agent_tag(tag: str) -> str:
@@ -121,7 +143,7 @@ def check_release_version(repo_root: Path, tag: str) -> str:
         version,
         "README release",
     )
-    read_agent_release(repo_root)
+    check_agent_version_line(version, read_agent_release(repo_root))
     return version
 
 
@@ -205,6 +227,21 @@ def self_test() -> None:
                 assert AGENT_RELEASE_FILE in str(error), (bad, error)
             else:
                 raise AssertionError(f"Agent release {bad!r} was accepted")
+        # From 5.0.0 the pinned Agent shares Control's major.minor; patches
+        # are independent.
+        write_fixture(root, "5.0.2")
+        for good in ("v5.0.0\n", "v5.0.7\n", "v5.0.0-rc.29\n"):
+            agent_release.write_text(good, encoding="utf-8")
+            assert check_release_version(root, "v5.0.2") == "5.0.2", good
+        for bad in ("v5.1.0\n", "v4.2.0\n", "v6.0.0\n"):
+            agent_release.write_text(bad, encoding="utf-8")
+            try:
+                check_release_version(root, "v5.0.2")
+            except ValueError as error:
+                assert "version line" in str(error), (bad, error)
+            else:
+                raise AssertionError(f"Agent release {bad!r} of another line was accepted")
+        write_fixture(root, version)
         agent_release.unlink()
         try:
             check_release_version(root, f"v{version}")

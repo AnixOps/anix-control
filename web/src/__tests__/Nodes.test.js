@@ -260,6 +260,23 @@ describe('Nodes.vue', () => {
       expect(wrapper.find('[data-testid="node-kernel-version"]').text()).toBe('anx-node 0.1.0-alpha.9')
     })
 
+    it('flags an Agent that is not compatible with this Control, with the reasons as a hint', async () => {
+      kernelApi.getKernelAdminNodes.mockResolvedValue({ list: [nodes[0]], total: 1 })
+      kernelApi.getKernelAgentTransports.mockResolvedValue({ nodes: [{ ...inventory.nodes[0], agent_version: 'v5.0.0', compatibility: { status: 'incompatible', problems: [{ code: 'kernel_too_old', severity: 'incompatible', message: 'x' }, { code: 'future_code', severity: 'warning', message: 'server text' }] } }] })
+      const { wrapper } = await mountNodes()
+      const badge = wrapper.find('[data-testid="node-agent-compatibility"]')
+      expect(badge.text()).toBe('Incompatible')
+      expect(badge.attributes('title')).toContain('upgrade the kernel')
+      expect(badge.attributes('title')).toContain('server text')
+    })
+
+    it('shows no compatibility badge for a compatible Agent', async () => {
+      kernelApi.getKernelAdminNodes.mockResolvedValue({ list: [nodes[0]], total: 1 })
+      kernelApi.getKernelAgentTransports.mockResolvedValue({ nodes: [{ ...inventory.nodes[0], agent_version: 'v5.0.0', compatibility: { status: 'compatible', problems: [] } }] })
+      const { wrapper } = await mountNodes()
+      expect(wrapper.find('[data-testid="node-agent-compatibility"]').exists()).toBe(false)
+    })
+
     it('flags a valid certificate whose Agent did not renew in time', async () => {
       kernelApi.getKernelAdminNodes.mockResolvedValue({ list: [nodes[0]], total: 1 })
       kernelApi.getKernelAgentTransports.mockResolvedValue({ nodes: [{ node: 'proxy-5', certificate_state: 'valid', last_certificate: cert({ renew_after: '2000-01-01T00:00:00Z', not_after: '2999-02-01T12:00:00Z' }), connection: { type: 'apikey_stream' } }] })

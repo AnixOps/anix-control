@@ -110,8 +110,16 @@ type NodeTransports struct {
 	// KernelVersion is the anx-node release the node's live session
 	// reported, "" without a live session or when the Agent reports none
 	// (no kernel installed, or an Agent that predates the report).
-	KernelVersion string     `json:"kernel_version,omitempty"`
-	LastSeenAt    *time.Time `json:"last_seen_at"`
+	KernelVersion string `json:"kernel_version,omitempty"`
+	// ProtocolRevision is the protocol revision the node's live session
+	// speaks, 0 without a live session.
+	ProtocolRevision uint32 `json:"protocol_revision,omitempty"`
+	// Compatibility judges the live session against this Control
+	// (agentcontrol.CheckCompatibility): its protocol revision, version
+	// line and kernel. Nil without a live session or when the inventory
+	// was built without Options.Control.
+	Compatibility *agentcontrol.Compatibility `json:"compatibility"`
+	LastSeenAt    *time.Time                  `json:"last_seen_at"`
 	// Certificate is the newest valid certificate, nil when there is none:
 	// nil also means never enrolled to the readiness check.
 	Certificate *Certificate `json:"certificate"`
@@ -143,9 +151,13 @@ type LiveSession struct {
 	Certificate  *agentstreams.SessionCertificate `json:"certificate"`
 	AgentVersion string                           `json:"agent_version,omitempty"`
 	// KernelVersion is the anx-node release the session's Hello named.
-	KernelVersion string    `json:"kernel_version,omitempty"`
-	ConnectedAt   time.Time `json:"connected_at"`
-	LastSeenAt    time.Time `json:"last_seen_at"`
+	KernelVersion string `json:"kernel_version,omitempty"`
+	// ProtocolRevision is the protocol revision the Hello named and
+	// KernelMinVersion the oldest anx-node release the Agent works with.
+	ProtocolRevision uint32    `json:"protocol_revision"`
+	KernelMinVersion string    `json:"kernel_min_version,omitempty"`
+	ConnectedAt      time.Time `json:"connected_at"`
+	LastSeenAt       time.Time `json:"last_seen_at"`
 	// NegotiatedCapabilities are the data-plane capabilities in use on the
 	// session (name.version, such as config.v1).
 	NegotiatedCapabilities []string `json:"negotiated_capabilities"`
@@ -162,6 +174,10 @@ type Summary struct {
 	Total  int `json:"total"`
 	MTLS   int `json:"mtls"`
 	Unseen int `json:"unseen"`
+	// Incompatible and CompatibilityWarnings count the listed nodes whose
+	// live session is judged incompatible or with a warning.
+	Incompatible          int `json:"incompatible"`
+	CompatibilityWarnings int `json:"compatibility_warnings"`
 	// ReadyForRequired is true when no enabled node is unseen without an
 	// agent certificate. It is computed over every node.
 	ReadyForRequired bool `json:"ready_for_required"`
@@ -215,11 +231,24 @@ func requiredReasons(summary Summary) []string {
 	return reasons
 }
 
+// ControlVersions is what a Control serves its Agents: its release, the
+// Agent release it installs, and the protocol revisions it serves.
+type ControlVersions struct {
+	Version      string `json:"version"`
+	AgentRelease string `json:"agent_release,omitempty"`
+	// VersionLine is the major.minor every Agent should share.
+	VersionLine         string `json:"version_line,omitempty"`
+	ProtocolRevisionMin uint32 `json:"protocol_revision_min"`
+	ProtocolRevisionMax uint32 `json:"protocol_revision_max"`
+}
+
 // Inventory is the transport inventory.
 type Inventory struct {
-	GeneratedAt time.Time        `json:"generated_at"`
-	Summary     Summary          `json:"summary"`
-	Nodes       []NodeTransports `json:"nodes"`
+	GeneratedAt time.Time `json:"generated_at"`
+	// Control is Options.Control, nil without it.
+	Control *ControlVersions `json:"control"`
+	Summary Summary          `json:"summary"`
+	Nodes   []NodeTransports `json:"nodes"`
 	// UpgradeGuide is where the operator reads how to move legacy nodes.
 	UpgradeGuide string `json:"upgrade_guide"`
 }
@@ -254,6 +283,9 @@ type Options struct {
 	// empty keeps every node. It narrows the list and its counts, not the
 	// readiness fields of the summary, which cover every node.
 	Nodes []agentcontrol.AgentNode
+	// Control, when set, judges every live session against it
+	// (NodeTransports.Compatibility).
+	Control *ControlVersions
 }
 
 // Build reads the transport inventory: every proxy and forward node with
@@ -266,6 +298,13 @@ func Build(ctx context.Context, db *gorm.DB, options Options) (Inventory, error)
 	now = now.UTC()
 	inventory := Inventory{GeneratedAt: now, UpgradeGuide: UpgradeGuideURL, Nodes: []NodeTransports{},
 		Summary: Summary{RequiredReasons: []string{}, RequiredBlockers: []RequiredBlocker{}}}
+	if options.Control != nil {
+		control := *options.Control
+		if line, ok := agentcontrol.VersionLine(control.Version); ok {
+			control.VersionLine = line
+		}
+		inventory.Control = &control
+	}
 	db = db.WithContext(ctx)
 
 	var proxies []inventoryProxyNode
@@ -328,7 +367,8 @@ func Build(ctx context.Context, db *gorm.DB, options Options) (Inventory, error)
 			negotiated := append([]string{}, session.NegotiatedCapabilities...)
 			liveSessions[nodeKey{session.Node.Kind, uint(session.Node.ID)}] = &LiveSession{
 				SessionID: session.SessionID, Authentication: session.Authentication, Identity: session.Identity,
-				Certificate: session.Certificate, AgentVersion: session.AgentVersion, KernelVersion: session.KernelVersion, ConnectedAt: session.ConnectedAt.UTC(),
+				Certificate: session.Certificate, AgentVersion: session.AgentVersion, KernelVersion: session.KernelVersion,
+				ProtocolRevision: session.ProtocolRevision, KernelMinVersion: session.KernelMinVersion, ConnectedAt: session.ConnectedAt.UTC(),
 				LastSeenAt: session.LastSeen.UTC(), NegotiatedCapabilities: negotiated,
 				AgentMetrics: session.AgentMetrics, AgentMetricsAt: session.AgentMetricsAt,
 			}
@@ -351,6 +391,16 @@ func Build(ctx context.Context, db *gorm.DB, options Options) (Inventory, error)
 		}
 		if node.Session != nil {
 			node.KernelVersion = node.Session.KernelVersion
+			node.ProtocolRevision = node.Session.ProtocolRevision
+			if inventory.Control != nil {
+				compatibility := agentcontrol.CheckCompatibility(agentcontrol.CompatibilityInput{
+					ControlVersion: inventory.Control.Version,
+					MinRevision:    inventory.Control.ProtocolRevisionMin, MaxRevision: inventory.Control.ProtocolRevisionMax,
+					AgentVersion: node.Session.AgentVersion, AgentRevision: node.Session.ProtocolRevision,
+					KernelVersion: node.Session.KernelVersion, KernelMinVersion: node.Session.KernelMinVersion,
+				})
+				node.Compatibility = &compatibility
+			}
 		}
 		classify(&node, fallbackVersion)
 		node.CertificateState = certificateState(node.Certificate, node.LastCertificate)
@@ -380,6 +430,14 @@ func Build(ctx context.Context, db *gorm.DB, options Options) (Inventory, error)
 			inventory.Summary.MTLS++
 		default:
 			inventory.Summary.Unseen++
+		}
+		if node.Compatibility != nil {
+			switch node.Compatibility.Status {
+			case agentcontrol.CompatibilityIncompatible:
+				inventory.Summary.Incompatible++
+			case agentcontrol.CompatibilityWarning:
+				inventory.Summary.CompatibilityWarnings++
+			}
 		}
 	}
 	inventory.Summary.RequiredReasons = requiredReasons(inventory.Summary)

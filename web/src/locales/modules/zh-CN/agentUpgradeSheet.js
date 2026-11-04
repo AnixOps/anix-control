@@ -10,7 +10,10 @@ export default {
     start: {
       title: '开始升级',
       target: '目标版本',
-      targetHelp: '默认是 Control 安装脚本固定的 Agent 版本，不能比 Control（{control}）新。',
+      targetHelp: '默认是 Control 安装脚本固定的 Agent 版本。Agent 要和 Control（{control}）在同一版本线（主版本号.次版本号相同），补丁号各自独立。',
+      lineMismatch: '默认目标 {target} 和 Control（{control}）不在同一版本线：请把同一版本线的 Agent 发布放进 agent_install.artifact_dir。',
+      nodeIncompatible: '版本不兼容',
+      nodeWarning: '版本需关注',
       batches: '灰度批次（累计百分比）',
       batchesHelp: '用逗号分隔。第一批最多 {first}%，最后一批是 100%。',
       minimum: '每批最短时间',
