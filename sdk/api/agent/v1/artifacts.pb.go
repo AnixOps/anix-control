@@ -429,6 +429,133 @@ func (x *PluginArtifactChunk) GetData() []byte {
 	return nil
 }
 
+// DownloadReleaseRequest names one release file by the fields of the
+// agent.upgrade operation: kind "agent" (version is the release tag, asset
+// the UpgradeArtifact asset) or "anx-node" (version is UpgradeKernel.version
+// and asset its package).
+type DownloadReleaseRequest struct {
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Kind    string                 `protobuf:"bytes,1,opt,name=kind,proto3" json:"kind,omitempty"`
+	Version string                 `protobuf:"bytes,2,opt,name=version,proto3" json:"version,omitempty"`
+	Asset   string                 `protobuf:"bytes,3,opt,name=asset,proto3" json:"asset,omitempty"`
+	// offset is where to start in the file.
+	Offset        int64 `protobuf:"varint,4,opt,name=offset,proto3" json:"offset,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DownloadReleaseRequest) Reset() {
+	*x = DownloadReleaseRequest{}
+	mi := &file_api_grpc_agent_v1_artifacts_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DownloadReleaseRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DownloadReleaseRequest) ProtoMessage() {}
+
+func (x *DownloadReleaseRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_grpc_agent_v1_artifacts_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DownloadReleaseRequest.ProtoReflect.Descriptor instead.
+func (*DownloadReleaseRequest) Descriptor() ([]byte, []int) {
+	return file_api_grpc_agent_v1_artifacts_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *DownloadReleaseRequest) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *DownloadReleaseRequest) GetVersion() string {
+	if x != nil {
+		return x.Version
+	}
+	return ""
+}
+
+func (x *DownloadReleaseRequest) GetAsset() string {
+	if x != nil {
+		return x.Asset
+	}
+	return ""
+}
+
+func (x *DownloadReleaseRequest) GetOffset() int64 {
+	if x != nil {
+		return x.Offset
+	}
+	return 0
+}
+
+// ReleaseChunk is one piece of a release file.
+type ReleaseChunk struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// offset is the position of data in the file.
+	Offset        int64  `protobuf:"varint,1,opt,name=offset,proto3" json:"offset,omitempty"`
+	Data          []byte `protobuf:"bytes,2,opt,name=data,proto3" json:"data,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReleaseChunk) Reset() {
+	*x = ReleaseChunk{}
+	mi := &file_api_grpc_agent_v1_artifacts_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReleaseChunk) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReleaseChunk) ProtoMessage() {}
+
+func (x *ReleaseChunk) ProtoReflect() protoreflect.Message {
+	mi := &file_api_grpc_agent_v1_artifacts_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReleaseChunk.ProtoReflect.Descriptor instead.
+func (*ReleaseChunk) Descriptor() ([]byte, []int) {
+	return file_api_grpc_agent_v1_artifacts_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *ReleaseChunk) GetOffset() int64 {
+	if x != nil {
+		return x.Offset
+	}
+	return 0
+}
+
+func (x *ReleaseChunk) GetData() []byte {
+	if x != nil {
+		return x.Data
+	}
+	return nil
+}
+
 var File_api_grpc_agent_v1_artifacts_proto protoreflect.FileDescriptor
 
 const file_api_grpc_agent_v1_artifacts_proto_rawDesc = "" +
@@ -462,10 +589,19 @@ const file_api_grpc_agent_v1_artifacts_proto_rawDesc = "" +
 	"\x13PluginArtifactChunk\x126\n" +
 	"\arelease\x18\x01 \x01(\v2\x1c.anix.agent.v1.PluginReleaseR\arelease\x12\x16\n" +
 	"\x06offset\x18\x02 \x01(\x03R\x06offset\x12\x12\n" +
-	"\x04data\x18\x03 \x01(\fR\x04data2\xe6\x01\n" +
+	"\x04data\x18\x03 \x01(\fR\x04data\"t\n" +
+	"\x16DownloadReleaseRequest\x12\x12\n" +
+	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x18\n" +
+	"\aversion\x18\x02 \x01(\tR\aversion\x12\x14\n" +
+	"\x05asset\x18\x03 \x01(\tR\x05asset\x12\x16\n" +
+	"\x06offset\x18\x04 \x01(\x03R\x06offset\":\n" +
+	"\fReleaseChunk\x12\x16\n" +
+	"\x06offset\x18\x01 \x01(\x03R\x06offset\x12\x12\n" +
+	"\x04data\x18\x02 \x01(\fR\x04data2\xbf\x02\n" +
 	"\x0eAgentArtifacts\x12f\n" +
 	"\x11GetPluginManifest\x12'.anix.agent.v1.GetPluginManifestRequest\x1a(.anix.agent.v1.GetPluginManifestResponse\x12l\n" +
-	"\x16DownloadPluginArtifact\x12,.anix.agent.v1.DownloadPluginArtifactRequest\x1a\".anix.agent.v1.PluginArtifactChunk0\x01B<Z:github.com/AnixOps/anix-control/sdk/api/agent/v1;agentv1pbb\x06proto3"
+	"\x16DownloadPluginArtifact\x12,.anix.agent.v1.DownloadPluginArtifactRequest\x1a\".anix.agent.v1.PluginArtifactChunk0\x01\x12W\n" +
+	"\x0fDownloadRelease\x12%.anix.agent.v1.DownloadReleaseRequest\x1a\x1b.anix.agent.v1.ReleaseChunk0\x01B<Z:github.com/AnixOps/anix-control/sdk/api/agent/v1;agentv1pbb\x06proto3"
 
 var (
 	file_api_grpc_agent_v1_artifacts_proto_rawDescOnce sync.Once
@@ -479,7 +615,7 @@ func file_api_grpc_agent_v1_artifacts_proto_rawDescGZIP() []byte {
 	return file_api_grpc_agent_v1_artifacts_proto_rawDescData
 }
 
-var file_api_grpc_agent_v1_artifacts_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_api_grpc_agent_v1_artifacts_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_api_grpc_agent_v1_artifacts_proto_goTypes = []any{
 	(*PluginReleaseAddress)(nil),          // 0: anix.agent.v1.PluginReleaseAddress
 	(*PluginRelease)(nil),                 // 1: anix.agent.v1.PluginRelease
@@ -487,6 +623,8 @@ var file_api_grpc_agent_v1_artifacts_proto_goTypes = []any{
 	(*GetPluginManifestResponse)(nil),     // 3: anix.agent.v1.GetPluginManifestResponse
 	(*DownloadPluginArtifactRequest)(nil), // 4: anix.agent.v1.DownloadPluginArtifactRequest
 	(*PluginArtifactChunk)(nil),           // 5: anix.agent.v1.PluginArtifactChunk
+	(*DownloadReleaseRequest)(nil),        // 6: anix.agent.v1.DownloadReleaseRequest
+	(*ReleaseChunk)(nil),                  // 7: anix.agent.v1.ReleaseChunk
 }
 var file_api_grpc_agent_v1_artifacts_proto_depIdxs = []int32{
 	0, // 0: anix.agent.v1.GetPluginManifestRequest.manifest:type_name -> anix.agent.v1.PluginReleaseAddress
@@ -495,10 +633,12 @@ var file_api_grpc_agent_v1_artifacts_proto_depIdxs = []int32{
 	1, // 3: anix.agent.v1.PluginArtifactChunk.release:type_name -> anix.agent.v1.PluginRelease
 	2, // 4: anix.agent.v1.AgentArtifacts.GetPluginManifest:input_type -> anix.agent.v1.GetPluginManifestRequest
 	4, // 5: anix.agent.v1.AgentArtifacts.DownloadPluginArtifact:input_type -> anix.agent.v1.DownloadPluginArtifactRequest
-	3, // 6: anix.agent.v1.AgentArtifacts.GetPluginManifest:output_type -> anix.agent.v1.GetPluginManifestResponse
-	5, // 7: anix.agent.v1.AgentArtifacts.DownloadPluginArtifact:output_type -> anix.agent.v1.PluginArtifactChunk
-	6, // [6:8] is the sub-list for method output_type
-	4, // [4:6] is the sub-list for method input_type
+	6, // 6: anix.agent.v1.AgentArtifacts.DownloadRelease:input_type -> anix.agent.v1.DownloadReleaseRequest
+	3, // 7: anix.agent.v1.AgentArtifacts.GetPluginManifest:output_type -> anix.agent.v1.GetPluginManifestResponse
+	5, // 8: anix.agent.v1.AgentArtifacts.DownloadPluginArtifact:output_type -> anix.agent.v1.PluginArtifactChunk
+	7, // 9: anix.agent.v1.AgentArtifacts.DownloadRelease:output_type -> anix.agent.v1.ReleaseChunk
+	7, // [7:10] is the sub-list for method output_type
+	4, // [4:7] is the sub-list for method input_type
 	4, // [4:4] is the sub-list for extension type_name
 	4, // [4:4] is the sub-list for extension extendee
 	0, // [0:4] is the sub-list for field type_name
@@ -515,7 +655,7 @@ func file_api_grpc_agent_v1_artifacts_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_grpc_agent_v1_artifacts_proto_rawDesc), len(file_api_grpc_agent_v1_artifacts_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   6,
+			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

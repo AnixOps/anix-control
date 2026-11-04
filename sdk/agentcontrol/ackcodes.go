@@ -115,6 +115,25 @@ const (
 	ErrorCodePluginReleaseBusy = "plugin_release_download_busy"
 )
 
+// Release download refusals (AgentArtifacts.DownloadRelease), in the
+// MetadataErrorCode trailer.
+const (
+	// ErrorCodeReleaseRequestInvalid (InvalidArgument): the kind, version,
+	// asset or offset names no release file.
+	ErrorCodeReleaseRequestInvalid = "invalid_release_request"
+	// ErrorCodeReleaseNotFound (NotFound): Control holds no such file.
+	ErrorCodeReleaseNotFound = "release_not_found"
+)
+
+// Release kinds of DownloadReleaseRequest.kind.
+const (
+	// ReleaseKindAgent names an Agent release asset (UpgradeArtifact).
+	ReleaseKindAgent = "agent"
+	// ReleaseKindKernel names a kernel package (UpgradeKernel); its value
+	// is the kernel's name.
+	ReleaseKindKernel = KernelAnxNode
+)
+
 // Forward link certificate refusals (AgentEnrollment.IssueLinkCertificate
 // and GetLinkTrustBundle, owner decision H28), in the MetadataErrorCode
 // trailer. Calls without a valid agent client certificate answer the

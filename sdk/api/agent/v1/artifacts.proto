@@ -30,6 +30,16 @@ service AgentArtifacts {
   // DownloadPluginArtifact streams the artifact of a release in chunks of
   // at most 1 MiB, in order. The first chunk carries the release.
   rpc DownloadPluginArtifact(DownloadPluginArtifactRequest) returns (stream PluginArtifactChunk);
+  // DownloadRelease streams a file of an Agent or kernel release that an
+  // agent.upgrade operation names (UpgradeArtifact, UpgradeKernel), from
+  // Control's agent_install.artifact_dir, in chunks of at most 1 MiB, in
+  // order, starting at the request's offset so an interrupted download
+  // resumes. The Agent verifies the file exactly as it verifies the HTTPS
+  // download of the operation's URL; this only moves the bytes onto the
+  // session's mTLS connection. Served to proxy and forward nodes of a
+  // session that negotiated releases.v1 (HelloAck.server_capabilities).
+  // PROTOCOL.md, "Release downloads".
+  rpc DownloadRelease(DownloadReleaseRequest) returns (stream ReleaseChunk);
 }
 
 // PluginReleaseAddress is the immutable content address of a release
@@ -86,4 +96,23 @@ message PluginArtifactChunk {
   // offset is the position of data in the artifact.
   int64 offset = 2;
   bytes data = 3;
+}
+
+// DownloadReleaseRequest names one release file by the fields of the
+// agent.upgrade operation: kind "agent" (version is the release tag, asset
+// the UpgradeArtifact asset) or "anx-node" (version is UpgradeKernel.version
+// and asset its package).
+message DownloadReleaseRequest {
+  string kind = 1;
+  string version = 2;
+  string asset = 3;
+  // offset is where to start in the file.
+  int64 offset = 4;
+}
+
+// ReleaseChunk is one piece of a release file.
+message ReleaseChunk {
+  // offset is the position of data in the file.
+  int64 offset = 1;
+  bytes data = 2;
 }

@@ -174,6 +174,9 @@ stream equivalent.
     authenticated by client certificate (`AgentArtifacts` reads no node
     API key, so a session on the API key is not offered it).
   - `upgrade.v1` (see "Agent upgrades"): proxy and forward nodes.
+  - `releases.v1` (see "Release downloads"): proxy and forward nodes that
+    are offered `upgrade.v1`, on a session authenticated by client
+    certificate.
   - `destinations.v1` (see "Destination statistics"): proxy nodes, whatever
     the administrator's setting, so that turning the statistics on or off
     needs no reconnect.
@@ -622,6 +625,30 @@ stream equivalent.
     enrolled yet, or a Control without `artifacts.v1`, still installs over
     it with the node API key. An enrolled Agent no longer holds the key and
     uses `AgentArtifacts`.
+- **Release downloads** (`releases.v1`). `AgentArtifacts.DownloadRelease`
+  moves the files of an `agent.upgrade` operation onto the session's mTLS
+  connection, so a node never fetches its Agent or kernel over a separate
+  https request to Control.
+  - **Authentication.** A valid agent client certificate of a proxy or
+    forward node, enabled, as `upgrade.v1` is offered.
+  - **Request.** `kind` is `agent` (`version` the release tag, `asset` an
+    `UpgradeArtifact.asset`) or `anx-node` (`version` the
+    `UpgradeKernel.version`, `asset` its package) and the `offset` to start
+    at. Control reads the file from `agent_install.artifact_dir` (the files
+    the https URL serves) and refuses a missing one (`NotFound`,
+    `release_not_found`) and a name that is no release file
+    (`InvalidArgument`, `invalid_release_request`).
+  - **Answer.** The file from `offset` in chunks of at most 1 MiB with their
+    `offset`. An Agent whose stream breaks asks again from the next offset
+    it has not received, so a link that cuts long HTTP/2 streams still
+    completes the download.
+  - **Verification** stays with the Agent: it checks the whole file's size,
+    SHA-256 and release signature against the operation, as for the https
+    download.
+  - A node runs at most 2 downloads at once, plugin and release downloads
+    together (`ResourceExhausted`, `plugin_release_download_busy`).
+  - The operation still carries its https `url`; an Agent without
+    `releases.v1`, or whose gRPC download fails, uses it.
 
 ## Diagnostic operation
 
