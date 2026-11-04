@@ -173,6 +173,7 @@ The console uses the same routes
    | `-u`, `--control` | Control's address (in the copied command) |
    | `-t`, `--token` | the join token (in the copied command); `ANIX_AGENT_TOKEN` in the environment works too and keeps it out of the shell history |
    | `--name hk-01` | the new node's name; default: the machine's host name. Control makes it unique in the group with `-2`, `-3` |
+   | `--install-name nodemon` | install under a neutral name for hosts that are scanned: the account, units, directories (`/usr/lib/nodemon`, `/etc/nodemon`, `/var/lib/nodemon`) and binaries (`nodemon`, the kernel `core`) are all called it, the unit runs the binary without arguments, and the files written carry no comments naming AnixOps. Give it again to `uninstall`; needs an Agent that derives its layout from its path (5.1) |
    | `--host 203.0.113.5` | the address clients connect to; default: the machine's public address as Control sees it |
    | `--mirror cn\|github`, `--offline <bundle>` | where the Agent comes from ([sources](#enrolling-an-existing-node), [offline](#installing-without-internet-access)) |
    | `--reset` | discard this machine's identity and join as a new node |
@@ -461,7 +462,7 @@ interfaces unless `--no-accept-ra` is given.
 | IPv6 SLAAC (forward nodes) | | an interface with a default route from router advertisements has `accept_ra` other than 2: with forwarding on the kernel ignores router advertisements and the route expires. Only with `--no-accept-ra`: otherwise the drop-in sets it |
 | Ports | | with `--port-range FROM-TO` (the node's forward port range in Control), a listener in that range (`ss`). The Agent itself listens on no port; without the flag the check is skipped |
 | Disk | less than 200 MiB free for `/usr/lib/anixops-agent` or the download directory | |
-| Control over https | online: `/install/agent.env` cannot be read with a verified certificate (stops before preflight) | offline: Control's https address is unreachable |
+| Control over https | online: `/install/agent.env` cannot be read with a verified certificate (stops before preflight) | |
 | gRPC target | it does not resolve, refuses or times out, its certificate does not verify against the system CAs (the Agent checks it the same way), or the TLS handshake fails | `curl` has no HTTP/2 and the handshake failed, or the result is inconclusive |
 | Clock | more than 5 minutes off Control's `Date` header (certificates stop verifying) | more than 30 seconds off, or no `Date` header |
 
@@ -474,7 +475,9 @@ polkit (Ubuntu 24.04, Debian 12) to forward with gost.
 
 A node that cannot download from Control's mirrors or GitHub installs from
 an offline bundle. The node still needs to reach Control's gRPC target to
-join; only the downloads move to the bundle.
+join; only the downloads move to the bundle. With `--offline` the script
+makes no https request to Control at all (no metadata, no address
+detection, no Control check): the node only opens the gRPC connection.
 
 1. Put the Agent release in `agent_install.artifact_dir` on Control
    (`<dir>/<tag>/`): the zips and their `.sig` files, `SHA256SUMS` and

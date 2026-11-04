@@ -1168,6 +1168,9 @@ func (s *AgentControlGRPCServer) sessionCapabilities(principal agentPrincipal, a
 	if servesArtifacts(principal, agent) {
 		capabilities = append(capabilities, &agentv1pb.Capability{Name: agentcontrol.CapabilityArtifacts, Version: agentcontrol.CapabilityVersionV1})
 	}
+	if servesReleases(principal, agent) {
+		capabilities = append(capabilities, &agentv1pb.Capability{Name: agentcontrol.CapabilityReleases, Version: agentcontrol.CapabilityVersionV1})
+	}
 	return capabilities
 }
 

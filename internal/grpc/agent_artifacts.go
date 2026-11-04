@@ -141,6 +141,19 @@ func (s *AgentArtifactsGRPCServer) downloadPluginArtifact(request *agentv1pb.Dow
 // authenticate returns the node of the call's client certificate: an
 // enabled proxy node. No node API key is read.
 func (s *AgentArtifactsGRPCServer) authenticate(ctx context.Context) (agentcontrol.AgentNode, error) {
+	node, err := s.certificateNode(ctx)
+	if err != nil {
+		return node, err
+	}
+	if node.Kind != agentcontrol.NodeKindProxy {
+		return agentcontrol.AgentNode{}, refuseAgent(agentcontrol.ErrorCodePluginReleaseNotAssigned, codes.PermissionDenied, "only proxy nodes have plugin assignments")
+	}
+	return node, nil
+}
+
+// certificateNode returns the enabled node of the call's client
+// certificate.
+func (s *AgentArtifactsGRPCServer) certificateNode(ctx context.Context) (agentcontrol.AgentNode, error) {
 	principal, ok, err := s.auth.certificatePrincipal(ctx)
 	if err != nil {
 		return agentcontrol.AgentNode{}, err
@@ -153,9 +166,6 @@ func (s *AgentArtifactsGRPCServer) authenticate(ctx context.Context) (agentcontr
 			return agentcontrol.AgentNode{}, refuseAgent(agentcontrol.ErrorCodeCertRevoked, codes.PermissionDenied, "node is disabled or no longer exists")
 		}
 		return agentcontrol.AgentNode{}, status.Error(codes.Unavailable, "node check failed")
-	}
-	if principal.Node.Kind != agentcontrol.NodeKindProxy {
-		return agentcontrol.AgentNode{}, refuseAgent(agentcontrol.ErrorCodePluginReleaseNotAssigned, codes.PermissionDenied, "only proxy nodes have plugin assignments")
 	}
 	return principal.Node, nil
 }

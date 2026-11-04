@@ -282,6 +282,10 @@ field anix.agent.v1.DestinationTraffic.protocol = 3 optional string
 field anix.agent.v1.DestinationTraffic.upload_bytes = 4 optional uint64
 field anix.agent.v1.DestinationTraffic.user_id = 1 optional uint64
 field anix.agent.v1.DownloadPluginArtifactRequest.artifact = 1 optional anix.agent.v1.PluginReleaseAddress
+field anix.agent.v1.DownloadReleaseRequest.asset = 3 optional string
+field anix.agent.v1.DownloadReleaseRequest.kind = 1 optional string
+field anix.agent.v1.DownloadReleaseRequest.offset = 4 optional int64
+field anix.agent.v1.DownloadReleaseRequest.version = 2 optional string
 field anix.agent.v1.EnrollAgentRequest.agent_version = 3 optional string
 field anix.agent.v1.EnrollAgentRequest.csr_der = 1 optional bytes
 field anix.agent.v1.EnrollAgentRequest.enrollment_credential = 2 optional string
@@ -423,6 +427,8 @@ field anix.agent.v1.PluginReleaseAddress.version = 2 optional string
 field anix.agent.v1.PluginRuleCounter.bytes = 3 optional uint64
 field anix.agent.v1.PluginRuleCounter.packets = 2 optional uint64
 field anix.agent.v1.PluginRuleCounter.rule_id = 1 optional string
+field anix.agent.v1.ReleaseChunk.data = 2 optional bytes
+field anix.agent.v1.ReleaseChunk.offset = 1 optional int64
 field anix.agent.v1.RenewAgentCertificateRequest.csr_der = 1 optional bytes
 field anix.agent.v1.RenewAgentCertificateResponse.certificate = 1 optional anix.agent.v1.AgentCertificate
 field anix.agent.v1.ReportAck.applied = 2 optional bool
@@ -1724,6 +1730,7 @@ field anixops.packagebridge.v1.WebSocketFrame.open = 1 optional anixops.packageb
 field anixops.packagebridge.v1.WebSocketOpen.capability = 1 optional bytes
 field anixops.packagebridge.v1.WebSocketOpen.operation = 2 optional string
 rpc anix.agent.v1.AgentArtifacts.DownloadPluginArtifact(anix.agent.v1.DownloadPluginArtifactRequest) returns (stream anix.agent.v1.PluginArtifactChunk)
+rpc anix.agent.v1.AgentArtifacts.DownloadRelease(anix.agent.v1.DownloadReleaseRequest) returns (stream anix.agent.v1.ReleaseChunk)
 rpc anix.agent.v1.AgentArtifacts.GetPluginManifest(anix.agent.v1.GetPluginManifestRequest) returns (anix.agent.v1.GetPluginManifestResponse)
 rpc anix.agent.v1.AgentControlService.ControlStream(stream anix.agent.v1.AgentToControl) returns (stream anix.agent.v1.ControlToAgent)
 rpc anix.agent.v1.AgentEnrollment.Enroll(anix.agent.v1.EnrollAgentRequest) returns (anix.agent.v1.EnrollAgentResponse)

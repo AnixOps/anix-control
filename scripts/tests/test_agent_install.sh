@@ -650,8 +650,9 @@ if openssl pkeyutl -help 2>&1 | grep -q -- '-rawin'; then
   metadata
   FAKE_CONTROL_DOWN=1 FAKE_IP=down ANIX_INSTALL_PUBLIC_KEY="${public}" run_installer -u "${CONTROL}" -t "${TOKEN_A}" --offline "${BUNDLE}"
   expect_status 0 "offline install without Control's https"
-  expect_out "cannot reach https://ctl.example.com over https"
-  ! grep -q '^agent join .*--address' "${STATE}/log" || fail "addresses passed although Control's https did not answer"
+  expect_out "Control's https address is not contacted"
+  ! grep -q '^agent join .*--address' "${STATE}/log" || fail "an offline install passed addresses"
+  ! grep -q "^curl ${CONTROL}/" "${STATE}/log" || fail "an offline install made https requests: $(grep "^curl ${CONTROL}/" "${STATE}/log")"
   new_root offline-nogrpc
   metadata
   FAKE_GRPC_RC=7 ANIX_INSTALL_PUBLIC_KEY="${public}" run_installer -u "${CONTROL}" -t "${TOKEN_A}" --offline "${BUNDLE}"
@@ -1029,5 +1030,31 @@ run_installer -u "${CONTROL}" -t "${TOKEN_A}"
 expect_status 0 "install without a kernel on Control"
 expect_out "kernel:      not installed (Control holds no anx-node release)"
 ok "the installer installs the anx-node Control holds"
+
+# A neutral install name: everything on the host is called it, the unit
+# runs the binary without arguments, and nothing written names AnixOps.
+new_root named
+metadata "kernel anx-node 0.1.0-alpha.9"
+build_kernel 0.1.0-alpha.9
+run_installer -u "${CONTROL}" -t "${TOKEN_A}" --install-name nodemon
+expect_status 0 "install under a neutral name"
+lib="${ROOT_DIR}/usr/lib/nodemon"
+[[ -x "${lib}/nodemon" && -x "${lib}/core" && -x "${lib}/core-server" && -f "${lib}/core.json" ]] || fail "named binaries: $(ls "${lib}")"
+[[ ! -e "${ROOT_DIR}/usr/local/bin/anix-agent" && ! -e "${ROOT_DIR}/usr/lib/anixops-agent" ]] || fail "a named install left AnixOps names"
+[[ -f "${ROOT_DIR}/etc/nodemon/config.json" && -d "${ROOT_DIR}/var/lib/nodemon/pki" ]] || fail "named config or state"
+unit="${ROOT_DIR}/etc/systemd/system/nodemon.service"
+for line in "ExecStart=/usr/lib/nodemon/nodemon" "User=nodemon" "RuntimeDirectory=nodemon" "Description=nodemon" "ReadWritePaths=/var/lib/nodemon"; do
+  grep -qxF "${line}" "${unit}" || fail "named unit lacks ${line}"
+done
+for file in "${unit}" "${ROOT_DIR}/etc/systemd/system/nodemon-updater.service" "${ROOT_DIR}/etc/systemd/system/nodemon-updater.path" \
+  "${ROOT_DIR}/etc/polkit-1/rules.d/50-nodemon.rules" "${ROOT_DIR}/etc/sysctl.d/90-nodemon.conf"; do
+  [[ -f "${file}" ]] || fail "missing ${file}"
+  ! grep -qi 'anixops\|anix-agent\|anx-node\|github' "${file}" || fail "${file} names AnixOps: $(grep -i 'anixops\|anix-agent\|anx-node\|github' "${file}")"
+done
+grep -qF 'useradd --system --gid nodemon' "${STATE}/log" || fail "named user not created"
+run_installer uninstall --purge --install-name nodemon
+expect_status 0 "uninstall under a neutral name"
+[[ ! -e "${lib}" && ! -e "${unit}" && ! -e "${ROOT_DIR}/etc/nodemon" ]] || fail "named uninstall left files"
+ok "an install under a neutral name"
 
 printf 'agent installer: %d checks passed\n' "${PASS}"

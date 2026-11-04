@@ -46,6 +46,12 @@ const (
 	// downloads its node's plugin releases without the node API key. It
 	// adds no stream payload.
 	CapabilityArtifacts = "artifacts"
+	// CapabilityReleases: Control serves AgentArtifacts.DownloadRelease
+	// (artifacts.proto) to the session's client certificate, so the Agent
+	// downloads the Agent and kernel files of an agent.upgrade operation
+	// over the mTLS connection instead of their https URL, which stays the
+	// fallback. It adds no stream payload.
+	CapabilityReleases = "releases"
 	// CapabilityDestinations: the Agent sends DestinationReport, each
 	// user's traffic by destination domain, and Control answers it with
 	// ReportAck as it answers reports.v1 batches.
@@ -66,7 +72,7 @@ const (
 // adds no payload but is offered by the same rule.
 var DataPlaneCapabilities = []string{
 	CapabilityConfig, CapabilityUsers, CapabilityReports, CapabilityPackageReports, CapabilityForward, CapabilityMaintenance,
-	CapabilityAlive, CapabilityArtifacts, CapabilityUpgrade, CapabilityDestinations, CapabilityNetwork,
+	CapabilityAlive, CapabilityArtifacts, CapabilityReleases, CapabilityUpgrade, CapabilityDestinations, CapabilityNetwork,
 }
 
 // Negotiated reports whether a data-plane capability is in use on a session:

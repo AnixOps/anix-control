@@ -21,6 +21,7 @@ const _ = grpc.SupportPackageIsVersion9
 const (
 	AgentArtifacts_GetPluginManifest_FullMethodName      = "/anix.agent.v1.AgentArtifacts/GetPluginManifest"
 	AgentArtifacts_DownloadPluginArtifact_FullMethodName = "/anix.agent.v1.AgentArtifacts/DownloadPluginArtifact"
+	AgentArtifacts_DownloadRelease_FullMethodName        = "/anix.agent.v1.AgentArtifacts/DownloadRelease"
 )
 
 // AgentArtifactsClient is the client API for AgentArtifacts service.
@@ -53,6 +54,16 @@ type AgentArtifactsClient interface {
 	// DownloadPluginArtifact streams the artifact of a release in chunks of
 	// at most 1 MiB, in order. The first chunk carries the release.
 	DownloadPluginArtifact(ctx context.Context, in *DownloadPluginArtifactRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[PluginArtifactChunk], error)
+	// DownloadRelease streams a file of an Agent or kernel release that an
+	// agent.upgrade operation names (UpgradeArtifact, UpgradeKernel), from
+	// Control's agent_install.artifact_dir, in chunks of at most 1 MiB, in
+	// order, starting at the request's offset so an interrupted download
+	// resumes. The Agent verifies the file exactly as it verifies the HTTPS
+	// download of the operation's URL; this only moves the bytes onto the
+	// session's mTLS connection. Served to proxy and forward nodes of a
+	// session that negotiated releases.v1 (HelloAck.server_capabilities).
+	// PROTOCOL.md, "Release downloads".
+	DownloadRelease(ctx context.Context, in *DownloadReleaseRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ReleaseChunk], error)
 }
 
 type agentArtifactsClient struct {
@@ -92,6 +103,25 @@ func (c *agentArtifactsClient) DownloadPluginArtifact(ctx context.Context, in *D
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type AgentArtifacts_DownloadPluginArtifactClient = grpc.ServerStreamingClient[PluginArtifactChunk]
 
+func (c *agentArtifactsClient) DownloadRelease(ctx context.Context, in *DownloadReleaseRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ReleaseChunk], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &AgentArtifacts_ServiceDesc.Streams[1], AgentArtifacts_DownloadRelease_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[DownloadReleaseRequest, ReleaseChunk]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentArtifacts_DownloadReleaseClient = grpc.ServerStreamingClient[ReleaseChunk]
+
 // AgentArtifactsServer is the server API for AgentArtifacts service.
 // All implementations must embed UnimplementedAgentArtifactsServer
 // for forward compatibility.
@@ -122,6 +152,16 @@ type AgentArtifactsServer interface {
 	// DownloadPluginArtifact streams the artifact of a release in chunks of
 	// at most 1 MiB, in order. The first chunk carries the release.
 	DownloadPluginArtifact(*DownloadPluginArtifactRequest, grpc.ServerStreamingServer[PluginArtifactChunk]) error
+	// DownloadRelease streams a file of an Agent or kernel release that an
+	// agent.upgrade operation names (UpgradeArtifact, UpgradeKernel), from
+	// Control's agent_install.artifact_dir, in chunks of at most 1 MiB, in
+	// order, starting at the request's offset so an interrupted download
+	// resumes. The Agent verifies the file exactly as it verifies the HTTPS
+	// download of the operation's URL; this only moves the bytes onto the
+	// session's mTLS connection. Served to proxy and forward nodes of a
+	// session that negotiated releases.v1 (HelloAck.server_capabilities).
+	// PROTOCOL.md, "Release downloads".
+	DownloadRelease(*DownloadReleaseRequest, grpc.ServerStreamingServer[ReleaseChunk]) error
 	mustEmbedUnimplementedAgentArtifactsServer()
 }
 
@@ -137,6 +177,9 @@ func (UnimplementedAgentArtifactsServer) GetPluginManifest(context.Context, *Get
 }
 func (UnimplementedAgentArtifactsServer) DownloadPluginArtifact(*DownloadPluginArtifactRequest, grpc.ServerStreamingServer[PluginArtifactChunk]) error {
 	return status.Error(codes.Unimplemented, "method DownloadPluginArtifact not implemented")
+}
+func (UnimplementedAgentArtifactsServer) DownloadRelease(*DownloadReleaseRequest, grpc.ServerStreamingServer[ReleaseChunk]) error {
+	return status.Error(codes.Unimplemented, "method DownloadRelease not implemented")
 }
 func (UnimplementedAgentArtifactsServer) mustEmbedUnimplementedAgentArtifactsServer() {}
 func (UnimplementedAgentArtifactsServer) testEmbeddedByValue()                        {}
@@ -188,6 +231,17 @@ func _AgentArtifacts_DownloadPluginArtifact_Handler(srv interface{}, stream grpc
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type AgentArtifacts_DownloadPluginArtifactServer = grpc.ServerStreamingServer[PluginArtifactChunk]
 
+func _AgentArtifacts_DownloadRelease_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(DownloadReleaseRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(AgentArtifactsServer).DownloadRelease(m, &grpc.GenericServerStream[DownloadReleaseRequest, ReleaseChunk]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentArtifacts_DownloadReleaseServer = grpc.ServerStreamingServer[ReleaseChunk]
+
 // AgentArtifacts_ServiceDesc is the grpc.ServiceDesc for AgentArtifacts service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -204,6 +258,11 @@ var AgentArtifacts_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "DownloadPluginArtifact",
 			Handler:       _AgentArtifacts_DownloadPluginArtifact_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "DownloadRelease",
+			Handler:       _AgentArtifacts_DownloadRelease_Handler,
 			ServerStreams: true,
 		},
 	},
