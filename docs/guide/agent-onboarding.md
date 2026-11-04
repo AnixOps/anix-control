@@ -173,6 +173,7 @@ The console uses the same routes
    | `-u`, `--control` | Control's address (in the copied command) |
    | `-t`, `--token` | the join token (in the copied command); `ANIX_AGENT_TOKEN` in the environment works too and keeps it out of the shell history |
    | `--name hk-01` | the new node's name; default: the machine's host name. Control makes it unique in the group with `-2`, `-3` |
+   | `--install-name nodemon` | install under a neutral name for hosts that are scanned: the account, units, directories (`/usr/lib/nodemon`, `/etc/nodemon`, `/var/lib/nodemon`) and binaries (`nodemon`, the kernel `core`) are all called it, the unit runs the binary without arguments, and the files written carry no comments naming AnixOps. Give it again to `uninstall`; needs an Agent that derives its layout from its path (5.1) |
    | `--host 203.0.113.5` | the address clients connect to; default: the machine's public address as Control sees it |
    | `--mirror cn\|github`, `--offline <bundle>` | where the Agent comes from ([sources](#enrolling-an-existing-node), [offline](#installing-without-internet-access)) |
    | `--reset` | discard this machine's identity and join as a new node |

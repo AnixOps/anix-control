@@ -61,36 +61,43 @@ readonly KERNEL_NAMESPACE="anx-release"
 # directory. Paths written into configuration and units never carry it.
 ROOT="${ANIX_INSTALL_ROOT:-}"
 
-readonly AGENT_USER="anixops-agent"
-readonly SERVICE="anix-agent.service"
+AGENT_USER="anixops-agent"
+SERVICE="anix-agent.service"
 # The privileged updater (forward-sdk.md section 9, O4): the Agent runs as
 # its own user under ProtectSystem=strict and cannot replace its binary.
 # For a Control-pushed upgrade it stages the verified release and writes
 # UPDATER_REQUEST; the path unit starts the root oneshot, which runs the
 # installed (root-owned) anix-agent to verify the release again, keep the
 # previous binary for a rollback and restart the Agent.
-readonly UPDATER_SERVICE="anixops-agent-updater.service"
-readonly UPDATER_PATH="anixops-agent-updater.path"
-readonly LIB_DIR="/usr/lib/anixops-agent"
-readonly BIN_LINK="/usr/local/bin/anix-agent"
-readonly CONFIG_DIR="/etc/anixops/agent"
-readonly CONFIG_FILE="${CONFIG_DIR}/config.json"
-readonly STATE_DIR="/var/lib/anixops-agent"
-readonly PKI_DIR="${STATE_DIR}/pki"
-readonly STREAM_DIR="${STATE_DIR}/stream"
+UPDATER_SERVICE="anixops-agent-updater.service"
+UPDATER_PATH="anixops-agent-updater.path"
+LIB_DIR="/usr/lib/anixops-agent"
+BIN_LINK="/usr/local/bin/anix-agent"
+CONFIG_DIR="/etc/anixops/agent"
+CONFIG_FILE="${CONFIG_DIR}/config.json"
+STATE_DIR="/var/lib/anixops-agent"
+PKI_DIR="${STATE_DIR}/pki"
+STREAM_DIR="${STATE_DIR}/stream"
 # The token reaches 'anix-agent join' in this file (0600, the Agent's),
 # removed as soon as the join returns; it is never written to the
 # configuration. enroll.credential is the file earlier releases left.
-readonly TOKEN_FILE="${STATE_DIR}/join.token"
-readonly LEGACY_CREDENTIAL_FILE="${STATE_DIR}/enroll.credential"
-readonly UPGRADE_DIR="${STATE_DIR}/upgrade"
-readonly UPDATER_REQUEST="${UPGRADE_DIR}/request.json"
+TOKEN_FILE="${STATE_DIR}/join.token"
+LEGACY_CREDENTIAL_FILE="${STATE_DIR}/enroll.credential"
+UPGRADE_DIR="${STATE_DIR}/upgrade"
+UPDATER_REQUEST="${UPGRADE_DIR}/request.json"
 readonly UNIT_DIR="/etc/systemd/system"
-readonly POLKIT_RULE="/etc/polkit-1/rules.d/50-anixops-agent.rules"
-readonly LOCK_FILE="/run/anixops-agent-install.lock"
+POLKIT_RULE="/etc/polkit-1/rules.d/50-anixops-agent.rules"
+LOCK_FILE="/run/anixops-agent-install.lock"
 # IP forwarding for forward nodes: nftables DNAT and the relays route
 # packets between interfaces.
-readonly SYSCTL_FILE="/etc/sysctl.d/90-anixops-forward.conf"
+SYSCTL_FILE="/etc/sysctl.d/90-anixops-forward.conf"
+# The binaries in LIB_DIR, the unit's RuntimeDirectory and the units'
+# Description; --install-name renames them all (apply_install_name).
+BIN_NAME="anix-agent"
+KERNEL_FILE="anx-node"
+KERNEL_SERVER_FILE="anx-server"
+RUNTIME_NAME="anixops-agent"
+INSTALL_NAME=""
 readonly SYSCTL_SETTINGS=("net.ipv4.ip_forward=1" "net.ipv6.conf.all.forwarding=1")
 
 # The legacy forward runtime the new Agent replaces (forward-sdk.md,
@@ -203,7 +210,7 @@ forward_node() { [[ "${NODE}" == forward-* ]] || ((FORWARD)); }
 usage() {
   cat <<'EOF'
 Usage: install.sh -u <https://control> -t <anixjoin_...|anixagt_...> [options]
-       install.sh uninstall [--purge]
+       install.sh uninstall [--purge] [--install-name NAME]
 
   -u, --control URL     the Control address nodes reach (from the copied command)
   -t, --token TOKEN     a node group's join token (anixjoin_...: this host becomes a
@@ -211,6 +218,9 @@ Usage: install.sh -u <https://control> -t <anixjoin_...|anixagt_...> [options]
                         (anixagt_...: this host becomes that node); or ANIX_AGENT_TOKEN
   --name NAME           the new node's name (default: this host's name; Control adds
                         -2, -3 when the group has it already)
+  --install-name NAME   install under a neutral name: the account, units, directories
+                        and binaries are all called NAME (default: the AnixOps names);
+                        give it again to uninstall
   --host HOST           the address clients connect to (default: this host's public
                         address as Control sees it)
   --mirror M            where the Agent is downloaded from: control (default), cn, github
@@ -271,7 +281,7 @@ parse_args() {
         flag="${flag%%=*}"
         shift
         ;;
-      -u | -t | --control | --token | --name | --host | --mirror | --timeout | --offline | --port-range | --node | --group)
+      -u | -t | --control | --token | --name | --install-name | --host | --mirror | --timeout | --offline | --port-range | --node | --group)
         (($# >= 2)) || die 2 "${flag} needs a value"
         value="$2"
         shift 2
@@ -287,6 +297,7 @@ parse_args() {
         TOKEN_ON_COMMAND_LINE=1
         ;;
       --name) NODE_NAME="${value}" ;;
+      --install-name) INSTALL_NAME="${value}" ;;
       --host) CONNECT_HOST="${value}" ;;
       --mirror) MIRROR="${value}" ;;
       --timeout) TIMEOUT="${value}" ;;
@@ -303,17 +314,59 @@ parse_uninstall_args() {
   while (($# > 0)); do
     case "$1" in
       --purge) PURGE=1 ;;
+      --install-name)
+        (($# >= 2)) || die 2 "--install-name needs a value"
+        INSTALL_NAME="$2"
+        shift
+        ;;
       -h | --help)
         usage
         exit 0
         ;;
-      *) die 2 "unknown argument to uninstall: $1 (uninstall [--purge])" ;;
+      *) die 2 "unknown argument to uninstall: $1 (uninstall [--purge] [--install-name NAME])" ;;
     esac
     shift
   done
+  check_install_name
+}
+
+# apply_install_name gives the install a neutral name (--install-name NAME):
+# the account, units, directories, polkit rule, sysctl drop-in and binaries
+# are all called NAME (the kernel core and core-server), and the files
+# written carry no comments or links, so nothing on the host names AnixOps.
+# The Agent derives the same layout from /usr/lib/NAME/NAME (anix-agent
+# common/layout).
+apply_install_name() {
+  [[ -n "${INSTALL_NAME}" ]] || return 0
+  AGENT_USER="${INSTALL_NAME}" RUNTIME_NAME="${INSTALL_NAME}" BIN_NAME="${INSTALL_NAME}"
+  SERVICE="${INSTALL_NAME}.service"
+  UPDATER_SERVICE="${INSTALL_NAME}-updater.service" UPDATER_PATH="${INSTALL_NAME}-updater.path"
+  LIB_DIR="/usr/lib/${INSTALL_NAME}" BIN_LINK="" CONFIG_DIR="/etc/${INSTALL_NAME}" STATE_DIR="/var/lib/${INSTALL_NAME}"
+  CONFIG_FILE="${CONFIG_DIR}/config.json" PKI_DIR="${STATE_DIR}/pki" STREAM_DIR="${STATE_DIR}/stream"
+  TOKEN_FILE="${STATE_DIR}/join.token" LEGACY_CREDENTIAL_FILE="${STATE_DIR}/enroll.credential"
+  UPGRADE_DIR="${STATE_DIR}/upgrade" UPDATER_REQUEST="${STATE_DIR}/upgrade/request.json"
+  POLKIT_RULE="/etc/polkit-1/rules.d/50-${INSTALL_NAME}.rules" LOCK_FILE="/run/${INSTALL_NAME}-install.lock"
+  SYSCTL_FILE="/etc/sysctl.d/90-${INSTALL_NAME}.conf"
+  KERNEL_FILE="core" KERNEL_SERVER_FILE="core-server"
+}
+
+# unbranded copies a generated file: as it is, or without its comment
+# lines and Documentation= under --install-name.
+unbranded() {
+  if [[ -n "${INSTALL_NAME}" ]]; then
+    sed -E '/^[[:space:]]*(#|\/\/)/d; /^Documentation=/d; s/^Description=.*/Description='"${INSTALL_NAME}"'/'
+  else
+    cat
+  fi
+}
+
+check_install_name() {
+  [[ -z "${INSTALL_NAME}" || ("${INSTALL_NAME}" =~ ^[a-z][a-z0-9-]{1,30}$ && "${INSTALL_NAME}" != "anixops-agent") ]] ||
+    die 2 "--install-name must be 2-31 lowercase letters, digits or '-', starting with a letter"
 }
 
 validate_args() {
+  check_install_name
   [[ -n "${CONTROL_URL}" ]] || die 2 "-u (--control) is required (copy the command from Control)"
   [[ "${CONTROL_URL}" =~ ^https://[^/?#[:space:]\'\"]+$ ]] || die 2 "-u (--control) must be https://host[:port], not ${CONTROL_URL}"
   if [[ -n "${TOKEN}" && ! "${TOKEN}" =~ ^anixjoin_[A-Za-z0-9_-]{43}$ && ! "${TOKEN}" =~ ^anixagt_[A-Za-z0-9_-]{20,}$ ]]; then
@@ -912,7 +965,7 @@ root_install() {
 migrate_root_install() {
   local bin args=(migrate-paths --chown "${AGENT_USER}")
   root_install || return 0
-  bin="$(path "${LIB_DIR}/anix-agent")"
+  bin="$(path "${LIB_DIR}/${BIN_NAME}")"
   if ! "${bin}" migrate-paths --help >/dev/null 2>&1; then
     note "the Agent ${META_VERSION} cannot migrate a root install's directories (no migrate-paths); this host joins again with the token"
     MIGRATION_STATE="not migrated (the Agent has no migrate-paths)"
@@ -939,7 +992,7 @@ ensure_users() {
 # JSON, or nothing.
 identity_status() {
   local bin
-  bin="$(path "${LIB_DIR}/anix-agent")"
+  bin="$(path "${LIB_DIR}/${BIN_NAME}")"
   [[ -x "${bin}" ]] || return 0
   "${bin}" identity --json --pki-dir "${PKI_DIR}" 2>/dev/null | tr -d '\n\t ' |
     grep -o "{[^{}]*\"node\":\"${NODE}\"[^{}]*}" | head -n 1 || true
@@ -966,9 +1019,9 @@ stop_running_agent() {
 
 install_files() {
   install -d -m 0755 "$(path "${LIB_DIR}")" "$(path "$(dirname "${BIN_LINK}")")"
-  install -m 0755 "${TMP_DIR}/agent/anix-agent" "$(path "${LIB_DIR}/anix-agent.new")"
-  mv -f "$(path "${LIB_DIR}/anix-agent.new")" "$(path "${LIB_DIR}/anix-agent")"
-  ln -sfn "${LIB_DIR}/anix-agent" "$(path "${BIN_LINK}")"
+  install -m 0755 "${TMP_DIR}/agent/anix-agent" "$(path "${LIB_DIR}/${BIN_NAME}.new")"
+  mv -f "$(path "${LIB_DIR}/${BIN_NAME}.new")" "$(path "${LIB_DIR}/${BIN_NAME}")"
+  [[ -z "${BIN_LINK}" ]] || ln -sfn "${LIB_DIR}/${BIN_NAME}" "$(path "${BIN_LINK}")"
   printf '%s\n' "${META_VERSION}" >"$(path "${LIB_DIR}/.release-version")"
 
   install -d -m 0750 "$(path "${CONFIG_DIR}")"
@@ -1007,8 +1060,8 @@ kernel_sum() {
 install_kernel() {
   local lib record target asset base dir sums sig package digest dist members member binary server_ok=false version_line
   lib="$(path "${LIB_DIR}")"
-  record="${lib}/anx-node.json"
-  if [[ -f "${record}" && -f "${lib}/anx-node" ]]; then
+  record="${lib}/${KERNEL_FILE}.json"
+  if [[ -f "${record}" && -f "${lib}/${KERNEL_FILE}" ]]; then
     KERNEL_STATE="kept the installed anx-node ($(sed -nE 's/.*"version"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p' "${record}" | head -n 1))"
     return 0
   fi
@@ -1087,14 +1140,14 @@ install_kernel() {
     return 0
   fi
   install -d -m 0755 "${lib}"
-  install -m 0755 "${dir}/unpacked/${dist}/anx-node" "${lib}/anx-node.new"
-  mv -f "${lib}/anx-node.new" "${lib}/anx-node"
+  install -m 0755 "${dir}/unpacked/${dist}/anx-node" "${lib}/${KERNEL_FILE}.new"
+  mv -f "${lib}/${KERNEL_FILE}.new" "${lib}/${KERNEL_FILE}"
   if [[ "${server_ok}" == true ]]; then
-    install -m 0755 "${dir}/unpacked/${dist}/anx-server" "${lib}/anx-server.new"
-    mv -f "${lib}/anx-server.new" "${lib}/anx-server"
+    install -m 0755 "${dir}/unpacked/${dist}/anx-server" "${lib}/${KERNEL_SERVER_FILE}.new"
+    mv -f "${lib}/${KERNEL_SERVER_FILE}.new" "${lib}/${KERNEL_SERVER_FILE}"
   fi
   printf '{\n  "version": "%s",\n  "sha256": "%s",\n  "installed_at_unix_ms": %s,\n  "server": %s\n}\n' \
-    "${META_KERNEL}" "$(sha256sum "${lib}/anx-node" | awk '{print $1}')" "$(($(date +%s) * 1000))" "${server_ok}" >"${record}.new"
+    "${META_KERNEL}" "$(sha256sum "${lib}/${KERNEL_FILE}" | awk '{print $1}')" "$(($(date +%s) * 1000))" "${server_ok}" >"${record}.new"
   chmod 0644 "${record}.new"
   mv -f "${record}.new" "${record}"
   KERNEL_STATE="installed anx-node ${META_KERNEL}"
@@ -1223,7 +1276,7 @@ join_control() {
   fi
   [[ -n "${TOKEN}" ]] || die "this host's Agent has no valid identity: a token (-t) is required; copy the command from Control"
   detect_addresses
-  bin="$(path "${LIB_DIR}/anix-agent")"
+  bin="$(path "${LIB_DIR}/${BIN_NAME}")"
   token_file="$(path "${TOKEN_FILE}")"
   (umask 077 && printf '%s\n' "${TOKEN}" >"${token_file}")
   chmod 0600 "${token_file}"
@@ -1386,11 +1439,12 @@ enable_forwarding() {
   install -d -m 0755 "$(dirname "${file}")"
   # The Agent prints the drop-in it expects; an Agent without the command
   # gets the same settings from the installer.
-  if ! "$(path "${LIB_DIR}/anix-agent")" forward sysctl-dropin >"${file}.new" 2>/dev/null ||
+  if ! "$(path "${LIB_DIR}/${BIN_NAME}")" forward sysctl-dropin >"${file}.new" 2>/dev/null ||
     ! grep -q '^net\.ipv4\.ip_forward *= *1' "${file}.new"; then
     render_sysctl >"${file}.new"
   fi
   append_accept_ra "${file}" "${file}.new"
+  unbranded <"${file}.new" >"${file}.tmp" && mv -f "${file}.tmp" "${file}.new"
   chmod 0644 "${file}.new"
   mv -f "${file}.new" "${file}"
   FORWARDING_STATE="wrote ${SYSCTL_FILE} (${SYSCTL_SETTINGS[*]}${FORWARDING_NOTE})"
@@ -1416,6 +1470,10 @@ render_agent_unit() {
   if getent group systemd-journal >/dev/null; then
     groups="SupplementaryGroups=systemd-journal"
   fi
+  # A named Agent finds its configuration from its own path: ps shows no
+  # arguments.
+  local args=" server -c ${CONFIG_FILE}"
+  [[ -z "${INSTALL_NAME}" ]] || args=""
   cat <<EOF
 # ${SERVICE}: the AnixOps Agent. Written by the AnixOps installer
 # (agent-install.sh); re-running the installer rewrites it.
@@ -1427,7 +1485,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=${LIB_DIR}/anix-agent server -c ${CONFIG_FILE}
+ExecStart=${LIB_DIR}/${BIN_NAME}${args}
 Restart=on-failure
 RestartSec=5s
 User=${AGENT_USER}
@@ -1437,7 +1495,7 @@ ${groups}
 UMask=0077
 LimitNOFILE=1048576
 # /run/anixops-agent: the plugins' sockets (ProtectSystem=strict).
-RuntimeDirectory=anixops-agent
+RuntimeDirectory=${RUNTIME_NAME}
 RuntimeDirectoryMode=0750
 
 # Privileges (H13): nftables and tc over netlink, low ports, and raw
@@ -1507,7 +1565,7 @@ ConditionPathExists=${UPDATER_REQUEST}
 
 [Service]
 Type=oneshot
-ExecStart=${LIB_DIR}/anix-agent upgrade apply --request ${UPDATER_REQUEST}
+ExecStart=${LIB_DIR}/${BIN_NAME} upgrade apply --request ${UPDATER_REQUEST}
 TimeoutStartSec=300
 UMask=0022
 NoNewPrivileges=yes
@@ -1550,13 +1608,13 @@ EOF
 
 install_units() {
   install -d -m 0755 "$(path "${UNIT_DIR}")"
-  render_agent_unit >"$(path "${UNIT_DIR}/${SERVICE}")"
-  render_updater_service >"$(path "${UNIT_DIR}/${UPDATER_SERVICE}")"
-  render_updater_path >"$(path "${UNIT_DIR}/${UPDATER_PATH}")"
+  render_agent_unit | unbranded >"$(path "${UNIT_DIR}/${SERVICE}")"
+  render_updater_service | unbranded >"$(path "${UNIT_DIR}/${UPDATER_SERVICE}")"
+  render_updater_path | unbranded >"$(path "${UNIT_DIR}/${UPDATER_PATH}")"
   chmod 0644 "$(path "${UNIT_DIR}/${SERVICE}")" \
     "$(path "${UNIT_DIR}/${UPDATER_SERVICE}")" "$(path "${UNIT_DIR}/${UPDATER_PATH}")"
   if [[ -d "$(path "$(dirname "${POLKIT_RULE}")")" ]]; then
-    render_polkit_rule >"$(path "${POLKIT_RULE}")"
+    render_polkit_rule | unbranded >"$(path "${POLKIT_RULE}")"
     chmod 0644 "$(path "${POLKIT_RULE}")"
   else
     note "polkit is not installed: 诊断 cannot restart the Agent until it is (apt-get install -y polkitd)"
@@ -1738,8 +1796,8 @@ uninstall() {
     systemctl daemon-reload >/dev/null 2>&1 || true
     systemctl reset-failed "${SERVICE}" "${UPDATER_SERVICE}" >/dev/null 2>&1 || true
   fi
-  link="$(path "${BIN_LINK}")"
-  if [[ -L "${link}" && "$(readlink "${link}")" == "${LIB_DIR}/anix-agent" ]]; then
+  link="$(path "${BIN_LINK:-/nonexistent}")"
+  if [[ -n "${BIN_LINK}" && -L "${link}" && "$(readlink "${link}")" == "${LIB_DIR}/${BIN_NAME}" ]]; then
     rm -f "${link}"
     REMOVED+=("${BIN_LINK}")
   fi
@@ -1782,6 +1840,7 @@ uninstall() {
 
 main() {
   parse_args "$@"
+  apply_install_name
   if [[ "${ACTION}" == "uninstall" ]]; then
     uninstall
     return 0

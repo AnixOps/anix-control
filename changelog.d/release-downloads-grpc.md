@@ -6,3 +6,8 @@
   1 MiB chunks from any offset, so a node resumes a cut download and makes
   no separate https request to Control. The operation keeps its https URL
   for Agents without the capability.
+- The Agent installer takes `--install-name NAME` (also for `uninstall`):
+  the account, units, directories, polkit rule, sysctl drop-in and binaries
+  are all called NAME (the kernel `core` and `core-server`), the unit runs
+  the binary without arguments, and the files it writes carry no comments
+  or links naming AnixOps. The Agent derives the same layout from its path.
