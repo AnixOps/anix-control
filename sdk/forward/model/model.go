@@ -37,6 +37,17 @@ func (r *Route) IsNetwork() bool {
 	return false
 }
 
+// IsKernel reports whether the route has a hop the kernel forwards
+// (ENGINE_NFTABLES).
+func (r *Route) IsKernel() bool {
+	for _, h := range r.Hops {
+		if h.Engine == EngineNFTables {
+			return true
+		}
+	}
+	return false
+}
+
 // Entry answers the entry hop, or false for a route without hops.
 func (r *Route) Entry() (Hop, bool) {
 	if len(r.Hops) == 0 {

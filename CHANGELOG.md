@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### Added
+
+- Kernel forwarding hops: a route's first hops may run `ENGINE_NFTABLES`.
+  Each of their nodes forwards the route's port in the kernel (nftables
+  DNAT, no process on the port) to the next hop's nodes, balanced by
+  `policy.next_hop`, or to the targets on the last hop. The hop after a
+  kernel hop is reached RAW at its port (the route's when 0) and dial
+  address, and may have several nodes; the network hops after it run as
+  before. Plans carry them as `NetworkPlan.kernel_forwards` (network.v1,
+  additions only); the Agent reports each as a port forward of the route.
+  Only the entry nodes meter a route. The route editor offers 内核转发 per
+  hop. Needs an Agent that runs kernel forwards.
+
 ## 5.0.0 - 2026-11-03
 
 The 5.0 release. It ships with anix-agent v5.0.0 (5af4e72) and anx-node

@@ -477,6 +477,8 @@ async function addHop() {
   const engine = isNetworkDraft(draft.value) || !draft.value.hops.length ? NETWORK_ENGINE : draft.value.hops[0].engine
   draft.value.hops.push(blankHop(draft.value.hops.length, draft.value.hops.length + 1, engine))
   syncRoles(draft.value.hops)
+  // After a kernel hop the new hop is reached RAW.
+  if (engine === NETWORK_ENGINE) setDraftEngine(draft.value, draft.value.hops.length - 1, engine)
   await nextTick()
   focusField(`hops[${draft.value.hops.length - 1}].node_refs`)
 }

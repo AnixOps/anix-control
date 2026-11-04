@@ -10,10 +10,13 @@
 // message, code). Validation is pure: it asks no DNS and
 // reads no clock but Options.Now.
 //
-// Every route runs on the network model: the engines with a driver of
-// their own (nftables, gost, the anixops relay) were removed, so a hop
-// runs ENGINE_NETWORK (else CodeEngineNotEnabled) and every link is
-// LINK_SECURITY_NETWORK (else CodeLinkUnsupported). The rules:
+// Every route runs on the network model, after kernel hops if it has any:
+// gost and the anixops relay were removed, so a hop runs ENGINE_NETWORK or
+// ENGINE_NFTABLES (else CodeEngineNotEnabled), the ENGINE_NFTABLES hops
+// come first, a link out of one is LINK_SECURITY_RAW and every other link
+// LINK_SECURITY_NETWORK (else CodeLinkUnsupported). A kernel hop may have
+// several nodes, and the hop it forwards to a port and a dial address.
+// The rules:
 //
 //   - id is a ULID or empty; owner is "admin" or "user:<id>"; name is text
 //     of at most MaxNameRunes; the encoded route is at most MaxRouteBytes.

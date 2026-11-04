@@ -97,12 +97,12 @@ func (d networkDevice) portForward(routeID string) *networkv1.PortForwardStatus 
 // entry devices' latest status, in the order of the entries.
 func networkRouteHealth(db *gorm.DB, route *forwardv1.Route) ([]*forwardv1.UpstreamHealth, error) {
 	forward, _ := networkForward(route)
-	devices, err := loadNetworkDevices(db, forward.Entries)
+	devices, err := loadNetworkDevices(db, forward.Checkers())
 	if err != nil {
 		return nil, err
 	}
 	var out []*forwardv1.UpstreamHealth
-	for _, entry := range forward.Entries {
+	for _, entry := range forward.Checkers() {
 		if status := devices[entry].portForward(route.GetId()); status != nil {
 			out = append(out, networkHealth(entry, status)...)
 		}

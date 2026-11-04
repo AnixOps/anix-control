@@ -1,6 +1,7 @@
 package networkmodel
 
 import (
+	"strconv"
 	"testing"
 
 	networkv1 "github.com/AnixOps/anix-control/sdk/api/network/v1"
@@ -165,4 +166,56 @@ func TestPlanForwardSeveralEntries(t *testing.T) {
 	require.Empty(t, result.Pending)
 	require.Equal(t, "eg-jp", result.Plans["proxy-2"].GetPortForwards()[0].GetEgressId())
 	require.Equal(t, "eg-hk-net", result.Plans["proxy-3"].GetPortForwards()[0].GetEgressId())
+}
+
+// Kernel hops forward to the next hop's nodes, the last to the network
+// entry (or to the targets on an all-kernel route), each node with its own
+// kernel forward.
+func TestPlanForwardKernelHops(t *testing.T) {
+	forward := sshForward()
+	forward.Kernel = []KernelHop{
+		{Nodes: []string{"proxy-7", "proxy-8"}, Listen: Endpoint{Address: "::", Port: 30022}, Policy: &networkv1.ForwardPolicy{Balance: "ip_hash"}},
+		{Nodes: []string{"proxy-9"}, Listen: Endpoint{Address: "::", Port: 30122}, DialAddress: "10.9.0.9"},
+	}
+	devices := map[string]device{"proxy-1": {Host: "[2001:db8::1]"}, "proxy-9": {Host: "203.0.113.9"}}
+	doc, forwards := complete(twoHops(), []Forward{forward}, devices)
+	result, err := Plan(doc, map[string]string{"tr-jp": linkKey}, japanKey(), forwards)
+	require.NoError(t, err)
+	require.Empty(t, result.Pending)
+	for _, node := range []string{"proxy-7", "proxy-8"} {
+		kernel := result.Plans[node].GetKernelForwards()
+		require.Len(t, kernel, 1)
+		require.Equal(t, uint32(30022), kernel[0].GetListen().GetPort())
+		require.Equal(t, "ip_hash", kernel[0].GetPolicy().GetBalance())
+		require.Equal(t, []string{"10.9.0.9:30122"}, targetsOf(kernel[0].GetTargets()))
+	}
+	require.Equal(t, []string{"2001:db8::1:20022"}, targetsOf(result.Plans["proxy-9"].GetKernelForwards()[0].GetTargets()))
+	require.Len(t, result.Plans["proxy-1"].GetPortForwards(), 1)
+
+	// All kernel: the last hop forwards to the targets.
+	forward.Entries, forward.Segments, forward.Egress = nil, nil, ""
+	doc, forwards = complete(twoHops(), []Forward{forward}, devices)
+	result, err = Plan(doc, map[string]string{"tr-jp": linkKey}, japanKey(), forwards)
+	require.NoError(t, err)
+	require.Empty(t, result.Pending)
+	require.Equal(t, []string{"10.1.0.5:22"}, targetsOf(result.Plans["proxy-9"].GetKernelForwards()[0].GetTargets()))
+	require.Empty(t, result.Plans["proxy-1"].GetPortForwards())
+
+	// A next hop without an address waits.
+	forward.Kernel[1].DialAddress = ""
+	delete(devices, "proxy-9")
+	forward.Kernel[1].Nodes = []string{"proxy-10"}
+	doc, forwards = complete(twoHops(), []Forward{forward}, devices)
+	result, err = Plan(doc, map[string]string{"tr-jp": linkKey}, japanKey(), forwards)
+	require.NoError(t, err)
+	require.Len(t, result.Pending, 2)
+	require.Contains(t, result.Pending[0].Reason, "kernel hop 0 on proxy-7")
+}
+
+func targetsOf(targets []*networkv1.ForwardTarget) []string {
+	var out []string
+	for _, target := range targets {
+		out = append(out, target.GetHost()+":"+strconv.Itoa(int(target.GetPort())))
+	}
+	return out
 }

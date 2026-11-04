@@ -92,7 +92,7 @@
           @update:model-value="value => emit('update', { engine: value })"
         />
         <UiSelect
-          v-if="network && index > 0"
+          v-if="network && index > 0 && !fromKernel"
           :id="fieldId(`${path}.ingress.network_transport_id`)"
           :model-value="hop.ingress?.network_transport_id || AUTO"
           size="md"
@@ -105,7 +105,7 @@
           @update:model-value="value => setIngress({ security: 'LINK_SECURITY_NETWORK', network_transport_id: value === AUTO ? '' : value, ...(value === AUTO ? {} : NO_MODE) })"
         />
         <UiSelect
-          v-else-if="index > 0"
+          v-else-if="index > 0 && !fromKernel"
           :id="fieldId(`${path}.ingress.security`)"
           :model-value="security"
           size="md"
@@ -115,10 +115,11 @@
           :help="t('forwardV4.editor.ingressHelp')"
           @update:model-value="value => setIngress({ security: value, mux: value === 'LINK_SECURITY_RAW' ? false : hop.ingress?.mux })"
         />
+        <p v-else-if="fromKernel" class="hop-card__note">{{ t('forwardV4.editor.kernelNote') }}</p>
         <p v-else class="hop-card__note">{{ t('forwardV4.editor.entryNote') }}</p>
       </div>
 
-      <div v-if="network && index > 0 && !hop.ingress?.network_transport_id" class="hop-card__row">
+      <div v-if="network && index > 0 && !fromKernel && !hop.ingress?.network_transport_id" class="hop-card__row">
         <UiSelect
           :id="fieldId(`${path}.ingress.network_mode`)"
           :model-value="hop.ingress?.network_mode || AUTO"
@@ -143,7 +144,7 @@
         />
       </div>
 
-      <div v-if="network && index > 0 && !hop.ingress?.network_transport_id && hop.ingress?.network_mode === MODE_LINE" class="hop-card__row">
+      <div v-if="network && index > 0 && !fromKernel && !hop.ingress?.network_transport_id && hop.ingress?.network_mode === MODE_LINE" class="hop-card__row">
         <UiSwitch
           :id="fieldId(`${path}.ingress.network_multipath`)"
           :model-value="Boolean(hop.ingress?.network_multipath)"
@@ -183,7 +184,7 @@
         </span>
       </div>
 
-      <div v-if="index > 0 && !network" class="hop-card__row">
+      <div v-if="index > 0 && !network && !kernel && !fromKernel" class="hop-card__row">
         <UiSwitch
           :id="fieldId(`${path}.ingress.mux`)"
           :model-value="Boolean(hop.ingress?.mux)"
@@ -214,7 +215,7 @@
         />
       </div>
 
-      <div v-if="index > 0 && !network" class="hop-card__row">
+      <div v-if="fromKernel" class="hop-card__row">
         <UiField :id="fieldId(`${path}.port`)" :label="t('forwardV4.editor.listenPort')" label-tag="span" :error="errorText(`${path}.port`)" :help="t('forwardV4.editor.hopPortHelp')">
           <template #default="{ labelId }">
             <span class="hop-card__port" role="group" :aria-labelledby="labelId">
@@ -263,7 +264,7 @@ import { ArrowDown, ArrowUp, Plus, Trash2, X } from '@lucide/vue'
 import { UiButton, UiCombobox, UiField, UiIconButton, UiNumberField, UiSegmentedControl, UiSelect, UiSwitch, UiTextField } from '@/ui'
 import { useAppI18n } from '@/composables/useAppI18n'
 import EngineChip from './EngineChip.vue'
-import { BASE_ENGINES, ENGINES, NETWORK_ENGINE, SECURITIES, fieldId, roleOf, securityOf, underField } from './routeModel'
+import { BASE_ENGINES, ENGINES, KERNEL_ENGINE, NETWORK_ENGINE, SECURITIES, fieldId, roleOf, securityOf, underField } from './routeModel'
 
 const props = defineProps({
   hop: { type: Object, required: true },
@@ -288,6 +289,10 @@ const role = computed(() => roleOf(props.index, props.total))
 const last = computed(() => props.index === props.total - 1)
 const security = computed(() => securityOf(props.hop))
 const network = computed(() => props.hop.engine === NETWORK_ENGINE)
+// A kernel hop forwards as the client sent it; the hop after one is
+// reached at its port (or the route's) and dial address.
+const kernel = computed(() => props.hop.engine === KERNEL_ENGINE)
+const fromKernel = computed(() => props.index > 0 && props.previous?.engine === KERNEL_ENGINE)
 
 // The network model's lines by id, and the devices a network hop may use:
 // every Agent node, and the nodes the model's lines are on.
@@ -355,13 +360,13 @@ function addNode(value) {
   queueMicrotask(() => { adding.value = undefined })
 }
 
-const nodeOptions = computed(() => (network.value ? networkNodeOptions.value : forwardNodeOptions.value))
+const nodeOptions = computed(() => (network.value || kernel.value ? networkNodeOptions.value : forwardNodeOptions.value))
 // A network hop is one device, except the entry: its other devices are
 // entry HA, each on a transport (or egress) of its own that the network
 // model chooses.
 const networkNodeOptions = computed(() => networkNodes.value
   .filter(ref => !props.hop.node_refs.includes(ref))
-  .map(ref => ({ value: ref, label: nodeName(ref), description: ref, disabled: props.index > 0 && props.hop.node_refs.length > 0 })))
+  .map(ref => ({ value: ref, label: nodeName(ref), description: ref, disabled: network.value && props.index > 0 && !fromKernel.value && props.hop.node_refs.length > 0 })))
 const forwardNodeOptions = computed(() => props.nodes
   .filter(node => !props.hop.node_refs.includes(node.node_ref))
   .map(node => {
@@ -380,16 +385,15 @@ const forwardNodeOptions = computed(() => props.nodes
 
 const engineOptions = computed(() => {
   const engines = [...BASE_ENGINES]
-  // Routes left on nftables and the removed gost and anixops engines still
-  // show them.
-  if (props.hop.engine === 'ENGINE_NFTABLES') engines.push('ENGINE_NFTABLES')
+  // Routes left on the removed gost and anixops engines still show them.
   if (props.hop.engine === 'ENGINE_ANIXOPS') engines.push('ENGINE_ANIXOPS')
   if (props.hop.engine === 'ENGINE_GOST') engines.push('ENGINE_GOST')
   return engines.map(engine => {
     const missing = props.hop.node_refs.filter(ref => !caps(ref, engine)?.available)
     let description = t(`forwardV4.engine.${engine}`)
-    // Network devices are outside the forwarding inventory.
+    // Network and kernel devices are outside the forwarding inventory.
     if (engine === NETWORK_ENGINE) return { value: engine, label: ENGINES[engine].label, description }
+    if (engine === KERNEL_ENGINE) return { value: engine, label: t('forwardV4.engine.kernelLabel'), description }
     if (missing.length) description = t('forwardV4.editor.engineMissing', { nodes: missing.map(nodeName).join(', ') })
     return {
       value: engine,

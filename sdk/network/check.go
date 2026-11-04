@@ -160,6 +160,7 @@ func Check(plan *networkv1.NetworkPlan) error {
 		"lines": len(plan.GetLines()), "ingresses": len(plan.GetIngresses()), "egresses": len(plan.GetEgresses()),
 		"transports": len(plan.GetTransports()), "paths": len(plan.GetPaths()), "forwarding": len(plan.GetForwarding()),
 		"port_forwards": len(plan.GetPortForwards()), "reverse_proxies": len(plan.GetReverseProxies()),
+		"kernel_forwards": len(plan.GetKernelForwards()),
 	} {
 		if n > MaxComponents {
 			return invalid("more than %d %s", MaxComponents, name)
@@ -280,6 +281,23 @@ func Check(plan *networkv1.NetworkPlan) error {
 			return invalid("port_forwards[%d]: %v", i, err)
 		}
 		forwards[forward.GetId()] = forward
+	}
+
+	kernel := map[string]*networkv1.PortForward{}
+	for i, forward := range plan.GetKernelForwards() {
+		if err := checkID(forward.GetId(), kernel); err != nil {
+			return invalid("kernel_forwards[%d]: %v", i, err)
+		}
+		as := kernelAsPortForward(forward)
+		if err := checkPortForwardFields(as); err != nil {
+			return invalid("kernel_forwards[%d]: %v", i, err)
+		}
+		kernel[forward.GetId()] = as
+		key := net.JoinHostPort(canonical(forward.GetListen().GetAddress()), strconv.Itoa(int(forward.GetListen().GetPort())))
+		if other, taken := listens[key]; taken {
+			return invalid("kernel_forwards[%d]: listen %s is taken by %q", i, key, other)
+		}
+		listens[key] = forward.GetId()
 	}
 
 	proxies := map[string]*networkv1.ReverseProxy{}
@@ -628,6 +646,25 @@ func CheckPortForward(forward *networkv1.PortForward) error {
 		return invalid("%v", err)
 	}
 	return nil
+}
+
+// CheckKernelForward checks what a kernel forward says on its own, as
+// CheckPortForward does.
+func CheckKernelForward(forward *networkv1.KernelForward) error {
+	if !idPattern.MatchString(forward.GetId()) {
+		return invalid("id %q must be 1 to 64 ASCII letters, digits, '-' and '_'", forward.GetId())
+	}
+	if err := checkPortForwardFields(kernelAsPortForward(forward)); err != nil {
+		return invalid("%v", err)
+	}
+	return nil
+}
+
+// kernelAsPortForward answers the fields a kernel forward shares with a
+// port forward, which are checked alike.
+func kernelAsPortForward(forward *networkv1.KernelForward) *networkv1.PortForward {
+	return &networkv1.PortForward{Id: forward.GetId(), Listen: forward.GetListen(), Protocols: forward.GetProtocols(),
+		Targets: forward.GetTargets(), Policy: forward.GetPolicy()}
 }
 
 func checkPortForwardFields(forward *networkv1.PortForward) error {

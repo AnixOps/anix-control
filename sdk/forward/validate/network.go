@@ -32,7 +32,20 @@ func checkNetwork(c *collector, r *model.Route) {
 	}
 	last := len(r.Hops) - 1
 	for i, h := range r.Hops {
-		if h.Engine != model.EngineNetwork {
+		if h.Engine == model.EngineNFTables {
+			checkKernelHop(c, i, h)
+			continue
+		}
+		if i > 0 && r.Hops[i-1].Engine == model.EngineNFTables {
+			// The first network hop after the kernel hops is their target and
+			// the network model's entry: it may have several devices, and
+			// listens where the kernel hop forwards to.
+			if len(h.NodeRefs) > 1 && h.DialAddress != "" {
+				c.add(hopField(i, "dial_address"), CodeRequiresSingleNode, "a dial address is for a hop of one node")
+			}
+			if i == last && h.NetworkEgressID != "" && !networkIDPattern.MatchString(h.NetworkEgressID) {
+				c.add(hopField(i, "network_egress_id"), CodeInvalidFormat, "must be a network model component id")
+			}
 			continue
 		}
 		if i > 0 && len(h.NodeRefs) > 1 {
@@ -100,5 +113,18 @@ func checkNetworkMode(c *collector, field string, t model.LinkTransport) {
 	}
 	if t.NetworkMultipath && len(t.NetworkCarriers) < 2 {
 		c.add(field+"network_multipath", CodeInvalidRelation, "multipath needs at least two carriers")
+	}
+}
+
+// checkKernelHop applies the rules of a hop the kernel forwards: its nodes
+// forward the port they listen on to the next hop's nodes (balanced by
+// policy.next_hop), or to the targets on the last hop. It has no egress; a
+// dial address is for a hop of one node.
+func checkKernelHop(c *collector, i int, h model.Hop) {
+	if h.NetworkEgressID != "" {
+		c.add(hopField(i, "network_egress_id"), CodeNotApplicable, "a kernel hop has no network model egress")
+	}
+	if i > 0 && len(h.NodeRefs) > 1 && h.DialAddress != "" {
+		c.add(hopField(i, "dial_address"), CodeRequiresSingleNode, "a dial address is for a hop of one node")
 	}
 }

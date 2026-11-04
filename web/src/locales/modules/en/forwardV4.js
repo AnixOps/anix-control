@@ -32,7 +32,8 @@ export default {
       HOP_ROLE_UNSPECIFIED: 'Hop'
     },
     engine: {
-      ENGINE_NFTABLES: 'Kernel DNAT, almost no CPU; RAW links only',
+      ENGINE_NFTABLES: 'nftables DNAT on the node, no process on the port; the first hops only, the link out of it is RAW',
+      kernelLabel: 'Kernel forwarding',
       ENGINE_GOST: 'Removed: move the route to ANX',
       ENGINE_NETWORK: 'Network model (anx-node): ANX-Line on trusted lines, the A2 jacket across borders',
       ENGINE_ANIXOPS: 'AnixOps relay protocol (experimental)',
@@ -382,6 +383,7 @@ export default {
       ingressHelp: 'The link from the previous hop: it originates, this hop terminates.',
       cannotOriginate: '{engine} cannot originate it',
       cannotTerminate: '{engine} cannot terminate it',
+      kernelNote: 'The previous hop forwards in the kernel: the traffic arrives as the client sent it, on this hop\'s port (the route\'s port when automatic).',
       entryNote: 'The entry address and port are under Entry; limits apply at the entry only.',
       previousEngine: 'Hop {n}’s {engine}',
       linkFix: '{prev} cannot originate {link}. You can:',

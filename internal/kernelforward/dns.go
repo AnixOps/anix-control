@@ -1042,11 +1042,11 @@ func (s *Service) RouteDNS(ctx context.Context, routeID string) (*forwardv1.Rout
 	// An ENGINE_NETWORK route's entry devices are on the network model.
 	if route, err := s.GetRoute(ctx, routeID); err == nil {
 		if forward, ok := networkForward(route); ok {
-			devices, err := loadNetworkDevices(db, forward.Entries)
+			devices, err := loadNetworkDevices(db, forward.UserEntries())
 			if err != nil {
 				return nil, err
 			}
-			for _, entry := range forward.Entries {
+			for _, entry := range forward.UserEntries() {
 				addresses[entry] = publicAddresses(deviceAddresses(db, entry, devices[entry].Status), bindingTypes(row))
 			}
 		}
