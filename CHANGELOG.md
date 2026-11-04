@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 5.0.1 - 2026-11-04
+
 ### Added
 
 - Kernel forwarding hops: a route's first hops may run `ENGINE_NFTABLES`.
@@ -14,6 +16,50 @@
   additions only); the Agent reports each as a port forward of the route.
   Only the entry nodes meter a route. The route editor offers 内核转发 per
   hop. Needs an Agent that runs kernel forwards.
+- Agent protocol revisions and version compatibility
+  (`docs/reference/agent-versioning.md`). Agents name their protocol revision
+  (`protocol.revision`) and the oldest anx-node they work with
+  (`kernel.anx-node.min`) in the Hello; Control judges every session
+  (compatible, warning, incompatible) in the transport inventory and the
+  upgrade plan, logs problems once per session, and the node list shows a
+  badge with the reasons.
+- The release tag gate requires `config/AGENT_RELEASE` to share Control's
+  major.minor from 5.0.0 on.
+- `releases.v1`: `AgentArtifacts.DownloadRelease` streams the Agent and
+  anx-node files of an `agent.upgrade` operation from
+  `agent_install.artifact_dir` over the session's mTLS gRPC connection, in
+  1 MiB chunks from any offset, so a node resumes a cut download and makes
+  no separate https request to Control. The operation keeps its https URL
+  for Agents without the capability.
+- The Agent installer takes `--install-name NAME` (also for `uninstall`):
+  the account, units, directories, polkit rule, sysctl drop-in and binaries
+  are all called NAME (the kernel `core` and `core-server`), the unit runs
+  the binary without arguments, and the files it writes carry no comments
+  or links naming AnixOps. The Agent derives the same layout from its path.
+
+### Changed
+
+- Control and the Agent number their patches independently since 5.0.0. An
+  upgrade campaign accepts an Agent patch newer than Control's and refuses a
+  target on another major.minor (`agent_version_line_mismatch`) unless
+  `allow_version_line_mismatch` is set; a target on a newer line than Control
+  is always refused.
+- `install.sh --offline` makes no https request to Control: it no longer
+  reads `/install/agent.env` or `/install/ip` nor checks Control's https
+  address; the node only opens the gRPC connection.
+
+### Removed
+
+- Migration `0028_drop_flux_tables` drops the 4.1 flux forwarding tables
+  (`v2_forward`, `v2_forward_tunnel`, `v2_forward_user_tunnel`,
+  `v2_forward_port_binding`, `v2_speed_limit`, `v2_forward_runtime_job`,
+  `v2_forward_traffic_cursor`, `v2_forward_agent_bridge_task`,
+  `v2_forward_rule`, `v2_forward_route`, `v2_forward_log`, `v2_forward_stats`)
+  and the v4.2 upgrade's records (`v4_forward_legacy_archive`,
+  `v4_forward_legacy_node`, `v4_forward_legacy_drop`), with the
+  `internal/forwardlegacy` package. `v2_forward_node` stays. **Irreversible:
+  back the database up before upgrading.** Node operations on a flux forward,
+  tunnel or legacy rule answer not found.
 
 ## 5.0.0 - 2026-11-03
 
