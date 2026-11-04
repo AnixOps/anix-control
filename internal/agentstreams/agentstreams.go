@@ -46,10 +46,15 @@ type Session struct {
 	// KernelVersion is the anx-node release a stream session's Hello
 	// named (agentcontrol.LabelKernelVersion), "" when it named none.
 	KernelVersion string
-	InstanceID    string
-	Capabilities  []string
-	ConnectedAt   time.Time
-	LastSeen      time.Time
+	// ProtocolRevision is the protocol revision a stream session's Hello
+	// named (agentcontrol.HelloProtocolRevision) and KernelMinVersion the
+	// oldest anx-node release the Agent works with, "" for none.
+	ProtocolRevision uint32
+	KernelMinVersion string
+	InstanceID       string
+	Capabilities     []string
+	ConnectedAt      time.Time
+	LastSeen         time.Time
 	// DesiredRevision and ObservedRevision are the stream's operation
 	// revisions; zero on the WebSocket.
 	DesiredRevision  uint64

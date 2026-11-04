@@ -7111,7 +7111,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Lists every proxy and forward node with the transport its agent was last seen on (mtls-stream), its agent version, its newest valid agent certificate, when it was last seen and its live Agent Control stream session (authentication mtls, certificate serial, expiry and SAN, negotiated capabilities). Each node also carries certificate_state (valid, revoked, expired or none), last_certificate (its newest certificate in any state: serial, issued_at, not_after, renew_after, revoked_at and revoke_reason) and connection (type mtls_stream or offline, the transport and when it was last seen). node=proxy-7 (repeatable or comma separated, at most 200) keeps the named nodes. summary.ready_for_required (with required_reasons and required_blockers, computed over every node) is false while an enabled node has never enrolled.",
+                "description": "Lists every proxy and forward node with the transport its agent was last seen on (mtls-stream), its agent version, its newest valid agent certificate, when it was last seen and its live Agent Control stream session (authentication mtls, certificate serial, expiry and SAN, negotiated capabilities). Each node also carries certificate_state (valid, revoked, expired or none), last_certificate (its newest certificate in any state: serial, issued_at, not_after, renew_after, revoked_at and revoke_reason) connection (type mtls_stream or offline, the transport and when it was last seen), protocol_revision and compatibility (status compatible, warning or incompatible, with problems: agent_protocol_too_old, agent_protocol_too_new, version_line_mismatch, kernel_too_old) of its live session. control names this Control's version, version line, Agent release and the protocol revisions it serves; summary.incompatible and summary.compatibility_warnings count the judged nodes. node=proxy-7 (repeatable or comma separated, at most 200) keeps the named nodes. summary.ready_for_required (with required_reasons and required_blockers, computed over every node) is false while an enabled node has never enrolled.",
                 "produces": [
                     "application/json"
                 ],
@@ -7149,7 +7149,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "The Agent release a campaign pushes by default (agent_install.agent_version, else the Agent release this Control was built with, else its own release), this Control's release, how many nodes a campaign would include now (enabled nodes whose Agent was seen on the Agent Control stream) and which (nodes: node_ref, name, agent_version, kernel_version reported by a live session, for a manual upgrade), the default batches with the rules of H19 (first batch at most 5%, each batch at least 30 minutes, a batch rolls back above 5% failures or after 10 minutes without a reconnect), the newest anx-node release agent_install.artifact_dir holds (kernel_version, which every campaign installs; empty for none), the active campaign if there is one, and whether the caller may start one (can_start: super administrators). When the https address nodes reach Control is not configured, configured is false with unconfigured_reason and target_version empty. Administrators read it; Start verifies the release files.",
+                "description": "The Agent release a campaign pushes by default (agent_install.agent_version, else the Agent release this Control was built with, else its own release), this Control's release, how many nodes a campaign would include now (enabled nodes whose Agent was seen on the Agent Control stream) and which (nodes: node_ref, name, agent_version, kernel_version reported by a live session, for a manual upgrade), the default batches with the rules of H19 (first batch at most 5%, each batch at least 30 minutes, a batch rolls back above 5% failures or after 10 minutes without a reconnect), the newest anx-node release agent_install.artifact_dir holds (kernel_version, which every campaign installs; empty for none), the active campaign if there is one, and whether the caller may start one (can_start: super administrators). control names this Control's version line and the protocol revisions it serves, target_version_line_mismatch says the default target is on another major.minor, and each node with a live session carries its compatibility (status compatible, warning or incompatible, with problems). When the https address nodes reach Control is not configured, configured is false with unconfigured_reason and target_version empty. Administrators read it; Start verifies the release files.",
                 "produces": [
                     "application/json"
                 ],
@@ -7207,7 +7207,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Pushes an Agent release to every enabled node whose Agent was seen on the Agent Control stream, in batches (default 5%, 25%, 100% of the nodes, at least 30 minutes each; canaries first by node name hash), as the agent.upgrade operation to Agents that negotiated upgrade.v1. With nodes (proxy-\u003cid\u003e, forward-\u003cid\u003e, each eligible) it is a manual upgrade instead: exactly those nodes in one batch with no minimum duration; batches and exclude must be empty. With kernel_only (and nodes, no target_version) only the anx-node kernel is upgraded: the target is the Agent release those nodes run now, so each Agent keeps its binary and installs the newest anx-node release in agent_install.artifact_dir. A batch rolls back when more than 5% of its offered nodes fail or do not reconnect with the target version within 10 minutes (H19). The release must be in agent_install.artifact_dir with its .sig files and SHA256SUMS(.sig), verified with plugins.official_public_key. Super administrators only; one campaign at a time.",
+                "description": "Pushes an Agent release to every enabled node whose Agent was seen on the Agent Control stream, in batches (default 5%, 25%, 100% of the nodes, at least 30 minutes each; canaries first by node name hash), as the agent.upgrade operation to Agents that negotiated upgrade.v1. With nodes (proxy-\u003cid\u003e, forward-\u003cid\u003e, each eligible) it is a manual upgrade instead: exactly those nodes in one batch with no minimum duration; batches and exclude must be empty. With kernel_only (and nodes, no target_version) only the anx-node kernel is upgraded: the target is the Agent release those nodes run now, so each Agent keeps its binary and installs the newest anx-node release in agent_install.artifact_dir. A target_version on another major.minor than this Control is refused (agent_version_line_mismatch, docs/reference/agent-versioning.md) unless allow_version_line_mismatch is set. A batch rolls back when more than 5% of its offered nodes fail or do not reconnect with the target version within 10 minutes (H19). The release must be in agent_install.artifact_dir with its .sig files and SHA256SUMS(.sig), verified with plugins.official_public_key. Super administrators only; one campaign at a time.",
                 "consumes": [
                     "application/json"
                 ],
@@ -7220,7 +7220,7 @@
                 "summary": "Start a staged Agent upgrade",
                 "parameters": [
                     {
-                        "description": "target_version (default this Control's Agent release), batches, exclude {nodes, tags}, nodes (manual upgrade), kernel_only, reason",
+                        "description": "target_version (default this Control's Agent release), batches, exclude {nodes, tags}, nodes (manual upgrade), kernel_only, allow_version_line_mismatch, reason",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -10726,6 +10726,10 @@
         "handler.startAgentUpgradeRequest": {
             "type": "object",
             "properties": {
+                "allow_version_line_mismatch": {
+                    "description": "AllowVersionLineMismatch starts a campaign whose target is on another\nmajor.minor than this Control (a rollback across version lines);\nwithout it such a target is refused (agent_version_line_mismatch).",
+                    "type": "boolean"
+                },
                 "batches": {
                     "type": "array",
                     "items": {

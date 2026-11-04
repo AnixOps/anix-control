@@ -38,6 +38,16 @@ export default {
     protocols: 'Protocols',
     agentVersion: 'Agent version',
     kernelVersion: 'Kernel version',
+    compatibility: {
+      warning: 'Check version',
+      incompatible: 'Incompatible',
+      problems: {
+        agent_protocol_too_old: 'The Agent speaks an older protocol revision than this Control serves: upgrade the Agent.',
+        agent_protocol_too_new: 'The Agent speaks a newer protocol revision than this Control; its new features stay off: upgrade Control.',
+        version_line_mismatch: 'The Agent is on another major.minor than Control: upgrade it to an Agent of the same version line.',
+        kernel_too_old: 'anx-node is older than this Agent needs: upgrade the kernel.'
+      }
+    },
     kernelUnknown: 'Not reported',
     kernelUnknownHint: 'An online Agent reports its anx-node version; older Agents do not, until they are upgraded.',
     load: 'Load',

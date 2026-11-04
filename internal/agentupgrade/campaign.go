@@ -138,8 +138,10 @@ type Actor struct {
 // StartRequest starts a campaign.
 type StartRequest struct {
 	TargetVersion string
-	// ControlVersion is the running Control's release (H25: the Agent
-	// release is Control's); a newer target is refused.
+	// ControlVersion is the running Control's release. Since 5.0.0 the
+	// Agent and Control share major.minor and number their patches
+	// independently (docs/reference/agent-versioning.md): a target on a
+	// newer version line than Control is refused, a newer patch is not.
 	ControlVersion string
 	// Artifacts are the verified release assets
 	// (agentinstall.UpgradeArtifacts).
@@ -372,6 +374,9 @@ type EligibleNode struct {
 	// KernelVersion is the anx-node release its live session reported, ""
 	// when unknown; the handler fills it in.
 	KernelVersion string `json:"kernel_version"`
+	// Compatibility judges its live session against this Control
+	// (agentcontrol.CheckCompatibility), nil without one.
+	Compatibility *agentcontrol.Compatibility `json:"compatibility,omitempty"`
 }
 
 // Describe answers the eligible nodes with their names and Agent versions,
@@ -435,8 +440,8 @@ func (s *Service) Start(ctx context.Context, request StartRequest) (model.AgentU
 	if !semver.IsValid(target) || !strings.HasPrefix(target, "v") {
 		return model.AgentUpgradeCampaign{}, fmt.Errorf("%w: target_version %q is not a release tag", ErrInvalid, target)
 	}
-	if control := "v" + strings.TrimPrefix(strings.TrimSpace(request.ControlVersion), "v"); semver.IsValid(control) && semver.Compare(target, control) > 0 {
-		return model.AgentUpgradeCampaign{}, fmt.Errorf("%w: target_version %s is newer than this Control (%s): the Agent release is Control's (H25)", ErrInvalid, target, control)
+	if control := "v" + strings.TrimPrefix(strings.TrimSpace(request.ControlVersion), "v"); semver.IsValid(control) && semver.Compare(semver.MajorMinor(target), semver.MajorMinor(control)) > 0 {
+		return model.AgentUpgradeCampaign{}, fmt.Errorf("%w: target_version %s is on a newer version line than this Control (%s): upgrade Control first", ErrInvalid, target, control)
 	}
 	if len(request.Artifacts) == 0 {
 		return model.AgentUpgradeCampaign{}, fmt.Errorf("%w: the release has no verified artifacts", ErrInvalid)

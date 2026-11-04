@@ -46,6 +46,7 @@ Use this tree like NodeX:
 - Upgrade runbook: [`UPGRADE.md`](UPGRADE.md)
 - Backups and restore (daily, pre-migration and manual bundles, verification, retention, `anix-control backup`): [`reference/backups.md`](reference/backups.md)
 - Destination statistics (访问统计: traffic by site and category, privacy, retention): [`reference/destination-stats.md`](reference/destination-stats.md)
+- Agent versions, protocol revisions and compatibility (version lines, independent patches, the panel's badge): [`reference/agent-versioning.md`](reference/agent-versioning.md)
 - V4 plugin-only upgrade: [`guide/v4-plugin-only-upgrade.md`](guide/v4-plugin-only-upgrade.md)
 - V4 plugin-only rollback: [`guide/v4-plugin-only-rollback.md`](guide/v4-plugin-only-rollback.md)
 - Official package signing root rotation: [`guide/release-root-rotation.md`](guide/release-root-rotation.md)

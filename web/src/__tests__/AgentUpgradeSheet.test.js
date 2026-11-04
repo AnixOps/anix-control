@@ -183,6 +183,19 @@ describe('AgentUpgradeSheet', () => {
     expect(screen.getByTestId('agent-upgrade-start').disabled).toBe(true)
   })
 
+  it('warns when the default target is on another version line, and marks incompatible nodes', async () => {
+    kernelApi.getKernelAgentUpgradePlan.mockResolvedValue(plan({
+      target_version: 'v4.1.3',
+      target_version_line_mismatch: true,
+      nodes: [{ node_ref: 'proxy-1', name: 'JP', agent_version: 'v4.1.0', compatibility: { status: 'incompatible', problems: [] } }]
+    }))
+    renderSheet()
+    await open()
+    expect(screen.getByTestId('agent-upgrade-line-mismatch').textContent).toContain('v4.1.3')
+    await userEvent.click(within(screen.getByTestId('agent-upgrade-mode')).getByText('Choose nodes'))
+    expect(await screen.findByText(/incompatible/)).toBeTruthy()
+  })
+
   it('does not start when the confirmation is declined', async () => {
     kernelApi.getKernelAgentUpgradePlan.mockResolvedValue(plan({ eligible_nodes: 1 }))
     renderSheet()

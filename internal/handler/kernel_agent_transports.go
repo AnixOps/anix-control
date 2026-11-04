@@ -31,7 +31,7 @@ func NewAgentTransportsHandler() *AgentTransportsHandler {
 
 // List godoc
 // @Summary Agent transport inventory
-// @Description Lists every proxy and forward node with the transport its agent was last seen on (mtls-stream), its agent version, its newest valid agent certificate, when it was last seen and its live Agent Control stream session (authentication mtls, certificate serial, expiry and SAN, negotiated capabilities). Each node also carries certificate_state (valid, revoked, expired or none), last_certificate (its newest certificate in any state: serial, issued_at, not_after, renew_after, revoked_at and revoke_reason) and connection (type mtls_stream or offline, the transport and when it was last seen). node=proxy-7 (repeatable or comma separated, at most 200) keeps the named nodes. summary.ready_for_required (with required_reasons and required_blockers, computed over every node) is false while an enabled node has never enrolled.
+// @Description Lists every proxy and forward node with the transport its agent was last seen on (mtls-stream), its agent version, its newest valid agent certificate, when it was last seen and its live Agent Control stream session (authentication mtls, certificate serial, expiry and SAN, negotiated capabilities). Each node also carries certificate_state (valid, revoked, expired or none), last_certificate (its newest certificate in any state: serial, issued_at, not_after, renew_after, revoked_at and revoke_reason) connection (type mtls_stream or offline, the transport and when it was last seen), protocol_revision and compatibility (status compatible, warning or incompatible, with problems: agent_protocol_too_old, agent_protocol_too_new, version_line_mismatch, kernel_too_old) of its live session. control names this Control's version, version line, Agent release and the protocol revisions it serves; summary.incompatible and summary.compatibility_warnings count the judged nodes. node=proxy-7 (repeatable or comma separated, at most 200) keeps the named nodes. summary.ready_for_required (with required_reasons and required_blockers, computed over every node) is false while an enabled node has never enrolled.
 // @Tags Kernel
 // @Produce json
 // @Security BearerAuth
@@ -50,7 +50,7 @@ func (h *AgentTransportsHandler) List(c *gin.Context) {
 		return
 	}
 	inventory, err := agenttransport.Build(c.Request.Context(), db, agenttransport.Options{
-		Live: h.live(), Sessions: h.sessions, Nodes: nodes,
+		Live: h.live(), Sessions: h.sessions, Nodes: nodes, Control: ControlVersions(),
 	})
 	if err != nil {
 		kernelDBError(c, err)
@@ -83,4 +83,16 @@ func parseNodeFilter(values []string) ([]agentcontrol.AgentNode, error) {
 		}
 	}
 	return nodes, nil
+}
+
+// ControlVersions is what this Control serves its Agents
+// (docs/reference/agent-versioning.md): its release, the Agent release it
+// installs and the protocol revisions it serves.
+func ControlVersions() *agenttransport.ControlVersions {
+	versions := &agenttransport.ControlVersions{
+		Version: ReleaseVersion, AgentRelease: AgentRelease,
+		ProtocolRevisionMin: controlgrpc.MinAgentProtocolRevision, ProtocolRevisionMax: controlgrpc.AgentProtocolRevision,
+	}
+	versions.VersionLine, _ = agentcontrol.VersionLine(ReleaseVersion)
+	return versions
 }

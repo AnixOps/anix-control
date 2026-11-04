@@ -22,6 +22,10 @@
             {{ t('agentUpgradeSheet.start.superOnly') }}
           </p>
 
+          <p v-if="plan.configured && plan.target_version_line_mismatch" class="upgrade-sheet__notice is-warning" role="status" data-testid="agent-upgrade-line-mismatch">
+            {{ t('agentUpgradeSheet.start.lineMismatch', { target: plan.target_version, control: plan.control_version }) }}
+          </p>
+
           <UiSegmentedControl
             v-model="form.mode"
             :aria-label="t('agentUpgradeSheet.start.mode')"
@@ -178,6 +182,9 @@ function nodeDescription(node) {
       ? t('agentUpgradeSheet.start.nodeKernel', { version: node.kernel_version })
       : t('agentUpgradeSheet.start.nodeKernelUnknown'))
   }
+  const status = node.compatibility?.status
+  if (status === 'incompatible') parts.push(t('agentUpgradeSheet.start.nodeIncompatible'))
+  else if (status === 'warning') parts.push(t('agentUpgradeSheet.start.nodeWarning'))
   return parts.join(' · ')
 }
 

@@ -646,6 +646,52 @@ func TestInventoryConnection(t *testing.T) {
 	require.Equal(t, "0.1.0-alpha.13", byNode["proxy-1"].KernelVersion)
 	require.Equal(t, "0.1.0-alpha.13", byNode["proxy-1"].Session.KernelVersion)
 	require.Equal(t, "", byNode["proxy-4"].KernelVersion)
+	require.Nil(t, byNode["proxy-1"].Compatibility, "no Control versions, no judgement")
+}
+
+func TestInventoryCompatibility(t *testing.T) {
+	db := openSQLite(t)
+	now := time.Date(2026, 10, 2, 12, 0, 0, 0, time.UTC)
+	seedInventory(t, db, now)
+	sessions := func() []agentstreams.Session {
+		return []agentstreams.Session{
+			{
+				Node: agentcontrol.AgentNode{Kind: "proxy", ID: 1}, Transport: agentstreams.TransportControlStream,
+				Authentication: agentstreams.AuthenticationMTLS, LastSeen: now, AgentVersion: "v5.0.3",
+				ProtocolRevision: 2, KernelVersion: "0.1.0-alpha.15", KernelMinVersion: "0.1.0-alpha.15",
+			},
+			{
+				// A 5.0.0 Agent: no labels, the baseline revision.
+				Node: agentcontrol.AgentNode{Kind: "proxy", ID: 4}, Transport: agentstreams.TransportControlStream,
+				Authentication: agentstreams.AuthenticationMTLS, LastSeen: now, AgentVersion: "v5.0.0",
+				ProtocolRevision: agentcontrol.ProtocolRevisionBaseline,
+			},
+			{
+				Node: agentcontrol.AgentNode{Kind: "forward", ID: 1}, Transport: agentstreams.TransportControlStream,
+				Authentication: agentstreams.AuthenticationMTLS, LastSeen: now, AgentVersion: "v5.1.0",
+				ProtocolRevision: 2, KernelVersion: "0.1.0-alpha.13", KernelMinVersion: "0.1.0-alpha.15",
+			},
+		}
+	}
+	inventory, err := Build(context.Background(), db, Options{Now: now, Sessions: sessions, Control: &ControlVersions{
+		Version: "5.0.1", AgentRelease: "v5.0.3", ProtocolRevisionMin: 2, ProtocolRevisionMax: 2,
+	}})
+	require.NoError(t, err)
+	require.NotNil(t, inventory.Control)
+	require.Equal(t, "5.0", inventory.Control.VersionLine)
+	byNode := inventoryByNode(inventory)
+
+	require.Equal(t, uint32(2), byNode["proxy-1"].ProtocolRevision)
+	require.Equal(t, agentcontrol.CompatibilityOK, byNode["proxy-1"].Compatibility.Status, "patch numbers are independent")
+	require.Equal(t, agentcontrol.CompatibilityIncompatible, byNode["proxy-4"].Compatibility.Status)
+	require.Equal(t, agentcontrol.ProblemAgentProtocolTooOld, byNode["proxy-4"].Compatibility.Problems[0].Code)
+	forward := byNode["forward-1"].Compatibility
+	require.Equal(t, agentcontrol.CompatibilityIncompatible, forward.Status)
+	require.Equal(t, agentcontrol.ProblemVersionLineMismatch, forward.Problems[0].Code)
+	require.Equal(t, agentcontrol.ProblemKernelTooOld, forward.Problems[1].Code)
+	require.Nil(t, byNode["proxy-2"].Compatibility, "no live session")
+	require.Equal(t, 2, inventory.Summary.Incompatible)
+	require.Equal(t, 0, inventory.Summary.CompatibilityWarnings)
 }
 
 // legacyAPIKeyStream is the transport the removed API-key stream recorded;

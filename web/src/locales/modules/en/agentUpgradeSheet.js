@@ -11,7 +11,10 @@ export default {
     start: {
       title: 'Start an upgrade',
       target: 'Target version',
-      targetHelp: 'Defaults to the Agent release the Control install script pins. It cannot be newer than Control ({control}).',
+      targetHelp: 'Defaults to the Agent release the Control install script pins. The Agent shares Control\'s ({control}) major.minor; patch numbers are independent.',
+      lineMismatch: 'The default target {target} is not on the version line of Control ({control}): put an Agent release of that line in agent_install.artifact_dir.',
+      nodeIncompatible: 'incompatible',
+      nodeWarning: 'check version',
       batches: 'Canary batches (cumulative %)',
       batchesHelp: 'Separate with commas. The first batch is at most {first}%, the last is 100%.',
       minimum: 'Minimum per batch',

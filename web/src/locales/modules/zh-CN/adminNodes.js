@@ -38,6 +38,16 @@ export default {
     protocols: '协议数',
     agentVersion: 'Agent 版本',
     kernelVersion: '内核版本',
+    compatibility: {
+      warning: '版本需关注',
+      incompatible: '版本不兼容',
+      problems: {
+        agent_protocol_too_old: 'Agent 的协议修订号低于主控支持的最低值：请升级 Agent。',
+        agent_protocol_too_new: 'Agent 的协议修订号比主控新，新功能暂不启用：请升级主控。',
+        version_line_mismatch: 'Agent 与主控的主版本号.次版本号不一致：请升级到同一版本线的 Agent。',
+        kernel_too_old: 'anx-node 低于该 Agent 所需的最低版本：请升级内核。'
+      }
+    },
     kernelUnknown: '未上报',
     kernelUnknownHint: '节点在线时由 Agent 上报 anx-node 版本；旧版 Agent 不上报，升级 Agent 后显示。',
     load: '负载',

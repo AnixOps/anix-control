@@ -120,6 +120,15 @@
                 :title="t('admin.nodes.table.kernelVersion')"
                 data-testid="node-kernel-version"
               >anx-node {{ kernelVersionOf(row) }}</span>
+              <UiBadge
+                v-if="compatibilityOf(row)"
+                class="node-compatibility"
+                :tone="compatibilityOf(row).status === 'incompatible' ? 'danger' : 'warning'"
+                :dot="false"
+                :label="t(`admin.nodes.table.compatibility.${compatibilityOf(row).status}`)"
+                :title="compatibilityHint(row)"
+                data-testid="node-agent-compatibility"
+              />
             </template>
             <template #cell-serviceStatus="{ row }">
               <NodeServiceStatusCell :entry="serviceEntries.get(Number(row.id))" :status="serviceStatus" />
@@ -214,7 +223,7 @@ import { useNodeGroups } from './nodes/useNodeGroups'
 import { useNodeServiceStatus } from './nodes/useNodeServiceStatus'
 import { useNodeTransports } from './nodes/useNodeTransports'
 
-const { t } = useAppI18n()
+const { t, te } = useAppI18n()
 const format = useFormat()
 const route = useRoute()
 const router = useRouter()
@@ -310,6 +319,17 @@ const lastSeenOf = node => entryOf(node)?.last_seen_at || entryOf(node)?.connect
 const agentVersionOf = node => entryOf(node)?.agent_version || node.server_version || ''
 // The anx-node release the node's live session reported.
 const kernelVersionOf = node => entryOf(node)?.kernel_version || ''
+// Control's judgement of the live session (protocol revision, version
+// line, kernel), only when it is not plain compatible.
+const compatibilityOf = node => {
+  const compatibility = entryOf(node)?.compatibility
+  return compatibility && compatibility.status !== 'compatible' ? compatibility : null
+}
+const compatibilityHint = node => (compatibilityOf(node)?.problems || [])
+  .map(problem => te(`admin.nodes.table.compatibility.problems.${problem.code}`)
+    ? t(`admin.nodes.table.compatibility.problems.${problem.code}`)
+    : problem.message)
+  .join('\n')
 
 // 版本 and 负载 start hidden, as does 连接 (the Agent's channel): a node that
 // joined has a certificate and one channel, so 证书, Agent 版本 and 最后在线

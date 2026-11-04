@@ -192,8 +192,11 @@ version `latest`.
     it is the Agent a node installs unless `agent_install.agent_version`
     says otherwise. The Agent version is not the Control's: a patch release
     can ship an unchanged Agent, and the Agent repository has no tag with
-    the Control's number then. `check_release_version.py` (the tag gate)
-    requires the file to hold `vX.Y.Z` or `vX.Y.Z-rc.N`; that the tag exists
+    the Control's number then. Since 5.0.0 both share major.minor and number
+    their patches independently
+    ([agent-versioning](reference/agent-versioning.md)).
+    `check_release_version.py` (the tag gate) requires the file to hold
+    `vX.Y.Z` or `vX.Y.Z-rc.N` of Control's major.minor (from 5.0.0 on); that the tag exists
     in `anix-agent`, and that `AGENT_REF` is its commit, cannot be checked
     offline: tag the Agent first (the Agent tag is asked for first,
     `docs/architecture/forward-sdk.md` H25), then set both.
@@ -298,7 +301,8 @@ A hotfix ships a small fix to production without a whole release.
   earlier hotfix of the same release that built one), so the node page and
   upgrade campaigns keep offering that Agent and no node moves. After 5.0.0
   Control and the Agent share major and minor versions and number their
-  patches independently.
+  patches independently; the Agent's protocol revision decides
+  compatibility ([agent-versioning](reference/agent-versioning.md)).
 - **What is built.** The fix is merged to `main` first. The workflow
   cherry-picks the named `main` commits (`control_commits`, oldest first)
   onto `hotfix/<release>`, created from the release tag the first time

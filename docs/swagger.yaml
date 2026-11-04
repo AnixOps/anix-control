@@ -331,6 +331,12 @@ definitions:
     type: object
   handler.startAgentUpgradeRequest:
     properties:
+      allow_version_line_mismatch:
+        description: |-
+          AllowVersionLineMismatch starts a campaign whose target is on another
+          major.minor than this Control (a rollback across version lines);
+          without it such a target is refused (agent_version_line_mismatch).
+        type: boolean
       batches:
         items:
           $ref: '#/definitions/agentupgrade.Batch'
@@ -6279,9 +6285,14 @@ paths:
         (authentication mtls, certificate serial, expiry and SAN, negotiated capabilities).
         Each node also carries certificate_state (valid, revoked, expired or none),
         last_certificate (its newest certificate in any state: serial, issued_at,
-        not_after, renew_after, revoked_at and revoke_reason) and connection (type
-        mtls_stream or offline, the transport and when it was last seen). node=proxy-7
-        (repeatable or comma separated, at most 200) keeps the named nodes. summary.ready_for_required
+        not_after, renew_after, revoked_at and revoke_reason) connection (type mtls_stream
+        or offline, the transport and when it was last seen), protocol_revision and
+        compatibility (status compatible, warning or incompatible, with problems:
+        agent_protocol_too_old, agent_protocol_too_new, version_line_mismatch, kernel_too_old)
+        of its live session. control names this Control''s version, version line,
+        Agent release and the protocol revisions it serves; summary.incompatible and
+        summary.compatibility_warnings count the judged nodes. node=proxy-7 (repeatable
+        or comma separated, at most 200) keeps the named nodes. summary.ready_for_required
         (with required_reasons and required_blockers, computed over every node) is
         false while an enabled node has never enrolled.'
       parameters:
@@ -6318,9 +6329,13 @@ paths:
         or after 10 minutes without a reconnect), the newest anx-node release agent_install.artifact_dir
         holds (kernel_version, which every campaign installs; empty for none), the
         active campaign if there is one, and whether the caller may start one (can_start:
-        super administrators). When the https address nodes reach Control is not configured,
-        configured is false with unconfigured_reason and target_version empty. Administrators
-        read it; Start verifies the release files.'
+        super administrators). control names this Control''s version line and the
+        protocol revisions it serves, target_version_line_mismatch says the default
+        target is on another major.minor, and each node with a live session carries
+        its compatibility (status compatible, warning or incompatible, with problems).
+        When the https address nodes reach Control is not configured, configured is
+        false with unconfigured_reason and target_version empty. Administrators read
+        it; Start verifies the release files.'
       produces:
       - application/json
       responses:
@@ -6369,13 +6384,17 @@ paths:
         With kernel_only (and nodes, no target_version) only the anx-node kernel is
         upgraded: the target is the Agent release those nodes run now, so each Agent
         keeps its binary and installs the newest anx-node release in agent_install.artifact_dir.
-        A batch rolls back when more than 5% of its offered nodes fail or do not reconnect
-        with the target version within 10 minutes (H19). The release must be in agent_install.artifact_dir
-        with its .sig files and SHA256SUMS(.sig), verified with plugins.official_public_key.
-        Super administrators only; one campaign at a time.'
+        A target_version on another major.minor than this Control is refused (agent_version_line_mismatch,
+        docs/reference/agent-versioning.md) unless allow_version_line_mismatch is
+        set. A batch rolls back when more than 5% of its offered nodes fail or do
+        not reconnect with the target version within 10 minutes (H19). The release
+        must be in agent_install.artifact_dir with its .sig files and SHA256SUMS(.sig),
+        verified with plugins.official_public_key. Super administrators only; one
+        campaign at a time.'
       parameters:
       - description: target_version (default this Control's Agent release), batches,
-          exclude {nodes, tags}, nodes (manual upgrade), kernel_only, reason
+          exclude {nodes, tags}, nodes (manual upgrade), kernel_only, allow_version_line_mismatch,
+          reason
         in: body
         name: request
         required: true

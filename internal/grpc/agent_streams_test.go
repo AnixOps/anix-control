@@ -42,6 +42,11 @@ func openStreamClient(t *testing.T, ctx context.Context, conn *grpc.ClientConn, 
 	stream, err := agentv1pb.NewAgentControlServiceClient(conn).ControlStream(ctx)
 	require.NoError(t, err)
 	hello := &agentv1pb.Hello{Protocol: AgentProtocolVersion, AgentVersion: "streams-test", InstanceId: "instance-" + node.String()}
+	if node.Kind == agentcontrol.NodeKindProxy {
+		// A proxy Agent names its protocol revision and kernel minimum; a
+		// forward one is an Agent from before the labels.
+		hello.Labels = map[string]string{agentcontrol.LabelProtocolRevision: "3", agentcontrol.LabelKernelMinVersion: "0.1.0-alpha.15"}
+	}
 	for _, capability := range capabilities {
 		hello.Capabilities = append(hello.Capabilities, &agentv1pb.Capability{Name: capability, Version: agentcontrol.CapabilityVersionV1})
 	}
@@ -165,6 +170,10 @@ func TestAgentStreamsDispatchToEachNodeKind(t *testing.T) {
 	assert.Equal(t, "spiffe://anixops/test/agent/"+proxy.String(), proxySession.Identity)
 	assert.Equal(t, agentstreams.TransportControlStream, proxySession.Transport)
 	assert.Equal(t, "streams-test", proxySession.AgentVersion)
+	assert.Equal(t, uint32(3), proxySession.ProtocolRevision)
+	assert.Equal(t, "0.1.0-alpha.15", proxySession.KernelMinVersion)
+	assert.Equal(t, agentcontrol.ProtocolRevisionBaseline, forwardSession.ProtocolRevision)
+	assert.Empty(t, forwardSession.KernelMinVersion)
 	assert.ElementsMatch(t, []string{"agent.ping", "operation.cancel"}, proxySession.Capabilities)
 	assert.Equal(t, forwardClient.sessionID, forwardSession.SessionID)
 	assert.Equal(t, "spiffe://anixops/test/agent/"+forward.String(), forwardSession.Identity)
