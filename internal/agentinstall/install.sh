@@ -1472,8 +1472,8 @@ render_agent_unit() {
   fi
   # A named Agent finds its configuration from its own path: ps shows no
   # arguments.
-  local args=" server -c ${CONFIG_FILE}"
-  [[ -z "${INSTALL_NAME}" ]] || args=""
+  local exec_args=" server -c ${CONFIG_FILE}"
+  [[ -z "${INSTALL_NAME}" ]] || exec_args=""
   cat <<EOF
 # ${SERVICE}: the AnixOps Agent. Written by the AnixOps installer
 # (agent-install.sh); re-running the installer rewrites it.
@@ -1485,7 +1485,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=${LIB_DIR}/${BIN_NAME}${args}
+ExecStart=${LIB_DIR}/${BIN_NAME}${exec_args}
 Restart=on-failure
 RestartSec=5s
 User=${AGENT_USER}
