@@ -217,7 +217,7 @@ func runInventoryReplan(t *testing.T, db *gorm.DB) {
 	assert.Equal(t, route.GetId(), status.Violations[0].GetRouteId())
 
 	// Any route write is refused meanwhile, naming the broken route.
-	_, err = f.service.CreateRoute(f.ctx, "create-2", twoHop(0))
+	_, err = f.service.CreateRoute(f.ctx, "create-2", twoHop(DefaultPortFirst+1))
 	var refusal *RefusedError
 	require.ErrorAs(t, err, &refusal)
 	assert.True(t, refusal.Precondition)
@@ -343,10 +343,10 @@ func runPlanRouteAndList(t *testing.T, db *gorm.DB) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, bad.GetViolations())
 
-	user := twoHop(0)
+	user := twoHop(DefaultPortFirst + 1)
 	user.Owner = "user:7"
 	userRoute := f.create("create-2", user)
-	third := f.create("create-3", twoHop(0))
+	third := f.create("create-3", twoHop(DefaultPortFirst+2))
 	routes, next, err := f.service.ListRoutes(f.ctx, ListOptions{PageSize: 2})
 	require.NoError(t, err)
 	require.Len(t, routes, 2)

@@ -105,6 +105,21 @@ func (s *Service) write(ctx context.Context, reason string, body func(tx *gorm.D
 		if err != nil || done {
 			return err
 		}
+		// A port another listener holds on the same node is refused when
+		// the route is saved, not left waiting in the plan.
+		if routeID != "" && tx.Migrator().HasTable(&model.NetworkModel{}) {
+			conflicts, err := s.network(tx).ListenConflicts(tx, routeID)
+			if err != nil {
+				return err
+			}
+			if len(conflicts) > 0 {
+				violations := make([]planner.RouteViolation, len(conflicts))
+				for i, message := range conflicts {
+					violations[i] = planner.RouteViolation{RouteID: routeID, Violation: validate.Violation{Field: "listen.port", Code: validate.CodePortInUse, Message: message}}
+				}
+				return refused(violations, routeID)
+			}
+		}
 		routes, err := loadRoutes(tx)
 		if err != nil {
 			return err
