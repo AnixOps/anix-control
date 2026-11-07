@@ -42,7 +42,7 @@ var KernelArches = map[string]string{
 }
 
 const (
-	// KernelReleaseKey is the anx release's signing key, the one
+	// KernelReleaseKey is the kernel release signing key, the one
 	// install.sh (KERNEL_RELEASE_KEY) and the Agent embed: SHA256SUMS.sig
 	// is `ssh-keygen -Y sign` by it in KernelSignatureNamespace. It is the
 	// only key an uploaded kernel release is checked against.
@@ -297,13 +297,16 @@ func StoreKernelRelease(artifactDir string, sums []byte, signature string, packa
 	if err := VerifyKernelSums(sums, signature); err != nil {
 		return "", fmt.Errorf("%w: SHA256SUMS: %v", ErrKernelRelease, err)
 	}
+	// Names first, so a bad name is ErrKernelReleaseFile whatever the order.
 	version := ""
-	for name, data := range packages {
+	for name := range packages {
 		v := kernelPackageVersion(name)
 		if v == "" || (version != "" && v != version) {
 			return "", fmt.Errorf("%w: %q is not an anx-node package of one release", ErrKernelReleaseFile, name)
 		}
 		version = v
+	}
+	for name, data := range packages {
 		if int64(len(data)) > agentcontrol.MaxUpgradeKernelBytes {
 			return "", fmt.Errorf("%w: %s is larger than %d bytes", ErrKernelRelease, name, agentcontrol.MaxUpgradeKernelBytes)
 		}
@@ -334,8 +337,10 @@ func StoreKernelRelease(artifactDir string, sums []byte, signature string, packa
 		names = append(names, name)
 	}
 	sort.Strings(names)
-	// Packages first and SHA256SUMS last: a release is complete
-	// (KernelReleaseHeld) only once everything it lists can be there.
+	// Packages first and SHA256SUMS last: once SHA256SUMS is there
+	// (KernelReleaseHeld), the packages of this upload are too. A package
+	// SHA256SUMS lists but no upload brought yet keeps campaigns refusing
+	// the release (UpgradeKernels) until it comes.
 	for _, name := range names {
 		if err := write(name, packages[name]); err != nil {
 			return "", err

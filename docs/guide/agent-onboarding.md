@@ -678,7 +678,9 @@ from Control:
    `agent_install.artifact_dir/anx-node/<version>/`. No other key is trusted
    and none can be uploaded. Another `SHA256SUMS` for a stored version is
    refused (`kernel_release_conflict`); a bad signature or digest is
-   `kernel_release_invalid`.
+   `kernel_release_invalid`. Upload every package `SHA256SUMS` lists for
+   x86_64 and aarch64: a campaign refuses a release with one of them missing
+   (`kernel_release_unverified`).
 2. Tick the nodes and start the kernel-only upgrade
    (`POST /api/v4/kernel/agents/upgrades` with
    `{"nodes": ["proxy-3"], "kernel_only": true}`). It installs the **newest**

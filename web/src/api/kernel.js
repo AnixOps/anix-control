@@ -189,9 +189,10 @@ export async function getKernelAgentUpgradePlan() {
 // Uploads anx-node release files (field files: SHA256SUMS, SHA256SUMS.sig
 // and packages of one version) into agent_install.artifact_dir. Control
 // checks the signature against its built-in kernel release key only.
-// Super administrators.
+// Super administrators. A package is tens of MB, so the client's 5 s
+// timeout does not apply.
 export async function uploadKernelRelease(formData) {
-  return unwrap(await v4({ url: '/kernel/agents/kernel-releases', method: 'post', data: formData }))
+  return unwrap(await v4({ url: '/kernel/agents/kernel-releases', method: 'post', data: formData, timeout: 0 }))
 }
 
 export async function startKernelAgentUpgrade(input = {}) {
