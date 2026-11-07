@@ -651,6 +651,42 @@ Per-node results in `status`:
 | `failed` `config_apply_failed` | the new Agent could not apply the node's configuration |
 | `rolled_back` | the batch failed and this node returned to its previous Agent |
 
+## Install The Kernel By Hand
+
+A node whose Agent runs without the anx-node kernel (it could not download
+one) stays connected and reports `config_apply_failed`. Give it the kernel
+from Control:
+
+1. In **升级节点** (⌘K → 升级节点), pick **只升级内核** and choose the files of
+   one anx-node release: `SHA256SUMS`, `SHA256SUMS.sig` and the
+   `anx-node-<version>-<target>-linux-musl.tar.gz` packages (x86_64,
+   aarch64). **上传内核** sends one package per request, each with the
+   checksums and their signature. The same is
+   `POST /api/v4/kernel/agents/kernel-releases` (multipart field `files`,
+   repeated; super administrators):
+
+   ```bash
+   curl -fsS -X POST https://panel.example.com/api/v4/kernel/agents/kernel-releases \
+     -H "Authorization: Bearer $TOKEN" \
+     -F files=@SHA256SUMS -F files=@SHA256SUMS.sig \
+     -F files=@anx-node-0.2.0-x86_64-linux-musl.tar.gz
+   ```
+
+   Control checks `SHA256SUMS.sig` against the kernel release key built into
+   Control, the same key the install script and the Agent embed (namespace
+   `anx-release`), and each package against `SHA256SUMS`, then stores them in
+   `agent_install.artifact_dir/anx-node/<version>/`. No other key is trusted
+   and none can be uploaded. Another `SHA256SUMS` for a stored version is
+   refused (`kernel_release_conflict`); a bad signature or digest is
+   `kernel_release_invalid`. Upload every package `SHA256SUMS` lists for
+   x86_64 and aarch64: a campaign refuses a release with one of them missing
+   (`kernel_release_unverified`).
+2. Tick the nodes and start the kernel-only upgrade
+   (`POST /api/v4/kernel/agents/upgrades` with
+   `{"nodes": ["proxy-3"], "kernel_only": true}`). It installs the **newest**
+   release in the directory (the plan's `kernel_version`), not necessarily the
+   one just uploaded. The Agent restarts once and applies its configuration.
+
 ## When An Agent Certificate Was Not Renewed
 
 An Agent renews its certificate (7 days) at two thirds of its life, over the

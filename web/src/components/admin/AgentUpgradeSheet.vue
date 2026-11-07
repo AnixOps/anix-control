@@ -38,6 +38,23 @@
             {{ plan.kernel_version ? t('agentUpgradeSheet.start.kernelTarget', { version: plan.kernel_version }) : t('agentUpgradeSheet.start.kernelMissing') }}
           </p>
 
+          <div v-if="form.mode === 'kernel' && plan.can_start" class="upgrade-sheet__upload" data-testid="agent-upgrade-kernel-upload">
+            <label class="upgrade-sheet__rules">
+              {{ t('agentUpgradeSheet.upload.label') }}
+              <input
+                type="file"
+                multiple
+                :disabled="uploading"
+                data-testid="agent-upgrade-kernel-files"
+                @change="kernelFiles = [...($event.target.files || [])]"
+              >
+            </label>
+            <UiButton type="button" variant="secondary" :loading="uploading" :disabled="!kernelFiles.length" data-testid="agent-upgrade-kernel-upload-submit" @click="uploadKernel">
+              {{ t('agentUpgradeSheet.upload.submit') }}
+            </UiButton>
+            <p v-if="uploadError" class="upgrade-sheet__notice is-danger" role="alert" data-testid="agent-upgrade-kernel-upload-error">{{ uploadError }}</p>
+          </div>
+
           <UiTextField
             v-if="form.mode !== 'kernel'"
             v-model.trim="form.target"
@@ -140,7 +157,7 @@
 // list and the node page open it with openKernelUpgrade(ref).
 import { computed, reactive, ref, watch } from 'vue'
 import { Rocket } from '@lucide/vue'
-import { getKernelAgentUpgradePlan, startKernelAgentUpgrade } from '@/api/kernel'
+import { getKernelAgentUpgradePlan, startKernelAgentUpgrade, uploadKernelRelease } from '@/api/kernel'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { useAgentUpgradeSheet } from '@/composables/useAgentUpgradeSheet'
 import AgentUpgradeCampaign from '@/components/admin/AgentUpgradeCampaign.vue'
@@ -248,6 +265,40 @@ async function loadPlan() {
     loadError.value = cause
   } finally {
     loading.value = false
+  }
+}
+
+// Manual kernel install: the release files are uploaded one package per
+// request, each with SHA256SUMS and its signature, so no request is larger
+// than one package. Control trusts only its built-in release key.
+const kernelFiles = ref([])
+const uploading = ref(false)
+const uploadError = ref('')
+
+async function uploadKernel() {
+  const sums = kernelFiles.value.find(file => file.name === 'SHA256SUMS')
+  const signature = kernelFiles.value.find(file => file.name === 'SHA256SUMS.sig')
+  const packages = kernelFiles.value.filter(file => file.name.endsWith('.tar.gz'))
+  uploadError.value = ''
+  if (!sums || !signature || !packages.length) {
+    uploadError.value = t('agentUpgradeSheet.upload.missing')
+    return
+  }
+  uploading.value = true
+  try {
+    let version = ''
+    for (const file of packages) {
+      const data = new FormData()
+      for (const part of [sums, signature, file]) data.append('files', part, part.name)
+      version = (await uploadKernelRelease(data))?.version || version
+    }
+    toast.success(t('agentUpgradeSheet.upload.done', { version }))
+    kernelFiles.value = []
+    await loadPlan()
+  } catch (cause) {
+    uploadError.value = errorText(cause)
+  } finally {
+    uploading.value = false
   }
 }
 
@@ -403,6 +454,19 @@ defineExpose({ loadPlan, plan, form })
 .upgrade-sheet__notice.is-danger {
   background: var(--danger-soft);
   color: color-mix(in srgb, var(--danger) 78%, var(--label-1));
+}
+
+.upgrade-sheet__upload {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.upgrade-sheet__upload input {
+  display: block;
+  max-width: 100%;
+  margin-top: var(--space-1);
 }
 
 .upgrade-sheet__actions {

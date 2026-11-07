@@ -668,6 +668,11 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		// Control ranks them and recommends one; apply writes one into a
 		// Reality protocol of the node; auto has the singleton worker
 		// recheck the node and replace a target that keeps failing.
+		// Exit policy: a proxy node refuses mainland-China destinations as
+		// an exit (internal/exitpolicy), off by default.
+		exitPolicy := handler.NewExitPolicyHandler()
+		v4.GET("/kernel/nodes/:id/exit-policy", exitPolicy.Get)
+		v4.PUT("/kernel/nodes/:id/exit-policy", exitPolicy.Set)
 		realityTargets := handler.NewRealityTargetsHandler()
 		v4.GET("/kernel/nodes/:id/reality-targets", realityTargets.List)
 		v4.POST("/kernel/nodes/:id/reality-targets/probe", realityTargets.Probe)
@@ -677,6 +682,7 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		upgrades := handler.NewAgentUpgradesHandler()
 		v4.GET("/kernel/agents/upgrade-plan", upgrades.Plan)
 		v4.POST("/kernel/agents/upgrades", upgrades.Start)
+		v4.POST("/kernel/agents/kernel-releases", upgrades.UploadKernel)
 		v4.GET("/kernel/agents/upgrades", upgrades.List)
 		v4.GET("/kernel/agents/upgrades/:id", upgrades.Get)
 		v4.POST("/kernel/agents/upgrades/:id/pause", upgrades.Pause)

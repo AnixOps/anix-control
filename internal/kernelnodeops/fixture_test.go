@@ -92,7 +92,7 @@ func seed(t *testing.T, db *gorm.DB) {
 	t.Helper()
 	require.NoError(t, db.AutoMigrate(append(model.KernelNodeOperationModels(),
 		&model.Node{}, &model.NodeProtocol{}, &model.ForwardNode{},
-		&model.ForwardTunnel{}, &model.Forward{}, &model.ForwardRule{}, &model.EgressRoute{})...))
+		&model.ForwardTunnel{}, &model.Forward{}, &model.ForwardRule{}, &model.EgressRoute{}, &model.NodeExitPolicy{})...))
 	exit := uint(11)
 	require.NoError(t, db.Create(&[]model.Node{{ID: 1, Name: "proxy-1"}, {ID: 2, Name: "proxy-2"}}).Error)
 	require.NoError(t, db.Create(&model.NodeProtocol{ID: 5, NodeID: 1, Name: "vless", Type: model.ProtocolVLESS, Port: 443}).Error)

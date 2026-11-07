@@ -219,8 +219,8 @@ func TestForwardControlServer(t *testing.T) {
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 
 	// A delete the other routes' plan refuses names them.
-	other := f.create("c4", twoHop(0))
-	_, err = f.service.SetNodeSettings(ctx, entry, NodeSettings{ReservedPorts: []uint32{DefaultPortFirst}})
+	other := f.create("c4", twoHop(DefaultPortFirst+1))
+	_, err = f.service.SetNodeSettings(ctx, entry, NodeSettings{ReservedPorts: []uint32{DefaultPortFirst + 1}})
 	require.NoError(t, err)
 	_, err = server.DeleteRoute(ctx, &forwardv1.DeleteRouteRequest{RequestId: "d1", RouteId: id})
 	st = status.Convert(err)

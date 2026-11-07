@@ -23,6 +23,17 @@ Rules:
 - Use environment variables, secret stores, or deployment-specific config files.
 - Rotate any credential that was ever pasted into logs, chat, CI output, or a public repository.
 
+Shadowsocks 2022 legacy keys:
+
+- Nodes still accept every user's legacy Shadowsocks 2022 key (derived from
+  the UUID) next to the stored random one. Refusing legacy keys breaks
+  clients that have not pulled a new subscription; decide it separately,
+  after the users have moved.
+- Server keys are still derived from the node's creation time. A relay child
+  node runs no Agent and derives its parent's key, while a protocol has no
+  link to the parent protocol it relays, so random server keys need one key
+  per node that the parent and its children share (and a client migration).
+
 ## Database And Migrations
 
 Manual action required:

@@ -136,6 +136,10 @@ export default {
           title: 'No verified backup in the last {hours} hours',
           hint: 'The newest verified backup was taken {date}. Check the backup worker in the Control log, or back up now.',
           never: 'The panel has no verified backup yet. Check the backup worker in the Control log, or back up now.'
+        },
+        exitMainland: {
+          title: '{name} refused mainland-China destinations ({n} so far)',
+          hint: 'Last refused {date}. Check the entries and the clients’ routing: mainland traffic should not reach this exit.'
         }
       },
       nodesFailed: 'Couldn’t load node status',

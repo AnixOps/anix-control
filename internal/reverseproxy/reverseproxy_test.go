@@ -34,7 +34,7 @@ func newService(t *testing.T) *Service {
 	sqlDB, err := db.DB()
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = sqlDB.Close() })
-	require.NoError(t, db.AutoMigrate(append([]any{&model.Node{}, &model.ForwardNode{}, &model.OperationLog{}, &model.ReverseProxy{}},
+	require.NoError(t, db.AutoMigrate(append([]any{&model.Node{}, &model.ForwardNode{}, &model.OperationLog{}, &model.ReverseProxy{}, &model.NodeProtocol{}, &model.EgressRoute{}},
 		model.NetworkModels()...)...))
 	for _, id := range []uint{1, 2} {
 		require.NoError(t, db.Create(&model.Node{ID: id, Name: "n", Host: "h.example.com"}).Error)
@@ -184,4 +184,27 @@ func TestReverseProxyRefuses(t *testing.T) {
 	forwards, err := s.Forwards(s.DB)
 	require.NoError(t, err)
 	require.Empty(t, forwards)
+}
+
+// A port another listener holds on an entry refuses the save: another
+// reverse proxy's redirect port, or a node protocol's port.
+func TestReverseProxyListenConflict(t *testing.T) {
+	s := newService(t)
+	ctx := context.Background()
+	cert, key := selfSigned(t, "blog.example.com", "*.blog.example.com")
+	first, err := s.Create(ctx, blogInput(cert, key), Actor{})
+	require.NoError(t, err)
+
+	second := blogInput(cert, key)
+	second.Name, second.ListenPort, second.HTTPPort = "second", 8443, 80
+	_, err = s.Create(ctx, second, Actor{})
+	require.ErrorIs(t, err, ErrInvalid)
+	require.ErrorContains(t, err, "listen [::]:80 on proxy-1 is taken by reverse proxy rp-1-http")
+
+	require.NoError(t, s.DB.Create(&model.NodeProtocol{ID: 3, NodeID: 1, Port: 8443, Enable: 1}).Error)
+	update := blogInput(cert, key)
+	update.ListenPort = 8443
+	_, err = s.Update(ctx, first.ID, update, Actor{})
+	require.ErrorIs(t, err, ErrInvalid)
+	require.ErrorContains(t, err, "listen [::]:8443 on proxy-1 is taken by protocol 3")
 }

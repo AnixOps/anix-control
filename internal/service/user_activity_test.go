@@ -24,7 +24,7 @@ func activityService(t *testing.T) (*ServerService, *gorm.DB) {
 	sqlDB.SetMaxOpenConns(1)
 	require.NoError(t, db.AutoMigrate(&model.Node{}, &model.User{}, &model.TrafficLog{}, &model.StatServer{},
 		&model.SubscriberRequest{}, &model.SubscriberChange{}, &model.UserActivity{}, &model.AgentReportBatch{},
-		&model.IdentityRevocation{}, &model.WireGuardPeer{}))
+		&model.IdentityRevocation{}, &model.WireGuardPeer{}, &model.UserSS2022Key{}))
 	require.NoError(t, db.Create(&model.Node{ID: 7, Name: "entry", Host: "entry.example.com"}).Error)
 	for _, id := range []uint{1, 2, 3} {
 		require.NoError(t, db.Create(&model.User{ID: id, Email: fmt.Sprintf("activity%d@example.test", id), Token: fmt.Sprintf("tok%d", id), UUID: fmt.Sprintf("uuid%d", id)}).Error)

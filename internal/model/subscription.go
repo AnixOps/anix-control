@@ -143,6 +143,11 @@ type TemplateRenderContext struct {
 	// 订阅元信息 (用于生成客户端特定配置，如 Surge managed-config)
 	SubscribeURL    string `json:"subscribe_url,omitempty"`
 	SubscribeDomain string `json:"subscribe_domain,omitempty"`
+
+	// SS2022Key is the user's stored Shadowsocks 2022 key (std base64 of 32
+	// bytes, model.UserSS2022Key); empty keeps the legacy key derived from
+	// the UUID.
+	SS2022Key string `json:"-"`
 }
 
 // ParsedNode 解析后的统一节点格式
@@ -182,6 +187,10 @@ type ParsedNode struct {
 	// Shadowsocks 配置
 	Cipher    string `json:"cipher,omitempty"`     // SS 加密方式
 	ServerKey string `json:"server_key,omitempty"` // SS2022 服务器密钥
+	// UserKey is the user's stored Shadowsocks 2022 key (std base64 of 32
+	// bytes) when this node's Agent serves it; the formatters use as many
+	// bytes as the cipher needs. Empty uses the legacy key.
+	UserKey string `json:"-"`
 
 	// WireGuard 配置
 	PrivateKey   string   `json:"private_key,omitempty"`

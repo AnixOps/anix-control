@@ -125,8 +125,8 @@ func TestAgentStreamUnderRequiredNeedsNoLegacyPath(t *testing.T) {
 	})
 	l := startAgentListener(t, true)
 	db := database.Get()
-	requireAutoMigrate(t, append(append(append(model.KernelNodeOperationModels(), &model.EgressRoute{}), model.KernelForwardModels()...), model.NetworkModels()...)...)
-	requireAutoMigrate(t, &model.Plan{}, &model.User{}, &model.SubscriberChange{}, &model.SubscriberRequest{}, &model.WireGuardPeer{},
+	requireAutoMigrate(t, append(append(append(model.KernelNodeOperationModels(), &model.EgressRoute{}, &model.NodeExitPolicy{}), model.KernelForwardModels()...), model.NetworkModels()...)...)
+	requireAutoMigrate(t, &model.Plan{}, &model.User{}, &model.SubscriberChange{}, &model.SubscriberRequest{}, &model.WireGuardPeer{}, &model.UserSS2022Key{},
 		&model.TrafficLog{}, &model.StatServer{}, &model.NodeLog{}, &model.AgentReportBatch{})
 	require.NoError(t, nodesecrets.MigrateForTest(db))
 	ctx := testContext(t)

@@ -133,7 +133,7 @@ func newAgentUsersEnvironment(t *testing.T, initDatabase func(t *testing.T)) *ag
 	cache.InitMemory()
 	initDatabase(t)
 	db := database.Get()
-	requireAutoMigrate(t, &model.Node{}, &model.NodeProtocol{}, &model.Plan{}, &model.User{}, &model.SubscriberChange{}, &model.WireGuardPeer{})
+	requireAutoMigrate(t, &model.Node{}, &model.NodeProtocol{}, &model.Plan{}, &model.User{}, &model.SubscriberChange{}, &model.WireGuardPeer{}, &model.UserSS2022Key{})
 	require.NoError(t, nodesecrets.MigrateForTest(db))
 
 	for _, bound := range []struct {
@@ -525,6 +525,9 @@ func TestAgentControlUsersCarryNoSecrets(t *testing.T) {
 	var users []model.User
 	require.NoError(t, environment.db.Find(&users).Error)
 	require.NotEmpty(t, users)
+	// A user with a stored Shadowsocks 2022 key gets it next to the peer.
+	key, err := service.EnsureSS2022UserKey(environment.db, users[0].ID)
+	require.NoError(t, err)
 
 	stream, _, cancel := environment.openUsersSession(t, usersCapabilities(), 0)
 	defer cancel()
@@ -545,6 +548,11 @@ func TestAgentControlUsersCarryNoSecrets(t *testing.T) {
 		for _, user := range page.Upserts {
 			assert.Contains(t, string(user.ExtraJson), `"wireguard_peer_ip":"10.9.0.`)
 			assert.Contains(t, string(user.ExtraJson), `"wireguard_public_key"`)
+			if user.UserId == uint64(users[0].ID) {
+				assert.Contains(t, string(user.ExtraJson), `"`+agentcontrol.UserExtraSS2022Key+`":"`+key+`"`)
+			} else {
+				assert.NotContains(t, string(user.ExtraJson), agentcontrol.UserExtraSS2022Key)
+			}
 		}
 	}
 }

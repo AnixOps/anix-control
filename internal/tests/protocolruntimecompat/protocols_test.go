@@ -57,7 +57,7 @@ func protocolCapabilities() []string {
 
 // protocolRoute is a node protocol route on the kernel's path.
 func protocolRoute(method, pattern, routeID string, legacy func(*handler.NodeHandler, *gin.Context)) packagecompat.KernelRoute {
-	models := append(append(append([]any{}, protocolModels...), packagecompat.NodeSplitModels()...), append(model.KernelNodeOperationModels(), &model.EgressRoute{})...)
+	models := append(append(append([]any{}, protocolModels...), packagecompat.NodeSplitModels()...), append(model.KernelNodeOperationModels(), &model.EgressRoute{}, &model.NodeExitPolicy{})...)
 	return packagecompat.KernelRoute{
 		Route: packagecompat.Route{
 			Method: method, Pattern: pattern, RouteID: routeID, Models: models,

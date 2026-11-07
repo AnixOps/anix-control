@@ -426,7 +426,7 @@ func (f *V2RayFormatter) formatShadowsocks(node *model.ParsedNode, ctx *model.Te
 
 		if serverKey != "" {
 			// ss2022://method:server_key:user_key@server:port#name
-			userKey := generateSS2022UserKey(password, cipher)
+			userKey := ss2022UserKey(node, password, cipher)
 			userInfo := fmt.Sprintf("%s:%s:%s", cipher, serverKey, userKey)
 			return fmt.Sprintf("ss://%s@%s#%s",
 				base64.RawURLEncoding.EncodeToString([]byte(userInfo)),
@@ -440,6 +440,23 @@ func (f *V2RayFormatter) formatShadowsocks(node *model.ParsedNode, ctx *model.Te
 		userInfo, uriHostPort(node.Server, node.Port), url.QueryEscape(node.Name)), nil
 }
 
+// ss2022UserKey is the user key a client sends: the user's stored key cut
+// to the cipher's length when the node serves it, else the legacy key.
+func ss2022UserKey(node *model.ParsedNode, uuid, cipher string) string {
+	if raw, err := base64.StdEncoding.DecodeString(node.UserKey); err == nil && len(raw) >= ss2022KeyLen(cipher) {
+		return base64.StdEncoding.EncodeToString(raw[:ss2022KeyLen(cipher)])
+	}
+	return generateSS2022UserKey(uuid, cipher)
+}
+
+// ss2022KeyLen is the key length of a Shadowsocks 2022 cipher in bytes.
+func ss2022KeyLen(cipher string) int {
+	if strings.Contains(cipher, "128") {
+		return 16
+	}
+	return 32
+}
+
 // generateSS2022UserKey 生成 SS2022 用户密钥。
 // 必须与节点端 V2bX (core/xray/ss.go) 完全一致:
 //
@@ -448,11 +465,7 @@ func (f *V2RayFormatter) formatShadowsocks(node *model.ParsedNode, ctx *model.Te
 // 注意: 用的是原始 UUID (带横线), 直接按字节截取前 keyLen 个, 不能去掉横线,
 // 否则和节点端算出的 user_key 不一致, 客户端会连接失败。
 func generateSS2022UserKey(uuid string, cipher string) string {
-	keyLen := 32 // 默认 256 位
-	if strings.Contains(cipher, "128") {
-		keyLen = 16
-	}
-
+	keyLen := ss2022KeyLen(cipher)
 	if len(uuid) < keyLen {
 		// UUID 正常是 36 字符, 理论上不会走到这里; 兜底避免越界。
 		return base64.StdEncoding.EncodeToString([]byte(uuid))
@@ -851,7 +864,7 @@ func (f *ClashFormatter) buildShadowsocks(proxy map[string]any, node *model.Pars
 		}
 		// Clash Meta 使用 password 字段传递 server:user 密钥对
 		if serverKey != "" {
-			userKey := generateSS2022UserKey(password, cipher)
+			userKey := ss2022UserKey(node, password, cipher)
 			proxy["password"] = serverKey + ":" + userKey
 		}
 	}
@@ -1229,7 +1242,7 @@ func (f *SurgeFormatter) formatShadowsocks(node *model.ParsedNode, ctx *model.Te
 			}
 		}
 		if serverKey != "" {
-			userKey := generateSS2022UserKey(password, cipher)
+			userKey := ss2022UserKey(node, password, cipher)
 			password = fmt.Sprintf("%s:%s", serverKey, userKey)
 		}
 	}

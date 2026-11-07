@@ -95,3 +95,10 @@ func NegotiatedCapabilities(agent, server []*agentv1pb.Capability) []string {
 	}
 	return negotiated
 }
+
+// UserExtraSS2022Key is the member of a users.v1 NodeUser's extra_json that
+// carries the user's stored Shadowsocks 2022 key (std base64 of 32 bytes).
+// An Agent of ProtocolRevisionUserKeys or later serves it as a second
+// Shadowsocks 2022 user next to the legacy key derived from the UUID; an
+// older Agent ignores it.
+const UserExtraSS2022Key = "ss2022_key"

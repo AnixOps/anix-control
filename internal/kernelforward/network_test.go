@@ -190,3 +190,28 @@ func TestNetworkForwardKernelHops(t *testing.T) {
 	require.Len(t, forward.Kernel, 3)
 	require.Empty(t, forward.Entries)
 }
+
+// A listen port another listener holds on the entry device is refused when
+// the route is saved: another route's, or a node protocol's.
+func TestNetworkRouteListenConflictIsRefused(t *testing.T) {
+	f, db, _ := networkFixture(t)
+	first := f.create("network-1", networkRoute(&forwardv1.Route{}))
+	require.NoError(t, db.Create(&model.NodeProtocol{ID: 7, NodeID: uint(proxy.ID), Port: 20023, Enable: 1}).Error)
+
+	for port, owner := range map[uint32]string{20022: "forward " + first.GetId(), 20023: "protocol 7"} {
+		_, err := f.service.CreateRoute(f.ctx, "network-"+owner, networkRoute(&forwardv1.Route{
+			Listen: &forwardv1.Listen{Port: port, Protocol: forwardv1.L4Protocol_L4_PROTOCOL_TCP},
+		}))
+		var refusal *RefusedError
+		require.ErrorAs(t, err, &refusal)
+		require.Len(t, refusal.Violations, 1)
+		violation := refusal.Violations[0]
+		require.Empty(t, violation.RouteID, "a new route has no id yet")
+		require.Equal(t, "listen.port", violation.Field)
+		require.Equal(t, "port_in_use", string(violation.Code))
+		require.Contains(t, violation.Message, "on proxy-21 is taken by "+owner)
+	}
+	var count int64
+	require.NoError(t, db.Model(&model.KernelForwardRoute{}).Count(&count).Error)
+	require.Equal(t, int64(1), count)
+}

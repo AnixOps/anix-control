@@ -114,7 +114,7 @@ administrator-only. That is v4.3 work.
 | 404 | `not_found` | unknown route or node, or an unknown path |
 | 404 | `plugin_route_not_found` | a commercial prefix in the community edition, or no installed package declares the route (kernel) |
 | 405 | `method_not_allowed` | known path, other method |
-| 409 | `refused` | the nodes cannot host the route, another route no longer plans, a node or DNS provider is in use, a DNS binding exists, or Control cannot seal credentials (`FAILED_PRECONDITION` with violations) |
+| 409 | `refused` | the nodes cannot host the route, its listen port is taken on an entry (`port_in_use` on `listen.port`: another forward, reverse proxy, kernel forward hop, network-model ingress, node protocol or egress relay listens there; the message names it), another route no longer plans, a node or DNS provider is in use, a DNS binding exists, or Control cannot seal credentials (`FAILED_PRECONDITION` with violations) |
 | 409 | `idempotency_conflict` | `Idempotency-Key` reused for another request |
 | 409 | `revision_conflict` | `PUT /routes/{id}` with a stale `revision`, or a concurrent change during pause or resume (`ABORTED`) |
 | 429 | `rate_limited` | too many route diagnoses run at once (`RESOURCE_EXHAUSTED`) |

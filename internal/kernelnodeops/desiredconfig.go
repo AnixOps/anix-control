@@ -14,6 +14,7 @@ import (
 	"github.com/AnixOps/anix-control/sdk/forward/wire"
 	"github.com/AnixOps/anix-control/sdk/network"
 	"github.com/AnixOps/anix-control/v5/internal/egressroute"
+	"github.com/AnixOps/anix-control/v5/internal/exitpolicy"
 	"github.com/AnixOps/anix-control/v5/internal/kernelforward"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/networkmodel"
@@ -167,6 +168,15 @@ func buildProxyDesiredConfig(db *gorm.DB, id uint) (map[string]any, error) {
 	}
 	if qos != nil {
 		document["qos"] = qos
+	}
+	// Whether the node refuses mainland-China destinations as an exit
+	// (internal/exitpolicy), only when it does.
+	exit, err := exitpolicy.NodeMember(db, id)
+	if err != nil {
+		return nil, err
+	}
+	if exit != nil {
+		document["exit_policy"] = exit
 	}
 	return document, nil
 }

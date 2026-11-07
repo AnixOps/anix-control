@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"regexp"
 	"sort"
 	"strconv"
@@ -96,6 +97,13 @@ func (s *SubscriptionService) GetUserSubscription(req *model.SubscriptionRequest
 
 	// 5. 构建渲染上下文
 	ctx := s.buildRenderContext(user, req)
+	// Pulling a subscription gives the user a random Shadowsocks 2022 key;
+	// nodes whose Agent serves it offer it, the rest the legacy key.
+	if key, err := EnsureSS2022UserKey(s.db, user.ID); err != nil {
+		slog.Warn("shadowsocks 2022 user key", "user", user.ID, "error", err)
+	} else {
+		ctx.SS2022Key = key
+	}
 
 	// 6. 将模板渲染为 ParsedNode
 	nodes := s.renderTemplates(templates, ctx, groups)
@@ -637,6 +645,17 @@ func (s *SubscriptionService) internalNodes(ctx *model.TemplateRenderContext, gr
 		}
 	}
 
+	userKeyNodes := map[uint]bool{}
+	if ctx != nil && ctx.SS2022Key != "" {
+		nodeIDs := make([]uint, 0, len(protocols))
+		for _, p := range protocols {
+			nodeIDs = append(nodeIDs, p.NodeID)
+		}
+		if userKeyNodes, err = agentUserKeyNodes(s.db, nodeIDs); err != nil {
+			return nil, err
+		}
+	}
+
 	liveness := make(map[uint]bool)
 	var result []*model.ParsedNode
 	var keys []groupProtocolKey
@@ -673,6 +692,9 @@ func (s *SubscriptionService) internalNodes(ctx *model.TemplateRenderContext, gr
 				entryKey, _ := nodeKey(parsed.ID, p.Node.ID, p.ID)
 				if overrides {
 					applyNodeOverrides(parsed, p.Node.ID, p.ID, layouts[groupProtocolKey{g.ID, p.ID}].Overrides)
+				}
+				if parsed.Type == string(model.ProtocolShadowsocks) && userKeyNodes[p.Node.ID] {
+					parsed.UserKey = ctx.SS2022Key
 				}
 				parsed.GroupID = g.ID
 				parsed.GroupName = g.Name

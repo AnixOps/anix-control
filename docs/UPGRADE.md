@@ -11,6 +11,16 @@ Use this together with:
 - [`features.md`](features.md)
 - [`reference/sqlite-to-postgres-migration.md`](reference/sqlite-to-postgres-migration.md)
 
+## Upgrading To 5.0.2: Listen Port Conflicts Are Refused On Save
+
+A forward route or reverse proxy whose listen port another listener holds on
+the same node (another forward, reverse proxy or kernel forward hop, a
+network-model ingress, a node protocol or an egress relay) is now refused
+when it is saved: the v4 API answers `409 refused` with a `port_in_use`
+violation on `listen.port`, a reverse proxy `400`. Routes that already
+conflict are left as they are and wait in the plan as before; they are
+refused only when they are saved again. Pick a free port for them.
+
 ## Upgrading To The Release After 5.0.0-rc.28: Node API Keys Are Gone
 
 Agents authenticate with their mTLS certificate only, so the node API key,

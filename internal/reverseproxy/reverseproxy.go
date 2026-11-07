@@ -360,6 +360,17 @@ func (s *Service) write(ctx context.Context, actor Actor, change func(tx *gorm.D
 		if !tx.Migrator().HasTable(&model.NetworkModel{}) {
 			return nil
 		}
+		// A port another listener holds on an entry refuses the save.
+		if action == AuditActionCreate || action == AuditActionUpdate {
+			id := IDPrefix + strconv.FormatUint(uint64(row.ID), 10)
+			conflicts, err := s.network(tx).ListenConflicts(tx, id, id+HTTPSuffix)
+			if err != nil {
+				return err
+			}
+			if len(conflicts) > 0 {
+				return invalid("%s", strings.Join(conflicts, "; "))
+			}
+		}
 		notify, err = s.network(tx).ReplanTx(tx)
 		if err != nil {
 			var invalidModel *networkmodel.Invalid

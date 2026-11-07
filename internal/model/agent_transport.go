@@ -24,6 +24,9 @@ type AgentTransport struct {
 	CertNotAfter *time.Time `json:"cert_not_after,omitempty"`
 	FirstSeenAt  time.Time  `gorm:"not null" json:"first_seen_at"`
 	LastSeenAt   time.Time  `gorm:"not null;index" json:"last_seen_at"`
+	// ProtocolRevision is the protocol revision the agent named in its
+	// Hello (agentcontrol.HelloProtocolRevision), 0 before it was recorded.
+	ProtocolRevision uint32 `gorm:"not null;default:0" json:"protocol_revision"`
 }
 
 func (AgentTransport) TableName() string { return "v4_kernel_agent_transport" }

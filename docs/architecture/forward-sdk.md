@@ -348,6 +348,11 @@ type Options struct {
      another route, another hop of the same route or a route in its grace
      period, is refused (`port_in_use`), so the route that holds a port
      keeps it.
+     A route on the network model is also checked when it is saved
+     (`networkmodel.ListenConflicts`): a listen port that another forward,
+     reverse proxy, kernel forward hop, ingress, node protocol or egress
+     relay holds on the same node refuses the write (`port_in_use`) instead
+     of leaving the route waiting in the plan.
   3. The remaining hops get the lowest port of the node's range that is
      free, not in `Options.ReservedPorts` and not in `Options.Taken`; none
      is `port_exhausted`, no range is `no_port_range`.

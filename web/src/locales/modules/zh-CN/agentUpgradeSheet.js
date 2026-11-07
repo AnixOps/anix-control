@@ -28,7 +28,7 @@ export default {
       nodeKernel: '内核 anx-node {version}',
       nodeKernelUnknown: '内核未上报',
       kernelTarget: '将安装 anx-node {version}（Control 上最新的内核）。Agent 版本不变，会重启一次。',
-      kernelMissing: 'Control 上没有 anx-node 内核：先把内核发布复制到 agent_install.artifact_dir。',
+      kernelMissing: 'Control 上没有 anx-node 内核：在下方上传，或把内核发布复制到 agent_install.artifact_dir。',
       kernelSubmit: '升级内核',
       mode: '升级方式',
       modes: {
@@ -44,6 +44,12 @@ export default {
       active: '已有一个升级在进行。结束或中止后才能开始新的。',
       superOnly: '只有超级管理员可以开始升级。',
       unconfigured: '现在还不能升级：{reason}'
+    },
+    upload: {
+      label: '手动安装内核：选择同一发布的 SHA256SUMS、SHA256SUMS.sig 和 anx-node 包',
+      submit: '上传内核',
+      missing: '请选择 SHA256SUMS、SHA256SUMS.sig 和至少一个 anx-node .tar.gz 包。',
+      done: '已上传 anx-node {version}'
     },
     confirm: {
       title: '把 {n} 个节点升级到 {version}？',
@@ -66,6 +72,8 @@ export default {
       kernel_release_missing: 'Control 上没有可安装的 anx-node 内核。',
       kernel_release_unverified: 'anx-node 内核文件不完整：{message}',
       agent_install_unconfigured: '现在还不能升级：{message}',
+      kernel_release_invalid: '内核发布没有通过内置发布公钥的校验：{message}',
+      kernel_release_conflict: '这个 anx-node 版本已存有另一份发布：{message}',
       invalid_request: '升级设置不正确：{message}',
       unknown: '没有开始升级。'
     }

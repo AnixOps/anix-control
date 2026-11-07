@@ -44,6 +44,14 @@ Agent 只通过 `anix.agent.v1` mTLS gRPC 控制流与 Control 通信；UniProxy
 | AnyTLS | `anytls` | AnyTLS |
 | Panabit iWAN | `iwan` | UDP 三层隧道，不加密，见下文 |
 
+### Shadowsocks 2022 密钥
+
+Shadowsocks 2022（`2022-blake3-*`）的客户端密码是「服务器密钥:用户密钥」。
+
+- 服务器密钥：不变。协议没填 `server_key` 时仍按节点创建时间推导（子节点用父节点的），改了会让所有客户端失效。
+- 用户密钥：旧的用户密钥由 UUID 推导，知道 UUID 就能算出来。用户第一次拉取订阅时，面板给他生成一个随机密钥（`v5_user_ss2022_key`），通过 `users.v1` 的 extra `ss2022_key` 下发到节点。协议修订 2 及以上的 Agent 把它作为第二个用户服务，旧密钥照常可用；订阅只在这些节点上给出新密钥，其余节点仍给旧密钥。老用户不用做任何事，重新拉取订阅就会换成新密钥。
+- 同一用户在同一节点同时用新旧两个密钥时，内核按用户计的限速和设备数会各算一份。
+
 ### Panabit iWAN
 
 `iwan` 协议由 anix-agent 的 anixcore 内核提供（networkcore_anixops `docs/protocols/iwan.md` §12），接入 iwand、OpenWrt、Panabit 等 iWAN 客户端。用户的流量进入节点后和其他协议一样走「转发 → 分流」的 egress 路由。**iWAN 没有加密和完整性校验**，只适合可信线路；管理端表单会标出这一点。

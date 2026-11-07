@@ -56,6 +56,7 @@
           <NodeEntriesSection :node="node" />
           <NodeNetworkSection :node-ref="`proxy-${node.id}`" />
           <NodeForwardPortsSection :node-ref="`proxy-${node.id}`" />
+          <NodeExitPolicySection :node-ref="`proxy-${node.id}`" />
         </div>
       </template>
       <template #credentials>
@@ -129,6 +130,8 @@ const NodeEntriesSection = defineAsyncComponent(() => import('./nodes/NodeEntrie
 const NodeNetworkSection = defineAsyncComponent(() => import('./nodes/NodeNetworkSection.vue'))
 // 转发端口: the port range the forward planner allocates from on the node.
 const NodeForwardPortsSection = defineAsyncComponent(() => import('./nodes/NodeForwardPortsSection.vue'))
+// 出口策略: whether the node refuses mainland-China destinations as an exit.
+const NodeExitPolicySection = defineAsyncComponent(() => import('./nodes/NodeExitPolicySection.vue'))
 // 流量 draws a chart: its code (and ECharts) load when the section opens.
 const NodeTrafficSection = defineAsyncComponent(() => import('./nodes/NodeTrafficSection.vue'))
 

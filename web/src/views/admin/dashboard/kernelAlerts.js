@@ -34,7 +34,8 @@ const KIND_ICONS = {
   panel_certificate_expiring: FileKey,
   panel_certificate_renewal_failing: ShieldAlert,
   backup_verify_failed: DatabaseBackup,
-  backup_stale: DatabaseBackup
+  backup_stale: DatabaseBackup,
+  exit_mainland_destinations: ShieldAlert
 }
 
 export const KERNEL_ALERT_KINDS = Object.freeze(Object.keys(KIND_ICONS))
@@ -133,6 +134,10 @@ export function alertText(alert, { t, format }) {
       hint = detail.last_verified_created_at
         ? t(`${base}.backupStale.hint`, { date: date(detail.last_verified_created_at) })
         : t(`${base}.backupStale.never`)
+      break
+    case 'exit_mainland_destinations':
+      title = t(`${base}.exitMainland.title`, { name: holderName(alert, detail), n: text(detail.total) || '0' })
+      hint = t(`${base}.exitMainland.hint`, { date: date(detail.last_at) })
       break
     default:
       title = text(alert?.message) || text(alert?.kind) || text(alert?.key)

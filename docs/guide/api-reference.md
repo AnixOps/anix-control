@@ -645,6 +645,9 @@ Agent 版本（`agent_install.agent_version`，否则 Control 自己的版本）
 `POST /api/v4/kernel/agents/upgrades` 及其子路径（超级管理员）；管理端从 ⌘K 的「升级节点」打开面板，
 开始前的确认框写明会升级多少个节点。开始请求带 `"nodes": ["proxy-1", "forward-2"]` 时是手动升级：只升级这些节点（每个都要在 `nodes` 列表里），
 一批全部推送，没有 30 分钟下限，失败阈值和回滚照旧；此时不能再带 `batches` 或 `exclude`。
+`POST /api/v4/kernel/agents/kernel-releases`（超级管理员，multipart 字段 `files` 重复）上传一个 anx-node 发布的
+`SHA256SUMS`、`SHA256SUMS.sig` 和内核包，只用 Control 内置的内核发布公钥校验签名，存入
+`agent_install.artifact_dir/anx-node/<version>/`；之后用 `kernel_only` 升级推送目录里最新的版本。
 
 ### 节点组与接入令牌
 

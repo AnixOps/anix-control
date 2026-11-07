@@ -620,6 +620,15 @@ func TestGenerateSS2022UserKey(t *testing.T) {
 	assert.Equal(t, "MTIzNDU2NzgtMTIzNC01Ng==", key128)
 }
 
+func TestSS2022UserKeyPrefersTheStoredKey(t *testing.T) {
+	uuid := "12345678-1234-5678-1234-567812345678"
+	stored := base64.StdEncoding.EncodeToString([]byte("0123456789abcdef0123456789abcdef"))
+	node := &model.ParsedNode{UserKey: stored}
+	assert.Equal(t, stored, ss2022UserKey(node, uuid, "2022-blake3-aes-256-gcm"))
+	assert.Equal(t, base64.StdEncoding.EncodeToString([]byte("0123456789abcdef")), ss2022UserKey(node, uuid, "2022-blake3-aes-128-gcm"))
+	assert.Equal(t, generateSS2022UserKey(uuid, "2022-blake3-aes-256-gcm"), ss2022UserKey(&model.ParsedNode{}, uuid, "2022-blake3-aes-256-gcm"))
+}
+
 func TestToInt(t *testing.T) {
 	assert.Equal(t, 0, toInt(nil))
 	assert.Equal(t, 123, toInt(123))

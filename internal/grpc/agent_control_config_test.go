@@ -26,7 +26,7 @@ import (
 func newConfigTestEnvironment(t *testing.T) *agentControlTestEnvironment {
 	t.Helper()
 	environment := newAgentControlTestEnvironment(t)
-	requireAutoMigrate(t, append(append(model.KernelNodeOperationModels(), &model.EgressRoute{}), &model.NodeProtocol{})...)
+	requireAutoMigrate(t, append(append(model.KernelNodeOperationModels(), &model.EgressRoute{}, &model.NodeExitPolicy{}), &model.NodeProtocol{})...)
 	return environment
 }
 

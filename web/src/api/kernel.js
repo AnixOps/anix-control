@@ -186,6 +186,15 @@ export async function getKernelAgentUpgradePlan() {
   return unwrap(await v4({ url: '/kernel/agents/upgrade-plan', method: 'get' }))
 }
 
+// Uploads anx-node release files (field files: SHA256SUMS, SHA256SUMS.sig
+// and packages of one version) into agent_install.artifact_dir. Control
+// checks the signature against its built-in kernel release key only.
+// Super administrators. A package is tens of MB, so the client's 5 s
+// timeout does not apply.
+export async function uploadKernelRelease(formData) {
+  return unwrap(await v4({ url: '/kernel/agents/kernel-releases', method: 'post', data: formData, timeout: 0 }))
+}
+
 export async function startKernelAgentUpgrade(input = {}) {
   return unwrap(await v4({ url: '/kernel/agents/upgrades', method: 'post', data: input }))
 }
@@ -277,6 +286,21 @@ export async function setKernelRealityTargetAuto(node, enabled) {
     url: `/kernel/nodes/${encodeURIComponent(node)}/reality-targets/auto`,
     method: 'put',
     data: { enabled: Boolean(enabled) }
+  }))
+}
+
+// A proxy node's exit policy, `node` is "proxy-<id>": { node_id,
+// block_mainland (refuse mainland-China destinations, off by default),
+// mainland_blocked_total, mainland_blocked_at }.
+export async function getKernelNodeExitPolicy(node) {
+  return unwrap(await v4({ url: `/kernel/nodes/${encodeURIComponent(node)}/exit-policy`, method: 'get' }))
+}
+
+export async function setKernelNodeExitPolicy(node, blockMainland) {
+  return unwrap(await v4({
+    url: `/kernel/nodes/${encodeURIComponent(node)}/exit-policy`,
+    method: 'put',
+    data: { block_mainland: Boolean(blockMainland) }
   }))
 }
 

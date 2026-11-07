@@ -14,6 +14,7 @@ import { toastMessages } from './helpers/feedback'
 const kernelApi = vi.hoisted(() => ({
   getKernelAgentUpgradePlan: vi.fn(),
   startKernelAgentUpgrade: vi.fn(),
+  uploadKernelRelease: vi.fn(),
   listKernelAgentUpgrades: vi.fn(),
   pauseKernelAgentUpgrade: vi.fn(),
   resumeKernelAgentUpgrade: vi.fn(),
@@ -170,6 +171,41 @@ describe('AgentUpgradeSheet', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: 'Upgrade kernel' }))
     await waitFor(() => expect(kernelApi.startKernelAgentUpgrade).toHaveBeenCalledWith({ nodes: ['proxy-1'], kernel_only: true }))
     await waitFor(() => expect(toastMessages('success')).toContain('Kernel upgrade to anx-node 0.1.0-alpha.13 started'))
+  })
+
+  it('uploads a kernel release one package per request, then shows the new version', async () => {
+    kernelApi.getKernelAgentUpgradePlan
+      .mockResolvedValueOnce(plan({ eligible_nodes: 1, kernel_version: '', nodes: [{ node_ref: 'proxy-1', name: 'JP', agent_version: 'v4.1.0' }] }))
+      .mockResolvedValue(plan({ eligible_nodes: 1, kernel_version: '0.2.0', nodes: [{ node_ref: 'proxy-1', name: 'JP', agent_version: 'v4.1.0' }] }))
+    kernelApi.uploadKernelRelease.mockResolvedValue({ version: '0.2.0', files: [], arches: ['amd64'] })
+    renderSheet()
+    openKernelUpgrade(['proxy-1'])
+    await screen.findByTestId('agent-upgrade-form')
+    const input = await screen.findByTestId('agent-upgrade-kernel-files')
+    const files = ['SHA256SUMS', 'SHA256SUMS.sig', 'anx-node-0.2.0-x86_64-linux-musl.tar.gz', 'anx-node-0.2.0-aarch64-linux-musl.tar.gz']
+      .map(name => new File(['x'], name))
+    await userEvent.upload(input, files)
+    await userEvent.click(screen.getByTestId('agent-upgrade-kernel-upload-submit'))
+
+    await waitFor(() => expect(kernelApi.uploadKernelRelease).toHaveBeenCalledTimes(2))
+    const names = kernelApi.uploadKernelRelease.mock.calls.map(([data]) => data.getAll('files').map(file => file.name))
+    expect(names).toEqual([
+      ['SHA256SUMS', 'SHA256SUMS.sig', 'anx-node-0.2.0-x86_64-linux-musl.tar.gz'],
+      ['SHA256SUMS', 'SHA256SUMS.sig', 'anx-node-0.2.0-aarch64-linux-musl.tar.gz']
+    ])
+    await waitFor(() => expect(toastMessages('success')).toContain('anx-node 0.2.0 uploaded'))
+    await waitFor(() => expect(screen.getByTestId('agent-upgrade-kernel').textContent).toContain('anx-node 0.2.0'))
+  })
+
+  it('asks for the signed checksums before uploading a kernel', async () => {
+    kernelApi.getKernelAgentUpgradePlan.mockResolvedValue(plan({ eligible_nodes: 1, kernel_version: '', nodes: [] }))
+    renderSheet()
+    openKernelUpgrade([])
+    await screen.findByTestId('agent-upgrade-form')
+    await userEvent.upload(await screen.findByTestId('agent-upgrade-kernel-files'), [new File(['x'], 'anx-node-0.2.0-x86_64-linux-musl.tar.gz')])
+    await userEvent.click(screen.getByTestId('agent-upgrade-kernel-upload-submit'))
+    expect((await screen.findByTestId('agent-upgrade-kernel-upload-error')).textContent).toContain('SHA256SUMS.sig')
+    expect(kernelApi.uploadKernelRelease).not.toHaveBeenCalled()
   })
 
   it('cannot upgrade the kernel when Control holds none', async () => {

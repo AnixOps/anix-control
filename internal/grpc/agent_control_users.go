@@ -316,8 +316,10 @@ func (d *userDeltaSender) delta(groupID *uint, changes []model.SubscriberChange)
 }
 
 // nodeUsers converts the users the node serves to the wire form, with the
-// WireGuard peer fields in extra_json when the node's protocol is WireGuard.
-// A WireGuard exit protocol serves no users, as in the legacy pulls.
+// WireGuard peer fields in extra_json when the node's protocol is WireGuard
+// and the user's stored Shadowsocks 2022 key under
+// agentcontrol.UserExtraSS2022Key once the user has one. A WireGuard exit
+// protocol serves no users, as in the legacy pulls.
 func (d *userDeltaSender) nodeUsers(users []*model.User) ([]*agentv1pb.NodeUser, error) {
 	extras, exit, err := wireGuardUserExtras(d.nodeService, uint(d.node.ID), users)
 	if err != nil {
@@ -326,9 +328,24 @@ func (d *userDeltaSender) nodeUsers(users []*model.User) ([]*agentv1pb.NodeUser,
 	if exit {
 		return nil, nil
 	}
+	ids := make([]uint, len(users))
+	for i, user := range users {
+		ids[i] = user.ID
+	}
+	keys, err := service.SS2022UserKeys(d.db, ids)
+	if err != nil {
+		return nil, err
+	}
 	nodeUsers := make([]*agentv1pb.NodeUser, 0, len(users))
 	for _, user := range users {
-		nodeUser, err := nodeUserFromModel(user, extras[user.ID])
+		extra := extras[user.ID]
+		if key := keys[user.ID]; key != "" {
+			if extra == nil {
+				extra = map[string]string{}
+			}
+			extra[agentcontrol.UserExtraSS2022Key] = key
+		}
+		nodeUser, err := nodeUserFromModel(user, extra)
 		if err != nil {
 			return nil, err
 		}
