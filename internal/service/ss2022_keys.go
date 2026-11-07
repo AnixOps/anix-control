@@ -3,8 +3,6 @@ package service
 import (
 	"crypto/rand"
 	"encoding/base64"
-	"encoding/json"
-	"strings"
 	"time"
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
@@ -19,22 +17,10 @@ import (
 // key (model.UserSS2022Key) at the first subscription pull; users.v1 sends
 // it to the nodes, whose Agents (agentcontrol.ProtocolRevisionUserKeys and
 // later) serve it as a second user next to the legacy one, so devices
-// configured with the legacy key keep working. A new root node's
-// Shadowsocks 2022 protocol gets a random server key instead of the one
-// derived from the node's creation time; existing nodes keep theirs, since
-// changing it breaks every client.
-
-// isSS2022 says whether cipher is a Shadowsocks 2022 cipher.
-func isSS2022(cipher string) bool { return strings.HasPrefix(cipher, "2022-blake3-") }
-
-// randomSS2022Key is n random bytes in std base64.
-func randomSS2022Key(n int) (string, error) {
-	raw := make([]byte, n)
-	if _, err := rand.Read(raw); err != nil {
-		return "", err
-	}
-	return base64.StdEncoding.EncodeToString(raw), nil
-}
+// configured with the legacy key keep working. Server keys stay derived
+// from the node's creation time: a relay child node runs no Agent and
+// derives its parent's key, so a random key per protocol of the parent
+// would break it (docs/manual-intervention.md).
 
 // EnsureSS2022UserKey answers the user's stored Shadowsocks 2022 key,
 // creating it on the first call. A new key is recorded as a change of the
@@ -44,11 +30,12 @@ func EnsureSS2022UserKey(db *gorm.DB, userID uint) (string, error) {
 	if err := db.Where("user_id = ?", userID).Limit(1).Find(&row).Error; err != nil || row.UserKey != "" {
 		return row.UserKey, err
 	}
-	key, err := randomSS2022Key(32)
-	if err != nil {
+	raw := make([]byte, 32)
+	if _, err := rand.Read(raw); err != nil {
 		return "", err
 	}
-	err = db.Transaction(func(tx *gorm.DB) error {
+	key := base64.StdEncoding.EncodeToString(raw)
+	err := db.Transaction(func(tx *gorm.DB) error {
 		now := time.Now().UTC()
 		created := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&model.UserSS2022Key{UserID: userID, UserKey: key, CreatedAt: now})
 		if created.Error != nil {
@@ -98,38 +85,4 @@ func agentUserKeyNodes(db *gorm.DB, nodeIDs []uint) (map[uint]bool, error) {
 		nodes[id] = true
 	}
 	return nodes, nil
-}
-
-// ensureSS2022ServerKey gives a new Shadowsocks 2022 protocol of a root
-// node a random server key when its settings name none, instead of the key
-// derived from the node's creation time.
-func ensureSS2022ServerKey(protocol *model.NodeProtocol, node *model.Node) error {
-	if protocol.Type != model.ProtocolShadowsocks || node.ParentID != nil {
-		return nil
-	}
-	settings := map[string]any{}
-	if protocol.Settings != nil && *protocol.Settings != "" {
-		if err := json.Unmarshal([]byte(*protocol.Settings), &settings); err != nil {
-			return nil // validation reports it
-		}
-	}
-	cipher, _ := settings["cipher"].(string)
-	if cipher == "" {
-		cipher, _ = settings["method"].(string)
-	}
-	if key, _ := settings["server_key"].(string); !isSS2022(cipher) || key != "" {
-		return nil
-	}
-	key, err := randomSS2022Key(ss2022KeyLen(cipher))
-	if err != nil {
-		return err
-	}
-	settings["server_key"] = key
-	encoded, err := json.Marshal(settings)
-	if err != nil {
-		return err
-	}
-	text := string(encoded)
-	protocol.Settings = &text
-	return nil
 }

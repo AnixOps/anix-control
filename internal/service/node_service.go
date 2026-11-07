@@ -641,9 +641,6 @@ func (s *NodeService) CreateProtocol(protocol *model.NodeProtocol) error {
 	if _, err := ensureRealityKeyPair(protocol); err != nil {
 		return err
 	}
-	if err := ensureSS2022ServerKey(protocol, &node); err != nil {
-		return err
-	}
 	if err := ValidateNodeProtocol(protocol); err != nil {
 		return err
 	}

@@ -26,10 +26,13 @@ Rules:
 Shadowsocks 2022 legacy keys:
 
 - Nodes still accept every user's legacy Shadowsocks 2022 key (derived from
-  the UUID) next to the stored random one. Refusing legacy keys, and moving
-  existing nodes or child nodes off the server key derived from the node's
-  creation time, breaks clients that have not pulled a new subscription;
-  decide it separately, after the users have moved.
+  the UUID) next to the stored random one. Refusing legacy keys breaks
+  clients that have not pulled a new subscription; decide it separately,
+  after the users have moved.
+- Server keys are still derived from the node's creation time. A relay child
+  node runs no Agent and derives its parent's key, while a protocol has no
+  link to the parent protocol it relays, so random server keys need one key
+  per node that the parent and its children share (and a client migration).
 
 ## Database And Migrations
 

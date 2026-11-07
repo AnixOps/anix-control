@@ -2,7 +2,6 @@ package service
 
 import (
 	"encoding/base64"
-	"encoding/json"
 	"testing"
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
@@ -58,27 +57,4 @@ func TestAgentUserKeyNodes(t *testing.T) {
 	nodes, err := agentUserKeyNodes(db, []uint{1, 2, 3, 4})
 	require.NoError(t, err)
 	require.Equal(t, map[uint]bool{1: true}, nodes)
-}
-
-// A new root Shadowsocks 2022 protocol gets a random server key of its
-// cipher's length; a child node, another cipher or a given key is left be.
-func TestEnsureSS2022ServerKey(t *testing.T) {
-	serverKey := func(settings string, node *model.Node) string {
-		protocol := &model.NodeProtocol{Type: model.ProtocolShadowsocks, Settings: &settings}
-		require.NoError(t, ensureSS2022ServerKey(protocol, node))
-		var decoded map[string]any
-		require.NoError(t, json.Unmarshal([]byte(*protocol.Settings), &decoded))
-		key, _ := decoded["server_key"].(string)
-		return key
-	}
-	root, parent := &model.Node{}, uint(1)
-	for cipher, size := range map[string]int{"2022-blake3-aes-128-gcm": 16, "2022-blake3-aes-256-gcm": 32} {
-		raw, err := base64.StdEncoding.DecodeString(serverKey(`{"cipher":"`+cipher+`"}`, root))
-		require.NoError(t, err)
-		require.Len(t, raw, size)
-	}
-	require.NotEmpty(t, serverKey(`{"method":"2022-blake3-chacha20-poly1305"}`, root))
-	require.Empty(t, serverKey(`{"cipher":"2022-blake3-aes-256-gcm"}`, &model.Node{ParentID: &parent}))
-	require.Empty(t, serverKey(`{"cipher":"aes-256-gcm"}`, root))
-	require.Equal(t, "given", serverKey(`{"cipher":"2022-blake3-aes-256-gcm","server_key":"given"}`, root))
 }
