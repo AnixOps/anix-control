@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -325,4 +326,56 @@ func TestAgentUpgradeKernelOnly(t *testing.T) {
 	assert.Equal(t, "v4.2.0", view["target_version"])
 	assert.EqualValues(t, 2, view["total"])
 	assert.Equal(t, "kernel upgrade: anx-node 0.1.0-alpha.13", view["reason"])
+}
+
+func TestUploadKernelRelease(t *testing.T) {
+	env := newUpgradeTestEnv(t)
+	handler := &AgentUpgradesHandler{db: func() *gorm.DB { return env.db }, config: func() *config.Config { return env.cfg }}
+	env.router.POST("/kernel-releases", handler.UploadKernel)
+	upload := func(user string, files map[string]string) (int, map[string]any) {
+		t.Helper()
+		var body bytes.Buffer
+		form := multipart.NewWriter(&body)
+		for name, content := range files {
+			part, err := form.CreateFormFile("files", name)
+			require.NoError(t, err)
+			_, err = part.Write([]byte(content))
+			require.NoError(t, err)
+		}
+		require.NoError(t, form.Close())
+		request := httptest.NewRequest(http.MethodPost, "/kernel-releases", &body)
+		request.Header.Set("Content-Type", form.FormDataContentType())
+		if user != "" {
+			request.Header.Set("X-Test-User", user)
+		}
+		recorder := httptest.NewRecorder()
+		env.router.ServeHTTP(recorder, request)
+		var answer map[string]any
+		require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &answer), recorder.Body.String())
+		return recorder.Code, answer
+	}
+	errorCode := func(answer map[string]any) any { return answer["error"].(map[string]any)["code"] }
+	asset := agentinstall.KernelAsset("0.3.0", "x86_64")
+	sum := sha256.Sum256([]byte("package"))
+	release := map[string]string{
+		agentinstall.SumsAssetName:          hex.EncodeToString(sum[:]) + "  " + asset + "\n",
+		agentinstall.SumsSignatureAssetName: "-----BEGIN SSH SIGNATURE-----\nU1NIU0lH\n-----END SSH SIGNATURE-----\n",
+		asset:                               "package",
+	}
+
+	code, answer := upload("8", release)
+	assert.Equal(t, http.StatusForbidden, code, answer)
+	code, answer = upload("", map[string]string{asset: "package"})
+	assert.Equal(t, http.StatusBadRequest, code, answer)
+	assert.Equal(t, "invalid_request", errorCode(answer))
+	// Only the built-in release key is trusted.
+	code, answer = upload("", release)
+	assert.Equal(t, http.StatusBadRequest, code, answer)
+	assert.Equal(t, "kernel_release_invalid", errorCode(answer))
+	assert.Empty(t, agentinstall.LatestKernelVersion(env.cfg.AgentInstall.ArtifactDir))
+
+	env.cfg.AgentInstall.ArtifactDir = ""
+	code, answer = upload("", release)
+	assert.Equal(t, http.StatusConflict, code, answer)
+	assert.Equal(t, "agent_install_unconfigured", errorCode(answer))
 }

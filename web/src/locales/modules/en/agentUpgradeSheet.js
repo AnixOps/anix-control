@@ -29,7 +29,7 @@ export default {
       nodeKernel: 'kernel anx-node {version}',
       nodeKernelUnknown: 'kernel not reported',
       kernelTarget: 'Installs anx-node {version}, the newest kernel Control holds. The Agent keeps its release and restarts once.',
-      kernelMissing: 'Control holds no anx-node release: copy one into agent_install.artifact_dir first.',
+      kernelMissing: 'Control holds no anx-node release: upload one below, or copy one into agent_install.artifact_dir.',
       kernelSubmit: 'Upgrade kernel',
       mode: 'Upgrade mode',
       modes: {
@@ -45,6 +45,12 @@ export default {
       active: 'An upgrade is running. Let it end, or abort it, before starting another.',
       superOnly: 'Only a super administrator can start an upgrade.',
       unconfigured: 'An upgrade cannot start now: {reason}'
+    },
+    upload: {
+      label: 'Install a kernel by hand: choose SHA256SUMS, SHA256SUMS.sig and the anx-node packages of one release',
+      submit: 'Upload kernel',
+      missing: 'Choose SHA256SUMS, SHA256SUMS.sig and at least one anx-node .tar.gz package.',
+      done: 'anx-node {version} uploaded'
     },
     confirm: {
       title: 'Upgrade {n} node to {version}? | Upgrade {n} nodes to {version}?',
@@ -67,6 +73,8 @@ export default {
       kernel_release_missing: 'Control holds no anx-node release to install.',
       kernel_release_unverified: 'The anx-node release files are incomplete: {message}',
       agent_install_unconfigured: 'An upgrade cannot start now: {message}',
+      kernel_release_invalid: 'The kernel release did not pass verification against the built-in release key: {message}',
+      kernel_release_conflict: 'Another release of this anx-node version is already stored: {message}',
       invalid_request: 'The upgrade settings are not valid: {message}',
       unknown: 'The upgrade did not start.'
     }

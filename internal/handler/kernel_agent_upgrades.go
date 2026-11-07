@@ -3,7 +3,11 @@ package handler
 import (
 	"errors"
 	"fmt"
+	"io"
+	"maps"
 	"net/http"
+	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -201,6 +205,88 @@ func (h *AgentUpgradesHandler) Start(c *gin.Context) {
 		return
 	}
 	kernelData(c, http.StatusCreated, view)
+}
+
+// UploadKernel godoc
+// @Summary Upload an anx-node kernel release
+// @Description Stores anx-node release files in agent_install.artifact_dir (anx-node/<version>/) for a kernel-only upgrade: the multipart field files repeats SHA256SUMS, SHA256SUMS.sig and one or more anx-node-<version>-<target>-linux-musl.tar.gz packages of one version. SHA256SUMS.sig must be the release's SSH signature by the kernel release key built into Control (the one install.sh and the Agent embed, namespace anx-release); no other key is trusted and none can be uploaded. Each package must be listed in SHA256SUMS with its SHA-256. A release can come in several uploads, one package each with the same SHA256SUMS and signature; another SHA256SUMS for a stored version is refused (kernel_release_conflict). Push it with a kernel-only upgrade (POST /api/v4/kernel/agents/upgrades with nodes and kernel_only), which installs the newest release the directory holds. Super administrators only.
+// @Tags Kernel
+// @Accept multipart/form-data
+// @Produce json
+// @Security BearerAuth
+// @Param files formData file true "SHA256SUMS, SHA256SUMS.sig and anx-node packages (repeated)"
+// @Success 201 {object} map[string]any
+// @Router /api/v4/kernel/agents/kernel-releases [post]
+func (h *AgentUpgradesHandler) UploadKernel(c *gin.Context) {
+	if !h.requireSuperAdmin(c, "upload kernels for") {
+		return
+	}
+	cfg := h.config()
+	if cfg == nil || strings.TrimSpace(cfg.AgentInstall.ArtifactDir) == "" {
+		kernelError(c, http.StatusConflict, "agent_install_unconfigured", "set agent_install.artifact_dir to store kernel releases")
+		return
+	}
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 2*agentcontrol.MaxUpgradeKernelBytes+1<<20)
+	form, err := c.MultipartForm()
+	if err != nil {
+		kernelError(c, http.StatusBadRequest, "invalid_request", err.Error())
+		return
+	}
+	var sums []byte
+	var signature string
+	packages := map[string][]byte{}
+	for _, header := range form.File["files"] {
+		file, err := header.Open()
+		if err != nil {
+			kernelError(c, http.StatusBadRequest, "invalid_request", err.Error())
+			return
+		}
+		data, err := io.ReadAll(io.LimitReader(file, agentcontrol.MaxUpgradeKernelBytes+1))
+		file.Close()
+		if err != nil {
+			kernelError(c, http.StatusBadRequest, "invalid_request", err.Error())
+			return
+		}
+		switch header.Filename {
+		case agentinstall.SumsAssetName:
+			sums = data
+		case agentinstall.SumsSignatureAssetName:
+			signature = string(data)
+		default:
+			packages[header.Filename] = data
+		}
+	}
+	if sums == nil || signature == "" || len(packages) == 0 {
+		kernelError(c, http.StatusBadRequest, "invalid_request", "upload SHA256SUMS, SHA256SUMS.sig and at least one anx-node package in the field files")
+		return
+	}
+	dir := cfg.AgentInstall.ArtifactDir
+	version, err := agentinstall.StoreKernelRelease(dir, sums, signature, packages)
+	switch {
+	case errors.Is(err, agentinstall.ErrKernelReleaseConflict):
+		kernelError(c, http.StatusConflict, "kernel_release_conflict", err.Error())
+		return
+	case errors.Is(err, agentinstall.ErrKernelRelease):
+		kernelError(c, http.StatusBadRequest, "kernel_release_invalid", err.Error())
+		return
+	case errors.Is(err, agentinstall.ErrKernelReleaseFile):
+		kernelError(c, http.StatusBadRequest, "invalid_request", err.Error())
+		return
+	case err != nil:
+		kernelError(c, http.StatusInternalServerError, "kernel_release_store_failed", err.Error())
+		return
+	}
+	// The release may now hold more than this upload: answer what it has.
+	files, arches := []string{agentinstall.SumsAssetName, agentinstall.SumsSignatureAssetName}, []string{}
+	for _, arch := range slices.Sorted(maps.Keys(agentinstall.KernelArches)) {
+		name := agentinstall.KernelAsset(version, agentinstall.KernelArches[arch])
+		if path, err := agentinstall.KernelPath(dir, version, name); err == nil {
+			if _, err := os.Stat(path); err == nil {
+				files, arches = append(files, name), append(arches, arch)
+			}
+		}
+	}
+	kernelData(c, http.StatusCreated, gin.H{"version": version, "files": files, "arches": arches})
 }
 
 // Plan godoc

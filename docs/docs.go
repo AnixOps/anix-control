@@ -7038,6 +7038,44 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v4/kernel/agents/kernel-releases": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Stores anx-node release files in agent_install.artifact_dir (anx-node/\u003cversion\u003e/) for a kernel-only upgrade: the multipart field files repeats SHA256SUMS, SHA256SUMS.sig and one or more anx-node-\u003cversion\u003e-\u003ctarget\u003e-linux-musl.tar.gz packages of one version. SHA256SUMS.sig must be the release's SSH signature by the kernel release key built into Control (the one install.sh and the Agent embed, namespace anx-release); no other key is trusted and none can be uploaded. Each package must be listed in SHA256SUMS with its SHA-256. A release can come in several uploads, one package each with the same SHA256SUMS and signature; another SHA256SUMS for a stored version is refused (kernel_release_conflict). Push it with a kernel-only upgrade (POST /api/v4/kernel/agents/upgrades with nodes and kernel_only), which installs the newest release the directory holds. Super administrators only.",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Upload an anx-node kernel release",
+                "parameters": [
+                    {
+                        "type": "file",
+                        "description": "SHA256SUMS, SHA256SUMS.sig and anx-node packages (repeated)",
+                        "name": "files",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/v4/kernel/agents/rotate-credentials": {
             "post": {
                 "security": [

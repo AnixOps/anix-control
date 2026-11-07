@@ -186,6 +186,14 @@ export async function getKernelAgentUpgradePlan() {
   return unwrap(await v4({ url: '/kernel/agents/upgrade-plan', method: 'get' }))
 }
 
+// Uploads anx-node release files (field files: SHA256SUMS, SHA256SUMS.sig
+// and packages of one version) into agent_install.artifact_dir. Control
+// checks the signature against its built-in kernel release key only.
+// Super administrators.
+export async function uploadKernelRelease(formData) {
+  return unwrap(await v4({ url: '/kernel/agents/kernel-releases', method: 'post', data: formData }))
+}
+
 export async function startKernelAgentUpgrade(input = {}) {
   return unwrap(await v4({ url: '/kernel/agents/upgrades', method: 'post', data: input }))
 }

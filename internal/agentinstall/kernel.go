@@ -1,6 +1,10 @@
 package agentinstall
 
 import (
+	"bytes"
+	"crypto/sha256"
+	"crypto/sha512"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"os"
@@ -9,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
+	"golang.org/x/crypto/ssh"
 	"golang.org/x/mod/semver"
 )
 
@@ -24,9 +29,11 @@ import (
 // exactly as the release workflow uploads them, and Control serves them at
 // /install/kernel/anx-node/<version>/<file>. The trust is the release's SSH
 // signature over SHA256SUMS, which the Agent checks with the key it
-// embeds; Control only checks that the files are there and agree. A
+// embeds; a campaign only checks that the files are there and agree. A
 // campaign installs the newest release there (LatestKernelVersion), so
-// copying a release in is all it takes to roll it out.
+// copying a release in is all it takes to roll it out. An administrator
+// can also upload one (StoreKernelRelease), which is checked against the
+// same built-in key before it is stored.
 
 // KernelArches maps an architecture to anx-node's release target.
 var KernelArches = map[string]string{
@@ -34,8 +41,30 @@ var KernelArches = map[string]string{
 	"arm64": "aarch64",
 }
 
-// ErrKernelRelease means the kernel release cannot be pushed to nodes.
-var ErrKernelRelease = errors.New("the kernel release cannot be pushed")
+const (
+	// KernelReleaseKey is the anx release's signing key, the one
+	// install.sh (KERNEL_RELEASE_KEY) and the Agent embed: SHA256SUMS.sig
+	// is `ssh-keygen -Y sign` by it in KernelSignatureNamespace. It is the
+	// only key an uploaded kernel release is checked against.
+	KernelReleaseKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIH9RCOAuDwKyWAXIp0szDWKN5t98NKsCK4isHLR05yLT"
+	// KernelSignatureNamespace is the namespace of the kernel signature.
+	KernelSignatureNamespace = "anx-release"
+)
+
+// kernelReleaseKey is KernelReleaseKey; tests sign with their own.
+var kernelReleaseKey = KernelReleaseKey
+
+var (
+	// ErrKernelRelease means the kernel release cannot be pushed to nodes,
+	// or an uploaded one does not verify.
+	ErrKernelRelease = errors.New("the kernel release cannot be pushed")
+	// ErrKernelReleaseFile means an uploaded file is not a file of a
+	// kernel release.
+	ErrKernelReleaseFile = errors.New("not a kernel release file")
+	// ErrKernelReleaseConflict means another SHA256SUMS is stored for the
+	// uploaded version.
+	ErrKernelReleaseConflict = errors.New("another release of this kernel version is stored")
+)
 
 // KernelAsset is the anx-node package of version for target.
 func KernelAsset(version, target string) string {
@@ -170,4 +199,175 @@ func UpgradeKernels(artifactDir, controlURL string) ([]agentcontrol.UpgradeKerne
 		return nil, fmt.Errorf("%w: SHA256SUMS of anx-node %s lists no package for %s", ErrKernelRelease, version, strings.Join(arches, ", "))
 	}
 	return kernels, nil
+}
+
+// VerifyKernelSums checks SHA256SUMS.sig, an armored SSH signature
+// (`ssh-keygen -Y sign`, PROTOCOL.sshsig) of sums by KernelReleaseKey in
+// KernelSignatureNamespace, as the Agent does.
+func VerifyKernelSums(sums []byte, signature string) error {
+	const begin, end = "-----BEGIN SSH SIGNATURE-----", "-----END SSH SIGNATURE-----"
+	text := strings.TrimSpace(signature)
+	if !strings.HasPrefix(text, begin) || !strings.HasSuffix(text, end) {
+		return errors.New("not an armored SSH signature")
+	}
+	blob, err := base64.StdEncoding.DecodeString(strings.Join(strings.Fields(text[len(begin):len(text)-len(end)]), ""))
+	if err != nil {
+		return fmt.Errorf("the signature is not base64: %w", err)
+	}
+	if !bytes.HasPrefix(blob, []byte("SSHSIG")) {
+		return errors.New("the signature has no SSHSIG preamble")
+	}
+	var wire struct {
+		Version       uint32
+		PublicKey     []byte
+		Namespace     string
+		Reserved      []byte
+		HashAlgorithm string
+		Signature     []byte
+	}
+	if err := ssh.Unmarshal(blob[6:], &wire); err != nil {
+		return fmt.Errorf("the signature is malformed: %w", err)
+	}
+	if wire.Version != 1 {
+		return fmt.Errorf("signature version %d is not 1", wire.Version)
+	}
+	if wire.Namespace != KernelSignatureNamespace {
+		return fmt.Errorf("the signature's namespace is %q, not %q", wire.Namespace, KernelSignatureNamespace)
+	}
+	signer, err := ssh.ParsePublicKey(wire.PublicKey)
+	if err != nil {
+		return fmt.Errorf("the signature's key: %w", err)
+	}
+	trusted, _, _, _, err := ssh.ParseAuthorizedKey([]byte(kernelReleaseKey))
+	if err != nil {
+		return fmt.Errorf("the trusted key: %w", err)
+	}
+	if !bytes.Equal(signer.Marshal(), trusted.Marshal()) {
+		return errors.New("the signature is not by the kernel release key")
+	}
+	var digest []byte
+	switch wire.HashAlgorithm {
+	case "sha512":
+		sum := sha512.Sum512(sums)
+		digest = sum[:]
+	case "sha256":
+		sum := sha256.Sum256(sums)
+		digest = sum[:]
+	default:
+		return fmt.Errorf("hash algorithm %q is not sha256 or sha512", wire.HashAlgorithm)
+	}
+	var sig ssh.Signature
+	if err := ssh.Unmarshal(wire.Signature, &sig); err != nil {
+		return fmt.Errorf("the signature is malformed: %w", err)
+	}
+	signed := append([]byte("SSHSIG"), ssh.Marshal(struct {
+		Namespace     string
+		Reserved      []byte
+		HashAlgorithm string
+		Hash          []byte
+	}{KernelSignatureNamespace, wire.Reserved, wire.HashAlgorithm, digest})...)
+	if err := trusted.Verify(signed, &sig); err != nil {
+		return fmt.Errorf("the signature does not verify: %w", err)
+	}
+	return nil
+}
+
+// kernelPackageVersion is the version of an anx-node package name,
+// "" when name is not one.
+func kernelPackageVersion(name string) string {
+	for _, target := range KernelArches {
+		version, ok := strings.CutSuffix(strings.TrimPrefix(name, agentcontrol.KernelAnxNode+"-"), "-"+target+"-linux-musl.tar.gz")
+		if ok && agentcontrol.KernelVersionPattern.MatchString(version) && name == KernelAsset(version, target) {
+			return version
+		}
+	}
+	return ""
+}
+
+// StoreKernelRelease stores an uploaded anx-node release in
+// artifactDir/anx-node/<version>/: SHA256SUMS, its signature by the
+// built-in KernelReleaseKey and packages (file name to contents), all of
+// one version and each listed in SHA256SUMS with its SHA-256. A release
+// can come in several uploads with the same SHA256SUMS, one package each;
+// another SHA256SUMS for a stored version is ErrKernelReleaseConflict.
+func StoreKernelRelease(artifactDir string, sums []byte, signature string, packages map[string][]byte) (string, error) {
+	if len(packages) == 0 {
+		return "", fmt.Errorf("%w: no anx-node package", ErrKernelReleaseFile)
+	}
+	if err := VerifyKernelSums(sums, signature); err != nil {
+		return "", fmt.Errorf("%w: SHA256SUMS: %v", ErrKernelRelease, err)
+	}
+	version := ""
+	for name, data := range packages {
+		v := kernelPackageVersion(name)
+		if v == "" || (version != "" && v != version) {
+			return "", fmt.Errorf("%w: %q is not an anx-node package of one release", ErrKernelReleaseFile, name)
+		}
+		version = v
+		if int64(len(data)) > agentcontrol.MaxUpgradeKernelBytes {
+			return "", fmt.Errorf("%w: %s is larger than %d bytes", ErrKernelRelease, name, agentcontrol.MaxUpgradeKernelBytes)
+		}
+		listed, ok := agentcontrol.KernelSum(string(sums), name)
+		if digest := sha256Hex(data); !ok || listed != digest {
+			return "", fmt.Errorf("%w: SHA256SUMS does not list %s with %s", ErrKernelRelease, name, digest)
+		}
+	}
+	sumsPath, err := KernelPath(artifactDir, version, SumsAssetName)
+	if err != nil {
+		return "", err
+	}
+	if stored, err := os.ReadFile(sumsPath); err == nil && !bytes.Equal(stored, sums) { // #nosec G304 -- KernelPath confines the name to the artifact directory.
+		return "", fmt.Errorf("%w: anx-node %s", ErrKernelReleaseConflict, version)
+	}
+	if err := os.MkdirAll(filepath.Dir(sumsPath), 0o755); err != nil { // #nosec G301 -- Control serves these files to nodes.
+		return "", err
+	}
+	write := func(name string, data []byte) error {
+		path, err := KernelPath(artifactDir, version, name)
+		if err != nil {
+			return err
+		}
+		return writeFileAtomic(path, data)
+	}
+	names := make([]string, 0, len(packages))
+	for name := range packages {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	// Packages first and SHA256SUMS last: a release is complete
+	// (KernelReleaseHeld) only once everything it lists can be there.
+	for _, name := range names {
+		if err := write(name, packages[name]); err != nil {
+			return "", err
+		}
+	}
+	if err := write(SumsSignatureAssetName, []byte(signature)); err != nil {
+		return "", err
+	}
+	if err := write(SumsAssetName, sums); err != nil {
+		return "", err
+	}
+	return version, nil
+}
+
+// writeFileAtomic writes data to path through a temporary file in its
+// directory, so a reader never sees half a file.
+func writeFileAtomic(path string, data []byte) error {
+	file, err := os.CreateTemp(filepath.Dir(path), ".upload-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(file.Name())
+	if _, err := file.Write(data); err != nil {
+		file.Close()
+		return err
+	}
+	if err := file.Chmod(0o644); err != nil {
+		file.Close()
+		return err
+	}
+	if err := file.Close(); err != nil {
+		return err
+	}
+	return os.Rename(file.Name(), path)
 }

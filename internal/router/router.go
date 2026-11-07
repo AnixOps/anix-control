@@ -677,6 +677,7 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		upgrades := handler.NewAgentUpgradesHandler()
 		v4.GET("/kernel/agents/upgrade-plan", upgrades.Plan)
 		v4.POST("/kernel/agents/upgrades", upgrades.Start)
+		v4.POST("/kernel/agents/kernel-releases", upgrades.UploadKernel)
 		v4.GET("/kernel/agents/upgrades", upgrades.List)
 		v4.GET("/kernel/agents/upgrades/:id", upgrades.Get)
 		v4.POST("/kernel/agents/upgrades/:id/pause", upgrades.Pause)
