@@ -60,7 +60,7 @@ func capabilities() []string {
 
 // kernelRoute is a proxy-node route on the kernel's path.
 func kernelRoute(method, pattern, routeID string, legacy gin.HandlerFunc) packagecompat.KernelRoute {
-	models := append(append(append([]any{}, adminModels...), packagecompat.NodeSplitModels()...), append(model.KernelNodeOperationModels(), &model.EgressRoute{})...)
+	models := append(append(append([]any{}, adminModels...), packagecompat.NodeSplitModels()...), append(model.KernelNodeOperationModels(), &model.EgressRoute{}, &model.NodeExitPolicy{})...)
 	return packagecompat.KernelRoute{
 		Route:     packagecompat.Route{Method: method, Pattern: pattern, RouteID: routeID, Models: models, Legacy: legacy},
 		PackageID: "proxy-node", Capabilities: capabilities(),

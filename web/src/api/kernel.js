@@ -288,6 +288,21 @@ export async function setKernelRealityTargetAuto(node, enabled) {
   }))
 }
 
+// A proxy node's exit policy, `node` is "proxy-<id>": { node_id,
+// block_mainland (refuse mainland-China destinations, off by default),
+// mainland_blocked_total, mainland_blocked_at }.
+export async function getKernelNodeExitPolicy(node) {
+  return unwrap(await v4({ url: `/kernel/nodes/${encodeURIComponent(node)}/exit-policy`, method: 'get' }))
+}
+
+export async function setKernelNodeExitPolicy(node, blockMainland) {
+  return unwrap(await v4({
+    url: `/kernel/nodes/${encodeURIComponent(node)}/exit-policy`,
+    method: 'put',
+    data: { block_mainland: Boolean(blockMainland) }
+  }))
+}
+
 // A proxy node's entries (入口), `node` is "proxy-<id>": { node_id, entries:
 // [{ id, label, kind (direct | nat | iwan), host, family (ipv4 | ipv6 |
 // domain), port_map: [{ from, to, external }], enabled, sort, iwan_line_id }] }. A node with

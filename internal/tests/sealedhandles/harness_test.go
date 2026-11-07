@@ -162,7 +162,7 @@ func newHarnessWith(t *testing.T, register func(h *harness, registry *kernelnode
 	sqlDB, err := db.DB()
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = sqlDB.Close() })
-	require.NoError(t, db.AutoMigrate(append(append(model.KernelNodeOperationModels(), &model.EgressRoute{}), &model.Node{}, &model.ForwardNode{})...))
+	require.NoError(t, db.AutoMigrate(append(append(model.KernelNodeOperationModels(), &model.EgressRoute{}, &model.NodeExitPolicy{}), &model.Node{}, &model.ForwardNode{})...))
 	require.NoError(t, db.Create(&model.Node{ID: proxyNodeID, Name: "edge"}).Error)
 	require.NoError(t, db.Create(&model.Node{ID: secretNodeID, Name: "relay"}).Error)
 	require.NoError(t, db.Create(&model.Node{ID: secretNodeID + 1, Name: "other"}).Error)

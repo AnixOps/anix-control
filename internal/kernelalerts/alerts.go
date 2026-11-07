@@ -67,6 +67,11 @@ const (
 	// KindBackupStale: no backup bundle that passed its verification is
 	// younger than BackupStaleAfter (and the database is older than that).
 	KindBackupStale = "backup_stale"
+	// KindExitMainlandDestinations: an exit node that refuses mainland-China
+	// destinations (internal/exitpolicy) refused some within the last 24
+	// hours: mainland traffic reaches it through an entry or a client
+	// routing it the wrong way.
+	KindExitMainlandDestinations = "exit_mainland_destinations"
 )
 
 // Subject kinds.

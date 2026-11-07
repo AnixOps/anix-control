@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
+	"github.com/AnixOps/anix-control/v5/internal/exitpolicy"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
@@ -53,5 +54,28 @@ func TestProxyDesiredConfigCarriesEgressRoutes(t *testing.T) {
 		exitConfig, err := BuildDesiredConfig(db, exit)
 		require.NoError(t, err)
 		require.Contains(t, string(exitConfig.JSON), `"relays":[{"id":7,"method":"2022-blake3-aes-128-gcm","password":"a2V5","port":24680,"protocol":"shadowsocks"}]`)
+	})
+}
+
+// The mainland block is the member "exit_policy" only while it is on, so
+// a node with it off keeps its hash.
+func TestProxyDesiredConfigCarriesExitPolicy(t *testing.T) {
+	forEachDatabase(t, func(t *testing.T, db *gorm.DB) {
+		node := agentcontrol.AgentNode{Kind: agentcontrol.NodeKindProxy, ID: 1}
+		before, err := BuildDesiredConfig(db, node)
+		require.NoError(t, err)
+		require.NotContains(t, before.Document, "exit_policy")
+
+		_, err = exitpolicy.Set(db, 1, true)
+		require.NoError(t, err)
+		on, err := BuildDesiredConfig(db, node)
+		require.NoError(t, err)
+		require.Contains(t, string(on.JSON), `"exit_policy":{"block_mainland":true}`)
+
+		_, err = exitpolicy.Set(db, 1, false)
+		require.NoError(t, err)
+		off, err := BuildDesiredConfig(db, node)
+		require.NoError(t, err)
+		require.Equal(t, before.Hash, off.Hash)
 	})
 }

@@ -90,7 +90,7 @@ func (f *agentsFixture) routes() []packagecompat.KernelHostRoute {
 // forEachAgents runs body with a fixture on each backend.
 func forEachAgents(t *testing.T, body func(t *testing.T, f *agentsFixture)) {
 	models := append([]any{&model.Node{}, &model.NodeProtocol{}, &model.ForwardNode{}, &model.AgentDiagnosticTask{}, &model.OperationLog{}},
-		append(model.KernelNodeOperationModels(), &model.EgressRoute{})...)
+		append(model.KernelNodeOperationModels(), &model.EgressRoute{}, &model.NodeExitPolicy{})...)
 	packagecompat.ForEachKernelDatabase(t, models, func(t *testing.T, db *gorm.DB) {
 		cache.InitMemory()
 		require.NoError(t, service.MigrateKernelModelsForTest(db))

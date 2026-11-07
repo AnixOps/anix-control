@@ -222,6 +222,11 @@ definitions:
     - name
     - scope
     type: object
+  handler.exitPolicyRequest:
+    properties:
+      block_mainland:
+        type: boolean
+    type: object
   handler.groupNodeOverridesRequest:
     properties:
       nodes:
@@ -539,6 +544,19 @@ definitions:
       uptime:
         description: 运行时间(秒)
         type: integer
+    type: object
+  model.NodeExitPolicy:
+    properties:
+      block_mainland:
+        type: boolean
+      mainland_blocked_at:
+        type: string
+      mainland_blocked_total:
+        type: integer
+      node_id:
+        type: integer
+      updated_at:
+        type: string
     type: object
   model.NodeProtocol:
     properties:
@@ -7454,6 +7472,62 @@ paths:
       security:
       - BearerAuth: []
       summary: Replace a proxy node's entries
+      tags:
+      - Kernel
+  /api/v4/kernel/nodes/{id}/exit-policy:
+    get:
+      description: Whether the node refuses mainland-China destinations as an exit
+        (block_mainland, off by default), and how many connections its Agent reported
+        refusing (mainland_blocked_total) and when last (mainland_blocked_at).
+      parameters:
+      - description: proxy-<id>
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.NodeExitPolicy'
+      security:
+      - BearerAuth: []
+      summary: A proxy node's exit policy
+      tags:
+      - Kernel
+    put:
+      consumes:
+      - application/json
+      description: With block_mainland on, the node's Agent has its kernel refuse
+        every connection the node dials to a mainland-China address (the list ships
+        with the Agent), and reports the refusals on its heartbeat; a refusal raises
+        the alert exit_mainland_destinations. It needs an Agent and anx-node kernel
+        of 5.0.2 or later; older ones ignore it. The node gets it with its next configuration.
+        Off by default. Audited (module exit_policy, action exit_policy_set).
+      parameters:
+      - description: proxy-<id>
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: block_mainland
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.exitPolicyRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.NodeExitPolicy'
+      security:
+      - BearerAuth: []
+      summary: Turn a proxy node's mainland-China block on or off
       tags:
       - Kernel
   /api/v4/kernel/nodes/{id}/network:

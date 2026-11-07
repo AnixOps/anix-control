@@ -17,6 +17,7 @@ import (
 	agentv1pb "github.com/AnixOps/anix-control/sdk/api/agent/v1"
 	"github.com/AnixOps/anix-control/v5/internal/agentstreams"
 	"github.com/AnixOps/anix-control/v5/internal/agenttransport"
+	"github.com/AnixOps/anix-control/v5/internal/exitpolicy"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/service"
 	"google.golang.org/grpc/codes"
@@ -1004,6 +1005,13 @@ func (s *AgentControlGRPCServer) controlStream(stream agentv1pb.AgentControlServ
 			// (v2_node); forward-node counters join with A5.
 			if agentNode.Kind == agentcontrol.NodeKindProxy {
 				s.recordHeartbeatPluginState(nodeID, payload.Heartbeat)
+				// Connections the exit refused to mainland-China
+				// destinations since the previous heartbeat.
+				if blocked := payload.Heartbeat.Metrics[exitpolicy.MetricMainlandBlocked]; blocked >= 1 {
+					if err := exitpolicy.RecordBlocked(databaseForAgentChecks(), uint(nodeID), int64(blocked), time.Now()); err != nil {
+						slog.Warn("failed to record refused mainland destinations", "component", "agent-control", "node", agentNode.String(), "error", err)
+					}
+				}
 			}
 			if err := connection.send(&agentv1pb.ControlToAgent{
 				RequestId:    message.RequestId,

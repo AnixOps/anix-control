@@ -223,6 +223,7 @@ func laterModels() []any {
 		&model.NodeUplinks{},               // 0023_node_uplinks
 		&model.TrafficCategoryRule{},       // 0024_traffic_categories
 		&model.TrafficCategorySource{},     // 0024_traffic_categories
+		&model.NodeExitPolicy{},            // 0029_node_exit_policy
 	}
 }
 

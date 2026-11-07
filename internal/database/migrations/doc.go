@@ -128,4 +128,7 @@
 //     tunnels, grants, speed limits, port bindings, runtime jobs, traffic
 //     cursors, bridge tasks, legacy rules, smart routes, log and stats) and
 //     the v4.2 upgrade's archive, node check and drop records are dropped.
+//   - 0029_node_exit_policy: whether a proxy node refuses mainland-China
+//     destinations as an exit, and what its Agent reported refusing
+//     (v5_node_exit_policy).
 package migrations

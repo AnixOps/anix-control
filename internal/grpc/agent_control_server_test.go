@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net"
 	"strconv"
@@ -20,6 +21,7 @@ import (
 	agentv1pb "github.com/AnixOps/anix-control/sdk/api/agent/v1"
 	"github.com/AnixOps/anix-control/v5/internal/cache"
 	"github.com/AnixOps/anix-control/v5/internal/database"
+	"github.com/AnixOps/anix-control/v5/internal/exitpolicy"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/service"
 	"github.com/stretchr/testify/assert"
@@ -968,4 +970,35 @@ func metadataIdentity(ctx context.Context) (agentPrincipal, bool, error) {
 // metadataIdentity.
 func newTestAgentControlServer(manager *AgentControlManager) *AgentControlGRPCServer {
 	return NewAgentControlGRPCServer(manager).WithAuthenticator(&AgentAuthenticator{identify: metadataIdentity})
+}
+
+func TestAgentControlHeartbeatRecordsRefusedMainlandDestinations(t *testing.T) {
+	environment := newAgentControlTestEnvironment(t)
+	db := database.GetDB()
+	require.NoError(t, db.AutoMigrate(&model.NodeExitPolicy{}))
+	_, err := exitpolicy.Set(db, environment.node.ID, true)
+	require.NoError(t, err)
+	ctx, cancel := context.WithTimeout(environment.authContext(context.Background()), 5*time.Second)
+	defer cancel()
+	stream, err := agentv1pb.NewAgentControlServiceClient(environment.conn).ControlStream(ctx)
+	require.NoError(t, err)
+	require.NoError(t, stream.Send(validAgentHello(uint32(environment.node.ID))))
+	helloAckMessage, err := stream.Recv()
+	require.NoError(t, err)
+	for i, blocked := range []float64{3, 0, 2} {
+		require.NoError(t, stream.Send(&agentv1pb.AgentToControl{
+			RequestId: fmt.Sprintf("mainland-heartbeat-%d", i), NodeId: uint32(environment.node.ID), SentAtUnixMs: time.Now().UnixMilli(),
+			Payload: &agentv1pb.AgentToControl_Heartbeat{Heartbeat: &agentv1pb.Heartbeat{
+				SessionId: helloAckMessage.GetHelloAck().SessionId,
+				Metrics:   map[string]float64{exitpolicy.MetricMainlandBlocked: blocked},
+			}},
+		}))
+		ack, err := stream.Recv()
+		require.NoError(t, err)
+		require.NotNil(t, ack.GetHeartbeatAck())
+	}
+	row, err := exitpolicy.Get(db, environment.node.ID)
+	require.NoError(t, err)
+	require.Equal(t, int64(5), row.MainlandBlockedTotal)
+	require.NotNil(t, row.MainlandBlockedAt)
 }

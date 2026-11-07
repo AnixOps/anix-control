@@ -136,6 +136,10 @@ export default {
           title: '最近 {hours} 小时内没有验证通过的备份',
           hint: '最近一个验证通过的备份创建于 {date}。请查看 Control 日志中的备份任务，或立即备份。',
           never: '面板还没有验证通过的备份。请查看 Control 日志中的备份任务，或立即备份。'
+        },
+        exitMainland: {
+          title: '{name} 拒绝了访问中国大陆目标的连接（累计 {n} 次）',
+          hint: '最近一次在 {date}。请检查入口和客户端分流：大陆流量不应到达这个出口。'
         }
       },
       nodesFailed: '无法加载节点状态',

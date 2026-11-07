@@ -18,6 +18,7 @@ import realityTargets from './modules/zh-CN/realityTargets'
 import nodeEntries from './modules/zh-CN/nodeEntries'
 import nodeNetwork from './modules/zh-CN/nodeNetwork'
 import nodeForwardPorts from './modules/zh-CN/nodeForwardPorts'
+import nodeExitPolicy from './modules/zh-CN/nodeExitPolicy'
 import agentUpgradeSheet from './modules/zh-CN/agentUpgradeSheet'
 
 export default {
@@ -32,6 +33,7 @@ export default {
   ...nodeEntries,
   ...nodeNetwork,
   ...nodeForwardPorts,
+  ...nodeExitPolicy,
   ...agentUpgradeSheet,
   ...networkPages,
   ...miscPages,
