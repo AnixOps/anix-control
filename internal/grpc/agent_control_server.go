@@ -911,7 +911,11 @@ func (s *AgentControlGRPCServer) controlStream(stream agentv1pb.AgentControlServ
 	connection.forwardNegotiated = agentcontrol.Negotiated(hello.Capabilities, connection.ServerCapabilities, agentcontrol.CapabilityForward)
 	connection.networkNegotiated = agentcontrol.Negotiated(hello.Capabilities, connection.ServerCapabilities, agentcontrol.CapabilityNetwork)
 
-	agenttransport.Seen(stream.Context(), principal.sighting(hello.AgentVersion))
+	// The revision decides, among others, whether the node's subscriptions
+	// carry the users' stored Shadowsocks 2022 keys.
+	sighting := principal.sighting(hello.AgentVersion)
+	sighting.ProtocolRevision = agentcontrol.HelloProtocolRevision(hello.GetLabels())
+	agenttransport.Seen(stream.Context(), sighting)
 	if err := s.touchNodeNow(agentNode); err != nil {
 		slog.Warn("failed to persist agent hello heartbeat", "component", "agent-control", "node", agentNode.String(), "error", err)
 	}

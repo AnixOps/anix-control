@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	"github.com/AnixOps/anix-control/v5/internal/authn"
 	"github.com/AnixOps/anix-control/v5/internal/cache"
 	"github.com/AnixOps/anix-control/v5/internal/config"
@@ -61,6 +62,8 @@ func (s *ServiceTestSuite) SetupSuite() {
 		// 自动迁移所有模型
 		dbInitErr = database.AutoMigrate(
 			&model.User{},
+			&model.UserSS2022Key{},
+			&model.AgentTransport{},
 			&model.IdentityRevocation{},
 			&model.IdentitySessionRevocation{},
 			&model.Plan{},
@@ -3951,4 +3954,34 @@ func (s *ForwardNodeServiceTestSuite) TestHealthCheckReturnsCanceledContext() {
 
 	assert.Nil(s.T(), result)
 	assert.ErrorIs(s.T(), err, context.Canceled)
+}
+
+// A subscription pull gives the user a stored Shadowsocks 2022 key, offered
+// at the nodes whose Agent serves it; the others keep the legacy key.
+func (s *SubscriptionServiceTestSuite) TestGetUserSubscriptionOffersTheStoredSS2022Key() {
+	group := &model.SubscriptionGroup{Name: "SS Group", Priority: 5, Enable: 1}
+	s.Require().NoError(s.svc.CreateGroup(group))
+	s.Require().NoError(s.svc.AssignGroupToUser(s.testUser.ID, group.ID, nil, nil, nil, ""))
+	lastCheckAt := time.Now().Unix()
+	serverKey := base64.StdEncoding.EncodeToString(make([]byte, 32))
+	settings := `{"cipher":"2022-blake3-aes-256-gcm","server_key":"` + serverKey + `"}`
+	for _, host := range []string{"served.example.com", "legacy.example.com"} {
+		node := &model.Node{Name: host, Host: host, Port: 443, Rate: 1, Show: 1, Status: model.NodeStatusOnline, LastCheckAt: &lastCheckAt}
+		s.Require().NoError(database.Get().Create(node).Error)
+		protocol := &model.NodeProtocol{NodeID: node.ID, Name: host, Type: model.ProtocolShadowsocks, Port: 8388, Enable: 1, Show: 1, Settings: &settings}
+		s.Require().NoError(database.Get().Create(protocol).Error)
+		s.Require().NoError(database.Get().Exec("INSERT INTO v2_subscription_group_node_protocols (subscription_group_id, node_protocol_id) VALUES (?, ?)", group.ID, protocol.ID).Error)
+		if host == "served.example.com" {
+			s.Require().NoError(database.Get().Create(&model.AgentTransport{NodeKind: agentcontrol.NodeKindProxy, NodeID: node.ID,
+				Transport: model.AgentTransportMTLSStream, ProtocolRevision: agentcontrol.ProtocolRevisionUserKeys}).Error)
+		}
+	}
+
+	resp, err := s.svc.GetUserSubscription(&model.SubscriptionRequest{Token: s.testUser.Token, Format: model.FormatClash})
+	s.Require().NoError(err)
+	keys, err := SS2022UserKeys(database.Get(), []uint{s.testUser.ID})
+	s.Require().NoError(err)
+	s.Require().NotEmpty(keys[s.testUser.ID])
+	s.Contains(resp.Content, serverKey+":"+keys[s.testUser.ID])
+	s.Contains(resp.Content, serverKey+":"+base64.StdEncoding.EncodeToString([]byte("sub-uuid")))
 }

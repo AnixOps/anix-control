@@ -35,7 +35,11 @@ const (
 	// Raise it, and add a line to the revision table of
 	// docs/reference/agent-versioning.md, with the contract change that
 	// introduces it.
-	ProtocolRevisionCurrent uint32 = 1
+	ProtocolRevisionCurrent uint32 = 2
+	// ProtocolRevisionUserKeys is the revision from which an Agent serves a
+	// user's stored Shadowsocks 2022 key (users.v1 extra
+	// UserExtraSS2022Key) next to the legacy one.
+	ProtocolRevisionUserKeys uint32 = 2
 )
 
 // Compatibility statuses, from best to worst.

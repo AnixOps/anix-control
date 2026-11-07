@@ -215,7 +215,7 @@ func (f *SingBoxFormatter) buildShadowsocks(outbound map[string]any, node *model
 			}
 		}
 		if serverKey != "" {
-			userKey := generateSS2022UserKey(password, cipher)
+			userKey := ss2022UserKey(node, password, cipher)
 			outbound["password"] = serverKey + ":" + userKey
 		}
 	}

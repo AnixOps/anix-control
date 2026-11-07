@@ -131,4 +131,7 @@
 //   - 0029_node_exit_policy: whether a proxy node refuses mainland-China
 //     destinations as an exit, and what its Agent reported refusing
 //     (v5_node_exit_policy).
+//   - 0030_ss2022_user_keys: each user's random Shadowsocks 2022 key
+//     (v5_user_ss2022_key) and the protocol revision of each Agent
+//     (v4_kernel_agent_transport.protocol_revision).
 package migrations

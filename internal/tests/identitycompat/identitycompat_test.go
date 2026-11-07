@@ -43,7 +43,7 @@ import (
 
 // Models every identity case needs in both databases.
 var Models = []any{
-	&model.User{}, &model.UserMFA{}, &model.MFALoginAttempt{}, &model.SystemConfig{}, &model.InviteCode{},
+	&model.User{}, &model.UserSS2022Key{}, &model.UserMFA{}, &model.MFALoginAttempt{}, &model.SystemConfig{}, &model.InviteCode{},
 	&model.IdentityAccountLink{}, &model.IdentityAuthority{}, &model.IdentityRevocation{}, &model.Plan{}, &model.SubscriberRequest{}, &model.SubscriberChange{},
 }
 

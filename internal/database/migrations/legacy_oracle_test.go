@@ -224,6 +224,7 @@ func laterModels() []any {
 		&model.TrafficCategoryRule{},       // 0024_traffic_categories
 		&model.TrafficCategorySource{},     // 0024_traffic_categories
 		&model.NodeExitPolicy{},            // 0029_node_exit_policy
+		&model.UserSS2022Key{},             // 0030_ss2022_user_keys
 	}
 }
 
@@ -428,6 +429,8 @@ func legacyPrepare(t *testing.T, db *gorm.DB, production bool) {
 	for _, added := range postBaselineIndexes {
 		require.NoError(t, db.Exec("DROP INDEX "+added.index).Error)
 	}
+	// 0030_ss2022_user_keys added v4_kernel_agent_transport.protocol_revision.
+	require.NoError(t, db.Exec("ALTER TABLE v4_kernel_agent_transport DROP COLUMN protocol_revision").Error)
 }
 
 // legacyModelsPrepare is the legacy start's schema work with today's

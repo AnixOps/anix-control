@@ -81,6 +81,10 @@ PostgreSQL), not the systemd installer.
 
 - [ ] Add callback implementations and tests before enabling Alipay, WeChat, or USDT payment callbacks.
 
+- [ ] Decide when nodes stop accepting the legacy UUID-derived Shadowsocks
+  2022 user key, and whether existing and child nodes move to random server
+  keys (see `docs/manual-intervention.md`).
+
 ## P3: API And UI Consistency
 
 - [ ] Normalize API error envelopes module by module.

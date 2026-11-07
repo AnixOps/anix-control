@@ -137,7 +137,7 @@ func (f *LoonFormatter) formatShadowsocks(node *model.ParsedNode, ctx *model.Tem
 		if serverKey == "" {
 			return ""
 		}
-		password = serverKey + ":" + generateSS2022UserKey(password, cipher)
+		password = serverKey + ":" + ss2022UserKey(node, password, cipher)
 	}
 	parts := []string{"Shadowsocks", node.Server, fmt.Sprint(node.Port), cipher, loonQuote(password), "fast-open=false", "udp=true"}
 	return loonLine(node.Name, parts)

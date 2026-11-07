@@ -32,6 +32,9 @@ type Sighting struct {
 	Identity     string
 	CertSerial   string
 	CertNotAfter *time.Time
+	// ProtocolRevision is the revision the agent's Hello named; 0 keeps
+	// what was recorded before.
+	ProtocolRevision uint32
 }
 
 type sightingKey struct {
@@ -105,6 +108,9 @@ func (r *Recorder) Seen(ctx context.Context, sighting Sighting) {
 	if sighting.AgentVersion != "" && sighting.AgentVersion != row.AgentVersion {
 		row.AgentVersion, changed = truncate(sighting.AgentVersion, 64), true
 	}
+	if sighting.ProtocolRevision != 0 && sighting.ProtocolRevision != row.ProtocolRevision {
+		row.ProtocolRevision, changed = sighting.ProtocolRevision, true
+	}
 	if sighting.Identity != "" && sighting.Identity != row.Identity {
 		row.Identity, changed = truncate(sighting.Identity, 255), true
 	}
@@ -157,6 +163,9 @@ func (r *Recorder) persist(ctx context.Context, row model.AgentTransport) error 
 	updates := map[string]any{"last_seen_at": row.LastSeenAt}
 	if row.AgentVersion != "" {
 		updates["agent_version"] = row.AgentVersion
+	}
+	if row.ProtocolRevision != 0 {
+		updates["protocol_revision"] = row.ProtocolRevision
 	}
 	if row.Identity != "" {
 		updates["identity"] = row.Identity

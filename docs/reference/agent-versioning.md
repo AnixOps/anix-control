@@ -32,7 +32,9 @@ judges.
   speaks revision 1.
 - Control serves the revisions from `MinAgentProtocolRevision` to
   `AgentProtocolRevision` (`internal/grpc/agent_control_server.go`, today
-  1 to 1).
+  1 to 2). Control stores each node's last revision
+  (`v4_kernel_agent_transport.protocol_revision`) to decide what a
+  subscription may offer at that node.
 - Raise `agentcontrol.ProtocolRevisionCurrent` (and Control's maximum) in the
   pull request that adds a contract change an Agent relies on, and add a row
   below. The Agent raises its own revision when it implements the change.
@@ -43,6 +45,7 @@ judges.
 | Revision | Introduced by | Contents |
 | --- | --- | --- |
 | 1 | v5.0.0 | The 5.0.0 contract (every Agent before the label). |
+| 2 | v5.0.2 | users.v1 extra `ss2022_key` (`agentcontrol.UserExtraSS2022Key`): the user's stored Shadowsocks 2022 key, std base64 of 32 bytes (the 128-bit ciphers use the first 16). The Agent serves it as a second Shadowsocks 2022 user next to the legacy key; subscriptions offer it only at nodes whose Agent speaks revision 2 or later over the mTLS stream. |
 
 ## Kernel
 

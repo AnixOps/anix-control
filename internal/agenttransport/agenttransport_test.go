@@ -165,6 +165,15 @@ func TestRecorderThrottlesWrites(t *testing.T) {
 	require.True(t, row.LastSeenAt.Equal(c.now))
 	require.NoError(t, r.Flush(ctx), "nothing pending")
 
+	// A Hello's protocol revision is written at once; 0 keeps it.
+	r.Seen(ctx, Sighting{Node: proxy7, Transport: legacyAPIKeyStream, ProtocolRevision: agentcontrol.ProtocolRevisionUserKeys})
+	row, _ = loadRow(t, db, proxy7, legacyAPIKeyStream)
+	require.Equal(t, agentcontrol.ProtocolRevisionUserKeys, row.ProtocolRevision)
+	r.Seen(ctx, Sighting{Node: proxy7, Transport: legacyAPIKeyStream})
+	require.NoError(t, r.Flush(ctx))
+	row, _ = loadRow(t, db, proxy7, legacyAPIKeyStream)
+	require.Equal(t, agentcontrol.ProtocolRevisionUserKeys, row.ProtocolRevision)
+
 	// Certificate details, and sightings that name no node are dropped.
 	notAfter := c.now.Add(7 * 24 * time.Hour)
 	r.Seen(ctx, Sighting{Node: proxy7, Transport: model.AgentTransportMTLSStream, Identity: "spiffe://anixops/prod/agent/proxy-7",

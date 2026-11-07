@@ -100,7 +100,7 @@ func MigrateKernelModelsForTest(db *gorm.DB) error {
 	if db == nil {
 		return errors.New("database is not initialized")
 	}
-	if err := db.AutoMigrate(append(model.KernelModels(), &model.EgressRoute{}, &model.NodeExitPolicy{}, &model.NodeEntry{}, &model.SubscriptionGroupProtocol{}, &model.ForwardRouteSubscription{}, &model.IWANLine{}, &model.KernelForwardLatency{}, &model.KernelForwardDNSVantage{})...); err != nil {
+	if err := db.AutoMigrate(append(model.KernelModels(), &model.EgressRoute{}, &model.NodeExitPolicy{}, &model.UserSS2022Key{}, &model.NodeEntry{}, &model.SubscriptionGroupProtocol{}, &model.ForwardRouteSubscription{}, &model.IWANLine{}, &model.KernelForwardLatency{}, &model.KernelForwardDNSVantage{})...); err != nil {
 		return err
 	}
 	return SeedKernelDefaults(db)

@@ -332,11 +332,15 @@ func (s *UserService) Delete(id uint) error {
 	return nil
 }
 
-// DeleteUserTx deletes a user and its WireGuard peers in tx and records the
-// revocation of its tokens; apply it with authn.Remember after the commit.
+// DeleteUserTx deletes a user, its WireGuard peers and its Shadowsocks
+// 2022 key in tx and records the revocation of its tokens; apply it with
+// authn.Remember after the commit.
 func DeleteUserTx(tx *gorm.DB, id uint) (authn.Revocation, error) {
 	revocation := authn.UserRevocation(id, "user deleted")
 	if err := deleteWireGuardPeers(tx, "user_id = ?", id); err != nil {
+		return revocation, err
+	}
+	if err := tx.Where("user_id = ?", id).Delete(&model.UserSS2022Key{}).Error; err != nil {
 		return revocation, err
 	}
 	res := tx.Delete(&model.User{}, id)
