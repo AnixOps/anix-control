@@ -242,7 +242,7 @@ func (h *AgentUpgradesHandler) UploadKernel(c *gin.Context) {
 			return
 		}
 		data, err := io.ReadAll(io.LimitReader(file, agentcontrol.MaxUpgradeKernelBytes+1))
-		file.Close()
+		_ = file.Close()
 		if err != nil {
 			kernelError(c, http.StatusBadRequest, "invalid_request", err.Error())
 			return

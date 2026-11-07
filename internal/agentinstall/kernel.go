@@ -362,16 +362,15 @@ func writeFileAtomic(path string, data []byte) error {
 	if err != nil {
 		return err
 	}
-	defer os.Remove(file.Name())
-	if _, err := file.Write(data); err != nil {
-		file.Close()
-		return err
+	defer func() { _ = os.Remove(file.Name()) }()
+	_, err = file.Write(data)
+	if err == nil {
+		err = file.Chmod(0o644)
 	}
-	if err := file.Chmod(0o644); err != nil {
-		file.Close()
-		return err
+	if closeErr := file.Close(); err == nil {
+		err = closeErr
 	}
-	if err := file.Close(); err != nil {
+	if err != nil {
 		return err
 	}
 	return os.Rename(file.Name(), path)
