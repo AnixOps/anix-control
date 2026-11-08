@@ -351,6 +351,11 @@ The planned `kernel.entitlement.apply.v1` became
   value in both phases, so the tables stay protected and no package route
   changes. The credential-free tables become adoptable only once finalized
   (the KernelNodeOps design, section 4).
+- **Since 5.0.3 every split table is finalized.** The phases P1 and P2 and
+  their commands are removed; Control refuses to start on a database whose
+  split is not finalized, reads the new tables only, and the views and
+  adoptions of the credential-free remainder are always available
+  (`docs/architecture/node-ops-service.md`, section 4.3).
 - **Kernel views.** Packages read other domains through 16 read-only
   `kapi_*` views (listed at the end of section 3.4), granted by
   `kernel.view:<view>`; none shows a credential.

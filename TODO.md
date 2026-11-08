@@ -11,10 +11,6 @@ from this file in the same PR that records it in `CHANGELOG.md`.
 
 ## 5.0.x Line
 
-- [ ] Node secret split: after the operator runs the irreversible
-  `anix-control node-secrets finalize` (`cmd/server/node_secrets_command.go`),
-  delete the dual-write/dual-read code and the legacy-column fallback
-  (`internal/nodesecrets`, `read.go` and `phase.go`).
 - [ ] Decide when nodes stop accepting the legacy UUID-derived Shadowsocks
   2022 user key, and how nodes and their relay child nodes move to random
   server keys (`docs/manual-intervention.md`). Random user keys exist since

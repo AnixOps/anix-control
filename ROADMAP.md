@@ -33,7 +33,7 @@
 | 新节点内核 | 面板加"手动安装内核"：上传内核发布文件，只信任内置发布公钥，用于无法自动下载的新节点 | Control |
 | 国内入口内核转发 | 代码已在 5.0.1；逐条线路把国内入口 / 中转切到 nftables 内核转发，每条线路由运维确认后再切 | Control / Agent / ansible |
 | 防扫描收尾 | 节点上 ansible 步骤框架的日志和状态目录改为中性名称 | ansible |
-| 节点密钥拆分收尾 | 生产已进入双读阶段；确认后执行不可逆的 finalize，再删除双读代码 | Control |
+| 节点密钥拆分收尾 | 已完成：生产 2026-11-08 完成 finalize；5.0.3 删除双读、回填、校验、finalize 和 unsplit 代码，未 finalize 的数据库拒绝启动 | Control |
 | 订阅域名隔离 | 准备备用订阅域名，开启 `app.subscribe_domains_only`，把面板和 Agent gRPC 从被封风险高的域名迁走 | Control / 运维 |
 | 访问统计 | 统计覆盖 UDP / QUIC / Mux，在新内核上核实上报并补测试 | 内核 / Agent |
 | 路由校验 | 网络路由增加"同一入口端口冲突"检查 | Control |

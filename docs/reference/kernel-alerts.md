@@ -20,8 +20,6 @@ backs up anything.
 | `link_certificate_expiring` | `forward-<id>` | the same for the forward link certificate (H28), which renews with the Agent certificate | the same: a connected Agent renews both |
 | `module_certificate_expiring` | `<package>#<enrollment>` | a module's latest certificate (per enrollment) is inside its window or ended | starting the module again or enrolling it again; revoking its enrollment ends the alert |
 | `ca_expiring` | `service_ca:<key id>` / `forward_link_ca:<key id>` | the **current** module (Agent and kernel) CA or forward link CA ends within `alerts.ca_expiry_days` | rotating the CA (`anix-control module ca rotate` or `POST /api/v4/kernel/modules/ca/rotate`; `anix-control agent link-ca rotate` for the link CA): the new CA is trusted at once and takes over signing by itself after one certificate lifetime |
-| `node_secrets_split_stalled` | the legacy table (`v2_node`, ...) | a split table is in `dual_write` or `dual_read` and was not touched for `alerts.phase_stuck_after` | `anix-control node-secrets verify`, `phase <table> dual_read`, `finalize -confirm <table>`; or accept it and set `alerts.phase_stuck_after: "0"` |
-| `node_secrets_finalize_interrupted` | the legacy table | a finalize started (phase `finalized`, no `finalized_at`) over an hour ago and did not complete | run `anix-control node-secrets finalize -confirm <table>` again: it resumes |
 | `identity_import_stalled` | `authority` | the identity authority sits in `importing` with no progress for `alerts.phase_stuck_after` | resume the import or start the cutover (`POST /api/v4/kernel/identity/import`, `/cutover`) |
 | `identity_cutover_not_finalized` | `authority` | identity owns logins (state `identity`) since the latest cutover event, and the legacy credentials were not finalized for `alerts.phase_stuck_after` | `POST /api/v4/kernel/identity/finalize` (allowed a day after the cutover), or roll back |
 | `builtin_package_invalid` (critical) | the package id (`index` for an unreadable set) | an official package built into the binary does not verify against `plugins.official_public_key` (signature, digest or contents): it was not installed and its routes are unavailable | install a release binary verified against `SHA256SUMS.txt.sig` ([`../RELEASING.md`](../RELEASING.md#verifying-a-release)), or set `plugins.official_public_key` to the key that signed it (a development build: `make dev-package-key`); the start log names that key |
@@ -71,20 +69,15 @@ default CA window), `warning` before. The phase alerts are always `warning`.
 
 Only processes with a reliable timestamp in their own rows are checked:
 
-- **Node credential split** (`v4_kernel_node_secret_split`): the row has no
-  "entered the phase at" time. `updated_at` moves with every backfill,
-  verification and phase change, so the alert is "**not touched** for
-  `phase_stuck_after`". It never fires early; it can fire late for a table
-  somebody still verifies every hour. A started finalize writes the row once
-  (its `updated_at` is its start), so an interrupted finalize is exact.
-  `dual_write` is the state every install starts in, so a fresh install with
-  nothing to move gets the reminder too: finalize the tables or set
-  `phase_stuck_after: "0"`.
 - **Identity authority** (`v4_kernel_identity_authority`): while `importing`,
   every batch saves the row, so `updated_at` is the last progress. For
   `identity`, the cutover time is the latest `cutover` event in
   `v4_kernel_identity_cutover`; the row's `updated_at` is also written by a
   rollback and an abort. Without a cutover event no alert is raised.
+- **The node credential split is not checked** since 5.0.3: every table is
+  finalized (Control refuses to start otherwise), so its two kinds,
+  `node_secrets_split_stalled` and `node_secrets_finalize_interrupted`, are
+  gone. Alerts of them still open are resolved at the next scan.
 - **Route modes are not checked.** They are not phases of a process: the
   rehearsed list in the binary decides each route's mode, and nothing stores
   or switches it.
