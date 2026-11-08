@@ -134,4 +134,8 @@
 //   - 0030_ss2022_user_keys: each user's random Shadowsocks 2022 key
 //     (v5_user_ss2022_key) and the protocol revision of each Agent
 //     (v4_kernel_agent_transport.protocol_revision).
+//   - 0031_drop_legacy_originals: the node secret split is finalized-only;
+//     the original JSON documents finalize kept for unsplit
+//     (v4_kernel_protocol_secret rows of scope legacy_original) are
+//     deleted.
 package migrations

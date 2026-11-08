@@ -192,7 +192,7 @@ func TestPhaseAlertsRepeatWeekly(t *testing.T) {
 		clk := &clock{now: start}
 		recorded := &recorder{}
 		monitor := newMonitor(db, clk, recorded)
-		require.NoError(t, db.Create(&model.NodeSecretSplit{Table: "v2_node", Phase: "dual_write", UpdatedAt: start.Add(-hours(100))}).Error)
+		require.NoError(t, db.Create(&model.IdentityAuthority{ID: 1, State: model.IdentityAuthorityImporting, UpdatedAt: start.Add(-hours(100))}).Error)
 		_, err := monitor.RunOnce(t.Context())
 		require.NoError(t, err)
 		require.Equal(t, 1, recorded.count())
@@ -204,10 +204,9 @@ func TestPhaseAlertsRepeatWeekly(t *testing.T) {
 		_, err = monitor.RunOnce(t.Context())
 		require.NoError(t, err)
 		assert.Equal(t, 2, recorded.count())
-		// Finalizing the table clears the alert.
-		finalized := clk.Now()
-		require.NoError(t, db.Model(&model.NodeSecretSplit{}).Where("table_name = ?", "v2_node").
-			Updates(map[string]any{"phase": "finalized", "finalized_at": finalized, "updated_at": finalized}).Error)
+		// Finishing the phase clears the alert.
+		require.NoError(t, db.Model(&model.IdentityAuthority{}).Where("id = ?", 1).
+			Updates(map[string]any{"state": model.IdentityAuthorityFinalized, "updated_at": clk.Now()}).Error)
 		summary, err := monitor.RunOnce(t.Context())
 		require.NoError(t, err)
 		assert.Equal(t, 1, summary.Resolved)

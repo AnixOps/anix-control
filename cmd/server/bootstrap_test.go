@@ -58,6 +58,9 @@ func TestBootstrapDatabaseMigratesTheSchema(t *testing.T) {
 		require.NoError(t, db.Model(&model.NodeSecretSplit{}).Count(&splitRows).Error)
 		assert.EqualValues(t, 4, scopes, "the kernel defaults are seeded")
 		assert.EqualValues(t, len(nodesecrets.Tables()), splitRows)
+		var unfinalized int64
+		require.NoError(t, db.Model(&model.NodeSecretSplit{}).Where("phase <> ? OR finalized_at IS NULL", nodesecrets.PhaseFinalized).Count(&unfinalized).Error)
+		assert.Zero(t, unfinalized, "a fresh database is finalized")
 		var views int64
 		if db.Name() == "postgres" {
 			require.NoError(t, db.Raw("SELECT count(*) FROM pg_views WHERE schemaname = current_schema() AND viewname = 'kapi_user_directory_v1'").Scan(&views).Error)
@@ -97,6 +100,43 @@ func TestBootstrapDatabaseRefusesADatabaseANewerControlMigrated(t *testing.T) {
 		assert.Contains(t, err.Error(), "migrated by a newer AnixOps Control")
 		assert.Contains(t, err.Error(), "Control 9.0.0")
 		assert.Contains(t, err.Error(), "restore the backup")
+	})
+}
+
+// A database whose node secret split is not finalized is refused before
+// any migration runs, and an empty split table is finalized at start.
+func TestBootstrapDatabaseRequiresAFinalizedSplit(t *testing.T) {
+	bootstrapDatabases(t, func(t *testing.T, cfg *config.Config) {
+		ctx := context.Background()
+		require.NoError(t, bootstrapDatabase(ctx, cfg))
+		db := database.Get()
+		var applied int64
+		require.NoError(t, db.Model(&migrations.MigrationRecord{}).Count(&applied).Error)
+		require.NoError(t, db.Model(&model.NodeSecretSplit{}).Where("table_name = ?", nodesecrets.TableNodeProtocol).
+			Updates(map[string]any{"phase": "dual_read", "finalized_at": nil}).Error)
+		require.NoError(t, bootstrapDatabase(ctx, cfg), "an empty table passes")
+		var split model.NodeSecretSplit
+		require.NoError(t, db.First(&split, "table_name = ?", nodesecrets.TableNodeProtocol).Error)
+		assert.Equal(t, nodesecrets.PhaseFinalized, split.Phase)
+		assert.NotNil(t, split.FinalizedAt)
+
+		require.NoError(t, db.Create(&model.NodeProtocol{NodeID: 1, Name: "p", Type: model.ProtocolVLESS, Port: 443}).Error)
+		// The latest migration is pending again: a refused start must not run it.
+		require.NoError(t, db.Where("version = (SELECT MAX(version) FROM "+migrations.MigrationTable+")").Delete(&migrations.MigrationRecord{}).Error)
+		for _, updates := range []map[string]any{
+			{"phase": "dual_read", "finalized_at": nil},
+			{"phase": nodesecrets.PhaseFinalized, "finalized_at": nil}, // an interrupted finalize
+		} {
+			require.NoError(t, db.Model(&model.NodeSecretSplit{}).Where("table_name = ?", nodesecrets.TableNodeProtocol).Updates(updates).Error)
+			err := bootstrapDatabase(ctx, cfg)
+			require.ErrorContains(t, err, "table v2_node_protocol is in phase "+updates["phase"].(string))
+			var after int64
+			require.NoError(t, db.Model(&migrations.MigrationRecord{}).Count(&after).Error)
+			assert.Equal(t, applied-1, after, "no migration ran")
+			var refused model.NodeSecretSplit
+			require.NoError(t, db.First(&refused, "table_name = ?", nodesecrets.TableNodeProtocol).Error)
+			assert.Nil(t, refused.FinalizedAt, "the state is left as it was")
+		}
 	})
 }
 

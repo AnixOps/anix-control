@@ -18,7 +18,7 @@ func TestBuildNodeProtocolConfig_IWAN(t *testing.T) {
 	settings := `{"pool":"10.70.0.0/24","mtu":1380,"allow_encrypt":false,"fixed_addresses":{"7":"10.70.0.9"}}`
 	protocol := &model.NodeProtocol{ID: 3, NodeID: 1, Type: model.ProtocolIWAN, Port: 4500, Settings: &settings}
 
-	config := BuildNodeProtocolConfig(node, protocol)
+	config := buildNodeProtocolConfig(node, protocol)
 
 	require.Equal(t, "iwan", config["type"])
 	require.Equal(t, 4500, config["server_port"])
@@ -29,7 +29,7 @@ func TestBuildNodeProtocolConfig_IWAN(t *testing.T) {
 	require.Equal(t, false, config["allow_client_to_client"])
 	require.Equal(t, map[string]string{"7": "10.70.0.9"}, config["fixed_addresses"])
 
-	empty := BuildNodeProtocolConfig(node, &model.NodeProtocol{ID: 4, NodeID: 1, Type: model.ProtocolIWAN, Port: 4501})
+	empty := buildNodeProtocolConfig(node, &model.NodeProtocol{ID: 4, NodeID: 1, Type: model.ProtocolIWAN, Port: 4501})
 	require.Equal(t, "10.66.0.0/16", empty["pool"])
 	require.Equal(t, 1400, empty["mtu"])
 	require.Equal(t, true, empty["allow_encrypt"])

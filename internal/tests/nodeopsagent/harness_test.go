@@ -25,6 +25,7 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/database"
 	"github.com/AnixOps/anix-control/v5/internal/kernelnodeops"
 	"github.com/AnixOps/anix-control/v5/internal/model"
+	"github.com/AnixOps/anix-control/v5/internal/nodesecrets"
 	"github.com/AnixOps/anix-control/v5/internal/packagebridge"
 	"github.com/AnixOps/anix-control/v5/internal/service"
 	"github.com/AnixOps/anix-control/v5/internal/tests/fakeagent"
@@ -126,6 +127,7 @@ func newFixture(t *testing.T, cfg *config.DatabaseConfig) *fixture {
 	host := protocolHost
 	f.protocol = model.NodeProtocol{NodeID: f.proxy.ID, Name: "vless", Type: model.ProtocolVLESS, Port: 443, Enable: 1, TLS: 2, Host: &host, Settings: &settings, RealitySettings: &reality}
 	require.NoError(t, db.Create(&f.protocol).Error)
+	require.NoError(t, nodesecrets.SeedForTest(db, nodesecrets.TableNodeProtocol))
 	f.forward = model.ForwardNode{ID: f.proxy.ID, Name: "relay", Host: "198.51.100.2", Port: 22, APIPort: 8443, Enabled: true}
 	require.NoError(t, db.Create(&f.forward).Error)
 	require.NoError(t, db.Create(&model.ForwardRule{Name: "rule", RelayNodeID: f.forward.ID, ListenPort: 2000, Protocol: "tcp", ExitNodeID: f.forward.ID, TargetHost: "203.0.113.3", TargetPort: 80, Enabled: true}).Error)

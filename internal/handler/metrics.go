@@ -145,8 +145,7 @@ v2board_go_gc_duration_seconds ` + formatFloat(float64(m.PauseTotalNs)/1e9) + `
 	}
 	// Singleton-worker leadership of this process.
 	lease.WritePrometheus(&body)
-	// Node credential split: dual_read fallbacks and validate-on-build
-	// findings of this process.
+	// Node credential split: validate-on-build findings of this process.
 	nodesecrets.WritePrometheus(&body)
 	// User deltas on the Agent Control stream.
 	controlgrpc.WriteAgentUsersPrometheus(&body)

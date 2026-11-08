@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/AnixOps/anix-control/v5/internal/model"
+	"github.com/AnixOps/anix-control/v5/internal/nodesecrets"
 	"github.com/AnixOps/anix-control/v5/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/suite"
@@ -68,6 +69,8 @@ func (s *NodeSecretsTestSuite) SetupTest() {
 	s.Require().NoError(s.db.Create(s.group).Error)
 	s.Require().NoError(s.db.Model(s.group).Association("Protocols").Append(s.reality))
 
+	s.Require().NoError(nodesecrets.SeedForTest(s.db))
+
 	s.secretText = []string{realityPrivateKey, tlsPrivateKeyPEM, hysteriaPassword, customSecret, rawConfigSecret, s.wgPrivate, "node-api-key", "node-shared-secret"}
 }
 
@@ -109,6 +112,7 @@ func (s *NodeSecretsTestSuite) requireMasked(name string, w *httptest.ResponseRe
 func (s *NodeSecretsTestSuite) storedProtocol(id uint) model.NodeProtocol {
 	var protocol model.NodeProtocol
 	s.Require().NoError(s.db.First(&protocol, id).Error)
+	nodesecrets.ResolveProtocol(s.db, &protocol)
 	return protocol
 }
 
@@ -271,6 +275,7 @@ func (s *NodeSecretsTestSuite) TestRawConfigKeepsMaskedSecrets() {
 
 	var node model.Node
 	s.Require().NoError(s.db.First(&node, s.node.ID).Error)
+	nodesecrets.ResolveNodeRawConfig(s.db, &node)
 	stored := settingsOf(node.RawConfig)
 	s.EqualValues(8443, stored["server_port"])
 	s.Equal(rawConfigSecret, stored["tls_settings"].(map[string]any)["private_key"])
@@ -280,12 +285,14 @@ func (s *NodeSecretsTestSuite) TestRawConfigKeepsMaskedSecrets() {
 	s.Require().NoError(err)
 	s.ok(s.serve("PUT", "/nodes/:id", nodePath, string(body), handler.UpdateNode))
 	s.Require().NoError(s.db.First(&node, s.node.ID).Error)
+	nodesecrets.ResolveNodeRawConfig(s.db, &node)
 	s.Equal("renamed", node.Name)
 	s.Equal(rawConfigSecret, settingsOf(node.RawConfig)["tls_settings"].(map[string]any)["private_key"])
 
 	s.ok(s.serve("PUT", "/nodes/:id/raw-config", nodePath+"/raw-config",
 		`{"raw_config":{"tls_settings":{"private_key":"rotated-raw-key"}}}`, handler.UpdateNodeRawConfig))
 	s.Require().NoError(s.db.First(&node, s.node.ID).Error)
+	nodesecrets.ResolveNodeRawConfig(s.db, &node)
 	s.Equal("rotated-raw-key", settingsOf(node.RawConfig)["tls_settings"].(map[string]any)["private_key"])
 }
 

@@ -159,6 +159,7 @@ func (s *NodeCredentialAnswersTestSuite) TestNodesAndRawConfigs() {
 	s.pin("put raw config", code, body)
 	s.Require().NoError(s.db.First(&node, 1).Error)
 	s.Require().NotNil(node.RawConfig)
+	nodesecrets.ResolveNodeRawConfig(s.db, &node)
 	s.Contains(*node.RawConfig, pinRawConfigSecret)
 	s.Equal(int64(1), s.count(&model.ProtocolSecret{}, "scope = ? AND owner_id = ?", nodesecrets.ScopeNodeRawConfig, node.ID))
 
@@ -166,6 +167,7 @@ func (s *NodeCredentialAnswersTestSuite) TestNodesAndRawConfigs() {
 	code, body = s.serve(http.MethodPut, "/admin/nodes/:id/raw-config", "/admin/nodes/1/raw-config", `{"raw_config":"`+strings.ReplaceAll(masked, `"`, `\"`)+`"}`, h.UpdateNodeRawConfig)
 	s.pin("put raw config with the placeholder", code, body)
 	s.Require().NoError(s.db.First(&node, 1).Error)
+	nodesecrets.ResolveNodeRawConfig(s.db, &node)
 	s.Contains(*node.RawConfig, pinRawConfigSecret, "the placeholder keeps the stored secret")
 
 	code, body = s.serve(http.MethodPut, "/admin/nodes/:id/raw-config", "/admin/nodes/1/raw-config", `{"raw_config":"not json"}`, h.UpdateNodeRawConfig)
@@ -180,6 +182,7 @@ func (s *NodeCredentialAnswersTestSuite) TestNodesAndRawConfigs() {
 	s.pin("update node with the placeholder", code, body)
 	s.Require().NoError(s.db.First(&node, 1).Error)
 	s.Equal("edge-2", node.Name)
+	nodesecrets.ResolveNodeRawConfig(s.db, &node)
 	s.Contains(*node.RawConfig, pinRawConfigSecret)
 
 	// Validation never stores anything.
@@ -228,6 +231,7 @@ func (s *NodeCredentialAnswersTestSuite) TestProtocols() {
 	var protocol model.NodeProtocol
 	s.Require().NoError(s.db.Where("node_id = ?", node.ID).First(&protocol).Error)
 	s.Require().NotNil(protocol.RealitySettings)
+	nodesecrets.ResolveProtocol(s.db, &protocol)
 	s.Contains(*protocol.RealitySettings, pinRealitySecret)
 	s.Equal(int64(1), s.count(&model.ProtocolSecret{}, "scope = ? AND owner_id = ?", nodesecrets.ScopeNodeProtocol, protocol.ID))
 
@@ -243,11 +247,13 @@ func (s *NodeCredentialAnswersTestSuite) TestProtocols() {
 	s.pin("update protocol with the placeholder", code, body)
 	s.Require().NoError(s.db.First(&protocol, protocol.ID).Error)
 	s.Equal("reality-2", protocol.Name)
+	nodesecrets.ResolveProtocol(s.db, &protocol)
 	s.Contains(*protocol.RealitySettings, pinRealitySecret, "the placeholder keeps the stored secret")
 	code, body = s.serve(http.MethodPut, "/admin/nodes/protocols/:protocol_id", fmt.Sprintf("/admin/nodes/protocols/%d", protocol.ID),
 		`{"reality_settings":"{\"dest\":\"other.example.test:443\",\"private_key\":\"new-reality-private\"}"}`, h.UpdateProtocol)
 	s.pin("update protocol with a new secret", code, body)
 	s.Require().NoError(s.db.First(&protocol, protocol.ID).Error)
+	nodesecrets.ResolveProtocol(s.db, &protocol)
 	s.Contains(*protocol.RealitySettings, "new-reality-private")
 	var secret model.ProtocolSecret
 	s.Require().NoError(s.db.Where("scope = ? AND owner_id = ?", nodesecrets.ScopeNodeProtocol, protocol.ID).First(&secret).Error)

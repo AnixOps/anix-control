@@ -51,10 +51,18 @@ const (
 // package lost every family or its generation was fenced.
 var watchReauthorize = 30 * time.Second
 
-// splitTables are the tables of the node secret split (section 4.1), as
-// GetCapabilities answers them.
-var splitTables = []string{
-	"v2_node", "v2_forward_runtime_job", "v2_node_protocol", "v2_wireguard_peer",
+// splitTables are the tables of the node secret split (section 4.1) and
+// their phase, as GetCapabilities answers them: the split tables are
+// finalized (Control refuses to start otherwise), and v2_forward_runtime_job
+// is not split, its payloads carrying no token since NO-7.
+var splitTables = []struct {
+	name  string
+	phase kernelnodeopsv1.SecretSplitPhase
+}{
+	{"v2_node", kernelnodeopsv1.SecretSplitPhase_SECRET_SPLIT_PHASE_FINALIZED},
+	{"v2_forward_runtime_job", kernelnodeopsv1.SecretSplitPhase_SECRET_SPLIT_PHASE_LEGACY},
+	{"v2_node_protocol", kernelnodeopsv1.SecretSplitPhase_SECRET_SPLIT_PHASE_FINALIZED},
+	{"v2_wireguard_peer", kernelnodeopsv1.SecretSplitPhase_SECRET_SPLIT_PHASE_FINALIZED},
 }
 
 // Authorizer admits a calling host to a capability.
@@ -66,9 +74,6 @@ type Authorizer interface {
 type Server struct {
 	Engine     *Engine
 	Authorizer Authorizer
-	// SplitPhases answers the node credential split's phase per table
-	// (SplitPhasesFrom). Nil answers LEGACY for every table.
-	SplitPhases func(ctx context.Context) ([]*kernelnodeopsv1.TableSplitState, error)
 	// Agents are the live agent sessions the session RPCs answer; nil reads
 	// the defaults registered with UseAgentStreams and UseWebSocketAgents.
 	Agents *AgentSources
@@ -639,18 +644,8 @@ func (h *hostServer) GetCapabilities(ctx context.Context, _ *kernelnodeopsv1.Get
 			response.GrantedFamilies = append(response.GrantedFamilies, family)
 		}
 	}
-	if h.server.SplitPhases != nil {
-		tables, err := h.server.SplitPhases(ctx)
-		if err != nil {
-			return nil, failure("get capabilities", err)
-		}
-		response.Tables = tables
-		return response, nil
-	}
 	for _, table := range splitTables {
-		response.Tables = append(response.Tables, &kernelnodeopsv1.TableSplitState{
-			Table: table, Phase: kernelnodeopsv1.SecretSplitPhase_SECRET_SPLIT_PHASE_LEGACY,
-		})
+		response.Tables = append(response.Tables, &kernelnodeopsv1.TableSplitState{Table: table.name, Phase: table.phase})
 	}
 	return response, nil
 }

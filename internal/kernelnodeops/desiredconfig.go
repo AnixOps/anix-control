@@ -127,7 +127,7 @@ func buildProxyDesiredConfig(db *gorm.DB, id uint) (map[string]any, error) {
 		"raw_config": nil,
 	}
 	// The raw configuration as the node's pull reads it: its secrets
-	// through the node credential split, in the table's phase.
+	// through the node credential split.
 	nodesecrets.ResolveNodeRawConfig(db, &node)
 	if node.RawConfig != nil && *node.RawConfig != "" {
 		var raw map[string]any
@@ -145,7 +145,7 @@ func buildProxyDesiredConfig(db *gorm.DB, id uint) (map[string]any, error) {
 		}
 		rendered = append(rendered, map[string]any{
 			"id": protocol.ID, "name": protocol.Name, "type": string(protocol.Type), "port": protocol.Port,
-			"show": protocol.Show, "group_id": protocol.GroupID, "config": service.BuildNodeProtocolConfig(&node, protocol),
+			"show": protocol.Show, "group_id": protocol.GroupID, "config": service.BuildNodeProtocolConfig(db, &node, protocol),
 		})
 	}
 	document["protocols"] = rendered

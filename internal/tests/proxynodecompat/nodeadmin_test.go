@@ -67,7 +67,7 @@ func kernelRoute(method, pattern, routeID string, legacy gin.HandlerFunc) packag
 		NativeService: func(db *gorm.DB, nodeOps kernelnodeopsv1.KernelNodeOpsClient) pluginhostsdk.NativeHandler {
 			return (&native.Service{
 				Open:    func(ctx context.Context) (*gorm.DB, error) { return db.WithContext(ctx), nil },
-				Leased:  packagecompat.Lease(db, "proxy-node"),
+				Leased:  packagecompat.Lease("proxy-node"),
 				NodeOps: nodeOps,
 			}).Handlers()[routeID]
 		},
@@ -151,7 +151,7 @@ func fleetState(t testing.TB, db *gorm.DB) any {
 		Scope, ColumnName, JSONPointer, Value string
 		OwnerID                               uint
 	}
-	require.NoError(t, db.Model(&model.ProtocolSecret{}).Where("scope <> ?", "legacy_original").Order("scope, owner_id, column_name, json_pointer").Find(&secrets).Error)
+	require.NoError(t, db.Model(&model.ProtocolSecret{}).Order("scope, owner_id, column_name, json_pointer").Find(&secrets).Error)
 	var peers, links int64
 	require.NoError(t, db.Model(&model.WireGuardPeer{}).Count(&peers).Error)
 	require.NoError(t, db.Table("v2_subscription_group_node_protocols").Count(&links).Error)
@@ -231,8 +231,6 @@ func TestNodeListParity(t *testing.T) {
 		{Name: "the shown status is not a sort column", Path: path + "?sort=status"},
 		{Name: "a sort that is an injection", Path: path + "?sort=id%3B%20DROP%20TABLE%20v2_node"},
 		{Name: "a direction that is not asc or desc", Path: path + "?sort=id&order=up"},
-		{Name: "sorted before finalize the kernel answers", Path: path + "?sort=name&order=desc", Seed: seedFleet, Fallback: true},
-		{Name: "before finalize the kernel answers", Path: path, Seed: seedFleet, Fallback: true},
 	})
 }
 
@@ -246,7 +244,6 @@ func TestNodeDetailParity(t *testing.T) {
 		{Name: "an unknown node", Path: path("99")},
 		{Name: "not a number", Path: path("x")},
 		{Name: "beyond 32 bits", Path: path("4294967297")},
-		{Name: "before finalize the kernel answers", Path: path("1"), Seed: seedFleet, Fallback: true},
 	})
 }
 
@@ -259,7 +256,6 @@ func TestNodeDeleteParity(t *testing.T) {
 		{Name: "without protocols", Path: path("6")},
 		{Name: "an unknown node", Path: path("99")},
 		{Name: "not a number", Path: path("x")},
-		{Name: "before finalize the kernel answers", Path: path("1"), Seed: seedFleet, Fallback: true},
 	})
 }
 
@@ -273,7 +269,6 @@ func TestRawConfigReadParity(t *testing.T) {
 		{Name: "none", Path: path("6")},
 		{Name: "an unknown node", Path: path("99")},
 		{Name: "not a number", Path: path("x")},
-		{Name: "before finalize the kernel answers", Path: path("1"), Seed: seedFleet, Fallback: true},
 	})
 }
 
@@ -299,7 +294,5 @@ func TestRawConfigUpdateParity(t *testing.T) {
 		// read the body: such requests are the kernel's legacy handler's.
 		{Name: "a node id that is not a number", Path: path("x"), Body: body(`{}`), Fallback: true},
 		{Name: "not JSON", Path: path("2"), Body: []byte(`{"raw_config":`), Fallback: true},
-		{Name: "before finalize the kernel answers", Path: path("6"), Seed: seedFleet, Fallback: true,
-			Body: body(wireGuardRawConfig(wireGuard.otherPrivate, wireGuard.otherPublic))},
 	})
 }

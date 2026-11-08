@@ -10,8 +10,8 @@ import (
 // syncBatch bounds the ids of one statement.
 const syncBatch = 500
 
-// Sync is the dual-write of a kernel writer. Call it with the transaction of
-// the legacy write, after that write, with the ids of the legacy rows it
+// Sync is the second half of a kernel writer. Call it with the transaction
+// of the legacy write, after that write, with the ids of the legacy rows it
 // created, changed or deleted: the new tables are brought in line with
 // those rows as they now stand, so a failure of either rolls back both.
 //
@@ -20,10 +20,9 @@ const syncBatch = 500
 //   - A deleted row, or a secret that is gone, takes its rows away.
 //   - A tombstone or the placeholder in a legacy column leaves the new row
 //     as it is: the secret has moved there.
-//   - In a finalized table (P3), the legacy columns of the rows then get
-//     their tombstones and redacted documents (section 4.4): a writer's
-//     secret reaches the new tables only. The phase is read in tx,
-//     uncached.
+//   - The legacy columns of the rows then get their tombstones and
+//     redacted documents (section 4.4): a writer's secret reaches the new
+//     tables only.
 //
 // Sync does nothing when the split tables do not exist.
 func Sync(tx *gorm.DB, table string, ids ...uint) error {
@@ -46,45 +45,33 @@ func Sync(tx *gorm.DB, table string, ids ...uint) error {
 		}
 	}
 	now := time.Now().UTC()
-	if _, err := syncRows(tx, spec, subjects, false, now); err != nil {
+	if err := syncRows(tx, spec, subjects, now); err != nil {
 		return err
 	}
-	// A finalized table keeps no secret in its legacy columns: what the
-	// writer just wrote there moved to the new tables above, and is
-	// replaced by its tombstone or redacted form in the same transaction.
-	phase, err := tablePhaseInTx(tx, table)
-	if err != nil || phase != PhaseFinalized {
-		return err
-	}
-	_, err = tombstoneRows(tx, spec, subjects, false, now)
-	return err
+	return tombstoneRows(tx, spec, subjects)
 }
 
 // syncRows derives the legacy rows ids of spec's table and applies them to
-// the new tables. It answers the number of new-table rows it inserted,
-// changed or deleted.
-func syncRows(tx *gorm.DB, spec tableSpec, ids []uint64, lock bool, now time.Time) (int64, error) {
-	var changes int64
+// the new tables.
+func syncRows(tx *gorm.DB, spec tableSpec, ids []uint64, now time.Time) error {
 	for start := 0; start < len(ids); start += syncBatch {
 		end := min(start+syncBatch, len(ids))
 		batch := ids[start:end]
-		derived, err := spec.derive(tx, batch, lock)
+		derived, err := spec.derive(tx, batch)
 		if err != nil {
-			return changes, err
+			return err
 		}
-		n, err := applySecrets(tx, spec.scope, batch, derived, now)
-		changes += n
-		if err != nil {
-			return changes, err
+		if err := applySecrets(tx, spec.scope, batch, derived, now); err != nil {
+			return err
 		}
 	}
-	return changes, nil
+	return nil
 }
 
-func applySecrets(tx *gorm.DB, scope string, ids []uint64, derived *derivation, now time.Time) (int64, error) {
+func applySecrets(tx *gorm.DB, scope string, ids []uint64, derived *derivation, now time.Time) error {
 	var existing []model.ProtocolSecret
 	if err := tx.Where("scope = ? AND owner_id IN ?", scope, ids).Find(&existing).Error; err != nil {
-		return 0, err
+		return err
 	}
 	rows := make(map[secretKey]model.ProtocolSecret, len(existing))
 	for _, row := range existing {
@@ -95,7 +82,6 @@ func applySecrets(tx *gorm.DB, scope string, ids []uint64, derived *derivation, 
 		desired[secretKey{OwnerID: entry.OwnerID, Column: entry.Column, Pointer: entry.Pointer}] = entry.Value
 	}
 
-	var changes int64
 	var gone []uint64
 	for key, row := range rows {
 		if _, ok := desired[key]; ok || derived.keptSecrets[key] {
@@ -104,11 +90,9 @@ func applySecrets(tx *gorm.DB, scope string, ids []uint64, derived *derivation, 
 		gone = append(gone, row.ID)
 	}
 	if len(gone) > 0 {
-		result := tx.Where("id IN ?", gone).Delete(&model.ProtocolSecret{})
-		if result.Error != nil {
-			return changes, result.Error
+		if err := tx.Where("id IN ?", gone).Delete(&model.ProtocolSecret{}).Error; err != nil {
+			return err
 		}
-		changes += result.RowsAffected
 	}
 
 	for key, value := range desired {
@@ -119,18 +103,15 @@ func applySecrets(tx *gorm.DB, scope string, ids []uint64, derived *derivation, 
 				Scope: scope, OwnerID: key.OwnerID, ColumnName: key.Column, JSONPointer: key.Pointer,
 				Value: value, Version: 1, UpdatedAt: now,
 			}).Error; err != nil {
-				return changes, err
+				return err
 			}
 		case row.Value != value:
 			if err := tx.Model(&model.ProtocolSecret{}).Where("id = ?", row.ID).Updates(map[string]any{
 				"value": value, "version": row.Version + 1, "updated_at": now,
 			}).Error; err != nil {
-				return changes, err
+				return err
 			}
-		default:
-			continue
 		}
-		changes++
 	}
-	return changes, nil
+	return nil
 }

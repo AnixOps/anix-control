@@ -11,6 +11,65 @@ Use this together with:
 - [`features.md`](features.md)
 - [`reference/sqlite-to-postgres-migration.md`](reference/sqlite-to-postgres-migration.md)
 
+## Upgrading To 5.0.3: The Node Secret Split Is Finalized-Only
+
+5.0.3 reads and writes the node secret split (`v2_node.raw_config`,
+`v2_node_protocol`, `v2_wireguard_peer`) in its finalized form only. The
+phases before finalize, and the commands that moved a table through them,
+are removed.
+
+**Before you upgrade, on 5.0.2:**
+
+```bash
+anix-control node-secrets status     # every table: phase finalized, finalized_at set
+anix-control node-secrets validate   # recommended; exit 0
+```
+
+- 5.0.3 refuses to start while a split table that holds rows is not
+  finalized (a phase other than `finalized`, or an interrupted finalize
+  without `finalized_at`). The check only reads, and runs before any
+  migration, so a refused start leaves the database as 5.0.2 left it. The
+  message names the table and its phase. Finish the split on 5.0.2 first
+  ([Phase P3](#finalizing-the-node-credential-split-phase-p3), with the
+  owner's approval), then start 5.0.3.
+- An empty split table, and a fresh database, need nothing: Control marks
+  their state finalized at start.
+- Control must have been restarted at least once after finalize, as 5.0.2
+  already requires, so package storage leases include the views and the
+  adoptions.
+
+**Back up the database.** Migration `0031_drop_legacy_originals` deletes the
+original JSON documents finalize kept for `unsplit` (rows of
+`v4_kernel_protocol_secret` with scope `legacy_original`), so the automatic
+pre-migration backup runs.
+
+**At start:** the check passes, migration 0031 runs, and nothing else
+changes. No rolling update: stop every 5.0.2 process before the first
+5.0.3 start. A 5.0.2 process still running after migration 0031 keeps
+writing original documents that 5.0.3 never deletes.
+
+**Removed:**
+
+- The commands `node-secrets backfill`, `verify`, `phase`, `finalize` and
+  `unsplit` (they now exit 2 with the usage). `node-secrets status` and
+  `node-secrets validate` stay. Update runbooks and scripts that call them.
+- The metric `anixops_node_secrets_fallback_total`. Remove it from
+  dashboards and alert rules; `anixops_node_secrets_invalid_total` stays.
+- The alert kinds `node_secrets_split_stalled` and
+  `node_secrets_finalize_interrupted`. Open alerts of these kinds are
+  resolved at the next scan. `alerts.phase_stuck_after` stays (identity
+  alerts use it).
+
+Unchanged: the configuration, the Agents and the packages.
+`GetCapabilities` of `KernelNodeOps` answers `FINALIZED` for the three split
+tables (`LEGACY` for `v2_forward_runtime_job`), and the views and adoptions
+of the split's remainder are always available.
+
+**Rollback.** 5.0.2 refuses a database that migration 0031 changed (a
+migration it does not know). Go back by restoring the pre-migration backup
+and starting 5.0.2. Binaries older than 5.0.2 stay forbidden after
+finalize.
+
 ## Upgrading To 5.0.2: Listen Port Conflicts Are Refused On Save
 
 A forward route or reverse proxy whose listen port another listener holds on
@@ -1625,6 +1684,9 @@ carried it (`docs/architecture/node-ops-service.md`, sections 3.7 and
 
 ### Node Credentials Are Also Kept In The Split Tables (Phase P1)
 
+> History. 5.0.3 removed this phase and its commands; see
+> [Upgrading To 5.0.3](#upgrading-to-503-the-node-secret-split-is-finalized-only).
+
 This release starts the node credential split
 (`docs/architecture/node-ops-service.md`, section 4) at phase P1,
 dual-write. At start Control creates three new tables, and alters no
@@ -1676,6 +1738,9 @@ anix-control node-secrets status     # phase, backfill progress, last verify, fo
   requires a matching `verify` first.
 
 ### Moving The Node Credential Readers To The Split Tables (Phase P2)
+
+> History. 5.0.3 removed this phase and its commands; see
+> [Upgrading To 5.0.3](#upgrading-to-503-the-node-secret-split-is-finalized-only).
 
 Phase P2, dual-read, moves a table's readers to the new tables. It is an
 operator command per table, never automatic, and the way back is another
@@ -2035,6 +2100,9 @@ and `anix-control-frontend.tar.gz`. `scripts/install.sh`, the image and the
 identity bootstrap package (still a separate asset) are unaffected.
 
 ### Finalizing The Node Credential Split (Phase P3)
+
+> History. 5.0.3 removed this phase and its commands; see
+> [Upgrading To 5.0.3](#upgrading-to-503-the-node-secret-split-is-finalized-only).
 
 Phase P3, finalize, removes the node credentials and protocol secrets from
 the legacy columns: from then on they live only in the split tables. Nothing

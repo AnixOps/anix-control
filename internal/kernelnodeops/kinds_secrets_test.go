@@ -37,10 +37,13 @@ func (r *request) sealedDocument(field string) map[string]any {
 	return document
 }
 
+// protocolColumn answers a protocol's column as the kernel reads it, its
+// secrets resolved from the split rows.
 func protocolColumn(t *testing.T, db *gorm.DB, id uint, column string) string {
 	t.Helper()
 	var protocol model.NodeProtocol
 	require.NoError(t, db.First(&protocol, id).Error)
+	nodesecrets.ResolveProtocol(db, &protocol)
 	var value *string
 	switch column {
 	case "reality_settings":
@@ -106,7 +109,7 @@ func TestPutProtocolSecretDocument(t *testing.T) {
 		require.Zero(t, result.GetKept())
 		require.Zero(t, result.GetCleared())
 		stored := protocolColumn(t, db, 5, "reality_settings")
-		require.Contains(t, stored, "reality-private-typed", "the legacy column holds the value")
+		require.Contains(t, stored, "reality-private-typed", "the kernel reads the value")
 		require.Equal(t, service.RedactNodeSecretsJSON(stored), string(result.GetRedactedJson()), "the package stores the redacted document")
 		require.Contains(t, string(result.GetRedactedJson()), service.NodeSecretPlaceholder)
 		value, ok := protocolSecret(t, db, 5, "reality_settings", "/private_key")
@@ -158,6 +161,8 @@ func TestPutRawConfigDocument(t *testing.T) {
 		var node model.Node
 		require.NoError(t, db.First(&node, 1).Error)
 		require.NotNil(t, node.RawConfig)
+		require.NotContains(t, *node.RawConfig, "raw-private-typed", "the legacy column holds no secret")
+		nodesecrets.ResolveNodeRawConfig(db, &node)
 		require.Contains(t, *node.RawConfig, "raw-private-typed")
 		var secret model.ProtocolSecret
 		require.NoError(t, db.Where("scope = ? AND owner_id = ? AND json_pointer = ?", nodesecrets.ScopeNodeRawConfig, 1, "/tls_settings/private_key").First(&secret).Error)
@@ -207,37 +212,33 @@ func mustJSON(t *testing.T, value any) []byte {
 	return raw
 }
 
-// The legacy column and the split rows agree after a put in both phases,
-// and the dual-read reader answers the stored secret.
-func TestSecretDocumentsAgreeInBothPhases(t *testing.T) {
+// A put moves the secret to the split rows: the legacy column holds the
+// placeholder, and the reader answers the stored secret. A keep-on-save
+// put keeps it.
+func TestSecretDocumentsMoveToTheSplitRows(t *testing.T) {
 	forEachDatabase(t, func(t *testing.T, db *gorm.DB) {
 		h := newCredentialHarness(t, db)
 		client := h.client(protocolHost, allFamilies())
-		for round, phase := range []string{nodesecrets.PhaseDualWrite, nodesecrets.PhaseDualRead} {
-			if phase == nodesecrets.PhaseDualRead {
-				dualRead(t, db)
-			}
-			typed := h.bindings.open(protocolHost, protocolUpdateRoute, map[string]string{"protocol_id": "5"}, `{"settings":{"password":"ss-`+phase+`","method":"aes"}}`)
-			operation, _ := submitBound(t, client, "secrets.put:5:settings:"+phase, putSecretSpec(kernelnodeopsv1.SecretScope_SECRET_SCOPE_NODE_PROTOCOL, 5, "settings", typed.sealedDocument("settings")), typed)
-			require.Equal(t, kernelnodeopsv1.OperationState_OPERATION_STATE_SUCCEEDED, operation.GetState(), operation.GetError())
-			stored := protocolColumn(t, db, 5, "settings")
-			require.Contains(t, stored, "ss-"+phase)
-			value, ok := protocolSecret(t, db, 5, "settings", "/password")
-			require.True(t, ok)
-			require.Equal(t, `"ss-`+phase+`"`, value, phase)
-			var protocol model.NodeProtocol
-			require.NoError(t, db.First(&protocol, 5).Error)
-			nodesecrets.ResolveProtocol(db, &protocol)
-			require.Equal(t, stored, *protocol.Settings, "the reader of %s answers the stored document", phase)
-			// A keep-on-save round in this phase too.
-			operation, _ = submitBound(t, client, "secrets.put:5:keep:"+phase, putSecretSpec(kernelnodeopsv1.SecretScope_SECRET_SCOPE_NODE_PROTOCOL, 5, "settings", map[string]any{"password": service.NodeSecretPlaceholder, "method": "chacha"}), nil)
-			require.Equal(t, kernelnodeopsv1.OperationState_OPERATION_STATE_SUCCEEDED, operation.GetState(), operation.GetError())
-			require.Contains(t, protocolColumn(t, db, 5, "settings"), "ss-"+phase)
-			_, err := nodesecrets.Backfill(context.Background(), db, nodesecrets.BackfillOptions{Restart: true})
-			require.NoError(t, err)
-			_, err = nodesecrets.Verify(context.Background(), db, nodesecrets.VerifyOptions{})
-			require.NoError(t, err, "round %d (%s)", round, phase)
-		}
+		typed := h.bindings.open(protocolHost, protocolUpdateRoute, map[string]string{"protocol_id": "5"}, `{"settings":{"password":"ss-moved","method":"aes"}}`)
+		operation, _ := submitBound(t, client, "secrets.put:5:settings", putSecretSpec(kernelnodeopsv1.SecretScope_SECRET_SCOPE_NODE_PROTOCOL, 5, "settings", typed.sealedDocument("settings")), typed)
+		require.Equal(t, kernelnodeopsv1.OperationState_OPERATION_STATE_SUCCEEDED, operation.GetState(), operation.GetError())
+		var legacy model.NodeProtocol
+		require.NoError(t, db.First(&legacy, 5).Error)
+		require.NotContains(t, *legacy.Settings, "ss-moved", "the legacy column holds no secret")
+		value, ok := protocolSecret(t, db, 5, "settings", "/password")
+		require.True(t, ok)
+		require.Equal(t, `"ss-moved"`, value)
+		var protocol model.NodeProtocol
+		require.NoError(t, db.First(&protocol, 5).Error)
+		nodesecrets.ResolveProtocol(db, &protocol)
+		require.Contains(t, *protocol.Settings, "ss-moved")
+
+		operation, _ = submitBound(t, client, "secrets.put:5:keep", putSecretSpec(kernelnodeopsv1.SecretScope_SECRET_SCOPE_NODE_PROTOCOL, 5, "settings", map[string]any{"password": service.NodeSecretPlaceholder, "method": "chacha"}), nil)
+		require.Equal(t, kernelnodeopsv1.OperationState_OPERATION_STATE_SUCCEEDED, operation.GetState(), operation.GetError())
+		value, ok = protocolSecret(t, db, 5, "settings", "/password")
+		require.True(t, ok)
+		require.Equal(t, `"ss-moved"`, value)
+		require.Contains(t, protocolColumn(t, db, 5, "settings"), "chacha")
 	})
 }
 

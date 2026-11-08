@@ -27,8 +27,8 @@ type ProtocolSecret struct {
 func (ProtocolSecret) TableName() string { return "v4_kernel_protocol_secret" }
 
 // NodeSecretSplit is the state of the credential split of one legacy table:
-// its phase (legacy, dual_write, dual_read, finalized), the progress of the
-// backfill, and the outcome of the last verification.
+// its phase (finalized since 5.0.3) and when it was finalized. The backfill
+// and verification columns record the phases before it.
 type NodeSecretSplit struct {
 	Table string `gorm:"column:table_name;primaryKey;size:64" json:"table_name"`
 	Phase string `gorm:"size:16;not null" json:"phase"`

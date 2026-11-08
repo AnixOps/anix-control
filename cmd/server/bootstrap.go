@@ -42,6 +42,11 @@ func bootstrapDatabase(ctx context.Context, cfg *config.Config) error {
 	}
 	defer release()
 
+	// Read-only, before any migration: a refused start leaves the database
+	// as the previous release left it.
+	if err := nodesecrets.RequireFinalized(db); err != nil {
+		return err
+	}
 	if _, err := migrations.Migrate(ctx, db, migrations.Options{ProgramVersion: version, Logf: log.Printf, BeforeMigrate: preMigrationBackup(log.Printf)}); err != nil {
 		return fmt.Errorf("database schema: %w", err)
 	}

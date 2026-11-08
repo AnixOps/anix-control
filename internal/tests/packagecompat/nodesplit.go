@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"testing"
 
 	"github.com/AnixOps/anix-control/v5/internal/model"
@@ -16,64 +17,34 @@ import (
 	"gorm.io/gorm"
 )
 
-// NodeSplitModels are the node secret split's tables, and the
-// operation log its phase changes are audited in. A route on a table or
-// view of the split's remainder (docs/architecture/node-ops-service.md
+// NodeSplitModels are the node secret split's tables. A route on a table
+// or view of the split's remainder (docs/architecture/node-ops-service.md
 // section 4.6) lists them in Route.Models, so the shared databases keep
 // them between cases.
 func NodeSplitModels() []any {
-	return []any{&model.ProtocolSecret{}, &model.NodeSecretSplit{}, &model.OperationLog{}}
+	return []any{&model.ProtocolSecret{}, &model.NodeSecretSplit{}}
 }
 
-// FinalizeNodeSplit takes tables (all split tables when none are named)
-// through the split as an operator does (docs/UPGRADE.md): the state rows,
-// a backfill, a matching verification, dual_read, then finalize. Their
-// legacy secret columns then hold tombstones and redacted documents, and
-// the kernel creates the views that wait for finalize
-// (packagestore.EnsureKernelAPIViews). Seed functions call it after the
-// rows are written, on both sides.
+// FinalizeNodeSplit moves the secrets of the rows a seed wrote into tables
+// (all split tables when none are named) to the new tables, as the
+// kernel's writers do (nodesecrets.SeedForTest): their legacy secret
+// columns then hold tombstones and redacted documents. It then creates the
+// kernel API views (packagestore.EnsureKernelAPIViews). Seed functions
+// call it after the rows are written, on both sides.
 func FinalizeNodeSplit(t testing.TB, db *gorm.DB, tables ...string) {
 	t.Helper()
-	ctx := context.Background()
-	require.NoError(t, nodesecrets.MigrateForTest(db))
-	nodesecrets.ForgetPhases(db)
-	_, err := nodesecrets.Backfill(ctx, db, nodesecrets.BackfillOptions{Tables: tables, Restart: true})
-	require.NoError(t, err)
-	verified, err := nodesecrets.Verify(ctx, db, nodesecrets.VerifyOptions{Tables: tables})
-	require.NoError(t, err, "%+v", verified)
-	for _, result := range verified {
-		require.True(t, result.Match, "%+v", result)
-	}
-	_, err = nodesecrets.SetPhase(ctx, db, nodesecrets.PhaseOptions{Tables: tables, Phase: nodesecrets.PhaseDualRead, Actor: "packagecompat"})
-	require.NoError(t, err)
-	_, err = nodesecrets.Finalize(ctx, db, nodesecrets.FinalizeOptions{Tables: tables, Confirm: true, Actor: "packagecompat"})
-	require.NoError(t, err)
-	nodesecrets.ForgetPhases(db)
+	require.NoError(t, nodesecrets.SeedForTest(db, tables...))
 	require.NoError(t, packagestore.EnsureKernelAPIViews(db))
 }
 
 // Lease answers what the kernel's storage lease grants the package whose
-// manifest template is packages/<packageID>/manifest.template.json on db,
-// as the kernel decides it when a host asks (service.EffectiveStorageGrants):
-// an adoption of v2_node, v2_node_protocol or v2_forward_node, and a view of
-// the split's remainder, only once finalized. The answer is computed when
-// asked, so it sees what the case's seed did. It is a native service's
+// manifest template is packages/<packageID>/manifest.template.json: the
+// tables it adopts and the views it reads. It is a native service's
 // Leased.
-func Lease(db *gorm.DB, packageID string) func(ctx context.Context, name string) bool {
+func Lease(packageID string) func(ctx context.Context, name string) bool {
 	grants := service.StorageGrants(manifest(packageID))
 	return func(_ context.Context, name string) bool {
-		effective, err := service.EffectiveStorageGrants(db, grants)
-		if err != nil {
-			return false
-		}
-		for _, granted := range [][]string{effective.AdoptTables, effective.Views} {
-			for _, candidate := range granted {
-				if candidate == name {
-					return true
-				}
-			}
-		}
-		return false
+		return slices.Contains(grants.AdoptTables, name) || slices.Contains(grants.Views, name)
 	}
 }
 

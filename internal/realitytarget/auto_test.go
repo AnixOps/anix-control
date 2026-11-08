@@ -9,6 +9,7 @@ import (
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	"github.com/AnixOps/anix-control/v5/internal/model"
+	"github.com/AnixOps/anix-control/v5/internal/nodesecrets"
 	"gorm.io/gorm"
 )
 
@@ -25,6 +26,9 @@ func autoFixture(t *testing.T) (*gorm.DB, *AutoWorker, *time.Time, fakeProber) {
 		RealitySettings: text(`{"dest":"www.microsoft.com:443","server_name":"www.microsoft.com","private_key":"sealed"}`),
 		TLSSettings:     text(`{"server_name":"www.microsoft.com","fingerprint":"chrome"}`)}
 	if err := db.Create(&protocol).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := nodesecrets.SeedForTest(db, nodesecrets.TableNodeProtocol); err != nil {
 		t.Fatal(err)
 	}
 	prober := fakeProber{

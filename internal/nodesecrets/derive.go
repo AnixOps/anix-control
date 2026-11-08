@@ -5,7 +5,6 @@ import (
 
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 )
 
 // secretEntry is a protocol secret as a legacy column holds it.
@@ -63,7 +62,7 @@ type tableSpec struct {
 	table string
 	// scope selects the table's protocol secrets.
 	scope  string
-	derive func(tx *gorm.DB, ids []uint64, lock bool) (*derivation, error)
+	derive func(tx *gorm.DB, ids []uint64) (*derivation, error)
 }
 
 var specs = map[string]tableSpec{
@@ -80,20 +79,14 @@ func lookupSpec(table string) (tableSpec, error) {
 	return spec, nil
 }
 
-// legacyRows reads the given legacy rows; lock takes their row locks
-// (PostgreSQL), so a backfill batch and a concurrent writer of the same row
-// run one after the other.
-func legacyRows(tx *gorm.DB, value any, columns []string, ids []uint64, lock bool, rows any) error {
-	query := tx.Model(value).Select(columns).Where("id IN ?", ids).Order("id")
-	if lock {
-		query = query.Clauses(clause.Locking{Strength: "UPDATE"})
-	}
-	return query.Find(rows).Error
+// legacyRows reads the given legacy rows.
+func legacyRows(tx *gorm.DB, value any, columns []string, ids []uint64, rows any) error {
+	return tx.Model(value).Select(columns).Where("id IN ?", ids).Order("id").Find(rows).Error
 }
 
-func deriveNodes(tx *gorm.DB, ids []uint64, lock bool) (*derivation, error) {
+func deriveNodes(tx *gorm.DB, ids []uint64) (*derivation, error) {
 	var rows []model.Node
-	if err := legacyRows(tx, &model.Node{}, []string{"id", "raw_config"}, ids, lock, &rows); err != nil {
+	if err := legacyRows(tx, &model.Node{}, []string{"id", "raw_config"}, ids, &rows); err != nil {
 		return nil, err
 	}
 	d := newDerivation()
@@ -107,9 +100,9 @@ func deriveNodes(tx *gorm.DB, ids []uint64, lock bool) (*derivation, error) {
 // secrets.
 var nodeProtocolColumns = []string{"settings", "tls_settings", "transport_settings", "reality_settings", "custom_config"}
 
-func deriveNodeProtocols(tx *gorm.DB, ids []uint64, lock bool) (*derivation, error) {
+func deriveNodeProtocols(tx *gorm.DB, ids []uint64) (*derivation, error) {
 	var rows []model.NodeProtocol
-	if err := legacyRows(tx, &model.NodeProtocol{}, append([]string{"id"}, nodeProtocolColumns...), ids, lock, &rows); err != nil {
+	if err := legacyRows(tx, &model.NodeProtocol{}, append([]string{"id"}, nodeProtocolColumns...), ids, &rows); err != nil {
 		return nil, err
 	}
 	d := newDerivation()
@@ -124,9 +117,9 @@ func deriveNodeProtocols(tx *gorm.DB, ids []uint64, lock bool) (*derivation, err
 	return d, nil
 }
 
-func deriveWireGuardPeers(tx *gorm.DB, ids []uint64, lock bool) (*derivation, error) {
+func deriveWireGuardPeers(tx *gorm.DB, ids []uint64) (*derivation, error) {
 	var rows []model.WireGuardPeer
-	if err := legacyRows(tx, &model.WireGuardPeer{}, []string{"id", "private_key", "preshared_key"}, ids, lock, &rows); err != nil {
+	if err := legacyRows(tx, &model.WireGuardPeer{}, []string{"id", "private_key", "preshared_key"}, ids, &rows); err != nil {
 		return nil, err
 	}
 	d := newDerivation()

@@ -812,9 +812,10 @@ NO-1.
   3.7). The binding is kept in memory for the operation's executor until
   its request ends, and is lost on a restart.
 - **Split phases.** `GetCapabilities.tables` answers `LEGACY` for the seven
-  tables of section 4.1 until the split state is plugged in. Since NO-9 it
-  is (`SplitPhasesFrom`): each split table's phase, `FINALIZED` only once
-  finalize completed, and `LEGACY` for `v2_forward_runtime_job`.
+  tables of section 4.1 until the split state is plugged in. From NO-9 to
+  5.0.2 it answered each split table's phase. Since 5.0.3 it answers a
+  constant: `FINALIZED` for the three split tables (Control refuses to start
+  otherwise) and `LEGACY` for `v2_forward_runtime_job`.
 
 **What NO-5 built** (`internal/kernelnodeops` `kinds_credentials.go`,
 `kinds_retire.go`, `kinds_secrets.go`, `validate.go`; the shared functions
@@ -1119,6 +1120,26 @@ All new tables carry the `v4_kernel_` prefix, so they are protected by
 
 ### 4.3 Migration path
 
+**Since 5.0.3 every split table is finalized (P3), the only phase Control
+reads and writes.** The phases P1 and P2, the dual-read fallback and its
+metric, and the commands `node-secrets backfill`, `verify`, `phase`,
+`finalize` and `unsplit` are removed; `status` and `validate` stay.
+
+- **Start gate.** Before the schema migrations, Control refuses to start
+  while a split table holds rows and its state row is not `finalized` with
+  `finalized_at` recorded (`nodesecrets.RequireFinalized`). The check only
+  reads, so the database stays as the previous release left it. An empty
+  table, and a fresh database, are marked finalized at start
+  (`EnsureStateRows`).
+- **Writers.** `Sync` always moves the secrets to the new table and writes
+  the tombstones and redacted documents of section 4.4.
+- **Readers.** Every reader reads the new table only; nothing falls back.
+- **Originals.** Migration `0031_drop_legacy_originals` deletes the
+  `legacy_original` rows finalize kept for `unsplit`.
+- **Rollback.** Restore the pre-migration backup; there is no `unsplit`.
+
+The rest of this section records how the split got there.
+
 Existing tables are never altered. The old columns stay, and finally hold
 tombstones. Each table moves through four phases, and the kernel records
 the phase in `v4_kernel_node_secret_split`. P1 starts with the release that
@@ -1127,9 +1148,9 @@ ships NO-2. Every later phase is an operator command, never a release.
 | Phase | Writes | Reads | Old binary rollback | Enter with |
 |---|---|---|---|---|
 | **P0 legacy** (today) | old columns | old columns | n/a | (default) |
-| **P1 dual-write** | old columns and new tables, in one transaction, through one writer (`internal/nodesecrets`) | old columns | yes | the release that ships NO-2: dual-write is always on, and a backfill copies the existing rows (`anix-control node-secrets backfill`, idempotent, in batches by id, checkpointed) |
-| **P2 dual-read** | both | new tables. A missing or mismatching row falls back to the old column and counts `anixops_node_secrets_fallback_total{table,kind,reason}` | yes | `anix-control node-secrets verify`: the digests over every secret of the old and new forms match; then `anix-control node-secrets phase <table\|all> dual_read` |
-| **P3 finalized** | new tables only; old columns get tombstones (section 4.4) | new tables only | **no**: `unsplit` first (or restore from backup) | `anix-control node-secrets finalize -confirm <table\|all>`, after a zero fallback count. It rewrites every old secret to its tombstone or redacted form in batches, verifies, and records `finalized_at` |
+| **P1 dual-write** (removed in 5.0.3) | old columns and new tables, in one transaction, through one writer (`internal/nodesecrets`) | old columns | yes | the release that ships NO-2: dual-write is always on, and a backfill copies the existing rows (`anix-control node-secrets backfill`, idempotent, in batches by id, checkpointed) |
+| **P2 dual-read** (removed in 5.0.3) | both | new tables. A missing or mismatching row fell back to the old column | yes | `anix-control node-secrets verify`: the digests over every secret of the old and new forms match; then `anix-control node-secrets phase <table\|all> dual_read` |
+| **P3 finalized** (the only phase since 5.0.3) | new tables only; old columns get tombstones (section 4.4) | new tables only | **no**: restore from backup | `anix-control node-secrets finalize -confirm <table\|all>`, after a zero fallback count. It rewrites every old secret to its tombstone or redacted form in batches, verifies, and records `finalized_at` |
 | **P4 adopted** | packages write the credential-free columns | | | a package release that declares `kernel.storage.adopt:<table>` (section 4.6) |
 
 **Every kernel writer goes through the single writer from P1 on:**
@@ -1293,39 +1314,24 @@ themselves; production finalize waits for the owner (D6).
   every other exception is listed with its reason, and a stale one fails.
   The JSON settings columns are not gated: their non-secret parts are read
   everywhere, and their secret positions come from `ResolveProtocols`.
-- **Conditional adoption.** A manifest may declare
+- **Conditional adoption** (until 5.0.3). A manifest may declare
   `kernel.storage.adopt:` for `v2_node`, `v2_node_protocol` and
-  `v2_forward_node`; `service.EffectiveStorageGrants` honours it at the
+  `v2_forward_node`; `service.EffectiveStorageGrants` honoured it at the
   lease only once `nodesecrets.AdoptionAllowed` (finalized, with
-  `finalized_at`), and leaves the views of section 4.6 out until they
-  exist. `GetCapabilities.tables` answers each table's phase
-  (`SplitPhasesFrom`), `FINALIZED` only once `finalized_at` is recorded.
+  `finalized_at`), and left the views of section 4.6 out until they
+  existed. `GetCapabilities.tables` answered each table's phase
+  (`SplitPhasesFrom`), `FINALIZED` only once `finalized_at` was recorded.
 
-**Rollback:**
+**Rollback** (before 5.0.3): P1 and P2 went back with `node-secrets phase
+all dual_write`, P3 with `unsplit` or a backup. Since 5.0.3 only the
+pre-migration backup goes back. Production finalized all three tables on
+2026-11-08.
 
-- **P1 or P2 to P0:** set the phase back (`anix-control node-secrets
-  phase all dual_write`). The writers dual-write in every phase since P1,
-  so `dual_write` is the way back: the readers read only the old columns.
-  The old columns still hold every value, so an older binary works.
-- **After P3:** only `anix-control node-secrets unsplit` (or a backup)
-  writes values back. `unsplit` is the documented escape hatch; it does not
-  undo adoption.
-- **Production is not touched by this phase** (owner decision,
-  2026-10-01). Finalize is rehearsed on local staging. Running it on
-  production comes later, at least one release after P2, and needs the
-  owner's approval (D6).
-
-**Conditional adoption.** A table's `kernel.storage.adopt:<table>` grant
-is honoured only once the table is finalized. Before that:
-
-- the lease leaves the table out (`LeaseStorageResponse.adopted_tables`);
-- the host's native routes for it report `mode_unsupported` and stay
-  legacy.
-
-So one package release works on every installation, whatever its phase.
-The protected-table rule becomes "protected unless finalized" for exactly
-`v2_node`, `v2_node_protocol` and `v2_forward_node`. The others stay
-protected (section 4.6).
+**Adoption.** A table's `kernel.storage.adopt:<table>` grant is honoured
+for exactly `v2_node`, `v2_node_protocol` and `v2_forward_node`; the other
+protected tables stay protected (section 4.6). Before 5.0.3 the grant
+waited for the table to be finalized; since the start gate it always
+holds.
 
 ### 4.4 Tombstones and unique indexes
 
@@ -1399,11 +1405,9 @@ packages read them through views or change them through operations:
   protected and non-adoptable after finalize too (decided by the owner,
   2026-10-01); packages read peers through `kapi_wireguard_peer_v1`.
 
-**New views.** Each is created by `EnsureKernelAPIViews`, and only once its
-source table is finalized, where the view depends on it (NO-9: every view
-below but `kapi_forward_runtime_job_v1`, which waits for a record that the
-payload scrub completed; `kapi_node_credential_status_v1` once any credential
-table is finalized; unsplit drops the others again):
+**New views.** Each is created by `EnsureKernelAPIViews` at every start.
+Before 5.0.3 a view of a split table waited for its source to be finalized
+(NO-9); since the start gate they always exist:
 
 | View | Source | Columns |
 |---|---|---|
@@ -2330,16 +2334,15 @@ and PostgreSQL. What differs from the rows above, and what the kernel gained:
 
 - **The lease is the gate.** The manifest declares
   `kernel.view:kapi_node_protocol_public_v1` and
-  `kernel.view:kapi_node_public_v1`; the kernel grants them only once both
-  tables are finalized (section 4.3). A route answers natively only when
+  `kernel.view:kapi_node_public_v1`; since 5.0.3 the kernel always grants
+  them (before, only once both tables were finalized, section 4.3). A
+  route answers natively only when
   the lease grants both (`packagestoresdk.Store.Leased`), and otherwise
   returns `ErrNativeUnavailable`, so the router answers from the legacy
   handler in every mode. On SQLite the package shares the kernel's database
   file, where the tables are there either way; the lease, not the
-  database, decides. The parity tests take the lease the kernel would give
-  the manifest on the test database (`service.EffectiveStorageGrants`), and
-  prove the routes legacy before finalize and with only one table
-  finalized.
+  database, decides. The parity tests take the lease the kernel gives the
+  manifest (`packagecompat.Lease`).
 - **A restart after finalize.** The host leases its storage when it first
   opens it, so a host started before the finalize keeps both routes legacy
   until it restarts.

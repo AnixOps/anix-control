@@ -12,6 +12,7 @@ import (
 	agentv1pb "github.com/AnixOps/anix-control/sdk/api/agent/v1"
 	"github.com/AnixOps/anix-control/v5/internal/kernelnodeops"
 	"github.com/AnixOps/anix-control/v5/internal/model"
+	"github.com/AnixOps/anix-control/v5/internal/nodesecrets"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -140,6 +141,7 @@ func TestRealityTargetsApply(t *testing.T) {
 	require.NoError(t, env.db.Create(&protocol).Error)
 	plain := model.NodeProtocol{NodeID: 5, Name: "SS", Type: model.ProtocolType("shadowsocks"), Port: 8388}
 	require.NoError(t, env.db.Create(&plain).Error)
+	require.NoError(t, nodesecrets.SeedForTest(env.db, nodesecrets.TableNodeProtocol))
 	apply := func(body string) *httptest.ResponseRecorder {
 		return serveJSON(router, http.MethodPost, "/nodes/proxy-5/reality-targets/apply", body)
 	}
@@ -158,6 +160,7 @@ func TestRealityTargetsApply(t *testing.T) {
 
 	var stored model.NodeProtocol
 	require.NoError(t, env.db.First(&stored, protocol.ID).Error)
+	nodesecrets.ResolveProtocol(env.db, &stored)
 	var gotReality, gotTLS map[string]any
 	require.NoError(t, json.Unmarshal([]byte(*stored.RealitySettings), &gotReality))
 	require.NoError(t, json.Unmarshal([]byte(*stored.TLSSettings), &gotTLS))

@@ -21,7 +21,7 @@ func TestBuildNodeProtocolConfig_ANX(t *testing.T) {
 	settings := `{"server_names":["a.example.com","b.example.com"],"dest":"a.example.com:443"}`
 	protocol := &model.NodeProtocol{ID: 3, NodeID: 1, Type: model.ProtocolANX, Port: 8443, Settings: &settings}
 
-	config := BuildNodeProtocolConfig(node, protocol)
+	config := buildNodeProtocolConfig(node, protocol)
 
 	require.Equal(t, "anx", config["type"])
 	require.Equal(t, 8443, config["server_port"])
@@ -29,7 +29,7 @@ func TestBuildNodeProtocolConfig_ANX(t *testing.T) {
 	require.Equal(t, "a.example.com:443", config["dest"])
 	require.Equal(t, []string{"h2", "http/1.1"}, config["alpn"])
 
-	empty := BuildNodeProtocolConfig(node, &model.NodeProtocol{ID: 4, NodeID: 1, Type: model.ProtocolANX, Port: 8444})
+	empty := buildNodeProtocolConfig(node, &model.NodeProtocol{ID: 4, NodeID: 1, Type: model.ProtocolANX, Port: 8444})
 	require.Equal(t, []string{"www.apple.com"}, empty["server_names"])
 	require.Equal(t, "www.apple.com:443", empty["dest"])
 	// The other A2 options stay out until set, for anx-nodes that do not know them.
@@ -39,7 +39,7 @@ func TestBuildNodeProtocolConfig_ANX(t *testing.T) {
 	require.NotContains(t, empty, "wg_listen_port")
 
 	a2 := `{"allow_no_sni":true,"shape_plain":true,"max_streams":512,"wg_listen_port":51820}`
-	full := BuildNodeProtocolConfig(node, &model.NodeProtocol{ID: 5, NodeID: 1, Type: model.ProtocolANX, Port: 8445, Settings: &a2})
+	full := buildNodeProtocolConfig(node, &model.NodeProtocol{ID: 5, NodeID: 1, Type: model.ProtocolANX, Port: 8445, Settings: &a2})
 	require.Equal(t, true, full["allow_no_sni"])
 	require.Equal(t, true, full["shape_plain"])
 	require.Equal(t, 512, full["max_streams"])

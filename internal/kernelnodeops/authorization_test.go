@@ -65,10 +65,16 @@ func TestEachFamilyNeedsItsCapability(t *testing.T) {
 			kernelnodeopsv1.OperationFamily_OPERATION_FAMILY_FORWARD, kernelnodeopsv1.OperationFamily_OPERATION_FAMILY_CREDENTIALS,
 		}, capabilities.GetGrantedFamilies())
 		require.Equal(t, KnownKinds(), capabilities.GetKinds())
-		require.Len(t, capabilities.GetTables(), 4)
+		phases := map[string]kernelnodeopsv1.SecretSplitPhase{}
 		for _, table := range capabilities.GetTables() {
-			require.Equal(t, kernelnodeopsv1.SecretSplitPhase_SECRET_SPLIT_PHASE_LEGACY, table.GetPhase(), table.GetTable())
+			phases[table.GetTable()] = table.GetPhase()
 		}
+		require.Equal(t, map[string]kernelnodeopsv1.SecretSplitPhase{
+			"v2_node":                kernelnodeopsv1.SecretSplitPhase_SECRET_SPLIT_PHASE_FINALIZED,
+			"v2_forward_runtime_job": kernelnodeopsv1.SecretSplitPhase_SECRET_SPLIT_PHASE_LEGACY,
+			"v2_node_protocol":       kernelnodeopsv1.SecretSplitPhase_SECRET_SPLIT_PHASE_FINALIZED,
+			"v2_wireguard_peer":      kernelnodeopsv1.SecretSplitPhase_SECRET_SPLIT_PHASE_FINALIZED,
+		}, phases)
 	})
 }
 

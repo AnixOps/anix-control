@@ -44,8 +44,6 @@ func forEachDatabase(t *testing.T, body func(t *testing.T, db *gorm.DB)) {
 func prepareDatabase(t *testing.T, db *gorm.DB) {
 	t.Helper()
 	require.NoError(t, db.AutoMigrate(legacyModels...))
-	// Phase changes are audited in the operation log.
-	require.NoError(t, db.AutoMigrate(&model.OperationLog{}))
 	require.NoError(t, MigrateForTest(db))
 }
 

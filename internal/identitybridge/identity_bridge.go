@@ -103,7 +103,6 @@ func NewKernelNodeOps(cfg *config.Config) (packagebridge.KernelNodeOpsProvider, 
 func kernelNodeOps(operations service.PackageHostOperations) packagebridge.KernelNodeOpsProvider {
 	server := &kernelnodeops.Server{
 		Engine: kernelnodeops.EngineFor(operations.DB), Authorizer: operations,
-		SplitPhases: kernelnodeops.SplitPhasesFrom(operations.DB),
 	}
 	return server.For
 }
