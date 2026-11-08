@@ -90,9 +90,7 @@ func TestManifestCapabilityGrammar(t *testing.T) {
 		{CapabilityStorage, "kernel.storage.adopt:v2_forward_tunnel", "kernel.view:kapi_forward_node_v1", CapabilitySubscriberTraffic},
 		{CapabilityIdentity, CapabilityStorage},
 		// The credential-free remainder of the split tables
-		// (node-ops-service.md section 4.6): the manifest is accepted, and
-		// a lease honours the grant only once the table is finalized
-		// (EffectiveStorageGrants).
+		// (node-ops-service.md section 4.6).
 		{CapabilityStorage, "kernel.storage.adopt:v2_node", "kernel.view:kapi_node_credential_status_v1"},
 		{CapabilityStorage, "kernel.storage.adopt:v2_node_protocol", "kernel.view:kapi_node_public_v1"},
 		{CapabilityStorage, "kernel.storage.adopt:v2_forward_node", "kernel.view:kapi_forward_clean_agent_v1"},

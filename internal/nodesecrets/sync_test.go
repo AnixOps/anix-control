@@ -2,9 +2,6 @@ package nodesecrets
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
-	"strconv"
 	"testing"
 	"time"
 
@@ -13,8 +10,8 @@ import (
 	"gorm.io/gorm"
 )
 
-// fixture is a database written before P1: legacy rows only. Every value is
-// fake.
+// fixture is legacy rows written past the writers, secrets in the legacy
+// columns. Every value is fake.
 type fixture struct {
 	nodes      []model.Node
 	protocols  []model.NodeProtocol
@@ -59,7 +56,7 @@ func seedLegacy(t *testing.T, db *gorm.DB) *fixture {
 	return f
 }
 
-// syncAll dual-writes every legacy row of the fixture, as the writers do.
+// syncAll syncs every legacy row of the fixture, as the writers do.
 func (f *fixture) syncAll(t *testing.T, db *gorm.DB) {
 	t.Helper()
 	require.NoError(t, db.Transaction(func(tx *gorm.DB) error {
@@ -97,29 +94,6 @@ func secrets(t *testing.T, db *gorm.DB, scope string, ownerID uint) map[string]s
 	return out
 }
 
-// requireVerified runs Verify and requires every table to match.
-func requireVerified(t *testing.T, db *gorm.DB) []TableVerify {
-	t.Helper()
-	results, err := Verify(context.Background(), db, VerifyOptions{})
-	require.NoError(t, err, "%+v", results)
-	for _, result := range results {
-		require.True(t, result.Match, "%+v", result)
-		require.Equal(t, result.LegacyDigest, result.NewDigest)
-	}
-	return results
-}
-
-type snapshot struct {
-	Secrets []model.ProtocolSecret
-}
-
-func takeSnapshot(t *testing.T, db *gorm.DB) snapshot {
-	t.Helper()
-	var s snapshot
-	require.NoError(t, db.Order("id").Find(&s.Secrets).Error)
-	return s
-}
-
 func TestSyncDerivesEveryTable(t *testing.T) {
 	forEachDatabase(t, func(t *testing.T, db *gorm.DB) {
 		f := seedLegacy(t, db)
@@ -131,8 +105,16 @@ func TestSyncDerivesEveryTable(t *testing.T) {
 		require.Equal(t, map[string]string{"custom_config ": "fake-custom-config"}, secrets(t, db, ScopeNodeProtocol, f.protocols[1].ID))
 		require.Empty(t, secrets(t, db, ScopeNodeProtocol, f.protocols[2].ID))
 		require.Equal(t, map[string]string{"private_key ": "fake-peer-private-1", "preshared_key ": "fake-peer-psk-1"}, secrets(t, db, ScopeWireGuardPeer, f.peers[0].ID))
+		f.requireFinalizedColumns(t, db)
 
-		requireVerified(t, db)
+		// A second sync changes nothing.
+		var before []model.ProtocolSecret
+		require.NoError(t, db.Order("id").Find(&before).Error)
+		f.syncAll(t, db)
+		var after []model.ProtocolSecret
+		require.NoError(t, db.Order("id").Find(&after).Error)
+		require.Equal(t, before, after)
+		f.requireFinalizedColumns(t, db)
 	})
 }
 
@@ -157,7 +139,6 @@ func TestSyncRotatesChangesAndRemoves(t *testing.T) {
 		require.NoError(t, db.Model(&model.NodeProtocol{}).Where("id = ?", f.protocols[0].ID).Update("reality_settings", `{"short_id":"6ba85179"}`).Error)
 		sync(TableNodeProtocol, f.protocols[0].ID)
 		require.Empty(t, secrets(t, db, ScopeNodeProtocol, f.protocols[0].ID))
-		requireVerified(t, db)
 
 		// A deleted row takes every row of it, retired versions included.
 		require.NoError(t, db.Delete(&model.Node{}, node.ID).Error)
@@ -166,179 +147,80 @@ func TestSyncRotatesChangesAndRemoves(t *testing.T) {
 		require.NoError(t, db.Delete(&model.WireGuardPeer{}, f.peers[0].ID).Error)
 		sync(TableWireGuardPeer, f.peers[0].ID)
 		require.Empty(t, secrets(t, db, ScopeWireGuardPeer, f.peers[0].ID))
-		requireVerified(t, db)
 	})
 }
 
-func TestBackfillThenVerifyIsIdempotent(t *testing.T) {
+func TestPruneRemovesOrphans(t *testing.T) {
 	forEachDatabase(t, func(t *testing.T, db *gorm.DB) {
-		ctx := context.Background()
-		seedLegacy(t, db)
-
-		// Before the backfill the new tables are empty: every secret is
-		// missing, and the report names none of them.
-		results, err := Verify(ctx, db, VerifyOptions{})
-		require.ErrorIs(t, err, ErrMismatch)
-		missing := int64(0)
-		for _, result := range results {
-			require.False(t, result.Match && result.LegacySecrets > 0)
-			missing += result.Missing
-		}
-		require.EqualValues(t, 7, missing)
-		report, err := json.Marshal(results)
-		require.NoError(t, err)
-		require.NotContains(t, string(report), "fake-")
-
-		backfilled, err := Backfill(ctx, db, BackfillOptions{BatchSize: 2})
-		require.NoError(t, err)
-		require.Len(t, backfilled, len(Tables()))
-		changed := int64(0)
-		for _, result := range backfilled {
-			require.False(t, result.Resumed)
-			changed += result.Changed
-		}
-		require.EqualValues(t, 7, changed)
-
-		verified := requireVerified(t, db)
-		var splits []model.NodeSecretSplit
-		require.NoError(t, db.Order("table_name").Find(&splits).Error)
-		require.Len(t, splits, len(Tables()))
-		digests := map[string]string{}
-		for _, result := range verified {
-			digests[result.Table] = result.LegacyDigest
-		}
-		for _, split := range splits {
-			require.Equal(t, PhaseDualWrite, split.Phase, "verify leaves the phase at P1")
-			require.NotNil(t, split.BackfilledAt)
-			require.NotNil(t, split.VerifiedAt)
-			require.Equal(t, digests[split.Table], split.Digest)
-			require.Zero(t, split.Mismatches)
-		}
-		// A second backfill changes nothing, not even a timestamp.
-		before := takeSnapshot(t, db)
-		again, err := Backfill(ctx, db, BackfillOptions{})
-		require.NoError(t, err)
-		for _, result := range again {
-			require.Zero(t, result.Changed, result.Table)
-		}
-		require.Equal(t, before, takeSnapshot(t, db))
-		requireVerified(t, db)
-	})
-}
-
-func TestBackfillResumesAndPrunes(t *testing.T) {
-	forEachDatabase(t, func(t *testing.T, db *gorm.DB) {
-		ctx := context.Background()
 		f := seedLegacy(t, db)
-		// An interrupted pass stopped after the first node.
-		require.NoError(t, db.Model(&model.NodeSecretSplit{}).Where("table_name = ?", TableNode).Updates(map[string]any{
-			"backfill_cursor": f.nodes[0].ID, "backfilled_rows": 1, "backfilled_at": nil,
-		}).Error)
-		// A secret of a node that no longer exists.
+		f.syncAll(t, db)
 		require.NoError(t, db.Create(&model.ProtocolSecret{
 			Scope: ScopeNodeRawConfig, OwnerID: 999, ColumnName: "raw_config", JSONPointer: "/wireguard/private_key", Version: 1,
 			Value: `"fake-orphan"`, UpdatedAt: time.Now(),
 		}).Error)
-
-		results, err := Backfill(ctx, db, BackfillOptions{Tables: []string{TableNode}, BatchSize: 1})
+		pruned, err := Prune(db, TableNode, TableNodeProtocol, TableWireGuardPeer)
 		require.NoError(t, err)
-		require.Len(t, results, 1)
-		require.True(t, results[0].Resumed)
-		require.EqualValues(t, 3, results[0].Rows)
-		require.EqualValues(t, 1, results[0].Pruned)
-		// The resumed pass skipped the first node: verify says so.
-		verified, err := Verify(ctx, db, VerifyOptions{Tables: []string{TableNode}})
-		require.ErrorIs(t, err, ErrMismatch)
-		require.EqualValues(t, 1, verified[0].Missing, "the first node's raw configuration")
-		require.Zero(t, verified[0].Extra)
-
-		// The pass completed, so the next one starts over and copies it.
-		results, err = Backfill(ctx, db, BackfillOptions{Tables: []string{TableNode}})
-		require.NoError(t, err)
-		require.False(t, results[0].Resumed)
-		require.EqualValues(t, 1, results[0].Changed)
-		verified, err = Verify(ctx, db, VerifyOptions{Tables: []string{TableNode}})
-		require.NoError(t, err)
-		require.True(t, verified[0].Match)
-
-		// Restart ignores an interrupted pass.
-		require.NoError(t, db.Model(&model.NodeSecretSplit{}).Where("table_name = ?", TableNode).Updates(map[string]any{
-			"backfill_cursor": f.nodes[2].ID, "backfilled_at": nil,
-		}).Error)
-		results, err = Backfill(ctx, db, BackfillOptions{Tables: []string{TableNode}, Restart: true})
-		require.NoError(t, err)
-		require.False(t, results[0].Resumed)
-		require.EqualValues(t, 3, results[0].Rows)
-	})
-}
-
-func TestVerifyDetectsMismatch(t *testing.T) {
-	forEachDatabase(t, func(t *testing.T, db *gorm.DB) {
-		ctx := context.Background()
-		f := seedLegacy(t, db)
-		_, err := Backfill(ctx, db, BackfillOptions{})
-		require.NoError(t, err)
-		requireVerified(t, db)
-		var before model.NodeSecretSplit
-		require.NoError(t, db.First(&before, "table_name = ?", TableNode).Error)
-
-		// A legacy write that skipped the writer, and a new row changed
-		// behind its back.
-		drifted := `{"server_port":51820,"wireguard":{"private_key":"fake-raw-private-x","public_key":"fake-raw-public"}}`
-		require.NoError(t, db.Model(&model.Node{}).Where("id = ?", f.nodes[0].ID).Update("raw_config", drifted).Error)
-		require.NoError(t, db.Model(&model.ProtocolSecret{}).Where("scope = ? AND owner_id = ?", ScopeWireGuardPeer, f.peers[1].ID).
-			Where("column_name = ?", "private_key").Update("value", "fake-peer-private-x").Error)
-
-		results, err := Verify(ctx, db, VerifyOptions{})
-		require.ErrorIs(t, err, ErrMismatch)
-		byTable := map[string]TableVerify{}
-		for _, result := range results {
-			byTable[result.Table] = result
-		}
-		node := byTable[TableNode]
-		require.False(t, node.Match)
-		require.NotEqual(t, node.LegacyDigest, node.NewDigest)
-		require.EqualValues(t, 1, node.Different)
-		require.Equal(t, []Mismatch{{Problem: "different", Secret: "node_raw_config " + uintString(f.nodes[0].ID) + " raw_config /wireguard/private_key"}}, node.Samples)
-		require.EqualValues(t, 1, byTable[TableWireGuardPeer].Different)
-		require.Equal(t, "wireguard_peer "+uintString(f.peers[1].ID)+" private_key ", byTable[TableWireGuardPeer].Samples[0].Secret)
-		require.True(t, byTable[TableNodeProtocol].Match)
-		report, err := json.Marshal(results)
-		require.NoError(t, err)
-		require.NotContains(t, string(report), "fake-")
-
-		var after model.NodeSecretSplit
-		require.NoError(t, db.First(&after, "table_name = ?", TableNode).Error)
-		require.EqualValues(t, 1, after.Mismatches)
-		require.NotNil(t, after.CheckedAt)
-		require.Equal(t, before.Digest, after.Digest, "a mismatch keeps the last verified digest")
-		require.Equal(t, before.VerifiedAt.Unix(), after.VerifiedAt.Unix())
-
-		// A backfill repairs both kinds of drift.
-		_, err = Backfill(ctx, db, BackfillOptions{})
-		require.NoError(t, err)
-		requireVerified(t, db)
-	})
-}
-
-func TestSplitTablesAndPhase(t *testing.T) {
-	forEachDatabase(t, func(t *testing.T, db *gorm.DB) {
-		rows, err := Status(context.Background(), db)
-		require.NoError(t, err)
-		require.Len(t, rows, len(Tables()))
-		for _, row := range rows {
-			require.Equal(t, PhaseDualWrite, row.Phase)
-		}
-		// EnsureStateRows never changes an existing phase.
-		require.NoError(t, db.Model(&model.NodeSecretSplit{}).Where("table_name = ?", TableNode).Update("phase", PhaseLegacy).Error)
-		require.NoError(t, EnsureStateRows(db))
-		var split model.NodeSecretSplit
-		require.NoError(t, db.First(&split, "table_name = ?", TableNode).Error)
-		require.Equal(t, PhaseLegacy, split.Phase)
-
-		_, err = Backfill(context.Background(), db, BackfillOptions{Tables: []string{"v2_user"}})
+		require.EqualValues(t, 1, pruned)
+		require.Empty(t, secrets(t, db, ScopeNodeRawConfig, 999))
+		require.NotEmpty(t, secrets(t, db, ScopeNodeRawConfig, f.nodes[0].ID))
+		_, err = Prune(db, "v2_user")
 		require.Error(t, err)
+	})
+}
+
+// TestStateRowsAreFinalized: EnsureStateRows records every table as
+// finalized, and marks an unfinalized row so.
+func TestStateRowsAreFinalized(t *testing.T) {
+	forEachDatabase(t, func(t *testing.T, db *gorm.DB) {
+		requireAllFinalized := func() {
+			t.Helper()
+			rows, err := Status(context.Background(), db)
+			require.NoError(t, err)
+			require.Len(t, rows, len(Tables()))
+			for _, row := range rows {
+				require.Equal(t, PhaseFinalized, row.Phase)
+				require.NotNil(t, row.FinalizedAt)
+			}
+		}
+		requireAllFinalized()
+		require.NoError(t, db.Model(&model.NodeSecretSplit{}).Where("table_name = ?", TableNode).
+			Updates(map[string]any{"phase": "dual_read", "finalized_at": nil}).Error)
+		require.NoError(t, EnsureStateRows(db))
+		requireAllFinalized()
 		require.Error(t, Sync(db, "v2_user", 1))
+	})
+}
+
+// TestRequireFinalized: a split table that holds rows and is not finalized
+// refuses the start; an empty one, or a database without the tables,
+// passes.
+func TestRequireFinalized(t *testing.T) {
+	forEachDatabase(t, func(t *testing.T, db *gorm.DB) {
+		require.NoError(t, RequireFinalized(db), "finalized, and empty")
+		f := seedLegacy(t, db)
+		require.NoError(t, RequireFinalized(db), "finalized")
+
+		require.NoError(t, db.Model(&model.NodeSecretSplit{}).Where("table_name = ?", TableNodeProtocol).
+			Update("phase", "dual_read").Error)
+		err := RequireFinalized(db)
+		require.ErrorContains(t, err, "table v2_node_protocol is in phase dual_read")
+		require.ErrorContains(t, err, "Upgrading To 5.0.3")
+
+		// An interrupted finalize.
+		require.NoError(t, db.Model(&model.NodeSecretSplit{}).Where("table_name = ?", TableNodeProtocol).
+			Updates(map[string]any{"phase": PhaseFinalized, "finalized_at": nil}).Error)
+		require.ErrorContains(t, RequireFinalized(db), "table v2_node_protocol is in phase finalized")
+
+		// The same table without rows passes.
+		require.NoError(t, db.Where("id IN ?", []uint{f.protocols[0].ID, f.protocols[1].ID, f.protocols[2].ID}).Delete(&model.NodeProtocol{}).Error)
+		require.NoError(t, RequireFinalized(db))
+
+		// No state rows, legacy rows: a database from before the split.
+		require.NoError(t, db.Where("1 = 1").Delete(&model.NodeSecretSplit{}).Error)
+		require.ErrorContains(t, RequireFinalized(db), "table v2_node is in phase none")
+	})
+	t.Run("fresh", func(t *testing.T) {
+		require.NoError(t, RequireFinalized(openSQLite(t)))
 	})
 }
 
@@ -346,14 +228,8 @@ func TestSyncWithoutSplitTables(t *testing.T) {
 	db := openSQLite(t)
 	require.NoError(t, db.AutoMigrate(legacyModels...))
 	f := seedLegacy(t, db)
-	require.NoError(t, Sync(db, TableNode, f.nodes[0].ID), "nothing to dual-write")
-	_, err := Backfill(context.Background(), db, BackfillOptions{})
-	require.Error(t, err)
-	_, err = Verify(context.Background(), db, VerifyOptions{})
-	require.Error(t, err)
-	require.False(t, errors.Is(err, ErrMismatch))
-}
-
-func uintString(id uint) string {
-	return strconv.FormatUint(uint64(id), 10)
+	require.NoError(t, Sync(db, TableNode, f.nodes[0].ID), "nothing to move")
+	var node model.Node
+	require.NoError(t, db.First(&node, f.nodes[0].ID).Error)
+	require.Equal(t, f.rawConfig, *node.RawConfig)
 }

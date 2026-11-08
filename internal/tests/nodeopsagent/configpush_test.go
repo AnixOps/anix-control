@@ -14,6 +14,7 @@ import (
 	kernelnodeopsv1 "github.com/AnixOps/anix-control/sdk/api/kernelnodeops/v1"
 	"github.com/AnixOps/anix-control/v5/internal/kernelnodeops"
 	"github.com/AnixOps/anix-control/v5/internal/model"
+	"github.com/AnixOps/anix-control/v5/internal/nodesecrets"
 	"github.com/AnixOps/anix-control/v5/internal/service"
 	"github.com/AnixOps/anix-control/v5/internal/tests/fakeagent"
 	"github.com/stretchr/testify/assert"
@@ -406,7 +407,7 @@ func TestConfigSnapshotCarriesTheRuntimeConfiguration(t *testing.T) {
 			require.NoError(t, f.db.First(&stored, f.protocol.ID).Error)
 			protocols, _ := document["protocols"].([]any)
 			require.Len(t, protocols, 1)
-			built := service.BuildNodeProtocolConfig(&node, &stored)
+			built := service.BuildNodeProtocolConfig(f.db, &node, &stored)
 			assert.Equal(t, canonical(t, reencode(t, built)), protocols[0].(map[string]any)["config"])
 			answers = append(answers, string(reencode(t, built)))
 
@@ -428,6 +429,7 @@ func TestConfigSnapshotCarriesTheRuntimeConfiguration(t *testing.T) {
 		// A raw configuration replaces the protocols.
 		raw := `{"type":"trojan","node_type":"trojan","server_port":7443,"password":"fake-raw-trojan-password-0123"}`
 		require.NoError(t, f.db.Model(&model.Node{}).Where("id = ?", f.proxy.ID).Update("raw_config", raw).Error)
+		require.NoError(t, nodesecrets.SeedForTest(f.db, nodesecrets.TableNode))
 		synced := terminal(t, f.client(), "node.sync:raw", syncSpec(f.proxyNode(), false))
 		require.Equal(t, kernelnodeopsv1.OperationState_OPERATION_STATE_SUCCEEDED, synced.GetState(), synced.GetError())
 		snapshots := agent.Snapshots()

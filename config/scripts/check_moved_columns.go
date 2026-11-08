@@ -4,10 +4,9 @@
 // (docs/architecture/node-ops-service.md, sections 4.3 and 9): it refuses a
 // kernel read of a moved credential column outside internal/nodesecrets.
 //
-// A finalized table's legacy columns hold tombstones, so a kernel reader
-// that reads them directly fails (closed) once the table is finalized; one
-// that reads them before finalize skips the split's phase rule. Every read
-// goes through internal/nodesecrets, which applies the phase.
+// The legacy columns hold tombstones, so a kernel reader that reads them
+// directly fails (closed). Every read goes through internal/nodesecrets,
+// which reads the secrets from the new table.
 //
 // What it refuses, in the non-test Go code of ./internal/... and ./cmd/...
 // (type-checked):
@@ -27,8 +26,8 @@
 // The JSON settings columns (v2_node.raw_config, v2_node_protocol's five
 // settings columns) are not checked: their non-secret parts are read
 // everywhere, and their secret positions are resolved by
-// nodesecrets.ResolveProtocols and ResolveNodeRawConfig, which a finalized
-// table answers from v4_kernel_protocol_secret only.
+// nodesecrets.ResolveProtocols and ResolveNodeRawConfig, which answer from
+// v4_kernel_protocol_secret only.
 //
 // Usage: go run ./config/scripts/check_moved_columns.go [-root dir] [-allowlist=false]
 package main

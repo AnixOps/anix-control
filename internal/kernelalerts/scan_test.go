@@ -192,43 +192,6 @@ func TestCAExpiryUsesTheCurrentAuthorityOnly(t *testing.T) {
 	})
 }
 
-func TestNodeSecretsSplitPhases(t *testing.T) {
-	forEachDatabase(t, func(t *testing.T, db *gorm.DB) {
-		row := func(table, phase string, updatedAgo time.Duration, finalized bool) {
-			split := model.NodeSecretSplit{Table: table, Phase: phase, UpdatedAt: start.Add(-updatedAgo)}
-			if finalized {
-				at := start.Add(-updatedAgo)
-				split.FinalizedAt = &at
-			}
-			require.NoError(t, db.Create(&split).Error)
-		}
-		row("v2_node", "dual_write", hours(80), false)
-		row("v2_authorized_key", "dual_read", hours(100), false)
-		row("v2_forward_node", "dual_write", hours(10), false)
-		row("v2_forward_clean_agent", "finalized", hours(500), true)
-		row("v2_node_protocol", "finalized", hours(2), false)
-		row("v2_wireguard_peer", "finalized", hours(0), false)
-
-		found := kinds(scan(t, db, defaultSettings(), start))
-		require.Len(t, found, 3)
-		stalled := found[KindNodeSecretsSplitStalled+"/v2_node"]
-		assert.Equal(t, SubjectNodeSecrets, stalled.SubjectKind)
-		assert.Equal(t, model.KernelAlertWarning, stalled.Severity)
-		assert.Equal(t, "dual_write", stalled.Detail["phase"])
-		assert.Contains(t, stalled.Message, "was not touched")
-		assert.Contains(t, found, KindNodeSecretsSplitStalled+"/v2_authorized_key")
-		interrupted := found[KindNodeSecretsFinalizeInterrupted+"/v2_node_protocol"]
-		assert.Contains(t, interrupted.Message, "resumes")
-
-		// The alert follows the threshold, and 0 turns phase alerts off.
-		settings := defaultSettings()
-		settings.PhaseStuckAfter = hours(120)
-		assert.Len(t, scan(t, db, settings, start).Findings, 1, "only the interrupted finalize remains")
-		settings.PhaseStuckAfter = 0
-		assert.Empty(t, scan(t, db, settings, start).Findings)
-	})
-}
-
 func TestIdentityPhases(t *testing.T) {
 	forEachDatabase(t, func(t *testing.T, db *gorm.DB) {
 		setState := func(state string, updatedAgo time.Duration) {

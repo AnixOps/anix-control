@@ -78,7 +78,7 @@ func (f *agentsFixture) routes() []packagecompat.KernelHostRoute {
 			Native: func(nodeOps kernelnodeopsv1.KernelNodeOpsClient) pluginhostsdk.NativeHandler {
 				return (&native.Service{
 					Open:    func(ctx context.Context) (*gorm.DB, error) { return f.db.WithContext(ctx), nil },
-					Leased:  packagecompat.Lease(f.db, "protocol-runtime"),
+					Leased:  packagecompat.Lease("protocol-runtime"),
 					NodeOps: nodeOps,
 				}).Handlers()[routeID]
 			},

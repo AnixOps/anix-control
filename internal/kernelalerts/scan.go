@@ -14,7 +14,6 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/agentpki"
 	"github.com/AnixOps/anix-control/v5/internal/config"
 	"github.com/AnixOps/anix-control/v5/internal/model"
-	"github.com/AnixOps/anix-control/v5/internal/nodesecrets"
 	"github.com/AnixOps/anix-control/v5/internal/panelcert"
 	"gorm.io/gorm"
 )
@@ -63,7 +62,6 @@ func (s *Scanner) Scan(ctx context.Context) (ScanResult, error) {
 		{[]string{KindLinkCertificate}, s.linkCertificates},
 		{[]string{KindModuleCertificate}, s.moduleCertificates},
 		{[]string{KindCAExpiring}, s.authorities},
-		{[]string{KindNodeSecretsSplitStalled, KindNodeSecretsFinalizeInterrupted}, s.nodeSecretsSplit},
 		{[]string{KindIdentityImportStalled, KindIdentityCutoverPending}, s.identityAuthority},
 		{[]string{KindBuiltinPackageInvalid, KindBuiltinPackageFailed}, s.builtinPackages},
 		{[]string{KindPanelCertificateExpiring, KindPanelCertificateRenewalFailing}, s.panelCertificates},
@@ -381,45 +379,6 @@ func (s *Scanner) nodeName(ctx context.Context, node agentcontrol.AgentNode) str
 		return ""
 	}
 	return truncate(names[0], 100)
-}
-
-// nodeSecretsSplit finds split tables that wait in a non-final phase.
-//
-// The split row has no "entered phase at": updated_at moves with every
-// backfill, verification and phase change. The scan therefore alerts on
-// "not touched for phase_stuck_after", which never fires early (the phase
-// is at least that old) and can fire late for a table somebody still
-// verifies. A finalize that began (phase finalized, no finalized_at) writes
-// the row once when it starts, so its updated_at is its start time.
-func (s *Scanner) nodeSecretsSplit(ctx context.Context, now time.Time) ([]Finding, error) {
-	stuck := s.Settings.PhaseStuckAfter
-	db := s.DB.WithContext(ctx)
-	if stuck <= 0 || !db.Migrator().HasTable(&model.NodeSecretSplit{}) {
-		return nil, nil
-	}
-	var rows []model.NodeSecretSplit
-	if err := db.Select("table_name", "phase", "finalized_at", "updated_at").Order("table_name").Find(&rows).Error; err != nil {
-		return nil, err
-	}
-	var findings []Finding
-	for _, row := range rows {
-		idle := now.Sub(row.UpdatedAt)
-		switch {
-		case row.Phase == nodesecrets.PhaseFinalized && row.FinalizedAt == nil && idle >= finalizeInterruptedAfter:
-			findings = append(findings, Finding{
-				Kind: KindNodeSecretsFinalizeInterrupted, Severity: model.KernelAlertWarning, SubjectKind: SubjectNodeSecrets, Subject: row.Table,
-				Message: fmt.Sprintf("The node credential split finalize of table %s started at %s and did not complete: some legacy columns may still hold secrets. Run `anix-control node-secrets finalize -confirm %s` again; it resumes.", row.Table, stamp(row.UpdatedAt), row.Table),
-				Detail:  map[string]any{"table": row.Table, "phase": row.Phase, "since": stamp(row.UpdatedAt)},
-			})
-		case (row.Phase == nodesecrets.PhaseDualWrite || row.Phase == nodesecrets.PhaseDualRead) && idle >= stuck:
-			findings = append(findings, Finding{
-				Kind: KindNodeSecretsSplitStalled, Severity: model.KernelAlertWarning, SubjectKind: SubjectNodeSecrets, Subject: row.Table,
-				Message: fmt.Sprintf("The node credential split of table %s is in phase %s and was not touched (backfill, verification or phase change) since %s. Legacy columns still hold the secrets: verify and finalize it (anix-control node-secrets), or leave it and set alerts.phase_stuck_after to 0.", row.Table, row.Phase, stamp(row.UpdatedAt)),
-				Detail:  map[string]any{"table": row.Table, "phase": row.Phase, "since": stamp(row.UpdatedAt), "stuck_after_hours": int64(stuck / time.Hour)},
-			})
-		}
-	}
-	return findings, nil
 }
 
 // identityAuthority finds an identity import without progress, and an

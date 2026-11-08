@@ -6574,10 +6574,9 @@ paths:
         inside the smaller of alerts.leaf_expiry_days and a sixth of their lifetime),
         the current module and forward link CAs inside alerts.ca_expiry_days, and
         phased processes left untouched in a non-final phase for alerts.phase_stuck_after
-        (the node credential split, an interrupted finalize, the identity import and
-        cutover). Critical alerts come first, then the soonest to end. The summary
-        counts every active alert whatever the filters. Alerts hold no secret: kinds,
-        node names, dates and counts only.'
+        (the identity import and cutover). Critical alerts come first, then the soonest
+        to end. The summary counts every active alert whatever the filters. Alerts
+        hold no secret: kinds, node names, dates and counts only.'
       parameters:
       - description: active (default), resolved or all
         in: query

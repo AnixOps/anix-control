@@ -9,6 +9,7 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/database"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/nodesecrets"
+	"gorm.io/gorm"
 )
 
 // BuildNodeProtocolConfig 从 Node + NodeProtocol 构建下发给节点的完整协议配置。
@@ -24,16 +25,20 @@ import (
 // 从节点 created_at 派生 (子节点用父节点 created_at), 与订阅端 DeriveSS2022ServerKey
 // 和节点端 V2bX 三方一致。
 //
-// The protocol's secrets are read through the node credential split, in the
-// table's phase, and checked first: a protocol whose secrets fail
-// validation is reported (ReportNodeSecretFindings) and still built, since
-// validation is report-only until decision D7 is enforced.
-func BuildNodeProtocolConfig(node *model.Node, protocol *model.NodeProtocol) map[string]any {
+// The protocol's secrets are read through the node credential split and
+// checked first: a protocol whose secrets fail validation is reported
+// (ReportNodeSecretFindings) and still built, since validation is
+// report-only until decision D7 is enforced.
+func BuildNodeProtocolConfig(db *gorm.DB, node *model.Node, protocol *model.NodeProtocol) map[string]any {
 	resolved := *protocol
-	nodesecrets.ResolveProtocol(database.Get(), &resolved)
-	protocol = &resolved
-	ReportNodeSecretFindings(ValidateProtocolSecrets(protocol))
+	nodesecrets.ResolveProtocol(db, &resolved)
+	ReportNodeSecretFindings(ValidateProtocolSecrets(&resolved))
+	return buildNodeProtocolConfig(node, &resolved)
+}
 
+// buildNodeProtocolConfig builds the configuration of a protocol whose
+// secrets are already resolved.
+func buildNodeProtocolConfig(node *model.Node, protocol *model.NodeProtocol) map[string]any {
 	config := make(map[string]any)
 
 	nodeType := NormalizeNodeType(string(protocol.Type))

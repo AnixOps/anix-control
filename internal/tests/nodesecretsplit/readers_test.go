@@ -18,10 +18,10 @@ import (
 )
 
 // fleet is every kind of subject the readers authenticate or present a
-// secret of, written by the kernel's own writers (and one row written
-// before P1). Every secret is fake.
+// secret of, written by the kernel's own writers (and one row written past
+// them). Every secret is fake.
 type fleet struct {
-	plain          model.Node // written before P1: no hash
+	plain          model.Node // written past the writers
 	created        model.Node // CreateNode: a Reality protocol
 	rawNode        model.Node // a raw configuration with a private key
 	rawPrivate     string
@@ -78,7 +78,7 @@ func newFleet(t *testing.T, db *gorm.DB) *fleet {
 
 // readerResults runs every kernel reader of a moved column once and
 // reports, per reader, whether it answered its real secret.
-func (f *fleet) readerResults(t *testing.T, db *gorm.DB, round int) map[string]bool {
+func (f *fleet) readerResults(t *testing.T, db *gorm.DB) map[string]bool {
 	t.Helper()
 	results := map[string]bool{}
 	// The node configuration: the Reality private key of a protocol, and
@@ -112,125 +112,25 @@ func requireAll(t *testing.T, results map[string]bool, want bool) {
 	}
 }
 
-// totalFallbacks sums every fallback counter of this process.
-func totalFallbacks() uint64 {
-	var total uint64
-	for _, table := range nodesecrets.Tables() {
-		for _, kind := range []string{"raw_config", "settings", "tls_settings", "transport_settings", "reality_settings", "custom_config", "private_key", "preshared_key"} {
-			total += nodesecrets.FallbackCount(table, kind, "")
-		}
-	}
-	return total
-}
-
-func setPhase(t *testing.T, db *gorm.DB, phase string) {
-	t.Helper()
-	changes, err := nodesecrets.SetPhase(context.Background(), db, nodesecrets.PhaseOptions{Phase: phase, Actor: "nodesecretsplit"})
-	require.NoError(t, err, "%+v", changes)
-}
-
-// olderBinaryAuthenticates is the release before NO-3 reading a node's
-// secrets: it reads only the legacy columns.
-func olderBinaryAuthenticates(t *testing.T, db *gorm.DB, f *fleet) {
-	t.Helper()
-	var protocol model.NodeProtocol
-	require.NoError(t, db.First(&protocol, f.reality.ID).Error)
-	require.Contains(t, *protocol.RealitySettings, f.realityPrivate)
-	var peer model.WireGuardPeer
-	require.NoError(t, db.First(&peer, f.peer.ID).Error)
-	require.Equal(t, f.peer.PrivateKey, peer.PrivateKey)
-}
-
-// TestEveryReaderInEachPhase: every reader authenticates every subject and
-// answers every secret in dual_write and in dual_read; in dual_read a
-// missing new row falls back with the metric; the way back is a phase
-// change; and the phase change never touches a legacy column, so an older
-// binary still authenticates every node.
-func TestEveryReaderInEachPhase(t *testing.T) {
+// TestEveryReaderReadsTheNewTables: every reader authenticates every
+// subject and answers every secret from the new tables, while the legacy
+// columns hold none; without the new rows no reader falls back to the
+// legacy columns.
+func TestEveryReaderReadsTheNewTables(t *testing.T) {
 	forEachBackend(t, func(t *testing.T, b backend) {
 		db := b.db
-		ctx := context.Background()
 		f := newFleet(t, db)
-		_, err := nodesecrets.Backfill(ctx, db, nodesecrets.BackfillOptions{})
-		require.NoError(t, err)
-		requireVerified(t, db)
-		before := totalFallbacks()
+		requireMoved(t, db)
+		requireAll(t, f.readerResults(t, db), true)
 
-		requireAll(t, f.readerResults(t, db, 1), true)
-		require.Equal(t, before, totalFallbacks(), "dual_write reads only the legacy columns")
+		// The writers keep working.
+		require.NoError(t, service.NewNodeService().UpdateNode(f.rawNode.ID, map[string]any{"name": "raw-renamed"}))
+		requireAll(t, f.readerResults(t, db), true)
+		requireMoved(t, db)
 
-		columns := legacyColumns(t, db)
-		setPhase(t, db, nodesecrets.PhaseDualRead)
-		require.Equal(t, columns, legacyColumns(t, db), "the phase change never touches a legacy column")
-		olderBinaryAuthenticates(t, db, f)
-
-		requireAll(t, f.readerResults(t, db, 2), true)
-		require.Equal(t, before, totalFallbacks(), "every secret was read from the new tables")
-		olderBinaryAuthenticates(t, db, f)
-		requireVerified(t, db)
-
-		// Rows missing from the new tables: the readers fall back to the
-		// legacy columns, and count it.
 		require.NoError(t, db.Where("owner_id IN ? AND scope = ?", []uint{f.reality.ID, f.wireGuard.ID}, nodesecrets.ScopeNodeProtocol).Delete(&model.ProtocolSecret{}).Error)
 		require.NoError(t, db.Where("scope IN ?", []string{nodesecrets.ScopeWireGuardPeer, nodesecrets.ScopeNodeRawConfig}).Delete(&model.ProtocolSecret{}).Error)
-		requireAll(t, f.readerResults(t, db, 3), true)
-		for _, counted := range [][2]string{
-			{nodesecrets.TableNode, "raw_config"},
-			{nodesecrets.TableNodeProtocol, "reality_settings"}, {nodesecrets.TableWireGuardPeer, "private_key"},
-		} {
-			require.NotZero(t, nodesecrets.FallbackCount(counted[0], counted[1], nodesecrets.FallbackMissing), "%v", counted)
-		}
-
-		// The way back: dual_write reads the legacy columns again and
-		// counts nothing more.
-		setPhase(t, db, nodesecrets.PhaseDualWrite)
-		after := totalFallbacks()
-		requireAll(t, f.readerResults(t, db, 4), true)
-		require.Equal(t, after, totalFallbacks())
-		olderBinaryAuthenticates(t, db, f)
-	})
-}
-
-// moveLegacySecrets writes into the legacy columns what P3 leaves there
-// (section 4.4), bypassing the writers.
-func (f *fleet) moveLegacySecrets(t *testing.T, db *gorm.DB) {
-	t.Helper()
-	require.NoError(t, db.Model(&model.Node{}).Where("id = ?", f.rawNode.ID).
-		UpdateColumn("raw_config", service.RedactNodeSecretsJSON(`{"node_type":"vless","type":"vless","server_port":443,"tls":2,"tls_settings":{"private_key":"`+f.rawPrivate+`","short_id":"01"}}`)).Error)
-	var protocols []model.NodeProtocol
-	require.NoError(t, db.Where("id IN ?", []uint{f.reality.ID, f.wireGuard.ID}).Find(&protocols).Error)
-	for _, protocol := range protocols {
-		redacted := protocol
-		service.RedactNodeProtocol(&redacted)
-		require.NoError(t, db.Model(&model.NodeProtocol{}).Where("id = ?", protocol.ID).
-			UpdateColumns(map[string]any{"settings": redacted.Settings, "reality_settings": redacted.RealitySettings}).Error)
-	}
-	require.NoError(t, db.Model(&model.WireGuardPeer{}).Where("id = ?", f.peer.ID).UpdateColumns(map[string]any{"private_key": "", "preshared_key": ""}).Error)
-}
-
-// TestDualReadReadsTheNewTables: with only the new tables holding the
-// secrets, as after P3, every reader in dual_read still authenticates and
-// answers every secret, without one fallback. In dual_write the same
-// readers find nothing: the tombstones and the placeholder authenticate no
-// one, which also proves the phase switches every reader.
-func TestDualReadReadsTheNewTables(t *testing.T) {
-	forEachBackend(t, func(t *testing.T, b backend) {
-		db := b.db
-		f := newFleet(t, db)
-		_, err := nodesecrets.Backfill(context.Background(), db, nodesecrets.BackfillOptions{})
-		require.NoError(t, err)
-		requireVerified(t, db)
-		setPhase(t, db, nodesecrets.PhaseDualRead)
-		f.moveLegacySecrets(t, db)
-
-		before := totalFallbacks()
-		requireAll(t, f.readerResults(t, db, 1), true)
-		require.Equal(t, before, totalFallbacks())
-
-		setPhase(t, db, nodesecrets.PhaseDualWrite)
-		results := f.readerResults(t, db, 2)
-		requireAll(t, results, false)
-		require.Equal(t, before, totalFallbacks())
+		requireAll(t, f.readerResults(t, db), false)
 	})
 }
 
@@ -253,6 +153,7 @@ func TestValidateOnBuildReportsWithoutExcluding(t *testing.T) {
 			Settings: ptr(`{"cidr":"10.66.0.0/24","server_private_key":"fake-not-a-key"}`)}
 		require.NoError(t, db.Create(&masked).Error)
 		require.NoError(t, db.Create(&malformed).Error)
+		require.NoError(t, nodesecrets.SeedForTest(db, nodesecrets.TableNodeProtocol))
 
 		nodesecrets.ForgetLogged()
 		var logs bytes.Buffer
@@ -264,9 +165,9 @@ func TestValidateOnBuildReportsWithoutExcluding(t *testing.T) {
 
 		var stored model.Node
 		require.NoError(t, db.First(&stored, node.ID).Error)
-		config := service.BuildNodeProtocolConfig(&stored, &masked)
+		config := service.BuildNodeProtocolConfig(db, &stored, &masked)
 		require.Equal(t, "********", config["tls_settings"].(map[string]any)["private_key"], "reported, not excluded")
-		config = service.BuildNodeProtocolConfig(&stored, &malformed)
+		config = service.BuildNodeProtocolConfig(db, &stored, &malformed)
 		require.Equal(t, "fake-not-a-key", config["server_private_key"], "reported, not excluded")
 		require.EqualValues(t, 1, nodesecrets.InvalidCount(nodesecrets.TableNodeProtocol, service.NodeSecretReasonPlaceholder)-placeholders)
 		require.EqualValues(t, 1, nodesecrets.InvalidCount(nodesecrets.TableNodeProtocol, service.NodeSecretReasonWireGuardKey)-wireGuardKeys)

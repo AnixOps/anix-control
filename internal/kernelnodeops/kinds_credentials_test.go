@@ -255,18 +255,6 @@ func sha256Hex(value string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func dualRead(t *testing.T, db *gorm.DB) {
-	t.Helper()
-	ctx := context.Background()
-	_, err := nodesecrets.Backfill(ctx, db, nodesecrets.BackfillOptions{Restart: true})
-	require.NoError(t, err)
-	_, err = nodesecrets.Verify(ctx, db, nodesecrets.VerifyOptions{})
-	require.NoError(t, err)
-	changes, err := nodesecrets.SetPhase(ctx, db, nodesecrets.PhaseOptions{Phase: nodesecrets.PhaseDualRead, Actor: "test"})
-	require.NoError(t, err, "%+v", changes)
-	require.Equal(t, nodesecrets.PhaseDualRead, nodesecrets.ReadPhase(db, nodesecrets.TableNode))
-}
-
 func issueSpec(subject *kernelnodeopsv1.NodeRef, kind kernelnodeopsv1.CredentialKind, handle string, replace bool) *kernelnodeopsv1.OperationSpec {
 	spec := issueCredential(subject, kind, handle)
 	spec.GetIssueCredential().Replace = replace

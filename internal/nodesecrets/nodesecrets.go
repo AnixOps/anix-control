@@ -5,22 +5,19 @@
 // configuration, v2_node_protocol, v2_wireguard_peer) into the protected
 // kernel table v4_kernel_protocol_secret. Existing tables are never altered.
 //
-// Phase P1 (dual_write): every kernel writer of a moved column calls Sync in
-// the transaction of its legacy write, and Sync derives the new rows from the
-// legacy rows it just wrote, so the two forms cannot drift. Backfill copies
-// the rows written before P1 and Verify compares the digests of both forms.
-//
-// Phase P2 (dual_read): every kernel reader of a moved column reads through
-// this package (read.go), which applies each table's phase. SetPhase moves a
-// table's readers to dual_read once a recent verification matched, and back
-// to dual_write. Writers dual-write in both phases.
+// Every table is finalized (phase P3; the earlier phases and the commands
+// that moved a table through them were removed in 5.0.3). Every kernel
+// writer of a moved column calls Sync in the transaction of its legacy
+// write: Sync moves the secrets to the new table and leaves tombstones and
+// redacted documents in the legacy columns. Every kernel reader reads
+// through this package (read.go), from the new table only. Control refuses
+// to start on a database whose split is not finalized (RequireFinalized).
 //
 // Secret values are never logged, printed or put in an error.
 package nodesecrets
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -37,18 +34,13 @@ const (
 	TableWireGuardPeer = "v2_wireguard_peer"
 )
 
-// Tables lists the split tables in backfill order.
+// Tables lists the split tables.
 func Tables() []string {
 	return []string{TableNode, TableNodeProtocol, TableWireGuardPeer}
 }
 
-// The phases of a table (section 4.3).
-const (
-	PhaseLegacy    = "legacy"
-	PhaseDualWrite = "dual_write"
-	PhaseDualRead  = "dual_read"
-	PhaseFinalized = "finalized"
-)
+// PhaseFinalized is the phase of every split table (section 4.3).
+const PhaseFinalized = "finalized"
 
 // Scopes of v4_kernel_protocol_secret.
 const (
@@ -76,19 +68,61 @@ func IsTombstone(value string) bool {
 	return strings.HasPrefix(value, tombstonePrefix)
 }
 
-// EnsureStateRows gives every split table its state row, in phase
-// dual_write: the release that ships the writer starts P1. It never changes
-// the phase of an existing row. Control runs it at every start, after the
-// schema migrations created the split tables.
+// RequireFinalized refuses a database whose node secret split is not
+// finalized: a split table whose state row is not finalized with
+// finalized_at recorded, and whose legacy table holds rows. A fresh
+// database passes. It only reads, so Control runs it before the schema
+// migrations and a refused start leaves the database as it was.
+func RequireFinalized(db *gorm.DB) error {
+	db = newSession(db)
+	states := map[string]model.NodeSecretSplit{}
+	if db.Migrator().HasTable(&model.NodeSecretSplit{}) {
+		var rows []model.NodeSecretSplit
+		if err := db.Find(&rows).Error; err != nil {
+			return fmt.Errorf("read the node secret split state: %w", err)
+		}
+		for _, row := range rows {
+			states[row.Table] = row
+		}
+	}
+	for _, table := range Tables() {
+		state := states[table]
+		if state.Phase == PhaseFinalized && state.FinalizedAt != nil || !db.Migrator().HasTable(table) {
+			continue
+		}
+		var count int64
+		if err := db.Table(table).Count(&count).Error; err != nil {
+			return fmt.Errorf("count %s: %w", table, err)
+		}
+		if count == 0 {
+			continue
+		}
+		phase := state.Phase
+		if phase == "" {
+			phase = "none"
+		}
+		return fmt.Errorf("node secret split: table %s is in phase %s (finalize not completed). This release reads finalized tables only. "+
+			"Start 5.0.2, run \"anix-control node-secrets verify\" and \"anix-control node-secrets finalize -confirm -by <you> all\", "+
+			"then start this release (docs/UPGRADE.md, \"Upgrading To 5.0.3\")", table, phase)
+	}
+	return nil
+}
+
+// EnsureStateRows records every split table as finalized: a missing state
+// row is created so, and an unfinalized one (its legacy table is empty,
+// RequireFinalized saw to that) is marked so. Control runs it at every
+// start, after the schema migrations created the split tables.
 func EnsureStateRows(db *gorm.DB) error {
 	now := time.Now().UTC()
 	for _, table := range Tables() {
-		row := model.NodeSecretSplit{Table: table, Phase: PhaseDualWrite, UpdatedAt: now}
+		row := model.NodeSecretSplit{Table: table, Phase: PhaseFinalized, FinalizedAt: &now, FinalizedBy: "bootstrap", UpdatedAt: now}
 		if err := db.Clauses(clause.OnConflict{DoNothing: true}).Create(&row).Error; err != nil {
 			return err
 		}
 	}
-	return nil
+	return db.Model(&model.NodeSecretSplit{}).Where("phase <> ? OR finalized_at IS NULL", PhaseFinalized).Updates(map[string]any{
+		"phase": PhaseFinalized, "finalized_at": now, "finalized_by": "bootstrap", "updated_at": now,
+	}).Error
 }
 
 // MigrateForTest creates the split tables with GORM's AutoMigrate and their
@@ -101,16 +135,36 @@ func MigrateForTest(db *gorm.DB) error {
 	return EnsureStateRows(db)
 }
 
-// installed reports whether the split tables exist. Control creates them at
-// startup, before any writer runs; a database without them (a tool's or a
-// test's that never created the kernel schema) has nothing to dual-write.
-func installed(tx *gorm.DB) bool {
-	return tx.Migrator().HasTable(&model.ProtocolSecret{})
+// SeedForTest moves the secrets of the rows a test wrote straight into the
+// legacy tables (every split table when none is named) to the new tables,
+// as the kernel's writers would have: MigrateForTest, then Sync of every
+// row; a table the database lacks is skipped. The legacy columns then hold
+// tombstones and redacted documents.
+func SeedForTest(db *gorm.DB, tables ...string) error {
+	if err := MigrateForTest(db); err != nil {
+		return err
+	}
+	if len(tables) == 0 {
+		tables = Tables()
+	}
+	for _, table := range tables {
+		if !db.Migrator().HasTable(table) {
+			continue
+		}
+		var ids []uint
+		if err := db.Table(table).Pluck("id", &ids).Error; err != nil {
+			return err
+		}
+		if err := Sync(db, table, ids...); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
-// hashSecret is the SHA-256 (hex) of a secret, as the legacy key hash
-// columns store it.
-func hashSecret(value string) string {
-	sum := sha256.Sum256([]byte(value))
-	return hex.EncodeToString(sum[:])
+// installed reports whether the split tables exist. Control creates them at
+// startup, before any writer runs; a database without them (a tool's or a
+// test's that never created the kernel schema) has nothing to move.
+func installed(tx *gorm.DB) bool {
+	return tx.Migrator().HasTable(&model.ProtocolSecret{})
 }

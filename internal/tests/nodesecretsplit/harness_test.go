@@ -1,11 +1,10 @@
-// Package nodesecretsplit tests phases P1 and P2 of the node credential
-// split (docs/architecture/node-ops-service.md, section 4) through the
-// kernel's own writers and readers: every writer of a moved column
-// dual-writes in its transaction, backfill and verify agree, every reader
-// follows its table's phase and falls back with a metric, and an older
-// binary still authenticates every node from the unchanged legacy columns.
-// It runs on SQLite and, with ANIX_TEST_POSTGRES_DSN set, on PostgreSQL.
-// Every secret is fake.
+// Package nodesecretsplit tests the node credential split
+// (docs/architecture/node-ops-service.md, section 4) through the kernel's
+// own writers and readers: every writer of a moved column moves its secret
+// to the new tables in its transaction and leaves tombstones and redacted
+// documents in the legacy columns, and every reader reads the new tables
+// only. It runs on SQLite and, with ANIX_TEST_POSTGRES_DSN set, on
+// PostgreSQL. Every secret is fake.
 package nodesecretsplit
 
 import (
@@ -83,16 +82,13 @@ func initKernelDatabase(t *testing.T, name string, cfg *config.DatabaseConfig) b
 		&model.User{}, &model.Plan{}, &model.SubscriptionGroup{},
 		&model.Node{}, &model.NodeProtocol{}, &model.WireGuardPeer{},
 		&model.ForwardNode{}, &model.ForwardRuntimeJob{}, &model.ForwardRule{},
-		// Phase changes are audited in the operation log.
-		&model.OperationLog{},
 	))
 	require.NoError(t, service.MigrateKernelModelsForTest(db))
 	require.NoError(t, nodesecrets.MigrateForTest(db))
 	return backend{name: name, db: db}
 }
 
-// legacyColumns reads every moved column, the state an older binary reads
-// the secrets from.
+// legacyColumns reads every moved column as stored.
 func legacyColumns(t *testing.T, db *gorm.DB) map[string][]map[string]any {
 	t.Helper()
 	columns := map[string][]string{
@@ -107,4 +103,31 @@ func legacyColumns(t *testing.T, db *gorm.DB) map[string][]map[string]any {
 		out[table] = rows
 	}
 	return out
+}
+
+// requireMoved requires every legacy column to hold no secret: a peer key is
+// empty or its tombstone, and every secret position of a JSON column holds
+// the placeholder.
+func requireMoved(t *testing.T, db *gorm.DB) {
+	t.Helper()
+	for table, rows := range legacyColumns(t, db) {
+		for _, row := range rows {
+			for column, value := range row {
+				text, ok := value.(string)
+				if bytes, isBytes := value.([]byte); isBytes {
+					text, ok = string(bytes), true
+				}
+				if !ok || column == "id" || column == "public_key" {
+					continue
+				}
+				if column == "private_key" || column == "preshared_key" {
+					require.True(t, text == "" || nodesecrets.IsTombstone(text), "%s.%s", table, column)
+					continue
+				}
+				for _, position := range nodesecrets.SecretPositions(text) {
+					require.True(t, position.Moved, "%s.%s %s", table, column, position.Pointer)
+				}
+			}
+		}
+	}
 }

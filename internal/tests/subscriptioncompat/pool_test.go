@@ -15,10 +15,9 @@ import (
 )
 
 // A group's protocols and the protocol pool read kapi_node_protocol_public_v1
-// and kapi_node_public_v1, which exist, and which the kernel grants the
-// package, only once v2_node_protocol and v2_node are finalized
-// (docs/architecture/node-ops-service.md section 4.3). The native side's
-// lease is what the kernel grants the package's manifest on its database
+// and kapi_node_public_v1, the views of the finalized v2_node_protocol and
+// v2_node (docs/architecture/node-ops-service.md section 4.6). The native
+// side's lease is what the kernel grants the package's manifest
 // (packagecompat.Lease), so these cases also prove the grant.
 
 // poolRoute is a protocol pool route: both databases have the node
@@ -35,7 +34,7 @@ func poolRoute(method, pattern, routeID string, legacy func(*handler.Subscriptio
 func poolService(db *gorm.DB) *native.Service {
 	return &native.Service{
 		Open:   func(ctx context.Context) (*gorm.DB, error) { return db.WithContext(ctx), nil },
-		Leased: packagecompat.Lease(db, "subscription"),
+		Leased: packagecompat.Lease("subscription"),
 	}
 }
 
@@ -94,29 +93,4 @@ func TestAvailableProtocolsParity(t *testing.T) {
 				packagecompat.FinalizeNodeSplit(t, db, "v2_node", "v2_node_protocol")
 			}},
 		})
-}
-
-// Before the two tables are finalized the kernel neither creates the views
-// nor grants them, although on SQLite the package shares the database file
-// that holds the tables: the routes answer from the legacy handler.
-func TestProtocolPoolStaysLegacyUntilFinalized(t *testing.T) {
-	for name, seedCase := range map[string]func(testing.TB, *gorm.DB){
-		"dual_write": seed,
-		"only v2_node_protocol finalized": func(t testing.TB, db *gorm.DB) {
-			seed(t, db)
-			packagecompat.FinalizeNodeSplit(t, db, "v2_node_protocol")
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			db := packagecompat.OpenSQLite(t, poolRoute("GET", "/", native.GroupProtocolsRouteID, nil).Models...)
-			seedCase(t, db)
-			handlers := poolService(db).Handlers()
-			for _, routeID := range []string{native.GroupProtocolsRouteID, native.AvailableProtocolsRouteID} {
-				_, err := handlers[routeID](context.Background(), pluginhostsdk.NativeRequest{
-					RouteID: routeID, Metadata: pluginhostsdk.RequestMetadata{PathParams: map[string]string{"id": "1"}},
-				})
-				require.ErrorIs(t, err, pluginhostsdk.ErrNativeUnavailable, routeID)
-			}
-		})
-	}
 }

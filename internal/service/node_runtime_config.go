@@ -59,7 +59,7 @@ func (s *NodeService) BuildRuntimeConfig(nodeID uint, preferredType string) (map
 	protocols, _ := s.GetProtocols(nodeID)
 	if len(protocols) > 0 {
 		if protocol := selectRuntimeProtocol(protocols, preferredType); protocol != nil {
-			for k, v := range BuildNodeProtocolConfig(node, protocol) {
+			for k, v := range BuildNodeProtocolConfig(s.db, node, protocol) {
 				config[k] = v
 			}
 			return completeRuntimeConfig(config), nil
@@ -107,7 +107,7 @@ func (s *NodeService) BuildRuntimeProtocolConfig(nodeID, protocolID uint) (map[s
 			continue
 		}
 		config := make(map[string]any)
-		for k, v := range BuildNodeProtocolConfig(node, &protocols[i]) {
+		for k, v := range BuildNodeProtocolConfig(s.db, node, &protocols[i]) {
 			config[k] = v
 		}
 		return completeRuntimeConfig(config), nil

@@ -69,7 +69,7 @@ func protocolRoute(method, pattern, routeID string, legacy func(*handler.NodeHan
 		NativeService: func(db *gorm.DB, nodeOps kernelnodeopsv1.KernelNodeOpsClient) pluginhostsdk.NativeHandler {
 			return (&native.Service{
 				Open:    func(ctx context.Context) (*gorm.DB, error) { return db.WithContext(ctx), nil },
-				Leased:  packagecompat.Lease(db, "protocol-runtime"),
+				Leased:  packagecompat.Lease("protocol-runtime"),
 				NodeOps: nodeOps,
 			}).Handlers()[routeID]
 		},
@@ -157,7 +157,7 @@ func protocolState(t testing.TB, db *gorm.DB) any {
 		Scope, ColumnName, JSONPointer, Value string
 		OwnerID                               uint
 	}
-	require.NoError(t, db.Model(&model.ProtocolSecret{}).Where("scope <> ?", "legacy_original").
+	require.NoError(t, db.Model(&model.ProtocolSecret{}).
 		Order("scope, owner_id, column_name, json_pointer").Find(&secrets).Error)
 	var peers []struct {
 		ID, NodeProtocolID, UserID uint
@@ -208,7 +208,6 @@ func TestNodeProtocolsReadParity(t *testing.T) {
 			{Name: "an unknown node", Path: path("99")},
 			{Name: "not a number", Path: path("x")},
 			{Name: "beyond 32 bits", Path: path("4294967297")},
-			{Name: "before finalize the kernel answers", Path: path("1"), Seed: seedNodes, Fallback: true},
 		})
 }
 
@@ -265,8 +264,6 @@ func TestNodeProtocolCreateParity(t *testing.T) {
 		{Name: "no body", Path: path("2")},
 		{Name: "a custom configuration that is not JSON is the kernel's", Path: path("2"), Mask: stamped, Fallback: true,
 			Body: body(map[string]any{"name": "raw", "type": "vless", "port": 6443, "custom_config": "not json"})},
-		{Name: "before finalize the kernel answers", Path: path("2"), Mask: stamped, Seed: seedNodes, Fallback: true,
-			Body: body(map[string]any{"name": "early", "type": "vless", "port": 7443, "reality_settings": `{"private_key":"typed-early"}`})},
 	})
 }
 
@@ -307,7 +304,6 @@ func TestNodeProtocolUpdateParity(t *testing.T) {
 		{Name: "a protocol id that is not a number", Path: path("x"), Body: body(map[string]any{"name": "x"}), Fallback: true},
 		{Name: "not JSON", Path: path("1"), Body: []byte(`{"name":`), Fallback: true},
 		{Name: "a document that is not JSON is the kernel's", Path: path("4"), Fallback: true, Body: body(map[string]any{"custom_config": "not json"})},
-		{Name: "before finalize the kernel answers", Path: path("1"), Seed: seedNodes, Fallback: true, Body: body(map[string]any{"name": "early"})},
 	})
 }
 
@@ -320,7 +316,6 @@ func TestNodeProtocolDeleteParity(t *testing.T) {
 		{Name: "without secrets", Path: path("4")},
 		{Name: "an unknown protocol", Path: path("99")},
 		{Name: "a protocol id that is not a number", Path: path("x")},
-		{Name: "before finalize the kernel answers", Path: path("2"), Seed: seedNodes, Fallback: true},
 	})
 }
 

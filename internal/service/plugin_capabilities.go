@@ -5,10 +5,6 @@ import (
 	"regexp"
 	"sort"
 	"strings"
-
-	"github.com/AnixOps/anix-control/v5/internal/nodesecrets"
-	"github.com/AnixOps/anix-control/v5/internal/packagestore"
-	"gorm.io/gorm"
 )
 
 // Capabilities in the kernel. namespace grant kernel authority to a signed
@@ -233,7 +229,7 @@ func validateManifestCapabilities(capabilities []string) error {
 			if !adoptableTablePattern.MatchString(table) {
 				return fmt.Errorf("capability %q names an invalid table", capability)
 			}
-			if protectedKernelTable(table) && !finalizedAdoptableTables[table] {
+			if protectedKernelTable(table) && !adoptableTables[table] {
 				return fmt.Errorf("capability %q may not adopt a kernel or identity table", capability)
 			}
 			needsStorage = capability
@@ -282,44 +278,12 @@ var forwardCredentialTables = map[string]bool{
 	"v2_forward_node": true, "v2_forward_runtime_job": true,
 }
 
-// finalizedAdoptableTables are the protected tables a package may declare
-// it adopts (node-ops-service.md sections 4.3 and 4.6): their credentials
-// move to the kernel's split tables, and once a table's split is finalized
-// its legacy columns hold only tombstones and redacted documents. The
-// manifest is accepted on every installation; the grant is honoured only
-// where the table is finalized (EffectiveStorageGrants), so one package
-// release works whatever the phase. Every other protected table, and these
-// before finalize, stays the kernel's.
-var finalizedAdoptableTables = map[string]bool{
+// adoptableTables are the protected tables a package may declare it adopts
+// (node-ops-service.md sections 4.3 and 4.6): their credentials moved to
+// the kernel's split tables, so their legacy columns hold only tombstones
+// and redacted documents. Every other protected table stays the kernel's.
+var adoptableTables = map[string]bool{
 	"v2_node": true, "v2_node_protocol": true, "v2_forward_node": true,
-}
-
-// EffectiveStorageGrants are the grants of a verified manifest the kernel
-// honours now: an adoption of a finalized-adoptable table only once its
-// split is finalized (nodesecrets.AdoptionAllowed), and a view of the
-// split's remainder only once it exists (packagestore.FinalizedViewAvailable).
-// What it leaves out is left out of the lease, as if not declared; the
-// package's native routes for it stay legacy (mode_unsupported).
-func EffectiveStorageGrants(db *gorm.DB, grants PackageStorageGrants) (PackageStorageGrants, error) {
-	effective := PackageStorageGrants{Storage: grants.Storage}
-	for _, table := range grants.AdoptTables {
-		if finalizedAdoptableTables[table] {
-			if err := nodesecrets.AdoptionAllowed(db, table); err != nil {
-				continue
-			}
-		}
-		effective.AdoptTables = append(effective.AdoptTables, table)
-	}
-	for _, view := range grants.Views {
-		available, err := packagestore.FinalizedViewAvailable(db, view)
-		if err != nil {
-			return PackageStorageGrants{}, err
-		}
-		if available {
-			effective.Views = append(effective.Views, view)
-		}
-	}
-	return effective, nil
 }
 
 func protectedKernelTable(table string) bool {

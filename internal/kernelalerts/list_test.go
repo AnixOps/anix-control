@@ -31,7 +31,7 @@ func TestListFiltersOrdersAndSummarizes(t *testing.T) {
 			{Key: "agent_certificate_expiring/proxy-1", Kind: KindAgentCertificate, Severity: "warning", Subject: "proxy-1", ExpiresAt: &later, Detail: `{"node":"proxy-1"}`},
 			{Key: "agent_certificate_expiring/proxy-2", Kind: KindAgentCertificate, Severity: "critical", Subject: "proxy-2", ExpiresAt: &later},
 			{Key: "agent_certificate_expiring/proxy-3", Kind: KindAgentCertificate, Severity: "critical", Subject: "proxy-3", ExpiresAt: &soon},
-			{Key: "node_secrets_split_stalled/v2_node", Kind: KindNodeSecretsSplitStalled, Severity: "warning", Subject: "v2_node"},
+			{Key: "identity_import_stalled/authority", Kind: KindIdentityImportStalled, Severity: "warning", Subject: "authority"},
 			{Key: "ca_expiring/old", Kind: KindCAExpiring, Severity: "warning", Subject: "old", ResolvedAt: &resolved},
 		} {
 			alert.SubjectKind, alert.Message, alert.FirstSeenAt, alert.LastSeenAt = "x", "m", start, start
@@ -46,7 +46,7 @@ func TestListFiltersOrdersAndSummarizes(t *testing.T) {
 			keys = append(keys, alert.Subject)
 			assert.Equal(t, StatusActive, alert.Status)
 		}
-		assert.Equal(t, []string{"proxy-3", "proxy-2", "v2_node", "proxy-1"}, keys, "critical first; within a severity the soonest end, or first seen, first")
+		assert.Equal(t, []string{"proxy-3", "proxy-2", "authority", "proxy-1"}, keys, "critical first; within a severity the soonest end, or first seen, first")
 		assert.Equal(t, "proxy-1", page.Alerts[3].Detail["node"])
 		assert.NotNil(t, page.Alerts[0].Detail, "detail is always an object")
 

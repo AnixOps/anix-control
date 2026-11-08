@@ -1,7 +1,6 @@
 package nodesecretsplit
 
 import (
-	"context"
 	"testing"
 
 	"github.com/AnixOps/anix-control/v5/internal/model"
@@ -12,16 +11,6 @@ import (
 )
 
 func ptr[T any](value T) *T { return &value }
-
-// requireVerified requires both forms of every split table to match.
-func requireVerified(t *testing.T, db *gorm.DB) {
-	t.Helper()
-	results, err := nodesecrets.Verify(context.Background(), db, nodesecrets.VerifyOptions{})
-	require.NoError(t, err, "%+v", results)
-	for _, result := range results {
-		require.True(t, result.Match, "%+v", result)
-	}
-}
 
 // positions answers an owner's protocol secrets by column and pointer.
 func positions(t *testing.T, db *gorm.DB, scope string, ownerID uint) map[string]string {
@@ -42,9 +31,10 @@ func secretVersion(t *testing.T, db *gorm.DB, scope string, ownerID uint, column
 	return row.Version
 }
 
-// TestEveryWriterDualWrites drives each kernel writer of a moved column and
-// requires the new tables to follow it, in the same transaction.
-func TestEveryWriterDualWrites(t *testing.T) {
+// TestEveryWriterMovesItsSecrets drives each kernel writer of a moved
+// column and requires the new tables to follow it, in the same
+// transaction, and the legacy columns to hold no secret.
+func TestEveryWriterMovesItsSecrets(t *testing.T) {
 	forEachBackend(t, func(t *testing.T, b backend) {
 		db := b.db
 		nodes := service.NewNodeService()
@@ -52,7 +42,7 @@ func TestEveryWriterDualWrites(t *testing.T) {
 		// Node creation: the default protocol holds no secret.
 		node := &model.Node{Name: "split-node", Host: "203.0.113.10", Port: 443}
 		require.NoError(t, nodes.CreateNode(node))
-		requireVerified(t, db)
+		requireMoved(t, db)
 
 		// Node update: the raw configuration's secret; the placeholder
 		// keeps it.
@@ -62,7 +52,7 @@ func TestEveryWriterDualWrites(t *testing.T) {
 		require.Equal(t, 1, secretVersion(t, db, nodesecrets.ScopeNodeRawConfig, node.ID, "raw_config", "/wireguard/private_key"))
 		require.NoError(t, nodes.UpdateNode(node.ID, map[string]any{"raw_config": `{"server_port":51821,"wireguard":{"private_key":"fake-raw-private-b"}}`}))
 		require.Equal(t, 2, secretVersion(t, db, nodesecrets.ScopeNodeRawConfig, node.ID, "raw_config", "/wireguard/private_key"))
-		requireVerified(t, db)
+		requireMoved(t, db)
 
 		// Protocol creation and update; the placeholder keeps the secret.
 		reality := `{"private_key":"fake-reality-private","short_id":"6ba85179","dest":"www.example.test:443"}`
@@ -75,7 +65,7 @@ func TestEveryWriterDualWrites(t *testing.T) {
 		require.NoError(t, nodes.UpdateProtocol(protocol.ID, map[string]any{"reality_settings": `{"private_key":"********","short_id":"6ba85179"}`, "custom_config": "fake-custom"}))
 		require.Equal(t, map[string]string{"reality_settings /private_key": `"fake-reality-private-b"`, "custom_config ": "fake-custom"}, positions(t, db, nodesecrets.ScopeNodeProtocol, protocol.ID))
 		require.Equal(t, 2, secretVersion(t, db, nodesecrets.ScopeNodeProtocol, protocol.ID, "reality_settings", "/private_key"))
-		requireVerified(t, db)
+		requireMoved(t, db)
 
 		// WireGuard peers: the subscription renderer creates them, a
 		// rotation replaces their keys, deleting a user takes theirs.
@@ -99,10 +89,10 @@ func TestEveryWriterDualWrites(t *testing.T) {
 		require.Equal(t, 2, rotated.RotatedPeerCount)
 		require.NotEqual(t, before, positions(t, db, nodesecrets.ScopeWireGuardPeer, peerIDs[0]))
 		require.Equal(t, 2, secretVersion(t, db, nodesecrets.ScopeWireGuardPeer, peerIDs[0], "private_key", ""))
-		requireVerified(t, db)
+		requireMoved(t, db)
 		require.NoError(t, service.NewUserService().Delete(users[0].ID))
 		require.Empty(t, positions(t, db, nodesecrets.ScopeWireGuardPeer, peerIDs[0]))
-		requireVerified(t, db)
+		requireMoved(t, db)
 
 		// Protocol deletion takes its secrets and its peers'; node deletion
 		// takes the node's raw configuration and protocols.
@@ -115,7 +105,7 @@ func TestEveryWriterDualWrites(t *testing.T) {
 		require.NoError(t, nodes.DeleteNode(node.ID))
 		require.Empty(t, positions(t, db, nodesecrets.ScopeNodeRawConfig, node.ID))
 		require.Empty(t, positions(t, db, nodesecrets.ScopeNodeProtocol, second.ID))
-		requireVerified(t, db)
+		requireMoved(t, db)
 	})
 }
 
@@ -134,9 +124,9 @@ func failSplitWrites(t *testing.T, b backend) {
 	}
 }
 
-// TestDualWriteIsTransactional: when the split write fails, the legacy
+// TestSplitWriteIsTransactional: when the split write fails, the legacy
 // write is rolled back with it.
-func TestDualWriteIsTransactional(t *testing.T) {
+func TestSplitWriteIsTransactional(t *testing.T) {
 	forEachBackend(t, func(t *testing.T, b backend) {
 		db := b.db
 		nodes := service.NewNodeService()
@@ -161,6 +151,6 @@ func TestDualWriteIsTransactional(t *testing.T) {
 		require.Error(t, nodes.UpdateNode(node.ID, map[string]any{"raw_config": `{"wireguard":{"private_key":"fake-failed"}}`}))
 		require.NoError(t, db.First(node, node.ID).Error)
 		require.Nil(t, node.RawConfig, "the node keeps its raw configuration")
-		requireVerified(t, db)
+		requireMoved(t, db)
 	})
 }

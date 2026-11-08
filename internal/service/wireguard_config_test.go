@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/v5/internal/model"
+	"github.com/AnixOps/anix-control/v5/internal/nodesecrets"
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
@@ -32,7 +33,7 @@ func TestBuildNodeProtocolConfig_WireGuardDefaults(t *testing.T) {
 		Transport: stringPtr("udp"),
 	}
 
-	config := BuildNodeProtocolConfig(node, protocol)
+	config := buildNodeProtocolConfig(node, protocol)
 
 	require.Equal(t, "wireguard", config["type"])
 	require.Equal(t, "wireguard", config["node_type"])
@@ -64,6 +65,7 @@ func TestUserDeleteRemovesWireGuardPeers(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
 	require.NoError(t, db.AutoMigrate(&model.User{}, &model.UserSS2022Key{}, &model.WireGuardPeer{}, &model.IdentityRevocation{}, &model.SubscriberChange{}))
+	require.NoError(t, nodesecrets.MigrateForTest(db))
 	require.NoError(t, db.Create(&model.User{ID: 901, Email: "wireguard-delete@example.com"}).Error)
 	require.NoError(t, db.Create(&model.WireGuardPeer{
 		NodeProtocolID: 10,
@@ -115,6 +117,7 @@ func TestWireGuardPeerAllocationAndKeyGeneration(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
 	require.NoError(t, db.AutoMigrate(&model.WireGuardPeer{}))
+	require.NoError(t, nodesecrets.MigrateForTest(db))
 
 	svc := &SubscriptionService{db: db}
 	first, err := svc.GetOrCreateWireGuardPeer(10, 100, "10.99.0.0/29")
@@ -141,6 +144,7 @@ func TestBuildWireGuardRuntimeUserExtras(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
 	require.NoError(t, db.AutoMigrate(&model.WireGuardPeer{}))
+	require.NoError(t, nodesecrets.MigrateForTest(db))
 
 	settings := `{"cidr":"10.77.0.0/29"}`
 	protocol := &model.NodeProtocol{
@@ -171,6 +175,7 @@ func TestWireGuardExitDoesNotAllocatePeerCredentials(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
 	require.NoError(t, db.AutoMigrate(&model.WireGuardPeer{}))
+	require.NoError(t, nodesecrets.MigrateForTest(db))
 	settings := `{"cidr":"10.77.0.0/24","relay":{"role":"exit"}}`
 	protocol := &model.NodeProtocol{ID: 55, Type: model.ProtocolWireGuard, Settings: &settings}
 	svc := &SubscriptionService{db: db}
@@ -239,7 +244,7 @@ func TestStoredWireGuardExitKeepsEntryKeysOut(t *testing.T) {
 	protocol := &model.NodeProtocol{Type: model.ProtocolWireGuard, Enable: 1, Settings: &settings}
 	require.ErrorIs(t, ValidateNodeProtocol(protocol), ErrInvalidNodeProtocol)
 
-	config := BuildNodeProtocolConfig(&model.Node{ID: 1, Host: "exit.example.com"}, protocol)
+	config := buildNodeProtocolConfig(&model.Node{ID: 1, Host: "exit.example.com"}, protocol)
 	require.Empty(t, config["server_private_key"])
 	require.Empty(t, config["server_public_key"])
 	require.Empty(t, config["server_address"])
@@ -249,7 +254,7 @@ func TestStoredWireGuardExitKeepsEntryKeysOut(t *testing.T) {
 func TestBuildNodeProtocolConfigIgnoresLegacyWireGuardCustomRuntimeOverride(t *testing.T) {
 	settings := `{"cidr":"10.77.0.0/24","relay":{"role":"exit","server_port":8443,"entry_tun_address":"172.31.77.2/24","exit_tun_address":"172.31.77.1/24"}}`
 	custom := `{"type":"vless","node_type":"vless","server_port":51820,"server_private_key":"leaked-entry-key","relay":{"role":"entry"},"legacy_note":"preserved"}`
-	config := BuildNodeProtocolConfig(&model.Node{ID: 3, Host: "exit.example.com"}, &model.NodeProtocol{
+	config := buildNodeProtocolConfig(&model.Node{ID: 3, Host: "exit.example.com"}, &model.NodeProtocol{
 		Type:         model.ProtocolWireGuard,
 		Settings:     &settings,
 		CustomConfig: &custom,
@@ -301,6 +306,7 @@ func TestWireGuardPeerAllocationSupportsIPv6AndCIDRMigration(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
 	require.NoError(t, db.AutoMigrate(&model.WireGuardPeer{}))
+	require.NoError(t, nodesecrets.MigrateForTest(db))
 
 	svc := &SubscriptionService{db: db}
 	peer, err := svc.GetOrCreateWireGuardPeer(20, 300, "fd00::/120")
@@ -317,7 +323,7 @@ func TestBuildNodeProtocolConfigDerivesWireGuardServerPublicKey(t *testing.T) {
 	privateKey, publicKey, err := generateWireGuardKeypair()
 	require.NoError(t, err)
 	settings := fmt.Sprintf(`{"server_private_key":%q}`, privateKey)
-	config := BuildNodeProtocolConfig(&model.Node{ID: 1, Host: "entry.example.com"}, &model.NodeProtocol{
+	config := buildNodeProtocolConfig(&model.Node{ID: 1, Host: "entry.example.com"}, &model.NodeProtocol{
 		Type:     model.ProtocolWireGuard,
 		Port:     51820,
 		Settings: &settings,
@@ -329,6 +335,7 @@ func TestWireGuardSubscriptionDerivesServerPublicKeyFromPrivateKey(t *testing.T)
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
 	require.NoError(t, db.AutoMigrate(&model.WireGuardPeer{}))
+	require.NoError(t, nodesecrets.MigrateForTest(db))
 	svc := &SubscriptionService{db: db}
 	privateKey, publicKey, err := generateWireGuardKeypair()
 	require.NoError(t, err)

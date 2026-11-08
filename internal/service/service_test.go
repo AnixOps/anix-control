@@ -18,6 +18,7 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/config"
 	"github.com/AnixOps/anix-control/v5/internal/database"
 	"github.com/AnixOps/anix-control/v5/internal/model"
+	"github.com/AnixOps/anix-control/v5/internal/nodesecrets"
 	"github.com/AnixOps/anix-control/v5/internal/tests/testutil"
 	"github.com/AnixOps/anix-control/v5/internal/utils"
 	"github.com/stretchr/testify/assert"
@@ -120,6 +121,9 @@ func (s *ServiceTestSuite) SetupSuite() {
 			&model.StatUser{},
 			&model.StatServer{},
 		)
+		if dbInitErr == nil {
+			dbInitErr = nodesecrets.MigrateForTest(database.Get())
+		}
 	})
 	s.Require().NoError(dbInitErr)
 
@@ -3976,6 +3980,7 @@ func (s *SubscriptionServiceTestSuite) TestGetUserSubscriptionOffersTheStoredSS2
 				Transport: model.AgentTransportMTLSStream, ProtocolRevision: agentcontrol.ProtocolRevisionUserKeys}).Error)
 		}
 	}
+	s.Require().NoError(nodesecrets.SeedForTest(database.Get(), nodesecrets.TableNodeProtocol))
 
 	resp, err := s.svc.GetUserSubscription(&model.SubscriptionRequest{Token: s.testUser.Token, Format: model.FormatClash})
 	s.Require().NoError(err)

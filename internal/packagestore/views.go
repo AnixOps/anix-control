@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/AnixOps/anix-control/v5/internal/nodesecrets"
 	"gorm.io/gorm"
 )
 
@@ -28,12 +27,6 @@ type KernelAPIView struct {
 	// package's query cannot see the rows the filter hides before the
 	// filter applies.
 	RowFilter bool
-	// Finalized names the node secret split tables
-	// (node-ops-service.md section 4.6) that must all be finalized before
-	// the view is created, because it shows a column that held secrets
-	// until then or the credential-free remainder of a split table. Unsplit
-	// drops the view again (DropFinalizedViews).
-	Finalized []string
 }
 
 // InviteSettingsKey is the system configuration key holding the affiliate
@@ -220,11 +213,9 @@ const (
 )
 
 // The views of the node credential split's remainder (node-ops-service.md
-// section 4.6). Each exists only once its source is finalized: before that,
-// EnsureKernelAPIViews leaves it out, and a lease leaves its grant out
-// (FinalizedViewAvailable), so they are inert. None shows a moved column:
-// no API key, key hash, shared secret, token, registration key or peer key;
-// the JSON columns only in their finalized, redacted form.
+// section 4.6). None shows a moved column: no API key, key hash, shared
+// secret, token, registration key or peer key; the JSON columns only in
+// their finalized, redacted form.
 func init() {
 	KernelAPIViews = append(KernelAPIViews, splitViews...)
 }
@@ -240,17 +231,15 @@ var splitViews = []KernelAPIView{
 			"monthly_reset_day", "raw_config", "server_ip", "server_version", "server_os", "cpu_usage", "memory_usage",
 			"disk_usage", "uptime", "online_users", "runtime_healthy", "runtime_error", "runtime_checked_at",
 			"total_upload", "total_download", "last_check_at", "created_at", "updated_at") + " FROM v2_node",
-		Finalized: []string{"v2_node"},
 	},
 	{
-		// Every column of a node protocol: once finalized its settings
-		// hold the placeholder at every secret position.
+		// Every column of a node protocol: its settings hold the
+		// placeholder at every secret position.
 		Name:   "kapi_node_protocol_public_v1",
 		Source: "v2_node_protocol",
 		Query: "SELECT " + quotedColumns("id", "node_id", "name", "type", "port", "enable", "show", "sort", "group_id",
 			"host", "tls", "alpn", "settings", "tls_settings", "transport", "transport_settings", "reality_settings",
 			"custom_config", "created_at", "updated_at") + " FROM v2_node_protocol",
-		Finalized: []string{"v2_node_protocol"},
 	},
 	{
 		// A user's WireGuard peer, without its private and preshared keys.
@@ -258,7 +247,6 @@ var splitViews = []KernelAPIView{
 		Source: "v2_wireguard_peer",
 		Query: "SELECT " + quotedColumns("id", "node_protocol_id", "user_id", "peer_ip", "public_key", "created_at", "updated_at") +
 			" FROM v2_wireguard_peer",
-		Finalized: []string{"v2_wireguard_peer"},
 	},
 }
 
@@ -269,63 +257,6 @@ func quotedColumns(columns ...string) string {
 		quoted[i] = quoteIdent(column)
 	}
 	return strings.Join(quoted, ", ")
-}
-
-// FinalizedViewAvailable reports whether view may exist and be granted
-// now: a view of the split's remainder only once its source is finalized.
-// Every other view answers true.
-func FinalizedViewAvailable(db *gorm.DB, view string) (bool, error) {
-	for _, candidate := range KernelAPIViews {
-		if candidate.Name != view {
-			continue
-		}
-		if len(candidate.Finalized) == 0 {
-			return true, nil
-		}
-		finalized, err := nodesecrets.FinalizedTables(db)
-		if err != nil {
-			return false, err
-		}
-		return splitViewReady(candidate, finalized), nil
-	}
-	return true, nil
-}
-
-func splitViewReady(view KernelAPIView, finalized []string) bool {
-	done := make(map[string]bool, len(finalized))
-	for _, table := range finalized {
-		done[table] = true
-	}
-	for _, table := range view.Finalized {
-		if !done[table] {
-			return false
-		}
-	}
-	return true
-}
-
-// DropFinalizedViews drops the views that may exist only while table is
-// finalized (Finalized names it), in tx: unsplit writes secrets back into
-// the columns they show.
-func DropFinalizedViews(tx *gorm.DB, table string) error {
-	for _, view := range KernelAPIViews {
-		if !containsString(view.Finalized, table) {
-			continue
-		}
-		if err := tx.Exec("DROP VIEW IF EXISTS " + quoteIdent(view.Name)).Error; err != nil {
-			return fmt.Errorf("drop kernel API view %s: %w", view.Name, err)
-		}
-	}
-	return nil
-}
-
-func containsString(values []string, value string) bool {
-	for _, candidate := range values {
-		if candidate == value {
-			return true
-		}
-	}
-	return false
 }
 
 // ForwardRuntimeSettingKeys are the system configuration keys
@@ -341,21 +272,11 @@ var ForwardRuntimeSettingKeys = []string{
 // creates its tables before its views, so this only happens on a partial
 // schema, and a lease that grants the view then fails as for any missing
 // view.
-//
-// A view of the split's remainder (Finalized) is created only
-// once its source is finalized; until then it is left out.
 func EnsureKernelAPIViews(db *gorm.DB) error {
 	if db == nil {
 		return nil
 	}
-	finalized, err := nodesecrets.FinalizedTables(db)
-	if err != nil {
-		return err
-	}
 	for _, view := range KernelAPIViews {
-		if !splitViewReady(view, finalized) {
-			continue
-		}
 		if !grantTargetPattern.MatchString(view.Name) {
 			return fmt.Errorf("invalid kernel API view name %q", view.Name)
 		}

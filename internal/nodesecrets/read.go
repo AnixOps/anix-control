@@ -4,174 +4,31 @@ import (
 	"errors"
 	"strconv"
 	"strings"
-	"sync"
-	"time"
 
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"gorm.io/gorm"
 )
 
-// This file is the read side of phase P2 (dual_read, section 4.3). Every
-// kernel reader of a moved column reads through it:
-//
-//   - In phase dual_write (and legacy) a reader reads the legacy column
-//     exactly as before the split, and never the new tables.
-//   - In phase dual_read it reads the new tables. A missing or mismatching
-//     row falls back to the legacy column, which still holds every secret
-//     until P3, counts anixops_node_secrets_fallback_total and logs once per
-//     subject, without the value.
-//   - In phase finalized (P3) it reads the new tables only, and never falls
-//     back: the legacy columns hold tombstones and redacted documents, and
-//     a literal secret a JSON column holds anyway (a row written past the
-//     kernel's writers) is ignored, its position left at the placeholder.
-//
-// No reader takes a tombstone or the placeholder for a secret, in any
-// phase.
-
-// PhaseCacheTTL bounds how long a process keeps the phases it read. A phase
-// change made by the node-secrets command, in another process, reaches every
-// Control process within it.
-const PhaseCacheTTL = 5 * time.Second
-
-type phaseEntry struct {
-	phases    map[string]string
-	installed bool
-	loaded    time.Time
-}
-
-var (
-	phaseMu    sync.Mutex
-	phaseCache = map[any]phaseEntry{}
-)
-
-// phaseCacheKey is the connection pool a handle reads: every session and
-// transaction of one database shares it.
-func phaseCacheKey(db *gorm.DB) any {
-	if db == nil || db.Config == nil {
-		return nil
-	}
-	return db.ConnPool
-}
-
-// ReadPhase answers the phase whose read rule table's readers apply. A
-// database without the split tables, a table without a state row, an
-// unknown phase and a failed read all answer dual_write: the legacy
-// columns. The phases are cached for PhaseCacheTTL.
-func ReadPhase(db *gorm.DB, table string) string {
-	switch phase := cachedPhases(db).phases[table]; phase {
-	case PhaseDualRead, PhaseFinalized, PhaseLegacy:
-		return phase
-	default:
-		return PhaseDualWrite
-	}
-}
-
-// SplitInstalled reports whether db holds the split tables (the schema
-// migrations or MigrateForTest created them): a database without them (a tool's, or a test's that never created
-// the kernel schema) has no credential rows and no endpoint pins. It is
-// cached with the phases.
-func SplitInstalled(db *gorm.DB) bool {
-	return cachedPhases(db).installed
-}
-
-// cachedPhases answers the phases of db, loaded at most every
-// PhaseCacheTTL.
-func cachedPhases(db *gorm.DB) phaseEntry {
-	key := phaseCacheKey(db)
-	if key == nil {
-		return phaseEntry{}
-	}
-	phaseMu.Lock()
-	entry, ok := phaseCache[key]
-	phaseMu.Unlock()
-	if !ok || time.Since(entry.loaded) >= PhaseCacheTTL {
-		phases, installed := loadPhases(db)
-		entry = phaseEntry{phases: phases, installed: installed, loaded: time.Now()}
-		phaseMu.Lock()
-		phaseCache[key] = entry
-		phaseMu.Unlock()
-	}
-	return entry
-}
-
-// loadPhases reads the split state table; it reports whether the split
-// tables exist.
-func loadPhases(db *gorm.DB) (map[string]string, bool) {
-	session := db.Session(&gorm.Session{NewDB: true})
-	if !session.Migrator().HasTable(&model.NodeSecretSplit{}) || !installed(session) {
-		return nil, false
-	}
-	var rows []model.NodeSecretSplit
-	if err := session.Select("table_name", "phase").Find(&rows).Error; err != nil {
-		return nil, true
-	}
-	phases := make(map[string]string, len(rows))
-	for _, row := range rows {
-		phases[row.Table] = row.Phase
-	}
-	return phases, true
-}
-
-// invalidatePhases drops the cached phases of db, so this process reads a
-// change it just made at once.
-func invalidatePhases(db *gorm.DB) {
-	if key := phaseCacheKey(db); key != nil {
-		phaseMu.Lock()
-		delete(phaseCache, key)
-		phaseMu.Unlock()
-	}
-}
-
-// ForgetPhases drops the phases this process cached for db, so the next
-// read loads them again: for a test, or a tool, that changed the split's
-// state table directly.
-func ForgetPhases(db *gorm.DB) {
-	invalidatePhases(db)
-}
-
-// readsNew reports whether table's readers read the new tables.
-func readsNew(db *gorm.DB, table string) bool {
-	switch ReadPhase(db, table) {
-	case PhaseDualRead, PhaseFinalized:
-		return true
-	default:
-		return false
-	}
-}
-
-// readsOnlyNew reports whether table is finalized: its readers never fall
-// back to the legacy column.
-func readsOnlyNew(db *gorm.DB, table string) bool {
-	return ReadPhase(db, table) == PhaseFinalized
-}
-
-// Unusable reports whether a credential value, presented or stored, can
-// never authenticate: empty, a tombstone, or the placeholder. P3 writes
-// tombstones and the placeholder into the legacy columns (section 4.4), so
-// a legacy comparison must never accept them.
-func Unusable(value string) bool {
-	trimmed := strings.TrimSpace(value)
-	return value == "" || IsTombstone(trimmed) || trimmed == Placeholder
-}
+// This file is the read side of the split (section 4.3). Every kernel
+// reader of a moved column reads through it, from the new tables only: the
+// legacy columns hold tombstones and redacted documents, and a literal
+// secret a JSON column holds anyway (a row written past the kernel's
+// writers) is ignored, its position left at the placeholder. No reader
+// takes a tombstone or the placeholder for a secret.
 
 func newSession(db *gorm.DB) *gorm.DB {
 	return db.Session(&gorm.Session{NewDB: true})
 }
 
-func subjectName(id uint64) string {
-	return strconv.FormatUint(id, 10)
-}
-
 // --- Protocol secrets (v2_node_protocol, v2_node.raw_config, v2_wireguard_peer) ---
 
 // ResolveProtocols gives the secret positions of the protocols' JSON
-// columns their values under the dual-read rule, in place, where the
-// kernel builds a node's or a user's configuration from them. In phase
-// dual_write it changes nothing. A column is rewritten only where a
-// position takes a value its legacy document does not hold (the
-// placeholder in it); otherwise it stays byte for byte as stored.
+// columns their values from the new table, in place, where the kernel
+// builds a node's or a user's configuration from them. A column is
+// rewritten only where a position takes a value its legacy document does
+// not hold; otherwise it stays byte for byte as stored.
 func ResolveProtocols(db *gorm.DB, protocols []model.NodeProtocol) {
-	if len(protocols) == 0 || !readsNew(db, TableNodeProtocol) {
+	if len(protocols) == 0 {
 		return
 	}
 	pointers := make([]*model.NodeProtocol, len(protocols))
@@ -183,7 +40,7 @@ func ResolveProtocols(db *gorm.DB, protocols []model.NodeProtocol) {
 
 // ResolveProtocol is ResolveProtocols for one protocol.
 func ResolveProtocol(db *gorm.DB, protocol *model.NodeProtocol) {
-	if protocol == nil || !readsNew(db, TableNodeProtocol) {
+	if protocol == nil {
 		return
 	}
 	resolveProtocols(db, []*model.NodeProtocol{protocol})
@@ -195,7 +52,6 @@ func resolveProtocols(db *gorm.DB, protocols []*model.NodeProtocol) {
 		ids = append(ids, uint64(protocol.ID))
 	}
 	rows, err := secretRows(db, ScopeNodeProtocol, ids)
-	only := readsOnlyNew(db, TableNodeProtocol)
 	for _, protocol := range protocols {
 		owner := uint64(protocol.ID)
 		for _, column := range []struct {
@@ -211,7 +67,7 @@ func resolveProtocols(db *gorm.DB, protocols []*model.NodeProtocol) {
 			if *column.value == nil {
 				continue
 			}
-			resolved := resolveDocument(TableNodeProtocol, column.name, owner, **column.value, rows[secretOwner{owner, column.name}], err, only)
+			resolved := resolveDocument(**column.value, rows[secretOwner{owner, column.name}], err)
 			if resolved != **column.value {
 				*column.value = &resolved
 			}
@@ -220,24 +76,24 @@ func resolveProtocols(db *gorm.DB, protocols []*model.NodeProtocol) {
 }
 
 // ResolveNodeRawConfig gives the secret positions of node's raw
-// configuration their values under the dual-read rule, in place.
+// configuration their values from the new table, in place.
 func ResolveNodeRawConfig(db *gorm.DB, node *model.Node) {
-	if node == nil || node.RawConfig == nil || !readsNew(db, TableNode) {
+	if node == nil || node.RawConfig == nil {
 		return
 	}
 	owner := uint64(node.ID)
 	rows, err := secretRows(db, ScopeNodeRawConfig, []uint64{owner})
-	resolved := resolveDocument(TableNode, "raw_config", owner, *node.RawConfig, rows[secretOwner{owner, "raw_config"}], err, readsOnlyNew(db, TableNode))
+	resolved := resolveDocument(*node.RawConfig, rows[secretOwner{owner, "raw_config"}], err)
 	if resolved != *node.RawConfig {
 		node.RawConfig = &resolved
 	}
 }
 
 // ResolveWireGuardPeers gives the peers' private and preshared keys their
-// values under the dual-read rule, in place: a user's subscription and the
-// node's runtime user list.
+// values from the new table, in place: a user's subscription and the
+// node's runtime user list. A peer without a row there has no key.
 func ResolveWireGuardPeers(db *gorm.DB, peers ...*model.WireGuardPeer) {
-	if len(peers) == 0 || !readsNew(db, TableWireGuardPeer) {
+	if len(peers) == 0 {
 		return
 	}
 	ids := make([]uint64, 0, len(peers))
@@ -247,41 +103,21 @@ func ResolveWireGuardPeers(db *gorm.DB, peers ...*model.WireGuardPeer) {
 		}
 	}
 	rows, err := secretRows(db, ScopeWireGuardPeer, ids)
-	only := readsOnlyNew(db, TableWireGuardPeer)
 	for _, peer := range peers {
 		if peer == nil {
 			continue
 		}
 		owner := uint64(peer.ID)
-		peer.PrivateKey = peerKey(owner, "private_key", peer.PrivateKey, rows[secretOwner{owner, "private_key"}], err, only)
-		peer.PresharedKey = peerKey(owner, "preshared_key", peer.PresharedKey, rows[secretOwner{owner, "preshared_key"}], err, only)
+		peer.PrivateKey = peerKey(rows[secretOwner{owner, "private_key"}], err)
+		peer.PresharedKey = peerKey(rows[secretOwner{owner, "preshared_key"}], err)
 	}
 }
 
-func peerKey(owner uint64, column, legacy string, rows map[string]string, err error, only bool) string {
-	value, found := rows[""]
-	if only {
-		// Finalized: the new table's key, or none.
-		if err != nil {
-			return ""
-		}
-		return value
+func peerKey(rows map[string]string, err error) string {
+	if err != nil {
+		return ""
 	}
-	switch {
-	case err == nil && found && value != "" && (value == legacy || Unusable(legacy)):
-		return value
-	case legacy == "":
-		return legacy
-	}
-	reason := FallbackMissing
-	switch {
-	case err != nil:
-		reason = FallbackError
-	case found:
-		reason = FallbackMismatch
-	}
-	recordFallback(TableWireGuardPeer, column, reason, subjectName(owner))
-	return legacy
+	return rows[""]
 }
 
 type secretOwner struct {
@@ -311,71 +147,37 @@ func secretRows(db *gorm.DB, scope string, owners []uint64) (map[secretOwner]map
 	return out, nil
 }
 
-// resolveDocument applies the dual-read rule to each secret position of one
-// legacy JSON column: the new table's value where the legacy document holds
-// the placeholder, the legacy value (counted) where the new row is missing
-// or differs, and the document unchanged where every position agrees.
-//
-// With only (a finalized table) every secret position takes the new
-// table's value, and a position the new table does not hold is left at the
-// placeholder, whatever the legacy document holds there: nothing falls back.
-func resolveDocument(table, column string, owner uint64, document string, rows map[string]string, readErr error, only bool) string {
+// resolveDocument gives each secret position of one legacy JSON column the
+// new table's value. A position the new table does not hold is left at the
+// placeholder, whatever the legacy document holds there.
+func resolveDocument(document string, rows map[string]string, readErr error) string {
 	positions := SecretPositions(document)
 	if len(positions) == 0 {
 		return document
 	}
 	replacements := map[string]string{}
-	if only {
-		placeholder := encodeJSON(Placeholder)
-		for _, position := range positions {
-			value, found := rows[position.Pointer]
-			switch {
-			case readErr == nil && found:
-				if value != position.Value {
-					replacements[position.Pointer] = value
-				}
-			case !position.Moved:
-				if position.Pointer == "" {
-					replacements[""] = Placeholder
-				} else {
-					replacements[position.Pointer] = placeholder
-				}
-			}
-		}
-		if len(replacements) == 0 {
-			return document
-		}
-		resolved, err := replacePositions(document, replacements)
-		if err != nil {
-			return Redact(document)
-		}
-		return resolved
-	}
+	placeholder := encodeJSON(Placeholder)
 	for _, position := range positions {
 		value, found := rows[position.Pointer]
-		if readErr == nil && found && value == position.Value {
-			continue
-		}
-		if readErr == nil && found && position.Moved {
-			replacements[position.Pointer] = value
-			continue
-		}
-		reason := FallbackMissing
 		switch {
-		case readErr != nil:
-			reason = FallbackError
-		case found:
-			reason = FallbackMismatch
+		case readErr == nil && found:
+			if value != position.Value {
+				replacements[position.Pointer] = value
+			}
+		case !position.Moved:
+			if position.Pointer == "" {
+				replacements[""] = Placeholder
+			} else {
+				replacements[position.Pointer] = placeholder
+			}
 		}
-		recordFallback(table, column, reason, subjectName(owner)+" "+position.Pointer)
 	}
 	if len(replacements) == 0 {
 		return document
 	}
 	resolved, err := replacePositions(document, replacements)
 	if err != nil {
-		recordFallback(table, column, FallbackError, subjectName(owner))
-		return document
+		return Redact(document)
 	}
 	return resolved
 }

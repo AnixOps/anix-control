@@ -263,7 +263,7 @@ const nodeSecretScanBatch = 500
 
 // ScanNodeSecrets checks every node protocol and every node raw
 // configuration as the configuration builder would use them (their secrets
-// read through the node credential split, in the table's phase), and
+// read through the node credential split), and
 // reports the findings. It changes nothing.
 func ScanNodeSecrets(ctx context.Context, db *gorm.DB) (*NodeSecretValidation, error) {
 	result := &NodeSecretValidation{Findings: []NodeSecretFinding{}}

@@ -30,12 +30,6 @@ const (
 	// KindCAExpiring: the current module (Agent, kernel) CA or forward link
 	// CA is within ca_expiry_days of its end.
 	KindCAExpiring = "ca_expiring"
-	// KindNodeSecretsSplitStalled: a node credential split table sits in
-	// dual_write or dual_read and was not touched for phase_stuck_after.
-	KindNodeSecretsSplitStalled = "node_secrets_split_stalled" // #nosec G101 -- names an alert kind, not a credential.
-	// KindNodeSecretsFinalizeInterrupted: a table's finalize started and
-	// did not complete.
-	KindNodeSecretsFinalizeInterrupted = "node_secrets_finalize_interrupted" // #nosec G101 -- names an alert kind, not a credential.
 	// KindIdentityImportStalled: the identity authority sits in importing
 	// without progress for phase_stuck_after.
 	KindIdentityImportStalled = "identity_import_stalled"
@@ -76,30 +70,22 @@ const (
 
 // Subject kinds.
 const (
-	SubjectNode        = "node"
-	SubjectCA          = "ca"
-	SubjectModule      = "module"
-	SubjectNodeSecrets = "node_secrets" // #nosec G101 -- names a subject kind, not a credential.
-	SubjectIdentity    = "identity"
-	SubjectPackage     = "package"
+	SubjectNode     = "node"
+	SubjectCA       = "ca"
+	SubjectModule   = "module"
+	SubjectIdentity = "identity"
+	SubjectPackage  = "package"
 	// SubjectPanelCertificate: a certificate of the panel, by name.
 	SubjectPanelCertificate = "panel_certificate"
 	// SubjectBackups: the panel's backups, one subject ("backups").
 	SubjectBackups = "backups"
 )
 
-// finalizeInterruptedAfter is how long a started finalize may take before
-// it counts as interrupted. Its start time is the only write to the table's
-// row while it runs, so the row's updated_at is the time it started.
-const finalizeInterruptedAfter = time.Hour
-
 // phaseKinds are the alert kinds about phased processes: operator-paced
 // rollouts that are reminded of weekly rather than daily.
 var phaseKinds = map[string]bool{
-	KindNodeSecretsSplitStalled:        true,
-	KindNodeSecretsFinalizeInterrupted: true,
-	KindIdentityImportStalled:          true,
-	KindIdentityCutoverPending:         true,
+	KindIdentityImportStalled:  true,
+	KindIdentityCutoverPending: true,
 }
 
 const phaseRenotifyFactor = 7

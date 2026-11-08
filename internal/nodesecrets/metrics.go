@@ -8,16 +8,6 @@ import (
 	"sync/atomic"
 )
 
-// Fallback reasons: why a dual_read reader used the legacy column.
-const (
-	// FallbackMissing: the new table holds no current row for the secret.
-	FallbackMissing = "missing"
-	// FallbackMismatch: the new table's row differs from the legacy column.
-	FallbackMismatch = "mismatch"
-	// FallbackError: the new table could not be read.
-	FallbackError = "error"
-)
-
 // loggedSubjectsLimit bounds the subjects this process remembers having
 // logged. Past it, the counters still count and nothing more is logged.
 const loggedSubjectsLimit = 10000
@@ -76,8 +66,7 @@ func (s *counterSet) write(body *strings.Builder, name string, labelNames [3]str
 }
 
 var (
-	fallbacks counterSet // table, kind, reason
-	invalids  counterSet // table, type, reason
+	invalids counterSet // table, type, reason
 
 	loggedMu       sync.Mutex
 	loggedSubjects = map[string]struct{}{}
@@ -85,8 +74,8 @@ var (
 )
 
 // firstLog reports whether subject is logged for the first time in this
-// process. Readers log once per subject, so a node polling every minute
-// does not repeat the line.
+// process. Findings are logged once per subject, so a node polling every
+// minute does not repeat the line.
 func firstLog(subject string) bool {
 	loggedMu.Lock()
 	defer loggedMu.Unlock()
@@ -106,33 +95,13 @@ func firstLog(subject string) bool {
 }
 
 // ForgetLogged forgets which subjects this process has logged, so the next
-// fallback or finding of each is logged again. Control never calls it;
+// finding of each is logged again. Control never calls it;
 // tests that reuse row ids across databases do.
 func ForgetLogged() {
 	loggedMu.Lock()
 	defer loggedMu.Unlock()
 	loggedSubjects = map[string]struct{}{}
 	loggedFull = false
-}
-
-// recordFallback counts a dual_read reader that used the legacy column, and
-// logs it once per subject. subject names the row and position, never a
-// value.
-func recordFallback(table, kind, reason, subject string) {
-	fallbacks.add([3]string{table, kind, reason})
-	if firstLog("fallback " + table + " " + kind + " " + subject) {
-		slog.Warn("node secret read fell back to the legacy column",
-			"component", "nodesecrets", "table", table, "kind", kind, "subject", subject, "reason", reason)
-	}
-}
-
-// FallbackCount answers how many reads of table's secrets of kind fell back
-// to the legacy column in this process; an empty reason counts every
-// reason.
-func FallbackCount(table, kind, reason string) uint64 {
-	return fallbacks.get(func(labels [3]string) bool {
-		return labels[0] == table && labels[1] == kind && (reason == "" || labels[2] == reason)
-	})
 }
 
 // RecordInvalid counts a node configuration build that used a row whose
@@ -185,12 +154,8 @@ func formatCount(value uint64) string {
 	return string(buffer[i:])
 }
 
-// WritePrometheus writes the dual_read fallback and the validate-on-build
-// counters of this process.
+// WritePrometheus writes the validate-on-build counters of this process.
 func WritePrometheus(body *strings.Builder) {
-	body.WriteString("# HELP anixops_node_secrets_fallback_total Node secret reads in phase dual_read that used the legacy column (section 4.3).\n")
-	body.WriteString("# TYPE anixops_node_secrets_fallback_total counter\n")
-	fallbacks.write(body, "anixops_node_secrets_fallback_total", [3]string{"table", "kind", "reason"})
 	body.WriteString("# HELP anixops_node_secrets_invalid_total Node configuration builds that used a secret failing validation; reported, not excluded (D7).\n")
 	body.WriteString("# TYPE anixops_node_secrets_invalid_total counter\n")
 	invalids.write(body, "anixops_node_secrets_invalid_total", [3]string{"table", "type", "reason"})
