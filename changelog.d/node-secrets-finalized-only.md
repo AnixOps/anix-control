@@ -22,8 +22,9 @@
   finalized at start.
 - Migration `0031_drop_legacy_originals` deletes the original JSON documents
   finalize kept for `unsplit` (`v4_kernel_protocol_secret` rows of scope
-  `legacy_original`). The pre-migration backup runs; going back to 5.0.2
-  means restoring it.
+  `legacy_original`). Stop every 5.0.2 process before the first 5.0.3
+  start (no rolling update). The pre-migration backup runs; going back to
+  5.0.2 means restoring it.
 - `GetCapabilities` of `KernelNodeOps` answers `FINALIZED` for the three
   split tables, and the kernel API views and adoptions of the split's
   credential-free remainder are always available.

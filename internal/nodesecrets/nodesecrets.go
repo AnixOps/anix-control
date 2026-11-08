@@ -102,7 +102,7 @@ func RequireFinalized(db *gorm.DB) error {
 			phase = "none"
 		}
 		return fmt.Errorf("node secret split: table %s is in phase %s (finalize not completed). This release reads finalized tables only. "+
-			"Start 5.0.2, run \"anix-control node-secrets verify\" and \"anix-control node-secrets finalize -confirm -by <you> all\", "+
+			"On 5.0.2, finish the split (backfill, verify, phase all dual_read, finalize -confirm), "+
 			"then start this release (docs/UPGRADE.md, \"Upgrading To 5.0.3\")", table, phase)
 	}
 	return nil

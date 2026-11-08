@@ -82,7 +82,7 @@
 | 订阅变更日志 internal/subscriber/changes.go:65-69 | `pg_advisory_xact_lock` | 靠单写者 |
 | 邀请码 internal/service/invite_service.go:225-230；packages/affiliate/native/invite_codes.go:219-250 | 咨询锁 | 跳过或忙重试 |
 | 签名密钥库 identity/keystore/keystore.go:151-156 | 咨询锁 | 靠单写者 |
-| 一致性读 internal/nodesecrets/verify.go:187-191；packages/identity-platform/native/directory.go:288-291 | `REPEATABLE READ READ ONLY` | 普通事务 |
+| 一致性读 packages/identity-platform/native/directory.go:288-291 | `REPEATABLE READ READ ONLY` | 普通事务 |
 | 统计 SQL internal/service/stats_service.go:451-462、node_traffic_series.go:217-224；packages/machine-telemetry/native/traffic.go:61-71 | `GREATEST`、`::numeric` | `CAST` |
 | 包存储 internal/packagestore/postgres.go:32-204；views.go:186-191, 411-441 | 每个包一个角色 `anix_pkg_<id>` 和模式 `pkg_<id>`，按角色授权和行过滤视图 | 共用内核文件，表名加 `pkg_<id>_` 前缀，“什么也不隔离，只用于开发和测试”（packagestore.go:8-10, 277-306） |
 | 包迁移 sdk/packagestoresdk/migrations.go:168-172 | 咨询锁 | 靠单写者 |

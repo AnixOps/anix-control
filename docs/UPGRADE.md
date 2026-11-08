@@ -44,7 +44,9 @@ original JSON documents finalize kept for `unsplit` (rows of
 pre-migration backup runs.
 
 **At start:** the check passes, migration 0031 runs, and nothing else
-changes. A rolling update is fine: 5.0.2 processes handle finalized tables.
+changes. No rolling update: stop every 5.0.2 process before the first
+5.0.3 start. A 5.0.2 process still running after migration 0031 keeps
+writing original documents that 5.0.3 never deletes.
 
 **Removed:**
 
