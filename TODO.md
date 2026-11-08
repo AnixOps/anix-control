@@ -13,8 +13,8 @@ from this file in the same PR that records it in `CHANGELOG.md`.
 
 - [ ] Node secret split: after the operator runs the irreversible
   `anix-control node-secrets finalize` (`cmd/server/node_secrets_command.go`),
-  delete the dual-read code (`internal/kernelnodeops/split_phases.go`,
-  `internal/model/node_secret.go`).
+  delete the dual-write/dual-read code and the legacy-column fallback
+  (`internal/nodesecrets`, `read.go` and `phase.go`).
 - [ ] Decide when nodes stop accepting the legacy UUID-derived Shadowsocks
   2022 user key, and how nodes and their relay child nodes move to random
   server keys (`docs/manual-intervention.md`). Random user keys exist since
@@ -68,7 +68,9 @@ calls them. Wire them (with tests and docs) or delete them deliberately.
 - [ ] Remove the hard-coded `/home/dev/...` Node.js paths from
   `config/deploy/deploy_panel.sh`.
 - [ ] Background workers that contact real infrastructure (entry DNS
-  updates, reverse-proxy ACME, Agent campaigns) cannot be switched off by
+  updates, reverse-proxy ACME, Agent upgrade campaigns, Reality target
+  rechecks, remote category-list fetches, alert digests;
+  `cmd/server/singleton_workers.go`) cannot be switched off by
   configuration, so rehearsals on production copies need network namespace
   isolation. Add a config switch for outbound background work, and update the
   worker list in `docs/UPGRADE.md` ("Rehearse On A Copy First"), which still
