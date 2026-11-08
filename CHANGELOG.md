@@ -2,6 +2,61 @@
 
 ## Unreleased
 
+## 5.0.2 - 2026-11-08
+
+### Added
+
+- Exit nodes can refuse mainland-China destinations. 节点 → 协议 → 出口策略
+  has a switch per proxy node, off by default
+  (`GET`/`PUT /api/v4/kernel/nodes/<node>/exit-policy`, audited as
+  `exit_policy_set`; migration `0029_node_exit_policy`). While it is on, the
+  node's desired configuration carries `exit_policy`, the Agent has the
+  anx-node kernel refuse connections to mainland-China addresses (the list
+  ships with the Agent) and reports the refusals on its heartbeat. Control
+  counts them on the section and raises the alert
+  `exit_mainland_destinations` when the node refused some within 24 hours:
+  mainland traffic reaches the exit, so check the entries and the clients'
+  routing. It needs an Agent and kernel of 5.0.2 or later; older ones ignore
+  the setting.
+- Manual kernel install. 升级节点 → 只升级内核 can upload the files of an
+  anx-node release (`SHA256SUMS`, `SHA256SUMS.sig` and the packages), one
+  package per request: `POST /api/v4/kernel/agents/kernel-releases`
+  (multipart field `files`, super administrators). Control checks the
+  signature against the kernel release key built into Control (the one the
+  install script and the Agent embed) and no other, checks each package
+  against `SHA256SUMS` and stores the release in
+  `agent_install.artifact_dir/anx-node/<version>/`. Push it with a kernel-only
+  upgrade, which installs the newest release stored there. Errors:
+  `kernel_release_invalid` (signature or digest), `kernel_release_conflict`
+  (another `SHA256SUMS` for that version), `agent_install_unconfigured` (no
+  `agent_install.artifact_dir`).
+
+### Changed
+
+- A forward route or reverse proxy on the network model is refused when it
+  is saved if its listen port is taken on the same node by another forward,
+  reverse proxy or kernel forward hop, a network-model ingress, a node
+  protocol or an egress relay. The v4 forwarding API answers `409 refused`
+  with a `port_in_use` violation on `listen.port` naming the owner, a
+  reverse proxy answers `400`. Before, the route was stored and waited in
+  the plan. Routes that already conflict are left as they are until they
+  are saved again.
+
+### Security
+
+- Shadowsocks 2022 user keys are no longer only derived from the UUID. A
+  user gets a random key at the first subscription pull
+  (`v5_user_ss2022_key`, migration `0030_ss2022_user_keys`); users.v1 sends it
+  to the nodes as extra `ss2022_key`, and Agents of protocol revision 2
+  (5.0.2 and later) serve it as a second user next to the legacy
+  UUID-derived key. Subscriptions offer the new key only at nodes whose Agent
+  reported revision 2 over the mTLS stream (Control now stores each node's
+  revision, `v4_kernel_agent_transport.protocol_revision`); other nodes keep
+  the legacy key. Existing users are not forced to change anything: their
+  configured clients keep working, and the next subscription pull switches
+  them. Server keys are unchanged. A user who uses both keys on one node is
+  counted twice by the kernel's per-user speed and device limits.
+
 ## 5.0.1 - 2026-11-04
 
 ### Added
