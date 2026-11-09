@@ -46,6 +46,7 @@
           :help="t('nodeEntries.sheet.portMapHelp')"
           :error="errors[form.key]?.portMap"
         />
+        <UiTextField v-model="form.pool" size="md" :label="t('nodeEntries.sheet.pool')" placeholder="shard-0" :help="t('nodeEntries.sheet.poolHelp')" :error="errors[form.key]?.pool" />
         <UiSwitch v-model="form.enabled" :label="t('nodeEntries.sheet.enabled')" />
       </fieldset>
       <UiButton size="sm" variant="ghost" :icon="Plus" :disabled="forms.length >= MAX_ENTRIES" data-testid="add-node-entry" @click="add">{{ t('nodeEntries.add') }}</UiButton>
@@ -115,7 +116,8 @@ async function save() {
     required: t('nodeEntries.sheet.required'),
     noPipe: t('nodeEntries.sheet.noPipe'),
     duplicate: t('nodeEntries.sheet.duplicate'),
-    badLine: line => t('nodeEntries.sheet.badLine', { line })
+    badLine: line => t('nodeEntries.sheet.badLine', { line }),
+    badPool: t('nodeEntries.sheet.badPool')
   })
   if (Object.keys(errors.value).length) return
   saving.value = true

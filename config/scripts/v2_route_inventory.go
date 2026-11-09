@@ -727,11 +727,17 @@ func (c *collector) isDirectSafeSubscribeRegistration(statement ast.Stmt, env *s
 		return false
 	}
 	selector, ok := call.Fun.(*ast.SelectorExpr)
-	if !ok || selector.Sel.Name != "GET" || len(call.Args) < 2 {
+	if !ok || len(call.Args) < 2 {
+		return false
+	}
+	// The subscription itself (GET /<path>/:token) and the AnixOps Net
+	// clients' failure report on its address (POST /<path>/:token/report).
+	suffix, known := map[string]string{"GET": "/:token", "POST": "/:token/report"}[selector.Sel.Name]
+	if !known {
 		return false
 	}
 	target, err := c.resolveGroupWithMiddlewareMutation(selector.X, env, false)
-	if err != nil || target == nil || target.base != "" || !isSafeSubscribeRegistrationPath(call.Args[0], env) {
+	if err != nil || target == nil || target.base != "" || !isSafeSubscribeRegistrationPath(call.Args[0], env, suffix) {
 		return false
 	}
 	for _, argument := range call.Args[1:] {
@@ -906,7 +912,8 @@ func (c *collector) registerArguments(target *group, method string, args []ast.E
 	}
 	relativePath, ok := resolveString(args[0], env)
 	if !ok {
-		if target.base == "" && method == "GET" && isSafeSubscribeRegistrationPath(args[0], env) {
+		if target.base == "" && ((method == "GET" && isSafeSubscribeRegistrationPath(args[0], env, "/:token")) ||
+			(method == "POST" && isSafeSubscribeRegistrationPath(args[0], env, "/:token/report"))) {
 			return nil
 		}
 		if isV2Group(target) {
@@ -1062,7 +1069,7 @@ func (c *collector) isTrustedConfigCall(expression ast.Expr, env *scope, functio
 	return imported
 }
 
-func isSafeSubscribeRegistrationPath(expression ast.Expr, env *scope) bool {
+func isSafeSubscribeRegistrationPath(expression ast.Expr, env *scope, want string) bool {
 	var parts []ast.Expr
 	flattenStringConcatenation(unwrapParens(expression), &parts)
 	if len(parts) != 3 {
@@ -1076,7 +1083,7 @@ func isSafeSubscribeRegistrationPath(expression ast.Expr, env *scope) bool {
 		return false
 	}
 	suffix, ok := resolveString(parts[2], env)
-	return ok && suffix == "/:token"
+	return ok && suffix == want
 }
 
 func flattenStringConcatenation(expression ast.Expr, parts *[]ast.Expr) {

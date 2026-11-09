@@ -12,6 +12,7 @@ import adminApiTokens from './modules/zh-CN/adminApiTokens'
 import forwardV4 from './modules/zh-CN/forwardV4'
 import forwardDns from './modules/zh-CN/forwardDns'
 import egressRoutes from './modules/zh-CN/egressRoutes'
+import standby from './modules/zh-CN/standby'
 import reverseProxies from './modules/zh-CN/reverseProxies'
 import nodeDiagnostics from './modules/zh-CN/nodeDiagnostics'
 import realityTargets from './modules/zh-CN/realityTargets'
@@ -27,6 +28,7 @@ export default {
   ...forwardV4,
   ...forwardDns,
   ...egressRoutes,
+  ...standby,
   ...reverseProxies,
   ...nodeDiagnostics,
   ...realityTargets,

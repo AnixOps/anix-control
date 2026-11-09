@@ -41,6 +41,10 @@ type NodeEntry struct {
 	// IWANLineID is the line of an iWAN entry (model.IWANLine); nil for
 	// the other kinds.
 	IWANLineID *uint `gorm:"column:iwan_line_id" json:"iwan_line_id"`
+	// Pool is the entry pool (internal/entrypool): only the subscribers of
+	// that pool are offered the entry. Empty offers it to every subscriber
+	// outside the quarantine pool.
+	Pool string `gorm:"size:32;not null;default:''" json:"pool"`
 }
 
 func (NodeEntry) TableName() string { return "v5_node_entry" }

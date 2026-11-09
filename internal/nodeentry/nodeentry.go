@@ -28,6 +28,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/AnixOps/anix-control/v5/internal/entrypool"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"gorm.io/gorm"
 )
@@ -73,6 +74,9 @@ type Input struct {
 	Enabled *bool       `json:"enabled"`
 	// IWANLineID is the line of an iWAN entry.
 	IWANLineID *uint `json:"iwan_line_id"`
+	// Pool offers the entry only to the subscribers of that pool
+	// (internal/entrypool); empty offers it to everyone.
+	Pool string `json:"pool"`
 }
 
 // View is one entry as the API answers it.
@@ -86,6 +90,7 @@ type View struct {
 	Enabled    bool        `json:"enabled"`
 	Sort       int         `json:"sort"`
 	IWANLineID *uint       `json:"iwan_line_id"`
+	Pool       string      `json:"pool"`
 }
 
 // Actor is who made an administrator's change, for the audit entry.
@@ -220,7 +225,11 @@ func validate(inputs []Input) ([]model.NodeEntry, error) {
 		if err != nil {
 			return nil, invalid("entry %d: %v", n, err)
 		}
-		row := model.NodeEntry{Label: label, Kind: input.Kind, Host: host, Enabled: input.Enabled == nil || *input.Enabled, Sort: i}
+		pool := strings.TrimSpace(input.Pool)
+		if err := entrypool.CheckPool(pool); err != nil {
+			return nil, invalid("entry %d: %v", n, err)
+		}
+		row := model.NodeEntry{Label: label, Kind: input.Kind, Host: host, Enabled: input.Enabled == nil || *input.Enabled, Sort: i, Pool: pool}
 		switch input.Kind {
 		case model.NodeEntryDirect:
 			if len(input.PortMap) > 0 {
@@ -316,7 +325,7 @@ func Family(host string) string {
 func viewOf(row model.NodeEntry) View {
 	return View{
 		ID: row.ID, Label: row.Label, Kind: row.Kind, Host: row.Host, Family: Family(row.Host),
-		PortMap: Ranges(row), Enabled: row.Enabled, Sort: row.Sort, IWANLineID: row.IWANLineID,
+		PortMap: Ranges(row), Enabled: row.Enabled, Sort: row.Sort, IWANLineID: row.IWANLineID, Pool: row.Pool,
 	}
 }
 

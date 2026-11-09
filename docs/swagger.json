@@ -7607,6 +7607,40 @@
                 }
             }
         },
+        "/api/v4/kernel/client-failures": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "What AnixOps Net clients reported about each node over the last hours (default 24, at most 336): the outcomes by cause, how many subscribers reported it and gave up on it, outcomes by kind of network, the failure ratio; most failing first. Never a subscriber's identity.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Client failure reports by node",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "hours to look back",
+                        "name": "hours",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/v4/kernel/egress-routes": {
             "get": {
                 "security": [
@@ -7738,6 +7772,192 @@
                         "name": "id",
                         "in": "path",
                         "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v4/kernel/entry-pools": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "The policy (shards, quarantine_days, quarantine_pool) and every pool with entries or subscribers: its node entries, how many subscribers it has and why (assigned, quarantine, shard, none), and up to 500 of their user ids. The pool \"\" holds the shared entries and the subscribers without a pool.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Entry pools",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v4/kernel/entry-pools/assign": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Puts the users in pool (a canary pool of one user, or the pool a leak is isolated in), over the policy; an empty pool removes their assignment. Audited.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Assign subscribers to an entry pool",
+                "parameters": [
+                    {
+                        "description": "users and pool",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/entrypool.AssignInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v4/kernel/entry-pools/leak": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "The entries with entry_id, or with host (an address found in a leaked subscription or probed), each with its pool and the subscribers of that pool (up to 500 ids). An entry without a pool went to every subscriber without an entry of their own pool on that node.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Who was given a leaked address",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "node entry id",
+                        "name": "entry_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "entry host",
+                        "name": "host",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v4/kernel/entry-pools/policy": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "shards deals the subscribers without an assignment into shard-0..shard-(N-1) by user id (0 off, 2-64); quarantine_days puts accounts younger than that, and accounts without a plan, into quarantine_pool (0 off). Subscriptions follow on their next update. Audited.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Set the entry pool policy",
+                "parameters": [
+                    {
+                        "description": "the policy",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/entrypool.Policy"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v4/kernel/entry-pools/split": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Assigns the subscribers of pool alternately to into[0] and into[1], to bisect a leak: give each half its own entry and see which one leaks. Audited.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Split an entry pool in two",
+                "parameters": [
+                    {
+                        "description": "the pool and its halves",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/entrypool.SplitInput"
+                        }
                     }
                 ],
                 "responses": {
@@ -8087,6 +8307,112 @@
                         "name": "id",
                         "in": "path",
                         "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v4/kernel/network/standby": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Every cross-border transport of the network model (kind anx, not trusted) with the node pairs it serves, the tier its traffic takes now (reality, xhttp or off), the tiers ready for every pair, and its channels (relay port, borrowed site, own domain and path, REALITY public key); channels of pairs that are gone under stale. Never a uuid or private key.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Cross-border standby channels",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v4/kernel/network/standby/prepare": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Makes sure every pair of the cross-border transports (or of transports) has a channel of each tier it can have: reality once reality_server_name is given (reality_dest defaults to it on 443), xhttp once xhttp_domains names the exit node's own domain. New channels get a fresh uuid, REALITY key pair, short id, path and a relay port of 31000-31999; existing ones keep them. Inactive channels of pairs that are gone are removed when transports is empty. Changes nothing on the nodes until a switch. Audited.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Prepare cross-border standby channels",
+                "parameters": [
+                    {
+                        "description": "what to prepare",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/l2standby.PrepareInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v4/kernel/network/standby/switch": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Moves the traffic of transports (or all) to their reality or xhttp channels, or back to the transport with tier off: the source node routes every domain to the exit node's VLESS relay, the exit node serves it, both within a minute through their Agents. All or nothing: 409 not_ready when a transport lacks a ready channel of the tier for one of its pairs. Audited.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Switch cross-border transports to a standby tier",
+                "parameters": [
+                    {
+                        "description": "transports and tier",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/l2standby.SwitchInput"
+                        }
                     }
                 ],
                 "responses": {
@@ -9892,6 +10218,41 @@
                 }
             }
         },
+        "/s/{token}/report": {
+            "post": {
+                "description": "A client's connection outcomes per node of its subscription over window_secs (60-86400): ok, fallback, timeout, refused, reset, after_handshake, keepalive_lost, other (each 0-1000000), stopped, clock_skew_secs; at most 200 nodes, unknown fields ignored, no destinations. The token is the subscription's, in the path. 204 on success, 404 for an unknown token, 400 out of bounds, 429 when the token reported within 10 minutes (drop the report).",
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Subscription"
+                ],
+                "summary": "Report connection outcomes (AnixOps Net)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "subscription token",
+                        "name": "token",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "the report",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/clientreport.Report"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
         "/telegram/webhook": {
             "post": {
                 "description": "接收Telegram Bot的Webhook回调",
@@ -10401,6 +10762,74 @@
                 }
             }
         },
+        "clientreport.NodeReport": {
+            "type": "object",
+            "properties": {
+                "after_handshake": {
+                    "type": "integer"
+                },
+                "clock_skew_secs": {
+                    "type": "integer"
+                },
+                "fallback": {
+                    "type": "integer"
+                },
+                "keepalive_lost": {
+                    "type": "integer"
+                },
+                "node": {
+                    "description": "Node is the node as the subscription named it.",
+                    "type": "string"
+                },
+                "ok": {
+                    "type": "integer"
+                },
+                "other": {
+                    "type": "integer"
+                },
+                "proto": {
+                    "type": "string"
+                },
+                "refused": {
+                    "type": "integer"
+                },
+                "reset": {
+                    "type": "integer"
+                },
+                "server": {
+                    "type": "string"
+                },
+                "stopped": {
+                    "type": "boolean"
+                },
+                "timeout": {
+                    "type": "integer"
+                }
+            }
+        },
+        "clientreport.Report": {
+            "type": "object",
+            "properties": {
+                "client": {
+                    "type": "string"
+                },
+                "network": {
+                    "type": "string"
+                },
+                "nodes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/clientreport.NodeReport"
+                    }
+                },
+                "platform": {
+                    "type": "string"
+                },
+                "window_secs": {
+                    "type": "integer"
+                }
+            }
+        },
         "destinationstats.RuleInput": {
             "type": "object",
             "properties": {
@@ -10481,6 +10910,51 @@
                 },
                 "source_node_id": {
                     "type": "integer"
+                }
+            }
+        },
+        "entrypool.AssignInput": {
+            "type": "object",
+            "properties": {
+                "pool": {
+                    "type": "string"
+                },
+                "reason": {
+                    "type": "string"
+                },
+                "user_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                }
+            }
+        },
+        "entrypool.Policy": {
+            "type": "object",
+            "properties": {
+                "quarantine_days": {
+                    "type": "integer"
+                },
+                "quarantine_pool": {
+                    "type": "string"
+                },
+                "shards": {
+                    "type": "integer"
+                }
+            }
+        },
+        "entrypool.SplitInput": {
+            "type": "object",
+            "properties": {
+                "into": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "pool": {
+                    "type": "string"
                 }
             }
         },
@@ -10929,6 +11403,58 @@
                 },
                 "username": {
                     "type": "string"
+                }
+            }
+        },
+        "l2standby.PrepareInput": {
+            "type": "object",
+            "properties": {
+                "exit_hosts": {
+                    "description": "ExitHosts overrides the address a source node dials for the reality\ntier, by exit node id; the node's host when absent.",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "reality_dest": {
+                    "type": "string"
+                },
+                "reality_server_name": {
+                    "description": "RealityServerName is the borrowed site of the reality tier (SNI) and\nRealityDest its address (server_name:443 when empty).",
+                    "type": "string"
+                },
+                "transports": {
+                    "description": "Transports limits the preparation; empty prepares every cross-border\ntransport.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "xhttp_domains": {
+                    "description": "XHTTPDomains is our own domain on each exit node's TLS front, by\nexit node id (\"12\" or \"proxy-12\"). An exit node without one gets no\nxhttp channel yet.",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "l2standby.SwitchInput": {
+            "type": "object",
+            "properties": {
+                "all": {
+                    "type": "boolean"
+                },
+                "tier": {
+                    "description": "Tier is reality, xhttp, or off (back to the transport).",
+                    "type": "string"
+                },
+                "transports": {
+                    "description": "Transports to switch; All switches every cross-border transport\n(A2 targeted as a whole).",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
         },
@@ -12156,6 +12682,10 @@
                     "type": "string"
                 },
                 "label": {
+                    "type": "string"
+                },
+                "pool": {
+                    "description": "Pool offers the entry only to the subscribers of that pool\n(internal/entrypool); empty offers it to everyone.",
                     "type": "string"
                 },
                 "port_map": {

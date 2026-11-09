@@ -138,4 +138,8 @@
 //     the original JSON documents finalize kept for unsplit
 //     (v4_kernel_protocol_secret rows of scope legacy_original) are
 //     deleted.
+//   - 0032_cross_border_standby_and_entry_pools: the cross-border standby
+//     channels (v5_l2_standby), the entry pool policy and assignments
+//     (v5_entry_pool_policy, v5_user_entry_pool, v5_node_entry.pool) and
+//     the clients' failure reports (v5_client_failure_report).
 package migrations

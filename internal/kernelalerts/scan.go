@@ -67,6 +67,7 @@ func (s *Scanner) Scan(ctx context.Context) (ScanResult, error) {
 		{[]string{KindPanelCertificateExpiring, KindPanelCertificateRenewalFailing}, s.panelCertificates},
 		{[]string{KindBackupVerifyFailed, KindBackupStale}, s.backups},
 		{[]string{KindExitMainlandDestinations}, s.exitMainland},
+		{[]string{KindCrossBorderLinkDown, KindCrossBorderWideOutage}, s.crossBorder},
 	} {
 		findings, err := check.run(ctx, now)
 		if ctx.Err() != nil {

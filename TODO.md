@@ -33,6 +33,22 @@ from this file in the same PR that records it in `CHANGELOG.md`.
   directly by a kernel handler, outside the `/api/v2` package gate. Decide
   whether to package-gate it.
 
+## Cross-Border Standby And Canaries (paused, not urgent)
+
+Code and playbooks are ready; the operator does these when there is time
+(owner decision 2026-11-09: no reminder).
+
+- [ ] Verify on one pair that the Agent passes the `egress` member's relay
+  `settings` and `listen` through, then drill both standby tiers
+  (`docs/guide/cross-border-standby.md`).
+- [ ] Tier 2: an own domain (not the ICP-filed one) and the nginx front on
+  each cross-border exit node.
+- [ ] Buy canary exits (same provider/ASN as the real exits) and one domestic
+  probe machine; deploy AnixOps-ansible `canary-egress` / `canary-probe`.
+- [ ] Turn on entry pools (`PUT /api/v4/kernel/entry-pools/policy`) and give
+  busy nodes per-shard and quarantine entries (`docs/guide/entry-pools.md`).
+- [ ] Bump networkcore in anx so anx-node has VLESS egress relays.
+
 ## Implemented But Not Wired (keep; wire later)
 
 These code paths exist and have unit tests, but nothing in the running server

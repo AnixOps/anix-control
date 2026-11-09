@@ -14,6 +14,7 @@ export function alertTone(alert) {
 // backup alerts open 系统设置 → 备份.
 export function alertRoute(alert) {
   if (alert?.subject_kind === 'backups') return '/admin/system/backup'
+  if (alert?.subject_kind === 'transport') return '/admin/forward/standby'
   if (alert?.subject_kind !== 'node') return null
   const match = /^(proxy|forward)-(\d+)$/.exec(String(alert.subject || ''))
   if (!match) return null
@@ -35,7 +36,9 @@ const KIND_ICONS = {
   panel_certificate_renewal_failing: ShieldAlert,
   backup_verify_failed: DatabaseBackup,
   backup_stale: DatabaseBackup,
-  exit_mainland_destinations: ShieldAlert
+  exit_mainland_destinations: ShieldAlert,
+  cross_border_link_down: ShieldAlert,
+  cross_border_wide_outage: ShieldAlert
 }
 
 export const KERNEL_ALERT_KINDS = Object.freeze(Object.keys(KIND_ICONS))
@@ -138,6 +141,16 @@ export function alertText(alert, { t, format }) {
     case 'exit_mainland_destinations':
       title = t(`${base}.exitMainland.title`, { name: holderName(alert, detail), n: text(detail.total) || '0' })
       hint = t(`${base}.exitMainland.hint`, { date: date(detail.last_at) })
+      break
+    case 'cross_border_link_down':
+      title = t(`${base}.crossBorderDown.title`, { name: text(detail.transport) || text(alert.subject) || '—', date: date(detail.since) })
+      hint = detail.active_tier && detail.active_tier !== 'off'
+        ? t(`${base}.crossBorderDown.switched`, { tier: text(detail.active_tier) })
+        : t(`${base}.crossBorderDown.hint`)
+      break
+    case 'cross_border_wide_outage':
+      title = t(`${base}.crossBorderWide.title`, { n: text((detail.down || []).length), total: text(detail.total) || '0' })
+      hint = t(`${base}.crossBorderWide.hint`)
       break
     default:
       title = text(alert?.message) || text(alert?.kind) || text(alert?.key)

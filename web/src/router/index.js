@@ -48,6 +48,7 @@ const ForwardRouteDetail = () => import('@/views/admin/forward/RouteDetail.vue')
 const ForwardNodeView = () => import('@/views/admin/forward/NodeDetail.vue')
 const ForwardDnsProviders = () => import('@/views/admin/forward/DnsProviders.vue')
 const ForwardEgressRoutes = () => import('@/views/admin/forward/EgressRoutes.vue')
+const ForwardStandby = () => import('@/views/admin/forward/CrossBorderStandby.vue')
 const ForwardReverseProxies = () => import('@/views/admin/forward/ReverseProxies.vue')
 const Account = () => import('@/views/Account.vue')
 const StatusPage = () => import('@/views/StatusPage.vue')
@@ -283,6 +284,13 @@ const routes = [
         path: 'forward/egress',
         component: ForwardEgressRoutes,
         meta: { layout: 'wide', titleKey: 'pageTitles.admin.forwardEgress' }
+      },
+      {
+        // 过境应急: the cross-border standby channels (F-54), a kernel API
+        // of its own that needs no forward package.
+        path: 'forward/standby',
+        component: ForwardStandby,
+        meta: { layout: 'wide', titleKey: 'pageTitles.admin.forwardStandby' }
       },
       {
         // 反向代理: HTTP(S) sites on entry nodes, a kernel API of its own
