@@ -502,6 +502,13 @@ func ConditionalSubscribeSafety(r *gin.Engine) {
 	r.GET("/"+subscribePath+"/:token", hiddenHandler.Get)
 }
 """,
+            "post_other_suffix": """
+
+func PostOtherSuffix(r *gin.Engine) {
+	subscribePath := config.PrepareSubscribePath(cfg)
+	r.POST("/"+subscribePath+"/:token/other", hiddenHandler.Get)
+}
+""",
             "pointer": """
 
 func PointerSubscribeMutation(r *gin.Engine) {
