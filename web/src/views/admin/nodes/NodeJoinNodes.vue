@@ -22,7 +22,7 @@
           </span>
           <span class="join-node__meta">
             <code>{{ node.node }}</code>
-            <span>{{ node.host || '—' }}</span>
+            <span>{{ showAddress(node.host) || '—' }}</span>
             <span v-if="node.agent_version">{{ node.agent_version }}</span>
           </span>
           <span v-if="node.approval === 'pending'" class="join-node__actions">
@@ -46,10 +46,13 @@
 // id, address, approval and whether it is online. A machine waiting for
 // approval carries 批准 and 拒绝.
 import { computed } from 'vue'
+import { useAddressPrivacy } from '@/composables/useAddressPrivacy'
 import UiBadge from '@/ui/UiBadge.vue'
 import UiButton from '@/ui/UiButton.vue'
 import UiSpinner from '@/ui/UiSpinner.vue'
 import { useAppI18n } from '@/composables/useAppI18n'
+
+const { display: showAddress } = useAddressPrivacy()
 
 const SHOWN = 8
 

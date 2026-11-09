@@ -90,7 +90,9 @@ describe('NodeEntriesSection', () => {
       components: { NodeEntriesSection, UiHost },
       template: '<div><NodeEntriesSection :node="{ id: 60, name: \'SH\', host: \'relay.example.com\' }" /><UiHost /></div>'
     })
-    expect(await screen.findByText('2001:db8::10')).toBeTruthy()
+    // The list masks server addresses until the administrator reveals them.
+    expect(await screen.findByText('2001:****')).toBeTruthy()
+    expect(screen.queryByText('2001:db8::10')).toBeNull()
     expect(kernelApi.getKernelNodeEntries).toHaveBeenCalledWith('proxy-60')
 
     const user = userEvent.setup()
@@ -107,7 +109,7 @@ describe('NodeEntriesSection', () => {
       { label: 'CN2 v6', kind: 'direct', host: '2001:db8::10', port_map: [], enabled: true },
       { label: '9929 v6', kind: 'direct', host: '2001:db8:1::20', port_map: [], enabled: true }
     ])
-    expect(await screen.findByText('2001:db8:1::20')).toBeTruthy()
+    await waitFor(() => expect(screen.getAllByText('2001:****')).toHaveLength(2))
   })
 
   it('warns about protocols no entry offers', async () => {

@@ -78,7 +78,7 @@
               </span>
             </template>
             <template #cell-address="{ row }">
-              <code class="node-address">{{ row.address || '—' }}</code>
+              <code class="node-address">{{ showAddress(row.address) || '—' }}</code>
             </template>
             <template #cell-status="{ row }">
               <span class="node-badges">
@@ -184,6 +184,7 @@
 // lists the node groups behind the join command. There is one kind of node:
 // relaying is the network model's (ANX), not a kind of node.
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { useAddressPrivacy } from '@/composables/useAddressPrivacy'
 import { useRoute, useRouter } from 'vue-router'
 import { Check, Cpu, FileText, Layers, Pencil, RefreshCcw, Rocket, Server, SquareArrowOutUpRight, Terminal, Trash2, X } from '@lucide/vue'
 import { getNodeStats } from '@/api/admin'
@@ -222,6 +223,8 @@ import { useNodeActions } from './nodes/useNodeActions'
 import { useNodeGroups } from './nodes/useNodeGroups'
 import { useNodeServiceStatus } from './nodes/useNodeServiceStatus'
 import { useNodeTransports } from './nodes/useNodeTransports'
+
+const { display: showAddress } = useAddressPrivacy()
 
 const { t, te } = useAppI18n()
 const format = useFormat()

@@ -62,7 +62,7 @@
 
         <UiGroupedList :title="t('admin.nodes.overview.config')" heading-tag="h2">
           <UiGroupedListRow :label="t('admin.nodes.table.address')">
-            <template #value><code class="node-overview__code">{{ node.address || '—' }}</code></template>
+            <template #value><code class="node-overview__code">{{ showAddress(node.address) || '—' }}</code></template>
           </UiGroupedListRow>
           <UiGroupedListRow :label="t('admin.nodes.table.protocols')" :value="String(protocolCount)" />
           <UiGroupedListRow :label="t('admin.nodes.table.parent')">
@@ -93,6 +93,7 @@
 // Agent's own report), traffic and the node's settings. Everything comes
 // from GET /admin/nodes/:id; nothing here writes.
 import { computed } from 'vue'
+import { useAddressPrivacy } from '@/composables/useAddressPrivacy'
 import { RouterLink } from 'vue-router'
 import UiBadge from '@/ui/UiBadge.vue'
 import UiGroupedList from '@/ui/UiGroupedList.vue'
@@ -103,6 +104,8 @@ import { useAppI18n } from '@/composables/useAppI18n'
 import NodeAgentConnection from './NodeAgentConnection.vue'
 import NodeNotice from './NodeNotice.vue'
 import { displayStatus, isOverQuota, monthlyUsed, splitTags, statusName } from './nodeData'
+
+const { display: showAddress } = useAddressPrivacy()
 
 const props = defineProps({
   node: { type: Object, required: true },

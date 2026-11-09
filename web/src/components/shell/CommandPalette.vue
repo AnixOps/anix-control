@@ -85,10 +85,11 @@ import {
   DialogContent, DialogDescription, DialogOverlay, DialogPortal, DialogRoot, DialogTitle,
   ListboxContent, ListboxFilter, ListboxGroup, ListboxGroupLabel, ListboxItem, ListboxRoot, useId
 } from 'reka-ui'
-import { Languages, Monitor, Moon, Search, Sun, UserRound } from '@lucide/vue'
+import { Eye, EyeOff, Languages, Monitor, Moon, Search, Sun, UserRound } from '@lucide/vue'
 import { getUserList } from '@/api/admin'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { useTheme } from '@/composables/useTheme'
+import { useAddressPrivacy } from '@/composables/useAddressPrivacy'
 import { matchesQuery, paletteEntries } from '@/navigation/menu'
 import { navIcon } from '@/navigation/icons'
 import UiIcon from '@/ui/UiIcon.vue'
@@ -106,6 +107,7 @@ const USER_SEARCH_LIMIT = 5
 const router = useRouter()
 const { t, currentLocale, localeOptions, switchLocale } = useAppI18n()
 const { themePreference, setThemePreference } = useTheme()
+const { revealed: addressesRevealed, setRevealed: setAddressesRevealed } = useAddressPrivacy()
 const { open } = usePalette()
 
 const listId = useId(undefined, 'palette-list')
@@ -142,7 +144,15 @@ const settingEntries = computed(() => {
   const entries = [
     { id: 'theme-light', label: t('shell.palette.actions.themeLight'), iconComponent: Sun, run: () => setThemePreference('light'), when: themePreference.value !== 'light' },
     { id: 'theme-dark', label: t('shell.palette.actions.themeDark'), iconComponent: Moon, run: () => setThemePreference('dark'), when: themePreference.value !== 'dark' },
-    { id: 'theme-system', label: t('shell.palette.actions.themeSystem'), iconComponent: Monitor, run: () => setThemePreference('system'), when: themePreference.value !== 'system' }
+    { id: 'theme-system', label: t('shell.palette.actions.themeSystem'), iconComponent: Monitor, run: () => setThemePreference('system'), when: themePreference.value !== 'system' },
+    {
+      id: 'reveal-addresses',
+      label: addressesRevealed.value ? t('shell.palette.actions.hideAddresses') : t('shell.palette.actions.revealAddresses'),
+      iconComponent: addressesRevealed.value ? EyeOff : Eye,
+      run: () => setAddressesRevealed(!addressesRevealed.value),
+      when: true,
+      keywords: 'ip address privacy mask 地址 脱敏 隐藏 显示'
+    }
   ]
   for (const option of localeOptions.value) {
     if (option.value === currentLocale.value) continue

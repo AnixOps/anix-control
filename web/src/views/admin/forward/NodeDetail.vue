@@ -10,7 +10,7 @@
         </template>
         <template #meta>
           <UiBadge :status="nodeState(node)" />
-          <span class="fwd-mono node-ref">{{ [node.node_ref, node.host].filter(Boolean).join(' · ') }}</span>
+          <span class="fwd-mono node-ref">{{ [node.node_ref, showAddress(node.host)].filter(Boolean).join(' · ') }}</span>
         </template>
         <template #actions>
           <span class="fwd-muted node-updated">{{ secondsAgo !== null && secondsAgo < 5 ? t('forwardV4.updated.now') : t('forwardV4.updated.ago', { n: secondsAgo ?? 0 }) }}</span>
@@ -176,6 +176,7 @@
 // forwarding settings (PUT /nodes/{ref}/settings). A proxy node shows only
 // its forwarding settings; its record belongs to the proxy node page (D15).
 import { computed, reactive, ref } from 'vue'
+import { useAddressPrivacy } from '@/composables/useAddressPrivacy'
 import { useRouter } from 'vue-router'
 import { AlertTriangle, ChevronLeft, Plus, Power, RefreshCw, Terminal, Trash2, X } from '@lucide/vue'
 import {
@@ -193,6 +194,8 @@ import { forwardErrorMessage, violationText } from '@/components/forward/message
 import { usePolling } from '@/components/forward/usePolling'
 import { NETWORK_ENGINE, NETWORK_SECURITY, SECURITIES, nodeLag, nodeState, num, roleOf } from '@/components/forward/routeModel'
 import '@/components/forward/forward.css'
+
+const { display: showAddress } = useAddressPrivacy()
 
 const props = defineProps({
   nodeRef: { type: String, required: true }

@@ -225,7 +225,7 @@ describe('NodeJoinSheet', () => {
     const row = await within(dialog).findByText('hk-01 joined')
     const item = row.closest('li')
     expect(item.textContent).toContain('proxy-12')
-    expect(item.textContent).toContain('203.0.113.5')
+    expect(item.textContent).toContain('203.*.*.5')
     expect(item.textContent).toContain('Approved')
     expect(item.textContent).toContain('Connecting')
     expect(within(dialog).queryByTestId('join-waiting')).toBeNull()

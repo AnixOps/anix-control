@@ -305,7 +305,9 @@ describe('entry HA card', () => {
     await flushPromises()
     expect(wrapper.get('[data-testid="forward-entry-ha-state"]').text()).toBe('Degraded')
     expect(wrapper.text()).toContain('No entry is healthy')
-    expect(wrapper.text()).toContain('203.0.113.41')
+    // Server addresses are masked until the administrator reveals them.
+    expect(wrapper.text()).toContain('203.*.*.41')
+    expect(wrapper.text()).not.toContain('203.0.113.41')
     expect(wrapper.text()).toContain('None healthy: published kept')
     const node = wrapper.get('[data-node-ref="forward-41"]').text()
     expect(node).toContain('hk-edge-01')
