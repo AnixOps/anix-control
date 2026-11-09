@@ -13,7 +13,7 @@
         <li v-for="line in lines" :key="line.id" class="iwan-lines-sheet__line" :data-testid="`iwan-line-${line.id}`">
           <div class="iwan-lines-sheet__info">
             <span class="iwan-lines-sheet__name">{{ line.name }}</span>
-            <span class="iwan-lines-sheet__address">{{ address(line) }}</span>
+            <span class="iwan-lines-sheet__address">{{ showAddress(address(line)) }}</span>
             <span class="iwan-lines-sheet__used">{{ t('nodeEntries.lines.used', { n: line.entries || 0 }) }}</span>
           </div>
           <UiIconButton :icon="Pencil" size="sm" :label="t('nodeEntries.lines.edit', { name: line.name })" @click="edit(line)" />
@@ -56,11 +56,14 @@
 // third-party iWAN ingresses AnixOps Net logs into with each line's shared
 // account. A node's iwan entry reaches the node through one of them.
 import { ref, watch } from 'vue'
+import { useAddressPrivacy } from '@/composables/useAddressPrivacy'
 import { Pencil, Plus, Trash2 } from '@lucide/vue'
 import { UiButton, UiIconButton, UiNumberField, UiPasswordField, UiSheet, UiSwitch, UiTextField, useConfirm, useToast } from '@/ui'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { createIWANLine, deleteIWANLine, updateIWANLine } from '@/api/kernel'
 import { lineForm, lineRequest, validateLine } from './nodeEntriesModel'
+
+const { display: showAddress } = useAddressPrivacy()
 
 defineProps({
   open: { type: Boolean, default: false },

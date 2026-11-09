@@ -88,6 +88,7 @@ export default {
       appearance: '外观',
       language: '语言',
       about: '关于',
+      revealAddresses: '显示服务器 IP',
       logout: '退出登录',
       roleAdmin: '管理员',
       roleUser: '用户',
@@ -132,6 +133,8 @@ export default {
         themeLight: '切换到浅色外观',
         themeDark: '切换到深色外观',
         themeSystem: '外观跟随系统',
+        revealAddresses: '显示服务器 IP',
+        hideAddresses: '隐藏服务器 IP',
         language: '切换语言：{language}'
       },
       userResult: '在用户列表中查看'

@@ -64,13 +64,13 @@
                 <th scope="row" class="fwd-mono">{{ recordTypeLabel(record.type) }}</th>
                 <td>
                   <span v-if="record.published.length" class="ha-values">
-                    <span v-for="value in record.published" :key="value" class="fwd-mono" :class="{ 'ha-stale': !record.desired.includes(value) && record.desired.length }">{{ value }}</span>
+                    <span v-for="value in record.published" :key="value" class="fwd-mono" :class="{ 'ha-stale': !record.desired.includes(value) && record.desired.length }">{{ showAddress(value) }}</span>
                   </span>
                   <span v-else class="fwd-muted">{{ t('forwardDns.card.none') }}</span>
                 </td>
                 <td>
                   <span v-if="record.desired.length" class="ha-values">
-                    <span v-for="value in record.desired" :key="value" class="fwd-mono">{{ value }}</span>
+                    <span v-for="value in record.desired" :key="value" class="fwd-mono">{{ showAddress(value) }}</span>
                   </span>
                   <span v-else class="fwd-muted">{{ t('forwardDns.card.keepPublished') }}</span>
                 </td>
@@ -91,9 +91,9 @@
           <li v-for="node in nodes" :key="node.node_ref" class="fwd-list__item ha-node" :data-node-ref="node.node_ref">
             <span class="fwd-cell-stack">
               <span class="ha-node__name">{{ nodeName(node.node_ref) }}</span>
-              <span class="fwd-mono ha-wrap">{{ (node.addresses || []).join(', ') || t('forwardDns.card.noAddress') }}</span>
+              <span class="fwd-mono ha-wrap">{{ showAddress((node.addresses || []).join(', ')) || t('forwardDns.card.noAddress') }}</span>
               <span v-if="node.unreachable?.length" class="fwd-muted ha-wrap" data-testid="forward-dns-unreachable">
-                {{ t('forwardDns.card.unreachable', { addresses: node.unreachable.join(', '), n: node.vantage_nodes || 0 }) }}
+                {{ t('forwardDns.card.unreachable', { addresses: showAddress(node.unreachable.join(', ')), n: node.vantage_nodes || 0 }) }}
               </span>
             </span>
             <span class="ha-chips">
@@ -125,6 +125,7 @@
 // desired records, each entry with its reason, the last error and the next
 // attempt. Unbinding needs a super administrator (can_delete, D7).
 import { computed, ref } from 'vue'
+import { useAddressPrivacy } from '@/composables/useAddressPrivacy'
 import { useRouter } from 'vue-router'
 import { AlertCircle, Link2, Pencil, Unlink } from '@lucide/vue'
 import { UiBadge, UiButton, UiCard, UiCheckbox, UiCopyField, UiDialog, UiErrorState, UiGroupedList, UiGroupedListRow, UiSkeleton, useFormat, useToast } from '@/ui'
@@ -135,6 +136,8 @@ import { forwardErrorMessage } from './messages'
 import { usePolling } from './usePolling'
 import { num } from './routeModel'
 import './forward.css'
+
+const { display: showAddress } = useAddressPrivacy()
 
 const props = defineProps({
   routeId: { type: String, required: true },

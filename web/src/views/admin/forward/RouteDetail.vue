@@ -51,7 +51,7 @@
                 <div class="chain__node-head">
                   <UiStatusDot :tone="nodeTone(ref).tone" :label="nodeName(ref)" />
                   <span v-if="portOf(index, ref)" class="fwd-mono">:{{ portOf(index, ref) }}</span>
-                  <span v-else-if="nodeOf(ref)?.host" class="fwd-mono">{{ nodeOf(ref).host }}</span>
+                  <span v-else-if="nodeOf(ref)?.host" class="fwd-mono">{{ showAddress(nodeOf(ref).host) }}</span>
                 </div>
                 <span class="fwd-muted">{{ nodeTone(ref).text }}</span>
                 <ul class="chain__ups">
@@ -73,7 +73,7 @@
             <div class="chain__head"><span class="chain__role">{{ t('forwardV4.detail.targets') }}</span></div>
             <ul class="chain__nodes">
               <li v-for="target in route.targets || []" :key="`${target.host}:${target.port}`" class="chain__node">
-                <span class="fwd-mono">{{ target.host }}:{{ target.port }}</span>
+                <span class="fwd-mono">{{ showAddress(target.host) }}:{{ target.port }}</span>
                 <span class="fwd-muted">{{ t('forwardV4.detail.weightPriority', { w: num(target.weight) || 1, p: num(target.priority) }) }}</span>
               </li>
             </ul>
@@ -186,6 +186,7 @@
 // upstream of this route, then the node's lag (owner decision, H16).
 // Polls every 15 s while visible; traffic at most every 60 s (D5).
 import { computed, onMounted, ref, watch } from 'vue'
+import { useAddressPrivacy } from '@/composables/useAddressPrivacy'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowDownToLine, ArrowUpFromLine, Cable, ChevronLeft, Copy, FileJson, Pause, Pencil, Play, RefreshCw, Stethoscope, Timer, Trash2 } from '@lucide/vue'
 import {
@@ -204,6 +205,8 @@ import { forwardErrorMessage } from '@/components/forward/messages'
 import { usePolling } from '@/components/forward/usePolling'
 import { H21_DEFAULTS, hourlySeries, latencySeries, linkLabel, nodeLag, nodeLagging, num, roleOf, routeStatus, statusContext, trafficWindow } from '@/components/forward/routeModel'
 import '@/components/forward/forward.css'
+
+const { display: showAddress } = useAddressPrivacy()
 
 const props = defineProps({
   id: { type: String, required: true }

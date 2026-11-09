@@ -5,6 +5,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { createPinia, setActivePinia } from 'pinia'
 import { useUserStore } from '@/stores/user'
 import { useTheme } from '@/composables/useTheme'
+import { useAddressPrivacy } from '@/composables/useAddressPrivacy'
 import i18n from '@/i18n'
 import AccountMenu from '@/components/shell/AccountMenu.vue'
 
@@ -128,6 +129,21 @@ describe('AccountMenu.vue', () => {
     await waitFor(() => expect(router.currentRoute.value.path).toBe('/login'))
   })
 
+  it('reveals and hides server IP addresses for administrators, masked by default', async () => {
+    const user = userEvent.setup()
+    const { revealed, setRevealed } = useAddressPrivacy()
+    setRevealed(false)
+    await renderMenu()
+    await user.click(screen.getByRole('button', { name: /Account menu/ }))
+    const item = await screen.findByRole('menuitemcheckbox', { name: 'Show server IPs' })
+    expect(item.getAttribute('aria-checked')).toBe('false')
+    await user.click(item)
+    expect(revealed.value).toBe(true)
+    await waitFor(() => expect(item.getAttribute('aria-checked')).toBe('true'))
+    await user.click(item)
+    expect(revealed.value).toBe(false)
+  })
+
   it('has no 关于 for users and names them by email', async () => {
     const user = userEvent.setup()
     useUserStore().login('token', { id: 7, email: 'lin@example.test', is_admin: false })
@@ -135,6 +151,7 @@ describe('AccountMenu.vue', () => {
     await user.click(screen.getByRole('button', { name: 'Account menu: lin@example.test' }))
     const menu = await screen.findByRole('menu')
     expect(within(menu).queryByRole('menuitem', { name: 'About' })).toBeNull()
+    expect(within(menu).queryByRole('menuitemcheckbox', { name: 'Show server IPs' })).toBeNull()
     // The email is the name: not repeated underneath.
     expect(within(menu).getAllByText('lin@example.test')).toHaveLength(1)
   })

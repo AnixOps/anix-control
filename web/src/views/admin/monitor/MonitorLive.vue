@@ -48,7 +48,7 @@
         <span class="monitor-section__strong">{{ row.name || `#${row.id}` }}</span>
       </template>
       <template #cell-host="{ row }">
-        <code class="monitor-section__code">{{ row.host || '—' }}</code>
+        <code class="monitor-section__code">{{ showAddress(row.host) || '—' }}</code>
       </template>
       <template #cell-status="{ row }">
         <UiBadge :status="row.status === 'online' ? 'online' : row.status === 'offline' ? 'offline' : 'pending'" :label="statusLabel(row.status)" />
@@ -72,6 +72,7 @@
 // A row opens that node's traffic history in a sheet (MonitorNodeTraffic,
 // GET /api/v4/kernel/nodes/:id/traffic), also from its row menu.
 import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useAddressPrivacy } from '@/composables/useAddressPrivacy'
 import { useRouter } from 'vue-router'
 import { ChartLine, Radio, RotateCw, Server, SquareArrowOutUpRight, Unplug } from '@lucide/vue'
 import { useAppI18n } from '@/composables/useAppI18n'
@@ -83,6 +84,8 @@ import UiMetricCard from '@/ui/UiMetricCard.vue'
 import UiStatusDot from '@/ui/UiStatusDot.vue'
 import UiUsageBar from '@/ui/UiUsageBar.vue'
 import { useFormat } from '@/ui/composables/useFormat'
+
+const { display: showAddress } = useAddressPrivacy()
 
 const USAGE_KEYS = ['cpu_usage', 'memory_usage', 'disk_usage']
 const STATUS_ORDER = { online: 0, pending: 1, offline: 2 }

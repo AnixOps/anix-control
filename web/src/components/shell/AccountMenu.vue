@@ -141,6 +141,22 @@
 
         </template>
 
+        <!-- Server addresses are masked by default (useAddressPrivacy). -->
+        <DropdownMenuCheckboxItem
+          v-if="role === 'admin'"
+          class="shell-menu__item"
+          :model-value="addressesRevealed"
+          data-menu-item="reveal-addresses"
+          @update:model-value="setAddressesRevealed"
+          @select.prevent
+        >
+          <UiIcon :icon="addressesRevealed ? Eye : EyeOff" />
+          <span class="shell-menu__label">{{ t('shell.account.revealAddresses') }}</span>
+          <DropdownMenuItemIndicator class="shell-menu__check">
+            <UiIcon :icon="Check" />
+          </DropdownMenuItemIndicator>
+        </DropdownMenuCheckboxItem>
+
         <DropdownMenuItem v-if="showAbout" class="shell-menu__item" data-menu-item="about" @select="emit('about')">
           <UiIcon :icon="Info" />
           <span class="shell-menu__label">{{ t('shell.account.about') }}</span>
@@ -166,14 +182,15 @@
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import {
-  DropdownMenuContent, DropdownMenuItem, DropdownMenuItemIndicator, DropdownMenuLabel, DropdownMenuPortal,
+  DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuItemIndicator, DropdownMenuLabel, DropdownMenuPortal,
   DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuRoot, DropdownMenuSeparator, DropdownMenuSub,
   DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger
 } from 'reka-ui'
-import { Check, ChevronRight, ChevronsUpDown, Info, Languages, LogOut, Monitor, Moon, Sun, SunMoon, UserRound } from '@lucide/vue'
+import { Check, ChevronRight, ChevronsUpDown, Eye, EyeOff, Info, Languages, LogOut, Monitor, Moon, Sun, SunMoon, UserRound } from '@lucide/vue'
 import { useUserStore } from '@/stores/user'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { useTheme } from '@/composables/useTheme'
+import { useAddressPrivacy } from '@/composables/useAddressPrivacy'
 import { useMediaQuery, NARROW_QUERY } from '@/composables/useMediaQuery'
 import { navIcon } from '@/navigation/icons'
 import UiIcon from '@/ui/UiIcon.vue'
@@ -197,6 +214,7 @@ const router = useRouter()
 const userStore = useUserStore()
 const { t, currentLocale, localeOptions, switchLocale } = useAppI18n()
 const { themePreference, setThemePreference } = useTheme()
+const { revealed: addressesRevealed, setRevealed: setAddressesRevealed } = useAddressPrivacy()
 const open = ref(false)
 // The open menu and its submenus sit in one labelled region, not on <body>.
 const layer = useMenuLayer(open, () => t('shell.account.menuLabel', { name: displayName.value }))

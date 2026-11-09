@@ -88,6 +88,7 @@ export default {
       appearance: 'Appearance',
       language: 'Language',
       about: 'About',
+      revealAddresses: 'Show server IPs',
       logout: 'Sign out',
       roleAdmin: 'Administrator',
       roleUser: 'User',
@@ -132,6 +133,8 @@ export default {
         themeLight: 'Use light appearance',
         themeDark: 'Use dark appearance',
         themeSystem: 'Match system appearance',
+        revealAddresses: 'Show server IP addresses',
+        hideAddresses: 'Hide server IP addresses',
         language: 'Switch language: {language}'
       },
       userResult: 'Show in the user list'

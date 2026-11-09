@@ -26,7 +26,7 @@
         <UiButton variant="primary" :icon="Plus" @click="sheetOpen = true">{{ t('nodeEntries.add') }}</UiButton>
       </template>
       <template #cell-host="{ row }">
-        <span class="node-entry-host">{{ row.host }}</span>
+        <span class="node-entry-host">{{ showAddress(row.host) }}</span>
       </template>
       <template #cell-enabled="{ row }">
         <UiBadge :tone="row.enabled ? 'success' : 'neutral'" :label="row.enabled ? t('nodeEntries.enabled') : t('nodeEntries.disabled')" />
@@ -44,6 +44,7 @@
 // each line's native IPv6 address and a provider NAT address with its port
 // map. A node with enabled entries is offered once per entry and protocol.
 import { computed, onMounted, ref } from 'vue'
+import { useAddressPrivacy } from '@/composables/useAddressPrivacy'
 import { Cable, Pencil, Plus, Waypoints } from '@lucide/vue'
 import { getKernelNodeEntries, listIWANLines } from '@/api/kernel'
 import UiBadge from '@/ui/UiBadge.vue'
@@ -55,6 +56,8 @@ import IWANLinesSheet from './IWANLinesSheet.vue'
 import NodeEntriesSheet from './NodeEntriesSheet.vue'
 import NodeNotice from './NodeNotice.vue'
 import { portMapSummary } from './nodeEntriesModel'
+
+const { display: showAddress } = useAddressPrivacy()
 
 const props = defineProps({
   node: { type: Object, required: true }
