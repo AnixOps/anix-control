@@ -81,7 +81,10 @@ func iwanLink(node *model.ParsedNode) string {
 }
 
 // anxLink is an ANX-A node as an anx:// link:
-// anx://<user key>@host:port?sni=&pk=<server public key>&alpn=&fp=chrome#name.
+// anx://<user key>@host:port?sni=&pk=<server public key>&alpn=#name.
+// There is no fp: the client picks the ClientHello shape of its own platform
+// (Safari's on iOS and macOS, Chrome's elsewhere), and clients older than
+// that choice read a missing fp as chrome.
 // A node whose server has not reported its public key has no link yet. A
 // node in the A2 no-SNI mode (settings allow_no_sni) has no sni: the client
 // then sends a ClientHello without SNI. A node with the wg jacket on
@@ -100,7 +103,6 @@ func anxLink(node *model.ParsedNode) string {
 	if node.ALPN != "" {
 		query.Set("alpn", node.ALPN)
 	}
-	query.Set("fp", "chrome")
 	if port := anxWGPort(node.Settings["wg_listen_port"]); port > 0 {
 		query.Set("wg_port", strconv.Itoa(port))
 	}
