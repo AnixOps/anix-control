@@ -101,6 +101,10 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 	// 路径可通过配置 app.subscribe_path 自定义，默认为 "s"
 	subscribeHandler := handler.NewSubscribeHandler(cfg)
 	r.GET("/"+subscribePath+"/:token", subscribeHandler.GetSubscription)
+	// AnixOps Net clients' failure reports on the subscription's address
+	// (internal/clientreport), rate limited per token.
+	clientReports := handler.NewClientReportHandler(subscribeHandler)
+	r.POST("/"+subscribePath+"/:token/report", clientReports.Report)
 
 	// One-command node onboarding (forward-sdk.md, section 9): the signed
 	// install script, its signature, the release metadata it reads and the
@@ -638,6 +642,24 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		v4.GET("/kernel/network", networkModel.Get)
 		v4.PUT("/kernel/network", networkModel.Replace)
 		v4.POST("/kernel/network/transports/:id/rotate-key", networkModel.RotateLinkKey)
+		// Cross-border standby channels (F-54): public-protocol channels
+		// of each cross-border transport, switched in one call
+		// (internal/l2standby, docs/guide/cross-border-standby.md).
+		standby := handler.NewL2StandbyHandler()
+		v4.GET("/kernel/network/standby", standby.Overview)
+		v4.POST("/kernel/network/standby/prepare", standby.Prepare)
+		v4.POST("/kernel/network/standby/switch", standby.Switch)
+		// Entry pools (F-55): node entries dealt out to subscribers by
+		// pool, quarantine for new and trial accounts, leak lookup
+		// (internal/entrypool).
+		entryPools := handler.NewEntryPoolsHandler()
+		v4.GET("/kernel/entry-pools", entryPools.Overview)
+		v4.PUT("/kernel/entry-pools/policy", entryPools.SetPolicy)
+		v4.POST("/kernel/entry-pools/assign", entryPools.Assign)
+		v4.POST("/kernel/entry-pools/split", entryPools.Split)
+		v4.GET("/kernel/entry-pools/leak", entryPools.Leak)
+		// What AnixOps Net clients reported about the nodes.
+		v4.GET("/kernel/client-failures", clientReports.Summary)
 		v4.GET("/kernel/network/devices/:id/plan", networkModel.DevicePlan)
 		v4.GET("/kernel/nodes/:id/network", networkModel.NodeNetwork)
 		v4.PUT("/kernel/nodes/:id/network", networkModel.SetNodeNetwork)

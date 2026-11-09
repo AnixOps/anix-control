@@ -54,6 +54,9 @@ export function entryForm(entry = null) {
     portMap: formatPortMap(entry?.port_map),
     // The Panabit iWAN line of an iwan entry, by id.
     lineId: entry?.iwan_line_id ?? '',
+    // The entry pool (internal/entrypool): only that pool's subscribers
+    // get the entry; empty is everyone's.
+    pool: entry?.pool || '',
     enabled: entry ? entry.enabled !== false : true
   }
 }
@@ -76,6 +79,7 @@ export function validateEntries(forms, messages) {
       else if (!ranges.length) found.portMap = messages.required
     }
     if (form.kind === 'iwan' && form.lineId === '') found.line = messages.required
+    if (form.pool && !/^[a-z0-9][a-z0-9_-]{0,31}$/.test(form.pool.trim())) found.pool = messages.badPool || messages.required
     if (Object.keys(found).length) errors[form.key] = found
   }
   return errors
@@ -88,6 +92,7 @@ export function entriesRequest(forms) {
       kind: form.kind,
       host: form.host.trim(),
       port_map: form.kind === 'nat' ? parsePortMap(form.portMap).ranges : [],
+      pool: (form.pool || '').trim(),
       enabled: form.enabled
     }
     if (form.kind === 'iwan') entry.iwan_line_id = Number(form.lineId)

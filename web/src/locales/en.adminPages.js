@@ -12,6 +12,7 @@ import adminApiTokens from './modules/en/adminApiTokens'
 import forwardV4 from './modules/en/forwardV4'
 import forwardDns from './modules/en/forwardDns'
 import egressRoutes from './modules/en/egressRoutes'
+import standby from './modules/en/standby'
 import reverseProxies from './modules/en/reverseProxies'
 import nodeDiagnostics from './modules/en/nodeDiagnostics'
 import realityTargets from './modules/en/realityTargets'
@@ -27,6 +28,7 @@ export default {
   ...forwardV4,
   ...forwardDns,
   ...egressRoutes,
+  ...standby,
   ...reverseProxies,
   ...nodeDiagnostics,
   ...realityTargets,

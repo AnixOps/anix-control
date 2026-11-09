@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/v5/internal/database"
+	"github.com/AnixOps/anix-control/v5/internal/entrypool"
 	"github.com/AnixOps/anix-control/v5/internal/iwanline"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/nodeentry"
@@ -623,6 +624,16 @@ func (s *SubscriptionService) internalNodes(ctx *model.TemplateRenderContext, gr
 	if err != nil {
 		return nil, err
 	}
+	// The subscriber sees the entries of their pool (internal/entrypool);
+	// a node whose entries are all in other pools is not offered.
+	hiddenNodes := map[uint]bool{}
+	if ctx != nil && ctx.UserID != 0 {
+		pool, _, err := entrypool.UserPool(s.db, ctx.UserID, time.Now().UTC())
+		if err != nil && !errors.Is(err, entrypool.ErrNotFound) {
+			return nil, err
+		}
+		entries, hiddenNodes = entrypool.Filter(entries, pool)
+	}
 	lines, err := s.iwanLines(entries)
 	if err != nil {
 		return nil, err
@@ -668,7 +679,7 @@ func (s *SubscriptionService) internalNodes(ctx *model.TemplateRenderContext, gr
 			continue
 		}
 
-		if !s.nodeServing(p.Node, liveness) {
+		if !s.nodeServing(p.Node, liveness) || hiddenNodes[p.Node.ID] {
 			continue
 		}
 		// A node that joined a group requiring approval serves nobody until

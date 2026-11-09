@@ -605,6 +605,14 @@ func lockModel(tx *gorm.DB, now time.Time) (*model.NetworkModel, *Document, erro
 	return loadDocument(tx.Clauses(clause.Locking{Strength: "UPDATE"}))
 }
 
+// LoadDocument answers the stored document alone (an empty one before the
+// first write), without the devices and plans Get adds: for readers that
+// only need the components, like the alert scan.
+func LoadDocument(db *gorm.DB) (*Document, error) {
+	_, doc, err := loadDocument(db)
+	return doc, err
+}
+
 func loadDocument(db *gorm.DB) (*model.NetworkModel, *Document, error) {
 	var rows []model.NetworkModel
 	if err := db.Where("id = ?", modelRowID).Limit(1).Find(&rows).Error; err != nil {

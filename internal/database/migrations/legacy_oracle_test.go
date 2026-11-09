@@ -225,6 +225,10 @@ func laterModels() []any {
 		&model.TrafficCategorySource{},     // 0024_traffic_categories
 		&model.NodeExitPolicy{},            // 0029_node_exit_policy
 		&model.UserSS2022Key{},             // 0030_ss2022_user_keys
+		&model.L2Standby{},                 // 0032_cross_border_standby_and_entry_pools
+		&model.EntryPoolPolicy{},           // 0032_cross_border_standby_and_entry_pools
+		&model.UserEntryPool{},             // 0032_cross_border_standby_and_entry_pools
+		&model.ClientFailureReport{},       // 0032_cross_border_standby_and_entry_pools
 	}
 }
 

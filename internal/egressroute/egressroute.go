@@ -304,6 +304,16 @@ func checkPort(tx *gorm.DB, routeID, exitNodeID uint, port int) error {
 	if protocols > 0 {
 		return fmt.Errorf("%w: a protocol of the node listens on %d", ErrPortTaken, port)
 	}
+	if tx.Migrator().HasTable(&model.L2Standby{}) {
+		var standbys int64
+		if err := tx.Model(&model.L2Standby{}).Where("exit_node_id = ? AND relay_port = ?", exitNodeID, port).
+			Count(&standbys).Error; err != nil {
+			return err
+		}
+		if standbys > 0 {
+			return fmt.Errorf("%w: a cross-border standby channel's relay listens on %d", ErrPortTaken, port)
+		}
+	}
 	return nil
 }
 
@@ -438,8 +448,9 @@ func decodeDomains(encoded string) []string {
 // NodeMember is the member "egress" of a proxy node's desired
 // configuration: the routes of the node's enabled egress routes as their
 // source node (with the exit node's address and the relay key) and the
-// relays of those it is the exit node of. Nil when the node takes part in
-// none, so the member is left out and other nodes' configurations do not
+// relays of those it is the exit node of, then the active cross-border
+// standby channels (standby.go). Nil when the node takes part in none, so
+// the member is left out and other nodes' configurations do not
 // change.
 //
 // The member names no kernel: domains in the matcher vocabulary of
@@ -479,6 +490,10 @@ func NodeMember(db *gorm.DB, nodeID uint) (map[string]any, error) {
 			"id": row.ID, "domains": decodeDomains(row.Domains),
 			"server": map[string]any{"protocol": model.EgressRouteProtocol, "host": host, "port": row.RelayPort, "method": row.Method, "password": row.RelayKey},
 		})
+	}
+	routes, relays, err := standbyMember(db, nodeID, routes, relays)
+	if err != nil {
+		return nil, err
 	}
 	if len(routes) == 0 && len(relays) == 0 {
 		return nil, nil

@@ -66,6 +66,14 @@ const (
 	// hours: mainland traffic reaches it through an entry or a client
 	// routing it the wrong way.
 	KindExitMainlandDestinations = "exit_mainland_destinations"
+	// KindCrossBorderLinkDown: a cross-border transport (kind anx, not
+	// trusted) has been down on the devices at its ends for
+	// CrossBorderDownAfter: critical while its traffic has no standby
+	// channel, warning once it is switched (internal/l2standby).
+	KindCrossBorderLinkDown = "cross_border_link_down"
+	// KindCrossBorderWideOutage: half or more of at least two cross-border
+	// transports are down at once, the sign of a targeted jacket.
+	KindCrossBorderWideOutage = "cross_border_wide_outage"
 )
 
 // Subject kinds.
@@ -79,6 +87,9 @@ const (
 	SubjectPanelCertificate = "panel_certificate"
 	// SubjectBackups: the panel's backups, one subject ("backups").
 	SubjectBackups = "backups"
+	// SubjectTransport: a transport of the network model, by id ("all"
+	// for the wide outage).
+	SubjectTransport = "transport"
 )
 
 // phaseKinds are the alert kinds about phased processes: operator-paced

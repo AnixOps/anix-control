@@ -641,6 +641,29 @@ export async function deleteKernelEgressRoute(id) {
   return unwrap(await v4({ url: `/kernel/egress-routes/${encodeURIComponent(id)}`, method: 'delete' }))
 }
 
+// Cross-border standby channels (过境应急): public-protocol channels of each
+// cross-border transport. { links: [{ transport_id, from, to, pairs,
+// skipped?, active_tier: reality | xhttp | off, ready: [], channels: [{ id,
+// tier, source_node_id, exit_node_id, exit_host, relay_port,
+// reality_server_name?, reality_dest?, reality_public_key?, xhttp_domain?,
+// xhttp_path?, ready, active, activated_at }] }], stale: [] }. Never a uuid
+// or private key.
+export async function getKernelStandby() {
+  return unwrap(await v4({ url: '/kernel/network/standby', method: 'get' }))
+}
+
+// input: { transports: [], reality_server_name, reality_dest, xhttp_domains:
+// { "<exit node id>": domain }, exit_hosts: { ... } }.
+export async function prepareKernelStandby(input) {
+  return unwrap(await v4({ url: '/kernel/network/standby/prepare', method: 'post', data: input }))
+}
+
+// input: { transports: [] | all: true, tier: reality | xhttp | off }.
+// Errors: 409 not_ready when a transport has no ready channel of the tier.
+export async function switchKernelStandby(input) {
+  return unwrap(await v4({ url: '/kernel/network/standby/switch', method: 'post', data: input }))
+}
+
 // Reverse proxies: HTTP(S) sites on entry nodes, routes by path to
 // upstreams. { reverse_proxies: [{ id, name, enabled, entries, via,
 // listen_port, http_port, sites: [{ hosts, routes: [{ path, strip_prefix,

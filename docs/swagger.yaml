@@ -18,6 +18,51 @@ definitions:
           type: string
         type: array
     type: object
+  clientreport.NodeReport:
+    properties:
+      after_handshake:
+        type: integer
+      clock_skew_secs:
+        type: integer
+      fallback:
+        type: integer
+      keepalive_lost:
+        type: integer
+      node:
+        description: Node is the node as the subscription named it.
+        type: string
+      ok:
+        type: integer
+      other:
+        type: integer
+      proto:
+        type: string
+      refused:
+        type: integer
+      reset:
+        type: integer
+      server:
+        type: string
+      stopped:
+        type: boolean
+      timeout:
+        type: integer
+    type: object
+  clientreport.Report:
+    properties:
+      client:
+        type: string
+      network:
+        type: string
+      nodes:
+        items:
+          $ref: '#/definitions/clientreport.NodeReport'
+        type: array
+      platform:
+        type: string
+      window_secs:
+        type: integer
+    type: object
   destinationstats.RuleInput:
     properties:
       category:
@@ -74,6 +119,35 @@ definitions:
         type: boolean
       source_node_id:
         type: integer
+    type: object
+  entrypool.AssignInput:
+    properties:
+      pool:
+        type: string
+      reason:
+        type: string
+      user_ids:
+        items:
+          type: integer
+        type: array
+    type: object
+  entrypool.Policy:
+    properties:
+      quarantine_days:
+        type: integer
+      quarantine_pool:
+        type: string
+      shards:
+        type: integer
+    type: object
+  entrypool.SplitInput:
+    properties:
+      into:
+        items:
+          type: string
+        type: array
+      pool:
+        type: string
     type: object
   handler.AdminBindRequest:
     properties:
@@ -401,6 +475,53 @@ definitions:
         type: integer
       username:
         type: string
+    type: object
+  l2standby.PrepareInput:
+    properties:
+      exit_hosts:
+        additionalProperties:
+          type: string
+        description: |-
+          ExitHosts overrides the address a source node dials for the reality
+          tier, by exit node id; the node's host when absent.
+        type: object
+      reality_dest:
+        type: string
+      reality_server_name:
+        description: |-
+          RealityServerName is the borrowed site of the reality tier (SNI) and
+          RealityDest its address (server_name:443 when empty).
+        type: string
+      transports:
+        description: |-
+          Transports limits the preparation; empty prepares every cross-border
+          transport.
+        items:
+          type: string
+        type: array
+      xhttp_domains:
+        additionalProperties:
+          type: string
+        description: |-
+          XHTTPDomains is our own domain on each exit node's TLS front, by
+          exit node id ("12" or "proxy-12"). An exit node without one gets no
+          xhttp channel yet.
+        type: object
+    type: object
+  l2standby.SwitchInput:
+    properties:
+      all:
+        type: boolean
+      tier:
+        description: Tier is reality, xhttp, or off (back to the transport).
+        type: string
+      transports:
+        description: |-
+          Transports to switch; All switches every cross-border transport
+          (A2 targeted as a whole).
+        items:
+          type: string
+        type: array
     type: object
   model.AdminCreateUserRequest:
     properties:
@@ -1261,6 +1382,11 @@ definitions:
       kind:
         type: string
       label:
+        type: string
+      pool:
+        description: |-
+          Pool offers the entry only to the subscribers of that pool
+          (internal/entrypool); empty offers it to everyone.
         type: string
       port_map:
         items:
@@ -6703,6 +6829,30 @@ paths:
       summary: Revoke an admin API token
       tags:
       - Kernel
+  /api/v4/kernel/client-failures:
+    get:
+      description: 'What AnixOps Net clients reported about each node over the last
+        hours (default 24, at most 336): the outcomes by cause, how many subscribers
+        reported it and gave up on it, outcomes by kind of network, the failure ratio;
+        most failing first. Never a subscriber''s identity.'
+      parameters:
+      - description: hours to look back
+        in: query
+        name: hours
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Client failure reports by node
+      tags:
+      - Kernel
   /api/v4/kernel/egress-routes:
     get:
       description: 'Every egress route by id: its source and exit node, the exit host
@@ -6803,6 +6953,134 @@ paths:
       security:
       - BearerAuth: []
       summary: Update an egress route
+      tags:
+      - Kernel
+  /api/v4/kernel/entry-pools:
+    get:
+      description: 'The policy (shards, quarantine_days, quarantine_pool) and every
+        pool with entries or subscribers: its node entries, how many subscribers it
+        has and why (assigned, quarantine, shard, none), and up to 500 of their user
+        ids. The pool "" holds the shared entries and the subscribers without a pool.'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Entry pools
+      tags:
+      - Kernel
+  /api/v4/kernel/entry-pools/assign:
+    post:
+      consumes:
+      - application/json
+      description: Puts the users in pool (a canary pool of one user, or the pool
+        a leak is isolated in), over the policy; an empty pool removes their assignment.
+        Audited.
+      parameters:
+      - description: users and pool
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/entrypool.AssignInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Assign subscribers to an entry pool
+      tags:
+      - Kernel
+  /api/v4/kernel/entry-pools/leak:
+    get:
+      description: The entries with entry_id, or with host (an address found in a
+        leaked subscription or probed), each with its pool and the subscribers of
+        that pool (up to 500 ids). An entry without a pool went to every subscriber
+        without an entry of their own pool on that node.
+      parameters:
+      - description: node entry id
+        in: query
+        name: entry_id
+        type: integer
+      - description: entry host
+        in: query
+        name: host
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Who was given a leaked address
+      tags:
+      - Kernel
+  /api/v4/kernel/entry-pools/policy:
+    put:
+      consumes:
+      - application/json
+      description: shards deals the subscribers without an assignment into shard-0..shard-(N-1)
+        by user id (0 off, 2-64); quarantine_days puts accounts younger than that,
+        and accounts without a plan, into quarantine_pool (0 off). Subscriptions follow
+        on their next update. Audited.
+      parameters:
+      - description: the policy
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/entrypool.Policy'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Set the entry pool policy
+      tags:
+      - Kernel
+  /api/v4/kernel/entry-pools/split:
+    post:
+      consumes:
+      - application/json
+      description: 'Assigns the subscribers of pool alternately to into[0] and into[1],
+        to bisect a leak: give each half its own entry and see which one leaks. Audited.'
+      parameters:
+      - description: the pool and its halves
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/entrypool.SplitInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Split an entry pool in two
       tags:
       - Kernel
   /api/v4/kernel/features:
@@ -7064,6 +7342,86 @@ paths:
       security:
       - BearerAuth: []
       summary: A device's network plan
+      tags:
+      - Kernel
+  /api/v4/kernel/network/standby:
+    get:
+      description: Every cross-border transport of the network model (kind anx, not
+        trusted) with the node pairs it serves, the tier its traffic takes now (reality,
+        xhttp or off), the tiers ready for every pair, and its channels (relay port,
+        borrowed site, own domain and path, REALITY public key); channels of pairs
+        that are gone under stale. Never a uuid or private key.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Cross-border standby channels
+      tags:
+      - Kernel
+  /api/v4/kernel/network/standby/prepare:
+    post:
+      consumes:
+      - application/json
+      description: 'Makes sure every pair of the cross-border transports (or of transports)
+        has a channel of each tier it can have: reality once reality_server_name is
+        given (reality_dest defaults to it on 443), xhttp once xhttp_domains names
+        the exit node''s own domain. New channels get a fresh uuid, REALITY key pair,
+        short id, path and a relay port of 31000-31999; existing ones keep them. Inactive
+        channels of pairs that are gone are removed when transports is empty. Changes
+        nothing on the nodes until a switch. Audited.'
+      parameters:
+      - description: what to prepare
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/l2standby.PrepareInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Prepare cross-border standby channels
+      tags:
+      - Kernel
+  /api/v4/kernel/network/standby/switch:
+    post:
+      consumes:
+      - application/json
+      description: 'Moves the traffic of transports (or all) to their reality or xhttp
+        channels, or back to the transport with tier off: the source node routes every
+        domain to the exit node''s VLESS relay, the exit node serves it, both within
+        a minute through their Agents. All or nothing: 409 not_ready when a transport
+        lacks a ready channel of the tier for one of its pairs. Audited.'
+      parameters:
+      - description: transports and tier
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/l2standby.SwitchInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Switch cross-border transports to a standby tier
       tags:
       - Kernel
   /api/v4/kernel/network/transports/{id}/rotate-key:
@@ -8410,6 +8768,34 @@ paths:
       summary: 用户注册
       tags:
       - 认证
+  /s/{token}/report:
+    post:
+      consumes:
+      - application/json
+      description: 'A client''s connection outcomes per node of its subscription over
+        window_secs (60-86400): ok, fallback, timeout, refused, reset, after_handshake,
+        keepalive_lost, other (each 0-1000000), stopped, clock_skew_secs; at most
+        200 nodes, unknown fields ignored, no destinations. The token is the subscription''s,
+        in the path. 204 on success, 404 for an unknown token, 400 out of bounds,
+        429 when the token reported within 10 minutes (drop the report).'
+      parameters:
+      - description: subscription token
+        in: path
+        name: token
+        required: true
+        type: string
+      - description: the report
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/clientreport.Report'
+      responses:
+        "204":
+          description: No Content
+      summary: Report connection outcomes (AnixOps Net)
+      tags:
+      - Subscription
   /telegram/webhook:
     post:
       consumes:

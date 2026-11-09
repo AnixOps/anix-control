@@ -20,6 +20,7 @@ Use this folder when you need implementation detail, clone contracts, runtime op
 | [Forwarding (v4.2)](forwarding.md) | The v4.2 forwarding pages: routes, hop chains, the inventory, node settings and diagnosis |
 | [Forward Relay Onboarding](forward-relay-onboarding.md) | Exact operator checklist for making a relay actually join the runtime |
 | [Forward Entry HA Through DNS](forward-entry-ha.md) | Keeping a route's entry name on its healthy entry nodes: provider credentials with the least permissions, DDNS and CNAME bindings, status |
+| [Cross-Border Standby Channels And Drill](cross-border-standby.md) | Public-protocol standby channels (VLESS REALITY, VLESS XHTTP) of each cross-border transport: preparing, one-call switch and switch back, the alerts, the drill and the manual plan |
 | [Forward Runtime Operations](forward-tunnel-runtime-ops.md) | Runtime ownership, evidence chain, and what counts as a real relay attachment |
 | [Forward/Tunnel Manual Smoke Tests](forward-tunnel-smoke-test.md) | Manual and real-machine proof steps for `gost`, `nftables_ansible`, and legacy `iptables_ansible` |
 | [NodeX Internal Extension Boundary](nodex-internal-extension.md) | Where the internal NodeX and local ansible execution planes stop and the public Flux surface begins |
@@ -45,6 +46,7 @@ Use this folder when you need implementation detail, clone contracts, runtime op
 | [JumpServer Node Access](jumpserver.md) | Reaching the node fleet through JumpServer: API credentials, the manual JumpServer workflow, running commands through Ansible |
 | [Installing The Agent With One Command](agent-onboarding.md) | Single-use install tokens, the signed `install.sh`, mirrors, re-runs and the legacy forward cleanup |
 | [Subscription System](subscription-system.md) | Subscription groups, templates and formatting |
+| [Entry Pools And Leak Tracing](entry-pools.md) | Dealing node entries out by pool (shards, quarantine for new accounts, canary addresses), tracing a leaked address to its subscribers, and the AnixOps Net client failure reports |
 | [Loon Subscriptions](loon-subscriptions.md) | User-Agent detection and native Loon node syntax output |
 | [Loon WireGuard](loon-wireguard.md) | Loon-specific WireGuard endpoint compatibility handling |
 | [Mihomo WireGuard](mihomo-wireguard.md) | Mihomo/Clash WireGuard output differences such as omitted `persistent-keepalive` |

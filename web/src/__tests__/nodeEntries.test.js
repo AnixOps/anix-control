@@ -43,8 +43,8 @@ describe('nodeEntriesModel', () => {
     const empty = { ...entryForm(null), kind: 'nat' }
     expect(validateEntries([empty], MESSAGES)[empty.key]).toEqual({ label: 'required', host: 'required', portMap: 'required' })
     expect(entriesRequest([v6, nat])).toEqual([
-      { label: 'CN2 v6', kind: 'direct', host: '2001:db8::10', port_map: [], enabled: true },
-      { label: 'CN2 NAT', kind: 'nat', host: '203.0.113.7', port_map: [{ from: 30000, to: 30099, external: 21000 }], enabled: true }
+      { label: 'CN2 v6', kind: 'direct', host: '2001:db8::10', port_map: [], pool: '', enabled: true },
+      { label: 'CN2 NAT', kind: 'nat', host: '203.0.113.7', port_map: [{ from: 30000, to: 30099, external: 21000 }], pool: '', enabled: true }
     ])
   })
 })
@@ -55,8 +55,16 @@ describe('iWAN entries and lines', () => {
     expect(validateEntries([iwan], MESSAGES)[iwan.key]).toEqual({ line: 'required' })
     iwan.lineId = 3
     expect(validateEntries([iwan], MESSAGES)).toEqual({})
-    expect(entriesRequest([iwan])).toEqual([{ label: 'via HK', kind: 'iwan', host: '198.51.100.20', port_map: [], enabled: true, iwan_line_id: 3 }])
+    expect(entriesRequest([iwan])).toEqual([{ label: 'via HK', kind: 'iwan', host: '198.51.100.20', port_map: [], pool: '', enabled: true, iwan_line_id: 3 }])
     expect(entryForm({ label: 'via HK', kind: 'iwan', host: 'h', iwan_line_id: 3 }).lineId).toBe(3)
+  })
+
+  it('keeps an entry pool and refuses a bad one', () => {
+    const pooled = { ...entryForm({ label: 'canary', kind: 'direct', host: 'c.example.com', pool: 'canary-42' }) }
+    expect(pooled.pool).toBe('canary-42')
+    expect(entriesRequest([pooled])[0].pool).toBe('canary-42')
+    pooled.pool = 'Bad Pool'
+    expect(validateEntries([pooled], { ...MESSAGES, badPool: 'bad pool' })[pooled.key]).toEqual({ pool: 'bad pool' })
   })
 
   it('validates a line and keeps the password on an edit', () => {
@@ -106,8 +114,8 @@ describe('NodeEntriesSection', () => {
 
     await waitFor(() => expect(kernelApi.replaceKernelNodeEntries).toHaveBeenCalledTimes(1))
     expect(kernelApi.replaceKernelNodeEntries).toHaveBeenCalledWith('proxy-60', [
-      { label: 'CN2 v6', kind: 'direct', host: '2001:db8::10', port_map: [], enabled: true },
-      { label: '9929 v6', kind: 'direct', host: '2001:db8:1::20', port_map: [], enabled: true }
+      { label: 'CN2 v6', kind: 'direct', host: '2001:db8::10', port_map: [], pool: '', enabled: true },
+      { label: '9929 v6', kind: 'direct', host: '2001:db8:1::20', port_map: [], pool: '', enabled: true }
     ])
     await waitFor(() => expect(screen.getAllByText('2001:****')).toHaveLength(2))
   })
