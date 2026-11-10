@@ -1,8 +1,8 @@
 name: Dev Release
 
 # Dev builds (docs/RELEASING.md, "Dev builds"): an internal test channel that
-# does not wait for a release. Every green main of this repository (and of
-# anix-agent, picked up by the schedule) gives one pre-release that holds
+# does not wait for a release. A manual run (Actions > Dev Release > Run
+# workflow) gives one pre-release that holds
 # Control AND the Agent at the same version, the release before plus
 # ".dev.<run>" (v5.0.0-rc.15.dev.42): newer than that release, older than the
 # next, so a test node can go on to the next release. Both are signed with
@@ -18,14 +18,10 @@ name: Dev Release
 # deploy (manual) installs the build on the production Control through
 # JumpServer, after a database dump; Agents move with a normal upgrade
 # campaign on the nodes chosen for testing.
+# Manual only (user 2026-11-10): automatic runs after every green main filled
+# the Releases page with "Dev build" pre-releases. Releases hold real
+# versions; a dev build is cut only when someone wants to test one.
 on:
-  workflow_run:
-    workflows: [CI/CD Pipeline]
-    types: [completed]
-    branches: [main]
-  schedule:
-    # anix-agent merges start nothing here: pick them up every three hours.
-    - cron: '41 */3 * * *'
   workflow_dispatch:
     inputs:
       deploy:
@@ -50,8 +46,9 @@ env:
   GO_VERSION: '1.26.10'
   NODE_VERSION: '22'
   AGENT_REPOSITORY: AnixOps/anix-agent
-  # Dev builds kept; older ones are deleted with their tags.
-  KEEP_DEV_RELEASES: '15'
+  # Dev builds kept; older ones are deleted with their tags. One: a new dev
+  # build replaces the previous one, so Releases never holds more than one.
+  KEEP_DEV_RELEASES: '1'
 
 jobs:
   plan:
