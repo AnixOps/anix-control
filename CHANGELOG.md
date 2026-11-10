@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+### Added
+
+- The ANX protocol form takes a bare jacket TCP port (`bare_listen_port`,
+  anx spec §5.2): random-looking bytes for users dialing a domestic entry,
+  with forward secrecy, post-quantum keys and revocable devices that
+  SS-2022 lacks. Cross-border nodes must not open it (the GFW flags fully
+  random traffic), so Control accepts it only with `allow_no_sni`, the mode
+  domestic entries run, and on a port other than `wg_listen_port`. Control
+  sends it to the Agent only when set; the AnixOps Net subscription adds
+  `bare_port` to the `anx://` link (moved through NAT entries like
+  `wg_port`, dropped by entries and routes that do not carry it), and
+  clients try wg, then bare, then no-SNI A2. Needs an anx-node whose ANX
+  inbound serves the bare jacket and the matching Agent; the TCP port has to
+  be open in the node's firewall.
+
 ## 5.0.2 - 2026-11-08
 
 ### Added

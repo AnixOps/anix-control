@@ -89,7 +89,9 @@ func iwanLink(node *model.ParsedNode) string {
 // node in the A2 no-SNI mode (settings allow_no_sni) has no sni: the client
 // then sends a ClientHello without SNI. A node with the wg jacket on
 // (settings wg_listen_port) adds wg_port, and clients try that UDP port first
-// and fall back to A2 (jacket auto, the client default).
+// and fall back to A2 (jacket auto, the client default). A node with the bare
+// jacket on (settings bare_listen_port, domestic entries only) adds bare_port;
+// clients in auto try wg, then bare, then A2.
 func anxLink(node *model.ParsedNode) string {
 	noSNI, _ := node.Settings["allow_no_sni"].(bool)
 	if node.Server == "" || node.Port <= 0 || node.Password == "" || node.PublicKey == "" || (node.ServerName == "" && !noSNI) {
@@ -106,6 +108,9 @@ func anxLink(node *model.ParsedNode) string {
 	if port := anxWGPort(node.Settings["wg_listen_port"]); port > 0 {
 		query.Set("wg_port", strconv.Itoa(port))
 	}
+	if port := anxWGPort(node.Settings["bare_listen_port"]); port > 0 {
+		query.Set("bare_port", strconv.Itoa(port))
+	}
 	host := node.Server
 	if strings.Contains(host, ":") {
 		host = "[" + host + "]"
@@ -113,7 +118,7 @@ func anxLink(node *model.ParsedNode) string {
 	return fmt.Sprintf("anx://%s@%s:%d?%s#%s", node.Password, host, node.Port, query.Encode(), url.PathEscape(node.Name))
 }
 
-// anxWGPort reads the wg jacket port from node settings (a JSON number, or
+// anxWGPort reads a jacket port (wg or bare) from node settings (a JSON number, or
 // an int when set in code); 0 when absent or out of range.
 func anxWGPort(value any) int {
 	var n int

@@ -56,6 +56,15 @@ func TestAnixOpsFormatterWritesANXLinks(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "anx://"+strings.Repeat("cd", 32)+"@203.0.113.9:8443?pk=ANX1key&wg_port=51820#SH%20W1", string(decoded))
 
+	// The bare jacket (domestic entries) adds bare_port; clients try wg, bare, then A2.
+	bare := &model.ParsedNode{ID: "e", Name: "SH bare", Type: "anx", Server: "203.0.113.9", Port: 8443,
+		Password: strings.Repeat("cd", 32), PublicKey: "ANX1key", Settings: map[string]any{"allow_no_sni": true, "wg_listen_port": float64(51820), "bare_listen_port": float64(8444)}}
+	content, err = (&AnixOpsFormatter{}).Format([]*model.ParsedNode{bare}, &model.TemplateRenderContext{})
+	require.NoError(t, err)
+	decoded, err = base64.StdEncoding.DecodeString(string(content))
+	require.NoError(t, err)
+	require.Equal(t, "anx://"+strings.Repeat("cd", 32)+"@203.0.113.9:8443?bare_port=8444&pk=ANX1key&wg_port=51820#SH%20bare", string(decoded))
+
 	// Other formats leave ANX out.
 	v2ray, err := (&V2RayFormatter{}).Format([]*model.ParsedNode{anx}, &model.TemplateRenderContext{})
 	require.NoError(t, err)

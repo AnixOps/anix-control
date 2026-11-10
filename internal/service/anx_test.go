@@ -37,6 +37,7 @@ func TestBuildNodeProtocolConfig_ANX(t *testing.T) {
 	require.NotContains(t, empty, "shape_plain")
 	require.NotContains(t, empty, "max_streams")
 	require.NotContains(t, empty, "wg_listen_port")
+	require.NotContains(t, empty, "bare_listen_port")
 	require.NotContains(t, empty, "min_wire_gen")
 	require.NotContains(t, empty, "wire_gen")
 
@@ -46,6 +47,10 @@ func TestBuildNodeProtocolConfig_ANX(t *testing.T) {
 	require.Equal(t, true, full["shape_plain"])
 	require.Equal(t, 512, full["max_streams"])
 	require.Equal(t, 51820, full["wg_listen_port"])
+
+	bare := `{"allow_no_sni":true,"bare_listen_port":8444}`
+	withBare := buildNodeProtocolConfig(node, &model.NodeProtocol{ID: 8, NodeID: 1, Type: model.ProtocolANX, Port: 8448, Settings: &bare})
+	require.Equal(t, 8444, withBare["bare_listen_port"])
 
 	// wire_gen only changes the key text clients get; min_wire_gen is the
 	// node's own setting and goes out when it is 2.
@@ -85,6 +90,7 @@ func TestApplyANXUser(t *testing.T) {
 func TestValidateANXProtocol(t *testing.T) {
 	valid := []string{``, `{}`, `{"server_names":["www.apple.com"],"dest":"www.apple.com:443","alpn":["h2"]}`,
 		`{"alpn":["h2","http/1.1"]}`, `{"allow_no_sni":true,"shape_plain":false,"max_streams":1024}`, `{"max_streams":65535}`, `{"wg_listen_port":51820}`,
+		`{"allow_no_sni":true,"bare_listen_port":8444}`, `{"allow_no_sni":true,"wg_listen_port":51820,"bare_listen_port":8444}`,
 		`{"wire_gen":1}`, `{"wire_gen":2}`, `{"wire_gen":2,"min_wire_gen":1}`, `{"wire_gen":2,"min_wire_gen":2}`}
 	for _, settings := range valid {
 		s := settings
@@ -95,6 +101,8 @@ func TestValidateANXProtocol(t *testing.T) {
 		`{"alpn":["h2,http/1.1"]}`, `{"alpn":["http 1.1"]}`, `{"server_names":["a/b"]}`,
 		`{"allow_no_sni":"yes"}`, `{"shape_plain":1}`, `{"max_streams":0}`, `{"max_streams":65536}`, `{"max_streams":1.5}`, `{"max_streams":"256"}`,
 		`{"wg_listen_port":0}`, `{"wg_listen_port":65536}`, `{"wg_listen_port":"51820"}`,
+		`{"bare_listen_port":8444}`, `{"allow_no_sni":false,"bare_listen_port":8444}`, `{"allow_no_sni":true,"bare_listen_port":0}`,
+		`{"allow_no_sni":true,"bare_listen_port":"8444"}`, `{"allow_no_sni":true,"wg_listen_port":8444,"bare_listen_port":8444}`,
 		`{"wire_gen":3}`, `{"wire_gen":"2"}`, `{"min_wire_gen":0}`, `{"min_wire_gen":2}`, `{"wire_gen":1,"min_wire_gen":2}`}
 	for _, settings := range invalid {
 		s := settings
