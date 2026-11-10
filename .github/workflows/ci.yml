@@ -553,6 +553,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          retention-days: 3
           name: golangci-lint-report
           path: lint-reports/golangci-lint.txt
 
@@ -605,6 +606,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          retention-days: 3
           name: gosec-report
           path: security-reports/gosec.json
 
@@ -1187,6 +1189,7 @@ jobs:
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v7
         with:
+          retention-days: 3
           name: coverage-report
           path: |
             coverage.out
@@ -1374,6 +1377,7 @@ jobs:
       - name: Upload migration dry-run report
         uses: actions/upload-artifact@v7
         with:
+          retention-days: 3
           name: migration-dry-run-report
           path: migration-dry-run.txt
 
@@ -1423,6 +1427,7 @@ jobs:
       - name: Upload PostgreSQL restore rehearsal evidence
         uses: actions/upload-artifact@v7
         with:
+          retention-days: 3
           name: postgres-restore-rehearsal
           path: postgres-restore-rehearsal/
 
@@ -1492,6 +1497,7 @@ jobs:
       - name: Upload package contract report
         uses: actions/upload-artifact@v7
         with:
+          retention-days: 3
           name: plugin-package-contract-reports
           path: |
             machine-telemetry-package-contract.txt
@@ -1580,12 +1586,14 @@ jobs:
       - name: Upload the built-in package set
         uses: actions/upload-artifact@v7
         with:
+          retention-days: 3
           name: builtin-packages
           path: builtin-packages/
 
       - name: Upload signed release assets
         uses: actions/upload-artifact@v7
         with:
+          retention-days: 3
           name: signed-plugin-releases
           path: release-assets/
 
@@ -2032,6 +2040,7 @@ jobs:
       - name: Upload frontend artifacts
         uses: actions/upload-artifact@v7
         with:
+          retention-days: 3
           name: frontend-dist
           path: web/public/
 
@@ -2039,6 +2048,7 @@ jobs:
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
         with:
+          retention-days: 3
           name: frontend-bundle-size
           path: web/bundle-reports/
 
@@ -2088,6 +2098,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v7
         with:
+          retention-days: 3
           name: frontend-e2e-report-${{ matrix.shard }}
           path: |
             web/playwright-report/
@@ -2154,6 +2165,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v7
         with:
+          retention-days: 3
           name: frontend-visual-diffs
           path: |
             web/test-results/visual/
@@ -2191,6 +2203,7 @@ jobs:
       - name: Upload backend artifacts
         uses: actions/upload-artifact@v7
         with:
+          retention-days: 3
           name: anix-control-binary
           path: anix-control
 
@@ -2271,6 +2284,7 @@ jobs:
       - name: Upload release binary artifact
         uses: actions/upload-artifact@v7
         with:
+          retention-days: 3
           name: release-binary-${{ matrix.goos }}-${{ matrix.goarch }}
           path: dist/*
 
@@ -2418,6 +2432,7 @@ jobs:
       - name: Upload docker metadata artifact
         uses: actions/upload-artifact@v7
         with:
+          retention-days: 3
           name: docker-metadata
           path: release/docker-image.txt
 

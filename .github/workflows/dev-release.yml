@@ -186,12 +186,14 @@ jobs:
       - name: Upload the built-in package set
         uses: actions/upload-artifact@v7
         with:
+          retention-days: 3
           name: dev-builtin-packages
           path: builtin-packages/
 
       - name: Upload the signed assets
         uses: actions/upload-artifact@v7
         with:
+          retention-days: 3
           name: dev-signed-assets
           path: release-assets/
 
@@ -253,6 +255,7 @@ jobs:
       - name: Upload the binary
         uses: actions/upload-artifact@v7
         with:
+          retention-days: 3
           name: dev-control-${{ matrix.goarch }}
           path: dist/*
 
@@ -288,6 +291,7 @@ jobs:
       - name: Upload the frontend
         uses: actions/upload-artifact@v7
         with:
+          retention-days: 3
           name: dev-frontend
           path: dist/*
 
@@ -362,6 +366,7 @@ jobs:
       - name: Upload the package
         uses: actions/upload-artifact@v7
         with:
+          retention-days: 3
           name: dev-agent-${{ matrix.asset_name }}
           path: dist/*
 
