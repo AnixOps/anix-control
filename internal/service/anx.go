@@ -72,6 +72,35 @@ func buildANXConfig(config, settings map[string]any) {
 	if n := ANXWGPort(settings); n > 0 {
 		config["wg_listen_port"] = n
 	}
+	// The handshake generation: anx-node accepts both generations until
+	// min_wire_gen is 2. Like the options above it goes out only when set,
+	// for anx-nodes older than the second generation.
+	if anxGenSetting(settings, "min_wire_gen") == 2 {
+		config["min_wire_gen"] = 2
+	}
+}
+
+// anxGenSetting is a handshake generation setting (wire_gen, min_wire_gen):
+// 2 when set to 2, else 1, the generation every anx-node speaks.
+func anxGenSetting(settings map[string]any, key string) int {
+	if intSetting(settings, key, 1) == 2 {
+		return 2
+	}
+	return 1
+}
+
+// ANXClientPublicKey is the server public key as clients get it. A node set
+// to the second handshake generation (settings wire_gen 2) publishes its key
+// with the suffix "@2": a client builds its login for the generation the key
+// text names and never falls back, so the suffix goes out only once the node
+// runs an anx-node that knows the second generation. A key the Agent already
+// reported with a generation is passed through.
+func ANXClientPublicKey(publicKey string, settings map[string]any) string {
+	publicKey = strings.TrimSpace(publicKey)
+	if publicKey == "" || strings.Contains(publicKey, "@") || anxGenSetting(settings, "wire_gen") != 2 {
+		return publicKey
+	}
+	return publicKey + "@2"
 }
 
 // ANXWGPort is the UDP port of an ANX node's wg jacket, 0 when it is off.
@@ -188,6 +217,18 @@ func ValidateANXSettings(settings map[string]any) error {
 		if !isNumber || n != float64(int64(n)) || n < 1 || n > 65535 {
 			return errors.New("ANX wg_listen_port must be a port number from 1 to 65535")
 		}
+	}
+	for _, key := range []string{"wire_gen", "min_wire_gen"} {
+		if value, ok := settings[key]; ok && value != nil {
+			if n, isNumber := value.(float64); !isNumber || (n != 1 && n != 2) {
+				return fmt.Errorf("ANX %s must be 1 or 2", key)
+			}
+		}
+	}
+	// Refusing the first generation while still publishing a first-generation
+	// key would lock every client out.
+	if anxGenSetting(settings, "min_wire_gen") == 2 && anxGenSetting(settings, "wire_gen") != 2 {
+		return errors.New("ANX min_wire_gen 2 needs wire_gen 2")
 	}
 	if value, ok := settings["dest"]; ok && value != nil {
 		text, isString := value.(string)

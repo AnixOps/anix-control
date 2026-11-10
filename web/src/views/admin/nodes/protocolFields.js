@@ -98,6 +98,17 @@ export const PROTOCOL_FIELDS = Object.freeze([
     section: 'settings', key: 'wg_listen_port', kind: 'number', min: 1, max: 65535, hintKey: 'anxWgListenPort',
     placeholder: '', show: p => p.type === 'anx'
   },
+  // Handshake generation (anx spec §2.5): wire_gen 2 publishes the server key
+  // with "@2", so clients log in with the second generation; min_wire_gen 2
+  // makes the node refuse the first. Empty = 1.
+  {
+    section: 'settings', key: 'wire_gen', kind: 'number', min: 1, max: 2, hintKey: 'anxWireGen',
+    placeholder: '1', show: p => p.type === 'anx'
+  },
+  {
+    section: 'settings', key: 'min_wire_gen', kind: 'number', min: 1, max: 2, hintKey: 'anxMinWireGen',
+    placeholder: '1', show: p => p.type === 'anx'
+  },
 
   // transport -------------------------------------------------------------
   { section: 'transport_settings', key: 'path', kind: 'text', placeholder: '/', show: takesTransportPath },

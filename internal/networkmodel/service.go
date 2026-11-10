@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sort"
 	"strings"
 	"sync"
@@ -325,6 +326,14 @@ func (s *Service) SetPublicKeys(ctx context.Context, node string, keys map[strin
 		if err := tx.Save(&row).Error; err != nil {
 			return err
 		}
+		var others []model.NetworkDevice
+		if err := tx.Where("node_ref <> ?", node).Find(&others).Error; err != nil {
+			return err
+		}
+		for kind, sharers := range sharedKeys(keys, others) {
+			slog.Warn("network model: devices share a server key", "component", "network-model",
+				"node", node, "kind", kind, "also", strings.Join(sharers, ","))
+		}
 		changed, err = s.replan(tx, doc)
 		return err
 	})
@@ -630,6 +639,38 @@ func loadDocument(db *gorm.DB) (*model.NetworkModel, *Document, error) {
 	}
 	normalize(doc)
 	return &rows[0], doc, nil
+}
+
+// sharedKeys finds, for each kind of key a device reported, the other devices
+// that reported the same key. Every server keeps its own key pair: with one
+// key on two servers, a first packet recorded at one is new to the replay
+// cache of the other. The same machine registered under two node refs
+// legitimately reports one key twice, so this is a warning for the operator,
+// not a refusal. The generation suffix ("@2") is not part of the key.
+func sharedKeys(keys map[string]string, others []model.NetworkDevice) map[string][]string {
+	bare := func(key string) string {
+		key, _, _ = strings.Cut(strings.TrimSpace(key), "@")
+		return key
+	}
+	shared := map[string][]string{}
+	for _, row := range others {
+		if row.PublicKeysJSON == "" {
+			continue
+		}
+		theirs := map[string]string{}
+		if json.Unmarshal([]byte(row.PublicKeysJSON), &theirs) != nil {
+			continue
+		}
+		for kind, key := range keys {
+			if bare(key) != "" && bare(key) == bare(theirs[kind]) {
+				shared[kind] = append(shared[kind], row.NodeRef)
+			}
+		}
+	}
+	for kind := range shared {
+		sort.Strings(shared[kind])
+	}
+	return shared
 }
 
 func loadDevices(db *gorm.DB) (map[string]Device, []model.NetworkDevice, error) {

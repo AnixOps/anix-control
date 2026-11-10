@@ -37,6 +37,8 @@ func TestBuildNodeProtocolConfig_ANX(t *testing.T) {
 	require.NotContains(t, empty, "shape_plain")
 	require.NotContains(t, empty, "max_streams")
 	require.NotContains(t, empty, "wg_listen_port")
+	require.NotContains(t, empty, "min_wire_gen")
+	require.NotContains(t, empty, "wire_gen")
 
 	a2 := `{"allow_no_sni":true,"shape_plain":true,"max_streams":512,"wg_listen_port":51820}`
 	full := buildNodeProtocolConfig(node, &model.NodeProtocol{ID: 5, NodeID: 1, Type: model.ProtocolANX, Port: 8445, Settings: &a2})
@@ -44,6 +46,28 @@ func TestBuildNodeProtocolConfig_ANX(t *testing.T) {
 	require.Equal(t, true, full["shape_plain"])
 	require.Equal(t, 512, full["max_streams"])
 	require.Equal(t, 51820, full["wg_listen_port"])
+
+	// wire_gen only changes the key text clients get; min_wire_gen is the
+	// node's own setting and goes out when it is 2.
+	gen2 := `{"wire_gen":2}`
+	published := buildNodeProtocolConfig(node, &model.NodeProtocol{ID: 6, NodeID: 1, Type: model.ProtocolANX, Port: 8446, Settings: &gen2})
+	require.NotContains(t, published, "min_wire_gen")
+	require.NotContains(t, published, "wire_gen")
+	strict := `{"wire_gen":2,"min_wire_gen":2}`
+	enforced := buildNodeProtocolConfig(node, &model.NodeProtocol{ID: 7, NodeID: 1, Type: model.ProtocolANX, Port: 8447, Settings: &strict})
+	require.Equal(t, 2, enforced["min_wire_gen"])
+}
+
+func TestANXClientPublicKey(t *testing.T) {
+	key := "aabb:ccdd"
+	require.Equal(t, key, ANXClientPublicKey(key, nil))
+	require.Equal(t, key, ANXClientPublicKey(key, map[string]any{"wire_gen": float64(1)}))
+	require.Equal(t, key+"@2", ANXClientPublicKey(" "+key+" ", map[string]any{"wire_gen": float64(2)}))
+	// A key the Agent reported with its generation is not touched.
+	require.Equal(t, key+"@2", ANXClientPublicKey(key+"@2", map[string]any{"wire_gen": float64(2)}))
+	require.Equal(t, key+"@2", ANXClientPublicKey(key+"@2", nil))
+	// No key yet: nothing to publish.
+	require.Empty(t, ANXClientPublicKey("", map[string]any{"wire_gen": float64(2)}))
 }
 
 func TestApplyANXUser(t *testing.T) {
@@ -60,7 +84,8 @@ func TestApplyANXUser(t *testing.T) {
 
 func TestValidateANXProtocol(t *testing.T) {
 	valid := []string{``, `{}`, `{"server_names":["www.apple.com"],"dest":"www.apple.com:443","alpn":["h2"]}`,
-		`{"alpn":["h2","http/1.1"]}`, `{"allow_no_sni":true,"shape_plain":false,"max_streams":1024}`, `{"max_streams":65535}`, `{"wg_listen_port":51820}`}
+		`{"alpn":["h2","http/1.1"]}`, `{"allow_no_sni":true,"shape_plain":false,"max_streams":1024}`, `{"max_streams":65535}`, `{"wg_listen_port":51820}`,
+		`{"wire_gen":1}`, `{"wire_gen":2}`, `{"wire_gen":2,"min_wire_gen":1}`, `{"wire_gen":2,"min_wire_gen":2}`}
 	for _, settings := range valid {
 		s := settings
 		require.NoError(t, validateANXProtocol(&model.NodeProtocol{Type: model.ProtocolANX, Settings: &s}), settings)
@@ -69,7 +94,8 @@ func TestValidateANXProtocol(t *testing.T) {
 		`{"dest":"www.apple.com"}`, `{"dest":"www.apple.com:0"}`, `{"dest":5}`, `{"alpn":[1]}`,
 		`{"alpn":["h2,http/1.1"]}`, `{"alpn":["http 1.1"]}`, `{"server_names":["a/b"]}`,
 		`{"allow_no_sni":"yes"}`, `{"shape_plain":1}`, `{"max_streams":0}`, `{"max_streams":65536}`, `{"max_streams":1.5}`, `{"max_streams":"256"}`,
-		`{"wg_listen_port":0}`, `{"wg_listen_port":65536}`, `{"wg_listen_port":"51820"}`}
+		`{"wg_listen_port":0}`, `{"wg_listen_port":65536}`, `{"wg_listen_port":"51820"}`,
+		`{"wire_gen":3}`, `{"wire_gen":"2"}`, `{"min_wire_gen":0}`, `{"min_wire_gen":2}`, `{"wire_gen":1,"min_wire_gen":2}`}
 	for _, settings := range invalid {
 		s := settings
 		require.Error(t, validateANXProtocol(&model.NodeProtocol{Type: model.ProtocolANX, Settings: &s}), settings)
