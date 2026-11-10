@@ -51,6 +51,13 @@ var idPattern = regexp.MustCompile(`^[0-9A-Za-z_-]{1,64}$`)
 // the egress's device; a transport joins two different devices and
 // carries at most one path (N3: one link per path); a disabled ingress,
 // egress or path takes its paths out of the plans.
+
+// ReverseA2KeyKind is the kind of the reverse A2 rendezvous key an Agent
+// reports (anix-agent anxserver.ReverseA2PublicKind): a copy of its
+// anx-server key that does not rotate (anx §2.6), since l2 egresses pin it
+// and have no grace period.
+const ReverseA2KeyKind = "anx_reverse_a2"
+
 func Plan(doc *Document, keys map[string]string, devices map[string]Device, forwards []Forward) (*Result, error) {
 	var v violations
 	for name, n := range map[string]int{"lines": len(doc.Lines), "ingresses": len(doc.Ingresses), "egresses": len(doc.Egresses),
@@ -516,8 +523,13 @@ func transportProto(transport *Transport, role networkv1.TransportRole, peer, ke
 			if anx.Egress == "l2" {
 				// l2 dials back as the A2 jacket's client (anx
 				// ANX-LINE-REVERSE §6.4): its short auth is to the dialing
-				// device's key, the jacket server's.
-				anx.ServerPublic = peerDevice.PublicKeys[network.TransportAnxLine]
+				// device's rendezvous key. Agents that keep that key apart
+				// from the rotating server key report it as anx_reverse_a2;
+				// older ones serve the rendezvous with the server key.
+				anx.ServerPublic = peerDevice.PublicKeys[ReverseA2KeyKind]
+				if anx.ServerPublic == "" {
+					anx.ServerPublic = peerDevice.PublicKeys[network.TransportAnxLine]
+				}
 			}
 		}
 		out.Settings = &networkv1.Transport_AnxLine{AnxLine: anx}
