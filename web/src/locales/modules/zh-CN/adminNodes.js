@@ -473,7 +473,22 @@ export default {
     description: '节点 {name}',
     create: '添加协议',
     save: '保存协议',
-    templateLibrary: '从模板开始',
+    pickHint: '选一个起点，下一步可以修改全部参数。',
+    portSpec: '端口 {port}',
+    recommended: '推荐',
+    change: '更换',
+    fixed: '{value}（该协议固定）',
+    blank: {
+      name: '自定义',
+      description: '从空白配置开始，自己选择协议和参数'
+    },
+    sections: {
+      basics: '基本信息',
+      connection: '传输与安全',
+      publish: '发布'
+    },
+    enableHint: '关闭后保留配置，但不在节点上运行。',
+    showHint: '用户订阅中包含这个入站。',
     maskedSecretsHint: '已保存的密钥（私钥、密码、令牌）显示为 ********。保留 ******** 即沿用原值，填写新值则替换。',
     modeLabel: '编辑方式',
     jsonLabel: '协议 JSON',
@@ -493,16 +508,7 @@ export default {
     },
     jsonActions: {
       format: '格式化',
-      copy: '复制',
-      fromTemplate: '从模板加载'
-    },
-    templatePicker: {
-      title: '从模板加载',
-      description: '选择一个模板，编辑器中的 JSON 会被替换。',
-      label: '模板',
-      placeholder: '选择模板',
-      required: '请先选择要加载的模板。',
-      apply: '加载模板'
+      copy: '复制'
     },
     jsonStatus: {
       valid: 'JSON 有效',

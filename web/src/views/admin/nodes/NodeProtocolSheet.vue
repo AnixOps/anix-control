@@ -2,134 +2,147 @@
   <UiSheet
     :open="open"
     size="lg"
-    :title="protocol ? t('admin.nodes.protocolForm.titleEdit') : t('admin.nodes.protocolForm.titleCreate')"
-    :description="t('admin.nodes.protocolForm.description', { name: node?.name || '—' })"
+    :title="protocol ? t(`${K}.titleEdit`) : t(`${K}.titleCreate`)"
+    :description="t(`${K}.description`, { name: node?.name || '—' })"
     :dismissible="!saving"
     data-testid="protocol-sheet"
     @update:open="value => { if (!value) close() }"
   >
-    <section v-if="!protocol && templates.length" class="dialog-section">
-      <h3 :id="templateHeadingId" class="dialog-section__title">{{ t('admin.nodes.protocolForm.templateLibrary') }}</h3>
-      <div class="node-templates" role="group" :aria-labelledby="templateHeadingId">
-        <button
-          v-for="tpl in templates"
-          :key="tpl.type + tpl.name"
-          type="button"
-          class="node-templates__card"
-          :aria-pressed="editor.selectedTemplate.value === tpl.name ? 'true' : 'false'"
-          @click="editor.applyTemplate(tpl)"
-        >
-          <span class="node-templates__name">{{ tpl.name }}</span>
-          <span v-if="tpl.description" class="node-templates__desc">{{ tpl.description }}</span>
-        </button>
-      </div>
+    <!-- Step 1 (adding only): pick a starting point. -->
+    <section v-if="step === 'pick'" class="dialog-section" data-testid="protocol-picker">
+      <p class="node-protocol__lead">{{ t(`${K}.pickHint`) }}</p>
+      <ul class="proto-list" role="list">
+        <li v-for="tpl in choices" :key="tpl.key">
+          <button type="button" class="proto-option" :data-testid="`protocol-template-${tpl.key}`" @click="pick(tpl)">
+            <span class="proto-mark" aria-hidden="true">{{ tpl.mark }}</span>
+            <span class="proto-option__body">
+              <span class="proto-option__title">
+                {{ tpl.title }}
+                <span v-if="tpl.recommended" class="proto-chip proto-chip--accent">{{ t(`${K}.recommended`) }}</span>
+              </span>
+              <span class="proto-option__desc">{{ tpl.description }}</span>
+              <span v-if="tpl.specs.length" class="proto-option__specs">
+                <span v-for="spec in tpl.specs" :key="spec" class="proto-chip">{{ spec }}</span>
+              </span>
+            </span>
+            <UiIcon :icon="ChevronRight" :size="18" class="proto-option__go" />
+          </button>
+        </li>
+      </ul>
     </section>
 
-    <p v-if="protocol" class="node-protocol__hint" data-testid="protocol-masked-hint">{{ t('admin.nodes.protocolForm.maskedSecretsHint') }}</p>
+    <!-- Step 2: configure. -->
+    <template v-else>
+      <div class="proto-summary">
+        <span class="proto-mark" aria-hidden="true">{{ markOf(form.type) }}</span>
+        <span class="proto-summary__body">
+          <span class="proto-summary__title">{{ summaryTitle }}</span>
+          <span class="proto-summary__specs">{{ summarySpecs }}</span>
+        </span>
+        <UiButton v-if="!protocol && templates.length" size="sm" variant="tertiary" data-testid="protocol-change" @click="step = 'pick'">{{ t(`${K}.change`) }}</UiButton>
+        <UiSegmentedControl
+          v-model="form.mode"
+          size="sm"
+          :aria-label="t(`${K}.modeLabel`)"
+          :options="modeOptions"
+          data-testid="protocol-mode"
+        />
+      </div>
 
-    <section class="dialog-section">
-      <UiSegmentedControl
-        v-model="form.mode"
-        :aria-label="t('admin.nodes.protocolForm.modeLabel')"
-        :options="modeOptions"
-        class="node-protocol__mode"
-        data-testid="protocol-mode"
-      />
+      <p v-if="protocol" class="node-protocol__hint" data-testid="protocol-masked-hint">{{ t(`${K}.maskedSecretsHint`) }}</p>
 
-      <div v-if="form.mode === 'json'" class="node-protocol__editor">
+      <section v-if="form.mode === 'json'" class="dialog-section">
         <div class="node-protocol__toolbar">
-          <UiBadge :tone="editor.jsonValid.value ? 'success' : 'danger'" :label="editor.jsonValid.value ? t('admin.nodes.protocolForm.jsonStatus.valid') : t('admin.nodes.protocolForm.jsonStatus.invalid')" />
+          <UiBadge :tone="editor.jsonValid.value ? 'success' : 'danger'" :label="editor.jsonValid.value ? t(`${K}.jsonStatus.valid`) : t(`${K}.jsonStatus.invalid`)" />
           <span class="node-protocol__spacer" />
-          <UiButton size="sm" :disabled="!editor.jsonValid.value" @click="editor.formatJson()">{{ t('admin.nodes.protocolForm.jsonActions.format') }}</UiButton>
-          <UiButton size="sm" :icon="Copy" @click="copyWithToast(editor.jsonEditorContent.value)">{{ t('admin.nodes.protocolForm.jsonActions.copy') }}</UiButton>
-          <UiButton v-if="templates.length" size="sm" @click="openTemplatePicker">{{ t('admin.nodes.protocolForm.jsonActions.fromTemplate') }}</UiButton>
+          <UiButton size="sm" :disabled="!editor.jsonValid.value" @click="editor.formatJson()">{{ t(`${K}.jsonActions.format`) }}</UiButton>
+          <UiButton size="sm" :icon="Copy" @click="copyWithToast(editor.jsonEditorContent.value)">{{ t(`${K}.jsonActions.copy`) }}</UiButton>
         </div>
         <UiTextarea
           v-model="editor.jsonEditorContent.value"
           class="node-protocol__json"
-          :label="t('admin.nodes.protocolForm.jsonLabel')"
-          :rows="20"
+          :label="t(`${K}.jsonLabel`)"
+          :rows="22"
           :placeholder="JSON_PLACEHOLDER"
           :error="editor.jsonValid.value ? '' : t('admin.nodes.messages.invalidJsonDetail', { message: editor.jsonParseError.value })"
           spellcheck="false"
           data-testid="protocol-json"
         />
+      </section>
+
+      <div v-else class="proto-form">
+        <section class="dialog-section">
+          <h3 class="dialog-section__title">{{ t(`${K}.sections.basics`) }}</h3>
+          <div class="form-grid">
+            <UiSelect v-model="form.type" size="md" :label="t(`${K}.fields.type`)" :options="typeOptions" required />
+            <UiNumberField v-model="form.port" size="md" :min="1" :max="65535" :label="t(`${K}.fields.port`)" required />
+          </div>
+        </section>
+
+        <section class="dialog-section">
+          <h3 class="dialog-section__title">{{ t(`${K}.sections.connection`) }}</h3>
+          <div class="proto-row">
+            <span class="proto-row__label">{{ t(`${K}.fields.tls`) }}</span>
+            <UiSegmentedControl
+              v-if="tlsOptions.length > 1"
+              v-model="form.tls"
+              block
+              :aria-label="t(`${K}.fields.tls`)"
+              :options="tlsOptions"
+              data-testid="protocol-tls"
+            />
+            <span v-else class="proto-row__fixed" data-testid="protocol-tls">{{ t(`${K}.fixed`, { value: tlsOptions[0]?.label }) }}</span>
+          </div>
+          <div class="proto-row">
+            <span class="proto-row__label">{{ t(`${K}.fields.transport`) }}</span>
+            <UiSelect v-if="transportOptions.length > 1" v-model="form.transport" size="md" :aria-label="t(`${K}.fields.transport`)" :options="transportOptions" data-testid="protocol-transport" />
+            <span v-else class="proto-row__fixed" data-testid="protocol-transport">{{ t(`${K}.fixed`, { value: transportOptions[0]?.label }) }}</span>
+          </div>
+        </section>
+
+        <NodeWireGuardFields v-if="form.type === 'wireguard'" :wg="editor.wireGuardForm" @generate-keypair="createWireGuardKeypair" />
+        <NodeIwanFields v-else-if="form.type === 'iwan'" :iwan="editor.iwanForm" />
+        <ProtocolFields v-else v-model="editor.protocolModel.value" />
+
+        <section class="dialog-section">
+          <h3 class="dialog-section__title">{{ t(`${K}.sections.publish`) }}</h3>
+          <div class="proto-switches">
+            <UiSwitch v-model="enabled" :label="t(`${K}.enable`)" :description="t(`${K}.enableHint`)" />
+            <UiSwitch v-model="shown" :label="t(`${K}.show`)" :description="t(`${K}.showHint`)" />
+          </div>
+        </section>
       </div>
+    </template>
 
-      <div v-else class="node-protocol__editor">
-        <div class="form-grid">
-          <UiSelect v-model="form.type" size="md" :label="t('admin.nodes.protocolForm.fields.type')" :options="typeOptions" required />
-          <UiNumberField v-model="form.port" size="md" :min="1" :max="65535" :label="t('admin.nodes.protocolForm.fields.port')" required />
-          <UiSelect v-model="form.tls" size="md" :label="t('admin.nodes.protocolForm.fields.tls')" :options="tlsOptions" :disabled="tlsOptions.length < 2" data-testid="protocol-tls" />
-          <UiSelect v-model="form.transport" size="md" :label="t('admin.nodes.protocolForm.fields.transport')" :options="transportOptions" :disabled="transportOptions.length < 2" data-testid="protocol-transport" />
-          <UiCheckbox v-model="enabled" :label="t('admin.nodes.protocolForm.enable')" />
-          <UiCheckbox v-model="shown" :label="t('admin.nodes.protocolForm.show')" />
-        </div>
-
-        <NodeWireGuardFields
-          v-if="form.type === 'wireguard'"
-          :wg="editor.wireGuardForm"
-          @generate-keypair="createWireGuardKeypair"
-        />
-        <NodeIwanFields v-if="form.type === 'iwan'" :iwan="editor.iwanForm" />
-
-        <ProtocolFields
-          v-if="form.type !== 'wireguard' && form.type !== 'iwan'"
-          v-model="editor.protocolModel.value"
-        />
-      </div>
-    </section>
     <p v-if="formError" class="form-error" role="alert" data-testid="protocol-form-error">{{ formError }}</p>
 
     <template #footer>
       <UiButton :disabled="saving" @click="close">{{ t('common.actions.cancel') }}</UiButton>
-      <UiButton variant="primary" data-testid="save-protocol" :loading="saving" @click="save">
-        {{ protocol ? t('admin.nodes.protocolForm.save') : t('admin.nodes.protocolForm.create') }}
+      <UiButton v-if="step === 'form'" variant="primary" data-testid="save-protocol" :loading="saving" @click="save">
+        {{ protocol ? t(`${K}.save`) : t(`${K}.create`) }}
       </UiButton>
     </template>
   </UiSheet>
-
-  <!-- Template picker for the JSON editor -->
-  <UiDialog
-    v-model:open="pickerOpen"
-    size="sm"
-    :title="t('admin.nodes.protocolForm.templatePicker.title')"
-    :description="t('admin.nodes.protocolForm.templatePicker.description')"
-  >
-    <UiSelect
-      v-model="pickIndex"
-      data-testid="template-picker-select"
-      :label="t('admin.nodes.protocolForm.templatePicker.label')"
-      :placeholder="t('admin.nodes.protocolForm.templatePicker.placeholder')"
-      :options="pickerOptions"
-      :error="pickError"
-      required
-    />
-    <template #footer="{ close: closePicker }">
-      <UiButton @click="closePicker">{{ t('common.actions.cancel') }}</UiButton>
-      <UiButton variant="primary" data-testid="template-picker-apply" @click="applyPickedTemplate">{{ t('admin.nodes.protocolForm.templatePicker.apply') }}</UiButton>
-    </template>
-  </UiDialog>
 </template>
 
 <script setup>
-// Add or edit one protocol of a node. A form first (ProtocolFields shows the
-// fields of the chosen type, TLS mode and transport, like 3x-ui), with the
-// whole protocol as JSON on the advanced tab.
-// Saves with POST /admin/nodes/:id/protocols or PUT …/protocols/:protocol_id
-// (useProtocolEditor builds the same body as before the redesign).
+// Add or edit one protocol (inbound) of a node. Adding starts with a list of
+// starting points (the protocol templates and a blank one), then the form:
+// basics, TLS and transport, the type's own fields, and whether it runs and
+// shows in subscriptions. The whole protocol is editable as JSON from the
+// summary bar. Saves with POST /admin/nodes/:id/protocols or
+// PUT …/protocols/:protocol_id (useProtocolEditor builds the body).
 import { computed, ref, watch } from 'vue'
-import { useId } from 'reka-ui'
-import { Copy } from '@lucide/vue'
+import { ChevronRight, Copy } from '@lucide/vue'
 import { createNodeProtocol, generateWireGuardKeypair, updateNodeProtocol } from '@/api/admin'
 import UiBadge from '@/ui/UiBadge.vue'
 import UiButton from '@/ui/UiButton.vue'
-import UiCheckbox from '@/ui/UiCheckbox.vue'
-import UiDialog from '@/ui/UiDialog.vue'
+import UiIcon from '@/ui/UiIcon.vue'
 import UiNumberField from '@/ui/UiNumberField.vue'
 import UiSegmentedControl from '@/ui/UiSegmentedControl.vue'
 import UiSelect from '@/ui/UiSelect.vue'
 import UiSheet from '@/ui/UiSheet.vue'
+import UiSwitch from '@/ui/UiSwitch.vue'
 import UiTextarea from '@/ui/UiTextarea.vue'
 import { useToast } from '@/ui/composables/useToast'
 import { useAppI18n } from '@/composables/useAppI18n'
@@ -149,43 +162,78 @@ const props = defineProps({
   templates: { type: Array, default: () => [] }
 })
 const emit = defineEmits(['update:open', 'saved'])
+const K = 'admin.nodes.protocolForm'
 const { t } = useAppI18n()
 const toast = useToast()
 const copyWithToast = useNodeCopy()
 const editor = useProtocolEditor()
 const form = editor.protocolForm
-const templateHeadingId = useId(undefined, 'node-templates')
 
+const step = ref('form') // pick | form
 const saving = ref(false)
 const formError = ref('')
 
-const modeOptions = computed(() => [
-  { value: 'visual', label: t('admin.nodes.protocolForm.tabs.visual') },
-  { value: 'json', label: t('admin.nodes.protocolForm.tabs.json') }
-])
+const MARKS = { vless: 'VL', vmess: 'VM', trojan: 'TJ', shadowsocks: 'SS', hysteria2: 'HY', tuic: 'TU', wireguard: 'WG', iwan: 'iW', anx: 'AX' }
+const markOf = type => MARKS[type] || '+'
 const typeLabel = type => ({ wireguard: 'WireGuard', iwan: 'Panabit iWAN', anx: 'ANX' }[type] || t(`networkPages.nodes.protocols.${type}`))
 const typeOptions = computed(() => PROTOCOL_TYPES.map(type => ({ value: type, label: typeLabel(type) })))
+
 // TLS modes and transports follow the protocol type (protocolCapabilities):
 // Shadowsocks is TCP without TLS, Hysteria2 and TUIC UDP with TLS.
 const TLS_MODE_KEYS = ['none', 'standard', 'reality']
 const TRANSPORT_KEYS = ['tcp', 'ws', 'grpc', 'quic', 'h2', 'httpupgrade', 'udp']
 // ANX brings its own security, the A2 jacket, instead of the node's TLS.
 const tlsLabel = (type, value) => t(`admin.nodes.tlsModes.${type === 'anx' ? 'anxA2' : (TLS_MODE_KEYS[value] || 'none')}`)
-const tlsOptions = computed(() => capabilitiesOf(form.type).tls
-  .map(value => ({ value, label: tlsLabel(form.type, value) })))
-const transportOptions = computed(() => transportsFor(form.type, form.tls, form.transport)
-  .map(value => ({ value, label: t(`admin.nodes.transports.${value}`) })))
+const transportLabel = value => (TRANSPORT_KEYS.includes(value) ? t(`admin.nodes.transports.${value}`) : value)
+const tlsOptions = computed(() => capabilitiesOf(form.type).tls.map(value => ({ value, label: tlsLabel(form.type, value).replace(RECOMMENDED, '') })))
+const transportOptions = computed(() => transportsFor(form.type, form.tls, form.transport).map(value => ({ value, label: transportLabel(value) })))
+const specsOf = (type, tls, transport, port) => [
+  transportLabel(transport),
+  Number(tls) || type === 'anx' ? tlsLabel(type, Number(tls)).replace(RECOMMENDED, '') : '',
+  port ? t(`${K}.portSpec`, { port }) : ''
+].filter(Boolean)
+
+// The templates name their recommended one "… (推荐)": shown as a chip.
+const RECOMMENDED = /\s*[(（](推荐|recommended)[)）]/i
+const modeOptions = computed(() => [
+  { value: 'visual', label: t(`${K}.tabs.visual`) },
+  { value: 'json', label: t(`${K}.tabs.json`) }
+])
 const enabled = computed({ get: () => Boolean(form.enable), set: value => { form.enable = value ? 1 : 0 } })
 const shown = computed({ get: () => Boolean(form.show), set: value => { form.show = value ? 1 : 0 } })
+
+const choices = computed(() => [
+  ...props.templates.map((tpl, index) => ({
+    key: index,
+    tpl,
+    mark: markOf(tpl.type),
+    title: tpl.name.replace(RECOMMENDED, ''),
+    recommended: RECOMMENDED.test(tpl.name),
+    description: tpl.description,
+    specs: specsOf(tpl.type, tpl.tls, tpl.transport, tpl.default_port)
+  })),
+  { key: 'blank', tpl: null, mark: '+', title: t(`${K}.blank.name`), recommended: false, description: t(`${K}.blank.description`), specs: [] }
+])
+
+const summaryTitle = computed(() => typeLabel(form.type))
+const summarySpecs = computed(() => specsOf(form.type, form.tls, form.transport, form.port).join(' · '))
 
 watch(() => props.open, (open) => {
   if (!open) return
   formError.value = ''
   if (props.protocol) editor.startEdit(props.protocol)
   else editor.startCreate()
+  step.value = props.protocol || !props.templates.length ? 'form' : 'pick'
 }, { immediate: true })
 
 watch(editor.jsonEditorContent, () => editor.validateJson())
+
+function pick(choice) {
+  formError.value = ''
+  if (choice.tpl) editor.applyTemplate(choice.tpl)
+  else editor.startCreate()
+  step.value = 'form'
+}
 
 function close() {
   if (saving.value) return
@@ -213,9 +261,7 @@ async function save() {
   }
   if (built.error === 'unsupported') {
     const { field, type, value } = built.problem
-    const label = field === 'tls'
-      ? t(`admin.nodes.tlsModes.${TLS_MODE_KEYS[value] || 'none'}`)
-      : (TRANSPORT_KEYS.includes(value) ? t(`admin.nodes.transports.${value}`) : value)
+    const label = field === 'tls' ? t(`admin.nodes.tlsModes.${TLS_MODE_KEYS[value] || 'none'}`) : transportLabel(value)
     formError.value = t(`admin.nodes.messages.${field}Unsupported`, { type: typeLabel(type), value: label })
     return
   }
@@ -227,11 +273,8 @@ async function save() {
   const editing = Boolean(props.protocol)
   saving.value = true
   try {
-    if (editing) {
-      await updateNodeProtocol(props.node.id, props.protocol.id, payload)
-    } else {
-      await createNodeProtocol(props.node.id, payload)
-    }
+    if (editing) await updateNodeProtocol(props.node.id, props.protocol.id, payload)
+    else await createNodeProtocol(props.node.id, payload)
     saving.value = false
     emit('update:open', false)
     toast.success(t(editing ? 'admin.nodes.messages.protocolSaved' : 'admin.nodes.messages.protocolCreated', { type: String(payload.type || '').toUpperCase(), port: payload.port }))
@@ -243,33 +286,156 @@ async function save() {
   }
 }
 
-// Template picker ----------------------------------------------------------
-const pickerOpen = ref(false)
-const pickIndex = ref(undefined)
-const pickError = ref('')
-const pickerOptions = computed(() => props.templates.map((tpl, index) => ({ value: index, label: tpl.name })))
-watch(pickIndex, () => { pickError.value = '' })
-
-function openTemplatePicker() {
-  pickIndex.value = undefined
-  pickError.value = ''
-  pickerOpen.value = true
-}
-
-function applyPickedTemplate() {
-  const idx = Number(pickIndex.value)
-  if (pickIndex.value === undefined || pickIndex.value === null || Number.isNaN(idx) || idx < 0 || idx >= props.templates.length) {
-    pickError.value = t('admin.nodes.protocolForm.templatePicker.required')
-    return
-  }
-  pickerOpen.value = false
-  editor.loadTemplateJson(props.templates[idx])
-}
-
 defineExpose({ editor })
 </script>
 
 <style scoped>
+.node-protocol__lead {
+  margin: 0;
+  color: var(--label-2);
+  font-size: var(--type-callout-size);
+  line-height: var(--type-callout-line);
+}
+
+/* Starting points: one per row, so long descriptions wrap instead of
+   running into the next card. */
+.proto-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--separator);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  list-style: none;
+}
+
+.proto-list li + li {
+  border-top: 1px solid var(--separator);
+}
+
+.proto-option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--label-1);
+  font: inherit;
+  text-align: left;
+  white-space: normal;
+  cursor: pointer;
+  transition: background-color var(--dur-micro) var(--ease-standard);
+}
+
+.proto-option:hover {
+  background: var(--fill-1);
+}
+
+.proto-option:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: calc(var(--focus-ring-offset) * -1);
+}
+
+.proto-option__body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.proto-option__title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--type-body-size);
+  font-weight: var(--weight-semibold);
+}
+
+.proto-option__desc {
+  color: var(--label-2);
+  font-size: var(--type-callout-size);
+  line-height: var(--type-callout-line);
+}
+
+.proto-option__specs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-top: var(--space-0-5);
+}
+
+.proto-option__go {
+  flex: none;
+  color: var(--label-3);
+}
+
+.proto-chip {
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--fill-2);
+  color: var(--label-2);
+  font-size: var(--type-caption-size);
+  font-weight: var(--weight-medium);
+  line-height: 20px;
+  white-space: nowrap;
+}
+
+.proto-chip--accent {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.proto-mark {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: var(--type-callout-size);
+  font-weight: var(--weight-bold);
+}
+
+/* Step 2 */
+.proto-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--bg-grouped);
+}
+
+.proto-summary__body {
+  display: flex;
+  flex: 1 1 160px;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.proto-summary__title {
+  font-size: var(--type-body-size);
+  font-weight: var(--weight-semibold);
+}
+
+.proto-summary__specs {
+  color: var(--label-2);
+  font-size: var(--type-caption-size);
+}
+
 .node-protocol__hint {
   margin: 0 0 var(--space-6);
   padding: var(--space-3) var(--space-4);
@@ -280,14 +446,44 @@ defineExpose({ editor })
   line-height: var(--type-callout-line);
 }
 
-.node-protocol__mode {
-  align-self: flex-start;
+.proto-row {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-3);
 }
 
-.node-protocol__editor {
+@media (max-width: 640px) {
+  .proto-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-1);
+  }
+}
+
+.proto-row__label {
+  color: var(--label-2);
+  font-size: var(--type-callout-size);
+}
+
+.proto-row__fixed {
+  color: var(--label-1);
+  font-size: var(--type-callout-size);
+}
+
+.proto-form {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-6);
+}
+
+.proto-form > .dialog-section + .dialog-section {
+  margin-top: 0;
+}
+
+.proto-switches {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
 }
 
 .node-protocol__toolbar {
@@ -305,89 +501,5 @@ defineExpose({ editor })
   font-family: var(--font-mono);
   font-size: var(--type-caption-size);
   line-height: 1.6;
-}
-
-.node-protocol__advanced {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-.node-protocol__advanced summary {
-  padding: var(--space-1) 0;
-  color: var(--label-1);
-  font-size: var(--type-callout-size);
-  font-weight: var(--weight-medium);
-  cursor: pointer;
-}
-
-/* Touch: the disclosure toggles from a 44 px tall strip. */
-@media (pointer: coarse) {
-  .node-protocol__advanced summary {
-    position: relative;
-  }
-
-  .node-protocol__advanced summary::after {
-    position: absolute;
-    top: 50%;
-    left: 0;
-    width: 100%;
-    height: max(100%, var(--size-control-lg));
-    transform: translateY(-50%);
-    content: '';
-  }
-}
-
-.node-protocol__advanced summary:focus-visible {
-  border-radius: var(--radius-xs);
-  outline: var(--focus-ring);
-  outline-offset: var(--focus-ring-offset);
-}
-
-.node-templates {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: var(--space-2);
-}
-
-.node-templates__card {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  min-height: 0;
-  padding: var(--space-3);
-  border: 1px solid var(--separator);
-  border-radius: var(--radius-sm);
-  background: var(--bg-elevated);
-  color: var(--label-1);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-  transition: border-color var(--dur-micro) var(--ease-standard), background-color var(--dur-micro) var(--ease-standard);
-}
-
-.node-templates__card:hover {
-  background: var(--fill-1);
-}
-
-.node-templates__card[aria-pressed='true'] {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-}
-
-.node-templates__card:focus-visible {
-  outline: var(--focus-ring);
-  outline-offset: var(--focus-ring-offset);
-}
-
-.node-templates__name {
-  font-size: var(--type-callout-size);
-  font-weight: var(--weight-semibold);
-}
-
-.node-templates__desc {
-  color: var(--label-2);
-  font-size: var(--type-caption-size);
-  line-height: 1.4;
 }
 </style>
