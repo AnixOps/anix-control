@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -78,6 +79,14 @@ func buildANXConfig(config, settings map[string]any) {
 	if n := ANXBarePort(settings); n > 0 {
 		config["bare_listen_port"] = n
 	}
+	// The cover site's TLS stack preset and per-key overrides (anx spec §4
+	// item 6): ValidateANXSettings checks the shape, anx-node the values.
+	if stack := stringSetting(settings, "dest_stack", ""); stack != "" {
+		config["dest_stack"] = stack
+	}
+	if behavior, ok := settings["dest_behavior"].(map[string]any); ok && len(behavior) > 0 {
+		config["dest_behavior"] = behavior
+	}
 	// The handshake generation: anx-node accepts both generations until
 	// min_wire_gen is 2. Like the options above it goes out only when set,
 	// for anx-nodes older than the second generation.
@@ -115,6 +124,79 @@ func ANXWGPort(settings map[string]any) int {
 		return n
 	}
 	return 0
+}
+
+// anxDestStacks are the TLS stack presets of anx-node (dest_stack).
+var anxDestStacks = []string{"openssl", "boringssl", "go", "rustls"}
+
+// anxDestBehaviorKeys are the keys of the anx-node inbound's dest_behavior
+// (anx public/BOUNDARY.md).
+var anxDestBehaviorKeys = map[string]bool{
+	"max_ccs": true, "ccs_overflow": true, "bad_ccs": true, "bad_record": true,
+	"plaintext_handshake": true, "plaintext_alert": true, "unknown_content_type": true,
+	"plaintext_stage": true, "unknown_type_stage": true, "heartbeat_as_record": true,
+	"record_version": true, "max_record_len": true, "oversize_record": true,
+	"read_ahead": true, "bad_finished": true, "unexpected_handshake": true,
+	"handshake_timeout_secs": true, "timeout": true, "dest_close_grace_ms": true,
+	"session_tickets": true, "flight_records": true, "flight_gap_ms": true,
+}
+
+// anxDestSiteKeys are the dest_behavior keys that hold the cover site's own
+// data (anx spec §4 items 8 and 9), measured by anx-lab dest-probe: record
+// lengths "len/len/…" (min, max length, max count), or "none".
+var anxDestSiteKeys = map[string][3]int{
+	"session_tickets": {35, 16401, 8},
+	"flight_records":  {18, 16401, 16},
+}
+
+func validateANXDestBehavior(value any) error {
+	behavior, isObject := value.(map[string]any)
+	if !isObject {
+		return errors.New("ANX dest_behavior must be an object (paste the dest_behavior line anx-lab dest-probe prints)")
+	}
+	for key, item := range behavior {
+		if !anxDestBehaviorKeys[key] {
+			return fmt.Errorf("ANX dest_behavior has an unknown key %q", key)
+		}
+		if limits, site := anxDestSiteKeys[key]; site {
+			text, isString := item.(string)
+			if !isString || !validANXRecordLengths(text, limits) {
+				return fmt.Errorf("ANX dest_behavior %s must be \"none\" or record lengths \"len/len/…\" (%d to %d, at most %d)", key, limits[0], limits[1], limits[2])
+			}
+			continue
+		}
+		switch v := item.(type) {
+		case string:
+			if strings.TrimSpace(v) == "" {
+				return fmt.Errorf("ANX dest_behavior %s is empty", key)
+			}
+		case bool:
+		case float64:
+			if v != float64(int64(v)) || v < 0 {
+				return fmt.Errorf("ANX dest_behavior %s must be a whole number", key)
+			}
+		default:
+			return fmt.Errorf("ANX dest_behavior %s must be a string, a whole number or true / false", key)
+		}
+	}
+	return nil
+}
+
+func validANXRecordLengths(text string, limits [3]int) bool {
+	if text == "none" {
+		return true
+	}
+	parts := strings.Split(text, "/")
+	if len(parts) > limits[2] {
+		return false
+	}
+	for _, part := range parts {
+		n, err := strconv.Atoi(part)
+		if err != nil || n < limits[0] || n > limits[1] {
+			return false
+		}
+	}
+	return true
 }
 
 // ANXBarePort is the TCP port of an ANX node's bare jacket, 0 when it is off.
@@ -245,6 +327,17 @@ func ValidateANXSettings(settings map[string]any) error {
 		}
 		if ANXWGPort(settings) == int(n) {
 			return errors.New("ANX bare_listen_port must differ from wg_listen_port")
+		}
+	}
+	if value, ok := settings["dest_stack"]; ok && value != nil {
+		stack, isString := value.(string)
+		if !isString || !slices.Contains(anxDestStacks, stack) {
+			return fmt.Errorf("ANX dest_stack must be one of %s", strings.Join(anxDestStacks, ", "))
+		}
+	}
+	if value, ok := settings["dest_behavior"]; ok && value != nil {
+		if err := validateANXDestBehavior(value); err != nil {
+			return err
 		}
 	}
 	for _, key := range []string{"wire_gen", "min_wire_gen"} {

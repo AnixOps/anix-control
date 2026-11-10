@@ -3,7 +3,7 @@
 // node data helpers.
 import { describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
-import { PROTOCOL_FIELDS, defaultSettingsFor, fieldsFor, readField, writeField } from '@/views/admin/nodes/protocolFields'
+import { PROTOCOL_FIELDS, anxDestWarnings, defaultSettingsFor, fieldsFor, parseJsonObject, readField, writeField } from '@/views/admin/nodes/protocolFields'
 import { useProtocolEditor } from '@/views/admin/nodes/useProtocolEditor'
 import { buildNodePayload, displayStatus, nodeFormFrom, parentCandidatesFor } from '@/views/admin/nodes/nodeData'
 
@@ -188,8 +188,26 @@ describe('protocol form fields', () => {
 describe('ANX protocol fields', () => {
   const anx = { type: 'anx', tls: 0, transport: 'tcp', settings: {}, tls_settings: {}, reality_settings: {}, transport_settings: {} }
 
+  it('takes the dest_behavior line dest-probe prints', () => {
+    const object = { session_tickets: '266/266', flight_records: 'none', max_ccs: 32 }
+    expect(parseJsonObject('"dest_behavior": {"session_tickets": "266/266", "flight_records": "none", "max_ccs": 32},', 'dest_behavior')).toEqual(object)
+    expect(parseJsonObject('{"session_tickets": "266/266", "flight_records": "none", "max_ccs": 32}', 'dest_behavior')).toEqual(object)
+    expect(parseJsonObject('{"session_tickets": ', 'dest_behavior')).toBeNull()
+    expect(parseJsonObject('[1]', 'dest_behavior')).toBeNull()
+    expect(parseJsonObject('session_tickets=266', 'dest_behavior')).toBeNull()
+  })
+
+  it('warns while the dest lacks its site data', () => {
+    const withSettings = settings => ({ ...anx, settings })
+    expect(anxDestWarnings(withSettings({}))).toEqual(['anxDestBehaviorMissing'])
+    expect(anxDestWarnings(withSettings({ dest_behavior: { session_tickets: 'none' } }))).toEqual(['anxDestBehaviorMissing'])
+    expect(anxDestWarnings(withSettings({ dest_behavior: { session_tickets: 'none', flight_records: '4/1' } }))).toEqual([])
+    expect(anxDestWarnings(withSettings({ dest: 'a.example:443,b.example:443', dest_behavior: { session_tickets: 'none', flight_records: 'none' } }))).toEqual(['anxDestBehaviorFirstDest'])
+    expect(anxDestWarnings(withSettings({ dest: '' }))).toEqual([])
+  })
+
   it('shows every A2 option and starts from the defaults', () => {
-    expect(fieldsFor(anx).map(field => field.key)).toEqual(['server_names', 'dest', 'alpn', 'allow_no_sni', 'shape_plain', 'max_streams', 'wg_listen_port', 'bare_listen_port', 'wire_gen', 'min_wire_gen'])
+    expect(fieldsFor(anx).map(field => field.key)).toEqual(['server_names', 'dest', 'alpn', 'dest_stack', 'dest_behavior', 'allow_no_sni', 'shape_plain', 'max_streams', 'wg_listen_port', 'bare_listen_port', 'wire_gen', 'min_wire_gen'])
     expect(defaultSettingsFor('anx')).toEqual({
       server_names: ['www.apple.com'],
       dest: 'www.apple.com:443',

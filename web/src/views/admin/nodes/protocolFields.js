@@ -8,7 +8,9 @@
 //   key      the JSON key; `keys` lists aliases, read in order, written to the
 //            first one present (else the last)
 //   kind     text | password | number | select | switch | list (an array of
-//            strings, edited as comma separated text)
+//            strings, edited as comma separated text) | json (an object,
+//            edited as JSON text; see parseJsonObject)
+//   warn     (protocol) => i18n hint keys to show instead of the hint
 //   options  select: the values ('' means unset); labels come from i18n
 //   show     (protocol) => whether the field applies
 // The same registry serves the node protocol sheet, the node group template
@@ -42,6 +44,47 @@ export const ANX_ALPN = Object.freeze(['h2', 'http/1.1'])
 // Streams one ANX session may open: anx-node's default and its u16 limit.
 export const ANX_MAX_STREAMS = 256
 export const ANX_MAX_STREAMS_LIMIT = 65535
+
+// TLS stack presets of anx-node for the cover site (dest_stack).
+export const ANX_DEST_STACKS = Object.freeze(['openssl', 'boringssl', 'go', 'rustls'])
+// dest_behavior keys that hold the cover site's own data (anx spec §4 items
+// 8 and 9), measured by anx-lab dest-probe; "none" counts as measured.
+export const ANX_DEST_SITE_KEYS = Object.freeze(['session_tickets', 'flight_records'])
+
+// The warnings of an ANX protocol's dest_behavior: the site keys are missing
+// while there is a dest (the node then looks unlike its dest whenever it
+// cannot mirror it), or dest lists several sites while dest_behavior holds
+// the data of one.
+export function anxDestWarnings(protocol) {
+  const settings = protocol?.settings || {}
+  const dest = String(settings.dest ?? `${ANX_COVER}:443`).trim()
+  if (!dest) return []
+  const behavior = settings.dest_behavior
+  const object = behavior && typeof behavior === 'object' && !Array.isArray(behavior) ? behavior : {}
+  const warnings = []
+  if (ANX_DEST_SITE_KEYS.some(key => !Object.prototype.hasOwnProperty.call(object, key))) warnings.push('anxDestBehaviorMissing')
+  if (dest.includes(',')) warnings.push('anxDestBehaviorFirstDest')
+  return warnings
+}
+
+// The object in text: a JSON object, or the line anx-lab dest-probe prints
+// ("dest_behavior": {…}, maybe with a trailing comma). null when it is not
+// one yet (the form keeps the text until it parses).
+export function parseJsonObject(text, key) {
+  let body = String(text || '').trim()
+  if (key) {
+    const prefix = new RegExp(`^"?${key}"?\\s*:`)
+    body = body.replace(prefix, '').trim()
+  }
+  body = body.replace(/,\s*$/, '')
+  if (!body.startsWith('{')) return null
+  try {
+    const value = JSON.parse(body)
+    return value && typeof value === 'object' && !Array.isArray(value) ? value : null
+  } catch {
+    return null
+  }
+}
 
 // Reality targets that work from most regions; the target probe
 // (NodeRealityTargetsSection) replaces this with a measured one.
@@ -83,6 +126,14 @@ export const PROTOCOL_FIELDS = Object.freeze([
     placeholder: `${ANX_COVER}:443`, show: p => p.type === 'anx'
   },
   { section: 'settings', key: 'alpn', kind: 'list', default: [...ANX_ALPN], placeholder: 'h2,http/1.1', show: p => p.type === 'anx' },
+  // The cover site's TLS stack preset and per-key overrides (anx spec §4
+  // item 6). dest_behavior takes the line anx-lab dest-probe prints; it
+  // should carry session_tickets and flight_records for the dest.
+  { section: 'settings', key: 'dest_stack', kind: 'select', options: ['', ...ANX_DEST_STACKS], show: p => p.type === 'anx' },
+  {
+    section: 'settings', key: 'dest_behavior', kind: 'json', hintKey: 'anxDestBehavior', warn: anxDestWarnings,
+    placeholder: '"dest_behavior": {"session_tickets": "266/266", "flight_records": "4/1/1/1"}', show: p => p.type === 'anx'
+  },
   // A2 no-SNI mode (anx spec §4): also accept ClientHellos without SNI, and
   // subscriptions leave the SNI out (clients dial the IP).
   { section: 'settings', key: 'allow_no_sni', kind: 'switch', hintKey: 'anxAllowNoSni', show: p => p.type === 'anx' },

@@ -38,6 +38,8 @@ func TestBuildNodeProtocolConfig_ANX(t *testing.T) {
 	require.NotContains(t, empty, "max_streams")
 	require.NotContains(t, empty, "wg_listen_port")
 	require.NotContains(t, empty, "bare_listen_port")
+	require.NotContains(t, empty, "dest_stack")
+	require.NotContains(t, empty, "dest_behavior")
 	require.NotContains(t, empty, "min_wire_gen")
 	require.NotContains(t, empty, "wire_gen")
 
@@ -51,6 +53,11 @@ func TestBuildNodeProtocolConfig_ANX(t *testing.T) {
 	bare := `{"allow_no_sni":true,"bare_listen_port":8444}`
 	withBare := buildNodeProtocolConfig(node, &model.NodeProtocol{ID: 8, NodeID: 1, Type: model.ProtocolANX, Port: 8448, Settings: &bare})
 	require.Equal(t, 8444, withBare["bare_listen_port"])
+
+	site := `{"dest_stack":"boringssl","dest_behavior":{"session_tickets":"266/266","flight_records":"none","max_ccs":32}}`
+	withSite := buildNodeProtocolConfig(node, &model.NodeProtocol{ID: 9, NodeID: 1, Type: model.ProtocolANX, Port: 8449, Settings: &site})
+	require.Equal(t, "boringssl", withSite["dest_stack"])
+	require.Equal(t, map[string]any{"session_tickets": "266/266", "flight_records": "none", "max_ccs": float64(32)}, withSite["dest_behavior"])
 
 	// wire_gen only changes the key text clients get; min_wire_gen is the
 	// node's own setting and goes out when it is 2.
@@ -91,6 +98,8 @@ func TestValidateANXProtocol(t *testing.T) {
 	valid := []string{``, `{}`, `{"server_names":["www.apple.com"],"dest":"www.apple.com:443","alpn":["h2"]}`,
 		`{"alpn":["h2","http/1.1"]}`, `{"allow_no_sni":true,"shape_plain":false,"max_streams":1024}`, `{"max_streams":65535}`, `{"wg_listen_port":51820}`,
 		`{"allow_no_sni":true,"bare_listen_port":8444}`, `{"allow_no_sni":true,"wg_listen_port":51820,"bare_listen_port":8444}`,
+		`{"dest_stack":"rustls"}`, `{"dest_behavior":{}}`, `{"dest_behavior":{"session_tickets":"none","flight_records":"none"}}`,
+		`{"dest_behavior":{"session_tickets":"266/266","flight_records":"122/1803/79/52","flight_gap_ms":5,"read_ahead":true,"ccs_overflow":"alert:10","max_ccs":"32"}}`,
 		`{"wire_gen":1}`, `{"wire_gen":2}`, `{"wire_gen":2,"min_wire_gen":1}`, `{"wire_gen":2,"min_wire_gen":2}`}
 	for _, settings := range valid {
 		s := settings
@@ -103,6 +112,9 @@ func TestValidateANXProtocol(t *testing.T) {
 		`{"wg_listen_port":0}`, `{"wg_listen_port":65536}`, `{"wg_listen_port":"51820"}`,
 		`{"bare_listen_port":8444}`, `{"allow_no_sni":false,"bare_listen_port":8444}`, `{"allow_no_sni":true,"bare_listen_port":0}`,
 		`{"allow_no_sni":true,"bare_listen_port":"8444"}`, `{"allow_no_sni":true,"wg_listen_port":8444,"bare_listen_port":8444}`,
+		`{"dest_stack":"schannel"}`, `{"dest_stack":1}`, `{"dest_behavior":"session_tickets=266"}`, `{"dest_behavior":{"nope":1}}`,
+		`{"dest_behavior":{"session_tickets":"34"}}`, `{"dest_behavior":{"session_tickets":"100/100/100/100/100/100/100/100/100"}}`, `{"dest_behavior":{"flight_records":"17"}}`,
+		`{"dest_behavior":{"flight_records":266}}`, `{"dest_behavior":{"max_ccs":1.5}}`, `{"dest_behavior":{"timeout":""}}`, `{"dest_behavior":{"max_ccs":[1]}}`,
 		`{"wire_gen":3}`, `{"wire_gen":"2"}`, `{"min_wire_gen":0}`, `{"min_wire_gen":2}`, `{"wire_gen":1,"min_wire_gen":2}`}
 	for _, settings := range invalid {
 		s := settings
