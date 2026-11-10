@@ -3,7 +3,7 @@
 // node data helpers.
 import { describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
-import { PROTOCOL_FIELDS, anxDestWarnings, defaultSettingsFor, fieldsFor, parseJsonObject, readField, writeField } from '@/views/admin/nodes/protocolFields'
+import { PROTOCOL_FIELDS, anxDestBehaviorsWarnings, anxDestWarnings, defaultSettingsFor, fieldsFor, parseJsonObject, readField, writeField } from '@/views/admin/nodes/protocolFields'
 import { useProtocolEditor } from '@/views/admin/nodes/useProtocolEditor'
 import { buildNodePayload, displayStatus, nodeFormFrom, parentCandidatesFor } from '@/views/admin/nodes/nodeData'
 
@@ -201,8 +201,14 @@ describe('ANX protocol fields', () => {
     const withSettings = settings => ({ ...anx, settings })
     expect(anxDestWarnings(withSettings({}))).toEqual(['anxDestBehaviorMissing'])
     expect(anxDestWarnings(withSettings({ dest_behavior: { session_tickets: 'none' } }))).toEqual(['anxDestBehaviorMissing'])
-    expect(anxDestWarnings(withSettings({ dest_behavior: { session_tickets: 'none', flight_records: '4/1' } }))).toEqual([])
-    expect(anxDestWarnings(withSettings({ dest: 'a.example:443,b.example:443', dest_behavior: { session_tickets: 'none', flight_records: 'none' } }))).toEqual(['anxDestBehaviorFirstDest'])
+    expect(anxDestWarnings(withSettings({ dest_behavior: { session_tickets: 'none', flight_records: '122/1803' } }))).toEqual([])
+    // A dest list: each dest is checked on dest_behavior merged with its own entry.
+    const list = { dest: 'a.example:443, b.example:443', dest_behavior: { flight_records: 'none' }, dest_behaviors: { 'a.example:443': { session_tickets: 'none' } } }
+    expect(anxDestWarnings(withSettings(list))).toEqual(['anxDestBehaviorMissing'])
+    const both = { ...list, dest_behaviors: { ...list.dest_behaviors, 'b.example:443': { session_tickets: '200/200' } } }
+    expect(anxDestWarnings(withSettings(both))).toEqual([])
+    expect(anxDestBehaviorsWarnings(withSettings({ ...both, dest_behaviors: { ...both.dest_behaviors, 'old.example:443': {} } }))).toEqual(['anxDestBehaviorsStale'])
+    expect(fieldsFor(withSettings(list)).map(field => field.key)).toContain('dest_behaviors')
     expect(anxDestWarnings(withSettings({ dest: '' }))).toEqual([])
   })
 
