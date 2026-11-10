@@ -51,20 +51,33 @@ export const ANX_DEST_STACKS = Object.freeze(['openssl', 'boringssl', 'go', 'rus
 // 8 and 9), measured by anx-lab dest-probe; "none" counts as measured.
 export const ANX_DEST_SITE_KEYS = Object.freeze(['session_tickets', 'flight_records'])
 
-// The warnings of an ANX protocol's dest_behavior: the site keys are missing
-// while there is a dest (the node then looks unlike its dest whenever it
-// cannot mirror it), or dest lists several sites while dest_behavior holds
-// the data of one.
+// The entries of an ANX dest list ("host:port[,host:port…]"), split as
+// anx-node splits it.
+export function anxDests(protocol) {
+  const settings = protocol?.settings || {}
+  return String(settings.dest ?? `${ANX_COVER}:443`).split(',').map(item => item.trim()).filter(Boolean)
+}
+
+const objectOr = value => (value && typeof value === 'object' && !Array.isArray(value) ? value : {})
+const has = (object, key) => Object.prototype.hasOwnProperty.call(object, key)
+
+// The warnings of an ANX protocol's dest_behavior: a dest lacks the site keys
+// in its merged behavior (dest_behavior, then dest_behaviors[dest]); the node
+// then looks unlike that dest whenever it cannot mirror it.
 export function anxDestWarnings(protocol) {
   const settings = protocol?.settings || {}
-  const dest = String(settings.dest ?? `${ANX_COVER}:443`).trim()
-  if (!dest) return []
-  const behavior = settings.dest_behavior
-  const object = behavior && typeof behavior === 'object' && !Array.isArray(behavior) ? behavior : {}
-  const warnings = []
-  if (ANX_DEST_SITE_KEYS.some(key => !Object.prototype.hasOwnProperty.call(object, key))) warnings.push('anxDestBehaviorMissing')
-  if (dest.includes(',')) warnings.push('anxDestBehaviorFirstDest')
-  return warnings
+  const common = objectOr(settings.dest_behavior)
+  const perDest = objectOr(settings.dest_behaviors)
+  const missing = anxDests(protocol).some(dest => ANX_DEST_SITE_KEYS.some(key => !has(common, key) && !has(objectOr(perDest[dest]), key)))
+  return missing ? ['anxDestBehaviorMissing'] : []
+}
+
+// The warnings of dest_behaviors: entries for a dest no longer in the dest
+// list are kept but not sent.
+export function anxDestBehaviorsWarnings(protocol) {
+  const dests = anxDests(protocol)
+  const stale = Object.keys(objectOr(protocol?.settings?.dest_behaviors)).some(dest => !dests.includes(dest))
+  return [...anxDestWarnings(protocol), ...(stale ? ['anxDestBehaviorsStale'] : [])]
 }
 
 // The object in text: a JSON object, or the line anx-lab dest-probe prints
@@ -132,7 +145,13 @@ export const PROTOCOL_FIELDS = Object.freeze([
   { section: 'settings', key: 'dest_stack', kind: 'select', options: ['', ...ANX_DEST_STACKS], show: p => p.type === 'anx' },
   {
     section: 'settings', key: 'dest_behavior', kind: 'json', hintKey: 'anxDestBehavior', warn: anxDestWarnings,
-    placeholder: '"dest_behavior": {"session_tickets": "266/266", "flight_records": "4/1/1/1"}', show: p => p.type === 'anx'
+    placeholder: '"dest_behavior": {"session_tickets": "266/266", "flight_records": "122/1803/79/52"}', show: p => p.type === 'anx'
+  },
+  // Per-dest overrides for a dest list (anx #208): { "host:port": {…} },
+  // usually each backup dest's session_tickets and flight_records.
+  {
+    section: 'settings', key: 'dest_behaviors', kind: 'json', hintKey: 'anxDestBehaviors', warn: anxDestBehaviorsWarnings,
+    placeholder: '{"www.icloud.com:443": {"session_tickets": "none", "flight_records": "122/1803/79/52"}}', show: p => p.type === 'anx' && anxDests(p).length > 1
   },
   // A2 no-SNI mode (anx spec §4): also accept ClientHellos without SNI, and
   // subscriptions leave the SNI out (clients dial the IP).

@@ -87,6 +87,12 @@ func buildANXConfig(config, settings map[string]any) {
 	if behavior, ok := settings["dest_behavior"].(map[string]any); ok && len(behavior) > 0 {
 		config["dest_behavior"] = behavior
 	}
+	// Per-dest overrides (anx #208), keyed by an entry of the dest list.
+	// anx-node refuses a key that is not in the list, so entries left over
+	// from an earlier list stay stored but do not go out.
+	if behaviors := anxDestBehaviors(config["dest"].(string), settings); len(behaviors) > 0 {
+		config["dest_behaviors"] = behaviors
+	}
 	// The handshake generation: anx-node accepts both generations until
 	// min_wire_gen is 2. Like the options above it goes out only when set,
 	// for anx-nodes older than the second generation.
@@ -147,6 +153,45 @@ var anxDestBehaviorKeys = map[string]bool{
 var anxDestSiteKeys = map[string][3]int{
 	"session_tickets": {35, 16401, 8},
 	"flight_records":  {18, 16401, 16},
+}
+
+// anxDests splits a dest list ("host:port[,host:port…]") as anx-node does.
+func anxDests(dest string) []string {
+	var dests []string
+	for _, item := range strings.Split(dest, ",") {
+		if item = strings.TrimSpace(item); item != "" {
+			dests = append(dests, item)
+		}
+	}
+	return dests
+}
+
+// anxDestBehaviors is settings dest_behaviors limited to the entries of dest.
+func anxDestBehaviors(dest string, settings map[string]any) map[string]any {
+	stored, _ := settings["dest_behaviors"].(map[string]any)
+	behaviors := map[string]any{}
+	for _, item := range anxDests(dest) {
+		if behavior, ok := stored[item].(map[string]any); ok && len(behavior) > 0 {
+			behaviors[item] = behavior
+		}
+	}
+	return behaviors
+}
+
+func validateANXDestBehaviors(value any) error {
+	behaviors, isObject := value.(map[string]any)
+	if !isObject {
+		return errors.New(`ANX dest_behaviors must be an object of dest ("host:port") to its dest_behavior`)
+	}
+	for dest, behavior := range behaviors {
+		if strings.TrimSpace(dest) != dest || dest == "" || strings.ContainsAny(dest, ", \t") {
+			return fmt.Errorf("ANX dest_behaviors has an invalid dest %q (one host:port of the dest list)", dest)
+		}
+		if err := validateANXDestBehavior(behavior); err != nil {
+			return fmt.Errorf("%w (dest_behaviors %s)", err, dest)
+		}
+	}
+	return nil
 }
 
 func validateANXDestBehavior(value any) error {
@@ -337,6 +382,11 @@ func ValidateANXSettings(settings map[string]any) error {
 	}
 	if value, ok := settings["dest_behavior"]; ok && value != nil {
 		if err := validateANXDestBehavior(value); err != nil {
+			return err
+		}
+	}
+	if value, ok := settings["dest_behaviors"]; ok && value != nil {
+		if err := validateANXDestBehaviors(value); err != nil {
 			return err
 		}
 	}

@@ -4,6 +4,14 @@
 
 ### Added
 
+- ANX nodes with a dest list take per-dest behavior (`dest_behaviors`: dest
+  `host:port` to its overrides on top of `dest_behavior`, usually that site's
+  `session_tickets` and `flight_records`). Control sends only the entries of
+  the current dest list (anx-node refuses others; stale ones stay stored and
+  the form flags them), and the missing site data warning checks each dest on
+  its merged behavior. Needs an anx-node with per-dest behavior (anx #208)
+  and the matching Agent.
+
 - The ANX protocol form takes the cover site's TLS stack preset
   (`dest_stack`: openssl, boringssl, go, rustls) and per-key overrides
   (`dest_behavior`, anx spec §4 item 6). `dest_behavior` takes the
