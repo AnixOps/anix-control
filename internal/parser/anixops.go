@@ -18,9 +18,13 @@ import (
 //     link;
 //   - an ANX-A node is an anx:// link (anxLink); other formats skip ANX;
 //   - a node reached through an iWAN line carries via=<line name> in its
-//     link's query (after the base64 body of a vmess:// link).
+//     link's query (after the base64 body of a vmess:// link);
+//   - a node reached through a domestic ingress and a shared trunk
+//     (ParsedNode.Path trunk) follows a "#anixops:path=trunk" line, which
+//     the App picks by default (anx docs FUTURE-IMPROVEMENTS F-51).
 //
-// Older App versions skip iwan:// links and ignore via.
+// Older App versions skip iwan:// links, ignore via and skip the # line
+// as a comment.
 type AnixOpsFormatter struct {
 	links V2RayFormatter
 }
@@ -56,11 +60,17 @@ func (f *AnixOpsFormatter) Format(nodes []*model.ParsedNode, ctx *model.Template
 		if node.Via != "" {
 			link = withVia(link, node.Via)
 		}
+		if node.Path == model.NodePathTrunk {
+			links = append(links, anixOpsTrunkMark)
+		}
 		links = append(links, link)
 	}
 	content := strings.Join(links, "\n")
 	return []byte(base64.StdEncoding.EncodeToString([]byte(content))), nil
 }
+
+// anixOpsTrunkMark marks the next link as a trunk node.
+const anixOpsTrunkMark = "#anixops:path=trunk"
 
 // iwanLink is a Panabit iWAN login as an iwan:// link.
 func iwanLink(node *model.ParsedNode) string {

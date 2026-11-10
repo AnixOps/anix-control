@@ -71,3 +71,20 @@ func TestAnixOpsFormatterWritesANXLinks(t *testing.T) {
 	raw, _ := base64.StdEncoding.DecodeString(string(v2ray))
 	require.Empty(t, strings.TrimSpace(string(raw)))
 }
+
+// A trunk node follows a "#anixops:path=trunk" line; a direct one does not.
+func TestAnixOpsFormatterMarksTrunkNodes(t *testing.T) {
+	nodes := []*model.ParsedNode{
+		{ID: "t", Name: "SH CN2 | JP", Type: "trojan", Server: "sh.example.com", Port: 443, Password: "pw", TLSMode: 1, Path: model.NodePathTrunk},
+		{ID: "d", Name: "JP direct", Type: "trojan", Server: "198.51.100.40", Port: 443, Password: "pw", TLSMode: 1},
+	}
+	content, err := (&AnixOpsFormatter{}).Format(nodes, &model.TemplateRenderContext{})
+	require.NoError(t, err)
+	decoded, err := base64.StdEncoding.DecodeString(string(content))
+	require.NoError(t, err)
+	lines := strings.Split(string(decoded), "\n")
+	require.Len(t, lines, 3)
+	require.Equal(t, "#anixops:path=trunk", lines[0])
+	require.True(t, strings.HasPrefix(lines[1], "trojan://pw@sh.example.com:443"))
+	require.True(t, strings.HasPrefix(lines[2], "trojan://pw@198.51.100.40:443"))
+}

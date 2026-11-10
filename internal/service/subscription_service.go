@@ -21,6 +21,7 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/entrypool"
 	"github.com/AnixOps/anix-control/v5/internal/iwanline"
 	"github.com/AnixOps/anix-control/v5/internal/model"
+	"github.com/AnixOps/anix-control/v5/internal/networkmodel"
 	"github.com/AnixOps/anix-control/v5/internal/nodeentry"
 	"github.com/AnixOps/anix-control/v5/internal/nodesecrets"
 	"github.com/AnixOps/anix-control/v5/internal/parser"
@@ -667,6 +668,16 @@ func (s *SubscriptionService) internalNodes(ctx *model.TemplateRenderContext, gr
 		}
 	}
 
+	// Nodes whose users leave over a trunk (internal/networkmodel) come
+	// first in each group (anx F-51, 默认路径规则).
+	// Without the model (a store not migrated yet) nothing is trunk and
+	// the order stays as it was.
+	trunkNodes, err := networkmodel.TrunkProxyNodes(s.db)
+	if err != nil {
+		slog.Warn("subscription: network model unavailable, no trunk order", "error", err)
+		trunkNodes = nil
+	}
+
 	liveness := make(map[uint]bool)
 	var result []*model.ParsedNode
 	var keys []groupProtocolKey
@@ -707,6 +718,9 @@ func (s *SubscriptionService) internalNodes(ctx *model.TemplateRenderContext, gr
 				if parsed.Type == string(model.ProtocolShadowsocks) && userKeyNodes[p.Node.ID] {
 					parsed.UserKey = ctx.SS2022Key
 				}
+				if trunkNodes[p.Node.ID] {
+					parsed.Path = model.NodePathTrunk
+				}
 				parsed.GroupID = g.ID
 				parsed.GroupName = g.Name
 				result = append(result, parsed)
@@ -732,6 +746,10 @@ func (s *SubscriptionService) internalNodes(ctx *model.TemplateRenderContext, gr
 		a, b := keys[order[i]], keys[order[j]]
 		if a.group != b.group {
 			return groupPlace[a.group] < groupPlace[b.group]
+		}
+		// Trunk nodes before direct ones; each kind keeps the group's order.
+		if ta, tb := result[order[i]].Path == model.NodePathTrunk, result[order[j]].Path == model.NodePathTrunk; ta != tb {
+			return ta
 		}
 		if a.protocol == b.protocol {
 			if !overrides {
@@ -878,6 +896,7 @@ func (s *SubscriptionService) nodeProtocolEntries(node *model.Node, protocol *mo
 		parsed.Name = fmt.Sprintf("%s | %s", parsed.Name, entry.Label)
 		parsed.Server = entry.Host
 		parsed.Via = line.Name
+		parsed.Path = model.NodePathTrunk
 		result = append(result, parsed)
 	}
 	return result
@@ -941,6 +960,7 @@ func (s *SubscriptionService) routeOffers(node *model.Node, protocol *model.Node
 		parsed.Name = fmt.Sprintf("%s | %s", parsed.Name, offer.Label)
 		parsed.Server = offer.Host
 		parsed.Port = offer.Port
+		parsed.Path = model.NodePathTrunk
 		rebaseANXJacket(parsed, func(jacket int) (int, bool) { return offer.Port, jacket == protocol.Port })
 		result = append(result, parsed)
 	}

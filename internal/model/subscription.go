@@ -212,6 +212,13 @@ type ParsedNode struct {
 	// node is reached through; only FormatAnixOps carries it.
 	Via string `json:"via,omitempty"`
 
+	// Path is how the subscriber's traffic crosses the border (anx docs
+	// FUTURE-IMPROVEMENTS F-51, 默认路径规则): NodePathTrunk when the node
+	// is a domestic ingress whose cross-border leg is a link many users
+	// share; empty for a direct node. Subscriptions list trunk nodes first
+	// in each group, and FormatAnixOps marks them for the App's default.
+	Path string `json:"path,omitempty"`
+
 	// 来源信息
 	SourceType string `json:"source_type"` // template, node, external, iwan_line
 	SourceID   uint   `json:"source_id"`   // 来源 ID
@@ -219,6 +226,11 @@ type ParsedNode struct {
 	GroupID    uint   `json:"group_id"`    // 所属分组
 	GroupName  string `json:"group_name"`  // 分组名称
 }
+
+// NodePathTrunk is ParsedNode.Path for a node reached through a domestic
+// ingress and a shared trunk (ANX-Line, ANX-A, a published forward route or
+// a Panabit iWAN line).
+const NodePathTrunk = "trunk"
 
 // IsValid checks whether a parsed node has all required fields populated.
 func (n *ParsedNode) IsValid() bool {
