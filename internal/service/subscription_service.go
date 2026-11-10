@@ -952,19 +952,25 @@ func (s *SubscriptionService) routeOffers(node *model.Node, protocol *model.Node
 // at maps the node's jacket port to the port subscribers dial; when the entry
 // or route does not carry that port the jacket is dropped, so clients go
 // straight to A2 instead of trying a UDP port nothing listens on.
+// The bare jacket port (settings bare_listen_port, the link's bare_port) moves
+// the same way.
 func rebaseANXJacket(parsed *model.ParsedNode, at func(jacket int) (int, bool)) {
 	if parsed.Type != string(model.ProtocolANX) {
 		return
 	}
-	jacket := ANXWGPort(parsed.Settings)
-	if jacket == 0 {
-		return
+	for key, jacket := range map[string]int{
+		"wg_listen_port":   ANXWGPort(parsed.Settings),
+		"bare_listen_port": ANXBarePort(parsed.Settings),
+	} {
+		if jacket == 0 {
+			continue
+		}
+		if port, ok := at(jacket); ok && port > 0 && port <= 65535 {
+			parsed.Settings[key] = port
+			continue
+		}
+		delete(parsed.Settings, key)
 	}
-	if port, ok := at(jacket); ok && port > 0 && port <= 65535 {
-		parsed.Settings["wg_listen_port"] = port
-		return
-	}
-	delete(parsed.Settings, "wg_listen_port")
 }
 
 // maxRelayDepth bounds the walk up a relay chain; validateParentID keeps the

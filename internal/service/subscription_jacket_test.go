@@ -24,6 +24,16 @@ func TestRebaseANXJacket(t *testing.T) {
 			t.Fatalf("wg_listen_port kept: %v", parsed.Settings)
 		}
 	})
+	t.Run("moves the bare jacket like the wg one", func(t *testing.T) {
+		parsed := anx(map[string]any{"wg_listen_port": float64(11114), "bare_listen_port": float64(11116)})
+		rebaseANXJacket(parsed, func(jacket int) (int, bool) { return jacket + 4000, jacket != 11114 })
+		if _, ok := parsed.Settings["wg_listen_port"]; ok {
+			t.Fatalf("wg_listen_port kept: %v", parsed.Settings)
+		}
+		if got := ANXBarePort(parsed.Settings); got != 15116 {
+			t.Fatalf("bare port = %d, want 15116", got)
+		}
+	})
 	t.Run("leaves nodes without a jacket alone", func(t *testing.T) {
 		parsed := anx(map[string]any{})
 		rebaseANXJacket(parsed, func(int) (int, bool) { t.Fatal("at called"); return 0, false })

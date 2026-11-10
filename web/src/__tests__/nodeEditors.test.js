@@ -189,7 +189,7 @@ describe('ANX protocol fields', () => {
   const anx = { type: 'anx', tls: 0, transport: 'tcp', settings: {}, tls_settings: {}, reality_settings: {}, transport_settings: {} }
 
   it('shows every A2 option and starts from the defaults', () => {
-    expect(fieldsFor(anx).map(field => field.key)).toEqual(['server_names', 'dest', 'alpn', 'allow_no_sni', 'shape_plain', 'max_streams', 'wg_listen_port', 'wire_gen', 'min_wire_gen'])
+    expect(fieldsFor(anx).map(field => field.key)).toEqual(['server_names', 'dest', 'alpn', 'allow_no_sni', 'shape_plain', 'max_streams', 'wg_listen_port', 'bare_listen_port', 'wire_gen', 'min_wire_gen'])
     expect(defaultSettingsFor('anx')).toEqual({
       server_names: ['www.apple.com'],
       dest: 'www.apple.com:443',

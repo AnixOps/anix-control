@@ -72,6 +72,12 @@ func buildANXConfig(config, settings map[string]any) {
 	if n := ANXWGPort(settings); n > 0 {
 		config["wg_listen_port"] = n
 	}
+	// The bare jacket (random-looking TCP, anx spec §5.2) is for users
+	// dialing a domestic entry only; validateANXProtocol ties it to the
+	// no-SNI mode, the mode domestic entries run.
+	if n := ANXBarePort(settings); n > 0 {
+		config["bare_listen_port"] = n
+	}
 	// The handshake generation: anx-node accepts both generations until
 	// min_wire_gen is 2. Like the options above it goes out only when set,
 	// for anx-nodes older than the second generation.
@@ -106,6 +112,14 @@ func ANXClientPublicKey(publicKey string, settings map[string]any) string {
 // ANXWGPort is the UDP port of an ANX node's wg jacket, 0 when it is off.
 func ANXWGPort(settings map[string]any) int {
 	if n := intSetting(settings, "wg_listen_port", 0); n > 0 && n <= 65535 {
+		return n
+	}
+	return 0
+}
+
+// ANXBarePort is the TCP port of an ANX node's bare jacket, 0 when it is off.
+func ANXBarePort(settings map[string]any) int {
+	if n := intSetting(settings, "bare_listen_port", 0); n > 0 && n <= 65535 {
 		return n
 	}
 	return 0
@@ -216,6 +230,21 @@ func ValidateANXSettings(settings map[string]any) error {
 		n, isNumber := value.(float64)
 		if !isNumber || n != float64(int64(n)) || n < 1 || n > 65535 {
 			return errors.New("ANX wg_listen_port must be a port number from 1 to 65535")
+		}
+	}
+	if value, ok := settings["bare_listen_port"]; ok && value != nil {
+		n, isNumber := value.(float64)
+		if !isNumber || n != float64(int64(n)) || n < 1 || n > 65535 {
+			return errors.New("ANX bare_listen_port must be a port number from 1 to 65535")
+		}
+		// The bare jacket looks like random bytes, which the GFW flags on
+		// cross-border paths: it is for domestic entries only, and those run
+		// the no-SNI mode.
+		if !ANXNoSNI(settings) {
+			return errors.New("ANX bare_listen_port is for domestic entries only and needs allow_no_sni")
+		}
+		if ANXWGPort(settings) == int(n) {
+			return errors.New("ANX bare_listen_port must differ from wg_listen_port")
 		}
 	}
 	for _, key := range []string{"wire_gen", "min_wire_gen"} {

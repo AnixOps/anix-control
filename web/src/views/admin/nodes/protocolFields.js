@@ -98,6 +98,12 @@ export const PROTOCOL_FIELDS = Object.freeze([
     section: 'settings', key: 'wg_listen_port', kind: 'number', min: 1, max: 65535, hintKey: 'anxWgListenPort',
     placeholder: '', show: p => p.type === 'anx'
   },
+  // bare jacket (anx spec §5.2): a random-looking TCP port for users dialing a
+  // domestic entry only; Control requires the no-SNI mode. Empty = off.
+  {
+    section: 'settings', key: 'bare_listen_port', kind: 'number', min: 1, max: 65535, hintKey: 'anxBareListenPort',
+    placeholder: '', show: p => p.type === 'anx'
+  },
   // Handshake generation (anx spec §2.5): wire_gen 2 publishes the server key
   // with "@2", so clients log in with the second generation; min_wire_gen 2
   // makes the node refuse the first. Empty = 1.
