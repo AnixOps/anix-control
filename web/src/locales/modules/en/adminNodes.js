@@ -581,7 +581,9 @@ export default {
       allow_no_sni: 'No-SNI mode',
       shape_plain: 'Turn off traffic shaping',
       max_streams: 'Max streams per session',
-      wg_listen_port: 'WireGuard-shaped UDP port (wg jacket)'
+      wg_listen_port: 'WireGuard-shaped UDP port (wg jacket)',
+      wire_gen: 'Published handshake generation',
+      min_wire_gen: 'Lowest handshake generation accepted'
     },
     hints: {
       anxServerNames: 'Comma separated; clients use the first. It must be a name the cover site really serves. ANX user keys derive from the UUID and the server public key is reported by the Agent on the node; the AnixOps Net subscription format carries the anx:// link.',
@@ -589,6 +591,8 @@ export default {
       anxAllowNoSni: 'Also accept connections without SNI (clients dial the IP; for domestic entries that block unregistered SNIs). Subscriptions then carry no SNI. Needs an anx-node newer than alpha.7.',
       anxShapePlain: 'VisionLike shaping is on by default (it hides the TLS-in-TLS pattern); turn it off only to debug interop.',
       anxMaxStreams: 'Streams one ANX session may open at once; empty means 256.',
+      anxWireGen: 'Set to 2 to publish the server key with "@2": clients then log in with the second handshake generation and never fall back. Only once this node runs an anx-node that knows the second generation, and every client of it has been updated; older clients cannot read the new key. Empty = 1.',
+      anxMinWireGen: 'Set to 2 to make the node refuse first-generation logins. Only after the published generation is 2 and the node no longer counts first-generation logins (Stats auth_gen1). Empty = 1 (both accepted). Needs an anx-node that knows the second generation.',
       anxWgListenPort: 'Also serve the wg jacket (looks like WireGuard UDP) on this UDP port, for users dialing a domestic entry; it backs up no-SNI A2. Subscriptions add wg_port and clients try it first. Open the UDP port in the firewall. Empty = off. Needs an anx-node with the wg jacket.',
       serverKey: 'Server key of the 2022 ciphers; empty derives it from the node.',
       privateKey: 'Empty generates a key pair when saved; a stored private key shows as ********.',

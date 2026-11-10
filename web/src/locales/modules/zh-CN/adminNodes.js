@@ -581,7 +581,9 @@ export default {
       allow_no_sni: '无 SNI 模式',
       shape_plain: '关闭流量整形',
       max_streams: '单会话最大流数',
-      wg_listen_port: 'WireGuard 外形 UDP 端口（外衣 wg）'
+      wg_listen_port: 'WireGuard 外形 UDP 端口（外衣 wg）',
+      wire_gen: '对外发布的握手代',
+      min_wire_gen: '接受的最低握手代'
     },
     hints: {
       anxServerNames: '用逗号分隔，客户端使用第一个；必须是伪装目标站真实支持的域名。ANX 用户密钥由 UUID 派生，服务器公钥由节点上的 Agent 上报，订阅选择 AnixOps Net 格式即可拿到 anx:// 链接。',
@@ -589,6 +591,8 @@ export default {
       anxAllowNoSni: '同时接受不带 SNI 的连接（客户端直连 IP，适合按备案拦截 SNI 的国内入口）；开启后订阅不再下发 SNI。需要 alpha.7 之后的新版 anx-node。',
       anxShapePlain: '默认使用 VisionLike 整形（抹掉 TLS-in-TLS 特征）；只在互通调试时关闭。',
       anxMaxStreams: '一个 ANX 会话里同时打开的流数上限，留空为 256。',
+      anxWireGen: '填 2 后，订阅里的服务端公钥带上 "@2"，客户端改用第 2 代握手且不会降级。只在本节点的 anx-node 已支持第 2 代、并且它的客户端都已升级之后再填；旧客户端读不了新公钥。留空为 1。',
+      anxMinWireGen: '填 2 后节点拒绝第 1 代握手。只在发布代已是 2、且节点不再有第 1 代登录（Stats auth_gen1 不再增长）之后再填。留空为 1（两代都收）。需要支持第 2 代的 anx-node。',
       anxWgListenPort: '在这个 UDP 端口同时提供外衣 wg（外形像 WireGuard），给用户连国内入口用，与无 SNI 的 A2 互为备份；订阅会带上 wg_port，客户端先试它再回落 A2。需要在防火墙放行该 UDP 端口。留空为关闭。需要带外衣 wg 的新版 anx-node。',
       serverKey: '2022 系列加密的服务端密钥；留空则按节点自动派生。',
       privateKey: '留空则保存时自动生成密钥对；已保存的私钥显示为 ********。',

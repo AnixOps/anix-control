@@ -381,3 +381,19 @@ func TestServiceRefusals(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, found)
 }
+
+func TestSharedKeys(t *testing.T) {
+	others := []model.NetworkDevice{
+		{NodeRef: "proxy-3", PublicKeysJSON: `{"anx_line":"aa:bb@2"}`},
+		{NodeRef: "proxy-1", PublicKeysJSON: `{"anx_line":"aa:bb","other":"zz"}`},
+		{NodeRef: "proxy-4", PublicKeysJSON: `{"anx_line":"cc:dd"}`},
+		{NodeRef: "proxy-5", PublicKeysJSON: ``},
+		{NodeRef: "proxy-6", PublicKeysJSON: `not json`},
+	}
+	// The same key on other devices is found whatever generation suffix each reports.
+	require.Equal(t, map[string][]string{"anx_line": {"proxy-1", "proxy-3"}},
+		sharedKeys(map[string]string{"anx_line": " aa:bb ", "other": "yy"}, others))
+	require.Empty(t, sharedKeys(map[string]string{"anx_line": "ee:ff"}, others))
+	// An empty key is no key.
+	require.Empty(t, sharedKeys(map[string]string{"anx_line": ""}, others))
+}
