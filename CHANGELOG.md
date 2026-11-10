@@ -4,6 +4,16 @@
 
 ### Added
 
+- The ANX protocol form takes the cover site's TLS stack preset
+  (`dest_stack`: openssl, boringssl, go, rustls) and per-key overrides
+  (`dest_behavior`, anx spec §4 item 6). `dest_behavior` takes the
+  `"dest_behavior": {…}` line `anx-lab dest-probe` prints as is; Control
+  checks its keys and value shapes and sends both to the Agent only when set.
+  The form warns while a node with a dest lacks `session_tickets` or
+  `flight_records` (the site's own data; `"none"` counts as measured), and
+  when `dest` lists several sites, since that data fits only the first. Needs
+  the matching Agent.
+
 - The ANX protocol form takes a bare jacket TCP port (`bare_listen_port`,
   anx spec §5.2): random-looking bytes for users dialing a domestic entry,
   with forward secrecy, post-quantum keys and revocable devices that

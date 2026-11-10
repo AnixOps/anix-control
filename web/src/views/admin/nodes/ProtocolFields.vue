@@ -44,6 +44,17 @@
             :data-testid="`protocol-field-${field.key}`"
             @update:model-value="value => update(field, splitList(value))"
           />
+          <UiTextarea
+            v-else-if="field.kind === 'json'"
+            class="form-grid__full"
+            :model-value="jsonText(field)"
+            :rows="3"
+            :label="labelOf(field)"
+            :help="helpOf(field)"
+            :placeholder="field.placeholder || ''"
+            :data-testid="`protocol-field-${field.key}`"
+            @update:model-value="value => updateJson(field, value)"
+          />
           <UiPasswordField
             v-else-if="field.kind === 'password'"
             :model-value="String(readField(modelValue, field))"
@@ -96,8 +107,9 @@ import UiPasswordField from '@/ui/UiPasswordField.vue'
 import UiSelect from '@/ui/UiSelect.vue'
 import UiSwitch from '@/ui/UiSwitch.vue'
 import UiTextField from '@/ui/UiTextField.vue'
+import UiTextarea from '@/ui/UiTextarea.vue'
 import { useAppI18n } from '@/composables/useAppI18n'
-import { FIELD_GROUPS, PROTOCOL_SECTIONS, fieldsFor, randomShortId, readField, writeField } from './protocolFields'
+import { FIELD_GROUPS, PROTOCOL_SECTIONS, fieldsFor, parseJsonObject, randomShortId, readField, writeField } from './protocolFields'
 
 const props = defineProps({
   modelValue: { type: Object, required: true },
@@ -121,7 +133,12 @@ const groups = computed(() => {
 
 const i18nKey = field => field.key.replace(/-/g, '_')
 const labelOf = field => t(`${K}.labels.${i18nKey(field)}`)
-const helpOf = field => (field.hintKey ? t(`${K}.hints.${field.hintKey}`) : '')
+// A field's warnings (field.warn) replace its hint while they hold.
+const helpOf = (field) => {
+  const warnings = field.warn ? field.warn(props.modelValue) : []
+  if (warnings.length) return warnings.map(key => t(`${K}.hints.${key}`)).join(' ')
+  return field.hintKey ? t(`${K}.hints.${field.hintKey}`) : ''
+}
 const selectValue = (field) => {
   const value = readField(props.modelValue, field)
   return value === '' ? NONE : value
@@ -132,6 +149,17 @@ const optionsOf = field => field.options.map(value => ({
   value: value === '' ? NONE : value,
   label: value === '' ? t(`${K}.none`) : value
 }))
+
+// A json field shows its object as JSON; text that is not an object yet
+// (typing, or a bad paste) stays as text, and saving it is refused.
+const jsonText = (field) => {
+  const value = readField(props.modelValue, field)
+  return typeof value === 'object' && value !== null ? JSON.stringify(value) : String(value ?? '')
+}
+function updateJson(field, text) {
+  const trimmed = String(text).trim()
+  update(field, trimmed === '' ? '' : (parseJsonObject(trimmed, field.key) ?? trimmed))
+}
 
 function update(field, value) {
   emit('update:modelValue', writeField(props.modelValue, field, value))
