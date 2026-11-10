@@ -40,6 +40,12 @@ jobs:
           count=$(wc -l < old.tsv)
           bytes=$(awk '{s+=$2} END {print s+0}' old.tsv)
           echo "Found ${count} artifacts, ${bytes} bytes"
-          cut -f1 old.tsv | xargs -r -P 8 -I{} gh api -X DELETE "repos/${REPO}/actions/artifacts/{}" --silent
+          # An artifact can expire or be deleted between listing and deleting
+          # (404), and a large backlog can exhaust the hourly API budget; skip
+          # those and let the next daily run pick up what is left.
+          cut -f1 old.tsv | xargs -r -P 8 -I{} sh -c \
+            'gh api -X DELETE "repos/${REPO}/actions/artifacts/$1" --silent || echo "skip $1"' _ {} > delete.log 2>&1
+          skipped=$(grep -c '^skip ' delete.log || true)
+          count=$((count - skipped))
           echo "### Artifact prune" >> "$GITHUB_STEP_SUMMARY"
-          echo "Deleted ${count} artifacts older than ${DAYS} days ($(numfmt --to=iec "${bytes}"))." >> "$GITHUB_STEP_SUMMARY"
+          echo "Deleted ${count} artifacts older than ${DAYS} days, ${skipped} skipped (listed size $(numfmt --to=iec "${bytes}"))." >> "$GITHUB_STEP_SUMMARY"
