@@ -245,9 +245,10 @@ workflow. Change it in the same pull request as any release step.
 
 Dev builds are the internal test channel: a feature merged to `main` can be
 tried on a test Control and test nodes without waiting for the next release.
-`.github/workflows/dev-release.yml` cuts one after every green `main` push
-CI of this repository, every three hours when `anix-agent`'s `main` moved,
-and on a manual run.
+`.github/workflows/dev-release.yml` cuts one on a manual run only (Actions >
+Dev Release > Run workflow); it no longer runs after every green `main` or on
+a schedule, so the Releases page holds real releases (user decision
+2026-11-10).
 
 - **Version.** The release the tree declares plus `.dev.<run number>`:
   `v5.0.0-rc.15.dev.42` after `v5.0.0-rc.15`. After a stable `vX.Y.Z` it is
@@ -261,8 +262,8 @@ and on a manual run.
   public `anix-agent` repository, packaged and signed as its `release.yml`
   does. All of it is one pre-release of this repository, never marked
   latest; the notes name both commits. Nothing is built when neither
-  repository moved (`force` builds anyway). The 15 newest dev builds are
-  kept; older ones are deleted with their tags.
+  repository moved (`force` builds anyway). Only the newest dev build is
+  kept: a new one deletes the previous release and its tag.
 - **Installing.** `install.sh update --version <dev tag>` installs Control
   and, because the Agent of a dev tag is in this repository's pre-release,
   fills `agent_install.artifact_dir` from there. The node page's github

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Changed
+
+- Dev builds run on a manual dispatch of `dev-release.yml` only, no longer
+  after every green `main` or every three hours, and only the newest one is
+  kept, so the Releases page holds real releases.
+
 ## 5.0.3 - 2026-11-10
 
 ### Added
