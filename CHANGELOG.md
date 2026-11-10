@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 5.0.3 - 2026-11-10
+
 ### Added
 
 - l2 reverse links hand the egress the rendezvous key an Agent reports as
@@ -39,6 +41,109 @@
   clients try wg, then bare, then no-SNI A2. Needs an anx-node whose ANX
   inbound serves the bare jacket and the matching Agent; the TCP port has to
   be open in the node's firewall.
+- Server IP addresses are masked on the admin pages by default
+  (`203.0.113.7` shows as `203.*.*.7`, `2001:db8::1` as `2001:****`), so a
+  screen share or a screenshot does not give them away: the node list and
+  node overview, entries and IWAN lines, joining machines, the live monitor,
+  forward node and route details, and the entry HA card's records and node
+  addresses. Account menu → 显示服务器 IP (or the command palette) shows
+  them; the choice lasts for the browser tab, and a new tab starts masked
+  again. Forms, copy buttons, diagnostics output and the API keep the real
+  values.
+- ANX nodes have two handshake generation settings (admin node editor, ANX
+  protocol): `wire_gen` and `min_wire_gen`, each 1 or 2, empty = 1. With
+  `wire_gen` 2 the subscription publishes the node's server public key with
+  the suffix `@2`, so clients log in with the second handshake generation
+  (they never fall back to the first). With `min_wire_gen` 2 the node config
+  carries `min_wire_gen: 2` and anx-node refuses first-generation logins;
+  `min_wire_gen` 2 needs `wire_gen` 2. Both stay out of the node config and
+  the key text until set, so nodes and clients older than the second
+  generation are unaffected. Switch a node only after its anx-node and all
+  of its clients know the second generation.
+- Control logs a warning when two devices report the same ANX server public
+  key (`network model: devices share a server key`): every server is meant to
+  have its own key, so that a login recorded at one cannot be replayed at
+  another.
+- Cross-border standby channels (节点 → 过境应急, `internal/l2standby`):
+  each cross-border transport of the network model (kind `anx`, not
+  trusted) gets public-protocol standby channels between the same proxy
+  nodes, tier 1 VLESS + REALITY + Vision and tier 2 VLESS + XHTTP behind our
+  own domain's TLS front, prepared ahead (`POST
+  /api/v4/kernel/network/standby/prepare`) and switched per transport or all
+  at once, and back (`POST /api/v4/kernel/network/standby/switch`, tier
+  `reality`, `xhttp` or `off`). A switch reaches both nodes within a minute
+  as VLESS egress relays and a catch-all egress route. Needs node kernels
+  with VLESS egress relays (networkcore node-runtime) and an Agent that
+  passes the relays' `settings` and `listen` through. The drill manual and
+  the manual plan are in `docs/guide/cross-border-standby.md`.
+- Alerts `cross_border_link_down` (a cross-border transport down for 10
+  minutes; critical without a standby, warning once switched) and
+  `cross_border_wide_outage` (half or more down at once).
+- Entry pools (`internal/entrypool`, `docs/guide/entry-pools.md`): a node
+  entry can belong to a pool and is then offered only to that pool's
+  subscribers; subscribers are dealt into `shard-N` pools by user id, new
+  and plan-less accounts into a quarantine pool, or assigned by an
+  administrator (canary addresses of one subscriber). `GET
+  /api/v4/kernel/entry-pools/leak` names the subscribers who were given a
+  leaked address, `POST /api/v4/kernel/entry-pools/split` halves a pool to
+  bisect a leak. The node entries sheet has a pool field.
+- AnixOps Net client failure reports: `POST /{subscribe_path}/{token}/report`
+  takes per-node connection outcomes (ok, fallback, timeout, refused,
+  reset, after handshake, keepalive lost, stopped), once per 10 minutes per
+  subscriber; `GET /api/v4/kernel/client-failures` sums them per node.
+
+### Changed
+
+- `anx://` links in the AnixOps Net subscription no longer carry `fp=chrome`.
+  The client then uses the TLS ClientHello shape of its own platform: Safari's
+  on iOS and macOS, Chrome's elsewhere (a Chrome ClientHello from an Apple
+  device is unusual on the wire). Clients released before that choice existed
+  read a missing `fp` as `chrome`, so nothing changes for them.
+- A scheduled workflow (`artifact-cleanup.yml`, every six hours) deletes
+  GitHub Actions artifacts older than one day. Artifacts only carry files
+  between the jobs of one run; release assets are not touched.
+- CI artifacts are kept for 3 days instead of the 90-day default, and the
+  daily `Artifact prune` workflow deletes older ones, so the organization's
+  shared artifact storage quota no longer fills up.
+- Control refuses to start while a node secret split table
+  (`v2_node`, `v2_node_protocol`, `v2_wireguard_peer`) holds rows and is not
+  finalized with `finalized_at` set. The check runs before the migrations and
+  changes nothing. Finish the split on 5.0.2 first (`docs/UPGRADE.md`,
+  "Upgrading To 5.0.3"). An empty table and a fresh database are marked
+  finalized at start.
+- Migration `0031_drop_legacy_originals` deletes the original JSON documents
+  finalize kept for `unsplit` (`v4_kernel_protocol_secret` rows of scope
+  `legacy_original`). Stop every 5.0.2 process before the first 5.0.3
+  start (no rolling update). The pre-migration backup runs; going back to
+  5.0.2 means restoring it.
+- `GetCapabilities` of `KernelNodeOps` answers `FINALIZED` for the three
+  split tables, and the kernel API views and adoptions of the split's
+  credential-free remainder are always available.
+- Subscriptions list trunk nodes first in each group: a node whose users
+  reach the internet through a domestic ingress and a shared link (a network
+  model path with a transport, a forward route published in subscriptions, a
+  Panabit iWAN line), before nodes subscribers dial across the border
+  directly. Within each kind the group's order is unchanged, so a group's
+  first entry, and the default of clients that start on it, is a trunk node
+  whenever the group has one (anx FUTURE-IMPROVEMENTS F-51, 默认路径规则).
+  No node is removed and no node configuration changes.
+- The AnixOps Net subscription (`format=anixops`) puts a
+  `#anixops:path=trunk` line before each trunk node's link. Clients that do
+  not know it skip it as a comment.
+
+### Removed
+
+- The node secret split is finalized-only. The commands
+  `anix-control node-secrets backfill`, `verify`, `phase`, `finalize` and
+  `unsplit` are removed (they exit 2 with the usage); `node-secrets status`
+  and `node-secrets validate` stay. Update runbooks and scripts that call
+  them.
+- The metric `anixops_node_secrets_fallback_total` is removed: readers no
+  longer fall back to the legacy columns. Remove it from dashboards and alert
+  rules; `anixops_node_secrets_invalid_total` stays.
+- The alert kinds `node_secrets_split_stalled` and
+  `node_secrets_finalize_interrupted` are removed. Open alerts of these kinds
+  are resolved at the next scan.
 
 ## 5.0.2 - 2026-11-08
 
