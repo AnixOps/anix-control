@@ -173,6 +173,10 @@ function update(field, value) {
   gap: var(--space-6);
 }
 
+.protocol-fields > .dialog-section + .dialog-section {
+  margin-top: 0;
+}
+
 .protocol-fields__with-action {
   display: flex;
   align-items: flex-end;
@@ -181,5 +185,10 @@ function update(field, value) {
 
 .protocol-fields__with-action > :first-child {
   flex: 1 1 auto;
+  min-width: 0;
+}
+
+.protocol-fields__with-action > :last-child {
+  flex: none;
 }
 </style>

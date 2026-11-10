@@ -473,7 +473,22 @@ export default {
     description: 'Node {name}',
     create: 'Add protocol',
     save: 'Save protocol',
-    templateLibrary: 'Start from a template',
+    pickHint: 'Pick a starting point. Every setting can be changed in the next step.',
+    portSpec: 'Port {port}',
+    recommended: 'Recommended',
+    change: 'Change',
+    fixed: '{value} (fixed for this protocol)',
+    blank: {
+      name: 'Custom',
+      description: 'Start from a blank protocol and choose everything yourself'
+    },
+    sections: {
+      basics: 'Basics',
+      connection: 'Transport and security',
+      publish: 'Publishing'
+    },
+    enableHint: 'When off, the configuration is kept but does not run on the node.',
+    showHint: 'Include this inbound in user subscriptions.',
     maskedSecretsHint: 'Stored secrets (private keys, passwords, tokens) show as ********. Leave ******** to keep a stored secret, or replace it with a new value.',
     modeLabel: 'Editor',
     jsonLabel: 'Protocol JSON',
@@ -493,16 +508,7 @@ export default {
     },
     jsonActions: {
       format: 'Format',
-      copy: 'Copy',
-      fromTemplate: 'Load from template'
-    },
-    templatePicker: {
-      title: 'Load from template',
-      description: 'Pick a template. It replaces the JSON in the editor.',
-      label: 'Template',
-      placeholder: 'Choose a template',
-      required: 'Choose a template to load.',
-      apply: 'Load template'
+      copy: 'Copy'
     },
     jsonStatus: {
       valid: 'Valid JSON',

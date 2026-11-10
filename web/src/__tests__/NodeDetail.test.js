@@ -327,7 +327,7 @@ describe('NodeDetail', () => {
     expect(api.syncNodeProtocol).toHaveBeenCalledWith(5)
   })
 
-  it('manages protocols: delete after a confirmation, invalid JSON inline, templates through a picker', async () => {
+  it('manages protocols: delete after a confirmation, invalid JSON inline, templates as starting points', async () => {
     const user = userEvent.setup()
     api.deleteNodeProtocol.mockResolvedValue({ data: {} })
     api.createNodeProtocol.mockResolvedValue({ data: { id: 62 } })
@@ -350,8 +350,12 @@ describe('NodeDetail', () => {
 
     await user.click(screen.getAllByRole('button', { name: 'Add protocol' })[0])
     const sheet = await screen.findByRole('dialog', { name: 'Add protocol' })
-    // The form is the default; the whole protocol as JSON is the advanced tab.
+    // Adding starts with the starting points; Custom opens a blank form.
+    expect(within(sheet).queryByTestId('protocol-fields')).toBeNull()
+    expect(within(sheet).queryByRole('button', { name: 'Add protocol' })).toBeNull()
+    await user.click(within(sheet).getByRole('button', { name: /^Custom/ }))
     expect(within(sheet).getByTestId('protocol-fields')).toBeTruthy()
+    // The whole protocol as JSON is the advanced mode.
     await user.click(within(sheet).getByRole('button', { name: 'Advanced JSON' }))
     const editor = within(sheet).getByRole('textbox', { name: /Protocol JSON/ })
     await user.clear(editor)
@@ -360,15 +364,10 @@ describe('NodeDetail', () => {
     expect(within(sheet).getByTestId('protocol-form-error').textContent).toMatch(/^Invalid JSON: /)
     expect(api.createNodeProtocol).not.toHaveBeenCalled()
 
-    await user.click(within(sheet).getByRole('button', { name: 'Load from template' }))
-    const picker = await screen.findByRole('dialog', { name: 'Load from template' })
-    await user.click(within(picker).getByRole('button', { name: 'Load template' }))
-    expect(within(picker).getByText('Choose a template to load.')).toBeTruthy()
-    await user.click(within(picker).getByRole('combobox'))
-    await user.click(await screen.findByRole('option', { name: 'Trojan' }))
-    await user.click(within(picker).getByRole('button', { name: 'Load template' }))
-    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Load from template' })).toBeNull())
-    expect(JSON.parse(editor.value)).toMatchObject({ type: 'trojan', port: 9443, tls: 1 })
+    // Change goes back to the starting points; a template replaces the JSON.
+    await user.click(within(sheet).getByRole('button', { name: 'Change' }))
+    await user.click(within(sheet).getByRole('button', { name: /^Trojan/ }))
+    expect(JSON.parse(within(sheet).getByRole('textbox', { name: /Protocol JSON/ }).value)).toMatchObject({ type: 'trojan', port: 9443, tls: 1 })
 
     await user.click(within(sheet).getByRole('button', { name: 'Add protocol' }))
     await waitFor(() => expect(api.createNodeProtocol).toHaveBeenCalledWith(5, expect.objectContaining({ type: 'trojan', port: 9443, tls: 1, transport: 'tcp' })))

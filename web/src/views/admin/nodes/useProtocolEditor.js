@@ -402,11 +402,6 @@ export function useProtocolEditor() {
     jsonToVisual(json)
   }
 
-  // The template picker loads a template into the JSON editor only.
-  function loadTemplateJson(tpl) {
-    setJson(templateToJson(tpl))
-  }
-
   function validateJson() {
     try {
       JSON.parse(jsonEditorContent.value)
@@ -494,7 +489,6 @@ export function useProtocolEditor() {
     startCreate,
     startEdit,
     applyTemplate,
-    loadTemplateJson,
     validateJson,
     formatJson,
     buildPayload
