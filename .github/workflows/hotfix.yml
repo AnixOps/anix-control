@@ -340,12 +340,14 @@ jobs:
       - name: Upload the built-in package set
         uses: actions/upload-artifact@v7
         with:
+          retention-days: 3
           name: hotfix-builtin-packages
           path: builtin-packages/
 
       - name: Upload the signed assets
         uses: actions/upload-artifact@v7
         with:
+          retention-days: 3
           name: hotfix-signed-assets
           path: release-assets/
 
@@ -409,6 +411,7 @@ jobs:
       - name: Upload the binary
         uses: actions/upload-artifact@v7
         with:
+          retention-days: 3
           name: hotfix-control-${{ matrix.goarch }}
           path: dist/*
 
@@ -443,6 +446,7 @@ jobs:
       - name: Upload the frontend
         uses: actions/upload-artifact@v7
         with:
+          retention-days: 3
           name: hotfix-frontend
           path: dist/*
 
@@ -550,6 +554,7 @@ jobs:
       - name: Upload the package
         uses: actions/upload-artifact@v7
         with:
+          retention-days: 3
           name: hotfix-agent-${{ matrix.asset_name }}
           path: dist/*
 
