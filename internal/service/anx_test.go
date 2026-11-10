@@ -110,6 +110,8 @@ func TestValidateANXProtocol(t *testing.T) {
 		`{"dest_behaviors":{}}`, `{"dest_behaviors":{"www.icloud.com:443":{"session_tickets":"none","flight_records":"122/1803"}}}`,
 		`{"dest_stack":"rustls"}`, `{"dest_behavior":{}}`, `{"dest_behavior":{"session_tickets":"none","flight_records":"none"}}`,
 		`{"dest_behavior":{"session_tickets":"266/266","flight_records":"122/1803/79/52","flight_gap_ms":5,"read_ahead":true,"ccs_overflow":"alert:10","max_ccs":"32"}}`,
+		`{"dest_behavior":{"session_tickets":"266/266","flight_records":"none","ticket_lifetime":7200,"ticket_ids":"4/4","ticket_prefix":"00ab","ticket_reuse":true,"resume_exts":"41/43/51","resume_flight":"122/79","resume_tickets":"266","resume_ticket_ids":"4","bad_binder":"alert:51"}}`,
+		`{"dest_behavior":{"ticket_lifetime":"0"}}`, `{"dest_behavior":{"ticket_lifetime":"7200","ticket_ids":"4","resume_exts":"41/43/51","resume_flight":"none","resume_tickets":"none"}}`,
 		`{"wire_gen":1}`, `{"wire_gen":2}`, `{"wire_gen":2,"min_wire_gen":1}`, `{"wire_gen":2,"min_wire_gen":2}`}
 	for _, settings := range valid {
 		s := settings
@@ -127,6 +129,11 @@ func TestValidateANXProtocol(t *testing.T) {
 		`{"dest_stack":"schannel"}`, `{"dest_stack":1}`, `{"dest_behavior":"session_tickets=266"}`, `{"dest_behavior":{"nope":1}}`,
 		`{"dest_behavior":{"session_tickets":"34"}}`, `{"dest_behavior":{"session_tickets":"100/100/100/100/100/100/100/100/100"}}`, `{"dest_behavior":{"flight_records":"17"}}`,
 		`{"dest_behavior":{"flight_records":266}}`, `{"dest_behavior":{"max_ccs":1.5}}`, `{"dest_behavior":{"timeout":""}}`, `{"dest_behavior":{"max_ccs":[1]}}`,
+		`{"dest_behavior":{"ticket_lifetime":7200}}`, `{"dest_behavior":{"ticket_lifetime":7200,"ticket_ids":"4"}}`,
+		`{"dest_behavior":{"ticket_lifetime":604801,"ticket_ids":"4","resume_exts":"41/43/51"}}`, `{"dest_behavior":{"ticket_lifetime":-1}}`,
+		`{"dest_behavior":{"ticket_lifetime":1.5}}`, `{"dest_behavior":{"ticket_lifetime":"x"}}`, `{"dest_behavior":{"ticket_lifetime":true}}`,
+		`{"dest_behavior":{"resume_flight":"17"}}`, `{"dest_behavior":{"resume_tickets":"34"}}`,
+		`{"dest_behaviors":{"www.icloud.com:443":{"ticket_lifetime":7200}}}`,
 		`{"wire_gen":3}`, `{"wire_gen":"2"}`, `{"min_wire_gen":0}`, `{"min_wire_gen":2}`, `{"wire_gen":1,"min_wire_gen":2}`}
 	for _, settings := range invalid {
 		s := settings
