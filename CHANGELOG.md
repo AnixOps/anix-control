@@ -4,6 +4,11 @@
 
 ### Added
 
+- l2 reverse links hand the egress the rendezvous key an Agent reports as
+  `anx_reverse_a2` (a copy of its anx-server key that does not rotate), and
+  the anx-server key when an older Agent reports none. The anx-server key
+  can then rotate (anx §2.6) without breaking those links.
+
 - ANX nodes with a dest list take per-dest behavior (`dest_behaviors`: dest
   `host:port` to its overrides on top of `dest_behavior`, usually that site's
   `session_tickets` and `flight_records`). Control sends only the entries of

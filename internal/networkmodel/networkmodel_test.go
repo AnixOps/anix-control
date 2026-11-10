@@ -199,6 +199,13 @@ func TestPlanReverseJacketedTransport(t *testing.T) {
 	require.Equal(t, "198.51.100.7:8443", accept.GetReverseDial())
 	require.Equal(t, "anx1-ix", accept.GetServerPublic())
 	require.Empty(t, accept.GetTcpAddr())
+
+	// An Agent with a rendezvous key of its own (the server key rotates):
+	// the egress authenticates to that one.
+	devices["proxy-1"] = Device{PublicKeys: map[string]string{"anx_line": "anx1-ix-rotated", ReverseA2KeyKind: "anx1-ix"}}
+	result, err = Plan(doc, map[string]string{"tr-jp": linkKey}, devices, nil)
+	require.NoError(t, err)
+	require.Equal(t, "anx1-ix", result.Plans["proxy-2"].GetTransports()[0].GetAnxLine().GetServerPublic())
 }
 
 func TestPlanRefuses(t *testing.T) {
