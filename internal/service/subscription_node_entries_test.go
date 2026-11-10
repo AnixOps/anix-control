@@ -66,7 +66,9 @@ func TestSubscriptionOffersANodeThroughAnIWANLine(t *testing.T) {
 	offered := svc.nodeProtocolEntries(node, ss, ctx, entries, lines, "")
 	require.Len(t, offered, 2, "the host, and through the line")
 	require.Empty(t, offered[0].Via)
+	require.Empty(t, offered[0].Path)
 	require.Equal(t, "node-70-9-i4", offered[1].ID)
+	require.Equal(t, model.NodePathTrunk, offered[1].Path)
 	require.Equal(t, "US land - SS | via HK", offered[1].Name)
 	require.Equal(t, "HK iWAN", offered[1].Via)
 

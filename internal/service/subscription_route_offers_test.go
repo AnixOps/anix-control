@@ -15,8 +15,9 @@ import (
 )
 
 // A forward route published in subscriptions (Phase 10) offers its target
-// protocol again at its entry, after the protocol's own node, in the
-// protocol's groups.
+// protocol again at its entry, in the protocol's groups. The route is a
+// domestic ingress plus a trunk, so it comes before the protocol's own
+// (direct) node (anx F-51, 默认路径规则).
 func TestSubscriptionOffersPublishedForwardRoutes(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
@@ -54,10 +55,12 @@ func TestSubscriptionOffersPublishedForwardRoutes(t *testing.T) {
 	require.NoError(t, err)
 	parsed := nodes()
 	require.Len(t, parsed, 2)
-	require.Equal(t, "KFC JP - ss", parsed[0].Name)
-	require.Equal(t, "KFC JP - ss | KFC-JP", parsed[1].Name)
-	require.Equal(t, "sh.example.com", parsed[1].Server)
-	require.Equal(t, 15301, parsed[1].Port)
-	require.Equal(t, group.ID, parsed[1].GroupID)
+	require.Equal(t, "KFC JP - ss | KFC-JP", parsed[0].Name)
+	require.Equal(t, model.NodePathTrunk, parsed[0].Path)
+	require.Equal(t, "sh.example.com", parsed[0].Server)
+	require.Equal(t, 15301, parsed[0].Port)
+	require.Equal(t, group.ID, parsed[0].GroupID)
+	require.Equal(t, "KFC JP - ss", parsed[1].Name)
+	require.Empty(t, parsed[1].Path)
 	require.NotEqual(t, parsed[0].ID, parsed[1].ID)
 }
