@@ -276,3 +276,26 @@ func TestRouterNativeOnlyNeverReachesLegacy(t *testing.T) {
 	assert.Equal(t, RouteModeNative, configured)
 	assert.Equal(t, RouteModeNative, effective)
 }
+
+// A flagged route of a native-only router keeps its legacy handler: it runs
+// in the kernel's mode and falls back when the native handler cannot serve.
+func TestRouterNativeOnlyLeavesFlaggedRoutesToTheKernelsModes(t *testing.T) {
+	bridge := &routerBridgeFake{config: packagebridgesdk.PackageConfig{Revision: 1, RouteModes: map[string]string{"knowledge.admin.knowledge.post": RouteModeNative}}}
+	bridge.response = packagebridgesdk.Response{StatusCode: 200, Body: []byte(legacyBody)}
+	unavailable := func(context.Context, NativeRequest) (NativeResponse, error) {
+		return NativeResponse{}, ErrNativeUnavailable
+	}
+	router, err := NewRouter(RouterConfig{PackageID: "knowledge", LeaseID: "lease-1", Bridge: bridge, NativeOnly: true,
+		Native:  map[string]NativeHandler{"knowledge.article.list": matchingNative, "knowledge.admin.knowledge.post": unavailable},
+		Flagged: map[string]struct{}{"knowledge.admin.knowledge.post": {}}})
+	require.NoError(t, err)
+
+	_, effective := router.Mode("knowledge.admin.knowledge.post")
+	assert.Equal(t, RouteModeLegacy, effective, "before the kernel sets its mode")
+	router.Refresh(context.Background())
+	_, effective = router.Mode("knowledge.admin.knowledge.post")
+	assert.Equal(t, RouteModeNative, effective)
+	_, err = dispatch(t, router, "knowledge.admin.knowledge.post", "POST")
+	require.NoError(t, err)
+	assert.Len(t, bridge.invocations(), 1, "the legacy handler answers what the native one cannot")
+}

@@ -93,16 +93,24 @@ func dispatch(t *testing.T, service *pluginhostsdk.Router, route string, request
 	return response
 }
 
-// Until the kernel sets a route's mode, the host relays it to the legacy
-// handler, bridged routes always; routes outside the package are refused.
-func TestSubscriptionHostRelaysRoutesUntilTheyAreSwitchedToNative(t *testing.T) {
+// A route the kernel has no handler for is served natively whatever the
+// modes say. Until the kernel sets a flagged route's mode, the host relays it
+// to the legacy handler, bridged routes always; routes outside the package
+// are refused.
+func TestSubscriptionHostRelaysOnlyFlaggedRoutes(t *testing.T) {
 	bridge := &bridgeStub{}
 	service, err := newSubscriptionService(bridge, "lease-1")
 	require.NoError(t, err)
-	for _, route := range []string{
-		"subscription.admin.subscription.groups.get", "subscription.admin.subscription.groups.id.protocols.post",
-		"subscription.admin.subscription.users.user_id.groups.post", "subscription.user.subscription.get",
-	} {
+	_, effective := service.Mode("subscription.admin.subscription.groups.get")
+	require.Equal(t, pluginhostsdk.RouteModeNative, effective)
+	_, _ = service.Dispatch(context.Background(), pluginhostsdk.DispatchRequest{
+		RouteID: "subscription.admin.subscription.groups.get", BridgeCapability: make([]byte, 32), DeadlineUnixMillis: time.Now().Add(time.Second).UnixMilli(),
+	})
+	require.Empty(t, bridge.operation, "a native route is not relayed")
+	for route := range flaggedRoutes {
+		require.Contains(t, subscriptionRoutes, route)
+	}
+	for _, route := range []string{native.GroupProtocolsRouteID, native.AvailableProtocolsRouteID, "subscription.admin.subscription.preview.post"} {
 		response := dispatch(t, service, route, pluginhostsdk.DispatchRequest{})
 		require.EqualValues(t, 200, response.StatusCode)
 		require.Equal(t, route, bridge.operation)
@@ -123,7 +131,7 @@ func TestSubscriptionHostRelaysRoutesUntilTheyAreSwitchedToNative(t *testing.T) 
 	}
 	withoutSubscriber := (&native.Service{}).Handlers()
 	for _, route := range []string{native.DeleteGroupRouteID, native.GrantUserGroupRouteID, native.RevokeUserGroupRouteID, native.SummaryRouteID} {
-		require.NotContains(t, withoutSubscriber, route, "without KernelSubscriber membership changes and the summary stay legacy")
+		require.NotContains(t, withoutSubscriber, route, "membership changes and the summary need KernelSubscriber")
 	}
 }
 

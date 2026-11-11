@@ -1,0 +1,4 @@
+{
+"every_status": {"status":200,"body":{"code":0,"data":{"down":3298534884028,"offline":1,"online":2,"pending":2,"total":5,"up":1099511628277},"msg":"操作成功"}},
+"no_nodes": {"status":200,"body":{"code":0,"data":{"down":0,"offline":0,"online":0,"pending":0,"total":0,"up":0},"msg":"操作成功"}}
+}

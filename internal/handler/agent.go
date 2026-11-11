@@ -12,7 +12,6 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/agentstreams"
 	"github.com/AnixOps/anix-control/v5/internal/database"
 	"github.com/AnixOps/anix-control/v5/internal/kernelnodeops"
-	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/service"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -126,69 +125,6 @@ func (h *AgentHandler) ListAgents(c *gin.Context) {
 	}
 
 	panelSuccess(c, gin.H{"agents": agents})
-}
-
-// GetTaskResult godoc
-// @Summary Get task execution result
-// @Description Query the latest status/result for a task by task_id
-// @Tags 管理端 Agent
-// @Produce json
-// @Security BearerAuth
-// @Param task_id path string true "Task ID"
-// @Success 200 {object} map[string]any
-// @Failure 404 {object} map[string]any
-// @Router /admin/agent/tasks/{task_id} [get]
-func (h *AgentHandler) GetTaskResult(c *gin.Context) {
-	taskID := c.Param("task_id")
-	if taskID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "task_id is required"})
-		return
-	}
-
-	if h.diagnosticSvc == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "task result not found"})
-		return
-	}
-
-	taskRow, err := h.diagnosticSvc.GetTask(taskID)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "task result not found"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	panelSuccess(c, taskRow)
-}
-
-// ListDiagnosticTasks godoc
-// @Summary List diagnostic task history
-// @Description Query recent whitelisted diagnostic tasks, optionally filtered by node_id
-// @Tags 管理端 Agent
-// @Produce json
-// @Security BearerAuth
-// @Param node_id query int false "Node ID"
-// @Param limit query int false "Limit"
-// @Success 200 {object} map[string]any
-// @Router /admin/agent/tasks [get]
-func (h *AgentHandler) ListDiagnosticTasks(c *gin.Context) {
-	nodeID, _ := strconv.Atoi(c.Query("node_id"))
-	limit, _ := strconv.Atoi(c.Query("limit"))
-
-	if h.diagnosticSvc == nil {
-		panelSuccess(c, []model.AgentDiagnosticTask{})
-		return
-	}
-
-	tasks, err := h.diagnosticSvc.ListTasks(uint(nodeID), limit)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	panelSuccess(c, tasks)
 }
 
 // GetMonitor godoc

@@ -44,9 +44,6 @@ const (
 // applied once. token identifies the HTTP request: its Idempotency-Key,
 // else its X-Request-ID, else a fresh random value. The digest also covers
 // the granted fields, so a key reused for other values is another grant.
-// The kernel's legacy handler derives the same id
-// (service.SubscriptionGroupGrantRequestID), so a retry is recognized
-// whichever side serves it.
 func GrantRequestID(userID, groupID uint, expireAt, transferEnable, nextRenewPrice *int64, token string) string {
 	sum := sha256.Sum256([]byte(strings.Join([]string{
 		token, digestField(expireAt), digestField(transferEnable), digestField(nextRenewPrice),
@@ -55,14 +52,14 @@ func GrantRequestID(userID, groupID uint, expireAt, transferEnable, nextRenewPri
 }
 
 // RevokeRequestID names an administrator's removal of a user's group, as
-// GrantRequestID names a grant (service.SubscriptionGroupRevokeRequestID).
+// GrantRequestID names a grant.
 func RevokeRequestID(userID, groupID uint, token string) string {
 	sum := sha256.Sum256([]byte(token))
 	return fmt.Sprintf("subscription.revoke:%d:%d:%x", userID, groupID, sum[:12])
 }
 
 // DeleteGroupRequestID names the removal of a deleted group's members, as
-// GrantRequestID names a grant (service.SubscriptionGroupDeleteRequestID).
+// GrantRequestID names a grant.
 func DeleteGroupRequestID(groupID uint, token string) string {
 	sum := sha256.Sum256([]byte(token))
 	return fmt.Sprintf("subscription.delete_group:%d:%x", groupID, sum[:12])

@@ -1,0 +1,4 @@
+{
+"members,_traffic,_templates,_protocols,_online_nodes_and_plans": {"status":200,"body":{"code":0,"data":[{"enabled_users":2,"group_id":2,"group_name":"premium","online_nodes":1,"plan_count":1,"protocol_count":3,"template_count":2,"total_traffic":316,"user_count":3},{"enabled_users":0,"group_id":4,"group_name":"empty","online_nodes":0,"plan_count":0,"protocol_count":0,"template_count":0,"total_traffic":0,"user_count":0},{"enabled_users":1,"group_id":3,"group_name":"retired","online_nodes":0,"plan_count":0,"protocol_count":0,"template_count":1,"total_traffic":50,"user_count":1},{"enabled_users":1,"group_id":1,"group_name":"default","online_nodes":1,"plan_count":2,"protocol_count":2,"template_count":2,"total_traffic":300,"user_count":1}],"msg":"操作成功"}},
+"no_groups": {"status":200,"body":{"code":0,"data":[],"msg":"操作成功"}}
+}

@@ -58,36 +58,6 @@ var SensitiveKeys = []string{
 	"credential",
 }
 
-// RedactMap 脱敏 Map 中的敏感字段
-func RedactMap(data map[string]any) map[string]any {
-	result := make(map[string]any)
-	for key, value := range data {
-		lowerKey := strings.ToLower(key)
-		isSensitive := false
-		for _, sk := range SensitiveKeys {
-			if strings.Contains(lowerKey, sk) {
-				isSensitive = true
-				break
-			}
-		}
-		if isSensitive {
-			if str, ok := value.(string); ok {
-				result[key] = Redact(str)
-			} else {
-				result[key] = "[REDACTED]"
-			}
-		} else {
-			// 递归处理嵌套 map
-			if nested, ok := value.(map[string]any); ok {
-				result[key] = RedactMap(nested)
-			} else {
-				result[key] = value
-			}
-		}
-	}
-	return result
-}
-
 // LogSafe 生成安全的日志字符串
 type LogSafe struct {
 	fields map[string]any

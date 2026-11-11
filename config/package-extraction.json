@@ -22,8 +22,8 @@
       "path": "/api/v2/admin/agent/tasks",
       "package_id": "protocol-runtime",
       "route_id": "protocol.admin.agent.tasks.get",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "POST",
@@ -38,8 +38,8 @@
       "path": "/api/v2/admin/agent/tasks/:task_id",
       "package_id": "protocol-runtime",
       "route_id": "protocol.admin.agent.tasks.task_id.get",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "GET",
@@ -182,8 +182,8 @@
       "path": "/api/v2/admin/nodes/:id/logs",
       "package_id": "proxy-node",
       "route_id": "proxy.admin.nodes.id.logs.get",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "GET",
@@ -230,8 +230,8 @@
       "path": "/api/v2/admin/nodes/stats",
       "package_id": "proxy-node",
       "route_id": "proxy.admin.nodes.stats.get",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "GET",
@@ -350,48 +350,48 @@
       "path": "/api/v2/admin/protocol-templates",
       "package_id": "protocol-runtime",
       "route_id": "protocol.admin.protocol_templates.get",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "GET",
       "path": "/api/v2/admin/subscription/groups",
       "package_id": "subscription",
       "route_id": "subscription.admin.subscription.groups.get",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "POST",
       "path": "/api/v2/admin/subscription/groups",
       "package_id": "subscription",
       "route_id": "subscription.admin.subscription.groups.post",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "DELETE",
       "path": "/api/v2/admin/subscription/groups/:id",
       "package_id": "subscription",
       "route_id": "subscription.admin.subscription.groups.id.delete",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "GET",
       "path": "/api/v2/admin/subscription/groups/:id",
       "package_id": "subscription",
       "route_id": "subscription.admin.subscription.groups.id.get",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "PUT",
       "path": "/api/v2/admin/subscription/groups/:id",
       "package_id": "subscription",
       "route_id": "subscription.admin.subscription.groups.id.put",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "GET",
@@ -406,48 +406,48 @@
       "path": "/api/v2/admin/subscription/groups/:id/protocols",
       "package_id": "subscription",
       "route_id": "subscription.admin.subscription.groups.id.protocols.post",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "GET",
       "path": "/api/v2/admin/subscription/groups/:id/templates",
       "package_id": "subscription",
       "route_id": "subscription.admin.subscription.groups.id.templates.get",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "POST",
       "path": "/api/v2/admin/subscription/groups/:id/templates",
       "package_id": "subscription",
       "route_id": "subscription.admin.subscription.groups.id.templates.post",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "GET",
       "path": "/api/v2/admin/subscription/plans/:plan_id/groups",
       "package_id": "subscription",
       "route_id": "subscription.admin.subscription.plans.plan_id.groups.get",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "POST",
       "path": "/api/v2/admin/subscription/plans/:plan_id/groups",
       "package_id": "subscription",
       "route_id": "subscription.admin.subscription.plans.plan_id.groups.post",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "DELETE",
       "path": "/api/v2/admin/subscription/plans/:plan_id/groups/:group_id",
       "package_id": "subscription",
       "route_id": "subscription.admin.subscription.plans.plan_id.groups.group_id.delete",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "POST",
@@ -462,8 +462,8 @@
       "path": "/api/v2/admin/subscription/protocols",
       "package_id": "subscription",
       "route_id": "subscription.admin.subscription.protocols.get",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "GET",
@@ -478,56 +478,56 @@
       "path": "/api/v2/admin/subscription/stats",
       "package_id": "subscription",
       "route_id": "subscription.admin.subscription.stats.get",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "DELETE",
       "path": "/api/v2/admin/subscription/templates/:id",
       "package_id": "subscription",
       "route_id": "subscription.admin.subscription.templates.id.delete",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "GET",
       "path": "/api/v2/admin/subscription/templates/:id",
       "package_id": "subscription",
       "route_id": "subscription.admin.subscription.templates.id.get",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "PUT",
       "path": "/api/v2/admin/subscription/templates/:id",
       "package_id": "subscription",
       "route_id": "subscription.admin.subscription.templates.id.put",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "GET",
       "path": "/api/v2/admin/subscription/users/:user_id/groups",
       "package_id": "subscription",
       "route_id": "subscription.admin.subscription.users.user_id.groups.get",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "POST",
       "path": "/api/v2/admin/subscription/users/:user_id/groups",
       "package_id": "subscription",
       "route_id": "subscription.admin.subscription.users.user_id.groups.post",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "DELETE",
       "path": "/api/v2/admin/subscription/users/:user_id/groups/:group_id",
       "package_id": "subscription",
       "route_id": "subscription.admin.subscription.users.user_id.groups.group_id.delete",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "GET",
@@ -949,8 +949,8 @@
       "path": "/api/v2/user/subscription",
       "package_id": "subscription",
       "route_id": "subscription.user.subscription.get",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "POST",

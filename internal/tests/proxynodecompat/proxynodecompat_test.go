@@ -1,7 +1,11 @@
-// Package proxynodecompat proves the proxy-node package's native routes
-// answer exactly as the kernel's legacy handlers, on SQLite and PostgreSQL:
-// the same bytes (times the handlers take from their clock masked) and,
-// where a route writes, the same resulting rows.
+// Package proxynodecompat tests the proxy-node package's native routes on
+// SQLite and PostgreSQL. The node logs and the node statistics, which the
+// kernel no longer has a handler for, are pinned to the answers recorded in
+// testdata while they still matched the legacy handlers byte for byte
+// (packagecompat's golden answers). The node list, detail and delete still
+// have a legacy handler and are compared with it: the same bytes (times the
+// handlers take from their clock masked) and, where a route writes, the same
+// resulting rows.
 //
 // The node logs read the adopted v2_node_log table. The node statistics, and whether
 // a node exists, come from the kernel view kapi_node_status_v1 over v2_node
@@ -15,7 +19,6 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
-	"github.com/AnixOps/anix-control/v5/internal/handler"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/packagestore"
 	"github.com/AnixOps/anix-control/v5/internal/tests/packagecompat"
@@ -38,13 +41,6 @@ func route(method, pattern, routeID string, legacy gin.HandlerFunc) packagecompa
 			return service.Handlers()[routeID]
 		},
 	}
-}
-
-// nodes builds the legacy handler per request: its service takes the
-// kernel's database when it is built, and the harness sets up a database
-// per case.
-func nodes(method func(*handler.NodeHandler, *gin.Context)) gin.HandlerFunc {
-	return func(c *gin.Context) { method(handler.NewNodeHandler(), c) }
 }
 
 // syncSequences moves PostgreSQL's id sequences past explicitly seeded ids,
@@ -87,9 +83,9 @@ func seedNodes(t testing.TB, db *gorm.DB) {
 	syncSequences(t, db)
 }
 
-func TestNodeStatsRouteParity(t *testing.T) {
+func TestNodeStatsRoute(t *testing.T) {
 	path := "/api/v2/admin/nodes/stats"
-	read(t, route("GET", path, "proxy.admin.nodes.stats.get", nodes((*handler.NodeHandler).GetNodeStats)), []packagecompat.Case{
+	read(t, route("GET", path, "proxy.admin.nodes.stats.get", nil), []packagecompat.Case{
 		{Name: "every status", Path: path, Seed: seedNodes},
 		{Name: "no nodes", Path: path, Seed: seedViews},
 	})
@@ -117,10 +113,10 @@ func seedNodeLogs(t testing.TB, db *gorm.DB) {
 	syncSequences(t, db)
 }
 
-func TestNodeLogsRouteParity(t *testing.T) {
+func TestNodeLogsRoute(t *testing.T) {
 	pattern := "/api/v2/admin/nodes/:id/logs"
 	path := func(id, query string) string { return "/api/v2/admin/nodes/" + id + "/logs" + query }
-	read(t, route("GET", pattern, "proxy.admin.nodes.id.logs.get", nodes((*handler.NodeHandler).GetNodeLogs)), []packagecompat.Case{
+	read(t, route("GET", pattern, "proxy.admin.nodes.id.logs.get", nil), []packagecompat.Case{
 		{Name: "newest first", Path: path("1", ""), Seed: seedNodeLogs},
 		{Name: "level as reported", Path: path("1", "?level=WARN"), Seed: seedNodeLogs},
 		{Name: "level fatal is error", Path: path("1", "?level=%20fatal%20"), Seed: seedNodeLogs},

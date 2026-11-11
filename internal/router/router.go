@@ -145,11 +145,10 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		auth.Use(middleware.JWTAuth())
 		{
 			// 用户接口
-			userHandler := handler.NewUserHandler()
 			auth.GET("/user/profile", v2PackageGateway.Serve)
 			auth.GET("/user/dashboard", v2PackageGateway.Serve)
 			// 用户订阅接口
-			auth.GET("/user/subscription", registeredPackageRoute(v2PackageGateway.Serve, "subscription", "subscription.user.subscription.get", userHandler.GetSubscription))
+			auth.GET("/user/subscription", v2PackageGateway.Serve)
 
 			// 知识库接口（knowledge 包原生实现，内核无 legacy handler）
 			auth.GET("/user/knowledge", v2PackageGateway.Serve)
@@ -214,8 +213,8 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			// 节点管理 (新版)
 			nodeHandler := handler.NewNodeHandler()
 			admin.GET("/nodes", registeredPackageRoute(v2PackageGateway.Serve, "proxy-node", "proxy.admin.nodes.get", nodeHandler.GetNodes))
-			admin.GET("/nodes/stats", registeredPackageRoute(v2PackageGateway.Serve, "proxy-node", "proxy.admin.nodes.stats.get", nodeHandler.GetNodeStats))
-			admin.GET("/nodes/:id/logs", registeredPackageRoute(v2PackageGateway.Serve, "proxy-node", "proxy.admin.nodes.id.logs.get", nodeHandler.GetNodeLogs))
+			admin.GET("/nodes/stats", v2PackageGateway.Serve)
+			admin.GET("/nodes/:id/logs", v2PackageGateway.Serve)
 			admin.POST("/nodes", registeredPackageRoute(v2PackageGateway.Serve, "proxy-node", "proxy.admin.nodes.post", nodeHandler.CreateNode))
 			admin.GET("/nodes/:id", registeredPackageRoute(v2PackageGateway.Serve, "proxy-node", "proxy.admin.nodes.id.get", nodeHandler.GetNode))
 			admin.PUT("/nodes/:id", registeredPackageRoute(v2PackageGateway.Serve, "proxy-node", "proxy.admin.nodes.id.put", nodeHandler.UpdateNode))
@@ -229,43 +228,43 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			admin.POST("/nodes/:id/protocols", registeredPackageRoute(v2PackageGateway.Serve, "protocol-runtime", "protocol.admin.nodes.id.protocols.post", nodeHandler.CreateProtocol))
 			admin.PUT("/nodes/:id/protocols/:protocol_id", registeredPackageRoute(v2PackageGateway.Serve, "protocol-runtime", "protocol.admin.nodes.id.protocols.protocol_id.put", nodeHandler.UpdateProtocol))
 			admin.DELETE("/nodes/:id/protocols/:protocol_id", registeredPackageRoute(v2PackageGateway.Serve, "protocol-runtime", "protocol.admin.nodes.id.protocols.protocol_id.delete", nodeHandler.DeleteProtocol))
-			admin.GET("/protocol-templates", registeredPackageRoute(v2PackageGateway.Serve, "protocol-runtime", "protocol.admin.protocol_templates.get", nodeHandler.GetProtocolTemplates))
+			admin.GET("/protocol-templates", v2PackageGateway.Serve)
 			admin.POST("/wireguard/keypair", v2PackageGateway.Serve)
 
 			// 订阅分组和模板管理
 			subAdmin := handler.NewSubscriptionAdminHandler()
 
 			// 订阅分组
-			admin.GET("/subscription/groups", registeredPackageRoute(v2PackageGateway.Serve, "subscription", "subscription.admin.subscription.groups.get", subAdmin.GetGroups))
-			admin.POST("/subscription/groups", registeredPackageRoute(v2PackageGateway.Serve, "subscription", "subscription.admin.subscription.groups.post", subAdmin.CreateGroup))
-			admin.GET("/subscription/groups/:id", registeredPackageRoute(v2PackageGateway.Serve, "subscription", "subscription.admin.subscription.groups.id.get", subAdmin.GetGroup))
-			admin.PUT("/subscription/groups/:id", registeredPackageRoute(v2PackageGateway.Serve, "subscription", "subscription.admin.subscription.groups.id.put", subAdmin.UpdateGroup))
-			admin.DELETE("/subscription/groups/:id", registeredPackageRoute(v2PackageGateway.Serve, "subscription", "subscription.admin.subscription.groups.id.delete", subAdmin.DeleteGroup))
+			admin.GET("/subscription/groups", v2PackageGateway.Serve)
+			admin.POST("/subscription/groups", v2PackageGateway.Serve)
+			admin.GET("/subscription/groups/:id", v2PackageGateway.Serve)
+			admin.PUT("/subscription/groups/:id", v2PackageGateway.Serve)
+			admin.DELETE("/subscription/groups/:id", v2PackageGateway.Serve)
 
 			// 订阅模板
-			admin.GET("/subscription/groups/:id/templates", registeredPackageRoute(v2PackageGateway.Serve, "subscription", "subscription.admin.subscription.groups.id.templates.get", subAdmin.GetTemplates))
+			admin.GET("/subscription/groups/:id/templates", v2PackageGateway.Serve)
 			admin.GET("/subscription/groups/:id/protocols", registeredPackageRoute(v2PackageGateway.Serve, "subscription", "subscription.admin.subscription.groups.id.protocols.get", subAdmin.GetGroupProtocols))
-			admin.POST("/subscription/groups/:id/protocols", registeredPackageRoute(v2PackageGateway.Serve, "subscription", "subscription.admin.subscription.groups.id.protocols.post", subAdmin.UpdateGroupProtocols))
-			admin.POST("/subscription/groups/:id/templates", registeredPackageRoute(v2PackageGateway.Serve, "subscription", "subscription.admin.subscription.groups.id.templates.post", subAdmin.CreateTemplate))
-			admin.GET("/subscription/templates/:id", registeredPackageRoute(v2PackageGateway.Serve, "subscription", "subscription.admin.subscription.templates.id.get", subAdmin.GetTemplate))
-			admin.PUT("/subscription/templates/:id", registeredPackageRoute(v2PackageGateway.Serve, "subscription", "subscription.admin.subscription.templates.id.put", subAdmin.UpdateTemplate))
-			admin.DELETE("/subscription/templates/:id", registeredPackageRoute(v2PackageGateway.Serve, "subscription", "subscription.admin.subscription.templates.id.delete", subAdmin.DeleteTemplate))
+			admin.POST("/subscription/groups/:id/protocols", v2PackageGateway.Serve)
+			admin.POST("/subscription/groups/:id/templates", v2PackageGateway.Serve)
+			admin.GET("/subscription/templates/:id", v2PackageGateway.Serve)
+			admin.PUT("/subscription/templates/:id", v2PackageGateway.Serve)
+			admin.DELETE("/subscription/templates/:id", v2PackageGateway.Serve)
 
 			// 用户订阅分组关联
-			admin.GET("/subscription/users/:user_id/groups", registeredPackageRoute(v2PackageGateway.Serve, "subscription", "subscription.admin.subscription.users.user_id.groups.get", subAdmin.GetUserGroups))
-			admin.POST("/subscription/users/:user_id/groups", registeredPackageRoute(v2PackageGateway.Serve, "subscription", "subscription.admin.subscription.users.user_id.groups.post", subAdmin.AssignGroupToUser))
-			admin.DELETE("/subscription/users/:user_id/groups/:group_id", registeredPackageRoute(v2PackageGateway.Serve, "subscription", "subscription.admin.subscription.users.user_id.groups.group_id.delete", subAdmin.RemoveGroupFromUser))
+			admin.GET("/subscription/users/:user_id/groups", v2PackageGateway.Serve)
+			admin.POST("/subscription/users/:user_id/groups", v2PackageGateway.Serve)
+			admin.DELETE("/subscription/users/:user_id/groups/:group_id", v2PackageGateway.Serve)
 
 			// 套餐订阅分组关联
-			admin.GET("/subscription/plans/:plan_id/groups", registeredPackageRoute(v2PackageGateway.Serve, "subscription", "subscription.admin.subscription.plans.plan_id.groups.get", subAdmin.GetPlanGroups))
-			admin.POST("/subscription/plans/:plan_id/groups", registeredPackageRoute(v2PackageGateway.Serve, "subscription", "subscription.admin.subscription.plans.plan_id.groups.post", subAdmin.AssignGroupToPlan))
-			admin.DELETE("/subscription/plans/:plan_id/groups/:group_id", registeredPackageRoute(v2PackageGateway.Serve, "subscription", "subscription.admin.subscription.plans.plan_id.groups.group_id.delete", subAdmin.RemoveGroupFromPlan))
+			admin.GET("/subscription/plans/:plan_id/groups", v2PackageGateway.Serve)
+			admin.POST("/subscription/plans/:plan_id/groups", v2PackageGateway.Serve)
+			admin.DELETE("/subscription/plans/:plan_id/groups/:group_id", v2PackageGateway.Serve)
 
 			// 订阅工具接口
-			admin.GET("/subscription/protocols", registeredPackageRoute(v2PackageGateway.Serve, "subscription", "subscription.admin.subscription.protocols.get", subAdmin.GetProtocolTypes))
+			admin.GET("/subscription/protocols", v2PackageGateway.Serve)
 			admin.GET("/subscription/protocols/available", registeredPackageRoute(v2PackageGateway.Serve, "subscription", "subscription.admin.subscription.protocols.available.get", subAdmin.GetAvailableProtocols))
 			admin.POST("/subscription/preview", registeredPackageRoute(v2PackageGateway.Serve, "subscription", "subscription.admin.subscription.preview.post", subAdmin.PreviewSubscription))
-			admin.GET("/subscription/stats", registeredPackageRoute(v2PackageGateway.Serve, "subscription", "subscription.admin.subscription.stats.get", subAdmin.GetGroupStats))
+			admin.GET("/subscription/stats", v2PackageGateway.Serve)
 
 			// 套餐管理
 			admin.GET("/plans", v2PackageGateway.Serve)
@@ -398,8 +397,8 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		{
 			agentAdmin.GET("/list", registeredPackageRoute(v2PackageGateway.Serve, "protocol-runtime", "protocol.admin.agent.list.get", agentHandler.ListAgents))
 			agentAdmin.POST("/tasks", registeredPackageRoute(v2PackageGateway.Serve, "protocol-runtime", "protocol.admin.agent.tasks.post", agentHandler.CreateTask))
-			agentAdmin.GET("/tasks", registeredPackageRoute(v2PackageGateway.Serve, "protocol-runtime", "protocol.admin.agent.tasks.get", agentHandler.ListDiagnosticTasks))
-			agentAdmin.GET("/tasks/:task_id", registeredPackageRoute(v2PackageGateway.Serve, "protocol-runtime", "protocol.admin.agent.tasks.task_id.get", agentHandler.GetTaskResult))
+			agentAdmin.GET("/tasks", v2PackageGateway.Serve)
+			agentAdmin.GET("/tasks/:task_id", v2PackageGateway.Serve)
 			agentAdmin.GET("/monitor", registeredPackageRoute(v2PackageGateway.Serve, "protocol-runtime", "protocol.admin.agent.monitor.get", agentHandler.GetMonitor))
 		}
 	}

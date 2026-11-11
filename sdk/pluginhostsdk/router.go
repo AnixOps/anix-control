@@ -110,6 +110,10 @@ type RouterConfig struct {
 	// legacy handler for such a package's routes. ErrNativeUnavailable is
 	// then an error, not a fallback.
 	NativeOnly bool
+	// Flagged lists the native routes NativeOnly leaves out: the kernel
+	// still keeps their legacy handler, so they follow its route modes and
+	// fall back on ErrNativeUnavailable.
+	Flagged map[string]struct{}
 	// AllowRoute, when set, rejects dispatch for route ids it returns false for.
 	AllowRoute func(routeID string) bool
 	// MigrationOperation maps a migration id to its bridge operation; nil uses
@@ -218,11 +222,18 @@ func (r *Router) Refresh(ctx context.Context) {
 
 // Mode returns the configured and the effective mode of a route. The effective
 // mode is legacy whenever the package has no native implementation.
+// nativeOnly reports whether the route has no legacy handler to fall back
+// to.
+func (r *Router) nativeOnly(routeID string) bool {
+	_, flagged := r.config.Flagged[routeID]
+	return r.config.NativeOnly && !flagged && r.config.Native[routeID] != nil
+}
+
 func (r *Router) Mode(routeID string) (configured, effective string) {
 	r.mu.RLock()
 	configured = r.modes[routeID]
 	r.mu.RUnlock()
-	if r.config.NativeOnly && r.config.Native[routeID] != nil {
+	if r.nativeOnly(routeID) {
 		return RouteModeNative, RouteModeNative
 	}
 	if configured == "" {
@@ -248,7 +259,7 @@ func (r *Router) Dispatch(ctx context.Context, request DispatchRequest) (Dispatc
 	switch mode {
 	case RouteModeNative:
 		response, err := r.runNative(ctx, request, request.BridgeCapability)
-		if errors.Is(err, ErrNativeUnavailable) && !r.config.NativeOnly {
+		if errors.Is(err, ErrNativeUnavailable) && !r.nativeOnly(request.RouteID) {
 			return r.invokeLegacy(ctx, request)
 		}
 		r.count(request.RouteID, func(stats *routeStatistics) {

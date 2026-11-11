@@ -1,15 +1,17 @@
-// Package subscriptioncompat proves the subscription package's native routes
-// answer exactly as the kernel's legacy handlers, on SQLite and PostgreSQL:
-// the same bytes (times the handlers take from their clock masked) and the
-// same resulting rows.
+// Package subscriptioncompat pins the answers of the subscription package's
+// native routes, on SQLite and PostgreSQL, to the ones recorded in testdata
+// while the routes still matched the kernel's legacy handlers byte for byte
+// (packagecompat's golden answers): the answer (times the handlers take from
+// their clock masked) and the resulting rows. The two protocol pool routes
+// (pool_test.go) still have a legacy handler and are compared with it.
 //
 // The native side reads the plan, entitlement, membership and node views the
 // kernel publishes (packagestore.EnsureKernelAPIViews) and writes only the
 // adopted subscription tables. Membership changes and the user's
 // subscription summary reach the real KernelSubscriber server
 // (internal/kernelsubscriber) in process over gRPC, on the native side's
-// database, so both sides end with the same memberships, request ledger and
-// change log, and the same kernel cache.
+// database: the memberships, request ledger, change log and kernel cache it
+// leaves are part of the recorded state.
 package subscriptioncompat
 
 import (
@@ -23,7 +25,6 @@ import (
 
 	kernelsubscriberv1 "github.com/AnixOps/anix-control/sdk/api/kernelsubscriber/v1"
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
-	"github.com/AnixOps/anix-control/v5/internal/handler"
 	"github.com/AnixOps/anix-control/v5/internal/kernelsubscriber"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/packagebridge"
@@ -32,7 +33,6 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/tests/packagecompat"
 	"github.com/AnixOps/anix-control/v5/packages/subscription/native"
 	mirror "github.com/AnixOps/anix-control/v5/packages/subscription/native/model"
-	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -44,16 +44,17 @@ var admin = pluginhostsdk.Principal{ActorID: 1, Admin: true}
 
 var seeded = time.Date(2026, 9, 1, 8, 0, 0, 0, time.UTC)
 
-// expiryBase is what seeded expiries are relative to: one value for the
-// whole run, so the two sides store the same expiries.
-var expiryBase = time.Now().Unix()
+// expired and active are what seeded expiries are relative to: fixed, and
+// far on either side of any clock a run has, so the recorded answers hold
+// them.
+var (
+	expired = time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC).Unix()
+	active  = time.Date(2090, 1, 1, 0, 0, 0, 0, time.UTC).Unix()
+)
 
-func route(method, pattern, routeID string, legacy func(*handler.SubscriptionAdminHandler, *gin.Context)) packagecompat.Route {
+func route(method, pattern, routeID string) packagecompat.Route {
 	return packagecompat.Route{
 		Method: method, Pattern: pattern, RouteID: routeID,
-		// The legacy handler is built per request: its service keeps the
-		// database it was built with, which the harness sets up per case.
-		Legacy: func(c *gin.Context) { legacy(handler.NewSubscriptionAdminHandler(), c) },
 		Models: []any{
 			&model.Plan{}, &model.User{}, &model.Node{}, &model.NodeProtocol{}, &model.SubscriptionGroup{},
 			&model.SubscriptionTemplate{}, &model.UserSubscriptionGroup{}, &model.PlanSubscriptionGroup{},
@@ -100,10 +101,10 @@ func kernelSubscriber(t *testing.T, db *gorm.DB) kernelsubscriberv1.KernelSubscr
 }
 
 // membershipRoute is a route that changes subscription group membership:
-// the native side calls KernelSubscriber, and both databases have the
-// subscriber request ledger and change log.
-func membershipRoute(t *testing.T, method, pattern, routeID string, legacy func(*handler.SubscriptionAdminHandler, *gin.Context)) packagecompat.Route {
-	r := route(method, pattern, routeID, legacy)
+// it calls KernelSubscriber, and the database has the subscriber request
+// ledger and change log.
+func membershipRoute(t *testing.T, method, pattern, routeID string) packagecompat.Route {
+	r := route(method, pattern, routeID)
 	r.Models = append(r.Models, &model.SubscriberRequest{}, &model.SubscriberChange{})
 	r.Native = func(db *gorm.DB) pluginhostsdk.NativeHandler {
 		service := &native.Service{
@@ -119,8 +120,8 @@ func ptr[T any](value T) *T { return &value }
 
 // seed writes users, plans, groups, templates, nodes and their protocols,
 // the links between them, then the kernel views. Expiries and node reports
-// are relative to now (expiries to expiryBase), so the handlers' clocks see
-// them as seeded. Users 1
+// are relative to now (expiries to expired and active), so the handlers'
+// clocks see them as seeded. Users 1
 // and 2 are active subscribers; 3 is banned, 4 expired and 5 out of
 // traffic.
 func seed(t testing.TB, db *gorm.DB) {
@@ -137,7 +138,7 @@ func seed(t testing.TB, db *gorm.DB) {
 		}
 	}
 	users := []model.User{user(1, 0, 0), user(2, 100, 200), user(3, 1000, 2000), user(4, 7, 9), user(5, 50, 0)}
-	users[2].Banned, users[3].ExpiredAt, users[4].TransferEnable = 1, ptr(expiryBase-3600), 50
+	users[2].Banned, users[3].ExpiredAt, users[4].TransferEnable = 1, ptr(expired-3600), 50
 	require.NoError(t, db.Create(&users).Error)
 	require.NoError(t, db.Create(&[]model.SubscriptionGroup{
 		{ID: 1, Name: "default", Priority: 0, Enable: 1, CreatedAt: seeded, UpdatedAt: seeded},
@@ -167,9 +168,9 @@ func seed(t testing.TB, db *gorm.DB) {
 	}).Error)
 	require.NoError(t, db.Create(&[]model.UserSubscriptionGroup{
 		{ID: 1, UserID: 2, GroupID: 1, CreatedAt: seeded},
-		{ID: 2, UserID: 2, GroupID: 2, ExpireAt: ptr(expiryBase + 86400), TransferEnable: ptr(int64(1 << 30)), CreatedAt: seeded},
-		{ID: 3, UserID: 3, GroupID: 2, ExpireAt: ptr(expiryBase - 86400), CreatedAt: seeded},
-		{ID: 4, UserID: 4, GroupID: 2, ExpireAt: ptr(expiryBase + 3600), NextRenewPrice: ptr(int64(990)), CreatedAt: seeded},
+		{ID: 2, UserID: 2, GroupID: 2, ExpireAt: ptr(active + 86400), TransferEnable: ptr(int64(1 << 30)), CreatedAt: seeded},
+		{ID: 3, UserID: 3, GroupID: 2, ExpireAt: ptr(expired - 86400), CreatedAt: seeded},
+		{ID: 4, UserID: 4, GroupID: 2, ExpireAt: ptr(active + 3600), NextRenewPrice: ptr(int64(990)), CreatedAt: seeded},
 		{ID: 5, UserID: 5, GroupID: 3, CreatedAt: seeded},
 	}).Error)
 	require.NoError(t, db.Create(&[]model.Node{
@@ -193,7 +194,7 @@ func seed(t testing.TB, db *gorm.DB) {
 func empty(t testing.TB, db *gorm.DB) { require.NoError(t, packagestore.EnsureKernelAPIViews(db)) }
 
 // syncSequences moves PostgreSQL's id sequences past explicitly seeded ids,
-// so both sides create the next row with the same id.
+// so the next row gets the id it has on SQLite.
 func syncSequences(t testing.TB, db *gorm.DB) {
 	if db.Name() != "postgres" {
 		return
@@ -281,22 +282,19 @@ func write(t *testing.T, r packagecompat.Route, cases []packagecompat.Case) {
 	}
 }
 
-func TestStaticListsParity(t *testing.T) {
-	read(t, route("GET", "/api/v2/admin/subscription/protocols", "subscription.admin.subscription.protocols.get",
-		(*handler.SubscriptionAdminHandler).GetProtocolTypes),
+func TestStaticLists(t *testing.T) {
+	read(t, route("GET", "/api/v2/admin/subscription/protocols", "subscription.admin.subscription.protocols.get"),
 		[]packagecompat.Case{{Name: "protocol types", Path: "/api/v2/admin/subscription/protocols"}})
 }
 
-func TestGroupReadsParity(t *testing.T) {
-	read(t, route("GET", "/api/v2/admin/subscription/groups", "subscription.admin.subscription.groups.get",
-		(*handler.SubscriptionAdminHandler).GetGroups),
+func TestGroupReads(t *testing.T) {
+	read(t, route("GET", "/api/v2/admin/subscription/groups", "subscription.admin.subscription.groups.get"),
 		[]packagecompat.Case{
 			{Name: "by priority then id", Path: "/api/v2/admin/subscription/groups"},
 			{Name: "no groups", Path: "/api/v2/admin/subscription/groups", Seed: empty},
 		})
 	group := func(id string) string { return "/api/v2/admin/subscription/groups/" + id }
-	read(t, route("GET", "/api/v2/admin/subscription/groups/:id", "subscription.admin.subscription.groups.id.get",
-		(*handler.SubscriptionAdminHandler).GetGroup),
+	read(t, route("GET", "/api/v2/admin/subscription/groups/:id", "subscription.admin.subscription.groups.id.get"),
 		[]packagecompat.Case{
 			{Name: "with its templates", Path: group("1")},
 			{Name: "with a description", Path: group("2")},
@@ -308,8 +306,7 @@ func TestGroupReadsParity(t *testing.T) {
 			{Name: "beyond 32 bits", Path: group("4294967297")},
 		})
 	templates := func(id string) string { return "/api/v2/admin/subscription/groups/" + id + "/templates" }
-	read(t, route("GET", "/api/v2/admin/subscription/groups/:id/templates", "subscription.admin.subscription.groups.id.templates.get",
-		(*handler.SubscriptionAdminHandler).GetTemplates),
+	read(t, route("GET", "/api/v2/admin/subscription/groups/:id/templates", "subscription.admin.subscription.groups.id.templates.get"),
 		[]packagecompat.Case{
 			{Name: "by sort then id", Path: templates("1")},
 			{Name: "settings and keys", Path: templates("2")},
@@ -318,8 +315,7 @@ func TestGroupReadsParity(t *testing.T) {
 			{Name: "not a number", Path: templates("x")},
 		})
 	template := func(id string) string { return "/api/v2/admin/subscription/templates/" + id }
-	read(t, route("GET", "/api/v2/admin/subscription/templates/:id", "subscription.admin.subscription.templates.id.get",
-		(*handler.SubscriptionAdminHandler).GetTemplate),
+	read(t, route("GET", "/api/v2/admin/subscription/templates/:id", "subscription.admin.subscription.templates.id.get"),
 		[]packagecompat.Case{
 			{Name: "a template", Path: template("3")},
 			{Name: "another", Path: template("4")},
@@ -328,10 +324,9 @@ func TestGroupReadsParity(t *testing.T) {
 		})
 }
 
-func TestLinkReadsParity(t *testing.T) {
+func TestLinkReads(t *testing.T) {
 	plans := func(id string) string { return "/api/v2/admin/subscription/plans/" + id + "/groups" }
-	read(t, route("GET", "/api/v2/admin/subscription/plans/:plan_id/groups", "subscription.admin.subscription.plans.plan_id.groups.get",
-		(*handler.SubscriptionAdminHandler).GetPlanGroups),
+	read(t, route("GET", "/api/v2/admin/subscription/plans/:plan_id/groups", "subscription.admin.subscription.plans.plan_id.groups.get"),
 		[]packagecompat.Case{
 			{Name: "two groups", Path: plans("2")},
 			{Name: "one group", Path: plans("1")},
@@ -341,8 +336,7 @@ func TestLinkReadsParity(t *testing.T) {
 			{Name: "not a number", Path: plans("x")},
 		})
 	users := func(id string) string { return "/api/v2/admin/subscription/users/" + id + "/groups" }
-	read(t, route("GET", "/api/v2/admin/subscription/users/:user_id/groups", "subscription.admin.subscription.users.user_id.groups.get",
-		(*handler.SubscriptionAdminHandler).GetUserGroups),
+	read(t, route("GET", "/api/v2/admin/subscription/users/:user_id/groups", "subscription.admin.subscription.users.user_id.groups.get"),
 		[]packagecompat.Case{
 			{Name: "unexpired and without expiry", Path: users("2")},
 			{Name: "an expired one is left out", Path: users("3")},
@@ -354,19 +348,17 @@ func TestLinkReadsParity(t *testing.T) {
 		})
 }
 
-func TestStatsParity(t *testing.T) {
-	read(t, route("GET", "/api/v2/admin/subscription/stats", "subscription.admin.subscription.stats.get",
-		(*handler.SubscriptionAdminHandler).GetGroupStats),
+func TestStats(t *testing.T) {
+	read(t, route("GET", "/api/v2/admin/subscription/stats", "subscription.admin.subscription.stats.get"),
 		[]packagecompat.Case{
 			{Name: "members, traffic, templates, protocols, online nodes and plans", Path: "/api/v2/admin/subscription/stats"},
 			{Name: "no groups", Path: "/api/v2/admin/subscription/stats", Seed: empty},
 		})
 }
 
-func TestGroupWritesParity(t *testing.T) {
+func TestGroupWrites(t *testing.T) {
 	stamped := []string{"data.created_at", "data.updated_at"}
-	create := route("POST", "/api/v2/admin/subscription/groups", "subscription.admin.subscription.groups.post",
-		(*handler.SubscriptionAdminHandler).CreateGroup)
+	create := route("POST", "/api/v2/admin/subscription/groups", "subscription.admin.subscription.groups.post")
 	path := "/api/v2/admin/subscription/groups"
 	write(t, create, []packagecompat.Case{
 		{Name: "a group", Path: path, Mask: stamped, Body: []byte(`{"name":"new","description":"d","priority":3,"enable":1}`)},
@@ -385,8 +377,7 @@ func TestGroupWritesParity(t *testing.T) {
 		{Name: "no body", Path: path},
 		{Name: "a body that is not an object", Path: path, Body: []byte(`[1]`)},
 	})
-	update := route("PUT", "/api/v2/admin/subscription/groups/:id", "subscription.admin.subscription.groups.id.put",
-		(*handler.SubscriptionAdminHandler).UpdateGroup)
+	update := route("PUT", "/api/v2/admin/subscription/groups/:id", "subscription.admin.subscription.groups.id.put")
 	group := func(id string) string { return "/api/v2/admin/subscription/groups/" + id }
 	write(t, update, []packagecompat.Case{
 		{Name: "every column", Path: group("2"), Mask: []string{"data.updated_at"},
@@ -405,10 +396,9 @@ func TestGroupWritesParity(t *testing.T) {
 	})
 }
 
-func TestTemplateWritesParity(t *testing.T) {
+func TestTemplateWrites(t *testing.T) {
 	stamped := []string{"data.created_at", "data.updated_at"}
-	create := route("POST", "/api/v2/admin/subscription/groups/:id/templates", "subscription.admin.subscription.groups.id.templates.post",
-		(*handler.SubscriptionAdminHandler).CreateTemplate)
+	create := route("POST", "/api/v2/admin/subscription/groups/:id/templates", "subscription.admin.subscription.groups.id.templates.post")
 	templates := func(id string) string { return "/api/v2/admin/subscription/groups/" + id + "/templates" }
 	full := `{"name":"tw","type":"trojan","server":"tw.example.test","port":8443,"server_name":"tw.example.test","tls":1,` +
 		`"tls_fingerprint":"chrome","alpn":"h2,http/1.1","transport":"ws","transport_settings":"{\"path\":\"/ws\"}","enable":1,"sort":3,` +
@@ -428,8 +418,7 @@ func TestTemplateWritesParity(t *testing.T) {
 		{Name: "not a number", Path: templates("x"), Body: []byte(full)},
 		{Name: "no body", Path: templates("1")},
 	})
-	update := route("PUT", "/api/v2/admin/subscription/templates/:id", "subscription.admin.subscription.templates.id.put",
-		(*handler.SubscriptionAdminHandler).UpdateTemplate)
+	update := route("PUT", "/api/v2/admin/subscription/templates/:id", "subscription.admin.subscription.templates.id.put")
 	template := func(id string) string { return "/api/v2/admin/subscription/templates/" + id }
 	write(t, update, []packagecompat.Case{
 		{Name: "some fields", Path: template("3"), Mask: []string{"data.updated_at"}, Body: []byte(`{"name":"us-2","port":8443,"tls":true,"enable":false}`)},
@@ -449,8 +438,7 @@ func TestTemplateWritesParity(t *testing.T) {
 		{Name: "a body that is not an object", Path: template("3"), Body: []byte(`[1]`)},
 		{Name: "no body", Path: template("3")},
 	})
-	remove := route("DELETE", "/api/v2/admin/subscription/templates/:id", "subscription.admin.subscription.templates.id.delete",
-		(*handler.SubscriptionAdminHandler).DeleteTemplate)
+	remove := route("DELETE", "/api/v2/admin/subscription/templates/:id", "subscription.admin.subscription.templates.id.delete")
 	write(t, remove, []packagecompat.Case{
 		{Name: "a template", Path: template("2")},
 		{Name: "unknown", Path: template("99")},
@@ -459,9 +447,8 @@ func TestTemplateWritesParity(t *testing.T) {
 	})
 }
 
-func TestPlanLinkWritesParity(t *testing.T) {
-	assign := route("POST", "/api/v2/admin/subscription/plans/:plan_id/groups", "subscription.admin.subscription.plans.plan_id.groups.post",
-		(*handler.SubscriptionAdminHandler).AssignGroupToPlan)
+func TestPlanLinkWrites(t *testing.T) {
+	assign := route("POST", "/api/v2/admin/subscription/plans/:plan_id/groups", "subscription.admin.subscription.plans.plan_id.groups.post")
 	plans := func(id string) string { return "/api/v2/admin/subscription/plans/" + id + "/groups" }
 	write(t, assign, []packagecompat.Case{
 		{Name: "a new link", Path: plans("3"), Body: []byte(`{"group_id":2}`)},
@@ -477,7 +464,7 @@ func TestPlanLinkWritesParity(t *testing.T) {
 		{Name: "no body", Path: plans("1")},
 	})
 	remove := route("DELETE", "/api/v2/admin/subscription/plans/:plan_id/groups/:group_id",
-		"subscription.admin.subscription.plans.plan_id.groups.group_id.delete", (*handler.SubscriptionAdminHandler).RemoveGroupFromPlan)
+		"subscription.admin.subscription.plans.plan_id.groups.group_id.delete")
 	link := func(plan, group string) string {
 		return "/api/v2/admin/subscription/plans/" + plan + "/groups/" + group
 	}
@@ -491,9 +478,8 @@ func TestPlanLinkWritesParity(t *testing.T) {
 	})
 }
 
-func TestProtocolLinkWritesParity(t *testing.T) {
-	link := route("POST", "/api/v2/admin/subscription/groups/:id/protocols", "subscription.admin.subscription.groups.id.protocols.post",
-		(*handler.SubscriptionAdminHandler).UpdateGroupProtocols)
+func TestProtocolLinkWrites(t *testing.T) {
+	link := route("POST", "/api/v2/admin/subscription/groups/:id/protocols", "subscription.admin.subscription.groups.id.protocols.post")
 	protocols := func(id string) string { return "/api/v2/admin/subscription/groups/" + id + "/protocols" }
 	write(t, link, []packagecompat.Case{
 		{Name: "replace some", Path: protocols("2"), Body: []byte(`{"protocol_ids":[1,3,5]}`)},
@@ -564,11 +550,10 @@ func writeMembership(t *testing.T, r packagecompat.Route, maskRequestIDs bool, c
 
 func requestID(id string) map[string]string { return map[string]string{"X-Request-ID": id} }
 
-func TestUserGroupGrantParity(t *testing.T) {
-	grant := membershipRoute(t, "POST", "/api/v2/admin/subscription/users/:user_id/groups", native.GrantUserGroupRouteID,
-		(*handler.SubscriptionAdminHandler).AssignGroupToUser)
+func TestUserGroupGrant(t *testing.T) {
+	grant := membershipRoute(t, "POST", "/api/v2/admin/subscription/users/:user_id/groups", native.GrantUserGroupRouteID)
 	users := func(id string) string { return "/api/v2/admin/subscription/users/" + id + "/groups" }
-	later := time.Now().Add(30 * 24 * time.Hour).Unix()
+	later := active + 30*86400
 	expiring := func(group int) []byte { return []byte(fmt.Sprintf(`{"group_id":%d,"expire_at":%d}`, group, later)) }
 	writeMembership(t, grant, false, []packagecompat.Case{
 		{Name: "a new group with every field", Path: users("2"), RequestHeaders: requestID("g-1"),
@@ -610,15 +595,14 @@ func TestUserGroupGrantParity(t *testing.T) {
 		{Name: "no body", Path: users("2")},
 	})
 	// Without an idempotency key or request id every request is a grant of
-	// its own, as in v2; the ids are random on both sides.
+	// its own, as in v2; the ids are random.
 	writeMembership(t, grant, true, []packagecompat.Case{
 		{Name: "two requests are two grants", Path: users("2"), Warmup: [][]byte{[]byte(`{"group_id":3}`)}, Body: expiring(3)},
 	})
 }
 
-func TestUserGroupRevokeParity(t *testing.T) {
-	revoke := membershipRoute(t, "DELETE", "/api/v2/admin/subscription/users/:user_id/groups/:group_id", native.RevokeUserGroupRouteID,
-		(*handler.SubscriptionAdminHandler).RemoveGroupFromUser)
+func TestUserGroupRevoke(t *testing.T) {
+	revoke := membershipRoute(t, "DELETE", "/api/v2/admin/subscription/users/:user_id/groups/:group_id", native.RevokeUserGroupRouteID)
 	membership := func(user, group string) string {
 		return "/api/v2/admin/subscription/users/" + user + "/groups/" + group
 	}
@@ -645,9 +629,8 @@ func TestUserGroupRevokeParity(t *testing.T) {
 	})
 }
 
-func TestGroupDeleteParity(t *testing.T) {
-	remove := membershipRoute(t, "DELETE", "/api/v2/admin/subscription/groups/:id", native.DeleteGroupRouteID,
-		(*handler.SubscriptionAdminHandler).DeleteGroup)
+func TestGroupDelete(t *testing.T) {
+	remove := membershipRoute(t, "DELETE", "/api/v2/admin/subscription/groups/:id", native.DeleteGroupRouteID)
 	group := func(id string) string { return "/api/v2/admin/subscription/groups/" + id }
 	writeMembership(t, remove, false, []packagecompat.Case{
 		{Name: "members, templates, plan and protocol links", Path: group("2"), RequestHeaders: requestID("d-1")},

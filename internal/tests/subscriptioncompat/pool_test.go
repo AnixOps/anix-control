@@ -23,7 +23,10 @@ import (
 // poolRoute is a protocol pool route: both databases have the node
 // credential split's tables.
 func poolRoute(method, pattern, routeID string, legacy func(*handler.SubscriptionAdminHandler, *gin.Context)) packagecompat.Route {
-	r := route(method, pattern, routeID, legacy)
+	r := route(method, pattern, routeID)
+	// The legacy handler is built per request: its service keeps the
+	// database it was built with, which the harness sets up per case.
+	r.Legacy = func(c *gin.Context) { legacy(handler.NewSubscriptionAdminHandler(), c) }
 	r.Models = append(r.Models, packagecompat.NodeSplitModels()...)
 	r.Native = func(db *gorm.DB) pluginhostsdk.NativeHandler {
 		return poolService(db).Handlers()[routeID]

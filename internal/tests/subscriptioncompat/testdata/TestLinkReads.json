@@ -1,0 +1,15 @@
+{
+"a_disabled_group_is_listed": {"status":200,"body":{"code":0,"data":[{"created_at":"2026-09-01T08:00:00Z","description":null,"enable":0,"id":3,"name":"retired","priority":5,"updated_at":"2026-09-01T08:00:00Z"}],"msg":"操作成功"}},
+"an_expired_one_is_left_out": {"status":200,"body":{"code":0,"data":[],"msg":"操作成功"}},
+"an_expiring_one": {"status":200,"body":{"code":0,"data":[{"created_at":"2026-09-01T08:00:00Z","description":"fast nodes","enable":1,"id":2,"name":"premium","priority":10,"updated_at":"2026-09-01T08:00:00Z"}],"msg":"操作成功"}},
+"none": {"status":200,"body":{"code":0,"data":[],"msg":"操作成功"}},
+"not_a_number": {"status":200,"body":{"code":-1,"data":null,"msg":"套餐 ID 无效"}},
+"not_a_number (postgres#01)": {"status":200,"body":{"code":-1,"data":null,"msg":"用户 ID 无效"}},
+"not_a_number (sqlite#01)": {"status":200,"body":{"code":-1,"data":null,"msg":"用户 ID 无效"}},
+"one_group": {"status":200,"body":{"code":0,"data":[{"created_at":"2026-09-01T08:00:00Z","description":null,"enable":1,"id":1,"name":"default","priority":0,"updated_at":"2026-09-01T08:00:00Z"}],"msg":"操作成功"}},
+"plan_zero": {"status":200,"body":{"code":-1,"data":null,"msg":"套餐不存在"}},
+"two_groups": {"status":200,"body":{"code":0,"data":[{"created_at":"2026-09-01T08:00:00Z","description":null,"enable":1,"id":1,"name":"default","priority":0,"updated_at":"2026-09-01T08:00:00Z"},{"created_at":"2026-09-01T08:00:00Z","description":"fast nodes","enable":1,"id":2,"name":"premium","priority":10,"updated_at":"2026-09-01T08:00:00Z"}],"msg":"操作成功"}},
+"unexpired_and_without_expiry": {"status":200,"body":{"code":0,"data":[{"created_at":"2026-09-01T08:00:00Z","description":null,"enable":1,"id":1,"name":"default","priority":0,"updated_at":"2026-09-01T08:00:00Z"},{"created_at":"2026-09-01T08:00:00Z","description":"fast nodes","enable":1,"id":2,"name":"premium","priority":10,"updated_at":"2026-09-01T08:00:00Z"}],"msg":"操作成功"}},
+"unknown_plan": {"status":200,"body":{"code":-1,"data":null,"msg":"套餐不存在"}},
+"unknown_user": {"status":200,"body":{"code":-1,"data":null,"msg":"用户不存在"}}
+}

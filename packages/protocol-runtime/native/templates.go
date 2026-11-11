@@ -25,8 +25,8 @@ func (s *Service) ProtocolTemplates(context.Context, pluginhostsdk.NativeRequest
 	return s.panel(protocolTemplates())
 }
 
-// protocolTemplates is the kernel's model.GetProtocolTemplates; the parity
-// test compares the two answers byte for byte.
+// protocolTemplates are the protocol templates the panel offers; the route's
+// test pins the answer.
 func protocolTemplates() []ProtocolTemplate {
 	return []ProtocolTemplate{
 		{

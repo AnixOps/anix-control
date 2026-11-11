@@ -30,19 +30,28 @@ func (s *bridgeStub) Invoke(_ context.Context, _ []byte, operation string, _ []b
 	return packagebridgesdk.Response{StatusCode: 200, Body: []byte(`{"code":0,"msg":"操作成功","ts":1,"data":null}`)}, nil
 }
 
-// Until the kernel sets a route's mode, the host relays it to the legacy
-// handler, bridged routes always; routes outside the package are refused.
-func TestProtocolRuntimeHostRelaysRoutesUntilTheyAreSwitchedToNative(t *testing.T) {
+// A route the kernel has no handler for is served natively whatever the
+// modes say. Until the kernel sets a flagged route's mode, the host relays it
+// to the legacy handler, bridged routes always; routes outside the package
+// are refused.
+func TestProtocolRuntimeHostRelaysOnlyFlaggedRoutes(t *testing.T) {
 	bridge := &bridgeStub{}
 	service, err := newProtocolRuntimeService(bridge, "lease-1")
 	require.NoError(t, err)
-	for _, route := range []string{"protocol.admin.agent.tasks.get", "protocol.admin.nodes.id.protocols.get"} {
-		response, err := service.Dispatch(context.Background(), pluginhostsdk.DispatchRequest{
-			RouteID: route, BridgeCapability: make([]byte, 32), DeadlineUnixMillis: time.Now().Add(time.Second).UnixMilli(),
-		})
-		require.NoError(t, err)
-		require.EqualValues(t, 200, response.StatusCode)
-		require.Equal(t, route, bridge.operation)
+	_, effective := service.Mode("protocol.admin.agent.tasks.get")
+	require.Equal(t, pluginhostsdk.RouteModeNative, effective)
+	_, _ = service.Dispatch(context.Background(), pluginhostsdk.DispatchRequest{
+		RouteID: "protocol.admin.agent.tasks.get", BridgeCapability: make([]byte, 32), DeadlineUnixMillis: time.Now().Add(time.Second).UnixMilli(),
+	})
+	require.Empty(t, bridge.operation, "a native route is not relayed")
+	response, err := service.Dispatch(context.Background(), pluginhostsdk.DispatchRequest{
+		RouteID: native.ProtocolsRouteID, BridgeCapability: make([]byte, 32), DeadlineUnixMillis: time.Now().Add(time.Second).UnixMilli(),
+	})
+	require.NoError(t, err)
+	require.EqualValues(t, 200, response.StatusCode)
+	require.Equal(t, native.ProtocolsRouteID, bridge.operation)
+	for route := range flaggedRoutes {
+		require.Contains(t, protocolRuntimeRoutes, route)
 	}
 
 	_, err = service.Dispatch(context.Background(), pluginhostsdk.DispatchRequest{
