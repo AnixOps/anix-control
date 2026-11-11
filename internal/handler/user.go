@@ -45,44 +45,6 @@ func currentPanelUserID(c *gin.Context) (uint, bool) {
 	return uid, true
 }
 
-// GetSubscription godoc
-// @Summary 获取用户订阅详情
-// @Description 获取当前登录用户的订阅信息，包括流量、到期时间等
-// @Tags 用户端
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param refresh query bool false "是否强制刷新缓存"
-// @Success 200 {object} map[string]any
-// @Failure 401 {object} map[string]any
-// @Failure 500 {object} map[string]any
-// @Router /user/subscription [get]
-func (h *UserHandler) GetSubscription(c *gin.Context) {
-	uid, ok := currentPanelUserID(c)
-	if !ok {
-		return
-	}
-
-	// 检查是否强制刷新
-	forceRefresh := c.Query("refresh") == "true"
-
-	// The subscription package answers it through
-	// KernelSubscriber.GetSubscriptionSummary, which calls the same
-	// function on the same cache.
-	sub, err := h.statsService.UserSubscriptionSummary(uid, forceRefresh, h.configService, h.cfg)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			panelError(c, "用户不存在")
-			return
-		}
-		log.Printf("user subscription failed: %v", err)
-		panelError(c, "获取订阅信息失败")
-		return
-	}
-
-	panelSuccess(c, sub)
-}
-
 // GetProfile godoc
 // @Summary 获取用户基本信息
 // @Description 获取当前登录用户的基本信息，包括邮箱、UUID、Token等

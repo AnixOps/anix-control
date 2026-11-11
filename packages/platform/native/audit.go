@@ -70,7 +70,8 @@ var sensitiveKeys = []string{
 	"credential",
 }
 
-// redact is the kernel's utils.Redact.
+// redact keeps the first and last four characters of a secret longer than
+// eight, and none of a shorter one.
 func redact(s string) string {
 	if s == "" {
 		return ""
@@ -82,7 +83,7 @@ func redact(s string) string {
 	return s[:4] + "****" + s[length-4:]
 }
 
-// redactMap is the kernel's utils.RedactMap.
+// redactMap returns data with the values of sensitive keys redacted.
 func redactMap(data map[string]any) map[string]any {
 	result := make(map[string]any)
 	for key, value := range data {

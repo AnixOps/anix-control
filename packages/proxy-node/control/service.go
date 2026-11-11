@@ -21,8 +21,9 @@ type proxyNodeBridge interface {
 }
 
 // newProxyNodeService returns the proxy-node host's router. The routes in
-// proxyNodeRoutes have a native handler; such a route serves natively once
-// the kernel sets its mode, and falls back to the legacy handler otherwise.
+// proxyNodeRoutes have a native handler; a route in flaggedRoutes serves
+// natively once the kernel sets its mode, and falls back to the legacy
+// handler otherwise.
 // The node routes on v2_node need grants the kernel gives only once the node credential split is finalized: until the
 // lease has them they answer from the legacy handler, and a host started
 // before the finalize keeps them legacy until it restarts. The routes that
@@ -57,8 +58,17 @@ func newProxyNodeService(bridge proxyNodeBridge, leaseID string) (*pluginhostsdk
 			_, bridgedRoute := bridgedRoutes[routeID]
 			return nativeRoute || bridgedRoute
 		},
-		Native: service.Handlers(),
+		Native: service.Handlers(), NativeOnly: true, Flagged: flaggedRoutes,
 	})
+}
+
+// flaggedRoutes are the native routes the kernel still has a legacy handler
+// for: they follow the mode the kernel sets. The other native routes are
+// served by their native handler alone.
+var flaggedRoutes = map[string]struct{}{
+	native.NodesRouteID:      {},
+	native.NodeRouteID:       {},
+	native.DeleteNodeRouteID: {},
 }
 
 // proxyNodeRoutes are the package's compatibility routes with a native

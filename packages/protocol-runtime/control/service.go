@@ -20,9 +20,9 @@ type protocolRuntimeBridge interface {
 }
 
 // newProtocolRuntimeService returns the protocol-runtime host's router. The
-// routes in protocolRuntimeRoutes have a native handler; such a route serves
-// natively once the kernel sets its mode, and falls back to the legacy
-// handler otherwise:
+// routes in protocolRuntimeRoutes have a native handler; a route in
+// flaggedRoutes serves natively once the kernel sets its mode, and falls
+// back to the legacy handler otherwise:
 //   - the protocol templates, and the diagnostic task history and detail on
 //     the adopted v2_agent_diagnostic_task;
 //   - a node's protocols and their writes on v2_node_protocol, which the
@@ -64,8 +64,25 @@ func newProtocolRuntimeService(bridge protocolRuntimeBridge, leaseID string) (*p
 			_, bridgedRoute := bridgedRoutes[routeID]
 			return nativeRoute || bridgedRoute
 		},
-		Native: service.Handlers(),
+		Native: service.Handlers(), NativeOnly: true, Flagged: flaggedRoutes,
 	})
+}
+
+// flaggedRoutes are the native routes the kernel still has a legacy handler
+// for: they follow the mode the kernel sets. The other native routes (the
+// protocol templates and the diagnostic task history and detail) are served
+// by their native handler alone.
+var flaggedRoutes = map[string]struct{}{
+	native.ProtocolsRouteID:        {},
+	native.CreateProtocolRouteID:   {},
+	native.UpdateProtocolRouteID:   {},
+	native.DeleteProtocolRouteID:   {},
+	native.SyncRouteID:             {},
+	native.AgentControlRouteID:     {},
+	native.AgentControlOpsRouteID:  {},
+	native.AgentListRouteID:        {},
+	native.AgentMonitorRouteID:     {},
+	native.AgentTasksCreateRouteID: {},
 }
 
 // protocolRuntimeRoutes are the package's compatibility routes with a native

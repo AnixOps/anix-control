@@ -119,28 +119,6 @@ func (s *AgentHandlerTestSuite) TestGetMonitor_Retired() {
 	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
 }
 
-func (s *AgentHandlerTestSuite) TestGetTaskResult_Success() {
-	s.Require().NoError(s.db.Create(&model.AgentDiagnosticTask{
-		TaskID: "task-xyz-1", NodeID: s.testNode.ID, Action: "service_status", Status: "completed", Success: true, Output: "ok", DurationMS: 66,
-	}).Error)
-	handler := NewAgentHandler()
-	w := s.get("/admin/agent/tasks/task-xyz-1", "/admin/agent/tasks/:task_id", handler.GetTaskResult)
-	assert.Equal(s.T(), http.StatusOK, w.Code)
-
-	resp := decodePanelTestResponse(s.T(), w)
-	assert.Equal(s.T(), float64(0), resp["code"])
-	data := resp["data"].(map[string]any)
-	assert.Equal(s.T(), "task-xyz-1", data["task_id"])
-	assert.Equal(s.T(), float64(s.testNode.ID), data["node_id"])
-	assert.NotContains(s.T(), resp, "error")
-}
-
-func (s *AgentHandlerTestSuite) TestGetTaskResult_NotFound() {
-	handler := NewAgentHandler()
-	w := s.get("/admin/agent/tasks/not-exists", "/admin/agent/tasks/:task_id", handler.GetTaskResult)
-	assert.Equal(s.T(), http.StatusNotFound, w.Code)
-}
-
 func (s *AgentHandlerTestSuite) TestListAgents_Empty() {
 	handler := NewAgentHandler()
 	w := s.get("/admin/agent/list", "/admin/agent/list", handler.ListAgents)
@@ -148,18 +126,6 @@ func (s *AgentHandlerTestSuite) TestListAgents_Empty() {
 	resp := decodePanelTestResponse(s.T(), w)
 	assert.Equal(s.T(), float64(0), resp["code"])
 	assert.Empty(s.T(), resp["data"].(map[string]any)["agents"])
-}
-
-func (s *AgentHandlerTestSuite) TestListDiagnosticTasks() {
-	handler := NewAgentHandler()
-	w := s.get("/admin/agent/tasks?limit=50", "/admin/agent/tasks", handler.ListDiagnosticTasks)
-	assert.Equal(s.T(), http.StatusOK, w.Code)
-	assert.Empty(s.T(), decodePanelTestResponse(s.T(), w)["data"].([]any))
-
-	s.Require().NoError(s.db.Create(&model.AgentDiagnosticTask{TaskID: "task-1", NodeID: s.testNode.ID, Action: "service_status", Status: "completed"}).Error)
-	s.router = gin.New()
-	w = s.get("/admin/agent/tasks", "/admin/agent/tasks", handler.ListDiagnosticTasks)
-	assert.Len(s.T(), decodePanelTestResponse(s.T(), w)["data"].([]any), 1)
 }
 
 // A node without an Agent Control stream session is offline: the task is

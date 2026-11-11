@@ -19,6 +19,7 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/database"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/nodesecrets"
+	"github.com/AnixOps/anix-control/v5/internal/subscriber"
 	"github.com/AnixOps/anix-control/v5/internal/tests/testutil"
 	"github.com/AnixOps/anix-control/v5/internal/utils"
 	"github.com/stretchr/testify/assert"
@@ -1314,6 +1315,13 @@ func (s *SubscriptionServiceTestSuite) TearDownSuite() {
 	s.ServiceTestSuite.TearDownSuite()
 }
 
+// grantGroup gives the test user a subscription group, as the kernel's
+// subscriber does for the subscription package.
+func (s *SubscriptionServiceTestSuite) grantGroup(groupID uint) error {
+	_, err := subscriber.GrantSubscriptionGroupTx(database.Get(), subscriber.GroupGrant{UserID: s.testUser.ID, GroupID: groupID}, time.Now())
+	return err
+}
+
 func (s *SubscriptionServiceTestSuite) SetupTest() {
 	s.ServiceTestSuite.SetupTest()
 	s.svc = NewSubscriptionService()
@@ -1329,191 +1337,13 @@ func (s *SubscriptionServiceTestSuite) SetupTest() {
 	database.Get().Create(s.testUser)
 }
 
-func (s *SubscriptionServiceTestSuite) TestCreateGroup() {
-	group := &model.SubscriptionGroup{
-		Name:        "Test Group",
-		Description: ptrString("Test Description"),
-		Priority:    10,
-		Enable:      1,
-	}
-
-	err := s.svc.CreateGroup(group)
-	assert.NoError(s.T(), err)
-	assert.NotZero(s.T(), group.ID)
-}
-
-func (s *SubscriptionServiceTestSuite) TestGetGroup() {
-	group := &model.SubscriptionGroup{
-		Name:     "Get Test Group",
-		Priority: 5,
-		Enable:   1,
-	}
-	assert.NoError(s.T(), s.svc.CreateGroup(group))
-	found, err := s.svc.GetGroup(group.ID)
-	assert.NoError(s.T(), err)
-	assert.Equal(s.T(), "Get Test Group", found.Name)
-}
-
-func (s *SubscriptionServiceTestSuite) TestGetGroup_NotFound() {
-	_, err := s.svc.GetGroup(99999)
-	assert.Error(s.T(), err)
-}
-
-func (s *SubscriptionServiceTestSuite) TestUpdateGroup() {
-	group := &model.SubscriptionGroup{
-		Name:     "Update Test Group",
-		Priority: 5,
-		Enable:   1,
-	}
-	assert.NoError(s.T(), s.svc.CreateGroup(group))
-	group.Name = "Updated Group"
-	group.Priority = 20
-	err := s.svc.UpdateGroup(group)
-	assert.NoError(s.T(), err)
-
-	found, _ := s.svc.GetGroup(group.ID)
-	assert.Equal(s.T(), "Updated Group", found.Name)
-	assert.Equal(s.T(), 20, found.Priority)
-}
-
-func (s *SubscriptionServiceTestSuite) TestDeleteGroup() {
-	group := &model.SubscriptionGroup{
-		Name:     "Delete Test Group",
-		Priority: 5,
-		Enable:   1,
-	}
-	assert.NoError(s.T(), s.svc.CreateGroup(group))
-	err := s.svc.DeleteGroup(group.ID, "")
-	assert.NoError(s.T(), err)
-
-	_, err = s.svc.GetGroup(group.ID)
-	assert.Error(s.T(), err)
-}
-
-// Deleting a group removes its node protocol links: PostgreSQL refused to
-// delete a linked group, and SQLite kept orphan links.
-func (s *SubscriptionServiceTestSuite) TestDeleteGroupRemovesProtocolLinks() {
-	node := &model.Node{Name: "edge", Host: "edge.example.test"}
-	s.Require().NoError(database.GetDB().Create(node).Error)
-	protocol := &model.NodeProtocol{NodeID: node.ID, Name: "vless", Type: model.ProtocolVLESS, Port: 443}
-	s.Require().NoError(database.GetDB().Create(protocol).Error)
-	group := &model.SubscriptionGroup{Name: "linked", Enable: 1, Protocols: []model.NodeProtocol{*protocol}}
-	s.Require().NoError(database.GetDB().Create(group).Error)
-	var links int64
-	s.Require().NoError(database.GetDB().Table("v2_subscription_group_node_protocols").Where("subscription_group_id = ?", group.ID).Count(&links).Error)
-	s.Require().EqualValues(1, links)
-
-	s.Require().NoError(s.svc.DeleteGroup(group.ID, ""))
-
-	s.Require().NoError(database.GetDB().Table("v2_subscription_group_node_protocols").Where("subscription_group_id = ?", group.ID).Count(&links).Error)
-	s.Zero(links)
-	var kept model.NodeProtocol
-	s.NoError(database.GetDB().First(&kept, protocol.ID).Error, "the protocol itself stays")
-}
-
-func (s *SubscriptionServiceTestSuite) TestDeleteGroup_NotFound() {
-	err := s.svc.DeleteGroup(99999, "")
-	assert.Error(s.T(), err)
-}
-
-func (s *SubscriptionServiceTestSuite) TestGetGroups() {
-	// 创建多个分组
-	for i := 1; i <= 3; i++ {
-		group := &model.SubscriptionGroup{
-			Name:     fmt.Sprintf("Group %d", i),
-			Priority: i * 10,
-			Enable:   1,
-		}
-		assert.NoError(s.T(), s.svc.CreateGroup(group))
-	}
-
-	groups, err := s.svc.GetGroups()
-	assert.NoError(s.T(), err)
-	assert.GreaterOrEqual(s.T(), len(groups), 3)
-}
-
-func (s *SubscriptionServiceTestSuite) TestCreateTemplate() {
-	group := &model.SubscriptionGroup{
-		Name:     "Template Test Group",
-		Priority: 5,
-		Enable:   1,
-	}
-	assert.NoError(s.T(), s.svc.CreateGroup(group))
-	tpl := &model.SubscriptionTemplate{
-		GroupID: group.ID,
-		Name:    "Test Template",
-		Type:    "vmess",
-		Server:  "example.com",
-		Port:    443,
-		Enable:  1,
-	}
-
-	err := s.svc.CreateTemplate(tpl)
-	assert.NoError(s.T(), err)
-	assert.NotZero(s.T(), tpl.ID)
-}
-
-func (s *SubscriptionServiceTestSuite) TestGetTemplate() {
-	group := &model.SubscriptionGroup{
-		Name:     "Get Template Group",
-		Priority: 5,
-		Enable:   1,
-	}
-	assert.NoError(s.T(), s.svc.CreateGroup(group))
-	tpl := &model.SubscriptionTemplate{
-		GroupID: group.ID,
-		Name:    "Get Test Template",
-		Type:    "vless",
-		Server:  "example.com",
-		Port:    443,
-		Enable:  1,
-	}
-	assert.NoError(s.T(), s.svc.CreateTemplate(tpl))
-	found, err := s.svc.GetTemplate(tpl.ID)
-	assert.NoError(s.T(), err)
-	assert.Equal(s.T(), "Get Test Template", found.Name)
-}
-
-func (s *SubscriptionServiceTestSuite) TestUpdateTemplateFields_NotFound() {
-	err := s.svc.UpdateTemplateFields(99999, map[string]any{"name": "missing"})
-	assert.Error(s.T(), err)
-}
-
-func (s *SubscriptionServiceTestSuite) TestDeleteTemplate() {
-	group := &model.SubscriptionGroup{
-		Name:     "Delete Template Group",
-		Priority: 5,
-		Enable:   1,
-	}
-	assert.NoError(s.T(), s.svc.CreateGroup(group))
-	tpl := &model.SubscriptionTemplate{
-		GroupID: group.ID,
-		Name:    "Delete Test Template",
-		Type:    "trojan",
-		Server:  "example.com",
-		Port:    443,
-		Enable:  1,
-	}
-	assert.NoError(s.T(), s.svc.CreateTemplate(tpl))
-	err := s.svc.DeleteTemplate(tpl.ID)
-	assert.NoError(s.T(), err)
-
-	_, err = s.svc.GetTemplate(tpl.ID)
-	assert.Error(s.T(), err)
-}
-
-func (s *SubscriptionServiceTestSuite) TestDeleteTemplate_NotFound() {
-	err := s.svc.DeleteTemplate(99999)
-	assert.Error(s.T(), err)
-}
-
 func (s *SubscriptionServiceTestSuite) TestGetTemplatesByGroup() {
 	group := &model.SubscriptionGroup{
 		Name:     "Templates Group",
 		Priority: 5,
 		Enable:   1,
 	}
-	assert.NoError(s.T(), s.svc.CreateGroup(group))
+	assert.NoError(s.T(), database.Get().Create(group).Error)
 	// 创建多个模板
 	for i := 1; i <= 3; i++ {
 		tpl := &model.SubscriptionTemplate{
@@ -1525,191 +1355,12 @@ func (s *SubscriptionServiceTestSuite) TestGetTemplatesByGroup() {
 			Enable:  1,
 			Sort:    i,
 		}
-		assert.NoError(s.T(), s.svc.CreateTemplate(tpl))
+		assert.NoError(s.T(), database.Get().Create(tpl).Error)
 	}
 
 	templates, err := s.svc.GetTemplatesByGroup(group.ID)
 	assert.NoError(s.T(), err)
 	assert.Len(s.T(), templates, 3)
-}
-
-func (s *SubscriptionServiceTestSuite) TestAssignGroupToUser() {
-	group := &model.SubscriptionGroup{
-		Name:     "User Group",
-		Priority: 5,
-		Enable:   1,
-	}
-	assert.NoError(s.T(), s.svc.CreateGroup(group))
-	err := s.svc.AssignGroupToUser(s.testUser.ID, group.ID, nil, nil, nil, "")
-	assert.NoError(s.T(), err)
-
-	groups, err := s.svc.GetUserGroups(s.testUser.ID)
-	assert.NoError(s.T(), err)
-	assert.Len(s.T(), groups, 1)
-	assert.Equal(s.T(), "User Group", groups[0].Name)
-}
-
-func (s *SubscriptionServiceTestSuite) TestAssignGroupToUser_UserNotFound() {
-	group := &model.SubscriptionGroup{
-		Name:   "Missing User Group",
-		Enable: 1,
-	}
-	assert.NoError(s.T(), s.svc.CreateGroup(group))
-
-	err := s.svc.AssignGroupToUser(99999, group.ID, nil, nil, nil, "")
-	assert.ErrorIs(s.T(), err, ErrSubscriptionUserNotFound)
-}
-
-func (s *SubscriptionServiceTestSuite) TestAssignGroupToUser_GroupNotFound() {
-	err := s.svc.AssignGroupToUser(s.testUser.ID, 99999, nil, nil, nil, "")
-	assert.ErrorIs(s.T(), err, ErrSubscriptionGroupNotFound)
-}
-
-func (s *SubscriptionServiceTestSuite) TestAssignGroupToUser_WithExpiry() {
-	group := &model.SubscriptionGroup{
-		Name:     "Expiry Group",
-		Priority: 5,
-		Enable:   1,
-	}
-	assert.NoError(s.T(), s.svc.CreateGroup(group))
-	expireAt := time.Now().Add(30 * 24 * time.Hour).Unix()
-	err := s.svc.AssignGroupToUser(s.testUser.ID, group.ID, &expireAt, nil, nil, "")
-	assert.NoError(s.T(), err)
-}
-
-func (s *SubscriptionServiceTestSuite) TestRemoveGroupFromUser() {
-	group := &model.SubscriptionGroup{
-		Name:     "Remove Group",
-		Priority: 5,
-		Enable:   1,
-	}
-	assert.NoError(s.T(), s.svc.CreateGroup(group))
-	// 分配
-	assert.NoError(s.T(), s.svc.AssignGroupToUser(s.testUser.ID, group.ID, nil, nil, nil, ""))
-	// 移除
-	err := s.svc.RemoveGroupFromUser(s.testUser.ID, group.ID, "")
-	assert.NoError(s.T(), err)
-
-	groups, _ := s.svc.GetUserGroups(s.testUser.ID)
-	assert.Empty(s.T(), groups)
-}
-
-func (s *SubscriptionServiceTestSuite) TestRemoveGroupFromUser_NotFound() {
-	group := &model.SubscriptionGroup{
-		Name:   "Missing User Relation Group",
-		Enable: 1,
-	}
-	assert.NoError(s.T(), s.svc.CreateGroup(group))
-
-	err := s.svc.RemoveGroupFromUser(s.testUser.ID, group.ID, "")
-	assert.ErrorIs(s.T(), err, ErrSubscriptionUserGroupNotFound)
-}
-
-func (s *SubscriptionServiceTestSuite) TestGetUserGroups_UserNotFound() {
-	groups, err := s.svc.GetUserGroups(99999)
-	assert.ErrorIs(s.T(), err, ErrSubscriptionUserNotFound)
-	assert.Nil(s.T(), groups)
-}
-
-func (s *SubscriptionServiceTestSuite) TestAssignGroupToPlan() {
-	group := &model.SubscriptionGroup{
-		Name:     "Plan Group",
-		Priority: 5,
-		Enable:   1,
-	}
-	assert.NoError(s.T(), s.svc.CreateGroup(group))
-	// 创建套餐
-	monthPrice := int64(1000)
-	plan := &model.Plan{
-		Name:           "Subscription Test Plan",
-		TransferEnable: 100,
-		MonthPrice:     &monthPrice,
-		Show:           1,
-	}
-	database.Get().Create(plan)
-
-	err := s.svc.AssignGroupToPlan(plan.ID, group.ID)
-	assert.NoError(s.T(), err)
-
-	groups, err := s.svc.GetPlanGroups(plan.ID)
-	assert.NoError(s.T(), err)
-	assert.Len(s.T(), groups, 1)
-}
-
-func (s *SubscriptionServiceTestSuite) TestAssignGroupToPlan_PlanNotFound() {
-	group := &model.SubscriptionGroup{
-		Name:   "Missing Plan Group",
-		Enable: 1,
-	}
-	assert.NoError(s.T(), s.svc.CreateGroup(group))
-
-	err := s.svc.AssignGroupToPlan(99999, group.ID)
-	assert.ErrorIs(s.T(), err, ErrSubscriptionPlanNotFound)
-}
-
-func (s *SubscriptionServiceTestSuite) TestAssignGroupToPlan_GroupNotFound() {
-	monthPrice := int64(1000)
-	plan := &model.Plan{
-		Name:           "Missing Group Plan",
-		TransferEnable: 100,
-		MonthPrice:     &monthPrice,
-		Show:           1,
-	}
-	assert.NoError(s.T(), database.Get().Create(plan).Error)
-
-	err := s.svc.AssignGroupToPlan(plan.ID, 99999)
-	assert.ErrorIs(s.T(), err, ErrSubscriptionGroupNotFound)
-}
-
-func (s *SubscriptionServiceTestSuite) TestRemoveGroupFromPlan() {
-	group := &model.SubscriptionGroup{
-		Name:     "Remove Plan Group",
-		Priority: 5,
-		Enable:   1,
-	}
-	assert.NoError(s.T(), s.svc.CreateGroup(group))
-	monthPrice := int64(1000)
-	plan := &model.Plan{
-		Name:           "Remove Plan Test",
-		TransferEnable: 100,
-		MonthPrice:     &monthPrice,
-		Show:           1,
-	}
-	database.Get().Create(plan)
-
-	// 分配
-	assert.NoError(s.T(), s.svc.AssignGroupToPlan(plan.ID, group.ID))
-	// 移除
-	err := s.svc.RemoveGroupFromPlan(plan.ID, group.ID)
-	assert.NoError(s.T(), err)
-
-	groups, _ := s.svc.GetPlanGroups(plan.ID)
-	assert.Empty(s.T(), groups)
-}
-
-func (s *SubscriptionServiceTestSuite) TestRemoveGroupFromPlan_NotFound() {
-	group := &model.SubscriptionGroup{
-		Name:   "Missing Plan Relation Group",
-		Enable: 1,
-	}
-	assert.NoError(s.T(), s.svc.CreateGroup(group))
-	monthPrice := int64(1000)
-	plan := &model.Plan{
-		Name:           "Missing Plan Relation Test",
-		TransferEnable: 100,
-		MonthPrice:     &monthPrice,
-		Show:           1,
-	}
-	assert.NoError(s.T(), database.Get().Create(plan).Error)
-
-	err := s.svc.RemoveGroupFromPlan(plan.ID, group.ID)
-	assert.ErrorIs(s.T(), err, ErrSubscriptionPlanGroupNotFound)
-}
-
-func (s *SubscriptionServiceTestSuite) TestGetPlanGroups_PlanNotFound() {
-	groups, err := s.svc.GetPlanGroups(99999)
-	assert.ErrorIs(s.T(), err, ErrSubscriptionPlanNotFound)
-	assert.Nil(s.T(), groups)
 }
 
 func (s *SubscriptionServiceTestSuite) TestGetUserSubscription_InvalidToken() {
@@ -1728,7 +1379,7 @@ func (s *SubscriptionServiceTestSuite) TestGetUserSubscription_Success() {
 		Priority: 5,
 		Enable:   1,
 	}
-	assert.NoError(s.T(), s.svc.CreateGroup(group))
+	assert.NoError(s.T(), database.Get().Create(group).Error)
 	tpl := &model.SubscriptionTemplate{
 		GroupID: group.ID,
 		Name:    "Test Node",
@@ -1737,9 +1388,9 @@ func (s *SubscriptionServiceTestSuite) TestGetUserSubscription_Success() {
 		Port:    443,
 		Enable:  1,
 	}
-	assert.NoError(s.T(), s.svc.CreateTemplate(tpl))
+	assert.NoError(s.T(), database.Get().Create(tpl).Error)
 	// 分配分组给用户
-	assert.NoError(s.T(), s.svc.AssignGroupToUser(s.testUser.ID, group.ID, nil, nil, nil, ""))
+	assert.NoError(s.T(), s.grantGroup(group.ID))
 	// 获取订阅
 	resp, err := s.svc.GetUserSubscription(&model.SubscriptionRequest{
 		Token:  s.testUser.Token,
@@ -1757,7 +1408,7 @@ func (s *SubscriptionServiceTestSuite) TestGetUserSubscription_LegacyGroupIDFall
 		Priority: 5,
 		Enable:   1,
 	}
-	assert.NoError(s.T(), s.svc.CreateGroup(group))
+	assert.NoError(s.T(), database.Get().Create(group).Error)
 
 	monthPrice := int64(1000)
 	plan := &model.Plan{
@@ -1830,7 +1481,7 @@ func (s *SubscriptionServiceTestSuite) TestGetUserSubscription_ExcludesNodeWitho
 		Priority: 5,
 		Enable:   1,
 	}
-	assert.NoError(s.T(), s.svc.CreateGroup(group))
+	assert.NoError(s.T(), database.Get().Create(group).Error)
 
 	monthPrice := int64(1000)
 	plan := &model.Plan{
@@ -3281,7 +2932,7 @@ func (s *SubscriptionServiceTestSuite) TestApplyTemplateJSON() {
 		Priority: 5,
 		Enable:   1,
 	}
-	assert.NoError(s.T(), s.svc.CreateGroup(group))
+	assert.NoError(s.T(), database.Get().Create(group).Error)
 	tpl := &model.SubscriptionTemplate{
 		GroupID:      group.ID,
 		Name:         "Custom JSON Node",
@@ -3291,9 +2942,9 @@ func (s *SubscriptionServiceTestSuite) TestApplyTemplateJSON() {
 		Enable:       1,
 		TemplateJSON: `{"name":"Custom Name","server":"custom.server.com","port":8443,"settings":{"flow":"xtls-rprx-vision"}}`,
 	}
-	assert.NoError(s.T(), s.svc.CreateTemplate(tpl))
+	assert.NoError(s.T(), database.Get().Create(tpl).Error)
 	// Assign to user
-	assert.NoError(s.T(), s.svc.AssignGroupToUser(s.testUser.ID, group.ID, nil, nil, nil, ""))
+	assert.NoError(s.T(), s.grantGroup(group.ID))
 	// Get subscription - applyTemplateJSON is called during renderTemplate
 	resp, err := s.svc.GetUserSubscription(&model.SubscriptionRequest{
 		Token:  s.testUser.Token,
@@ -3343,7 +2994,7 @@ func (s *SubscriptionServiceTestSuite) TestNodeProtocolToParsedNode() {
 	database.Get().Exec("INSERT INTO v2_subscription_group_node_protocols (subscription_group_id, node_protocol_id) VALUES (?, ?)", group.ID, protocol.ID)
 
 	// Assign group to user
-	assert.NoError(s.T(), s.svc.AssignGroupToUser(s.testUser.ID, group.ID, nil, nil, nil, ""))
+	assert.NoError(s.T(), s.grantGroup(group.ID))
 	// Get subscription - nodeProtocolToParsedNode is called during getInternalNodes
 	resp, err := s.svc.GetUserSubscription(&model.SubscriptionRequest{
 		Token:  s.testUser.Token,
@@ -3553,8 +3204,8 @@ func (s *ForwardNodeServiceTestSuite) TestHealthCheckReturnsCanceledContext() {
 // at the nodes whose Agent serves it; the others keep the legacy key.
 func (s *SubscriptionServiceTestSuite) TestGetUserSubscriptionOffersTheStoredSS2022Key() {
 	group := &model.SubscriptionGroup{Name: "SS Group", Priority: 5, Enable: 1}
-	s.Require().NoError(s.svc.CreateGroup(group))
-	s.Require().NoError(s.svc.AssignGroupToUser(s.testUser.ID, group.ID, nil, nil, nil, ""))
+	s.Require().NoError(database.Get().Create(group).Error)
+	s.Require().NoError(s.grantGroup(group.ID))
 	lastCheckAt := time.Now().Unix()
 	serverKey := base64.StdEncoding.EncodeToString(make([]byte, 32))
 	settings := `{"cipher":"2022-blake3-aes-256-gcm","server_key":"` + serverKey + `"}`

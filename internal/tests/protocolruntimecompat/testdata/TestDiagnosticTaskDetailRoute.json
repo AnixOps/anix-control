@@ -1,0 +1,9 @@
+{
+"an_id_with_SQL_in_it": {"status":404,"body":{"error":"task result not found"}},
+"completed_with_output": {"status":200,"body":{"code":0,"data":{"action":"service_status","created_at":"2026-09-01T08:02:00Z","duration_ms":14,"id":2,"node_id":3,"output":"gost.service active (running) \u003c2\u003e","params":"{\"service\":\"anix-agent\"}","status":"completed","success":true,"task_id":"task-002","timestamp":"2026-09-01T08:02:01Z"},"msg":"操作成功"}},
+"failed_with_an_error": {"status":200,"body":{"code":0,"data":{"action":"service_status","created_at":"2026-09-01T08:03:00Z","duration_ms":21,"error":"exit status 3: \"gost\" \u0026 friends","id":3,"node_id":1,"params":"{\"service\":\"anix-agent\"}","status":"failed","success":false,"task_id":"task-003","timestamp":"2026-09-01T08:03:01Z"},"msg":"操作成功"}},
+"no_tasks": {"status":404,"body":{"error":"task result not found"}},
+"pending": {"status":200,"body":{"code":0,"data":{"action":"service_status","created_at":"2026-09-01T08:05:00Z","duration_ms":35,"id":5,"node_id":3,"params":"{\"service\":\"anix-agent\"}","status":"dispatched","success":false,"task_id":"task-005","timestamp":"2026-09-01T08:05:01Z"},"msg":"操作成功"}},
+"unknown": {"status":404,"body":{"error":"task result not found"}},
+"without_params": {"status":200,"body":{"code":0,"data":{"action":"log_tail","created_at":"2026-09-01T08:04:00Z","duration_ms":28,"id":4,"node_id":2,"status":"pending","success":false,"task_id":"task-004","timestamp":"2026-09-01T08:04:01Z"},"msg":"操作成功"}}
+}

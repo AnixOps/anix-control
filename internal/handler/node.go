@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -215,101 +214,6 @@ func (h *NodeHandler) DeleteNode(c *gin.Context) {
 	panelSuccess(c, gin.H{"message": "删除成功"})
 }
 
-// GetNodeStats godoc
-// @Summary 获取节点统计
-// @Description 管理员获取节点统计数据
-// @Tags 管理端-节点
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Success 200 {object} map[string]any
-// @Failure 500 {object} map[string]any
-// @Router /admin/nodes/stats [get]
-func (h *NodeHandler) GetNodeStats(c *gin.Context) {
-	stats, err := h.nodeService.GetNodeStats()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "获取统计失败"})
-		return
-	}
-
-	panelSuccess(c, stats)
-}
-
-// GetNodeLogs godoc
-// @Summary 获取节点运行日志
-// @Description 管理员获取指定节点通过 gRPC 上报的运行日志
-// @Tags 管理端-节点
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param id path int true "节点ID"
-// @Param page query int false "页码" default(1)
-// @Param page_size query int false "每页数量" default(20)
-// @Param level query string false "日志级别"
-// @Param source query string false "日志来源"
-// @Param search query string false "关键词"
-// @Success 200 {object} map[string]any
-// @Failure 400 {object} map[string]any
-// @Failure 500 {object} map[string]any
-// @Router /admin/nodes/{id}/logs [get]
-func (h *NodeHandler) GetNodeLogs(c *gin.Context) {
-	nodeID, err := strconv.ParseUint(c.Param("id"), 10, 32)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "无效的节点ID"})
-		return
-	}
-
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
-	page, pageSize = ClampPagination(page, pageSize)
-
-	if _, err := h.nodeService.GetNode(uint(nodeID)); err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"message": "节点不存在"})
-		return
-	}
-
-	result, err := h.nodeLogService.GetLogs(service.NodeLogListParams{
-		NodeID:   uint(nodeID),
-		Page:     page,
-		PageSize: pageSize,
-		Level:    c.Query("level"),
-		Source:   c.Query("source"),
-		Search:   c.Query("search"),
-	})
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "获取节点日志失败", "error": err.Error()})
-		return
-	}
-
-	list := make([]gin.H, 0, len(result.List))
-	for _, item := range result.List {
-		var fields any
-		if item.FieldsJSON != "" {
-			_ = json.Unmarshal([]byte(item.FieldsJSON), &fields)
-		}
-
-		list = append(list, gin.H{
-			"id":          item.ID,
-			"node_id":     item.NodeID,
-			"level":       item.Level,
-			"source":      item.Source,
-			"message":     item.Message,
-			"trace_id":    item.TraceID,
-			"fields":      fields,
-			"fields_json": item.FieldsJSON,
-			"logged_at":   item.LoggedAt,
-			"created_at":  item.CreatedAt,
-		})
-	}
-
-	panelSuccess(c, gin.H{
-		"list":      list,
-		"total":     result.Total,
-		"page":      page,
-		"page_size": pageSize,
-	})
-}
-
 // ========== 高级配置 (RawConfig) ==========
 
 // ========== 协议管理 ==========
@@ -450,20 +354,6 @@ func (h *NodeHandler) DeleteProtocol(c *gin.Context) {
 	}
 
 	panelSuccess(c, gin.H{"message": "删除成功"})
-}
-
-// GetProtocolTemplates godoc
-// @Summary 获取协议模板
-// @Description 管理员获取可用的协议模板列表
-// @Tags 管理端-节点
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Success 200 {object} map[string]any
-// @Router /admin/protocol-templates [get]
-func (h *NodeHandler) GetProtocolTemplates(c *gin.Context) {
-	templates := model.GetProtocolTemplates()
-	panelSuccess(c, templates)
 }
 
 // SyncProtocol godoc

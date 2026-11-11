@@ -4,40 +4,32 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"testing"
 	"time"
 
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
 	"github.com/AnixOps/anix-control/v5/internal/cache"
 	"github.com/AnixOps/anix-control/v5/internal/config"
-	"github.com/AnixOps/anix-control/v5/internal/handler"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/service"
 	"github.com/AnixOps/anix-control/v5/internal/tests/packagecompat"
 	"github.com/AnixOps/anix-control/v5/packages/subscription/native"
-	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )
 
-// The summary's parity: the legacy handler answers the user's summary the
-// kernel caches for 30 seconds, with the subscription link settings; the
-// native one reads it through the real KernelSubscriber server, served in
-// process over gRPC on the native side's database. The cache is the
-// kernel's memory, one per process: each side's seed starts it afresh, so a
-// case's sides do not share it, and a seeded summary is answered byte for
-// byte, cached_at included. A summary a side builds itself has that side's
-// cached_at, which is masked; the cache entry it leaves is compared.
+// The summary: the route reads the user's summary the kernel caches for 30
+// seconds through the real KernelSubscriber server, served in process over
+// gRPC on the case's database, and adds the subscription link settings. The
+// cache is the kernel's memory, one per process: each seed starts it afresh,
+// and a seeded summary is answered byte for byte, cached_at included. A
+// summary built for the request has the time of the build as cached_at,
+// which is masked; the cache entry it leaves is compared.
 
 func summaryRoute(t *testing.T) packagecompat.Route {
 	return packagecompat.Route{
 		Method: "GET", Pattern: "/api/v2/user/subscription", RouteID: native.SummaryRouteID,
-		// The legacy handler and its StatsService are built per request: the
-		// service keeps the database it was first built with.
-		Legacy: func(c *gin.Context) {
-			service.ResetStatsServiceForTest()
-			handler.NewUserHandler().GetSubscription(c)
-		},
 		Models: []any{&model.Plan{}, &model.User{}, &model.SystemConfig{}},
 		Native: func(db *gorm.DB) pluginhostsdk.NativeHandler {
 			service := &native.Service{
@@ -49,9 +41,10 @@ func summaryRoute(t *testing.T) packagecompat.Route {
 	}
 }
 
-// summaryLater is an expiry ten and a half days ahead, far from a day
-// boundary, so both sides count the same days remaining.
-var summaryLater = expiryBase + 10*86400 + 43200
+// summaryLater is an expiry ten and a half days ahead of the run, far from
+// a day boundary, so the kernel always counts ten days remaining. The
+// recorded answers hold 0 in its place.
+var summaryLater = time.Now().Unix() + 10*86400 + 43200
 
 // cachedAt is the cached_at of a seeded summary: a fraction and an offset,
 // both of which an answer must keep.
@@ -79,7 +72,7 @@ func seedSummary(t testing.TB, db *gorm.DB) {
 	users := []model.User{user(1), user(2), user(3), user(4), user(5)}
 	users[1].PlanID, users[1].TransferEnable, users[1].U, users[1].D, users[1].ExpiredAt = ptr(uint(2)), 3000, 400, 600, &summaryLater
 	users[2].U = 5
-	users[3].PlanID, users[3].TransferEnable, users[3].U, users[3].D, users[3].ExpiredAt = ptr(uint(1)), 1<<30, 7, 9, ptr(expiryBase-3600)
+	users[3].PlanID, users[3].TransferEnable, users[3].U, users[3].D, users[3].ExpiredAt = ptr(uint(1)), 1<<30, 7, 9, ptr(expired-3600)
 	users[4].TransferEnable, users[4].U, users[4].D = 3, 10, 0
 	require.NoError(t, db.Create(&users).Error)
 	require.NoError(t, db.Create(&model.SystemConfig{
@@ -146,18 +139,19 @@ func summaryCases(t *testing.T, cases []packagecompat.Case) {
 		if c.Snapshot == nil {
 			c.Snapshot = summaryCache(c.Principal.ActorID)
 		}
+		c.Volatile = []string{strconv.FormatInt(summaryLater, 10)}
 		packagecompat.RunWrite(t, route, c)
 	}
 }
 
-func TestUserSubscriptionSummaryParity(t *testing.T) {
+func TestUserSubscriptionSummary(t *testing.T) {
 	withConfig(t, &config.Config{App: config.AppConfig{SubscribePath: "feed/"}})
 	path := "/api/v2/user/subscription"
 	built := []string{"data.cached_at"}
 	user := func(id uint) pluginhostsdk.Principal { return pluginhostsdk.Principal{ActorID: id} }
 	summaryCases(t, []packagecompat.Case{
-		// Nothing cached: each side builds the caller's summary, answers it
-		// with the link settings and caches it without them.
+		// Nothing cached: the kernel builds the caller's summary, the route
+		// answers it with the link settings, and it is cached without them.
 		{Name: "plan, traffic and expiry", Path: path, Mask: built},
 		{Name: "no plan, no transfer, never expires", Path: path, Principal: user(3), Mask: built},
 		{Name: "expired", Path: path, Principal: user(4), Mask: built},
@@ -195,8 +189,8 @@ func TestUserSubscriptionSummaryParity(t *testing.T) {
 }
 
 // Without a configured subscription path the link settings answer the
-// default, "/s", on both sides.
-func TestUserSubscriptionSummaryDefaultPathParity(t *testing.T) {
+// default, "/s".
+func TestUserSubscriptionSummaryDefaultPath(t *testing.T) {
 	withConfig(t, &config.Config{})
 	summaryCases(t, []packagecompat.Case{
 		{Name: "built", Path: "/api/v2/user/subscription", Mask: []string{"data.cached_at"}},

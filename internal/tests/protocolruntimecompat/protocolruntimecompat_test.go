@@ -1,8 +1,10 @@
-// Package protocolruntimecompat proves the protocol-runtime package's native
-// routes answer exactly as the kernel's legacy handlers, on SQLite and
-// PostgreSQL: the protocol templates, and the administrator's diagnostic
-// task history and task detail on v2_agent_diagnostic_task, which the
-// package adopts in place.
+// Package protocolruntimecompat tests the protocol-runtime package's native
+// routes on SQLite and PostgreSQL. The protocol templates, and the
+// administrator's diagnostic task history and task detail on
+// v2_agent_diagnostic_task, which the package adopts in place, have no
+// legacy handler any more and are pinned to the answers recorded in testdata
+// while they still matched it byte for byte (packagecompat's golden
+// answers). The other routes are compared with the kernel's legacy handlers.
 package protocolruntimecompat
 
 import (
@@ -74,15 +76,14 @@ func read(t *testing.T, r packagecompat.Route, cases []packagecompat.Case) {
 	}
 }
 
-func TestProtocolTemplatesRouteParity(t *testing.T) {
-	read(t, route("GET", "/api/v2/admin/protocol-templates", "protocol.admin.protocol_templates.get",
-		func(c *gin.Context) { handler.NewNodeHandler().GetProtocolTemplates(c) }), []packagecompat.Case{
+func TestProtocolTemplatesRoute(t *testing.T) {
+	read(t, route("GET", "/api/v2/admin/protocol-templates", "protocol.admin.protocol_templates.get", nil), []packagecompat.Case{
 		{Name: "every template", Path: "/api/v2/admin/protocol-templates"},
 	})
 }
 
-func TestDiagnosticTaskListRouteParity(t *testing.T) {
-	read(t, route("GET", "/api/v2/admin/agent/tasks", "protocol.admin.agent.tasks.get", agent((*handler.AgentHandler).ListDiagnosticTasks)), []packagecompat.Case{
+func TestDiagnosticTaskListRoute(t *testing.T) {
+	read(t, route("GET", "/api/v2/admin/agent/tasks", "protocol.admin.agent.tasks.get", nil), []packagecompat.Case{
 		{Name: "newest 50", Path: "/api/v2/admin/agent/tasks", Seed: seedTasks},
 		{Name: "one node", Path: "/api/v2/admin/agent/tasks?node_id=2", Seed: seedTasks},
 		{Name: "one node and a limit", Path: "/api/v2/admin/agent/tasks?node_id=3&limit=4", Seed: seedTasks},
@@ -100,8 +101,8 @@ func TestDiagnosticTaskListRouteParity(t *testing.T) {
 	})
 }
 
-func TestDiagnosticTaskDetailRouteParity(t *testing.T) {
-	read(t, route("GET", "/api/v2/admin/agent/tasks/:task_id", "protocol.admin.agent.tasks.task_id.get", agent((*handler.AgentHandler).GetTaskResult)), []packagecompat.Case{
+func TestDiagnosticTaskDetailRoute(t *testing.T) {
+	read(t, route("GET", "/api/v2/admin/agent/tasks/:task_id", "protocol.admin.agent.tasks.task_id.get", nil), []packagecompat.Case{
 		{Name: "completed with output", Path: "/api/v2/admin/agent/tasks/task-002", Seed: seedTasks},
 		{Name: "failed with an error", Path: "/api/v2/admin/agent/tasks/task-003", Seed: seedTasks},
 		{Name: "without params", Path: "/api/v2/admin/agent/tasks/task-004", Seed: seedTasks},
