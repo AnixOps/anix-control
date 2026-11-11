@@ -27,7 +27,11 @@ describe('buildTopology', () => {
     nodes: [node(1, 'sha-01'), node(2, 'hk-01'), node(3, 'tyo-01'), node(4, 'osaka-01', { last_check_at: NOW / 1000 - 9000 }), node(5, 'sg-01')],
     routes: [route('a', 'sha-hk-tyo', [['proxy-1'], ['proxy-2'], ['proxy-3']]), route('b', 'sha-osaka', [['proxy-1'], ['proxy-4']]), route('c', 'gone', [['proxy-99']])],
     traffic: new Map([['a', { up: 1, down: 2 }]]),
-    egress: [{ id: 7, name: 'ai', enabled: true, source_node: { id: 2 }, exit_node: { id: 3 } }]
+    egress: [{ id: 7, name: 'ai', enabled: true, source_node: { id: 2 }, exit_node: { id: 3 } }],
+    network: {
+      devices: [{ ref: 'proxy-1', region: 'beijing', kernel: true }, { ref: 'proxy-5' }],
+      lines: [{ id: 'a', exit: 'proxy-3', protocol: { type: 'vless' } }, { id: 'protocol-9', exit: 'proxy-5', protocol: { type: 'trojan' } }]
+    }
   })
   const device = name => topology.devices.find(item => item.name === name)
 
@@ -37,6 +41,14 @@ describe('buildTopology', () => {
     expect(device('tyo-01').roles).toEqual(['exit'])
     expect(device('sg-01').roles).toEqual(['direct'])
     expect(device('sha-01').lines).toEqual(['a', 'b'])
+  })
+
+  it('takes the region set on a device before its name, and what the lines serve', () => {
+    expect(device('sha-01').place.key).toBe('beijing')
+    expect(device('sha-01').kernel).toBe(true)
+    expect(device('sg-01').place.key).toBe('sg')
+    expect(device('sg-01').served).toBe(1)
+    expect(topology.lines.map(line => line.protocol)).toEqual(['vless', '', undefined])
   })
 
   it('breaks a line whose hop is offline and skips routes of unknown devices', () => {

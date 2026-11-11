@@ -54,7 +54,7 @@
         <div class="node-page__stack">
           <NodeProtocolsSection :node="node" @changed="list => { protocolCount = list.length }" />
           <NodeEntriesSection :node="node" />
-          <NodeNetworkSection :node-ref="`proxy-${node.id}`" />
+          <NodeNetworkSection :node-ref="`proxy-${node.id}`" :name="node.name" :tags="node.tags || ''" />
           <NodeForwardPortsSection :node-ref="`proxy-${node.id}`" />
           <NodeExitPolicySection :node-ref="`proxy-${node.id}`" />
         </div>

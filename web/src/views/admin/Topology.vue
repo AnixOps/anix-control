@@ -64,6 +64,8 @@
               <div><dt>{{ t('topology.device.place') }}</dt><dd>{{ placeName(device) || t('topology.device.noPlace') }}</dd></div>
               <div><dt>{{ t('topology.device.role') }}</dt><dd>{{ device.roles.map(role => t(`topology.roles.${role}`)).join(' · ') }}</dd></div>
               <div><dt>{{ t('topology.device.host') }}</dt><dd class="fwd-mono">{{ device.host || '—' }}</dd></div>
+              <div v-if="device.kernel"><dt>{{ t('topology.device.forwarding') }}</dt><dd>{{ t('topology.device.kernel') }}</dd></div>
+              <div v-if="device.served"><dt>{{ t('topology.device.served') }}</dt><dd>{{ device.served }}</dd></div>
               <div><dt>{{ t('topology.device.usersLabel') }}</dt><dd>{{ device.users }}</dd></div>
             </dl>
             <h3 class="topo__sub">{{ t('topology.device.lines', { n: deviceLines.length }) }}</h3>
@@ -98,6 +100,7 @@
             </ol>
             <dl class="topo__facts">
               <div><dt>{{ t('topology.line.kind') }}</dt><dd>{{ t(`topology.line.${line.kind}`) }}</dd></div>
+              <div v-if="line.kind === 'route'"><dt>{{ t('topology.line.protocol') }}</dt><dd>{{ line.protocol || t('topology.line.fixed') }}<template v-if="line.port"> · {{ line.port }}</template></dd></div>
               <div v-if="line.kind === 'route'"><dt>{{ t('topology.line.traffic') }}</dt><dd>{{ fmt.bytes(line.traffic, { precision: 1 }) }}</dd></div>
             </dl>
             <div class="topo__pad">
@@ -131,13 +134,14 @@
 // 网络拓扑: every device and the lines between them, as a world map and as
 // columns from entry to exit. Built from what Control already serves: the
 // node list, the forward routes (when the forward package is there) and the
-// egress routes. Polls every 30 s while visible.
+// egress routes, with each device's region and each line's protocol from the
+// network as lines. Polls every 30 s while visible.
 import { computed, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { ChevronRight, MapPin, RefreshCw, Route as RouteIcon, Server, Users, X } from '@lucide/vue'
 import { UiBadge, UiButton, UiCard, UiEmptyState, UiErrorState, UiIconButton, UiMetricCard, UiPageHeader, UiSegmentedControl, UiSkeleton, useFormat } from '@/ui'
 import { useAppI18n } from '@/composables/useAppI18n'
-import { getKernelAdminNodes, listKernelEgressRoutes } from '@/api/kernel'
+import { getKernelAdminNodes, getKernelNetworkLines, listKernelEgressRoutes } from '@/api/kernel'
 import { loadForwardSnapshot } from '@/components/forward/forwardData'
 import { usePolling } from '@/components/forward/usePolling'
 import TopologyGraph from '@/components/topology/TopologyGraph.vue'
@@ -159,17 +163,19 @@ const loadError = ref(null)
 const { loading, secondsAgo, refresh } = usePolling(async () => {
   try {
     // Lines need the forward package; the egress routes their own API.
-    const [nodePage, snapshot, egress] = await Promise.all([
+    const [nodePage, snapshot, egress, network] = await Promise.all([
       getKernelAdminNodes({ page: 1, page_size: 500 }),
       loadForwardSnapshot().catch(() => null),
-      listKernelEgressRoutes().catch(() => null)
+      listKernelEgressRoutes().catch(() => null),
+      getKernelNetworkLines().catch(() => null)
     ])
     topology.value = buildTopology({
       nodes: (readNodePage(nodePage).list || []).filter(node => node.approval === 'approved'),
       forwardNodes: snapshot?.nodes,
       routes: snapshot?.routes,
       traffic: snapshot?.traffic,
-      egress: egress?.routes
+      egress: egress?.routes,
+      network: network?.snapshot
     })
     loadError.value = null
   } catch (error) {
