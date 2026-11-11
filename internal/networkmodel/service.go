@@ -97,6 +97,18 @@ func RegisterForwardSource(name string, source func(db *gorm.DB) ([]Forward, err
 	forwardSources[name] = source
 }
 
+// SourceForwards answers what the source registered under name answers
+// now; none when there is no such source.
+func SourceForwards(name string, db *gorm.DB) ([]Forward, error) {
+	forwardSourceMu.RLock()
+	source := forwardSources[name]
+	forwardSourceMu.RUnlock()
+	if source == nil {
+		return nil, nil
+	}
+	return source(db)
+}
+
 func (s *Service) forwards(db *gorm.DB) ([]Forward, error) {
 	if s.Forwards != nil {
 		return s.Forwards(db)

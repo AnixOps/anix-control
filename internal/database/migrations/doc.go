@@ -142,4 +142,6 @@
 //     channels (v5_l2_standby), the entry pool policy and assignments
 //     (v5_entry_pool_policy, v5_user_entry_pool, v5_node_entry.pool) and
 //     the clients' failure reports (v5_client_failure_report).
+//   - 0033_node_region: where a device is, for the topology map
+//     (v4_kernel_node_network.region).
 package migrations

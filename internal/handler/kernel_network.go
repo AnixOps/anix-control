@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/AnixOps/anix-control/v5/internal/database"
+	"github.com/AnixOps/anix-control/v5/internal/netline"
 	"github.com/AnixOps/anix-control/v5/internal/networkmodel"
 	"github.com/gin-gonic/gin"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -69,6 +70,23 @@ func (h *NetworkModelHandler) Get(c *gin.Context) {
 		return
 	}
 	kernelData(c, http.StatusOK, view)
+}
+
+// Lines godoc
+// @Summary The network as lines
+// @Description What Control stores today read as lines (docs/design/network-lines): snapshot has the devices, uplinks, entries, transports, exits and lines (a line per enabled node protocol and per forward route, with the protocol it serves or its targets, its chain of hops, its exit and its rules) and what could not be read as a line (skipped, with the reason). forwards counts the forwards the routes plan today; differences lists the ones the lines would plan differently (missing, extra, or the fields that differ). Read-only: nothing is stored and no node changes.
+// @Tags Kernel
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} map[string]any
+// @Router /api/v4/kernel/network/lines [get]
+func (h *NetworkModelHandler) Lines(c *gin.Context) {
+	report, err := netline.Shadow(h.db().WithContext(c.Request.Context()))
+	if err != nil {
+		kernelDBError(c, err)
+		return
+	}
+	kernelData(c, http.StatusOK, report)
 }
 
 // Replace godoc
@@ -146,7 +164,7 @@ func (h *NetworkModelHandler) DevicePlan(c *gin.Context) {
 
 // NodeNetwork godoc
 // @Summary A device's network settings
-// @Description The interface the network model's automatic egresses of the node leave by (interface; source_v4 and gateway_v4, source_v6 and gateway_v6 on it; empty: the default route) and the port its automatic hop ingress listens on (hop_port; 0: 24443). A node behind NAT is reached at the NAT entry (GET /api/v4/kernel/nodes/{id}/entries) whose port map covers hop_port. detected lists the interfaces the node's Agent last reported (name, addresses_v4, addresses_v6, gateway_v4, gateway_v6; empty before an Agent that reports them), detected_at when. 404 for an unknown node.
+// @Description The interface the network model's automatic egresses of the node leave by (interface; source_v4 and gateway_v4, source_v6 and gateway_v6 on it; empty: the default route) where the node is, for the topology map (region, a place key of up to 32 lowercase letters, digits or dashes; empty when unset), and the port its automatic hop ingress listens on (hop_port; 0: 24443). A node behind NAT is reached at the NAT entry (GET /api/v4/kernel/nodes/{id}/entries) whose port map covers hop_port. detected lists the interfaces the node's Agent last reported (name, addresses_v4, addresses_v6, gateway_v4, gateway_v6; empty before an Agent that reports them), detected_at when. 404 for an unknown node.
 // @Tags Kernel
 // @Produce json
 // @Security BearerAuth
