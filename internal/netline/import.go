@@ -179,11 +179,14 @@ func (in *importer) uplinks(db *gorm.DB) error {
 		}
 	}
 	var settings []model.NodeNetwork
-	if err := db.Where("interface <> ''").Find(&settings).Error; err != nil {
+	if err := db.Find(&settings).Error; err != nil {
 		return err
 	}
 	for _, row := range settings {
-		if !has[row.NodeRef] {
+		if i, ok := in.devices[row.NodeRef]; ok {
+			in.s.Devices[i].Region = row.Region
+		}
+		if row.Interface != "" && !has[row.NodeRef] {
 			in.s.Uplinks = append(in.s.Uplinks, Uplink{Device: row.NodeRef, Name: "default", Interface: row.Interface, SourceV4: row.SourceV4, GatewayV4: row.GatewayV4, SourceV6: row.SourceV6, GatewayV6: row.GatewayV6})
 		}
 	}

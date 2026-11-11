@@ -25,6 +25,8 @@ type Device struct {
 	Ref  string `json:"ref"`
 	Name string `json:"name"`
 	Host string `json:"host"`
+	// Region is where the device is (its network settings), a place key.
+	Region string `json:"region,omitempty"`
 	// Kernel devices forward in the kernel (hosts on clouds that scan
 	// their machines); the others run the userspace kernel.
 	Kernel bool `json:"kernel"`

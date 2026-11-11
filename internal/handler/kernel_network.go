@@ -164,7 +164,7 @@ func (h *NetworkModelHandler) DevicePlan(c *gin.Context) {
 
 // NodeNetwork godoc
 // @Summary A device's network settings
-// @Description The interface the network model's automatic egresses of the node leave by (interface; source_v4 and gateway_v4, source_v6 and gateway_v6 on it; empty: the default route) and the port its automatic hop ingress listens on (hop_port; 0: 24443). A node behind NAT is reached at the NAT entry (GET /api/v4/kernel/nodes/{id}/entries) whose port map covers hop_port. detected lists the interfaces the node's Agent last reported (name, addresses_v4, addresses_v6, gateway_v4, gateway_v6; empty before an Agent that reports them), detected_at when. 404 for an unknown node.
+// @Description The interface the network model's automatic egresses of the node leave by (interface; source_v4 and gateway_v4, source_v6 and gateway_v6 on it; empty: the default route) where the node is, for the topology map (region, a place key of up to 32 lowercase letters, digits or dashes; empty when unset), and the port its automatic hop ingress listens on (hop_port; 0: 24443). A node behind NAT is reached at the NAT entry (GET /api/v4/kernel/nodes/{id}/entries) whose port map covers hop_port. detected lists the interfaces the node's Agent last reported (name, addresses_v4, addresses_v6, gateway_v4, gateway_v6; empty before an Agent that reports them), detected_at when. 404 for an unknown node.
 // @Tags Kernel
 // @Produce json
 // @Security BearerAuth
