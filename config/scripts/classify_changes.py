@@ -54,7 +54,8 @@ WORKFLOW_FULL_JOBS = frozenset({"changes", "tag-gate"})
 DOC_PATTERNS = ("docs/*", "*.md", "LICENSE*")
 
 CLASS_PATTERNS: dict[str, tuple[str, ...]] = {
-    "web": ("web/*",),
+    # The web unit tests read the combinations the kernel runs.
+    "web": ("web/*", "contracts/agent/v1/protocol-combinations.json"),
     "db": (
         "internal/model/*",
         "internal/database/*",
@@ -297,6 +298,7 @@ def self_test() -> None:
     workflow = WORKFLOW
     check(["docs/RELEASING.md", "CHANGELOG.md"], set())
     check(["web/src/App.vue"], {"code", "web"})
+    check(["contracts/agent/v1/protocol-combinations.json"], {"code", "web", "agent"})
     check(["internal/handler/ticket.go"], {"code", "db"})
     check(["internal/middleware/audit_log.go"], {"code"})
     check(["packages/plan/native/plans.go"], {"code", "db", "packages"})

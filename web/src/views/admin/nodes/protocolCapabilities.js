@@ -1,12 +1,15 @@
 // What each node protocol type runs on: its transports and TLS modes
 // (0 none, 1 TLS, 2 Reality). Shadowsocks has no stream transport and no TLS;
-// Hysteria2 and TUIC are QUIC on UDP and always TLS; WireGuard and iWAN are
-// UDP; Snell is TCP with its own encryption. Control checks the same rules
-// again (service.validateProtocolTransport).
+// Trojan is always TLS on the node; Hysteria2 and TUIC are QUIC on UDP and
+// always TLS; WireGuard and iWAN are UDP; Snell is TCP with its own
+// encryption. Control checks the same rules again
+// (service.validateProtocolTransport). Everything offered here must be listed
+// in contracts/agent/v1/protocol-combinations.json, the combinations the
+// Agent's kernel runs (protocolCombinations.test.js).
 
 export const STREAM_TRANSPORTS = Object.freeze(['tcp', 'ws', 'grpc', 'httpupgrade'])
-// Reality runs on tcp and grpc only.
-export const REALITY_TRANSPORTS = Object.freeze(['tcp', 'grpc'])
+// Reality runs directly on tcp only.
+export const REALITY_TRANSPORTS = Object.freeze(['tcp'])
 // Transports the old editor offered and stored protocols may still carry:
 // kept when loaded, never offered for a new value. The kernel runs neither.
 export const LEGACY_TRANSPORTS = Object.freeze(['quic', 'h2'])
@@ -14,7 +17,7 @@ export const LEGACY_TRANSPORTS = Object.freeze(['quic', 'h2'])
 export const PROTOCOL_CAPABILITIES = Object.freeze({
   vless: { transports: STREAM_TRANSPORTS, tls: [0, 1, 2] },
   vmess: { transports: STREAM_TRANSPORTS, tls: [0, 1] },
-  trojan: { transports: STREAM_TRANSPORTS, tls: [0, 1, 2] },
+  trojan: { transports: STREAM_TRANSPORTS, tls: [1] },
   shadowsocks: { transports: ['tcp'], tls: [0] },
   hysteria2: { transports: ['udp'], tls: [1] },
   tuic: { transports: ['udp'], tls: [1] },
