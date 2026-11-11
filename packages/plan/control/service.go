@@ -19,12 +19,10 @@ type planBridge interface {
 }
 
 // newPlanService returns the plan host's router. The routes in planRoutes
-// have a native handler on the adopted v2_plan and v2_event tables; such a
-// route serves natively once the kernel sets its mode, and falls back to the
-// legacy handler otherwise. The assignment calls the kernel's
-// KernelSubscriber over the bridge connection (local socket or module
-// listener); a bridge without one leaves it legacy. The routes in
-// bridgedRoutes always relay to the legacy handler.
+// have a native handler on the adopted v2_plan and v2_event tables and serve
+// natively from the start: the kernel keeps no legacy handler for them. The
+// assignment calls the kernel's KernelSubscriber over the bridge connection
+// (local socket or module listener).
 func newPlanService(bridge planBridge, leaseID string) (*pluginhostsdk.Router, error) {
 	storage := packagestoresdk.SharedOpener(bridge)
 	service := &native.Service{Open: func(ctx context.Context) (*gorm.DB, error) {
@@ -46,7 +44,7 @@ func newPlanService(bridge planBridge, leaseID string) (*pluginhostsdk.Router, e
 			_, bridgedRoute := bridgedRoutes[routeID]
 			return nativeRoute || bridgedRoute
 		},
-		Native: service.Handlers(),
+		Native: service.Handlers(), NativeOnly: true,
 	})
 }
 
@@ -62,7 +60,6 @@ var planRoutes = map[string]struct{}{
 }
 
 // bridgedRoutes are the package's compatibility routes without a native
-// handler; they always relay to the kernel's legacy handler. There are
-// none left: the speed-limit routes are Flux forward limits, whose rows name
+// handler. There are none left: the speed-limit routes are Flux forward limits, whose rows name
 // forward tunnels, and moved to the forward package.
 var bridgedRoutes = map[string]struct{}{}

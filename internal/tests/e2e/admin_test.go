@@ -339,37 +339,6 @@ func (s *AdminE2ETestSuite) TestCreateNode() {
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 }
 
-// TestGetPlans 测试获取套餐列表
-func (s *AdminE2ETestSuite) TestGetPlans() {
-	req, _ := http.NewRequest("GET", "/api/v2/admin/plans", nil)
-	req.Header.Set("Authorization", "Bearer "+s.adminToken)
-
-	w := httptest.NewRecorder()
-	s.router.ServeHTTP(w, req)
-
-	assert.Equal(s.T(), http.StatusOK, w.Code)
-}
-
-// TestCreatePlan 测试创建套餐
-func (s *AdminE2ETestSuite) TestCreatePlan() {
-	body := map[string]any{
-		"name":            "New Test Plan",
-		"transfer_enable": 107374182400,
-		"show":            1,
-		"renew":           1,
-	}
-	jsonBody, _ := json.Marshal(body)
-
-	req, _ := http.NewRequest("POST", "/api/v2/admin/plans", bytes.NewReader(jsonBody))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+s.adminToken)
-
-	w := httptest.NewRecorder()
-	s.router.ServeHTTP(w, req)
-
-	assert.Equal(s.T(), http.StatusOK, w.Code)
-}
-
 // TestTrafficHourlyEndpoints verifies the real admin HTTP routes that feed
 // /admin/traffic-hourly, including include_zero_users and legacy rate=0 logs.
 func (s *AdminE2ETestSuite) TestTrafficHourlyEndpoints() {

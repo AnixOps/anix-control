@@ -8,8 +8,8 @@ import (
 )
 
 // newWireGuardService returns the wireguard host's router. The package's one
-// route has a native handler and needs no storage; it serves natively once
-// the kernel sets its mode, and falls back to the legacy handler otherwise.
+// route has a native handler and needs no storage; it serves natively from
+// the start: the kernel keeps no legacy handler for it.
 func newWireGuardService(bridge pluginhostsdk.RouterBridge, leaseID string) (*pluginhostsdk.Router, error) {
 	service := &native.Service{}
 	return pluginhostsdk.NewRouter(pluginhostsdk.RouterConfig{
@@ -19,7 +19,7 @@ func newWireGuardService(bridge pluginhostsdk.RouterBridge, leaseID string) (*pl
 			_, bridgedRoute := bridgedRoutes[routeID]
 			return nativeRoute || bridgedRoute
 		},
-		Native: service.Handlers(),
+		Native: service.Handlers(), NativeOnly: true,
 	})
 }
 

@@ -775,27 +775,6 @@ func (s *PlanServiceTestSuite) SetupTest() {
 	s.svc = NewPlanService()
 }
 
-func (s *PlanServiceTestSuite) TestCreatePlan() {
-	groupID := uint(1)
-	speedLimit := int64(100000000)
-	deviceLimit := 5
-	monthPrice := int64(1000)
-
-	plan := &model.Plan{
-		Name:           "Test Plan",
-		GroupID:        groupID,
-		TransferEnable: 100, // 100GB
-		SpeedLimit:     &speedLimit,
-		DeviceLimit:    &deviceLimit,
-		MonthPrice:     &monthPrice,
-		Show:           1,
-	}
-
-	err := s.svc.Create(plan)
-	assert.NoError(s.T(), err)
-	assert.NotZero(s.T(), plan.ID)
-}
-
 func (s *PlanServiceTestSuite) TestGetPlan() {
 	monthPrice := int64(2000)
 	plan := &model.Plan{
@@ -805,7 +784,7 @@ func (s *PlanServiceTestSuite) TestGetPlan() {
 		MonthPrice:     &monthPrice,
 		Show:           1,
 	}
-	assert.NoError(s.T(), s.svc.Create(plan))
+	assert.NoError(s.T(), database.Get().Create(plan).Error)
 	found, err := s.svc.Get(plan.ID)
 	assert.NoError(s.T(), err)
 	assert.Equal(s.T(), "Get Test Plan", found.Name)
@@ -817,164 +796,6 @@ func (s *PlanServiceTestSuite) TestGetPlan_NotFound() {
 	assert.ErrorIs(s.T(), err, ErrPlanNotFound)
 }
 
-func (s *PlanServiceTestSuite) TestUpdatePlan() {
-	monthPrice := int64(3000)
-	plan := &model.Plan{
-		Name:           "Update Test Plan",
-		GroupID:        1,
-		TransferEnable: 50,
-		MonthPrice:     &monthPrice,
-		Show:           1,
-	}
-	assert.NoError(s.T(), s.svc.Create(plan))
-	plan.Name = "Updated Plan"
-	plan.TransferEnable = 100
-	err := s.svc.Update(plan)
-	assert.NoError(s.T(), err)
-
-	found, _ := s.svc.Get(plan.ID)
-	assert.Equal(s.T(), "Updated Plan", found.Name)
-	assert.Equal(s.T(), int64(100), found.TransferEnable)
-}
-
-func (s *PlanServiceTestSuite) TestUpdatePlan_NotFound() {
-	plan := &model.Plan{
-		ID:             99999,
-		Name:           "Missing Plan",
-		GroupID:        1,
-		TransferEnable: 50,
-		Show:           1,
-	}
-
-	err := s.svc.Update(plan)
-	assert.ErrorIs(s.T(), err, ErrPlanNotFound)
-
-	_, err = s.svc.Get(plan.ID)
-	assert.ErrorIs(s.T(), err, ErrPlanNotFound)
-}
-
-func (s *PlanServiceTestSuite) TestDeletePlan() {
-	monthPrice := int64(4000)
-	plan := &model.Plan{
-		Name:           "Delete Test Plan",
-		GroupID:        1,
-		TransferEnable: 50,
-		MonthPrice:     &monthPrice,
-		Show:           1,
-	}
-	assert.NoError(s.T(), s.svc.Create(plan))
-	err := s.svc.Delete(plan.ID)
-	assert.NoError(s.T(), err)
-
-	_, err = s.svc.Get(plan.ID)
-	assert.ErrorIs(s.T(), err, ErrPlanNotFound)
-}
-
-func (s *PlanServiceTestSuite) TestDeletePlan_NotFound() {
-	err := s.svc.Delete(99999)
-	assert.ErrorIs(s.T(), err, ErrPlanNotFound)
-}
-
-func (s *PlanServiceTestSuite) TestListPlans() {
-	monthPrice := int64(5000)
-	for i := 1; i <= 3; i++ {
-		plan := &model.Plan{
-			Name:           "List Test Plan",
-			GroupID:        1,
-			TransferEnable: int64(i * 50),
-			MonthPrice:     &monthPrice,
-			Show:           1,
-		}
-		assert.NoError(s.T(), s.svc.Create(plan))
-	}
-
-	list, err := s.svc.List()
-	assert.NoError(s.T(), err)
-	assert.GreaterOrEqual(s.T(), len(list), 3)
-}
-
-func (s *PlanServiceTestSuite) TestAssignToUser() {
-	// 创建套餐
-	speedLimit := int64(100000000)
-	deviceLimit := 5
-	monthPrice := int64(1000)
-	groupID := uint(1)
-	plan := &model.Plan{
-		Name:           "Assign Test Plan",
-		GroupID:        groupID,
-		TransferEnable: 100,
-		SpeedLimit:     &speedLimit,
-		DeviceLimit:    &deviceLimit,
-		MonthPrice:     &monthPrice,
-		Show:           1,
-	}
-	assert.NoError(s.T(), s.svc.Create(plan))
-	// 创建用户
-	user := &model.User{
-		Email:          "planuser@example.com",
-		Password:       "hash",
-		Token:          "plan-token",
-		UUID:           "plan-uuid",
-		TransferEnable: 10737418240,
-	}
-	database.Get().Create(user)
-
-	// 分配套餐
-	expireAt := time.Now().Add(30 * 24 * time.Hour).Unix()
-	requestID := PlanAssignmentRequestID(plan.ID, user.ID, &expireAt, "req-1")
-	err := s.svc.AssignToUser(plan.ID, user.ID, &expireAt, requestID)
-	assert.NoError(s.T(), err)
-	var recorded model.SubscriberRequest
-	assert.NoError(s.T(), database.Get().Where("request_id = ?", requestID).Take(&recorded).Error)
-	assert.Equal(s.T(), user.ID, recorded.UserID)
-
-	// A retry of the same request is applied once: traffic used since then
-	// is kept.
-	assert.NoError(s.T(), database.Get().Model(&model.User{}).Where("id = ?", user.ID).Update("u", 5).Error)
-	assert.NoError(s.T(), s.svc.AssignToUser(plan.ID, user.ID, &expireAt, requestID))
-	var retried model.User
-	assert.NoError(s.T(), database.Get().First(&retried, user.ID).Error)
-	assert.Equal(s.T(), int64(5), retried.U)
-	var events int64
-	assert.NoError(s.T(), database.Get().Model(&model.Event{}).Where("type = ? AND payload LIKE ?", "plan.assigned", fmt.Sprintf(`%%"user_id":%d%%`, user.ID)).Count(&events).Error)
-	assert.Equal(s.T(), int64(2), events, "every answered request writes its event")
-
-	// 验证用户更新
-	var updatedUser model.User
-	database.Get().First(&updatedUser, user.ID)
-	assert.Equal(s.T(), plan.ID, *updatedUser.PlanID)
-	assert.Equal(s.T(), int64(100*1073741824), updatedUser.TransferEnable)
-}
-
-func (s *PlanServiceTestSuite) TestAssignToUser_PlanNotFound() {
-	user := &model.User{
-		Email:          "missing-plan-user@example.com",
-		Password:       "hash",
-		Token:          "missing-plan-token",
-		UUID:           "missing-plan-uuid",
-		TransferEnable: 10737418240,
-	}
-	assert.NoError(s.T(), database.Get().Create(user).Error)
-
-	err := s.svc.AssignToUser(99999, user.ID, nil, "")
-	assert.ErrorIs(s.T(), err, ErrPlanNotFound)
-}
-
-func (s *PlanServiceTestSuite) TestAssignToUser_UserNotFound() {
-	monthPrice := int64(1000)
-	plan := &model.Plan{
-		Name:           "Missing User Assign Plan",
-		GroupID:        1,
-		TransferEnable: 100,
-		MonthPrice:     &monthPrice,
-		Show:           1,
-	}
-	assert.NoError(s.T(), s.svc.Create(plan))
-
-	err := s.svc.AssignToUser(plan.ID, 99999, nil, "")
-	assert.ErrorIs(s.T(), err, ErrPlanUserNotFound)
-}
-
 func TestPlanService(t *testing.T) {
 	suite.Run(t, new(PlanServiceTestSuite))
 }
@@ -984,7 +805,6 @@ type StatsServiceTestSuite struct {
 	ServiceTestSuite
 	svc     *StatsService
 	authSvc *AuthService
-	planSvc *PlanService
 }
 
 func (s *StatsServiceTestSuite) SetupSuite() {
@@ -1001,7 +821,6 @@ func (s *StatsServiceTestSuite) SetupTest() {
 	statsServiceInstance = nil
 	s.svc = NewStatsService()
 	s.authSvc = NewAuthService()
-	s.planSvc = NewPlanService()
 }
 
 func (s *StatsServiceTestSuite) TestGetDashboardStats() {
@@ -1050,10 +869,10 @@ func (s *StatsServiceTestSuite) TestGetUserSubscription() {
 		MonthPrice:     &monthPrice,
 		Show:           1,
 	}
-	assert.NoError(s.T(), s.planSvc.Create(plan))
+	assert.NoError(s.T(), database.Get().Create(plan).Error)
 	// 分配套餐给用户
 	expireAt := time.Now().Add(30 * 24 * time.Hour).Unix()
-	assert.NoError(s.T(), s.planSvc.AssignToUser(plan.ID, user.ID, &expireAt, ""))
+	assert.NoError(s.T(), database.Get().Model(user).Updates(map[string]any{"plan_id": plan.ID, "expired_at": expireAt}).Error)
 	sub, err := s.svc.GetUserSubscription(user.ID, false)
 	assert.NoError(s.T(), err)
 	assert.NotNil(s.T(), sub)

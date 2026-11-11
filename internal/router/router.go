@@ -162,9 +162,8 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			auth.POST("/user/ticket/:id/reply", v2PackageGateway.Serve)
 			auth.POST("/user/ticket/:id/close", v2PackageGateway.Serve)
 
-			// 套餐接口
-			planHandler := handler.NewUserPlanHandler()
-			auth.GET("/user/plan", registeredPackageRoute(v2PackageGateway.Serve, "plan", "plan.user.plan.get", planHandler.GetPlans))
+			// 套餐接口（plan 包原生实现，内核无 legacy handler）
+			auth.GET("/user/plan", v2PackageGateway.Serve)
 
 			// 优惠券接口
 
@@ -236,7 +235,7 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			admin.PUT("/nodes/:id/protocols/:protocol_id", registeredPackageRoute(v2PackageGateway.Serve, "protocol-runtime", "protocol.admin.nodes.id.protocols.protocol_id.put", nodeHandler.UpdateProtocol))
 			admin.DELETE("/nodes/:id/protocols/:protocol_id", registeredPackageRoute(v2PackageGateway.Serve, "protocol-runtime", "protocol.admin.nodes.id.protocols.protocol_id.delete", nodeHandler.DeleteProtocol))
 			admin.GET("/protocol-templates", registeredPackageRoute(v2PackageGateway.Serve, "protocol-runtime", "protocol.admin.protocol_templates.get", nodeHandler.GetProtocolTemplates))
-			admin.POST("/wireguard/keypair", registeredPackageRoute(v2PackageGateway.Serve, "wireguard", "wireguard.admin.wireguard.keypair.post", nodeHandler.GenerateWireGuardKeypair))
+			admin.POST("/wireguard/keypair", v2PackageGateway.Serve)
 
 			// 订阅分组和模板管理
 			subAdmin := handler.NewSubscriptionAdminHandler()
@@ -275,12 +274,12 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			admin.GET("/subscription/stats", registeredPackageRoute(v2PackageGateway.Serve, "subscription", "subscription.admin.subscription.stats.get", subAdmin.GetGroupStats))
 
 			// 套餐管理
-			admin.GET("/plans", registeredPackageRoute(v2PackageGateway.Serve, "plan", "plan.admin.plans.get", adminHandler.GetPlans))
-			admin.POST("/plans", registeredPackageRoute(v2PackageGateway.Serve, "plan", "plan.admin.plans.post", adminHandler.CreatePlan))
-			admin.GET("/plans/:id", registeredPackageRoute(v2PackageGateway.Serve, "plan", "plan.admin.plans.id.get", adminHandler.GetPlan))
-			admin.PUT("/plans/:id", registeredPackageRoute(v2PackageGateway.Serve, "plan", "plan.admin.plans.id.put", adminHandler.UpdatePlan))
-			admin.DELETE("/plans/:id", registeredPackageRoute(v2PackageGateway.Serve, "plan", "plan.admin.plans.id.delete", adminHandler.DeletePlan))
-			admin.POST("/plans/:id/assign", registeredPackageRoute(v2PackageGateway.Serve, "plan", "plan.admin.plans.id.assign.post", adminHandler.AssignPlanToUser))
+			admin.GET("/plans", v2PackageGateway.Serve)
+			admin.POST("/plans", v2PackageGateway.Serve)
+			admin.GET("/plans/:id", v2PackageGateway.Serve)
+			admin.PUT("/plans/:id", v2PackageGateway.Serve)
+			admin.DELETE("/plans/:id", v2PackageGateway.Serve)
+			admin.POST("/plans/:id/assign", v2PackageGateway.Serve)
 
 			// 工单管理（ticket 包原生实现）
 			admin.GET("/ticket", v2PackageGateway.Serve)

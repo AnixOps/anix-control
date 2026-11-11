@@ -14,8 +14,7 @@ import (
 
 // The user's plan list holds only plans with show = 1, and the admin form
 // never sent a show value: a plan created without one is on sale, an
-// explicit show keeps its value (as the kernel's handler does,
-// internal/tests/plancompat compares the two).
+// explicit show keeps its value.
 func TestAdminCreateIsOnSaleUnlessShowIsGiven(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "plans.db")), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	require.NoError(t, err)

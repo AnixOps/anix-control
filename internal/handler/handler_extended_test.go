@@ -2486,17 +2486,6 @@ func (s *AdminExtendedTestSuite) TestUpdateUser_NotFound() {
 	assertPanelTestError(s.T(), w, "用户不存在")
 }
 
-func (s *AdminExtendedTestSuite) TestGetPlans_WithGroupId() {
-	handler := NewAdminHandler()
-	s.router.GET("/admin/plans", handler.GetPlans)
-
-	req, _ := http.NewRequest("GET", "/admin/plans?group_id=1", nil)
-	w := httptest.NewRecorder()
-	s.router.ServeHTTP(w, req)
-
-	assert.Equal(s.T(), http.StatusOK, w.Code)
-}
-
 func (s *AdminExtendedTestSuite) TestGetDashboard() {
 	handler := NewAdminHandler()
 	s.router.GET("/admin/dashboard", handler.GetDashboard)
@@ -2506,119 +2495,6 @@ func (s *AdminExtendedTestSuite) TestGetDashboard() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
-}
-
-func (s *AdminExtendedTestSuite) TestCreatePlan_InvalidBody() {
-	handler := NewAdminHandler()
-	s.router.POST("/admin/plans", handler.CreatePlan)
-
-	req, _ := http.NewRequest("POST", "/admin/plans", strings.NewReader("invalid"))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	s.router.ServeHTTP(w, req)
-
-	assertPanelTestError(s.T(), w, "参数错误")
-}
-
-func (s *AdminExtendedTestSuite) TestUpdatePlan_Success() {
-	handler := NewAdminHandler()
-	s.router.PUT("/admin/plans/:id", handler.UpdatePlan)
-
-	body := map[string]any{
-		"name":            "Updated Plan",
-		"transfer_enable": 21474836480,
-	}
-	jsonBody, _ := json.Marshal(body)
-
-	req, _ := http.NewRequest("PUT", "/admin/plans/"+strconv.FormatUint(uint64(s.testPlan.ID), 10), bytes.NewReader(jsonBody))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	s.router.ServeHTTP(w, req)
-
-	assert.Equal(s.T(), http.StatusOK, w.Code)
-}
-
-func (s *AdminExtendedTestSuite) TestUpdatePlan_NotFound() {
-	handler := NewAdminHandler()
-	s.router.PUT("/admin/plans/:id", handler.UpdatePlan)
-
-	body := map[string]any{
-		"name": "Updated Plan",
-	}
-	jsonBody, _ := json.Marshal(body)
-
-	req, _ := http.NewRequest("PUT", "/admin/plans/99999", bytes.NewReader(jsonBody))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	s.router.ServeHTTP(w, req)
-
-	assertPanelTestError(s.T(), w, "套餐不存在")
-}
-
-func (s *AdminExtendedTestSuite) TestDeletePlan_Success() {
-	plan := &model.Plan{
-		Name:           "Plan to Delete",
-		TransferEnable: 1073741824,
-	}
-	s.db.Create(plan)
-
-	handler := NewAdminHandler()
-	s.router.DELETE("/admin/plans/:id", handler.DeletePlan)
-
-	req, _ := http.NewRequest("DELETE", "/admin/plans/"+strconv.FormatUint(uint64(plan.ID), 10), nil)
-	w := httptest.NewRecorder()
-	s.router.ServeHTTP(w, req)
-
-	assert.Equal(s.T(), http.StatusOK, w.Code)
-}
-
-func (s *AdminExtendedTestSuite) TestDeletePlan_InvalidID() {
-	handler := NewAdminHandler()
-	s.router.DELETE("/admin/plans/:id", handler.DeletePlan)
-
-	req, _ := http.NewRequest("DELETE", "/admin/plans/invalid", nil)
-	w := httptest.NewRecorder()
-	s.router.ServeHTTP(w, req)
-
-	assertPanelTestError(s.T(), w, "ID")
-}
-
-func (s *AdminExtendedTestSuite) TestAssignPlanToUser_Success() {
-	// Create a new user without plan
-	user := &model.User{
-		Email:          "assign-plan@example.com",
-		Token:          "assign-plan-token",
-		UUID:           "assign-plan-uuid",
-		TransferEnable: 1073741824,
-	}
-	s.db.Create(user)
-
-	handler := NewAdminHandler()
-	s.router.POST("/admin/plans/:id/assign", handler.AssignPlanToUser)
-
-	body := map[string]any{
-		"user_id": user.ID,
-	}
-	jsonBody, _ := json.Marshal(body)
-
-	req, _ := http.NewRequest("POST", "/admin/plans/"+strconv.FormatUint(uint64(s.testPlan.ID), 10)+"/assign", bytes.NewReader(jsonBody))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	s.router.ServeHTTP(w, req)
-
-	assert.Equal(s.T(), http.StatusOK, w.Code)
-}
-
-func (s *AdminExtendedTestSuite) TestAssignPlanToUser_InvalidBody() {
-	handler := NewAdminHandler()
-	s.router.POST("/admin/plans/:id/assign", handler.AssignPlanToUser)
-
-	req, _ := http.NewRequest("POST", "/admin/plans/"+strconv.FormatUint(uint64(s.testPlan.ID), 10)+"/assign", strings.NewReader("invalid"))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	s.router.ServeHTTP(w, req)
-
-	assertPanelTestError(s.T(), w, "参数错误")
 }
 
 func TestAdminExtended(t *testing.T) {
