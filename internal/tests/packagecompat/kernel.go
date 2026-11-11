@@ -62,6 +62,10 @@ func RunKernelRead(t *testing.T, route KernelRoute, c Case) {
 	t.Helper()
 	forEachBackend(t, c.Name, func(t *testing.T, open opener) {
 		legacy, native := runKernel(t, open, route, c)
+		if route.Legacy == nil {
+			requireGolden(t, c, native)
+			return
+		}
 		requireSame(t, c, legacy, native)
 	})
 }
@@ -72,6 +76,10 @@ func RunKernelWrite(t *testing.T, route KernelRoute, c Case) {
 	require.NotNil(t, c.Snapshot, "RunKernelWrite needs Case.Snapshot")
 	forEachBackend(t, c.Name, func(t *testing.T, open opener) {
 		legacy, native := runKernel(t, open, route, c)
+		if route.Legacy == nil {
+			requireGolden(t, c, native)
+			return
+		}
 		requireSame(t, c, legacy, native)
 		legacyState, err := json.Marshal(legacy.State)
 		require.NoError(t, err)
@@ -85,29 +93,32 @@ func runKernel(t *testing.T, open opener, route KernelRoute, c Case) (Result, Re
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 
-	legacyConfig, _, migrated := open(t, "legacy", route.Models)
 	database.Reset()
-	require.NoError(t, database.Init(legacyConfig))
 	t.Cleanup(func() {
 		_ = database.Close()
 		database.Reset()
 	})
-	legacyDB := database.GetDB()
-	prepare(t, legacyDB, route.Route, c, migrated)
-	legacy := serve(t, route.Method, route.Pattern, c, func(ctx *gin.Context) {
-		ctx.Set("user_id", c.Principal.ActorID)
-		ctx.Set("is_admin", c.Principal.Admin)
-		route.Legacy(ctx)
-	})
-	if c.Snapshot != nil {
-		legacy.State = c.Snapshot(t, legacyDB)
+	var legacy Result
+	if route.Legacy != nil {
+		legacyConfig, _, migrated := open(t, "legacy", route.Models)
+		require.NoError(t, database.Init(legacyConfig))
+		legacyDB := database.GetDB()
+		prepare(t, legacyDB, route.Route, c, migrated)
+		legacy = serve(t, route.Method, route.Pattern, c, func(ctx *gin.Context) {
+			ctx.Set("user_id", c.Principal.ActorID)
+			ctx.Set("is_admin", c.Principal.Admin)
+			route.Legacy(ctx)
+		})
+		if c.Snapshot != nil {
+			legacy.State = c.Snapshot(t, legacyDB)
+		}
+		_ = database.Close()
+		database.Reset()
 	}
 
 	// The kernel's handlers and services read the global database: on the
 	// native side it is the native database.
 	nativeConfig, nativeDB, migrated := open(t, "native", route.Models)
-	_ = database.Close()
-	database.Reset()
 	require.NoError(t, database.Init(nativeConfig))
 	prepare(t, nativeDB, route.Route, c, migrated)
 	kernel := StartKernel(t, KernelOptions{
@@ -132,7 +143,9 @@ func runKernel(t *testing.T, open opener, route KernelRoute, c Case) (Result, Re
 // KernelHostRoute is one route of a KernelOptions host.
 type KernelHostRoute struct {
 	Method, Pattern, RouteID string
-	// Legacy is the kernel's handler, which the host relays to.
+	// Legacy is the kernel's handler, which the host relays to; nil for a
+	// route the kernel has no handler for, which the host serves natively
+	// only.
 	Legacy gin.HandlerFunc
 	// Native builds the package's handler with the host's KernelNodeOps
 	// client.
@@ -208,8 +221,14 @@ func StartKernel(t testing.TB, opts KernelOptions) *Kernel {
 
 	operations := make([]packagebridge.Operation, 0, len(opts.Routes))
 	modes := map[string]string{}
+	flagged := map[string]struct{}{}
 	for _, route := range opts.Routes {
 		routeID, legacy := route.RouteID, route.Legacy
+		modes[routeID] = pluginhostsdk.RouteModeNative
+		if legacy == nil {
+			continue
+		}
+		flagged[routeID] = struct{}{}
 		operations = append(operations, packagebridge.Operation{PackageID: opts.PackageID, RouteID: routeID, Name: routeID,
 			Handler: packagebridge.NewHTTPAdapter(func(c *gin.Context) {
 				k.mu.Lock()
@@ -217,7 +236,6 @@ func StartKernel(t testing.TB, opts KernelOptions) *Kernel {
 				k.mu.Unlock()
 				legacy(c)
 			})})
-		modes[routeID] = pluginhostsdk.RouteModeNative
 	}
 	allowlist, err := packagebridge.NewAllowlistWithFallback(nil, operations...)
 	require.NoError(t, err)
@@ -243,7 +261,8 @@ func StartKernel(t testing.TB, opts KernelOptions) *Kernel {
 			return handler(ctx, request)
 		}
 	}
-	router, err := pluginhostsdk.NewRouter(pluginhostsdk.RouterConfig{PackageID: opts.PackageID, LeaseID: "lease", Bridge: client, Native: native})
+	router, err := pluginhostsdk.NewRouter(pluginhostsdk.RouterConfig{PackageID: opts.PackageID, LeaseID: "lease", Bridge: client, Native: native,
+		NativeOnly: true, Flagged: flagged})
 	require.NoError(t, err)
 	router.Refresh(context.Background())
 	k.router = router

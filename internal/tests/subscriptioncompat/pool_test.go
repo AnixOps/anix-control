@@ -5,11 +5,9 @@ import (
 	"testing"
 
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
-	"github.com/AnixOps/anix-control/v5/internal/handler"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/tests/packagecompat"
 	"github.com/AnixOps/anix-control/v5/packages/subscription/native"
-	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )
@@ -20,13 +18,10 @@ import (
 // side's lease is what the kernel grants the package's manifest
 // (packagecompat.Lease), so these cases also prove the grant.
 
-// poolRoute is a protocol pool route: both databases have the node
-// credential split's tables.
-func poolRoute(method, pattern, routeID string, legacy func(*handler.SubscriptionAdminHandler, *gin.Context)) packagecompat.Route {
+// poolRoute is a protocol pool route: the database has the node credential
+// split's tables.
+func poolRoute(method, pattern, routeID string) packagecompat.Route {
 	r := route(method, pattern, routeID)
-	// The legacy handler is built per request: its service keeps the
-	// database it was built with, which the harness sets up per case.
-	r.Legacy = func(c *gin.Context) { legacy(handler.NewSubscriptionAdminHandler(), c) }
 	r.Models = append(r.Models, packagecompat.NodeSplitModels()...)
 	r.Native = func(db *gorm.DB) pluginhostsdk.NativeHandler {
 		return poolService(db).Handlers()[routeID]
@@ -72,10 +67,9 @@ func seedPool(t testing.TB, db *gorm.DB) {
 	syncSequences(t, db)
 }
 
-func TestGroupProtocolsParity(t *testing.T) {
+func TestGroupProtocols(t *testing.T) {
 	path := func(id string) string { return "/api/v2/admin/subscription/groups/" + id + "/protocols" }
-	read(t, poolRoute("GET", "/api/v2/admin/subscription/groups/:id/protocols", native.GroupProtocolsRouteID,
-		(*handler.SubscriptionAdminHandler).GetGroupProtocols),
+	read(t, poolRoute("GET", "/api/v2/admin/subscription/groups/:id/protocols", native.GroupProtocolsRouteID),
 		[]packagecompat.Case{
 			{Name: "secrets and raw configuration redacted", Path: path("1"), Seed: seedPool},
 			{Name: "a hidden protocol is linked too", Path: path("2"), Seed: seedPool},
@@ -87,9 +81,9 @@ func TestGroupProtocolsParity(t *testing.T) {
 		})
 }
 
-func TestAvailableProtocolsParity(t *testing.T) {
+func TestAvailableProtocols(t *testing.T) {
 	path := "/api/v2/admin/subscription/protocols/available"
-	read(t, poolRoute("GET", path, native.AvailableProtocolsRouteID, (*handler.SubscriptionAdminHandler).GetAvailableProtocols),
+	read(t, poolRoute("GET", path, native.AvailableProtocolsRouteID),
 		[]packagecompat.Case{
 			{Name: "shown protocols by node and sort, with nodes and groups", Path: path, Seed: seedPool},
 			{Name: "no protocols", Path: path, Seed: func(t testing.TB, db *gorm.DB) {

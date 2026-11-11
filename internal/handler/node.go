@@ -6,7 +6,6 @@ import (
 	"strconv"
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
-	"github.com/AnixOps/anix-control/sdk/v2compat"
 	"github.com/AnixOps/anix-control/v5/internal/database"
 	"github.com/AnixOps/anix-control/v5/internal/kernelnodeops"
 	"github.com/AnixOps/anix-control/v5/internal/model"
@@ -31,98 +30,6 @@ func NewNodeHandler() *NodeHandler {
 }
 
 // ========== 管理员节点管理 ==========
-
-// GetNodes godoc
-// @Summary 获取节点列表
-// @Description 管理员获取节点列表，支持分页和筛选
-// @Tags 管理端-节点
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param page query int false "页码" default(1)
-// @Param page_size query int false "每页数量" default(20)
-// @Param search query string false "搜索关键词"
-// @Param status query int false "节点状态"
-// @Param group_id query int false "分组ID"
-// @Param sort query string false "排序字段: id, name, host, sort, created_at, last_check_at, cpu_usage, online_users; 缺省为管理员排序 (sort 升序, id 倒序)" Enums(id, name, host, sort, created_at, last_check_at, cpu_usage, online_users)
-// @Param order query string false "排序方向, 仅与 sort 同用" Enums(asc, desc) default(asc)
-// @Success 200 {object} map[string]any
-// @Failure 400 {object} map[string]any
-// @Failure 500 {object} map[string]any
-// @Router /admin/nodes [get]
-func (h *NodeHandler) GetNodes(c *gin.Context) {
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
-	page, pageSize = ClampPagination(page, pageSize)
-	search := c.Query("search")
-	orderBy, err := v2compat.ParseListSort(c.Query("sort"), c.Query("order"), service.NodeSortColumns, service.NodeSortTiebreaker)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
-		return
-	}
-
-	var status *model.NodeStatus
-	if s := c.Query("status"); s != "" {
-		st, _ := strconv.Atoi(s)
-		ns := model.NodeStatus(st)
-		status = &ns
-	}
-
-	var groupID *uint
-	if g := c.Query("group_id"); g != "" {
-		gid, _ := strconv.ParseUint(g, 10, 32)
-		gidVal := uint(gid)
-		groupID = &gidVal
-	}
-
-	result, err := h.nodeService.GetNodes(service.NodeListParams{
-		Page:     page,
-		PageSize: pageSize,
-		Status:   status,
-		GroupID:  groupID,
-		Search:   search,
-		OrderBy:  orderBy,
-	})
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "获取节点列表失败"})
-		return
-	}
-	// Protocol and raw configuration secrets read as the placeholder.
-	for i := range result.List {
-		service.RedactNode(&result.List[i])
-	}
-
-	panelSuccess(c, result)
-}
-
-// GetNode godoc
-// @Summary 获取节点详情
-// @Description 管理员获取指定节点的详细信息
-// @Tags 管理端-节点
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param id path int true "节点ID"
-// @Success 200 {object} map[string]any
-// @Failure 400 {object} map[string]any
-// @Failure 404 {object} map[string]any
-// @Router /admin/nodes/{id} [get]
-func (h *NodeHandler) GetNode(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "无效的节点ID"})
-		return
-	}
-
-	node, err := h.nodeService.GetNode(uint(id))
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"message": "节点不存在"})
-		return
-	}
-	service.RedactNode(node)
-
-	panelSuccess(c, node)
-}
 
 // CreateNode godoc
 // @Summary 创建节点
@@ -185,33 +92,6 @@ func (h *NodeHandler) UpdateNode(c *gin.Context) {
 	}
 
 	panelSuccess(c, gin.H{"message": "更新成功"})
-}
-
-// DeleteNode godoc
-// @Summary 删除节点
-// @Description 管理员删除指定节点
-// @Tags 管理端-节点
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param id path int true "节点ID"
-// @Success 200 {object} map[string]any
-// @Failure 400 {object} map[string]any
-// @Failure 500 {object} map[string]any
-// @Router /admin/nodes/{id} [delete]
-func (h *NodeHandler) DeleteNode(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "无效的节点ID"})
-		return
-	}
-
-	if err := h.nodeService.DeleteNode(uint(id)); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "删除失败"})
-		return
-	}
-
-	panelSuccess(c, gin.H{"message": "删除成功"})
 }
 
 // ========== 高级配置 (RawConfig) ==========

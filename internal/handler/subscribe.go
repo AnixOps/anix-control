@@ -267,42 +267,6 @@ func NewSubscriptionAdminHandler() *SubscriptionAdminHandler {
 	}
 }
 
-// GetGroupProtocols 获取属于该分组的物理节点协议
-// GET /api/v2/admin/subscription/groups/:id/protocols
-func (h *SubscriptionAdminHandler) GetGroupProtocols(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
-	if err != nil {
-		panelError(c, "ID 无效")
-		return
-	}
-
-	nodeService := service.NewNodeService()
-	protocols, err := nodeService.GetProtocolsByGroup(uint(id))
-	if err != nil {
-		panelError(c, err.Error())
-		return
-	}
-	// Secret settings and the nodes' raw configuration secrets read as the
-	// placeholder.
-	service.RedactNodeProtocols(protocols)
-
-	panelSuccess(c, protocols)
-}
-
-// GetAvailableProtocols 获取所有可用的物理节点协议 (Protocol Pool)
-// GET /api/v2/admin/subscription/protocols/available
-func (h *SubscriptionAdminHandler) GetAvailableProtocols(c *gin.Context) {
-	nodeService := service.NewNodeService()
-	protocols, err := nodeService.GetAllAvailableProtocols()
-	if err != nil {
-		panelError(c, err.Error())
-		return
-	}
-	service.RedactNodeProtocols(protocols)
-
-	panelSuccess(c, protocols)
-}
-
 // PreviewSubscription 预览订阅内容
 // POST /api/v2/admin/subscription/preview
 func (h *SubscriptionAdminHandler) PreviewSubscription(c *gin.Context) {

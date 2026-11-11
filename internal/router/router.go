@@ -212,13 +212,13 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 
 			// 节点管理 (新版)
 			nodeHandler := handler.NewNodeHandler()
-			admin.GET("/nodes", registeredPackageRoute(v2PackageGateway.Serve, "proxy-node", "proxy.admin.nodes.get", nodeHandler.GetNodes))
+			admin.GET("/nodes", v2PackageGateway.Serve)
 			admin.GET("/nodes/stats", v2PackageGateway.Serve)
 			admin.GET("/nodes/:id/logs", v2PackageGateway.Serve)
 			admin.POST("/nodes", registeredPackageRoute(v2PackageGateway.Serve, "proxy-node", "proxy.admin.nodes.post", nodeHandler.CreateNode))
-			admin.GET("/nodes/:id", registeredPackageRoute(v2PackageGateway.Serve, "proxy-node", "proxy.admin.nodes.id.get", nodeHandler.GetNode))
+			admin.GET("/nodes/:id", v2PackageGateway.Serve)
 			admin.PUT("/nodes/:id", registeredPackageRoute(v2PackageGateway.Serve, "proxy-node", "proxy.admin.nodes.id.put", nodeHandler.UpdateNode))
-			admin.DELETE("/nodes/:id", registeredPackageRoute(v2PackageGateway.Serve, "proxy-node", "proxy.admin.nodes.id.delete", nodeHandler.DeleteNode))
+			admin.DELETE("/nodes/:id", v2PackageGateway.Serve)
 			admin.POST("/nodes/:id/sync", registeredPackageRoute(v2PackageGateway.Serve, "protocol-runtime", "protocol.admin.nodes.id.sync.post", nodeHandler.SyncProtocol))
 			admin.GET("/nodes/:id/agent-control", registeredPackageRoute(v2PackageGateway.Serve, "protocol-runtime", "protocol.admin.nodes.id.agent_control.get", nodeHandler.GetAgentControlStatus))
 			admin.POST("/nodes/:id/agent-control/operations", registeredPackageRoute(v2PackageGateway.Serve, "protocol-runtime", "protocol.admin.nodes.id.agent_control.operations.post", nodeHandler.DispatchAgentControlOperation))
@@ -243,7 +243,7 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 
 			// 订阅模板
 			admin.GET("/subscription/groups/:id/templates", v2PackageGateway.Serve)
-			admin.GET("/subscription/groups/:id/protocols", registeredPackageRoute(v2PackageGateway.Serve, "subscription", "subscription.admin.subscription.groups.id.protocols.get", subAdmin.GetGroupProtocols))
+			admin.GET("/subscription/groups/:id/protocols", v2PackageGateway.Serve)
 			admin.POST("/subscription/groups/:id/protocols", v2PackageGateway.Serve)
 			admin.POST("/subscription/groups/:id/templates", v2PackageGateway.Serve)
 			admin.GET("/subscription/templates/:id", v2PackageGateway.Serve)
@@ -262,7 +262,7 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 
 			// 订阅工具接口
 			admin.GET("/subscription/protocols", v2PackageGateway.Serve)
-			admin.GET("/subscription/protocols/available", registeredPackageRoute(v2PackageGateway.Serve, "subscription", "subscription.admin.subscription.protocols.available.get", subAdmin.GetAvailableProtocols))
+			admin.GET("/subscription/protocols/available", v2PackageGateway.Serve)
 			admin.POST("/subscription/preview", registeredPackageRoute(v2PackageGateway.Serve, "subscription", "subscription.admin.subscription.preview.post", subAdmin.PreviewSubscription))
 			admin.GET("/subscription/stats", v2PackageGateway.Serve)
 

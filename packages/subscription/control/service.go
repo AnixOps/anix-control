@@ -27,14 +27,10 @@ type subscriptionBridge interface {
 // by it alone: the kernel has no handler for them. Deleting a group, granting
 // or taking away a user's group and the user's subscription summary call the
 // kernel's KernelSubscriber over the bridge connection (local socket or
-// module listener). The two routes in flaggedRoutes still follow the mode the
-// kernel sets: a group's protocols and the protocol pool read
-// kapi_node_protocol_public_v1 and kapi_node_public_v1, which the kernel
-// grants only once the node credential split of v2_node_protocol and v2_node
-// is finalized; until the lease grants both, they answer from the legacy
-// handler. The lease is taken when the host first opens its storage, so a
-// host started before the finalize keeps them legacy until it restarts. The
-// routes in bridgedRoutes always relay to the legacy handler.
+// module listener). A group's protocols and the protocol pool read
+// kapi_node_protocol_public_v1 and kapi_node_public_v1, the views of the
+// finalized v2_node_protocol and v2_node. The routes in bridgedRoutes relay
+// to the kernel's handler.
 func newSubscriptionService(bridge subscriptionBridge, leaseID string) (*pluginhostsdk.Router, error) {
 	storage := packagestoresdk.SharedOpener(bridge)
 	service := &native.Service{
@@ -62,7 +58,7 @@ func newSubscriptionService(bridge subscriptionBridge, leaseID string) (*pluginh
 			_, bridgedRoute := bridgedRoutes[routeID]
 			return nativeRoute || bridgedRoute
 		},
-		Native: service.Handlers(), NativeOnly: true, Flagged: flaggedRoutes,
+		Native: service.Handlers(), NativeOnly: true,
 	})
 }
 
@@ -91,13 +87,6 @@ var subscriptionRoutes = map[string]struct{}{
 	"subscription.user.subscription.get":                                   {},
 	"subscription.admin.subscription.groups.id.protocols.get":              {},
 	"subscription.admin.subscription.protocols.available.get":              {},
-}
-
-// flaggedRoutes are the native routes the kernel still has a legacy handler
-// for.
-var flaggedRoutes = map[string]struct{}{
-	native.GroupProtocolsRouteID:     {},
-	native.AvailableProtocolsRouteID: {},
 }
 
 // bridgedRoutes are the package's compatibility routes without a native

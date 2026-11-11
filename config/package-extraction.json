@@ -126,8 +126,8 @@
       "path": "/api/v2/admin/nodes",
       "package_id": "proxy-node",
       "route_id": "proxy.admin.nodes.get",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "POST",
@@ -142,16 +142,16 @@
       "path": "/api/v2/admin/nodes/:id",
       "package_id": "proxy-node",
       "route_id": "proxy.admin.nodes.id.delete",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "GET",
       "path": "/api/v2/admin/nodes/:id",
       "package_id": "proxy-node",
       "route_id": "proxy.admin.nodes.id.get",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "PUT",
@@ -398,8 +398,8 @@
       "path": "/api/v2/admin/subscription/groups/:id/protocols",
       "package_id": "subscription",
       "route_id": "subscription.admin.subscription.groups.id.protocols.get",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "POST",
@@ -470,8 +470,8 @@
       "path": "/api/v2/admin/subscription/protocols/available",
       "package_id": "subscription",
       "route_id": "subscription.admin.subscription.protocols.available.get",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "GET",

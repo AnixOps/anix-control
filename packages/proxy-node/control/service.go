@@ -21,16 +21,12 @@ type proxyNodeBridge interface {
 }
 
 // newProxyNodeService returns the proxy-node host's router. The routes in
-// proxyNodeRoutes have a native handler; a route in flaggedRoutes serves
-// natively once the kernel sets its mode, and falls back to the legacy
-// handler otherwise.
-// The node routes on v2_node need grants the kernel gives only once the node credential split is finalized: until the
-// lease has them they answer from the legacy handler, and a host started
-// before the finalize keeps them legacy until it restarts. The routes that
-// reach the kernel's KernelNodeOps (a node's deletion and raw
-// configuration) use the bridge connection (local socket or module listener); a bridge without one
-// leaves them legacy. The routes in bridgedRoutes always relay to the
-// legacy handler, the agent WebSocket included.
+// proxyNodeRoutes have a native handler and are served by it alone: the
+// kernel has no handler for them. The node routes read v2_node, which the
+// lease adopts since the node credential split finalized it; a node's
+// deletion reaches the kernel's KernelNodeOps over the bridge connection
+// (local socket or module listener). The routes in bridgedRoutes relay to
+// the kernel's handler, the agent WebSocket included.
 func newProxyNodeService(bridge proxyNodeBridge, leaseID string) (*pluginhostsdk.Router, error) {
 	storage := packagestoresdk.SharedOpener(bridge)
 	service := &native.Service{
@@ -58,17 +54,8 @@ func newProxyNodeService(bridge proxyNodeBridge, leaseID string) (*pluginhostsdk
 			_, bridgedRoute := bridgedRoutes[routeID]
 			return nativeRoute || bridgedRoute
 		},
-		Native: service.Handlers(), NativeOnly: true, Flagged: flaggedRoutes,
+		Native: service.Handlers(), NativeOnly: true,
 	})
-}
-
-// flaggedRoutes are the native routes the kernel still has a legacy handler
-// for: they follow the mode the kernel sets. The other native routes are
-// served by their native handler alone.
-var flaggedRoutes = map[string]struct{}{
-	native.NodesRouteID:      {},
-	native.NodeRouteID:       {},
-	native.DeleteNodeRouteID: {},
 }
 
 // proxyNodeRoutes are the package's compatibility routes with a native

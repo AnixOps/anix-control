@@ -280,24 +280,6 @@ func (s *AdminE2ETestSuite) TestBanUser() {
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 }
 
-// TestGetNodes 测试获取节点列表
-func (s *AdminE2ETestSuite) TestGetNodes() {
-	req, _ := http.NewRequest("GET", "/api/v2/admin/nodes", nil)
-	req.Header.Set("Authorization", "Bearer "+s.adminToken)
-
-	w := httptest.NewRecorder()
-	s.router.ServeHTTP(w, req)
-
-	assert.Equal(s.T(), http.StatusOK, w.Code)
-
-	var response map[string]any
-	requireJSONUnmarshal(s.T(), w.Body.Bytes(), &response)
-
-	data := response["data"].(map[string]any)
-	nodes := data["list"].([]any)
-	assert.GreaterOrEqual(s.T(), len(nodes), 1)
-}
-
 // TestCreateNode 测试创建节点
 func (s *AdminE2ETestSuite) TestCreateNode() {
 	body := map[string]any{

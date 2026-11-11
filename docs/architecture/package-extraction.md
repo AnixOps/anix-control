@@ -701,9 +701,9 @@ The planned `kernel.entitlement.apply.v1` became
 - **Subscription (in place).** 23 of 25 routes run on the adopted
   `v2_subscription_group`, `v2_subscription_template`,
   `v2_plan_subscription_group` and `v2_subscription_group_node_protocols`
-  tables, proved by `internal/tests/subscriptioncompat` (all but a group's
-  protocols and the protocol pool natively only: the kernel keeps no legacy
-  handler for them, and the suite pins their recorded answers): groups (list, read,
+  tables, proved by `internal/tests/subscriptioncompat` (natively only: the kernel
+  keeps no legacy handler for them, and the suite pins their recorded
+  answers): groups (list, read,
   create, update, delete) and templates (list, read, create, update,
   delete), a group's node protocol links, a plan's groups, a user's groups
   (list, grant, take away), the statistics, the two static lists, the
@@ -791,9 +791,10 @@ The planned `kernel.entitlement.apply.v1` became
 - **Proxy node (in place).** 7 of proxy-node's 11 routes run natively,
   proved by `internal/tests/proxynodecompat`: a node's runtime logs on the
   adopted `v2_node_log` (the kernel's agent control writes it), the node
-  statistics (both natively only: the kernel keeps no legacy handler, and
-  the suite pins their recorded answers), and since M3-2 the node list, detail, deletion and raw
-  configuration ([`node-ops-service.md`](node-ops-service.md) section
+  statistics, and since M3-2 the node list, detail and deletion (all
+  natively only: the kernel keeps no legacy handler, and the suite pins
+  their recorded answers; the raw configuration routes were removed)
+  ([`node-ops-service.md`](node-ops-service.md) section
   6.2). The load balancer and registration key routes were removed with
   their features (migrations `0021_drop_load_balancer` and
   `0025_drop_registration_keys`).

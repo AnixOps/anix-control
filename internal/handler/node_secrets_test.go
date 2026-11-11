@@ -129,14 +129,9 @@ func settingsOf(text *string) map[string]any {
 // and Reality's short_id.
 func (s *NodeSecretsTestSuite) TestAnswersMaskProtocolSecrets() {
 	handler := NewNodeHandler()
-	subscriptions := NewSubscriptionAdminHandler()
 	nodePath := fmt.Sprintf("/nodes/%d", s.node.ID)
 	answers := map[string]*httptest.ResponseRecorder{
-		"node list":           s.serve("GET", "/nodes", "/nodes", "", handler.GetNodes),
-		"node detail":         s.serve("GET", "/nodes/:id", nodePath, "", handler.GetNode),
-		"protocol list":       s.serve("GET", "/nodes/:id/protocols", nodePath+"/protocols", "", handler.GetProtocols),
-		"group protocols":     s.serve("GET", "/groups/:id/protocols", fmt.Sprintf("/groups/%d/protocols", s.group.ID), "", subscriptions.GetGroupProtocols),
-		"available protocols": s.serve("GET", "/protocols/available", "/protocols/available", "", subscriptions.GetAvailableProtocols),
+		"protocol list": s.serve("GET", "/nodes/:id/protocols", nodePath+"/protocols", "", handler.GetProtocols),
 	}
 	for name, w := range answers {
 		s.requireMasked(name, w)
@@ -155,11 +150,6 @@ func (s *NodeSecretsTestSuite) TestAnswersMaskProtocolSecrets() {
 	s.Equal(service.NodeSecretPlaceholder, settingsOf(stringPointer(reality["settings"]))["obfs-password"])
 	s.Equal("salamander", settingsOf(stringPointer(reality["settings"]))["obfs"])
 	s.Equal(service.NodeSecretPlaceholder, settingsOf(stringPointer(reality["tls_settings"]))["key"])
-
-	detail := s.ok(answers["node detail"])
-	tls := settingsOf(stringPointer(detail["data"].(map[string]any)["raw_config"]))["tls_settings"].(map[string]any)
-	s.Equal(service.NodeSecretPlaceholder, tls["private_key"])
-	s.Equal("raw.example.test", tls["server_name"])
 
 	// The answer that creates a protocol masks it too.
 	body := `{"name":"new","type":"vless","port":8443,"reality_settings":"{\"private_key\":\"fresh-private\",\"short_id\":\"aa\"}"}`
