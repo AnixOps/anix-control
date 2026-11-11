@@ -3,12 +3,12 @@
 // Hysteria2 and TUIC are QUIC on UDP and always TLS; WireGuard and iWAN are
 // UDP. Control checks the same rules again (service.validateProtocolTransport).
 
-export const STREAM_TRANSPORTS = Object.freeze(['tcp', 'ws', 'grpc', 'h2', 'httpupgrade'])
-// Reality runs on tcp, grpc and h2 only.
-export const REALITY_TRANSPORTS = Object.freeze(['tcp', 'grpc', 'h2'])
+export const STREAM_TRANSPORTS = Object.freeze(['tcp', 'ws', 'grpc', 'httpupgrade'])
+// Reality runs on tcp and grpc only.
+export const REALITY_TRANSPORTS = Object.freeze(['tcp', 'grpc'])
 // Transports the old editor offered and stored protocols may still carry:
-// kept when loaded, never offered for a new value.
-export const LEGACY_TRANSPORTS = Object.freeze(['quic'])
+// kept when loaded, never offered for a new value. The kernel runs neither.
+export const LEGACY_TRANSPORTS = Object.freeze(['quic', 'h2'])
 
 export const PROTOCOL_CAPABILITIES = Object.freeze({
   vless: { transports: STREAM_TRANSPORTS, tls: [0, 1, 2] },

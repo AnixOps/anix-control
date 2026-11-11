@@ -16,6 +16,8 @@ func TestValidateProtocolTransport(t *testing.T) {
 	}{
 		{"vless ws", model.NodeProtocol{Type: model.ProtocolVLESS, Transport: str("ws"), TLS: 1}, false},
 		{"vless reality grpc", model.NodeProtocol{Type: model.ProtocolVLESS, Transport: str("grpc"), TLS: 2}, false},
+		{"vless reality h2", model.NodeProtocol{Type: model.ProtocolVLESS, Transport: str("h2"), TLS: 2}, true},
+		{"vless h2 label", model.NodeProtocol{Type: model.ProtocolVLESS, Transport: str("h2"), TLS: 1}, false},
 		{"vless reality ws", model.NodeProtocol{Type: model.ProtocolVLESS, Transport: str("ws"), TLS: 2}, true},
 		{"trojan reality", model.NodeProtocol{Type: model.ProtocolTrojan, Transport: str("tcp"), TLS: 2}, false},
 		{"vmess reality", model.NodeProtocol{Type: model.ProtocolVMess, Transport: str("tcp"), TLS: 2}, true},

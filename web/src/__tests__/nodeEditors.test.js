@@ -4,6 +4,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import { PROTOCOL_FIELDS, anxDestBehaviorsWarnings, anxDestWarnings, defaultSettingsFor, fieldsFor, parseJsonObject, readField, writeField } from '@/views/admin/nodes/protocolFields'
+import { transportProblem, transportsFor } from '@/views/admin/nodes/protocolCapabilities'
 import { useProtocolEditor } from '@/views/admin/nodes/useProtocolEditor'
 import { buildNodePayload, displayStatus, nodeFormFrom, parentCandidatesFor } from '@/views/admin/nodes/nodeData'
 
@@ -129,6 +130,13 @@ describe('useProtocolEditor', () => {
     // The tcp an old editor stored for Hysteria2 is sent as udp.
     editor.jsonEditorContent.value = JSON.stringify({ type: 'hysteria2', port: 443, tls: 1, transport: 'tcp' })
     expect(editor.buildPayload().payload).toMatchObject({ transport: 'udp', tls: 1 })
+  })
+
+  it('keeps a stored h2 transport without offering it', () => {
+    expect(transportsFor('vless', 1, 'tcp')).not.toContain('h2')
+    expect(transportsFor('vless', 1, 'h2')).toContain('h2')
+    expect(transportsFor('vless', 2, 'h2')).not.toContain('h2')
+    expect(transportProblem({ type: 'vless', tls: 2, transport: 'h2' })).toMatchObject({ field: 'transport', value: 'h2' })
   })
 })
 

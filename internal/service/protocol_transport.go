@@ -21,10 +21,11 @@ var datagramProtocols = map[model.ProtocolType]bool{
 }
 
 // realityProtocols are the types Reality (tls 2) runs with, and
-// realityTransports the transports it runs on.
+// realityTransports the transports it runs on. The kernel has no h2
+// transport, so h2 is not one of them.
 var (
 	realityProtocols  = map[model.ProtocolType]bool{model.ProtocolVLESS: true, model.ProtocolTrojan: true}
-	realityTransports = map[string]bool{"": true, "tcp": true, "grpc": true, "h2": true}
+	realityTransports = map[string]bool{"": true, "tcp": true, "grpc": true}
 )
 
 // validateProtocolTransport refuses the transport and TLS combinations no
@@ -44,7 +45,7 @@ func validateProtocolTransport(protocol *model.NodeProtocol) error {
 			return fmt.Errorf("%s 不支持 Reality", protocolType)
 		}
 		if !realityTransports[transport] {
-			return fmt.Errorf("transport %s 不能用于 Reality，只能用 tcp、grpc 或 h2", transport)
+			return fmt.Errorf("transport %s 不能用于 Reality，只能用 tcp 或 grpc", transport)
 		}
 	}
 	return nil
