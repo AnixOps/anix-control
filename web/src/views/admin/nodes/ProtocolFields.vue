@@ -8,7 +8,10 @@
       :open="group.collapsed ? group.filled : undefined"
       :data-testid="`protocol-fields-${group.name}`"
     >
-      <component :is="group.collapsed ? 'summary' : 'h3'" class="dialog-section__title">{{ t(`${K}.groups.${group.name}`) }}</component>
+      <component :is="group.collapsed ? 'summary' : 'h3'" class="dialog-section__title">
+        {{ t(`${K}.groups.${group.name}`) }}
+        <UiBadge v-if="group.collapsed && group.warns" tone="warning" :label="t(`${K}.needsAttention`)" />
+      </component>
       <p v-if="GROUP_INTROS.includes(group.name)" class="protocol-fields__intro">{{ t(`${K}.groupIntros.${group.name}`) }}</p>
       <div class="form-grid" :class="{ 'protocol-fields__stack': STACKED.includes(group.name) }">
         <template v-for="field in group.fields" :key="`${field.section}.${field.key}`">
@@ -109,6 +112,7 @@
 // subscription group).
 import { computed } from 'vue'
 import { Dices } from '@lucide/vue'
+import UiBadge from '@/ui/UiBadge.vue'
 import UiButton from '@/ui/UiButton.vue'
 import UiNumberField from '@/ui/UiNumberField.vue'
 import UiPasswordField from '@/ui/UiPasswordField.vue'
@@ -131,19 +135,25 @@ const K = 'admin.nodes.protocolFields'
 // Select items cannot carry an empty value: '' travels as this.
 const NONE = '__none__'
 
-const GROUP_ORDER = ['protocol', 'anxCover', 'anxEntry', 'transport', 'security', 'anxAdvanced']
-const GROUP_INTROS = ['anxCover', 'anxEntry']
-// Rarely changed groups fold away, open when one of their fields is set.
-const COLLAPSED = ['anxAdvanced']
+const GROUP_ORDER = ['protocol', 'anxCover', 'transport', 'security', 'anxEntry', 'anxTuning', 'anxAdvanced']
+const GROUP_INTROS = ['anxCover', 'anxEntry', 'anxTuning']
+// Rarely changed groups fold away, open when one of their fields is changed
+// from its default; a folded group whose field warns says so.
+const COLLAPSED = ['anxEntry', 'anxTuning', 'anxAdvanced']
 // Groups whose hints are long read better one field per row.
-const STACKED = ['anxEntry', 'anxAdvanced']
-const isSet = value => !(value === '' || value === false || value == null)
+const STACKED = ['anxEntry', 'anxTuning', 'anxAdvanced']
+const isChanged = (value, field) => !(value === '' || value === false || value == null) && JSON.stringify(value) !== JSON.stringify(field.default)
 const groups = computed(() => {
   const fields = fieldsFor(props.modelValue).filter(field => props.sections.includes(field.section))
   return GROUP_ORDER
     .map(name => ({ name, fields: fields.filter(field => (field.group || FIELD_GROUPS[field.section]) === name) }))
     .filter(group => group.fields.length)
-    .map(group => ({ ...group, collapsed: COLLAPSED.includes(group.name), filled: group.fields.some(field => isSet(readField(props.modelValue, field))) }))
+    .map(group => ({
+      ...group,
+      collapsed: COLLAPSED.includes(group.name),
+      filled: group.fields.some(field => isChanged(readField(props.modelValue, field), field)),
+      warns: group.fields.some(field => field.warn?.(props.modelValue).length)
+    }))
 })
 
 const i18nKey = field => field.key.replace(/-/g, '_')
@@ -205,6 +215,11 @@ function update(field, value) {
 
 .protocol-fields summary {
   cursor: pointer;
+}
+
+.protocol-fields summary .ui-badge {
+  margin-left: var(--space-2);
+  vertical-align: middle;
 }
 
 .protocol-fields summary:focus-visible {

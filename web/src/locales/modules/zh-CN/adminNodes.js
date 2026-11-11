@@ -562,13 +562,16 @@ export default {
       security: '安全设置',
       anxCover: '伪装站点',
       anxEntry: '国内入口',
+      anxTuning: '握手外观调优',
       anxAdvanced: '高级设置'
     },
     groupIntros: {
       anxCover: '探测和非 ANX 连接看到的就是这个站点，节点对外的握手外观也照它来。',
-      anxEntry: '只在用户直连国内入口时需要；过境节点保持默认即可。'
+      anxEntry: '只在用户直连国内入口时需要；过境节点保持默认即可。',
+      anxTuning: '让节点对外的握手更贴近伪装站点。不填也能用，默认按通用预设。'
     },
     none: '无',
+    needsAttention: '有提示',
     generate: '随机生成',
     labels: {
       server_names: '允许的 SNI',
@@ -603,7 +606,7 @@ export default {
       min_wire_gen: '接受的最低握手代'
     },
     hints: {
-      anxServerNames: '用逗号分隔，客户端使用第一个；必须是伪装目标站真实支持的域名。ANX 用户密钥由 UUID 派生，服务器公钥由节点上的 Agent 上报，订阅选择 AnixOps Net 格式即可拿到 anx:// 链接。',
+      anxServerNames: '用逗号分隔，客户端使用第一个；必须是伪装站点真实支持的域名。',
       anxDest: '非 ANX 连接（含主动探测）原样转发到这里，格式 host:port。',
       anxAllowNoSni: '同时接受不带 SNI 的连接（客户端直连 IP，适合按备案拦截 SNI 的国内入口）；开启后订阅不再下发 SNI。需要 alpha.7 之后的新版 anx-node。',
       anxShapePlain: '默认使用 VisionLike 整形（抹掉 TLS-in-TLS 特征）；只在互通调试时关闭。',
