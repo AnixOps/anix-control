@@ -632,18 +632,6 @@ func (h *NodeHandler) GetProtocolTemplates(c *gin.Context) {
 	panelSuccess(c, templates)
 }
 
-// GenerateWireGuardKeypair creates a WireGuard server keypair for the admin
-// protocol form. The private key is returned only to the authenticated caller
-// and is never stored by this endpoint.
-func (h *NodeHandler) GenerateWireGuardKeypair(c *gin.Context) {
-	privateKey, publicKey, err := service.GenerateWireGuardKeypair()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "生成 WireGuard 密钥失败"})
-		return
-	}
-	panelSuccess(c, gin.H{"private_key": privateKey, "public_key": publicKey})
-}
-
 // SyncProtocol godoc
 // @Summary 同步协议到节点
 // @Description 管理员将协议配置同步到指定节点

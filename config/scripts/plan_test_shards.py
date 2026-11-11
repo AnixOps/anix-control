@@ -49,7 +49,6 @@ WEIGHTS: dict[str, dict[str, float]] = {
         "internal/tests/nodeopsagent": 6.0,
         "internal/nodesecrets": 3.1,
         "internal/router": 3.0,
-        "internal/tests/plancompat": 2.9,
         "internal/tests/machinetelemetrycompat": 2.8,
         "internal/tests/proxynodecompat": 4.5,
         # Not measured in CI yet: M3-1's protocol and agent routes (local).
@@ -97,7 +96,6 @@ WEIGHTS: dict[str, dict[str, float]] = {
         "internal/plugincontrol": 10.7,
         "internal/identitycutover": 9.8,
         "internal/kernelforward": 9.1,
-        "internal/tests/plancompat": 7.0,
     },
     "postgres": {
         # The mean of 12 runs of 2026-10-04 (11 pull request and go_dev runs,
@@ -114,7 +112,6 @@ WEIGHTS: dict[str, dict[str, float]] = {
         "internal/nodesecrets": 10.4,
         "internal/tests/nodesecretsplit": 10.3,
         "internal/tests/machinetelemetrycompat": 6.1,
-        "internal/tests/plancompat": 5.3,
         "internal/packagestore": 4.4,
         "internal/kernelforward": 4.3,
         "internal/agentpki": 2.3,
@@ -132,7 +129,6 @@ WEIGHTS: dict[str, dict[str, float]] = {
         "internal/tests/packagecompat": 0.6,
         "internal/tests/forwardv4": 0.5,
         "internal/agentreports": 0.1,
-        "internal/tests/wireguardcompat": 0.1,
     },
 }
 

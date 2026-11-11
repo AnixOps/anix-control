@@ -84,17 +84,21 @@ func dispatch(t *testing.T, service *pluginhostsdk.Router, route string, request
 	return response
 }
 
-// Until the kernel sets a route's mode, the host relays it to the legacy
-// handler, bridged routes always; routes outside the package are refused.
-func TestPlanHostRelaysRoutesUntilTheyAreSwitchedToNative(t *testing.T) {
-	bridge := &bridgeStub{}
-	service, err := newPlanService(bridge, "lease-1")
+// Every route runs natively from the start and never reaches the kernel's
+// legacy path; routes outside the package are refused.
+func TestPlanHostServesEveryRouteNatively(t *testing.T) {
+	stub := &bridgeStub{}
+	service, err := newPlanService(connectedBridge{bridgeStub: stub, conn: &grpc.ClientConn{}}, "lease-1")
 	require.NoError(t, err)
-	for _, route := range []string{"plan.admin.plans.get", "plan.admin.plans.id.assign.post"} {
-		response := dispatch(t, service, route, pluginhostsdk.DispatchRequest{})
-		require.EqualValues(t, 200, response.StatusCode)
-		require.Equal(t, route, bridge.operation)
+	for route := range planRoutes {
+		configured, effective := service.Mode(route)
+		require.Equal(t, pluginhostsdk.RouteModeNative, configured, route)
+		require.Equal(t, pluginhostsdk.RouteModeNative, effective, route)
 	}
+	_, _ = service.Dispatch(context.Background(), pluginhostsdk.DispatchRequest{
+		RouteID: "plan.admin.plans.get", BridgeCapability: make([]byte, 32), DeadlineUnixMillis: time.Now().Add(time.Second).UnixMilli(),
+	})
+	require.Empty(t, stub.operation, "no route is relayed to a legacy handler")
 
 	_, err = service.Dispatch(context.Background(), pluginhostsdk.DispatchRequest{
 		RouteID: "ticket.user.ticket.get", BridgeCapability: make([]byte, 32), DeadlineUnixMillis: time.Now().Add(time.Second).UnixMilli(),
@@ -109,7 +113,6 @@ func TestPlanHostRelaysRoutesUntilTheyAreSwitchedToNative(t *testing.T) {
 		require.NotContains(t, handlers, route, "a bridged route has no native handler")
 		require.NotContains(t, planRoutes, route)
 	}
-	require.NotContains(t, (&native.Service{}).Handlers(), native.AssignRouteID, "without KernelSubscriber the assignment stays legacy")
 }
 
 // The host accepts exactly the package's declared compatibility routes.

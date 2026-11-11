@@ -335,48 +335,48 @@
       "path": "/api/v2/admin/plans",
       "package_id": "plan",
       "route_id": "plan.admin.plans.get",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "POST",
       "path": "/api/v2/admin/plans",
       "package_id": "plan",
       "route_id": "plan.admin.plans.post",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "DELETE",
       "path": "/api/v2/admin/plans/:id",
       "package_id": "plan",
       "route_id": "plan.admin.plans.id.delete",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "GET",
       "path": "/api/v2/admin/plans/:id",
       "package_id": "plan",
       "route_id": "plan.admin.plans.id.get",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "PUT",
       "path": "/api/v2/admin/plans/:id",
       "package_id": "plan",
       "route_id": "plan.admin.plans.id.put",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "POST",
       "path": "/api/v2/admin/plans/:id/assign",
       "package_id": "plan",
       "route_id": "plan.admin.plans.id.assign.post",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "GET",
@@ -820,8 +820,8 @@
       "path": "/api/v2/admin/wireguard/keypair",
       "package_id": "wireguard",
       "route_id": "wireguard.admin.wireguard.keypair.post",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "GET",
@@ -965,8 +965,8 @@
       "path": "/api/v2/user/plan",
       "package_id": "plan",
       "route_id": "plan.user.plan.get",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "GET",

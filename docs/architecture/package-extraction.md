@@ -465,7 +465,7 @@ The planned `kernel.entitlement.apply.v1` became
     The package adopts no table any more and holds no settings capability.
 - **Plan (in place).** The first module that changes shared subscriber
   state. All 7 routes run on the adopted `v2_plan` and `v2_event` tables,
-  proved by `internal/tests/plancompat`.
+  natively only: the kernel keeps no legacy handler for them.
   - `v2_event` is the plan domain's event log: only the plan routes write
     it, and nothing reads it.
   - An administrator's assignment calls `KernelSubscriber.ApplyEntitlement`
@@ -984,8 +984,8 @@ The planned `kernel.entitlement.apply.v1` became
     in clear with `kernel.settings.nodex.secrets.v1`) and call NodeX from
     the package host. The parity test runs test NodeX servers that answer,
     refuse the token, fail or answer what does not decode.
-- **WireGuard (in place).** wireguard's one route runs natively, proved by
-  `internal/tests/wireguardcompat`: the administrator's server keypair for
+- **WireGuard (in place).** wireguard's one route runs natively only (the
+  kernel keeps no legacy handler): the administrator's server keypair for
   the protocol form. It reads and stores nothing; the administrator saves
   the private key into a protocol through protocol-runtime's bridged routes
   on the protected `v2_node_protocol`. The answer carries a private key

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -16,7 +15,6 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/service"
 	"github.com/AnixOps/anix-control/v5/internal/subscriber"
 	"github.com/gin-gonic/gin"
-	"github.com/gin-gonic/gin/binding"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
@@ -474,45 +472,6 @@ func (h *AdminHandler) DeleteUser(c *gin.Context) {
 
 // ====== 套餐管理 ======
 
-// CreatePlan godoc
-// @Summary 创建套餐
-// @Description 管理员创建新套餐
-// @Tags 管理端-套餐
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param request body model.Plan true "套餐信息"
-// @Success 200 {object} map[string]any
-// @Failure 400 {object} map[string]any
-// @Failure 500 {object} map[string]any
-// @Router /admin/plans [post]
-func (h *AdminHandler) CreatePlan(c *gin.Context) {
-	var body []byte
-	if c.Request.Body != nil {
-		var err error
-		if body, err = io.ReadAll(c.Request.Body); err != nil {
-			panelError(c, "参数错误: "+err.Error())
-			return
-		}
-	}
-	var p model.Plan
-	if err := binding.JSON.BindBody(body, &p); err != nil {
-		panelError(c, "参数错误: "+err.Error())
-		return
-	}
-	// A plan created without a show value is on sale: the user's plan list
-	// holds only show = 1, so a plan the administrator creates and never
-	// hears of again would stay invisible. An explicit 0 is kept.
-	if !jsonFieldGiven(body, "show") {
-		p.Show = 1
-	}
-	if err := h.planService.Create(&p); err != nil {
-		panelError(c, "创建失败: "+err.Error())
-		return
-	}
-	panelSuccess(c, p)
-}
-
 // jsonFieldGiven reports whether the JSON object body names field with a
 // value other than null (the name matches case-insensitively, as the struct
 // binding does). A zero value cannot tell an omitted field from an explicit
@@ -530,145 +489,8 @@ func jsonFieldGiven(body []byte, field string) bool {
 	return false
 }
 
-// GetPlans godoc
-// @Summary 获取套餐列表
-// @Description 管理员获取所有套餐列表
-// @Tags 管理端-套餐
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Success 200 {object} map[string]any
-// @Failure 500 {object} map[string]any
-// @Router /admin/plans [get]
-func (h *AdminHandler) GetPlans(c *gin.Context) {
-	list, err := h.planService.List()
-	if err != nil {
-		panelError(c, "获取失败: "+err.Error())
-		return
-	}
-	panelSuccess(c, list)
-}
-
-// GetPlan godoc
-// @Summary 获取套餐详情
-// @Description 管理员获取指定套餐的详细信息
-// @Tags 管理端-套餐
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param id path int true "套餐ID"
-// @Success 200 {object} map[string]any
-// @Failure 400 {object} map[string]any
-// @Failure 404 {object} map[string]any
-// @Router /admin/plans/{id} [get]
-func (h *AdminHandler) GetPlan(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
-	if err != nil {
-		panelError(c, "ID 无效")
-		return
-	}
-	p, err := h.planService.Get(uint(id))
-	if err != nil {
-		panelAdminPlanError(c, "获取失败", err)
-		return
-	}
-	panelSuccess(c, p)
-}
-
-// UpdatePlan godoc
-// @Summary 更新套餐
-// @Description 管理员更新指定套餐信息
-// @Tags 管理端-套餐
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param id path int true "套餐ID"
-// @Param request body model.Plan true "套餐信息"
-// @Success 200 {object} map[string]any
-// @Failure 400 {object} map[string]any
-// @Failure 500 {object} map[string]any
-// @Router /admin/plans/{id} [put]
-func (h *AdminHandler) UpdatePlan(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
-	if err != nil {
-		panelError(c, "ID 无效")
-		return
-	}
-	var p model.Plan
-	if err := c.ShouldBindJSON(&p); err != nil {
-		panelError(c, "参数错误: "+err.Error())
-		return
-	}
-	p.ID = uint(id)
-	if err := h.planService.Update(&p); err != nil {
-		panelAdminPlanError(c, "更新失败", err)
-		return
-	}
-	panelSuccess(c, p)
-}
-
-// DeletePlan godoc
-// @Summary 删除套餐
-// @Description 管理员删除指定套餐
-// @Tags 管理端-套餐
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param id path int true "套餐ID"
-// @Success 200 {object} map[string]any
-// @Failure 400 {object} map[string]any
-// @Failure 500 {object} map[string]any
-// @Router /admin/plans/{id} [delete]
-func (h *AdminHandler) DeletePlan(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
-	if err != nil {
-		panelError(c, "ID 无效")
-		return
-	}
-	if err := h.planService.Delete(uint(id)); err != nil {
-		panelAdminPlanError(c, "删除失败", err)
-		return
-	}
-	panelSuccess(c, gin.H{"message": "删除成功"})
-}
-
-// AssignPlanToUser godoc
-// @Summary 分配套餐给用户
-// @Description 管理员将指定套餐分配给用户
-// @Tags 管理端-套餐
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param id path int true "套餐ID"
-// @Param request body map[string]any true "分配请求 {user_id: uint, expire_at: int64}"
-// @Success 200 {object} map[string]any
-// @Failure 400 {object} map[string]any
-// @Failure 500 {object} map[string]any
-// @Router /admin/plans/{id}/assign [post]
-func (h *AdminHandler) AssignPlanToUser(c *gin.Context) {
-	planID, err := strconv.ParseUint(c.Param("id"), 10, 32)
-	if err != nil {
-		panelError(c, "套餐ID 无效")
-		return
-	}
-	var req struct {
-		UserID   uint   `json:"user_id" binding:"required,gt=0"`
-		ExpireAt *int64 `json:"expire_at"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		panelError(c, "参数错误: "+err.Error())
-		return
-	}
-	requestID := service.PlanAssignmentRequestID(uint(planID), req.UserID, req.ExpireAt, assignmentToken(c))
-	if err := h.planService.AssignToUser(uint(planID), req.UserID, req.ExpireAt, requestID); err != nil {
-		panelAdminPlanError(c, "分配失败", err)
-		return
-	}
-	panelSuccess(c, gin.H{"message": "分配成功"})
-}
-
 // assignmentToken identifies an administrator's request for
-// service.PlanAssignmentRequestID, service.AdminUserResetRequestID and the
+// service.AdminUserResetRequestID and the
 // subscription group request ids (service.SubscriptionGroupGrantRequestID
 // and its kin): its Idempotency-Key, else its request id (X-Request-ID or
 // the one the kernel gave it), else a fresh value.
@@ -683,15 +505,6 @@ func assignmentToken(c *gin.Context) string {
 		return id
 	}
 	return uuid.NewString()
-}
-
-func panelAdminPlanError(c *gin.Context, fallback string, err error) {
-	switch {
-	case errors.Is(err, service.ErrPlanNotFound), errors.Is(err, service.ErrPlanUserNotFound):
-		panelError(c, err.Error())
-	default:
-		panelError(c, fallback+": "+err.Error())
-	}
 }
 
 // GetUserStats godoc

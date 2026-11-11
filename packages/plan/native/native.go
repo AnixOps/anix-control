@@ -3,9 +3,7 @@
 // (kernel.storage.adopt). An administrator's plan assignment changes the
 // subscriber through the kernel's KernelSubscriber contract
 // (kernel.subscriber.entitlements.v1): the package never writes v2_user.
-// Legacy handlers and native routes share the tables and the subscriber
-// request ledger, so a route can switch between them at any time. Responses
-// are byte-compatible with the legacy handlers (internal/tests/plancompat).
+// The routes are native only: the kernel keeps no legacy handler for them.
 //
 // The five /api/v2/speed-limit routes are Flux forward limits, whose rows
 // name forward tunnels: they belong to the forward package.

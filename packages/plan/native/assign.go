@@ -29,9 +29,6 @@ const maxTransferBytes = 1 << 62
 // identifies the HTTP request: its Idempotency-Key, else its X-Request-ID,
 // else a fresh random value. A new request is a new grant, as in v2: an
 // administrator who assigns the same plan again resets the traffic again.
-// The kernel's legacy handler derives the same id
-// (service.PlanAssignmentRequestID), so a retry is recognized whichever
-// side serves it.
 func AssignRequestID(planID uint64, userID uint, expireAt *int64, token string) string {
 	expiry := "-"
 	if expireAt != nil {
