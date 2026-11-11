@@ -193,6 +193,25 @@ describe('protocol form fields', () => {
   })
 })
 
+describe('Snell protocol', () => {
+  it('is TCP without TLS and starts with a random PSK', async () => {
+    const editor = useProtocolEditor()
+    editor.startCreate()
+    editor.protocolForm.type = 'snell'
+    await nextTick()
+    expect(editor.protocolForm).toMatchObject({ tls: 0, transport: 'tcp' })
+    const { payload } = editor.buildPayload()
+    expect(payload).toMatchObject({ type: 'snell', tls: 0, transport: 'tcp' })
+    const settings = JSON.parse(payload.settings)
+    expect(settings.version).toBe(4)
+    expect(settings.psk).toMatch(/^[0-9a-f]{32}$/)
+    expect(defaultSettingsFor('snell').psk).not.toBe(settings.psk)
+    expect(fieldsFor({ type: 'snell', tls: 0, transport: 'tcp', settings }).map(field => field.key)).toEqual(['psk', 'version', 'obfs', 'mode'])
+    expect(transportProblem({ type: 'snell', tls: 1, transport: 'tcp' })).toMatchObject({ field: 'tls' })
+    expect(transportProblem({ type: 'snell', tls: 0, transport: 'ws' })).toMatchObject({ field: 'transport' })
+  })
+})
+
 describe('ANX protocol fields', () => {
   const anx = { type: 'anx', tls: 0, transport: 'tcp', settings: {}, tls_settings: {}, reality_settings: {}, transport_settings: {} }
 

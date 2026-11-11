@@ -11892,7 +11892,8 @@
                 "anytls",
                 "wireguard",
                 "iwan",
-                "anx"
+                "anx",
+                "snell"
             ],
             "x-enum-varnames": [
                 "ProtocolVMess",
@@ -11904,7 +11905,8 @@
                 "ProtocolAnyTLS",
                 "ProtocolWireGuard",
                 "ProtocolIWAN",
-                "ProtocolANX"
+                "ProtocolANX",
+                "ProtocolSnell"
             ]
         },
         "model.RegisterRequest": {

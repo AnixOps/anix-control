@@ -1,7 +1,8 @@
 // What each node protocol type runs on: its transports and TLS modes
 // (0 none, 1 TLS, 2 Reality). Shadowsocks has no stream transport and no TLS;
 // Hysteria2 and TUIC are QUIC on UDP and always TLS; WireGuard and iWAN are
-// UDP. Control checks the same rules again (service.validateProtocolTransport).
+// UDP; Snell is TCP with its own encryption. Control checks the same rules
+// again (service.validateProtocolTransport).
 
 export const STREAM_TRANSPORTS = Object.freeze(['tcp', 'ws', 'grpc', 'httpupgrade'])
 // Reality runs on tcp and grpc only.
@@ -17,6 +18,7 @@ export const PROTOCOL_CAPABILITIES = Object.freeze({
   shadowsocks: { transports: ['tcp'], tls: [0] },
   hysteria2: { transports: ['udp'], tls: [1] },
   tuic: { transports: ['udp'], tls: [1] },
+  snell: { transports: ['tcp'], tls: [0] },
   wireguard: { transports: ['udp'], tls: [0] },
   iwan: { transports: ['udp'], tls: [0] },
   // ANX-A runs its own jacket over TCP: no stream transport, no TLS of the node's.

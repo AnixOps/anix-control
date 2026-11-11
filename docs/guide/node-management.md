@@ -42,6 +42,7 @@ Agent 只通过 `anix.agent.v1` mTLS gRPC 控制流与 Control 通信；UniProxy
 | Hysteria2 | `hysteria2` | Hysteria2 |
 | TUIC | `tuic` | TUIC |
 | AnyTLS | `anytls` | AnyTLS |
+| Snell | `snell` | Snell，TCP，自带加密，见下文 |
 | Panabit iWAN | `iwan` | UDP 三层隧道，不加密，见下文 |
 
 ### Shadowsocks 2022 密钥
@@ -51,6 +52,23 @@ Shadowsocks 2022（`2022-blake3-*`）的客户端密码是「服务器密钥:用
 - 服务器密钥：不变。协议没填 `server_key` 时仍按节点创建时间推导（子节点用父节点的），改了会让所有客户端失效。
 - 用户密钥：旧的用户密钥由 UUID 推导，知道 UUID 就能算出来。用户第一次拉取订阅时，面板给他生成一个随机密钥（`v5_user_ss2022_key`），通过 `users.v1` 的 extra `ss2022_key` 下发到节点。协议修订 2 及以上的 Agent 把它作为第二个用户服务，旧密钥照常可用；订阅只在这些节点上给出新密钥，其余节点仍给旧密钥。老用户不用做任何事，重新拉取订阅就会换成新密钥。
 - 同一用户在同一节点同时用新旧两个密钥时，内核按用户计的限速和设备数会各算一份。
+
+### Snell
+
+`snell` 协议由 anix-agent 的 anixcore 内核提供（networkcore_anixops `crates/inbound-snell`）。它跑在 TCP 上，自带加密，不配 TLS，也不选传输层。
+
+协议设置（`settings`）：
+
+| 字段 | 默认 | 说明 |
+|------|------|------|
+| `psk` | 无，必填 | 本协议所有用户共用的预共享密钥，1–255 字节，不能有空格和逗号。管理端新建时随机生成，保存后显示为 `********` |
+| `version` | `4` | 1–6。版本 4 的节点同时接受版本 5 的客户端 |
+| `obfs` | 空 | `http`，只用于版本 1–4 |
+| `mode` | 空 | 只用于版本 6：`default`、`unshaped`、`unsafe-raw` |
+
+- 用户：内核的 Snell 入站是「一个 PSK + 每个用户一个用户密钥」。用户密钥就是用户的 UUID（Surge 的 `userkey`），节点按用户统计流量和在线 IP；用户到期后节点不再认他的密钥。没有用户密钥、或密钥不认识的连接会被直接关闭。
+- 订阅：只有 Surge 格式给出 Snell 节点（`snell, 地址, 端口, psk=…, version=…, userkey=…`）。Clash / mihomo、Loon、sing-box 等格式没有用户密钥字段，连不上多用户服务端，所以不输出。
+- 版本要求：Agent 协议修订 3 及以上（见 `docs/reference/agent-versioning.md`），内核需带 snell 入站。旧 Agent 收到 Snell 协议会回报 `config_invalid`，节点上的其他协议照常运行。
 
 ### Panabit iWAN
 

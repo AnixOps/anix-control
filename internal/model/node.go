@@ -113,6 +113,11 @@ const (
 	// anx:// link in the AnixOps Net subscription; other clients cannot
 	// speak it.
 	ProtocolANX ProtocolType = "anx"
+	// ProtocolSnell is Snell served by anixcore: TCP with the protocol's
+	// own encryption, no TLS and no transport. A protocol has one PSK and
+	// a user's key is their UUID (the Surge userkey), so only a client
+	// that names a user key can log in.
+	ProtocolSnell ProtocolType = "snell"
 )
 
 // NodeProtocol 节点协议配置

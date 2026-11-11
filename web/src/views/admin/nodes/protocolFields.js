@@ -12,6 +12,7 @@
 //            edited as JSON text; see parseJsonObject)
 //   warn     (protocol) => i18n hint keys to show instead of the hint
 //   options  select: the values ('' means unset); labels come from i18n
+//   generate text: () => a random value, offered by a button next to the field
 //   show     (protocol) => whether the field applies
 // The same registry serves the node protocol sheet, the node group template
 // and the subscription group editors; ANX adds its fields here.
@@ -40,6 +41,9 @@ export const FINGERPRINTS = Object.freeze(['chrome', 'firefox', 'safari', 'ios',
 export const HYSTERIA_OBFS = Object.freeze(['', 'salamander'])
 export const TUIC_CONGESTION = Object.freeze(['bbr', 'cubic', 'new_reno'])
 export const VLESS_FLOWS = Object.freeze(['', 'xtls-rprx-vision'])
+// Snell (anixcore's snell inbound): obfs for versions 1 to 4, modes of version 6.
+export const SNELL_OBFS = Object.freeze(['', 'http'])
+export const SNELL_MODES = Object.freeze(['', 'unshaped', 'unsafe-raw'])
 // ANX-A (anx-node's anx inbound, A2 jacket): the cover site and the names and ALPN it answers with.
 export const ANX_COVER = 'www.apple.com'
 export const ANX_ALPN = Object.freeze(['h2', 'http/1.1'])
@@ -132,6 +136,12 @@ export const PROTOCOL_FIELDS = Object.freeze([
     show: p => p.type === 'hysteria2' && Boolean(readField(p, { section: 'settings', key: 'obfs' }))
   },
   { section: 'settings', key: 'congestion_control', kind: 'select', options: TUIC_CONGESTION, default: 'bbr', show: p => p.type === 'tuic' },
+  // Snell: one PSK for the protocol; every user logs in with their own key
+  // on top of it, so a new protocol starts with a random PSK.
+  { section: 'settings', key: 'psk', kind: 'text', generate: () => hexBytes(16), hintKey: 'snellPsk', show: p => p.type === 'snell' },
+  { section: 'settings', key: 'version', kind: 'number', min: 1, max: 6, default: 4, hintKey: 'snellVersion', show: p => p.type === 'snell' },
+  { section: 'settings', key: 'obfs', kind: 'select', options: SNELL_OBFS, show: p => p.type === 'snell' },
+  { section: 'settings', key: 'mode', kind: 'select', options: SNELL_MODES, show: p => p.type === 'snell' },
   {
     section: 'settings', key: 'server_names', group: 'anxCover', kind: 'list', default: [ANX_COVER], hintKey: 'anxServerNames',
     placeholder: ANX_COVER, show: p => p.type === 'anx'
@@ -198,7 +208,7 @@ export const PROTOCOL_FIELDS = Object.freeze([
   { section: 'tls_settings', key: 'fingerprint', kind: 'select', options: ['', ...FINGERPRINTS], show: p => isTls(p) && isStreamProtocol(p) },
   { section: 'tls_settings', key: 'allowInsecure', kind: 'switch', show: p => Number(p.tls) === 1 },
   { section: 'reality_settings', key: 'dest', kind: 'text', placeholder: `${DEFAULT_REALITY_TARGET}:443`, show: isReality },
-  { section: 'reality_settings', key: 'short_id', kind: 'text', action: 'shortId', show: isReality },
+  { section: 'reality_settings', key: 'short_id', kind: 'text', generate: randomShortId, show: isReality },
   { section: 'reality_settings', key: 'private_key', keys: ['private_key', 'privateKey'], kind: 'password', hintKey: 'privateKey', show: isReality },
   { section: 'reality_settings', key: 'public_key', keys: ['public_key', 'publicKey', 'pbk'], kind: 'text', hintKey: 'publicKey', show: isReality }
 ])
@@ -245,13 +255,13 @@ export function writeField(protocol, field, value) {
 }
 
 // What a freshly chosen protocol type starts with: settings that must have a
-// value (a Shadowsocks method, a TUIC congestion control).
+// value (a Shadowsocks method, a TUIC congestion control, a Snell PSK).
 export function defaultSettingsFor(type) {
   const settings = {}
   for (const field of PROTOCOL_FIELDS) {
-    if (field.section === 'settings' && field.default !== undefined && field.show({ type, tls: 0, transport: 'tcp' })) {
-      settings[field.key] = field.default
-    }
+    if (field.section !== 'settings' || !field.show({ type, tls: 0, transport: 'tcp' })) continue
+    const value = field.default ?? field.generate?.()
+    if (value !== undefined) settings[field.key] = value
   }
   if (type === 'hysteria2') Object.assign(settings, { up_mbps: 100, down_mbps: 100 })
   return settings
@@ -272,7 +282,12 @@ export function defaultRealityFor(protocol, randomHex = randomShortId) {
 
 // 8 random bytes as 16 hex digits, the length Xray and sing-box take.
 export function randomShortId() {
-  const bytes = new Uint8Array(8)
+  return hexBytes(8)
+}
+
+// count random bytes as hex digits.
+function hexBytes(count) {
+  const bytes = new Uint8Array(count)
   globalThis.crypto.getRandomValues(bytes)
   return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('')
 }

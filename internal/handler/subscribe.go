@@ -773,6 +773,7 @@ func (h *SubscriptionAdminHandler) GetProtocolTypes(c *gin.Context) {
 		{"id": "wireguard", "name": "WireGuard", "description": "WireGuard 用户接入协议", "supports_tls": false, "supports_reality": false},
 		{"id": "iwan", "name": "Panabit iWAN", "description": "iWAN 三层隧道（不加密）", "supports_tls": false, "supports_reality": false},
 		{"id": "anx", "name": "ANX", "description": "AnixOps 私有协议 ANX-A（只有 AnixOps Net 客户端能连）", "supports_tls": false, "supports_reality": false},
+		{"id": "snell", "name": "Snell", "description": "Snell 协议（只在 Surge 订阅格式里给出）", "supports_tls": false, "supports_reality": false},
 	}
 
 	panelSuccess(c, protocols)
