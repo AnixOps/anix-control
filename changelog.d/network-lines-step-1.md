@@ -7,3 +7,8 @@
   egress routes, exit policies) as lines and compares the forwards those
   lines plan with the ones the routes plan now. It is read-only; nothing is
   stored and no node changes.
+
+### Security
+
+- Go 1.26.11 (toolchain, CI and the build images): a standard library
+  vulnerability that govulncheck reports in 1.26.10.
