@@ -1,0 +1,9 @@
+### Added
+
+- The network as lines, step 1 of the move to devices, entries, transports,
+  exits and lines (`docs/design/network-lines/README.md`):
+  `GET /api/v4/kernel/network/lines` reads what Control stores today (nodes
+  and their protocols, node entries, forward routes and their subscriptions,
+  egress routes, exit policies) as lines and compares the forwards those
+  lines plan with the ones the routes plan now. It is read-only; nothing is
+  stored and no node changes.

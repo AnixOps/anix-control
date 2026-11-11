@@ -8322,6 +8322,32 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v4/kernel/network/lines": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "What Control stores today read as lines (docs/design/network-lines): snapshot has the devices, uplinks, entries, transports, exits and lines (a line per enabled node protocol and per forward route, with the protocol it serves or its targets, its chain of hops, its exit and its rules) and what could not be read as a line (skipped, with the reason). forwards counts the forwards the routes plan today; differences lists the ones the lines would plan differently (missing, extra, or the fields that differ). Read-only: nothing is stored and no node changes.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "The network as lines",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/v4/kernel/network/standby": {
             "get": {
                 "security": [

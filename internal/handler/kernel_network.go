@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/AnixOps/anix-control/v5/internal/database"
+	"github.com/AnixOps/anix-control/v5/internal/netline"
 	"github.com/AnixOps/anix-control/v5/internal/networkmodel"
 	"github.com/gin-gonic/gin"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -69,6 +70,23 @@ func (h *NetworkModelHandler) Get(c *gin.Context) {
 		return
 	}
 	kernelData(c, http.StatusOK, view)
+}
+
+// Lines godoc
+// @Summary The network as lines
+// @Description What Control stores today read as lines (docs/design/network-lines): snapshot has the devices, uplinks, entries, transports, exits and lines (a line per enabled node protocol and per forward route, with the protocol it serves or its targets, its chain of hops, its exit and its rules) and what could not be read as a line (skipped, with the reason). forwards counts the forwards the routes plan today; differences lists the ones the lines would plan differently (missing, extra, or the fields that differ). Read-only: nothing is stored and no node changes.
+// @Tags Kernel
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} map[string]any
+// @Router /api/v4/kernel/network/lines [get]
+func (h *NetworkModelHandler) Lines(c *gin.Context) {
+	report, err := netline.Shadow(h.db().WithContext(c.Request.Context()))
+	if err != nil {
+		kernelDBError(c, err)
+		return
+	}
+	kernelData(c, http.StatusOK, report)
 }
 
 // Replace godoc
