@@ -619,12 +619,11 @@ The planned `kernel.entitlement.apply.v1` became
   - **Account reads:** the user's profile and dashboard and the
     administrator's user detail, user list and user statistics.
     - The account (email, administrator, staff and ban flags) comes from
-      identity's own store. Identity's store is current only while identity
-      is authoritative, so the kernel lets these five routes leave legacy
-      mode (shadow or native) only then
-      (`service.IdentityAccountReadRoutes`). The rollback returns them to
-      legacy with group A. The cutover leaves them to the operator: they are
-      not part of group A, and group A's rule is unchanged.
+      identity's own store, which is current only while identity is
+      authoritative: these five routes and the two resets
+      (`service.IdentityAccountRoutes`) are native exactly then, like group
+      A, and the rollback returns them to legacy. The cutover does not
+      pause them.
     - The subscriber fields come from `KernelIdentity.GetSubscriber`
       (`kernel.identity.v1`), for one user per call, never from a view:
       plan, traffic and expiry, and the subscription token and proxy uuid
@@ -653,8 +652,8 @@ The planned `kernel.entitlement.apply.v1` became
   - **Resets:** the administrator's traffic reset and subscription reset.
     - They change only the subscriber, through
       `KernelSubscriber.ResetTraffic` (`kernel.subscriber.traffic.v1`) and
-      `ResetCredentials` (`kernel.subscriber.credentials.v1`), so they switch
-      at any time.
+      `ResetCredentials` (`kernel.subscriber.credentials.v1`), and follow the
+      authority with the account reads.
     - Their request id is `identity.reset_traffic:<user>:<digest>` or
       `identity.reset_subscribe:<user>:<digest>`, a digest of the request's
       `Idempotency-Key` (else its request id). The legacy handlers now derive
@@ -688,7 +687,7 @@ The planned `kernel.entitlement.apply.v1` became
     `POST /api/v2/user/subscription/reset`
     (`identity.user.subscription.reset.post`, owner decision 2026-10-02).
     It is identity-platform's, beside the administrator's reset, and in
-    group A rather than among the resets that switch at any time: before it
+    group A rather than with the administrator's resets: before it
     resets, it checks the user's password or second factor, which identity
     owns once authoritative (and the kernel no longer holds after finalize).
     The reset itself is the administrator's: `KernelSubscriber.ResetCredentials`

@@ -385,26 +385,21 @@ func TestStartRunsTheChangeInTheBackground(t *testing.T) {
 	require.Contains(t, f.service.Latest().Error, "already authoritative")
 }
 
-// Identity's account reads and the resets are not in the rehearsed list:
-// they stay legacy whatever the authority, and the cutover and rollback do
-// not touch them.
-func TestAccountReadsStayLegacy(t *testing.T) {
+// Identity's account reads and the resets follow the authority with
+// group A: the cutover makes them native, the rollback legacy again.
+func TestAccountRoutesFollowTheAuthority(t *testing.T) {
 	f := newFixture(t)
 	ctx := context.Background()
-	reads := []string{
-		"identity.user.profile.get", "identity.user.dashboard.get", "identity.admin.users.id.get",
-		"identity.admin.users.get", "identity.admin.users.stats.get",
-		"identity.admin.users.id.reset_traffic.post", "identity.admin.users.id.reset_subscribe.post",
-	}
-	require.Equal(t, map[string]int{packagebridge.RouteModeLegacy: len(reads)}, f.modesOf(t, reads))
+	routes := service.IdentityAccountRoutes
+	require.Equal(t, map[string]int{packagebridge.RouteModeLegacy: len(routes)}, f.modesOf(t, routes))
 	_, err := f.service.Importer.Run(ctx, false)
 	require.NoError(t, err)
 	_, err = f.service.Cutover(ctx, 1)
 	require.NoError(t, err)
-	require.Equal(t, map[string]int{packagebridge.RouteModeLegacy: len(reads)}, f.modesOf(t, reads))
+	require.Equal(t, map[string]int{packagebridge.RouteModeNative: len(routes)}, f.modesOf(t, routes))
 	_, err = f.service.Rollback(ctx, 1)
 	require.NoError(t, err)
-	require.Equal(t, map[string]int{packagebridge.RouteModeLegacy: len(reads)}, f.modesOf(t, reads))
+	require.Equal(t, map[string]int{packagebridge.RouteModeLegacy: len(routes)}, f.modesOf(t, routes))
 	require.Equal(t, map[string]int{packagebridge.RouteModeLegacy: len(service.IdentityGroupARoutes)}, f.groupAModes(t))
 }
 
