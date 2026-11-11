@@ -1,9 +1,8 @@
 // 网络拓扑 (/admin/topology): sixteen devices from Shanghai to Frankfurt,
 // seven forward routes between them (one through an offline exit, one with
 // two entries) and an egress route. The scenario 'direct' has the devices
-// and no line; 'empty' no device. The network as lines gives the Sydney
-// device its region, makes the Guangzhou entry forward in the kernel and
-// names what two routes serve.
+// and no line; 'empty' no device. The scenarios 'lines' and 'lines-empty'
+// open 线路 (/admin/lines) on the same network.
 import { FIXED_NOW_MS } from './clock.js'
 import { EXTENSION } from './forwardV4.js'
 
@@ -42,24 +41,42 @@ const EGRESS = [{
   source_state: { state: 'applied' }, exit_state: { state: 'applied' }
 }]
 
+// The network as lines: a line per route (the first hop of the Guangzhou
+// routes forwards in the kernel), a direct line per exit device, a port
+// forward to a fixed target, and one route that cannot be read as a line.
+const PROTOCOLS = ['vless', 'anx', 'hysteria2', 'vless', 'trojan', 'vless', 'vless']
+const ref = id => `proxy-${id}`
 const NETWORK = {
-  devices: NODES.map(node => ({ ref: `proxy-${node.id}`, name: node.name, host: node.host, kernel: node.id === 3, ...(node.id === 15 ? { region: 'au' } : {}) })),
-  uplinks: [], entries: [], transports: [], exits: [], skipped: [],
+  devices: NODES.map(node => ({ ref: ref(node.id), name: node.name, host: node.host, kernel: node.id === 3, ...(node.id === 15 ? { region: 'au' } : {}) })),
+  uplinks: [], entries: [], transports: [], exits: [],
   lines: [
-    { id: ROUTES[0].route.id, exit: 'proxy-6', protocol: { id: 1, type: 'vless', device: 'proxy-6', port: 443 } },
-    { id: ROUTES[2].route.id, exit: 'proxy-5', protocol: { id: 2, type: 'hysteria2', device: 'proxy-5', port: 8443 } },
-    { id: 'protocol-3', exit: 'proxy-11', protocol: { id: 3, type: 'vless', device: 'proxy-11', port: 443 } }
-  ]
+    ...LINES.map(([name, hops], index) => ({
+      id: ROUTES[index].route.id, name, enabled: true, show: true, port: 443 + index * 1000, l4: ['tcp'], rate: index === 1 ? 1.5 : 1,
+      entries: hops[0].map(ref), chain: hops.map(ids => ({ devices: ids.map(ref) })), exit: ref(hops.at(-1)[0]),
+      protocol: { id: index + 1, type: PROTOCOLS[index], device: ref(hops.at(-1)[0]), port: 443 },
+      ...(index === 2 ? { rules: [{ name: 'ai-via-jp', domains: ['openai.com', 'anthropic.com'], exit: 'proxy-6', enabled: true }] } : {})
+    })),
+    ...[6, 11, 14].map(id => ({
+      id: `protocol-${id + 20}`, name: `${NODES[id - 1].name} direct`, enabled: true, show: id !== 14, port: 8443, l4: ['tcp', 'udp'], rate: 1,
+      entries: [ref(id)], chain: [{ devices: [ref(id)] }], exit: ref(id), protocol: { id: id + 20, type: 'hysteria2', device: ref(id), port: 8443 }
+    })),
+    {
+      id: '01JBTOPOFIXED0000000000000', name: 'game-forward', enabled: true, show: false, port: 30443, l4: ['tcp', 'udp'], rate: 1,
+      entries: ['proxy-2'], chain: [{ devices: ['proxy-2'] }, { devices: ['proxy-5'] }], exit: 'proxy-5', targets: [{ host: 'game.example.jp', port: 7777 }]
+    }
+  ],
+  skipped: [{ id: '01JBTOPOSKIPPED00000000000', reason: 'hop 1 runs on ENGINE_GOST' }]
 }
 
 export default {
   edition: 'community',
-  pathFor: scenario => (scenario === 'graph' ? '/admin/topology?view=graph' : '/admin/topology'),
+  pathFor: scenario => (scenario.startsWith('lines') ? '/admin/lines' : scenario === 'graph' ? '/admin/topology?view=graph' : '/admin/topology'),
   api(path, { scenario }) {
-    const lines = scenario !== 'direct' && scenario !== 'empty'
+    const empty = scenario === 'empty' || scenario === 'lines-empty'
+    const lines = scenario !== 'direct' && !empty
     if (path === '/api/v3/extensions') return [EXTENSION]
-    if (path === '/api/v4/admin/nodes') return { data: { list: scenario === 'empty' ? [] : NODES, total: NODES.length } }
-    if (path === '/api/v4/kernel/network/lines') return { data: { snapshot: scenario === 'empty' ? { ...NETWORK, devices: [], lines: [] } : NETWORK, forwards: 0, differences: [] } }
+    if (path === '/api/v4/admin/nodes') return { data: { list: empty ? [] : NODES, total: NODES.length } }
+    if (path === '/api/v4/kernel/network/lines') return { data: { snapshot: empty ? { ...NETWORK, devices: [], lines: [], skipped: [] } : NETWORK, forwards: 0, differences: [] } }
     if (path === '/api/v4/kernel/egress-routes') return { data: { routes: lines ? EGRESS : [] } }
     if (path === '/api/v4/forward/routes') return { data: { routes: lines ? ROUTES : [], can_delete: true } }
     if (path === '/api/v4/forward/nodes') return { data: { nodes: FORWARD_NODES, can_delete: true } }

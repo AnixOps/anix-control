@@ -38,6 +38,7 @@ import {
   TicketPercent,
   UserRound,
   Users,
+  Waypoints,
   Workflow
 } from '@lucide/vue'
 
@@ -58,6 +59,7 @@ export const NAV_ICONS = Object.freeze({
   nodes: Server,
   forward: ArrowLeftRight,
   'forward-nodes': Network,
+  lines: Waypoints,
   agents: Bot,
   plugins: Puzzle,
   deployments: Rocket,
