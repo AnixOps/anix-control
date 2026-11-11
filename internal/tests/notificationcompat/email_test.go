@@ -11,13 +11,11 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
-	"github.com/AnixOps/anix-control/v5/internal/handler"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/packagebridge"
 	"github.com/AnixOps/anix-control/v5/internal/service"
 	"github.com/AnixOps/anix-control/v5/internal/tests/packagecompat"
 	"github.com/AnixOps/anix-control/v5/packages/notification/native"
-	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )
@@ -29,9 +27,9 @@ var notificationHost = packagebridge.HostIdentity{PackageID: "notification", Ver
 
 // mailRoute runs a route whose native side reads and writes the e-mail
 // configuration through the real KernelSettings server on its database.
-func mailRoute(t *testing.T, method, pattern, routeID string, legacy gin.HandlerFunc) packagecompat.Route {
+func mailRoute(t *testing.T, method, pattern, routeID string) packagecompat.Route {
 	return packagecompat.Route{
-		Method: method, Pattern: pattern, RouteID: routeID, Legacy: legacy,
+		Method: method, Pattern: pattern, RouteID: routeID,
 		Models: []any{&model.SystemConfig{}, &model.OperationLog{}, &model.SettingsRequest{}, &model.User{}},
 		Native: func(db *gorm.DB) pluginhostsdk.NativeHandler {
 			grants := packagecompat.SettingsGrants{Host: notificationHost}
@@ -124,9 +122,9 @@ func mailCases(t *testing.T, r packagecompat.Route, cases []packagecompat.Case) 
 	}
 }
 
-func TestEmailConfigReadRouteParity(t *testing.T) {
+func TestEmailConfigReadRoute(t *testing.T) {
 	path := "/api/v2/admin/notification/email/config"
-	mailCases(t, mailRoute(t, "GET", path, native.EmailConfigGetRouteID, notifications((*handler.NotificationHandler).GetEmailConfig)), []packagecompat.Case{
+	mailCases(t, mailRoute(t, "GET", path, native.EmailConfigGetRouteID), []packagecompat.Case{
 		{Name: "stored configuration, password masked", Path: path, Seed: emailConfig(storedEmail)},
 		{Name: "a blank password reads empty", Path: path, Seed: emailConfig(`{"host":"h","password":"   "}`)},
 		{Name: "a stored placeholder reads masked", Path: path, Seed: emailConfig(`{"host":"h","password":"********"}`)},
@@ -140,9 +138,9 @@ func TestEmailConfigReadRouteParity(t *testing.T) {
 	})
 }
 
-func TestEmailConfigUpdateRouteParity(t *testing.T) {
+func TestEmailConfigUpdateRoute(t *testing.T) {
 	path := "/api/v2/admin/notification/email/config"
-	mailCases(t, mailRoute(t, "PUT", path, native.EmailConfigPutRouteID, notifications((*handler.NotificationHandler).UpdateEmailConfig)), []packagecompat.Case{
+	mailCases(t, mailRoute(t, "PUT", path, native.EmailConfigPutRouteID), []packagecompat.Case{
 		{Name: "a new configuration", Path: path, Seed: otherSettings, Body: []byte(`{"host":" smtp.new.test ","port":587,"username":"u","password":"p",
 			"from_address":"a@new.test","from_name":"New","encryption_type":"starttls"}`)},
 		{Name: "a blank password keeps the stored one", Path: path, Seed: emailConfig(storedEmail), Body: []byte(`{"host":"smtp.example.test","port":"2525","password":"  ","from_address":"b@example.test"}`)},
@@ -262,7 +260,7 @@ func (s *smtpServer) received() []string {
 	return mail
 }
 
-func TestTestNotificationRouteParity(t *testing.T) {
+func TestTestNotificationRoute(t *testing.T) {
 	path := "/api/v2/admin/notification/test"
 	server := newSMTPServer(t)
 	host, port, err := net.SplitHostPort(server.address)
@@ -276,8 +274,8 @@ func TestTestNotificationRouteParity(t *testing.T) {
 		return emailConfig(fmt.Sprintf(`{"host":%q,"port":%s,"username":"mailer","password":"smtp-secret","from_name":"Anix","from_address":"noreply@example.test","encryption":%q}`,
 			host, port, encryption))
 	}
-	// Each side's state includes the mail the SMTP server received for it;
-	// a delivered case must have delivered one.
+	// The state includes the mail the SMTP server received; a delivered
+	// case must have delivered one.
 	state := func(delivered int) func(testing.TB, *gorm.DB) any {
 		return func(t testing.TB, db *gorm.DB) any {
 			mail := server.received()
@@ -304,9 +302,10 @@ func TestTestNotificationRouteParity(t *testing.T) {
 	} {
 		c.Path = path
 		c.Principal = admin
+		c.Volatile = []string{port, closedPort}
 		if c.Snapshot == nil {
 			c.Snapshot = state(0)
 		}
-		packagecompat.RunWrite(t, mailRoute(t, "POST", path, native.TestSendRouteID, notifications((*handler.NotificationHandler).SendTestNotification)), c)
+		packagecompat.RunWrite(t, mailRoute(t, "POST", path, native.TestSendRouteID), c)
 	}
 }

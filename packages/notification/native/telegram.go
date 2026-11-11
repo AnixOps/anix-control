@@ -367,9 +367,8 @@ const SetWebhookRouteID = "notification.admin.telegram.webhook.post"
 // peer is a trusted reverse proxy (server.trusted_proxies); forwarding
 // headers never reach the package and are not read here.
 //
-// A kernel that sends no request scheme or host leaves the request to the
-// legacy handler (pluginhostsdk.ErrNativeUnavailable), which builds the URL
-// from what the kernel's bridge saw.
+// Without the request scheme or host (a kernel that predates them) the
+// route fails with pluginhostsdk.ErrNativeUnavailable.
 func (s *Service) AdminSetWebhook(ctx context.Context, request pluginhostsdk.NativeRequest) (pluginhostsdk.NativeResponse, error) {
 	var req SetWebhookRequest
 	if err := binding.JSON.BindBody(request.Body, &req); err != nil && !errors.Is(err, io.EOF) {

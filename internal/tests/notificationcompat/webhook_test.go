@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
-	"github.com/AnixOps/anix-control/v5/internal/handler"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/tests/packagecompat"
 	"github.com/AnixOps/anix-control/v5/packages/notification/native"
@@ -18,8 +17,8 @@ import (
 	"gorm.io/gorm"
 )
 
-// botAPI stands for the Telegram Bot API. The kernel's and the package's
-// clients both use http.DefaultTransport, which the test replaces: it
+// botAPI stands for the Telegram Bot API. The package's client uses
+// http.DefaultTransport, which the test replaces: it
 // records each call and answers JSON, or a body that is not JSON for the
 // bot token "1:broken".
 type botAPI struct {
@@ -72,14 +71,14 @@ func seedBrokenBot(t testing.TB, db *gorm.DB) {
 }
 
 // The webhook's default URL is the administrator's request's scheme and
-// host: the legacy handler reads them from the request, the native one from
-// the request scheme and host the kernel sends. Neither honours a client's
+// host, which the route reads from the request scheme and host the kernel
+// sends. It does not honour a client's
 // X-Forwarded-Proto (the harness's peer, 192.0.2.1, is no trusted proxy; the
 // kernel resolves a trusted proxy's headers before the package, see
-// internal/requestorigin). Each side's Bot API calls are part of its state.
-func TestAdminSetWebhookParity(t *testing.T) {
+// internal/requestorigin). The Bot API calls are part of the state.
+func TestAdminSetWebhook(t *testing.T) {
 	api := withBotAPI(t)
-	r := route("POST", "/api/v2/admin/telegram/webhook", native.SetWebhookRouteID, telegram((*handler.TelegramHandler).SetWebhook))
+	r := route("POST", "/api/v2/admin/telegram/webhook", native.SetWebhookRouteID)
 	path := "/api/v2/admin/telegram/webhook"
 	withCalls := func(t testing.TB, db *gorm.DB) any {
 		return map[string]any{"rows": rows(t, db), "bot_api": api.drain()}
@@ -113,10 +112,10 @@ func TestAdminSetWebhookParity(t *testing.T) {
 	require.Empty(t, api.drain())
 }
 
-// A kernel that sends no request scheme or host (one that predates them)
-// leaves a webhook without a url to the legacy handler; one with a url
+// Without the request scheme or host (a kernel that predates them) a
+// webhook without a url cannot be built and the route fails; one with a url
 // needs neither.
-func TestAdminSetWebhookDefersWithoutTheRequestAddress(t *testing.T) {
+func TestAdminSetWebhookFailsWithoutTheRequestAddress(t *testing.T) {
 	withBotAPI(t)
 	service := &native.Service{Open: func(ctx context.Context) (*gorm.DB, error) { return nil, errors.New("no storage") }}
 	for _, metadata := range []pluginhostsdk.RequestMetadata{{}, {Scheme: "https"}, {Host: "panel.example.test"}} {

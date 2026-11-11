@@ -1,7 +1,6 @@
 package service
 
 import (
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -412,16 +411,6 @@ func (s *StatsService) getOnlineUsersCount() int64 {
 	return count
 }
 
-// HourlyTraffic 单个小时的流量统计
-type HourlyTraffic struct {
-	HourTs  int64 `json:"hour_ts"` // 该小时起始的 Unix 秒 (整点)
-	Traffic int64 `json:"traffic"` // 该小时流量 (字节, 已按倍率计)
-}
-
-type TrafficLogMeta struct {
-	LatestLogAt int64 `json:"latest_log_at"` // 最近一次流量上报 Unix 秒, 0 表示从未上报
-}
-
 const (
 	hourSeconds     = int64(3600)
 	maxHourlyWindow = 24 * 30 // 最多查询 30 天
@@ -451,154 +440,4 @@ func (s *StatsService) trafficLogAggregateExpr(alias string) string {
 		"CAST(CASE WHEN " + d + " > 0 THEN " + d + " ELSE 0 END AS REAL)" +
 		") * (CASE WHEN " + rate + " > 0 THEN " + rate + " ELSE 1 END)), 0), " +
 		maxInt64SQL + ") AS INTEGER)"
-}
-
-// GetHourlyTraffic 返回最近 hours 个整点小时的流量序列 (含当前未结束的小时),
-// 数据源为 v2_server_log, 按 (log_at/3600) 分桶聚合 SUM((u+d)*rate)。
-// userID > 0 时只统计该用户的流量; userID == 0 时统计全局。
-// 缺失的小时补零, 结果按时间升序返回, 便于前端直接绘制折线图。
-func (s *StatsService) GetHourlyTraffic(hours int, userID uint) ([]HourlyTraffic, error) {
-	if hours <= 0 {
-		hours = 24
-	}
-	if hours > maxHourlyWindow {
-		hours = maxHourlyWindow
-	}
-
-	// 当前整点 (本地时区), 作为最后一个桶
-	now := time.Now()
-	currentHour := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), 0, 0, 0, time.Local).Unix()
-	startHour := currentHour - int64(hours-1)*hourSeconds
-	endHour := currentHour + hourSeconds
-
-	// 按小时分桶聚合
-	type bucketRow struct {
-		Hour    int64
-		Traffic int64
-	}
-	var rows []bucketRow
-	query := s.db.Model(&model.TrafficLog{}).Where("log_at >= ? AND log_at < ?", startHour, endHour)
-	if userID > 0 {
-		query = query.Where("user_id = ?", userID)
-	}
-	if err := query.
-		Select("(log_at / ?) * ? AS hour, "+s.trafficLogAggregateExpr("")+" AS traffic", hourSeconds, hourSeconds).
-		Group("hour").
-		Order("hour ASC").
-		Scan(&rows).Error; err != nil {
-		return nil, err
-	}
-
-	// 映射并补零
-	byHour := make(map[int64]int64, len(rows))
-	for _, r := range rows {
-		byHour[r.Hour] = r.Traffic
-	}
-
-	result := make([]HourlyTraffic, 0, hours)
-	for h := startHour; h <= currentHour; h += hourSeconds {
-		result = append(result, HourlyTraffic{HourTs: h, Traffic: byHour[h]})
-	}
-	return result, nil
-}
-
-// GetTrafficLogMeta returns lightweight diagnostics for traffic chart pages.
-//
-// The latest report time is the latest row's log_at, which is the start of an
-// hour for a row of an hourly bucket. A bucket's created_at is the time of
-// the report that last touched it (addTrafficLogs), so when the latest row
-// is on an hour boundary the latest report is read from it: the dashboard
-// tells a stalled report path by the age of this time.
-func (s *StatsService) GetTrafficLogMeta(userID uint) (TrafficLogMeta, error) {
-	var latest sql.NullInt64
-	query := s.db.Model(&model.TrafficLog{})
-	if userID > 0 {
-		query = query.Where("user_id = ?", userID)
-	}
-	if err := query.Select("MAX(log_at)").Scan(&latest).Error; err != nil {
-		return TrafficLogMeta{}, err
-	}
-	if !latest.Valid {
-		return TrafficLogMeta{}, nil
-	}
-	at := latest.Int64
-	if at%model.TrafficLogBucketSeconds == 0 {
-		var newest []model.TrafficLog
-		bucket := s.db.Model(&model.TrafficLog{}).Where("log_at = ?", at)
-		if userID > 0 {
-			bucket = bucket.Where("user_id = ?", userID)
-		}
-		if err := bucket.Select("created_at").Order("created_at DESC").Limit(1).Find(&newest).Error; err != nil {
-			return TrafficLogMeta{}, err
-		}
-		if len(newest) == 1 {
-			// Only a time inside the bucket's hour is a report time.
-			if reported := newest[0].CreatedAt.Unix(); reported >= at && reported < at+model.TrafficLogBucketSeconds {
-				at = reported
-			}
-		}
-	}
-	return TrafficLogMeta{LatestLogAt: at}, nil
-}
-
-// UserTrafficRank 单个用户的流量排行项
-type UserTrafficRank struct {
-	UserID  uint   `json:"user_id"`
-	Email   string `json:"email"`
-	Traffic int64  `json:"traffic"` // 区间内总流量 (字节, 已按倍率计)
-}
-
-// GetUserTrafficRanking 返回最近 hours 小时内按用户聚合的流量排行 (倒序),
-// 数据源为 v2_server_log, 关联 v2_user 取 email。limit 限制返回条数。
-// includeZeroUsers 为 true 时从用户表出发返回无区间流量的用户, 便于后台按任意用户筛选小时图。
-func (s *StatsService) GetUserTrafficRanking(hours int, limit int, includeZeroUsers bool) ([]UserTrafficRank, error) {
-	if hours <= 0 {
-		hours = 24
-	}
-	if hours > maxHourlyWindow {
-		hours = maxHourlyWindow
-	}
-	if limit <= 0 {
-		limit = 20
-	}
-	maxLimit := 200
-	if includeZeroUsers {
-		maxLimit = 1000
-	}
-	if limit > maxLimit {
-		limit = maxLimit
-	}
-
-	now := time.Now()
-	currentHour := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), 0, 0, 0, time.Local).Unix()
-	startHour := currentHour - int64(hours-1)*hourSeconds
-	endHour := currentHour + hourSeconds
-
-	var ranks []UserTrafficRank
-	if includeZeroUsers {
-		trafficSubquery := s.db.Table("v2_server_log").
-			Select("user_id, "+s.trafficLogAggregateExpr("")+" AS traffic").
-			Where("log_at >= ? AND log_at < ?", startHour, endHour).
-			Group("user_id")
-		if err := s.db.Table("v2_user AS u").
-			Select("u.id AS user_id, u.email AS email, COALESCE(t.traffic, 0) AS traffic").
-			Joins("LEFT JOIN (?) AS t ON t.user_id = u.id", trafficSubquery).
-			Order("traffic DESC, u.id ASC").
-			Limit(limit).
-			Scan(&ranks).Error; err != nil {
-			return nil, err
-		}
-	} else {
-		if err := s.db.Table("v2_server_log AS l").
-			Select("l.user_id AS user_id, COALESCE(u.email, '') AS email, "+s.trafficLogAggregateExpr("l")+" AS traffic").
-			Joins("LEFT JOIN v2_user AS u ON u.id = l.user_id").
-			Where("l.log_at >= ? AND l.log_at < ?", startHour, endHour).
-			Group("l.user_id, u.email").
-			Order("traffic DESC").
-			Limit(limit).
-			Scan(&ranks).Error; err != nil {
-			return nil, err
-		}
-	}
-	return ranks, nil
 }

@@ -23,57 +23,6 @@ func storedEmailConfig(t *testing.T, db *gorm.DB) string {
 	return row.Value
 }
 
-// The e-mail configuration answers the SMTP password masked; an update
-// that sends the placeholder back, or no password, keeps the stored one,
-// and a new password replaces it.
-func TestEmailConfigMasksThePasswordAndKeepsItOnSave(t *testing.T) {
-	db, _, router := setupSystemConfigSecurityTest(t)
-	seedEmailConfig(t, db, storedEmailConfigValue)
-	notifications := NewNotificationHandler()
-	router.GET("/admin/notification/email/config", notifications.GetEmailConfig)
-	router.PUT("/admin/notification/email/config", notifications.UpdateEmailConfig)
-
-	read := func() map[string]any {
-		recorder := performSystemConfigJSONRequest(t, router, http.MethodGet, "/admin/notification/email/config", nil)
-		require.NotContains(t, recorder.Body.String(), "smtp-secret")
-		require.NotContains(t, recorder.Body.String(), "rotated")
-		return decodeJSONMap(t, recorder)["data"].(map[string]any)
-	}
-	require.Equal(t, "********", read()["password"])
-
-	save := func(password any) {
-		body := map[string]any{"host": "smtp.test", "port": 465, "username": "mailer", "from_address": "noreply@example.test"}
-		if password != nil {
-			body["password"] = password
-		}
-		recorder := performSystemConfigJSONRequest(t, router, http.MethodPut, "/admin/notification/email/config", body)
-		require.Equal(t, float64(0), decodeJSONMap(t, recorder)["code"], recorder.Body.String())
-	}
-	// The page sends back what it read.
-	save("********")
-	require.Contains(t, storedEmailConfig(t, db), `"password":"smtp-secret"`)
-	save("")
-	require.Contains(t, storedEmailConfig(t, db), `"password":"smtp-secret"`)
-	save(nil)
-	require.Contains(t, storedEmailConfig(t, db), `"password":"smtp-secret"`)
-	save("rotated")
-	require.Contains(t, storedEmailConfig(t, db), `"password":"rotated"`)
-	require.Equal(t, "********", read()["password"])
-
-	// The test e-mail still uses the stored password.
-	cfg, err := notifications.loadEmailConfig()
-	require.NoError(t, err)
-	require.Equal(t, "rotated", cfg.Password)
-}
-
-func TestEmailConfigWithoutPasswordReadsEmpty(t *testing.T) {
-	db, _, router := setupSystemConfigSecurityTest(t)
-	seedEmailConfig(t, db, `{"host":"smtp.test","password":"  "}`)
-	router.GET("/admin/notification/email/config", NewNotificationHandler().GetEmailConfig)
-	recorder := performSystemConfigJSONRequest(t, router, http.MethodGet, "/admin/notification/email/config", nil)
-	require.Equal(t, "", decodeJSONMap(t, recorder)["data"].(map[string]any)["password"])
-}
-
 // The generic system configuration answers (list, single key, update)
 // show the e-mail configuration with its password masked, and saving the
 // value they showed keeps the stored password.

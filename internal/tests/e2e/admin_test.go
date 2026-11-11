@@ -5,9 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"strconv"
 	"testing"
-	"time"
 
 	"github.com/AnixOps/anix-control/v5/internal/cache"
 	"github.com/AnixOps/anix-control/v5/internal/config"
@@ -233,23 +231,6 @@ func (s *AdminE2ETestSuite) TestAdminAuth_RequireAdmin() {
 	assert.Equal(s.T(), http.StatusForbidden, w.Code)
 }
 
-// TestGetDashboard 测试获取管理仪表盘
-func (s *AdminE2ETestSuite) TestGetDashboard() {
-	req, _ := http.NewRequest("GET", "/api/v2/admin/dashboard", nil)
-	req.Header.Set("Authorization", "Bearer "+s.adminToken)
-
-	w := httptest.NewRecorder()
-	s.router.ServeHTTP(w, req)
-
-	assert.Equal(s.T(), http.StatusOK, w.Code)
-
-	var response map[string]any
-	requireJSONUnmarshal(s.T(), w.Body.Bytes(), &response)
-
-	// 检查仪表盘数据
-	assert.Contains(s.T(), response, "data")
-}
-
 // TestGetUsers 测试获取用户列表
 func (s *AdminE2ETestSuite) TestGetUsers() {
 	req, _ := http.NewRequest("GET", "/api/v2/admin/users", nil)
@@ -337,80 +318,6 @@ func (s *AdminE2ETestSuite) TestCreateNode() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
-}
-
-// TestTrafficHourlyEndpoints verifies the real admin HTTP routes that feed
-// /admin/traffic-hourly, including include_zero_users and legacy rate=0 logs.
-func (s *AdminE2ETestSuite) TestTrafficHourlyEndpoints() {
-	trafficUser := &model.User{
-		Email:          "traffic-http@example.com",
-		Password:       "unused",
-		Token:          uuid.New().String(),
-		UUID:           uuid.New().String(),
-		Balance:        0,
-		TransferEnable: 10737418240,
-		Banned:         0,
-		IsAdmin:        0,
-	}
-	s.Require().NoError(s.db.Create(trafficUser).Error)
-
-	now := time.Now()
-	currentHour := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), 0, 0, 0, time.Local).Unix()
-	s.Require().NoError(s.db.Create(&model.TrafficLog{
-		UserID:     trafficUser.ID,
-		ServerID:   s.testNode.ID,
-		ServerType: "node",
-		U:          1024,
-		D:          2048,
-		Rate:       0,
-		LogAt:      currentHour + 10,
-	}).Error)
-
-	hourlyReq, _ := http.NewRequest("GET", "/api/v2/admin/traffic/hourly?hours=2&user_id="+strconv.FormatUint(uint64(trafficUser.ID), 10), nil)
-	hourlyReq.Header.Set("Authorization", "Bearer "+s.adminToken)
-	hourlyRecorder := httptest.NewRecorder()
-	s.router.ServeHTTP(hourlyRecorder, hourlyReq)
-	assert.Equal(s.T(), http.StatusOK, hourlyRecorder.Code, hourlyRecorder.Body.String())
-
-	hourlyData := requirePanelDataMap(s.T(), hourlyRecorder.Body.Bytes())
-	hourlyRows := hourlyData["list"].([]any)
-	var currentHourTraffic float64
-	for _, item := range hourlyRows {
-		row := item.(map[string]any)
-		if int64(row["hour_ts"].(float64)) == currentHour {
-			currentHourTraffic = row["traffic"].(float64)
-		}
-	}
-	assert.Equal(s.T(), float64(3072), currentHourTraffic)
-
-	rankingReq, _ := http.NewRequest("GET", "/api/v2/admin/traffic/user-ranking?hours=168&limit=500&include_zero_users=true", nil)
-	rankingReq.Header.Set("Authorization", "Bearer "+s.adminToken)
-	rankingRecorder := httptest.NewRecorder()
-	s.router.ServeHTTP(rankingRecorder, rankingReq)
-	assert.Equal(s.T(), http.StatusOK, rankingRecorder.Code, rankingRecorder.Body.String())
-
-	rankingData := requirePanelDataMap(s.T(), rankingRecorder.Body.Bytes())
-	rankingRows := rankingData["list"].([]any)
-	var found bool
-	for _, item := range rankingRows {
-		row := item.(map[string]any)
-		if uint(row["user_id"].(float64)) == trafficUser.ID {
-			found = true
-			assert.Equal(s.T(), "traffic-http@example.com", row["email"])
-			assert.Equal(s.T(), float64(3072), row["traffic"])
-		}
-	}
-	assert.True(s.T(), found)
-
-	oversizedRankingReq, _ := http.NewRequest("GET", "/api/v2/admin/traffic/user-ranking?hours=999999&limit=999999&include_zero_users=true", nil)
-	oversizedRankingReq.Header.Set("Authorization", "Bearer "+s.adminToken)
-	oversizedRankingRecorder := httptest.NewRecorder()
-	s.router.ServeHTTP(oversizedRankingRecorder, oversizedRankingReq)
-	assert.Equal(s.T(), http.StatusOK, oversizedRankingRecorder.Code, oversizedRankingRecorder.Body.String())
-
-	oversizedRankingData := requirePanelDataMap(s.T(), oversizedRankingRecorder.Body.Bytes())
-	oversizedRankingRows := oversizedRankingData["list"].([]any)
-	assert.LessOrEqual(s.T(), len(oversizedRankingRows), 1000)
 }
 
 // TestAdminE2E 运行测试套件

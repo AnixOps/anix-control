@@ -1,8 +1,7 @@
 // Package native implements the platform package's route in the package
 // itself: the system audit log through the kapi_system_audit_log_v1 kernel
-// view. Legacy handler and native route share the rows, so the route can
-// switch between them at any time. Responses are byte-compatible with the
-// legacy handler (internal/tests/platformcompat).
+// view. The kernel keeps no handler for the route; its answers are pinned by
+// internal/tests/platformcompat.
 //
 // The system configuration routes (list, get, set, delete) have no native
 // handler and stay bridged: they work on any key of v2_system_config, a

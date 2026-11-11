@@ -2,13 +2,11 @@ package service
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
 	"io"
 	"log"
 	"net"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -69,70 +67,6 @@ func TestTelegramBotService_GetBot(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "test-token", result.Token)
 	assert.Equal(t, "testbot", result.Name)
-}
-
-func TestTelegramBotService_UpdateBot(t *testing.T) {
-	db := setupTelegramTestDB(t)
-	svc := NewTelegramBotService(db)
-
-	bot := &model.TelegramBot{
-		Token: "test-token",
-		Name:  "testbot",
-	}
-	db.Create(bot)
-
-	// Update bot
-	bot.Name = "updatedbot"
-	err := svc.UpdateBot(bot)
-	require.NoError(t, err)
-
-	// Verify update
-	result, err := svc.GetBot()
-	require.NoError(t, err)
-	assert.Equal(t, "updatedbot", result.Name)
-}
-
-func TestTelegramBotService_SetWebhook(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		resp := map[string]any{
-			"ok": true,
-		}
-		require.NoError(t, json.NewEncoder(w).Encode(resp))
-	}))
-	defer server.Close()
-
-	db := setupTelegramTestDB(t)
-	svc := NewTelegramBotService(db)
-
-	// Create bot
-	bot := &model.TelegramBot{
-		Token: "test-token",
-		Name:  "testbot",
-	}
-	db.Create(bot)
-
-	// We need to mock the API request, but since the URL is built with the token,
-	// we can't easily redirect to our test server. Instead, we test the error path.
-	err := svc.SetWebhook("https://example.com/webhook")
-	// This will fail because the API request goes to api.telegram.org
-	// In a real test, we would inject the HTTP client
-	// For now, we just verify the function runs without panic
-	_ = err
-}
-
-func TestTelegramBotService_DeleteWebhook(t *testing.T) {
-	db := setupTelegramTestDB(t)
-	svc := NewTelegramBotService(db)
-
-	// Create bot
-	bot := &model.TelegramBot{
-		Token: "test-token",
-		Name:  "testbot",
-	}
-	db.Create(bot)
-
-	// Test delete webhook (will fail due to API call, but tests the flow)
-	_ = svc.DeleteWebhook()
 }
 
 func TestTelegramBotService_HandleUpdate_Message(t *testing.T) {
@@ -416,13 +350,6 @@ func TestTelegramUserService_GetByUserID(t *testing.T) {
 	assert.Equal(t, int64(12345), result.TelegramID)
 }
 
-func TestTelegramBotService_GetTelegramUserService(t *testing.T) {
-	db := setupTelegramTestDB(t)
-	svc := NewTelegramBotService(db)
-	userSvc := svc.GetTelegramUserService()
-	assert.NotNil(t, userSvc)
-}
-
 // failingTransport fails every request the way a dead network does.
 type failingTransport struct{ err error }
 
@@ -454,9 +381,7 @@ func TestTelegramBotServiceTransportErrorsCarryNoToken(t *testing.T) {
 			defer log.SetOutput(previous)
 
 			for name, err := range map[string]error{
-				"SendMessage":   svc.SendMessage(1, "hi"),
-				"SetWebhook":    svc.SetWebhook("https://panel.example.test/hook"),
-				"DeleteWebhook": svc.DeleteWebhook(),
+				"SendMessage": svc.SendMessage(1, "hi"),
 			} {
 				require.Error(t, err, name)
 				assert.Equal(t, tc.want, err.Error(), name)

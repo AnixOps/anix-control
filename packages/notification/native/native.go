@@ -1,9 +1,8 @@
 // Package native implements the notification package's v2 routes in the
 // package itself, on the kernel's notification and Telegram tables adopted in
 // place (kernel.storage.adopt), and the e-mail configuration through the
-// kernel's KernelSettings contract. Legacy handlers and native routes share
-// the tables, so a route can switch between them at any time. Responses are
-// byte-compatible with the legacy handlers (internal/tests/notificationcompat).
+// kernel's KernelSettings contract. The kernel keeps no handler for these
+// routes; their answers are pinned by internal/tests/notificationcompat.
 //
 // The e-mail configuration (GET and PUT) and the test send read and write
 // the notification.email.config key of the kernel's v2_system_config
@@ -12,7 +11,7 @@
 // because it sends the test e-mail itself. Administrators see it masked, as
 // the kernel's handler shows it, and an update that keeps it sends the
 // placeholder, which the kernel replaces with the stored password. A host
-// without the contract leaves the three routes legacy.
+// without the contract has no handler for the three routes.
 //
 // Setting the Telegram webhook derives its default URL from the request's
 // scheme and host, which the kernel sends package hosts as request
@@ -46,7 +45,7 @@ type Service struct {
 	// tables and the kapi_user_directory_v1 view are visible.
 	Open func(ctx context.Context) (*gorm.DB, error)
 	// Settings is the kernel's KernelSettings; without it the e-mail
-	// configuration and test send have no native handler and stay legacy.
+	// configuration and test send have no handler.
 	Settings Settings
 	// NewToken names a request that carries neither an Idempotency-Key
 	// nor a request id; it defaults to a random UUID.

@@ -51,11 +51,6 @@ func (s *TelegramBotService) GetBot() (*model.TelegramBot, error) {
 	return &bot, nil
 }
 
-// UpdateBot 更新Bot配置
-func (s *TelegramBotService) UpdateBot(bot *model.TelegramBot) error {
-	return s.db.Save(bot).Error
-}
-
 // TelegramWebhookSecret is the secret_token registered with setWebhook. Telegram
 // sends it back in X-Telegram-Bot-Api-Secret-Token with every update. It is derived
 // from the bot token, so the webhook keeps no extra state. Changing the token
@@ -74,47 +69,6 @@ func (s *TelegramBotService) ValidWebhookSecret(header string) bool {
 		return false
 	}
 	return subtle.ConstantTimeCompare([]byte(header), []byte(TelegramWebhookSecret(bot.Token))) == 1
-}
-
-// SetWebhook 设置Webhook
-func (s *TelegramBotService) SetWebhook(webhookURL string) error {
-	bot, err := s.GetBot()
-	if err != nil {
-		return err
-	}
-
-	url := fmt.Sprintf("https://api.telegram.org/bot%s/setWebhook", bot.Token)
-	payload := map[string]any{
-		"url":          webhookURL,
-		"secret_token": TelegramWebhookSecret(bot.Token),
-	}
-
-	_, err = s.apiRequest(url, payload)
-	if err != nil {
-		return err
-	}
-
-	// 更新配置
-	bot.WebhookURL = webhookURL
-	bot.WebhookSet = true
-	return s.db.Save(bot).Error
-}
-
-// DeleteWebhook 删除Webhook
-func (s *TelegramBotService) DeleteWebhook() error {
-	bot, err := s.GetBot()
-	if err != nil {
-		return err
-	}
-
-	url := fmt.Sprintf("https://api.telegram.org/bot%s/deleteWebhook", bot.Token)
-	_, err = s.apiRequest(url, nil)
-	if err != nil {
-		return err
-	}
-
-	bot.WebhookSet = false
-	return s.db.Save(bot).Error
 }
 
 // HandleUpdate 处理Webhook更新
@@ -654,11 +608,6 @@ type TelegramCallback struct {
 	From    TelegramUser    `json:"from"`
 	Message TelegramMessage `json:"message"`
 	Data    string          `json:"data"`
-}
-
-// GetTelegramUserService 获取Telegram用户服务
-func (s *TelegramBotService) GetTelegramUserService() *TelegramUserService {
-	return NewTelegramUserService(s.db)
 }
 
 // TelegramUserService Telegram用户服务

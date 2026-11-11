@@ -41,20 +41,20 @@ func (s *bridgeStub) Invoke(_ context.Context, _ []byte, operation string, _ []b
 	return packagebridgesdk.Response{StatusCode: 200, Body: []byte(`{"code":0,"msg":"操作成功","ts":1,"data":null}`)}, nil
 }
 
-// Until the kernel sets a route's mode, the host relays it to the legacy
-// handler, bridged routes always; routes outside the package are refused.
-func TestMachineTelemetryHostRelaysRoutesUntilTheyAreSwitchedToNative(t *testing.T) {
-	bridge := &bridgeStub{}
-	service, err := newMachineTelemetryService(bridge, "lease-1")
+// The native routes run natively from the start and never reach the
+// kernel's legacy path; routes outside the package are refused.
+func TestMachineTelemetryHostServesItsNativeRoutesNatively(t *testing.T) {
+	stub := &bridgeStub{}
+	service, err := newMachineTelemetryService(connectedBridge{bridgeStub: stub, conn: &grpc.ClientConn{}}, "lease-1")
 	require.NoError(t, err)
-	for _, route := range []string{"telemetry.admin.traffic.hourly.get", "telemetry.admin.dashboard.get"} {
-		response, err := service.Dispatch(context.Background(), pluginhostsdk.DispatchRequest{
-			RouteID: route, BridgeCapability: make([]byte, 32), DeadlineUnixMillis: time.Now().Add(time.Second).UnixMilli(),
-		})
-		require.NoError(t, err)
-		require.EqualValues(t, 200, response.StatusCode)
-		require.Equal(t, route, bridge.operation)
+	for route := range machineTelemetryRoutes {
+		_, effective := service.Mode(route)
+		require.Equal(t, pluginhostsdk.RouteModeNative, effective, route)
 	}
+	_, _ = service.Dispatch(context.Background(), pluginhostsdk.DispatchRequest{
+		RouteID: "telemetry.admin.traffic.hourly.get", BridgeCapability: make([]byte, 32), DeadlineUnixMillis: time.Now().Add(time.Second).UnixMilli(),
+	})
+	require.Empty(t, stub.operation, "a native route is not relayed")
 
 	_, err = service.Dispatch(context.Background(), pluginhostsdk.DispatchRequest{
 		RouteID: "ticket.user.ticket.get", BridgeCapability: make([]byte, 32), DeadlineUnixMillis: time.Now().Add(time.Second).UnixMilli(),
@@ -69,7 +69,6 @@ func TestMachineTelemetryHostRelaysRoutesUntilTheyAreSwitchedToNative(t *testing
 		require.NotContains(t, handlers, route, "a bridged route has no native handler")
 		require.NotContains(t, machineTelemetryRoutes, route)
 	}
-	require.NotContains(t, (&native.Service{}).Handlers(), native.DashboardRouteID, "without KernelTelemetry the dashboard stays legacy")
 }
 
 // The host accepts exactly the package's declared compatibility routes.

@@ -14,7 +14,6 @@ import (
 	kerneltelemetryv1 "github.com/AnixOps/anix-control/sdk/api/kerneltelemetry/v1"
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
 	"github.com/AnixOps/anix-control/v5/internal/cache"
-	"github.com/AnixOps/anix-control/v5/internal/handler"
 	"github.com/AnixOps/anix-control/v5/internal/kerneltelemetry"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/packagebridge"
@@ -30,14 +29,15 @@ import (
 	"gorm.io/gorm/logger"
 )
 
-// The dashboard's parity: the legacy handler answers the snapshot the
-// kernel caches; the native one reads it through the real KernelTelemetry
-// server (internal/kerneltelemetry), served in process over gRPC on the
-// native side's database. The cache is the kernel's memory, one per
-// process: each side's seed starts it afresh, so a case's sides do not
-// share it, and a seeded snapshot is answered byte for byte, cached_at
-// included. A snapshot a side builds itself has that side's cached_at,
-// which is masked; the cache it leaves is compared.
+// The dashboard reads the snapshot the kernel caches through the real
+// KernelTelemetry server (internal/kerneltelemetry), served in process over
+// gRPC on the case's database. The cache is the kernel's memory, one per
+// process: each seed starts it afresh, and a seeded snapshot is answered
+// byte for byte, cached_at included. A snapshot built for the request has
+// the time of the build as cached_at, which is masked, as are its order
+// figures, which only the commercial order set counts
+// (TestSeededDashboardCountsEveryField pins them); the cache it leaves is
+// compared.
 
 // telemetryHost is the identity the kernel serves the machine-telemetry
 // host as.
@@ -75,7 +75,6 @@ func kernelTelemetry(t *testing.T, db *gorm.DB) kerneltelemetryv1.KernelTelemetr
 func dashboardRoute(t *testing.T) packagecompat.Route {
 	return packagecompat.Route{
 		Method: "GET", Pattern: "/api/v2/admin/dashboard", RouteID: native.DashboardRouteID,
-		Legacy: stats((*handler.AdminHandler).GetDashboard),
 		Models: []any{
 			&model.User{}, &model.Plan{}, &model.Order{}, &model.ServerVMess{}, &model.ServerVLESS{}, &model.ServerTrojan{},
 			&model.ServerShadowsocks{}, &model.TrafficLog{},
@@ -209,9 +208,9 @@ func dashboardCache(t testing.TB, _ *gorm.DB) any {
 	return map[string]any{"snapshot": snapshot, "cached_at": cachedAt}
 }
 
-// rebuilt is dashboardCache for a case whose side builds a snapshot from
-// the seeded rows: the build must succeed on every backend and count them,
-// or two failing sides would agree.
+// rebuilt is dashboardCache for a case that builds a snapshot from the
+// seeded rows: the build must succeed on every backend and count them. The
+// order figures are left out (see above).
 func rebuilt(t testing.TB, db *gorm.DB) any {
 	state := dashboardCache(t, db)
 	cached, ok := state.(map[string]any)
@@ -222,15 +221,18 @@ func rebuilt(t testing.TB, db *gorm.DB) any {
 	require.EqualValues(t, 7, snapshot.TotalNodes)
 	require.EqualValues(t, 3, snapshot.OnlineUsers)
 	require.EqualValues(t, 1200, snapshot.TodayTraffic)
+	snapshot.TotalOrders, snapshot.PendingOrders, snapshot.PaidOrders = 0, 0, 0
+	snapshot.TotalRevenue, snapshot.MonthlyIncome, snapshot.TodayIncome = 0, 0, 0
+	cached["snapshot"] = snapshot
 	return state
 }
 
-func TestDashboardRouteParity(t *testing.T) {
+func TestDashboardRoute(t *testing.T) {
 	path := "/api/v2/admin/dashboard"
-	built := []string{"data.cached_at"}
+	built := []string{"data.cached_at", "data.total_orders", "data.pending_orders", "data.paid_orders", "data.total_revenue", "data.monthly_income", "data.today_income"}
 	utc := time.Date(2026, 10, 1, 0, 0, 1, 0, time.UTC)
 	cases := []packagecompat.Case{
-		// No snapshot cached: each side builds one from its rows, answers
+		// No snapshot cached: the kernel builds one from the rows, answers
 		// it and caches it.
 		{Name: "built from the rows", Path: path, Seed: seedDashboard, Mask: built, Snapshot: rebuilt},
 		{Name: "built from no rows", Path: path, Seed: emptyDashboard, Mask: built},
@@ -267,7 +269,7 @@ func TestDashboardRouteParity(t *testing.T) {
 }
 
 // The rows seeded for the dashboard make every count nonzero, so the
-// parity cases compare each field; the alive set is counted, its members
+// route cases compare each field; the alive set is counted, its members
 // are not answered.
 func TestSeededDashboardCountsEveryField(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "dashboard.db")), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})

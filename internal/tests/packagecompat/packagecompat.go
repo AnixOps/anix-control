@@ -3,6 +3,10 @@
 // it to prove that a native route answers byte-compatibly (after
 // v2compat.NormalizeForCompare) before its mode moves past shadow.
 //
+// A route whose legacy handler is deleted leaves Route.Legacy nil: its native
+// answer is then compared with the one recorded in the test's testdata while
+// both implementations still matched (golden.go).
+//
 // Every run seeds two independent databases: the legacy handler reads the
 // kernel's global database, the native handler gets its own connection. They
 // are SQLite files by default; with ANIX_TEST_POSTGRES_DSN set, RunRead and
@@ -50,7 +54,9 @@ type Route struct {
 	Method  string
 	Pattern string
 	RouteID string
-	// Legacy is the kernel's gin handler. It reads database.GetDB().
+	// Legacy is the kernel's gin handler. It reads database.GetDB(). A
+	// route the kernel keeps no handler for leaves it nil: the native answer
+	// is then compared with the recorded one (golden.go).
 	Legacy gin.HandlerFunc
 	// Native builds the package implementation on a database connection.
 	Native func(db *gorm.DB) pluginhostsdk.NativeHandler
@@ -74,6 +80,9 @@ type Case struct {
 	// differ by design, such as tokens and secrets: they must exist on both
 	// sides and are replaced before comparing.
 	Mask []string
+	// Volatile lists texts that differ from run to run, such as a port the
+	// test listens on: a recorded answer holds "<volatile>" in their place.
+	Volatile []string
 	// Headers lists response headers both sides must send.
 	Headers []string
 	// RequestHeaders are sent with the request: the legacy handler reads
@@ -113,6 +122,10 @@ type Result struct {
 func RunRead(t *testing.T, route Route, c Case) {
 	t.Helper()
 	forEachBackend(t, c.Name, func(t *testing.T, open opener) {
+		if route.Legacy == nil {
+			requireGolden(t, c, runNative(t, open, route, c))
+			return
+		}
 		legacy, native := run(t, open, route, c)
 		requireSame(t, c, legacy, native)
 	})
@@ -123,6 +136,10 @@ func RunWrite(t *testing.T, route Route, c Case) {
 	t.Helper()
 	require.NotNil(t, c.Snapshot, "RunWrite needs Case.Snapshot")
 	forEachBackend(t, c.Name, func(t *testing.T, open opener) {
+		if route.Legacy == nil {
+			requireGolden(t, c, runNative(t, open, route, c))
+			return
+		}
 		legacy, native := run(t, open, route, c)
 		requireSame(t, c, legacy, native)
 		legacyState, err := json.Marshal(legacy.State)
@@ -225,6 +242,12 @@ func run(t *testing.T, open opener, route Route, c Case) (Result, Result) {
 		legacy.State = c.Snapshot(t, legacyDB)
 	}
 
+	return legacy, runNative(t, open, route, c)
+}
+
+func runNative(t *testing.T, open opener, route Route, c Case) Result {
+	t.Helper()
+	gin.SetMode(gin.TestMode)
 	_, nativeDB, migrated := open(t, "native", route.Models)
 	prepare(t, nativeDB, route, c, migrated)
 	handler := route.Native(nativeDB)
@@ -252,7 +275,7 @@ func run(t *testing.T, open opener, route Route, c Case) (Result, Result) {
 	if c.Snapshot != nil {
 		native.State = c.Snapshot(t, nativeDB)
 	}
-	return legacy, native
+	return native
 }
 
 // requestScheme is the scheme the kernel sends: from the connection's TLS

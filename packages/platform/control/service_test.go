@@ -29,20 +29,27 @@ func (s *bridgeStub) Invoke(_ context.Context, _ []byte, operation string, _ []b
 	return packagebridgesdk.Response{StatusCode: 200, Body: []byte(`{"code":0,"msg":"操作成功","ts":1,"data":null}`)}, nil
 }
 
-// Until the kernel sets a route's mode, the host relays it to the legacy
-// handler, bridged routes always; routes outside the package are refused.
-func TestPlatformHostRelaysRoutesUntilTheyAreSwitchedToNative(t *testing.T) {
+// The audit log route runs natively from the start and never reaches the
+// kernel's legacy path; the bridged routes relay to the kernel; routes
+// outside the package are refused.
+func TestPlatformHostServesItsNativeRouteNatively(t *testing.T) {
 	bridge := &bridgeStub{}
 	service, err := newPlatformService(bridge, "lease-1")
 	require.NoError(t, err)
-	for _, route := range []string{"platform.admin.system.audit_logs.get", "platform.admin.system.configs.get"} {
-		response, err := service.Dispatch(context.Background(), pluginhostsdk.DispatchRequest{
+	for route := range platformRoutes {
+		_, effective := service.Mode(route)
+		require.Equal(t, pluginhostsdk.RouteModeNative, effective, route)
+		_, _ = service.Dispatch(context.Background(), pluginhostsdk.DispatchRequest{
 			RouteID: route, BridgeCapability: make([]byte, 32), DeadlineUnixMillis: time.Now().Add(time.Second).UnixMilli(),
 		})
-		require.NoError(t, err)
-		require.EqualValues(t, 200, response.StatusCode)
-		require.Equal(t, route, bridge.operation)
+		require.Empty(t, bridge.operation, "a native route is not relayed")
 	}
+	response, err := service.Dispatch(context.Background(), pluginhostsdk.DispatchRequest{
+		RouteID: "platform.admin.system.configs.get", BridgeCapability: make([]byte, 32), DeadlineUnixMillis: time.Now().Add(time.Second).UnixMilli(),
+	})
+	require.NoError(t, err)
+	require.EqualValues(t, 200, response.StatusCode)
+	require.Equal(t, "platform.admin.system.configs.get", bridge.operation)
 
 	_, err = service.Dispatch(context.Background(), pluginhostsdk.DispatchRequest{
 		RouteID: "ticket.user.ticket.get", BridgeCapability: make([]byte, 32), DeadlineUnixMillis: time.Now().Add(time.Second).UnixMilli(),

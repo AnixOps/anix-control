@@ -187,9 +187,9 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			admin.GET("/ws/monitor", registeredPackageWebSocketRoute(v2WebSocketGateway.Serve, "machine-telemetry", "telemetry.admin.ws.monitor.get", monitorWSHandler.HandleMonitorWS, nil))
 
 			// 仪表盘
-			admin.GET("/dashboard", registeredPackageRoute(v2PackageGateway.Serve, "machine-telemetry", "telemetry.admin.dashboard.get", adminHandler.GetDashboard))
-			admin.GET("/traffic/hourly", registeredPackageRoute(v2PackageGateway.Serve, "machine-telemetry", "telemetry.admin.traffic.hourly.get", adminHandler.GetHourlyTraffic))
-			admin.GET("/traffic/user-ranking", registeredPackageRoute(v2PackageGateway.Serve, "machine-telemetry", "telemetry.admin.traffic.user_ranking.get", adminHandler.GetUserTrafficRanking))
+			admin.GET("/dashboard", v2PackageGateway.Serve)
+			admin.GET("/traffic/hourly", v2PackageGateway.Serve)
+			admin.GET("/traffic/user-ranking", v2PackageGateway.Serve)
 			admin.GET("/system/info", registeredPackageRoute(v2PackageGateway.Serve, "machine-telemetry", "telemetry.admin.system.info.get", adminHandler.GetSystemInfo))
 
 			// 邀请码管理 (注册邀请码，社区版保留)
@@ -295,16 +295,15 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			// 支付统计和记录
 
 			// ========== Telegram Bot 管理 ==========
-			telegramHandler := handler.NewTelegramHandler()
 
-			admin.GET("/telegram/bot", registeredPackageRoute(v2PackageGateway.Serve, "notification", "notification.admin.telegram.bot.get", telegramHandler.GetBot))
-			admin.PUT("/telegram/bot", registeredPackageRoute(v2PackageGateway.Serve, "notification", "notification.admin.telegram.bot.put", telegramHandler.UpdateBot))
-			admin.POST("/telegram/webhook", registeredPackageRoute(v2PackageGateway.Serve, "notification", "notification.admin.telegram.webhook.post", telegramHandler.SetWebhook))
-			admin.DELETE("/telegram/webhook", registeredPackageRoute(v2PackageGateway.Serve, "notification", "notification.admin.telegram.webhook.delete", telegramHandler.DeleteWebhook))
-			admin.POST("/telegram/notify", registeredPackageRoute(v2PackageGateway.Serve, "notification", "notification.admin.telegram.notify.post", telegramHandler.SendNotification))
-			admin.POST("/telegram/broadcast", registeredPackageRoute(v2PackageGateway.Serve, "notification", "notification.admin.telegram.broadcast.post", telegramHandler.Broadcast))
-			admin.GET("/telegram/users", registeredPackageRoute(v2PackageGateway.Serve, "notification", "notification.admin.telegram.users.get", telegramHandler.GetUserBindings))
-			admin.PUT("/telegram/users/:id/notify", registeredPackageRoute(v2PackageGateway.Serve, "notification", "notification.admin.telegram.users.id.notify.put", telegramHandler.UpdateUserNotify))
+			admin.GET("/telegram/bot", v2PackageGateway.Serve)
+			admin.PUT("/telegram/bot", v2PackageGateway.Serve)
+			admin.POST("/telegram/webhook", v2PackageGateway.Serve)
+			admin.DELETE("/telegram/webhook", v2PackageGateway.Serve)
+			admin.POST("/telegram/notify", v2PackageGateway.Serve)
+			admin.POST("/telegram/broadcast", v2PackageGateway.Serve)
+			admin.GET("/telegram/users", v2PackageGateway.Serve)
+			admin.PUT("/telegram/users/:id/notify", v2PackageGateway.Serve)
 
 			// ========== MFA 管理 ==========
 			admin.GET("/mfa/config", v2PackageGateway.Serve)
@@ -313,15 +312,14 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			// ========== 邀请码管理（注册控制，所有版本） ==========
 
 			// ========== 通知管理 ==========
-			notificationHandler := handler.NewNotificationHandler()
-			admin.GET("/notification/templates", registeredPackageRoute(v2PackageGateway.Serve, "notification", "notification.admin.notification.templates.get", notificationHandler.ListTemplates))
-			admin.POST("/notification/templates", registeredPackageRoute(v2PackageGateway.Serve, "notification", "notification.admin.notification.templates.post", notificationHandler.CreateTemplate))
-			admin.PUT("/notification/templates/:id", registeredPackageRoute(v2PackageGateway.Serve, "notification", "notification.admin.notification.templates.id.put", notificationHandler.UpdateTemplate))
-			admin.DELETE("/notification/templates/:id", registeredPackageRoute(v2PackageGateway.Serve, "notification", "notification.admin.notification.templates.id.delete", notificationHandler.DeleteTemplate))
-			admin.GET("/notification/logs", registeredPackageRoute(v2PackageGateway.Serve, "notification", "notification.admin.notification.logs.get", notificationHandler.ListLogs))
-			admin.POST("/notification/test", registeredPackageRoute(v2PackageGateway.Serve, "notification", "notification.admin.notification.test.post", notificationHandler.SendTestNotification))
-			admin.GET("/notification/email/config", registeredPackageRoute(v2PackageGateway.Serve, "notification", "notification.admin.notification.email.config.get", notificationHandler.GetEmailConfig))
-			admin.PUT("/notification/email/config", registeredPackageRoute(v2PackageGateway.Serve, "notification", "notification.admin.notification.email.config.put", notificationHandler.UpdateEmailConfig))
+			admin.GET("/notification/templates", v2PackageGateway.Serve)
+			admin.POST("/notification/templates", v2PackageGateway.Serve)
+			admin.PUT("/notification/templates/:id", v2PackageGateway.Serve)
+			admin.DELETE("/notification/templates/:id", v2PackageGateway.Serve)
+			admin.GET("/notification/logs", v2PackageGateway.Serve)
+			admin.POST("/notification/test", v2PackageGateway.Serve)
+			admin.GET("/notification/email/config", v2PackageGateway.Serve)
+			admin.PUT("/notification/email/config", v2PackageGateway.Serve)
 
 			// ========== 邀请返利管理 ==========
 
@@ -332,7 +330,7 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			admin.GET("/system/subscription-settings", registeredPackageRoute(v2PackageGateway.Serve, "subscription", "subscription.admin.system.subscription_settings.get", systemHandler.GetSubscriptionSettings))
 			admin.PUT("/system/configs/:key", registeredPackageRoute(v2PackageGateway.Serve, "platform", "platform.admin.system.configs.key.put", systemHandler.SetConfig))
 			admin.DELETE("/system/configs/:key", registeredPackageRoute(v2PackageGateway.Serve, "platform", "platform.admin.system.configs.key.delete", systemHandler.DeleteConfig))
-			admin.GET("/system/audit-logs", registeredPackageRoute(v2PackageGateway.Serve, "platform", "platform.admin.system.audit_logs.get", systemHandler.GetAuditLogs))
+			admin.GET("/system/audit-logs", v2PackageGateway.Serve)
 
 			// The backup routes (/system/backup*, /system/backups*) are gone:
 			// their schedule, retention and S3 settings ran nothing and the
@@ -357,10 +355,9 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			// 用户支付
 
 			// 用户 Telegram
-			telegramHandler := handler.NewTelegramHandler()
-			authUser.GET("/user/telegram/status", registeredPackageRoute(v2PackageGateway.Serve, "notification", "notification.user.telegram.status.get", telegramHandler.GetTelegramStatus))
-			authUser.POST("/user/telegram/unbind", registeredPackageRoute(v2PackageGateway.Serve, "notification", "notification.user.telegram.unbind.post", telegramHandler.UnbindTelegram))
-			authUser.POST("/user/telegram/notify", registeredPackageRoute(v2PackageGateway.Serve, "notification", "notification.user.telegram.notify.post", telegramHandler.UpdateNotifySettings))
+			authUser.GET("/user/telegram/status", v2PackageGateway.Serve)
+			authUser.POST("/user/telegram/unbind", v2PackageGateway.Serve)
+			authUser.POST("/user/telegram/notify", v2PackageGateway.Serve)
 
 			// 用户 MFA
 			authUser.GET("/user/mfa/status", v2PackageGateway.Serve)
@@ -374,11 +371,10 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			authUser.POST("/user/subscription/reset", middleware.AuditLog(), v2PackageGateway.Serve)
 
 			// 用户通知
-			notificationHandler := handler.NewNotificationHandler()
-			authUser.GET("/user/notifications", registeredPackageRoute(v2PackageGateway.Serve, "notification", "notification.user.notifications.get", notificationHandler.GetUserNotifications))
-			authUser.GET("/user/notifications/unread-count", registeredPackageRoute(v2PackageGateway.Serve, "notification", "notification.user.notifications.unread_count.get", notificationHandler.GetUnreadCount))
-			authUser.POST("/user/notifications/:id/read", registeredPackageRoute(v2PackageGateway.Serve, "notification", "notification.user.notifications.id.read.post", notificationHandler.MarkAsRead))
-			authUser.POST("/user/notifications/read-all", registeredPackageRoute(v2PackageGateway.Serve, "notification", "notification.user.notifications.read_all.post", notificationHandler.MarkAllAsRead))
+			authUser.GET("/user/notifications", v2PackageGateway.Serve)
+			authUser.GET("/user/notifications/unread-count", v2PackageGateway.Serve)
+			authUser.POST("/user/notifications/:id/read", v2PackageGateway.Serve)
+			authUser.POST("/user/notifications/read-all", v2PackageGateway.Serve)
 
 			// 用户邀请
 		}

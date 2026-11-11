@@ -68,8 +68,7 @@ func (h *KernelAlertsHandler) List(c *gin.Context) {
 // such as the alert monitor's digest. A configuration without a host or a
 // from address is not usable: it answers nil.
 func LoadNotificationEmailConfig(db *gorm.DB) (*model.EmailConfig, error) {
-	handler := &NotificationHandler{systemConfigService: service.NewSystemConfigService(db)}
-	cfg, err := handler.loadEmailConfig()
+	cfg, err := loadEmailConfig(service.NewSystemConfigService(db))
 	if err != nil {
 		return nil, err
 	}
