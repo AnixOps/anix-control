@@ -11,14 +11,12 @@ import (
 
 	kernelnodeopsv1 "github.com/AnixOps/anix-control/sdk/api/kernelnodeops/v1"
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
-	"github.com/AnixOps/anix-control/v5/internal/handler"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/nodesecrets"
 	"github.com/AnixOps/anix-control/v5/internal/service"
 	"github.com/AnixOps/anix-control/v5/internal/tests/packagecompat"
 	"github.com/AnixOps/anix-control/v5/packages/protocol-runtime/native"
 	mirror "github.com/AnixOps/anix-control/v5/packages/protocol-runtime/native/model"
-	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )
@@ -29,22 +27,16 @@ import (
 // reads v2_node_protocol, which its lease adopts once the node credential
 // split finalized it, and writes the rows; the kernel validates and stores
 // the secrets (PutSecretDocument) and retires a deleted protocol's peers,
-// links and secrets (RetireProtocol). Both sides start from the same rows,
-// finalized; the answers are the same bytes and the rows, the split
-// table's secrets, the peers and the links end the same.
+// links and secrets (RetireProtocol). Each case starts from the same rows,
+// finalized, and requires the answer recorded for it.
 
 // WireGuard key pairs, one for the seeded protocol and one an
-// administrator types, generated once so both sides store the same.
-var wireGuard = func() (pair struct{ private, public, otherPrivate, otherPublic string }) {
-	var err error
-	if pair.private, pair.public, err = service.GenerateWireGuardKeypair(); err != nil {
-		panic(err)
-	}
-	if pair.otherPrivate, pair.otherPublic, err = service.GenerateWireGuardKeypair(); err != nil {
-		panic(err)
-	}
-	return pair
-}()
+// administrator types: generated for this test and used nowhere else, and
+// fixed, so the recorded answers hold them.
+var wireGuard = struct{ private, public, otherPrivate, otherPublic string }{
+	private: "xFgrZYz2S27LdAUfmgvMBP9EVh6BYwOlMP5PgnlNy/Q=", public: "p1T3JyjXGiS31F8mQjgZ/jHyPzC/BcEdwPDQ0pdD5gU=",
+	otherPrivate: "HgjMzty/73P8n/d1cSgyDaMp7tKkz+KjFg2lUwZOl5M=", otherPublic: "lcuwvHt27KTECRVvIHPzkpV3dgqLPM8frdRVjIVOqk4=",
+}
 
 var protocolModels = []any{
 	&model.Node{}, &model.NodeProtocol{}, &model.WireGuardPeer{}, &model.SubscriptionGroup{}, &model.SubscriptionTemplate{},
@@ -56,15 +48,10 @@ func protocolCapabilities() []string {
 }
 
 // protocolRoute is a node protocol route on the kernel's path.
-func protocolRoute(method, pattern, routeID string, legacy func(*handler.NodeHandler, *gin.Context)) packagecompat.KernelRoute {
+func protocolRoute(method, pattern, routeID string) packagecompat.KernelRoute {
 	models := append(append(append([]any{}, protocolModels...), packagecompat.NodeSplitModels()...), append(model.KernelNodeOperationModels(), &model.EgressRoute{}, &model.NodeExitPolicy{})...)
 	return packagecompat.KernelRoute{
-		Route: packagecompat.Route{
-			Method: method, Pattern: pattern, RouteID: routeID, Models: models,
-			// The legacy handler is built per request: it keeps the
-			// database it was built with.
-			Legacy: func(c *gin.Context) { legacy(handler.NewNodeHandler(), c) },
-		},
+		Route:     packagecompat.Route{Method: method, Pattern: pattern, RouteID: routeID, Models: models},
 		PackageID: "protocol-runtime", Capabilities: protocolCapabilities(),
 		NativeService: func(db *gorm.DB, nodeOps kernelnodeopsv1.KernelNodeOpsClient) pluginhostsdk.NativeHandler {
 			return (&native.Service{
@@ -198,9 +185,9 @@ func kernelWrite(t *testing.T, r packagecompat.KernelRoute, cases []packagecompa
 	}
 }
 
-func TestNodeProtocolsReadParity(t *testing.T) {
+func TestNodeProtocolsRead(t *testing.T) {
 	path := func(id string) string { return "/api/v2/admin/nodes/" + id + "/protocols" }
-	kernelRead(t, protocolRoute("GET", "/api/v2/admin/nodes/:id/protocols", native.ProtocolsRouteID, (*handler.NodeHandler).GetProtocols),
+	kernelRead(t, protocolRoute("GET", "/api/v2/admin/nodes/:id/protocols", native.ProtocolsRouteID),
 		[]packagecompat.Case{
 			{Name: "by sort and id, secrets masked", Path: path("1")},
 			{Name: "a hidden protocol without secrets", Path: path("2")},
@@ -211,7 +198,7 @@ func TestNodeProtocolsReadParity(t *testing.T) {
 		})
 }
 
-func TestNodeProtocolCreateParity(t *testing.T) {
+func TestNodeProtocolCreate(t *testing.T) {
 	pattern := "/api/v2/admin/nodes/:id/protocols"
 	path := func(id string) string { return "/api/v2/admin/nodes/" + id + "/protocols" }
 	stamped := []string{"data.created_at", "data.updated_at"}
@@ -220,7 +207,7 @@ func TestNodeProtocolCreateParity(t *testing.T) {
 		require.NoError(t, err)
 		return encoded
 	}
-	kernelWrite(t, protocolRoute("POST", pattern, native.CreateProtocolRouteID, (*handler.NodeHandler).CreateProtocol), []packagecompat.Case{
+	kernelWrite(t, protocolRoute("POST", pattern, native.CreateProtocolRouteID), []packagecompat.Case{
 		{Name: "reality with a typed private key", Path: path("2"), Mask: stamped, Body: body(map[string]any{
 			"name": "new-reality", "type": "vless", "port": 2443, "tls": 2, "sort": 3,
 			"reality_settings": `{"dest":"www.example.test:443","private_key":"typed-reality-private","public_key":"pub-new","short_ids":["cd"]}`,
@@ -258,16 +245,15 @@ func TestNodeProtocolCreateParity(t *testing.T) {
 		{Name: "a node id that is not a number", Path: path("x"), Body: body(map[string]any{"name": "x"})},
 		{Name: "a port that is a string", Path: path("2"), Body: []byte(`{"name":"x","port":"443"}`)},
 		{Name: "a type that is a number", Path: path("2"), Body: []byte(`{"name":"x","type":7}`)},
-		// A body the gateway cannot seal is served by the kernel's legacy
-		// handler, without the package host.
-		{Name: "not JSON", Path: path("2"), Body: []byte(`{"name":`), Fallback: true},
+		// A body the gateway cannot seal is refused there.
+		{Name: "not JSON", Path: path("2"), Body: []byte(`{"name":`)},
 		{Name: "no body", Path: path("2")},
-		{Name: "a custom configuration that is not JSON is the kernel's", Path: path("2"), Mask: stamped, Fallback: true,
+		{Name: "a custom configuration that is not JSON", Path: path("2"),
 			Body: body(map[string]any{"name": "raw", "type": "vless", "port": 6443, "custom_config": "not json"})},
 	})
 }
 
-func TestNodeProtocolUpdateParity(t *testing.T) {
+func TestNodeProtocolUpdate(t *testing.T) {
 	pattern := "/api/v2/admin/nodes/:id/protocols/:protocol_id"
 	path := func(id string) string { return "/api/v2/admin/nodes/1/protocols/" + id }
 	body := func(value map[string]any) []byte {
@@ -275,7 +261,7 @@ func TestNodeProtocolUpdateParity(t *testing.T) {
 		require.NoError(t, err)
 		return encoded
 	}
-	kernelWrite(t, protocolRoute("PUT", pattern, native.UpdateProtocolRouteID, (*handler.NodeHandler).UpdateProtocol), []packagecompat.Case{
+	kernelWrite(t, protocolRoute("PUT", pattern, native.UpdateProtocolRouteID), []packagecompat.Case{
 		{Name: "a field without secrets", Path: path("1"), Body: body(map[string]any{"name": "renamed", "sort": 9})},
 		{Name: "the placeholder keeps the private key", Path: path("1"), Body: body(map[string]any{
 			"reality_settings": map[string]any{"dest": "other.example.test:443", "private_key": service.NodeSecretPlaceholder, "public_key": "pub-2", "short_ids": []string{"ab"}},
@@ -300,17 +286,17 @@ func TestNodeProtocolUpdateParity(t *testing.T) {
 		{Name: "a value of the wrong type", Path: path("4"), Body: body(map[string]any{"port": "x"})},
 		{Name: "an unknown protocol", Path: path("99"), Body: body(map[string]any{"name": "x"})},
 		// The gateway binds handles to the protocol the path names: a path
-		// that names none is served by the kernel's legacy handler.
-		{Name: "a protocol id that is not a number", Path: path("x"), Body: body(map[string]any{"name": "x"}), Fallback: true},
-		{Name: "not JSON", Path: path("1"), Body: []byte(`{"name":`), Fallback: true},
-		{Name: "a document that is not JSON is the kernel's", Path: path("4"), Fallback: true, Body: body(map[string]any{"custom_config": "not json"})},
+		// that names none is refused there.
+		{Name: "a protocol id that is not a number", Path: path("x"), Body: body(map[string]any{"name": "x"})},
+		{Name: "not JSON", Path: path("1"), Body: []byte(`{"name":`)},
+		{Name: "a document that is not JSON", Path: path("4"), Body: body(map[string]any{"custom_config": "not json"})},
 	})
 }
 
-func TestNodeProtocolDeleteParity(t *testing.T) {
+func TestNodeProtocolDelete(t *testing.T) {
 	pattern := "/api/v2/admin/nodes/:id/protocols/:protocol_id"
 	path := func(id string) string { return "/api/v2/admin/nodes/1/protocols/" + id }
-	kernelWrite(t, protocolRoute("DELETE", pattern, native.DeleteProtocolRouteID, (*handler.NodeHandler).DeleteProtocol), []packagecompat.Case{
+	kernelWrite(t, protocolRoute("DELETE", pattern, native.DeleteProtocolRouteID), []packagecompat.Case{
 		{Name: "with its peers, links and secrets", Path: path("2")},
 		{Name: "with its secrets", Path: path("1")},
 		{Name: "without secrets", Path: path("4")},
@@ -322,12 +308,12 @@ func TestNodeProtocolDeleteParity(t *testing.T) {
 // No typed secret reaches the package: the native handlers of the writes
 // are sent handles only, and the kernel holds none once a request ended.
 func TestTypedSecretsNeverReachThePackage(t *testing.T) {
-	db := packagecompat.OpenSQLite(t, protocolRoute("POST", "/", native.CreateProtocolRouteID, nil).Models...)
+	db := packagecompat.OpenSQLite(t, protocolRoute("POST", "/", native.CreateProtocolRouteID).Models...)
 	seedFinalized(t, db)
-	route := protocolRoute("POST", "/api/v2/admin/nodes/:id/protocols", native.CreateProtocolRouteID, (*handler.NodeHandler).CreateProtocol)
+	route := protocolRoute("POST", "/api/v2/admin/nodes/:id/protocols", native.CreateProtocolRouteID)
 	kernel := packagecompat.StartKernel(t, packagecompat.KernelOptions{
 		DB: db, PackageID: route.PackageID, Capabilities: route.Capabilities,
-		Routes: []packagecompat.KernelHostRoute{{Method: route.Method, Pattern: route.Pattern, RouteID: route.RouteID, Legacy: route.Legacy,
+		Routes: []packagecompat.KernelHostRoute{{Method: route.Method, Pattern: route.Pattern, RouteID: route.RouteID,
 			Native: func(nodeOps kernelnodeopsv1.KernelNodeOpsClient) pluginhostsdk.NativeHandler {
 				return route.NativeService(db, nodeOps)
 			}}},

@@ -75,13 +75,6 @@ func RedactNodeProtocol(protocol *model.NodeProtocol) {
 	}
 }
 
-// RedactNodeProtocols masks the protocols of an administrator's answer.
-func RedactNodeProtocols(protocols []model.NodeProtocol) {
-	for i := range protocols {
-		RedactNodeProtocol(&protocols[i])
-	}
-}
-
 // RedactNode masks a node's raw configuration and the secrets of its loaded
 // protocols for an administrator's answer (see RedactNodeProtocol). The
 // node's API key and shared secret are never serialized (json:"-").

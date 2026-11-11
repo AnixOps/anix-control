@@ -175,8 +175,8 @@ func TestGatewayFailsClosedToLegacy(t *testing.T) {
 		host := &sealingHost{answer: answer}
 		gateway := newSealedGateway(t, route, host)
 		recorder := gateway.do(http.MethodPost, "/api/v2/admin/nodes", `{"raw_config":`)
-		require.Equal(t, http.StatusServiceUnavailable, recorder.Code)
-		assert.Contains(t, recorder.Body.String(), codeSealedSecretUnavailable)
+		require.Equal(t, http.StatusBadRequest, recorder.Code, "a body that is not JSON is the client's error")
+		assert.Contains(t, recorder.Body.String(), codePluginRequestInvalid)
 		assert.Empty(t, host.inputs)
 		assert.Contains(t, renderGatewayMetrics(t, gateway.metrics), `stage="request",result="refused",reason="not_json"`)
 	})
@@ -185,8 +185,8 @@ func TestGatewayFailsClosedToLegacy(t *testing.T) {
 		host := &sealingHost{answer: answer, legacyErr: pluginhost.ErrLegacyUnavailable}
 		gateway := newSealedGateway(t, route, legacySealingHost{host})
 		recorder := gateway.do(http.MethodPost, "/api/v2/admin/nodes", `{"raw_config":`)
-		require.Equal(t, http.StatusServiceUnavailable, recorder.Code)
-		assert.Contains(t, recorder.Body.String(), codeSealedSecretUnavailable)
+		require.Equal(t, http.StatusBadRequest, recorder.Code, "a body that is not JSON is the client's error")
+		assert.Contains(t, recorder.Body.String(), codePluginRequestInvalid)
 		assert.NotContains(t, recorder.Body.String(), "raw_config")
 		assert.Empty(t, host.inputs)
 	})

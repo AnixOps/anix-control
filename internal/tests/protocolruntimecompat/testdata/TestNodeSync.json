@@ -1,0 +1,8 @@
+{
+"a_configuration_snapshot": {"status":200,"body":{"code":0,"data":{"config_hash":"\u003cmasked\u003e","config_revision":1,"message":"配置快照已通过 AnixOps Agent Control 下发","transport":"agent-control-grpc"},"msg":"操作成功"}},
+"a_node_on_the_legacy_transports": {"status":200,"body":{"code":0,"data":{"message":"节点未连接 Agent Control，将保留旧版周期拉取同步","transport":"legacy-poll"},"msg":"操作成功"}},
+"a_node_whose_agent_left": {"status":200,"body":{"code":0,"data":{"message":"节点未连接 Agent Control，将保留旧版周期拉取同步","transport":"legacy-poll"},"msg":"操作成功"}},
+"an_unknown_node": {"status":404,"body":{"message":"节点不存在"}},
+"node.reload_on_the_stream": {"status":200,"body":{"code":0,"data":{"ack":{"accepted":true,"accepted_at_unix_ms":"\u003cmasked\u003e","operation_id":"\u003cmasked\u003e","revision":"\u003cmasked\u003e","session_id":"\u003cmasked\u003e"},"message":"同步操作已由 AnixOps Agent 接收","operation_id":"\u003cmasked\u003e","revision":"\u003cmasked\u003e","transport":"agent-control-grpc"},"msg":"操作成功"}},
+"not_a_number": {"status":400,"body":{"message":"无效的节点ID"}}
+}

@@ -17,16 +17,15 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/tests/packagecompat"
 	"github.com/AnixOps/anix-control/v5/packages/protocol-runtime/native"
-	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )
 
 var admin = pluginhostsdk.Principal{ActorID: 1, Admin: true}
 
-func route(method, pattern, routeID string, legacy gin.HandlerFunc) packagecompat.Route {
+func route(method, pattern, routeID string) packagecompat.Route {
 	return packagecompat.Route{
-		Method: method, Pattern: pattern, RouteID: routeID, Legacy: legacy,
+		Method: method, Pattern: pattern, RouteID: routeID,
 		Models: []any{&model.AgentDiagnosticTask{}},
 		Native: func(db *gorm.DB) pluginhostsdk.NativeHandler {
 			service := &native.Service{Open: func(ctx context.Context) (*gorm.DB, error) { return db.WithContext(ctx), nil }}
@@ -70,13 +69,13 @@ func read(t *testing.T, r packagecompat.Route, cases []packagecompat.Case) {
 }
 
 func TestProtocolTemplatesRoute(t *testing.T) {
-	read(t, route("GET", "/api/v2/admin/protocol-templates", "protocol.admin.protocol_templates.get", nil), []packagecompat.Case{
+	read(t, route("GET", "/api/v2/admin/protocol-templates", "protocol.admin.protocol_templates.get"), []packagecompat.Case{
 		{Name: "every template", Path: "/api/v2/admin/protocol-templates"},
 	})
 }
 
 func TestDiagnosticTaskListRoute(t *testing.T) {
-	read(t, route("GET", "/api/v2/admin/agent/tasks", "protocol.admin.agent.tasks.get", nil), []packagecompat.Case{
+	read(t, route("GET", "/api/v2/admin/agent/tasks", "protocol.admin.agent.tasks.get"), []packagecompat.Case{
 		{Name: "newest 50", Path: "/api/v2/admin/agent/tasks", Seed: seedTasks},
 		{Name: "one node", Path: "/api/v2/admin/agent/tasks?node_id=2", Seed: seedTasks},
 		{Name: "one node and a limit", Path: "/api/v2/admin/agent/tasks?node_id=3&limit=4", Seed: seedTasks},
@@ -95,7 +94,7 @@ func TestDiagnosticTaskListRoute(t *testing.T) {
 }
 
 func TestDiagnosticTaskDetailRoute(t *testing.T) {
-	read(t, route("GET", "/api/v2/admin/agent/tasks/:task_id", "protocol.admin.agent.tasks.task_id.get", nil), []packagecompat.Case{
+	read(t, route("GET", "/api/v2/admin/agent/tasks/:task_id", "protocol.admin.agent.tasks.task_id.get"), []packagecompat.Case{
 		{Name: "completed with output", Path: "/api/v2/admin/agent/tasks/task-002", Seed: seedTasks},
 		{Name: "failed with an error", Path: "/api/v2/admin/agent/tasks/task-003", Seed: seedTasks},
 		{Name: "without params", Path: "/api/v2/admin/agent/tasks/task-004", Seed: seedTasks},

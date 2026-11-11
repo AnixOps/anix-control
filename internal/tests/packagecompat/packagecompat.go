@@ -78,7 +78,8 @@ type Case struct {
 	Snapshot func(t testing.TB, db *gorm.DB) any
 	// Mask lists dotted JSON paths (for example "data.token") whose values
 	// differ by design, such as tokens and secrets: they must exist on both
-	// sides and are replaced before comparing.
+	// sides and are replaced before comparing. A list on the path stands
+	// for each of its elements.
 	Mask []string
 	// Volatile lists texts that differ from run to run, such as a port the
 	// test listens on: a recorded answer holds 0 in their place.
@@ -95,11 +96,6 @@ type Case struct {
 	TLS  bool
 	// Warmup bodies are sent, in order, before the compared request.
 	Warmup [][]byte
-	// Fallback is set when the native side must answer from the legacy
-	// handler (RunKernelRead, RunKernelWrite): the route cannot serve the
-	// request natively, for example before the node credential split is
-	// finalized.
-	Fallback bool
 }
 
 // noRouteHeader marks the harness's own answer to a path no route matches.
@@ -172,20 +168,37 @@ func mask(t *testing.T, body []byte, paths []string) []byte {
 	var decoded map[string]any
 	require.NoError(t, json.Unmarshal(body, &decoded), "masked body must be a JSON object: %s", body)
 	for _, path := range paths {
-		parts := strings.Split(path, ".")
-		node := decoded
-		for _, part := range parts[:len(parts)-1] {
-			next, ok := node[part].(map[string]any)
-			require.True(t, ok, "masked path %s is missing in %s", path, body)
-			node = next
-		}
-		_, ok := node[parts[len(parts)-1]]
-		require.True(t, ok, "masked path %s is missing in %s", path, body)
-		node[parts[len(parts)-1]] = "<masked>"
+		require.True(t, maskPath(decoded, strings.Split(path, ".")), "masked path %s is missing in %s", path, body)
 	}
 	encoded, err := json.Marshal(decoded)
 	require.NoError(t, err)
 	return encoded
+}
+
+// maskPath masks the value at parts under node; a list on the way stands
+// for each of its elements.
+func maskPath(node any, parts []string) bool {
+	if list, ok := node.([]any); ok {
+		for _, element := range list {
+			if !maskPath(element, parts) {
+				return false
+			}
+		}
+		return true
+	}
+	object, ok := node.(map[string]any)
+	if !ok {
+		return false
+	}
+	value, ok := object[parts[0]]
+	if !ok {
+		return false
+	}
+	if len(parts) == 1 {
+		object[parts[0]] = "<masked>"
+		return true
+	}
+	return maskPath(value, parts[1:])
 }
 
 // CompareAnswers reports how two answers differ: status code, or body after

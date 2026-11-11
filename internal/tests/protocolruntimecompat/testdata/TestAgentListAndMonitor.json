@@ -1,0 +1,9 @@
+{
+"an_unknown_node": {"status":404,"body":{"error":"monitor data not found"}},
+"no_agent": {"status":200,"body":{"code":0,"data":{"agents":[]},"msg":"操作成功"}},
+"no_node": {"status":400,"body":{"error":"valid node_id is required"}},
+"no_snapshot": {"status":404,"body":{"error":"monitor data not found"}},
+"node_zero": {"status":400,"body":{"error":"valid node_id is required"}},
+"not_a_number": {"status":400,"body":{"error":"valid node_id is required"}},
+"one_stream_agent": {"status":200,"body":{"code":0,"data":{"agents":[{"capabilities":["agent.control","operation.cancel","agent.ping","node.reload","users.reload","agent.diagnostic"],"last_seen":"\u003cmasked\u003e","node_id":0,"online":true,"system":null,"version":"fake-agent"},{"capabilities":["agent.control","operation.cancel","agent.ping","node.reload","users.reload","agent.diagnostic","config"],"last_seen":"\u003cmasked\u003e","node_id":0,"online":true,"system":null,"version":"fake-agent"}]},"msg":"操作成功"}}
+}

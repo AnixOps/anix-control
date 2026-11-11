@@ -1,0 +1,10 @@
+{
+"a_log_tail_on_the_stream": {"status":200,"body":{"code":0,"data":{"ack":{"accepted":true,"accepted_at_unix_ms":"\u003cmasked\u003e","operation_id":"\u003cmasked\u003e","revision":"\u003cmasked\u003e","session_id":"\u003cmasked\u003e"},"ack_received":true,"channel":"agent_control","data":{"action":"log_tail","created_at":"\u003cmasked\u003e","duration_ms":0,"id":"\u003cmasked\u003e","node_id":0,"params":"{\"lines\":1000,\"service\":\"anix-agent\"}","status":"dispatched","success":false,"task_id":"\u003cmasked\u003e","timestamp":"\u003cmasked\u003e"},"duration_ms":0,"message":"task sent","message_id":"\u003cmasked\u003e","node_id":0,"output":"task dispatched","success":true,"task_id":"\u003cmasked\u003e"},"msg":"操作成功"}},
+"a_type_that_is_not_diagnostic": {"status":400,"body":{"error":"task type \"shell\" is not allowed: only \"diagnostic\" tasks are sent to agents"}},
+"an_action_off_the_whitelist": {"status":400,"body":{"error":"action \"rm -rf /\" is not in the diagnostic whitelist"}},
+"an_offline_node": {"status":400,"body":{"error":"node offline"}},
+"no_action": {"status":400,"body":{"error":"Key: 'CreateTaskRequest.Action' Error:Field validation for 'Action' failed on the 'required' tag"}},
+"not_JSON": {"status":400,"body":{"error":"unexpected EOF"}},
+"on_the_stream": {"status":200,"body":{"code":0,"data":{"ack":{"accepted":true,"accepted_at_unix_ms":"\u003cmasked\u003e","operation_id":"\u003cmasked\u003e","revision":"\u003cmasked\u003e","session_id":"\u003cmasked\u003e"},"ack_received":true,"channel":"agent_control","data":{"action":"service_status","created_at":"\u003cmasked\u003e","duration_ms":0,"id":"\u003cmasked\u003e","node_id":0,"params":"{\"service\":\"anix-agent\"}","status":"dispatched","success":false,"task_id":"\u003cmasked\u003e","timestamp":"\u003cmasked\u003e"},"duration_ms":0,"message":"task sent","message_id":"\u003cmasked\u003e","node_id":0,"output":"task dispatched","success":true,"task_id":"\u003cmasked\u003e"},"msg":"操作成功"}},
+"parameters_the_whitelist_refuses": {"status":400,"body":{"error":"service \"sshd\" is not allowed"}}
+}

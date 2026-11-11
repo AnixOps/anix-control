@@ -113,9 +113,7 @@ func hasSecretPositions(document string) bool {
 
 // storable reports whether a secret column's document can go through the
 // kernel's PutSecretDocument: blank, the placeholder, or JSON. A document
-// that is not JSON is a secret whole (the masking hides it), which the
-// kernel stores only from its own writers: such a request is the legacy
-// handler's.
+// that is not JSON is refused: no reader of these columns understands it.
 func storable(document *string) bool {
 	if document == nil {
 		return true
@@ -236,7 +234,7 @@ func (s *Service) CreateProtocol(ctx context.Context, request pluginhostsdk.Nati
 	}
 	for _, column := range model.SecretColumns {
 		if !storable(*protocol.Column(column)) {
-			return pluginhostsdk.NativeResponse{}, pluginhostsdk.ErrNativeUnavailable
+			return messageError(http.StatusBadRequest, "参数错误", column+" must be JSON")
 		}
 	}
 	db, err := s.Open(ctx)
@@ -329,7 +327,7 @@ func (s *Service) UpdateProtocol(ctx context.Context, request pluginhostsdk.Nati
 	}
 	for _, column := range model.SecretColumns {
 		if text, ok := normalized[column].(string); ok && !storable(&text) {
-			return pluginhostsdk.NativeResponse{}, pluginhostsdk.ErrNativeUnavailable
+			return messageError(http.StatusBadRequest, "参数错误", column+" must be JSON")
 		}
 	}
 	candidate, err := mergeProtocol(current, normalized)

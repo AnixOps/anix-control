@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
-	"encoding/json"
 	"errors"
 	"io"
 	"net/http/httptest"
@@ -54,99 +53,53 @@ type KernelRoute struct {
 	Agents kernelnodeops.SourcesFunc
 }
 
-// RunKernelRead is RunRead for a KernelRoute. Unless the case expects the
-// route to fall back (Case.Fallback), the native handler must answer
-// itself: an answer the host relayed to the kernel's legacy handler would
-// match by construction.
+// RunKernelRead sends c through the kernel's path on each backend and
+// requires the answer recorded for it.
 func RunKernelRead(t *testing.T, route KernelRoute, c Case) {
 	t.Helper()
 	forEachBackend(t, c.Name, func(t *testing.T, open opener) {
-		legacy, native := runKernel(t, open, route, c)
-		if route.Legacy == nil {
-			requireGolden(t, c, native)
-			return
-		}
-		requireSame(t, c, legacy, native)
+		requireGolden(t, c, runKernel(t, open, route, c))
 	})
 }
 
-// RunKernelWrite is RunWrite for a KernelRoute.
+// RunKernelWrite is RunKernelRead with the state Case.Snapshot reads after
+// the request.
 func RunKernelWrite(t *testing.T, route KernelRoute, c Case) {
 	t.Helper()
 	require.NotNil(t, c.Snapshot, "RunKernelWrite needs Case.Snapshot")
-	forEachBackend(t, c.Name, func(t *testing.T, open opener) {
-		legacy, native := runKernel(t, open, route, c)
-		if route.Legacy == nil {
-			requireGolden(t, c, native)
-			return
-		}
-		requireSame(t, c, legacy, native)
-		legacyState, err := json.Marshal(legacy.State)
-		require.NoError(t, err)
-		nativeState, err := json.Marshal(native.State)
-		require.NoError(t, err)
-		require.JSONEq(t, string(legacyState), string(nativeState), "database state after the request differs")
-	})
+	RunKernelRead(t, route, c)
 }
 
-func runKernel(t *testing.T, open opener, route KernelRoute, c Case) (Result, Result) {
+func runKernel(t *testing.T, open opener, route KernelRoute, c Case) Result {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 
+	// The kernel's services read the global database.
 	database.Reset()
 	t.Cleanup(func() {
 		_ = database.Close()
 		database.Reset()
 	})
-	var legacy Result
-	if route.Legacy != nil {
-		legacyConfig, _, migrated := open(t, "legacy", route.Models)
-		require.NoError(t, database.Init(legacyConfig))
-		legacyDB := database.GetDB()
-		prepare(t, legacyDB, route.Route, c, migrated)
-		legacy = serve(t, route.Method, route.Pattern, c, func(ctx *gin.Context) {
-			ctx.Set("user_id", c.Principal.ActorID)
-			ctx.Set("is_admin", c.Principal.Admin)
-			route.Legacy(ctx)
-		})
-		if c.Snapshot != nil {
-			legacy.State = c.Snapshot(t, legacyDB)
-		}
-		_ = database.Close()
-		database.Reset()
-	}
-
-	// The kernel's handlers and services read the global database: on the
-	// native side it is the native database.
-	nativeConfig, nativeDB, migrated := open(t, "native", route.Models)
-	require.NoError(t, database.Init(nativeConfig))
-	prepare(t, nativeDB, route.Route, c, migrated)
+	cfg, db, migrated := open(t, "native", route.Models)
+	require.NoError(t, database.Init(cfg))
+	prepare(t, db, route.Route, c, migrated)
 	kernel := StartKernel(t, KernelOptions{
-		DB: nativeDB, PackageID: route.PackageID, Capabilities: route.Capabilities, Agents: route.Agents,
-		Routes: []KernelHostRoute{{Method: route.Method, Pattern: route.Pattern, RouteID: route.RouteID, Legacy: route.Legacy,
+		DB: db, PackageID: route.PackageID, Capabilities: route.Capabilities, Agents: route.Agents,
+		Routes: []KernelHostRoute{{Method: route.Method, Pattern: route.Pattern, RouteID: route.RouteID,
 			Native: func(nodeOps kernelnodeopsv1.KernelNodeOpsClient) pluginhostsdk.NativeHandler {
-				return route.NativeService(nativeDB, nodeOps)
+				return route.NativeService(db, nodeOps)
 			}}},
 	})
-	native := kernel.Serve(t, route.Method, route.Pattern, c)
-	if c.Fallback {
-		require.Positive(t, kernel.LegacyCalls(route.RouteID), "the host was to answer from the legacy handler")
-	} else {
-		require.Zero(t, kernel.LegacyCalls(route.RouteID), "the native handler answered from the legacy handler: %s", native.Body)
-	}
+	answer := kernel.Serve(t, route.Method, route.Pattern, c)
 	if c.Snapshot != nil {
-		native.State = c.Snapshot(t, nativeDB)
+		answer.State = c.Snapshot(t, db)
 	}
-	return legacy, native
+	return answer
 }
 
 // KernelHostRoute is one route of a KernelOptions host.
 type KernelHostRoute struct {
 	Method, Pattern, RouteID string
-	// Legacy is the kernel's handler, which the host relays to; nil for a
-	// route the kernel has no handler for, which the host serves natively
-	// only.
-	Legacy gin.HandlerFunc
 	// Native builds the package's handler with the host's KernelNodeOps
 	// client.
 	Native func(nodeOps kernelnodeopsv1.KernelNodeOpsClient) pluginhostsdk.NativeHandler
@@ -175,7 +128,6 @@ type Kernel struct {
 	routes  []KernelHostRoute
 
 	mu       sync.Mutex
-	legacy   map[string]int
 	received map[string][]pluginhostsdk.NativeRequest
 }
 
@@ -185,7 +137,7 @@ type Kernel struct {
 // package host on a real bridge session, every route native.
 func StartKernel(t testing.TB, opts KernelOptions) *Kernel {
 	t.Helper()
-	k := &Kernel{store: sealedsecrets.NewStore(nil), routes: opts.Routes, legacy: map[string]int{}, received: map[string][]pluginhostsdk.NativeRequest{}}
+	k := &Kernel{store: sealedsecrets.NewStore(nil), routes: opts.Routes, received: map[string][]pluginhostsdk.NativeRequest{}}
 	registry := kernelnodeops.NewRegistry()
 	for _, register := range []func(*kernelnodeops.Registry) error{
 		(&kernelnodeops.Credentials{}).Register, (&kernelnodeops.Retirements{}).Register, (&kernelnodeops.SecretDocuments{}).Register,
@@ -219,29 +171,11 @@ func StartKernel(t testing.TB, opts KernelOptions) *Kernel {
 		Metrics: compatv2.NewGatewayMetrics(), Sealer: sealedsecrets.NewSealer(table, nil, k.store),
 	}
 
-	operations := make([]packagebridge.Operation, 0, len(opts.Routes))
-	modes := map[string]string{}
-	flagged := map[string]struct{}{}
-	for _, route := range opts.Routes {
-		routeID, legacy := route.RouteID, route.Legacy
-		modes[routeID] = pluginhostsdk.RouteModeNative
-		if legacy == nil {
-			continue
-		}
-		flagged[routeID] = struct{}{}
-		operations = append(operations, packagebridge.Operation{PackageID: opts.PackageID, RouteID: routeID, Name: routeID,
-			Handler: packagebridge.NewHTTPAdapter(func(c *gin.Context) {
-				k.mu.Lock()
-				k.legacy[routeID]++
-				k.mu.Unlock()
-				legacy(c)
-			})})
-	}
-	allowlist, err := packagebridge.NewAllowlistWithFallback(nil, operations...)
+	allowlist, err := packagebridge.NewAllowlistWithFallback(nil)
 	require.NoError(t, err)
 	identity := packagebridge.HostIdentity{PackageID: opts.PackageID, Version: "4.2.0", Generation: 5}
 	session, child, err := packagebridge.NewSessionWithOptions(identity, allowlist, packagebridge.SessionOptions{
-		HostOperations: kernelHostOperations{modes: modes}, KernelNodeOps: server.For,
+		HostOperations: kernelHostOperations{}, KernelNodeOps: server.For,
 	})
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = session.Close() })
@@ -262,7 +196,7 @@ func StartKernel(t testing.TB, opts KernelOptions) *Kernel {
 		}
 	}
 	router, err := pluginhostsdk.NewRouter(pluginhostsdk.RouterConfig{PackageID: opts.PackageID, LeaseID: "lease", Bridge: client, Native: native,
-		NativeOnly: true, Flagged: flagged})
+		NativeOnly: true})
 	require.NoError(t, err)
 	router.Refresh(context.Background())
 	k.router = router
@@ -277,14 +211,6 @@ func (k *Kernel) Serve(t *testing.T, method, pattern string, c Case) Result {
 		ctx.Set("is_admin", c.Principal.Admin)
 		k.gateway.Serve(ctx)
 	})
-}
-
-// LegacyCalls counts the requests of a route the host relayed to the
-// kernel's legacy handler.
-func (k *Kernel) LegacyCalls(routeID string) int {
-	k.mu.Lock()
-	defer k.mu.Unlock()
-	return k.legacy[routeID]
 }
 
 // Received returns what the package's native handler of a route was sent.
@@ -316,12 +242,12 @@ func (g declaredGrants) AuthorizeCapability(_ context.Context, host packagebridg
 	return service.ErrCapabilityNotAuthorized
 }
 
-// kernelHostOperations serves the host its route modes; storage is the
-// native service's own connection.
-type kernelHostOperations struct{ modes map[string]string }
+// kernelHostOperations serves the host no route modes (it is native-only);
+// storage is the native service's own connection.
+type kernelHostOperations struct{}
 
-func (o kernelHostOperations) PackageConfig(context.Context, packagebridge.HostIdentity) (packagebridge.PackageConfig, error) {
-	return packagebridge.PackageConfig{Revision: 1, ConfigHash: "h", RouteModes: o.modes}, nil
+func (kernelHostOperations) PackageConfig(context.Context, packagebridge.HostIdentity) (packagebridge.PackageConfig, error) {
+	return packagebridge.PackageConfig{Revision: 1, ConfigHash: "h"}, nil
 }
 
 func (kernelHostOperations) LeaseStorage(context.Context, packagebridge.HostIdentity) (packagebridge.StorageLease, error) {
@@ -394,21 +320,6 @@ func (d kernelDispatcher) Dispatch(ctx context.Context, input pluginhost.Dispatc
 	return pluginhost.DispatchOutput{StatusCode: response.StatusCode, Body: response.ResponseBody, Headers: headers}, nil
 }
 
-func (d kernelDispatcher) DispatchLegacy(ctx context.Context, input pluginhost.DispatchInput) (pluginhost.DispatchOutput, error) {
-	request, err := pluginhost.BridgeRequest(input)
-	if err != nil {
-		return pluginhost.DispatchOutput{}, err
-	}
-	d.k.mu.Lock()
-	d.k.legacy[input.RouteID]++
-	d.k.mu.Unlock()
-	response, err := d.k.session.ServeLegacy(ctx, request, input.RouteID)
-	if err != nil {
-		return pluginhost.DispatchOutput{}, err
-	}
-	return pluginhost.DispatchOutput{StatusCode: response.StatusCode, Body: response.Body}, nil
-}
-
 // Do sends one request through the gateway, without a Case: method, path,
 // body and request headers, as the administrator (actor 1).
 func (k *Kernel) Do(t testing.TB, method, path string, body []byte, headers map[string]string) Result {
@@ -439,9 +350,7 @@ func (k *Kernel) Do(t testing.TB, method, path string, body []byte, headers map[
 // ForEachKernelDatabase runs body on a fresh kernel database with models
 // migrated, on SQLite and, with ANIX_TEST_POSTGRES_DSN set, on a throwaway
 // PostgreSQL schema; the database is also the kernel's global one, which
-// the legacy handlers and the kernel's services read. A test whose legacy
-// and native sides must share live state (agent sessions the kernel holds
-// in memory) runs both on it.
+// the kernel's services read.
 func ForEachKernelDatabase(t *testing.T, models []any, body func(t *testing.T, db *gorm.DB)) {
 	t.Helper()
 	run := func(t *testing.T, cfg *config.DatabaseConfig, db *gorm.DB) {
@@ -472,25 +381,4 @@ func ForEachKernelDatabase(t *testing.T, models []any, body func(t *testing.T, d
 		t.Cleanup(drop)
 		run(t, cfg, db)
 	})
-}
-
-// ServeLegacy sends c to the kernel's legacy handler, as the principal of
-// c, for a test that runs both sides on one database
-// (ForEachKernelDatabase).
-func ServeLegacy(t *testing.T, method, pattern string, c Case, legacy gin.HandlerFunc) Result {
-	t.Helper()
-	gin.SetMode(gin.TestMode)
-	return serve(t, method, pattern, c, func(ctx *gin.Context) {
-		ctx.Set("user_id", c.Principal.ActorID)
-		ctx.Set("is_admin", c.Principal.Admin)
-		legacy(ctx)
-	})
-}
-
-// RequireSame requires two answers to be the same, as RunRead does: the
-// headers c lists sent by both, the status and the normalized body equal
-// once c's masked paths are masked.
-func RequireSame(t *testing.T, c Case, legacy, native Result) {
-	t.Helper()
-	requireSame(t, c, legacy, native)
 }

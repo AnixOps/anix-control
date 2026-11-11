@@ -906,11 +906,11 @@ The planned `kernel.entitlement.apply.v1` became
 - **Protocol runtime (in place).** 14 of protocol-runtime's 20 routes run
   natively, proved by `internal/tests/protocolruntimecompat`: the protocol
   templates (static data), the administrator's diagnostic task history and
-  detail on the adopted `v2_agent_diagnostic_task` (these three natively
-  only: the kernel keeps no legacy handler, and the suite pins their
-  recorded answers), and since M3-1 the node
+  detail on the adopted `v2_agent_diagnostic_task`, and since M3-1 the node
   protocols and every administrator route of the agents
-  ([`node-ops-service.md`](node-ops-service.md) section 6.3).
+  ([`node-ops-service.md`](node-ops-service.md) section 6.3). All 14 run
+  natively only: the kernel keeps no legacy handler, and the suite pins
+  their recorded answers.
   - The kernel keeps writing `v2_agent_diagnostic_task`: creating a task,
     the agents' polls and results. Since a package may write it too, the
     agents' HTTP poll checks every pending task against the diagnostic
@@ -921,9 +921,8 @@ The planned `kernel.entitlement.apply.v1` became
     `kernel.storage.adopt:v2_node_protocol`, which the kernel honours only
     once the node credential split finalized the table: its secret
     positions then hold the placeholder, and the Reality, TLS and WireGuard
-    keys are the kernel's (`v4_kernel_protocol_secret`). Until the lease
-    adopts it, the list, creation, update and deletion answer from the
-    legacy handler in every mode, SQLite included.
+    keys are the kernel's (`v4_kernel_protocol_secret`). The kernel starts
+    on a finalized split only, so the lease always adopts it.
     - The secrets an administrator types reach the host as sealed handles
       (`config/node-secret-fields.json`); the host passes them to
       `PutSecretDocument`, and the kernel stores them. With the settings it
@@ -934,9 +933,10 @@ The planned `kernel.entitlement.apply.v1` became
     - A deletion retires what goes with the protocol (`RetireProtocol`: its
       users' WireGuard peers, its subscription group links and its secrets),
       then the host deletes the row.
-    - A document that is not JSON in a secret column is a secret whole,
-      which only the kernel's writers store: such a request is served by
-      the legacy handler.
+    - A document that is not JSON in a secret column cannot be sealed:
+      the gateway refuses the request with 400 `plugin_request_invalid`
+      (as it does a body that is not JSON and a protocol id that is not a
+      number), and the host answers 400 for a stored one.
   - **Agents through KernelNodeOps.** Node synchronization (`node.sync`),
     Agent Control status (`GetAgentSession`) and operations
     (`agent.operation`), the agent list (`ListAgentSessions`), the monitoring

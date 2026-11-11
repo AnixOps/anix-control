@@ -22,14 +22,13 @@ import (
 // still receive the real values.
 type NodeSecretsTestSuite struct {
 	HandlerTestSuite
-	node       *model.Node
-	reality    *model.NodeProtocol
-	wireGuard  *model.NodeProtocol
-	wgPrivate  string
-	wgPublic   string
-	group      *model.SubscriptionGroup
-	rawConfig  string
-	secretText []string
+	node      *model.Node
+	reality   *model.NodeProtocol
+	wireGuard *model.NodeProtocol
+	wgPrivate string
+	wgPublic  string
+	group     *model.SubscriptionGroup
+	rawConfig string
 }
 
 const (
@@ -71,7 +70,6 @@ func (s *NodeSecretsTestSuite) SetupTest() {
 
 	s.Require().NoError(nodesecrets.SeedForTest(s.db))
 
-	s.secretText = []string{realityPrivateKey, tlsPrivateKeyPEM, hysteriaPassword, customSecret, rawConfigSecret, s.wgPrivate, "node-api-key", "node-shared-secret"}
 }
 
 func (s *NodeSecretsTestSuite) wireGuardSettings(privateKey, publicKey string) string {
@@ -98,155 +96,12 @@ func (s *NodeSecretsTestSuite) ok(w *httptest.ResponseRecorder) map[string]any {
 	return resp
 }
 
-// requireMasked checks that an answer shows none of the stored secrets but
-// still shows the public halves.
-func (s *NodeSecretsTestSuite) requireMasked(name string, w *httptest.ResponseRecorder) {
-	s.Require().Equal(http.StatusOK, w.Code, "%s: %s", name, w.Body.String())
-	body := w.Body.String()
-	for _, secret := range s.secretText {
-		s.NotContains(body, secret, name)
-	}
-	s.Contains(body, service.NodeSecretPlaceholder, name)
-}
-
-func (s *NodeSecretsTestSuite) storedProtocol(id uint) model.NodeProtocol {
-	var protocol model.NodeProtocol
-	s.Require().NoError(s.db.First(&protocol, id).Error)
-	nodesecrets.ResolveProtocol(s.db, &protocol)
-	return protocol
-}
-
 func settingsOf(text *string) map[string]any {
 	var value map[string]any
 	if text != nil {
 		_ = json.Unmarshal([]byte(*text), &value)
 	}
 	return value
-}
-
-// Every administrator answer that shows node protocols masks their secret
-// settings, and the nodes' raw configuration secrets, but keeps public keys
-// and Reality's short_id.
-func (s *NodeSecretsTestSuite) TestAnswersMaskProtocolSecrets() {
-	handler := NewNodeHandler()
-	nodePath := fmt.Sprintf("/nodes/%d", s.node.ID)
-	answers := map[string]*httptest.ResponseRecorder{
-		"protocol list": s.serve("GET", "/nodes/:id/protocols", nodePath+"/protocols", "", handler.GetProtocols),
-	}
-	for name, w := range answers {
-		s.requireMasked(name, w)
-		s.Contains(w.Body.String(), realityPublicKey, name)
-		s.Contains(w.Body.String(), realityShortID, name)
-	}
-	s.Contains(answers["protocol list"].Body.String(), s.wgPublic)
-
-	resp := s.ok(answers["protocol list"])
-	protocols := resp["data"].([]any)
-	s.Require().Len(protocols, 2)
-	reality := protocols[0].(map[string]any)
-	realitySettings := settingsOf(stringPointer(reality["reality_settings"]))
-	s.Equal(service.NodeSecretPlaceholder, realitySettings["private_key"])
-	s.Equal(realityPublicKey, realitySettings["public_key"])
-	s.Equal(service.NodeSecretPlaceholder, settingsOf(stringPointer(reality["settings"]))["obfs-password"])
-	s.Equal("salamander", settingsOf(stringPointer(reality["settings"]))["obfs"])
-	s.Equal(service.NodeSecretPlaceholder, settingsOf(stringPointer(reality["tls_settings"]))["key"])
-
-	// The answer that creates a protocol masks it too.
-	body := `{"name":"new","type":"vless","port":8443,"reality_settings":"{\"private_key\":\"fresh-private\",\"short_id\":\"aa\"}"}`
-	created := s.serve("POST", "/nodes/:id/protocols", nodePath+"/protocols", body, handler.CreateProtocol)
-	s.Require().Equal(http.StatusOK, created.Code, created.Body.String())
-	s.NotContains(created.Body.String(), "fresh-private")
-	data := s.ok(created)["data"].(map[string]any)
-	stored := s.storedProtocol(uint(data["id"].(float64)))
-	s.Equal("fresh-private", settingsOf(stored.RealitySettings)["private_key"], "the protocol stores the real key")
-
-	// The stored rows are unchanged.
-	s.Equal(realityPrivateKey, settingsOf(s.storedProtocol(s.reality.ID).RealitySettings)["private_key"])
-}
-
-func stringPointer(value any) *string {
-	text, ok := value.(string)
-	if !ok {
-		return nil
-	}
-	return &text
-}
-
-// The protocol editor sends back what it was shown: the placeholder keeps
-// the stored secret, in a JSON string or a JSON object and in any spelling
-// of the column, and a new value replaces it.
-func (s *NodeSecretsTestSuite) TestProtocolUpdateKeepsMaskedSecrets() {
-	handler := NewNodeHandler()
-	path := fmt.Sprintf("/nodes/%d/protocols/%d", s.node.ID, s.reality.ID)
-	shown := s.ok(s.serve("GET", "/nodes/:id/protocols", fmt.Sprintf("/nodes/%d/protocols", s.node.ID), "", handler.GetProtocols))
-	reality := shown["data"].([]any)[0].(map[string]any)
-
-	update := map[string]any{"name": "renamed"}
-	for _, column := range []string{"settings", "tls_settings", "reality_settings", "custom_config"} {
-		update[column] = reality[column]
-	}
-	encoded, err := json.Marshal(update)
-	s.Require().NoError(err)
-	s.ok(s.serve("PUT", "/nodes/:id/protocols/:protocol_id", path, string(encoded), handler.UpdateProtocol))
-	stored := s.storedProtocol(s.reality.ID)
-	s.Equal("renamed", stored.Name)
-	s.Equal(realityPrivateKey, settingsOf(stored.RealitySettings)["private_key"])
-	s.Equal(realityPublicKey, settingsOf(stored.RealitySettings)["public_key"])
-	s.Equal(hysteriaPassword, settingsOf(stored.Settings)["obfs-password"])
-	s.Equal(tlsPrivateKeyPEM, settingsOf(stored.TLSSettings)["key"])
-	s.Equal(customSecret, settingsOf(stored.CustomConfig)["api"].(map[string]any)["token"])
-
-	// An object and another spelling of the column keep it too.
-	s.ok(s.serve("PUT", "/nodes/:id/protocols/:protocol_id", path,
-		`{"RealitySettings":{"private_key":"********","public_key":"rotated-public","short_id":"cd"}}`, handler.UpdateProtocol))
-	stored = s.storedProtocol(s.reality.ID)
-	s.Equal(realityPrivateKey, settingsOf(stored.RealitySettings)["private_key"])
-	s.Equal("rotated-public", settingsOf(stored.RealitySettings)["public_key"])
-
-	// A new value replaces the stored one.
-	s.ok(s.serve("PUT", "/nodes/:id/protocols/:protocol_id", path,
-		`{"reality_settings":"{\"private_key\":\"rotated-private\",\"public_key\":\"rotated-public\"}"}`, handler.UpdateProtocol))
-	s.Equal("rotated-private", settingsOf(s.storedProtocol(s.reality.ID).RealitySettings)["private_key"])
-}
-
-// A WireGuard protocol saved back with its masked private key keeps the key
-// and passes the check of the key pair; a new pair replaces it.
-func (s *NodeSecretsTestSuite) TestWireGuardUpdateKeepsTheMaskedPrivateKey() {
-	handler := NewNodeHandler()
-	path := fmt.Sprintf("/nodes/%d/protocols/%d", s.node.ID, s.wireGuard.ID)
-	masked := service.RedactNodeSecretsJSON(*s.wireGuard.Settings)
-	s.Require().NotContains(masked, s.wgPrivate)
-	body, err := json.Marshal(map[string]any{"type": "wireguard", "port": 51820, "enable": 1, "settings": masked})
-	s.Require().NoError(err)
-	s.ok(s.serve("PUT", "/nodes/:id/protocols/:protocol_id", path, string(body), handler.UpdateProtocol))
-	settings := settingsOf(s.storedProtocol(s.wireGuard.ID).Settings)
-	s.Equal(s.wgPrivate, settings["server_private_key"])
-	s.Equal(s.wgPublic, settings["server_public_key"])
-
-	private, public, err := service.GenerateWireGuardKeypair()
-	s.Require().NoError(err)
-	body, err = json.Marshal(map[string]any{"settings": s.wireGuardSettings(private, public)})
-	s.Require().NoError(err)
-	s.ok(s.serve("PUT", "/nodes/:id/protocols/:protocol_id", path, string(body), handler.UpdateProtocol))
-	s.Equal(private, settingsOf(s.storedProtocol(s.wireGuard.ID).Settings)["server_private_key"])
-}
-
-// A new protocol has nothing stored: a placeholder in it stands for no
-// secret, and a WireGuard protocol needs its real private key.
-func (s *NodeSecretsTestSuite) TestCreateProtocolStoresNoPlaceholder() {
-	handler := NewNodeHandler()
-	path := fmt.Sprintf("/nodes/%d/protocols", s.node.ID)
-	data := s.ok(s.serve("POST", "/nodes/:id/protocols", path,
-		`{"name":"copy","type":"vless","port":8443,"reality_settings":"{\"private_key\":\"********\",\"short_id\":\"ab\"}"}`, handler.CreateProtocol))["data"].(map[string]any)
-	stored := s.storedProtocol(uint(data["id"].(float64)))
-	s.NotContains(*stored.RealitySettings, service.NodeSecretPlaceholder)
-	s.Equal("", settingsOf(stored.RealitySettings)["private_key"])
-
-	settings := service.RedactNodeSecretsJSON(*s.wireGuard.Settings)
-	body, err := json.Marshal(map[string]any{"name": "wg-copy", "type": "wireguard", "port": 51821, "enable": 1, "settings": settings})
-	s.Require().NoError(err)
-	w := s.serve("POST", "/nodes/:id/protocols", path, string(body), handler.CreateProtocol)
-	s.Equal(http.StatusBadRequest, w.Code, w.Body.String())
 }
 
 // A raw configuration saved back with its placeholders through the node
@@ -274,14 +129,8 @@ func (s *NodeSecretsTestSuite) TestRawConfigKeepsMaskedSecrets() {
 }
 
 // Nodes get their runtime configuration built from the stored rows: it
-// still carries the real secrets after an administrator saved the masked
-// form back.
-func (s *NodeSecretsTestSuite) TestNodesStillReceiveRealSecrets() {
-	handler := NewNodeHandler()
-	path := fmt.Sprintf("/nodes/%d/protocols/%d", s.node.ID, s.reality.ID)
-	body, err := json.Marshal(map[string]any{"reality_settings": service.RedactNodeSecretsJSON(*s.reality.RealitySettings)})
-	s.Require().NoError(err)
-	s.ok(s.serve("PUT", "/nodes/:id/protocols/:protocol_id", path, string(body), handler.UpdateProtocol))
+// carries the real secrets.
+func (s *NodeSecretsTestSuite) TestNodesReceiveRealSecrets() {
 	s.Require().NoError(s.db.Model(&model.Node{}).Where("id = ?", s.node.ID).Update("raw_config", nil).Error)
 
 	runtime := func(nodeType string) string {

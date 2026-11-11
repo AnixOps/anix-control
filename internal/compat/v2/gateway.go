@@ -139,17 +139,15 @@ func (g Gateway) serve(c *gin.Context) (Route, string) {
 
 // serveLegacy serves a request whose node secrets could not be sealed with
 // the kernel's legacy handler, without the package host, so no secret
-// reaches the package. Without one it is refused.
+// reaches the package. Without one it is refused (refuseSealed).
 func (g Gateway) serveLegacy(c *gin.Context, ctx context.Context, route Route, input pluginhost.DispatchInput, reason string) (Route, string) {
 	legacy, ok := g.Dispatcher.(LegacyDispatcher)
 	if !ok {
-		g.metrics().ObserveSealed(route.PackageID, route.PackageRoute, sealedStageRequest, sealedResultRefused, reason)
-		return route, writeGatewayError(c, http.StatusServiceUnavailable, codeSealedSecretUnavailable, "package route cannot seal its node secrets")
+		return route, g.refuseSealed(c, route, reason)
 	}
 	response, err := legacy.DispatchLegacy(ctx, input)
 	if errors.Is(err, pluginhost.ErrLegacyUnavailable) {
-		g.metrics().ObserveSealed(route.PackageID, route.PackageRoute, sealedStageRequest, sealedResultRefused, reason)
-		return route, writeGatewayError(c, http.StatusServiceUnavailable, codeSealedSecretUnavailable, "package route cannot seal its node secrets")
+		return route, g.refuseSealed(c, route, reason)
 	}
 	g.metrics().ObserveSealed(route.PackageID, route.PackageRoute, sealedStageRequest, sealedResultLegacy, reason)
 	if err != nil {
@@ -159,6 +157,19 @@ func (g Gateway) serveLegacy(c *gin.Context, ctx context.Context, route Route, i
 		return route, writeGatewayError(c, http.StatusBadGateway, codePluginHostIncompatible, err.Error())
 	}
 	return route, ""
+}
+
+// refuseSealed answers a request whose node secrets could not be sealed and
+// that no legacy handler serves: 400 when the request itself cannot be
+// sealed (a body that is not JSON, a secret field that is not a string, a
+// path that names no target, a body over the limit), 503 otherwise.
+func (g Gateway) refuseSealed(c *gin.Context, route Route, reason string) string {
+	g.metrics().ObserveSealed(route.PackageID, route.PackageRoute, sealedStageRequest, sealedResultRefused, reason)
+	switch reason {
+	case "not_json", "value_not_string", "target_invalid", "too_large":
+		return writeGatewayError(c, http.StatusBadRequest, codePluginRequestInvalid, "request is not valid for this route")
+	}
+	return writeGatewayError(c, http.StatusServiceUnavailable, codeSealedSecretUnavailable, "package route cannot seal its node secrets")
 }
 
 func writeDispatchError(c *gin.Context, err error) string {

@@ -1,0 +1,3 @@
+{
+"the_agent_refuses": {"status":200,"body":{"code":0,"data":{"ack":{"accepted_at_unix_ms":"\u003cmasked\u003e","error":"busy","operation_id":"\u003cmasked\u003e","revision":"\u003cmasked\u003e","session_id":"\u003cmasked\u003e"},"message":"同步操作已由 AnixOps Agent 接收","operation_id":"\u003cmasked\u003e","revision":"\u003cmasked\u003e","transport":"agent-control-grpc"},"msg":"操作成功"}}
+}

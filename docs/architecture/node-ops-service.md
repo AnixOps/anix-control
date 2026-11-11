@@ -484,12 +484,15 @@ A package learns everything it needs and never a secret.
    - **Fail closed.**
      - **Legacy fallback.** A request whose secrets cannot be sealed is
        served by the kernel's legacy handler without the package host
-       (`pluginhost.Supervisor.DispatchLegacy`). That covers a body that is
+       (`pluginhost.Supervisor.DispatchLegacy`), on the routes that still
+       have one (node creation and update). That covers a body that is
        not JSON, a value field that is not a string, a target parameter that
        is not an id, a sealed body over the request limit, or an unavailable
        field list.
-     - **Refusal.** A route without a legacy handler is refused with 503
-       `sealed_secret_unavailable`.
+     - **Refusal.** A route without a legacy handler (the node protocol
+       writes) is refused: 400 `plugin_request_invalid` when the request
+       itself cannot be sealed (the first four reasons), 503
+       `sealed_secret_unavailable` otherwise.
      - **Metric.** Both are counted in
        `anixops_v2_gateway_sealed_secrets_total{package,route,stage,result,reason}`,
        with fixed labels and no handle.
@@ -2264,12 +2267,12 @@ same scripted agents (`internal/tests/fakeagent` on the stream, a legacy
 WebSocket agent on the kernel's agent handler). Byte parity holds on SQLite
 and PostgreSQL. What differs from the rows above, and what the kernel gained:
 
-- **The protocols wait for the finalize.** The routes answer natively only
-  when the lease adopts `v2_node_protocol` (`packagestoresdk.Store.Leased`);
-  otherwise they return `ErrNativeUnavailable` and the router answers from
-  the legacy handler, SQLite included. A host started before the finalize
-  keeps them legacy until Control restarts. The agent routes need no
-  finalize: a missing node is the kernel's `NOT_FOUND`.
+- **The protocols need the finalize.** The routes answer only when the
+  lease adopts `v2_node_protocol` (`packagestoresdk.Store.Leased`), which
+  it always does: the kernel starts on a finalized split only. The kernel
+  keeps no legacy handler for these routes (removed after 5.0.3; the suite
+  now pins the recorded answers). The agent routes need no finalize: a
+  missing node is the kernel's `NOT_FOUND`.
 - **No `SyncNode` on protocol writes.** The legacy creation, update and
   deletion do not sync the node, so the native ones do not either; the
   administrator's sync button does.
@@ -2293,8 +2296,8 @@ and PostgreSQL. What differs from the rows above, and what the kernel gained:
   runs the protocol validator on it with the settings it stores and fails
   `VALIDATION_FAILED`, storing nothing, when it refuses them. The route
   answers that as the legacy route answers its validator (400).
-- **A secret document that is not JSON** is a secret whole, which only the
-  kernel's writers store: such a request is answered by the legacy handler.
+- **A secret document that is not JSON** cannot be sealed: the gateway
+  refuses the request (400 `plugin_request_invalid`).
 - **Results at acceptance (added).** An executor may record the result so
   far when the channel accepts the operation (`Acceptance.Result`); an
   ACCEPTED wait answers it. `node.sync`, `agent.operation` and
