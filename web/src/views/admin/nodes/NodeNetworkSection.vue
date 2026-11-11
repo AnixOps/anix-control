@@ -56,6 +56,7 @@
         :error="fieldError('hop_port')"
         data-testid="node-network-hop-port"
       />
+      <UiSelect v-model="region" :options="regionOptions" :label="t('nodeNetwork.region')" :help="suggested ? t('nodeNetwork.regionSuggested') : t('nodeNetwork.regionHint')" :error="fieldError('region')" data-testid="node-network-region" />
       <NodeUplinksEditor v-model="uplinks" :hops="hops" :detected="detected" :field-error="fieldError" />
       <p v-if="saveError" class="node-network__error" role="alert">{{ saveError }}</p>
       <p v-if="saved" class="node-network__hint" role="status">{{ t('nodeNetwork.saved') }}</p>
@@ -77,6 +78,8 @@
 // switches to free text, which is all there is before the Agent reports.
 // 上联网卡 (NodeUplinksEditor) lists the NICs of a dual-NIC node and which
 // one each next node of its routes gets, with each NIC's latency to it.
+// 地区 is where the node is, for the topology map: until one is saved, the
+// place its name and tags suggest is offered, and Save stores it.
 // GET/PUT /api/v4/kernel/nodes/:id/network
 import { computed, onMounted, reactive, ref } from 'vue'
 import { getKernelNodeNetwork, setKernelNodeNetwork } from '@/api/kernel'
@@ -88,14 +91,19 @@ import UiSection from '@/ui/UiSection.vue'
 import UiSelect from '@/ui/UiSelect.vue'
 import UiSkeleton from '@/ui/UiSkeleton.vue'
 import UiTextField from '@/ui/UiTextField.vue'
+import { REGIONS, locate } from '@/components/topology/geo'
 import NodeUplinksEditor from './NodeUplinksEditor.vue'
 
 const props = defineProps({
-  nodeRef: { type: String, required: true }
+  nodeRef: { type: String, required: true },
+  // The node's name and tags, which suggest its region.
+  name: { type: String, default: '' },
+  tags: { type: String, default: '' }
 })
-const { t } = useAppI18n()
+const { t, locale } = useAppI18n()
 
-const form = reactive({ interface: '', source_v4: '', gateway_v4: '', source_v6: '', gateway_v6: '', hop_port: null })
+const form = reactive({ interface: '', source_v4: '', gateway_v4: '', source_v6: '', gateway_v6: '', hop_port: null, region: '' })
+const suggested = ref(false)
 const loading = ref(true)
 const loadError = ref(null)
 const saving = ref(false)
@@ -142,6 +150,11 @@ function field(key) {
     set: value => { form[key] = value === NONE ? '' : value }
   })
 }
+const region = field('region')
+const regionOptions = computed(() => [
+  { value: NONE, label: t('nodeNetwork.none') },
+  ...REGIONS.map(place => ({ value: place.key, label: locale.value === 'zh-CN' ? place.zh : place.en }))
+])
 const sourceV4 = field('source_v4')
 const gatewayV4 = field('gateway_v4')
 const sourceV6 = field('source_v6')
@@ -159,6 +172,8 @@ function pickInterface(value) {
 function fill(view) {
   for (const key of FIELDS) form[key] = view?.[key] || ''
   form.hop_port = view?.hop_port || null
+  form.region = view?.region || locate(props)?.key || ''
+  suggested.value = !view?.region && Boolean(form.region)
   detected.value = Array.isArray(view?.detected) ? view.detected : []
   detectedAt.value = view?.detected_at || ''
   uplinks.value = {
@@ -193,7 +208,7 @@ async function save() {
   violations.value = []
   try {
     const settings = Object.fromEntries(FIELDS.map(key => [key, form[key]]))
-    fill(await setKernelNodeNetwork(props.nodeRef, { ...settings, hop_port: form.hop_port || 0, ...uplinks.value }))
+    fill(await setKernelNodeNetwork(props.nodeRef, { ...settings, hop_port: form.hop_port || 0, region: form.region, ...uplinks.value }))
     saved.value = true
   } catch (e) {
     const error = e?.response?.data?.error

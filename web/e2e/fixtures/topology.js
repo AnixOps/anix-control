@@ -1,7 +1,9 @@
 // 网络拓扑 (/admin/topology): sixteen devices from Shanghai to Frankfurt,
 // seven forward routes between them (one through an offline exit, one with
 // two entries) and an egress route. The scenario 'direct' has the devices
-// and no line; 'empty' no device.
+// and no line; 'empty' no device. The network as lines gives the Sydney
+// device its region, makes the Guangzhou entry forward in the kernel and
+// names what two routes serve.
 import { FIXED_NOW_MS } from './clock.js'
 import { EXTENSION } from './forwardV4.js'
 
@@ -40,6 +42,16 @@ const EGRESS = [{
   source_state: { state: 'applied' }, exit_state: { state: 'applied' }
 }]
 
+const NETWORK = {
+  devices: NODES.map(node => ({ ref: `proxy-${node.id}`, name: node.name, host: node.host, kernel: node.id === 3, ...(node.id === 15 ? { region: 'au' } : {}) })),
+  uplinks: [], entries: [], transports: [], exits: [], skipped: [],
+  lines: [
+    { id: ROUTES[0].route.id, exit: 'proxy-6', protocol: { id: 1, type: 'vless', device: 'proxy-6', port: 443 } },
+    { id: ROUTES[2].route.id, exit: 'proxy-5', protocol: { id: 2, type: 'hysteria2', device: 'proxy-5', port: 8443 } },
+    { id: 'protocol-3', exit: 'proxy-11', protocol: { id: 3, type: 'vless', device: 'proxy-11', port: 443 } }
+  ]
+}
+
 export default {
   edition: 'community',
   pathFor: scenario => (scenario === 'graph' ? '/admin/topology?view=graph' : '/admin/topology'),
@@ -47,6 +59,7 @@ export default {
     const lines = scenario !== 'direct' && scenario !== 'empty'
     if (path === '/api/v3/extensions') return [EXTENSION]
     if (path === '/api/v4/admin/nodes') return { data: { list: scenario === 'empty' ? [] : NODES, total: NODES.length } }
+    if (path === '/api/v4/kernel/network/lines') return { data: { snapshot: scenario === 'empty' ? { ...NETWORK, devices: [], lines: [] } : NETWORK, forwards: 0, differences: [] } }
     if (path === '/api/v4/kernel/egress-routes') return { data: { routes: lines ? EGRESS : [] } }
     if (path === '/api/v4/forward/routes') return { data: { routes: lines ? ROUTES : [], can_delete: true } }
     if (path === '/api/v4/forward/nodes') return { data: { nodes: FORWARD_NODES, can_delete: true } }

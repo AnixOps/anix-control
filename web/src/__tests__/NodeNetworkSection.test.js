@@ -13,7 +13,7 @@ const kernelApi = vi.hoisted(() => ({
 
 vi.mock('@/api/kernel', () => kernelApi)
 
-const EMPTY = { interface: '', source_v4: '', gateway_v4: '', source_v6: '', gateway_v6: '', hop_port: 0, uplinks: [], uplink_default: '', uplink_choices: {} }
+const EMPTY = { interface: '', source_v4: '', gateway_v4: '', source_v6: '', gateway_v6: '', hop_port: 0, region: '', uplinks: [], uplink_default: '', uplink_choices: {} }
 
 describe('NodeNetworkSection', () => {
   beforeEach(async () => {
@@ -34,6 +34,16 @@ describe('NodeNetworkSection', () => {
       ...EMPTY, interface: 'eth1', source_v4: '10.0.0.7', gateway_v4: '10.0.0.1'
     })
     expect(await screen.findByText('已保存，经过这个节点的线路已重新规划。')).toBeTruthy()
+  })
+
+  it('suggests the region from the name and saves it', async () => {
+    kernelApi.getKernelNodeNetwork.mockResolvedValue(EMPTY)
+    kernelApi.setKernelNodeNetwork.mockImplementation(async (_, settings) => settings)
+    render(NodeNetworkSection, { props: { nodeRef: 'proxy-57', name: 'tyo-01' } })
+    const user = userEvent.setup()
+    expect(await screen.findByText(/按名称预填的/)).toBeTruthy()
+    await user.click(screen.getByTestId('node-network-save'))
+    expect(kernelApi.setKernelNodeNetwork).toHaveBeenCalledWith('proxy-57', { ...EMPTY, region: 'jp' })
   })
 
   it('shows the violations by field', async () => {

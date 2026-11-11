@@ -1,8 +1,8 @@
-// Where a device is, for the map of the topology page. A device has no
-// location field, so the place is read from its tags and its name: a region
-// code (JP, HK), an airport or city code (tyo, lax) or a city name in English
-// or Chinese. A device nothing matches stays off the map and is listed
-// under it.
+// Where a device is, for the map of the topology page: the region set on
+// the device (a place key, in its network settings), and until one is set
+// the place read from its tags and its name: a region code (JP, HK), an
+// airport or city code (tyo, lax) or a city name in English or Chinese. A
+// device with neither stays off the map and is listed under it.
 
 // [key, latitude, longitude, English name, Chinese name, words]: codes match a whole word of the name,
 // Chinese names anywhere in it. Cities come before their country, so
@@ -73,6 +73,10 @@ function placeIn(text) {
   }
   return best || CJK_PLACE.find(([word]) => text.includes(word))?.[1] || null
 }
+
+// The places a device's region can be, and the place of a region.
+export const REGIONS = PLACES
+export const placeOf = region => PLACES.find(place => place.key === region) || null
 
 // locate answers the place ({ key, lat, lon, en, zh }) of a device from its
 // name and its tags, the most specific one they name, or null.

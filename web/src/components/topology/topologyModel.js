@@ -1,9 +1,9 @@
 // The topology page's model: devices, lines and the links between devices,
-// built from what Control already serves (the node list, the forward routes
-// and the egress routes). No requests here.
+// built from what Control already serves (the node list, the forward routes,
+// the egress routes and the network as lines). No requests here.
 import { displayStatus, statusName } from '@/views/admin/nodes/nodeData'
 import { nodeState } from '@/components/forward/routeModel'
-import { locate } from './geo'
+import { locate, placeOf } from './geo'
 
 // A line's tone from its route status (routeModel.routeStatus).
 const LINE_TONES = { healthy: 'ok', syncing: 'warn', degraded: 'warn', error: 'bad' }
@@ -11,15 +11,28 @@ const LINE_TONES = { healthy: 'ok', syncing: 'warn', degraded: 'warn', error: 'b
 const TONE_RANK = { off: 0, bad: 1, warn: 2, ok: 3 }
 
 // buildTopology answers { devices, lines, links }:
-// - devices: { ref, id, name, host, status, place, users, roles, lines }
-//   (roles: entry, relay, exit by its position in the lines, or direct with
-//   none; id is the node page's, null for a forward-only host);
-// - lines: { id, kind: route | egress, name, status, tone, stages, traffic }
-//   (stages: the device refs of each hop, entry first);
+// - devices: { ref, id, name, host, status, place, kernel, served, users,
+//   roles, lines } (place: of the region set on the device, else read from
+//   its name; kernel: it forwards in the kernel; served: the protocols its
+//   users connect to directly; roles: entry, relay, exit by its position in
+//   the lines, or direct with none; id is the node page's, null for a
+//   forward-only host);
+// - lines: { id, kind: route | egress, name, status, tone, stages, traffic,
+//   protocol, port } (stages: the device refs of each hop, entry first;
+//   protocol: the type it serves, empty when it forwards to fixed targets);
 // - links: { key, from, to, kind, tone, lines } between two devices.
-export function buildTopology({ nodes = [], forwardNodes = [], routes = [], traffic = new Map(), egress = [], now = Date.now() } = {}) {
+export function buildTopology({ nodes = [], forwardNodes = [], routes = [], traffic = new Map(), egress = [], network = null, now = Date.now() } = {}) {
+  const known = new Map((network?.devices || []).map(device => [device.ref, device]))
+  const served = new Map((network?.lines || []).map(line => [line.id, line]))
   const devices = new Map()
-  const add = device => devices.set(device.ref, { ...device, place: locate(device), roles: [], lines: [] })
+  const add = device => devices.set(device.ref, {
+    ...device,
+    place: placeOf(known.get(device.ref)?.region) || locate(device),
+    kernel: Boolean(known.get(device.ref)?.kernel),
+    served: [...served.values()].filter(line => line.id.startsWith('protocol-') && line.exit === device.ref).length,
+    roles: [],
+    lines: []
+  })
   for (const node of nodes) {
     add({ ref: `proxy-${node.id}`, id: node.id, name: node.name, host: node.host, tags: node.tags, status: statusName(displayStatus(node, now)), users: Number(node.online_users || 0) })
   }
@@ -32,7 +45,7 @@ export function buildTopology({ nodes = [], forwardNodes = [], routes = [], traf
     const stages = (item.route.hops || []).map(hop => (hop.node_refs || []).filter(ref => devices.has(ref))).filter(stage => stage.length)
     if (!stages.length) continue
     const used = traffic.get(item.route.id)
-    lines.push({ id: item.route.id, kind: 'route', name: item.route.name, status: item.status, tone: LINE_TONES[item.status] || 'off', stages, traffic: used ? used.up + used.down : 0 })
+    lines.push({ id: item.route.id, kind: 'route', name: item.route.name, status: item.status, tone: LINE_TONES[item.status] || 'off', stages, traffic: used ? used.up + used.down : 0, protocol: served.get(item.route.id)?.protocol?.type || '', port: item.route.listen?.port || 0 })
   }
   for (const route of egress) {
     const stages = [`proxy-${route.source_node?.id}`, `proxy-${route.exit_node?.id}`]
