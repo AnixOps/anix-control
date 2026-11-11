@@ -37,11 +37,13 @@ func kernelCombinations(t *testing.T) (listed map[string]bool, types []model.Pro
 	return listed, types, transports
 }
 
-// What Control accepts must be what the kernel runs: saving never refuses
-// a listed combination, Reality (the one mode saving is exact about) is
-// accepted only where listed, and the quick-add templates are listed. The
-// editor's own table is held to the same file by the web test
-// protocolCombinations.test.js.
+// Saving is held to the table where it is exact: it never refuses a listed
+// combination, Reality (tls 2) is accepted only where listed, and the
+// quick-add templates are listed. For TLS 0 and 1 saving stays lenient by
+// design (validateProtocolTransport: the TLS column and transports such as
+// h2 are labels on stored rows), so the API still saves unlisted
+// combinations there. What the editor offers is held to the same file,
+// combination by combination, by the web test protocolCombinations.test.js.
 func TestProtocolCombinationsMatchTheKernel(t *testing.T) {
 	listed, types, transports := kernelCombinations(t)
 	// Transports the kernel does not run but stored protocols may name.
