@@ -1,8 +1,6 @@
 package handler
 
 import (
-	"bytes"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -468,25 +466,6 @@ func (h *AdminHandler) DeleteUser(c *gin.Context) {
 	}
 
 	panelSuccess(c, gin.H{"message": "删除成功"})
-}
-
-// ====== 套餐管理 ======
-
-// jsonFieldGiven reports whether the JSON object body names field with a
-// value other than null (the name matches case-insensitively, as the struct
-// binding does). A zero value cannot tell an omitted field from an explicit
-// one after binding.
-func jsonFieldGiven(body []byte, field string) bool {
-	var fields map[string]json.RawMessage
-	if err := json.Unmarshal(body, &fields); err != nil {
-		return false
-	}
-	for name, raw := range fields {
-		if strings.EqualFold(name, field) {
-			return !bytes.Equal(bytes.TrimSpace(raw), []byte("null"))
-		}
-	}
-	return false
 }
 
 // assignmentToken identifies an administrator's request for
