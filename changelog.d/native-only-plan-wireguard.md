@@ -6,3 +6,5 @@
   The plan and wireguard package hosts now run every route natively from
   the start (`pluginhostsdk.RouterConfig.NativeOnly`), as knowledge and
   ticket already do.
+- The wireguard keypair route keeps a test of its own in the package
+  (`packages/wireguard/native`), which the removed comparison test carried.
