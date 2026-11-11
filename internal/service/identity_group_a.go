@@ -36,6 +36,22 @@ var IdentityGroupARoutes = []string{
 	"identity.user.subscription.reset.post",
 }
 
+// IdentityAccountRoutes are identity-platform's other routes: the account
+// reads (the user's profile and dashboard, the administrator's user list,
+// detail and statistics), which answer identity's account store, current
+// only while identity is authoritative, and the administrator's traffic and
+// subscription resets. They follow the authority with group A but are not
+// paused at the cutover.
+var IdentityAccountRoutes = []string{
+	"identity.user.profile.get",
+	"identity.user.dashboard.get",
+	"identity.admin.users.get",
+	"identity.admin.users.id.get",
+	"identity.admin.users.stats.get",
+	"identity.admin.users.id.reset_traffic.post",
+	"identity.admin.users.id.reset_subscribe.post",
+}
+
 // IdentityAuthorityState returns the identity authority state; no row
 // means the kernel.
 func IdentityAuthorityState(db *gorm.DB) (string, error) {
@@ -52,16 +68,16 @@ func IdentityAuthoritative(state string) bool {
 	return state == model.IdentityAuthorityIdentity || state == model.IdentityAuthorityFinalized
 }
 
-// ResolvePackageRouteModes returns the route modes identity group A has
-// for packageID: identity-platform's group A routes are native while
-// identity is authoritative (state identity or finalized), because group A
-// is native exactly then, and legacy (not named) otherwise. Any other
+// ResolvePackageRouteModes returns the route modes the identity authority
+// gives packageID: identity-platform's routes (group A and
+// IdentityAccountRoutes) are native while identity is authoritative (state
+// identity or finalized), and legacy (not named) otherwise. Any other
 // package, and any other route, gets nothing here
 // (ResolveEffectivePackageRouteModes adds the rehearsed list). Nothing
 // stores these modes: the identity cutover and rollback move the authority,
 // and group A with it.
 func ResolvePackageRouteModes(db *gorm.DB, packageID string) (map[string]string, error) {
-	resolved := make(map[string]string, len(IdentityGroupARoutes))
+	resolved := make(map[string]string, len(IdentityGroupARoutes)+len(IdentityAccountRoutes))
 	if packageID != IdentityPlatformPackageID {
 		return resolved, nil
 	}
@@ -72,7 +88,7 @@ func ResolvePackageRouteModes(db *gorm.DB, packageID string) (map[string]string,
 	if !IdentityAuthoritative(state) {
 		return resolved, nil
 	}
-	for _, route := range IdentityGroupARoutes {
+	for _, route := range append(append([]string(nil), IdentityGroupARoutes...), IdentityAccountRoutes...) {
 		resolved[route] = packagebridge.RouteModeNative
 	}
 	return resolved, nil

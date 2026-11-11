@@ -187,11 +187,13 @@ instance's generation.
     [user directory](#user-directory): identity's accounts joined with
     Control's subscriber views, with no token.
 
-  They leave legacy mode only while identity is authoritative, and the
-  rollback returns them to legacy; they are not part of group A.
-- **Resets, native at any time (in place):** the admin traffic and
-  subscription resets change only the subscriber, through
-  `KernelSubscriber.ResetTraffic` and `ResetCredentials`.
+- **Resets (in place):** the admin traffic and subscription resets change
+  only the subscriber, through `KernelSubscriber.ResetTraffic` and
+  `ResetCredentials`.
+
+  The account reads and the resets (`service.IdentityAccountRoutes`) are
+  native exactly while identity is authoritative, like group A, and the
+  rollback returns them to legacy. They are not paused at the cutover.
 - **Moved to other packages (done, step 7):**
   - system configuration, audit and backup (12 routes) → new package
     `platform`;
@@ -258,8 +260,8 @@ expired (Control).
   - banned;
   - new today: created since midnight UTC.
 - **Authority.** Both routes read identity's accounts. They are in
-  `service.IdentityAccountReadRoutes`: native or shadow only while identity
-  is authoritative, back to legacy on a rollback.
+  `service.IdentityAccountRoutes`: native exactly while identity is
+  authoritative, back to legacy on a rollback.
 - **No subscription tokens in the list.**
   - Each user is `id`, `email`, `balance`, `commission_balance`,
     `device_limit`, `speed_limit`, `flowResetTime`, `transfer_enable`, `u`,
@@ -397,8 +399,8 @@ expired (Control).
         (`service.ResolvePackageRouteModes`, used by the host's
         configuration), so the cutover and rollback move only the
         authority, and a route added to group A later needs nothing. The
-        account reads (profile, dashboard, admin user detail) are not in
-        the rehearsed list and stay legacy.
+        account reads and the resets follow the authority the same way,
+        without the pause.
       - **Rollback.** `POST /api/v4/kernel/identity/rollback` pauses group A,
         switches it to legacy and the authority to `importing`.
       - **Finalize.** `POST /api/v4/kernel/identity/finalize`
@@ -427,17 +429,15 @@ expired (Control).
       (plan, traffic, expiry, subscription token and proxy uuid) from
       `KernelIdentity.GetSubscriber`, which now includes the plan, and the
       permissions from `ResolveActorAccess`.
-      - `service.IdentityAccountReadRoutes` lets them leave legacy mode only
-        while identity is authoritative.
-      - The cutover leaves them to the operator, who may shadow them first;
-        the rollback returns them to legacy with group A, and the hosts
-        confirm it.
+      - They are native while identity is authoritative
+        (`service.IdentityAccountRoutes`); the rollback returns them to
+        legacy with group A.
       - A subscriber identity has no account for is "用户不存在" to the
         user's own routes; the admin detail shows it as Control holds it.
     - **Resets.** The admin traffic and subscription resets call
       `KernelSubscriber.ResetTraffic` (`kernel.subscriber.traffic.v1`) and
-      `ResetCredentials` (`kernel.subscriber.credentials.v1`) and switch at
-      any time. Their request ids, `identity.reset_traffic:<user>:<digest>`
+      `ResetCredentials` (`kernel.subscriber.credentials.v1`) and follow the
+      authority with the account reads. Their request ids, `identity.reset_traffic:<user>:<digest>`
       and `identity.reset_subscribe:<user>:<digest>`, are the legacy
       handlers' too, so a retry applies once whichever side serves it.
     - **Moved to affiliate.** The user's invite code list and generation

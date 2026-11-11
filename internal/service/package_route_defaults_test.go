@@ -368,12 +368,13 @@ func testRouteModeDefaultsTooOld(t *testing.T, db *gorm.DB) {
 	assert.Empty(t, hostModes(t, operations, "4.0.0"))
 }
 
-// Identity's routes are not in the list: identity group A follows the
-// authority only, and the rest of identity-platform stays legacy.
+// Identity's routes are not in the list: they follow the authority only
+// (group A and the account routes), and a bridged route stays legacy.
 func testRouteModeDefaultsIdentity(t *testing.T, db *gorm.DB) {
 	prepareRouteModeDB(t, db)
 	routes := []testCompatibilityRoute{{Method: "GET", LegacyPath: "/api/v2/admin/invite-codes", PackageRoute: "identity.admin.invite_codes.get", Transport: "http"}}
-	for i, route := range IdentityGroupARoutes {
+	authority := append(append([]string(nil), IdentityGroupARoutes...), IdentityAccountRoutes...)
+	for i, route := range authority {
 		routes = append(routes, testCompatibilityRoute{Method: "POST", LegacyPath: "/api/v2/group-a/" + string(rune('a'+i)), PackageRoute: route, Transport: "http"})
 	}
 	seedRouteModePackageVersion(t, db, IdentityPlatformPackageID, "4.1.0-rc.5", routes)
@@ -386,16 +387,16 @@ func testRouteModeDefaultsIdentity(t *testing.T, db *gorm.DB) {
 		require.NoError(t, db.Save(&model.IdentityAuthority{ID: 1, State: state}).Error)
 		config, err = PackageHostOperations{DB: db}.PackageConfig(context.Background(), host)
 		require.NoError(t, err)
-		assert.Len(t, config.RouteModes, len(IdentityGroupARoutes), state)
+		assert.Len(t, config.RouteModes, len(authority), state)
 		for route, mode := range config.RouteModes {
-			assert.True(t, slices.Contains(IdentityGroupARoutes, route), route)
+			assert.True(t, slices.Contains(authority, route), route)
 			assert.Equal(t, packagebridge.RouteModeNative, mode, route)
 		}
 	}
 	require.NoError(t, db.Save(&model.IdentityAuthority{ID: 1, State: model.IdentityAuthorityImporting}).Error)
 	config, err = PackageHostOperations{DB: db}.PackageConfig(context.Background(), host)
 	require.NoError(t, err)
-	assert.Empty(t, config.RouteModes, "a rollback returns group A to legacy")
+	assert.Empty(t, config.RouteModes, "a rollback returns them to legacy")
 }
 
 func TestPackageRouteCatalogParsesTheEmbeddedMap(t *testing.T) {
