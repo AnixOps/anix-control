@@ -253,14 +253,6 @@ type CreateTaskRequest struct {
 	Timeout int            `json:"timeout"`
 }
 
-// ExecuteCommandRequest is the kernel's handler.ExecuteCommandRequest.
-type ExecuteCommandRequest struct {
-	NodeID  uint           `json:"node_id" binding:"required"`
-	Action  string         `json:"action" binding:"required"`
-	Params  map[string]any `json:"params"`
-	Timeout int            `json:"timeout"`
-}
-
 // CreateTask is POST /api/v2/admin/agent/tasks: one whitelisted diagnostic
 // action for a node's agent (agent.diagnostic); the answer is the agent's
 // acknowledgement and the task's row.
@@ -270,16 +262,6 @@ func (s *Service) CreateTask(ctx context.Context, request pluginhostsdk.NativeRe
 		return errorAnswer(http.StatusBadRequest, err.Error())
 	}
 	return s.diagnose(ctx, request, req)
-}
-
-// ExecuteCommand is POST /api/v2/admin/agent/execute: CreateTask for a
-// diagnostic action, without a type.
-func (s *Service) ExecuteCommand(ctx context.Context, request pluginhostsdk.NativeRequest) (pluginhostsdk.NativeResponse, error) {
-	var req ExecuteCommandRequest
-	if err := binding.JSON.BindBody(request.Body, &req); err != nil {
-		return errorAnswer(http.StatusBadRequest, err.Error())
-	}
-	return s.diagnose(ctx, request, CreateTaskRequest{NodeID: req.NodeID, Type: agentDiagnosticTaskType, Action: req.Action, Params: req.Params, Timeout: req.Timeout})
 }
 
 func (s *Service) diagnose(ctx context.Context, request pluginhostsdk.NativeRequest, req CreateTaskRequest) (pluginhostsdk.NativeResponse, error) {

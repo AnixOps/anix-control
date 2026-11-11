@@ -121,7 +121,7 @@ stream equivalent.
 | UniProxy `push` and `alive`, `NodeLogService.ReportLogs` | `TrafficReport` and `LogBatch` (`reports.v1`) |
 | UniProxy `alivelist` | `AliveList` (`alive.v1`) |
 | `GET /api/v3/agent/plugin-releases/{plugin_id}/{version}/manifest` and `/artifact` (`X-API-Key`) | `AgentArtifacts.GetPluginManifest` and `DownloadPluginArtifact` by the client certificate (`artifacts.v1`) |
-| `POST /admin/agent/tasks`, `/admin/agent/execute` (administrator routes that sent `task.assign` on the WebSocket) | the same routes send the `agent.diagnostic` operation on the stream when the node has no WebSocket and its Agent lists that capability |
+| `POST /admin/agent/tasks` (the administrator route that sent `task.assign` on the WebSocket) | the same route sends the `agent.diagnostic` operation on the stream when the node has no WebSocket and its Agent lists that capability |
 
 ### Negotiation
 

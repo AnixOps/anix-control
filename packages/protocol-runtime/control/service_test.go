@@ -62,7 +62,7 @@ func TestProtocolRuntimeHostRelaysRoutesUntilTheyAreSwitchedToNative(t *testing.
 	for _, route := range []string{
 		native.CreateProtocolRouteID, native.UpdateProtocolRouteID, native.DeleteProtocolRouteID, native.SyncRouteID,
 		native.AgentControlRouteID, native.AgentControlOpsRouteID, native.AgentListRouteID, native.AgentMonitorRouteID,
-		native.AgentTasksCreateRouteID, native.AgentExecuteRouteID,
+		native.AgentTasksCreateRouteID,
 	} {
 		require.NotContains(t, withoutNodeOps, route, "without KernelNodeOps the route stays legacy")
 	}

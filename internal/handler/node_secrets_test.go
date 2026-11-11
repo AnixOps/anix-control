@@ -156,9 +156,8 @@ func (s *NodeSecretsTestSuite) TestAnswersMaskProtocolSecrets() {
 	s.Equal("salamander", settingsOf(stringPointer(reality["settings"]))["obfs"])
 	s.Equal(service.NodeSecretPlaceholder, settingsOf(stringPointer(reality["tls_settings"]))["key"])
 
-	raw := s.ok(s.serve("GET", "/nodes/:id/raw-config", nodePath+"/raw-config", "", handler.GetNodeRawConfig))
-	rawConfig := raw["data"].(map[string]any)["raw_config"].(map[string]any)
-	tls := rawConfig["tls_settings"].(map[string]any)
+	detail := s.ok(answers["node detail"])
+	tls := settingsOf(stringPointer(detail["data"].(map[string]any)["raw_config"]))["tls_settings"].(map[string]any)
 	s.Equal(service.NodeSecretPlaceholder, tls["private_key"])
 	s.Equal("raw.example.test", tls["server_name"])
 
@@ -260,28 +259,17 @@ func (s *NodeSecretsTestSuite) TestCreateProtocolStoresNoPlaceholder() {
 	s.Equal(http.StatusBadRequest, w.Code, w.Body.String())
 }
 
-// A raw configuration saved back with its placeholders keeps its secrets,
-// through the raw configuration route and the node update; a new value
-// replaces them.
+// A raw configuration saved back with its placeholders through the node
+// update keeps its secrets; a new value replaces them.
 func (s *NodeSecretsTestSuite) TestRawConfigKeepsMaskedSecrets() {
 	handler := NewNodeHandler()
 	nodePath := fmt.Sprintf("/nodes/%d", s.node.ID)
-	shown := s.ok(s.serve("GET", "/nodes/:id/raw-config", nodePath+"/raw-config", "", handler.GetNodeRawConfig))
-	rawConfig := shown["data"].(map[string]any)["raw_config"].(map[string]any)
-	rawConfig["server_port"] = 8443
-	body, err := json.Marshal(map[string]any{"raw_config": rawConfig})
-	s.Require().NoError(err)
-	s.ok(s.serve("PUT", "/nodes/:id/raw-config", nodePath+"/raw-config", string(body), handler.UpdateNodeRawConfig))
-
 	var node model.Node
 	s.Require().NoError(s.db.First(&node, s.node.ID).Error)
 	nodesecrets.ResolveNodeRawConfig(s.db, &node)
-	stored := settingsOf(node.RawConfig)
-	s.EqualValues(8443, stored["server_port"])
-	s.Equal(rawConfigSecret, stored["tls_settings"].(map[string]any)["private_key"])
 
 	masked := service.RedactNodeSecretsJSON(*node.RawConfig)
-	body, err = json.Marshal(map[string]any{"name": "renamed", "Raw_Config": masked})
+	body, err := json.Marshal(map[string]any{"name": "renamed", "Raw_Config": masked})
 	s.Require().NoError(err)
 	s.ok(s.serve("PUT", "/nodes/:id", nodePath, string(body), handler.UpdateNode))
 	s.Require().NoError(s.db.First(&node, s.node.ID).Error)
@@ -289,8 +277,7 @@ func (s *NodeSecretsTestSuite) TestRawConfigKeepsMaskedSecrets() {
 	s.Equal("renamed", node.Name)
 	s.Equal(rawConfigSecret, settingsOf(node.RawConfig)["tls_settings"].(map[string]any)["private_key"])
 
-	s.ok(s.serve("PUT", "/nodes/:id/raw-config", nodePath+"/raw-config",
-		`{"raw_config":{"tls_settings":{"private_key":"rotated-raw-key"}}}`, handler.UpdateNodeRawConfig))
+	s.ok(s.serve("PUT", "/nodes/:id", nodePath, `{"raw_config":"{\"tls_settings\":{\"private_key\":\"rotated-raw-key\"}}"}`, handler.UpdateNode))
 	s.Require().NoError(s.db.First(&node, s.node.ID).Error)
 	nodesecrets.ResolveNodeRawConfig(s.db, &node)
 	s.Equal("rotated-raw-key", settingsOf(node.RawConfig)["tls_settings"].(map[string]any)["private_key"])

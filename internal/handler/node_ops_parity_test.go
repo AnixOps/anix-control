@@ -207,7 +207,6 @@ func TestCreateTaskLegacyAnswers(t *testing.T) {
 	post := func(h *AgentHandler, path string, body any) *httptest.ResponseRecorder {
 		router := gin.New()
 		router.POST("/admin/agent/tasks", h.CreateTask)
-		router.POST("/admin/agent/execute", h.ExecuteCommand)
 		raw, err := json.Marshal(body)
 		require.NoError(t, err)
 		recorder := httptest.NewRecorder()
@@ -253,7 +252,7 @@ func TestCreateTaskLegacyAnswers(t *testing.T) {
 
 	t.Run("refused by the agent", func(t *testing.T) {
 		h := connectedAgentHandler(node.ID, errors.New("agent nack: busy"))
-		recorder := post(h, "/admin/agent/execute", map[string]any{"node_id": node.ID, "action": "service_status", "params": map[string]any{"service": "anix-agent"}, "timeout": 5})
+		recorder := post(h, "/admin/agent/tasks", map[string]any{"node_id": node.ID, "type": "diagnostic", "action": "service_status", "params": map[string]any{"service": "anix-agent"}, "timeout": 5})
 		require.Equal(t, http.StatusInternalServerError, recorder.Code, recorder.Body.String())
 		var body map[string]any
 		require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &body))

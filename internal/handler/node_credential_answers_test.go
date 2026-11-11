@@ -64,17 +64,8 @@ var pinnedCredentialAnswers = map[string]string{
 	"revoke clean agent, bad id":                    `200 {"code":-1,"data":null,"msg":"invalid agent id","ts":0}`,
 	"create node":                                   `200 {"code":0,"data":{"node_id":1},"msg":"操作成功","ts":0}`,
 	"create node, bad body":                         `400 {"error":"unexpected EOF","message":"参数错误"}`,
-	"put raw config":                                `200 {"code":0,"data":{"message":"配置更新成功"},"msg":"操作成功","ts":0}`,
-	"put raw config with the placeholder":           `200 {"code":0,"data":{"message":"配置更新成功"},"msg":"操作成功","ts":0}`,
-	"put raw config that is not an object":          `400 {"message":"原始配置必须是 JSON 对象"}`,
-	"put raw config with an invalid WireGuard key":  `400 {"error":"invalid node protocol: WireGuard server_private_key 必须是标准 Base64 的 32 字节密钥","message":"WireGuard 配置无效"}`,
-	"put raw config, bad id":                        `400 {"message":"无效的节点ID"}`,
+	"update node with a raw configuration":          `200 {"code":0,"data":{"message":"更新成功"},"msg":"操作成功","ts":0}`,
 	"update node with the placeholder":              `200 {"code":0,"data":{"message":"更新成功"},"msg":"操作成功","ts":0}`,
-	"validate config":                               `200 {"code":0,"data":{"message":"配置有效","size":34,"valid":true,"warnings":[]},"msg":"操作成功","ts":0}`,
-	"validate config without server_port":           `200 {"code":0,"data":{"message":"配置有效","size":16,"valid":true,"warnings":["缺少 server_port 字段"]},"msg":"操作成功","ts":0}`,
-	"validate config that is not an object":         `400 {"message":"配置必须是 JSON 对象","valid":false}`,
-	"validate config with an invalid WireGuard key": `400 {"error":"invalid node protocol: WireGuard server_private_key 必须是标准 Base64 的 32 字节密钥","message":"WireGuard 配置无效","valid":false}`,
-	"validate config without raw_config":            `400 {"error":"Key: 'RawConfig' Error:Field validation for 'RawConfig' failed on the 'required' tag","message":"参数错误"}`,
 	"delete node":                                   `200 {"code":0,"data":{"message":"删除成功"},"msg":"操作成功","ts":0}`,
 	"delete node again":                             `200 {"code":0,"data":{"message":"删除成功"},"msg":"操作成功","ts":0}`,
 	"delete node, bad id":                           `400 {"message":"无效的节点ID"}`,
@@ -136,10 +127,6 @@ const (
 	pinRealitySecret   = "pinned-reality-private-key"
 )
 
-func (s *NodeCredentialAnswersTestSuite) wireGuardRawConfig(privateKey string) string {
-	return `{"type":"wireguard","node_type":"wireguard","server_port":51820,"cidr":"10.9.0.0/24","server_address":"10.9.0.1/24","server_private_key":"` + privateKey + `"}`
-}
-
 func (s *NodeCredentialAnswersTestSuite) TestNodesAndRawConfigs() {
 	h := NewNodeHandler()
 	code, body := s.serve(http.MethodPost, "/admin/nodes", "/admin/nodes", `{"name":"edge","host":"edge.example.test","port":443}`, h.CreateNode)
@@ -155,8 +142,8 @@ func (s *NodeCredentialAnswersTestSuite) TestNodesAndRawConfigs() {
 	// A raw configuration with a secret, then saved back with the
 	// placeholder: the stored secret is kept.
 	raw := `{"type":"vless","server_port":443,"tls_settings":{"private_key":"` + pinRawConfigSecret + `","server_name":"edge.example.test"}}`
-	code, body = s.serve(http.MethodPut, "/admin/nodes/:id/raw-config", "/admin/nodes/1/raw-config", `{"raw_config":`+raw+`}`, h.UpdateNodeRawConfig)
-	s.pin("put raw config", code, body)
+	code, body = s.serve(http.MethodPut, "/admin/nodes/:id", "/admin/nodes/1", `{"raw_config":"`+strings.ReplaceAll(raw, `"`, `\"`)+`"}`, h.UpdateNode)
+	s.pin("update node with a raw configuration", code, body)
 	s.Require().NoError(s.db.First(&node, 1).Error)
 	s.Require().NotNil(node.RawConfig)
 	nodesecrets.ResolveNodeRawConfig(s.db, &node)
@@ -164,38 +151,12 @@ func (s *NodeCredentialAnswersTestSuite) TestNodesAndRawConfigs() {
 	s.Equal(int64(1), s.count(&model.ProtocolSecret{}, "scope = ? AND owner_id = ?", nodesecrets.ScopeNodeRawConfig, node.ID))
 
 	masked := strings.ReplaceAll(raw, pinRawConfigSecret, service.NodeSecretPlaceholder)
-	code, body = s.serve(http.MethodPut, "/admin/nodes/:id/raw-config", "/admin/nodes/1/raw-config", `{"raw_config":"`+strings.ReplaceAll(masked, `"`, `\"`)+`"}`, h.UpdateNodeRawConfig)
-	s.pin("put raw config with the placeholder", code, body)
-	s.Require().NoError(s.db.First(&node, 1).Error)
-	nodesecrets.ResolveNodeRawConfig(s.db, &node)
-	s.Contains(*node.RawConfig, pinRawConfigSecret, "the placeholder keeps the stored secret")
-
-	code, body = s.serve(http.MethodPut, "/admin/nodes/:id/raw-config", "/admin/nodes/1/raw-config", `{"raw_config":"not json"}`, h.UpdateNodeRawConfig)
-	s.pin("put raw config that is not an object", code, body)
-	code, body = s.serve(http.MethodPut, "/admin/nodes/:id/raw-config", "/admin/nodes/1/raw-config", `{"raw_config":`+s.wireGuardRawConfig("not-a-key")+`}`, h.UpdateNodeRawConfig)
-	s.pin("put raw config with an invalid WireGuard key", code, body)
-	code, body = s.serve(http.MethodPut, "/admin/nodes/:id/raw-config", "/admin/nodes/x/raw-config", `{}`, h.UpdateNodeRawConfig)
-	s.pin("put raw config, bad id", code, body)
-
-	// The node update route carries the raw configuration too.
 	code, body = s.serve(http.MethodPut, "/admin/nodes/:id", "/admin/nodes/1", `{"name":"edge-2","raw_config":"`+strings.ReplaceAll(masked, `"`, `\"`)+`"}`, h.UpdateNode)
 	s.pin("update node with the placeholder", code, body)
 	s.Require().NoError(s.db.First(&node, 1).Error)
 	s.Equal("edge-2", node.Name)
 	nodesecrets.ResolveNodeRawConfig(s.db, &node)
 	s.Contains(*node.RawConfig, pinRawConfigSecret)
-
-	// Validation never stores anything.
-	code, body = s.serve(http.MethodPost, "/admin/nodes/validate-config", "/admin/nodes/validate-config", `{"raw_config":{"type":"vless","server_port":443}}`, h.ValidateRawConfig)
-	s.pin("validate config", code, body)
-	code, body = s.serve(http.MethodPost, "/admin/nodes/validate-config", "/admin/nodes/validate-config", `{"raw_config":{"type":"vless"}}`, h.ValidateRawConfig)
-	s.pin("validate config without server_port", code, body)
-	code, body = s.serve(http.MethodPost, "/admin/nodes/validate-config", "/admin/nodes/validate-config", `{"raw_config":"[1]"}`, h.ValidateRawConfig)
-	s.pin("validate config that is not an object", code, body)
-	code, body = s.serve(http.MethodPost, "/admin/nodes/validate-config", "/admin/nodes/validate-config", `{"raw_config":`+s.wireGuardRawConfig("not-a-key")+`}`, h.ValidateRawConfig)
-	s.pin("validate config with an invalid WireGuard key", code, body)
-	code, body = s.serve(http.MethodPost, "/admin/nodes/validate-config", "/admin/nodes/validate-config", `{}`, h.ValidateRawConfig)
-	s.pin("validate config without raw_config", code, body)
 
 	// Deleting the node takes its protocols, their links and peers with it.
 	group := &model.SubscriptionGroup{Name: "group", Enable: 1}

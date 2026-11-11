@@ -18,28 +18,6 @@ const (
 	templateNotFound = "模板不存在"
 )
 
-// Formats is GET /api/v2/admin/subscription/formats: the formats a
-// subscription link can be rendered in.
-func (s *Service) Formats(context.Context, pluginhostsdk.NativeRequest) (pluginhostsdk.NativeResponse, error) {
-	return s.panel([]map[string]string{
-		{"id": "auto", "name": "Auto (UA)", "description": "根据客户端 User-Agent 自动识别订阅格式"},
-		{"id": "v2ray", "name": "V2Ray Base64", "description": "适用于 V2RayN, V2RayNG, V2Box 等"},
-		{"id": "clash", "name": "Clash YAML", "description": "适用于 Clash, ClashX 等"},
-		{"id": "stash", "name": "Stash YAML", "description": "适用于 Stash（Clash YAML 兼容）"},
-		{"id": "egern", "name": "Egern YAML", "description": "适用于 Egern（Clash YAML 兼容）"},
-		{"id": "surge", "name": "Surge", "description": "适用于 Surge iOS/macOS"},
-		{"id": "loon", "name": "Loon", "description": "适用于 Loon iOS"},
-		{"id": "shadowrocket", "name": "Shadowrocket", "description": "适用于 Shadowrocket iOS"},
-		{"id": "quantumultx", "name": "Quantumult X", "description": "适用于 Quantumult X iOS"},
-		{"id": "json", "name": "JSON", "description": "原始 JSON 格式"},
-		{"id": "base64json", "name": "Base64 JSON", "description": "Base64 编码的分组 JSON 格式"},
-		{"id": "sing-box", "name": "Sing-box", "description": "适用于 Sing-box, Nekobox 等"},
-		{"id": "wireguard", "name": "WireGuard", "description": "原生 WireGuard 配置，适用于 WireGuard/Shadowrocket/Loon 等支持导入 .conf 的客户端"},
-		{"id": "iwan", "name": "iWAN (iwand)", "description": "Panabit iWAN 登录信息，iwand 客户端配置；OpenWrt、Panabit 客户端按其中的服务器、端口、用户名、口令手工填写"},
-		{"id": "anixops", "name": "AnixOps Net", "description": "AnixOps Net 客户端：分享链接，另含 ANX 节点（anx://）、Panabit iWAN 线路（iwan://）和经线路连接的节点（via）"},
-	})
-}
-
 // ProtocolTypes is GET /api/v2/admin/subscription/protocols: the protocol
 // types a template can have.
 func (s *Service) ProtocolTypes(context.Context, pluginhostsdk.NativeRequest) (pluginhostsdk.NativeResponse, error) {

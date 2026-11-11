@@ -209,45 +209,6 @@ func (h *AgentHandler) GetMonitor(c *gin.Context) {
 	c.JSON(http.StatusNotFound, gin.H{"error": "monitor data not found"})
 }
 
-// ExecuteCommand godoc
-// @Summary 执行命令
-// @Description 管理员在节点上执行命令
-// @Tags 管理端 Agent
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param request body ExecuteCommandRequest true "命令信息"
-// @Success 200 {object} map[string]any
-// @Router /admin/agent/execute [post]
-func (h *AgentHandler) ExecuteCommand(c *gin.Context) {
-	var req ExecuteCommandRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	// ExecuteCommand 不再接受任意命令字符串，改为白名单诊断动作
-	taskReq := CreateTaskRequest{
-		NodeID:  req.NodeID,
-		Type:    agentDiagnosticTaskType,
-		Action:  req.Action,
-		Params:  req.Params,
-		Timeout: req.Timeout,
-	}
-
-	// 复用 CreateTask 逻辑
-	c.Set("task_request", taskReq)
-	h.CreateTask(c)
-}
-
-// ExecuteCommandRequest 白名单诊断动作请求
-type ExecuteCommandRequest struct {
-	NodeID  uint           `json:"node_id" binding:"required"`
-	Action  string         `json:"action" binding:"required"`
-	Params  map[string]any `json:"params"`
-	Timeout int            `json:"timeout"`
-}
-
 // answerStreamDiagnostic answers a diagnostic task sent on the node's Agent
 // Control stream: as the WebSocket answer, at the agent's acknowledgement;
 // the agent's result reaches the task's row later.

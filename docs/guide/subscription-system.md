@@ -419,9 +419,6 @@ the list, as they are not in the counts.
 #### 工具接口
 
 ```http
-# 获取支持的订阅格式
-GET /api/v2/admin/subscription/formats
-
 # 获取支持的协议类型
 GET /api/v2/admin/subscription/protocols
 

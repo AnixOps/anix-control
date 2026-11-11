@@ -66,8 +66,7 @@ func refused(message string, err error, path string) *kernelnodeopsv1.ValidateNo
 	return response
 }
 
-// validateRawConfig validates a raw configuration as POST
-// /admin/nodes/validate-config does: the configuration must be a JSON
+// validateRawConfig validates a raw configuration: it must be a JSON
 // object, a WireGuard configuration must be valid, and one without
 // server_port is valid with a warning.
 func validateRawConfig(raw []byte) *kernelnodeopsv1.ValidateNodeConfigResponse {

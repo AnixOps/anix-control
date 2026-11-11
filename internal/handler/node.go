@@ -5,14 +5,12 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
-	"strings"
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	"github.com/AnixOps/anix-control/sdk/v2compat"
 	"github.com/AnixOps/anix-control/v5/internal/database"
 	"github.com/AnixOps/anix-control/v5/internal/kernelnodeops"
 	"github.com/AnixOps/anix-control/v5/internal/model"
-	"github.com/AnixOps/anix-control/v5/internal/nodesecrets"
 	"github.com/AnixOps/anix-control/v5/internal/service"
 	"github.com/gin-gonic/gin"
 )
@@ -313,170 +311,6 @@ func (h *NodeHandler) GetNodeLogs(c *gin.Context) {
 }
 
 // ========== 高级配置 (RawConfig) ==========
-
-// GetNodeRawConfig godoc
-// @Summary 获取节点原始配置
-// @Description 管理员获取指定节点的原始JSON配置
-// @Tags 管理端-节点
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param id path int true "节点ID"
-// @Success 200 {object} map[string]any
-// @Failure 400 {object} map[string]any
-// @Failure 404 {object} map[string]any
-// @Router /admin/nodes/{id}/raw-config [get]
-func (h *NodeHandler) GetNodeRawConfig(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "无效的节点ID"})
-		return
-	}
-
-	node, err := h.nodeService.GetNode(uint(id))
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"message": "节点不存在"})
-		return
-	}
-
-	var config any
-	if node.RawConfig != nil && *node.RawConfig != "" {
-		// Secrets read as the placeholder, and saving it back keeps them.
-		// A configuration that is not JSON is refused as before (it would
-		// read as the placeholder alone).
-		if err := json.Unmarshal([]byte(service.RedactNodeSecretsJSON(*node.RawConfig)), &config); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"message": "节点原始配置 JSON 无效"})
-			return
-		}
-	}
-
-	panelSuccess(c, gin.H{
-		"node_id":    node.ID,
-		"name":       node.Name,
-		"raw_config": config,
-	})
-}
-
-func decodeRawConfigObject(raw any) (map[string]any, []byte, error) {
-	return service.DecodeRawNodeConfig(raw)
-}
-
-// UpdateNodeRawConfig godoc
-// @Summary 更新节点原始配置
-// @Description 管理员更新指定节点的原始JSON配置（高级模式）
-// @Tags 管理端-节点
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param id path int true "节点ID"
-// @Param request body map[string]any true "原始配置 {raw_config: object}"
-// @Success 200 {object} map[string]any
-// @Failure 400 {object} map[string]any
-// @Failure 500 {object} map[string]any
-// @Router /admin/nodes/{id}/raw-config [put]
-func (h *NodeHandler) UpdateNodeRawConfig(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "无效的节点ID"})
-		return
-	}
-
-	var req struct {
-		RawConfig any `json:"raw_config" binding:"required"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "参数错误", "error": err.Error()})
-		return
-	}
-
-	// 验证并序列化 JSON
-	var rawConfigStr *string
-	if req.RawConfig != nil {
-		config, jsonBytes, err := decodeRawConfigObject(req.RawConfig)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"message": "原始配置必须是 JSON 对象"})
-			return
-		}
-		// Secrets sent back as the placeholder keep their stored values,
-		// and the configuration is checked with them.
-		if strings.Contains(string(jsonBytes), service.NodeSecretPlaceholder) {
-			node, err := h.nodeService.GetNode(uint(id))
-			if err != nil {
-				c.JSON(http.StatusNotFound, gin.H{"message": "节点不存在"})
-				return
-			}
-			// The stored secrets, from the split table where the legacy
-			// column holds placeholders (a finalized table).
-			nodesecrets.ResolveNodeRawConfig(database.Get(), node)
-			config, jsonBytes, err = decodeRawConfigObject(service.KeepNodeRawConfig(string(jsonBytes), node.RawConfig))
-			if err != nil {
-				c.JSON(http.StatusBadRequest, gin.H{"message": "原始配置必须是 JSON 对象"})
-				return
-			}
-		}
-		if err := service.ValidateWireGuardRuntimeConfig(config); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"message": "WireGuard 配置无效", "error": err.Error()})
-			return
-		}
-		str := string(jsonBytes)
-		rawConfigStr = &str
-	}
-
-	if err := h.nodeService.UpdateNode(uint(id), map[string]any{
-		"raw_config": rawConfigStr,
-	}); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "更新失败"})
-		return
-	}
-
-	panelSuccess(c, gin.H{"message": "配置更新成功"})
-}
-
-// ValidateRawConfig godoc
-// @Summary 验证原始配置
-// @Description 管理员验证节点原始JSON配置的有效性
-// @Tags 管理端-节点
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param request body map[string]any true "原始配置 {raw_config: object}"
-// @Success 200 {object} map[string]any
-// @Failure 400 {object} map[string]any
-// @Router /admin/nodes/validate-config [post]
-func (h *NodeHandler) ValidateRawConfig(c *gin.Context) {
-	var req struct {
-		RawConfig any `json:"raw_config" binding:"required"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "参数错误", "error": err.Error()})
-		return
-	}
-
-	// The validators are the kernel's ValidateNodeConfig (KernelNodeOps).
-	validated, err := service.ValidateRawNodeConfig(req.RawConfig)
-	if errors.Is(err, service.ErrInvalidNodeProtocol) {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"valid":   false,
-			"message": "WireGuard 配置无效",
-			"error":   err.Error(),
-		})
-		return
-	}
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"valid":   false,
-			"message": "配置必须是 JSON 对象",
-		})
-		return
-	}
-
-	panelSuccess(c, gin.H{
-		"valid":    true,
-		"message":  "配置有效",
-		"warnings": validated.Warnings,
-		"size":     len(validated.Normalized),
-	})
-}
 
 // ========== 协议管理 ==========
 

@@ -198,22 +198,6 @@ func (s *AgentHandlerTestSuite) TestCreateTask_InvalidBody() {
 	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
 }
 
-func (s *AgentHandlerTestSuite) TestExecuteCommand_InvalidBody() {
-	w := s.post("/admin/agent/execute", NewAgentHandler().ExecuteCommand, []byte("invalid"))
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
-}
-
-func (s *AgentHandlerTestSuite) TestExecuteCommand_NodeOffline() {
-	w := s.post("/admin/agent/execute", NewAgentHandler().ExecuteCommand,
-		ExecuteCommandRequest{NodeID: s.testNode.ID, Action: "service_status", Params: map[string]any{"service": "anix-agent"}, Timeout: 30})
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
-}
-
-func (s *AgentHandlerTestSuite) TestExecuteCommand_MissingFields() {
-	w := s.post("/admin/agent/execute", NewAgentHandler().ExecuteCommand, map[string]any{"command": "ls"})
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
-}
-
 func TestAgentHandler(t *testing.T) {
 	suite.Run(t, new(AgentHandlerTestSuite))
 }

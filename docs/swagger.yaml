@@ -182,21 +182,6 @@ definitions:
     - node_id
     - type
     type: object
-  handler.ExecuteCommandRequest:
-    properties:
-      action:
-        type: string
-      node_id:
-        type: integer
-      params:
-        additionalProperties: {}
-        type: object
-      timeout:
-        type: integer
-    required:
-    - action
-    - node_id
-    type: object
   handler.NotifySettingsRequest:
     properties:
       notify_expire:
@@ -1693,31 +1678,6 @@ info:
   title: AnixOps Control API
   version: 5.0.3
 paths:
-  /admin/agent/execute:
-    post:
-      consumes:
-      - application/json
-      description: 管理员在节点上执行命令
-      parameters:
-      - description: 命令信息
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/handler.ExecuteCommandRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: 执行命令
-      tags:
-      - 管理端 Agent
   /admin/agent/list:
     get:
       description: 管理员获取所有在线的 Agent
@@ -2285,80 +2245,6 @@ paths:
       summary: 创建节点协议
       tags:
       - 管理端-节点
-  /admin/nodes/{id}/raw-config:
-    get:
-      consumes:
-      - application/json
-      description: 管理员获取指定节点的原始JSON配置
-      parameters:
-      - description: 节点ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties: true
-            type: object
-        "404":
-          description: Not Found
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: 获取节点原始配置
-      tags:
-      - 管理端-节点
-    put:
-      consumes:
-      - application/json
-      description: 管理员更新指定节点的原始JSON配置（高级模式）
-      parameters:
-      - description: 节点ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      - description: '原始配置 {raw_config: object}'
-        in: body
-        name: request
-        required: true
-        schema:
-          additionalProperties: true
-          type: object
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties: true
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: 更新节点原始配置
-      tags:
-      - 管理端-节点
   /admin/nodes/{id}/sync:
     post:
       consumes:
@@ -2488,37 +2374,6 @@ paths:
       security:
       - BearerAuth: []
       summary: 获取节点统计
-      tags:
-      - 管理端-节点
-  /admin/nodes/validate-config:
-    post:
-      consumes:
-      - application/json
-      description: 管理员验证节点原始JSON配置的有效性
-      parameters:
-      - description: '原始配置 {raw_config: object}'
-        in: body
-        name: request
-        required: true
-        schema:
-          additionalProperties: true
-          type: object
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: 验证原始配置
       tags:
       - 管理端-节点
   /admin/notification/email/config:

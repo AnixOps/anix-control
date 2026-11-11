@@ -68,7 +68,6 @@ func (f *agentsFixture) routes() []packagecompat.KernelHostRoute {
 		{"GET", "/api/v2/admin/agent/list", native.AgentListRouteID, agents((*handler.AgentHandler).ListAgents)},
 		{"GET", "/api/v2/admin/agent/monitor", native.AgentMonitorRouteID, agents((*handler.AgentHandler).GetMonitor)},
 		{"POST", "/api/v2/admin/agent/tasks", native.AgentTasksCreateRouteID, agents((*handler.AgentHandler).CreateTask)},
-		{"POST", "/api/v2/admin/agent/execute", native.AgentExecuteRouteID, agents((*handler.AgentHandler).ExecuteCommand)},
 	}
 	hostRoutes := make([]packagecompat.KernelHostRoute, 0, len(routes))
 	for _, route := range routes {
@@ -251,7 +250,7 @@ func TestAgentListAndMonitorParity(t *testing.T) {
 
 func TestAgentTasksParity(t *testing.T) {
 	forEachAgents(t, func(t *testing.T, f *agentsFixture) {
-		tasks, execute := "/api/v2/admin/agent/tasks", "/api/v2/admin/agent/execute"
+		tasks := "/api/v2/admin/agent/tasks"
 		sent := []string{"data.task_id", "data.message_id", "data.data.id", "data.data.task_id", "data.data.created_at", "data.data.timestamp"}
 		onStream := append(append([]string(nil), sent...), "data.ack.operation_id", "data.ack.revision", "data.ack.accepted_at_unix_ms")
 		body := func(node uint, action, params string) []byte {
@@ -262,12 +261,10 @@ func TestAgentTasksParity(t *testing.T) {
 		f.compare(t, "POST", tasks, packagecompat.Case{Name: "a type that is not diagnostic", Path: tasks, Body: []byte(`{"node_id":1,"type":"shell","action":"service_status"}`)})
 		f.compare(t, "POST", tasks, packagecompat.Case{Name: "no action", Path: tasks, Body: []byte(`{"node_id":1,"type":"diagnostic"}`)})
 		f.compare(t, "POST", tasks, packagecompat.Case{Name: "not JSON", Path: tasks, Body: []byte(`{"node_id":`)})
-		f.compare(t, "POST", execute, packagecompat.Case{Name: "execute: no node", Path: execute, Body: []byte(`{"action":"service_status"}`)})
 
 		f.connectStream(fakeagent.Script{})
 		f.compare(t, "POST", tasks, packagecompat.Case{Name: "on the stream", Path: tasks, Body: body(f.stream, "service_status", `{"service":"anix-agent","extra":1}`), Mask: onStream})
-		f.compare(t, "POST", execute, packagecompat.Case{Name: "execute on the stream", Path: execute,
-			Body: []byte(fmt.Sprintf(`{"node_id":%d,"action":"log_tail","params":{"service":"anix-agent","lines":5000}}`, f.stream)), Mask: onStream})
+		f.compare(t, "POST", tasks, packagecompat.Case{Name: "a log tail on the stream", Path: tasks, Body: body(f.stream, "log_tail", `{"service":"anix-agent","lines":5000}`), Mask: onStream})
 		f.compare(t, "POST", tasks, packagecompat.Case{Name: "an action off the whitelist", Path: tasks, Body: body(f.stream, "rm -rf /", `{}`)})
 		f.compare(t, "POST", tasks, packagecompat.Case{Name: "parameters the whitelist refuses", Path: tasks, Body: body(f.stream, "service_status", `{"service":"sshd"}`)})
 	})

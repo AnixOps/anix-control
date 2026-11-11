@@ -108,7 +108,6 @@
       "batch": 4,
       "min_version": "4.1.0-rc.5",
       "routes": [
-        "subscription.admin.subscription.formats.get",
         "subscription.admin.subscription.groups.get",
         "subscription.admin.subscription.groups.id.delete",
         "subscription.admin.subscription.groups.id.get",
