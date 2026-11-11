@@ -562,13 +562,16 @@ export default {
       security: 'Security',
       anxCover: 'Cover site',
       anxEntry: 'Domestic entry',
+      anxTuning: 'Handshake look tuning',
       anxAdvanced: 'Advanced'
     },
     groupIntros: {
       anxCover: 'Probes and non-ANX connections see this site, and the node answers handshakes the way it does.',
-      anxEntry: 'Only for users who dial a domestic entry directly; leave the defaults on transit nodes.'
+      anxEntry: 'Only for users who dial a domestic entry directly; leave the defaults on transit nodes.',
+      anxTuning: 'Makes the node answer handshakes more like the cover site. Optional: a general preset applies when empty.'
     },
     none: 'None',
+    needsAttention: 'See hint',
     generate: 'Generate',
     labels: {
       server_names: 'Allowed SNI',
@@ -603,7 +606,7 @@ export default {
       min_wire_gen: 'Lowest handshake generation accepted'
     },
     hints: {
-      anxServerNames: 'Comma separated; clients use the first. It must be a name the cover site really serves. ANX user keys derive from the UUID and the server public key is reported by the Agent on the node; the AnixOps Net subscription format carries the anx:// link.',
+      anxServerNames: 'Comma separated, clients use the first; they must be names the cover site really serves.',
       anxDest: 'Connections that are not ANX (probes included) are forwarded here as host:port.',
       anxAllowNoSni: 'Also accept connections without SNI (clients dial the IP; for domestic entries that block unregistered SNIs). Subscriptions then carry no SNI. Needs an anx-node newer than alpha.7.',
       anxShapePlain: 'VisionLike shaping is on by default (it hides the TLS-in-TLS pattern); turn it off only to debug interop.',

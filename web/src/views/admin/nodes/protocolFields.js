@@ -19,7 +19,8 @@
 export const PROTOCOL_SECTIONS = Object.freeze(['settings', 'tls_settings', 'reality_settings', 'transport_settings'])
 
 // The group a section's fields show in; a field's own `group` wins (ANX
-// splits its settings into the cover site, the domestic entry and advanced).
+// shows its cover site and folds the domestic entry, the look tuning and the
+// advanced settings away).
 export const FIELD_GROUPS = Object.freeze({
   settings: 'protocol',
   transport_settings: 'transport',
@@ -139,19 +140,19 @@ export const PROTOCOL_FIELDS = Object.freeze([
     section: 'settings', key: 'dest', group: 'anxCover', kind: 'text', default: `${ANX_COVER}:443`, hintKey: 'anxDest',
     placeholder: `${ANX_COVER}:443`, show: p => p.type === 'anx'
   },
-  { section: 'settings', key: 'alpn', group: 'anxCover', kind: 'list', default: [...ANX_ALPN], placeholder: 'h2,http/1.1', show: p => p.type === 'anx' },
+  { section: 'settings', key: 'alpn', group: 'anxTuning', kind: 'list', default: [...ANX_ALPN], placeholder: 'h2,http/1.1', show: p => p.type === 'anx' },
   // The cover site's TLS stack preset and per-key overrides (anx spec §4
   // item 6). dest_behavior takes the line anx-lab dest-probe prints; it
   // should carry session_tickets and flight_records for the dest.
-  { section: 'settings', key: 'dest_stack', group: 'anxCover', kind: 'select', options: ['', ...ANX_DEST_STACKS], show: p => p.type === 'anx' },
+  { section: 'settings', key: 'dest_stack', group: 'anxTuning', kind: 'select', options: ['', ...ANX_DEST_STACKS], show: p => p.type === 'anx' },
   {
-    section: 'settings', key: 'dest_behavior', group: 'anxCover', kind: 'json', hintKey: 'anxDestBehavior', warn: anxDestWarnings,
+    section: 'settings', key: 'dest_behavior', group: 'anxTuning', kind: 'json', hintKey: 'anxDestBehavior', warn: anxDestWarnings,
     placeholder: '"dest_behavior": {"session_tickets": "266/266", "flight_records": "122/1803/79/52"}', show: p => p.type === 'anx'
   },
   // Per-dest overrides for a dest list (anx #208): { "host:port": {…} },
   // usually each backup dest's session_tickets and flight_records.
   {
-    section: 'settings', key: 'dest_behaviors', group: 'anxCover', kind: 'json', hintKey: 'anxDestBehaviors', warn: anxDestBehaviorsWarnings,
+    section: 'settings', key: 'dest_behaviors', group: 'anxTuning', kind: 'json', hintKey: 'anxDestBehaviors', warn: anxDestBehaviorsWarnings,
     placeholder: '{"www.icloud.com:443": {"session_tickets": "none", "flight_records": "122/1803/79/52"}}', show: p => p.type === 'anx' && anxDests(p).length > 1
   },
   // A2 no-SNI mode (anx spec §4): also accept ClientHellos without SNI, and

@@ -79,7 +79,8 @@
           </div>
         </section>
 
-        <section class="dialog-section">
+        <!-- A type with one TLS mode and one transport has nothing to choose: the summary bar names them. -->
+        <section v-if="tlsOptions.length > 1 || transportOptions.length > 1" class="dialog-section">
           <h3 class="dialog-section__title">{{ t(`${K}.sections.connection`) }}</h3>
           <div class="proto-row">
             <span class="proto-row__label">{{ t(`${K}.fields.tls`) }}</span>
