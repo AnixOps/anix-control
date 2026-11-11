@@ -48,6 +48,9 @@ const SHOTS = [
   ['admin-agent-upgrade', [DESKTOP, PHONE]],
   ['admin-agent-upgrade-running', [DESKTOP]],
   ['admin-monitor-node-traffic', [DESKTOP]],
+  // 网络拓扑: the world map and the diagram.
+  ['admin-topology', [DESKTOP, PHONE]],
+  ['admin-topology-graph', [DESKTOP]],
   // The v4.2 forwarding pages (F5b).
   ['admin-forward-overview', [DESKTOP]],
   ['admin-forward-routes', [DESKTOP, PHONE]],

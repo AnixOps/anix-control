@@ -41,6 +41,7 @@ const AdminInviteCodes = () => import('@/views/admin/InviteCodes.vue')
 const AdminSystem = () => import('@/views/admin/System.vue')
 // The v4.2 forwarding area (F5b): lazy chunks, opened only with the
 // forward package's v4 API (meta.capability, checked in the guard).
+const AdminTopology = () => import('@/views/admin/Topology.vue')
 const ForwardOverview = () => import('@/views/admin/forward/Overview.vue')
 const ForwardRoutes = () => import('@/views/admin/forward/Routes.vue')
 const ForwardRouteEditor = () => import('@/views/admin/forward/RouteEditor.vue')
@@ -189,6 +190,12 @@ const routes = [
         path: 'nodes',
         component: AdminNodes,
         meta: WIDE
+      },
+      {
+        // 网络拓扑: the devices and lines as a world map and as columns.
+        path: 'topology',
+        component: AdminTopology,
+        meta: { ...WIDE, titleKey: 'pageTitles.admin.topology' }
       },
       {
         // A node's page (UI U7); ?section= picks the section.

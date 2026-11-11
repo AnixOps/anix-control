@@ -20,6 +20,7 @@ import security from '../fixtures/security.js'
 import subscriptions from '../fixtures/subscriptions.js'
 import system from '../fixtures/system.js'
 import tickets from '../fixtures/tickets.js'
+import topology from '../fixtures/topology.js'
 import user from '../fixtures/user.js'
 import users from '../fixtures/users.js'
 import { FIXED_NOW_MS } from '../fixtures/clock.js'
@@ -94,6 +95,11 @@ export const SCREENS = {
   'admin-forward-route-ha': { fixture: forwardV4, scenario: 'route-ha' },
   'admin-forward-editor-ha': { fixture: forwardV4, scenario: 'editor-ha' },
   'admin-forward-no-capability': { fixture: forwardV4, scenario: 'no-capability' },
+  // 网络拓扑: the world map, the diagram, devices with no line, no device.
+  'admin-topology': { fixture: topology, scenario: 'map' },
+  'admin-topology-graph': { fixture: topology, scenario: 'graph' },
+  'admin-topology-direct': { fixture: topology, scenario: 'direct' },
+  'admin-topology-empty': { fixture: topology, scenario: 'empty' },
   'admin-subscriptions': { fixture: subscriptions, scenario: 'list' },
   'admin-subscription-members': { fixture: subscriptions, scenario: 'members' },
   'admin-system': { fixture: system, scenario: 'general' },
