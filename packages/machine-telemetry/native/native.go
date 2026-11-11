@@ -7,9 +7,9 @@
 // and users' e-mail addresses through kapi_user_directory_v1. The kernel
 // writes the log when a node reports traffic; the package never writes it.
 // The dashboard is the snapshot the kernel caches, read through
-// KernelTelemetry (kernel.telemetry.dashboard.v1); without that contract it
-// stays legacy. Responses are byte-compatible with the legacy handlers
-// (internal/tests/machinetelemetrycompat).
+// KernelTelemetry (kernel.telemetry.dashboard.v1). The kernel keeps no
+// handler for these routes; their answers are pinned by
+// internal/tests/machinetelemetrycompat.
 //
 // Two routes are kernel-owned; the reasons are in the host's bridgedRoutes
 // (packages/machine-telemetry/control/service.go): the system information
@@ -32,7 +32,7 @@ type Service struct {
 	// kapi_traffic_log_v1 and kapi_user_directory_v1 views are visible.
 	Open func(ctx context.Context) (*gorm.DB, error)
 	// Telemetry is the kernel's KernelTelemetry; without it the dashboard
-	// has no native handler and stays legacy.
+	// has no handler.
 	Telemetry Telemetry
 	// Now defaults to time.Now. The hourly buckets are in the local time
 	// zone, as the kernel's; the kernel passes its TZ to the host.

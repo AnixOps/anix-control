@@ -102,50 +102,6 @@ func TestRedactMap_Empty(t *testing.T) {
 	assert.Empty(t, result)
 }
 
-func TestRedactJSON(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    string
-		contains string
-	}{
-		{
-			name:     "valid json with password",
-			input:    `{"username":"john","password":"secret123456789"}`,
-			contains: "secr****6789",
-		},
-		{
-			name:     "valid json with api_key",
-			input:    `{"api_key":"abcdefghijklmnop"}`,
-			contains: "abcd****mnop",
-		},
-		{
-			name:     "empty string",
-			input:    "",
-			contains: "",
-		},
-		{
-			name:     "valid json with short password",
-			input:    `{"password":"secret123"}`,
-			contains: "secr****t123", // Redacted form for 9-char string
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := RedactJSON(tt.input)
-			if tt.contains != "" {
-				assert.Contains(t, result, tt.contains)
-			}
-		})
-	}
-}
-
-func TestRedactJSONRegex(t *testing.T) {
-	input := `{"password": "secret123", "api_key": "key456"}`
-	result := redactJSONRegex(input)
-	assert.Contains(t, result, "[REDACTED]")
-}
-
 func TestLogSafe(t *testing.T) {
 	log := NewLogSafe().
 		SetRaw("action", "login").

@@ -1,10 +1,12 @@
-// Package notificationcompat proves the notification package's native routes
-// answer exactly as the kernel's legacy handlers, on SQLite and PostgreSQL:
-// the same bytes (times the handlers take from their clock masked) and the
-// same resulting rows.
+// Package notificationcompat pins the answers of the notification package's
+// native routes, on SQLite and PostgreSQL, to the ones recorded in testdata
+// while the routes still matched the kernel's legacy handlers byte for byte
+// (packagecompat's golden answers): the answer (times the handlers take from
+// their clock masked) and the resulting rows.
 //
-// No case reaches the Telegram Bot API: the routes that call it run without a
-// bot row, so both sides fail the same way before any request is made.
+// Outside the webhook cases, which replace the transport, no case reaches the
+// Telegram Bot API: the routes that call it run without a bot row and fail
+// before any request is made.
 package notificationcompat
 
 import (
@@ -16,12 +18,10 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
-	"github.com/AnixOps/anix-control/v5/internal/handler"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/packagestore"
 	"github.com/AnixOps/anix-control/v5/internal/tests/packagecompat"
 	"github.com/AnixOps/anix-control/v5/packages/notification/native"
-	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )
@@ -32,9 +32,9 @@ var (
 	nobody = pluginhostsdk.Principal{ActorID: 9}
 )
 
-func route(method, pattern, routeID string, legacy gin.HandlerFunc) packagecompat.Route {
+func route(method, pattern, routeID string) packagecompat.Route {
 	return packagecompat.Route{
-		Method: method, Pattern: pattern, RouteID: routeID, Legacy: legacy,
+		Method: method, Pattern: pattern, RouteID: routeID,
 		Models: []any{
 			&model.User{}, &model.NotificationTemplate{}, &model.NotificationLog{},
 			&model.TelegramBot{}, &model.TelegramUser{},
@@ -44,16 +44,6 @@ func route(method, pattern, routeID string, legacy gin.HandlerFunc) packagecompa
 			return service.Handlers()[routeID]
 		},
 	}
-}
-
-// The legacy handlers are built per request: the Telegram handler's service
-// keeps the database it was built with, which the harness sets up per case.
-func notifications(method func(*handler.NotificationHandler, *gin.Context)) gin.HandlerFunc {
-	return func(c *gin.Context) { method(handler.NewNotificationHandler(), c) }
-}
-
-func telegram(method func(*handler.TelegramHandler, *gin.Context)) gin.HandlerFunc {
-	return func(c *gin.Context) { method(handler.NewTelegramHandler(), c) }
 }
 
 var seeded = time.Date(2026, 9, 1, 8, 0, 0, 0, time.UTC)
@@ -117,7 +107,7 @@ func seedBot(adminIDs string) func(t testing.TB, db *gorm.DB) {
 }
 
 // syncSequences moves PostgreSQL's id sequences past explicitly seeded ids,
-// so both sides create the next row with the same id.
+// so the next row gets the id it has on SQLite.
 func syncSequences(t testing.TB, db *gorm.DB) {
 	if db.Name() != "postgres" {
 		return
@@ -203,39 +193,39 @@ func write(t *testing.T, r packagecompat.Route, cases []packagecompat.Case) {
 	}
 }
 
-func TestUserNotificationRoutesParity(t *testing.T) {
-	read(t, route("GET", "/api/v2/user/notifications", "notification.user.notifications.get", notifications((*handler.NotificationHandler).GetUserNotifications)), []packagecompat.Case{
+func TestUserNotificationRoutes(t *testing.T) {
+	read(t, route("GET", "/api/v2/user/notifications", "notification.user.notifications.get"), []packagecompat.Case{
 		{Name: "own notifications newest first", Path: "/api/v2/user/notifications", Principal: member},
 		{Name: "second page", Path: "/api/v2/user/notifications?page=2&page_size=2", Principal: member},
 		{Name: "page size zero", Path: "/api/v2/user/notifications?page_size=0", Principal: member},
 		{Name: "page that is not a number", Path: "/api/v2/user/notifications?page=x", Principal: member},
 		{Name: "no notifications", Path: "/api/v2/user/notifications", Principal: nobody},
 	})
-	read(t, route("GET", "/api/v2/user/notifications/unread-count", "notification.user.notifications.unread_count.get", notifications((*handler.NotificationHandler).GetUnreadCount)), []packagecompat.Case{
+	read(t, route("GET", "/api/v2/user/notifications/unread-count", "notification.user.notifications.unread_count.get"), []packagecompat.Case{
 		{Name: "unread count", Path: "/api/v2/user/notifications/unread-count", Principal: member},
 		{Name: "nothing unread", Path: "/api/v2/user/notifications/unread-count", Principal: nobody},
 	})
-	write(t, route("POST", "/api/v2/user/notifications/:id/read", "notification.user.notifications.id.read.post", notifications((*handler.NotificationHandler).MarkAsRead)), []packagecompat.Case{
+	write(t, route("POST", "/api/v2/user/notifications/:id/read", "notification.user.notifications.id.read.post"), []packagecompat.Case{
 		{Name: "mark own notification", Path: "/api/v2/user/notifications/1/read", Principal: member},
 		{Name: "mark one already read", Path: "/api/v2/user/notifications/3/read", Principal: member},
 		{Name: "another member's notification", Path: "/api/v2/user/notifications/4/read", Principal: member},
 		{Name: "unknown notification", Path: "/api/v2/user/notifications/99/read", Principal: member},
 		{Name: "id that is not a number", Path: "/api/v2/user/notifications/x/read", Principal: member},
 	})
-	write(t, route("POST", "/api/v2/user/notifications/read-all", "notification.user.notifications.read_all.post", notifications((*handler.NotificationHandler).MarkAllAsRead)), []packagecompat.Case{
+	write(t, route("POST", "/api/v2/user/notifications/read-all", "notification.user.notifications.read_all.post"), []packagecompat.Case{
 		{Name: "mark all", Path: "/api/v2/user/notifications/read-all", Principal: member},
 		{Name: "nothing to mark", Path: "/api/v2/user/notifications/read-all", Principal: nobody},
 	})
 }
 
-func TestAdminTemplateRoutesParity(t *testing.T) {
-	read(t, route("GET", "/api/v2/admin/notification/templates", "notification.admin.notification.templates.get", notifications((*handler.NotificationHandler).ListTemplates)), []packagecompat.Case{
+func TestAdminTemplateRoutes(t *testing.T) {
+	read(t, route("GET", "/api/v2/admin/notification/templates", "notification.admin.notification.templates.get"), []packagecompat.Case{
 		{Name: "every template", Path: "/api/v2/admin/notification/templates", Principal: admin},
 		{Name: "by type", Path: "/api/v2/admin/notification/templates?type=email", Principal: admin},
 		{Name: "no template of the type", Path: "/api/v2/admin/notification/templates?type=webhook", Principal: admin},
 		{Name: "no templates", Path: "/api/v2/admin/notification/templates", Principal: admin, Seed: seedUsers},
 	})
-	write(t, route("POST", "/api/v2/admin/notification/templates", "notification.admin.notification.templates.post", notifications((*handler.NotificationHandler).CreateTemplate)), []packagecompat.Case{
+	write(t, route("POST", "/api/v2/admin/notification/templates", "notification.admin.notification.templates.post"), []packagecompat.Case{
 		{Name: "create", Path: "/api/v2/admin/notification/templates", Principal: admin, Mask: []string{"data.created_at", "data.updated_at"},
 			Body: []byte(`{"name":"n","type":"email","event":"e","title":"t","content":"c","enabled":true}`)},
 		{Name: "create disabled keeps the column default", Path: "/api/v2/admin/notification/templates", Principal: admin, Mask: []string{"data.created_at", "data.updated_at"},
@@ -244,7 +234,7 @@ func TestAdminTemplateRoutesParity(t *testing.T) {
 		{Name: "wrong field type", Path: "/api/v2/admin/notification/templates", Principal: admin, Body: []byte(`{"name":1}`)},
 		{Name: "no body", Path: "/api/v2/admin/notification/templates", Principal: admin},
 	})
-	write(t, route("PUT", "/api/v2/admin/notification/templates/:id", "notification.admin.notification.templates.id.put", notifications((*handler.NotificationHandler).UpdateTemplate)), []packagecompat.Case{
+	write(t, route("PUT", "/api/v2/admin/notification/templates/:id", "notification.admin.notification.templates.id.put"), []packagecompat.Case{
 		{Name: "update", Path: "/api/v2/admin/notification/templates/1", Principal: admin, Mask: []string{"data.updated_at"},
 			Body: []byte(`{"type":"webhook","event":"ev","name":"renamed","title":"T","content":"C","enabled":false}`)},
 		{Name: "enable only", Path: "/api/v2/admin/notification/templates/3", Principal: admin, Mask: []string{"data.updated_at"}, Body: []byte(`{"enabled":true}`)},
@@ -255,7 +245,7 @@ func TestAdminTemplateRoutesParity(t *testing.T) {
 		{Name: "id that is not a number", Path: "/api/v2/admin/notification/templates/x", Principal: admin, Body: []byte(`{"name":"x"}`)},
 		{Name: "id that is SQL", Path: "/api/v2/admin/notification/templates/0%20OR%201=1", Principal: admin, Body: []byte(`{"name":"x"}`)},
 	})
-	write(t, route("DELETE", "/api/v2/admin/notification/templates/:id", "notification.admin.notification.templates.id.delete", notifications((*handler.NotificationHandler).DeleteTemplate)), []packagecompat.Case{
+	write(t, route("DELETE", "/api/v2/admin/notification/templates/:id", "notification.admin.notification.templates.id.delete"), []packagecompat.Case{
 		{Name: "delete", Path: "/api/v2/admin/notification/templates/2", Principal: admin},
 		{Name: "delete an unknown template", Path: "/api/v2/admin/notification/templates/99", Principal: admin},
 		{Name: "delete by an id that is not a number", Path: "/api/v2/admin/notification/templates/x", Principal: admin},
@@ -263,8 +253,8 @@ func TestAdminTemplateRoutesParity(t *testing.T) {
 	})
 }
 
-func TestAdminLogRoutesParity(t *testing.T) {
-	read(t, route("GET", "/api/v2/admin/notification/logs", "notification.admin.notification.logs.get", notifications((*handler.NotificationHandler).ListLogs)), []packagecompat.Case{
+func TestAdminLogRoutes(t *testing.T) {
+	read(t, route("GET", "/api/v2/admin/notification/logs", "notification.admin.notification.logs.get"), []packagecompat.Case{
 		{Name: "every log newest first", Path: "/api/v2/admin/notification/logs", Principal: admin},
 		{Name: "by type", Path: "/api/v2/admin/notification/logs?type=email", Principal: admin},
 		{Name: "by status name", Path: "/api/v2/admin/notification/logs?status=failed", Principal: admin},
@@ -276,14 +266,14 @@ func TestAdminLogRoutesParity(t *testing.T) {
 	})
 }
 
-func TestAdminTelegramBotRoutesParity(t *testing.T) {
-	read(t, route("GET", "/api/v2/admin/telegram/bot", "notification.admin.telegram.bot.get", telegram((*handler.TelegramHandler).GetBot)), []packagecompat.Case{
+func TestAdminTelegramBotRoutes(t *testing.T) {
+	read(t, route("GET", "/api/v2/admin/telegram/bot", "notification.admin.telegram.bot.get"), []packagecompat.Case{
 		{Name: "no bot answers the defaults", Path: "/api/v2/admin/telegram/bot", Principal: admin},
 		{Name: "bot", Path: "/api/v2/admin/telegram/bot", Principal: admin, Seed: seedBot("[11,22]")},
 		{Name: "comma separated admin ids", Path: "/api/v2/admin/telegram/bot", Principal: admin, Seed: seedBot("11, 22,x")},
 		{Name: "unreadable admin ids", Path: "/api/v2/admin/telegram/bot", Principal: admin, Seed: seedBot("abc")},
 	})
-	write(t, route("PUT", "/api/v2/admin/telegram/bot", "notification.admin.telegram.bot.put", telegram((*handler.TelegramHandler).UpdateBot)), []packagecompat.Case{
+	write(t, route("PUT", "/api/v2/admin/telegram/bot", "notification.admin.telegram.bot.put"), []packagecompat.Case{
 		{Name: "first update creates the bot", Path: "/api/v2/admin/telegram/bot", Principal: admin, Mask: []string{"data.created_at", "data.updated_at"},
 			Body: []byte(`{"token":"1:x","welcome_message":"hi","admin_ids":"5,6","allow_bind":false}`)},
 		{Name: "first update without a name", Path: "/api/v2/admin/telegram/bot", Principal: admin, Mask: []string{"data.created_at", "data.updated_at"}, Body: []byte(`{}`)},
@@ -295,13 +285,13 @@ func TestAdminTelegramBotRoutesParity(t *testing.T) {
 		{Name: "name too long", Path: "/api/v2/admin/telegram/bot", Principal: admin, Body: []byte(`{"name":"` + strings.Repeat("n", 256) + `"}`)},
 		{Name: "wrong field type", Path: "/api/v2/admin/telegram/bot", Principal: admin, Body: []byte(`{"allow_bind":"yes"}`)},
 	})
-	write(t, route("DELETE", "/api/v2/admin/telegram/webhook", "notification.admin.telegram.webhook.delete", telegram((*handler.TelegramHandler).DeleteWebhook)), []packagecompat.Case{
+	write(t, route("DELETE", "/api/v2/admin/telegram/webhook", "notification.admin.telegram.webhook.delete"), []packagecompat.Case{
 		{Name: "no bot", Path: "/api/v2/admin/telegram/webhook", Principal: admin},
 	})
 }
 
-func TestAdminTelegramMessageRoutesParity(t *testing.T) {
-	write(t, route("POST", "/api/v2/admin/telegram/notify", "notification.admin.telegram.notify.post", telegram((*handler.TelegramHandler).SendNotification)), []packagecompat.Case{
+func TestAdminTelegramMessageRoutes(t *testing.T) {
+	write(t, route("POST", "/api/v2/admin/telegram/notify", "notification.admin.telegram.notify.post"), []packagecompat.Case{
 		{Name: "no bot", Path: "/api/v2/admin/telegram/notify", Principal: admin, Body: []byte(`{"telegram_id":1002,"message":"hi"}`)},
 		{Name: "title and content without a bot", Path: "/api/v2/admin/telegram/notify", Principal: admin, Body: []byte(`{"telegram_id":"1002","title":"T","content":"C"}`)},
 		{Name: "nested message without a bot", Path: "/api/v2/admin/telegram/notify", Principal: admin, Body: []byte(`{"telegram_id":1002,"message":{"message":" hi "}}`)},
@@ -311,7 +301,7 @@ func TestAdminTelegramMessageRoutesParity(t *testing.T) {
 		{Name: "no message", Path: "/api/v2/admin/telegram/notify", Principal: admin, Body: []byte(`{"telegram_id":1002,"title":" ","content":""}`)},
 		{Name: "not an object", Path: "/api/v2/admin/telegram/notify", Principal: admin, Body: []byte(`[]`)},
 	})
-	write(t, route("POST", "/api/v2/admin/telegram/broadcast", "notification.admin.telegram.broadcast.post", telegram((*handler.TelegramHandler).Broadcast)), []packagecompat.Case{
+	write(t, route("POST", "/api/v2/admin/telegram/broadcast", "notification.admin.telegram.broadcast.post"), []packagecompat.Case{
 		{Name: "every eligible member fails without a bot", Path: "/api/v2/admin/telegram/broadcast", Principal: admin, Body: []byte(`{"message":"hi"}`)},
 		{Name: "no eligible member", Path: "/api/v2/admin/telegram/broadcast", Principal: admin, Seed: seedUsers, Body: []byte(`{"message":{"message":"hi"}}`)},
 		{Name: "empty broadcast", Path: "/api/v2/admin/telegram/broadcast", Principal: admin, Body: []byte(`{"message":"  "}`)},
@@ -319,8 +309,8 @@ func TestAdminTelegramMessageRoutesParity(t *testing.T) {
 	})
 }
 
-func TestAdminTelegramBindingRoutesParity(t *testing.T) {
-	read(t, route("GET", "/api/v2/admin/telegram/users", "notification.admin.telegram.users.get", telegram((*handler.TelegramHandler).GetUserBindings)), []packagecompat.Case{
+func TestAdminTelegramBindingRoutes(t *testing.T) {
+	read(t, route("GET", "/api/v2/admin/telegram/users", "notification.admin.telegram.users.get"), []packagecompat.Case{
 		{Name: "first page newest first", Path: "/api/v2/admin/telegram/users", Principal: admin},
 		{Name: "every binding", Path: "/api/v2/admin/telegram/users?all=TRUE", Principal: admin},
 		{Name: "second page", Path: "/api/v2/admin/telegram/users?page=2&page_size=3", Principal: admin},
@@ -328,7 +318,7 @@ func TestAdminTelegramBindingRoutesParity(t *testing.T) {
 		{Name: "no bindings", Path: "/api/v2/admin/telegram/users", Principal: admin, Seed: seedUsers},
 		{Name: "no bindings at all", Path: "/api/v2/admin/telegram/users?all=true", Principal: admin, Seed: seedUsers},
 	})
-	write(t, route("PUT", "/api/v2/admin/telegram/users/:id/notify", "notification.admin.telegram.users.id.notify.put", telegram((*handler.TelegramHandler).UpdateUserNotify)), []packagecompat.Case{
+	write(t, route("PUT", "/api/v2/admin/telegram/users/:id/notify", "notification.admin.telegram.users.id.notify.put"), []packagecompat.Case{
 		{Name: "switch all off", Path: "/api/v2/admin/telegram/users/1/notify", Principal: admin, Mask: []string{"data.updated_at"}, Body: []byte(`{"notify_enabled":false}`)},
 		{Name: "one switch wins over notify_enabled", Path: "/api/v2/admin/telegram/users/2/notify", Principal: admin, Mask: []string{"data.updated_at"},
 			Body: []byte(`{"notify_enabled":false,"notify_expire":true}`)},
@@ -343,18 +333,18 @@ func TestAdminTelegramBindingRoutesParity(t *testing.T) {
 	})
 }
 
-func TestUserTelegramRoutesParity(t *testing.T) {
-	read(t, route("GET", "/api/v2/user/telegram/status", "notification.user.telegram.status.get", telegram((*handler.TelegramHandler).GetTelegramStatus)), []packagecompat.Case{
+func TestUserTelegramRoutes(t *testing.T) {
+	read(t, route("GET", "/api/v2/user/telegram/status", "notification.user.telegram.status.get"), []packagecompat.Case{
 		{Name: "bound", Path: "/api/v2/user/telegram/status", Principal: member},
 		{Name: "not bound", Path: "/api/v2/user/telegram/status", Principal: nobody},
 	})
-	// Neither route is implemented: both sides refuse and change nothing (the
+	// Neither route is implemented: it refuses and changes nothing (the
 	// state compared includes the bindings and their switches).
-	write(t, route("POST", "/api/v2/user/telegram/unbind", "notification.user.telegram.unbind.post", telegram((*handler.TelegramHandler).UnbindTelegram)), []packagecompat.Case{
+	write(t, route("POST", "/api/v2/user/telegram/unbind", "notification.user.telegram.unbind.post"), []packagecompat.Case{
 		{Name: "unbind is not implemented", Path: "/api/v2/user/telegram/unbind", Principal: member},
 		{Name: "unbind without a binding is not implemented either", Path: "/api/v2/user/telegram/unbind", Principal: nobody},
 	})
-	write(t, route("POST", "/api/v2/user/telegram/notify", "notification.user.telegram.notify.post", telegram((*handler.TelegramHandler).UpdateNotifySettings)), []packagecompat.Case{
+	write(t, route("POST", "/api/v2/user/telegram/notify", "notification.user.telegram.notify.post"), []packagecompat.Case{
 		{Name: "settings are not implemented", Path: "/api/v2/user/telegram/notify", Principal: member, Body: []byte(`{"notify_expire":false}`)},
 		{Name: "an empty object is not implemented either", Path: "/api/v2/user/telegram/notify", Principal: member, Body: []byte(`{}`)},
 		{Name: "wrong field type", Path: "/api/v2/user/telegram/notify", Principal: member, Body: []byte(`{"notify_expire":"no"}`)},
@@ -362,8 +352,8 @@ func TestUserTelegramRoutesParity(t *testing.T) {
 	})
 }
 
-// TestUserTelegramActionsAreNotImplemented pins what the native routes answer,
-// which the parity cases above only compare with the kernel: an error
+// TestUserTelegramActionsAreNotImplemented spells out what the native routes
+// answer: an error
 // envelope that says the action is not implemented (never "unbound
 // successfully" or "settings updated"), and the binding and its switches
 // untouched.

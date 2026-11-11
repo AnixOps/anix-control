@@ -2,7 +2,6 @@ package utils
 
 import (
 	"encoding/json"
-	"regexp"
 	"strings"
 )
 
@@ -87,32 +86,6 @@ func RedactMap(data map[string]any) map[string]any {
 		}
 	}
 	return result
-}
-
-// RedactJSON 脱敏 JSON 字符串中的敏感字段
-func RedactJSON(jsonStr string) string {
-	if jsonStr == "" {
-		return ""
-	}
-	var data map[string]any
-	if err := json.Unmarshal([]byte(jsonStr), &data); err != nil {
-		// 不是有效 JSON，尝试正则替换
-		return redactJSONRegex(jsonStr)
-	}
-	redacted := RedactMap(data)
-	result, _ := json.Marshal(redacted)
-	return string(result)
-}
-
-// redactJSONRegex 使用正则表达式脱敏 JSON 字符串
-func redactJSONRegex(jsonStr string) string {
-	for _, key := range SensitiveKeys {
-		// 匹配 "key": "value" 或 "key":"value"
-		pattern := `("` + key + `"\s*:\s*")([^"]+)(")`
-		re := regexp.MustCompile("(?i)" + pattern)
-		jsonStr = re.ReplaceAllString(jsonStr, `$1[REDACTED]$3`)
-	}
-	return jsonStr
 }
 
 // LogSafe 生成安全的日志字符串

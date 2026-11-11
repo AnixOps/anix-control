@@ -127,27 +127,6 @@ func settingsAuditActor(c *gin.Context) service.SettingsAuditActor {
 	return actor
 }
 
-// recordSettingsAudit records the system configuration audit entry of a
-// key a dedicated handler (the e-mail and invite configuration) wrote: the
-// entry the system configuration handler and KernelSettings record.
-func recordSettingsAudit(c *gin.Context, configs *service.SystemConfigService, operations *service.OperationLogService, key string, created, preserveExisting bool) {
-	if configs == nil || operations == nil {
-		return
-	}
-	saved, err := configs.GetEntry(key)
-	if err != nil || saved == nil {
-		log.Printf("record system config audit failed for key=%s: saved entry not found: %v", key, err)
-		return
-	}
-	action := "update"
-	if created {
-		action = "create"
-	}
-	if err := operations.Record(service.SystemConfigAuditInput(settingsAuditActor(c), action, saved, preserveExisting)); err != nil {
-		log.Printf("record system config audit failed for key=%s: %v", key, err)
-	}
-}
-
 func (h *SystemHandler) recordSystemConfigAudit(c *gin.Context, action string, cfg *model.SystemConfig, preserveExisting bool) {
 	if h == nil || h.operationLogService == nil || cfg == nil {
 		return

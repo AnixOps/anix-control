@@ -25,13 +25,12 @@ type machineTelemetryBridge interface {
 }
 
 // newMachineTelemetryService returns the machine-telemetry host's router.
-// The routes in machineTelemetryRoutes have a native handler: the traffic
-// routes on the kapi_traffic_log_v1 and kapi_user_directory_v1 kernel
-// views, the dashboard on the kernel's KernelTelemetry over the bridge
-// connection (local socket or module listener; a bridge without one leaves
-// it legacy). Such a route serves natively once the kernel sets its mode,
-// and falls back to the legacy handler otherwise. The routes in
-// bridgedRoutes always relay to the legacy handler, the monitoring
+// The routes in machineTelemetryRoutes have a native handler and serve
+// natively from the start (the kernel keeps no legacy handler for them): the
+// traffic routes on the kapi_traffic_log_v1 and kapi_user_directory_v1
+// kernel views, the dashboard on the kernel's KernelTelemetry over the
+// bridge connection (local socket or module listener). The routes in
+// bridgedRoutes always relay to the kernel's handler, the monitoring
 // WebSocket included. Of the package's own control routes, the per-node
 // services table (native.NodesRoute) is the package's alone and always
 // served here; the others relay to the kernel.
@@ -58,7 +57,7 @@ func newMachineTelemetryService(bridge machineTelemetryBridge, leaseID string) (
 			// arrive as "machine-telemetry.control.<digest>" and relay to the kernel.
 			return nativeRoute || bridgedRoute || strings.HasPrefix(routeID, pluginControlRoutePrefix)
 		},
-		Native: service.Handlers(),
+		Native: service.Handlers(), NativeOnly: true,
 	})
 	if err != nil {
 		return nil, err
@@ -69,9 +68,7 @@ func newMachineTelemetryService(bridge machineTelemetryBridge, leaseID string) (
 }
 
 // machineTelemetryHost is the router plus the control routes the package
-// owns outright. Route modes apply to compatibility routes, which have a
-// legacy handler to fall back to; an owned control route has none, so it
-// is always answered by the package.
+// owns outright, which it always answers itself.
 type machineTelemetryHost struct {
 	*pluginhostsdk.Router
 	owned map[string]pluginhostsdk.NativeHandler

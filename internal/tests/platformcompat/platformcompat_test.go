@@ -1,12 +1,13 @@
-// Package platformcompat proves the platform package's native route answers
-// exactly as the kernel's legacy handler, on SQLite and PostgreSQL: the same
-// bytes. The backup routes it once compared are gone (the backups are
-// /api/v5/backups); the audit log entries they wrote stay in the seed as
-// data.
+// Package platformcompat pins the answers of the platform package's native
+// route, on SQLite and PostgreSQL, to the ones recorded in testdata while
+// the route still matched the kernel's legacy handler byte for byte
+// (packagecompat's golden answers). The backup routes it once compared are
+// gone (the backups are /api/v5/backups); the audit log entries they wrote
+// stay in the seed as data.
 //
-// The legacy audit log handler reads v2_operation_log; the native one reads
-// the kernel view kapi_system_audit_log_v1 over it, so every audit case also
-// proves the view shows exactly the rows the handler filters on.
+// The route reads the kernel view kapi_system_audit_log_v1 over
+// v2_operation_log, so every case also proves the view shows the rows the
+// route filters on.
 package platformcompat
 
 import (
@@ -15,33 +16,25 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
-	"github.com/AnixOps/anix-control/v5/internal/handler"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/packagestore"
 	"github.com/AnixOps/anix-control/v5/internal/tests/packagecompat"
 	"github.com/AnixOps/anix-control/v5/packages/platform/native"
-	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )
 
 var admin = pluginhostsdk.Principal{ActorID: 1, Admin: true}
 
-func route(method, pattern, routeID string, legacy gin.HandlerFunc) packagecompat.Route {
+func route(method, pattern, routeID string) packagecompat.Route {
 	return packagecompat.Route{
-		Method: method, Pattern: pattern, RouteID: routeID, Legacy: legacy,
+		Method: method, Pattern: pattern, RouteID: routeID,
 		Models: []any{&model.OperationLog{}},
 		Native: func(db *gorm.DB) pluginhostsdk.NativeHandler {
 			service := &native.Service{Open: func(ctx context.Context) (*gorm.DB, error) { return db.WithContext(ctx), nil }}
 			return service.Handlers()[routeID]
 		},
 	}
-}
-
-// system builds the legacy handler per request: the harness sets up a
-// database per case.
-func system(method func(*handler.SystemHandler, *gin.Context)) gin.HandlerFunc {
-	return func(c *gin.Context) { method(handler.NewSystemHandler(), c) }
 }
 
 var seeded = time.Date(2026, 9, 1, 8, 0, 0, 0, time.UTC)
@@ -97,8 +90,8 @@ func read(t *testing.T, r packagecompat.Route, cases []packagecompat.Case) {
 	}
 }
 
-func TestAuditLogRouteParity(t *testing.T) {
-	read(t, route("GET", "/api/v2/admin/system/audit-logs", "platform.admin.system.audit_logs.get", system((*handler.SystemHandler).GetAuditLogs)), []packagecompat.Case{
+func TestAuditLogRoute(t *testing.T) {
+	read(t, route("GET", "/api/v2/admin/system/audit-logs", "platform.admin.system.audit_logs.get"), []packagecompat.Case{
 		{Name: "system entries newest first, redacted", Path: "/api/v2/admin/system/audit-logs", Seed: seedAudit},
 		{Name: "by target type", Path: "/api/v2/admin/system/audit-logs?target_type=system_config", Seed: seedAudit},
 		{Name: "by action", Path: "/api/v2/admin/system/audit-logs?action=update", Seed: seedAudit},

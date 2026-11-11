@@ -21,12 +21,11 @@ type notificationBridge interface {
 
 // newNotificationService returns the notification host's router. The routes
 // in notificationRoutes have a native handler on the adopted notification and
-// Telegram tables and the kernel's KernelSettings; such a route serves
-// natively once the kernel sets its mode, and falls back to the legacy
-// handler otherwise. The e-mail configuration and test send call
-// KernelSettings over the bridge connection (local socket or module
-// listener); a bridge without one leaves them legacy. The routes in
-// bridgedRoutes always relay to the legacy handler.
+// Telegram tables and the kernel's KernelSettings, and serve natively from
+// the start: the kernel keeps no legacy handler for them. The e-mail
+// configuration and test send call KernelSettings over the bridge connection
+// (local socket or module listener). The routes in bridgedRoutes always
+// relay to the kernel's handler.
 func newNotificationService(bridge notificationBridge, leaseID string) (*pluginhostsdk.Router, error) {
 	storage := packagestoresdk.SharedOpener(bridge)
 	service := &native.Service{Open: func(ctx context.Context) (*gorm.DB, error) {
@@ -48,7 +47,7 @@ func newNotificationService(bridge notificationBridge, leaseID string) (*pluginh
 			_, bridgedRoute := bridgedRoutes[routeID]
 			return nativeRoute || bridgedRoute
 		},
-		Native: service.Handlers(),
+		Native: service.Handlers(), NativeOnly: true,
 	})
 }
 

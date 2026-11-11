@@ -137,7 +137,7 @@ Reusable pieces that already exist:
 | Signed package build: the slim built-in set (`--builtin`) or the full format with the standalone host `packages/builtin/cmd/package-host` | `packages/shared/build_package.py` |
 | Versioned, schema-validated package config | `GET/PUT /api/v3/plugin-installations/:id/config` |
 | Rollout/migration ledger models | `internal/model/plugin_rollout.go`, `internal/service/plugin_rollout.go` |
-| Legacy/native comparison harness (`RunRead`, `RunWrite`) | `internal/tests/packagecompat` |
+| Route answer harness (`RunRead`, `RunWrite`): compares a native route with its legacy handler, or, once that is deleted, with the answers recorded in `testdata` | `internal/tests/packagecompat` |
 | Lifecycle plan with reverse compensation | `internal/plugincontrol/lifecycle_plan.go` |
 | Compiling a real host inside a test | `internal/pluginhost/identity_platform_host_test.go` |
 | E2E fixture that installs a real signed package | `internal/tests/e2e/identity_package_fixture_test.go` |
@@ -433,8 +433,9 @@ The planned `kernel.entitlement.apply.v1` became
   returned.
 - **Notification (in place).** 23 of 24 routes on the adopted
   `v2_notification_template`, `v2_notification_log`, `v2_telegram_bot` and
-  `v2_telegram_user` tables and the kernel's KernelSettings, proved by
-  `internal/tests/notificationcompat`; binding e-mails come from
+  `v2_telegram_user` tables and the kernel's KernelSettings, natively only
+  (the kernel keeps no legacy handler); their answers are pinned by
+  `internal/tests/notificationcompat`. Binding e-mails come from
   `kapi_user_directory_v1`.
   - The e-mail configuration (GET and PUT) and the test send read and write
     `notification.email.config` through KernelSettings, namespace `mail`
@@ -442,18 +443,19 @@ The planned `kernel.entitlement.apply.v1` became
     password: the package reads it in clear (`kernel.settings.mail.secrets.v1`)
     because the test e-mail is sent from the package host; the GET masks it
     as the kernel's handler does, and an update that keeps it sends the
-    placeholder. The parity test runs a test SMTP server and compares the
-    mail each side delivers.
+    placeholder. The test runs a test SMTP server and compares the
+    mail delivered.
   - Setting the webhook without a `url` points it at
     `<scheme>://<host>/api/v2/telegram/webhook` of the administrator's
     request: the request scheme and host the kernel sends (forwarding
     headers count only from a trusted proxy, `internal/requestorigin`)
-    (section 3.2, "Request address"). The parity test answers the Bot API
-    calls of both sides and compares them.
+    (section 3.2, "Request address"). The test answers the Bot API
+    calls and compares them.
   - One stays bridged: the public webhook (`/sub` needs the subscription
     token).
 - **Platform (in place).** 1 of 5 routes: the system audit log through
-  `kapi_system_audit_log_v1`, proved by `internal/tests/platformcompat`.
+  `kapi_system_audit_log_v1`, natively only (the kernel keeps no legacy
+  handler); its answers are pinned by `internal/tests/platformcompat`.
   - Four are `kernel-owned`: the system configuration routes reach every
     key of the protected `v2_system_config`, and a grant over every key
     holds every secret ([`settings-service.md`](settings-service.md#routes)).
@@ -945,7 +947,8 @@ The planned `kernel.entitlement.apply.v1` became
     kernel's memory, and hand out the forward package's bridge tasks and
     runtime jobs.
 - **Machine telemetry (in place).** 3 of machine-telemetry's 5 routes run
-  natively, proved by `internal/tests/machinetelemetrycompat`: the
+  natively only (the kernel keeps no legacy handler), their answers pinned
+  by `internal/tests/machinetelemetrycompat`: the
   administrator's hourly traffic series, the user traffic ranking and the
   dashboard.
   - The package adopts no table. It reads the traffic log through the new

@@ -18,42 +18,6 @@ func systemAudit(t *testing.T, db *gorm.DB) []model.OperationLog {
 	return entries
 }
 
-// E-mail configuration writes record the system configuration
-// handler's audit entry for the key they write: module system, the action,
-// the key, whether the SMTP password is set and was kept, and never a
-// secret value.
-func TestEmailConfigWritesRecordTheSystemConfigAudit(t *testing.T) {
-	db, _, router := setupSystemConfigSecurityTest(t)
-	seedEmailConfig(t, db, storedEmailConfigValue)
-	notifications := NewNotificationHandler()
-	router.PUT("/admin/notification/email/config", notifications.UpdateEmailConfig)
-
-	recorder := performSystemConfigJSONRequest(t, router, http.MethodPut, "/admin/notification/email/config",
-		map[string]any{"host": "smtp.test", "port": 465, "password": "********", "from_address": "noreply@example.test"})
-	require.Equal(t, float64(0), decodeJSONMap(t, recorder)["code"], recorder.Body.String())
-	recorder = performSystemConfigJSONRequest(t, router, http.MethodPut, "/admin/notification/email/config",
-		map[string]any{"host": "smtp.test", "port": 465, "password": "rotated", "from_address": "noreply@example.test"})
-	require.Equal(t, float64(0), decodeJSONMap(t, recorder)["code"], recorder.Body.String())
-
-	entries := systemAudit(t, db)
-	require.Len(t, entries, 2)
-	var emailRow model.SystemConfig
-	require.NoError(t, db.Where("key = ?", notificationEmailConfigKey).Take(&emailRow).Error)
-	for _, entry := range entries {
-		require.Equal(t, "system_config", entry.TargetType)
-		require.Equal(t, uint(99), *entry.UserID)
-		require.Equal(t, "admin@example.com", entry.Username)
-		require.NotContains(t, entry.Content, "smtp-secret")
-		require.NotContains(t, entry.Content, "rotated")
-	}
-	require.Equal(t, "update", entries[0].Action)
-	require.Equal(t, emailRow.ID, *entries[0].TargetID)
-	require.JSONEq(t, `{"key":"notification.email.config","group":"notification","type":"json","sensitive":false,"has_value":true,
-		"preserve_existing":true,"masked_fields":["password"],"masked_fields_with_value":["password"]}`, entries[0].Content)
-	require.JSONEq(t, `{"key":"notification.email.config","group":"notification","type":"json","sensitive":false,"has_value":true,
-		"preserve_existing":false,"masked_fields":["password"],"masked_fields_with_value":["password"]}`, entries[1].Content)
-}
-
 // A legacy handler the package bridge relays to gets the actor's id only;
 // its audit entries name the user by e-mail all the same.
 func TestBridgedAuditEntriesNameTheUser(t *testing.T) {

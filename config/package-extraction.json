@@ -46,8 +46,8 @@
       "path": "/api/v2/admin/dashboard",
       "package_id": "machine-telemetry",
       "route_id": "telemetry.admin.dashboard.get",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "GET",
@@ -238,64 +238,64 @@
       "path": "/api/v2/admin/notification/email/config",
       "package_id": "notification",
       "route_id": "notification.admin.notification.email.config.get",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "PUT",
       "path": "/api/v2/admin/notification/email/config",
       "package_id": "notification",
       "route_id": "notification.admin.notification.email.config.put",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "GET",
       "path": "/api/v2/admin/notification/logs",
       "package_id": "notification",
       "route_id": "notification.admin.notification.logs.get",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "GET",
       "path": "/api/v2/admin/notification/templates",
       "package_id": "notification",
       "route_id": "notification.admin.notification.templates.get",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "POST",
       "path": "/api/v2/admin/notification/templates",
       "package_id": "notification",
       "route_id": "notification.admin.notification.templates.post",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "DELETE",
       "path": "/api/v2/admin/notification/templates/:id",
       "package_id": "notification",
       "route_id": "notification.admin.notification.templates.id.delete",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "PUT",
       "path": "/api/v2/admin/notification/templates/:id",
       "package_id": "notification",
       "route_id": "notification.admin.notification.templates.id.put",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "POST",
       "path": "/api/v2/admin/notification/test",
       "package_id": "notification",
       "route_id": "notification.admin.notification.test.post",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "GET",
@@ -534,8 +534,8 @@
       "path": "/api/v2/admin/system/audit-logs",
       "package_id": "platform",
       "route_id": "platform.admin.system.audit_logs.get",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "GET",
@@ -595,64 +595,64 @@
       "path": "/api/v2/admin/telegram/bot",
       "package_id": "notification",
       "route_id": "notification.admin.telegram.bot.get",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "PUT",
       "path": "/api/v2/admin/telegram/bot",
       "package_id": "notification",
       "route_id": "notification.admin.telegram.bot.put",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "POST",
       "path": "/api/v2/admin/telegram/broadcast",
       "package_id": "notification",
       "route_id": "notification.admin.telegram.broadcast.post",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "POST",
       "path": "/api/v2/admin/telegram/notify",
       "package_id": "notification",
       "route_id": "notification.admin.telegram.notify.post",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "GET",
       "path": "/api/v2/admin/telegram/users",
       "package_id": "notification",
       "route_id": "notification.admin.telegram.users.get",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "PUT",
       "path": "/api/v2/admin/telegram/users/:id/notify",
       "package_id": "notification",
       "route_id": "notification.admin.telegram.users.id.notify.put",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "DELETE",
       "path": "/api/v2/admin/telegram/webhook",
       "package_id": "notification",
       "route_id": "notification.admin.telegram.webhook.delete",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "POST",
       "path": "/api/v2/admin/telegram/webhook",
       "package_id": "notification",
       "route_id": "notification.admin.telegram.webhook.post",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "GET",
@@ -683,16 +683,16 @@
       "path": "/api/v2/admin/traffic/hourly",
       "package_id": "machine-telemetry",
       "route_id": "telemetry.admin.traffic.hourly.get",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "GET",
       "path": "/api/v2/admin/traffic/user-ranking",
       "package_id": "machine-telemetry",
       "route_id": "telemetry.admin.traffic.user_ranking.get",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "GET",
@@ -892,32 +892,32 @@
       "path": "/api/v2/user/notifications",
       "package_id": "notification",
       "route_id": "notification.user.notifications.get",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "POST",
       "path": "/api/v2/user/notifications/:id/read",
       "package_id": "notification",
       "route_id": "notification.user.notifications.id.read.post",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "POST",
       "path": "/api/v2/user/notifications/read-all",
       "package_id": "notification",
       "route_id": "notification.user.notifications.read_all.post",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "GET",
       "path": "/api/v2/user/notifications/unread-count",
       "package_id": "notification",
       "route_id": "notification.user.notifications.unread_count.get",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "GET",
@@ -965,24 +965,24 @@
       "path": "/api/v2/user/telegram/notify",
       "package_id": "notification",
       "route_id": "notification.user.telegram.notify.post",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "GET",
       "path": "/api/v2/user/telegram/status",
       "package_id": "notification",
       "route_id": "notification.user.telegram.status.get",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "POST",
       "path": "/api/v2/user/telegram/unbind",
       "package_id": "notification",
       "route_id": "notification.user.telegram.unbind.post",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "GET",

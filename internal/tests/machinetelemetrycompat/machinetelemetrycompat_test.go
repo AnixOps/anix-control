@@ -1,12 +1,11 @@
-// Package machinetelemetrycompat proves the machine-telemetry package's
-// native routes answer exactly as the kernel's legacy handlers, on SQLite and
-// PostgreSQL: the hourly traffic series and the user traffic ranking. The
-// legacy handlers read v2_server_log and v2_user; the native ones read the
-// kernel views kapi_traffic_log_v1 and kapi_user_directory_v1 over them, so
-// every case also proves the views show what the handlers read.
-//
-// The answers depend on the current hour, which each side takes from its own
-// clock: a run that crosses the top of an hour may see one case differ.
+// Package machinetelemetrycompat pins the answers of the machine-telemetry
+// package's native routes, on SQLite and PostgreSQL, to the ones recorded in
+// testdata while the routes still matched the kernel's legacy handlers byte
+// for byte (packagecompat's golden answers): the hourly traffic series, the
+// user traffic ranking and the dashboard. The traffic routes read the kernel
+// views kapi_traffic_log_v1 and kapi_user_directory_v1 over v2_server_log
+// and v2_user, so every case also proves the views show what the routes
+// read.
 package machinetelemetrycompat
 
 import (
@@ -17,13 +16,10 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
-	"github.com/AnixOps/anix-control/v5/internal/handler"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/packagestore"
-	"github.com/AnixOps/anix-control/v5/internal/service"
 	"github.com/AnixOps/anix-control/v5/internal/tests/packagecompat"
 	"github.com/AnixOps/anix-control/v5/packages/machine-telemetry/native"
-	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
@@ -32,23 +28,20 @@ import (
 
 var admin = pluginhostsdk.Principal{ActorID: 1, Admin: true}
 
-func route(method, pattern, routeID string, legacy gin.HandlerFunc) packagecompat.Route {
+// clock is the native side's time: the traffic routes answer hours relative
+// to it, in the local zone, which the tests set to UTC.
+var clock = time.Date(2026, 9, 1, 8, 30, 0, 0, time.UTC)
+
+func init() { time.Local = time.UTC }
+
+func route(method, pattern, routeID string) packagecompat.Route {
 	return packagecompat.Route{
-		Method: method, Pattern: pattern, RouteID: routeID, Legacy: legacy,
+		Method: method, Pattern: pattern, RouteID: routeID,
 		Models: []any{&model.User{}, &model.TrafficLog{}},
 		Native: func(db *gorm.DB) pluginhostsdk.NativeHandler {
-			service := &native.Service{Open: func(ctx context.Context) (*gorm.DB, error) { return db.WithContext(ctx), nil }}
+			service := &native.Service{Open: func(ctx context.Context) (*gorm.DB, error) { return db.WithContext(ctx), nil }, Now: func() time.Time { return clock }}
 			return service.Handlers()[routeID]
 		},
-	}
-}
-
-// stats builds the legacy handler per request on a fresh StatsService,
-// which otherwise keeps the database it was first built with.
-func stats(method func(*handler.AdminHandler, *gin.Context)) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		service.ResetStatsServiceForTest()
-		method(handler.NewAdminHandler(), c)
 	}
 }
 
@@ -65,17 +58,17 @@ func seedUsers(t testing.TB, db *gorm.DB) {
 	require.NoError(t, db.Create(&users).Error)
 }
 
-// seedTraffic writes users and traffic reports relative to the current local
-// hour: in it, in earlier hours of the day, a day ago, weeks ago and beyond
-// the 30-day window, with rates of 1, 1.5, 0 and -2 (both counted as 1) and
-// 2, negative bytes (counted as 0), a sum beyond int64 (clamped), and reports of a user
-// without a v2_user row (id 9). Each user's total differs in every window, so
-// the ranking, which has no tie-break, is well defined.
+// seedTraffic writes users and traffic reports relative to the clock's
+// hour: in it, in the next hour (counted nowhere), in earlier hours of the
+// day, a day ago, weeks ago and beyond the 30-day window, with rates of 1,
+// 1.5, 0 and -2 (both counted as 1) and 2, negative bytes (counted as 0), a
+// sum beyond int64 (clamped), and reports of a user without a v2_user row
+// (id 9). Each user's total differs in every window, so the ranking, which
+// has no tie-break, is well defined.
 func seedTraffic(t testing.TB, db *gorm.DB) {
 	seedViews(t, db)
 	seedUsers(t, db)
-	now := time.Now()
-	current := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), 0, 0, 0, time.Local).Unix()
+	current := clock.Truncate(time.Hour).Unix()
 	hour := int64(3600)
 	logs := []model.TrafficLog{
 		{UserID: 1, ServerID: 1, ServerType: "vless", U: 1000, D: 5000, Rate: 1, LogAt: current + 5},
@@ -86,6 +79,7 @@ func seedTraffic(t testing.TB, db *gorm.DB) {
 		{UserID: 3, ServerID: 3, ServerType: "trojan", U: 40000, D: 2000, Rate: 1, LogAt: current - 30*hour},
 		{UserID: 5, ServerID: 4, ServerType: "vless", U: 9_000_000_000_000_000_000, D: 9_000_000_000_000_000_000, Rate: 1, LogAt: current - 400*hour},
 		{UserID: 6, ServerID: 4, ServerType: "vless", U: 777, D: 0, Rate: 1, LogAt: current - 800*hour},
+		{UserID: 1, ServerID: 1, ServerType: "vless", U: 111, D: 111, Rate: 1, LogAt: current + hour + 5},
 	}
 	for i := range logs {
 		logs[i].ID = uint(i + 1)
@@ -111,7 +105,7 @@ func read(t *testing.T, r packagecompat.Route, cases []packagecompat.Case) {
 	}
 }
 
-func TestHourlyTrafficRouteParity(t *testing.T) {
+func TestHourlyTrafficRoute(t *testing.T) {
 	path := "/api/v2/admin/traffic/hourly"
 	cases := []packagecompat.Case{
 		{Name: "last 24 hours", Path: path, Seed: seedTraffic},
@@ -125,10 +119,10 @@ func TestHourlyTrafficRouteParity(t *testing.T) {
 	} {
 		cases = append(cases, packagecompat.Case{Name: query, Path: path + "?" + query, Seed: seedTraffic})
 	}
-	read(t, route("GET", path, "telemetry.admin.traffic.hourly.get", stats((*handler.AdminHandler).GetHourlyTraffic)), cases)
+	read(t, route("GET", path, "telemetry.admin.traffic.hourly.get"), cases)
 }
 
-func TestUserTrafficRankingRouteParity(t *testing.T) {
+func TestUserTrafficRankingRoute(t *testing.T) {
 	path := "/api/v2/admin/traffic/user-ranking"
 	cases := []packagecompat.Case{
 		{Name: "last 24 hours", Path: path, Seed: seedTraffic},
@@ -144,7 +138,7 @@ func TestUserTrafficRankingRouteParity(t *testing.T) {
 	} {
 		cases = append(cases, packagecompat.Case{Name: query, Path: path + "?" + query, Seed: seedTraffic})
 	}
-	read(t, route("GET", path, "telemetry.admin.traffic.user_ranking.get", stats((*handler.AdminHandler).GetUserTrafficRanking)), cases)
+	read(t, route("GET", path, "telemetry.admin.traffic.user_ranking.get"), cases)
 }
 
 // The seed puts traffic in the windows, so the cases compare data and not
@@ -155,7 +149,7 @@ func TestSeedRanksTrafficInTheWindow(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, db.AutoMigrate(&model.User{}, &model.TrafficLog{}))
 	seedTraffic(t, db)
-	service := &native.Service{Open: func(ctx context.Context) (*gorm.DB, error) { return db.WithContext(ctx), nil }}
+	service := &native.Service{Open: func(ctx context.Context) (*gorm.DB, error) { return db.WithContext(ctx), nil }, Now: func() time.Time { return clock }}
 	response, err := service.UserTrafficRanking(context.Background(), pluginhostsdk.NativeRequest{})
 	require.NoError(t, err)
 	var answer struct {

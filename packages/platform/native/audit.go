@@ -111,7 +111,7 @@ func redactMap(data map[string]any) map[string]any {
 	return result
 }
 
-// redactJSON is the kernel's utils.RedactJSON.
+// redactJSON redacts the sensitive fields of a JSON object.
 func redactJSON(jsonStr string) string {
 	if jsonStr == "" {
 		return ""

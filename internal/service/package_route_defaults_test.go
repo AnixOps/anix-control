@@ -402,7 +402,7 @@ func TestPackageRouteCatalogParsesTheEmbeddedMap(t *testing.T) {
 	catalog, err := PackageRouteCatalog()
 	require.NoError(t, err)
 	assert.Equal(t, RouteCatalogNative, catalog["knowledge.article.list"].Mode)
-	assert.Equal(t, RouteCatalogNativeFlagged, catalog["notification.admin.notification.email.config.get"].Mode)
+	assert.Equal(t, RouteCatalogNativeFlagged, catalog["proxy.admin.nodes.get"].Mode)
 	assert.Equal(t, "knowledge", catalog["knowledge.article.list"].PackageID)
 	assert.Equal(t, RouteCatalogKernelOwned, catalog["platform.admin.system.configs.get"].Mode)
 	_, err = parsePackageRouteCatalog([]byte(`{`))
