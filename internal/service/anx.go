@@ -145,7 +145,18 @@ var anxDestBehaviorKeys = map[string]bool{
 	"read_ahead": true, "bad_finished": true, "unexpected_handshake": true,
 	"handshake_timeout_secs": true, "timeout": true, "dest_close_grace_ms": true,
 	"session_tickets": true, "flight_records": true, "flight_gap_ms": true,
+	// TLS session resumption (anx #216): measured by dest-probe as one set.
+	"ticket_lifetime": true, "ticket_ids": true, "ticket_prefix": true, "ticket_reuse": true,
+	"resume_exts": true, "resume_flight": true, "resume_tickets": true, "resume_ticket_ids": true,
+	"bad_binder": true,
 }
+
+// anxMaxTicketLifetime is the longest ticket_lifetime anx-node accepts (s).
+const anxMaxTicketLifetime = 604800
+
+// anxResumptionRequired are the keys anx-node needs once ticket_lifetime is
+// non-zero (it refuses to start without them).
+var anxResumptionRequired = []string{"ticket_ids", "resume_exts"}
 
 // anxDestSiteKeys are the dest_behavior keys that hold the cover site's own
 // data (anx spec §4 items 8 and 9), measured by anx-lab dest-probe: record
@@ -153,6 +164,8 @@ var anxDestBehaviorKeys = map[string]bool{
 var anxDestSiteKeys = map[string][3]int{
 	"session_tickets": {35, 16401, 8},
 	"flight_records":  {18, 16401, 16},
+	"resume_tickets":  {35, 16401, 8},
+	"resume_flight":   {18, 16401, 16},
 }
 
 // anxDests splits a dest list ("host:port[,host:port…]") as anx-node does.
@@ -210,6 +223,12 @@ func validateANXDestBehavior(value any) error {
 			}
 			continue
 		}
+		if key == "ticket_lifetime" {
+			if _, ok := anxTicketLifetime(item); !ok {
+				return fmt.Errorf("ANX dest_behavior ticket_lifetime must be whole seconds, 0 to %d", anxMaxTicketLifetime)
+			}
+			continue
+		}
 		switch v := item.(type) {
 		case string:
 			if strings.TrimSpace(v) == "" {
@@ -224,7 +243,38 @@ func validateANXDestBehavior(value any) error {
 			return fmt.Errorf("ANX dest_behavior %s must be a string, a whole number or true / false", key)
 		}
 	}
+	if lifetime, _ := anxTicketLifetime(behavior["ticket_lifetime"]); lifetime > 0 {
+		for _, key := range anxResumptionRequired {
+			if _, ok := behavior[key]; !ok {
+				return fmt.Errorf("ANX dest_behavior turns on session resumption (ticket_lifetime) without %s: paste the whole dest_behavior line anx-lab dest-probe prints", key)
+			}
+		}
+	}
 	return nil
+}
+
+// anxTicketLifetime reads ticket_lifetime (a number or a numeric string);
+// absent is 0.
+func anxTicketLifetime(value any) (int64, bool) {
+	var n int64
+	switch v := value.(type) {
+	case nil:
+		return 0, true
+	case float64:
+		if v != float64(int64(v)) {
+			return 0, false
+		}
+		n = int64(v)
+	case string:
+		parsed, err := strconv.ParseInt(strings.TrimSpace(v), 10, 64)
+		if err != nil {
+			return 0, false
+		}
+		n = parsed
+	default:
+		return 0, false
+	}
+	return n, n >= 0 && n <= anxMaxTicketLifetime
 }
 
 func validANXRecordLengths(text string, limits [3]int) bool {
