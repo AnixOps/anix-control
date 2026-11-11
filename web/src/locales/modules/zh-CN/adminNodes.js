@@ -559,7 +559,14 @@ export default {
     groups: {
       protocol: '协议设置',
       transport: '传输设置',
-      security: '安全设置'
+      security: '安全设置',
+      anxCover: '伪装站点',
+      anxEntry: '国内入口',
+      anxAdvanced: '高级设置'
+    },
+    groupIntros: {
+      anxCover: '探测和非 ANX 连接看到的就是这个站点，节点对外的握手外观也照它来。',
+      anxEntry: '只在用户直连国内入口时需要；过境节点保持默认即可。'
     },
     none: '无',
     generate: '随机生成',
@@ -601,7 +608,7 @@ export default {
       anxAllowNoSni: '同时接受不带 SNI 的连接（客户端直连 IP，适合按备案拦截 SNI 的国内入口）；开启后订阅不再下发 SNI。需要 alpha.7 之后的新版 anx-node。',
       anxShapePlain: '默认使用 VisionLike 整形（抹掉 TLS-in-TLS 特征）；只在互通调试时关闭。',
       anxMaxStreams: '一个 ANX 会话里同时打开的流数上限，留空为 256。',
-      anxWireGen: '填 2 后，订阅里的服务端公钥带上 "@2"，客户端改用第 2 代握手且不会降级。只在本节点的 anx-node 已支持第 2 代、并且它的客户端都已升级之后再填；旧客户端读不了新公钥。留空为 1。',
+      anxWireGen: '填 2 后，订阅里的服务端公钥带上 "{\'@\'}2"，客户端改用第 2 代握手且不会降级。只在本节点的 anx-node 已支持第 2 代、并且它的客户端都已升级之后再填；旧客户端读不了新公钥。留空为 1。',
       anxMinWireGen: '填 2 后节点拒绝第 1 代握手。只在发布代已是 2、且节点不再有第 1 代登录（Stats auth_gen1 不再增长）之后再填。留空为 1（两代都收）。需要支持第 2 代的 anx-node。',
       anxDestBehavior: '粘贴 anx-lab dest-probe 对这个 dest 打印的 "dest_behavior": {…} 整行（或一个 JSON 对象）。应包含 session_tickets 与 flight_records，这两项是伪装站点自己的数据。留空则只用栈预设。',
       anxDestBehaviorMissing: '告警：有 dest 在 dest_behavior（或它在 dest_behaviors 里的条目）中缺 session_tickets 或 flight_records，节点无法镜像目标站时外观会和目标站不一致。请对 dest 运行 anx-lab dest-probe，把打印的 dest_behavior 整行粘贴到这里（值为 "none" 也算已测过）。',

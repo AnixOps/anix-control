@@ -559,7 +559,14 @@ export default {
     groups: {
       protocol: 'Protocol',
       transport: 'Transport',
-      security: 'Security'
+      security: 'Security',
+      anxCover: 'Cover site',
+      anxEntry: 'Domestic entry',
+      anxAdvanced: 'Advanced'
+    },
+    groupIntros: {
+      anxCover: 'Probes and non-ANX connections see this site, and the node answers handshakes the way it does.',
+      anxEntry: 'Only for users who dial a domestic entry directly; leave the defaults on transit nodes.'
     },
     none: 'None',
     generate: 'Generate',
@@ -601,7 +608,7 @@ export default {
       anxAllowNoSni: 'Also accept connections without SNI (clients dial the IP; for domestic entries that block unregistered SNIs). Subscriptions then carry no SNI. Needs an anx-node newer than alpha.7.',
       anxShapePlain: 'VisionLike shaping is on by default (it hides the TLS-in-TLS pattern); turn it off only to debug interop.',
       anxMaxStreams: 'Streams one ANX session may open at once; empty means 256.',
-      anxWireGen: 'Set to 2 to publish the server key with "@2": clients then log in with the second handshake generation and never fall back. Only once this node runs an anx-node that knows the second generation, and every client of it has been updated; older clients cannot read the new key. Empty = 1.',
+      anxWireGen: 'Set to 2 to publish the server key with "{\'@\'}2": clients then log in with the second handshake generation and never fall back. Only once this node runs an anx-node that knows the second generation, and every client of it has been updated; older clients cannot read the new key. Empty = 1.',
       anxMinWireGen: 'Set to 2 to make the node refuse first-generation logins. Only after the published generation is 2 and the node no longer counts first-generation logins (Stats auth_gen1). Empty = 1 (both accepted). Needs an anx-node that knows the second generation.',
       anxDestBehavior: 'Paste the "dest_behavior": {…} line that anx-lab dest-probe prints for this dest (or a JSON object). It should carry session_tickets and flight_records, the cover site\'s own data. Empty = the stack preset only.',
       anxDestBehaviorMissing: 'Warning: a dest lacks session_tickets or flight_records in dest_behavior (or its dest_behaviors entry), so the node looks unlike the cover site whenever it cannot mirror it. Run anx-lab dest-probe against the dest and paste its dest_behavior line ("none" counts as measured).',
