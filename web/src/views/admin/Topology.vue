@@ -77,7 +77,7 @@
               </li>
             </ul>
             <div v-if="device.id" class="topo__pad">
-              <UiButton block @click="router.push(`/admin/nodes/${device.id}`)">{{ t('topology.device.open') }}</UiButton>
+              <UiButton variant="tertiary" :icon-end="ChevronRight" :as="RouterLink" :to="`/admin/nodes/${device.id}`">{{ t('topology.device.open') }}</UiButton>
             </div>
           </div>
 
@@ -101,7 +101,7 @@
               <div v-if="line.kind === 'route'"><dt>{{ t('topology.line.traffic') }}</dt><dd>{{ fmt.bytes(line.traffic, { precision: 1 }) }}</dd></div>
             </dl>
             <div class="topo__pad">
-              <UiButton block @click="router.push(line.kind === 'route' ? `/admin/forward/routes/${line.id}` : '/admin/forward/egress')">{{ t('topology.line.open') }}</UiButton>
+              <UiButton variant="tertiary" :icon-end="ChevronRight" :as="RouterLink" :to="line.kind === 'route' ? `/admin/forward/routes/${line.id}` : '/admin/forward/egress'">{{ t('topology.line.open') }}</UiButton>
             </div>
           </div>
 
@@ -133,8 +133,8 @@
 // node list, the forward routes (when the forward package is there) and the
 // egress routes. Polls every 30 s while visible.
 import { computed, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { MapPin, RefreshCw, Route as RouteIcon, Server, Users, X } from '@lucide/vue'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
+import { ChevronRight, MapPin, RefreshCw, Route as RouteIcon, Server, Users, X } from '@lucide/vue'
 import { UiBadge, UiButton, UiCard, UiEmptyState, UiErrorState, UiIconButton, UiMetricCard, UiPageHeader, UiSegmentedControl, UiSkeleton, useFormat } from '@/ui'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { getKernelAdminNodes, listKernelEgressRoutes } from '@/api/kernel'
