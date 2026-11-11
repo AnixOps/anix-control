@@ -151,7 +151,7 @@ test.describe('kernel alerts in the dashboard', () => {
     await expect.poll(() => requests.to('/api/v4/kernel/alerts').at(-1).query).toEqual({ status: 'resolved', limit: '30' })
     await expect(card.locator('[data-alert="kernel-21"]')).toContainText('The certificate of module identity-platform is about to expire')
     await expect(card.locator('[data-alert="kernel-21"]')).toContainText('Resolved 2026-10-02 05:00')
-    await expect(card.locator('[data-alert="kernel-20"]')).toContainText('The identity import has stalled')
+    await expect(card.locator('[data-alert="kernel-20"]')).toContainText('The built-in package plan does not verify')
     await expect(card.locator('[data-alert="tickets"]')).toHaveCount(0)
     await toggle.getByRole('button', { name: 'Active' }).click()
     await expect(card.locator('[data-alert="tickets"]')).toBeVisible()

@@ -389,6 +389,26 @@ func (i *Importer) ImportAccount(ctx context.Context, user model.User, accountUU
 	if i == nil || i.Connect == nil {
 		return ErrNotInitialized
 	}
+	// Right after a fresh start the identity host is still starting and
+	// migrating: the first administrator's claim waits for it.
+	deadline := time.Now().Add(accountImportWait)
+	for {
+		err := i.importAccount(ctx, user, accountUUID)
+		if err == nil || ctx.Err() != nil || time.Now().After(deadline) {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return err
+		case <-time.After(250 * time.Millisecond):
+		}
+	}
+}
+
+// accountImportWait is how long ImportAccount retries.
+const accountImportWait = 30 * time.Second
+
+func (i *Importer) importAccount(ctx context.Context, user model.User, accountUUID string) error {
 	conn, err := i.Connect()
 	if err != nil {
 		return fmt.Errorf("reach the identity module: %w", err)

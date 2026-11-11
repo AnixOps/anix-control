@@ -44,7 +44,7 @@ export const KERNEL_ALERT_KINDS = Object.freeze(Object.keys(KIND_ICONS))
 export function alertIcon(alert) {
   if (KIND_ICONS[alert?.kind]) return KIND_ICONS[alert.kind]
   if (alert?.subject_kind === 'node') return ServerOff
-  if (alert?.subject_kind === 'node_secrets' || alert?.subject_kind === 'identity') return ServerCog
+  if (alert?.subject_kind === 'node_secrets') return ServerCog
   return CalendarClock
 }
 

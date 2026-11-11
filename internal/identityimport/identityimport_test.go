@@ -266,8 +266,13 @@ func TestImportAccountHandsOneAccountToAnAuthoritativeIdentity(t *testing.T) {
 	require.Equal(t, authority.State, stored.State)
 	require.Equal(t, authority.Checkpoint, stored.Checkpoint, "the import state is not touched")
 
+	// A failed attempt (the identity host still starting) is retried; a
+	// request that ended is not.
 	f.identity.failOn = f.identity.calls + 1
-	require.Error(t, f.importer.ImportAccount(ctx, model.User{ID: 8, Email: "other@example.test", Password: string(hash), IsAdmin: 1}, AccountUUID(8)))
+	require.NoError(t, f.importer.ImportAccount(ctx, model.User{ID: 8, Email: "other@example.test", Password: string(hash), IsAdmin: 1}, AccountUUID(8)))
+	ended, cancel := context.WithCancel(ctx)
+	cancel()
+	require.Error(t, f.importer.ImportAccount(ended, model.User{ID: 9, Email: "third@example.test", Password: string(hash), IsAdmin: 1}, AccountUUID(9)))
 	require.ErrorIs(t, (&Importer{}).ImportAccount(ctx, user, AccountUUID(7)), ErrNotInitialized)
 	var runner *Runner
 	require.ErrorIs(t, runner.ImportAccount(ctx, user, AccountUUID(7)), ErrNotInitialized)

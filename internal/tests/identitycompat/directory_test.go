@@ -54,7 +54,7 @@ func withDirectory(t testing.TB, db *gorm.DB) {
 		directoryUser(7, "dave_x@example.test", directoryDay.Add(3*time.Hour), func(u *model.User) {
 			u.PlanID, u.GroupID, u.ExpiredAt, u.Banned = &plan8, &group5, &expiredAt, 1
 		}),
-		directoryUser(8, "Erin@Example.test", directoryDay.Add(3*time.Hour), func(u *model.User) {
+		directoryUser(8, "erin@Example.test", directoryDay.Add(3*time.Hour), func(u *model.User) {
 			u.PlanID, u.ExpiredAt = &plan7, &future
 		}),
 		directoryUser(9, "frank%off@example.test", directoryDay.Add(3*time.Hour), func(u *model.User) {
