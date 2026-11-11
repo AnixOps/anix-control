@@ -3,45 +3,44 @@ package proxynodecompat
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"testing"
 	"time"
 
 	kernelnodeopsv1 "github.com/AnixOps/anix-control/sdk/api/kernelnodeops/v1"
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
-	"github.com/AnixOps/anix-control/v5/internal/handler"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/nodesecrets"
 	"github.com/AnixOps/anix-control/v5/internal/service"
 	"github.com/AnixOps/anix-control/v5/internal/tests/packagecompat"
 	"github.com/AnixOps/anix-control/v5/packages/proxy-node/native"
-	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )
 
 // The node routes run through the whole path a deployment runs
 // (packagecompat.RunKernelRead and RunKernelWrite): the kernel's gateway
-// seals the secrets an administrator types into handles and expands the
-// ones an answer shows, the package host reads v2_node, which its lease
-// adopts once the node credential split finalized it, and the kernel stores
-// raw configuration secrets and retires deleted nodes. Both sides start
-// from the same rows; the answers are the same bytes and the rows, the
-// kernel's secrets and credentials end the same.
+// expands the handles an answer shows, the package host reads v2_node, which
+// its lease adopts since the node credential split finalized it, and the
+// kernel retires deleted nodes. The answers and, for the deletion, the rows,
+// the kernel's secrets and credentials after it are the ones recorded in
+// testdata while the routes still matched the kernel's legacy handlers.
 
-// now is the clock the seeds' report times are relative to, one value for
-// the run, so both sides store the same.
+// now is the clock the seeds' report times are relative to: a node's shown
+// status depends on how long ago it checked in. The recorded answers hold 0
+// for the report times (volatile).
 var now = time.Now().Unix()
 
-var wireGuard = func() (pair struct{ private, public, otherPrivate, otherPublic string }) {
-	var err error
-	if pair.private, pair.public, err = service.GenerateWireGuardKeypair(); err != nil {
-		panic(err)
-	}
-	if pair.otherPrivate, pair.otherPublic, err = service.GenerateWireGuardKeypair(); err != nil {
-		panic(err)
-	}
-	return pair
-}()
+func volatile() []string {
+	return []string{strconv.FormatInt(now-30, 10), strconv.FormatInt(now-7200, 10)}
+}
+
+// wireGuard holds two key pairs generated for this test and used nowhere
+// else: fixed, so the recorded answers hold them.
+var wireGuard = struct{ private, public, otherPrivate, otherPublic string }{
+	private: "xFgrZYz2S27LdAUfmgvMBP9EVh6BYwOlMP5PgnlNy/Q=", public: "p1T3JyjXGiS31F8mQjgZ/jHyPzC/BcEdwPDQ0pdD5gU=",
+	otherPrivate: "HgjMzty/73P8n/d1cSgyDaMp7tKkz+KjFg2lUwZOl5M=", otherPublic: "lcuwvHt27KTECRVvIHPzkpV3dgqLPM8frdRVjIVOqk4=",
+}
 
 func wireGuardRawConfig(private, public string) string {
 	return fmt.Sprintf(`{"type":"wireguard","server_port":51820,"cidr":"10.9.0.0/24","server_address":"10.9.0.1/24",`+
@@ -58,10 +57,10 @@ func capabilities() []string {
 }
 
 // kernelRoute is a proxy-node route on the kernel's path.
-func kernelRoute(method, pattern, routeID string, legacy gin.HandlerFunc) packagecompat.KernelRoute {
+func kernelRoute(method, pattern, routeID string) packagecompat.KernelRoute {
 	models := append(append(append([]any{}, adminModels...), packagecompat.NodeSplitModels()...), append(model.KernelNodeOperationModels(), &model.EgressRoute{}, &model.NodeExitPolicy{})...)
 	return packagecompat.KernelRoute{
-		Route:     packagecompat.Route{Method: method, Pattern: pattern, RouteID: routeID, Models: models, Legacy: legacy},
+		Route:     packagecompat.Route{Method: method, Pattern: pattern, RouteID: routeID, Models: models},
 		PackageID: "proxy-node", Capabilities: capabilities(),
 		NativeService: func(db *gorm.DB, nodeOps kernelnodeopsv1.KernelNodeOpsClient) pluginhostsdk.NativeHandler {
 			return (&native.Service{
@@ -71,10 +70,6 @@ func kernelRoute(method, pattern, routeID string, legacy gin.HandlerFunc) packag
 			}).Handlers()[routeID]
 		},
 	}
-}
-
-func nodeHandler(method func(*handler.NodeHandler, *gin.Context)) gin.HandlerFunc {
-	return func(c *gin.Context) { method(handler.NewNodeHandler(), c) }
 }
 
 // seedFleet writes nodes 1 to 6: online, offline, pending, disabled, in
@@ -181,6 +176,7 @@ func kernelRead(t *testing.T, r packagecompat.KernelRoute, cases []packagecompat
 		if c.Seed == nil {
 			c.Seed = seedFinalized
 		}
+		c.Volatile = volatile()
 		packagecompat.RunKernelRead(t, r, c)
 	}
 }
@@ -193,6 +189,7 @@ func kernelWrite(t *testing.T, r packagecompat.KernelRoute, cases []packagecompa
 		if c.Seed == nil {
 			c.Seed = seedFinalized
 		}
+		c.Volatile = volatile()
 		if c.Snapshot == nil {
 			c.Snapshot = fleetState
 		}
@@ -200,9 +197,9 @@ func kernelWrite(t *testing.T, r packagecompat.KernelRoute, cases []packagecompa
 	}
 }
 
-func TestNodeListParity(t *testing.T) {
+func TestNodeList(t *testing.T) {
 	path := "/api/v2/admin/nodes"
-	kernelRead(t, kernelRoute("GET", path, native.NodesRouteID, nodeHandler((*handler.NodeHandler).GetNodes)), []packagecompat.Case{
+	kernelRead(t, kernelRoute("GET", path, native.NodesRouteID), []packagecompat.Case{
 		{Name: "every node by sort, statuses from their last check", Path: path},
 		{Name: "page 2 of 4", Path: path + "?page=2&page_size=4"},
 		{Name: "a page size over the limit", Path: path + "?page_size=1000"},
@@ -233,10 +230,10 @@ func TestNodeListParity(t *testing.T) {
 	})
 }
 
-func TestNodeDetailParity(t *testing.T) {
+func TestNodeDetail(t *testing.T) {
 	pattern := "/api/v2/admin/nodes/:id"
 	path := func(id string) string { return "/api/v2/admin/nodes/" + id }
-	kernelRead(t, kernelRoute("GET", pattern, native.NodeRouteID, nodeHandler((*handler.NodeHandler).GetNode)), []packagecompat.Case{
+	kernelRead(t, kernelRoute("GET", pattern, native.NodeRouteID), []packagecompat.Case{
 		{Name: "with its protocols and raw configuration, masked", Path: path("1")},
 		{Name: "a raw configuration that is not JSON", Path: path("3")},
 		{Name: "a disabled node keeps its status", Path: path("4")},
@@ -246,10 +243,10 @@ func TestNodeDetailParity(t *testing.T) {
 	})
 }
 
-func TestNodeDeleteParity(t *testing.T) {
+func TestNodeDelete(t *testing.T) {
 	pattern := "/api/v2/admin/nodes/:id"
 	path := func(id string) string { return "/api/v2/admin/nodes/" + id }
-	kernelWrite(t, kernelRoute("DELETE", pattern, native.DeleteNodeRouteID, nodeHandler((*handler.NodeHandler).DeleteNode)), []packagecompat.Case{
+	kernelWrite(t, kernelRoute("DELETE", pattern, native.DeleteNodeRouteID), []packagecompat.Case{
 		{Name: "with its protocols, peers, links and credentials", Path: path("1")},
 		{Name: "with a protocol", Path: path("2")},
 		{Name: "without protocols", Path: path("6")},

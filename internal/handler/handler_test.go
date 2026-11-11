@@ -1023,94 +1023,6 @@ func (s *NodeHandlerTestSuite) SetupTest() {
 	s.router = gin.New()
 }
 
-func (s *NodeHandlerTestSuite) TestGetNodes_Success() {
-	handler := NewNodeHandler()
-	s.router.GET("/nodes", handler.GetNodes)
-
-	req, _ := http.NewRequest("GET", "/nodes", nil)
-	w := httptest.NewRecorder()
-	s.router.ServeHTTP(w, req)
-
-	assert.Equal(s.T(), http.StatusOK, w.Code)
-	resp := decodePanelTestResponse(s.T(), w)
-	assert.Equal(s.T(), float64(0), resp["code"])
-	data := resp["data"].(map[string]any)
-	assert.Contains(s.T(), data, "list")
-	assert.Contains(s.T(), data, "total")
-	assert.NotContains(s.T(), resp, "error")
-}
-
-func (s *NodeHandlerTestSuite) TestGetNodes_WithPagination() {
-	handler := NewNodeHandler()
-	s.router.GET("/nodes", handler.GetNodes)
-
-	req, _ := http.NewRequest("GET", "/nodes?page=1&page_size=10", nil)
-	w := httptest.NewRecorder()
-	s.router.ServeHTTP(w, req)
-
-	assert.Equal(s.T(), http.StatusOK, w.Code)
-	resp := decodePanelTestResponse(s.T(), w)
-	assert.Equal(s.T(), float64(0), resp["code"])
-	data := resp["data"].(map[string]any)
-	assert.Len(s.T(), data["list"].([]any), 1)
-	assert.Equal(s.T(), float64(1), data["total"])
-	assert.NotContains(s.T(), resp, "error")
-}
-
-func (s *NodeHandlerTestSuite) TestGetNodes_WithFilters() {
-	handler := NewNodeHandler()
-	s.router.GET("/nodes", handler.GetNodes)
-
-	req, _ := http.NewRequest("GET", "/nodes?status=1&search=test", nil)
-	w := httptest.NewRecorder()
-	s.router.ServeHTTP(w, req)
-
-	assert.Equal(s.T(), http.StatusOK, w.Code)
-	resp := decodePanelTestResponse(s.T(), w)
-	assert.Equal(s.T(), float64(0), resp["code"])
-	assert.NotNil(s.T(), resp["data"])
-	assert.NotContains(s.T(), resp, "error")
-}
-
-func (s *NodeHandlerTestSuite) TestGetNode_Success() {
-	handler := NewNodeHandler()
-	s.router.GET("/nodes/:id", handler.GetNode)
-
-	req, _ := http.NewRequest("GET", "/nodes/"+strconv.FormatUint(uint64(s.testNode.ID), 10), nil)
-	w := httptest.NewRecorder()
-	s.router.ServeHTTP(w, req)
-
-	assert.Equal(s.T(), http.StatusOK, w.Code)
-	resp := decodePanelTestResponse(s.T(), w)
-	assert.Equal(s.T(), float64(0), resp["code"])
-	data := resp["data"].(map[string]any)
-	assert.Equal(s.T(), float64(s.testNode.ID), data["id"])
-	assert.Equal(s.T(), s.testNode.Name, data["name"])
-	assert.NotContains(s.T(), resp, "error")
-}
-
-func (s *NodeHandlerTestSuite) TestGetNode_NotFound() {
-	handler := NewNodeHandler()
-	s.router.GET("/nodes/:id", handler.GetNode)
-
-	req, _ := http.NewRequest("GET", "/nodes/99999", nil)
-	w := httptest.NewRecorder()
-	s.router.ServeHTTP(w, req)
-
-	assert.Equal(s.T(), http.StatusNotFound, w.Code)
-}
-
-func (s *NodeHandlerTestSuite) TestGetNode_InvalidID() {
-	handler := NewNodeHandler()
-	s.router.GET("/nodes/:id", handler.GetNode)
-
-	req, _ := http.NewRequest("GET", "/nodes/invalid", nil)
-	w := httptest.NewRecorder()
-	s.router.ServeHTTP(w, req)
-
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
-}
-
 func (s *NodeHandlerTestSuite) TestCreateNode_Success() {
 	handler := NewNodeHandler()
 	s.router.POST("/nodes", handler.CreateNode)
@@ -1186,22 +1098,6 @@ func (s *NodeHandlerTestSuite) TestUpdateNode_InvalidID() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
-}
-
-func (s *NodeHandlerTestSuite) TestDeleteNode_Success() {
-	handler := NewNodeHandler()
-	s.router.DELETE("/nodes/:id", handler.DeleteNode)
-
-	req, _ := http.NewRequest("DELETE", "/nodes/"+strconv.FormatUint(uint64(s.testNode.ID), 10), nil)
-	w := httptest.NewRecorder()
-	s.router.ServeHTTP(w, req)
-
-	assert.Equal(s.T(), http.StatusOK, w.Code)
-	resp := decodePanelTestResponse(s.T(), w)
-	assert.Equal(s.T(), float64(0), resp["code"])
-	data := resp["data"].(map[string]any)
-	assert.Equal(s.T(), "删除成功", data["message"])
-	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *NodeHandlerTestSuite) TestGetProtocols_Success() {
@@ -2097,34 +1993,6 @@ func (s *SubscriptionAdminHandlerTestSuite) assertPanelError(w *httptest.Respons
 		assert.True(s.T(), ok)
 		assert.Contains(s.T(), strings.ToLower(msg), strings.ToLower(msgContains))
 	}
-}
-
-func (s *SubscriptionAdminHandlerTestSuite) TestGetGroupProtocols_InvalidID() {
-	handler := NewSubscriptionAdminHandler()
-	s.router.GET("/groups/:id/protocols", handler.GetGroupProtocols)
-
-	req, _ := http.NewRequest("GET", "/groups/invalid/protocols", nil)
-	w := httptest.NewRecorder()
-	s.router.ServeHTTP(w, req)
-
-	s.assertPanelError(w, "id")
-}
-
-func (s *SubscriptionAdminHandlerTestSuite) TestGetAvailableProtocols_Success() {
-	handler := NewSubscriptionAdminHandler()
-	s.router.GET("/protocols/available", handler.GetAvailableProtocols)
-
-	req, _ := http.NewRequest("GET", "/protocols/available", nil)
-	w := httptest.NewRecorder()
-	s.router.ServeHTTP(w, req)
-
-	assert.Equal(s.T(), http.StatusOK, w.Code)
-	resp := decodePanelTestResponse(s.T(), w)
-	assert.Equal(s.T(), float64(0), resp["code"])
-	assert.NotEmpty(s.T(), resp["msg"])
-	assert.NotZero(s.T(), resp["ts"])
-	assert.NotNil(s.T(), resp["data"])
-	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *SubscriptionAdminHandlerTestSuite) TestPreviewSubscription_InvalidBody() {

@@ -97,7 +97,7 @@ func dispatch(t *testing.T, service *pluginhostsdk.Router, route string, request
 // modes say. Until the kernel sets a flagged route's mode, the host relays it
 // to the legacy handler, bridged routes always; routes outside the package
 // are refused.
-func TestSubscriptionHostRelaysOnlyFlaggedRoutes(t *testing.T) {
+func TestSubscriptionHostRelaysOnlyBridgedRoutes(t *testing.T) {
 	bridge := &bridgeStub{}
 	service, err := newSubscriptionService(bridge, "lease-1")
 	require.NoError(t, err)
@@ -107,10 +107,7 @@ func TestSubscriptionHostRelaysOnlyFlaggedRoutes(t *testing.T) {
 		RouteID: "subscription.admin.subscription.groups.get", BridgeCapability: make([]byte, 32), DeadlineUnixMillis: time.Now().Add(time.Second).UnixMilli(),
 	})
 	require.Empty(t, bridge.operation, "a native route is not relayed")
-	for route := range flaggedRoutes {
-		require.Contains(t, subscriptionRoutes, route)
-	}
-	for _, route := range []string{native.GroupProtocolsRouteID, native.AvailableProtocolsRouteID, "subscription.admin.subscription.preview.post"} {
+	for _, route := range []string{"subscription.admin.subscription.preview.post"} {
 		response := dispatch(t, service, route, pluginhostsdk.DispatchRequest{})
 		require.EqualValues(t, 200, response.StatusCode)
 		require.Equal(t, route, bridge.operation)
@@ -231,11 +228,14 @@ func TestSubscriptionHostServesNativeRoutesOnTheLease(t *testing.T) {
 	response = dispatch(t, service, get, pluginhostsdk.DispatchRequest{Method: "GET", Metadata: params})
 	require.JSONEq(t, `"hk"`, mustField(t, response.ResponseBody, "data", "templates", "0", "name"))
 
-	// The lease grants no view of the node credential split's remainder
-	// (the split is not finalized), so a group's protocols are answered by
-	// the legacy handler although the route is native.
-	dispatch(t, service, native.GroupProtocolsRouteID, pluginhostsdk.DispatchRequest{Method: "GET", Metadata: params})
-	require.Equal(t, native.GroupProtocolsRouteID, stub.operation)
+	// A lease without the views of the finalized node credential split
+	// cannot serve a group's protocols: the request fails, there is no
+	// handler to fall back to.
+	request := pluginhostsdk.DispatchRequest{RouteID: native.GroupProtocolsRouteID, Method: "GET", Metadata: params,
+		BridgeCapability: make([]byte, 32), DeadlineUnixMillis: time.Now().Add(5 * time.Second).UnixMilli()}
+	_, err = service.Dispatch(context.Background(), request)
+	require.ErrorIs(t, err, pluginhostsdk.ErrNativeUnavailable)
+	require.Empty(t, stub.operation)
 }
 
 // Native membership changes reach KernelSubscriber on the bridge

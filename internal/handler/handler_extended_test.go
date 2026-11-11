@@ -103,49 +103,6 @@ func (s *SubscribeExtendedTestSuite) assertPanelError(w *httptest.ResponseRecord
 	}
 }
 
-func (s *SubscribeExtendedTestSuite) TestGetGroupProtocols() {
-	handler := NewSubscriptionAdminHandler()
-	s.router.GET("/admin/subscription/groups/:id/protocols", handler.GetGroupProtocols)
-
-	req, _ := http.NewRequest("GET", "/admin/subscription/groups/"+strconv.FormatUint(uint64(s.testGroup.ID), 10)+"/protocols", nil)
-	w := httptest.NewRecorder()
-	s.router.ServeHTTP(w, req)
-
-	assert.Equal(s.T(), http.StatusOK, w.Code)
-	resp := decodePanelTestResponse(s.T(), w)
-	assert.Equal(s.T(), float64(0), resp["code"])
-	assert.NotEmpty(s.T(), resp["msg"])
-	assert.NotZero(s.T(), resp["ts"])
-	assert.NotNil(s.T(), resp["data"])
-	assert.NotContains(s.T(), resp, "error")
-}
-
-func (s *SubscribeExtendedTestSuite) TestGetGroupProtocols_InvalidID() {
-	handler := NewSubscriptionAdminHandler()
-	s.router.GET("/admin/subscription/groups/:id/protocols", handler.GetGroupProtocols)
-
-	req, _ := http.NewRequest("GET", "/admin/subscription/groups/invalid/protocols", nil)
-	w := httptest.NewRecorder()
-	s.router.ServeHTTP(w, req)
-
-	s.assertPanelError(w, "id")
-}
-
-func (s *SubscribeExtendedTestSuite) TestGetAvailableProtocols() {
-	handler := NewSubscriptionAdminHandler()
-	s.router.GET("/admin/subscription/protocols/available", handler.GetAvailableProtocols)
-
-	req, _ := http.NewRequest("GET", "/admin/subscription/protocols/available", nil)
-	w := httptest.NewRecorder()
-	s.router.ServeHTTP(w, req)
-
-	assert.Equal(s.T(), http.StatusOK, w.Code)
-	resp := decodePanelTestResponse(s.T(), w)
-	assert.Equal(s.T(), float64(0), resp["code"])
-	assert.NotNil(s.T(), resp["data"])
-	assert.NotContains(s.T(), resp, "error")
-}
-
 func (s *SubscribeExtendedTestSuite) TestPreviewSubscription() {
 	handler := NewSubscriptionAdminHandler()
 	s.router.POST("/admin/subscription/preview", handler.PreviewSubscription)
@@ -482,17 +439,6 @@ func (s *NodeExtendedTestSuite) SetupTest() {
 	s.router = gin.New()
 }
 
-func (s *NodeExtendedTestSuite) TestGetNodes() {
-	handler := NewNodeHandler()
-	s.router.GET("/admin/nodes", handler.GetNodes)
-
-	req, _ := http.NewRequest("GET", "/admin/nodes", nil)
-	w := httptest.NewRecorder()
-	s.router.ServeHTTP(w, req)
-
-	assert.Equal(s.T(), http.StatusOK, w.Code)
-}
-
 func (s *NodeExtendedTestSuite) TestCreateNode() {
 	handler := NewNodeHandler()
 	s.router.POST("/admin/nodes", handler.CreateNode)
@@ -525,28 +471,6 @@ func (s *NodeExtendedTestSuite) TestCreateNode_InvalidBody() {
 	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
 }
 
-func (s *NodeExtendedTestSuite) TestGetNode() {
-	handler := NewNodeHandler()
-	s.router.GET("/admin/nodes/:id", handler.GetNode)
-
-	req, _ := http.NewRequest("GET", "/admin/nodes/"+strconv.FormatUint(uint64(s.testNode.ID), 10), nil)
-	w := httptest.NewRecorder()
-	s.router.ServeHTTP(w, req)
-
-	assert.Equal(s.T(), http.StatusOK, w.Code)
-}
-
-func (s *NodeExtendedTestSuite) TestGetNode_InvalidID() {
-	handler := NewNodeHandler()
-	s.router.GET("/admin/nodes/:id", handler.GetNode)
-
-	req, _ := http.NewRequest("GET", "/admin/nodes/invalid", nil)
-	w := httptest.NewRecorder()
-	s.router.ServeHTTP(w, req)
-
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
-}
-
 func (s *NodeExtendedTestSuite) TestUpdateNode() {
 	handler := NewNodeHandler()
 	s.router.PUT("/admin/nodes/:id", handler.UpdateNode)
@@ -560,17 +484,6 @@ func (s *NodeExtendedTestSuite) TestUpdateNode() {
 
 	req, _ := http.NewRequest("PUT", "/admin/nodes/"+strconv.FormatUint(uint64(s.testNode.ID), 10), bytes.NewReader(jsonBody))
 	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	s.router.ServeHTTP(w, req)
-
-	assert.Equal(s.T(), http.StatusOK, w.Code)
-}
-
-func (s *NodeExtendedTestSuite) TestDeleteNode() {
-	handler := NewNodeHandler()
-	s.router.DELETE("/admin/nodes/:id", handler.DeleteNode)
-
-	req, _ := http.NewRequest("DELETE", "/admin/nodes/"+strconv.FormatUint(uint64(s.testNode.ID), 10), nil)
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 

@@ -42,7 +42,7 @@ func (s *bridgeStub) OpenWebSocket(_ context.Context, _ []byte, operation string
 // modes say. Until the kernel sets a flagged route's mode, the host relays it
 // to the legacy handler, bridged routes always; routes outside the package
 // are refused.
-func TestProxyNodeHostRelaysOnlyFlaggedRoutes(t *testing.T) {
+func TestProxyNodeHostRelaysOnlyBridgedRoutes(t *testing.T) {
 	bridge := &bridgeStub{}
 	service, err := newProxyNodeService(bridge, "lease-1")
 	require.NoError(t, err)
@@ -52,10 +52,7 @@ func TestProxyNodeHostRelaysOnlyFlaggedRoutes(t *testing.T) {
 		RouteID: "proxy.admin.nodes.id.logs.get", BridgeCapability: make([]byte, 32), DeadlineUnixMillis: time.Now().Add(time.Second).UnixMilli(),
 	})
 	require.Empty(t, bridge.operation, "a native route is not relayed")
-	for route := range flaggedRoutes {
-		require.Contains(t, proxyNodeRoutes, route)
-	}
-	for _, route := range []string{"proxy.admin.nodes.get", "proxy.admin.nodes.post"} {
+	for _, route := range []string{"proxy.admin.nodes.post"} {
 		response, err := service.Dispatch(context.Background(), pluginhostsdk.DispatchRequest{
 			RouteID: route, BridgeCapability: make([]byte, 32), DeadlineUnixMillis: time.Now().Add(time.Second).UnixMilli(),
 		})

@@ -158,26 +158,6 @@ func (s *NodeCredentialAnswersTestSuite) TestNodesAndRawConfigs() {
 	nodesecrets.ResolveNodeRawConfig(s.db, &node)
 	s.Contains(*node.RawConfig, pinRawConfigSecret)
 
-	// Deleting the node takes its protocols, their links and peers with it.
-	group := &model.SubscriptionGroup{Name: "group", Enable: 1}
-	s.Require().NoError(s.db.Create(group).Error)
-	var protocol model.NodeProtocol
-	s.Require().NoError(s.db.Where("node_id = ?", node.ID).First(&protocol).Error)
-	s.Require().NoError(s.db.Model(group).Association("Protocols").Append(&protocol))
-	s.Require().NoError(s.db.Create(&model.WireGuardPeer{NodeProtocolID: protocol.ID, UserID: 1, PeerIP: "10.9.0.2", PrivateKey: "peer-private", PublicKey: "peer-public"}).Error)
-	code, body = s.serve(http.MethodDelete, "/admin/nodes/:id", "/admin/nodes/1", "", h.DeleteNode)
-	s.pin("delete node", code, body)
-	s.Equal(int64(0), s.count(&model.Node{}, "id = ?", 1))
-	s.Equal(int64(0), s.count(&model.NodeProtocol{}, "node_id = ?", 1))
-	s.Equal(int64(0), s.count(&model.WireGuardPeer{}, "node_protocol_id = ?", protocol.ID))
-	s.Equal(int64(0), s.count(&model.ProtocolSecret{}, "scope = ? AND owner_id = ?", nodesecrets.ScopeNodeRawConfig, 1))
-	var links int64
-	s.Require().NoError(s.db.Table("v2_subscription_group_node_protocols").Where("node_protocol_id = ?", protocol.ID).Count(&links).Error)
-	s.Equal(int64(0), links)
-	code, body = s.serve(http.MethodDelete, "/admin/nodes/:id", "/admin/nodes/1", "", h.DeleteNode)
-	s.pin("delete node again", code, body)
-	code, body = s.serve(http.MethodDelete, "/admin/nodes/:id", "/admin/nodes/x", "", h.DeleteNode)
-	s.pin("delete node, bad id", code, body)
 }
 
 func (s *NodeCredentialAnswersTestSuite) TestProtocols() {

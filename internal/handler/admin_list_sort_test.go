@@ -99,43 +99,6 @@ func (s *AdminListSortTestSuite) TestUsersRefuseWhatIsNotListed() {
 	}
 }
 
-func (s *AdminListSortTestSuite) TestNodesSortByTheColumnsAsked() {
-	now := time.Now().Unix()
-	recent, stale := now-10, now-10_000
-	nodes := []model.Node{
-		{ID: 1, Name: "beta", Host: "b.example.test", Sort: 2, LastCheckAt: &recent, CPUUsage: 30, OnlineUsers: 5},
-		{ID: 2, Name: "alpha", Host: "c.example.test", Sort: 1, LastCheckAt: &stale, CPUUsage: 90, OnlineUsers: 1},
-		{ID: 3, Name: "gamma", Host: "a.example.test", Sort: 2, CPUUsage: 10, OnlineUsers: 9},
-	}
-	s.Require().NoError(s.db.Create(&nodes).Error)
-	handler := NewNodeHandler().GetNodes
-	for query, want := range map[string][]uint{
-		"":                               {2, 3, 1},
-		"?sort=name":                     {2, 1, 3},
-		"?sort=name&order=desc":          {3, 1, 2},
-		"?sort=host":                     {3, 1, 2},
-		"?sort=sort&order=desc":          {3, 1, 2},
-		"?sort=last_check_at":            {2, 1, 3},
-		"?sort=last_check_at&order=desc": {3, 1, 2},
-		"?sort=cpu_usage&order=desc":     {2, 1, 3},
-		"?sort=online_users&order=desc":  {3, 1, 2},
-		"?sort=id&order=desc":            {3, 2, 1},
-		"?sort=&order=desc":              {2, 3, 1},
-		"?sort=name&page=2&page_size=2":  {3},
-	} {
-		w := s.get(handler, "/admin/nodes", query)
-		s.Require().Equal(http.StatusOK, w.Code, w.Body.String())
-		s.Equal(want, s.listIDs(w), query)
-	}
-	for _, query := range []string{"?sort=status", "?sort=api_key", "?sort=id&order=up"} {
-		w := s.get(handler, "/admin/nodes", query)
-		s.Equal(http.StatusBadRequest, w.Code, query)
-		var answer map[string]any
-		s.Require().NoError(json.Unmarshal(w.Body.Bytes(), &answer))
-		s.Contains(answer["message"], "无效的排序", query)
-	}
-}
-
 func TestAdminListSortTestSuite(t *testing.T) {
 	suite.Run(t, new(AdminListSortTestSuite))
 }
