@@ -87,16 +87,6 @@ func RunAgentDiagnostic(ctx context.Context, db *gorm.DB, request AgentDiagnosti
 	return run, nil
 }
 
-// Bounds of a legacy route's diagnostic on the stream
-// (RunAgentDiagnosticOnStream).
-const (
-	// defaultDiagnosticTimeout is a task's timeout when the request names
-	// none, as the whitelist's tasks run.
-	defaultDiagnosticTimeout = 30 * time.Second
-	// maxDiagnosticTimeout caps the timeout a request asks for.
-	maxDiagnosticTimeout = 10 * time.Minute
-)
-
 // streamDiagnosticTransport carries a task on the node's Agent Control
 // stream as an agent.diagnostic operation.
 type streamDiagnosticTransport struct {

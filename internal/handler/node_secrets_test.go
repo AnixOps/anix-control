@@ -22,14 +22,13 @@ import (
 // still receive the real values.
 type NodeSecretsTestSuite struct {
 	HandlerTestSuite
-	node       *model.Node
-	reality    *model.NodeProtocol
-	wireGuard  *model.NodeProtocol
-	wgPrivate  string
-	wgPublic   string
-	group      *model.SubscriptionGroup
-	rawConfig  string
-	secretText []string
+	node      *model.Node
+	reality   *model.NodeProtocol
+	wireGuard *model.NodeProtocol
+	wgPrivate string
+	wgPublic  string
+	group     *model.SubscriptionGroup
+	rawConfig string
 }
 
 const (
@@ -71,7 +70,6 @@ func (s *NodeSecretsTestSuite) SetupTest() {
 
 	s.Require().NoError(nodesecrets.SeedForTest(s.db))
 
-	s.secretText = []string{realityPrivateKey, tlsPrivateKeyPEM, hysteriaPassword, customSecret, rawConfigSecret, s.wgPrivate, "node-api-key", "node-shared-secret"}
 }
 
 func (s *NodeSecretsTestSuite) wireGuardSettings(privateKey, publicKey string) string {
@@ -96,17 +94,6 @@ func (s *NodeSecretsTestSuite) ok(w *httptest.ResponseRecorder) map[string]any {
 	resp := decodePanelTestResponse(s.T(), w)
 	s.Require().Equal(float64(0), resp["code"], "%v", resp)
 	return resp
-}
-
-// requireMasked checks that an answer shows none of the stored secrets but
-// still shows the public halves.
-func (s *NodeSecretsTestSuite) requireMasked(name string, w *httptest.ResponseRecorder) {
-	s.Require().Equal(http.StatusOK, w.Code, "%s: %s", name, w.Body.String())
-	body := w.Body.String()
-	for _, secret := range s.secretText {
-		s.NotContains(body, secret, name)
-	}
-	s.Contains(body, service.NodeSecretPlaceholder, name)
 }
 
 func settingsOf(text *string) map[string]any {
