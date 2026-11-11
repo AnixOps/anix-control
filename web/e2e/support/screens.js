@@ -27,6 +27,12 @@ import { FIXED_NOW_MS } from '../fixtures/clock.js'
 export { FIXED_NOW_MS }
 
 // name → { fixture, scenario }
+// Theme and viewport combinations of the axe sweeps. A pull request runs one
+// combination per theme and per viewport (A11Y_MATRIX=fast); the full lane
+// runs all four.
+const ALL_COMBINATIONS = [['light', 1440, 900], ['dark', 1440, 900], ['light', 390, 844], ['dark', 390, 844]]
+export const A11Y_MATRIX = process.env.A11Y_MATRIX === 'fast' ? [ALL_COMBINATIONS[0], ALL_COMBINATIONS[3]] : ALL_COMBINATIONS
+
 export const SCREENS = {
   login: { fixture: user, scenario: 'login' },
   // The first administrator's claim link: the form, and nothing to claim.

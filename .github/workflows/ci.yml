@@ -51,7 +51,6 @@ jobs:
       web: ${{ steps.classify.outputs.web }}
       db: ${{ steps.classify.outputs.db }}
       modules: ${{ steps.classify.outputs.modules }}
-      forward: ${{ steps.classify.outputs.forward }}
       agent: ${{ steps.classify.outputs.agent }}
       packages: ${{ steps.classify.outputs.packages }}
     steps:
@@ -1186,6 +1185,13 @@ jobs:
           cat coverage.txt >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
 
+      - name: Check gRPC coverage (80%+)
+        run: |
+          { head -n 1 coverage.out; grep '/internal/grpc/' coverage.out; } > grpc_coverage.out
+          COVERAGE=$(go tool cover -func=grpc_coverage.out | awk '/^total:/ {sub("%","",$3); print $3}')
+          echo "gRPC coverage: ${COVERAGE}%"
+          awk -v c="${COVERAGE}" 'BEGIN { exit !(c >= 80) }' || { echo "::error::gRPC coverage ${COVERAGE}% is below minimum 80%"; exit 1; }
+
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v7
         with:
@@ -1597,66 +1603,6 @@ jobs:
           name: signed-plugin-releases
           path: release-assets/
 
-  forward-runtime-test:
-    name: Forward Runtime Regression
-    runs-on: ubuntu-24.04
-    needs: [changes]
-    if: ${{ needs.changes.outputs.forward == 'true' }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v7
-
-      - name: Setup Go
-        uses: actions/setup-go@v6
-        with:
-          go-version: ${{ env.GO_VERSION }}
-          cache: true
-
-      - name: Run forward runtime service tests
-        run: |
-          go test -v ./internal/service -run 'TestPanelForwardRuntimeJobExecutor|TestForwardAgentBridgeWorker|TestForwardCleanAgentService|TestNewForwardAgentBridgeWorker_LoadsCleanAgentActionTimeoutFromConfig' -count=1
-
-      - name: Run forward runtime config tests
-        run: |
-          go test -v ./internal/config -run TestLoadForwardRuntimeConfig -count=1
-
-      - name: Run forward runtime server startup tests
-        run: |
-          go test -v ./cmd/server -run TestShouldStartForwardAgentBridgeWorker -count=1
-
-      - name: Run forward agent bridge handler tests
-        run: |
-          go test -v ./internal/handler -run TestAgentBridgeHandler -count=1
-
-  grpc-test:
-    name: gRPC Core Tests
-    runs-on: ubuntu-24.04
-    needs: [changes]
-    if: ${{ needs.changes.outputs.agent == 'true' }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v7
-
-      - name: Setup Go
-        uses: actions/setup-go@v6
-        with:
-          go-version: ${{ env.GO_VERSION }}
-          cache: true
-
-      - name: Run gRPC tests
-        run: |
-          go test -v -coverprofile=grpc_coverage.out ./internal/grpc/...
-
-      - name: Check gRPC coverage (80%+)
-        run: |
-          COVERAGE=$(go tool cover -func=grpc_coverage.out | grep total | awk '{print $3}' | sed 's/%//')
-          echo "gRPC coverage: ${COVERAGE}%"
-          if [ $(echo "$COVERAGE < 80" | bc -l) -eq 1 ]; then
-            echo "::error::gRPC coverage ${COVERAGE}% is below minimum 80%"
-            exit 1
-          fi
-          echo "gRPC coverage check passed: ${COVERAGE}%"
-
   cross-repository-agent-e2e:
     name: Control to Agent Process E2E
     runs-on: ubuntu-24.04
@@ -1837,46 +1783,6 @@ jobs:
           path: agent-e2e-logs/
           retention-days: 7
           if-no-files-found: ignore
-
-  cmd-test:
-    name: CLI Tests
-    runs-on: ubuntu-24.04
-    needs: [changes]
-    if: ${{ needs.changes.outputs.code == 'true' }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v7
-
-      - name: Setup Go
-        uses: actions/setup-go@v6
-        with:
-          go-version: ${{ env.GO_VERSION }}
-          cache: true
-
-      - name: Run CLI tests
-        run: |
-          go test -v -coverprofile=cmd_coverage.out ./cmd/...
-          COVERAGE=$(go tool cover -func=cmd_coverage.out | grep total | awk '{print $3}')
-          echo "CLI coverage: ${COVERAGE}"
-
-  smoke-test:
-    name: Smoke Tests
-    runs-on: ubuntu-24.04
-    needs: [changes]
-    if: ${{ needs.changes.outputs.code == 'true' }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v7
-
-      - name: Setup Go
-        uses: actions/setup-go@v6
-        with:
-          go-version: ${{ env.GO_VERSION }}
-          cache: true
-
-      - name: Run smoke tests
-        run: |
-          go test -v -coverprofile=smoke_coverage.out ./internal/tests/smoke/...
 
   e2e-test:
     name: E2E Tests
@@ -2092,6 +1998,7 @@ jobs:
         working-directory: web
         env:
           HOME: /root
+          A11Y_MATRIX: ${{ needs.changes.outputs.full == 'true' && 'full' || 'fast' }}
         run: npm run test:e2e -- --shard=${{ matrix.shard }}/3
 
       - name: Upload the Playwright report
@@ -2174,7 +2081,7 @@ jobs:
   backend-build:
     name: Backend Build
     runs-on: ubuntu-24.04
-    needs: [go-quality, go-lint, go-security, backend-test, postgres-stats-test, migration-dry-run-test, postgres-restore-rehearsal, plugin-package-release-test, forward-runtime-test, grpc-test, cross-repository-agent-e2e, cmd-test]
+    needs: [go-quality, go-lint, go-security, backend-test, postgres-stats-test, migration-dry-run-test, postgres-restore-rehearsal, plugin-package-release-test, cross-repository-agent-e2e]
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -2211,11 +2118,10 @@ jobs:
     name: Build Release Binary (${{ matrix.goos }}-${{ matrix.goarch }})
     runs-on: ubuntu-24.04
     # The tag waits for the test jobs. A job named here must run on tags: a
-    # skipped need skips this job. Smoke Tests is not listed: Backend Tests
-    # runs its packages, since internal/tests/smoke is under ./internal/...
-    # E2E Tests is listed because Backend Tests excludes internal/tests/e2e.
+    # skipped need skips this job. E2E Tests is listed because Backend Tests
+    # excludes internal/tests/e2e.
     # config/scripts/check_release_workflow.sh lists the same names.
-    needs: [go-quality, go-lint, go-security, backend-test, postgres-stats-test, migration-dry-run-test, postgres-restore-rehearsal, plugin-package-release-test, plugin-package-publish, forward-runtime-test, grpc-test, cross-repository-agent-e2e, e2e-test, cmd-test, tag-gate, release-workflow-policy, deploy-script-test, package-storage-postgres, docker-smoke, kubernetes-smoke]
+    needs: [go-quality, go-lint, go-security, backend-test, postgres-stats-test, migration-dry-run-test, postgres-restore-rehearsal, plugin-package-release-test, plugin-package-publish, cross-repository-agent-e2e, e2e-test, tag-gate, release-workflow-policy, deploy-script-test, package-storage-postgres, docker-smoke, kubernetes-smoke]
     if: ${{ needs.tag-gate.outputs.is_release_tag == 'true' }}
     # Control runs its built-in package hosts as Linux processes, so it is
     # released for linux/amd64 and linux/arm64 only.

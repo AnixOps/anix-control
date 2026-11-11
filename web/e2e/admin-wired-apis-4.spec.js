@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
-import { openScreen } from './support/screens.js'
+import { A11Y_MATRIX, openScreen } from './support/screens.js'
 import { TELEGRAM_TEST_PATH } from './fixtures/notifications.js'
 
 // Notifications → Telegram → Test message (docs/reference/telegram-test-endpoint.md)
@@ -187,7 +187,7 @@ const SWEEPS = [
   ['admin-dashboard-alerts-failed', { clock: true }]
 ]
 for (const [name, options] of SWEEPS) {
-  for (const [theme, width, height] of [['light', 1440, 900], ['dark', 1440, 900], ['light', 390, 844], ['dark', 390, 844]]) {
+  for (const [theme, width, height] of A11Y_MATRIX) {
     test(`${name} has no axe finding and no horizontal scroll (${theme}, ${width})`, async ({ page }) => {
       await page.setViewportSize({ width, height })
       await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' })

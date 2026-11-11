@@ -18,8 +18,7 @@ Prints GitHub output lines (name=true|false):
   db       schemas, storage and migrations (the PostgreSQL jobs)
   modules  the module runtime, identity, images and deployment (Docker and
            Kubernetes smokes)
-  forward  forwarding: the v4.1 forward runtime regression and the forward SDK
-  agent    the Agent channel (gRPC and the cross-repository Agent E2E)
+  agent    the Agent channel (the cross-repository Agent E2E)
   packages official package sources (the package release contracts)
 """
 
@@ -32,7 +31,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-CLASSES = ("code", "web", "db", "modules", "forward", "agent", "packages")
+CLASSES = ("code", "web", "db", "modules", "agent", "packages")
 
 # Any of these makes the change run the full lane.
 FULL_PATTERNS = (
@@ -110,19 +109,6 @@ CLASS_PATTERNS: dict[str, tuple[str, ...]] = {
         "sdk/*",
         "packages/identity-platform/*",
         "packages/shared/*",
-    ),
-    "forward": (
-        "internal/service/forward*",
-        "internal/handler/forward*",
-        "packages/forward/*",
-        # The forward SDK (v4.2): model, planner, drivers and contract.
-        "sdk/forward/*",
-        "sdk/api/forward/*",
-        "contracts/forward/*",
-        # The kernel's forwarding state, served to packages and Agents (F3a).
-        "internal/kernelforward/*",
-        # Entry HA's DNS provider clients (L2).
-        "internal/forwardddns/*",
     ),
     "agent": (
         "internal/grpc/*",
@@ -302,12 +288,12 @@ def self_test() -> None:
     check(["packages/plan/native/plans.go"], {"code", "db", "packages"})
     check(["internal/service/order_service.go"], {"code", "db"})
     check(["internal/pluginhost/remote.go"], {"code", "modules"})
-    check(["internal/service/forward_panel_flow.go"], {"code", "db", "forward"})
-    check(["sdk/forward/driver/driver.go"], {"code", "modules", "forward"})
-    check(["sdk/api/forward/v1/forward.pb.go"], {"code", "modules", "forward"})
-    check(["contracts/forward/v1/plan-negative.json"], {"code", "forward"})
-    check(["internal/kernelforward/plan.go"], {"code", "db", "forward"})
-    check(["internal/forwardddns/alidns.go"], {"code", "forward"})
+    check(["internal/service/forward_panel_flow.go"], {"code", "db"})
+    check(["sdk/forward/driver/driver.go"], {"code", "modules"})
+    check(["sdk/api/forward/v1/forward.pb.go"], {"code", "modules"})
+    check(["contracts/forward/v1/plan-negative.json"], {"code"})
+    check(["internal/kernelforward/plan.go"], {"code", "db"})
+    check(["internal/forwardddns/alidns.go"], {"code"})
     check(["sdk/agentcontrol/identity.go"], {"code", "modules"})
     check(["internal/grpc/node_server.go"], {"code", "agent"})
     check(["internal/agentpki/enrollment.go"], {"code", "db", "agent"})

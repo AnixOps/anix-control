@@ -81,8 +81,7 @@ duplicate it here); the docs landing page is `docs/README.md`.
     - PostgreSQL jobs for schema, storage and service code;
     - Docker and Kubernetes smokes for the module runtime, identity and
       deployment;
-    - forward, Agent and package jobs for their areas (the `forward` class
-      also covers the forward SDK).
+    - Agent and package jobs for their areas.
 
     Documentation-only PRs skip the Go jobs. PRs that leave `web/` alone
     skip Frontend Checks' lint and unit tests and the mocked browser E2E
@@ -116,7 +115,8 @@ duplicate it here); the docs landing page is `docs/README.md`.
     - The required "Backend Tests" job aggregates the shards. It fails unless
       every shard passed and every package ran exactly once. It then merges
       the coverage profiles (`plan_test_shards.py --merge-coverage`) and
-      writes the coverage report.
+      writes the coverage report and requires 80% coverage of
+      `internal/grpc`.
     - "Package Storage PostgreSQL (1/4)" to "(4/4)" split the PostgreSQL
       package tests by measured time, each shard with its own PostgreSQL.
       Inside a shard they run one at a time (`-p 1`): package schemas and
@@ -131,7 +131,7 @@ duplicate it here); the docs landing page is `docs/README.md`.
       module image once, with a buildx `type=gha` layer cache per image.
       "Docker Build Smoke" and "Kubernetes Smoke" load its archives and
       start without waiting for the Go jobs.
-    - "Smoke Tests" and "E2E Tests" start at once as well.
+    - "E2E Tests" starts at once as well.
     - The edge image publish still waits for the Go quality and security
       gates, Backend Tests, the frontend and the Docker smoke.
   - **Race detector** ("Go Race Detector (1/3)" to "(3/3)", `go test
