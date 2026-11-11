@@ -3,7 +3,6 @@ package proxynodecompat
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"testing"
 	"time"
 
@@ -256,43 +255,5 @@ func TestNodeDeleteParity(t *testing.T) {
 		{Name: "without protocols", Path: path("6")},
 		{Name: "an unknown node", Path: path("99")},
 		{Name: "not a number", Path: path("x")},
-	})
-}
-
-func TestRawConfigReadParity(t *testing.T) {
-	pattern := "/api/v2/admin/nodes/:id/raw-config"
-	path := func(id string) string { return "/api/v2/admin/nodes/" + id + "/raw-config" }
-	kernelRead(t, kernelRoute("GET", pattern, native.RawConfigRouteID, nodeHandler((*handler.NodeHandler).GetNodeRawConfig)), []packagecompat.Case{
-		{Name: "a WireGuard configuration, masked", Path: path("1")},
-		{Name: "a token, masked", Path: path("2")},
-		{Name: "a configuration that is not JSON", Path: path("3")},
-		{Name: "none", Path: path("6")},
-		{Name: "an unknown node", Path: path("99")},
-		{Name: "not a number", Path: path("x")},
-	})
-}
-
-func TestRawConfigUpdateParity(t *testing.T) {
-	pattern := "/api/v2/admin/nodes/:id/raw-config"
-	path := func(id string) string { return "/api/v2/admin/nodes/" + id + "/raw-config" }
-	body := func(config string) []byte { return []byte(`{"raw_config":` + config + `}`) }
-	quoted := func(config string) []byte { return []byte(`{"raw_config":` + strconv.Quote(config) + `}`) }
-	kernelWrite(t, kernelRoute("PUT", pattern, native.UpdateRawConfigRouteID, nodeHandler((*handler.NodeHandler).UpdateNodeRawConfig)), []packagecompat.Case{
-		{Name: "a typed WireGuard key pair", Path: path("6"), Body: body(wireGuardRawConfig(wireGuard.otherPrivate, wireGuard.otherPublic))},
-		{Name: "as a JSON string", Path: path("6"), Body: quoted(wireGuardRawConfig(wireGuard.otherPrivate, wireGuard.otherPublic))},
-		{Name: "the placeholder keeps the private key", Path: path("1"), Body: body(wireGuardRawConfig(service.NodeSecretPlaceholder, wireGuard.public))},
-		{Name: "a kept private key that does not match a new public key", Path: path("1"), Body: body(wireGuardRawConfig(service.NodeSecretPlaceholder, wireGuard.otherPublic))},
-		{Name: "a typed private key that does not match its public key", Path: path("6"), Body: body(wireGuardRawConfig(wireGuard.otherPrivate, wireGuard.public))},
-		{Name: "a configuration without secrets replaces one with", Path: path("2"), Body: body(`{"log":{"level":"warning"}}`)},
-		{Name: "null clears it", Path: path("1"), Body: body("null")},
-		{Name: "an array is refused", Path: path("2"), Body: body(`[1,2]`)},
-		{Name: "a string that is not an object is refused", Path: path("2"), Body: quoted("[1]")},
-		{Name: "an unknown node is nothing to update", Path: path("99"), Body: body(`{"log":{}}`)},
-		{Name: "an unknown node with a placeholder", Path: path("99"), Body: body(`{"token":"********"}`)},
-		{Name: "no configuration", Path: path("2"), Body: []byte(`{}`)},
-		// The gateway binds handles to the node the path names, and must
-		// read the body: such requests are the kernel's legacy handler's.
-		{Name: "a node id that is not a number", Path: path("x"), Body: body(`{}`), Fallback: true},
-		{Name: "not JSON", Path: path("2"), Body: []byte(`{"raw_config":`), Fallback: true},
 	})
 }

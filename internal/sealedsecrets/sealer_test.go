@@ -142,7 +142,7 @@ func TestEveryListedRouteAndFieldIsSubstituted(t *testing.T) {
 		}
 		assert.Equal(t, len(handles(sealed.Body)), sealed.Count, id)
 	}
-	assert.Equal(t, 6, requestRoutes, "the request routes of node-ops-service.md sections 3.7 and 6 (the forward node routes removed in F5d, the gost test connection with the v4.1 forwarding runtime)")
+	assert.Equal(t, 4, requestRoutes, "the request routes of node-ops-service.md sections 3.7 and 6 (the forward node routes removed in F5d, the gost test connection with the v4.1 forwarding runtime)")
 }
 
 // The placeholder keeps the stored secret, and empty values carry none:
@@ -152,8 +152,7 @@ func TestThePlaceholderAndEmptyValuesPassUnchanged(t *testing.T) {
 	bodies := map[string]string{
 		fixtureNodeUpdate:                                   `{"name":"n","api_token":"********"}`,
 		fixtureNodeCreate:                                   `{"name":"n","api_token":"","x":null}`,
-		"proxy.admin.nodes.id.raw_config.put":               `{"raw_config":{"private_key":"********","preshared_key":"","peers":[],"secret":null}}`,
-		"proxy.admin.nodes.id.put":                          `{"raw_config":"********","name":"n"}`,
+		"proxy.admin.nodes.id.put":                          `{"raw_config":{"private_key":"********","preshared_key":"","peers":[],"secret":null},"name":"n"}`,
 		"proxy.admin.nodes.post":                            `{"raw_config":"","name":"n"}`,
 		"protocol.admin.nodes.id.protocols.protocol_id.put": `{"settings":"{\"password\":\"********\",\"psk\":\"\"}","reality_settings":null,"tls_settings":"  "}`,
 	}
@@ -176,7 +175,7 @@ func TestSubstitutionKeepsEveryOtherByte(t *testing.T) {
 	assert.Equal(t, "tést", secrets[0].Value, "the secret is the decoded string")
 
 	document := `{"raw_config":"{ \"b\": 1, \"private_key\" : \"k\", \"a\": [\"x\"] }"}`
-	sealed, _ = f.seal("proxy.admin.nodes.id.raw_config.put", "req-2", document, map[string]string{"id": "7"})
+	sealed, _ = f.seal("proxy.admin.nodes.id.put", "req-2", document, map[string]string{"id": "7"})
 	var decoded struct {
 		RawConfig string `json:"raw_config"`
 	}
@@ -213,7 +212,7 @@ func TestSubstitutionFailsClosed(t *testing.T) {
 	}{
 		"a body that is not JSON":         {input(fixtureNodeUpdate, `api_token=tok`, id), ErrNotJSON},
 		"a truncated body":                {input(fixtureNodeUpdate, `{"api_token":"tok"`, id), ErrNotJSON},
-		"a document that is not JSON":     {input("proxy.admin.nodes.id.raw_config.put", `{"raw_config":"private_key=k"}`, id), ErrNotJSON},
+		"a document that is not JSON":     {input("proxy.admin.nodes.id.put", `{"raw_config":"private_key=k"}`, id), ErrNotJSON},
 		"a value that is not a string":    {input(fixtureNodeUpdate, `{"api_token":12345}`, id), ErrValueNotString},
 		"an object at a value field":      {input(fixtureNodeUpdate, `{"api_token":{"v":"tok"}}`, id), ErrValueNotString},
 		"a target that is not an id":      {input(fixtureNodeUpdate, `{"api_token":"tok"}`, map[string]string{"id": "7 OR 1=1"}), ErrTargetInvalid},

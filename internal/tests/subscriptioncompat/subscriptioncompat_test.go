@@ -282,9 +282,6 @@ func write(t *testing.T, r packagecompat.Route, cases []packagecompat.Case) {
 }
 
 func TestStaticListsParity(t *testing.T) {
-	read(t, route("GET", "/api/v2/admin/subscription/formats", "subscription.admin.subscription.formats.get",
-		(*handler.SubscriptionAdminHandler).GetSubscriptionFormats),
-		[]packagecompat.Case{{Name: "formats", Path: "/api/v2/admin/subscription/formats"}})
 	read(t, route("GET", "/api/v2/admin/subscription/protocols", "subscription.admin.subscription.protocols.get",
 		(*handler.SubscriptionAdminHandler).GetProtocolTypes),
 		[]packagecompat.Case{{Name: "protocol types", Path: "/api/v2/admin/subscription/protocols"}})

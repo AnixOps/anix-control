@@ -67,11 +67,9 @@ type Service struct {
 
 // Route ids of the native routes of M3-2.
 const (
-	NodesRouteID           = "proxy.admin.nodes.get"
-	NodeRouteID            = "proxy.admin.nodes.id.get"
-	DeleteNodeRouteID      = "proxy.admin.nodes.id.delete"
-	RawConfigRouteID       = "proxy.admin.nodes.id.raw_config.get"
-	UpdateRawConfigRouteID = "proxy.admin.nodes.id.raw_config.put"
+	NodesRouteID      = "proxy.admin.nodes.get"
+	NodeRouteID       = "proxy.admin.nodes.id.get"
+	DeleteNodeRouteID = "proxy.admin.nodes.id.delete"
 )
 
 // Handlers returns the native handlers by route id. A host without
@@ -82,11 +80,9 @@ func (s *Service) Handlers() map[string]pluginhostsdk.NativeHandler {
 		"proxy.admin.nodes.id.logs.get": s.GetNodeLogs,
 		NodesRouteID:                    s.ListNodes,
 		NodeRouteID:                     s.GetNode,
-		RawConfigRouteID:                s.GetRawConfig,
 	}
 	if s.NodeOps != nil {
 		handlers[DeleteNodeRouteID] = s.DeleteNode
-		handlers[UpdateRawConfigRouteID] = s.UpdateRawConfig
 	}
 	return handlers
 }

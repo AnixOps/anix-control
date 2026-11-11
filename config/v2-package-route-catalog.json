@@ -1,14 +1,5 @@
 [
   {
-    "method": "POST",
-    "path": "/api/v2/admin/agent/execute",
-    "owner": "protocol-runtime",
-    "route_id": "protocol.admin.agent.execute.post",
-    "envelope": "data",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
     "method": "GET",
     "path": "/api/v2/admin/agent/list",
     "owner": "protocol-runtime",
@@ -252,24 +243,6 @@
     "transport": "http"
   },
   {
-    "method": "GET",
-    "path": "/api/v2/admin/nodes/:id/raw-config",
-    "owner": "proxy-node",
-    "route_id": "proxy.admin.nodes.id.raw_config.get",
-    "envelope": "data",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
-    "method": "PUT",
-    "path": "/api/v2/admin/nodes/:id/raw-config",
-    "owner": "proxy-node",
-    "route_id": "proxy.admin.nodes.id.raw_config.put",
-    "envelope": "data",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
     "method": "POST",
     "path": "/api/v2/admin/nodes/:id/sync",
     "owner": "protocol-runtime",
@@ -283,15 +256,6 @@
     "path": "/api/v2/admin/nodes/stats",
     "owner": "proxy-node",
     "route_id": "proxy.admin.nodes.stats.get",
-    "envelope": "data",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
-    "method": "POST",
-    "path": "/api/v2/admin/nodes/validate-config",
-    "owner": "proxy-node",
-    "route_id": "proxy.admin.nodes.validate_config.post",
     "envelope": "data",
     "middleware_group": "admin",
     "transport": "http"
@@ -427,15 +391,6 @@
     "path": "/api/v2/admin/protocol-templates",
     "owner": "protocol-runtime",
     "route_id": "protocol.admin.protocol_templates.get",
-    "envelope": "data",
-    "middleware_group": "admin",
-    "transport": "http"
-  },
-  {
-    "method": "GET",
-    "path": "/api/v2/admin/subscription/formats",
-    "owner": "subscription",
-    "route_id": "subscription.admin.subscription.formats.get",
     "envelope": "data",
     "middleware_group": "admin",
     "transport": "http"

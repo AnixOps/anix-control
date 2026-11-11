@@ -74,7 +74,6 @@ const (
 	AgentListRouteID         = "protocol.admin.agent.list.get"
 	AgentMonitorRouteID      = "protocol.admin.agent.monitor.get"
 	AgentTasksCreateRouteID  = "protocol.admin.agent.tasks.post"
-	AgentExecuteRouteID      = "protocol.admin.agent.execute.post"
 	protocolTemplatesRouteID = "protocol.admin.protocol_templates.get"
 	diagnosticTasksRouteID   = "protocol.admin.agent.tasks.get"
 	diagnosticTaskRouteID    = "protocol.admin.agent.tasks.task_id.get"
@@ -99,7 +98,6 @@ func (s *Service) Handlers() map[string]pluginhostsdk.NativeHandler {
 		handlers[AgentListRouteID] = s.ListAgents
 		handlers[AgentMonitorRouteID] = s.GetMonitor
 		handlers[AgentTasksCreateRouteID] = s.CreateTask
-		handlers[AgentExecuteRouteID] = s.ExecuteCommand
 	}
 	return handlers
 }

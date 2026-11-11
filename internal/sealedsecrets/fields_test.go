@@ -86,12 +86,10 @@ func TestTheFieldListCoversTheDesignedRoutes(t *testing.T) {
 	protocolColumns := []string{"/settings", "/tls_settings", "/transport_settings", "/reality_settings", "/custom_config"}
 	assert.Equal(t, protocolColumns, request("protocol.admin.nodes.id.protocols.post"))
 	assert.Equal(t, protocolColumns, request("protocol.admin.nodes.id.protocols.protocol_id.put"))
-	for _, id := range []string{"proxy.admin.nodes.post", "proxy.admin.nodes.id.put", "proxy.admin.nodes.id.raw_config.put", "proxy.admin.nodes.validate_config.post"} {
+	for _, id := range []string{"proxy.admin.nodes.post", "proxy.admin.nodes.id.put"} {
 		assert.Equal(t, []string{"/raw_config"}, request(id), id)
 	}
 	assert.Empty(t, answer("proxy.admin.nodes.post"), "a node has no generated secret to show")
-	validate, _ := table.Route("proxy.admin.nodes.validate_config.post")
-	assert.Equal(t, TargetNone, validate.Target.Kind, "a validation stores nothing")
 }
 
 func TestParseTableRefusesMalformedLists(t *testing.T) {

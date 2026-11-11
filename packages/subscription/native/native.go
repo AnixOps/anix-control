@@ -76,7 +76,6 @@ type Service struct {
 // Handlers returns the native handlers by route id.
 func (s *Service) Handlers() map[string]pluginhostsdk.NativeHandler {
 	handlers := map[string]pluginhostsdk.NativeHandler{
-		"subscription.admin.subscription.formats.get":                          s.Formats,
 		"subscription.admin.subscription.protocols.get":                        s.ProtocolTypes,
 		"subscription.admin.subscription.groups.get":                           s.Groups,
 		"subscription.admin.subscription.groups.post":                          s.CreateGroup,

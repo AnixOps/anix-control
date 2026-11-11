@@ -3,13 +3,6 @@
   "package_id": "protocol-runtime",
   "routes": [
     {
-      "method": "POST",
-      "legacy_path": "/api/v2/admin/agent/execute",
-      "package_route": "protocol.admin.agent.execute.post",
-      "envelope": "data",
-      "transport": "http"
-    },
-    {
       "method": "GET",
       "legacy_path": "/api/v2/admin/agent/list",
       "package_route": "protocol.admin.agent.list.get",

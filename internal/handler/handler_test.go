@@ -1426,43 +1426,6 @@ func (s *NodeHandlerTestSuite) TestCreateProtocol_Success() {
 	assert.NotContains(s.T(), resp, "error")
 }
 
-func (s *NodeHandlerTestSuite) TestValidateRawConfig_Success() {
-	handler := NewNodeHandler()
-	s.router.POST("/validate-config", handler.ValidateRawConfig)
-
-	body := map[string]any{
-		"raw_config": map[string]any{
-			"server_port": 443,
-		},
-	}
-	jsonBody, _ := json.Marshal(body)
-
-	req, _ := http.NewRequest("POST", "/validate-config", bytes.NewReader(jsonBody))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	s.router.ServeHTTP(w, req)
-
-	assert.Equal(s.T(), http.StatusOK, w.Code)
-	resp := decodePanelTestResponse(s.T(), w)
-	assert.Equal(s.T(), float64(0), resp["code"])
-	data := resp["data"].(map[string]any)
-	assert.Equal(s.T(), true, data["valid"])
-	assert.Equal(s.T(), "配置有效", data["message"])
-	assert.NotContains(s.T(), resp, "error")
-}
-
-func (s *NodeHandlerTestSuite) TestValidateRawConfig_InvalidJSON() {
-	handler := NewNodeHandler()
-	s.router.POST("/validate-config", handler.ValidateRawConfig)
-
-	req, _ := http.NewRequest("POST", "/validate-config", bytes.NewReader([]byte("invalid")))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	s.router.ServeHTTP(w, req)
-
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
-}
-
 func TestNodeHandler(t *testing.T) {
 	suite.Run(t, new(NodeHandlerTestSuite))
 }
@@ -2669,25 +2632,6 @@ func (s *SubscriptionAdminHandlerTestSuite) TestGetPlanGroups_InvalidPlanID() {
 	s.router.ServeHTTP(w, req)
 
 	s.assertPanelError(w, "套餐")
-}
-
-func (s *SubscriptionAdminHandlerTestSuite) TestGetSubscriptionFormats_Success() {
-	handler := NewSubscriptionAdminHandler()
-	s.router.GET("/formats", handler.GetSubscriptionFormats)
-
-	req, _ := http.NewRequest("GET", "/formats", nil)
-	w := httptest.NewRecorder()
-	s.router.ServeHTTP(w, req)
-
-	assert.Equal(s.T(), http.StatusOK, w.Code)
-
-	resp := decodePanelTestResponse(s.T(), w)
-	assert.Equal(s.T(), float64(0), resp["code"])
-	assert.NotEmpty(s.T(), resp["msg"])
-	assert.NotZero(s.T(), resp["ts"])
-	data := resp["data"].([]any)
-	assert.GreaterOrEqual(s.T(), len(data), 12) // At least 12 formats (including auto)
-	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *SubscriptionAdminHandlerTestSuite) TestGetProtocolTypes_Success() {

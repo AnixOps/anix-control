@@ -126,8 +126,8 @@ func awaitTaskStatus(t *testing.T, f *fixture, taskID, status string) model.Agen
 	return row
 }
 
-// The legacy admin routes (POST /admin/agent/tasks, /admin/agent/execute)
-// reach a stream agent that advertises agent.diagnostic: the answer is the
+// The legacy admin route (POST /admin/agent/tasks)
+// reaches a stream agent that advertises agent.diagnostic: the answer is the
 // acknowledgement, and the agent's report completes the row later. A node
 // without such a stream is not served there; a refused action records
 // nothing; a result that never comes fails the row.

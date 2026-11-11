@@ -979,7 +979,7 @@ executes `node.sync` (nodeconfig), `agent.operation` (agents) and
   states, monitor snapshots) is scrubbed like a result.
 - **The legacy routes** `POST /admin/nodes/:id/sync`,
   `POST /admin/nodes/:id/agent-control/operations`,
-  `POST /admin/agent/tasks` and `POST /admin/agent/execute` call the same
+  `POST /admin/agent/tasks` (and `POST /admin/agent/execute`, since removed) call the same
   functions and answer the same bytes (`internal/handler`'s parity tests
   pin them); the sync route writes the desired configuration row too.
 - **Tests.** `internal/tests/fakeagent` is the scripted Agent Control
@@ -2192,6 +2192,11 @@ Proxy-node adopts `v2_node` once it is finalized.
 | `POST /admin/nodes/validate-config` | `ValidateNodeConfig` | native |
 | `POST /node/register`, `/node/heartbeat`, `/node/runtime-health` | none | **kernel-owned (decided D3)**: registration mints node credentials, and the others are authenticated by them. With A2 they become enrollment and stream reports, and 5.0 removes them |
 
+**Removed since.** `GET` and `PUT /admin/nodes/:id/raw-config` and
+`POST /admin/nodes/validate-config` are gone: no client called them, and
+the node update route carries the raw configuration. The rows that name
+them here and in section 3.7 record the design as it was built.
+
 **As M3-2 built them.** 11 of the 14 routes are `native-flagged`
 (`packages/proxy-node/native`, `internal/tests/proxynodecompat`, through
 the whole path a deployment runs, on SQLite and PostgreSQL); three are not:
@@ -2245,6 +2250,9 @@ Protocol-runtime adopts `v2_node_protocol` once it is finalized.
 | `GET /admin/agent/monitor` | `GetAgentMonitor` | native |
 | `POST /admin/agent/tasks` | `RunAgentDiagnostic` (wait A): the kernel validates the whitelist, writes the task row, dispatches and waits for the acknowledgement, with the legacy fallback | native |
 | `POST /admin/agent/execute` | `RunAgentDiagnostic` | native |
+
+**Removed since.** `POST /admin/agent/execute` is gone: it was
+`POST /admin/agent/tasks` without the `type` field, and no client called it.
 
 **As M3-1 built them.** All 11 routes are `native-flagged`
 (`packages/protocol-runtime/native`, `internal/tests/protocolruntimecompat`).

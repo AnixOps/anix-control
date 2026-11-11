@@ -70,7 +70,6 @@ func newSubscriptionService(bridge subscriptionBridge, leaseID string) (*pluginh
 // subscriptionRoutes are the package's compatibility routes with a native
 // handler.
 var subscriptionRoutes = map[string]struct{}{
-	"subscription.admin.subscription.formats.get":                          {},
 	"subscription.admin.subscription.protocols.get":                        {},
 	"subscription.admin.subscription.groups.get":                           {},
 	"subscription.admin.subscription.groups.post":                          {},

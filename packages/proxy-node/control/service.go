@@ -64,13 +64,11 @@ func newProxyNodeService(bridge proxyNodeBridge, leaseID string) (*pluginhostsdk
 // proxyNodeRoutes are the package's compatibility routes with a native
 // handler.
 var proxyNodeRoutes = map[string]struct{}{
-	"proxy.admin.nodes.stats.get":         {},
-	"proxy.admin.nodes.id.logs.get":       {},
-	"proxy.admin.nodes.get":               {},
-	"proxy.admin.nodes.id.get":            {},
-	"proxy.admin.nodes.id.delete":         {},
-	"proxy.admin.nodes.id.raw_config.get": {},
-	"proxy.admin.nodes.id.raw_config.put": {},
+	"proxy.admin.nodes.stats.get":   {},
+	"proxy.admin.nodes.id.logs.get": {},
+	"proxy.admin.nodes.get":         {},
+	"proxy.admin.nodes.id.get":      {},
+	"proxy.admin.nodes.id.delete":   {},
 }
 
 // bridgedRoutes are the package's compatibility routes without a native
@@ -85,12 +83,7 @@ var proxyNodeRoutes = map[string]struct{}{
 //     cache, in the kernel's transaction; no KernelNodeOps call records a
 //     node's group change, and SyncNode would also store and push the
 //     desired configuration, which the legacy update does not.
-//   - Configuration validation (kernel-owned): its answer's size is the
-//     length of the configuration with its secrets, which the gateway
-//     seals into handles that never resolve for this route, so neither the
-//     package nor ValidateNodeConfig can compute it.
 var bridgedRoutes = map[string]struct{}{
-	"proxy.admin.nodes.post":                 {},
-	"proxy.admin.nodes.id.put":               {},
-	"proxy.admin.nodes.validate_config.post": {},
+	"proxy.admin.nodes.post":   {},
+	"proxy.admin.nodes.id.put": {},
 }

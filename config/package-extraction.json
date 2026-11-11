@@ -2,14 +2,6 @@
   "format": "anixops.package-extraction/v1",
   "routes": [
     {
-      "method": "POST",
-      "path": "/api/v2/admin/agent/execute",
-      "package_id": "protocol-runtime",
-      "route_id": "protocol.admin.agent.execute.post",
-      "mode": "native-flagged",
-      "legacy": "router"
-    },
-    {
       "method": "GET",
       "path": "/api/v2/admin/agent/list",
       "package_id": "protocol-runtime",
@@ -226,22 +218,6 @@
       "legacy": "router"
     },
     {
-      "method": "GET",
-      "path": "/api/v2/admin/nodes/:id/raw-config",
-      "package_id": "proxy-node",
-      "route_id": "proxy.admin.nodes.id.raw_config.get",
-      "mode": "native-flagged",
-      "legacy": "router"
-    },
-    {
-      "method": "PUT",
-      "path": "/api/v2/admin/nodes/:id/raw-config",
-      "package_id": "proxy-node",
-      "route_id": "proxy.admin.nodes.id.raw_config.put",
-      "mode": "native-flagged",
-      "legacy": "router"
-    },
-    {
       "method": "POST",
       "path": "/api/v2/admin/nodes/:id/sync",
       "package_id": "protocol-runtime",
@@ -256,15 +232,6 @@
       "route_id": "proxy.admin.nodes.stats.get",
       "mode": "native-flagged",
       "legacy": "router"
-    },
-    {
-      "method": "POST",
-      "path": "/api/v2/admin/nodes/validate-config",
-      "package_id": "proxy-node",
-      "route_id": "proxy.admin.nodes.validate_config.post",
-      "mode": "kernel-owned",
-      "legacy": "router",
-      "reason": "answers the size of the configuration with its secrets, which reach the package as handles that never resolve (node-ops-service.md 6.2)"
     },
     {
       "method": "GET",
@@ -383,14 +350,6 @@
       "path": "/api/v2/admin/protocol-templates",
       "package_id": "protocol-runtime",
       "route_id": "protocol.admin.protocol_templates.get",
-      "mode": "native-flagged",
-      "legacy": "router"
-    },
-    {
-      "method": "GET",
-      "path": "/api/v2/admin/subscription/formats",
-      "package_id": "subscription",
-      "route_id": "subscription.admin.subscription.formats.get",
       "mode": "native-flagged",
       "legacy": "router"
     },

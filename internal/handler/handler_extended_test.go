@@ -15,10 +15,6 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
-func strPtr(v string) *string {
-	return &v
-}
-
 type TelegramHandlerExtendedTestSuite struct {
 	HandlerTestSuite
 	testBot *model.TelegramBot
@@ -461,99 +457,6 @@ func TestTelegramHandlerExtended(t *testing.T) {
 // ========== Payment Gateway Extended Tests ==========
 
 // ========== Forward User Rules Tests ==========
-
-type NodeRawConfigTestSuite struct {
-	HandlerTestSuite
-	testNode *model.Node
-}
-
-func (s *NodeRawConfigTestSuite) SetupTest() {
-	s.HandlerTestSuite.SetupTest()
-
-	s.testNode = &model.Node{
-		Name:      "Raw Config Node",
-		Host:      "127.0.0.1",
-		Port:      443,
-		Status:    1,
-		RawConfig: strPtr(`{"log_level":"value"}`),
-	}
-	s.db.Create(s.testNode)
-
-	s.router = gin.New()
-}
-
-func (s *NodeRawConfigTestSuite) TestGetNodeRawConfig() {
-	handler := NewNodeHandler()
-	s.router.GET("/admin/nodes/:id/raw-config", handler.GetNodeRawConfig)
-
-	req, _ := http.NewRequest("GET", "/admin/nodes/"+strconv.FormatUint(uint64(s.testNode.ID), 10)+"/raw-config", nil)
-	w := httptest.NewRecorder()
-	s.router.ServeHTTP(w, req)
-
-	assert.Equal(s.T(), http.StatusOK, w.Code)
-	resp := decodePanelTestResponse(s.T(), w)
-	assert.Equal(s.T(), float64(0), resp["code"])
-	data := resp["data"].(map[string]any)
-	assert.Equal(s.T(), float64(s.testNode.ID), data["node_id"])
-	assert.Equal(s.T(), s.testNode.Name, data["name"])
-	rawConfig := data["raw_config"].(map[string]any)
-	assert.Equal(s.T(), "value", rawConfig["log_level"])
-	assert.NotContains(s.T(), resp, "error")
-}
-
-func (s *NodeRawConfigTestSuite) TestGetNodeRawConfig_InvalidID() {
-	handler := NewNodeHandler()
-	s.router.GET("/admin/nodes/:id/raw-config", handler.GetNodeRawConfig)
-
-	req, _ := http.NewRequest("GET", "/admin/nodes/invalid/raw-config", nil)
-	w := httptest.NewRecorder()
-	s.router.ServeHTTP(w, req)
-
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
-}
-
-func (s *NodeRawConfigTestSuite) TestUpdateNodeRawConfig() {
-	handler := NewNodeHandler()
-	s.router.PUT("/admin/nodes/:id/raw-config", handler.UpdateNodeRawConfig)
-
-	body := map[string]string{
-		"raw_config": `{"updated":"config"}`,
-	}
-	jsonBody, _ := json.Marshal(body)
-
-	req, _ := http.NewRequest("PUT", "/admin/nodes/"+strconv.FormatUint(uint64(s.testNode.ID), 10)+"/raw-config", bytes.NewReader(jsonBody))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	s.router.ServeHTTP(w, req)
-
-	assert.Equal(s.T(), http.StatusOK, w.Code)
-	resp := decodePanelTestResponse(s.T(), w)
-	assert.Equal(s.T(), float64(0), resp["code"])
-	data := resp["data"].(map[string]any)
-	assert.Equal(s.T(), "配置更新成功", data["message"])
-	assert.NotContains(s.T(), resp, "error")
-}
-
-func (s *NodeRawConfigTestSuite) TestUpdateNodeRawConfig_InvalidID() {
-	handler := NewNodeHandler()
-	s.router.PUT("/admin/nodes/:id/raw-config", handler.UpdateNodeRawConfig)
-
-	body := map[string]string{
-		"raw_config": `{"updated":"config"}`,
-	}
-	jsonBody, _ := json.Marshal(body)
-
-	req, _ := http.NewRequest("PUT", "/admin/nodes/invalid/raw-config", bytes.NewReader(jsonBody))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	s.router.ServeHTTP(w, req)
-
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
-}
-
-func TestNodeRawConfig(t *testing.T) {
-	suite.Run(t, new(NodeRawConfigTestSuite))
-}
 
 // ========== Telegram User Tests ==========
 
@@ -1397,24 +1300,6 @@ func (s *SubscribeExtendedTestSuite) TestDeleteTemplate_NotFound() {
 	s.router.ServeHTTP(w, req)
 
 	s.assertPanelError(w, "模板不存在")
-}
-
-func (s *SubscribeExtendedTestSuite) TestGetSubscriptionFormats() {
-	handler := NewSubscriptionAdminHandler()
-	s.router.GET("/admin/subscription/formats", handler.GetSubscriptionFormats)
-
-	req, _ := http.NewRequest("GET", "/admin/subscription/formats", nil)
-	w := httptest.NewRecorder()
-	s.router.ServeHTTP(w, req)
-
-	assert.Equal(s.T(), http.StatusOK, w.Code)
-	resp := decodePanelTestResponse(s.T(), w)
-	assert.Equal(s.T(), float64(0), resp["code"])
-	assert.NotEmpty(s.T(), resp["msg"])
-	assert.NotZero(s.T(), resp["ts"])
-	data := resp["data"].([]any)
-	assert.GreaterOrEqual(s.T(), len(data), 12)
-	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *SubscribeExtendedTestSuite) TestGetProtocolTypes() {

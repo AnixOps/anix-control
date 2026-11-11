@@ -29,7 +29,7 @@ const (
 )
 
 // AgentDiagnosticRequest is one diagnostic task for a proxy node's agent,
-// as POST /admin/agent/tasks and /admin/agent/execute take it.
+// as POST /admin/agent/tasks takes it.
 type AgentDiagnosticRequest struct {
 	NodeID uint
 	Action string
@@ -58,7 +58,7 @@ type AgentDiagnostic struct {
 // RunAgentDiagnostic validates a diagnostic task against the kernel's
 // whitelist (its parameters normalized), records it in
 // v2_agent_diagnostic_task, sends it over transport and records whether it
-// went out, as the legacy task and execute routes do. A refused task is a
+// went out, as the legacy task route does. A refused task is a
 // DiagnosticValidationError and records nothing.
 func RunAgentDiagnostic(ctx context.Context, db *gorm.DB, request AgentDiagnosticRequest, transport agentstreams.DiagnosticTransport) (*AgentDiagnostic, error) {
 	normalized, err := service.ValidateAgentDiagnosticTask(request.Action, request.Params)
@@ -111,7 +111,7 @@ func SetDiagnosticResultGraceForTest(grace time.Duration) (restore func()) {
 }
 
 // RunAgentDiagnosticOnStream runs a diagnostic task of the legacy admin
-// routes (POST /admin/agent/tasks and /admin/agent/execute) on the node's
+// route (POST /admin/agent/tasks) on the node's
 // Agent Control stream, as the agent.diagnostic executor runs it: when the
 // node's agent is connected on a stream of sources and advertises
 // agent.diagnostic. ok is false otherwise, and nothing was recorded. The

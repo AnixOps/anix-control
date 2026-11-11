@@ -67,11 +67,7 @@ func TestProxyNodeHostRelaysRoutesUntilTheyAreSwitchedToNative(t *testing.T) {
 		require.NotContains(t, proxyNodeRoutes, route)
 	}
 	withoutNodeOps := (&native.Service{}).Handlers()
-	for _, route := range []string{
-		native.DeleteNodeRouteID, native.UpdateRawConfigRouteID,
-	} {
-		require.NotContains(t, withoutNodeOps, route, "without KernelNodeOps the route stays legacy")
-	}
+	require.NotContains(t, withoutNodeOps, native.DeleteNodeRouteID, "without KernelNodeOps the route stays legacy")
 }
 
 // The host accepts exactly the package's declared compatibility routes.

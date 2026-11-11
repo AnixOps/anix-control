@@ -185,16 +185,6 @@ func TestANewTargetIsBoundByItsFirstResolution(t *testing.T) {
 	require.NoError(t, err)
 }
 
-// A validation stores nothing: its handles never resolve.
-func TestHandlesOfAValidationNeverResolve(t *testing.T) {
-	f := newFixture(t)
-	sealed, binding := f.seal("proxy.admin.nodes.validate_config.post", "req-1", `{"raw_config":{"private_key":"k"}}`, nil)
-	for _, target := range []Target{{Kind: TargetProxy, ID: 1}, {Kind: TargetNone, ID: 1}} {
-		_, err := f.store.Resolve(binding, Use{Handle: handles(sealed.Body)[0], Target: target, Field: "/raw_config/private_key"})
-		require.Error(t, err, target.Kind)
-	}
-}
-
 // Handles die with their request: released, or past its deadline.
 func TestHandlesExpireWithTheirRequest(t *testing.T) {
 	f := newFixture(t)

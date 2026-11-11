@@ -84,7 +84,6 @@ var protocolRuntimeRoutes = map[string]struct{}{
 	"protocol.admin.agent.list.get":                         {},
 	"protocol.admin.agent.monitor.get":                      {},
 	"protocol.admin.agent.tasks.post":                       {},
-	"protocol.admin.agent.execute.post":                     {},
 }
 
 // bridgedRoutes are the package's compatibility routes without a native
