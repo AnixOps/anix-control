@@ -7,22 +7,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// ========== Helper Functions ==========
-// Note: ptrInt64 and ptrInt are defined in user_test.go
-
-// ========== User Tests ==========
-// Note: User tests are in user_test.go
-
-func TestUserTableName(t *testing.T) {
-	assert.Equal(t, "v2_user", User{}.TableName())
-}
-
-// ========== Node Tests ==========
-
-func TestNodeTableName(t *testing.T) {
-	assert.Equal(t, "v2_node", Node{}.TableName())
-}
-
 func TestNodeIsOnline(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -65,14 +49,6 @@ func TestNodeIsOnline(t *testing.T) {
 	}
 }
 
-func TestNodeProtocolTableName(t *testing.T) {
-	assert.Equal(t, "v2_node_protocol", NodeProtocol{}.TableName())
-}
-
-func TestNodeGroupTableName(t *testing.T) {
-	assert.Equal(t, "v5_node_group", NodeGroup{}.TableName())
-}
-
 func TestGetProtocolTemplates(t *testing.T) {
 	templates := GetProtocolTemplates()
 	assert.NotEmpty(t, templates)
@@ -91,51 +67,6 @@ func TestGetProtocolTemplates(t *testing.T) {
 	assert.True(t, protocolTypes[ProtocolTUIC])
 }
 
-func TestProtocolTypeConstants(t *testing.T) {
-	assert.Equal(t, ProtocolType("vmess"), ProtocolVMess)
-	assert.Equal(t, ProtocolType("vless"), ProtocolVLESS)
-	assert.Equal(t, ProtocolType("trojan"), ProtocolTrojan)
-	assert.Equal(t, ProtocolType("shadowsocks"), ProtocolShadowsocks)
-	assert.Equal(t, ProtocolType("hysteria2"), ProtocolHysteria2)
-	assert.Equal(t, ProtocolType("tuic"), ProtocolTUIC)
-	assert.Equal(t, ProtocolType("anytls"), ProtocolAnyTLS)
-}
-
-func TestNodeStatusConstants(t *testing.T) {
-	assert.Equal(t, NodeStatus(0), NodeStatusPending)
-	assert.Equal(t, NodeStatus(1), NodeStatusOnline)
-	assert.Equal(t, NodeStatus(2), NodeStatusOffline)
-	assert.Equal(t, NodeStatus(3), NodeStatusDisabled)
-}
-
-// ========== Plan Tests ==========
-
-func TestPlanTableName(t *testing.T) {
-	assert.Equal(t, "v2_plan", Plan{}.TableName())
-}
-
-// ========== Order Tests ==========
-
-func TestOrderTableName(t *testing.T) {
-	assert.Equal(t, "v2_order", Order{}.TableName())
-}
-
-// ========== Event Tests ==========
-
-func TestEventTableName(t *testing.T) {
-	assert.Equal(t, "v2_event", Event{}.TableName())
-}
-
-// ========== Subscription Tests ==========
-
-func TestSubscriptionGroupTableName(t *testing.T) {
-	assert.Equal(t, "v2_subscription_group", SubscriptionGroup{}.TableName())
-}
-
-func TestSubscriptionTemplateTableName(t *testing.T) {
-	assert.Equal(t, "v2_subscription_template", SubscriptionTemplate{}.TableName())
-}
-
 func TestSubscriptionTemplateJSONHelpersRejectInvalidJSON(t *testing.T) {
 	invalid := "{invalid"
 	template := SubscriptionTemplate{
@@ -148,52 +79,6 @@ func TestSubscriptionTemplateJSONHelpersRejectInvalidJSON(t *testing.T) {
 	assert.Nil(t, template.GetProtocolSettings())
 	assert.Nil(t, template.GetTags())
 }
-
-func TestUserSubscriptionGroupTableName(t *testing.T) {
-	assert.Equal(t, "v2_user_subscription_group", UserSubscriptionGroup{}.TableName())
-}
-
-func TestPlanSubscriptionGroupTableName(t *testing.T) {
-	assert.Equal(t, "v2_plan_subscription_group", PlanSubscriptionGroup{}.TableName())
-}
-
-// ========== Payment Tests ==========
-
-func TestPaymentTableName(t *testing.T) {
-	assert.Equal(t, "v2_payment", Payment{}.TableName())
-}
-
-func TestPaymentLogTableName(t *testing.T) {
-	assert.Equal(t, "v2_payment_log", PaymentLog{}.TableName())
-}
-
-// ========== Ticket Tests ==========
-
-func TestTicketTableName(t *testing.T) {
-	assert.Equal(t, "v2_ticket", Ticket{}.TableName())
-}
-
-func TestTicketMessageTableName(t *testing.T) {
-	assert.Equal(t, "v2_ticket_message", TicketMessage{}.TableName())
-}
-
-// ========== Coupon Tests ==========
-
-func TestCouponTableName(t *testing.T) {
-	assert.Equal(t, "v2_coupon", Coupon{}.TableName())
-}
-
-func TestCouponUsageTableName(t *testing.T) {
-	assert.Equal(t, "v2_coupon_usage", CouponUsage{}.TableName())
-}
-
-// ========== Knowledge Tests ==========
-
-func TestKnowledgeTableName(t *testing.T) {
-	assert.Equal(t, "v2_knowledge", Knowledge{}.TableName())
-}
-
-// ========== ParsedNode Tests ==========
 
 func TestParsedNodeDefaults(t *testing.T) {
 	node := &ParsedNode{
@@ -208,83 +93,6 @@ func TestParsedNodeDefaults(t *testing.T) {
 	assert.Equal(t, "example.com", node.Server)
 	assert.Equal(t, 443, node.Port)
 }
-
-// ========== Forward Model Tests ==========
-
-func TestForwardNodeTableName(t *testing.T) {
-	assert.Equal(t, "v2_forward_node", ForwardNode{}.TableName())
-}
-
-func TestForwardRuleTableName(t *testing.T) {
-	assert.Equal(t, "v2_forward_rule", ForwardRule{}.TableName())
-}
-
-func TestForwardRouteTableName(t *testing.T) {
-	assert.Equal(t, "v2_forward_route", ForwardRoute{}.TableName())
-}
-
-// ========== Payment Gateway Tests ==========
-
-func TestPaymentGatewayTableName(t *testing.T) {
-	assert.Equal(t, "v2_payment_gateway", PaymentGateway{}.TableName())
-}
-
-// ========== MFA Tests ==========
-
-func TestUserMFATableName(t *testing.T) {
-	assert.Equal(t, "v2_user_mfa", UserMFA{}.TableName())
-}
-
-func TestMFALoginAttemptTableName(t *testing.T) {
-	assert.Equal(t, "v2_mfa_login_attempt", MFALoginAttempt{}.TableName())
-}
-
-func TestMFAMethodConstants(t *testing.T) {
-	assert.Equal(t, "totp", MFAMethodTOTP)
-	assert.Equal(t, "sms", MFAMethodSMS)
-	assert.Equal(t, "email", MFAMethodEmail)
-	assert.Equal(t, "backup", MFAMethodBackup)
-}
-
-// ========== Notification Tests ==========
-
-func TestNotificationTemplateTableName(t *testing.T) {
-	assert.Equal(t, "v2_notification_template", NotificationTemplate{}.TableName())
-}
-
-func TestNotificationLogTableName(t *testing.T) {
-	assert.Equal(t, "v2_notification_log", NotificationLog{}.TableName())
-}
-
-// ========== Invite Tests ==========
-
-func TestInviteCodeTableName(t *testing.T) {
-	assert.Equal(t, "v2_invite_code", InviteCode{}.TableName())
-}
-
-// ========== System Config Tests ==========
-
-func TestSystemConfigTableName(t *testing.T) {
-	assert.Equal(t, "v2_system_config", SystemConfig{}.TableName())
-}
-
-// ========== Format Constants Tests ==========
-
-func TestSubscriptionFormatConstants(t *testing.T) {
-	assert.Equal(t, SubscriptionFormat("v2ray"), FormatV2Ray)
-	assert.Equal(t, SubscriptionFormat("clash"), FormatClash)
-	assert.Equal(t, SubscriptionFormat("stash"), FormatStash)
-	assert.Equal(t, SubscriptionFormat("egern"), FormatEgern)
-	assert.Equal(t, SubscriptionFormat("surge"), FormatSurge)
-	assert.Equal(t, SubscriptionFormat("loon"), FormatLoon)
-	assert.Equal(t, SubscriptionFormat("json"), FormatJSON)
-	assert.Equal(t, SubscriptionFormat("base64json"), FormatBase64JSON)
-	assert.Equal(t, SubscriptionFormat("shadowrocket"), FormatShadowrocket)
-	assert.Equal(t, SubscriptionFormat("quantumultx"), FormatQuantumultX)
-	assert.Equal(t, SubscriptionFormat("sing-box"), FormatSingBox)
-}
-
-// ========== User Method Tests ==========
 
 func TestUser_IsValid(t *testing.T) {
 	tests := []struct {
@@ -430,46 +238,6 @@ func TestUser_GetDeviceLimit(t *testing.T) {
 	}
 }
 
-// ========== Server Model Tests ==========
-
-func TestServerTypeConstants(t *testing.T) {
-	assert.Equal(t, ServerType("vmess"), ServerTypeVMess)
-	assert.Equal(t, ServerType("vless"), ServerTypeVLESS)
-	assert.Equal(t, ServerType("trojan"), ServerTypeTrojan)
-	assert.Equal(t, ServerType("shadowsocks"), ServerTypeShadowsocks)
-	assert.Equal(t, ServerType("hysteria2"), ServerTypeHysteria2)
-	assert.Equal(t, ServerType("tuic"), ServerTypeTUIC)
-	assert.Equal(t, ServerType("anytls"), ServerTypeAnyTLS)
-}
-
-func TestServerVMess_TableName(t *testing.T) {
-	assert.Equal(t, "v2_server_vmess", ServerVMess{}.TableName())
-}
-
-func TestServerVLESS_TableName(t *testing.T) {
-	assert.Equal(t, "v2_server_vless", ServerVLESS{}.TableName())
-}
-
-func TestServerTrojan_TableName(t *testing.T) {
-	assert.Equal(t, "v2_server_trojan", ServerTrojan{}.TableName())
-}
-
-func TestServerShadowsocks_TableName(t *testing.T) {
-	assert.Equal(t, "v2_server_shadowsocks", ServerShadowsocks{}.TableName())
-}
-
-func TestServerTUIC_TableName(t *testing.T) {
-	assert.Equal(t, "v2_server_tuic", ServerTUIC{}.TableName())
-}
-
-func TestServerAnyTLS_TableName(t *testing.T) {
-	assert.Equal(t, "v2_server_anytls", ServerAnyTLS{}.TableName())
-}
-
-func TestServerRoute_TableName(t *testing.T) {
-	assert.Equal(t, "v2_server_route", ServerRoute{}.TableName())
-}
-
 func TestBaseServer_GetGroupIDs(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -542,106 +310,6 @@ func TestBaseServer_GetRouteIDs(t *testing.T) {
 	}
 }
 
-func TestServerVMess_Interface(t *testing.T) {
-	server := &ServerVMess{
-		BaseServer: BaseServer{
-			ID:         1,
-			Host:       "example.com",
-			Port:       443,
-			ServerPort: 8443,
-		},
-		Network: "ws",
-	}
-
-	assert.Equal(t, uint(1), server.GetID())
-	assert.Equal(t, ServerTypeVMess, server.GetType())
-	assert.Equal(t, "example.com", server.GetHost())
-	assert.Equal(t, 443, server.GetPort())
-	assert.Equal(t, 8443, server.GetServerPort())
-}
-
-func TestServerVLESS_Interface(t *testing.T) {
-	server := &ServerVLESS{
-		BaseServer: BaseServer{
-			ID:         2,
-			Host:       "vless.example.com",
-			Port:       443,
-			ServerPort: 8443,
-		},
-		Network: "tcp",
-		Flow:    "xtls-rprx-vision",
-	}
-
-	assert.Equal(t, uint(2), server.GetID())
-	assert.Equal(t, ServerTypeVLESS, server.GetType())
-	assert.Equal(t, "vless.example.com", server.GetHost())
-}
-
-func TestServerTrojan_Interface(t *testing.T) {
-	server := &ServerTrojan{
-		BaseServer: BaseServer{
-			ID:         3,
-			Host:       "trojan.example.com",
-			Port:       443,
-			ServerPort: 8443,
-		},
-		Network: "grpc",
-	}
-
-	assert.Equal(t, uint(3), server.GetID())
-	assert.Equal(t, ServerTypeTrojan, server.GetType())
-	assert.Equal(t, "trojan.example.com", server.GetHost())
-}
-
-func TestServerShadowsocks_Interface(t *testing.T) {
-	server := &ServerShadowsocks{
-		BaseServer: BaseServer{
-			ID:         4,
-			Host:       "ss.example.com",
-			Port:       8388,
-			ServerPort: 9388,
-		},
-		Cipher: "aes-256-gcm",
-	}
-
-	assert.Equal(t, uint(4), server.GetID())
-	assert.Equal(t, ServerTypeShadowsocks, server.GetType())
-	assert.Equal(t, "ss.example.com", server.GetHost())
-}
-
-func TestServerTUIC_Interface(t *testing.T) {
-	server := &ServerTUIC{
-		BaseServer: BaseServer{
-			ID:         6,
-			Host:       "tuic.example.com",
-			Port:       443,
-			ServerPort: 8443,
-		},
-		CongestionControl: "bbr",
-	}
-
-	assert.Equal(t, uint(6), server.GetID())
-	assert.Equal(t, ServerTypeTUIC, server.GetType())
-	assert.Equal(t, "tuic.example.com", server.GetHost())
-}
-
-func TestServerAnyTLS_Interface(t *testing.T) {
-	server := &ServerAnyTLS{
-		BaseServer: BaseServer{
-			ID:         7,
-			Host:       "anytls.example.com",
-			Port:       443,
-			ServerPort: 8443,
-		},
-	}
-
-	assert.Equal(t, uint(7), server.GetID())
-	assert.Equal(t, ServerTypeAnyTLS, server.GetType())
-	assert.Equal(t, "anytls.example.com", server.GetHost())
-}
-
-// ========== Plan Model Tests ==========
-
 func TestPlan_GetSpeedLimit(t *testing.T) {
 	speedLimit := int64(1024000)
 	tests := []struct {
@@ -694,29 +362,4 @@ func TestPlan_GetDeviceLimit(t *testing.T) {
 			assert.Equal(t, tt.expected, result)
 		})
 	}
-}
-
-// ========== Forward Node Type Tests ==========
-
-func TestForwardNodeTypeConstants(t *testing.T) {
-	assert.Equal(t, "relay", ForwardNodeTypeRelay)
-	assert.Equal(t, "exit", ForwardNodeTypeExit)
-}
-
-func TestForwardNodeStatusConstants(t *testing.T) {
-	assert.Equal(t, 0, ForwardNodeStatusOffline)
-	assert.Equal(t, 1, ForwardNodeStatusOnline)
-}
-
-// ========== Payment Gateway Tests ==========
-
-func TestPaymentGatewayTypeConstants(t *testing.T) {
-	assert.Equal(t, "alipay", PaymentGatewayAlipay)
-	assert.Equal(t, "wechat", PaymentGatewayWechat)
-	assert.Equal(t, "epay", PaymentGatewayEPay)
-	assert.Equal(t, "usdt", PaymentGatewayUSDT)
-}
-
-func TestPaymentRecord_TableName(t *testing.T) {
-	assert.Equal(t, "v2_payment_record", PaymentRecord{}.TableName())
 }

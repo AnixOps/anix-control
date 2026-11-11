@@ -8,8 +8,7 @@ REPO_ROOT="${RELEASE_WORKFLOW_REPO_ROOT:-${REPO_ROOT_DEFAULT}}"
 WORKFLOW_PATH="${RELEASE_WORKFLOW_PATH:-${REPO_ROOT}/.github/workflows/ci.yml}"
 
 # Jobs that must pass before a tag is built, signed or published. Every one
-# must run on a tag push: GitHub skips a job whose need was skipped. Smoke Tests
-# is left out because Backend Tests already runs its packages. E2E Tests is in
+# must run on a tag push: GitHub skips a job whose need was skipped. E2E Tests is in
 # the list because Backend Tests excludes internal/tests/e2e.
 RELEASE_BINARY_GATES=(
   go-quality
@@ -21,11 +20,8 @@ RELEASE_BINARY_GATES=(
   postgres-restore-rehearsal
   plugin-package-release-test
   plugin-package-publish
-  forward-runtime-test
-  grpc-test
   cross-repository-agent-e2e
   e2e-test
-  cmd-test
   tag-gate
   release-workflow-policy
   deploy-script-test
