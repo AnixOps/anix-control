@@ -48,11 +48,6 @@ func message(code int, text string) (pluginhostsdk.NativeResponse, error) {
 	return jsonAnswer(code, map[string]any{"message": text})
 }
 
-// messageError is c.JSON(code, gin.H{"message": text, "error": detail}).
-func messageError(code int, text, detail string) (pluginhostsdk.NativeResponse, error) {
-	return jsonAnswer(code, map[string]any{"message": text, "error": detail})
-}
-
 // redactNode masks a node for an administrator's answer, as the kernel's
 // service.RedactNode does: its raw configuration and its protocols'
 // settings.
