@@ -201,6 +201,7 @@ export default {
       forwardV4Nodes: '转发节点清单',
       forwardV4Node: '节点详情',
       forwardV4Dns: 'DNS 服务商',
+      topology: '网络拓扑',
       forwardEgress: '域名分流',
       forwardStandby: '过境应急',
       reverseProxies: '反向代理',
