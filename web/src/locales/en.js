@@ -200,6 +200,7 @@ export default {
       forwardV4Nodes: 'Forwarding nodes',
       forwardV4Node: 'Forwarding node',
       forwardV4Dns: 'DNS providers',
+      topology: 'Network topology',
       forwardEgress: 'Domain egress',
       forwardStandby: 'Cross-border standby',
       reverseProxies: 'Reverse proxies',

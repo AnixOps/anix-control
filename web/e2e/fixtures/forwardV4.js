@@ -516,7 +516,7 @@ function dnsApi(rest, { method, query, body }) {
 // The fixture
 // ---------------------------------------------------------------------------
 
-const EXTENSION = {
+export const EXTENSION = {
   plugin_id: 'forward', plugin_name: 'Forward', publisher: 'AnixOps', version: '4.2.0', api_version: 'v2', installation_id: 3, state: 'healthy',
   bundle: { path: 'webui/index.mjs', sha256: 'a'.repeat(64), url: '' }, permissions: ['forward.view'], menus: [], routes: [], config_schema: {},
   control_routes: ['/api/v4/plugins/forward/*']

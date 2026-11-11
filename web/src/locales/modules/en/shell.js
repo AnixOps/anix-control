@@ -52,6 +52,7 @@ export default {
         tickets: 'Tickets',
         knowledge: 'Help Center content',
         nodes: 'Nodes',
+        topology: 'Topology',
         forward: 'Forwarding',
         settings: 'Settings',
         security: 'Security',
