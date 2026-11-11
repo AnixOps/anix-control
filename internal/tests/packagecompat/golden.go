@@ -51,8 +51,8 @@ func requireGolden(t *testing.T, c Case, native Result) {
 		got.State = state
 	}
 	for _, text := range c.Volatile {
-		got.Body = bytes.ReplaceAll(got.Body, []byte(text), []byte("<volatile>"))
-		got.State = bytes.ReplaceAll(got.State, []byte(text), []byte("<volatile>"))
+		got.Body = bytes.ReplaceAll(got.Body, []byte(text), []byte("0"))
+		got.State = bytes.ReplaceAll(got.State, []byte(text), []byte("0"))
 	}
 
 	test, key, _ := strings.Cut(t.Name(), "/")
@@ -61,7 +61,7 @@ func requireGolden(t *testing.T, c Case, native Result) {
 	own := key + " (" + backend + ")"
 	path := filepath.Join("testdata", test+".json")
 	answers := map[string]goldenAnswer{}
-	if raw, err := os.ReadFile(path); err == nil {
+	if raw, err := os.ReadFile(path); err == nil { // #nosec G304 -- a test reads the answers recorded for it.
 		require.NoError(t, json.Unmarshal(raw, &answers))
 	}
 	if os.Getenv(RecordEnvironment) != "" {
@@ -82,8 +82,8 @@ func requireGolden(t *testing.T, c Case, native Result) {
 			fmt.Fprintf(&out, "%s%s: %s", map[bool]string{true: "{\n", false: ",\n"}[i == 0], quoted, compact(t, answers[name]))
 		}
 		out.WriteString("\n}\n")
-		require.NoError(t, os.MkdirAll("testdata", 0o755))
-		require.NoError(t, os.WriteFile(path, out.Bytes(), 0o644))
+		require.NoError(t, os.MkdirAll("testdata", 0o750))
+		require.NoError(t, os.WriteFile(path, out.Bytes(), 0o600))
 		return
 	}
 	want, ok := answers[own]

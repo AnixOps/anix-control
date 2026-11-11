@@ -81,7 +81,7 @@ type Case struct {
 	// sides and are replaced before comparing.
 	Mask []string
 	// Volatile lists texts that differ from run to run, such as a port the
-	// test listens on: a recorded answer holds "<volatile>" in their place.
+	// test listens on: a recorded answer holds 0 in their place.
 	Volatile []string
 	// Headers lists response headers both sides must send.
 	Headers []string
