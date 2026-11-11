@@ -51,6 +51,7 @@ const SHOTS = [
   // 网络拓扑: the world map and the diagram.
   ['admin-topology', [DESKTOP, PHONE]],
   ['admin-topology-graph', [DESKTOP]],
+  ['admin-lines', [DESKTOP, PHONE]],
   // The v4.2 forwarding pages (F5b).
   ['admin-forward-overview', [DESKTOP]],
   ['admin-forward-routes', [DESKTOP, PHONE]],

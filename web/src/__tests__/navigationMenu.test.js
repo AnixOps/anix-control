@@ -43,6 +43,7 @@ describe('navigation/menu.js: buildAdminMenu', () => {
     // flux-clone 转发 and 转发节点 were removed in v4.2 (F5d).
     expect(network.map(item => [item.id, item.to])).toEqual([
       ['nodes', '/admin/nodes'],
+      ['lines', '/admin/lines'],
       ['topology', '/admin/topology']
     ])
     expect(ids(groups)).not.toContain('plugins')
@@ -266,6 +267,7 @@ describe('forwarding area capability', () => {
     for (const groups of [without, withV4]) {
       expect(network(groups).map(item => [item.id, item.label])).toEqual([
         ['nodes', 'shell.admin.items.nodes'],
+        ['lines', 'shell.admin.items.lines'],
         ['topology', 'shell.admin.items.topology']
       ])
     }

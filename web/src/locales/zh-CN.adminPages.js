@@ -14,6 +14,7 @@ import forwardDns from './modules/zh-CN/forwardDns'
 import egressRoutes from './modules/zh-CN/egressRoutes'
 import standby from './modules/zh-CN/standby'
 import topology from './modules/zh-CN/topology'
+import lines from './modules/zh-CN/lines'
 import reverseProxies from './modules/zh-CN/reverseProxies'
 import nodeDiagnostics from './modules/zh-CN/nodeDiagnostics'
 import realityTargets from './modules/zh-CN/realityTargets'
@@ -30,6 +31,7 @@ export default {
   ...forwardDns,
   ...egressRoutes,
   ...topology,
+  ...lines,
   ...standby,
   ...reverseProxies,
   ...nodeDiagnostics,

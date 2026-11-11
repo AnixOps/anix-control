@@ -52,6 +52,7 @@ export default {
         tickets: '工单',
         knowledge: '帮助中心内容',
         nodes: '节点',
+        lines: '线路',
         topology: '拓扑',
         forward: '转发',
         settings: '系统设置',

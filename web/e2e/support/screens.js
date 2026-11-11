@@ -106,6 +106,8 @@ export const SCREENS = {
   'admin-topology-graph': { fixture: topology, scenario: 'graph' },
   'admin-topology-direct': { fixture: topology, scenario: 'direct' },
   'admin-topology-empty': { fixture: topology, scenario: 'empty' },
+  'admin-lines': { fixture: topology, scenario: 'lines' },
+  'admin-lines-empty': { fixture: topology, scenario: 'lines-empty' },
   'admin-subscriptions': { fixture: subscriptions, scenario: 'list' },
   'admin-subscription-members': { fixture: subscriptions, scenario: 'members' },
   'admin-system': { fixture: system, scenario: 'general' },

@@ -14,6 +14,7 @@ import forwardDns from './modules/en/forwardDns'
 import egressRoutes from './modules/en/egressRoutes'
 import standby from './modules/en/standby'
 import topology from './modules/en/topology'
+import lines from './modules/en/lines'
 import reverseProxies from './modules/en/reverseProxies'
 import nodeDiagnostics from './modules/en/nodeDiagnostics'
 import realityTargets from './modules/en/realityTargets'
@@ -30,6 +31,7 @@ export default {
   ...forwardDns,
   ...egressRoutes,
   ...topology,
+  ...lines,
   ...standby,
   ...reverseProxies,
   ...nodeDiagnostics,

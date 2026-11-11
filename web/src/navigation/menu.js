@@ -57,9 +57,11 @@ export const ADMIN_MENU = Object.freeze([
     // machine, relays included, and the forwarding pages (概览, 路由, DNS,
     // 分流 and a node's 转发设置) as its sections under /admin/forward/,
     // switched by the area's segmented control. There is no separate 转发
-    // item. 拓扑 shows all of it at once, so it stands beside 节点.
+    // item. 线路 lists every way from an entry to an exit and 拓扑 draws
+    // them all at once, so both stand beside 节点.
     items: [
       { id: 'nodes', to: '/admin/nodes', icon: 'nodes', labelKey: 'shell.admin.items.nodes', match: ['/admin/forward/'] },
+      { id: 'lines', to: '/admin/lines', icon: 'lines', labelKey: 'shell.admin.items.lines' },
       { id: 'topology', to: '/admin/topology', icon: 'forward-nodes', labelKey: 'shell.admin.items.topology' }
     ]
   },
