@@ -210,6 +210,9 @@ export function useProtocolEditor() {
   // custom_config has no form field: it rides along from the stored protocol
   // or the JSON tab.
   let customConfig = null
+  // The transport of the protocol being edited: a legacy one (h2, quic) is
+  // kept, never newly chosen.
+  let storedTransport = ''
   // Loading a protocol or template sets type, TLS and transport in one go;
   // the watchers below only react to the user's own changes.
   let hydrating = false
@@ -377,6 +380,7 @@ export function useProtocolEditor() {
   function startCreate() {
     editing.value = false
     selectedTemplate.value = ''
+    storedTransport = ''
     resetWireGuardForm()
     resetIwanForm()
     customConfig = null
@@ -387,6 +391,7 @@ export function useProtocolEditor() {
   function startEdit(protocol) {
     editing.value = true
     selectedTemplate.value = ''
+    storedTransport = protocol.transport || ''
     const json = protocolToJson(protocol)
     jsonToVisual(json)
     setJson(json)
@@ -424,7 +429,7 @@ export function useProtocolEditor() {
   function buildPayload() {
     const built = buildRawPayload()
     if (built.error) return built
-    const problem = transportProblem(built.payload)
+    const problem = transportProblem(built.payload, storedTransport)
     return problem ? { error: 'unsupported', problem } : built
   }
 

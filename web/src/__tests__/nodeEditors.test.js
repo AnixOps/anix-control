@@ -137,6 +137,17 @@ describe('useProtocolEditor', () => {
     expect(transportsFor('vless', 1, 'h2')).toContain('h2')
     expect(transportsFor('vless', 2, 'h2')).not.toContain('h2')
     expect(transportProblem({ type: 'vless', tls: 2, transport: 'h2' })).toMatchObject({ field: 'transport', value: 'h2' })
+
+    // The JSON tab takes h2 only for the protocol that already has it.
+    const h2 = { type: 'vless', port: 443, tls: 1, transport: 'h2' }
+    const editor = useProtocolEditor()
+    editor.startEdit(h2)
+    editor.protocolForm.mode = 'json'
+    expect(editor.buildPayload().payload).toMatchObject({ transport: 'h2' })
+    editor.startCreate()
+    editor.protocolForm.mode = 'json'
+    editor.jsonEditorContent.value = JSON.stringify(h2)
+    expect(editor.buildPayload()).toMatchObject({ error: 'unsupported', problem: { field: 'transport', value: 'h2' } })
   })
 })
 

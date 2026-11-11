@@ -58,8 +58,9 @@ export function adaptTransport(form) {
 }
 
 // The first problem of a protocol body ({ type, tls, transport }), or null:
-// { field: 'transport' | 'tls', type, value }.
-export function transportProblem(protocol) {
+// { field: 'transport' | 'tls', type, value }. stored is the transport the
+// protocol was loaded with: a legacy transport passes only as that one.
+export function transportProblem(protocol, stored = '') {
   const type = String(protocol.type || '')
   if (!PROTOCOL_CAPABILITIES[type]) return null
   const caps = PROTOCOL_CAPABILITIES[type]
@@ -67,6 +68,6 @@ export function transportProblem(protocol) {
   if (!caps.tls.includes(tls)) return { field: 'tls', type, value: tls }
   const transport = String(protocol.transport || '')
   if (!transport) return null
-  if (!transportsFor(type, tls, transport).includes(transport)) return { field: 'transport', type, value: transport }
+  if (!transportsFor(type, tls, stored).includes(transport)) return { field: 'transport', type, value: transport }
   return null
 }
