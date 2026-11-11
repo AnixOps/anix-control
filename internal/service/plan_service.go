@@ -17,7 +17,12 @@ type PlanService struct {
 
 // NewPlanService 创建 PlanService
 func NewPlanService() *PlanService {
-	return &PlanService{db: database.Get()}
+	return PlanServiceOn(database.Get())
+}
+
+// PlanServiceOn returns a PlanService on db.
+func PlanServiceOn(db *gorm.DB) *PlanService {
+	return &PlanService{db: db}
 }
 
 // Get 获取单个套餐

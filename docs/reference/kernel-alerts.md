@@ -20,8 +20,6 @@ backs up anything.
 | `link_certificate_expiring` | `forward-<id>` | the same for the forward link certificate (H28), which renews with the Agent certificate | the same: a connected Agent renews both |
 | `module_certificate_expiring` | `<package>#<enrollment>` | a module's latest certificate (per enrollment) is inside its window or ended | starting the module again or enrolling it again; revoking its enrollment ends the alert |
 | `ca_expiring` | `service_ca:<key id>` / `forward_link_ca:<key id>` | the **current** module (Agent and kernel) CA or forward link CA ends within `alerts.ca_expiry_days` | rotating the CA (`anix-control module ca rotate` or `POST /api/v4/kernel/modules/ca/rotate`; `anix-control agent link-ca rotate` for the link CA): the new CA is trusted at once and takes over signing by itself after one certificate lifetime |
-| `identity_import_stalled` | `authority` | the identity authority sits in `importing` with no progress for `alerts.phase_stuck_after` | resume the import or start the cutover (`POST /api/v4/kernel/identity/import`, `/cutover`) |
-| `identity_cutover_not_finalized` | `authority` | identity owns logins (state `identity`) since the latest cutover event, and the legacy credentials were not finalized for `alerts.phase_stuck_after` | `POST /api/v4/kernel/identity/finalize` (allowed a day after the cutover), or roll back |
 | `builtin_package_invalid` (critical) | the package id (`index` for an unreadable set) | an official package built into the binary does not verify against `plugins.official_public_key` (signature, digest or contents): it was not installed and its routes are unavailable | install a release binary verified against `SHA256SUMS.txt.sig` ([`../RELEASING.md`](../RELEASING.md#verifying-a-release)), or set `plugins.official_public_key` to the key that signed it (a development build: `make dev-package-key`); the start log names that key |
 | `builtin_package_failed` (critical) | the package id | a built-in package verified, but its installation is `failed` (its host does not start, a migration failed, the binary is older than the installed version) or is not enabled at the built-in version | read the reason in the alert and the Control log (`built-in package ... failed`), fix it, restart Control: the start installs and starts it again |
 | `panel_certificate_expiring` | the certificate's name (`panel.example.com`) | a certificate Control serves itself (the panel's, the gRPC listener's) is inside its [window](#thresholds): an ACME certificate that missed its renewal (renewed a third of its lifetime before the end), or certificate files due for replacement | for ACME, the cause in `anix-control tls status`, then `anix-control tls retry`; for files, replacing them (Control reloads them) |
@@ -65,24 +63,23 @@ is already staged.
 
 Severity: `critical` when the certificate or CA already ended or is inside the
 last quarter of its window (7 hours for an Agent certificate, 15 days for the
-default CA window), `warning` before. The phase alerts are always `warning`.
+default CA window), `warning` before.
 
-### What "stuck" means for the phases
+### Phases are not checked
 
-Only processes with a reliable timestamp in their own rows are checked:
+No phased process is left to watch:
 
-- **Identity authority** (`v4_kernel_identity_authority`): while `importing`,
-  every batch saves the row, so `updated_at` is the last progress. For
-  `identity`, the cutover time is the latest `cutover` event in
-  `v4_kernel_identity_cutover`; the row's `updated_at` is also written by a
-  rollback and an abort. Without a cutover event no alert is raised.
-- **The node credential split is not checked** since 5.0.3: every table is
-  finalized (Control refuses to start otherwise), so its two kinds,
+- **The node credential split** is finalized on every running database
+  (Control refuses to start otherwise), so its two kinds,
   `node_secrets_split_stalled` and `node_secrets_finalize_interrupted`, are
-  gone. Alerts of them still open are resolved at the next scan.
-- **Route modes are not checked.** They are not phases of a process: the
-  rehearsed list in the binary decides each route's mode, and nothing stores
-  or switches it.
+  gone.
+- **Identity** is finalized on every running database since the release
+  after 5.0.3 (the same refusal), so `identity_import_stalled` and
+  `identity_cutover_not_finalized` are gone.
+
+Alerts of these kinds still open are resolved at the next scan. Route
+modes are not checked either: the rehearsed list in the binary decides each
+route's mode, and nothing stores or switches it.
 
 ## Notifications
 
@@ -98,7 +95,7 @@ due again.
 
 An alert is announced once per subject. It is announced again after
 `alerts.renotify_interval` (default 24 hours); a critical alert after a
-quarter of that (6 hours), a phase alert after seven times it (a week). A
+quarter of that (6 hours). A
 finding that disappears and comes back inside the interval is not announced
 again. A digest lists at most 20 alerts and 3,500 characters (critical first)
 and points to the list for the rest. If no channel could deliver, the alerts
@@ -177,7 +174,7 @@ endpoint, alerts clear themselves.
 | `alerts.leaf_expiry_days` | `ANIX_CONTROL_ALERTS_LEAF_EXPIRY_DAYS` | `14` (the cap, see [thresholds](#thresholds)) |
 | `alerts.ca_expiry_days` | `ANIX_CONTROL_ALERTS_CA_EXPIRY_DAYS` | `60` |
 | `alerts.renotify_interval` | `ANIX_CONTROL_ALERTS_RENOTIFY_INTERVAL` | `24h` (at least `1h`) |
-| `alerts.phase_stuck_after` | `ANIX_CONTROL_ALERTS_PHASE_STUCK_AFTER` | `72h` (at least `1h`; `0` turns the phase alerts off) |
+| `alerts.phase_stuck_after` | `ANIX_CONTROL_ALERTS_PHASE_STUCK_AFTER` | `72h`; no alert uses it any more |
 
 The monitor runs in the one Control process that holds the singleton-worker
 lease, so a second process does not send a second digest. The table

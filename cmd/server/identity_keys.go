@@ -2,19 +2,14 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"time"
 
 	"github.com/AnixOps/anix-control/v5/internal/authn"
-	compatv2 "github.com/AnixOps/anix-control/v5/internal/compat/v2"
 	"github.com/AnixOps/anix-control/v5/internal/database"
-	"github.com/AnixOps/anix-control/v5/internal/identitycutover"
 	"github.com/AnixOps/anix-control/v5/internal/identityimport"
 	"github.com/AnixOps/anix-control/v5/internal/identitykeys"
-	"github.com/AnixOps/anix-control/v5/internal/model"
-	"github.com/AnixOps/anix-control/v5/internal/service"
 	"google.golang.org/grpc"
 )
 
@@ -32,15 +27,8 @@ func (rt *serverRuntime) startIdentityKeys() error {
 	}
 	authn.SetDefaultIdentityKeys(keys)
 	identityimport.SetDefault(nil, database.Get())
-	identitycutover.SetDefault(nil)
-	state, err := service.IdentityAuthorityState(database.Get())
-	if err != nil {
-		return fmt.Errorf("read the identity authority: %w", err)
-	}
-	if state == model.IdentityAuthorityFinalized {
-		// Only identity issues tokens once the legacy credentials are gone.
-		authn.RefuseLegacyTokens()
-	}
+	// Identity is finalized (bootstrapDatabase): only identity issues tokens.
+	authn.RefuseLegacyTokens()
 	hosts := rt.controlPluginHosts
 	if hosts == nil {
 		return nil
@@ -58,25 +46,6 @@ func (rt *serverRuntime) startIdentityKeys() error {
 		keys.Run(ctx, identityKeyRefresh, connect, report)
 	})
 	importer := &identityimport.Importer{DB: database.Get(), Connect: connect}
-	runner := identityimport.NewRunner(importer, log.Printf)
-	identityimport.SetDefault(runner, database.Get())
-	rt.workers.Go("identity account importer", runner.Serve)
-	identitycutover.SetDefault(&identitycutover.Service{
-		DB: database.Get(), Importer: importer, Hosts: hosts, Freeze: compatv2.DefaultRouteFreeze(),
-		RefreshKeys: func(ctx context.Context) error {
-			conn, err := connect()
-			if err != nil {
-				return err
-			}
-			if err := keys.Refresh(ctx, conn); err != nil {
-				return err
-			}
-			if len(keys.KeySet()) == 0 {
-				return errors.New("identity publishes no token keys (is identity.kek set?)")
-			}
-			return nil
-		},
-		OnFinalized: authn.RefuseLegacyTokens,
-	})
+	identityimport.SetDefault(identityimport.NewRunner(importer, log.Printf), database.Get())
 	return nil
 }

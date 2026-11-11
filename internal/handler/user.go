@@ -1,33 +1,8 @@
 package handler
 
 import (
-	"errors"
-	"log"
-
-	"github.com/AnixOps/anix-control/v5/internal/config"
-	"github.com/AnixOps/anix-control/v5/internal/database"
-	"github.com/AnixOps/anix-control/v5/internal/service"
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 )
-
-// UserHandler 用户处理器
-type UserHandler struct {
-	statsService  *service.StatsService
-	userService   *service.UserService
-	configService *service.SystemConfigService
-	cfg           *config.Config
-}
-
-// NewUserHandler 创建用户处理器
-func NewUserHandler() *UserHandler {
-	return &UserHandler{
-		statsService:  service.NewStatsService(),
-		userService:   service.NewUserService(),
-		configService: service.NewSystemConfigService(database.Get()),
-		cfg:           config.Get(),
-	}
-}
 
 func currentPanelUserID(c *gin.Context) (uint, bool) {
 	userID, exists := c.Get("user_id")
@@ -43,84 +18,4 @@ func currentPanelUserID(c *gin.Context) (uint, bool) {
 	}
 
 	return uid, true
-}
-
-// GetProfile godoc
-// @Summary 获取用户基本信息
-// @Description 获取当前登录用户的基本信息，包括邮箱、UUID、Token等
-// @Tags 用户端
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Success 200 {object} map[string]any
-// @Failure 401 {object} map[string]any
-// @Failure 404 {object} map[string]any
-// @Router /user/profile [get]
-func (h *UserHandler) GetProfile(c *gin.Context) {
-	uid, ok := currentPanelUserID(c)
-	if !ok {
-		return
-	}
-
-	user, err := h.userService.GetByID(uid)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			panelError(c, "用户不存在")
-			return
-		}
-		log.Printf("user profile failed: %v", err)
-		panelError(c, "获取用户信息失败")
-		return
-	}
-	pluginAccess, err := service.ResolveActorPluginAccess(database.Get(), uid, user.IsAdmin == 1)
-	if err != nil {
-		log.Printf("user plugin permissions failed: %v", err)
-		panelError(c, "获取用户权限失败")
-		return
-	}
-
-	panelSuccess(c, gin.H{
-		"id":                 user.ID,
-		"email":              user.Email,
-		"uuid":               user.UUID,
-		"token":              user.Token,
-		"is_admin":           user.IsAdmin == 1,
-		"permission_mode":    pluginAccess.PermissionMode(),
-		"permissions":        pluginAccess.ProfilePermissions(),
-		"restricted_plugins": pluginAccess.ProfileRestrictedPluginList(),
-	})
-}
-
-// GetDashboard godoc
-// @Summary 获取用户仪表盘
-// @Description 获取当前登录用户的仪表盘数据，包括订阅信息等
-// @Tags 用户端
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Success 200 {object} map[string]any
-// @Failure 401 {object} map[string]any
-// @Failure 500 {object} map[string]any
-// @Router /user/dashboard [get]
-func (h *UserHandler) GetDashboard(c *gin.Context) {
-	uid, ok := currentPanelUserID(c)
-	if !ok {
-		return
-	}
-
-	// 获取订阅信息
-	sub, err := h.statsService.GetUserSubscription(uid, false)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			panelError(c, "用户不存在")
-			return
-		}
-		log.Printf("user dashboard failed: %v", err)
-		panelError(c, "获取信息失败")
-		return
-	}
-
-	panelSuccess(c, gin.H{
-		"subscription": sub,
-	})
 }

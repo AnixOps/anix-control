@@ -2,7 +2,6 @@ package service
 
 import (
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 
@@ -13,15 +12,6 @@ import (
 // UserSubscriptionReset is a user's reset of their own subscription token,
 // for UserSubscriptionResetRequestID.
 const UserSubscriptionReset = "user_reset_subscribe"
-
-// UserSubscriptionResetRequestID names a user's reset of their own
-// subscription token in the subscriber request ledger, so a retried
-// request is applied once: identity.user_reset_subscribe:<user>:<digest>,
-// a digest of the request's Idempotency-Key (else its request id). The
-// identity package's native handler derives the same id.
-func UserSubscriptionResetRequestID(userID uint, token string) string {
-	return AdminUserResetRequestID(UserSubscriptionReset, userID, token)
-}
 
 // SubscriptionResetRateLimit bounds a user's subscription resets: every
 // attempt that checks a credential counts, successful or not, and the
@@ -35,19 +25,7 @@ var SubscriptionResetRateLimit = LoginRateLimitOptions{
 	CleanupAfter: 2*time.Hour + 5*time.Minute,
 }
 
-// SubscriptionResetRateLimitKey is a user's key in the reset limiter.
-func SubscriptionResetRateLimitKey(userID uint) string {
-	return fmt.Sprintf("subscription_reset|%d", userID)
-}
-
 var globalSubscriptionResetLimiter = NewLoginRateLimiter()
-
-// GetSubscriptionResetLimiter returns the limiter of users' subscription
-// resets, kept apart from the login limiter so that neither's cleanup
-// forgets the other's keys early.
-func GetSubscriptionResetLimiter() *LoginRateLimiter {
-	return globalSubscriptionResetLimiter
-}
 
 // The answers of a subscription reset that does not reset; identity-platform
 // answers the same messages.

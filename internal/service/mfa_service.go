@@ -1,7 +1,6 @@
 package service
 
 import (
-	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,11 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/AnixOps/anix-control/v5/internal/branding"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/pquerna/otp"
 	"github.com/pquerna/otp/totp"
-	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
@@ -35,25 +32,6 @@ func NewMFAService(db *gorm.DB, config *model.MFAConfig) *MFAService {
 	}
 }
 
-// SetConfig updates MFA runtime config without recreating service.
-func (s *MFAService) SetConfig(config *model.MFAConfig) {
-	s.config = config
-}
-
-// IsEnforcedForUser 检查是否对用户强制MFA
-func (s *MFAService) IsEnforcedForUser(user *model.User) bool {
-	if s.config == nil || !s.config.Enabled {
-		return false
-	}
-	if s.config.EnforceForAll {
-		return true
-	}
-	if s.config.EnforceForAdmin && user.IsAdmin == 1 {
-		return true
-	}
-	return false
-}
-
 // GetUserMFA 获取用户MFA配置
 func (s *MFAService) GetUserMFA(userID uint) (*model.UserMFA, error) {
 	var mfa model.UserMFA
@@ -65,109 +43,6 @@ func (s *MFAService) GetUserMFA(userID uint) (*model.UserMFA, error) {
 		return nil, err
 	}
 	return &mfa, nil
-}
-
-// SetupTOTP 设置TOTP
-func (s *MFAService) SetupTOTP(userID uint, email string) (*TOTPSetup, error) {
-	// 生成密钥
-	issuer := branding.ControlName
-	if s.config != nil && s.config.TOTPIssuer != "" {
-		issuer = s.config.TOTPIssuer
-	}
-
-	accountName := email
-	key, err := totp.Generate(totp.GenerateOpts{
-		Issuer:      issuer,
-		AccountName: accountName,
-		SecretSize:  32,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	// 生成备用码
-	backupCodes, err := s.generateBackupCodes()
-	if err != nil {
-		return nil, err
-	}
-
-	// 创建或更新MFA记录
-	var mfa model.UserMFA
-	result := s.db.Where("user_id = ?", userID).First(&mfa)
-	if result.Error == gorm.ErrRecordNotFound {
-		mfa = model.UserMFA{
-			UserID:      userID,
-			TOTPSecret:  key.Secret(),
-			BackupCodes: backupCodes,
-			Enabled:     false, // 需要验证后才启用
-		}
-		if err := s.db.Create(&mfa).Error; err != nil {
-			return nil, err
-		}
-	} else {
-		if mfa.Enabled {
-			// A session alone must not replace the factor that guards the
-			// account; it is disabled first, with the password.
-			return nil, ErrMFAAlreadyEnabled
-		}
-		mfa.TOTPSecret = key.Secret()
-		mfa.BackupCodes = backupCodes
-		if err := s.db.Save(&mfa).Error; err != nil {
-			return nil, err
-		}
-	}
-
-	return &TOTPSetup{
-		Secret:      key.Secret(),
-		URL:         key.URL(),
-		QRCode:      key.String(),
-		BackupCodes: parseBackupCodes(backupCodes),
-	}, nil
-}
-
-// EnableTOTP 启用TOTP
-func (s *MFAService) EnableTOTP(userID uint, code string) error {
-	mfa, err := s.GetUserMFA(userID)
-	if err != nil {
-		return err
-	}
-	if mfa == nil {
-		return fmt.Errorf("MFA not setup")
-	}
-
-	// 验证代码
-	if !s.VerifyTOTP(mfa.TOTPSecret, code) {
-		return fmt.Errorf("invalid code")
-	}
-
-	// 启用MFA
-	mfa.Enabled = true
-	now := time.Now()
-	mfa.LastUsed = &now
-	mfa.LastMethod = model.MFAMethodTOTP
-
-	return s.db.Save(mfa).Error
-}
-
-// DisableMFA 禁用MFA
-func (s *MFAService) DisableMFA(userID uint, password string) error {
-	// 验证密码
-	var user model.User
-	if err := s.db.First(&user, userID).Error; err != nil {
-		return err
-	}
-
-	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)); err != nil {
-		return fmt.Errorf("invalid password")
-	}
-
-	// Touching the user lets a delta identity import see the removal.
-	return s.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("user_id = ?", userID).Delete(&model.UserMFA{}).Error; err != nil {
-			return err
-		}
-		return tx.Model(&model.User{}).Where("id = ?", userID).Update("updated_at", time.Now()).Error
-	})
 }
 
 // VerifyTOTP 验证TOTP代码
@@ -271,18 +146,6 @@ func (s *MFAService) Verify(userID uint, code, method string) (bool, error) {
 	return valid, nil
 }
 
-// RecordLoginAttempt 记录登录尝试
-func (s *MFAService) RecordLoginAttempt(userID uint, ip, userAgent string, success bool, method string) error {
-	attempt := &model.MFALoginAttempt{
-		UserID:    userID,
-		IP:        ip,
-		UserAgent: userAgent,
-		Success:   success,
-		Method:    method,
-	}
-	return s.db.Create(attempt).Error
-}
-
 // CheckBruteForce 检查暴力破解
 //
 // Implemented but not yet wired into the MFA verification flow; see TODO.md
@@ -299,53 +162,6 @@ func (s *MFAService) CheckBruteForce(userID uint, maxAttempts int, window time.D
 	return count >= int64(maxAttempts), nil
 }
 
-// generateBackupCodes 生成备用码
-func (s *MFAService) generateBackupCodes() (string, error) {
-	count := 10
-	if s.config != nil && s.config.BackupCodeCount > 0 {
-		count = s.config.BackupCodeCount
-	}
-
-	codes := make([]string, count)
-	for i := 0; i < count; i++ {
-		code, err := generateRandomCode(8)
-		if err != nil {
-			return "", err
-		}
-		// 格式: XXXX-XXXX
-		codes[i] = code[:4] + "-" + code[4:]
-	}
-
-	jsonCodes, err := json.Marshal(codes)
-	if err != nil {
-		return "", err
-	}
-	return string(jsonCodes), nil
-}
-
-// generateRandomCode 生成随机代码
-func generateRandomCode(length int) (string, error) {
-	const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	b := make([]byte, length)
-	_, err := rand.Read(b)
-	if err != nil {
-		return "", err
-	}
-	for i := range b {
-		b[i] = chars[int(b[i])%len(chars)]
-	}
-	return string(b), nil
-}
-
-// parseBackupCodes 解析备用码
-func parseBackupCodes(jsonCodes string) []string {
-	codes, err := parseBackupCodesWithError(jsonCodes)
-	if err != nil {
-		return []string{}
-	}
-	return codes
-}
-
 func parseBackupCodesWithError(jsonCodes string) ([]string, error) {
 	if strings.TrimSpace(jsonCodes) == "" {
 		return []string{}, nil
@@ -354,49 +170,6 @@ func parseBackupCodesWithError(jsonCodes string) ([]string, error) {
 	var codes []string
 	if err := json.Unmarshal([]byte(jsonCodes), &codes); err != nil {
 		return nil, fmt.Errorf("parse MFA backup codes: %w", err)
-	}
-	return codes, nil
-}
-
-// GetRemainingBackupCodes 获取剩余备用码数量
-func (s *MFAService) GetRemainingBackupCodes(userID uint) (int, error) {
-	mfa, err := s.GetUserMFA(userID)
-	if err != nil {
-		return 0, err
-	}
-	if mfa == nil {
-		return 0, nil
-	}
-	codes, err := parseBackupCodesWithError(mfa.BackupCodes)
-	if err != nil {
-		return 0, err
-	}
-	return len(codes), nil
-}
-
-// RegenerateBackupCodes 重新生成备用码
-func (s *MFAService) RegenerateBackupCodes(userID uint) ([]string, error) {
-	mfa, err := s.GetUserMFA(userID)
-	if err != nil {
-		return nil, err
-	}
-	if mfa == nil || !mfa.Enabled {
-		return nil, fmt.Errorf("MFA not enabled")
-	}
-
-	backupCodes, err := s.generateBackupCodes()
-	if err != nil {
-		return nil, err
-	}
-
-	mfa.BackupCodes = backupCodes
-	if err := s.db.Save(mfa).Error; err != nil {
-		return nil, err
-	}
-
-	codes, err := parseBackupCodesWithError(backupCodes)
-	if err != nil {
-		return nil, err
 	}
 	return codes, nil
 }

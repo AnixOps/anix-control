@@ -156,9 +156,6 @@ var legacyTokensRefused atomic.Bool
 // only identity then issues tokens.
 func RefuseLegacyTokens() { legacyTokensRefused.Store(true) }
 
-// LegacyTokensRefused reports whether RefuseLegacyTokens was called.
-func LegacyTokensRefused() bool { return legacyTokensRefused.Load() }
-
 // Default returns a verifier over the loaded configuration's secret and the
 // default revocation store. It has no secret once legacy tokens are
 // refused.

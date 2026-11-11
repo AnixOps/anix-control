@@ -5,11 +5,9 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
-	"github.com/AnixOps/anix-control/v5/internal/handler"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/tests/packagecompat"
 	"github.com/AnixOps/anix-control/v5/packages/identity-platform/native"
-	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )
@@ -44,10 +42,9 @@ func withGrants(t testing.TB, db *gorm.DB) {
 	require.NoError(t, db.Create(&model.ResourceGrant{GroupID: 1, ResourceType: "plugin_api", ResourceID: "ticket", Permissions: `["ticket.view"]`}).Error)
 }
 
-func userRoute(pattern, routeID string, legacy func(*handler.UserHandler, *gin.Context)) packagecompat.Route {
+func userRoute(pattern, routeID string) packagecompat.Route {
 	return packagecompat.Route{
 		Method: "GET", Pattern: pattern, RouteID: routeID, Models: Models,
-		Legacy: func(c *gin.Context) { legacy(handler.NewUserHandler(), c) },
 		Native: nativeRoute(routeID),
 	}
 }
@@ -58,12 +55,12 @@ func runReads(t *testing.T, route packagecompat.Route, cases []packagecompat.Cas
 		if c.Seed == nil {
 			c.Seed = seedUsers(nil, nil)
 		}
-		packagecompat.RunRead(t, route, c)
+		readCase(t, route, c)
 	}
 }
 
 func TestProfileParity(t *testing.T) {
-	route := userRoute("/api/v2/user/profile", native.ProfileRouteID, (*handler.UserHandler).GetProfile)
+	route := userRoute("/api/v2/user/profile", native.ProfileRouteID)
 	path := "/api/v2/user/profile"
 	runReads(t, route, []packagecompat.Case{
 		{Name: "member", Path: path, Principal: member},
@@ -76,7 +73,7 @@ func TestProfileParity(t *testing.T) {
 }
 
 func TestDashboardParity(t *testing.T) {
-	route := userRoute("/api/v2/user/dashboard", native.DashboardRouteID, (*handler.UserHandler).GetDashboard)
+	route := userRoute("/api/v2/user/dashboard", native.DashboardRouteID)
 	path := "/api/v2/user/dashboard"
 	computed := []string{"data.subscription.cached_at"}
 	runReads(t, route, []packagecompat.Case{
@@ -89,7 +86,7 @@ func TestDashboardParity(t *testing.T) {
 }
 
 func TestAdminUserDetailParity(t *testing.T) {
-	route := adminRoute("GET", "/api/v2/admin/users/:id", native.AdminUserRouteID, (*handler.AdminHandler).GetUser)
+	route := adminRoute("GET", "/api/v2/admin/users/:id", native.AdminUserRouteID)
 	seed := seedUsers(nil, withSubscription)
 	runReads(t, route, []packagecompat.Case{
 		{Name: "member with a plan", Path: "/api/v2/admin/users/2", Principal: admin, Seed: seed},

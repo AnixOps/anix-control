@@ -29,14 +29,6 @@ type ActorPluginAccess struct {
 	restricted        map[string]struct{}
 }
 
-// NewFailClosedActorPluginAccess is used when authentication has already
-// committed but the optional plugin authorization lookup is temporarily
-// unavailable. It never grants access and lets the caller return a valid
-// session that can retry its profile fetch.
-func NewFailClosedActorPluginAccess() *ActorPluginAccess {
-	return newEmptyActorPluginAccess(false)
-}
-
 func newEmptyActorPluginAccess(legacyAdmin bool) *ActorPluginAccess {
 	access := &ActorPluginAccess{
 		LegacyAdmin:       legacyAdmin,

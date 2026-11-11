@@ -1,0 +1,7 @@
+{
+"banned_member_with_traffic": {"status":200,"body":{"code":0,"data":{"subscription":{"cached_at":"\u003cmasked\u003e","days_remaining":-1,"download_traffic":0,"email":"banned@example.test","expired_at":0,"is_expired":false,"plan_id":null,"plan_name":"无套餐","transfer_enable":20,"upload_traffic":5,"usage_percent":25,"used_traffic":5,"user_id":3}},"msg":"操作成功"}},
+"expired": {"status":200,"body":{"code":0,"data":{"subscription":{"cached_at":"\u003cmasked\u003e","days_remaining":0,"download_traffic":0,"email":"expired@example.test","expired_at":0,"is_expired":true,"plan_id":null,"plan_name":"无套餐","transfer_enable":0,"upload_traffic":0,"usage_percent":0,"used_traffic":0,"user_id":4}},"msg":"操作成功"}},
+"member_with_a_plan": {"status":200,"body":{"code":0,"data":{"subscription":{"cached_at":"\u003cmasked\u003e","days_remaining":10,"download_traffic":300,"email":"member@example.test","expired_at":0,"is_expired":false,"plan_id":7,"plan_name":"Pro","transfer_enable":1000,"upload_traffic":100,"usage_percent":40,"used_traffic":400,"user_id":2}},"msg":"操作成功"}},
+"member_without_a_plan": {"status":200,"body":{"code":0,"data":{"subscription":{"cached_at":"\u003cmasked\u003e","days_remaining":-1,"download_traffic":0,"email":"member@example.test","expired_at":0,"is_expired":false,"plan_id":null,"plan_name":"无套餐","transfer_enable":0,"upload_traffic":0,"usage_percent":0,"used_traffic":0,"user_id":2}},"msg":"操作成功"}},
+"unknown_user": {"status":200,"body":{"code":-1,"data":null,"msg":"用户不存在"}}
+}

@@ -11,7 +11,6 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/database"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/subscriber"
-	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -137,117 +136,9 @@ type UserListPlan struct {
 const userListColumns = "id, email, balance, commission_balance, device_limit, speed_limit, flow_reset_time, transfer_enable, " +
 	"u, d, plan_id, group_id, expired_at, banned, is_admin, is_staff, created_at"
 
-// GetList 获取用户列表. Users created in the same instant keep a stable
-// order (created_at DESC, id DESC), so pages neither repeat nor skip a user.
-func (s *UserService) GetList(params UserListParams) (*UserListResult, error) {
-	users := []UserListItem{}
-	var total int64
-
-	query := s.db.Model(&model.User{})
-
-	// 筛选条件
-	if params.Email != "" {
-		query = query.Where("email LIKE ?", "%"+params.Email+"%")
-	}
-	if params.PlanID != nil {
-		query = query.Where("plan_id = ?", *params.PlanID)
-	}
-	switch params.Status {
-	case "active":
-		now := time.Now().Unix()
-		query = query.Where("banned = 0").
-			Where("(expired_at IS NULL OR expired_at > ?)", now)
-	case "expired":
-		now := time.Now().Unix()
-		query = query.Where("expired_at IS NOT NULL AND expired_at <= ?", now)
-	case "banned":
-		query = query.Where("banned = 1")
-	}
-
-	// 获取总数
-	if err := query.Count(&total).Error; err != nil {
-		return nil, err
-	}
-
-	// 排序
-	orderBy := "created_at DESC, id DESC"
-	if params.OrderBy != "" {
-		orderBy = params.OrderBy
-	}
-
-	// 分页
-	offset := (params.Page - 1) * params.PageSize
-	if err := query.Select(userListColumns).
-		Order(orderBy).
-		Offset(offset).
-		Limit(params.PageSize).
-		Find(&users).Error; err != nil {
-		return nil, err
-	}
-	if err := s.nameListedPlans(users); err != nil {
-		return nil, err
-	}
-
-	return &UserListResult{
-		Total: total,
-		List:  users,
-	}, nil
-}
-
-// nameListedPlans gives each listed user on a plan that still exists the
-// plan's id and name.
-func (s *UserService) nameListedPlans(users []UserListItem) error {
-	planIDs := make([]uint, 0, len(users))
-	for _, user := range users {
-		if user.PlanID != nil {
-			planIDs = append(planIDs, *user.PlanID)
-		}
-	}
-	if len(planIDs) == 0 {
-		return nil
-	}
-	var plans []UserListPlan
-	if err := s.db.Model(&model.Plan{}).Select("id", "name").Where("id IN ?", planIDs).Find(&plans).Error; err != nil {
-		return err
-	}
-	byID := make(map[uint]*UserListPlan, len(plans))
-	for i := range plans {
-		byID[plans[i].ID] = &plans[i]
-	}
-	for i := range users {
-		if users[i].PlanID != nil {
-			users[i].Plan = byID[*users[i].PlanID]
-		}
-	}
-	return nil
-}
-
 // revokingUserFields are the user columns whose change ends the user's
 // sessions: tokens issued before it stop working.
 var revokingUserFields = []string{"password", "email", "is_admin", "banned"}
-
-// Update 更新用户
-func (s *UserService) Update(id uint, updates map[string]any) error {
-	if err := s.ensureUserExists(id); err != nil {
-		return err
-	}
-	if len(updates) == 0 {
-		return nil
-	}
-	var revocation *authn.Revocation
-	err := s.db.Transaction(func(tx *gorm.DB) error {
-		var err error
-		revocation, err = UpdateUserTx(tx, id, updates)
-		return err
-	})
-	if err != nil {
-		return err
-	}
-	if revocation != nil {
-		authn.Remember(*revocation)
-	}
-	return nil
-}
 
 // UpdateUserTx updates a user in tx. When the change ends the user's
 // sessions it also records the revocation and returns it; apply it with
@@ -314,24 +205,6 @@ func sessionEndingChange(tx *gorm.DB, id uint, updates map[string]any) (string, 
 	return "", nil
 }
 
-// Delete 删除用户
-func (s *UserService) Delete(id uint) error {
-	if id == 0 {
-		return ErrUserNotFound
-	}
-	var revocation authn.Revocation
-	err := s.db.Transaction(func(tx *gorm.DB) error {
-		var err error
-		revocation, err = DeleteUserTx(tx, id)
-		return err
-	})
-	if err != nil {
-		return err
-	}
-	authn.Remember(revocation)
-	return nil
-}
-
 // DeleteUserTx deletes a user, its WireGuard peers and its Shadowsocks
 // 2022 key in tx and records the revocation of its tokens; apply it with
 // authn.Remember after the commit.
@@ -359,16 +232,6 @@ func DeleteUserTx(tx *gorm.DB, id uint) (authn.Revocation, error) {
 	return revocation, authn.Write(tx, revocation)
 }
 
-// Ban 封禁用户
-func (s *UserService) Ban(id uint) error {
-	return s.Update(id, map[string]any{"banned": 1})
-}
-
-// Unban 解封用户
-func (s *UserService) Unban(id uint) error {
-	return s.Update(id, map[string]any{"banned": 0})
-}
-
 // ResetTraffic 重置用户流量. A non-empty requestID (AdminUserResetRequestID)
 // applies a retried reset once, through the subscriber request ledger.
 func (s *UserService) ResetTraffic(id uint, requestID string) error {
@@ -381,37 +244,6 @@ func (s *UserService) ResetTraffic(id uint, requestID string) error {
 	})
 }
 
-// ResetToken 为用户重新生成订阅 token, 让旧的 /s/<token> 链接立即失效。
-// 不改动 UUID, 所以节点端密码/连接不受影响, 用户只需重新导入订阅。
-// 返回当前 token. requestID (AdminUserResetRequestID) applies a retried
-// reset once, as KernelSubscriber.ResetCredentials does: a repeat changes
-// nothing and returns the token the first one issued, if it is still the
-// current one.
-func (s *UserService) ResetToken(id uint, requestID string) (string, error) {
-	if err := s.ensureUserExists(id); err != nil {
-		return "", err
-	}
-	var tokens []string
-	var revocation *authn.Revocation
-	err := s.db.Transaction(func(tx *gorm.DB) error {
-		var err error
-		if _, revocation, err = UpdateUserOnceTx(tx, requestID, SubscriberReissueMethod, id, map[string]any{"token": uuid.New().String()}, time.Now()); err != nil {
-			return err
-		}
-		return tx.Model(&model.User{}).Where("id = ?", id).Limit(1).Pluck("token", &tokens).Error
-	})
-	if err != nil {
-		return "", err
-	}
-	if revocation != nil {
-		authn.Remember(*revocation)
-	}
-	if len(tokens) == 0 {
-		return "", ErrUserNotFound
-	}
-	return tokens[0], nil
-}
-
 // SubscriberReissueMethod is the subscriber request ledger's method for a
 // new subscription token or proxy uuid (KernelSubscriber.ResetCredentials
 // and the administrator's subscription reset).
@@ -422,17 +254,6 @@ const (
 	AdminUserResetTraffic   = "reset_traffic"
 	AdminUserResetSubscribe = "reset_subscribe"
 )
-
-// AdminUserResetRequestID names an administrator's traffic or subscription
-// reset of a user in the subscriber request ledger, so a retried request is
-// applied once. token identifies the HTTP request: its Idempotency-Key, else
-// its request id. The identity package's native handlers derive the same id
-// (packages/identity-platform/native), so a retry is recognized whichever
-// side serves it; a new request is a new reset, as in v2.
-func AdminUserResetRequestID(kind string, userID uint, token string) string {
-	sum := sha256.Sum256([]byte(token))
-	return fmt.Sprintf("identity.%s:%d:%x", kind, userID, sum[:12])
-}
 
 // ForwardUserResetRequestID names an administrator's subscriber traffic
 // reset through the Flux-style POST /api/v2/user/reset (type 1) in the
@@ -484,47 +305,4 @@ func (s *UserService) ensureUserExists(id uint) error {
 		return err
 	}
 	return nil
-}
-
-// GetStats 获取用户统计
-func (s *UserService) GetStats() (map[string]any, error) {
-	var totalUsers int64
-	var activeUsers int64
-	var expiredUsers int64
-	var bannedUsers int64
-	var todayNewUsers int64
-
-	now := time.Now().Unix()
-	todayStart := time.Now().Truncate(24 * time.Hour)
-
-	if err := s.db.Model(&model.User{}).Count(&totalUsers).Error; err != nil {
-		return nil, err
-	}
-	if err := s.db.Model(&model.User{}).
-		Where("banned = 0").
-		Where("(expired_at IS NULL OR expired_at > ?)", now).
-		Count(&activeUsers).Error; err != nil {
-		return nil, err
-	}
-	if err := s.db.Model(&model.User{}).
-		Where("expired_at IS NOT NULL AND expired_at <= ?", now).
-		Count(&expiredUsers).Error; err != nil {
-		return nil, err
-	}
-	if err := s.db.Model(&model.User{}).Where("banned = 1").Count(&bannedUsers).Error; err != nil {
-		return nil, err
-	}
-
-	// 今日新增用户
-	if err := s.db.Model(&model.User{}).Where("created_at >= ?", todayStart).Count(&todayNewUsers).Error; err != nil {
-		return nil, err
-	}
-
-	return map[string]any{
-		"total_users":     totalUsers,
-		"active_users":    activeUsers,
-		"expired_users":   expiredUsers,
-		"banned_users":    bannedUsers,
-		"today_new_users": todayNewUsers,
-	}, nil
 }

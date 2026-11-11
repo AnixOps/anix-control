@@ -61,28 +61,6 @@ func TestProtocolWireGuardTemplate(t *testing.T) {
 	require.Fail(t, "wireguard protocol template missing")
 }
 
-func TestUserDeleteRemovesWireGuardPeers(t *testing.T) {
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
-	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&model.User{}, &model.UserSS2022Key{}, &model.WireGuardPeer{}, &model.IdentityRevocation{}, &model.SubscriberChange{}))
-	require.NoError(t, nodesecrets.MigrateForTest(db))
-	require.NoError(t, db.Create(&model.User{ID: 901, Email: "wireguard-delete@example.com"}).Error)
-	require.NoError(t, db.Create(&model.WireGuardPeer{
-		NodeProtocolID: 10,
-		UserID:         901,
-		PeerIP:         "10.99.0.2",
-		PrivateKey:     "private",
-		PublicKey:      "public",
-		PresharedKey:   "psk",
-	}).Error)
-
-	svc := &UserService{db: db}
-	require.NoError(t, svc.Delete(901))
-	var count int64
-	require.NoError(t, db.Model(&model.WireGuardPeer{}).Where("user_id = ?", 901).Count(&count).Error)
-	require.Zero(t, count)
-}
-
 func TestRecordNodeTrafficReportIsConsistent(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)

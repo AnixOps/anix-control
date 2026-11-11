@@ -1,0 +1,10 @@
+{
+"an_enabled_second_factor_is_not_replaced_by_a_session_alone": {"status":200,"body":{"code":-1,"data":null,"msg":"MFA already enabled; disable it first"}},
+"an_unfinished_setup_is_replaced": {"status":200,"body":{"code":0,"data":{"backup_codes":"\u003cmasked\u003e","qr_code":"\u003cmasked\u003e","secret":"\u003cmasked\u003e","url":"\u003cmasked\u003e"},"msg":"操作成功"}},
+"missing_code": {"status":200,"body":{"code":-1,"data":null,"msg":"Key: 'Code' Error:Field validation for 'Code' failed on the 'required' tag"}},
+"new_second_factor": {"status":200,"body":{"code":0,"data":{"backup_codes":"\u003cmasked\u003e","qr_code":"\u003cmasked\u003e","secret":"\u003cmasked\u003e","url":"\u003cmasked\u003e"},"msg":"操作成功"}},
+"not_set_up": {"status":200,"body":{"code":-1,"data":null,"msg":"MFA not setup"}},
+"unknown_user": {"status":200,"body":{"code":-1,"data":null,"msg":"user not found"}},
+"valid_code": {"status":200,"body":{"code":0,"data":{"message":"MFA enabled successfully"},"msg":"操作成功"}},
+"wrong_code": {"status":200,"body":{"code":-1,"data":null,"msg":"invalid code"}}
+}

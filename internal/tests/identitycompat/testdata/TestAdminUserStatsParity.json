@@ -1,0 +1,6 @@
+{
+"created_on_another_day": {"status":200,"body":{"code":0,"data":{"active_users":3,"banned_users":1,"expired_users":1,"today_new_users":0,"total_users":5},"msg":"操作成功"}},
+"created_today": {"status":200,"body":{"code":0,"data":{"active_users":3,"banned_users":1,"expired_users":1,"today_new_users":5,"total_users":5},"msg":"操作成功"}},
+"directory": {"status":200,"body":{"code":0,"data":{"active_users":7,"banned_users":3,"expired_users":3,"today_new_users":2,"total_users":12},"msg":"操作成功"}},
+"no_users": {"status":200,"body":{"code":0,"data":{"active_users":0,"banned_users":0,"expired_users":0,"today_new_users":0,"total_users":0},"msg":"操作成功"}}
+}

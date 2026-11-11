@@ -104,14 +104,6 @@ export default {
           title: '{table} 的凭据拆分在收尾时被中断',
           hint: '{date} 开始。再运行一次收尾即可继续。'
         },
-        identityImport: {
-          title: '身份导入已停滞',
-          hint: '自 {date} 起没有进展。请继续导入或开始切换。'
-        },
-        identityCutover: {
-          title: '身份切换尚未收尾',
-          hint: '身份服务自 {date} 起处理登录。请完成收尾，或回滚。'
-        },
         builtinPackageInvalid: {
           title: '内置包 {name} 校验失败',
           hint: '它没有被安装，相关页面和接口不可用。请安装经过校验的发布程序。'

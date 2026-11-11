@@ -67,6 +67,23 @@ func TestIdentityHostMigratesStorageAndPublishesItsKeys(t *testing.T) {
 	require.Equal(t, response.GetKeys()[0].GetKid(), again.GetKeys()[0].GetKid())
 }
 
+// The first token of a fresh install signs before the rotation pass has
+// created a key.
+func TestIdentityHostSignsBeforeTheFirstRotationPass(t *testing.T) {
+	bridge := &storageBridge{path: filepath.Join(t.TempDir(), "kernel.db")}
+	host, err := newIdentityHost(bridge, "lease-1", environment(map[string]string{envKEK: testKEK}), t.Logf)
+	require.NoError(t, err)
+	ctx := context.Background()
+	_, err = host.Migrate(ctx, pluginhostsdk.MigrationRequest{MigrationID: "index.0123456789abcdef0123456789abcdef"})
+	require.NoError(t, err)
+
+	key, err := host.keys.signingKey(ctx)
+	require.NoError(t, err)
+	again, err := host.keys.signingKey(ctx)
+	require.NoError(t, err)
+	require.Equal(t, key.ID, again.ID)
+}
+
 func TestIdentityHostWithoutKEKPublishesNothing(t *testing.T) {
 	host, err := newIdentityHost(&bridgeStub{}, "lease-1", environment(nil), t.Logf)
 	require.NoError(t, err)

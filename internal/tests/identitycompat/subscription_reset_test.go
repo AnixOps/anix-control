@@ -7,12 +7,9 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
-	"github.com/AnixOps/anix-control/v5/internal/handler"
 	"github.com/AnixOps/anix-control/v5/internal/model"
-	kernelservice "github.com/AnixOps/anix-control/v5/internal/service"
 	"github.com/AnixOps/anix-control/v5/internal/tests/packagecompat"
 	"github.com/AnixOps/anix-control/v5/packages/identity-platform/native"
-	"github.com/gin-gonic/gin"
 	"github.com/pquerna/otp/totp"
 	"github.com/stretchr/testify/require"
 )
@@ -22,7 +19,6 @@ const subscriptionResetPath = "/api/v2/user/subscription/reset"
 func subscriptionResetRoute() packagecompat.Route {
 	return packagecompat.Route{
 		Method: "POST", Pattern: subscriptionResetPath, RouteID: native.UserSubscriptionResetRouteID, Models: Models,
-		Legacy: func(c *gin.Context) { handler.NewUserHandler().ResetSubscription(c) },
 		Native: nativeRoute(native.UserSubscriptionResetRouteID),
 	}
 }
@@ -74,7 +70,7 @@ func TestUserSubscriptionResetParity(t *testing.T) {
 		c.Seed = seedUsers(nil, nil)
 		c.Snapshot = resetState
 		c.RequestHeaders = map[string]string{"Idempotency-Key": "self-reset-1"}
-		packagecompat.RunWrite(t, subscriptionResetRoute(), c)
+		writeCase(t, subscriptionResetRoute(), c)
 	}
 }
 
@@ -96,24 +92,15 @@ func TestUserSubscriptionResetChangesControlsToken(t *testing.T) {
 	require.Equal(t, token, stored.Token)
 	require.NotEqual(t, "t2", stored.Token)
 	require.Equal(t, "u2", stored.UUID)
-	var request model.SubscriberRequest
-	require.NoError(t, db.Take(&request).Error)
-	require.Equal(t, kernelservice.UserSubscriptionResetRequestID(2, "self-1"), request.RequestID)
 }
 
-// On a finalized install the kernel resolves the user's subscription reset
-// native with the rest of group A (route modes follow the authority, nothing
-// stores them), and the native handler resets with identity's credentials
-// although Control no longer holds any.
+// On a finalized install the native handler resets with identity's
+// credentials although Control no longer holds any.
 func TestUserSubscriptionResetWorksOnAFinalizedInstall(t *testing.T) {
 	db, identity, _ := controlWithIdentity(t)
 	require.NoError(t, db.Save(&model.IdentityAuthority{ID: 1, State: model.IdentityAuthorityFinalized, UpdatedAt: time.Now()}).Error)
 	require.NoError(t, db.Model(&model.User{}).Where("1 = 1").Update("password", model.UnusableLegacyPassword).Error)
 	require.NoError(t, db.Where("1 = 1").Delete(&model.UserMFA{}).Error)
-
-	modes, err := kernelservice.ResolvePackageRouteModes(db, kernelservice.IdentityPlatformPackageID)
-	require.NoError(t, err)
-	require.Equal(t, "native", modes[native.UserSubscriptionResetRouteID])
 
 	code, err := totp.GenerateCode(totpSecret, time.Now())
 	require.NoError(t, err)

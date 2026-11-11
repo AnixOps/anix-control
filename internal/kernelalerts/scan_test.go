@@ -192,47 +192,6 @@ func TestCAExpiryUsesTheCurrentAuthorityOnly(t *testing.T) {
 	})
 }
 
-func TestIdentityPhases(t *testing.T) {
-	forEachDatabase(t, func(t *testing.T, db *gorm.DB) {
-		setState := func(state string, updatedAgo time.Duration) {
-			require.NoError(t, db.Where("1 = 1").Delete(&model.IdentityAuthority{}).Error)
-			require.NoError(t, db.Create(&model.IdentityAuthority{ID: 1, State: state, Checkpoint: "secret-looking-checkpoint", UpdatedAt: start.Add(-updatedAgo)}).Error)
-		}
-		cutover := func(action string, ago time.Duration) {
-			require.NoError(t, db.Create(&model.IdentityCutoverEvent{Action: action, CreatedAt: start.Add(-ago)}).Error)
-		}
-
-		assert.Empty(t, scan(t, db, defaultSettings(), start).Findings, "no row means kernel")
-		setState(model.IdentityAuthorityKernel, hours(900))
-		assert.Empty(t, scan(t, db, defaultSettings(), start).Findings)
-
-		setState(model.IdentityAuthorityImporting, hours(10))
-		assert.Empty(t, scan(t, db, defaultSettings(), start).Findings)
-		setState(model.IdentityAuthorityImporting, hours(100))
-		found := kinds(scan(t, db, defaultSettings(), start))
-		require.Len(t, found, 1)
-		finding := found[KindIdentityImportStalled+"/authority"]
-		assert.Equal(t, SubjectIdentity, finding.SubjectKind)
-		assert.NotContains(t, finding.Message+" "+toJSON(finding.Detail), "checkpoint", "the import checkpoint stays out of alerts")
-
-		// identity: the cutover event dates the phase, not updated_at.
-		setState(model.IdentityAuthorityIdentity, hours(1))
-		assert.Empty(t, scan(t, db, defaultSettings(), start).Findings, "no cutover event, no reliable start")
-		cutover(model.IdentityCutoverActionCutover, hours(200))
-		cutover(model.IdentityCutoverActionRollback, hours(150))
-		cutover(model.IdentityCutoverActionCutover, hours(30))
-		assert.Empty(t, scan(t, db, defaultSettings(), start).Findings, "the latest cutover is 30 hours old")
-		settings := defaultSettings()
-		settings.PhaseStuckAfter = hours(24)
-		found = kinds(scan(t, db, settings, start))
-		require.Len(t, found, 1)
-		assert.Contains(t, found[KindIdentityCutoverPending+"/authority"].Message, "legacy credentials were not finalized")
-
-		setState(model.IdentityAuthorityFinalized, hours(900))
-		assert.Empty(t, scan(t, db, defaultSettings(), start).Findings)
-	})
-}
-
 // Once the v4.1 forward tables are dropped, forward nodes cannot be looked
 // up: their certificates are skipped without failing the proxy checks.
 func TestMissingForwardNodeTableSkipsForwardNodesOnly(t *testing.T) {

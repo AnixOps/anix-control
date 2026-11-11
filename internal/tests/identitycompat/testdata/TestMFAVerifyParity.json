@@ -1,0 +1,8 @@
+{
+"backup_code": {"status":200,"body":{"code":0,"data":{"message":"verified successfully"},"msg":"操作成功"}},
+"missing_code": {"status":200,"body":{"code":-1,"data":null,"msg":"Key: 'Code' Error:Field validation for 'Code' failed on the 'required' tag"}},
+"no_second_factor_passes": {"status":200,"body":{"code":0,"data":{"message":"verified successfully"},"msg":"操作成功"}},
+"sms_is_not_implemented": {"status":200,"body":{"code":-1,"data":null,"msg":"invalid code"}},
+"totp": {"status":200,"body":{"code":0,"data":{"message":"verified successfully"},"msg":"操作成功"}},
+"wrong_code": {"status":200,"body":{"code":-1,"data":null,"msg":"invalid code"}}
+}

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/AnixOps/anix-control/v5/internal/handler"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/tests/packagecompat"
 	"github.com/AnixOps/anix-control/v5/packages/identity-platform/native"
@@ -66,12 +65,12 @@ func runResets(t *testing.T, route packagecompat.Route, cases []packagecompat.Ca
 		c.Principal = admin
 		c.Snapshot = resetState
 		c.RequestHeaders = map[string]string{"Idempotency-Key": "reset-1"}
-		packagecompat.RunWrite(t, route, c)
+		writeCase(t, route, c)
 	}
 }
 
 func TestAdminResetTrafficParity(t *testing.T) {
-	route := adminRoute("POST", "/api/v2/admin/users/:id/reset-traffic", native.ResetTrafficRouteID, (*handler.AdminHandler).ResetUserTraffic)
+	route := adminRoute("POST", "/api/v2/admin/users/:id/reset-traffic", native.ResetTrafficRouteID)
 	runResets(t, route, []packagecompat.Case{
 		{Name: "reset", Path: "/api/v2/admin/users/2/reset-traffic"},
 		{Name: "retried request applies once", Path: "/api/v2/admin/users/2/reset-traffic", Warmup: [][]byte{nil}},
@@ -82,7 +81,7 @@ func TestAdminResetTrafficParity(t *testing.T) {
 }
 
 func TestAdminResetSubscribeParity(t *testing.T) {
-	route := adminRoute("POST", "/api/v2/admin/users/:id/reset-subscribe", native.ResetSubscribeRouteID, (*handler.AdminHandler).ResetUserSubscribe)
+	route := adminRoute("POST", "/api/v2/admin/users/:id/reset-subscribe", native.ResetSubscribeRouteID)
 	issued := []string{"data.token"}
 	runResets(t, route, []packagecompat.Case{
 		{Name: "reset", Path: "/api/v2/admin/users/2/reset-subscribe", Mask: issued},

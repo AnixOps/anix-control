@@ -11,7 +11,7 @@
 // invite code was used, the administrator targeted their own account.
 const FINAL_CODES = new Set(['not_found', 'conflict', 'forbidden_self'])
 // Codes the console words itself; any other code (a package gateway code such
-// as package_route_frozen) is shown as a plain failure with the server text.
+// as plugin_host_unavailable) is shown as a plain failure with the server text.
 export const BULK_ERROR_CODES = Object.freeze(['not_found', 'conflict', 'forbidden_self', 'not_attempted', 'failed'])
 
 export function isRetryableBulkCode(code) {

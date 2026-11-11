@@ -104,14 +104,6 @@ export default {
           title: 'Finalizing the credential split of {table} was interrupted',
           hint: 'Started {date}. Run the finalize again: it resumes.'
         },
-        identityImport: {
-          title: 'The identity import has stalled',
-          hint: 'No progress since {date}. Resume the import or start the cutover.'
-        },
-        identityCutover: {
-          title: 'The identity cutover is not finalized',
-          hint: 'Identity has handled sign-ins since {date}. Finalize it, or roll back.'
-        },
         builtinPackageInvalid: {
           title: 'The built-in package {name} does not verify',
           hint: 'It was not installed, so its pages and routes are unavailable. Install a verified release binary.'

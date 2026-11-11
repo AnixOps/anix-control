@@ -6,11 +6,9 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/v5/internal/config"
-	"github.com/AnixOps/anix-control/v5/internal/handler"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/service"
 	"github.com/AnixOps/anix-control/v5/internal/tests/packagecompat"
-	"github.com/gin-gonic/gin"
 	"github.com/pquerna/otp/totp"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/bcrypt"
@@ -28,7 +26,6 @@ var expiredAt = time.Now().Add(-time.Hour).Unix()
 func loginRoute() packagecompat.Route {
 	return packagecompat.Route{
 		Method: "POST", Pattern: "/api/v2/login", RouteID: "identity.auth.login", Models: Models,
-		Legacy: func(c *gin.Context) { handler.NewAuthHandler(config.Get()).Login(c) },
 		Native: nativeRoute("identity.auth.login"),
 	}
 }
@@ -36,7 +33,6 @@ func loginRoute() packagecompat.Route {
 func registerRoute() packagecompat.Route {
 	return packagecompat.Route{
 		Method: "POST", Pattern: "/api/v2/register", RouteID: "identity.auth.register", Models: Models,
-		Legacy: func(c *gin.Context) { handler.NewAuthHandler(config.Get()).Register(c) },
 		Native: nativeRoute("identity.auth.register"),
 	}
 }
@@ -130,7 +126,7 @@ func TestLoginParity(t *testing.T) {
 		if c.Seed == nil {
 			c.Seed = seedUsers(nil, nil)
 		}
-		packagecompat.RunRead(t, route, c)
+		readCase(t, route, c)
 	}
 }
 
@@ -144,14 +140,14 @@ func TestLoginMFAPolicyParity(t *testing.T) {
 		{Name: "members pass when only admins are enforced", Body: login("member@example.test", password, nil), Seed: seedUsers(nil, requireMFAConfig(adminOnly)), Mask: []string{"data.token"}},
 	} {
 		c.Path = "/api/v2/login"
-		packagecompat.RunRead(t, route, c)
+		readCase(t, route, c)
 	}
 }
 
 func TestLoginWithTOTPParity(t *testing.T) {
 	code, err := totp.GenerateCode(totpSecret, time.Now())
 	require.NoError(t, err)
-	packagecompat.RunRead(t, loginRoute(), packagecompat.Case{
+	readCase(t, loginRoute(), packagecompat.Case{
 		Name: "totp", Path: "/api/v2/login", Seed: seedUsers(nil, nil), Mask: []string{"data.token"},
 		Body: login("mfa@example.test", password, map[string]string{"mfa_code": code, "mfa_method": "totp"}),
 	})
@@ -219,6 +215,6 @@ func TestRegisterParity(t *testing.T) {
 			c.Seed = seedUsers(nil, invites)
 		}
 		c.Snapshot = subscribers
-		packagecompat.RunWrite(t, route, c)
+		writeCase(t, route, c)
 	}
 }

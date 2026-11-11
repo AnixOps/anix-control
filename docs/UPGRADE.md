@@ -11,6 +11,43 @@ Use this together with:
 - [`features.md`](features.md)
 - [`reference/sqlite-to-postgres-migration.md`](reference/sqlite-to-postgres-migration.md)
 
+## Upgrading To The Release After 5.0.3: Identity Is Finalized-Only
+
+identity-platform serves logins, registration, MFA and the user
+administration natively only: the kernel keeps no login of its own, and
+the identity cutover API is removed.
+
+**Before you upgrade, on 5.0.3:** cut over and finalize identity, as an
+administrator:
+
+```bash
+curl -X POST .../api/v4/kernel/identity/import     # wait for completed_at (GET /api/v4/kernel/identity)
+curl -X POST .../api/v4/kernel/identity/cutover    # state identity
+curl -X POST .../api/v4/kernel/identity/finalize -d '{"force":true}'   # state finalized; cannot be undone
+```
+
+- This release refuses to start while the database has users and identity
+  is not finalized. The check only reads, and runs before any migration,
+  so a refused start leaves the database as 5.0.3 left it. The message
+  names the state.
+- A fresh database, or one without users, needs nothing: Control records
+  identity as finalized at start.
+- Finalize makes every user sign in once more (passwords are kept by
+  identity). Subscription links are not affected.
+
+**Removed:**
+
+- `GET /api/v4/kernel/identity` and `POST /api/v4/kernel/identity/import`,
+  `/cutover`, `/rollback`, `/finalize`.
+- The alert kinds `identity_import_stalled` and
+  `identity_cutover_not_finalized`. Open alerts of these kinds are resolved
+  at the next scan. `alerts.phase_stuck_after` no longer raises anything.
+- The gateway answer `503 package_route_frozen` (only the cutover paused
+  routes).
+
+**Rollback.** 5.0.3 starts on the finalized database: go back by
+installing 5.0.3.
+
 ## Upgrading To 5.0.3: The Node Secret Split Is Finalized-Only
 
 5.0.3 reads and writes the node secret split (`v2_node.raw_config`,
@@ -57,8 +94,7 @@ writing original documents that 5.0.3 never deletes.
   dashboards and alert rules; `anixops_node_secrets_invalid_total` stays.
 - The alert kinds `node_secrets_split_stalled` and
   `node_secrets_finalize_interrupted`. Open alerts of these kinds are
-  resolved at the next scan. `alerts.phase_stuck_after` stays (identity
-  alerts use it).
+  resolved at the next scan.
 
 Unchanged: the configuration, the Agents and the packages.
 `GetCapabilities` of `KernelNodeOps` answers `FINALIZED` for the three split

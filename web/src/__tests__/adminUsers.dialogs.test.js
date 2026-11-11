@@ -243,13 +243,13 @@ describe('Users dialogs and feedback', () => {
       const userEv = userEvent.setup()
       api.getUserList.mockResolvedValue({ data: { list: [user, other, third], total: 3 } })
       api.bulkUsers
-        .mockResolvedValueOnce(outcome('ban', [ok(7), refused(8, 'not_found', 'user not found'), refused(10, 'package_route_frozen', 'the route is frozen')]))
+        .mockResolvedValueOnce(outcome('ban', [ok(7), refused(8, 'not_found', 'user not found'), refused(10, 'plugin_host_unavailable', 'plugin host is unavailable')]))
         .mockResolvedValueOnce(outcome('ban', [ok(10)]))
       await renderPage()
       const bar = await selectAll(userEv)
       await userEv.click(within(bar).getByRole('button', { name: 'Ban' }))
 
-      await waitFor(() => expect(toastMessages('warning')).toEqual(['Banned 1 of 3 users. 1 not found; 1 failed (the route is frozen).']))
+      await waitFor(() => expect(toastMessages('warning')).toEqual(['Banned 1 of 3 users. 1 not found; 1 failed (plugin host is unavailable).']))
       const [toast] = toasts('warning')
       // The warning stays until it is dismissed and offers one retry: the user that can still change.
       expect(toast.duration).toBe(0)

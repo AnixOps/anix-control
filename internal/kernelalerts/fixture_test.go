@@ -31,7 +31,7 @@ func migrate(t *testing.T, db *gorm.DB) {
 	require.NoError(t, db.AutoMigrate(
 		&model.KernelAlert{}, &model.AgentCertificate{}, &model.ForwardLinkCertificate{}, &model.ModuleCertificate{},
 		&model.ServiceCA{}, &model.ForwardLinkCA{}, &model.Node{}, &model.ForwardNode{},
-		&model.IdentityAuthority{}, &model.IdentityCutoverEvent{}, &model.NodeExitPolicy{},
+		&model.NodeExitPolicy{},
 	))
 }
 

@@ -1,0 +1,17 @@
+{
+"admin_has_unrestricted_permissions": {"status":200,"body":{"code":0,"data":{"email":"admin@example.test","is_admin":true,"permission_mode":"legacy","permissions":null,"restricted_plugins":[],"token":"\u003cmasked\u003e","user_id":1},"msg":"操作成功"}},
+"banned": {"status":200,"body":{"code":-1,"data":null,"msg":"用户已被封禁"}},
+"empty_body": {"status":200,"body":{"code":-1,"data":null,"msg":"参数错误"}},
+"expired": {"status":200,"body":{"code":-1,"data":null,"msg":"用户已过期"}},
+"member": {"status":200,"body":{"code":0,"data":{"email":"member@example.test","is_admin":false,"permission_mode":"authoritative","permissions":[],"restricted_plugins":[],"token":"\u003cmasked\u003e","user_id":2},"msg":"操作成功"}},
+"mfa_backup_code": {"status":200,"body":{"code":0,"data":{"email":"mfa@example.test","is_admin":false,"permission_mode":"authoritative","permissions":[],"restricted_plugins":[],"token":"\u003cmasked\u003e","user_id":5},"msg":"操作成功"}},
+"mfa_backup_code_without_method": {"status":200,"body":{"code":0,"data":{"email":"mfa@example.test","is_admin":false,"permission_mode":"authoritative","permissions":[],"restricted_plugins":[],"token":"\u003cmasked\u003e","user_id":5},"msg":"操作成功"}},
+"mfa_challenge": {"status":200,"body":{"code":0,"data":{"email":"mfa@example.test","methods":["totp","backup"],"mfa_methods":["totp","backup"],"mfa_required":true,"user_id":5},"msg":"操作成功"}},
+"mfa_email_method_is_not_implemented": {"status":200,"body":{"code":-1,"data":null,"msg":"invalid mfa code"}},
+"mfa_wrong_code": {"status":200,"body":{"code":-1,"data":null,"msg":"invalid mfa code"}},
+"missing_password": {"status":200,"body":{"code":-1,"data":null,"msg":"参数错误"}},
+"not_an_email": {"status":200,"body":{"code":-1,"data":null,"msg":"参数错误"}},
+"rate_limited_after_repeated_failures": {"status":200,"body":{"code":-1,"data":null,"msg":"too many login attempts, please try again later"}},
+"unknown_email": {"status":200,"body":{"code":-1,"data":null,"msg":"用户不存在或密码错误"}},
+"wrong_password": {"status":200,"body":{"code":-1,"data":null,"msg":"用户不存在或密码错误"}}
+}

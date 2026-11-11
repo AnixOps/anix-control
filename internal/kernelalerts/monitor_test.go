@@ -187,32 +187,6 @@ func TestMonitorRetriesAfterAFailedNotification(t *testing.T) {
 	})
 }
 
-func TestPhaseAlertsRepeatWeekly(t *testing.T) {
-	forEachDatabase(t, func(t *testing.T, db *gorm.DB) {
-		clk := &clock{now: start}
-		recorded := &recorder{}
-		monitor := newMonitor(db, clk, recorded)
-		require.NoError(t, db.Create(&model.IdentityAuthority{ID: 1, State: model.IdentityAuthorityImporting, UpdatedAt: start.Add(-hours(100))}).Error)
-		_, err := monitor.RunOnce(t.Context())
-		require.NoError(t, err)
-		require.Equal(t, 1, recorded.count())
-		clk.Advance(hours(24 * 6))
-		_, err = monitor.RunOnce(t.Context())
-		require.NoError(t, err)
-		assert.Equal(t, 1, recorded.count())
-		clk.Advance(hours(24))
-		_, err = monitor.RunOnce(t.Context())
-		require.NoError(t, err)
-		assert.Equal(t, 2, recorded.count())
-		// Finishing the phase clears the alert.
-		require.NoError(t, db.Model(&model.IdentityAuthority{}).Where("id = ?", 1).
-			Updates(map[string]any{"state": model.IdentityAuthorityFinalized, "updated_at": clk.Now()}).Error)
-		summary, err := monitor.RunOnce(t.Context())
-		require.NoError(t, err)
-		assert.Equal(t, 1, summary.Resolved)
-	})
-}
-
 func TestResolvedAlertsAreDroppedAfterAMonth(t *testing.T) {
 	forEachDatabase(t, func(t *testing.T, db *gorm.DB) {
 		clk := &clock{now: start}

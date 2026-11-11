@@ -11,7 +11,9 @@ import (
 	"context"
 	"net"
 	"os"
+	"strconv"
 	"strings"
+	"testing"
 	"time"
 
 	"github.com/AnixOps/anix-control/identity/account"
@@ -34,6 +36,7 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/packagebridge"
 	"github.com/AnixOps/anix-control/v5/internal/packagestore"
 	"github.com/AnixOps/anix-control/v5/internal/service"
+	"github.com/AnixOps/anix-control/v5/internal/tests/packagecompat"
 	"github.com/AnixOps/anix-control/v5/packages/identity-platform/native"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -188,4 +191,26 @@ func nativeService(db *gorm.DB) *native.Service {
 		}
 		return service
 	}
+}
+
+// clockTexts are the seeded instants that move with the clock (expiredAt,
+// later, earlyToday): a recorded answer holds 0 in their place.
+func clockTexts() []string {
+	texts := []string{strconv.FormatInt(expiredAt, 10), strconv.FormatInt(later, 10), strconv.FormatInt(earlyToday.Unix(), 10)}
+	for _, at := range []time.Time{time.Unix(expiredAt, 0), time.Unix(later, 0), earlyToday} {
+		texts = append(texts, at.UTC().Format(time.RFC3339), at.Format(time.RFC3339))
+	}
+	return texts
+}
+
+func readCase(t *testing.T, route packagecompat.Route, c packagecompat.Case) {
+	t.Helper()
+	c.Volatile = append(c.Volatile, clockTexts()...)
+	packagecompat.RunRead(t, route, c)
+}
+
+func writeCase(t *testing.T, route packagecompat.Route, c packagecompat.Case) {
+	t.Helper()
+	c.Volatile = append(c.Volatile, clockTexts()...)
+	packagecompat.RunWrite(t, route, c)
 }

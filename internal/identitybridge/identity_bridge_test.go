@@ -21,35 +21,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestNewAllowlistInvokesTheIdentityLoginAdapter(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	cache.InitMemory()
-	config.Set(&config.Config{JWT: config.JWTConfig{Secret: "identity-bridge-test-secret", Expire: 3600}})
-	require.NoError(t, database.Init(&config.DatabaseConfig{Driver: "sqlite", Database: ":memory:"}))
-	t.Cleanup(func() { require.NoError(t, database.Close()) })
-	require.NoError(t, database.Get().AutoMigrate(&model.User{}))
-
-	allowlist, err := NewAllowlist(config.Get())
-	require.NoError(t, err)
-
-	metadata, err := json.Marshal(map[string]any{"path": "/api/v2/login"})
-	require.NoError(t, err)
-	response, err := allowlist.Invoke(context.Background(), packagebridge.Call{
-		Host: packagebridge.HostIdentity{PackageID: "identity-platform", Version: "4.0.0", Generation: 1},
-		Request: packagebridge.Request{
-			RequestID: "identity-bridge-login", RouteID: "identity.auth.login", Method: "POST",
-			Body: []byte(`{}`), PrincipalJSON: []byte(`{"actor_id":0,"admin":false,"package_id":"identity-platform"}`),
-			MetadataJSON: metadata, Deadline: time.Now().Add(time.Second),
-		},
-		Operation: "identity.auth.login",
-	})
-	require.NoError(t, err)
-	require.EqualValues(t, 200, response.StatusCode)
-	var panel map[string]any
-	require.NoError(t, json.Unmarshal(response.Body, &panel))
-	require.EqualValues(t, -1, panel["code"])
-}
-
 func TestNewAllowlistExecutesOnlyTheFixedIdentityMigration(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	config.Set(&config.Config{JWT: config.JWTConfig{Secret: "identity-migration-test-secret", Expire: 3600}})

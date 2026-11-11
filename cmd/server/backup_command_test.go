@@ -20,6 +20,7 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/modulepki"
 	"github.com/AnixOps/anix-control/v5/internal/nodesecrets"
 	"github.com/AnixOps/anix-control/v5/internal/rootkey"
+	"github.com/AnixOps/anix-control/v5/internal/service"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
@@ -55,8 +56,10 @@ func newBackupFixture(t *testing.T, prepare func(t *testing.T, db *gorm.DB)) *ba
 	require.NoError(t, authority.Ensure(context.Background()))
 	require.NoError(t, db.Exec("INSERT INTO v2_user (email, password, uuid, token, is_admin, created_at, updated_at) VALUES ('admin@example.com', 'x', 'u-1', 't-1', 1, datetime('now'), datetime('now')), ('user@example.com', 'x', 'u-2', 't-2', 0, datetime('now'), datetime('now'))").Error)
 	require.NoError(t, db.Exec("INSERT INTO v2_node (name, host, port) VALUES ('hk-01', 'hk-01.example.com', 443)").Error)
-	// Its node secret split is finalized, as Control requires to start.
+	// Its node secret split and identity are finalized, as Control requires
+	// to start.
 	require.NoError(t, nodesecrets.EnsureStateRows(db))
+	require.NoError(t, service.EnsureIdentityFinalized(db))
 	return f
 }
 

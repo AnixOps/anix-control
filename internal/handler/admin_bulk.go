@@ -86,8 +86,8 @@ var inviteCodeBulkResource = bulkResource{actions: map[string]bulkAction{
 // BulkError is why one item of a bulk request was not done.
 type BulkError struct {
 	// Code is machine readable: not_found, conflict, forbidden_self, failed,
-	// not_attempted, or a code of the package gateway (package_route_frozen,
-	// plugin_host_unavailable, ...).
+	// not_attempted, or a code of the package gateway
+	// (plugin_host_unavailable, ...).
 	Code    string `json:"code"`
 	Message string `json:"message"`
 }

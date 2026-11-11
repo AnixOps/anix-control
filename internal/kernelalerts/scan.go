@@ -62,7 +62,6 @@ func (s *Scanner) Scan(ctx context.Context) (ScanResult, error) {
 		{[]string{KindLinkCertificate}, s.linkCertificates},
 		{[]string{KindModuleCertificate}, s.moduleCertificates},
 		{[]string{KindCAExpiring}, s.authorities},
-		{[]string{KindIdentityImportStalled, KindIdentityCutoverPending}, s.identityAuthority},
 		{[]string{KindBuiltinPackageInvalid, KindBuiltinPackageFailed}, s.builtinPackages},
 		{[]string{KindPanelCertificateExpiring, KindPanelCertificateRenewalFailing}, s.panelCertificates},
 		{[]string{KindBackupVerifyFailed, KindBackupStale}, s.backups},
@@ -380,55 +379,6 @@ func (s *Scanner) nodeName(ctx context.Context, node agentcontrol.AgentNode) str
 		return ""
 	}
 	return truncate(names[0], 100)
-}
-
-// identityAuthority finds an identity import without progress, and an
-// identity cutover left unfinalized.
-//
-// While importing, every batch of the import saves the authority row, so
-// its updated_at is the last progress. The time identity took over is the
-// latest "cutover" event (the row's updated_at is also written by a
-// rollback and an abort); without such an event no alert is raised.
-func (s *Scanner) identityAuthority(ctx context.Context, now time.Time) ([]Finding, error) {
-	stuck := s.Settings.PhaseStuckAfter
-	db := s.DB.WithContext(ctx)
-	if stuck <= 0 || !db.Migrator().HasTable(&model.IdentityAuthority{}) {
-		return nil, nil
-	}
-	var authorities []model.IdentityAuthority
-	if err := db.Where("id = ?", 1).Limit(1).Find(&authorities).Error; err != nil || len(authorities) == 0 {
-		return nil, err
-	}
-	authority := authorities[0]
-	switch authority.State {
-	case model.IdentityAuthorityImporting:
-		if now.Sub(authority.UpdatedAt) < stuck {
-			return nil, nil
-		}
-		return []Finding{{
-			Kind: KindIdentityImportStalled, Severity: model.KernelAlertWarning, SubjectKind: SubjectIdentity, Subject: "authority",
-			Message: fmt.Sprintf("The identity authority has been in state importing with no progress since %s: the account import did not finish or the cutover was not started. Resume the import or start the cutover (POST /api/v4/kernel/identity/import, /cutover).", stamp(authority.UpdatedAt)),
-			Detail:  map[string]any{"state": authority.State, "since": stamp(authority.UpdatedAt), "stuck_after_hours": int64(stuck / time.Hour)},
-		}}, nil
-	case model.IdentityAuthorityIdentity:
-		if !db.Migrator().HasTable(&model.IdentityCutoverEvent{}) {
-			return nil, nil
-		}
-		var events []model.IdentityCutoverEvent
-		if err := db.Where("action = ?", model.IdentityCutoverActionCutover).Order("id DESC").Limit(1).Find(&events).Error; err != nil || len(events) == 0 {
-			return nil, err
-		}
-		since := events[0].CreatedAt
-		if now.Sub(since) < stuck {
-			return nil, nil
-		}
-		return []Finding{{
-			Kind: KindIdentityCutoverPending, Severity: model.KernelAlertWarning, SubjectKind: SubjectIdentity, Subject: "authority",
-			Message: fmt.Sprintf("Identity has owned logins since the cutover at %s, but the legacy credentials were not finalized: they are still mirrored. Finalize (POST /api/v4/kernel/identity/finalize) once identity is verified, or roll back.", stamp(since)),
-			Detail:  map[string]any{"state": authority.State, "since": stamp(since), "stuck_after_hours": int64(stuck / time.Hour)},
-		}}, nil
-	}
-	return nil, nil
 }
 
 // builtinPackages raises the official packages built into Control that did

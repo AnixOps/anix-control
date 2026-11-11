@@ -90,7 +90,10 @@ func TestEveryWriterMovesItsSecrets(t *testing.T) {
 		require.NotEqual(t, before, positions(t, db, nodesecrets.ScopeWireGuardPeer, peerIDs[0]))
 		require.Equal(t, 2, secretVersion(t, db, nodesecrets.ScopeWireGuardPeer, peerIDs[0], "private_key", ""))
 		requireMoved(t, db)
-		require.NoError(t, service.NewUserService().Delete(users[0].ID))
+		require.NoError(t, db.Transaction(func(tx *gorm.DB) error {
+			_, err := service.DeleteUserTx(tx, users[0].ID)
+			return err
+		}))
 		require.Empty(t, positions(t, db, nodesecrets.ScopeWireGuardPeer, peerIDs[0]))
 		requireMoved(t, db)
 
