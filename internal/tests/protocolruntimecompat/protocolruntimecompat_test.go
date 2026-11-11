@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
-	"github.com/AnixOps/anix-control/v5/internal/handler"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/tests/packagecompat"
 	"github.com/AnixOps/anix-control/v5/packages/protocol-runtime/native"
@@ -34,12 +33,6 @@ func route(method, pattern, routeID string, legacy gin.HandlerFunc) packagecompa
 			return service.Handlers()[routeID]
 		},
 	}
-}
-
-// agent builds the legacy handler per request: it keeps the database it was
-// built with, and the harness sets up a database per case.
-func agent(method func(*handler.AgentHandler, *gin.Context)) gin.HandlerFunc {
-	return func(c *gin.Context) { method(handler.NewAgentHandler(), c) }
 }
 
 var seeded = time.Date(2026, 9, 1, 8, 0, 0, 0, time.UTC)

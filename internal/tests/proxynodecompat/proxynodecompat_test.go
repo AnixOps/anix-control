@@ -19,7 +19,6 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
-	"github.com/AnixOps/anix-control/v5/internal/handler"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/packagestore"
 	"github.com/AnixOps/anix-control/v5/internal/tests/packagecompat"
@@ -42,13 +41,6 @@ func route(method, pattern, routeID string, legacy gin.HandlerFunc) packagecompa
 			return service.Handlers()[routeID]
 		},
 	}
-}
-
-// nodes builds the legacy handler per request: its service takes the
-// kernel's database when it is built, and the harness sets up a database
-// per case.
-func nodes(method func(*handler.NodeHandler, *gin.Context)) gin.HandlerFunc {
-	return func(c *gin.Context) { method(handler.NewNodeHandler(), c) }
 }
 
 // syncSequences moves PostgreSQL's id sequences past explicitly seeded ids,
