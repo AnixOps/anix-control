@@ -25,8 +25,6 @@ var SubscriptionResetRateLimit = LoginRateLimitOptions{
 	CleanupAfter: 2*time.Hour + 5*time.Minute,
 }
 
-var globalSubscriptionResetLimiter = NewLoginRateLimiter()
-
 // The answers of a subscription reset that does not reset; identity-platform
 // answers the same messages.
 const (

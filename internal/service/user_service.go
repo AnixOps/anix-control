@@ -132,10 +132,6 @@ type UserListPlan struct {
 	Name string `json:"name"`
 }
 
-// userListColumns are the v2_user columns of a UserListItem.
-const userListColumns = "id, email, balance, commission_balance, device_limit, speed_limit, flow_reset_time, transfer_enable, " +
-	"u, d, plan_id, group_id, expired_at, banned, is_admin, is_staff, created_at"
-
 // revokingUserFields are the user columns whose change ends the user's
 // sessions: tokens issued before it stop working.
 var revokingUserFields = []string{"password", "email", "is_admin", "banned"}

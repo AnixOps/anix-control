@@ -158,23 +158,6 @@ func (s *HandlerTestSuite) SetupTest() {
 	testutil.CleanupDB(s.db)
 }
 
-func assertPanelTestError(t *testing.T, w *httptest.ResponseRecorder, msgContains string) {
-	t.Helper()
-	assert.Equal(t, http.StatusOK, w.Code)
-	resp := decodePanelTestResponse(t, w)
-	assert.Equal(t, float64(-1), resp["code"])
-	assert.NotEmpty(t, resp["msg"])
-	assert.NotZero(t, resp["ts"])
-	assert.Nil(t, resp["data"])
-	assert.NotContains(t, resp, "message")
-	assert.NotContains(t, resp, "error")
-	if msgContains != "" {
-		msg, ok := resp["msg"].(string)
-		assert.True(t, ok)
-		assert.Contains(t, strings.ToLower(msg), strings.ToLower(msgContains))
-	}
-}
-
 // NodeHandlerTestSuite 节点 Handler 测试套件
 type NodeHandlerTestSuite struct {
 	HandlerTestSuite

@@ -47,15 +47,6 @@ func NewLoginRateLimiter() *LoginRateLimiter {
 	}
 }
 
-var globalLoginRateLimiter = NewLoginRateLimiter()
-
-// ResetLoginRateLimiterForTest forgets every login, registration and
-// subscription reset attempt.
-func ResetLoginRateLimiterForTest() {
-	globalLoginRateLimiter = NewLoginRateLimiter()
-	globalSubscriptionResetLimiter = NewLoginRateLimiter()
-}
-
 func ResolveLoginRateLimitOptions(cfg *config.Config) LoginRateLimitOptions {
 	enabled := defaultLoginRateLimitEnabled
 	maxAttempts := defaultLoginRateLimitMaxAttempts
