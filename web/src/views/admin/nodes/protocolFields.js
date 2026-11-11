@@ -18,7 +18,8 @@
 
 export const PROTOCOL_SECTIONS = Object.freeze(['settings', 'tls_settings', 'reality_settings', 'transport_settings'])
 
-// Groups of the form, in display order.
+// The group a section's fields show in; a field's own `group` wins (ANX
+// splits its settings into the cover site, the domestic entry and advanced).
 export const FIELD_GROUPS = Object.freeze({
   settings: 'protocol',
   transport_settings: 'transport',
@@ -131,58 +132,58 @@ export const PROTOCOL_FIELDS = Object.freeze([
   },
   { section: 'settings', key: 'congestion_control', kind: 'select', options: TUIC_CONGESTION, default: 'bbr', show: p => p.type === 'tuic' },
   {
-    section: 'settings', key: 'server_names', kind: 'list', default: [ANX_COVER], hintKey: 'anxServerNames',
+    section: 'settings', key: 'server_names', group: 'anxCover', kind: 'list', default: [ANX_COVER], hintKey: 'anxServerNames',
     placeholder: ANX_COVER, show: p => p.type === 'anx'
   },
   {
-    section: 'settings', key: 'dest', kind: 'text', default: `${ANX_COVER}:443`, hintKey: 'anxDest',
+    section: 'settings', key: 'dest', group: 'anxCover', kind: 'text', default: `${ANX_COVER}:443`, hintKey: 'anxDest',
     placeholder: `${ANX_COVER}:443`, show: p => p.type === 'anx'
   },
-  { section: 'settings', key: 'alpn', kind: 'list', default: [...ANX_ALPN], placeholder: 'h2,http/1.1', show: p => p.type === 'anx' },
+  { section: 'settings', key: 'alpn', group: 'anxCover', kind: 'list', default: [...ANX_ALPN], placeholder: 'h2,http/1.1', show: p => p.type === 'anx' },
   // The cover site's TLS stack preset and per-key overrides (anx spec §4
   // item 6). dest_behavior takes the line anx-lab dest-probe prints; it
   // should carry session_tickets and flight_records for the dest.
-  { section: 'settings', key: 'dest_stack', kind: 'select', options: ['', ...ANX_DEST_STACKS], show: p => p.type === 'anx' },
+  { section: 'settings', key: 'dest_stack', group: 'anxCover', kind: 'select', options: ['', ...ANX_DEST_STACKS], show: p => p.type === 'anx' },
   {
-    section: 'settings', key: 'dest_behavior', kind: 'json', hintKey: 'anxDestBehavior', warn: anxDestWarnings,
+    section: 'settings', key: 'dest_behavior', group: 'anxCover', kind: 'json', hintKey: 'anxDestBehavior', warn: anxDestWarnings,
     placeholder: '"dest_behavior": {"session_tickets": "266/266", "flight_records": "122/1803/79/52"}', show: p => p.type === 'anx'
   },
   // Per-dest overrides for a dest list (anx #208): { "host:port": {…} },
   // usually each backup dest's session_tickets and flight_records.
   {
-    section: 'settings', key: 'dest_behaviors', kind: 'json', hintKey: 'anxDestBehaviors', warn: anxDestBehaviorsWarnings,
+    section: 'settings', key: 'dest_behaviors', group: 'anxCover', kind: 'json', hintKey: 'anxDestBehaviors', warn: anxDestBehaviorsWarnings,
     placeholder: '{"www.icloud.com:443": {"session_tickets": "none", "flight_records": "122/1803/79/52"}}', show: p => p.type === 'anx' && anxDests(p).length > 1
   },
   // A2 no-SNI mode (anx spec §4): also accept ClientHellos without SNI, and
   // subscriptions leave the SNI out (clients dial the IP).
-  { section: 'settings', key: 'allow_no_sni', kind: 'switch', hintKey: 'anxAllowNoSni', show: p => p.type === 'anx' },
+  { section: 'settings', key: 'allow_no_sni', group: 'anxEntry', kind: 'switch', hintKey: 'anxAllowNoSni', show: p => p.type === 'anx' },
   // Shaping (anx spec §6): VisionLike by default; plain only to debug.
-  { section: 'settings', key: 'shape_plain', kind: 'switch', hintKey: 'anxShapePlain', show: p => p.type === 'anx' },
+  { section: 'settings', key: 'shape_plain', group: 'anxAdvanced', kind: 'switch', hintKey: 'anxShapePlain', show: p => p.type === 'anx' },
   {
-    section: 'settings', key: 'max_streams', kind: 'number', min: 1, max: ANX_MAX_STREAMS_LIMIT, hintKey: 'anxMaxStreams',
+    section: 'settings', key: 'max_streams', group: 'anxAdvanced', kind: 'number', min: 1, max: ANX_MAX_STREAMS_LIMIT, hintKey: 'anxMaxStreams',
     placeholder: String(ANX_MAX_STREAMS), show: p => p.type === 'anx'
   },
   // wg jacket (anx spec §5.1): a WireGuard-shaped UDP port beside the A2 TCP
   // port, for users dialing a domestic entry; empty = off.
   {
-    section: 'settings', key: 'wg_listen_port', kind: 'number', min: 1, max: 65535, hintKey: 'anxWgListenPort',
+    section: 'settings', key: 'wg_listen_port', group: 'anxEntry', kind: 'number', min: 1, max: 65535, hintKey: 'anxWgListenPort',
     placeholder: '', show: p => p.type === 'anx'
   },
   // bare jacket (anx spec §5.2): a random-looking TCP port for users dialing a
   // domestic entry only; Control requires the no-SNI mode. Empty = off.
   {
-    section: 'settings', key: 'bare_listen_port', kind: 'number', min: 1, max: 65535, hintKey: 'anxBareListenPort',
+    section: 'settings', key: 'bare_listen_port', group: 'anxEntry', kind: 'number', min: 1, max: 65535, hintKey: 'anxBareListenPort',
     placeholder: '', show: p => p.type === 'anx'
   },
   // Handshake generation (anx spec §2.5): wire_gen 2 publishes the server key
   // with "@2", so clients log in with the second generation; min_wire_gen 2
   // makes the node refuse the first. Empty = 1.
   {
-    section: 'settings', key: 'wire_gen', kind: 'number', min: 1, max: 2, hintKey: 'anxWireGen',
+    section: 'settings', key: 'wire_gen', group: 'anxAdvanced', kind: 'number', min: 1, max: 2, hintKey: 'anxWireGen',
     placeholder: '1', show: p => p.type === 'anx'
   },
   {
-    section: 'settings', key: 'min_wire_gen', kind: 'number', min: 1, max: 2, hintKey: 'anxMinWireGen',
+    section: 'settings', key: 'min_wire_gen', group: 'anxAdvanced', kind: 'number', min: 1, max: 2, hintKey: 'anxMinWireGen',
     placeholder: '1', show: p => p.type === 'anx'
   },
 

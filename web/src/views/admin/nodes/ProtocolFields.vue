@@ -1,8 +1,16 @@
 <template>
   <div class="protocol-fields" data-testid="protocol-fields">
-    <section v-for="group in groups" :key="group.name" class="dialog-section" :data-testid="`protocol-fields-${group.name}`">
-      <h3 class="dialog-section__title">{{ t(`${K}.groups.${group.name}`) }}</h3>
-      <div class="form-grid">
+    <component
+      :is="group.collapsed ? 'details' : 'section'"
+      v-for="group in groups"
+      :key="group.name"
+      class="dialog-section"
+      :open="group.collapsed ? group.filled : undefined"
+      :data-testid="`protocol-fields-${group.name}`"
+    >
+      <component :is="group.collapsed ? 'summary' : 'h3'" class="dialog-section__title">{{ t(`${K}.groups.${group.name}`) }}</component>
+      <p v-if="GROUP_INTROS.includes(group.name)" class="protocol-fields__intro">{{ t(`${K}.groupIntros.${group.name}`) }}</p>
+      <div class="form-grid" :class="{ 'protocol-fields__stack': STACKED.includes(group.name) }">
         <template v-for="field in group.fields" :key="`${field.section}.${field.key}`">
           <UiSelect
             v-if="field.kind === 'select'"
@@ -87,7 +95,7 @@
           />
         </template>
       </div>
-    </section>
+    </component>
   </div>
 </template>
 
@@ -123,12 +131,19 @@ const K = 'admin.nodes.protocolFields'
 // Select items cannot carry an empty value: '' travels as this.
 const NONE = '__none__'
 
-const GROUP_ORDER = ['protocol', 'transport', 'security']
+const GROUP_ORDER = ['protocol', 'anxCover', 'anxEntry', 'transport', 'security', 'anxAdvanced']
+const GROUP_INTROS = ['anxCover', 'anxEntry']
+// Rarely changed groups fold away, open when one of their fields is set.
+const COLLAPSED = ['anxAdvanced']
+// Groups whose hints are long read better one field per row.
+const STACKED = ['anxEntry', 'anxAdvanced']
+const isSet = value => !(value === '' || value === false || value == null)
 const groups = computed(() => {
   const fields = fieldsFor(props.modelValue).filter(field => props.sections.includes(field.section))
   return GROUP_ORDER
-    .map(name => ({ name, fields: fields.filter(field => FIELD_GROUPS[field.section] === name) }))
+    .map(name => ({ name, fields: fields.filter(field => (field.group || FIELD_GROUPS[field.section]) === name) }))
     .filter(group => group.fields.length)
+    .map(group => ({ ...group, collapsed: COLLAPSED.includes(group.name), filled: group.fields.some(field => isSet(readField(props.modelValue, field))) }))
 })
 
 const i18nKey = field => field.key.replace(/-/g, '_')
@@ -175,6 +190,31 @@ function update(field, value) {
 
 .protocol-fields > .dialog-section + .dialog-section {
   margin-top: 0;
+}
+
+.protocol-fields__intro {
+  margin: calc(var(--space-2) * -1) 0 0;
+  color: var(--label-2);
+  font-size: var(--type-callout-size);
+  line-height: var(--type-callout-line);
+}
+
+.protocol-fields__stack {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.protocol-fields summary {
+  cursor: pointer;
+}
+
+.protocol-fields summary:focus-visible {
+  border-radius: var(--radius-xs);
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.protocol-fields details:not([open]) > :not(summary) {
+  display: none;
 }
 
 .protocol-fields__with-action {
