@@ -641,6 +641,9 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		networkModel := handler.NewNetworkModelHandler()
 		v4.GET("/kernel/network", networkModel.Get)
 		v4.PUT("/kernel/network", networkModel.Replace)
+		// The same network read as lines, compared with today's plan
+		// (internal/netline, docs/design/network-lines).
+		v4.GET("/kernel/network/lines", networkModel.Lines)
 		v4.POST("/kernel/network/transports/:id/rotate-key", networkModel.RotateLinkKey)
 		// Cross-border standby channels (F-54): public-protocol channels
 		// of each cross-border transport, switched in one call

@@ -261,7 +261,7 @@ require_live_control_webui_gate() {
     "actions/setup-python@v6" \
     "actions/setup-node@v6" \
     "npm ci" \
-    "npx playwright install --with-deps chromium" \
+    "npx playwright install chromium" \
     "npx playwright test --config playwright.live-control.config.js"; do
     if ! grep -Fq -- "${required}" <<<"${block}"; then
       fail "frontend-checks live Control WebUI gate is missing: ${required}"

@@ -19,6 +19,9 @@ const AuditActionNodeSettings = "network_node_settings"
 // interfacePattern is a Linux interface name.
 var interfacePattern = regexp.MustCompile(`^[A-Za-z0-9._@-]{1,15}$`)
 
+// regionPattern is a place key, or empty.
+var regionPattern = regexp.MustCompile(`^[a-z0-9-]{0,32}$`)
+
 // NodeSettings are a device's own network settings (model.NodeNetwork):
 // the interface the network model's automatic egresses of the device leave
 // by, with its source address and gateway per family, and the port its
@@ -31,6 +34,8 @@ type NodeSettings struct {
 	SourceV6  string `json:"source_v6"`
 	GatewayV6 string `json:"gateway_v6"`
 	HopPort   uint32 `json:"hop_port"`
+	// Region is where the device is, a place key of the panel's map.
+	Region string `json:"region"`
 	// Uplinks are the interfaces traffic to the next device of a route may
 	// leave by (uplinks.go); UplinkDefault ("auto" when empty) and
 	// UplinkChoices (by next device) say which one it does.
@@ -80,7 +85,7 @@ func (s *Service) SetNodeSettings(ctx context.Context, node string, settings Nod
 			return err
 		}
 		row := model.NodeNetwork{NodeRef: ref, Interface: settings.Interface, SourceV4: settings.SourceV4, GatewayV4: settings.GatewayV4,
-			SourceV6: settings.SourceV6, GatewayV6: settings.GatewayV6, HopPort: settings.HopPort, UpdatedAt: s.now()}
+			SourceV6: settings.SourceV6, GatewayV6: settings.GatewayV6, HopPort: settings.HopPort, Region: settings.Region, UpdatedAt: s.now()}
 		if err := tx.Save(&row).Error; err != nil {
 			return err
 		}
@@ -92,7 +97,7 @@ func (s *Service) SetNodeSettings(ctx context.Context, node string, settings Nod
 		}
 		return writeAudit(tx, actor, AuditActionNodeSettings, map[string]any{
 			"node": ref, "interface": row.Interface, "source_v4": row.SourceV4, "gateway_v4": row.GatewayV4,
-			"source_v6": row.SourceV6, "gateway_v6": row.GatewayV6, "hop_port": row.HopPort,
+			"source_v6": row.SourceV6, "gateway_v6": row.GatewayV6, "hop_port": row.HopPort, "region": row.Region,
 			"uplinks": settings.Uplinks, "uplink_default": settings.UplinkDefault, "uplink_choices": settings.UplinkChoices,
 		})
 	})
@@ -127,7 +132,7 @@ func (s *Service) requireNode(db *gorm.DB, node string) (string, error) {
 
 func settingsOf(row model.NodeNetwork) NodeSettings {
 	return NodeSettings{Interface: row.Interface, SourceV4: row.SourceV4, GatewayV4: row.GatewayV4,
-		SourceV6: row.SourceV6, GatewayV6: row.GatewayV6, HopPort: row.HopPort}
+		SourceV6: row.SourceV6, GatewayV6: row.GatewayV6, HopPort: row.HopPort, Region: row.Region}
 }
 
 // checkSettings answers settings trimmed, or an *Invalid: the interface is
@@ -152,6 +157,9 @@ func checkSettings(in NodeSettings) (NodeSettings, error) {
 	}
 	if in.GatewayV6 != "" && in.SourceV6 == "" {
 		v.add("source_v6", "a gateway needs the interface's source address")
+	}
+	if in.Region = strings.TrimSpace(in.Region); !regionPattern.MatchString(in.Region) {
+		v.add("region", "a place key of up to 32 lowercase letters, digits or '-'")
 	}
 	if in.HopPort > 65535 {
 		v.add("hop_port", "a port of 1-65535, or 0 for %d", AutoHopPort)

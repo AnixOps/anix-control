@@ -8322,6 +8322,32 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v4/kernel/network/lines": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "What Control stores today read as lines (docs/design/network-lines): snapshot has the devices, uplinks, entries, transports, exits and lines (a line per enabled node protocol and per forward route, with the protocol it serves or its targets, its chain of hops, its exit and its rules) and what could not be read as a line (skipped, with the reason). forwards counts the forwards the routes plan today; differences lists the ones the lines would plan differently (missing, extra, or the fields that differ). Read-only: nothing is stored and no node changes.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "The network as lines",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/v4/kernel/network/standby": {
             "get": {
                 "security": [
@@ -9064,7 +9090,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "The interface the network model's automatic egresses of the node leave by (interface; source_v4 and gateway_v4, source_v6 and gateway_v6 on it; empty: the default route) and the port its automatic hop ingress listens on (hop_port; 0: 24443). A node behind NAT is reached at the NAT entry (GET /api/v4/kernel/nodes/{id}/entries) whose port map covers hop_port. detected lists the interfaces the node's Agent last reported (name, addresses_v4, addresses_v6, gateway_v4, gateway_v6; empty before an Agent that reports them), detected_at when. 404 for an unknown node.",
+                "description": "The interface the network model's automatic egresses of the node leave by (interface; source_v4 and gateway_v4, source_v6 and gateway_v6 on it; empty: the default route) where the node is, for the topology map (region, a place key of up to 32 lowercase letters, digits or dashes; empty when unset), and the port its automatic hop ingress listens on (hop_port; 0: 24443). A node behind NAT is reached at the NAT entry (GET /api/v4/kernel/nodes/{id}/entries) whose port map covers hop_port. detected lists the interfaces the node's Agent last reported (name, addresses_v4, addresses_v6, gateway_v4, gateway_v6; empty before an Agent that reports them), detected_at when. 404 for an unknown node.",
                 "produces": [
                     "application/json"
                 ],
@@ -12389,6 +12415,10 @@ const docTemplate = `{
                 "interface": {
                     "type": "string"
                 },
+                "region": {
+                    "description": "Region is where the device is, a place key of the panel's map.",
+                    "type": "string"
+                },
                 "source_v4": {
                     "type": "string"
                 },
@@ -12433,6 +12463,10 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "interface": {
+                    "type": "string"
+                },
+                "region": {
+                    "description": "Region is where the device is, a place key of the panel's map.",
                     "type": "string"
                 },
                 "source_v4": {

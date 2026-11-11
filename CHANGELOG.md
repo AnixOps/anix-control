@@ -4,6 +4,12 @@
 
 ### Changed
 
+- ANX `dest_behavior` / `dest_behaviors` accept the TLS session resumption
+  keys that `anx-lab dest-probe` now prints (`ticket_lifetime`, `ticket_ids`,
+  `ticket_prefix`, `ticket_reuse`, `resume_exts`, `resume_flight`,
+  `resume_tickets`, `resume_ticket_ids`, `bad_binder`; anx #216 / #220), so
+  its whole line can be pasted. A non-zero `ticket_lifetime` without
+  `ticket_ids` and `resume_exts` is refused, as anx-node would not start.
 - Dev builds run on a manual dispatch of `dev-release.yml` only, no longer
   after every green `main` or every three hours, and only the newest one is
   kept, so the Releases page holds real releases.

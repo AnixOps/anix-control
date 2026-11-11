@@ -62,8 +62,8 @@ func networkForward(route *forwardv1.Route) (networkmodel.Forward, bool) {
 	listen := networkmodel.Endpoint{Address: address, Port: route.GetListen().GetPort()}
 	forward := networkmodel.Forward{
 		ID:        route.GetId(),
-		Protocols: networkProtocols(route.GetListen().GetProtocol()),
-		Policy:    networkPolicy(route),
+		Protocols: NetworkProtocols(route.GetListen().GetProtocol()),
+		Policy:    NetworkPolicy(route),
 		Paused:    route.GetPaused(),
 	}
 	for _, target := range route.GetTargets() {
@@ -118,7 +118,7 @@ func kernelPolicy(route *forwardv1.Route, last bool) *networkv1.ForwardPolicy {
 	if last {
 		balance = policy.GetTarget()
 	}
-	out := &networkv1.ForwardPolicy{Balance: networkBalances[balance]}
+	out := &networkv1.ForwardPolicy{Balance: NetworkBalances[balance]}
 	if health := policy.GetHealth(); health != nil {
 		out.Health = &networkv1.ForwardHealth{IntervalMs: health.GetIntervalMs(), TimeoutMs: health.GetTimeoutMs(), Disabled: health.GetDisabled()}
 	}
@@ -156,7 +156,8 @@ func networkLink(link *forwardv1.LinkTransport) networkmodel.Link {
 	return out
 }
 
-func networkProtocols(protocol forwardv1.L4Protocol) []string {
+// NetworkProtocols answers the transports of a listen protocol.
+func NetworkProtocols(protocol forwardv1.L4Protocol) []string {
 	switch protocol {
 	case forwardv1.L4Protocol_L4_PROTOCOL_UDP:
 		return []string{"udp"}
@@ -167,7 +168,8 @@ func networkProtocols(protocol forwardv1.L4Protocol) []string {
 	}
 }
 
-var networkBalances = map[forwardv1.BalanceStrategy]string{
+// NetworkBalances names forward.v1 balance strategies as network.v1 does.
+var NetworkBalances = map[forwardv1.BalanceStrategy]string{
 	forwardv1.BalanceStrategy_BALANCE_STRATEGY_ROUND_ROBIN: "round_robin",
 	forwardv1.BalanceStrategy_BALANCE_STRATEGY_RANDOM:      "random",
 	forwardv1.BalanceStrategy_BALANCE_STRATEGY_IP_HASH:     "ip_hash",
@@ -175,12 +177,12 @@ var networkBalances = map[forwardv1.BalanceStrategy]string{
 	forwardv1.BalanceStrategy_BALANCE_STRATEGY_FAILOVER:    "failover",
 }
 
-// networkPolicy answers the route's target policy and limits as a port
+// NetworkPolicy answers the route's target policy and limits as a port
 // forward policy; nil when everything is the default.
-func networkPolicy(route *forwardv1.Route) *networkv1.ForwardPolicy {
+func NetworkPolicy(route *forwardv1.Route) *networkv1.ForwardPolicy {
 	policy := route.GetPolicy()
 	out := &networkv1.ForwardPolicy{
-		Balance:      networkBalances[policy.GetTarget()],
+		Balance:      NetworkBalances[policy.GetTarget()],
 		BandwidthBps: route.GetLimits().GetBandwidthBps(),
 		MaxConns:     route.GetLimits().GetMaxConns(),
 	}

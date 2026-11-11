@@ -67,13 +67,16 @@ func NetworkModels() []any {
 // A NAT node entry that maps the hop port makes the hop ingress a NAT
 // ingress reached at the entry's address.
 type NodeNetwork struct {
-	NodeRef   string    `gorm:"primaryKey;size:32" json:"node_ref"`
-	Interface string    `gorm:"size:32;not null;default:''" json:"interface"`
-	SourceV4  string    `gorm:"size:64;not null;default:''" json:"source_v4"`
-	GatewayV4 string    `gorm:"size:64;not null;default:''" json:"gateway_v4"`
-	SourceV6  string    `gorm:"size:64;not null;default:''" json:"source_v6"`
-	GatewayV6 string    `gorm:"size:64;not null;default:''" json:"gateway_v6"`
-	HopPort   uint32    `gorm:"not null;default:0" json:"hop_port"`
+	NodeRef   string `gorm:"primaryKey;size:32" json:"node_ref"`
+	Interface string `gorm:"size:32;not null;default:''" json:"interface"`
+	SourceV4  string `gorm:"size:64;not null;default:''" json:"source_v4"`
+	GatewayV4 string `gorm:"size:64;not null;default:''" json:"gateway_v4"`
+	SourceV6  string `gorm:"size:64;not null;default:''" json:"source_v6"`
+	GatewayV6 string `gorm:"size:64;not null;default:''" json:"gateway_v6"`
+	HopPort   uint32 `gorm:"not null;default:0" json:"hop_port"`
+	// Region is where the device is, a place key the panel's map knows
+	// ("jp", "shanghai"); empty lets the panel guess from the name.
+	Region    string    `gorm:"size:32;not null;default:''" json:"region"`
 	UpdatedAt time.Time `gorm:"not null" json:"updated_at"`
 }
 
