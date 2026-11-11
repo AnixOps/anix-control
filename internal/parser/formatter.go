@@ -1334,8 +1334,10 @@ func (f *SurgeFormatter) formatAnyTLS(node *model.ParsedNode, ctx *model.Templat
 }
 
 // formatSnell is a Snell node line: the node's psk and, as userkey, the
-// subscriber's key at a multi-user server. Surge is the only format with a
-// user key, so the other formatters leave Snell nodes out.
+// subscriber's key at a multi-user server. Surge's manual does not list
+// userkey (the name is the kernel's, docs/protocols/snell.md section 8), so
+// the line is unverified until a real Surge logs in with it. No other
+// formatter writes Snell nodes.
 func (f *SurgeFormatter) formatSnell(node *model.ParsedNode, ctx *model.TemplateRenderContext) string {
 	psk, _ := node.Settings["psk"].(string)
 	if psk == "" {

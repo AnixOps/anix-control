@@ -254,14 +254,20 @@ export function writeField(protocol, field, value) {
   return { ...protocol, [field.section]: section }
 }
 
+// The settings of type that are random values (a Snell PSK), made anew.
+export function generatedSettingsFor(type) {
+  const fields = PROTOCOL_FIELDS.filter(field => field.section === 'settings' && field.generate && field.show({ type, tls: 0, transport: 'tcp' }))
+  return Object.fromEntries(fields.map(field => [field.key, field.generate()]))
+}
+
 // What a freshly chosen protocol type starts with: settings that must have a
 // value (a Shadowsocks method, a TUIC congestion control, a Snell PSK).
 export function defaultSettingsFor(type) {
-  const settings = {}
+  const settings = generatedSettingsFor(type)
   for (const field of PROTOCOL_FIELDS) {
-    if (field.section !== 'settings' || !field.show({ type, tls: 0, transport: 'tcp' })) continue
-    const value = field.default ?? field.generate?.()
-    if (value !== undefined) settings[field.key] = value
+    if (field.section === 'settings' && field.default !== undefined && field.show({ type, tls: 0, transport: 'tcp' })) {
+      settings[field.key] = field.default
+    }
   }
   if (type === 'hysteria2') Object.assign(settings, { up_mbps: 100, down_mbps: 100 })
   return settings

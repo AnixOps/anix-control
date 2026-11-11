@@ -624,7 +624,7 @@ export default {
       anxBareListenPort: 'Also serve the bare jacket (random-looking bytes, like SS-2022 but with forward secrecy, post-quantum keys and revocable devices) on this TCP port, for users dialing a domestic entry only. Do not turn it on for cross-border nodes (the GFW flags fully random traffic), so it needs the no-SNI mode. Subscriptions add bare_port and clients try wg, then bare, then no-SNI A2. Open the TCP port in the firewall. Empty = off. Needs an anx-node whose ANX inbound serves the bare jacket.',
       serverKey: 'Server key of the 2022 ciphers; empty derives it from the node.',
       snellPsk: 'Shared by every user of this protocol; each user also logs in with their own user key (their UUID), so only clients that can send a user key connect. Subscriptions list this protocol in the Surge format only. Needs an Agent of protocol revision 3 or later.',
-      snellVersion: '1 to 6; a version 4 node also serves version 5 clients. Obfuscation applies to versions 1 to 4 and the mode to version 6.',
+      snellVersion: '1 to 6; a version 4 node also serves version 5 clients. Obfuscation applies to versions 1 to 4 and the mode to version 6, which needs a PSK of at least 12 bytes.',
       privateKey: 'Empty generates a key pair when saved; a stored private key shows as ********.',
       publicKey: 'The public key subscriptions hand to clients; empty derives it from the private key.'
     }

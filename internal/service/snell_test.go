@@ -34,14 +34,16 @@ func TestValidateNodeProtocol_Snell(t *testing.T) {
 	}
 	for _, settings := range []string{
 		`{"psk":"shared-psk"}`, `{"psk":"shared-psk","version":1}`, `{"psk":"shared-psk","version":4,"obfs":"http"}`,
-		`{"psk":"shared-psk","version":5}`, `{"psk":"shared-psk","version":6}`, `{"psk":"shared-psk","version":6,"mode":"unsafe-raw"}`,
+		`{"psk":"shared-psk","version":5}`, `{"psk":"shared-psk-12","version":6}`, `{"psk":"shared-psk-12","version":6,"mode":"unsafe-raw"}`,
+		// The mask of a stored psk, as a write is checked before it is stored.
+		`{"psk":"********","version":6}`,
 	} {
 		require.NoError(t, ValidateNodeProtocol(protocol(settings)), settings)
 	}
 	for _, settings := range []string{
-		``, `{}`, `[]`, `{"psk":"has space"}`, `{"psk":"a,b"}`, `{"psk":"shared-psk","version":0}`, `{"psk":"shared-psk","version":7}`,
-		`{"psk":"shared-psk","obfs":"tls"}`, `{"psk":"shared-psk","version":6,"obfs":"http"}`,
-		`{"psk":"shared-psk","mode":"default"}`, `{"psk":"shared-psk","version":6,"mode":"fast"}`,
+		``, `{}`, `[]`, `{"psk":"has space"}`, `{"psk":"a,b"}`, `{"psk":"line\nbreak"}`, `{"psk":"shared-psk","version":0}`, `{"psk":"shared-psk","version":7}`,
+		`{"psk":"shared-psk","obfs":"tls"}`, `{"psk":"shared-psk-12","version":6,"obfs":"http"}`,
+		`{"psk":"shared-psk","mode":"default"}`, `{"psk":"shared-psk-12","version":6,"mode":"fast"}`, `{"psk":"short-psk","version":6}`,
 	} {
 		require.ErrorIs(t, ValidateNodeProtocol(protocol(settings)), ErrInvalidNodeProtocol, settings)
 	}
@@ -56,7 +58,8 @@ func TestValidateNodeProtocol_Snell(t *testing.T) {
 }
 
 func TestNodeProtocolToParsedNode_Snell(t *testing.T) {
-	settings := `{"psk":"shared-psk","version":4}`
+	// The stored spelling may differ from what the node gets.
+	settings := `{"psk":"shared-psk\n","version":"4"}`
 	parsed := (&SubscriptionService{}).nodeProtocolToParsedNode(
 		&model.Node{ID: 1, Name: "node", Host: "snell.example.com"},
 		&model.NodeProtocol{ID: 3, NodeID: 1, Name: "snell", Type: model.ProtocolSnell, Port: 6160, Settings: &settings},
@@ -65,5 +68,6 @@ func TestNodeProtocolToParsedNode_Snell(t *testing.T) {
 	// The subscriber's key is their UUID; the psk is the node's.
 	require.Equal(t, "user-uuid", parsed.Password)
 	require.Equal(t, "shared-psk", parsed.Settings["psk"])
+	require.Equal(t, 4, parsed.Settings["version"])
 	require.False(t, parsed.TLS)
 }

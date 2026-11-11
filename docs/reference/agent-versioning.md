@@ -46,7 +46,7 @@ judges.
 | --- | --- | --- |
 | 1 | v5.0.0 | The 5.0.0 contract (every Agent before the label). |
 | 2 | v5.0.2 | users.v1 extra `ss2022_key` (`agentcontrol.UserExtraSS2022Key`): the user's stored Shadowsocks 2022 key, std base64 of 32 bytes (the 128-bit ciphers use the first 16). The Agent serves it as a second Shadowsocks 2022 user next to the legacy key; subscriptions offer it only at nodes whose Agent speaks revision 2 or later over the mTLS stream. |
-| 3 | next release | Node type `snell` in the configuration answers (`agentcontrol.ProtocolRevisionSnell`): `psk`, `version` and, when set, `obfs` and `mode`; a user's key is their UUID. An older Agent answers `config_invalid` for a Snell protocol and keeps running its other protocols, so upgrade the Agent before adding one. |
+| 3 | next release | Node type `snell` in the configuration answers (`agentcontrol.ProtocolRevisionSnell`): `psk`, `version` and, when set, `obfs` and `mode`; a user's key is their UUID. An older Agent answers `config_invalid` for a Snell protocol and keeps running its other protocols, so upgrade the Agent before adding one. The kernel's snell inbound came after anx-node v0.2.0 and is in no release yet; `KernelMinVersion` stays as it is until one exists. |
 
 ## Kernel
 

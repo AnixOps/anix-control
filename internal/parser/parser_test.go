@@ -413,7 +413,9 @@ func TestSurgeFormatter_Snell(t *testing.T) {
 	assert.Contains(t, string(output), "Snell v6 = snell, example.com, 6161, psk=shared, version=6, mode=unshaped, userkey=test-uuid, reuse=true")
 	assert.NotContains(t, string(output), "No PSK =")
 
-	// No other format has a user key: a Snell node is left out of them.
+	// The other formatters leave a Snell node out: sing-box 1.14 has a
+	// snell outbound with a userkey, but an older one refuses a whole
+	// profile over an outbound type it does not know.
 	for _, format := range []Formatter{&ClashFormatter{}, &LoonFormatter{}, &SingBoxFormatter{}} {
 		output, err := format.Format(nodes[:1], ctx)
 		require.NoError(t, err)

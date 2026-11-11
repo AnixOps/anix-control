@@ -61,14 +61,16 @@ Shadowsocks 2022（`2022-blake3-*`）的客户端密码是「服务器密钥:用
 
 | 字段 | 默认 | 说明 |
 |------|------|------|
-| `psk` | 无，必填 | 本协议所有用户共用的预共享密钥，1–255 字节，不能有空格和逗号。管理端新建时随机生成，保存后显示为 `********` |
+| `psk` | 无，必填 | 本协议所有用户共用的预共享密钥，1–255 字节（版本 6 至少 12 字节），不能有空白、控制字符和逗号。管理端新建时随机生成，保存后显示为 `********` |
 | `version` | `4` | 1–6。版本 4 的节点同时接受版本 5 的客户端 |
 | `obfs` | 空 | `http`，只用于版本 1–4 |
 | `mode` | 空 | 只用于版本 6：`default`、`unshaped`、`unsafe-raw` |
 
 - 用户：内核的 Snell 入站是「一个 PSK + 每个用户一个用户密钥」。用户密钥就是用户的 UUID（Surge 的 `userkey`），节点按用户统计流量和在线 IP；用户到期后节点不再认他的密钥。没有用户密钥、或密钥不认识的连接会被直接关闭。
-- 订阅：只有 Surge 格式给出 Snell 节点（`snell, 地址, 端口, psk=…, version=…, userkey=…`）。Clash / mihomo、Loon、sing-box 等格式没有用户密钥字段，连不上多用户服务端，所以不输出。
-- 版本要求：Agent 协议修订 3 及以上（见 `docs/reference/agent-versioning.md`），内核需带 snell 入站。旧 Agent 收到 Snell 协议会回报 `config_invalid`，节点上的其他协议照常运行。
+- 订阅：只有 Surge 格式给出 Snell 节点（`snell, 地址, 端口, psk=…, version=…, userkey=…`），其他格式不输出。
+  - `userkey` 这个参数名来自内核的协议规格（networkcore_anixops `docs/protocols/snell.md` §8）。Surge 公开手册的 Snell 策略参数里没有它，**还没有用真实的 Surge 客户端验证过**：Surge 如果不发送用户密钥，就连不上节点。上线前先验证。
+  - sing-box 1.14 起有 `snell` 出站和 `userkey` 字段（版本 4 和 6），是文档里写明支持多用户服务端的客户端。Control 的 sing-box 格式还没有输出它（AnyTLS 也一样）：旧版 sing-box 遇到不认识的出站类型会拒绝整份配置。
+- 版本要求：Agent 协议修订 3 及以上（见 `docs/reference/agent-versioning.md`），内核需带 snell 入站。snell 入站在内核 v0.2.0 之后才加入，写这段时还没有带它的 anx-node 发行版：已发行的内核会拒绝这个入站，而兼容性判断不会提示。旧 Agent 收到 Snell 协议会回报 `config_invalid`，节点上的其他协议照常运行。
 
 ### Panabit iWAN
 

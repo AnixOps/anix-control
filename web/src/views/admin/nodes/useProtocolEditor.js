@@ -5,7 +5,7 @@
 // the server keeps the stored value.
 import { computed, reactive, ref, watch } from 'vue'
 import { adaptTransport, capabilitiesOf, hasFixedTransport, transportProblem } from './protocolCapabilities'
-import { PROTOCOL_SECTIONS, defaultRealityFor, defaultSettingsFor } from './protocolFields'
+import { PROTOCOL_SECTIONS, defaultRealityFor, defaultSettingsFor, generatedSettingsFor } from './protocolFields'
 
 export const PROTOCOL_TYPES = ['vmess', 'vless', 'trojan', 'shadowsocks', 'hysteria2', 'tuic', 'snell', 'wireguard', 'iwan', 'anx']
 
@@ -135,7 +135,8 @@ export function wireGuardFormFromSettings(settings = {}) {
   }
 }
 
-// A template of GET /admin/protocol-templates as editor JSON.
+// A template of GET /admin/protocol-templates as editor JSON. A template
+// cannot carry a generated setting (a Snell PSK), so it is made here.
 export function templateToJson(tpl) {
   return {
     type: tpl.type,
@@ -144,7 +145,7 @@ export function templateToJson(tpl) {
     transport: tpl.transport || 'tcp',
     enable: 1,
     show: 1,
-    settings: parseObject(tpl.settings),
+    settings: { ...generatedSettingsFor(tpl.type), ...parseObject(tpl.settings) },
     tls_settings: parseObject(tpl.tls_settings),
     transport_settings: parseObject(tpl.transport_settings),
     reality_settings: parseObject(tpl.reality_settings)

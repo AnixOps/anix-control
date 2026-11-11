@@ -1170,6 +1170,10 @@ func (s *SubscriptionService) nodeProtocolToParsedNode(node *model.Node, protoco
 		applyANXUser(parsed, ctx)
 		parsed.PublicKey = ANXClientPublicKey(anxServerPublicKey(s.db, node.ID), parsed.Settings)
 	}
+	if parsed.Type == string(model.ProtocolSnell) {
+		// The values the node gets, not the stored spelling.
+		buildSnellConfig(parsed.Settings, parsed.Settings)
+	}
 	// After the WireGuard step, which derives the server public key from it.
 	stripServerPrivateKeys(parsed.Settings)
 

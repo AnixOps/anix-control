@@ -221,6 +221,15 @@ describe('Snell protocol', () => {
     expect(transportProblem({ type: 'snell', tls: 1, transport: 'tcp' })).toMatchObject({ field: 'tls' })
     expect(transportProblem({ type: 'snell', tls: 0, transport: 'ws' })).toMatchObject({ field: 'transport' })
   })
+
+  it('gets a random PSK from the template too', () => {
+    const editor = useProtocolEditor()
+    editor.startCreate()
+    editor.applyTemplate({ type: 'snell', name: 'Snell', default_port: 6160, tls: 0, transport: 'tcp', settings: '{"version":4}' })
+    const settings = JSON.parse(editor.buildPayload().payload.settings)
+    expect(settings).toMatchObject({ version: 4 })
+    expect(settings.psk).toMatch(/^[0-9a-f]{32}$/)
+  })
 })
 
 describe('ANX protocol fields', () => {
