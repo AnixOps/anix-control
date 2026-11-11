@@ -14,7 +14,7 @@
 </template>
 
 <script setup>
-// The node area's sections (节点 / 拓扑 / 转发概览 / 路由 / DNS / 分流), one
+// The node area's sections (节点 / 转发概览 / 路由 / DNS / 分流), one
 // network area since the 转发 sidebar item was folded into 节点
 // (docs/design/node-unification), plus 反向代理, with the polling line of the forwarding
 // pages (D5: "更新于 N 秒前" and refresh). DNS holds the providers of entry
@@ -37,11 +37,10 @@ defineProps({
 const emit = defineEmits(['refresh'])
 const router = useRouter()
 const { t } = useAppI18n()
-const PATHS = { nodes: '/admin/nodes', topology: '/admin/topology', overview: '/admin/forward/overview', routes: '/admin/forward/routes', dns: '/admin/forward/dns', egress: '/admin/forward/egress', standby: '/admin/forward/standby', 'reverse-proxies': '/admin/forward/reverse-proxies' }
+const PATHS = { nodes: '/admin/nodes', overview: '/admin/forward/overview', routes: '/admin/forward/routes', dns: '/admin/forward/dns', egress: '/admin/forward/egress', standby: '/admin/forward/standby', 'reverse-proxies': '/admin/forward/reverse-proxies' }
 const FORWARD = new Set(['overview', 'routes', 'dns'])
 const options = computed(() => [
   { value: 'nodes', label: t('forwardV4.nav.nodes') },
-  { value: 'topology', label: t('topology.nav') },
   { value: 'overview', label: t('forwardV4.nav.overview') },
   { value: 'routes', label: t('forwardV4.nav.routes') },
   { value: 'dns', label: t('forwardDns.nav') },

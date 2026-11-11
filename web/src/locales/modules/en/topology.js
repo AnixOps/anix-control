@@ -1,7 +1,6 @@
 // Network topology (src/views/admin/Topology.vue).
 export default {
   topology: {
-    nav: 'Topology',
     title: 'Network topology',
     description: 'Every device and the lines between them. Select a device or a line to see where it goes.',
     loadFailed: 'The topology did not load',

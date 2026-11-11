@@ -1,7 +1,6 @@
 // 网络拓扑 (src/views/admin/Topology.vue).
 export default {
   topology: {
-    nav: '拓扑',
     title: '网络拓扑',
     description: '所有设备和它们之间的线路。点一台设备或一条线路，看它经过哪里。',
     loadFailed: '拓扑加载失败',

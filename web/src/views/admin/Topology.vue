@@ -1,10 +1,8 @@
 <template>
   <section class="fwd-page" data-testid="topology">
-    <ForwardAreaNav area="topology" :seconds-ago="secondsAgo" :loading="loading" refreshable @refresh="refresh" />
-
     <UiPageHeader :title="t('topology.title')" :description="t('topology.description')">
       <template #actions>
-        <UiSegmentedControl :model-value="mode" :options="modes" :aria-label="t('topology.view.label')" @update:model-value="setMode" />
+        <UiIconButton :icon="RefreshCw" :label="t('forwardV4.updated.refresh')" :disabled="loading" @click="refresh" />
       </template>
     </UiPageHeader>
 
@@ -30,6 +28,10 @@
 
       <div v-else class="topo">
         <div class="topo__canvas">
+          <div class="topo__bar">
+            <UiSegmentedControl :model-value="mode" :options="modes" size="sm" :aria-label="t('topology.view.label')" @update:model-value="setMode" />
+            <span v-if="secondsAgo !== null" class="fwd-muted">{{ secondsAgo < 5 ? t('forwardV4.updated.now') : t('forwardV4.updated.ago', { n: secondsAgo }) }}</span>
+          </div>
           <TopologyMap v-if="mode === 'map'" :devices="topology.devices" :links="topology.links" :focus="focus" :selected="selectedDevice" :label="t('topology.view.map')" @select="selectDevice" @hover="hovered = $event" />
           <TopologyGraph v-else :devices="topology.devices" :links="topology.links" :focus="focus" :selected="selectedDevice" @select="selectDevice" @hover="hovered = $event" />
 
@@ -132,11 +134,10 @@
 // egress routes. Polls every 30 s while visible.
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { MapPin, Route as RouteIcon, Server, Users, X } from '@lucide/vue'
+import { MapPin, RefreshCw, Route as RouteIcon, Server, Users, X } from '@lucide/vue'
 import { UiBadge, UiButton, UiCard, UiEmptyState, UiErrorState, UiIconButton, UiMetricCard, UiPageHeader, UiSegmentedControl, UiSkeleton, useFormat } from '@/ui'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { getKernelAdminNodes, listKernelEgressRoutes } from '@/api/kernel'
-import ForwardAreaNav from '@/components/forward/ForwardAreaNav.vue'
 import { loadForwardSnapshot } from '@/components/forward/forwardData'
 import { usePolling } from '@/components/forward/usePolling'
 import TopologyGraph from '@/components/topology/TopologyGraph.vue'
@@ -230,6 +231,14 @@ const stageRole = (item, index) => (item.kind === 'egress' ? 'exit' : index === 
   background: var(--bg-elevated);
 }
 
+.topo__bar {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4) 0;
+}
+
 .topo__legend {
   display: flex;
   flex-wrap: wrap;
@@ -312,7 +321,7 @@ const stageRole = (item, index) => (item.kind === 'egress' ? 'exit' : index === 
 }
 
 .topo__panel {
-  max-height: calc(clamp(340px, 30vw, 560px) + 44px);
+  max-height: calc(clamp(340px, 30vw, 560px) + 96px);
   overflow: auto;
 }
 
