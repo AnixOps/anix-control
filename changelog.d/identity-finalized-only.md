@@ -13,7 +13,9 @@
 - identity-platform creates its first signing key when it first signs, so
   the administrator of a fresh install can log in right after the claim
   instead of after the next key rotation pass (up to a minute, during which
-  the failed logins counted toward the login limit).
+  the failed logins counted toward the login limit). Control fetches
+  identity's keys while it answers the first request that carries a token
+  of an unknown key, so that request is no longer refused as expired.
 
 ### Removed
 

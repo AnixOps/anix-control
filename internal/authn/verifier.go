@@ -27,7 +27,8 @@ var (
 // IdentityKeys supplies the identity module's token keys.
 type IdentityKeys interface {
 	KeySet() identitytoken.KeySet
-	// Kick asks for a refresh: a token named a key the kernel does not know.
+	// Kick refreshes the keys, waiting briefly: a token named a key the
+	// kernel does not know.
 	Kick()
 }
 
@@ -83,6 +84,7 @@ func (v *Verifier) verifyIdentity(token, kid string) (*utils.Claims, error) {
 	keys := v.IdentityKeys.KeySet()
 	if _, known := keys[kid]; !known && kid != "" {
 		v.IdentityKeys.Kick()
+		keys = v.IdentityKeys.KeySet()
 	}
 	verified, err := identitytoken.Verify(token, keys, identitytoken.Expectations{Issuer: IdentityIssuer, Audience: IdentityAudience})
 	if err != nil {
