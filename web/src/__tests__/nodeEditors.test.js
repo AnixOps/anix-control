@@ -4,6 +4,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import { PROTOCOL_FIELDS, anxDestBehaviorsWarnings, anxDestWarnings, defaultSettingsFor, fieldsFor, parseJsonObject, readField, writeField } from '@/views/admin/nodes/protocolFields'
+import { transportProblem, transportsFor } from '@/views/admin/nodes/protocolCapabilities'
 import { useProtocolEditor } from '@/views/admin/nodes/useProtocolEditor'
 import { buildNodePayload, displayStatus, nodeFormFrom, parentCandidatesFor } from '@/views/admin/nodes/nodeData'
 
@@ -130,6 +131,24 @@ describe('useProtocolEditor', () => {
     editor.jsonEditorContent.value = JSON.stringify({ type: 'hysteria2', port: 443, tls: 1, transport: 'tcp' })
     expect(editor.buildPayload().payload).toMatchObject({ transport: 'udp', tls: 1 })
   })
+
+  it('keeps a stored h2 transport without offering it', () => {
+    expect(transportsFor('vless', 1, 'tcp')).not.toContain('h2')
+    expect(transportsFor('vless', 1, 'h2')).toContain('h2')
+    expect(transportsFor('vless', 2, 'h2')).not.toContain('h2')
+    expect(transportProblem({ type: 'vless', tls: 2, transport: 'h2' })).toMatchObject({ field: 'transport', value: 'h2' })
+
+    // The JSON tab takes h2 only for the protocol that already has it.
+    const h2 = { type: 'vless', port: 443, tls: 1, transport: 'h2' }
+    const editor = useProtocolEditor()
+    editor.startEdit(h2)
+    editor.protocolForm.mode = 'json'
+    expect(editor.buildPayload().payload).toMatchObject({ transport: 'h2' })
+    editor.startCreate()
+    editor.protocolForm.mode = 'json'
+    editor.jsonEditorContent.value = JSON.stringify(h2)
+    expect(editor.buildPayload()).toMatchObject({ error: 'unsupported', problem: { field: 'transport', value: 'h2' } })
+  })
 })
 
 describe('protocol form fields', () => {
@@ -182,6 +201,34 @@ describe('protocol form fields', () => {
     stored.protocolForm.mode = 'visual'
     expect(stored.protocolForm).toMatchObject({ type: 'trojan', port: 8443, tls: 1, transport: 'ws' })
     expect(stored.protocolModel.value.transport_settings).toEqual({ path: '/w' })
+  })
+})
+
+describe('Snell protocol', () => {
+  it('is TCP without TLS and starts with a random PSK', async () => {
+    const editor = useProtocolEditor()
+    editor.startCreate()
+    editor.protocolForm.type = 'snell'
+    await nextTick()
+    expect(editor.protocolForm).toMatchObject({ tls: 0, transport: 'tcp' })
+    const { payload } = editor.buildPayload()
+    expect(payload).toMatchObject({ type: 'snell', tls: 0, transport: 'tcp' })
+    const settings = JSON.parse(payload.settings)
+    expect(settings.version).toBe(4)
+    expect(settings.psk).toMatch(/^[0-9a-f]{32}$/)
+    expect(defaultSettingsFor('snell').psk).not.toBe(settings.psk)
+    expect(fieldsFor({ type: 'snell', tls: 0, transport: 'tcp', settings }).map(field => field.key)).toEqual(['psk', 'version', 'obfs', 'mode'])
+    expect(transportProblem({ type: 'snell', tls: 1, transport: 'tcp' })).toMatchObject({ field: 'tls' })
+    expect(transportProblem({ type: 'snell', tls: 0, transport: 'ws' })).toMatchObject({ field: 'transport' })
+  })
+
+  it('gets a random PSK from the template too', () => {
+    const editor = useProtocolEditor()
+    editor.startCreate()
+    editor.applyTemplate({ type: 'snell', name: 'Snell', default_port: 6160, tls: 0, transport: 'tcp', settings: '{"version":4}' })
+    const settings = JSON.parse(editor.buildPayload().payload.settings)
+    expect(settings).toMatchObject({ version: 4 })
+    expect(settings.psk).toMatch(/^[0-9a-f]{32}$/)
   })
 })
 

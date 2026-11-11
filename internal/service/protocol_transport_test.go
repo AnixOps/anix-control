@@ -15,9 +15,12 @@ func TestValidateProtocolTransport(t *testing.T) {
 		wantError bool
 	}{
 		{"vless ws", model.NodeProtocol{Type: model.ProtocolVLESS, Transport: str("ws"), TLS: 1}, false},
-		{"vless reality grpc", model.NodeProtocol{Type: model.ProtocolVLESS, Transport: str("grpc"), TLS: 2}, false},
+		{"vless reality", model.NodeProtocol{Type: model.ProtocolVLESS, Transport: str("tcp"), TLS: 2}, false},
+		{"vless reality grpc", model.NodeProtocol{Type: model.ProtocolVLESS, Transport: str("grpc"), TLS: 2}, true},
+		{"vless reality h2", model.NodeProtocol{Type: model.ProtocolVLESS, Transport: str("h2"), TLS: 2}, true},
+		{"vless h2 label", model.NodeProtocol{Type: model.ProtocolVLESS, Transport: str("h2"), TLS: 1}, false},
 		{"vless reality ws", model.NodeProtocol{Type: model.ProtocolVLESS, Transport: str("ws"), TLS: 2}, true},
-		{"trojan reality", model.NodeProtocol{Type: model.ProtocolTrojan, Transport: str("tcp"), TLS: 2}, false},
+		{"trojan reality", model.NodeProtocol{Type: model.ProtocolTrojan, Transport: str("tcp"), TLS: 2}, true},
 		{"vmess reality", model.NodeProtocol{Type: model.ProtocolVMess, Transport: str("tcp"), TLS: 2}, true},
 		{"shadowsocks tcp", model.NodeProtocol{Type: model.ProtocolShadowsocks, Transport: str("tcp")}, false},
 		{"shadowsocks udp label", model.NodeProtocol{Type: model.ProtocolShadowsocks, Transport: str("udp")}, false},

@@ -76,15 +76,16 @@
             :data-testid="`protocol-field-${field.key}`"
             @update:model-value="value => update(field, String(value).trim())"
           />
-          <div v-else-if="field.action === 'shortId'" class="protocol-fields__with-action">
+          <div v-else-if="field.generate" class="protocol-fields__with-action">
             <UiTextField
               :model-value="String(readField(modelValue, field))"
               size="md"
               :label="labelOf(field)"
+              :help="helpOf(field)"
               :data-testid="`protocol-field-${field.key}`"
               @update:model-value="value => update(field, String(value).trim())"
             />
-            <UiButton size="md" :icon="Dices" :data-testid="`protocol-generate-${field.key}`" @click="update(field, randomShortId())">{{ t(`${K}.generate`) }}</UiButton>
+            <UiButton size="md" :icon="Dices" :data-testid="`protocol-generate-${field.key}`" @click="update(field, field.generate())">{{ t(`${K}.generate`) }}</UiButton>
           </div>
           <UiTextField
             v-else
@@ -121,7 +122,7 @@ import UiSwitch from '@/ui/UiSwitch.vue'
 import UiTextField from '@/ui/UiTextField.vue'
 import UiTextarea from '@/ui/UiTextarea.vue'
 import { useAppI18n } from '@/composables/useAppI18n'
-import { FIELD_GROUPS, PROTOCOL_SECTIONS, fieldsFor, parseJsonObject, randomShortId, readField, writeField } from './protocolFields'
+import { FIELD_GROUPS, PROTOCOL_SECTIONS, fieldsFor, parseJsonObject, readField, writeField } from './protocolFields'
 
 const props = defineProps({
   modelValue: { type: Object, required: true },

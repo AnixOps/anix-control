@@ -113,5 +113,14 @@ func protocolTemplates() []ProtocolTemplate {
 			Settings:    `{"server_names":["www.apple.com"],"dest":"www.apple.com:443","alpn":["h2","http/1.1"]}`,
 			Transport:   "tcp",
 		},
+		{
+			Type:        "snell",
+			Name:        "Snell",
+			Description: "Snell v4，TCP，自带加密；PSK 在表单里随机生成，用户用各自的密钥登录",
+			DefaultPort: 6160,
+			TLS:         0,
+			Settings:    `{"version":4}`,
+			Transport:   "tcp",
+		},
 	}
 }

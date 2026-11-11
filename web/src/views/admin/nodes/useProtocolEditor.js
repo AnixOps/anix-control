@@ -5,9 +5,9 @@
 // the server keeps the stored value.
 import { computed, reactive, ref, watch } from 'vue'
 import { adaptTransport, capabilitiesOf, hasFixedTransport, transportProblem } from './protocolCapabilities'
-import { PROTOCOL_SECTIONS, defaultRealityFor, defaultSettingsFor } from './protocolFields'
+import { PROTOCOL_SECTIONS, defaultRealityFor, defaultSettingsFor, generatedSettingsFor } from './protocolFields'
 
-export const PROTOCOL_TYPES = ['vmess', 'vless', 'trojan', 'shadowsocks', 'hysteria2', 'tuic', 'wireguard', 'iwan', 'anx']
+export const PROTOCOL_TYPES = ['vmess', 'vless', 'trojan', 'shadowsocks', 'hysteria2', 'tuic', 'snell', 'wireguard', 'iwan', 'anx']
 
 export const JSON_PLACEHOLDER = `{
   "type": "vless",
@@ -135,7 +135,8 @@ export function wireGuardFormFromSettings(settings = {}) {
   }
 }
 
-// A template of GET /admin/protocol-templates as editor JSON.
+// A template of GET /admin/protocol-templates as editor JSON. A template
+// cannot carry a generated setting (a Snell PSK), so it is made here.
 export function templateToJson(tpl) {
   return {
     type: tpl.type,
@@ -144,7 +145,7 @@ export function templateToJson(tpl) {
     transport: tpl.transport || 'tcp',
     enable: 1,
     show: 1,
-    settings: parseObject(tpl.settings),
+    settings: { ...generatedSettingsFor(tpl.type), ...parseObject(tpl.settings) },
     tls_settings: parseObject(tpl.tls_settings),
     transport_settings: parseObject(tpl.transport_settings),
     reality_settings: parseObject(tpl.reality_settings)
@@ -210,6 +211,9 @@ export function useProtocolEditor() {
   // custom_config has no form field: it rides along from the stored protocol
   // or the JSON tab.
   let customConfig = null
+  // The transport of the protocol being edited: a legacy one (h2, quic) is
+  // kept, never newly chosen.
+  let storedTransport = ''
   // Loading a protocol or template sets type, TLS and transport in one go;
   // the watchers below only react to the user's own changes.
   let hydrating = false
@@ -377,6 +381,7 @@ export function useProtocolEditor() {
   function startCreate() {
     editing.value = false
     selectedTemplate.value = ''
+    storedTransport = ''
     resetWireGuardForm()
     resetIwanForm()
     customConfig = null
@@ -387,6 +392,7 @@ export function useProtocolEditor() {
   function startEdit(protocol) {
     editing.value = true
     selectedTemplate.value = ''
+    storedTransport = protocol.transport || ''
     const json = protocolToJson(protocol)
     jsonToVisual(json)
     setJson(json)
@@ -424,7 +430,7 @@ export function useProtocolEditor() {
   function buildPayload() {
     const built = buildRawPayload()
     if (built.error) return built
-    const problem = transportProblem(built.payload)
+    const problem = transportProblem(built.payload, storedTransport)
     return problem ? { error: 'unsupported', problem } : built
   }
 

@@ -1,22 +1,27 @@
 // What each node protocol type runs on: its transports and TLS modes
 // (0 none, 1 TLS, 2 Reality). Shadowsocks has no stream transport and no TLS;
-// Hysteria2 and TUIC are QUIC on UDP and always TLS; WireGuard and iWAN are
-// UDP. Control checks the same rules again (service.validateProtocolTransport).
+// Trojan is always TLS on the node; Hysteria2 and TUIC are QUIC on UDP and
+// always TLS; WireGuard and iWAN are UDP; Snell is TCP with its own
+// encryption. Control checks the same rules again
+// (service.validateProtocolTransport). Everything offered here must be listed
+// in contracts/agent/v1/protocol-combinations.json, the combinations the
+// Agent's kernel runs (protocolCombinations.test.js).
 
-export const STREAM_TRANSPORTS = Object.freeze(['tcp', 'ws', 'grpc', 'h2', 'httpupgrade'])
-// Reality runs on tcp, grpc and h2 only.
-export const REALITY_TRANSPORTS = Object.freeze(['tcp', 'grpc', 'h2'])
+export const STREAM_TRANSPORTS = Object.freeze(['tcp', 'ws', 'grpc', 'httpupgrade'])
+// Reality runs directly on tcp only.
+export const REALITY_TRANSPORTS = Object.freeze(['tcp'])
 // Transports the old editor offered and stored protocols may still carry:
-// kept when loaded, never offered for a new value.
-export const LEGACY_TRANSPORTS = Object.freeze(['quic'])
+// kept when loaded, never offered for a new value. The kernel runs neither.
+export const LEGACY_TRANSPORTS = Object.freeze(['quic', 'h2'])
 
 export const PROTOCOL_CAPABILITIES = Object.freeze({
   vless: { transports: STREAM_TRANSPORTS, tls: [0, 1, 2] },
   vmess: { transports: STREAM_TRANSPORTS, tls: [0, 1] },
-  trojan: { transports: STREAM_TRANSPORTS, tls: [0, 1, 2] },
+  trojan: { transports: STREAM_TRANSPORTS, tls: [1] },
   shadowsocks: { transports: ['tcp'], tls: [0] },
   hysteria2: { transports: ['udp'], tls: [1] },
   tuic: { transports: ['udp'], tls: [1] },
+  snell: { transports: ['tcp'], tls: [0] },
   wireguard: { transports: ['udp'], tls: [0] },
   iwan: { transports: ['udp'], tls: [0] },
   // ANX-A runs its own jacket over TCP: no stream transport, no TLS of the node's.
@@ -53,8 +58,9 @@ export function adaptTransport(form) {
 }
 
 // The first problem of a protocol body ({ type, tls, transport }), or null:
-// { field: 'transport' | 'tls', type, value }.
-export function transportProblem(protocol) {
+// { field: 'transport' | 'tls', type, value }. stored is the transport the
+// protocol was loaded with: a legacy transport passes only as that one.
+export function transportProblem(protocol, stored = '') {
   const type = String(protocol.type || '')
   if (!PROTOCOL_CAPABILITIES[type]) return null
   const caps = PROTOCOL_CAPABILITIES[type]
@@ -62,6 +68,6 @@ export function transportProblem(protocol) {
   if (!caps.tls.includes(tls)) return { field: 'tls', type, value: tls }
   const transport = String(protocol.transport || '')
   if (!transport) return null
-  if (!transportsFor(type, tls, transport).includes(transport)) return { field: 'transport', type, value: transport }
+  if (!transportsFor(type, tls, stored).includes(transport)) return { field: 'transport', type, value: transport }
   return null
 }

@@ -1110,6 +1110,8 @@ func (f *SurgeFormatter) formatNode(node *model.ParsedNode, ctx *model.TemplateR
 		proxy = f.formatHysteria2(node, ctx)
 	case "anytls":
 		proxy = f.formatAnyTLS(node, ctx)
+	case "snell":
+		proxy = f.formatSnell(node, ctx)
 	default:
 		return "", ""
 	}
@@ -1327,6 +1329,43 @@ func (f *SurgeFormatter) formatAnyTLS(node *model.ParsedNode, ctx *model.Templat
 	} else {
 		parts = append(parts, "skip-cert-verify=false")
 	}
+
+	return strings.Join(parts, ", ")
+}
+
+// formatSnell is a Snell node line: the node's psk and, as userkey, the
+// subscriber's key at a multi-user server. Surge's manual does not list
+// userkey (the name is the kernel's, docs/protocols/snell.md section 8), so
+// the line is unverified until a real Surge logs in with it. No other
+// formatter writes Snell nodes.
+func (f *SurgeFormatter) formatSnell(node *model.ParsedNode, ctx *model.TemplateRenderContext) string {
+	psk, _ := node.Settings["psk"].(string)
+	if psk == "" {
+		return ""
+	}
+	userKey := node.Password
+	if userKey == "" && ctx != nil {
+		userKey = ctx.UUID
+	}
+	version := node.Settings["version"]
+	if version == nil {
+		version = 4
+	}
+
+	// snell, server, port, psk=psk, version=4, obfs=http, userkey=key
+	parts := []string{
+		"snell",
+		node.Server,
+		fmt.Sprintf("%d", node.Port),
+		fmt.Sprintf("psk=%s", psk),
+		fmt.Sprintf("version=%v", version),
+	}
+	for _, key := range []string{"mode", "obfs"} {
+		if value, ok := node.Settings[key].(string); ok && value != "" {
+			parts = append(parts, fmt.Sprintf("%s=%s", key, value))
+		}
+	}
+	parts = append(parts, fmt.Sprintf("userkey=%s", userKey), "reuse=true")
 
 	return strings.Join(parts, ", ")
 }

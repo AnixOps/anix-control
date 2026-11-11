@@ -11920,7 +11920,8 @@ const docTemplate = `{
                 "anytls",
                 "wireguard",
                 "iwan",
-                "anx"
+                "anx",
+                "snell"
             ],
             "x-enum-varnames": [
                 "ProtocolVMess",
@@ -11932,7 +11933,8 @@ const docTemplate = `{
                 "ProtocolAnyTLS",
                 "ProtocolWireGuard",
                 "ProtocolIWAN",
-                "ProtocolANX"
+                "ProtocolANX",
+                "ProtocolSnell"
             ]
         },
         "model.RegisterRequest": {

@@ -831,6 +831,7 @@ definitions:
     - wireguard
     - iwan
     - anx
+    - snell
     type: string
     x-enum-varnames:
     - ProtocolVMess
@@ -843,6 +844,7 @@ definitions:
     - ProtocolWireGuard
     - ProtocolIWAN
     - ProtocolANX
+    - ProtocolSnell
   model.RegisterRequest:
     properties:
       email:

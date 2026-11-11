@@ -399,6 +399,30 @@ func TestSurgeFormatter_GroupOnlyIncludesSupportedNodes(t *testing.T) {
 	assert.Contains(t, string(output), "Proxy = select, auto, fallback, VMess Supported")
 }
 
+func TestSurgeFormatter_Snell(t *testing.T) {
+	ctx := &model.TemplateRenderContext{UUID: "test-uuid"}
+	nodes := []*model.ParsedNode{
+		{Name: "Snell", Type: "snell", Server: "example.com", Port: 6160, Password: "user-uuid", Settings: map[string]any{"psk": "shared", "version": float64(4), "obfs": "http"}},
+		{Name: "Snell v6", Type: "snell", Server: "example.com", Port: 6161, Settings: map[string]any{"psk": "shared", "version": float64(6), "mode": "unshaped"}},
+		{Name: "No PSK", Type: "snell", Server: "example.com", Port: 6162, Settings: map[string]any{}},
+	}
+
+	output, err := (&SurgeFormatter{}).Format(nodes, ctx)
+	require.NoError(t, err)
+	assert.Contains(t, string(output), "Snell = snell, example.com, 6160, psk=shared, version=4, obfs=http, userkey=user-uuid, reuse=true")
+	assert.Contains(t, string(output), "Snell v6 = snell, example.com, 6161, psk=shared, version=6, mode=unshaped, userkey=test-uuid, reuse=true")
+	assert.NotContains(t, string(output), "No PSK =")
+
+	// The other formatters leave a Snell node out: sing-box 1.14 has a
+	// snell outbound with a userkey, but an older one refuses a whole
+	// profile over an outbound type it does not know.
+	for _, format := range []Formatter{&ClashFormatter{}, &LoonFormatter{}, &SingBoxFormatter{}} {
+		output, err := format.Format(nodes[:1], ctx)
+		require.NoError(t, err)
+		assert.NotContains(t, string(output), "shared", format.Name())
+	}
+}
+
 func TestSurgeFormatter_Properties(t *testing.T) {
 	f := &SurgeFormatter{}
 	assert.Equal(t, "surge", f.Name())

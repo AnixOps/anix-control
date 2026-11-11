@@ -174,9 +174,9 @@ const step = ref('form') // pick | form
 const saving = ref(false)
 const formError = ref('')
 
-const MARKS = { vless: 'VL', vmess: 'VM', trojan: 'TJ', shadowsocks: 'SS', hysteria2: 'HY', tuic: 'TU', wireguard: 'WG', iwan: 'iW', anx: 'AX' }
+const MARKS = { vless: 'VL', vmess: 'VM', trojan: 'TJ', shadowsocks: 'SS', hysteria2: 'HY', tuic: 'TU', snell: 'SN', wireguard: 'WG', iwan: 'iW', anx: 'AX' }
 const markOf = type => MARKS[type] || '+'
-const typeLabel = type => ({ wireguard: 'WireGuard', iwan: 'Panabit iWAN', anx: 'ANX' }[type] || t(`networkPages.nodes.protocols.${type}`))
+const typeLabel = type => ({ snell: 'Snell', wireguard: 'WireGuard', iwan: 'Panabit iWAN', anx: 'ANX' }[type] || t(`networkPages.nodes.protocols.${type}`))
 const typeOptions = computed(() => PROTOCOL_TYPES.map(type => ({ value: type, label: typeLabel(type) })))
 
 // TLS modes and transports follow the protocol type (protocolCapabilities):

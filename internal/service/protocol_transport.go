@@ -21,15 +21,19 @@ var datagramProtocols = map[model.ProtocolType]bool{
 }
 
 // realityProtocols are the types Reality (tls 2) runs with, and
-// realityTransports the transports it runs on.
+// realityTransports the transports it runs on: the kernel serves Reality
+// for VLESS directly on TCP (it has no h2 transport, and neither Trojan nor
+// gRPC under Reality).
 var (
-	realityProtocols  = map[model.ProtocolType]bool{model.ProtocolVLESS: true, model.ProtocolTrojan: true}
-	realityTransports = map[string]bool{"": true, "tcp": true, "grpc": true, "h2": true}
+	realityProtocols  = map[model.ProtocolType]bool{model.ProtocolVLESS: true}
+	realityTransports = map[string]bool{"": true, "tcp": true}
 )
 
 // validateProtocolTransport refuses the transport and TLS combinations no
-// kernel runs (web: protocolCapabilities.js). It is lenient with values
-// that are only labels, so stored protocols keep saving.
+// kernel runs (web: protocolCapabilities.js); the combinations the kernel
+// does run are listed in contracts/agent/v1/protocol-combinations.json,
+// which the tests hold both to. It is lenient with values that are only
+// labels, so stored protocols keep saving.
 func validateProtocolTransport(protocol *model.NodeProtocol) error {
 	protocolType := model.ProtocolType(strings.ToLower(strings.TrimSpace(string(protocol.Type))))
 	transport := ""
@@ -44,7 +48,7 @@ func validateProtocolTransport(protocol *model.NodeProtocol) error {
 			return fmt.Errorf("%s 不支持 Reality", protocolType)
 		}
 		if !realityTransports[transport] {
-			return fmt.Errorf("transport %s 不能用于 Reality，只能用 tcp、grpc 或 h2", transport)
+			return fmt.Errorf("transport %s 不能用于 Reality，只能用 tcp", transport)
 		}
 	}
 	return nil
