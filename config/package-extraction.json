@@ -6,16 +6,16 @@
       "path": "/api/v2/admin/agent/list",
       "package_id": "protocol-runtime",
       "route_id": "protocol.admin.agent.list.get",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "GET",
       "path": "/api/v2/admin/agent/monitor",
       "package_id": "protocol-runtime",
       "route_id": "protocol.admin.agent.monitor.get",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "GET",
@@ -30,8 +30,8 @@
       "path": "/api/v2/admin/agent/tasks",
       "package_id": "protocol-runtime",
       "route_id": "protocol.admin.agent.tasks.post",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "GET",
@@ -166,16 +166,16 @@
       "path": "/api/v2/admin/nodes/:id/agent-control",
       "package_id": "protocol-runtime",
       "route_id": "protocol.admin.nodes.id.agent_control.get",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "POST",
       "path": "/api/v2/admin/nodes/:id/agent-control/operations",
       "package_id": "protocol-runtime",
       "route_id": "protocol.admin.nodes.id.agent_control.operations.post",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "GET",
@@ -190,40 +190,40 @@
       "path": "/api/v2/admin/nodes/:id/protocols",
       "package_id": "protocol-runtime",
       "route_id": "protocol.admin.nodes.id.protocols.get",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "POST",
       "path": "/api/v2/admin/nodes/:id/protocols",
       "package_id": "protocol-runtime",
       "route_id": "protocol.admin.nodes.id.protocols.post",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "DELETE",
       "path": "/api/v2/admin/nodes/:id/protocols/:protocol_id",
       "package_id": "protocol-runtime",
       "route_id": "protocol.admin.nodes.id.protocols.protocol_id.delete",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "PUT",
       "path": "/api/v2/admin/nodes/:id/protocols/:protocol_id",
       "package_id": "protocol-runtime",
       "route_id": "protocol.admin.nodes.id.protocols.protocol_id.put",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "POST",
       "path": "/api/v2/admin/nodes/:id/sync",
       "package_id": "protocol-runtime",
       "route_id": "protocol.admin.nodes.id.sync.post",
-      "mode": "native-flagged",
-      "legacy": "router"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "GET",

@@ -30,29 +30,23 @@ func (s *bridgeStub) Invoke(_ context.Context, _ []byte, operation string, _ []b
 	return packagebridgesdk.Response{StatusCode: 200, Body: []byte(`{"code":0,"msg":"操作成功","ts":1,"data":null}`)}, nil
 }
 
-// A route the kernel has no handler for is served natively whatever the
-// modes say. Until the kernel sets a flagged route's mode, the host relays it
-// to the legacy handler, bridged routes always; routes outside the package
-// are refused.
-func TestProtocolRuntimeHostRelaysOnlyFlaggedRoutes(t *testing.T) {
+// Every route is served natively whatever the modes say; routes outside
+// the package are refused.
+func TestProtocolRuntimeHostServesItsRoutesNatively(t *testing.T) {
 	bridge := &bridgeStub{}
 	service, err := newProtocolRuntimeService(bridge, "lease-1")
 	require.NoError(t, err)
-	_, effective := service.Mode("protocol.admin.agent.tasks.get")
-	require.Equal(t, pluginhostsdk.RouteModeNative, effective)
+	// The stub bridge has no KernelNodeOps connection: the routes that
+	// need none are the ones this host has handlers for.
+	for route := range (&native.Service{}).Handlers() {
+		_, effective := service.Mode(route)
+		require.Equal(t, pluginhostsdk.RouteModeNative, effective, route)
+	}
 	_, _ = service.Dispatch(context.Background(), pluginhostsdk.DispatchRequest{
-		RouteID: "protocol.admin.agent.tasks.get", BridgeCapability: make([]byte, 32), DeadlineUnixMillis: time.Now().Add(time.Second).UnixMilli(),
+		RouteID: native.ProtocolsRouteID, Method: "GET", BridgeCapability: make([]byte, 32), DeadlineUnixMillis: time.Now().Add(time.Second).UnixMilli(),
+		Metadata: pluginhostsdk.RequestMetadata{PathParams: map[string]string{"id": "1"}},
 	})
 	require.Empty(t, bridge.operation, "a native route is not relayed")
-	response, err := service.Dispatch(context.Background(), pluginhostsdk.DispatchRequest{
-		RouteID: native.ProtocolsRouteID, BridgeCapability: make([]byte, 32), DeadlineUnixMillis: time.Now().Add(time.Second).UnixMilli(),
-	})
-	require.NoError(t, err)
-	require.EqualValues(t, 200, response.StatusCode)
-	require.Equal(t, native.ProtocolsRouteID, bridge.operation)
-	for route := range flaggedRoutes {
-		require.Contains(t, protocolRuntimeRoutes, route)
-	}
 
 	_, err = service.Dispatch(context.Background(), pluginhostsdk.DispatchRequest{
 		RouteID: "ticket.user.ticket.get", BridgeCapability: make([]byte, 32), DeadlineUnixMillis: time.Now().Add(time.Second).UnixMilli(),
@@ -61,49 +55,8 @@ func TestProtocolRuntimeHostRelaysOnlyFlaggedRoutes(t *testing.T) {
 	handlers := (&native.Service{NodeOps: kernelnodeopsv1.NewKernelNodeOpsClient(nil)}).Handlers()
 	require.Len(t, handlers, len(protocolRuntimeRoutes))
 	for route := range protocolRuntimeRoutes {
-		require.Contains(t, handlers, route, "every native route has a handler")
+		require.Contains(t, handlers, route, "every route has a native handler")
 	}
-	for route := range bridgedRoutes {
-		require.NotContains(t, handlers, route, "a bridged route has no native handler")
-		require.NotContains(t, protocolRuntimeRoutes, route)
-	}
-	withoutNodeOps := (&native.Service{}).Handlers()
-	for _, route := range []string{
-		native.CreateProtocolRouteID, native.UpdateProtocolRouteID, native.DeleteProtocolRouteID, native.SyncRouteID,
-		native.AgentControlRouteID, native.AgentControlOpsRouteID, native.AgentListRouteID, native.AgentMonitorRouteID,
-		native.AgentTasksCreateRouteID,
-	} {
-		require.NotContains(t, withoutNodeOps, route, "without KernelNodeOps the route stays legacy")
-	}
-}
-
-// In native mode, a node's protocols answer from the legacy handler while
-// the lease does not adopt v2_node_protocol: the node credential split is
-// not finalized, or the host has no storage.
-func TestProtocolRuntimeHostKeepsProtocolsLegacyWithoutTheAdoption(t *testing.T) {
-	bridge := &modesStub{modes: map[string]string{native.ProtocolsRouteID: "native"}}
-	service, err := newProtocolRuntimeService(bridge, "lease-1")
-	require.NoError(t, err)
-	service.Refresh(context.Background())
-	_, effective := service.Mode(native.ProtocolsRouteID)
-	require.Equal(t, "native", effective)
-	response, err := service.Dispatch(context.Background(), pluginhostsdk.DispatchRequest{
-		RouteID: native.ProtocolsRouteID, Method: "GET", BridgeCapability: make([]byte, 32), DeadlineUnixMillis: time.Now().Add(time.Second).UnixMilli(),
-		Metadata: pluginhostsdk.RequestMetadata{PathParams: map[string]string{"id": "1"}},
-	})
-	require.NoError(t, err)
-	require.EqualValues(t, 200, response.StatusCode)
-	require.Equal(t, native.ProtocolsRouteID, bridge.operation)
-}
-
-// modesStub is bridgeStub with route modes.
-type modesStub struct {
-	bridgeStub
-	modes map[string]string
-}
-
-func (s *modesStub) GetPackageConfig(context.Context) (packagebridgesdk.PackageConfig, error) {
-	return packagebridgesdk.PackageConfig{Revision: 1, RouteModes: s.modes}, nil
 }
 
 // The host accepts exactly the package's declared compatibility routes.
@@ -121,9 +74,6 @@ func TestProtocolRuntimeHostRoutesAreThePackageRoutes(t *testing.T) {
 		want = append(want, route.PackageRoute)
 	}
 	for route := range protocolRuntimeRoutes {
-		got = append(got, route)
-	}
-	for route := range bridgedRoutes {
 		got = append(got, route)
 	}
 	sort.Strings(want)

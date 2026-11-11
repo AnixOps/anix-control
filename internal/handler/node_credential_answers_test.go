@@ -122,10 +122,7 @@ func (s *NodeCredentialAnswersTestSuite) pin(name string, code int, body string)
 	s.Equal(want, fmt.Sprintf("%d %s", code, body), name)
 }
 
-const (
-	pinRawConfigSecret = "pinned-raw-config-private-key"
-	pinRealitySecret   = "pinned-reality-private-key"
-)
+const pinRawConfigSecret = "pinned-raw-config-private-key"
 
 func (s *NodeCredentialAnswersTestSuite) TestNodesAndRawConfigs() {
 	h := NewNodeHandler()
@@ -158,69 +155,6 @@ func (s *NodeCredentialAnswersTestSuite) TestNodesAndRawConfigs() {
 	nodesecrets.ResolveNodeRawConfig(s.db, &node)
 	s.Contains(*node.RawConfig, pinRawConfigSecret)
 
-}
-
-func (s *NodeCredentialAnswersTestSuite) TestProtocols() {
-	h := NewNodeHandler()
-	node := &model.Node{Name: "edge", Host: "edge.example.test", Port: 443}
-	s.Require().NoError(s.db.Create(node).Error)
-
-	reality := `{"dest":"www.example.test:443","private_key":"` + pinRealitySecret + `","public_key":"reality-public","short_id":"6ba85179"}`
-	code, body := s.serve(http.MethodPost, "/admin/nodes/:id/protocols", "/admin/nodes/1/protocols",
-		`{"name":"reality","type":"vless","port":443,"enable":1,"show":1,"tls":2,"reality_settings":"`+strings.ReplaceAll(reality, `"`, `\"`)+`"}`, h.CreateProtocol)
-	s.pin("create protocol", code, body)
-	var protocol model.NodeProtocol
-	s.Require().NoError(s.db.Where("node_id = ?", node.ID).First(&protocol).Error)
-	s.Require().NotNil(protocol.RealitySettings)
-	nodesecrets.ResolveProtocol(s.db, &protocol)
-	s.Contains(*protocol.RealitySettings, pinRealitySecret)
-	s.Equal(int64(1), s.count(&model.ProtocolSecret{}, "scope = ? AND owner_id = ?", nodesecrets.ScopeNodeProtocol, protocol.ID))
-
-	code, body = s.serve(http.MethodPost, "/admin/nodes/:id/protocols", "/admin/nodes/1/protocols",
-		`{"name":"wg","type":"wireguard","port":51820,"enable":1,"settings":"{\"cidr\":\"10.9.0.0/24\",\"server_private_key\":\"not-a-key\"}"}`, h.CreateProtocol)
-	s.pin("create protocol with an invalid WireGuard key", code, body)
-	code, body = s.serve(http.MethodPost, "/admin/nodes/:id/protocols", "/admin/nodes/x/protocols", `{}`, h.CreateProtocol)
-	s.pin("create protocol, bad id", code, body)
-
-	masked := strings.ReplaceAll(reality, pinRealitySecret, service.NodeSecretPlaceholder)
-	code, body = s.serve(http.MethodPut, "/admin/nodes/protocols/:protocol_id", fmt.Sprintf("/admin/nodes/protocols/%d", protocol.ID),
-		`{"name":"reality-2","reality_settings":"`+strings.ReplaceAll(masked, `"`, `\"`)+`"}`, h.UpdateProtocol)
-	s.pin("update protocol with the placeholder", code, body)
-	s.Require().NoError(s.db.First(&protocol, protocol.ID).Error)
-	s.Equal("reality-2", protocol.Name)
-	nodesecrets.ResolveProtocol(s.db, &protocol)
-	s.Contains(*protocol.RealitySettings, pinRealitySecret, "the placeholder keeps the stored secret")
-	code, body = s.serve(http.MethodPut, "/admin/nodes/protocols/:protocol_id", fmt.Sprintf("/admin/nodes/protocols/%d", protocol.ID),
-		`{"reality_settings":"{\"dest\":\"other.example.test:443\",\"private_key\":\"new-reality-private\"}"}`, h.UpdateProtocol)
-	s.pin("update protocol with a new secret", code, body)
-	s.Require().NoError(s.db.First(&protocol, protocol.ID).Error)
-	nodesecrets.ResolveProtocol(s.db, &protocol)
-	s.Contains(*protocol.RealitySettings, "new-reality-private")
-	var secret model.ProtocolSecret
-	s.Require().NoError(s.db.Where("scope = ? AND owner_id = ?", nodesecrets.ScopeNodeProtocol, protocol.ID).First(&secret).Error)
-	s.Equal(`"new-reality-private"`, secret.Value, "the JSON encoding of the value")
-	code, body = s.serve(http.MethodPut, "/admin/nodes/protocols/:protocol_id", fmt.Sprintf("/admin/nodes/protocols/%d", protocol.ID),
-		`{"type":"wireguard","settings":"{\"cidr\":\"10.9.0.0/24\",\"server_private_key\":\"not-a-key\"}"}`, h.UpdateProtocol)
-	s.pin("update protocol with an invalid WireGuard key", code, body)
-	code, body = s.serve(http.MethodPut, "/admin/nodes/protocols/:protocol_id", "/admin/nodes/protocols/999", `{"name":"gone"}`, h.UpdateProtocol)
-	s.pin("update protocol that does not exist", code, body)
-
-	group := &model.SubscriptionGroup{Name: "group", Enable: 1}
-	s.Require().NoError(s.db.Create(group).Error)
-	s.Require().NoError(s.db.Model(group).Association("Protocols").Append(&protocol))
-	s.Require().NoError(s.db.Create(&model.WireGuardPeer{NodeProtocolID: protocol.ID, UserID: 1, PeerIP: "10.9.0.2", PrivateKey: "peer-private", PublicKey: "peer-public"}).Error)
-	code, body = s.serve(http.MethodDelete, "/admin/nodes/protocols/:protocol_id", fmt.Sprintf("/admin/nodes/protocols/%d", protocol.ID), "", h.DeleteProtocol)
-	s.pin("delete protocol", code, body)
-	s.Equal(int64(0), s.count(&model.NodeProtocol{}, "id = ?", protocol.ID))
-	s.Equal(int64(0), s.count(&model.WireGuardPeer{}, "node_protocol_id = ?", protocol.ID))
-	s.Equal(int64(0), s.count(&model.ProtocolSecret{}, "scope = ? AND owner_id = ?", nodesecrets.ScopeNodeProtocol, protocol.ID))
-	var links int64
-	s.Require().NoError(s.db.Table("v2_subscription_group_node_protocols").Where("node_protocol_id = ?", protocol.ID).Count(&links).Error)
-	s.Equal(int64(0), links)
-	code, body = s.serve(http.MethodDelete, "/admin/nodes/protocols/:protocol_id", fmt.Sprintf("/admin/nodes/protocols/%d", protocol.ID), "", h.DeleteProtocol)
-	s.pin("delete protocol again", code, body)
-	code, body = s.serve(http.MethodDelete, "/admin/nodes/protocols/:protocol_id", "/admin/nodes/protocols/x", "", h.DeleteProtocol)
-	s.pin("delete protocol, bad id", code, body)
 }
 
 func (s *NodeCredentialAnswersTestSuite) count(value any, query string, args ...any) int64 {

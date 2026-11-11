@@ -23,7 +23,6 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/packagestore"
 	"github.com/AnixOps/anix-control/v5/internal/tests/packagecompat"
 	"github.com/AnixOps/anix-control/v5/packages/proxy-node/native"
-	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )
@@ -32,9 +31,9 @@ var admin = pluginhostsdk.Principal{ActorID: 1, Admin: true}
 
 var seeded = time.Date(2026, 9, 1, 8, 0, 0, 0, time.UTC)
 
-func route(method, pattern, routeID string, legacy gin.HandlerFunc) packagecompat.Route {
+func route(method, pattern, routeID string) packagecompat.Route {
 	return packagecompat.Route{
-		Method: method, Pattern: pattern, RouteID: routeID, Legacy: legacy,
+		Method: method, Pattern: pattern, RouteID: routeID,
 		Models: []any{&model.Node{}, &model.NodeProtocol{}, &model.NodeLog{}},
 		Native: func(db *gorm.DB) pluginhostsdk.NativeHandler {
 			service := &native.Service{Open: func(ctx context.Context) (*gorm.DB, error) { return db.WithContext(ctx), nil }}
@@ -85,7 +84,7 @@ func seedNodes(t testing.TB, db *gorm.DB) {
 
 func TestNodeStatsRoute(t *testing.T) {
 	path := "/api/v2/admin/nodes/stats"
-	read(t, route("GET", path, "proxy.admin.nodes.stats.get", nil), []packagecompat.Case{
+	read(t, route("GET", path, "proxy.admin.nodes.stats.get"), []packagecompat.Case{
 		{Name: "every status", Path: path, Seed: seedNodes},
 		{Name: "no nodes", Path: path, Seed: seedViews},
 	})
@@ -116,7 +115,7 @@ func seedNodeLogs(t testing.TB, db *gorm.DB) {
 func TestNodeLogsRoute(t *testing.T) {
 	pattern := "/api/v2/admin/nodes/:id/logs"
 	path := func(id, query string) string { return "/api/v2/admin/nodes/" + id + "/logs" + query }
-	read(t, route("GET", pattern, "proxy.admin.nodes.id.logs.get", nil), []packagecompat.Case{
+	read(t, route("GET", pattern, "proxy.admin.nodes.id.logs.get"), []packagecompat.Case{
 		{Name: "newest first", Path: path("1", ""), Seed: seedNodeLogs},
 		{Name: "level as reported", Path: path("1", "?level=WARN"), Seed: seedNodeLogs},
 		{Name: "level fatal is error", Path: path("1", "?level=%20fatal%20"), Seed: seedNodeLogs},

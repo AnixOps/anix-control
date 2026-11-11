@@ -39,12 +39,6 @@ func AgentListEntryJSON(session agentstreams.Session, now time.Time) []byte {
 	return encoded
 }
 
-// SortAgentSessions orders sessions as the session RPCs list them: by node
-// kind, node id and transport.
-func SortAgentSessions(sessions []agentstreams.Session) {
-	sortSessions(sessions)
-}
-
 // agentMonitorView is the snapshot GET /api/v2/admin/agent/monitor answers.
 type agentMonitorView struct {
 	NodeID    uint            `json:"node_id"`

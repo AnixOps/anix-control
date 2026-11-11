@@ -219,15 +219,15 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			admin.GET("/nodes/:id", v2PackageGateway.Serve)
 			admin.PUT("/nodes/:id", registeredPackageRoute(v2PackageGateway.Serve, "proxy-node", "proxy.admin.nodes.id.put", nodeHandler.UpdateNode))
 			admin.DELETE("/nodes/:id", v2PackageGateway.Serve)
-			admin.POST("/nodes/:id/sync", registeredPackageRoute(v2PackageGateway.Serve, "protocol-runtime", "protocol.admin.nodes.id.sync.post", nodeHandler.SyncProtocol))
-			admin.GET("/nodes/:id/agent-control", registeredPackageRoute(v2PackageGateway.Serve, "protocol-runtime", "protocol.admin.nodes.id.agent_control.get", nodeHandler.GetAgentControlStatus))
-			admin.POST("/nodes/:id/agent-control/operations", registeredPackageRoute(v2PackageGateway.Serve, "protocol-runtime", "protocol.admin.nodes.id.agent_control.operations.post", nodeHandler.DispatchAgentControlOperation))
+			admin.POST("/nodes/:id/sync", v2PackageGateway.Serve)
+			admin.GET("/nodes/:id/agent-control", v2PackageGateway.Serve)
+			admin.POST("/nodes/:id/agent-control/operations", v2PackageGateway.Serve)
 
 			// 节点协议管理
-			admin.GET("/nodes/:id/protocols", registeredPackageRoute(v2PackageGateway.Serve, "protocol-runtime", "protocol.admin.nodes.id.protocols.get", nodeHandler.GetProtocols))
-			admin.POST("/nodes/:id/protocols", registeredPackageRoute(v2PackageGateway.Serve, "protocol-runtime", "protocol.admin.nodes.id.protocols.post", nodeHandler.CreateProtocol))
-			admin.PUT("/nodes/:id/protocols/:protocol_id", registeredPackageRoute(v2PackageGateway.Serve, "protocol-runtime", "protocol.admin.nodes.id.protocols.protocol_id.put", nodeHandler.UpdateProtocol))
-			admin.DELETE("/nodes/:id/protocols/:protocol_id", registeredPackageRoute(v2PackageGateway.Serve, "protocol-runtime", "protocol.admin.nodes.id.protocols.protocol_id.delete", nodeHandler.DeleteProtocol))
+			admin.GET("/nodes/:id/protocols", v2PackageGateway.Serve)
+			admin.POST("/nodes/:id/protocols", v2PackageGateway.Serve)
+			admin.PUT("/nodes/:id/protocols/:protocol_id", v2PackageGateway.Serve)
+			admin.DELETE("/nodes/:id/protocols/:protocol_id", v2PackageGateway.Serve)
 			admin.GET("/protocol-templates", v2PackageGateway.Serve)
 			admin.POST("/wireguard/keypair", v2PackageGateway.Serve)
 
@@ -386,8 +386,6 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			tgWebhook.POST("/telegram/webhook", registeredPackageRoute(v2PackageGateway.Serve, "notification", "notification.telegram.webhook.post", telegramHandler.TelegramWebhook))
 		}
 
-		agentHandler := handler.NewAgentHandler()
-
 		// Agent 管理接口 (管理员)
 		agentAdmin := v2.Group("/admin/agent")
 		agentAdmin.Use(adminLimiter.Middleware())
@@ -395,11 +393,11 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		agentAdmin.Use(middleware.JWTAuth())
 		agentAdmin.Use(middleware.AdminAuth())
 		{
-			agentAdmin.GET("/list", registeredPackageRoute(v2PackageGateway.Serve, "protocol-runtime", "protocol.admin.agent.list.get", agentHandler.ListAgents))
-			agentAdmin.POST("/tasks", registeredPackageRoute(v2PackageGateway.Serve, "protocol-runtime", "protocol.admin.agent.tasks.post", agentHandler.CreateTask))
+			agentAdmin.GET("/list", v2PackageGateway.Serve)
+			agentAdmin.POST("/tasks", v2PackageGateway.Serve)
 			agentAdmin.GET("/tasks", v2PackageGateway.Serve)
 			agentAdmin.GET("/tasks/:task_id", v2PackageGateway.Serve)
-			agentAdmin.GET("/monitor", registeredPackageRoute(v2PackageGateway.Serve, "protocol-runtime", "protocol.admin.agent.monitor.get", agentHandler.GetMonitor))
+			agentAdmin.GET("/monitor", v2PackageGateway.Serve)
 		}
 	}
 

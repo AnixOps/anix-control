@@ -55,9 +55,15 @@ func requireGolden(t *testing.T, c Case, native Result) {
 		got.State = bytes.ReplaceAll(got.State, []byte(text), []byte("0"))
 	}
 
+	// The test runs as <test>/<case>/<backend>, or, for a test that sends
+	// several cases to one kernel (RequireGolden), as <test>/<backend>.
 	test, key, _ := strings.Cut(t.Name(), "/")
 	backend := key[strings.LastIndex(key, "/")+1:]
-	key = key[:strings.LastIndex(key, "/")]
+	if key == backend {
+		key = strings.ReplaceAll(c.Name, " ", "_")
+	} else {
+		key = key[:strings.LastIndex(key, "/")]
+	}
 	own := key + " (" + backend + ")"
 	path := filepath.Join("testdata", test+".json")
 	answers := map[string]goldenAnswer{}
@@ -92,6 +98,14 @@ func requireGolden(t *testing.T, c Case, native Result) {
 	}
 	require.True(t, ok, "no recorded answer for %q in %s", key, path)
 	require.Equal(t, compact(t, want), compact(t, got))
+}
+
+// RequireGolden compares an answer with the one recorded for c.Name, for a
+// test that sends several cases to one kernel (ForEachKernelDatabase,
+// StartKernel).
+func RequireGolden(t *testing.T, c Case, native Result) {
+	t.Helper()
+	requireGolden(t, c, native)
 }
 
 func compact(t *testing.T, answer goldenAnswer) string {

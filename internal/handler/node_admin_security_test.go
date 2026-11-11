@@ -134,60 +134,6 @@ func (s *NodeAdminWritesTestSuite) TestUpdateNodeChecksTheParentInEverySpelling(
 	s.Equal(s.nodeB.ID, *parent)
 }
 
-// A protocol body's node created a node without an API key and moved the
-// protocol to it, and its subscription groups were created and linked.
-func (s *NodeAdminWritesTestSuite) TestCreateProtocolKeepsTheRouteNode() {
-	handler := NewNodeHandler()
-	body := `{"name":"vless-b","type":"vless","port":443,"node":{"name":"keyless","host":"evil.example.test"},` +
-		`"subscription_groups":[{"name":"injected-group"}]}`
-	resp := s.ok(s.serve("POST", "/nodes/:id/protocols", fmt.Sprintf("/nodes/%d/protocols", s.nodeB.ID), body, handler.CreateProtocol))
-	data := resp["data"].(map[string]any)
-	s.EqualValues(s.nodeB.ID, data["node_id"])
-	s.NotContains(data, "node", "the answer shows only what was stored")
-	s.NotContains(data, "subscription_groups", "the answer shows only what was stored")
-	var stored model.NodeProtocol
-	s.Require().NoError(s.db.First(&stored, uint(data["id"].(float64))).Error)
-	s.Equal(s.nodeB.ID, stored.NodeID)
-	s.EqualValues(2, s.count("v2_node"), "a nested node was created")
-	s.EqualValues(0, s.count("v2_subscription_group"), "a nested subscription group was created")
-	s.EqualValues(0, s.count("v2_subscription_group_node_protocols"), "a nested protocol was linked")
-}
-
-// The update refused id and node_id, but other spellings moved a protocol
-// to another node or renumbered it, and a second spelling of type was
-// written without the check of the type it named.
-func (s *NodeAdminWritesTestSuite) TestUpdateProtocolKeepsItsNodeIDAndChecks() {
-	handler := NewNodeHandler()
-	path := fmt.Sprintf("/nodes/%d/protocols/%d", s.nodeA.ID, s.protocolA.ID)
-	for _, body := range []string{
-		fmt.Sprintf(`{"name":"renamed","NodeID":%d}`, s.nodeB.ID),
-		fmt.Sprintf(`{"name":"renamed","Node_Id":%d}`, s.nodeB.ID),
-		`{"name":"renamed","ID":99}`,
-		`{"name":"renamed","Id":98}`,
-	} {
-		s.ok(s.serve("PUT", "/nodes/:id/protocols/:protocol_id", path, body, handler.UpdateProtocol))
-		var stored model.NodeProtocol
-		s.Require().NoError(s.db.First(&stored, s.protocolA.ID).Error, body)
-		s.Equal("renamed", stored.Name, body)
-		s.Equal(s.nodeA.ID, stored.NodeID, body)
-		s.EqualValues(1, s.count("v2_node_protocol"), body)
-	}
-
-	// A WireGuard protocol with an invalid CIDR is refused whichever
-	// spelling names its type.
-	for _, body := range []string{
-		`{"type":"wireguard","settings":{"cidr":"not-a-cidr"}}`,
-		`{"Type":"wireguard","settings":{"cidr":"not-a-cidr"}}`,
-		`{"TYPE":"wireguard","Settings":{"cidr":"not-a-cidr"}}`,
-	} {
-		w := s.serve("PUT", "/nodes/:id/protocols/:protocol_id", path, body, handler.UpdateProtocol)
-		s.Equal(http.StatusBadRequest, w.Code, "%s: %s", body, w.Body.String())
-		var stored model.NodeProtocol
-		s.Require().NoError(s.db.First(&stored, s.protocolA.ID).Error, body)
-		s.Equal(model.ProtocolVLESS, stored.Type, body)
-	}
-}
-
 func TestNodeAdminWrites(t *testing.T) {
 	suite.Run(t, new(NodeAdminWritesTestSuite))
 }

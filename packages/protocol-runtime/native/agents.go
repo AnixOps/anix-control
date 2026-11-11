@@ -269,9 +269,7 @@ func (s *Service) diagnose(ctx context.Context, request pluginhostsdk.NativeRequ
 		return errorAnswer(http.StatusBadRequest, fmt.Sprintf("task type %q is not allowed: only %q tasks are sent to agents", req.Type, agentDiagnosticTaskType))
 	}
 	if req.Timeout < 0 || uint64(req.Timeout) > uint64(^uint32(0)) {
-		// The kernel's operation takes no negative timeout; the legacy
-		// handler sends the task as asked.
-		return pluginhostsdk.NativeResponse{}, pluginhostsdk.ErrNativeUnavailable
+		return errorAnswer(http.StatusBadRequest, "timeout must be between 0 and 4294967295 seconds")
 	}
 	params, err := json.Marshal(req.Params)
 	if err != nil {

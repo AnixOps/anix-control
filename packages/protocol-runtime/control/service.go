@@ -19,24 +19,18 @@ type protocolRuntimeBridge interface {
 	packagestoresdk.Leaser
 }
 
-// newProtocolRuntimeService returns the protocol-runtime host's router. The
-// routes in protocolRuntimeRoutes have a native handler; a route in
-// flaggedRoutes serves natively once the kernel sets its mode, and falls
-// back to the legacy handler otherwise:
+// newProtocolRuntimeService returns the protocol-runtime host's router.
+// Every route in protocolRuntimeRoutes is served by its native handler
+// alone (the kernel has no handler for them):
 //   - the protocol templates, and the diagnostic task history and detail on
 //     the adopted v2_agent_diagnostic_task;
 //   - a node's protocols and their writes on v2_node_protocol, which the
-//     lease adopts only once the node credential split is finalized: until
-//     then they answer from the legacy handler, and a host started before
-//     the finalize keeps them legacy until it restarts. The secrets in a
-//     write reach the kernel only, as sealed handles (PutSecretDocument);
+//     lease adopts once the node credential split is finalized (the kernel
+//     starts on a finalized split only). The secrets in a write reach the
+//     kernel only, as sealed handles (PutSecretDocument);
 //   - node synchronization, Agent Control and the administrator's agent
 //     routes, through the kernel's KernelNodeOps over the bridge connection
-//     (local socket or module listener). A bridge without one leaves the
-//     routes that need it legacy.
-//
-// The routes in bridgedRoutes always relay to the legacy handler; there are
-// none since the legacy agent channels were removed.
+//     (local socket or module listener).
 func newProtocolRuntimeService(bridge protocolRuntimeBridge, leaseID string) (*pluginhostsdk.Router, error) {
 	storage := packagestoresdk.SharedOpener(bridge)
 	service := &native.Service{
@@ -60,33 +54,14 @@ func newProtocolRuntimeService(bridge protocolRuntimeBridge, leaseID string) (*p
 	return pluginhostsdk.NewRouter(pluginhostsdk.RouterConfig{
 		PackageID: "protocol-runtime", LeaseID: leaseID, Bridge: bridge, Logf: log.Printf,
 		AllowRoute: func(routeID string) bool {
-			_, nativeRoute := protocolRuntimeRoutes[routeID]
-			_, bridgedRoute := bridgedRoutes[routeID]
-			return nativeRoute || bridgedRoute
+			_, ok := protocolRuntimeRoutes[routeID]
+			return ok
 		},
-		Native: service.Handlers(), NativeOnly: true, Flagged: flaggedRoutes,
+		Native: service.Handlers(), NativeOnly: true,
 	})
 }
 
-// flaggedRoutes are the native routes the kernel still has a legacy handler
-// for: they follow the mode the kernel sets. The other native routes (the
-// protocol templates and the diagnostic task history and detail) are served
-// by their native handler alone.
-var flaggedRoutes = map[string]struct{}{
-	native.ProtocolsRouteID:        {},
-	native.CreateProtocolRouteID:   {},
-	native.UpdateProtocolRouteID:   {},
-	native.DeleteProtocolRouteID:   {},
-	native.SyncRouteID:             {},
-	native.AgentControlRouteID:     {},
-	native.AgentControlOpsRouteID:  {},
-	native.AgentListRouteID:        {},
-	native.AgentMonitorRouteID:     {},
-	native.AgentTasksCreateRouteID: {},
-}
-
-// protocolRuntimeRoutes are the package's compatibility routes with a native
-// handler.
+// protocolRuntimeRoutes are the package's compatibility routes.
 var protocolRuntimeRoutes = map[string]struct{}{
 	"protocol.admin.protocol_templates.get":                 {},
 	"protocol.admin.agent.tasks.get":                        {},
@@ -102,9 +77,3 @@ var protocolRuntimeRoutes = map[string]struct{}{
 	"protocol.admin.agent.monitor.get":                      {},
 	"protocol.admin.agent.tasks.post":                       {},
 }
-
-// bridgedRoutes are the package's compatibility routes without a native
-// handler; they always relay to the kernel's legacy handler. None remain:
-// the agent REST and WebSocket routes were removed with the legacy agent
-// channels.
-var bridgedRoutes = map[string]struct{}{}
