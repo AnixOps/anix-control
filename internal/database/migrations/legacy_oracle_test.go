@@ -14,6 +14,7 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/database/migrations"
 	"github.com/AnixOps/anix-control/v5/internal/lease"
 	"github.com/AnixOps/anix-control/v5/internal/model"
+	"github.com/AnixOps/anix-control/v5/internal/netline"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -229,6 +230,8 @@ func laterModels() []any {
 		&model.EntryPoolPolicy{},           // 0032_cross_border_standby_and_entry_pools
 		&model.UserEntryPool{},             // 0032_cross_border_standby_and_entry_pools
 		&model.ClientFailureReport{},       // 0032_cross_border_standby_and_entry_pools
+		&netline.LineRow{},                 // 0035_network_lines
+		&netline.TransportRow{},            // 0035_network_lines
 	}
 }
 

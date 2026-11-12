@@ -76,7 +76,10 @@ type NodeNetwork struct {
 	HopPort   uint32 `gorm:"not null;default:0" json:"hop_port"`
 	// Region is where the device is, a place key the panel's map knows
 	// ("jp", "shanghai"); empty lets the panel guess from the name.
-	Region    string    `gorm:"size:32;not null;default:''" json:"region"`
+	Region string `gorm:"size:32;not null;default:''" json:"region"`
+	// ScanCloud marks a device on a cloud that scans its machines: it
+	// forwards in the kernel and never runs the userspace kernel.
+	ScanCloud bool      `gorm:"not null;default:false" json:"scan_cloud"`
 	UpdatedAt time.Time `gorm:"not null" json:"updated_at"`
 }
 

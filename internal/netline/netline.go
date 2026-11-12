@@ -163,6 +163,9 @@ type Line struct {
 	Policy     *networkv1.ForwardPolicy `json:"policy,omitempty"`
 	HopBalance string                   `json:"hop_balance,omitempty"`
 	Rate       float64                  `json:"rate"`
+	// ServeAt is the device the protocol is served at when the
+	// administrator chose it; empty is the first userspace device.
+	ServeAt string `json:"serve_at,omitempty"`
 }
 
 // Skipped is something Import could not read as a line, and why.
