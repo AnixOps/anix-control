@@ -36,6 +36,9 @@ type NodeSettings struct {
 	HopPort   uint32 `json:"hop_port"`
 	// Region is where the device is, a place key of the panel's map.
 	Region string `json:"region"`
+	// ScanCloud marks a device on a cloud that scans its machines: it
+	// forwards in the kernel on every line (internal/netline).
+	ScanCloud bool `json:"scan_cloud"`
 	// Uplinks are the interfaces traffic to the next device of a route may
 	// leave by (uplinks.go); UplinkDefault ("auto" when empty) and
 	// UplinkChoices (by next device) say which one it does.
@@ -85,7 +88,7 @@ func (s *Service) SetNodeSettings(ctx context.Context, node string, settings Nod
 			return err
 		}
 		row := model.NodeNetwork{NodeRef: ref, Interface: settings.Interface, SourceV4: settings.SourceV4, GatewayV4: settings.GatewayV4,
-			SourceV6: settings.SourceV6, GatewayV6: settings.GatewayV6, HopPort: settings.HopPort, Region: settings.Region, UpdatedAt: s.now()}
+			SourceV6: settings.SourceV6, GatewayV6: settings.GatewayV6, HopPort: settings.HopPort, Region: settings.Region, ScanCloud: settings.ScanCloud, UpdatedAt: s.now()}
 		if err := tx.Save(&row).Error; err != nil {
 			return err
 		}
@@ -97,7 +100,7 @@ func (s *Service) SetNodeSettings(ctx context.Context, node string, settings Nod
 		}
 		return writeAudit(tx, actor, AuditActionNodeSettings, map[string]any{
 			"node": ref, "interface": row.Interface, "source_v4": row.SourceV4, "gateway_v4": row.GatewayV4,
-			"source_v6": row.SourceV6, "gateway_v6": row.GatewayV6, "hop_port": row.HopPort, "region": row.Region,
+			"source_v6": row.SourceV6, "gateway_v6": row.GatewayV6, "hop_port": row.HopPort, "region": row.Region, "scan_cloud": row.ScanCloud,
 			"uplinks": settings.Uplinks, "uplink_default": settings.UplinkDefault, "uplink_choices": settings.UplinkChoices,
 		})
 	})
@@ -132,7 +135,7 @@ func (s *Service) requireNode(db *gorm.DB, node string) (string, error) {
 
 func settingsOf(row model.NodeNetwork) NodeSettings {
 	return NodeSettings{Interface: row.Interface, SourceV4: row.SourceV4, GatewayV4: row.GatewayV4,
-		SourceV6: row.SourceV6, GatewayV6: row.GatewayV6, HopPort: row.HopPort, Region: row.Region}
+		SourceV6: row.SourceV6, GatewayV6: row.GatewayV6, HopPort: row.HopPort, Region: row.Region, ScanCloud: row.ScanCloud}
 }
 
 // checkSettings answers settings trimmed, or an *Invalid: the interface is
