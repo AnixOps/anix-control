@@ -1,6 +1,7 @@
 package netline
 
 import (
+	"encoding/json"
 	"path/filepath"
 	"testing"
 
@@ -19,7 +20,7 @@ func openDB(t *testing.T) *gorm.DB {
 	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "control.db")), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	require.NoError(t, err)
 	require.NoError(t, db.AutoMigrate(&model.Node{}, &model.NodeProtocol{}, &model.NodeEntry{}, &model.NodeExitPolicy{}, &model.NodeNetwork{},
-		&model.NodeUplinks{}, &model.KernelForwardRoute{}, &model.ForwardRouteSubscription{}, &model.EgressRoute{}))
+		&model.NodeUplinks{}, &model.KernelForwardRoute{}, &model.ForwardRouteSubscription{}, &model.EgressRoute{}, &LineRow{}, &TransportRow{}))
 	return db
 }
 
@@ -137,6 +138,29 @@ func TestImportReadsNodesAndRoutesAsLines(t *testing.T) {
 	require.Contains(t, s.Exits, Exit{ID: "jp-dedicated", Device: "proxy-3", Declared: true})
 	require.Contains(t, s.Transports, Transport{ID: "t-ix", From: "proxy-4", To: "proxy-1", Kind: TransportJacket, Declared: true})
 	require.Contains(t, s.Transports, Transport{ID: "proxy-1>proxy-3/line/c2/false/true", From: "proxy-1", To: "proxy-3", Kind: TransportLine, Carriers: []string{"c2"}, FEC: true})
+}
+
+func TestSavedLinesLoadAsImported(t *testing.T) {
+	db := openDB(t)
+	seed(t, db)
+	require.NoError(t, db.Create(&model.EgressRoute{Name: "ai", SourceNodeID: 3, ExitNodeID: 1, RelayPort: 1, Method: "m", RelayKey: "k", Domains: `["openai.com"]`, Enabled: true}).Error)
+	imported, err := Import(db)
+	require.NoError(t, err)
+	imported.Lines[0].ServeAt = "proxy-3"
+	require.NoError(t, Save(db, imported))
+	require.NoError(t, Save(db, imported), "saving again replaces the rows")
+
+	loaded, err := Load(db)
+	require.NoError(t, err)
+	require.ElementsMatch(t, imported.Transports, loaded.Transports)
+	loaded.Transports, imported.Transports = nil, nil
+	loaded.Skipped = imported.Skipped
+	want, err := json.Marshal(imported)
+	require.NoError(t, err)
+	got, err := json.Marshal(loaded)
+	require.NoError(t, err)
+	require.JSONEq(t, string(want), string(got))
+	require.Empty(t, Compare(Forwards(imported), Forwards(loaded)))
 }
 
 func TestCompareNamesWhatDiffers(t *testing.T) {

@@ -147,4 +147,7 @@
 //   - 0034_drop_identity_leftovers: the kernel's MFA login attempts
 //     (v2_mfa_login_attempt) and the identity cutover log
 //     (v4_kernel_identity_cutover) are dropped.
+//   - 0035_network_lines: the network as lines (v5_line, v5_transport)
+//     and whether a device is on a cloud that scans its machines
+//     (v4_kernel_node_network.scan_cloud).
 package migrations

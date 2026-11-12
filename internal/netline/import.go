@@ -44,45 +44,9 @@ type importer struct {
 // published one is shown under the name its subscription has. Egress routes
 // become rules of the lines served at their source node.
 func Import(db *gorm.DB) (*Snapshot, error) {
-	in := &importer{devices: map[string]int{}, byHost: map[string]map[uint]bool{}, transports: map[string]bool{}, exits: map[string]bool{}}
-	in.s = Snapshot{Devices: []Device{}, Uplinks: []Uplink{}, Entries: []Entry{}, Transports: []Transport{}, Exits: []Exit{}, Lines: []Line{}, Skipped: []Skipped{}}
-	var nodes []model.Node
-	if err := db.Order("id").Find(&nodes).Error; err != nil {
-		return nil, err
-	}
-	var policies []model.NodeExitPolicy
-	if err := db.Find(&policies).Error; err != nil {
-		return nil, err
-	}
-	block := map[uint]bool{}
-	for _, policy := range policies {
-		block[policy.NodeID] = policy.BlockMainland
-	}
-	rates := map[string]float64{}
-	for _, node := range nodes {
-		r := ref(node.ID)
-		in.devices[r] = len(in.s.Devices)
-		in.s.Devices = append(in.s.Devices, Device{Ref: r, Name: node.Name, Host: node.Host})
-		in.s.Entries = append(in.s.Entries, Entry{ID: r, Device: r, Kind: EntryDirect, Host: node.Host})
-		in.s.Exits = append(in.s.Exits, Exit{ID: r, Device: r, BlockMainland: block[node.ID]})
-		in.exits[r] = true
-		in.addHost(node.Host, node.ID)
-		rates[r] = node.Rate
-	}
-	entries, err := in.entries(db)
+	in, rates, entries, err := readDevices(db)
 	if err != nil {
 		return nil, err
-	}
-	if err := in.uplinks(db); err != nil {
-		return nil, err
-	}
-	if err := db.Order("sort, id").Find(&in.protocols).Error; err != nil {
-		return nil, err
-	}
-	for _, protocol := range in.protocols {
-		if protocol.Host != nil {
-			in.addHost(*protocol.Host, protocol.NodeID)
-		}
 	}
 	for _, protocol := range in.protocols {
 		r := ref(protocol.NodeID)
@@ -107,6 +71,53 @@ func Import(db *gorm.DB) (*Snapshot, error) {
 		return nil, err
 	}
 	return &in.s, nil
+}
+
+// readDevices reads the devices with their entries, uplinks, exits and
+// protocols, and answers each device's rate and addresses (its direct and
+// NAT entries).
+func readDevices(db *gorm.DB) (*importer, map[string]float64, map[string][]string, error) {
+	in := &importer{devices: map[string]int{}, byHost: map[string]map[uint]bool{}, transports: map[string]bool{}, exits: map[string]bool{}}
+	in.s = Snapshot{Devices: []Device{}, Uplinks: []Uplink{}, Entries: []Entry{}, Transports: []Transport{}, Exits: []Exit{}, Lines: []Line{}, Skipped: []Skipped{}}
+	var nodes []model.Node
+	if err := db.Order("id").Find(&nodes).Error; err != nil {
+		return nil, nil, nil, err
+	}
+	var policies []model.NodeExitPolicy
+	if err := db.Find(&policies).Error; err != nil {
+		return nil, nil, nil, err
+	}
+	block := map[uint]bool{}
+	for _, policy := range policies {
+		block[policy.NodeID] = policy.BlockMainland
+	}
+	rates := map[string]float64{}
+	for _, node := range nodes {
+		r := ref(node.ID)
+		in.devices[r] = len(in.s.Devices)
+		in.s.Devices = append(in.s.Devices, Device{Ref: r, Name: node.Name, Host: node.Host})
+		in.s.Entries = append(in.s.Entries, Entry{ID: r, Device: r, Kind: EntryDirect, Host: node.Host})
+		in.s.Exits = append(in.s.Exits, Exit{ID: r, Device: r, BlockMainland: block[node.ID]})
+		in.exits[r] = true
+		in.addHost(node.Host, node.ID)
+		rates[r] = node.Rate
+	}
+	entries, err := in.entries(db)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	if err := in.uplinks(db); err != nil {
+		return nil, nil, nil, err
+	}
+	if err := db.Order("sort, id").Find(&in.protocols).Error; err != nil {
+		return nil, nil, nil, err
+	}
+	for _, protocol := range in.protocols {
+		if protocol.Host != nil {
+			in.addHost(*protocol.Host, protocol.NodeID)
+		}
+	}
+	return in, rates, entries, nil
 }
 
 // l4 answers the transports a protocol type runs on.
@@ -184,7 +195,7 @@ func (in *importer) uplinks(db *gorm.DB) error {
 	}
 	for _, row := range settings {
 		if i, ok := in.devices[row.NodeRef]; ok {
-			in.s.Devices[i].Region = row.Region
+			in.s.Devices[i].Region, in.s.Devices[i].Kernel = row.Region, row.ScanCloud
 		}
 		if row.Interface != "" && !has[row.NodeRef] {
 			in.s.Uplinks = append(in.s.Uplinks, Uplink{Device: row.NodeRef, Name: "default", Interface: row.Interface, SourceV4: row.SourceV4, GatewayV4: row.GatewayV4, SourceV6: row.SourceV6, GatewayV6: row.GatewayV6})
