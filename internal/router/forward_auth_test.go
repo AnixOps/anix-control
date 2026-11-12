@@ -1,30 +1,22 @@
 package router
 
 import (
+	"github.com/AnixOps/anix-control/v5/internal/authn/authntest"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
-	"github.com/AnixOps/anix-control/v5/internal/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func testRouterJWT(t *testing.T, secret string, isAdmin bool) string {
-	t.Helper()
-
-	token, err := utils.GenerateToken(1, "auth-test@example.com", isAdmin, secret, 3600)
-	require.NoError(t, err)
-	return token
-}
-
 func TestSetup_ForwardCompatAdminEndpoints_RequireAdmin(t *testing.T) {
-	r, cfg := setupTestRouter(t)
+	r, _ := setupTestRouter(t)
 	defer teardownTestRouter(t)
 
-	userToken := testRouterJWT(t, cfg.JWT.Secret, false)
-	adminToken := testRouterJWT(t, cfg.JWT.Secret, true)
+	userToken := authntest.Token(t, 1, "auth-test@example.com", false)
+	adminToken := authntest.Token(t, 1, "auth-test@example.com", true)
 
 	endpoints := []struct {
 		method      string
@@ -88,9 +80,9 @@ func TestSetup_ForwardCompatAdminEndpoints_RequireAdmin(t *testing.T) {
 // The flux forwarding API was removed with the flux runtime and gost: its
 // v2 routes are not registered, and /api/v4/forward/* replaces them.
 func TestFluxForwardRoutesAreRemoved(t *testing.T) {
-	r, cfg := setupTestRouter(t)
+	r, _ := setupTestRouter(t)
 	defer teardownTestRouter(t)
-	adminToken := testRouterJWT(t, cfg.JWT.Secret, true)
+	adminToken := authntest.Token(t, 1, "auth-test@example.com", true)
 
 	for _, ep := range []struct{ method, path string }{
 		{http.MethodPost, "/api/v2/admin/forward/create"},

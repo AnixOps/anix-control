@@ -18,9 +18,7 @@ const kernelApi = vi.hoisted(() => ({
   revokeKernelApiToken: vi.fn(),
   createKernelApiToken: vi.fn()
 }))
-const userApi = vi.hoisted(() => ({ getMfaStatus: vi.fn() }))
 vi.mock('@/api/kernel', () => kernelApi)
-vi.mock('@/api/user', () => userApi)
 
 const NOW = Date.UTC(2026, 9, 5, 12, 0, 0)
 const DAY = 86_400_000
@@ -62,7 +60,6 @@ describe('Admin API tokens', () => {
     useUserStore().login('jwt', { id: 7, email: 'admin@example.com' })
     await setLocale('en')
     kernelApi.listKernelApiTokens.mockResolvedValue([ACTIVE, ADMIN, FOREVER])
-    userApi.getMfaStatus.mockResolvedValue({ code: 0, data: { enabled: false } })
   })
 
   afterEach(() => {
@@ -200,7 +197,6 @@ describe('Admin API tokens', () => {
     await user.click(screen.getByTestId('api-token-create-open'))
     const form = await screen.findByRole('dialog', { name: 'Create an API token' })
     await user.type(within(form).getByRole('textbox', { name: /^Name/ }), 'brand new')
-    await user.type(await within(form).findByLabelText(/Current password/), 'pw')
     kernelApi.listKernelApiTokens.mockResolvedValue([ACTIVE, row(8, { name: 'brand new' })])
     await user.click(within(form).getByRole('button', { name: 'Create token' }))
     await screen.findByRole('dialog', { name: 'Your new API token' })

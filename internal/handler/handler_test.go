@@ -86,7 +86,6 @@ func initTestDB() *gorm.DB {
 		&model.TicketMessage{},
 		&model.Knowledge{},
 		&model.UserMFA{},
-		&model.MFALoginAttempt{},
 		&model.InviteCode{},
 		&model.CommissionRecord{},
 		&model.CommissionWithdraw{},

@@ -77,7 +77,7 @@ func TestConfigurationRefusesTheRemovedRouteModes(t *testing.T) {
 		`{"port":443,"routes":{"knowledge.article.list":"native"}}`, nil, 1, nil, nil)
 	require.ErrorContains(t, err, `configuration key "routes" was removed`)
 	_, err = UpdatePluginConfigurationWithValidatorAndHook(db, publicKey, installation.ID, `{"routes":{}}`, nil, 1, nil, nil)
-	require.ErrorContains(t, err, "rehearsed list")
+	require.ErrorContains(t, err, "runs natively")
 
 	config, err := UpdatePluginConfigurationWithValidatorAndHook(db, publicKey, installation.ID, `{"port":443}`, nil, 1, nil, nil)
 	require.NoError(t, err)
@@ -86,7 +86,7 @@ func TestConfigurationRefusesTheRemovedRouteModes(t *testing.T) {
 	require.Error(t, err, "the package schema still holds")
 }
 
-func TestPackageHostOperationsReturnActiveModesOnlyToTheCurrentGeneration(t *testing.T) {
+func TestPackageHostOperationsAnswerOnlyTheCurrentGeneration(t *testing.T) {
 	db := newKernelTestDB(t)
 	publicKey, installation := seedRouteModeRelease(t, db, "")
 	_, err := UpdatePluginConfigurationWithValidatorAndHook(db, publicKey, installation.ID, `{}`, nil, 1, nil, nil)
@@ -98,7 +98,7 @@ func TestPackageHostOperationsReturnActiveModesOnlyToTheCurrentGeneration(t *tes
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), config.Revision)
 	assert.NotEmpty(t, config.ConfigHash)
-	assert.Empty(t, config.RouteModes, "4.0.1 is older than the rehearsed release: every route is legacy")
+	assert.Empty(t, config.RouteModes, "the kernel names no route modes")
 
 	fenced := map[string]packagebridge.HostIdentity{
 		"stale generation": {PackageID: "knowledge", Version: "4.0.1", Generation: 6},

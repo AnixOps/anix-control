@@ -11,10 +11,6 @@ const DAY = 86_400_000
 
 // A made-up token: 8 + 43 characters like the real ones, and it opens nothing.
 export const FIXTURE_TOKEN = `anixadm_${'E2eFixtureTokenNotReal'.padEnd(43, 'X')}`
-// What the fixture accepts as the re-authentication.
-export const FIXTURE_PASSWORD = 'correct-horse-battery'
-export const FIXTURE_CODE = '123456'
-export const FIXTURE_RECOVERY = 'AB12-CD34'
 
 const ME = 1
 
@@ -50,8 +46,8 @@ function fullSet(now) {
 
 let state = { created: [], revoked: {} }
 
-function refusal(status, code, message, headers) {
-  return { __status: status, headers, body: { error: { code, message } } }
+function refusal(status, code, message) {
+  return { __status: status, body: { error: { code, message } } }
 }
 
 function isRevoked(token) {
@@ -73,17 +69,9 @@ function list(now, query, scenario) {
 
 // What the route checks before it mints a token, by scenario.
 function create(now, body, scenario) {
-  if (scenario === 'cutover') return refusal(403, 'step_up_sign_in_stale', 'sign in again and retry within 10 minutes')
+  if (scenario === 'stale') return refusal(403, 'step_up_sign_in_stale', 'sign in again and retry within 10 minutes')
   if (scenario === 'tooMany') return refusal(409, 'too_many_tokens', 'an administrator may hold at most 25 active API tokens: revoke one first')
-  if (scenario === 'rateLimited') return refusal(429, 'step_up_rate_limited', 'too many failed re-authentications, try again later', { 'Retry-After': '900' })
   if (!body?.name || !body?.scope) return refusal(400, 'invalid_request', 'name and scope are required; expires_in_days is 1 to 730')
-  const proof = body.password
-    ? body.password === FIXTURE_PASSWORD
-    : body.method === 'totp' ? body.code === FIXTURE_CODE : body.method === 'backup' && body.code === FIXTURE_RECOVERY
-  if (!body.password && !body.code) {
-    return refusal(403, 'step_up_required', scenario === 'mfa' ? 'an MFA code is required' : 'password is required')
-  }
-  if (!proof) return refusal(403, 'step_up_failed', 'the password or code is not valid')
   const days = Number(body.expires_in_days || 0)
   const record = row(now, [`created-${state.created.length + 1}`, ME, body.name, body.scope, FIXTURE_TOKEN.slice(-4), 0, days ? days * DAY : null, null, '', null, ''])
   state.created.push(record)
@@ -96,7 +84,6 @@ export default {
     state = { created: [], revoked: {} }
   },
   api(path, { method, query, body, scenario, now = FIXED_NOW_MS }) {
-    if (path === '/api/v2/user/mfa/status') return { code: 0, data: { enabled: scenario === 'mfa' } }
     if (path === '/api/v4/kernel/api-tokens' && method === 'GET') {
       if (scenario === 'error') return refusal(503, 'database_unavailable', 'the database is unavailable')
       if (scenario === 'empty') return { data: [] }
@@ -130,7 +117,6 @@ export default {
     await page.getByTestId('api-token-form-dialog').waitFor()
     if (scenario === 'create') return
     await page.getByRole('textbox', { name: /^Name/ }).fill('nightly export')
-    await page.getByLabel(/Current password/).fill(FIXTURE_PASSWORD)
     await page.getByTestId('api-token-submit').click()
     await page.getByTestId('api-token-result').waitFor()
   }

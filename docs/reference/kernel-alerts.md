@@ -9,7 +9,7 @@ The **alert monitor** (`internal/kernelalerts`)
 scans them every 15 minutes, keeps one row per alert in `v4_kernel_alert`,
 sends the administrators one digest of what needs them, and lists the rows at
 `GET /api/v4/kernel/alerts`. It only reads the certificate stores and the
-phase tables and the backup records: it never renews, revokes, advances or
+backup records: it never renews, revokes, advances or
 backs up anything.
 
 ## Alert Kinds
@@ -78,8 +78,7 @@ No phased process is left to watch:
   `identity_cutover_not_finalized` are gone.
 
 Alerts of these kinds still open are resolved at the next scan. Route
-modes are not checked either: the rehearsed list in the binary decides each
-route's mode, and nothing stores or switches it.
+modes are not checked either: every package route runs natively.
 
 ## Notifications
 
@@ -174,7 +173,6 @@ endpoint, alerts clear themselves.
 | `alerts.leaf_expiry_days` | `ANIX_CONTROL_ALERTS_LEAF_EXPIRY_DAYS` | `14` (the cap, see [thresholds](#thresholds)) |
 | `alerts.ca_expiry_days` | `ANIX_CONTROL_ALERTS_CA_EXPIRY_DAYS` | `60` |
 | `alerts.renotify_interval` | `ANIX_CONTROL_ALERTS_RENOTIFY_INTERVAL` | `24h` (at least `1h`) |
-| `alerts.phase_stuck_after` | `ANIX_CONTROL_ALERTS_PHASE_STUCK_AFTER` | `72h`; no alert uses it any more |
 
 The monitor runs in the one Control process that holds the singleton-worker
 lease, so a second process does not send a second digest. The table

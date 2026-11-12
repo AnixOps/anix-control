@@ -98,8 +98,7 @@ func (s *Service) ResetOwnSubscription(ctx context.Context, request pluginhostsd
 	return s.panel(map[string]any{"token": shown.Token})
 }
 
-// stepUp re-authenticates a signed-in user as the kernel does
-// (service.UserService.VerifyStepUp): with a second factor, a TOTP or
+// stepUp re-authenticates a signed-in user: with a second factor, a TOTP or
 // recovery code (Accounts.VerifyMFA, which consumes a used recovery code);
 // otherwise the current password. checked reports whether a credential was
 // checked; refusal is the answer when the check failed or a credential is

@@ -1,13 +1,13 @@
 package router
 
 import (
+	"github.com/AnixOps/anix-control/v5/internal/authn/authntest"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/AnixOps/anix-control/v5/internal/handler"
-	"github.com/AnixOps/anix-control/v5/internal/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -15,7 +15,7 @@ import (
 // Every bulk action repeats a single-item route the router serves, and both
 // bulk endpoints are administrator-only.
 func TestSetup_AdminV4BulkEndpoints(t *testing.T) {
-	r, cfg := setupTestRouter(t)
+	r, _ := setupTestRouter(t)
 	defer teardownTestRouter(t)
 
 	registered := map[string]bool{}
@@ -29,8 +29,7 @@ func TestSetup_AdminV4BulkEndpoints(t *testing.T) {
 		assert.True(t, registered["POST "+route.Endpoint], route.Endpoint)
 	}
 
-	member, err := utils.GenerateToken(2, "member@example.com", false, cfg.JWT.Secret, cfg.JWT.Expire)
-	require.NoError(t, err)
+	member := authntest.Token(t, 2, "member@example.com", false)
 	for _, endpoint := range []string{"/api/v4/admin/users/bulk", "/api/v4/admin/invite-codes/bulk"} {
 		request := httptest.NewRequest(http.MethodPost, endpoint, strings.NewReader(`{"action":"ban","ids":[1]}`))
 		unauthenticated := httptest.NewRecorder()

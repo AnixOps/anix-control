@@ -2,6 +2,7 @@ package router
 
 import (
 	"encoding/json"
+	"github.com/AnixOps/anix-control/v5/internal/authn/authntest"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -10,13 +11,12 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/database"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/service"
-	"github.com/AnixOps/anix-control/v5/internal/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestKernelAlertsRouteIsAdminOnlyAndReadOnly(t *testing.T) {
-	r, cfg := setupTestRouter(t)
+	r, _ := setupTestRouter(t)
 	defer teardownTestRouter(t)
 	require.NoError(t, service.MigrateKernelModelsForTest(database.GetDB()))
 	now := time.Now().UTC()
@@ -38,12 +38,10 @@ func TestKernelAlertsRouteIsAdminOnlyAndReadOnly(t *testing.T) {
 	}
 	assert.Equal(t, http.StatusUnauthorized, get("/api/v4/kernel/alerts", "").Code)
 
-	user, err := utils.GenerateToken(2, "user@example.com", false, cfg.JWT.Secret, cfg.JWT.Expire)
-	require.NoError(t, err)
+	user := authntest.Token(t, 2, "user@example.com", false)
 	assert.Equal(t, http.StatusForbidden, get("/api/v4/kernel/alerts", user).Code, "a non-administrator is refused")
 
-	admin, err := utils.GenerateToken(1, "admin@example.com", true, cfg.JWT.Secret, cfg.JWT.Expire)
-	require.NoError(t, err)
+	admin := authntest.Token(t, 1, "admin@example.com", true)
 	listed := get("/api/v4/kernel/alerts", admin)
 	require.Equal(t, http.StatusOK, listed.Code, listed.Body.String())
 	assert.Equal(t, "no-store", listed.Header().Get("Cache-Control"))

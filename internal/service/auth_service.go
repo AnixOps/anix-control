@@ -3,14 +3,7 @@ package service
 import (
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/google/uuid"
-	"golang.org/x/crypto/bcrypt"
 )
-
-// checkPassword verifies a bcrypt password hash.
-func checkPassword(password, hashedPassword string) bool {
-	err := bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password))
-	return err == nil
-}
 
 // NewSubscriberUser returns a new v2_user row with fresh node UUID and
 // subscription token, as registration creates it.

@@ -105,7 +105,7 @@ Dropped:
   log.max_backups: nothing reads it
   log.max_size: nothing reads it
   log.output: nothing reads it; Control logs to standard output
-  package_routes.default_mode: route modes come only from the rehearsed list (config/package-route-defaults.json)
+  package_routes.default_mode: every package route runs natively; there are no route modes
   plugins.control_execution_enabled: the built-in packages always run; Control starts their hosts at every start
   plugins.control_host_artifact_dir: still read until M2 (P11), not written: where package hosts' files are kept, until the systemd unit gives Control its directories
   plugins.control_host_request_timeout: a built-in value (30s)

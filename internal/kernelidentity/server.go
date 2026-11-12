@@ -149,24 +149,6 @@ func (h *hostServer) CreateSubscriber(ctx context.Context, request *kernelidenti
 		if err := tx.Create(user).Error; err != nil {
 			return err
 		}
-		if mirror := request.GetLegacyMirror(); mirror != nil {
-			state, err := authorityState(tx)
-			if err != nil {
-				return err
-			}
-			if state != model.IdentityAuthorityFinalized {
-				updates := map[string]any{}
-				if err := mirrorCredentials(tx, user.ID, mirror, updates); err != nil {
-					return err
-				}
-				// Part of the creation: written directly, revoking nothing.
-				if len(updates) > 0 {
-					if err := tx.Model(&model.User{}).Where("id = ?", user.ID).Updates(updates).Error; err != nil {
-						return err
-					}
-				}
-			}
-		}
 		if invite != nil {
 			if err := invite.Consume(tx, user.ID); err != nil {
 				return err
@@ -267,18 +249,6 @@ func (h *hostServer) ApplyAccountProjection(ctx context.Context, request *kernel
 			"is_staff": boolInt(request.GetIsStaff()),
 			"banned":   boolInt(request.GetBanned()),
 		}
-		if mirror := request.GetLegacyMirror(); mirror != nil {
-			state, err := authorityState(tx)
-			if err != nil {
-				return err
-			}
-			// After finalize the kernel keeps no credentials.
-			if state != model.IdentityAuthorityFinalized {
-				if err := mirrorCredentials(tx, id, mirror, updates); err != nil {
-					return err
-				}
-			}
-		}
 		// Identity raises the token version whenever a change ends sessions.
 		// Only a version above the last one projected can revoke by version;
 		// otherwise the revocation falls back to time, which cannot miss.
@@ -289,6 +259,15 @@ func (h *hostServer) ApplyAccountProjection(ctx context.Context, request *kernel
 		var err error
 		if revocation, err = service.UpdateUserTxWithTokenVersion(tx, id, updates, tokenVersion); err != nil {
 			return err
+		}
+		// A password or second-factor change ends sessions too, but the
+		// kernel keeps no credentials to compare: the risen version says so
+		// (versions start at 1, which revokes nothing).
+		if revocation == nil && tokenVersion > 1 {
+			revocation = &authn.Revocation{UserID: id, TokenVersion: tokenVersion, Reason: "user credentials changed"}
+			if err := authn.Write(tx, *revocation); err != nil {
+				return err
+			}
 		}
 		if err := tx.Model(&model.IdentityAccountLink{}).Where("user_id = ?", id).Updates(map[string]any{
 			"projection_version": request.GetVersion(), "token_version": max(link.TokenVersion, request.GetTokenVersion()),
@@ -306,34 +285,6 @@ func (h *hostServer) ApplyAccountProjection(ctx context.Context, request *kernel
 		authn.Remember(*revocation)
 	}
 	return response, nil
-}
-
-// mirrorCredentials copies identity's credentials into the legacy columns so
-// that switching the identity routes back to legacy logs users in.
-func mirrorCredentials(tx *gorm.DB, id uint, mirror *kernelidentityv1.LegacyCredentialMirror, updates map[string]any) error {
-	if mirror.GetPasswordHash() != "" {
-		updates["password"] = mirror.GetPasswordHash()
-		updates["password_algo"] = nullableString(mirror.GetPasswordAlgo())
-		updates["password_salt"] = nullableString(mirror.GetPasswordSalt())
-	}
-	if !mirror.GetMfaEnabled() {
-		return tx.Model(&model.UserMFA{}).Where("user_id = ?", id).
-			Updates(map[string]any{"enabled": false, "totp_secret": "", "backup_codes": ""}).Error
-	}
-	// Legacy compares backup codes in plain text while identity keeps only
-	// hashes, so the legacy backup codes are left as they are; TOTP is kept
-	// in step.
-	var existing model.UserMFA
-	err := tx.Where("user_id = ?", id).Take(&existing).Error
-	switch {
-	case err == nil:
-		return tx.Model(&model.UserMFA{}).Where("user_id = ?", id).
-			Updates(map[string]any{"enabled": true, "totp_secret": mirror.GetTotpSecret()}).Error
-	case errors.Is(err, gorm.ErrRecordNotFound):
-		return tx.Create(&model.UserMFA{UserID: id, Enabled: true, TOTPSecret: mirror.GetTotpSecret(), BackupCodes: "[]"}).Error
-	default:
-		return err
-	}
 }
 
 func (h *hostServer) DeleteSubscriber(ctx context.Context, request *kernelidentityv1.DeleteSubscriberRequest) (*kernelidentityv1.DeleteSubscriberResponse, error) {
@@ -447,8 +398,6 @@ type IdentitySettings struct {
 	RegisterRateLimit     RateLimitSettings    `json:"register_rate_limit"`
 	AdminMFA              map[string]any       `json:"admin_mfa"`
 	TokenLifetimeSeconds  int                  `json:"token_lifetime_seconds"`
-	LegacyTokenIssuer     string               `json:"legacy_token_issuer"`
-	AuthorityState        string               `json:"authority_state"`
 	SettingsSchemaVersion int                  `json:"settings_schema_version"`
 }
 
@@ -484,10 +433,6 @@ func (h *hostServer) GetIdentitySettings(ctx context.Context, _ *kernelidentityv
 	if err != nil {
 		return nil, internalError("load admin MFA settings", err)
 	}
-	state, err := authorityState(db)
-	if err != nil {
-		return nil, internalError("load identity authority", err)
-	}
 	policy := service.ResolveRegistrationPolicy(cfg)
 	settings := IdentitySettings{
 		Registration: RegistrationSettings{
@@ -498,8 +443,6 @@ func (h *hostServer) GetIdentitySettings(ctx context.Context, _ *kernelidentityv
 		RegisterRateLimit:     rateLimit(service.ResolveRegisterRateLimitOptions(cfg)),
 		AdminMFA:              mfa,
 		TokenLifetimeSeconds:  cfg.JWT.Expire,
-		LegacyTokenIssuer:     "v2board",
-		AuthorityState:        state,
 		SettingsSchemaVersion: 1,
 	}
 	raw, err := json.Marshal(settings)
@@ -513,23 +456,6 @@ func rateLimit(options service.LoginRateLimitOptions) RateLimitSettings {
 	return RateLimitSettings{
 		Enabled: options.Enabled, MaxAttempts: options.MaxAttempts,
 		WindowSeconds: int(options.Window / time.Second), LockoutSeconds: int(options.Lockout / time.Second),
-	}
-}
-
-// AuthorityState returns the identity authority state; no row means the
-// kernel still owns logins.
-func AuthorityState(db *gorm.DB) (string, error) { return authorityState(db) }
-
-func authorityState(db *gorm.DB) (string, error) {
-	var authority model.IdentityAuthority
-	err := db.Where("id = ?", 1).Take(&authority).Error
-	switch {
-	case err == nil:
-		return authority.State, nil
-	case errors.Is(err, gorm.ErrRecordNotFound):
-		return model.IdentityAuthorityKernel, nil
-	default:
-		return "", err
 	}
 }
 
@@ -592,13 +518,6 @@ func boolInt(value bool) int {
 		return 1
 	}
 	return 0
-}
-
-func nullableString(value string) any {
-	if value == "" {
-		return nil
-	}
-	return value
 }
 
 func nonNil(values []string) []string {

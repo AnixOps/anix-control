@@ -1,14 +1,12 @@
 // Package kernelalerts raises the kernel's operational alerts: leaf
 // certificates (Agent, forward link, module) that were not renewed in time,
-// CAs close to their end, the panel's own certificates (close to their end,
-// or failing to renew), and phased processes (the node credential split,
-// the identity cutover) left in a non-final phase. A Monitor scans the
-// certificate stores and the phase tables read-only, keeps one row per
-// alert in v4_kernel_alert, and sends the administrators one digest of the
-// alerts that are new, worse or due again. GET /api/v4/kernel/alerts lists
-// the rows. It also watches the backups: a bundle that failed its
-// verification, and no verified bundle for too long. Nothing here changes a
-// certificate, a phase or a backup.
+// CAs close to their end, and the panel's own certificates (close to their
+// end, or failing to renew). A Monitor scans the certificate stores
+// read-only, keeps one row per alert in v4_kernel_alert, and sends the
+// administrators one digest of the alerts that are new, worse or due again.
+// GET /api/v4/kernel/alerts lists the rows. It also watches the backups: a
+// bundle that failed its verification, and no verified bundle for too long.
+// Nothing here changes a certificate or a backup.
 package kernelalerts
 
 import (

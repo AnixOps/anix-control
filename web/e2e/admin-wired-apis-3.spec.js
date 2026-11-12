@@ -2,11 +2,10 @@ import { test, expect } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
 import { openScreen } from './support/screens.js'
 import { expectToast } from './support/toasts.js'
-import { FIXTURE_CODE, FIXTURE_PASSWORD, FIXTURE_RECOVERY, FIXTURE_TOKEN } from './fixtures/apiTokens.js'
+import { FIXTURE_TOKEN } from './fixtures/apiTokens.js'
 
 // Security → API tokens (docs/guide/admin-api-tokens.md): the table of the
-// administrator's tokens, the create form with its re-authentication, the one
-// time token, and revoking. The API is mocked (e2e/fixtures/apiTokens.js); each
+// administrator's tokens, the create form, the one time token, and revoking. The API is mocked (e2e/fixtures/apiTokens.js); each
 // test records the requests the page makes and checks what it sent.
 //
 // Flows that work a Select inside a dialog (the expiry) run on the real clock:
@@ -219,14 +218,13 @@ test.describe('creating a token', () => {
     await form.getByRole('combobox', { name: 'Expires' }).click()
     await page.getByRole('option', { name: '30 days', exact: true }).click()
     await expect(form.getByRole('combobox', { name: 'Expires' })).toContainText('30 days')
-    await form.getByLabel(/Current password/).fill(FIXTURE_PASSWORD)
     await form.getByRole('button', { name: 'Create token' }).click()
 
     const result = page.getByRole('dialog', { name: 'Your new API token' })
     await expect(result).toBeVisible()
     const posts = requests.to(TOKENS, 'POST')
     expect(posts).toHaveLength(1)
-    expect(JSON.parse(posts[0].body)).toEqual({ name: 'weekly report', scope: 'admin', expires_in_days: 30, password: FIXTURE_PASSWORD })
+    expect(JSON.parse(posts[0].body)).toEqual({ name: 'weekly report', scope: 'admin', expires_in_days: 30 })
     // The session, not a token: tokens cannot create tokens.
     expect(posts[0].headers.authorization).toBe('Bearer e2e-screen-token')
 
@@ -266,7 +264,6 @@ test.describe('creating a token', () => {
     // Asking again starts from a clean form.
     const again = await openForm(page)
     await expect(again.getByRole('textbox', { name: /^Name/ })).toHaveValue('')
-    await expect(again.getByLabel(/Current password/)).toHaveValue('')
     await expect(again.getByRole('radio', { name: 'Read' })).toBeChecked()
   })
 
@@ -284,7 +281,6 @@ test.describe('creating a token', () => {
 
     await page.getByTestId('api-token-create-open').click()
     await page.getByRole('textbox', { name: /^Name/ }).fill('again')
-    await page.getByLabel(/Current password/).fill(FIXTURE_PASSWORD)
     await page.getByTestId('api-token-submit').click()
     await expect(result).toBeVisible()
     await result.getByRole('button', { name: 'Close' }).click()
@@ -314,10 +310,6 @@ test.describe('creating a token', () => {
     await form.getByRole('textbox', { name: /^Name/ }).fill('x'.repeat(101))
     await form.getByRole('button', { name: 'Create token' }).click()
     await expect(form.getByText('Use at most 100 characters.')).toBeVisible()
-    await form.getByRole('textbox', { name: /^Name/ }).fill('probe')
-    await form.getByRole('button', { name: 'Create token' }).click()
-    await expect(form.getByText('Enter your current password.')).toBeVisible()
-    await expect(form.getByLabel(/Current password/)).toBeFocused()
     expect(requests.to(TOKENS, 'POST')).toHaveLength(0)
   })
 
@@ -329,7 +321,6 @@ test.describe('creating a token', () => {
     await form.getByRole('combobox', { name: 'Expires' }).click()
     await page.getByRole('option', { name: 'Custom…' }).click()
     await form.getByLabel('Days until it expires').fill('731')
-    await form.getByLabel(/Current password/).fill(FIXTURE_PASSWORD)
     await form.getByRole('button', { name: 'Create token' }).click()
     await expect(form.getByText('Enter a whole number of days from 1 to 730.')).toBeVisible()
     expect(requests.to(TOKENS, 'POST')).toHaveLength(0)
@@ -340,64 +331,14 @@ test.describe('creating a token', () => {
     await form.getByRole('button', { name: 'Create token' }).click()
     await expect(page.getByTestId('api-token-result')).toBeVisible()
     // No expiry: the field is left out of the request.
-    expect(JSON.parse(requests.to(TOKENS, 'POST')[0].body)).toEqual({ name: 'probe', scope: 'read', password: FIXTURE_PASSWORD })
+    expect(JSON.parse(requests.to(TOKENS, 'POST')[0].body)).toEqual({ name: 'probe', scope: 'read' })
     await expect(page.getByTestId('api-token-facts')).toContainText('Never')
   })
 
-  test('says so on the field for a wrong password, and works once it is right', async ({ page }) => {
-    const requests = recordRequests(page)
-    await openScreen(page, 'admin-api-tokens', { clock: true })
+  test('says to sign in again when the sign-in is too old', async ({ page }) => {
+    await openScreen(page, 'admin-api-tokens', { clock: true, scenario: 'stale' })
     const form = await openForm(page)
     await form.getByRole('textbox', { name: /^Name/ }).fill('probe')
-    await form.getByLabel(/Current password/).fill('not the password')
-    await form.getByRole('button', { name: 'Create token' }).click()
-    await expect(form.getByText('That password isn’t right.')).toBeVisible()
-    await expect(form.getByLabel(/Current password/)).toHaveValue('')
-    await expect(form.getByLabel(/Current password/)).toBeFocused()
-    await expect(page.getByTestId('api-token-result')).toHaveCount(0)
-    await form.getByLabel(/Current password/).fill(FIXTURE_PASSWORD)
-    await form.getByRole('button', { name: 'Create token' }).click()
-    await expect(page.getByTestId('api-token-result')).toBeVisible()
-    expect(requests.to(TOKENS, 'POST')).toHaveLength(2)
-  })
-
-  test('asks for the authenticator code when two-step verification is on, with a recovery code as the way out', async ({ page }) => {
-    const requests = recordRequests(page)
-    await openScreen(page, 'admin-api-tokens', { clock: true, scenario: 'mfa' })
-    const form = await openForm(page)
-    await expect(form.getByRole('group', { name: 'Authenticator code' })).toBeVisible()
-    await expect(form.getByLabel(/Current password/)).toHaveCount(0)
-    await form.getByRole('textbox', { name: /^Name/ }).fill('probe')
-    // A wrong code, typed to the end, is sent at once and refused.
-    await form.getByLabel('Digit 1 of 6').click()
-    await page.keyboard.type('000000')
-    await expect(form.getByText('That code isn’t right. Try the next one.')).toBeVisible()
-    expect(JSON.parse(requests.to(TOKENS, 'POST')[0].body)).toMatchObject({ code: '000000', method: 'totp' })
-    // A recovery code instead.
-    await form.getByRole('button', { name: 'Use a recovery code instead' }).click()
-    await form.getByRole('textbox', { name: 'Recovery code' }).fill(FIXTURE_RECOVERY.toLowerCase().replace('-', ''))
-    await form.getByRole('button', { name: 'Create token' }).click()
-    await expect(page.getByTestId('api-token-result')).toBeVisible()
-    expect(JSON.parse(requests.to(TOKENS, 'POST')[1].body)).toEqual({ name: 'probe', scope: 'read', expires_in_days: 90, code: FIXTURE_RECOVERY, method: 'backup' })
-  })
-
-  test('sends the six digits of the authenticator code as totp', async ({ page }) => {
-    const requests = recordRequests(page)
-    await openScreen(page, 'admin-api-tokens', { clock: true, scenario: 'mfa' })
-    const form = await openForm(page)
-    await form.getByRole('textbox', { name: /^Name/ }).fill('probe')
-    await form.getByLabel('Digit 1 of 6').click()
-    await page.keyboard.type(FIXTURE_CODE)
-    await expect(page.getByTestId('api-token-result')).toBeVisible()
-    expect(JSON.parse(requests.to(TOKENS, 'POST')[0].body)).toMatchObject({ code: FIXTURE_CODE, method: 'totp' })
-    expect(JSON.parse(requests.to(TOKENS, 'POST')[0].body)).not.toHaveProperty('password')
-  })
-
-  test('says to sign in again when identity holds the credentials and the sign-in is too old', async ({ page }) => {
-    await openScreen(page, 'admin-api-tokens', { clock: true, scenario: 'cutover' })
-    const form = await openForm(page)
-    await form.getByRole('textbox', { name: /^Name/ }).fill('probe')
-    await form.getByLabel(/Current password/).fill(FIXTURE_PASSWORD)
     await form.getByRole('button', { name: 'Create token' }).click()
     const alert = form.getByRole('alert')
     await expect(alert).toContainText('Your sign-in is too old for this. Sign in again, then create the token within 10 minutes.')
@@ -405,34 +346,13 @@ test.describe('creating a token', () => {
     await expect(page).toHaveURL(/\/login$/)
   })
 
-  test('says so for 25 active tokens and for too many failed attempts, with the wait', async ({ page }) => {
+  test('says so for 25 active tokens', async ({ page }) => {
     await openScreen(page, 'admin-api-tokens', { clock: true, scenario: 'tooMany' })
-    let form = await openForm(page)
+    const form = await openForm(page)
     await form.getByRole('textbox', { name: /^Name/ }).fill('probe')
-    await form.getByLabel(/Current password/).fill(FIXTURE_PASSWORD)
     await form.getByRole('button', { name: 'Create token' }).click()
     await expect(form.getByRole('alert')).toContainText('You already hold 25 active API tokens. Revoke one first.')
     await expect(form).toBeVisible()
-
-    await openScreen(page, 'admin-api-tokens', { clock: true, scenario: 'rateLimited' })
-    form = await openForm(page)
-    await form.getByRole('textbox', { name: /^Name/ }).fill('probe')
-    await form.getByLabel(/Current password/).fill('whatever')
-    await form.getByRole('button', { name: 'Create token' }).click()
-    await expect(form.getByText('Too many failed attempts. Try again in 15 min.')).toBeVisible()
-    await expect(form.getByLabel(/Current password/)).toHaveValue('')
-  })
-
-  test('puts nothing of the credential in the console when the re-authentication fails', async ({ page }) => {
-    const logged = []
-    page.on('console', message => logged.push(message.text()))
-    await openScreen(page, 'admin-api-tokens', { clock: true })
-    const form = await openForm(page)
-    await form.getByRole('textbox', { name: /^Name/ }).fill('probe')
-    await form.getByLabel(/Current password/).fill('a-wrong-password-9')
-    await form.getByRole('button', { name: 'Create token' }).click()
-    await expect(form.getByText('That password isn’t right.')).toBeVisible()
-    expect(logged.join('\n')).not.toContain('a-wrong-password-9')
   })
 
   test('the form and the token dialog fit a phone, and have no axe finding', async ({ page }) => {

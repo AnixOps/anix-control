@@ -49,7 +49,7 @@ func takeAdminCommand() []string {
 // them. Running one exits with status 2 and the reason instead of starting
 // the server with the words as stray arguments.
 var removedCommands = map[string]string{
-	"routes": "anix-control routes was removed: the route modes of the v2 packages come only from the rehearsed list (config/package-route-defaults.json) and can no longer be listed or switched",
+	"routes": "anix-control routes was removed: every package route runs natively, so there are no route modes to list or switch",
 }
 
 // removedCommand reports the reason when arguments start with a removed

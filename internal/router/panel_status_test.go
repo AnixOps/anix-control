@@ -3,6 +3,7 @@ package router
 import (
 	"context"
 	"encoding/json"
+	"github.com/AnixOps/anix-control/v5/internal/authn/authntest"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -11,13 +12,12 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/panelcert"
 	"github.com/AnixOps/anix-control/v5/internal/service"
-	"github.com/AnixOps/anix-control/v5/internal/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestPanelStatusRouteIsAdminOnly(t *testing.T) {
-	r, cfg := setupTestRouter(t)
+	r, _ := setupTestRouter(t)
 	defer teardownTestRouter(t)
 	require.NoError(t, service.MigrateKernelModelsForTest(database.GetDB()))
 	// Control creates v5_acme_cache with the migration 0003_acme_cache.
@@ -32,13 +32,11 @@ func TestPanelStatusRouteIsAdminOnly(t *testing.T) {
 		return recorder
 	}
 	assert.Equal(t, http.StatusUnauthorized, call(http.MethodGet, "/api/v5/panel/status", "").Code)
-	user, err := utils.GenerateToken(2, "user@example.com", false, cfg.JWT.Secret, cfg.JWT.Expire)
-	require.NoError(t, err)
+	user := authntest.Token(t, 2, "user@example.com", false)
 	assert.Equal(t, http.StatusForbidden, call(http.MethodGet, "/api/v5/panel/status", user).Code)
 	assert.Equal(t, http.StatusForbidden, call(http.MethodPost, "/api/v5/panel/certificates/retry", user).Code)
 
-	admin, err := utils.GenerateToken(1, "admin@example.com", true, cfg.JWT.Secret, cfg.JWT.Expire)
-	require.NoError(t, err)
+	admin := authntest.Token(t, 1, "admin@example.com", true)
 	// No manager in this process and nothing stored: unavailable.
 	panelcert.SetDefault(nil)
 	assert.Equal(t, http.StatusServiceUnavailable, call(http.MethodGet, "/api/v5/panel/status", admin).Code)

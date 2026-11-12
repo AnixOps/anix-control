@@ -408,12 +408,6 @@ func run() int {
 	} else {
 		logging.Setup(cfg.Log)
 	}
-	// The route modes of the v2 Control packages: the rehearsed list.
-	if summary, err := service.PackageRouteDefaultsSummary(); err != nil {
-		log.Fatalf("Invalid package route defaults: %v", err)
-	} else if adminArguments == nil {
-		log.Print(summary)
-	}
 	if adminArguments == nil && !migrateOnly && !jsonCommand {
 		logSecretStrength(log.Printf, cfg)
 	}

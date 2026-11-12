@@ -1,6 +1,5 @@
 // "Create an API token" (views/admin/security/ApiTokenCreate.vue and
-// useApiTokenCreate.js, POST /api/v4/kernel/api-tokens): the form, the
-// re-authentication, what is sent, the one-time token in the result dialog and,
+// useApiTokenCreate.js, POST /api/v4/kernel/api-tokens): the form, what is sent, the one-time token in the result dialog and,
 // above all, that the token is gone when that dialog closes.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { effectScope } from 'vue'
@@ -13,9 +12,7 @@ import { useApiTokenCreate } from '@/views/admin/security/useApiTokenCreate'
 import { setLocale } from '@/i18n'
 
 const kernelApi = vi.hoisted(() => ({ createKernelApiToken: vi.fn() }))
-const userApi = vi.hoisted(() => ({ getMfaStatus: vi.fn() }))
 vi.mock('@/api/kernel', () => kernelApi)
-vi.mock('@/api/user', () => userApi)
 
 // A made-up token: it opens nothing anywhere.
 const TOKEN = 'anixadm_TestTokenNotRealAbCdEfGhIjKlMnOpQrStUvWxYz0'
@@ -32,20 +29,17 @@ function created(extra = {}) {
   }
 }
 
-function refusal(status, code, message, headers) {
-  return { response: { status, data: { error: { code, message } }, headers }, message: `Request failed with status code ${status}` }
+function refusal(status, code, message) {
+  return { response: { status, data: { error: { code, message } } }, message: `Request failed with status code ${status}` }
 }
-
-const ok = data => ({ code: 0, data })
 
 describe('useApiTokenCreate', () => {
   let scope
-  const t = (key, params = {}) => `${key}${params.message ? `:${params.message}` : ''}${params.minutes ? `:${params.minutes}` : ''}`
+  const t = (key, params = {}) => `${key}${params.message ? `:${params.message}` : ''}`
 
   beforeEach(() => {
     vi.resetAllMocks()
     kernelApi.createKernelApiToken.mockResolvedValue(created())
-    userApi.getMfaStatus.mockResolvedValue(ok({ enabled: false }))
   })
 
   afterEach(() => {
@@ -61,67 +55,20 @@ describe('useApiTokenCreate', () => {
   }
 
   function fill(create, extra = {}) {
-    Object.assign(create.form, { name: 'nightly export', password: 'correct horse', ...extra })
+    Object.assign(create.form, { name: 'nightly export', ...extra })
   }
 
-  it('asks for the password unless two-step verification is on, then for a code', async () => {
-    const create = await setup()
-    expect(create.stage.value).toBe('form')
-    expect(create.step.value).toBe('password')
-    create.cancel()
-
-    userApi.getMfaStatus.mockResolvedValue(ok({ enabled: true }))
-    create.open()
-    await flushPromises()
-    expect(create.step.value).toBe('code')
-  })
-
-  it('asks for the password when the account\'s status cannot be read; the route says if it wants a code', async () => {
-    userApi.getMfaStatus.mockRejectedValue(new Error('offline'))
-    const create = await setup()
-    expect(create.step.value).toBe('password')
-  })
-
-  it('does not take a late status answer for a form that was closed and opened again', async () => {
-    let release
-    userApi.getMfaStatus.mockReturnValueOnce(new Promise((resolve) => { release = resolve }))
-    scope = effectScope()
-    const create = scope.run(() => useApiTokenCreate({ t }))
-    create.open()
-    create.cancel()
-    userApi.getMfaStatus.mockResolvedValueOnce(ok({ enabled: false }))
-    create.open()
-    await flushPromises()
-    expect(create.step.value).toBe('password')
-    release(ok({ enabled: true }))
-    await flushPromises()
-    expect(create.step.value).toBe('password')
-  })
-
-  it('does not send while it is still checking how to confirm', async () => {
-    let release
-    userApi.getMfaStatus.mockReturnValueOnce(new Promise((resolve) => { release = resolve }))
-    scope = effectScope()
-    const create = scope.run(() => useApiTokenCreate({ t }))
-    create.open()
-    fill(create)
-    expect(create.step.value).toBe('checking')
-    expect((await create.submit()).ok).toBe(false)
-    expect(kernelApi.createKernelApiToken).not.toHaveBeenCalled()
-    release(ok({ enabled: false }))
-  })
-
-  it('sends the name, scope, expiry and password, and keeps the token in result only', async () => {
+  it('sends the name, scope and expiry, and keeps the token in result only', async () => {
     const onCreated = vi.fn()
     const create = await setup(onCreated)
     fill(create, { name: '  nightly export  ', scope: 'admin', expiry: '30' })
     expect(await create.submit()).toEqual({ ok: true, focus: '' })
-    expect(kernelApi.createKernelApiToken).toHaveBeenCalledWith({ name: '  nightly export  ', scope: 'admin', expiresInDays: 30, password: 'correct horse' })
+    expect(kernelApi.createKernelApiToken).toHaveBeenCalledWith({ name: '  nightly export  ', scope: 'admin', expiresInDays: 30 })
     expect(create.stage.value).toBe('result')
     expect(create.result.value.token).toBe(TOKEN)
     expect(create.result.value.record).toMatchObject({ id: 'tok-1', name: 'nightly export', scope: 'read', hint: 'Yz0' })
-    // The form is back to its defaults: the password and the name are gone.
-    expect(create.form).toEqual({ name: '', scope: 'read', expiry: '90', customDays: '', password: '', code: '', recovery: '' })
+    // The form is back to its defaults.
+    expect(create.form).toEqual({ name: '', scope: 'read', expiry: '90', customDays: '' })
     // The page is told about the record, never the token.
     expect(onCreated).toHaveBeenCalledTimes(1)
     expect(JSON.stringify(onCreated.mock.calls)).not.toContain(TOKEN)
@@ -150,23 +97,6 @@ describe('useApiTokenCreate', () => {
     expect(kernelApi.createKernelApiToken.mock.calls[2][0].expiresInDays).toBe(0)
   })
 
-  it('sends a six-digit code as totp, and a recovery code, upper-cased and hyphenated, as backup', async () => {
-    userApi.getMfaStatus.mockResolvedValue(ok({ enabled: true }))
-    const create = await setup()
-    fill(create, { password: '', code: '12 34 56' })
-    await create.submit()
-    expect(kernelApi.createKernelApiToken.mock.calls[0][0]).toMatchObject({ code: '123456', method: 'totp' })
-    expect(kernelApi.createKernelApiToken.mock.calls[0][0]).not.toHaveProperty('password')
-    create.dismiss()
-
-    create.open()
-    await flushPromises()
-    create.switchStep('recovery')
-    fill(create, { password: '', recovery: 'ab12cd34' })
-    await create.submit()
-    expect(kernelApi.createKernelApiToken.mock.calls[1][0]).toMatchObject({ code: 'AB12-CD34', method: 'backup' })
-  })
-
   it('says what is missing without a request, and where to look', async () => {
     const create = await setup()
     expect(await create.submit()).toEqual({ ok: false, focus: 'name' })
@@ -174,17 +104,6 @@ describe('useApiTokenCreate', () => {
     fill(create, { expiry: 'custom', customDays: '731' })
     expect(await create.submit()).toEqual({ ok: false, focus: 'expiry' })
     expect(create.expiryError.value).toBe('adminApiTokens.create.errors.expiry')
-    fill(create, { expiry: '90', password: '' })
-    expect(await create.submit()).toEqual({ ok: false, focus: 'credential' })
-    expect(create.credentialError.value).toBe('adminApiTokens.create.errors.password')
-    create.switchStep('code')
-    create.form.code = '123'
-    await create.submit()
-    expect(create.credentialError.value).toBe('adminApiTokens.create.errors.code')
-    create.switchStep('recovery')
-    create.form.recovery = 'nope'
-    await create.submit()
-    expect(create.credentialError.value).toBe('adminApiTokens.create.errors.recoveryFormat')
     expect(kernelApi.createKernelApiToken).not.toHaveBeenCalled()
   })
 
@@ -218,7 +137,7 @@ describe('useApiTokenCreate', () => {
       await create.submit()
       scope.stop()
       expect(create.result.value).toBeNull()
-      expect(create.form.password).toBe('')
+      expect(create.form.name).toBe('')
     })
 
     it('when the form is opened again', async () => {
@@ -259,7 +178,6 @@ describe('useApiTokenCreate', () => {
       create.open()
       fill(create)
       create.cancel()
-      expect(create.form.password).toBe('')
       expect(create.form.name).toBe('')
       expect(create.stage.value).toBe('idle')
     })
@@ -276,71 +194,24 @@ describe('useApiTokenCreate', () => {
   })
 
   describe('what the route refuses', () => {
-    async function refused(error, prepare) {
+    async function refused(error) {
       kernelApi.createKernelApiToken.mockRejectedValueOnce(error)
       const create = await setup()
-      prepare?.(create)
-      fill(create, prepare ? {} : {})
+      fill(create)
       const outcome = await create.submit()
       return { create, outcome }
     }
-
-    it('a wrong password: says so on the field, clears the password, keeps the form open', async () => {
-      const { create, outcome } = await refused(refusal(403, 'step_up_failed', 'the password or code is not valid'))
-      expect(outcome).toEqual({ ok: false, focus: 'credential' })
-      expect(create.credentialError.value).toBe('adminApiTokens.create.errors.passwordWrong')
-      expect(create.form.password).toBe('')
-      expect(create.form.name).toBe('nightly export')
-      expect(create.stage.value).toBe('form')
-      expect(create.busy.value).toBe(false)
-    })
-
-    it('a wrong code and a wrong recovery code say which', async () => {
-      userApi.getMfaStatus.mockResolvedValue(ok({ enabled: true }))
-      kernelApi.createKernelApiToken.mockRejectedValue(refusal(403, 'step_up_failed', 'the password or code is not valid'))
-      const create = await setup()
-      fill(create, { code: '123456', password: '' })
-      await create.submit()
-      expect(create.credentialError.value).toBe('adminApiTokens.create.errors.codeWrong')
-      expect(create.form.code).toBe('')
-      create.switchStep('recovery')
-      fill(create, { recovery: 'AB12-CD34', password: '' })
-      await create.submit()
-      expect(create.credentialError.value).toBe('adminApiTokens.create.errors.recoveryWrong')
-      expect(create.form.recovery).toBe('')
-    })
-
-    it('"an MFA code is required" moves to the code step, "password is required" back to the password', async () => {
-      const { create } = await refused(refusal(403, 'step_up_required', 'an MFA code is required'))
-      expect(create.step.value).toBe('code')
-      expect(create.form.name).toBe('nightly export')
-      kernelApi.createKernelApiToken.mockRejectedValueOnce(refusal(403, 'step_up_required', 'password is required'))
-      create.form.code = '123456'
-      await create.submit()
-      expect(create.step.value).toBe('password')
-      expect(create.credentialError.value).toBe('adminApiTokens.create.errors.password')
-    })
 
     it('"sign in again" is a form-level error that offers a new sign-in', async () => {
       const { create, outcome } = await refused(refusal(403, 'step_up_sign_in_stale', 'sign in again and retry within 10 minutes'))
       expect(outcome.focus).toBe('')
       expect(create.error.value).toBe('adminApiTokens.create.errors.signInAgain')
       expect(create.signInAgain.value).toBe(true)
-      expect(create.credentialError.value).toBe('')
-      // Typing again clears it with the next attempt.
+      expect(create.stage.value).toBe('form')
+      // Trying again clears it with the next attempt.
       kernelApi.createKernelApiToken.mockResolvedValueOnce(created())
       await create.submit()
       expect(create.signInAgain.value).toBe(false)
-    })
-
-    it('429 says how long to wait, in whole minutes, and clears the credential', async () => {
-      const { create } = await refused(refusal(429, 'step_up_rate_limited', 'too many failed re-authentications', { 'retry-after': '890' }))
-      expect(create.credentialError.value).toBe('adminApiTokens.create.errors.rateLimitedWait:15')
-      expect(create.form.password).toBe('')
-      kernelApi.createKernelApiToken.mockRejectedValueOnce({ response: { status: 429, data: {}, headers: {} } })
-      create.form.password = 'x'
-      await create.submit()
-      expect(create.credentialError.value).toBe('adminApiTokens.create.errors.rateLimited')
     })
 
     it('25 active tokens, a demoted owner, a bad request and anything else are said once, above the buttons', async () => {
@@ -371,7 +242,6 @@ describe('ApiTokenCreate', () => {
     setActivePinia(pinia)
     await setLocale('en')
     kernelApi.createKernelApiToken.mockResolvedValue(created())
-    userApi.getMfaStatus.mockResolvedValue(ok({ enabled: false }))
     writeText = vi.fn().mockResolvedValue(undefined)
     // Everything the secret must never reach.
     localStorage.setItem.mockClear()
@@ -409,10 +279,9 @@ describe('ApiTokenCreate', () => {
     return screen.findByRole('dialog', { name: 'Create an API token' })
   }
 
-  async function createToken(user, { name = 'nightly export', password = 'correct horse' } = {}) {
+  async function createToken(user, { name = 'nightly export' } = {}) {
     const form = await openForm(user)
     await user.type(within(form).getByRole('textbox', { name: /^Name/ }), name)
-    await user.type(await within(form).findByLabelText(/Current password/), password)
     await user.click(within(form).getByRole('button', { name: 'Create token' }))
     return screen.findByRole('dialog', { name: 'Your new API token' })
   }
@@ -432,32 +301,15 @@ describe('ApiTokenCreate', () => {
     expect(kernelApi.createKernelApiToken).not.toHaveBeenCalled()
   })
 
-  it('sends nothing, and says what is missing, until the name and the password are there', async () => {
+  it('sends nothing, and says what is missing, until the name is there', async () => {
     const user = startUser()
     render(ApiTokenCreate)
     const form = await openForm(user)
     await user.click(within(form).getByRole('button', { name: 'Create token' }))
     expect(within(form).getByText('Enter a name.')).toBeTruthy()
     expect(document.activeElement).toBe(within(form).getByRole('textbox', { name: /^Name/ }))
-    await user.type(within(form).getByRole('textbox', { name: /^Name/ }), 'probe')
-    await user.click(within(form).getByRole('button', { name: 'Create token' }))
-    expect(within(form).getByText('Enter your current password.')).toBeTruthy()
+    expect(within(form).queryByLabelText(/password/i)).toBeNull()
     expect(kernelApi.createKernelApiToken).not.toHaveBeenCalled()
-  })
-
-  it('asks for the authenticator code, with a recovery code as the way out, when two-step verification is on', async () => {
-    const user = startUser()
-    userApi.getMfaStatus.mockResolvedValue(ok({ enabled: true }))
-    render(ApiTokenCreate)
-    const form = await openForm(user)
-    await within(form).findByRole('group', { name: 'Authenticator code' })
-    expect(within(form).queryByLabelText(/Current password/)).toBeNull()
-    await user.type(within(form).getByRole('textbox', { name: /^Name/ }), 'probe')
-    await user.click(within(form).getByRole('button', { name: 'Use a recovery code instead' }))
-    await user.type(within(form).getByRole('textbox', { name: 'Recovery code' }), 'ab12cd34')
-    await user.click(within(form).getByRole('button', { name: 'Create token' }))
-    await screen.findByRole('dialog', { name: 'Your new API token' })
-    expect(kernelApi.createKernelApiToken).toHaveBeenCalledWith({ name: 'probe', scope: 'read', expiresInDays: 90, code: 'AB12-CD34', method: 'backup' })
   })
 
   it('sends the choices and shows the token once, masked, with a warning and a usage hint that has no token in it', async () => {
@@ -468,11 +320,10 @@ describe('ApiTokenCreate', () => {
     await user.click(within(form).getByRole('radio', { name: 'Admin' }))
     await user.click(within(form).getByRole('combobox', { name: 'Expires' }))
     await user.click(await screen.findByRole('option', { name: '30 days' }))
-    await user.type(within(form).getByLabelText(/Current password/), 'correct horse')
     await user.click(within(form).getByRole('button', { name: 'Create token' }))
 
     const result = await screen.findByRole('dialog', { name: 'Your new API token' })
-    expect(kernelApi.createKernelApiToken).toHaveBeenCalledWith({ name: 'nightly export', scope: 'admin', expiresInDays: 30, password: 'correct horse' })
+    expect(kernelApi.createKernelApiToken).toHaveBeenCalledWith({ name: 'nightly export', scope: 'admin', expiresInDays: 30 })
     const field = within(result).getByLabelText('API token')
     expect(field.value).toBe(TOKEN)
     expect(field.type).toBe('password')
@@ -522,10 +373,9 @@ describe('ApiTokenCreate', () => {
       // The store and the logs never had it.
       expect(JSON.stringify(pinia.state.value)).not.toContain(TOKEN)
       expect(leaked()).toBe(false)
-      // A new form starts blank: no name, no password, scope read, 90 days.
+      // A new form starts blank: no name, scope read, 90 days.
       const form = await openForm(user)
       expect(within(form).getByRole('textbox', { name: /^Name/ }).value).toBe('')
-      expect(within(form).getByLabelText(/Current password/).value).toBe('')
       expect(within(form).getByRole('radio', { name: 'Read' }).getAttribute('aria-checked')).toBe('true')
       expect(onPage()).toBe(false)
     })
@@ -570,8 +420,7 @@ describe('ApiTokenCreate', () => {
       const { unmount } = render(ApiTokenCreate)
       const form = await openForm(user)
       await user.type(within(form).getByRole('textbox', { name: /^Name/ }), 'probe')
-      await user.type(within(form).getByLabelText(/Current password/), 'pw')
-      await user.click(within(form).getByRole('button', { name: 'Create token' }))
+        await user.click(within(form).getByRole('button', { name: 'Create token' }))
       unmount()
       release(created())
       await flushPromises()
@@ -580,46 +429,26 @@ describe('ApiTokenCreate', () => {
     })
   })
 
-  it('keeps the form open on a wrong password, with the message on the field', async () => {
-    const user = startUser()
-    kernelApi.createKernelApiToken.mockRejectedValueOnce(refusal(403, 'step_up_failed', 'the password or code is not valid'))
-    render(ApiTokenCreate)
-    const form = await openForm(user)
-    await user.type(within(form).getByRole('textbox', { name: /^Name/ }), 'probe')
-    await user.type(within(form).getByLabelText(/Current password/), 'nope')
-    await user.click(within(form).getByRole('button', { name: 'Create token' }))
-    expect(await within(form).findByText('That password isn’t right.')).toBeTruthy()
-    expect(within(form).getByLabelText(/Current password/).value).toBe('')
-    expect(document.activeElement).toBe(within(form).getByLabelText(/Current password/))
-    expect(screen.queryByRole('dialog', { name: 'Your new API token' })).toBeNull()
-  })
-
-  it('says to sign in again, with a button, when identity holds the credentials and the sign-in is old', async () => {
+  it('says to sign in again, with a button, when the sign-in is old', async () => {
     const user = startUser()
     kernelApi.createKernelApiToken.mockRejectedValueOnce(refusal(403, 'step_up_sign_in_stale', 'sign in again and retry within 10 minutes'))
     render(ApiTokenCreate)
     const form = await openForm(user)
     await user.type(within(form).getByRole('textbox', { name: /^Name/ }), 'probe')
-    await user.type(within(form).getByLabelText(/Current password/), 'pw')
     await user.click(within(form).getByRole('button', { name: 'Create token' }))
     const alert = await within(form).findByRole('alert')
     expect(alert.textContent).toContain('Your sign-in is too old for this.')
     expect(within(alert).getByRole('button', { name: 'Sign in again' })).toBeTruthy()
   })
 
-  it('names 25 active tokens and 429 in the form', async () => {
+  it('names 25 active tokens in the form', async () => {
     const user = startUser()
-    kernelApi.createKernelApiToken
-      .mockRejectedValueOnce(refusal(409, 'too_many_tokens', 'at most 25'))
-      .mockRejectedValueOnce(refusal(429, 'step_up_rate_limited', 'later', { 'retry-after': '900' }))
+    kernelApi.createKernelApiToken.mockRejectedValueOnce(refusal(409, 'too_many_tokens', 'at most 25'))
     render(ApiTokenCreate)
     const form = await openForm(user)
     await user.type(within(form).getByRole('textbox', { name: /^Name/ }), 'probe')
-    await user.type(within(form).getByLabelText(/Current password/), 'pw')
     await user.click(within(form).getByRole('button', { name: 'Create token' }))
     expect((await within(form).findByRole('alert')).textContent).toContain('You already hold 25 active API tokens. Revoke one first.')
-    await user.click(within(form).getByRole('button', { name: 'Create token' }))
-    expect(await within(form).findByText('Too many failed attempts. Try again in 15 min.')).toBeTruthy()
   })
 
   it('is off, with the button disabled, while the limit is reached', async () => {

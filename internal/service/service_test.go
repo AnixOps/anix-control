@@ -23,7 +23,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-	"golang.org/x/crypto/bcrypt"
 )
 
 var (
@@ -91,7 +90,6 @@ func (s *ServiceTestSuite) SetupSuite() {
 			&model.ForwardLatencyBucket{},
 			&model.SpeedLimit{},
 			&model.UserMFA{},
-			&model.MFALoginAttempt{},
 			&model.InviteCode{},
 			&model.InviteConfig{},
 			&model.CommissionRecord{},
@@ -662,56 +660,6 @@ func (s *StatsServiceTestSuite) TestTodayTraffic_NoLogsIsZero() {
 
 func TestStatsService(t *testing.T) {
 	suite.Run(t, new(StatsServiceTestSuite))
-}
-
-// MFAServiceTestSuite MFA服务测试套件
-type MFAServiceTestSuite struct {
-	ServiceTestSuite
-	svc      *MFAService
-	testUser *model.User
-}
-
-func (s *MFAServiceTestSuite) SetupSuite() {
-	s.ServiceTestSuite.SetupSuite()
-}
-
-func (s *MFAServiceTestSuite) TearDownSuite() {
-	s.ServiceTestSuite.TearDownSuite()
-}
-
-func (s *MFAServiceTestSuite) SetupTest() {
-	s.ServiceTestSuite.SetupTest()
-
-	// 创建测试配置
-	mfaConfig := &model.MFAConfig{
-		Enabled:         true,
-		EnforceForAll:   false,
-		EnforceForAdmin: true,
-		TOTPIssuer:      "TestApp",
-		BackupCodeCount: 10,
-	}
-	s.svc = NewMFAService(database.Get(), mfaConfig)
-
-	// 创建测试用户
-	password, _ := bcrypt.GenerateFromPassword([]byte("password123"), bcrypt.DefaultCost)
-	s.testUser = &model.User{
-		Email:          "mfa@example.com",
-		Password:       string(password),
-		Token:          "mfa-token",
-		UUID:           "mfa-uuid",
-		TransferEnable: 10737418240,
-	}
-	database.Get().Create(s.testUser)
-}
-
-func (s *MFAServiceTestSuite) TestGetUserMFA_NotFound() {
-	mfa, err := s.svc.GetUserMFA(s.testUser.ID)
-	assert.NoError(s.T(), err)
-	assert.Nil(s.T(), mfa)
-}
-
-func TestMFAService(t *testing.T) {
-	suite.Run(t, new(MFAServiceTestSuite))
 }
 
 // ForwardNodeServiceTestSuite 转发节点服务测试套件
@@ -1860,21 +1808,6 @@ func (s *ForwardNodeServiceTestSuite) SkipTestHealthCheck() {
 	assert.NotZero(s.T(), found.ID)
 }
 
-func (s *MFAServiceTestSuite) TestVerifyBackupCodeRejectsInvalidStoredJSON() {
-	mfa := &model.UserMFA{
-		UserID:      s.testUser.ID,
-		Enabled:     true,
-		BackupCodes: `["code-1"`,
-	}
-	assert.NoError(s.T(), database.Get().Create(mfa).Error)
-
-	valid, err := s.svc.VerifyBackupCode(mfa, "code-1")
-
-	assert.False(s.T(), valid)
-	assert.Error(s.T(), err)
-	assert.Contains(s.T(), err.Error(), "parse MFA backup codes")
-}
-
 // Additional SystemConfigService Tests
 func (s *SystemConfigServiceTestSuite) TestGetByGroup() {
 	assert.NoError(s.T(), s.svc.Set("group_key1", "value1", "string", "testgroup", ""))
@@ -1955,10 +1888,6 @@ func (s *NotificationServiceTestSuite) TestBroadcast() {
 // =====================================================
 
 // =====================================================
-// =====================================================
-
-// =====================================================
-// MFAService Verify Tests
 // =====================================================
 
 // =====================================================
@@ -2594,10 +2523,6 @@ func (s *InviteServiceTestSuite) TestGetConfig_NoConfig() {
 	// May be nil or default
 	_ = cfg
 }
-
-// =====================================================
-// MFAService Additional Tests
-// =====================================================
 
 // =====================================================
 // ForwardNodeService Additional Tests

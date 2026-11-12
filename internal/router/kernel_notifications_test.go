@@ -1,6 +1,7 @@
 package router
 
 import (
+	"github.com/AnixOps/anix-control/v5/internal/authn/authntest"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -16,7 +17,7 @@ import (
 // non-administrator is 403, and an administrator reaches the handler. The
 // token it would send with never appears in the answer.
 func TestSetup_TelegramTestRoute_RequiresAdmin(t *testing.T) {
-	r, cfg := setupTestRouter(t)
+	r, _ := setupTestRouter(t)
 	defer teardownTestRouter(t)
 	require.NoError(t, database.GetDB().AutoMigrate(&model.TelegramBot{}, &model.TelegramUser{}, &model.OperationLog{}))
 	const path = "/api/v4/kernel/notifications/telegram/test"
@@ -33,10 +34,10 @@ func TestSetup_TelegramTestRoute_RequiresAdmin(t *testing.T) {
 	}
 
 	assert.Equal(t, http.StatusUnauthorized, serve("").Code)
-	assert.Equal(t, http.StatusForbidden, serve(testRouterJWT(t, cfg.JWT.Secret, false)).Code)
+	assert.Equal(t, http.StatusForbidden, serve(authntest.Token(t, 1, "auth-test@example.com", false)).Code)
 
 	require.NoError(t, database.GetDB().Create(&model.TelegramBot{Name: "bot", Token: "123456789:SECRETtokenValueForTests-0123456789abc"}).Error)
-	admin := serve(testRouterJWT(t, cfg.JWT.Secret, true))
+	admin := serve(authntest.Token(t, 1, "auth-test@example.com", true))
 	// The administrator (user 1) has no bound Telegram account here.
 	require.Equal(t, http.StatusConflict, admin.Code, admin.Body.String())
 	assert.Contains(t, admin.Body.String(), "telegram_not_bound")

@@ -1,12 +1,12 @@
 package router
 
 import (
+	"github.com/AnixOps/anix-control/v5/internal/authn/authntest"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
-	"github.com/AnixOps/anix-control/v5/internal/utils"
 	"github.com/stretchr/testify/require"
 )
 
@@ -67,9 +67,8 @@ func TestAdministratorInviteCodesReachIdentityPlatform(t *testing.T) {
 
 // A user's reset of their own subscription link reaches identity-platform.
 func TestUsersSubscriptionResetReachesIdentityPlatform(t *testing.T) {
-	router, cfg, host := setupV2PackageRouter(t)
-	token, err := utils.GenerateToken(2, "member@example.com", false, cfg.JWT.Secret, cfg.JWT.Expire)
-	require.NoError(t, err)
+	router, _, host := setupV2PackageRouter(t)
+	token := authntest.Token(t, 2, "member@example.com", false)
 	response := requestV2WithToken(t, router, http.MethodPost, "/api/v2/user/subscription/reset", token)
 	require.Equal(t, http.StatusOK, response.Code, response.Body.String())
 	require.Equal(t, "identity.user.subscription.reset.post", host.lastRouteID)

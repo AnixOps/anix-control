@@ -95,8 +95,8 @@ func runSingletonWorkers(ctx context.Context) {
 		},
 		Update: service.NewNodeServiceFor(database.Get()).UpdateProtocol,
 	}).Run)
-	// Certificate-expiry and phase alerts (alerts.*): scans the certificate
-	// stores and the phased processes read-only and sends the administrators
+	// Certificate-expiry and backup alerts (alerts.*): scans the certificate
+	// stores and the backups read-only and sends the administrators
 	// one digest of what needs them. One process only, or they would all
 	// notify.
 	run(kernelAlertMonitor(database.Get(), config.Get()).Run)

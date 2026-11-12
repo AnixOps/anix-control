@@ -3,6 +3,7 @@ package e2e
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/AnixOps/anix-control/v5/internal/authn/authntest"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -12,7 +13,6 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/database"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/router"
-	"github.com/AnixOps/anix-control/v5/internal/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
@@ -56,8 +56,7 @@ func TestBulkActionsRunTheSingleItemRoutesThroughThePackageGateway(t *testing.T)
 	require.NoError(t, db.Create(&model.User{ID: 1, Email: "bulk1@example.test", Token: "tok1", UUID: "uuid1", IsAdmin: 1}).Error)
 	engine := gin.New()
 	router.Setup(engine, cfg)
-	admin, err := utils.GenerateToken(1, "bulk1@example.test", true, cfg.JWT.Secret, cfg.JWT.Expire)
-	require.NoError(t, err)
+	admin := authntest.Token(t, 1, "bulk1@example.test", true)
 
 	post := func(token, path, body string) (*httptest.ResponseRecorder, bulkResult) {
 		request := httptest.NewRequest(http.MethodPost, path, bytes.NewBufferString(body))

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/AnixOps/anix-control/v5/internal/authn/authntest"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -13,7 +14,6 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/database"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/router"
-	"github.com/AnixOps/anix-control/v5/internal/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
@@ -41,8 +41,7 @@ func TestAdminInviteCodes(t *testing.T) {
 	engine := gin.New()
 	router.Setup(engine, cfg)
 	router.SetupNotFound(engine)
-	token, err := utils.GenerateToken(admin.ID, admin.Email, true, cfg.JWT.Secret, cfg.JWT.Expire)
-	require.NoError(t, err)
+	token := authntest.Token(t, admin.ID, admin.Email, true)
 	serve := func(method, path string, body any, bearer string) *httptest.ResponseRecorder {
 		var reader *bytes.Reader
 		if body == nil {
@@ -84,8 +83,7 @@ func TestAdminInviteCodes(t *testing.T) {
 
 	// An unauthenticated or non-admin caller cannot generate.
 	require.Equal(t, http.StatusUnauthorized, serve(http.MethodPost, "/api/v2/admin/invite/codes", nil, "").Code)
-	userToken, err := utils.GenerateToken(admin.ID, admin.Email, false, cfg.JWT.Secret, cfg.JWT.Expire)
-	require.NoError(t, err)
+	userToken := authntest.Token(t, admin.ID, admin.Email, false)
 	require.Equal(t, http.StatusForbidden, serve(http.MethodPost, "/api/v2/admin/invite/codes", nil, userToken).Code)
 
 	// A registration uses the first code (identitycompat covers the

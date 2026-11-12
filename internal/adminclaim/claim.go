@@ -10,7 +10,6 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/database/migrations"
 	"github.com/AnixOps/anix-control/v5/internal/identityimport"
 	"github.com/AnixOps/anix-control/v5/internal/model"
-	"github.com/AnixOps/anix-control/v5/internal/service"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
@@ -25,8 +24,8 @@ const (
 	AuditPath = "/api/v5/claim"
 )
 
-// IdentityAccounts hands identity an account the kernel created while
-// identity holds the credentials (identityimport.Runner).
+// IdentityAccounts hands identity an account the kernel created
+// (identityimport.Importer).
 type IdentityAccounts interface {
 	ImportAccount(ctx context.Context, user model.User, accountUUID string) error
 }
@@ -45,16 +44,14 @@ type Request struct {
 type Result struct {
 	UserID uint
 	Email  string
-	// Identity is true when the account was created through identity.
-	Identity bool
 }
 
 // Claimer creates the first administrator from a claim.
 type Claimer struct {
 	DB *gorm.DB
-	// Identity creates the account in identity when identity holds the
-	// credentials (the authority is identity or finalized). Without it such
-	// a claim answers ErrIdentityUnavailable and changes nothing.
+	// Identity creates the account in identity, which holds the
+	// credentials. Without it a claim answers ErrIdentityUnavailable and
+	// changes nothing.
 	Identity IdentityAccounts
 	// Now defaults to time.Now.
 	Now func() time.Time
@@ -69,15 +66,6 @@ func (c *Claimer) now() time.Time {
 	return time.Now()
 }
 
-// identityAuthority is the credential authority, "kernel" when its table
-// does not exist (a database that never had identity).
-func identityAuthority(db *gorm.DB) (string, error) {
-	if !db.Migrator().HasTable(&model.IdentityAuthority{}) {
-		return model.IdentityAuthorityKernel, nil
-	}
-	return service.IdentityAuthorityState(db)
-}
-
 // Claim checks the request and creates the administrator. The token is
 // consumed in the transaction that creates the account, and only if it is
 // still the pending one, so of concurrent claims with the same token
@@ -88,13 +76,10 @@ func identityAuthority(db *gorm.DB) (string, error) {
 // token is not the pending claim's (ErrInvalidToken) or expired
 // (ErrExpired); then the email and the password.
 //
-// While the kernel holds the credentials (authority kernel or importing)
-// the administrator is a v2_user row with the bcrypt hash, as the kernel
-// creates administrators; a later identity import copies it. Once identity
-// holds them the row is a subscriber linked to an identity account
-// (the password mirrored until finalize, as KernelIdentity does), and the
-// account is handed to identity after the commit; if identity refuses, the
-// row and the link are removed and the token restored.
+// The administrator is a subscriber row without credentials, linked to an
+// identity account; the account and its password hash are handed to
+// identity after the commit. If identity refuses, the row and the link are
+// removed and the token restored.
 func (c *Claimer) Claim(ctx context.Context, request Request) (Result, error) {
 	db := c.DB.WithContext(ctx)
 	now := c.now()
@@ -115,12 +100,7 @@ func (c *Claimer) Claim(ctx context.Context, request Request) (Result, error) {
 	if err := CheckPassword(request.Password); err != nil {
 		return Result{}, err
 	}
-	authority, err := identityAuthority(db)
-	if err != nil {
-		return Result{}, fmt.Errorf("read the identity authority: %w", err)
-	}
-	viaIdentity := service.IdentityAuthoritative(authority)
-	if viaIdentity && c.Identity == nil {
+	if c.Identity == nil {
 		return Result{}, ErrIdentityUnavailable
 	}
 	cost := c.Cost
@@ -166,20 +146,15 @@ func (c *Claimer) Claim(ctx context.Context, request Request) (Result, error) {
 		if deleted.RowsAffected != 1 {
 			return ErrInvalidToken
 		}
-		user = model.User{Email: email, Password: string(hash), IsAdmin: 1, CreatedAt: now, UpdatedAt: now}
-		if viaIdentity && authority == model.IdentityAuthorityFinalized {
-			user.Password = model.UnusableLegacyPassword
-		}
+		user = model.User{Email: email, Password: model.UnusableLegacyPassword, IsAdmin: 1, CreatedAt: now, UpdatedAt: now}
 		user.UUID, user.Token = uuid.NewString(), uuid.NewString()
 		if err := tx.Create(&user).Error; err != nil {
 			return fmt.Errorf("create the administrator: %w", err)
 		}
-		if viaIdentity {
-			accountUUID = identityimport.AccountUUID(user.ID)
-			link := model.IdentityAccountLink{UserID: user.ID, AccountUUID: accountUUID, CreatedAt: now, UpdatedAt: now}
-			if err := tx.Create(&link).Error; err != nil {
-				return fmt.Errorf("link the identity account: %w", err)
-			}
+		accountUUID = identityimport.AccountUUID(user.ID)
+		link := model.IdentityAccountLink{UserID: user.ID, AccountUUID: accountUUID, CreatedAt: now, UpdatedAt: now}
+		if err := tx.Create(&link).Error; err != nil {
+			return fmt.Errorf("link the identity account: %w", err)
 		}
 		id := user.ID
 		audit = model.AuditLog{
@@ -194,9 +169,6 @@ func (c *Claimer) Claim(ctx context.Context, request Request) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	if !viaIdentity {
-		return Result{UserID: user.ID, Email: email}, nil
-	}
 	account := user
 	account.Password = string(hash)
 	if pushErr := c.Identity.ImportAccount(ctx, account, accountUUID); pushErr != nil {
@@ -207,7 +179,7 @@ func (c *Claimer) Claim(ctx context.Context, request Request) (Result, error) {
 		}
 		return Result{}, fmt.Errorf("%w: %v", ErrIdentityUnavailable, pushErr)
 	}
-	return Result{UserID: user.ID, Email: email, Identity: true}, nil
+	return Result{UserID: user.ID, Email: email}, nil
 }
 
 // undo removes what a claim committed when identity did not take the
@@ -230,9 +202,9 @@ func (c *Claimer) undo(ctx context.Context, userID, auditID uint, stored string)
 
 // IdentityFromImporter adapts the server's identity importer; nil when the
 // process runs no package hosts.
-func IdentityFromImporter(runner *identityimport.Runner) IdentityAccounts {
-	if runner == nil {
+func IdentityFromImporter(importer *identityimport.Importer) IdentityAccounts {
+	if importer == nil {
 		return nil
 	}
-	return runner
+	return importer
 }

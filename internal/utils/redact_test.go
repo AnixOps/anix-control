@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestRedact(t *testing.T) {
@@ -69,53 +68,4 @@ func TestLogSafe_String(t *testing.T) {
 	result := log.String()
 	assert.Contains(t, result, "john")
 	assert.Contains(t, result, "192.168.*.*")
-}
-
-// ========== JWT Tests ==========
-
-func TestGenerateToken(t *testing.T) {
-	token, err := GenerateToken(1, "test@example.com", false, "test-secret", 3600)
-	require.NoError(t, err)
-	assert.NotEmpty(t, token)
-}
-
-func TestGenerateToken_Admin(t *testing.T) {
-	token, err := GenerateToken(2, "admin@example.com", true, "admin-secret", 7200)
-	require.NoError(t, err)
-	assert.NotEmpty(t, token)
-}
-
-func TestParseTokenWithSecret(t *testing.T) {
-	// Generate a token first
-	token, err := GenerateToken(1, "test@example.com", false, "test-secret", 3600)
-	require.NoError(t, err)
-
-	// Parse it
-	claims, err := ParseTokenWithSecret(token, "test-secret")
-	require.NoError(t, err)
-	assert.Equal(t, uint(1), claims.UserID)
-	assert.Equal(t, "test@example.com", claims.Email)
-	assert.False(t, claims.IsAdmin)
-}
-
-func TestParseTokenWithSecret_InvalidToken(t *testing.T) {
-	_, err := ParseTokenWithSecret("invalid-token", "test-secret")
-	assert.Error(t, err)
-}
-
-func TestParseTokenWithSecret_WrongSecret(t *testing.T) {
-	token, err := GenerateToken(1, "test@example.com", false, "correct-secret", 3600)
-	require.NoError(t, err)
-
-	_, err = ParseTokenWithSecret(token, "wrong-secret")
-	assert.Error(t, err)
-}
-
-func TestParseTokenWithSecret_Expired(t *testing.T) {
-	// Generate an already expired token
-	token, err := GenerateToken(1, "test@example.com", false, "test-secret", -1)
-	require.NoError(t, err)
-
-	_, err = ParseTokenWithSecret(token, "test-secret")
-	assert.Error(t, err)
 }

@@ -76,61 +76,6 @@
           </NodeNotice>
         </div>
 
-        <div class="api-token-form__group" role="group" aria-labelledby="api-token-confirm-title" data-testid="api-token-credential">
-          <h3 id="api-token-confirm-title" class="api-token-form__heading">{{ t('adminApiTokens.create.confirmTitle') }}</h3>
-          <p v-if="create.step.value === 'checking'" class="api-token-form__note" role="status">{{ t('adminApiTokens.create.checking') }}</p>
-          <template v-else-if="create.step.value === 'password'">
-            <p class="api-token-form__note">{{ t('adminApiTokens.create.passwordNote') }}</p>
-            <UiPasswordField
-              ref="passwordRef"
-              v-model="create.form.password"
-              :label="t('adminApiTokens.create.password')"
-              :error="create.credentialError.value"
-              :disabled="create.busy.value"
-              required
-              data-testid="api-token-password"
-            />
-          </template>
-          <template v-else-if="create.step.value === 'code'">
-            <p class="api-token-form__note">{{ t('adminApiTokens.create.codeNote') }}</p>
-            <UiOtpField
-              ref="otpRef"
-              v-model="create.form.code"
-              :label="t('adminApiTokens.create.code')"
-              :error="create.credentialError.value"
-              :disabled="create.busy.value"
-              data-testid="api-token-code"
-              @complete="submit"
-            />
-            <UiButton variant="tertiary" size="sm" class="api-token-form__switch" data-testid="api-token-use-recovery" @click="switchStep('recovery')">
-              {{ t('adminApiTokens.create.useRecovery') }}
-            </UiButton>
-          </template>
-          <template v-else>
-            <p class="api-token-form__note">{{ t('adminApiTokens.create.recoveryNote') }}</p>
-            <UiTextField
-              id="api-token-recovery"
-              ref="recoveryRef"
-              v-model="create.form.recovery"
-              :label="t('adminApiTokens.create.recovery')"
-              placeholder="XXXX-XXXX"
-              :error="create.credentialError.value"
-              :disabled="create.busy.value"
-              autocomplete="one-time-code"
-              autocapitalize="characters"
-              spellcheck="false"
-              maxlength="9"
-              class="api-token-form__recovery"
-              aria-required="true"
-              data-testid="api-token-recovery"
-              @blur="create.form.recovery = formatRecoveryCode(create.form.recovery)"
-            />
-            <UiButton variant="tertiary" size="sm" class="api-token-form__switch" data-testid="api-token-use-code" @click="switchStep('code')">
-              {{ t('adminApiTokens.create.useCode') }}
-            </UiButton>
-          </template>
-        </div>
-
         <div v-if="create.error.value" class="api-token-form__error" role="alert" data-testid="api-token-error">
           <p>{{ create.error.value }}</p>
           <UiButton v-if="create.signInAgain.value" size="sm" data-testid="api-token-sign-in" @click="signInAgain">
@@ -145,7 +90,6 @@
           type="submit"
           form="api-token-form"
           :loading="create.busy.value"
-          :disabled="create.step.value === 'checking'"
           data-testid="api-token-submit"
         >{{ t('adminApiTokens.create.submit') }}</UiButton>
       </template>
@@ -201,10 +145,8 @@
 </template>
 
 <script setup>
-// "Create token" for the API tokens page: a form (name, scope, expiry and the
-// re-authentication the route needs: the password, or with two-step
-// verification on a six-digit code or a recovery code), then a dialog that
-// shows the new `anixadm_` token once.
+// "Create token" for the API tokens page: a form (name, scope, expiry), then a
+// dialog that shows the new `anixadm_` token once.
 //
 // The token lives in useApiTokenCreate's `result` while the result dialog is
 // open and is cleared when it closes (Done, Esc, ×) and when this component
@@ -221,14 +163,12 @@ import UiButton from '@/ui/UiButton.vue'
 import UiCodeBlock from '@/ui/UiCodeBlock.vue'
 import UiCopyField from '@/ui/UiCopyField.vue'
 import UiDialog from '@/ui/UiDialog.vue'
-import UiOtpField from '@/ui/UiOtpField.vue'
-import UiPasswordField from '@/ui/UiPasswordField.vue'
 import UiRadioGroup from '@/ui/UiRadioGroup.vue'
 import UiSelect from '@/ui/UiSelect.vue'
 import UiTextField from '@/ui/UiTextField.vue'
 import { useFormat } from '@/ui/composables/useFormat'
 import NodeNotice from '@/views/admin/nodes/NodeNotice.vue'
-import { API_TOKEN_MAX_DAYS, API_TOKEN_NAME_MAX, EXPIRY_CHOICES, SCOPES, formatRecoveryCode } from './apiTokens'
+import { API_TOKEN_MAX_DAYS, API_TOKEN_NAME_MAX, EXPIRY_CHOICES, SCOPES } from './apiTokens'
 import { useApiTokenCreate } from './useApiTokenCreate'
 
 defineProps({
@@ -264,36 +204,15 @@ const usageExample = computed(() => {
 
 const nameRef = ref(null)
 const daysRef = ref(null)
-const passwordRef = ref(null)
-const otpRef = ref(null)
-const recoveryRef = ref(null)
-
-function focusStep() {
-  nextTick(() => {
-    if (create.step.value === 'password') passwordRef.value?.focus()
-    else if (create.step.value === 'code') otpRef.value?.focus()
-    else if (create.step.value === 'recovery') recoveryRef.value?.focus()
-  })
-}
 
 function focusField(name) {
   if (name === 'name') nameRef.value?.focus()
   else if (name === 'expiry') nextTick(() => (daysRef.value ? daysRef.value.focus() : document.getElementById('api-token-expiry')?.focus()))
-  else if (name === 'credential') {
-    // A refused code starts over from the first box.
-    if (create.step.value === 'code') nextTick(() => otpRef.value?.clear?.())
-    else focusStep()
-  }
 }
 
-async function submit(value) {
-  const outcome = await create.submit(value)
+async function submit() {
+  const outcome = await create.submit()
   if (!outcome.ok && outcome.focus) focusField(outcome.focus)
-}
-
-function switchStep(step) {
-  create.switchStep(step)
-  focusStep()
 }
 
 function onFormOpenChange(open) {
@@ -304,8 +223,7 @@ function onResultOpenChange(open) {
   if (!open) create.dismiss()
 }
 
-// The sign-in the route asks for: an identity-held credential is checked at
-// sign-in, so the way to a fresh one is to sign out and in again.
+// The route wants a sign-in at most ten minutes old: sign out and in again.
 function signInAgain() {
   create.cancel()
   userStore.logout()
@@ -342,29 +260,6 @@ defineExpose({ open })
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-}
-
-.api-token-form__heading {
-  margin: 0;
-  font-size: var(--type-callout-size);
-  font-weight: var(--weight-semibold);
-}
-
-.api-token-form__note {
-  margin: 0;
-  color: var(--label-2);
-  font-size: var(--type-callout-size);
-  line-height: var(--type-callout-line);
-}
-
-.api-token-form__switch {
-  align-self: flex-start;
-}
-
-.api-token-form__recovery :deep(input) {
-  font-family: var(--font-mono);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
 }
 
 .api-token-form__error {

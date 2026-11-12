@@ -9,7 +9,9 @@ package identitycompat
 
 import (
 	"context"
-	"net"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"os"
 	"strconv"
 	"strings"
@@ -18,11 +20,9 @@ import (
 
 	"github.com/AnixOps/anix-control/identity/account"
 	"github.com/AnixOps/anix-control/identity/secretbox"
-	"github.com/AnixOps/anix-control/identity/server"
 	"github.com/AnixOps/anix-control/identity/settings"
 	"github.com/AnixOps/anix-control/identity/signingkey"
 	"github.com/AnixOps/anix-control/identity/throttle"
-	identityv1 "github.com/AnixOps/anix-control/sdk/api/identity/v1"
 	kernelidentityv1 "github.com/AnixOps/anix-control/sdk/api/kernelidentity/v1"
 	kernelsubscriberv1 "github.com/AnixOps/anix-control/sdk/api/kernelsubscriber/v1"
 	"github.com/AnixOps/anix-control/sdk/packagebridgesdk"
@@ -39,14 +39,12 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/tests/packagecompat"
 	"github.com/AnixOps/anix-control/v5/packages/identity-platform/native"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/test/bufconn"
 	"gorm.io/gorm"
 )
 
 // Models every identity case needs in both databases.
 var Models = []any{
-	&model.User{}, &model.UserSS2022Key{}, &model.UserMFA{}, &model.MFALoginAttempt{}, &model.SystemConfig{}, &model.InviteCode{},
+	&model.User{}, &model.UserSS2022Key{}, &model.UserMFA{}, &model.SystemConfig{}, &model.InviteCode{},
 	&model.IdentityAccountLink{}, &model.IdentityAuthority{}, &model.IdentityRevocation{}, &model.Plan{}, &model.SubscriberRequest{}, &model.SubscriberChange{},
 }
 
@@ -134,20 +132,55 @@ func applyMigration(db *gorm.DB, name string) {
 	}
 }
 
-// importAccounts copies the seeded v2 rows into identity with the kernel's
-// importer, as the cutover does.
+// importAccounts copies the seeded v2 rows, their MFA and backup codes into
+// identity and links them, as the 5.0.3 cutover did.
 func importAccounts(db *gorm.DB, store *account.Store) {
-	listener := bufconn.Listen(1 << 20)
-	grpcServer := grpc.NewServer()
-	identityv1.RegisterIdentityServiceServer(grpcServer, &server.Server{Accounts: store})
-	go func() { _ = grpcServer.Serve(listener) }()
-	defer grpcServer.Stop()
-	conn, err := grpc.NewClient("passthrough:///identity", grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithContextDialer(func(context.Context, string) (net.Conn, error) { return listener.Dial() }))
-	must(err)
-	defer func() { _ = conn.Close() }()
-	importer := &identityimport.Importer{DB: db, Connect: func() (grpc.ClientConnInterface, error) { return conn, nil }}
-	_, err = importer.Run(context.Background(), false)
+	var users []model.User
+	must(db.Order("id").Find(&users).Error)
+	var mfaRows []model.UserMFA
+	must(db.Find(&mfaRows).Error)
+	mfas := map[uint]model.UserMFA{}
+	for _, mfa := range mfaRows {
+		mfas[mfa.UserID] = mfa
+	}
+	var batch account.ImportBatch
+	for _, user := range users {
+		accountUUID := identityimport.AccountUUID(user.ID)
+		must(db.Create(&model.IdentityAccountLink{UserID: user.ID, AccountUUID: accountUUID}).Error)
+		imported := account.Imported{Account: account.Account{
+			UserID: uint64(user.ID), AccountUUID: accountUUID, Email: user.Email, PasswordHash: user.Password,
+			IsAdmin: user.IsAdmin == 1, IsStaff: user.IsStaff == 1, Banned: user.Banned == 1, CreatedAt: user.CreatedAt,
+		}}
+		if user.PasswordAlgo != nil {
+			imported.Account.PasswordAlgo = *user.PasswordAlgo
+		}
+		if user.PasswordSalt != nil {
+			imported.Account.PasswordSalt = *user.PasswordSalt
+		}
+		if user.InviteUserID != nil {
+			imported.Account.InviteUserID = uint64(*user.InviteUserID)
+		}
+		if mfa, ok := mfas[user.ID]; ok {
+			var codes []string
+			if mfa.BackupCodes != "" {
+				must(json.Unmarshal([]byte(mfa.BackupCodes), &codes))
+			}
+			hashes := make([]string, 0, len(codes))
+			for _, code := range codes {
+				sum := sha256.Sum256([]byte(code))
+				hashes = append(hashes, hex.EncodeToString(sum[:]))
+			}
+			imported.MFA = &account.MFA{Enabled: mfa.Enabled, TOTPSecret: mfa.TOTPSecret, BackupCodeHashes: hashes, LastMethod: mfa.LastMethod}
+			if mfa.LastUsed != nil {
+				imported.MFA.LastUsed = *mfa.LastUsed
+			}
+			if mfa.Enabled {
+				imported.MFA.EnabledAt = mfa.UpdatedAt
+			}
+		}
+		batch.Accounts = append(batch.Accounts, imported)
+	}
+	_, err := store.Import(context.Background(), "compat-seed", "users", batch)
 	must(err)
 }
 

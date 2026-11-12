@@ -93,59 +93,26 @@ export function expiryDays(choice, custom = '') {
   return days >= 1 && days <= API_TOKEN_MAX_DAYS ? days : Number.NaN
 }
 
-// Recovery codes are XXXX-XXXX from A-Z and 0-9 and compared exactly: upper-case
-// them and restore the hyphen (the sign-in and the subscription reset do the same).
-export function formatRecoveryCode(value) {
-  const clean = String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '')
-  if (clean.length !== 8) return String(value || '').toUpperCase().trim()
-  return `${clean.slice(0, 4)}-${clean.slice(4)}`
-}
-
-export function isRecoveryCode(value) {
-  return /^[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(String(value || ''))
-}
-
 // The refusals of the three routes, by what the page does about them. The
-// kernel answers { error: { code, message } }; the code alone does not tell
-// the cases of `step_up_required` apart (the message does). A stale sign-in has
-// its own code, `step_up_sign_in_stale`; the old `step_up_required` with the
-// "sign in again" message (Control up to 4.2.0-rc.2) is still understood.
+// kernel answers { error: { code, message } }.
 //
-//   password_required   403 step_up_required "password is required"
-//   code_required       403 step_up_required "an MFA code is required"
-//   sign_in_again       403 step_up_sign_in_stale "sign in again and retry within 10 minutes"
-//                       (before 4.2.0: step_up_required with that message)
-//                       (identity holds the credentials: the kernel only checks
-//                       that the sign-in is at most ten minutes old)
-//   step_up_failed      403 the password or code is not valid
-//   rate_limited        429 step_up_rate_limited (or any 429); `retryAfter` in seconds
-//   too_many_tokens     409 25 active tokens
+//   sign_in_again        403 step_up_sign_in_stale: creating a token needs a
+//                        sign-in at most ten minutes old
+//   too_many_tokens      409 25 active tokens
 //   super_admin_required 403 listing other administrators' tokens
 //   not_an_administrator 403 the owner is no longer an administrator
-//   invalid_request     400
-//   not_found           404 revoking a token that is gone or not yours
-//   other               anything else (`message` is the route's, or the transport's)
+//   invalid_request      400
+//   not_found            404 revoking a token that is gone or not yours
+//   other                anything else (`message` is the route's, or the transport's)
 export function classifyTokenRefusal(error) {
   const status = Number(error?.response?.status) || 0
   const failure = error?.response?.data?.error
   const code = (failure && typeof failure === 'object' ? failure.code : '') || ''
   const message = (typeof failure === 'string' ? failure : failure?.message) || error?.response?.data?.message || error?.message || ''
-  const out = { kind: 'other', status, code, message, retryAfter: 0 }
+  const out = { kind: 'other', status, code, message }
 
-  if (status === 429 || code === 'step_up_rate_limited') {
-    out.kind = 'rate_limited'
-    const headers = error?.response?.headers
-    const raw = typeof headers?.get === 'function' ? headers.get('retry-after') : headers?.['retry-after']
-    const seconds = Number.parseInt(String(raw ?? ''), 10)
-    out.retryAfter = Number.isFinite(seconds) && seconds > 0 ? seconds : 0
-  } else if (code === 'step_up_sign_in_stale') {
+  if (code === 'step_up_sign_in_stale') {
     out.kind = 'sign_in_again'
-  } else if (code === 'step_up_required') {
-    if (/mfa code|code is required/i.test(message)) out.kind = 'code_required'
-    else if (/password/i.test(message)) out.kind = 'password_required'
-    else out.kind = 'sign_in_again'
-  } else if (code === 'step_up_failed') {
-    out.kind = 'step_up_failed'
   } else if (code === 'too_many_tokens' || status === 409) {
     out.kind = 'too_many_tokens'
   } else if (code === 'super_admin_required') {

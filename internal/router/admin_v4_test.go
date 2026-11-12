@@ -3,6 +3,7 @@ package router
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/AnixOps/anix-control/v5/internal/authn/authntest"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -12,7 +13,6 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/service"
 	"github.com/AnixOps/anix-control/v5/internal/subscriber"
-	"github.com/AnixOps/anix-control/v5/internal/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -21,7 +21,7 @@ import (
 // time each asked-for user was seen online (null for one never seen), in the
 // order asked, and refuses ids it cannot read.
 func TestSetup_AdminV4UserActivity(t *testing.T) {
-	r, cfg := setupTestRouter(t)
+	r, _ := setupTestRouter(t)
 	defer teardownTestRouter(t)
 	db := database.GetDB()
 	require.NoError(t, service.MigrateKernelModelsForTest(db))
@@ -40,10 +40,8 @@ func TestSetup_AdminV4UserActivity(t *testing.T) {
 		r.ServeHTTP(recorder, request)
 		return recorder
 	}
-	admin, err := utils.GenerateToken(1, "admin@example.com", true, cfg.JWT.Secret, cfg.JWT.Expire)
-	require.NoError(t, err)
-	member, err := utils.GenerateToken(3, "member@example.com", false, cfg.JWT.Secret, cfg.JWT.Expire)
-	require.NoError(t, err)
+	admin := authntest.Token(t, 1, "admin@example.com", true)
+	member := authntest.Token(t, 3, "member@example.com", false)
 
 	assert.Equal(t, http.StatusUnauthorized, get("", "/api/v4/admin/users/activity?ids=2").Code)
 	assert.Equal(t, http.StatusForbidden, get(member, "/api/v4/admin/users/activity?ids=2").Code)

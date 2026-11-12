@@ -13,7 +13,6 @@ import (
 	"sync/atomic"
 
 	"github.com/AnixOps/anix-control/sdk/identitytoken"
-	"github.com/AnixOps/anix-control/v5/internal/config"
 	"github.com/AnixOps/anix-control/v5/internal/utils"
 )
 
@@ -38,12 +37,9 @@ const (
 	IdentityAudience = "anix-control"
 )
 
-// Verifier checks the kernel's own HS256 tokens (signed with the configured
-// secret) and the identity module's EdDSA tokens (signed with a published
-// identity key), then the revocation store.
+// Verifier checks the identity module's EdDSA tokens (signed with a
+// published identity key), then the revocation store.
 type Verifier struct {
-	// Secret returns the current HS256 secret.
-	Secret func() string
 	// Revocations may be nil, which disables revocation checks (tools and
 	// tests without a database).
 	Revocations *Store
@@ -56,18 +52,11 @@ func (v *Verifier) Verify(_ context.Context, token string) (*utils.Claims, error
 	if v == nil {
 		return nil, ErrInvalidToken
 	}
-	var (
-		claims *utils.Claims
-		err    error
-	)
-	if algorithm, kid := tokenHeader(token); algorithm == identitytoken.Algorithm {
-		claims, err = v.verifyIdentity(token, kid)
-	} else {
-		if v.Secret == nil {
-			return nil, ErrInvalidToken
-		}
-		claims, err = utils.ParseTokenWithSecret(token, v.Secret())
+	algorithm, kid := tokenHeader(token)
+	if algorithm != identitytoken.Algorithm {
+		return nil, ErrInvalidToken
 	}
+	claims, err := v.verifyIdentity(token, kid)
 	if err != nil {
 		return nil, ErrInvalidToken
 	}
@@ -151,27 +140,10 @@ func SetDefaultStore(store *Store) { defaultStore.Store(store) }
 // DefaultStore returns the installed revocation store, or nil.
 func DefaultStore() *Store { return defaultStore.Load() }
 
-var legacyTokensRefused atomic.Bool
-
-// RefuseLegacyTokens makes the default verifier refuse the kernel's own
-// HS256 tokens from now on. The server calls it once identity is finalized:
-// only identity then issues tokens.
-func RefuseLegacyTokens() { legacyTokensRefused.Store(true) }
-
-// Default returns a verifier over the loaded configuration's secret and the
-// default revocation store. It has no secret once legacy tokens are
-// refused.
+// Default returns a verifier over the default revocation store and
+// identity keys.
 func Default() *Verifier {
-	return &Verifier{
-		Secret: func() string {
-			if cfg := config.Get(); cfg != nil && !legacyTokensRefused.Load() {
-				return cfg.JWT.Secret
-			}
-			return ""
-		},
-		Revocations:  DefaultStore(),
-		IdentityKeys: DefaultIdentityKeys(),
-	}
+	return &Verifier{Revocations: DefaultStore(), IdentityKeys: DefaultIdentityKeys()}
 }
 
 // Remember applies a committed revocation to the default store, if any.

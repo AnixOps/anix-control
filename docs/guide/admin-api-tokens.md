@@ -29,19 +29,13 @@ this page is the way to do it by hand.
      **Admin** does what you may do, except manage tokens. Prefer Read.
   3. *Expires*: 30, 90 (recommended), 180, 365 or 730 days, *Custom…* (1 to 730)
      or *No expiry*, which warns: it works until someone revokes it.
-  4. *Confirm it's you*: your current password; with two-step verification on, the
-     six-digit code from your authenticator app (typing the sixth digit sends it),
-     or a recovery code through *Use a recovery code instead*. Five failed
-     attempts in 15 minutes lock creating out for 15 minutes (the form says how
-     long).
-  5. The token appears **once**, masked, with a copy button and a reveal toggle
+  4. The token appears **once**, masked, with a copy button and a reveal toggle
      (if the browser refuses to copy, the text is selected for Ctrl+C). Put it in
      the secret store of the automation, then press *Done*: closing the dialog (Done,
      Esc, ×) erases it from the page, and nothing in the console keeps it.
      The dialog shows the call to make, with `$ANIXOPS_TOKEN` where the token goes.
-  If the form says your sign-in is too old, your account's credentials are held by
-  the identity service (after the identity cutover is finalized), which the kernel
-  cannot check: *Sign in again*, then create the token within 10 minutes.
+  Creating a token needs a sign-in at most 10 minutes old. If the form says
+  your sign-in is too old: *Sign in again*, then create the token within 10 minutes.
 - **Revoke.** The row menu's *Revoke token…* asks first and ends the token at
   once; *Copy token ID* copies the id that the operation log carries
   (`admin_api_token_use` entries) when you look for what a token did.
@@ -55,7 +49,7 @@ the session's bearer token:
 ```sh
 curl -sS -X POST https://panel.example.com/api/v4/kernel/api-tokens \
   -H "Authorization: Bearer $SESSION_JWT" -H 'Content-Type: application/json' \
-  -d '{"name":"nightly export","scope":"read","expires_in_days":90,"password":"..."}'
+  -d '{"name":"nightly export","scope":"read","expires_in_days":90}'
 ```
 
 - **Scope.** `read` for dashboards, exports and probes: `GET` and `HEAD`
@@ -63,9 +57,8 @@ curl -sS -X POST https://panel.example.com/api/v4/kernel/api-tokens \
   change things: what you may do, except managing tokens.
 - **Expiry.** Always set one (90 days is a good start) and put the renewal in
   your calendar. A token without an expiry works until it is revoked.
-- **Re-authentication.** Your current password, or, when your account has a
-  second factor, `"code":"123456","method":"totp"` (or a recovery code with
-  `"method":"backup"`) instead of `password`.
+- **Fresh sign-in.** The session must be at most 10 minutes old
+  (`403 step_up_sign_in_stale` otherwise): sign in again first.
 
 The answer's `data.token` is the token (`anixadm_...`). **It is shown once.**
 Put it in the secret store of the automation straight away; Control keeps only

@@ -312,7 +312,7 @@ stands). The list is `internal/config/deprecated_keys.yaml`.
 | `module_runtime.listen` | `ANIX_CONTROL_MODULE_RUNTIME_LISTEN` | still read | M2 (P4) | the remote module runtime, removed with PostgreSQL support |
 | `module_runtime.pki` | `ANIX_CONTROL_MODULE_RUNTIME_PKI` | still read | M2 (P4) | the remote module runtime, removed with PostgreSQL support |
 | `module_runtime.trust_bundle_file` | `ANIX_CONTROL_MODULE_RUNTIME_TRUST_BUNDLE_FILE` | still read | M2 (P4) | the remote module runtime, removed with PostgreSQL support |
-| `package_routes.default_mode` | `ANIX_CONTROL_PACKAGE_ROUTES_DEFAULT_MODE` | ignored | M2 (P7) | route modes come only from the rehearsed list (config/package-route-defaults.json) |
+| `package_routes.default_mode` | `ANIX_CONTROL_PACKAGE_ROUTES_DEFAULT_MODE` | ignored | M2 (P7) | every package route runs natively; there are no route modes |
 | `plugins.control_execution_enabled` | `ANIX_CONTROL_PLUGINS_CONTROL_EXECUTION_ENABLED` | ignored | M2 (P7) | the built-in packages always run; Control starts their hosts at every start |
 | `plugins.control_host_artifact_dir` | `ANIX_CONTROL_PLUGINS_CONTROL_HOST_ARTIFACT_DIR` | still read | M2 (P11) | where package hosts' files are kept, until the systemd unit gives Control its directories |
 | `plugins.control_host_max_request_bytes` | `ANIX_CONTROL_PLUGINS_CONTROL_HOST_MAX_REQUEST_BYTES` | ignored | M2 (P8) | a built-in value (1 MiB) |
@@ -864,14 +864,11 @@ agent_install:
 
 ## Package Route Modes
 
-No key sets them. The route modes of the v2 Control packages come only from
-the rehearsed list, `config/package-route-defaults.json`, which ships in the
-binary: its 130 routes of 14 packages run natively once the installed package
-release is at least its `min_version` (`4.1.0-rc.5`), identity group A
-follows the identity authority, and every other route runs its legacy
-handler. Nothing stores or switches a route's mode any more (the route-mode
-administration and `anix-control routes` were removed). The startup log line
-`package route modes: ...` states the count.
+There are none. Every built-in package serves its routes natively; the
+administrator's invite codes, which have no native handler, pass through to
+the kernel's. Nothing stores or switches a route's mode (the route-mode
+administration, `anix-control routes` and the rehearsed list
+`config/package-route-defaults.json` were removed).
 
 ## Alerts
 

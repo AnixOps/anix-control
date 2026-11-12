@@ -53,7 +53,6 @@ func (s *Service) CreateUser(ctx context.Context, request pluginhostsdk.NativeRe
 	accountUUID := uuid.NewString()
 	created, err := s.Kernel.CreateSubscriber(ctx, &kernelidentityv1.CreateSubscriberRequest{
 		AccountUuid: accountUUID, Email: req.Email, IsAdmin: req.IsAdmin != 0,
-		LegacyMirror: &kernelidentityv1.LegacyCredentialMirror{PasswordHash: string(hash)},
 	})
 	if err != nil {
 		return failed(err)
@@ -108,29 +107,15 @@ func (s *Service) mirrorMFA(ctx context.Context, stores *Stores, userID uint64) 
 	if err != nil {
 		return err
 	}
-	return s.project(ctx, stores, touched, true)
+	return s.project(ctx, touched)
 }
 
 // project writes an account's identity fields into Control's projection.
-// With mirror, the password hash and MFA state are mirrored to the legacy
-// columns too, so switching back to the legacy routes keeps logins working.
-func (s *Service) project(ctx context.Context, stores *Stores, a account.Account, mirror bool) error {
-	request := &kernelidentityv1.ApplyAccountProjectionRequest{
+func (s *Service) project(ctx context.Context, a account.Account) error {
+	_, err := s.Kernel.ApplyAccountProjection(ctx, &kernelidentityv1.ApplyAccountProjectionRequest{
 		UserId: a.UserID, Version: a.Version, Email: a.Email, IsAdmin: a.IsAdmin, IsStaff: a.IsStaff, Banned: a.Banned,
 		TokenVersion: a.TokenVersion,
-	}
-	if mirror {
-		credentials := &kernelidentityv1.LegacyCredentialMirror{PasswordHash: a.PasswordHash, PasswordAlgo: a.PasswordAlgo, PasswordSalt: a.PasswordSalt}
-		mfa, _, err := stores.Accounts.MFA(ctx, a.UserID)
-		if err != nil {
-			return err
-		}
-		if mfa != nil && mfa.Enabled {
-			credentials.MfaEnabled, credentials.TotpSecret = true, mfa.TOTPSecret
-		}
-		request.LegacyMirror = credentials
-	}
-	_, err := s.Kernel.ApplyAccountProjection(ctx, request)
+	})
 	return err
 }
 
@@ -238,7 +223,7 @@ func (s *Service) changeAccount(ctx context.Context, id uint64, changes account.
 		return response, true
 	}
 	if result.Changed {
-		if err := s.project(ctx, stores, result.Account, result.PasswordChanged); err != nil {
+		if err := s.project(ctx, result.Account); err != nil {
 			response, _ := s.panelError(failure + ": " + status.Convert(err).Message())
 			return response, true
 		}

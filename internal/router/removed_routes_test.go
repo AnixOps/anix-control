@@ -1,6 +1,7 @@
 package router
 
 import (
+	"github.com/AnixOps/anix-control/v5/internal/authn/authntest"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -9,7 +10,6 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/database"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/service"
-	"github.com/AnixOps/anix-control/v5/internal/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -20,14 +20,13 @@ import (
 // and the routes the remaining status view, the Agent and the packages need
 // stay.
 func TestSetup_RemovedPluginCenterRoutesAnswerNotFound(t *testing.T) {
-	r, cfg := setupTestRouter(t)
+	r, _ := setupTestRouter(t)
 	defer teardownTestRouter(t)
 	db := database.GetDB()
 	require.NoError(t, service.MigrateKernelModelsForTest(db))
 	require.NoError(t, db.AutoMigrate(&model.OperationLog{}))
 	require.NoError(t, db.Create(&model.User{ID: 1, Email: "admin@example.com", IsAdmin: 1, Password: "x", Token: "t1", UUID: "u1"}).Error)
-	session, err := utils.GenerateToken(1, "admin@example.com", true, cfg.JWT.Secret, cfg.JWT.Expire)
-	require.NoError(t, err)
+	session := authntest.Token(t, 1, "admin@example.com", true)
 
 	do := func(method, path, authorization string) *httptest.ResponseRecorder {
 		request := httptest.NewRequest(method, path, strings.NewReader("{}"))

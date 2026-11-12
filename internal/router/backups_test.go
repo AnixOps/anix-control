@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/AnixOps/anix-control/v5/internal/authn/authntest"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -17,7 +18,6 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/database/migrations"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/rootkey"
-	"github.com/AnixOps/anix-control/v5/internal/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
@@ -46,7 +46,7 @@ func backupManagerForTest(t *testing.T) *backup.Manager {
 }
 
 func TestBackupRoutes(t *testing.T) {
-	r, cfg := setupTestRouter(t)
+	r, _ := setupTestRouter(t)
 	defer teardownTestRouter(t)
 	db := database.GetDB()
 	// One connection: each connection of an in-memory database is its own
@@ -73,8 +73,7 @@ func TestBackupRoutes(t *testing.T) {
 		return recorder
 	}
 	token := func(id uint, email string, admin bool) string {
-		value, err := utils.GenerateToken(id, email, admin, cfg.JWT.Secret, cfg.JWT.Expire)
-		require.NoError(t, err)
+		value := authntest.Token(t, id, email, admin)
 		return value
 	}
 	root, staff, user := token(1, "root@example.com", true), token(2, "staff@example.com", true), token(3, "user@example.com", false)
@@ -155,11 +154,10 @@ func TestBackupRoutes(t *testing.T) {
 // ran nothing, and the online restore overwrote the open database. They
 // answer 404, to an administrator too.
 func TestRemovedBackupRoutesAnswer404(t *testing.T) {
-	r, cfg := setupTestRouter(t)
+	r, _ := setupTestRouter(t)
 	defer teardownTestRouter(t)
 	require.NoError(t, database.GetDB().Create(&model.User{ID: 1, Email: "root@example.com", IsAdmin: 1}).Error)
-	admin, err := utils.GenerateToken(1, "root@example.com", true, cfg.JWT.Secret, cfg.JWT.Expire)
-	require.NoError(t, err)
+	admin := authntest.Token(t, 1, "root@example.com", true)
 	for _, route := range [][2]string{
 		{http.MethodGet, "/api/v2/admin/system/backup/config"},
 		{http.MethodPut, "/api/v2/admin/system/backup/config"},
@@ -180,14 +178,13 @@ func TestRemovedBackupRoutesAnswer404(t *testing.T) {
 // On PostgreSQL the list says why there are no backups and creating one is
 // refused; nothing breaks.
 func TestBackupRoutesOnPostgreSQL(t *testing.T) {
-	r, cfg := setupTestRouter(t)
+	r, _ := setupTestRouter(t)
 	defer teardownTestRouter(t)
 	require.NoError(t, database.GetDB().Create(&model.User{ID: 1, Email: "root@example.com", IsAdmin: 1}).Error)
 	saved := backup.Default()
 	backup.SetDefault(&backup.Manager{Driver: "postgres", DataDir: t.TempDir(), DB: func() *gorm.DB { return database.GetDB() }})
 	t.Cleanup(func() { backup.SetDefault(saved) })
-	admin, err := utils.GenerateToken(1, "root@example.com", true, cfg.JWT.Secret, cfg.JWT.Expire)
-	require.NoError(t, err)
+	admin := authntest.Token(t, 1, "root@example.com", true)
 	call := func(method, path string) *httptest.ResponseRecorder {
 		request := httptest.NewRequest(method, path, nil)
 		request.Header.Set("Authorization", "Bearer "+admin)

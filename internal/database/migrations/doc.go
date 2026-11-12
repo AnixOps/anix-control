@@ -144,4 +144,7 @@
 //     the clients' failure reports (v5_client_failure_report).
 //   - 0033_node_region: where a device is, for the topology map
 //     (v4_kernel_node_network.region).
+//   - 0034_drop_identity_leftovers: the kernel's MFA login attempts
+//     (v2_mfa_login_attempt) and the identity cutover log
+//     (v4_kernel_identity_cutover) are dropped.
 package migrations

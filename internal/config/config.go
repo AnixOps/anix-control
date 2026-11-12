@@ -86,17 +86,16 @@ type ForwardConfig struct {
 }
 
 // AlertsConfig configures the kernel alert monitor (internal/kernelalerts):
-// certificates that were not renewed in time, CAs close to their end, and
-// phased processes (the node credential split, the identity cutover) that
-// have not moved for too long. Alerts are listed at GET
+// certificates that were not renewed in time, CAs close to their end and
+// the backups. Alerts are listed at GET
 // /api/v4/kernel/alerts and sent to the administrators through the
 // notification channels (Telegram for bound administrators, and the
 // notification log).
 type AlertsConfig struct {
 	// Enabled turns the monitor off when false; nil means on.
 	Enabled *bool `yaml:"enabled"`
-	// CheckInterval is how often the certificate stores and the phased
-	// processes are scanned (a duration, at least 1m; default 15m).
+	// CheckInterval is how often the certificate stores and the backups
+	// are scanned (a duration, at least 1m; default 15m).
 	CheckInterval string `yaml:"check_interval"`
 	// LeafExpiryDays caps, in days, how close to its end a leaf certificate
 	// (Agent, link, module) may get without having been renewed before it
@@ -109,12 +108,8 @@ type AlertsConfig struct {
 	CAExpiryDays int `yaml:"ca_expiry_days"`
 	// RenotifyInterval is the shortest time between two notifications of
 	// the same alert (a duration, at least 1h; default 24h). Critical alerts
-	// repeat four times as often, phase alerts seven times as rarely.
+	// repeat four times as often.
 	RenotifyInterval string `yaml:"renotify_interval"`
-	// PhaseStuckAfter is how long a phased process may stay untouched in a
-	// non-final phase before it alerts (a duration, at least 1h; default
-	// 72h); "0" turns the phase alerts off.
-	PhaseStuckAfter string `yaml:"phase_stuck_after"`
 }
 
 // Alert monitor defaults.
@@ -123,7 +118,6 @@ const (
 	DefaultAlertLeafExpiryDays   = 14
 	DefaultAlertCAExpiryDays     = 60
 	DefaultAlertRenotifyInterval = 24 * time.Hour
-	DefaultAlertPhaseStuckAfter  = 72 * time.Hour
 )
 
 // AlertSettings are the alert monitor's settings with the defaults applied.
@@ -133,8 +127,6 @@ type AlertSettings struct {
 	LeafExpiryDays   int
 	CAExpiryDays     int
 	RenotifyInterval time.Duration
-	// PhaseStuckAfter is zero when the phase alerts are off.
-	PhaseStuckAfter time.Duration
 }
 
 // Settings returns the effective alert settings. It assumes a validated
@@ -146,7 +138,6 @@ func (a AlertsConfig) Settings() AlertSettings {
 		LeafExpiryDays:   a.LeafExpiryDays,
 		CAExpiryDays:     a.CAExpiryDays,
 		RenotifyInterval: alertDuration(a.RenotifyInterval, DefaultAlertRenotifyInterval),
-		PhaseStuckAfter:  alertDuration(a.PhaseStuckAfter, DefaultAlertPhaseStuckAfter),
 	}
 	if settings.LeafExpiryDays <= 0 {
 		settings.LeafExpiryDays = DefaultAlertLeafExpiryDays
@@ -179,7 +170,6 @@ func (a AlertsConfig) validate() error {
 	}{
 		{"alerts.check_interval", a.CheckInterval, time.Minute, false},
 		{"alerts.renotify_interval", a.RenotifyInterval, time.Hour, false},
-		{"alerts.phase_stuck_after", a.PhaseStuckAfter, time.Hour, true},
 	} {
 		raw := strings.TrimSpace(check.raw)
 		if raw == "" {
@@ -288,7 +278,7 @@ type IdentityConfig struct {
 	// KEK is the base64 or hex 32-byte key that seals the identity signing
 	// keys. It is passed to the local identity-platform host only; a network
 	// module gets its own copy (ANIX_IDENTITY_KEK_FILE). Without it identity
-	// signs no tokens and the kernel's own HS256 tokens stay in use.
+	// signs no tokens, so no one can log in.
 	KEK string `yaml:"kek"`
 }
 

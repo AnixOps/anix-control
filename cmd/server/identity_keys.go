@@ -26,9 +26,7 @@ func (rt *serverRuntime) startIdentityKeys() error {
 		return fmt.Errorf("load identity token keys: %w", err)
 	}
 	authn.SetDefaultIdentityKeys(keys)
-	identityimport.SetDefault(nil, database.Get())
-	// Identity is finalized (bootstrapDatabase): only identity issues tokens.
-	authn.RefuseLegacyTokens()
+	identityimport.SetDefault(nil)
 	hosts := rt.controlPluginHosts
 	if hosts == nil {
 		return nil
@@ -45,7 +43,6 @@ func (rt *serverRuntime) startIdentityKeys() error {
 	rt.workers.Go("identity token key refresher", func(ctx context.Context) {
 		keys.Run(ctx, identityKeyRefresh, connect, report)
 	})
-	importer := &identityimport.Importer{DB: database.Get(), Connect: connect}
-	identityimport.SetDefault(identityimport.NewRunner(importer, log.Printf), database.Get())
+	identityimport.SetDefault(&identityimport.Importer{Connect: connect})
 	return nil
 }

@@ -1,7 +1,7 @@
 # Package Extraction Design
 
-Date: 2026-09-29 (status refreshed 2026-10-13: the hosts are built into
-Control, and route modes come only from the rehearsed list)
+Date: 2026-09-29 (status refreshed 2026-11-12: the hosts are built into
+Control, every package runs natively, and the rehearsed list is gone)
 
 This is the design of record for moving business domains out of the Control
 kernel and into signed packages. It replaces the retired plans that lived under

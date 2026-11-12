@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"github.com/AnixOps/anix-control/v5/internal/authn/authntest"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -19,7 +20,6 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/config"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/service"
-	"github.com/AnixOps/anix-control/v5/internal/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
@@ -170,8 +170,7 @@ func (e *tokenEnv) do(method, target, authorization, remote string) *httptest.Re
 
 func jwtFor(t *testing.T, userID uint, admin bool) string {
 	t.Helper()
-	token, err := utils.GenerateToken(userID, "jwt@example.com", admin, tokenTestSecret, 3600)
-	require.NoError(t, err)
+	token := authntest.Token(t, userID, "jwt@example.com", admin)
 	return "Bearer " + token
 }
 
