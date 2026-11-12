@@ -431,7 +431,7 @@ several entries is Control-authoritative with a local remainder, as above.
 F3a implements the Control side: when the entry hop's metered bytes (both
 directions, every entry node, every counter epoch; section 11) reach
 `quota_bytes`, or `expires_at_unix_ms` has passed (checked every minute),
-Control plans the route as paused (`KernelForwardRoute.enforced` is
+Control plans the route as paused (`v5_line.enforced` is
 `quota` or `expired`) without changing the stored route, so its hops,
 ports and counters survive; raising the quota or the expiry lifts it at
 the next plan. Rendering each entry's local remainder is **deferred**:
@@ -1529,7 +1529,7 @@ by `internal/kernelforward` (L2 adds three for entry HA, section 7.4:
 
 | Table | Holds |
 |---|---|
-| `v4_kernel_forward_route` | each route as protojson, its owner and revision, and `enforced` (Control's own pause, section 5.3) |
+| `v5_line` | each route as protojson (column `route`, with the line columns internal/netline writes from it), its owner and revision, and `enforced` (Control's own pause, section 5.3) |
 | `v4_kernel_forward_allocation` | the port and mark of each (route, hop, node), sticky across plans; a deleted route's rows get `released_at` and stay taken for 10 minutes |
 | `v4_kernel_forward_node` | the inventory: per node the persisted `negotiated` flag, the Agent's `NodeCapabilities` and their hash, and the node's settings (port range, reserved ports, addresses, labels) |
 | `v4_kernel_forward_node_state` | each node's stamped `NodeForwardState`, `generation` and `state_hash` |

@@ -15,6 +15,7 @@ package netline
 
 import (
 	networkv1 "github.com/AnixOps/anix-control/sdk/api/network/v1"
+	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/networkmodel"
 	"github.com/AnixOps/anix-control/v5/internal/nodeentry"
 	"google.golang.org/protobuf/proto"
@@ -101,26 +102,10 @@ type Exit struct {
 }
 
 // Rule sends the domains of a line out by another exit.
-type Rule struct {
-	Name    string   `json:"name"`
-	Domains []string `json:"domains"`
-	Exit    string   `json:"exit"`
-	Enabled bool     `json:"enabled"`
-}
+type Rule = model.LineRule
 
-// Hop is a step of a line's chain: its devices (several on the entry hop
-// are entry HA) and how the hop before reaches it.
-type Hop struct {
-	Devices []string `json:"devices"`
-	// Port is where a hop after the entry listens for a kernel hop before
-	// it; 0 is the line's port.
-	Port uint32 `json:"port,omitempty"`
-	// Dial replaces the device's host for the hop before.
-	Dial string `json:"dial,omitempty"`
-	// Transport is the transport from the hop before; empty after a kernel
-	// device, which forwards without one, and on the entry hop.
-	Transport string `json:"transport,omitempty"`
-}
+// Hop is a step of a line's chain.
+type Hop = model.LineHop
 
 // Protocol is the protocol a line serves: a protocol of the device it is
 // served at.

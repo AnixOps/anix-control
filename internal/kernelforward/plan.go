@@ -38,12 +38,12 @@ func (o PlanOutcome) notify() {
 
 // storedRoute is a route row with its decoded route.
 type storedRoute struct {
-	row   model.KernelForwardRoute
+	row   model.Line
 	route *forwardv1.Route
 }
 
 func loadRoutes(tx *gorm.DB) ([]storedRoute, error) {
-	var rows []model.KernelForwardRoute
+	var rows []model.Line
 	if err := tx.Order("id").Find(&rows).Error; err != nil {
 		return nil, fmt.Errorf("kernel forward: load routes: %w", err)
 	}
@@ -58,9 +58,9 @@ func loadRoutes(tx *gorm.DB) ([]storedRoute, error) {
 	return out, nil
 }
 
-func decodeRoute(row model.KernelForwardRoute) (*forwardv1.Route, error) {
+func decodeRoute(row model.Line) (*forwardv1.Route, error) {
 	route := &forwardv1.Route{}
-	if err := jsonRead.Unmarshal([]byte(row.RouteJSON), route); err != nil {
+	if err := jsonRead.Unmarshal([]byte(row.Route), route); err != nil {
 		return nil, fmt.Errorf("kernel forward: route %s: %w", row.ID, err)
 	}
 	route.Id, route.Revision = row.ID, row.Revision
@@ -213,7 +213,7 @@ func (s *Service) replanTx(tx *gorm.DB, routes []storedRoute, now time.Time) (Pl
 	outcome.Changed = changed
 	for _, stored := range routes {
 		if reason := enforced[stored.route.GetId()]; reason != stored.row.Enforced {
-			if err := tx.Model(&model.KernelForwardRoute{}).Where("id = ?", stored.row.ID).Update("enforced", reason).Error; err != nil {
+			if err := tx.Model(&model.Line{}).Where("id = ?", stored.row.ID).Update("enforced", reason).Error; err != nil {
 				return PlanOutcome{}, fmt.Errorf("kernel forward: route %s enforcement: %w", stored.row.ID, err)
 			}
 		}
@@ -225,8 +225,21 @@ func (s *Service) replanTx(tx *gorm.DB, routes []storedRoute, now time.Time) (Pl
 			return PlanOutcome{}, fmt.Errorf("kernel forward: network model: %w", err)
 		}
 	}
+	if projectLines != nil {
+		if err := projectLines(tx); err != nil {
+			return PlanOutcome{}, fmt.Errorf("kernel forward: lines: %w", err)
+		}
+	}
 	return outcome, nil
 }
+
+// projectLines writes the lines' columns from their routes after every
+// accepted plan (netline.Project); it is set by internal/netline, which
+// reads the routes through this package.
+var projectLines func(tx *gorm.DB) error
+
+// ProjectLines sets what writes the lines' columns after a plan.
+func ProjectLines(project func(tx *gorm.DB) error) { projectLines = project }
 
 // enforcement is the kernel's pause of a route: expired once its expiry has
 // passed, quota once its entry hop's metered bytes reach its quota. Control

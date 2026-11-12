@@ -30,7 +30,7 @@ func (s *Service) Maintain(ctx context.Context) error {
 	if err := pruneLatency(db, now); err != nil {
 		return err
 	}
-	var rows []model.KernelForwardRoute
+	var rows []model.Line
 	if err := db.Where("enforced <> ?", EnforcedExpired).Find(&rows).Error; err != nil {
 		return fmt.Errorf("kernel forward: load routes: %w", err)
 	}

@@ -15,7 +15,7 @@ func TestForwardCapabilityGrammar(t *testing.T) {
 	for _, capability := range []string{"kernel.forward.v2", "kernel.forward", "kernel.forward.write.v1"} {
 		require.ErrorContains(t, validateManifestCapabilities([]string{capability}), "unknown kernel capability", capability)
 	}
-	for _, value := range model.KernelForwardModels() {
+	for _, value := range model.KernelForwardTables() {
 		table := value.(interface{ TableName() string }).TableName()
 		require.True(t, protectedKernelTable(table), table)
 		require.True(t, protectedTables[table], "listed by name: %s", table)

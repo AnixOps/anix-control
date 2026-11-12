@@ -47,7 +47,7 @@ const (
 	planRowID = "current"
 )
 
-// Enforcement reasons (KernelForwardRoute.Enforced).
+// Enforcement reasons (Line.Enforced).
 const (
 	EnforcedQuota   = "quota"
 	EnforcedExpired = "expired"

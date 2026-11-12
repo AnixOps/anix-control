@@ -22,7 +22,7 @@ func newDB(t *testing.T) *gorm.DB {
 	sqlDB, err := db.DB()
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = sqlDB.Close() })
-	require.NoError(t, db.AutoMigrate(&model.Node{}, &model.NodeProtocol{}, &model.ForwardNode{}, &model.KernelForwardRoute{},
+	require.NoError(t, db.AutoMigrate(&model.Node{}, &model.NodeProtocol{}, &model.ForwardNode{}, &model.Line{},
 		&model.ForwardRouteSubscription{}, &model.OperationLog{}))
 	// KFC JP: Shadowsocks on 11111; the Shanghai forwarder newnb-1488.
 	require.NoError(t, db.Create(&model.Node{ID: 50, Name: "KFC JP", Host: "104.251.233.29"}).Error)
@@ -39,7 +39,7 @@ func storeRoute(t *testing.T, db *gorm.DB, route *forwardv1.Route, enforced stri
 	encoded, err := protojson.Marshal(route)
 	require.NoError(t, err)
 	now := time.Now()
-	require.NoError(t, db.Save(&model.KernelForwardRoute{ID: route.GetId(), Owner: "admin", Revision: 1, RouteJSON: string(encoded), Enforced: enforced, CreatedAt: now, UpdatedAt: now}).Error)
+	require.NoError(t, db.Save(&model.Line{ID: route.GetId(), Owner: "admin", Revision: 1, Route: string(encoded), Enforced: enforced, CreatedAt: now, UpdatedAt: now}).Error)
 }
 
 func kfcRoute(port uint32) *forwardv1.Route {

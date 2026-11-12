@@ -143,13 +143,13 @@ func loadRoutes(db *gorm.DB, ids []string) (map[string]route, error) {
 	if len(ids) == 0 {
 		return routes, nil
 	}
-	var rows []model.KernelForwardRoute
+	var rows []model.Line
 	if err := db.Where("id IN ?", ids).Find(&rows).Error; err != nil {
 		return nil, err
 	}
 	for _, row := range rows {
 		decoded := &forwardv1.Route{}
-		if err := jsonRead.Unmarshal([]byte(row.RouteJSON), decoded); err != nil {
+		if err := jsonRead.Unmarshal([]byte(row.Route), decoded); err != nil {
 			return nil, fmt.Errorf("route subscription: route %s: %w", row.ID, err)
 		}
 		routes[row.ID] = route{route: decoded, enforced: row.Enforced}

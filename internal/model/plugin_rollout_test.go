@@ -15,7 +15,6 @@ func TestPackageRolloutModelsUseKernelOwnedTables(t *testing.T) {
 		PackageBackupReference{}:   "v4_kernel_package_backup_reference",
 		PackageRolloutLock{}:       "v4_kernel_package_rollout_lock",
 		PackageStorage{}:           "v4_kernel_package_storage",
-		KernelForwardRoute{}:       "v4_kernel_forward_route",
 		KernelForwardAllocation{}:  "v4_kernel_forward_allocation",
 		KernelForwardNode{}:        "v4_kernel_forward_node",
 		KernelForwardNodeState{}:   "v4_kernel_forward_node_state",

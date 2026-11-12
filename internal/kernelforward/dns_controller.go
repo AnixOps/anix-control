@@ -537,7 +537,7 @@ func clipError(err error) string {
 func (e *EntryHA) evaluateBinding(ctx context.Context, db *gorm.DB, pass *evaluation, binding model.KernelForwardDNSBinding) error {
 	now := pass.now
 	binding.EvaluatedAt = &now
-	var routes []model.KernelForwardRoute
+	var routes []model.Line
 	if err := db.Where("id = ?", binding.RouteID).Limit(1).Find(&routes).Error; err != nil {
 		return err
 	}

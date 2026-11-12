@@ -14,7 +14,6 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/database/migrations"
 	"github.com/AnixOps/anix-control/v5/internal/lease"
 	"github.com/AnixOps/anix-control/v5/internal/model"
-	"github.com/AnixOps/anix-control/v5/internal/netline"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -230,8 +229,8 @@ func laterModels() []any {
 		&model.EntryPoolPolicy{},           // 0032_cross_border_standby_and_entry_pools
 		&model.UserEntryPool{},             // 0032_cross_border_standby_and_entry_pools
 		&model.ClientFailureReport{},       // 0032_cross_border_standby_and_entry_pools
-		&netline.LineRow{},                 // 0035_network_lines
-		&netline.TransportRow{},            // 0035_network_lines
+		&model.Line{},                      // 0035_network_lines, 0036_forward_routes_as_lines
+		&model.Transport{},                 // 0035_network_lines
 	}
 }
 
@@ -321,8 +320,24 @@ func retiredKernelModels() []any {
 		&retiredAuthorizedKey{},                        // 0025_drop_registration_keys
 		&retiredCleanAgent{}, &retiredNodeCredential{}, // 0027_drop_node_credentials
 		&retiredMFALoginAttempt{}, &retiredIdentityCutoverEvent{}, // 0034_drop_identity_leftovers
+		&retiredKernelForwardRoute{}, // 0036_forward_routes_as_lines
 	}
 }
+
+// retiredKernelForwardRoute is model.KernelForwardRoute as the baseline
+// created it; 0036_forward_routes_as_lines moved the routes into v5_line
+// and dropped the table and the model.
+type retiredKernelForwardRoute struct {
+	ID        string    `gorm:"primaryKey;size:64"`
+	Owner     string    `gorm:"size:64;not null;index"`
+	Revision  uint64    `gorm:"not null"`
+	RouteJSON string    `gorm:"type:text;not null"`
+	Enforced  string    `gorm:"size:16;not null;default:''"`
+	CreatedAt time.Time `gorm:"not null"`
+	UpdatedAt time.Time `gorm:"not null"`
+}
+
+func (retiredKernelForwardRoute) TableName() string { return "v4_kernel_forward_route" }
 
 // retiredMFALoginAttempt is model.MFALoginAttempt as the baseline created
 // it; 0034_drop_identity_leftovers dropped the table and the model.

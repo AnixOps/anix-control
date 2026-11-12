@@ -141,7 +141,7 @@ var (
 		// or change metered traffic; packages use ForwardControl
 		// (kernel.forward.v1). Protected by the prefix; named so the rule
 		// survives a prefix change.
-		"v4_kernel_forward_route": true, "v4_kernel_forward_allocation": true, "v4_kernel_forward_node": true,
+		"v5_line": true, "v5_transport": true, "v4_kernel_forward_allocation": true, "v4_kernel_forward_node": true,
 		"v4_kernel_forward_node_state": true, "v4_kernel_forward_node_report": true,
 		"v4_kernel_forward_counter": true, "v4_kernel_forward_traffic": true,
 		"v4_kernel_forward_request": true, "v4_kernel_forward_plan": true,

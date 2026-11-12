@@ -599,7 +599,7 @@ func checkTTL(ttl uint32) (uint32, *forwardv1.Violation) {
 
 // routeEntryHostname answers a stored route's entry_hostname.
 func routeEntryHostname(tx *gorm.DB, routeID string) (string, bool, error) {
-	var rows []model.KernelForwardRoute
+	var rows []model.Line
 	if err := tx.Where("id = ?", routeID).Limit(1).Find(&rows).Error; err != nil {
 		return "", false, err
 	}

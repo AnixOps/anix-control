@@ -172,8 +172,8 @@ func (s *Service) CreateRoute(ctx context.Context, requestID string, route *forw
 		if err != nil {
 			return "", false, err
 		}
-		if err := tx.Create(&model.KernelForwardRoute{
-			ID: candidate.GetId(), Owner: candidate.GetOwner(), Revision: 1, RouteJSON: encoded, CreatedAt: now, UpdatedAt: now,
+		if err := tx.Create(&model.Line{
+			ID: candidate.GetId(), Owner: candidate.GetOwner(), Revision: 1, Route: encoded, CreatedAt: now, UpdatedAt: now,
 		}).Error; err != nil {
 			return "", false, fmt.Errorf("kernel forward: store route: %w", err)
 		}
@@ -214,7 +214,7 @@ func (s *Service) UpdateRoute(ctx context.Context, requestID string, route *forw
 		if found, err := replay(tx, requestID, methodUpdate, hash, response); err != nil || found {
 			return "", found, err
 		}
-		var rows []model.KernelForwardRoute
+		var rows []model.Line
 		if err := tx.Where("id = ?", route.GetId()).Limit(1).Find(&rows).Error; err != nil {
 			return "", false, err
 		}
@@ -238,8 +238,8 @@ func (s *Service) UpdateRoute(ctx context.Context, requestID string, route *forw
 		if err != nil {
 			return "", false, err
 		}
-		if err := tx.Model(&model.KernelForwardRoute{}).Where("id = ?", candidate.GetId()).Updates(map[string]any{
-			"owner": candidate.GetOwner(), "revision": candidate.GetRevision(), "route_json": encoded, "updated_at": now,
+		if err := tx.Model(&model.Line{}).Where("id = ?", candidate.GetId()).Updates(map[string]any{
+			"owner": candidate.GetOwner(), "revision": candidate.GetRevision(), "route": encoded, "updated_at": now,
 		}).Error; err != nil {
 			return "", false, fmt.Errorf("kernel forward: store route: %w", err)
 		}
@@ -267,7 +267,7 @@ func (s *Service) DeleteRoute(ctx context.Context, requestID, routeID string) er
 		if found, err := replay(tx, requestID, methodDelete, hash, &forwardv1.DeleteRouteResponse{}); err != nil || found {
 			return "", found, err
 		}
-		result := tx.Where("id = ?", routeID).Delete(&model.KernelForwardRoute{})
+		result := tx.Where("id = ?", routeID).Delete(&model.Line{})
 		if result.Error != nil {
 			return "", false, result.Error
 		}
@@ -292,7 +292,7 @@ func (s *Service) GetRoute(ctx context.Context, routeID string) (*forwardv1.Rout
 	if err != nil {
 		return nil, err
 	}
-	var rows []model.KernelForwardRoute
+	var rows []model.Line
 	if err := db.Where("id = ?", routeID).Limit(1).Find(&rows).Error; err != nil {
 		return nil, err
 	}
@@ -338,7 +338,7 @@ func (s *Service) ListRoutes(ctx context.Context, opts ListOptions) ([]*forwardv
 	if opts.PageToken != "" {
 		query = query.Where("id > ?", opts.PageToken)
 	}
-	var rows []model.KernelForwardRoute
+	var rows []model.Line
 	if err := query.Find(&rows).Error; err != nil {
 		return nil, "", err
 	}

@@ -13,7 +13,7 @@
 | --- | --- | --- |
 | 节点与节点协议 | `v2_node`、`v2_node_protocol` | 机器、地址、协议、倍率混在一起 |
 | 节点入口、入口池、iWAN 线路 | `v5_node_entry` 等 | 入口地址的补丁，挂在节点上 |
-| 转发路由与「加入订阅」 | `v4_kernel_forward_route`、`v5_forward_route_subscription` | 真正承载中转线路，健康、延迟、流量、DNS 切换都挂在它上面 |
+| 转发路由与「加入订阅」 | `v5_line`（`route` 列）、`v5_forward_route_subscription` | 真正承载中转线路，健康、延迟、流量、DNS 切换都挂在它上面 |
 | 网络模型文档 | `v4_kernel_network_model` | 内容主要靠自动补全从转发路由推出来 |
 | 分流 | `v5_egress_route` | 另起一套中继，不走网络模型的传输 |
 
@@ -96,6 +96,8 @@
 | `v5_transport` | 两台设备之间的一段传输：种类、承载、多路径、FEC，是否为网络模型文档里声明的传输 |
 | `v4_kernel_node_network.scan_cloud` | 设备在会扫描机器的云上：它用内核转发 |
 
-`netline.Save` 把快照里的线路和传输写进表，`netline.Load` 读回来；同一份快照存入再读出
-规划出的转发不变。第 2 步余下的部分是把现有数据一次写进这两张表，再让规划、订阅、统计改读
-它们，旧接口改成写这两张表的薄适配。
+转发路由就是线路（迁移 `0036_forward_routes_as_lines`）：`v5_line` 多了路由自己的列（`owner`、
+`revision`、`route` 存 forward.v1 Route 的 protojson、`enforced`、`created_at`），
+`v4_kernel_forward_route` 的路由全部搬进来，旧表删除。旧转发接口照常写 `route`；每次规划被接受后，
+`netline.Project` 按 Import 读路由的方式把线路列和 `v5_transport` 重新写一遍，所以线路表里的
+名称、入口、链、出口总跟路由一致。节点协议自己的线路还不入表，第 3 步新接口写线路时一起存。

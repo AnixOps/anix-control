@@ -13,7 +13,6 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/database"
 	"github.com/AnixOps/anix-control/v5/internal/database/migrations"
 	"github.com/AnixOps/anix-control/v5/internal/model"
-	"github.com/AnixOps/anix-control/v5/internal/netline"
 	"github.com/AnixOps/anix-control/v5/internal/nodesecrets"
 	"github.com/AnixOps/anix-control/v5/internal/service"
 	"github.com/glebarez/sqlite"
@@ -77,7 +76,7 @@ func TestBootstrapDatabaseMigratesTheSchema(t *testing.T) {
 		// 0007_egress_routes, 0008_reality_target_probes, 0009_reality_target_auto,
 		// 0010_node_entries, 0011_subscription_group_protocols,
 		// 0012_forward_route_subscriptions).
-		require.NoError(t, db.Migrator().DropTable(migrations.MigrationTable, migrations.MetaTable, &model.ACMECacheEntry{}, &model.Backup{}, &model.DestinationStat{}, &model.EgressRoute{}, &model.RealityTargetProbe{}, &model.RealityTargetAuto{}, &model.NodeEntry{}, &model.SubscriptionGroupProtocol{}, &model.ForwardRouteSubscription{}, &model.IWANLine{}, &model.KernelForwardLatency{}, &model.KernelForwardDNSVantage{}, &model.NetworkModel{}, &model.NetworkTransportKey{}, &model.NetworkDevice{}, &model.NodeNetwork{}, &model.ReverseProxy{}, &model.ReverseProxyACMEAccount{}, &model.NodeUplinks{}, &model.TrafficCategoryRule{}, &model.TrafficCategorySource{}, &model.NodeExitPolicy{}, &model.UserSS2022Key{}, &model.L2Standby{}, &model.EntryPoolPolicy{}, &model.UserEntryPool{}, &model.ClientFailureReport{}, &netline.LineRow{}, &netline.TransportRow{}))
+		require.NoError(t, db.Migrator().DropTable(migrations.MigrationTable, migrations.MetaTable, &model.ACMECacheEntry{}, &model.Backup{}, &model.DestinationStat{}, &model.EgressRoute{}, &model.RealityTargetProbe{}, &model.RealityTargetAuto{}, &model.NodeEntry{}, &model.SubscriptionGroupProtocol{}, &model.ForwardRouteSubscription{}, &model.IWANLine{}, &model.KernelForwardLatency{}, &model.KernelForwardDNSVantage{}, &model.NetworkModel{}, &model.NetworkTransportKey{}, &model.NetworkDevice{}, &model.NodeNetwork{}, &model.ReverseProxy{}, &model.ReverseProxyACMEAccount{}, &model.NodeUplinks{}, &model.TrafficCategoryRule{}, &model.TrafficCategorySource{}, &model.NodeExitPolicy{}, &model.UserSS2022Key{}, &model.L2Standby{}, &model.EntryPoolPolicy{}, &model.UserEntryPool{}, &model.ClientFailureReport{}, &model.Line{}, &model.Transport{}))
 		require.NoError(t, db.Exec("ALTER TABLE v4_kernel_agent_transport DROP COLUMN protocol_revision").Error)
 		require.NoError(t, bootstrapDatabase(ctx, cfg))
 		meta, err = migrations.Meta(ctx, db)
