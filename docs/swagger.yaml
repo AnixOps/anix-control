@@ -1676,7 +1676,7 @@ info:
     url: https://opensource.org/licenses/MIT
   termsOfService: https://github.com/AnixOps/anix-control
   title: AnixOps Control API
-  version: 5.0.4
+  version: 5.0.5
 paths:
   /admin/agent/list:
     get:
