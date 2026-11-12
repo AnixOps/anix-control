@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/AnixOps/anix-control/v5/internal/config"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/utils"
 	"github.com/glebarez/sqlite"
@@ -14,8 +13,6 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
-
-const testSecret = "authn-test-secret-0123456789"
 
 func testDB(t *testing.T) *gorm.DB {
 	t.Helper()
@@ -36,123 +33,63 @@ func sign(t *testing.T, method jwt.SigningMethod, key any, claims jwt.Claims) st
 	return token
 }
 
-func legacyClaims(userID uint, issuedAt time.Time) *utils.Claims {
+// claimsAt are a verified token's claims: token version 1, issued at
+// issuedAt.
+func claimsAt(userID uint, issuedAt time.Time) *utils.Claims {
 	return &utils.Claims{
-		UserID: userID, Email: "user@example.test", SessionID: "session-1",
+		UserID: userID, Email: "user@example.test", SessionID: "session-1", TokenVersion: 1,
 		RegisteredClaims: jwt.RegisteredClaims{
-			Issuer:    utils.LegacyTokenIssuer,
+			Issuer:    IdentityIssuer,
 			IssuedAt:  jwt.NewNumericDate(issuedAt),
 			ExpiresAt: jwt.NewNumericDate(issuedAt.Add(time.Hour)),
 		},
 	}
 }
 
-func verifier(store *Store) *Verifier {
-	return &Verifier{Secret: func() string { return testSecret }, Revocations: store}
-}
-
-func TestVerifyAcceptsTheKernelsHS256Tokens(t *testing.T) {
-	token, err := utils.GenerateToken(7, "user@example.test", true, testSecret, 3600)
-	require.NoError(t, err)
-	claims, err := verifier(nil).Verify(context.Background(), token)
-	require.NoError(t, err)
-	require.Equal(t, uint(7), claims.UserID)
-	require.True(t, claims.IsAdmin)
-	require.NotEmpty(t, claims.SessionID, "new tokens carry a session id")
-}
-
-func TestTheDefaultVerifierRefusesLegacyTokensAfterFinalize(t *testing.T) {
-	previous := config.Get()
-	config.Set(&config.Config{JWT: config.JWTConfig{Secret: testSecret}})
-	t.Cleanup(func() {
-		config.Set(previous)
-		legacyTokensRefused.Store(false)
-	})
-	token, err := utils.GenerateToken(7, "user@example.test", false, testSecret, 3600)
-	require.NoError(t, err)
-	_, err = Default().Verify(context.Background(), token)
-	require.NoError(t, err)
-
-	RefuseLegacyTokens()
-	_, err = Default().Verify(context.Background(), token)
-	require.ErrorIs(t, err, ErrInvalidToken)
-}
-
-func TestVerifyPinsTheAlgorithmAndRequiredClaims(t *testing.T) {
-	now := time.Now()
-	valid := legacyClaims(7, now)
-	noExpiry := legacyClaims(7, now)
-	noExpiry.ExpiresAt = nil
-	noIssuedAt := legacyClaims(7, now)
-	noIssuedAt.IssuedAt = nil
-	otherIssuer := legacyClaims(7, now)
-	otherIssuer.Issuer = "someone-else"
-	expired := legacyClaims(7, now.Add(-2*time.Hour))
-
+func TestVerifyRefusesEveryOtherAlgorithm(t *testing.T) {
+	f := newIdentityFixture(t)
+	verifier := &Verifier{IdentityKeys: f.keys}
+	valid := claimsAt(7, time.Now())
 	cases := map[string]string{
-		"HS512 with the same secret": sign(t, jwt.SigningMethodHS512, []byte(testSecret), valid),
-		"HS384 with the same secret": sign(t, jwt.SigningMethodHS384, []byte(testSecret), valid),
-		"alg none":                   sign(t, jwt.SigningMethodNone, jwt.UnsafeAllowNoneSignatureType, valid),
-		"wrong secret":               sign(t, jwt.SigningMethodHS256, []byte("another-secret"), valid),
-		"no exp":                     sign(t, jwt.SigningMethodHS256, []byte(testSecret), noExpiry),
-		"no iat":                     sign(t, jwt.SigningMethodHS256, []byte(testSecret), noIssuedAt),
-		"other issuer":               sign(t, jwt.SigningMethodHS256, []byte(testSecret), otherIssuer),
-		"expired":                    sign(t, jwt.SigningMethodHS256, []byte(testSecret), expired),
-		"garbage":                    "not-a-token",
+		"HS256":    sign(t, jwt.SigningMethodHS256, []byte("a-shared-secret"), valid),
+		"alg none": sign(t, jwt.SigningMethodNone, jwt.UnsafeAllowNoneSignatureType, valid),
+		"garbage":  "not-a-token",
 	}
 	for name, token := range cases {
 		t.Run(name, func(t *testing.T) {
-			_, err := verifier(nil).Verify(context.Background(), token)
+			_, err := verifier.Verify(context.Background(), token)
 			require.ErrorIs(t, err, ErrInvalidToken)
 		})
 	}
-
-	_, err := (&Verifier{Secret: func() string { return "" }}).Verify(context.Background(),
-		sign(t, jwt.SigningMethodHS256, []byte(""), valid))
-	require.ErrorIs(t, err, ErrInvalidToken, "an unset secret never verifies")
 }
 
 func TestUserRevocationRejectsOlderTokens(t *testing.T) {
 	store := NewStore(testDB(t), 25*time.Hour)
 	// The revocation is two seconds old, so the next second is not in the future.
 	now := time.Now().Add(-2 * time.Second)
-	before := sign(t, jwt.SigningMethodHS256, []byte(testSecret), legacyClaims(7, now.Add(-time.Minute)))
-	sameSecond := sign(t, jwt.SigningMethodHS256, []byte(testSecret), legacyClaims(7, now))
-	nextSecond := sign(t, jwt.SigningMethodHS256, []byte(testSecret), legacyClaims(7, now.Truncate(time.Second).Add(time.Second)))
-	otherUser := sign(t, jwt.SigningMethodHS256, []byte(testSecret), legacyClaims(8, now.Add(-time.Minute)))
-
 	require.NoError(t, store.Publish(context.Background(), Revocation{UserID: 7, NotBefore: now, Reason: "ban"}))
 
-	_, err := verifier(store).Verify(context.Background(), before)
-	require.ErrorIs(t, err, ErrRevokedToken)
-	_, err = verifier(store).Verify(context.Background(), sameSecond)
-	require.ErrorIs(t, err, ErrRevokedToken, "iat has second precision: the revocation's own second is revoked")
-	_, err = verifier(store).Verify(context.Background(), nextSecond)
-	require.NoError(t, err, "a token issued in a later second is valid")
-	_, err = verifier(store).Verify(context.Background(), otherUser)
-	require.NoError(t, err)
+	require.True(t, store.Revoked(claimsAt(7, now.Add(-time.Minute))))
+	require.True(t, store.Revoked(claimsAt(7, now)), "iat has second precision: the revocation's own second is revoked")
+	require.False(t, store.Revoked(claimsAt(7, now.Truncate(time.Second).Add(time.Second))), "a token issued in a later second is valid")
+	require.False(t, store.Revoked(claimsAt(8, now.Add(-time.Minute))))
 }
 
 func TestTokenVersionAndSessionRevocations(t *testing.T) {
 	store := NewStore(testDB(t), 25*time.Hour)
 	now := time.Now()
-	claims := legacyClaims(7, now)
-	claims.TokenVersion = 2
-	versioned := sign(t, jwt.SigningMethodHS256, []byte(testSecret), claims)
+	versioned := claimsAt(7, now)
+	versioned.TokenVersion = 2
 
 	require.NoError(t, store.Publish(context.Background(), Revocation{UserID: 7, TokenVersion: 2}))
-	_, err := verifier(store).Verify(context.Background(), versioned)
-	require.NoError(t, err, "tv equal to the revoked version is current")
+	require.False(t, store.Revoked(versioned), "tv equal to the revoked version is current")
 	require.NoError(t, store.Publish(context.Background(), Revocation{UserID: 7, TokenVersion: 3}))
-	_, err = verifier(store).Verify(context.Background(), versioned)
-	require.ErrorIs(t, err, ErrRevokedToken)
+	require.True(t, store.Revoked(versioned))
 
-	session := sign(t, jwt.SigningMethodHS256, []byte(testSecret), legacyClaims(9, now))
 	require.NoError(t, store.Publish(context.Background(), Revocation{
 		UserID: 9, SessionID: "session-1", SessionExpiresAt: now.Add(time.Hour), Reason: "logout",
 	}))
-	_, err = verifier(store).Verify(context.Background(), session)
-	require.ErrorIs(t, err, ErrRevokedToken)
+	require.True(t, store.Revoked(claimsAt(9, now)))
 }
 
 func TestRevocationBoundsOnlyMoveForward(t *testing.T) {
@@ -177,13 +114,11 @@ func TestReloadPicksUpOtherWritersAndPrunes(t *testing.T) {
 	require.NoError(t, Write(db, Revocation{UserID: 9, SessionID: "gone", SessionExpiresAt: now.Add(-time.Minute)}))
 
 	store := NewStore(db, 25*time.Hour)
-	token := sign(t, jwt.SigningMethodHS256, []byte(testSecret), legacyClaims(7, now.Add(-time.Minute)))
-	_, err := verifier(store).Verify(context.Background(), token)
-	require.NoError(t, err, "nothing is loaded before the first reload")
+	claims := claimsAt(7, now.Add(-time.Minute))
+	require.False(t, store.Revoked(claims), "nothing is loaded before the first reload")
 
 	require.NoError(t, store.Reload(context.Background()))
-	_, err = verifier(store).Verify(context.Background(), token)
-	require.ErrorIs(t, err, ErrRevokedToken)
+	require.True(t, store.Revoked(claims))
 
 	var users, sessions int64
 	require.NoError(t, db.Model(&model.IdentityRevocation{}).Count(&users).Error)
@@ -221,7 +156,7 @@ func TestReloadPrunesAtMostEveryPruneInterval(t *testing.T) {
 	var users int64
 	require.NoError(t, db.Model(&model.IdentityRevocation{}).Count(&users).Error)
 	require.Equal(t, int64(2), users, "not pruned inside the interval")
-	require.True(t, store.Revoked(legacyClaims(7, clock.Add(-time.Minute))), "but every reload reads: a revocation of another process applies")
+	require.True(t, store.Revoked(claimsAt(7, clock.Add(-time.Minute))), "but every reload reads: a revocation of another process applies")
 
 	clock = clock.Add(PruneInterval)
 	require.NoError(t, store.Reload(ctx))
@@ -234,16 +169,15 @@ func TestReloadPrunesAtMostEveryPruneInterval(t *testing.T) {
 	require.Equal(t, 1, *deletes, "nothing left to prune: no write")
 }
 
-// Identity tokens follow the token version: one identity issues right after
-// a versioned revocation, within the same second, keeps working, while the
-// kernel's own tokens of that second stop working.
-func TestVersionedRevocationsSpareIdentityTokensIssuedAfterThem(t *testing.T) {
+// Tokens follow the token version: one identity issues right after a
+// versioned revocation, within the same second, keeps working.
+func TestVersionedRevocationsSpareTokensIssuedAfterThem(t *testing.T) {
 	ctx := context.Background()
 	db := testDB(t)
 	store := NewStore(db, 25*time.Hour)
 	now := time.Now().Truncate(time.Second).Add(500 * time.Millisecond)
 	identity := func(tokenVersion uint64, issuedAt time.Time) *utils.Claims {
-		claims := legacyClaims(7, issuedAt)
+		claims := claimsAt(7, issuedAt)
 		claims.TokenVersion = tokenVersion
 		return claims
 	}
@@ -251,8 +185,6 @@ func TestVersionedRevocationsSpareIdentityTokensIssuedAfterThem(t *testing.T) {
 	require.NoError(t, store.Publish(ctx, Revocation{UserID: 7, TokenVersion: 3, NotBefore: now, Reason: "user is_admin changed"}))
 	require.True(t, store.Revoked(identity(2, now.Add(-time.Minute))), "an older token version")
 	require.False(t, store.Revoked(identity(3, now)), "issued after the change, in the same second")
-	require.True(t, store.Revoked(legacyClaims(7, now)), "kernel tokens of that second")
-	require.False(t, store.Revoked(legacyClaims(7, now.Add(time.Second))), "later kernel tokens")
 
 	// Without a token version a revocation bounds identity tokens by time.
 	later := now.Add(time.Minute)
@@ -265,5 +197,4 @@ func TestVersionedRevocationsSpareIdentityTokensIssuedAfterThem(t *testing.T) {
 	require.True(t, reloaded.Revoked(identity(2, later.Add(time.Second))), "the token version survives a reload")
 	require.True(t, reloaded.Revoked(identity(3, later)), "the identity bound survives a reload")
 	require.False(t, reloaded.Revoked(identity(3, later.Add(time.Second))))
-	require.True(t, reloaded.Revoked(legacyClaims(7, later)))
 }

@@ -27,8 +27,6 @@ func (rt *serverRuntime) startIdentityKeys() error {
 	}
 	authn.SetDefaultIdentityKeys(keys)
 	identityimport.SetDefault(nil, database.Get())
-	// Identity is finalized (bootstrapDatabase): only identity issues tokens.
-	authn.RefuseLegacyTokens()
 	hosts := rt.controlPluginHosts
 	if hosts == nil {
 		return nil

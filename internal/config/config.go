@@ -288,7 +288,7 @@ type IdentityConfig struct {
 	// KEK is the base64 or hex 32-byte key that seals the identity signing
 	// keys. It is passed to the local identity-platform host only; a network
 	// module gets its own copy (ANIX_IDENTITY_KEK_FILE). Without it identity
-	// signs no tokens and the kernel's own HS256 tokens stay in use.
+	// signs no tokens, so no one can log in.
 	KEK string `yaml:"kek"`
 }
 

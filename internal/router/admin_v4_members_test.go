@@ -2,6 +2,7 @@ package router
 
 import (
 	"encoding/json"
+	"github.com/AnixOps/anix-control/v5/internal/authn/authntest"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -9,7 +10,6 @@ import (
 
 	"github.com/AnixOps/anix-control/v5/internal/database"
 	"github.com/AnixOps/anix-control/v5/internal/model"
-	"github.com/AnixOps/anix-control/v5/internal/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -19,7 +19,7 @@ import (
 // read: an id that is not one (400), an unknown group (404), a status other
 // than active or expired (400).
 func TestSetup_AdminV4SubscriptionGroupMembers(t *testing.T) {
-	r, cfg := setupTestRouter(t)
+	r, _ := setupTestRouter(t)
 	defer teardownTestRouter(t)
 	db := database.GetDB()
 	require.NoError(t, db.AutoMigrate(&model.SubscriptionGroup{}, &model.UserSubscriptionGroup{}, &model.Plan{}))
@@ -39,10 +39,8 @@ func TestSetup_AdminV4SubscriptionGroupMembers(t *testing.T) {
 		r.ServeHTTP(recorder, request)
 		return recorder
 	}
-	admin, err := utils.GenerateToken(1, "admin@example.com", true, cfg.JWT.Secret, cfg.JWT.Expire)
-	require.NoError(t, err)
-	member, err := utils.GenerateToken(2, "member@example.com", false, cfg.JWT.Secret, cfg.JWT.Expire)
-	require.NoError(t, err)
+	admin := authntest.Token(t, 1, "admin@example.com", true)
+	member := authntest.Token(t, 2, "member@example.com", false)
 
 	const path = "/api/v4/admin/subscription-groups/1/members"
 	assert.Equal(t, http.StatusUnauthorized, get("", path).Code)

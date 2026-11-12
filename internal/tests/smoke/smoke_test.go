@@ -3,6 +3,7 @@ package smoke
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/AnixOps/anix-control/v5/internal/authn/authntest"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -14,7 +15,6 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/router"
 	"github.com/AnixOps/anix-control/v5/internal/tests/testutil"
-	"github.com/AnixOps/anix-control/v5/internal/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -133,9 +133,7 @@ func TestSmoke(t *testing.T) {
 
 // generateToken creates a JWT token for a user
 func (s *SmokeTestSuite) generateToken(userID uint, email string, isAdmin bool) string {
-	token, err := utils.GenerateToken(userID, email, isAdmin, s.cfg.JWT.Secret, s.cfg.JWT.Expire)
-	require.NoError(s.T(), err)
-	return token
+	return authntest.Token(s.T(), userID, email, isAdmin)
 }
 
 // adminToken returns a valid admin JWT token

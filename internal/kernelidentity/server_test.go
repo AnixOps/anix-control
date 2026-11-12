@@ -3,6 +3,7 @@ package kernelidentity
 import (
 	"context"
 	"encoding/json"
+	"github.com/AnixOps/anix-control/v5/internal/authn/authntest"
 	"testing"
 	"time"
 
@@ -155,8 +156,7 @@ func TestUpdateSubscriberAppliesEntitlementsLikeTheAdminAPI(t *testing.T) {
 func TestApplyAccountProjectionIsMonotonicAndRevokes(t *testing.T) {
 	f := newFixture(t)
 	id := f.createSubscriber(t, accountA, "proj@example.test")
-	token, err := utils.GenerateToken(id, "proj@example.test", false, testSecret, 3600)
-	require.NoError(t, err)
+	token := authntest.Token(t, id, "proj@example.test", false)
 	verify := func() error { _, err := authn.Default().Verify(context.Background(), token); return err }
 	require.NoError(t, verify())
 
@@ -217,11 +217,10 @@ func TestLegacyMirrorKeepsCredentialsUntilFinalize(t *testing.T) {
 func TestDeleteSubscriberRemovesTheLinkAndRevokes(t *testing.T) {
 	f := newFixture(t)
 	id := f.createSubscriber(t, accountA, "delete@example.test")
-	token, err := utils.GenerateToken(id, "delete@example.test", false, testSecret, 3600)
-	require.NoError(t, err)
+	token := authntest.Token(t, id, "delete@example.test", false)
 	time.Sleep(time.Until(time.Now().Truncate(time.Second).Add(time.Second)))
 
-	_, err = f.server.DeleteSubscriber(context.Background(), &kernelidentityv1.DeleteSubscriberRequest{UserId: uint64(id)})
+	_, err := f.server.DeleteSubscriber(context.Background(), &kernelidentityv1.DeleteSubscriberRequest{UserId: uint64(id)})
 	require.NoError(t, err)
 	var count int64
 	require.NoError(t, f.db.Model(&model.User{}).Where("id = ?", id).Count(&count).Error)
@@ -237,9 +236,8 @@ func TestDeleteSubscriberRemovesTheLinkAndRevokes(t *testing.T) {
 
 func TestPublishRevocationValidatesAndApplies(t *testing.T) {
 	f := newFixture(t)
-	token, err := utils.GenerateToken(9, "rev@example.test", false, testSecret, 3600)
-	require.NoError(t, err)
-	claims, err := utils.ParseTokenWithSecret(token, testSecret)
+	token := authntest.Token(t, 9, "rev@example.test", false)
+	claims, err := authn.Default().Verify(context.Background(), token)
 	require.NoError(t, err)
 
 	_, err = f.server.PublishRevocation(context.Background(), &kernelidentityv1.PublishRevocationRequest{UserId: 9})

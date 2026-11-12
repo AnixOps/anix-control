@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"github.com/AnixOps/anix-control/v5/internal/authn/authntest"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -10,7 +11,6 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/config"
 	"github.com/AnixOps/anix-control/v5/internal/middleware"
 	"github.com/AnixOps/anix-control/v5/internal/model"
-	"github.com/AnixOps/anix-control/v5/internal/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/require"
@@ -25,10 +25,8 @@ func TestLogoutEndsOnlyTheCallingSession(t *testing.T) {
 	require.NoError(t, db.AutoMigrate(&model.IdentityRevocation{}, &model.IdentitySessionRevocation{}))
 	authn.SetDefaultStore(authn.NewStore(db, 24*time.Hour))
 	t.Cleanup(func() { authn.SetDefaultStore(nil) })
-	first, err := utils.GenerateToken(7, "a@example.test", false, "logout-secret", 3600)
-	require.NoError(t, err)
-	second, err := utils.GenerateToken(7, "a@example.test", false, "logout-secret", 3600)
-	require.NoError(t, err)
+	first := authntest.Token(t, 7, "a@example.test", false)
+	second := authntest.Token(t, 7, "a@example.test", false)
 
 	router := gin.New()
 	router.POST("/logout", middleware.JWTAuth(), IdentityLogout)

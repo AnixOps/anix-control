@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"github.com/AnixOps/anix-control/v5/internal/authn/authntest"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -11,7 +12,6 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/config"
 	"github.com/AnixOps/anix-control/v5/internal/database"
 	"github.com/AnixOps/anix-control/v5/internal/model"
-	"github.com/AnixOps/anix-control/v5/internal/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -66,17 +66,7 @@ func TestJWTAuth_InvalidToken(t *testing.T) {
 }
 
 func TestJWTAuth_ValidToken(t *testing.T) {
-	// 生成有效的 token
-	secret := "test-secret-key"
-	token, err := utils.GenerateToken(1, "test@example.com", false, secret, 3600)
-	assert.NoError(t, err)
-
-	cfg := &config.Config{
-		JWT: config.JWTConfig{
-			Secret: secret,
-		},
-	}
-	config.Set(cfg)
+	token := authntest.Token(t, 1, "test@example.com", false)
 
 	router := gin.New()
 	router.Use(JWTAuth())
@@ -102,10 +92,7 @@ func TestJWTAuth_ValidToken(t *testing.T) {
 // cannot carry an Authorization header; on any other request it is refused,
 // the way V2Board-style panels leaked or forged credentials through the URL.
 func TestJWTAuth_QueryTokenOnlyOnWebSocketUpgrade(t *testing.T) {
-	secret := "test-secret-key"
-	token, err := utils.GenerateToken(1, "test@example.com", false, secret, 3600)
-	assert.NoError(t, err)
-	config.Set(&config.Config{JWT: config.JWTConfig{Secret: secret}})
+	token := authntest.Token(t, 1, "test@example.com", false)
 
 	router := gin.New()
 	router.Use(JWTAuth())
@@ -134,16 +121,7 @@ func TestTextAccessLogOmitsQuery(t *testing.T) {
 }
 
 func TestJWTAuth_BearerPrefix(t *testing.T) {
-	secret := "test-secret-key"
-	token, err := utils.GenerateToken(1, "test@example.com", true, secret, 3600)
-	assert.NoError(t, err)
-
-	cfg := &config.Config{
-		JWT: config.JWTConfig{
-			Secret: secret,
-		},
-	}
-	config.Set(cfg)
+	token := authntest.Token(t, 1, "test@example.com", true)
 
 	router := gin.New()
 	router.Use(JWTAuth())
@@ -401,10 +379,7 @@ func TestRecovery(t *testing.T) {
 }
 
 func TestJWTAuth_RejectsRevokedToken(t *testing.T) {
-	secret := "test-secret-key"
-	config.Set(&config.Config{JWT: config.JWTConfig{Secret: secret}})
-	token, err := utils.GenerateToken(41, "revoked@example.com", false, secret, 3600)
-	assert.NoError(t, err)
+	token := authntest.Token(t, 41, "revoked@example.com", false)
 
 	store := authn.NewStore(nil, time.Hour)
 	store.Remember(authn.Revocation{UserID: 41, NotBefore: time.Now(), Reason: "ban"})

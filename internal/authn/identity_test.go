@@ -8,7 +8,6 @@ import (
 	"github.com/AnixOps/anix-control/identity/signingkey"
 	"github.com/AnixOps/anix-control/identity/token"
 	"github.com/AnixOps/anix-control/sdk/identitytoken"
-	"github.com/AnixOps/anix-control/v5/internal/utils"
 	"github.com/stretchr/testify/require"
 )
 
@@ -45,9 +44,9 @@ func (f *identityFixture) issue(t *testing.T, subject token.Subject, session, au
 	return signed
 }
 
-func TestIdentityTokensVerifyAlongsideLegacyTokens(t *testing.T) {
+func TestIdentityTokensVerify(t *testing.T) {
 	f := newIdentityFixture(t)
-	verifier := &Verifier{Secret: func() string { return testSecret }, IdentityKeys: f.keys}
+	verifier := &Verifier{IdentityKeys: f.keys}
 
 	claims, err := verifier.Verify(context.Background(), f.issue(t, token.Subject{UserID: 42, Email: "member@example.test", IsAdmin: true, TokenVersion: 3}, "s-1", IdentityAudience))
 	require.NoError(t, err)
@@ -56,15 +55,10 @@ func TestIdentityTokensVerifyAlongsideLegacyTokens(t *testing.T) {
 	require.Equal(t, "s-1", claims.SessionID)
 	require.Equal(t, uint64(3), claims.TokenVersion)
 
-	legacy, err := utils.GenerateToken(7, "legacy@example.test", false, testSecret, 3600)
-	require.NoError(t, err)
-	_, err = verifier.Verify(context.Background(), legacy)
-	require.NoError(t, err, "the kernel's HS256 tokens keep working")
-
 	_, err = verifier.Verify(context.Background(), f.issue(t, token.Subject{UserID: 42, TokenVersion: 1}, "s-1", "other-service"))
 	require.ErrorIs(t, err, ErrInvalidToken, "tokens for another service are refused")
 
-	_, err = (&Verifier{Secret: func() string { return testSecret }}).Verify(context.Background(), f.issue(t, token.Subject{UserID: 42, TokenVersion: 1}, "s-1", IdentityAudience))
+	_, err = (&Verifier{}).Verify(context.Background(), f.issue(t, token.Subject{UserID: 42, TokenVersion: 1}, "s-1", IdentityAudience))
 	require.ErrorIs(t, err, ErrInvalidToken, "without identity keys identity tokens are refused")
 }
 

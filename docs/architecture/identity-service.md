@@ -17,12 +17,10 @@ are removed (they ran on 5.0.3; [UPGRADE.md](../UPGRADE.md)).
   only; the kernel keeps no login, MFA or user administration handler. The
   administrator's invite codes, which have no native handler, still pass
   through `internal/identitybridge` to the kernel's.
-- **Tokens.** HS256 with a shared secret (`internal/utils/jwt.go`), checked in
-  one place, `internal/authn` (step 8):
-  - the algorithm is pinned to HS256, and `iss=v2board`, `exp` and `iat` are
-    required;
-  - new tokens carry a session id (`sid`);
-  - revocations are enforced (see below).
+- **Tokens.** Identity signs every user access token (EdDSA, published
+  keys). The kernel verifies them in one place, `internal/authn`, refuses
+  every other algorithm and enforces revocations (see below). The kernel
+  signs no user tokens.
 - **Data.** `v2_user` mixes identity columns (email, password, is_admin,
   is_staff, banned) with subscriber and entitlement columns (plan, traffic,
   expiry, limits, balance). About 20 other kernel files read those identity
@@ -106,7 +104,6 @@ lists that read the `v2_user` projection.
     version (`ApplyAccountProjectionRequest.token_version`).
   - The kernel then ends identity tokens whose `tv` claim is lower, so a
     token issued right after the change works, even within the same second.
-  - The kernel's own HS256 tokens carry no `tv` and are still ended by time.
   - A version that did not rise above the last one projected
     (`v4_kernel_identity_account.token_version`) falls back to time, so a
     revocation cannot be missed.

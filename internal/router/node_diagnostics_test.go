@@ -1,6 +1,7 @@
 package router
 
 import (
+	"github.com/AnixOps/anix-control/v5/internal/authn/authntest"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -16,7 +17,7 @@ import (
 // Agent upgrade plan are in the administrator-only /api/v4 group, and the
 // diagnostics refuse what the whitelist does not name.
 func TestSetup_V4NodeDiagnosticsRequireAdmin(t *testing.T) {
-	r, cfg := setupTestRouter(t)
+	r, _ := setupTestRouter(t)
 	defer teardownTestRouter(t)
 	require.NoError(t, database.GetDB().AutoMigrate(&model.Node{}, &model.ForwardNode{}, &model.AgentDiagnosticTask{}, &model.OperationLog{},
 		&model.AgentTransport{}, &model.AgentUpgradeCampaign{}))
@@ -32,14 +33,14 @@ func TestSetup_V4NodeDiagnosticsRequireAdmin(t *testing.T) {
 		r.ServeHTTP(recorder, request)
 		return recorder
 	}
-	admin := testRouterJWT(t, cfg.JWT.Secret, true)
+	admin := authntest.Token(t, 1, "auth-test@example.com", true)
 	for _, route := range []struct{ method, path, body string }{
 		{http.MethodGet, "/api/v4/kernel/nodes/proxy-5/diagnostics", ""},
 		{http.MethodPost, "/api/v4/kernel/nodes/proxy-5/diagnostics", `{"action":"service_status","params":{"service":"anix-agent"}}`},
 		{http.MethodGet, "/api/v4/kernel/agents/upgrade-plan", ""},
 	} {
 		assert.Equal(t, http.StatusUnauthorized, serve(route.method, route.path, route.body, "").Code, route.path)
-		assert.Equal(t, http.StatusForbidden, serve(route.method, route.path, route.body, testRouterJWT(t, cfg.JWT.Secret, false)).Code, route.path)
+		assert.Equal(t, http.StatusForbidden, serve(route.method, route.path, route.body, authntest.Token(t, 1, "auth-test@example.com", false)).Code, route.path)
 	}
 
 	listed := serve(http.MethodGet, "/api/v4/kernel/nodes/proxy-5/diagnostics", "", admin)

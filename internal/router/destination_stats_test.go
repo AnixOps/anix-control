@@ -3,6 +3,7 @@ package router
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/AnixOps/anix-control/v5/internal/authn/authntest"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -11,7 +12,6 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/database"
 	"github.com/AnixOps/anix-control/v5/internal/destinationstats"
 	"github.com/AnixOps/anix-control/v5/internal/model"
-	"github.com/AnixOps/anix-control/v5/internal/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -19,7 +19,7 @@ import (
 // The administrators read every user's traffic by destination and change the
 // settings; a user reads only their own.
 func TestSetup_DestinationStats(t *testing.T) {
-	r, cfg := setupTestRouter(t)
+	r, _ := setupTestRouter(t)
 	defer teardownTestRouter(t)
 	db := database.GetDB()
 	require.NoError(t, db.AutoMigrate(&model.DestinationStat{}, &model.SystemConfig{}))
@@ -60,10 +60,8 @@ func TestSetup_DestinationStats(t *testing.T) {
 		require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &body))
 		return body
 	}
-	admin, err := utils.GenerateToken(1, "admin@example.com", true, cfg.JWT.Secret, cfg.JWT.Expire)
-	require.NoError(t, err)
-	member, err := utils.GenerateToken(3, "member@example.com", false, cfg.JWT.Secret, cfg.JWT.Expire)
-	require.NoError(t, err)
+	admin := authntest.Token(t, 1, "admin@example.com", true)
+	member := authntest.Token(t, 3, "member@example.com", false)
 
 	assert.Equal(t, http.StatusUnauthorized, do(http.MethodGet, "", "/api/v4/admin/traffic/destinations", nil).Code)
 	assert.Equal(t, http.StatusForbidden, do(http.MethodGet, member, "/api/v4/admin/traffic/destinations", nil).Code)

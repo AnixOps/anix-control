@@ -11,6 +11,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"github.com/AnixOps/anix-control/v5/internal/authn/authntest"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -31,7 +32,6 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/packagebridge"
 	"github.com/AnixOps/anix-control/v5/internal/pluginhost"
 	"github.com/AnixOps/anix-control/v5/internal/service"
-	"github.com/AnixOps/anix-control/v5/internal/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -274,15 +274,13 @@ func v2TestPackage(t *testing.T, files map[string][]byte) []byte {
 
 func requestV2(t *testing.T, router *gin.Engine, cfg *config.Config, method, path string) *httptest.ResponseRecorder {
 	t.Helper()
-	token, err := utils.GenerateToken(1, "user@example.com", false, cfg.JWT.Secret, cfg.JWT.Expire)
-	require.NoError(t, err)
+	token := authntest.Token(t, 1, "user@example.com", false)
 	return requestV2WithToken(t, router, method, path, token)
 }
 
 func requestV2Admin(t *testing.T, router *gin.Engine, cfg *config.Config, method, path string) *httptest.ResponseRecorder {
 	t.Helper()
-	token, err := utils.GenerateToken(1, "admin@example.com", true, cfg.JWT.Secret, cfg.JWT.Expire)
-	require.NoError(t, err)
+	token := authntest.Token(t, 1, "admin@example.com", true)
 	return requestV2WithToken(t, router, method, path, token)
 }
 
@@ -569,7 +567,7 @@ func TestSetup_ContainerProbesNeedNoCredentials(t *testing.T) {
 }
 
 func TestSetup_V3KernelAccessGroupsRequireAdminAndPersistScope(t *testing.T) {
-	r, cfg := setupTestRouter(t)
+	r, _ := setupTestRouter(t)
 	defer teardownTestRouter(t)
 	require.NoError(t, service.MigrateKernelModelsForTest(database.GetDB()))
 
@@ -581,8 +579,7 @@ func TestSetup_V3KernelAccessGroupsRequireAdminAndPersistScope(t *testing.T) {
 	r.ServeHTTP(unauthenticated, request)
 	assert.Equal(t, http.StatusUnauthorized, unauthenticated.Code)
 
-	token, err := utils.GenerateToken(1, "admin@example.com", true, cfg.JWT.Secret, cfg.JWT.Expire)
-	require.NoError(t, err)
+	token := authntest.Token(t, 1, "admin@example.com", true)
 	request = httptest.NewRequest(http.MethodPost, "/api/v3/access-groups", bytes.NewReader(payload))
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Authorization", "Bearer "+token)
@@ -599,7 +596,7 @@ func TestSetup_V3KernelAccessGroupsRequireAdminAndPersistScope(t *testing.T) {
 }
 
 func TestSetup_V3KernelAccessGroupDetailUsesStaticResolveRouteAndProtectedDetailRoute(t *testing.T) {
-	r, cfg := setupTestRouter(t)
+	r, _ := setupTestRouter(t)
 	defer teardownTestRouter(t)
 	require.NoError(t, service.MigrateKernelModelsForTest(database.GetDB()))
 	require.NoError(t, database.GetDB().AutoMigrate(&model.User{}, &model.Plan{}))
@@ -618,8 +615,7 @@ func TestSetup_V3KernelAccessGroupDetailUsesStaticResolveRouteAndProtectedDetail
 	r.ServeHTTP(unauthenticated, request)
 	require.Equal(t, http.StatusUnauthorized, unauthenticated.Code)
 
-	token, err := utils.GenerateToken(1, "admin@example.com", true, cfg.JWT.Secret, cfg.JWT.Expire)
-	require.NoError(t, err)
+	token := authntest.Token(t, 1, "admin@example.com", true)
 	request.Header.Set("Authorization", "Bearer "+token)
 	detail := httptest.NewRecorder()
 	r.ServeHTTP(detail, request)
@@ -635,7 +631,7 @@ func TestSetup_V3KernelAccessGroupDetailUsesStaticResolveRouteAndProtectedDetail
 }
 
 func TestSetup_V3KernelOperationIsIdempotent(t *testing.T) {
-	r, cfg := setupTestRouter(t)
+	r, _ := setupTestRouter(t)
 	defer teardownTestRouter(t)
 	require.NoError(t, service.MigrateKernelModelsForTest(database.GetDB()))
 	manifestJSON, err := service.CanonicalPluginManifest(service.PluginManifest{
@@ -647,8 +643,7 @@ func TestSetup_V3KernelOperationIsIdempotent(t *testing.T) {
 		PluginID: "subscription", Version: "1.0.0", APIVersion: "v1", ManifestJSON: string(manifestJSON),
 		ArtifactSHA256: strings.Repeat("a", 64), Signature: "test",
 	}).Error)
-	token, err := utils.GenerateToken(1, "admin@example.com", true, cfg.JWT.Secret, cfg.JWT.Expire)
-	require.NoError(t, err)
+	token := authntest.Token(t, 1, "admin@example.com", true)
 	payload, err := json.Marshal(gin.H{
 		"operation_id": "73c38025-6e13-4af8-a3bc-f3204bbf7cee", "idempotency_key": "router-operation-1",
 		"plugin_id": "subscription", "target_version": "1.0.0", "kind": "plugin.health",
@@ -666,7 +661,7 @@ func TestSetup_V3KernelOperationIsIdempotent(t *testing.T) {
 }
 
 func TestSetup_V3ExtensionsRequiresAdminAndReturnsEmptyCatalog(t *testing.T) {
-	r, cfg := setupTestRouter(t)
+	r, _ := setupTestRouter(t)
 	defer teardownTestRouter(t)
 	require.NoError(t, service.MigrateKernelModelsForTest(database.GetDB()))
 
@@ -675,8 +670,7 @@ func TestSetup_V3ExtensionsRequiresAdminAndReturnsEmptyCatalog(t *testing.T) {
 	r.ServeHTTP(unauthenticated, request)
 	require.Equal(t, http.StatusUnauthorized, unauthenticated.Code)
 
-	token, err := utils.GenerateToken(1, "admin@example.com", true, cfg.JWT.Secret, cfg.JWT.Expire)
-	require.NoError(t, err)
+	token := authntest.Token(t, 1, "admin@example.com", true)
 	request = httptest.NewRequest(http.MethodGet, "/api/v3/extensions", nil)
 	request.Header.Set("Authorization", "Bearer "+token)
 	recorder := httptest.NewRecorder()
@@ -771,12 +765,11 @@ func TestV2GatewayReflectsGenerationBumpForCachedPackage(t *testing.T) {
 }
 
 func TestWebSocketGatewayDoesNotInvokeLegacyHandler(t *testing.T) {
-	router, cfg, _ := setupV2PackageRouter(t)
+	router, _, _ := setupV2PackageRouter(t)
 	defer teardownTestRouter(t)
 	disablePackage(t, "knowledge")
 
-	token, err := utils.GenerateToken(1, "admin@example.com", true, cfg.JWT.Secret, cfg.JWT.Expire)
-	require.NoError(t, err)
+	token := authntest.Token(t, 1, "admin@example.com", true)
 	request := httptest.NewRequest(http.MethodGet, "/api/v2/admin/ws/monitor", nil)
 	request.Header.Set("Authorization", "Bearer "+token)
 	recorder := httptest.NewRecorder()
