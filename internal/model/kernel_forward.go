@@ -181,12 +181,16 @@ type KernelForwardPlan struct {
 
 func (KernelForwardPlan) TableName() string { return "v4_kernel_forward_plan" }
 
-// KernelForwardModels are the kernel's forwarding tables, with the tables
+// KernelForwardModels are the kernel's forwarding tables with the tables
 // its lines are read from (internal/netline).
 func KernelForwardModels() []any {
+	return append(KernelForwardTables(), &Node{}, &NodeProtocol{}, &NodeEntry{}, &NodeExitPolicy{}, &NodeNetwork{},
+		&NodeUplinks{}, &ForwardRouteSubscription{}, &EgressRoute{})
+}
+
+// KernelForwardTables are the kernel's forwarding tables.
+func KernelForwardTables() []any {
 	return []any{
-		&Node{}, &NodeProtocol{}, &NodeEntry{}, &NodeExitPolicy{}, &NodeNetwork{}, &NodeUplinks{},
-		&ForwardRouteSubscription{}, &EgressRoute{},
 		&Line{}, &Transport{}, &KernelForwardAllocation{}, &KernelForwardNode{}, &KernelForwardNodeState{},
 		&KernelForwardNodeReport{}, &KernelForwardCounter{}, &KernelForwardTraffic{}, &KernelForwardRequest{},
 		&KernelForwardPlan{}, &KernelForwardDNSProvider{}, &KernelForwardDNSBinding{}, &KernelForwardDNSNode{},
