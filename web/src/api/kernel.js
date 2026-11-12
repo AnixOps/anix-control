@@ -343,6 +343,24 @@ export async function getKernelNetworkLines() {
   return unwrap(await v4({ url: '/kernel/network/lines', method: 'get' }))
 }
 
+// Lines (docs/design/network-lines, section 8). A draft is { name,
+// enabled, show, port, l4, chain: [{ devices }], protocol_id | targets,
+// revision (an update's) }: the first hop's devices are the entries, the
+// last hop's device is the exit. Refusals: refused (422) with violations,
+// revision_conflict (409), invalid_request (400). Answers { id }.
+export async function createNetLine(draft) {
+  return unwrap(await v5({ url: '/net/lines', method: 'post', data: draft }))
+}
+
+export async function updateNetLine(id, draft) {
+  return unwrap(await v5({ url: `/net/lines/${encodeURIComponent(id)}`, method: 'put', data: draft }))
+}
+
+// Deletes the line and its subscription offer (super administrators).
+export async function deleteNetLine(id) {
+  return unwrap(await v5({ url: `/net/lines/${encodeURIComponent(id)}`, method: 'delete' }))
+}
+
 // Replaces the node's network settings and replans the routes through it.
 // Refusals: invalid_request (400) with violations, not_found (404).
 export async function setKernelNodeNetwork(node, settings) {

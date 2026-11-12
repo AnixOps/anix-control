@@ -51,7 +51,7 @@ const NETWORK = {
   uplinks: [], entries: [], transports: [], exits: [],
   lines: [
     ...LINES.map(([name, hops], index) => ({
-      id: ROUTES[index].route.id, name, enabled: true, show: true, port: 443 + index * 1000, l4: ['tcp'], rate: index === 1 ? 1.5 : 1,
+      id: ROUTES[index].route.id, name, enabled: true, show: true, port: 443 + index * 1000, l4: ['tcp'], rate: index === 1 ? 1.5 : 1, revision: 3,
       entries: hops[0].map(ref), chain: hops.map(ids => ({ devices: ids.map(ref) })), exit: ref(hops.at(-1)[0]),
       protocol: { id: index + 1, type: PROTOCOLS[index], device: ref(hops.at(-1)[0]), port: 443 },
       ...(index === 2 ? { rules: [{ name: 'ai-via-jp', domains: ['openai.com', 'anthropic.com'], exit: 'proxy-6', enabled: true }] } : {})
@@ -61,7 +61,7 @@ const NETWORK = {
       entries: [ref(id)], chain: [{ devices: [ref(id)] }], exit: ref(id), protocol: { id: id + 20, type: 'hysteria2', device: ref(id), port: 8443 }
     })),
     {
-      id: '01JBTOPOFIXED0000000000000', name: 'game-forward', enabled: true, show: false, port: 30443, l4: ['tcp', 'udp'], rate: 1,
+      id: '01JBTOPOFIXED0000000000000', name: 'game-forward', enabled: true, show: false, port: 30443, l4: ['tcp', 'udp'], rate: 1, revision: 1,
       entries: ['proxy-2'], chain: [{ devices: ['proxy-2'] }, { devices: ['proxy-5'] }], exit: 'proxy-5', targets: [{ host: 'game.example.jp', port: 7777 }]
     }
   ],
@@ -71,6 +71,13 @@ const NETWORK = {
 export default {
   edition: 'community',
   pathFor: scenario => (scenario.startsWith('lines') ? '/admin/lines' : scenario === 'graph' ? '/admin/topology?view=graph' : '/admin/topology'),
+  // lines-edit opens a relayed line's edit sheet.
+  async after(page, { scenario }) {
+    if (scenario !== 'lines-edit') return
+    await page.getByText('sha-hk-tyo', { exact: true }).first().click()
+    await page.getByTestId('line-edit').click()
+    await page.getByTestId('line-form-save').waitFor()
+  },
   api(path, { scenario }) {
     const empty = scenario === 'empty' || scenario === 'lines-empty'
     const lines = scenario !== 'direct' && !empty

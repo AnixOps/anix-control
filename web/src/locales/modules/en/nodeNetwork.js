@@ -45,6 +45,8 @@ export default {
     region: 'Region',
     regionHint: 'Where this device is, for the topology map.',
     regionSuggested: 'Suggested from the name; Save stores it. Used for the topology map.',
+    scanCloud: 'Scanning cloud',
+    scanCloudHint: 'The cloud this machine runs on scans its hosts. Lines through it then forward in the kernel at this device, from the next line saved.',
     save: 'Save',
     saved: 'Saved; the routes through this node were replanned.',
     saveFailed: 'Could not save',

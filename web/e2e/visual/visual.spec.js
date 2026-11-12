@@ -52,6 +52,7 @@ const SHOTS = [
   ['admin-topology', [DESKTOP, PHONE]],
   ['admin-topology-graph', [DESKTOP]],
   ['admin-lines', [DESKTOP, PHONE]],
+  ['admin-lines-edit', [DESKTOP, PHONE]],
   // The v4.2 forwarding pages (F5b).
   ['admin-forward-overview', [DESKTOP]],
   ['admin-forward-routes', [DESKTOP, PHONE]],

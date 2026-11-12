@@ -57,6 +57,7 @@
         data-testid="node-network-hop-port"
       />
       <UiSelect v-model="region" :options="regionOptions" :label="t('nodeNetwork.region')" :help="suggested ? t('nodeNetwork.regionSuggested') : t('nodeNetwork.regionHint')" :error="fieldError('region')" data-testid="node-network-region" />
+      <UiSwitch v-model="form.scan_cloud" :label="t('nodeNetwork.scanCloud')" :description="t('nodeNetwork.scanCloudHint')" data-testid="node-network-scan-cloud" />
       <NodeUplinksEditor v-model="uplinks" :hops="hops" :detected="detected" :field-error="fieldError" />
       <p v-if="saveError" class="node-network__error" role="alert">{{ saveError }}</p>
       <p v-if="saved" class="node-network__hint" role="status">{{ t('nodeNetwork.saved') }}</p>
@@ -79,7 +80,9 @@
 // 上联网卡 (NodeUplinksEditor) lists the NICs of a dual-NIC node and which
 // one each next node of its routes gets, with each NIC's latency to it.
 // 地区 is where the node is, for the topology map: until one is saved, the
-// place its name and tags suggest is offered, and Save stores it.
+// place its name and tags suggest is offered, and Save stores it. 扫描云
+// marks a machine on a cloud that scans its hosts: lines through it forward
+// in the kernel there (docs/design/network-lines).
 // GET/PUT /api/v4/kernel/nodes/:id/network
 import { computed, onMounted, reactive, ref } from 'vue'
 import { getKernelNodeNetwork, setKernelNodeNetwork } from '@/api/kernel'
@@ -90,6 +93,7 @@ import UiNumberField from '@/ui/UiNumberField.vue'
 import UiSection from '@/ui/UiSection.vue'
 import UiSelect from '@/ui/UiSelect.vue'
 import UiSkeleton from '@/ui/UiSkeleton.vue'
+import UiSwitch from '@/ui/UiSwitch.vue'
 import UiTextField from '@/ui/UiTextField.vue'
 import { REGIONS, locate } from '@/components/topology/geo'
 import NodeUplinksEditor from './NodeUplinksEditor.vue'
@@ -102,7 +106,7 @@ const props = defineProps({
 })
 const { t, locale } = useAppI18n()
 
-const form = reactive({ interface: '', source_v4: '', gateway_v4: '', source_v6: '', gateway_v6: '', hop_port: null, region: '' })
+const form = reactive({ interface: '', source_v4: '', gateway_v4: '', source_v6: '', gateway_v6: '', hop_port: null, region: '', scan_cloud: false })
 const suggested = ref(false)
 const loading = ref(true)
 const loadError = ref(null)
@@ -173,6 +177,7 @@ function fill(view) {
   for (const key of FIELDS) form[key] = view?.[key] || ''
   form.hop_port = view?.hop_port || null
   form.region = view?.region || locate(props)?.key || ''
+  form.scan_cloud = Boolean(view?.scan_cloud)
   suggested.value = !view?.region && Boolean(form.region)
   detected.value = Array.isArray(view?.detected) ? view.detected : []
   detectedAt.value = view?.detected_at || ''
@@ -208,7 +213,7 @@ async function save() {
   violations.value = []
   try {
     const settings = Object.fromEntries(FIELDS.map(key => [key, form[key]]))
-    fill(await setKernelNodeNetwork(props.nodeRef, { ...settings, hop_port: form.hop_port || 0, region: form.region, ...uplinks.value }))
+    fill(await setKernelNodeNetwork(props.nodeRef, { ...settings, hop_port: form.hop_port || 0, region: form.region, scan_cloud: form.scan_cloud, ...uplinks.value }))
     saved.value = true
   } catch (e) {
     const error = e?.response?.data?.error
