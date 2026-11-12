@@ -169,8 +169,8 @@ async function save() {
   display: grid;
   gap: var(--space-2);
   padding: var(--space-3);
+  border: 1px solid var(--separator);
   border-radius: var(--radius-md);
-  background: var(--fill-3);
 }
 
 .line-form__sub {
@@ -209,7 +209,7 @@ async function save() {
 .line-form__pick button[aria-pressed="true"] {
   border-color: var(--accent);
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--label-1);
 }
 
 .line-form__pick button:focus-visible {
