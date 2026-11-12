@@ -97,6 +97,7 @@ carry it with the database (P10).
 | the module and forward link CA keys, DNS provider credentials | sealed with the root key (AES-256-GCM), as with `module_runtime.ca_kek` before |
 | node group join tokens | sealed with HKDF-SHA256(root key, `anixops node-group join token v1`), unchanged |
 | ACME account and certificate keys (`v5_acme_cache`) | sealed with HKDF-SHA256(root key, `anixops acme cache v1`), unchanged |
+| the license CA (ANX licensing, `internal/entitlement`) | Ed25519 key from the seed HKDF-SHA256(root key, `anixops entitlement license ca v1`); nothing stored. A root key rotation changes the CA, so ANX nodes get the new `license_ca` and clients need a fresh license. |
 | the JWT secret (`jwt.secret`) | a value the configuration sets (explicitly, not a template value) is adopted: recorded in `root.key` at the next start and kept until a rotation, also after the configuration drops it. Otherwise standard base64 of HKDF-SHA256(root key, `anixops jwt v1`). |
 | the identity signing key KEK (`identity.kek`) | adopted the same way; otherwise standard base64 of HKDF-SHA256(root key, `anixops identity kek v1`) |
 

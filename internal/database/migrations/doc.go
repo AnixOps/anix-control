@@ -153,4 +153,6 @@
 //   - 0036_forward_routes_as_lines: forward routes move into v5_line
 //     (created again with the route's columns) and
 //     v4_kernel_forward_route goes.
+//   - 0037_entitlement_devices: the devices users registered for a
+//     licensed feature (v5_entitlement_device, internal/entitlement).
 package migrations

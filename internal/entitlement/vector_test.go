@@ -1,0 +1,9 @@
+package entitlement
+
+// The pinned certificate of TestANXCertVector: root key 0x42 × 32, user
+// UUID 00000000-0000-4000-8000-000000000001, the Ed25519 device key of the
+// all-zero seed, valid from 1800000000 to 1800604800.
+const (
+	vectorCA   = "c83c22218d9d871e9eb6196777b1ee9715a34420d42646c09e6bbedf3687de26"
+	vectorCert = "01c00f77ef73c16e3608c8dfab4273795e02203b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da296b49d2006b530c80e4f028a2f3c2add9a1cff3660629e2babb6053ed7e9d9e72476f8b87eb826a5932b570004a19d5225dd38a172800e384e3a6a32ba8e2b71c63819ea894ebc005"
+)
