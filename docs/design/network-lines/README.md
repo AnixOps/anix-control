@@ -101,3 +101,18 @@
 `v4_kernel_forward_route` 的路由全部搬进来，旧表删除。旧转发接口照常写 `route`；每次规划被接受后，
 `netline.Project` 按 Import 读路由的方式把线路列和 `v5_transport` 重新写一遍，所以线路表里的
 名称、入口、链、出口总跟路由一致。节点协议自己的线路还不入表，第 3 步新接口写线路时一起存。
+
+## 8. 第 3 步的接口
+
+线路的写接口在 `/api/v5/net/lines`，读仍是 `GET /api/v4/kernel/network/lines`（每条存下的线路带
+`revision`）：
+
+| 方法 | 路径 | 作用 |
+| --- | --- | --- |
+| `POST` | `/api/v5/net/lines` | 建线路：`name`、`enabled`、`show`（加入订阅）、`port`、`l4`、`chain`（每一跳的设备，第一跳是入口，最后一跳的设备是出口）、`protocol_id`（出口设备上的协议）或 `targets`（固定目标） |
+| `PUT` | `/api/v5/net/lines/{id}` | 按 `revision` 整条替换；路由的负载与健康检查、限额、标签保留，设备不变的那一跳保留它的传输 |
+| `DELETE` | `/api/v5/net/lines/{id}` | 删线路和它的订阅；需要超级管理员 |
+
+线路存成转发路由，照旧经过校验和规划：被拒时 422 带 `violations`，revision 不对时 409。
+`Idempotency-Key` 头让重试只生效一次。设备是否用内核转发看它的网络设置 `scan_cloud`
+（`PUT /api/v4/kernel/nodes/{id}/network`），改了以后对之后写入的线路生效。

@@ -151,6 +151,9 @@ type Line struct {
 	// ServeAt is the device the protocol is served at when the
 	// administrator chose it; empty is the first userspace device.
 	ServeAt string `json:"serve_at,omitempty"`
+	// Revision is the stored line's, which an update names; 0 on a
+	// protocol's own line, which is not stored.
+	Revision uint64 `json:"revision,omitempty"`
 }
 
 // Skipped is something Import could not read as a line, and why.

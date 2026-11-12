@@ -22,9 +22,10 @@ func TestSetNodeSettingsReplans(t *testing.T) {
 	require.NoError(t, err)
 	require.Zero(t, empty)
 
-	saved, err := s.SetNodeSettings(ctx, "proxy-1", NodeSettings{Interface: " eth1 ", SourceV4: "10.0.0.7", GatewayV4: "10.0.0.1"}, Actor{Name: "admin"})
+	saved, err := s.SetNodeSettings(ctx, "proxy-1", NodeSettings{Interface: " eth1 ", SourceV4: "10.0.0.7", GatewayV4: "10.0.0.1", ScanCloud: true}, Actor{Name: "admin"})
 	require.NoError(t, err)
 	require.Equal(t, "eth1", saved.Interface)
+	require.True(t, saved.ScanCloud)
 	got, err := s.NodeSettings(ctx, "proxy-1")
 	require.NoError(t, err)
 	require.Equal(t, saved, got)
