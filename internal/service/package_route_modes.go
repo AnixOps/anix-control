@@ -33,7 +33,7 @@ func rejectRemovedRouteModes(canonical string) error {
 		return fmt.Errorf("plugin configuration is not a JSON object: %w", err)
 	}
 	if _, ok := document[RemovedRouteModesConfigKey]; ok {
-		return fmt.Errorf("configuration key %q was removed: route modes come only from the rehearsed list (config/package-route-defaults.json)", RemovedRouteModesConfigKey)
+		return fmt.Errorf("configuration key %q was removed: every package route runs natively", RemovedRouteModesConfigKey)
 	}
 	return nil
 }
@@ -50,8 +50,9 @@ type PackageHostOperations struct {
 
 var _ packagebridge.HostOperations = PackageHostOperations{}
 
-// PackageConfig returns the calling host's route modes: the rehearsed list
-// and identity group A (ResolveEffectivePackageRouteModes). The host must be
+// PackageConfig returns the calling host's configuration revision. It names
+// no route modes: every package runs its routes natively (NativeOnly), and
+// a route without a native handler passes to the kernel's. The host must be
 // the enabled control installation at its desired version and current
 // lifecycle generation; any other host is fenced.
 func (o PackageHostOperations) PackageConfig(ctx context.Context, host packagebridge.HostIdentity) (packagebridge.PackageConfig, error) {
@@ -63,17 +64,7 @@ func (o PackageHostOperations) PackageConfig(ctx context.Context, host packagebr
 	if err != nil {
 		return packagebridge.PackageConfig{}, err
 	}
-	modes, err := ResolveEffectivePackageRouteModes(o.DB.WithContext(ctx), host.PackageID, installation.DesiredVersion)
-	if err != nil {
-		return packagebridge.PackageConfig{}, err
-	}
-	active := make(map[string]string, len(modes))
-	for route, mode := range modes {
-		if mode == packagebridge.RouteModeNative {
-			active[route] = mode
-		}
-	}
-	return packagebridge.PackageConfig{Revision: configuration.Revision, ConfigHash: configuration.ConfigHash, RouteModes: active}, nil
+	return packagebridge.PackageConfig{Revision: configuration.Revision, ConfigHash: configuration.ConfigHash}, nil
 }
 
 // currentInstallation returns the host's Control installation if the host is

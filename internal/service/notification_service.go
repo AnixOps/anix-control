@@ -453,7 +453,7 @@ func (s *NotificationService) NotifyAdministrators(event, title, content string,
 
 // telegramMarkdownSafe makes text safe for the Bot API's legacy Markdown
 // mode, which TelegramBotService.SendMessage uses: an unpaired _, *, ` or [
-// (a table name such as v2_node, a setting such as alerts.phase_stuck_after)
+// (a table name such as v2_node, a setting such as alerts.check_interval)
 // makes Telegram refuse the whole message with "can't parse entities".
 // Legacy Markdown has no reliable escape, so the characters are replaced.
 func telegramMarkdownSafe(text string) string {

@@ -131,8 +131,7 @@ agent_install:
   signature_file: ""
 alerts:
   # The alert monitor (GET /api/v4/kernel/alerts): certificates that were not
-  # renewed in time, CAs close to their end, and phased processes (the node
-  # credential split, the identity cutover) left in a non-final phase.
+  # renewed in time, CAs close to their end, and the backups.
   enabled: true
   check_interval: "15m"
   # Upper bound, in days, for a leaf certificate's alert window; the window
@@ -140,5 +139,3 @@ alerts:
   leaf_expiry_days: 14
   ca_expiry_days: 60
   renotify_interval: "24h"
-  # "0" turns the phase alerts off.
-  phase_stuck_after: "72h"

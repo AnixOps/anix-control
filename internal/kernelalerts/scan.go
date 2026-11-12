@@ -18,7 +18,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// Scanner reads the certificate stores and the phase tables and answers
+// Scanner reads the certificate stores and the backups and answers
 // what is wrong now. It never writes.
 type Scanner struct {
 	DB       *gorm.DB

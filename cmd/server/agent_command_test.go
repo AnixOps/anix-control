@@ -79,7 +79,7 @@ func TestTakeAdminCommand(t *testing.T) {
 	require.Nil(t, takeAdminCommand())
 	reason, removed := removedCommand(os.Args[1:])
 	require.True(t, removed)
-	require.Contains(t, reason, "rehearsed list")
+	require.Contains(t, reason, "runs natively")
 	_, removed = removedCommand([]string{"module"})
 	require.False(t, removed)
 	_, removed = removedCommand(nil)

@@ -17,7 +17,7 @@ import (
 func TestPluginStateUpsertsKeepTheNewestObservation(t *testing.T) {
 	for name, open := range map[string]func(*testing.T) *gorm.DB{
 		"sqlite":   func(t *testing.T) *gorm.DB { return newKernelTestDB(t) },
-		"postgres": openRouteModePostgres,
+		"postgres": openServicePostgres,
 	} {
 		t.Run(name, func(t *testing.T) {
 			db := open(t)

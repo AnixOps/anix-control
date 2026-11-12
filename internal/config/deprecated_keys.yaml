@@ -607,7 +607,7 @@ keys:
   - key: package_routes.default_mode
     status: ignored
     removed_in: M2 (P7)
-    reason: route modes come only from the rehearsed list (config/package-route-defaults.json)
+    reason: every package route runs natively; there are no route modes
   - key: plugins.control_execution_enabled
     status: ignored
     removed_in: M2 (P7)

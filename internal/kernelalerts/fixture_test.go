@@ -138,7 +138,7 @@ func (r *recorder) last() Notification {
 func defaultSettings() config.AlertSettings {
 	return config.AlertSettings{
 		Enabled: true, CheckInterval: 15 * time.Minute, LeafExpiryDays: 14, CAExpiryDays: 60,
-		RenotifyInterval: 24 * time.Hour, PhaseStuckAfter: 72 * time.Hour,
+		RenotifyInterval: 24 * time.Hour,
 	}
 }
 

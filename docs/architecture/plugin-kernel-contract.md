@@ -347,12 +347,9 @@ A host runs each of its v2 compatibility routes in one of two modes:
 | `native` | the host answers with its native implementation |
 
 Nothing stores or switches a route's mode (single-binary design, section
-4.3). The kernel resolves it (`ResolveEffectivePackageRouteModes`): a route of
-the rehearsed list (`config/package-route-defaults.json`) is `native` once
-the installed release is at least the package's `min_version`, identity group
-A is `native` while identity is authoritative (it follows the identity
-cutover and rollback), and every other route is `legacy`. N6 (M5) makes every
-route native and deletes the legacy handlers.
+4.3), and the kernel names none: every built-in package runs its routes
+natively (`RouterConfig.NativeOnly`), and a route without a native handler
+(the administrator's invite codes) is `legacy`.
 
 A route's runtime mode is not its extraction mode, which
 `config/package-extraction.json` records per route

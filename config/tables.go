@@ -11,19 +11,3 @@ import _ "embed"
 //
 //go:embed node-secret-fields.json
 var NodeSecretFields []byte
-
-// PackageExtraction is config/package-extraction.json: the owning package
-// and route id of every /api/v2 route.
-//
-//go:embed package-extraction.json
-var PackageExtraction []byte
-
-// PackageRouteDefaults is config/package-route-defaults.json, the rehearsed
-// list: the routes that run natively, once they passed the staging
-// rehearsal, with the package release each needs. Route modes come only from
-// it (and identity group A from the identity authority). The list is
-// explicit: a route that becomes native-flagged in package-extraction.json
-// does not run natively until it is added here.
-//
-//go:embed package-route-defaults.json
-var PackageRouteDefaults []byte
