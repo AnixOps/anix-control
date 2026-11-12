@@ -520,13 +520,6 @@ func boolInt(value bool) int {
 	return 0
 }
 
-func nullableString(value string) any {
-	if value == "" {
-		return nil
-	}
-	return value
-}
-
 func nonNil(values []string) []string {
 	if values == nil {
 		return []string{}
