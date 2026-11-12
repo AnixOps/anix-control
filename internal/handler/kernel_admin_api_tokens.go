@@ -15,40 +15,26 @@ import (
 	"gorm.io/gorm"
 )
 
-// stepUpFreshness is how recent a sign-in must be when the kernel cannot
-// check a credential itself (see AdminAPITokensHandler.stepUp).
+// stepUpFreshness is how recent the sign-in that creates a token must be
+// (see AdminAPITokensHandler.stepUp).
 const stepUpFreshness = 10 * time.Minute
 
-// adminAPITokenStepUpStaleCode is the refusal code when identity holds the
-// credentials and the caller's sign-in is older than stepUpFreshness. It used
-// to share step_up_required with "a password is required", which clients could
-// tell apart only by the message text.
+// adminAPITokenStepUpStaleCode is the refusal code when the caller's sign-in
+// is older than stepUpFreshness.
 const adminAPITokenStepUpStaleCode = "step_up_sign_in_stale" // #nosec G101 -- a response error code, not a credential
-
-// adminAPITokenStepUpLimit bounds the re-authentication attempts of one
-// administrator: the fifth failure in fifteen minutes locks creations out for
-// fifteen minutes.
-var adminAPITokenStepUpLimit = service.LoginRateLimitOptions{
-	Enabled:      true,
-	MaxAttempts:  5,
-	Window:       15 * time.Minute,
-	Lockout:      15 * time.Minute,
-	CleanupAfter: 40 * time.Minute,
-}
 
 // AdminAPITokensHandler manages administrators' personal access tokens
 // (docs/reference/admin-api-tokens.md). Its routes need a signed-in session:
 // the authentication middleware refuses every API token on them, so a stolen
 // token cannot mint, list or end tokens.
 type AdminAPITokensHandler struct {
-	db      func() *gorm.DB
-	limiter *service.LoginRateLimiter
-	now     func() time.Time
+	db  func() *gorm.DB
+	now func() time.Time
 }
 
 // NewAdminAPITokensHandler returns the handler over the process database.
 func NewAdminAPITokensHandler() *AdminAPITokensHandler {
-	return &AdminAPITokensHandler{db: database.Get, limiter: service.NewLoginRateLimiter(), now: time.Now}
+	return &AdminAPITokensHandler{db: database.Get, now: time.Now}
 }
 
 type createAdminAPITokenRequest struct {
@@ -59,11 +45,6 @@ type createAdminAPITokenRequest struct {
 	// ExpiresInDays ends the token after that many days (at most 730); 0 or
 	// absent never.
 	ExpiresInDays int `json:"expires_in_days" binding:"omitempty,min=1,max=730"`
-	// Password re-authenticates the administrator; with a second factor on,
-	// Code and Method (totp or backup) do instead.
-	Password string `json:"password"`
-	Code     string `json:"code"`
-	Method   string `json:"method"`
 }
 
 type createdAdminAPIToken struct {
@@ -96,12 +77,12 @@ func (h *AdminAPITokensHandler) actor(c *gin.Context) (*gorm.DB, uint, bool) {
 
 // Create godoc
 // @Summary Create an admin API token
-// @Description Issues a personal access token for automation: `anixadm_` and 43 characters, shown once in this answer; only its SHA-256 is stored. Scope `read` allows GET and HEAD on the administrator APIs except the reads that answer a secret in clear; `admin` allows what the owner may do except managing tokens. Needs a signed-in session (never an API token) and a re-authentication: the current password, or a TOTP or recovery code when the account has a second factor (when the kernel cannot check a credential because identity holds it, the sign-in must be at most 10 minutes old, or it answers 403 step_up_sign_in_stale). Up to 25 active tokens per administrator; the owner's rights are read on every use. Audited. Send the token as `Authorization: Bearer <token>` only, never in a URL.
+// @Description Issues a personal access token for automation: `anixadm_` and 43 characters, shown once in this answer; only its SHA-256 is stored. Scope `read` allows GET and HEAD on the administrator APIs except the reads that answer a secret in clear; `admin` allows what the owner may do except managing tokens. Needs a signed-in session (never an API token) at most 10 minutes old, or it answers 403 step_up_sign_in_stale. Up to 25 active tokens per administrator; the owner's rights are read on every use. Audited. Send the token as `Authorization: Bearer <token>` only, never in a URL.
 // @Tags Kernel
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param request body createAdminAPITokenRequest true "name, scope (read or admin), optional expires_in_days, and password or code (+ method)"
+// @Param request body createAdminAPITokenRequest true "name, scope (read or admin), optional expires_in_days"
 // @Success 201 {object} map[string]any "data.token is shown once; data.api_token is the stored record"
 // @Router /api/v4/kernel/api-tokens [post]
 func (h *AdminAPITokensHandler) Create(c *gin.Context) {
@@ -118,7 +99,7 @@ func (h *AdminAPITokensHandler) Create(c *gin.Context) {
 		return
 	}
 	tokens := adminapitoken.New(db)
-	if !h.stepUp(c, db, tokens, actorID, request) {
+	if !h.stepUp(c, tokens, actorID) {
 		return
 	}
 	input := adminapitoken.CreateInput{
@@ -148,57 +129,20 @@ func (h *AdminAPITokensHandler) Create(c *gin.Context) {
 	kernelData(c, http.StatusCreated, createdAdminAPIToken{Token: secret, APIToken: row})
 }
 
-// stepUp re-authenticates the administrator before a token is created, as
-// the user's own subscription reset does (UserService.VerifyStepUp): with a
-// second factor on, a TOTP or recovery code; otherwise the current password.
-// When identity holds the credentials (the account's legacy password is the
-// unusable marker), the kernel cannot check one: it then requires a sign-in
-// at most stepUpFreshness old, which identity's login (with its MFA policy)
-// has just checked. Attempts are rate limited per administrator and a
-// refusal is audited.
-func (h *AdminAPITokensHandler) stepUp(c *gin.Context, db *gorm.DB, tokens *adminapitoken.Service, userID uint, request createAdminAPITokenRequest) bool {
-	key := "admin_api_token_step_up|" + strconv.FormatUint(uint64(userID), 10)
-	event := adminapitoken.Event{
+// stepUp requires a sign-in at most stepUpFreshness old before a token is
+// created: identity's login (with its MFA policy) has just checked the
+// administrator's credentials, which the kernel does not hold. A refusal is
+// audited.
+func (h *AdminAPITokensHandler) stepUp(c *gin.Context, tokens *adminapitoken.Service, userID uint) bool {
+	issued, _ := c.Get("token_issued_at")
+	if at, isTime := issued.(time.Time); isTime && h.now().Sub(at) <= stepUpFreshness {
+		return true
+	}
+	tokens.RecordCreateDenied(c.Request.Context(), adminapitoken.Event{
 		UserID: userID, Actor: c.GetString("email"), IP: c.ClientIP(), Method: c.Request.Method, Path: c.Request.URL.Path,
-	}
-	refuse := func(status int, code, message string) bool {
-		event.Reason = code
-		tokens.RecordCreateDenied(c.Request.Context(), event)
-		kernelError(c, status, code, message)
-		return false
-	}
-	if blocked, wait := h.limiter.Check(key, adminAPITokenStepUpLimit); blocked {
-		c.Header("Retry-After", strconv.Itoa(max(int(wait.Seconds()), 1)))
-		return refuse(http.StatusTooManyRequests, "step_up_rate_limited", "too many failed re-authentications, try again later")
-	}
-	var owner model.User
-	if err := db.Select("id", "password").Where("id = ?", userID).Take(&owner).Error; err != nil {
-		return refuse(http.StatusForbidden, "not_an_administrator", adminapitoken.ErrOwnerNotAdmin.Error())
-	}
-	if owner.Password == model.UnusableLegacyPassword {
-		issued, _ := c.Get("token_issued_at")
-		at, isTime := issued.(time.Time)
-		if !isTime || h.now().Sub(at) > stepUpFreshness {
-			return refuse(http.StatusForbidden, adminAPITokenStepUpStaleCode, "sign in again and retry within 10 minutes")
-		}
-		return true
-	}
-	checked, err := service.NewUserServiceFor(db).VerifyStepUp(userID, request.Password, request.Code, request.Method)
-	if checked && err != nil {
-		h.limiter.RecordFailure(key, adminAPITokenStepUpLimit)
-	}
-	switch {
-	case err == nil:
-		h.limiter.RecordSuccess(key)
-		return true
-	case errors.Is(err, service.ErrStepUpPasswordRequired):
-		return refuse(http.StatusForbidden, "step_up_required", "password is required")
-	case errors.Is(err, service.ErrStepUpMFARequired):
-		return refuse(http.StatusForbidden, "step_up_required", "an MFA code is required")
-	case errors.Is(err, service.ErrStepUpInvalidPassword), errors.Is(err, service.ErrStepUpInvalidMFACode):
-		return refuse(http.StatusForbidden, "step_up_failed", "the password or code is not valid")
-	}
-	kernelError(c, http.StatusInternalServerError, "step_up_unavailable", "the re-authentication could not be checked")
+		Reason: adminAPITokenStepUpStaleCode,
+	})
+	kernelError(c, http.StatusForbidden, adminAPITokenStepUpStaleCode, "sign in again and retry within 10 minutes")
 	return false
 }
 

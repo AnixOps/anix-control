@@ -134,7 +134,7 @@ func legacySchemaModels() []any {
 		&model.PaymentGateway{}, &model.PaymentRecord{},
 		&model.TelegramBot{}, &model.TelegramUser{}, &model.TelegramChat{}, &model.TelegramCommand{}, &model.TelegramNotification{},
 		&model.NotificationTemplate{}, &model.NotificationLog{},
-		&model.UserMFA{}, &model.MFALoginAttempt{},
+		&model.UserMFA{},
 		&model.UserLevel{}, &model.InviteCode{}, &model.CommissionRecord{}, &model.CommissionWithdraw{}, &model.InviteConfig{},
 		&model.SystemConfig{}, &keptBackupRecord{}, &keptBackupConfig{}, &model.OperationLog{}, &model.AuditLog{},
 	}
@@ -317,8 +317,35 @@ func retiredKernelModels() []any {
 		&retiredLoadBalancer{},                         // 0021_drop_load_balancer
 		&retiredAuthorizedKey{},                        // 0025_drop_registration_keys
 		&retiredCleanAgent{}, &retiredNodeCredential{}, // 0027_drop_node_credentials
+		&retiredMFALoginAttempt{}, &retiredIdentityCutoverEvent{}, // 0034_drop_identity_leftovers
 	}
 }
+
+// retiredMFALoginAttempt is model.MFALoginAttempt as the baseline created
+// it; 0034_drop_identity_leftovers dropped the table and the model.
+type retiredMFALoginAttempt struct {
+	ID        uint   `gorm:"primaryKey"`
+	UserID    uint   `gorm:"index"`
+	IP        string `gorm:"size:50"`
+	UserAgent string `gorm:"size:255"`
+	Success   bool
+	Method    string    `gorm:"size:20"`
+	CreatedAt time.Time `gorm:"index"`
+}
+
+func (retiredMFALoginAttempt) TableName() string { return "v2_mfa_login_attempt" }
+
+// retiredIdentityCutoverEvent is model.IdentityCutoverEvent as the baseline
+// created it; 0034_drop_identity_leftovers dropped the table and the model.
+type retiredIdentityCutoverEvent struct {
+	ID        uint      `gorm:"primaryKey"`
+	Action    string    `gorm:"size:32;not null;index"`
+	ActorID   uint      `gorm:"not null;default:0"`
+	Detail    string    `gorm:"type:text;not null;default:''"`
+	CreatedAt time.Time `gorm:"not null;index"`
+}
+
+func (retiredIdentityCutoverEvent) TableName() string { return "v4_kernel_identity_cutover" }
 
 // retiredCleanAgent is model.ForwardCleanAgent as the baseline created it;
 // 0027_drop_node_credentials dropped the table and the model.

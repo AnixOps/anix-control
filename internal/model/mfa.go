@@ -35,22 +35,6 @@ func (UserMFA) TableName() string {
 	return "v2_user_mfa"
 }
 
-// MFALoginAttempt MFA登录尝试
-type MFALoginAttempt struct {
-	ID        uint      `gorm:"primaryKey" json:"id"`
-	UserID    uint      `gorm:"index" json:"user_id"`
-	IP        string    `gorm:"size:50" json:"ip"`
-	UserAgent string    `gorm:"size:255" json:"user_agent"`
-	Success   bool      `json:"success"`
-	Method    string    `gorm:"size:20" json:"method"` // totp/sms/email/backup
-	CreatedAt time.Time `gorm:"index" json:"created_at"`
-}
-
-// TableName 指定表名
-func (MFALoginAttempt) TableName() string {
-	return "v2_mfa_login_attempt"
-}
-
 // MFAMethod MFA方式
 const (
 	MFAMethodTOTP   = "totp"   // TOTP验证器
@@ -58,13 +42,3 @@ const (
 	MFAMethodEmail  = "email"  // 邮箱验证
 	MFAMethodBackup = "backup" // 备用码
 )
-
-// MFAConfig MFA全局配置
-type MFAConfig struct {
-	Enabled         bool   `json:"enabled"`           // 是否启用MFA
-	EnforceForAll   bool   `json:"enforce_for_all"`   // 强制所有用户启用
-	EnforceForAdmin bool   `json:"enforce_for_admin"` // 强制管理员启用
-	AllowedMethods  string `json:"allowed_methods"`   // 允许的方式 (JSON数组)
-	TOTPIssuer      string `json:"totp_issuer"`       // TOTP发行者名称
-	BackupCodeCount int    `json:"backup_code_count"` // 备用码数量
-}

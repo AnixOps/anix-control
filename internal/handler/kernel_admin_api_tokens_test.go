@@ -16,13 +16,10 @@ import (
 
 	"github.com/AnixOps/anix-control/v5/internal/adminapitoken"
 	"github.com/AnixOps/anix-control/v5/internal/model"
-	"github.com/AnixOps/anix-control/v5/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
-	"github.com/pquerna/otp/totp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/crypto/bcrypt"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -32,7 +29,7 @@ var apiTokenTestGorm = &gorm.Config{Logger: logger.Default.LogMode(logger.Silent
 
 func migrateAPITokenTables(t *testing.T, db *gorm.DB) {
 	t.Helper()
-	require.NoError(t, db.AutoMigrate(&model.User{}, &model.UserMFA{}, &model.AdminAPIToken{}, &model.OperationLog{}))
+	require.NoError(t, db.AutoMigrate(&model.User{}, &model.AdminAPIToken{}, &model.OperationLog{}))
 }
 
 func openAPITokenSQLite(t *testing.T) *gorm.DB {
@@ -84,8 +81,6 @@ func forEachAPITokenDatabase(t *testing.T, body func(t *testing.T, db *gorm.DB))
 	t.Run("postgres", func(t *testing.T) { body(t, openAPITokenPostgres(t)) })
 }
 
-const apiTokenTestPassword = "correct horse battery staple"
-
 type apiTokenEnv struct {
 	router *gin.Engine
 	db     *gorm.DB
@@ -95,23 +90,18 @@ type apiTokenEnv struct {
 func newAPITokenEnv(t *testing.T, db *gorm.DB) *apiTokenEnv {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
-	hash, err := bcrypt.GenerateFromPassword([]byte(apiTokenTestPassword), bcrypt.MinCost)
-	require.NoError(t, err)
 	for _, user := range []model.User{
-		{ID: 7, Email: "root@example.com", IsAdmin: 1, Password: string(hash)},
-		{ID: 8, Email: "staff@example.com", IsAdmin: 1, IsStaff: 1, Password: string(hash)},
-		{ID: 9, Email: "member@example.com", Password: string(hash)},
-		{ID: 10, Email: "identity@example.com", IsAdmin: 1, Password: model.UnusableLegacyPassword},
-		{ID: 11, Email: "mfa@example.com", IsAdmin: 1, Password: string(hash)},
+		{ID: 7, Email: "root@example.com", IsAdmin: 1},
+		{ID: 8, Email: "staff@example.com", IsAdmin: 1, IsStaff: 1},
+		{ID: 9, Email: "member@example.com"},
 	} {
-		user.Token, user.UUID = "token-"+user.Email, "uuid-"+user.Email
+		user.Password, user.Token, user.UUID = model.UnusableLegacyPassword, "token-"+user.Email, "uuid-"+user.Email
 		require.NoError(t, db.Create(&user).Error)
 	}
 	now := time.Now()
 	env := &apiTokenEnv{db: db, clock: &now}
 	handler := &AdminAPITokensHandler{
-		db: func() *gorm.DB { return db }, limiter: service.NewLoginRateLimiter(),
-		now: func() time.Time { return *env.clock },
+		db: func() *gorm.DB { return db }, now: func() time.Time { return *env.clock },
 	}
 	router := gin.New()
 	router.Use(func(c *gin.Context) {
@@ -141,6 +131,7 @@ func (e *apiTokenEnv) call(method, target, body string, headers map[string]strin
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("X-Test-User", "7")
 	request.Header.Set("X-Test-Email", "root@example.com")
+	request.Header.Set("X-Test-Issued-Ago", "60")
 	for key, value := range headers {
 		request.Header.Set(key, value)
 	}
@@ -172,7 +163,7 @@ func decodeAPITokenAnswer(t *testing.T, response *httptest.ResponseRecorder) api
 }
 
 func createBody(extra string) string {
-	body := `{"name":"deploy","scope":"read","password":"` + apiTokenTestPassword + `"`
+	body := `{"name":"deploy","scope":"read"`
 	if extra != "" {
 		body += "," + extra
 	}
@@ -198,7 +189,7 @@ func TestAdminAPITokenCreate(t *testing.T) {
 		assert.WithinDuration(t, env.clock.Add(30*24*time.Hour), expires, time.Second)
 
 		// The token works as stored, and is nowhere in clear, the audit
-		// entry and the request password included.
+		// entry included.
 		principal, err := adminapitoken.New(db).Authenticate(context.Background(), token, "")
 		require.NoError(t, err)
 		assert.EqualValues(t, 7, principal.UserID)
@@ -213,17 +204,16 @@ func TestAdminAPITokenCreate(t *testing.T) {
 		assert.Equal(t, adminapitoken.AuditActionCreate, logs[0].Action)
 		assert.Equal(t, "root@example.com", logs[0].Username)
 		assert.NotContains(t, logs[0].Content, token)
-		assert.NotContains(t, logs[0].Content, apiTokenTestPassword)
 
 		// Invalid requests.
 		for name, body := range map[string]string{
-			"no scope":         `{"name":"x","password":"` + apiTokenTestPassword + `"}`,
-			"no name":          `{"scope":"read","password":"` + apiTokenTestPassword + `"}`,
+			"no scope":         `{"name":"x"}`,
+			"no name":          `{"scope":"read"}`,
 			"unknown scope":    createBody(`"scope":"write"`),
 			"too long expiry":  createBody(`"expires_in_days":731`),
 			"negative expiry":  createBody(`"expires_in_days":-1`),
 			"not json":         `nope`,
-			"name too long":    `{"name":"` + strings.Repeat("n", 101) + `","scope":"read","password":"` + apiTokenTestPassword + `"}`,
+			"name too long":    `{"name":"` + strings.Repeat("n", 101) + `","scope":"read"}`,
 			"expiry not a num": createBody(`"expires_in_days":"soon"`),
 		} {
 			assert.Equal(t, http.StatusBadRequest, env.call(http.MethodPost, "/api-tokens", body, nil).Code, name)
@@ -250,7 +240,7 @@ func TestAdminAPITokenCreateNeedsAnAdministratorAndASession(t *testing.T) {
 		var count int64
 		require.NoError(t, db.Model(&model.AdminAPIToken{}).Count(&count).Error)
 		assert.Zero(t, count)
-		// A banned administrator, even with their password.
+		// A banned administrator.
 		require.NoError(t, db.Model(&model.User{}).Where("id = ?", 8).Update("banned", 1).Error)
 		response = env.call(http.MethodPost, "/api-tokens", createBody(""), env.as("8", "staff@example.com"))
 		assert.Equal(t, http.StatusForbidden, response.Code)
@@ -261,96 +251,21 @@ func TestAdminAPITokenCreateNeedsAnAdministratorAndASession(t *testing.T) {
 func TestAdminAPITokenStepUp(t *testing.T) {
 	forEachAPITokenDatabase(t, func(t *testing.T, db *gorm.DB) {
 		env := newAPITokenEnv(t, db)
-		denied := func(body, wantCode string) {
-			t.Helper()
-			response := env.call(http.MethodPost, "/api-tokens", body, nil)
-			assert.Equal(t, http.StatusForbidden, response.Code, body)
-			assert.Equal(t, wantCode, decodeAPITokenAnswer(t, response).Error.Code, body)
-			assert.NotContains(t, response.Body.String(), apiTokenTestPassword)
-		}
-		denied(`{"name":"x","scope":"read"}`, "step_up_required")
-		denied(`{"name":"x","scope":"read","password":"wrong"}`, "step_up_failed")
-		denied(`{"name":"x","scope":"read","code":"123456"}`, "step_up_required")
-		var count int64
-		require.NoError(t, db.Model(&model.AdminAPIToken{}).Count(&count).Error)
-		assert.Zero(t, count, "nothing is created without the re-authentication")
-
-		// The refusals are audited, without the password.
-		var entries []model.OperationLog
-		require.NoError(t, db.Where("action = ?", adminapitoken.AuditActionCreateDenied).Find(&entries).Error)
-		require.NotEmpty(t, entries)
-		for _, entry := range entries {
-			assert.Equal(t, "root@example.com", entry.Username)
-			assert.NotContains(t, entry.Content, "wrong")
-			assert.NotContains(t, entry.Content, "123456")
-		}
-
-		// Repeated failures lock creation out, even for the right password.
-		for range 6 {
-			env.call(http.MethodPost, "/api-tokens", `{"name":"x","scope":"read","password":"wrong"}`, nil)
-		}
-		response := env.call(http.MethodPost, "/api-tokens", createBody(""), nil)
-		assert.Equal(t, http.StatusTooManyRequests, response.Code)
-		assert.NotEmpty(t, response.Header().Get("Retry-After"))
-		// Another administrator is not locked out.
-		assert.Equal(t, http.StatusCreated, env.call(http.MethodPost, "/api-tokens", createBody(""), env.as("8", "staff@example.com")).Code)
-	})
-}
-
-func TestAdminAPITokenStepUpWithMFA(t *testing.T) {
-	forEachAPITokenDatabase(t, func(t *testing.T, db *gorm.DB) {
-		env := newAPITokenEnv(t, db)
-		key, err := totp.Generate(totp.GenerateOpts{Issuer: "test", AccountName: "mfa@example.com"})
-		require.NoError(t, err)
-		require.NoError(t, db.Create(&model.UserMFA{UserID: 11, Enabled: true, TOTPSecret: key.Secret(), BackupCodes: `["backup-one"]`}).Error)
-		as := env.as("11", "mfa@example.com")
-		call := func(body string) *httptest.ResponseRecorder {
-			return env.call(http.MethodPost, "/api-tokens", body, as)
-		}
-
-		// The password alone is not enough once a second factor is on.
-		response := call(createBody(""))
-		assert.Equal(t, http.StatusForbidden, response.Code)
-		assert.Equal(t, "step_up_required", decodeAPITokenAnswer(t, response).Error.Code)
-		response = call(`{"name":"x","scope":"read","code":"000000","method":"totp"}`)
-		assert.Equal(t, "step_up_failed", decodeAPITokenAnswer(t, response).Error.Code)
-
-		code, err := totp.GenerateCode(key.Secret(), time.Now())
-		require.NoError(t, err)
-		response = call(`{"name":"x","scope":"admin","code":"` + code + `","method":"totp"}`)
-		require.Equal(t, http.StatusCreated, response.Code, response.Body.String())
-
-		// A recovery code works once.
-		response = call(`{"name":"y","scope":"read","code":"backup-one","method":"backup"}`)
-		require.Equal(t, http.StatusCreated, response.Code, response.Body.String())
-		response = call(`{"name":"z","scope":"read","code":"backup-one","method":"backup"}`)
-		assert.Equal(t, http.StatusForbidden, response.Code)
-	})
-}
-
-func TestAdminAPITokenStepUpWhenIdentityHoldsTheCredentials(t *testing.T) {
-	forEachAPITokenDatabase(t, func(t *testing.T, db *gorm.DB) {
-		env := newAPITokenEnv(t, db)
 		body := `{"name":"x","scope":"read"}`
-		headers := func(issuedAgo string) map[string]string {
-			h := env.as("10", "identity@example.com")
-			if issuedAgo != "" {
-				h["X-Test-Issued-Ago"] = issuedAgo
-			}
-			return h
-		}
-		// The kernel cannot check a password it does not hold; the sign-in
-		// that identity just checked stands in, when it is recent.
-		stale := func(response *httptest.ResponseRecorder, what string) {
+		// The kernel holds no credentials: the sign-in that identity just
+		// checked stands in, when it is recent.
+		stale := func(issuedAgo, what string) {
 			t.Helper()
+			response := env.call(http.MethodPost, "/api-tokens", body, map[string]string{"X-Test-Issued-Ago": issuedAgo})
 			assert.Equal(t, http.StatusForbidden, response.Code, what)
 			assert.Equal(t, "step_up_sign_in_stale", decodeAPITokenAnswer(t, response).Error.Code, what)
 		}
-		stale(env.call(http.MethodPost, "/api-tokens", body, headers("")), "no issue time")
-		stale(env.call(http.MethodPost, "/api-tokens", body, headers("601")), "a stale sign-in")
-		assert.Equal(t, http.StatusCreated, env.call(http.MethodPost, "/api-tokens", body, headers("120")).Code)
-		// A password in the body does not matter for such an account.
-		stale(env.call(http.MethodPost, "/api-tokens", createBody(""), headers("601")), "a password does not help")
+		stale("", "no issue time")
+		stale("601", "a stale sign-in")
+		var entries []model.OperationLog
+		require.NoError(t, db.Where("action = ?", adminapitoken.AuditActionCreateDenied).Find(&entries).Error)
+		assert.Len(t, entries, 2, "the refusals are audited")
+		assert.Equal(t, http.StatusCreated, env.call(http.MethodPost, "/api-tokens", body, map[string]string{"X-Test-Issued-Ago": "120"}).Code)
 	})
 }
 

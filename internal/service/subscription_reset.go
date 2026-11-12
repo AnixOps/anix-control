@@ -1,13 +1,6 @@
 package service
 
-import (
-	"errors"
-	"strings"
-	"time"
-
-	"github.com/AnixOps/anix-control/v5/internal/model"
-	"gorm.io/gorm"
-)
+import "time"
 
 // UserSubscriptionReset is a user's reset of their own subscription token,
 // for UserSubscriptionResetRequestID.
@@ -31,53 +24,3 @@ const (
 	SubscriptionResetRateLimitedMessage = "too many subscription reset attempts, please try again later"
 	SubscriptionResetFailedMessage      = "重置订阅失败"
 )
-
-// Step-up errors: the re-authentication a user's own subscription reset
-// needs. Their messages are the panel answers.
-var (
-	ErrStepUpPasswordRequired = errors.New("password required")
-	ErrStepUpInvalidPassword  = errors.New("invalid password")
-	ErrStepUpMFARequired      = errors.New("mfa code required")
-	ErrStepUpInvalidMFACode   = errors.New("invalid mfa code")
-)
-
-// VerifyStepUp re-authenticates a signed-in user before a sensitive change:
-// with a second factor enabled, a TOTP or recovery (backup) code, checked by
-// MFAService.Verify, which consumes a used recovery code; otherwise the
-// current password. checked reports whether a credential was checked, which
-// counts toward the caller's rate limit; a missing credential is not.
-func (s *UserService) VerifyStepUp(userID uint, password, code, method string) (bool, error) {
-	var user model.User
-	if err := s.db.Select("id", "password").Where("id = ?", userID).Take(&user).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return false, ErrUserNotFound
-		}
-		return false, err
-	}
-	mfaService := NewMFAService(s.db, nil)
-	mfa, err := mfaService.GetUserMFA(userID)
-	if err != nil {
-		return false, err
-	}
-	if mfa != nil && mfa.Enabled {
-		code = strings.TrimSpace(code)
-		if code == "" {
-			return false, ErrStepUpMFARequired
-		}
-		valid, err := mfaService.Verify(userID, code, method)
-		if err != nil {
-			return true, err
-		}
-		if !valid {
-			return true, ErrStepUpInvalidMFACode
-		}
-		return true, nil
-	}
-	if password == "" {
-		return false, ErrStepUpPasswordRequired
-	}
-	if !checkPassword(password, user.Password) {
-		return true, ErrStepUpInvalidPassword
-	}
-	return true, nil
-}
