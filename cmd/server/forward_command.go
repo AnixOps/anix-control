@@ -20,6 +20,7 @@ import (
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	forwardv1 "github.com/AnixOps/anix-control/sdk/api/forward/v1"
 	"github.com/AnixOps/anix-control/v5/internal/kernelforward"
+	"github.com/AnixOps/anix-control/v5/internal/netline"
 	"github.com/AnixOps/anix-control/v5/internal/service"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -38,6 +39,7 @@ const forwardCommandUsage = `usage:
   anix-control forward nodes set <node_ref> (-f <settings.json> | [--port-range <first>-<last>] [--reserved <port,...>] [--address <ip>]... [--label <key=value>]... | --defaults)
   anix-control forward stats [--route <route_id>] [--node <node_ref>] [--since <time>] [--until <time>] [--json]
   anix-control forward reset-node <node_ref>
+  anix-control forward lines
   anix-control forward dns providers list [--json]
   anix-control forward dns providers create -f <provider.json> [--request-id <id>]
   anix-control forward dns providers update <id> -f <provider.json> [--request-id <id>]
@@ -146,8 +148,33 @@ func runForwardCommand(ctx context.Context, db *gorm.DB, arguments []string, std
 		return cli.stats(arguments[1:])
 	case "dns":
 		return cli.dns(arguments[1:])
+	case "lines":
+		if len(arguments) != 1 {
+			return forwardUsageError()
+		}
+		return cli.lines()
 	}
 	return forwardUsageError()
+}
+
+// lines reads the network as lines and prints how the forwards they plan
+// differ from today's (GET /api/v4/kernel/network/lines), by id: no
+// addresses, so the output can go to a shared log.
+func (c *forwardCLI) lines() error {
+	report, err := netline.Shadow(c.db.WithContext(c.ctx))
+	if err != nil {
+		return err
+	}
+	s := report.Snapshot
+	fmt.Fprintf(c.stdout, "devices %d, lines %d, forwards today %d, differences %d, skipped %d\n",
+		len(s.Devices), len(s.Lines), report.Forwards, len(report.Differences), len(s.Skipped))
+	for _, difference := range report.Differences {
+		fmt.Fprintf(c.stdout, "difference %s: %s\n", difference.ID, difference.What)
+	}
+	for _, skipped := range s.Skipped {
+		fmt.Fprintf(c.stdout, "skipped %s: %s\n", skipped.ID, skipped.Reason)
+	}
+	return nil
 }
 
 func (c *forwardCLI) audit(action, targetType string, content any) bool {
