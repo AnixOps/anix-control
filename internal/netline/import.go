@@ -232,7 +232,7 @@ func (in *importer) routes(db *gorm.DB, rates map[string]float64) error {
 		if !ok {
 			continue
 		}
-		line.Enabled = !route.GetPaused() && row.Enforced == ""
+		line.Enabled, line.Revision = !route.GetPaused() && row.Enforced == "", row.Revision
 		line.Rate = 1
 		if line.Protocol = in.match(route); line.Protocol != nil {
 			line.Rate = rates[line.Protocol.Device]

@@ -734,6 +734,12 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		v5.GET("/backups", backups.List)
 		v5.POST("/backups", backups.Create)
 		v5.GET("/backups/:id/download", backups.Download)
+		// Lines (docs/design/network-lines, step 3), stored as forward
+		// routes; GET /api/v4/kernel/network/lines reads them.
+		lines := handler.NewNetLinesHandler()
+		v5.POST("/net/lines", lines.Create)
+		v5.PUT("/net/lines/:id", lines.Update)
+		v5.DELETE("/net/lines/:id", lines.Delete)
 	}
 
 	// Routes of the packages outside the community set (router_commercial.go).
