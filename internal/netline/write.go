@@ -152,10 +152,10 @@ func (w *Writer) route(d Draft, route *forwardv1.Route) (*forwardv1.Route, error
 }
 
 func role(i, n int) forwardv1.HopRole {
-	switch {
-	case i == 0:
+	switch i {
+	case 0:
 		return forwardv1.HopRole_HOP_ROLE_ENTRY
-	case i == n-1:
+	case n - 1:
 		return forwardv1.HopRole_HOP_ROLE_EXIT
 	}
 	return forwardv1.HopRole_HOP_ROLE_RELAY
