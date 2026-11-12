@@ -34,6 +34,10 @@ const (
 const (
 	kickInterval = 10 * time.Second
 	kickWait     = 5 * time.Second
+	// retryInterval replaces the refresh interval while refreshes fail, so
+	// that the keys of an identity host that starts after Control arrive
+	// soon.
+	retryInterval = 10 * time.Second
 )
 
 // ErrNoKeys means the identity module publishes no keys (no KEK yet).
@@ -206,7 +210,8 @@ func (k *Keys) Refresh(ctx context.Context, conn grpc.ClientConnInterface) error
 	return k.Reload(ctx)
 }
 
-// Run refreshes every interval and when kicked, until ctx ends. connect
+// Run refreshes every interval (every retryInterval after a failure) and when
+// kicked, until ctx ends. connect
 // returns the current connection to the identity module; failures keep the
 // last good keys and go to report.
 func (k *Keys) Run(ctx context.Context, interval time.Duration, connect func() (grpc.ClientConnInterface, error), report func(error)) {
@@ -241,6 +246,10 @@ func (k *Keys) Run(ctx context.Context, interval time.Duration, connect func() (
 			default:
 			}
 		}
-		timer.Reset(interval)
+		if err != nil {
+			timer.Reset(min(interval, retryInterval))
+		} else {
+			timer.Reset(interval)
+		}
 	}
 }
