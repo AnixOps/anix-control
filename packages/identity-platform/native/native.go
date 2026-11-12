@@ -142,7 +142,6 @@ type Settings struct {
 	RegisterRateLimit    RateLimitSettings    `json:"register_rate_limit"`
 	AdminMFA             map[string]any       `json:"admin_mfa"`
 	TokenLifetimeSeconds int                  `json:"token_lifetime_seconds"`
-	AuthorityState       string               `json:"authority_state"`
 }
 
 // RegistrationSettings is the registration policy.

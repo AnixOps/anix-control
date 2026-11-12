@@ -107,7 +107,7 @@ func TestAdminClaimLinkPrintsTheLinkWithItsToken(t *testing.T) {
 	require.NotEqual(t, token, newer)
 	assert.Contains(t, again, "within 30 minutes")
 	assert.Contains(t, again, "The link expires at 2026-10-13 08:30 UTC.")
-	claimer := &adminclaim.Claimer{DB: db, Cost: bcrypt.MinCost, Now: func() time.Time { return time.Date(2026, 10, 13, 8, 1, 0, 0, time.UTC) }}
+	claimer := &adminclaim.Claimer{DB: db, Identity: acceptingIdentity{}, Cost: bcrypt.MinCost, Now: func() time.Time { return time.Date(2026, 10, 13, 8, 1, 0, 0, time.UTC) }}
 	_, err = claimer.Claim(context.Background(), adminclaim.Request{Token: token, Email: "owner@example.com", Password: "secret-pass-12"})
 	require.ErrorIs(t, err, adminclaim.ErrInvalidToken)
 	_, err = claimer.Claim(context.Background(), adminclaim.Request{Token: newer, Email: "owner@example.com", Password: "secret-pass-12"})
@@ -291,3 +291,8 @@ func TestAdminClaimLinkProcess(t *testing.T) {
 	assert.Equal(t, 2, code)
 	assert.Contains(t, stderr, "anix-control admin claim-link")
 }
+
+// acceptingIdentity takes every account a claim hands identity.
+type acceptingIdentity struct{}
+
+func (acceptingIdentity) ImportAccount(context.Context, model.User, string) error { return nil }

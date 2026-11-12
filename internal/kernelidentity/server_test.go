@@ -186,34 +186,6 @@ func TestApplyAccountProjectionIsMonotonicAndRevokes(t *testing.T) {
 	require.ErrorIs(t, verify(), authn.ErrRevokedToken, "a ban projected into the kernel revokes at once")
 }
 
-func TestLegacyMirrorKeepsCredentialsUntilFinalize(t *testing.T) {
-	f := newFixture(t)
-	id := f.createSubscriber(t, accountA, "mirror@example.test")
-	mirror := &kernelidentityv1.LegacyCredentialMirror{
-		PasswordHash: "$2a$10$abcdefghijklmnopqrstuvabcdefghijklmnopqrstuvwxyzABCDE", MfaEnabled: true, TotpSecret: "JBSWY3DPEHPK3PXP",
-	}
-	_, err := f.server.ApplyAccountProjection(context.Background(), &kernelidentityv1.ApplyAccountProjectionRequest{
-		UserId: uint64(id), Version: 1, Email: "mirror@example.test", LegacyMirror: mirror,
-	})
-	require.NoError(t, err)
-	var user model.User
-	require.NoError(t, f.db.Take(&user, id).Error)
-	require.Equal(t, mirror.GetPasswordHash(), user.Password)
-	var mfa model.UserMFA
-	require.NoError(t, f.db.Take(&mfa, "user_id = ?", id).Error)
-	require.True(t, mfa.Enabled)
-	require.Equal(t, "JBSWY3DPEHPK3PXP", mfa.TOTPSecret)
-
-	require.NoError(t, f.db.Create(&model.IdentityAuthority{ID: 1, State: model.IdentityAuthorityFinalized, UpdatedAt: time.Now()}).Error)
-	_, err = f.server.ApplyAccountProjection(context.Background(), &kernelidentityv1.ApplyAccountProjectionRequest{
-		UserId: uint64(id), Version: 2, Email: "mirror@example.test",
-		LegacyMirror: &kernelidentityv1.LegacyCredentialMirror{PasswordHash: "$2a$10$changed"},
-	})
-	require.NoError(t, err)
-	require.NoError(t, f.db.Take(&user, id).Error)
-	require.Equal(t, mirror.GetPasswordHash(), user.Password, "after finalize nothing is mirrored")
-}
-
 func TestDeleteSubscriberRemovesTheLinkAndRevokes(t *testing.T) {
 	f := newFixture(t)
 	id := f.createSubscriber(t, accountA, "delete@example.test")
@@ -273,7 +245,6 @@ func TestResolveActorAccessAndSettings(t *testing.T) {
 	require.NoError(t, json.Unmarshal(response.GetSettingsJson(), &settings))
 	require.True(t, settings.Registration.Enabled)
 	require.Equal(t, 3600, settings.TokenLifetimeSeconds)
-	require.Equal(t, model.IdentityAuthorityKernel, settings.AuthorityState)
 	require.Contains(t, settings.AdminMFA, "enabled")
 	require.Positive(t, settings.LoginRateLimit.MaxAttempts)
 }
@@ -357,29 +328,12 @@ func TestGetSubscriberShowsTheV2UserWithoutCredentials(t *testing.T) {
 	require.Equal(t, "Pro", shown["plan"].(map[string]any)["name"])
 }
 
-func TestCreateSubscriberMirrorsCredentialsWithoutRevoking(t *testing.T) {
+func TestCreateSubscriberRevokesNothing(t *testing.T) {
 	f := newFixture(t)
-	response, err := f.server.CreateSubscriber(context.Background(), &kernelidentityv1.CreateSubscriberRequest{
-		AccountUuid: accountA, Email: "mirrored@example.test",
-		LegacyMirror: &kernelidentityv1.LegacyCredentialMirror{PasswordHash: "$2a$10$mirrored"},
-	})
-	require.NoError(t, err)
-	var user model.User
-	require.NoError(t, f.db.Take(&user, response.GetUserId()).Error)
-	require.Equal(t, "$2a$10$mirrored", user.Password, "the legacy password works after a rollback")
+	f.createSubscriber(t, accountA, "fresh@example.test")
 	var revocations int64
 	require.NoError(t, f.db.Model(&model.IdentityRevocation{}).Count(&revocations).Error)
 	require.Zero(t, revocations, "a new subscriber's first token must stay valid")
-
-	require.NoError(t, f.db.Create(&model.IdentityAuthority{ID: 1, State: model.IdentityAuthorityFinalized, UpdatedAt: time.Now()}).Error)
-	response, err = f.server.CreateSubscriber(context.Background(), &kernelidentityv1.CreateSubscriberRequest{
-		AccountUuid: "11111111-2222-4333-8444-555555555555", Email: "late@example.test",
-		LegacyMirror: &kernelidentityv1.LegacyCredentialMirror{PasswordHash: "$2a$10$late"},
-	})
-	require.NoError(t, err)
-	var late model.User
-	require.NoError(t, f.db.Take(&late, response.GetUserId()).Error)
-	require.Equal(t, UnusableLegacyPassword, late.Password, "after finalize nothing is mirrored")
 }
 
 // A session-ending change from identity carries the account's new token
@@ -416,4 +370,12 @@ func TestSessionEndingProjectionRevokesIdentityTokensByVersion(t *testing.T) {
 	var link model.IdentityAccountLink
 	require.NoError(t, f.db.Take(&link, "user_id = ?", id).Error)
 	require.Equal(t, uint64(2), link.TokenVersion)
+
+	// A credential change (password, second factor) leaves every projected
+	// field as it was: the risen version alone ends the old tokens.
+	apply(4, false, 3)
+	require.True(t, store.Revoked(identityToken(2)))
+	later := identityToken(3)
+	later.IssuedAt = jwt.NewNumericDate(time.Now().Add(2 * time.Second))
+	require.False(t, store.Revoked(later), "past the earlier time bound, the new version works")
 }

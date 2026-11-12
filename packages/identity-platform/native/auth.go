@@ -381,7 +381,6 @@ func (s *Service) register(ctx context.Context, stores *Stores, email, password,
 	accountUUID := uuid.NewString()
 	created, err := s.Kernel.CreateSubscriber(ctx, &kernelidentityv1.CreateSubscriberRequest{
 		AccountUuid: accountUUID, Email: email, InviteCode: inviteCode,
-		LegacyMirror: &kernelidentityv1.LegacyCredentialMirror{PasswordHash: string(hash)},
 	})
 	switch status.Code(err) {
 	case codes.OK:

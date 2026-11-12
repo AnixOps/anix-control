@@ -24,14 +24,13 @@ type ClaimHandler struct {
 	identity func() adminclaim.IdentityAccounts
 }
 
-// NewClaimHandler claims through the process's database and, once identity
-// holds the credentials, its identity importer.
+// NewClaimHandler claims through the process's database and identity
+// importer.
 func NewClaimHandler() *ClaimHandler {
 	return &ClaimHandler{
 		db: database.Get,
 		identity: func() adminclaim.IdentityAccounts {
-			runner, _ := identityimport.Default()
-			return adminclaim.IdentityFromImporter(runner)
+			return adminclaim.IdentityFromImporter(identityimport.Default())
 		},
 	}
 }
@@ -111,8 +110,7 @@ func (h *ClaimHandler) Claim(c *gin.Context) {
 	})
 	switch {
 	case err == nil:
-		slog.Info("first administrator claimed", slog.String("email", result.Email), slog.String("ip", c.ClientIP()),
-			slog.Bool("identity", result.Identity))
+		slog.Info("first administrator claimed", slog.String("email", result.Email), slog.String("ip", c.ClientIP()))
 		kernelData(c, http.StatusCreated, claimAnswer{UserID: result.UserID, Email: result.Email, Next: "/login"})
 	case errors.Is(err, adminclaim.ErrAdministratorExists):
 		kernelError(c, http.StatusNotFound, "not_found", "resource not found")

@@ -205,18 +205,17 @@ func TestClaimCreatesTheAdministratorAndConsumesTheToken(t *testing.T) {
 	issued, err := Issue(context.Background(), db, DefaultTTL, issuedAt)
 	require.NoError(t, err)
 
-	claimer := &Claimer{DB: db, Now: fixedClock(issuedAt.Add(23 * time.Hour)), Cost: bcrypt.MinCost}
+	claimer := &Claimer{DB: db, Identity: &fakeIdentity{}, Now: fixedClock(issuedAt.Add(23 * time.Hour)), Cost: bcrypt.MinCost}
 	password := "first-owner-Pa55"
 	result, err := claimer.Claim(context.Background(), Request{Token: issued.Token, Email: "  owner@example.com ", Password: password, SourceIP: "203.0.113.7"})
 	require.NoError(t, err)
 	assert.Equal(t, "owner@example.com", result.Email)
-	assert.False(t, result.Identity)
 
 	created := admins(t, db)
 	require.Len(t, created, 1)
 	assert.Equal(t, result.UserID, created[0].ID)
 	assert.Equal(t, "owner@example.com", created[0].Email)
-	assert.NoError(t, bcrypt.CompareHashAndPassword([]byte(created[0].Password), []byte(password)))
+	assert.Equal(t, model.UnusableLegacyPassword, created[0].Password, "identity holds the credentials")
 	assert.NotEmpty(t, created[0].UUID)
 	assert.NotEmpty(t, created[0].Token)
 	_, ok := metaValue(t, db)
@@ -252,7 +251,7 @@ func TestClaimCreatesTheAdministratorAndConsumesTheToken(t *testing.T) {
 
 func TestClaimOnlyWithThePendingToken(t *testing.T) {
 	db := openDB(t)
-	claimer := &Claimer{DB: db, Now: fixedClock(issuedAt.Add(time.Hour)), Cost: bcrypt.MinCost}
+	claimer := &Claimer{DB: db, Identity: &fakeIdentity{}, Now: fixedClock(issuedAt.Add(time.Hour)), Cost: bcrypt.MinCost}
 	request := func(token string) Request {
 		return Request{Token: token, Email: "owner@example.com", Password: "secret-pass-12"}
 	}
@@ -283,7 +282,7 @@ func TestClaimExpires(t *testing.T) {
 	db := openDB(t)
 	issued, err := Issue(context.Background(), db, DefaultTTL, issuedAt)
 	require.NoError(t, err)
-	late := &Claimer{DB: db, Now: fixedClock(issuedAt.Add(24 * time.Hour)), Cost: bcrypt.MinCost}
+	late := &Claimer{DB: db, Identity: &fakeIdentity{}, Now: fixedClock(issuedAt.Add(24 * time.Hour)), Cost: bcrypt.MinCost}
 	_, err = late.Claim(context.Background(), Request{Token: issued.Token, Email: "owner@example.com", Password: "secret-pass-12"})
 	require.ErrorIs(t, err, ErrExpired)
 	// Without the token, an expired claim looks like any wrong token.
@@ -304,7 +303,7 @@ func TestClaimChecksTheEmailAndThePasswordAfterTheToken(t *testing.T) {
 	db := openDB(t)
 	issued, err := Issue(context.Background(), db, DefaultTTL, issuedAt)
 	require.NoError(t, err)
-	claimer := &Claimer{DB: db, Now: fixedClock(issuedAt), Cost: bcrypt.MinCost}
+	claimer := &Claimer{DB: db, Identity: &fakeIdentity{}, Now: fixedClock(issuedAt), Cost: bcrypt.MinCost}
 	claim := func(token, email, password string) error {
 		_, err := claimer.Claim(context.Background(), Request{Token: token, Email: email, Password: password})
 		return err
@@ -344,7 +343,7 @@ func TestConcurrentClaimsWithOneTokenCreateOneAdministrator(t *testing.T) {
 	db := openDB(t)
 	issued, err := Issue(context.Background(), db, DefaultTTL, issuedAt)
 	require.NoError(t, err)
-	claimer := &Claimer{DB: db, Now: fixedClock(issuedAt), Cost: bcrypt.MinCost}
+	claimer := &Claimer{DB: db, Identity: &fakeIdentity{}, Now: fixedClock(issuedAt), Cost: bcrypt.MinCost}
 	const racers = 12
 	var (
 		wg     sync.WaitGroup
@@ -397,78 +396,50 @@ func (f *fakeIdentity) ImportAccount(_ context.Context, user model.User, account
 	return nil
 }
 
-func setAuthority(t *testing.T, db *gorm.DB, state string) {
-	t.Helper()
-	require.NoError(t, db.Save(&model.IdentityAuthority{ID: 1, State: state, UpdatedAt: issuedAt}).Error)
-}
-
-func TestClaimThroughIdentityOnceItHoldsTheCredentials(t *testing.T) {
-	for _, state := range []string{model.IdentityAuthorityIdentity, model.IdentityAuthorityFinalized} {
-		t.Run(state, func(t *testing.T) {
-			db := openDB(t)
-			setAuthority(t, db, state)
-			issued, err := Issue(context.Background(), db, DefaultTTL, issuedAt)
-			require.NoError(t, err)
-			request := Request{Token: issued.Token, Email: "owner@example.com", Password: "secret-pass-12", SourceIP: "198.51.100.4"}
-
-			// Without identity nothing changes and the link keeps working.
-			_, err = (&Claimer{DB: db, Now: fixedClock(issuedAt), Cost: bcrypt.MinCost}).Claim(context.Background(), request)
-			require.ErrorIs(t, err, ErrIdentityUnavailable)
-			assert.Empty(t, admins(t, db))
-
-			// Identity refuses: the claim is undone and the token restored.
-			refusing := &fakeIdentity{err: errors.New("identity is restarting")}
-			_, err = (&Claimer{DB: db, Identity: refusing, Now: fixedClock(issuedAt), Cost: bcrypt.MinCost}).Claim(context.Background(), request)
-			require.ErrorIs(t, err, ErrIdentityUnavailable)
-			assert.Empty(t, admins(t, db))
-			var links, audits int64
-			require.NoError(t, db.Model(&model.IdentityAccountLink{}).Count(&links).Error)
-			require.NoError(t, db.Model(&model.AuditLog{}).Count(&audits).Error)
-			assert.Zero(t, links)
-			assert.Zero(t, audits)
-			record, ok := metaValue(t, db)
-			require.True(t, ok, "the token is restored")
-			assert.Equal(t, Hash(issued.Token), record.SHA256)
-
-			identity := &fakeIdentity{}
-			result, err := (&Claimer{DB: db, Identity: identity, Now: fixedClock(issuedAt), Cost: bcrypt.MinCost}).Claim(context.Background(), request)
-			require.NoError(t, err)
-			assert.True(t, result.Identity)
-			require.Len(t, identity.accounts, 1)
-			pushed := identity.accounts[0]
-			assert.Equal(t, result.UserID, pushed.ID)
-			assert.Equal(t, 1, pushed.IsAdmin)
-			assert.Equal(t, "owner@example.com", pushed.Email)
-			assert.NoError(t, bcrypt.CompareHashAndPassword([]byte(pushed.Password), []byte("secret-pass-12")), "identity gets the hash")
-			assert.Equal(t, identityimport.AccountUUID(result.UserID), identity.uuids[0])
-
-			created := admins(t, db)
-			require.Len(t, created, 1)
-			if state == model.IdentityAuthorityFinalized {
-				assert.Equal(t, model.UnusableLegacyPassword, created[0].Password, "no legacy credential after finalize")
-			} else {
-				assert.NoError(t, bcrypt.CompareHashAndPassword([]byte(created[0].Password), []byte("secret-pass-12")), "mirrored until finalize")
-			}
-			var link model.IdentityAccountLink
-			require.NoError(t, db.Where("user_id = ?", result.UserID).Take(&link).Error)
-			assert.Equal(t, identity.uuids[0], link.AccountUUID)
-			_, ok = metaValue(t, db)
-			assert.False(t, ok)
-		})
-	}
-}
-
-func TestClaimWhileImportingStaysWithTheKernel(t *testing.T) {
+func TestClaimThroughIdentity(t *testing.T) {
 	db := openDB(t)
-	setAuthority(t, db, model.IdentityAuthorityImporting)
 	issued, err := Issue(context.Background(), db, DefaultTTL, issuedAt)
 	require.NoError(t, err)
+	request := Request{Token: issued.Token, Email: "owner@example.com", Password: "secret-pass-12", SourceIP: "198.51.100.4"}
+
+	// Without identity nothing changes and the link keeps working.
+	_, err = (&Claimer{DB: db, Now: fixedClock(issuedAt), Cost: bcrypt.MinCost}).Claim(context.Background(), request)
+	require.ErrorIs(t, err, ErrIdentityUnavailable)
+	assert.Empty(t, admins(t, db))
+
+	// Identity refuses: the claim is undone and the token restored.
+	refusing := &fakeIdentity{err: errors.New("identity is restarting")}
+	_, err = (&Claimer{DB: db, Identity: refusing, Now: fixedClock(issuedAt), Cost: bcrypt.MinCost}).Claim(context.Background(), request)
+	require.ErrorIs(t, err, ErrIdentityUnavailable)
+	assert.Empty(t, admins(t, db))
+	var links, audits int64
+	require.NoError(t, db.Model(&model.IdentityAccountLink{}).Count(&links).Error)
+	require.NoError(t, db.Model(&model.AuditLog{}).Count(&audits).Error)
+	assert.Zero(t, links)
+	assert.Zero(t, audits)
+	record, ok := metaValue(t, db)
+	require.True(t, ok, "the token is restored")
+	assert.Equal(t, Hash(issued.Token), record.SHA256)
+
 	identity := &fakeIdentity{}
-	result, err := (&Claimer{DB: db, Identity: identity, Now: fixedClock(issuedAt), Cost: bcrypt.MinCost}).Claim(context.Background(),
-		Request{Token: issued.Token, Email: "owner@example.com", Password: "secret-pass-12"})
+	result, err := (&Claimer{DB: db, Identity: identity, Now: fixedClock(issuedAt), Cost: bcrypt.MinCost}).Claim(context.Background(), request)
 	require.NoError(t, err)
-	assert.False(t, result.Identity)
-	assert.Empty(t, identity.accounts, "the next import copies it")
+	require.Len(t, identity.accounts, 1)
+	pushed := identity.accounts[0]
+	assert.Equal(t, result.UserID, pushed.ID)
+	assert.Equal(t, 1, pushed.IsAdmin)
+	assert.Equal(t, "owner@example.com", pushed.Email)
+	assert.NoError(t, bcrypt.CompareHashAndPassword([]byte(pushed.Password), []byte("secret-pass-12")), "identity gets the hash")
+	assert.Equal(t, identityimport.AccountUUID(result.UserID), identity.uuids[0])
+
+	created := admins(t, db)
+	require.Len(t, created, 1)
+	assert.Equal(t, model.UnusableLegacyPassword, created[0].Password, "the kernel keeps no credential")
+	var link model.IdentityAccountLink
+	require.NoError(t, db.Where("user_id = ?", result.UserID).Take(&link).Error)
+	assert.Equal(t, identity.uuids[0], link.AccountUUID)
+	_, ok = metaValue(t, db)
+	assert.False(t, ok)
 }
 
 // cryptoReader is crypto/rand for NewToken.

@@ -118,8 +118,7 @@ func Hash(token string) string {
 }
 
 // HasAdministrator reports whether any account is an administrator. The
-// kernel's v2_user is the source in every identity authority state: while
-// identity holds the credentials it projects is_admin into it. A banned
+// kernel's v2_user is the source: identity projects is_admin into it. A banned
 // administrator still counts: the link is only for a panel nobody owns yet.
 func HasAdministrator(ctx context.Context, db *gorm.DB) (bool, error) {
 	var count int64
