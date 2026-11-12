@@ -405,8 +405,9 @@ func (i *Importer) ImportAccount(ctx context.Context, user model.User, accountUU
 	}
 }
 
-// accountImportWait is how long ImportAccount retries.
-const accountImportWait = 30 * time.Second
+// accountImportWait is how long ImportAccount retries, well inside the
+// server write timeout (30 seconds).
+const accountImportWait = 15 * time.Second
 
 func (i *Importer) importAccount(ctx context.Context, user model.User, accountUUID string) error {
 	conn, err := i.Connect()

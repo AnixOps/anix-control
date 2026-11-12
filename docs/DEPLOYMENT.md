@@ -144,7 +144,7 @@ docker compose -f docker-compose.prod.yml exec control /app/anix-control admin c
 新库启动时只记录一行“No administrator yet. Run `sudo anix-control admin claim-link` to get the claim link.”。
 `admin claim-link` 只把链接打印到执行它的终端，链接一次有效、24 小时内有效，再次执行会作废旧链接；
 没有设置 `domain` 时它打印路径和本机监听地址，把路径接在反向代理对外的地址之后打开即可。
-管理员账号保存在 identity-platform：Control 刚启动、identity 宿主还在启动时，领取请求最多等 30 秒，
+管理员账号保存在 identity-platform：Control 刚启动、identity 宿主还在启动时，领取请求最多等 15 秒，
 仍不可用才回答 503（稍后重试即可，链接不会被消耗）。
 已有管理员时命令以状态 1 拒绝，领取接口回答 404。详见
 [`reference/quickstart.md`](reference/quickstart.md#the-first-administrator)。

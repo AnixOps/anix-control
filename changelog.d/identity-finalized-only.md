@@ -16,6 +16,9 @@
   the failed logins counted toward the login limit). Control fetches
   identity's keys while it answers the first request that carries a token
   of an unknown key, so that request is no longer refused as expired.
+- The first administrator's claim waits up to 15 seconds for the identity
+  host after a start instead of answering `503 identity_unavailable` at
+  once. A build without identity-platform (a source image) cannot claim.
 
 ### Removed
 
