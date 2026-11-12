@@ -166,15 +166,17 @@ func (c *forwardCLI) lines() error {
 		return err
 	}
 	s := report.Snapshot
-	fmt.Fprintf(c.stdout, "devices %d, lines %d, forwards today %d, differences %d, skipped %d\n",
+	var out strings.Builder
+	_, _ = fmt.Fprintf(&out, "devices %d, lines %d, forwards today %d, differences %d, skipped %d\n",
 		len(s.Devices), len(s.Lines), report.Forwards, len(report.Differences), len(s.Skipped))
 	for _, difference := range report.Differences {
-		fmt.Fprintf(c.stdout, "difference %s: %s\n", difference.ID, difference.What)
+		_, _ = fmt.Fprintf(&out, "difference %s: %s\n", difference.ID, difference.What)
 	}
 	for _, skipped := range s.Skipped {
-		fmt.Fprintf(c.stdout, "skipped %s: %s\n", skipped.ID, skipped.Reason)
+		_, _ = fmt.Fprintf(&out, "skipped %s: %s\n", skipped.ID, skipped.Reason)
 	}
-	return nil
+	_, err = io.WriteString(c.stdout, out.String())
+	return err
 }
 
 func (c *forwardCLI) audit(action, targetType string, content any) bool {
