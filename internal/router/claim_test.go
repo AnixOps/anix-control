@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -15,14 +16,19 @@ import (
 	"testing"
 	"time"
 
+	identityv1 "github.com/AnixOps/anix-control/sdk/api/identity/v1"
 	"github.com/AnixOps/anix-control/v5/internal/adminclaim"
 	"github.com/AnixOps/anix-control/v5/internal/config"
 	"github.com/AnixOps/anix-control/v5/internal/database"
 	"github.com/AnixOps/anix-control/v5/internal/database/migrations"
+	"github.com/AnixOps/anix-control/v5/internal/identityimport"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/test/bufconn"
 )
 
 // claimLogs captures everything the process logs while a test runs: the
@@ -59,12 +65,49 @@ func captureClaimLogs(t *testing.T) *claimLogs {
 	return logs
 }
 
+// acceptingIdentity stores every account the claim hands it.
+type acceptingIdentity struct {
+	identityv1.UnimplementedIdentityServiceServer
+}
+
+func (acceptingIdentity) ImportAccounts(stream identityv1.IdentityService_ImportAccountsServer) error {
+	var accounts uint64
+	for {
+		request, err := stream.Recv()
+		if err != nil {
+			return stream.SendAndClose(&identityv1.ImportAccountsResponse{Accounts: accounts})
+		}
+		if request.GetAccount() != nil {
+			accounts++
+		}
+	}
+}
+
+// useIdentity installs an identity module that takes the claimed account.
+func useIdentity(t *testing.T) {
+	t.Helper()
+	listener := bufconn.Listen(1 << 20)
+	server := grpc.NewServer()
+	identityv1.RegisterIdentityServiceServer(server, acceptingIdentity{})
+	go func() { _ = server.Serve(listener) }()
+	conn, err := grpc.NewClient("passthrough:///identity", grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithContextDialer(func(context.Context, string) (net.Conn, error) { return listener.Dial() }))
+	require.NoError(t, err)
+	identityimport.SetDefault(&identityimport.Importer{Connect: func() (grpc.ClientConnInterface, error) { return conn, nil }})
+	t.Cleanup(func() {
+		identityimport.SetDefault(nil)
+		_ = conn.Close()
+		server.Stop()
+	})
+}
+
 func claimRouter(t *testing.T) *gin.Engine {
 	t.Helper()
+	useIdentity(t)
 	r, _ := setupTestRouter(t)
 	t.Cleanup(func() { teardownTestRouter(t) })
 	db := database.GetDB()
-	require.NoError(t, db.AutoMigrate(&migrations.MetaEntry{}, &model.AuditLog{}))
+	require.NoError(t, db.AutoMigrate(&migrations.MetaEntry{}, &model.AuditLog{}, &model.IdentityAccountLink{}))
 	return r
 }
 
@@ -210,6 +253,7 @@ func TestClaimRoutesAreRateLimited(t *testing.T) {
 // as Control opens it: exactly one creates the administrator; the others
 // answer 404 (an administrator exists) or 403 (the token is used up).
 func TestClaimRouteConcurrentPostsCreateOneAdministrator(t *testing.T) {
+	useIdentity(t)
 	require.NoError(t, database.Init(&config.DatabaseConfig{Driver: "sqlite", Database: filepath.Join(t.TempDir(), "control.db"), LogLevel: "silent"}))
 	t.Cleanup(func() { teardownTestRouter(t) })
 	db := database.GetDB()

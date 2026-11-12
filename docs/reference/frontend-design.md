@@ -1243,22 +1243,15 @@ are in `web/src/views/admin/security/`:
   never the two reads that answer a secret in clear, a node's credentials and the
   Telegram bot token; Admin: what you may do, except manage tokens), expiry as a
   `UiSelect` (30, 90 (recommended, the default), 180, 365, 730 days, *Custom…*
-  with a 1 to 730 field, *No expiry* with a warning) and the re-authentication,
-  which follows the subscription reset in `Subscribe.vue`: `getMfaStatus()` picks
-  the password or a six-digit `UiOtpField` (sent as `{ code, method: 'totp' }`),
-  with a switch to a recovery code (`{ code: 'XXXX-XXXX', method: 'backup' }`). The
-  form is `novalidate`: the same checks run in `useApiTokenCreate.submit` and the
-  field to focus comes back.
+  with a 1 to 730 field, *No expiry* with a warning). There is no password or
+  code: identity holds the credentials and the kernel only asks for a sign-in
+  at most ten minutes old. The form is `novalidate`: the same checks run in
+  `useApiTokenCreate.submit` and the field to focus comes back.
 - **Refusals** (`classifyTokenRefusal` reads the kernel's `{ error: { code,
-  message } }`): `step_up_failed` on the credential field (and the credential is
-  cleared), `step_up_required` split by its message (`password is required`
-  switches to the password, `an MFA code is required` to the code, `step_up_sign_in_stale`
-  (older Controls said `step_up_required` with `sign in again and retry within 10
-  minutes`), which is what the kernel says once identity holds
-  the credentials and the sign-in is older than ten minutes, is a form-level alert with a *Sign in again* button that signs
-  out and goes to `/login`), `409 too_many_tokens`, `429` (`step_up_rate_limited`,
-  or any 429; the wait from `Retry-After` in whole minutes), `400
-  invalid_request`, and anything else with the route's own message.
+  message } }`): `step_up_sign_in_stale` (the sign-in is older than ten minutes)
+  is a form-level alert with a *Sign in again* button that signs out and goes
+  to `/login`; `409 too_many_tokens`, `400 invalid_request`, and anything else
+  with the route's own message.
 - **The token is shown once** in a `UiDialog` whose scrim does not close it (Esc,
   × and Done do): a warning that it will not be shown again, the token in a
   masked `UiCopyField` (reveal toggle, copy with the clipboard fallback that

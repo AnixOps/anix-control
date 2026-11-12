@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   API_TOKEN_MAX_ACTIVE, API_TOKEN_NAME_MAX, DEFAULT_EXPIRY, EXPIRY_CHOICES, checkTokenName, classifyTokenRefusal, expiryDays,
-  formatRecoveryCode, isActiveToken, isRecoveryCode, readApiToken, readApiTokens, tokenState
+  isActiveToken, readApiToken, readApiTokens, tokenState
 } from '@/views/admin/security/apiTokens'
 
 const NOW = Date.UTC(2026, 9, 5, 12, 0, 0)
@@ -21,8 +21,8 @@ const ROW = {
   revoked_at: null
 }
 
-function refusal(status, code, message, headers) {
-  return { response: { status, data: { error: { code, message } }, headers }, message: `Request failed with status code ${status}` }
+function refusal(status, code, message) {
+  return { response: { status, data: { error: { code, message } } }, message: `Request failed with status code ${status}` }
 }
 
 describe('reading the list', () => {
@@ -130,27 +130,9 @@ describe('the expiry', () => {
   })
 })
 
-describe('recovery codes', () => {
-  it('are upper-cased and hyphenated, and checked as XXXX-XXXX', () => {
-    expect(formatRecoveryCode('ab12cd34')).toBe('AB12-CD34')
-    expect(formatRecoveryCode(' ab12-cd34 ')).toBe('AB12-CD34')
-    expect(formatRecoveryCode('ab12')).toBe('AB12')
-    expect(isRecoveryCode('AB12-CD34')).toBe(true)
-    expect(isRecoveryCode('AB12CD34')).toBe(false)
-    expect(isRecoveryCode('ab12-cd34')).toBe(false)
-  })
-})
-
 describe('telling the route\'s refusals apart', () => {
-  it('splits step_up_required by what the message asks for', () => {
-    expect(classifyTokenRefusal(refusal(403, 'step_up_required', 'password is required')).kind).toBe('password_required')
-    expect(classifyTokenRefusal(refusal(403, 'step_up_required', 'an MFA code is required')).kind).toBe('code_required')
-    expect(classifyTokenRefusal(refusal(403, 'step_up_required', 'sign in again and retry within 10 minutes')).kind).toBe('sign_in_again')
+  it('names the refusals of the create route', () => {
     expect(classifyTokenRefusal(refusal(403, 'step_up_sign_in_stale', 'sign in again and retry within 10 minutes')).kind).toBe('sign_in_again')
-  })
-
-  it('names the other refusals of the create route', () => {
-    expect(classifyTokenRefusal(refusal(403, 'step_up_failed', 'the password or code is not valid')).kind).toBe('step_up_failed')
     expect(classifyTokenRefusal(refusal(409, 'too_many_tokens', 'at most 25')).kind).toBe('too_many_tokens')
     expect(classifyTokenRefusal(refusal(403, 'not_an_administrator', 'no')).kind).toBe('not_an_administrator')
     expect(classifyTokenRefusal(refusal(400, 'invalid_request', 'scope must be read or admin')).kind).toBe('invalid_request')
@@ -161,18 +143,9 @@ describe('telling the route\'s refusals apart', () => {
     expect(classifyTokenRefusal(refusal(404, 'not_found', 'the API token does not exist or is not yours')).kind).toBe('not_found')
   })
 
-  it('reads Retry-After from a plain object or from axios headers, and takes any 429 for rate limited', () => {
-    expect(classifyTokenRefusal(refusal(429, 'step_up_rate_limited', 'later', { 'retry-after': '900' }))).toMatchObject({ kind: 'rate_limited', retryAfter: 900 })
-    const axiosLike = { get: name => (name === 'retry-after' ? '120' : undefined) }
-    expect(classifyTokenRefusal(refusal(429, 'step_up_rate_limited', 'later', axiosLike)).retryAfter).toBe(120)
-    // A 429 from the router's limiter has no code; Retry-After may be missing.
-    expect(classifyTokenRefusal({ response: { status: 429, data: {} } })).toMatchObject({ kind: 'rate_limited', retryAfter: 0 })
-    expect(classifyTokenRefusal(refusal(429, 'step_up_rate_limited', 'later', { 'retry-after': 'soon' })).retryAfter).toBe(0)
-  })
-
   it('keeps the route\'s message, or the transport\'s, for what it does not know', () => {
-    expect(classifyTokenRefusal(refusal(500, 'step_up_unavailable', 'the re-authentication could not be checked'))).toMatchObject({
-      kind: 'other', message: 'the re-authentication could not be checked'
+    expect(classifyTokenRefusal(refusal(500, 'internal_error', 'the token could not be stored'))).toMatchObject({
+      kind: 'other', message: 'the token could not be stored'
     })
     expect(classifyTokenRefusal(new Error('Network Error'))).toMatchObject({ kind: 'other', message: 'Network Error', status: 0 })
     expect(classifyTokenRefusal(undefined).kind).toBe('other')

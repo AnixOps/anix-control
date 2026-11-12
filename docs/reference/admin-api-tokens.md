@@ -81,23 +81,15 @@ administrator route.
 {
   "name": "nightly export",
   "scope": "read",
-  "expires_in_days": 90,
-  "password": "<the administrator's current password>"
+  "expires_in_days": 90
 }
 ```
 
 - `name`: 1 to 100 printable characters (counted as characters, not bytes); `scope`: `read` or `admin`.
-- Re-authentication, as the user's own subscription reset requires
-  (`VerifyStepUp`): with a second factor enabled, `code` and `method`
-  (`totp` or `backup`; a recovery code works once) instead of `password`.
-  Failed attempts are limited per administrator: the 5th failure in 15
-  minutes locks creation out for 15 minutes (`429 step_up_rate_limited`).
-- When identity holds the credentials (the account's legacy password is the
-  unusable marker, after the identity cutover is finalized) the kernel cannot
-  check one. It then requires a sign-in at most 10 minutes old, which
-  identity's login (with the MFA policy) has just checked; otherwise
-  `403 step_up_sign_in_stale` (up to 4.2.0-rc.2 this was `step_up_required`
-  with the message `sign in again and retry within 10 minutes`).
+- Re-authentication: identity holds the credentials, so the kernel requires
+  a sign-in at most 10 minutes old, which identity's login (with the MFA
+  policy) has just checked; otherwise `403 step_up_sign_in_stale`. The
+  `password`, `code` and `method` fields of earlier versions are ignored.
 
 ```json
 {
@@ -113,9 +105,8 @@ administrator route.
 ```
 
 `Cache-Control: no-store`. Errors: `400 invalid_request`,
-`403 step_up_required` / `step_up_sign_in_stale` / `step_up_failed` /
-`not_an_administrator`,
-`409 too_many_tokens`, `429 step_up_rate_limited`.
+`403 step_up_sign_in_stale` / `not_an_administrator`,
+`409 too_many_tokens`.
 
 ### `GET /api/v4/kernel/api-tokens`
 
@@ -157,7 +148,7 @@ its hash.
 | Action | When |
 |---|---|
 | `admin_api_token_create` | a token was created |
-| `admin_api_token_create_denied` | a creation was refused for its re-authentication (no password or code is kept) |
+| `admin_api_token_create_denied` | a creation was refused because the sign-in is older than 10 minutes |
 | `admin_api_token_revoke` | a token was revoked, by its owner or by a super administrator |
 | `admin_api_token_use` | a write (not `GET` or `HEAD`) made with a token, with the status code |
 | `admin_api_token_use_denied` | an unusable token (`malformed`, `unknown`, `revoked`, `expired`, `owner banned`, `owner not an administrator`, `owner deleted`), a request outside the scope (`scope_read_only`, `scope_secret_read`), a request that needs a session (`interactive_only`), or a token in a URL (`token_in_url`). The same subject and reason is written at most once a minute |
@@ -169,7 +160,7 @@ its hash.
 | Token theft (repository, log, laptop) | stored only as a hash, so a database or backup leak yields no usable token; 256-bit random value, so it cannot be guessed; expiry and revocation; `read` scope for what does not need to write; last use time and address to spot a stolen token; rate-limited failures; never accepted in a URL |
 | Brute force | 256 bits of entropy make guessing infeasible; the lookup is by hash (an attacker learns nothing from timing without the preimage), compared again in constant time; refusals are all one answer and lock the address out |
 | Scope escalation | the scope is checked by the middleware on every request, before any handler; `read` allows safe methods only and never a secret-revealing read; token management needs a session, so a stolen token cannot mint a longer-lived one or hide itself by revoking others |
-| Weaker path than the session | creation needs the re-authentication the repo already uses (password, or MFA code when MFA is on), and a session |
+| Weaker path than the session | creation needs a session whose sign-in (identity's password and MFA policy) is at most 10 minutes old |
 | Deleted, banned or demoted administrator | rights are read at use; the token is revoked on first refusal; a super administrator can list and revoke any administrator's tokens |
 | Token in logs | only the `Authorization` header carries it, and neither the access log nor the audit log records headers (a test checks the log output); a token in a URL is refused, audited by path only, and the answer says to revoke it |
 | Using a token on a user route | the token middleware exists on the administrator groups only; elsewhere the token is not a JWT and fails |

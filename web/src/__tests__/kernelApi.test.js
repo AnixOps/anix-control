@@ -178,20 +178,15 @@ describe('kernel API', () => {
 
   it('creates an API token with only the fields that are set, marks the request sensitive, and answers the token and its record', async () => {
     mockRequest.mockResolvedValue({ data: { token: 'anixadm_x', api_token: { id: 'tok-1' } } })
-    await expect(kernelApi.createKernelApiToken({ name: '  nightly export ', scope: 'read', expiresInDays: 90, password: 'pw' }))
+    await expect(kernelApi.createKernelApiToken({ name: '  nightly export ', scope: 'read', expiresInDays: 90 }))
       .resolves.toEqual({ token: 'anixadm_x', api_token: { id: 'tok-1' } })
     expect(mockRequest).toHaveBeenLastCalledWith({
       baseURL: '/api/v4', url: '/kernel/api-tokens', method: 'post',
-      data: { name: 'nightly export', scope: 'read', expires_in_days: 90, password: 'pw' }, timeout: 30_000, sensitive: true
+      data: { name: 'nightly export', scope: 'read', expires_in_days: 90 }, timeout: 30_000, sensitive: true
     })
-    // No expiry, no password: a code and its method instead.
-    await kernelApi.createKernelApiToken({ name: 'probe', scope: 'admin', expiresInDays: 0, code: '123456', method: 'totp' })
-    expect(mockRequest.mock.lastCall[0].data).toEqual({ name: 'probe', scope: 'admin', code: '123456', method: 'totp' })
-    await kernelApi.createKernelApiToken({ name: 'probe', scope: 'read', code: 'AB12-CD34', method: 'backup' })
-    expect(mockRequest.mock.lastCall[0].data).toEqual({ name: 'probe', scope: 'read', code: 'AB12-CD34', method: 'backup' })
-    // A code without a method is a TOTP code.
-    await kernelApi.createKernelApiToken({ name: 'probe', scope: 'read', code: '123456' })
-    expect(mockRequest.mock.lastCall[0].data.method).toBe('totp')
+    // No expiry: the field is left out.
+    await kernelApi.createKernelApiToken({ name: 'probe', scope: 'admin', expiresInDays: 0 })
+    expect(mockRequest.mock.lastCall[0].data).toEqual({ name: 'probe', scope: 'admin' })
   })
 
   it('revokes an API token by id, which cannot change the path', async () => {

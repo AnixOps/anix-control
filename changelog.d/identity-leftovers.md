@@ -13,6 +13,8 @@
   second factor, so the `password`, `code` and `method` fields of the
   request are no longer read, and `step_up_required`, `step_up_failed` and
   `step_up_rate_limited` are no longer answered.
+- The admin API token form no longer asks for a password, authenticator code
+  or recovery code; a stale sign-in still offers *Sign in again*.
 
 ### Removed
 

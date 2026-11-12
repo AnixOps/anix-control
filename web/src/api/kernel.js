@@ -542,27 +542,17 @@ export async function listKernelApiTokens({ all = false, userId, includeInactive
   return unwrap(await v4(config))
 }
 
-// Create: `name` (1 to 100 characters), `scope` ('read' or 'admin'), optional
-// `expiresInDays` (1 to 730; none or 0 never expires) and the administrator's
-// re-authentication: `password`, or with two-step verification on `code` and
-// `method` ('totp' or 'backup'). Only the fields that are set are sent. The
-// answer is { token, api_token } with Cache-Control: no-store: `token` is the
-// `anixadm_` secret, shown once, and the caller keeps it only as long as it
-// shows it and never writes it anywhere. The request is marked `sensitive`
+// Create: `name` (1 to 100 characters), `scope` ('read' or 'admin') and
+// optional `expiresInDays` (1 to 730; none or 0 never expires). The answer is
+// { token, api_token } with Cache-Control: no-store: `token` is the `anixadm_`
+// secret, shown once, and the caller keeps it only as long as it shows it and
+// never writes it anywhere. The request is marked `sensitive`
 // (utils/request.js), so a failed one logs no body. Refusals: 400
-// invalid_request, 403 step_up_required (the message says password or MFA code),
-// step_up_sign_in_stale (identity holds the credential and the sign-in is older
-// than 10 minutes; older Controls said step_up_required with "sign in again"), step_up_failed,
-// not_an_administrator, 409 too_many_tokens (25 active), 429
-// step_up_rate_limited with Retry-After.
-export async function createKernelApiToken({ name, scope, expiresInDays, password, code, method }) {
+// invalid_request, 403 step_up_sign_in_stale (the sign-in is older than 10
+// minutes), not_an_administrator, 409 too_many_tokens (25 active).
+export async function createKernelApiToken({ name, scope, expiresInDays }) {
   const data = { name: String(name ?? '').trim(), scope }
   if (expiresInDays) data.expires_in_days = expiresInDays
-  if (password) data.password = password
-  if (code) {
-    data.code = code
-    data.method = method || 'totp'
-  }
   return unwrap(await v4({ url: '/kernel/api-tokens', method: 'post', data, timeout: 30_000, sensitive: true }))
 }
 
