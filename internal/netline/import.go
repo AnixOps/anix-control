@@ -210,7 +210,7 @@ func (in *importer) skip(id, format string, args ...any) {
 
 // routes adds a line per forward route on the kernel or the network model.
 func (in *importer) routes(db *gorm.DB, rates map[string]float64) error {
-	var rows []model.KernelForwardRoute
+	var rows []model.Line
 	if err := db.Order("id").Find(&rows).Error; err != nil {
 		return err
 	}
@@ -225,7 +225,7 @@ func (in *importer) routes(db *gorm.DB, rates map[string]float64) error {
 	engines := map[string]forwardv1.Engine{}
 	for _, row := range rows {
 		route := &forwardv1.Route{}
-		if err := jsonRead.Unmarshal([]byte(row.RouteJSON), route); err != nil {
+		if err := jsonRead.Unmarshal([]byte(row.Route), route); err != nil {
 			return fmt.Errorf("netline: route %s: %w", row.ID, err)
 		}
 		line, ok := in.route(route, engines)

@@ -221,7 +221,7 @@ func runEnforcement(t *testing.T, db *gorm.DB) {
 	assert.False(t, result.Replanned, "900 of 1000 bytes on the entry; the exit's do not count")
 	result = f.report(entry, at.Add(time.Minute), 1, counter(id, 0, "e1", 500, 500))
 	assert.True(t, result.Replanned)
-	var row model.KernelForwardRoute
+	var row model.Line
 	require.NoError(t, db.First(&row, "id = ?", id).Error)
 	assert.Equal(t, EnforcedQuota, row.Enforced)
 	stored, err := f.service.GetRoute(f.ctx, id)

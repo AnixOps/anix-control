@@ -230,7 +230,7 @@ func (s *Service) RecordNetworkCounters(ctx context.Context, node agentcontrol.A
 	err = db.Transaction(func(tx *gorm.DB) error {
 		entryGrew := map[string]bool{}
 		for _, forward := range forwards {
-			var stored []model.KernelForwardRoute
+			var stored []model.Line
 			if err := tx.Where("id = ?", forward.GetId()).Limit(1).Find(&stored).Error; err != nil {
 				return err
 			}

@@ -1,7 +1,6 @@
 package netline
 
 import (
-	"encoding/json"
 	"path/filepath"
 	"testing"
 
@@ -20,7 +19,7 @@ func openDB(t *testing.T) *gorm.DB {
 	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "control.db")), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	require.NoError(t, err)
 	require.NoError(t, db.AutoMigrate(&model.Node{}, &model.NodeProtocol{}, &model.NodeEntry{}, &model.NodeExitPolicy{}, &model.NodeNetwork{},
-		&model.NodeUplinks{}, &model.KernelForwardRoute{}, &model.ForwardRouteSubscription{}, &model.EgressRoute{}, &LineRow{}, &TransportRow{}))
+		&model.NodeUplinks{}, &model.Line{}, &model.ForwardRouteSubscription{}, &model.EgressRoute{}, &model.Transport{}))
 	return db
 }
 
@@ -28,7 +27,7 @@ func addRoute(t *testing.T, db *gorm.DB, route *forwardv1.Route, enforced string
 	t.Helper()
 	encoded, err := protojson.Marshal(route)
 	require.NoError(t, err)
-	require.NoError(t, db.Create(&model.KernelForwardRoute{ID: route.GetId(), Owner: "test", Revision: 1, RouteJSON: string(encoded), Enforced: enforced}).Error)
+	require.NoError(t, db.Create(&model.Line{ID: route.GetId(), Owner: "test", Revision: 1, Route: string(encoded), Enforced: enforced}).Error)
 }
 
 func hop(engine forwardv1.Engine, nodes ...string) *forwardv1.Hop {
@@ -140,27 +139,37 @@ func TestImportReadsNodesAndRoutesAsLines(t *testing.T) {
 	require.Contains(t, s.Transports, Transport{ID: "proxy-1>proxy-3/line/c2/false/true", From: "proxy-1", To: "proxy-3", Kind: TransportLine, Carriers: []string{"c2"}, FEC: true})
 }
 
-func TestSavedLinesLoadAsImported(t *testing.T) {
+func TestProjectWritesTheRoutesLines(t *testing.T) {
 	db := openDB(t)
 	seed(t, db)
-	require.NoError(t, db.Create(&model.EgressRoute{Name: "ai", SourceNodeID: 3, ExitNodeID: 1, RelayPort: 1, Method: "m", RelayKey: "k", Domains: `["openai.com"]`, Enabled: true}).Error)
 	imported, err := Import(db)
 	require.NoError(t, err)
-	imported.Lines[0].ServeAt = "proxy-3"
-	require.NoError(t, Save(db, imported))
-	require.NoError(t, Save(db, imported), "saving again replaces the rows")
+	require.NoError(t, Project(db))
+	require.NoError(t, Project(db), "projecting again replaces the transports")
 
-	loaded, err := Load(db)
-	require.NoError(t, err)
-	require.ElementsMatch(t, imported.Transports, loaded.Transports)
-	loaded.Transports, imported.Transports = nil, nil
-	loaded.Skipped = imported.Skipped
-	want, err := json.Marshal(imported)
-	require.NoError(t, err)
-	got, err := json.Marshal(loaded)
-	require.NoError(t, err)
-	require.JSONEq(t, string(want), string(got))
-	require.Empty(t, Compare(Forwards(imported), Forwards(loaded)))
+	var transports []model.Transport
+	require.NoError(t, db.Find(&transports).Error)
+	require.Len(t, transports, len(imported.Transports))
+	stored := map[string]model.Line{}
+	var rows []model.Line
+	require.NoError(t, db.Find(&rows).Error)
+	for _, row := range rows {
+		stored[row.ID] = row
+	}
+	for i, line := range imported.Lines {
+		row, ok := stored[line.ID]
+		if line.Protocol != nil && !ok {
+			continue // a protocol's own line is not stored yet
+		}
+		require.True(t, ok, line.ID)
+		require.Equal(t, i, row.Sort)
+		require.Equal(t, line.Name, row.Name)
+		require.Equal(t, line.Enabled, row.Enabled)
+		require.Equal(t, line.Entries, row.Entries)
+		require.Equal(t, line.Chain, row.Chain)
+		require.Equal(t, line.Exit, row.Exit)
+		require.NotEmpty(t, row.Route, "the route stays")
+	}
 }
 
 func TestCompareNamesWhatDiffers(t *testing.T) {

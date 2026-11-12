@@ -86,7 +86,7 @@ func runRouteWrites(t *testing.T, db *gorm.DB) {
 	require.NoError(t, err)
 	assert.True(t, proto.Equal(route, replayed))
 	var count int64
-	require.NoError(t, db.Model(&model.KernelForwardRoute{}).Count(&count).Error)
+	require.NoError(t, db.Model(&model.Line{}).Count(&count).Error)
 	assert.EqualValues(t, 1, count)
 	// The same request id for another request conflicts.
 	_, err = f.service.CreateRoute(f.ctx, "create-1", twoHop(31001))
@@ -336,7 +336,7 @@ func runPlanRouteAndList(t *testing.T, db *gorm.DB) {
 	require.NoError(t, err)
 	require.Empty(t, self.GetViolations())
 	var count int64
-	require.NoError(t, db.Model(&model.KernelForwardRoute{}).Count(&count).Error)
+	require.NoError(t, db.Model(&model.Line{}).Count(&count).Error)
 	assert.EqualValues(t, 1, count)
 	// Violations are answered, not raised.
 	bad, err := f.service.PlanRoute(f.ctx, &forwardv1.PlanRouteRequest{Route: &forwardv1.Route{Owner: "admin"}})

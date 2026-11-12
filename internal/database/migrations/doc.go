@@ -150,4 +150,7 @@
 //   - 0035_network_lines: the network as lines (v5_line, v5_transport)
 //     and whether a device is on a cloud that scans its machines
 //     (v4_kernel_node_network.scan_cloud).
+//   - 0036_forward_routes_as_lines: forward routes move into v5_line
+//     (created again with the route's columns) and
+//     v4_kernel_forward_route goes.
 package migrations

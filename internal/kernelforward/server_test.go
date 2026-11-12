@@ -127,7 +127,7 @@ func TestForwardControlAuthorization(t *testing.T) {
 		}
 	}
 	var routes int64
-	require.NoError(t, f.db.Table("v4_kernel_forward_route").Count(&routes).Error)
+	require.NoError(t, f.db.Table("v5_line").Count(&routes).Error)
 	assert.Zero(t, routes, "a refused call writes nothing")
 	var nodes int64
 	require.NoError(t, f.db.Table("v2_forward_node").Count(&nodes).Error)

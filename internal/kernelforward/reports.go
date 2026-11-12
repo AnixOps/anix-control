@@ -237,7 +237,7 @@ func quotaCandidates(tx *gorm.DB, grew map[string]bool) ([]string, error) {
 		ids = append(ids, id)
 	}
 	sort.Strings(ids)
-	var rows []model.KernelForwardRoute
+	var rows []model.Line
 	if err := tx.Where("id IN ? AND enforced = ?", ids, "").Find(&rows).Error; err != nil {
 		return nil, err
 	}

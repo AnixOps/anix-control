@@ -22,7 +22,7 @@ func TestSubscriptionOffersPublishedForwardRoutes(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
 	require.NoError(t, db.AutoMigrate(&model.Node{}, &model.NodeProtocol{}, &model.SubscriptionGroup{}, &model.NodeEntry{}, &model.SubscriptionGroupProtocol{},
-		&model.ForwardNode{}, &model.KernelForwardRoute{}, &model.ForwardRouteSubscription{}, &model.OperationLog{}))
+		&model.ForwardNode{}, &model.Line{}, &model.ForwardRouteSubscription{}, &model.OperationLog{}))
 	svc := &SubscriptionService{db: db}
 
 	now := time.Now().Unix()
@@ -42,7 +42,7 @@ func TestSubscriptionOffersPublishedForwardRoutes(t *testing.T) {
 	}
 	encoded, err := protojson.Marshal(route)
 	require.NoError(t, err)
-	require.NoError(t, db.Create(&model.KernelForwardRoute{ID: "r1", Owner: "admin", Revision: 1, RouteJSON: string(encoded), CreatedAt: time.Now(), UpdatedAt: time.Now()}).Error)
+	require.NoError(t, db.Create(&model.Line{ID: "r1", Owner: "admin", Revision: 1, Route: string(encoded), CreatedAt: time.Now(), UpdatedAt: time.Now()}).Error)
 
 	nodes := func() []*model.ParsedNode {
 		parsed, err := svc.getInternalNodes(nil, &model.TemplateRenderContext{UUID: "u"}, []*model.SubscriptionGroup{group})

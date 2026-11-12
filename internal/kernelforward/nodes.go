@@ -882,7 +882,7 @@ func (s *Service) Enforcement(ctx context.Context, routeIDs []string) (map[strin
 	if err != nil {
 		return nil, err
 	}
-	var rows []model.KernelForwardRoute
+	var rows []model.Line
 	if err := db.Select("id", "enforced").Where("id IN ? AND enforced <> ''", routeIDs).Find(&rows).Error; err != nil {
 		return nil, err
 	}

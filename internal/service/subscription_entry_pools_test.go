@@ -18,7 +18,7 @@ func TestSubscriptionFollowsEntryPools(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
 	require.NoError(t, db.AutoMigrate(&model.User{}, &model.Node{}, &model.NodeProtocol{}, &model.SubscriptionGroup{}, &model.NodeEntry{},
-		&model.SubscriptionGroupProtocol{}, &model.ForwardNode{}, &model.KernelForwardRoute{}, &model.ForwardRouteSubscription{},
+		&model.SubscriptionGroupProtocol{}, &model.ForwardNode{}, &model.Line{}, &model.ForwardRouteSubscription{},
 		&model.OperationLog{}, &model.EntryPoolPolicy{}, &model.UserEntryPool{}))
 	svc := &SubscriptionService{db: db}
 

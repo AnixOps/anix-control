@@ -10,24 +10,6 @@ import "time"
 // and written only by internal/kernelforward; packages reach the data
 // through ForwardControl (kernel.forward.v1), never through storage.
 
-// KernelForwardRoute is one stored route: the contract's Route as protojson,
-// with the columns the kernel filters on. Enforced is the kernel's own
-// pause of the route, separate from the route's paused flag: "quota" once
-// the entry hop's metered bytes reach limits.quota_bytes, "expired" once
-// limits.expires_at_unix_ms has passed, empty otherwise. The planner sees
-// an enforced route as paused; the stored route is unchanged.
-type KernelForwardRoute struct {
-	ID        string    `gorm:"primaryKey;size:64" json:"id"`
-	Owner     string    `gorm:"size:64;not null;index" json:"owner"`
-	Revision  uint64    `gorm:"not null" json:"revision"`
-	RouteJSON string    `gorm:"type:text;not null" json:"route"`
-	Enforced  string    `gorm:"size:16;not null;default:''" json:"enforced"`
-	CreatedAt time.Time `gorm:"not null" json:"created_at"`
-	UpdatedAt time.Time `gorm:"not null" json:"updated_at"`
-}
-
-func (KernelForwardRoute) TableName() string { return "v4_kernel_forward_route" }
-
 // KernelForwardAllocation is the port and connection mark a hop of a route
 // holds on a node (planner.Allocations). The planner passes the active ones
 // back as the previous allocations so they stick. A deleted route's
@@ -199,10 +181,13 @@ type KernelForwardPlan struct {
 
 func (KernelForwardPlan) TableName() string { return "v4_kernel_forward_plan" }
 
-// KernelForwardModels are the kernel's forwarding tables.
+// KernelForwardModels are the kernel's forwarding tables, with the tables
+// its lines are read from (internal/netline).
 func KernelForwardModels() []any {
 	return []any{
-		&KernelForwardRoute{}, &KernelForwardAllocation{}, &KernelForwardNode{}, &KernelForwardNodeState{},
+		&Node{}, &NodeProtocol{}, &NodeEntry{}, &NodeExitPolicy{}, &NodeNetwork{}, &NodeUplinks{},
+		&ForwardRouteSubscription{}, &EgressRoute{},
+		&Line{}, &Transport{}, &KernelForwardAllocation{}, &KernelForwardNode{}, &KernelForwardNodeState{},
 		&KernelForwardNodeReport{}, &KernelForwardCounter{}, &KernelForwardTraffic{}, &KernelForwardRequest{},
 		&KernelForwardPlan{}, &KernelForwardDNSProvider{}, &KernelForwardDNSBinding{}, &KernelForwardDNSNode{},
 		&KernelForwardLatency{}, &KernelForwardDNSVantage{},

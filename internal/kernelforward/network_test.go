@@ -212,6 +212,6 @@ func TestNetworkRouteListenConflictIsRefused(t *testing.T) {
 		require.Contains(t, violation.Message, "on proxy-21 is taken by "+owner)
 	}
 	var count int64
-	require.NoError(t, db.Model(&model.KernelForwardRoute{}).Count(&count).Error)
+	require.NoError(t, db.Model(&model.Line{}).Count(&count).Error)
 	require.Equal(t, int64(1), count)
 }
