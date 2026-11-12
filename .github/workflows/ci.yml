@@ -758,12 +758,11 @@ jobs:
               -d "{\"token\":\"$1\",\"email\":\"owner@example.test\",\"password\":\"ci-smoke-owner-0123456789\"}" \
               http://127.0.0.1:8080/api/v5/claim
           }
-          test "$(claim "${token}")" = 201
-          test "$(claim "${token}")" = 404
-          curl -fsS http://127.0.0.1:8080/api/v5/claim/status | grep -F '"claimable":false' >/dev/null
-          status=0
-          docker exec control /app/anix-control admin claim-link >/dev/null 2>&1 || status=$?
-          test "${status}" = 1 || { echo "admin claim-link must refuse with 1 once claimed, got ${status}"; exit 1; }
+          # The source image embeds no identity-platform, which holds the
+          # accounts: the claim waits for it, answers 503 and leaves the link
+          # unused. The network module step below claims for real.
+          test "$(claim "${token}")" = 503
+          curl -fsS http://127.0.0.1:8080/api/v5/claim/status | grep -F '"claimable":true' >/dev/null
           logs="$(docker logs control 2>&1)"
           if grep -F "${token}" <<<"${logs}" >/dev/null; then echo "the claim token reached the logs"; exit 1; fi
           docker stop --time 90 control
@@ -813,7 +812,10 @@ jobs:
           status="$(curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' \
             -d "{\"token\":\"${BASH_REMATCH[1]}\",\"email\":\"owner@example.test\",\"password\":\"ci-compose-owner-0123456789\"}" \
             http://127.0.0.1:8080/api/v5/claim)"
-          test "${status}" = 201 || { echo "the claim answered ${status}"; exit 1; }
+          # The source image embeds no identity-platform, which holds the
+          # accounts: the claim waits for it, answers 503 and leaves the link
+          # unused. The network module step below claims for real.
+          test "${status}" = 503 || { echo "the claim answered ${status}"; exit 1; }
           "${compose[@]}" stop control
           test "$(docker inspect -f '{{.State.ExitCode}}' "${control_id}")" = 0
           "${compose[@]}" down -v
@@ -1007,7 +1009,10 @@ jobs:
           status="$(curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' \
             -d "{\"token\":\"${BASH_REMATCH[1]}\",\"email\":\"owner@example.test\",\"password\":\"ci-kubernetes-owner-0123456789\"}" \
             http://127.0.0.1:18080/api/v5/claim)"
-          test "${status}" = 201 || { echo "the claim answered ${status}"; exit 1; }
+          # The source image embeds no identity-platform, which holds the
+          # accounts: the claim waits for it, answers 503 and leaves the link
+          # unused. The network module step below claims for real.
+          test "${status}" = 503 || { echo "the claim answered ${status}"; exit 1; }
           # A config change rolls the pod (Recreate) and it becomes ready again.
           helm upgrade control config/deploy/helm/anix-control --namespace anix --reuse-values \
             --set config.ANIX_CONTROL_LOG_FORMAT=text --wait --timeout 6m
