@@ -2,6 +2,55 @@
 
 ## Unreleased
 
+## 5.0.4 - 2026-11-12
+
+### Added
+
+- 网络 → 线路 (`/admin/lines`): every line a user can connect to, read from
+  the network as lines (`GET /api/v4/kernel/network/lines`). Each row shows
+  the path from entry to exit, where the protocol is served, the rate and the
+  last 24 hours of traffic; the filters separate relay lines, direct lines,
+  fixed-target forwards and lines that need attention. Opening a line shows
+  its devices, protocol, port and split rules. The page is read-only: lines
+  are still changed under 节点 and 转发.
+- The network as lines, step 1 of the move to devices, entries, transports,
+  exits and lines (`docs/design/network-lines/README.md`):
+  `GET /api/v4/kernel/network/lines` reads what Control stores today (nodes
+  and their protocols, node entries, forward routes and their subscriptions,
+  egress routes, exit policies) as lines and compares the forwards those
+  lines plan with the ones the routes plan now. It is read-only; nothing is
+  stored and no node changes.
+- A node's network settings (`GET` / `PUT /api/v4/kernel/nodes/{id}/network`)
+  have `region`, where the device is, as a place key for the topology map;
+  the lines snapshot answers it on each device (migration `0033_node_region`).
+- 网络 → 拓扑 (`/admin/topology`): every device and the lines between them,
+  as a world map (全球地图) and as columns from entry to exit (抽象拓扑).
+  Selecting a device or a line lights its path and shows its details. It is
+  built from the node list, the forward routes and the egress routes, with no
+  new API. A device's place is read from its name and tags (a region code or
+  a city, such as `JP` or `tokyo`); a device nothing matches is listed under
+  the map.
+- Node protocol type `snell`: Snell served by the Agent's kernel, on TCP with
+  the protocol's own encryption (no TLS, no transport). A protocol has one
+  PSK (`settings.psk`, generated in the admin form; 12 bytes or more for
+  version 6) plus `version` (1 to 6, default 4), `obfs` (`http`, versions 1
+  to 4) and `mode` (version 6). Each user logs in with their UUID as the user
+  key, so traffic stays per user and an expired user is locked out. The
+  add-protocol picker has a Snell template.
+- The Surge subscription lists Snell nodes (`psk`, `version`, `userkey`); the
+  other formats leave them out. `userkey` is not in Surge's manual and has
+  not been checked with a real Surge client yet.
+- Agent protocol revision 3: the `snell` node type. Upgrade the Agent of a
+  node before adding a Snell protocol to it; an older Agent answers
+  `config_invalid` for that protocol and keeps running the others
+  (`docs/reference/agent-versioning.md`). The node also needs an anx-node
+  with the snell inbound, which no anx-node release has yet.
+- A device has a region: 节点 → 协议 → 网络 → 地区 picks where it is, with
+  the place its name suggests offered until one is saved. 网络 → 拓扑 puts
+  the device there on the map, and shows which devices forward in the
+  kernel, how many protocols a device serves directly and what a line
+  serves.
+
 ### Changed
 
 - ANX `dest_behavior` / `dest_behaviors` accept the TLS session resumption
@@ -13,6 +62,167 @@
 - Dev builds run on a manual dispatch of `dev-release.yml` only, no longer
   after every green `main` or every three hours, and only the newest one is
   kept, so the Releases page holds real releases.
+- 节点协议表单里 ANX 的设置按用途分成“伪装站点”“国内入口”和默认折叠的“高级设置”三组，说明较长的字段一行一个。
+- ANX 协议表单默认只显示端口和伪装站点（域名、目标站）；“国内入口”“握手外观调优”“高级设置”折叠起来，改过默认值时自动展开，折叠组里有提示时在标题旁标出。TLS 和传输都固定的协议不再单独显示“传输与安全”一节（摘要栏已写明）。
+- On pull requests the browser accessibility sweeps run two theme and
+  viewport combinations (light desktop, dark phone) instead of four; the
+  full lane still runs all four.
+- **Breaking, on upgrade:** Control starts only once identity is finalized.
+  A database with users whose identity authority is not `finalized` is
+  refused before any migration runs; on 5.0.3, import, cut over and finalize
+  first ([UPGRADE.md](docs/UPGRADE.md)). A fresh database, or one without
+  users, is recorded as finalized at start.
+- identity-platform's 23 account routes (login, registration, MFA, the
+  administrator's user management and MFA configuration, the profile, the
+  dashboard and the resets) run natively only. Their answers are recorded
+  in `internal/tests/identitycompat/testdata`, taken while CI proved them
+  equal to the kernel's handlers.
+- identity-platform creates its first signing key when it first signs, so
+  the administrator of a fresh install can log in right after the claim
+  instead of after the next key rotation pass (up to a minute, during which
+  the failed logins counted toward the login limit). Control fetches
+  identity's keys while it answers the first request that carries a token
+  of an unknown key, so that request is no longer refused as expired, and
+  retries a failed key refresh every 10 seconds instead of every 5 minutes,
+  so that tokens keep verifying when the identity host stops soon after
+  Control started.
+- The first administrator's claim waits up to 15 seconds for the identity
+  host after a start instead of answering `503 identity_unavailable` at
+  once. A build without identity-platform (a source image) cannot claim.
+- Creating an admin API token needs a sign-in at most 10 minutes old
+  (`403 step_up_sign_in_stale` otherwise). The kernel holds no password or
+  second factor, so the `password`, `code` and `method` fields of the
+  request are no longer read, and `step_up_required`, `step_up_failed` and
+  `step_up_rate_limited` are no longer answered.
+- The admin API token form no longer asks for a password, authenticator code
+  or recovery code; a stale sign-in still offers *Sign in again*.
+- **Behaviour change on upgrade:** these 5 routes switch from the kernel's
+  handler to the package's native handler. Their compatibility tests proved
+  the two answer the same bytes; the answers are now recorded in `testdata`.
+- The compatibility tests of these routes (`platformcompat`,
+  `machinetelemetrycompat`, `notificationcompat`) no longer compare with a
+  legacy handler: they compare each native answer, on SQLite and
+  PostgreSQL, with the one recorded in `testdata` while the route still
+  matched its legacy handler byte for byte. `PACKAGECOMPAT_RECORD=1`
+  records the answers again after an intended change.
+- **Behaviour change on upgrade:** these 10 routes switch from the kernel's
+  handler to the package's native handler. Their compatibility tests proved
+  the two answer the same bytes; the answers are now recorded in `testdata`.
+- A node protocol write the gateway cannot seal is no longer served by the
+  legacy handler: a body that is not JSON, a protocol id that is not a
+  number and a settings document that is not JSON (for example a
+  `custom_config` of plain text, which no node configuration ever used) are
+  refused with 400 `plugin_request_invalid`.
+- Creating a diagnostic task with a negative `timeout` answers 400 instead
+  of falling back to the legacy handler.
+- `pluginhostsdk.RouterConfig.Flagged` names the routes of a `NativeOnly`
+  host that still follow the kernel's route modes and may fall back to the
+  legacy handler. Subscription keeps 2 such routes (a group's protocols,
+  the protocol pool), proxy-node 3 (node list, detail, delete) and
+  protocol-runtime 10 (node protocols, synchronization, Agent Control and
+  the agent routes): they still run their legacy handler in production.
+- 节点的“添加协议”抽屉重做为两步：先从列表选一个起点（各协议模板或自定义，说明、传输、TLS 和端口一目了然，长说明自动换行），再填表单。表单分为基本信息、传输与安全（TLS 用分段选择，协议固定的 TLS/传输直接写明）、协议设置和发布（运行、订阅显示带说明的开关）；表单/高级 JSON 切换和“更换”模板放在顶部摘要栏，原 JSON 编辑器里的“从模板加载”对话框随之移除。
+- Node protocols offer only what the Agent's kernel runs, listed in
+  `contracts/agent/v1/protocol-combinations.json`; tests in Control, the web
+  editor and the Agent read that file, so a combination cannot be offered
+  without being mapped. Two more combinations that never ran are gone with it:
+  - Reality is VLESS directly on `tcp`. Reality with Trojan, or on `grpc`, is
+    refused when a protocol is saved: the Agent refused Reality on gRPC and
+    served a Trojan Reality protocol with the node's own certificate.
+  - Trojan is always TLS in the editor, as the node always serves it with its
+    certificate; a stored Trojan protocol with another TLS mode opens as TLS.
+
+### Removed
+
+- The daily `Artifact prune` workflow. `Artifact Cleanup` already deletes
+  Actions artifacts older than a day every six hours, so the 3-day prune had
+  nothing left to delete.
+- CI no longer runs the Forward Runtime Regression job (every test it named
+  was removed with the old forward runtime), nor the gRPC Core Tests, CLI
+  Tests and Smoke Tests jobs: Backend Tests already runs those packages.
+  Backend Tests now enforces the 80% coverage of `internal/grpc`. The
+  `forward` change class is gone with its only job.
+- The model tests that only compared table names and constants with
+  themselves.
+- The kernel's legacy login, registration, MFA and user administration
+  handlers and the services only they used.
+- The identity cutover API (`GET /api/v4/kernel/identity`, `POST
+  /api/v4/kernel/identity/import`, `/cutover`, `/rollback`, `/finalize`),
+  the gateway's route freeze (`503 package_route_frozen`) and the alerts
+  `identity_import_stalled` and `identity_cutover_not_finalized`.
+- The kernel's own HS256 user tokens: Control signs no user token and
+  verifies identity's (EdDSA) only.
+- The full identity import (only the first administrator's claim still
+  hands identity its account), the legacy credential mirror of
+  `KernelIdentity.CreateSubscriber` and `ApplyAccountProjection` (identity
+  no longer sends it), and the `authority_state` and `legacy_token_issuer`
+  fields of `GetIdentitySettings`.
+- The rehearsed route list (`config/package-route-defaults.json`) and the
+  route modes `GetPackageConfig` answered: every built-in package serves its
+  routes natively.
+- The setting `alerts.phase_stuck_after` (already ignored).
+- Migration `0034_drop_identity_leftovers` drops `v2_mfa_login_attempt` and
+  `v4_kernel_identity_cutover`.
+- The kernel's legacy handlers for 5 v2 routes that ran them in production
+  until now: the node list, detail and deletion (proxy-node) and a
+  subscription group's protocols and the protocol pool (subscription). The
+  package hosts serve them natively only; a host whose storage lease lacks
+  the node tables (impossible since the kernel refuses to start before the
+  node credential split is finalized) now fails the request instead of
+  falling back.
+- The kernel's legacy handlers for the plan and wireguard routes (8 v2
+  routes), the plan service methods only they used, and their
+  native-vs-legacy compatibility tests (`plancompat`, `wireguardcompat`).
+  The plan and wireguard package hosts now run every route natively from
+  the start (`pluginhostsdk.RouterConfig.NativeOnly`), as knowledge and
+  ticket already do.
+- The wireguard keypair route keeps a test of its own in the package
+  (`packages/wireguard/native`), which the removed comparison test carried.
+- The kernel's legacy handlers for the 27 v2 routes the platform (audit
+  log), machine-telemetry (dashboard, hourly traffic, user traffic ranking)
+  and notification (23 routes) packages already answered natively in
+  production, with the kernel statistics and Telegram bot service methods
+  only they used. The three package hosts now run these routes natively
+  from the start (`pluginhostsdk.RouterConfig.NativeOnly`).
+- The kernel's legacy handlers for the last 10 protocol-runtime routes that
+  ran them in production: a node's protocols (list, creation, update,
+  deletion), node synchronization, Agent Control status and operations, the
+  agent list, the monitoring data and diagnostic task creation. The package
+  host serves all its routes natively only, and the SDK router's `Flagged`
+  option is gone with them.
+- The kernel's legacy handlers for 25 more v2 routes their packages already
+  answered natively in production: subscription (20: groups, templates, a
+  group's protocol links, plan and user groups, statistics, the protocol
+  types and the user's subscription summary), proxy-node (2: node
+  statistics and node logs) and protocol-runtime (3: protocol templates,
+  diagnostic task history and detail), with the `SubscriptionService`
+  methods only they used. The package hosts run these routes natively from
+  the start; their compatibility tests compare with recorded answers.
+- Node protocols no longer offer the `h2` transport, and Reality on `h2` is
+  refused when a protocol is saved: neither the Agent nor the kernel has an
+  h2 transport, so such a protocol never started. A stored protocol on `h2`
+  keeps showing it; move it to `tcp`, `ws`, `grpc` or `httpupgrade`. The JSON
+  tab takes `h2` or `quic` only for a protocol that already has it.
+- Five v2 administrator routes no client called, with their native and
+  legacy handlers and tests: `GET` and `PUT /api/v2/admin/nodes/:id/raw-config`
+  and `POST /api/v2/admin/nodes/validate-config` (the node update route
+  carries the raw configuration), `POST /api/v2/admin/agent/execute` (it was
+  `POST /api/v2/admin/agent/tasks` without the `type` field) and
+  `GET /api/v2/admin/subscription/formats`.
+
+### Fixed
+
+- ANX 协议表单因一条说明文字里的 `@` 被当成 i18n 链接语法而渲染失败、整个表单空白的问题。
+- A password or second-factor change an administrator makes in identity
+  ends the account's sessions again. Since finalize the kernel kept no
+  credentials to compare, so only an email, administrator or ban change
+  revoked tokens; a projection whose token version rose now revokes the
+  older tokens itself.
+
+### Security
+
+- Go 1.26.11 (toolchain, CI and the build images): a standard library
+  vulnerability that govulncheck reports in 1.26.10.
 
 ## 5.0.3 - 2026-11-10
 
