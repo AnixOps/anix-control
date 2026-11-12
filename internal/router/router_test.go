@@ -440,7 +440,9 @@ func TestAllCataloguedV2RoutesResolveThroughTheirPackageBridge(t *testing.T) {
 		t.Run(route.Method+" "+route.Path, func(t *testing.T) {
 			if route.Owner == "identity-platform" {
 				identityRoutes++
-				require.True(t, identityAllowlist.Allows(route.Owner, route.RouteID, route.RouteID))
+				if !nativeOnlyRoutes(t)[route.RouteID] {
+					require.True(t, identityAllowlist.Allows(route.Owner, route.RouteID, route.RouteID))
+				}
 				return
 			}
 			bridgedRoutes++

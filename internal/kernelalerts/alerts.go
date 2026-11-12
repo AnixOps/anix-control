@@ -30,13 +30,6 @@ const (
 	// KindCAExpiring: the current module (Agent, kernel) CA or forward link
 	// CA is within ca_expiry_days of its end.
 	KindCAExpiring = "ca_expiring"
-	// KindIdentityImportStalled: the identity authority sits in importing
-	// without progress for phase_stuck_after.
-	KindIdentityImportStalled = "identity_import_stalled"
-	// KindIdentityCutoverPending: identity owns logins since the latest
-	// cutover, but legacy credentials were not finalized for
-	// phase_stuck_after.
-	KindIdentityCutoverPending = "identity_cutover_not_finalized"
 	// KindBuiltinPackageInvalid: an official package embedded in the Control
 	// binary does not verify against plugins.official_public_key (signature,
 	// digest, contents), so it was not installed.
@@ -78,11 +71,10 @@ const (
 
 // Subject kinds.
 const (
-	SubjectNode     = "node"
-	SubjectCA       = "ca"
-	SubjectModule   = "module"
-	SubjectIdentity = "identity"
-	SubjectPackage  = "package"
+	SubjectNode    = "node"
+	SubjectCA      = "ca"
+	SubjectModule  = "module"
+	SubjectPackage = "package"
 	// SubjectPanelCertificate: a certificate of the panel, by name.
 	SubjectPanelCertificate = "panel_certificate"
 	// SubjectBackups: the panel's backups, one subject ("backups").
@@ -91,15 +83,6 @@ const (
 	// for the wide outage).
 	SubjectTransport = "transport"
 )
-
-// phaseKinds are the alert kinds about phased processes: operator-paced
-// rollouts that are reminded of weekly rather than daily.
-var phaseKinds = map[string]bool{
-	KindIdentityImportStalled:  true,
-	KindIdentityCutoverPending: true,
-}
-
-const phaseRenotifyFactor = 7
 
 // resolvedRetention is how long a resolved alert stays listed.
 const resolvedRetention = 30 * 24 * time.Hour

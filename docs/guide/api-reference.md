@@ -351,7 +351,7 @@ subscription links are deliberately not bulk actions.
   invite code that was used is kept), `forbidden_self` (an administrator
   cannot ban their own account in a bulk request, so a page selected whole is
   safe), `not_attempted`, a code of the package gateway
-  (`package_route_frozen`, `plugin_host_unavailable`, ...) and `failed` for
+  (`plugin_host_unavailable`, ...) and `failed` for
   any other refusal of the route, with the route's own message.
 - **Idempotent where it can be.** `ban` and `unban` are: a user already in
   the target state is `ok`. `reset_traffic` zeroes once per `Idempotency-Key`

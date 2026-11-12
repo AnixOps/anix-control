@@ -56,7 +56,7 @@ func (s *bridgeStub) Invoke(_ context.Context, capability []byte, operation stri
 	return s.response, nil
 }
 
-func TestIdentityServiceDispatchesLoginOnlyThroughBridgeCapability(t *testing.T) {
+func TestIdentityServiceDispatchesBridgedRoutesThroughBridgeCapability(t *testing.T) {
 	bridge := &bridgeStub{response: packagebridgesdk.Response{
 		StatusCode: 200,
 		Body:       []byte(`{"code":0,"msg":"操作成功","ts":1,"data":{"token":"issued"}}`),
@@ -65,15 +65,15 @@ func TestIdentityServiceDispatchesLoginOnlyThroughBridgeCapability(t *testing.T)
 	service := newTestService(t, bridge)
 	capability := make([]byte, 32)
 	response, err := service.Dispatch(context.Background(), pluginhostsdk.DispatchRequest{
-		RouteID: "identity.auth.login", RequestBody: []byte(`{"email":"u@example.test","password":"secret"}`),
+		RouteID: "identity.admin.invite.codes.post", RequestBody: []byte(`{"count":1}`),
 		BridgeCapability: capability, DeadlineUnixMillis: time.Now().Add(time.Second).UnixMilli(),
 	})
 
 	require.NoError(t, err)
 	require.EqualValues(t, 200, response.StatusCode)
-	require.Equal(t, "identity.auth.login", bridge.operation)
+	require.Equal(t, "identity.admin.invite.codes.post", bridge.operation)
 	require.Equal(t, capability, bridge.capability)
-	require.Equal(t, []byte(`{"email":"u@example.test","password":"secret"}`), bridge.payload)
+	require.Equal(t, []byte(`{"count":1}`), bridge.payload)
 	require.Equal(t, []pluginhostsdk.Header{{Name: "Retry-After", Value: "1"}}, response.Headers)
 }
 
@@ -82,20 +82,8 @@ func TestIdentityServiceRejectsUnknownRoutesAndMissingCapability(t *testing.T) {
 	_, err := service.Dispatch(context.Background(), pluginhostsdk.DispatchRequest{RouteID: "identity.admin.users.list"})
 	require.Error(t, err)
 
-	_, err = service.Dispatch(context.Background(), pluginhostsdk.DispatchRequest{RouteID: "identity.auth.login"})
+	_, err = service.Dispatch(context.Background(), pluginhostsdk.DispatchRequest{RouteID: "identity.admin.invite.codes.get"})
 	require.Error(t, err)
-}
-
-func TestIdentityServiceDispatchesDeclaredAdministrativeRouteThroughBridge(t *testing.T) {
-	bridge := &bridgeStub{response: packagebridgesdk.Response{StatusCode: 200, Body: []byte(`{"code":0,"msg":"操作成功","ts":1,"data":[]}`)}}
-	service := newTestService(t, bridge)
-	capability := make([]byte, 32)
-	_, err := service.Dispatch(context.Background(), pluginhostsdk.DispatchRequest{
-		RouteID: "identity.admin.users.get", BridgeCapability: capability,
-	})
-
-	require.NoError(t, err)
-	require.Equal(t, "identity.admin.users.get", bridge.operation, "a route with no native mode relays to the legacy handler")
 }
 
 func TestNilIdentityServiceHealthIsUnhealthyWithoutPanicking(t *testing.T) {
@@ -226,16 +214,15 @@ func (r *kernelRecorder) ResetTraffic(_ context.Context, request *kernelsubscrib
 	return &kernelsubscriberv1.ResetTrafficResponse{Applied: true, ResetUsers: 1}, nil
 }
 
-// connectedBridge leases storage, hands out route modes and carries the
-// kernel's contracts on its connection, as packagebridgesdk.Client does.
+// connectedBridge leases storage and carries the kernel's contracts on its
+// connection, as packagebridgesdk.Client does.
 type connectedBridge struct {
 	*storageBridge
-	modes map[string]string
-	conn  grpc.ClientConnInterface
+	conn grpc.ClientConnInterface
 }
 
 func (b connectedBridge) GetPackageConfig(context.Context) (packagebridgesdk.PackageConfig, error) {
-	return packagebridgesdk.PackageConfig{Revision: 1, RouteModes: b.modes}, nil
+	return packagebridgesdk.PackageConfig{Revision: 1}, nil
 }
 
 func (b connectedBridge) Conn() grpc.ClientConnInterface { return b.conn }
@@ -256,9 +243,7 @@ func TestIdentityHostResetsThroughKernelSubscriberOverTheBridge(t *testing.T) {
 	t.Cleanup(func() { _ = conn.Close() })
 
 	storage := &storageBridge{path: filepath.Join(t.TempDir(), "kernel.db")}
-	bridge := connectedBridge{storageBridge: storage, conn: conn, modes: map[string]string{
-		native.ResetSubscribeRouteID: "native", native.ResetTrafficRouteID: "native",
-	}}
+	bridge := connectedBridge{storageBridge: storage, conn: conn}
 	host, err := newIdentityHost(bridge, "lease-1", environment(map[string]string{envKEK: testKEK}), t.Logf)
 	require.NoError(t, err)
 	host.Refresh(context.Background())
@@ -291,9 +276,9 @@ func TestIdentityHostResetsThroughKernelSubscriberOverTheBridge(t *testing.T) {
 	require.Equal(t, native.ResetRequestID("reset_traffic", 2, "key-1"), recorder.traffic[0].GetRequestId())
 	require.Equal(t, []uint64{2}, recorder.traffic[0].GetUserIds())
 
-	// The user list relays to the legacy handler while its mode is legacy.
-	dispatchRoute(t, host.Router, native.AdminUsersRouteID, pluginhostsdk.DispatchRequest{Method: "GET"})
-	require.Equal(t, native.AdminUsersRouteID, storage.operation)
+	// The invite codes, which have no native handler, relay to the kernel.
+	dispatchRoute(t, host.Router, "identity.admin.invite.codes.get", pluginhostsdk.DispatchRequest{Method: "GET"})
+	require.Equal(t, "identity.admin.invite.codes.get", storage.operation)
 }
 
 func dispatchRoute(t *testing.T, router *pluginhostsdk.Router, route string, request pluginhostsdk.DispatchRequest) pluginhostsdk.DispatchResponse {

@@ -2,23 +2,14 @@ package handler
 
 import (
 	"encoding/json"
-	"errors"
 	"strconv"
 	"strings"
 
 	"github.com/AnixOps/anix-control/v5/internal/branding"
-	"github.com/AnixOps/anix-control/v5/internal/database"
-	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/service"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
-
-// MFAHandler handles user and admin MFA endpoints.
-type MFAHandler struct {
-	mfaService          *service.MFAService
-	systemConfigService *service.SystemConfigService
-}
 
 const mfaAdminConfigKey = "security.mfa.config"
 
@@ -216,11 +207,11 @@ func normalizeMFAConfig(cfg mfaAdminConfig) mfaAdminConfig {
 	return cfg
 }
 
-func (h *MFAHandler) loadAdminConfig() (mfaAdminConfig, error) {
+func loadMFAAdminConfig(db *gorm.DB) (mfaAdminConfig, error) {
 	cfg := defaultMFAAdminConfig()
 
 	var raw map[string]any
-	if err := h.systemConfigService.GetJSON(mfaAdminConfigKey, &raw); err != nil {
+	if err := service.NewSystemConfigService(db).GetJSON(mfaAdminConfigKey, &raw); err != nil {
 		return cfg, err
 	}
 	if len(raw) == 0 {
@@ -264,28 +255,6 @@ func (h *MFAHandler) loadAdminConfig() (mfaAdminConfig, error) {
 	return normalizeMFAConfig(cfg), nil
 }
 
-func (h *MFAHandler) applyRuntimeConfig(cfg mfaAdminConfig) {
-	h.mfaService.SetConfig(mfaRuntimeConfig(cfg))
-}
-
-func loadMFAAdminConfig(db *gorm.DB) (mfaAdminConfig, error) {
-	return (&MFAHandler{
-		systemConfigService: service.NewSystemConfigService(db),
-	}).loadAdminConfig()
-}
-
-func mfaRuntimeConfig(cfg mfaAdminConfig) *model.MFAConfig {
-	allowedBytes, _ := json.Marshal(cfg.AllowedMethods)
-	return &model.MFAConfig{
-		Enabled:         cfg.Enabled,
-		EnforceForAll:   cfg.Required,
-		EnforceForAdmin: cfg.EnforceForAdmin,
-		AllowedMethods:  string(allowedBytes),
-		TOTPIssuer:      cfg.TOTPIssuer,
-		BackupCodeCount: cfg.BackupCodesCount,
-	}
-}
-
 func mfaAdminConfigResponse(cfg mfaAdminConfig) gin.H {
 	return gin.H{
 		"enabled":            cfg.Enabled,
@@ -301,243 +270,6 @@ func mfaAdminConfigResponse(cfg mfaAdminConfig) gin.H {
 		"allowed_methods":   cfg.AllowedMethods,
 		"totp_issuer":       cfg.TOTPIssuer,
 	}
-}
-
-// NewMFAHandler creates MFA handler.
-func NewMFAHandler() *MFAHandler {
-	db := database.Get()
-	handler := &MFAHandler{
-		mfaService:          service.NewMFAService(db, nil),
-		systemConfigService: service.NewSystemConfigService(db),
-	}
-
-	if cfg, err := handler.loadAdminConfig(); err == nil {
-		handler.applyRuntimeConfig(cfg)
-	}
-
-	return handler
-}
-
-// GetStatus gets MFA status for current user.
-func (h *MFAHandler) GetStatus(c *gin.Context) {
-	userID := c.GetUint("user_id")
-
-	mfa, err := h.mfaService.GetUserMFA(userID)
-	if err != nil {
-		panelError(c, err.Error())
-		return
-	}
-
-	if mfa == nil {
-		panelSuccess(c, gin.H{
-			"enabled":          false,
-			"has_backup_codes": false,
-			"remaining_codes":  0,
-			"last_used":        nil,
-			"enforced":         false,
-		})
-		return
-	}
-
-	remainingCodes, _ := h.mfaService.GetRemainingBackupCodes(userID)
-
-	panelSuccess(c, gin.H{
-		"enabled":          mfa.Enabled,
-		"has_backup_codes": len(mfa.BackupCodes) > 0,
-		"remaining_codes":  remainingCodes,
-		"last_used":        mfa.LastUsed,
-		"last_method":      mfa.LastMethod,
-	})
-}
-
-// SetupTOTP sets up TOTP for current user.
-func (h *MFAHandler) SetupTOTP(c *gin.Context) {
-	userID := c.GetUint("user_id")
-
-	var user model.User
-	if err := database.Get().First(&user, userID).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			panelError(c, "user not found")
-			return
-		}
-		panelError(c, "failed to load user")
-		return
-	}
-
-	setup, err := h.mfaService.SetupTOTP(userID, user.Email)
-	if err != nil {
-		panelError(c, err.Error())
-		return
-	}
-
-	panelSuccess(c, gin.H{
-		"secret":       setup.Secret,
-		"url":          setup.URL,
-		"qr_code":      setup.QRCode,
-		"backup_codes": setup.BackupCodes,
-	})
-}
-
-// EnableTOTP enables TOTP with verification code.
-func (h *MFAHandler) EnableTOTP(c *gin.Context) {
-	userID := c.GetUint("user_id")
-
-	var req struct {
-		Code string `json:"code" binding:"required"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		panelError(c, err.Error())
-		return
-	}
-
-	if err := h.mfaService.EnableTOTP(userID, req.Code); err != nil {
-		panelError(c, err.Error())
-		return
-	}
-
-	panelSuccess(c, gin.H{"message": "MFA enabled successfully"})
-}
-
-// DisableMFA disables MFA with password confirmation.
-func (h *MFAHandler) DisableMFA(c *gin.Context) {
-	userID := c.GetUint("user_id")
-
-	var req struct {
-		Password string `json:"password" binding:"required"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		panelError(c, err.Error())
-		return
-	}
-
-	if err := h.mfaService.DisableMFA(userID, req.Password); err != nil {
-		panelError(c, err.Error())
-		return
-	}
-
-	panelSuccess(c, gin.H{"message": "MFA disabled successfully"})
-}
-
-// VerifyMFA verifies MFA code.
-func (h *MFAHandler) VerifyMFA(c *gin.Context) {
-	userID := c.GetUint("user_id")
-
-	var req struct {
-		Code   string `json:"code" binding:"required"`
-		Method string `json:"method"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		panelError(c, err.Error())
-		return
-	}
-
-	valid, err := h.mfaService.Verify(userID, req.Code, req.Method)
-	if err != nil {
-		panelError(c, err.Error())
-		return
-	}
-
-	if !valid {
-		panelError(c, "invalid code")
-		return
-	}
-
-	panelSuccess(c, gin.H{"message": "verified successfully"})
-}
-
-// RegenerateBackupCodes regenerates backup codes for current user.
-func (h *MFAHandler) RegenerateBackupCodes(c *gin.Context) {
-	userID := c.GetUint("user_id")
-
-	codes, err := h.mfaService.RegenerateBackupCodes(userID)
-	if err != nil {
-		panelError(c, err.Error())
-		return
-	}
-
-	panelSuccess(c, gin.H{"backup_codes": codes})
-}
-
-// GetAdminConfig returns global MFA admin config.
-func (h *MFAHandler) GetAdminConfig(c *gin.Context) {
-	cfg, err := h.loadAdminConfig()
-	if err != nil {
-		panelError(c, err.Error())
-		return
-	}
-
-	h.applyRuntimeConfig(cfg)
-	panelSuccess(c, mfaAdminConfigResponse(cfg))
-}
-
-// UpdateAdminConfig updates and persists MFA admin config.
-func (h *MFAHandler) UpdateAdminConfig(c *gin.Context) {
-	var req map[string]any
-	if err := c.ShouldBindJSON(&req); err != nil {
-		panelError(c, err.Error())
-		return
-	}
-
-	cfg, err := h.loadAdminConfig()
-	if err != nil {
-		panelError(c, err.Error())
-		return
-	}
-
-	if v, ok := boolFromValue(req["enabled"]); ok {
-		cfg.Enabled = v
-	}
-	if v, ok := boolFromValue(req["required"]); ok {
-		cfg.Required = v
-	}
-	if v, ok := boolFromValue(req["enforce_for_all"]); ok {
-		cfg.Required = v
-	}
-	if v, ok := boolFromValue(req["enforce_for_admin"]); ok {
-		cfg.EnforceForAdmin = v
-	}
-	if issuer, ok := req["totp_issuer"].(string); ok && strings.TrimSpace(issuer) != "" {
-		cfg.TOTPIssuer = strings.TrimSpace(issuer)
-	}
-	if v, ok := intFromValue(req["backup_codes_count"]); ok && v > 0 {
-		cfg.BackupCodesCount = v
-	}
-	if v, ok := intFromValue(req["backup_code_count"]); ok && v > 0 {
-		cfg.BackupCodesCount = v
-	}
-	if v, ok := intFromValue(req["max_attempts"]); ok && v > 0 {
-		cfg.MaxAttempts = v
-	}
-	if v, ok := intFromValue(req["lockout_duration"]); ok && v > 0 {
-		cfg.LockoutDuration = v
-	}
-
-	if methods, exists := req["methods"]; exists {
-		parsed := parseMethodsMap(methods)
-		if len(parsed) > 0 {
-			cfg.Methods = cloneMFAMethods(parsed)
-		}
-	}
-	if allowed, exists := req["allowed_methods"]; exists {
-		parsed := parseAllowedMethods(allowed)
-		if len(parsed) > 0 {
-			cfg.Methods = cloneMFAMethods(parsed)
-		}
-	}
-
-	cfg = normalizeMFAConfig(cfg)
-	if err := h.systemConfigService.SetJSON(
-		mfaAdminConfigKey,
-		cfg,
-		"security",
-		"mfa admin config",
-	); err != nil {
-		panelError(c, err.Error())
-		return
-	}
-
-	h.applyRuntimeConfig(cfg)
-	panelSuccess(c, mfaAdminConfigResponse(cfg))
 }
 
 // AdminMFASettings returns the admin MFA configuration as the admin API

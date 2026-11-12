@@ -226,8 +226,19 @@ func (a *storedAccounts) ChangedAfter(ctx context.Context, version uint64, limit
 
 // signingKey returns the key that signs tokens now.
 func (k *storedKeys) signingKey(ctx context.Context) (signingkey.Key, error) {
-	keys, err := k.Load(ctx)
+	store, err := k.keyStore(ctx)
 	if err != nil {
+		return signingkey.Key{}, err
+	}
+	keys, err := store.Load(ctx)
+	if err != nil {
+		return signingkey.Key{}, err
+	}
+	if key, err := signingkey.Signing(keys); err == nil {
+		return key, nil
+	}
+	// A fresh install signs before the next rotation pass creates its key.
+	if keys, err = store.Advance(ctx); err != nil {
 		return signingkey.Key{}, err
 	}
 	return signingkey.Signing(keys)

@@ -613,17 +613,15 @@ The planned `kernel.entitlement.apply.v1` became
     keep in memory. Neither path records an audit
     entry.
 - **Identity leftovers (in place).** All 7 of identity-platform's routes
-  outside group A run natively, proved by `internal/tests/identitycompat`
-  (byte parity and the same Control state, on SQLite and PostgreSQL).
-  identity-platform adopts no kernel table.
+  outside group A run natively. Since the release after 5.0.3 all 23 of its
+  account routes run natively only (Control starts only once identity is
+  finalized): the kernel keeps no legacy handler, and
+  `internal/tests/identitycompat` pins their recorded answers and Control's
+  state, on SQLite and PostgreSQL. identity-platform adopts no kernel table.
   - **Account reads:** the user's profile and dashboard and the
     administrator's user detail, user list and user statistics.
     - The account (email, administrator, staff and ban flags) comes from
-      identity's own store, which is current only while identity is
-      authoritative: these five routes and the two resets
-      (`service.IdentityAccountRoutes`) are native exactly then, like group
-      A, and the rollback returns them to legacy. The cutover does not
-      pause them.
+      identity's own store.
     - The subscriber fields come from `KernelIdentity.GetSubscriber`
       (`kernel.identity.v1`), for one user per call, never from a view:
       plan, traffic and expiry, and the subscription token and proxy uuid
@@ -1158,7 +1156,7 @@ shapes; the first extraction step adopts the existing `v2_*` tables in place.
 | wireguard (T12) | 1 | peer lifecycle, generated config | package migration (names not fixed) | Needs anix-agent revival |
 | protocol-runtime (T12) | 20 | protocol composition, runtime-adapter selection, Agent task/monitor | package migration (names not fixed) | Needs anix-agent revival |
 | machine-telemetry, nftables-forward, gost-mesh, nat-egress (T12) | 5 / 0 / 3 / 0 | keep runtime semantics; add v2 entrypoint, generation, `RuntimeStatus` reports | — | Agent-target runtime packages |
-| identity-platform | 26 | group A switches with the identity cutover | — | 23 native-flagged (section 3.4); the user's two invite routes moved to affiliate; the administrator's 3 invite code routes are bridged; the user's own subscription reset is group A |
+| identity-platform | 26 | group A switched with the identity cutover | — | 23 native, natively only since identity is finalized (section 3.4); the user's two invite routes moved to affiliate; the administrator's 3 invite code routes are bridged; the user's own subscription reset is group A |
 | platform | 12 | system configuration, audit, backup | — | Moved from identity-platform after v4.0.0; bridged |
 | affiliate | 10 | invite codes, commissions, withdrawals, invite statistics and configuration | — | Moved from identity-platform after v4.0.0; all native-flagged (section 3.4) |
 

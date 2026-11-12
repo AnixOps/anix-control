@@ -74,7 +74,6 @@ func TestTheDefaultVerifierRefusesLegacyTokensAfterFinalize(t *testing.T) {
 	require.NoError(t, err)
 
 	RefuseLegacyTokens()
-	require.True(t, LegacyTokensRefused())
 	_, err = Default().Verify(context.Background(), token)
 	require.ErrorIs(t, err, ErrInvalidToken)
 }

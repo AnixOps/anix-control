@@ -1,8 +1,6 @@
 package service
 
 import (
-	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -47,19 +45,6 @@ func NewLoginRateLimiter() *LoginRateLimiter {
 		nowFunc: time.Now,
 		states:  make(map[string]loginRateLimitState),
 	}
-}
-
-var globalLoginRateLimiter = NewLoginRateLimiter()
-
-func GetLoginRateLimiter() *LoginRateLimiter {
-	return globalLoginRateLimiter
-}
-
-// ResetLoginRateLimiterForTest forgets every login, registration and
-// subscription reset attempt.
-func ResetLoginRateLimiterForTest() {
-	globalLoginRateLimiter = NewLoginRateLimiter()
-	globalSubscriptionResetLimiter = NewLoginRateLimiter()
 }
 
 func ResolveLoginRateLimitOptions(cfg *config.Config) LoginRateLimitOptions {
@@ -128,23 +113,6 @@ func ResolveRegisterRateLimitOptions(cfg *config.Config) LoginRateLimitOptions {
 		Lockout:      lockout,
 		CleanupAfter: window + lockout + 5*time.Minute,
 	}
-}
-
-func BuildLoginRateLimitKey(email, ip string) string {
-	normalizedEmail := strings.ToLower(strings.TrimSpace(email))
-	normalizedIP := strings.TrimSpace(ip)
-	if normalizedIP == "" {
-		normalizedIP = "unknown"
-	}
-	return fmt.Sprintf("login|%s|%s", normalizedEmail, normalizedIP)
-}
-
-func BuildRegisterRateLimitKey(ip string) string {
-	normalizedIP := strings.TrimSpace(ip)
-	if normalizedIP == "" {
-		normalizedIP = "unknown"
-	}
-	return fmt.Sprintf("register|%s", normalizedIP)
 }
 
 func (l *LoginRateLimiter) Check(key string, options LoginRateLimitOptions) (bool, time.Duration) {

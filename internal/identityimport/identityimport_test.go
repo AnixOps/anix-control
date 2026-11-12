@@ -18,7 +18,6 @@ import (
 	"github.com/AnixOps/anix-control/sdk/packagebridgesdk"
 	"github.com/AnixOps/anix-control/sdk/packagestoresdk"
 	"github.com/AnixOps/anix-control/v5/internal/model"
-	"github.com/AnixOps/anix-control/v5/internal/service"
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/bcrypt"
@@ -212,13 +211,11 @@ func TestDeltaImportCarriesMFAChangesAndDeletions(t *testing.T) {
 
 	f.importer.Now = time.Now
 	// User 1 enables MFA (only v2_user_mfa changes), user 2 disables it
-	// (the legacy service deletes the row and touches the user), and user 4
+	// (its row is deleted and the user touched), and user 4
 	// is deleted.
 	require.NoError(t, f.kernel.Create(&model.UserMFA{UserID: 1, Enabled: true, TOTPSecret: "KRSXG5CTMVRXEZLU"}).Error)
-	hash, err := bcrypt.GenerateFromPassword([]byte("secret1"), bcrypt.MinCost)
-	require.NoError(t, err)
-	require.NoError(t, f.kernel.Model(&model.User{}).Where("id = ?", 2).UpdateColumn("password", string(hash)).Error)
-	require.NoError(t, service.NewMFAService(f.kernel, nil).DisableMFA(2, "secret1"))
+	require.NoError(t, f.kernel.Where("user_id = ?", 2).Delete(&model.UserMFA{}).Error)
+	require.NoError(t, f.kernel.Model(&model.User{}).Where("id = ?", 2).Update("updated_at", time.Now()).Error)
 	require.NoError(t, f.kernel.Delete(&model.User{}, 4).Error)
 
 	delta, err := f.importer.Run(ctx, true)
@@ -269,8 +266,13 @@ func TestImportAccountHandsOneAccountToAnAuthoritativeIdentity(t *testing.T) {
 	require.Equal(t, authority.State, stored.State)
 	require.Equal(t, authority.Checkpoint, stored.Checkpoint, "the import state is not touched")
 
+	// A failed attempt (the identity host still starting) is retried; a
+	// request that ended is not.
 	f.identity.failOn = f.identity.calls + 1
-	require.Error(t, f.importer.ImportAccount(ctx, model.User{ID: 8, Email: "other@example.test", Password: string(hash), IsAdmin: 1}, AccountUUID(8)))
+	require.NoError(t, f.importer.ImportAccount(ctx, model.User{ID: 8, Email: "other@example.test", Password: string(hash), IsAdmin: 1}, AccountUUID(8)))
+	ended, cancel := context.WithCancel(ctx)
+	cancel()
+	require.Error(t, f.importer.ImportAccount(ended, model.User{ID: 9, Email: "third@example.test", Password: string(hash), IsAdmin: 1}, AccountUUID(9)))
 	require.ErrorIs(t, (&Importer{}).ImportAccount(ctx, user, AccountUUID(7)), ErrNotInitialized)
 	var runner *Runner
 	require.ErrorIs(t, runner.ImportAccount(ctx, user, AccountUUID(7)), ErrNotInitialized)

@@ -43,8 +43,6 @@ type Gateway struct {
 	// Metrics receives one observation per request; nil selects
 	// DefaultGatewayMetrics.
 	Metrics *GatewayMetrics
-	// Freeze pauses routes; nil selects DefaultRouteFreeze.
-	Freeze *RouteFreeze
 	// Sealer seals the node secrets of the routes in
 	// config/node-secret-fields.json and expands the handles shown in their
 	// answers; nil selects sealedsecrets.DefaultSealer.
@@ -73,12 +71,6 @@ func (g Gateway) serve(c *gin.Context) (Route, string) {
 	if g.Dispatcher == nil {
 		return route, writeGatewayError(c, http.StatusBadGateway, codePluginHostUnavailable, "plugin host is unavailable")
 	}
-	release, admitted := g.freeze().enter(route.PackageID, route.PackageRoute)
-	if !admitted {
-		c.Header("Retry-After", "5")
-		return route, writeGatewayError(c, http.StatusServiceUnavailable, codePackageRouteFrozen, "package route is paused for maintenance")
-	}
-	defer release()
 	body, err := readRequestBody(c.Request.Body, g.bodyLimit())
 	if err != nil {
 		return route, writeGatewayError(c, http.StatusRequestEntityTooLarge, codePluginRequestTooLarge, "plugin request body exceeds its limit")
@@ -206,13 +198,6 @@ func (g Gateway) metrics() *GatewayMetrics {
 		return DefaultGatewayMetrics()
 	}
 	return g.Metrics
-}
-
-func (g Gateway) freeze() *RouteFreeze {
-	if g.Freeze == nil {
-		return DefaultRouteFreeze()
-	}
-	return g.Freeze
 }
 
 func (g Gateway) resolve(ctx context.Context, method, requestPath string) (Route, error) {

@@ -28,8 +28,6 @@ const KIND_ICONS = {
   ca_expiring: ShieldAlert,
   node_secrets_split_stalled: Hourglass,
   node_secrets_finalize_interrupted: Hourglass,
-  identity_import_stalled: Hourglass,
-  identity_cutover_not_finalized: Hourglass,
   builtin_package_invalid: ShieldAlert,
   builtin_package_failed: ServerCog,
   panel_certificate_expiring: FileKey,
@@ -46,7 +44,7 @@ export const KERNEL_ALERT_KINDS = Object.freeze(Object.keys(KIND_ICONS))
 export function alertIcon(alert) {
   if (KIND_ICONS[alert?.kind]) return KIND_ICONS[alert.kind]
   if (alert?.subject_kind === 'node') return ServerOff
-  if (alert?.subject_kind === 'node_secrets' || alert?.subject_kind === 'identity') return ServerCog
+  if (alert?.subject_kind === 'node_secrets') return ServerCog
   return CalendarClock
 }
 
@@ -96,14 +94,6 @@ export function alertText(alert, { t, format }) {
     case 'node_secrets_finalize_interrupted':
       title = t(`${base}.nodeSecretsInterrupted.title`, { table: text(detail.table) || text(alert.subject) })
       hint = t(`${base}.nodeSecretsInterrupted.hint`, { date: date(detail.since) })
-      break
-    case 'identity_import_stalled':
-      title = t(`${base}.identityImport.title`)
-      hint = t(`${base}.identityImport.hint`, { date: date(detail.since) })
-      break
-    case 'identity_cutover_not_finalized':
-      title = t(`${base}.identityCutover.title`)
-      hint = t(`${base}.identityCutover.hint`, { date: date(detail.since) })
       break
     case 'builtin_package_invalid':
     case 'builtin_package_failed': {

@@ -84,11 +84,3 @@ func TestAliveReportRecordsTheUsersSeenOnline(t *testing.T) {
 	}))
 	require.Equal(t, []uint{1, 3}, seenOnline(t, db))
 }
-
-// Deleting a user drops their time.
-func TestDeletingAUserDropsTheirActivity(t *testing.T) {
-	svc, db := activityService(t)
-	require.NoError(t, svc.UpdateOnlineStatus(model.ServerType("vmess"), 7, map[uint][]string{1: {"198.51.100.1"}, 2: {"198.51.100.2"}}))
-	require.NoError(t, (&UserService{db: db}).Delete(1))
-	require.Equal(t, []uint{2}, seenOnline(t, db))
-}

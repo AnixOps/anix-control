@@ -175,17 +175,12 @@ func PackageReleaseAtLeast(version, minimum string) bool {
 // installed release version that do not run their legacy handler, with
 // their mode (native). It is what the package bridge hands the package
 // host:
-//   - identity group A follows the identity authority
-//     (ResolvePackageRouteModes);
 //   - a route of the rehearsed list is native when the installed release is
 //     at least the package's min_version and the extraction map still lists
 //     the route as native-flagged for the package;
 //   - every other route is legacy and is not named.
 func ResolveEffectivePackageRouteModes(db *gorm.DB, packageID, version string) (map[string]string, error) {
-	modes, err := ResolvePackageRouteModes(db, packageID)
-	if err != nil {
-		return nil, err
-	}
+	modes := map[string]string{}
 	defaults, err := LoadPackageRouteDefaults()
 	if err != nil {
 		return nil, err

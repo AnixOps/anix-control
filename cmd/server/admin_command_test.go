@@ -273,12 +273,10 @@ func TestAdminClaimLinkProcess(t *testing.T) {
 	assert.NotContains(t, stderr, "anixclaim_")
 	assert.NotContains(t, stdout, "AnixOps Control v", "the banner goes to stderr")
 
-	// Claim it, then the command refuses with status 1.
+	// Once an administrator exists the command refuses with status 1.
 	db, err := database.Open(&config.DatabaseConfig{Driver: "sqlite", Database: databaseFile, LogLevel: "silent"})
 	require.NoError(t, err)
-	_, err = (&adminclaim.Claimer{DB: db, Cost: bcrypt.MinCost}).Claim(context.Background(),
-		adminclaim.Request{Token: token, Email: "owner@example.com", Password: "secret-pass-12"})
-	require.NoError(t, err)
+	require.NoError(t, db.Create(&model.User{Email: "owner@example.com", Password: model.UnusableLegacyPassword, UUID: "u-owner", Token: "t-owner", IsAdmin: 1}).Error)
 	require.NoError(t, database.CloseHandle(db))
 
 	stdout, stderr, code = child("admin claim-link")

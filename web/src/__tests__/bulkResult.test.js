@@ -14,14 +14,14 @@ describe('readBulkResult', () => {
       { id: 5, ok: false, error: { code: 'forbidden_self', message: 'cannot ban yourself' } },
       { id: 8, ok: false, error: { code: 'not_found', message: 'user not found' } },
       { id: 9, ok: true },
-      { id: 11, ok: false, error: { code: 'package_route_frozen', message: 'the route is frozen' } }
+      { id: 11, ok: false, error: { code: 'plugin_host_unavailable', message: 'plugin host is unavailable' } }
     ]
   }
 
   it('splits the requested ids into done and failed, in the order asked', () => {
     const outcome = readBulkResult(answer, [3, 5, 8, 9, 11])
     expect(outcome.done).toEqual([3, 9])
-    expect(outcome.failed.map(entry => [entry.id, entry.code])).toEqual([[5, 'forbidden_self'], [8, 'not_found'], [11, 'package_route_frozen']])
+    expect(outcome.failed.map(entry => [entry.id, entry.code])).toEqual([[5, 'forbidden_self'], [8, 'not_found'], [11, 'plugin_host_unavailable']])
     expect(outcome.failedIds).toEqual([5, 8, 11])
   })
 
@@ -55,7 +55,7 @@ describe('countBulkFailures', () => {
     const rows = countBulkFailures([
       { id: 1, code: 'failed', message: 'first' },
       { id: 2, code: 'not_found', message: '' },
-      { id: 3, code: 'package_route_frozen', message: 'frozen' },
+      { id: 3, code: 'plugin_host_unavailable', message: 'unavailable' },
       { id: 4, code: 'not_found', message: '' }
     ])
     expect(rows).toEqual([

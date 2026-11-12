@@ -198,15 +198,11 @@ func (m *Monitor) reconcile(ctx context.Context, now time.Time, result ScanResul
 }
 
 // renotifyAfter is how long an alert waits between notifications: the
-// configured interval; a quarter of it when critical; seven times it for
-// phase alerts, which are operator-paced rollouts.
+// configured interval; a quarter of it when critical.
 func (m *Monitor) renotifyAfter(row model.KernelAlert) time.Duration {
 	interval := m.Settings.RenotifyInterval
 	if interval <= 0 {
 		interval = config.DefaultAlertRenotifyInterval
-	}
-	if phaseKinds[row.Kind] {
-		return interval * phaseRenotifyFactor
 	}
 	if row.Severity == model.KernelAlertCritical {
 		return interval / 4

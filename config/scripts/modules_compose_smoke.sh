@@ -7,8 +7,7 @@
 # package bridge -> kernel. The identity package is built and signed with a
 # throwaway key that the kernel is told to trust. The administrator is the
 # first one, created through the claim link (`anix-control admin claim-link`
-# in the container, then POST /api/v5/claim). It then runs the identity
-# cutover acceptance (identity_cutover_acceptance.sh), and stops the identity
+# in the container, then POST /api/v5/claim). It then stops the identity
 # module: new logins fail while issued identity tokens still verify.
 #
 # Required environment:
@@ -132,17 +131,15 @@ for _ in $(seq 1 40); do
   sleep 3
 done
 test "${logged_in}" = 1 || { echo "login after the module restart failed: ${response:-}"; exit 1; }
-
-BASE_URL=http://127.0.0.1:8080 ADMIN_EMAIL=admin@example.test ADMIN_PASSWORD=ModuleSmoke-0123456789 \
-  IDENTITY_TOKEN_FILE="${work}/identity-token" bash "${repo_root}/config/scripts/identity_cutover_acceptance.sh"
+token="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["token"])' <<<"${response}")"
 
 echo "== identity module down: new logins fail, issued identity tokens still verify"
 "${compose[@]}" stop identity >/dev/null
 status="$(curl -sS -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' \
   -d '{"email":"admin@example.test","password":"ModuleSmoke-0123456789"}' http://127.0.0.1:8080/api/v2/login)"
 test "${status}" != 200 || { echo "login succeeded without the identity module"; exit 1; }
-status="$(curl -sS -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $(cat "${work}/identity-token")" \
-  http://127.0.0.1:8080/api/v4/kernel/identity)"
+status="$(curl -sS -o /dev/null -w '%{http_code}' -H "Authorization: Bearer ${token}" \
+  http://127.0.0.1:8080/api/v3/plugins)"
 test "${status}" = 200 || { echo "an identity token was refused while the module was down: ${status}"; exit 1; }
 "${compose[@]}" start identity >/dev/null
 logged_in=0

@@ -1,8 +1,6 @@
 package service
 
 import (
-	"errors"
-	"fmt"
 	"strings"
 
 	"github.com/AnixOps/anix-control/v5/internal/config"
@@ -34,30 +32,6 @@ func ResolveRegistrationPolicy(cfg *config.Config) RegistrationPolicy {
 	return policy
 }
 
-func ValidateRegistrationEmail(email string, policy RegistrationPolicy) error {
-	domain, err := emailDomain(email)
-	if err != nil {
-		return err
-	}
-
-	if len(policy.BlockedEmailDomains) > 0 && domainMatchesAny(domain, policy.BlockedEmailDomains) {
-		return fmt.Errorf("email domain %s is not allowed", domain)
-	}
-	if len(policy.AllowedEmailDomains) > 0 && !domainMatchesAny(domain, policy.AllowedEmailDomains) {
-		return fmt.Errorf("email domain %s is not in the allowlist", domain)
-	}
-	return nil
-}
-
-func emailDomain(email string) (string, error) {
-	normalized := strings.ToLower(strings.TrimSpace(email))
-	parts := strings.Split(normalized, "@")
-	if len(parts) != 2 || strings.TrimSpace(parts[0]) == "" || strings.TrimSpace(parts[1]) == "" {
-		return "", errors.New("invalid email address")
-	}
-	return strings.TrimPrefix(parts[1], "."), nil
-}
-
 func normalizeDomainList(items []string) []string {
 	if len(items) == 0 {
 		return nil
@@ -78,13 +52,4 @@ func normalizeDomainList(items []string) []string {
 		out = append(out, domain)
 	}
 	return out
-}
-
-func domainMatchesAny(domain string, patterns []string) bool {
-	for _, pattern := range patterns {
-		if domain == pattern || strings.HasSuffix(domain, "."+pattern) {
-			return true
-		}
-	}
-	return false
 }

@@ -37,7 +37,7 @@ function kernelAlerts(now) {
     ],
     resolved: [
       alert(21, 'module_certificate_expiring', 'warning', 'module', 'identity-platform#4c1d0e7a', { package_id: 'identity-platform', not_after: iso(now, -1 * DAY_MS), expired: false }, { status: 'resolved', resolved_at: iso(now, -3 * 3_600_000) }),
-      alert(20, 'identity_import_stalled', 'warning', 'identity', 'authority', { state: 'importing', since: iso(now, -9 * DAY_MS), stuck_after_hours: 72 }, { status: 'resolved', resolved_at: iso(now, -4 * DAY_MS) })
+      alert(20, 'builtin_package_invalid', 'warning', 'package', 'plan', { package_id: 'plan' }, { status: 'resolved', resolved_at: iso(now, -4 * DAY_MS) })
     ]
   }
 }

@@ -6,12 +6,17 @@ the kernel. Login, registration, credentials, MFA and invite codes move into
 the identity module (`identity-platform`), the first network module on the
 [module runtime](module-runtime.md).
 
+Since the release after 5.0.3 the migration is complete: Control starts only
+on a finalized identity, the kernel's legacy handlers are gone, and the
+import, cutover, rollback and finalize endpoints described in the plan below
+are removed (they ran on 5.0.3; [UPGRADE.md](../UPGRADE.md)).
+
 ## Today
 
-- **Routing.** `identity-platform` is a pass-through host. Its 45 routes go
-  through `internal/identitybridge` back into the kernel handlers
-  `handler/auth.go`, `user.go`, `admin.go`, `mfa.go`, `invite.go` and
-  `system*.go`.
+- **Routing.** `identity-platform` serves its 23 account routes natively
+  only; the kernel keeps no login, MFA or user administration handler. The
+  administrator's invite codes, which have no native handler, still pass
+  through `internal/identitybridge` to the kernel's.
 - **Tokens.** HS256 with a shared secret (`internal/utils/jwt.go`), checked in
   one place, `internal/authn` (step 8):
   - the algorithm is pinned to HS256, and `iss=v2board`, `exp` and `iat` are
@@ -123,11 +128,16 @@ lists that read the `v2_user` projection.
   codes and pushes them with `ImportAccounts`. The import is checkpointed and
   can repeat as `updated_at` deltas. Identity never reads `v2_user.password`.
 - **Authority state machine.** `kernel → importing → identity → finalized`.
-  - **Before finalize,** identity mirrors credentials back into the legacy
+  - **Before finalize,** identity mirrored credentials back into the legacy
     tables (`LegacyCredentialMirror`), so switching the routes back to
-    `legacy` is an instant rollback.
+    `legacy` was an instant rollback.
   - **Finalize** stops the mirror, sets `v2_user.password` to a sentinel,
     deletes `v2_user_mfa` rows and disables HS256.
+  - **Since the release after 5.0.3** Control starts only on a finalized
+    database (`service.RequireIdentityFinalized`; one without users is
+    recorded as finalized at start), and the cutover API is removed: the
+    import, cutover, rollback and finalize ran on 5.0.3
+    ([UPGRADE.md](../UPGRADE.md)).
 - **Settings.** The `auth.*` settings (registration policy, login limits, MFA
   configuration) move into the identity installation configuration. They are
   seeded once from `GetIdentitySettings`.
@@ -165,7 +175,11 @@ instance's generation.
 
 ## Routes
 
-- **Group A — moves to identity, switched together at cutover:**
+All 23 routes below are native only since the release after 5.0.3. Their
+answers are pinned in `internal/tests/identitycompat/testdata`, recorded
+while CI still proved them equal to the kernel's legacy handlers.
+
+- **Group A — moved to identity, switched together at cutover:**
   - login and register;
   - user MFA (6) and admin MFA configuration (2);
   - admin user create, update, ban, unban and delete;
@@ -191,9 +205,6 @@ instance's generation.
   only the subscriber, through `KernelSubscriber.ResetTraffic` and
   `ResetCredentials`.
 
-  The account reads and the resets (`service.IdentityAccountRoutes`) are
-  native exactly while identity is authoritative, like group A, and the
-  rollback returns them to legacy. They are not paused at the cutover.
 - **Moved to other packages (done, step 7):**
   - system configuration, audit and backup (12 routes) → new package
     `platform`;
@@ -418,11 +429,12 @@ expired (Control).
         finalize) and hands the account to identity with a one-account
         `ImportAccounts`, undoing the claim when identity refuses.
 13. End-to-end acceptance on Compose and kind (in place).
-    - `config/scripts/identity_cutover_acceptance.sh` drives the whole move
-      against a running Control.
-    - The kind smoke runs it against two identity replicas.
-    - The Compose smoke runs it, then checks that issued tokens outlive the
-      identity module.
+    - The cutover acceptance script drove the whole move until the release
+      after 5.0.3 removed the cutover; the Compose and kind smokes now claim
+      the first administrator and log in through the remote identity
+      module (two replicas on kind).
+    - The Compose smoke checks that issued tokens outlive the identity
+      module.
 14. The routes outside group A (in place).
     - **Account reads.** The profile, the dashboard and the admin user
       detail are native: the account from identity's store, the subscriber

@@ -106,14 +106,6 @@ func (s *SystemConfigService) GetJSON(key string, v any) error {
 	return json.Unmarshal([]byte(value), v)
 }
 
-func (s *SystemConfigService) SetJSON(key string, v any, group, remark string) error {
-	data, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	return s.Set(key, string(data), "json", group, remark)
-}
-
 func (s *SystemConfigService) Delete(key string) error {
 	return s.db.Where("key = ?", key).Delete(&model.SystemConfig{}).Error
 }

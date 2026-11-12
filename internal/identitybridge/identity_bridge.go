@@ -218,38 +218,13 @@ func NewAllowlist(cfg *config.Config) (*packagebridge.Allowlist, error) {
 	if cfg == nil {
 		return nil, errors.New("identity package bridge configuration is required")
 	}
-	authHandler := handler.NewAuthHandler(cfg)
-	userHandler := handler.NewUserHandler()
-	adminHandler := handler.NewAdminHandler()
-	mfaHandler := handler.NewMFAHandler()
 	inviteCodeHandler := handler.NewInviteCodeAdminHandler()
+	// identity-platform's routes are native; only the invite codes, which
+	// have no native handler, still run the kernel's.
 	handlers := map[string]gin.HandlerFunc{
-		"identity.auth.login":                            authHandler.Login,
-		"identity.auth.register":                         authHandler.Register,
-		"identity.user.profile.get":                      userHandler.GetProfile,
-		"identity.user.dashboard.get":                    userHandler.GetDashboard,
-		"identity.admin.users.post":                      adminHandler.CreateUser,
-		"identity.admin.users.get":                       adminHandler.GetUserList,
-		"identity.admin.users.stats.get":                 adminHandler.GetUserStats,
-		"identity.admin.users.id.get":                    adminHandler.GetUser,
-		"identity.admin.users.id.put":                    adminHandler.UpdateUser,
-		"identity.admin.users.id.delete":                 adminHandler.DeleteUser,
-		"identity.admin.users.id.ban.post":               adminHandler.BanUser,
-		"identity.admin.users.id.unban.post":             adminHandler.UnbanUser,
-		"identity.admin.users.id.reset_traffic.post":     adminHandler.ResetUserTraffic,
-		"identity.admin.users.id.reset_subscribe.post":   adminHandler.ResetUserSubscribe,
-		"identity.user.mfa.status.get":                   mfaHandler.GetStatus,
-		"identity.user.mfa.totp.setup.post":              mfaHandler.SetupTOTP,
-		"identity.user.mfa.totp.enable.post":             mfaHandler.EnableTOTP,
-		"identity.user.mfa.disable.post":                 mfaHandler.DisableMFA,
-		"identity.user.mfa.verify.post":                  mfaHandler.VerifyMFA,
-		"identity.user.mfa.backup_codes.regenerate.post": mfaHandler.RegenerateBackupCodes,
-		"identity.user.subscription.reset.post":          userHandler.ResetSubscription,
-		"identity.admin.mfa.config.get":                  mfaHandler.GetAdminConfig,
-		"identity.admin.mfa.config.put":                  mfaHandler.UpdateAdminConfig,
-		"identity.admin.invite.codes.get":                inviteCodeHandler.ListCodes,
-		"identity.admin.invite.codes.post":               inviteCodeHandler.GenerateCodes,
-		"identity.admin.invite.codes.id.delete":          inviteCodeHandler.RevokeCode,
+		"identity.admin.invite.codes.get":       inviteCodeHandler.ListCodes,
+		"identity.admin.invite.codes.post":      inviteCodeHandler.GenerateCodes,
+		"identity.admin.invite.codes.id.delete": inviteCodeHandler.RevokeCode,
 	}
 	operations := make([]packagebridge.Operation, 0, len(handlers))
 	for routeID, routeHandler := range handlers {

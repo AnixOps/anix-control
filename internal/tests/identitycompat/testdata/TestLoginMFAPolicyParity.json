@@ -1,0 +1,5 @@
+{
+"enforced_for_admins_only": {"status":200,"body":{"code":0,"data":{"email":"admin@example.test","methods":["totp"],"mfa_enrollment_required":true,"mfa_methods":["totp"],"mfa_setup_required":true,"user_id":1},"msg":"操作成功"}},
+"enrollment_required": {"status":200,"body":{"code":0,"data":{"email":"member@example.test","methods":["totp"],"mfa_enrollment_required":true,"mfa_methods":["totp"],"mfa_setup_required":true,"user_id":2},"msg":"操作成功"}},
+"members_pass_when_only_admins_are_enforced": {"status":200,"body":{"code":0,"data":{"email":"member@example.test","is_admin":false,"permission_mode":"authoritative","permissions":[],"restricted_plugins":[],"token":"\u003cmasked\u003e","user_id":2},"msg":"操作成功"}}
+}

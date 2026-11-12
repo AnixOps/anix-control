@@ -47,6 +47,9 @@ func bootstrapDatabase(ctx context.Context, cfg *config.Config) error {
 	if err := nodesecrets.RequireFinalized(db); err != nil {
 		return err
 	}
+	if err := service.RequireIdentityFinalized(db); err != nil {
+		return err
+	}
 	if _, err := migrations.Migrate(ctx, db, migrations.Options{ProgramVersion: version, Logf: log.Printf, BeforeMigrate: preMigrationBackup(log.Printf)}); err != nil {
 		return fmt.Errorf("database schema: %w", err)
 	}
@@ -63,6 +66,9 @@ func bootstrapDatabase(ctx context.Context, cfg *config.Config) error {
 	}
 	if err := nodesecrets.EnsureStateRows(db); err != nil {
 		return fmt.Errorf("seed the node secret split state: %w", err)
+	}
+	if err := service.EnsureIdentityFinalized(db); err != nil {
+		return fmt.Errorf("record identity as finalized: %w", err)
 	}
 	if err := ensureModulePKI(ctx, cfg, db); err != nil {
 		return err

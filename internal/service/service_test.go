@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
-	"github.com/AnixOps/anix-control/v5/internal/authn"
 	"github.com/AnixOps/anix-control/v5/internal/cache"
 	"github.com/AnixOps/anix-control/v5/internal/config"
 	"github.com/AnixOps/anix-control/v5/internal/database"
@@ -21,7 +20,6 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/nodesecrets"
 	"github.com/AnixOps/anix-control/v5/internal/subscriber"
 	"github.com/AnixOps/anix-control/v5/internal/tests/testutil"
-	"github.com/AnixOps/anix-control/v5/internal/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -175,165 +173,6 @@ func TestServiceTestDatabasePathIsIsolated(t *testing.T) {
 func (s *ServiceTestSuite) SetupTest() {
 	// 清理数据（自动发现所有表）
 	testutil.CleanupDB(database.Get())
-}
-
-// AuthServiceTestSuite 认证服务测试套件
-type AuthServiceTestSuite struct {
-	ServiceTestSuite
-}
-
-func (s *AuthServiceTestSuite) TestRegister_Success() {
-	svc := NewAuthService()
-	token, user, err := svc.RegisterWithInvite("test@example.com", "password123", "", s.cfg)
-
-	assert.NoError(s.T(), err)
-	assert.NotEmpty(s.T(), token)
-	assert.NotNil(s.T(), user)
-	assert.Equal(s.T(), "test@example.com", user.Email)
-}
-
-func (s *AuthServiceTestSuite) TestRegister_DuplicateEmail() {
-	svc := NewAuthService()
-
-	// 第一次注册
-	_, _, err := svc.RegisterWithInvite("dup@example.com", "password123", "", s.cfg)
-	assert.NoError(s.T(), err)
-
-	// 第二次注册相同邮箱
-	_, _, err = svc.RegisterWithInvite("dup@example.com", "password456", "", s.cfg)
-	assert.Error(s.T(), err)
-	assert.Contains(s.T(), err.Error(), "该邮箱已被注册")
-}
-
-func (s *AuthServiceTestSuite) TestRegister_DisabledByPolicy() {
-	svc := NewAuthService()
-	disabled := false
-	cfg := *s.cfg
-	cfg.Auth.Registration.Enabled = &disabled
-
-	_, _, err := svc.RegisterWithInvite("closed@example.com", "password123", "", &cfg)
-
-	assert.Error(s.T(), err)
-	assert.Contains(s.T(), err.Error(), "registration is disabled")
-}
-
-func (s *AuthServiceTestSuite) TestRegister_RejectsEmailOutsideAllowlist() {
-	svc := NewAuthService()
-	cfg := *s.cfg
-	cfg.Auth.Registration.AllowedEmailDomains = []string{"example.com"}
-
-	_, _, err := svc.RegisterWithInvite("user@other.test", "password123", "", &cfg)
-
-	assert.Error(s.T(), err)
-	assert.Contains(s.T(), err.Error(), "not in the allowlist")
-}
-
-func (s *AuthServiceTestSuite) TestRegisterWithInvite_ConsumesInviteCode() {
-	svc := NewAuthService()
-	cfg := *s.cfg
-	cfg.Auth.Registration.RequireInvite = true
-
-	inviter := &model.User{
-		Email:    "inviter@example.com",
-		Password: "hash",
-		Token:    "inviter-token",
-		UUID:     "inviter-uuid",
-	}
-	assert.NoError(s.T(), database.Get().Create(inviter).Error)
-
-	invite := &model.InviteCode{
-		Code:   "INVITE123",
-		UserID: &inviter.ID,
-		Status: 0,
-	}
-	assert.NoError(s.T(), database.Get().Create(invite).Error)
-
-	_, user, err := svc.RegisterWithInvite("invited@example.com", "password123", "INVITE123", &cfg)
-
-	assert.NoError(s.T(), err)
-	assert.NotNil(s.T(), user)
-	if assert.NotNil(s.T(), user.InviteUserID) {
-		assert.Equal(s.T(), inviter.ID, *user.InviteUserID)
-	}
-
-	var used model.InviteCode
-	assert.NoError(s.T(), database.Get().First(&used, invite.ID).Error)
-	assert.Equal(s.T(), 1, used.Status)
-	if assert.NotNil(s.T(), used.UsedBy) {
-		assert.Equal(s.T(), user.ID, *used.UsedBy)
-	}
-	assert.NotNil(s.T(), used.UsedAt)
-}
-
-func (s *AuthServiceTestSuite) TestLogin_Success() {
-	svc := NewAuthService()
-
-	// 先注册
-	_, _, err := svc.RegisterWithInvite("login@example.com", "password123", "", s.cfg)
-	assert.NoError(s.T(), err)
-
-	// 登录
-	user, err := svc.Authenticate("login@example.com", "password123")
-	assert.NoError(s.T(), err)
-	assert.NotNil(s.T(), user)
-
-	token, err := svc.IssueToken(user, s.cfg)
-	assert.NoError(s.T(), err)
-	assert.NotEmpty(s.T(), token)
-}
-
-func (s *AuthServiceTestSuite) TestLogin_WrongPassword() {
-	svc := NewAuthService()
-
-	// 先注册
-	_, _, err := svc.RegisterWithInvite("wrongpass@example.com", "password123", "", s.cfg)
-	assert.NoError(s.T(), err)
-
-	// 使用错误密码登录
-	_, err = svc.Authenticate("wrongpass@example.com", "wrongpassword")
-	assert.Error(s.T(), err)
-	assert.Contains(s.T(), err.Error(), "用户不存在或密码错误")
-}
-
-func (s *AuthServiceTestSuite) TestLogin_UserNotFound() {
-	svc := NewAuthService()
-
-	_, err := svc.Authenticate("nonexistent@example.com", "password123")
-	assert.Error(s.T(), err)
-	assert.Contains(s.T(), err.Error(), "用户不存在或密码错误")
-}
-
-func (s *AuthServiceTestSuite) TestLogin_BannedUser() {
-	svc := NewAuthService()
-
-	// 注册用户
-	_, user, _ := svc.RegisterWithInvite("banned@example.com", "password123", "", s.cfg)
-
-	// 封禁用户
-	database.Get().Model(user).Update("banned", 1)
-
-	// 尝试登录
-	_, err := svc.Authenticate("banned@example.com", "password123")
-	assert.Error(s.T(), err)
-	assert.Contains(s.T(), err.Error(), "用户已被封禁")
-}
-
-func (s *AuthServiceTestSuite) TestLogin_ExpiredUser() {
-	svc := NewAuthService()
-
-	_, user, err := svc.RegisterWithInvite("expired-login@example.com", "password123", "", s.cfg)
-	assert.NoError(s.T(), err)
-
-	expiredAt := time.Now().Add(-time.Hour).Unix()
-	assert.NoError(s.T(), database.Get().Model(user).Update("expired_at", expiredAt).Error)
-
-	_, err = svc.Authenticate("expired-login@example.com", "password123")
-	assert.Error(s.T(), err)
-	assert.Contains(s.T(), err.Error(), "用户已过期")
-}
-
-func TestAuthService(t *testing.T) {
-	suite.Run(t, new(AuthServiceTestSuite))
 }
 
 // NodeServiceTestSuite 节点服务测试套件
@@ -606,84 +445,6 @@ func (s *UserServiceTestSuite) TestGetByID() {
 	assert.Equal(s.T(), user.Email, found.Email)
 }
 
-func (s *UserServiceTestSuite) TestBanUnban() {
-	user := &model.User{
-		Email:          "ban@example.com",
-		Password:       "hash",
-		Token:          "ban-token",
-		UUID:           "ban-uuid",
-		TransferEnable: 10737418240,
-	}
-	database.Get().Create(user)
-
-	// 封禁
-	err := s.svc.Ban(user.ID)
-	assert.NoError(s.T(), err)
-
-	found, _ := s.svc.GetByID(user.ID)
-	assert.Equal(s.T(), 1, found.Banned)
-
-	// 解封
-	err = s.svc.Unban(user.ID)
-	assert.NoError(s.T(), err)
-
-	found, _ = s.svc.GetByID(user.ID)
-	assert.Equal(s.T(), 0, found.Banned)
-}
-
-// A ban, and the other session-ending changes, revoke the user's tokens in
-// the same transaction and at once in this process.
-func (s *UserServiceTestSuite) TestSessionEndingChangesRevokeTokens() {
-	cfg := &config.Config{JWT: config.JWTConfig{Secret: "revocation-test-secret", Expire: 3600}}
-	config.Set(cfg)
-	store := authn.NewStore(database.Get(), time.Hour)
-	authn.SetDefaultStore(store)
-	s.T().Cleanup(func() { authn.SetDefaultStore(nil) })
-
-	user := &model.User{Email: "revoke@example.com", Password: "hash", Token: "revoke-token", UUID: "revoke-uuid"}
-	require.NoError(s.T(), database.Get().Create(user).Error)
-	issue := func() string {
-		token, err := utils.GenerateToken(user.ID, user.Email, false, cfg.JWT.Secret, cfg.JWT.Expire)
-		require.NoError(s.T(), err)
-		return token
-	}
-	verify := func(token string) error {
-		_, err := authn.Default().Verify(context.Background(), token)
-		return err
-	}
-
-	token := issue()
-	require.NoError(s.T(), s.svc.Update(user.ID, map[string]any{"u": 1, "d": 2}))
-	require.NoError(s.T(), verify(token), "a traffic update keeps sessions")
-	require.NoError(s.T(), s.svc.Update(user.ID, map[string]any{"email": user.Email, "banned": 0, "is_admin": 0}))
-	require.NoError(s.T(), verify(token), "resending unchanged values keeps sessions")
-
-	require.NoError(s.T(), s.svc.Ban(user.ID))
-	require.ErrorIs(s.T(), verify(token), authn.ErrRevokedToken)
-
-	var row model.IdentityRevocation
-	require.NoError(s.T(), database.Get().Take(&row, "user_id = ?", user.ID).Error)
-	require.Equal(s.T(), "user banned changed", row.Reason)
-
-	// The revocation holds after a reload from the table as well.
-	require.NoError(s.T(), store.Reload(context.Background()))
-	require.ErrorIs(s.T(), verify(token), authn.ErrRevokedToken)
-
-	// A token issued in a later second is valid again.
-	time.Sleep(time.Until(time.Now().Truncate(time.Second).Add(time.Second)))
-	require.NoError(s.T(), verify(issue()))
-
-	later := issue()
-	time.Sleep(time.Until(time.Now().Truncate(time.Second).Add(time.Second)))
-	require.NoError(s.T(), s.svc.Delete(user.ID))
-	require.ErrorIs(s.T(), verify(later), authn.ErrRevokedToken)
-}
-
-func (s *UserServiceTestSuite) TestBanUnban_NotFound() {
-	assert.ErrorIs(s.T(), s.svc.Ban(99999), ErrUserNotFound)
-	assert.ErrorIs(s.T(), s.svc.Unban(99999), ErrUserNotFound)
-}
-
 func (s *UserServiceTestSuite) TestResetTraffic() {
 	user := &model.User{
 		Email:          "reset@example.com",
@@ -707,50 +468,6 @@ func (s *UserServiceTestSuite) TestResetTraffic() {
 
 func (s *UserServiceTestSuite) TestResetTraffic_NotFound() {
 	assert.ErrorIs(s.T(), s.svc.ResetTraffic(99999, ""), ErrUserNotFound)
-}
-
-func (s *UserServiceTestSuite) TestResetToken_NotFound() {
-	token, err := s.svc.ResetToken(99999, "identity.reset_subscribe:99999:missing")
-	assert.ErrorIs(s.T(), err, ErrUserNotFound)
-	assert.Empty(s.T(), token)
-	var recorded int64
-	assert.NoError(s.T(), database.Get().Model(&model.SubscriberRequest{}).Where("user_id = ?", 99999).Count(&recorded).Error)
-	assert.Zero(s.T(), recorded, "a reset of a missing user records nothing")
-}
-
-// A retried reset (same request id) applies once and answers the token the
-// first one issued; a new request issues a new token.
-func (s *UserServiceTestSuite) TestResetToken_AppliesARequestOnce() {
-	user := &model.User{Email: "reset-once@example.com", Password: "hash", Token: "token-before", UUID: "uuid-reset-once"}
-	s.Require().NoError(database.Get().Create(user).Error)
-	requestID := AdminUserResetRequestID(AdminUserResetSubscribe, user.ID, "key-1")
-
-	first, err := s.svc.ResetToken(user.ID, requestID)
-	s.Require().NoError(err)
-	assert.NotEqual(s.T(), "token-before", first)
-	again, err := s.svc.ResetToken(user.ID, requestID)
-	s.Require().NoError(err)
-	assert.Equal(s.T(), first, again, "a retry answers the token the first reset issued")
-	other, err := s.svc.ResetToken(user.ID, AdminUserResetRequestID(AdminUserResetSubscribe, user.ID, "key-2"))
-	s.Require().NoError(err)
-	assert.NotEqual(s.T(), first, other)
-
-	var stored model.User
-	s.Require().NoError(database.Get().Take(&stored, user.ID).Error)
-	assert.Equal(s.T(), other, stored.Token)
-	assert.Equal(s.T(), "uuid-reset-once", stored.UUID, "the proxy uuid is kept")
-	var recorded int64
-	s.Require().NoError(database.Get().Model(&model.SubscriberRequest{}).Where("user_id = ? AND method = ?", user.ID, SubscriberReissueMethod).Count(&recorded).Error)
-	assert.EqualValues(s.T(), 2, recorded)
-}
-
-func TestAdminUserResetRequestIDNamesTheRequest(t *testing.T) {
-	id := AdminUserResetRequestID(AdminUserResetTraffic, 7, "key")
-	assert.Equal(t, id, AdminUserResetRequestID(AdminUserResetTraffic, 7, "key"))
-	assert.NotEqual(t, id, AdminUserResetRequestID(AdminUserResetTraffic, 7, "other"))
-	assert.NotEqual(t, id, AdminUserResetRequestID(AdminUserResetSubscribe, 7, "key"))
-	assert.Regexp(t, `^identity\.reset_traffic:7:[0-9a-f]{24}$`, id)
-	assert.LessOrEqual(t, len(AdminUserResetRequestID(AdminUserResetSubscribe, 4294967295, "key")), 128)
 }
 
 func TestUserService(t *testing.T) {
@@ -804,8 +521,13 @@ func TestPlanService(t *testing.T) {
 // StatsServiceTestSuite 统计服务测试套件
 type StatsServiceTestSuite struct {
 	ServiceTestSuite
-	svc     *StatsService
-	authSvc *AuthService
+	svc *StatsService
+}
+
+// register adds a subscriber as registration does.
+func (s *StatsServiceTestSuite) register(email string) (*model.User, error) {
+	user := NewSubscriberUser(email, model.UnusableLegacyPassword)
+	return user, database.Get().Create(user).Error
 }
 
 func (s *StatsServiceTestSuite) SetupSuite() {
@@ -821,13 +543,12 @@ func (s *StatsServiceTestSuite) SetupTest() {
 	// 重置 statsServiceInstance 以便创建新实例
 	statsServiceInstance = nil
 	s.svc = NewStatsService()
-	s.authSvc = NewAuthService()
 }
 
 func (s *StatsServiceTestSuite) TestGetDashboardStats() {
 	// 创建一些用户
 	for i := 0; i < 3; i++ {
-		_, _, err := s.authSvc.RegisterWithInvite(fmt.Sprintf("stats%d@example.com", i), "password123", "", s.cfg)
+		_, err := s.register(fmt.Sprintf("stats%d@example.com", i))
 		assert.NoError(s.T(), err)
 	}
 
@@ -858,7 +579,7 @@ func (s *StatsServiceTestSuite) TestGetDashboardStats_DBError() {
 
 func (s *StatsServiceTestSuite) TestGetUserSubscription() {
 	// 创建用户
-	_, user, _ := s.authSvc.RegisterWithInvite("subuser@example.com", "password123", "", s.cfg)
+	user, _ := s.register("subuser@example.com")
 
 	// 创建套餐
 	groupID := uint(1)
@@ -885,7 +606,7 @@ func (s *StatsServiceTestSuite) TestGetUserSubscription() {
 
 func (s *StatsServiceTestSuite) TestGetUserSubscription_Expired() {
 	// 创建用户
-	_, user, _ := s.authSvc.RegisterWithInvite("expireduser@example.com", "password123", "", s.cfg)
+	user, _ := s.register("expireduser@example.com")
 
 	// 设置过期时间
 	expiredAt := time.Now().Add(-24 * time.Hour).Unix() // 昨天过期
@@ -899,7 +620,7 @@ func (s *StatsServiceTestSuite) TestGetUserSubscription_Expired() {
 
 func (s *StatsServiceTestSuite) TestGetUserSubscription_NoPlan() {
 	// 创建无套餐用户
-	_, user, _ := s.authSvc.RegisterWithInvite("noplanuser@example.com", "password123", "", s.cfg)
+	user, _ := s.register("noplanuser@example.com")
 
 	sub, err := s.svc.GetUserSubscription(user.ID, true)
 	assert.NoError(s.T(), err)
@@ -983,62 +704,10 @@ func (s *MFAServiceTestSuite) SetupTest() {
 	database.Get().Create(s.testUser)
 }
 
-func (s *MFAServiceTestSuite) TestIsEnforcedForUser_Admin() {
-	adminUser := &model.User{IsAdmin: 1}
-	assert.True(s.T(), s.svc.IsEnforcedForUser(adminUser))
-
-	normalUser := &model.User{IsAdmin: 0}
-	assert.False(s.T(), s.svc.IsEnforcedForUser(normalUser))
-}
-
 func (s *MFAServiceTestSuite) TestGetUserMFA_NotFound() {
 	mfa, err := s.svc.GetUserMFA(s.testUser.ID)
 	assert.NoError(s.T(), err)
 	assert.Nil(s.T(), mfa)
-}
-
-func (s *MFAServiceTestSuite) TestSetupTOTP() {
-	setup, err := s.svc.SetupTOTP(s.testUser.ID, s.testUser.Email)
-	assert.NoError(s.T(), err)
-	assert.NotNil(s.T(), setup)
-	assert.NotEmpty(s.T(), setup.Secret)
-	assert.NotEmpty(s.T(), setup.URL)
-	assert.NotEmpty(s.T(), setup.BackupCodes)
-	assert.Len(s.T(), setup.BackupCodes, 10)
-}
-
-func (s *MFAServiceTestSuite) TestEnableTOTP_NotSetup() {
-	err := s.svc.EnableTOTP(s.testUser.ID, "123456")
-	assert.Error(s.T(), err)
-	assert.Contains(s.T(), err.Error(), "not setup")
-}
-
-func (s *MFAServiceTestSuite) TestDisableMFA_WrongPassword() {
-	err := s.svc.DisableMFA(s.testUser.ID, "wrongpassword")
-	assert.Error(s.T(), err)
-	assert.Contains(s.T(), err.Error(), "invalid password")
-}
-
-func (s *MFAServiceTestSuite) TestGetRemainingBackupCodes_NoMFA() {
-	count, err := s.svc.GetRemainingBackupCodes(s.testUser.ID)
-	assert.NoError(s.T(), err)
-	assert.Equal(s.T(), 0, count)
-}
-
-func (s *MFAServiceTestSuite) TestRecordLoginAttempt() {
-	err := s.svc.RecordLoginAttempt(s.testUser.ID, "192.168.1.1", "TestAgent", false, "totp")
-	assert.NoError(s.T(), err)
-}
-
-func (s *MFAServiceTestSuite) TestCheckBruteForce() {
-	// Record some failed attempts
-	for i := 0; i < 3; i++ {
-		assert.NoError(s.T(), s.svc.RecordLoginAttempt(s.testUser.ID, "192.168.1.1", "TestAgent", false, "totp"))
-	}
-
-	blocked, err := s.svc.CheckBruteForce(s.testUser.ID, 3, time.Hour)
-	assert.NoError(s.T(), err)
-	assert.True(s.T(), blocked)
 }
 
 func TestMFAService(t *testing.T) {
@@ -1857,20 +1526,6 @@ func (s *SystemConfigServiceTestSuite) TestGet_NotFound() {
 	assert.Empty(s.T(), value)
 }
 
-func (s *SystemConfigServiceTestSuite) TestSetJSON() {
-	data := map[string]any{
-		"host": "localhost",
-		"port": 8080,
-	}
-	err := s.svc.SetJSON("json_config", data, "test", "JSON Config")
-	assert.NoError(s.T(), err)
-
-	var result map[string]any
-	err = s.svc.GetJSON("json_config", &result)
-	assert.NoError(s.T(), err)
-	assert.Equal(s.T(), "localhost", result["host"])
-}
-
 func (s *SystemConfigServiceTestSuite) TestGetAll() {
 	assert.NoError(s.T(), s.svc.Set("key1", "value1", "string", "test", ""))
 	assert.NoError(s.T(), s.svc.Set("key2", "value2", "string", "test", ""))
@@ -1904,6 +1559,17 @@ func (s *SystemConfigServiceTestSuite) TestUpdate() {
 
 	value, _ := s.svc.Get("update_key")
 	assert.Equal(s.T(), "new_value", value)
+}
+
+func (s *SystemConfigServiceTestSuite) TestGetJSON() {
+	type TestConfig struct {
+		Name  string `json:"name"`
+		Value int    `json:"value"`
+	}
+	assert.NoError(s.T(), s.svc.Set("test_json_key", `{"name":"test","value":123}`, "json", "test", ""))
+	var retrieved TestConfig
+	assert.NoError(s.T(), s.svc.GetJSON("test_json_key", &retrieved))
+	assert.Equal(s.T(), TestConfig{Name: "test", Value: 123}, retrieved)
 }
 
 func TestSystemConfigService(t *testing.T) {
@@ -2194,38 +1860,6 @@ func (s *ForwardNodeServiceTestSuite) SkipTestHealthCheck() {
 	assert.NotZero(s.T(), found.ID)
 }
 
-// Additional MFAService Tests
-func (s *MFAServiceTestSuite) TestVerifyTOTP() {
-	// First setup TOTP
-	setup, _ := s.svc.SetupTOTP(s.testUser.ID, s.testUser.Email)
-
-	// VerifyTOTP takes secret and code strings
-	// We can't get a valid code without the actual TOTP, so just test the function exists
-	valid := s.svc.VerifyTOTP(setup.Secret, "123456")
-	// Should be false because the code is wrong
-	assert.False(s.T(), valid)
-}
-
-func (s *MFAServiceTestSuite) TestVerifyBackupCode() {
-	// Setup TOTP to get backup codes
-	setup, _ := s.svc.SetupTOTP(s.testUser.ID, s.testUser.Email)
-
-	// Get the MFA record
-	mfa, _ := s.svc.GetUserMFA(s.testUser.ID)
-
-	// Use one of the backup codes
-	if mfa != nil && len(setup.BackupCodes) > 0 {
-		valid, err := s.svc.VerifyBackupCode(mfa, setup.BackupCodes[0])
-		assert.NoError(s.T(), err)
-		assert.True(s.T(), valid)
-
-		// Verify backup code count decreased
-		count, err := s.svc.GetRemainingBackupCodes(s.testUser.ID)
-		assert.NoError(s.T(), err)
-		assert.Equal(s.T(), 9, count)
-	}
-}
-
 func (s *MFAServiceTestSuite) TestVerifyBackupCodeRejectsInvalidStoredJSON() {
 	mfa := &model.UserMFA{
 		UserID:      s.testUser.ID,
@@ -2239,69 +1873,6 @@ func (s *MFAServiceTestSuite) TestVerifyBackupCodeRejectsInvalidStoredJSON() {
 	assert.False(s.T(), valid)
 	assert.Error(s.T(), err)
 	assert.Contains(s.T(), err.Error(), "parse MFA backup codes")
-}
-
-func (s *MFAServiceTestSuite) TestGetRemainingBackupCodesRejectsInvalidStoredJSON() {
-	mfa := &model.UserMFA{
-		UserID:      s.testUser.ID,
-		Enabled:     true,
-		BackupCodes: `["code-1"`,
-	}
-	assert.NoError(s.T(), database.Get().Create(mfa).Error)
-
-	count, err := s.svc.GetRemainingBackupCodes(s.testUser.ID)
-
-	assert.Equal(s.T(), 0, count)
-	assert.Error(s.T(), err)
-	assert.Contains(s.T(), err.Error(), "parse MFA backup codes")
-}
-
-func (s *MFAServiceTestSuite) TestRegenerateBackupCodes() {
-	// First setup TOTP
-	_, err := s.svc.SetupTOTP(s.testUser.ID, s.testUser.Email)
-	assert.NoError(s.T(), err)
-
-	// Get MFA and enable it
-	mfa, _ := s.svc.GetUserMFA(s.testUser.ID)
-	if mfa != nil {
-		mfa.Enabled = true
-		database.Get().Save(mfa)
-
-		// Regenerate backup codes
-		codes, err := s.svc.RegenerateBackupCodes(s.testUser.ID)
-		assert.NoError(s.T(), err)
-		assert.Len(s.T(), codes, 10)
-	}
-}
-
-// Additional UserService Tests
-func (s *UserServiceTestSuite) TestGetStats() {
-	// Create a user first
-	user := &model.User{
-		Email:          "statsuser@example.com",
-		Password:       "hash",
-		Token:          "stats-token",
-		UUID:           "stats-uuid",
-		TransferEnable: 10737418240,
-	}
-	database.Get().Create(user)
-
-	stats, err := s.svc.GetStats()
-	assert.NoError(s.T(), err)
-	assert.NotNil(s.T(), stats)
-	assert.Contains(s.T(), stats, "total_users")
-}
-
-func (s *UserServiceTestSuite) TestGetStats_DBError() {
-	db := database.Get()
-	s.Require().NoError(db.Migrator().DropTable(&model.User{}))
-	defer func() {
-		s.Require().NoError(db.AutoMigrate(&model.User{}))
-	}()
-
-	stats, err := s.svc.GetStats()
-	assert.Error(s.T(), err)
-	assert.Nil(s.T(), stats)
 }
 
 // Additional SystemConfigService Tests
@@ -2375,52 +1946,6 @@ func (s *NotificationServiceTestSuite) TestBroadcast() {
 // Additional UserService Tests for 0% coverage functions
 // =====================================================
 
-func (s *UserServiceTestSuite) TestGetList() {
-	// Create multiple users
-	for i := 1; i <= 3; i++ {
-		user := &model.User{
-			Email:          fmt.Sprintf("listuser%d@test.com", i),
-			Password:       "hashed",
-			Token:          fmt.Sprintf("token-list-%d", i),
-			UUID:           fmt.Sprintf("uuid-list-%d", i),
-			TransferEnable: 1073741824,
-		}
-		database.Get().Create(user)
-	}
-
-	result, err := s.svc.GetList(UserListParams{Page: 1, PageSize: 10})
-	assert.NoError(s.T(), err)
-	assert.GreaterOrEqual(s.T(), result.Total, int64(3))
-	assert.GreaterOrEqual(s.T(), len(result.List), 3)
-}
-
-func (s *UserServiceTestSuite) TestUpdate_NotFound() {
-	err := s.svc.Update(99999, map[string]any{"balance": 100})
-	assert.ErrorIs(s.T(), err, ErrUserNotFound)
-}
-
-func (s *UserServiceTestSuite) TestDelete() {
-	user := &model.User{
-		Email:          "deletetest@test.com",
-		Password:       "hashed",
-		Token:          "token-delete",
-		UUID:           "uuid-delete",
-		TransferEnable: 1073741824,
-	}
-	database.Get().Create(user)
-
-	err := s.svc.Delete(user.ID)
-	assert.NoError(s.T(), err)
-
-	_, err = s.svc.GetByID(user.ID)
-	assert.Error(s.T(), err)
-}
-
-func (s *UserServiceTestSuite) TestDelete_NotFound() {
-	err := s.svc.Delete(99999)
-	assert.ErrorIs(s.T(), err, ErrUserNotFound)
-}
-
 // =====================================================
 // OrderService.Complete Tests
 // =====================================================
@@ -2436,57 +1961,9 @@ func (s *UserServiceTestSuite) TestDelete_NotFound() {
 // MFAService Verify Tests
 // =====================================================
 
-func (s *MFAServiceTestSuite) TestVerify() {
-	// Create user MFA with TOTP
-	user := &model.User{
-		Email:          "mfa-verify@test.com",
-		Password:       "hashed",
-		Token:          "token-mfa-verify",
-		UUID:           "uuid-mfa-verify",
-		TransferEnable: 1073741824,
-	}
-	database.Get().Create(user)
-
-	// Setup TOTP
-	setup, err := s.svc.SetupTOTP(user.ID, user.Email)
-	assert.NoError(s.T(), err)
-	assert.NotEmpty(s.T(), setup.Secret)
-
-	// Create MFA record manually with backup codes
-	mfa := &model.UserMFA{
-		UserID:      user.ID,
-		Enabled:     true,
-		TOTPSecret:  setup.Secret,
-		BackupCodes: `["code1","code2","code3"]`,
-	}
-	database.Get().Create(mfa)
-
-	// Verify with backup code
-	valid, err := s.svc.Verify(user.ID, "code1", "backup")
-	assert.NoError(s.T(), err)
-	assert.True(s.T(), valid)
-}
-
 // =====================================================
 // SystemConfigService JSON Tests
 // =====================================================
-
-func (s *SystemConfigServiceTestSuite) TestGetJSON() {
-	// Set JSON config
-	type TestConfig struct {
-		Name  string `json:"name"`
-		Value int    `json:"value"`
-	}
-
-	cfg := TestConfig{Name: "test", Value: 123}
-	assert.NoError(s.T(), s.svc.SetJSON("test_json_key", cfg, "test", ""))
-	// Get JSON config
-	var retrieved TestConfig
-	err := s.svc.GetJSON("test_json_key", &retrieved)
-	assert.NoError(s.T(), err)
-	assert.Equal(s.T(), "test", retrieved.Name)
-	assert.Equal(s.T(), 123, retrieved.Value)
-}
 
 // =====================================================
 // ServerService Tests
@@ -3121,64 +2598,6 @@ func (s *InviteServiceTestSuite) TestGetConfig_NoConfig() {
 // =====================================================
 // MFAService Additional Tests
 // =====================================================
-
-func (s *MFAServiceTestSuite) TestEnableTOTP_InvalidCode() {
-	// Create user
-	user := &model.User{
-		Email:          "enable-totp-invalid@test.com",
-		Password:       "hashed",
-		Token:          "token-enable-totp-invalid",
-		UUID:           "uuid-enable-totp-invalid",
-		TransferEnable: 1073741824,
-	}
-	database.Get().Create(user)
-
-	// Setup TOTP
-	setup, err := s.svc.SetupTOTP(user.ID, user.Email)
-	assert.NoError(s.T(), err)
-
-	// Create MFA record without enabling
-	mfa := &model.UserMFA{
-		UserID:     user.ID,
-		Enabled:    false,
-		TOTPSecret: setup.Secret,
-	}
-	database.Get().Create(mfa)
-
-	// Try to enable with invalid code
-	err = s.svc.EnableTOTP(user.ID, "000000")
-	assert.Error(s.T(), err)
-	assert.Contains(s.T(), err.Error(), "invalid code")
-}
-
-func (s *MFAServiceTestSuite) TestDisableMFA_Success() {
-	// Create user with bcrypt password
-	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte("correctpassword"), bcrypt.DefaultCost)
-	user := &model.User{
-		Email:          "disable-success@test.com",
-		Password:       string(hashedPassword),
-		Token:          "token-disable-success",
-		UUID:           "uuid-disable-success",
-		TransferEnable: 1073741824,
-	}
-	database.Get().Create(user)
-
-	// Create MFA record
-	mfa := &model.UserMFA{
-		UserID:  user.ID,
-		Enabled: true,
-	}
-	database.Get().Create(mfa)
-
-	// Disable with correct password
-	err := s.svc.DisableMFA(user.ID, "correctpassword")
-	assert.NoError(s.T(), err)
-
-	// Verify MFA is deleted
-	var count int64
-	database.Get().Model(&model.UserMFA{}).Where("user_id = ?", user.ID).Count(&count)
-	assert.Equal(s.T(), int64(0), count)
-}
 
 // =====================================================
 // ForwardNodeService Additional Tests

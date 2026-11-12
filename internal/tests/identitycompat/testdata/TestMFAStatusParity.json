@@ -1,0 +1,5 @@
+{
+"enabled,_never_used": {"status":200,"body":{"code":0,"data":{"enabled":true,"has_backup_codes":true,"last_method":"","last_used":null,"remaining_codes":2},"msg":"操作成功"}},
+"no_second_factor": {"status":200,"body":{"code":0,"data":{"enabled":false,"enforced":false,"has_backup_codes":false,"last_used":null,"remaining_codes":0},"msg":"操作成功"}},
+"used_before": {"status":200,"body":{"code":0,"data":{"enabled":true,"has_backup_codes":true,"last_method":"totp","last_used":"\u003cmasked\u003e","remaining_codes":2},"msg":"操作成功"}}
+}

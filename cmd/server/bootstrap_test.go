@@ -14,6 +14,7 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/database/migrations"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/nodesecrets"
+	"github.com/AnixOps/anix-control/v5/internal/service"
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -100,6 +101,28 @@ func TestBootstrapDatabaseRefusesADatabaseANewerControlMigrated(t *testing.T) {
 		assert.Contains(t, err.Error(), "migrated by a newer AnixOps Control")
 		assert.Contains(t, err.Error(), "Control 9.0.0")
 		assert.Contains(t, err.Error(), "restore the backup")
+	})
+}
+
+// A database with users whose identity is not finalized is refused before
+// any migration runs; one without users is recorded as finalized at start.
+func TestBootstrapDatabaseRequiresAFinalizedIdentity(t *testing.T) {
+	bootstrapDatabases(t, func(t *testing.T, cfg *config.Config) {
+		ctx := context.Background()
+		require.NoError(t, bootstrapDatabase(ctx, cfg))
+		db := database.Get()
+		state, err := service.IdentityAuthorityState(db)
+		require.NoError(t, err)
+		assert.Equal(t, model.IdentityAuthorityFinalized, state, "a database without users")
+
+		require.NoError(t, db.Create(&model.User{Email: "u@example.test", Password: "x", UUID: "u", Token: "t"}).Error)
+		require.NoError(t, db.Model(&model.IdentityAuthority{}).Where("id = ?", 1).Update("state", model.IdentityAuthorityIdentity).Error)
+		require.ErrorContains(t, bootstrapDatabase(ctx, cfg), "identity: the accounts are in state identity")
+		require.NoError(t, db.Where("1 = 1").Delete(&model.IdentityAuthority{}).Error)
+		require.ErrorContains(t, bootstrapDatabase(ctx, cfg), "state kernel", "no row is the kernel")
+		state, err = service.IdentityAuthorityState(db)
+		require.NoError(t, err)
+		assert.Equal(t, model.IdentityAuthorityKernel, state, "a refused start changes nothing")
 	})
 }
 

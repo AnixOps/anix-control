@@ -19,23 +19,13 @@ import (
 
 const identityMigrationRoute = "migration.identity-platform.001_identity_platform"
 
-// identityRoutes are the package's compatibility routes with a native
-// handler. Each serves natively only once the kernel sets its mode, and
-// relays to the legacy handler otherwise:
-//   - group A (login, registration, MFA, the admin MFA configuration and the
-//     administrator's account writes) switches with the identity cutover;
-//   - the account reads (profile, dashboard, the administrator's user
-//     detail, user list and user statistics) read identity's accounts, so
-//     the kernel lets them leave legacy only while identity is
-//     authoritative. The list and the statistics search identity's
-//     accounts together with Control's subscriber views
-//     (kapi_user_directory_v1, kapi_subscriber_entitlement_v1) in one query
-//     on the package's own storage (native.UserDirectory);
-//   - the administrator's traffic and subscription resets change only the
-//     subscriber, through KernelSubscriber, and switch at any time.
-//   - the user's reset of their own subscription link checks the user's
-//     password or second factor in identity's store before the same
-//     subscriber change, so it belongs to group A.
+// identityRoutes are the package's routes with a native handler: the
+// kernel keeps no legacy handler for them, so they serve natively from the
+// start. The list and the statistics search identity's accounts together
+// with Control's subscriber views (kapi_user_directory_v1,
+// kapi_subscriber_entitlement_v1) in one query on the package's own storage
+// (native.UserDirectory); the resets change the subscriber through
+// KernelSubscriber.
 var identityRoutes = map[string]struct{}{
 	"identity.admin.mfa.config.get":                  {},
 	"identity.admin.mfa.config.put":                  {},
@@ -82,9 +72,8 @@ type identityBridge interface {
 }
 
 // newIdentityService returns the identity host's router: only the declared
-// identity routes and the 001_identity_platform migration are accepted. A
-// route passes through the bridge until the kernel sets it native and the
-// host has its handler. The package's own storage runs the embedded
+// identity routes and the 001_identity_platform migration are accepted. The
+// routes with a handler serve natively; the others pass through the bridge. The package's own storage runs the embedded
 // migration index when the kernel starts the host.
 func newIdentityService(bridge identityBridge, leaseID string, storage packagestoresdk.Opener, handlers ...map[string]pluginhostsdk.NativeHandler) (*pluginhostsdk.Router, error) {
 	var nativeHandlers map[string]pluginhostsdk.NativeHandler
@@ -102,9 +91,7 @@ func newIdentityService(bridge identityBridge, leaseID string, storage packagest
 			return identityMigrationRoute, migrationID == "001_identity_platform"
 		},
 		IndexMigration: packagestoresdk.IndexMigrator(storage, identityplatform.Migrations, identityplatform.MigrationIndex),
-		// Native routes serve only once the kernel sets their mode (the
-		// identity cutover); until then every route stays legacy.
-		Native: nativeHandlers,
+		Native:         nativeHandlers, NativeOnly: true,
 	})
 }
 

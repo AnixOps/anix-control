@@ -1,0 +1,8 @@
+{
+"administrator_is_unrestricted": {"status":200,"body":{"code":0,"data":{"email":"admin@example.test","id":1,"is_admin":true,"permission_mode":"legacy","permissions":null,"restricted_plugins":[],"token":"t1","uuid":"u1"},"msg":"操作成功"}},
+"administrator_with_a_restricted_plugin": {"status":200,"body":{"code":0,"data":{"email":"admin@example.test","id":1,"is_admin":true,"permission_mode":"mixed","permissions":[],"restricted_plugins":["ticket"],"token":"t1","uuid":"u1"},"msg":"操作成功"}},
+"banned_member": {"status":200,"body":{"code":0,"data":{"email":"banned@example.test","id":3,"is_admin":false,"permission_mode":"authoritative","permissions":[],"restricted_plugins":[],"token":"t3","uuid":"u3"},"msg":"操作成功"}},
+"member": {"status":200,"body":{"code":0,"data":{"email":"member@example.test","id":2,"is_admin":false,"permission_mode":"authoritative","permissions":[],"restricted_plugins":[],"token":"t2","uuid":"u2"},"msg":"操作成功"}},
+"member_with_plugin_grants": {"status":200,"body":{"code":0,"data":{"email":"member@example.test","id":2,"is_admin":false,"permission_mode":"authoritative","permissions":["ticket.view"],"restricted_plugins":[],"token":"t2","uuid":"u2"},"msg":"操作成功"}},
+"unknown_user": {"status":200,"body":{"code":-1,"data":null,"msg":"用户不存在"}}
+}

@@ -141,7 +141,7 @@ func TestUnknownKeysAskForARefresh(t *testing.T) {
 
 	stub.response.Keys = append(stub.response.Keys, tokenKey("idk-next", publicKey(t), identityv1.TokenKeyState_TOKEN_KEY_STATE_NEXT, 0))
 	keys.Kick()
-	require.Eventually(t, func() bool { return len(keys.KeySet()) == 2 }, 5*time.Second, 10*time.Millisecond, "a kick refreshes before the interval")
+	require.Len(t, keys.KeySet(), 2, "a kick refreshes before the interval and waits for it")
 	calls := stub.calls
 	keys.Kick()
 	time.Sleep(100 * time.Millisecond)

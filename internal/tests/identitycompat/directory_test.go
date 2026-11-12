@@ -13,7 +13,6 @@ import (
 
 	"github.com/AnixOps/anix-control/identity/account"
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
-	"github.com/AnixOps/anix-control/v5/internal/handler"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/tests/packagecompat"
 	"github.com/AnixOps/anix-control/v5/packages/identity-platform/native"
@@ -55,7 +54,7 @@ func withDirectory(t testing.TB, db *gorm.DB) {
 		directoryUser(7, "dave_x@example.test", directoryDay.Add(3*time.Hour), func(u *model.User) {
 			u.PlanID, u.GroupID, u.ExpiredAt, u.Banned = &plan8, &group5, &expiredAt, 1
 		}),
-		directoryUser(8, "Erin@Example.test", directoryDay.Add(3*time.Hour), func(u *model.User) {
+		directoryUser(8, "erin@Example.test", directoryDay.Add(3*time.Hour), func(u *model.User) {
 			u.PlanID, u.ExpiredAt = &plan7, &future
 		}),
 		directoryUser(9, "frank%off@example.test", directoryDay.Add(3*time.Hour), func(u *model.User) {
@@ -116,12 +115,12 @@ func runDirectory(t *testing.T, route packagecompat.Route, cases []packagecompat
 			c.Seed = seedUsers(nil, withDirectory)
 		}
 		c.Principal = admin
-		packagecompat.RunRead(t, route, c)
+		readCase(t, route, c)
 	}
 }
 
 func TestAdminUserListParity(t *testing.T) {
-	route := adminRoute("GET", "/api/v2/admin/users", native.AdminUsersRouteID, (*handler.AdminHandler).GetUserList)
+	route := adminRoute("GET", "/api/v2/admin/users", native.AdminUsersRouteID)
 	list := func(query string) string { return "/api/v2/admin/users" + query }
 	runDirectory(t, route, []packagecompat.Case{
 		{Name: "first page", Path: list("")},
@@ -192,7 +191,7 @@ func TestAdminUserListParity(t *testing.T) {
 }
 
 func TestAdminUserStatsParity(t *testing.T) {
-	route := adminRoute("GET", "/api/v2/admin/users/stats", native.AdminUserStatsRouteID, (*handler.AdminHandler).GetUserStats)
+	route := adminRoute("GET", "/api/v2/admin/users/stats", native.AdminUserStatsRouteID)
 	runDirectory(t, route, []packagecompat.Case{
 		{Name: "directory", Path: "/api/v2/admin/users/stats"},
 		{Name: "created today", Path: "/api/v2/admin/users/stats", Seed: seedUsers(nil, nil)},

@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	identityv1 "github.com/AnixOps/anix-control/sdk/api/identity/v1"
@@ -28,8 +29,16 @@ const (
 	Audience = "anix-control"
 )
 
-// kickInterval bounds refreshes asked for by unknown key ids.
-const kickInterval = 10 * time.Second
+// kickInterval bounds refreshes asked for by unknown key ids; kickWait is
+// how long the request that asked waits for its refresh.
+const (
+	kickInterval = 10 * time.Second
+	kickWait     = 5 * time.Second
+	// retryInterval replaces the refresh interval while refreshes fail, so
+	// that the keys of an identity host that starts after Control arrive
+	// soon.
+	retryInterval = 10 * time.Second
+)
 
 // ErrNoKeys means the identity module publishes no keys (no KEK yet).
 var ErrNoKeys = errors.New("the identity module publishes no token keys")
@@ -47,14 +56,15 @@ type Keys struct {
 	mu   sync.RWMutex
 	keys map[string]cachedKey
 
-	kick     chan struct{}
+	kick     chan chan struct{}
+	running  atomic.Bool
 	kickMu   sync.Mutex
 	lastKick time.Time
 }
 
 // New returns an empty key cache over db; call Reload to load it.
 func New(db *gorm.DB) *Keys {
-	return &Keys{db: db, now: time.Now, keys: map[string]cachedKey{}, kick: make(chan struct{}, 1)}
+	return &Keys{db: db, now: time.Now, keys: map[string]cachedKey{}, kick: make(chan chan struct{}, 1)}
 }
 
 // KeySet returns the keys that verify now; revoked keys are kept, marked, so
@@ -76,20 +86,30 @@ func (k *Keys) KeySet() identitytoken.KeySet {
 	return set
 }
 
-// Kick asks for a refresh soon, at most every kickInterval; the verifier
-// calls it for a token whose key id is unknown.
+// Kick refreshes now, at most every kickInterval, and waits up to kickWait
+// for it; the verifier calls it for a token whose key id is unknown, such as
+// the first token of a fresh install.
 func (k *Keys) Kick() {
-	if k == nil {
+	if k == nil || !k.running.Load() {
 		return
 	}
 	k.kickMu.Lock()
-	defer k.kickMu.Unlock()
-	if now := k.now(); now.Sub(k.lastKick) >= kickInterval {
-		k.lastKick = now
-		select {
-		case k.kick <- struct{}{}:
-		default:
-		}
+	now := k.now()
+	if now.Sub(k.lastKick) < kickInterval {
+		k.kickMu.Unlock()
+		return
+	}
+	k.lastKick = now
+	k.kickMu.Unlock()
+	done := make(chan struct{})
+	select {
+	case k.kick <- done:
+	default:
+		return
+	}
+	select {
+	case <-done:
+	case <-time.After(kickWait):
 	}
 }
 
@@ -190,18 +210,22 @@ func (k *Keys) Refresh(ctx context.Context, conn grpc.ClientConnInterface) error
 	return k.Reload(ctx)
 }
 
-// Run refreshes every interval and when kicked, until ctx ends. connect
+// Run refreshes every interval (every retryInterval after a failure) and when
+// kicked, until ctx ends. connect
 // returns the current connection to the identity module; failures keep the
 // last good keys and go to report.
 func (k *Keys) Run(ctx context.Context, interval time.Duration, connect func() (grpc.ClientConnInterface, error), report func(error)) {
 	timer := time.NewTimer(0)
 	defer timer.Stop()
+	k.running.Store(true)
+	defer k.running.Store(false)
+	var done chan struct{}
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-timer.C:
-		case <-k.kick:
+		case done = <-k.kick:
 		}
 		conn, err := connect()
 		if err == nil {
@@ -212,12 +236,20 @@ func (k *Keys) Run(ctx context.Context, interval time.Duration, connect func() (
 		if err != nil && ctx.Err() == nil && report != nil {
 			report(err)
 		}
+		if done != nil {
+			close(done)
+			done = nil
+		}
 		if !timer.Stop() {
 			select {
 			case <-timer.C:
 			default:
 			}
 		}
-		timer.Reset(interval)
+		if err != nil {
+			timer.Reset(min(interval, retryInterval))
+		} else {
+			timer.Reset(interval)
+		}
 	}
 }

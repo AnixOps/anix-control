@@ -1,0 +1,9 @@
+{
+"correct_password": {"status":200,"body":{"code":0,"data":{"message":"MFA disabled successfully"},"msg":"操作成功"}},
+"enabled": {"status":200,"body":{"code":0,"data":{"backup_codes":"\u003cmasked\u003e"},"msg":"操作成功"}},
+"missing_password": {"status":200,"body":{"code":-1,"data":null,"msg":"Key: 'Password' Error:Field validation for 'Password' failed on the 'required' tag"}},
+"no_second_factor": {"status":200,"body":{"code":0,"data":{"message":"MFA disabled successfully"},"msg":"操作成功"}},
+"not_enabled": {"status":200,"body":{"code":-1,"data":null,"msg":"MFA not enabled"}},
+"unknown_user": {"status":200,"body":{"code":-1,"data":null,"msg":"record not found"}},
+"wrong_password": {"status":200,"body":{"code":-1,"data":null,"msg":"invalid password"}}
+}

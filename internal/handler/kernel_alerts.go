@@ -13,10 +13,9 @@ import (
 )
 
 // KernelAlertsHandler lists the kernel's alerts for administrators
-// (certificates that were not renewed, CAs close to their end, phased
-// processes left in a non-final phase; internal/kernelalerts). It is
-// read-only: alerts are raised and resolved by the monitor, and nothing
-// here touches a certificate or a phase.
+// (certificates that were not renewed, CAs close to their end, and the
+// other kinds of internal/kernelalerts). It is read-only: alerts are raised
+// and resolved by the monitor, and nothing here touches a certificate.
 type KernelAlertsHandler struct {
 	db func() *gorm.DB
 }
@@ -28,7 +27,7 @@ func NewKernelAlertsHandler() *KernelAlertsHandler {
 
 // List godoc
 // @Summary List the kernel alerts
-// @Description The alerts of the kernel's alert monitor: Agent, forward link and module certificates that were not renewed in time (leaf certificates alert inside the smaller of alerts.leaf_expiry_days and a sixth of their lifetime), the current module and forward link CAs inside alerts.ca_expiry_days, and phased processes left untouched in a non-final phase for alerts.phase_stuck_after (the identity import and cutover). Critical alerts come first, then the soonest to end. The summary counts every active alert whatever the filters. Alerts hold no secret: kinds, node names, dates and counts only.
+// @Description The alerts of the kernel's alert monitor: Agent, forward link and module certificates that were not renewed in time (leaf certificates alert inside the smaller of alerts.leaf_expiry_days and a sixth of their lifetime), and the current module and forward link CAs inside alerts.ca_expiry_days. Critical alerts come first, then the soonest to end. The summary counts every active alert whatever the filters. Alerts hold no secret: kinds, node names, dates and counts only.
 // @Tags Kernel
 // @Produce json
 // @Security BearerAuth

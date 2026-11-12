@@ -135,7 +135,7 @@ func TestBulkItemsFailIndependently(t *testing.T) {
 	probe := &bulkProbe{answers: map[string]BulkAnswer{
 		"/api/v2/admin/users/2/ban": panelRefusal("用户不存在"),
 		"/api/v2/admin/users/3/ban": panelRefusal("封禁失败: database is locked"),
-		"/api/v2/admin/users/4/ban": {Status: http.StatusServiceUnavailable, Body: []byte(`{"error":{"code":"package_route_frozen","message":"package route is paused for maintenance"}}`)},
+		"/api/v2/admin/users/4/ban": {Status: http.StatusServiceUnavailable, Body: []byte(`{"error":{"code":"plugin_host_unavailable","message":"plugin host is unavailable"}}`)},
 		"/api/v2/admin/users/5/ban": {Status: http.StatusInternalServerError},
 		"/api/v2/admin/users/6/ban": {Status: http.StatusBadGateway, Body: []byte(`{"message":"bridge down"}`)},
 	}}
@@ -154,7 +154,7 @@ func TestBulkItemsFailIndependently(t *testing.T) {
 	require.True(t, byID[8].OK)
 	require.Equal(t, &BulkError{Code: "not_found", Message: "用户不存在"}, byID[2].Error)
 	require.Equal(t, &BulkError{Code: "failed", Message: "封禁失败: database is locked"}, byID[3].Error)
-	require.Equal(t, &BulkError{Code: "package_route_frozen", Message: "package route is paused for maintenance"}, byID[4].Error)
+	require.Equal(t, &BulkError{Code: "plugin_host_unavailable", Message: "plugin host is unavailable"}, byID[4].Error)
 	require.Equal(t, "failed", byID[5].Error.Code)
 	require.NotEmpty(t, byID[5].Error.Message)
 	require.Equal(t, &BulkError{Code: "failed", Message: "bridge down"}, byID[6].Error)

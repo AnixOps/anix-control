@@ -1,0 +1,3 @@
+{
+"totp": {"status":200,"body":{"code":0,"data":{"email":"mfa@example.test","is_admin":false,"permission_mode":"authoritative","permissions":[],"restricted_plugins":[],"token":"\u003cmasked\u003e","user_id":5},"msg":"操作成功"}}
+}

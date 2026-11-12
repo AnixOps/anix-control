@@ -110,16 +110,16 @@
       "path": "/api/v2/admin/mfa/config",
       "package_id": "identity-platform",
       "route_id": "identity.admin.mfa.config.get",
-      "mode": "native-flagged",
-      "legacy": "identity-bridge"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "PUT",
       "path": "/api/v2/admin/mfa/config",
       "package_id": "identity-platform",
       "route_id": "identity.admin.mfa.config.put",
-      "mode": "native-flagged",
-      "legacy": "identity-bridge"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "GET",
@@ -699,80 +699,80 @@
       "path": "/api/v2/admin/users",
       "package_id": "identity-platform",
       "route_id": "identity.admin.users.get",
-      "mode": "native-flagged",
-      "legacy": "identity-bridge"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "POST",
       "path": "/api/v2/admin/users",
       "package_id": "identity-platform",
       "route_id": "identity.admin.users.post",
-      "mode": "native-flagged",
-      "legacy": "identity-bridge"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "DELETE",
       "path": "/api/v2/admin/users/:id",
       "package_id": "identity-platform",
       "route_id": "identity.admin.users.id.delete",
-      "mode": "native-flagged",
-      "legacy": "identity-bridge"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "GET",
       "path": "/api/v2/admin/users/:id",
       "package_id": "identity-platform",
       "route_id": "identity.admin.users.id.get",
-      "mode": "native-flagged",
-      "legacy": "identity-bridge"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "PUT",
       "path": "/api/v2/admin/users/:id",
       "package_id": "identity-platform",
       "route_id": "identity.admin.users.id.put",
-      "mode": "native-flagged",
-      "legacy": "identity-bridge"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "POST",
       "path": "/api/v2/admin/users/:id/ban",
       "package_id": "identity-platform",
       "route_id": "identity.admin.users.id.ban.post",
-      "mode": "native-flagged",
-      "legacy": "identity-bridge"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "POST",
       "path": "/api/v2/admin/users/:id/reset-subscribe",
       "package_id": "identity-platform",
       "route_id": "identity.admin.users.id.reset_subscribe.post",
-      "mode": "native-flagged",
-      "legacy": "identity-bridge"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "POST",
       "path": "/api/v2/admin/users/:id/reset-traffic",
       "package_id": "identity-platform",
       "route_id": "identity.admin.users.id.reset_traffic.post",
-      "mode": "native-flagged",
-      "legacy": "identity-bridge"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "POST",
       "path": "/api/v2/admin/users/:id/unban",
       "package_id": "identity-platform",
       "route_id": "identity.admin.users.id.unban.post",
-      "mode": "native-flagged",
-      "legacy": "identity-bridge"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "GET",
       "path": "/api/v2/admin/users/stats",
       "package_id": "identity-platform",
       "route_id": "identity.admin.users.stats.get",
-      "mode": "native-flagged",
-      "legacy": "identity-bridge"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "POST",
@@ -796,16 +796,16 @@
       "path": "/api/v2/login",
       "package_id": "identity-platform",
       "route_id": "identity.auth.login",
-      "mode": "native-flagged",
-      "legacy": "identity-bridge"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "POST",
       "path": "/api/v2/register",
       "package_id": "identity-platform",
       "route_id": "identity.auth.register",
-      "mode": "native-flagged",
-      "legacy": "identity-bridge"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "POST",
@@ -820,8 +820,8 @@
       "path": "/api/v2/user/dashboard",
       "package_id": "identity-platform",
       "route_id": "identity.user.dashboard.get",
-      "mode": "native-flagged",
-      "legacy": "identity-bridge"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "GET",
@@ -844,48 +844,48 @@
       "path": "/api/v2/user/mfa/backup-codes/regenerate",
       "package_id": "identity-platform",
       "route_id": "identity.user.mfa.backup_codes.regenerate.post",
-      "mode": "native-flagged",
-      "legacy": "identity-bridge"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "POST",
       "path": "/api/v2/user/mfa/disable",
       "package_id": "identity-platform",
       "route_id": "identity.user.mfa.disable.post",
-      "mode": "native-flagged",
-      "legacy": "identity-bridge"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "GET",
       "path": "/api/v2/user/mfa/status",
       "package_id": "identity-platform",
       "route_id": "identity.user.mfa.status.get",
-      "mode": "native-flagged",
-      "legacy": "identity-bridge"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "POST",
       "path": "/api/v2/user/mfa/totp/enable",
       "package_id": "identity-platform",
       "route_id": "identity.user.mfa.totp.enable.post",
-      "mode": "native-flagged",
-      "legacy": "identity-bridge"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "POST",
       "path": "/api/v2/user/mfa/totp/setup",
       "package_id": "identity-platform",
       "route_id": "identity.user.mfa.totp.setup.post",
-      "mode": "native-flagged",
-      "legacy": "identity-bridge"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "POST",
       "path": "/api/v2/user/mfa/verify",
       "package_id": "identity-platform",
       "route_id": "identity.user.mfa.verify.post",
-      "mode": "native-flagged",
-      "legacy": "identity-bridge"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "GET",
@@ -932,8 +932,8 @@
       "path": "/api/v2/user/profile",
       "package_id": "identity-platform",
       "route_id": "identity.user.profile.get",
-      "mode": "native-flagged",
-      "legacy": "identity-bridge"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "POST",
@@ -957,8 +957,8 @@
       "path": "/api/v2/user/subscription/reset",
       "package_id": "identity-platform",
       "route_id": "identity.user.subscription.reset.post",
-      "mode": "native-flagged",
-      "legacy": "identity-bridge"
+      "mode": "native",
+      "legacy": "none"
     },
     {
       "method": "POST",

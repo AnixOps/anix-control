@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -105,7 +104,6 @@ func TestPackageRouteDefaultsGate(t *testing.T) {
 			assert.Equal(t, pkg.PackageID, entry.PackageID, route)
 			assert.Contains(t, []string{RouteCatalogNativeFlagged, RouteCatalogNative}, entry.Mode, "%s must be native-flagged or native", route)
 			assert.NotEqual(t, RouteCatalogKernelOwned, entry.Mode, route)
-			assert.NotContains(t, IdentityGroupARoutes, route)
 			transport, known := transports[route]
 			require.True(t, known, "%s is not in v2-package-route-catalog.json", route)
 			assert.NotEqual(t, "websocket", transport, route)
@@ -333,7 +331,6 @@ func TestPostgresRouteModeDefaults(t *testing.T) {
 func runRouteModeDefaultsSuite(t *testing.T, open func(*testing.T) *gorm.DB) {
 	t.Run("rehearsed release", func(t *testing.T) { testRouteModeDefaultsRehearsedRelease(t, open(t)) })
 	t.Run("package too old", func(t *testing.T) { testRouteModeDefaultsTooOld(t, open(t)) })
-	t.Run("identity group A follows the authority", func(t *testing.T) { testRouteModeDefaultsIdentity(t, open(t)) })
 }
 
 func seedKnowledge(t *testing.T, db *gorm.DB, version string) PackageHostOperations {
@@ -368,42 +365,11 @@ func testRouteModeDefaultsTooOld(t *testing.T, db *gorm.DB) {
 	assert.Empty(t, hostModes(t, operations, "4.0.0"))
 }
 
-// Identity's routes are not in the list: they follow the authority only
-// (group A and the account routes), and a bridged route stays legacy.
-func testRouteModeDefaultsIdentity(t *testing.T, db *gorm.DB) {
-	prepareRouteModeDB(t, db)
-	routes := []testCompatibilityRoute{{Method: "GET", LegacyPath: "/api/v2/admin/invite-codes", PackageRoute: "identity.admin.invite_codes.get", Transport: "http"}}
-	authority := append(append([]string(nil), IdentityGroupARoutes...), IdentityAccountRoutes...)
-	for i, route := range authority {
-		routes = append(routes, testCompatibilityRoute{Method: "POST", LegacyPath: "/api/v2/group-a/" + string(rune('a'+i)), PackageRoute: route, Transport: "http"})
-	}
-	seedRouteModePackageVersion(t, db, IdentityPlatformPackageID, "4.1.0-rc.5", routes)
-	host := packagebridge.HostIdentity{PackageID: IdentityPlatformPackageID, Version: "4.1.0-rc.5", Generation: 7}
-	config, err := PackageHostOperations{DB: db}.PackageConfig(context.Background(), host)
-	require.NoError(t, err)
-	assert.Empty(t, config.RouteModes, "before the cutover every identity route is legacy")
-
-	for _, state := range []string{model.IdentityAuthorityIdentity, model.IdentityAuthorityFinalized} {
-		require.NoError(t, db.Save(&model.IdentityAuthority{ID: 1, State: state}).Error)
-		config, err = PackageHostOperations{DB: db}.PackageConfig(context.Background(), host)
-		require.NoError(t, err)
-		assert.Len(t, config.RouteModes, len(authority), state)
-		for route, mode := range config.RouteModes {
-			assert.True(t, slices.Contains(authority, route), route)
-			assert.Equal(t, packagebridge.RouteModeNative, mode, route)
-		}
-	}
-	require.NoError(t, db.Save(&model.IdentityAuthority{ID: 1, State: model.IdentityAuthorityImporting}).Error)
-	config, err = PackageHostOperations{DB: db}.PackageConfig(context.Background(), host)
-	require.NoError(t, err)
-	assert.Empty(t, config.RouteModes, "a rollback returns them to legacy")
-}
-
 func TestPackageRouteCatalogParsesTheEmbeddedMap(t *testing.T) {
 	catalog, err := PackageRouteCatalog()
 	require.NoError(t, err)
 	assert.Equal(t, RouteCatalogNative, catalog["knowledge.article.list"].Mode)
-	assert.Equal(t, RouteCatalogNativeFlagged, catalog["identity.admin.users.get"].Mode)
+	assert.Equal(t, RouteCatalogBridged, catalog["identity.admin.invite.codes.get"].Mode)
 	assert.Equal(t, "knowledge", catalog["knowledge.article.list"].PackageID)
 	assert.Equal(t, RouteCatalogKernelOwned, catalog["platform.admin.system.configs.get"].Mode)
 	_, err = parsePackageRouteCatalog([]byte(`{`))

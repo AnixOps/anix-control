@@ -213,7 +213,7 @@ func (h *hostServer) UpdateSubscriber(ctx context.Context, request *kernelidenti
 	if entitlements.PlanID != nil && *entitlements.PlanID == 0 {
 		return nil, status.Error(codes.InvalidArgument, "entitlements_json: plan_id must be positive")
 	}
-	updates := entitlements.Updates(service.NewPlanService())
+	updates := entitlements.Updates(service.PlanServiceOn(db))
 	err = db.Transaction(func(tx *gorm.DB) error {
 		if _, err := linkByUser(tx, id); err != nil {
 			return err
