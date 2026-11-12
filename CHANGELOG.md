@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+## 5.0.5 - 2026-11-12
+
+### Added
+
+- `anix-control forward lines` prints how the forwards the network's lines
+  plan differ from today's, the comparison of
+  `GET /api/v4/kernel/network/lines`, by id and without addresses, so it can
+  run on a production host into a shared log.
+- The network's lines and transports have their own tables (`v5_line`,
+  `v5_transport`, migration `0035_network_lines`), and a device's network
+  settings say whether it is on a cloud that scans its machines
+  (`scan_cloud`). Nothing reads them yet: the planner still plans from the
+  forward routes until the data moves over (docs/design/network-lines,
+  step 2).
+
 ## 5.0.4 - 2026-11-12
 
 ### Added
