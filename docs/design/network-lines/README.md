@@ -61,7 +61,7 @@
 
 | 步骤 | 内容 | 怎么验证 |
 | --- | --- | --- |
-| 1 | 线路模型（`internal/netline`）；把现有数据读成线路；线路规划出的转发与今天的逐项比较（影子对比），只读接口 `GET /api/v4/kernel/network/lines` | 单元测试；生产上 `differences` 为空 |
+| 1 | 线路模型（`internal/netline`）；把现有数据读成线路；线路规划出的转发与今天的逐项比较（影子对比），只读接口 `GET /api/v4/kernel/network/lines`，命令 `anix-control forward lines` | 单元测试；生产上 `differences` 为空 |
 | 2 | 建表，一次迁移把数据写进新表；规划、订阅、统计改读新表；旧 API 变成薄适配 | 迁移前后每台设备的计划哈希和每个用户的订阅内容相同 |
 | 3 | 新 API 与面板的「设备」「线路」两页、网络拓扑图（全球地图与抽象拓扑） | 前端 e2e |
 | 4 | 删除旧 API、旧表、旧包；Agent 删分流成员 | CI；删表前备份 |

@@ -429,6 +429,7 @@ anix-control forward nodes list [--kind forward|proxy] [--json]
 anix-control forward nodes set <node_ref> (-f <settings.json> | [--port-range 30000-39999] [--reserved 80,443] [--address <ip>]... [--label key=value]... | --defaults)
 anix-control forward stats [--route <route_id>] [--node <node_ref>] [--since <RFC 3339 or ms>] [--until ...] [--json]
 anix-control forward reset-node <node_ref>
+anix-control forward lines
 anix-control forward dns providers list [--json]
 anix-control forward dns providers create -f <provider.json> [--request-id <id>]
 anix-control forward dns providers update <id> -f <provider.json> [--request-id <id>]
@@ -443,6 +444,9 @@ anix-control forward dns status <route_id> [--json]
 - **Input.** `routes create` reads a `Route` and `nodes set -f` a
   `NodeSettings`, both protojson.
 - **Refusals** print each violation with its code.
+- **`lines`** prints the shadow comparison of
+  `GET /api/v4/kernel/network/lines` (`docs/design/network-lines`): counts,
+  then each difference and each skipped route by id, with no addresses.
 - **`dns`.** A provider file is `{"provider": DnsProvider, "credentials":
   {...}}`, a binding file a `DnsBinding`. Credentials come only from the
   file, never from the command line, and are never printed. The command

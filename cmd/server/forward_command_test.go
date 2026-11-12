@@ -137,6 +137,13 @@ func TestForwardCommandRoutesNodesAndStats(t *testing.T) {
 	output, err = run("routes", "list")
 	require.NoError(t, err)
 	assert.Contains(t, output, created.GetId())
+	require.NoError(t, db.AutoMigrate(&model.NodeEntry{}, &model.NodeExitPolicy{}, &model.NodeNetwork{}, &model.NodeUplinks{},
+		&model.ForwardRouteSubscription{}, &model.EgressRoute{}))
+	lines, err := run("lines")
+	require.NoError(t, err)
+	id := created.GetId()
+	assert.Equal(t, "devices 0, lines 0, forwards today 1, differences 1, skipped 1\ndifference "+id+": missing\nskipped "+id+
+		": hop 0 is on forward-11, which is not a node\n", lines, "a route on forward nodes is no line yet")
 	assert.Contains(t, output, "forward-11 > forward-12")
 	output, err = run("routes", "list", "--json", "--node", "forward-12")
 	require.NoError(t, err)
