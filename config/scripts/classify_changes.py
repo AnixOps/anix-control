@@ -94,7 +94,6 @@ CLASS_PATTERNS: dict[str, tuple[str, ...]] = {
         "docker-compose*",
         "config/deploy/*",
         "config/scripts/modules_*",
-        "config/scripts/identity_cutover_acceptance.sh",
         "cmd/server/*",
         "internal/router/*",
         "internal/config/*",

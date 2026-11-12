@@ -429,11 +429,12 @@ expired (Control).
         finalize) and hands the account to identity with a one-account
         `ImportAccounts`, undoing the claim when identity refuses.
 13. End-to-end acceptance on Compose and kind (in place).
-    - `config/scripts/identity_cutover_acceptance.sh` drives the whole move
-      against a running Control.
-    - The kind smoke runs it against two identity replicas.
-    - The Compose smoke runs it, then checks that issued tokens outlive the
-      identity module.
+    - The cutover acceptance script drove the whole move until the release
+      after 5.0.3 removed the cutover; the Compose and kind smokes now claim
+      the first administrator and log in through the remote identity
+      module (two replicas on kind).
+    - The Compose smoke checks that issued tokens outlive the identity
+      module.
 14. The routes outside group A (in place).
     - **Account reads.** The profile, the dashboard and the admin user
       detail are native: the account from identity's store, the subscriber
