@@ -13,7 +13,7 @@ const kernelApi = vi.hoisted(() => ({
 
 vi.mock('@/api/kernel', () => kernelApi)
 
-const EMPTY = { interface: '', source_v4: '', gateway_v4: '', source_v6: '', gateway_v6: '', hop_port: 0, region: '', uplinks: [], uplink_default: '', uplink_choices: {} }
+const EMPTY = { interface: '', source_v4: '', gateway_v4: '', source_v6: '', gateway_v6: '', hop_port: 0, region: '', scan_cloud: false, uplinks: [], uplink_default: '', uplink_choices: {} }
 
 describe('NodeNetworkSection', () => {
   beforeEach(async () => {
@@ -34,6 +34,16 @@ describe('NodeNetworkSection', () => {
       ...EMPTY, interface: 'eth1', source_v4: '10.0.0.7', gateway_v4: '10.0.0.1'
     })
     expect(await screen.findByText('已保存，经过这个节点的线路已重新规划。')).toBeTruthy()
+  })
+
+  it('saves the scanning-cloud switch', async () => {
+    kernelApi.getKernelNodeNetwork.mockResolvedValue(EMPTY)
+    kernelApi.setKernelNodeNetwork.mockImplementation(async (_, settings) => settings)
+    render(NodeNetworkSection, { props: { nodeRef: 'proxy-30' } })
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('switch', { name: /扫描云/ }))
+    await user.click(screen.getByTestId('node-network-save'))
+    expect(kernelApi.setKernelNodeNetwork).toHaveBeenCalledWith('proxy-30', { ...EMPTY, scan_cloud: true })
   })
 
   it('suggests the region from the name and saves it', async () => {

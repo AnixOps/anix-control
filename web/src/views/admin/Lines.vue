@@ -3,6 +3,7 @@
     <UiPageHeader :title="t('lines.title')" :description="t('lines.description')">
       <template #actions>
         <UiIconButton :icon="RefreshCw" :label="t('forwardV4.updated.refresh')" :disabled="loading" @click="refresh" />
+        <UiButton variant="primary" :icon="Plus" :disabled="!network" data-testid="line-create" @click="openForm(null)">{{ t('lines.form.createTitle') }}</UiButton>
       </template>
     </UiPageHeader>
 
@@ -45,6 +46,12 @@
     </UiSection>
 
     <UiSheet :open="Boolean(line)" :title="line?.name" :description="line ? `${t(`lines.kind.${line.kind}`)} · ${t(`topology.tone.${line.tone}`)}` : ''" data-testid="line-sheet" @update:open="selected = ''">
+      <template v-if="line?.source.revision" #header-actions>
+        <span class="lines__actions">
+          <UiButton size="sm" data-testid="line-edit" @click="openForm(line.source)">{{ t('lines.actions.edit') }}</UiButton>
+          <UiMenu :label="t('lines.actions.more')" :items="menuItems" data-testid="line-menu" />
+        </span>
+      </template>
       <template v-if="line">
         <h3 class="lines__sub">{{ t('lines.detail.path') }}</h3>
         <ol class="lines__hops">
@@ -89,6 +96,8 @@
         </div>
       </template>
     </UiSheet>
+
+    <LineSheet v-model:open="formOpen" :line="formLine" :network="network" @saved="saved" />
   </section>
 </template>
 
@@ -98,23 +107,29 @@
 // connects through: relayed over other devices, direct on one device, or a
 // port forward to fixed targets. Read-only: lines are still made of node
 // protocols, forward routes and egress routes, which their own pages edit.
-// Polls every 30 s while visible.
+// A stored line (one with a revision) is created, edited, copied and
+// deleted here (/api/v5/net/lines); a protocol's own line is edited with
+// the protocol. Polls every 30 s while visible.
 import { computed, ref } from 'vue'
 import { RouterLink } from 'vue-router'
-import { ChevronRight, RefreshCw } from '@lucide/vue'
-import { UiBadge, UiButton, UiDataTable, UiFilterChips, UiIconButton, UiPageHeader, UiSection, UiSheet, useFormat } from '@/ui'
+import { ChevronRight, Plus, RefreshCw } from '@lucide/vue'
+import { UiBadge, UiButton, UiDataTable, UiFilterChips, UiIconButton, UiMenu, UiPageHeader, UiSection, UiSheet, useConfirm, useFormat, useToast } from '@/ui'
 import { useAppI18n } from '@/composables/useAppI18n'
-import { getKernelAdminNodes, getKernelNetworkLines } from '@/api/kernel'
+import { deleteNetLine, getKernelAdminNodes, getKernelNetworkLines } from '@/api/kernel'
 import { loadForwardSnapshot } from '@/components/forward/forwardData'
 import { usePolling } from '@/components/forward/usePolling'
 import LinePath from '@/components/lines/LinePath.vue'
+import LineSheet from '@/components/lines/LineSheet.vue'
 import { buildLines, matches } from '@/components/lines/linesModel'
 import { readNodeApiError, readNodePage } from '@/views/admin/nodes/nodeData'
 import '@/components/forward/forward.css'
 
 const { t, locale } = useAppI18n()
 const fmt = useFormat()
+const confirm = useConfirm()
+const toast = useToast()
 
+const network = ref(null)
 const lines = ref(null)
 const skipped = ref([])
 const loadError = ref(null)
@@ -127,6 +142,7 @@ const { loading, refresh } = usePolling(async () => {
       getKernelAdminNodes({ page: 1, page_size: 500 }),
       loadForwardSnapshot().catch(() => null)
     ])
+    network.value = report.snapshot
     lines.value = buildLines({ network: report.snapshot, nodes: readNodePage(nodePage).list || [], routes: snapshot?.routes, traffic: snapshot?.traffic })
     skipped.value = report.snapshot.skipped || []
     loadError.value = null
@@ -153,6 +169,39 @@ const columns = computed(() => [
 
 const selected = ref('')
 const line = computed(() => (lines.value || []).find(item => item.id === selected.value) || null)
+
+// The line sheet: null for a new line, a line without an id for a copy.
+const formOpen = ref(false)
+const formLine = ref(null)
+function openForm(source) {
+  formLine.value = source
+  formOpen.value = true
+}
+function saved(id) {
+  selected.value = id
+  refresh()
+}
+
+const menuItems = computed(() => [
+  { label: t('lines.actions.copy'), onSelect: () => openForm({ ...line.value.source, id: '', revision: 0, name: t('lines.actions.copyName', { name: line.value.name }) }) },
+  { label: t('lines.actions.delete'), danger: true, separatorBefore: true, onSelect: remove }
+])
+
+async function remove() {
+  const item = line.value
+  const ok = await confirm({
+    title: t('lines.delete.title', { name: item.name }),
+    message: t(item.rules.length ? 'lines.delete.messageRules' : 'lines.delete.message', { n: item.rules.length }),
+    confirmLabel: t('lines.delete.confirm'),
+    tone: 'danger',
+    requireText: item.name,
+    onConfirm: () => deleteNetLine(item.id)
+  })
+  if (!ok) return
+  selected.value = ''
+  toast.success(t('lines.toast.deleted', { name: item.name }))
+  refresh()
+}
 
 const summary = row => [row.protocol || t('lines.detail.noProtocol'), row.port, t(`lines.kind.${row.kind}`), row.rules.length ? t('lines.rules', { n: row.rules.length }) : '', row.show ? '' : t('lines.detail.hidden')].filter(Boolean).join(' · ')
 const placeName = device => device.place?.[locale.value === 'zh-CN' ? 'zh' : 'en']
@@ -197,6 +246,12 @@ function hopText(item, hop) {
 
 .lines__tone.is-bad {
   background: var(--danger);
+}
+
+.lines__actions {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
 }
 
 .lines__legend {

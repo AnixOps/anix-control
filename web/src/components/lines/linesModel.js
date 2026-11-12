@@ -13,7 +13,9 @@ const ROUTE_TONES = { healthy: 'ok', syncing: 'warn', degraded: 'warn', error: '
 //   hops: [{ role: entry | relay | exit, devices: [device] }],
 //   served: the ref of the device the protocol is served at,
 //   rules: [{ name, domains, exit: device, enabled }],
-//   route: the forward route's id of a line that has one }
+//   route: the forward route's id of a line that has one,
+//   source: the line as the network answers it, which a stored line
+//   (revision above 0) is edited from }
 // and device is { ref, id, name, host, place, kernel, online }.
 // - relay: entries, maybe relays, an exit, and a protocol served on the way;
 // - direct: one device, the protocol where its users connect;
@@ -61,7 +63,8 @@ export function buildLines({ network, nodes = [], routes = [], traffic = new Map
       hops,
       served: line.protocol?.device || '',
       rules: (line.rules || []).map(rule => ({ ...rule, exit: devices.get(rule.exit) })),
-      route: route ? line.id : ''
+      route: route ? line.id : '',
+      source: line
     }
   })
 }

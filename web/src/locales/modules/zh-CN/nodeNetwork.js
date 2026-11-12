@@ -44,6 +44,8 @@ export default {
     region: '地区',
     regionHint: '这台设备在哪里，用来画在拓扑地图上。',
     regionSuggested: '按名称预填的，保存后生效。用来画在拓扑地图上。',
+    scanCloud: '扫描云',
+    scanCloudHint: '这台机器所在的云会扫描主机。打开后，经过它的线路在这一段改用内核转发，对之后保存的线路生效。',
     save: '保存',
     saved: '已保存，经过这个节点的线路已重新规划。',
     saveFailed: '保存失败',
