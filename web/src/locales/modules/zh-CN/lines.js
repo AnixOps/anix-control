@@ -51,12 +51,49 @@ export default {
       showHelp: '用户的订阅里会出现这条线路。',
       create: '创建线路',
       save: '保存',
+      advanced: '高级设置',
+      limits: '限额',
+      bandwidth: '带宽',
+      quota: '流量配额',
+      maxConns: '最大连接数',
+      expires: '到期时间',
+      expiresHelp: '到期或配额用尽后线路自动暂停。',
+      unlimited: '不限',
+      forwarding: '转发',
+      proxyProtocol: 'PROXY protocol',
+      proxyProtocolHelp: '把用户的真实 IP 告诉目标；目标要能读这个头。',
+      balance: '多个目标时',
+      balanceHelp: '怎么在固定目标之间分配连接。',
+      healthOff: '关闭健康检查',
+      healthOffHelp: '只靠真实连接失败判断目标是否可用。',
+      interval: '检查间隔',
+      timeout: '超时',
+      threshold: '熔断阈值',
+      thresholdHelp: '连续失败这么多次后暂停用这个目标。',
+      openFor: '熔断时长',
+      openForHelp: '暂停这么久后再试一次。',
+      seconds: '秒',
+      times: '次',
+      proxy: {
+        off: '关闭',
+        v1: 'v1（文本）',
+        v2: 'v2（二进制）'
+      },
+      balances: {
+        default: '默认（轮询）',
+        round_robin: '轮询',
+        random: '随机',
+        ip_hash: '按来源 IP 固定',
+        least_conn: '最少连接',
+        failover: '主备（第一个不可用才用下一个）'
+      },
       refused: '这条线路没法按现在的设置建起来：',
       conflict: '这条线路刚被别处改过，关掉重新打开再改。',
       errors: {
         required: '必填',
         reused: '出口不能同时是入口或经过的设备',
-        target: '格式是 主机:端口，端口在 1–65535'
+        target: '格式是 主机:端口，端口在 1–65535',
+        timeout: '超时要小于检查间隔'
       }
     },
     detail: {

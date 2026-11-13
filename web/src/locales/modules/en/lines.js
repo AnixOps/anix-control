@@ -51,12 +51,49 @@ export default {
       showHelp: 'The line appears in users\' subscriptions.',
       create: 'Create line',
       save: 'Save',
+      advanced: 'Advanced',
+      limits: 'Limits',
+      bandwidth: 'Bandwidth',
+      quota: 'Traffic quota',
+      maxConns: 'Max connections',
+      expires: 'Expires',
+      expiresHelp: 'The line pauses when it expires or its quota runs out.',
+      unlimited: 'Unlimited',
+      forwarding: 'Forwarding',
+      proxyProtocol: 'PROXY protocol',
+      proxyProtocolHelp: 'Tells the target the user\'s real IP; the target must read the header.',
+      balance: 'With several targets',
+      balanceHelp: 'How connections are spread over the fixed targets.',
+      healthOff: 'Turn off health checks',
+      healthOffHelp: 'A target counts as down only when real connections fail.',
+      interval: 'Check interval',
+      timeout: 'Timeout',
+      threshold: 'Breaker threshold',
+      thresholdHelp: 'Failures in a row before the target is set aside.',
+      openFor: 'Breaker open for',
+      openForHelp: 'How long before the target is tried again.',
+      seconds: 's',
+      times: 'times',
+      proxy: {
+        off: 'Off',
+        v1: 'v1 (text)',
+        v2: 'v2 (binary)'
+      },
+      balances: {
+        default: 'Default (round robin)',
+        round_robin: 'Round robin',
+        random: 'Random',
+        ip_hash: 'Stick to source IP',
+        least_conn: 'Least connections',
+        failover: 'Failover (next only when the first is down)'
+      },
       refused: 'The line cannot be built as set:',
       conflict: 'The line was just changed elsewhere. Close and reopen it to edit.',
       errors: {
         required: 'Required',
         reused: 'The exit cannot also be an entry or a device it passes',
-        target: 'Use host:port, with a port from 1 to 65535'
+        target: 'Use host:port, with a port from 1 to 65535',
+        timeout: 'The timeout must be shorter than the interval'
       }
     },
     detail: {

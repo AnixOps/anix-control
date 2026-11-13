@@ -110,8 +110,13 @@
 | 方法 | 路径 | 作用 |
 | --- | --- | --- |
 | `POST` | `/api/v5/net/lines` | 建线路：`name`、`enabled`、`show`（加入订阅）、`port`、`l4`、`chain`（每一跳的设备，第一跳是入口，最后一跳的设备是出口）、`protocol_id`（出口设备上的协议）或 `targets`（固定目标） |
-| `PUT` | `/api/v5/net/lines/{id}` | 按 `revision` 整条替换；路由的负载与健康检查、限额、标签保留，设备不变的那一跳保留它的传输 |
+| `PUT` | `/api/v5/net/lines/{id}` | 按 `revision` 整条替换，策略和限额也按草稿替换；路由的标签保留，设备不变的那一跳保留它的传输 |
 | `DELETE` | `/api/v5/net/lines/{id}` | 删线路和它的订阅；需要超级管理员 |
+
+建和改都可以带线路的策略与限额，字段和读接口一样：`policy`（`proxy_protocol` 为 `v1`/`v2`、
+`balance` 为固定目标之间的均衡方式、`health`、`circuit_breaker`、`bandwidth_bps`、`max_conns`）、
+`hop_balance`、`quota_bytes`、`expires_at_unix_ms`；不带就是默认、不限。面板的线路编辑在「高级设置」
+里改这些，旧的路由编辑器删掉之后它们仍然有地方改。
 
 线路存成转发路由，照旧经过校验和规划：被拒时 422 带 `violations`，revision 不对时 409。
 `Idempotency-Key` 头让重试只生效一次。设备是否用内核转发看它的网络设置 `scan_cloud`

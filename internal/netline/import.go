@@ -299,6 +299,7 @@ func (in *importer) route(route *forwardv1.Route, engines map[string]forwardv1.E
 		Port: route.GetListen().GetPort(), L4: kernelforward.NetworkProtocols(route.GetListen().GetProtocol()),
 		Entries: hops[0].GetNodeRefs(), Exit: last.GetNodeRefs()[0], Policy: kernelforward.NetworkPolicy(route),
 		HopBalance: kernelforward.NetworkBalances[route.GetPolicy().GetNextHop()],
+		QuotaBytes: route.GetLimits().GetQuotaBytes(), ExpiresAt: route.GetLimits().GetExpiresAtUnixMs(),
 	}
 	for _, target := range route.GetTargets() {
 		line.Targets = append(line.Targets, &networkv1.ForwardTarget{Host: target.GetHost(), Port: target.GetPort(), Weight: target.GetWeight(), Priority: target.GetPriority()})

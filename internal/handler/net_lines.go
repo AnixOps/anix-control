@@ -81,7 +81,7 @@ func (h *NetLinesHandler) Create(c *gin.Context) {
 
 // Update godoc
 // @Summary Update a line
-// @Description Replaces the line at revision (409 revision_conflict when it moved on). The route's policy, limits and labels stay, and so does a hop's transport while its devices do. As create otherwise.
+// @Description Replaces the line at revision (409 revision_conflict when it moved on). The draft's policy, hop_balance, quota_bytes and expires_at_unix_ms replace the line's (send what the line API read to keep them); its labels stay, and so does a hop's transport while its devices do. As create otherwise.
 // @Tags Network
 // @Accept json
 // @Produce json
