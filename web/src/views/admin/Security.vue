@@ -11,6 +11,7 @@
       <MFA v-if="current === 'mfa'" key="mfa" />
       <AccessGroups v-else-if="current === 'access-groups'" key="access-groups" embedded />
       <ApiTokens v-else-if="current === 'api-tokens'" key="api-tokens" />
+      <Licenses v-else-if="current === 'licenses'" key="licenses" />
     </SettingsLayout>
   </div>
 </template>
@@ -21,10 +22,11 @@
 // settings template. The first two are the existing pages (MFA.vue,
 // AccessGroups.vue) with their own requests, unchanged; /admin/mfa and
 // /admin/access-groups redirect here. API tokens (security/ApiTokens.vue) are
-// their own lazy chunk: the section loads only when it is opened.
+// their own lazy chunk: the section loads only when it is opened, and so are
+// the ANX device licenses (security/Licenses.vue).
 import { computed, defineAsyncComponent, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { KeyRound, KeySquare, ShieldCheck } from '@lucide/vue'
+import { BadgeCheck, KeyRound, KeySquare, ShieldCheck } from '@lucide/vue'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { NARROW_QUERY, useMediaQuery } from '@/composables/useMediaQuery'
 import { ADMIN_PAGE_SECTIONS } from '@/navigation/menu'
@@ -34,8 +36,9 @@ import AccessGroups from './AccessGroups.vue'
 import MFA from './MFA.vue'
 
 const ApiTokens = defineAsyncComponent(() => import('./security/ApiTokens.vue'))
+const Licenses = defineAsyncComponent(() => import('./security/Licenses.vue'))
 
-const SECTION_ICONS = { mfa: ShieldCheck, 'access-groups': KeyRound, 'api-tokens': KeySquare }
+const SECTION_ICONS = { mfa: ShieldCheck, 'access-groups': KeyRound, 'api-tokens': KeySquare, licenses: BadgeCheck }
 
 const { t } = useAppI18n()
 const route = useRoute()

@@ -678,6 +678,15 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		exitPolicy := handler.NewExitPolicyHandler()
 		v4.GET("/kernel/nodes/:id/exit-policy", exitPolicy.Get)
 		v4.PUT("/kernel/nodes/:id/exit-policy", exitPolicy.Set)
+		// Feature licensing (internal/entitlement, anx spec §2.4.1): the ANX
+		// licensing settings, the devices that asked for a license, revoke
+		// and restore. Off by default.
+		entitlements := handler.NewEntitlementsHandler()
+		v4.GET("/kernel/entitlements/:feature", entitlements.Get)
+		v4.PUT("/kernel/entitlements/:feature", entitlements.Set)
+		v4.GET("/kernel/entitlements/:feature/devices", entitlements.Devices)
+		v4.POST("/kernel/entitlements/:feature/devices/:id/revoke", entitlements.Revoke)
+		v4.POST("/kernel/entitlements/:feature/devices/:id/restore", entitlements.Restore)
 		realityTargets := handler.NewRealityTargetsHandler()
 		v4.GET("/kernel/nodes/:id/reality-targets", realityTargets.List)
 		v4.POST("/kernel/nodes/:id/reality-targets/probe", realityTargets.Probe)

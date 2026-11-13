@@ -715,3 +715,33 @@ export async function deleteReverseProxy(id) {
 export async function getNetworkModel() {
   return unwrap(await v4({ url: '/kernel/network', method: 'get' }))
 }
+
+// Feature licensing (internal/entitlement, anx spec §2.4.1), off by default.
+// Only the feature 'anx' exists. GET answers { feature, enabled, require,
+// trial_days, plan_ids ([] = every plan), ca (hex, '' without a root key),
+// root_key, devices: { total, seated, revoked }, validity_days,
+// seat_window_days, max_trial_days }; PUT takes the fields to change and
+// answers the same.
+export async function getKernelEntitlement(feature = 'anx') {
+  return unwrap(await v4({ url: `/kernel/entitlements/${encodeURIComponent(feature)}`, method: 'get' }))
+}
+
+export async function setKernelEntitlement(patch, feature = 'anx') {
+  return unwrap(await v4({ url: `/kernel/entitlements/${encodeURIComponent(feature)}`, method: 'put', data: patch }))
+}
+
+// The devices that asked for a license, newest activity first: { items: [{ id,
+// user_id, email, device_id, alg, trial, not_after, revoked, revoked_at,
+// created_at, last_seen_at, seated }], total, page, page_size } (times in Unix
+// seconds).
+export async function listKernelEntitlementDevices({ userId, page = 1, pageSize = 20 } = {}, feature = 'anx') {
+  const params = { page, page_size: pageSize }
+  if (userId) params.user_id = userId
+  return unwrap(await v4({ url: `/kernel/entitlements/${encodeURIComponent(feature)}/devices`, method: 'get', params }))
+}
+
+// Revoke or restore one device (its row id): { device, changed }.
+export async function setKernelEntitlementDeviceRevoked(id, revoked, feature = 'anx') {
+  const action = revoked ? 'revoke' : 'restore'
+  return unwrap(await v4({ url: `/kernel/entitlements/${encodeURIComponent(feature)}/devices/${encodeURIComponent(id)}/${action}`, method: 'post' }))
+}

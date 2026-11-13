@@ -1,0 +1,57 @@
+// 安全 → 设备授权（security/Licenses.vue）：ANX 协议的设备授权，默认关闭。随 adminPages 加载。
+export default {
+  adminLicenses: {
+    title: 'ANX 设备授权',
+    description: '只有 ANX 协议需要授权，客户端其他功能不受限制。开启后，客户端更新订阅时领取一张 7 天的设备授权，ANX 节点据此放行。',
+    loading: '正在加载授权设置',
+    loadFailed: '无法加载授权设置',
+    saveFailed: '保存失败：{message}',
+    saved: '已保存。节点会随下一次配置下发生效。',
+    noRootKey: '面板没有加载根密钥，无法签发授权，节点会照常不校验授权。',
+    enabled: '开启 ANX 授权',
+    enabledHelp: '订阅会为客户端签发授权，ANX 节点信任面板的授权 CA。只开启不要求时，节点照常放行未授权的连接，可以先灰度观察。',
+    require: '节点要求授权',
+    requireHelp: '没有有效授权的 ANX 会话会被节点断开。开启了 WireGuard 外衣（wg_listen_port）的入站不受此项约束。',
+    trialDays: '试用天数',
+    trialDaysHelp: '套餐不含 ANX 的账户可试用的天数，每个账户一次，所有设备共用。0 表示不提供试用。',
+    plans: '包含 ANX 的套餐',
+    plansHelp: '一个都不选表示所有套餐都包含 ANX。',
+    plansLoadFailed: '无法加载套餐列表。',
+    save: '保存',
+    ca: '授权 CA 公钥',
+    caHelp: '随根密钥派生；轮换根密钥会同时更换 CA，已签发的授权随之失效。',
+    counts: '共 {total} 台设备，{seated} 台占用席位，{revoked} 台已吊销。',
+    rules: '授权有效期 {validity} 天（离线宽限）；{window} 天内领取过授权且未吊销的设备占用席位，席位上限是用户的设备数限制。',
+    devices: {
+      title: '设备',
+      description: '领取过 ANX 授权的设备，按最近活动排序。吊销后设备不再获得新授权，手上的授权最长 7 天内失效。',
+      label: 'ANX 授权设备',
+      refresh: '刷新',
+      loadFailed: '无法加载设备',
+      emptyTitle: '还没有设备',
+      emptyDescription: '开启授权后，客户端更新订阅时会出现在这里。',
+      user: '用户',
+      device: '设备 ID',
+      alg: '密钥',
+      state: '状态',
+      notAfter: '授权到期',
+      lastSeen: '最近领取',
+      userFallback: '用户 #{id}',
+      states: {
+        seated: '占用席位',
+        idle: '不活跃',
+        revoked: '已吊销'
+      },
+      trial: '试用',
+      none: '未签发',
+      revoke: '吊销授权',
+      restore: '恢复授权',
+      revokeTitle: '吊销设备 {device}？',
+      revokeMessage: '{user} 的这台设备不再获得新授权，手上的授权最长 7 天内失效。之后可以恢复。',
+      revoked: '已吊销。',
+      restored: '已恢复，设备下次更新订阅时重新领取授权。',
+      unchanged: '状态没有变化。',
+      actionFailed: '操作失败：{message}'
+    }
+  }
+}

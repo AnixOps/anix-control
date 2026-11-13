@@ -1,0 +1,57 @@
+// Security → Device licenses (security/Licenses.vue): ANX device licensing, off by default. Loaded with adminPages.
+export default {
+  adminLicenses: {
+    title: 'ANX device licenses',
+    description: 'Only the ANX protocol needs a license; nothing else in the client is restricted. Once on, a client gets a 7-day device license when it refreshes its subscription, and ANX nodes admit it by that license.',
+    loading: 'Loading the license settings',
+    loadFailed: 'Could not load the license settings',
+    saveFailed: 'Could not save: {message}',
+    saved: 'Saved. Nodes apply it with their next configuration.',
+    noRootKey: 'The panel has no root key loaded, so it cannot sign licenses and nodes keep running without checking them.',
+    enabled: 'Turn on ANX licensing',
+    enabledHelp: 'Subscriptions sign licenses for clients and ANX nodes trust the panel\'s license CA. Without "Nodes require a license", nodes still admit unlicensed sessions, so you can roll it out gradually.',
+    require: 'Nodes require a license',
+    requireHelp: 'Nodes drop ANX sessions without a valid license. Inbounds with the WireGuard jacket (wg_listen_port) are not affected.',
+    trialDays: 'Trial days',
+    trialDaysHelp: 'How many days an account whose plan does not include ANX may try it, once per account, shared by all its devices. 0 offers no trial.',
+    plans: 'Plans that include ANX',
+    plansHelp: 'Select none to include ANX in every plan.',
+    plansLoadFailed: 'Could not load the plans.',
+    save: 'Save',
+    ca: 'License CA public key',
+    caHelp: 'Derived from the root key; rotating the root key changes the CA and invalidates the licenses already signed.',
+    counts: '{total} devices, {seated} taking a seat, {revoked} revoked.',
+    rules: 'A license lasts {validity} days (the offline grace). A device that asked within {window} days and is not revoked takes a seat; the user\'s device limit caps the seats.',
+    devices: {
+      title: 'Devices',
+      description: 'Devices that asked for an ANX license, most recent first. A revoked device gets no new license, and the one it holds runs out within 7 days.',
+      label: 'ANX licensed devices',
+      refresh: 'Refresh',
+      loadFailed: 'Could not load the devices',
+      emptyTitle: 'No devices yet',
+      emptyDescription: 'Once licensing is on, clients show up here when they refresh their subscription.',
+      user: 'User',
+      device: 'Device ID',
+      alg: 'Key',
+      state: 'Status',
+      notAfter: 'License ends',
+      lastSeen: 'Last request',
+      userFallback: 'User #{id}',
+      states: {
+        seated: 'Taking a seat',
+        idle: 'Inactive',
+        revoked: 'Revoked'
+      },
+      trial: 'Trial',
+      none: 'Not signed',
+      revoke: 'Revoke license',
+      restore: 'Restore license',
+      revokeTitle: 'Revoke device {device}?',
+      revokeMessage: 'This device of {user} gets no new license, and the one it holds runs out within 7 days. You can restore it later.',
+      revoked: 'Revoked.',
+      restored: 'Restored. The device gets a license at its next subscription refresh.',
+      unchanged: 'Nothing changed.',
+      actionFailed: 'Could not do that: {message}'
+    }
+  }
+}

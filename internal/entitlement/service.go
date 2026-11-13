@@ -215,3 +215,13 @@ func (s *Service) ANXNodeLicense() (ca string, require bool, err error) {
 	}
 	return LicenseCAPublicHex(key), settings.Require, nil
 }
+
+// LicenseCAHex answers the hex of the license CA's public key;
+// ErrNoRootKey without a root key.
+func (s *Service) LicenseCAHex() (string, error) {
+	key, err := s.ca()
+	if err != nil {
+		return "", err
+	}
+	return LicenseCAPublicHex(key), nil
+}
