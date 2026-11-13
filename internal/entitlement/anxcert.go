@@ -89,7 +89,7 @@ func ANXCert(ca ed25519.PrivateKey, userID [8]byte, d Device, notBefore, notAfte
 	tbs = append(tbs, certVersion)
 	tbs = append(tbs, id[:]...)
 	tbs = append(tbs, userID[:]...)
-	tbs = append(tbs, d.Alg, byte(len(d.PublicKey)))
+	tbs = append(tbs, d.Alg, byte(len(d.PublicKey))) // #nosec G115 -- ParseDevice admits 32- or 65-byte keys only.
 	tbs = append(tbs, d.PublicKey...)
 	tbs = binary.BigEndian.AppendUint32(tbs, notBefore)
 	tbs = binary.BigEndian.AppendUint32(tbs, notAfter)
