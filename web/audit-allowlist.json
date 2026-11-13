@@ -1,11 +1,17 @@
 {
-  "$comment": "Advisories waived for development dependencies only. Shipped (production) dependencies are always audited strictly. Each entry expires; after its expiry the nightly audit (Nightly Security, npm audit (web)) fails again. The required pull-request job audits only shipped dependencies and does not read this file. Owner approved GHSA-vfj7-8cjw-p6xm on 2026-10-03.",
+  "$comment": "Advisories waived for development dependencies only. Shipped (production) dependencies are always audited strictly. Each entry expires; after its expiry the nightly audit (Nightly Security, npm audit (web)) fails again. The required pull-request job audits only shipped dependencies and does not read this file. Owner allowed waivers for advisories with no fix on 2026-11-13 (fix all CI).",
   "advisories": [
     {
-      "id": "GHSA-vfj7-8cjw-p6xm",
-      "package": "braces",
-      "reason": "Stack exhaustion on deeply nested patterns. Every braces version is affected and no fix exists. It is reached only through build tools (histoire, stylelint via micromatch/fast-glob/globby) that run on trusted patterns from this repository; it is not in the shipped frontend.",
-      "expires": "2026-11-02"
+      "id": "GHSA-g3hv-75wg-m249",
+      "package": "minimatch",
+      "reason": "Denial of service through glob pattern amplification, fixed only in minimatch 11.0.1. The newest eslint (10.14.0) and @eslint/config-array still require minimatch ^10.2.6, and the newest js-beautify (via @vue/test-utils) reaches it through editorconfig ^3 and glob ^13. All are lint and test tools run on patterns from this repository; none is in the shipped frontend. Drop this entry once eslint and js-beautify accept minimatch 11.",
+      "expires": "2026-12-13"
+    },
+    {
+      "id": "GHSA-3g3m-2fjr-6pw4",
+      "package": "glob",
+      "reason": "An aborted AbortSignal does not stop the walk, fixed only in glob 14.0.2. Reached only through js-beautify (pretty printing in @vue/test-utils), whose newest release still requires glob ^13 and never passes a signal. Test tooling only, not in the shipped frontend.",
+      "expires": "2026-12-13"
     }
   ]
 }
