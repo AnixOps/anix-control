@@ -213,3 +213,8 @@ moved to `github.com/AnixOps/anix-control/v5`.
 
 Do not change these response shapes without checking
 [`docs/features.md`](docs/features.md) and adding compatibility tests.
+
+## Terms Of Use
+
+Use is subject to [`TERMS.md`](TERMS.md) (user agreement, acceptable use and disclaimer, in Chinese). Operators who
+run the panel for others are the service provider and must publish their own terms to their users.
