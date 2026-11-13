@@ -455,7 +455,8 @@ export default {
     sections: {
       mfa: '两步验证',
       accessGroups: '访问组',
-      apiTokens: 'API 令牌'
+      apiTokens: 'API 令牌',
+      licenses: '设备授权'
     },
     mfa: {
       title: '两步验证',

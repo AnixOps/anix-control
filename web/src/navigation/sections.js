@@ -32,7 +32,9 @@ export const ADMIN_PAGE_SECTIONS = Object.freeze({
   security: [
     { id: 'security-mfa', to: '/admin/security/mfa', labelKey: 'adminSecurity.sections.mfa' },
     { id: 'security-access-groups', to: '/admin/security/access-groups', labelKey: 'adminSecurity.sections.accessGroups' },
-    { id: 'security-api-tokens', to: '/admin/security/api-tokens', labelKey: 'adminSecurity.sections.apiTokens' }
+    { id: 'security-api-tokens', to: '/admin/security/api-tokens', labelKey: 'adminSecurity.sections.apiTokens' },
+    // 设备授权: ANX device licensing (internal/entitlement), off by default.
+    { id: 'security-licenses', to: '/admin/security/licenses', labelKey: 'adminSecurity.sections.licenses' }
   ],
   notifications: [
     { id: 'notifications-email', to: '/admin/notifications/email', labelKey: 'adminNotify.channels.email' },

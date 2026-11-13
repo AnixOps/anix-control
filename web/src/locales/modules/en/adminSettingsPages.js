@@ -456,7 +456,8 @@ export default {
     sections: {
       mfa: 'Two-factor authentication',
       accessGroups: 'Access groups',
-      apiTokens: 'API tokens'
+      apiTokens: 'API tokens',
+      licenses: 'Device licenses'
     },
     mfa: {
       title: 'Two-factor authentication',

@@ -63,11 +63,11 @@ describe('Admin security page', () => {
     vi.restoreAllMocks()
   })
 
-  it('shows the three sections and the MFA policy at /admin/security', async () => {
+  it('shows the four sections and the MFA policy at /admin/security', async () => {
     const { wrapper } = await mountAt('/admin/security')
     const links = wrapper.findAll('[data-settings-section]')
-    expect(links.map(link => link.text())).toEqual(['Two-factor authentication', 'Access groups', 'API tokens'])
-    expect(links.map(link => link.attributes('href'))).toEqual(['/admin/security/mfa', '/admin/security/access-groups', '/admin/security/api-tokens'])
+    expect(links.map(link => link.text())).toEqual(['Two-factor authentication', 'Access groups', 'API tokens', 'Device licenses'])
+    expect(links.map(link => link.attributes('href'))).toEqual(['/admin/security/mfa', '/admin/security/access-groups', '/admin/security/api-tokens', '/admin/security/licenses'])
     expect(wrapper.find('[data-security-panel="mfa"]').exists()).toBe(true)
     expect(wrapper.text()).toContain('Recovery codes')
     expect(kernelApi.getKernelAccessGroups).not.toHaveBeenCalled()
