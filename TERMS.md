@@ -1,7 +1,7 @@
 # AnixOps Control 用户协议与免责声明
 
 适用于 AnixOps Control（面板、Agent 对接、安装脚本和文档）的源代码、官方构建和文档。
-基准版本 2.0.0，来源：AnixOps Design `legal/terms.zh-CN.md`。软件许可见 [`LICENSE`](LICENSE)（MIT）。
+基准版本 2.0.1，来源：AnixOps Design `legal/terms.zh-CN.md`。软件许可见 [`LICENSE`](LICENSE)（MIT）。
 
 > 本文件不构成法律意见。正式发布或商用之前，建议请执业律师审阅。
 
@@ -126,10 +126,9 @@
 
 ## 11. 滥用举报和安全问题
 
-- **滥用举报**：认为有人正在用 AnixOps 软件从事第 3 节所列行为，请联系 AnixOps 组织维护者
-  （举报邮箱待公布；公布前，请在相关仓库开 issue 说明需要私下沟通，**不要在公开 issue
-  中写个人信息或证据细节**，维护者会改用私下渠道联系你）。请提供涉及的产品和版本、
-  行为描述、时间、证据和你的联系方式。
+- **滥用举报**：认为有人正在用 AnixOps 软件从事第 3 节所列行为，请发邮件到
+  **abuse@anixops.com**，写明涉及的产品和版本、行为描述、时间、证据和你的联系方式。
+  不要在公开 issue 中写个人信息或证据细节。
 - **安全漏洞**：请通过 GitHub 的私密漏洞报告（Security → Report a vulnerability）
   或私下联系维护者，不要公开披露未修复的漏洞。
 
