@@ -272,6 +272,7 @@ compare_snapshot() {
   local table
   cmp -s "${OUTPUT_DIR}/before/schema.sql" "${OUTPUT_DIR}/after/schema.sql" || {
     error "schema snapshot changed after restore"
+    diff -u "${OUTPUT_DIR}/before/schema.sql" "${OUTPUT_DIR}/after/schema.sql" | head -n 120 >&2 || true
     return 1
   }
   cmp -s "${OUTPUT_DIR}/before/data.sql" "${OUTPUT_DIR}/after/data.sql" || {
