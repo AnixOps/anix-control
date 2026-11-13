@@ -6,7 +6,9 @@
 //   - It seals the module CA's and the forward link CA's private keys, the
 //     DNS provider credentials and, through HKDF-SHA256 with their own
 //     labels, the node group join tokens ("anixops node-group join token v1")
-//     and the ACME account and certificate keys ("anixops acme cache v1"). In
+//     and the ACME account and certificate keys ("anixops acme cache v1"),
+//     and it derives the license CA's signing key ("anixops entitlement
+//     license ca v1"), so rotating the root key changes that CA too. In
 //     memory it stands where module_runtime.ca_kek stood, so every reader of
 //     that key keeps working unchanged.
 //   - The JWT secret and the identity signing key KEK are derived from it
@@ -67,6 +69,10 @@ const (
 	// LabelACMECache derives the key that seals the ACME cache entries
 	// holding a private key (internal/panelcert).
 	LabelACMECache = "anixops acme cache v1"
+	// LabelLicenseCA derives the Ed25519 seed of the license CA that signs
+	// device licenses (internal/entitlement): the ANX nodes trust its public
+	// key as license_ca (anx spec §2.4.1).
+	LabelLicenseCA = "anixops entitlement license ca v1"
 	// LabelFingerprint derives the bytes whose SHA-256 is the key's
 	// fingerprint (Key.Fingerprint): a backup manifest names its root key
 	// without a digest of the key itself.

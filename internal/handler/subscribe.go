@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/hex"
 	"fmt"
 	"net"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/branding"
 	"github.com/AnixOps/anix-control/v5/internal/config"
 	"github.com/AnixOps/anix-control/v5/internal/database"
+	"github.com/AnixOps/anix-control/v5/internal/entitlement"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/requestorigin"
 	"github.com/AnixOps/anix-control/v5/internal/service"
@@ -126,9 +128,46 @@ func (h *SubscribeHandler) GetSubscription(c *gin.Context) {
 	c.Header("Subscription-Userinfo", h.buildUserInfo(resp))
 	c.Header("Profile-Update-Interval", "24") // 24 小时更新间隔
 	c.Header("Profile-Title", branding.ControlName+" Subscription")
+	h.setANXLicense(c, token)
 
 	// 返回订阅内容
 	c.String(http.StatusOK, resp.Content)
+}
+
+// setANXLicense answers the client's ANX license request while ANX
+// licensing is on (internal/entitlement, anx spec §2.4.1): the license
+// CA's public key always, so a client knows to ask, and for a device named
+// by X-AnixOps-Device its license and status. A failure leaves the
+// subscription as it is: the license is renewed on the next refresh.
+func (h *SubscribeHandler) setANXLicense(c *gin.Context, token string) {
+	db := database.Get()
+	if db == nil {
+		return
+	}
+	svc := &entitlement.Service{DB: db}
+	device := strings.TrimSpace(c.GetHeader(entitlement.HeaderDevice))
+	if device == "" {
+		ca, _, err := svc.ANXNodeLicense()
+		if err == nil && ca != "" {
+			c.Header(entitlement.HeaderANXLicenseCA, ca)
+		}
+		return
+	}
+	var user model.User
+	if err := db.Preload("Plan").Where("token = ?", token).First(&user).Error; err != nil {
+		return
+	}
+	grant, err := svc.IssueANX(&user, device)
+	if err != nil || grant == nil {
+		return
+	}
+	if grant.CA != "" {
+		c.Header(entitlement.HeaderANXLicenseCA, grant.CA)
+	}
+	c.Header(entitlement.HeaderANXLicenseStatus, string(grant.Status))
+	if len(grant.License) > 0 {
+		c.Header(entitlement.HeaderANXLicense, hex.EncodeToString(grant.License))
+	}
 }
 
 // buildSubscribeURL is the subscription link handed back in client configs.

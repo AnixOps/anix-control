@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"encoding/hex"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"github.com/AnixOps/anix-control/v5/internal/cache"
 	"github.com/AnixOps/anix-control/v5/internal/config"
 	"github.com/AnixOps/anix-control/v5/internal/database"
+	"github.com/AnixOps/anix-control/v5/internal/entitlement"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/router"
 	"github.com/gin-gonic/gin"
@@ -83,6 +85,7 @@ func (s *SubscribeE2ETestSuite) SetupSuite() {
 		&model.Order{},
 		&model.UserMFA{},
 		&model.SystemConfig{},
+		&model.EntitlementDevice{},
 	)
 	s.Require().NoError(err)
 
@@ -257,6 +260,47 @@ func (s *SubscribeE2ETestSuite) TestSubscriptionHeaders() {
 	// 检查 Content-Disposition
 	contentDisposition := w.Header().Get("Content-Disposition")
 	assert.Contains(s.T(), contentDisposition, "attachment")
+}
+
+// TestANXLicenseHeaders: while ANX licensing is off a subscription
+// carries no license header; on, the license CA always, and for the device
+// the client names, a license from the account's trial.
+func (s *SubscribeE2ETestSuite) TestANXLicenseHeaders() {
+	device := "ed25519:" + strings.Repeat("ab", 32)
+	get := func(withDevice bool) http.Header {
+		req, _ := http.NewRequest("GET", "/s/"+s.testUser.Token, nil)
+		if withDevice {
+			req.Header.Set(entitlement.HeaderDevice, device)
+		}
+		w := httptest.NewRecorder()
+		s.router.ServeHTTP(w, req)
+		s.Require().Equal(http.StatusOK, w.Code)
+		return w.Header()
+	}
+	off := get(true)
+	s.Empty(off.Get(entitlement.HeaderANXLicenseCA))
+	s.Empty(off.Get(entitlement.HeaderANXLicense))
+
+	savedKEK := s.cfg.ModuleRuntime.CAKEK
+	s.cfg.ModuleRuntime.CAKEK = strings.Repeat("42", 32)
+	s.Require().NoError(s.db.Create(&model.SystemConfig{Key: entitlement.KeyANXEnabled, Value: "true"}).Error)
+	defer func() {
+		s.cfg.ModuleRuntime.CAKEK = savedKEK
+		s.db.Where("key = ?", entitlement.KeyANXEnabled).Delete(&model.SystemConfig{})
+		s.db.Where("1 = 1").Delete(&model.EntitlementDevice{})
+	}()
+
+	ca := "c83c22218d9d871e9eb6196777b1ee9715a34420d42646c09e6bbedf3687de26"
+	plain := get(false)
+	s.Equal(ca, plain.Get(entitlement.HeaderANXLicenseCA))
+	s.Empty(plain.Get(entitlement.HeaderANXLicense))
+
+	licensed := get(true)
+	s.Equal(ca, licensed.Get(entitlement.HeaderANXLicenseCA))
+	s.Equal("ok", licensed.Get(entitlement.HeaderANXLicenseStatus))
+	cert, err := hex.DecodeString(licensed.Get(entitlement.HeaderANXLicense))
+	s.Require().NoError(err)
+	s.Len(cert, 123)
 }
 
 // TestETagCaching 测试 ETag 缓存

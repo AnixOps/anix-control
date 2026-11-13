@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/v5/internal/database"
+	"github.com/AnixOps/anix-control/v5/internal/entitlement"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/nodesecrets"
 	"gorm.io/gorm"
@@ -33,7 +34,11 @@ func BuildNodeProtocolConfig(db *gorm.DB, node *model.Node, protocol *model.Node
 	resolved := *protocol
 	nodesecrets.ResolveProtocol(db, &resolved)
 	ReportNodeSecretFindings(ValidateProtocolSecrets(&resolved))
-	return buildNodeProtocolConfig(node, &resolved)
+	config := buildNodeProtocolConfig(node, &resolved)
+	if NormalizeNodeType(string(resolved.Type)) == "anx" && db != nil {
+		applyANXLicense(&entitlement.Service{DB: db}, config)
+	}
+	return config
 }
 
 // buildNodeProtocolConfig builds the configuration of a protocol whose

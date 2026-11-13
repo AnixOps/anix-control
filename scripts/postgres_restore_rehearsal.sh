@@ -248,8 +248,11 @@ snapshot() {
   assert_snapshot_tables
   # PostgreSQL 15+ adds random \restrict/\unrestrict guard tokens to each
   # dump. Strip those nonce lines so the schema hash is reproducible.
+  # Newer 16.x servers also dump a per-column pg_attver option whose value
+  # is assigned at creation time and differs after a restore; mask it.
   pg_dump --schema-only --no-owner --no-acl --no-comments \
-    --dbname="${PG_CLI_DSN}" | sed -E '/^\\(restrict|unrestrict)/d' >"${directory}/schema.sql"
+    --dbname="${PG_CLI_DSN}" | sed -E -e '/^\\(restrict|unrestrict)/d' \
+    -e 's/pg_attver=[0-9]+/pg_attver=N/g' >"${directory}/schema.sql"
   sha256sum "${directory}/schema.sql" | awk '{print $1}' >"${directory}/schema.sha256"
   pg_dump --data-only --column-inserts --no-owner --no-acl \
     --dbname="${PG_CLI_DSN}" | sed -E '/^\\(restrict|unrestrict)/d' >"${directory}/data.sql"
@@ -272,6 +275,7 @@ compare_snapshot() {
   local table
   cmp -s "${OUTPUT_DIR}/before/schema.sql" "${OUTPUT_DIR}/after/schema.sql" || {
     error "schema snapshot changed after restore"
+    diff -u "${OUTPUT_DIR}/before/schema.sql" "${OUTPUT_DIR}/after/schema.sql" | head -n 120 >&2 || true
     return 1
   }
   cmp -s "${OUTPUT_DIR}/before/data.sql" "${OUTPUT_DIR}/after/data.sql" || {

@@ -7,11 +7,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net"
 	"slices"
 	"strconv"
 	"strings"
 
+	"github.com/AnixOps/anix-control/v5/internal/entitlement"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"gorm.io/gorm"
 )
@@ -98,6 +100,27 @@ func buildANXConfig(config, settings map[string]any) {
 	// for anx-nodes older than the second generation.
 	if anxGenSetting(settings, "min_wire_gen") == 2 {
 		config["min_wire_gen"] = 2
+	}
+}
+
+// applyANXLicense adds the license options of the anx-node inbound (anx
+// spec §2.4.1) while ANX licensing is on (internal/entitlement): the
+// license CA the node trusts and, when required, require_license. Like the
+// other optional keys they go out only when set. anx-node refuses
+// require_license beside the wg jacket (its sessions never present a
+// license), so such a node only accepts licenses.
+func applyANXLicense(licenses *entitlement.Service, config map[string]any) {
+	ca, require, err := licenses.ANXNodeLicense()
+	if err != nil {
+		log.Printf("anx license settings: %v", err)
+		return
+	}
+	if ca == "" {
+		return
+	}
+	config["license_ca"] = []string{ca}
+	if _, wg := config["wg_listen_port"]; require && !wg {
+		config["require_license"] = true
 	}
 }
 

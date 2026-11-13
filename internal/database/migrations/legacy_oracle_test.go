@@ -231,6 +231,7 @@ func laterModels() []any {
 		&model.ClientFailureReport{},       // 0032_cross_border_standby_and_entry_pools
 		&model.Line{},                      // 0035_network_lines, 0036_forward_routes_as_lines
 		&model.Transport{},                 // 0035_network_lines
+		&model.EntitlementDevice{},         // 0037_entitlement_devices
 	}
 }
 
