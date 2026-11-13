@@ -28,6 +28,12 @@ type Draft struct {
 	Chain      []Hop                      `json:"chain"`
 	ProtocolID uint                       `json:"protocol_id,omitempty"`
 	Targets    []*networkv1.ForwardTarget `json:"targets,omitempty"`
+	// Policy, HopBalance, QuotaBytes and ExpiresAt are the line's, as the
+	// line API reads them; they replace the stored ones.
+	Policy     *networkv1.ForwardPolicy `json:"policy,omitempty"`
+	HopBalance string                   `json:"hop_balance,omitempty"`
+	QuotaBytes uint64                   `json:"quota_bytes,omitempty"`
+	ExpiresAt  int64                    `json:"expires_at_unix_ms,omitempty"`
 	// Revision is the stored line's on an update.
 	Revision uint64 `json:"revision,omitempty"`
 }
@@ -55,8 +61,7 @@ func (w *Writer) Create(ctx context.Context, requestID string, d Draft) (string,
 }
 
 // Update replaces line id at d.Revision. What a draft does not hold (the
-// route's policy, limits and labels, a hop's transport while its devices
-// stay) is kept.
+// route's labels, a hop's transport while its devices stay) is kept.
 func (w *Writer) Update(ctx context.Context, requestID, id string, d Draft) error {
 	stored, err := w.Forward.GetRoute(ctx, id)
 	if err != nil {
@@ -103,6 +108,9 @@ func (w *Writer) route(d Draft, route *forwardv1.Route) (*forwardv1.Route, error
 		route.Listen = &forwardv1.Listen{}
 	}
 	route.Listen.Port, route.Listen.Protocol = d.Port, l4Protocol(d.L4)
+	if err := policy(d, route); err != nil {
+		return nil, err
+	}
 	hops := make([]*forwardv1.Hop, len(d.Chain))
 	for i, step := range d.Chain {
 		hop := &forwardv1.Hop{}
@@ -149,6 +157,53 @@ func (w *Writer) route(d Draft, route *forwardv1.Route) (*forwardv1.Route, error
 	}
 	route.Targets = []*forwardv1.Target{{Host: node.Host, Port: uint32(protocol.Port)}} // #nosec G115 -- a port.
 	return route, nil
+}
+
+// policy writes d's policy and limits onto route; the route's direct mode
+// and target policy, which lines do not use, stay.
+func policy(d Draft, route *forwardv1.Route) error {
+	p := d.Policy
+	target, ok := balances[p.GetBalance()]
+	nextHop, hopOK := balances[d.HopBalance]
+	if !ok || !hopOK {
+		return fmt.Errorf("%w: unknown balance %q or hop_balance %q", kernelforward.ErrInvalidRequest, p.GetBalance(), d.HopBalance)
+	}
+	proxy, ok := proxyProtocols[p.GetProxyProtocol()]
+	if !ok {
+		return fmt.Errorf("%w: unknown proxy_protocol %q", kernelforward.ErrInvalidRequest, p.GetProxyProtocol())
+	}
+	if route.Policy == nil {
+		route.Policy = &forwardv1.Policy{}
+	}
+	route.Policy.Target, route.Policy.NextHop, route.Policy.ProxyProtocol = target, nextHop, proxy
+	route.Policy.Health, route.Policy.CircuitBreaker = nil, nil
+	if h := p.GetHealth(); h != nil {
+		route.Policy.Health = &forwardv1.HealthCheck{IntervalMs: h.GetIntervalMs(), TimeoutMs: h.GetTimeoutMs(), Disabled: h.GetDisabled()}
+	}
+	if b := p.GetCircuitBreaker(); b != nil {
+		route.Policy.CircuitBreaker = &forwardv1.CircuitBreaker{FailureThreshold: b.GetFailureThreshold(), OpenMs: b.GetOpenMs()}
+	}
+	route.Limits = &forwardv1.Limits{BandwidthBps: p.GetBandwidthBps(), MaxConns: p.GetMaxConns(), QuotaBytes: d.QuotaBytes, ExpiresAtUnixMs: d.ExpiresAt}
+	if proto.Equal(route.Limits, &forwardv1.Limits{}) {
+		route.Limits = nil
+	}
+	return nil
+}
+
+// balances is kernelforward.NetworkBalances the other way; empty is the
+// default.
+var balances = func() map[string]forwardv1.BalanceStrategy {
+	out := map[string]forwardv1.BalanceStrategy{"": forwardv1.BalanceStrategy_BALANCE_STRATEGY_UNSPECIFIED}
+	for strategy, name := range kernelforward.NetworkBalances {
+		out[name] = strategy
+	}
+	return out
+}()
+
+var proxyProtocols = map[string]forwardv1.ProxyProtocol{
+	"":   forwardv1.ProxyProtocol_PROXY_PROTOCOL_UNSPECIFIED,
+	"v1": forwardv1.ProxyProtocol_PROXY_PROTOCOL_V1,
+	"v2": forwardv1.ProxyProtocol_PROXY_PROTOCOL_V2,
 }
 
 func role(i, n int) forwardv1.HopRole {

@@ -147,7 +147,11 @@ type Line struct {
 	// HopBalance balances a kernel hop over the next hop's devices.
 	Policy     *networkv1.ForwardPolicy `json:"policy,omitempty"`
 	HopBalance string                   `json:"hop_balance,omitempty"`
-	Rate       float64                  `json:"rate"`
+	// QuotaBytes and ExpiresAt pause the line once its traffic reaches
+	// the quota or the time passes; 0 is neither.
+	QuotaBytes uint64  `json:"quota_bytes,omitempty"`
+	ExpiresAt  int64   `json:"expires_at_unix_ms,omitempty"`
+	Rate       float64 `json:"rate"`
 	// ServeAt is the device the protocol is served at when the
 	// administrator chose it; empty is the first userspace device.
 	ServeAt string `json:"serve_at,omitempty"`

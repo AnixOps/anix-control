@@ -6,10 +6,12 @@ import (
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	forwardv1 "github.com/AnixOps/anix-control/sdk/api/forward/v1"
+	networkv1 "github.com/AnixOps/anix-control/sdk/api/network/v1"
 	"github.com/AnixOps/anix-control/v5/internal/kernelforward"
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"github.com/AnixOps/anix-control/v5/internal/routesubscription"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestWriterStoresLinesAsRoutes(t *testing.T) {
@@ -56,8 +58,33 @@ func TestWriterStoresLinesAsRoutes(t *testing.T) {
 	require.Equal(t, forwardv1.Engine_ENGINE_NFTABLES, route.GetHops()[0].GetEngine())
 	require.Equal(t, forwardv1.Engine_ENGINE_NETWORK, route.GetHops()[1].GetEngine())
 
+	require.Nil(t, line.Policy)
+
 	draft.Show, draft.Name, draft.Revision = false, "renamed", line.Revision
+	draft.Policy = &networkv1.ForwardPolicy{Balance: "round_robin", ProxyProtocol: "v2", BandwidthBps: 8_000_000, MaxConns: 64,
+		Health: &networkv1.ForwardHealth{IntervalMs: 5000, TimeoutMs: 1000}, CircuitBreaker: &networkv1.ForwardBreaker{FailureThreshold: 3, OpenMs: 30000}}
+	draft.HopBalance, draft.QuotaBytes, draft.ExpiresAt = "round_robin", 1<<30, 4102444800000
 	require.NoError(t, w.Update(ctx, "r-2", id, draft))
+	s, err = Import(db)
+	require.NoError(t, err)
+	for _, l := range s.Lines {
+		if l.ID == id {
+			line = l
+		}
+	}
+	require.True(t, proto.Equal(draft.Policy, line.Policy), "the line reads back the policy it was written with: %v", line.Policy)
+	require.Equal(t, "round_robin", line.HopBalance)
+	require.Equal(t, uint64(1<<30), line.QuotaBytes)
+	require.Equal(t, int64(4102444800000), line.ExpiresAt)
+
+	draft.Revision, draft.Policy.ProxyProtocol = line.Revision, "v3"
+	require.ErrorIs(t, w.Update(ctx, "r-2b", id, draft), kernelforward.ErrInvalidRequest)
+	draft.Policy, draft.HopBalance, draft.QuotaBytes, draft.ExpiresAt = nil, "", 0, 0
+	require.NoError(t, w.Update(ctx, "r-2c", id, draft))
+	route, err = forward.GetRoute(ctx, id)
+	require.NoError(t, err)
+	require.Nil(t, route.GetLimits(), "a draft without limits clears them")
+	require.Equal(t, forwardv1.ProxyProtocol_PROXY_PROTOCOL_UNSPECIFIED, route.GetPolicy().GetProxyProtocol())
 	require.ErrorIs(t, w.Update(ctx, "r-3", id, draft), kernelforward.ErrRevisionMismatch)
 	status, err := w.Offers.Get(ctx, id)
 	require.NoError(t, err)

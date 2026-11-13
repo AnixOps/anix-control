@@ -44,6 +44,31 @@
       </UiField>
       <UiSwitch v-model="form.enabled" :label="t('lines.form.enabled')" />
       <UiSwitch v-if="form.protocol !== FIXED" v-model="form.show" :label="t('lines.form.show')" :description="t('lines.form.showHelp')" />
+
+      <div class="line-form__more">
+        <button type="button" class="line-form__toggle" :aria-expanded="advanced" aria-controls="line-form-advanced" data-testid="line-form-advanced" @click="advanced = !advanced">
+          <ChevronRight class="line-form__chevron" :size="16" aria-hidden="true" />{{ t('lines.form.advanced') }}
+        </button>
+        <div v-show="advanced" id="line-form-advanced" class="line-form__advanced">
+          <h3 class="line-form__sub">{{ t('lines.form.limits') }}</h3>
+          <div class="line-form__grid">
+            <UiNumberField v-model="form.bandwidth" :label="t('lines.form.bandwidth')" unit="Mbps" :min="0" :step="0.1" :placeholder="t('lines.form.unlimited')" />
+            <UiNumberField v-model="form.quota" :label="t('lines.form.quota')" unit="GB" :min="0" :step="0.1" :placeholder="t('lines.form.unlimited')" />
+            <UiNumberField v-model="form.maxConns" :label="t('lines.form.maxConns')" :min="0" :placeholder="t('lines.form.unlimited')" />
+            <UiTextField v-model="form.expires" type="datetime-local" :label="t('lines.form.expires')" :help="t('lines.form.expiresHelp')" />
+          </div>
+          <h3 class="line-form__sub">{{ t('lines.form.forwarding') }}</h3>
+          <UiSelect v-model="form.proxyProtocol" :options="proxyOptions" :label="t('lines.form.proxyProtocol')" :help="t('lines.form.proxyProtocolHelp')" data-testid="line-form-proxy" />
+          <UiSelect v-if="form.protocol === FIXED" v-model="form.balance" :options="balanceOptions" :label="t('lines.form.balance')" :help="t('lines.form.balanceHelp')" />
+          <UiSwitch v-model="form.healthOff" :label="t('lines.form.healthOff')" :description="t('lines.form.healthOffHelp')" />
+          <div class="line-form__grid">
+            <UiNumberField v-model="form.interval" :label="t('lines.form.interval')" :unit="t('lines.form.seconds')" :min="0" placeholder="5" :disabled="form.healthOff" />
+            <UiNumberField v-model="form.timeout" :label="t('lines.form.timeout')" :unit="t('lines.form.seconds')" :min="0" placeholder="2" :disabled="form.healthOff" :error="message('timeout')" />
+            <UiNumberField v-model="form.threshold" :label="t('lines.form.threshold')" :unit="t('lines.form.times')" :min="0" placeholder="3" :help="t('lines.form.thresholdHelp')" />
+            <UiNumberField v-model="form.openFor" :label="t('lines.form.openFor')" :unit="t('lines.form.seconds')" :min="0" placeholder="30" :help="t('lines.form.openForHelp')" />
+          </div>
+        </div>
+      </div>
       <div v-if="saveError" class="fwd-note is-danger" role="alert">
         <p>{{ saveError }}</p>
         <ul v-if="violations.length"><li v-for="(item, index) in violations" :key="index">{{ item.message }}</li></ul>
@@ -63,12 +88,13 @@
 // A device on a cloud that scans its machines forwards in the kernel (its
 // network settings), which the preview's dashed links show.
 import { computed, ref, watch } from 'vue'
+import { ChevronRight } from '@lucide/vue'
 import { UiButton, UiCheckbox, UiField, UiNumberField, UiSelect, UiSheet, UiSwitch, UiTextarea, UiTextField, useToast } from '@/ui'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { createNetLine, updateNetLine } from '@/api/kernel'
 import LinePath from './LinePath.vue'
 import { buildLines } from './linesModel'
-import { FIXED, lineDraft, lineForm, parseTargets, protocolsOn, validate } from './lineForm'
+import { BALANCES, FIXED, PROXY_PROTOCOLS, hasPolicy, lineDraft, lineForm, parseTargets, protocolsOn, validate } from './lineForm'
 import '@/components/forward/forward.css'
 
 const props = defineProps({
@@ -89,10 +115,13 @@ const errors = ref({})
 const saving = ref(false)
 const saveError = ref('')
 const violations = ref([])
+// advanced shows the policy and limits; open when the line has any.
+const advanced = ref(false)
 
 watch(() => props.open, (value) => {
   if (!value) return
   form.value = lineForm(props.line)
+  advanced.value = hasPolicy(form.value)
   errors.value = {}
   saveError.value = ''
   violations.value = []
@@ -105,6 +134,9 @@ const protocolOptions = computed(() => [
   ...protocols.value.map(item => ({ value: item.id, label: item.type, description: t('lines.form.protocolPort', { port: item.port }) })),
   { value: FIXED, label: t('lines.form.fixed') }
 ])
+
+const proxyOptions = computed(() => PROXY_PROTOCOLS.map(value => ({ value, label: t(`lines.form.proxy.${value}`) })))
+const balanceOptions = computed(() => BALANCES.map(value => ({ value, label: t(`lines.form.balances.${value}`) })))
 
 // A new exit keeps the protocol only while the exit serves it; a protocol
 // fills an empty port with its own.
@@ -139,6 +171,7 @@ const message = key => (errors.value[key] ? t(`lines.form.errors.${errors.value[
 async function save() {
   if (saving.value) return
   errors.value = validate(form.value)
+  if (errors.value.timeout) advanced.value = true
   if (Object.keys(errors.value).length) return
   const body = lineDraft(form.value, editing.value ? props.line.revision : 0)
   saving.value = true
@@ -215,6 +248,51 @@ async function save() {
 .line-form__pick button:focus-visible {
   outline: var(--focus-ring);
   outline-offset: var(--focus-ring-offset);
+}
+
+.line-form__more {
+  display: grid;
+  gap: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--separator);
+}
+
+.line-form__toggle {
+  display: inline-flex;
+  gap: var(--space-1);
+  align-items: center;
+  justify-self: start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--label-1);
+  font: inherit;
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+}
+
+.line-form__toggle:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.line-form__chevron {
+  transition: transform var(--duration-fast, 120ms) ease;
+}
+
+.line-form__toggle[aria-expanded="true"] .line-form__chevron {
+  transform: rotate(90deg);
+}
+
+.line-form__advanced {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.line-form__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--space-4);
 }
 
 .line-form__order {

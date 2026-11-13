@@ -54,6 +54,9 @@ const NETWORK = {
       id: ROUTES[index].route.id, name, enabled: true, show: true, port: 443 + index * 1000, l4: ['tcp'], rate: index === 1 ? 1.5 : 1, revision: 3,
       entries: hops[0].map(ref), chain: hops.map(ids => ({ devices: ids.map(ref) })), exit: ref(hops.at(-1)[0]),
       protocol: { id: index + 1, type: PROTOCOLS[index], device: ref(hops.at(-1)[0]), port: 443 },
+      // sha-hk-tyo passes the user's address on and has limits (the edit
+      // sheet opens its advanced part).
+      ...(index === 1 ? { policy: { proxy_protocol: 'v2', bandwidth_bps: 200_000_000 }, quota_bytes: 500 * GB } : {}),
       ...(index === 2 ? { rules: [{ name: 'ai-via-jp', domains: ['openai.com', 'anthropic.com'], exit: 'proxy-6', enabled: true }] } : {})
     })),
     ...[6, 11, 14].map(id => ({
