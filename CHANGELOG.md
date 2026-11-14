@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 5.0.7 - 2026-11-14
+
+Installs Agent 5.0.5 on nodes (passes ANX licensing settings to anx-node
+0.1.0-alpha.22).
+
+### Changed
+
+- An ANX device holds a seat of the user's device limit for 7 days after its
+  last license request (was 30), the lifetime of one license: a reinstalled
+  or replaced device frees its old seat within a week.
+
 ## 5.0.6 - 2026-11-14
 
 ### Added
