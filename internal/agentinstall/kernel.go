@@ -205,6 +205,14 @@ func UpgradeKernels(artifactDir, controlURL string) ([]agentcontrol.UpgradeKerne
 // (`ssh-keygen -Y sign`, PROTOCOL.sshsig) of sums by KernelReleaseKey in
 // KernelSignatureNamespace, as the Agent does.
 func VerifyKernelSums(sums []byte, signature string) error {
+	return VerifyReleaseSums(sums, signature, kernelReleaseKey)
+}
+
+// VerifyReleaseSums checks that signature is an armored SSH signature of
+// sums in KernelSignatureNamespace by trustedKey (an authorized_keys line).
+// Every anx release (anx-node, the ANX clients: internal/clientrelease) is
+// signed this way by KernelReleaseKey.
+func VerifyReleaseSums(sums []byte, signature, trustedKey string) error {
 	const begin, end = "-----BEGIN SSH SIGNATURE-----", "-----END SSH SIGNATURE-----"
 	text := strings.TrimSpace(signature)
 	if !strings.HasPrefix(text, begin) || !strings.HasSuffix(text, end) {
@@ -238,12 +246,12 @@ func VerifyKernelSums(sums []byte, signature string) error {
 	if err != nil {
 		return fmt.Errorf("the signature's key: %w", err)
 	}
-	trusted, _, _, _, err := ssh.ParseAuthorizedKey([]byte(kernelReleaseKey))
+	trusted, _, _, _, err := ssh.ParseAuthorizedKey([]byte(trustedKey))
 	if err != nil {
 		return fmt.Errorf("the trusted key: %w", err)
 	}
 	if !bytes.Equal(signer.Marshal(), trusted.Marshal()) {
-		return errors.New("the signature is not by the kernel release key")
+		return errors.New("the signature is not by the release key")
 	}
 	var digest []byte
 	switch wire.HashAlgorithm {

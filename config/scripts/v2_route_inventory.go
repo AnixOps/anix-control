@@ -717,6 +717,26 @@ func (c *collector) containsSafeSubscribePath(node ast.Node, env *scope) bool {
 	return found
 }
 
+// safeSubscribeSuffixes are the routes registered on the subscription
+// path, by method: the subscription itself (GET /<path>/:token), the
+// AnixOps Net clients' failure report on its address (POST
+// /<path>/:token/report) and the ANX client downloads (GET
+// /<path>/:token/client and /<path>/:token/client/:version/:file,
+// internal/clientrelease).
+var safeSubscribeSuffixes = map[string][]string{
+	"GET":  {"/:token", "/:token/client", "/:token/client/:version/:file"},
+	"POST": {"/:token/report"},
+}
+
+func isKnownSafeSubscribeRegistrationPath(method string, expression ast.Expr, env *scope) bool {
+	for _, suffix := range safeSubscribeSuffixes[method] {
+		if isSafeSubscribeRegistrationPath(expression, env, suffix) {
+			return true
+		}
+	}
+	return false
+}
+
 func (c *collector) isDirectSafeSubscribeRegistration(statement ast.Stmt, env *scope) bool {
 	expressionStatement, ok := statement.(*ast.ExprStmt)
 	if !ok {
@@ -730,14 +750,8 @@ func (c *collector) isDirectSafeSubscribeRegistration(statement ast.Stmt, env *s
 	if !ok || len(call.Args) < 2 {
 		return false
 	}
-	// The subscription itself (GET /<path>/:token) and the AnixOps Net
-	// clients' failure report on its address (POST /<path>/:token/report).
-	suffix, known := map[string]string{"GET": "/:token", "POST": "/:token/report"}[selector.Sel.Name]
-	if !known {
-		return false
-	}
 	target, err := c.resolveGroupWithMiddlewareMutation(selector.X, env, false)
-	if err != nil || target == nil || target.base != "" || !isSafeSubscribeRegistrationPath(call.Args[0], env, suffix) {
+	if err != nil || target == nil || target.base != "" || !isKnownSafeSubscribeRegistrationPath(selector.Sel.Name, call.Args[0], env) {
 		return false
 	}
 	for _, argument := range call.Args[1:] {
@@ -912,8 +926,7 @@ func (c *collector) registerArguments(target *group, method string, args []ast.E
 	}
 	relativePath, ok := resolveString(args[0], env)
 	if !ok {
-		if target.base == "" && ((method == "GET" && isSafeSubscribeRegistrationPath(args[0], env, "/:token")) ||
-			(method == "POST" && isSafeSubscribeRegistrationPath(args[0], env, "/:token/report"))) {
+		if target.base == "" && isKnownSafeSubscribeRegistrationPath(method, args[0], env) {
 			return nil
 		}
 		if isV2Group(target) {

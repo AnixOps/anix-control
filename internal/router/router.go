@@ -105,6 +105,12 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 	// (internal/clientreport), rate limited per token.
 	clientReports := handler.NewClientReportHandler(subscribeHandler)
 	r.POST("/"+subscribePath+"/:token/report", clientReports.Report)
+	// The ANX edition of AnixOps Net for subscribers (internal/clientrelease,
+	// docs/reference/client-downloads.md): the newest release and its files,
+	// behind the subscription token, rate limited like public downloads.
+	clientReleases := handler.NewClientReleasesHandler(subscribeHandler)
+	r.GET("/"+subscribePath+"/:token/client", publicLimiter.Middleware(), clientReleases.Latest)
+	r.GET("/"+subscribePath+"/:token/client/:version/:file", publicLimiter.Middleware(), clientReleases.Download)
 
 	// One-command node onboarding (forward-sdk.md, section 9): the signed
 	// install script, its signature, the release metadata it reads and the
@@ -702,6 +708,10 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		v4.POST("/kernel/agents/upgrades/:id/pause", upgrades.Pause)
 		v4.POST("/kernel/agents/upgrades/:id/resume", upgrades.Resume)
 		v4.POST("/kernel/agents/upgrades/:id/abort", upgrades.Abort)
+		// ANX client releases subscribers download (internal/clientrelease).
+		v4.GET("/kernel/client-releases", clientReleases.List)
+		v4.POST("/kernel/client-releases", clientReleases.Upload)
+		v4.DELETE("/kernel/client-releases/:version", clientReleases.Delete)
 	}
 
 	// The first administrator's claim link (adminclaim, N10): public, at the

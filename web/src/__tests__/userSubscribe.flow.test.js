@@ -134,6 +134,44 @@ describe('User Subscribe flow', () => {
     expect(toastMessages('success')).toEqual(['Copied the v2rayN link'])
   })
 
+  it('offers the ANX client downloads when Control holds a release', async () => {
+    mockGetSubscription.mockResolvedValue(ok(SUMMARY))
+    const base = `${window.location.protocol}//${window.location.host}/s/sub-token-1`
+    mockFetch.mockImplementation(async (url) => {
+      if (url !== `${base}/client`) return { ok: false, status: 404 }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          data: {
+            version: '0.3.0-beta.6',
+            testflight_url: 'https://testflight.apple.com/join/abcdef',
+            sha256sums_url: `${base}/client/0.3.0-beta.6/SHA256SUMS`,
+            files: [
+              { name: 'anixops-net-anx-0.3.0-beta.6-windows-x64-portable.zip', platform: 'windows-portable', os: 'windows', size: 30 * 1024 ** 2, url: `${base}/client/0.3.0-beta.6/anixops-net-anx-0.3.0-beta.6-windows-x64-portable.zip` },
+              { name: 'anixops-net-anx-0.3.0-beta.6-ios-testflight.url', platform: 'ios', os: 'ios', size: 40, url: `${base}/client/0.3.0-beta.6/anixops-net-anx-0.3.0-beta.6-ios-testflight.url` }
+            ]
+          }
+        })
+      }
+    })
+    await renderPage()
+    const section = await screen.findByRole('region', { name: 'AnixOps Net (ANX edition)' })
+    const zip = within(section).getByRole('link', { name: 'Download Windows Portable' })
+    expect(zip.getAttribute('href')).toBe(`${base}/client/0.3.0-beta.6/anixops-net-anx-0.3.0-beta.6-windows-x64-portable.zip`)
+    expect(within(section).getByRole('link', { name: 'Join TestFlight' }).getAttribute('href')).toBe('https://testflight.apple.com/join/abcdef')
+    expect(within(section).queryByText('macOS')).toBeNull()
+  })
+
+  it('hides the ANX client downloads when Control holds none', async () => {
+    mockGetSubscription.mockResolvedValue(ok(SUMMARY))
+    mockFetch.mockResolvedValue({ ok: false, status: 404 })
+    await renderPage()
+    await screen.findByLabelText('Subscription link', { selector: '#subscribe-link' })
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled())
+    expect(screen.queryByRole('region', { name: 'AnixOps Net (ANX edition)' })).toBeNull()
+  })
+
   it('previews another format from this origin and downloads it with the right extension', async () => {
     mockGetSubscription.mockResolvedValue(ok({ ...SUMMARY, subscribe_domains: ['sub-a.example.com'] }))
     mockFetch.mockResolvedValue({ ok: true, status: 200, text: async () => '[Interface]\nPrivateKey = test' })
