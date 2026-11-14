@@ -22,6 +22,7 @@ This section is the operator/developer reference index for `anix-control`.
 - [agent-versioning.md](agent-versioning.md): Control and Agent version lines, independent patches, the Agent protocol revision and the compatibility judgement (badge, inventory, upgrade campaigns)
 - [node-credential-rotation.md](node-credential-rotation.md): the admin API that rotates a node's Agent credentials (`POST /api/v4/kernel/agents/rotate-credentials`)
 - [admin-api-tokens.md](admin-api-tokens.md): administrators' personal access tokens for automation: format, scopes, endpoints, audit and threat model
+- [client-downloads.md](client-downloads.md): the ANX edition of the AnixOps Net client that Control hosts for subscribers: release files, signature, upload, download routes
 - [runtime.md](runtime.md): NodeX mode vs local Ansible mode, recommended `nftables_ansible` defaults, and where to operate each path
 
 ## Runtime And Boundary References

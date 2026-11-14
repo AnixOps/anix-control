@@ -63,6 +63,8 @@
         <UiQrCode :value="sub.link.value" :label="t('portal.subscribe.qr.label')" :caption="t('portal.subscribe.qr.caption')" data-subscribe-qr />
       </section>
 
+      <AnxClientDownloads :link="ownOriginLink" />
+
       <section class="subscribe-section" aria-labelledby="subscribe-clients-title" data-subscribe-clients>
         <div class="subscribe-section__head">
           <h2 id="subscribe-clients-title" class="subscribe-section__title">{{ t('portal.subscribe.clients.title') }}</h2>
@@ -258,6 +260,7 @@ import { useUserSubscription } from '@/composables/useUserSubscription'
 import { useUserStore } from '@/stores/user'
 import { panelErrorMessage, unwrapPanel } from '@/utils/panelResponse'
 import LoadError from '@/components/common/LoadError.vue'
+import AnxClientDownloads from './AnxClientDownloads.vue'
 import { SUBSCRIPTION_CLIENTS, SUBSCRIPTION_FORMATS } from './subscriptionClients'
 import UiButton from '@/ui/UiButton.vue'
 import UiCopyField from '@/ui/UiCopyField.vue'
@@ -290,6 +293,9 @@ function shortBytes(value) {
 }
 
 // Clients ------------------------------------------------------------------
+// The ANX client downloads are read from this page's own origin, like the
+// preview (a subscription domain may not allow this page to fetch it).
+const ownOriginLink = computed(() => sub.linkFor('', typeof window !== 'undefined' ? window.location.host : ''))
 const profileName = computed(() => (typeof window !== 'undefined' ? window.location.host : 'AnixOps'))
 const clients = computed(() => SUBSCRIPTION_CLIENTS.map(client => ({
   ...client,

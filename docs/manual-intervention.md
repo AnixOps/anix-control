@@ -132,3 +132,16 @@ bash config/deploy/clean_local_build_artifacts.sh --include-deploy-backups
 
 The deploy-backup cleanup mode removes stale archive leftovers in the checkout
 only. It keeps database backups, config, certificates, and `web/node_modules`.
+
+## ANX client downloads (2026-11-14)
+
+The ANX edition of AnixOps Net is downloaded from Control
+(docs/reference/client-downloads.md). On the production Control:
+
+- [ ] Set `agent_install.artifact_dir` (already set where Control hosts
+  anx-node releases).
+- [ ] Let the reverse proxy accept large uploads on
+  `/api/v4/kernel/client-releases` (nginx `client_max_body_size 600m;`).
+- [ ] Create an admin API token (`admin` scope) of a super administrator and
+  store it, with the Control address, in the anx repository Environment the
+  client release workflows use, so they can upload releases.

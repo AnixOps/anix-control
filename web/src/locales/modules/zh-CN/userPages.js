@@ -153,6 +153,23 @@ export default {
       },
       missing: '还没有订阅链接。',
       loadFailed: '无法加载订阅信息。',
+      anx: {
+        title: 'AnixOps Net 客户端（ANX 版）',
+        hint: '本站专用客户端 {version}，支持 ANX 协议',
+        os: { windows: 'Windows', macos: 'macOS', linux: 'Linux', android: '安卓', ios: 'iPhone / iPad' },
+        kind: {
+          windows: '安装版',
+          'windows-portable': '便携版',
+          macos: '安装包',
+          'linux-deb': '.deb',
+          linux: '.tar.gz',
+          android: 'APK'
+        },
+        downloadLabel: '下载 {os} {name}',
+        testflight: '加入 TestFlight',
+        testflightAsk: '通过 TestFlight 安装，请联系客服获取邀请。',
+        verify: '下载链接含你的订阅令牌，请勿分享。校验文件：'
+      },
       clients: {
         title: '导入到客户端',
         hint: '点击后在已安装的客户端中打开',

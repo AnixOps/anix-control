@@ -154,6 +154,23 @@ export default {
       },
       missing: 'You don’t have a subscription link yet.',
       loadFailed: 'Could not load your subscription.',
+      anx: {
+        title: 'AnixOps Net (ANX edition)',
+        hint: 'This service’s own client {version}, with the ANX protocol',
+        os: { windows: 'Windows', macos: 'macOS', linux: 'Linux', android: 'Android', ios: 'iPhone / iPad' },
+        kind: {
+          windows: 'Installer',
+          'windows-portable': 'Portable',
+          macos: 'Installer',
+          'linux-deb': '.deb',
+          linux: '.tar.gz',
+          android: 'APK'
+        },
+        downloadLabel: 'Download {os} {name}',
+        testflight: 'Join TestFlight',
+        testflightAsk: 'Installed through TestFlight. Ask support for an invitation.',
+        verify: 'Download links carry your subscription token. Do not share them. Checksums:'
+      },
       clients: {
         title: 'Import to a client',
         hint: 'Opens the client if it’s installed',
