@@ -2,6 +2,94 @@
 
 ## Unreleased
 
+## 5.0.6 - 2026-11-14
+
+### Added
+
+- Control hosts the ANX edition of the AnixOps Net client for subscribers
+  (docs/reference/client-downloads.md). Super administrators, or the anx
+  release workflow with their admin API token, upload a signed release with
+  `POST /api/v4/kernel/client-releases` (SHA256SUMS signed by the anx release
+  key, as for anx-node); `GET` lists the stored releases and `DELETE
+  /api/v4/kernel/client-releases/{version}` removes one. Releases are kept in
+  `agent_install.artifact_dir/anixops-net-anx/`.
+- Subscribers download the newest release with their subscription token:
+  `GET /{subscribe_path}/{token}/client` and
+  `GET /{subscribe_path}/{token}/client/{version}/{file}` (banned or expired
+  subscribers get 403). The subscription page shows an "AnixOps Net (ANX
+  edition)" section with the Windows, macOS, Linux and Android files and the
+  iOS TestFlight invitation when Control holds a release; without one the page
+  is unchanged.
+- To use it, set `agent_install.artifact_dir` and let the reverse proxy in
+  front of Control accept uploads of a few hundred MB on
+  `/api/v4/kernel/client-releases` (nginx `client_max_body_size`).
+- ANX licensing on the panel side, off by default (`internal/entitlement`,
+  anx spec §2.4.1). A generic feature entitlement with `anx` as its first
+  feature: the panel's license CA, derived from the root key, signs a
+  7-day ANX device certificate when a client refreshes its subscription with
+  `X-AnixOps-Device`, while the plan includes ANX or the account's one trial
+  runs and a seat of the user's device limit is free. Devices are kept in
+  `v5_entitlement_device` (migration `0037_entitlement_devices`). With
+  `entitlement.anx.enabled` on, ANX nodes get `license_ca` and, with
+  `entitlement.anx.require`, `require_license`.
+- 安全 → 设备授权 (`/admin/security/licenses`): the ANX licensing switches,
+  trial days, the plans that include ANX, the license CA, and the devices
+  that asked for a license with revoke and restore. API:
+  `GET|PUT /api/v4/kernel/entitlements/anx`,
+  `GET /api/v4/kernel/entitlements/anx/devices`,
+  `POST /api/v4/kernel/entitlements/anx/devices/:id/(revoke|restore)`, all audited
+  (module `entitlement`).
+- Lines carry their forwarding policy and limits: `POST`/`PUT /api/v5/net/lines` take `policy` (PROXY protocol,
+  balance over fixed targets, health check, circuit breaker, bandwidth, max connections), `hop_balance`,
+  `quota_bytes` and `expires_at_unix_ms`, which `GET /api/v4/kernel/network/lines` now also answers. The line sheet
+  edits them under 高级设置 / Advanced, so they stay editable once the old route editor goes.
+- 网络 → 线路 creates, edits, copies and deletes lines (`/api/v5/net/lines`).
+  创建线路 opens a sheet: pick the entries (several back each other up), the
+  devices the line passes in order and the exit, then a protocol on the exit
+  or fixed targets; a preview shows the path as it will be. A stored line's
+  sheet has 编辑 and, under `⋯`, 复制线路 and 删除线路, which asks for the
+  line's name. A protocol's own direct line is still edited with the
+  protocol.
+- 节点 → 协议 → 网络 has a 扫描云 switch: lines through a machine on a cloud
+  that scans its hosts forward in the kernel there.
+- Lines can be written: `POST /api/v5/net/lines`, `PUT /api/v5/net/lines/{id}`
+  and `DELETE /api/v5/net/lines/{id}` (docs/design/network-lines, section 8).
+  A line names its chain of devices and the exit device's protocol it serves
+  or fixed targets, and whether it is offered in subscriptions; it is stored
+  and planned as a forward route. `GET /api/v4/kernel/network/lines` gives
+  each stored line's `revision`.
+- A device's network settings (`/api/v4/kernel/nodes/{id}/network`) carry
+  `scan_cloud`: a device on a cloud that scans its machines forwards in the
+  kernel on the lines written after.
+
+### Changed
+
+- Forward routes are stored as lines. Migration
+  `0036_forward_routes_as_lines` moves every route of
+  `v4_kernel_forward_route` into `v5_line` (the route stays as protojson in
+  its `route` column) and drops the old table; the forward API reads and
+  writes `v5_line`. After every accepted plan Control writes each route's
+  line columns (name, entries, chain, exit, protocol) and the transports
+  from the routes, so the line table always matches them. Rolling back to
+  an earlier Control needs the database backup taken before the upgrade.
+- `PUT /api/v5/net/lines/{id}` replaces the line's policy and limits with the draft's instead of keeping the stored
+  ones; send what the read answered to keep them.
+
+### Fixed
+
+- Saving a device's network settings no longer clears its `scan_cloud` flag.
+
+### Security
+
+- The nightly frontend audit (Nightly Security, `npm audit (web)`) passes again.
+  Development tools move to fixed releases: vitest, `@vitest/ui` and
+  `@vitest/coverage-v8` 4.1.12, vite 8.3.8 (and with it launch-editor 2.14.2),
+  happy-dom 21.0.4, markdown-it 14.3.3 and fast-uri 3.1.9.
+  `web/audit-allowlist.json` drops the braces entry that no longer applies and
+  waives, until 2026-12-13, the two advisories that have no fix the current
+  eslint and js-beautify accept (minimatch GHSA-g3hv-75wg-m249, glob
+  GHSA-3g3m-2fjr-6pw4). Nothing in the shipped frontend changes.
+
 ## 5.0.5 - 2026-11-12
 
 ### Added
