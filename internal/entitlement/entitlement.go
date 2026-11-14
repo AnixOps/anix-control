@@ -73,8 +73,10 @@ const (
 	DefaultTrialDays = 3
 	// MaxTrialDays bounds KeyANXTrialDays.
 	MaxTrialDays = 30
-	// SeatWindow is how recently a device must have asked to take a seat.
-	SeatWindow = 30 * 24 * time.Hour
+	// SeatWindow is how recently a device must have asked to take a seat:
+	// one license lifetime, so a reinstalled app frees the old seat once
+	// the old license has run out.
+	SeatWindow = LicenseValidity
 	// backdate is how far a license's not_before goes back, for clients
 	// whose clock is a little behind (anx spec §2.4).
 	backdate = 5 * time.Minute
