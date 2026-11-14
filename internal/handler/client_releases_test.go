@@ -40,7 +40,7 @@ func writeClientRelease(t *testing.T, dir, version string, files map[string]stri
 
 func TestClientReleasesUploadAndList(t *testing.T) {
 	env := newUpgradeTestEnv(t)
-	h := &ClientReleasesHandler{db: func() *gorm.DB { return env.db }, config: func() *config.Config { return env.cfg }, subscribePath: "s"}
+	h := &ClientReleasesHandler{db: func() *gorm.DB { return env.db }, config: func() *config.Config { return env.cfg }}
 	env.router.POST("/client-releases", h.Upload)
 	env.router.GET("/client-releases", h.List)
 	env.router.DELETE("/client-releases/:version", h.Delete)
@@ -121,7 +121,7 @@ func TestClientReleasesUploadAndList(t *testing.T) {
 
 func TestClientReleasesSubscriberDownload(t *testing.T) {
 	env := newUpgradeTestEnv(t)
-	h := &ClientReleasesHandler{db: func() *gorm.DB { return env.db }, config: func() *config.Config { return env.cfg }, subscribePath: "s"}
+	h := &ClientReleasesHandler{db: func() *gorm.DB { return env.db }, config: func() *config.Config { return env.cfg }}
 	router := gin.New()
 	router.GET("/s/:token/client", h.Latest)
 	router.GET("/s/:token/client/:version/:file", h.Download)

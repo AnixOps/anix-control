@@ -26,8 +26,6 @@ import (
 type ClientReleasesHandler struct {
 	db     func() *gorm.DB
 	config func() *config.Config
-	// subscribePath is app.subscribe_path, for the download addresses.
-	subscribePath string
 	// servesHere is the subscription address's host rule; nil serves
 	// every host.
 	servesHere func(*gin.Context) bool
@@ -36,8 +34,8 @@ type ClientReleasesHandler struct {
 // NewClientReleasesHandler reads the database and the configuration on
 // each request; the subscriber routes answer on the hosts subscriptions
 // answer on.
-func NewClientReleasesHandler(subscribePath string, subscriptions *SubscribeHandler) *ClientReleasesHandler {
-	h := &ClientReleasesHandler{db: database.Get, config: config.Get, subscribePath: strings.Trim(subscribePath, "/")}
+func NewClientReleasesHandler(subscriptions *SubscribeHandler) *ClientReleasesHandler {
+	h := &ClientReleasesHandler{db: database.Get, config: config.Get}
 	if subscriptions != nil {
 		h.servesHere = subscriptions.servesSubscriptionsHere
 	}
@@ -240,8 +238,7 @@ func (h *ClientReleasesHandler) subscriber(c *gin.Context) (string, bool) {
 // @Success 200 {object} map[string]any
 // @Router /s/{token}/client [get]
 func (h *ClientReleasesHandler) Latest(c *gin.Context) {
-	token, ok := h.subscriber(c)
-	if !ok {
+	if _, ok := h.subscriber(c); !ok {
 		return
 	}
 	release, err := clientrelease.Latest(h.artifactDir())
@@ -249,7 +246,9 @@ func (h *ClientReleasesHandler) Latest(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": gin.H{"code": "no_client_release", "message": "this Control holds no client release"}})
 		return
 	}
-	base := requestorigin.Resolve(c.Request).BaseURL() + "/" + h.subscribePath + "/" + token + "/client/" + release.Version + "/"
+	// The files are under this request's own address
+	// (/{subscribe_path}/{token}/client/...).
+	base := requestorigin.Resolve(c.Request).BaseURL() + strings.TrimSuffix(c.Request.URL.Path, "/") + "/" + release.Version + "/"
 	files := make([]gin.H, 0, len(release.Files))
 	for _, file := range release.Files {
 		files = append(files, gin.H{

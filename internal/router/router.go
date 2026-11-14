@@ -108,11 +108,9 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 	// The ANX edition of AnixOps Net for subscribers (internal/clientrelease,
 	// docs/reference/client-downloads.md): the newest release and its files,
 	// behind the subscription token, rate limited like public downloads.
-	clientReleases := handler.NewClientReleasesHandler(subscribePath, subscribeHandler)
-	clientDownloads := r.Group("/" + subscribePath + "/:token/client")
-	clientDownloads.Use(publicLimiter.Middleware())
-	clientDownloads.GET("", clientReleases.Latest)
-	clientDownloads.GET("/:version/:file", clientReleases.Download)
+	clientReleases := handler.NewClientReleasesHandler(subscribeHandler)
+	r.GET("/"+subscribePath+"/:token/client", publicLimiter.Middleware(), clientReleases.Latest)
+	r.GET("/"+subscribePath+"/:token/client/:version/:file", publicLimiter.Middleware(), clientReleases.Download)
 
 	// One-command node onboarding (forward-sdk.md, section 9): the signed
 	// install script, its signature, the release metadata it reads and the

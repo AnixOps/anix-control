@@ -730,14 +730,29 @@ func (c *collector) isDirectSafeSubscribeRegistration(statement ast.Stmt, env *s
 	if !ok || len(call.Args) < 2 {
 		return false
 	}
-	// The subscription itself (GET /<path>/:token) and the AnixOps Net
-	// clients' failure report on its address (POST /<path>/:token/report).
-	suffix, known := map[string]string{"GET": "/:token", "POST": "/:token/report"}[selector.Sel.Name]
+	// The subscription itself (GET /<path>/:token), the AnixOps Net
+	// clients' failure report on its address (POST /<path>/:token/report)
+	// and the ANX client downloads (GET /<path>/:token/client and
+	// /<path>/:token/client/:version/:file, internal/clientrelease).
+	suffixes, known := map[string][]string{
+		"GET":  {"/:token", "/:token/client", "/:token/client/:version/:file"},
+		"POST": {"/:token/report"},
+	}[selector.Sel.Name]
 	if !known {
 		return false
 	}
 	target, err := c.resolveGroupWithMiddlewareMutation(selector.X, env, false)
-	if err != nil || target == nil || target.base != "" || !isSafeSubscribeRegistrationPath(call.Args[0], env, suffix) {
+	if err != nil || target == nil || target.base != "" {
+		return false
+	}
+	matched := false
+	for _, suffix := range suffixes {
+		if isSafeSubscribeRegistrationPath(call.Args[0], env, suffix) {
+			matched = true
+			break
+		}
+	}
+	if !matched {
 		return false
 	}
 	for _, argument := range call.Args[1:] {
