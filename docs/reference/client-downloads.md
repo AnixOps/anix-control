@@ -25,7 +25,8 @@ any of these files, named `anixops-net-anx-<version><suffix>`:
 |---|---|---|
 | `windows` | `-windows-x64.msi` | Windows, installer |
 | `windows-portable` | `-windows-x64-portable.zip` | Windows, portable |
-| `macos` | `-macos-universal.pkg` | macOS, installer |
+| `macos` | `-macos.pkg` | macOS, installer package |
+| `macos-dmg` | `-macos.dmg` | macOS, disk image |
 | `linux-deb` | `-linux-amd64.deb` | Linux, .deb |
 | `linux` | `-linux-x64.tar.gz` | Linux, .tar.gz |
 | `android` | `-android-arm64.apk` | Android, APK |

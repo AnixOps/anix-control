@@ -161,6 +161,7 @@ export default {
           windows: '安装版',
           'windows-portable': '便携版',
           macos: '安装包',
+          'macos-dmg': '磁盘映像',
           'linux-deb': '.deb',
           linux: '.tar.gz',
           android: 'APK'

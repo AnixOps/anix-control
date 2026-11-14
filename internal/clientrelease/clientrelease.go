@@ -74,7 +74,8 @@ type Platform struct {
 var Platforms = []Platform{
 	{Key: "windows", Suffix: "-windows-x64.msi", OS: "windows"},
 	{Key: "windows-portable", Suffix: "-windows-x64-portable.zip", OS: "windows"},
-	{Key: "macos", Suffix: "-macos-universal.pkg", OS: "macos"},
+	{Key: "macos", Suffix: "-macos.pkg", OS: "macos"},
+	{Key: "macos-dmg", Suffix: "-macos.dmg", OS: "macos"},
 	{Key: "linux-deb", Suffix: "-linux-amd64.deb", OS: "linux"},
 	{Key: "linux", Suffix: "-linux-x64.tar.gz", OS: "linux"},
 	{Key: "android", Suffix: "-android-arm64.apk", OS: "android"},

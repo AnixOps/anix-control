@@ -162,6 +162,7 @@ export default {
           windows: 'Installer',
           'windows-portable': 'Portable',
           macos: 'Installer',
+          'macos-dmg': 'Disk image',
           'linux-deb': '.deb',
           linux: '.tar.gz',
           android: 'APK'
