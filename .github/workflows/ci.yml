@@ -1935,6 +1935,14 @@ jobs:
         working-directory: web
         run: npx playwright test --config playwright.live-control.config.js
 
+      - name: Upload live Control gate results
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v7
+        with:
+          retention-days: 3
+          name: live-control-test-results
+          path: web/test-results/
+
       - name: Build frontend
         working-directory: web
         run: npm run build
