@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+## 5.0.8 - 2026-11-15
+
+Installs Agent 5.0.6 on nodes (passes egress route fallbacks to anx-node
+0.1.0-alpha.23).
+
+### Added
+
+- Egress routes (转发 → 分流) take ordered backup exits (`fallbacks`: node,
+  optional address, relay port). Every exit serves a relay with the route's
+  key; the source node's kernel tries the exits in order, skips one that
+  fails to connect for 30 seconds and takes it back once it recovers, so the
+  route's domains keep working when the exit node is down. Migration
+  `0038_egress_route_fallbacks` adds `v5_egress_route.fallbacks`. Needs an
+  anx-node with egress fallbacks; an older one keeps using only the exit node.
+
+### Fixed
+
+- Pages of the admin UI no longer show "didn't load" when a quick page change
+  spends the API rate limit. The admin APIs share one bucket per client
+  address (10 requests a second, burst 20); a read refused with 429 is now sent
+  again after the server's `Retry-After` (at most 5 s, at most twice). Writes
+  are never repeated.
+
 ## 5.0.7 - 2026-11-14
 
 Installs Agent 5.0.5 on nodes (passes ANX licensing settings to anx-node
