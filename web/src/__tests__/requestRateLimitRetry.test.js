@@ -73,10 +73,11 @@ describe('rate-limited reads', () => {
     const { service, rejected } = await loadClient()
     const controller = new AbortController()
     const error = rateLimited({ url: '/x', method: 'get', signal: controller.signal })
-    const answer = rejected(error)
+    // Attach the expectation first: the promise rejects while the timers run.
+    const answer = expect(rejected(error)).rejects.toBe(error)
     controller.abort()
     await vi.advanceTimersByTimeAsync(1000)
-    await expect(answer).rejects.toBe(error)
+    await answer
     expect(service).not.toHaveBeenCalled()
   })
 
