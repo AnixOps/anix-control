@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -518,11 +519,20 @@ func NodeMember(db *gorm.DB, nodeID uint) (map[string]any, error) {
 	relays := []map[string]any{}
 	for _, row := range rows {
 		for _, exit := range row.Exits() {
-			if exit.NodeID == nodeID {
-				relays = append(relays, map[string]any{
-					"id": row.ID, "protocol": model.EgressRouteProtocol, "port": exit.RelayPort, "method": row.Method, "password": row.RelayKey,
-				})
+			if exit.NodeID != nodeID {
+				continue
 			}
+			relay := map[string]any{
+				"id": row.ID, "protocol": model.EgressRouteProtocol, "port": exit.RelayPort, "method": row.Method, "password": row.RelayKey,
+			}
+			allow, err := sourceAddresses(db, row.SourceNodeID)
+			if err != nil {
+				return nil, err
+			}
+			if len(allow) > 0 {
+				relay["allow"] = allow
+			}
+			relays = append(relays, relay)
 		}
 		if row.SourceNodeID != nodeID {
 			continue
@@ -562,6 +572,23 @@ func NodeMember(db *gorm.DB, nodeID uint) (map[string]any, error) {
 		return nil, nil
 	}
 	return map[string]any{"routes": routes, "relays": relays}, nil
+}
+
+// sourceAddresses are where a route's source node connects from: its host
+// and the public address it joined from. The exit's Agent lets only them
+// reach the relay port; none (the node is gone) leaves the port open.
+func sourceAddresses(db *gorm.DB, nodeID uint) ([]string, error) {
+	node, err := loadNode(db, nodeID)
+	if err != nil || node == nil {
+		return nil, err
+	}
+	var addresses []string
+	for _, address := range []string{node.Host, node.LastPublicAddress} {
+		if address = strings.TrimSpace(address); address != "" && !slices.Contains(addresses, address) {
+			addresses = append(addresses, address)
+		}
+	}
+	return addresses, nil
 }
 
 // auditContent is what an audit entry says about a route: never its key.
