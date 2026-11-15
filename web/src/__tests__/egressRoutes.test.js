@@ -17,15 +17,19 @@ describe('egress route model', () => {
   it('round-trips a listed route through the form', () => {
     const route = {
       id: 3, name: 'AI', source_node: { id: 29 }, exit_node: { id: 50 }, exit_host: '', relay_port: 24680,
-      domains: ['openai.com', 'claude.ai'], enabled: true
+      domains: ['openai.com', 'claude.ai'], enabled: true,
+      fallbacks: [{ exit_node: { id: 33 }, exit_host: '', relay_port: 24680 }]
     }
     const form = egressForm(route)
     expect(form.domains).toBe('openai.com\nclaude.ai')
     expect(egressRequest(form)).toEqual({
       name: 'AI', source_node_id: 29, exit_node_id: 50, exit_host: '', relay_port: 24680,
-      domains: ['openai.com', 'claude.ai'], enabled: true, rotate_key: false
+      domains: ['openai.com', 'claude.ai'], enabled: true, rotate_key: false,
+      fallbacks: [{ exit_node_id: 33, exit_host: '', relay_port: 24680 }]
     })
-    expect(egressRouteInput(route, { enabled: false })).toMatchObject({ source_node_id: 29, exit_node_id: 50, enabled: false })
+    expect(egressRouteInput(route, { enabled: false })).toMatchObject({
+      source_node_id: 29, exit_node_id: 50, enabled: false, fallbacks: [{ exit_node_id: 33, exit_host: '', relay_port: 24680 }]
+    })
     expect(egressForm(null).enabled).toBe(true)
   })
 

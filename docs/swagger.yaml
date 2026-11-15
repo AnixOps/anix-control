@@ -108,6 +108,11 @@ definitions:
         type: string
       exit_node_id:
         type: integer
+      fallbacks:
+        description: Fallbacks are the backup exits in the order they are tried.
+        items:
+          $ref: '#/definitions/model.EgressExit'
+        type: array
       name:
         type: string
       relay_port:
@@ -530,6 +535,15 @@ definitions:
     required:
     - email
     - password
+    type: object
+  model.EgressExit:
+    properties:
+      exit_host:
+        type: string
+      exit_node_id:
+        type: integer
+      relay_port:
+        type: integer
     type: object
   model.LoginRequest:
     properties:

@@ -155,4 +155,6 @@
 //     v4_kernel_forward_route goes.
 //   - 0037_entitlement_devices: the devices users registered for a
 //     licensed feature (v5_entitlement_device, internal/entitlement).
+//   - 0038_egress_route_fallbacks: the backup exits of an egress route
+//     (v5_egress_route.fallbacks).
 package migrations

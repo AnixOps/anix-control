@@ -94,11 +94,13 @@ func (s *Service) ListenConflicts(tx *gorm.DB, ids ...string) ([]string, error) 
 		others = append(others, listener{proxyRef(protocol.NodeID), "", uint32(protocol.Port), fmt.Sprintf("protocol %d", protocol.ID)}) // #nosec G115 -- ports are 16-bit.
 	}
 	var relays []model.EgressRoute
-	if err := tx.Select("id", "exit_node_id", "relay_port").Where("enabled = ?", true).Find(&relays).Error; err != nil {
+	if err := tx.Select("id", "exit_node_id", "relay_port", "fallbacks").Where("enabled = ?", true).Find(&relays).Error; err != nil {
 		return nil, err
 	}
 	for _, relay := range relays {
-		others = append(others, listener{proxyRef(relay.ExitNodeID), "", uint32(relay.RelayPort), fmt.Sprintf("egress relay %d", relay.ID)}) // #nosec G115 -- ports are 16-bit.
+		for _, exit := range relay.Exits() {
+			others = append(others, listener{proxyRef(exit.NodeID), "", uint32(exit.RelayPort), fmt.Sprintf("egress relay %d", relay.ID)}) // #nosec G115 -- ports are 16-bit.
+		}
 	}
 	var conflicts []string
 	for _, l := range mine {

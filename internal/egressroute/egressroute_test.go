@@ -156,3 +156,45 @@ func TestNodeMember(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, views)
 }
+
+func TestFallbacks(t *testing.T) {
+	s := newService(t)
+	ctx := context.Background()
+	require.NoError(t, s.DB.Create(&model.Node{ID: 33, Name: "us", Host: "us.example.com"}).Error)
+	input := hkToJP()
+	input.Fallbacks = []model.EgressExit{{NodeID: 33, RelayPort: 24680}, {NodeID: 57, Host: "203.0.113.57", RelayPort: 24681}}
+	view, err := s.Create(ctx, input, Actor{})
+	require.NoError(t, err)
+	require.Len(t, view.Fallbacks, 2)
+	require.Equal(t, "us", view.Fallbacks[0].ExitNode.Name)
+	var row model.EgressRoute
+	require.NoError(t, s.DB.First(&row, view.ID).Error)
+
+	server := func(host string, port int) map[string]any {
+		return map[string]any{"protocol": "shadowsocks", "host": host, "port": port, "method": model.EgressRouteMethod, "password": row.RelayKey}
+	}
+	source, err := NodeMember(s.DB, 29)
+	require.NoError(t, err)
+	route := source["routes"].([]map[string]any)[0]
+	require.Equal(t, server("jp.example.com", 24680), route["server"])
+	require.Equal(t, []map[string]any{server("us.example.com", 24680), server("203.0.113.57", 24681)}, route["fallbacks"])
+
+	// Every exit serves a relay with the route's key.
+	for node, port := range map[uint]int{50: 24680, 33: 24680, 57: 24681} {
+		member, err := NodeMember(s.DB, node)
+		require.NoError(t, err)
+		require.Equal(t, []map[string]any{{"id": view.ID, "protocol": "shadowsocks", "port": port, "method": model.EgressRouteMethod, "password": row.RelayKey}}, member["relays"])
+	}
+
+	// A fallback's port is taken for other routes; an exit appears once.
+	other := hkToJP()
+	other.ExitNodeID, other.RelayPort = 33, 24680
+	_, err = s.Create(ctx, other, Actor{})
+	require.ErrorIs(t, err, ErrPortTaken)
+	input.Fallbacks = []model.EgressExit{{NodeID: 50, RelayPort: 24690}}
+	_, err = s.Update(ctx, view.ID, input, Actor{})
+	require.ErrorIs(t, err, ErrInvalid)
+	input.Fallbacks = []model.EgressExit{{NodeID: 29, RelayPort: 24690}}
+	_, err = s.Update(ctx, view.ID, input, Actor{})
+	require.ErrorIs(t, err, ErrInvalid)
+}

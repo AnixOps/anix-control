@@ -18,6 +18,7 @@ export default {
       disable: 'Disable',
       delete: 'Delete…',
       nodeMissing: 'Node #{id} was deleted',
+      fallbacks: '(backup {names})',
       columns: {
         name: 'Name',
         path: 'Source → exit',
@@ -54,7 +55,13 @@ export default {
       create: 'Create',
       save: 'Save',
       required: 'Required',
-      sameNode: 'The exit node must be another node'
+      sameNode: 'The exit node must be another node',
+      fallbacks: 'Backup exits',
+      fallbacksHelp: 'When the exit node cannot be reached, the source node moves on to the next backup exit in order; a failed exit is skipped for 30 seconds and taken back once it recovers. Each backup exit listens on its own relay port.',
+      fallbackNode: 'Backup exit {n}',
+      addFallback: 'Add backup exit',
+      removeFallback: 'Remove',
+      fallbackRepeated: 'The source node, the exit node and the backup exits must all differ'
     },
     delete: {
       title: 'Delete {name}?',

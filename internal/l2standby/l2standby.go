@@ -559,14 +559,18 @@ func freePort(tx *gorm.DB, exitNodeID uint) (int, error) {
 	for _, p := range ports {
 		used[p] = true
 	}
-	ports = nil
 	if tx.Migrator().HasTable(&model.EgressRoute{}) {
-		if err := tx.Model(&model.EgressRoute{}).Where("exit_node_id = ?", exitNodeID).Pluck("relay_port", &ports).Error; err != nil {
+		var routes []model.EgressRoute
+		if err := tx.Select("exit_node_id", "relay_port", "fallbacks").Find(&routes).Error; err != nil {
 			return 0, err
 		}
-	}
-	for _, p := range ports {
-		used[p] = true
+		for _, route := range routes {
+			for _, exit := range route.Exits() {
+				if exit.NodeID == exitNodeID {
+					used[exit.RelayPort] = true
+				}
+			}
+		}
 	}
 	ports = nil
 	if tx.Migrator().HasTable(&model.NodeProtocol{}) {
