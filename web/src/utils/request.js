@@ -75,6 +75,36 @@ function redirectToLogin() {
   window.location.href = '/login'
 }
 
+// The server's rate limiter (internal/middleware/rate_limiter.go) answers 429
+// with Retry-After once a client has spent its burst. All administrator APIs
+// share one bucket per client address, so opening a page right after another
+// one loaded can spend it: the built-in packages page then showed "didn't
+// load" (CI run 43652174366). A read is safe to send again, so wait as long
+// as the server asks (at most 5 s) and send it again, at most twice. Writes
+// are never repeated; their callers show the refusal.
+const RATE_LIMIT_RETRIES = 2
+const RATE_LIMIT_MAX_WAIT_MS = 5000
+
+function retryAfterHeader(headers) {
+  if (!headers) return undefined
+  if (typeof headers.get === 'function') return headers.get('retry-after')
+  return headers['retry-after'] ?? headers['Retry-After']
+}
+
+// Milliseconds to wait before sending a rate-limited read again, or null when
+// it must not be sent again.
+export function rateLimitRetryDelay(error) {
+  const config = error?.config
+  if (!config || error?.response?.status !== 429) return null
+  const method = String(config.method || 'get').toLowerCase()
+  if (method !== 'get' && method !== 'head') return null
+  if (config.noRateLimitRetry || config.signal?.aborted) return null
+  if ((config.rateLimitRetries || 0) >= RATE_LIMIT_RETRIES) return null
+  const seconds = Number.parseInt(retryAfterHeader(error.response.headers), 10)
+  const wait = Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : 1000
+  return Math.min(wait, RATE_LIMIT_MAX_WAIT_MS)
+}
+
 let clientPromise = null
 
 function createClient(axios) {
@@ -110,6 +140,14 @@ function createClient(axios) {
       return response.config?.rawResponse ? response : response.data
     },
     error => {
+      const retryDelay = rateLimitRetryDelay(error)
+      if (retryDelay !== null) {
+        const config = error.config
+        config.rateLimitRetries = (config.rateLimitRetries || 0) + 1
+        return new Promise(resolve => setTimeout(resolve, retryDelay)).then(() => (
+          config.signal?.aborted ? Promise.reject(error) : service(config)
+        ))
+      }
       if (error?.config?.sensitive) {
         // A request that carries a credential (a password or a one-time code
         // for a step-up): log what failed, never the body the error holds.
