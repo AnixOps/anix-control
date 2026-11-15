@@ -121,8 +121,15 @@ func TestNodeMember(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, map[string]any{
 		"routes": []map[string]any{},
-		"relays": []map[string]any{{"id": view.ID, "protocol": "shadowsocks", "port": 24680, "method": model.EgressRouteMethod, "password": row.RelayKey}},
+		"relays": []map[string]any{{"id": view.ID, "protocol": "shadowsocks", "port": 24680, "method": model.EgressRouteMethod, "password": row.RelayKey,
+			"allow": []string{"hk.example.com"}}},
 	}, exit)
+
+	// The public address the source joined from is allowed too.
+	require.NoError(t, s.DB.Model(&model.Node{}).Where("id = ?", 29).Update("last_public_address", "203.0.113.29").Error)
+	exit, err = NodeMember(s.DB, 50)
+	require.NoError(t, err)
+	require.Equal(t, []string{"hk.example.com", "203.0.113.29"}, exit["relays"].([]map[string]any)[0]["allow"])
 
 	other, err := NodeMember(s.DB, 57)
 	require.NoError(t, err)
@@ -179,11 +186,12 @@ func TestFallbacks(t *testing.T) {
 	require.Equal(t, server("jp.example.com", 24680), route["server"])
 	require.Equal(t, []map[string]any{server("us.example.com", 24680), server("203.0.113.57", 24681)}, route["fallbacks"])
 
-	// Every exit serves a relay with the route's key.
+	// Every exit serves a relay with the route's key, open to the source only.
 	for node, port := range map[uint]int{50: 24680, 33: 24680, 57: 24681} {
 		member, err := NodeMember(s.DB, node)
 		require.NoError(t, err)
-		require.Equal(t, []map[string]any{{"id": view.ID, "protocol": "shadowsocks", "port": port, "method": model.EgressRouteMethod, "password": row.RelayKey}}, member["relays"])
+		require.Equal(t, []map[string]any{{"id": view.ID, "protocol": "shadowsocks", "port": port, "method": model.EgressRouteMethod, "password": row.RelayKey,
+			"allow": []string{"hk.example.com"}}}, member["relays"])
 	}
 
 	// A fallback's port is taken for other routes; an exit appears once.
