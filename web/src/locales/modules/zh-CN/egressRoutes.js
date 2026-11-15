@@ -18,6 +18,7 @@ export default {
       disable: '停用',
       delete: '删除…',
       nodeMissing: '节点 #{id} 已删除',
+      fallbacks: '（备用 {names}）',
       columns: {
         name: '名称',
         path: '源节点 → 出口节点',
@@ -54,7 +55,13 @@ export default {
       create: '创建',
       save: '保存',
       required: '必填',
-      sameNode: '出口节点不能是源节点'
+      sameNode: '出口节点不能是源节点',
+      fallbacks: '备用出口',
+      fallbacksHelp: '出口节点连不上时，源节点按顺序换到下一个备用出口；故障的出口 30 秒内不再尝试，恢复后自动切回。每个备用出口都会监听自己的中继端口。',
+      fallbackNode: '备用出口 {n}',
+      addFallback: '添加备用出口',
+      removeFallback: '移除',
+      fallbackRepeated: '源节点、出口节点和各备用出口不能重复'
     },
     delete: {
       title: '删除 {name}？',

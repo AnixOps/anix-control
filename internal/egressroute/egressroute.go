@@ -5,7 +5,11 @@
 //
 // The hop is Shadowsocks 2022 (model.EgressRouteMethod) with a key Control
 // generates: the exit node's Agent serves a relay inbound on the route's
-// port, the source node's Agent sends the route's domains to it. Neither
+// port, the source node's Agent sends the route's domains to it. A route
+// may have fallbacks, backup exits with relays of their own (same key):
+// the source node's kernel tries the exits in order and skips one that
+// fails to connect for a while, so the domains keep working when the exit
+// node is down. Neither
 // is a protocol of a node, so neither is in a subscription. Both nodes
 // get the route in the member "egress" of their desired configuration
 // (NodeMember), which reaches their Agents with the next configuration
@@ -45,6 +49,7 @@ const (
 	maxNameLength   = 100
 	maxDomains      = 1000
 	maxDomainLength = 253
+	maxFallbacks    = 8
 )
 
 // Audit actions of the operation log (v2_operation_log, module
@@ -89,7 +94,9 @@ type Input struct {
 	ExitHost     string   `json:"exit_host"`
 	RelayPort    int      `json:"relay_port"`
 	Domains      []string `json:"domains"`
-	Enabled      *bool    `json:"enabled"`
+	// Fallbacks are the backup exits in the order they are tried.
+	Fallbacks []model.EgressExit `json:"fallbacks"`
+	Enabled   *bool              `json:"enabled"`
 	// RotateKey replaces the relay key (update only); a new route always
 	// gets one.
 	RotateKey bool `json:"rotate_key"`
@@ -104,19 +111,27 @@ type NodeRef struct {
 	Exists bool `json:"exists"`
 }
 
+// ExitView is a backup exit as the API answers it.
+type ExitView struct {
+	ExitNode  NodeRef `json:"exit_node"`
+	ExitHost  string  `json:"exit_host"`
+	RelayPort int     `json:"relay_port"`
+}
+
 // View is a route as the API answers it: never the relay key.
 type View struct {
-	ID         uint     `json:"id"`
-	Name       string   `json:"name"`
-	SourceNode NodeRef  `json:"source_node"`
-	ExitNode   NodeRef  `json:"exit_node"`
-	ExitHost   string   `json:"exit_host"`
-	RelayPort  int      `json:"relay_port"`
-	Method     string   `json:"method"`
-	Domains    []string `json:"domains"`
-	Enabled    bool     `json:"enabled"`
-	CreatedAt  string   `json:"created_at"`
-	UpdatedAt  string   `json:"updated_at"`
+	ID         uint       `json:"id"`
+	Name       string     `json:"name"`
+	SourceNode NodeRef    `json:"source_node"`
+	ExitNode   NodeRef    `json:"exit_node"`
+	ExitHost   string     `json:"exit_host"`
+	RelayPort  int        `json:"relay_port"`
+	Method     string     `json:"method"`
+	Domains    []string   `json:"domains"`
+	Fallbacks  []ExitView `json:"fallbacks"`
+	Enabled    bool       `json:"enabled"`
+	CreatedAt  string     `json:"created_at"`
+	UpdatedAt  string     `json:"updated_at"`
 }
 
 // List answers every route by id.
@@ -249,52 +264,79 @@ func (s *Service) apply(tx *gorm.DB, row *model.EgressRoute, input Input) error 
 	if source == nil {
 		return invalid("source_node_id: no node %d", input.SourceNodeID)
 	}
-	exit, err := loadNode(tx, input.ExitNodeID)
-	if err != nil {
-		return err
+	if len(input.Fallbacks) > maxFallbacks {
+		return invalid("fallbacks: at most %d", maxFallbacks)
 	}
-	if exit == nil {
-		return invalid("exit_node_id: no node %d", input.ExitNodeID)
-	}
-	exitHost := strings.TrimSpace(input.ExitHost)
-	if len(exitHost) > 255 || strings.ContainsAny(exitHost, " /\t") {
-		return invalid("exit_host: a host name or address")
-	}
-	if exitHost == "" && strings.TrimSpace(exit.Host) == "" {
-		return invalid("exit_host: the exit node has no host; give the address the source node dials")
-	}
-	if input.RelayPort < 1 || input.RelayPort > 65535 {
-		return invalid("relay_port: 1 to 65535")
+	exits := append([]model.EgressExit{{NodeID: input.ExitNodeID, Host: input.ExitHost, RelayPort: input.RelayPort}}, input.Fallbacks...)
+	seen := map[uint]bool{input.SourceNodeID: true}
+	for i := range exits {
+		field := ""
+		if i > 0 {
+			field = fmt.Sprintf("fallbacks[%d].", i-1)
+		}
+		if seen[exits[i].NodeID] {
+			return invalid("%sexit_node_id: each exit must be another node than the source and the other exits", field)
+		}
+		seen[exits[i].NodeID] = true
+		if err := checkExit(tx, row.ID, &exits[i], field); err != nil {
+			return err
+		}
 	}
 	domains, err := NormalizeDomains(input.Domains)
 	if err != nil {
-		return err
-	}
-	if err := checkPort(tx, row.ID, input.ExitNodeID, input.RelayPort); err != nil {
 		return err
 	}
 	encoded, err := json.Marshal(domains)
 	if err != nil {
 		return err
 	}
-	row.Name, row.SourceNodeID, row.ExitNodeID, row.ExitHost = name, input.SourceNodeID, input.ExitNodeID, exitHost
-	row.RelayPort, row.Domains = input.RelayPort, string(encoded)
+	row.Name, row.SourceNodeID, row.ExitNodeID, row.ExitHost = name, input.SourceNodeID, exits[0].NodeID, exits[0].Host
+	row.RelayPort, row.Domains, row.Fallbacks = exits[0].RelayPort, string(encoded), exits[1:]
 	if input.Enabled != nil {
 		row.Enabled = *input.Enabled
 	}
 	return nil
 }
 
-// checkPort refuses a relay port another route of the exit node, or one of
-// its enabled protocols, listens on.
-func checkPort(tx *gorm.DB, routeID, exitNodeID uint, port int) error {
-	var routes int64
-	if err := tx.Model(&model.EgressRoute{}).Where("exit_node_id = ? AND relay_port = ? AND id <> ?", exitNodeID, port, routeID).
-		Count(&routes).Error; err != nil {
+// checkExit validates an exit (field names it in messages) and trims its
+// host.
+func checkExit(tx *gorm.DB, routeID uint, exit *model.EgressExit, field string) error {
+	if exit.NodeID == 0 {
+		return invalid("%sexit_node_id is required", field)
+	}
+	node, err := loadNode(tx, exit.NodeID)
+	if err != nil {
 		return err
 	}
-	if routes > 0 {
-		return fmt.Errorf("%w: another egress route's relay listens on %d", ErrPortTaken, port)
+	if node == nil {
+		return invalid("%sexit_node_id: no node %d", field, exit.NodeID)
+	}
+	exit.Host = strings.TrimSpace(exit.Host)
+	if len(exit.Host) > 255 || strings.ContainsAny(exit.Host, " /\t") {
+		return invalid("%sexit_host: a host name or address", field)
+	}
+	if exit.Host == "" && strings.TrimSpace(node.Host) == "" {
+		return invalid("%sexit_host: the exit node has no host; give the address the source node dials", field)
+	}
+	if exit.RelayPort < 1 || exit.RelayPort > 65535 {
+		return invalid("%srelay_port: 1 to 65535", field)
+	}
+	return checkPort(tx, routeID, exit.NodeID, exit.RelayPort)
+}
+
+// checkPort refuses a relay port another route's relay on the exit node, or
+// one of its enabled protocols, listens on.
+func checkPort(tx *gorm.DB, routeID, exitNodeID uint, port int) error {
+	var routes []model.EgressRoute
+	if err := tx.Select("id", "exit_node_id", "relay_port", "fallbacks").Where("id <> ?", routeID).Find(&routes).Error; err != nil {
+		return err
+	}
+	for _, route := range routes {
+		for _, exit := range route.Exits() {
+			if exit.NodeID == exitNodeID && exit.RelayPort == port {
+				return fmt.Errorf("%w: another egress route's relay listens on %d", ErrPortTaken, port)
+			}
+		}
 	}
 	var protocols int64
 	if err := tx.Model(&model.NodeProtocol{}).Where("node_id = ? AND port = ? AND enable = 1", exitNodeID, port).
@@ -408,7 +450,10 @@ func loadNode(tx *gorm.DB, id uint) (*model.Node, error) {
 func (s *Service) nodesOf(ctx context.Context, rows []model.EgressRoute) (map[uint]model.Node, error) {
 	ids := make([]uint, 0, 2*len(rows))
 	for _, row := range rows {
-		ids = append(ids, row.SourceNodeID, row.ExitNodeID)
+		ids = append(ids, row.SourceNodeID)
+		for _, exit := range row.Exits() {
+			ids = append(ids, exit.NodeID)
+		}
 	}
 	nodes := map[uint]model.Node{}
 	if len(ids) == 0 {
@@ -430,9 +475,13 @@ func nodeRef(id uint, nodes map[uint]model.Node) NodeRef {
 }
 
 func viewOf(row model.EgressRoute, nodes map[uint]model.Node) View {
+	fallbacks := make([]ExitView, 0, len(row.Fallbacks))
+	for _, exit := range row.Fallbacks {
+		fallbacks = append(fallbacks, ExitView{ExitNode: nodeRef(exit.NodeID, nodes), ExitHost: exit.Host, RelayPort: exit.RelayPort})
+	}
 	return View{
 		ID: row.ID, Name: row.Name, SourceNode: nodeRef(row.SourceNodeID, nodes), ExitNode: nodeRef(row.ExitNodeID, nodes),
-		ExitHost: row.ExitHost, RelayPort: row.RelayPort, Method: row.Method, Domains: decodeDomains(row.Domains),
+		ExitHost: row.ExitHost, RelayPort: row.RelayPort, Method: row.Method, Domains: decodeDomains(row.Domains), Fallbacks: fallbacks,
 		Enabled: row.Enabled, CreatedAt: row.CreatedAt.UTC().Format(time.RFC3339), UpdatedAt: row.UpdatedAt.UTC().Format(time.RFC3339),
 	}
 }
@@ -447,8 +496,9 @@ func decodeDomains(encoded string) []string {
 
 // NodeMember is the member "egress" of a proxy node's desired
 // configuration: the routes of the node's enabled egress routes as their
-// source node (with the exit node's address and the relay key) and the
-// relays of those it is the exit node of, then the active cross-border
+// source node (with the exits' addresses and the relay key: the exit node
+// as "server", the reachable fallbacks as "fallbacks") and the relays of
+// those it is an exit of, then the active cross-border
 // standby channels (standby.go). Nil when the node takes part in none, so
 // the member is left out and other nodes' configurations do not
 // change.
@@ -458,38 +508,51 @@ func decodeDomains(encoded string) []string {
 // Agent core (xray today, networkcore later) translates it into its own
 // routing.
 func NodeMember(db *gorm.DB, nodeID uint) (map[string]any, error) {
+	// Exits are in a JSON column, so every enabled route is read; there
+	// are few.
 	var rows []model.EgressRoute
-	if err := db.Where("enabled = ? AND (source_node_id = ? OR exit_node_id = ?)", true, nodeID, nodeID).
-		Order("id ASC").Find(&rows).Error; err != nil {
+	if err := db.Where("enabled = ?", true).Order("id ASC").Find(&rows).Error; err != nil {
 		return nil, err
 	}
 	routes := []map[string]any{}
 	relays := []map[string]any{}
 	for _, row := range rows {
-		if row.ExitNodeID == nodeID {
-			relays = append(relays, map[string]any{
-				"id": row.ID, "protocol": model.EgressRouteProtocol, "port": row.RelayPort, "method": row.Method, "password": row.RelayKey,
-			})
+		for _, exit := range row.Exits() {
+			if exit.NodeID == nodeID {
+				relays = append(relays, map[string]any{
+					"id": row.ID, "protocol": model.EgressRouteProtocol, "port": exit.RelayPort, "method": row.Method, "password": row.RelayKey,
+				})
+			}
 		}
 		if row.SourceNodeID != nodeID {
 			continue
 		}
-		host := row.ExitHost
-		if host == "" {
-			exit, err := loadNode(db, row.ExitNodeID)
-			if err != nil {
-				return nil, err
+		servers := []map[string]any{}
+		for _, exit := range row.Exits() {
+			host := exit.Host
+			if host == "" {
+				node, err := loadNode(db, exit.NodeID)
+				if err != nil {
+					return nil, err
+				}
+				if node == nil {
+					// The exit node is gone: nothing to dial.
+					continue
+				}
+				host = strings.TrimSpace(node.Host)
 			}
-			if exit == nil || strings.TrimSpace(exit.Host) == "" {
-				// The exit node is gone or has no address: nothing to dial.
-				continue
+			if host != "" {
+				servers = append(servers, map[string]any{"protocol": model.EgressRouteProtocol, "host": host, "port": exit.RelayPort, "method": row.Method, "password": row.RelayKey})
 			}
-			host = strings.TrimSpace(exit.Host)
 		}
-		routes = append(routes, map[string]any{
-			"id": row.ID, "domains": decodeDomains(row.Domains),
-			"server": map[string]any{"protocol": model.EgressRouteProtocol, "host": host, "port": row.RelayPort, "method": row.Method, "password": row.RelayKey},
-		})
+		if len(servers) == 0 {
+			continue
+		}
+		route := map[string]any{"id": row.ID, "domains": decodeDomains(row.Domains), "server": servers[0]}
+		if len(servers) > 1 {
+			route["fallbacks"] = servers[1:]
+		}
+		routes = append(routes, route)
 	}
 	routes, relays, err := standbyMember(db, nodeID, routes, relays)
 	if err != nil {
@@ -505,7 +568,7 @@ func NodeMember(db *gorm.DB, nodeID uint) (map[string]any, error) {
 func auditContent(row model.EgressRoute) map[string]any {
 	return map[string]any{
 		"name": row.Name, "source_node_id": row.SourceNodeID, "exit_node_id": row.ExitNodeID, "relay_port": row.RelayPort,
-		"domains": len(decodeDomains(row.Domains)), "enabled": row.Enabled,
+		"domains": len(decodeDomains(row.Domains)), "fallbacks": row.Fallbacks, "enabled": row.Enabled,
 	}
 }
 

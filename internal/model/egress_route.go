@@ -32,10 +32,29 @@ type EgressRoute struct {
 	// Domains is a JSON array of the domains, as the Agent matches them: a
 	// bare name is the domain and its subdomains; full:, domain:, keyword:
 	// and regexp: entries are kept.
-	Domains   string    `gorm:"type:text;not null" json:"-"`
-	Enabled   bool      `gorm:"not null;default:true" json:"enabled"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	Domains string `gorm:"type:text;not null" json:"-"`
+	// Fallbacks are backup exits, in the order the source node tries them
+	// when the exits before fail to connect. Each serves a relay with the
+	// route's key.
+	Fallbacks []EgressExit `gorm:"type:text;serializer:json" json:"-"`
+	Enabled   bool         `gorm:"not null;default:true" json:"enabled"`
+	CreatedAt time.Time    `json:"created_at"`
+	UpdatedAt time.Time    `json:"updated_at"`
 }
 
 func (EgressRoute) TableName() string { return "v5_egress_route" }
+
+// EgressExit is an exit of an egress route: a node serving the relay, the
+// address the source node dials (the node's host when empty) and the
+// relay's port.
+type EgressExit struct {
+	NodeID    uint   `json:"exit_node_id"`
+	Host      string `json:"exit_host"`
+	RelayPort int    `json:"relay_port"`
+}
+
+// Exits are the route's exits in the order they are tried: the exit node,
+// then the fallbacks.
+func (r EgressRoute) Exits() []EgressExit {
+	return append([]EgressExit{{NodeID: r.ExitNodeID, Host: r.ExitHost, RelayPort: r.RelayPort}}, r.Fallbacks...)
+}

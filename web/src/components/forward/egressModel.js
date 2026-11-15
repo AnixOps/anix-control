@@ -29,6 +29,7 @@ export function egressForm(route) {
     exitHost: route?.exit_host || '',
     relayPort: route?.relay_port || null,
     domains: (route?.domains || []).join('\n'),
+    fallbacks: (route?.fallbacks || []).map(exit => ({ nodeId: exit.exit_node?.id, host: exit.exit_host || '', relayPort: exit.relay_port || null })),
     enabled: route ? route.enabled !== false : true,
     rotateKey: false
   }
@@ -42,6 +43,7 @@ export function egressRequest(form) {
     exit_host: form.exitHost.trim(),
     relay_port: Number(form.relayPort),
     domains: parseDomains(form.domains),
+    fallbacks: form.fallbacks.map(exit => ({ exit_node_id: Number(exit.nodeId), exit_host: exit.host.trim(), relay_port: Number(exit.relayPort) })),
     enabled: Boolean(form.enabled),
     rotate_key: Boolean(form.rotateKey)
   }
@@ -56,6 +58,7 @@ export function egressRouteInput(route, changes = {}) {
     exit_host: route.exit_host || '',
     relay_port: route.relay_port,
     domains: route.domains || [],
+    fallbacks: (route.fallbacks || []).map(exit => ({ exit_node_id: exit.exit_node.id, exit_host: exit.exit_host || '', relay_port: exit.relay_port })),
     enabled: route.enabled,
     ...changes
   }

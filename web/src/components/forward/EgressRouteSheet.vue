@@ -13,6 +13,17 @@
       <UiSelect v-model="form.exitNodeId" size="md" :label="t('egressRoutes.sheet.exit')" :options="nodeOptions" required :error="errors.exit" data-testid="egress-route-exit" />
       <UiTextField v-model="form.exitHost" size="md" :label="t('egressRoutes.sheet.exitHost')" :placeholder="exitNodeHost" :help="t('egressRoutes.sheet.exitHostHelp')" />
       <UiNumberField v-model="form.relayPort" size="md" :label="t('egressRoutes.sheet.relayPort')" :min="1" :max="65535" required :help="t('egressRoutes.sheet.relayPortHelp')" :error="errors.relayPort" />
+      <div class="egress-sheet__fallbacks" data-testid="egress-route-fallbacks">
+        <span class="egress-sheet__label">{{ t('egressRoutes.sheet.fallbacks') }}</span>
+        <p class="fwd-muted">{{ t('egressRoutes.sheet.fallbacksHelp') }}</p>
+        <div v-for="(exit, index) in form.fallbacks" :key="index" class="egress-sheet__fallback">
+          <UiSelect v-model="exit.nodeId" size="md" :label="t('egressRoutes.sheet.fallbackNode', { n: index + 1 })" :options="nodeOptions" required />
+          <UiNumberField v-model="exit.relayPort" size="md" :label="t('egressRoutes.sheet.relayPort')" :min="1" :max="65535" required />
+          <UiButton size="sm" variant="ghost" @click="form.fallbacks.splice(index, 1)">{{ t('egressRoutes.sheet.removeFallback') }}</UiButton>
+        </div>
+        <p v-if="errors.fallbacks" class="fwd-note is-danger" role="alert">{{ errors.fallbacks }}</p>
+        <UiButton size="sm" variant="ghost" data-testid="egress-route-add-fallback" @click="addFallback">{{ t('egressRoutes.sheet.addFallback') }}</UiButton>
+      </div>
       <div class="egress-sheet__domains">
         <UiTextarea v-model="form.domains" :rows="8" :label="t('egressRoutes.sheet.domains')" required :help="t('egressRoutes.sheet.domainsHelp')" :error="errors.domains" data-testid="egress-route-domains" />
         <UiButton size="sm" variant="ghost" @click="addPreset">{{ t('egressRoutes.sheet.presetAi') }}</UiButton>
@@ -74,6 +85,10 @@ function addPreset() {
   form.value.domains = [...parseDomains(form.value.domains), ...added].join('\n')
 }
 
+function addFallback() {
+  form.value.fallbacks.push({ nodeId: undefined, host: '', relayPort: form.value.relayPort })
+}
+
 function validate() {
   const required = t('egressRoutes.sheet.required')
   const found = {}
@@ -82,6 +97,9 @@ function validate() {
   if (!form.value.exitNodeId) found.exit = required
   else if (form.value.exitNodeId === form.value.sourceNodeId) found.exit = t('egressRoutes.sheet.sameNode')
   if (!form.value.relayPort) found.relayPort = required
+  const exits = [form.value.sourceNodeId, form.value.exitNodeId, ...form.value.fallbacks.map(exit => exit.nodeId)]
+  if (form.value.fallbacks.some(exit => !exit.nodeId || !exit.relayPort)) found.fallbacks = required
+  else if (new Set(exits).size !== exits.length) found.fallbacks = t('egressRoutes.sheet.fallbackRepeated')
   if (!parseDomains(form.value.domains).length) found.domains = required
   return found
 }
@@ -112,6 +130,28 @@ async function save() {
 .egress-sheet {
   display: grid;
   gap: var(--space-4);
+}
+
+.egress-sheet__fallbacks {
+  display: grid;
+  gap: var(--space-2);
+  justify-items: start;
+}
+
+.egress-sheet__fallbacks > p {
+  margin: 0;
+}
+
+.egress-sheet__label {
+  font-weight: 600;
+}
+
+.egress-sheet__fallback {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) auto;
+  gap: var(--space-2);
+  align-items: end;
+  justify-self: stretch;
 }
 
 .egress-sheet__domains {

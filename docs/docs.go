@@ -10723,6 +10723,13 @@ const docTemplate = `{
                 "exit_host": {
                     "type": "string"
                 },
+                "fallbacks": {
+                    "description": "Fallbacks are the backup exits in the order they are tried.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.EgressExit"
+                    }
+                },
                 "exit_node_id": {
                     "type": "integer"
                 },
@@ -10737,6 +10744,20 @@ const docTemplate = `{
                     "type": "boolean"
                 },
                 "source_node_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "model.EgressExit": {
+            "type": "object",
+            "properties": {
+                "exit_host": {
+                    "type": "string"
+                },
+                "exit_node_id": {
+                    "type": "integer"
+                },
+                "relay_port": {
                     "type": "integer"
                 }
             }

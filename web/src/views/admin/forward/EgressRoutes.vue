@@ -39,6 +39,7 @@
           <span>{{ nodeLabel(row.source_node) }}</span>
           <ArrowRight :size="14" aria-hidden="true" />
           <span>{{ nodeLabel(row.exit_node) }}</span>
+          <span v-if="row.fallbacks?.length" class="fwd-muted">{{ t('egressRoutes.page.fallbacks', { names: row.fallbacks.map(exit => nodeLabel(exit.exit_node)).join(' → ') }) }}</span>
         </span>
       </template>
       <template #cell-domains="{ row }">
