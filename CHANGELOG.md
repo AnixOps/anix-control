@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## 5.0.9 - 2026-11-15
+
+Installs Agent 5.0.7 on nodes (firewalls egress relay ports to the route's
+source nodes).
+
+### Added
+
+- An egress route's relays only accept its source node. Every exit (the main
+  one and the fallbacks) gets `allow` with the source node's host and the
+  public address it joined from, and Agent 5.0.7+ drops every other address
+  on the relay port. Older Agents ignore it and leave the port open.
+
 ## 5.0.8 - 2026-11-15
 
 Installs Agent 5.0.6 on nodes (passes egress route fallbacks to anx-node
