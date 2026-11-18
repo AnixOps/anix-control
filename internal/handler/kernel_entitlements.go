@@ -317,7 +317,7 @@ func (h *EntitlementsHandler) deviceView(row model.EntitlementDevice, email stri
 
 // Revoke godoc
 // @Summary Revoke a device's license
-// @Description The device gets no new license and frees its seat; the license it holds runs out within 7 days. Audited (module entitlement, action entitlement_device_revoke).
+// @Description The device gets no new license and frees its seat; ANX nodes that require a license drop it at their next configuration (within a minute). Audited (module entitlement, action entitlement_device_revoke).
 // @Tags Kernel
 // @Produce json
 // @Security BearerAuth
