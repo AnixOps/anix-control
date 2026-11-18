@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+## 5.0.10 - 2026-11-18
+
+Installs Agent 5.0.8 on nodes (passes revoked ANX devices to anx-node
+0.1.0-alpha.24).
+
+### Changed
+
+- Revoking an ANX device takes effect on the nodes within a minute instead of
+  when its license runs out. While ANX licensing is on, the anx inbound gets
+  `license_revoked` (`<user_id hex>:<device_id hex>` of each revoked device
+  whose last license has not expired), so nodes that require a license drop
+  the device and refuse it. The same device under another account keeps
+  working. Needs an Agent and anx-node that know the field; older ones ignore
+  it.
+
 ## 5.0.9 - 2026-11-15
 
 Installs Agent 5.0.7 on nodes (firewalls egress relay ports to the route's
