@@ -266,3 +266,33 @@ func TestANXCertVector(t *testing.T) {
 	require.Equal(t, vectorCA, LicenseCAPublicHex(ca))
 	require.Equal(t, vectorCert, hex.EncodeToString(cert))
 }
+
+func TestANXRevokedGoesToNodes(t *testing.T) {
+	svc, c := newService(t)
+	require.NoError(t, svc.DB.AutoMigrate(&model.User{}))
+	set(t, svc.DB, KeyANXEnabled, "true")
+	user := planUser(1, 1)
+	require.NoError(t, svc.DB.Create(user).Error)
+	grant, err := svc.IssueANX(user, edDevice(t, 1))
+	require.NoError(t, err)
+	require.Equal(t, StatusOK, grant.Status)
+	revoked, err := svc.ANXRevoked()
+	require.NoError(t, err)
+	require.Empty(t, revoked)
+
+	d1, _ := ParseDevice(edDevice(t, 1))
+	id := d1.ID()
+	ok, err := svc.Revoke(user.ID, FeatureANX, hex.EncodeToString(id[:]))
+	require.NoError(t, err)
+	require.True(t, ok)
+	userID, _ := ANXUserID(user.UUID)
+	revoked, err = svc.ANXRevoked()
+	require.NoError(t, err)
+	require.Equal(t, []string{hex.EncodeToString(userID[:]) + ":" + hex.EncodeToString(id[:])}, revoked)
+
+	// Once its last license has run out the node no longer needs it.
+	c.t = c.t.Add(LicenseValidity + time.Second)
+	revoked, err = svc.ANXRevoked()
+	require.NoError(t, err)
+	require.Empty(t, revoked)
+}

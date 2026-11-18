@@ -24,7 +24,7 @@ export default {
     rules: 'A license lasts {validity} days (the offline grace). A device that asked within {window} days and is not revoked takes a seat; the user\'s device limit caps the seats.',
     devices: {
       title: 'Devices',
-      description: 'Devices that asked for an ANX license, most recent first. A revoked device gets no new license, and the one it holds runs out within 7 days.',
+      description: 'Devices that asked for an ANX license, most recent first. A revoked device gets no new license; when nodes require a license, they disconnect it within a minute.',
       label: 'ANX licensed devices',
       refresh: 'Refresh',
       loadFailed: 'Could not load the devices',
@@ -47,7 +47,7 @@ export default {
       revoke: 'Revoke license',
       restore: 'Restore license',
       revokeTitle: 'Revoke device {device}?',
-      revokeMessage: 'This device of {user} gets no new license, and the one it holds runs out within 7 days. You can restore it later.',
+      revokeMessage: 'This device of {user} gets no new license; when nodes require a license, they disconnect it within a minute. You can restore it later.',
       revoked: 'Revoked.',
       restored: 'Restored. The device gets a license at its next subscription refresh.',
       unchanged: 'Nothing changed.',

@@ -105,8 +105,10 @@ func buildANXConfig(config, settings map[string]any) {
 
 // applyANXLicense adds the license options of the anx-node inbound (anx
 // spec §2.4.1) while ANX licensing is on (internal/entitlement): the
-// license CA the node trusts and, when required, require_license. Like the
-// other optional keys they go out only when set. anx-node refuses
+// license CA the node trusts, when required require_license, and the
+// revoked devices it refuses (license_revoked; a change reloads the
+// inbound, which ends the revoked device's open sessions). Like the other
+// optional keys they go out only when set. anx-node refuses
 // require_license beside the wg jacket (its sessions never present a
 // license), so such a node only accepts licenses.
 func applyANXLicense(licenses *entitlement.Service, config map[string]any) {
@@ -121,6 +123,13 @@ func applyANXLicense(licenses *entitlement.Service, config map[string]any) {
 	config["license_ca"] = []string{ca}
 	if _, wg := config["wg_listen_port"]; require && !wg {
 		config["require_license"] = true
+	}
+	revoked, err := licenses.ANXRevoked()
+	if err != nil {
+		log.Printf("anx revoked devices: %v", err)
+	}
+	if len(revoked) > 0 {
+		config["license_revoked"] = revoked
 	}
 }
 

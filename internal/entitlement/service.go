@@ -183,8 +183,8 @@ func (s *Service) Devices(userID uint, feature string) ([]model.EntitlementDevic
 }
 
 // Revoke revokes a user's device: it gets no new license and frees its
-// seat. The license it holds runs out within LicenseValidity. It reports
-// whether the device was found.
+// seat, and the ANX nodes refuse the license it holds from their next
+// configuration on (ANXRevoked). It reports whether the device was found.
 func (s *Service) Revoke(userID uint, feature, deviceID string) (bool, error) {
 	res := s.DB.Model(&model.EntitlementDevice{}).
 		Where("user_id = ? AND feature = ? AND device_id = ? AND revoked_at IS NULL", userID, feature, deviceID).
@@ -214,6 +214,29 @@ func (s *Service) ANXNodeLicense() (ca string, require bool, err error) {
 		return "", false, nil
 	}
 	return LicenseCAPublicHex(key), settings.Require, nil
+}
+
+// ANXRevoked lists the revoked ANX devices whose last license has not run
+// out, as "<user_id hex>:<device_id hex>" (anx spec §2.4.1): the ANX nodes
+// refuse those licenses (license_revoked). A device is revoked per user, so
+// the same device of another account keeps working.
+func (s *Service) ANXRevoked() ([]string, error) {
+	var rows []struct{ UUID, DeviceID string }
+	err := s.DB.Table(model.EntitlementDevice{}.TableName()+" AS d").
+		Select("u.uuid, d.device_id").
+		Joins("JOIN "+model.User{}.TableName()+" AS u ON u.id = d.user_id").
+		Where("d.feature = ? AND d.revoked_at IS NOT NULL AND d.not_after > ?", FeatureANX, s.now().Unix()).
+		Order("d.id").Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	revoked := make([]string, 0, len(rows))
+	for _, row := range rows {
+		if id, ok := ANXUserID(row.UUID); ok {
+			revoked = append(revoked, hex.EncodeToString(id[:])+":"+row.DeviceID)
+		}
+	}
+	return revoked, nil
 }
 
 // LicenseCAHex answers the hex of the license CA's public key;

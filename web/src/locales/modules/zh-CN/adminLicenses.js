@@ -24,7 +24,7 @@ export default {
     rules: '授权有效期 {validity} 天（离线宽限）；{window} 天内领取过授权且未吊销的设备占用席位，席位上限是用户的设备数限制。',
     devices: {
       title: '设备',
-      description: '领取过 ANX 授权的设备，按最近活动排序。吊销后设备不再获得新授权，手上的授权最长 7 天内失效。',
+      description: '领取过 ANX 授权的设备，按最近活动排序。吊销后设备不再获得新授权；节点要求授权时，一分钟内断开该设备。',
       label: 'ANX 授权设备',
       refresh: '刷新',
       loadFailed: '无法加载设备',
@@ -47,7 +47,7 @@ export default {
       revoke: '吊销授权',
       restore: '恢复授权',
       revokeTitle: '吊销设备 {device}？',
-      revokeMessage: '{user} 的这台设备不再获得新授权，手上的授权最长 7 天内失效。之后可以恢复。',
+      revokeMessage: '{user} 的这台设备不再获得新授权；节点要求授权时，一分钟内断开该设备。之后可以恢复。',
       revoked: '已吊销。',
       restored: '已恢复，设备下次更新订阅时重新领取授权。',
       unchanged: '状态没有变化。',

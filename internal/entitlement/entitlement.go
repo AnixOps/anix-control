@@ -17,8 +17,9 @@
 //     carries the license (X-AnixOps-Anx-License, hex), the CA's public key
 //     (X-AnixOps-Anx-License-Ca) and a status (X-AnixOps-Anx-License-Status).
 //   - A license lasts 7 days (LicenseValidity), never past the account's
-//     expiry or the end of the trial: that is the offline grace, and
-//     revoking a device stops its renewals.
+//     expiry or the end of the trial: that is the offline grace. Revoking
+//     a device stops its renewals, and the ANX nodes refuse the license it
+//     holds (license_revoked) until that license would have run out.
 //   - Seats: devices that asked within SeatWindow and are not revoked.
 //
 // Everything is off until the administrator turns entitlement.anx.enabled
