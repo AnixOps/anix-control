@@ -355,7 +355,8 @@ const columns = computed(() => [
   { key: 'certificate', label: t('admin.nodes.table.certificate'), nowrap: true, breakpoint: 'lg', card: false },
   { key: 'agentVersion', label: t('admin.nodes.table.agentVersion'), nowrap: true, value: agentVersionOf, breakpoint: 'lg', card: false },
   { key: 'serviceStatus', label: t('admin.nodes.table.serviceStatus'), nowrap: true, breakpoint: 'lg', card: false },
-  { key: 'reach', label: t('nodeReach.column'), nowrap: true, breakpoint: 'lg', card: false },
+  // 可达性 shows once a probe vantage is set: until then it has nothing to say.
+  ...(reachVantages.value.size ? [{ key: 'reach', label: t('nodeReach.column'), nowrap: true, breakpoint: 'lg', card: false }] : []),
   { key: 'load', label: t('admin.nodes.table.load'), nowrap: true, numeric: true, value: loadText, firstDirection: 'desc', breakpoint: 'lg', hidden: true, card: false },
   { key: 'lastSeen', label: t('admin.nodes.table.lastSeen'), nowrap: true, value: lastSeenOf, firstDirection: 'desc' },
   { key: 'parent', label: t('admin.nodes.table.parent'), value: node => parentName(node.parent_id), hidden: true },
