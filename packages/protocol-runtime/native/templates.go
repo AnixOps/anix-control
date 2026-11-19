@@ -32,7 +32,7 @@ func protocolTemplates() []ProtocolTemplate {
 		{
 			Type:        "vless",
 			Name:        "VLESS + Reality (推荐)",
-			Description: "目前最安全的协议组合，连接稳定性强",
+			Description: "目前推荐的协议组合，安全性和连接可靠性最好",
 			DefaultPort: 443,
 			TLS:         2, // Reality
 			Settings:    `{"flow":"xtls-rprx-vision"}`,

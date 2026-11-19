@@ -46,9 +46,9 @@ const (
 
 // DefaultCandidates are probed when a run names none of its own, or with
 // them: large sites on different providers known to answer TLS 1.3 and h2.
-// The probe decides; the list only seeds it. Names that are often
-// unreachable by SNI from some regions (Google, and so on) are left out on
-// purpose: the SNI travels in clear.
+// The probe decides; the list only seeds it. Names that on-path classifiers
+// commonly reset by SNI (Google, and so on) are left out on purpose: the SNI
+// travels in clear.
 var DefaultCandidates = []string{
 	"www.microsoft.com",
 	"www.bing.com",
