@@ -418,8 +418,8 @@ Installs Agent 5.0.5 on nodes (passes ANX licensing settings to anx-node
 - The ANX protocol form takes a bare jacket TCP port (`bare_listen_port`,
   anx spec §5.2): random-looking bytes for users dialing a domestic entry,
   with forward secrecy, post-quantum keys and revocable devices that
-  SS-2022 lacks. Cross-border nodes must not open it (the GFW flags fully
-  random traffic), so Control accepts it only with `allow_no_sni`, the mode
+  SS-2022 lacks. Cross-border nodes must not open it (fully random
+  traffic is often dropped on cross-border paths), so Control accepts it only with `allow_no_sni`, the mode
   domestic entries run, and on a port other than `wg_listen_port`. Control
   sends it to the Agent only when set; the AnixOps Net subscription adds
   `bare_port` to the `anx://` link (moved through NAT entries like

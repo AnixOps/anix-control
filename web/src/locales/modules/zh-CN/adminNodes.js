@@ -621,7 +621,7 @@ export default {
       anxDestBehaviors: 'dest 填了多个站点时使用：JSON 对象，键是 dest 里的某一项（"host:port"，与 dest 的写法一致），值是在 dest_behavior 之上对这个站点的覆盖，通常是 anx-lab dest-probe 对该站点测出的 session_tickets 与 flight_records。需要支持按 dest 行为数据的新版 anx-node。',
       anxDestBehaviorsStale: '有条目对应的站点已不在 dest 列表中，会保留但不下发。',
       anxWgListenPort: '在这个 UDP 端口同时提供外衣 wg（外形像 WireGuard），给用户连国内入口用，与无 SNI 的 A2 互为备份；订阅会带上 wg_port，客户端先试它再回落 A2。需要在防火墙放行该 UDP 端口。留空为关闭。需要带外衣 wg 的新版 anx-node。',
-      anxBareListenPort: '在这个 TCP 端口同时提供外衣 bare（全随机字节，类似 SS-2022，但有前向安全、后量子与设备吊销），只给用户连国内入口用；过境节点不要开（GFW 会识别全随机流量），所以要求开启无 SNI 模式。订阅会带上 bare_port，客户端按 wg → bare → 无 SNI A2 的顺序尝试。需要在防火墙放行该 TCP 端口。留空为关闭。需要带外衣 bare 用户入口的新版 anx-node。',
+      anxBareListenPort: '在这个 TCP 端口同时提供外衣 bare（全随机字节，类似 SS-2022，但有前向安全、后量子与设备吊销），只给用户连国内入口用；过境节点不要开（全随机流量在跨境链路上容易被丢弃），所以要求开启无 SNI 模式。订阅会带上 bare_port，客户端按 wg → bare → 无 SNI A2 的顺序尝试。需要在防火墙放行该 TCP 端口。留空为关闭。需要带外衣 bare 用户入口的新版 anx-node。',
       serverKey: '2022 系列加密的服务端密钥；留空则按节点自动派生。',
       snellPsk: '本协议所有用户共用；每个用户另用自己的用户密钥（UUID）登录，所以只有能发送用户密钥的客户端连得上。订阅只在 Surge 格式里给出本协议。需要协议修订 3 及以上的 Agent。',
       snellVersion: '1 到 6；版本 4 的节点同时接受版本 5 的客户端。混淆只用于版本 1 到 4，模式只用于版本 6，版本 6 的 PSK 至少 12 字节。',
