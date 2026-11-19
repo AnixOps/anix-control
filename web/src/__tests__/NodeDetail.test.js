@@ -39,7 +39,8 @@ const kernelApi = vi.hoisted(() => ({
   getKernelAgentTransports: vi.fn(),
   getKernelNodeTraffic: vi.fn(),
   rotateKernelAgentCredentials: vi.fn(),
-  createKernelAgentInstallToken: vi.fn()
+  createKernelAgentInstallToken: vi.fn(),
+  getKernelReach: vi.fn()
 }))
 vi.mock('@/api/kernel', async importOriginal => ({ ...(await importOriginal()), ...kernelApi }))
 

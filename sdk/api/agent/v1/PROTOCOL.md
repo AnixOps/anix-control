@@ -826,6 +826,41 @@ this tells. A probe never changes the node.
   `cloudfront`, `fastly`, `akamai`), for Control's ranking.
 - The diagnostic answer's `success` is `verdict == "ok"`.
 
+### Reachability probe
+
+A proxy node's Agent that lists the capability `reach.probe` (v1) also runs
+the action `reach.probe`: from the node's own network it tells whether other
+nodes' public addresses answer. Control sends it every 10 minutes to the
+vantages the administrator marked (`internal/reachprobe`,
+`/api/v4/kernel/reach`), only to a session that lists `agent.diagnostic` and
+`reach.probe`, and compares the answers of the domestic and overseas
+vantages.
+
+| Param | Meaning |
+|---|---|
+| `targets` | 1 to 64 `{"host", "ports"}`: an address or a host name, and 1 to 4 ports |
+| `timeout_ms` | each connection, 100 to 10000 (default 3000) |
+
+**The safety rule, mandatory.** A host name resolves with the node's
+resolver; only a public address (IPv4 first) is dialled, as for
+`reality.probe`. A target without one answers `error` and nothing is
+dialled. Each port gets one TCP connection, closed as soon as it is set up:
+no data is sent and no user traffic is involved. At most 16 connections run
+at a time.
+
+**`result`:**
+
+```json
+{"targets": [{"host": "203.0.113.7", "address": "203.0.113.7", "reachable": true,
+  "ports": [{"port": 443, "state": "open", "ms": 41}, {"port": 22, "state": "timeout"}]}]}
+```
+
+- `targets` answers in the order asked. A port's `state` is `open`,
+  `refused` (the host answered with a reset), `timeout`, `reset`,
+  `unreachable` (no route) or `error`.
+- `reachable` is true when any port is `open` or `refused`.
+- The diagnostic answer's `success` is true when every target is reachable.
+
 ## Agent upgrades
 
 `upgrade.v1` lets Control upgrade the Agent (owner decision H19,

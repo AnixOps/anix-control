@@ -304,6 +304,19 @@ export async function setKernelNodeExitPolicy(node, blockMainland) {
   }))
 }
 
+// Reachability by region (internal/reachprobe): { vantages: [{ node_id,
+// region (domestic | overseas), capable }], nodes: [{ node_id, status (ok |
+// region_unreachable | overseas_unreachable | unreachable | unknown),
+// domestic, overseas: { reachable, vantages, probed_at } }] }.
+export async function getKernelReach() {
+  return unwrap(await v4({ url: '/kernel/reach', method: 'get' }))
+}
+
+// Replaces the vantages: [{ node_id, region }].
+export async function setKernelReachVantages(vantages) {
+  return unwrap(await v4({ url: '/kernel/reach/vantages', method: 'put', data: { vantages } }))
+}
+
 // A proxy node's entries (入口), `node` is "proxy-<id>": { node_id, entries:
 // [{ id, label, kind (direct | nat | iwan), host, family (ipv4 | ipv6 |
 // domain), port_map: [{ from, to, external }], enabled, sort, iwan_line_id }] }. A node with

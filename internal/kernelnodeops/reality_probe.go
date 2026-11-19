@@ -83,23 +83,32 @@ func (p RealityProbes) Probe(ctx context.Context, node agentcontrol.AgentNode, s
 		return nil, ErrRealityProbeUnavailable
 	}
 	timeoutMS := timeout.Milliseconds()
-	deadline := time.Now().Add(timeout + RealityProbeHandshakeTime + 2*time.Second)
+	params := map[string]any{"server_name": serverName, "port": port, "timeout_ms": timeoutMS}
+	return runCheck(ctx, streams, node, RealityProbeAction, "rprobe-", params, timeout, RealityProbeHandshakeTime+2*time.Second, ErrRealityProbeUnavailable)
+}
+
+// runCheck runs one node-vantage check of the agent.diagnostic operation
+// on node's stream: the task's own timeout, plus slack for the Agent (or
+// ctx's end), bounds it. It answers the Agent's result; unavailable wraps
+// the errors of a node that cannot run the check.
+func runCheck(ctx context.Context, streams agentstreams.Streams, node agentcontrol.AgentNode, action, idPrefix string, params map[string]any, timeout, slack time.Duration, unavailable error) (json.RawMessage, error) {
+	deadline := time.Now().Add(timeout + slack)
 	if ctxDeadline, ok := ctx.Deadline(); ok && ctxDeadline.Before(deadline) {
 		deadline = ctxDeadline
 	}
-	id := newRealityProbeID()
-	params := map[string]any{"server_name": serverName, "port": port, "timeout_ms": timeoutMS}
-	task := agentstreams.DiagnosticTask{ID: id, Type: AgentDiagnosticTaskType, Action: RealityProbeAction, Params: params, Timeout: int((timeoutMS + 999) / 1000)}
+	id := newCheckID(idPrefix)
+	timeoutS := int((timeout + time.Second - 1) / time.Second)
+	task := agentstreams.DiagnosticTask{ID: id, Type: AgentDiagnosticTaskType, Action: action, Params: params, Timeout: timeoutS}
 	payload, err := json.Marshal(map[string]any{"task": task})
 	if err != nil {
-		return nil, fmt.Errorf("encode reality probe: %w", err)
+		return nil, fmt.Errorf("encode %s: %w", action, err)
 	}
 	desired := &agentv1pb.DesiredOperation{OperationId: id, Kind: AgentDiagnosticOperation, PayloadJson: payload, DeadlineUnixMs: deadline.UnixMilli()}
 	dispatch := dispatchOnStream(ctx, streams, node, desired, min(realityProbeAckTimeout, time.Until(deadline)))
 	if dispatch.Err != nil {
 		if errors.Is(dispatch.Err, agentstreams.ErrNotConnected) || errors.Is(dispatch.Err, agentstreams.ErrCapabilityMissing) ||
 			errors.Is(dispatch.Err, agentstreams.ErrSessionClosed) {
-			return nil, fmt.Errorf("%w: %v", ErrRealityProbeUnavailable, dispatch.Err)
+			return nil, fmt.Errorf("%w: %v", unavailable, dispatch.Err)
 		}
 		return nil, dispatch.Err
 	}
@@ -152,10 +161,10 @@ func decodeRealityProbe(observed *agentv1pb.ObservedState) (json.RawMessage, err
 	return state.Result, nil
 }
 
-func newRealityProbeID() string {
+func newCheckID(prefix string) string {
 	var raw [12]byte
 	_, _ = rand.Read(raw[:])
-	return "rprobe-" + hex.EncodeToString(raw[:])
+	return prefix + hex.EncodeToString(raw[:])
 }
 
 // realityProbeAckTimeout bounds the wait for the Agent's acknowledgement.

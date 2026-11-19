@@ -157,4 +157,7 @@
 //     licensed feature (v5_entitlement_device, internal/entitlement).
 //   - 0038_egress_route_fallbacks: the backup exits of an egress route
 //     (v5_egress_route.fallbacks).
+//   - 0039_reach_probes: the reachability probe's vantages and their
+//     latest answers (v5_reach_vantage, v5_reach_probe,
+//     internal/reachprobe).
 package migrations

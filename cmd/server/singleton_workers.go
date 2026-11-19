@@ -18,6 +18,7 @@ import (
 	grpcserver "github.com/AnixOps/anix-control/v5/internal/grpc"
 	"github.com/AnixOps/anix-control/v5/internal/kernelforward"
 	"github.com/AnixOps/anix-control/v5/internal/kernelnodeops"
+	"github.com/AnixOps/anix-control/v5/internal/reachprobe"
 	"github.com/AnixOps/anix-control/v5/internal/realitytarget"
 	"github.com/AnixOps/anix-control/v5/internal/retention"
 	"github.com/AnixOps/anix-control/v5/internal/reverseproxy"
@@ -95,6 +96,9 @@ func runSingletonWorkers(ctx context.Context) {
 		},
 		Update: service.NewNodeServiceFor(database.Get()).UpdateProtocol,
 	}).Run)
+	// Reachability probe (internal/reachprobe): every 10 minutes the
+	// vantages' Agents connected here probe the other nodes.
+	run((&reachprobe.Worker{Service: &reachprobe.Service{DB: database.Get(), Prober: kernelnodeops.ReachProbes{}}}).Run)
 	// Certificate-expiry and backup alerts (alerts.*): scans the certificate
 	// stores and the backups read-only and sends the administrators
 	// one digest of what needs them. One process only, or they would all
