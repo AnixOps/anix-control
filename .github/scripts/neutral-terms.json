@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "doc": "guidelines/terminology.md",
+  "terms": [
+    {"id": "fanqiang", "pattern": "翻墙|科学上网|梯子|(?i:\\bfanqiang\\b)", "use": "使用代理 / use a proxy (T1)"},
+    {"id": "jichang", "pattern": "机场|(?i:\\bjichang\\b)|(?i:\\bairports?\\b)", "use": "服务商 / provider (T2)"},
+    {"id": "gfw", "pattern": "(?i:gfw)|(?i:great\\s+firewall)|防火长城|长城防火墙|墙内|墙外", "use": "网络路径上的中间设备 / on-path middlebox (T3)"},
+    {"id": "censorship", "pattern": "审查|(?i:\\bcensor(?:ship|ed|ing|s)?\\b)|(?i:circumvent)", "use": "网络干扰 / network interference; review = 评审 (T3, T6)"},
+    {"id": "blocking", "pattern": "封锁", "use": "不可达 / unreachable (T3)"},
+    {"id": "unlock", "pattern": "(?:流媒体|服务|地区|区域)解锁|解锁(?:检测|测试|情况|结果|规则)|(?i:\\bstreaming[ _-]?unlock)|(?i:\\bunlock[ _-]?(?:checks?|tests?|rules?|results?|status)\\b)", "use": "服务可用性 / service availability (T4)"},
+    {"id": "country-routing", "pattern": "回国|绕过大陆|(?i:bypass[ _-]?china)|(?i:return[ _-]?china)", "use": "直连 / 经代理 / 按规则 (T5)"}
+  ],
+  "exempt": [
+    "LICENSE", "LICENSE.*", "LICENSE-*", "**/LICENSE", "**/LICENSE.*", "**/LICENSE-*",
+    "*.lock", "**/*.lock", "**/package-lock.json", "package-lock.json", "**/go.sum", "go.sum",
+    "**/node_modules/**", "**/vendor/**", "third_party/**", "**/third_party/**",
+    "*.png", "*.jpg", "*.jpeg", "*.gif", "*.ico", "*.icns", "*.webp", "*.pdf", "*.ttf", "*.otf", "*.woff", "*.woff2",
+    "**/*.png", "**/*.jpg", "**/*.jpeg", "**/*.gif", "**/*.ico", "**/*.icns", "**/*.webp", "**/*.pdf", "**/*.ttf", "**/*.otf", "**/*.woff", "**/*.woff2",
+    ".github/scripts/neutral_terms.py", ".github/scripts/neutral-terms.json",
+    "scripts/neutral_terms.py", "guidelines/neutral-terms.json", "guidelines/terminology.md"
+  ]
+}

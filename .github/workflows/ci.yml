@@ -324,6 +324,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
 
+      # Neutral terminology (AnixOps-design guidelines/terminology.md); the script and
+      # word list are byte-identical copies of the AnixOps-design baseline.
+      - name: Neutral terminology
+        run: python3 .github/scripts/neutral_terms.py
+
       - name: Validate release workflow policy script syntax
         run: bash -n config/scripts/check_release_workflow.sh
 
