@@ -4,7 +4,7 @@
   "terms": [
     {"id": "fanqiang", "pattern": "翻墙|科学上网|梯子|(?i:\\bfanqiang\\b)", "use": "使用代理 / use a proxy (T1)"},
     {"id": "jichang", "pattern": "机场|(?i:\\bjichang\\b)|(?i:\\bairports?\\b)", "use": "服务商 / provider (T2)"},
-    {"id": "gfw", "pattern": "(?i:gfw)|(?i:great\\s+firewall)|防火长城|长城防火墙|墙内|墙外", "use": "网络路径上的中间设备 / on-path middlebox (T3)"},
+    {"id": "gfw", "pattern": "(?i:(?<!open)gfw)|(?i:great\\s+firewall)|防火长城|长城防火墙|墙内|墙外", "use": "网络路径上的中间设备 / on-path middlebox (T3)"},
     {"id": "censorship", "pattern": "审查|(?i:\\bcensor(?:ship|ed|ing|s)?\\b)|(?i:circumvent)", "use": "网络干扰 / network interference; review = 评审 (T3, T6)"},
     {"id": "blocking", "pattern": "封锁", "use": "不可达 / unreachable (T3)"},
     {"id": "unlock", "pattern": "(?:流媒体|服务|地区|区域)解锁|解锁(?:检测|测试|情况|结果|规则)|(?i:\\bstreaming[ _-]?unlock)|(?i:\\bunlock[ _-]?(?:checks?|tests?|rules?|results?|status)\\b)", "use": "服务可用性 / service availability (T4)"},
