@@ -1,7 +1,7 @@
 // Where a device is, for the map of the topology page: the region set on
 // the device (a place key, in its network settings), and until one is set
 // the place read from its tags and its name: a region code (JP, HK), an
-// airport or city code (tyo, lax) or a city name in English or Chinese. A
+// IATA-style city code (tyo, lax) or a city name in English or Chinese. A
 // device with neither stays off the map and is listed under it.
 
 // [key, latitude, longitude, English name, Chinese name, words]: codes match a whole word of the name,

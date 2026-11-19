@@ -446,8 +446,8 @@ func ValidateANXSettings(settings map[string]any) error {
 		if !isNumber || n != float64(int64(n)) || n < 1 || n > 65535 {
 			return errors.New("ANX bare_listen_port must be a port number from 1 to 65535")
 		}
-		// The bare jacket looks like random bytes, which the GFW flags on
-		// cross-border paths: it is for domestic entries only, and those run
+		// The bare jacket looks like random bytes, which on-path traffic
+		// classifiers flag on cross-border paths: it is for domestic entries only, and those run
 		// the no-SNI mode.
 		if !ANXNoSNI(settings) {
 			return errors.New("ANX bare_listen_port is for domestic entries only and needs allow_no_sni")
