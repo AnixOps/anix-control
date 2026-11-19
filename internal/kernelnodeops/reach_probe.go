@@ -40,7 +40,7 @@ type ReachProbes struct {
 
 // Capable answers whether node's Agent is connected and runs the probe.
 func (p ReachProbes) Capable(node agentcontrol.AgentNode) bool {
-	streams := RealityProbes{Sources: p.Sources}.streams()
+	streams := RealityProbes(p).streams()
 	if streams == nil {
 		return false
 	}
@@ -54,7 +54,7 @@ func (p ReachProbes) Probe(ctx context.Context, node agentcontrol.AgentNode, tar
 	if !p.Capable(node) {
 		return nil, ErrReachProbeUnavailable
 	}
-	streams := RealityProbes{Sources: p.Sources}.streams()
+	streams := RealityProbes(p).streams()
 	params := map[string]any{"targets": targets, "timeout_ms": timeout.Milliseconds()}
 	// The Agent runs 16 connections at a time: the slack covers the rounds.
 	rounds := time.Duration(len(targets)*4/16 + 1)
