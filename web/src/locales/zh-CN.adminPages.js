@@ -23,6 +23,7 @@ import nodeEntries from './modules/zh-CN/nodeEntries'
 import nodeNetwork from './modules/zh-CN/nodeNetwork'
 import nodeForwardPorts from './modules/zh-CN/nodeForwardPorts'
 import nodeExitPolicy from './modules/zh-CN/nodeExitPolicy'
+import nodeReach from './modules/zh-CN/nodeReach'
 import agentUpgradeSheet from './modules/zh-CN/agentUpgradeSheet'
 
 export default {
@@ -42,6 +43,7 @@ export default {
   ...nodeNetwork,
   ...nodeForwardPorts,
   ...nodeExitPolicy,
+  ...nodeReach,
   ...agentUpgradeSheet,
   ...networkPages,
   ...miscPages,

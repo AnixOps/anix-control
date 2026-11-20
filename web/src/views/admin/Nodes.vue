@@ -133,6 +133,9 @@
             <template #cell-serviceStatus="{ row }">
               <NodeServiceStatusCell :entry="serviceEntries.get(Number(row.id))" :status="serviceStatus" />
             </template>
+            <template #cell-reach="{ row }">
+              <NodeReachCell :entry="reachNodes.get(Number(row.id))" :vantage="reachVantages.get(Number(row.id))" />
+            </template>
             <template #cell-lastSeen="{ row }">
               <time v-if="lastSeenOf(row)" :title="format.dateTime(lastSeenOf(row))">{{ format.relativeTime(lastSeenOf(row)) }}</time>
               <span v-else>{{ t('admin.nodes.table.never') }}</span>
@@ -213,6 +216,7 @@ import NodeGroupsPanel from './nodes/NodeGroupsPanel.vue'
 import NodeJoinSheet from './nodes/NodeJoinSheet.vue'
 import NodeNotice from './nodes/NodeNotice.vue'
 import NodeServiceStatusCell from './nodes/NodeServiceStatusCell.vue'
+import NodeReachCell from './nodes/NodeReachCell.vue'
 import { nodeRef } from './nodes/agentConnection'
 import {
   NODE_STATUS, isOverQuota, monthlyUsed, normalizeNode, readNodePage, readNodePayload,
@@ -222,6 +226,7 @@ import { readKernelError } from './nodes/nodeGroupData'
 import { useNodeActions } from './nodes/useNodeActions'
 import { useNodeGroups } from './nodes/useNodeGroups'
 import { useNodeServiceStatus } from './nodes/useNodeServiceStatus'
+import { useNodeReach } from './nodes/useNodeReach'
 import { useNodeTransports } from './nodes/useNodeTransports'
 
 const { display: showAddress } = useAddressPrivacy()
@@ -263,6 +268,7 @@ const sortState = ref(NODE_SORT.fromQuery(
 ))
 const { entries: transportEntries, status: transportStatus, load: loadTransports, reset: resetTransports } = useNodeTransports()
 const { entries: serviceEntries, status: serviceStatus, load: loadServiceStatus, reset: resetServiceStatus } = useNodeServiceStatus()
+const { nodes: reachNodes, vantages: reachVantages, load: loadReach } = useNodeReach()
 
 const formOpen = ref(false)
 const editingNode = ref(null)
@@ -349,6 +355,8 @@ const columns = computed(() => [
   { key: 'certificate', label: t('admin.nodes.table.certificate'), nowrap: true, breakpoint: 'lg', card: false },
   { key: 'agentVersion', label: t('admin.nodes.table.agentVersion'), nowrap: true, value: agentVersionOf, breakpoint: 'lg', card: false },
   { key: 'serviceStatus', label: t('admin.nodes.table.serviceStatus'), nowrap: true, breakpoint: 'lg', card: false },
+  // 可达性 shows once a probe vantage is set: until then it has nothing to say.
+  ...(reachVantages.value.size ? [{ key: 'reach', label: t('nodeReach.column'), nowrap: true, breakpoint: 'lg', card: false }] : []),
   { key: 'load', label: t('admin.nodes.table.load'), nowrap: true, numeric: true, value: loadText, firstDirection: 'desc', breakpoint: 'lg', hidden: true, card: false },
   { key: 'lastSeen', label: t('admin.nodes.table.lastSeen'), nowrap: true, value: lastSeenOf, firstDirection: 'desc' },
   { key: 'parent', label: t('admin.nodes.table.parent'), value: node => parentName(node.parent_id), hidden: true },
@@ -415,6 +423,7 @@ const loadNodes = async () => {
     // one call each, after the list.
     void loadTransports(nodes.value.map(node => node.id))
     void loadServiceStatus(nodes.value.map(node => node.id))
+    void loadReach()
     return true
   } catch (e) {
     console.error('Failed to load nodes:', e)

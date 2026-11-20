@@ -693,6 +693,11 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		v4.GET("/kernel/entitlements/:feature/devices", entitlements.Devices)
 		v4.POST("/kernel/entitlements/:feature/devices/:id/revoke", entitlements.Revoke)
 		v4.POST("/kernel/entitlements/:feature/devices/:id/restore", entitlements.Restore)
+		// Reachability probe (internal/reachprobe): the vantages and, from
+		// their answers, which nodes are unreachable from some regions only.
+		reach := handler.NewReachHandler()
+		v4.GET("/kernel/reach", reach.Get)
+		v4.PUT("/kernel/reach/vantages", reach.SetVantages)
 		realityTargets := handler.NewRealityTargetsHandler()
 		v4.GET("/kernel/nodes/:id/reality-targets", realityTargets.List)
 		v4.POST("/kernel/nodes/:id/reality-targets/probe", realityTargets.Probe)

@@ -232,6 +232,8 @@ func laterModels() []any {
 		&model.Line{},                      // 0035_network_lines, 0036_forward_routes_as_lines
 		&model.Transport{},                 // 0035_network_lines
 		&model.EntitlementDevice{},         // 0037_entitlement_devices
+		&model.ReachVantage{},              // 0039_reach_probes
+		&model.ReachProbe{},                // 0039_reach_probes
 	}
 }
 
