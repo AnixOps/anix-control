@@ -55,9 +55,21 @@ In your first pull request, add one line to
 <your GitHub login> | <your name> | <YYYY-MM-DD> | CLA 1.0
 ```
 
-The commit that adds the line is your signature. The "CLA" check on the pull
-request turns green once the line is there. You sign once; later pull
+The commit that adds the line is your signature. You sign once; later pull
 requests need nothing more.
+
+The "CLA" check (`.github/workflows/cla.yml`, `.github/scripts/check_cla.py`)
+enforces three rules on every pull request:
+
+1. Every commit author has a signature line. Commit with an email linked to
+   your GitHub account, or the check cannot match the commit to you.
+2. A pull request adds signature lines only for its own author: nobody signs
+   for someone else.
+3. Existing signature lines are never removed or changed.
+
+The repository owner and bot accounts are exempt. `Co-authored-by` trailers
+are not machine-checked: before merging, the reviewer confirms that every
+human co-author named in a trailer has signed.
 
 ## 中文摘要
 
@@ -66,3 +78,4 @@ requests need nothing more.
 - AnixOps 承诺：合并的贡献会一直在公开仓库以 AGPL-3.0 或其他 OSI 批准的许可证提供。
 - 你声明有权提交该贡献；包含他人代码时在 PR 里说明来源和许可证。
 - 签署方式：第一次提 PR 时，在 `.github/cla-signatures.txt` 加一行，提交这一行即为签署。
+- CI 检查：PR 中每个提交作者都已签署；只能为 PR 作者本人签署；已有签名不能删改。
