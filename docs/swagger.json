@@ -10453,53 +10453,6 @@
                 }
             }
         },
-        "/user/telegram/notify": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "尚未实现：校验请求体后始终返回错误（code=-1），不会修改任何设置",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "用户端"
-                ],
-                "summary": "更新Telegram通知设置",
-                "parameters": [
-                    {
-                        "description": "通知设置",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handler.NotifySettingsRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
         "/user/telegram/status": {
             "get": {
                 "security": [
@@ -10518,35 +10471,6 @@
                     "用户端"
                 ],
                 "summary": "获取Telegram绑定状态",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/user/telegram/unbind": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "尚未实现：不会解除绑定，始终返回错误（code=-1）；请在 Telegram 机器人中发送 /unbind 解绑",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "用户端"
-                ],
-                "summary": "解绑Telegram",
                 "responses": {
                     "200": {
                         "description": "OK",

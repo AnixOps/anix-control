@@ -1,11 +1,12 @@
 package middleware
 
 import (
-	"github.com/AnixOps/anix-control/v5/internal/authn/authntest"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/AnixOps/anix-control/v5/internal/authn/authntest"
 
 	"github.com/AnixOps/anix-control/v5/internal/authn"
 	"github.com/AnixOps/anix-control/v5/internal/cache"
@@ -329,22 +330,6 @@ func TestCORS_WildcardOriginNoCredentials(t *testing.T) {
 	assert.Equal(t, "https://example.com", w.Header().Get("Access-Control-Allow-Origin"))
 	// Credentials must NOT be set with wildcard origin
 	assert.Equal(t, "", w.Header().Get("Access-Control-Allow-Credentials"))
-}
-
-func TestNodeSecureLogger(t *testing.T) {
-	router := gin.New()
-	router.Use(NodeSecureLogger())
-	router.GET("/test", func(c *gin.Context) {
-		c.Set("node_id", uint(1))
-		c.JSON(http.StatusOK, gin.H{"message": "ok"})
-	})
-
-	req := httptest.NewRequest("GET", "/test", nil)
-	w := httptest.NewRecorder()
-
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusOK, w.Code)
 }
 
 func TestLogger(t *testing.T) {

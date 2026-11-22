@@ -75,8 +75,6 @@ var notificationRoutes = map[string]struct{}{
 	"notification.user.notifications.read_all.post":       {},
 	"notification.user.notifications.unread_count.get":    {},
 	"notification.user.telegram.status.get":               {},
-	"notification.user.telegram.unbind.post":              {},
-	"notification.user.telegram.notify.post":              {},
 }
 
 // bridgedRoutes are the package's compatibility routes without a native

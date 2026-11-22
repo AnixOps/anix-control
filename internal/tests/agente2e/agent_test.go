@@ -186,17 +186,3 @@ func agentEnv(shimDir, serverCA string) []string {
 	}
 	return append(env, "PATH="+shimDir+":"+os.Getenv("PATH"), "SSL_CERT_FILE="+serverCA, "SSL_CERT_DIR=/nonexistent")
 }
-
-// spoolFiles lists the files of the Agent's data-plane state (the report
-// spool among them).
-func (a *agentNode) StreamFiles() []string {
-	var files []string
-	_ = filepath.Walk(a.streamDir, func(path string, info os.FileInfo, err error) error {
-		if err == nil && !info.IsDir() {
-			rel, _ := filepath.Rel(a.streamDir, path)
-			files = append(files, fmt.Sprintf("%s:%d", rel, info.Size()))
-		}
-		return nil
-	})
-	return files
-}

@@ -78,10 +78,6 @@ export function resetEdition() {
   pending = null
 }
 
-export function currentEdition() {
-  return state.edition
-}
-
 export function isCommercialEdition() {
   return state.edition === EDITION_COMMERCIAL
 }

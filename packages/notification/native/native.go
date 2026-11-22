@@ -75,8 +75,6 @@ func (s *Service) Handlers() map[string]pluginhostsdk.NativeHandler {
 		"notification.user.notifications.read_all.post":       s.UserMarkAllRead,
 		"notification.user.notifications.unread_count.get":    s.UserUnreadCount,
 		"notification.user.telegram.status.get":               s.UserTelegramStatus,
-		"notification.user.telegram.unbind.post":              s.UserTelegramUnbind,
-		"notification.user.telegram.notify.post":              s.UserTelegramNotify,
 	}
 	if s.Settings != nil {
 		handlers[EmailConfigGetRouteID] = s.AdminEmailConfig

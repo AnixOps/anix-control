@@ -173,10 +173,6 @@ export async function listKernelAgentUpgrades(limit) {
   return unwrap(await v4(config))
 }
 
-export async function getKernelAgentUpgrade(id) {
-  return unwrap(await v4({ url: `/kernel/agents/upgrades/${encodeURIComponent(id)}`, method: 'get' }))
-}
-
 // What an upgrade would do now: the Agent release a campaign pushes by
 // default (target_version, "" when Control's https address is not set),
 // this Control's release, the nodes it would include (eligible_nodes), the

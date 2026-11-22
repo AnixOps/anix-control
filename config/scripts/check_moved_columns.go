@@ -19,8 +19,8 @@
 //     Order, Raw and the like): private_key and preshared_key.
 //
 // Allowed: internal/nodesecrets itself, internal/model (the definitions),
-// cmd/migrate and cmd/sqlite2postgres (they copy whole rows between
-// databases, then call the writer or prune), tests, and the reasoned
+// cmd/sqlite2postgres (it copies whole rows between databases, then calls
+// the writer or prunes), tests, and the reasoned
 // entries of allowed below.
 //
 // The JSON settings columns (v5_node.raw_config, v5_node_protocol's five
@@ -61,7 +61,7 @@ var allowed = map[string]string{
 
 // exemptPrefixes are package directories (relative to the module root)
 // whose reads are allowed.
-var exemptPrefixes = []string{"internal/nodesecrets", "internal/model", "cmd/migrate", "cmd/sqlite2postgres"}
+var exemptPrefixes = []string{"internal/nodesecrets", "internal/model", "cmd/sqlite2postgres"}
 
 // movedFields are the moved fields by model type, with their columns.
 var movedFields = map[string]map[string]string{

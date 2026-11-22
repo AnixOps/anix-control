@@ -1,13 +1,13 @@
 package handler
 
 import (
-	"github.com/AnixOps/anix-control/v5/internal/lease"
 	"net/http"
 	"runtime"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"time"
+
+	"github.com/AnixOps/anix-control/v5/internal/lease"
 
 	"github.com/AnixOps/anix-control/v5/internal/agenttransport"
 	"github.com/AnixOps/anix-control/v5/internal/branding"
@@ -25,11 +25,6 @@ import (
 type MetricsHandler struct {
 	db *gorm.DB
 
-	// 计数器
-	requestCount uint64
-	errorCount   uint64
-	successCount uint64
-
 	// 启动时间
 	startTime time.Time
 }
@@ -39,16 +34,6 @@ func NewMetricsHandler() *MetricsHandler {
 	return &MetricsHandler{
 		db:        database.Get(),
 		startTime: time.Now(),
-	}
-}
-
-// RecordRequest 记录请求
-func (h *MetricsHandler) RecordRequest(success bool) {
-	atomic.AddUint64(&h.requestCount, 1)
-	if success {
-		atomic.AddUint64(&h.successCount, 1)
-	} else {
-		atomic.AddUint64(&h.errorCount, 1)
 	}
 }
 
@@ -81,18 +66,6 @@ anixops_control_info{version="` + branding.DefaultVersion + `",go_version="` + r
 # HELP anixops_control_uptime_seconds Application uptime in seconds
 # TYPE anixops_control_uptime_seconds gauge
 anixops_control_uptime_seconds ` + formatFloat(time.Since(h.startTime).Seconds()) + `
-
-# HELP anixops_control_requests_total Total number of HTTP requests
-# TYPE anixops_control_requests_total counter
-anixops_control_requests_total ` + formatUint(atomic.LoadUint64(&h.requestCount)) + `
-
-# HELP anixops_control_requests_success_total Total number of successful requests
-# TYPE anixops_control_requests_success_total counter
-anixops_control_requests_success_total ` + formatUint(atomic.LoadUint64(&h.successCount)) + `
-
-# HELP anixops_control_requests_error_total Total number of error requests
-# TYPE anixops_control_requests_error_total counter
-anixops_control_requests_error_total ` + formatUint(atomic.LoadUint64(&h.errorCount)) + `
 
 # HELP anixops_control_users_total Total number of users
 # TYPE anixops_control_users_total gauge

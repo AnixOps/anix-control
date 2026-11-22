@@ -3,11 +3,9 @@ package service
 import (
 	"bytes"
 	"errors"
-	"io"
 	"log"
 	"net"
 	"net/http"
-	"strings"
 	"testing"
 
 	"github.com/AnixOps/anix-control/v5/internal/model"
@@ -145,58 +143,6 @@ func TestTelegramBotService_HandleUpdate_Callback(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestTelegramBotService_BindUser(t *testing.T) {
-	db := setupTelegramTestDB(t)
-	svc := NewTelegramBotService(db)
-
-	// Create test user
-	user := &model.User{
-		Email:          "test@example.com",
-		Token:          "test-token",
-		UUID:           "test-uuid",
-		TransferEnable: 1073741824, // 1GB
-	}
-	db.Create(user)
-
-	// Create bot
-	bot := &model.TelegramBot{
-		Token: "test-token",
-		Name:  "testbot",
-	}
-	db.Create(bot)
-
-	// Test bind user
-	from := &TelegramUser{
-		ID:        12345,
-		FirstName: "Test",
-		Username:  "testuser",
-	}
-
-	err := svc.BindUser(12345, "test@example.com", from)
-	require.NoError(t, err)
-
-	// Verify binding
-	var tgUser model.TelegramUser
-	err = db.Where("telegram_id = ?", 12345).First(&tgUser).Error
-	require.NoError(t, err)
-	assert.Equal(t, user.ID, tgUser.UserID)
-	assert.Equal(t, int64(12345), tgUser.TelegramID)
-}
-
-func TestTelegramBotService_BindUser_UserNotFound(t *testing.T) {
-	db := setupTelegramTestDB(t)
-	svc := NewTelegramBotService(db)
-
-	from := &TelegramUser{
-		ID:        12345,
-		FirstName: "Test",
-	}
-
-	err := svc.BindUser(12345, "nonexistent@example.com", from)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "未找到")
-}
-
 func TestTelegramBotService_HandleUnbind(t *testing.T) {
 	db := setupTelegramTestDB(t)
 	svc := NewTelegramBotService(db)
@@ -230,59 +176,6 @@ func TestTelegramBotService_HandleUnbind(t *testing.T) {
 	var count int64
 	db.Model(&model.TelegramUser{}).Where("telegram_id = ?", 12345).Count(&count)
 	assert.Equal(t, int64(0), count)
-}
-
-func TestTelegramBotService_BroadcastReturnsSendErrors(t *testing.T) {
-	db := setupTelegramTestDB(t)
-	svc := NewTelegramBotService(db)
-	svc.client = &http.Client{
-		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
-			return nil, errors.New("telegram unavailable")
-		}),
-	}
-
-	require.NoError(t, db.Create(&model.TelegramBot{
-		Token:   "test-token",
-		Name:    "testbot",
-		Enabled: true,
-	}).Error)
-	require.NoError(t, db.Create(&model.TelegramUser{
-		TelegramID: 12345,
-		IsBanned:   false,
-	}).Error)
-
-	err := svc.Broadcast("hello")
-
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "send telegram message to 12345")
-	assert.Contains(t, err.Error(), "telegram API request failed: other")
-	assert.NotContains(t, err.Error(), "telegram unavailable")
-}
-
-func TestTelegramBotService_BroadcastSuccess(t *testing.T) {
-	db := setupTelegramTestDB(t)
-	svc := NewTelegramBotService(db)
-	svc.client = &http.Client{
-		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Header:     make(http.Header),
-				Body:       io.NopCloser(strings.NewReader(`{"ok":true}`)),
-			}, nil
-		}),
-	}
-
-	require.NoError(t, db.Create(&model.TelegramBot{
-		Token:   "test-token",
-		Name:    "testbot",
-		Enabled: true,
-	}).Error)
-	require.NoError(t, db.Create(&model.TelegramUser{
-		TelegramID: 12345,
-		IsBanned:   false,
-	}).Error)
-
-	assert.NoError(t, svc.Broadcast("hello"))
 }
 
 func TestTelegramBotServiceAPIRequestReturnsEncodeError(t *testing.T) {
@@ -401,17 +294,4 @@ func TestTelegramBotServiceUnparseableURLErrorCarriesNoToken(t *testing.T) {
 	err := NewTelegramBotService(db).SendMessage(1, "hi")
 	require.Error(t, err)
 	assert.Equal(t, "telegram API request failed: other", err.Error())
-}
-
-// Broadcast joins the per-chat errors; none may carry the token.
-func TestTelegramBotServiceBroadcastErrorsCarryNoToken(t *testing.T) {
-	db := setupTelegramTestDB(t)
-	require.NoError(t, db.Create(&model.TelegramBot{Token: leakTestToken, Name: "b"}).Error)
-	require.NoError(t, db.Create(&model.TelegramUser{UserID: 1, TelegramID: 77}).Error)
-	svc := NewTelegramBotService(db)
-	svc.client.Transport = failingTransport{err: &net.OpError{Op: "dial", Err: errors.New("refused")}}
-	err := svc.Broadcast("hi")
-	require.Error(t, err)
-	assert.NotContains(t, err.Error(), "FAKEtoken")
-	assert.Contains(t, err.Error(), "telegram API request failed: connect")
 }

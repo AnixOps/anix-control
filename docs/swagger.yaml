@@ -8940,36 +8940,6 @@ paths:
       summary: 重置我的订阅链接
       tags:
       - 用户端
-  /user/telegram/notify:
-    post:
-      consumes:
-      - application/json
-      description: 尚未实现：校验请求体后始终返回错误（code=-1），不会修改任何设置
-      parameters:
-      - description: 通知设置
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/handler.NotifySettingsRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: 更新Telegram通知设置
-      tags:
-      - 用户端
   /user/telegram/status:
     get:
       consumes:
@@ -8986,24 +8956,6 @@ paths:
       security:
       - BearerAuth: []
       summary: 获取Telegram绑定状态
-      tags:
-      - 用户端
-  /user/telegram/unbind:
-    post:
-      consumes:
-      - application/json
-      description: 尚未实现：不会解除绑定，始终返回错误（code=-1）；请在 Telegram 机器人中发送 /unbind 解绑
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: 解绑Telegram
       tags:
       - 用户端
 schemes:

@@ -158,26 +158,12 @@ func (ca *CA) SetTargets(tlsALPN, http01 func(name string) string) {
 	ca.tlsALPNTarget, ca.httpTarget = tlsALPN, http01
 }
 
-// SetLifetime changes the lifetime of the next certificates.
-func (ca *CA) SetLifetime(lifetime time.Duration) {
-	ca.mu.Lock()
-	defer ca.mu.Unlock()
-	ca.lifetime = lifetime
-}
-
 // SetAsyncFinalize makes finalize answer like Pebble: the order still
 // processing, without a Location header.
 func (ca *CA) SetAsyncFinalize(async bool) {
 	ca.mu.Lock()
 	defer ca.mu.Unlock()
 	ca.asyncFinalize = async
-}
-
-// SetOffline makes every request answer 503 (true) or serves again.
-func (ca *CA) SetOffline(offline bool) {
-	ca.mu.Lock()
-	defer ca.mu.Unlock()
-	ca.directoryOffline = offline
 }
 
 // Validations lists "<type> <name> ok|failed" in order.

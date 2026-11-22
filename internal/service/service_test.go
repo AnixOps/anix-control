@@ -774,10 +774,6 @@ func (s *ForwardNodeServiceTestSuite) TestGetByType() {
 	assert.Equal(s.T(), "Relay Node", nodes[0].Name)
 }
 
-// Skip: HealthCheck tests timeout and cause instability
-// func (s *ForwardNodeServiceTestSuite) TestHealthCheck() { ... }
-// func (s *ForwardNodeServiceTestSuite) TestHealthCheckAll() { ... }
-
 func TestForwardNodeService(t *testing.T) {
 	suite.Run(t, new(ForwardNodeServiceTestSuite))
 }
@@ -1465,15 +1461,6 @@ func (s *SystemConfigServiceTestSuite) TestGetAll() {
 	assert.GreaterOrEqual(s.T(), len(configs), 2)
 }
 
-func (s *SystemConfigServiceTestSuite) TestGetAsMap() {
-	assert.NoError(s.T(), s.svc.Set("map_key1", "value1", "string", "test", ""))
-	assert.NoError(s.T(), s.svc.Set("map_key2", "value2", "string", "test", ""))
-	result, err := s.svc.GetAsMap()
-	assert.NoError(s.T(), err)
-	assert.GreaterOrEqual(s.T(), len(result), 2)
-	assert.Equal(s.T(), "value1", result["map_key1"])
-}
-
 func (s *SystemConfigServiceTestSuite) TestDelete() {
 	assert.NoError(s.T(), s.svc.Set("delete_key", "value", "string", "test", ""))
 	err := s.svc.Delete("delete_key")
@@ -1771,26 +1758,6 @@ func (s *NodeServiceTestSuite) TestAssignProtocolsToGroup_MissingProtocol() {
 	assert.ErrorIs(s.T(), err, ErrNodeProtocolNotFound)
 }
 
-// Additional ForwardNodeService Tests
-func (s *ForwardNodeServiceTestSuite) SkipTestHealthCheck() {
-	node := &model.ForwardNode{
-		Name:    "Health Check Test",
-		Type:    model.ForwardNodeTypeRelay,
-		Host:    "127.0.0.1", // localhost for testing
-		Port:    8080,
-		Enabled: true,
-	}
-	assert.NoError(s.T(), s.svc.Create(node))
-	// Health check will likely fail since there's no actual server, but function should run
-	_, err := s.svc.HealthCheck(context.Background(), node.ID)
-	// We just check the function runs, error is expected since no real server
-	_ = err
-
-	// Verify node was checked
-	found, _ := s.svc.GetByID(node.ID)
-	assert.NotZero(s.T(), found.ID)
-}
-
 // Additional SystemConfigService Tests
 func (s *SystemConfigServiceTestSuite) TestGetByGroup() {
 	assert.NoError(s.T(), s.svc.Set("group_key1", "value1", "string", "testgroup", ""))
@@ -1839,23 +1806,6 @@ func (s *NotificationServiceTestSuite) TestGetEmailTemplateEscapesContent() {
 	assert.Contains(s.T(), body, "Security")
 	assert.Contains(s.T(), body, "&lt;script&gt;")
 	assert.NotContains(s.T(), body, `<script>alert("x")</script>`)
-}
-
-func (s *NotificationServiceTestSuite) TestNotifyUserExpire() {
-	err := s.svc.NotifyUserExpire(s.testUser, 7)
-	// May fail due to no email config, but function should run
-	_ = err
-}
-
-func (s *NotificationServiceTestSuite) TestNotifyTrafficLow() {
-	err := s.svc.NotifyTrafficLow(s.testUser, 10.0)
-	_ = err
-}
-
-func (s *NotificationServiceTestSuite) TestBroadcast() {
-	err := s.svc.Broadcast("Test Broadcast", "This is a test broadcast message")
-	// May fail due to no users, but function should run
-	_ = err
 }
 
 // =====================================================
@@ -2268,48 +2218,6 @@ func TestInitService(t *testing.T) {
 // Notification Event Tests (NotifyTicketReply, NotifyOrderPaid, NotifyNodeOffline)
 // =====================================================
 
-func (s *NotificationServiceTestSuite) TestNotifyTicketReply() {
-	// Create a ticket for the test user
-	ticket := &model.Ticket{
-		UserID:    s.testUser.ID,
-		Subject:   "Test Ticket",
-		Status:    0,
-		CreatedAt: time.Now(),
-	}
-	database.Get().Create(ticket)
-
-	// Call NotifyTicketReply
-	err := s.svc.NotifyTicketReply(ticket, "Admin")
-	// May fail due to missing email config, but function runs
-	_ = err
-}
-
-func (s *NotificationServiceTestSuite) TestNotifyNodeOffline() {
-	// Create admin user
-	admin := &model.User{
-		Email:          "admin@test.com",
-		Password:       "hashed",
-		Token:          "admin-token",
-		UUID:           "admin-uuid",
-		TransferEnable: 10737418240,
-		IsAdmin:        1,
-	}
-	database.Get().Create(admin)
-
-	// Create a node
-	node := &model.Node{
-		Name: "Offline Test Node",
-		Host: "192.168.1.99",
-		Port: 443,
-	}
-	database.Get().Create(node)
-
-	// Call NotifyNodeOffline
-	err := s.svc.NotifyNodeOffline(node)
-	// May fail due to missing email config, but function runs
-	_ = err
-}
-
 // =====================================================
 // SubscriptionService Helper Function Tests
 // =====================================================
@@ -2510,22 +2418,6 @@ func (s *InviteServiceTestSuite) TestGetConfig_NoConfig() {
 // =====================================================
 // ForwardNodeService Additional Tests
 // =====================================================
-
-func (s *ForwardNodeServiceTestSuite) TestHealthCheck_NodeNotFound() {
-	ctx := context.Background()
-	_, err := s.svc.HealthCheck(ctx, 99999)
-	assert.Error(s.T(), err)
-}
-
-func (s *ForwardNodeServiceTestSuite) TestHealthCheckReturnsCanceledContext() {
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-
-	result, err := s.svc.HealthCheck(ctx, 99999)
-
-	assert.Nil(s.T(), result)
-	assert.ErrorIs(s.T(), err, context.Canceled)
-}
 
 // A subscription pull gives the user a stored Shadowsocks 2022 key, offered
 // at the nodes whose Agent serves it; the others keep the legacy key.

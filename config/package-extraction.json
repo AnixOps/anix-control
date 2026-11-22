@@ -961,26 +961,10 @@
       "legacy": "none"
     },
     {
-      "method": "POST",
-      "path": "/api/v2/user/telegram/notify",
-      "package_id": "notification",
-      "route_id": "notification.user.telegram.notify.post",
-      "mode": "native",
-      "legacy": "none"
-    },
-    {
       "method": "GET",
       "path": "/api/v2/user/telegram/status",
       "package_id": "notification",
       "route_id": "notification.user.telegram.status.get",
-      "mode": "native",
-      "legacy": "none"
-    },
-    {
-      "method": "POST",
-      "path": "/api/v2/user/telegram/unbind",
-      "package_id": "notification",
-      "route_id": "notification.user.telegram.unbind.post",
       "mode": "native",
       "legacy": "none"
     },

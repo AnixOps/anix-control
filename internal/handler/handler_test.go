@@ -372,17 +372,6 @@ func (s *MetricsHandlerTestSuite) TestGetMetrics_IncludesV2GatewaySeries() {
 	assert.Contains(s.T(), body, `anixops_v2_gateway_request_duration_seconds_bucket{package="knowledge",le="0.005"}`)
 }
 
-func (s *MetricsHandlerTestSuite) TestRecordRequest_Success() {
-	handler := NewMetricsHandler()
-	handler.RecordRequest(true)
-	handler.RecordRequest(true)
-	handler.RecordRequest(false)
-
-	assert.Equal(s.T(), uint64(3), handler.requestCount)
-	assert.Equal(s.T(), uint64(2), handler.successCount)
-	assert.Equal(s.T(), uint64(1), handler.errorCount)
-}
-
 func (s *MetricsHandlerTestSuite) TestFormatInt() {
 	assert.Equal(s.T(), "0", formatInt(0))
 	assert.Equal(s.T(), "1", formatInt(1))

@@ -85,8 +85,3 @@ type KernelForwardDNSVantage struct {
 }
 
 func (KernelForwardDNSVantage) TableName() string { return "v4_kernel_forward_dns_vantage" }
-
-// KernelForwardDNSModels are the entry HA tables.
-func KernelForwardDNSModels() []any {
-	return []any{&KernelForwardDNSProvider{}, &KernelForwardDNSBinding{}, &KernelForwardDNSNode{}}
-}

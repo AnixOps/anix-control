@@ -54,15 +54,6 @@ Code and playbooks are ready; the operator does these when there is time
 These code paths exist and have unit tests, but nothing in the running server
 calls them. Wire them (with tests and docs) or delete them deliberately.
 
-- [ ] Automatic notifications: `NotifyUserExpire`, `NotifyTrafficLow`,
-  `NotifyTicketReply`, `NotifyNodeOffline` and `Broadcast` in
-  `internal/service/notification_service.go` are never called.
-- [ ] `MetricsHandler.RecordRequest` (`internal/handler/metrics.go`) is never
-  called, so the `/metrics` request counters stay at 0.
-- [ ] `TelegramBotService.BindUser` (by e-mail; the bot's `/bind` uses
-  `BindUserByToken`) and `Broadcast` (`internal/service/telegram_service.go`)
-  have no callers; `SendNotification` is reached only through the unwired
-  notifications above.
 - [ ] `AdvancePackageCohort` and `RollbackPackageGeneration`
   (`internal/service/plugin_rollout.go`) are not wired to any route or
   worker. The migration-ledger half runs when a storage package's host starts
@@ -71,9 +62,6 @@ calls them. Wire them (with tests and docs) or delete them deliberately.
   (`internal/service/mfa_service.go`) is never consulted during
   verification, so repeated wrong codes are not throttled on the kernel's own
   path. (The identity module limits second-factor attempts separately.)
-- [ ] `cmd/migrate` (XBoard MySQL dump importer) is undocumented;
-  `docs/guide/legacy-migration.md` still says there is no one-command
-  converter. Document its scope and limits, or remove it.
 
 ## Deployment And Repository Hygiene
 

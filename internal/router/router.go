@@ -361,8 +361,6 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 
 			// 用户 Telegram
 			authUser.GET("/user/telegram/status", v2PackageGateway.Serve)
-			authUser.POST("/user/telegram/unbind", v2PackageGateway.Serve)
-			authUser.POST("/user/telegram/notify", v2PackageGateway.Serve)
 
 			// 用户 MFA
 			authUser.GET("/user/mfa/status", v2PackageGateway.Serve)

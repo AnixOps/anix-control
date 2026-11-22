@@ -36,14 +36,6 @@ func newTCPProxy(t *testing.T, target string) *tcpProxy {
 
 func (p *tcpProxy) Addr() string { return p.addr }
 
-// Accepted counts the connections the proxy has taken (each a dial of the
-// Agent).
-func (p *tcpProxy) Accepted() int {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	return p.accepted
-}
-
 func (p *tcpProxy) serve(listener net.Listener) {
 	p.mu.Lock()
 	p.listener = listener

@@ -15,7 +15,7 @@ This is the current audit baseline for `github.com/AnixOps/anix-control/v5`. It 
 - Current package count from `GOWORK=off go list ./...`: 141
 - Current Go test file count under `cmd`, `internal`, and `config`: 558 (730 repository-wide)
 - Primary backend entry point: `cmd/server/main.go`
-- Supporting commands: `cmd/migrate`, `cmd/sqlite2postgres`, `cmd/wgrotate`
+- Supporting commands: `cmd/sqlite2postgres`, `cmd/wgrotate`
   (`cmd/configgen`, `cmd/integration-test`, `cmd/report`, `cmd/subtest`, and
   `cmd/verify` were removed by PR #8)
 - Frontend: Vue/Vite app under `web/`

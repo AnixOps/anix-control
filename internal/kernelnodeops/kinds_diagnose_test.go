@@ -207,14 +207,10 @@ func TestCheckEndpoints(t *testing.T) {
 		require.Equal(t, "dial tcp 198.51.100.11:22: connect: connection refused", checks[1].GetError())
 		require.True(t, checks[2].GetReachable())
 
-		// What the legacy check records, and answers.
+		// What the check records.
 		require.Equal(t, model.ForwardNodeStatusOnline, forwardNodeRow(t, db, 10).Status)
 		require.False(t, forwardNodeRow(t, db, 10).LastCheck.IsZero())
 		require.Equal(t, model.ForwardNodeStatusOffline, forwardNodeRow(t, db, 11).Status)
-		legacy, err := service.NewForwardNodeService(db).CheckEndpoint(context.Background(), network.probes(), 11, false)
-		require.NoError(t, err)
-		require.Equal(t, legacy.Error, checks[1].GetError())
-		require.Equal(t, legacy.Status == model.ForwardNodeStatusOnline, checks[1].GetReachable())
 
 		// Without record_status the rows are left alone.
 		require.NoError(t, db.Model(&model.ForwardNode{}).Where("id = ?", 11).Updates(map[string]any{"status": model.ForwardNodeStatusOnline, "latency": 7}).Error)

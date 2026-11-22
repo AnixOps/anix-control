@@ -25,11 +25,6 @@ func IdentityAuthorityState(db *gorm.DB) (string, error) {
 	return authority.State, err
 }
 
-// IdentityAuthoritative reports whether identity owns credentials in state.
-func IdentityAuthoritative(state string) bool {
-	return state == model.IdentityAuthorityIdentity || state == model.IdentityAuthorityFinalized
-}
-
 // RequireIdentityFinalized refuses a database whose accounts identity does
 // not own yet: Control keeps no login of its own, so a database with users
 // must have been cut over to identity and finalized by an earlier release.

@@ -52,12 +52,6 @@ type Grant struct {
 	Trial bool
 }
 
-// ANXEnabled reports whether ANX licensing is on.
-func (s *Service) ANXEnabled() (bool, error) {
-	settings, err := LoadSettings(s.DB)
-	return settings.Enabled, err
-}
-
 // IssueANX answers the ANX license request of user's device (the value of
 // X-AnixOps-Device). It returns nil while ANX licensing is off.
 func (s *Service) IssueANX(user *model.User, deviceHeader string) (*Grant, error) {
@@ -173,31 +167,6 @@ func (s *Service) trialEnd(userID uint, trialDays int, now time.Time) (time.Time
 		return time.Time{}, err
 	}
 	return start.Add(time.Duration(trialDays) * 24 * time.Hour), nil
-}
-
-// Devices lists a user's devices for feature, newest first.
-func (s *Service) Devices(userID uint, feature string) ([]model.EntitlementDevice, error) {
-	var rows []model.EntitlementDevice
-	err := s.DB.Where("user_id = ? AND feature = ?", userID, feature).Order("last_seen_at DESC").Find(&rows).Error
-	return rows, err
-}
-
-// Revoke revokes a user's device: it gets no new license and frees its
-// seat, and the ANX nodes refuse the license it holds from their next
-// configuration on (ANXRevoked). It reports whether the device was found.
-func (s *Service) Revoke(userID uint, feature, deviceID string) (bool, error) {
-	res := s.DB.Model(&model.EntitlementDevice{}).
-		Where("user_id = ? AND feature = ? AND device_id = ? AND revoked_at IS NULL", userID, feature, deviceID).
-		Update("revoked_at", s.now())
-	return res.RowsAffected > 0, res.Error
-}
-
-// Restore lifts a revocation.
-func (s *Service) Restore(userID uint, feature, deviceID string) (bool, error) {
-	res := s.DB.Model(&model.EntitlementDevice{}).
-		Where("user_id = ? AND feature = ? AND device_id = ?", userID, feature, deviceID).
-		Update("revoked_at", nil)
-	return res.RowsAffected > 0, res.Error
 }
 
 // ANXNodeLicense is what an ANX node's inbound gets: the license CA it

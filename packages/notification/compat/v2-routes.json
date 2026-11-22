@@ -150,23 +150,9 @@
       "transport": "http"
     },
     {
-      "method": "POST",
-      "legacy_path": "/api/v2/user/telegram/notify",
-      "package_route": "notification.user.telegram.notify.post",
-      "envelope": "data",
-      "transport": "http"
-    },
-    {
       "method": "GET",
       "legacy_path": "/api/v2/user/telegram/status",
       "package_route": "notification.user.telegram.status.get",
-      "envelope": "data",
-      "transport": "http"
-    },
-    {
-      "method": "POST",
-      "legacy_path": "/api/v2/user/telegram/unbind",
-      "package_route": "notification.user.telegram.unbind.post",
       "envelope": "data",
       "transport": "http"
     }
