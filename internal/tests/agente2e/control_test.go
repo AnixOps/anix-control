@@ -258,29 +258,6 @@ func (c *control) InstallPackages(t *testing.T, publicKey string, pkgs ...signed
 	}
 }
 
-// InstallAgentPackage makes the package's Agent installation, enabled at
-// the release InstallPackages registered, the way the bootstrap makes a
-// Control one; the node assignments then deploy it (once Agent plugin
-// dispatch is on, in M4).
-func (c *control) InstallAgentPackage(t *testing.T, pkg signedPackage) {
-	t.Helper()
-	require.NoError(t, c.db.Transaction(func(tx *gorm.DB) error {
-		if err := service.LockPluginInstallationTarget(tx, "agent"); err != nil {
-			return err
-		}
-		var release model.PluginRelease
-		if err := tx.Take(&release, "plugin_id = ? AND version = ?", pkg.ID, pkg.Version).Error; err != nil {
-			return err
-		}
-		if err := service.ValidatePluginInstallationPlan(tx, release, "agent", true, 0); err != nil {
-			return err
-		}
-		return tx.Create(&model.PluginInstallation{
-			PluginID: pkg.ID, Target: "agent", DesiredVersion: pkg.Version, State: "pending", Enabled: true, LifecycleGeneration: 1,
-		}).Error
-	}), pkg.ID)
-}
-
 type installation struct {
 	ID              uint   `json:"id"`
 	PluginID        string `json:"plugin_id"`

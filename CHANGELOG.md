@@ -17,6 +17,13 @@
   empty `legacy_rules` and `tunnels` of a forward node's desired
   configuration: each forward node gets one new configuration revision after
   the upgrade, with the same content for its Agent.
+- The Agent plugin dispatcher (`KernelOperationBridge`) and its plugin
+  lifecycle queue, retry and reconcile code, which a constant kept off since
+  5.0.0-rc.1. Node assignments and Agent configuration changes keep recording
+  the desired state, as before; deleting an assignment of an inactive plugin
+  still removes it at once. The "Control to Agent Process E2E" tag gate,
+  which exercised only that dispatcher, is gone; the real-Agent
+  "Cross-Repo E2E" stays.
 
 ## 5.0.10 - 2026-11-18
 

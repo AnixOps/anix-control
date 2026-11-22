@@ -10,12 +10,11 @@ The kernel persists signed plugin releases, installation intent, scoped access
 groups, verified immutable plugin artifacts, node assignments, topology
 revisions, deployments, and idempotent operations. Control-target lifecycle
 operations are executed by the in-process Control executor, which always
-runs: the built-in packages' hosts start with Control. Agent plugin dispatch
-and topology execution are off until M4 brings the Agent plugins, and no
-setting turns them on (`service.AgentPluginDispatchEnabled` and
-`service.TopologyExecutionEnabled` are `false`; the code paths stay). Node
-assignments and Agent configuration changes record the desired state and
-queue no Agent operation, and a deployment created through
+runs: the built-in packages' hosts start with Control. Control does not
+dispatch Agent plugins (the dispatcher was removed in the 2026-11 slimming,
+`docs/audit/slim-2026-11.md`), and topology execution is off with no
+setting. Node assignments and Agent configuration changes record the
+desired state and queue no Agent operation, and a deployment created through
 `/api/v3/deployments` stays planned: apply and rollback answer
 `409 topology_execution_disabled`. The kernel does not switch forwarding
 traffic.
@@ -658,19 +657,8 @@ installation updates include a monotonic lifecycle generation in their
 idempotency key, so a disable/enable cycle cannot replay an old terminal
 operation.
 
-The payload fixture at `contracts/agent/v1/operation-envelope-golden.json` is
-byte-identical in Control and Agent. Control tests assert the dispatcher
-produces exactly those `DesiredOperation.payload_json` bytes; Agent tests assert
-the same bytes decode under the active session and re-encode without drift.
-
-Once Agent plugin dispatch is on (M4; until then
-`service.AgentPluginDispatchEnabled` is `false` and the dispatcher does not
-start), the Control dispatcher claims pending lifecycle operations, obtains
-the active Agent stream session, constructs the versioned envelope from
-canonical persisted config, and records ACK plus observed state back to the
-same operation row. It only dispatches the currently implemented lifecycle
-capabilities `plugin.inspect/configure/enable/disable/update/rollback/health`;
-Control dependency plans and topology deployment plans create those primitive
-operations instead of bypassing the durable dispatcher. The
-`plugins.dispatch_enabled` switch that used to turn it on is gone; a file
-that still sets it loads and the key is ignored with a warning.
+Control does not dispatch Agent plugin lifecycle operations: the dispatcher
+(`KernelOperationBridge`) and its envelope golden fixture were removed in the
+2026-11 slimming (`docs/audit/slim-2026-11.md`), because dispatch was never
+enabled in production. The `plugins.dispatch_enabled` key is ignored with a
+warning.

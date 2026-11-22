@@ -4,19 +4,14 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"net/url"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/AnixOps/anix-control/v5/internal/model"
 	"gorm.io/gorm"
 )
-
-const AgentPluginInstallAPIVersion = "anixops.io/plugin-install/v1alpha1"
 
 const maxAgentPluginArtifactBytes = MaxPluginArtifactBytes
 
@@ -27,30 +22,6 @@ var (
 	ErrAgentPluginReconcileNotReady  = errors.New("agent plugin assignment is not ready to reconcile")
 	ErrAgentPluginAddressMismatch    = errors.New("agent plugin download address does not match verified content")
 )
-
-type AgentPluginInstallConfig struct {
-	APIVersion string                     `json:"api_version"`
-	PluginID   string                     `json:"plugin_id"`
-	Version    string                     `json:"version"`
-	Artifact   AgentPluginArtifactAddress `json:"artifact"`
-	Manifest   AgentPluginManifestAddress `json:"manifest"`
-}
-
-type AgentPluginArtifactAddress struct {
-	URL    string `json:"url"`
-	SHA256 string `json:"sha256"`
-	Size   int64  `json:"size"`
-}
-
-type AgentPluginManifestAddress struct {
-	URL        string `json:"url"`
-	SHA256     string `json:"sha256"`
-	Size       int64  `json:"size"`
-	Signature  string `json:"signature"`
-	Publisher  string `json:"publisher"`
-	KeyID      string `json:"key_id"`
-	APIVersion string `json:"api_version"`
-}
 
 // AgentPluginReleaseDownload is verified immediately before a node-facing
 // response is written. Data is intentionally kept out of JSON response types.
@@ -192,43 +163,4 @@ func (download *AgentPluginReleaseDownload) ValidateManifestAddress(sha256Hex st
 		return ErrAgentPluginAddressMismatch
 	}
 	return nil
-}
-
-func BuildAgentPluginInstallConfig(db *gorm.DB, nodeID uint, pluginID, version string) (string, error) {
-	download, err := LoadAuthorizedAgentPluginMetadata(db, nodeID, pluginID, version)
-	if err != nil {
-		return "", err
-	}
-	basePath := "/api/v3/agent/plugin-releases/" + url.PathEscape(download.Release.PluginID) + "/" + url.PathEscape(download.Release.Version)
-	artifactQuery := url.Values{}
-	artifactQuery.Set("sha256", strings.ToLower(download.Artifact.ArtifactSHA256))
-	artifactQuery.Set("size", strconv.FormatInt(download.Artifact.SizeBytes, 10))
-	manifestQuery := url.Values{}
-	manifestQuery.Set("sha256", download.ManifestHash)
-	manifestQuery.Set("size", strconv.FormatInt(int64(len(download.ManifestData)), 10))
-	payload := AgentPluginInstallConfig{
-		APIVersion: AgentPluginInstallAPIVersion,
-		PluginID:   download.Release.PluginID,
-		Version:    download.Release.Version,
-		Artifact: AgentPluginArtifactAddress{
-			URL: basePath + "/artifact?" + artifactQuery.Encode(), SHA256: strings.ToLower(download.Artifact.ArtifactSHA256), Size: download.Artifact.SizeBytes,
-		},
-		Manifest: AgentPluginManifestAddress{
-			URL: basePath + "/manifest?" + manifestQuery.Encode(), SHA256: download.ManifestHash, Size: int64(len(download.ManifestData)),
-			Signature: download.Release.Signature, Publisher: download.Manifest.Publisher,
-			KeyID: download.Release.TrustRootKeyID, APIVersion: download.Manifest.APIVersion,
-		},
-	}
-	raw, err := json.Marshal(payload)
-	if err != nil {
-		return "", err
-	}
-	return CanonicalKernelOperationConfig(string(raw))
-}
-
-type AgentAssignmentOperationChain struct {
-	Install *model.KernelOperation
-	Update  *model.KernelOperation
-	Enable  *model.KernelOperation
-	Disable *model.KernelOperation
 }

@@ -20,7 +20,6 @@ RELEASE_BINARY_GATES=(
   postgres-restore-rehearsal
   plugin-package-release-test
   plugin-package-publish
-  cross-repository-agent-e2e
   e2e-test
   tag-gate
   release-workflow-policy

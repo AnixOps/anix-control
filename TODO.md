@@ -18,10 +18,6 @@ from this file in the same PR that records it in `CHANGELOG.md`.
 
 ## Plugin Platform
 
-- [ ] Agent plugin dispatch and topology execution are off with no setting
-  (`service.AgentPluginDispatchEnabled`) until M4's Agent release manifest
-  brings the Agent plugins; the cross-repo E2E plugin scenarios skip until
-  then.
 - [ ] Move the legacy business domains out of the kernel. Every `/api/v2`
   business route goes through the package gateway (`registeredPackageRoute`,
   `internal/router/router.go`), but most still fall back to the in-kernel
@@ -58,10 +54,6 @@ calls them. Wire them (with tests and docs) or delete them deliberately.
   (`internal/service/plugin_rollout.go`) are not wired to any route or
   worker. The migration-ledger half runs when a storage package's host starts
   (`internal/service/package_host_migration.go`).
-- [ ] MFA brute-force protection: `MFAService.CheckBruteForce`
-  (`internal/service/mfa_service.go`) is never consulted during
-  verification, so repeated wrong codes are not throttled on the kernel's own
-  path. (The identity module limits second-factor attempts separately.)
 
 ## Deployment And Repository Hygiene
 

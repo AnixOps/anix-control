@@ -5,10 +5,8 @@
 - PostgreSQL restore rehearsal now runs end to end against a disposable
   PostgreSQL service, comparing normalized schema and deterministic snapshots
   before and after `pg_dump`/`pg_restore`; CI uploads the report and dump TOC.
-- The cross-repository gate builds and launches the Agent fixture process, then
-  drives a durable Control operation through `KernelOperationBridge` and checks
-  ACK, envelope identity, and terminal observed state. The Agent repository's
-  separate E2E covers Supervisor plus the signed plugin process.
+- The cross-repository E2E (`internal/tests/agente2e`) builds and launches
+  the real Agent against a real Control.
 - Chromium Playwright tests cover signed-catalog WebUI loading, same-origin
   digest binding, route collision isolation, disabled entries, and tampered
   bundle recovery. The separate live-Control gate now builds an isolated

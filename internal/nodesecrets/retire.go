@@ -50,31 +50,6 @@ func Retire(tx *gorm.DB, table string, ids ...uint) (Retired, error) {
 	return retired, nil
 }
 
-// Prune removes the new-table rows of the given split tables whose legacy
-// row no longer exists, in the caller's transaction: for a tool that
-// deletes legacy rows without the writers (a re-import). It does nothing
-// when the split tables do not exist.
-func Prune(tx *gorm.DB, tables ...string) (int64, error) {
-	if !installed(tx) {
-		return 0, nil
-	}
-	var pruned int64
-	for _, table := range tables {
-		spec, err := lookupSpec(table)
-		if err != nil {
-			return pruned, err
-		}
-		legacy := tx.Session(&gorm.Session{NewDB: true}).Table(spec.table).Select("1").
-			Where(spec.table + ".id = v4_kernel_protocol_secret.owner_id")
-		result := tx.Where("scope = ?", spec.scope).Where("NOT EXISTS (?)", legacy).Delete(&model.ProtocolSecret{})
-		pruned += result.RowsAffected
-		if result.Error != nil {
-			return pruned, result.Error
-		}
-	}
-	return pruned, nil
-}
-
 // Status answers the state of every split table.
 func Status(ctx context.Context, db *gorm.DB) ([]model.NodeSecretSplit, error) {
 	if !db.Migrator().HasTable(&model.NodeSecretSplit{}) {

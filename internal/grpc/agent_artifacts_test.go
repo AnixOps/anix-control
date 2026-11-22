@@ -32,15 +32,29 @@ import (
 )
 
 // artifactRelease is a signed official Agent release stored with its
-// artifact and assigned to a node, and the install configuration the
-// agent.plugin.install operation would carry.
+// artifact and assigned to a node, and its content addresses.
 type artifactRelease struct {
 	manifest  service.PluginManifest
 	canonical []byte
 	artifact  []byte
 	publicKey ed25519.PublicKey
 	release   model.PluginRelease
-	install   service.AgentPluginInstallConfig
+	install   releaseAddresses
+}
+
+// releaseAddresses are the verified content addresses of a release, as
+// service.LoadAuthorizedAgentPluginMetadata reads them for the node.
+type releaseAddresses struct {
+	PluginID, Version string
+	Artifact          struct {
+		SHA256 string
+		Size   int64
+	}
+	Manifest struct {
+		SHA256                                  string
+		Size                                    int64
+		Signature, Publisher, KeyID, APIVersion string
+	}
 }
 
 // newReleaseSigner is the key of the kernel's one AnixOps trust root for a
@@ -78,10 +92,14 @@ func seedArtifactRelease(t *testing.T, db *gorm.DB, signer ed25519.PrivateKey, n
 	require.NoError(t, db.Create(&model.PluginInstallation{
 		PluginID: pluginID, Target: "agent", DesiredVersion: manifest.Version, Enabled: true, State: "pending",
 	}).Error)
-	raw, err := service.BuildAgentPluginInstallConfig(db, nodeID, pluginID, manifest.Version)
+	download, err := service.LoadAuthorizedAgentPluginMetadata(db, nodeID, pluginID, manifest.Version)
 	require.NoError(t, err)
 	seeded := artifactRelease{manifest: manifest, canonical: canonical, artifact: artifact, publicKey: publicKey, release: *release}
-	require.NoError(t, json.Unmarshal([]byte(raw), &seeded.install))
+	seeded.install.PluginID, seeded.install.Version = download.Release.PluginID, download.Release.Version
+	seeded.install.Artifact.SHA256, seeded.install.Artifact.Size = strings.ToLower(download.Artifact.ArtifactSHA256), download.Artifact.SizeBytes
+	seeded.install.Manifest.SHA256, seeded.install.Manifest.Size = download.ManifestHash, int64(len(download.ManifestData))
+	seeded.install.Manifest.Signature, seeded.install.Manifest.Publisher = download.Release.Signature, download.Manifest.Publisher
+	seeded.install.Manifest.KeyID, seeded.install.Manifest.APIVersion = download.Release.TrustRootKeyID, download.Manifest.APIVersion
 	return seeded
 }
 

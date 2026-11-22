@@ -554,11 +554,9 @@ func run() int {
 }
 
 // pluginPollIntervals holds the validated poll intervals of the plugin
-// control loops. The Agent plugin dispatcher is off until M4
-// (service.AgentPluginDispatchEnabled) and has no setting.
+// control loops.
 type pluginPollIntervals struct {
-	control  time.Duration
-	dispatch time.Duration
+	control time.Duration
 }
 
 func parsePluginPollInterval(key, raw string) (time.Duration, error) {
@@ -574,7 +572,7 @@ func parsePluginPollInterval(key, raw string) (time.Duration, error) {
 }
 
 func parsePluginPollIntervals(cfg *config.Config) (pluginPollIntervals, error) {
-	intervals := pluginPollIntervals{dispatch: service.AgentPluginWorkerPollInterval}
+	intervals := pluginPollIntervals{}
 	var err error
 	if intervals.control, err = parsePluginPollInterval("plugins.control_poll_interval", cfg.Plugins.ControlPollInterval); err != nil {
 		return intervals, err
@@ -699,19 +697,6 @@ func (rt *serverRuntime) start(cfg *config.Config, intervals pluginPollIntervals
 		}()
 	}
 
-	// Off until M4 (service.AgentPluginDispatchEnabled): the code stays.
-	if service.AgentPluginDispatchEnabled && rt.grpcSrv != nil {
-		bridge, err := grpcserver.NewKernelOperationBridge(database.Get(), rt.grpcSrv.GetAgentControlManager())
-		if err != nil {
-			return fmt.Errorf("initialize plugin operation dispatcher: %w", err)
-		}
-		rt.workers.Go("plugin operation dispatcher", func(ctx context.Context) {
-			bridge.Run(ctx, intervals.dispatch, func(err error) {
-				log.Printf("Plugin operation dispatcher error: %v", err)
-			})
-		})
-		log.Printf("Plugin operation dispatcher enabled (poll interval %s)", intervals.dispatch)
-	}
 	return nil
 }
 

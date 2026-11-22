@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -49,11 +48,9 @@ type suite struct {
 	sink    *trafficSink
 	netns   bool
 
-	nodeID uint
-	// pluginReadyAt is when machine-telemetry ran on the node.
-	pluginReadyAt time.Time
-	protocolPt    int
-	users         []testUser
+	nodeID     uint
+	protocolPt int
+	users      []testUser
 
 	mu         sync.Mutex
 	results    []scenarioResult
@@ -367,13 +364,4 @@ func (s *suite) connectedSession(t *testing.T, timeout time.Duration, differentF
 		return true, ""
 	}, s.control.proc, s.agent.proc)
 	return session
-}
-
-func sortedKeys(m map[string]float64) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	return keys
 }
