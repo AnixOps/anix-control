@@ -49,12 +49,24 @@
 - 已知限制：git 的提交作者只是提交里写的邮箱，不经认证，可以冒用；因此 PR 作者（经过 GitHub 认证的账号）也必须已签署。
 - 已知限制：`Co-authored-by` 署名不做机器检查，由合并前的评审确认；CLA 检查尚未加入 `main` 分支规则的必需检查。
 
-## 5. 开发方式说明
+## 5. 上游来源
+
+AGPL 切换和商业授权的前提是：除上游声明保留的部分外，本仓库代码由项目所有者享有版权。来源核对如下。
+本节数据来自 2026-11-22 “剥离 V2Board”工作的分析，方法可复现，切换许可证（第 4 步）前需重新运行并记录结果。
+
+| 上游 | 许可证 | 现状 | 处理 |
+| --- | --- | --- | --- |
+| V2Board（经社区 fork wyx2685/v2board，分叉点 `cedd83e1`，2025-12-12，PHP） | MIT | 2025-12-24 加入 Go 后端（`d8402536`），同日删除全部 PHP（`6c22a349`）。按 `git ls-tree -r` 的 blob 哈希比对，分叉点与当前 main 完全相同的文件只有 `LICENSE`；仍源自上游的是数据结构与命名（51 张 `v2_` 前缀表、`v2_user` 的字段名） | `NOTICE` 永久保留 Tokumeikoi 的 MIT 声明；5.1 替换 `LICENSE` 时声明不丢失 |
+| flux-panel（bqlpfy/flux-panel） | Apache-2.0 | v4.1 转发模块按其 API 与页面仿做（接口层面，非复制代码），v4.2 已删除，迁移 0028 删除其表；洁净室规则见 `docs/forward-clean-room/provenance.md` | **推断**：仿接口不构成复制，不需要 Apache NOTICE；残留未用模型由瘦身工作删除 |
+
+复现方法：`git fetch --tags`（v2.x 标签带完整旧历史）；`git ls-tree -r cedd83e1` 与 `git ls-tree -r HEAD` 比对 blob 哈希；`git diff --shortstat cedd83e1 HEAD`。
+
+## 6. 开发方式说明
 
 - 本仓库的改动由项目所有者指示、AI 编码助手编写。这些提交的作者是 `claude` 账号（`noreply@anthropic.com`），提交信息中的 `Co-Authored-By: Claude` 表示 AI 参与；它们属于所有者本人的工作，不是独立贡献者，CLA 检查只在所有者开的 PR 中接受这类提交。
 - 所有验证在 GitHub Actions 中进行，以上 CI 运行编号可直接打开核对。
 
-## 6. 未解决问题
+## 7. 未解决问题
 
 | 问题 | 需要谁 | 影响 |
 | --- | --- | --- |
