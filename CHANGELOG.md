@@ -13,6 +13,10 @@
 - The `/metrics` counters `anixops_control_requests_total`,
   `anixops_control_requests_success_total` and `anixops_control_requests_error_total`, which
   nothing incremented (always 0).
+- The flux forwarding models (tables dropped by 0028 in 4.2) and the always
+  empty `legacy_rules` and `tunnels` of a forward node's desired
+  configuration: each forward node gets one new configuration revision after
+  the upgrade, with the same content for its Agent.
 
 ## 5.0.10 - 2026-11-18
 

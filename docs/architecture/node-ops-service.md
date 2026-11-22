@@ -818,7 +818,8 @@ NO-1.
   tables of section 4.1 until the split state is plugged in. From NO-9 to
   5.0.2 it answered each split table's phase. Since 5.0.3 it answers a
   constant: `FINALIZED` for the three split tables (Control refuses to start
-  otherwise) and `LEGACY` for `v2_forward_runtime_job`.
+  otherwise), and until the 2026-11 slimming also `LEGACY` for
+  `v2_forward_runtime_job`, a table `0028_drop_flux_tables` had dropped.
 
 **What NO-5 built** (`internal/kernelnodeops` `kinds_credentials.go`,
 `kinds_retire.go`, `kinds_secrets.go`, `validate.go`; the shared functions

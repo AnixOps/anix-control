@@ -43,17 +43,15 @@ func legacyFluxPrepare(db *gorm.DB) error {
 		}
 	}
 	if err := db.AutoMigrate(
-		&model.ForwardRule{}, &model.ForwardRoute{}, &model.ForwardLog{}, &model.ForwardStats{},
-		&model.ForwardTunnel{}, &model.ForwardUserTunnel{}, &model.Forward{}, &model.ForwardPortBinding{}, &model.SpeedLimit{},
-		&model.ForwardTrafficCursor{}, &model.ForwardAgentBridgeTask{}, &model.ForwardRuntimeJob{},
+		&retiredForwardRule{}, &retiredForwardRoute{}, &retiredForwardLog{}, &retiredForwardStats{},
+		&retiredForwardTunnel{}, &retiredForwardUserTunnel{}, &retiredForward{}, &retiredForwardPortBinding{}, &retiredSpeedLimit{},
+		&retiredForwardTrafficCursor{}, &retiredForwardAgentBridgeTask{}, &retiredForwardRuntimeJob{},
 	); err != nil {
 		return err
 	}
-	if !migrator.HasIndex(&model.ForwardRuntimeJob{}, "idx_forward_runtime_job_active_forward") {
-		return db.Exec(fmt.Sprintf(
-			"CREATE UNIQUE INDEX IF NOT EXISTS idx_forward_runtime_job_active_forward ON %s (forward_id) WHERE forward_id IS NOT NULL AND status IN (%d, %d)",
-			model.ForwardRuntimeJob{}.TableName(), model.ForwardRuntimeJobStatusPending, model.ForwardRuntimeJobStatusRunning,
-		)).Error
+	if !migrator.HasIndex(&retiredForwardRuntimeJob{}, "idx_forward_runtime_job_active_forward") {
+		// The active statuses: pending 0, running 1.
+		return db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_forward_runtime_job_active_forward ON v2_forward_runtime_job (forward_id) WHERE forward_id IS NOT NULL AND status IN (0, 1)").Error
 	}
 	return nil
 }

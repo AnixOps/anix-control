@@ -112,7 +112,7 @@ func TestSyncNodeOnTheLegacyTransports(t *testing.T) {
 		require.True(t, found)
 		assert.Equal(t, uint64(1), row.Revision)
 		assert.NotEqual(t, result.GetConfigHash(), row.ConfigHash)
-		assert.Contains(t, row.ConfigJSON, `"legacy_rules"`)
+		assert.Contains(t, row.ConfigJSON, `"kind":"forward"`)
 	})
 }
 

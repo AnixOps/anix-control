@@ -77,8 +77,6 @@ func TestDesiredConfigRevisionIsMonotonicAndHashIsStable(t *testing.T) {
 		forwardConfig, err := BuildDesiredConfig(db, forward)
 		require.NoError(t, err)
 		assert.Contains(t, string(forwardConfig.JSON), `"kind":"forward"`)
-		assert.Contains(t, string(forwardConfig.JSON), `"legacy_rules":[{`)
-		assert.Contains(t, string(forwardConfig.JSON), `"tunnels":[{`)
 		assert.NotContains(t, string(forwardConfig.JSON), "api_token")
 		row, changed, err = StoreDesiredConfig(ctx, db, forwardConfig, t0)
 		require.NoError(t, err)

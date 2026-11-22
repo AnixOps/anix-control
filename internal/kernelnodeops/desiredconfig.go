@@ -231,9 +231,7 @@ func buildRuntime(db *gorm.DB, id uint, protocols []map[string]any) map[string]a
 	return pull
 }
 
-// buildForwardDesiredConfig renders a forward node: the legacy rules it
-// relays or exits, as GET /forward/agent/rules serves them to its agent,
-// and the tunnels it belongs to.
+// buildForwardDesiredConfig renders a forward node.
 func buildForwardDesiredConfig(db *gorm.DB, id uint) (map[string]any, error) {
 	var nodes []model.ForwardNode
 	if err := db.Where("id = ?", id).Limit(1).Find(&nodes).Error; err != nil {
@@ -243,47 +241,12 @@ func buildForwardDesiredConfig(db *gorm.DB, id uint) (map[string]any, error) {
 		return nil, ErrNodeGone
 	}
 	node := nodes[0]
-	// Once 0028_drop_flux_tables (or the v4.2 upgrade) dropped the flux tables, a
-	// forward node has no legacy rules or tunnels left.
-	var rules []model.ForwardRule
-	if db.Migrator().HasTable(&model.ForwardRule{}) {
-		if err := db.Where("relay_node_id = ? OR exit_node_id = ?", id, id).Order("id ASC").Find(&rules).Error; err != nil {
-			return nil, err
-		}
-	}
-	var tunnels []model.ForwardTunnel
-	if db.Migrator().HasTable(&model.ForwardTunnel{}) {
-		if err := db.Where("in_node_id = ? OR out_node_id = ?", id, id).Order("id ASC").Find(&tunnels).Error; err != nil {
-			return nil, err
-		}
-	}
-	renderedRules := make([]map[string]any, 0, len(rules))
-	for _, rule := range rules {
-		role := "exit"
-		if rule.RelayNodeID == id {
-			role = "relay"
-		}
-		renderedRules = append(renderedRules, map[string]any{
-			"id": rule.ID, "enabled": rule.Enabled, "listen_port": rule.ListenPort, "protocol": rule.Protocol,
-			"target_host": rule.TargetHost, "target_port": rule.TargetPort, "role": role,
-		})
-	}
-	renderedTunnels := make([]map[string]any, 0, len(tunnels))
-	for _, tunnel := range tunnels {
-		role := "exit"
-		if tunnel.InNodeID == id {
-			role = "entry"
-		}
-		renderedTunnels = append(renderedTunnels, map[string]any{"id": tunnel.ID, "name": tunnel.Name, "role": role})
-	}
 	return map[string]any{
 		"kind": agentcontrol.NodeKindForward,
 		"node": map[string]any{
 			"id": node.ID, "name": node.Name, "type": node.Type, "host": node.Host, "port": node.Port,
 			"api_port": node.APIPort, "metrics_port": node.MetricsPort, "enabled": node.Enabled,
 		},
-		"legacy_rules": renderedRules,
-		"tunnels":      renderedTunnels,
 	}, nil
 }
 

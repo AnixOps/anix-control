@@ -270,12 +270,10 @@ func validateManifestCapabilities(capabilities []string) error {
 }
 
 // forwardCredentialTables are the forward tables no package may adopt:
-//   - v5_forward_node is the forward node inventory and the Agent identity
-//     (forward-<id>) the kernel's agent PKI issues certificates for;
-//   - v2_forward_runtime_job holds the legacy runtime's jobs, whose
-//     payloads carried the node's API token.
+// v5_forward_node is the forward node inventory and the Agent identity
+// (forward-<id>) the kernel's agent PKI issues certificates for.
 var forwardCredentialTables = map[string]bool{
-	"v5_forward_node": true, "v2_forward_runtime_job": true,
+	"v5_forward_node": true,
 }
 
 // adoptableTables are the protected tables a package may declare it adopts

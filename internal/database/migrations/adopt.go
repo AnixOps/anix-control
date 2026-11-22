@@ -424,12 +424,13 @@ func baselineSchema(ctx context.Context, tx *gorm.DB, baseline Step) (*Schema, e
 // over duplicates. It is the repair the start before this runner made
 // before creating the index.
 func supersedeDuplicateActiveJobs(tx *gorm.DB, now time.Time) (int64, error) {
-	active := []int{model.ForwardRuntimeJobStatusPending, model.ForwardRuntimeJobStatusRunning}
+	const table, pending, running, failed = "v2_forward_runtime_job", 0, 1, 3
+	active := []int{pending, running}
 	var duplicates []struct {
 		ForwardID uint
 		Count     int64
 	}
-	if err := tx.Model(&model.ForwardRuntimeJob{}).
+	if err := tx.Table(table).
 		Select("forward_id, COUNT(*) AS count").
 		Where("forward_id IS NOT NULL AND status IN ?", active).
 		Group("forward_id").
@@ -439,8 +440,8 @@ func supersedeDuplicateActiveJobs(tx *gorm.DB, now time.Time) (int64, error) {
 	}
 	var superseded int64
 	for _, duplicate := range duplicates {
-		var jobs []model.ForwardRuntimeJob
-		if err := tx.Where("forward_id = ? AND status IN ?", duplicate.ForwardID, active).
+		var jobs []struct{ ID uint }
+		if err := tx.Table(table).Select("id").Where("forward_id = ? AND status IN ?", duplicate.ForwardID, active).
 			Order("CASE WHEN status = 1 THEN 0 ELSE 1 END ASC, id DESC").
 			Find(&jobs).Error; err != nil {
 			return 0, err
@@ -453,8 +454,8 @@ func supersedeDuplicateActiveJobs(tx *gorm.DB, now time.Time) (int64, error) {
 			stale = append(stale, job.ID)
 		}
 		completed := now
-		update := tx.Model(&model.ForwardRuntimeJob{}).Where("id IN ?", stale).Updates(map[string]any{
-			"status":       model.ForwardRuntimeJobStatusFailed,
+		update := tx.Table(table).Where("id IN ?", stale).Updates(map[string]any{
+			"status":       failed,
 			"error":        "superseded by newer active runtime job during schema repair",
 			"completed_at": &completed,
 		})

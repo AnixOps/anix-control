@@ -117,7 +117,7 @@ func TestConfigPushNegotiation(t *testing.T) {
 		forward := f.forwardAgent(fakeagent.Script{Capabilities: configCapabilities()})
 		assert.True(t, hasCapability(forward.HelloAck.GetServerCapabilities(), agentcontrol.CapabilityConfig))
 		require.Len(t, forward.Snapshots(), 1)
-		assert.Contains(t, string(forward.Snapshots()[0].GetConfigJson()), `"legacy_rules"`)
+		assert.Contains(t, string(forward.Snapshots()[0].GetConfigJson()), `"kind":"forward"`)
 		forwardSync := terminal(t, client, "node.sync:forward-config", syncSpec(f.forwardNode(), true))
 		require.Equal(t, kernelnodeopsv1.OperationState_OPERATION_STATE_SUCCEEDED, forwardSync.GetState(), forwardSync.GetError())
 		assert.Equal(t, forward.SessionID(), forwardSync.GetResult().GetNodeSync().GetAck().GetSessionId())
