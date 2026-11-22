@@ -176,16 +176,6 @@ func (l *LoginRateLimiter) RecordFailure(key string, options LoginRateLimitOptio
 	l.cleanupLocked(now, options.CleanupAfter)
 }
 
-func (l *LoginRateLimiter) RecordSuccess(key string) {
-	if key == "" {
-		return
-	}
-
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	delete(l.states, key)
-}
-
 func (l *LoginRateLimiter) cleanupLocked(now time.Time, ttl time.Duration) {
 	if len(l.states) < 2048 {
 		return

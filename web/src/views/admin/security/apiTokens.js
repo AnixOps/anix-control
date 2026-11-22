@@ -68,10 +68,6 @@ export function isActiveToken(token, now = Date.now()) {
   return state === 'active' || state === 'expiring'
 }
 
-// What the list shows for a token that was cut short: the route's
-// revoke_reason (owner_revoked, admin_revoked, owner_not_admin).
-export const REVOKE_REASONS = Object.freeze(['owner_revoked', 'admin_revoked', 'owner_not_admin'])
-
 // The name's rules: 1 to 100 printable characters (counted as characters, not
 // bytes). '' when it is fine, else 'required', 'tooLong' or 'unprintable'.
 export function checkTokenName(value) {

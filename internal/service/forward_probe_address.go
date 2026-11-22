@@ -118,22 +118,8 @@ func resolvePublicAddressWith(ctx context.Context, lookup probeLookupFunc, host 
 	return addrs[0].Unmap(), nil
 }
 
-// publicProbeAddress resolves the host of a probe that Control runs for a
-// user (a forward's diagnosis) and returns the address to connect to, or
-// why the probe is refused.
-//
-// A forward's target is the user's to choose, and the diagnosis connects to
-// it from Control: without this check a user could reach Control's own
-// network (its database, metadata service or loopback services) and read
-// from the answer which ports are open. Every address the name resolves to
-// must be public, and the probe connects to the checked address, so the
-// name cannot resolve to another one between the check and the connection.
-func publicProbeAddress(host string) (netip.Addr, string) {
-	return publicProbeAddressWith(context.Background(), probeLookup, host)
-}
-
-// publicProbeAddressWith is publicProbeAddress with lookup asking DNS, until
-// ctx ends.
+// publicProbeAddressWith answers the public address host resolves to, asking
+// lookup until ctx ends, or the refusal shown to the administrator.
 func publicProbeAddressWith(ctx context.Context, lookup probeLookupFunc, host string) (netip.Addr, string) {
 	addr, err := resolvePublicAddressWith(ctx, lookup, host)
 	switch {

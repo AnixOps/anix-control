@@ -153,31 +153,6 @@ func (s *ForwardNodeService) RecordHealthCheck(node *model.ForwardNode, result *
 	return nil
 }
 
-// CheckEndpoint checks one node's endpoint from Control and, with record,
-// writes what it found to the node's row.
-func (s *ForwardNodeService) CheckEndpoint(ctx context.Context, probes DiagnosisProbes, nodeID uint, record bool) (*HealthCheckResult, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	node, err := s.GetByID(nodeID)
-	if err != nil {
-		return nil, err
-	}
-	result, err := probes.ProbeEndpoint(ctx, node)
-	if err != nil {
-		return nil, err
-	}
-	if record {
-		if err := s.RecordHealthCheck(node, result); err != nil {
-			return nil, err
-		}
-	}
-	return result, nil
-}
-
 // EndpointCheck is one node's check in CheckEndpoints.
 type EndpointCheck struct {
 	NodeID uint

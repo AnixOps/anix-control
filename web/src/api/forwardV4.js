@@ -279,13 +279,6 @@ export function getNode(ref, { signal } = {}) {
   return call({ url: `/nodes/${encodeURIComponent(ref)}`, signal })
 }
 
-export function createNode(record, settings, { idempotencyKey } = {}) {
-  const data = { node: nodeRecordBody(record) }
-  const body = settings ? settingsBody(settings) : null
-  if (body && Object.keys(body).length) data.settings = body
-  return call({ method: 'post', url: '/nodes', data, idempotencyKey, timeout: WRITE_TIMEOUT_MS })
-}
-
 export function setNodeSettings(ref, settings, { idempotencyKey } = {}) {
   return call({ method: 'put', url: `/nodes/${encodeURIComponent(ref)}/settings`, data: settingsBody(settings), idempotencyKey, timeout: WRITE_TIMEOUT_MS })
 }

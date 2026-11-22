@@ -11,7 +11,6 @@ package notificationcompat
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -338,66 +337,4 @@ func TestUserTelegramRoutes(t *testing.T) {
 		{Name: "bound", Path: "/api/v2/user/telegram/status", Principal: member},
 		{Name: "not bound", Path: "/api/v2/user/telegram/status", Principal: nobody},
 	})
-	// Neither route is implemented: it refuses and changes nothing (the
-	// state compared includes the bindings and their switches).
-	write(t, route("POST", "/api/v2/user/telegram/unbind", "notification.user.telegram.unbind.post"), []packagecompat.Case{
-		{Name: "unbind is not implemented", Path: "/api/v2/user/telegram/unbind", Principal: member},
-		{Name: "unbind without a binding is not implemented either", Path: "/api/v2/user/telegram/unbind", Principal: nobody},
-	})
-	write(t, route("POST", "/api/v2/user/telegram/notify", "notification.user.telegram.notify.post"), []packagecompat.Case{
-		{Name: "settings are not implemented", Path: "/api/v2/user/telegram/notify", Principal: member, Body: []byte(`{"notify_expire":false}`)},
-		{Name: "an empty object is not implemented either", Path: "/api/v2/user/telegram/notify", Principal: member, Body: []byte(`{}`)},
-		{Name: "wrong field type", Path: "/api/v2/user/telegram/notify", Principal: member, Body: []byte(`{"notify_expire":"no"}`)},
-		{Name: "no body", Path: "/api/v2/user/telegram/notify", Principal: member},
-	})
-}
-
-// TestUserTelegramActionsAreNotImplemented spells out what the native routes
-// answer: an error
-// envelope that says the action is not implemented (never "unbound
-// successfully" or "settings updated"), and the binding and its switches
-// untouched.
-func TestUserTelegramActionsAreNotImplemented(t *testing.T) {
-	db := packagecompat.OpenSQLite(t, &model.User{}, &model.TelegramUser{})
-	seedUsers(t, db)
-	require.NoError(t, db.Create(&model.TelegramUser{ID: 1, UserID: 2, TelegramID: 1002, Username: "two"}).Error)
-	service := &native.Service{Open: func(ctx context.Context) (*gorm.DB, error) { return db.WithContext(ctx), nil }}
-
-	call := func(routeID, body string) (int, string, string) {
-		response, err := service.Handlers()[routeID](context.Background(), pluginhostsdk.NativeRequest{
-			RouteID: routeID, Method: "POST", Principal: member, Body: []byte(body),
-		})
-		require.NoError(t, err)
-		var envelope struct {
-			Code int    `json:"code"`
-			Data any    `json:"data"`
-			Msg  string `json:"msg"`
-		}
-		require.NoError(t, json.Unmarshal(response.Body, &envelope), "%s", response.Body)
-		require.Nil(t, envelope.Data, "%s", response.Body)
-		return envelope.Code, envelope.Msg, string(response.Body)
-	}
-
-	code, msg, body := call("notification.user.telegram.unbind.post", "")
-	require.Equal(t, -1, code, body)
-	require.Contains(t, msg, "Telegram 解绑尚未实现")
-	require.NotContains(t, body, "unbound successfully")
-
-	code, msg, body = call("notification.user.telegram.notify.post", `{"notify_expire":false,"notify_traffic":false}`)
-	require.Equal(t, -1, code, body)
-	require.Contains(t, msg, "Telegram 通知设置尚未实现")
-	require.NotContains(t, body, "settings updated")
-
-	// A body that does not parse is still the bad request it was.
-	code, msg, body = call("notification.user.telegram.notify.post", `{"notify_expire":"no"}`)
-	require.Equal(t, -1, code, body)
-	require.NotContains(t, msg, "尚未实现")
-
-	// The binding is still there with every switch on, as it defaults.
-	var binding model.TelegramUser
-	require.NoError(t, db.Where("user_id = ?", 2).First(&binding).Error)
-	require.Equal(t, int64(1002), binding.TelegramID)
-	require.True(t, binding.NotifyExpire)
-	require.True(t, binding.NotifyTraffic)
-	require.True(t, binding.NotifyTicket)
 }

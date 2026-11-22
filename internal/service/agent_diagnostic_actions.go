@@ -2,7 +2,6 @@ package service
 
 import (
 	"fmt"
-	"sort"
 )
 
 // AgentDiagnosticActionSpec 描述一个白名单诊断动作允许携带哪些参数，以及是否为变更类操作。
@@ -36,19 +35,6 @@ const AgentDiagnosticServiceAgent = "anix-agent"
 // agentDiagnosticAllowedServices 是 service 参数允许的枚举值，不能是任意字符串。
 var agentDiagnosticAllowedServices = map[string]bool{
 	AgentDiagnosticServiceAgent: true,
-}
-
-// AgentDiagnosticServices lists the services the service parameter of the
-// generic actions may name, sorted.
-func AgentDiagnosticServices() []string {
-	services := make([]string, 0, len(agentDiagnosticAllowedServices))
-	for name, allowed := range agentDiagnosticAllowedServices {
-		if allowed {
-			services = append(services, name)
-		}
-	}
-	sort.Strings(services)
-	return services
 }
 
 // ValidateAgentDiagnosticTask 校验 action 是否在白名单内，并将 params 归一化为

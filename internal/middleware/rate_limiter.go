@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"fmt"
 	"math"
 	"net/http"
 	"strconv"
@@ -138,17 +137,6 @@ func (rl *RateLimiter) Allow(key string) bool {
 // Middleware returns a gin.HandlerFunc that enforces rate limiting per client IP.
 func (rl *RateLimiter) Middleware() gin.HandlerFunc {
 	return rl.middleware(func(c *gin.Context) string { return c.ClientIP() })
-}
-
-// MiddlewareForContextKey enforces independent buckets for an authenticated
-// identity stored in Gin context, such as a node_id.
-func (rl *RateLimiter) MiddlewareForContextKey(contextKey string) gin.HandlerFunc {
-	return rl.middleware(func(c *gin.Context) string {
-		if value, exists := c.Get(contextKey); exists {
-			return contextKey + ":" + fmt.Sprint(value)
-		}
-		return "ip:" + c.ClientIP()
-	})
 }
 
 func (rl *RateLimiter) middleware(keyFor func(*gin.Context) string) gin.HandlerFunc {

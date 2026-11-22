@@ -275,12 +275,6 @@ func (a *Agent) Complete(operation *agentv1pb.DesiredOperation, phase agentv1pb.
 	return a.observe(operation, phase, message, encoded)
 }
 
-// Report sends a raw observed state, for reports a replaced session
-// would send.
-func (a *Agent) Report(observed *agentv1pb.ObservedState) error {
-	return a.send(&agentv1pb.AgentToControl{Revision: observed.GetRevision(), Payload: &agentv1pb.AgentToControl_ObservedState{ObservedState: observed}})
-}
-
 // receiveConfig records a snapshot and answers it per the script.
 func (a *Agent) receiveConfig(snapshot *agentv1pb.ConfigSnapshot) error {
 	a.mu.Lock()

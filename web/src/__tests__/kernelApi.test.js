@@ -115,8 +115,6 @@ describe('kernel API', () => {
     expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v4', url: '/kernel/agents/transports', method: 'get' })
     await kernelApi.listKernelAgentUpgrades(1)
     expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v4', url: '/kernel/agents/upgrades', method: 'get', params: { limit: 1 } })
-    await kernelApi.getKernelAgentUpgrade('c/1')
-    expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v4', url: '/kernel/agents/upgrades/c%2F1', method: 'get' })
     await kernelApi.startKernelAgentUpgrade({ target_version: 'v4.2.0' })
     expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v4', url: '/kernel/agents/upgrades', method: 'post', data: { target_version: 'v4.2.0' } })
     await kernelApi.pauseKernelAgentUpgrade('c1')

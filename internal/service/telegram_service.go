@@ -7,13 +7,11 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"net/url"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/AnixOps/anix-control/v5/internal/config"
@@ -302,16 +300,6 @@ func (s *TelegramBotService) BindUserByToken(telegramID int64, token string, fro
 	return &user, nil
 }
 
-// BindUser 绑定用户
-func (s *TelegramBotService) BindUser(telegramID int64, email string, from *TelegramUser) error {
-	// 查找用户
-	var user model.User
-	if err := s.db.Where("email = ?", email).First(&user).Error; err != nil {
-		return fmt.Errorf("未找到该邮箱对应的账户")
-	}
-	return s.bind(telegramID, &user, from)
-}
-
 // bind records the binding of a Telegram account to user.
 func (s *TelegramBotService) bind(telegramID int64, user *model.User, from *TelegramUser) error {
 	// 检查是否已被其他Telegram绑定
@@ -495,35 +483,6 @@ func (s *TelegramBotService) SendMessage(chatID int64, text string) error {
 func (s *TelegramBotService) SendNotification(telegramID int64, title, content string) error {
 	text := fmt.Sprintf("📢 *%s*\n\n%s", title, content)
 	return s.SendMessage(telegramID, text)
-}
-
-// Broadcast 广播消息
-func (s *TelegramBotService) Broadcast(text string) error {
-	var users []model.TelegramUser
-	if err := s.db.Where("is_banned = ?", false).Find(&users).Error; err != nil {
-		return err
-	}
-
-	var wg sync.WaitGroup
-	errs := make(chan error, len(users))
-	for _, user := range users {
-		wg.Add(1)
-		go func(telegramID int64) {
-			defer wg.Done()
-			if err := s.SendMessage(telegramID, text); err != nil {
-				errs <- fmt.Errorf("send telegram message to %d: %w", telegramID, err)
-			}
-			time.Sleep(50 * time.Millisecond) // 避免频率限制
-		}(user.TelegramID)
-	}
-	wg.Wait()
-	close(errs)
-
-	var sendErrs []error
-	for err := range errs {
-		sendErrs = append(sendErrs, err)
-	}
-	return errors.Join(sendErrs...)
 }
 
 // apiRequest 发送API请求

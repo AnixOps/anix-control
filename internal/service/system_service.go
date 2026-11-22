@@ -82,19 +82,6 @@ func (s *SystemConfigService) GetAll() ([]model.SystemConfig, error) {
 	return configs, err
 }
 
-func (s *SystemConfigService) GetAsMap() (map[string]string, error) {
-	configs, err := s.GetAll()
-	if err != nil {
-		return nil, err
-	}
-
-	result := make(map[string]string)
-	for _, cfg := range configs {
-		result[cfg.Key] = cfg.Value
-	}
-	return result, nil
-}
-
 func (s *SystemConfigService) GetJSON(key string, v any) error {
 	value, err := s.Get(key)
 	if err != nil {

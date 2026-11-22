@@ -35,15 +35,6 @@ func (s *ForwardNodeService) ListByInventoryScope(scope, nodeType string, status
 	return nodes, total, err
 }
 
-func (s *ForwardNodeService) GetByIDForInventoryScope(id uint, scope string) (*model.ForwardNode, error) {
-	var node model.ForwardNode
-	query := applyForwardNodeInventoryScope(s.db.Model(&model.ForwardNode{}), scope)
-	if err := query.First(&node, id).Error; err != nil {
-		return nil, err
-	}
-	return &node, nil
-}
-
 // applyForwardNodeInventoryScope keeps the forward nodes of an inventory: an
 // Ansible machine is a relay tagged so, or a relay without an API port.
 func applyForwardNodeInventoryScope(query *gorm.DB, scope string) *gorm.DB {

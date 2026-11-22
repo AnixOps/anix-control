@@ -65,7 +65,6 @@ CLASS_PATTERNS: dict[str, tuple[str, ...]] = {
         "internal/kernelidentity/*",
         "internal/identity*",
         "cmd/sqlite2postgres/*",
-        "cmd/migrate/*",
         "scripts/postgres_restore_rehearsal.sh",
         "packages/*/migrations/*",
         # Parity tests compare legacy handlers with package-native ones on

@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### Removed
+
+- Code with no runtime caller (2026-11 slimming, `docs/audit/slim-2026-11.md`):
+  about 40 unused functions, the never-installed node secure logger, and the
+  undocumented `cmd/migrate` XBoard importer.
+- `POST /api/v2/user/telegram/unbind` and `POST /api/v2/user/telegram/notify`,
+  which only ever answered "not implemented"; they now answer 404. Members
+  unbind with `DELETE /api/v4/user/telegram` or the bot's `/unbind`.
+- The `/metrics` counters `anixops_control_requests_total`,
+  `anixops_control_requests_success_total` and `anixops_control_requests_error_total`, which
+  nothing incremented (always 0).
+
 ## 5.0.10 - 2026-11-18
 
 Installs Agent 5.0.8 on nodes (passes revoked ANX devices to anx-node

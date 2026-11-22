@@ -10,11 +10,9 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
-	"encoding/hex"
 	"encoding/pem"
 	"math/big"
 	"net"
@@ -199,10 +197,4 @@ func withEdgeHeader(certificate *tls.Certificate) []grpc.DialOption {
 			return streamer(outgoing(ctx), desc, cc, method, opts...)
 		}),
 	}
-}
-
-// APIKeyHash hashes a node API key as v5_node.api_key_hash stores it.
-func APIKeyHash(apiKey string) string {
-	sum := sha256.Sum256([]byte(apiKey))
-	return hex.EncodeToString(sum[:])
 }

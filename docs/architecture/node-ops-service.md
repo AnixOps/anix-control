@@ -1313,7 +1313,7 @@ themselves; production finalize waits for the owner (D6).
   `model.ForwardNode.APIToken`, `model.ForwardCleanAgent.Token`,
   `model.WireGuardPeer.PrivateKey`, `.PresharedKey`), or a moved column
   named in a gorm call's SQL, outside `internal/nodesecrets`. Writes, tests,
-  `internal/model`, `cmd/migrate` and `cmd/sqlite2postgres` are allowed;
+  `internal/model` and `cmd/sqlite2postgres` are allowed;
   every other exception is listed with its reason, and a stale one fails.
   The JSON settings columns are not gated: their non-secret parts are read
   everywhere, and their secret positions come from `ResolveProtocols`.

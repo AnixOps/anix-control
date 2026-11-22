@@ -116,22 +116,6 @@ var specs = map[string]Spec{
 	KindWebhook:     {Kind: KindWebhook, Config: []string{ConfigURL}, Required: []string{ConfigURL}, Credentials: []string{CredentialSecret}},
 }
 
-// SpecFor returns the spec of kind.
-func SpecFor(kind string) (Spec, bool) {
-	spec, ok := specs[kind]
-	return spec, ok
-}
-
-// Kinds lists the provider kinds.
-func Kinds() []string {
-	out := make([]string, 0, len(specs))
-	for kind := range specs {
-		out = append(out, kind)
-	}
-	sort.Strings(out)
-	return out
-}
-
 // FieldError is one reason a provider's settings are refused.
 type FieldError struct {
 	Field   string

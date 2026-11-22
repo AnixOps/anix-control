@@ -24,18 +24,19 @@ func TestIsPublicProbeAddress(t *testing.T) {
 }
 
 func TestPublicProbeAddressChecksEveryResolvedAddress(t *testing.T) {
-	previous := probeLookup
-	t.Cleanup(func() { probeLookup = previous })
 	answers := map[string][]netip.Addr{
 		"public.example.test": {netip.MustParseAddr("203.0.113.7")},
 		"mixed.example.test":  {netip.MustParseAddr("203.0.113.7"), netip.MustParseAddr("10.0.0.5")},
 		"mapped.example.test": {netip.MustParseAddr("::ffff:203.0.113.9")},
 	}
-	probeLookup = func(_ context.Context, host string) ([]netip.Addr, error) {
+	lookup := func(_ context.Context, host string) ([]netip.Addr, error) {
 		if addrs, ok := answers[host]; ok {
 			return addrs, nil
 		}
 		return nil, errors.New("no such host")
+	}
+	publicProbeAddress := func(host string) (netip.Addr, string) {
+		return publicProbeAddressWith(context.Background(), lookup, host)
 	}
 
 	addr, refusal := publicProbeAddress("public.example.test")

@@ -197,12 +197,18 @@ func TestSeatsAndRevocation(t *testing.T) {
 	require.Equal(t, StatusOK, grant.Status)
 
 	// Revoking one frees its seat; the revoked device gets nothing.
-	devices, err := svc.Devices(user.ID, FeatureANX)
+	devices, total, err := ListDevices(svc.DB, DeviceQuery{Feature: FeatureANX, UserID: user.ID, Limit: 10})
 	require.NoError(t, err)
-	require.Len(t, devices, 2)
+	require.EqualValues(t, 2, total)
 	d1, _ := ParseDevice(edDevice(t, 1))
 	id := d1.ID()
-	ok, err := svc.Revoke(user.ID, FeatureANX, hex.EncodeToString(id[:]))
+	var revoked uint
+	for _, d := range devices {
+		if d.DeviceID == hex.EncodeToString(id[:]) {
+			revoked = d.ID
+		}
+	}
+	_, ok, err := SetRevoked(svc.DB, FeatureANX, revoked, true, c.t)
 	require.NoError(t, err)
 	require.True(t, ok)
 	grant, err = svc.IssueANX(user, edDevice(t, 1))
@@ -218,7 +224,7 @@ func TestSeatsAndRevocation(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, StatusOK, grant.Status)
 
-	ok, err = svc.Restore(user.ID, FeatureANX, hex.EncodeToString(id[:]))
+	_, ok, err = SetRevoked(svc.DB, FeatureANX, revoked, false, c.t)
 	require.NoError(t, err)
 	require.True(t, ok)
 }
@@ -282,7 +288,10 @@ func TestANXRevokedGoesToNodes(t *testing.T) {
 
 	d1, _ := ParseDevice(edDevice(t, 1))
 	id := d1.ID()
-	ok, err := svc.Revoke(user.ID, FeatureANX, hex.EncodeToString(id[:]))
+	devices, _, err := ListDevices(svc.DB, DeviceQuery{Feature: FeatureANX, UserID: user.ID, Limit: 10})
+	require.NoError(t, err)
+	require.Len(t, devices, 1)
+	_, ok, err := SetRevoked(svc.DB, FeatureANX, devices[0].ID, true, c.t)
 	require.NoError(t, err)
 	require.True(t, ok)
 	userID, _ := ANXUserID(user.UUID)

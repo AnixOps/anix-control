@@ -1,7 +1,6 @@
 package service
 
 import (
-	"context"
 	"time"
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
@@ -68,12 +67,6 @@ func (s *ForwardNodeService) GetByType(nodeType string) ([]*model.ForwardNode, e
 	var nodes []*model.ForwardNode
 	err := s.db.Where("type = ? AND enabled = ?", nodeType, true).Find(&nodes).Error
 	return nodes, err
-}
-
-// HealthCheck 健康检查: the forward node check, from Control, recording what
-// it found (CheckEndpoint).
-func (s *ForwardNodeService) HealthCheck(ctx context.Context, nodeID uint) (*HealthCheckResult, error) {
-	return s.CheckEndpoint(ctx, DiagnosisProbes{}, nodeID, true)
 }
 
 // HealthCheckResult 健康检查结果

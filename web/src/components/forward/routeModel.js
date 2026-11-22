@@ -242,10 +242,6 @@ export function fieldId(field) {
   return `fwd-f-${String(field || 'route').replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '')}`
 }
 
-export function violationsFor(violations, field) {
-  return (violations || []).filter(item => item.field === field)
-}
-
 // fieldHasViolation reports a violation on field or below it.
 export function underField(violations, prefix) {
   return (violations || []).some(item => item.field === prefix || String(item.field).startsWith(`${prefix}.`) || String(item.field).startsWith(`${prefix}[`))

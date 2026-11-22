@@ -1,9 +1,6 @@
 // The cross-border standby page's helpers (CrossBorderStandby): the prepare
 // form and its request body, and labels of the tiers.
 
-export const STANDBY_TIERS = Object.freeze(['reality', 'xhttp'])
-export const STANDBY_OFF = 'off'
-
 // parseNodeHosts reads "node=host" lines (node: an id or proxy-<id>; "="
 // or ":" or a space separates) into { "<id>": host }; blank lines and
 // lines without a host are dropped.

@@ -8,10 +8,3 @@ export function parseManifest(release) {
     return {}
   }
 }
-
-export function releaseTargets(release) {
-  const targets = parseManifest(release).targets
-  return Array.isArray(targets)
-    ? targets.filter(target => target === 'control' || target === 'agent')
-    : []
-}

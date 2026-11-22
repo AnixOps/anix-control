@@ -3,8 +3,6 @@ package service
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
-	"strings"
 	"time"
 
 	"github.com/AnixOps/anix-control/v5/internal/database"
@@ -56,83 +54,6 @@ func (s *AgentDiagnosticTaskService) MarkStatus(taskID string, status string) er
 		Where("task_id = ?", taskID).
 		Updates(map[string]any{
 			"status":     status,
-			"updated_at": time.Now(),
-		}).Error
-}
-
-// PullPendingTasks 取出该节点尚未下发 (status=pending) 的诊断任务，并原子标记为
-// dispatched，供 HTTP 轮询降级路径 (AgentGetTasks) 使用，避免并发重复下发。
-func (s *AgentDiagnosticTaskService) PullPendingTasks(nodeID uint) ([]model.AgentDiagnosticTask, error) {
-	if nodeID == 0 {
-		return nil, nil
-	}
-
-	var pending []model.AgentDiagnosticTask
-	if err := s.db.
-		Where("node_id = ? AND status = ?", nodeID, model.AgentDiagnosticTaskStatusPending).
-		Order("id ASC").
-		Find(&pending).Error; err != nil {
-		return nil, err
-	}
-
-	dispatched := make([]model.AgentDiagnosticTask, 0, len(pending))
-	for i := range pending {
-		// The protocol-runtime package adopts this table, so a pending row
-		// is checked against the whitelist again before an agent gets it,
-		// as CreateTask checks the administrator's request: an action off
-		// the whitelist fails, and only the action's own params go out.
-		if err := normalizePendingDiagnosticTask(&pending[i]); err != nil {
-			if markErr := s.failPendingTask(pending[i].ID, err); markErr != nil {
-				return dispatched, markErr
-			}
-			continue
-		}
-		result := s.db.Model(&model.AgentDiagnosticTask{}).
-			Where("id = ? AND status = ?", pending[i].ID, model.AgentDiagnosticTaskStatusPending).
-			Updates(map[string]any{
-				"status":     model.AgentDiagnosticTaskStatusDispatched,
-				"updated_at": time.Now(),
-			})
-		if result.Error != nil {
-			return dispatched, result.Error
-		}
-		if result.RowsAffected == 0 {
-			continue
-		}
-		dispatched = append(dispatched, pending[i])
-	}
-	return dispatched, nil
-}
-
-// normalizePendingDiagnosticTask validates a stored task as CreateTask
-// validates a request (ValidateAgentDiagnosticTask) and replaces its params
-// with the normalized ones.
-func normalizePendingDiagnosticTask(task *model.AgentDiagnosticTask) error {
-	params := map[string]any{}
-	if strings.TrimSpace(task.Params) != "" {
-		if err := json.Unmarshal([]byte(task.Params), &params); err != nil {
-			return fmt.Errorf("params are not a JSON object: %w", err)
-		}
-	}
-	normalized, err := ValidateAgentDiagnosticTask(task.Action, params)
-	if err != nil {
-		return err
-	}
-	encoded, err := json.Marshal(normalized)
-	if err != nil {
-		return err
-	}
-	task.Params = string(encoded)
-	return nil
-}
-
-// failPendingTask fails a pending task that may not be dispatched.
-func (s *AgentDiagnosticTaskService) failPendingTask(id uint, reason error) error {
-	return s.db.Model(&model.AgentDiagnosticTask{}).
-		Where("id = ? AND status = ?", id, model.AgentDiagnosticTaskStatusPending).
-		Updates(map[string]any{
-			"status":     model.AgentDiagnosticTaskStatusFailed,
-			"error":      "rejected before dispatch: " + reason.Error(),
 			"updated_at": time.Now(),
 		}).Error
 }

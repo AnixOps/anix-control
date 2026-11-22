@@ -55,7 +55,7 @@ func sanitizeAuditLogContent(content string) string {
 	return auditKeyValueSecretPattern.ReplaceAllString(trimmed, `${1}[REDACTED]`)
 }
 
-// sensitiveKeys is the kernel's utils.SensitiveKeys.
+// sensitiveKeys are the field names whose values the audit log redacts.
 var sensitiveKeys = []string{
 	"password",
 	"secret",
