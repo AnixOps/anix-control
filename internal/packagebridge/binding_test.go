@@ -123,9 +123,8 @@ func TestLocalSessionCallsCarryTheirGeneration(t *testing.T) {
 	capability, err := session.Mint(Request{RequestID: "req-9", RouteID: "proxy.admin.nodes.post", Method: "POST", Deadline: time.Now().Add(time.Minute)})
 	require.NoError(t, err)
 	probe.capability = capability
-	client, err := packagebridgesdk.DialFile(context.Background(), child)
+	client, err := packagebridgesdk.NewClient(child)
 	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, client.Close()) })
 	nodeOps := kernelnodeopsv1.NewKernelNodeOpsClient(client.Conn())
 
 	response, err := nodeOps.SubmitOperation(context.Background(), &kernelnodeopsv1.SubmitOperationRequest{Request: &kernelnodeopsv1.RequestBinding{BridgeCapability: capability}})

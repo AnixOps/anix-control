@@ -78,14 +78,11 @@ func TestManagerMigrateDispatchesOneShotBridgeCapabilityToHost(t *testing.T) {
 func TestManagerMintsWebSocketBridgeCapabilityBeforeOpeningTheHostStream(t *testing.T) {
 	allowlist, err := packagebridge.NewAllowlistWithFallback(nil)
 	require.NoError(t, err)
-	session, child, err := packagebridge.NewSession(
+	session, _, err := packagebridge.NewSession(
 		packagebridge.HostIdentity{PackageID: "machine-telemetry", Version: "4.0.0", Generation: 7}, allowlist,
 	)
 	require.NoError(t, err)
-	t.Cleanup(func() {
-		require.NoError(t, child.Close())
-		require.NoError(t, session.Close())
-	})
+	t.Cleanup(func() { require.NoError(t, session.Close()) })
 	client := &bridgeCapabilityCaptureHostClient{opened: make(chan WebSocketInput, 1)}
 	host := &hostProcess{
 		packageID: "machine-telemetry", version: "4.0.0", generation: 7, leaseID: "lease-7", bridge: session, client: client,

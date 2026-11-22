@@ -180,9 +180,8 @@ func StartKernel(t testing.TB, opts KernelOptions) *Kernel {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = session.Close() })
 	k.session = session
-	client, err := packagebridgesdk.DialFile(context.Background(), child)
+	client, err := packagebridgesdk.NewClient(child)
 	require.NoError(t, err)
-	t.Cleanup(func() { _ = client.Close() })
 	nodeOps := kernelnodeopsv1.NewKernelNodeOpsClient(client.Conn())
 	native := map[string]pluginhostsdk.NativeHandler{}
 	for _, route := range opts.Routes {

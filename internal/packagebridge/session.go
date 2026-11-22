@@ -9,9 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
-	"net"
-	"os"
 	"sync"
 	"time"
 
@@ -23,7 +20,7 @@ import (
 	kernelsubscriberv1 "github.com/AnixOps/anix-control/sdk/api/kernelsubscriber/v1"
 	kerneltelemetryv1 "github.com/AnixOps/anix-control/sdk/api/kerneltelemetry/v1"
 	packagebridgev1 "github.com/AnixOps/anix-control/sdk/api/packagebridge/v1"
-	"github.com/AnixOps/anix-control/v5/internal/panicrecovery"
+	"github.com/AnixOps/anix-control/v5/internal/localgrpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -35,11 +32,6 @@ const (
 	// DefaultMaxResponseBodyBytes bounds a bridge response body when a
 	// session is created without SessionOptions.MaxResponseBodyBytes.
 	DefaultMaxResponseBodyBytes int64 = 1 << 20
-	// messageEnvelopeBytes is the fixed allowance for everything in a bridge
-	// message except its body or payload.
-	messageEnvelopeBytes = 64 << 10
-	// defaultGRPCMessageBytes is grpc-go's default receive limit.
-	defaultGRPCMessageBytes = 4 << 20
 )
 
 var (
@@ -56,9 +48,6 @@ type SessionOptions struct {
 	// MaxResponseBodyBytes bounds a response body returned to the package
 	// host. Zero selects DefaultMaxResponseBodyBytes.
 	MaxResponseBodyBytes int64
-	// MaxRequestBodyBytes is the kernel's request body limit. The bridge uses
-	// it only to size its gRPC receive window for host payloads.
-	MaxRequestBodyBytes int64
 	// HostOperations serves the session-scoped RPCs (GetPackageConfig and
 	// LeaseStorage). Nil answers them with codes.Unimplemented, which hosts
 	// treat as "no configuration": every route stays in legacy mode and no
@@ -94,17 +83,6 @@ func (o SessionOptions) responseLimit() int64 {
 	return o.MaxResponseBodyBytes
 }
 
-func (o SessionOptions) receiveMessageLimit() int {
-	limit := o.MaxRequestBodyBytes
-	if limit < o.responseLimit() {
-		limit = o.responseLimit()
-	}
-	if size := limit + messageEnvelopeBytes; size > defaultGRPCMessageBytes && size <= math.MaxInt32 {
-		return int(size)
-	}
-	return defaultGRPCMessageBytes
-}
-
 type responseLimitContextKey struct{}
 
 // withResponseLimit lets operation adapters that validate their own
@@ -122,8 +100,8 @@ func responseLimitFromContext(ctx context.Context) int64 {
 	return DefaultMaxResponseBodyBytes
 }
 
-// HostIdentity is fixed when a child process is started. The socketpair makes
-// this identity process-local rather than client-asserted.
+// HostIdentity is fixed when a host is started. Only that host holds its
+// session's connection, so the identity is never client-asserted.
 type HostIdentity struct {
 	PackageID  string
 	Version    string
@@ -223,7 +201,7 @@ type Allowlist struct {
 
 // SessionFactory creates a fresh private endpoint for every supervised host.
 type SessionFactory interface {
-	NewSession(HostIdentity) (*Session, *os.File, error)
+	NewSession(HostIdentity) (*Session, grpc.ClientConnInterface, error)
 }
 
 type Factory struct {
@@ -249,7 +227,7 @@ func (f *Factory) WithSessionOptions(options SessionOptions) *Factory {
 	return f
 }
 
-func (f *Factory) NewSession(identity HostIdentity) (*Session, *os.File, error) {
+func (f *Factory) NewSession(identity HostIdentity) (*Session, grpc.ClientConnInterface, error) {
 	if f == nil {
 		return nil, nil, ErrBridgeClosed
 	}
@@ -311,10 +289,7 @@ type capability struct {
 
 // GenerationSession is the kernel-side state of one package host generation:
 // its identity, the one-shot capabilities minted for its requests, and the
-// operations it may call. It is independent of the transport: a local host
-// reaches it through its own socketpair Session, and every remote instance
-// of the same generation shares one through the module bridge, so any of
-// them can redeem a capability minted for the generation.
+// operations it may call. The host reaches it through its Session.
 type GenerationSession struct {
 	mu                sync.Mutex
 	identity          HostIdentity
@@ -381,94 +356,54 @@ func (g *GenerationSession) Draining() bool {
 	return g.draining
 }
 
-// Session owns one endpoint of an inherited Unix socketpair. The returned
-// child file is passed once through exec.ExtraFiles and is never addressable
-// by a filesystem path.
+// Session serves one host's bridge in process: the connection it returns
+// reaches the bridge and the kernel contracts of this generation only, and
+// is never addressable by anything else.
 type Session struct {
 	packagebridgev1.UnimplementedKernelPackageBridgeServer
 
 	*GenerationSession
-	listener  *singleConnListener
-	server    *grpc.Server
-	closeOnce sync.Once
-	closeErr  error
+	channel *localgrpc.Channel
 }
 
 var _ packagebridgev1.KernelPackageBridgeServer = (*Session)(nil)
 
-func NewSession(identity HostIdentity, handler *Allowlist, webSocketResolvers ...WebSocketOperationResolver) (*Session, *os.File, error) {
+func NewSession(identity HostIdentity, handler *Allowlist, webSocketResolvers ...WebSocketOperationResolver) (*Session, grpc.ClientConnInterface, error) {
 	return NewSessionWithOptions(identity, handler, SessionOptions{}, webSocketResolvers...)
 }
 
 // NewSessionWithOptions is NewSession with explicit payload limits.
-func NewSessionWithOptions(identity HostIdentity, handler *Allowlist, options SessionOptions, webSocketResolvers ...WebSocketOperationResolver) (*Session, *os.File, error) {
+func NewSessionWithOptions(identity HostIdentity, handler *Allowlist, options SessionOptions, webSocketResolvers ...WebSocketOperationResolver) (*Session, grpc.ClientConnInterface, error) {
 	generation, err := NewGenerationSession(identity, handler, options, webSocketResolvers...)
 	if err != nil {
 		return nil, nil, err
 	}
-	fds, err := newSessionSocketpair()
-	if err != nil {
-		return nil, nil, fmt.Errorf("create package bridge socketpair: %w", err)
-	}
-	parentFile := os.NewFile(uintptr(fds[0]), "anix-package-bridge-parent")
-	childFile := os.NewFile(uintptr(fds[1]), "anix-package-bridge-child")
-	if parentFile == nil || childFile == nil {
-		if parentFile != nil {
-			_ = parentFile.Close()
-		} else {
-			_ = closeSessionSocket(fds[0])
-		}
-		if childFile != nil {
-			_ = childFile.Close()
-		} else {
-			_ = closeSessionSocket(fds[1])
-		}
-		return nil, nil, errors.New("create package bridge file handles")
-	}
-	parentConnection, err := net.FileConn(parentFile)
-	closeErr := parentFile.Close()
-	if err != nil || closeErr != nil {
-		_ = childFile.Close()
-		if parentConnection != nil {
-			_ = parentConnection.Close()
-		}
-		if err != nil {
-			return nil, nil, fmt.Errorf("open package bridge parent connection: %w", err)
-		}
-		return nil, nil, fmt.Errorf("close package bridge parent descriptor: %w", closeErr)
-	}
-
-	serverOptions := append(panicrecovery.ServerOptions(), grpc.MaxRecvMsgSize(options.receiveMessageLimit()))
-	serverOptions = append(serverOptions, generation.serverOptions()...)
-	session := &Session{
-		GenerationSession: generation, listener: newSingleConnListener(parentConnection),
-		server: grpc.NewServer(serverOptions...),
-	}
-	packagebridgev1.RegisterKernelPackageBridgeServer(session.server, session)
+	session := &Session{GenerationSession: generation, channel: &localgrpc.Channel{
+		ServerContext: func(ctx context.Context) context.Context { return withGeneration(ctx, generation) },
+	}}
+	packagebridgev1.RegisterKernelPackageBridgeServer(session.channel, session)
 	if options.KernelIdentity != nil {
-		kernelidentityv1.RegisterKernelIdentityServer(session.server, options.KernelIdentity(identity))
+		kernelidentityv1.RegisterKernelIdentityServer(session.channel, options.KernelIdentity(identity))
 	}
 	if options.KernelOrder != nil {
-		kernelorderv1.RegisterKernelOrderServer(session.server, options.KernelOrder(identity))
+		kernelorderv1.RegisterKernelOrderServer(session.channel, options.KernelOrder(identity))
 	}
 	if options.KernelSubscriber != nil {
-		kernelsubscriberv1.RegisterKernelSubscriberServer(session.server, options.KernelSubscriber(identity))
+		kernelsubscriberv1.RegisterKernelSubscriberServer(session.channel, options.KernelSubscriber(identity))
 	}
 	if options.KernelSettings != nil {
-		kernelsettingsv1.RegisterKernelSettingsServer(session.server, options.KernelSettings(identity))
+		kernelsettingsv1.RegisterKernelSettingsServer(session.channel, options.KernelSettings(identity))
 	}
 	if options.KernelTelemetry != nil {
-		kerneltelemetryv1.RegisterKernelTelemetryServer(session.server, options.KernelTelemetry(identity))
+		kerneltelemetryv1.RegisterKernelTelemetryServer(session.channel, options.KernelTelemetry(identity))
 	}
 	if options.KernelNodeOps != nil {
-		kernelnodeopsv1.RegisterKernelNodeOpsServer(session.server, options.KernelNodeOps(identity))
+		kernelnodeopsv1.RegisterKernelNodeOpsServer(session.channel, options.KernelNodeOps(identity))
 	}
 	if options.KernelForward != nil {
-		forwardv1.RegisterForwardControlServer(session.server, options.KernelForward(identity))
+		forwardv1.RegisterForwardControlServer(session.channel, options.KernelForward(identity))
 	}
-	server, listener := session.server, session.listener
-	go func() { _ = server.Serve(listener) }()
-	return session, childFile, nil
+	return session, session.channel, nil
 }
 
 // Mint creates an opaque one-shot capability for a dispatch already admitted
@@ -710,21 +645,15 @@ func (s *GenerationSession) Close() error {
 	return nil
 }
 
-// Close fences the generation and closes the socketpair.
+// Close fences the generation, ends the calls in flight and refuses later
+// ones.
 func (s *Session) Close() error {
 	if s == nil {
 		return nil
 	}
-	s.closeOnce.Do(func() {
-		_ = s.GenerationSession.Close()
-		if s.server != nil {
-			s.server.Stop()
-		}
-		if s.listener != nil {
-			s.closeErr = s.listener.Close()
-		}
-	})
-	return s.closeErr
+	_ = s.GenerationSession.Close()
+	s.channel.Close()
+	return nil
 }
 
 func responseTooLargeStatusError() error {
@@ -831,53 +760,3 @@ func (s *sessionWebSocketStream) Send(frame WebSocketFrame) error {
 	}
 	return s.stream.Send(&packagebridgev1.WebSocketFrame{Value: &packagebridgev1.WebSocketFrame_Data{Data: append([]byte(nil), frame.Data...)}})
 }
-
-type singleConnListener struct {
-	mu       sync.Mutex
-	conn     net.Conn
-	accepted bool
-	done     chan struct{}
-	close    sync.Once
-}
-
-func newSingleConnListener(connection net.Conn) *singleConnListener {
-	return &singleConnListener{conn: connection, done: make(chan struct{})}
-}
-
-func (l *singleConnListener) Accept() (net.Conn, error) {
-	l.mu.Lock()
-	if !l.accepted && l.conn != nil {
-		l.accepted = true
-		connection := l.conn
-		l.mu.Unlock()
-		return connection, nil
-	}
-	l.mu.Unlock()
-	<-l.done
-	return nil, net.ErrClosed
-}
-
-func (l *singleConnListener) Close() error {
-	if l == nil {
-		return nil
-	}
-	var closeErr error
-	l.close.Do(func() {
-		close(l.done)
-		l.mu.Lock()
-		connection := l.conn
-		l.conn = nil
-		l.mu.Unlock()
-		if connection != nil {
-			closeErr = connection.Close()
-		}
-	})
-	return closeErr
-}
-
-func (l *singleConnListener) Addr() net.Addr { return packageBridgeAddress{} }
-
-type packageBridgeAddress struct{}
-
-func (packageBridgeAddress) Network() string { return "unix" }
-func (packageBridgeAddress) String() string  { return "anix-package-bridge" }

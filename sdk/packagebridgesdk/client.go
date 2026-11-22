@@ -1,5 +1,6 @@
 // Package packagebridgesdk is the narrow client surface available to a
-// package-host executable. It communicates only over its inherited bridge FD.
+// package host. It reaches the kernel only over the bridge connection the
+// kernel handed the host.
 package packagebridgesdk
 
 import (
@@ -7,22 +8,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
-	"os"
 	"strings"
-	"sync"
 
 	packagebridgev1 "github.com/AnixOps/anix-control/sdk/api/packagebridge/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 )
-
-// maxBridgeMessageBytes is the receive limit for bridge responses: the
-// largest configurable response body (64 MiB) plus a fixed envelope. The
-// kernel end of the bridge enforces the configured body limit itself.
-const maxBridgeMessageBytes = 64<<20 + 64<<10
 
 var (
 	ErrBridgeUnavailable  = errors.New("package bridge unavailable")
@@ -44,13 +36,21 @@ var (
 )
 
 type Client struct {
-	connection *grpc.ClientConn
+	connection grpc.ClientConnInterface
 	rpc        packagebridgev1.KernelPackageBridgeClient
 }
 
+// NewClient returns the client of the bridge connection the kernel handed
+// the host (modulesdk.InProcess.Bridge).
+func NewClient(connection grpc.ClientConnInterface) (*Client, error) {
+	if connection == nil {
+		return nil, ErrBridgeUnavailable
+	}
+	return &Client{connection: connection, rpc: packagebridgev1.NewKernelPackageBridgeClient(connection)}, nil
+}
+
 // Conn is the connection to the kernel, for the other kernel contracts a
-// package may call over it, such as KernelIdentity. On a network client it
-// carries the bridge session, rebinding when the kernel asks.
+// package may call over it, such as KernelIdentity.
 func (c *Client) Conn() grpc.ClientConnInterface {
 	if c == nil {
 		return nil
@@ -85,49 +85,6 @@ type WebSocketStream interface {
 	Recv() (WebSocketFrame, error)
 	Send(WebSocketFrame) error
 	CloseSend() error
-}
-
-// DialFile consumes a duplicate of file and leaves no filesystem-addressable
-// bridge endpoint for a package to discover or replace.
-func DialFile(_ context.Context, file *os.File) (*Client, error) {
-	if file == nil {
-		return nil, ErrBridgeUnavailable
-	}
-	connection, err := net.FileConn(file)
-	closeErr := file.Close()
-	if err != nil || closeErr != nil {
-		if connection != nil {
-			_ = connection.Close()
-		}
-		if err != nil {
-			return nil, fmt.Errorf("%w: open bridge descriptor: %v", ErrBridgeUnavailable, err)
-		}
-		return nil, fmt.Errorf("%w: close bridge descriptor: %v", ErrBridgeUnavailable, closeErr)
-	}
-	var once sync.Once
-	var dialConnection net.Conn
-	dialer := func(context.Context, string) (net.Conn, error) {
-		used := false
-		once.Do(func() {
-			used = true
-			dialConnection = connection
-		})
-		if !used {
-			return nil, net.ErrClosed
-		}
-		return dialConnection, nil
-	}
-	grpcConnection, err := grpc.NewClient(
-		"passthrough:///anix-package-bridge",
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithContextDialer(dialer),
-		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(maxBridgeMessageBytes)),
-	)
-	if err != nil {
-		_ = connection.Close()
-		return nil, bridgeError(err)
-	}
-	return &Client{connection: grpcConnection, rpc: packagebridgev1.NewKernelPackageBridgeClient(grpcConnection)}, nil
 }
 
 func (c *Client) Invoke(ctx context.Context, capability []byte, operation string, payload []byte) (Response, error) {
@@ -165,13 +122,6 @@ func (c *Client) OpenWebSocket(ctx context.Context, capability []byte, operation
 		return nil, bridgeError(err)
 	}
 	return &webSocketClientStream{stream: stream}, nil
-}
-
-func (c *Client) Close() error {
-	if c == nil || c.connection == nil {
-		return nil
-	}
-	return c.connection.Close()
 }
 
 type webSocketClientStream struct {

@@ -110,3 +110,24 @@ func TestCancelledCallerEndsTheStream(t *testing.T) {
 	_, err = stream.CloseAndRecv()
 	require.Equal(t, codes.Canceled, status.Code(err))
 }
+
+// ServerContext derives every handler's context; Close ends running
+// handlers and refuses later calls.
+func TestServerContextAndClose(t *testing.T) {
+	channel := &Channel{ServerContext: func(ctx context.Context) context.Context {
+		return metadata.NewIncomingContext(ctx, metadata.Pairs("x-test", "from-server"))
+	}}
+	testgrpc.RegisterTestServiceServer(channel, testService{})
+	client := testgrpc.NewTestServiceClient(channel)
+	response, err := client.UnaryCall(context.Background(), &testgrpc.SimpleRequest{Payload: &testgrpc.Payload{Body: []byte("x ")}})
+	require.NoError(t, err)
+	require.Equal(t, "x from-server", string(response.GetPayload().GetBody()))
+
+	stream, err := client.StreamingInputCall(context.Background())
+	require.NoError(t, err)
+	channel.Close()
+	_, err = stream.CloseAndRecv()
+	require.Equal(t, codes.Canceled, status.Code(err))
+	_, err = client.UnaryCall(context.Background(), &testgrpc.SimpleRequest{})
+	require.Equal(t, codes.Unavailable, status.Code(err))
+}

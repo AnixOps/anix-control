@@ -67,9 +67,8 @@ func TestSessionSurvivesPanickingOperations(t *testing.T) {
 	session, child, err := NewSession(HostIdentity{PackageID: "identity-platform", Version: "4.0.0", Generation: 7}, allowlist)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, session.Close()) })
-	client, err := packagebridgesdk.DialFile(context.Background(), child)
+	client, err := packagebridgesdk.NewClient(child)
 	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, client.Close()) })
 
 	mint := func(routeID string) []byte {
 		call := panicTestCall(routeID, "/api/v2/user/info")

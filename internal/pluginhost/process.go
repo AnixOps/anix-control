@@ -6,7 +6,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"runtime/debug"
 	"strings"
 	"time"
@@ -14,6 +13,7 @@ import (
 	"github.com/AnixOps/anix-control/sdk/modulesdk"
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
 	"github.com/AnixOps/anix-control/v5/internal/packagebridge"
+	"google.golang.org/grpc"
 )
 
 // hostStartOptions carries the supervisor settings a host start uses. The
@@ -40,7 +40,7 @@ func startHostProcess(ctx context.Context, ref ArtifactRef, generation uint64, o
 		return nil, err
 	}
 	var bridge *packagebridge.Session
-	var bridgeEnd *os.File
+	var bridgeEnd grpc.ClientConnInterface
 	if options.bridgeFactory != nil {
 		var err error
 		bridge, bridgeEnd, err = options.bridgeFactory.NewSession(packagebridge.HostIdentity{
@@ -60,9 +60,9 @@ func startHostProcess(ctx context.Context, ref ArtifactRef, generation uint64, o
 }
 
 // startInProcessHost runs a host on a goroutine of Control. It gets its
-// settings from the kernel, never from Control's environment, and its end of
-// the bridge. A panic in its start ends the host, not Control.
-func startInProcessHost(ref ArtifactRef, generation uint64, options hostStartOptions, bridgeEnd *os.File) *hostProcess {
+// settings from the kernel, never from Control's environment, and its
+// bridge connection. A panic in its start ends the host, not Control.
+func startInProcessHost(ref ArtifactRef, generation uint64, options hostStartOptions, bridgeEnd grpc.ClientConnInterface) *hostProcess {
 	environment := map[string]string{}
 	for _, entry := range options.packageEnvironment[ref.PackageID] {
 		if name, value, ok := strings.Cut(entry, "="); ok {

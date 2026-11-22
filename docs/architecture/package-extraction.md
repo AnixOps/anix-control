@@ -1039,7 +1039,7 @@ configuration. It may lease its own per-package least-privilege role; see
 `Invoke`/`OpenWebSocket`, a host may call named session operations
 (`GetPackageConfig`, `LeaseStorage`) without a capability. They are
 authorized by the session identity (package id, version, lifecycle
-generation bound to the inherited socketpair) and fenced against the current
+generation bound to the host's bridge session) and fenced against the current
 installation on every call; see `plugin-kernel-contract.md`, "Package
 Configuration".
 

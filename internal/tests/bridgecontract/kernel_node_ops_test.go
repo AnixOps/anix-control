@@ -295,9 +295,8 @@ func TestKernelNodeOpsOverTheLocalBridge(t *testing.T) {
 		)
 		require.NoError(t, err)
 		t.Cleanup(func() { require.NoError(t, session.Close()) })
-		client, err := packagebridgesdk.DialFile(context.Background(), child)
+		client, err := packagebridgesdk.NewClient(child)
 		require.NoError(t, err)
-		t.Cleanup(func() { require.NoError(t, client.Close()) })
 		exerciseNodeOps(t, kernel, client.Conn(), "plan", 3, mintBinding(t, session, "plan"))
 	})
 }
@@ -323,9 +322,8 @@ func TestKernelNodeOpsRefusesABindingOfAnotherGeneration(t *testing.T) {
 		)
 		require.NoError(t, err)
 		t.Cleanup(func() { require.NoError(t, session.Close()) })
-		client, err := packagebridgesdk.DialFile(context.Background(), child)
+		client, err := packagebridgesdk.NewClient(child)
 		require.NoError(t, err)
-		t.Cleanup(func() { require.NoError(t, client.Close()) })
 		_, err = kernelnodeopsv1.NewKernelNodeOpsClient(client.Conn()).SubmitOperation(context.Background(), &kernelnodeopsv1.SubmitOperationRequest{
 			RequestId: "node.sync:proxy-1:other", Operation: syncProxy(1),
 			Request: &kernelnodeopsv1.RequestBinding{BridgeCapability: mintBinding(t, session, "plan")},

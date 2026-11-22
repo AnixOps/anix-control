@@ -34,9 +34,8 @@ func TestClientOpensAWebSocketBridgeWithItsMintedCapability(t *testing.T) {
 		RequestID: "sdk-websocket-1", RouteID: "telemetry.monitor.ws", Method: "GET", Deadline: time.Now().Add(time.Second),
 	})
 	require.NoError(t, err)
-	client, err := packagebridgesdk.DialFile(context.Background(), child)
+	client, err := packagebridgesdk.NewClient(child)
 	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, client.Close()) })
 
 	stream, err := client.OpenWebSocket(context.Background(), capability, "telemetry.monitor.ws")
 	require.NoError(t, err)
