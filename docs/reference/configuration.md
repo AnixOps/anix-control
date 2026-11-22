@@ -352,7 +352,7 @@ stands). The list is `internal/config/deprecated_keys.yaml`.
 | `plugins.control_poll_interval` | `ANIX_CONTROL_PLUGINS_CONTROL_POLL_INTERVAL` | ignored | M2 (P8) | a built-in value (5s) |
 | `plugins.dispatch_enabled` | `ANIX_CONTROL_PLUGINS_DISPATCH_ENABLED` | ignored | M2 (P7) | Agent plugin dispatch is off until the Agent release manifest brings the Agent plugins (M4) |
 | `plugins.dispatch_poll_interval` | `ANIX_CONTROL_PLUGINS_DISPATCH_POLL_INTERVAL` | ignored | M2 (P7) | Agent plugin dispatch is off until the Agent release manifest brings the Agent plugins (M4) |
-| `plugins.identity_bootstrap_package_dir` | `ANIX_CONTROL_PLUGINS_IDENTITY_BOOTSTRAP_PACKAGE_DIR` | ignored | slim audit C1c-1b | every package, identity-platform included, comes from the binary; a binary without them installs none (logged) |
+| `plugins.identity_bootstrap_package_dir` | `ANIX_CONTROL_PLUGINS_IDENTITY_BOOTSTRAP_PACKAGE_DIR` | ignored | M5 | every official package, identity-platform included, is built into Control; a binary built without them installs none |
 | `plugins.official_public_key` | `ANIX_CONTROL_PLUGINS_OFFICIAL_PUBLIC_KEY` | still read | M2 (P11) | the key the built-in packages verify against (development builds sign with their own), until the package index carries it |
 | `plugins.topology_execution_enabled` | `ANIX_CONTROL_PLUGINS_TOPOLOGY_EXECUTION_ENABLED` | ignored | M2 (P7) | topology deployment execution is off until the Agent release manifest brings the Agent plugins (M4) |
 | `plugins.topology_poll_interval` | `ANIX_CONTROL_PLUGINS_TOPOLOGY_POLL_INTERVAL` | ignored | M2 (P7) | topology deployment execution is off until the Agent release manifest brings the Agent plugins (M4) |

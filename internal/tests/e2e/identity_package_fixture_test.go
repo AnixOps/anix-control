@@ -185,9 +185,7 @@ func installTaskEightE2EPackages(t testing.TB, publicKey ed25519.PublicKey, priv
 
 func installE2ESignedPackage(t testing.TB, packageID, name string, routes, migrations []byte, files map[string][]byte, publicKey ed25519.PublicKey, privateKey ed25519.PrivateKey) {
 	t.Helper()
-	entrypoint := []byte("#!/bin/sh\nexit 0\n")
 	artifactFiles := map[string][]byte{
-		"bin/control-host":      entrypoint,
 		"compat/v2-routes.json": routes,
 		"migrations/index.json": migrations,
 	}
@@ -196,16 +194,13 @@ func installE2ESignedPackage(t testing.TB, packageID, name string, routes, migra
 	}
 	artifact := identityPackageFixtureArchive(t, artifactFiles)
 	artifactDigest := sha256.Sum256(artifact)
-	entrypointDigest := sha256.Sum256(entrypoint)
 	migrationsDigest := sha256.Sum256(migrations)
 	routesDigest := sha256.Sum256(routes)
 	manifest := service.PluginManifest{
 		ID: packageID, Name: name, Version: identityE2EVersion,
 		APIVersion: "v2", Publisher: "AnixOps", Targets: []string{"control"},
-		ArtifactSHA256: hex.EncodeToString(artifactDigest[:]),
-		ControlEntrypoint: &service.PluginEntrypoint{
-			Path: "bin/control-host", SHA256: hex.EncodeToString(entrypointDigest[:]),
-		},
+		ArtifactSHA256:    hex.EncodeToString(artifactDigest[:]),
+		ControlEntrypoint: &service.PluginEntrypoint{Builtin: packageID},
 		Migrations: &service.PluginMigrations{
 			Index: "migrations/index.json", SHA256: hex.EncodeToString(migrationsDigest[:]),
 		},

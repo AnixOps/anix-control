@@ -79,13 +79,11 @@ type registeredRelease struct {
 
 func (f *signedRouteFixture) registerRelease(tb testing.TB, packageID, version, routes string, payloadBytes int) registeredRelease {
 	tb.Helper()
-	entrypoint := []byte("#!/bin/sh\nexit 0\n")
 	migrations := []byte(`{"format":"anixops.migrations/v1","migrations":[],"package_id":"` + packageID + `","version":"` + version + `"}`)
 	files := []struct {
 		name string
 		data []byte
 	}{
-		{"bin/control-host", entrypoint},
 		{"compat/v2-routes.json", []byte(routes)},
 		{"migrations/index.json", migrations},
 	}
@@ -112,7 +110,7 @@ func (f *signedRouteFixture) registerRelease(tb testing.TB, packageID, version, 
 	manifest := service.PluginManifest{
 		ID: packageID, Name: packageID, Version: version, APIVersion: "v2", Publisher: "AnixOps", Targets: []string{"control"},
 		ArtifactSHA256:    digestHex(artifact),
-		ControlEntrypoint: &service.PluginEntrypoint{Path: "bin/control-host", SHA256: digestHex(entrypoint)},
+		ControlEntrypoint: &service.PluginEntrypoint{Builtin: packageID},
 		Migrations:        &service.PluginMigrations{Index: "migrations/index.json", SHA256: digestHex(migrations)},
 		CompatibilityRoutes: &service.PluginCompatibilityRoutes{
 			Path: "compat/v2-routes.json", SHA256: digestHex([]byte(routes)),

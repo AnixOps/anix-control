@@ -291,7 +291,6 @@ type IdentityConfig struct {
 // execution is intentionally unsupported by the control kernel.
 type PluginConfig struct {
 	OfficialPublicKey                  string `yaml:"official_public_key"`
-	IdentityBootstrapPackageDir        string `yaml:"identity_bootstrap_package_dir"`
 	ControlPollInterval                string `yaml:"control_poll_interval"`
 	ControlHostRuntimeDir              string `yaml:"control_host_runtime_dir"`
 	ControlHostArtifactDir             string `yaml:"control_host_artifact_dir"`

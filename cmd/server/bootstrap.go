@@ -164,9 +164,6 @@ func bootstrapBuiltinPackages(db *gorm.DB, cfg *config.Config, logf func(string,
 		logf("WARNING: the built-in packages of this binary cannot be read: %v. No official package was installed or upgraded; reinstall a verified release binary.", err)
 		return
 	}
-	if strings.TrimSpace(cfg.Plugins.IdentityBootstrapPackageDir) != "" {
-		logf("plugins.identity_bootstrap_package_dir is ignored: the official packages, identity-platform included, are built into Control")
-	}
 	if set.Empty() {
 		logf("WARNING: this binary embeds no official packages (built without `make build`): no package is installed and nobody can sign in.")
 		return
