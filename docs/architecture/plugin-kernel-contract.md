@@ -516,10 +516,10 @@ the browser does not duplicate or widen the allow-union calculation.
 The topology and deployment API (`/topologies*`, `/deployments*`,
 `/observed-states`) and its executor were removed in 5.0.0; the
 observed-state write-back left behind went in the 2026-11 slimming
-(`docs/audit/slim-2026-11.md`). The `v3_kernel_topology_*` tables and the
-topology columns of `v3_kernel_operation` remain until a migration drops
-them. Nodes and relays are configured on the node page and the network
-model.
+(`docs/audit/slim-2026-11.md`). The migration
+`0042_drop_topology_and_plugin_leftovers` dropped the `v3_kernel_topology*`
+tables and the topology columns of `v3_kernel_operation`. Nodes and relays
+are configured on the node page and the network model.
 
 ## Operations
 

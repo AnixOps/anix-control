@@ -80,11 +80,42 @@ func TestBootstrapDatabaseMigratesTheSchema(t *testing.T) {
 		require.NoError(t, db.Migrator().DropTable(migrations.MigrationTable, migrations.MetaTable, &model.ACMECacheEntry{}, &model.Backup{}, &model.DestinationStat{}, &model.EgressRoute{}, &model.RealityTargetProbe{}, &model.RealityTargetAuto{}, &model.NodeEntry{}, &model.SubscriptionGroupProtocol{}, &model.ForwardRouteSubscription{}, &model.IWANLine{}, &model.KernelForwardLatency{}, &model.KernelForwardDNSVantage{}, &model.NetworkModel{}, &model.NetworkTransportKey{}, &model.NetworkDevice{}, &model.NodeNetwork{}, &model.ReverseProxy{}, &model.ReverseProxyACMEAccount{}, &model.NodeUplinks{}, &model.TrafficCategoryRule{}, &model.TrafficCategorySource{}, &model.NodeExitPolicy{}, &model.UserSS2022Key{}, &model.L2Standby{}, &model.EntryPoolPolicy{}, &model.UserEntryPool{}, &model.ClientFailureReport{}, &model.Line{}, &model.Transport{}, &model.EntitlementDevice{}, &model.ReachVantage{}, &model.ReachProbe{}))
 		require.NoError(t, db.Exec("ALTER TABLE v4_kernel_agent_transport DROP COLUMN protocol_revision").Error)
 		formerTableNames(t, db)
+		droppedTables(t, db)
 		require.NoError(t, bootstrapDatabase(ctx, cfg))
 		meta, err = migrations.Meta(ctx, db)
 		require.NoError(t, err)
 		assert.Equal(t, "adopted", meta[migrations.MetaOrigin])
 	})
+}
+
+// droppedTables creates, as the baseline did, the tables
+// 0042_drop_topology_and_plugin_leftovers dropped with their models: a
+// database from before the runner has them (several are tables every
+// Control 4.x start created, which adoption requires).
+func droppedTables(t *testing.T, db *gorm.DB) {
+	t.Helper()
+	known, err := migrations.Steps()
+	require.NoError(t, err)
+	dialect := migrations.DialectSQLite
+	if db.Name() == "postgres" {
+		dialect = migrations.DialectPostgres
+	}
+	var baseline, dropped string
+	for _, step := range known {
+		switch step.Name {
+		case "baseline":
+			baseline = step.SQL[dialect]
+		case "drop_topology_and_plugin_leftovers":
+			dropped = step.SQL[dialect]
+		}
+	}
+	tables := regexp.MustCompile("DROP TABLE IF EXISTS [`\"]([a-z0-9_]+)[`\"]").FindAllStringSubmatch(dropped, -1)
+	require.Len(t, tables, 13)
+	for _, table := range tables {
+		create := regexp.MustCompile("(?m)^CREATE TABLE [`\"]" + table[1] + "[`\"] .*;$").FindString(baseline)
+		require.NotEmpty(t, create, table[1])
+		require.NoError(t, db.Exec(create).Error)
+	}
 }
 
 // formerTableNames gives the tables 0040_table_prefix renamed, and their

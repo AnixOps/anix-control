@@ -96,9 +96,9 @@ func TestAdoptionCompletesADatabaseAnOlderReleaseLeft(t *testing.T) {
 			"v2_forward_node.approval", "v2_forward_node.last_public_address",
 			"v2_user.token", "v2_server_log.rate", "v2_server_log.log_at",
 		}, adoption.AddedColumns)
-		assert.Equal(t, []string{model.LegacyTopologyNameIndex}, adoption.DroppedIndexes)
+		assert.Equal(t, []string{"idx_v3_kernel_topology_name"}, adoption.DroppedIndexes)
 		assert.Contains(t, adoption.CreatedIndexes, "idx_forward_runtime_job_active_forward")
-		assert.Contains(t, adoption.CreatedIndexes, model.TopologyLiveNameIndex)
+		assert.Contains(t, adoption.CreatedIndexes, "ux_topology_live_name")
 		assert.Contains(t, adoption.CreatedIndexes, model.NodeGroupLiveNameIndex)
 		assert.EqualValues(t, 2, adoption.SupersededJobs)
 		assert.Empty(t, adoption.Differences)

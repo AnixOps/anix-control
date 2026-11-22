@@ -2,8 +2,6 @@ package model
 
 import (
 	"time"
-
-	"gorm.io/plugin/soft_delete"
 )
 
 // ServiceScope is an authorization namespace. A user may belong to multiple
@@ -127,22 +125,6 @@ type PluginArtifact struct {
 
 func (PluginArtifact) TableName() string { return "v3_kernel_plugin_artifact" }
 
-type PluginWebUIAsset struct {
-	ID           uint      `gorm:"primaryKey" json:"id"`
-	ReleaseID    uint      `gorm:"not null;uniqueIndex" json:"release_id"`
-	PluginID     string    `gorm:"size:120;not null;index;uniqueIndex:ux_plugin_webui_asset_addr" json:"plugin_id"`
-	Version      string    `gorm:"size:64;not null;uniqueIndex:ux_plugin_webui_asset_addr" json:"version"`
-	BundlePath   string    `gorm:"size:240;not null" json:"bundle_path"`
-	BundleSHA256 string    `gorm:"size:64;not null;index;uniqueIndex:ux_plugin_webui_asset_addr" json:"bundle_sha256"`
-	SizeBytes    int64     `gorm:"not null" json:"size_bytes"`
-	ContentType  string    `gorm:"size:120;not null" json:"content_type"`
-	StorageKey   string    `gorm:"size:360;not null;uniqueIndex" json:"storage_key"`
-	Data         []byte    `json:"-"`
-	CreatedAt    time.Time `json:"created_at"`
-}
-
-func (PluginWebUIAsset) TableName() string { return "v3_kernel_plugin_webui_asset" }
-
 type PluginInstallation struct {
 	ID                  uint       `gorm:"primaryKey" json:"id"`
 	PluginID            string     `gorm:"size:120;not null;uniqueIndex:ux_plugin_install_target" json:"plugin_id"`
@@ -227,246 +209,38 @@ type NodePluginLifecycle struct {
 
 func (NodePluginLifecycle) TableName() string { return "v3_kernel_node_plugin_lifecycle" }
 
-// TopologyLiveNameIndex is the unique index on the names of live topologies.
-// It is partial (WHERE deleted = 0), so a deleted topology's name can be
-// reused. Adopting a database an earlier Control created
-// (internal/database/migrations) drops the plain unique index older schemas
-// carry (LegacyTopologyNameIndex) and creates this one.
-const (
-	TopologyLiveNameIndex   = "ux_topology_live_name"
-	LegacyTopologyNameIndex = "idx_v3_kernel_topology_name"
-)
-
-// Topology rows are never removed. Deleting a topology sets Deleted to 1 and
-// DeletedAt; gorm.io/plugin/soft_delete then adds "deleted = 0" to every
-// query, update and delete of this model, so a deleted topology is invisible
-// unless a query is Unscoped. Its revisions, deployments, steps, observed
-// states and operations are kept for audit.
-type Topology struct {
-	ID               uint   `gorm:"primaryKey" json:"id"`
-	Name             string `gorm:"size:160;not null;uniqueIndex:ux_topology_live_name,where:deleted = 0" json:"name"`
-	ServiceScope     string `gorm:"size:64;not null;index" json:"service_scope"`
-	Description      string `gorm:"type:text" json:"description"`
-	ActiveRevisionID *uint  `gorm:"index" json:"active_revision_id"`
-	// DeleteRequestedAt is set while a teardown deployment removes the active
-	// revision from the nodes; the topology is deleted when it succeeds, and
-	// the mark is cleared when it fails or rolls back.
-	DeleteRequestedAt *time.Time            `json:"delete_requested_at"`
-	Deleted           soft_delete.DeletedAt `gorm:"column:deleted;not null;default:0;softDelete:flag,DeletedAtField:DeletedAt" json:"-"`
-	DeletedAt         *time.Time            `json:"deleted_at"`
-	CreatedAt         time.Time             `json:"created_at"`
-	UpdatedAt         time.Time             `json:"updated_at"`
-}
-
-func (Topology) TableName() string { return "v3_kernel_topology" }
-
-type TopologyRevision struct {
-	ID          uint      `gorm:"primaryKey" json:"id"`
-	TopologyID  uint      `gorm:"not null;uniqueIndex:ux_topology_revision" json:"topology_id"`
-	Revision    int64     `gorm:"not null;uniqueIndex:ux_topology_revision" json:"revision"`
-	State       string    `gorm:"size:24;not null;index" json:"state"`
-	ContentHash string    `gorm:"size:64;not null" json:"content_hash"`
-	Message     string    `gorm:"type:text" json:"message"`
-	CreatedBy   uint      `gorm:"not null" json:"created_by"`
-	CreatedAt   time.Time `json:"created_at"`
-}
-
-func (TopologyRevision) TableName() string { return "v3_kernel_topology_revision" }
-
-type TopologyVertex struct {
-	ID         uint   `gorm:"primaryKey" json:"id"`
-	RevisionID uint   `gorm:"not null;index;uniqueIndex:ux_topology_vertex_key" json:"revision_id"`
-	Key        string `gorm:"size:120;not null;uniqueIndex:ux_topology_vertex_key" json:"key"`
-	Kind       string `gorm:"size:48;not null" json:"kind"`
-	NodeID     *uint  `gorm:"index" json:"node_id"`
-	PluginID   string `gorm:"size:120;index" json:"plugin_id"`
-	Role       string `gorm:"size:80" json:"role"`
-	ConfigJSON string `gorm:"type:text;not null" json:"config"`
-}
-
-func (TopologyVertex) TableName() string { return "v3_kernel_topology_vertex" }
-
-type TopologyEdge struct {
-	ID         uint   `gorm:"primaryKey" json:"id"`
-	RevisionID uint   `gorm:"not null;index" json:"revision_id"`
-	SourceKey  string `gorm:"size:120;not null" json:"source_key"`
-	TargetKey  string `gorm:"size:120;not null" json:"target_key"`
-	Protocol   string `gorm:"size:48;not null" json:"protocol"`
-	SecretID   string `gorm:"size:160" json:"secret_id"`
-	ConfigJSON string `gorm:"type:text;not null" json:"config"`
-}
-
-func (TopologyEdge) TableName() string { return "v3_kernel_topology_edge" }
-
-type TopologyDeployment struct {
-	ID                 uint   `gorm:"primaryKey" json:"id"`
-	TopologyID         uint   `gorm:"not null;index" json:"topology_id"`
-	RevisionID         uint   `gorm:"not null;index" json:"revision_id"`
-	PreviousRevisionID *uint  `json:"previous_revision_id"`
-	RolloutGroup       string `gorm:"size:80" json:"rollout_group"`
-	State              string `gorm:"size:32;not null;index" json:"state"`
-	FailurePolicy      string `gorm:"size:32;not null" json:"failure_policy"`
-	LastError          string `gorm:"type:text" json:"last_error"`
-	// Teardown marks the deployment DELETE /api/v3/topologies/:id creates for
-	// a topology with an active revision: its steps disable every vertex of
-	// that revision (RevisionID and PreviousRevisionID both name it), and its
-	// success deletes the topology instead of activating a revision.
-	Teardown bool `gorm:"not null;default:false" json:"teardown"`
-	// HealthGateDeadlineAt is a durable grace window for a terminal Agent
-	// operation to be followed by its independent runtime observation.
-	HealthGateDeadlineAt *time.Time `json:"health_gate_deadline_at"`
-	RollbackStartedAt    *time.Time `json:"rollback_started_at"`
-	RollbackCompletedAt  *time.Time `json:"rollback_completed_at"`
-	CreatedBy            uint       `gorm:"not null" json:"created_by"`
-	CreatedAt            time.Time  `json:"created_at"`
-	UpdatedAt            time.Time  `json:"updated_at"`
-	CompletedAt          *time.Time `json:"completed_at"`
-}
-
-func (TopologyDeployment) TableName() string { return "v3_kernel_topology_deployment" }
-
-// TopologyDeploymentStep is the durable, per-vertex execution plan for one
-// immutable topology revision. It stores operation identities rather than an
-// in-memory work queue so a Control restart can resume or compensate a
-// partially applied deployment deterministically.
-//
-// ApplyAction is either configure_enable or disable. RollbackMode is restore
-// (configure the previous active revision and enable it) or disable (there was
-// no previous vertex to restore). States are advanced only by the topology
-// deployment executor.
-type TopologyDeploymentStep struct {
-	ID                           uint      `gorm:"primaryKey" json:"id"`
-	DeploymentID                 uint      `gorm:"not null;index;uniqueIndex:ux_topology_deployment_step" json:"deployment_id"`
-	VertexID                     uint      `gorm:"not null;uniqueIndex:ux_topology_deployment_step" json:"vertex_id"`
-	VertexKey                    string    `gorm:"size:120;not null" json:"vertex_key"`
-	NodeID                       uint      `gorm:"not null;index" json:"node_id"`
-	PluginID                     string    `gorm:"size:120;not null" json:"plugin_id"`
-	Role                         string    `gorm:"size:80;not null" json:"role"`
-	TargetVersion                string    `gorm:"size:64;not null" json:"target_version"`
-	ApplyOrder                   int       `gorm:"not null;index" json:"apply_order"`
-	Removal                      bool      `gorm:"not null;default:false" json:"removal"`
-	ApplyAction                  string    `gorm:"size:32;not null" json:"apply_action"`
-	ConfigJSON                   string    `gorm:"type:text;not null;default:{}" json:"config"`
-	RollbackMode                 string    `gorm:"size:32;not null" json:"rollback_mode"`
-	RollbackConfigJSON           string    `gorm:"type:text;not null;default:{}" json:"rollback_config"`
-	State                        string    `gorm:"size:32;not null;index" json:"state"`
-	ConfigureOperationID         string    `gorm:"size:64;index" json:"configure_operation_id"`
-	EnableOperationID            string    `gorm:"size:64;index" json:"enable_operation_id"`
-	DisableOperationID           string    `gorm:"size:64;index" json:"disable_operation_id"`
-	RollbackConfigureOperationID string    `gorm:"size:64;index" json:"rollback_configure_operation_id"`
-	RollbackEnableOperationID    string    `gorm:"size:64;index" json:"rollback_enable_operation_id"`
-	RollbackDisableOperationID   string    `gorm:"size:64;index" json:"rollback_disable_operation_id"`
-	LastError                    string    `gorm:"type:text" json:"last_error"`
-	CreatedAt                    time.Time `json:"created_at"`
-	UpdatedAt                    time.Time `json:"updated_at"`
-}
-
-func (TopologyDeploymentStep) TableName() string { return "v3_kernel_topology_deployment_step" }
-
-type TopologyObservedState struct {
-	ID               uint      `gorm:"primaryKey" json:"id"`
-	DeploymentID     uint      `gorm:"not null;index;uniqueIndex:ux_observed_deployment_node" json:"deployment_id"`
-	NodeID           uint      `gorm:"not null;uniqueIndex:ux_observed_deployment_node" json:"node_id"`
-	DesiredRevision  int64     `gorm:"not null" json:"desired_revision"`
-	ObservedRevision int64     `gorm:"not null" json:"observed_revision"`
-	State            string    `gorm:"size:32;not null" json:"state"`
-	HealthJSON       string    `gorm:"type:text" json:"health"`
-	LastError        string    `gorm:"type:text" json:"last_error"`
-	UpdatedAt        time.Time `json:"updated_at"`
-}
-
-func (TopologyObservedState) TableName() string { return "v3_kernel_topology_observed_state" }
-
 type KernelOperation struct {
 	ID              string `gorm:"primaryKey;size:64" json:"id"`
 	IdempotencyKey  string `gorm:"size:160;not null;uniqueIndex" json:"idempotency_key"`
 	EnvelopeVersion string `gorm:"size:32;not null;default:anixops.operation/v1" json:"envelope_version"`
 	// SessionID is written by the dispatcher from the active Agent connection.
 	// It must never be trusted from an HTTP request.
-	SessionID            string `gorm:"size:120;index" json:"session_id"`
-	NodeID               *uint  `gorm:"index" json:"node_id"`
-	PluginID             string `gorm:"size:120;index" json:"plugin_id"`
-	TargetVersion        string `gorm:"size:64" json:"target_version"`
-	TopologyDeploymentID *uint  `gorm:"index" json:"topology_deployment_id"`
-	TopologyStepID       *uint  `gorm:"index" json:"topology_step_id"`
-	TopologyRevision     int64  `gorm:"not null;default:0" json:"topology_revision"`
-	Kind                 string `gorm:"size:80;not null" json:"kind"`
-	Revision             int64  `gorm:"not null" json:"revision"`
-	ConfigJSON           string `gorm:"type:text;not null;default:{}" json:"config"`
-	ConfigHash           string `gorm:"size:64" json:"config_hash"`
-	DependsOnOperationID string `gorm:"size:64;index" json:"depends_on_operation_id,omitempty"`
-	// LifecyclePlanID and the following fields group Control-target package
-	// operations that must be executed as one dependency-aware lifecycle plan.
-	// They are intentionally empty for legacy and Agent operations.
-	LifecyclePlanID       string     `gorm:"size:64;index" json:"lifecycle_plan_id,omitempty"`
-	LifecyclePlanStepID   uint       `gorm:"index" json:"lifecycle_plan_step_id,omitempty"`
-	LifecyclePlanPhase    string     `gorm:"size:16;index" json:"lifecycle_plan_phase,omitempty"`
-	LifecyclePlanSequence int        `gorm:"not null;default:0;index" json:"lifecycle_plan_sequence"`
-	State                 string     `gorm:"size:32;not null;index" json:"state"`
-	DeadlineAt            *time.Time `json:"deadline_at"`
-	DispatchedAt          *time.Time `json:"dispatched_at"`
-	AcknowledgedAt        *time.Time `json:"acknowledged_at"`
-	ObservedAt            *time.Time `json:"observed_at"`
-	CancelAt              *time.Time `json:"cancel_at"`
-	CancelDispatchedAt    *time.Time `json:"cancel_dispatched_at"`
-	ClaimedBy             string     `gorm:"size:96;index" json:"claimed_by"`
-	LeaseExpiresAt        *time.Time `gorm:"index" json:"lease_expires_at"`
-	Attempt               int        `gorm:"not null;default:0" json:"attempt"`
-	ResultJSON            string     `gorm:"type:text" json:"result"`
-	LastError             string     `gorm:"type:text" json:"last_error"`
-	CreatedAt             time.Time  `json:"created_at"`
-	UpdatedAt             time.Time  `json:"updated_at"`
+	SessionID            string     `gorm:"size:120;index" json:"session_id"`
+	NodeID               *uint      `gorm:"index" json:"node_id"`
+	PluginID             string     `gorm:"size:120;index" json:"plugin_id"`
+	TargetVersion        string     `gorm:"size:64" json:"target_version"`
+	Kind                 string     `gorm:"size:80;not null" json:"kind"`
+	Revision             int64      `gorm:"not null" json:"revision"`
+	ConfigJSON           string     `gorm:"type:text;not null;default:{}" json:"config"`
+	ConfigHash           string     `gorm:"size:64" json:"config_hash"`
+	DependsOnOperationID string     `gorm:"size:64;index" json:"depends_on_operation_id,omitempty"`
+	State                string     `gorm:"size:32;not null;index" json:"state"`
+	DeadlineAt           *time.Time `json:"deadline_at"`
+	DispatchedAt         *time.Time `json:"dispatched_at"`
+	AcknowledgedAt       *time.Time `json:"acknowledged_at"`
+	ObservedAt           *time.Time `json:"observed_at"`
+	CancelAt             *time.Time `json:"cancel_at"`
+	CancelDispatchedAt   *time.Time `json:"cancel_dispatched_at"`
+	ClaimedBy            string     `gorm:"size:96;index" json:"claimed_by"`
+	LeaseExpiresAt       *time.Time `gorm:"index" json:"lease_expires_at"`
+	Attempt              int        `gorm:"not null;default:0" json:"attempt"`
+	ResultJSON           string     `gorm:"type:text" json:"result"`
+	LastError            string     `gorm:"type:text" json:"last_error"`
+	CreatedAt            time.Time  `json:"created_at"`
+	UpdatedAt            time.Time  `json:"updated_at"`
 }
 
 func (KernelOperation) TableName() string { return "v3_kernel_operation" }
-
-// PluginLifecyclePlan is the durable Control-side transaction boundary for a
-// dependency closure. Individual KernelOperations remain independently
-// observable and cancellable, while the plan supplies dependency ordering and
-// reverse rollback after a failed or cancelled apply phase.
-type PluginLifecyclePlan struct {
-	ID              string     `gorm:"primaryKey;size:64" json:"id"`
-	IdempotencyKey  string     `gorm:"size:160;not null;uniqueIndex" json:"idempotency_key"`
-	Target          string     `gorm:"size:20;not null;index" json:"target"`
-	RootPluginID    string     `gorm:"size:120;not null;index" json:"root_plugin_id"`
-	RootOperationID string     `gorm:"size:64;not null;uniqueIndex" json:"root_operation_id"`
-	State           string     `gorm:"size:32;not null;index" json:"state"`
-	Outcome         string     `gorm:"size:32" json:"outcome"`
-	LastError       string     `gorm:"type:text" json:"last_error"`
-	CreatedAt       time.Time  `json:"created_at"`
-	UpdatedAt       time.Time  `json:"updated_at"`
-	CompletedAt     *time.Time `json:"completed_at"`
-}
-
-func (PluginLifecyclePlan) TableName() string { return "v3_kernel_plugin_lifecycle_plan" }
-
-// PluginLifecyclePlanStep stores the old desired state separately from the
-// runtime operation. That lets a restarted worker restore intent precisely
-// after a dependency graph failure without deleting package data.
-type PluginLifecyclePlanStep struct {
-	ID                      uint       `gorm:"primaryKey" json:"id"`
-	PlanID                  string     `gorm:"size:64;not null;uniqueIndex:ux_plugin_lifecycle_plan_step" json:"plan_id"`
-	Sequence                int        `gorm:"not null;uniqueIndex:ux_plugin_lifecycle_plan_step;index" json:"sequence"`
-	PluginID                string     `gorm:"size:120;not null;index" json:"plugin_id"`
-	TargetVersion           string     `gorm:"size:64;not null" json:"target_version"`
-	HadInstallation         bool       `gorm:"not null" json:"had_installation"`
-	PreviousDesiredVersion  string     `gorm:"size:64" json:"previous_desired_version"`
-	PreviousObservedVersion string     `gorm:"size:64" json:"previous_observed_version"`
-	PreviousPreviousVersion string     `gorm:"size:64" json:"previous_previous_version"`
-	PreviousState           string     `gorm:"size:32" json:"previous_state"`
-	PreviousEnabled         bool       `gorm:"not null" json:"previous_enabled"`
-	PreviousDisabledAt      *time.Time `json:"previous_disabled_at"`
-	PreviousLastError       string     `gorm:"type:text" json:"previous_last_error"`
-	Changed                 bool       `gorm:"not null" json:"changed"`
-	ApplyState              string     `gorm:"size:32;not null;default:pending;index" json:"apply_state"`
-	RollbackState           string     `gorm:"size:32;not null;default:pending;index" json:"rollback_state"`
-	CreatedAt               time.Time  `json:"created_at"`
-	UpdatedAt               time.Time  `json:"updated_at"`
-}
-
-func (PluginLifecyclePlanStep) TableName() string {
-	return "v3_kernel_plugin_lifecycle_plan_step"
-}
 
 // NodeOperationRevision is the durable desired/observed revision cursor for a
 // physical node. It is intentionally separate from any plugin-specific state.
@@ -519,14 +293,11 @@ func KernelModels() []any {
 	return []any{
 		&ServiceScope{}, &AccessGroup{}, &AccessGroupUser{}, &AccessGroupPlan{},
 		&ResourceGrant{}, &QuotaPolicy{}, &Plugin{}, &PluginRelease{},
-		&PluginTrustRoot{}, &PluginArtifact{}, &PluginWebUIAsset{}, &PluginInstallation{},
-		&PluginTargetLock{}, &PluginConfiguration{}, &NodeServiceAssignment{}, &NodePluginLifecycle{}, &Topology{},
-		&TopologyRevision{}, &TopologyVertex{}, &TopologyEdge{},
-		&TopologyDeployment{}, &TopologyDeploymentStep{}, &TopologyObservedState{}, &KernelOperation{},
-		&PluginLifecyclePlan{}, &PluginLifecyclePlanStep{},
+		&PluginTrustRoot{}, &PluginArtifact{}, &PluginInstallation{},
+		&PluginTargetLock{}, &PluginConfiguration{}, &NodeServiceAssignment{}, &NodePluginLifecycle{}, &KernelOperation{},
 		&NodeOperationRevision{}, &PluginTelemetryState{}, &NodePluginObservedState{},
 		&PackageMigrationRun{}, &PackageValidationResult{}, &PackageRouteGeneration{}, &PackageBackupReference{}, &PackageRolloutLock{},
-		&PackageStorage{}, &ServiceCA{}, &ModuleEnrollment{}, &ModuleCertificate{}, &PluginRuntime{},
+		&PackageStorage{}, &ServiceCA{},
 		&IdentityRevocation{}, &IdentitySessionRevocation{}, &IdentityAccountLink{}, &IdentityAuthority{},
 		&IdentityTokenKey{}, &SubscriberRequest{}, &SubscriberChange{}, &UserActivity{}, &SettingsRequest{},
 		&ProtocolSecret{}, &NodeSecretSplit{},

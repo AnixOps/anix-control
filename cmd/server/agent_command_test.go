@@ -103,7 +103,7 @@ func TestAgentPKIForGRPC(t *testing.T) {
 func TestAgentPKIWithTheCAAlone(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "kernel.db")), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&model.ServiceCA{}, &model.ModuleCertificate{}, &model.AgentEnrollment{}, &model.AgentCertificate{},
+	require.NoError(t, db.AutoMigrate(&model.ServiceCA{}, &model.AgentEnrollment{}, &model.AgentCertificate{},
 		&model.Node{}, &model.ForwardNode{}, &model.OperationLog{}, &model.ForwardLinkCA{}))
 	cfg := &config.Config{ModuleRuntime: config.ModuleRuntimeConfig{
 		Cluster: "edge", CAKEK: "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
